@@ -2,8 +2,9 @@
 // (server-worker.js) -> client on the canvas. Message shapes: docs/RUNNING.md, "Browser demo".
 const $ = (id) => document.getElementById(id);
 const PARALLEL_FETCHES = 6;
-const CLIENT_WASM = "client/ss13_web_client_bg.wasm";
-const SERVER_WASM = "server/ss13_web_server_bg.wasm";
+// Gzipped by web-build.sh (Cloudflare Pages' 25 MiB file limit); inflated here.
+const CLIENT_WASM = "client/ss13_web_client_bg.wasm.gz";
+const SERVER_WASM = "server/ss13_web_server_bg.wasm.gz";
 const SIDES = new Set(["server", "client", "both"]);
 
 const brands = navigator.userAgentData?.brands ?? [];
@@ -51,7 +52,14 @@ function wasmSizes() {
   }
 }
 
-async function download(url, size, onBytes) {
+// Inflates a gzip body unless the host already decoded it (Content-Encoding: gzip).
+async function gunzip(bytes) {
+  if (bytes[0] !== 0x1f || bytes[1] !== 0x8b) return bytes;
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+async function download(url, size, onBytes, exact = true) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
   const reader = res.body.getReader();
@@ -65,7 +73,7 @@ async function download(url, size, onBytes) {
     onBytes(value.length);
   }
   // A mismatch means a cached file from another build: mixing builds fails later and obscurely.
-  if (size !== undefined && got !== size) {
+  if (exact && size !== undefined && got !== size) {
     throw new Error(`${url}: ожидалось ${size} байт, получено ${got}. Обновите страницу.`);
   }
   if (chunks.length === 1) return chunks[0];
@@ -100,8 +108,9 @@ async function run() {
 
   const sizes = wasmSizes();
   const jobs = [
-    { url: CLIENT_WASM, size: sizes.client },
-    { url: SERVER_WASM, size: sizes.server },
+    // Not exact: a host that decodes gzip itself delivers more bytes than the file size.
+    { url: CLIENT_WASM, size: sizes.client, exact: false },
+    { url: SERVER_WASM, size: sizes.server, exact: false },
     ...list.map((f) => ({ url: `data/${f.path}`, size: f.size, path: f.path })),
   ];
   const total = jobs.reduce((sum, j) => sum + (j.size ?? 0), 0);
@@ -114,7 +123,7 @@ async function run() {
   onBytes(0);
   const got = new Map();
   await inParallel(jobs, PARALLEL_FETCHES, async (j) => {
-    got.set(j.url, await download(j.url, j.size, onBytes));
+    got.set(j.url, await download(j.url, j.size, onBytes, j.exact ?? true));
   });
 
   const serverFiles = new Map();
@@ -126,8 +135,8 @@ async function run() {
     if (f.side !== "server") clientFiles.set(f.path, bytes);
     if (f.side === "server") transfer.push(bytes.buffer);
   }
-  const serverWasm = got.get(SERVER_WASM);
-  const clientWasm = got.get(CLIENT_WASM);
+  const serverWasm = await gunzip(got.get(SERVER_WASM));
+  const clientWasm = await gunzip(got.get(CLIENT_WASM));
   got.clear();
 
   $("loader-title").textContent = "Запуск сервера";

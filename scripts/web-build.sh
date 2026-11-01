@@ -18,7 +18,9 @@ if [[ $cli != "$locked" ]]; then
     exit 1
 fi
 
-cargo build --release --target wasm32-unknown-unknown -p ss13_web_server -p ss13_web_client
+# Two invocations: one build would unify the features of both crates into both binaries.
+cargo build --release --target wasm32-unknown-unknown -p ss13_web_server
+cargo build --release --target wasm32-unknown-unknown -p ss13_web_client
 
 rm -rf "$out"
 mkdir -p "$out/data"
@@ -29,6 +31,9 @@ for side in client server; do
     wasm-opt -Oz --enable-bulk-memory --enable-nontrapping-float-to-int --enable-sign-ext \
         --enable-mutable-globals --enable-reference-types --enable-multivalue \
         -o "$out/$side/${crate}_bg.wasm" "$out/$side/${crate}_bg.wasm"
+    # Cloudflare Pages rejects files over 25 MiB and the client wasm is larger: ship it gzipped,
+    # the page inflates it (DecompressionStream). Also cuts the download to about a third.
+    gzip -9 "$out/$side/${crate}_bg.wasm"
 done
 cp web/index.html web/style.css web/main.js web/server-worker.js "$out/"
 
@@ -53,8 +58,8 @@ awk -F'\t' '
     END { print "\n]" }
 ' <<<"$list" >"$out/data/files.json"
 
-client_bytes=$(stat -c %s "$out/client/ss13_web_client_bg.wasm")
-server_bytes=$(stat -c %s "$out/server/ss13_web_server_bg.wasm")
+client_bytes=$(stat -c %s "$out/client/ss13_web_client_bg.wasm.gz")
+server_bytes=$(stat -c %s "$out/server/ss13_web_server_bg.wasm.gz")
 download_mb=$(((data_bytes + client_bytes + server_bytes + 524288) / 1048576))
 commit=$(git rev-parse HEAD)
 # shortcut: no source archive on the site yet (owner's decision while the code is not ready);
