@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>space-station-rs</title>
+<meta name="description" content="Space Station 13 на Rust: одиночная демо-версия в браузере">
+<link rel="stylesheet" href="style.css">
+<script type="module" src="main.js"></script>
+</head>
+<!-- web-build.sh replaces __COMMIT__, __DOWNLOAD_MB__ and __WASM_BYTES__. -->
+<body data-wasm-bytes='__WASM_BYTES__'>
+<main id="landing" class="panel">
+  <h1>space-station-rs</h1>
+  <p>
+    Space Station 13, написанная с нуля на Rust по образцу
+    <a href="https://github.com/ss220club/BandaStation">BandaStation</a> (форк
+    <a href="https://github.com/tgstation/tgstation">tgstation</a>).
+    Это одиночная демо-версия: сервер и клиент работают прямо в этой вкладке, ничего не
+    устанавливается, перезагрузка страницы начинает раунд заново.
+  </p>
+  <p>
+    Поддерживается только Google Chrome (нужен WebGL2). Перед стартом загружается около
+    <b>__DOWNLOAD_MB__ МБ</b>, сервер затем собирает станцию ещё несколько десятков секунд.
+  </p>
+  <p id="browser-note" class="note" hidden>
+    Похоже, это не Chrome. Игра может не запуститься, но попробовать можно.
+  </p>
+  <button id="start" type="button">Запустить игру</button>
+  <details>
+    <summary>Управление</summary>
+    <ul>
+      <li>Стрелки или WASD: движение; две клавиши дают диагональ.</li>
+      <li>ЛКМ: действие с тем, что под курсором; Shift+ЛКМ: осмотреть; Ctrl+ЛКМ: тащить.</li>
+      <li>X: сменить руку; Q: выбросить предмет; F: боевой режим; R: режим броска.</li>
+      <li>В лобби нажмите «Присоединиться» и выберите профессию: раунд уже идёт.</li>
+      <li>Вы администратор-хост: F7 открывает админ-панель, F6 включает aghost.</li>
+    </ul>
+  </details>
+  <footer>
+    <a href="https://github.com/rswayd/space-station-rs/tree/__COMMIT__">Исходный код</a>
+    (AGPL-3.0, раздел 13: исходный код этой сборки).
+    Ресурсы BandaStation: CC BY-SA 3.0, если не указано иное
+    (<a href="https://github.com/rswayd/space-station-rs/blob/__COMMIT__/ASSETS-LICENSE.md">ASSETS-LICENSE</a>,
+    атрибуции: <a href="data/ICON-SOURCES.txt">иконки</a>, <a href="data/sound/SOURCES.txt">звуки</a>).
+    Проект некоммерческий: часть звуков разрешена только для некоммерческого использования.
+  </footer>
+</main>
+
+<section id="loader" class="panel" hidden>
+  <h2 id="loader-title">Загрузка данных</h2>
+  <progress id="loader-bar" max="1" value="0"></progress>
+  <p id="loader-text"></p>
+</section>
+
+<section id="error" class="panel" hidden>
+  <h2>Ошибка</h2>
+  <pre id="error-text"></pre>
+  <button type="button" onclick="location.reload()">Перезагрузить страницу</button>
+</section>
+
+<canvas id="game" hidden></canvas>
+</body>
+</html>
