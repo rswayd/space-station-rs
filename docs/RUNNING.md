@@ -53,7 +53,8 @@ SS13_MAP=MetaStation SS13_ASSETS=$ASSETS cargo run -p ss13_server
   self-signed one (same digest across restarts; clients still pin the digest).
 - Logs `certificate digest <hex>` and writes it to `ss13-rs-dev-cert-<port>.txt` in a directory
   only this user can access: `$XDG_RUNTIME_DIR` (`/run/user/<uid>/ss13-rs-dev-cert-7777.txt`),
-  else `$TMPDIR/ss13-rs-$USER/` created with mode 0700.
+  else `$TMPDIR/ss13-rs-$USER/` created with mode 0700. It also prints
+  `ss13-certificate-digest <hex>` on stdout (for a client that started it, see "Windows demo / releases").
 - `SS13_SOURCE_URL=https://...`: where players get this server's source code. The code is
   AGPL-3.0-only, and section 13 requires offering the source of the running version (with your
   changes) to everyone who plays on it: the lobby shows the URL as "Исходный код". Unset, the
@@ -105,6 +106,49 @@ SS13_ASSETS=$ASSETS SS13_TOKEN=bob   cargo run -p ss13_client
 - For screenshots and scripted input use the scripted client (next section), never OS tools.
 
 Controls: arrows or WASD, two keys for diagonals; left click on the world clicks the topmost thing drawn under the cursor: only where a pixel of its current icon frame or of an overlay is not fully transparent (BYOND `mouse_opacity = 1`; a click on the empty corner of a tile with a small item goes to the floor), with pixel offsets and the turn of a lying mob, `mouse_opacity = 2` things anywhere in their icon, skipping tg's click-through atoms (`mouse_opacity = 0`: gas overlays, fires, many effects); every click is handled in order, one per tick per client (tg's 15 clicks per second limit), and a plain click does nothing during the mob's click cooldown (tg `next_move`: after a melee hit, a throw); the left button acts on release, as in BYOND: released over what it was pressed on it clicks (with an empty active hand an item next to the mob is picked up; with an item in hand a free tile next to the mob gets it), released over something else it drags (tg `MouseDrop`; a drag shorter than 16 icon pixels and 0.1 s is still a click, tg `check_drag_proximity`): another human dragged onto the own mob opens tg's strip menu (their slots; a slot with an item takes it off after its strip delay, 4 s, pockets 4 s; an empty slot with an item in hand puts it on after 2 s, pockets 1 s, hands too; cuffs come off through its handcuffs entry), a storage dragged from the HUD onto an empty hand slot goes into that hand, onto the own mob opens, onto another storage empties into it at once, onto a floor or an object empties onto that tile after 2 s, the active hand's item dragged onto a storage goes in, an item or a mob dragged from the floor onto an open closet goes onto its tile or (a mob, after 4 s) is stuffed in and the closet closes (stepping inside opens an unlocked closet again), and an item dragged onto another cell of the open storage grid moves there; a middle click swaps hands (tg `cycle_hand`), shift+middle click points (an arrow over the target for 2.5 s, "X указывает на Y.", once a second); alt+click is tg `AltClickOn`: a storage next to the mob opens (also on the floor), a PDA gives back its ID, anything else opens tg's loot panel (the tile's turf and everything on it; a click on an entry clicks it), as does alt+shift+click. X swaps hands, Q drops the active hand's item; the HUD has tg's human slots at their tg places: the bottom row (suit storage, ID, belt, back, hands, pockets) and, behind the toggle button at the bottom left, the clothes (uniform, suit, gloves, shoes, neck, mask, ears, glasses, head); a click on a hand selects it, a click on another slot equips the active hand's item there (tg `can_equip`: `slot_flags`, a jumpsuit for ID/belt/pockets, a suit for suit storage) or takes the worn item into the empty hand (taking off the jumpsuit drops ID, belt and pockets). Alt+click on a gas tank's slot toggles internals when a breath mask (or an internals helmet) is worn. Players spawn with a backpack holding their outfit's `box` (the survival box) and `backpack_contents` (a security officer's baton, ...): clicking the back slot with an empty active hand opens its storage grid above the HUD row (click an item to take it, the arrow closes it), clicking it with an item in hand puts the item in (tg weight class and slot limits). Closets, lockers and crates open and close on click next to them; their contents come from tg `PopulateContents()` on the first opening, secure lockers unlock with an ID that has their access. F toggles combat mode (also the combat button at the bottom right): a click on a mob next to yours with an empty hand punches it in combat mode (kicks it when it lies) and hugs it otherwise; with an item in hand it is hit with the item's force. The health indicator and the health doll on the right edge show the own health. A mob at 0 health or below lies in crit, at -100 it dies; a dead player's first step turns them into a ghost that only other ghosts see and that moves through walls. A client that disconnects leaves its body. Ctrl+click on something next to the mob (an item on the floor, a closet, a mob) pulls it: it follows the mob's steps (tg `Move`), a lying body or a closet slows the puller, the pull breaks at distance 2; ctrl+click on the pulled mob again is an aggressive grab (its steps and the resist key B are tg's 60% escape rolls, a failed step blocks moving for 4 s). C or Delete (or the HUD pull icon) stops pulling. R (or the HUD throw button) toggles throw mode: the next click throws the active hand's item at what was clicked (tg `throw_at`: `throw_range`, `throw_speed`); it hits the first dense thing or the clicked mob for its `throwforce`, a mob in throw mode with an empty hand catches it. Shift+click examines (title, description, size; for mobs clothes, held items, damage, crit, death), also from crit and as a ghost. In the say line `*scream`, `*nod Боб`, `*me текст` are emotes (`*help` lists them), `#` whispers, `;` (Common), `:h` (the headset's department), `:e`/`:у` and the other tg department keys (both keyboard layouts), `:i` (intercoms within 1 tile) and `:r`/`:l` (the held radio) talk into radios (see Radio below) and are whispered next to the speaker; a mob in soft crit can only whisper (heard in full at 1 tile, starred at 2), in hard crit it says nothing, a dead mob or ghost talks in deadchat. The window shows 19x15 tiles at zoom 2 left of the 480 px chat panel (window 1696x960).
+
+## Windows demo / releases
+
+A single-player package: unzip, run `ss13_client.exe`, play alone. `.github/workflows/demo.yml`
+builds it: a `v*` tag publishes `space-station-rs-demo-windows-<tag>.zip` as a GitHub Release, a
+manual run (`workflow_dispatch`) uploads the same tree as a workflow artifact. Jobs: `data`
+(linux) checks out BandaStation at the commit of `ASSETS-LICENSE.md`, runs the three commands of
+"Generate assets" and `scripts/demo-package.sh`; `windows` builds `ss13_client` and `ss13_server`
+(release, `x86_64-pc-windows-msvc`); `package` puts the executables into that tree and zips it.
+
+The package (`scripts/demo-package.sh <BandaStation> <assets> <out>` makes all but the
+executables):
+
+- `ss13_client.exe`, `ss13_server.exe`, `LICENSE`, `ASSETS-LICENSE.md`, `README.txt` (how to run,
+  the source link and both commits);
+- `assets/`: the converted assets without `dm_types.json` (converter input only);
+- `data/BandaStation/`: only the BYOND files the server reads at runtime for MetaStation: the
+  `.dmm`, `_maps/map_jsons/metastation.json` and the shuttle templates it loads (emergency
+  `emergency_meta`, cargo `cargo_box`, the nuke ops infiltrator). Another map needs its files
+  added to the script's list;
+- `config/`: BandaStation's admin ranks and `admins.txt` with `dev = Host`.
+
+Single-player launch (`crates/ss13_client/src/local_server.rs`): when `SS13_SERVER_ADDR` is unset
+and a `data/` directory lies next to the client executable, the client starts the
+`ss13_server` next to it before opening its window: bound to `127.0.0.1` on a free port, without
+a console window of its own on Windows (its log goes to the client's stdout as `[server] ...`),
+with `SS13_MAP=MetaStation`, `SS13_LOBBY_SECONDS=0` (the round runs, the player joins from the
+lobby), `SS13_SOURCE_URL` set to this repository and the package's `assets/`, `data/BandaStation`
+and `config/` (each of these only when not set already). The server prints
+`ss13-certificate-digest <hex>` on stdout once it listens; the client reads it from the pipe (no
+digest file) and connects. The local player (token `dev`) is the host admin through
+`SS13_INSECURE_ADMINS=1`, safe only because nothing but this machine can reach a loopback port.
+The client kills the server when it exits; if the client is killed, the server sees its stdin
+close (`SS13_EXIT_WITH_PARENT=1`) and exits too. With `SS13_SERVER_ADDR` set (or no `data/`, as in
+`target/`) the client behaves as in section 3.
+
+Local check of the package on linux (debug binaries, the scripted client offscreen):
+
+```sh
+scripts/demo-package.sh $SS13_SOURCE $ASSETS /tmp/pkg && cp target/debug/ss13_{client,server} /tmp/pkg/
+SS13_ADMIN_UI=players SS13_SCRIPT=$PWD/scripts/visual/demo.txt SS13_SCRIPT_OUT=/tmp/demo \
+    SS13_OFFSCREEN=1 /tmp/pkg/ss13_client      # latejoins as an Assistant, the admin panel open
+```
 
 ## Scripted client / visual checks
 

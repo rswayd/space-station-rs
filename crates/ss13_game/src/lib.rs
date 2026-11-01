@@ -285,6 +285,10 @@ pub const RUN_DELAY_SECS: f32 = 0.22;
 /// letting it run away from the server.
 pub const MAX_UNACKED_STEPS: usize = 8;
 
+/// The line prefix a server prints its certificate digest after on stdout: a client that started
+/// it as a child (`ss13_client` single-player launch) reads it from the pipe.
+pub const LOCAL_DIGEST_LINE: &str = "ss13-certificate-digest ";
+
 /// Where a server writes the digest of its self-signed certificate, per port, so a local client
 /// can connect without copying it from the log. Dev only: the client reads it only for loopback
 /// servers and only when `SS13_CERT_DIGEST` is unset.
@@ -327,9 +331,9 @@ pub fn read_dev_cert_digest(path: &Path) -> io::Result<String> {
 }
 
 fn create_private_dir(dir: &Path) -> io::Result<()> {
-    let mut builder = std::fs::DirBuilder::new();
+    let builder = &mut std::fs::DirBuilder::new();
     #[cfg(unix)]
-    std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);
+    std::os::unix::fs::DirBuilderExt::mode(builder, 0o700);
     match builder.create(dir) {
         Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Ok(()),
         other => other,

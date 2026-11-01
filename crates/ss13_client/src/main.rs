@@ -1,7 +1,20 @@
 use bevy::ecs::error::{BevyError, ErrorContext};
 use bevy::prelude::*;
 
+mod local_server;
+
 fn main() -> AppExit {
+    // The release package run with no server address: a bundled server on loopback, stopped when
+    // `local` drops after the app exits.
+    let package = local_server::package_dir();
+    let local = match package.as_deref().map(local_server::start) {
+        Some(Ok(server)) => Some(server),
+        Some(Err(e)) => {
+            eprintln!("single-player launch failed: {e}");
+            return AppExit::error();
+        }
+        None => None,
+    };
     // `SS13_SCRIPT`: scripted run for visual checks (docs/RUNNING.md); absent, nothing changes.
     let script = ss13_devtools::ScriptPlugin::from_env();
     // Debug overlay (F12, docs/RUNNING.md "Debug UI"): debug builds, or `--features debug-ui`.
@@ -32,10 +45,15 @@ fn main() -> AppExit {
         None => defaults,
     };
     // Same variable and default as the server's map loader.
-    let asset_root: std::path::PathBuf = std::env::var("SS13_ASSETS")
-        .unwrap_or_else(|_| ss13_render::DEFAULT_ASSET_ROOT.into())
-        .into();
+    let asset_root: std::path::PathBuf = match (std::env::var_os("SS13_ASSETS"), &package) {
+        (Some(root), _) => root.into(),
+        (None, Some(dir)) => dir.join("assets"),
+        (None, None) => ss13_render::DEFAULT_ASSET_ROOT.into(),
+    };
     let mut app = App::new();
+    if let Some(local) = &local {
+        app.insert_resource(local.config.clone());
+    }
     app.set_error_handler(log_errors_keep_panics)
         .add_plugins((
             defaults,
@@ -76,7 +94,9 @@ fn main() -> AppExit {
     if let Some(script) = script {
         app.add_plugins(script);
     }
-    app.run()
+    let exit = app.run();
+    drop(local);
+    exit
 }
 
 /// Wiring: the map viewport ends where the docked chat panel begins (ss13_render knows no chat).
