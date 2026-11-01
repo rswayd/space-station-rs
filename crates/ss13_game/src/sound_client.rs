@@ -75,7 +75,7 @@ fn play(
         let handle = files
             .loaded
             .entry(sound.file.clone())
-            .or_insert_with(|| match std::fs::read(root.join(&sound.file)) {
+            .or_insert_with(|| match ss13_data::read(&root.join(&sound.file)) {
                 Ok(bytes) => Some(sources.add(AudioSource {
                     bytes: bytes.into(),
                 })),

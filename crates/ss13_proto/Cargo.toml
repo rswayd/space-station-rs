@@ -7,6 +7,7 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
+ss13_data = { path = "../ss13_data" }
 bevy = { workspace = true, features = ["std"] }
 serde.workspace = true
 thiserror.workspace = true

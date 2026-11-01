@@ -1,0 +1,30 @@
+[package]
+name = "ss13_web_client"
+description = "Browser demo: the client app on a WebGL2 canvas, connected to the worker's server over the loopback bridge."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+# wasm32 only: natively this crate is empty (target-specific dependencies keep the `web` feature
+# out of the native Bevy build). Build it alone, not together with `ss13_web_server`, or Cargo
+# unifies the `server` and `client` features of the game crates into both binaries.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+ss13_web_common = { path = "../ss13_web_common" }
+ss13_game = { workspace = true, features = ["client"] }
+ss13_net = { workspace = true, features = ["client"] }
+ss13_render.workspace = true
+ss13_ui_kit.workspace = true
+ss13_tgui = { workspace = true, features = ["client"] }
+ss13_chat = { workspace = true, features = ["client"] }
+ss13_admin = { workspace = true, features = ["client"] }
+# `2d` brings `webgl2` (Bevy's `default_platform`): wgpu on wasm without it needs WebGPU.
+bevy = { workspace = true, features = ["2d", "ui", "audio", "web"] }
+wasm-bindgen = "0.2.130"
+js-sys = "0.3.107"
+
+[lints]
+workspace = true

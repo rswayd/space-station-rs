@@ -1,0 +1,12 @@
+[package]
+name = "ss13_data"
+description = "Runtime data files by path: the disk natively, an in-memory bundle in the browser."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

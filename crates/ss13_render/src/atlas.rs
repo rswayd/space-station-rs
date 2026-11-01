@@ -117,7 +117,7 @@ impl IconAtlas {
     /// `Assets::<Image>::get_handle_provider`.
     pub fn open(root: &Path, handles: AssetHandleProvider, budget: u64) -> anyhow::Result<Self> {
         let manifest_path = root.join("manifest.postcard");
-        let bytes = std::fs::read(&manifest_path)
+        let bytes = ss13_data::read(&manifest_path)
             .with_context(|| format!("reading {}", manifest_path.display()))?;
         let manifest: AssetManifest = postcard::from_bytes(&bytes)
             .with_context(|| format!("decoding {}", manifest_path.display()))?;
@@ -253,7 +253,7 @@ fn held_elsewhere(handle: &Handle<Image>) -> bool {
 }
 
 fn decode(path: &Path) -> anyhow::Result<(Image, AlphaMask)> {
-    let bytes = std::fs::read(path).with_context(|| format!("reading {}", path.display()))?;
+    let bytes = ss13_data::read(path).with_context(|| format!("reading {}", path.display()))?;
     let image = Image::from_buffer(
         &bytes,
         ImageType::Extension("png"),

@@ -34,7 +34,7 @@ const AREA_NOOP: &str = "/area/template_noop";
 
 pub fn read_manifest(assets: &Path) -> anyhow::Result<AssetManifest> {
     let path = assets.join(MANIFEST_FILE);
-    let bytes = std::fs::read(&path).with_context(|| format!("reading {}", path.display()))?;
+    let bytes = ss13_data::read(&path).with_context(|| format!("reading {}", path.display()))?;
     postcard::from_bytes(&bytes).with_context(|| format!("decoding {}", path.display()))
 }
 

@@ -1,0 +1,17 @@
+[package]
+name = "ss13_web_common"
+description = "Browser demo: what the worker (server) and the page (client) entries share: the data bundle mount, the loopback bridge over postMessage, the panic hook."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+# wasm32 only: natively this crate is empty, so the workspace build pulls nothing in.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+ss13_data = { path = "../ss13_data" }
+ss13_net.workspace = true
+wasm-bindgen = "0.2.130"
+js-sys = "0.3.107"
+
+[lints]
+workspace = true

@@ -7,6 +7,7 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
+ss13_data = { path = "../ss13_data" }
 serde.workspace = true
 anyhow.workspace = true
 # The generated `reagents.ron`; same version the prototype loader uses.

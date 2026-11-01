@@ -79,7 +79,7 @@ pub enum DmmError {
 
 impl DmmMap {
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self, DmmError> {
-        let bytes = std::fs::read(path)?;
+        let bytes = ss13_data::read(path.as_ref())?;
         Self::parse(std::str::from_utf8(&bytes)?)
     }
 

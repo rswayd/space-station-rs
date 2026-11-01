@@ -1,0 +1,33 @@
+[package]
+name = "ss13_web_server"
+description = "Browser demo: the server app in a Web Worker, ticked by its own timer, reached over the loopback bridge."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+# wasm32 only: natively this crate is empty (target-specific dependencies keep the `web` feature
+# out of the native Bevy build). Build it alone, not together with `ss13_web_client`, or Cargo
+# unifies the `server` and `client` features of the game crates into both binaries.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+ss13_web_common = { path = "../ss13_web_common" }
+ss13_shared.workspace = true
+ss13_game = { workspace = true, features = ["server"] }
+ss13_world.workspace = true
+ss13_proto.workspace = true
+ss13_mapload.workspace = true
+ss13_atmos.workspace = true
+ss13_net = { workspace = true, features = ["server"] }
+ss13_tgui = { workspace = true, features = ["server"] }
+ss13_chat = { workspace = true, features = ["server"] }
+ss13_debug = { workspace = true, features = ["server"] }
+ss13_admin = { workspace = true, features = ["server"] }
+bevy = { workspace = true, features = ["std", "multi_threaded", "bevy_log", "bevy_state", "async_executor", "web"] }
+wasm-bindgen = "0.2.130"
+js-sys = "0.3.107"
+
+[lints]
+workspace = true
