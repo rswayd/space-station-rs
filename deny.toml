@@ -1,0 +1,55 @@
+# License gate for dependencies (scripts/gate.sh): the project is AGPL-3.0-only, so every crate
+# must carry a license compatible with it. Add a license here only after checking that compatibility.
+[graph]
+all-features = true
+
+[licenses]
+confidence-threshold = 0.9
+allow = [
+    "AGPL-3.0-only",
+    # GPLv3 code may be combined with AGPLv3 code (AGPL §13 / GPL §13).
+    "GPL-3.0-or-later",
+    "MIT",
+    "MIT-0",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "BSL-1.0",
+    "Unicode-3.0",
+    # Fonts embedded by egui's default_fonts; font licenses permit bundling with any program.
+    "OFL-1.1",
+    "Ubuntu-font-1.0",
+]
+
+# SpacemanDMM (used only by the ss13_dm_extract converter) declares no license in these crates'
+# manifests; the repository's LICENSE and README put the whole tree under GPL-3.0-or-later.
+[[licenses.clarify]]
+crate = "dreammaker"
+expression = "GPL-3.0-or-later"
+license-files = []
+
+[[licenses.clarify]]
+crate = "builtins-proc-macro"
+expression = "GPL-3.0-or-later"
+license-files = []
+
+[[licenses.clarify]]
+crate = "interval-tree"
+expression = "GPL-3.0-or-later"
+license-files = []
+
+[licenses.private]
+ignore = true
+
+[bans]
+multiple-versions = "allow"
+
+[advisories]
+ignore = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-git = ["https://github.com/SpaceManiac/SpacemanDMM"]

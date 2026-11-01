@@ -1,0 +1,30 @@
+# MetaStation: spawn at (104,72) under the Getmore snack machine (104,73) in the departure
+# lounge. Open it, switch the layout, search, vend, walk away (the window closes past 5 tiles).
+# spawn: 104,72
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_until entities 500 timeout=30
+wait_secs 1
+log_state
+click_tile 0 1
+wait_secs 1.5
+log_state
+screenshot "vending_open.png"
+click_ui "layout toggle"
+wait_secs 0.5
+screenshot "vending_list.png"
+click_ui "Поиск..."
+type "ch"
+wait_secs 0.5
+screenshot "vending_search.png"
+click_ui "Chips"
+wait_secs 1
+log_state
+screenshot "vending_vended.png"
+key_down S
+wait_secs 2.2
+key_up S
+wait_secs 1
+log_state
+screenshot "vending_walked_away.png"
+quit

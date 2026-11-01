@@ -1,0 +1,11 @@
+# Pulling, victim (see pull_puller.txt): dies and stays in its body (no step, so no ghost) while
+# it is dragged; a screenshot from the body's view.
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_until chat "безжизненным" timeout=90
+wait_until chat "пассивно хватает вас" timeout=30
+wait_secs 2.5
+screenshot "victim_dragged.png"
+log_state
+wait_secs 3
+quit

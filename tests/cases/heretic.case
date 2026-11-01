@@ -1,0 +1,35 @@
+# The heretic (tg `/datum/antagonist/heretic`): alice is made a heretic (the bot framework skips
+# the lobby, so the roundstart ruleset is covered by `crates/ss13_game/tests/heretic.rs`). Her
+# research window and buttons; an influence spawned by an admin is replicated to her and never
+# to bob; her right click drains it for a point, after which bob sees the pierced reality; she
+# takes the Path of Ash in the research window.
+map heretic.dmm
+time_scale 10
+bot alice 3,3 antag heretic
+bot bob 7,3
+spawn /obj/effect/heretic_influence 5,3
+
+test heretic_has_the_window_and_buttons
+  until alice.windows.AntagInfoHeretic exists
+  expect alice.chat_all ~ "Вы - Еретик."
+  expect alice.windows.AntagInfoHeretic.data.charges == 1
+  until alice.windows.ActionButtons exists
+  expect alice.windows.ActionButtons.data.buttons[].id ~ "heretic_living_heart"
+  expect bob.windows.AntagInfoHeretic missing
+
+test influences_are_only_for_heretics
+  until alice.seen[].icon ~ "reality_smash"
+  wait 0.5
+  expect bob.seen[].icon !~ "reality_smash"
+
+test a_right_click_drains_the_influence
+  alice move E
+  alice click 5,3 /obj/effect/heretic_influence right
+  until alice.windows.AntagInfoHeretic.data.charges == 2 timeout=20
+  until bob.seen[].icon ~ "pierced_illusion"
+  expect alice.seen[].icon !~ "reality_smash"
+
+test the_path_of_ash
+  alice act AntagInfoHeretic research path=/datum/heretic_knowledge/limited_amount/starting/base_ash category=start
+  until alice.windows.AntagInfoHeretic.data.charges == 1
+  until alice.chat ~ "Изучите как минимум"

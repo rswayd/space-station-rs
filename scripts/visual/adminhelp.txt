@@ -1,0 +1,14 @@
+# The adminhelp window (F1, docs/RUNNING.md "Admins"): opens it, types a ticket and sends it with
+# Enter; the server confirms in the chat. Run together with scripts/visual/admin_panel.txt.
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 3
+tap F1
+wait_secs 0.5
+type "Помогите, меня заперли в техтоннелях"
+tap Enter
+wait_until chat "был создан" timeout=15
+wait_secs 1
+screenshot "adminhelp.png"
+log_state
+quit

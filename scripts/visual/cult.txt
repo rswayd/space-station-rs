@@ -1,0 +1,48 @@
+# Run with SS13_DEV_TRAITOR=cult on the arena map:
+#   SS13_LIGHTING=0 SS13_MAP=$PWD/scripts/visual/maps/arena.dmm SS13_DEV_TRAITOR=cult \
+#       scripts/visual-check.sh scripts/visual/cult.txt
+# The joining body becomes a cultist with the ritual dagger in a pocket: the AntagInfoGeneric
+# panel and the Communion / blood magic buttons; the dagger in hand opens the rune list
+# ("Sigils of Power"); Offer, Empower and Revive runes drawn in a row; the spell list next to the
+# Empower rune.
+# spawn: 10,8
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_until chat "Вы - Культист." timeout=30
+wait_secs 3
+screenshot "cult_info.png"
+click_ui ""           # the panel's close button
+wait_secs 0.5
+click_ui "hud_left_pocket"
+wait_secs 0.5
+click_ui "hud_left_hand"
+wait_secs 1.5
+screenshot "cult_rune_list.png"
+click_ui "list item 1"
+wait_until chat "The offer rune" timeout=15
+key_down D
+wait_secs 0.25
+key_up D
+wait_secs 0.5
+click_ui "hud_left_hand"
+wait_secs 1
+click_ui "list item 2"
+wait_until chat "The empower rune" timeout=15
+key_down D
+wait_secs 0.25
+key_up D
+wait_secs 0.5
+click_ui "hud_left_hand"
+wait_secs 1
+click_ui "list item 5"
+wait_until chat "The revive rune" timeout=15
+key_down S
+wait_secs 0.25
+key_up S
+wait_secs 1
+screenshot "cult_runes.png"
+click_ui "action: Prepare Blood Magic"
+wait_secs 1.5
+screenshot "cult_spell_list.png"
+log_state
+quit

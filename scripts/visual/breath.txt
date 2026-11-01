@@ -1,0 +1,22 @@
+# spawn: 95,155
+# Breathing HUD: become a Security Officer (the dev spawn puts the new body in space next to
+# MetaStation's AI satellite approach), open the pop-up inventory with the toggle button and
+# screenshot the filled slots; in vacuum the low pressure alert comes on the first Life() fire
+# and the no-oxygen alert on the first breath (every 4th fire): screenshot the alert column.
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 1
+click_ui "Выбрать профессию"
+wait_secs 1.5
+scroll_ui "Смотритель" 5
+wait_secs 0.5
+click_ui "Security Officer"
+wait_secs 2
+click_ui "hud_toggle"
+wait_secs 1
+screenshot "hud_slots.png"
+wait_until chat "задыхается" timeout=20
+wait_secs 2
+screenshot "alerts.png"
+log_state
+quit

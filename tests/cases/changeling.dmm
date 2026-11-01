@@ -1,0 +1,10 @@
+"w" = (/turf/closed/wall,/area/centcom/central_command_areas/evacuation)
+"f" = (/turf/open/floor/iron,/area/centcom/central_command_areas/evacuation)
+
+(1,1,1) = {"
+wwwwwwww
+wffffffw
+wffffffw
+wffffffw
+wwwwwwww
+"}

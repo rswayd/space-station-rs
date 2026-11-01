@@ -1,0 +1,19 @@
+# Run with SS13_DEV_TRAITOR=vampire: the joining body becomes a vampire (an admin's "make
+# antag"): the AntagInfoVampire panel opens, the vampire HUD icon is over the own mob, the action
+# row at the top left has the antag info button, rejuvenate and glare (2 charges), the usable
+# blood counter sits on the left edge.
+# spawn: 104,72
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_until chat "Вы — вампир!" timeout=30
+wait_secs 3
+log_state
+screenshot "vampire_info.png"
+click_ui "Специализации"
+wait_secs 1
+screenshot "vampire_specializations.png"
+click_ui "action: Взгляд"
+wait_until chat "испускают ослепительную вспышку" timeout=10
+wait_secs 1
+screenshot "vampire_glare.png"
+quit

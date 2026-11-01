@@ -1,0 +1,38 @@
+# A vacuumed room (airless floors, its breach already closed) gets its air back from the
+# distro: an air canister wrenched to a connector port feeds the pipe, the vent fills the
+# room to ~101 kPa and its air alarm stops warning about the pressure. Then the canister window opens and its
+# valve releases into the room the bot stands in.
+map atmos.dmm
+bot alice 3,4 give /obj/item/wrench
+
+test room_is_vacuum
+  expect tile(8,4).air.pressure < 1
+  until obj(9,5,/obj/machinery/airalarm).atmos.danger == 2
+  expect obj(8,4,/obj/machinery/atmospherics/components/unary/vent_pump).atmos.on == true
+
+test wrench_connects_the_canister
+  alice click 4,4 /obj/machinery/portable_atmospherics
+  until obj(4,4,/obj/machinery/portable_atmospherics).atmos.port == true
+  until obj(8,4,/obj/machinery/atmospherics/components/unary/vent_pump).atmos.pipe_pressure > 1000
+
+test vent_refills_the_room
+  until tile(8,4).air.pressure > 95 timeout=30
+  until tile(9,3).air.pressure > 95 timeout=60
+  until tile(7,5).air.pressure > 95 timeout=60
+  # tg's vacuum turfs count 7000 J/K at 2.7 K (`/datum/gas_mixture/turf/heat_capacity`): the
+  # first gas in cools, the room settles at ~268 K, under the alarm's 270 K: only the low
+  # temperature warning remains.
+  expect tile(9,5).air.temperature > 260
+  until alice.chat ~ "Тревога! Низкая температура." timeout=30
+
+test canister_valve_releases
+  alice drop
+  wait 1
+  alice click 4,4 /obj/machinery/portable_atmospherics
+  until alice.windows.Canister exists
+  expect alice.windows.Canister.data.port_connected == true
+  alice act Canister pressure pressure=500
+  until obj(4,4,/obj/machinery/portable_atmospherics).atmos.release_pressure == 500
+  alice act Canister valve
+  until obj(4,4,/obj/machinery/portable_atmospherics).atmos.valve_open == true
+  until tile(4,4).air.pressure > 150 timeout=20

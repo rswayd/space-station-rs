@@ -1,0 +1,16 @@
+# Guns: on scripts/visual/maps/guns.dmm the player picks up the laser gun east of the spawn and
+# fires it at the west wall; screenshots of the beam in flight (12.5 tiles/s over 8 tiles to the floor and on into the wall).
+# SS13_LIGHTING=0 SS13_MAP=$PWD/scripts/visual/maps/guns.dmm scripts/visual-check.sh scripts/visual/guns.txt
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 1
+click_tile 1 0
+wait_secs 0.5
+click_tile -8 0
+wait_secs 0.1
+screenshot "beam_1.png"
+wait_secs 0.1
+screenshot "beam_2.png"
+wait_secs 1.5
+log_state
+quit

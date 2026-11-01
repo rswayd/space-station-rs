@@ -1,0 +1,23 @@
+# PDA, sending side (run with pda_receiver.txt): open the messenger, pick the other PDA in the
+# contacts, type a message and send it with Enter.
+# spawn: 106,72
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 1
+click_ui "hud_belt"
+wait_secs 0.5
+click_ui "hud_left_hand"
+wait_until chat "включая" timeout=10
+click_ui "Direct Messenger"
+wait_secs 4                 # the receiver joins and opens its PDA
+click_ui "pda contact"
+wait_secs 1
+click_ui "pda: message"
+type "Привет! Это КПК."
+tap Enter
+wait_until chat "PDA message sent to" timeout=10
+wait_secs 1
+screenshot "sender_chat.png"
+wait_secs 8                 # the receiver reads it before the server goes away
+log_state
+quit

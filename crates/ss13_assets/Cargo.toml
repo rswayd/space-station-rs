@@ -1,0 +1,20 @@
+[package]
+name = "ss13_assets"
+description = "Import of BYOND assets: .dmi -> atlases + manifest, .dmm -> map data."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+ss13_shared.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+png.workspace = true
+postcard.workspace = true
+rayon = "1.12"
+# Reads the `icon` of each type from `ss13_dm_extract` output for map usage.
+serde_json = "1.0.154"
+
+[lints]
+workspace = true

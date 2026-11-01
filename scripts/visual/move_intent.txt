@@ -1,0 +1,11 @@
+# The move intent HUD button (tg `/atom/movable/screen/mov_intent`): running, a click, walking.
+# Run with SS13_MAP=scripts/visual/maps/janitor.dmm.
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 4
+screenshot "running.png"
+click_ui "move intent"
+wait_secs 2
+screenshot "walking.png"
+log_state
+quit

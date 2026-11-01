@@ -1,0 +1,22 @@
+# A toolbox to the chest hurts, a bruise pack applied by another mob heals the chest's brute.
+map medical.dmm
+bot alice 3,3 give /obj/item/storage/toolbox/mechanical give /obj/item/stack/medical/bruise_pack
+bot bob 4,3
+
+test toolbox_hurts
+  alice zone chest
+  until alice.zone == Chest
+  alice combat
+  until alice.combat == true
+  # tg `ran_zone`: a hit may land on another bodypart; the pack treats the chest only.
+  repeat 1 alice click bob until mob(bob).health.parts.chest.brute > 0 timeout=20
+  alice combat
+  until alice.combat == false
+  until bob.health exists
+
+test bruise_pack_heals
+  save brute mob(bob).health.parts.chest.brute
+  alice swap
+  alice click bob
+  until mob(bob).health.parts.chest.brute < $brute timeout=10
+  until alice.chat ~ "bruise pack"

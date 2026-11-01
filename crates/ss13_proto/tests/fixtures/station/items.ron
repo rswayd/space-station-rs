@@ -1,0 +1,17 @@
+[
+    (
+        id: "item",
+        parent: "obj",
+        components: {
+            "icon": (file: "icons/obj/items.dmi", layer: 3.1),
+        },
+    ),
+    (
+        id: "toolbox",
+        parent: "item",
+        components: {
+            "name": ("toolbox"),
+            "icon": (state: "red"),
+        },
+    ),
+]

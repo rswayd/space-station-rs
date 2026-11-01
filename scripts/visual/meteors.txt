@@ -1,0 +1,14 @@
+# A forced catastrophic meteor wave on a 45x45 space map with a walled room in the middle:
+# meteors fly in from the edges and break the walls and floor where they hit.
+#   SS13_FORCE_EVENT="Meteor Wave: Catastrophic" SS13_LIGHTING=0 \
+#   SS13_MAP=$PWD/scripts/visual/maps/meteors.dmm SS13_ASSETS=$ASSETS \
+#   scripts/visual-check.sh scripts/visual/meteors.txt
+# spawn: 23,23
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 14
+screenshot "meteors_incoming.png"
+wait_secs 10
+screenshot "meteors_impact.png"
+log_state
+quit

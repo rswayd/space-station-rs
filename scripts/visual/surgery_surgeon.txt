@@ -1,0 +1,27 @@
+# Surgery, surgeon: on scripts/visual/maps/surgery.dmm the surgeon spawns east of the patient,
+# with surgical drapes east and a scalpel south. Once the patient lies on the operating table,
+# prepares the patient's head with the drapes, swaps hands, takes the scalpel and starts an
+# incision: the screenshot catches the operation in progress.
+# Run with surgery_patient.txt:
+#   SS13_SKIP_LOBBY=1 SS13_LIGHTING=0 SS13_MAP=$PWD/scripts/visual/maps/surgery.dmm \
+#       scripts/visual-check.sh scripts/visual/surgery_surgeon.txt scripts/visual/surgery_patient.txt
+# spawn: 13,9
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_until chat "ложится на" timeout=60
+tap Numpad8            # the head
+wait_secs 0.3
+click_tile 1 0         # the drapes into the hand
+wait_secs 0.5
+click_tile -1 1        # drape the patient's head
+wait_until chat "подготовлена для операции" timeout=10
+tap X
+wait_secs 0.3
+click_tile 0 -1 16 11  # the scalpel into the other hand (its thin blade)
+wait_secs 0.5
+click_tile -1 1        # start the incision
+wait_until chat "делать разрез" timeout=10
+wait_secs 0.6
+screenshot "surgery.png"
+log_state
+quit

@@ -1,0 +1,48 @@
+# Hydroponics: on scripts/visual/maps/botany.dmm the botanist spawns below a row of four trays
+# (full of water, 10u of E-Z-Nutrient, as mapped), with a tomato seed pack under each. Plants
+# them one after another with hydroponics timers 10 times faster (a cycle every 2 s), so the
+# screenshot shows the trays at different ages (the oldest grown or ready to harvest, younger
+# growth stages next to it); then clicks the oldest (harvest if ready, else examine).
+#   SS13_HYDRO_SPEED=10 SS13_LIGHTING=0 SS13_MAP=$PWD/scripts/visual/maps/botany.dmm \
+#       scripts/visual-check.sh scripts/visual/botany.txt
+# spawn: 2,3
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 1
+screenshot "trays.png"
+click_tile 0 -1        # the seed pack into the empty hand
+wait_secs 0.4
+click_tile 0 1         # plant it
+wait_until chat "You plant" timeout=5
+wait_secs 12
+tap D
+wait_secs 0.5
+click_tile 0 -1
+wait_secs 0.4
+click_tile 0 1
+wait_secs 3.5
+tap D
+wait_secs 0.5
+click_tile 0 -1
+wait_secs 0.4
+click_tile 0 1
+wait_secs 3.5
+tap D
+wait_secs 0.5
+click_tile 0 -1
+wait_secs 0.4
+click_tile 0 1
+wait_secs 3
+screenshot "stages.png"
+log_state
+tap A
+wait_secs 0.4
+tap A
+wait_secs 0.4
+tap A
+wait_secs 0.5
+click_tile 0 1         # the oldest
+wait_secs 1
+screenshot "harvested.png"
+log_state
+quit

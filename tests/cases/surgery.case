@@ -1,0 +1,91 @@
+# Advanced medicine: a slash wound bleeds until gauze soaks it up; a tend-wounds operation on an
+# operating table heals (drapes, scalpel, retractor, then the operation list); a defibrillator
+# revives a fresh corpse.
+map surgery.dmm
+bot alice 4,3
+bot bob 5,3
+bot carol 7,3
+
+test slash_bleeds_gauze_stops
+  spawn /obj/item/scalpel 5,3
+  bob click 5,3 /obj/item/scalpel
+  until bob.hands ~ "scalpel"
+  bob zone l_arm
+  bob combat
+  until bob.combat == true
+  # A scalpel (10, +10, +15 exposed) on an unarmored arm always rolls at least a cut; hitting
+  # yourself lands on the selected zone.
+  repeat 1 bob click self until mob(bob).bleed_rate > 0 timeout=20
+  expect mob(bob).limbs.larm.kinds ~ "Slash"
+  bob combat
+  bob drop
+  save blood mob(bob).blood_volume
+  wait 2.5
+  expect mob(bob).blood_volume < $blood
+  spawn /obj/item/stack/medical/wrap/gauze 4,3
+  alice click 4,3 /obj/item/stack/medical/wrap/gauze
+  until alice.hands ~ "gauze"
+  alice zone l_arm
+  alice click bob
+  until mob(bob).limbs.larm.gauze == true timeout=10
+  until mob(bob).bleed_rate == 0 timeout=60
+  expect mob(bob).limbs.larm.kinds.len == 0
+
+test tend_wounds_surgery
+  # The chest must be bare and the patient lying: the jumpsuit off, onto the operating table.
+  bob slot uniform
+  until bob.slots.uniform missing
+  bob drop
+  bob drag self 5,4 /obj/structure/table/optable
+  until mob(bob).buckled == true
+  until mob(bob).pos == 5,4
+  alice drop
+  spawn /obj/item/surgical_drapes 4,3
+  alice click 4,3 /obj/item/surgical_drapes
+  until alice.hands ~ "surgical_drapes"
+  alice zone chest
+  alice click bob
+  until mob(bob).limbs.chest.prepped == true
+  alice drop
+  spawn /obj/item/scalpel 4,3
+  alice click 4,3 /obj/item/scalpel
+  until alice.hands ~ "scalpel"
+  # A conscious patient: 45% of the steps fail (BandaStation), so retry until the skin is cut.
+  repeat 1 alice click bob until mob(bob).limbs.chest.surgery == 5 timeout=40
+  alice drop
+  spawn /obj/item/retractor 4,3
+  alice click 4,3 /obj/item/retractor
+  until alice.hands ~ "retractor"
+  repeat 1 alice click bob until mob(bob).limbs.chest.surgery == 6 timeout=40
+  alice drop
+  spawn /obj/item/hemostat 4,3
+  alice click 4,3 /obj/item/hemostat
+  until alice.hands ~ "hemostat"
+  save brute mob(bob).health.brute
+  # Clamping and tending both fit a hemostat on open skin: the operation list opens.
+  alice click bob
+  until alice.windows.ListInputWindow.data.items ~ "Обработка ушибов"
+  alice act ListInputWindow submit "entry=Обработка ушибов"
+  until mob(bob).health.brute < $brute timeout=60
+
+test defib_revives_fresh_corpse
+  carol hurt oxy 210
+  until mob(carol).stat == "Dead"
+  alice drop
+  # A compact defibrillator goes on the belt (the back holds the backpack): the PDA off first.
+  alice slot belt
+  until mob(alice).slots.belt missing
+  alice drop
+  spawn /obj/item/defibrillator/compact/loaded 4,3
+  alice click 4,3 /obj/item/defibrillator
+  until alice.hands ~ "defibcompact"
+  alice slot belt
+  until mob(alice).slots.belt ~ "defibrillator"
+  alice slot belt
+  until alice.hands ~ "defibpaddles0"
+  alice move E E
+  until alice.pos == 6,3
+  alice zone chest
+  alice click carol
+  until mob(carol).stat == "HardCrit" timeout=15
+  expect mob(carol).health.health > -51

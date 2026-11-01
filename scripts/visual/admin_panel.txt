@@ -1,0 +1,11 @@
+# The admin panel (docs/RUNNING.md "Admins"): client1 is listed as an admin in SS13_CONFIG_DIR
+# (with SS13_INSECURE_ADMINS=1);
+# SS13_ADMIN_UI=tickets (or players) opens the panel on that tab once the server confirms the
+# rights. Waits for client2's adminhelp (scripts/visual/adminhelp.txt) and screenshots the panel.
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_until chat "Тикет #1" timeout=60
+wait_secs 2
+screenshot "admin_panel.png"
+log_state
+quit

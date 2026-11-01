@@ -1,0 +1,9 @@
+# A plain tile click hits pixels, like the client and BYOND: MetaStation's supply console
+# (67,152) shares its tile with a west wall light (layer 4.25) and two door buttons drawn on the
+# wall; the click on the tile's center opens the console, not the light above it.
+map click_pixels.dmm
+bot alice 3,3
+
+test console_under_a_wall_light
+  alice click 2,3
+  until alice.windows.Cargo exists

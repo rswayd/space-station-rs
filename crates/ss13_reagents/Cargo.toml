@@ -1,0 +1,16 @@
+[package]
+name = "ss13_reagents"
+description = "Chemistry (tg reagents): reagent and reaction data, reagent holders, equilibrium reactions, metabolism. Pure logic, no Bevy."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+anyhow.workspace = true
+# The generated `reagents.ron`; same version the prototype loader uses.
+ron = "0.12"
+
+[lints]
+workspace = true

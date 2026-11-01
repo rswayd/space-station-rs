@@ -1,0 +1,51 @@
+# Малые и особые антагонисты
+Роли, выдаваемые событиями, предметами, админами или эффектами: клоны, валентинки, промывка мозгов, хайлендер, выживальщики, нации и т.д.
+
+### Парадокс-клон и злой клон
+Парадокс-клон — копия члена экипажа из другой реальности, цель — убить и заменить оригинал (мидраунд из призраков); злой клон — клон из неисправного клонирующего устройства/эффекта.
+
+- **Код:** [`/datum/antagonist/paradox_clone`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/paradox_clone/paradox_clone.dm#L1), [`/datum/antagonist/evil_clone`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/evil_clone/evil_clone.dm#L2)
+- **BandaStation:** [`dynamic_ruleset_midround.dm#L774`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/dynamic/dynamic_ruleset_midround.dm#L774) — сообщение админам при выборе клона
+- **Статус в ss13-rs:** ❌ нет
+
+### Промытые мозги и гипноз
+Brainwashed — цели, вложенные хирургией/нанитами/вещами; hypnotized — фраза гипноза от гипнофлеша/травмы.
+
+- **Код:** [`/datum/antagonist/brainwashed`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/brainwashing/brainwashing.dm#L30), [`/datum/antagonist/hypnotized`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/hypnotized/hypnotized.dm#L2); tgui: [`AntagInfoBrainwashed.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/AntagInfoBrainwashed.tsx)
+- **Статус в ss13-rs:** ❌ нет
+
+### Валентинки
+Событие Дня святого Валентина: пары валентинок защищают друг друга, третий лишний и разбиватель сердец.
+
+- **Код:** [`/datum/antagonist/valentine`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/valentines/valentine.dm#L1), [`/datum/antagonist/heartbreaker`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/valentines/heartbreaker.dm#L1), [`/datum/antagonist/valentine/third_wheel`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/valentines/valentine.dm#L72)
+- **Статус в ss13-rs:** ❌ нет
+
+### Хайлендер и выживальщики
+Хайлендер (админ-событие «There can be only one»: клеймор, остаться последним); выживальщики Summon Guns/Summon Magic и battle royale — собрать оружие/магию и выжить.
+
+- **Код:** [`/datum/antagonist/highlander`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/highlander/highlander.dm#L1), [`/datum/antagonist/survivalist`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/survivalist/survivalist.dm#L1), [`/datum/antagonist/survivalist/guns`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/survivalist/survivalist.dm#L26), [`/datum/antagonist/survivalist/battle_royale`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/survivalist/survivalist.dm#L62)
+- **Статус в ss13-rs:** ❌ нет
+
+### Сепаратисты (нации)
+Режим Nations: каждый департамент — независимая нация со своими целями.
+
+- **Код:** [`/datum/team/nation`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/separatist/separatist.dm#L1), [`/datum/antagonist/separatist`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/separatist/separatist.dm#L81); tgui: [`AntagInfoSeparatist.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/AntagInfoSeparatist.tsx)
+- **Статус в ss13-rs:** ❌ нет
+
+### Подчинённые и разумные существа
+Разумное существо (после зелья разума), шейд-слуга, слуга мага (magic servant), обезьяна-агент Синдиката, пиро-слайм, венерина мухоловка, исполнитель желаний (wishgranter), гринтекст-носитель.
+
+- **Код:** [`/datum/antagonist/sentient_creature`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/sentient_creature/sentient_creature.dm#L1), [`/datum/antagonist/shade_minion`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/shade/shade_minion.dm#L7), [`/datum/antagonist/magic_servant`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/magic_servant/servant.dm#L1), [`/datum/antagonist/syndicate_monkey`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/syndicate_monkey/syndicate_monkey.dm#L1), [`/datum/antagonist/pyro_slime`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/pyro_slime/pyro_slime.dm#L1), [`/datum/antagonist/venus_human_trap`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/venus_human_trap/venus_human_trap.dm#L1), [`/datum/antagonist/wishgranter`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/wishgranter/wishgranter.dm#L1), [`/datum/antagonist/greentext`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/greentext/greentext.dm#L1); tgui: [`AntagInfoSentient.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/AntagInfoSentient.jsx)
+- **Статус в ss13-rs:** ❌ нет
+
+### Пеплоходцы
+Ящеры Лаваленда, команда вокруг гнезда-тендрила: приносят тела для размножения, защищают гнездо.
+
+- **Код:** [`/datum/antagonist/ashwalker`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/ashwalker/ashwalker.dm#L1), [`/datum/team/ashwalkers`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/ashwalker/ashwalker.dm#L44)
+- **Статус в ss13-rs:** ❌ нет
+
+### Санта
+Админ-событие: Санта с мешком подарков и телепортом.
+
+- **Код:** [`/datum/antagonist/santa`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/santa/santa.dm#L1)
+- **Статус в ss13-rs:** ❌ нет

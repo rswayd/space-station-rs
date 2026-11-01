@@ -1,0 +1,12 @@
+# Run with SS13_DEV_TRAITOR=rev together with rev.txt: the first joining body becomes a head
+# revolutionary (the AntagInfoRevolution panel, the `rev_head` HUD icon over the own mob), the
+# second (by join order) a revolutionary; each sees the other with its own icon (`rev` / `rev_head`).
+# spawn: 104,72
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 8
+click_ui ""           # the panel's close button (Font Awesome `times`)
+wait_secs 1
+log_state
+screenshot "rev_head.png"
+quit

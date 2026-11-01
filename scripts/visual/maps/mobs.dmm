@@ -1,0 +1,26 @@
+"w" = (/turf/closed/wall,/area/station/commons/dorms)
+"f" = (/turf/open/floor/iron,/area/station/commons/dorms)
+"s" = (/obj/effect/landmark/start/assistant,/turf/open/floor/iron,/area/station/commons/dorms)
+"I" = (/mob/living/basic/pet/dog/corgi/ian,/turf/open/floor/iron,/area/station/commons/dorms)
+"C" = (/mob/living/basic/carp,/turf/open/floor/iron,/area/station/commons/dorms)
+"K" = (/mob/living/basic/pet/cat/runtime,/turf/open/floor/iron,/area/station/commons/dorms)
+"M" = (/mob/living/basic/mouse/brown/tom,/turf/open/floor/iron,/area/station/commons/dorms)
+"F" = (/mob/living/basic/pet/fox/renault,/turf/open/floor/iron,/area/station/commons/dorms)
+
+(1,1,1) = {"
+wwwwwwwwwwwwwwwwwwwww
+wfffffffffffffffffffw
+wfffffffffffffffffffw
+wfffffffffffffffCfffw
+wfffffffffffffffffffw
+wffffffKffffffffffffw
+wfffffffffsIffffffffw
+wfffffffffffffFfffffw
+wfffffffffffffffffffw
+wffffMffffffffffffffw
+wfffffffffffffffffffw
+wfffffffffffffffffffw
+wfffffffffffffffffffw
+wfffffffffffffffffffw
+wwwwwwwwwwwwwwwwwwwww
+"}

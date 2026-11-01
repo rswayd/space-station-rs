@@ -1,0 +1,30 @@
+# Power generation: an RTG powers a welded emitter aimed at a supermatter crystal; the crystal's
+# arcs charge the tesla coil beside it, whose net feeds a SMES; the solar console links the
+# panel and tracker wired to it through the wall.
+map engine.dmm
+bot alice 3,5
+time_scale 4
+timeout 30
+
+test emitter_feeds_the_crystal
+  expect obj(8,4,/obj/machinery/power/supermatter_crystal).supermatter.energy == 0
+  alice click 3,4 /obj/machinery/power/emitter
+  until obj(3,4,/obj/machinery/power/emitter).emitter.active == true
+  until obj(8,4,/obj/machinery/power/supermatter_crystal).supermatter.energy > 50
+
+test arcs_power_the_net
+  # Arcs under 240 kJ fizzle until the crystal's zap energy builds up.
+  until obj(9,6,/obj/machinery/power/energy_accumulator).accumulator.processed > 0 timeout=60
+  until obj(5,8,/obj/machinery/power/smes).smes.input > 10000 timeout=60
+  expect obj(9,6,/obj/machinery/power/energy_accumulator).powernet.avail > 5000
+  expect obj(8,4,/obj/machinery/power/supermatter_crystal).supermatter.damage == 0
+
+test solar_console_links_the_panel
+  alice teleport 13,8
+  alice click 14,8 /obj/machinery/power/solar_control
+  until alice.windows.SolarControl exists
+  expect alice.windows.SolarControl.data.connected_panels == 0
+  alice act SolarControl refresh
+  until alice.windows.SolarControl.data.connected_panels == 1
+  expect alice.windows.SolarControl.data.connected_tracker == true
+  expect alice.windows.SolarControl.data.capacity == 2500

@@ -1,0 +1,35 @@
+# The vampire (BandaStation `/datum/antagonist/vampire`): alice is made a vampire (an admin's
+# "make antag"; the bot framework skips the lobby, so the roundstart ruleset is covered by
+# `crates/ss13_game/tests/vampire.rs`). Her panel, action buttons and blood counter; a bite on
+# bob's head in combat mode drains 25 of his blood and gives her 10 usable blood; her glare
+# stuns bob in front of her and spends a charge. Time runs 10x so a 5 s bite takes 0.5 s.
+map vampire.dmm
+time_scale 10
+bot alice 3,3 antag vampire
+bot bob 4,3
+
+test vampire_has_its_panel_and_buttons
+  until alice.windows.AntagInfoVampire exists
+  expect alice.chat_all ~ "Вы — вампир!"
+  expect alice.windows.AntagInfoVampire.static.subclasses[0].id == "umbrae"
+  until alice.windows.ActionButtons exists
+  expect alice.windows.ActionButtons.data.buttons[0].id == "vampire_rejuvenate"
+  expect alice.windows.ActionButtons.data.buttons[1].maptext == "2"
+  until alice.windows.VampireHud exists
+  expect alice.windows.VampireHud.data.usable == 0
+  expect bob.windows.AntagInfoVampire missing
+
+test bite_drains_blood
+  alice combat
+  alice zone head
+  save before mob(bob).blood_volume
+  alice click bob
+  until alice.chat ~ "Вы накопили 10 ед. крови; для использования осталось 10."
+  expect bob.chat ~ "грубо хватает"
+  expect mob(bob).blood_volume <= $before-24
+  until alice.windows.VampireHud.data.usable >= 10
+
+test glare_stuns_in_front
+  alice act ActionButtons trigger id=vampire_glare
+  until bob.chat ~ "Вас ослепляет взгляд"
+  until alice.windows.ActionButtons.data.buttons[1].maptext == "1"

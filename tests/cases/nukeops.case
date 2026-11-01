@@ -1,0 +1,36 @@
+# The nuclear bomb's keypad (tg `/obj/machinery/nuclearbomb`, `NuclearBomb.tsx`): alice picks up
+# the nuclear authentication disk, puts it into the syndicate bomb and opens the keypad; a wrong
+# code is an ERROR, C clears it; the eject button gives the disk back. The operatives' code,
+# timer and detonation are covered by `crates/ss13_game/tests/nukeops.rs` (the bot framework
+# skips the lobby, where the nukeops ruleset runs).
+map nukeops.dmm
+bot alice 3,3
+
+test disk_goes_into_the_bomb
+  alice click 3,3 /obj/item/disk/nuclear
+  until alice.hands[0] exists
+  alice move E
+  alice click 5,3 /obj/machinery/nuclearbomb
+  until alice.hands[0] missing
+  alice click 5,3 /obj/machinery/nuclearbomb
+  until alice.windows.NuclearBomb exists
+  expect alice.windows.NuclearBomb.data.disk_present == true
+  expect alice.windows.NuclearBomb.data.status1 == "INPUT CODE"
+  expect alice.windows.NuclearBomb.data.status2 == "CODE: -----"
+
+test wrong_code_is_an_error
+  alice act NuclearBomb keypad digit=1
+  alice act NuclearBomb keypad digit=2
+  until alice.windows.NuclearBomb.data.status2 == "CODE: **---"
+  alice act NuclearBomb keypad digit=E
+  until alice.windows.NuclearBomb.data.status2 == "CODE: ERROR"
+  alice act NuclearBomb keypad digit=C
+  until alice.windows.NuclearBomb.data.status2 == "CODE: -----"
+  alice act NuclearBomb arm
+  wait 0.3
+  expect alice.windows.NuclearBomb.data.status1 == "INPUT CODE"
+
+test eject_gives_the_disk_back
+  alice act NuclearBomb eject_disk
+  until alice.windows.NuclearBomb.data.status2 == "AWAIT DISK"
+  expect obj(5,3,/obj/item/disk/nuclear).path == "/obj/item/disk/nuclear"

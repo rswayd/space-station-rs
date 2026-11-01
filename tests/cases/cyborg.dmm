@@ -1,0 +1,12 @@
+"w" = (/turf/closed/wall,/area/centcom/central_command_areas/arboretum)
+"f" = (/turf/open/floor/iron,/area/centcom/central_command_areas/arboretum)
+"r" = (/obj/machinery/recharge_station,/turf/open/floor/iron,/area/centcom/central_command_areas/arboretum)
+"x" = (/obj/item/screwdriver,/turf/open/floor/iron,/area/centcom/central_command_areas/arboretum)
+
+(1,1,1) = {"
+wwwwwww
+wfffffw
+wfffxrw
+wfffffw
+wwwwwww
+"}

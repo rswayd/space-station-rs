@@ -1,0 +1,7 @@
+# The player being stripped (see strip_stripper.txt): stands still north of the stripper.
+# spawn: 11,9
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 12
+log_state
+quit

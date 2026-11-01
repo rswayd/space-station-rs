@@ -1,0 +1,20 @@
+# The strip menu and the loot panel. With strip_victim.txt on scripts/visual/maps/arena.dmm:
+# this client drags the player north of it onto itself (tg MouseDrop -> strippable), the
+# StripMenu window opens on them (centered, east of the mob); then alt-clicks the tile west of
+# it (the loot panel), which opens offset from the strip menu, not on top of it.
+# SS13_LIGHTING=0 SS13_MAP=$PWD/scripts/visual/maps/arena.dmm scripts/visual-check.sh \
+#     scripts/visual/strip_stripper.txt scripts/visual/strip_victim.txt
+# spawn: 11,8
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 4            # the victim joins north of us
+drag_tile 0 1 0 0
+wait_secs 1.5
+screenshot "strip_menu.png"
+key_down Alt
+click_tile -1 0
+key_up Alt
+wait_secs 1.5
+screenshot "loot_panel.png"
+log_state
+quit

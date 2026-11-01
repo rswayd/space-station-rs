@@ -1,0 +1,16 @@
+"w" = (/turf/closed/wall,/area/misc/testroom)
+"f" = (/turf/open/floor/iron,/area/misc/testroom)
+"s" = (/obj/effect/landmark/start/assistant,/turf/open/floor/iron,/area/misc/testroom)
+"M" = (/obj/structure/table,/obj/machinery/microwave,/turf/open/floor/iron,/area/misc/testroom)
+"E" = (/obj/item/food/egg,/turf/open/floor/iron,/area/misc/testroom)
+"T" = (/obj/structure/table,/obj/item/food/meat/slab/monkey,/turf/open/floor/iron,/area/misc/testroom)
+"K" = (/obj/item/knife/kitchen,/turf/open/floor/iron,/area/misc/testroom)
+
+(1,1,1) = {"
+wwwwwww
+wfffffw
+wMsEffw
+wTKfffw
+wfffffw
+wwwwwww
+"}

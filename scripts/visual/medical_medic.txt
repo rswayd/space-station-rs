@@ -1,0 +1,35 @@
+# Medicine, medic: on scripts/visual/maps/medical.dmm the medic spawns south of the patient with a
+# health analyzer and a bruise pack east of it. Punches the patient (combat mode), selects the
+# right arm with Numpad4 (zone selector screenshot), the chest with a click on the selector, picks
+# up the analyzer and scans the patient (the scan in chat).
+# Run with medical_patient.txt:
+#   SS13_LIGHTING=0 SS13_MAP=$PWD/scripts/visual/maps/medical.dmm scripts/visual-check.sh \
+#       scripts/visual/medical_medic.txt scripts/visual/medical_patient.txt
+# spawn: 11,8
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 3            # the patient joins
+tap F
+wait_secs 0.3
+click_tile 0 1
+wait_secs 0.9
+click_tile 0 1
+wait_secs 0.9
+click_tile 0 1
+wait_secs 0.9
+click_tile 0 1
+wait_secs 0.9
+tap F
+tap Numpad4
+wait_secs 0.5
+screenshot "zone_r_arm.png"
+click_ui "zone selector"
+wait_secs 0.5
+click_tile 1 0         # the analyzer into the empty hand
+wait_secs 0.5
+click_tile 0 1         # scan the patient
+wait_until chat "Анализ результатов" timeout=10
+wait_secs 0.5
+screenshot "scan.png"
+log_state
+quit

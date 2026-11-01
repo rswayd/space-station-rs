@@ -1,0 +1,59 @@
+"ww" = (/turf/closed/wall,/area/station/commons/dorms)
+"00" = (/obj/item/clothing/under/color/grey,/turf/open/floor/iron,/area/station/commons/dorms)
+"01" = (/obj/item/clothing/under/color/black,/turf/open/floor/iron,/area/station/commons/dorms)
+"02" = (/obj/item/clothing/under/color/blue,/turf/open/floor/iron,/area/station/commons/dorms)
+"03" = (/obj/item/clothing/under/color/darkblue,/turf/open/floor/iron,/area/station/commons/dorms)
+"04" = (/obj/item/clothing/under/color/green,/turf/open/floor/iron,/area/station/commons/dorms)
+"05" = (/obj/item/clothing/under/color/red,/turf/open/floor/iron,/area/station/commons/dorms)
+"06" = (/obj/item/clothing/under/color/orange,/turf/open/floor/iron,/area/station/commons/dorms)
+"07" = (/obj/item/clothing/under/color/pink,/turf/open/floor/iron,/area/station/commons/dorms)
+"08" = (/obj/item/clothing/under/color/lightpurple,/turf/open/floor/iron,/area/station/commons/dorms)
+"09" = (/obj/item/clothing/under/color/teal,/turf/open/floor/iron,/area/station/commons/dorms)
+"10" = (/obj/item/clothing/under/color/rainbow,/turf/open/floor/iron,/area/station/commons/dorms)
+"11" = (/obj/item/modular_computer/pda,/turf/open/floor/iron,/area/station/commons/dorms)
+"12" = (/obj/item/modular_computer/pda/crew/medical,/turf/open/floor/iron,/area/station/commons/dorms)
+"13" = (/obj/item/modular_computer/pda/crew/security,/turf/open/floor/iron,/area/station/commons/dorms)
+"14" = (/obj/item/modular_computer/pda/crew/engineering,/turf/open/floor/iron,/area/station/commons/dorms)
+"15" = (/obj/item/modular_computer/pda/crew/clown,/turf/open/floor/iron,/area/station/commons/dorms)
+"16" = (/obj/item/modular_computer/pda/crew/heads/captain,/turf/open/floor/iron,/area/station/commons/dorms)
+"17" = (/obj/item/modular_computer/pda/syndicate,/turf/open/floor/iron,/area/station/commons/dorms)
+"18" = (/obj/item/modular_computer/pda/bridge_assistant,/turf/open/floor/iron,/area/station/commons/dorms)
+"19" = (/obj/item/modular_computer/pda/pun_pun,/turf/open/floor/iron,/area/station/commons/dorms)
+"20" = (/obj/item/modular_computer/pda/veteran_advisor,/turf/open/floor/iron,/area/station/commons/dorms)
+"21" = (/obj/item/modular_computer/pda/chameleon,/turf/open/floor/iron,/area/station/commons/dorms)
+"22" = (/obj/item/clothing/head/beret,/turf/open/floor/iron,/area/station/commons/dorms)
+"23" = (/obj/item/clothing/head/beret/sec,/turf/open/floor/iron,/area/station/commons/dorms)
+"24" = (/obj/item/clothing/head/beret/science,/turf/open/floor/iron,/area/station/commons/dorms)
+"25" = (/obj/item/clothing/head/beret/medical/cmo,/turf/open/floor/iron,/area/station/commons/dorms)
+"26" = (/obj/item/clothing/head/beret/engi,/turf/open/floor/iron,/area/station/commons/dorms)
+"27" = (/obj/item/clothing/head/beanie/red,/turf/open/floor/iron,/area/station/commons/dorms)
+"28" = (/obj/item/clothing/head/fedora/greyscale,/turf/open/floor/iron,/area/station/commons/dorms)
+"29" = (/obj/item/clothing/head/costume/ushanka,/turf/open/floor/iron,/area/station/commons/dorms)
+"30" = (/obj/item/clothing/head/costume/sombrero/green,/turf/open/floor/iron,/area/station/commons/dorms)
+"31" = (/obj/item/clothing/head/wizard/marisa,/turf/open/floor/iron,/area/station/commons/dorms)
+"32" = (/obj/item/clothing/head/costume/fancy,/turf/open/floor/iron,/area/station/commons/dorms)
+"33" = (/obj/item/clothing/shoes/sneakers/black,/turf/open/floor/iron,/area/station/commons/dorms)
+"34" = (/obj/item/clothing/shoes/sneakers/blue,/turf/open/floor/iron,/area/station/commons/dorms)
+"35" = (/obj/item/clothing/shoes/sneakers/brown,/turf/open/floor/iron,/area/station/commons/dorms)
+"36" = (/obj/item/clothing/shoes/sneakers/orange,/turf/open/floor/iron,/area/station/commons/dorms)
+"37" = (/obj/item/clothing/shoes/sneakers/white,/turf/open/floor/iron,/area/station/commons/dorms)
+"38" = (/obj/item/clothing/shoes/sneakers/marisa,/turf/open/floor/iron,/area/station/commons/dorms)
+"39" = (/obj/item/clothing/shoes/wheelys,/turf/open/floor/iron,/area/station/commons/dorms)
+"40" = (/turf/open/floor/iron,/area/station/commons/dorms)
+"41" = (/obj/machinery/portable_atmospherics/canister/oxygen,/turf/open/floor/iron,/area/station/commons/dorms)
+"42" = (/obj/machinery/portable_atmospherics/canister/plasma,/turf/open/floor/iron,/area/station/commons/dorms)
+"43" = (/obj/machinery/portable_atmospherics/canister/nitrogen,/turf/open/floor/iron,/area/station/commons/dorms)
+"44" = (/obj/effect/landmark/start/assistant,/turf/open/floor/iron,/area/station/commons/dorms)
+
+(1,1,1) = {"
+wwwwwwwwwwwwwwwwwwwwwwwwww
+ww0001020304050607080910ww
+ww1112131415161718192021ww
+ww2223242526272829303132ww
+ww3334353637383940414243ww
+ww4040404040404040404040ww
+ww4044234040274040304040ww
+ww4005404002404004404040ww
+ww4040404040404040404040ww
+wwwwwwwwwwwwwwwwwwwwwwwwww
+"}

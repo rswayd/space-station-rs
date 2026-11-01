@@ -1,0 +1,64 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+license = "AGPL-3.0-only"
+
+# Shared dependency versions. Agents may add crate-local deps; the coordinator owns this table
+# and resolves Cargo.lock on merge.
+[workspace.dependencies]
+ss13_shared = { path = "crates/ss13_shared" }
+ss13_net = { path = "crates/ss13_net" }
+ss13_world = { path = "crates/ss13_world" }
+ss13_assets = { path = "crates/ss13_assets" }
+ss13_render = { path = "crates/ss13_render" }
+ss13_ui_kit = { path = "crates/ss13_ui_kit" }
+ss13_tgui = { path = "crates/ss13_tgui" }
+ss13_proto = { path = "crates/ss13_proto" }
+ss13_mapload = { path = "crates/ss13_mapload" }
+ss13_game = { path = "crates/ss13_game" }
+ss13_chat = { path = "crates/ss13_chat" }
+ss13_devtools = { path = "crates/ss13_devtools" }
+ss13_atmos = { path = "crates/ss13_atmos" }
+ss13_admin = { path = "crates/ss13_admin" }
+ss13_debug = { path = "crates/ss13_debug" }
+ss13_reagents = { path = "crates/ss13_reagents" }
+ss13_bots = { path = "crates/ss13_bots" }
+
+bevy = { version = "0.20.1", default-features = false }
+serde = { version = "1.0.229", features = ["derive"] }
+postcard = { version = "1.1.3", features = ["use-std"] }
+thiserror = "2"
+anyhow = "1"
+png = "0.18"
+# Debug overlay (ss13_debug) and admin windows; 0.43 is the bevy_egui line for Bevy 0.20. `bevy_ui`
+# orders the egui pass after bevy_ui's (`EguiAboveBevyUi`); without it the order is undefined and
+# the lobby's full-window background covered the windows.
+bevy_egui = { version = "0.43.1", default-features = false, features = ["render", "default_fonts", "picking", "bevy_ui"] }
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+type_complexity = "allow"
+too_many_arguments = "allow"
+
+# Bevy is unusable at opt-level 0; keep our code debuggable, optimize dependencies.
+[profile.dev]
+opt-level = 1
+# Full debuginfo in every test binary (each links Bevy) made one worktree's target 30-40 GB;
+# line tables keep backtraces with file:line.
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+opt-level = 3
+# Dependency debuginfo multiplied target/ size several times.
+debug = false
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

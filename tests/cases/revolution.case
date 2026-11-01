@@ -1,0 +1,27 @@
+# The revolution (tg `/datum/antagonist/rev/head`): alice is made a head revolutionary (an
+# admin's "make antag": a flash in a pocket, the revolution starts against the captain carol); a
+# successful flash on bob makes him a revolutionary, and each one's antag HUD shows the other with
+# its own icon (`rev_head`, `rev`). The captain joins first: a revolution without heads of staff
+# would win at once (tg `check_rev_victory` of no objectives). Case maps load beside the station
+# levels, so the revolution wins here at once anyway (the captain is "off the station"); the
+# outcome is checked by the integration test (`tests/it/revolution.rs`).
+map revolution.dmm
+seed 1
+bot carol 6,3 job "Captain"
+bot bob 4,3 job "Assistant"
+bot alice 3,3 give /obj/item/assembly/flash/handheld antag headrev
+
+test head_rev_has_a_flash
+  until alice.windows.AntagInfoRevolution exists
+  expect alice.chat_all ~ "Вы - Глава Революционеров."
+  expect alice.windows.AntagInfoRevolution.static.objectives[0].explanation ~ "Убейте или отправьте в изгнание"
+  expect mob(alice).slots.left_pocket ~ "/obj/item/assembly/flash"
+  expect bob.windows.AntagHud missing
+
+test flash_converts_bob
+  alice click bob
+  until bob.windows.AntagInfoRevolution exists
+  expect bob.chat ~ "Вы - Революционер."
+  until alice.windows.AntagHud.data.team_icons.len == 1
+  until bob.windows.AntagHud.data.team_icons.len == 1
+  expect carol.windows.AntagHud missing

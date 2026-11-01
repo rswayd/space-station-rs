@@ -1,0 +1,22 @@
+# A plasma fire on `scripts/visual/maps/fire.dmm`: the east room holds plasma (12 mol a tile).
+# The player picks up the welder next to it through the plasma overlay (gas overlays and fires
+# are `mouse_opacity = 0`), lights it with a click on its hand slot, `open_flame()` lights the
+# tile, the fire spreads through the room and sets the player on fire. Hotspot sprites
+# (light/medium/heavy) and their light in the unlit room, the burning mob, the fire alert.
+#   SS13_MAP=$PWD/scripts/visual/maps/fire.dmm SS13_ASSETS=$ASSETS \
+#     scripts/visual-check.sh scripts/visual/fire.txt
+# spawn: 10,5
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 2
+click_world 11 5
+wait_secs 1
+screenshot "welder_in_hand.png"
+click_ui "hud_left_hand"
+wait_until chat "загорелись" timeout=15
+wait_secs 1
+screenshot "fire_start.png"
+wait_secs 4
+log_state
+screenshot "fire_spread.png"
+quit

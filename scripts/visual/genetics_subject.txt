@@ -1,0 +1,15 @@
+# Genetics, subject: opens the DNA scanner west of him and steps in (see genetics.txt).
+#   SS13_LIGHTING=0 SS13_MAP=$PWD/scripts/visual/maps/genetics.dmm SS13_ASSETS=$ASSETS \
+#     scripts/visual-check.sh scripts/visual/genetics_subject.txt scripts/visual/genetics.txt
+# spawn: 5,3
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 2
+click_tile -1 0
+wait_secs 1
+key_down A
+wait_secs 0.3
+key_up A
+wait_secs 15
+screenshot "subject.png"
+quit

@@ -1,0 +1,13 @@
+"w" = (/turf/closed/wall,/area/centcom/central_command_areas/briefing)
+"f" = (/turf/open/floor/iron,/area/centcom/central_command_areas/briefing)
+"B" = (/obj/item/reagent_containers/cup/beaker,/turf/open/floor/iron,/area/centcom/central_command_areas/briefing)
+"H" = (/obj/item/reagent_containers/cup/bottle/hydrogen,/turf/open/floor/iron,/area/centcom/central_command_areas/briefing)
+"N" = (/obj/item/reagent_containers/cup/bottle/nitrogen,/turf/open/floor/iron,/area/centcom/central_command_areas/briefing)
+
+(1,1,1) = {"
+wwwwww
+wfNffw
+wHfBfw
+wffffw
+wwwwww
+"}

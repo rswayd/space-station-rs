@@ -1,0 +1,14 @@
+# Radio, assistant side (run with radio_engineer.txt): a plain headset hears Common but not the
+# engineering channel; replies on Common and screenshots its chat.
+# spawn: 98,72
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_until chat "Всем постам" timeout=120
+click_ui "Сообщение"
+type "; Приём, слышу"
+tap Enter
+wait_until chat "Приём, слышу" timeout=10
+wait_secs 1
+screenshot "radio_assistant.png"
+log_state
+quit

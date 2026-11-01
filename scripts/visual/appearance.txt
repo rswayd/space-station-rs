@@ -1,0 +1,12 @@
+# Character setup's appearance section (docs/RUNNING.md "Lobby and rounds"): opens the window,
+# makes the body female and bald, steps the skin tone, screenshots. Run with SS13_SKIP_LOBBY=0.
+wait_connected timeout=60
+wait_secs 3
+click_ui "Настройка персонажа"
+wait_secs 2
+click_ui "appearance: female Женское"
+wait_secs 1
+click_ui "appearance: skin_tone ▶"
+wait_secs 1
+screenshot "appearance.png"
+quit

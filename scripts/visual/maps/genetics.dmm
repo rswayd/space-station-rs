@@ -1,0 +1,13 @@
+"w" = (/turf/closed/wall,/area/centcom/central_command_areas/planetary_port/plaza)
+"s" = (/obj/effect/landmark/start/assistant,/turf/open/floor/iron,/area/centcom/central_command_areas/planetary_port/plaza)
+"f" = (/turf/open/floor/iron,/area/centcom/central_command_areas/planetary_port/plaza)
+"C" = (/obj/machinery/computer/dna_console,/turf/open/floor/iron,/area/centcom/central_command_areas/planetary_port/plaza)
+"S" = (/obj/machinery/dna_scannernew,/turf/open/floor/iron,/area/centcom/central_command_areas/planetary_port/plaza)
+
+(1,1,1) = {"
+wwwwwww
+wfffffw
+wsCSfsw
+wfffffw
+wwwwwww
+"}

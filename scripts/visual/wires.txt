@@ -1,0 +1,24 @@
+# Hacking on `scripts/visual/maps/wires.dmm` (fullbright): a screwdriver opens the maintenance
+# airlock's panel, a multitool opens its Wires window; the airlock east of it is bolted (bolt
+# lights).
+#   SS13_LIGHTING=0 SS13_MAP=$PWD/scripts/visual/maps/wires.dmm \
+#     SS13_ASSETS=$ASSETS scripts/visual-check.sh scripts/visual/wires.txt
+# spawn: 4,4
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 2
+click_tile -1 0
+wait_secs 0.5
+click_tile 1 0
+wait_secs 0.5
+tap X
+click_tile -1 -1
+wait_secs 0.5
+click_tile 1 0
+wait_secs 1.5
+log_state
+screenshot "wires.png"
+click_ui "Pulse"
+wait_secs 1
+screenshot "wires_pulsed.png"
+quit

@@ -1,0 +1,10 @@
+#List users here to be made admins with the format: ckey = rank name.
+#Ckey will be converted to ckey format, lowercase with no punctuation except '@'.
+#Rank name will match anything after ' = ' and has not format requirements.
+#Ranks will match to those with the same name in admin_ranks.txt, if a match isn't found the user won't be adminned.
+#
+#ss13-rs: the ckey is the client's handshake token (SS13_TOKEN). There is no real auth yet: anyone
+#can connect with any token, so listed admins get their rights only with SS13_INSECURE_ADMINS=1,
+#which is for trusted servers only (docs/RUNNING.md, "Admins").
+#Example:
+#alice = Game Master

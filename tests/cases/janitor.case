@@ -1,0 +1,20 @@
+# Janitorial: water from a bottle poured into a mop bucket, the mop wetted from the bucket
+# (right click), a map-placed pool of blood mopped off its floor, which is left wet.
+map janitor.dmm
+bot alice 3,3 give /obj/item/reagent_containers/cup/glass/waterbottle
+
+test fill_bucket_wet_mop
+  alice click 2,3 /obj/structure/mop_bucket
+  until obj(2,3,/obj/structure/mop_bucket).reagents.total == 10
+  alice drop
+  alice click 4,3 /obj/item/mop
+  until mob(alice).held ~ mop
+  alice click 2,3 /obj/structure/mop_bucket right
+  until alice.chat ~ "Вы смачиваете швабру"
+  expect obj(2,3,/obj/structure/mop_bucket).reagents.total == 0
+
+test mop_blood
+  expect tile(3,4).entities[].path ~ /obj/effect/decal/cleanable/blood
+  alice click 3,4 /turf/open/floor/iron
+  until tile(3,4).entities[].path !~ /obj/effect/decal/cleanable/blood
+  expect tile(3,4).wet == 1

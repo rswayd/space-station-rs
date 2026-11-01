@@ -1,0 +1,10 @@
+# Security, victim (see security_officer.txt): batoned into stamina crit (lying, HUD), cuffed;
+# a screenshot of its own cuffed body with the handcuff overlay.
+# spawn: 11,9
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_until chat "надевает на вас наручники" timeout=60
+wait_secs 1
+screenshot "victim_cuffed.png"
+log_state
+quit

@@ -1,0 +1,276 @@
+# Pulling, puller: on scripts/visual/maps/arena.dmm the two players spawn one tile apart
+# (north/south, whoever connects first is south). Punches the other player to death (combat mode,
+# both neighbouring tiles), turns combat mode off, ctrl+clicks the body (passive pull), drags it
+# three tiles east and screenshots the body following; C stops pulling.
+# Run with pull_victim.txt:
+#   SS13_LIGHTING=0 SS13_MAP=$PWD/scripts/visual/maps/arena.dmm scripts/visual-check.sh \
+#       scripts/visual/pull_puller.txt scripts/visual/pull_victim.txt
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 3            # the victim joins
+tap F
+wait_secs 0.3
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+wait_until chat "безжизненным" timeout=60
+tap F
+wait_secs 1
+key_down Ctrl
+click_tile 0 1
+click_tile 0 -1
+key_up Ctrl
+wait_until chat "пассивно хватаете" timeout=5
+screenshot "pull_start.png"
+key_down D
+wait_secs 1.2
+key_up D
+wait_secs 0.6
+screenshot "pull_dragged.png"
+log_state
+tap C
+wait_secs 0.3
+key_down D
+wait_secs 0.5
+key_up D
+wait_secs 0.6
+screenshot "pull_released.png"
+log_state
+quit

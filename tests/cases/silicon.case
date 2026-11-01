@@ -1,0 +1,68 @@
+# The AI and the camera network: the AI opens and bolts an airlock its cameras see (tg
+# AIShiftClick / AICtrlClick) and loses control once the airlock's AI wire is cut; a camera
+# console moves its user's view to the chosen camera, far from the console, and back. The AI
+# client gets nothing on tiles no camera sees: a wrench behind the closed door arrives while the
+# door is open and goes when it closes.
+map silicon.dmm
+bot alice 7,3 job "AI"
+bot bob 10,3 give /obj/item/screwdriver give /obj/item/wirecutters
+bot carol 3,3
+timeout 10
+
+test ai_opens_a_seen_door
+  expect alice.pos == 7,3
+  expect mob(alice).ai.stat == "Conscious"
+  alice click 9,3 /obj/machinery/door shift
+  until obj(9,3,/obj/machinery/door).door.open == true
+  until obj(9,3,/obj/machinery/door).door.closed == true timeout=15
+
+test ai_bolts_and_unbolts
+  alice click 9,3 /obj/machinery/door ctrl
+  until obj(9,3,/obj/machinery/door).door.bolted == true
+  alice click 9,3 /obj/machinery/door shift
+  wait 1
+  expect obj(9,3,/obj/machinery/door).door.closed == true
+  alice click 9,3 /obj/machinery/door ctrl
+  until obj(9,3,/obj/machinery/door).door.bolted == false
+
+test ai_sees_only_what_cameras_see
+  spawn /obj/item/wrench 10,3
+  until obj(10,3,/obj/item/wrench) exists
+  wait 0.5
+  expect alice.seen[].pos !~ [10,3]
+  expect alice.seen[].pos ~ [9,3]
+  alice click 9,3 /obj/machinery/door shift
+  until alice.seen[].icon ~ "wrench"
+  expect alice.seen[].pos ~ [10,3]
+  until obj(9,3,/obj/machinery/door).door.closed == true timeout=15
+  until alice.seen[].pos !~ [10,3]
+  expect alice.seen[].icon !~ "wrench"
+
+test ai_wire_cut_blocks_the_ai
+  bob click 9,3 /obj/machinery/door
+  until obj(9,3,/obj/machinery/door).door.panel_open == true
+  bob swap
+  bob click 9,3 /obj/machinery/door
+  until bob.windows.Wires exists
+  bob act Wires cut "wire=@obj(9,3,/obj/machinery/door).wires.colors.AI Connection"
+  until obj(9,3,/obj/machinery/door).wires.cut ~ "AI Connection"
+  alice click 9,3 /obj/machinery/door shift
+  wait 1.5
+  expect obj(9,3,/obj/machinery/door).door.closed == true
+  alice click 9,3 /obj/machinery/door ctrl
+  wait 1
+  expect obj(9,3,/obj/machinery/door).door.bolted == false
+
+test console_moves_the_view
+  expect carol.seen[].pos !~ [27,3]
+  carol click 2,3 /obj/machinery/computer/security
+  until carol.windows.CameraConsole220 exists
+  expect carol.windows.CameraConsole220.static.cameras.len == 3
+  expect carol.windows.CameraConsole220.static.cameras[0].name == "Room Far"
+  carol act CameraConsole220 switch_camera camera=@carol.windows.CameraConsole220.static.cameras[0].cam_ref
+  until carol.windows.CameraView.data.center.x == 27
+  until carol.seen[].pos ~ [27,3]
+  expect carol.windows.CameraConsole220.data.active_camera.name == "Room Far"
+  carol close CameraConsole220
+  until carol.windows.CameraView missing
+  until carol.seen[].pos !~ [27,3]

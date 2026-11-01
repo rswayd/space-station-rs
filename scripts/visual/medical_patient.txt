@@ -1,0 +1,8 @@
+# Medicine, patient: stands north of the medic (see medical_medic.txt) and reads what happens.
+# spawn: 11,9
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_until chat "анализирует жизненные показатели" timeout=60
+screenshot "patient.png"
+log_state
+quit

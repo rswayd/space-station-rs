@@ -1,0 +1,14 @@
+"w" = (/turf/closed/wall,/area/centcom/central_command_areas/control)
+"f" = (/turf/open/floor/iron,/area/centcom/central_command_areas/control)
+"C" = (/obj/machinery/computer/rdconsole,/turf/open/floor/iron,/area/centcom/central_command_areas/control)
+"L" = (/obj/machinery/rnd/production/protolathe/department/science,/turf/open/floor/iron,/area/centcom/central_command_areas/control)
+"R" = (/obj/machinery/rnd/server,/turf/open/floor/iron,/area/centcom/central_command_areas/control)
+"O" = (/obj/machinery/ore_silo,/turf/open/floor/iron,/area/centcom/central_command_areas/control)
+
+(1,1,1) = {"
+wwwwwww
+wfCLfRw
+wfffffw
+wffffOw
+wwwwwww
+"}

@@ -1,0 +1,51 @@
+# Генераторы, солнечные панели, турбина, гравитация
+Источники энергии помимо двигателей (двигатели — в singularity.md и supermatter.md) и генератор гравитации.
+
+### Переносной генератор P.A.C.M.A.N.
+Генератор на листах плазмы (super — урана, wood — дерева): уровень мощности, перегрев и взрыв при высокой мощности, подключение к кабелю ключом; емаг снимает ограничения.
+
+- **Код:** [`/obj/machinery/power/port_gen`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/port_gen.dm#L2), [`process()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/port_gen.dm#L71), [`/obj/machinery/power/port_gen/pacman`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/port_gen.dm#L89), [`proc/overheat()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/port_gen.dm#L174); tgui: [`PortableGenerator.jsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/PortableGenerator.jsx)
+- **Статус в ss13-rs:** ❌ нет
+
+### Радиоизотопный генератор (РИТЭГ)
+Постоянно отдаёт мощность в сеть по уровню деталей; варианты advanced, abductor, lavaland, old_station.
+
+- **Код:** [`/obj/machinery/power/rtg`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/rtg.dm#L4), [`process()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/rtg.dm#L32), [`RefreshParts()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/rtg.dm#L35)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/power/mod.rs` (`Generator`): постоянная мощность `power_gen` из карты; без расчёта по деталям и разборки
+
+### Термоэлектрический генератор (ТЭГ)
+Генератор между горячим и холодным циркуляторами: мощность от разницы температур газа в контурах; окно с показаниями.
+
+- **Код:** [`/obj/machinery/power/thermoelectric_generator`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/thermoelectric_generator.dm#L3), [`process_atmos()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/thermoelectric_generator.dm#L99), [`proc/find_circulators()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/thermoelectric_generator.dm#L181); tgui: [`ThermoElectricGenerator.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/ThermoElectricGenerator.tsx)
+- **Статус в ss13-rs:** ❌ нет
+
+### Солнечные панели
+Панели дают мощность по углу к солнцу и затенению; поворачиваются по команде консоли; собираются из сборки (`solar_assembly`) и стекла.
+
+- **Код:** [`/obj/machinery/power/solar`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/solar.dm#L5), [`process()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/solar.dm#L227), [`/obj/item/solar_assembly`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/solar.dm#L259)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/power/solar.rs` (`SolarPanel`, `Solars::process`, `is_sunlight_blocked`): выработка 2500 Вт × косинус Ламберта × `power_tier`, затенение станцией при повороте, поворот к цели консоли; нет сборки (`solar_assembly`), стёкол других тиров при постройке, поломки, лиан и 2.5D-поворота спрайта панели (shortcut)
+
+### Солнечный трекер и консоль управления
+Трекер следит за солнцем; консоль поворачивает панели вручную, по таймеру или автоматически по трекеру, показывает выработку.
+
+- **Код:** [`/obj/machinery/power/tracker`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/tracker.dm#L9), [`/obj/machinery/power/solar_control`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/solar.dm#L410), [`proc/set_panels()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/solar.dm#L625); tgui: [`SolarControl.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/SolarControl.tsx)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/power/solar.rs` (`SolarControl`, `SolarTracker`, `apply_act`), `crates/ss13_tgui/src/interfaces/solar_control.rs`: окно `SolarControl` (поиск панелей и трекера в сети консоли, ручной азимут, таймер со скоростью, авто по трекеру, выработка и ёмкость, история); нет графика `Chart.Line` (shortcut), разборки консоли и сборки трекера
+
+### Подсистема солнца (SSsun)
+Солнце медленно вращается вокруг станции (азимут, скорость, направление случайны на раунд) и рассылает сигнал панелям; BandaStation кэширует компоненты направления.
+
+- **Код:** [`SSsun`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/sun.dm#L1), [`fire()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/sun.dm#L23)
+- **BandaStation:** [`sun.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/sun.dm#L8) — кэш направления солнца
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/power/solar.rs` (`Sun`, `sun_tick`): случайные азимут и скорость, шаг 6° × `azimuth_mod` в минуту, кэш `sun_x`/`sun_y` BandaStation
+
+### Газовая турбина
+Три части (компрессор, ротор, выход) из сменных деталей разного уровня: сжимает и сжигает газ, мощность от разности энергий, повреждение от перегрева; управляется консолью.
+
+- **Код:** [`/obj/machinery/power/turbine`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/turbine/turbine.dm#L6), [`core_rotor/process()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/turbine/turbine.dm#L625), [`activate_parts()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/turbine/turbine.dm#L497), [`/obj/item/turbine_parts`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/turbine/turbine_parts.dm#L6), [`/obj/machinery/computer/turbine_computer`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/turbine/turbine_computer.dm#L1); tgui: [`TurbineComputer.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/TurbineComputer.tsx)
+- **Статус в ss13-rs:** ❌ нет
+
+### Генератор гравитации
+Многотайловая машина создаёт гравитацию на уровне; включение/выключение с раскруткой, тряска и блэкаут при переключении, ремонт сваркой и ключом после поломки, радиация вблизи.
+
+- **Код:** [`/obj/machinery/gravity_generator/main`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/gravitygenerator.dm#L117), [`process()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/gravitygenerator.dm#L376), [`proc/blackout()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/gravitygenerator.dm#L459), [`ui_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/gravitygenerator.dm#L298); tgui: [`GravityGenerator.jsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/GravityGenerator.jsx)
+- **Статус в ss13-rs:** ❌ нет — гравитации как механики нет

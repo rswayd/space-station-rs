@@ -1,0 +1,26 @@
+# Pixel-accurate clicks (BYOND `mouse_opacity = MOUSE_OPACITY_ICON`): on
+# scripts/visual/maps/pixel_click.dmm a pen lies east of the spawn. Shift+click examines what was
+# picked: the transparent corner (1, 30) of the pen's tile is the floor beneath, the pen's drawn
+# pixel (16, 16) is the pen, and after 5.5 s (the chat combines repeats within 5 s) a transparent
+# pixel right next to the pen (20, 20) is the floor again: the last `log_state` chat line is
+# "Это floor.", after the pen's three lines.
+# Run: SS13_LIGHTING=0 SS13_MAP=$PWD/scripts/visual/maps/pixel_click.dmm scripts/visual-check.sh scripts/visual/pixel_click.txt
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 2
+screenshot "pen.png"
+key_down Shift
+click_tile 1 0 1 30
+key_up Shift
+wait_until chat "Это floor." timeout=5
+key_down Shift
+click_tile 1 0 16 16
+key_up Shift
+wait_until chat "Это pen." timeout=5
+wait_secs 5.5
+key_down Shift
+click_tile 1 0 20 20
+key_up Shift
+wait_secs 1
+log_state
+quit

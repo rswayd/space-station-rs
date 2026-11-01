@@ -1,0 +1,39 @@
+# Lights beyond the replication radius while walking (lightsync): spawn with
+# `SS13_SPAWN_AT=100,68,1` in the MetaStation departure lounge and walk east one tile at a time;
+# the rooms east of the lounge enter the right edge of the screen lit, not dark then popping in.
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_until entities 800 timeout=30
+wait_secs 3
+log_state
+screenshot "walk0.png"
+key_down D
+wait_secs 0.15
+key_up D
+wait_secs 0.6
+screenshot "walk1.png"
+key_down D
+wait_secs 0.15
+key_up D
+wait_secs 0.6
+screenshot "walk2.png"
+key_down D
+wait_secs 0.15
+key_up D
+wait_secs 0.6
+screenshot "walk3.png"
+key_down D
+wait_secs 0.15
+key_up D
+wait_secs 0.6
+log_state
+screenshot "walk4.png"
+key_down D
+wait_secs 1.0
+key_up D
+wait_secs 0.6
+log_state
+screenshot "walk5.png"
+wait_secs 10
+log_state
+quit

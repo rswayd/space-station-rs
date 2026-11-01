@@ -1,0 +1,69 @@
+# Аварийный шаттл и эвакуация
+Вызов, отзыв и полёт эвакуационного шаттла, консоль на его борту, угон, спасательные капсулы и каталог альтернативных шаттлов.
+
+### Вызов и отзыв эвакуационного шаттла
+`requestEvac`/`canEvac`: вызов с причиной (не короче 12 символов), запрет в начале раунда (`SHUTTLE_REFUEL_DELAY`), коэффициент времени по уровню угрозы, отзыв до точки невозврата (`past_restriction_point`), анонсы ЦК. Окно вызова — консоль связи, см. ../comms/.
+
+- **Код:** [`proc/requestEvac()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/shuttle.dm#L375), [`proc/canEvac()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/shuttle.dm#L328), [`proc/cancel_evac()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/shuttle.dm#L458), [`emergency/request()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/mobile_port/variants/emergency/emergency.dm#L38), [`emergency/cancel()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/mobile_port/variants/emergency/emergency.dm#L68)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/shuttle.rs`: вызов, отзыв, задержка дозаправки и анонсы на русском есть; уровень угрозы всегда зелёный (x2), нет пересчёта таймера при смене уровня
+
+### Цикл полёта аварийного шаттла
+Вызван → пристыкован к станции (таймер дока) → запуск двигателей → отлёт через транзит → прибытие на ЦК, что завершает раунд; учёт сбежавших для итогов раунда и записи в БД.
+
+- **Код:** [`/obj/docking_port/mobile/emergency`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/mobile_port/variants/emergency/emergency.dm#L1), [`emergency/check()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/mobile_port/variants/emergency/emergency.dm#L146), [`proc/ShuttleDBStuff()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/mobile_port/variants/emergency/emergency.dm#L136)
+- **BandaStation:** [`emergency.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/mobile_port/variants/emergency/emergency.dm#L245) — голосование за карту перенесено с прилёта шаттла на конец раунда
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/shuttle.rs`: все режимы и конец раунда с отчётом об эвакуированных; нет уровня ЦК (стоит шаблонный уровень), нет поворота шаттла, нет записи в БД
+
+### Автовызов при потере экипажа
+`CheckAutoEvac`: если живых членов экипажа слишком мало (порог из конфига), шаттл вызывается автоматически; `autoEvac` — вызов при отсутствии связи и командования.
+
+- **Код:** [`proc/CheckAutoEvac()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/shuttle.dm#L253), [`proc/autoEvac()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/shuttle.dm#L530)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/shuttle.rs` (`SS13_SHUTTLE_AUTOCALL_THRESHOLD`): автовызов по доле потерь; нет вызова из-за отсутствия консолей связи
+
+### Консоль аварийного шаттла (авторизация досрочного отлёта)
+Пульт на борту: три главы свайпают ID, чтобы шаттл улетел раньше (запуск двигателей через 10 с); можно отозвать авторизацию; tgui-окно с числом оставшихся подписей.
+
+- **Код:** [`/obj/machinery/computer/emergency_shuttle`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/mobile_port/variants/emergency/emergency_console.dm#L6), [`proc/authorize()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/mobile_port/variants/emergency/emergency_console.dm#L160); tgui: [`EmergencyShuttleConsole.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/EmergencyShuttleConsole.tsx)
+- **Статус в ss13-rs:** ❌ нет
+
+### Взлом консоли емагом
+Емаг на консоли аварийного шаттла запускает отлёт через 10 секунд без авторизаций и сбивает таймер в анонсе.
+
+- **Код:** [`emag_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/mobile_port/variants/emergency/emergency_console.dm#L296)
+- **Статус в ss13-rs:** ❌ нет
+
+### Угон шаттла
+Антагонист с целью угона alt-кликом по консоли поэтапно перепрошивает навигацию (стадии с задержкой и анонсами); при успехе шаттл летит на базу Синдиката; также «элиминационный» угон — только антагонисты на борту.
+
+- **Код:** [`proc/attempt_hijack_stage()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/mobile_port/variants/emergency/emergency_console.dm#L229), [`proc/elimination_hijack()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/mobile_port/variants/emergency/emergency.dm#L100)
+- **Статус в ss13-rs:** ❌ нет
+
+### События полёта шаттла
+Во время перелёта на ЦК могут случаться события: карпы, метеоры, чёрная дыра, турбулентность (надо пристегнуться), огненные шары, призраки в роли пассажиров и т. п.; набор задаётся шаблоном шаттла.
+
+- **Код:** [`/datum/shuttle_event`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/shuttle_events/_shuttle_events.dm#L2), [`/datum/shuttle_event/simple_spawner`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/shuttle_events/_shuttle_events.dm#L45), [`/datum/shuttle_event/turbulence`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/shuttle_events/turbulence.dm#L2), [`proc/setup_shuttle_events()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/mobile_port/variants/emergency/emergency.dm#L312)
+- **Статус в ss13-rs:** ❌ нет
+
+### Спасательные капсулы
+Капсулы улетают сами при красной тревоге или после отлёта шаттла (`/obj/machinery/computer/shuttle/pod`), садятся в случайную точку на ЦК/лаваленде; внутри ящик с припасами, открываемый при угрозе.
+
+- **Код:** [`/obj/docking_port/mobile/pod`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/mobile_port/variants/emergency/pods.dm#L3), [`/obj/machinery/computer/shuttle/pod`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/mobile_port/variants/emergency/pods.dm#L22), [`/obj/docking_port/stationary/random`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/mobile_port/variants/emergency/pods.dm#L80), [`/obj/item/storage/pod`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/mobile_port/variants/emergency/pods.dm#L130)
+- **Статус в ss13-rs:** ❌ нет
+
+### Каталог аварийных шаттлов
+74 шаблона (`box`, `meta`, `delta`, `luxury`, `arena`, `supermatter`, `scrapheap`, `disco`, ...) с ценой и особенностями; капитан покупает их через консоль связи, некоторые доступны только при условиях или емаге.
+
+- **Код:** [`/datum/map_template/shuttle/emergency`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/shuttles/emergency.dm#L3), [`proc/init_has_purchase_shuttle_access()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/shuttle.dm#L1209)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/shuttle.rs`: загружается только шаттл из json карты (MetaStation: `emergency_meta`); покупки и замены нет
+
+### Запасной шаттл и BYOS
+Если на карте нет эвакуационного шаттла, подгружается `backup`; «Build Your Own Shuttle» — пустая платформа, которую экипаж достраивает сам.
+
+- **Код:** [`/obj/docking_port/mobile/emergency/backup`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/mobile_port/variants/emergency/emergency_types.dm#L2), [`proc/check_backup_emergency_shuttle()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/shuttle.dm#L349), [`/obj/docking_port/mobile/emergency/shuttle_build`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/mobile_port/variants/emergency/emergency_types.dm#L34)
+- **Статус в ss13-rs:** ❌ нет
+
+### Особые предметы и машины шаттлов
+Объекты для тематических шаттлов: энергопушка, бар-дрон, стол Wabbajack, сканер-ворота «люксового» шаттла (берут плату за вход), бойцовские медведи и т. п.
+
+- **Код:** [`special.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/misc/special.dm), [`/obj/machinery/scanner_gate/luxury_shuttle`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/misc/special.dm#L214), [`/obj/machinery/computer/reality_simulation`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/misc/medisim.dm#L3)
+- **Статус в ss13-rs:** ❌ нет

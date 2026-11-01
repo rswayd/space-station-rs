@@ -1,0 +1,7 @@
+# cargo-nextest: one process per test, all test binaries in parallel (the gate's test step).
+[profile.default]
+# Only failures and slow tests are printed; the summary line counts the rest.
+status-level = "fail"
+final-status-level = "slow"
+# The slowest integration test takes ~10 s; a hung server is killed after 5 minutes.
+slow-timeout = { period = "60s", terminate-after = 5 }

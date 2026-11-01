@@ -1,0 +1,62 @@
+[package]
+name = "ss13_game"
+description = "Gameplay: player mobs, movement and click intents, doors, camera follow and input (server and client halves)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+ss13_shared.workspace = true
+ss13_net.workspace = true
+ss13_tgui.workspace = true
+serde.workspace = true
+bevy = { workspace = true, features = ["std", "bevy_log"] }
+ss13_world = { workspace = true, optional = true }
+ss13_mapload = { workspace = true, optional = true }
+ss13_assets = { workspace = true, optional = true }
+ss13_render = { workspace = true, optional = true }
+ss13_proto = { workspace = true, optional = true }
+ss13_chat = { workspace = true, optional = true }
+# The lobby screen and the job preferences window (`lobby_client`).
+ss13_ui_kit = { workspace = true, optional = true }
+ss13_atmos = { workspace = true, optional = true }
+# Chemistry (`chem`).
+ss13_reagents = { workspace = true, optional = true }
+# Fixture manifests of the integration-test harness (`testing`).
+postcard = { workspace = true, optional = true }
+
+[features]
+server = ["ss13_net/server", "dep:ss13_world", "dep:ss13_mapload", "dep:ss13_assets", "dep:ss13_proto", "dep:ss13_atmos", "ss13_tgui/server", "dep:ss13_chat", "ss13_chat/server", "dep:ss13_reagents"]
+# The deterministic integration-test harness (`ss13_game::testing`).
+testing = ["server", "ss13_net/client", "dep:postcard"]
+client = [
+    "ss13_net/client",
+    "dep:ss13_render",
+    "dep:ss13_world",
+    "ss13_tgui/client",
+    "dep:ss13_ui_kit",
+    "bevy/2d",
+    "bevy/ui",
+    "bevy/audio",
+]
+
+[dev-dependencies]
+ss13_reagents.workspace = true
+ss13_world.workspace = true
+ss13_mapload.workspace = true
+ss13_assets.workspace = true
+postcard.workspace = true
+serde_json = "1.0.154"
+
+[[example]]
+name = "human_sheet"
+required-features = ["server", "client", "testing"]
+
+[lints]
+workspace = true
+
+[[test]]
+name = "it"
+path = "tests/it/main.rs"
+required-features = ["server", "client", "testing"]

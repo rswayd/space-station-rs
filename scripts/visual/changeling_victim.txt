@@ -1,0 +1,9 @@
+# The second player of changeling.txt: stands east of the first and gets absorbed.
+# spawn: 11,8
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_until chat "sucks the fluids from" timeout=120
+wait_secs 2
+log_state
+wait_secs 20
+quit

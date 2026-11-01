@@ -1,0 +1,12 @@
+# A screenshot of wherever the server spawns the player (`SS13_SPAWN_AT`), lit and after the
+# atlas pages loaded, then 12 s standing still (`SS13_LOG_FPS=1` frame times; the server's 10 s
+# replication line).
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_until entities 800 timeout=30
+wait_secs 3
+log_state
+screenshot "spot.png"
+wait_secs 12
+log_state
+quit

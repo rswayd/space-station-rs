@@ -1,0 +1,28 @@
+# Radio, engineer side (run with radio_assistant.txt): become a Station Engineer, talk on the
+# engineering channel (`:e`, `:у`) and Common (`;`), wait for the assistant's Common reply and
+# screenshot the chat with the colored radio lines.
+# spawn: 108,66
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 1
+click_ui "Выбрать профессию"
+wait_secs 1.5
+click_ui "Station Engineer"
+wait_secs 2
+click_ui "Сообщение"
+type ":e Двигатель запущен"
+tap Enter
+wait_until chat "[Инженерия]" timeout=10
+click_ui "Сообщение"
+type ":у Сингулярность стабильна"
+tap Enter
+wait_until chat "Сингулярность стабильна" timeout=10
+click_ui "Сообщение"
+type "; Всем постам, это инженерия"
+tap Enter
+wait_until chat "[Общий]" timeout=10
+wait_until chat "Приём, слышу" timeout=60
+wait_secs 1
+screenshot "radio_engineer.png"
+log_state
+quit

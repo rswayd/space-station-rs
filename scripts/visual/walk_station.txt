@@ -1,0 +1,25 @@
+# A MetaStation walk for atlas memory checks: screenshots at fixed points, log_state at the end.
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 2
+screenshot "spawn.png"
+key_down A
+wait_secs 4
+key_up A
+wait_secs 1
+screenshot "west.png"
+key_down W
+wait_secs 3
+key_up W
+wait_secs 1
+screenshot "north.png"
+key_down A
+wait_secs 4
+key_up A
+key_down S
+wait_secs 6
+key_up S
+wait_secs 1
+screenshot "southwest.png"
+log_state
+quit

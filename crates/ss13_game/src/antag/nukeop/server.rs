@@ -1,0 +1,1886 @@
+//! Nuclear operatives (server) after tg `/datum/antagonist/nukeop` (+ `/leader`),
+//! `/datum/team/nuclear`, `/datum/dynamic_ruleset/roundstart/nukies`, `/datum/outfit/syndicate`,
+//! `/obj/item/disk/nuclear` (`/datum/component/stationloving`), `/obj/item/pinpointer/nuke` and
+//! the infiltrator (`/obj/docking_port/mobile/infiltrator`, `/obj/machinery/computer/shuttle/
+//! syndicate`).
+//!
+//! - **Where they start.** tg loads the nukie base template and flies the infiltrator to it at
+//!   round start. Here the infiltrator template (`_maps/shuttles/infiltrator/infiltrator_basic.dmm`)
+//!   loads with the station onto its own level, like the emergency shuttle, and that level is the
+//!   syndicate base: the operatives spawn aboard, its `syndicate_away` dock is "home"
+//!   (`is_infiltrator_docked_at_syndiebase`). Its console flies it (ignition 5.5 s, transit 10 s,
+//!   tg's mobile port defaults) to the station's `syndicate_*` docks and back.
+//! - **Roundstart** ([`spawn_operatives`]): the ruleset's players get no station job (tg
+//!   `forced_occupations` = nuclear operative); the first is the leader (tg: the most
+//!   experienced). Each gets a body aboard, the alias "<alias> <team name>" (the leader with a
+//!   title), `/datum/outfit/syndicate` (or `/leader`): ID with syndicate access, syndicate
+//!   headset locked to the syndicate frequency, and a nuclear uplink in the backpack with 25 TC
+//!   plus `CEILING(players / 5, 5)`; the team objective "nuke the station"; the bomb's code (the
+//!   team's `memorized_code`, also on the leader's paper). The leader also holds the war
+//!   declaration item.
+//! - **The disk** ([`NukeDisk`]): the station's real disk; out of bounds (tg `atom_in_bounds`) or
+//!   gone, it reappears on a random station floor.
+//! - **The result** ([`compute_result`], tg `get_result`) and the round-end report
+//!   ([`roundend_report`]). A detonation on the station ends the round (`check_finished`).
+// shortcut: no nukie base template (no elevator, armory, war room, reinforcement beacons): the
+// infiltrator's level stands in for it; upgrade when lazy templates load at runtime.
+// shortcut: the team name is a random last name (tg asks the leader, defaulting to one); the
+// leader is the first selected player (tg: most playtime); no team discounts, implants, MOD
+// suits, species switch or skillchips; the operatives see only their own antag HUD icon.
+
+use std::collections::HashMap;
+use std::path::PathBuf;
+
+use bevy::ecs::message::MessageCursor;
+use bevy::prelude::*;
+use ss13_mapload::antag::{AntagData, UPLINK_NUKE_OPS};
+use ss13_mapload::jobs::Outfit;
+use ss13_mapload::spawner::Rng;
+use ss13_mapload::{
+    Areas, DmAtom, DmItem, DmName, DmObj, IconIndex, MapLoadPlugin, ShuttleTemplates, Template,
+    read_manifest,
+};
+use ss13_net::chat::server::SendChat;
+use ss13_net::server::{ClientToken, Networked};
+use ss13_shared::chat::{ChatChannel, ChatMessage, ChatSegment, Span};
+use ss13_shared::{Appearance, Dir, Overlay, TilePos};
+use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiActed, UiParams, UiReject, UiSystems};
+use ss13_world::SpatialIndex;
+
+use super::bomb::{Detonation, NuclearBomb, NuclearBombPlugin, classify, is_space_area};
+use super::{DESTINATION, MOVE, SET_DESTINATION, SHUTTLE_ID, ShuttleConsoleData, ShuttleConsoleUi};
+use crate::antag::objectives::RoundEnd;
+use crate::antag::uplink::PurchaseLog;
+use crate::antag::{AntagHudData, AntagHudUi};
+use crate::click::{ClickResolved, ResolveClicks};
+use crate::construction::{path_of, turf_at};
+use crate::health::{DamageType, Health, Stat, apply_damage};
+use crate::inventory::{CarriedBy, IdCard, Inventory, check_access};
+use crate::outfit::IdRegistration;
+use crate::server::PlayerMob;
+use crate::shuttle::{
+    EmergencyShuttle, MobileDock, ShuttleMode, StationaryDock, initiate_docking, ordered_turfs,
+    setup_template_shuttle,
+};
+
+/// tg `/datum/antagonist/nukeop` `name`.
+pub const NUKEOP_NAME: &str = "Ядерный оперативник";
+/// `/datum/antagonist/nukeop/leader` `name`.
+pub const LEADER_NAME: &str = "Лидер ядерных оперативников";
+/// `/datum/objective/nuclear` `explanation_text`.
+pub const NUCLEAR_OBJECTIVE: &str =
+    "Уничтожьте станцию \u{200b}\u{200b}с помощью ядерного устройства.";
+/// `/datum/outfit/syndicate` `tc`.
+pub const OUTFIT_TC: u32 = 25;
+const ANTAG_HUD: (&str, &str) = ("icons/mob/huds/antag_hud.dmi", "synd");
+const INFILTRATOR_PORT: &str = "/obj/docking_port/mobile/infiltrator";
+const INFILTRATOR_ID: &str = "syndicate";
+const AWAY_DOCK: &str = "syndicate_away";
+/// `/obj/machinery/computer/shuttle/syndicate` `possible_destinations`.
+const SYNDICATE_DESTINATIONS: [&str; 9] = [
+    "syndicate_away",
+    "syndicate_z5",
+    "syndicate_ne",
+    "syndicate_nw",
+    "syndicate_n",
+    "syndicate_se",
+    "syndicate_sw",
+    "syndicate_s",
+    "syndicate_custom",
+];
+const SHUTTLE_CONSOLE: &str = "/obj/machinery/computer/shuttle/syndicate";
+const DISK_PATH: &str = "/obj/item/disk/nuclear";
+const PAPER: &str = "/obj/item/paper";
+const CHALLENGE: &str = "/obj/item/nuclear_challenge";
+const NUCLEAR_UPLINK: &str = "/obj/item/uplink/nuclear";
+const PINPOINTER: &str = "/obj/item/pinpointer/nuke";
+const SYNDICATE_PINPOINTER: &str = "/obj/item/pinpointer/nuke/syndicate";
+/// tg `/obj/docking_port/mobile` `ignitionTime`, `callTime`.
+pub const IGNITION_SECS: f64 = 5.5;
+pub const CALL_SECS: f64 = 10.0;
+/// `/datum/antagonist/nukeop/leader/give_alias` titles.
+const LEADER_TITLES: [&str; 7] = [
+    "Царь",
+    "Босс",
+    "Командир",
+    "Шеф",
+    "Главарь",
+    "Директор",
+    "Повелитель",
+];
+/// Station areas a relocated disk may land in.
+const STATION_AREA: &str = "/area/station";
+/// `/obj/item/pinpointer` `close_range`, `medium_range`.
+const CLOSE_RANGE: i32 = 8;
+const MEDIUM_RANGE: i32 = 16;
+/// tg `SSfastprocess` wait: pinpointers refresh this often.
+const PINPOINTER_SECS: f64 = 0.2;
+
+/// Insert before `GameServerPlugin` to override where the infiltrator template comes from.
+#[derive(Resource, Clone, Debug, Default)]
+pub struct NukeopConfig {
+    /// `None`: `_maps/shuttles/infiltrator/infiltrator_basic.dmm` in the BYOND checkout.
+    pub infiltrator: Option<PathBuf>,
+}
+
+/// `/datum/team/nuclear`.
+#[derive(Resource, Clone, Debug, Default)]
+pub struct NukeTeam {
+    pub syndicate_name: String,
+    pub members: Vec<Entity>,
+    pub leader: Option<Entity>,
+    pub memorized_code: Option<String>,
+    pub tracked_nuke: Option<Entity>,
+}
+
+/// The operative antagonist datum, on its body.
+#[derive(Component, Clone, Debug)]
+pub struct Nukeop {
+    pub key: String,
+    pub leader: bool,
+    /// `antag_memory`.
+    pub memory: String,
+}
+
+/// The station's real nuclear authentication disk (tg `real_nuclear_disks`).
+#[derive(Component, Clone, Copy, Debug, Default)]
+pub struct NukeDisk;
+
+/// tg `GLOB.station_was_nuked` and `GLOB.station_nuke_source`.
+#[derive(Resource, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct NukeOutcome {
+    pub station_was_nuked: bool,
+    pub station_nuke_source: Option<Detonation>,
+}
+
+/// The infiltrator's flight (tg mobile port `mode` and `timer`).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum Flight {
+    #[default]
+    Idle,
+    Igniting {
+        dest: Entity,
+        until: f64,
+    },
+    Transit {
+        dest: Entity,
+        until: f64,
+    },
+}
+
+/// The syndicate infiltrator (`SSshuttle.getShuttle("syndicate")`).
+#[derive(Resource, Clone, Debug)]
+pub struct Infiltrator {
+    pub port: Entity,
+    pub away: Entity,
+    pub transit: Entity,
+    /// The level standing in for the syndicate base.
+    pub level_z: u16,
+    pub transit_z: u16,
+    pub flight: Flight,
+}
+
+/// A shuttle console (`/obj/machinery/computer/shuttle`).
+#[derive(Component, Clone, Debug, Default)]
+pub struct ShuttleConsole {
+    pub possible_destinations: Vec<String>,
+    pub destination: Option<String>,
+    pub req_access: Vec<String>,
+}
+
+/// A pinpointer (`/obj/item/pinpointer/nuke`).
+#[derive(Component, Clone, Debug, Default)]
+pub struct Pinpointer {
+    pub active: bool,
+    /// tg `TRACK_INFILTRATOR` (syndicate pinpointers while a bomb counts down), else the disk.
+    pub track_infiltrator: bool,
+    pub syndicate: bool,
+    pub alert: bool,
+}
+
+/// The templates of what the operatives get, and the converted data.
+#[derive(Resource, Default)]
+struct NukeopData {
+    outfits: Vec<Outfit>,
+    aliases: Vec<String>,
+    last_names: Vec<String>,
+    templates: HashMap<String, Template>,
+}
+
+#[derive(Resource)]
+struct NukeopRng(Rng);
+
+#[derive(Resource)]
+struct InfiltratorTemplate(PathBuf);
+
+pub struct NukeopPlugin;
+
+impl Plugin for NukeopPlugin {
+    fn build(&self, app: &mut App) {
+        if !app.world().contains_resource::<NukeopConfig>() {
+            app.init_resource::<NukeopConfig>();
+        }
+        let config = app.world().resource::<NukeopConfig>().clone();
+        let template = config.infiltrator.or_else(|| {
+            let map = app.world().get_resource::<MapLoadPlugin>()?;
+            // Only with a real station map: fixture maps name `.dmm` files.
+            map.maps.first().filter(|m| !m.ends_with(".dmm"))?;
+            let path = map
+                .source
+                .join("_maps/shuttles/infiltrator/infiltrator_basic.dmm");
+            path.exists().then_some(path)
+        });
+        if let Some(template) = template {
+            info!("infiltrator template {}", template.display());
+            let world = app.world_mut();
+            match world.get_resource_mut::<ShuttleTemplates>() {
+                Some(mut templates) => templates.0.push(template.clone()),
+                None => {
+                    world.insert_resource(ShuttleTemplates(vec![template.clone()]));
+                }
+            }
+            app.insert_resource(InfiltratorTemplate(template));
+        }
+        app.add_plugins(NuclearBombPlugin)
+            .init_resource::<NukeOutcome>()
+            .register_ui::<ShuttleConsoleUi>()
+            .add_systems(
+                Startup,
+                (
+                    load_data,
+                    setup_infiltrator.after(crate::shuttle::setup_shuttle),
+                    setup_world,
+                ),
+            )
+            .add_systems(
+                Update,
+                (
+                    console_clicks.after(ResolveClicks).before(UiSystems::Open),
+                    console_acts.in_set(UiSystems::Handle),
+                    tick_flight,
+                    watch_disk,
+                    tick_pinpointers,
+                ),
+            );
+    }
+}
+
+fn load_data(world: &mut World) {
+    let seed = world
+        .get_resource::<ss13_mapload::MapSeed>()
+        .map_or(0, |s| s.0);
+    world.insert_resource(NukeopRng(Rng::new(seed ^ 0x6e75_6b65)));
+    let Some(assets) = world
+        .get_resource::<MapLoadPlugin>()
+        .map(|m| m.assets.clone())
+    else {
+        world.init_resource::<NukeopData>();
+        return;
+    };
+    let data = AntagData::read(&assets.join(ss13_mapload::antag::ANTAG_FILE)).unwrap_or_default();
+    let manifest = read_manifest(&assets).unwrap_or_default();
+    let index = manifest.index();
+    let mut templates = HashMap::new();
+    for path in data.nukeop_types() {
+        let proto = world
+            .get_resource::<ss13_proto::Prototypes>()
+            .and_then(|p| p.get(path).cloned());
+        if let Some(proto) = proto {
+            templates.insert(path.to_owned(), Template::new(proto, &index));
+        }
+    }
+    info!(
+        "nuclear operatives: {} outfits, {} item templates",
+        data.nukeop_outfits.len(),
+        templates.len()
+    );
+    world.insert_resource(NukeopData {
+        outfits: data.nukeop_outfits.clone(),
+        aliases: data.operative_aliases.clone(),
+        last_names: data.last_names.clone(),
+        templates,
+    });
+}
+
+/// Disks, consoles and pinpointers on the maps.
+fn setup_world(world: &mut World) {
+    let mut items = world.query::<(Entity, &DmItem)>();
+    let found: Vec<(Entity, String)> = items
+        .iter(world)
+        .map(|(e, i)| (e, i.path.clone()))
+        .filter(|(_, p)| p == DISK_PATH || ss13_mapload::fidelity::is_under(p, PINPOINTER))
+        .collect();
+    for (e, path) in found {
+        if path == DISK_PATH {
+            world.entity_mut(e).insert(NukeDisk);
+        } else {
+            world.entity_mut(e).insert(Pinpointer {
+                syndicate: ss13_mapload::fidelity::is_under(&path, SYNDICATE_PINPOINTER),
+                ..default()
+            });
+        }
+    }
+    let mut objs = world.query::<(Entity, &DmObj)>();
+    let consoles: Vec<Entity> = objs
+        .iter(world)
+        .filter(|(_, o)| ss13_mapload::fidelity::is_under(&o.path, SHUTTLE_CONSOLE))
+        .map(|(e, _)| e)
+        .collect();
+    for e in consoles {
+        world.entity_mut(e).insert(ShuttleConsole {
+            possible_destinations: SYNDICATE_DESTINATIONS.map(str::to_owned).to_vec(),
+            destination: None,
+            req_access: vec!["syndicate".into()],
+        });
+    }
+}
+
+/// `/datum/antagonist/nukeop/spawn_infiltrator` for a template loaded with the station.
+fn setup_infiltrator(world: &mut World) {
+    let Some(template) = world
+        .get_resource::<InfiltratorTemplate>()
+        .map(|t| t.0.clone())
+    else {
+        return;
+    };
+    let Some(shuttle) = setup_template_shuttle(
+        world,
+        &template,
+        INFILTRATOR_PORT,
+        INFILTRATOR_ID,
+        AWAY_DOCK,
+        "syndicate base",
+    ) else {
+        return;
+    };
+    info!(
+        "infiltrator {} at z{} (transit z{})",
+        shuttle.name, shuttle.level_z, shuttle.transit_z
+    );
+    world.insert_resource(Infiltrator {
+        port: shuttle.port,
+        away: shuttle.away,
+        transit: shuttle.transit,
+        level_z: shuttle.level_z,
+        transit_z: shuttle.transit_z,
+        flight: Flight::Idle,
+    });
+}
+
+pub(crate) fn client_of(world: &World, mob: Entity) -> Option<Entity> {
+    world.get::<PlayerMob>(mob).map(|p| p.client)
+}
+
+pub(crate) fn chat_to(
+    world: &mut World,
+    client: Option<Entity>,
+    span: Span,
+    text: impl Into<String>,
+) {
+    if let Some(client) = client {
+        world.write_message(SendChat {
+            clients: vec![client],
+            message: ChatMessage::simple(ChatChannel::System, span, text),
+        });
+    }
+}
+
+fn to_everyone(world: &mut World, span: Span, text: &str) {
+    let mut q = world.query_filtered::<Entity, With<ClientToken>>();
+    let clients: Vec<Entity> = q.iter(world).collect();
+    world.write_message(SendChat {
+        clients,
+        message: ChatMessage::simple(ChatChannel::System, span, text),
+    });
+}
+
+/// tg `syndicate_name()`.
+pub fn syndicate_name(rng: &mut Rng) -> String {
+    let pick = |rng: &mut Rng, list: &[&str]| {
+        list[rng.range(0, list.len() as i64 - 1) as usize].to_owned()
+    };
+    let mut name = pick(
+        rng,
+        &[
+            "Clandestine",
+            "Prima",
+            "Blue",
+            "Zero-G",
+            "Max",
+            "Blasto",
+            "North",
+            "Omni",
+            "Newton",
+            "Cyber",
+            "Bonk",
+            "Gene",
+            "Gib",
+        ],
+    );
+    if rng.prob(80.0) {
+        name.push(' ');
+        if rng.prob(60.0) {
+            name += &pick(
+                rng,
+                &[
+                    "Syndicate",
+                    "Consortium",
+                    "Collective",
+                    "Corporation",
+                    "Group",
+                    "Holdings",
+                    "Biotech",
+                    "Industries",
+                    "Systems",
+                    "Products",
+                    "Chemicals",
+                    "Enterprises",
+                    "Family",
+                    "Creations",
+                    "International",
+                    "Intergalactic",
+                    "Interplanetary",
+                    "Foundation",
+                    "Positronics",
+                    "Hive",
+                ],
+            );
+        } else {
+            name += &pick(
+                rng,
+                &[
+                    "Syndi", "Corp", "Bio", "System", "Prod", "Chem", "Inter", "Hive",
+                ],
+            );
+            name += &pick(rng, &["", "-"]);
+            name += &pick(rng, &["Tech", "Co", "Tek", "X", "Inc", "Code"]);
+        }
+    } else {
+        name += &pick(rng, &["-", "*", ""]);
+        name += &pick(
+            rng,
+            &[
+                "Tech", "Co", "Tek", "X", "Inc", "Gen", "Star", "Dyne", "Code", "Hive",
+            ],
+        );
+    }
+    name
+}
+
+/// tg `random_nukecode()`.
+pub fn random_nukecode(rng: &mut Rng) -> String {
+    format!("{:05}", rng.range(0, 99_999))
+}
+
+/// tg `/datum/antagonist/nukeop/on_gain` bonus: `CEILING(joined / 5, 5)`.
+pub fn bonus_tc(joined: u32) -> u32 {
+    joined.div_ceil(5).div_ceil(5) * 5
+}
+
+/// Free open floor aboard the infiltrator, hallway first (tg reinforcements: EVA, hallway).
+fn infiltrator_spawns(world: &World) -> Vec<TilePos> {
+    let Some(infiltrator) = world.get_resource::<Infiltrator>() else {
+        return Vec::new();
+    };
+    let (Some(mobile), Some(&port_pos)) = (
+        world.get::<MobileDock>(infiltrator.port),
+        world.get::<TilePos>(infiltrator.port),
+    ) else {
+        return Vec::new();
+    };
+    let index = world.resource::<SpatialIndex>();
+    let areas = world.resource::<Areas>();
+    let mut tiles: Vec<(bool, TilePos)> = ordered_turfs(port_pos, mobile.dir, mobile.size)
+        .into_iter()
+        .filter(|&p| index.in_bounds(p) && index.dense_on_tile(p).is_empty())
+        .filter_map(|p| {
+            let area = areas.area_at(p).filter(|a| mobile.areas.contains(a))?;
+            let floor = turf_at(world, p)
+                .and_then(|t| path_of(world, t))
+                .is_some_and(|t| ss13_mapload::fidelity::is_under(&t, "/turf/open/floor"));
+            floor.then(|| {
+                let hallway =
+                    super::bomb::area_path(world, area).is_some_and(|a| a.ends_with("/hallway"));
+                (!hallway, p)
+            })
+        })
+        .collect();
+    tiles.sort_by_key(|&(h, p)| (h, p.z, p.y, p.x));
+    tiles.into_iter().map(|(_, p)| p).collect()
+}
+
+/// The ruleset's `execute()` for the players it selected: bodies aboard the infiltrator, the
+/// team, the leader first.
+pub fn spawn_operatives(world: &mut World, clients: &[Entity]) {
+    if clients.is_empty() {
+        return;
+    }
+    let spawns = infiltrator_spawns(world);
+    spawn_team(world);
+    let mut rng = world
+        .remove_resource::<NukeopRng>()
+        .map_or(Rng::new(0), |r| r.0);
+    let joined = world
+        .query_filtered::<(), With<PlayerMob>>()
+        .iter(world)
+        .count() as u32
+        + clients.len() as u32;
+    for (i, &client) in clients.iter().enumerate() {
+        let pos = if spawns.is_empty() {
+            crate::server::pick_latejoin(world)
+        } else {
+            crate::server::pick_free(world, &spawns, i).1
+        };
+        let mob = crate::server::spawn_mob(world, client, pos, String::new());
+        world.entity_mut(client).remove::<crate::round::NewPlayer>();
+        add_nukeop(world, mob, i == 0, joined, &mut rng);
+    }
+    world.insert_resource(NukeopRng(rng));
+}
+
+/// Dev (`SS13_DEV_TRAITOR=nukeop`): a joined crew body becomes an operative aboard the
+/// infiltrator (a dev spawn on the infiltrator's level is kept), its job gear replaced; the
+/// first one makes the team and leads it.
+pub fn dev_nukeop(world: &mut World, client: Entity, mob: Entity) {
+    let leader = world.get_resource::<NukeTeam>().is_none();
+    let mut rng = world
+        .remove_resource::<NukeopRng>()
+        .map_or(Rng::new(0), |r| r.0);
+    if leader {
+        world.insert_resource(NukeopRng(rng));
+        spawn_team(world);
+        rng = world
+            .remove_resource::<NukeopRng>()
+            .map_or(Rng::new(0), |r| r.0);
+    }
+    if let Some(inventory) = world.get::<Inventory>(mob).cloned() {
+        let items: Vec<Entity> = inventory
+            .equipped()
+            .chain(inventory.hands.iter().flatten().copied())
+            .collect();
+        for item in items {
+            world.despawn(item);
+        }
+    }
+    world.entity_mut(mob).remove::<crate::jobs::PlayerJob>();
+    let spawns = infiltrator_spawns(world);
+    let level = world.get_resource::<Infiltrator>().map(|i| i.level_z);
+    let kept = crate::server::dev_spawn(world, client).is_some_and(|p| Some(p.z) == level);
+    if !spawns.is_empty() && !kept {
+        let n = world.resource::<NukeTeam>().members.len();
+        let pos = crate::server::pick_free(world, &spawns, n).1;
+        world.entity_mut(mob).insert(pos);
+    }
+    let joined = world
+        .query_filtered::<(), With<PlayerMob>>()
+        .iter(world)
+        .count() as u32;
+    add_nukeop(world, mob, leader, joined, &mut rng);
+    world.insert_resource(NukeopRng(rng));
+}
+
+/// `/datum/team/nuclear/New` + `assign_nuke`.
+fn spawn_team(world: &mut World) {
+    let mut rng = world
+        .remove_resource::<NukeopRng>()
+        .map_or(Rng::new(0), |r| r.0);
+    let last_names = world
+        .get_resource::<NukeopData>()
+        .map(|d| d.last_names.clone())
+        .unwrap_or_default();
+    // `/datum/team/nuclear/New` names the team; the leader renames it at once (`ask_name`,
+    // whose default is a random last name).
+    let mut team = NukeTeam {
+        syndicate_name: syndicate_name(&mut rng),
+        ..default()
+    };
+    if !last_names.is_empty() {
+        team.syndicate_name =
+            last_names[rng.range(0, last_names.len() as i64 - 1) as usize].clone();
+    }
+    let mut bombs = world.query::<(Entity, &NuclearBomb)>();
+    let nuke = bombs
+        .iter(world)
+        .filter(|(_, b)| b.syndicate)
+        .map(|(e, _)| e)
+        .min();
+    if let Some(nuke) = nuke {
+        let code = random_nukecode(&mut rng);
+        let mut bomb = world.get_mut::<NuclearBomb>(nuke).expect("queried");
+        if bomb.state.r_code == super::bomb::NUKE_CODE_UNSET {
+            bomb.state.r_code = code.clone();
+            team.memorized_code = Some(code);
+        } else {
+            team.memorized_code = Some(bomb.state.r_code.clone());
+        }
+        team.tracked_nuke = Some(nuke);
+    }
+    world.insert_resource(team);
+    world.insert_resource(NukeopRng(rng));
+}
+
+/// `add_antag_datum(/datum/antagonist/nukeop[/leader])` on a fresh body: `give_alias`,
+/// `forge_objectives`, `equip_op`, the bonus TC, `memorize_code`, `greet`.
+pub fn add_nukeop(world: &mut World, mob: Entity, leader: bool, joined: u32, rng: &mut Rng) {
+    let client = client_of(world, mob);
+    let key = client
+        .and_then(|c| world.get::<ClientToken>(c))
+        .map(|t| t.0.clone())
+        .unwrap_or_default();
+    let (aliases, outfit) = world
+        .get_resource::<NukeopData>()
+        .map(|d| {
+            (
+                d.aliases.clone(),
+                d.outfits
+                    .get(usize::from(leader))
+                    .or(d.outfits.first())
+                    .cloned(),
+            )
+        })
+        .unwrap_or_default();
+    let syndicate_name = world.resource::<NukeTeam>().syndicate_name.clone();
+    let alias = if aliases.is_empty() {
+        "Агент".to_owned()
+    } else {
+        aliases[rng.range(0, aliases.len() as i64 - 1) as usize].clone()
+    };
+    let mut name = format!("{alias} {syndicate_name}");
+    if leader {
+        let title = LEADER_TITLES[rng.range(0, LEADER_TITLES.len() as i64 - 1) as usize];
+        name = format!("{title} {name}");
+    }
+    world.entity_mut(mob).insert(Name::new(name.clone()));
+    {
+        let mut team = world.resource_mut::<NukeTeam>();
+        team.members.push(mob);
+        if leader {
+            team.leader = Some(mob);
+        }
+    }
+    if let Some(outfit) = outfit {
+        equip_op(
+            world,
+            mob,
+            &outfit,
+            &name,
+            leader,
+            OUTFIT_TC + bonus_tc(joined),
+        );
+    }
+    let hud_icon = world
+        .get_resource::<IconIndex>()
+        .and_then(|index| index.get(ANTAG_HUD.0, ANTAG_HUD.1));
+    let code = world.resource::<NukeTeam>().memorized_code.clone();
+    let mut memory = String::new();
+    if let Some(code) = &code {
+        memory = format!("Код от ядерной боеголовки: {code}");
+    }
+    world.entity_mut(mob).insert((
+        Nukeop {
+            key,
+            leader,
+            memory,
+        },
+        AntagHudData {
+            hud_icon,
+            ..default()
+        },
+    ));
+    // `greet`.
+    if leader {
+        let title = name.split(' ').next().unwrap_or_default().to_owned();
+        chat_to(
+            world,
+            client,
+            Span::Warning,
+            format!(
+                "Вы - {title} отряда Синдиката для этой задачи. Вы несете ответственность за \
+                 руководство своей командой."
+            ),
+        );
+        chat_to(
+            world,
+            client,
+            Span::Warning,
+            "Если вы чувствуете, что не справляетесь с этой задачей, обменяйте свой наушник у \
+             другого оперативника.",
+        );
+        chat_to(
+            world,
+            client,
+            Span::Warning,
+            "В вашей руке найдете специальный предмет, что повысит сложность для вашей команды. \
+             Внимательно изучите его и обсудите план с вашей командой, прежде чем активируете \
+             его.",
+        );
+    } else {
+        chat_to(
+            world,
+            client,
+            Span::Bold,
+            format!("Вы - агент {syndicate_name}!"),
+        );
+    }
+    chat_to(world, client, Span::Notice, "Ваши текущие задачи:");
+    if let Some(client) = client {
+        world.write_message(SendChat {
+            clients: vec![client],
+            message: ChatMessage {
+                channel: ChatChannel::System,
+                segments: vec![
+                    ChatSegment::new(Span::Bold, "Задача #1"),
+                    ChatSegment::new(Span::Plain, format!(": {NUCLEAR_OBJECTIVE}")),
+                ],
+            },
+        });
+    }
+    if let Some(code) = code {
+        chat_to(
+            world,
+            client,
+            Span::Plain,
+            format!("Код ядерной аутентификации: {code}"),
+        );
+        if leader {
+            give_item(world, mob, PAPER, |world, paper| {
+                if let Some(mut n) = world.get_mut::<DmName>(paper) {
+                    n.name = "коды ядерной аутентификации".into();
+                    n.desc = format!("Код активации ядерной боеголовки: {code}");
+                }
+            });
+        }
+    }
+    if leader {
+        give_item(world, mob, CHALLENGE, |_, _| {});
+    }
+    if let Some(client) = client {
+        world.write_message(OpenUi::new::<AntagHudUi>(client, mob, mob, ""));
+    }
+    info!(
+        "{mob} is a nuclear operative{}",
+        if leader { " (leader)" } else { "" }
+    );
+}
+
+/// Spawns `path` into `mob`'s free hand (tg `put_in_hands`), else at its feet.
+fn give_item(world: &mut World, mob: Entity, path: &str, then: impl FnOnce(&mut World, Entity)) {
+    let item = world.resource_scope(|world, data: Mut<NukeopData>| {
+        Some(data.templates.get(path)?.spawn(world, None))
+    });
+    let Some(item) = item else {
+        warn!("no prototype for {path}");
+        return;
+    };
+    crate::storage::finish_item(world, item, 0);
+    then(world, item);
+    let hand = world.get::<Inventory>(mob).and_then(|inv| {
+        [inv.active, 1 - inv.active]
+            .into_iter()
+            .find(|&h| inv.hands[h].is_none())
+    });
+    match hand {
+        Some(h) => {
+            world.entity_mut(item).insert((Networked, CarriedBy(mob)));
+            world.get_mut::<Inventory>(mob).expect("checked").hands[h] = Some(item);
+        }
+        None => {
+            let pos = world.get::<TilePos>(mob).copied().unwrap_or_default();
+            world.entity_mut(item).insert((Networked, pos));
+        }
+    }
+}
+
+/// Spawns `path` into `pack` (`equip_to_storage(del_on_fail = TRUE)`).
+fn into_pack(world: &mut World, pack: Entity, path: &str) -> Option<Entity> {
+    let item = world.resource_scope(|world, data: Mut<NukeopData>| {
+        Some(data.templates.get(path)?.spawn(world, None))
+    })?;
+    crate::storage::finish_item(world, item, 1);
+    if crate::storage::can_insert(world, pack, item).is_err() {
+        world.despawn(item);
+        return None;
+    }
+    world.entity_mut(item).insert(Networked);
+    crate::storage::put_inside(world, item, pack);
+    Some(item)
+}
+
+/// `equip_op` with `/datum/outfit/syndicate` and its `post_equip`.
+fn equip_op(world: &mut World, mob: Entity, outfit: &Outfit, name: &str, leader: bool, tc: u32) {
+    let assignment = if leader {
+        "Syndicate Operative Leader"
+    } else {
+        "Syndicate Operative"
+    };
+    let mut inventory = world.resource_scope(|world, data: Mut<NukeopData>| {
+        crate::outfit::equip_outfit(world, mob, outfit, &data.templates)
+    });
+    if let Some(card) = inventory.id {
+        // `/datum/id_trim/chameleon/operative[/nuke_leader]`.
+        let mut access = vec!["syndicate".to_owned(), "maint_tunnels".to_owned()];
+        if leader {
+            access.push("syndicate_leader".into());
+        }
+        let label = crate::outfit::id_label(name, assignment);
+        let mut card = world.entity_mut(card);
+        card.insert((
+            IdCard { access },
+            IdRegistration {
+                registered_name: name.to_owned(),
+                assignment: assignment.to_owned(),
+                job: assignment.to_owned(),
+            },
+        ));
+        if let Some(mut n) = card.get_mut::<DmName>() {
+            n.name = label;
+        }
+    }
+    // `post_equip`: the headset on the syndicate frequency.
+    if let Some(ears) = inventory.ears
+        && let Some(mut radio) = world.get_mut::<crate::radio::Radio>(ears)
+    {
+        radio.frequency = ss13_chat::radio::FREQ_SYNDICATE;
+    }
+    // shortcut: storage's grey backpack, as every job gets (`crate::jobs::join`).
+    inventory.back = crate::storage::spawn_backpack(world, mob);
+    world.entity_mut(mob).insert(inventory.clone());
+    crate::modpc::pda::post_equip(world, mob, name, assignment);
+    if let Some(pack) = inventory.back {
+        for (path, count) in &outfit.backpack_contents {
+            for _ in 0..*count {
+                into_pack(world, pack, path);
+            }
+        }
+        if let Some(uplink) = into_pack(world, pack, NUCLEAR_UPLINK) {
+            crate::antag::uplink::give_nuclear_uplink(world, mob, uplink, tc);
+        }
+        // shortcut: the base's pinpointers come with the operative.
+        if let Some(p) = into_pack(world, pack, SYNDICATE_PINPOINTER) {
+            world.entity_mut(p).insert(Pinpointer {
+                syndicate: true,
+                ..default()
+            });
+        }
+    }
+    if world.get::<PurchaseLog>(mob).is_none() {
+        world.entity_mut(mob).insert(PurchaseLog::default());
+    }
+}
+
+/// tg `attack_self` of the operatives' items: the nuclear uplink opens, the pinpointer toggles,
+/// the war declaration item explains itself. `false` for other items.
+pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity) -> bool {
+    if world
+        .get::<crate::antag::uplink::Uplink>(item)
+        .is_some_and(|u| u.uplink_flag == UPLINK_NUKE_OPS)
+    {
+        crate::antag::uplink::open_uplink(world, client, mob, item);
+        return true;
+    }
+    if let Some(mut p) = world.get_mut::<Pinpointer>(item) {
+        p.active = !p.active;
+        let active = p.active;
+        if !active {
+            set_pinpointer_overlay(world, item, None);
+        }
+        chat_to(
+            world,
+            Some(client),
+            Span::Notice,
+            if active {
+                "Вы активируете пинпоинтер."
+            } else {
+                "Вы деактивируете пинпоинтер."
+            },
+        );
+        return true;
+    }
+    if world
+        .get::<DmItem>(item)
+        .is_some_and(|i| i.path == CHALLENGE)
+    {
+        // shortcut: war declaration (bonus TC, shuttle delay, announcement) is not modelled.
+        chat_to(
+            world,
+            Some(client),
+            Span::Warning,
+            "Объявление войны пока недоступно.",
+        );
+        return true;
+    }
+    false
+}
+
+/// `arm_nuke`: syndicate pinpointers switch to the infiltrator.
+pub(crate) fn bomb_armed(world: &mut World, _bomb: Entity) {
+    let mut q = world.query::<&mut Pinpointer>();
+    for mut p in q.iter_mut(world) {
+        if p.syndicate {
+            p.track_infiltrator = true;
+        }
+    }
+}
+
+/// `explode`: everyone hears the alarm.
+pub(crate) fn bomb_exploding(world: &mut World, _bomb: Entity) {
+    to_everyone(
+        world,
+        Span::BoldAnnounce,
+        "Ядерное устройство активировано! Взрыв неизбежен!",
+    );
+}
+
+/// `actually_explode` + `really_actually_explode`.
+pub(crate) fn actually_explode(world: &mut World, bomb: Entity) {
+    let Some(pos) = world.get::<TilePos>(bomb).copied() else {
+        return;
+    };
+    let station = crate::events::controller::station_levels(world).contains(&pos.z);
+    let base = world
+        .get_resource::<Infiltrator>()
+        .is_some_and(|i| i.level_z == pos.z);
+    let size = world
+        .resource::<SpatialIndex>()
+        .level_size(pos.z)
+        .unwrap_or((255, 255));
+    let status = classify(pos, station, is_space_area(world, pos), base, size);
+    info!("nuclear detonation at {pos:?}: {status:?}");
+    {
+        let mut outcome = world.resource_mut::<NukeOutcome>();
+        outcome.station_nuke_source = Some(status);
+        if status == Detonation::HitStation {
+            outcome.station_was_nuked = true;
+        }
+    }
+    let gib_z: Vec<u16> = match status {
+        Detonation::HitStation => crate::events::controller::station_levels(world).collect(),
+        Detonation::HitSyndieBase => vec![pos.z],
+        _ => Vec::new(),
+    };
+    match status {
+        Detonation::HitStation => {}
+        Detonation::HitSyndieBase => crate::shuttle::priority_announce(
+            world,
+            "Приоритетное оповещение",
+            "Командование ядерных операций",
+            "Сканеры дальнего действия показывают, что ядерное устройство взорвалось на ранее \
+             неизвестной базе, мы предполагаем,что база имеет синдикатовское происхождение. \
+             Хорошая работа.",
+        ),
+        _ => crate::shuttle::priority_announce(
+            world,
+            "Приоритетное оповещение",
+            "Командование ядерных операций",
+            "Сканеры дальнего действия показывают, что ядерное устройство взорвалось; однако \
+             сейсмическая активность на станции минимальна. Мы предполагаем, что устройство \
+             взорвалось не на самой станции.",
+        ),
+    }
+    // `nuke_gib` on every living mob of the hit levels.
+    // shortcut: the mob dies where it stood (tg gibs it; no freezer survival).
+    let mut mobs = world.query::<(Entity, &TilePos, &Health, &Stat)>();
+    let victims: Vec<Entity> = mobs
+        .iter(world)
+        .filter(|(_, p, _, s)| gib_z.contains(&p.z) && **s != Stat::Dead)
+        .map(|(e, ..)| e)
+        .collect();
+    for e in victims {
+        let (Some(mut health), Some(mut stat)) = (
+            world.get::<Health>(e).cloned(),
+            world.get::<Stat>(e).copied(),
+        ) else {
+            continue;
+        };
+        apply_damage(&mut health, &mut stat, DamageType::Brute, 1000.0);
+        world.entity_mut(e).insert((health, stat));
+        chat_to(
+            world,
+            client_of(world, e),
+            Span::Danger,
+            "Вас разрывает на атомы ядерным взрывом!",
+        );
+    }
+    // `qdel(src)`: the disk inside is not deleted (stationloving), it drops out first.
+    if let Some(disk) = world.get::<NuclearBomb>(bomb).and_then(|b| b.disk) {
+        crate::storage::take_out(world, disk, pos);
+    }
+    world.despawn(bomb);
+}
+
+/// tg `check_finished`: the station was nuked.
+pub fn station_destroyed(world: &World) -> bool {
+    world
+        .get_resource::<NukeOutcome>()
+        .is_some_and(|o| o.station_was_nuked)
+}
+
+/// tg `NUKE_RESULT_*`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NukeResult {
+    Fluke,
+    NukeWin,
+    NoSurvivors,
+    WrongStation,
+    WrongStationDead,
+    HijackDisk,
+    HijackNoDisk,
+    CrewWinSyndiesDead,
+    CrewWin,
+    DiskLost,
+    DiskStolen,
+    Interrupted,
+}
+
+/// What `get_result` reads.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ResultInputs {
+    pub shuttle_evacuated: bool,
+    pub shuttle_landed_base: bool,
+    pub disk_rescued: bool,
+    pub syndies_didnt_escape: bool,
+    pub team_is_dead: bool,
+    pub station_was_nuked: bool,
+    pub station_nuke_source: Option<Detonation>,
+}
+
+/// `/datum/team/nuclear/proc/get_result`.
+pub fn compute_result(i: ResultInputs) -> NukeResult {
+    if i.station_nuke_source == Some(Detonation::HitSyndieBase) {
+        return NukeResult::Fluke;
+    }
+    if i.station_was_nuked {
+        return if i.syndies_didnt_escape {
+            NukeResult::NoSurvivors
+        } else {
+            NukeResult::NukeWin
+        };
+    }
+    if i.station_nuke_source.is_some() && !i.disk_rescued {
+        return if i.syndies_didnt_escape {
+            NukeResult::WrongStationDead
+        } else {
+            NukeResult::WrongStation
+        };
+    }
+    if i.shuttle_landed_base {
+        return if i.disk_rescued {
+            NukeResult::HijackDisk
+        } else {
+            NukeResult::HijackNoDisk
+        };
+    }
+    if i.disk_rescued {
+        return if i.shuttle_evacuated && i.team_is_dead {
+            NukeResult::CrewWinSyndiesDead
+        } else {
+            NukeResult::CrewWin
+        };
+    }
+    if i.team_is_dead {
+        NukeResult::DiskLost
+    } else if i.shuttle_evacuated {
+        NukeResult::DiskStolen
+    } else {
+        // tg CRASHes here; the report prints "Миссия прервана!".
+        NukeResult::Interrupted
+    }
+}
+
+/// `is_disk_rescued`.
+fn disk_rescued(world: &mut World) -> bool {
+    let mut q = world.query_filtered::<Entity, With<NukeDisk>>();
+    let disks: Vec<Entity> = q.iter(world).collect();
+    let shuttle = world.get_resource::<EmergencyShuttle>();
+    let station = crate::events::controller::station_levels(world);
+    disks.into_iter().all(|disk| {
+        let Some(pos) = crate::modpc::pda::turf_of(world, disk) else {
+            return false;
+        };
+        match shuttle.map(|s| (s.state.mode, s)) {
+            Some((ShuttleMode::Escape, s)) => {
+                let area = world.resource::<Areas>().area_at(pos);
+                area.is_some_and(|a| {
+                    world
+                        .get::<MobileDock>(s.port)
+                        .is_some_and(|m| m.areas.contains(&a))
+                })
+            }
+            Some((ShuttleMode::Endgame, s)) => pos.z == s.centcom_z,
+            _ => station.contains(&pos.z),
+        }
+    })
+}
+
+/// `are_all_operatives_dead`.
+fn team_dead(world: &World, team: &NukeTeam) -> bool {
+    team.members
+        .iter()
+        .all(|&m| world.get::<Stat>(m).is_none_or(|s| *s == Stat::Dead))
+}
+
+/// `is_infiltrator_docked_at_syndiebase`.
+pub fn infiltrator_home(world: &World) -> bool {
+    world.get_resource::<Infiltrator>().is_some_and(|i| {
+        world
+            .get::<MobileDock>(i.port)
+            .is_some_and(|m| m.docked == Some(i.away))
+    })
+}
+
+/// `get_result` against the world.
+pub fn get_result(world: &mut World) -> Option<NukeResult> {
+    let team = world.get_resource::<NukeTeam>()?.clone();
+    let outcome = *world.resource::<NukeOutcome>();
+    let inputs = ResultInputs {
+        shuttle_evacuated: crate::shuttle::evacuated(world),
+        // shortcut: the emergency shuttle cannot be hijacked here.
+        shuttle_landed_base: false,
+        disk_rescued: disk_rescued(world),
+        syndies_didnt_escape: !infiltrator_home(world),
+        team_is_dead: team_dead(world, &team),
+        station_was_nuked: outcome.station_was_nuked,
+        station_nuke_source: outcome.station_nuke_source,
+    };
+    Some(compute_result(inputs))
+}
+
+/// `/datum/team/nuclear/roundend_report`.
+pub fn roundend_report(world: &mut World, _end: RoundEnd) -> Vec<ChatMessage> {
+    let Some(result) = get_result(world) else {
+        return Vec::new();
+    };
+    let team = world.resource::<NukeTeam>().clone();
+    let station = crate::round::station_name(world);
+    let name = &team.syndicate_name;
+    let line = |segments: Vec<ChatSegment>| ChatMessage {
+        channel: ChatChannel::System,
+        segments,
+    };
+    let (span, title, text) = match result {
+        NukeResult::Fluke => (
+            Span::RedText,
+            "Унизительное поражение Синдиката!".to_owned(),
+            format!(
+                "Экипаж станции {station} вернули оперативникам {name} бомбу обратно на их базу! \
+                 База Синдиката была уничтожена! В следующий раз - не теряйте ядерную бомбу!"
+            ),
+        ),
+        NukeResult::NukeWin => (
+            Span::GreenText,
+            "Разгромная победа Синдиката!".to_owned(),
+            format!("Оперативники {name} уничтожили {station}!"),
+        ),
+        NukeResult::NoSurvivors => (
+            Span::Bold,
+            "Полное уничтожение!".to_owned(),
+            format!(
+                "Оперативники {name} уничтожили {station}, но не смогли покинуть станцию вовремя \
+                 и попали под взрыв. В следующий раз - не теряйте диск!"
+            ),
+        ),
+        NukeResult::WrongStation => (
+            Span::RedText,
+            "Незначительная победа экипажа!".to_owned(),
+            format!(
+                "Оперативники {name} сохранили диск аутентификации, но взорвали то, что не \
+                 являлось {station}. В следующий раз - не делайте так!"
+            ),
+        ),
+        NukeResult::WrongStationDead => (
+            Span::RedText,
+            format!("Оперативники {name} получили премию Дарвина!"),
+            format!(
+                "Оперативники {name} взорвали то, что не являлось {station} и попали под взрыв. \
+                 В следующий раз - не делайте так!"
+            ),
+        ),
+        NukeResult::HijackDisk | NukeResult::HijackNoDisk => (
+            Span::GreenText,
+            "Незначительная победа Синдиката!".to_owned(),
+            format!("Оперативники {name} угнали эвакуационный шаттл."),
+        ),
+        NukeResult::CrewWinSyndiesDead => (
+            Span::RedText,
+            "Разгромная победа экипажа!".to_owned(),
+            format!("Экипаж спас диск и уничтожил оперативников {name}!"),
+        ),
+        NukeResult::CrewWin => (
+            Span::RedText,
+            "Разгромная победа экипажа!".to_owned(),
+            format!("Экипаж спас диск и остановил оперативников {name}!"),
+        ),
+        NukeResult::DiskLost => (
+            Span::Bold,
+            "Победа экипажа!".to_owned(),
+            format!(
+                "Экипаж не смог сохранить диск, но смогли уничтожить большую часть оперативников \
+                 {name}!"
+            ),
+        ),
+        NukeResult::DiskStolen => (
+            Span::GreenText,
+            "Незначительная победа Синдиката!".to_owned(),
+            format!(
+                "Оперативники {name} пережили задание, но не смогли уничтожить {station}. В \
+                 следующий раз - не теряйте диск!"
+            ),
+        ),
+        NukeResult::Interrupted => (
+            Span::Bold,
+            "Победа".to_owned(),
+            "Миссия прервана!".to_owned(),
+        ),
+    };
+    let mut out = vec![
+        line(vec![ChatSegment::new(
+            Span::Bold,
+            format!("Оперативники {name}:"),
+        )]),
+        line(vec![ChatSegment::new(span, title)]),
+        line(vec![ChatSegment::new(Span::Bold, text)]),
+        line(vec![ChatSegment::new(
+            Span::Bold,
+            "Оперативниками Синдиката были:",
+        )]),
+    ];
+    let mut spent = 0;
+    for &member in &team.members {
+        let key = world
+            .get::<Nukeop>(member)
+            .map(|n| n.key.clone())
+            .unwrap_or_default();
+        out.push(crate::antag::traitor::print_player(world, member, &key));
+        spent += world
+            .get::<PurchaseLog>(member)
+            .map_or(0, |l| l.total_spent);
+    }
+    out.push(line(vec![ChatSegment::new(
+        Span::Plain,
+        format!("(Оперативники потратили {spent} ТК)"),
+    )]));
+    let done = result == NukeResult::NukeWin || result == NukeResult::NoSurvivors;
+    out.push(line(vec![
+        ChatSegment::new(Span::Bold, "Задача #1"),
+        ChatSegment::new(Span::Plain, format!(": {NUCLEAR_OBJECTIVE} ")),
+        if done {
+            ChatSegment::new(Span::GreenText, "Успех!")
+        } else {
+            ChatSegment::new(Span::RedText, "Неудача.")
+        },
+    ]));
+    info!("nuclear operatives: {result:?}");
+    out
+}
+
+/// `/datum/dynamic_ruleset/roundstart/nukies/round_result` `mode_result`.
+pub fn mode_result(result: NukeResult) -> &'static str {
+    match result {
+        NukeResult::Fluke => "loss - syndicate nuked - disk secured",
+        NukeResult::NukeWin => "win - syndicate nuke",
+        NukeResult::NoSurvivors => "halfwin - syndicate nuke - did not evacuate in time",
+        NukeResult::WrongStation => "halfwin - blew wrong station",
+        NukeResult::WrongStationDead => "halfwin - blew wrong station - did not evacuate in time",
+        NukeResult::CrewWinSyndiesDead => "loss - evacuation - disk secured - syndi team dead",
+        NukeResult::CrewWin => "loss - evacuation - disk secured",
+        NukeResult::DiskLost => "halfwin - evacuation - disk not secured",
+        NukeResult::DiskStolen => "halfwin - detonation averted",
+        _ => "halfwin - interrupted",
+    }
+}
+
+// --- The disk -------------------------------------------------------------------------------
+
+/// `atom_in_bounds`.
+fn disk_in_bounds(world: &World, pos: TilePos) -> bool {
+    if crate::events::controller::station_levels(world).contains(&pos.z) {
+        return true;
+    }
+    if world
+        .get_resource::<Infiltrator>()
+        .is_some_and(|i| i.level_z == pos.z)
+    {
+        return true;
+    }
+    if world
+        .get_resource::<EmergencyShuttle>()
+        .is_some_and(|s| s.centcom_z == pos.z)
+    {
+        return true;
+    }
+    // Transit levels: only aboard the allowed shuttles.
+    world
+        .resource::<Areas>()
+        .area_at(pos)
+        .and_then(|a| super::bomb::area_path(world, a))
+        .is_some_and(|p| {
+            [
+                "/area/shuttle/syndicate",
+                "/area/shuttle/escape",
+                "/area/shuttle/pod_",
+            ]
+            .iter()
+            .any(|root| p.starts_with(root))
+        })
+}
+
+/// `get_safe_random_station_turf`: a random free floor in a station area.
+fn safe_station_turf(world: &World, rng: &mut Rng) -> Option<TilePos> {
+    let index = world.resource::<SpatialIndex>();
+    let (w, h) = index.level_size(1)?;
+    for _ in 0..500 {
+        let pos = TilePos::new(
+            rng.range(1, i64::from(w)) as i32,
+            rng.range(1, i64::from(h)) as i32,
+            1,
+        );
+        if !index.dense_on_tile(pos).is_empty() {
+            continue;
+        }
+        let floor = turf_at(world, pos)
+            .and_then(|t| path_of(world, t))
+            .is_some_and(|t| ss13_mapload::fidelity::is_under(&t, "/turf/open/floor"));
+        let station = world
+            .resource::<Areas>()
+            .area_at(pos)
+            .and_then(|a| super::bomb::area_path(world, a))
+            .is_some_and(|p| ss13_mapload::fidelity::is_under(p, STATION_AREA));
+        if floor && station {
+            return Some(pos);
+        }
+    }
+    None
+}
+
+/// The tracked disk, last seen once a second: out of bounds it is relocated, gone (despawned)
+/// a new one appears (tg's disk cannot be deleted).
+fn watch_disk(world: &mut World, mut next: Local<f64>, mut known: Local<Option<Entity>>) {
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    if now < *next {
+        return;
+    }
+    *next = now + 1.0;
+    let mut q = world.query_filtered::<Entity, With<NukeDisk>>();
+    let disk = q.iter(world).next();
+    let Some(mut rng) = world.remove_resource::<NukeopRng>() else {
+        return;
+    };
+    match disk {
+        Some(disk) => {
+            *known = Some(disk);
+            let pos = crate::modpc::pda::turf_of(world, disk);
+            if pos.is_none_or(|p| !disk_in_bounds(world, p))
+                && let Some(to) = safe_station_turf(world, &mut rng.0)
+            {
+                if let Some(holder) = world.get::<CarriedBy>(disk).map(|c| c.0) {
+                    chat_to(
+                        world,
+                        client_of(world, holder),
+                        Span::Danger,
+                        "Вы не можете отделаться от ощущения, что вы что-то потеряли...",
+                    );
+                }
+                world
+                    .entity_mut(disk)
+                    .remove::<(CarriedBy, crate::storage::StoredIn)>();
+                crate::storage::take_out(world, disk, to);
+                info!("nuclear disk out of bounds at {pos:?}: relocated to {to:?}");
+            }
+        }
+        None if known.is_some() => {
+            let to = safe_station_turf(world, &mut rng.0);
+            let disk = to.and_then(|to| {
+                world.resource_scope(|world, data: Mut<NukeopData>| {
+                    Some(data.templates.get(DISK_PATH)?.spawn(world, Some(to)))
+                })
+            });
+            if let (Some(disk), Some(to)) = (disk, to) {
+                world.entity_mut(disk).insert((NukeDisk, Networked));
+                *known = Some(disk);
+                info!("nuclear disk was destroyed: a new one at {to:?}");
+            }
+        }
+        None => {}
+    }
+    world.insert_resource(rng);
+}
+
+// --- Pinpointers ----------------------------------------------------------------------------
+
+fn set_pinpointer_overlay(world: &mut World, item: Entity, state: Option<(String, Option<Dir>)>) {
+    let icon = world
+        .get::<DmAtom>(item)
+        .map(|a| a.icon.clone())
+        .unwrap_or_default();
+    let overlay = state.and_then(|(s, dir)| {
+        let id = world.get_resource::<IconIndex>()?.get(&icon, &s)?;
+        Some(Overlay {
+            dir,
+            ..Overlay::new(id)
+        })
+    });
+    if let Some(mut appearance) = world.get_mut::<Appearance>(item) {
+        let new: Vec<Overlay> = overlay.into_iter().collect();
+        if appearance.overlays != new {
+            appearance.overlays = new;
+        }
+    }
+}
+
+/// BYOND `get_dir`.
+fn get_dir(from: TilePos, to: TilePos) -> Dir {
+    let (dx, dy) = (to.x - from.x, to.y - from.y);
+    match (dx.signum(), dy.signum()) {
+        (0, 1) => Dir::North,
+        (0, -1) => Dir::South,
+        (1, 0) => Dir::East,
+        (-1, 0) => Dir::West,
+        (1, 1) => Dir::NorthEast,
+        (-1, 1) => Dir::NorthWest,
+        (1, -1) => Dir::SouthEast,
+        (-1, -1) => Dir::SouthWest,
+        _ => Dir::South,
+    }
+}
+
+/// The overlay state of a pinpointer at `here` pointing at `there` (`update_overlays`).
+pub fn pinpointer_state(
+    here: TilePos,
+    there: Option<TilePos>,
+    alert: bool,
+) -> (String, Option<Dir>) {
+    let a = if alert { "alert" } else { "" };
+    let Some(there) = there.filter(|t| t.z == here.z) else {
+        return (format!("pinon{a}null"), None);
+    };
+    if there == here {
+        return (format!("pinon{a}direct"), None);
+    }
+    let d = (there.x - here.x).abs().max((there.y - here.y).abs());
+    let range = if d <= CLOSE_RANGE {
+        "close"
+    } else if d <= MEDIUM_RANGE {
+        "medium"
+    } else {
+        "far"
+    };
+    let state = if alert {
+        "pinonalert".to_owned()
+    } else {
+        format!("pinon{range}")
+    };
+    (state, Some(get_dir(here, there)))
+}
+
+/// `process` of the active pinpointers (`SSfastprocess`).
+fn tick_pinpointers(world: &mut World, mut next: Local<f64>) {
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    if now < *next {
+        return;
+    }
+    *next = now + PINPOINTER_SECS;
+    let mut q = world.query::<(Entity, &Pinpointer)>();
+    let active: Vec<(Entity, Pinpointer)> = q
+        .iter(world)
+        .filter(|(_, p)| p.active)
+        .map(|(e, p)| (e, p.clone()))
+        .collect();
+    if active.is_empty() {
+        return;
+    }
+    let mut disks = world.query_filtered::<Entity, With<NukeDisk>>();
+    let disk = disks.iter(world).next();
+    let disk_pos = disk.and_then(|d| crate::modpc::pda::turf_of(world, d));
+    let infiltrator_pos = world
+        .get_resource::<Infiltrator>()
+        .and_then(|i| world.get::<TilePos>(i.port).copied());
+    let mut bombs = world.query::<&NuclearBomb>();
+    let armed = bombs.iter(world).any(|b| b.state.timing);
+    for (e, mut p) in active {
+        let Some(here) = crate::modpc::pda::turf_of(world, e) else {
+            continue;
+        };
+        if armed && !p.alert {
+            p.alert = true;
+            if let Some(holder) = world.get::<CarriedBy>(e).map(|c| c.0) {
+                chat_to(
+                    world,
+                    client_of(world, holder),
+                    Span::Danger,
+                    "Ваш пинпоинтер вибрирует и издает зловещий сигнал. Ой-ой.",
+                );
+            }
+        }
+        if !armed {
+            p.alert = false;
+            p.track_infiltrator = false;
+        }
+        let target = if p.track_infiltrator {
+            infiltrator_pos
+        } else {
+            disk_pos
+        };
+        let state = pinpointer_state(here, target, p.alert);
+        world.entity_mut(e).insert(p);
+        set_pinpointer_overlay(world, e, Some(state));
+    }
+}
+
+// --- The infiltrator's console --------------------------------------------------------------
+
+fn console_clicks(
+    mut clicks: MessageReader<ClickResolved>,
+    consoles: Query<&DmName, With<ShuttleConsole>>,
+    inventories: Query<&Inventory>,
+    mut open: MessageWriter<OpenUi>,
+) {
+    for click in clicks.read() {
+        let Ok(name) = consoles.get(click.target) else {
+            continue;
+        };
+        if inventories
+            .get(click.mob)
+            .is_ok_and(|inv| inv.active_item().is_none())
+        {
+            open.write(OpenUi::new::<ShuttleConsoleUi>(
+                click.client,
+                click.mob,
+                click.target,
+                crate::vending::plain_name(&name.name),
+            ));
+        }
+    }
+}
+
+/// tg `getTimerStr`.
+pub fn timer_str(left: f64) -> String {
+    if left > 3600.0 {
+        return "--:--".into();
+    }
+    let left = left.max(0.0).round() as u64;
+    format!("{:02}:{:02}", left / 60, left % 60)
+}
+
+/// `get_valid_destinations`: docks named by the console, not the one the shuttle is on.
+fn valid_destinations(
+    world: &mut World,
+    console: &ShuttleConsole,
+) -> Vec<(Entity, String, String)> {
+    let docked = world
+        .get_resource::<Infiltrator>()
+        .and_then(|i| world.get::<MobileDock>(i.port))
+        .and_then(|m| m.docked);
+    let mut q = world.query::<(Entity, &StationaryDock)>();
+    let mut out: Vec<(Entity, String, String)> = q
+        .iter(world)
+        .filter(|(e, d)| console.possible_destinations.contains(&d.id) && Some(*e) != docked)
+        .map(|(e, d)| (e, d.id.clone(), d.name.clone()))
+        .collect();
+    out.sort_by(|a, b| a.1.cmp(&b.1));
+    out
+}
+
+impl ServerUi for ShuttleConsoleUi {
+    type Source = &'static ShuttleConsole;
+    type UserParam = (
+        Option<Res<'static, Infiltrator>>,
+        Query<'static, 'static, (Entity, &'static StationaryDock)>,
+        Query<'static, 'static, &'static MobileDock>,
+        Res<'static, Time>,
+    );
+    type Act = ConsoleAct;
+
+    fn static_data(_: &ShuttleConsole) {}
+
+    fn data(
+        console: &ShuttleConsole,
+        _: Entity,
+        (infiltrator, docks, mobiles, time): &bevy::ecs::system::SystemParamItem<
+            '_,
+            '_,
+            Self::UserParam,
+        >,
+    ) -> ShuttleConsoleData {
+        let Some(infiltrator) = infiltrator.as_deref() else {
+            return ShuttleConsoleData {
+                docked_location: "Unknown".into(),
+                timer_str: "00:00".into(),
+                status: "Missing".into(),
+                ..default()
+            };
+        };
+        let now = time.elapsed_secs_f64();
+        let docked = mobiles.get(infiltrator.port).ok().and_then(|m| m.docked);
+        let docked_location = docked
+            .and_then(|d| docks.get(d).ok())
+            .map_or("In transit".to_owned(), |(_, d)| d.name.clone());
+        let (status, left) = match infiltrator.flight {
+            Flight::Idle => ("Idle", 0.0),
+            Flight::Igniting { until, .. } => ("Igniting", until - now),
+            Flight::Transit { until, .. } => ("In Transit", until - now),
+        };
+        let mut locations: Vec<(String, String)> = docks
+            .iter()
+            .filter(|(e, d)| console.possible_destinations.contains(&d.id) && Some(*e) != docked)
+            .map(|(_, d)| (d.id.clone(), d.name.clone()))
+            .collect();
+        locations.sort();
+        let mut data = ShuttleConsoleData {
+            docked_location,
+            locked: false,
+            authorization_required: false,
+            timer_str: timer_str(left),
+            destination: console.destination.clone(),
+            status: status.into(),
+            locations,
+        };
+        if data.locations.len() == 1 {
+            data.destination = Some(data.locations[0].0.clone());
+        }
+        if data.locations.is_empty() {
+            data.locked = true;
+            data.status = "Locked".into();
+        }
+        data
+    }
+
+    fn parse_act(action: &str, params: &UiParams) -> Result<ConsoleAct, UiReject> {
+        let id = |key: &str| {
+            params
+                .get(key)
+                .filter(|v| !v.is_empty() && v.len() <= 64)
+                .map(str::to_owned)
+                .ok_or_else(|| UiReject::BadParams(format!("{key}: missing")))
+        };
+        match action {
+            MOVE => Ok(ConsoleAct::Move(id(SHUTTLE_ID)?)),
+            SET_DESTINATION => Ok(ConsoleAct::SetDestination(id(DESTINATION)?)),
+            _ => Err(UiReject::UnknownAction),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ConsoleAct {
+    Move(String),
+    SetDestination(String),
+}
+
+/// `/obj/machinery/computer/shuttle/ui_act`: access, then a destination the console offers now.
+fn console_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed<ShuttleConsoleUi>>>) {
+    let pending: Vec<(Entity, Entity, Entity, ConsoleAct)> = acts
+        .read(world.resource::<Messages<UiActed<ShuttleConsoleUi>>>())
+        .map(|a| (a.client, a.actor, a.source, a.act.clone()))
+        .collect();
+    for (client, actor, console_e, act) in pending {
+        let Some(console) = world.get::<ShuttleConsole>(console_e).cloned() else {
+            continue;
+        };
+        let access = world
+            .get::<Inventory>(actor)
+            .and_then(|inv| {
+                [inv.hands[inv.active], inv.hands[1 - inv.active], inv.id]
+                    .into_iter()
+                    .flatten()
+                    .find_map(|i| {
+                        let card = crate::inventory::get_id(world, i)?;
+                        world.get::<IdCard>(card).map(|c| c.access.clone())
+                    })
+            })
+            .unwrap_or_default();
+        if !check_access(&console.req_access, &[], &access) {
+            chat_to(world, Some(client), Span::Danger, "Access denied.");
+            continue;
+        }
+        let valid = valid_destinations(world, &console);
+        match act {
+            // The window's dropdown sends the dock's name (tgui maps it back to the id).
+            ConsoleAct::SetDestination(value) => {
+                if let Some((_, id, _)) = valid.iter().find(|(_, d, n)| *d == value || *n == value)
+                    && let Some(mut c) = world.get_mut::<ShuttleConsole>(console_e)
+                {
+                    c.destination = Some(id.clone());
+                }
+            }
+            ConsoleAct::Move(id) => {
+                let Some(&(dest, ..)) = valid.iter().find(|(_, d, _)| *d == id) else {
+                    warn!("{actor} tried to send the infiltrator to an invalid dock {id:?}");
+                    chat_to(world, Some(client), Span::Warning, "Invalid destination.");
+                    continue;
+                };
+                let now = world.resource::<Time>().elapsed_secs_f64();
+                let Some(mut infiltrator) = world.get_resource_mut::<Infiltrator>() else {
+                    continue;
+                };
+                if infiltrator.flight != Flight::Idle {
+                    chat_to(
+                        world,
+                        Some(client),
+                        Span::Warning,
+                        "Shuttle already in transit.",
+                    );
+                    continue;
+                }
+                infiltrator.flight = Flight::Igniting {
+                    dest,
+                    until: now + IGNITION_SECS,
+                };
+                chat_to(
+                    world,
+                    Some(client),
+                    Span::Plain,
+                    "Терминал говорит: \"Shuttle departing. Please stand away from the doors.\"",
+                );
+                info!("{actor} sent the infiltrator towards {id}");
+            }
+        }
+    }
+}
+
+/// The infiltrator's mobile port timer: ignition, transit, arrival.
+fn tick_flight(world: &mut World) {
+    let Some(infiltrator) = world.get_resource::<Infiltrator>().cloned() else {
+        return;
+    };
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    match infiltrator.flight {
+        Flight::Igniting { dest, until } if now >= until => {
+            let moved = initiate_docking(world, infiltrator.port, infiltrator.transit);
+            info!("infiltrator into transit: {moved:?}");
+            world.resource_mut::<Infiltrator>().flight = if moved.is_ok() {
+                Flight::Transit {
+                    dest,
+                    until: now + CALL_SECS,
+                }
+            } else {
+                Flight::Idle
+            };
+        }
+        Flight::Transit { dest, until } if now >= until => {
+            let moved = initiate_docking(world, infiltrator.port, dest);
+            info!("infiltrator docked: {moved:?}");
+            if moved.is_err() {
+                // tg would keep it in transit; back home rather than stranded.
+                let _ = initiate_docking(world, infiltrator.port, infiltrator.away);
+            }
+            world.resource_mut::<Infiltrator>().flight = Flight::Idle;
+        }
+        _ => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn result_follows_get_result() {
+        let base = ResultInputs::default();
+        let nuked = ResultInputs {
+            station_was_nuked: true,
+            station_nuke_source: Some(Detonation::HitStation),
+            ..base
+        };
+        assert_eq!(compute_result(nuked), NukeResult::NukeWin);
+        assert_eq!(
+            compute_result(ResultInputs {
+                syndies_didnt_escape: true,
+                ..nuked
+            }),
+            NukeResult::NoSurvivors
+        );
+        assert_eq!(
+            compute_result(ResultInputs {
+                station_nuke_source: Some(Detonation::HitSyndieBase),
+                ..base
+            }),
+            NukeResult::Fluke
+        );
+        let missed = ResultInputs {
+            station_nuke_source: Some(Detonation::NearMissedStation),
+            ..base
+        };
+        assert_eq!(compute_result(missed), NukeResult::WrongStation);
+        assert_eq!(
+            compute_result(ResultInputs {
+                syndies_didnt_escape: true,
+                ..missed
+            }),
+            NukeResult::WrongStationDead
+        );
+        // A miss with the disk rescued falls through to the disk checks.
+        assert_eq!(
+            compute_result(ResultInputs {
+                disk_rescued: true,
+                ..missed
+            }),
+            NukeResult::CrewWin
+        );
+        let rescued = ResultInputs {
+            disk_rescued: true,
+            ..base
+        };
+        assert_eq!(compute_result(rescued), NukeResult::CrewWin);
+        assert_eq!(
+            compute_result(ResultInputs {
+                shuttle_evacuated: true,
+                team_is_dead: true,
+                ..rescued
+            }),
+            NukeResult::CrewWinSyndiesDead
+        );
+        assert_eq!(
+            compute_result(ResultInputs {
+                team_is_dead: true,
+                ..base
+            }),
+            NukeResult::DiskLost
+        );
+        assert_eq!(
+            compute_result(ResultInputs {
+                shuttle_evacuated: true,
+                ..base
+            }),
+            NukeResult::DiskStolen
+        );
+        assert_eq!(compute_result(base), NukeResult::Interrupted);
+        assert_eq!(mode_result(NukeResult::NukeWin), "win - syndicate nuke");
+    }
+
+    #[test]
+    fn helpers_match_tg() {
+        // `CEILING(joined / 5, 5)`.
+        assert_eq!(bonus_tc(0), 0);
+        assert_eq!(bonus_tc(1), 5);
+        assert_eq!(bonus_tc(25), 5);
+        assert_eq!(bonus_tc(26), 10);
+        assert_eq!(bonus_tc(30), 10);
+        let mut rng = Rng::new(7);
+        for _ in 0..50 {
+            let code = random_nukecode(&mut rng);
+            assert_eq!(code.len(), 5);
+            assert!(code.bytes().all(|b| b.is_ascii_digit()));
+            assert!(!syndicate_name(&mut rng).is_empty());
+        }
+        assert_eq!(timer_str(65.2), "01:05");
+        assert_eq!(timer_str(-3.0), "00:00");
+        assert_eq!(timer_str(4000.0), "--:--");
+        let here = TilePos::new(10, 10, 1);
+        assert_eq!(
+            pinpointer_state(here, Some(TilePos::new(10, 15, 1)), false),
+            ("pinonclose".into(), Some(Dir::North))
+        );
+        assert_eq!(
+            pinpointer_state(here, Some(TilePos::new(30, 10, 1)), false),
+            ("pinonfar".into(), Some(Dir::East))
+        );
+        assert_eq!(
+            pinpointer_state(here, Some(TilePos::new(10, 10, 2)), true),
+            ("pinonalertnull".into(), None)
+        );
+        assert_eq!(
+            pinpointer_state(here, Some(here), false),
+            ("pinondirect".into(), None)
+        );
+    }
+}

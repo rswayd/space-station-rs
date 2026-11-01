@@ -1,0 +1,20 @@
+# Lighting on MetaStation (docs/RUNNING.md). The first client spawns in the departure lounge at
+# (108, 66): the lit lounge, then the dark maintenance north-west of it.
+# spawn: 108,66
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_until entities 800 timeout=30
+wait_secs 2
+log_state
+screenshot "lounge.png"
+# North to (108, 72), then west along the lounge's north row to (100, 72).
+key_down W
+wait_secs 1.25
+key_up W
+key_down A
+wait_secs 1.7
+key_up A
+wait_secs 1
+log_state
+screenshot "maintenance.png"
+quit

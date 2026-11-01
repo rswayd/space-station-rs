@@ -1,0 +1,37 @@
+# Chemistry: on scripts/visual/maps/chem.dmm the chemist spawns south of an empty beaker, with a
+# hydrogen bottle east, a nitrogen bottle west, a large beaker north-west, a full meta beaker of
+# salbutamol and an epinephrine bottle north-east. Pours 20 hydrogen into the beaker (40% fill)
+# and 10 into the large beaker (10%), then 10 nitrogen into the beaker: ammonia forms with tg's
+# mix message; examines the beaker (its contents in chat).
+#   SS13_LIGHTING=0 SS13_MAP=$PWD/scripts/visual/maps/chem.dmm scripts/visual-check.sh \
+#       scripts/visual/chem.txt
+# spawn: 6,4
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 1
+screenshot "containers.png"
+click_tile 1 0         # the hydrogen bottle into the empty hand
+wait_secs 0.4
+click_tile 0 1         # 10 into the beaker north
+wait_until chat "Вы переливаете 10 ед." timeout=5
+wait_secs 0.4
+click_tile 0 1         # 20: 40%
+wait_secs 0.4
+click_tile -1 1        # 10 into the large beaker: 10%
+wait_secs 0.4
+screenshot "poured.png"
+tap Q                  # the bottle down on our tile
+wait_secs 0.4
+click_tile -1 0        # the nitrogen bottle
+wait_secs 0.4
+click_tile 0 1         # 10 nitrogen into the beaker: ammonia
+wait_until chat "The solution begins to bubble." timeout=10
+wait_secs 0.5
+key_down Shift
+click_tile 0 1
+key_up Shift
+wait_until chat "юнитов" timeout=5
+wait_secs 0.5
+screenshot "reacted.png"
+log_state
+quit

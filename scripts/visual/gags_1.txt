@@ -1,0 +1,21 @@
+# GAGS lineup on scripts/visual/maps/gags.dmm: rows of GAGS jumpsuits, PDAs (the base, syndicate,
+# bridge assistant, pun pun, veteran advisor and chameleon ones were tg's "ERROR" placeholder
+# before), hats, sneakers and canisters; three assistants each put on a GAGS hat (worn icon) and
+# hold a GAGS jumpsuit (in-hand icon). Run all three together:
+# SS13_LIGHTING=0 SS13_MAP=$PWD/scripts/visual/maps/gags.dmm scripts/visual-check.sh \
+#     scripts/visual/gags_1.txt scripts/visual/gags_2.txt scripts/visual/gags_3.txt
+# spawn: 3,4
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 2
+click_tile 1 0              # the hat east of the spawn
+wait_secs 0.5
+click_ui "hud_toggle"
+wait_secs 0.3
+click_ui "hud_head"         # on the head
+wait_secs 0.5
+click_tile 0 -1             # the jumpsuit south of the spawn, into the empty hand
+wait_secs 4                 # the others dress too
+screenshot "lineup.png"
+log_state
+quit

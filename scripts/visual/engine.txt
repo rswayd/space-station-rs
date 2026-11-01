@@ -1,0 +1,13 @@
+# MetaStation's supermatter engine room: the crystal behind its plasma glass, coils and rods,
+# the reflectors; the client turns on the emitter south-east of it and watches it fire.
+#   SS13_SKIP_LOBBY=1 SS13_ASSETS=$ASSETS scripts/visual-check.sh scripts/visual/engine.txt
+# spawn: 176,151
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 3
+screenshot "engine_room.png"
+click_tile 1 -1
+wait_secs 12
+log_state
+screenshot "engine_emitter_on.png"
+quit

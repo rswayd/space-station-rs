@@ -1,0 +1,32 @@
+# Трамвай и лифты
+Подсистема транспорта (`SStransport`) и линейные транспортные модули: трамвай (Tramstation, Birdshot) и многоэтажные лифты.
+
+### Подсистема транспорта и линейный контроллер
+`SStransport` (тик 0.05 с, включается только на картах с транспортом) ведёт `transport_controller/linear`: группу модулей, движущихся вместе по прямой или между этажами.
+
+- **Код:** [`PROCESSING_SUBSYSTEM_DEF(transport)`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/transport.dm#L1), [`/datum/transport_controller/linear`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/transport/linear_controller.dm#L6), [`/obj/structure/transport/linear`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/transport/transport_module.dm#L5), [`proc/travel()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/transport/transport_module.dm#L295)
+- **Статус в ss13-rs:** ❌ нет
+
+### Трамвай: движение и маршрут
+Трамвай едет между платформами по навигационным маякам, разгоняется и тормозит, давит и отбрасывает всё на пути; экстренная остановка бросает пассажиров; при поломке «аккуратно ломается».
+
+- **Код:** [`/datum/transport_controller/linear/tram`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/transport/tram/tram_controller.dm#L8), [`proc/dispatch_transport()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/transport/tram/tram_controller.dm#L269), [`/obj/structure/transport/linear/tram`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/transport/transport_module.dm#L865), [`proc/estop_throw()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/transport/transport_module.dm#L965), [`transport_navigation.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/transport/transport_navigation.dm)
+- **Статус в ss13-rs:** ❌ нет
+
+### Управление трамваем
+Консоль трамвая (tgui: выбор платформы, статус), кнопки вызова на платформах, пульт трамвая, админская панель контроллера.
+
+- **Код:** [`/obj/machinery/computer/tram_controls`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/transport/tram/tram_controls.dm#L1), [`/obj/item/assembly/control/transport/call_button`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/transport/tram/tram_machinery.dm#L31), [`/obj/item/assembly/control/transport/remote`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/transport/tram/tram_remote.dm#L1), [`admin.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/transport/admin.dm); tgui: [`TramControl.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/TramControl.tsx), [`TramController.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/TramController.tsx)
+- **Статус в ss13-rs:** ❌ нет
+
+### Инфраструктура трамвая
+Переездные светофоры с датчиками пути, табло назначения, выпрямитель питания, двери трамвая (закрываются перед отъездом), стены и окна вагона, электрифицированные плиты пути, скамейки, табличка.
+
+- **Код:** [`/obj/machinery/transport/crossing_signal`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/transport/tram/tram_signals.dm#L2), [`/obj/machinery/transport/guideway_sensor`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/transport/tram/tram_signals.dm#L464), [`/obj/machinery/transport/destination_sign`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/transport/tram/tram_displays.dm#L1), [`/obj/machinery/transport/power_rectifier`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/transport/tram/tram_power.dm#L1), [`/obj/machinery/door/airlock/tram`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/transport/tram/tram_doors.dm#L4), [`/obj/structure/tram`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/transport/tram/tram_structures.dm#L22), [`/turf/open/floor/tram/plate/energized`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/transport/tram/tram_floors.dm#L106); tgui: [`TramPlaque.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/TramPlaque.tsx)
+- **Статус в ss13-rs:** ❌ нет
+
+### Лифты
+Многоэтажные лифты на линейных модулях: панель лифта (tgui, выбор этажа, доступ), кнопки вызова, индикатор этажа, двери-шлюзы лифта и шахтные гермодвери, музыка в кабине.
+
+- **Код:** [`/obj/machinery/elevator_control_panel`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/transport/elevator/elev_panel.dm#L12), [`/obj/machinery/button/elevator`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/transport/elevator/elev_controller.dm#L1), [`/obj/machinery/lift_indicator`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/transport/elevator/elev_indicator.dm#L4), [`/obj/machinery/door/window/elevator`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/transport/elevator/elev_doors.dm#L3), [`/obj/machinery/door/poddoor/lift`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/transport/transport_module.dm#L774), [`/obj/effect/abstract/elevator_music_zone`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/transport/elevator/elev_music_zone.dm#L3); tgui: [`ElevatorPanel.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/ElevatorPanel.tsx)
+- **Статус в ss13-rs:** ❌ нет

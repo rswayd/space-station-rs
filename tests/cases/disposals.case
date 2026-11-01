@@ -1,0 +1,56 @@
+# Disposals: a bin (3,5) on a pipe run past a mail sorting junction tagged for medbay (5,5),
+# straight on to an outlet (10,5), sorted down to an outlet (5,3); both outlets throw east.
+# An item flushed from the DisposalUnit window lands past the straight outlet; a pen wrapped
+# with the package wrapper and tagged for medbay in the DestinationTagger window takes the
+# sorted branch; bob, dragged into a second bin (3,3), rides its pipe to an outlet (10,2).
+# Game speed 10 so the first bin recharges between flushes (tg: ~1.5 minutes).
+map disposals.dmm
+time_scale 10
+timeout 15
+bot alice 2,5 give /obj/item/pen
+bot bob 2,3
+
+test flushed_item_reaches_the_outlet
+  alice click 3,5 /obj/machinery/disposal/bin
+  until obj(3,5,/obj/machinery/disposal/bin).disposal.contents ~ /obj/item/pen
+  alice click 3,5 /obj/machinery/disposal/bin
+  until alice.windows.DisposalUnit.data.full_pressure == true
+  alice act DisposalUnit handle-1
+  until obj(3,5,/obj/machinery/disposal/bin).disposal.flushing == true
+  until obj(12,5,/obj/item/pen) exists
+  expect obj(3,5,/obj/machinery/disposal/bin).disposal.pressure_charging == true
+
+test tagged_parcel_takes_its_sort_branch
+  alice click 3,6 /obj/item/stack/package_wrap
+  until mob(alice).held ~ /obj/item/stack/package_wrap
+  alice click 3,4 /obj/item/pen
+  until mob(alice).held ~ /obj/item/delivery/small
+  alice drop
+  alice click 2,6 /obj/item/dest_tagger
+  until mob(alice).held ~ /obj/item/dest_tagger
+  alice slot left_hand
+  until alice.windows.DestinationTagger exists
+  alice act DestinationTagger change index=9
+  until alice.windows.DestinationTagger.data.current_tag == 9
+  alice slot right_hand
+  until alice.chat ~ "*MEDBAY*"
+  alice drop
+  alice swap
+  alice click 3,5 /obj/machinery/disposal/bin
+  until obj(3,5,/obj/machinery/disposal/bin).disposal.contents ~ /obj/item/delivery/small
+  alice click 3,5 /obj/machinery/disposal/bin
+  until alice.windows.DisposalUnit.data.full_pressure == true timeout=30
+  alice act DisposalUnit handle-1
+  until obj(7,3,/obj/item/delivery/small).sort_tag == 9
+
+test dragged_mob_rides_to_the_outlet
+  alice move S
+  alice drag bob 3,3 /obj/machinery/disposal/bin
+  until mob(bob).in_disposal == "bin"
+  expect mob(bob).pos == 3,3
+  alice click 3,3 /obj/machinery/disposal/bin
+  until alice.windows.DisposalUnit.data.full_pressure == true
+  alice act DisposalUnit handle-1
+  until mob(bob).in_disposal == "pipe"
+  until mob(bob).in_disposal missing
+  until mob(bob).pos == 12,2

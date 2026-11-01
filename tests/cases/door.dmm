@@ -1,0 +1,11 @@
+"w" = (/turf/closed/wall,/area/centcom/central_command_areas/armory)
+"f" = (/turf/open/floor/iron,/area/centcom/central_command_areas/armory)
+"D" = (/obj/machinery/door/airlock/security{req_access = list("brig")},/turf/open/floor/iron,/area/centcom/central_command_areas/armory)
+
+(1,1,1) = {"
+wwwwwwwww
+wfffwfffw
+wfffDfffw
+wfffwfffw
+wwwwwwwww
+"}

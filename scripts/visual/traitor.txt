@@ -1,0 +1,25 @@
+# Run with SS13_DEV_TRAITOR=unlocked: the joining body becomes a traitor with its uplink
+# unlocked and open (an admin's "Make Traitor"; the info panel stays on its button). The uplink's
+# objectives tab, the market, a purchase (20 -> 19 TC, the toolbox in hand).
+# spawn: 104,72
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_until chat "Вы - Предатель." timeout=30
+wait_secs 2
+log_state
+screenshot "uplink_objectives.png"
+click_ui "Рынок"
+wait_secs 1
+screenshot "uplink_market.png"
+click_ui "Misc. Gadgets"
+wait_secs 1
+screenshot "uplink_gadgets.png"
+click_ui "buy: Full Syndicate Toolbox"
+wait_until chat "материализуется" timeout=10
+wait_secs 1
+log_state
+screenshot "uplink_bought.png"
+click_ui "antag info"
+wait_secs 1
+screenshot "traitor_info.png"
+quit

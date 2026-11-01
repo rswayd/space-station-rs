@@ -1,0 +1,13 @@
+# Surgery, patient: lies down on the operating table north of it (drags itself onto it) and
+# waits for the incision (see surgery_surgeon.txt).
+# spawn: 12,9
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 3            # the surgeon joins
+drag_tile 0 0 0 1
+wait_until chat "ложитесь на" timeout=10
+wait_until chat "делать разрез" timeout=60
+wait_secs 0.6
+screenshot "patient.png"
+log_state
+quit

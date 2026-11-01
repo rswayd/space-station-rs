@@ -1,0 +1,5 @@
+/target
+/target-*
+/assets/generated
+*.swp
+logs/

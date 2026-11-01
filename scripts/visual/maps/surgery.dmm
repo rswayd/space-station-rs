@@ -1,0 +1,25 @@
+"w" = (/turf/closed/wall,/area/station/medical/surgery)
+"f" = (/turf/open/floor/iron/white,/area/station/medical/surgery)
+"s" = (/obj/effect/landmark/start/assistant,/turf/open/floor/iron/white,/area/station/medical/surgery)
+"o" = (/obj/structure/table/optable,/turf/open/floor/iron/white,/area/station/medical/surgery)
+"D" = (/obj/item/surgical_drapes,/turf/open/floor/iron/white,/area/station/medical/surgery)
+"X" = (/obj/item/scalpel,/turf/open/floor/iron/white,/area/station/medical/surgery)
+"I" = (/obj/machinery/iv_drip,/turf/open/floor/iron/white,/area/station/medical/surgery)
+
+(1,1,1) = {"
+wwwwwwwwwwwwwwwwwwwww
+wfffffffffffffffffffw
+wfffffffffffffffffffw
+wfffffffffffffffffffw
+wfffffffffffffffffffw
+wfffffffffIoffffffffw
+wffffffffffssDffffffw
+wfffffffffffXfffffffw
+wfffffffffffffffffffw
+wfffffffffffffffffffw
+wfffffffffffffffffffw
+wfffffffffffffffffffw
+wfffffffffffffffffffw
+wfffffffffffffffffffw
+wwwwwwwwwwwwwwwwwwwww
+"}

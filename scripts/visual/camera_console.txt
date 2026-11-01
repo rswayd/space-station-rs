@@ -1,0 +1,15 @@
+# The bridge camera console: open it, pick the first camera of the list and look through it
+# (the map view moves to the camera, static where it does not see), then close the window.
+#   SS13_ASSETS=$ASSETS scripts/visual-check.sh scripts/visual/camera_console.txt
+# spawn: 110,138
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 2
+click_tile 0 1
+wait_secs 1.5
+screenshot "console_window.png"
+click_ui "Arrivals - Station Entrance"
+wait_secs 3
+screenshot "console_view.png"
+log_state
+quit

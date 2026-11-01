@@ -1,0 +1,19 @@
+# The debug overlay (docs/RUNNING.md "Debug UI"). Run with the panels to show, e.g.
+#   SS13_DEBUG_UI=net,entities scripts/visual-check.sh scripts/visual/debug_ui.txt
+# Walks a few steps (traffic for the network panel), clicks the tile east of the mob (the
+# entities panel's pick mode selects it) and takes a screenshot.
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_until entities 300 timeout=30
+key_down D
+wait_secs 0.6
+key_up D
+key_down W
+wait_secs 0.4
+key_up W
+wait_secs 0.5
+click_tile 1 0
+wait_secs 2
+log_state
+screenshot "debug_ui.png"
+quit

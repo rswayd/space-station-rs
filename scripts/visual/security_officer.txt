@@ -1,0 +1,32 @@
+# Security, officer: on scripts/visual/maps/security.dmm. Picks up the stun baton east of it,
+# turns it on (a click on the active hand), batons the victim north of it twice (60 stamina,
+# then stamina crit), drops the baton, picks up the handcuffs west of it and cuffs the victim
+# (4 s). Screenshot of the cuffed victim lying in stamina crit.
+# Run with security_victim.txt:
+#   SS13_LIGHTING=0 SS13_MAP=$PWD/scripts/visual/maps/security.dmm scripts/visual-check.sh \
+#       scripts/visual/security_officer.txt scripts/visual/security_victim.txt
+# spawn: 11,8
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 3            # the victim joins
+click_tile 1 0
+wait_secs 0.5
+click_ui "hud_left_hand"
+wait_until chat "включение" timeout=5
+click_tile 0 1
+wait_until chat "оглушает" timeout=5
+wait_secs 3            # the baton's cooldown
+click_tile 0 1
+wait_secs 1
+screenshot "officer_stamcrit.png"
+tap Q
+wait_secs 0.5
+click_tile -1 0
+wait_secs 0.5
+click_tile 0 1
+wait_until chat "надевает наручники" timeout=15
+wait_secs 1
+screenshot "officer_cuffed.png"
+log_state
+wait_secs 3
+quit

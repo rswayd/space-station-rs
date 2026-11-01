@@ -1,0 +1,27 @@
+[package]
+name = "ss13_client"
+description = "Native game client."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+ss13_shared.workspace = true
+ss13_game = { workspace = true, features = ["client"] }
+ss13_net = { workspace = true, features = ["client"] }
+ss13_render.workspace = true
+ss13_ui_kit.workspace = true
+ss13_tgui = { workspace = true, features = ["client"] }
+ss13_chat = { workspace = true, features = ["client"] }
+ss13_devtools.workspace = true
+bevy = { workspace = true, features = ["2d", "ui", "audio"] }
+ss13_debug = { workspace = true, features = ["client"] }
+ss13_admin = { workspace = true, features = ["client"] }
+
+[features]
+# The debug overlay (F12) in a release build; debug builds always have it.
+debug-ui = []
+
+[lints]
+workspace = true

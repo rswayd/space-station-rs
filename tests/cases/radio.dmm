@@ -1,0 +1,10 @@
+"w" = (/turf/closed/wall,/area/centcom/central_command_areas/ferry)
+"f" = (/turf/open/floor/iron,/area/centcom/central_command_areas/ferry)
+
+(1,1,1) = {"
+wwwwwwwwwwwwwwwwwwwwwww
+wfffffffffffffffffffffw
+wfffffffffffffffffffffw
+wfffffffffffffffffffffw
+wwwwwwwwwwwwwwwwwwwwwww
+"}

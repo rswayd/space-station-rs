@@ -1,0 +1,11 @@
+"w" = (/turf/closed/wall,/area/centcom/central_command_areas/planetary_port/library)
+"f" = (/turf/open/floor/iron,/area/centcom/central_command_areas/planetary_port/library)
+
+(1,1,1) = {"
+wwwwwwwwww
+wffffffffw
+wffffffffw
+wffffffffw
+wffffffffw
+wwwwwwwwww
+"}

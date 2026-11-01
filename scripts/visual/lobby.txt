@@ -1,0 +1,22 @@
+# The lobby: tg's title screen and the lobby buttons, the job preferences window, a Security
+# Officer preference, Ready, and the round start at a security officer start landmark:
+#   SS13_SKIP_LOBBY=0 SS13_LOBBY_SECONDS=15 scripts/visual-check.sh scripts/visual/lobby.txt
+wait_connected timeout=60
+wait_until chat "Готов" timeout=30   # the lobby greeting
+wait_secs 1.5
+screenshot "lobby.png"
+click_ui "lobby: setup"
+wait_secs 1.5
+click_ui "Security Officer: Выс."
+wait_secs 1
+screenshot "job_prefs.png"
+click_ui ""            # the window's close button (Font Awesome `times`); it covers the lobby
+wait_secs 0.5
+click_ui "lobby: ready"
+wait_secs 1
+screenshot "ready.png"
+wait_until controlled timeout=40
+wait_secs 2
+screenshot "spawned.png"
+log_state
+quit

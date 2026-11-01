@@ -1,0 +1,14 @@
+"w" = (/turf/closed/wall,/area/misc/testroom)
+"f" = (/turf/open/floor/iron,/area/misc/testroom)
+"s" = (/obj/effect/landmark/start/assistant,/turf/open/floor/iron,/area/misc/testroom)
+"T" = (/obj/machinery/hydroponics/constructable,/turf/open/floor/iron,/area/misc/testroom)
+"S" = (/obj/item/seeds/tomato,/turf/open/floor/iron,/area/misc/testroom)
+"X" = (/obj/machinery/seed_extractor,/turf/open/floor/iron,/area/misc/testroom)
+
+(1,1,1) = {"
+wwwwwwww
+wTTTTffw
+wsfffXfw
+wSSSSffw
+wwwwwwww
+"}

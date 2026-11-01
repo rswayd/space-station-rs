@@ -1,0 +1,39 @@
+[package]
+name = "ss13_tgui"
+description = "tgui window model: server-owned windows (ui_data/ui_act/ui_status) and their client binding."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+ss13_shared.workspace = true
+ss13_net.workspace = true
+ss13_ui_kit = { workspace = true, optional = true }
+ss13_world = { workspace = true, optional = true }
+bevy = { workspace = true, features = ["std", "bevy_log"] }
+serde.workspace = true
+postcard.workspace = true
+
+[features]
+server = ["ss13_net/server", "dep:ss13_world"]
+client = ["ss13_net/client", "dep:ss13_ui_kit"]
+
+[dev-dependencies]
+# The demo draws and screenshots the client half.
+bevy = { workspace = true, features = ["2d", "ui", "png", "bevy_log", "async_executor", "multi_threaded"] }
+
+[[test]]
+name = "e2e"
+required-features = ["server", "client"]
+
+[[test]]
+name = "rerender"
+required-features = ["client"]
+
+[[example]]
+name = "thermo_demo"
+required-features = ["server", "client"]
+
+[lints]
+workspace = true

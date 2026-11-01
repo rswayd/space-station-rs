@@ -1,0 +1,13 @@
+"w" = (/turf/closed/wall,/area/centcom/central_command_areas/admin/storage)
+"f" = (/turf/open/floor/iron,/area/centcom/central_command_areas/admin/storage)
+
+(1,1,1) = {"
+wwwwwwwwww
+wffffffffw
+wffffffffw
+wffffffffw
+wffffffffw
+wffffffffw
+wffffffffw
+wwwwwwwwww
+"}

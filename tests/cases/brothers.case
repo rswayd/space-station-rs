@@ -1,0 +1,28 @@
+# Blood brothers (tg `/datum/antagonist/brother`): alice is made a brother (an admin's "make
+# antag": a team of her own, its objectives, the brother's flash in a pocket); a successful flash
+# on bob converts him into her team, and each one's antag HUD lists the other. Bob gets a new
+# body after alice's objectives were forged, so it is never their target (a target is refused);
+# the seed (own server) keeps the flash's burnout roll deterministic.
+map brothers.dmm
+seed 1
+bot alice 3,3 give /obj/item/assembly/flash/handheld antag brother
+bot bob 4,3 job "Assistant"
+bot carol 6,3
+
+test brother_has_a_team_and_a_flash
+  until alice.windows.AntagInfoBrother exists
+  expect alice.windows.AntagInfoBrother.static.objectives[0].explanation ~ "Пробудите"
+  expect alice.chat_all ~ "Вы - кровный брат."
+  expect mob(alice).slots.left_pocket ~ "/obj/item/assembly/flash"
+  expect alice.windows.AntagHud.data.team.len == 0
+  expect bob.windows.AntagInfoBrother missing
+
+test flash_converts_bob
+  alice click bob
+  until bob.windows.AntagInfoBrother exists
+  expect bob.chat ~ "Вы - кровный брат."
+  until alice.chat ~ "пробужден, чтобы помогать вам как ваш кровный брат!"
+  until alice.windows.AntagHud.data.team.len == 1
+  until bob.windows.AntagHud.data.team.len == 1
+  expect carol.windows.AntagHud missing
+  expect carol.chat !~ "кровный брат"

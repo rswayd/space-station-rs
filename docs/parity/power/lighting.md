@@ -1,0 +1,58 @@
+# Осветительные приборы
+Лампы станции (`/obj/machinery/light`), их питание, аварийный режим, монтаж и обслуживание. Сам движок освещения (источники, тени) — см. ../effects/.
+
+### Лампа: работа от зоны
+Лампа горит, если запитан канал освещения её зоны и включён выключатель зоны; яркость, мощность и цвет из лампочки, свет направлен от стены; тратит статическую мощность.
+
+- **Код:** [`/obj/machinery/light`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light.dm#L2), [`proc/update()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light.dm#L232), [`proc/has_power()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light.dm#L510), [`power_change()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light.dm#L736)
+- **BandaStation:** [`modular_bandastation/aesthetics/lights/code/lights.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/aesthetics/lights/code/lights.dm#L1) — свои иконки, `bulb_colour` #FFF7F2, `bulb_power` 0.8, мощность ночного режима 0.6
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/power/mod.rs` (`LightFixture`, `apply_area_power`), `crates/ss13_mapload/src/light.rs`
+
+### Аварийное освещение
+Без питания лампа с аварийной ячейкой светит красным в четверть дальности, ячейка тратится (~10 минут) и подзаряжается при питании; «major emergency» от пожарной тревоги.
+
+- **Код:** [`proc/use_emergency_power()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light.dm#L526), [`proc/has_emergency_power()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light.dm#L516), [`process()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light.dm#L329), [`proc/set_major_emergency_light()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light.dm#L648)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/power/model.rs` (`light_mode`, `EMERGENCY_CELL_CHARGE`), `crates/ss13_game/src/power/mod.rs`: аварийный режим и подзарядка; нет режима пожарной тревоги
+
+### Поломка, перегорание и мерцание ламп
+Лампы бьются ударами и взрывами (искры, осколки), перегорают при включении, случайная поломка на старте раунда, мерцание (ЭМИ, события, призраки), удар током при вынимании голой рукой горячей лампы.
+
+- **Код:** [`proc/break_light_tube()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light.dm#L690), [`proc/burn_out()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light.dm#L343), [`proc/flicker()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light.dm#L542), [`attack_hand_secondary()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light.dm#L584), [`emp_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light.dm#L721)
+- **Статус в ss13-rs:** ❌ нет — `crates/ss13_mapload/src/light.rs`: shortcut, нет поломки на старте; лампы без лампочки с карты не светят
+
+### Лампочки и трубки (/obj/item/light)
+Предметы-лампы: трубка и лампочка, состояния целая/перегоревшая/разбитая, разбиваются о пол с осколками.
+
+- **Код:** [`/obj/item/light`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light_items.dm#L5), [`/obj/item/light/tube`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light_items.dm#L53), [`/obj/item/light/bulb`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light_items.dm#L76)
+- **Статус в ss13-rs:** ❌ нет
+
+### Замена лампы и монтаж светильника
+Вставка и вынимание лампы, отвёртка разбирает светильник в каркас; каркас (`light_construct`) собирается из рамки, кабеля и отвёртки.
+
+- **Код:** [`item_interaction()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light.dm#L385), [`proc/drop_light_tube()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light.dm#L656), [`screwdriver_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light.dm#L433), [`/obj/structure/light_construct`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light_construct.dm#L1), [`/obj/item/wallframe/light_fixture`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light_wallframes.dm#L1)
+- **Статус в ss13-rs:** ❌ нет
+
+### Варианты ламп и маппинг-хелперы
+Маленькие, напольные, тёплые, холодные, красные, приглушённые, ультрафиолетовые, перегоревшие лампы.
+
+- **Код:** [`/obj/machinery/light/small`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light_mapping_helpers.dm#L59), [`/obj/machinery/light/floor`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light.dm#L773), [`/obj/machinery/light/warm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light_mapping_helpers.dm#L17), [`/obj/machinery/light/blacklight`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light_mapping_helpers.dm#L48)
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_mapload/src/light.rs` (параметры света по типу и правкам карты)
+
+### Выключатель света (light switch)
+Настенный выключатель включает и выключает все лампы своей зоны; BandaStation добавляет звук щелчка и свою иконку.
+
+- **Код:** [`/obj/machinery/light_switch`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/lightswitch.dm#L2), [`interact()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/lightswitch.dm#L79), [`proc/set_lights()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/lightswitch.dm#L93)
+- **BandaStation:** [`modular_bandastation/aesthetics/lightswitch/code/lightswitch.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/aesthetics/lightswitch/code/lightswitch.dm#L4) — звук и иконка
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/power/model.rs` (`AreaPower::lightswitch`), `crates/ss13_mapload/src/power.rs`: состояние выключателя зоны из карты (`turn_off_lights_with_lightswitch`); кликом переключить нельзя
+
+### Лампозаменитель (light replacer)
+Инструмент уборщика: меняет лампы на расстоянии, перерабатывает осколки стекла в новые лампы.
+
+- **Код:** [`/obj/item/lightreplacer`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/devices/lightreplacer.dm#L34), [`proc/do_action()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/devices/lightreplacer.dm#L223)
+- **Статус в ss13-rs:** ❌ нет
+
+### Прожектор (floodlight)
+Собираемый прожектор на кабеле с уровнями яркости и потреблением из сети.
+
+- **Код:** [`/obj/machinery/power/floodlight`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/floodlight.dm#L135), [`/obj/structure/floodlight_frame`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/floodlight.dm#L7)
+- **Статус в ss13-rs:** ❌ нет

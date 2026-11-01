@@ -1,0 +1,22 @@
+# Plasma in the room's air does nothing at room temperature; a lit welder in hand ignites it:
+# the air heats up, the bot catches fire and burns, plasma burns into CO2.
+map fire.dmm
+bot alice 11,5
+
+test plasma_is_inert
+  expect tile(11,5).air.gases.plasma > 0
+  wait 1
+  expect mob(alice).on_fire != true
+  expect tile(11,5).air.temperature < 300
+
+test welder_lights_the_room
+  alice click 11,5 /obj/item/weldingtool
+  until mob(alice).held ~ /obj/item/weldingtool
+  alice slot left_hand
+  until tile(11,5).air.temperature > 400
+  until mob(alice).on_fire == true
+
+test the_bot_burns
+  until alice.chat_all ~ "Вы загорелись!"
+  until mob(alice).health.burn > 5 timeout=20
+  until tile(8,4).air.gases.co2 > 0 timeout=20

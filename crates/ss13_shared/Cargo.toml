@@ -1,0 +1,14 @@
+[package]
+name = "ss13_shared"
+description = "Types shared by server and client: tile coordinates, directions, asset ids, protocol."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+bevy = { workspace = true, features = ["std", "serialize"] }
+serde.workspace = true
+
+[lints]
+workspace = true

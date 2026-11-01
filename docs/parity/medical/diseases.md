@@ -1,0 +1,44 @@
+# Болезни и вирусология
+Болезни `/datum/disease`: заражение, стадии, лечение; продвинутые (вирусологические) болезни с симптомами. Машина пандемии и реагенты-лекарства — ../chemistry/. В ss13-rs болезней нет.
+
+### Механика болезни
+Болезнь проходит стадии (`stage_act`) с эффектами, лечится реагентами-лекарствами (`cures`) или проходит сама; даёт иммунитет; распространение: контактное, по воздуху, через кровь, укусы; защита — био-броня и маски; подсистема `SSdisease` хранит архив.
+
+- **Код:** [`/datum/disease`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/diseases/_disease.dm#L1), [`proc/stage_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/diseases/_disease.dm#L127), [`proc/try_infect()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/diseases/_disease.dm#L69), [`proc/airborne_spread()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/diseases/_disease.dm#L300), [`proc/cure()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/diseases/_disease.dm#L337), [`proc/CanContractDisease()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/diseases/_MobProcs.dm#L10), [`proc/ContactContractDisease()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/diseases/_MobProcs.dm#L29), [`proc/ForceContractDisease()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/diseases/_MobProcs.dm#L112)
+- **Статус в ss13-rs:** ❌ нет
+
+### Обычные простуды и инфекции
+Простуда, грипп, испанка, туберкулёз, ГБС (и фальшивый), мозгогниль, магнитис, невесомость, гастролиз, паразиты, хроническая болезнь, отравление «смертельным бутербродом».
+
+- **Код:** [`/datum/disease/cold`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/diseases/cold.dm#L1), [`/datum/disease/flu`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/diseases/flu.dm#L1), [`/datum/disease/fluspanish`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/diseases/fluspanish.dm#L1), [`/datum/disease/tuberculosis`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/diseases/tuberculosis.dm#L1), [`/datum/disease/gbs`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/diseases/gbs.dm#L1), [`/datum/disease/brainrot`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/diseases/brainrot.dm#L1), [`/datum/disease/magnitis`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/diseases/magnitis.dm#L1), [`/datum/disease/parasite`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/diseases/parasitic_infection.dm#L1), [`/datum/disease/chronic_illness`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/diseases/chronic_illness.dm#L1)
+- **Статус в ss13-rs:** ❌ нет
+
+### Медицинские кризисы от квирков и реакций
+Анафилаксия (аллергия), приступ астмы, адреналовый криз, тревожность.
+
+- **Код:** [`/datum/disease/anaphylaxis`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/diseases/anaphylaxis.dm#L1), [`/datum/disease/asthma_attack`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/diseases/asthma_attack.dm#L1), [`/datum/disease/adrenal_crisis`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/diseases/adrenal_crisis.dm#L1), [`/datum/disease/anxiety`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/diseases/anxiety.dm#L1)
+- **Статус в ss13-rs:** ❌ нет
+
+### Болезни-превращения
+Превращение в обезьяну (джунглевая лихорадка), робота, ксеноморфа, слайма, корги, морфа, гондолу.
+
+- **Код:** [`/datum/disease/transformation`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/diseases/transformation.dm#L1), [`/datum/disease/transformation/jungle_flu`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/diseases/transformation.dm#L100), [`/datum/disease/transformation/robot`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/diseases/transformation.dm#L149), [`/datum/disease/transformation/xeno`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/diseases/transformation.dm#L188)
+- **Статус в ss13-rs:** ❌ нет
+
+### Странные и магические болезни
+Пчелиная болезнь, ритм румбы, горло Пьеро (клоунская речь), одержимость попугаем, визардит, верминозная чума, ДНК-ретровирус и ДНК-распространение, деклонинг; болезни с грязного пола (карпеллоз, гастритиум, небула-тошнота).
+
+- **Код:** [`/datum/disease/beesease`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/diseases/beesease.dm#L1), [`/datum/disease/rhumba_beat`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/diseases/rhumba_beat.dm#L1), [`/datum/disease/pierrot_throat`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/diseases/pierrot_throat.dm#L1), [`/datum/disease/parrot_possession`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/diseases/parrotpossession.dm#L1), [`/datum/disease/wizarditis`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/diseases/wizarditis.dm#L1), [`/datum/disease/verminous_plague`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/diseases/verminous_plague.dm#L30), [`/datum/disease/dna_retrovirus`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/diseases/retrovirus.dm#L1), [`/datum/disease/decloning`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/diseases/decloning.dm#L1), [`code/datums/diseases/floor_diseases/`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/diseases/floor_diseases)
+- **Статус в ss13-rs:** ❌ нет
+
+### Продвинутые болезни и симптомы
+Вирусологические болезни из до 6 симптомов (37 типов: кашель, лихорадка, исцеление, регенерация, невидимость голоса, плотоядность, самовозгорание, глухота, галлюцинации и т.д.); свойства (скрытность, сопротивляемость, скорость, передача) складываются; болезни смешиваются; мутаген и вирусная пища добавляют симптомы.
+
+- **Код:** [`/datum/disease/advance`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/diseases/advance/advance.dm#L19), [`proc/Mix()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/diseases/advance/advance.dm#L143), [`proc/GenerateProperties()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/diseases/advance/advance.dm#L198), [`/datum/symptom`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/diseases/advance/symptoms/symptoms.dm#L3), [`code/datums/diseases/advance/symptoms/`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/diseases/advance/symptoms)
+- **Статус в ss13-rs:** ❌ нет
+
+### Вирусология: культуры и вакцины
+Кровь с вирусом в пандемии (см. ../chemistry/) даёт культуры, вакцины и анализ; вирусологический HUD и сканер показывают болезни.
+
+- **Код:** [`advance/presets.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/diseases/advance/presets.dm#L1)
+- **Статус в ss13-rs:** ❌ нет

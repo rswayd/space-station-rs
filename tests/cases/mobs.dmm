@@ -1,0 +1,12 @@
+"w" = (/turf/closed/wall,/area/centcom/central_command_areas/planetary_port/club)
+"f" = (/turf/open/floor/iron,/area/centcom/central_command_areas/planetary_port/club)
+"I" = (/mob/living/basic/pet/dog/corgi,/turf/open/floor/iron,/area/centcom/central_command_areas/planetary_port/club)
+"C" = (/mob/living/basic/carp,/turf/open/floor/iron,/area/centcom/central_command_areas/planetary_port/club)
+
+(1,1,1) = {"
+wwwwwwwwwwwww
+wfwwwfffffffw
+wfIwwfffffCfw
+wfwwwfffffffw
+wwwwwwwwwwwww
+"}

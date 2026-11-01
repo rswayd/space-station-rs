@@ -1,0 +1,30 @@
+# Drags: bob dragged onto alice opens the strip menu, which takes bob's handcuffs and ID off
+# after tg's strip delay; a backpack dragged from the back slot onto the floor dumps after 2 s;
+# bob dragged onto an open closet is stuffed in after 4 s.
+map strip.dmm
+bot alice 3,3 give /obj/item/restraints/handcuffs
+bot bob 3,4
+
+test cuff_and_strip
+  alice click bob
+  until mob(bob).handcuffed ~ handcuffs timeout=8
+  alice drag bob self
+  until alice.windows.StripMenu exists
+  expect alice.windows.StripMenu.data.items[].key ~ handcuffs
+  alice act StripMenu use key=handcuffs
+  wait 2
+  expect mob(bob).handcuffed exists
+  until mob(bob).handcuffed missing timeout=5
+  alice act StripMenu use key=id
+  until mob(bob).slots.id missing timeout=6
+  expect tile(3,4).entities[].path ~ /obj/item/card/id
+
+test dump_backpack
+  alice drag slot:back 2,3
+  until tile(2,3).entities[].path ~ /obj/item/storage/box timeout=5
+  expect mob(alice).slots.back ~ backpack
+
+test into_closet
+  alice drag bob 4,4 /obj/structure/closet
+  until mob(bob).in_closet == true timeout=8
+  expect obj(4,4,/obj/structure/closet).closet.open == false

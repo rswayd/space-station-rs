@@ -1,0 +1,14 @@
+# The MetaStation emergency shuttle docked at the departure lounge. Run the server with the
+# shuttle called at once and short timers:
+#   SS13_SHUTTLE_AUTOCALL_THRESHOLD=1 SS13_SHUTTLE_CALL_SECONDS=5 SS13_SHUTTLE_DOCK_SECONDS=600
+# (autocall: the crew is "mostly dead" from the start; 5 s x 0.4 = 2 s to dock).
+# spawn: 106,62
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_until chat "Эвакуационный шаттл вызван" timeout=30
+wait_until chat "состыковался со станцией" timeout=30
+wait_until entities 800 timeout=30
+wait_secs 3
+log_state
+screenshot "docked.png"
+quit

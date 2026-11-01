@@ -1,0 +1,23 @@
+"w" = (/turf/closed/wall,/area/station/commons/dorms)
+"f" = (/turf/open/floor/iron,/area/station/commons/dorms)
+"s" = (/obj/effect/landmark/start/assistant,/turf/open/floor/iron,/area/station/commons/dorms)
+"b" = (/obj/item/melee/baton/security/loaded,/turf/open/floor/iron,/area/station/commons/dorms)
+"c" = (/obj/item/restraints/handcuffs,/turf/open/floor/iron,/area/station/commons/dorms)
+
+(1,1,1) = {"
+wwwwwwwwwwwwwwwwwwwww
+wfffffffffffffffffffw
+wfffffffffffffffffffw
+wfffffffffffffffffffw
+wfffffffffffffffffffw
+wfffffffffffffffffffw
+wfffffffffsfffffffffw
+wffffffffcsbffffffffw
+wfffffffffffffffffffw
+wfffffffffffffffffffw
+wfffffffffffffffffffw
+wfffffffffffffffffffw
+wfffffffffffffffffffw
+wfffffffffffffffffffw
+wwwwwwwwwwwwwwwwwwwww
+"}

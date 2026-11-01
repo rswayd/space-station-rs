@@ -1,0 +1,258 @@
+# Health/combat, attacker: on scripts/visual/maps/arena.dmm the two players spawn one tile apart
+# (north/south, whoever connects first is south). Combat mode on (F), then punches at both
+# neighbouring tiles every 0.45 s (a click on the floor does nothing) until the other player
+# dies; a screenshot of the dead body lying next to the attacker (its ghost is invisible here).
+# Run with victim.txt: scripts/visual-check.sh scripts/visual/combat_attacker.txt scripts/visual/combat_victim.txt
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 3            # the victim joins
+tap F
+wait_secs 0.3
+screenshot "attacker_combat_on.png"
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+click_tile 0 1
+wait_secs 0.45
+click_tile 0 -1
+wait_secs 0.45
+wait_until chat "безжизненным" timeout=60
+wait_secs 1
+screenshot "attacker_dead_body.png"
+wait_secs 6            # the victim ghosts and walks around
+screenshot "attacker_no_ghost.png"
+log_state
+quit

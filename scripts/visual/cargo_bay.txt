@@ -1,0 +1,12 @@
+# MetaStation cargo bay, east of the supply shuttle's dock (cargo_home at 63,151); see
+# cargo_qm.txt. Screenshots the bay before and after the shuttle brings the crate.
+# spawn: 68,150
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_until entities 500 timeout=30
+wait_secs 1
+screenshot "bay_empty.png"
+wait_secs 17
+log_state
+screenshot "bay_crate.png"
+quit

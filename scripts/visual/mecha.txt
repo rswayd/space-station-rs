@@ -1,0 +1,21 @@
+# A Ripley with a pilot on `scripts/visual/maps/mecha.dmm` (fullbright): the player drags
+# itself onto the mapped Ripley east of it (1 s) and drives east to the crate (the first step
+# turns it); an Odysseus and an exosuit fabricator stand by.
+#   SS13_LIGHTING=0 SS13_MAP=$PWD/scripts/visual/maps/mecha.dmm \
+#     SS13_ASSETS=$ASSETS scripts/visual-check.sh scripts/visual/mecha.txt
+# spawn: 6,4
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 2
+screenshot "mecha_empty.png"
+drag_tile 0 0 1 0
+wait_until chat "You climb into" timeout=10
+wait_secs 1
+screenshot "mecha_pilot.png"
+key_down D
+wait_secs 1.6
+key_up D
+wait_secs 1
+log_state
+screenshot "mecha_driven.png"
+quit

@@ -1,0 +1,12 @@
+# The debug overlay's perf, tile, prediction, server and log panels (docs/RUNNING.md "Debug UI"):
+#   SS13_DEBUG_UI=perf,tile,prediction,server,log scripts/visual-check.sh scripts/visual/debug_tools.txt
+# Clicks the tile two north of the mob (the tile panel shows it: area, power, air) and
+# screenshots the panels. Dev tools need egui input, which scripts cannot inject.
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_until entities 300 timeout=30
+click_tile 0 2
+wait_secs 1.5
+screenshot "debug_tools.png"
+log_state
+quit

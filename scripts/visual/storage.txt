@@ -1,0 +1,21 @@
+# Closets and storage on MetaStation (docs/RUNNING.md). Spawn at (98, 72) under the fire-safety
+# closet at (98, 73), open it, then open the backpack's storage grid and take the survival box out
+# of it.
+# spawn: 98,72
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_until entities 800 timeout=30
+wait_secs 1
+log_state
+screenshot "closed.png"
+click_tile 0 1              # the fire-safety closet: opens, PopulateContents lands on its tile
+wait_secs 1
+screenshot "open_locker.png"
+click_ui "hud_back"         # empty active hand + worn backpack: the storage grid opens
+wait_secs 1
+screenshot "storage_grid.png"
+click_ui "storage slot 0"   # the survival box goes to the active hand
+wait_secs 1
+screenshot "box_in_hand.png"
+log_state
+quit

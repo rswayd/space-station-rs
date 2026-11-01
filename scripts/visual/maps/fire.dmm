@@ -1,0 +1,20 @@
+"w" = (/turf/closed/wall,/area/station/commons/dorms)
+"f" = (/turf/open/floor/iron,/area/station/commons/dorms)
+"s" = (/obj/effect/landmark/start/assistant,/turf/open/floor/iron,/area/station/commons/dorms)
+"W" = (/obj/structure/grille,/obj/structure/window/reinforced/fulltile,/turf/open/floor/plating,/area/station/commons/dorms)
+"p" = (/turf/open/floor/iron{initial_gas_mix = "o2=22;n2=82;plasma=12;TEMP=293.15"},/area/station/commons/dorms)
+"L" = (/obj/item/weldingtool,/turf/open/floor/iron{initial_gas_mix = "o2=22;n2=82;plasma=12;TEMP=293.15"},/area/station/commons/dorms)
+"t" = (/obj/structure/table/wood,/turf/open/floor/iron{initial_gas_mix = "o2=22;n2=82;plasma=12;TEMP=293.15"},/area/station/commons/dorms)
+"S" = (/turf/open/space/basic,/area/space)
+
+(1,1,1) = {"
+SSSSSSSSSSSSSSS
+SwwwwwwwwwwwwwS
+SwfffWppppppwwS
+SwfffWpptppppwS
+SwfsfWppppLppwS
+SwfffWppppppwwS
+SwfffWppptpppwS
+SwwwwwwwwwwwwwS
+SSSSSSSSSSSSSSS
+"}

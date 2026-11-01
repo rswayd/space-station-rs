@@ -1,0 +1,27 @@
+# Genetics: a DNA console (3,3) linked to the DNA scanner east of it (4,3). Bob opens the
+# scanner and steps in, alice closes it from the DnaConsole window and scans him: his eight
+# mutation blocks, enzymes and stability; then she opens the scanner again and he is out.
+map genetics.dmm
+bot alice 2,3
+bot bob 5,3
+
+test scan_occupant
+  expect mob(bob).dna.index.len == 8
+  expect mob(bob).dna.stability == 100
+  bob click 4,3 /obj/machinery/dna_scannernew
+  until obj(4,3,/obj/machinery/dna_scannernew).scanner.open == true
+  bob move W
+  until mob(bob).pos == 4,3
+  alice click 3,3 /obj/machinery/computer/dna_console
+  until alice.windows.DnaConsole exists
+  expect alice.windows.DnaConsole.data.is_scanner_connected == true
+  alice act DnaConsole toggle_door
+  until mob(bob).in_closet == true
+  until alice.windows.DnaConsole.data.is_viable_subject == true
+  expect alice.windows.DnaConsole.data.mutations.len == 8
+  expect alice.windows.DnaConsole.data.subject_stability == 100
+  save enzymes mob(bob).dna.enzymes
+  expect alice.windows.DnaConsole.data.subject_enzymes == $enzymes
+  alice act DnaConsole toggle_door
+  until mob(bob).in_closet missing
+  until alice.windows.DnaConsole.data.is_viable_subject == false

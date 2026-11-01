@@ -1,0 +1,15 @@
+# Basic mobs: petting a corgi with an empty hand; a space carp in the next room hunts bob down
+# and bites him (its attack verb is untranslated in BandaStation's [attack_verbs]).
+map mobs.dmm
+bot alice 2,3
+bot bob 6,3
+
+test pet_corgi
+  alice click 3,3 /mob/living/basic/pet/dog/corgi
+  until alice.chat ~ "Вы гладите corgi."
+  expect tile(3,3).entities[].path ~ /mob/living/basic/pet/dog/corgi
+
+test carp_bites
+  until mob(bob).health.health <= 80 timeout=20
+  until bob.chat ~ "bites вас!"
+  expect mob(alice).health.health == 100

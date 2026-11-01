@@ -1,0 +1,52 @@
+# The ID console and crew records: the head of personnel logs into Plexagon Access Management
+# with her ID and gives the assistant's card security access; the card opens a security door.
+# The security officer logs into the security records console and adds a crime to the
+# assistant's record (Arrest); the security HUD glasses the officer puts on show the wanted icon
+# (BandaStation's officer outfit has no HUD glasses).
+map records.dmm
+bot hop 2,5 job "Head of Personnel"
+bot bob 4,5
+bot officer 5,4 job "Security Officer" give /obj/item/clothing/glasses/hud/security/sunglasses
+
+test hop_gives_access
+  hop slot id
+  until hop.slots.id missing
+  hop click 3,5 /obj/machinery/modular_computer
+  until hop.hands[0] missing
+  hop click 3,5 /obj/machinery/modular_computer
+  until hop.windows.NtosMain exists
+  hop act NtosMain PC_runprogram name=plexagonidwriter
+  until hop.windows.NtosMain.data.screen.Card exists
+  hop act NtosMain PRG_authenticate
+  until hop.windows.NtosMain.data.screen.Card.authed_user exists
+  bob click 3,5 /obj/machinery/modular_computer
+  until bob.windows.NtosMain exists
+  bob slot id
+  until bob.slots.id missing
+  bob act NtosMain PRG_insert_alt_id
+  until hop.windows.NtosMain.data.screen.Card.modified_card exists
+  hop act NtosMain PRG_access access_target=cent_captain
+  hop act NtosMain PRG_access access_target=security
+  until hop.windows.NtosMain.data.screen.Card.modified_card.access_on_card ~ "security"
+  expect hop.windows.NtosMain.data.screen.Card.modified_card.access_on_card !~ "cent_captain"
+  bob act NtosMain PRG_remove_alt_id
+  until bob.hands[0] exists
+  bob close NtosMain
+  bob teleport 7,3
+  bob move E
+  until obj(8,3,/obj/machinery/door).door.open == true
+
+test sechud_sees_wanted
+  officer slot eyes
+  until mob(officer).slots.eyes == "/obj/item/clothing/glasses/hud/security/sunglasses"
+  until officer.windows.DataHud.data.entries.len >= 2
+  officer click 5,5 /obj/machinery/computer/records
+  until officer.windows.SecurityRecords exists
+  officer act SecurityRecords login
+  until officer.windows.SecurityRecords.data.authenticated == true
+  officer act SecurityRecords set_wanted crew_ref=@mob(bob).record.crew_ref status=Арест
+  wait 0.5
+  expect mob(bob).record.wanted_status == "Нет"
+  officer act SecurityRecords add_crime crew_ref=@mob(bob).record.crew_ref name=Кража details=Украл fine=0
+  until mob(bob).record.wanted_status == "Арест"
+  until officer.windows.DataHud.data.entries[].icons[-1] ~ "hudwanted"

@@ -1,0 +1,14 @@
+# The AI in its core in the AI chamber: the eye's view (static where no camera sees), then the
+# eye walks west out of the chamber.
+#   SS13_DEV_JOB=AI SS13_ASSETS=$ASSETS scripts/visual-check.sh scripts/visual/ai.txt
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 3
+screenshot "ai_core.png"
+key_down A
+wait_secs 1.0
+key_up A
+wait_secs 2
+screenshot "ai_eye.png"
+log_state
+quit

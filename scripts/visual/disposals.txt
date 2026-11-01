@@ -1,0 +1,30 @@
+# A disposal bin and its outlet (map `scripts/visual/maps/disposals.dmm`): the player puts a
+# pen into the bin, opens the DisposalUnit window, engages the handle; 1.5 s later the pen
+# leaves through the pipes and the outlet east of the bin (facing south here) opens for 2 s and
+# throws it out.
+#   SS13_LIGHTING=0 SS13_MAP=$PWD/scripts/visual/maps/disposals.dmm SS13_ASSETS=$ASSETS \
+#     scripts/visual-check.sh scripts/visual/disposals.txt
+# spawn: 2,5
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 2
+click_tile 1 -1
+wait_secs 0.5
+click_tile 1 0
+wait_secs 0.5
+click_tile 1 0
+wait_secs 3
+screenshot "disposal_window.png"
+click_ui "Engage"
+wait_secs 2.5
+screenshot "flush_1.png"
+wait_secs 1
+screenshot "flush_2.png"
+wait_secs 1
+screenshot "flush_3.png"
+wait_secs 1
+screenshot "flush_4.png"
+wait_secs 2
+screenshot "landed.png"
+log_state
+quit

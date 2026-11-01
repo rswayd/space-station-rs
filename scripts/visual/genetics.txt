@@ -1,0 +1,16 @@
+# Genetics, geneticist: west of the DNA console; opens the DnaConsole window, closes the scanner
+# with the subject inside (genetics_subject.txt) and shows his mutation blocks.
+# spawn: 2,3
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 6
+click_tile 1 0
+wait_secs 2
+click_ui "Close Scanner"
+wait_secs 2
+screenshot "dna_console.png"
+scroll_ui "Activator" 40     # the sequencer scrolls inside the window
+wait_secs 1
+screenshot "dna_console_scrolled.png"
+log_state
+quit

@@ -1,0 +1,16 @@
+# Heat exchanging pipes in space radiate the heat of their gas away (tg
+# `heat_exchanging/process_atmos` -> `temperature_interact` with space: 2.7 K,
+# `HEAT_CAPACITY_VACUUM`): an air canister wrenched to a connector port fills a pipe that runs
+# through the wall into a junction and four HE pipes on space tiles; the loop cools well below
+# room temperature while plain pipes would keep it at 293 K.
+map he_pipes.dmm
+bot alice 3,3 give /obj/item/wrench
+
+test canister_fills_the_loop
+  alice click 4,3 /obj/machinery/portable_atmospherics
+  until obj(4,3,/obj/machinery/portable_atmospherics).atmos.port == true
+  until obj(10,3,/obj/machinery/atmospherics/pipe/heat_exchanging/simple).atmos.pipe_pressure > 100
+
+test space_cools_the_loop
+  until obj(10,3,/obj/machinery/atmospherics/pipe/heat_exchanging/simple).atmos.pipe_temperature < 270 timeout=60
+  expect obj(5,3,/obj/machinery/atmospherics/pipe/smart/simple/supply/visible).atmos.pipe_temperature < 280

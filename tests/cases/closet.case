@@ -1,0 +1,23 @@
+# A security locker (tg `req_access = list(ACCESS_BRIG)`): an assistant's ID cannot unlock it, a
+# security officer's can; then it opens, spills its contents and closes again.
+map closet.dmm
+bot alice 3,3
+bot bob 3,4 job "Security Officer"
+
+test assistant_is_refused
+  alice click 4,3 /obj/structure/closet
+  wait 0.5
+  expect obj(4,3,/obj/structure/closet).closet.locked == true
+  expect obj(4,3,/obj/structure/closet).closet.open == false
+
+test officer_unlocks_and_opens
+  expect mob(bob).slots.id exists
+  bob click 4,3 /obj/structure/closet
+  until obj(4,3,/obj/structure/closet).closet.locked == false
+  bob click 4,3 /obj/structure/closet
+  until obj(4,3,/obj/structure/closet).closet.open == true
+  until tile(4,3).entities.len > 4
+
+test anyone_closes_it
+  alice click 4,3 /obj/structure/closet
+  until obj(4,3,/obj/structure/closet).closet.open == false

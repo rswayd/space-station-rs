@@ -1,0 +1,29 @@
+"w" = (/turf/closed/wall,/area/centcom/central_command_areas/control)
+"f" = (/turf/open/floor/iron,/area/centcom/central_command_areas/control)
+"e" = (/turf/open/floor/engine,/area/centcom/central_command_areas/control)
+"c" = (/obj/structure/cable,/turf/open/floor/iron,/area/centcom/central_command_areas/control)
+"R" = (/obj/structure/cable,/obj/machinery/power/rtg,/turf/open/floor/iron,/area/centcom/central_command_areas/control)
+"T" = (/obj/structure/cable,/obj/machinery/power/terminal{dir = 4},/turf/open/floor/iron,/area/centcom/central_command_areas/control)
+"S" = (/obj/structure/cable,/obj/machinery/power/smes,/turf/open/floor/iron,/area/centcom/central_command_areas/control)
+"E" = (/obj/structure/cable,/obj/machinery/power/emitter/welded{dir = 4},/turf/open/floor/iron,/area/centcom/central_command_areas/control)
+"Q" = (/obj/structure/cable,/obj/machinery/power/energy_accumulator/tesla_coil/anchored,/turf/open/floor/engine,/area/centcom/central_command_areas/control)
+"G" = (/obj/machinery/power/energy_accumulator/grounding_rod/anchored,/turf/open/floor/engine,/area/centcom/central_command_areas/control)
+"X" = (/obj/machinery/power/supermatter_crystal/engine,/turf/open/floor/engine,/area/centcom/central_command_areas/control)
+"C" = (/obj/structure/cable,/obj/machinery/power/solar_control{dir = 4},/turf/open/floor/iron,/area/centcom/central_command_areas/control)
+"W" = (/obj/structure/cable,/turf/closed/wall,/area/centcom/central_command_areas/control)
+"," = (/obj/structure/cable,/turf/open/space/basic,/area/space)
+"P" = (/obj/structure/cable,/obj/machinery/power/solar,/turf/open/space/basic,/area/space)
+"K" = (/obj/structure/cable,/obj/machinery/power/tracker,/turf/open/space/basic,/area/space)
+"." = (/turf/open/space/basic,/area/space)
+
+(1,1,1) = {"
+wwwwwwwwwwwwwww...
+wRcTSffffffffCW,PK
+wcffffffffffffw...
+wcccccccQfffffw...
+wcffffffffffffw...
+wcEfffeXefffffw...
+wfffffffffffffw...
+wffffffGffffffw...
+wwwwwwwwwwwwwww...
+"}

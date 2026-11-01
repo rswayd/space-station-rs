@@ -1,0 +1,11 @@
+# Run with SS13_DEV_TRAITOR=brother: the joining body becomes a blood brother with a team of its
+# own (an admin's "make antag"): the AntagInfoBrother panel opens with the team's objectives, the
+# brother HUD icon is over the own mob, the flash is in a pocket.
+# spawn: 104,72
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_until chat "Вы - кровный брат." timeout=30
+wait_secs 2
+log_state
+screenshot "brother_info.png"
+quit

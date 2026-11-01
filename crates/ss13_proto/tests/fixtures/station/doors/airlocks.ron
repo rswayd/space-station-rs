@@ -1,0 +1,30 @@
+[
+    (
+        id: "door",
+        parent: "machinery",
+        components: {
+            "name": ("door"),
+            "density": (true),
+            "door": (open: false, open_time: 1.0, access: ["general"]),
+            "icon": (file: "icons/obj/doors/door.dmi", state: "closed", dir: East),
+        },
+    ),
+    (
+        id: "airlock",
+        parent: "door",
+        components: {
+            "name": ("airlock"),
+            "door": (open_time: 0.5),
+            "icon": (file: "icons/obj/doors/airlock.dmi"),
+        },
+    ),
+    (
+        id: "airlock_engineering",
+        parent: "airlock",
+        components: {
+            "name": ("engineering airlock"),
+            "door": (access: ["engineering", "atmos"]),
+            "icon": (tint: (255, 200, 0, 255), offset: (x: 0, y: 4)),
+        },
+    ),
+]

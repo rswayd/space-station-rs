@@ -1,0 +1,22 @@
+[package]
+name = "ss13_devtools"
+description = "Scripted client for visual checks: injected input, in-app screenshots, offscreen rendering."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+ss13_shared.workspace = true
+ss13_net = { workspace = true, features = ["client"] }
+ss13_render.workspace = true
+ss13_ui_kit.workspace = true
+ss13_chat = { workspace = true, features = ["client"] }
+bevy = { workspace = true, features = ["2d", "ui", "png"] }
+
+[dev-dependencies]
+ss13_game = { workspace = true, features = ["client"] }
+bevy = { workspace = true, features = ["2d", "ui", "png", "bevy_log", "async_executor", "multi_threaded"] }
+
+[lints]
+workspace = true

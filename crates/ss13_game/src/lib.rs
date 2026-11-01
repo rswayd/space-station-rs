@@ -1,0 +1,398 @@
+//! First playable loop: a connected client gets a mob at a spawn landmark, walks it with
+//! `ClientIntent::Move`, and its camera follows it.
+//!
+//! - `server` (feature `server`): marks map entities for replication, spawns and despawns player
+//!   mobs, validates move intents, moves each client's `Viewer` with its mob.
+//! - `click` (feature `server`): validates world clicks once (sight, reach) for doors and items.
+//! - `doors` (feature `server`): airlocks and other doors open on bumps and clicks, autoclose.
+//! - `human` (feature `server`): player mobs drawn as tg humans (body parts, eyes, clothes, hair,
+//!   held items).
+//! - `inventory` (feature `server`): hands, tg's human equipment slots, pickup and drop, ID
+//!   access.
+//! - `jobs`, `outfit` (feature `server`): joinable jobs, the latejoin menu, job spawn landmarks,
+//!   outfits and ID trims, character names.
+//! - `round` (feature `server`): the lobby (new players, ready, observe, job preferences), tg's
+//!   ticker states, round start job division, round end report and reboot; `lobby` holds the
+//!   interfaces both halves share, `lobby_client` (feature `client`) draws the lobby screen and
+//!   the job preferences window.
+//! - `antag` (feature `server`; shared interfaces and `antag::client` with `client`): roundstart
+//!   antagonists (BandaStation's dynamic), the traitor, objectives, the uplink, round-end report.
+//! - `power` (feature `server`): tg areas, APCs, powernets, SMES, machine loads; unpowered doors
+//!   stay shut, lights go to emergency light or dark.
+//! - `closets` (feature `server`): closets, lockers and crates open, close, lock and hold their
+//!   contents (mapped and from `PopulateContents`).
+//! - `storage` (feature `server`): storage items (backpacks, boxes) with tg weight and slot
+//!   limits, contents programs, the open storage view; `storage_client` (feature `client`)
+//!   draws it as a slot grid.
+//! - `health` (feature `server`): damage, stat (crit, death), lying bodies.
+//! - `breath`, `internals` (feature `server`): tg `Life()` breathing from the tile air or an
+//!   internals tank, pressure and body temperature damage, the screen alerts; gas tanks.
+//!   `breath_client` (feature `client`): the alert column.
+//! - `combat` (feature `server`): combat mode, punches, hugs, attacks with held items.
+//! - `status_effects` (feature `server`): tg stuns, knockdowns, paralysis, immobilization,
+//!   stamina and stamcrit, confusion; the traits moves, clicks and hands read. `restraints`
+//!   (feature `server`): handcuffs, resisting out, taking them off. `security` (feature
+//!   `server`): stun batons, flashes, the shove.
+//! - `ghost` (feature `server`): a dead player's ghost, invisible to the living.
+//! - `atmos` (feature `server`): gas overlays replicate, gas analyzers print their readout.
+//!   `atmos_machinery` (feature `server`): pipe networks, vents, scrubbers, pumps, valves,
+//!   filters, mixers, thermomachines, canisters and portable machines, air alarms and their
+//!   tgui windows.
+//! - `fire` (feature `server`): open flames light hotspots, fire on mobs (fire stacks, stop drop
+//!   and roll) and flammable objects, gas tank reactions, space wind.
+//! - `pull` (feature `server`): ctrl+click pulling, pulled things following, grabs and resisting,
+//!   the pull/throw HUD's server half; `throw` (feature `server`): throw mode, flying items,
+//!   hits and catches; `examine` (feature `server`): shift+click examine text; `speech` (feature
+//!   `server`): the mob's stat for `ss13_chat` (crit whispers, deadchat, emote checks).
+//!   `interact_client` (feature `client`): the pull, resist and throw keys and HUD buttons.
+//! - `radio` (feature `server`): headsets, intercoms and station bounced radios: talking into
+//!   them (`;`, `:h`, `:x`, `:i`, `:r`/`:l`), relaying nearby speech, receiving by frequency.
+//! - `hud`: the inventory and health HUD data both halves share; `inventory_client` and
+//!   `health_client` (feature `client`) draw them and send the inventory keys (X, Q), the combat
+//!   mode key (F) and slot clicks.
+//! - `client` (feature `client`): keyboard -> move intents, camera on the controlled mob, BYOND-style
+//!   gliding between tiles, dev certificate pickup.
+//!
+//! - `shuttle` (feature `server`): docking ports, shuttle templates and moves, the emergency
+//!   shuttle's modes as the round's end, the communications console's server half; `comms`
+//!   holds the console window's data, `comms_client` (feature `client`) draws it.
+//! - `vending` (feature `server`): vending machines, the tgui `Vending` window's server half.
+//! - `disposals` (feature `server`): disposal pipes, bins and chutes (tgui `DisposalUnit`),
+//!   holders travelling to outlets, mail sorting, destination taggers and parcels.
+//! - `wires` (feature `server`): tg `/datum/wires` on airlocks, APCs and vending machines
+//!   (colors per round, cut, mend, pulse, the tgui `Wires` window's server half), shocks.
+//! - `tools`, `construction`, `obj_damage` (feature `server`): tool behaviours, `use_tool` and
+//!   `do_after`, welders and stacks; floors, girders, walls, grilles, windows and machine
+//!   anchoring with tg's tool chains, turf changes (`ChangeTurf`); structure integrity, item
+//!   hits on structures and their debris.
+//! - `medical`, `health_scan` (feature `server`): the zone selector's server half, medical
+//!   stacks healing bodyparts, gauze, health analyzers (tg `healthscan`), CPR; `zone`: body
+//!   zones, the selector's hit map and numpad keys.
+//! - `chem` (feature `server`): reagent holders on containers and mobs (`ss13_reagents`),
+//!   pouring, drinking, syringes, pills, reactions over time, metabolism, fill overlays.
+//! - `hunger` (feature `server`): nutrition, the stomach's `handle_hunger`, obesity, the hunger
+//!   bar's server half; `hunger_client` (feature `client`) draws the bar. `food` (feature
+//!   `server`): food items (`/obj/item/food`): eating and feeding bite by bite, tastes, trash,
+//!   tool processing (slicing). `kitchen` (feature `server`): the microwave, the food processor
+//!   and the reagent grinder.
+//! - `cargo` (feature `server`; the window's data shared, `cargo::client` with `client`): the
+//!   economy (department budgets, bank accounts on ID cards, paydays), supply packs and orders,
+//!   the supply shuttle (buying on the way in, selling on arrival at CentCom) and the supply
+//!   consoles' tgui `Cargo` window.
+//! - `botany` (feature `server`): hydroponics trays, seeds, plant genes, the harvest, the seed
+//!   extractor and the plant analyzer.
+//! - `science` (feature `server`; the windows' data shared, `science::client` with `client`):
+//!   the station techweb, research points from R&D servers, the R&D console's tgui `Techweb`,
+//!   the protolathe, circuit imprinter and departmental techfabs (tgui `Fabricator`) with the ore
+//!   silo's material storage, and the destructive analyzer.
+//! - `silicon` (feature `server`; the windows' data shared, `silicon::client` with `client`):
+//!   security cameras and the camera network, the camera console, the AI (core, eye, AI
+//!   clicks), cyborgs (models, cell, recharging stations), laws, binary chat.
+//! - `ui_sprites` (feature `client`): atlas sprites inside tgui windows (`UiSprite`).
+//! - `drag` (feature `server`): click-drags (tg `MouseDrop`): storages, the strip menu, closets.
+//!   `strip` (feature `server`): the strip menu. `loot` (feature `server`): alt-clicks
+//!   (`click_alt`, the loot panel). `point` (feature `server`): shift+middle pointing. `panels`:
+//!   the strip menu and loot panel data both halves share; `panels_client` (feature `client`)
+//!   draws them.
+//!
+//! - `mecha` (feature `server`; the fabricator window's data shared, `mecha::client` with
+//!   `client`): exosuits (entering, driving, equipment, damage, wreckage), building them from a
+//!   chassis and the exosuit fabricator (tgui `ExosuitFabricator`).
+//!
+//! - `mobs` (feature `server`): tg basic mobs (`/mob/living/basic`) from map placements and
+//!   spawns, their environment, fighting them, and their AI controllers (behavior trees).
+//!
+//! - `events` (feature `server`): tg `SSevents`, the random event scheduler, and the round
+//!   events that act on ported systems (grid check, electrical storm, communications blackout,
+//!   meteors, radiation storm, brand intelligence, market crash, false alarm, carp migration).
+//!
+//! - `prediction` (feature `client`): the own mob walks at once on input; the server's acks
+//!   reconcile it.
+//!
+//! Walking is one `Move { dir, seq }` per step: while a direction is held the client predicts a
+//! step whenever its copy of the run cooldown allows and sends it once (reliable, ordered). The
+//! server applies each `seq` once, when the mob's `Mover` cooldown allows, and acks it with the
+//! mob's authoritative tile. Spam therefore cannot walk faster than the cooldown, and releasing
+//! the key stops the mob after the steps already shown.
+
+use std::io;
+use std::path::{Path, PathBuf};
+
+pub mod actions;
+#[cfg(feature = "client")]
+pub mod actions_client;
+pub mod antag;
+#[cfg(feature = "server")]
+pub mod armor;
+#[cfg(feature = "server")]
+pub mod atmos;
+#[cfg(feature = "server")]
+pub mod atmos_machinery;
+#[cfg(feature = "server")]
+pub mod botany;
+#[cfg(feature = "server")]
+pub mod breath;
+#[cfg(feature = "client")]
+pub mod breath_client;
+pub mod cargo;
+#[cfg(feature = "server")]
+pub mod chem;
+#[cfg(feature = "server")]
+pub mod click;
+#[cfg(feature = "client")]
+pub mod client;
+#[cfg(feature = "server")]
+pub mod closets;
+#[cfg(feature = "server")]
+pub mod combat;
+pub mod comms;
+#[cfg(feature = "client")]
+pub mod comms_client;
+#[cfg(feature = "server")]
+pub mod construction;
+#[cfg(feature = "server")]
+pub mod disposals;
+#[cfg(feature = "server")]
+pub mod doors;
+#[cfg(feature = "server")]
+pub mod drag;
+#[cfg(feature = "server")]
+pub mod events;
+#[cfg(feature = "server")]
+pub mod examine;
+#[cfg(feature = "server")]
+pub mod fire;
+#[cfg(feature = "server")]
+pub mod food;
+#[cfg(feature = "server")]
+pub mod footsteps;
+#[cfg(feature = "server")]
+pub mod genetics;
+#[cfg(feature = "server")]
+pub mod ghost;
+#[cfg(feature = "server")]
+pub mod guns;
+#[cfg(feature = "server")]
+pub mod health;
+#[cfg(feature = "client")]
+pub mod health_client;
+#[cfg(feature = "server")]
+pub mod health_scan;
+pub mod hud;
+#[cfg(feature = "server")]
+pub mod human;
+#[cfg(feature = "server")]
+pub mod hunger;
+#[cfg(feature = "client")]
+pub mod hunger_client;
+#[cfg(feature = "server")]
+pub mod id_access;
+#[cfg(feature = "client")]
+pub mod interact_client;
+#[cfg(feature = "server")]
+pub mod internals;
+#[cfg(feature = "server")]
+pub mod inventory;
+#[cfg(feature = "client")]
+pub mod inventory_client;
+#[cfg(feature = "server")]
+pub mod janitor;
+#[cfg(feature = "server")]
+pub mod jobs;
+#[cfg(feature = "server")]
+pub mod kitchen;
+pub mod lobby;
+#[cfg(feature = "client")]
+pub mod lobby_client;
+#[cfg(feature = "server")]
+pub mod loot;
+pub mod mecha;
+#[cfg(feature = "server")]
+pub mod medical;
+#[cfg(feature = "server")]
+pub mod mobs;
+pub mod modpc;
+#[cfg(feature = "server")]
+pub mod obj_damage;
+#[cfg(feature = "server")]
+pub mod outfit;
+pub mod panels;
+#[cfg(feature = "client")]
+pub mod panels_client;
+#[cfg(feature = "server")]
+pub mod point;
+#[cfg(feature = "server")]
+pub mod power;
+#[cfg(feature = "client")]
+pub mod prediction;
+#[cfg(feature = "server")]
+pub mod projectile;
+#[cfg(feature = "server")]
+pub mod pull;
+#[cfg(feature = "server")]
+pub mod radio;
+#[cfg(feature = "server")]
+pub mod recoil;
+pub mod records;
+#[cfg(feature = "server")]
+pub mod restraints;
+#[cfg(feature = "server")]
+pub mod round;
+pub mod science;
+#[cfg(feature = "server")]
+pub mod security;
+#[cfg(feature = "server")]
+pub mod server;
+#[cfg(feature = "server")]
+pub mod shuttle;
+pub mod silicon;
+#[cfg(feature = "server")]
+pub mod sound;
+#[cfg(feature = "client")]
+pub mod sound_client;
+#[cfg(feature = "server")]
+pub mod speech;
+#[cfg(feature = "server")]
+pub mod status_effects;
+#[cfg(feature = "server")]
+pub mod storage;
+#[cfg(feature = "client")]
+pub mod storage_client;
+#[cfg(feature = "server")]
+pub mod strip;
+#[cfg(feature = "server")]
+pub mod taser;
+#[cfg(feature = "testing")]
+pub mod testing;
+#[cfg(feature = "server")]
+pub mod throw;
+#[cfg(feature = "server")]
+pub mod tools;
+#[cfg(feature = "client")]
+pub mod ui_sprites;
+#[cfg(feature = "server")]
+pub mod vending;
+#[cfg(feature = "server")]
+pub mod wires;
+pub mod zone;
+
+/// Seconds per tile of a running human: tg `RUN_DELAY 2.2` deciseconds (`config/game_options.txt`,
+/// `/datum/movespeed_modifier/config_walk_run/run`); `move_intent` defaults to run.
+pub const RUN_DELAY_SECS: f32 = 0.22;
+
+/// Steps the client may have in flight (predicted, not acked); also the most a server queues per
+/// mob. 8 run steps are ~1.8 s: a round trip longer than that stalls prediction instead of
+/// letting it run away from the server.
+pub const MAX_UNACKED_STEPS: usize = 8;
+
+/// Where a server writes the digest of its self-signed certificate, per port, so a local client
+/// can connect without copying it from the log. Dev only: the client reads it only for loopback
+/// servers and only when `SS13_CERT_DIGEST` is unset.
+///
+/// The directory is private to the user (`$XDG_RUNTIME_DIR`, else `<temp>/ss13-rs-<user>` made
+/// 0700): in a shared `/tmp` another user could plant a digest and have the client pin their
+/// server.
+pub fn dev_cert_digest_file(port: u16) -> io::Result<PathBuf> {
+    let dir = match std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from) {
+        Some(dir) if dir.is_absolute() => dir,
+        _ => {
+            let user = std::env::var("USER").unwrap_or_else(|_| "dev".into());
+            let dir = std::env::temp_dir().join(format!("ss13-rs-{user}"));
+            create_private_dir(&dir)?;
+            dir
+        }
+    };
+    Ok(digest_file_in(&dir, port))
+}
+
+fn digest_file_in(dir: &Path, port: u16) -> PathBuf {
+    dir.join(format!("ss13-rs-dev-cert-{port}.txt"))
+}
+
+pub fn write_dev_cert_digest(path: &Path, digest: &str) -> io::Result<()> {
+    check_private(path.parent().unwrap_or(Path::new(".")), None)?;
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+    io::Write::write_all(&mut options.open(path)?, digest.as_bytes())
+}
+
+/// The digest at `path`, only if the directory and the file are private to their owner and the
+/// file belongs to the directory's owner.
+pub fn read_dev_cert_digest(path: &Path) -> io::Result<String> {
+    let dir = check_private(path.parent().unwrap_or(Path::new(".")), None)?;
+    check_private(path, Some(&dir))?;
+    std::fs::read_to_string(path)
+}
+
+fn create_private_dir(dir: &Path) -> io::Result<()> {
+    let mut builder = std::fs::DirBuilder::new();
+    #[cfg(unix)]
+    std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);
+    match builder.create(dir) {
+        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Ok(()),
+        other => other,
+    }
+}
+
+/// Not a symlink, no group/other permission bits and, with `owner`, the same owner as it.
+#[cfg(unix)]
+fn check_private(path: &Path, owner: Option<&std::fs::Metadata>) -> io::Result<std::fs::Metadata> {
+    use std::os::unix::fs::MetadataExt;
+    let meta = std::fs::symlink_metadata(path)?;
+    let refuse = |why: &str| {
+        Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            format!("{}: {why}", path.display()),
+        ))
+    };
+    if meta.file_type().is_symlink() {
+        return refuse("is a symlink");
+    }
+    if meta.mode() & 0o077 != 0 {
+        return refuse("accessible to other users");
+    }
+    if owner.is_some_and(|owner| owner.uid() != meta.uid()) {
+        return refuse("owned by another user than its directory");
+    }
+    Ok(meta)
+}
+
+// Windows: the temp dir is per user already.
+#[cfg(not(unix))]
+fn check_private(path: &Path, _: Option<&std::fs::Metadata>) -> io::Result<std::fs::Metadata> {
+    std::fs::symlink_metadata(path)
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use std::os::unix::fs::PermissionsExt;
+
+    use super::*;
+
+    #[test]
+    fn digest_is_trusted_only_in_private_files() {
+        let dir = std::env::temp_dir().join(format!("ss13-rs-digest-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        create_private_dir(&dir).unwrap();
+        let path = digest_file_in(&dir, 1);
+        write_dev_cert_digest(&path, "abc").unwrap();
+        assert_eq!(read_dev_cert_digest(&path).unwrap(), "abc");
+
+        let chmod =
+            |p: &Path, mode| std::fs::set_permissions(p, std::fs::Permissions::from_mode(mode));
+        chmod(&path, 0o644).unwrap();
+        assert!(read_dev_cert_digest(&path).is_err());
+        chmod(&path, 0o600).unwrap();
+
+        let link = digest_file_in(&dir, 2);
+        std::os::unix::fs::symlink(&path, &link).unwrap();
+        assert!(read_dev_cert_digest(&link).is_err());
+
+        chmod(&dir, 0o777).unwrap();
+        assert!(read_dev_cert_digest(&path).is_err());
+        assert!(write_dev_cert_digest(&path, "planted").is_err());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+}

@@ -1,0 +1,19 @@
+"w" = (/turf/closed/wall,/area/station/commons/dorms)
+"f" = (/turf/open/floor/iron,/area/station/commons/dorms)
+"s" = (/obj/effect/landmark/start/assistant,/turf/open/floor/iron,/area/station/commons/dorms)
+"W" = (/obj/item/reagent_containers/cup/glass/waterbottle,/turf/open/floor/iron,/area/station/commons/dorms)
+"K" = (/obj/structure/mop_bucket,/turf/open/floor/iron,/area/station/commons/dorms)
+"M" = (/obj/item/mop,/turf/open/floor/iron,/area/station/commons/dorms)
+"B" = (/obj/effect/decal/cleanable/blood,/turf/open/floor/iron,/area/station/commons/dorms)
+"D" = (/obj/effect/decal/cleanable/blood/drip,/turf/open/floor/iron,/area/station/commons/dorms)
+"O" = (/obj/effect/decal/cleanable/blood/old,/turf/open/floor/iron,/area/station/commons/dorms)
+
+(1,1,1) = {"
+wwwwwwwww
+wfffffffw
+wffWfBDfw
+wffKsBOfw
+wffMfDffw
+wfffffffw
+wwwwwwwww
+"}

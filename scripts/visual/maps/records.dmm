@@ -1,0 +1,16 @@
+"w" = (/turf/closed/wall,/area/centcom/central_command_areas/admin)
+"f" = (/turf/open/floor/iron,/area/centcom/central_command_areas/admin)
+"s" = (/obj/effect/landmark/start/assistant,/turf/open/floor/iron,/area/centcom/central_command_areas/admin)
+"I" = (/obj/machinery/modular_computer/preset/id,/turf/open/floor/iron,/area/centcom/central_command_areas/admin)
+"c" = (/obj/item/card/id/advanced,/turf/open/floor/iron,/area/centcom/central_command_areas/admin)
+"R" = (/obj/machinery/computer/records/security,/turf/open/floor/iron,/area/centcom/central_command_areas/admin)
+
+(1,1,1) = {"
+wwwwwwwww
+wfffffffw
+wfIcRfffw
+wffsffffw
+wfffffffw
+wfffffffw
+wwwwwwwww
+"}

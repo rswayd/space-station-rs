@@ -1,0 +1,25 @@
+"w" = (/turf/closed/wall,/area/station/commons/dorms)
+"f" = (/turf/open/floor/iron,/area/station/commons/dorms)
+"p" = (/turf/open/floor/plating,/area/station/commons/dorms)
+"s" = (/obj/effect/landmark/start/assistant,/turf/open/floor/iron,/area/station/commons/dorms)
+"g" = (/obj/structure/girder,/turf/open/floor/plating,/area/station/commons/dorms)
+"d" = (/obj/structure/girder/displaced,/turf/open/floor/iron,/area/station/commons/dorms)
+"G" = (/obj/structure/grille,/turf/open/floor/plating,/area/station/commons/dorms)
+"W" = (/obj/structure/grille,/obj/structure/window/fulltile,/turf/open/floor/plating,/area/station/commons/dorms)
+"B" = (/obj/structure/grille/broken,/obj/item/shard,/obj/item/shard,/turf/open/floor/plating,/area/station/commons/dorms)
+"x" = (/obj/item/shard,/obj/item/stack/rods,/turf/open/floor/plating,/area/station/commons/dorms)
+"i" = (/obj/item/stack/sheet/iron/fifty,/turf/open/floor/iron,/area/station/commons/dorms)
+"L" = (/obj/item/weldingtool,/turf/open/floor/iron,/area/station/commons/dorms)
+"S" = (/turf/open/space/basic,/area/space)
+
+(1,1,1) = {"
+SSSSSSSSSSSSS
+SwwwWWBWWwwwS
+SwfffffffffwS
+SwfgggpppffwS
+SwffffsffdfwS
+SwfGGxpfiLfwS
+SwfffffffffwS
+SwwwwwwwwwwwS
+SSSSSSSSSSSSS
+"}

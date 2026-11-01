@@ -1,0 +1,12 @@
+"w" = (/turf/closed/wall,/area/centcom/central_command_areas/supplypod/pod_storage)
+"f" = (/turf/open/floor/iron,/area/centcom/central_command_areas/supplypod/pod_storage)
+"C" = (/obj/machinery/computer/dna_console,/turf/open/floor/iron,/area/centcom/central_command_areas/supplypod/pod_storage)
+"S" = (/obj/machinery/dna_scannernew,/turf/open/floor/iron,/area/centcom/central_command_areas/supplypod/pod_storage)
+
+(1,1,1) = {"
+wwwwww
+wffffw
+wfCSfw
+wffffw
+wwwwww
+"}

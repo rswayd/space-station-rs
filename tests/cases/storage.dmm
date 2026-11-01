@@ -1,0 +1,12 @@
+"w" = (/turf/closed/wall,/area/centcom/central_command_areas/supply)
+"f" = (/turf/open/floor/iron,/area/centcom/central_command_areas/supply)
+"x" = (/obj/item/screwdriver,/turf/open/floor/iron,/area/centcom/central_command_areas/supply)
+"T" = (/obj/item/storage/toolbox/mechanical,/turf/open/floor/iron,/area/centcom/central_command_areas/supply)
+
+(1,1,1) = {"
+wwwwww
+wffTfw
+wffxfw
+wffffw
+wwwwww
+"}

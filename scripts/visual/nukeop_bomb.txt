@@ -1,0 +1,33 @@
+# Run with SS13_DEV_TRAITOR=nukeop SS13_SKIP_LOBBY=1 and nukeop_console.txt on MetaStation:
+#   SS13_SKIP_LOBBY=1 SS13_DEV_TRAITOR=nukeop scripts/visual-check.sh \
+#       scripts/visual/nukeop_bomb.txt scripts/visual/nukeop_console.txt
+# Both joining bodies become nuclear operatives aboard the infiltrator (z4). This one stands
+# north of the syndicate bomb (9,5): the operative in gear, then the NuclearBomb keypad (the
+# first click opens the windoor in front of the bomb with the operative's syndicate access).
+# spawn: 9,6,4
+wait_connected timeout=120
+wait_until controlled timeout=60
+wait_until chat "Код ядерной аутентификации" timeout=30
+wait_secs 3
+tap Q
+wait_secs 0.3
+tap X
+wait_secs 0.3
+tap Q
+wait_secs 0.5
+screenshot "nukeop_operative.png"
+click_tile 0 -1 16 29
+wait_secs 1.2
+click_tile 0 -1 6 20
+wait_secs 2
+screenshot "nukeop_bomb.png"
+click_ui "1"
+wait_secs 0.3
+click_ui "2"
+wait_secs 0.5
+screenshot "nukeop_bomb_typed.png"
+log_state
+wait_secs 25
+screenshot "nukeop_after_flight.png"
+log_state
+quit

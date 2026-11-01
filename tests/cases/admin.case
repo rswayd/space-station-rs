@@ -1,0 +1,47 @@
+# Admin tools over the admin channel: a player's admin verb is refused; an adminhelp reaches the
+# admin, the admin's PM answers it, the player's reply reaches the admin, the admin resolves it;
+# jump, get, spawn, make a traitor, kick.
+map admin.dmm
+bot alice 2,3 admin EVERYTHING
+bot bob 6,3
+
+test player_is_refused
+  until alice.admin.rights > 0
+  expect bob.admin.rights missing
+  bob admin kick alice
+  until bob.admin.last ~ "не администратор"
+  expect alice.connected == true
+
+test adminhelp_and_reply
+  bob admin ahelp "Меня толкнули в космос"
+  until alice.chat ~ "Меня толкнули в космос"
+  until bob.chat ~ "был создан"
+  alice admin pm bob "Кто толкнул?"
+  until bob.chat ~ "Кто толкнул?"
+  bob admin ahelp "Не видел"
+  until alice.chat ~ "Не видел"
+  until alice.admin.tickets[-1].messages.len == 3
+  alice admin ticket bob resolve
+  until bob.chat ~ "был решён"
+
+test jump_and_get
+  alice admin jump bob
+  until mob(alice).pos == 6,3
+  alice move W W
+  alice admin get bob
+  until mob(bob).pos == 4,3
+  until alice.chat ~ "teleported"
+
+test spawn_under_the_admin
+  alice admin spawn /obj/item/screwdriver
+  until tile(4,3).entities[].path ~ /obj/item/screwdriver
+
+test make_traitor
+  alice admin antag bob traitor
+  until bob.chat ~ "Вы - "
+  until alice.admin.last ~ "traitor"
+
+test kick
+  alice admin kick bob "тест"
+  until bob.connected == false
+  until alice.admin.last ~ "kicked"

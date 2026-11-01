@@ -1,0 +1,24 @@
+# Janitorial (SS13_MAP=scripts/visual/maps/janitor.dmm): blood on the floor, water from a bottle
+# into the mop bucket, the mop wetted (right click on the bucket), the pool east mopped off
+# (first click washes the decal, the second wets the clean floor).
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 1.5
+screenshot "blood.png"
+click_tile -1 1
+wait_secs 0.5
+click_tile -1 0
+wait_until chat "Вы переливаете" timeout=5
+tap Q
+wait_secs 0.5
+click_tile -1 -1
+wait_secs 0.5
+rclick_tile -1 0
+wait_until chat "Вы смачиваете швабру" timeout=5
+click_tile 1 0
+wait_secs 2.5
+click_tile 1 0
+wait_secs 2.5
+screenshot "mopped.png"
+log_state
+quit

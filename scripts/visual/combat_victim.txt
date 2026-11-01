@@ -1,0 +1,27 @@
+# Health/combat, victim (see combat_attacker.txt): screenshots of the health HUD while being
+# punched, in crit (lying, health6), dead (health7, doll DEAD), then as a ghost (a step ghostizes).
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 1
+screenshot "victim_healthy.png"
+wait_until chat "вас!" timeout=30
+wait_secs 2
+screenshot "victim_hurt.png"
+wait_until chat "пинает вас" timeout=60   # kicks: the body lies in crit
+wait_secs 0.5
+screenshot "victim_crit.png"
+log_state
+wait_until chat "безжизненным" timeout=90
+wait_secs 1
+screenshot "victim_dead.png"
+key_down A
+wait_secs 0.3
+key_up A
+wait_secs 1
+key_down A
+wait_secs 0.6
+key_up A
+wait_secs 1
+screenshot "victim_ghost.png"
+log_state
+quit

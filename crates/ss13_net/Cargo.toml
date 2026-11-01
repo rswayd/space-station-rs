@@ -1,0 +1,34 @@
+[package]
+name = "ss13_net"
+description = "Networking over WebTransport (wtransport). The only crate that imports the network library."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+ss13_shared.workspace = true
+bevy = { workspace = true, features = ["std", "bevy_log"] }
+wtransport = { version = "0.7.2", features = ["quinn"] }
+tokio = { version = "1.54", features = ["rt-multi-thread", "time", "sync", "macros"] }
+serde.workspace = true
+postcard.workspace = true
+ss13_world = { workspace = true, optional = true }
+
+[dev-dependencies]
+ss13_world.workspace = true
+
+[features]
+client = []
+server = ["dep:ss13_world"]
+
+[[example]]
+name = "headless_client"
+required-features = ["client"]
+
+[lints]
+workspace = true
+
+[[test]]
+name = "replication_load"
+required-features = ["client", "server"]

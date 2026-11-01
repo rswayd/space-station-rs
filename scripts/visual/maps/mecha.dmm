@@ -1,0 +1,17 @@
+"w" = (/turf/closed/wall,/area/station/science/robotics/lab)
+"f" = (/turf/open/floor/iron,/area/station/science/robotics/lab)
+"s" = (/obj/effect/landmark/start/assistant,/turf/open/floor/iron,/area/station/science/robotics/lab)
+"R" = (/obj/vehicle/sealed/mecha/ripley,/turf/open/floor/iron,/area/station/science/robotics/lab)
+"O" = (/obj/vehicle/sealed/mecha/odysseus,/turf/open/floor/iron,/area/station/science/robotics/lab)
+"F" = (/obj/machinery/mecha_part_fabricator,/turf/open/floor/iron,/area/station/science/robotics/lab)
+"C" = (/obj/structure/closet/crate,/turf/open/floor/iron,/area/station/science/robotics/lab)
+
+(1,1,1) = {"
+wwwwwwwwwwwww
+wfffffffffffw
+wfFffffffOffw
+wffffsRffffCw
+wfffffffffffw
+wfffffffffffw
+wwwwwwwwwwwww
+"}

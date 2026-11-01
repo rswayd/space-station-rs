@@ -1,0 +1,22 @@
+# See nukeop_bomb.txt. This operative stands at the infiltrator's console (9,22) and flies the
+# shuttle to MetaStation's `syndicate_nw` dock: the ShuttleConsole window, then the station
+# outside after ignition (5.5 s) and transit (10 s).
+# spawn: 9,21,4
+wait_connected timeout=120
+wait_until controlled timeout=60
+wait_until chat "Код ядерной аутентификации" timeout=30
+wait_secs 3
+tap Q
+wait_secs 0.3
+tap X
+wait_secs 0.3
+tap Q
+wait_secs 0.5
+click_tile 0 1
+wait_secs 2
+screenshot "nukeop_console.png"
+click_ui "Depart"
+wait_secs 20
+screenshot "nukeop_docked.png"
+log_state
+quit

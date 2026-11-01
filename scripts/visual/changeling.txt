@@ -1,0 +1,43 @@
+# Run with SS13_DEV_TRAITOR=changeling and changeling_victim.txt on the arena map:
+#   SS13_LIGHTING=0 SS13_MAP=$PWD/scripts/visual/maps/arena.dmm SS13_DEV_TRAITOR=changeling \
+#       scripts/visual-check.sh scripts/visual/changeling.txt scripts/visual/changeling_victim.txt
+# Both joining bodies become changelings. The first: the AntagInfoChangeling panel, the chemical
+# counter on the left edge and the action row; the cellular emporium buying the arm blade; an
+# aggressive grab on the second player and the 45 s absorption; the transform list, then the
+# changeling transformed into the victim, next to the husk.
+# spawn: 10,8
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_until chat "Вы - Генокрад." timeout=30
+wait_secs 3
+screenshot "changeling_info.png"
+click_ui "action: Cellular Emporium"
+wait_secs 1.5
+click_ui "evolve: Arm Blade"
+wait_secs 1
+screenshot "changeling_emporium.png"
+click_ui ""           # the windows' close buttons (Font Awesome `times`)
+wait_secs 0.5
+click_ui ""
+wait_secs 0.5
+log_state
+key_down Ctrl
+click_tile 1 0
+key_up Ctrl
+wait_until chat "пассивно хватаете" timeout=10
+wait_secs 1.2
+key_down Ctrl
+click_tile 1 0
+key_up Ctrl
+wait_until chat "агрессивно хватаете" timeout=10
+click_ui "action: Absorb DNA"
+wait_until chat "We have absorbed" timeout=60
+log_state
+click_ui "action: Transform"
+wait_secs 1.5
+screenshot "changeling_transform_list.png"
+click_ui "list item 2"      # the victim's profile (the own one is first)
+wait_secs 2
+screenshot "changeling_transformed.png"
+log_state
+quit

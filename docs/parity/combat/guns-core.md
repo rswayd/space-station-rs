@@ -1,0 +1,47 @@
+# Огнестрел: общая механика
+Как стреляет любое `/obj/item/gun`: выстрел, разброс, очереди, отдача, обвесы. Семейства оружия — в [guns-ballistic.md](guns-ballistic.md), [guns-energy.md](guns-energy.md), [guns-special.md](guns-special.md). Огнестрел в ss13-rs: `crates/ss13_game/src/guns.rs`, снаряды — `crates/ss13_game/src/projectile.rs`.
+
+### Выстрел
+Клик с оружием по дальней цели (или в упор) стреляет: проверка бойка (`firing_pin`), `can_shoot`, затем гильза создаёт снаряд, летящий в цель с разбросом; звук, вспышка, сообщение; выстрел в упор не промахивается.
+
+- **Код:** [`/obj/item/gun`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/projectiles/gun.dm#L5), [`proc/fire_gun()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/projectiles/gun.dm#L396), [`proc/process_fire()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/projectiles/gun.dm#L565), [`proc/can_shoot()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/projectiles/gun.dm#L227), [`proc/shoot_live_shot()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/projectiles/gun.dm#L258)
+- **BandaStation:** [`modular_bandastation/weapon/code/ranged/overrides/ballistic_master.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/weapon/code/ranged/overrides/ballistic_master.dm#L1) — правки параметров оружия форка
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/guns.rs`: выстрел по клику вдаль и в упор по мобу с точностью до пикселя клика (`ICON_X`/`ICON_Y`, сервер ограничивает смещение тайлом), боёк, пустой щелчок, `fire_delay`, `CLICK_CD_RANGE`, `WEAPON_HEAVY` (нужны обе руки), сообщения; без звуков и вспышки
+
+### Разброс, отдача и стрельба с двух рук
+Разброс (`spread`) растёт при стрельбе с двух рук и без обеих рук на двуручном оружии; отдача трясёт камеру; оружие в обеих руках стреляет по очереди (akimbo).
+
+- **Код:** [`proc/process_fire()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/projectiles/gun.dm#L565), [`proc/fire_sounds()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/projectiles/gun.dm#L242)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/guns.rs`: `spread` оружия, `variance`/`randomspread` гильзы, разброс очереди (умный и случайный), стрельба с двух рук (лёгкие стволы во второй руке стреляют через децисекунду, `dual_wield_spread` с `AKIMBO_PENALTY_SCALING`); отдача `recoil`/`min_recoil` толкает камеру (`crates/ss13_game/src/recoil.rs`, `recoil_camera`); нет звуков выстрела (в проекте нет звука), настройки `min_recoil_multiplier`
+
+### Очереди и автоматический огонь
+`burst_size` даёт очередь из нескольких выстрелов; компонент `automatic_fire` — стрельба при зажатой кнопке; переключение режимов огня.
+
+- **Код:** [`proc/process_burst()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/projectiles/gun.dm#L495), [`/datum/component/automatic_fire`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/fullauto.dm#L4)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/guns.rs`: очередь `burst_size`/`burst_delay` (C-20r); нет переключения режимов и автоогня
+
+### Самоубийство из оружия
+Выстрел себе в голову в упор с задержкой (`handle_suicide`) — мгновенная смерть.
+
+- **Код:** [`proc/handle_suicide()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/projectiles/gun.dm#L681)
+- **Статус в ss13-rs:** ❌ нет
+
+### Обвесы: фонарь, глушитель, штык, прицел
+Подствольный фонарь (`seclite_attachable`), глушитель (тихие выстрелы), штык (ближний бой оружием), оптический прицел (`scope`, дальний обзор).
+
+- **Код:** [`/datum/component/seclite_attachable`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/seclight_attachable.dm#L5), [`/obj/item/suppressor`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/projectiles/guns/ballistic.dm#L927), [`proc/install_suppressor()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/projectiles/guns/ballistic.dm#L653), [`/datum/component/bayonet_attachable`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/bayonet_attachable.dm#L5), [`/datum/component/scope`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/scope.dm#L5)
+- **Статус в ss13-rs:** ❌ нет
+
+### Счётчик патронов на HUD (BandaStation)
+Модпак форка: при оружии в руке на экране показывается счётчик патронов/заряда и режим огня.
+
+- **Код:** [`/datum/component/gunhud`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/gunhud/code/gunhud_component.dm#L1)
+- **BandaStation:** [`modular_bandastation/gunhud/code/gunhud_component.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/gunhud/code/gunhud_component.dm#L1) — весь механизм
+- **Статус в ss13-rs:** ❌ нет
+
+### Оружейные стойки и маяки выбора оружия (BandaStation)
+Форк добавляет оружейные стойки для арсенала (с наполненными спавнерами) и маяки выбора табельного оружия для СБ, ГСБ и блюшилда; кобуры с быстрым выхватыванием.
+
+- **Код:** [`/obj/structure/rack/gunrack`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/weapon/code/gun_rack.dm#L1), [`/obj/item/choice_beacon/weapon`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/weapon/code/ranged/weapon_choice.dm#L1), [`proc/toggle_holster()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/weapon/code/ranged/quik_accessory.dm#L1)
+- **BandaStation:** [`modular_bandastation/weapon/code/ranged/weapon_choice.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/weapon/code/ranged/weapon_choice.dm#L1) — маяки выбора оружия
+- **Статус в ss13-rs:** ❌ нет

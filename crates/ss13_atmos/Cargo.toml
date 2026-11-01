@@ -1,0 +1,15 @@
+[package]
+name = "ss13_atmos"
+description = "Tile atmospherics (tg LINDA): gas mixtures, active turfs, excited groups."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+ss13_shared.workspace = true
+ss13_world.workspace = true
+bevy = { workspace = true, features = ["std", "multi_threaded", "bevy_log"] }
+
+[lints]
+workspace = true

@@ -1,0 +1,13 @@
+"w" = (/turf/closed/wall,/area/centcom/central_command_areas/fore)
+"f" = (/turf/open/floor/iron,/area/centcom/central_command_areas/fore)
+"F" = (/obj/machinery/mecha_part_fabricator/maint,/turf/open/floor/iron,/area/centcom/central_command_areas/fore)
+"R" = (/obj/vehicle/sealed/mecha/ripley,/turf/open/floor/iron,/area/centcom/central_command_areas/fore)
+"C" = (/obj/structure/closet/crate,/turf/open/floor/iron,/area/centcom/central_command_areas/fore)
+
+(1,1,1) = {"
+wwwwwwwwwww
+wfFfffffffw
+wfffRfffCfw
+wfffffffffw
+wwwwwwwwwww
+"}

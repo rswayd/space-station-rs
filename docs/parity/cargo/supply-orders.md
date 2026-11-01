@@ -1,0 +1,83 @@
+# Заказы снабжения и шаттл карго
+Как станция заказывает грузы у ЦК: консоли, наборы, шаттл снабжения, экспресс-доставка капсулами.
+
+### Консоль снабжения (Supply console)
+Основная консоль карго: каталог наборов по группам, корзина, отправка/вызов шаттла, одобрение и отклонение запросов, приватные заказы за личный счёт, займ шаттла ЦК (shuttle loan). Цена заказа списывается с карго-бюджета или с личного счёта заказчика.
+
+- **Код:** [`/obj/machinery/computer/cargo`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/orderconsole.dm#L1), [`ui_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/orderconsole.dm#L375), [`add_item()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/orderconsole.dm#L219); tgui: [`Cargo/`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/Cargo)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/cargo/console.rs`, `crates/ss13_game/src/cargo/client.rs` (tgui `Cargo`: статус, каталог по группам, корзина, запросы с одобрением/отказом, «Купить лично», отправка шаттла): проверки в момент действия; `// shortcut:` нет поиска и ввода количества, емага и взломанных плат
+
+### Консоль запросов снабжения (Request console)
+Упрощённая консоль `/obj/machinery/computer/cargo/request`: любой член экипажа может только запросить набор, оплату и отправку делает карго. Запросы видны в основной консоли.
+
+- **Код:** [`/obj/machinery/computer/cargo/request`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/orderconsole.dm#L39); tgui: [`Cargo/`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/Cargo)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/cargo/console.rs`: запросы с причиной, сервер отказывает в отправке, одобрении и правке корзины; `// shortcut:` нет запросов с бюджета отдела и объявления запроса в канал снабжения
+
+_«Заказы через ПДА/компьютеры (NTOS Cargo, Budget orders)» описано в [../comms/ntos-apps.md](../comms/ntos-apps.md)._
+
+### Наборы снабжения (supply packs)
+Около 400 `/datum/supply_pack` в группах: аварийные, инженерия, исследование, общие, импорт, живность, материалы, медицина, органика (еда/семена), наука, безопасность и арсенал (требует доступа, ящик с замком), сервис, костюмы/игрушки, рестоки вендоматов. У набора цена, доступ, тип ящика, флаги (`ORDER_CONTRABAND`, `ORDER_SPECIAL`, `ORDER_GOODY`).
+
+- **Код:** [`/datum/supply_pack`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/packs/_packs.dm#L1), [`generate()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/packs/_packs.dm#L74), [`packs/`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/packs), [`/datum/supply_pack/security/armory`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/packs/security.dm#L186)
+- **BandaStation:** [`modular_bandastation/balance/code/supply_packs.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/balance/code/supply_packs.dm#L1) — всем наборам `special_pod` = телепорт-капсула; дополнительные наборы: [`weapon/code/ranged/supply_packs.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/weapon/code/ranged/supply_packs.dm#L1), [`mobs/code/supplypacks/livestock_pack_animals.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/mobs/code/supplypacks/livestock_pack_animals.dm#L5) (собаки, кошки, лисы), [`augmentation_preferences/.../supply_packs.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/augmentation_preferences/code/body_modifications/supply_packs.dm#L1) (протезы), [`objects/code/items/consumables/supply_packs.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/items/consumables/supply_packs.dm#L1) (квас, контрабанда), [`id_stickers/code/supply_packs.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/id_stickers/code/supply_packs.dm#L1); правки цен и содержимого маркерами, напр. [`packs/imports.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/packs/imports.dm#L224), [`packs/science.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/packs/science.dm#L125), [`packs/medical.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/packs/medical.dm#L20)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload/src/cargo.rs`, `crates/ss13_game/src/cargo/supply.rs`: все `/datum/supply_pack` с содержимым, ценой, ящиком и доступом из DM; наборы со своим `fill()`/`generate()` (случайные, живность), контрабанда и емаг-наборы не предлагаются
+
+### Мелкие товары (goodies)
+`/datum/supply_pack/goody`: одиночные предметы (оружие, аптечки, перчатки) без ящика, покупаются только частным заказом и приходят в общей коробке.
+
+- **Код:** [`/datum/supply_pack/goody`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/goodies.dm#L2)
+- **BandaStation:** [`code/modules/cargo/goodies.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/goodies.dm#L91) — кобуры-аксессуары вместо поясных
+- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/cargo/supply.rs`: `// shortcut:` goodies (личные локбоксы) не перенесены
+
+### Контрабанда и взлом консоли снабжения
+Емаг (или мультитул на плате) открывает в консоли контрабандные и особые наборы (`contraband = TRUE`).
+
+- **Код:** [`/obj/machinery/computer/cargo/emag_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/orderconsole.dm#L55)
+- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/cargo/console.rs`: `// shortcut:` нет емага и взломанных плат
+
+### Шаттл снабжения: покупка и продажа
+`/obj/docking_port/mobile/supply`: при прибытии на станцию привозит оплаченные заказы в ящиках с манифестами, при отлёте к ЦК продаёт всё в своей зоне (см. [exports-bounties.md](exports-bounties.md)) и почту везёт обратно. Живых существ, ядерный диск и прочее из чёрного списка шаттл не берёт.
+
+- **Код:** [`/obj/docking_port/mobile/supply`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/mobile_port/variants/supply.dm#L45), [`buy()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/mobile_port/variants/supply.dm#L158), [`sell()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/mobile_port/variants/supply.dm#L307), [`check_blacklist()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/mobile_port/variants/supply.dm#L85)
+- **BandaStation:** [`supply.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/mobile_port/variants/supply.dm#L109) — запрещённые предметы возвращаются телепорт-капсулой вместо ЦК-капсулы
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/cargo/supply.rs` (`request`, `buy`, `sell`): шаблон `cargo` из json карты на своём уровне вместо ЦК, 5.5 с запуск, 60 с перелёт; покупка за бюджет карго (личные ×1.1 со счёта покупателя), ящики с доступом набора и манифестом; продажа всего незакреплённого на ЦК с эластичностью цен; не улетает с живыми на борту; `// shortcut:` нет заказов отделов, почты, продуктов повара, займов, ошибок манифеста, ящиков с привязкой к счёту
+
+### Заказ, манифест и запрос на бумаге
+`/datum/supply_order` — один заказ (кто, за чей счёт, набор). Ящик приходит с манифестом (`manifest`), который можно проштамповать «одобрено/отклонено» и продать; ошибочные манифесты штрафуются. Бумажная `requisition`.
+
+- **Код:** [`/datum/supply_order`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/order.dm#L44), [`/obj/item/paper/fluff/jobs/cargo/manifest`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/order.dm#L12), [`/obj/item/paper/requisition`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/order.dm#L18)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/cargo/supply.rs` (`generate`): заказ с номером, манифест внутри ящика (текст — описание предмета); `// shortcut:` бумажных заявок, ошибок манифеста и штампов нет
+
+### Купоны
+Купоны со скидкой на конкретный набор (приходят по почте или через NTOS Coupon Master по кодам); «проклятый» купон.
+
+- **Код:** [`/obj/item/coupon`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/coupon.dm#L48), [`/datum/coupon_code`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/coupon.dm#L2), [`/datum/computer_file/program/coupon`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/modular_computers/file_system/programs/coupon.dm#L5); tgui: [`NtosCouponMaster.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/NtosCouponMaster.tsx)
+- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/cargo/supply.rs`: `// shortcut:` купоны не перенесены
+
+### Экспресс-консоль снабжения и маяк
+Экспресс-консоль доставляет заказ капсулой прямо на станцию (в карго или к привязанному маяку снабжения) за наценку; емаг даёт случайную точку посадки. Маяк `supplypod_beacon` привязывается к консоли.
+
+- **Код:** [`/obj/machinery/computer/cargo/express`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/expressconsole.dm#L4), [`ui_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/expressconsole.dm#L119), [`/obj/item/supplypod_beacon`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/supplypod_beacon.dm#L1); tgui: [`CargoExpress.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/CargoExpress.tsx)
+- **Статус в ss13-rs:** ❌ нет
+
+### Капсулы снабжения (supply pods)
+Падающая с неба капсула-шкаф: тень-предупреждение, удар при посадке (урон, взрыв по настройке), открытие, возврат пустой. Стили капсул (обычная, блюспейс, ЦК, синдикат и т.д.).
+
+- **Код:** [`/obj/structure/closet/supplypod`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/supplypod.dm#L3), [`open_pod()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/supplypod.dm#L383), [`set_style()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/supplypod.dm#L170)
+- **BandaStation:** [`modular_bandastation/aesthetics/supply_pods/code/supply_pods.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/aesthetics/supply_pods/code/supply_pods.dm#L1) — `supplypod/teleporter`: портал без взрыва и дыма, используется для всех доставок форка
+- **Статус в ss13-rs:** ❌ нет
+
+### Админский запуск капсул (CentCom Pod Launcher)
+Админ-инструмент: выбрать предметы/мобов, стиль, урон, взрыв, звук и обстрелять точку капсулами.
+
+- **Код:** [`/datum/centcom_podlauncher`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/centcom_podlauncher.dm#L24), [`launch()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/centcom_podlauncher.dm#L715); tgui: [`CentcomPodLauncher/`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/CentcomPodLauncher)
+- **Статус в ss13-rs:** ❌ нет
+
+_«Займ шаттла снабжения (shuttle loan)» описано в [../events/crew-events.md](../events/crew-events.md)._
+
+### Консоли заказа товаров (ProduceConsole)
+Общая консоль `order_console`: каталог за кредиты или очки, обычная доставка шаттлом или экспресс-капсулой с наценкой. Подтипы: шахтёрский вендор (за шахтёрские очки), консоль корабля големов; консоль повара — см. ../kitchen/, битраннерская — см. ../science/.
+
+- **Код:** [`/obj/machinery/computer/order_console`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/computer/orders/order_computer/order_computer.dm#L4), [`purchase_items()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/computer/orders/order_computer/order_computer.dm#L224), [`order_items/`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/computer/orders/order_items); tgui: [`ProduceConsole.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/ProduceConsole.tsx)
+- **BandaStation:** [`order_computer.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/computer/orders/order_computer/order_computer.dm#L210) — экспресс-доставка телепорт-капсулой; [`modular_bandastation/orderables/code/orderables.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/orderables/code/orderables.dm#L1) — говядина и свинина в каталоге повара
+- **Статус в ss13-rs:** ❌ нет

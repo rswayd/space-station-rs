@@ -1,0 +1,27 @@
+# Walking into walls, picking an item up and dropping it.
+map walk_pickup.dmm
+bot alice 3,3
+
+test walk
+  alice move E
+  expect alice.pos == 4,3
+  expect mob(alice).pos == 4,3
+  alice move N S
+  expect alice.pos == 4,3
+
+test blocked_by_wall
+  alice move W W W
+  expect alice.pos == 2,3
+  alice move E E
+  expect mob(alice).pos == 4,3
+
+test pick_up
+  alice click 5,3 /obj/item/screwdriver
+  until mob(alice).held ~ /obj/item/screwdriver
+  until alice.hands[0] exists
+  expect tile(5,3).entities[].path !~ screwdriver
+
+test drop
+  alice drop
+  until tile(4,3).entities[].path ~ /obj/item/screwdriver
+  expect alice.hands[0] missing

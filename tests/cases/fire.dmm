@@ -1,0 +1,20 @@
+"w" = (/turf/closed/wall,/area/centcom/central_command_areas/engine)
+"f" = (/turf/open/floor/iron,/area/centcom/central_command_areas/engine)
+"s" = (/turf/open/floor/iron,/area/centcom/central_command_areas/engine)
+"W" = (/obj/structure/grille,/obj/structure/window/reinforced/fulltile,/turf/open/floor/plating,/area/centcom/central_command_areas/engine)
+"p" = (/turf/open/floor/iron{initial_gas_mix = "o2=22;n2=82;plasma=12;TEMP=293.15"},/area/centcom/central_command_areas/engine)
+"L" = (/obj/item/weldingtool,/turf/open/floor/iron{initial_gas_mix = "o2=22;n2=82;plasma=12;TEMP=293.15"},/area/centcom/central_command_areas/engine)
+"t" = (/obj/structure/table/wood,/turf/open/floor/iron{initial_gas_mix = "o2=22;n2=82;plasma=12;TEMP=293.15"},/area/centcom/central_command_areas/engine)
+"S" = (/turf/open/space/basic,/area/space)
+
+(1,1,1) = {"
+SSSSSSSSSSSSSSS
+SwwwwwwwwwwwwwS
+SwfffWppppppwwS
+SwfffWpptppppwS
+SwfsfWppppLppwS
+SwfffWppppppwwS
+SwfffWppptpppwS
+SwwwwwwwwwwwwwS
+SSSSSSSSSSSSSSS
+"}

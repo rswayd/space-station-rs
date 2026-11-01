@@ -1,0 +1,36 @@
+# R&D: a scientist unlocks the (locked) R&D console with her access, waits for the server's
+# points and researches Biological Scanning; iron and glass go into the science protolathe (the
+# ore silo's storage) and it prints the newly researched gene scanner.
+map research.dmm
+time_scale 10
+bot alice 4,3 job "Scientist" give /obj/item/stack/sheet/iron/fifty give /obj/item/stack/sheet/glass/fifty
+
+test insert_iron_and_glass
+  alice click 4,4 /obj/machinery/rnd/production
+  alice swap
+  alice click 4,4 /obj/machinery/rnd/production
+  until mob(alice).held[0] missing
+  expect mob(alice).held[1] missing
+  until alice.chat ~ "were added to department protolathe (Science)."
+
+test research_a_node
+  alice click 3,4 /obj/machinery/computer/rdconsole
+  until alice.windows.Techweb exists
+  expect alice.windows.Techweb.data.locked == true
+  alice act Techweb researchNode node_path=/datum/techweb_node/bio_scan
+  until alice.chat ~ "Консоль заблокирована"
+  alice act Techweb toggleLock
+  until alice.windows.Techweb.data.locked == false
+  until alice.windows.Techweb.data.points[0][1] >= 40 timeout=20
+  alice act Techweb researchNode node_path=/datum/techweb_node/bio_scan
+  until alice.chat ~ "Успешно исследовано"
+  alice close Techweb
+
+test print_the_researched_design
+  alice click 4,4 /obj/machinery/rnd/production
+  until alice.windows.Fabricator exists
+  expect alice.windows.Fabricator.data.materials ~ 5000
+  expect alice.windows.Fabricator.data.researched.len > 0
+  alice act Fabricator build design_path=/datum/design/genescanner amount=1
+  until tile(4,4).entities[].path ~ /obj/item/sequence_scanner timeout=10
+  until alice.windows.Fabricator.data.materials ~ 4950

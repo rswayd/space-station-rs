@@ -1,0 +1,43 @@
+# Exosuits: iron into the (maintenance) exosuit fabricator, which prints a Ripley chassis from
+# its queue; a clamp goes on the mapped Ripley's left arm; alice climbs in by dragging herself
+# onto it, drives 3 tiles east (the first step turns it, every attempt costs the cell), clamps
+# the crate into the cargo compartment and ejects.
+map mecha.dmm
+time_scale 10
+bot alice 4,3 give /obj/item/stack/sheet/iron/fifty give /obj/item/mecha_parts/mecha_equipment/hydraulic_clamp
+
+test print_a_chassis
+  alice click 3,4 /obj/machinery/mecha_part_fabricator
+  until mob(alice).held[0] missing
+  until alice.chat ~ "were added to"
+  alice swap
+  alice click 5,3 /obj/vehicle/sealed/mecha
+  until obj(5,3,/obj/vehicle/sealed/mecha).mech.l_arm == true
+  alice click 3,4 /obj/machinery/mecha_part_fabricator
+  until alice.windows.ExosuitFabricator exists
+  expect alice.windows.ExosuitFabricator.data.materials ~ 5000
+  alice act ExosuitFabricator build designs=/datum/design/ripley_chassis now=1
+  until alice.windows.ExosuitFabricator.data.processing == true
+  until tile(3,3).entities[].path ~ /obj/item/mecha_parts/chassis/ripley timeout=10
+  until alice.chat ~ "is now complete"
+  alice close ExosuitFabricator
+
+test drive_three_tiles
+  alice drag self 5,3 /obj/vehicle/sealed/mecha
+  until mob(alice).pilot exists
+  expect mob(alice).pos == 5,3
+  save charge obj(5,3,/obj/vehicle/sealed/mecha).mech.charge
+  alice move E E E E
+  until mob(alice).pos == 8,3
+  expect obj(8,3,/obj/vehicle/sealed/mecha).mech.charge == $charge-320
+  expect obj(8,3,/obj/vehicle/sealed/mecha).mech.facing == "East"
+
+test clamp_the_crate_and_eject
+  alice click 9,3 /obj/structure/closet/crate
+  until obj(8,3,/obj/vehicle/sealed/mecha).mech.cargo == 1
+  expect tile(9,3).entities[].path !~ /obj/structure/closet/crate
+  until alice.chat ~ "successfully loaded"
+  alice resist
+  until mob(alice).pilot missing
+  expect mob(alice).pos == 8,3
+  expect obj(8,3,/obj/vehicle/sealed/mecha).mech.occupied == false

@@ -1,0 +1,11 @@
+"w" = (/turf/closed/wall,/area/centcom/central_command_areas/bar)
+"f" = (/turf/open/floor/iron,/area/centcom/central_command_areas/bar)
+"V" = (/obj/machinery/vending/cola,/turf/open/floor/iron,/area/centcom/central_command_areas/bar)
+
+(1,1,1) = {"
+wwwwwwww
+wffffffw
+wffffVfw
+wffffffw
+wwwwwwww
+"}

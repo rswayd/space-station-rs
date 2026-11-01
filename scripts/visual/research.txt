@@ -1,0 +1,27 @@
+# MetaStation's science lab, between the R&D console (125,104, north) and the science
+# protolathe (125,102, south): the Fabricator window, then the Techweb window; after the servers
+# earned 40 points, Biological Scanning is researched and its details shown.
+# spawn: 125,103
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_until entities 500 timeout=30
+wait_secs 1
+click_tile 0 -1
+wait_secs 2
+screenshot "fabricator.png"
+click_ui ""           # the window's close button (Font Awesome `times`)
+wait_secs 1
+click_tile 0 1
+wait_secs 2
+log_state
+screenshot "techweb.png"
+wait_secs 38
+click_ui "research: Биологическое сканирование"
+wait_until chat "Успешно исследовано" timeout=20
+wait_secs 2
+screenshot "techweb_researched.png"
+click_ui "Researched"
+wait_secs 1.5
+screenshot "techweb_tab_researched.png"
+log_state
+quit

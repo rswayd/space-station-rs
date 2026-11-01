@@ -1,0 +1,54 @@
+# The blood cult (tg `/datum/antagonist/cult`): alice, bob and dave are made cultists (the bot
+# framework skips the lobby, so the roundstart ruleset is covered by
+# `crates/ss13_game/tests/cult.rs`). carol is a security officer set up first: mindshielded, so
+# the only unconvertible crew member and the sacrifice target. The cultists' panel and buttons;
+# Communion reaches the cult and not carol; the dagger refuses to draw off the station (CentCom
+# has no `CULT_PERMITTED`); on an Offer rune (spawned by an admin) two cultists cannot take carol,
+# three sacrifice her.
+map cult.dmm
+time_scale 10
+bot carol 7,4 job "Security Officer"
+bot alice 3,3 antag cult give /obj/item/melee/cultblade/dagger
+bot bob 4,3 antag cult
+bot dave 2,2 antag cult
+spawn /obj/effect/rune/convert 6,3
+
+test cultists_have_their_panel_and_buttons
+  until alice.windows.AntagInfoGeneric exists
+  expect alice.chat_all ~ "Вы - Культист."
+  expect alice.chat_all ~ "Sacrifice "
+  until alice.windows.ActionButtons exists
+  expect alice.windows.ActionButtons.data.buttons[0].id == "cult_comm"
+  expect alice.windows.ActionButtons.data.buttons[1].id == "cult_blood_magic"
+  until bob.windows.AntagInfoGeneric exists
+  expect carol.windows.AntagInfoGeneric missing
+
+test communion_is_only_for_the_cult
+  alice act ActionButtons trigger id=cult_comm
+  until alice.windows.TextInputModal exists
+  alice act TextInputModal submit "entry=Слава Геометру"
+  until bob.chat ~ ": Слава Геометру"
+  until dave.chat ~ ": Слава Геометру"
+  wait 0.3
+  expect carol.chat !~ "Слава Геометру"
+
+test the_dagger_needs_the_station
+  alice slot left_hand
+  until alice.chat ~ "The veil is not weak enough here."
+
+test two_cannot_take_the_mindshielded_target
+  carol teleport 6,3
+  alice teleport 5,3
+  bob teleport 7,3
+  alice swap
+  alice click 6,3 /obj/effect/rune
+  until alice.chat ~ "is too greatly linked to the world! You need three acolytes!"
+  expect carol.windows.AntagInfoGeneric missing
+  expect tile(6,3).entities[].path ~ "/mob/living/carbon/human"
+
+test three_sacrifice_the_target
+  dave teleport 6,4
+  wait 1
+  alice click 6,3 /obj/effect/rune
+  until alice.chat ~ "This is the one I desire! You have done well."
+  until tile(6,3).entities[].path ~ "/obj/item/card/id"

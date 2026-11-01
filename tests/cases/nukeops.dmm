@@ -1,0 +1,12 @@
+"w" = (/turf/closed/wall,/area/station/command/vault)
+"f" = (/turf/open/floor/iron,/area/station/command/vault)
+"B" = (/obj/machinery/nuclearbomb/syndicate,/turf/open/floor/iron,/area/station/command/vault)
+"D" = (/obj/item/disk/nuclear,/turf/open/floor/iron,/area/station/command/vault)
+
+(1,1,1) = {"
+wwwwwww
+wfffffw
+wfDfBfw
+wfffffw
+wwwwwww
+"}

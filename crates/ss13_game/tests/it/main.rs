@@ -1,0 +1,51 @@
+//! All integration tests of `ss13_game` in one binary: one link of Bevy and the game instead of
+//! one per file (build time and target/ size). Run one area with `cargo nextest run -p ss13_game
+//! --all-features -E 'test(/^cult::/)'`.
+
+mod atmos_machinery;
+mod border;
+mod botany;
+mod breath;
+mod brothers;
+mod cargo;
+mod changeling;
+mod chem;
+mod combat;
+mod construction;
+mod cult;
+mod disposals;
+mod doors;
+mod drag;
+mod engine;
+mod fire;
+mod food;
+mod genetics;
+mod guns;
+mod heretic;
+mod interact;
+mod inventory;
+mod janitor;
+mod jobs;
+mod los;
+mod mecha;
+mod medical;
+mod medicine;
+mod mobs;
+mod nukeops;
+mod pda;
+mod play;
+mod power;
+mod prediction;
+mod radio;
+mod records;
+mod revolution;
+mod science;
+mod security;
+mod shuttle;
+mod silicon;
+mod sound;
+mod storage;
+mod traitor;
+mod vampire;
+mod vending;
+mod wires;

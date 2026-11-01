@@ -1,0 +1,22 @@
+# PDA, receiving side (run with pda_sender.txt): take the PDA from the belt, use it in hand (the
+# NtosMain menu), open the messenger, wait for the sender's message (chat line and ring) and open
+# the conversation.
+# spawn: 104,72
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 1
+click_ui "hud_belt"         # empty hand + the PDA on the belt: into the hand
+wait_secs 0.5
+click_ui "hud_left_hand"    # attack_self: turns on, NtOS opens
+wait_until chat "включая" timeout=10
+wait_secs 1
+screenshot "ntos_main.png"
+click_ui "Direct Messenger"
+wait_until chat "PDA message from" timeout=120
+wait_secs 1
+screenshot "messenger_contacts.png"
+click_ui "pda chat"         # the chat with the unread message
+wait_secs 1
+screenshot "messenger_chat.png"
+log_state
+quit

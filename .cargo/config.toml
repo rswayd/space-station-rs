@@ -1,0 +1,16 @@
+[target.x86_64-unknown-linux-gnu]
+linker = "clang"
+rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+
+# Always the whole workspace with all features: a narrower selection (`-p ss13_server -p
+# ss13_client`) resolves other features and rebuilds Bevy and the game next to the test artifacts.
+[alias]
+bins = "build --workspace --all-features --bins"
+lint = "clippy --workspace --all-targets --all-features -- -D warnings"
+nt = "nextest run --workspace --all-features"
+
+# The BYOND reference checkout (read-only input): a `BandaStation` directory next to this
+# workspace by default. Code falls back to it via `env!("SS13_SOURCE")`; an `SS13_SOURCE` already
+# set in the environment wins (cargo does not override it).
+[env]
+SS13_SOURCE = { value = "../BandaStation", relative = true }

@@ -1,0 +1,52 @@
+# The changeling (tg `/datum/antagonist/changeling`): alice is made a changeling (an admin's
+# "make antag"; the bot framework skips the lobby, so the roundstart ruleset is covered by
+# `crates/ss13_game/tests/changeling.rs`). Her panel, buttons and chemical counter; the hivemind
+# (`:g`); an aggressive grab on bob and three absorption stages husk him and store his profile;
+# the cellular emporium sells her gene stim, which she uses. Time runs 10x so the 45 s
+# absorption takes 4.5 s.
+map changeling.dmm
+time_scale 10
+bot alice 3,3 antag changeling
+bot bob 4,3
+
+test changeling_has_its_panel_and_buttons
+  until alice.windows.AntagInfoChangeling exists
+  expect alice.chat_all ~ "Вы - Генокрад."
+  expect alice.windows.AntagInfoChangeling.data.absorbed_dna == 1
+  until alice.windows.ActionButtons exists
+  expect alice.windows.ActionButtons.data.buttons[0].id == "cellular_emporium"
+  expect alice.windows.ActionButtons.data.buttons[1].id == "absorb_dna"
+  until alice.windows.ChangelingHud exists
+  expect alice.windows.ChangelingHud.data.chem_max == 75
+  expect bob.windows.AntagInfoChangeling missing
+
+test hivemind_is_only_for_changelings
+  alice say ":g Улей, слушай."
+  until alice.chat ~ ": Улей, слушай."
+  wait 0.3
+  expect bob.chat !~ "Улей"
+
+test absorb_husks_the_victim
+  alice click bob ctrl
+  until alice.pulling == true
+  wait 1.2
+  alice click bob ctrl
+  wait 0.3
+  alice act ActionButtons trigger id=absorb_dna
+  until alice.chat ~ "Это существо совместимо"
+  until mob(bob).husk == true timeout=20
+  expect mob(bob).stat == "Dead"
+  expect mob(alice).changeling.absorbed == 2
+  expect mob(alice).changeling.true_absorbs == 1
+  expect mob(alice).changeling.profiles.len == 2
+
+test emporium_sells_gene_stim
+  alice act ActionButtons trigger id=cellular_emporium
+  until alice.windows.CellularEmporium exists
+  expect alice.windows.CellularEmporium.static.abilities.len == 4
+  alice act CellularEmporium evolve path=/datum/action/changeling/adrenaline
+  until alice.windows.CellularEmporium.data.genetic_points_count == 8
+  until alice.windows.ActionButtons.data.buttons[-1].id == "adrenaline"
+  until mob(alice).changeling.chemicals >= 25 timeout=20
+  alice act ActionButtons trigger id=adrenaline
+  until alice.chat ~ "INVIGORATING"

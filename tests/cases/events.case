@@ -1,0 +1,25 @@
+# Random events forced as an admin would (`event`, the dev stand-in for Force Event): Grid Check
+# fails the room's APC; Communications Blackout silences the headsets. Exclusive: both act on
+# every station level of the server.
+exclusive
+map events.dmm
+bot alice 2,3
+bot bob 20,3
+timeout 15
+
+test grid_check_cuts_the_power
+  expect tile(3,3).area.powered[0] == true
+  event "Grid Check"
+  until tile(3,3).area.powered[0] == false
+  expect tile(3,3).area.powered[2] == false
+  until alice.chat ~ "Критический сбой системы питания"
+
+test communications_blackout_silences_headsets
+  alice say "; До сбоя"
+  until bob.chat ~ "До сбоя"
+  event "Communications Blackout"
+  # The event starts on the next SSevents fire (every 2 s).
+  wait 2.5
+  alice say "; Тишина в эфире"
+  wait 1.5
+  expect bob.chat !~ "Тишина в эфире"

@@ -1,0 +1,11 @@
+"w" = (/turf/closed/wall,/area/station/engineering/atmos/office)
+"f" = (/turf/open/floor/iron,/area/station/engineering/atmos/office)
+"A" = (/obj/machinery/power/apc/auto_name/directional/north,/turf/open/floor/iron,/area/station/engineering/atmos/office)
+
+(1,1,1) = {"
+wwwwwwwwwwwwwwwwwwwwwww
+wfAfffffffffffffffffffw
+wfffffffffffffffffffffw
+wfffffffffffffffffffffw
+wwwwwwwwwwwwwwwwwwwwwww
+"}

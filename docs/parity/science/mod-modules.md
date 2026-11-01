@@ -1,0 +1,71 @@
+# Модули MODsuit
+
+Модули MOD по отделам: пассивные, переключаемые, активные (с прицеливанием) и используемые; каждый требует сложность и заряд.
+
+### Базовый модуль
+Типы модулей (пассивный/переключаемый/выбираемый/используемый), сложность, потребление, кулдаун, требуемые части, закрепление на панели действий.
+
+- **Код:** [`/obj/item/mod/module`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/_module.dm#L2), [`activate()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/_module.dm#L149), [`on_select()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/_module.dm#L116)
+- **BandaStation:** [`_module.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/_module.dm#L417) — учёт видов (species) для модулей
+- **Статус в ss13-rs:** ❌ нет
+
+### Общие модули
+Хранилище (и блюспейс-хранилище), джетпак, джамп-джет, статус-ридаут, отверстие для рта, ЭМИ-щит, фонарь, диспенсер, longfall, терморегулятор, ДНК-замок, плазменный стабилизатор, стабилизатор шляпы, радио жестового языка, joint torsion, переработчик, рыболовная перчатка, амортизатор.
+
+- **Код:** [`storage`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_general.dm#L4), [`jetpack`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_general.dm#L93), [`dna_lock`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_general.dm#L608), [`recycler`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_general.dm#L814), [`storage/holding`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/module_holding.dm#L4)
+- **Статус в ss13-rs:** ❌ нет
+
+### Визоры
+HUD-визоры: медицинский, диагностический, СБ, мезонный, тепловизор, ночного видения.
+
+- **Код:** [`/obj/item/mod/module/visor`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_visor.dm#L4)
+- **Статус в ss13-rs:** ❌ нет
+
+### Инженерные модули
+Сварочная защита, T-ray сканер, магнитные ботинки, трос (tether), радиационная защита, конструктор (сканер чертежей), защита головы, распылитель.
+
+- **Код:** [`welding`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_engineering.dm#L4), [`magboot`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_engineering.dm#L80), [`tether`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_engineering.dm#L126), [`constructor`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_engineering.dm#L415)
+- **Статус в ss13-rs:** ❌ нет
+
+### Медицинские модули
+Анализатор здоровья, быстрый перенос, инжектор, органайзер (выстрел органами), дефибриллятор, thread ripper, хирургический процессор.
+
+- **Код:** [`health_analyzer`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_medical.dm#L8), [`defibrillator`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_medical.dm#L236), [`surgical_processor`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_medical.dm#L380)
+- **Статус в ss13-rs:** ❌ нет
+
+### Модули СБ
+Магнитная сбруя, перцовые наплечники, кобура, мегафон, захват преступника, гаситель снарядов, активный сонар, помощник стрельбы, блок толчков, быстрые наручники.
+
+- **Код:** [`magnetic_harness`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_security.dm#L4), [`holster`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_security.dm#L108), [`active_sonar`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_security.dm#L350), [`quick_cuff`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_security.dm#L592)
+- **Статус в ss13-rs:** ❌ нет
+
+### Модули снабжения и шахты
+GPS, клешня, бур, рудный мешок, гидравлическая рука погрузчика, коннектор утилизации, магнит, ash accretion, сфера (трансформация), candela spool.
+
+- **Код:** [`gps`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_supply.dm#L4), [`clamp`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_supply.dm#L26), [`drill`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_supply.dm#L132), [`sphere_transform`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_supply.dm#L587)
+- **Статус в ss13-rs:** ❌ нет
+
+### Научные модули и модули на ядрах аномалий
+Сканер реагентов (и продвинутый), кинезис (телекинез), антигравитация, телепортер — последние три требуют ядро аномалии.
+
+- **Код:** [`reagent_scanner`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_science.dm#L4), [`anomaly_locked/antigrav`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_science.dm#L54), [`anomaly_locked/teleporter`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_science.dm#L87), [`anomaly_locked/kinesis`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/module_kinesis.dm#L2)
+- **Статус в ss13-rs:** ❌ нет
+
+### Сервисные и «техобслуживающие» модули
+Велосипедный гудок, микроволновый луч, клоунская походка, самоочистка; springlock, загар, шарики, раздатчик бумаги, печать, атроцинатор (антигравитация вверх ногами).
+
+- **Код:** [`bikehorn`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_service.dm#L4), [`microwave_beam`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_service.dm#L30), [`springlock`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_maint.dm#L4), [`atrocinator`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_maint.dm#L317)
+- **BandaStation:** [`modules_maint.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_maint.dm#L397) — тише шаги атроцинатора; [`monitor_module.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/items/clothing/mod/modules/monitor_module.dm#L1) — модуль-монитор (с чертежом)
+- **Статус в ss13-rs:** ❌ нет
+
+### Модуль-поисковик (pathfinder)
+Имплант вызывает костюм, который сам приходит к владельцу.
+
+- **Код:** [`pathfinder`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/module_pathfinder.dm#L4)
+- **Статус в ss13-rs:** ❌ нет
+
+### Антаг-модули (синдикат, ниндзя, хроно)
+Энергощит, антимагия, нескользящие, огнемёт, силовой удар, хамелеон, сжатие пластин, деморализатор, инфильтратор, медлуч; ниндзя: стелс, хакер, возврат оружия, энергосеть, адреналин; хроно: замок, перемотка, остановка времени, прыжок по линии времени, TEM. (Подробнее — антагонисты.)
+
+- **Код:** [`energy_shield`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_antag.dm#L4), [`chameleon`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_antag.dm#L291), [`stealth`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_ninja.dm#L4), [`hacker`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_ninja.dm#L178), [`timestopper`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_timeline.dm#L101)
+- **Статус в ss13-rs:** ❌ нет

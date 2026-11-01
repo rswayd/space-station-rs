@@ -1,0 +1,36 @@
+[package]
+name = "ss13_bots"
+description = "Headless functional-test bots: real clients over the real transport, case files, a pool of in-process servers."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+ss13_shared.workspace = true
+ss13_net = { workspace = true, features = ["client", "server"] }
+ss13_game = { workspace = true, features = ["server", "testing"] }
+ss13_tgui = { workspace = true, features = ["server"] }
+ss13_chat = { workspace = true, features = ["server"] }
+ss13_debug = { workspace = true, features = ["server"] }
+ss13_admin = { workspace = true, features = ["server"] }
+ss13_world.workspace = true
+ss13_mapload.workspace = true
+ss13_proto.workspace = true
+ss13_atmos.workspace = true
+ss13_assets.workspace = true
+png.workspace = true
+bevy = { workspace = true, features = ["std", "bevy_log"] }
+serde.workspace = true
+serde_json = "1.0.154"
+anyhow.workspace = true
+
+[dev-dependencies]
+postcard.workspace = true
+
+[[bin]]
+name = "ss13-bots"
+path = "src/main.rs"
+
+[lints]
+workspace = true

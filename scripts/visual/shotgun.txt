@@ -1,0 +1,17 @@
+# Shotgun: on scripts/visual/maps/shotgun.dmm the player picks up the riot shotgun east of the
+# spawn and fires it at the west wall; screenshots of the six rubber pellets fanning out (variance
+# 15 degrees) and the view kicked back east by the recoil.
+# SS13_LIGHTING=0 SS13_MAP=$PWD/scripts/visual/maps/shotgun.dmm scripts/visual-check.sh scripts/visual/shotgun.txt
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 1
+click_tile 1 0
+wait_secs 0.5
+click_tile -8 0
+wait_secs 0.15
+screenshot "blast_1.png"
+wait_secs 0.15
+screenshot "blast_2.png"
+wait_secs 1.5
+log_state
+quit

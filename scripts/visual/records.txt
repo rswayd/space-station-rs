@@ -1,0 +1,60 @@
+# The ID console and the security records console (run as the head of personnel, see
+# docs/RUNNING.md "ID console and crew records"): the HoP's ID into the console, Plexagon Access
+# Management, log in, a blank card from the floor into the second slot, security access in a
+# common wildcard slot; then the security records console: log in, the HoP's record, a crime.
+# spawn: 4,4
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 1
+click_ui "hud_id"
+wait_secs 0.5
+click_tile -1 1
+wait_until chat "в слот карты" timeout=10
+click_tile 0 1
+wait_secs 0.5
+tap X
+click_tile -1 1
+wait_secs 1
+click_ui "Plexagon Access Management"
+wait_secs 0.5
+click_ui "card: login"
+wait_secs 0.5
+tap X
+wait_secs 1.5               # the window learns the card is in hand on its next update
+click_ui "card: target id"
+wait_until chat "дополнительной карты" timeout=10
+wait_secs 1
+click_ui "Common: 0/4"
+wait_secs 0.3
+click_ui "Security"
+wait_secs 0.3
+click_ui "access: security"
+wait_secs 0.3
+click_ui "access: brig"
+wait_secs 1
+screenshot "id_console.png"
+log_state
+click_ui "card: main id"
+wait_until chat "вытаскиваете" timeout=10
+click_ui "ntos: PC_exit"
+wait_secs 0.5
+click_ui "ntos: PC_shutdown"
+wait_secs 0.5
+tap X                       # the ID to the other hand: a computer opens for an empty hand
+click_tile 1 1
+wait_secs 1
+click_ui "records: login"
+wait_secs 0.5
+click_ui "records: record"
+wait_secs 0.5
+click_ui "crimes: tab 2"
+wait_secs 0.3
+click_ui "crime: name"
+type "Кража ID-карты"
+click_ui "crime: details"
+type "Унёс карту с пола у консоли"
+click_ui "crime: create"
+wait_secs 1
+screenshot "security_records.png"
+log_state
+quit

@@ -1,0 +1,14 @@
+"w" = (/turf/closed/wall,/area/centcom/central_command_areas/conference_room)
+"f" = (/turf/open/floor/iron,/area/centcom/central_command_areas/conference_room)
+"I" = (/obj/machinery/modular_computer/preset/id,/turf/open/floor/iron,/area/centcom/central_command_areas/conference_room)
+"R" = (/obj/machinery/computer/records/security,/turf/open/floor/iron,/area/centcom/central_command_areas/conference_room)
+"D" = (/obj/machinery/door/airlock/security{req_access = list("security")},/turf/open/floor/iron,/area/centcom/central_command_areas/conference_room)
+
+(1,1,1) = {"
+wwwwwwwwww
+wfIfRffwww
+wffffffwfw
+wffffffDfw
+wffffffwfw
+wwwwwwwwww
+"}

@@ -1,0 +1,25 @@
+// Roots of the hierarchy, like /atom and /obj in DM.
+[
+    (
+        id: "atom",
+        components: {
+            "name": ("thing"),
+            "icon": (file: "icons/misc.dmi", state: "unknown", layer: 2.0),
+        },
+    ),
+    (
+        id: "obj",
+        parent: "atom",
+        components: {
+            "icon": (layer: 3.0),
+        },
+    ),
+    (
+        id: "machinery",
+        parent: "obj",
+        components: {
+            "anchored": (),
+            "icon": (file: "icons/obj/machines.dmi"),
+        },
+    ),
+]

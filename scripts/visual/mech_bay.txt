@@ -1,0 +1,14 @@
+# The mech bay on `scripts/visual/maps/mech_bay.dmm` (fullbright, a CentCom area that needs no
+# power): the player clicks the mech bay power control console east of it; its window shows
+# the Ripley standing on the power port's tile and its cell. A cell charger stands west.
+#   SS13_LIGHTING=0 SS13_MAP=$PWD/scripts/visual/maps/mech_bay.dmm \
+#     SS13_ASSETS=$ASSETS scripts/visual-check.sh scripts/visual/mech_bay.txt
+# spawn: 3,3
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 2
+click_tile 1 0
+wait_secs 2
+log_state
+screenshot "mech_bay_console.png"
+quit

@@ -1,0 +1,19 @@
+[package]
+name = "ss13_ui_kit"
+description = "tgui-core primitives on bevy_ui, same names and props, tgui theme."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+bevy = { workspace = true, features = ["ui", "system_clipboard"] }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+# Screenshots in the gallery example are written as PNG.
+bevy = { workspace = true, features = ["ui", "png"] }
+# Same version Bevy 0.20 already pulls in; only used to pick the test font in editing tests.
+parley = { version = "0.11.1", default-features = false, features = ["std"] }

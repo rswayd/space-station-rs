@@ -1,0 +1,13 @@
+"w" = (/turf/closed/wall,/area/centcom/central_command_areas/supplypod)
+"f" = (/turf/open/floor/iron,/area/centcom/central_command_areas/supplypod)
+"K" = (/obj/structure/mop_bucket,/turf/open/floor/iron,/area/centcom/central_command_areas/supplypod)
+"M" = (/obj/item/mop,/turf/open/floor/iron,/area/centcom/central_command_areas/supplypod)
+"B" = (/obj/effect/decal/cleanable/blood,/turf/open/floor/iron,/area/centcom/central_command_areas/supplypod)
+
+(1,1,1) = {"
+wwwwww
+wfBffw
+wKfMfw
+wffffw
+wwwwww
+"}

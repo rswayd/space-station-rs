@@ -1,0 +1,13 @@
+"w" = (/turf/closed/wall,/area/centcom/central_command_areas/conference_room)
+"f" = (/turf/open/floor/iron,/area/centcom/central_command_areas/conference_room)
+"l" = (/obj/machinery/light/directional/north,/turf/open/floor/iron,/area/centcom/central_command_areas/conference_room)
+"o" = (/obj/structure/table/optable,/turf/open/floor/iron,/area/centcom/central_command_areas/conference_room)
+
+(1,1,1) = {"
+wwwwwwwww
+wfffllffw
+wfffofffw
+wfffffffw
+wfffffffw
+wwwwwwwww
+"}

@@ -1,0 +1,23 @@
+# Spawn, walk east with a held key, say something in Cyrillic; screenshots before and after.
+# spawn: 82,101
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 1                 # sprites and atlases settle
+screenshot "before.png"
+log_state
+key_down D
+wait_secs 0.9               # ~4 tiles at run speed
+key_up D
+key_down S
+wait_secs 0.5
+key_up S
+wait_secs 0.5               # glide ends
+screenshot "walked.png"
+click_ui "Сообщение"        # the say line's placeholder: focuses the field
+type "Привет, станция!"
+tap Enter
+wait_until chat "Привет, станция!" timeout=5
+wait_secs 0.3
+screenshot "said.png"
+log_state
+quit

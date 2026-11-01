@@ -1,0 +1,21 @@
+# Pour 10 hydrogen from a bottle into a beaker, then 10 nitrogen: 3 hydrogen + 1 nitrogen react
+# into ammonia (tg's step reaction) until the hydrogen runs out.
+map chem.dmm
+bot alice 3,3
+
+test pour
+  alice click 2,3 /obj/item/reagent_containers/cup/bottle/hydrogen
+  until mob(alice).held ~ hydrogen
+  alice click 4,3 /obj/item/reagent_containers/cup/beaker
+  until obj(4,3,/obj/item/reagent_containers/cup/beaker).reagents.list./datum/reagent/hydrogen == 10
+  until alice.chat ~ "Вы переливаете 10"
+
+test ammonia_forms
+  alice drop
+  alice click 3,4 /obj/item/reagent_containers/cup/bottle/nitrogen
+  until mob(alice).held ~ nitrogen
+  alice click 4,3 /obj/item/reagent_containers/cup/beaker
+  until obj(4,3,/obj/item/reagent_containers/cup/beaker).reagents.list./datum/reagent/ammonia > 0
+  until obj(4,3,/obj/item/reagent_containers/cup/beaker).reagents.list./datum/reagent/ammonia > 9.9 timeout=20
+  expect obj(4,3,/obj/item/reagent_containers/cup/beaker).reagents.list./datum/reagent/hydrogen < 0.05
+  until alice.chat ~ "The solution begins to bubble."

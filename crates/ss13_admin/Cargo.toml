@@ -1,0 +1,58 @@
+[package]
+name = "ss13_admin"
+description = "Admin tools: ranks and rights (tg admins.txt/admin_ranks.txt), admin verbs, adminhelp tickets, asay, admin log (server half) and the admin panel (client half)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+ss13_shared.workspace = true
+bevy = { workspace = true, features = ["std", "bevy_log"] }
+ss13_net = { workspace = true, optional = true }
+ss13_game = { workspace = true, optional = true }
+ss13_chat = { workspace = true, optional = true }
+ss13_proto = { workspace = true, optional = true }
+ss13_mapload = { workspace = true, optional = true }
+ss13_world = { workspace = true, optional = true }
+ss13_render = { workspace = true, optional = true }
+bevy_egui = { workspace = true, optional = true }
+
+[features]
+server = [
+    "ss13_net/server",
+    "ss13_game/server",
+    "ss13_chat/server",
+    "dep:ss13_net",
+    "dep:ss13_game",
+    "dep:ss13_chat",
+    "dep:ss13_proto",
+    "dep:ss13_mapload",
+    "dep:ss13_world",
+]
+client = [
+    "ss13_net/client",
+    "dep:ss13_net",
+    "dep:ss13_render",
+    "dep:bevy_egui",
+    "bevy/2d",
+    "bevy/ui",
+]
+
+[dev-dependencies]
+ss13_game = { workspace = true, features = ["server", "client", "testing"] }
+ss13_mapload.workspace = true
+ss13_assets.workspace = true
+ss13_proto.workspace = true
+ss13_world.workspace = true
+ss13_net = { workspace = true, features = ["server", "client"] }
+postcard.workspace = true
+ss13_tgui = { workspace = true, features = ["server"] }
+ss13_chat = { workspace = true, features = ["server"] }
+
+[[test]]
+name = "admin"
+required-features = ["server"]
+
+[lints]
+workspace = true

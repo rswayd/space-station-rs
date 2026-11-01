@@ -1,0 +1,30 @@
+# Run with SS13_DEV_TRAITOR=heretic on the heretic map (the arena with a pen east of the spawn):
+#   SS13_LIGHTING=0 SS13_MAP=$PWD/scripts/visual/maps/heretic.dmm SS13_DEV_TRAITOR=heretic \
+#       scripts/visual-check.sh scripts/visual/heretic.txt
+# The joining body becomes a heretic: the AntagInfoHeretic window (the paths, the research tree,
+# the introduction), the influences only it sees; the pen picked up, the Mansus grasp called into
+# the other hand and the transmutation rune drawn south of it.
+# spawn: 11,8
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_until chat "Вы - Еретик." timeout=30
+wait_secs 3
+screenshot "heretic_paths.png"
+click_ui "heretic tab 2"
+wait_secs 1.5
+screenshot "heretic_research.png"
+click_ui "heretic tab 0"
+wait_secs 1
+screenshot "heretic_info.png"
+click_ui ""           # the window's close button (Font Awesome `times`)
+wait_secs 0.5
+click_tile 1 0
+wait_secs 0.5
+click_ui "action: Хватка Мансуса"
+wait_secs 0.5
+click_tile 0 -1
+wait_until chat "руна создана" timeout=40
+wait_secs 1
+screenshot "heretic_rune.png"
+log_state
+quit

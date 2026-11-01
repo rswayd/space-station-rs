@@ -1,0 +1,28 @@
+# Line of sight: a player's client gets nothing behind a wall (the screwdriver at 7,2 is not
+# replicated to it), gets it while the airlock between the rooms is open and loses it when the
+# airlock closes; an admin ghost sees through the wall.
+map los.dmm
+bot alice 3,3
+bot bob 2,2 admin EVERYTHING
+
+test hidden_behind_the_wall
+  until alice.seen.len > 10
+  until obj(5,3,/obj/machinery/door).door.closed == true
+  expect alice.seen[].pos ~ 5,3
+  expect alice.seen[].pos !~ 7,2
+  expect bob.seen[].pos !~ 7,2
+
+test seen_through_the_open_door
+  alice move E
+  repeat 0.5 alice move E until obj(5,3,/obj/machinery/door).door.open == true timeout=10
+  until alice.seen[].pos ~ 7,2
+
+test hidden_again_when_it_closes
+  alice teleport 3,3
+  until obj(5,3,/obj/machinery/door).door.closed == true timeout=20
+  until alice.seen[].pos !~ 7,2
+
+test ghost_sees_through_walls
+  bob admin aghost
+  until bob.seen[].pos ~ 7,2
+  expect alice.seen[].pos !~ 7,2

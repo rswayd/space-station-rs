@@ -1,0 +1,76 @@
+# Гидропонные лотки и почва
+Лоток — основная машина ботаники: в нём растёт посаженное семя, расходуются вода и удобрения, копятся сорняки, вредители и токсины.
+
+### Гидропонный лоток (базовый цикл роста)
+Машина, в которую сажают семя; каждые `cycledelay` растение стареет, тратит воду (`maxwater` 100) и питательные вещества (`maxnutri` 20, расход `nutridrain`), без воды/удобрений теряет здоровье, по достижении `maturation` и `production` становится готовым к сбору. Состояния: пусто, растёт, готово, мертво; световые индикаторы на лотке показывают нехватку воды/удобрений, вредителей, сорняки, готовность.
+
+- **Код:** [`/obj/machinery/hydroponics`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L1), [`process()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L288), [`update_status_light_overlays()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L499)
+- **BandaStation:** [`hydroponics.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L472) — имя лотка с названием растения через `ru_names_toml`
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/botany/tray.rs` (`cycle`): цикл 20 с, возраст, питательные вещества, вода, свет (статическая освещённость тайла), токсины, вредители, сорняки, смерть, спрайт и индикаторы; `// shortcut:` свет считается по прямой линии, динамические источники как статические
+
+### Посадка, полив и взаимодействие с предметами
+Клик семенем сажает его; ведро/лейка/кружка с реагентами поливает и удобряет; лопатка убирает растение, культиватор — сорняки, секатор снимает прививку; мешок для растений собирает урожай. ПКМ пустой рукой (с подтверждением) сливает реагенты лотка, гаечный ключ откручивает лоток.
+
+- **Код:** [`item_interaction()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L895), [`attack_hand_secondary()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L1198), [`empty_tray()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L1211), [`set_seed()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L519)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/botany/`: посадка пакетом, полив и подкормка ёмкостью, компост из еды, культиватор, лопата (5 с), осмотр; `// shortcut:` нет опустошения правым кликом, мешков почвы, ножниц для генов, соматолуча
+
+### Сбор урожая и удаление растения
+Клик пустой рукой по готовому растению собирает урожай (`seeds/harvest()`: количество зависит от `yield` и `yieldmod`), по мёртвому — убирает его. Многоразовые растения (`repeated_harvest`) после сбора продолжают расти.
+
+- **Код:** [`attack_hand()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L1167), [`/obj/item/seeds/proc/harvest()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/seeds.dm#L208), [`update_tray()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L1224), [`remove_plant()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L1272)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/botany/plants.rs` (`harvest`): пустая рука собирает `getYield()` плодов с реагентами по потенции, убирает мёртвое растение; сумок для растений нет
+
+### Автополив (self-sustaining)
+Ctrl+клик по закреплённому и запитанному лотку включает автороста: лоток сам доливает воду, снижает сорняки и вредителей, но потребляет много энергии; при пропаже питания отключается.
+
+- **Код:** [`click_ctrl()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L1183), [`set_self_sustaining()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L543)
+- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/botany/tray.rs`: `// shortcut:` нет автополива (`self_sustaining`, ctrl+клик)
+
+### Сорняки, вредители и токсичность
+Уровни сорняков, вредителей и токсинов (0–10/100) растут со временем и от реагентов, снижают здоровье растения; на 10 сорняков пустой или слабый лоток захватывает сорняк (`weedinvasion`), растение может мутировать в сорняк (`mutateweed`), вредители — в мутацию (`mutatepest`).
+
+- **Код:** [`weedinvasion()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L692), [`mutateweed()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L800), [`mutatepest()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L877), [`adjust_toxic()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L630)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/botany/tray.rs`: рост сорняков и вредителей, урон от токсинов; `// shortcut:` `mutatepest` предупреждает без паучат
+
+### Реагенты в лотке и мутации
+Каждый цикл реагенты лотка применяются к растению через `/datum/reagent/proc/on_hydroponics_apply()`: удобрения (E-Z-Nutrient, Left 4 Zed, Robust Harvest) меняют статы и мутации, мутаген/радий/урановая радиация вызывают `mutate`/`hardmutate`/смену вида (`mutatespecie`), сахар/яды/гербициды бьют по здоровью и сорнякам.
+
+- **Код:** [`apply_chemicals()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics_chemreact.dm#L5), [`radioactive_exposure()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics_chemreact.dm#L30), [`mutate()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L724), [`mutatespecie()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L766), [`polymorph()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L783), [`/datum/reagent/proc/on_hydroponics_apply()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/reagents/chemistry/reagents.dm#L302)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/botany/tray.rs`: ~40 реагентов с `on_hydroponics_apply` (E-Z-Nutrient, Left 4 Zed, Robust Harvest, аммиак, мутаген, гербициды, пестициды, вода, зола...), мутации по нестабильности (статы, трейты, вид из `mutatelist`); странный реагент не оживляет растение
+
+### Соматолуч (флора-ган) по лотку
+Снаряд флора-гана при попадании в лоток мутирует растение или меняет урожай/потенцию в зависимости от режима.
+
+- **Код:** [`bullet_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L267)
+- **Статус в ss13-rs:** ❌ нет
+
+### Опыление
+Соседние лотки в радиусе 1 обмениваются реагентными генами растений (`perform_reagent_pollination`); пчёлы из улья опыляют лотки, повышая урожай и потенцию.
+
+- **Код:** [`pollinate()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L843), [`can_bee_pollinate()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L865), [`perform_reagent_pollination()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/seeds.dm#L590)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/botany/mod.rs` (`pollinate`), `crates/ss13_game/src/botany/genes.rs` (повышение реагентных генов); нет: окна между лотками не мешают (`// shortcut:`), опыление пчёлами (пчёл нет)
+
+### Улитка в лотке
+Посаженная в лоток улитка поедает вредителей и сорняки; её видно оверлеем на лотке, её можно забрать рукой.
+
+- **Код:** [`handle_snail()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L647), [`/obj/effect/overlay/vis_effect/snail`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/snail_overlay.dm#L4)
+- **BandaStation:** [`hydroponics.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L184) — у лотка отключена рыболовная точка (`fishing_spot`)
+- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/botany/tray.rs`: `// shortcut:` улиток нет
+
+### Собираемые лотки и улучшения
+Лоток собирается из платы (`/obj/machinery/hydroponics/constructable`), детали (матлазеры/манипуляторы) повышают `maxwater`, `maxnutri` и снижают расход; есть старый вид лотка и «делюкс»-вариант с максимальными деталями. Отвёртка/лом — разборка.
+
+- **Код:** [`/obj/machinery/hydroponics/constructable`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L165), [`fullupgrade`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L174)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload/src/plants.rs`: типы лотков и грядок с карты; `// shortcut:` детали всегда первого уровня, постройки и улучшения нет
+
+### Компонент схемы лотка
+USB-компонент wiremod для лотка: выдаёт уровни воды/удобрений/сорняков/вредителей/здоровья, событие сбора и смерти, управляет автополивом.
+
+- **Код:** [`/obj/item/circuit_component/hydroponics`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L1284)
+- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/botany/tray.rs`: `// shortcut:` схем нет
+
+### Почва и мешки с грунтом
+Грядка почвы — беспитательный лоток без энергии (`maxnutri` 15), выкапывается лопатой обратно в мешок. Виды грунта дают бонусы: вермикулит, гель (не нужна вода), кокосовое волокно, червячная почва (медленное выделение азота), богатая почва (быстрые грибы).
+
+- **Код:** [`/obj/machinery/hydroponics/soil`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/soil.dm#L3), [`/obj/item/soil_sack`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/soil.dm#L115), [`soil/worm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/soil.dm#L92), [`soil/rich`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/soil.dm#L106)
+- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/botany/tray.rs`: `// shortcut:` мешков с грунтом и бонуса кокосового субстрата нет

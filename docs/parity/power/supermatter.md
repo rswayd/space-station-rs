@@ -1,0 +1,60 @@
+# Суперматерия
+Кристалл суперматерии — основной двигатель станции: превращает энергию выстрелов эмиттера и газ камеры в мощность молний и отходы, при перегреве деламинирует.
+
+### Атмосферный цикл кристалла
+Каждый тик кристалл забирает газ тайла, считает влияние газов, внутреннюю энергию, температуру и выпускает отходы (плазму, кислород) и тепло обратно в камеру.
+
+- **Код:** [`/obj/machinery/power/supermatter_crystal`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter.dm#L17), [`process_atmos()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter.dm#L281), [`proc/calculate_gases()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter.dm#L669), [`proc/calculate_internal_energy()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter.dm#L710), [`proc/calculate_waste_multiplier()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter.dm#L802)
+- **BandaStation:** [`supermatter.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter.dm#L314) — тише звук разряда (35 вместо 70)
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/power/supermatter.rs` (`Crystal::process_atmos`, `breathe`): забор `absorption_ratio` газа тайла на каждом тике SSair, энергия, отходы тепла/плазмы/кислорода обратно в тайл; плавления стены под кристаллом нет (shortcut)
+
+### Влияние газов (sm_gas)
+У каждого газа свои модификаторы: генерация энергии, теплостойкость, отходы, теплоёмкость (N2 и CO2 охлаждают, плазма и тритий разгоняют, BZ даёт галлюцинации, хилиум, фреон, гипер-ноблий и др.).
+
+- **Код:** [`/datum/sm_gas`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter_gas.dm#L66), [`/datum/sm_gas/plasma`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter_gas.dm#L121), [`/datum/sm_gas/carbon_dioxide`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter_gas.dm#L95), [`/datum/sm_gas/antinoblium`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter_gas.dm#L232)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/power/supermatter.rs` (`SM_GASES`, `calculate_gases`, `extra_effects`): все модификаторы газов, CO2+O2 → плюоксий, поглощение миазмов; нет ядерных частиц BZ и стан-молний заукера (shortcut)
+
+### Молнии и выработка энергии
+Накопленная энергия разряжается молниями в тесла-катушки (мощность сети) и в окружение; на высокой мощности — аномалии, гравитационное притяжение, сильные разряды.
+
+- **Код:** [`proc/discharge_energy()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter.dm#L940), [`proc/calculate_zap_transmission_rate()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter.dm#L779), [`proc/handle_high_power()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter_extra_effects.dm#L92), [`proc/supermatter_pull()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter_extra_effects.dm#L148)
+- **BandaStation:** [`supermatter_extra_effects.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter_extra_effects.dm#L131) — тише звуки высокой мощности
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/power/supermatter.rs` (`zap`, `handle_high_power`): накопление энергии разряда, основной разряд и разряды высокой мощности с приоритетом целей (катушка 70%, заземлитель, живые 20%, машины 40%, объекты), множитель катушек на 7/9 ГэВ; нет линии видимости, электролиза, урона/взрывов машин, аномалий и притяжения (shortcut)
+
+### Радиация, галлюцинации и психологическое воздействие
+Кристалл излучает радиацию по мощности, вызывает галлюцинации у смотрящих без мезонов и психологический эффект на осмотре.
+
+- **Код:** [`proc/emit_radiation()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter_extra_effects.dm#L20), [`proc/psychological_examination()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter_extra_effects.dm#L76), [`proc/processing_sound()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter_extra_effects.dm#L57)
+- **Статус в ss13-rs:** ❌ нет — радиации, галлюцинаций и психолога нет (`psy_coeff` всегда 0)
+
+### Повреждение и предупреждения
+Урон кристалла от перегрева, давления и мощности, лечение в холоде; предупреждения по инженерному каналу, затем по общему, отсчёт деламинации.
+
+- **Код:** [`proc/calculate_damage()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter.dm#L851), [`proc/calculate_temp_limit()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter.dm#L828), [`proc/count_down()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter.dm#L573), [`proc/should_alert_common()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter.dm#L1093)
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/power/supermatter.rs` (`calculate_damage`, `delam_progress`, `count_down`): урон от тепла, энергии, молей и космоса, лечение холодом, предупреждения раз в минуту по инженерному каналу и общему в аварии (`crate::radio::MachineRadio`), отсчёт 15 с
+
+### Поглощение материи
+Касание кристалла обращает моба или предмет в пыль, добавляя энергию; кристалл поглощает пули, тележки трамвая, сингулярность; вблизи — радиационные ожоги. Осколок суперматерии с щипцами — см. ../science/.
+
+- **Код:** [`/datum/component/supermatter_crystal`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/supermatter_crystal.dm#L1), [`proc/dust_mob()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/supermatter_crystal.dm#L270), [`proc/eat_bullets()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter_hit_procs.dm#L8), [`item_interaction()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter_hit_procs.dm#L78)
+- **Статус в ss13-rs:** ❌ нет
+
+### Деламинация: выбор типа и последствия
+Тип деламинации выбирается по состоянию: взрывная (взрыв, радиация, аномалии, деморализация), сингулярность (при большой массе молей), тесла (при высокой мощности; BandaStation спавнит переработанную теслу), каскадная (антиноблий / адамантин: кристаллическая масса, портал эвакуации, застрявший шаттл).
+
+- **Код:** [`/datum/sm_delam`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter_delamination/_sm_delam.dm#L11), [`proc/set_delam()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter.dm#L896), [`/datum/sm_delam/explosive`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter_delamination/common_delams.dm#L113), [`/datum/sm_delam/singularity`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter_delamination/common_delams.dm#L4), [`/datum/sm_delam/tesla`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter_delamination/common_delams.dm#L64), [`/datum/sm_delam/cascade`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter_delamination/cascade_delam.dm#L1), [`/obj/crystal_mass`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter_delamination/cascade_delam_objects.dm#L1), [`/obj/cascade_portal`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter_delamination/cascade_delam_objects.dm#L109)
+- **BandaStation:** [`delamination_effects.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter_delamination/delamination_effects.dm#L113) — `/obj/tesla_ball` вместо `/obj/energy_ball`
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/power/supermatter.rs` (`select_delam`, `delaminate`): выбор каскад/сингулярность/тесла/взрыв по `can_select`, их сообщения по радио; сама деламинация — заглушка: сообщение всем на уровне и удаление кристалла (взрывов, сингулярности, теслы, радиации нет; shortcut)
+
+### Монитор суперматерии
+Окно с интегритетом, мощностью, температурой и составом газа кристалла (консоль; программа ПДА — см. ../comms/).
+
+- **Код:** [`proc/sm_ui_data()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter.dm#L396), [`ui_interact()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter.dm#L381); tgui: [`Supermatter.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/Supermatter.tsx)
+- **Статус в ss13-rs:** ❌ нет — данные есть в `Crystal` (энергия, урон, газы, температура), окна `Supermatter`/`NtosSupermatter` нет
+
+### Варианты кристалла
+Двигательный кристалл, осколок, малый кристалл, «hugbox» без деламинации (BandaStation приглушает его звук), адамантиновый пьедестал для каскада.
+
+- **Код:** [`/obj/machinery/power/supermatter_crystal/engine`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter_variants.dm#L9), [`/obj/machinery/power/supermatter_crystal/shard`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter_variants.dm#L13), [`/obj/machinery/power/supermatter_crystal/hugbox`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter_variants.dm#L2), [`/obj/item/adamantine_pedestal`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter_variants.dm#L72)
+- **BandaStation:** [`modular_bandastation/sounds/code/supermatter.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/sounds/code/supermatter.dm#L5) — тихий звуковой цикл hugbox
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/power/supermatter.rs` (`init_supermatter`): двигательный кристалл, осколок (поглощение 0.125, сила взрыва 12), hugbox без обработки; малого кристалла и пьедестала нет

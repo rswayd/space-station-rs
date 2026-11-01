@@ -1,0 +1,21 @@
+"w" = (/turf/closed/wall,/area/station/commons/dorms)
+"f" = (/turf/open/floor/iron,/area/station/commons/dorms)
+"s" = (/obj/effect/landmark/start/assistant,/turf/open/floor/iron,/area/station/commons/dorms)
+"B" = (/obj/item/reagent_containers/cup/beaker,/turf/open/floor/iron,/area/station/commons/dorms)
+"L" = (/obj/item/reagent_containers/cup/beaker/large,/turf/open/floor/iron,/area/station/commons/dorms)
+"E" = (/obj/item/reagent_containers/cup/beaker,/turf/open/floor/iron,/area/station/commons/dorms)
+"M" = (/obj/item/reagent_containers/cup/beaker/meta/salbutamol,/turf/open/floor/iron,/area/station/commons/dorms)
+"P" = (/obj/item/reagent_containers/cup/bottle/epinephrine,/turf/open/floor/iron,/area/station/commons/dorms)
+"H" = (/obj/item/reagent_containers/cup/bottle/hydrogen,/turf/open/floor/iron,/area/station/commons/dorms)
+"N" = (/obj/item/reagent_containers/cup/bottle/nitrogen,/turf/open/floor/iron,/area/station/commons/dorms)
+
+(1,1,1) = {"
+wwwwwwwwwww
+wfffffffffw
+wfffffffffw
+wffBLEMPffw
+wfffNsHfffw
+wfffffffffw
+wfffffffffw
+wwwwwwwwwww
+"}

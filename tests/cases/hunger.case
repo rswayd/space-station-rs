@@ -1,0 +1,16 @@
+# Hunger at 10x game speed: nutrition drops on its own; eating a burger (bites, digestion,
+# nutriment metabolism) raises it.
+map hunger.dmm
+time_scale 10
+bot alice 3,3 give /obj/item/food/burger/plain
+
+test nutrition_drops
+  expect alice.hunger.shown exists
+  save start mob(alice).nutrition
+  until mob(alice).nutrition < $start
+
+test eating_raises_it
+  save before mob(alice).nutrition
+  alice click self
+  until alice.chat ~ "plain burger"
+  until mob(alice).nutrition > $before+5 timeout=40

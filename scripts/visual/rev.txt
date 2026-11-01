@@ -1,0 +1,12 @@
+# Run with SS13_DEV_TRAITOR=rev after rev_head.txt: this body becomes a revolutionary next to the
+# head revolutionary.
+# spawn: 105,72
+wait_connected timeout=60
+wait_secs 3
+wait_until controlled timeout=30
+wait_secs 5
+click_ui ""           # the panel's close button (Font Awesome `times`)
+wait_secs 1
+log_state
+screenshot "rev.png"
+quit

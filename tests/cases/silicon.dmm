@@ -1,0 +1,16 @@
+"w" = (/turf/closed/wall,/area/centcom/central_command_areas/admin)
+"f" = (/turf/open/floor/iron,/area/centcom/central_command_areas/admin)
+"c" = (/obj/machinery/computer/security,/turf/open/floor/iron,/area/centcom/central_command_areas/admin)
+"D" = (/obj/machinery/door/airlock,/turf/open/floor/iron,/area/centcom/central_command_areas/admin)
+"1" = (/obj/machinery/camera/directional/north{c_tag = "Room One"},/turf/open/floor/iron,/area/centcom/central_command_areas/admin)
+"2" = (/obj/machinery/camera/directional/north{c_tag = "Room Two"; network = list("ss13","rd")},/turf/open/floor/iron,/area/centcom/central_command_areas/admin)
+"3" = (/obj/machinery/camera/directional/north{c_tag = "Room Far"},/turf/open/floor/iron,/area/centcom/central_command_areas/admin)
+"x" = (/obj/item/screwdriver,/turf/open/floor/iron,/area/centcom/central_command_areas/admin)
+
+(1,1,1) = {"
+wwwwwwwwwwwwwwwwwwwwwwwwwwwww
+wf1fwf2fwfffwwwwwwwwwwwwwf3fw
+wcffDfffDfffwwwwwwwwwwwwwfxfw
+wfffwfffwfffwwwwwwwwwwwwwfffw
+wwwwwwwwwwwwwwwwwwwwwwwwwwwww
+"}

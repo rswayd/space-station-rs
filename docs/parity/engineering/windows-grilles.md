@@ -1,0 +1,65 @@
+# Окна, решётки, ограждения
+Окна всех видов, решётки, решётчатые настилы и мостики, перила, платформы, пластиковые завесы и голобарьеры.
+
+### Окна: сборка и разборка
+Обычное окно ставится в раму отвёрткой и ломом и снимается обратно: отвёртка (3 с) открепляет от рамы, лом (10 с / 5 с) вынимает, отвёртка откручивает от пола, гаечный ключ разбирает в стекло; сварка чинит. Направленные окна ставятся на край тайла и поворачиваются, полнотайловые — на решётку.
+
+- **Код:** [`/obj/structure/window`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/window.dm#L1), [`screwdriver_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/window.dm#L228), [`crowbar_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/window.dm#L271), [`wrench_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/window.dm#L254), [`welder_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/window.dm#L216), [`/obj/structure/window/fulltile`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/window.dm#L742)
+- **BandaStation:** [`aesthetics/windows`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/aesthetics/windows/code/windows.dm), [`aesthetics/smoothing`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/aesthetics/smoothing/code/smoothing.dm) — свои спрайты и сглаживание окон
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/construction.rs`: вся цепочка обычного окна и ремонт сваркой; нет поворота направленных окон, проверки `can_be_reached`, покраски
+
+### Укреплённые окна
+Разборка укреплённого окна дольше и с нагревом болтов: сварка нагревает, лом и отвёртка поэтапно снимают (`RWINDOW_*`), при остывании болтов шаг сбрасывается.
+
+- **Код:** [`/obj/structure/window/reinforced`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/window.dm#L494), [`reinforced/crowbar_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/window.dm#L555), [`proc/cool_bolts()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/window.dm#L638)
+- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/construction.rs` отказывает с сообщением
+
+### Виды окон
+Плазменные (жаропрочные), укреплённые плазменные, тонированные и матовые (непрозрачные), титановые и пластитановые шаттловые, ледяные, бумажные (сёдзи, чинятся бумагой), бронзовые, культистские, неразрушимые.
+
+- **Код:** [`/obj/structure/window/plasma`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/window.dm#L667), [`/obj/structure/window/reinforced/plasma`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/window.dm#L697), [`/obj/structure/window/reinforced/tinted`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/window.dm#L728), [`/obj/structure/window/reinforced/titanium`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/window.dm#L903), [`/obj/structure/window/reinforced/plasma/plastitanium`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/window.dm#L949), [`/obj/structure/window/paperframe`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/window.dm#L1012), [`/obj/structure/window/bronze`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/window.dm#L1098)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload/src/border.rs`, `crates/ss13_game/src/obj_damage.rs`: грузятся с карты, блокируют проход/воздух по краям, получают урон; особые свойства (жаростойкость, тонировка как непрозрачность) не проверены, разборка только обычного окна
+
+### Повреждение и разрушение окон
+Окна получают урон от ударов (через `damage_deflection` и броню), трескаются, бьются на осколки (и прутья у укреплённых), открывая тайл воздуху; стук по окну рукой.
+
+- **Код:** [`take_damage()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/window.dm#L329), [`proc/spawn_debris()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/window.dm#L357), [`attack_hand()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/window.dm#L185)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/obj_damage.rs`: урон от предметов, осколки, разгерметизация; нет трещин на спрайте, стука, урона от огня и давления
+
+### Решётки
+Решётка: кусачки режут в прутья, отвёртка крепит/откручивает, прутья чинят сломанную, 2 листа стекла — полнотайловое окно на ней; запитанная от кабеля под ней решётка бьёт током (`is_shocked`).
+
+- **Код:** [`/obj/structure/grille`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/grille.dm#L4), [`grille/item_interaction()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/grille.dm#L234), [`screwdriver_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/grille.dm#L221), [`proc/repair_grille()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/grille.dm#L343), [`proc/is_shocked()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/grille.dm#L409)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/construction.rs`, `crates/ss13_game/src/obj_damage.rs`: резка, крепление, ремонт, окно на решётке, ломается на 40 % и разваливается на прутья; постройка из прутьев ПКМ вместо меню крафта; нет удара током
+
+### Решётчатый настил и мостик
+Решётка (`lattice`) из прутьев держит над космосом и служит основой для обшивки; мостик (`catwalk`) — проходимый настил, под которым видны кабели и трубы; лавовый мостик для лаваленда.
+
+- **Код:** [`/obj/structure/lattice`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/lattice.dm#L1), [`/obj/structure/lattice/catwalk`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/lattice.dm#L116), [`/obj/structure/lattice/catwalk/lava`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/lattice.dm#L165)
+- **Статус в ss13-rs:** ❌ нет
+
+### Перила и деревянный забор
+Перила блокируют проход через свой край (угловые — через два), перелезаются с задержкой, разбираются гаечным ключом/кусачками.
+
+- **Код:** [`/obj/structure/railing`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/railings.dm#L1), [`/obj/structure/railing/wooden_fence`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/railings.dm#L174)
+- **BandaStation:** [`aesthetics/railings`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/aesthetics/railings/code/railings.dm) — спрайты перил
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload/src/border.rs`: блокируют край тайла; перелезания и разборки нет
+
+### Платформы
+Приподнятые платформы разных материалов: на них забираются с задержкой, они блокируют проход сбоку.
+
+- **Код:** [`/obj/structure/platform`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/platform.dm#L4), [`/obj/structure/platform/material`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/platform.dm#L130)
+- **BandaStation:** [`modular_bandastation/objects/code/structures/platform.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/structures/platform.dm#L2) — платформы-перила форка (обычные и укреплённые, разбираются отвёрткой)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload/src/border.rs`: платформы форка наследуют краевую блокировку перил; залезания нет
+
+### Пластиковые завесы
+Пропускают людей и предметы, но не лежачих и ботов/мулов без разрешения; держат воздух; разбираются инструментами.
+
+- **Код:** [`/obj/structure/plasticflaps`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/plasticflaps.dm#L1)
+- **Статус в ss13-rs:** ❌ нет
+
+### Голографические знаки и барьеры
+Проекторами ставятся голознаки «мокрый пол», инженерные и атмосферные барьеры (держат газ), медицинские (не пускают больных), борговые (бьют током при взломе).
+
+- **Код:** [`/obj/structure/holosign`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/holosign.dm#L4), [`/obj/structure/holosign/barrier/engineering`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/holosign.dm#L183), [`/obj/structure/holosign/barrier/atmos`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/holosign.dm#L191), [`/obj/structure/holosign/barrier/medical`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/holosign.dm#L260)
+- **Статус в ss13-rs:** ❌ нет

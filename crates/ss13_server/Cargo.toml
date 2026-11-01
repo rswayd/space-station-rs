@@ -1,0 +1,24 @@
+[package]
+name = "ss13_server"
+description = "Headless authoritative server."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+ss13_shared.workspace = true
+ss13_game = { workspace = true, features = ["server"] }
+ss13_world.workspace = true
+ss13_proto.workspace = true
+ss13_mapload.workspace = true
+ss13_atmos = { workspace = true }
+ss13_net = { workspace = true, features = ["server"] }
+ss13_tgui = { workspace = true, features = ["server"] }
+ss13_chat = { workspace = true, features = ["server"] }
+bevy = { workspace = true, features = ["std", "multi_threaded", "bevy_log", "bevy_state", "async_executor"] }
+ss13_debug = { workspace = true, features = ["server"] }
+ss13_admin = { workspace = true, features = ["server"] }
+
+[lints]
+workspace = true

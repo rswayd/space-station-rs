@@ -1,0 +1,45 @@
+# Воздушные тревоги и атмосферные консоли
+Контроль воздуха в зонах станции: воздушная тревога со своими режимами и порогами, консоли атмос-отсека, датчики.
+
+### Воздушная тревога (air alarm)
+Настенный прибор зоны: следит за воздухом своего тайла, поднимает тревогу зоны (жёлтую/красную), управляет вентиляциями и скрубберами зоны через окно (доступ — атмос-техники), говорит голосом при опасности. BandaStation исправляет дублирование имени зоны и меняет иконку.
+
+- **Код:** [`/obj/machinery/airalarm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/air_alarm/_air_alarm.dm#L3), [`process()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/air_alarm/_air_alarm.dm#L141), [`proc/check_danger()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/air_alarm/_air_alarm.dm#L578), [`ui_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/air_alarm/_air_alarm.dm#L370), [`proc/speak()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/air_alarm/_air_alarm.dm#L659); tgui: [`AirAlarm`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/AirAlarm)
+- **BandaStation:** [`_air_alarm.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/air_alarm/_air_alarm.dm#L183) — `update_zone_name()`; [`modular_bandastation/aesthetics/airalarm/code/airalarm.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/aesthetics/airalarm/code/airalarm.dm#L1) — иконка
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/atmos_machinery/alarm.rs`: оценка воздуха тайла, уровни тревоги, предупреждения голосом раз в 10 с, тревога зоны, окно `AirAlarm` (`crates/ss13_game/src/atmos_machinery/windows.rs`, `crates/ss13_tgui/src/interfaces/air_alarm.rs`); нет проводов, emag, датчиков камер
+
+### Режимы воздушной тревоги
+Наборы настроек вентиляций и скрубберов зоны: фильтрация, загрязнение, сквозняк, обновление, откачка, паническая откачка, цикл, наполнение (flood), выключено.
+
+- **Код:** [`/datum/air_alarm_mode`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/air_alarm/air_alarm_modes.dm#L12), [`panic_siphon`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/air_alarm/air_alarm_modes.dm#L162), [`flood`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/air_alarm/air_alarm_modes.dm#L191), [`proc/select_mode()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/air_alarm/_air_alarm.dm#L646)
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/atmos_machinery/alarm.rs`: все режимы tg (flood и vent siphon только с emag, которого нет), cycle с возвратом
+
+### Пороги (TLV)
+Безопасные и опасные границы давления, температуры и газов (кислород, CO2, плазма и т. д.); варианты для холодильников, кухни, без проверок.
+
+- **Код:** [`/datum/tlv`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/air_alarm/air_alarm_thresholds.dm#L2), [`tlv/pressure`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/air_alarm/air_alarm_thresholds.dm#L89), [`tlv/temperature`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/air_alarm/air_alarm_thresholds.dm#L95), [`proc/set_tlv_cold_room()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/air_alarm/_air_alarm.dm#L704)
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/atmos_machinery/alarm.rs`: TLV по газам, давлению, температуре, хелперы cold_room/kitchen/no_checks, установка и сброс из окна
+
+### Монтаж воздушной тревоги, блокировка, датчик камеры
+Сборка из рамки и платы, разблокировка ID-картой, взлом емагом, подключение удалённого датчика (`air_sensor`) для камер двигателя; провода — см. ../engineering/.
+
+- **Код:** [`/obj/item/wallframe/airalarm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/air_alarm/air_alarm_interact.dm#L190), [`/obj/item/electronics/airalarm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/air_alarm/air_alarm_interact.dm#L186), [`proc/togglelock()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/air_alarm/air_alarm_interact.dm#L70), [`proc/connect_sensor()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/air_alarm/_air_alarm.dm#L736)
+- **Статус в ss13-rs:** 🟡 частично — блокировка ID с доступом (`atmos_equip`, хелперы доступа) в `crates/ss13_game/src/atmos_machinery/windows.rs`; нет монтажа, стадий сборки и датчиков
+
+### Компоненты интегральных схем воздушной тревоги
+Чтение показаний и управление вентиляциями/скрубберами тревоги из интегральных схем.
+
+- **Код:** [`circuit_component/air_alarm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/air_alarm/air_alarm_circuit.dm#L101), [`air_alarm_vents`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/air_alarm/air_alarm_circuit.dm#L448), [`air_alarm_scrubbers`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/air_alarm/air_alarm_circuit.dm#L238)
+- **Статус в ss13-rs:** ❌ нет
+
+### Консоль атмосферных тревог (atmos_alert)
+Список зон с активными воздушными тревогами станции.
+
+- **Код:** [`/obj/machinery/computer/atmos_alert`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/computer/atmos_alert.dm#L1); tgui: [`AtmosAlertConsole.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/AtmosAlertConsole.tsx)
+- **Статус в ss13-rs:** ❌ нет
+
+### Консоль контроля атмосферы и датчики (atmos_control, air_sensor)
+Показывает воздух в камерах хранения газов, двигателя и инсинератора по датчикам и управляет их входными инжекторами и выходными вентиляциями.
+
+- **Код:** [`/obj/machinery/computer/atmos_control`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/computer/atmos_computers/_atmos_control.dm#L2), [`/obj/machinery/air_sensor`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/computer/atmos_computers/_air_sensor.dm#L8), [`vent_pump/siphon/monitored`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/computer/atmos_computers/outlets.dm#L1); tgui: [`AtmosControlConsole.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/AtmosControlConsole.tsx)
+- **Статус в ss13-rs:** ❌ нет

@@ -1,0 +1,17 @@
+# Latejoin from the lobby: "Join game" opens the job menu, screenshot it, become a Security
+# Officer (the job entry's `Name` is its English title) and screenshot the officer at the
+# latejoin landmark. Needs the lobby with the round already running:
+#   SS13_SKIP_LOBBY=0 SS13_LOBBY_SECONDS=0 scripts/visual-check.sh scripts/visual/jobs.txt
+wait_connected timeout=60
+wait_secs 2                 # the round starts, the lobby shows "Join game"
+click_ui "lobby: join"
+wait_secs 1.5
+screenshot "job_window.png"
+scroll_ui "Смотритель" 5    # Security is below the fold of the first column
+wait_secs 0.5
+click_ui "Security Officer"
+wait_until controlled timeout=30
+wait_secs 2
+screenshot "officer.png"
+log_state
+quit

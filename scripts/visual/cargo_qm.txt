@@ -1,0 +1,25 @@
+# MetaStation: the quartermaster's office, south of its supply console (81,150). Run together
+# with cargo_bay.txt and SS13_PAYDAY_SECONDS=3 SS13_SUPPLY_CALL_SECONDS=3
+# SS13_SUPPLY_IGNITION_SECONDS=1: the first payday gives cargo 500, the order is a calligraphy crate
+# (290), the shuttle docks at cargo_home (63,151) with its crate.
+# spawn: 81,149
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_until entities 500 timeout=30
+wait_secs 1
+click_tile 0 1
+wait_secs 1.5
+log_state
+screenshot "cargo_console.png"
+wait_secs 4
+click_ui "Miscellaneous Supplies"
+wait_secs 1
+click_ui "pack: Calligraphy Crate"
+wait_secs 1
+screenshot "cargo_ordered.png"
+click_ui "cargo: send"
+wait_until chat "The supply shuttle has been called" timeout=5
+wait_secs 7
+log_state
+screenshot "cargo_arrived.png"
+quit

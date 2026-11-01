@@ -1,0 +1,27 @@
+# Speech and headsets: a said line reaches the mob next to the speaker but not one 18 tiles
+# away; `;` talks into the headset and reaches him; without a headset he hears nothing.
+map radio.dmm
+bot alice 2,3
+bot carol 3,3
+bot bob 20,3
+
+test say_is_local
+  alice say "Привет рядом"
+  until carol.chat ~ "Привет рядом"
+  wait 1
+  expect bob.chat !~ "Привет рядом"
+
+test headset_reaches_far
+  expect mob(bob).slots.ears ~ /obj/item/radio/headset
+  alice say "; Общий канал"
+  until bob.chat ~ "Общий канал"
+
+test no_headset_no_radio
+  bob slot ears
+  until mob(bob).slots.ears missing
+  bob drop
+  until tile(20,3).entities[].path ~ /obj/item/radio/headset
+  alice say "; Без гарнитуры"
+  until carol.chat ~ "Без гарнитуры"
+  wait 1
+  expect bob.chat !~ "Без гарнитуры"

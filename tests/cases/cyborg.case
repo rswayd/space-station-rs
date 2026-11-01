@@ -1,0 +1,50 @@
+# A cyborg linked to the AI: it follows the AI's laws, picks its model from the list window
+# (tg pick_model), takes a module out of the model and puts it back, picks nothing up, drains
+# its cell, and is taken into a recharging station.
+map cyborg.dmm
+bot alice 2,2 job "AI"
+bot bob 3,3 job "Cyborg"
+timeout 10
+
+test linked_to_the_ai
+  expect mob(bob).cyborg.connected_ai == true
+  save laws mob(alice).ai.laws.name
+  expect mob(bob).laws.name == $laws
+  expect mob(bob).laws.list.len >= 3
+  expect mob(bob).health.max == 100
+
+test picks_a_model
+  until bob.windows.ListInputModal exists
+  expect bob.windows.ListInputModal.static.items ~ "Engineering"
+  expect bob.windows.ListInputModal.static.items !~ "Security"
+  bob act ListInputModal submit entry=Engineering
+  until mob(bob).cyborg.model == "Engineering"
+  until bob.windows.ListInputModal missing
+
+test modules_from_the_model
+  bob slot back
+  until bob.windows.Storage.data.items.len >= 10
+  bob act Storage take key=@bob.windows.Storage.data.items[0].key
+  until mob(bob).held[0] exists
+  bob drop
+  until mob(bob).held[0] missing
+  expect tile(3,3).entities[].path !~ /obj/item/assembly/flash/cyborg
+
+test picks_nothing_up
+  bob move E
+  bob click 5,3 /obj/item/screwdriver
+  wait 0.5
+  expect mob(bob).held[0] missing
+  expect obj(5,3,/obj/item/screwdriver).pos == 5,3
+
+test cell_drains_and_station_takes_it_in
+  save charge mob(bob).cyborg.charge
+  wait 1.5
+  expect mob(bob).cyborg.charge < $charge
+  bob move E
+  bob move E
+  until mob(bob).pos == 6,3
+  bob click 6,3 /obj/machinery/recharge_station
+  until obj(6,3,/obj/machinery/recharge_station).station.occupied == true
+  bob move W
+  until obj(6,3,/obj/machinery/recharge_station).station.open == true

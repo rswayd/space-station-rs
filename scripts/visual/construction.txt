@@ -1,0 +1,12 @@
+# Construction pieces on `scripts/visual/maps/construction.dmm` (fullbright): girders on
+# plating, a displaced girder, plating, grilles, windows on grilles in the north wall with a
+# broken one (shards, a broken grille) open to space, shards and rods, iron sheets, a welder.
+#   SS13_LIGHTING=0 SS13_MAP=$PWD/scripts/visual/maps/construction.dmm \
+#     SS13_ASSETS=$ASSETS scripts/visual-check.sh scripts/visual/construction.txt
+# spawn: 7,5
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 3
+log_state
+screenshot "construction.png"
+quit

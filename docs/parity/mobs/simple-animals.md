@@ -1,0 +1,69 @@
+# Simple animals и мегафауна
+Устаревшая основа `/mob/living/simple_animal` (без контроллеров ИИ, собственный `Life()` и поиск целей). Из неё в апстриме остались мегафауна, элиты Лаваленда и слизни-oozes; боты — в каталоге силиконов. В ss13-rs отсутствует.
+
+### Базовый simple animal
+Старая модель моба: `Life()` с собственной атмосферой/температурой, `speak`/`emote` по таймеру, реакция на руку; урон по `damage_coeff`.
+
+- **Код:** [`/mob/living/simple_animal`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/simple_animal/simple_animal.dm#L2), [`Life()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/simple_animal/simple_animal.dm#L211), [`attack_hand()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/simple_animal/animal_defense.dm#L1)
+- **Статус в ss13-rs:** ❌ нет
+
+### Враждебные simple animals
+`hostile`: поиск целей в обзоре (`FindTarget`), преследование, ближний и дальний бой, ломание препятствий, агрессия к обидчикам.
+
+- **Код:** [`/mob/living/simple_animal/hostile`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/simple_animal/hostile/hostile.dm#L1), [`proc/FindTarget()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/simple_animal/hostile/hostile.dm#L183)
+- **Статус в ss13-rs:** ❌ нет
+
+### Общие механики мегафауны
+Боссы Лаваленда/Ледяной луны: огромное здоровье, иммунитет к оглушениям, награды за убийство (медали, лут-сундук, трофеи крашера), запись в БД достижений.
+
+- **Код:** [`/mob/living/simple_animal/hostile/megafauna`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/simple_animal/hostile/megafauna/_megafauna.dm#L1), [`death()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/simple_animal/hostile/megafauna/_megafauna.dm#L102)
+- **Статус в ss13-rs:** ❌ нет
+
+### Баблгам
+Демон крови: прыгает через лужи крови, рывки, призывает галлюцинации-копии; лут — бутылка крови/плащ.
+
+- **Код:** [`/mob/living/simple_animal/hostile/megafauna/bubblegum`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/simple_animal/hostile/megafauna/bubblegum.dm#L30)
+- **Статус в ss13-rs:** ❌ нет
+
+### Колосс
+Стреляет узорами снарядов (спирали, залпы), лут — кристаллы аномалий.
+
+- **Код:** [`/mob/living/simple_animal/hostile/megafauna/colossus`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/simple_animal/hostile/megafauna/colossus.dm#L23)
+- **Статус в ss13-rs:** ❌ нет
+
+### Пепельный дракон
+Огненное дыхание, лавовые поля, налёты с неба; малый дракон.
+
+- **Код:** [`/mob/living/simple_animal/hostile/megafauna/dragon`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/simple_animal/hostile/megafauna/drake.dm#L32)
+- **Статус в ss13-rs:** ❌ нет
+
+### Иерофант
+Босс-арена: кубы-волны, телепорт, лабиринт ударных линий; лут — посох иерофанта.
+
+- **Код:** [`/mob/living/simple_animal/hostile/megafauna/hierophant`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/simple_animal/hostile/megafauna/hierophant.dm#L37)
+- **Статус в ss13-rs:** ❌ нет
+
+### Легион (мегафауна)
+Гигантский череп, при ранении раскалывается на меньших легионов; лут после последнего.
+
+- **Код:** [`/mob/living/simple_animal/hostile/megafauna/legion`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/simple_animal/hostile/megafauna/legion.dm#L24)
+- **BandaStation:** [`legion.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/simple_animal/hostile/megafauna/legion.dm#L66) — флаг `last_legion` для выдачи лута только с последнего
+- **Статус в ss13-rs:** ❌ нет
+
+### Мегафауна Ледяной луны
+Вендиго (ударные волны, рывки), демонический морозный шахтёр (фазы, ледяные снаряды), заводной защитник.
+
+- **Код:** [`/mob/living/simple_animal/hostile/megafauna/wendigo`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/simple_animal/hostile/megafauna/wendigo.dm#L9), [`/mob/living/simple_animal/hostile/megafauna/demonic_frost_miner`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/simple_animal/hostile/megafauna/demonic_frost_miner.dm#L10), [`/mob/living/simple_animal/hostile/megafauna/clockwork_defender`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/simple_animal/hostile/megafauna/clockwork_knight.dm#L9)
+- **Статус в ss13-rs:** ❌ нет
+
+### Элиты Лаваленда
+Опухоль-элита призывает гост-игрока в элитного моба для дуэли с шахтёром на арене: мать голиафов, геральд, легионер, пандора; победитель получает награду или элиту-питомца.
+
+- **Код:** [`/mob/living/simple_animal/hostile/asteroid/elite`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/simple_animal/hostile/mining_mobs/elites/elite.dm#L9), [`broodmother`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/simple_animal/hostile/mining_mobs/elites/goliath_broodmother.dm#L19), [`herald`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/simple_animal/hostile/mining_mobs/elites/herald.dm#L19), [`legionnaire`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/simple_animal/hostile/mining_mobs/elites/legionnaire.dm#L19), [`pandora`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/simple_animal/hostile/mining_mobs/elites/pandora.dm#L19)
+- **Статус в ss13-rs:** ❌ нет
+
+### Слизни-ooze
+Желеобразные игровые мобы (от ксенобиологии/админов): поглощают предметы и мобов, слизь-виноградины, способности кислоты и паутины.
+
+- **Код:** [`/mob/living/simple_animal/hostile/ooze`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/simple_animal/hostile/ooze.dm#L2), [`ooze/gelatinous`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/simple_animal/hostile/ooze.dm#L107), [`ooze/grapes`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/simple_animal/hostile/ooze.dm#L296)
+- **Статус в ss13-rs:** ❌ нет

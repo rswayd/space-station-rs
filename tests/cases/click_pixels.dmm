@@ -1,0 +1,10 @@
+"w" = (/turf/closed/wall,/area/centcom/central_command_areas/control)
+"f" = (/turf/open/floor/iron,/area/centcom/central_command_areas/control)
+"C" = (/obj/machinery/computer/cargo{dir = 4},/obj/effect/turf_decal/bot,/obj/machinery/button/door/directional/west{id = "QMLoaddoor"; name = "Loading Doors"; pixel_y = -8},/obj/machinery/button/door/directional/west{id = "QMLoaddoor2"; name = "Loading Doors"; pixel_y = 8},/obj/machinery/light/directional/west,/turf/open/floor/iron,/area/centcom/central_command_areas/control)
+
+(1,1,1) = {"
+wwwww
+wCffw
+wfffw
+wwwww
+"}

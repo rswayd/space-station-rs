@@ -1,0 +1,26 @@
+"w" = (/turf/closed/wall,/area/centcom/central_command_areas/planetary_port/plaza)
+"s" = (/obj/effect/landmark/start/assistant,/turf/open/floor/iron,/area/centcom/central_command_areas/planetary_port/plaza)
+"f" = (/turf/open/floor/iron,/area/centcom/central_command_areas/planetary_port/plaza)
+"B" = (/obj/structure/disposalpipe/trunk{dir = 4},/obj/machinery/disposal/bin,/turf/open/floor/iron,/area/centcom/central_command_areas/planetary_port/plaza)
+"h" = (/obj/structure/disposalpipe/segment{dir = 4},/turf/open/floor/iron,/area/centcom/central_command_areas/planetary_port/plaza)
+"J" = (/obj/structure/disposalpipe/sorting/mail{dir = 4},/obj/effect/mapping_helpers/mail_sorting/medbay/general,/turf/open/floor/iron,/area/centcom/central_command_areas/planetary_port/plaza)
+"v" = (/obj/structure/disposalpipe/segment,/turf/open/floor/iron,/area/centcom/central_command_areas/planetary_port/plaza)
+"Q" = (/obj/structure/disposalpipe/trunk{dir = 1},/obj/structure/disposaloutlet{dir = 4},/turf/open/floor/iron,/area/centcom/central_command_areas/planetary_port/plaza)
+"O" = (/obj/structure/disposalpipe/trunk{dir = 8},/obj/structure/disposaloutlet{dir = 2},/turf/open/floor/iron,/area/centcom/central_command_areas/planetary_port/plaza)
+"p" = (/obj/item/pen,/turf/open/floor/iron,/area/centcom/central_command_areas/planetary_port/plaza)
+"W" = (/obj/item/stack/package_wrap,/turf/open/floor/iron,/area/centcom/central_command_areas/planetary_port/plaza)
+"C" = (/obj/structure/disposalpipe/trunk{dir = 2},/obj/machinery/disposal/bin,/turf/open/floor/iron,/area/centcom/central_command_areas/planetary_port/plaza)
+"b" = (/obj/structure/disposalpipe/segment{dir = 5},/turf/open/floor/iron,/area/centcom/central_command_areas/planetary_port/plaza)
+"R" = (/obj/structure/disposalpipe/trunk{dir = 8},/obj/structure/disposaloutlet{dir = 4},/turf/open/floor/iron,/area/centcom/central_command_areas/planetary_port/plaza)
+"T" = (/obj/item/dest_tagger,/turf/open/floor/iron,/area/centcom/central_command_areas/planetary_port/plaza)
+
+(1,1,1) = {"
+wwwwwwwwwwwwwwww
+wffffffffffffffw
+wTWffffffffffffw
+wsBhJhhhhOfffffw
+wfpfvffffffffffw
+wfCfQffffffffffw
+wfbhhhhhhRfffffw
+wwwwwwwwwwwwwwww
+"}

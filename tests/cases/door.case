@@ -1,0 +1,37 @@
+# An airlock with brig access: the assistant bumps into it, the security officer walks through;
+# then the assistant opens its panel and drops the bolts by pulsing the bolt wire, and the
+# officer can no longer pass.
+map door.dmm
+bot alice 4,3 give /obj/item/screwdriver give /obj/item/multitool
+bot bob 3,3 job "Security Officer"
+
+test assistant_is_denied
+  alice move E
+  wait 1
+  expect alice.pos == 4,3
+  expect obj(5,3,/obj/machinery/door).door.closed == true
+  # tg `animation_effects`: the airlock's `doorDeni`.
+  until alice.sounds ~ "deniedbeep.ogg"
+
+test officer_walks_through
+  alice move N
+  bob move E
+  repeat 0.5 bob move E until bob.pos == 6,3 timeout=10
+  expect mob(bob).pos == 6,3
+  # tg `/datum/element/footstep`: a running human in shoes, every second step.
+  until alice.sounds ~ "sound/effects/footstep/"
+
+test bolts_by_wire
+  until obj(5,3,/obj/machinery/door).door.closed == true timeout=15
+  alice click 5,3 /obj/machinery/door
+  until obj(5,3,/obj/machinery/door).door.panel_open == true
+  alice swap
+  alice click 5,3 /obj/machinery/door
+  until alice.windows.Wires exists
+  alice act Wires pulse wire=@obj(5,3,/obj/machinery/door).wires.colors.Bolts
+  until obj(5,3,/obj/machinery/door).door.bolted == true
+  until alice.sounds ~ "bolts_down.ogg"
+  bob move W
+  wait 1
+  expect bob.pos == 6,3
+  expect obj(5,3,/obj/machinery/door).door.closed == true

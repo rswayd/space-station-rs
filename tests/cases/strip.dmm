@@ -1,0 +1,12 @@
+"w" = (/turf/closed/wall,/area/centcom/central_command_areas/courtroom)
+"f" = (/turf/open/floor/iron,/area/centcom/central_command_areas/courtroom)
+"O" = (/obj/structure/closet{opened = 1},/turf/open/floor/iron,/area/centcom/central_command_areas/courtroom)
+
+(1,1,1) = {"
+wwwwww
+wffffw
+wffOfw
+wffffw
+wffffw
+wwwwww
+"}

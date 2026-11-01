@@ -1,0 +1,22 @@
+[package]
+name = "ss13_dm_extract"
+description = "Offline tool: dumps static vars of every DM type from the source .dme. Never linked into the game."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[[bin]]
+name = "ss13-dm-extract"
+path = "src/main.rs"
+
+[dependencies]
+# GPL-3.0: this is why the extractor is a separate offline binary that the game never links.
+dreammaker = { git = "https://github.com/SpaceManiac/SpacemanDMM", tag = "suite-1.11" }
+serde.workspace = true
+serde_json = "1.0.154"
+anyhow.workspace = true
+
+[lints]
+workspace = true

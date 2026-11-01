@@ -1,0 +1,15 @@
+# Basic mobs (SS13_MAP=scripts/visual/maps/mobs.dmm, SS13_LIGHTING=0): Ian next to the player,
+# a space carp coming to bite, Runtime, Renault and Tom. Pets Ian with an empty hand, then
+# watches the carp attack.
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 1
+screenshot "mobs_start.png"
+click_tile 1 0
+wait_until chat "гладите" timeout=10
+screenshot "mobs_pet.png"
+wait_until chat "вас!" timeout=30
+wait_secs 0.5
+screenshot "mobs_bitten.png"
+log_state
+quit

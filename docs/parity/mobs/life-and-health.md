@@ -1,0 +1,121 @@
+# Жизненный цикл, урон и здоровье мобов
+Тик `Life()`, типы урона, пороги крита, смерть, гиббинг и связанные с ними механики живых мобов.
+
+### Подсистема SSmobs и тик Life()
+Каждые 2 секунды подсистема мобов вызывает `Life()` каждого живого моба: дыхание, окружение, органы, кровь, метаболизм, статус-эффекты, обновление HUD. Все «периодические» эффекты мобов привязаны к этому тику (`seconds_per_tick`).
+
+- **Код:** [`SUBSYSTEM_DEF(mobs)`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/mobs.dm#L1), [`proc/Life()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/life.dm#L12), [`carbon/Life()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/life.dm#L1), [`human/Life()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/human/life.dm#L21)
+- **BandaStation:** [`code/modules/mob/living/life.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/life.dm#L52) — вызов `handle_ssd()` (SSD-индикатор) в тике
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/breath.rs`, `crates/ss13_game/src/hunger.rs`, `crates/ss13_game/src/chem.rs`: тик 2 с есть для дыхания, температуры, голода и метаболизма; нет органов, крови, обработки гравитации, болезней
+
+### Типы урона и apply_damage
+Урон делится на brute, burn, toxin, oxy, stamina и урон органов (brain и т.д.); `apply_damage` распределяет его по выбранной части тела с учётом брони, модификаторов вида (`brutemod`/`burnmod`) и блокировки. Здоровье = `maxHealth` минус сумма brute+burn+tox+oxy.
+
+- **Код:** [`proc/apply_damage()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/damage_procs.dm#L23), [`proc/apply_damages()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/damage_procs.dm#L166), [`proc/adjust_brute_loss()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/damage_procs.dm#L271), [`proc/adjust_fire_loss()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/damage_procs.dm#L400), [`proc/adjust_tox_loss()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/damage_procs.dm#L354), [`proc/adjust_oxy_loss()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/damage_procs.dm#L320), [`proc/adjust_organ_loss()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/damage_procs.dm#L421), [`carbon/updatehealth()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/carbon.dm#L426)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/health.rs`: brute/burn по шести частям тела, tox, oxy, `apply_damage`; нет урона органов, брони в `apply_damage`, модификаторов вида, `required_bodytype`/биотипов
+
+### Лечение и полное исцеление
+`heal_overall_damage`/`take_overall_damage` распределяют лечение и урон по всем частям тела; `fully_heal` (админ-исцеление, некоторые реагенты и эффекты) снимает урон, раны, болезни, восстанавливает органы и конечности по флагам `HEAL_*`.
+
+- **Код:** [`proc/heal_overall_damage()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/damage_procs.dm#L513), [`proc/take_overall_damage()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/damage_procs.dm#L523), [`proc/fully_heal()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/living.dm#L976), [`carbon/fully_heal()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/carbon.dm#L673)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/health.rs`, `crates/ss13_game/src/medical.rs`: лечение brute/burn по частям тела; нет `fully_heal` и флагов `HEAL_*`
+
+### Состояния: сознание, софт-крит, хард-крит, смерть
+`update_stat` переводит моба между CONSCIOUS, SOFT_CRIT (здоровье ≤ 0: ползает, руки заблокированы), HARD_CRIT (≤ −30: без сознания) и DEAD (≤ −100). В крите моб получает oxy-урон и пропускает вдохи; черта `TRAIT_NOSOFTCRIT`/`TRAIT_NOHARDCRIT` меняет пороги.
+
+- **Код:** [`carbon/update_stat()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/carbon.dm#L610), [`living/set_stat()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/living.dm#L2518), [`HEALTH_THRESHOLD_*`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/__DEFINES/combat.dm#L88), [`proc/check_passout()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/carbon_defense.dm#L523)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/health.rs`, `crates/ss13_game/src/breath.rs`: четыре состояния с порогами tg, ползание в софт-крите, пропуск вдохов, потеря сознания от oxyloss; нет черт, меняющих пороги
+
+### Отображение урона: оверлеи и HUD здоровья
+Повреждённые части тела рисуются оверлеями крови/ожогов; HUD показывает куклу здоровья по частям тела, индикатор здоровья и экранные эффекты (красная виньетка боли, затемнение в крите, oxy-оверлей).
+
+- **Код:** [`carbon/update_damage_overlays()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/carbon_update_icons.dm#L283), [`carbon/update_damage_hud()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/carbon.dm#L480), [`human/update_health_hud()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/human/human.dm#L679)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/health.rs`, `crates/ss13_game/src/hud.rs`: кукла здоровья по частям тела; нет оверлеев повреждений на спрайте и экранных эффектов крита/боли
+
+### Замедление от урона
+Человек с большим уроном двигается медленнее (`damage_slowdown` от 40 потерянного здоровья), в софт-крите и лёжа ползает с отдельными модификаторами.
+
+- **Код:** [`/datum/movespeed_modifier/damage_slowdown`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/movespeed/modifiers/mobs.dm#L26), [`/datum/movespeed_modifier/carbon_softcrit`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/movespeed/modifiers/mobs.dm#L122), [`/datum/movespeed_modifier/carbon_crawling`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/movespeed/modifiers/mobs.dm#L126)
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/health.rs` (`move_delay`)
+
+### Смерть
+`death()` фиксирует время смерти, роняет моба, отправляет сообщение и моодлеты окружающим, отключает HUD-элементы; тело остаётся, игрок может стать призраком. Смерть — точка входа для дефибрилляции и клонирования (см. ../medical/).
+
+- **Код:** [`proc/death()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/death.dm#L224), [`carbon/death.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/death.dm#L1), [`human/death.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/human/death.dm#L1), [`proc/send_death_moodlets()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/death.dm#L185)
+- **BandaStation:** [`code/modules/mob/living/death.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/death.dm#L269) — контекстное обновление `time_of_death`
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/health.rs`, `crates/ss13_game/src/ghost.rs`: стат DEAD, сообщение о смерти, тело остаётся, гостинг; нет моодлетов, времени смерти, оживления
+
+### Гиббинг и превращение в пыль
+`gib()` разрывает моба на ошмётки, разбрасывая органы, конечности и вещи (флаги `DROP_*`); `inflate_gib` — с анимацией раздувания; `dust()` оставляет кучку пепла и, возможно, скелет.
+
+- **Код:** [`proc/gib()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/death.dm#L11), [`proc/inflate_gib()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/death.dm#L39), [`proc/spread_bodyparts()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/death.dm#L86), [`proc/spawn_dust()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/death.dm#L165)
+- **Статус в ss13-rs:** ❌ нет
+
+### Хаск (husk)
+Сильные ожоги (или высасывание генокрадом) превращают тело в хаска: обезличенное, неклонируемое без лечения ожогов/синтфлеша. Черта `TRAIT_UNHUSKABLE` защищает.
+
+- **Код:** [`proc/become_husk()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/status_procs.dm#L577), [`proc/cure_husk()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/status_procs.dm#L570)
+- **Статус в ss13-rs:** ❌ нет
+
+### Разложение трупа
+Мёртвое тело без бальзамирования через время начинает гнить (`attach_rot`), выделяя миазмы и не поддаваясь дефибрилляции.
+
+- **Код:** [`proc/attach_rot()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/carbon.dm#L1167)
+- **Статус в ss13-rs:** ❌ нет
+
+### Поддаться смерти (succumb) и самоубийство
+В крите игрок может поддаться (`succumb`) и умереть сразу; глагол `suicide` убивает моба способом, зависящим от предмета в руке (у предметов свои `suicide_act`), и запрещает клонирование/возрождение.
+
+- **Код:** [`verb/succumb`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/living.dm#L556), [`verb/suicide`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/client/verbs/suicide.dm#L4), [`human/perform_basic_suicide()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/human/human_suicide.dm#L7)
+- **Статус в ss13-rs:** ❌ нет
+
+### Электрошок
+`electrocute_act` наносит burn-урон от тока с учётом `siemens_coeff` (перчатки, вид), оглушает и вызывает дрожь; источник — провода, шлюзы под током, ловушки, батоны с флагами.
+
+- **Код:** [`proc/electrocute_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/living_defense.dm#L630), [`proc/should_electrocute()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/carbon.dm#L1094)
+- **BandaStation:** [`code/modules/mob/living/living_defense.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/living_defense.dm#L648) — сообщение об ударе током
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/wires.rs` (`electrocute_mob`): удар током от электрифицированных машин с burn-уроном, оглушением и защитой изолированных перчаток; нет других источников (провода, батоны), дрожи, `siemens_coeff` вида
+
+### Взрывы по мобам
+`ex_act` наносит мобу урон по степени взрыва с учётом брони (bomb armor), может оторвать конечности и гибнуть при эпицентре.
+
+- **Код:** [`living/ex_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/living_defense.dm#L620), [`human/ex_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/human/human_defense.dm#L257)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/events/explosion.rs` `ex_act_mob`: урон brute/burn 300/60/30 поровну по частям тела, паралич вместо потери сознания, нокдаун; нет брони bomb, гиба, ран, отрыва конечностей, урона одежде и глухоты
+
+### Падение с высоты (z-уровни)
+Падая на нижний z-уровень, моб получает brute-урон за каждый уровень и сбивается с ног; некоторые черты и ботинки смягчают падение.
+
+- **Код:** [`proc/ZImpactDamage()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/living.dm#L81), [`carbon/on_fall()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/carbon.dm#L148)
+- **BandaStation:** [`code/modules/mob/living/living.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/living.dm#L2790) — убраны проверки plating для перемещения по z
+- **Статус в ss13-rs:** ❌ нет
+
+### Повышенная гравитация
+При гравитации выше нормы моб получает brute-урон за тик и замедляется; при нулевой гравитации — плавает (см. movement.md).
+
+- **Код:** [`proc/handle_gravity()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/life.dm#L125), [`proc/handle_high_gravity()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/life.dm#L135)
+- **Статус в ss13-rs:** ❌ нет
+
+### Лёжа, отдых и сон
+Моб может лечь (`toggle_resting`, клавиша), встать с задержкой, уснуть глаголом `Sleep`; лёжа он не плотный, ползает медленнее, поза влияет на попадания и спрайт.
+
+- **Код:** [`proc/toggle_resting()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/living.dm#L669), [`proc/set_resting()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/living.dm#L674), [`proc/get_up()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/living.dm#L714), [`proc/set_body_position()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/living.dm#L2718), [`verb/mob_sleep`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/living.dm#L615)
+- **BandaStation:** [`modular_bandastation/mobs/code/mobs_resting.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/mobs/code/mobs_resting.dm#L5) — спрайт отдыха для basic-мобов
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/health.rs`, `crates/ss13_game/src/status_effects.rs`: лежание от крита и нокдауна (поворот спрайта, не плотный, ползание); нет произвольного отдыха, вставания с задержкой и сна
+
+### Сопротивление (resist)
+Клавиша resist по приоритету снимает захват, пристёгивание, горение, наручники или выбирает из шкафа/контейнера.
+
+- **Код:** [`proc/resist()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/living.dm#L1147), [`proc/execute_resist()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/living.dm#L1151), [`carbon/resist_buckle()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/carbon.dm#L152), [`carbon/resist_restraints()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/carbon.dm#L181)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/pull.rs`, `crates/ss13_game/src/restraints.rs`: вырывание из захвата и наручников; нет снятия с пристёгивания, тушения себя, выхода из шкафа
+
+### Рвота
+`vomit()` опустошает желудок, оставляет лужу рвоты, отнимает сытость и может нанести toxin-урон или выплюнуть кровь; вызывается реагентами, болезнями, перееданием.
+
+- **Код:** [`proc/vomit()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/carbon.dm#L293)
+- **Статус в ss13-rs:** ❌ нет
+
+### Превращения моба (monkeyize, humanize и др.)
+Набор процедур превращения: человек ↔ обезьяна (генетика, мутаген), в корги, краба, гориллу, слайма, оверминда блоба и в произвольный тип моба.
+
+- **Код:** [`proc/monkeyize()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/transform_procs.dm#L7), [`proc/humanize()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/transform_procs.dm#L47), [`proc/corgize()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/transform_procs.dm#L193), [`proc/gorillize()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/transform_procs.dm#L210), [`proc/transform_into_mob()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/transform_procs.dm#L232)
+- **Статус в ss13-rs:** ❌ нет

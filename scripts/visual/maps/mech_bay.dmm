@@ -1,0 +1,15 @@
+"w" = (/turf/closed/wall,/area/centcom/central_command_areas/admin)
+"f" = (/turf/open/floor/iron,/area/centcom/central_command_areas/admin)
+"s" = (/obj/effect/landmark/start/assistant,/turf/open/floor/iron,/area/centcom/central_command_areas/admin)
+"R" = (/obj/vehicle/sealed/mecha/ripley,/turf/open/floor/iron/recharge_floor,/area/centcom/central_command_areas/admin)
+"P" = (/obj/machinery/mech_bay_recharge_port{dir = 8},/turf/open/floor/iron,/area/centcom/central_command_areas/admin)
+"K" = (/obj/machinery/computer/mech_bay_power_console,/turf/open/floor/iron,/area/centcom/central_command_areas/admin)
+"H" = (/obj/structure/table,/obj/machinery/cell_charger,/turf/open/floor/iron,/area/centcom/central_command_areas/admin)
+
+(1,1,1) = {"
+wwwwwwww
+wffffffw
+wHsKRPfw
+wffffffw
+wwwwwwww
+"}

@@ -1,0 +1,20 @@
+"w" = (/turf/closed/wall,/area/centcom/central_command_areas/admin)
+"f" = (/turf/open/floor/iron,/area/centcom/central_command_areas/admin)
+"a" = (/turf/open/floor/iron/airless,/area/centcom/central_command_areas/admin)
+"c" = (/obj/machinery/atmospherics/components/unary/portables_connector/visible{dir = 4},/obj/machinery/portable_atmospherics/canister/air,/turf/open/floor/iron,/area/centcom/central_command_areas/admin)
+"p" = (/obj/machinery/atmospherics/pipe/smart/simple/supply/visible{dir = 4},/turf/open/floor/iron,/area/centcom/central_command_areas/admin)
+"P" = (/obj/machinery/atmospherics/pipe/smart/simple/supply/visible{dir = 4},/turf/closed/wall,/area/centcom/central_command_areas/admin)
+"q" = (/obj/machinery/atmospherics/pipe/smart/simple/supply/visible{dir = 4},/turf/open/floor/iron/airless,/area/centcom/central_command_areas/admin)
+"v" = (/obj/machinery/atmospherics/components/unary/vent_pump/on{dir = 8},/turf/open/floor/iron/airless,/area/centcom/central_command_areas/admin)
+"A" = (/obj/machinery/airalarm/directional/north,/turf/open/floor/iron/airless,/area/centcom/central_command_areas/admin)
+"S" = (/turf/open/space/basic,/area/space)
+
+(1,1,1) = {"
+SSSSSSSSSSS
+SwwwwwwwwwS
+SwfffwaaAwS
+SwfcpPqvawS
+SwfffwaaawS
+SwwwwwwwwwS
+SSSSSSSSSSS
+"}

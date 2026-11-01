@@ -1,0 +1,36 @@
+# Kitchen: on scripts/visual/maps/kitchen.dmm (an unpowered-free test room) the cook spawns east
+# of a microwave on a table, with an egg east, a knife south and a monkey meat slab on a table
+# south-west. Cooks the egg into a boiled egg (10 s), eats it (the hunger bar shows while it
+# digests), then cuts the slab into three raw cutlets with the knife.
+#   SS13_LIGHTING=0 SS13_MAP=$PWD/scripts/visual/maps/kitchen.dmm scripts/visual-check.sh \
+#       scripts/visual/kitchen.txt
+# spawn: 3,4
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 1
+screenshot "kitchen.png"
+click_tile 1 0         # the egg into the empty hand
+wait_secs 0.4
+click_tile -1 0        # into the microwave
+wait_until chat "Вы добавляете" timeout=5
+wait_secs 1
+click_tile -1 0        # cook
+wait_until chat "включается" timeout=5
+wait_secs 12
+screenshot "cooked.png"
+click_tile -1 0        # the boiled egg on the microwave's table
+wait_secs 0.5
+click_tile 0 0         # eat it
+wait_until chat "Ничего более не осталось" timeout=15
+wait_secs 2.5
+screenshot "hunger.png"
+tap Q                  # the shell down
+wait_secs 0.4
+click_tile 0 -1        # the knife
+wait_secs 0.4
+click_tile -1 -1       # cut the slab on the table
+wait_until chat "You manage to create" timeout=10
+wait_secs 0.5
+screenshot "sliced.png"
+log_state
+quit

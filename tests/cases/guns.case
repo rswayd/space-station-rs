@@ -1,0 +1,26 @@
+# Guns: a disabler stamcrits bob (30 stamina a shot), a laser gun burns dave, a pistol shot
+# drops its casing at the shooter's feet, a riot shotgun's rubber pellets hit hank.
+map guns.dmm
+bot alice 2,3 give /obj/item/gun/energy/disabler
+bot bob 7,3
+bot carol 2,5 give /obj/item/gun/energy/laser
+bot dave 7,5
+bot erin 2,6 give /obj/item/gun/ballistic/automatic/pistol
+bot frank 2,7 give /obj/item/gun/ballistic/shotgun/riot
+bot hank 6,7
+
+test disabler_stamcrit
+  repeat 1 alice click bob until bob.chat ~ "истощены" timeout=15
+  expect mob(bob).health.burn == 0
+
+test laser_burns
+  repeat 1 carol click dave until mob(dave).health.burn > 0 timeout=10
+
+test pistol_drops_casing
+  erin click dave
+  until tile(2,6).entities[].path ~ /obj/item/ammo_casing/c9mm timeout=5
+  until mob(dave).health.brute > 0 timeout=5
+
+test riot_shotgun_pellets
+  frank click hank
+  until mob(hank).health.brute > 0 timeout=5

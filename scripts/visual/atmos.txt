@@ -1,0 +1,13 @@
+# MetaStation's atmospherics room by "Air to Distro": pipes in tg's runtime bitmask states,
+# pumps, then the air alarm's window (opened with a click on its sprite, mounted on the wall).
+#   SS13_SKIP_LOBBY=1 SS13_ASSETS=$ASSETS scripts/visual-check.sh scripts/visual/atmos.txt
+# spawn: 170,129
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 3
+screenshot "atmos_room.png"
+click_world 171 131 16 6
+wait_secs 2
+log_state
+screenshot "atmos_alarm.png"
+quit

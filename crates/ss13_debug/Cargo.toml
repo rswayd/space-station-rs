@@ -1,0 +1,67 @@
+[package]
+name = "ss13_debug"
+description = "Debug overlay (egui) for the client, and its debug query / dev tool server half."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+ss13_shared.workspace = true
+bevy = { workspace = true, features = ["std", "bevy_log"] }
+ss13_net = { workspace = true, optional = true }
+ss13_game = { workspace = true, optional = true }
+ss13_render = { workspace = true, optional = true }
+ss13_tgui = { workspace = true, optional = true }
+ss13_atmos = { workspace = true, optional = true }
+ss13_mapload = { workspace = true, optional = true }
+ss13_proto = { workspace = true, optional = true }
+ss13_world = { workspace = true, optional = true }
+bevy_egui = { workspace = true, optional = true }
+serde_json = { version = "1.0.154", optional = true }
+ss13_reagents = { workspace = true, optional = true }
+
+[features]
+client = [
+    "ss13_net/client",
+    "ss13_game/client",
+    "ss13_tgui/client",
+    "dep:ss13_net",
+    "dep:ss13_game",
+    "dep:ss13_render",
+    "dep:ss13_tgui",
+    "dep:ss13_world",
+    "dep:bevy_egui",
+    "dep:serde_json",
+    "bevy/2d",
+    "bevy/ui",
+]
+server = [
+    "ss13_net/server",
+    "ss13_game/server",
+    "dep:ss13_net",
+    "dep:ss13_game",
+    "dep:ss13_atmos",
+    "dep:ss13_mapload",
+    "dep:ss13_proto",
+    "dep:ss13_world",
+    "dep:serde_json",
+    "dep:ss13_reagents",
+]
+
+[dev-dependencies]
+ss13_game = { workspace = true, features = ["server", "client", "testing"] }
+ss13_mapload.workspace = true
+ss13_assets.workspace = true
+ss13_atmos.workspace = true
+ss13_proto.workspace = true
+ss13_world.workspace = true
+ss13_net = { workspace = true, features = ["server", "client"] }
+postcard.workspace = true
+
+[[test]]
+name = "debug_queries"
+required-features = ["server"]
+
+[lints]
+workspace = true

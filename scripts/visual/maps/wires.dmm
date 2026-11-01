@@ -1,0 +1,19 @@
+"w" = (/turf/closed/wall,/area/station/commons/dorms)
+"f" = (/turf/open/floor/iron,/area/station/commons/dorms)
+"s" = (/obj/effect/landmark/start/assistant,/turf/open/floor/iron,/area/station/commons/dorms)
+"x" = (/obj/item/screwdriver,/turf/open/floor/iron,/area/station/commons/dorms)
+"m" = (/obj/item/multitool,/turf/open/floor/iron,/area/station/commons/dorms)
+"A" = (/obj/machinery/power/apc/auto_name/directional/north,/turf/open/floor/iron,/area/station/commons/dorms)
+"D" = (/obj/machinery/door/airlock/maintenance,/turf/open/floor/iron,/area/station/commons/dorms)
+"B" = (/obj/machinery/door/airlock/maintenance{locked = 1},/turf/open/floor/iron,/area/station/commons/dorms)
+"S" = (/turf/open/space/basic,/area/space)
+
+(1,1,1) = {"
+SSSSSSSSS
+SwwwwwwwS
+SwfAfffwS
+SwxsDfBwS
+SwmffffwS
+SwwwwwwwS
+SSSSSSSSS
+"}

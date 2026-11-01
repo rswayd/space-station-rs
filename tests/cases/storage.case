@@ -1,0 +1,28 @@
+# The backpack every job spawns with: an item goes in, the storage view opens and gives it back,
+# a bulky item does not fit.
+map storage.dmm
+bot alice 3,3
+
+test into_backpack
+  alice click 4,3 /obj/item/screwdriver
+  until mob(alice).held ~ /obj/item/screwdriver
+  alice slot back
+  until mob(alice).back_contents ~ /obj/item/screwdriver
+  expect mob(alice).held[0] missing
+  expect alice.hands[0] missing
+
+test take_back_out
+  alice slot back
+  until alice.windows.Storage.data.items.len >= 2
+  alice act Storage take key=@alice.windows.Storage.data.items[-1].key
+  until mob(alice).held ~ /obj/item/screwdriver
+  expect mob(alice).back_contents !~ /obj/item/screwdriver
+
+test bulky_does_not_fit
+  alice drop
+  alice click 4,4 /obj/item/storage/toolbox
+  until mob(alice).held ~ /obj/item/storage/toolbox
+  alice slot back
+  wait 0.5
+  expect mob(alice).held ~ /obj/item/storage/toolbox
+  expect mob(alice).back_contents !~ toolbox

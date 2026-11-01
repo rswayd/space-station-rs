@@ -1,0 +1,12 @@
+# The AI clicks the APC of its chamber on MetaStation (on the north wall of the tile west of
+# the core, its sprite over the wall above) and its `Apc` window opens as a silicon's (the
+# interface lock button).
+#   SS13_DEV_JOB=AI SS13_ASSETS=$ASSETS scripts/visual-check.sh scripts/visual/ai_apc.txt
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 3
+click_tile -1 2 16 8
+wait_secs 2
+log_state
+screenshot "ai_apc.png"
+quit

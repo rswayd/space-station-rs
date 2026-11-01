@@ -1,0 +1,37 @@
+[package]
+name = "ss13_mapload"
+description = "Server-side station loading: DM types -> prototypes, .dmm -> entities on z-levels."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "ss13-mapload"
+path = "src/bin/ss13-mapload.rs"
+
+[dependencies]
+ss13_shared.workspace = true
+ss13_assets.workspace = true
+ss13_world.workspace = true
+# Not in the workspace dependency table yet; path dep until the coordinator adds it.
+ss13_proto.workspace = true
+ss13_atmos = { workspace = true }
+# Chemistry data written by the converter (`reagents.ron`).
+ss13_reagents.workspace = true
+bevy = { workspace = true, features = ["std", "bevy_log"] }
+serde.workspace = true
+postcard.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+# Reads dm_types.json in the converter.
+serde_json = "1.0.154"
+# Escapes strings in generated prototype RON; same version ss13_proto parses with.
+ron = "0.12"
+
+[dev-dependencies]
+# Example `map_shot` writes PNGs from the atlases.
+png.workspace = true
+
+[lints]
+workspace = true

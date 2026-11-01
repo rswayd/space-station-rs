@@ -1,0 +1,38 @@
+[package]
+name = "ss13_chat"
+description = "Chat: server-side say validation and hearing range, client chat panel (tgui-panel port)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+ss13_shared.workspace = true
+ss13_net.workspace = true
+ss13_world = { workspace = true, optional = true }
+ss13_ui_kit = { workspace = true, optional = true }
+bevy = { workspace = true, features = ["std", "bevy_log"] }
+# Same version Bevy 0.20's text layout uses: chat lines are broken by the same engine that draws them.
+parley = { version = "0.11.1", default-features = false, features = ["std"], optional = true }
+
+[features]
+server = ["ss13_net/server", "dep:ss13_world"]
+client = ["ss13_net/client", "dep:ss13_ui_kit", "dep:parley", "bevy/ui"]
+
+[dev-dependencies]
+bevy = { workspace = true, features = ["2d", "ui", "png", "bevy_log", "async_executor", "multi_threaded"] }
+
+[[test]]
+name = "e2e"
+required-features = ["server", "client"]
+
+[[test]]
+name = "panel"
+required-features = ["client"]
+
+[[example]]
+name = "chat_demo"
+required-features = ["client"]
+
+[lints]
+workspace = true

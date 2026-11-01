@@ -1,0 +1,29 @@
+# A soda vendor: the Vending window opens with its products, a vend puts a can in the hand and
+# takes one from the stock; walking away makes the window update-only, then disabled (tgui
+# `shared_living_ui_distance`), and a vend from there is refused.
+map vending.dmm
+bot alice 5,3
+
+test window_opens
+  alice click 6,3 /obj/machinery/vending
+  until alice.windows.Vending exists
+  expect alice.windows.Vending.static.product_records.len > 0
+  expect alice.windows.Vending.static.product_records[0].path ~ soda_cans
+  expect alice.windows.Vending.data.user exists
+
+test vend_a_can
+  save stock obj(6,3,/obj/machinery/vending).stock[0].amount
+  alice act Vending vend ref=@alice.windows.Vending.static.product_records[0].reference premium=0
+  until mob(alice).held ~ /obj/item/reagent_containers/cup/soda_cans
+  expect obj(6,3,/obj/machinery/vending).stock[0].amount == $stock-1
+  expect alice.hands[0] exists
+
+test walking_away_disables
+  alice move W
+  until alice.windows.Vending.status == Update
+  alice move W W
+  until alice.windows.Vending.status == Disabled
+  save stock obj(6,3,/obj/machinery/vending).stock[0].amount
+  alice act Vending vend ref=0 premium=0
+  wait 0.5
+  expect obj(6,3,/obj/machinery/vending).stock[0].amount == $stock

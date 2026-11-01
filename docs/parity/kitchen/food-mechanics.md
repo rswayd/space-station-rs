@@ -1,0 +1,88 @@
+# Механика еды
+Общие правила, по которым любая `/obj/item/food` съедается, режется, готовится и портится.
+
+### Предмет еды и компонент edible
+Базовый тип еды: при `Initialize` получает реагенты (`food_reagents`), объём, размер укуса, вкусы, тип пищи (`foodtypes`) и подключает компонент `edible`, элементы обработки, готовки и мусора.
+
+- **Код:** [`/obj/item/food`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/food_and_drinks/food/_food.dm#L2), [`proc/make_edible()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/food_and_drinks/food/_food.dm#L130), [`/datum/component/edible`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/food/edible.dm#L17)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload/src/food.rs` (`DmFood` для всех `/obj/item/food`), `crates/ss13_game/src/food.rs`: нет `foodtypes`, кастомных материалов и сигналов компонента для других систем
+
+### Поедание и кормление
+Еда в руке, кликнутая на себя вне боевого режима, съедается по укусам (`eat_time`, сообщения о сытости, отказ при переедании); на другого — после 3 с, по одному укусу. Закрытый рот (маска) мешает.
+
+- **Код:** [`proc/TryToEat()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/food/edible.dm#L374), [`proc/TakeBite()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/food/edible.dm#L488), [`proc/On_Consume()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/food/edible.dm#L704)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/food.rs` (`try_to_eat`, `take_bite`, `on_consume`): нет звуков, трейтов voracious/glutton, проверки крышки шлема (любая маска закрывает рот), еды голограмм
+
+_«Вкус» описано в [../mobs/hunger-taste.md](../mobs/hunger-taste.md)._
+
+### Мусор после еды (food_trash)
+Доеденная еда оставляет `trash_type` (обёртку, палочку, тарелку) в руке едока.
+
+- **Код:** [`/datum/element/food_trash`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/elements/food/food_trash.dm#L2), [`proc/make_leave_trash()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/food_and_drinks/food/_food.dm#L215)
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/food.rs` (`on_consume`, trash в руку)
+
+### Нарезка и раскатка (processable)
+Инструмент нужного поведения (нож, скалка) на еде на столе или подносе за время элемента превращает её в `amount` результатов, делящих реагенты (хлеб в ломтики, пицца в куски, тесто в лепёшку). При нескольких вариантах — радиальное меню.
+
+- **Код:** [`/datum/element/processable`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/elements/food/processable.dm#L2), [`proc/make_processable()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/food_and_drinks/food/_food.dm#L192)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/food.rs` (`try_process`, `finish_process`), `crates/ss13_mapload/src/food.rs`: радиальное меню заменено выбором первого варианта
+
+### Результат микроволновки (microwavable)
+Еда в микроволновке становится своим `microwaved_type` (яйцо — варёное, донк-покет — тёплый), остальное — «неудачным блюдом» (`badrecipe`); результат может получить доп. реагенты.
+
+- **Код:** [`/datum/element/microwavable`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/elements/food/microwavable.dm#L2), [`proc/make_microwaveable()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/food_and_drinks/food/_food.dm#L207), [`/obj/item/food/badrecipe`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/food_and_drinks/food/misc.dm#L196)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/kitchen.rs`, `crates/ss13_mapload/src/food.rs`: нет добавочных реагентов результата (омнизин тёплого донк-покета)
+
+### Типы пищи, любимая и нелюбимая еда
+У еды есть `foodtypes` (мясо, овощи, жареное, токсичное...), у языка вида — списки любимого, нелюбимого и токсичного; от этого зависят мудлеты, рвота от токсичной еды и качество.
+
+- **Код:** [`/datum/component/edible`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/food/edible.dm#L17) (проверка `foodtypes`, `get_perceived_food_quality`), [`/obj/item/organ/tongue`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/organs/internal/tongue/_tongue.dm#L1)
+- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/food.rs` прямо исключает foodtypes и likes/dislikes (shortcut)
+
+### Качество блюда и баффы еды
+Скрафченная еда имеет сложность рецепта; качество (с учётом вкусов едока) даёт мудлет от «отвратительно» до «фантастически», а сложные блюда — временные баффы.
+
+- **Код:** [`proc/apply_buff()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/food/edible.dm#L586), [`proc/get_recipe_complexity()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/food/edible.dm#L648), [`/datum/element/quality_food_ingredient`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/elements/quality_food_ingredient.dm#L2), [`/datum/element/love_food_buff`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/elements/food/love_food_buff.dm#L2)
+- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/food.rs`: нет баффов и качества (shortcut)
+
+### Микробы и гниение еды
+Еда, полежавшая на полу (или взятая грязными руками), заражается и через время гниёт: превращается в плесневелую версию, может заразить болезнью.
+
+- **Код:** [`/datum/component/germ_sensitive`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/food/germ_sensitive.dm#L14), [`/datum/component/decomposition`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/food/decomposition.dm#L8), [`proc/make_germ_sensitive()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/food_and_drinks/food/_food.dm#L224)
+- **Статус в ss13-rs:** ❌ нет — нет в `crates/ss13_game/src/food.rs` (shortcut: decomposition)
+
+### Тайник в еде (food_storage)
+В крупную еду (хлеб, торт) можно спрятать маленький предмет; его находят, откусив или разрезав.
+
+- **Код:** [`/datum/component/food_storage`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/food_storage.dm#L5)
+- **Статус в ss13-rs:** ❌ нет
+
+### Макание (dunkable)
+Печенье и пончики можно обмакнуть в напиток: они впитывают часть реагентов из кружки.
+
+- **Код:** [`/datum/element/dunkable`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/elements/food/dunkable.dm#L3)
+- **Статус в ss13-rs:** ❌ нет
+
+### Шипение горячей еды (sizzle)
+Только что приготовленная на гриле или в сковороде еда некоторое время шипит (визуальный и звуковой эффект).
+
+- **Код:** [`/datum/component/sizzle`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/sizzle.dm#L1)
+- **Статус в ss13-rs:** ❌ нет
+
+### Еда для призраков
+Отдельные блюда (хеллоуинские) призрак может «есть»: предмет постепенно исчезает под действием наблюдателей.
+
+- **Код:** [`/datum/component/ghost_edible`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/food/ghost_edible.dm#L5)
+- **Статус в ss13-rs:** ❌ нет
+
+### Обезьяний кубик
+Кубик, политый водой или съеденный, раскрывается в живую обезьяну (у едока — из груди); есть варианты других видов.
+
+- **Код:** [`/obj/item/food/monkeycube`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/food_and_drinks/food/monkeycube.dm#L1), [`proc/Expand()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/food_and_drinks/food/monkeycube.dm#L25)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/food.rs`: съедается как обычная еда, раскрытия в обезьяну нет
+
+### Наживка для рыбалки
+Червяки и наживка (`bait.dm`) — еда, используемая как приманка на удочке; сама рыбалка — см. ../service/.
+
+- **Код:** [`/obj/item/food/bait`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/food_and_drinks/food/bait.dm#L1)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload/src/food.rs`: существует как еда, использования как наживки нет
