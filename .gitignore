@@ -3,3 +3,4 @@
 /assets/generated
 *.swp
 logs/
+/dist
