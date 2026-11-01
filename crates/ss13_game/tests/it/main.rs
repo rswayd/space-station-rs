@@ -26,6 +26,7 @@ mod interact;
 mod inventory;
 mod janitor;
 mod jobs;
+mod loopback;
 mod los;
 mod mecha;
 mod medical;

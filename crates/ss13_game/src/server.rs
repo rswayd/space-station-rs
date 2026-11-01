@@ -4,10 +4,10 @@
 //! `ss13_proto::ProtoPlugin` and `ss13_mapload::MapLoadPlugin`.
 
 use std::collections::{HashMap, VecDeque};
-use std::time::Instant;
 
 use bevy::ecs::entity::{EntityHashMap, EntityHashSet};
 use bevy::ecs::message::MessageCursor;
+use bevy::platform::time::Instant;
 use bevy::prelude::*;
 use ss13_assets::dmm::{DmValue, DmmMap};
 use ss13_mapload::{
@@ -270,7 +270,11 @@ impl Plugin for GameServerPlugin {
                 .chain()
                 .before(crate::jobs::JobsStartup),
         )
-        .add_systems(PostStartup, write_dev_cert_digest)
+        .add_systems(
+            PostStartup,
+            // None on a loopback (in-memory) server.
+            write_dev_cert_digest.run_if(resource_exists::<ServerCertificateDigest>),
+        )
         .add_systems(
             Update,
             (handle_connections, forward_moves)

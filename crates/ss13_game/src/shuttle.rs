@@ -33,9 +33,10 @@
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use bevy::ecs::message::MessageCursor;
+use bevy::platform::time::Instant;
 use bevy::prelude::*;
 use ss13_atmos::{Atmos, GasMixture, GasOverlay, HotspotEffect, TurfAir};
 use ss13_mapload::dock::{SHUTTLE_SKIPOVER, map_shuttle, shuttle_template_path};

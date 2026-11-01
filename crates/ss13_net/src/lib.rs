@@ -1,5 +1,6 @@
-//! Networking: maps `ss13_shared::protocol` onto WebTransport (QUIC, `wtransport`). Swapping the
-//! network library touches only this crate.
+//! Networking: maps `ss13_shared::protocol` onto WebTransport (QUIC, `wtransport`), or onto the
+//! in-memory [`loopback`] transport (the only one on wasm32). Swapping the network library touches
+//! only this crate.
 //!
 //! After the WebTransport session opens, the client sends a handshake with
 //! [`ss13_shared::protocol::PROTOCOL_VERSION`] and an auth token, and the server answers accept or
@@ -17,6 +18,7 @@ pub mod debug;
 mod light_server;
 #[cfg(feature = "server")]
 mod line_of_sight;
+pub mod loopback;
 pub mod move_ack;
 mod protocol;
 mod replication;
@@ -34,9 +36,17 @@ mod view_mask;
 
 #[cfg(feature = "client")]
 pub mod client;
+#[cfg(all(feature = "client", not(target_arch = "wasm32")))]
+mod client_quic;
 #[cfg(feature = "server")]
 pub mod server;
+#[cfg(feature = "server")]
+mod server_loopback;
+#[cfg(all(feature = "server", not(target_arch = "wasm32")))]
+mod server_quic;
 
+#[cfg(all(test, feature = "client", feature = "server"))]
+mod loopback_tests;
 #[cfg(all(test, feature = "client", feature = "server"))]
 mod replication_tests;
 #[cfg(all(test, feature = "client", feature = "server"))]

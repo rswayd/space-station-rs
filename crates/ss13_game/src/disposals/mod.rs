@@ -36,8 +36,8 @@ pub mod pipes;
 
 use crate::sound::PlaySound;
 use ss13_mapload::sound::files;
-use std::time::Instant;
 
+use bevy::platform::time::Instant;
 use bevy::prelude::*;
 use ss13_atmos::GasMixture;
 use ss13_mapload::fidelity::{IconIndex, is_under};

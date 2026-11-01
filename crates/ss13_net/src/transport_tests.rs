@@ -12,7 +12,8 @@ use wtransport::endpoint::endpoint_side::Client;
 use wtransport::{ClientConfig, Connection, Endpoint, Identity, RecvStream, SendStream};
 
 use crate::ServerNotice;
-use crate::client::{NetClientConfig, NetClientPlugin, NetClientState, parse_digest};
+use crate::client::{NetClientConfig, NetClientPlugin, NetClientState};
+use crate::client_quic::parse_digest;
 use crate::protocol::{
     Hello, HelloReply, MAX_CLIENT_FRAME, MAX_HELLO_FRAME, close, encode_frame, read_frame, runtime,
 };

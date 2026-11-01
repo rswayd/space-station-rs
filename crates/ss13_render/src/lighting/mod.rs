@@ -24,7 +24,7 @@
 
 pub mod math;
 
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use bevy::asset::RenderAssetUsages;
 use bevy::asset::embedded_asset;
@@ -34,6 +34,7 @@ use bevy::ecs::entity::EntityHashMap;
 use bevy::image::ImageSampler;
 use bevy::mesh::MeshVertexBufferLayoutRef;
 use bevy::platform::collections::HashMap;
+use bevy::platform::time::Instant;
 use bevy::prelude::*;
 use bevy::render::render_resource::{
     AsBindGroup, BlendComponent, BlendFactor, BlendOperation, BlendState, Extent3d,

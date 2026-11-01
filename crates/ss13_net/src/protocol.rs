@@ -18,8 +18,9 @@
 // Each side uses its half of the wire format.
 #![cfg_attr(not(all(feature = "client", feature = "server")), allow(dead_code))]
 
+#[cfg(not(target_arch = "wasm32"))]
 use core::time::Duration;
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -29,6 +30,7 @@ use ss13_shared::debug::{DebugRequest, DebugResponse};
 use ss13_shared::protocol::{ClientIntent, MoveAck};
 pub use ss13_shared::protocol::{ServerNotice, TICK_DURATION};
 use ss13_shared::ui::{UiClientMessage, UiServerMessage};
+#[cfg(not(target_arch = "wasm32"))]
 use wtransport::{RecvStream, VarInt};
 
 use crate::replication::{Motion, MotionBatch, ReplicationBatch};
@@ -47,7 +49,9 @@ pub(crate) const MAX_CLIENT_FRAME: usize = 64 * 1024;
 pub(crate) const MAX_SERVER_FRAME: usize = 4 * 1024 * 1024;
 
 /// QUIC idle timeout on both ends; keep-alives keep a quiet but live session open.
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) const IDLE_TIMEOUT: Duration = Duration::from_secs(10);
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) const KEEP_ALIVE: Duration = Duration::from_secs(3);
 
 /// Application close codes (QUIC `CONNECTION_CLOSE`); the reason bytes are human-readable.
@@ -64,6 +68,7 @@ pub(crate) mod close {
     pub const KICKED: u32 = 6;
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn code(code: u32) -> VarInt {
     VarInt::from_u32(code)
 }
@@ -113,7 +118,13 @@ pub(crate) type Frame = Arc<[u8]>;
 pub(crate) enum FrameError {
     TooLarge(usize),
     Malformed(postcard::Error),
+    /// An in-memory frame whose prefix does not match its payload.
+    Length {
+        prefix: usize,
+        payload: usize,
+    },
     /// The stream or connection ended; the string says how.
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     Closed(String),
 }
 
@@ -122,6 +133,9 @@ impl core::fmt::Display for FrameError {
         match self {
             Self::TooLarge(len) => write!(f, "frame of {len} bytes is over the limit"),
             Self::Malformed(e) => write!(f, "malformed frame: {e}"),
+            Self::Length { prefix, payload } => {
+                write!(f, "frame prefix says {prefix} bytes, payload has {payload}")
+            }
             Self::Closed(how) => f.write_str(how),
         }
     }
@@ -137,7 +151,30 @@ pub(crate) fn encode_frame<T: Serialize>(message: &T, max: usize) -> Result<Fram
     Ok(buf.into())
 }
 
+/// Decodes one whole frame (prefix included) of at most `max` payload bytes: the in-memory
+/// transport's counterpart of [`read_frame`], with the same limit.
+pub(crate) fn decode_frame<T: DeserializeOwned>(frame: &[u8], max: usize) -> Result<T, FrameError> {
+    let Some((prefix, payload)) = frame.split_first_chunk::<4>() else {
+        return Err(FrameError::Length {
+            prefix: 4,
+            payload: frame.len(),
+        });
+    };
+    let len = u32::from_le_bytes(*prefix) as usize;
+    if len > max {
+        return Err(FrameError::TooLarge(len));
+    }
+    if len != payload.len() {
+        return Err(FrameError::Length {
+            prefix: len,
+            payload: payload.len(),
+        });
+    }
+    postcard::from_bytes(payload).map_err(FrameError::Malformed)
+}
+
 /// Reads one frame of at most `max` payload bytes, using `buf` as scratch between calls.
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) async fn read_frame<T: DeserializeOwned>(
     recv: &mut RecvStream,
     max: usize,
@@ -190,10 +227,11 @@ pub(crate) fn decode_motion(datagram: &[u8]) -> Option<MotionBatch> {
     postcard::from_bytes(datagram).ok()
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// The process-wide async runtime of the transport: QUIC I/O never runs on Bevy threads, and
 /// Bevy systems only touch bounded channels and non-blocking calls.
 pub(crate) fn runtime() -> &'static tokio::runtime::Runtime {
-    static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
+    static RUNTIME: std::sync::OnceLock<tokio::runtime::Runtime> = std::sync::OnceLock::new();
     RUNTIME.get_or_init(|| {
         let threads = std::thread::available_parallelism().map_or(2, |n| n.get().clamp(2, 8));
         tokio::runtime::Builder::new_multi_thread()
@@ -205,6 +243,7 @@ pub(crate) fn runtime() -> &'static tokio::runtime::Runtime {
     })
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// A connection close as a reason fit to show: the peer's own reason when it gave one.
 pub(crate) fn close_reason(error: &wtransport::error::ConnectionError) -> String {
     match error {
@@ -217,6 +256,7 @@ pub(crate) fn close_reason(error: &wtransport::error::ConnectionError) -> String
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// The connection's close reason when the stream ended because the connection did, else `how`.
 pub(crate) async fn lost_reason(conn: &wtransport::Connection, how: String) -> String {
     match tokio::time::timeout(Duration::from_millis(100), conn.closed()).await {

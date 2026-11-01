@@ -60,8 +60,8 @@ pub struct CombatRng(pub u64);
 
 impl Default for CombatRng {
     fn default() -> Self {
-        let seed = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
+        let seed = web_time::SystemTime::now()
+            .duration_since(web_time::UNIX_EPOCH)
             .map_or(0, |d| d.as_nanos() as u64);
         Self(seed)
     }

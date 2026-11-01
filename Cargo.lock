@@ -5984,6 +5984,7 @@ dependencies = [
  "ss13_shared",
  "ss13_tgui",
  "ss13_world",
+ "web-time",
 ]
 
 [[package]]
@@ -6042,6 +6043,7 @@ dependencies = [
  "ss13_shared",
  "ss13_ui_kit",
  "ss13_world",
+ "web-time",
 ]
 
 [[package]]
@@ -6125,6 +6127,7 @@ dependencies = [
  "ss13_tgui",
  "ss13_ui_kit",
  "ss13_world",
+ "web-time",
 ]
 
 [[package]]
@@ -6145,6 +6148,7 @@ dependencies = [
  "ss13_shared",
  "ss13_world",
  "thiserror 2.0.21",
+ "web-time",
 ]
 
 [[package]]

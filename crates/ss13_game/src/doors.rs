@@ -9,8 +9,8 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Instant;
 
+use bevy::platform::time::Instant;
 use bevy::prelude::*;
 use ss13_mapload::{
     DmAirlockHelper, DmAtom, DmDoor, DoorKind, MapLoadPlugin, Opaque, read_manifest,

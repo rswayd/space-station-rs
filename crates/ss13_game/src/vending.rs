@@ -159,8 +159,8 @@ impl ServerUi for VendingWindow {
         let mut data = vendor.ui.clone();
         // tg picks a random ad per `ui_static_data`.
         if !vendor.ads.is_empty() {
-            let nanos = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
+            let nanos = web_time::SystemTime::now()
+                .duration_since(web_time::UNIX_EPOCH)
                 .map_or(0, |d| d.subsec_nanos() as usize);
             data.ad = vendor.ads[nanos % vendor.ads.len()].clone();
         }

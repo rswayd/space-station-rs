@@ -1,4 +1,5 @@
-//! Client side: connects at `Startup` over WebTransport, performs the handshake, sends intents,
+//! Client side: connects at `Startup` over WebTransport (or the in-memory [`crate::loopback`]
+//! transport when a [`LoopbackConnector`] is inserted), performs the handshake, sends intents,
 //! and reconnects with backoff when the session is lost (not after a rejection).
 //!
 //! Game code reads [`NetClientState`], writes [`SendIntent`] and reads [`NoticeReceived`].
@@ -7,30 +8,35 @@
 
 use core::net::{Ipv4Addr, SocketAddr};
 use core::time::Duration;
-use std::time::Instant;
 
+use bevy::platform::time::Instant;
 use bevy::prelude::*;
 use ss13_shared::protocol::{ClientIntent, PROTOCOL_VERSION};
 use tokio::sync::mpsc;
-use wtransport::tls::Sha256Digest;
-use wtransport::{ClientConfig, Connection, Endpoint, RecvStream, SendStream};
 
 pub use crate::replication_client::{LightBlocks, LocalControl, NetEntity, NetEntityMap};
 
 use crate::chat::client::ChatReceived;
+use crate::loopback::{LoopbackConnector, LoopbackEnd};
 use crate::move_ack::client::MoveAckReceived;
 use crate::protocol::{
-    ClientMessage, DEFAULT_PORT, Frame, FrameError, Hello, HelloReply, IDLE_TIMEOUT, KEEP_ALIVE,
-    MAX_CLIENT_FRAME, MAX_HELLO_FRAME, MAX_SERVER_FRAME, ServerMessage, ServerNotice, close,
-    close_reason, code, decode_motion, encode_frame, lost_reason, read_frame, runtime,
+    ClientMessage, DEFAULT_PORT, Hello, HelloReply, MAX_CLIENT_FRAME, MAX_HELLO_FRAME,
+    MAX_SERVER_FRAME, ServerMessage, ServerNotice, close, decode_frame, decode_motion,
+    encode_frame,
 };
 use crate::replication_client::ReplicationInbox;
 use crate::sim_latency::{Inbox, SimLatency};
 use crate::tap::{NetLinkStats, NetPacket, NetTap};
 use crate::ui::client::UiMessageReceived;
 
+/// The established QUIC connection, kept for its stats; nothing on wasm32.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) type QuicConn = wtransport::Connection;
+#[cfg(target_arch = "wasm32")]
+pub(crate) type QuicConn = core::convert::Infallible;
+
 /// QUIC handshake, WebTransport session and our handshake together.
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+pub(crate) const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 /// Reconnect delays: doubled after every failed attempt up to the max, reset by an accepted
 /// handshake.
 const RECONNECT_MIN: Duration = Duration::from_secs(1);
@@ -97,8 +103,9 @@ pub enum NetClientSystems {
 #[derive(Resource)]
 pub(crate) struct HandshakeVersion(pub u32);
 
-enum Event {
-    Accepted(Connection),
+pub(crate) enum Event {
+    /// With the QUIC connection; `None` over loopback.
+    Accepted(Option<QuicConn>),
     /// Final: the server refused this client.
     Rejected(String),
     /// With its encoded size.
@@ -121,16 +128,28 @@ pub(crate) struct ClientTransport {
 struct Session {
     events: Inbox<Event>,
     /// Set once the handshake is accepted.
-    conn: Option<Connection>,
-    // Unbounded: only this player's own input goes in.
-    out: mpsc::UnboundedSender<Frame>,
-    task: tokio::task::JoinHandle<()>,
+    conn: Option<QuicConn>,
+    driver: Driver,
+}
+
+enum Driver {
+    #[cfg(not(target_arch = "wasm32"))]
+    Quic {
+        // Unbounded: only this player's own input goes in.
+        out: mpsc::UnboundedSender<crate::protocol::Frame>,
+        task: tokio::task::JoinHandle<()>,
+    },
+    Loopback(Box<LoopbackSession>),
 }
 
 impl Drop for Session {
     fn drop(&mut self) {
-        // Dropping the task drops the connection, which closes it.
-        self.task.abort();
+        // Dropping the task drops the connection, which closes it; a dropped loopback end closes
+        // the connection for the server.
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Driver::Quic { task, .. } = &self.driver {
+            task.abort();
+        }
     }
 }
 
@@ -145,7 +164,13 @@ impl ClientTransport {
                     let packet = NetPacket::sent(message, frame.len());
                     self.tapped.lock().expect("tap lock").push(packet);
                 }
-                let _ = session.out.send(frame);
+                match &session.driver {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    Driver::Quic { out, .. } => {
+                        let _ = out.send(frame);
+                    }
+                    Driver::Loopback(lo) => lo.end.tx.send_frame(frame),
+                }
             }
             Err(e) => warn!("not sent to the server: {e}"),
         }
@@ -199,197 +224,181 @@ impl Plugin for NetClientPlugin {
 fn start_client(
     config: Res<NetClientConfig>,
     version: Res<HandshakeVersion>,
+    connector: Option<Res<LoopbackConnector>>,
     mut transport: ResMut<ClientTransport>,
     mut state: ResMut<NetClientState>,
 ) {
-    let digest = &config.certificate_digest;
-    if parse_digest(digest).is_none() {
-        *state = NetClientState::Disconnected {
-            reason: format!("invalid certificate digest {digest:?}: expected 64 hex digits"),
-        };
-        return;
+    #[cfg(not(target_arch = "wasm32"))]
+    if connector.is_none() {
+        let digest = &config.certificate_digest;
+        if crate::client_quic::parse_digest(digest).is_none() {
+            *state = NetClientState::Disconnected {
+                reason: format!("invalid certificate digest {digest:?}: expected 64 hex digits"),
+            };
+            return;
+        }
     }
-    connect(&config, version.0, &mut transport, &mut state);
-}
-
-/// 64 hex digits, as the server logs it.
-pub(crate) fn parse_digest(hex: &str) -> Option<Sha256Digest> {
-    if hex.len() != 64 || !hex.is_ascii() {
-        return None;
-    }
-    let mut bytes = [0; 32];
-    for (byte, pair) in bytes.iter_mut().zip(hex.as_bytes().chunks(2)) {
-        *byte = u8::from_str_radix(core::str::from_utf8(pair).ok()?, 16).ok()?;
-    }
-    Some(Sha256Digest::new(bytes))
+    connect(
+        &config,
+        version.0,
+        connector.as_deref(),
+        &mut transport,
+        &mut state,
+    );
 }
 
 fn connect(
     config: &NetClientConfig,
     version: u32,
+    connector: Option<&LoopbackConnector>,
     transport: &mut ClientTransport,
     state: &mut NetClientState,
 ) {
     let (events_tx, events_rx) = mpsc::channel(INBOX_ITEMS);
-    let (out_tx, out_rx) = mpsc::unbounded_channel();
-    let task = runtime().spawn(run_session(config.clone(), version, events_tx, out_rx));
+    let driver = match connector {
+        Some(connector) => Driver::Loopback(Box::new(LoopbackSession::start(
+            connector, config, version, events_tx,
+        ))),
+        #[cfg(not(target_arch = "wasm32"))]
+        None => {
+            let (out, task) = crate::client_quic::spawn(config, version, events_tx);
+            Driver::Quic { out, task }
+        }
+        #[cfg(target_arch = "wasm32")]
+        None => {
+            *state = NetClientState::Disconnected {
+                reason: "no WebTransport client on wasm32: insert a LoopbackConnector".into(),
+            };
+            return;
+        }
+    };
     transport.session = Some(Session {
         events: Inbox::new(events_rx),
         conn: None,
-        out: out_tx,
-        task,
+        driver,
     });
     transport.retry_at = None;
     *state = NetClientState::Connecting;
 }
 
-type Events = mpsc::Sender<(Instant, Event)>;
+pub(crate) type Events = mpsc::Sender<(Instant, Event)>;
 
-async fn run_session(
-    config: NetClientConfig,
-    version: u32,
+/// An in-memory session, pumped from `receive` (no task): the counterpart of `client_quic`'s
+/// session task, with the same frames, limits and outcomes.
+struct LoopbackSession {
+    end: LoopbackEnd,
     events: Events,
-    out: mpsc::UnboundedReceiver<Frame>,
-) {
-    let event = match session(&config, version, &events, out).await {
-        Ok(Some(rejected)) => Event::Rejected(rejected),
-        Ok(None) => return,
-        Err(reason) => Event::Lost(reason),
-    };
-    let _ = events.send((Instant::now(), event)).await;
+    accepted: bool,
+    deadline: Instant,
+    /// The final event, held while the event queue is full; `over` once it is queued.
+    ending: Option<Event>,
+    over: bool,
 }
 
-/// `Ok(Some(reason))`: rejected; `Ok(None)`: Bevy dropped the session; `Err`: lost.
-async fn session(
-    config: &NetClientConfig,
-    version: u32,
-    events: &Events,
-    out: mpsc::UnboundedReceiver<Frame>,
-) -> Result<Option<String>, String> {
-    let digest = parse_digest(&config.certificate_digest).ok_or("invalid certificate digest")?;
-    let client_config = ClientConfig::builder()
-        .with_bind_default()
-        .with_server_certificate_hashes([digest])
-        .keep_alive_interval(Some(KEEP_ALIVE))
-        .max_idle_timeout(Some(IDLE_TIMEOUT))
-        .map_err(|e| e.to_string())?
-        .build();
-    let endpoint = Endpoint::client(client_config).map_err(|e| e.to_string())?;
-    let mut buf = Vec::new();
-    let handshake = async {
-        let conn = endpoint
-            .connect(format!("https://{}", config.server_addr))
-            .await
-            .map_err(|e| e.to_string())?;
-        let opening = conn.open_bi().await.map_err(|e| close_reason(&e))?;
-        let (mut send, mut recv) = opening.await.map_err(|e| e.to_string())?;
+impl LoopbackSession {
+    fn start(
+        connector: &LoopbackConnector,
+        config: &NetClientConfig,
+        version: u32,
+        events: Events,
+    ) -> Self {
+        // A server that is gone gives a closed end: the session is lost and retried.
+        let end = connector
+            .connect()
+            .unwrap_or_else(|| crate::loopback::pipe().0);
         let hello = Hello {
             version,
             token: config.token.clone(),
         };
-        let frame = encode_frame(&hello, MAX_HELLO_FRAME).map_err(|e| e.to_string())?;
-        send.write_all(&frame).await.map_err(|e| e.to_string())?;
-        let reply = read_frame::<HelloReply>(&mut recv, MAX_HELLO_FRAME, &mut buf)
-            .await
-            .map_err(|e| e.to_string());
-        let reply = match reply {
-            Ok(reply) => reply,
-            // The server closed before answering (shutting down, timed out): its reason if any.
-            Err(how) => return Err(lost_reason(&conn, how).await),
+        let mut session = Self {
+            end,
+            events,
+            accepted: false,
+            deadline: Instant::now() + CONNECT_TIMEOUT,
+            ending: None,
+            over: false,
         };
-        Ok::<_, String>((conn, send, recv, reply))
-    };
-    let (conn, send, recv, reply) = tokio::time::timeout(CONNECT_TIMEOUT, handshake)
-        .await
-        .map_err(|_| {
-            format!(
-                "no answer from {} in {CONNECT_TIMEOUT:?}",
-                config.server_addr
-            )
-        })??;
-    if let HelloReply::Rejected(reason) = reply {
-        conn.close(code(close::NORMAL), b"");
-        return Ok(Some(reason));
+        match encode_frame(&hello, MAX_HELLO_FRAME) {
+            Ok(frame) => session.end.tx.send_frame(frame),
+            Err(e) => session.ending = Some(Event::Lost(e.to_string())),
+        }
+        session
     }
-    if events
-        .send((Instant::now(), Event::Accepted(conn.clone())))
-        .await
-        .is_err()
-    {
-        return Ok(None);
-    }
-    let reason = tokio::select! {
-        reason = read_loop(&conn, recv, events) => reason,
-        reason = read_datagrams(&conn, events) => reason,
-        reason = write_loop(send, out) => reason,
-        error = conn.closed() => Some(close_reason(&error)),
-    };
-    let Some(reason) = reason else {
-        conn.close(code(close::NORMAL), b"");
-        return Ok(None);
-    };
-    // A kick is final, like a rejection: reconnecting would undo it.
-    let kicked = matches!(
-        tokio::time::timeout(Duration::from_millis(100), conn.closed()).await,
-        Ok(wtransport::error::ConnectionError::ApplicationClosed(c)) if c.code() == code(close::KICKED)
-    );
-    conn.close(code(close::NORMAL), b"");
-    if kicked {
-        Ok(Some(reason))
-    } else {
-        Err(reason)
-    }
-}
 
-/// `None` when Bevy dropped the session.
-async fn read_loop(conn: &Connection, mut recv: RecvStream, events: &Events) -> Option<String> {
-    let mut buf = Vec::new();
-    loop {
-        match read_frame(&mut recv, MAX_SERVER_FRAME, &mut buf).await {
-            Ok(message) => {
-                let size = buf.len() + 4;
-                events
-                    .send((Instant::now(), Event::Message(message, size)))
-                    .await
-                    .ok()?;
-            }
-            Err(FrameError::Closed(how)) => return Some(lost_reason(conn, how).await),
-            Err(e) => {
-                let reason = format!("server sent a {e}");
-                conn.close(code(close::PROTOCOL), reason.as_bytes());
-                return Some(reason);
+    /// Moves what arrived into the event queue.
+    fn pump(&mut self) {
+        if self.over {
+            return;
+        }
+        if self.ending.is_none() {
+            self.ending = self.read();
+        }
+        if let Some(event) = self.ending.take() {
+            match self.events.try_send((Instant::now(), event)) {
+                Err(mpsc::error::TrySendError::Full((_, event))) => self.ending = Some(event),
+                _ => self.over = true,
             }
         }
     }
-}
 
-async fn read_datagrams(conn: &Connection, events: &Events) -> Option<String> {
-    loop {
-        let datagram = match conn.receive_datagram().await {
-            Ok(datagram) => datagram,
-            Err(e) => return Some(close_reason(&e)),
-        };
-        let payload = datagram.payload();
-        let Some(batch) = decode_motion(&payload) else {
-            continue; // Unreliable anyway; a bad one is just lost.
-        };
-        match events.try_send((Instant::now(), Event::Motion(batch, payload.len()))) {
-            Ok(()) | Err(mpsc::error::TrySendError::Full(_)) => {}
-            Err(mpsc::error::TrySendError::Closed(_)) => return None,
+    /// The final event once the session is over.
+    fn read(&mut self) -> Option<Event> {
+        let now = Instant::now();
+        if !self.accepted {
+            let frame = match self.end.recv_frame() {
+                Ok(Some(frame)) => frame,
+                Ok(None) if now < self.deadline => return None,
+                Ok(None) => {
+                    let reason =
+                        format!("no answer from the loopback server in {CONNECT_TIMEOUT:?}");
+                    return Some(Event::Lost(reason));
+                }
+                Err((_, reason)) => return Some(Event::Lost(reason)),
+            };
+            match decode_frame(&frame, MAX_HELLO_FRAME) {
+                Ok(HelloReply::Accepted) => {
+                    if self.events.try_send((now, Event::Accepted(None))).is_err() {
+                        return Some(Event::Lost("client dropped the session".into()));
+                    }
+                    self.accepted = true;
+                }
+                Ok(HelloReply::Rejected(reason)) => {
+                    self.end.close(close::NORMAL, "");
+                    return Some(Event::Rejected(reason));
+                }
+                Err(e) => return Some(Event::Lost(e.to_string())),
+            }
         }
-    }
-}
-
-async fn write_loop(
-    mut send: SendStream,
-    mut out: mpsc::UnboundedReceiver<Frame>,
-) -> Option<String> {
-    while let Some(frame) = out.recv().await {
-        if let Err(e) = send.write_all(&frame).await {
-            return Some(e.to_string());
+        // A full queue leaves frames in the connection, as QUIC flow control would.
+        while let Ok(permit) = self.events.try_reserve() {
+            let frame = match self.end.recv_frame() {
+                Ok(Some(frame)) => frame,
+                Ok(None) => break,
+                // A kick is final, like a rejection: reconnecting would undo it.
+                Err((code, reason)) if code == close::KICKED => {
+                    return Some(Event::Rejected(reason));
+                }
+                Err((_, reason)) => return Some(Event::Lost(reason)),
+            };
+            match decode_frame(&frame, MAX_SERVER_FRAME) {
+                Ok(message) => permit.send((now, Event::Message(message, frame.len()))),
+                Err(e) => {
+                    let reason = format!("server sent a {e}");
+                    self.end.close(close::PROTOCOL, &reason);
+                    return Some(Event::Lost(reason));
+                }
+            }
         }
+        while let Some(datagram) = self.end.recv_datagram() {
+            // Unreliable anyway: a bad one or one over a full queue is just lost.
+            if let Some(batch) = decode_motion(&datagram) {
+                let _ = self
+                    .events
+                    .try_send((now, Event::Motion(batch, datagram.len())));
+            }
+        }
+        None
     }
-    None
 }
 
 fn receive(
@@ -397,6 +406,7 @@ fn receive(
     mut state: ResMut<NetClientState>,
     config: Res<NetClientConfig>,
     version: Res<HandshakeVersion>,
+    connector: Option<Res<LoopbackConnector>>,
     latency: Res<SimLatency>,
     mut inbox: ResMut<ReplicationInbox>,
     mut notices: MessageWriter<NoticeReceived>,
@@ -417,18 +427,12 @@ fn receive(
     transport.tap = tap.enabled;
     if tap.enabled {
         packets.write_batch(transport.tapped.get_mut().expect("tap lock").drain(..));
+        #[cfg(not(target_arch = "wasm32"))]
         if let Some(conn) = transport.session.as_ref().and_then(|s| s.conn.as_ref()) {
-            let quic = conn.quic_connection();
-            let stats = quic.stats();
-            link_stats.set_if_neq(NetLinkStats {
-                rtt: Some(quic.rtt()),
-                udp_tx_bytes: stats.udp_tx.bytes,
-                udp_rx_bytes: stats.udp_rx.bytes,
-                udp_tx_datagrams: stats.udp_tx.datagrams,
-                udp_rx_datagrams: stats.udp_rx.datagrams,
-                lost_packets: stats.path.lost_packets,
-            });
+            link_stats.set_if_neq(crate::client_quic::link_stats(conn));
         }
+        #[cfg(target_arch = "wasm32")]
+        let _ = &mut link_stats;
     } else {
         // Sent while the tap was on; stale by the time it is turned on again.
         transport.tapped.get_mut().expect("tap lock").clear();
@@ -436,16 +440,27 @@ fn receive(
     if transport.session.is_none() {
         if transport.retry_at.is_some_and(|at| Instant::now() >= at) {
             info!("reconnecting to {}", config.server_addr);
-            connect(&config, version.0, transport, &mut state);
+            connect(
+                &config,
+                version.0,
+                connector.as_deref(),
+                transport,
+                &mut state,
+            );
         }
         return;
     }
     let mut ended = None;
     let session = transport.session.as_mut().expect("checked");
+    // The only driver on wasm32.
+    #[allow(irrefutable_let_patterns)]
+    if let Driver::Loopback(lo) = &mut session.driver {
+        lo.pump();
+    }
     session.events.drain(latency.0, |event| match event {
         Event::Accepted(conn) => {
             info!("handshake accepted");
-            session.conn = Some(conn);
+            session.conn = conn;
             *state = NetClientState::Connected;
         }
         Event::Message(message, size) => {

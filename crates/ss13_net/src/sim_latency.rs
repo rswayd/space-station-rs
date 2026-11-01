@@ -7,8 +7,8 @@
 
 use core::time::Duration;
 use std::collections::VecDeque;
-use std::time::Instant;
 
+use bevy::platform::time::Instant;
 use bevy::prelude::*;
 use tokio::sync::mpsc;
 
