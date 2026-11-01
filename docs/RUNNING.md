@@ -176,9 +176,13 @@ Page/worker messages: `{t: "init", files, wasm}` page→worker (`wasm`: the serv
 already downloaded), `progress`/`ready`/`error` worker→page, then `open`/`frame`/`dgram`/`close`
 both ways (`ArrayBuffer`s transferred).
 
-`.github/workflows/web.yml` builds and publishes it on GitHub Pages on every push to `main` and on
-a manual run: `data` (as in `demo.yml`), `site` (wasm build, `web-build.sh`), `deploy`
-(`actions/deploy-pages`). The repository needs Settings > Pages > Source = GitHub Actions.
+`.github/workflows/web.yml` (manual run only) builds it and deploys it to Cloudflare Pages:
+`data` (as in `demo.yml`), `site` (wasm build, `web-build.sh`, the 25 MiB per-file limit check,
+`wrangler pages deploy`). It needs the repository secrets `CLOUDFLARE_API_TOKEN` (permission
+"Cloudflare Pages: Edit") and `CLOUDFLARE_ACCOUNT_ID` and a Pages project `space-station-rs`.
+The site ships `source.tar.gz` (`git archive` of the built commit), `LICENSE` and
+`ASSETS-LICENSE.md`: it conveys the program, so AGPL-3.0 needs the source offered next to it
+even while the repository is private.
 `scripts/gate.sh` runs `cargo check --target wasm32-unknown-unknown` of `ss13_server` and
 `ss13_client`, so native changes cannot break the wasm build unnoticed.
 

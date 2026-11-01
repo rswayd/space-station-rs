@@ -1,10 +1,10 @@
 # Browser demo (docs/RUNNING.md, "Browser demo"): builds the static site (scripts/web-build.sh)
-# and publishes it on GitHub Pages. Needs the repository setting Pages > Source = GitHub Actions.
+# and deploys it to Cloudflare Pages. Manual runs only (the repository is private: Actions minutes
+# are limited). Needs the repository secrets CLOUDFLARE_API_TOKEN (permission "Cloudflare Pages:
+# Edit") and CLOUDFLARE_ACCOUNT_ID, and a Pages project named space-station-rs.
 name: web
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 env:
@@ -15,7 +15,7 @@ env:
 
 # One deployment at a time; a newer push supersedes a queued one.
 concurrency:
-  group: pages
+  group: web-deploy
   cancel-in-progress: false
 
 jobs:
@@ -70,19 +70,13 @@ jobs:
           name: web-data
           path: pkg
       - run: scripts/web-build.sh pkg dist
-      - uses: actions/upload-pages-artifact@v3
+      # Cloudflare Pages rejects files over 25 MiB.
+      - name: file size limit
+        run: |
+          big=$(find dist -type f -size +25M)
+          if [ -n "$big" ]; then echo "over 25 MiB: $big"; exit 1; fi
+      - uses: cloudflare/wrangler-action@v3
         with:
-          path: dist
-
-  deploy:
-    needs: site
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=space-station-rs --branch=main
