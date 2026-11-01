@@ -4,7 +4,9 @@ Goal: a static page; the game loads, a server runs in the same browser (Web Work
 (main thread, WebGL2) connects to it in memory; a reload resets everything. No backend.
 
 Status: phase 1 done (in-memory transport, `wasm32-unknown-unknown` type-checks, tick cost
-measured). Nothing runs in a browser yet.
+measured); phase 2 steps 1-3 done (data source `ss13_data`, worker entry `ss13_web_server`, page
+entry `ss13_web_client`, shared bridge `ss13_web_common`), page and build script in `web/` and
+`scripts/web-build.sh`.
 
 ## Architecture
 
@@ -64,12 +66,16 @@ pages around the spawn.
 
 | Area | Files | Why | Phase 2 fix |
 | --- | --- | --- | --- |
-| Data files | `ss13_proto/src/load.rs` (prototypes dir, `read_dir`), `ss13_mapload/src/{load,jobs,cargo,antag,mobs,mecha,plants,research,silicon,sound,dock}.rs`, `ss13_reagents/src/data.rs`, `ss13_render/src/atlas.rs` (manifest, pages), `ss13_game/src/sound_client.rs` | `std::fs` has no filesystem on wasm32-unknown-unknown | one "data by relative path" source filled from `fetch` before the app starts (native: the filesystem); lazy atlas pages and sounds through Bevy's asset reader or `fetch` |
-| Admin config and log | `ss13_admin/src/server.rs` | `std::fs` | no admin files in the demo: the local player is host (as `SS13_INSECURE_ADMINS` in the Windows demo) |
-| Composition roots | `ss13_server/src/main.rs` (thread watching stdin, `UdpSocket` port wait, reboot loop), `ss13_client/src/local_server.rs` (`std::process`) | no threads, sockets or processes | a wasm entry per side (`#[wasm_bindgen]` start in the worker and in the page) reusing the plugin lists; the round reboot (`REBOOT_EXIT_CODE`) rebuilds the server app inside the worker and hands it the listener again |
-| WebGL2 | `ss13_client` | Bevy's `webgl2` feature is not enabled: wgpu on wasm would need WebGPU | `bevy/webgl2` (+ `bevy_winit` canvas selector) for the wasm target |
 | Debug panel time stamp | `ss13_debug/src/client/panels.rs` | `std::time::SystemTime::now` panics | `web_time::SystemTime`, as done for the server crates |
 | Config by environment | every `std::env::var` | always unset on wasm32: defaults apply (fine for the demo) | URL query parameters if a knob is needed |
+
+Fixed in phase 2: data files (every runtime read goes through `ss13_data`: `std::fs` natively,
+the downloaded bundle mounted by the wasm entry; atlas pages and sounds are copied from the JS
+`Map` into wasm memory on first read), admin config (the worker mounts `config/admin_ranks.txt`
+and `dev = Host`, `insecure_admins`), composition roots (`ss13_web_server`/`ss13_web_client`
+repeat the plugin lists of `ss13_server`/`ss13_client`; the worker rebuilds the app on
+`REBOOT_EXIT_CODE` and moves the listener over), WebGL2 (`bevy/2d` already brings `webgl2`; the
+canvas comes from `start`).
 
 Fixed in phase 1: `wtransport`/tokio runtime (native only; tokio's `sync` channels work
 everywhere), `std::time::Instant` (`bevy::platform::time::Instant`, `web-time` on wasm via
@@ -96,18 +102,17 @@ SS13_ASSETS=$ASSETS cargo test --release -p ss13_game --all-features --test it \
 | --- | --- | --- | --- | --- | --- | --- |
 | native release | 0.65 ms | 0.62 ms | 0.80 ms | 0.93 ms | 10.8 ms | 16.0 s |
 | native dev profile (deps `opt-level=3`, our crates 1) | 1.17 ms | 1.12 ms | 1.40 ms | 1.60 ms | 12.9 ms | 15.4 s |
-| wasm32 | not measured | | | | | |
+| wasm32 release in node 22 (`ss13_web_server`, no player joined, 200 ticks) | 5.22 ms | | 6.63 ms | | 16.0 ms | 25.7 s |
 
 The budget is 50 ms per tick, so even a several-fold wasm slowdown leaves the idle server far
 inside it; the open questions are busy rounds (atmos fires, many mobs) and the server start
 (`Station::start`: map load and round start, 16 s native even in release: on wasm it blocks the
 worker, not the page, but the player waits; profile it before phase 3).
 
-wasm was not measured: the installed `wasm-bindgen` CLI is 0.2.114 and `Cargo.lock` has the
-`wasm-bindgen` crate 0.2.130 (they must match exactly), and the server cannot load MetaStation on
-wasm before the data source above exists. Needed: `wasm-bindgen-cli` 0.2.130 (`cargo install
-wasm-bindgen-cli --version 0.2.130 --locked`, or a project-local `--root`), then a node runner
-that feeds the files to the server app (phase 2, step 2).
+The wasm row is the release build before `wasm-opt`, idle with no client (the native rows have
+one idle player), timed by the worker's own tick log (`web server: N ticks, avg ...`); its map
+load is the whole start (`start` to `ready`). Prototypes and the map load in plugin
+`finish`/`build`, so the worker posts only two coarse `progress` stages.
 
 ## Phase 2 steps
 

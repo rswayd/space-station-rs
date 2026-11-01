@@ -1,7 +1,7 @@
 //! Browser demo, worker side (`docs/WEB.md`): the server app of `ss13_server` on MetaStation,
 //! without sockets: a [`LoopbackListener`] whose connector opens one connection per page `open`,
 //! ticked every 50 ms by its own timer (Bevy's schedule runner needs a `window`, a worker has
-//! none). Exports `start(files, post)` and `on_page_message(msg)`.
+//! none). Exports `start(files, post, source_url?)` and `on_page_message(msg)`.
 #![cfg(target_arch = "wasm32")]
 
 use std::cell::RefCell;
@@ -16,8 +16,6 @@ use ss13_net::loopback::{LoopbackConnector, LoopbackListener, listener};
 use ss13_web_common::{Bridge, Post};
 use wasm_bindgen::prelude::*;
 
-/// AGPL-3.0 §13: shown in the lobby.
-const SOURCE_URL: &str = "https://github.com/rswayd/space-station-rs";
 /// The bundle's BYOND map files live under this prefix (`scripts/demo-package.sh` layout).
 const SOURCE_DIR: &str = "BandaStation";
 /// Ticks per logged timing line.
@@ -28,6 +26,7 @@ struct Server {
     connector: LoopbackConnector,
     bridge: Bridge,
     ticks: Vec<f64>,
+    source_url: Option<String>,
 }
 
 thread_local! {
@@ -35,10 +34,12 @@ thread_local! {
 }
 
 /// `files`: path → `Uint8Array` (server and shared files of `data/files.json`); `post(msg,
-/// transfer)` posts to the page. Returns at once; the build and map load run in the next task
+/// transfer)` posts to the page; `source_url` (optional): where players get the source (AGPL-3.0
+/// §13), shown in the lobby; none: no source line. Returns at once; the build and map load run in the next task
 /// (`progress` messages, then `ready`, or `error`).
 #[wasm_bindgen]
-pub fn start(files: Map, post: Function) {
+pub fn start(files: Map, post: Function, source_url: Option<String>) {
+    let source_url = source_url.filter(|u| !u.trim().is_empty());
     let post = Post::new(post);
     ss13_web_common::set_panic_hook(Some(post.clone()));
     ss13_web_common::mount_files(files, admin_config());
@@ -46,7 +47,7 @@ pub fn start(files: Map, post: Function) {
     ss13_web_common::after(0, move || {
         let built = Instant::now();
         let (listener, connector) = listener();
-        let mut app = server_app(listener, true);
+        let mut app = server_app(listener, source_url.clone(), true);
         post.send("progress", &[("stage", "server: map".into())], None);
         let Some(()) = finish(&mut app, &post) else {
             return;
@@ -65,6 +66,7 @@ pub fn start(files: Map, post: Function) {
                 connector,
                 bridge,
                 ticks: Vec::with_capacity(STATS_TICKS),
+                source_url,
             })
         });
         post.send("ready", &[], None);
@@ -143,7 +145,7 @@ fn reboot(server: &mut Server) {
         .world_mut()
         .remove_resource::<LoopbackListener>()
         .expect("the listener stays in the server app");
-    let mut app = server_app(listener, false);
+    let mut app = server_app(listener, server.source_url.clone(), false);
     if finish(&mut app, server.bridge.post()).is_some() {
         server.app = app;
         info!("web server: rebooted");
@@ -179,7 +181,7 @@ fn finish(app: &mut App, post: &Post) -> Option<()> {
 
 /// The plugins of `ss13_server` with `SS13_MAP=MetaStation`, the single-player demo settings
 /// (`ss13_client::local_server`) and a loopback listener instead of a socket.
-fn server_app(listener: LoopbackListener, first: bool) -> App {
+fn server_app(listener: LoopbackListener, source_url: Option<String>, first: bool) -> App {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins);
     // The global logger is set once per worker.
@@ -201,7 +203,7 @@ fn server_app(listener: LoopbackListener, first: bool) -> App {
         .insert_resource(ss13_game::round::RoundConfig {
             // The round starts at once; the player joins it from the lobby (latejoin).
             lobby_secs: 0.0,
-            source_url: Some(SOURCE_URL.into()),
+            source_url,
             ..ss13_game::round::RoundConfig::tg()
         })
         .add_plugins((
