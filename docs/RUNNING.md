@@ -150,6 +150,38 @@ SS13_ADMIN_UI=players SS13_SCRIPT=$PWD/scripts/visual/demo.txt SS13_SCRIPT_OUT=/
     SS13_OFFSCREEN=1 /tmp/pkg/ss13_client      # latejoins as an Assistant, the admin panel open
 ```
 
+## Browser demo
+
+A single-player static site (architecture: `docs/WEB.md`): the server runs in a Web Worker, the
+client on a WebGL2 canvas, connected in memory; Chrome only. The landing page explains it and
+links the source (AGPL §13, the exact commit) and the asset licenses; "Запустить игру" downloads
+every file of `data/files.json` and both wasm binaries with a progress bar (~150 MB, no lazy
+loading), starts the worker, waits for its `ready` and then starts the client. A reload resets
+everything.
+
+```sh
+scripts/demo-package.sh $SS13_SOURCE $ASSETS /tmp/pkg   # the data, as for the Windows demo
+scripts/web-build.sh /tmp/pkg dist                      # release wasm of ss13_web_server/_client
+python3 -m http.server -d dist 8000                     # then open http://127.0.0.1:8000
+```
+
+`web-build.sh` needs the `wasm32-unknown-unknown` target (`rust-toolchain.toml` installs it),
+`wasm-bindgen` at the exact version of the `wasm-bindgen` crate in `Cargo.lock` (it checks) and
+`wasm-opt` (binaryen). `dist/`: `index.html`, `main.js`, `style.css`, `server-worker.js` (from
+`web/`), `client/` and `server/` (wasm-bindgen `--target web` output after `wasm-opt -Oz`),
+`data/` (the package's assets and `BandaStation/_maps/...` files, keyed by these relative paths)
+and `data/files.json` (`[{path, size, side}]`, `side` = `server`, `client` (atlas pages, sounds)
+or `both` (`manifest.postcard`)). Attribution texts are shipped but not downloaded up front.
+Page/worker messages: `{t: "init", files, wasm}` page→worker (`wasm`: the server binary the page
+already downloaded), `progress`/`ready`/`error` worker→page, then `open`/`frame`/`dgram`/`close`
+both ways (`ArrayBuffer`s transferred).
+
+`.github/workflows/web.yml` builds and publishes it on GitHub Pages on every push to `main` and on
+a manual run: `data` (as in `demo.yml`), `site` (wasm build, `web-build.sh`), `deploy`
+(`actions/deploy-pages`). The repository needs Settings > Pages > Source = GitHub Actions.
+`scripts/gate.sh` runs `cargo check --target wasm32-unknown-unknown` of `ss13_server` and
+`ss13_client`, so native changes cannot break the wasm build unnoticed.
+
 ## Scripted client / visual checks
 
 The client runs a script when `SS13_SCRIPT` is set: input is injected as Bevy messages

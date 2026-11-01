@@ -1,0 +1,88 @@
+# Browser demo (docs/RUNNING.md, "Browser demo"): builds the static site (scripts/web-build.sh)
+# and publishes it on GitHub Pages. Needs the repository setting Pages > Source = GitHub Actions.
+name: web
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  # The BandaStation commit the assets are converted from (ASSETS-LICENSE.md).
+  BANDASTATION_SHA: ce5b1f159748db35281bd3b673551598807f4a0b
+  BINARYEN_VERSION: "130"
+  CARGO_TERM_COLOR: always
+
+# One deployment at a time; a newer push supersedes a queued one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  data:
+    name: assets and map files
+    runs-on: ubuntu-latest
+    env:
+      SS13_SOURCE: ${{ github.workspace }}/BandaStation
+      ASSETS: ${{ github.workspace }}/generated
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+        with:
+          repository: ss220club/BandaStation
+          ref: ${{ env.BANDASTATION_SHA }}
+          fetch-depth: 1
+          path: BandaStation
+      # .cargo/config.toml links linux builds with clang + mold.
+      - run: sudo apt-get update && sudo apt-get install -y mold clang
+      - uses: Swatinem/rust-cache@v2
+      # The converter commands of docs/RUNNING.md, "Generate assets".
+      - run: cargo run -p ss13_dm_extract -- --out $ASSETS/dm_types.json
+      - run: cargo run -p ss13_assets --bin ss13-import -- dmi --out $ASSETS --types $ASSETS/dm_types.json
+      - run: cargo run -p ss13_mapload --bin ss13-mapload -- convert --assets $ASSETS
+      - run: scripts/demo-package.sh "$SS13_SOURCE" "$ASSETS" pkg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-data
+          path: pkg
+          if-no-files-found: error
+
+  site:
+    name: wasm build and site
+    needs: data
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      # Host-side build scripts and proc macros still link with clang + mold.
+      - run: sudo apt-get update && sudo apt-get install -y mold clang
+      - uses: Swatinem/rust-cache@v2
+      - name: wasm-bindgen version from Cargo.lock
+        run: echo "WASM_BINDGEN=$(grep -A1 '^name = "wasm-bindgen"$' Cargo.lock | sed -n 's/^version = "\(.*\)"$/\1/p')" >> "$GITHUB_ENV"
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen@${{ env.WASM_BINDGEN }}
+      - name: binaryen (wasm-opt)
+        run: |
+          curl -sSfL "https://github.com/WebAssembly/binaryen/releases/download/version_$BINARYEN_VERSION/binaryen-version_$BINARYEN_VERSION-x86_64-linux.tar.gz" | tar xz -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/binaryen-version_$BINARYEN_VERSION/bin" >> "$GITHUB_PATH"
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-data
+          path: pkg
+      - run: scripts/web-build.sh pkg dist
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: site
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
