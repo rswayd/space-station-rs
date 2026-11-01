@@ -5,6 +5,14 @@ use bevy::log::LogPlugin;
 use bevy::prelude::*;
 
 fn main() -> AppExit {
+    // Set by the client's single-player launch: the parent holds our stdin open, so its end, even
+    // when the parent is killed, ends this server too instead of leaving a hidden process behind.
+    if std::env::var_os("SS13_EXIT_WITH_PARENT").is_some() {
+        std::thread::spawn(|| {
+            let _ = std::io::copy(&mut std::io::stdin(), &mut std::io::sink());
+            std::process::exit(0);
+        });
+    }
     let mut first = true;
     loop {
         let exit = server(first).run();

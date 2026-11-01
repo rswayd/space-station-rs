@@ -535,8 +535,10 @@ fn build_mob_template(world: &mut World) {
     world.insert_resource(MobTemplate(template));
 }
 
-/// Dev convenience, see [`crate::dev_cert_digest_file`].
+/// Dev convenience, see [`crate::dev_cert_digest_file`]; the stdout line is for a client that
+/// started this server as its child ([`crate::LOCAL_DIGEST_LINE`]).
 fn write_dev_cert_digest(digest: Res<ServerCertificateDigest>, config: Res<NetServerConfig>) {
+    println!("{}{}", crate::LOCAL_DIGEST_LINE, digest.0);
     let written = crate::dev_cert_digest_file(config.bind_addr.port())
         .and_then(|path| crate::write_dev_cert_digest(&path, &digest.0).map(|()| path));
     match written {

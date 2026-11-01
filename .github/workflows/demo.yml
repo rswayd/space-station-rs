@@ -1,0 +1,93 @@
+# Windows single-player demo package (docs/RUNNING.md, "Windows demo / releases"): a `v*` tag
+# publishes it as a GitHub Release, a manual run uploads it as a workflow artifact.
+name: demo
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+env:
+  # The BandaStation commit the assets are converted from (ASSETS-LICENSE.md).
+  BANDASTATION_SHA: ce5b1f159748db35281bd3b673551598807f4a0b
+  CARGO_TERM_COLOR: always
+
+jobs:
+  data:
+    name: assets and map files (linux)
+    runs-on: ubuntu-latest
+    env:
+      SS13_SOURCE: ${{ github.workspace }}/BandaStation
+      ASSETS: ${{ github.workspace }}/generated
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+        with:
+          repository: ss220club/BandaStation
+          ref: ${{ env.BANDASTATION_SHA }}
+          fetch-depth: 1
+          path: BandaStation
+      # .cargo/config.toml links linux builds with clang + mold.
+      - run: sudo apt-get update && sudo apt-get install -y mold clang
+      - uses: Swatinem/rust-cache@v2
+      # The converter commands of docs/RUNNING.md, "Generate assets".
+      - run: cargo run -p ss13_dm_extract -- --out $ASSETS/dm_types.json
+      - run: cargo run -p ss13_assets --bin ss13-import -- dmi --out $ASSETS --types $ASSETS/dm_types.json
+      - run: cargo run -p ss13_mapload --bin ss13-mapload -- convert --assets $ASSETS
+      - run: scripts/demo-package.sh "$SS13_SOURCE" "$ASSETS" pkg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: demo-data
+          path: pkg
+          if-no-files-found: error
+
+  windows:
+    name: client and server (windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release --target x86_64-pc-windows-msvc -p ss13_client -p ss13_server
+      - uses: actions/upload-artifact@v4
+        with:
+          name: demo-windows
+          path: |
+            target/x86_64-pc-windows-msvc/release/ss13_client.exe
+            target/x86_64-pc-windows-msvc/release/ss13_server.exe
+          if-no-files-found: error
+
+  package:
+    needs: [data, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: demo-data
+          path: pkg
+      - uses: actions/download-artifact@v4
+        with:
+          name: demo-windows
+          path: pkg
+      - name: zip
+        run: |
+          name=space-station-rs-demo-windows-${GITHUB_REF_NAME//\//-}
+          mv pkg "$name"
+          zip -qr "$name.zip" "$name"
+          echo "NAME=$name" >> "$GITHUB_ENV"
+          ls -l "$name.zip"
+      - if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.NAME }}
+          path: ${{ env.NAME }}
+          if-no-files-found: error
+      - if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.NAME }}.zip
+          body: |
+            Windows single-player demo: unzip, run `ss13_client.exe` (README.txt inside).
+            Source: https://github.com/${{ github.repository }}/tree/${{ github.sha }}
+            Assets from BandaStation ${{ env.BANDASTATION_SHA }} (ASSETS-LICENSE.md).

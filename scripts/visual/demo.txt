@@ -1,0 +1,16 @@
+# The single-player package (docs/RUNNING.md, "Windows demo / releases"): the client started with
+# no server address next to `data/` runs the bundled server, joins its running round and is the
+# host admin (the players tab opens once the server confirms the rights). Run the packaged client
+# itself, not through visual-check.sh (which starts its own server); docs/RUNNING.md:
+#   SS13_ADMIN_UI=players SS13_SCRIPT=$PWD/scripts/visual/demo.txt SS13_SCRIPT_OUT=/tmp/demo \
+#       SS13_OFFSCREEN=1 <package>/ss13_client
+wait_connected timeout=120
+wait_secs 2                 # the round starts, the lobby shows "Join game"
+click_ui "lobby: join"
+wait_secs 1.5
+click_ui "Assistant"
+wait_until controlled timeout=30
+wait_secs 2
+screenshot "demo.png"
+log_state
+quit
