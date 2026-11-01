@@ -11,6 +11,8 @@ name = "ss13-mapload"
 path = "src/bin/ss13-mapload.rs"
 
 [dependencies]
+# `SystemTime` that also works on wasm32 (std's panics there); std's own type natively.
+web-time = "1.1"
 ss13_shared.workspace = true
 ss13_assets.workspace = true
 ss13_world.workspace = true

@@ -34,6 +34,7 @@ use ss13_mapload::{MapLoadPlugin, MapSeed};
 use ss13_net::client::{
     NetClientConfig, NetClientPlugin, NetClientState, NetEntity, NetEntityMap, SendIntent,
 };
+use ss13_net::loopback::LoopbackConnector;
 use ss13_net::server::{
     ClientToken, Interest, NetServerConfig, NetServerPlugin, ReplicationServerPlugin,
     ServerCertificateDigest,
@@ -159,17 +160,28 @@ pub fn server_app(map: MapLoadPlugin, setup: impl FnOnce(&mut App)) -> App {
 }
 
 /// A client app connecting to `server` with `token`, on game time like the server; `setup` adds
-/// the test's recorders.
+/// the test's recorders. A server holding a [`LoopbackConnector`] resource (next to its
+/// listener) is joined over the in-memory transport instead of QUIC.
 pub fn client_app(server: &App, token: &str, setup: impl FnOnce(&mut App)) -> App {
     let world = server.world();
     let mut app = App::new();
-    app.add_plugins(MinimalPlugins)
-        .insert_resource(TimeUpdateStrategy::ManualDuration(TICK))
-        .insert_resource(NetClientConfig {
+    let config = match world.get_resource::<LoopbackConnector>() {
+        Some(connector) => {
+            app.insert_resource(connector.clone());
+            NetClientConfig {
+                token: token.into(),
+                ..default()
+            }
+        }
+        None => NetClientConfig {
             server_addr: world.resource::<NetServerConfig>().bind_addr,
             certificate_digest: world.resource::<ServerCertificateDigest>().0.clone(),
             token: token.into(),
-        })
+        },
+    };
+    app.add_plugins(MinimalPlugins)
+        .insert_resource(TimeUpdateStrategy::ManualDuration(TICK))
+        .insert_resource(config)
         .add_plugins(NetClientPlugin);
     setup(&mut app);
     app.finish();

@@ -304,7 +304,7 @@ fn plan(world: &mut World) {
         }
         clock.elapsed %= AI_TICK_SECS;
     }
-    let started = std::time::Instant::now();
+    let started = bevy::platform::time::Instant::now();
     let now = world.resource::<Time>().elapsed_secs_f64();
     // Living players by level, for the status rules.
     let players: Vec<TilePos> = world

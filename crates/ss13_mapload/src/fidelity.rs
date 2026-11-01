@@ -9,9 +9,10 @@
 
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use bevy::ecs::prelude::{Resource, World};
+use bevy::platform::time::Instant;
 use ss13_assets::manifest::AssetManifest;
 use ss13_shared::{IconStateId, TilePos};
 
@@ -32,8 +33,8 @@ impl MapSeed {
             .ok()
             .and_then(|s| s.trim().parse().ok())
             .unwrap_or_else(|| {
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
+                web_time::SystemTime::now()
+                    .duration_since(web_time::UNIX_EPOCH)
                     .map_or(0, |d| d.as_nanos() as u64)
             });
         Self(seed)

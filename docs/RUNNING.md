@@ -381,6 +381,10 @@ Every integration test that starts a server uses `ss13_game::testing` (feature `
   not far enough yet) fails it early. Intents still arrive after a variable number of ticks:
   assert "eventually" with `run_until`, and "never" with `hold` after the effect it guards
   against could have happened.
+- **In-memory transport** (`ss13_net::loopback`, the browser build's transport, `docs/WEB.md`): a
+  test that inserts `loopback::listener()`'s listener *and* connector into the server app in the
+  `setup` closure gets clients joined over channels instead of QUIC (the server opens no socket);
+  same handshake, frames and limits, pumped by `update` (`it` `loopback::`).
 
 ```rust
 use ss13_game::testing::{self, Drive, fixture_map, write_fixture};

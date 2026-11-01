@@ -26,8 +26,8 @@ pub mod supermatter;
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Instant;
 
+use bevy::platform::time::Instant;
 use bevy::prelude::*;
 use ss13_mapload::fidelity::{IconIndex, is_under};
 use ss13_mapload::light::{DmLight, MINIMUM_USEFUL_LIGHT_RANGE, source};

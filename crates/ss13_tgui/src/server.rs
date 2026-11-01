@@ -891,7 +891,7 @@ mod tests {
         let many: Vec<_> = (0..200_000)
             .map(|i| (i.to_string(), String::new()))
             .collect();
-        let start = std::time::Instant::now();
+        let start = bevy::platform::time::Instant::now();
         assert_eq!(check_shape("x", &many), Err(UiReject::Malformed));
         // Unbounded, the duplicate scan is ~2e10 string comparisons here.
         assert!(start.elapsed() < core::time::Duration::from_secs(1));

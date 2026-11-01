@@ -5,10 +5,11 @@ use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use anyhow::{Context as _, bail};
 use bevy::ecs::prelude::{Entity, Mut, Resource, World};
+use bevy::platform::time::Instant;
 use ss13_assets::dmm::{DmmMap, DmmObject, NO_PREFAB};
 use ss13_assets::import::MANIFEST_FILE;
 use ss13_assets::manifest::AssetManifest;

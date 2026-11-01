@@ -28,9 +28,9 @@
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use std::time::Instant;
 
 use bevy::ecs::entity::EntityHashMap;
+use bevy::platform::time::Instant;
 use bevy::prelude::*;
 use ss13_mapload::{Areas, DmCamera, DmCameraConsole, DmName, Opaque};
 use ss13_net::server::{

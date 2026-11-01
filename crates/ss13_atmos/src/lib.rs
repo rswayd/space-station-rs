@@ -24,10 +24,11 @@ pub mod scan;
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::world::DeferredWorld;
+use bevy::platform::time::Instant;
 use bevy::prelude::*;
 use bevy::tasks::{ComputeTaskPool, TaskPool};
 use ss13_shared::chat::ChatMessage;

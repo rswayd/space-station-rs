@@ -27,8 +27,9 @@ pub mod portable;
 pub mod windows;
 
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
+use bevy::platform::time::Instant;
 use bevy::prelude::*;
 use ss13_atmos::pipenet::{
     Custom, DeviceId, DeviceKind, DeviceSpec, HeatExchange, PORT_VOLUME, Pipenet,

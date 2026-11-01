@@ -24,10 +24,11 @@
 
 use std::collections::VecDeque;
 use std::hash::{BuildHasher, Hash, Hasher};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use bevy::platform::collections::{HashMap, HashTable};
 use bevy::platform::hash::FixedHasher;
+use bevy::platform::time::Instant;
 use bevy::prelude::*;
 use ss13_shared::protocol::NetId;
 use ss13_shared::{Appearance, Facing, LIGHT_BLOCK, Optics, TilePos, light_block};

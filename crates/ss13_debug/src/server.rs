@@ -14,9 +14,9 @@
 //! dropped without an answer.
 
 use std::collections::VecDeque;
-use std::time::Instant;
 
 use bevy::platform::collections::HashMap;
+use bevy::platform::time::Instant;
 use bevy::prelude::*;
 use ss13_atmos::{Atmos, GASES, GasId};
 use ss13_game::health::{Health, HealthSystems, Stat};

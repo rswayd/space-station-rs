@@ -12,7 +12,7 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use anyhow::{Context, ensure};
 use bevy::asset::{AssetHandleProvider, Handle, RenderAssetUsages};
@@ -21,6 +21,7 @@ use bevy::image::Image;
 use bevy::image::{CompressedImageFormats, ImageSampler, ImageType};
 use bevy::log::error;
 use bevy::math::Rect;
+use bevy::platform::time::Instant;
 use bevy::tasks::futures::check_ready;
 use bevy::tasks::{AsyncComputeTaskPool, Task};
 use ss13_assets::manifest::{AssetManifest, IconStateInfo};
