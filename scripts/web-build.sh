@@ -57,6 +57,10 @@ client_bytes=$(stat -c %s "$out/client/ss13_web_client_bg.wasm")
 server_bytes=$(stat -c %s "$out/server/ss13_web_server_bg.wasm")
 download_mb=$(((data_bytes + client_bytes + server_bytes + 524288) / 1048576))
 commit=$(git rev-parse HEAD)
+# AGPL-3.0 §6/§13: the site conveys the program (wasm), so it offers the Corresponding Source of
+# this exact commit from the same place, independent of whether the repository is public.
+git archive --format=tar.gz --prefix="space-station-rs-$commit/" -o "$out/source.tar.gz" HEAD
+cp LICENSE ASSETS-LICENSE.md "$out/"
 sed -i -e "s/__COMMIT__/$commit/g" -e "s/__DOWNLOAD_MB__/$download_mb/g" \
     -e "s/__WASM_BYTES__/{\"client\":$client_bytes,\"server\":$server_bytes}/" "$out/index.html"
 echo "$out: data $((data_bytes / 1048576)) MB, client wasm $((client_bytes / 1048576)) MB," \
