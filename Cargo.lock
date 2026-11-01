@@ -5976,6 +5976,7 @@ dependencies = [
  "postcard",
  "ss13_assets",
  "ss13_chat",
+ "ss13_data",
  "ss13_game",
  "ss13_mapload",
  "ss13_net",
@@ -5996,6 +5997,7 @@ dependencies = [
  "rayon",
  "serde",
  "serde_json",
+ "ss13_data",
  "ss13_shared",
  "thiserror 2.0.21",
 ]
@@ -6064,6 +6066,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "ss13_data"
+version = "0.1.0"
+
+[[package]]
 name = "ss13_debug"
 version = "0.1.0"
 dependencies = [
@@ -6118,6 +6124,7 @@ dependencies = [
  "ss13_assets",
  "ss13_atmos",
  "ss13_chat",
+ "ss13_data",
  "ss13_mapload",
  "ss13_net",
  "ss13_proto",
@@ -6143,6 +6150,7 @@ dependencies = [
  "serde_json",
  "ss13_assets",
  "ss13_atmos",
+ "ss13_data",
  "ss13_proto",
  "ss13_reagents",
  "ss13_shared",
@@ -6171,6 +6179,7 @@ dependencies = [
  "bevy",
  "ron",
  "serde",
+ "ss13_data",
  "thiserror 2.0.21",
 ]
 
@@ -6181,6 +6190,7 @@ dependencies = [
  "anyhow",
  "ron",
  "serde",
+ "ss13_data",
 ]
 
 [[package]]
@@ -6192,6 +6202,7 @@ dependencies = [
  "png",
  "postcard",
  "ss13_assets",
+ "ss13_data",
  "ss13_shared",
 ]
 
@@ -6240,6 +6251,54 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "parley",
+]
+
+[[package]]
+name = "ss13_web_client"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "js-sys",
+ "ss13_admin",
+ "ss13_chat",
+ "ss13_game",
+ "ss13_net",
+ "ss13_render",
+ "ss13_tgui",
+ "ss13_ui_kit",
+ "ss13_web_common",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "ss13_web_common"
+version = "0.1.0"
+dependencies = [
+ "js-sys",
+ "ss13_data",
+ "ss13_net",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "ss13_web_server"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "js-sys",
+ "ss13_admin",
+ "ss13_atmos",
+ "ss13_chat",
+ "ss13_debug",
+ "ss13_game",
+ "ss13_mapload",
+ "ss13_net",
+ "ss13_proto",
+ "ss13_shared",
+ "ss13_tgui",
+ "ss13_web_common",
+ "ss13_world",
+ "wasm-bindgen",
 ]
 
 [[package]]

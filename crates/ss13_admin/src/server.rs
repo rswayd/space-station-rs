@@ -110,7 +110,7 @@ impl Admins {
 
     /// Reads `admin_ranks.txt` and `admins.txt` from `dir`; a missing file means none.
     pub fn load(dir: &std::path::Path) -> Self {
-        let read = |name: &str| std::fs::read_to_string(dir.join(name)).unwrap_or_default();
+        let read = |name: &str| ss13_data::read_to_string(&dir.join(name)).unwrap_or_default();
         let (ranks, mut warnings) = parse_ranks(&read("admin_ranks.txt"));
         let (holders, more) = parse_admins(&read("admins.txt"), &ranks);
         warnings.extend(more);

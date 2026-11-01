@@ -329,8 +329,8 @@ pub fn plant_closure<'a>(
 
 impl PlantData {
     pub fn read(path: &Path) -> anyhow::Result<Self> {
-        let text =
-            std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+        let text = ss13_data::read_to_string(path)
+            .with_context(|| format!("reading {}", path.display()))?;
         ron::from_str(&text).with_context(|| format!("parsing {}", path.display()))
     }
 

@@ -115,14 +115,14 @@ pub struct ShuttleTemplates(pub Vec<PathBuf>);
 /// `None` when no json describes the map or it names no such shuttle.
 pub fn map_shuttle(source: &Path, map: &str, key: &str) -> Option<String> {
     let dir = source.join("_maps/map_jsons");
-    let mut entries: Vec<PathBuf> = std::fs::read_dir(dir)
+    let mut entries: Vec<PathBuf> = ss13_data::read_dir(&dir)
         .ok()?
-        .filter_map(|e| e.ok().map(|e| e.path()))
+        .into_iter()
         .filter(|p| p.extension().is_some_and(|e| e == "json"))
         .collect();
     entries.sort();
     entries.into_iter().find_map(|path| {
-        let json: serde_json::Value = serde_json::from_slice(&std::fs::read(path).ok()?).ok()?;
+        let json: serde_json::Value = serde_json::from_slice(&ss13_data::read(&path).ok()?).ok()?;
         let named = json.get("map_name").and_then(|v| v.as_str()) == Some(map)
             || json
                 .get("map_file")
@@ -139,7 +139,7 @@ pub fn map_shuttle(source: &Path, map: &str, key: &str) -> Option<String> {
 /// shuttles override the prefix with `_maps/shuttles/emergency/`.
 pub fn shuttle_template_path(source: &Path, key: &str, id: &str) -> PathBuf {
     let nested = source.join(format!("_maps/shuttles/{key}/{id}.dmm"));
-    if nested.exists() {
+    if ss13_data::exists(&nested) {
         nested
     } else {
         source.join(format!("_maps/shuttles/{id}.dmm"))

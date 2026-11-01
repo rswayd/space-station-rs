@@ -165,6 +165,14 @@ pub fn listener() -> (LoopbackListener, LoopbackConnector) {
     (LoopbackListener(rx), LoopbackConnector(tx))
 }
 
+impl LoopbackListener {
+    /// The next connection a client opened, if any: for a bridge that forwards connections to a
+    /// server elsewhere (the browser page, `docs/WEB.md`) instead of `NetServerPlugin`.
+    pub fn accept(&mut self) -> Option<LoopbackEnd> {
+        self.0.try_recv().ok()
+    }
+}
+
 impl LoopbackConnector {
     /// The client end of a new connection; `None` when the server is gone.
     pub fn connect(&self) -> Option<LoopbackEnd> {

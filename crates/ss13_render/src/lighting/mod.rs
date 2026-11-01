@@ -512,13 +512,17 @@ fn spawn_lightmap(
     ));
 }
 
+/// A camera rendering into `Rgba8Unorm` gets an sRGB view of its main texture, which needs
+/// `VIEW_FORMATS`; WebGL2 lacks it. An sRGB target stores the same mask (encoded on write, decoded
+/// on sampling).
+const EMISSIVE_FORMAT: TextureFormat = if cfg!(target_arch = "wasm32") {
+    TextureFormat::Rgba8UnormSrgb
+} else {
+    TextureFormat::Rgba8Unorm
+};
+
 fn emissive_image(size: UVec2) -> Image {
-    Image::new_target_texture(
-        size.x.max(1),
-        size.y.max(1),
-        TextureFormat::Rgba8Unorm,
-        None,
-    )
+    Image::new_target_texture(size.x.max(1), size.y.max(1), EMISSIVE_FORMAT, None)
 }
 
 type WorldView<'a> = (&'a Camera, &'a Projection, &'a Transform);

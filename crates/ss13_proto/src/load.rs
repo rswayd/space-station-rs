@@ -100,7 +100,7 @@ impl Prototypes {
         paths.sort();
         let mut sources = Vec::with_capacity(paths.len());
         for path in paths {
-            match std::fs::read_to_string(&path) {
+            match ss13_data::read_to_string(&path) {
                 Ok(text) => sources.push((path, text)),
                 Err(e) => errors.push(file_error(&path, e.into())),
             }
@@ -407,19 +407,12 @@ fn file_error(path: &Path, kind: ErrorKind) -> ProtoError {
 }
 
 fn collect_ron_files(dir: &Path, out: &mut Vec<PathBuf>, errors: &mut Vec<ProtoError>) {
-    let entries = match std::fs::read_dir(dir) {
+    let entries = match ss13_data::read_dir(dir) {
         Ok(entries) => entries,
         Err(e) => return errors.push(file_error(dir, e.into())),
     };
-    for entry in entries {
-        let path = match entry {
-            Ok(entry) => entry.path(),
-            Err(e) => {
-                errors.push(file_error(dir, e.into()));
-                continue;
-            }
-        };
-        if path.is_dir() {
+    for path in entries {
+        if ss13_data::is_dir(&path) {
             collect_ron_files(&path, out, errors);
         } else if path.extension().is_some_and(|e| e == "ron") {
             out.push(path);

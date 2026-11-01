@@ -74,8 +74,15 @@ impl Plugin for GameClientPlugin {
 
 /// Dev only: a local server's digest from [`crate::dev_cert_digest_file`] when `SS13_CERT_DIGEST`
 /// is unset. Runs before `NetClientPlugin` connects in `Startup`.
-fn dev_cert_fallback(mut config: ResMut<NetClientConfig>) {
-    if !config.certificate_digest.is_empty() || !config.server_addr.ip().is_loopback() {
+/// A loopback (in-memory) client has no certificate to pin, and no filesystem in the browser.
+fn dev_cert_fallback(
+    mut config: ResMut<NetClientConfig>,
+    loopback: Option<Res<ss13_net::loopback::LoopbackConnector>>,
+) {
+    if loopback.is_some()
+        || !config.certificate_digest.is_empty()
+        || !config.server_addr.ip().is_loopback()
+    {
         return;
     }
     let read = crate::dev_cert_digest_file(config.server_addr.port())

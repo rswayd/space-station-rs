@@ -105,7 +105,7 @@ mod server {
                 );
                 world.insert_resource(Silicons(data));
             }
-            Err(e) if path.exists() => error!("{e:#}"),
+            Err(e) if ss13_data::exists(&path) => error!("{e:#}"),
             Err(_) => warn!("no {SILICON_FILE} (rerun `ss13-mapload convert`): default laws only"),
         }
     }

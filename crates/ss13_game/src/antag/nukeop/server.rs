@@ -228,7 +228,7 @@ impl Plugin for NukeopPlugin {
             let path = map
                 .source
                 .join("_maps/shuttles/infiltrator/infiltrator_basic.dmm");
-            path.exists().then_some(path)
+            ss13_data::exists(&path).then_some(path)
         });
         if let Some(template) = template {
             info!("infiltrator template {}", template.display());
