@@ -180,9 +180,9 @@ both ways (`ArrayBuffer`s transferred).
 `data` (as in `demo.yml`), `site` (wasm build, `web-build.sh`, the 25 MiB per-file limit check,
 `wrangler pages deploy`). It needs the repository secrets `CLOUDFLARE_API_TOKEN` (permission
 "Cloudflare Pages: Edit") and `CLOUDFLARE_ACCOUNT_ID` and a Pages project `space-station-rs`.
-The site ships `source.tar.gz` (`git archive` of the built commit), `LICENSE` and
-`ASSETS-LICENSE.md`: it conveys the program, so AGPL-3.0 needs the source offered next to it
-even while the repository is private.
+The site ships `LICENSE` and `ASSETS-LICENSE.md`, but no source archive yet (see the shortcut in
+`web-build.sh`): the site conveys the program, so AGPL-3.0 needs the source offered to its users
+before the demo is shown beyond trusted testers.
 `scripts/gate.sh` runs `cargo check --target wasm32-unknown-unknown` of `ss13_server` and
 `ss13_client`, so native changes cannot break the wasm build unnoticed.
 
