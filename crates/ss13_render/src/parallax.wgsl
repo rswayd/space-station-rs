@@ -20,7 +20,10 @@ fn texel(i: u32, world: vec2<f32>) -> vec2<i32> {
     let q = world - params.camera.xy + params.camera.xy / TILE_SIZE * params.speeds[i].x;
     // Texture rows run top-down, world y up.
     let uv = fract(vec2<f32>(q.x, -q.y) / rect.zw);
-    return vec2<i32>(rect.xy + floor(uv * rect.zw));
+    // `fract` of a tiny negative value rounds to exactly 1.0 in f32: unclamped, that samples the
+    // texel past the layer, a neighbour in the atlas, as a 1 px line at the layer's wrap seam.
+    let inside = min(floor(uv * rect.zw), rect.zw - vec2<f32>(1.0));
+    return vec2<i32>(rect.xy + inside);
 }
 
 fn linear_to_srgb(c: vec3<f32>) -> vec3<f32> {
