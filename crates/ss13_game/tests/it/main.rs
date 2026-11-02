@@ -46,6 +46,8 @@ mod shuttle;
 mod silicon;
 mod sound;
 mod storage;
+mod surfaces;
+mod tables;
 mod traitor;
 mod vampire;
 mod vending;

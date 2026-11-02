@@ -61,7 +61,7 @@ pub use atmos_machine::DmAtmosDevice;
 pub use border::DmBorder;
 pub use cable::DmCable;
 pub use clothing::{DmClothing, DmTank};
-pub use construct::{CONSTRUCTION_TYPES, DmObj, DmStack, DmTool, DmTurfBuild};
+pub use construct::{CONSTRUCTION_TYPES, DmObj, DmStack, DmTable, DmTool, DmTurfBuild};
 pub use contents::{DmCloset, DmContents, DmStorage, DmWeight, Fill, PickArm};
 pub use disposal::{DISPOSAL_RUNTIME_TYPES, DmMailSort};
 pub use dock::{DmDockingPort, ShuttleTemplates};
@@ -284,6 +284,7 @@ impl Plugin for DmProtoPlugin {
             .register_proto_component::<DmStack>(construct::STACK_COMPONENT)
             .register_proto_component::<DmTurfBuild>(construct::TURF_COMPONENT)
             .register_proto_component::<DmObj>(construct::OBJ_COMPONENT)
+            .register_proto_component::<DmTable>(construct::TABLE_COMPONENT)
             .register_proto_component::<DmMedical>(medical::MEDICAL_COMPONENT)
             .register_proto_component::<DmWounding>(medical::WOUNDING_COMPONENT)
             .register_proto_component::<DmDefib>(medical::DEFIB_COMPONENT)

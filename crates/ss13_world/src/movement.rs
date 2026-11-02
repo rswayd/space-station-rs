@@ -15,6 +15,11 @@ use crate::index::SpatialIndex;
 )]
 pub struct Density;
 
+/// tg `/datum/element/climb_walkable` (tables): a dense mover standing on one steps onto
+/// another as if it were not dense (`TRAIT_ON_CLIMBABLE` -> `COMSIG_COMPONENT_PERMIT_PASSAGE`).
+#[derive(Component, Clone, Copy, Debug, Default)]
+pub struct ClimbWalkable;
+
 /// tg `ON_BORDER_1`: a dense border object blocks only moves across the tile edges in `edges`
 /// (BYOND dir bits): entering its tile from that side (`CanPass` with `border_dir`) and leaving
 /// its tile through it (`COMSIG_ATOM_EXIT`). Directional windows, windoors, railings,
@@ -196,7 +201,14 @@ fn step(world: &mut World, entity: Entity, dir: Dir) -> bool {
     // Empty (no allocation) on a free step.
     let mut blockers: Vec<Entity> = index.exit_blockers(from, dir, entity).collect();
     if blockers.is_empty() {
-        blockers.extend(index.enter_blockers(to, dir, entity));
+        let walkable = |e: &Entity| world.get::<ClimbWalkable>(*e).is_some();
+        let on_climbable =
+            world.get::<Density>(entity).is_some() && index.on_tile(from).iter().any(walkable);
+        blockers.extend(
+            index
+                .enter_blockers(to, dir, entity)
+                .filter(|e| !(on_climbable && walkable(e))),
+        );
     }
     if !blockers.is_empty() {
         for obstacle in blockers {

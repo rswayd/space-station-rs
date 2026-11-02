@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::{Dir, TilePos};
 
 /// Bumped on every incompatible change; checked during the handshake.
-pub const PROTOCOL_VERSION: u32 = 58;
+pub const PROTOCOL_VERSION: u32 = 59;
 
 /// Simulation tick (20 Hz, as BYOND tg). Server loop and network tick sync must agree on it.
 pub const TICK_DURATION: Duration = Duration::from_millis(50);
@@ -56,6 +56,8 @@ pub enum ClientIntent {
     ToggleThrowMode,
     /// tg `resist` (default key B; the HUD resist button): break a grab.
     Resist,
+    /// tg `toggle_resting` (BandaStation key Shift+B; the HUD rest button): lie down or get up.
+    ToggleRest,
     /// tg lobby "Join Game": opens the `JobSelection` window (the latejoin menu), whose
     /// `select_job` act picks the job.
     LateJoinMenu,

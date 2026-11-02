@@ -226,6 +226,7 @@ fn resolve_clicks(
         Has<crate::silicon::cyborg::Cyborg>,
     )>,
     movers: Query<(), With<Mover>>,
+    objs: Query<&ss13_mapload::DmObj>,
     inside: Query<(), Or<(With<crate::mecha::Pilot>, With<InCloset>)>>,
     positions: Query<&TilePos>,
     mut out: ClickWriters,
@@ -309,8 +310,20 @@ fn resolve_clicks(
             continue;
         }
         // tg `ClickOn`: the modifier procs come before the incapacitation check.
-        let reach_of =
-            |target_pos| index.adjacent(mob_pos, target_pos, |e| e == target || movers.contains(e));
+        // tg `adjacent.dm`: tables and racks (`LETPASSTHROW`, `LETPASSCLICKS`) leave the
+        // corner of a diagonal reach open.
+        let passes = |e| {
+            objs.get(e).is_ok_and(|o| {
+                o.pass_flags_self
+                    & (crate::inventory::LETPASSTHROW | crate::inventory::LETPASSCLICKS)
+                    != 0
+            })
+        };
+        let reach_of = |target_pos| {
+            index.adjacent(mob_pos, target_pos, |e| {
+                e == target || movers.contains(e) || passes(e)
+            })
+        };
         if modifiers.shift && modifiers.middle {
             out.point.write(PointClick {
                 client,

@@ -5,20 +5,20 @@
 Предметы кладутся на стол кликом (с учётом точки клика), на стол залезают, через него перекидывают и «прикладывают» схваченного (table slam); стол можно перевернуть как укрытие; разборка: отвёртка снимает столешницу, гаечный ключ разбирает (укреплённый — сначала сварка).
 
 - **Код:** [`/obj/structure/table`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/tables_racks.dm#L15), [`proc/table_place_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/tables_racks.dm#L387), [`proc/flip_table()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/tables_racks.dm#L133), [`attack_hand()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/tables_racks.dm#L272), [`/obj/structure/table/reinforced`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/tables_racks.dm#L744)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/food.rs` (`on_table`): стол как поверхность для готовки, деревянные горят (`crates/ss13_game/src/fire.rs`); нет укладки предметов на стол, залезания, переворота, разборки
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/tables.rs`: предмет кладётся кликом в точку клика (не в боевом режиме), поднос высыпается на стол, переворот правым кликом (укрытие с одной стороны, лежащее на нём сталкивается), залезание перетаскиванием себя (подъём на 12 px, со стола на стол можно ходить — `ClimbWalkable` в `crates/ss13_world`), захваченного кладут/швыряют на стол, толчок в стол сбивает на него, разборка отвёрткой (остаётся рама) и ключом, укреплённый — после сварки; брошенное перелетает через стол (`LETPASSTHROW`, `crates/ss13_game/src/throw.rs`), стол на углу не мешает дотянуться по диагонали; `crates/ss13_game/src/food.rs` (`on_table`): поверхность для готовки, деревянные горят (`crates/ss13_game/src/fire.rs`); нет колоды карт (нет карт), удара от кабеля под укреплённым столом, отдыха (уложенный стоит), урона столу от ударов
 
 ### Виды столов и рамы
 Деревянные, стеклянные (бьются, если на них лечь или бросить человека), пластальные, бронзовые, покерные, «каталки» на колёсах, операционный стол (см. ../medical/); рама стола (`table_frame`) из прутьев + лист материала = стол.
 
 - **Код:** [`/obj/structure/table/wood`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/tables_racks.dm#L618), [`glass/proc/table_shatter()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/tables_racks.dm#L575), [`/obj/structure/table/rolling`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/tables_racks.dm#L449), [`/obj/structure/table_frame`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/table_frames.dm#L12)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/tables.rs`: рама + лист (`table_type` стака) = стол, ключ разбирает раму, деревянная рама — только дерево/ковёр; стеклянный стол бьётся под залезшим/брошенным (рама + осколок, паралич); нет «каталок», материальных (greyscale) столов и сборки рамы из прутьев
 
 ### Стеллажи
 Стеллаж (`rack`) держит предметы, разбирается гаечным ключом в детали, детали собираются обратно.
 
 - **Код:** [`/obj/structure/rack`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/tables_racks.dm#L1330), [`/obj/item/rack_parts`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/tables_racks.dm#L1430)
 - **BandaStation:** [`aesthetics/rack`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/aesthetics/rack/code/rack.dm) — спрайты стеллажа
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/tables.rs`: предмет кладётся по центру, брошенное перелетает, на стеллаж залезают, пинок в боевом режиме, ключ (правый клик) разбирает на детали, детали собираются в руке, ключ превращает детали в лист
 
 ### Стулья, диваны, скамьи
 На стул садятся (пристёгиваются), его поворачивают, складные стулья берутся в руки и бьют; офисные кресла катаются; разборка гаечным ключом.

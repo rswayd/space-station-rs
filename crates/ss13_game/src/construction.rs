@@ -119,6 +119,8 @@ pub enum Job {
     Atmos(crate::atmos_machinery::windows::AtmosJob),
     /// Dumping a storage, stuffing a mob into a closet ([`crate::drag`]).
     Interact(crate::drag::DragJob),
+    /// Flipping, climbing, taking apart tables and racks ([`crate::tables`]).
+    Table(crate::tables::TableJob),
     /// Taking an item off someone or putting one on them ([`crate::strip`]).
     Strip(crate::strip::StripJob),
     /// Wrenching or welding an emitter ([`crate::power::emitter`]).
@@ -860,6 +862,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         Job::Botany(job) => crate::botany::complete(world, mob, action, *job),
         Job::Atmos(job) => crate::atmos_machinery::windows::complete(world, action, *job),
         Job::Interact(job) => crate::drag::complete(world, mob, action, *job),
+        &Job::Table(job) => crate::tables::complete(world, mob, action, job),
         Job::Strip(job) => crate::strip::complete(world, mob, action, *job),
         Job::Medical(job) => crate::medical::complete_med(world, mob, action, *job),
         &Job::Mecha(job) => crate::mecha::core::complete(world, mob, action, job),

@@ -235,6 +235,8 @@ pub mod radio;
 pub mod recoil;
 pub mod records;
 #[cfg(feature = "server")]
+pub mod rest;
+#[cfg(feature = "server")]
 pub mod restraints;
 #[cfg(feature = "server")]
 pub mod round;
@@ -260,6 +262,8 @@ pub mod storage;
 pub mod storage_client;
 #[cfg(feature = "server")]
 pub mod strip;
+#[cfg(feature = "server")]
+pub mod tables;
 #[cfg(feature = "server")]
 pub mod taser;
 #[cfg(feature = "testing")]

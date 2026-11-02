@@ -329,6 +329,8 @@ pub struct Incapacitation {
     pub restrained: bool,
     /// `/datum/status_effect/staggered` (a movespeed modifier).
     pub staggered: bool,
+    /// Lying by choice (tg `resting`, [`crate::rest`]): drawn lying and crawling, not floored.
+    pub resting: bool,
 }
 
 impl Incapacitation {
@@ -336,6 +338,7 @@ impl Incapacitation {
         effects: Option<&StatusEffects>,
         cuffed: bool,
         limbs: Option<&crate::medical::LimbLimits>,
+        rest: Option<&crate::rest::Rest>,
     ) -> Self {
         let e = |f: fn(&StatusEffects) -> bool| effects.is_some_and(f);
         Self {
@@ -346,6 +349,7 @@ impl Incapacitation {
             hands_blocked: e(StatusEffects::hands_blocked) || cuffed,
             restrained: cuffed,
             staggered: effects.is_some_and(|e| e.staggered > 0.0),
+            resting: rest.is_some_and(|r| r.down),
         }
     }
 }
@@ -460,6 +464,7 @@ fn refresh_incapacitation(
             Changed<StatusEffects>,
             Changed<Handcuffed>,
             Changed<crate::medical::LimbLimits>,
+            Changed<crate::rest::Rest>,
         )>,
     >,
     mut removed_effects: RemovedComponents<StatusEffects>,
@@ -468,13 +473,14 @@ fn refresh_incapacitation(
         Option<&StatusEffects>,
         Has<Handcuffed>,
         Option<&crate::medical::LimbLimits>,
+        Option<&crate::rest::Rest>,
         &mut Incapacitation,
     )>,
 ) {
     let removed: Vec<Entity> = removed_effects.read().chain(removed_cuffs.read()).collect();
     for mob in changed.iter().chain(removed) {
-        if let Ok((effects, cuffed, limbs, mut traits)) = mobs.get_mut(mob) {
-            traits.set_if_neq(Incapacitation::of(effects, cuffed, limbs));
+        if let Ok((effects, cuffed, limbs, rest, mut traits)) = mobs.get_mut(mob) {
+            traits.set_if_neq(Incapacitation::of(effects, cuffed, limbs, rest));
         }
     }
 }

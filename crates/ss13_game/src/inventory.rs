@@ -10,8 +10,11 @@
 //! for sight and reach by `crate::click`:
 //! - `Click` on a visible item next to the mob with the active hand empty picks it up (tg
 //!   `attack_hand` -> `attempt_pickup` -> `put_in_active_hand`);
-//! - `Click` with an item in the active hand on a free tile next to the mob puts it there;
-//! - `SwapHands` (X) and a middle click (tg `cycle_hand`), `DropActive` (Q, `dropItemToGround`);
+//! - `Click` with an item in the active hand on a table or rack next to the mob puts it there (tg
+//!   `table_place_act`: on a table at the clicked point), out of combat mode; on a free tile next
+//!   to the mob, at the clicked point (not tg: there the floor ignores items);
+//! - `SwapHands` (X) and a middle click (tg `cycle_hand`), `DropActive` (Q, `dropItemToGround`:
+//!   up to 6 pixels off the tile's center);
 //! - `ClickSlot`: a hand slot selects that hand, an equipment slot equips the active hand's item
 //!   (tg `can_equip` rules) or takes the worn item into the empty hand (tg `attack_ui`);
 //!   `AltClickSlot` alt-clicks the item in a slot (a gas tank toggles internals).
@@ -22,7 +25,7 @@
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
 use ss13_mapload::fidelity::is_under;
-use ss13_mapload::{DmAtom, DmClothing, DmItem, DmWeight, IconIndex};
+use ss13_mapload::{DmAtom, DmClothing, DmItem, DmObj, DmWeight, IconIndex};
 use ss13_net::server::IntentReceived;
 use ss13_shared::protocol::{ClickModifiers, ClientIntent, InventorySlot};
 use ss13_shared::{Appearance, IconStateId, TilePos};
@@ -520,6 +523,10 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 Some(item)
                     if hand == inventory.active
                         && crate::antag::nukeop::server::attack_self(world, client, mob, item) => {}
+                // Rack parts build a rack.
+                Some(item)
+                    if hand == inventory.active
+                        && crate::tables::attack_self(world, client, mob, item) => {}
                 // A PDA turns on and opens its NtOS window.
                 Some(item)
                     if hand == inventory.active
@@ -607,7 +614,9 @@ fn apply(world: &mut World, client: Entity, action: Action) {
             ) => {}
         Action::Drop => {
             if let Some(item) = inventory.active_item().filter(|&i| !no_drop(world, i)) {
-                put_down(world, item, mob_pos);
+                let mut rng = world.resource_mut::<crate::combat::CombatRng>();
+                let offset = [0, 0].map(|_| rng.range(0, 12) as i16 - 6);
+                put_down_at(world, item, mob_pos, offset);
             }
         }
         Action::Click {
@@ -669,6 +678,9 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 None if crate::disposals::interact(world, client, mob, target, modifiers) => {}
                 // tg `attack_hand` of the DNA console (its window) and scanner (open/close).
                 None if crate::genetics::console::interact(world, client, mob, target) => {}
+                // tg `attack_hand` of tables and racks: a pulled mob onto it, flipping (right
+                // click), knocking a climber down, kicking a rack.
+                None if crate::tables::attack_hand(world, client, mob, target, modifiers) => {}
                 None => pick_up(world, mob, target, inventory.active),
                 // The ritual dagger scrapes a rune away; a blood magic aura on an object.
                 Some(held)
@@ -750,6 +762,11 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                     if crate::disposals::item_interaction(
                         world, client, mob, held, target, modifiers,
                     ) => {}
+                // Tools on tables, frames and racks; a stack builds a table on a frame.
+                Some(held)
+                    if crate::tables::item_interaction(
+                        world, client, mob, held, target, modifiers,
+                    ) => {}
                 // tg `base_item_interaction` and `attackby` come before storage and dropping.
                 Some(held)
                     if crate::construction::item_interaction(
@@ -772,7 +789,7 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 // tg `item_interaction` of a PDA with an ID card.
                 Some(held)
                     if crate::modpc::pda::item_interaction(world, client, mob, held, target) => {}
-                Some(held) => place(world, held, target, pos),
+                Some(held) => place(world, mob, held, target, pos, modifiers),
             }
         }
     }
@@ -805,11 +822,40 @@ pub(crate) fn pick_up(world: &mut World, mob: Entity, target: Entity, hand: usiz
         .hands[hand] = Some(target);
 }
 
-/// Clicked with `held` on something next to the mob: onto a free tile (a turf, or something
-/// lying on it), never onto items, mobs, doors or dense things.
-// Not tg: there a click with an item calls the target's `attackby` and items are put down on
-// tables only; kept as the minimal way to place an item on a chosen tile.
-fn place(world: &mut World, held: Entity, target: Entity, pos: TilePos) {
+/// tg `LETPASSTHROW` (`pass_flags_self`): thrown things fly over it (tables, racks, trays).
+pub(crate) const LETPASSTHROW: u32 = 1 << 6;
+/// tg `LETPASSCLICKS`: reaching past it diagonally is not blocked.
+pub(crate) const LETPASSCLICKS: u32 = 1 << 13;
+
+/// Whether `entity`'s `pass_flags_self` has any of `flags`.
+pub(crate) fn lets_pass(world: &World, entity: Entity, flags: u32) -> bool {
+    world
+        .get::<DmObj>(entity)
+        .is_some_and(|o| o.pass_flags_self & flags != 0)
+}
+
+/// Clicked with `held` on `target` on `pos`, next to the mob.
+/// - A table or rack (tg `base_item_interaction` -> `table_place_act`, rack): out of combat
+///   mode the item goes onto its tile, on a table at the clicked point (`ICON_X`/`ICON_Y`
+///   minus 16, clamped to the tile).
+/// - Not tg (there the floor ignores items): a free tile (a turf, or something lying on it;
+///   never items, mobs, doors or dense things) takes it at the clicked point too.
+// shortcut: no tray emptying or card dealing onto tables (tg `tray_act`, `deck_act`), no
+// flipped tables; add with trays and card decks.
+fn place(
+    world: &mut World,
+    mob: Entity,
+    held: Entity,
+    target: Entity,
+    pos: TilePos,
+    modifiers: ClickModifiers,
+) {
+    if crate::tables::place(world, mob, held, target, pos, modifiers) {
+        return;
+    }
+    let clicked = modifiers
+        .pixel
+        .map_or([0, 0], |p| p.map(|v| i16::from(v).clamp(-16, 16)));
     let entity = world.entity(target);
     let surface = !entity.contains::<DmItem>()
         && !entity.contains::<Mover>()
@@ -821,14 +867,30 @@ fn place(world: &mut World, held: Entity, target: Entity, pos: TilePos) {
             .dense_on_tile(pos)
             .is_empty()
     {
-        put_down(world, held, pos);
+        put_down_at(world, held, pos, clicked);
     }
 }
 
-/// Out of the inventory (the slot empties in [`forget_carried`]) onto `pos`.
-// shortcut: tg `dropItemToGround` adds a random -6..6 pixel offset; items land centered.
+/// Out of the inventory (the slot empties in [`forget_carried`]) onto `pos`, at its own pixel
+/// offset.
 pub(crate) fn put_down(world: &mut World, item: Entity, pos: TilePos) {
-    world.entity_mut(item).remove::<CarriedBy>().insert(pos);
+    put_down_at(world, item, pos, [0, 0]);
+}
+
+/// [`put_down`] `offset` pixels off its own offset (tg `transfer_item_to_turf`: `pixel_x =
+/// base_pixel_x + x_offset`).
+pub(crate) fn put_down_at(world: &mut World, item: Entity, pos: TilePos, offset: [i16; 2]) {
+    let base = world
+        .get::<DmAtom>(item)
+        .map_or([0, 0], |a| [a.pixel_x, a.pixel_y]);
+    let mut entity = world.entity_mut(item);
+    entity.remove::<CarriedBy>().insert(pos);
+    if let Some(mut look) = entity.get_mut::<Appearance>() {
+        let wanted = [base[0] + offset[0], base[1] + offset[1]];
+        if look.pixel_offset != wanted {
+            look.pixel_offset = wanted;
+        }
+    }
 }
 
 /// tg `attack_ui(slot)` on an equipment slot (`/atom/movable/screen/inventory/Click`): a worn

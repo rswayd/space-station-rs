@@ -1,6 +1,7 @@
-//! Client half of pulling and throwing: tg's keys (`stop_pulling` C and Delete in BandaStation,
-//! `resist` B, `toggle_throw_mode` R) and HUD buttons (`icons/hud/screen_midnight.dmi`: the pull
-//! icon `pull`/`pull0`, `act_resist`, `act_throw`/`act_throw_on`, the move intent
+//! Client half of pulling, throwing and resting: tg's keys (`stop_pulling` C and Delete in
+//! BandaStation, `resist` B, `rest` Shift+B in BandaStation, `toggle_throw_mode` R) and HUD
+//! buttons (`icons/hud/screen_midnight.dmi`: the pull icon `pull`/`pull0`, `act_resist`,
+//! `act_rest`/`act_rest_on`, `act_throw`/`act_throw_on`, the move intent
 //! `running`/`walking`; BandaStation leaves its keybinding unbound), drawn from the server's
 //! [`InteractHudData`] (headless tgui interface [`InteractHudUi`]).
 
@@ -60,6 +61,7 @@ struct ButtonsRoot;
 enum Button {
     Pull,
     Resist,
+    Rest,
     Throw,
     MoveIntent,
 }
@@ -69,6 +71,7 @@ impl Button {
         match self {
             Self::Pull => ClientIntent::StopPulling,
             Self::Resist => ClientIntent::Resist,
+            Self::Rest => ClientIntent::ToggleRest,
             Self::Throw => ClientIntent::ToggleThrowMode,
             Self::MoveIntent => ClientIntent::ToggleMoveIntent,
         }
@@ -79,6 +82,8 @@ impl Button {
             Self::Pull if data.pulling => "pull",
             Self::Pull => "pull0",
             Self::Resist => "act_resist",
+            Self::Rest if data.resting => "act_rest_on",
+            Self::Rest => "act_rest",
             Self::Throw if data.throw_mode => "act_throw_on",
             Self::Throw => "act_throw",
             Self::MoveIntent if data.walking => "walking",
@@ -120,12 +125,13 @@ fn spawn_buttons(atlas: Option<Res<IconAtlas>>, mut commands: Commands) {
         .id();
     // tg screen_loc on a 19x15 view, x2: `ui_above_movement_top` "EAST-2:26,SOUTH+1:24" (pull),
     // `ui_above_movement` "EAST-2:26,SOUTH+1:7" (resist), `ui_drop_throw` "EAST-1:28,SOUTH+1:24",
-    // `ui_movi` "EAST-2:26,SOUTH:5" (move intent).
+    // `ui_movi` "EAST-2:26,SOUTH:5" (move intent), `ui_below_throw` "EAST-1:28,SOUTH+1:7" (rest).
     for (button, name, right, bottom) in [
         (Button::MoveIntent, "move intent", 76.0, 10.0),
         (Button::Resist, "resist", 76.0, 78.0),
         (Button::Pull, "pull", 76.0, 112.0),
         (Button::Throw, "throw", 8.0, 112.0),
+        (Button::Rest, "rest", 8.0, 78.0),
     ] {
         commands
             .spawn((
@@ -161,8 +167,8 @@ fn click_button(
     }
 }
 
-/// C or Delete stop pulling, B resists, R toggles throw mode, unless a text field has the
-/// keyboard.
+/// C or Delete stop pulling, B resists, Shift+B lies down or gets up, R toggles throw mode,
+/// unless a text field has the keyboard.
 fn send_keys(
     keys: Res<ButtonInput<KeyCode>>,
     focus: Option<Res<InputFocus>>,
@@ -180,7 +186,13 @@ fn send_keys(
         intents.write(SendIntent(ClientIntent::StopPulling));
     }
     if keys.just_pressed(KeyCode::KeyB) {
-        intents.write(SendIntent(ClientIntent::Resist));
+        let shift = keys.any_pressed([KeyCode::ShiftLeft, KeyCode::ShiftRight]);
+        let intent = if shift {
+            ClientIntent::ToggleRest
+        } else {
+            ClientIntent::Resist
+        };
+        intents.write(SendIntent(intent));
     }
     if keys.just_pressed(KeyCode::KeyR) {
         intents.write(SendIntent(ClientIntent::ToggleThrowMode));
@@ -264,6 +276,7 @@ mod tests {
             throw_mode: true,
             pulling: true,
             walking: true,
+            resting: true,
         };
         assert_eq!(Button::Pull.state(&off), "pull0");
         assert_eq!(Button::Pull.state(&on), "pull");
@@ -271,6 +284,9 @@ mod tests {
         assert_eq!(Button::Throw.state(&on), "act_throw_on");
         assert_eq!(Button::MoveIntent.state(&off), "running");
         assert_eq!(Button::MoveIntent.state(&on), "walking");
+        assert_eq!(Button::Rest.state(&off), "act_rest");
+        assert_eq!(Button::Rest.state(&on), "act_rest_on");
+        assert_eq!(Button::Rest.intent(), ClientIntent::ToggleRest);
         assert_eq!(Button::Resist.intent(), ClientIntent::Resist);
         assert_eq!(Button::MoveIntent.intent(), ClientIntent::ToggleMoveIntent);
     }

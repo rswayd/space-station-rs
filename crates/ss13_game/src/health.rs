@@ -571,7 +571,7 @@ fn body_state(
         }
         // `TRAIT_FLOORED` from status effects crawls like soft crit (`carbon_crawling`);
         // `/datum/movespeed_modifier/staggered`.
-        if traits.floored && !health.floored(*stat) {
+        if (traits.floored || traits.resting) && !health.floored(*stat) {
             delay += CRAWLING_ADD_SLOWDOWN / 10.0;
         }
         if traits.staggered {
@@ -596,7 +596,7 @@ fn body_state(
         if let Some(pilot) = pilot {
             delay = pilot.move_delay;
         }
-        let floored = health.floored(*stat) || traits.floored;
+        let floored = health.floored(*stat) || traits.floored || traits.resting;
         if floored != posture.lying() {
             if floored {
                 // tg `lying_angle_on_lying_down`: either side; facing east or west turns to a
@@ -702,16 +702,27 @@ pub fn clients_in_view(
 /// the result differs.
 fn lying_appearance(
     mut mobs: Query<
-        (&BodyPosition, &DmAtom, &mut Appearance),
-        Or<(Changed<BodyPosition>, Changed<Appearance>)>,
+        (
+            &BodyPosition,
+            &DmAtom,
+            &mut Appearance,
+            Option<&crate::tables::Elevated>,
+        ),
+        Or<(
+            Changed<BodyPosition>,
+            Changed<Appearance>,
+            Changed<crate::tables::Elevated>,
+        )>,
     >,
 ) {
-    for (posture, atom, mut appearance) in &mut mobs {
+    for (posture, atom, mut appearance, elevated) in &mut mobs {
+        // tg `/datum/element/elevation`: up on a table or rack, lying or not.
+        let up = elevated.map_or(0, |e| e.0);
         let (layer, pixel_y) = if posture.lying() {
             // tg `on_lying_down` lowers the layer only while it is the type's own.
-            (LYING_MOB_LAYER, atom.pixel_y + PIXEL_Y_OFFSET_LYING)
+            (LYING_MOB_LAYER, atom.pixel_y + PIXEL_Y_OFFSET_LYING + up)
         } else {
-            (atom.layer, atom.pixel_y)
+            (atom.layer, atom.pixel_y + up)
         };
         let wanted = (Layer(layer), [atom.pixel_x, pixel_y], posture.lying_angle);
         let current = (

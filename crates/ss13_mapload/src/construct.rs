@@ -16,6 +16,7 @@ pub const TOOL_COMPONENT: &str = "dm_tool";
 pub const STACK_COMPONENT: &str = "dm_stack";
 pub const TURF_COMPONENT: &str = "dm_turf_build";
 pub const OBJ_COMPONENT: &str = "dm_obj";
+pub const TABLE_COMPONENT: &str = "dm_table";
 
 /// Types the construction code spawns or turns turfs into, so `ss13-mapload convert` emits them
 /// even when no converted map uses them. Fixtures convert without them; the game then skips
@@ -60,6 +61,33 @@ pub struct DmStack {
     pub singular_name: String,
     /// Tiles: the turf they place (`/obj/item/stack/tile::turf_type`).
     pub turf_type: String,
+    /// The table a table frame builds from one of these (`table_type`); empty: none.
+    pub table_type: String,
+}
+
+/// Table and table frame vars (`code/game/objects/structures/tables_racks.dm`,
+/// `table_frames.dm`), on `/obj/structure/table` and `/obj/structure/table_frame` and subtypes.
+#[derive(Component, Reflect, Default, Clone, Debug, PartialEq)]
+pub struct DmTable {
+    /// Tables: the frame a screwdriver leaves (`frame`).
+    pub frame: String,
+    /// What a wrench leaves of the frame (`framestack`, `framestackamount`).
+    pub framestack: String,
+    pub framestack_amount: u32,
+    /// Tables: the top's material (`buildstack`, `buildstackamount`); empty: none.
+    pub buildstack: String,
+    pub buildstack_amount: u32,
+    /// Tables: a screwdriver or wrench may take it apart (reinforced: once welded loose).
+    pub deconstruction_ready: bool,
+    pub can_flip: bool,
+    /// Tables: the sprite sheet of the flipped table (`flipped_table_icon`), its state is
+    /// `base_icon_state`.
+    pub flipped_icon: String,
+    pub base_icon_state: String,
+    /// Tables: a grabbed mob is placed, never slammed (`slam_gently`, the operating table).
+    pub slam_gently: bool,
+    /// Glass tables: what breaking leaves besides the frame (`glass_shard_type`).
+    pub glass_shard: String,
 }
 
 /// Turf construction vars (`/turf`).
@@ -94,6 +122,8 @@ pub struct DmObj {
     pub armor_melee: f32,
     pub obj_flags: u32,
     pub resistance_flags: u32,
+    /// `pass_flags_self`: what may pass it (`LETPASSTHROW`: thrown things fly over tables).
+    pub pass_flags_self: u32,
     /// Girders and windows: `state` (`GIRDER_*`, `WINDOW_*`).
     pub state: i32,
     /// Girders: `stack_type`, `stack_amount`, `can_displace`.
@@ -115,6 +145,8 @@ pub struct DmObj {
 #[derive(Clone, Copy)]
 enum Kind {
     Text,
+    /// An icon file (`{"resource": "icons/x.dmi"}`); null is empty.
+    Icon,
     Path,
     Num,
     Count,
@@ -129,13 +161,59 @@ const TOOL_VARS: [(&str, &str, Kind); 4] = [
     ("heat", "heat", Kind::Num),
 ];
 
-const STACK_VARS: [(&str, &str, Kind); 5] = [
+const STACK_VARS: [(&str, &str, Kind); 6] = [
     ("amount", "amount", Kind::Count),
     ("max_amount", "max_amount", Kind::Count),
     ("merge_type", "merge_type", Kind::Path),
     ("singular_name", "singular_name", Kind::Text),
     ("turf_type", "turf_type", Kind::Path),
+    ("table_type", "table_type", Kind::Path),
 ];
+
+const TABLE_VARS: [(&str, &str, Kind); 11] = [
+    ("frame", "frame", Kind::Path),
+    ("framestack", "framestack", Kind::Path),
+    ("framestackamount", "framestack_amount", Kind::Count),
+    ("buildstack", "buildstack", Kind::Path),
+    ("buildstackamount", "buildstack_amount", Kind::Count),
+    ("deconstruction_ready", "deconstruction_ready", Kind::Bool),
+    ("can_flip", "can_flip", Kind::Bool),
+    ("flipped_table_icon", "flipped_icon", Kind::Icon),
+    ("base_icon_state", "base_icon_state", Kind::Text),
+    ("slam_gently", "slam_gently", Kind::Bool),
+    ("glass_shard_type", "glass_shard", Kind::Path),
+];
+
+/// Roots of [`DmTable`] and of the rack types the table code spawns.
+const TABLE_ROOTS: [&str; 4] = [
+    "/obj/structure/table",
+    "/obj/structure/table_frame",
+    "/obj/structure/rack",
+    "/obj/item/rack_parts",
+];
+
+/// Every table, frame and rack type, and what taking them apart or building them makes, so
+/// `ss13-mapload convert` emits them even when no map uses them (a frame builds any table its
+/// stacks name, a table leaves its frame and stacks).
+pub fn table_runtime_types(types: &DmTypes) -> Vec<String> {
+    let mut out: Vec<String> = types
+        .types
+        .keys()
+        .filter(|p| TABLE_ROOTS.iter().any(|root| is_under(p, root)))
+        .cloned()
+        .collect();
+    let made: Vec<String> = out
+        .iter()
+        .flat_map(|p| ["frame", "framestack", "buildstack", "glass_shard_type"].map(|v| (p, v)))
+        .filter_map(|(p, var)| type_path(types.resolved(p, var)))
+        .chain(["/obj/item/stack/sheet/iron".to_owned()])
+        .filter(|p| types.types.contains_key(p))
+        .collect();
+    out.extend(made);
+    out.sort();
+    out.dedup();
+    out
+}
 
 const TURF_VARS: [(&str, &str, Kind); 7] = [
     ("baseturfs", "baseturf", Kind::Path),
@@ -147,13 +225,14 @@ const TURF_VARS: [(&str, &str, Kind); 7] = [
     ("slicing_duration", "slicing_duration", Kind::Num),
 ];
 
-const OBJ_VARS: [(&str, &str, Kind); 19] = [
+const OBJ_VARS: [(&str, &str, Kind); 20] = [
     ("anchored", "anchored", Kind::Bool),
     ("max_integrity", "max_integrity", Kind::Num),
     ("integrity_failure", "integrity_failure", Kind::Num),
     ("damage_deflection", "damage_deflection", Kind::Num),
     ("obj_flags", "obj_flags", Kind::Count),
     ("resistance_flags", "resistance_flags", Kind::Count),
+    ("pass_flags_self", "pass_flags_self", Kind::Count),
     ("state", "state", Kind::Int),
     ("stack_type", "stack_type", Kind::Path),
     ("stack_amount", "stack_amount", Kind::Count),
@@ -204,6 +283,11 @@ fn value_ron(kind: Kind, v: Option<&serde_json::Value>) -> Option<String> {
             _ => return None,
         },
         Kind::Path => ron_str(&type_path(v)?),
+        Kind::Icon => match v {
+            Some(serde_json::Value::Object(o)) => ron_str(o.get("resource")?.as_str()?),
+            None | Some(serde_json::Value::Null) => ron_str(""),
+            _ => return None,
+        },
         Kind::Num => format!("{:?}", number(v)? as f32),
         Kind::Count => (number(v)?.max(0.0) as u32).to_string(),
         Kind::Int => (number(v)? as i32).to_string(),
@@ -256,6 +340,9 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
     {
         out.push(ext(OBJ_COMPONENT, "path", ron_str(path)));
         fields(types, path, OBJ_COMPONENT, &OBJ_VARS, &mut out);
+        if is_under(path, "/obj/structure/table") || is_under(path, "/obj/structure/table_frame") {
+            fields(types, path, TABLE_COMPONENT, &TABLE_VARS, &mut out);
+        }
     }
     out
 }
@@ -324,7 +411,7 @@ mod tests {
             r#"{"dm_tool": (behaviour: "welder", speed: 1.0, max_fuel: 20.0, heat: 3800.0)}"#
         );
         assert!(ron("/obj/item/stack/rods").contains(
-            r#""dm_stack": (amount: 1, max_amount: 50, merge_type: "/obj/item/stack/rods", singular_name: "iron rod", turf_type: "")"#
+            r#""dm_stack": (amount: 1, max_amount: 50, merge_type: "/obj/item/stack/rods", singular_name: "iron rod", turf_type: "", table_type: "")"#
         ));
         let window = ron("/obj/structure/window");
         assert!(window.contains("max_integrity: 50.0"), "{window}");
@@ -345,5 +432,50 @@ mod tests {
             ext_field("/obj/structure/window", "amount", Val::Num(20.0)),
             Err(Skip::UnknownVar)
         );
+    }
+
+    #[test]
+    fn tables_bring_their_frames_and_stacks() {
+        let types = DmTypes::parse(
+            br##"{ "schema": 3, "types": {
+              "/datum": { "parent": null },
+              "/atom": { "parent": "/datum" },
+              "/obj": { "parent": "/atom" },
+              "/obj/item": { "parent": "/obj" },
+              "/obj/item/stack": { "parent": "/obj/item" },
+              "/obj/item/stack/rods": { "parent": "/obj/item/stack" },
+              "/obj/item/stack/sheet/iron": { "parent": "/obj/item/stack" },
+              "/obj/item/stack/sheet/glass": { "parent": "/obj/item/stack" },
+              "/obj/item/shard": { "parent": "/obj/item" },
+              "/obj/item/rack_parts": { "parent": "/obj/item" },
+              "/obj/structure": { "parent": "/obj" },
+              "/obj/structure/table": { "parent": "/obj/structure", "declared_vars": {
+                  "frame": { "path": "/obj/structure/table_frame" },
+                  "framestack": { "path": "/obj/item/stack/rods" },
+                  "buildstack": { "path": "/obj/item/stack/sheet/iron" } } },
+              "/obj/structure/table/glass": { "parent": "/obj/structure/table", "declared_vars": {
+                  "buildstack": { "path": "/obj/item/stack/sheet/glass" },
+                  "glass_shard_type": { "path": "/obj/item/shard" } } },
+              "/obj/structure/table_frame": { "parent": "/obj/structure" },
+              "/obj/structure/rack": { "parent": "/obj/structure" },
+              "/obj/structure/girder": { "parent": "/obj/structure" }
+            } }"##,
+        )
+        .unwrap();
+        let got = table_runtime_types(&types);
+        for want in [
+            "/obj/structure/table",
+            "/obj/structure/table/glass",
+            "/obj/structure/table_frame",
+            "/obj/structure/rack",
+            "/obj/item/rack_parts",
+            "/obj/item/stack/rods",
+            "/obj/item/stack/sheet/iron",
+            "/obj/item/stack/sheet/glass",
+            "/obj/item/shard",
+        ] {
+            assert!(got.iter().any(|p| p == want), "{want} missing from {got:?}");
+        }
+        assert!(!got.iter().any(|p| p == "/obj/structure/girder"));
     }
 }

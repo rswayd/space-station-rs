@@ -524,7 +524,13 @@ pub fn in_reach(world: &World, mob: Entity, thing: Entity) -> bool {
     world
         .resource::<ss13_world::SpatialIndex>()
         .adjacent(at, pos, |e| {
-            e == thing || world.entity(e).contains::<ss13_world::Mover>()
+            e == thing
+                || world.entity(e).contains::<ss13_world::Mover>()
+                || crate::inventory::lets_pass(
+                    world,
+                    e,
+                    crate::inventory::LETPASSTHROW | crate::inventory::LETPASSCLICKS,
+                )
         })
 }
 

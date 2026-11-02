@@ -170,6 +170,8 @@ pub struct InteractHudData {
     pub pulling: bool,
     /// tg `move_intent == MOVE_INTENT_WALK`: `walking` instead of `running`.
     pub walking: bool,
+    /// tg `resting`: `act_rest_on` instead of `act_rest`.
+    pub resting: bool,
 }
 
 /// The owner's screen alerts (tg `throw_alert`, `icons/hud/screen_alert.dmi`), a headless tgui

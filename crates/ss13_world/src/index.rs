@@ -187,8 +187,9 @@ impl SpatialIndex {
     /// tiles beside both, which must have no full-tile blocker and whose edges on the way must
     /// be free (`ClickCross`). `ignore`: dense entities that do not block a reach (tg only checks
     /// objects and turfs, not mobs, and skips the target itself).
-    // shortcut: no `LETPASSTHROW`/`LETPASSCLICKS` (tables) yet, and diagonal border objects
-    // block nothing (tg treats them as full-tile for clicks); add with those objects.
+    // `LETPASSTHROW`/`LETPASSCLICKS` objects (tables) are the caller's `ignore` (`ss13_game`).
+    // shortcut: diagonal border objects block nothing (tg treats them as full-tile for clicks);
+    // add with those objects.
     pub fn adjacent(&self, from: TilePos, to: TilePos, ignore: impl Fn(Entity) -> bool) -> bool {
         let crosses = |tile: TilePos, d: Dir| {
             !self

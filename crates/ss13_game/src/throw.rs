@@ -29,7 +29,7 @@ use crate::click::{ResolveClicks, ThrowClick};
 use crate::combat::{CombatRng, NextMove};
 use crate::health::{BodyPosition, DamageType, Health, HealthSystems, Stat, apply_damage_zone};
 use crate::inventory::{CarriedBy, Inventory};
-use crate::pull::{dir_between, step_once, visible_message};
+use crate::pull::{dir_between, step_once, step_passing, visible_message};
 use crate::server::{PlayerMob, Players};
 use crate::zone::BodyZone;
 
@@ -373,7 +373,12 @@ fn obstacle_here(world: &World, thrown: &Thrown, item: Entity, pos: TilePos) -> 
         .dense_on_tile(pos)
         .iter()
         .copied()
-        .find(|&e| e != item && Some(e) != thrown.thrower)
+        .find(|&e| e != item && Some(e) != thrown.thrower && !over_it(world, e))
+}
+
+/// tg `thrownthing.tick`: a thrown thing flies over `LETPASSTHROW` (tables, racks, trays).
+fn over_it(world: &World, e: Entity) -> bool {
+    crate::inventory::lets_pass(world, e, crate::inventory::LETPASSTHROW)
 }
 
 /// tg `Move` of the item: a diagonal step tries its vertical half, then the horizontal one, and
@@ -384,20 +389,23 @@ fn move_item(
     dir: Dir,
     thrower: Option<Entity>,
 ) -> Result<(), Vec<Entity>> {
+    let step = |world: &mut World, d| {
+        step_passing(world, item, d, |w, e| Some(e) == thrower || over_it(w, e))
+    };
     let (dx, dy) = dir.offset();
     if dx == 0 || dy == 0 {
-        return step_once(world, item, dir, thrower);
+        return step(world, dir);
     }
     let v = if dy > 0 { Dir::North } else { Dir::South };
     let h = if dx > 0 { Dir::East } else { Dir::West };
-    let first = match step_once(world, item, v, thrower) {
+    let first = match step(world, v) {
         Ok(()) => h,
         Err(_) => {
-            step_once(world, item, h, thrower)?;
+            step(world, h)?;
             v
         }
     };
-    step_once(world, item, first, thrower)
+    step(world, first)
 }
 
 /// Of the things that refused the item: the clicked one, else a living mob, else the first.

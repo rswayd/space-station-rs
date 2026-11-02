@@ -206,6 +206,7 @@ fn refresh_interact_hud(
             Changed<crate::throw::ThrowMode>,
             Changed<GrabState>,
             Changed<crate::janitor::Walking>,
+            Changed<crate::rest::Rest>,
         )>,
     >,
     mut stopped: RemovedComponents<GrabState>,
@@ -215,17 +216,19 @@ fn refresh_interact_hud(
         Option<&crate::throw::ThrowMode>,
         Has<Pulling>,
         Option<&crate::janitor::Walking>,
+        Option<&crate::rest::Rest>,
     )>,
     mut open: MessageWriter<OpenUi>,
 ) {
     for mob in changed.iter().chain(stopped.read()) {
-        let Ok((player, mut hud, throw_mode, pulling, walking)) = mobs.get_mut(mob) else {
+        let Ok((player, mut hud, throw_mode, pulling, walking, rest)) = mobs.get_mut(mob) else {
             continue;
         };
         let data = InteractHudData {
             throw_mode: throw_mode.is_some_and(|t| t.0),
             pulling,
             walking: walking.is_some_and(|w| w.0),
+            resting: rest.is_some_and(|r| r.resting),
         };
         if hud.set_if_neq(data) {
             open.write(OpenUi::new::<InteractHudUi>(player.client, mob, mob, ""));
@@ -268,6 +271,16 @@ pub(crate) fn step_once(
     dir: Dir,
     ignore: Option<Entity>,
 ) -> Result<(), Vec<Entity>> {
+    step_passing(world, entity, dir, |_, e| Some(e) == ignore)
+}
+
+/// [`step_once`] where the blockers `passes` accepts let it through.
+pub(crate) fn step_passing(
+    world: &mut World,
+    entity: Entity,
+    dir: Dir,
+    passes: impl Fn(&World, Entity) -> bool,
+) -> Result<(), Vec<Entity>> {
     let Some(&from) = world.get::<TilePos>(entity) else {
         return Err(Vec::new());
     };
@@ -276,7 +289,7 @@ pub(crate) fn step_once(
     if !index.in_bounds(to) {
         return Err(Vec::new());
     }
-    let keep = |e: &Entity| Some(*e) != ignore;
+    let keep = |e: &Entity| !passes(world, *e);
     let mut blockers: Vec<Entity> = index
         .exit_blockers(from, dir, entity)
         .filter(keep)
@@ -363,8 +376,8 @@ fn follow_pullers(
 }
 
 /// tg `check_pulling`: the pull ends at distance > 1, across z-levels, when the puller is off the
-/// map or incapacitated (soft crit and worse: `TRAIT_HANDS_BLOCKED`; stuns and stamcrit:
-/// `TRAIT_PULL_BLOCKED`), or the pulled thing left the map.
+/// map or incapacitated (soft crit and worse: `TRAIT_HANDS_BLOCKED`; stuns, stamcrit and lying
+/// down: `TRAIT_PULL_BLOCKED`), or the pulled thing left the map.
 // Cost: per tick, one pass over pullers only.
 fn check_pulls(
     pullers: Query<(
@@ -373,15 +386,16 @@ fn check_pulls(
         Option<&TilePos>,
         Option<&Stat>,
         Option<&Incapacitation>,
+        Option<&BodyPosition>,
     )>,
     positions: Query<&TilePos, Without<CarriedBy>>,
     mut commands: Commands,
 ) {
-    for (puller, &Pulling(pulled), pos, stat, traits) in &pullers {
+    for (puller, &Pulling(pulled), pos, stat, traits, posture) in &pullers {
         let near = pos
             .zip(positions.get(pulled).ok())
             .is_some_and(|(a, b)| a.chebyshev(*b).is_some_and(|d| d <= 1));
-        let blocked = traits.is_some_and(|t| t.incapacitated);
+        let blocked = traits.is_some_and(|t| t.incapacitated) || posture.is_some_and(|b| b.lying());
         if !near || blocked || stat.is_some_and(|s| *s >= Stat::SoftCrit) {
             commands.entity(puller).try_remove::<Pulling>();
         }
@@ -480,6 +494,8 @@ fn ctrl_clicks(world: &mut World, mut clicks: Local<MessageCursor<CtrlClick>>) {
             || entity
                 .get::<Incapacitation>()
                 .is_some_and(|t| t.incapacitated)
+            // `TRAIT_PULL_BLOCKED` of lying down.
+            || entity.get::<BodyPosition>().is_some_and(|b| b.lying())
             || entity.get::<NextMove>().is_none_or(|n| now < n.0)
             || world.get::<TilePos>(target) != Some(&click.target_pos)
             || !can_be_pulled(world, mob, target)

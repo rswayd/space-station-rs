@@ -893,6 +893,10 @@ fn shove(world: &mut World, user: Entity, target: Entity) {
     let (name_user, name_target) = (name_of(world, user), name_of(world, target));
     let at = world.get::<TilePos>(target).copied().unwrap_or(target_at);
     if blocked {
+        // `COMSIG_LIVING_DISARM_COLLIDE` of a table on the tile behind (`table_smash`).
+        if crate::tables::shoved_into(world, user, target, shove_to) {
+            return;
+        }
         // `COMSIG_LIVING_DISARM_COLLIDE` of a human on the tile behind (`disarm_collision`).
         let other = world
             .resource::<SpatialIndex>()

@@ -229,7 +229,12 @@ fn drag(world: &mut World, client: Entity, from: DragEnd, to: DragEnd) {
     {
         return;
     }
-    // 2. `COMSIG_MOUSEDROPPED_ONTO` of the target.
+    // 2. `COMSIG_MOUSEDROPPED_ONTO` of the target: climbing onto a table or rack.
+    if let (End::World(over), End::World(_)) = (to, from)
+        && crate::tables::mousedropped_onto(world, actor, over, dragged)
+    {
+        return;
+    }
     if let Some(over) = to.entity()
         && world.get::<crate::storage::Storage>(over).is_some()
         && crate::storage::mousedropped_onto(world, mob, over, dragged)

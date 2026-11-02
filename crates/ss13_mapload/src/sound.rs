@@ -72,9 +72,16 @@ pub mod files {
     pub const AIRLOCK_FORCED: &str = "sound/machines/airlock/airlockforced.ogg";
     /// `/datum/element/footstep/play_craw_step`.
     pub const CRAWL: &str = "sound/effects/footstep/crawl1.ogg";
+    /// `/obj/structure/table`: `flipped_table_sound`, `unflip_table_sound`.
+    pub const TABLE_FLIP: &str = "sound/items/trayhit/trayhit1.ogg";
+    pub const TABLE_UNFLIP: &str = "sound/items/trayhit/trayhit2.ogg";
+    /// `/datum/element/table_smash/tablepush`.
+    pub const TABLE_SLAM: &str = "sound/effects/tableslam.ogg";
+    /// `wrench_act` of tables and table frames.
+    pub const DECONSTRUCT: &str = "sound/items/deconstruct.ogg";
 }
 
-pub const RUNTIME_SOUNDS: [&str; 11] = [
+pub const RUNTIME_SOUNDS: [&str; 15] = [
     files::TAP,
     files::WELDER,
     files::PUNCH,
@@ -86,6 +93,10 @@ pub const RUNTIME_SOUNDS: [&str; 11] = [
     files::DISPOSAL_FLUSH,
     files::AIRLOCK_FORCED,
     files::CRAWL,
+    files::TABLE_FLIP,
+    files::TABLE_UNFLIP,
+    files::TABLE_SLAM,
+    files::DECONSTRUCT,
 ];
 
 /// The footstep tables, by global name (`ss13_dm_extract::DUMPED_GLOBALS`).

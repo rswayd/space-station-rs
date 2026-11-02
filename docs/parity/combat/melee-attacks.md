@@ -71,4 +71,4 @@
 Агрессивно захваченного можно бросить на стол (оглушение), ударить головой о стол или придавить конечность.
 
 - **Код:** [`proc/tablepush()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/elements/table_smash.dm#L140), [`proc/tablelimbsmash()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/elements/table_smash.dm#L170)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/tables.rs` (`smash`): вне боевого режима — уложить за 3,5 с, в боевом — агрессивный захват швыряет на стол (сбивание 3 с, 40 стамины, 10 брута), пассивного мало; нет удара конечностью (нет захвата за шею), переноски на плечах и отдыха (уложенный не ложится)
