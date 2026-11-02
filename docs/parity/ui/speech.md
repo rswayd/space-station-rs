@@ -33,7 +33,7 @@
 
 - **Код:** [`/datum/saymode`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/saymode.dm#L1), [`/datum/saymode/changeling`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/saymode.dm#L33), [`/datum/saymode/xeno`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/saymode.dm#L96), [`/datum/saymode/holopad`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/saymode.dm#L166)
 - **BandaStation:** [`saymode.dm#L80`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/saymode.dm#L80)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — улей генокрадов (`crates/ss13_chat/src/server.rs`, `crates/ss13_game/src/antag/changeling/server.rs`); нет разума ксеноморфов, голосовых связок, голопада
 
 ### Мёртвый чат
 Призраки и мёртвые говорят в deadchat, видимый всем мёртвым; админ может отключить.

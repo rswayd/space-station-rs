@@ -1,6 +1,6 @@
 # Шаттлы и транспорт
 
-Раздел покрывает `code/modules/shuttle`, `code/datums/shuttles`, `code/controllers/subsystem/shuttle.dm`, `code/modules/transport` (трамвай, лифты, `SStransport`) и модуль форка `modular_bandastation/shuttles`. В ss13-rs (`crates/ss13_game/src/shuttle.rs`, `crates/ss13_mapload/src/dock.rs`) реализован только аварийный шаттл: шаблон из json карты, вызов/отзыв через консоль связи, стыковка, отлёт и конец раунда; прочие шаттлы, консоли шаттлов и транспорт отсутствуют. Консоль связи описана в ../comms/, экономика грузового шаттла — в ../cargo/.
+Раздел покрывает `code/modules/shuttle`, `code/datums/shuttles`, `code/controllers/subsystem/shuttle.dm`, `code/modules/transport` (трамвай, лифты, `SStransport`) и модуль форка `modular_bandastation/shuttles`. В ss13-rs (`crates/ss13_game/src/shuttle.rs`, `crates/ss13_mapload/src/dock.rs`) реализованы аварийный шаттл (шаблон из json карты, вызов/отзыв через консоль связи, стыковка, отлёт и конец раунда), шаттл снабжения (../cargo/) и инфильтратор ядерных оперативников; прочие шаттлы, универсальные консоли шаттлов и транспорт отсутствуют. Консоль связи описана в ../comms/, экономика грузового шаттла — в ../cargo/.
 
 | Файл | Что внутри |
 | --- | --- |

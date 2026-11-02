@@ -102,7 +102,7 @@
 `genetic_damage` (от мутаторов, токсин-урон), `decloning`, `dna_melt`, временное превращение (жало трансформации, ДНК-инъектор). Подробно — см. ../genetics/.
 
 - **Код:** [`/datum/status_effect/genetic_damage`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/genetic_damage.dm#L4), [`/datum/status_effect/decloning`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/decloning.dm#L4), [`/datum/status_effect/dna_melt`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/debuffs.dm#L825), [`/datum/status_effect/temporary_transformation`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/dna_transformation.dm#L3)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `dna_melt` (`crates/ss13_game/src/genetics/mod.rs`: распад через 60 с, если мутации не убрать); нет `genetic_damage`, `decloning`, временных превращений
 
 ### Слизь и слаймы
 Облепление слизью, кормление слайма, высасывание слаймом.

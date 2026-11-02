@@ -1,6 +1,6 @@
 # Антагонисты
 
-Все антагонисты BandaStation (`code/modules/antagonists`, `code/modules/uplink`, `code/modules/spells`, `code/modules/zombie`), цели (`code/game/gamemodes/objective*.dm`), подсистема Dynamic (`code/controllers/subsystem/dynamic`, `config/dynamic.toml`) и модпаки форка (`antagonists`, `antag_operations`, `uplink_items`, `dynamic`, `vampire`, `cult_overhaul`, `revolution_overhaul`, `ert`). В ss13-rs (`crates/ss13_game/src/antag/`) есть только раундстарт-Dynamic, предатель, его цели и аплинк в гарнитуре; остальные антагонисты отсутствуют.
+Все антагонисты BandaStation (`code/modules/antagonists`, `code/modules/uplink`, `code/modules/spells`, `code/modules/zombie`), цели (`code/game/gamemodes/objective*.dm`), подсистема Dynamic (`code/controllers/subsystem/dynamic`, `config/dynamic.toml`) и модпаки форка (`antagonists`, `antag_operations`, `uplink_items`, `dynamic`, `vampire`, `cult_overhaul`, `revolution_overhaul`, `ert`). В ss13-rs (`crates/ss13_game/src/antag/`) есть Dynamic (раундстарт и мидраунд), предатель с целями и аплинком, кровные братья, генокрад, вампир BandaStation, ядерные оперативники, кровавый культ, еретик (путь Пепла) и революция, каждый частично (см. записи); мага, блоба, ксеноморфов, абдукторов, сбойного ИИ и мидраунд-существ нет.
 
 | Файл | Что внутри |
 | --- | --- |

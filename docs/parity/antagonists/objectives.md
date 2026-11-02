@@ -56,7 +56,7 @@ Protect/protect_object — сохранить человека/объект; deb
 
 - **Код:** [`/datum/objective/protect`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/gamemodes/objective.dm#L343), [`/datum/objective/debrain`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/gamemodes/objective.dm#L312), [`/datum/objective/jailbreak`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/gamemodes/objective.dm#L374), [`/datum/objective/capture`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/gamemodes/objective.dm#L694), [`/datum/objective/destroy`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/gamemodes/objective.dm#L854), [`/datum/objective/mutiny`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/gamemodes/objective.dm#L243)
 - **BandaStation:** [`objective.dm#L859`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/gamemodes/objective.dm#L859) — исправление чёрного списка для destroy
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — protect у вампира (`crates/ss13_game/src/antag/vampire/server.rs`, `VampireObjective::Protect`), mutiny у революции (`crates/ss13_game/src/antag/revolution/server.rs`: все главы — цели); нет protect_object, debrain, jailbreak/detain, capture, destroy (ИИ)
 
 ### Кража N предметов типа
 Steal_n_of_type: набрать N предметов (оружие при Summon Guns, магия при Summon Magic, органы для абдукторов-подобных).

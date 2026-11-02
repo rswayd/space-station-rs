@@ -29,14 +29,14 @@
 Регенеративное ядро (лаваленд), клятва Гиппократа (жезл Асклепия), заращивание плоти (генокрад), бафф здоровья, хорошая музыка (лечит слушателей), гнездо (корм), ускорение.
 
 - **Код:** [`/datum/status_effect/regenerative_core`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/buffs.dm#L380), [`/datum/status_effect/hippocratic_oath`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/buffs.dm#L268), [`/datum/status_effect/fleshmend`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/buffs.dm#L129), [`/datum/status_effect/good_music`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/buffs.dm#L359), [`/datum/status_effect/speed_boost`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/buffs.dm#L466)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — только заращивание плоти генокрада (`crates/ss13_game/src/antag/changeling/server.rs`, fleshmend); остальных нет
 
 ### Магические и антагонистские баффы
 Милость Его (His Grace), кровавое опьянение, хаос (Mayhem), шаровая молния, благословение безумия, теневая регенерация, радиационный иммунитет, рентгеновское зрение, ореол культа, стойкость революционера.
 
 - **Код:** [`/datum/status_effect/his_grace`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/buffs.dm#L3), [`/datum/status_effect/blooddrunk`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/buffs.dm#L95), [`/datum/status_effect/mayhem`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/buffs.dm#L423), [`/datum/status_effect/radiation_immunity`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/buffs.dm#L610), [`/datum/status_effect/temporary_xray`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/buffs/xray.dm#L4), [`/datum/status_effect/cult_halo`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/buffs/cult_halo.dm#L2)
 - **BandaStation:** [`buffs.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/buffs.dm#L425) — хаос (Mayhem) длится 15 с вместо 2 мин и даёт 5 ед. админордразина вместо 25
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — ореол культа (`crates/ss13_game/src/antag/cult/server.rs`, `halo1`..`halo6`, только вид); остальных нет
 
 ### Передача предмета и «дай пять»
 Предложение предмета (`offering`): получатель видит алерт и берёт предмет; варианты без предмета — «дай пять», помочь подняться.

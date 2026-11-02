@@ -25,7 +25,7 @@ GPS-маяк с меткой: в tgui показывает координаты 
 Указатель направления на цель: на диск ядерной аутентификации (капитан), на члена экипажа с датчиками, парные, на шаттл; стрелка показывает направление и дальность.
 
 - **Код:** [`/obj/item/pinpointer`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/pinpointer.dm#L2), [`scan_for_target()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/pinpointer.dm#L76), [`/obj/item/pinpointer/crew`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/pinpointer.dm#L107), [`/obj/item/pinpointer/pair`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/pinpointer.dm#L190)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — пинпоинтер на диск у ядерных оперативников (`crates/ss13_game/src/antag/nukeop/server.rs`: включение, переключение на инфильтратор после взвода бомбы); нет капитанского, по датчикам, парных и на шаттл
 
 _«T-ray сканер» описано в [../engineering/tools.md](../engineering/tools.md)._
 

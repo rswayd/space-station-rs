@@ -12,7 +12,7 @@
 `/datum/weather`: предупреждение (`telegraph`, сообщение и звук), начало (`start`, оверлеи на зоны), затухание (`wind_down`), конец (`end`); каждый тик действует на мобов и турфы в затронутых зонах, кроме защищённых (`protected_areas`, укрытия, иммунитеты). Поддерживаются грозы (`thunder_act_turf`) и частицы.
 
 - **Код:** [`/datum/weather`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/weather/weather.dm#L15), [`proc/telegraph()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/weather/weather.dm#L186), [`proc/weather_act_mob()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/weather/weather.dm#L465), [`proc/thunder_act_turf()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/weather/weather.dm#L516), [`/datum/weather/particle`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/weather/particle_weather.dm#L2)
-- **Статус в ss13-rs:** ❌ нет — нет погоды
+- **Статус в ss13-rs:** 🟡 частично — только радиационный шторм события (`crates/ss13_game/src/events/radiation_storm.rs`: предупреждение, длительность, конец, укрытия); общего `/datum/weather` и других погод нет
 
 ### Пепельная буря и Emberfall (Лаваленд)
 Пепельная буря обжигает всех снаружи без защиты (шахтёрские костюмы, укрытия); Emberfall — безвредный пепел. Звук бури слышен в укрытиях.

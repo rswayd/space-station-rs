@@ -35,7 +35,7 @@
 Пульверизатор (космоочиститель, перцовый баллончик, огнетушащий), химраспылитель; струя переносит реагенты на тайлы и мобов.
 
 - **Код:** [`/obj/item/reagent_containers/spray`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/reagents/reagent_containers/spray.dm#L1), [`/obj/item/reagent_containers/spray/chemsprayer`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/reagents/reagent_containers/spray.dm#L309)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/janitor.rs`: пульверизатор с космоочистителем брызгает по соседнему тайлу и мобу (`amount_per_transfer_from_this`), чистит; нет перцового баллончика, огнетушащего и химраспылителя, струи на расстояние
 
 ### Баки и канистры
 Водяные и топливные баки (топливный взрывается), пивная бочка, канистры, кулеры, кувшины, лейка, тряпка (моет и душит), приправы, пакеты капельниц.
