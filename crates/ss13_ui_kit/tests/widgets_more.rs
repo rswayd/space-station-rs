@@ -452,6 +452,53 @@ fn tooltip_appears_after_hover_delay_and_hides_on_leave() {
     assert_eq!(count::<TooltipPopup>(&mut app), 0);
 }
 
+#[test]
+fn tooltip_is_never_drawn_off_its_place_and_survives_a_rerender() {
+    let mut app = headless();
+    spawn(
+        &mut app,
+        bsn! {
+            @Window
+            Children [
+                @WindowContent
+                Children [
+                    @Button { @content: "Hover me", @tooltip: "Helpful text" } Marker
+                ]
+            ]
+        },
+    );
+    let button = single::<Marker>(&mut app);
+    let at = center(&app, button);
+    move_to(&mut app, at);
+    // Every frame it is visible, it is below the button, never at its spawn corner.
+    let mut popup = None;
+    for _ in 0..8 {
+        settle(&mut app, 1);
+        if count::<TooltipPopup>(&mut app) == 1 {
+            let p = single::<TooltipPopup>(&mut app);
+            if app.world().get::<Visibility>(p) == Some(&Visibility::Inherited) {
+                assert!(center(&app, p).y > at.y, "drawn off its place");
+            }
+            popup = Some(p);
+        }
+    }
+    let popup = popup.expect("shown");
+    assert_eq!(app.world().get::<Visibility>(popup), Some(&Visibility::Inherited));
+
+    // A tgui re-render: the button is replaced by an equal one in the same place.
+    let parent = app.world().get::<ChildOf>(button).unwrap().parent();
+    app.world_mut().despawn(button);
+    let twin = app
+        .world_mut()
+        .spawn_scene(bsn! { @Button { @content: "Hover me", @tooltip: "Helpful text" } })
+        .unwrap()
+        .id();
+    app.world_mut().entity_mut(twin).insert(ChildOf(parent));
+    settle(&mut app, 3);
+    assert_eq!(single::<TooltipPopup>(&mut app), popup, "the same popup, not a new one");
+    assert_eq!(app.world().get::<Visibility>(popup), Some(&Visibility::Inherited));
+}
+
 fn modal_window(with_modal: bool) -> impl Scene {
     let modal = with_modal.then(|| {
         bsn! {

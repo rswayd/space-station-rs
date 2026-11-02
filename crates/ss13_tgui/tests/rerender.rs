@@ -454,3 +454,86 @@ fn memoized_subtrees_are_reused_without_unsettled_frames() {
         );
     }
 }
+
+/// A purchase changes one product's stock: that row is drawn again with the new amount, every
+/// other row stays the same entities (Vending rows are memoized by what they show).
+#[test]
+fn vending_purchase_respawns_only_the_bought_row() {
+    use ss13_tgui::interfaces::vending::{
+        ProductRecord, StockItem, UserData, VendingData, VendingRow, VendingStatic,
+    };
+    let products = 6;
+    let data = |bought: u32| VendingData {
+        user: Some(UserData {
+            name: "Tester".into(),
+            cash: Some(1000),
+            job: "Assistant".into(),
+            department: "Service".into(),
+            is_captain_card: false,
+        }),
+        stock: (0..products)
+            .map(|i| StockItem {
+                amount: if i == 2 { 5 - bought } else { 5 },
+                free: false,
+            })
+            .collect(),
+        extended_inventory: false,
+    };
+    let st = VendingStatic {
+        displayed_currency_name: " cr".into(),
+        product_records: (0..products)
+            .map(|i| ProductRecord {
+                path: format!("product-{i}"),
+                name: format!("product {i}"),
+                price: 10,
+                reference: i,
+                category: "Misc".into(),
+                colorable: false,
+                premium: false,
+                icon: None,
+            })
+            .collect(),
+        ..default()
+    };
+    let mut app = headless();
+    send(
+        &mut app,
+        UiServerMessage::Open {
+            window: WINDOW,
+            interface: "Vending".into(),
+            title: "Vending".into(),
+            status: UiStatus::Interactive,
+            static_data: encode(&st),
+            data: encode(&data(0)),
+        },
+    );
+    frames(&mut app, 10);
+    let rows = |app: &mut App| {
+        let mut q = app
+            .world_mut()
+            .query_filtered::<(Entity, &VendingRow), With<Memo>>();
+        let mut rows: Vec<_> = q
+            .iter(app.world())
+            .map(|(e, row)| (row.name.clone(), e))
+            .collect();
+        rows.sort();
+        rows
+    };
+    let before = rows(&mut app);
+    assert_eq!(before.len(), products as usize, "every row memoized");
+    update(&mut app, UiStatus::Interactive, Some(encode(&data(1))));
+    frames(&mut app, 10);
+    assert!(
+        shows(&app, "4 ост.") || shows(&app, "x4"),
+        "new stock shown"
+    );
+    let after = rows(&mut app);
+    for ((name, old), (_, new)) in before.iter().zip(&after) {
+        assert_eq!(
+            old == new,
+            name != "product 2",
+            "{name}: reused {}",
+            old == new
+        );
+    }
+}

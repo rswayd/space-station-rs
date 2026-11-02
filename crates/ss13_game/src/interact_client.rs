@@ -77,6 +77,19 @@ impl Button {
         }
     }
 
+    /// The rows of the 32 px icon that are drawn: `act_*` and `pull` fill only the lower half
+    /// (rows 17..32 in `screen_midnight.dmi`), the move intent the whole tile. The button is only
+    /// that part, so it is clicked where it shows, as tg's pixel-exact `mouse_opacity` does: as
+    /// whole tiles, rest covered throw's picture and resist covered pull's.
+    // shortcut: bounds measured for the Midnight style; derive them from the atlas (opaque bounds
+    // in the manifest) once other HUD styles or pixel-exact clicks elsewhere need them.
+    fn drawn_rows(self) -> (f32, f32) {
+        match self {
+            Self::MoveIntent => (0.0, 32.0),
+            Self::Pull | Self::Resist | Self::Rest | Self::Throw => (17.0, 32.0),
+        }
+    }
+
     fn state(self, data: &InteractHudData) -> &'static str {
         match self {
             Self::Pull if data.pulling => "pull",
@@ -140,9 +153,11 @@ fn spawn_buttons(atlas: Option<Res<IconAtlas>>, mut commands: Commands) {
                 Node {
                     position_type: PositionType::Absolute,
                     width: px(TILE_PX),
-                    height: px(TILE_PX),
+                    height: px(TILE_PX * (button.drawn_rows().1 - button.drawn_rows().0) / 32.0),
                     right: px(right),
-                    bottom: px(bottom),
+                    // tg anchors the icon's bottom edge here; the transparent rows below the
+                    // drawn part (none at present) would lift it.
+                    bottom: px(bottom + TILE_PX * (32.0 - button.drawn_rows().1) / 32.0),
                     ..default()
                 },
                 ImageNode::default(),
@@ -241,9 +256,13 @@ fn draw_buttons(
         let drawn = hud.window.and_then(|_| {
             let id = *states.0.get(button.state(&hud.data))?;
             let (info, handle) = atlas.as_deref_mut()?.state(id)?;
+            let (top, bottom) = button.drawn_rows();
+            let rect = frame_rect(info, Dir::South, 0).map(|r| {
+                Rect::new(r.min.x, r.min.y + top, r.max.x, r.min.y + bottom)
+            });
             Some(ImageNode {
                 image: handle,
-                rect: frame_rect(info, Dir::South, 0),
+                rect,
                 ..default()
             })
         });

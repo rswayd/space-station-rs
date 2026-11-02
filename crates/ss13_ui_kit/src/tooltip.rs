@@ -37,21 +37,45 @@ const TOOLTIP_MAX_WIDTH: f32 = 250.0;
 #[derive(Component, Clone, Debug, Default)]
 pub struct TooltipPopup;
 
+/// Seconds a shown tooltip outlives its despawned anchor, waiting for a hovered anchor with the
+/// same text to take it over: a tgui window re-renders its content on every data update (the
+/// autoupdate, ~1 s), which replaces the button under the pointer with an equal one.
+const ORPHAN_GRACE: f32 = 0.25;
+
 /// Which anchor the pointer rests on, for how long, and its popup once shown.
 #[derive(Resource, Default, Debug)]
 pub struct TooltipState {
     pub anchor: Option<Entity>,
     pub rested: f32,
     pub popup: Option<Entity>,
+    /// The shown popup's text, matched against a new anchor taking it over.
+    pub content: String,
+    /// Seconds since the shown popup's anchor was despawned.
+    pub orphaned: f32,
 }
 
 fn track_hover(
-    changed: Query<(Entity, &Hovered), (Changed<Hovered>, bevy::prelude::With<Tooltip>)>,
+    changed: Query<(Entity, &Hovered, &Tooltip), Changed<Hovered>>,
+    anchors: Query<(), bevy::prelude::With<Tooltip>>,
+    mut popups: Query<&mut Anchored, bevy::prelude::With<TooltipPopup>>,
     mut state: ResMut<TooltipState>,
     mut commands: Commands,
 ) {
-    for (entity, hovered) in &changed {
+    for (entity, hovered, tooltip) in &changed {
         if hovered.get() && state.anchor != Some(entity) {
+            // The re-rendered twin of the anchor whose popup is shown: the popup moves over.
+            let orphan =
+                state.orphaned > 0.0 || state.anchor.is_some_and(|a| !anchors.contains(a));
+            if orphan
+                && let Some(popup) = state.popup
+                && tooltip.content == state.content
+                && let Ok(mut anchored) = popups.get_mut(popup)
+            {
+                anchored.anchor = entity;
+                state.anchor = Some(entity);
+                state.orphaned = 0.0;
+                continue;
+            }
             close(&mut state, &mut commands);
             state.anchor = Some(entity);
         } else if !hovered.get() && state.anchor == Some(entity) {
@@ -66,6 +90,8 @@ fn close(state: &mut TooltipState, commands: &mut Commands) {
     }
     state.anchor = None;
     state.rested = 0.0;
+    state.orphaned = 0.0;
+    state.content.clear();
 }
 
 fn show_after_delay(
@@ -78,7 +104,12 @@ fn show_after_delay(
         return;
     };
     let Ok((tooltip, hovered)) = anchors.get(anchor) else {
-        // The anchor was despawned or lost its tooltip under the pointer.
+        // The anchor was despawned or lost its tooltip under the pointer; a shown popup waits
+        // briefly for a re-rendered twin ([`track_hover`]).
+        if state.popup.is_some() && state.orphaned < ORPHAN_GRACE {
+            state.orphaned += time.delta_secs().max(f32::EPSILON);
+            return;
+        }
         close(&mut state, &mut commands);
         return;
     };
@@ -91,6 +122,7 @@ fn show_after_delay(
         return;
     }
     let content = tooltip.content.clone();
+    state.content = content.clone();
     let anchored = Anchored {
         anchor,
         placement: tooltip.position,

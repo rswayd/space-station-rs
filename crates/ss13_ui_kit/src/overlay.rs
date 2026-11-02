@@ -136,7 +136,7 @@ pub fn place(anchor: Rect, size: Vec2, viewport: Rect, placement: Placement, off
 /// Keeps a root overlay node next to `anchor`. Hidden until its first placement, since its own
 /// size is only known after a layout pass.
 #[derive(Component, Clone, Debug)]
-#[require(Visibility::Hidden)]
+#[require(Visibility::Hidden, OverlayPlaced)]
 pub struct Anchored {
     pub anchor: Entity,
     pub placement: Placement,
@@ -145,6 +145,11 @@ pub struct Anchored {
     /// `contentAutoWidth`: the overlay is as wide as the anchor.
     pub match_width: bool,
 }
+
+/// Whether an [`Anchored`] overlay was shown at its place yet. Kept apart from `Visibility`, which
+/// a `Node` in the same bundle may already have set visible.
+#[derive(Component, Clone, Copy, Debug, Default)]
+pub struct OverlayPlaced(pub bool);
 
 /// Logical-px rect of a laid out node.
 pub fn node_rect(node: &ComputedNode, transform: &UiGlobalTransform) -> Rect {
@@ -160,12 +165,13 @@ fn position_overlays(
         &Anchored,
         &mut Node,
         &mut Visibility,
+        &mut OverlayPlaced,
         &ComputedNode,
         &ComputedUiRenderTargetInfo,
     )>,
     anchors: Query<(&ComputedNode, &UiGlobalTransform)>,
 ) {
-    for (anchored, mut node, mut visibility, computed, target) in &mut overlays {
+    for (anchored, mut node, mut visibility, mut placed, computed, target) in &mut overlays {
         let Ok((anchor_node, anchor_transform)) = anchors.get(anchored.anchor) else {
             continue;
         };
@@ -182,14 +188,24 @@ fn position_overlays(
         let viewport = Rect::from_corners(Vec2::ZERO, target.physical_size().as_vec2() * scale);
         let pos = place(anchor, size, viewport, anchored.placement, anchored.offset);
         let (left, top) = (Val::Px(pos.x.round()), Val::Px(pos.y.round()));
-        if node.left != left || node.top != top {
+        let moved = node.left != left || node.top != top;
+        if moved {
             node.left = left;
             node.top = top;
         }
-        // Shown once a real size has been measured; the first layout has none.
-        if computed.size != Vec2::ZERO {
-            visibility.set_if_neq(Visibility::Inherited);
+        // First shown once a real size has been measured (the first layout has none) and the
+        // layout drawn this frame already has it in place: a move only lands in the next layout,
+        // so showing it now would flash it at its spawn spot (the top-left corner). Once shown it
+        // stays shown and trails a moving anchor.
+        if !placed.0 && computed.size != Vec2::ZERO && !moved {
+            placed.0 = true;
         }
+        let wanted = if placed.0 {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        };
+        visibility.set_if_neq(wanted);
     }
 }
 

@@ -13,6 +13,7 @@
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
+use std::hash::Hash;
 
 use bevy::camera::visibility::VisibilitySystems;
 use bevy::input_focus::InputFocus;
@@ -130,6 +131,21 @@ pub fn memo<S: Scene>(key: u64, build: impl FnOnce() -> S) -> Box<dyn SceneList>
             Box::new(EntityScene((build(), bsn! { memo })))
         }
     }
+}
+
+/// [`memo`] keyed by what the subtree is drawn from: `build` gets `input` alone (a `fn`, so it
+/// cannot read anything else), and the previous render's subtree is reused while `input` hashes
+/// the same. Put what a row shows into `input` (computed values, not whole records) so that it
+/// changes exactly when the row would.
+pub fn memo_of<D: std::hash::Hash, S: Scene>(input: &D, build: fn(&D) -> S) -> Box<dyn SceneList> {
+    use std::hash::{BuildHasher, Hasher};
+    // A fixed-key hasher: the key must be the same across renders of one session.
+    let mut hasher = bevy::platform::hash::FixedHasher.build_hasher();
+    // The builder tells two kinds of subtrees with equal inputs apart.
+    hasher.write_usize(build as usize);
+    std::any::type_name::<D>().hash(&mut hasher);
+    input.hash(&mut hasher);
+    memo(hasher.finish(), || build(input))
 }
 
 /// On a `NumberInput`: `onChange={(value) => act(action, {[param]: value})}`; an `ActParams`

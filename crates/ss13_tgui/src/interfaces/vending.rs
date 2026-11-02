@@ -15,7 +15,7 @@ use crate::UiInterface;
 pub struct VendingUi;
 
 /// A product's picture: the item type's icon state and color (tgui `dmIcon`/`dmIconState`).
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ProductIcon {
     pub icon_state: IconStateId,
     pub color: Option<[u8; 4]>,
@@ -162,7 +162,9 @@ mod client_side {
         LOCAL_CATEGORY, LOCAL_LAYOUT, LOCAL_SEARCH, ProductRecord, StockItem, VendingData,
         VendingStatic, VendingUi, capitalize_all, filter, job_ru,
     };
-    use crate::client::{ClientUi, ClientWindow, LocalOnInput, SetLocal, UiLocalState, UiSprite};
+    use crate::client::{
+        ClientUi, ClientWindow, LocalOnInput, SetLocal, UiLocalState, UiSprite, memo_of,
+    };
 
     /// A product row: what the in-place filter needs.
     #[derive(Component, Clone, Debug, Default)]
@@ -366,7 +368,7 @@ mod client_side {
                         amount: 0,
                         free: false,
                     });
-                product_row(st, data, product, stock, list)
+                memo_of(&row_view(st, data, product, stock, list), product_row)
             })
             .collect();
         let search = search.to_owned();
@@ -403,14 +405,29 @@ mod client_side {
         }
     }
 
-    /// `Product` -> `ProductGrid` / `ProductList`.
-    fn product_row(
+    /// Everything a product row shows, so that a re-render reuses the rows that did not change
+    /// (a purchase changes one row's stock, and the balance only those it makes unaffordable).
+    #[derive(Hash)]
+    struct RowView {
+        name: String,
+        category: String,
+        price_text: String,
+        remaining: u32,
+        disabled: bool,
+        icon: Option<super::ProductIcon>,
+        reference: u32,
+        premium: bool,
+        list: bool,
+    }
+
+    /// `Product`: the derived state of one row.
+    fn row_view(
         st: &VendingStatic,
         data: &VendingData,
         product: &ProductRecord,
         stock: StockItem,
         list: bool,
-    ) -> impl Scene + use<> {
+    ) -> RowView {
         let free = st.all_products_free || stock.free || product.price == 0;
         let discount = !product.premium
             && data
@@ -433,15 +450,32 @@ mod client_side {
         } else {
             format!("{price}{}", st.displayed_currency_name)
         };
-        let name = capitalize_all(&product.name);
-        let image = product_image(product.icon);
-        let params = ActParams(vec![
-            ("ref".into(), product.reference.to_string()),
-            ("premium".into(), u8::from(product.premium).to_string()),
-        ]);
-        let row = VendingRow {
+        RowView {
             name: product.name.clone(),
             category: product.category.clone(),
+            price_text,
+            remaining,
+            disabled,
+            icon: product.icon,
+            reference: product.reference,
+            premium: product.premium,
+            list,
+        }
+    }
+
+    /// `ProductGrid` / `ProductList`.
+    fn product_row(view: &RowView) -> Box<dyn Scene> {
+        let (disabled, remaining, list) = (view.disabled, view.remaining, view.list);
+        let price_text = view.price_text.clone();
+        let name = capitalize_all(&view.name);
+        let image = product_image(view.icon);
+        let params = ActParams(vec![
+            ("ref".into(), view.reference.to_string()),
+            ("premium".into(), u8::from(view.premium).to_string()),
+        ]);
+        let row = VendingRow {
+            name: view.name.clone(),
+            category: view.category.clone(),
         };
         // `ProductPrice`: `fontSize={0.85}` of the surrounding text, gold.
         let gold = UiColor::Gold.text().unwrap_or_default();

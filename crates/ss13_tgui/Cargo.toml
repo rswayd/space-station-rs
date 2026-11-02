@@ -32,6 +32,10 @@ name = "rerender"
 required-features = ["client"]
 
 [[example]]
+name = "vending_bench"
+required-features = ["client"]
+
+[[example]]
 name = "thermo_demo"
 required-features = ["server", "client"]
 
