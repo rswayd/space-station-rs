@@ -1,22 +1,18 @@
-//! Client half of the blood cult: the `AntagInfoGeneric` panel and the `TextInputModal`
-//! (Communion, rune keywords).
-// shortcut: no character counter, timeout bar or large-button preference in the text input.
+//! Client half of the blood cult: the `AntagInfoGeneric` panel.
 
 use bevy::app::Propagate;
 use ss13_tgui::client::{AppTguiClientExt, ClientUi};
 use ss13_ui_kit::prelude::*;
 use ss13_ui_kit::theme::{Bold, FontPx};
 
-use super::{AntagInfoGenericUi, CANCEL, SUBMIT, TextInputData, TextInputUi};
+use super::AntagInfoGenericUi;
 use crate::antag::BrotherInfo;
-use crate::modpc::client::ActOnSubmit;
 
 pub struct CultClientPlugin;
 
 impl Plugin for CultClientPlugin {
     fn build(&self, app: &mut App) {
-        app.register_ui_view::<AntagInfoGenericUi>()
-            .register_ui_view::<TextInputUi>();
+        app.register_ui_view::<AntagInfoGenericUi>();
     }
 }
 
@@ -58,49 +54,6 @@ impl ClientUi for AntagInfoGenericUi {
                         --
                         Node { flex_direction: FlexDirection::Column }
                         Children [ {objectives} ]
-                    ]
-                ]
-            ]
-        }
-    }
-}
-
-/// tg `TextInputModal.tsx`: the message, the field (Enter submits) and the buttons.
-impl ClientUi for TextInputUi {
-    const WIDTH: f32 = 325.0;
-    const HEIGHT: f32 = 135.0;
-
-    fn content(_: &(), data: &TextInputData) -> impl Scene {
-        let message = data.message.clone();
-        let max = (data.max_length > 0).then_some(data.max_length as usize);
-        let placeholder = data.placeholder.clone();
-        bsn! {
-            @WindowContent
-            Children [
-                @Stack { @vertical: true, @fill: true }
-                Children [
-                    @StackItem
-                    Children [ @UiBox Children [ Text(message) ] ]
-                    --
-                    @StackItem
-                    Children [
-                        Input {
-                            placeholder: placeholder,
-                            max_length: max,
-                            auto_focus: true,
-                            fluid: true,
-                        }
-                        ActOnSubmit {
-                            action: {SUBMIT.to_owned()},
-                            param: {"entry".to_owned()},
-                        }
-                        Name("text input: field")
-                    ]
-                    --
-                    @StackItem
-                    Children [
-                        @ss13_ui_kit::Button { @content: "Отмена", @fluid: true }
-                        Act(CANCEL)
                     ]
                 ]
             ]

@@ -16,7 +16,11 @@ use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 
 use bevy::camera::visibility::VisibilitySystems;
-use bevy::input_focus::InputFocus;
+use bevy::input::ButtonState;
+use bevy::input::keyboard::{Key, KeyboardInput};
+use bevy::input_focus::{FocusedInput, InputFocus};
+use bevy::picking::events::PointerClick;
+use bevy::picking::pointer::PointerButton;
 use bevy::prelude::*;
 use bevy::scene::{CommandsSceneExt, EntityScene, Scene, SceneList};
 use bevy::text::EditableText;
@@ -30,7 +34,9 @@ use ss13_shared::protocol::ClientIntent;
 use ss13_shared::ui::{UiClientMessage, UiServerMessage, UiStatus};
 use ss13_ui_kit::layout::Slot;
 use ss13_ui_kit::scroll::ScrollContent;
-use ss13_ui_kit::{InputChanged, LayoutFeedback, NumberInputChanged, UiAct, WindowClose, theme};
+use ss13_ui_kit::{
+    InputChanged, InputSubmitted, LayoutFeedback, NumberInputChanged, UiAct, WindowClose, theme,
+};
 
 use crate::{UiInterface, decode};
 
@@ -71,6 +77,11 @@ impl UiLocalState {
     /// `""` when unset.
     pub fn get(&self, key: &str) -> &str {
         self.0.get(key).map_or("", String::as_str)
+    }
+
+    /// `None` when unset, unlike [`Self::get`].
+    pub fn value(&self, key: &str) -> Option<&str> {
+        self.0.get(key).map(String::as_str)
     }
 
     pub fn set(&mut self, key: &str, value: &str) {
@@ -154,6 +165,128 @@ pub fn memo_of<D: std::hash::Hash, S: Scene>(input: &D, build: fn(&D) -> S) -> B
 pub struct ActOnChange {
     pub action: String,
     pub param: String,
+}
+
+/// On an `Input`: Enter sends `act(action, {...params, [param]: text})` (tgui `onEnter`). Empty
+/// text sends nothing.
+#[derive(Component, Clone, Debug, Default, PartialEq)]
+pub struct ActOnSubmit {
+    pub action: String,
+    pub param: String,
+    pub params: Vec<(String, String)>,
+}
+
+/// On a button with an `Act`: adds `[param]: local[key]` of the window's [`UiLocalState`] to
+/// the act, `default` while `key` is unset (tgui `onClick={() => act('submit', { entry: input })}`
+/// with `useState(default)`).
+#[derive(Component, Clone, Debug, Default, PartialEq)]
+pub struct ActWithLocal {
+    pub param: String,
+    pub key: String,
+    pub default: String,
+}
+
+/// On a view's root node: keys pressed while the window has keyboard focus send
+/// `act(action, params)` (tgui `<Window.Content onKeyDown>`). Text fields keep Enter to
+/// themselves ([`ActOnSubmit`]); list it here only for windows without one.
+#[derive(Component, Clone, Debug, Default, PartialEq)]
+pub struct ActOnKey(pub Vec<(KeyCode, String, Vec<(String, String)>)>);
+
+/// On a view's root node: keys pressed while the window has keyboard focus set `key` of its
+/// [`UiLocalState`] to the paired value and re-render (`setSelected(next)`).
+#[derive(Component, Clone, Debug, Default, PartialEq)]
+pub struct KeySetLocal {
+    pub key: String,
+    pub keys: Vec<(KeyCode, String)>,
+}
+
+/// On a row button: shown selected while the window's local `key` is `value` (or, while `key`
+/// is unset, when `default`). Updated in place: a click or arrow key needs no re-render, and a
+/// focused search field would hold one back.
+#[derive(Component, Clone, Debug, Default, PartialEq)]
+pub struct SelectRow {
+    pub key: String,
+    pub value: String,
+    pub default: bool,
+}
+
+/// On a view's root: keyboard choice in a list (tgui `ListInputModal`). Up/Down step through
+/// the items the search (`search_key`) leaves, Enter sends `submit` with the choice, and in
+/// hotkey mode a letter selects the first item starting with it. The choice is local `key`,
+/// `default` while unset.
+#[derive(Component, Clone, Debug, Default, PartialEq)]
+pub struct ListNav {
+    pub key: String,
+    pub default: String,
+    pub search_key: String,
+    pub items: Vec<String>,
+    pub hotkeys: bool,
+    pub submit: String,
+}
+
+/// On a button: a double click sends `act(action, {[param]: value})` (`onDoubleClick`).
+#[derive(Component, Clone, Debug, Default, PartialEq)]
+pub struct ActOnDoubleClick {
+    pub action: String,
+    pub param: String,
+    pub value: String,
+}
+
+/// On a button: activating it unsets these keys of its window's [`UiLocalState`] and
+/// re-renders (back to the `useState` defaults).
+#[derive(Component, Clone, Debug, Default, PartialEq)]
+pub struct ClearLocal(pub Vec<String>);
+
+/// On a view's root node: when `true`, gives the window keyboard focus when it is rendered
+/// (tgui `<Autofocus />`), so [`ActOnKey`] works without a click first.
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq)]
+pub struct AutoFocusWindow(pub bool);
+
+/// On a row: shown only while its `text` contains the window's local `key` (tgui
+/// `createSearch`, case-insensitive), filtered in place since typing does not re-render.
+#[derive(Component, Clone, Debug, Default, PartialEq)]
+pub struct SearchRow {
+    pub key: String,
+    /// Lowercase.
+    pub text: String,
+}
+
+/// `ss13_tgui::server::MAX_PARAM_LEN`: longer text goes out as `param`, `param.1`, ... and the
+/// server joins it back (`UiParams::text`).
+const PARAM_BYTES: usize = 256;
+
+/// `text` cut into pieces of at most `max` bytes at char boundaries.
+fn chunks(text: &str, max: usize) -> Vec<&str> {
+    let mut out = Vec::new();
+    let mut rest = text;
+    while !rest.is_empty() {
+        let mut end = rest.len().min(max);
+        while !rest.is_char_boundary(end) {
+            end -= 1;
+        }
+        out.push(&rest[..end]);
+        rest = &rest[end..];
+    }
+    out
+}
+
+/// `text` as the params `UiParams::text(param)` reads back. Empty text is one empty param.
+fn text_params(param: &str, text: &str) -> Vec<(String, String)> {
+    let parts = chunks(text, PARAM_BYTES);
+    if parts.is_empty() {
+        return vec![(param.to_owned(), String::new())];
+    }
+    parts
+        .into_iter()
+        .enumerate()
+        .map(|(i, part)| {
+            let key = match i {
+                0 => param.to_owned(),
+                i => format!("{param}.{i}"),
+            };
+            (key, part.to_owned())
+        })
+        .collect()
 }
 
 pub trait AppTguiClientExt {
@@ -245,6 +378,20 @@ pub struct ClientWindow {
     scroll: Vec<Vec2>,
     /// Where it was opened (top-left, logical px): a different position was dragged to.
     placed: Vec2,
+    /// [`AutoFocusWindow`] already took the keyboard (on the first render only, as tgui mounts).
+    autofocused: bool,
+}
+
+impl ClientWindow {
+    /// The shown render's root node (the view's `WindowContent`).
+    pub fn content_root(&self, children: &Query<&Children>) -> Option<Entity> {
+        children.get(self.content?).ok()?.first().copied()
+    }
+
+    /// Re-render with the current data and local state.
+    pub fn mark_dirty(&mut self) {
+        self.dirty = true;
+    }
 }
 
 /// Window positions the player dragged to, by interface, for this session (tgui
@@ -298,6 +445,12 @@ impl Plugin for TguiClientPlugin {
             .register_ui_view::<crate::interfaces::ai_airlock::AiAirlockUi>()
             .register_ui_view::<crate::interfaces::apc::ApcUi>()
             .register_ui_view::<crate::interfaces::list_input::ListInputUi>()
+            .register_ui_view::<crate::interfaces::alert::AlertUi>()
+            .register_ui_view::<crate::interfaces::text_input::TextInputUi>()
+            .register_ui_view::<crate::interfaces::number_input::NumberInputUi>()
+            .register_ui_view::<crate::interfaces::checkbox_input::CheckboxInputUi>()
+            .register_ui_view::<crate::interfaces::key_combo::KeyComboUi>()
+            .register_ui_view::<crate::interfaces::color_picker::ColorPickerUi>()
             .register_ui_view::<crate::interfaces::disposal_unit::DisposalUnitUi>()
             .register_ui_view::<crate::interfaces::dna_console::DnaConsoleUi>()
             .register_ui_view::<crate::interfaces::destination_tagger::DestinationTaggerUi>();
@@ -315,6 +468,9 @@ impl Plugin for TguiClientPlugin {
                     sync_dimmers,
                     restore_scroll,
                     crate::interfaces::vending::filter_rows,
+                    filter_search_rows,
+                    sync_selected_rows,
+                    autofocus_window,
                 )
                     .chain(),
             )
@@ -325,8 +481,14 @@ impl Plugin for TguiClientPlugin {
                     .before(VisibilitySystems::VisibilityPropagate),
             )
             .add_observer(set_local)
+            .add_observer(clear_local)
+            .add_observer(crate::interfaces::key_combo::client_side::capture_combo)
+            .add_plugins(crate::interfaces::color_picker::client_side::plugin)
             .add_observer(local_on_input)
             .add_observer(send_act)
+            .add_observer(submit_act)
+            .add_observer(key_acts)
+            .add_observer(double_click_acts)
             .add_observer(send_number_act)
             .add_observer(send_close);
     }
@@ -413,6 +575,7 @@ fn apply_messages(
                         dirty: true,
                         scroll: Vec::new(),
                         placed,
+                        autofocused: false,
                     })
                     .insert((UiLocalState::default(), Visibility::Hidden))
                     .id();
@@ -785,6 +948,29 @@ fn set_local(
     }
 }
 
+fn clear_local(
+    activate: On<Activate>,
+    clearers: Query<&ClearLocal>,
+    parents: Query<&ChildOf>,
+    mut windows: Query<(&mut ClientWindow, &mut UiLocalState)>,
+) {
+    let Ok(ClearLocal(keys)) = clearers.get(activate.entity) else {
+        return;
+    };
+    let Some(root) = parents
+        .iter_ancestors(activate.entity)
+        .find(|e| windows.contains(*e))
+    else {
+        return;
+    };
+    if let Ok((mut window, mut local)) = windows.get_mut(root) {
+        for key in keys {
+            local.0.remove(key);
+        }
+        window.dirty = true;
+    }
+}
+
 fn local_on_input(
     changed: On<InputChanged>,
     inputs: Query<&LocalOnInput>,
@@ -807,15 +993,257 @@ fn local_on_input(
     }
 }
 
-fn send_act(act: On<UiAct>, windows: Query<&ClientWindow>, mut intents: MessageWriter<SendIntent>) {
-    let Ok(window) = windows.get(act.scope) else {
+fn send_act(
+    act: On<UiAct>,
+    windows: Query<(&ClientWindow, &UiLocalState)>,
+    with_local: Query<&ActWithLocal>,
+    mut intents: MessageWriter<SendIntent>,
+) {
+    let Ok((window, local)) = windows.get(act.scope) else {
         return;
     };
     // ui_kit fills params from `ActParams` and from widgets that carry their own (Dropdown).
+    let mut params = act.params.clone();
+    if let Ok(with) = with_local.get(act.source) {
+        let value = local.value(&with.key).unwrap_or(&with.default);
+        params.extend(text_params(&with.param, value));
+    }
     intents.write(SendIntent(ClientIntent::UiAct {
         window: window.id,
         action: act.action.clone(),
-        params: act.params.clone(),
+        params,
+    }));
+}
+
+fn key_acts(
+    key: On<FocusedInput<KeyboardInput>>,
+    parents: Query<&ChildOf>,
+    mut roots: Query<(&mut ClientWindow, &mut UiLocalState)>,
+    children: Query<&Children>,
+    acts: Query<&ActOnKey>,
+    setters: Query<&KeySetLocal>,
+    navs: Query<&ListNav>,
+    mut intents: MessageWriter<SendIntent>,
+) {
+    // The event bubbles and a global observer sees every step: handle the focused one.
+    if key.event_target() != key.focused_entity
+        || key.input.state != ButtonState::Pressed
+        || key.input.repeat
+    {
+        return;
+    }
+    let Some(root) = std::iter::once(key.focused_entity)
+        .chain(parents.iter_ancestors(key.focused_entity))
+        .find(|e| roots.contains(*e))
+    else {
+        return;
+    };
+    let Ok((mut window, mut local)) = roots.get_mut(root) else {
+        return;
+    };
+    let Some(view_root) = window.content_root(&children) else {
+        return;
+    };
+    let code = key.input.key_code;
+    if let Ok(nav) = navs.get(view_root) {
+        let current = local.value(&nav.key).unwrap_or(&nav.default).to_owned();
+        let query = local.get(&nav.search_key).trim().to_lowercase();
+        let shown: Vec<&String> = nav
+            .items
+            .iter()
+            .filter(|i| i.to_lowercase().contains(&query))
+            .collect();
+        let at = shown.iter().position(|i| **i == current);
+        let pick = match (code, &key.input.logical_key) {
+            (KeyCode::ArrowDown, _) => match at {
+                Some(i) if i + 1 < shown.len() => shown.get(i + 1).copied(),
+                _ => shown.first().copied(),
+            },
+            (KeyCode::ArrowUp, _) => match at {
+                Some(i) if i > 0 => shown.get(i - 1).copied(),
+                _ => shown.last().copied(),
+            },
+            (KeyCode::Enter | KeyCode::NumpadEnter, _) => {
+                if shown.contains(&&current) {
+                    intents.write(SendIntent(ClientIntent::UiAct {
+                        window: window.id,
+                        action: nav.submit.clone(),
+                        params: text_params(&nav.key, &current),
+                    }));
+                }
+                return;
+            }
+            // The typed letter, not the key code: Cyrillic items on a Russian layout.
+            (_, Key::Character(c)) if nav.hotkeys => {
+                let c = c.to_lowercase();
+                nav.items.iter().find(|i| i.to_lowercase().starts_with(&c))
+            }
+            _ => None,
+        };
+        if let Some(pick) = pick.cloned() {
+            local.set(&nav.key, &pick);
+            return;
+        }
+    }
+    if let Ok(ActOnKey(bindings)) = acts.get(view_root)
+        && let Some((_, action, params)) = bindings.iter().find(|(k, ..)| *k == code)
+    {
+        intents.write(SendIntent(ClientIntent::UiAct {
+            window: window.id,
+            action: action.clone(),
+            params: params.clone(),
+        }));
+        return;
+    }
+    if let Ok(setter) = setters.get(view_root)
+        && let Some((_, value)) = setter.keys.iter().find(|(k, _)| *k == code)
+    {
+        local.set(&setter.key, value);
+        window.dirty = true;
+    }
+}
+
+fn double_click_acts(
+    click: On<PointerClick>,
+    acts: Query<&ActOnDoubleClick>,
+    parents: Query<&ChildOf>,
+    windows: Query<&ClientWindow>,
+    mut intents: MessageWriter<SendIntent>,
+) {
+    if click.count < 2 || click.button != PointerButton::Primary {
+        return;
+    }
+    let Ok(act) = acts.get(click.event_target()) else {
+        return;
+    };
+    let Some(window) = parents
+        .iter_ancestors(click.event_target())
+        .find_map(|e| windows.get(e).ok())
+    else {
+        return;
+    };
+    intents.write(SendIntent(ClientIntent::UiAct {
+        window: window.id,
+        action: act.action.clone(),
+        params: text_params(&act.param, &act.value),
+    }));
+}
+
+fn sync_selected_rows(
+    windows: Query<(Entity, Ref<UiLocalState>), With<ClientWindow>>,
+    added: Query<Entity, Added<SelectRow>>,
+    parents: Query<&ChildOf>,
+    children: Query<&Children>,
+    mut rows: Query<(&SelectRow, &mut ss13_ui_kit::Button)>,
+) {
+    let rendered: Vec<Entity> = added
+        .iter()
+        .filter_map(|row| parents.iter_ancestors(row).find(|e| windows.contains(*e)))
+        .collect();
+    for (root, local) in &windows {
+        if !(local.is_changed() || rendered.contains(&root)) {
+            continue;
+        }
+        for entity in children.iter_descendants(root) {
+            let Ok((row, mut button)) = rows.get_mut(entity) else {
+                continue;
+            };
+            let selected = local
+                .value(&row.key)
+                .map_or(row.default, |v| v == row.value);
+            if button.selected != selected {
+                button.selected = selected;
+            }
+        }
+    }
+}
+
+/// Runs when a window's local state changed or a render spawned rows; cost: one walk over that
+/// window's entities.
+fn filter_search_rows(
+    windows: Query<(Entity, Ref<UiLocalState>), With<ClientWindow>>,
+    added: Query<Entity, Added<SearchRow>>,
+    parents: Query<&ChildOf>,
+    children: Query<&Children>,
+    mut rows: Query<(&SearchRow, &mut Node)>,
+) {
+    let rendered: Vec<Entity> = added
+        .iter()
+        .filter_map(|row| parents.iter_ancestors(row).find(|e| windows.contains(*e)))
+        .collect();
+    for (root, local) in &windows {
+        if !(local.is_changed() || rendered.contains(&root)) {
+            continue;
+        }
+        for entity in children.iter_descendants(root) {
+            let Ok((row, mut node)) = rows.get_mut(entity) else {
+                continue;
+            };
+            let query = local.get(&row.key).to_lowercase();
+            let display = if row.text.contains(query.trim()) {
+                Display::Flex
+            } else {
+                Display::None
+            };
+            if node.display != display {
+                node.display = display;
+            }
+        }
+    }
+}
+
+/// A system, not an `Add` observer: the view's root gets its `ChildOf` after its components.
+fn autofocus_window(
+    added: Query<(Entity, &AutoFocusWindow), Added<AutoFocusWindow>>,
+    parents: Query<&ChildOf>,
+    mut windows: Query<&mut ClientWindow>,
+    focus: Option<ResMut<InputFocus>>,
+) {
+    let Some(mut focus) = focus else {
+        return;
+    };
+    for (entity, autofocus) in &added {
+        let Some(root) = std::iter::once(entity)
+            .chain(parents.iter_ancestors(entity))
+            .find(|e| windows.contains(*e))
+        else {
+            continue;
+        };
+        if let Ok(mut window) = windows.get_mut(root)
+            && autofocus.0
+            && !window.autofocused
+        {
+            window.autofocused = true;
+            focus.set(root, bevy::input_focus::FocusCause::Navigated);
+        }
+    }
+}
+
+fn submit_act(
+    submitted: On<InputSubmitted>,
+    acts: Query<&ActOnSubmit>,
+    parents: Query<&ChildOf>,
+    windows: Query<&ClientWindow>,
+    mut intents: MessageWriter<SendIntent>,
+) {
+    let Ok(act) = acts.get(submitted.entity) else {
+        return;
+    };
+    if submitted.value.trim().is_empty() {
+        return;
+    }
+    let Some(window) = parents
+        .iter_ancestors(submitted.entity)
+        .find_map(|e| windows.get(e).ok())
+    else {
+        return;
+    };
+    let mut params = act.params.clone();
+    params.extend(text_params(&act.param, &submitted.value));
+    intents.write(SendIntent(ClientIntent::UiAct {
+        window: window.id,
+        action: act.action.clone(),
+        params,
     }));
 }
 
@@ -863,6 +1291,20 @@ fn send_close(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn long_text_splits_at_char_boundaries() {
+        let text = "я".repeat(300);
+        let params = text_params("entry", &text);
+        let keys: Vec<_> = params.iter().map(|(k, _)| k.as_str()).collect();
+        assert_eq!(keys, ["entry", "entry.1", "entry.2"]);
+        assert!(params.iter().all(|(_, p)| p.len() <= PARAM_BYTES));
+        assert_eq!(
+            params.iter().map(|(_, p)| p.as_str()).collect::<String>(),
+            text
+        );
+        assert_eq!(text_params("entry", ""), [("entry".into(), String::new())]);
+    }
 
     #[test]
     fn placement_centers_cascades_and_keeps_recalled_windows_on_screen() {

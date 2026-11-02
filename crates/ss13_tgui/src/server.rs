@@ -148,6 +148,22 @@ impl<'a> UiParams<'a> {
             .map(|(_, v)| v.as_str())
     }
 
+    /// A text param, maybe split by the client into `key`, `key.1`, `key.2`... (each param is
+    /// capped at [`MAX_PARAM_LEN`] bytes, shorter than a message or a note).
+    pub fn text(&self, key: &str) -> Result<String, UiReject> {
+        let mut text = self
+            .get(key)
+            .ok_or_else(|| UiReject::BadParams(format!("{key}: missing")))?
+            .to_owned();
+        for i in 1.. {
+            match self.get(&format!("{key}.{i}")) {
+                Some(part) => text.push_str(part),
+                None => break,
+            }
+        }
+        Ok(text)
+    }
+
     /// A finite number (DM `text2num` on a tgui param).
     pub fn number(&self, key: &str) -> Result<f64, UiReject> {
         self.get(key)
@@ -275,6 +291,7 @@ impl Plugin for TguiServerPlugin {
                 ),
             )
             .add_observer(forget_window);
+        crate::prompt::plugin(app);
     }
 }
 
@@ -321,8 +338,10 @@ fn open<T: ServerUi>(
             window.actor = request.actor;
             continue;
         }
+        // Several server types may serve one interface (`ListInputWindow`): the others see
+        // this request too, so a source without this type's components is not an error.
         if !sources.contains(request.source) {
-            warn!(
+            debug!(
                 "OpenUi {}: source {} lacks the interface's components",
                 T::NAME,
                 request.source

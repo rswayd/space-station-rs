@@ -746,6 +746,7 @@ impl ServerUi for SurgeryListWindow {
             message: String::new(),
             init_value: items.first().cloned().unwrap_or_default(),
             items,
+            timeout: None,
         }
     }
 

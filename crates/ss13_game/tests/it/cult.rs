@@ -14,7 +14,7 @@ use ss13_chat::server::ChatServerPlugin;
 use ss13_game::actions::{ActionButtonsData, ActionButtonsUi, TRIGGER};
 use ss13_game::antag::BrotherInfo;
 use ss13_game::antag::cult::server::{CultTeam, Cultist, HOLY_WATER, Rune, RuneKind};
-use ss13_game::antag::cult::{AntagInfoGenericUi, ROLE_CULTIST, TextInputUi};
+use ss13_game::antag::cult::{AntagInfoGenericUi, ROLE_CULTIST};
 use ss13_game::antag::dynamic::{CULT_RULESET, DevTraitor, DynamicConfig};
 use ss13_game::chem::{Chem, MobReagents};
 use ss13_game::health::{Health, Stat};
@@ -39,6 +39,7 @@ use ss13_shared::protocol::{ClientIntent, InventorySlot};
 use ss13_shared::ui::UiServerMessage;
 use ss13_tgui::UiInterface;
 use ss13_tgui::interfaces::list_input::{ListInputData, ListInputUi};
+use ss13_tgui::interfaces::text_input::TextInputUi;
 use ss13_world::SpatialIndex;
 
 const DAGGER: &str = "/obj/item/melee/cultblade/dagger";

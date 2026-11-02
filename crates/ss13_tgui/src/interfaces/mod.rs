@@ -2,16 +2,24 @@
 
 pub mod ai_airlock;
 pub mod air_alarm;
+pub mod alert;
 pub mod apc;
 pub mod atmos;
+pub mod checkbox_input;
+pub mod color_picker;
 pub mod destination_tagger;
 pub mod disposal_unit;
 pub mod dna_console;
+#[cfg(feature = "client")]
+pub(crate) mod input_buttons;
 pub mod job_selection;
+pub mod key_combo;
 pub mod list_input;
 pub mod mech_bay;
+pub mod number_input;
 pub mod ru_jobs;
 pub mod solar_control;
+pub mod text_input;
 pub mod thermo_machine;
 pub mod vending;
 pub mod wires;

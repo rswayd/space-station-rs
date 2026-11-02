@@ -19,7 +19,7 @@ use ss13_ui_kit::prelude::*;
 use ss13_ui_kit::theme::Bold;
 
 use super::*;
-use crate::modpc::client::ActOnSubmit;
+use ss13_tgui::client::ActOnSubmit;
 
 pub struct RecordsClientPlugin;
 

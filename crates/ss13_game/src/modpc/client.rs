@@ -6,9 +6,7 @@
 
 use bevy::app::Propagate;
 use bevy::scene::{EntityScene, SceneList};
-use ss13_net::client::SendIntent;
-use ss13_shared::protocol::ClientIntent;
-use ss13_tgui::client::{AppTguiClientExt, ClientUi, ClientWindow, SetLocal, UiLocalState};
+use ss13_tgui::client::{ActOnSubmit, AppTguiClientExt, ClientUi, SetLocal, UiLocalState};
 use ss13_tgui::interfaces::ru_jobs::department_ru;
 use ss13_ui_kit::prelude::*;
 use ss13_ui_kit::theme::{Bold, FontPx, Italic};
@@ -19,71 +17,8 @@ pub struct ModpcClientPlugin;
 
 impl Plugin for ModpcClientPlugin {
     fn build(&self, app: &mut App) {
-        app.register_ui_view::<NtosUi>().add_observer(submit_act);
+        app.register_ui_view::<NtosUi>();
     }
-}
-
-/// On an `Input`: Enter sends `act(action, {...params, [param]: text})` (tgui `onEnter`).
-#[derive(Component, Clone, Debug, Default, PartialEq)]
-pub struct ActOnSubmit {
-    pub action: String,
-    pub param: String,
-    pub params: Vec<(String, String)>,
-}
-
-fn submit_act(
-    submitted: On<InputSubmitted>,
-    acts: Query<&ActOnSubmit>,
-    parents: Query<&ChildOf>,
-    windows: Query<&ClientWindow>,
-    mut intents: MessageWriter<SendIntent>,
-) {
-    let Ok(act) = acts.get(submitted.entity) else {
-        return;
-    };
-    if submitted.value.trim().is_empty() {
-        return;
-    }
-    let Some(window) = parents
-        .iter_ancestors(submitted.entity)
-        .find_map(|e| windows.get(e).ok())
-    else {
-        return;
-    };
-    let mut params = act.params.clone();
-    for (i, part) in chunks(&submitted.value, PARAM_BYTES)
-        .into_iter()
-        .enumerate()
-    {
-        let key = match i {
-            0 => act.param.clone(),
-            i => format!("{}.{i}", act.param),
-        };
-        params.push((key, part.to_owned()));
-    }
-    intents.write(SendIntent(ClientIntent::UiAct {
-        window: window.id,
-        action: act.action.clone(),
-        params,
-    }));
-}
-
-/// `ss13_tgui::server::MAX_PARAM_LEN`: longer text goes out in several params.
-const PARAM_BYTES: usize = 256;
-
-/// `text` cut into pieces of at most `max` bytes at char boundaries.
-fn chunks(text: &str, max: usize) -> Vec<&str> {
-    let mut out = Vec::new();
-    let mut rest = text;
-    while !rest.is_empty() {
-        let mut end = rest.len().min(max);
-        while !rest.is_char_boundary(end) {
-            end -= 1;
-        }
-        out.push(&rest[..end]);
-        rest = &rest[end..];
-    }
-    out
 }
 
 impl ClientUi for NtosUi {
@@ -1028,20 +963,5 @@ fn access_list(d: &CardModData, card: &CardUi, local: &UiLocalState) -> impl Sce
                 Children [ {checkboxes} ]
             ]
         ]
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn long_text_splits_at_char_boundaries() {
-        let text = "я".repeat(300);
-        let parts = chunks(&text, PARAM_BYTES);
-        assert_eq!(parts.len(), 3);
-        assert!(parts.iter().all(|p| p.len() <= PARAM_BYTES));
-        assert_eq!(parts.concat(), text);
-        assert!(chunks("", PARAM_BYTES).is_empty());
     }
 }

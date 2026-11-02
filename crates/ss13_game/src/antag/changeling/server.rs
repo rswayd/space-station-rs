@@ -1507,6 +1507,7 @@ impl ServerUi for TransformListWindow {
             message: "Выберите облик.".into(),
             init_value: items.first().cloned().unwrap_or_default(),
             items,
+            timeout: None,
         }
     }
 

@@ -31,8 +31,16 @@ required-features = ["server", "client"]
 name = "rerender"
 required-features = ["client"]
 
+[[test]]
+name = "modals"
+required-features = ["client"]
+
 [[example]]
 name = "vending_bench"
+required-features = ["client"]
+
+[[example]]
+name = "modals_gallery"
 required-features = ["client"]
 
 [[example]]

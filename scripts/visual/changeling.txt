@@ -37,6 +37,7 @@ click_ui "action: Transform"
 wait_secs 1.5
 screenshot "changeling_transform_list.png"
 click_ui "list item 2"      # the victim's profile (the own one is first)
+click_ui "input: submit"
 wait_secs 2
 screenshot "changeling_transformed.png"
 log_state

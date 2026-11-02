@@ -623,7 +623,7 @@ ui_decoders!(
     ss13_game::antag::nukeop::ShuttleConsoleUi,
     ss13_game::antag::cult::AntagInfoGenericUi,
     ss13_game::antag::revolution::AntagInfoRevolutionUi,
-    ss13_game::antag::cult::TextInputUi,
+    ss13_tgui::interfaces::text_input::TextInputUi,
     ss13_game::antag::heretic::AntagInfoHereticUi,
     ss13_game::actions::ActionButtonsUi,
     ss13_game::modpc::NtosUi,

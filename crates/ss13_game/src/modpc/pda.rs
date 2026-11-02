@@ -700,22 +700,6 @@ fn chat_param(params: &UiParams) -> Result<u32, UiReject> {
     }
 }
 
-/// A text param, maybe split by the client into `key`, `key.1`, `key.2`... (each tgui param is
-/// capped at `MAX_PARAM_LEN` bytes, shorter than a message or a note).
-pub(crate) fn text_param(params: &UiParams, key: &str) -> Result<String, UiReject> {
-    let mut text = params
-        .get(key)
-        .ok_or_else(|| UiReject::BadParams(format!("{key}: missing")))?
-        .to_owned();
-    for i in 1.. {
-        match params.get(&format!("{key}.{i}")) {
-            Some(part) => text.push_str(part),
-            None => break,
-        }
-    }
-    Ok(text)
-}
-
 impl ServerUi for NtosUi {
     type Source = (
         Entity,
@@ -819,7 +803,7 @@ impl ServerUi for NtosUi {
             PC_EJECT_DISK if params.get("name") == Some("ID") => NtosAct::EjectId,
             PC_EJECT_DISK => return Err(UiReject::BadParams("name: only ID".into())),
             PC_IMPRINT_ID => NtosAct::ImprintId,
-            PDA_RING_SET => NtosAct::RingSet(text_param(params, "ringtone")?),
+            PDA_RING_SET => NtosAct::RingSet(params.text("ringtone")?),
             PDA_TOGGLE_ALERTS => NtosAct::ToggleAlerts,
             PDA_TOGGLE_SENDING => NtosAct::ToggleSending,
             PDA_VIEW_MESSAGES => NtosAct::View(ref_param(params)?),
@@ -835,10 +819,10 @@ impl ServerUi for NtosUi {
             PDA_SEND_MESSAGE => {
                 let target =
                     ref_param(params)?.ok_or_else(|| UiReject::BadParams("ref: missing".into()))?;
-                NtosAct::Send(target, text_param(params, "message")?)
+                NtosAct::Send(target, params.text("message")?)
             }
             PDA_CLEAR_UNREADS => NtosAct::ClearUnreads(chat_param(params)?),
-            UPDATE_NOTE => NtosAct::UpdateNote(text_param(params, "newnote")?),
+            UPDATE_NOTE => NtosAct::UpdateNote(params.text("newnote")?),
             other => {
                 match super::programs::card_mod::parse(other, |k| params.get(k).map(str::to_owned))
                 {

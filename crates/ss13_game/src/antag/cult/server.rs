@@ -46,11 +46,12 @@ use ss13_shared::TilePos;
 use ss13_shared::chat::{ChatChannel, ChatMessage, ChatSegment, Span};
 use ss13_tgui::UiInterface;
 use ss13_tgui::interfaces::list_input::{ListInputData, ListInputUi};
+use ss13_tgui::prompt::{self, Ask, PromptAnswer, PromptAnswered, PromptSystems, ask_world};
 use ss13_tgui::server::{
     AppTguiExt, OpenUi, ServerUi, UiActed, UiParams, UiReject, UiSystems, UiWindow,
 };
 
-use super::{AntagInfoGenericUi, CANCEL, SUBMIT, TextInputData, TextInputUi};
+use super::{AntagInfoGenericUi, CANCEL, SUBMIT};
 use crate::actions::{ActionButton, ActionButtonsUi, set_buttons};
 use crate::antag::dynamic::DynamicRng;
 use crate::antag::objectives::RoundEnd;
@@ -653,12 +654,9 @@ pub enum TextKind {
     Keyword,
 }
 
-/// A text prompt on the cultist (`tgui_input_text`).
-#[derive(Component, Clone, Debug)]
-pub struct CultText {
-    pub kind: TextKind,
-    pub data: TextInputData,
-}
+/// On a `tgui_input_text` prompt entity: what the cultist is typing.
+#[derive(Component, Clone, Copy, Debug)]
+pub struct CultText(pub TextKind);
 
 /// The list prompt window (`ListInputWindow`).
 pub struct CultListWindow;
@@ -684,7 +682,6 @@ impl Plugin for CultPlugin {
     fn build(&self, app: &mut App) {
         app.register_ui::<AntagInfoGenericUi>()
             .register_ui::<CultListWindow>()
-            .register_ui::<TextInputUi>()
             .add_systems(
                 Update,
                 cult_clicks
@@ -693,7 +690,13 @@ impl Plugin for CultPlugin {
             )
             .add_systems(
                 Update,
-                (open_info, trigger_buttons, list_acts, text_acts).in_set(UiSystems::Handle),
+                (
+                    open_info,
+                    trigger_buttons,
+                    list_acts,
+                    text_acts.after(PromptSystems::Answer),
+                )
+                    .in_set(UiSystems::Handle),
             )
             .add_systems(
                 Update,
@@ -1158,7 +1161,7 @@ pub fn remove_cultist(world: &mut World, mob: Entity, silent: bool) {
     set_halo(world, mob, false);
     world
         .entity_mut(mob)
-        .remove::<(Cultist, AntagHudData, CultPrompt, CultText, CultInfo)>();
+        .remove::<(Cultist, AntagHudData, CultPrompt, CultInfo)>();
     set_buttons(world, mob, Vec::new());
     if let Some(mut team) = world.get_resource_mut::<CultTeam>() {
         team.members.retain(|&m| m != mob);
@@ -1405,24 +1408,28 @@ fn open_list(world: &mut World, client: Entity, mob: Entity, prompt: CultPrompt)
 }
 
 fn open_text(world: &mut World, client: Entity, mob: Entity, kind: TextKind) {
-    let data = match kind {
-        TextKind::Communion => TextInputData {
-            title: "Voice of Blood".into(),
-            message: "Message to tell to the other acolytes".into(),
-            placeholder: String::new(),
-            max_length: ss13_chat::MAX_MESSAGE_LEN as u32,
-        },
-        TextKind::Keyword => TextInputData {
-            title: "Words of Power".into(),
-            message: "Keyword for the new rune".into(),
-            placeholder: String::new(),
-            // `MAX_NAME_LEN`.
-            max_length: 42,
-        },
+    let (title, message, max_length) = match kind {
+        TextKind::Communion => (
+            "Voice of Blood",
+            "Message to tell to the other acolytes",
+            ss13_chat::MAX_MESSAGE_LEN as u32,
+        ),
+        // `MAX_NAME_LEN`.
+        TextKind::Keyword => ("Words of Power", "Keyword for the new rune", 42),
     };
-    let title = data.title.clone();
-    world.entity_mut(mob).insert(CultText { kind, data });
-    world.write_message(OpenUi::new::<TextInputUi>(client, mob, mob, &title));
+    let ask = Ask::new(
+        client,
+        mob,
+        title,
+        message,
+        prompt::PromptKind::Text {
+            default: String::new(),
+            max_length,
+            multiline: false,
+        },
+    );
+    let prompt = ask_world(world, ask);
+    world.entity_mut(prompt).insert(CultText(kind));
 }
 
 impl ServerUi for CultListWindow {
@@ -1438,23 +1445,8 @@ impl ServerUi for CultListWindow {
             message: prompt.message.clone(),
             init_value: prompt.items.first().cloned().unwrap_or_default(),
             items: prompt.items.clone(),
+            timeout: None,
         }
-    }
-
-    fn parse_act(action: &str, params: &UiParams) -> Result<Option<String>, UiReject> {
-        parse_entry(action, params)
-    }
-}
-
-impl ServerUi for TextInputUi {
-    type Source = &'static CultText;
-    type UserParam = ();
-    type Act = Option<String>;
-
-    fn static_data(_: &CultText) {}
-
-    fn data(text: &CultText, _: Entity, _: &()) -> TextInputData {
-        text.data.clone()
     }
 
     fn parse_act(action: &str, params: &UiParams) -> Result<Option<String>, UiReject> {
@@ -1464,7 +1456,7 @@ impl ServerUi for TextInputUi {
 
 fn parse_entry(action: &str, params: &UiParams) -> Result<Option<String>, UiReject> {
     match action {
-        SUBMIT => crate::modpc::pda::text_param(params, "entry").map(Some),
+        SUBMIT => params.text("entry").map(Some),
         CANCEL => Ok(None),
         _ => Err(UiReject::UnknownAction),
     }
@@ -1521,26 +1513,25 @@ fn list_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed<CultListWi
     }
 }
 
-fn text_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed<TextInputUi>>>) {
-    let pending: Vec<(Entity, Entity, Entity, Entity, Option<String>)> = acts
-        .read(world.resource::<Messages<UiActed<TextInputUi>>>())
-        .map(|a| (a.window, a.client, a.actor, a.source, a.act.clone()))
+fn text_acts(world: &mut World, mut answers: Local<MessageCursor<PromptAnswered>>) {
+    let pending: Vec<(Entity, Entity, Entity, Option<PromptAnswer>)> = answers
+        .read(world.resource::<Messages<PromptAnswered>>())
+        .map(|a| (a.prompt, a.client, a.actor, a.answer.clone()))
         .collect();
-    for (window, client, actor, source, entry) in pending {
-        close_window(world, window);
-        let Some(text) = world.entity_mut(source).take::<CultText>() else {
+    for (prompt, client, actor, answer) in pending {
+        let Some(&CultText(kind)) = world.get::<CultText>(prompt) else {
             continue;
         };
-        let Some(entry) = entry else {
+        let Some(PromptAnswer::Text(entry)) = answer else {
             continue;
         };
-        if actor != source || world.get::<Cultist>(actor).is_none() || !can_act(world, actor) {
+        if world.get::<Cultist>(actor).is_none() || !can_act(world, actor) {
             continue;
         }
         let Ok(entry) = ss13_chat::server::sanitize_say(&entry) else {
             continue;
         };
-        match text.kind {
+        match kind {
             TextKind::Communion => commune(world, actor, &entry),
             TextKind::Keyword => {
                 let entry: String = entry.chars().take(42).collect();

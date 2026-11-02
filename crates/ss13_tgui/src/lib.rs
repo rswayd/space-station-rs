@@ -18,6 +18,8 @@ pub use ss13_shared::ui::UiStatus;
 pub mod client;
 pub mod interfaces;
 #[cfg(feature = "server")]
+pub mod prompt;
+#[cfg(feature = "server")]
 pub mod server;
 
 /// A tgui interface: the name and data shapes both sides agree on.

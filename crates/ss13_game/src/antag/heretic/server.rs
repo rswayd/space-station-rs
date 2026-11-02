@@ -3117,12 +3117,13 @@ impl ServerUi for HereticListWindow {
             message: prompt.message.clone(),
             init_value: prompt.items.first().cloned().unwrap_or_default(),
             items: prompt.items.clone(),
+            timeout: None,
         }
     }
 
     fn parse_act(action: &str, params: &UiParams) -> Result<Option<String>, UiReject> {
         match action {
-            "submit" => crate::modpc::pda::text_param(params, "entry").map(Some),
+            "submit" => params.text("entry").map(Some),
             "cancel" => Ok(None),
             _ => Err(UiReject::UnknownAction),
         }

@@ -19,6 +19,7 @@ click_ui "hud_left_hand"
 wait_secs 1.5
 screenshot "cult_rune_list.png"
 click_ui "list item 1"
+click_ui "input: submit"
 wait_until chat "The offer rune" timeout=15
 key_down D
 wait_secs 0.25
@@ -27,6 +28,7 @@ wait_secs 0.5
 click_ui "hud_left_hand"
 wait_secs 1
 click_ui "list item 2"
+click_ui "input: submit"
 wait_until chat "The empower rune" timeout=15
 key_down D
 wait_secs 0.25
@@ -35,6 +37,7 @@ wait_secs 0.5
 click_ui "hud_left_hand"
 wait_secs 1
 click_ui "list item 5"
+click_ui "input: submit"
 wait_until chat "The revive rune" timeout=15
 key_down S
 wait_secs 0.25
