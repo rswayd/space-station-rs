@@ -46,3 +46,9 @@ text = re.sub(
 )
 readme.write_text(text, encoding="utf-8")
 print(f"entries {entries}: ✅ {done}, 🟡 {partial}, ❌ {missing}")
+
+
+# The readiness page (docs/parity/PROGRESS.html) from the same entries.
+import runpy  # noqa: E402
+
+runpy.run_path(str(pathlib.Path(__file__).with_name("parity_progress.py")), run_name="__main__")
