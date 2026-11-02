@@ -483,7 +483,10 @@ fn tooltip_is_never_drawn_off_its_place_and_survives_a_rerender() {
         }
     }
     let popup = popup.expect("shown");
-    assert_eq!(app.world().get::<Visibility>(popup), Some(&Visibility::Inherited));
+    assert_eq!(
+        app.world().get::<Visibility>(popup),
+        Some(&Visibility::Inherited)
+    );
 
     // A tgui re-render: the button is replaced by an equal one in the same place.
     let parent = app.world().get::<ChildOf>(button).unwrap().parent();
@@ -495,8 +498,15 @@ fn tooltip_is_never_drawn_off_its_place_and_survives_a_rerender() {
         .id();
     app.world_mut().entity_mut(twin).insert(ChildOf(parent));
     settle(&mut app, 3);
-    assert_eq!(single::<TooltipPopup>(&mut app), popup, "the same popup, not a new one");
-    assert_eq!(app.world().get::<Visibility>(popup), Some(&Visibility::Inherited));
+    assert_eq!(
+        single::<TooltipPopup>(&mut app),
+        popup,
+        "the same popup, not a new one"
+    );
+    assert_eq!(
+        app.world().get::<Visibility>(popup),
+        Some(&Visibility::Inherited)
+    );
 }
 
 fn modal_window(with_modal: bool) -> impl Scene {

@@ -257,9 +257,8 @@ fn draw_buttons(
             let id = *states.0.get(button.state(&hud.data))?;
             let (info, handle) = atlas.as_deref_mut()?.state(id)?;
             let (top, bottom) = button.drawn_rows();
-            let rect = frame_rect(info, Dir::South, 0).map(|r| {
-                Rect::new(r.min.x, r.min.y + top, r.max.x, r.min.y + bottom)
-            });
+            let rect = frame_rect(info, Dir::South, 0)
+                .map(|r| Rect::new(r.min.x, r.min.y + top, r.max.x, r.min.y + bottom));
             Some(ImageNode {
                 image: handle,
                 rect,

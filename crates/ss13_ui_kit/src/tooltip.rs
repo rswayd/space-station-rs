@@ -64,8 +64,7 @@ fn track_hover(
     for (entity, hovered, tooltip) in &changed {
         if hovered.get() && state.anchor != Some(entity) {
             // The re-rendered twin of the anchor whose popup is shown: the popup moves over.
-            let orphan =
-                state.orphaned > 0.0 || state.anchor.is_some_and(|a| !anchors.contains(a));
+            let orphan = state.orphaned > 0.0 || state.anchor.is_some_and(|a| !anchors.contains(a));
             if orphan
                 && let Some(popup) = state.popup
                 && tooltip.content == state.content
