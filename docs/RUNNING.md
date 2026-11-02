@@ -276,6 +276,12 @@ no input and the network tap is off. Open, the "ss13 debug" bar toggles the pane
 left for the session); egui takes the mouse over its windows (the map under them gets no
 clicks) and the keyboard only while one of its text fields has focus.
 
+"⏺ Записать видео" in the bar (native client only, needs `ffmpeg` in `PATH`) records the window
+until "⏹ Стоп": `ss13-recording-<unix time>.mp4` (H.264, 30 fps, real time: a slower game repeats
+frames) in `SS13_DEBUG_DIR`, default the temp dir; the client log names the file when it is done.
+Recording goes on with the overlay closed (F9), so the video can show the game alone. A resized
+window's frames are skipped; frames are dropped if ffmpeg falls behind.
+
 | Panel | Shows |
 | --- | --- |
 | Perf | fps, frame time and a graph of the last 300 frames, client entity count, replicated entities, cached appearances, light blocks, atlas pages loaded/MiB (budget), the lighting numbers of the 10 s log line, live |

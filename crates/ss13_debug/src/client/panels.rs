@@ -59,7 +59,11 @@ fn default_pos(panel: Panel) -> [f32; 2] {
     }
 }
 
-pub(super) fn menu(mut contexts: EguiContexts, mut ui_state: ResMut<DebugUi>) -> Result {
+pub(super) fn menu(
+    mut contexts: EguiContexts,
+    mut ui_state: ResMut<DebugUi>,
+    #[cfg(not(target_arch = "wasm32"))] mut recorder: ResMut<super::record::Recorder>,
+) -> Result {
     egui::Window::new("ss13 debug")
         .default_pos([8.0, 8.0])
         .resizable(false)
@@ -72,6 +76,8 @@ pub(super) fn menu(mut contexts: EguiContexts, mut ui_state: ResMut<DebugUi>) ->
                     }
                 }
             });
+            #[cfg(not(target_arch = "wasm32"))]
+            super::record::button(ui, &mut recorder, export_dir());
             ui.small("F9 / ` closes the overlay");
         });
     Ok(())

@@ -14,6 +14,8 @@
 
 mod log;
 mod panels;
+#[cfg(not(target_arch = "wasm32"))]
+mod record;
 
 use std::collections::{BTreeMap, VecDeque};
 
@@ -291,6 +293,10 @@ impl Plugin for DebugUiPlugin {
                     .chain()
                     .run_if(|ui: Res<DebugUi>| ui.open),
             );
+        // Keeps recording while the overlay is closed, so the video shows the game alone.
+        #[cfg(not(target_arch = "wasm32"))]
+        app.init_resource::<record::Recorder>()
+            .add_systems(Last, record::capture);
     }
 }
 
