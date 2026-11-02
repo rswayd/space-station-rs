@@ -219,6 +219,174 @@ fn block_updates_light_occlude_and_forget() {
     assert_eq!(corner(&app, 3, 3), 0);
 }
 
+/// A view mask (camera static): unseen tiles of a block with seen bits are out of view while
+/// the light itself is still computed; a block without them, or forgotten, is in view.
+#[test]
+fn masked_tiles_leave_the_view() {
+    let mut app = app();
+    let origin = TilePos::new(1, 1, 1);
+    app.world_mut().write_message(LightUpdate::Lights {
+        pos: TilePos::new(3, 3, 1),
+        lights: vec![lamp(6.0).light.unwrap()],
+    });
+    app.update();
+    // Region tile (x, y) of `REGION`.
+    let in_view = |app: &App, x: i32, y: i32| {
+        let view = view_targets(app.world().resource::<LightWorld>(), REGION);
+        view[(y - REGION.min.y) as usize * REGION.size.x as usize + (x - REGION.min.x) as usize]
+    };
+    assert_eq!(in_view(&app, 4, 3), 1.0, "no seen bits: seen");
+    // Only the lamp's row up to x = 3 is seen.
+    app.world_mut().write_message(LightUpdate::Seen {
+        origin,
+        bits: bits(&[(1, 3), (2, 3), (3, 3)]),
+    });
+    app.update();
+    assert_eq!(in_view(&app, 3, 3), 1.0);
+    assert_eq!(in_view(&app, 4, 3), 0.0, "masked");
+    assert!(corner(&app, 4, 3) > 0, "the light itself is still computed");
+    app.world_mut()
+        .write_message(LightUpdate::Forget { origin });
+    app.update();
+    assert_eq!(in_view(&app, 4, 3), 1.0);
+}
+
+#[test]
+fn the_region_keeps_its_size_while_the_camera_glides() {
+    let tile = TILE_SIZE as f32;
+    let area = Rect::new(-300.0, -170.0, 300.0, 170.0);
+    let sizes: Vec<_> = (0..=32)
+        .map(|i| {
+            let center = Vec2::new(100.0 * tile + i as f32 * tile / 32.0, 40.0 * tile + 7.0);
+            let region = view_region(center, area, 2);
+            // The view and its margin stay inside the region.
+            let view_min = ((center + area.min) / tile).floor().as_ivec2() - MARGIN;
+            let view_max = ((center + area.max) / tile).ceil().as_ivec2() + MARGIN;
+            assert!(region.min.cmple(view_min).all());
+            assert!((region.min + region.size.as_ivec2()).cmpge(view_max).all());
+            region.size
+        })
+        .collect();
+    assert!(sizes.iter().all(|&s| s == sizes[0]), "{sizes:?}");
+}
+
+/// A step moves the region: tiles kept in it keep their fade, new ones start at their target.
+#[test]
+fn the_view_fade_follows_the_region() {
+    let old = Region {
+        min: IVec2::new(1, 1),
+        size: UVec2::new(3, 1),
+        z: 1,
+    };
+    let new = Region {
+        min: IVec2::new(2, 1),
+        ..old
+    };
+    let moved = moved_view(Some(old), &[0.1, 0.2, 0.3], new, &[1.0, 1.0, 1.0]);
+    assert_eq!(moved, vec![0.2, 0.3, 1.0]);
+    let other_level = Region { z: 2, ..new };
+    assert_eq!(
+        moved_view(Some(old), &[0.1, 0.2, 0.3], other_level, &[0.0; 3]),
+        vec![0.0; 3]
+    );
+}
+
+/// Line of sight on the client: from the eye over the known opacity, a wall row hides what is
+/// behind it; no eye or no line of sight shows everything.
+#[test]
+fn line_of_sight_hides_behind_walls() {
+    let mut app = app();
+    let origin = TilePos::new(1, 1, 1);
+    let walls: Vec<(i32, i32)> = (1..=16).map(|x| (x, 4)).collect();
+    app.world_mut().write_message(LightUpdate::Opacity {
+        origin,
+        bits: bits(&walls),
+    });
+    app.world_mut()
+        .write_message(LightUpdate::LineOfSight(Some(12)));
+    app.update();
+    let mut world = app.world_mut().resource_mut::<LightWorld>();
+    let (behind, wall, front) = (
+        TilePos::new(3, 5, 1),
+        TilePos::new(3, 4, 1),
+        TilePos::new(3, 2, 1),
+    );
+    world.update_los(None);
+    assert!(world.is_seen(behind), "no eye: everything");
+    world.update_los(Some(TilePos::new(3, 3, 1)));
+    assert!(world.is_seen(front) && world.is_seen(wall));
+    assert!(!world.is_seen(behind), "behind the wall");
+    assert!(!world.is_seen(TilePos::new(3, 3, 2)), "another level");
+    world.update_los(Some(wall));
+    assert!(
+        world.is_seen(behind) && world.is_seen(front),
+        "an eye in a door sees out"
+    );
+    world.update(&LightUpdate::LineOfSight(None));
+    assert!(world.is_seen(behind), "observers see all");
+}
+
+/// The ring just past the line of sight is drawn dim; what lies further, or behind a wall, stays
+/// black even when the server sent it.
+#[test]
+fn glimpsed_tiles_are_dim() {
+    let mut app = app();
+    // A pillar east of the eye and a wall two rows north of it.
+    let mut walls: Vec<(i32, i32)> = (1..=16).map(|x| (x, 6)).collect();
+    walls.push((5, 3));
+    app.world_mut().write_message(LightUpdate::Opacity {
+        origin: TilePos::new(1, 1, 1),
+        bits: bits(&walls),
+    });
+    app.world_mut()
+        .write_message(LightUpdate::LineOfSight(Some(12)));
+    let at = |x, y| TilePos::new(x, y, 1);
+    for pos in [at(3, 2), at(7, 3), at(3, 7)] {
+        app.world_mut().spawn(pos);
+    }
+    app.update();
+    let mut world = app.world_mut().resource_mut::<LightWorld>();
+    world.update_los(Some(at(3, 3)));
+    assert_eq!(world.view_level(at(3, 2)), 1.0);
+    assert_eq!(
+        world.view_level(at(7, 3)),
+        BEHIND_VIEW,
+        "in the pillar's shadow, next to floor"
+    );
+    assert_eq!(world.view_level(at(3, 7)), 0.0, "behind the wall");
+    assert_eq!(world.view_level(at(8, 3)), 0.0, "nothing known there");
+}
+
+/// Under line of sight a seen tile is drawn only once something on it arrived (its turf), so
+/// the client's view, ahead of the server's, never shows it empty.
+#[test]
+fn seen_tiles_wait_for_their_content() {
+    let mut app = app();
+    app.world_mut()
+        .write_message(LightUpdate::LineOfSight(Some(12)));
+    app.world_mut()
+        .resource_mut::<LightWorld>()
+        .update_los(Some(TilePos::new(3, 3, 1)));
+    app.update();
+    let tile = TilePos::new(4, 3, 1);
+    let level = |app: &App| app.world().resource::<LightWorld>().view_level(tile);
+    app.world_mut()
+        .resource_mut::<LightWorld>()
+        .update_los(Some(TilePos::new(3, 3, 1)));
+    assert_eq!(level(&app), 0.0, "seen but empty");
+    let turf = app.world_mut().spawn(tile).id();
+    app.update();
+    assert_eq!(level(&app), 1.0);
+    app.world_mut()
+        .entity_mut(turf)
+        .insert(TilePos::new(5, 3, 1));
+    app.update();
+    assert_eq!(level(&app), 0.0, "its only entity left");
+    app.world_mut().despawn(turf);
+    app.update();
+    assert!(app.world().resource::<LightWorld>().occupied.is_empty());
+}
+
 /// Not a pass/fail check: the cost of a full rebuild with ~100 sources on screen, the worst
 /// case (everything changed at once). `cargo test -p ss13_render lighting_cost -- --nocapture`.
 #[test]

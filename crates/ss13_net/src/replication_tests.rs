@@ -708,8 +708,8 @@ fn light_blocks_reach_beyond_the_view_and_follow_changes() {
 }
 
 /// A client with a [`ViewMask`] (an AI eye under camera static) gets only the entities on tiles
-/// its mask shows, plus the entity it controls; the light blocks hide hidden tiles' lights and
-/// show them opaque; mask changes spawn and despawn by tile; dropping the mask shows the box.
+/// its mask shows, plus the entity it controls; the light blocks carry every light and the
+/// tiles the mask shows; mask changes spawn and despawn by tile; dropping the mask shows the box.
 #[test]
 fn masked_view_replicates_only_visible_tiles() {
     let server_addr = SocketAddr::from((Ipv4Addr::LOCALHOST, 0));
@@ -779,9 +779,21 @@ fn masked_view_replicates_only_visible_tiles() {
             .map(<[_]>::to_vec)
     };
     let opaque = |a: &App, p| a.world().resource::<LightBlocks>().opaque(p);
-    assert_eq!(lights(&a), Some(vec![]), "a hidden lamp is not sent");
-    assert_eq!(opaque(&a, lamp_pos), Some(true), "hidden tiles block light");
-    assert_eq!(opaque(&a, TilePos::new(17, 17, 1)), Some(false));
+    let seen_tile = |a: &App, p| a.world().resource::<LightBlocks>().seen(p);
+    // tg lights a seen tile from sources it cannot see: lights and opacity go unmasked, the
+    // client only learns which tiles to draw.
+    assert_eq!(
+        lights(&a).map(|l| l.len()),
+        Some(1),
+        "a hidden lamp still lights"
+    );
+    assert_eq!(
+        opaque(&a, lamp_pos),
+        Some(false),
+        "hidden floors stay clear"
+    );
+    assert_eq!(seen_tile(&a, lamp_pos), Some(false));
+    assert_eq!(seen_tile(&a, TilePos::new(17, 17, 1)), Some(true));
     run_until(&mut [&mut server, &mut a], "the eye arrives", |apps| {
         apps[1]
             .world()
@@ -807,10 +819,10 @@ fn masked_view_replicates_only_visible_tiles() {
     check(&mut server, &mut a, Some(5), "the room grew");
     assert!(server.world().resource::<Interest>().sees(link, walker));
     assert!(server.world().resource::<Interest>().sees(link, lamp_e));
-    run_until(&mut [&mut server, &mut a], "the lamp's light", |apps| {
-        lights(apps[1]).is_some_and(|l| l.len() == 1)
+    run_until(&mut [&mut server, &mut a], "the lamp's tile seen", |apps| {
+        seen_tile(apps[1], lamp_pos) == Some(true)
     });
-    assert_eq!(opaque(&a, lamp_pos), Some(false));
+    assert_eq!(lights(&a).map(|l| l.len()), Some(1));
 
     // It closes again: back to the room.
     server
@@ -820,8 +832,8 @@ fn masked_view_replicates_only_visible_tiles() {
     check(&mut server, &mut a, Some(0), "the room shrank");
     run_until(
         &mut [&mut server, &mut a],
-        "the lamp's light hidden",
-        |apps| lights(apps[1]) == Some(vec![]),
+        "the lamp's tile hidden",
+        |apps| seen_tile(apps[1], lamp_pos) == Some(false),
     );
 
     // The eye walks into the room and out to the hidden lamp: still shown.
@@ -835,7 +847,7 @@ fn masked_view_replicates_only_visible_tiles() {
     server.world_mut().entity_mut(link).remove::<ViewMask>();
     check(&mut server, &mut a, None, "unmasked");
     run_until(&mut [&mut server, &mut a], "the lamp unmasked", |apps| {
-        lights(apps[1]).is_some_and(|l| l.len() == 1)
+        seen_tile(apps[1], lamp_pos) == Some(true) && lights(apps[1]).is_some_and(|l| l.len() == 1)
     });
 }
 
@@ -845,8 +857,8 @@ fn masked_view_replicates_only_visible_tiles() {
 /// step lets the player see from the next tile until it stands still.
 #[test]
 fn line_of_sight_hides_what_walls_hide() {
-    use crate::line_of_sight::ViewGrid;
     use crate::server::Sight;
+    use ss13_shared::line_of_sight::ViewGrid;
 
     let server_addr = SocketAddr::from((Ipv4Addr::LOCALHOST, 0));
     let mut server = server_app(server_addr);
@@ -870,7 +882,8 @@ fn line_of_sight_hides_what_walls_hide() {
         }
     }
     let door = door.unwrap();
-    // A lamp behind the wall: its light is no more known than its entity.
+    // A lamp behind the wall: its entity is hidden, its light is not (tg lights the seen side
+    // of the wall from it).
     let lamp_pos = TilePos::new(26, 28, 1);
     server.world_mut().spawn((
         Networked,
@@ -933,17 +946,19 @@ fn line_of_sight_hides_what_walls_hide() {
             .lights(p)
             .map(<[_]>::to_vec)
     };
+    // The client draws its own line of sight from the true opacity: no seen bits, no masking.
+    let los = |a: &App| a.world().resource::<LightBlocks>().line_of_sight();
+    assert_eq!(los(&a), Some(12));
+    assert_eq!(los(&b), None, "x-ray sees all");
+    assert_eq!(opaque(&a, TilePos::new(21, 27, 1)), Some(false));
+    assert_eq!(opaque(&a, TilePos::new(22, 25, 1)), Some(true));
+    let seen_tile = |a: &App, p| a.world().resource::<LightBlocks>().seen(p);
     assert_eq!(
-        opaque(&a, TilePos::new(21, 27, 1)),
+        seen_tile(&a, TilePos::new(21, 27, 1)),
         Some(true),
-        "hidden tiles are opaque"
+        "no seen bits"
     );
-    assert_eq!(
-        lights(&a, lamp_pos),
-        Some(vec![]),
-        "a lamp behind the wall is hidden"
-    );
-    assert_eq!(lights(&b, lamp_pos).map(|l| l.len()), Some(1));
+    assert_eq!(lights(&a, lamp_pos).map(|l| l.len()), Some(1));
 
     // The door opens: the column in line with it shows the frame the door does.
     let behind = on_tile(&mut server, TilePos::new(21, 29, 1));
@@ -976,8 +991,10 @@ fn line_of_sight_hides_what_walls_hide() {
     };
     let sees_from = |grid: &mut ViewGrid, eye: TilePos, p: &TilePos, closed: bool| {
         let opaque = walls(closed);
-        grid.compute(18, |dx, dy| opaque(eye.x + dx, eye.y + dy));
-        grid.visible(p.x - eye.x, p.y - eye.y)
+        grid.compute(12, |dx, dy| opaque(eye.x + dx, eye.y + dy));
+        // Sent: the seen tiles and the glimpsed ring past them.
+        let (dx, dy) = (p.x - eye.x, p.y - eye.y);
+        grid.visible(dx, dy) || grid.glimpsed(dx, dy)
     };
     let open_view: Vec<TilePos> = state(&mut server, |_, p| within(viewer, 0)(p))
         .iter()

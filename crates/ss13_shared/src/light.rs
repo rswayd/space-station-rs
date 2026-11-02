@@ -109,8 +109,15 @@ pub enum LightUpdate {
         pos: TilePos,
         lights: Vec<LightSource>,
     },
-    /// The block at `origin` left the client's interest: forget its opacity and lights.
+    /// The block at `origin` left the client's interest: forget its opacity, lights and seen
+    /// tiles.
     Forget { origin: TilePos },
+    /// Tiles of the block at `origin` a view mask (camera static) shows (bit layout of
+    /// `Opacity`); the others are drawn black. A block without it is shown whole.
+    Seen { origin: TilePos, bits: [u8; 32] },
+    /// Draw only the tiles the camera target's eye sees (BYOND `view()` over the known
+    /// opacity) within this Chebyshev radius; `None`: no line of sight (observers).
+    LineOfSight(Option<u32>),
 }
 
 #[cfg(test)]

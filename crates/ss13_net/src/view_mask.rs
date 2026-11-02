@@ -1,8 +1,13 @@
 //! Masked views: clients that see only some tiles of their view box, as BYOND's AI eye and
 //! camera consoles under camera static (tg `cameranet`: mobs and objects under static are not
 //! shown). A masked client gets no entity on a hidden tile (its own controlled entity excepted),
-//! and its light blocks carry no light sources of hidden tiles and show them opaque, so a
-//! modified client learns nothing about what moves or opens under the static.
+//! and per light block the bits of the tiles it sees (`ReplicationOp::Seen`), which its client
+//! draws black when unset.
+// shortcut: light blocks carry the true opacity and light sources of hidden tiles (tg lights a
+// seen tile from sources behind walls, and the client computes the light), so a modified client
+// learns door states and lights up to `LIGHT_MARGIN` tiles past its view behind walls or under
+// camera static; move lighting to the server (per-corner values of seen tiles, as tg's
+// SSlighting) if that becomes a real cheat.
 //!
 //! Game code owns the masks ([`ViewMasks`]: 8x8 chunk bit sets, the layout of tg camera chunks)
 //! and puts a [`ViewMask`] on a client's connection entity. Replication follows chunk changes
@@ -11,8 +16,6 @@
 use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
 use ss13_shared::{LIGHT_BLOCK, TilePos};
-
-use crate::replication::{BlockLights, ReplicationOp};
 
 /// Side of a mask chunk (tg `CHUNK_SIZE`).
 pub const MASK_CHUNK: i32 = 8;
@@ -141,87 +144,21 @@ fn block_tile(origin: TilePos, i: usize) -> TilePos {
     )
 }
 
-/// A light op as a client with `mask` may see it: hidden tiles have no lights and are opaque.
-/// `None` when nothing of it is left to send.
-pub(crate) fn mask_light(
-    masks: &ViewMasks,
-    mask: MaskId,
-    op: ReplicationOp,
-) -> Option<ReplicationOp> {
-    let opacity = |seen: &[bool; TILES], mut opaque: [u8; 32]| {
-        for (i, _) in seen.iter().enumerate().filter(|(_, s)| !**s) {
-            opaque[i / 8] |= 1 << (i % 8);
-        }
-        opaque
-    };
-    match op {
-        ReplicationOp::LightBlock {
-            origin,
-            opaque,
-            lights,
-        } => {
-            let seen = masks.block_visibility(mask, origin);
-            Some(ReplicationOp::LightBlock {
-                origin,
-                opaque: opacity(&seen, opaque),
-                lights: visible_lights(&seen, lights).unwrap_or_default(),
-            })
-        }
-        ReplicationOp::Opacity { origin, opaque } => {
-            let seen = masks.block_visibility(mask, origin);
-            Some(ReplicationOp::Opacity {
-                origin,
-                opaque: opacity(&seen, opaque),
-            })
-        }
-        ReplicationOp::Lights { origin, lights } => {
-            let seen = masks.block_visibility(mask, origin);
-            visible_lights(&seen, lights).map(|lights| ReplicationOp::Lights { origin, lights })
-        }
-        other => Some(other),
+/// The tiles of the light block at `origin` that `mask` shows, in the bit layout of the block's
+/// opacity (`ss13_shared::LightUpdate::Opacity`). Lights and opacity themselves go unmasked: tg
+/// lights a seen tile from sources behind walls, so the client needs them; this tells it which
+/// tiles to draw at all.
+pub(crate) fn block_seen(masks: &ViewMasks, mask: MaskId, origin: TilePos) -> [u8; 32] {
+    let mut bits = [0u8; 32];
+    for (i, _) in (masks.block_visibility(mask, origin).iter().enumerate()).filter(|(_, s)| **s) {
+        bits[i / 8] |= 1 << (i % 8);
     }
-}
-
-/// The entries of `lights` on seen tiles, with a palette of only the values they use.
-fn visible_lights(seen: &[bool; TILES], lights: BlockLights) -> Option<BlockLights> {
-    let mut out = BlockLights::default();
-    for (tile, indexes) in lights.tiles {
-        if !seen[usize::from(tile)] {
-            continue;
-        }
-        let indexes = indexes
-            .into_iter()
-            .map(|i| {
-                let light = lights.palette[usize::from(i)];
-                let at = out.palette.iter().position(|p| *p == light);
-                at.unwrap_or_else(|| {
-                    out.palette.push(light);
-                    out.palette.len() - 1
-                }) as u16
-            })
-            .collect();
-        out.tiles.push((tile, indexes));
-    }
-    (!out.tiles.is_empty()).then_some(out)
+    bits
 }
 
 #[cfg(test)]
 mod tests {
-    use ss13_shared::{Dir, LightSource};
-
     use super::*;
-
-    fn lamp(range: f32) -> LightSource {
-        LightSource {
-            range,
-            power: 1.0,
-            color: [255, 255, 255],
-            height: 1.0,
-            angle: 360,
-            dir: Dir::North,
-            offset: [0, 0],
-        }
-    }
 
     #[test]
     fn chunks_record_flips_once_per_pass() {
@@ -250,53 +187,27 @@ mod tests {
     }
 
     #[test]
-    fn hidden_tiles_lose_lights_and_turn_opaque() {
+    fn seen_bits_follow_the_mask() {
         let mut masks = ViewMasks::default();
         let m = MaskId(1);
         let origin = TilePos::new(1, 1, 1);
-        // Only the block's tile 0 (1,1) and tile 1 (2,1) are seen.
-        masks.set_tiles(m, [TilePos::new(1, 1, 1), TilePos::new(2, 1, 1)]);
-        let lights = BlockLights {
-            palette: vec![lamp(2.0), lamp(5.0)],
-            tiles: vec![(1, vec![1]), (17, vec![0])],
-        };
-        let mut opaque = [0u8; 32];
-        opaque[0] = 0b10; // tile 1 is a wall
-        let Some(ReplicationOp::LightBlock {
-            opaque: got,
-            lights: got_lights,
-            ..
-        }) = mask_light(
-            &masks,
+        // The block's tile 0 (1,1), tile 1 (2,1) and tile 17 (2,2).
+        masks.set_tiles(
             m,
-            ReplicationOp::LightBlock {
-                origin,
-                opaque,
-                lights: lights.clone(),
-            },
-        )
-        else {
-            panic!()
-        };
-        assert_eq!(got[0], 0b1111_1110, "tile 0 stays clear, tile 1 its wall");
-        assert!(got[1..].iter().all(|&b| b == 0xff), "hidden tiles opaque");
-        assert_eq!(got_lights.tiles, vec![(1, vec![0])]);
-        assert_eq!(got_lights.palette, vec![lamp(5.0)], "unused values dropped");
-        // A change of hidden lights only sends nothing.
-        let hidden = BlockLights {
-            palette: vec![lamp(2.0)],
-            tiles: vec![(17, vec![0])],
-        };
-        assert!(
-            mask_light(
-                &masks,
-                m,
-                ReplicationOp::Lights {
-                    origin,
-                    lights: hidden
-                }
-            )
-            .is_none()
+            [
+                TilePos::new(1, 1, 1),
+                TilePos::new(2, 1, 1),
+                TilePos::new(2, 2, 1),
+            ],
         );
+        let bits = block_seen(&masks, m, origin);
+        assert_eq!(bits[0], 0b11);
+        assert_eq!(bits[2], 0b10);
+        assert!(
+            bits.iter()
+                .enumerate()
+                .all(|(i, &b)| i == 0 || i == 2 || b == 0)
+        );
+        assert_eq!(block_seen(&masks, MaskId(2), origin), [0; 32]);
     }
 }

@@ -111,7 +111,6 @@ impl ViewGrid {
     }
 
     /// Whether the tile at offset `(dx, dy)` from the eye is seen.
-    #[cfg(test)]
     pub fn visible(&self, dx: i32, dy: i32) -> bool {
         let (x, y) = (dx + self.radius, dy + self.radius);
         let w = self.side as i32;
@@ -124,6 +123,38 @@ impl ViewGrid {
         (self.vis.iter().enumerate())
             .filter(|(_, v)| **v != 0)
             .map(move |(i, _)| ((i % w) as i32 - r, (i / w) as i32 - r))
+    }
+
+    /// Whether the tile at `(dx, dy)` is glimpsed: not seen, but next to a seen clear tile (a
+    /// diagonal one only past a clear side, as sight never slips between two touching walls).
+    /// The dim ring around the view: the owner's choice; BYOND draws it black.
+    pub fn glimpsed(&self, dx: i32, dy: i32) -> bool {
+        if self.visible(dx, dy) {
+            return false;
+        }
+        (-1..=1).any(|oy| {
+            (-1..=1).any(|ox| {
+                let (x, y) = (dx + ox, dy + oy);
+                let corner_open =
+                    ox == 0 || oy == 0 || !self.opaque_at(x, dy) || !self.opaque_at(dx, y);
+                (ox, oy) != (0, 0) && self.visible(x, y) && !self.opaque_at(x, y) && corner_open
+            })
+        })
+    }
+
+    /// Offsets of every glimpsed tile; they reach one tile past the radius.
+    pub fn glimpses(&self) -> impl Iterator<Item = (i32, i32)> + '_ {
+        let r = self.radius + 1;
+        (-r..=r)
+            .flat_map(move |dy| (-r..=r).map(move |dx| (dx, dy)))
+            .filter(|&(dx, dy)| self.glimpsed(dx, dy))
+    }
+
+    /// The opacity `compute` was given at `(dx, dy)`; clear outside the square.
+    fn opaque_at(&self, dx: i32, dy: i32) -> bool {
+        let (x, y) = (dx + self.radius, dy + self.radius);
+        let w = self.side as i32;
+        (0..w).contains(&x) && (0..w).contains(&y) && self.opaque[(y * w + x) as usize]
     }
 }
 
@@ -216,6 +247,62 @@ mod tests {
             .map(|l| l.trim().strip_prefix('|').unwrap_or(l).trim_end())
             .collect();
         assert_eq!(view(map), want.join("\n"), "\n{map}");
+    }
+
+    /// The glimpsed tiles of `map` (as in [`view`]) inside the map, as `(x, y)`.
+    fn glimpsed(map: &str) -> Vec<(i32, i32)> {
+        let rows: Vec<&str> = map.trim().lines().map(str::trim).collect();
+        let h = rows.len() as i32;
+        let at = |x: i32, y: i32| {
+            let row = h - 1 - y;
+            (0..h)
+                .contains(&row)
+                .then(|| rows[row as usize].as_bytes().get(x as usize))
+                .flatten()
+        };
+        let (ex, ey) = (0..h)
+            .flat_map(|y| (0..20).map(move |x| (x, y)))
+            .find(|&(x, y)| at(x, y) == Some(&b'@'))
+            .unwrap();
+        let mut grid = ViewGrid::default();
+        grid.compute(20, |dx, dy| at(ex + dx, ey + dy).is_none_or(|&c| c == b'#'));
+        let mut out: Vec<(i32, i32)> = (grid.glimpses())
+            .map(|(dx, dy)| (ex + dx, ey + dy))
+            .filter(|&(x, y)| at(x, y).is_some())
+            .collect();
+        out.sort();
+        out
+    }
+
+    #[test]
+    fn nothing_is_glimpsed_through_a_wall() {
+        let map = "
+            .........
+            #########
+            ....@....
+            ";
+        assert_eq!(glimpsed(map), []);
+    }
+
+    #[test]
+    fn the_edge_of_a_shadow_is_glimpsed() {
+        // The pillar's shadow (x >= 3 on the eye's row) borders seen floor above and below.
+        let map = "
+            ......
+            @.#...
+            ......
+            ";
+        assert_eq!(glimpsed(map), [(3, 1), (4, 1), (5, 1)]);
+    }
+
+    #[test]
+    fn diagonal_gaps_are_not_glimpsed_through() {
+        // (2, 1) touches the seen floor (1, 0) only across the gap between two walls.
+        let map = "
+            .#.
+            @.#
+            ";
+        assert_eq!(glimpsed(map), []);
     }
 
     #[test]

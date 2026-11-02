@@ -26,22 +26,22 @@ use std::collections::VecDeque;
 use std::hash::{BuildHasher, Hash, Hasher};
 use std::time::Duration;
 
-use bevy::platform::collections::{HashMap, HashTable};
+use bevy::platform::collections::{HashMap, HashSet, HashTable};
 use bevy::platform::hash::FixedHasher;
 use bevy::platform::time::Instant;
 use bevy::prelude::*;
 use ss13_shared::protocol::NetId;
-use ss13_shared::{Appearance, Facing, LIGHT_BLOCK, Optics, TilePos, light_block};
+use ss13_shared::{Appearance, Facing, Optics, TilePos, light_block};
 use ss13_world::{ChunkPos, SpatialIndex};
 
 use crate::light_server::{LIGHT_MARGIN, LightGrid, block_overlaps, blocks_in};
-use crate::line_of_sight::ViewGrid;
 use crate::protocol::ServerMessage;
 use crate::replication::{
     AppearanceId, Look, Motion, ReplicationBatch, ReplicationOp, SETTLE_TICKS, Spawned,
 };
 use crate::server::{ClientLink, NetServerSystems};
-use crate::view_mask::{MASK_CHUNK, MaskId, ViewMask, ViewMasks, mask_light};
+use crate::view_mask::{MASK_CHUNK, MaskId, ViewMask, ViewMasks, block_seen};
+use ss13_shared::line_of_sight::ViewGrid;
 
 /// BYOND tg widescreen view is 19x15 (half-width 9); one tile of margin so that entities
 /// already exist when they scroll into view.
@@ -113,10 +113,10 @@ impl Sight {
     }
 }
 
-/// Line of sight reaches this many tiles beyond the view box, the longest light reach (see
-/// `LIGHT_MARGIN`): a light on a seen tile off screen still lights the screen edge, while
-/// lights on unseen tiles stay hidden (they would show where flashlights move behind walls).
-const LOS_MARGIN: u32 = 8;
+/// Line of sight reaches this many tiles beyond the view box: the client's lightmap margin
+/// past the screen (`ss13_render` lighting `MARGIN`), so a glide never shows a tile's seen bit
+/// missing. Lights do not need more: light blocks go unmasked (`view_mask`).
+const LOS_MARGIN: u32 = 2;
 
 /// A viewer that stepped also sees from the next tile in its direction this long (ticks), so
 /// what its client's predicted step reveals is there when the step shows, not a round trip
@@ -361,9 +361,14 @@ struct ClientView {
     /// near them: a step onto the lookahead tile reuses what was seen from it.
     // Cost: ~1000 tiles per eye, two eyes per walking client (~24 KB).
     los_seen: Vec<(TilePos, Vec<TilePos>)>,
-    /// Masked clients: the opacity last sent per light block, so a change on hidden tiles
-    /// only sends nothing.
-    light_sent: HashMap<TilePos, [u8; 32]>,
+    /// Clients under a game [`ViewMask`]: the seen tiles last sent per light block
+    /// (`ReplicationOp::Seen`).
+    seen_sent: HashMap<TilePos, [u8; 32]>,
+    /// The game mask whose seen tiles go with the light blocks; line of sight is not one (the
+    /// client computes it from its own predicted position, `ReplicationOp::LineOfSight`).
+    tile_mask: Option<MaskId>,
+    /// The line-of-sight radius last sent.
+    los_sent: Option<u32>,
     /// Origins of the light blocks this client subscribes to.
     light_blocks: Vec<TilePos>,
     appearances: Vec<(AppearanceId, Look)>,
@@ -407,31 +412,35 @@ impl ClientView {
     }
 
     /// Queues a light op, masked for a masked client.
+    /// Queues a light op; a masked client also gets the seen tiles of a block it now gets whole.
     fn push_light(&mut self, masks: &ViewMasks, op: ReplicationOp) {
-        let Some(mask) = self.mask else {
-            self.ops.push(op);
-            return;
-        };
-        let Some(op) = mask_light(masks, mask, op) else {
-            return;
-        };
-        match &op {
-            ReplicationOp::LightBlock { origin, opaque, .. } => {
-                self.light_sent.insert(*origin, *opaque);
-            }
-            ReplicationOp::Opacity { origin, opaque } => {
-                if self.light_sent.insert(*origin, *opaque) == Some(*opaque) {
-                    return;
-                }
-            }
+        let whole = match &op {
+            ReplicationOp::LightBlock { origin, .. } => Some(*origin),
             ReplicationOp::ForgetLight(origins) => {
                 for origin in origins {
-                    self.light_sent.remove(origin);
+                    self.seen_sent.remove(origin);
                 }
+                None
             }
-            _ => {}
-        }
+            _ => None,
+        };
         self.ops.push(op);
+        if let Some(origin) = whole {
+            // The client forgets a block's seen tiles when it gets the block again.
+            self.seen_sent.remove(&origin);
+            self.push_seen(masks, origin);
+        }
+    }
+
+    /// The seen tiles of the light block at `origin`, if the client is masked and they changed.
+    fn push_seen(&mut self, masks: &ViewMasks, origin: TilePos) {
+        let Some(mask) = self.tile_mask else {
+            return;
+        };
+        let seen = block_seen(masks, mask, origin);
+        if self.seen_sent.insert(origin, seen) != Some(seen) {
+            self.ops.push(ReplicationOp::Seen { origin, seen });
+        }
     }
 
     fn alloc_id(&mut self, tick: u32) -> NetId {
@@ -908,8 +917,8 @@ fn replicate(
     }
 
     // 2b. Mask chunks that changed: the flipped tiles of each client using the mask. Its light
-    // blocks there get the flipped tiles' opacity and lights after this tick's light changes.
-    let mut light_flips: HashMap<(Entity, TilePos), [u8; 32]> = HashMap::default();
+    // blocks there get their seen tiles again.
+    let mut light_flips: HashSet<(Entity, TilePos)> = HashSet::default();
     let mut by_mask: HashMap<MaskId, Vec<Entity>> = HashMap::default();
     if !mask_changes.is_empty() {
         for (&client, view) in clients.iter() {
@@ -927,9 +936,9 @@ fn replicate(
             let min = (chunk.0 * MASK_CHUNK, chunk.1 * MASK_CHUNK);
             for bit in (0..64).filter(|b| flipped & (1 << b) != 0) {
                 let pos = TilePos::new(min.0 + bit % MASK_CHUNK, min.1 + bit / MASK_CHUNK, chunk.2);
-                let (origin, i) = light_block(pos);
+                let (origin, _) = light_block(pos);
                 if view.light_blocks.contains(&origin) {
-                    light_flips.entry((*client, origin)).or_default()[i / 8] |= 1 << (i % 8);
+                    light_flips.insert((*client, origin));
                 }
                 if !keep.contains(pos) {
                     continue;
@@ -976,9 +985,19 @@ fn replicate(
         let new_view = ViewBox::of(&viewer);
         let view = clients.entry(client).or_default();
         let (see, groups) = (see.0.map_or(0, |s| s.0), see.1.map_or(0, |g| g.0));
+        let viewer_mask = mask;
         let mask = mask
             .map(|m| m.0)
             .or_else(|| view.los.is_some().then(|| los_mask(client)));
+        // Line of sight: the client blacks out what its eye does not see, within this radius.
+        let los = (viewer_mask.is_none())
+            .then_some(view.los)
+            .flatten()
+            .map(|l| l.radius);
+        if view.los_sent != los {
+            view.los_sent = los;
+            view.ops.push(ReplicationOp::LineOfSight(los));
+        }
         let want = controlled.map(|c| c.0);
         let old_control = view.control;
         if want != view.control {
@@ -999,6 +1018,7 @@ fn replicate(
             view.see_groups = groups;
             let mask_changed = view.mask != mask;
             view.mask = mask;
+            view.tile_mask = viewer_mask.map(|m| m.0);
             let keep = new_view.grow(KEEP_MARGIN);
             let hidden: Vec<Entity> = view
                 .known
@@ -1021,7 +1041,7 @@ fn replicate(
                 for &origin in &origins {
                     lights.unsubscribe(origin, client);
                 }
-                view.light_sent.clear();
+                view.seen_sent.clear();
                 if !origins.is_empty() {
                     view.ops.push(ReplicationOp::ForgetLight(origins));
                 }
@@ -1100,11 +1120,11 @@ fn replicate(
             }
         }
     });
-    for ((client, origin), flipped) in light_flips {
+    for (client, origin) in light_flips {
         if let Some(view) = clients.get_mut(&client)
             && view.light_blocks.contains(&origin)
         {
-            send_flips(view, lights, masks, origin, flipped);
+            view.push_seen(masks, origin);
         }
     }
 
@@ -1355,7 +1375,8 @@ fn update_line_of_sight(
                 block.is_some_and(|b| b[i] > 0)
             });
             computed += 1;
-            let seen: Vec<TilePos> = (grid.seen())
+            // The glimpsed ring too: the client draws it dimmed.
+            let seen: Vec<TilePos> = (grid.seen().chain(grid.glimpses()))
                 .map(|(dx, dy)| TilePos::new(eye.x + dx, eye.y + dy, eye.z))
                 .filter(|&p| index.in_bounds(p))
                 .collect();
@@ -1374,47 +1395,6 @@ fn opaque_at(lights: &LightGrid, index: &SpatialIndex, pos: TilePos) -> bool {
     }
     let (origin, i) = light_block(pos);
     lights.block_opacity(origin).is_some_and(|b| b[i] > 0)
-}
-
-/// Light state of the `flipped` tiles of the block at `origin` after `view`'s mask changed
-/// there: the block's opacity (masked, sent if it differs) and the lights of the flipped tiles
-/// that have any, now seen (their lights) or now hidden (cleared).
-fn send_flips(
-    view: &mut ClientView,
-    lights: &LightGrid,
-    masks: &ViewMasks,
-    origin: TilePos,
-    flipped: [u8; 32],
-) {
-    let opaque = lights.opacity_bits(origin);
-    view.push_light(masks, ReplicationOp::Opacity { origin, opaque });
-    let Some(mask) = view.mask else {
-        return;
-    };
-    let is_flipped = |t: u8| flipped[usize::from(t) / 8] & (1 << (t % 8)) != 0;
-    let seen = |t: u8| {
-        let t = i32::from(t);
-        let pos = TilePos::new(
-            origin.x + t % LIGHT_BLOCK,
-            origin.y + t / LIGHT_BLOCK,
-            origin.z,
-        );
-        masks.visible(mask, pos)
-    };
-    let lit = lights.lit_of(origin, is_flipped);
-    let mut out = lights.lit_of(origin, |t| is_flipped(t) && seen(t));
-    (out.tiles).extend(
-        lit.tiles
-            .iter()
-            .filter(|(t, _)| !seen(*t))
-            .map(|(t, _)| (*t, vec![])),
-    );
-    if !out.tiles.is_empty() {
-        view.ops.push(ReplicationOp::Lights {
-            origin,
-            lights: out,
-        });
-    }
 }
 
 /// Spawns or despawns `entity` on `view` by the current rules (box, keep, invisibility, mask);

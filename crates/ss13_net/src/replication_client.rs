@@ -106,11 +106,14 @@ impl NetEntityMap {
 #[derive(Resource, Default)]
 pub struct LightBlocks {
     blocks: HashMap<TilePos, KnownBlock>,
+    line_of_sight: Option<u32>,
 }
 
 struct KnownBlock {
     opaque: [u8; 32],
     lights: HashMap<u8, Vec<LightSource>>,
+    /// Seen tiles under a view mask; `None`: all.
+    seen: Option<[u8; 32]>,
 }
 
 impl LightBlocks {
@@ -136,6 +139,22 @@ impl LightBlocks {
         let (origin, i) = light_block(pos);
         let block = self.blocks.get(&origin)?;
         Some(block.opaque[i / 8] & (1 << (i % 8)) != 0)
+    }
+
+    /// The line-of-sight radius the server asks this client to draw within, if any.
+    pub fn line_of_sight(&self) -> Option<u32> {
+        self.line_of_sight
+    }
+
+    /// Whether a view mask shows `pos`; `None` when its block is not known.
+    pub fn seen(&self, pos: TilePos) -> Option<bool> {
+        let (origin, i) = light_block(pos);
+        let block = self.blocks.get(&origin)?;
+        Some(
+            block
+                .seen
+                .is_none_or(|bits| bits[i / 8] & (1 << (i % 8)) != 0),
+        )
     }
 
     /// The light sources on `pos`; `None` when its block is not known.
@@ -167,6 +186,7 @@ impl LightBlocks {
                     KnownBlock {
                         opaque,
                         lights: HashMap::default(),
+                        seen: None,
                     },
                 );
                 out.write(LightUpdate::Opacity {
@@ -185,6 +205,16 @@ impl LightBlocks {
                 }
             }
             ReplicationOp::Lights { origin, lights } => self.set_lights(origin, lights, out),
+            ReplicationOp::LineOfSight(radius) => {
+                self.line_of_sight = radius;
+                out.write(LightUpdate::LineOfSight(radius));
+            }
+            ReplicationOp::Seen { origin, seen } => {
+                if let Some(block) = self.blocks.get_mut(&origin) {
+                    block.seen = Some(seen);
+                    out.write(LightUpdate::Seen { origin, bits: seen });
+                }
+            }
             ReplicationOp::ForgetLight(origins) => {
                 for origin in origins {
                     self.forget(origin, out);
@@ -351,7 +381,9 @@ fn apply_op(map: &mut NetEntityMap, commands: &mut Commands, tick: u32, op: Repl
         ReplicationOp::LightBlock { .. }
         | ReplicationOp::Opacity { .. }
         | ReplicationOp::Lights { .. }
-        | ReplicationOp::ForgetLight(_) => {}
+        | ReplicationOp::ForgetLight(_)
+        | ReplicationOp::Seen { .. }
+        | ReplicationOp::LineOfSight(_) => {}
     }
 }
 

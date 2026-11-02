@@ -18,6 +18,9 @@ struct Region {
 @group(2) @binding(3) var tiles: texture_2d<f32>;
 // Emissive mask in target pixels (alpha = coverage), added to the light like tg's emissive plate.
 @group(2) @binding(4) var emissive: texture_2d<f32>;
+// One texel per tile: how much of it is in view (r). Sampled linearly between tile centres, so
+// the edge of the view is soft; what is out of view is black, as BYOND draws turfs out of view().
+@group(2) @binding(5) var view: texture_2d<f32>;
 
 const TILE_SIZE: f32 = 32.0;
 
@@ -29,7 +32,8 @@ fn light_at(world: vec2<f32>, frag: vec2<f32>) -> vec3<f32> {
     let tile = textureLoad(tiles, tile_xy, 0);
     let size = vec2<i32>(textureDimensions(emissive));
     let glow = textureLoad(emissive, clamp(vec2<i32>(frag), vec2<i32>(0), size - 1), 0).a;
-    return clamp(corner * tile.a + tile.rgb + glow, vec3<f32>(0.0), vec3<f32>(1.0));
+    let seen = textureSampleLevel(view, corners_sampler, p / region.size, 0.0).r;
+    return clamp(corner * tile.a + tile.rgb + glow, vec3<f32>(0.0), vec3<f32>(1.0)) * seen;
 }
 
 fn srgb_to_linear(c: vec3<f32>) -> vec3<f32> {

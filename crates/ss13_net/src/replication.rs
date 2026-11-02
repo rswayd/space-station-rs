@@ -100,6 +100,16 @@ pub(crate) enum ReplicationOp {
     },
     /// Light blocks that left the client's light interest.
     ForgetLight(Vec<TilePos>),
+    /// Whether the client draws only what its eye sees (BYOND `view()`) and within which
+    /// Chebyshev radius; it computes that itself from its predicted position and the light
+    /// blocks' opacity, so its view never lags its own step.
+    LineOfSight(Option<u32>),
+    /// The tiles of a known light block a game view mask (camera static) shows (bit layout of
+    /// `Opacity`); after the block's `LightBlock` and when it changes.
+    Seen {
+        origin: TilePos,
+        seen: [u8; 32],
+    },
 }
 
 /// Light sources of some tiles of one light block. Most lights of a block share a few values
@@ -120,6 +130,8 @@ impl ReplicationOp {
                 | Self::Opacity { .. }
                 | Self::Lights { .. }
                 | Self::ForgetLight(_)
+                | Self::Seen { .. }
+                | Self::LineOfSight(_)
         )
     }
 }

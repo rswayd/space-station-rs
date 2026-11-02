@@ -45,11 +45,12 @@ use bevy::sprite_render::{
     AlphaMode2d, Material2d, Material2dKey, Material2dPipeline, Material2dPlugin,
     Mesh2dPipelineKey, MeshMaterial2d,
 };
+use ss13_shared::line_of_sight::ViewGrid;
 use ss13_shared::{
     LIGHT_BLOCK, LightSource, LightUpdate, Optics, TILE_SIZE, TileLighting, TilePos, light_block,
 };
 
-use crate::camera::WorldCamera;
+use crate::camera::{CameraTarget, WorldCamera};
 use crate::order::DrawOrder;
 use crate::sprites::EMISSIVE_LAYER;
 use crate::{ActiveZ, RenderSystems};
@@ -59,6 +60,16 @@ pub const LIGHTING_PLANE: i16 = 10;
 
 /// Tiles of margin around the camera's view, so gliding never shows the region's edge.
 const MARGIN: i32 = 2;
+
+/// Seconds a tile takes to fade in or out of view. BYOND switches it at once; a step changes the
+/// view a whole tile while the mob glides, which reads as a jolt, so it fades over about a
+/// glide instead.
+const VIEW_FADE_SECONDS: f32 = 0.2;
+
+/// Brightness of a glimpsed tile ([`ViewGrid::glimpsed`]: the ring just past the line of sight;
+/// the server sends its content too). Not tg (black there): the owner chose a dim ring,
+/// accepting that a mob right past a corner shows dimmed.
+const BEHIND_VIEW: f32 = 0.3;
 
 /// Client lighting. Needs [`RenderPlugin`](crate::RenderPlugin).
 pub struct LightingPlugin;
@@ -129,6 +140,19 @@ pub struct LightWorld {
     tile_lights: HashMap<TilePos, u8>,
     /// Non-default tile lighting (turfs).
     tiles: HashMap<TilePos, TileLighting>,
+    /// Shown tiles of the light blocks under a view mask (camera static), by origin; tiles of
+    /// other blocks are shown.
+    seen: HashMap<TilePos, [u8; 32]>,
+    /// Line of sight: its radius while the server asks for it, the eye (the camera target's
+    /// tile, predicted for the local mob, so the view moves with the step) and what it sees.
+    los_radius: Option<u32>,
+    eye: Option<TilePos>,
+    los: ViewGrid,
+    /// Entities per tile and where each is: under line of sight a tile comes into view only once
+    /// the server sent what is on it (every tile has its turf), so the client's own view, a
+    /// round trip ahead of the server's, never shows a tile empty and then pops its content in.
+    occupied: HashMap<TilePos, u32>,
+    positions: EntityHashMap<TilePos>,
     sources: HashMap<SourceKey, Source>,
     /// What each tracked entity contributed, to undo it on change or removal.
     tracked: EntityHashMap<(TilePos, Optics)>,
@@ -157,14 +181,66 @@ impl LightWorld {
         opaque_at(&self.opaque, &self.blocks, pos)
     }
 
+    /// Whether the client sees `pos` (as of the last [`LightWorld::update_los`]); unseen tiles
+    /// are drawn black, as BYOND draws turfs out of `view()`.
+    pub fn is_seen(&self, pos: TilePos) -> bool {
+        !self.masked(pos) && !self.behind_los(pos)
+    }
+
+    /// Hidden by the server's view mask (AI camera static and the like).
+    fn masked(&self, pos: TilePos) -> bool {
+        let (origin, i) = light_block(pos);
+        (self.seen.get(&origin)).is_some_and(|bits| bits[i / 8] & (1 << (i % 8)) == 0)
+    }
+
+    /// Hidden by the client's line of sight from the eye.
+    fn behind_los(&self, pos: TilePos) -> bool {
+        match (self.los_radius, self.eye) {
+            (Some(_), Some(eye)) => {
+                eye.z != pos.z || !self.los.visible(pos.x - eye.x, pos.y - eye.y)
+            }
+            _ => false,
+        }
+    }
+
+    /// Recomputes line of sight from `eye` over the known opacity.
+    // Cost: BYOND's ring passes over (2r + 1)^2 tiles (625 at r = 12), on lightmap rebuilds only.
+    fn update_los(&mut self, eye: Option<TilePos>) {
+        self.eye = eye;
+        let (Some(radius), Some(eye)) = (self.los_radius, eye) else {
+            return;
+        };
+        let (opaque, blocks) = (&self.opaque, &self.blocks);
+        // The eye's own tile never blocks: a predicted step enters a closed door a round trip
+        // before the server's door opens.
+        self.los.compute(radius.min(64) as i32, |dx, dy| {
+            (dx, dy) != (0, 0)
+                && opaque_at(opaque, blocks, TilePos::new(eye.x + dx, eye.y + dy, eye.z))
+        });
+    }
+
     /// Applies one block update; tiles whose opacity flips are marked dirty.
     fn update(&mut self, update: &LightUpdate) {
         match update {
             LightUpdate::Opacity { origin, bits } => self.set_block_opacity(*origin, *bits),
             LightUpdate::Lights { pos, lights } => self.set_tile_lights(*pos, lights),
+            LightUpdate::LineOfSight(radius) => {
+                if self.los_radius != *radius {
+                    self.los_radius = *radius;
+                    self.changed = true;
+                }
+            }
+            LightUpdate::Seen { origin, bits } => {
+                if self.seen.insert(*origin, *bits) != Some(*bits) {
+                    self.changed = true;
+                }
+            }
             LightUpdate::Forget { origin } => {
                 self.set_block_opacity(*origin, [0; 32]);
                 self.blocks.remove(origin);
+                if self.seen.remove(origin).is_some() {
+                    self.changed = true;
+                }
                 for i in 0..LIGHT_BLOCK * LIGHT_BLOCK {
                     let pos = TilePos::new(
                         origin.x + i % LIGHT_BLOCK,
@@ -181,6 +257,10 @@ impl LightWorld {
         let old = self.blocks.insert(origin, bits).unwrap_or([0; 32]);
         for (byte, (&a, &b)) in old.iter().zip(&bits).enumerate() {
             let mut flipped = a ^ b;
+            if flipped != 0 {
+                // Line of sight changes with opacity.
+                self.changed = true;
+            }
             while flipped != 0 {
                 let i = byte as i32 * 8 + flipped.trailing_zeros() as i32;
                 flipped &= flipped - 1;
@@ -227,6 +307,7 @@ impl LightWorld {
                 self.opaque.remove(&pos);
             }
             self.dirty_tiles.push(pos);
+            self.changed = true;
         }
         if let Some(tile) = optics.tile {
             if sign > 0 {
@@ -250,6 +331,51 @@ impl LightWorld {
                 self.sources.remove(&SourceKey::Entity(entity));
             }
             self.changed = true;
+        }
+    }
+
+    /// How bright a tile is drawn (0..1): black when masked or, under line of sight, while
+    /// nothing on it is known; under line of sight [`BEHIND_VIEW`] when glimpsed, black when
+    /// otherwise hidden (whatever else the server sent, e.g. its lookahead); else 1.
+    fn view_level(&self, pos: TilePos) -> f32 {
+        let known = self.los_radius.is_none() || self.occupied.contains_key(&pos);
+        if self.masked(pos) || !known {
+            0.0
+        } else if !self.behind_los(pos) {
+            1.0
+        } else if self
+            .eye
+            .is_some_and(|eye| eye.z == pos.z && self.los.glimpsed(pos.x - eye.x, pos.y - eye.y))
+        {
+            BEHIND_VIEW
+        } else {
+            0.0
+        }
+    }
+
+    /// Moves `entity` to `pos` (`None`: gone) in the occupancy; a tile gaining its first or
+    /// losing its last entity changes the view.
+    fn occupy(&mut self, entity: Entity, pos: Option<TilePos>) {
+        let old = match pos {
+            Some(pos) => self.positions.insert(entity, pos),
+            None => self.positions.remove(&entity),
+        };
+        if old == pos {
+            return;
+        }
+        if let Some(old) = old
+            && let Some(count) = self.occupied.get_mut(&old)
+        {
+            *count -= 1;
+            if *count == 0 {
+                self.occupied.remove(&old);
+                self.changed |= self.los_radius.is_some();
+            }
+        }
+        if let Some(pos) = pos {
+            let count = self.occupied.entry(pos).or_default();
+            *count += 1;
+            self.changed |= *count == 1 && self.los_radius.is_some();
         }
     }
 
@@ -280,6 +406,7 @@ fn track_optics(
     mut world: ResMut<LightWorld>,
     mut updates: MessageReader<LightUpdate>,
     changed: Query<(Entity, &TilePos, &Optics), Or<(Changed<Optics>, Changed<TilePos>)>>,
+    moved: Query<(Entity, &TilePos), Changed<TilePos>>,
     mut lost_optics: RemovedComponents<Optics>,
     mut lost_pos: RemovedComponents<TilePos>,
     mut stats: ResMut<LightingStats>,
@@ -290,8 +417,15 @@ fn track_optics(
     for update in updates.read() {
         world.update(update);
     }
-    for entity in lost_optics.read().chain(lost_pos.read()) {
+    for entity in lost_pos.read() {
         world.untrack(entity);
+        world.occupy(entity, None);
+    }
+    for entity in lost_optics.read() {
+        world.untrack(entity);
+    }
+    for (entity, &pos) in &moved {
+        world.occupy(entity, Some(pos));
     }
     for (entity, &pos, optics) in &changed {
         if world.tracked.get(&entity) == Some(&(pos, optics.clone())) {
@@ -394,6 +528,15 @@ struct Lightmap {
     tiles: Handle<Image>,
     /// The emissive camera's target.
     emissive: Handle<Image>,
+    /// How much of each region tile is in view (0..1, one texel per tile, sampled linearly so
+    /// the edge of the view is soft), and where each is fading to; both by region tile index.
+    view: Handle<Image>,
+    view_now: Vec<f32>,
+    view_target: Vec<f32>,
+    /// Frames left in which to touch the material after a texture was re-allocated: Bevy prepares
+    /// `Material2d` unordered with `GpuImage`, so the frame of a re-allocation may bind the old
+    /// texture, which then stays until the material changes again.
+    rebind: u8,
 }
 
 /// Draws the [`EMISSIVE_LAYER`] sprites with the world camera's view into the emissive mask.
@@ -413,6 +556,9 @@ pub struct LightmapMaterial {
     /// Emissive mask, one texel per target pixel (alpha = coverage).
     #[texture(4)]
     emissive: Handle<Image>,
+    /// Tiles in view (r), sampled with the corners' linear sampler.
+    #[texture(5)]
+    view: Handle<Image>,
 }
 
 impl Material2d for LightmapMaterial {
@@ -492,6 +638,7 @@ fn spawn_lightmap(
     let corners = images.add(lightmap_image(UVec2::ONE, true));
     let tiles = images.add(lightmap_image(UVec2::ONE, false));
     let emissive = images.add(emissive_image(UVec2::ONE));
+    let view = images.add(lightmap_image(UVec2::ONE, true));
     commands.spawn((
         Name::new("lightmap"),
         Mesh2d(meshes.add(Rectangle::new(1.0, 1.0))),
@@ -500,6 +647,7 @@ fn spawn_lightmap(
             corners: corners.clone(),
             tiles: tiles.clone(),
             emissive: emissive.clone(),
+            view: view.clone(),
         })),
         Transform::default(),
         Visibility::Hidden,
@@ -508,6 +656,10 @@ fn spawn_lightmap(
             corners,
             tiles,
             emissive,
+            view,
+            view_now: Vec::new(),
+            view_target: Vec::new(),
+            rebind: 0,
         },
     ));
 }
@@ -534,7 +686,7 @@ fn sync_emissive_camera(
     settings: Res<LightingSettings>,
     mut commands: Commands,
     mut images: ResMut<Assets<Image>>,
-    lightmaps: Query<&Lightmap>,
+    mut lightmaps: Query<&mut Lightmap>,
     world_cameras: Query<WorldView, (With<WorldCamera>, Without<EmissiveCamera>)>,
     mut emissive: Query<
         (
@@ -547,8 +699,8 @@ fn sync_emissive_camera(
         With<EmissiveCamera>,
     >,
 ) {
-    let (Ok(lightmap), Some((camera, projection, transform))) =
-        (lightmaps.single(), world_cameras.iter().next())
+    let (Ok(mut lightmap), Some((camera, projection, transform))) =
+        (lightmaps.single_mut(), world_cameras.iter().next())
     else {
         return;
     };
@@ -564,6 +716,7 @@ fn sync_emissive_camera(
         && let Some(mut image) = images.get_mut(&lightmap.emissive)
     {
         *image = emissive_image(size);
+        lightmap.rebind = 2;
     }
     let target = RenderTarget::Image(ImageRenderTarget {
         handle: lightmap.emissive.clone(),
@@ -631,15 +784,24 @@ fn camera_region(
     let Projection::Orthographic(ortho) = projection else {
         return None;
     };
-    let tile = TILE_SIZE as f32;
-    let center = transform.translation.xy();
-    let min = ((center + ortho.area.min) / tile).floor().as_ivec2() - MARGIN;
-    let max = ((center + ortho.area.max) / tile).ceil().as_ivec2() + MARGIN;
-    let size = (max - min).max(IVec2::ONE).as_uvec2();
-    Some(Region { min, size, z })
+    Some(view_region(transform.translation.xy(), ortho.area, z))
 }
 
-/// Rebuilds the lightmap textures when something in the region changed or the region moved.
+/// The tiles under `area` around `center` (world pixels), plus [`MARGIN`].
+fn view_region(center: Vec2, area: Rect, z: u16) -> Region {
+    let tile = TILE_SIZE as f32;
+    let min = ((center + area.min) / tile).floor().as_ivec2() - MARGIN;
+    // From the view's size alone, so it holds while the camera glides between tiles: a size
+    // change re-allocates the textures. One more tile covers any sub-tile offset.
+    let size = ((area.size() / tile).ceil().as_ivec2() + 1 + 2 * MARGIN)
+        .max(IVec2::ONE)
+        .as_uvec2();
+    Region { min, size, z }
+}
+
+/// Rebuilds the lightmap textures when something in the region changed or the region moved, and
+/// fades the view toward what the eye sees.
+#[allow(clippy::too_many_arguments)]
 fn update_lightmap(
     settings: Res<LightingSettings>,
     active_z: Res<ActiveZ>,
@@ -647,6 +809,7 @@ fn update_lightmap(
     mut world: ResMut<LightWorld>,
     mut stats: ResMut<LightingStats>,
     cameras: Query<(&Transform, &Projection), (With<WorldCamera>, Without<Lightmap>)>,
+    targets: Query<&TilePos, With<CameraTarget>>,
     mut lightmaps: Query<(
         &mut Lightmap,
         &MeshMaterial2d<LightmapMaterial>,
@@ -655,6 +818,7 @@ fn update_lightmap(
     )>,
     mut images: ResMut<Assets<Image>>,
     mut materials: ResMut<Assets<LightmapMaterial>>,
+    time: Res<Time>,
 ) {
     let start = Instant::now();
     let Ok((mut lightmap, material, mut transform, mut visibility)) = lightmaps.single_mut() else {
@@ -668,29 +832,46 @@ fn update_lightmap(
     if !settings.enabled {
         return;
     }
+    if lightmap.rebind > 0 {
+        lightmap.rebind -= 1;
+        materials.get_mut(&material.0);
+    }
     let Some(region) = camera_region(&cameras, active_z.0) else {
         return;
     };
     if order.is_changed() || transform.translation.z == 0.0 {
         transform.translation.z = order.plane_z(LIGHTING_PLANE);
     }
+    let eye = targets.iter().next().copied();
+    if world.eye != eye {
+        world.changed = true;
+    }
     if !world.changed && lightmap.region == Some(region) {
+        fade_view(&mut lightmap, &mut images, time.delta_secs(), false);
         stats.frame_time += start.elapsed();
         return;
     }
     world.changed = false;
     stats.rebuilds += 1;
+    world.update_los(eye);
+    let old = lightmap.region;
+    let target = view_targets(&world, region);
+    lightmap.view_now = moved_view(old, &lightmap.view_now, region, &target);
+    lightmap.view_target = target;
 
     let (corner_bytes, tile_bytes, in_region) = bake(&world, region);
     stats.sources_in_region = in_region;
-    write_image(
+    let corners_size = region.size + 1;
+    if write_image(
         &mut images,
         &lightmap.corners,
-        region.size + 1,
+        corners_size,
         corner_bytes,
         true,
-    );
-    write_image(&mut images, &lightmap.tiles, region.size, tile_bytes, false);
+    ) | write_image(&mut images, &lightmap.tiles, region.size, tile_bytes, false)
+    {
+        lightmap.rebind = 2;
+    }
     // Touching the material rebinds the (possibly reallocated) textures.
     if let Some(mut m) = materials.get_mut(&material.0) {
         m.region = Vec4::new(
@@ -706,7 +887,73 @@ fn update_lightmap(
     transform.translation.y = region.min.y as f32 * tile + size.y / 2.0;
     transform.scale = size.extend(1.0);
     lightmap.region = Some(region);
+    fade_view(&mut lightmap, &mut images, time.delta_secs(), true);
     stats.frame_time += start.elapsed();
+}
+
+/// Per region tile: 1 if it is drawn ([`LightWorld::in_view`]), else 0.
+fn view_targets(world: &LightWorld, region: Region) -> Vec<f32> {
+    let (w, h) = (region.size.x as i32, region.size.y as i32);
+    (0..h)
+        .flat_map(|y| (0..w).map(move |x| (x, y)))
+        .map(|(x, y)| {
+            let pos = TilePos::new(region.min.x + x, region.min.y + y, region.z);
+            world.view_level(pos)
+        })
+        .collect()
+}
+
+/// The current view of `region`'s tiles: kept from `old` where the regions overlap on the same
+/// level, else at once what the eye sees (the tiles entering the region are off screen).
+fn moved_view(old: Option<Region>, now: &[f32], region: Region, target: &[f32]) -> Vec<f32> {
+    let mut out = target.to_vec();
+    let Some(old) = old.filter(|o| o.z == region.z && now.len() == (o.size.x * o.size.y) as usize)
+    else {
+        return out;
+    };
+    let w = region.size.x as i32;
+    for (i, v) in out.iter_mut().enumerate() {
+        let (x, y) = (region.min.x + i as i32 % w, region.min.y + i as i32 / w);
+        let (ox, oy) = (x - old.min.x, y - old.min.y);
+        if ox >= 0 && oy >= 0 && ox < old.size.x as i32 && oy < old.size.y as i32 {
+            *v = now[(oy * old.size.x as i32 + ox) as usize];
+        }
+    }
+    out
+}
+
+/// Moves the view toward its target by `dt` of [`VIEW_FADE_SECONDS`]; uploads the texture when a
+/// tile changed or `force`.
+fn fade_view(lightmap: &mut Lightmap, images: &mut Assets<Image>, dt: f32, force: bool) {
+    let step = dt / VIEW_FADE_SECONDS;
+    let mut changed = force;
+    let Lightmap {
+        view_now,
+        view_target,
+        ..
+    } = lightmap;
+    for (now, &target) in view_now.iter_mut().zip(view_target.iter()) {
+        if *now != target {
+            *now = if *now < target {
+                (*now + step).min(target)
+            } else {
+                (*now - step).max(target)
+            };
+            changed = true;
+        }
+    }
+    let Some(region) = lightmap.region.filter(|_| changed) else {
+        return;
+    };
+    let bytes = (lightmap.view_now.iter())
+        .flat_map(|&v| {
+            let v = (v * 255.0).round() as u8;
+            [v, v, v, 255]
+        })
+        .collect();
+    if write_image(images, &lightmap.view, region.size, bytes, true) {
+        lightmap.rebind = 2;
+    }
 }
 
 /// Lightmap texels for `region`: corners (`size + 1`, RGBA8) and tiles (`size`, RGBA8: ambient
@@ -803,14 +1050,16 @@ fn write_image(
     size: UVec2,
     data: Vec<u8>,
     linear: bool,
-) {
+) -> bool {
     let Some(mut image) = images.get_mut(handle) else {
-        return;
+        return false;
     };
-    if image.size() != size {
+    let resized = image.size() != size;
+    if resized {
         *image = lightmap_image(size, linear);
     }
     image.data = Some(data);
+    resized
 }
 
 #[cfg(test)]

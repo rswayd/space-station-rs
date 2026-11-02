@@ -16,8 +16,6 @@ pub mod chat;
 pub mod debug;
 #[cfg(feature = "server")]
 mod light_server;
-#[cfg(feature = "server")]
-mod line_of_sight;
 pub mod loopback;
 pub mod move_ack;
 mod protocol;

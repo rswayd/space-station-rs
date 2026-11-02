@@ -183,19 +183,6 @@ impl LightGrid {
         (!block.opaque.is_empty()).then_some(block.opaque.as_slice())
     }
 
-    /// The opacity bits of the block at `origin`.
-    pub(crate) fn opacity_bits(&self, origin: TilePos) -> [u8; 32] {
-        self.blocks.get(&origin).map_or([0; 32], Block::bits)
-    }
-
-    /// The lights of those `tiles` of the block at `origin` that have any.
-    pub(crate) fn lit_of(&self, origin: TilePos, tiles: impl Fn(u8) -> bool) -> BlockLights {
-        let Some(block) = self.blocks.get(&origin) else {
-            return BlockLights::default();
-        };
-        block.lights_of(block.lit_tiles().into_iter().filter(|&t| tiles(t)))
-    }
-
     /// Adds `client` to the block's subscribers and returns the block's whole state.
     pub(crate) fn subscribe(&mut self, origin: TilePos, client: Entity) -> ReplicationOp {
         let block = self.blocks.entry(origin).or_default();

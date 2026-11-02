@@ -7,6 +7,7 @@ pub mod chat;
 pub mod debug;
 pub mod dir;
 pub mod light;
+pub mod line_of_sight;
 pub mod protocol;
 pub mod tile;
 pub mod ui;

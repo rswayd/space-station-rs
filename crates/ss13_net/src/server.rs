@@ -38,13 +38,13 @@ use ss13_shared::protocol::{ClientIntent, PROTOCOL_VERSION};
 use tokio::sync::{mpsc, oneshot};
 
 pub use crate::light_server::LIGHT_MARGIN;
-pub use crate::line_of_sight::ViewGrid;
 pub use crate::replication_server::{
     ClientTraffic, ControlledEntity, DEFAULT_VIEW_RADIUS, Interest, Invisibility, KEEP_MARGIN,
     Networked, ReplicationServerPlugin, ReplicationStats, SeeGroups, SeeInvisible, Sight, Viewer,
     VisibleToGroups, los_mask,
 };
 pub use crate::view_mask::{MASK_CHUNK, MaskChunk, MaskId, ViewMask, ViewMasks, mask_chunk};
+pub use ss13_shared::line_of_sight::ViewGrid;
 
 use crate::loopback::LoopbackTx;
 use crate::protocol::{

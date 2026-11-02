@@ -93,7 +93,7 @@ impl NetPacket {
 
 /// Op counts instead of the ops: the interesting part of a batch is what it does.
 fn replication_summary(batch: &ReplicationBatch) -> String {
-    let mut counts = [0usize; 9];
+    let mut counts = [0usize; 11];
     let mut spawned = 0;
     for op in &batch.ops {
         let i = match op {
@@ -109,10 +109,12 @@ fn replication_summary(batch: &ReplicationBatch) -> String {
             ReplicationOp::Opacity { .. } => 6,
             ReplicationOp::Lights { .. } => 7,
             ReplicationOp::ForgetLight(_) => 8,
+            ReplicationOp::Seen { .. } => 9,
+            ReplicationOp::LineOfSight(_) => 10,
         };
         counts[i] += 1;
     }
-    const NAMES: [&str; 9] = [
+    const NAMES: [&str; 11] = [
         "spawn tiles",
         "despawn",
         "appearance",
@@ -122,6 +124,8 @@ fn replication_summary(batch: &ReplicationBatch) -> String {
         "opacity",
         "lights",
         "forget light",
+        "seen",
+        "line of sight",
     ];
     let mut out = format!(
         "tick {}, {} appearances, {} entities spawned",

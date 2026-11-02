@@ -88,12 +88,15 @@ SS13_ASSETS=$ASSETS SS13_TOKEN=bob   cargo run -p ss13_client
   Light sources and opacity reach the client per 16x16 light block from 11 tiles beyond the
   entity view (sources up to range 8 light the screen edge, shadows included);
   `scripts/visual/light_walk.txt` with `SS13_SPAWN_AT=100,68,1` walks along such an edge.
-  A living mob's client gets only what BYOND `view()` shows its mob (line of sight through
-  opacity, `ss13_net` `line_of_sight`): entities on unseen tiles are not sent (those tiles stay
-  black), their light sources neither, and their opacity arrives as opaque; lights on seen tiles
-  up to 8 tiles past the screen edge still light it. While walking it also sees from the next
-  tile ahead (so a predicted step reveals at once), for 0.4 s after the last step. Ghosts and
-  admin ghosts see through walls (tg observer `sight`).
+  A living mob sees what BYOND `view()` shows from its tile (line of sight through opacity,
+  `ss13_shared` `line_of_sight`), plus a dimmed ring one tile past it next to seen floor (not
+  tg: a glance around corners and door frames; nothing shows through a straight wall). The
+  client computes both from its predicted tile and fades tiles in and out over 0.2 s; everything
+  else is black. The server sends entities only on those tiles, seen from its own copy of the
+  mob and, for 0.4 s after a step, from the next tile ahead too (so a predicted step finds its
+  tiles there); the extra tiles stay black on the client. Light sources and opacity go unmasked,
+  so walls cast true shadows (a modified client could read door states behind walls). Ghosts
+  and admin ghosts see through walls (tg observer `sight`).
   Screens, bulbs and indicator lights glow in the dark through emissive overlays (round-start
   looks from `ss13-mapload convert`, `dm_look`). `scripts/visual/spot.txt` with `SS13_SPAWN_AT`
   screenshots any spot.
