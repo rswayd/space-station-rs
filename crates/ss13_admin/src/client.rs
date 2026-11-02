@@ -247,7 +247,7 @@ fn absorb_keyboard(
     if !ctx.text_edit_focused() {
         return;
     }
-    let kept: Vec<KeyCode> = [KeyCode::F1, KeyCode::F7, KeyCode::F12]
+    let kept: Vec<KeyCode> = [KeyCode::F1, KeyCode::F7, KeyCode::F9]
         .into_iter()
         .filter(|k| keys.just_pressed(*k))
         .collect();

@@ -17,7 +17,7 @@ fn main() -> AppExit {
     };
     // `SS13_SCRIPT`: scripted run for visual checks (docs/RUNNING.md); absent, nothing changes.
     let script = ss13_devtools::ScriptPlugin::from_env();
-    // Debug overlay (F12, docs/RUNNING.md "Debug UI"): debug builds, or `--features debug-ui`.
+    // Debug overlay (F9, docs/RUNNING.md "Debug UI"): debug builds, or `--features debug-ui`.
     let debug_ui = cfg!(debug_assertions) || cfg!(feature = "debug-ui");
     let defaults = DefaultPlugins.set(WindowPlugin {
         primary_window: Some(Window {

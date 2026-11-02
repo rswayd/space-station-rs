@@ -72,7 +72,7 @@ pub(super) fn menu(mut contexts: EguiContexts, mut ui_state: ResMut<DebugUi>) ->
                     }
                 }
             });
-            ui.small("F12 / ` closes the overlay");
+            ui.small("F9 / ` closes the overlay");
         });
     Ok(())
 }

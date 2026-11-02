@@ -41,17 +41,23 @@ pub fn start(canvas_selector: String, files: Map, post: Function) {
         })
     });
     let asset_root = PathBuf::new();
-    let defaults = DefaultPlugins.set(WindowPlugin {
-        primary_window: Some(Window {
-            title: "ss13-rs".into(),
-            canvas: Some(canvas_selector),
-            fit_canvas_to_parent: true,
-            // F1 adminhelp, F6/F7 admin keys and Tab must reach the game, not the browser.
-            prevent_default_event_handling: true,
+    let defaults = DefaultPlugins
+        .set(WindowPlugin {
+            primary_window: Some(Window {
+                title: "ss13-rs".into(),
+                canvas: Some(canvas_selector),
+                fit_canvas_to_parent: true,
+                // F1 adminhelp, F6/F7 admin keys and Tab must reach the game, not the browser.
+                prevent_default_event_handling: true,
+                ..default()
+            }),
             ..default()
-        }),
-        ..default()
-    });
+        })
+        // The debug overlay (F9 or backtick, docs/RUNNING.md "Debug UI") with its log tail.
+        .set(bevy::log::LogPlugin {
+            custom_layer: ss13_debug::client::log_layer,
+            ..default()
+        });
     let mut app = App::new();
     app.set_error_handler(log_errors_keep_panics)
         .insert_resource(connector)
@@ -77,6 +83,7 @@ pub fn start(canvas_selector: String, files: Map, post: Function) {
         .add_plugins(ss13_game::hunger_client::HungerHudPlugin)
         .add_plugins(ss13_game::sound_client::SoundClientPlugin { asset_root })
         .add_plugins(ss13_admin::client::AdminUiPlugin)
+        .add_plugins(ss13_debug::client::DebugUiPlugin)
         .add_systems(Update, map_left_of_chat)
         .add_systems(Last, pump_bridge);
     // On wasm, winit's runner hands the app to the browser event loop and returns.

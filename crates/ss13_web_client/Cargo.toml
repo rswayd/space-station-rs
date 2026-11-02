@@ -21,6 +21,7 @@ ss13_ui_kit.workspace = true
 ss13_tgui = { workspace = true, features = ["client"] }
 ss13_chat = { workspace = true, features = ["client"] }
 ss13_admin = { workspace = true, features = ["client"] }
+ss13_debug = { workspace = true, features = ["client"] }
 # `2d` brings `webgl2` (Bevy's `default_platform`): wgpu on wasm without it needs WebGPU.
 bevy = { workspace = true, features = ["2d", "ui", "audio", "web"] }
 wasm-bindgen = "0.2.130"

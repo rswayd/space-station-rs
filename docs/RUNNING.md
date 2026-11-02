@@ -265,9 +265,10 @@ To look at a screenshot, open the PNG (an agent reads it as an image file).
 
 ## Debug UI
 
-An egui overlay in the client (`crates/ss13_debug`): built into debug builds; a release client
-has it only with `cargo build -p ss13_client --release --features debug-ui`. **F12** (or the
-backtick key when no text field has focus) opens and closes it. Closed, it draws nothing, takes
+An egui overlay in the client (`crates/ss13_debug`): built into debug builds and the browser
+demo; a release client has it only with `cargo build -p ss13_client --release --features
+debug-ui`. **F9** (or the backtick key when no text field has focus) opens and closes it; not
+F12, which browsers keep for their developer tools. Closed, it draws nothing, takes
 no input and the network tap is off. Open, the "ss13 debug" bar toggles the panels (they stay as
 left for the session); egui takes the mouse over its windows (the map under them gets no
 clicks) and the keyboard only while one of its text fields has focus.

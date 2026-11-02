@@ -1,6 +1,6 @@
 //! Client half: the egui debug overlay.
 //!
-//! F12 (or the backtick key outside text fields) opens and closes it. While closed it draws
+//! F9 (or the backtick key outside text fields) opens and closes it. While closed it draws
 //! nothing, takes no input and turns the network tap off; the trackers that feed the panels
 //! (frame times, tgui messages, the log tail) keep a few hundred entries each. While open, egui
 //! takes the pointer over its windows (the world under them gets no clicks) and the keyboard
@@ -311,12 +311,12 @@ fn toggle(
     let typing = focus
         .and_then(|f| f.get())
         .is_some_and(|e| text_fields.contains(e));
-    if keys.just_pressed(KeyCode::F12) || (keys.just_pressed(KeyCode::Backquote) && !typing) {
+    if keys.just_pressed(KeyCode::F9) || (keys.just_pressed(KeyCode::Backquote) && !typing) {
         ui.open = !ui.open;
     }
 }
 
-/// While an egui text field has focus the game sees no keys (F12 still closes the overlay).
+/// While an egui text field has focus the game sees no keys (F9 still closes the overlay).
 /// After `bevy_egui` has read this frame's keyboard input.
 fn absorb_keyboard(
     mut contexts: EguiContexts,
@@ -329,11 +329,11 @@ fn absorb_keyboard(
     if !ctx.text_edit_focused() {
         return;
     }
-    let close = keys.just_pressed(KeyCode::F12);
+    let close = keys.just_pressed(KeyCode::F9);
     keys.reset_all();
     messages.clear();
     if close {
-        keys.press(KeyCode::F12);
+        keys.press(KeyCode::F9);
     }
 }
 
@@ -626,12 +626,12 @@ mod tests {
             world.run_system_once(toggle).unwrap();
             world.resource::<DebugUi>().open
         };
-        assert!(tap(&mut world, KeyCode::F12));
+        assert!(tap(&mut world, KeyCode::F9));
         assert!(!tap(&mut world, KeyCode::Backquote));
         // A focused text field (the say line) types the backtick instead.
         let field = world.spawn(EditableText::default()).id();
         world.insert_resource(InputFocus::from_entity(field));
         assert!(!tap(&mut world, KeyCode::Backquote));
-        assert!(tap(&mut world, KeyCode::F12));
+        assert!(tap(&mut world, KeyCode::F9));
     }
 }

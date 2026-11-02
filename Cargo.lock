@@ -6261,6 +6261,7 @@ dependencies = [
  "js-sys",
  "ss13_admin",
  "ss13_chat",
+ "ss13_debug",
  "ss13_game",
  "ss13_net",
  "ss13_render",

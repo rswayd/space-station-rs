@@ -20,7 +20,7 @@ ss13_debug = { workspace = true, features = ["client"] }
 ss13_admin = { workspace = true, features = ["client"] }
 
 [features]
-# The debug overlay (F12) in a release build; debug builds always have it.
+# The debug overlay (F9) in a release build; debug builds always have it.
 debug-ui = []
 
 [lints]
