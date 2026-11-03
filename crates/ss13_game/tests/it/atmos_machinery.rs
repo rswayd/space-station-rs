@@ -463,6 +463,51 @@ fn metastation() {
         "{tank_count} tanks, {groups:?}"
     );
 
+    // A mapped pipe scrubber: its canister's limit is 500-600 MPa; switched on with plasma in
+    // its buffer, the plasma ends up in the canister and it draws `pipe_scrubber_active`.
+    {
+        use ss13_game::atmos_machinery::PortableAtmos;
+        use ss13_game::atmos_machinery::pipe_scrubber::PipeScrubber;
+        use ss13_mapload::DmAtom;
+        use ss13_shared::Appearance;
+
+        let mut q = server
+            .world_mut()
+            .query_filtered::<(Entity, &DmAtom), With<PipeScrubber>>();
+        let (scrubber, icon) = q
+            .iter(server.world())
+            .map(|(e, a)| (e, a.icon.clone()))
+            .next()
+            .expect("a mapped pipe scrubber");
+        let world = server.world_mut();
+        let limit = world
+            .get::<PipeScrubber>(scrubber)
+            .unwrap()
+            .tank
+            .pressure_limit;
+        assert!((500_000.0..=600_000.0).contains(&limit), "{limit}");
+        world.get_mut::<PipeScrubber>(scrubber).unwrap().on = true;
+        world.resource_scope(|world, mut net: Mut<Pipenet>| {
+            let mut p = world.get_mut::<PortableAtmos>(scrubber).unwrap();
+            let air = p.air_mut(&mut net).unwrap();
+            air.gas.set(ss13_atmos::GasId::PLASMA, 5.0);
+        });
+        run(&mut server, 2.0);
+        let world = server.world();
+        let s = world.get::<PipeScrubber>(scrubber).unwrap();
+        let in_tank = s.tank.air.gas.get(ss13_atmos::GasId::PLASMA);
+        println!("pipe scrubber: {in_tank:.2} mol plasma in its tank");
+        assert!(in_tank > 4.9, "{in_tank}");
+        let active = world
+            .resource::<ss13_mapload::IconIndex>()
+            .get(&icon, "pipe_scrubber_active")
+            .expect("pipe_scrubber_active");
+        assert_eq!(
+            world.get::<Appearance>(scrubber).unwrap().icon_state,
+            active
+        );
+    }
+
     // Cutting a tank of a two-tank group open: the shared gas goes onto the tile, a plated
     // frame is left; fastened and sealed, it is an empty tank back in its neighbour's group.
     {

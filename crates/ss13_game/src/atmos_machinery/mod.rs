@@ -198,6 +198,7 @@ impl Plugin for AtmosMachineryPlugin {
                     airlock_pump::process_airlock_pumps,
                     devices::process_he_pipes,
                     portable::process_portables,
+                    pipe_scrubber::process_pipe_scrubbers,
                     tank::process_tanks,
                     damage::process_container_damage,
                     alarm::process_alarms,
@@ -214,6 +215,7 @@ impl Plugin for AtmosMachineryPlugin {
                     looks::sync_pipe_looks,
                     looks::sync_machine_looks,
                     thermo::sync_thermo_looks,
+                    pipe_scrubber::pipe_scrubber_looks,
                     devices::glow_he_pipes,
                     canister::process_canister_shielding,
                     gas_visuals::sync_gas_visuals.run_if(air_tick_due),
@@ -657,6 +659,7 @@ pub mod gas_visuals;
 pub mod meter;
 pub mod miner;
 pub mod overclock;
+pub mod pipe_scrubber;
 pub mod tank;
 pub mod tank_frame;
 #[cfg(test)]

@@ -444,6 +444,7 @@ impl Plugin for TguiClientPlugin {
             .register_ui_view::<crate::interfaces::atmos::CanisterUi>()
             .register_ui_view::<crate::interfaces::atmos::PortablePumpUi>()
             .register_ui_view::<crate::interfaces::atmos::PortableScrubberUi>()
+            .register_ui_view::<crate::interfaces::atmos::PipeScrubberUi>()
             .register_ui_view::<crate::interfaces::air_alarm::AirAlarmUi>()
             .register_ui_view::<crate::interfaces::solar_control::SolarControlUi>()
             .register_ui_view::<crate::interfaces::mech_bay::MechBayPowerConsoleUi>()

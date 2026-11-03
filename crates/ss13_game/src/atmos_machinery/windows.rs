@@ -26,8 +26,8 @@ use ss13_tgui::interfaces::air_alarm::{
 use ss13_tgui::interfaces::atmos::{
     AtmosFilterData, AtmosFilterUi, AtmosMixerData, AtmosMixerUi, AtmosPumpData, AtmosPumpUi,
     AtmosTempGateData, AtmosTempGateUi, AtmosTempPumpData, AtmosTempPumpUi, CanisterData,
-    CanisterStatic, CanisterUi, GasToggle, HoldingTank, PortablePumpData, PortablePumpUi,
-    PortableScrubberData, PortableScrubberUi,
+    CanisterStatic, CanisterUi, GasToggle, HoldingTank, PipeScrubberData, PipeScrubberStatic,
+    PipeScrubberUi, PortablePumpData, PortablePumpUi, PortableScrubberData, PortableScrubberUi,
 };
 use ss13_tgui::interfaces::thermo_machine::{ThermoMachineData, ThermoMachineUi};
 use ss13_tgui::server::{
@@ -69,6 +69,7 @@ window!(MixerWindow, AtmosMixerUi);
 window!(CanisterWindow, CanisterUi);
 window!(PortablePumpWindow, PortablePumpUi);
 window!(PortableScrubberWindow, PortableScrubberUi);
+window!(PipeScrubberWindow, PipeScrubberUi);
 window!(AirAlarmWindow, AirAlarmUi);
 
 use super::alarm::{AirAlarm, AlarmMode, TLV_IGNORE, select_mode};
@@ -913,6 +914,102 @@ fn apply_portable_scrubber_acts(
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum PipeScrubberAct {
+    Power,
+    Direction,
+    Toggle(GasId),
+    Suppression,
+}
+
+impl ServerUi for PipeScrubberWindow {
+    type Source = (
+        &'static super::pipe_scrubber::PipeScrubber,
+        &'static PortableAtmos,
+        Option<&'static super::portable::NobCrystal>,
+    );
+    type UserParam = PortableUser;
+    type Act = PipeScrubberAct;
+
+    fn static_data(
+        (scrubber, ..): (
+            &super::pipe_scrubber::PipeScrubber,
+            &PortableAtmos,
+            Option<&super::portable::NobCrystal>,
+        ),
+    ) -> PipeScrubberStatic {
+        PipeScrubberStatic {
+            pressure_limit_pump: super::damage::PRESSURE_LIMIT as f32,
+            pressure_limit_tank: scrubber.tank.pressure_limit as f32,
+        }
+    }
+
+    fn data(
+        (scrubber, portable, crystal): (
+            &super::pipe_scrubber::PipeScrubber,
+            &PortableAtmos,
+            Option<&super::portable::NobCrystal>,
+        ),
+        _: Entity,
+        (net, ..): &SystemParamItem<'_, '_, PortableUser>,
+    ) -> PipeScrubberData {
+        PipeScrubberData {
+            on: scrubber.on,
+            direction: scrubber.pump_in,
+            connected: portable.port.is_some(),
+            pressure_tank: scrubber.tank.air.pressure().round() as f32,
+            pressure_pump: portable.air(net).map_or(0.0, Mix::pressure).round() as f32,
+            // The button toggles the internal canister's suppression, so it shows that one
+            // (tg shows the scrubber's own, which the button never changes).
+            has_hypernob_crystal: crystal.is_some() || scrubber.tank.crystal,
+            reaction_suppression_enabled: scrubber.tank.suppress,
+            filter_types: gas_toggles(scrubber.filter),
+        }
+    }
+
+    fn parse_act(action: &str, params: &UiParams) -> Result<PipeScrubberAct, UiReject> {
+        match action {
+            "power" => Ok(PipeScrubberAct::Power),
+            "direction" => Ok(PipeScrubberAct::Direction),
+            "toggle_filter" => gas_param(params).map(PipeScrubberAct::Toggle),
+            "reaction_suppression" => Ok(PipeScrubberAct::Suppression),
+            _ => Err(UiReject::UnknownAction),
+        }
+    }
+}
+
+fn apply_pipe_scrubber_acts(
+    mut acts: MessageReader<UiActed<PipeScrubberWindow>>,
+    mut scrubbers: Query<&mut super::pipe_scrubber::PipeScrubber>,
+) {
+    for acted in acts.read() {
+        let Ok(mut s) = scrubbers.get_mut(acted.source) else {
+            continue;
+        };
+        match acted.act {
+            PipeScrubberAct::Power => s.on = !s.on,
+            PipeScrubberAct::Direction => s.pump_in = !s.pump_in,
+            PipeScrubberAct::Toggle(g) => s.filter ^= 1 << g.0,
+            // The internal canister's; refused without its crystal (tg logs an href exploit).
+            PipeScrubberAct::Suppression => {
+                if s.tank.crystal {
+                    s.tank.suppress = !s.tank.suppress;
+                    let text = if s.tank.suppress { "on" } else { "off" };
+                    info!(
+                        "{:?} turned {text} the reaction suppression of {:?}'s tank",
+                        acted.actor, acted.source
+                    );
+                } else {
+                    warn!(
+                        "{:?} toggled reaction suppression on {:?} without a crystal",
+                        acted.actor, acted.source
+                    );
+                }
+            }
+        }
+    }
+}
+
 /// `replace_tank(user, close_valve)` without a new tank: the held tank to the user's hands
 /// (or the floor); a pump or scrubber turns off, a canister closes its valve when it was
 /// releasing into it (`unregister_holding`).
@@ -1616,6 +1713,10 @@ pub fn interact(
         open::<PortableScrubberWindow>(world, client, mob, target);
         return true;
     }
+    if e.contains::<super::pipe_scrubber::PipeScrubber>() {
+        open::<PipeScrubberWindow>(world, client, mob, target);
+        return true;
+    }
     false
 }
 
@@ -2032,7 +2133,13 @@ pub fn item_interaction(
         }
         return true;
     }
-    if is_portable && world.get::<TankAir>(held).is_some() {
+    // `pipe_scrubber/replace_tank` refuses every tank.
+    if is_portable
+        && world.get::<TankAir>(held).is_some()
+        && world
+            .get::<super::pipe_scrubber::PipeScrubber>(target)
+            .is_none()
+    {
         insert_tank(world, client, mob, held, target);
         return true;
     }
@@ -2125,6 +2232,7 @@ pub fn plugin(app: &mut App) {
         .register_ui::<CanisterWindow>()
         .register_ui::<PortablePumpWindow>()
         .register_ui::<PortableScrubberWindow>()
+        .register_ui::<PipeScrubberWindow>()
         .register_ui::<AirAlarmWindow>()
         .add_systems(
             Update,
@@ -2139,6 +2247,7 @@ pub fn plugin(app: &mut App) {
                     apply_canister_acts,
                     apply_portable_pump_acts,
                     apply_portable_scrubber_acts,
+                    apply_pipe_scrubber_acts,
                     apply_alarm_acts,
                 )
                     .in_set(UiSystems::Handle),

@@ -1,6 +1,6 @@
 //! Atmos machine windows: `AtmosPump`, `AtmosTempGate`, `AtmosTempPump`, `AtmosFilter`,
 //! `AtmosMixer`, `Canister`, `PortablePump`
-//! and `PortableScrubber` (`tgui/packages/tgui/interfaces/*.tsx`, the `ui_data` of
+//! `PortableScrubber` and `PipeScrubber` (`tgui/packages/tgui/interfaces/*.tsx`, the `ui_data` of
 //! `code/modules/atmospherics/machinery/`). The server halves live with the machines
 //! (`ss13_game::atmos_machinery`); this module has the data both halves share and the views.
 //!
@@ -190,6 +190,34 @@ impl UiInterface for PortableScrubberUi {
     const NAME: &'static str = "PortableScrubber";
     type Data = PortableScrubberData;
     type StaticData = ();
+}
+
+/// `pipe_scrubber` `ui_static_data`.
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct PipeScrubberStatic {
+    pub pressure_limit_pump: f32,
+    pub pressure_limit_tank: f32,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct PipeScrubberData {
+    pub on: bool,
+    /// `PUMP_IN`: buffer -> tank.
+    pub direction: bool,
+    pub connected: bool,
+    pub pressure_tank: f32,
+    pub pressure_pump: f32,
+    pub has_hypernob_crystal: bool,
+    pub reaction_suppression_enabled: bool,
+    pub filter_types: Vec<GasToggle>,
+}
+
+pub struct PipeScrubberUi;
+
+impl UiInterface for PipeScrubberUi {
+    const NAME: &'static str = "PipeScrubber";
+    type Data = PipeScrubberData;
+    type StaticData = PipeScrubberStatic;
 }
 
 /// `formatPressure` of `Canister.tsx`: kPa below 10 000, then SI pascals.
@@ -817,6 +845,108 @@ mod client_side {
                     ]
                     --
                     {EntityScene(holding)}
+                ]
+            }
+        }
+    }
+
+    /// A `RoundGauge` of `PipeScrubber.tsx`: good to 70% of the limit, average to 85%.
+    fn limit_gauge(value: f32, limit: f32) -> impl Scene + use<> {
+        let limit = limit.max(1.0);
+        let gauge = ProgressBar {
+            value,
+            min_value: 0.0,
+            max_value: limit,
+            ranges: vec![
+                (UiColor::Good, 0.0, limit * 0.7),
+                (UiColor::Average, limit * 0.7, limit * 0.85),
+                (UiColor::Bad, limit * 0.85, f32::INFINITY),
+            ],
+            ..Default::default()
+        };
+        let text = format_pressure(value);
+        bsn! { @ProgressBar gauge Children [ Text(text) ] }
+    }
+
+    impl ClientUi for PipeScrubberUi {
+        const WIDTH: f32 = 400.0;
+        const HEIGHT: f32 = 350.0;
+
+        fn content(st: &PipeScrubberStatic, data: &PipeScrubberData) -> impl Scene {
+            let on = data.on;
+            let on_text = if on { "On" } else { "Off" };
+            let (port_text, port_color) = if data.connected {
+                ("Connected", UiColor::Good)
+            } else {
+                ("Disconnected", UiColor::Bad)
+            };
+            let suppress = data.reaction_suppression_enabled;
+            let (sup_icon, sup_text) = if suppress {
+                ("snowflake", "Reaction Suppression Enabled")
+            } else {
+                ("times", "Reaction Suppression Disabled")
+            };
+            let suppression = data.has_hypernob_crystal.then(|| {
+                EntityScene(bsn! {
+                    @ss13_ui_kit::Button { @icon: sup_icon, @content: sup_text }
+                    ss13_ui_kit::Button { selected: suppress }
+                    Act("reaction_suppression")
+                })
+            });
+            let buffer = limit_gauge(data.pressure_pump, st.pressure_limit_pump);
+            let tank = limit_gauge(data.pressure_tank, st.pressure_limit_tank);
+            let dir_text = if data.direction {
+                "Buffer → Tank"
+            } else {
+                "Tank → Buffer"
+            };
+            let filters = data.direction.then(|| {
+                let buttons = gas_buttons(&data.filter_types);
+                EntityScene(bsn! {
+                    Node { flex_direction: FlexDirection::Column }
+                    Children [
+                        Text("Filtering gases from the buffer into the internal tank.")
+                        --
+                        Node { flex_wrap: FlexWrap::Wrap }
+                        Children [ {buttons} ]
+                    ]
+                })
+            });
+            let dumping = (!data.direction).then_some(EntityScene(
+                bsn! { Text("Dumping internal tank gases into the buffer.") },
+            ));
+            bsn! {
+                @WindowContent
+                Children [
+                    @Section { @title: "Status", @buttons: bsn! { Node Children [ {suppression} ] } }
+                    Children [
+                        @LabeledList
+                        Children [
+                            @LabeledListItem { @label: "Buffer Port", @content: port_text, @color: port_color }
+                            --
+                            @LabeledListItem { @label: "Buffer" }
+                            Children [ {EntityScene(buffer)} ]
+                            --
+                            @LabeledListItem { @label: "Tank" }
+                            Children [ {EntityScene(tank)} ]
+                            --
+                            @LabeledListItem { @label: "Pump" }
+                            Children [
+                                @ss13_ui_kit::Button { @icon: "power-off", @content: on_text }
+                                ss13_ui_kit::Button { selected: on }
+                                Act("power")
+                            ]
+                        ]
+                    ]
+                    --
+                    @Section {
+                        @title: "Direction",
+                        @buttons: bsn! {
+                            @ss13_ui_kit::Button { @content: dir_text }
+                            Act("direction")
+                        },
+                    }
+                    Children [ {filters} -- {dumping} ]
                 ]
             }
         }

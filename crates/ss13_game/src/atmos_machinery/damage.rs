@@ -223,6 +223,9 @@ pub fn canister_break(world: &mut World, canister: Entity, pos: TilePos) {
 /// `canister/on_deconstruction`: breaks first if whole, then iron sheets (10 taken apart, 5
 /// smashed).
 pub fn deconstruct(world: &mut World, target: Entity, disassembled: bool) -> bool {
+    if super::pipe_scrubber::deconstruct(world, target) {
+        return true;
+    }
     if world.get::<Canister>(target).is_none() {
         return tank_deconstruct(world, target, disassembled);
     }

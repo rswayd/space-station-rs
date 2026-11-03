@@ -137,6 +137,10 @@ pub fn insert_nob_crystal(world: &mut World, client: Entity, held: Entity, targe
         return true;
     }
     world.entity_mut(target).insert(NobCrystal::default());
+    // `pipe_scrubber/insert_nob_crystal`: its internal canister gets one too.
+    if let Some(mut s) = world.get_mut::<super::pipe_scrubber::PipeScrubber>(target) {
+        s.tank.crystal = true;
+    }
     crate::tools::tell(
         world,
         client,
@@ -298,8 +302,20 @@ pub fn init_portables(world: &mut World, found: &[(Entity, DmAtmosDevice, TilePo
                 huge: is_under(path, HUGE_SCRUBBER),
                 movable: is_under(path, MOVABLE_HUGE_SCRUBBER),
             });
+        } else if is_under(path, super::pipe_scrubber::PIPE_SCRUBBER) {
+            entity.insert(super::pipe_scrubber::PipeScrubber {
+                on: dm.on,
+                pump_in: dm.direction,
+                volume_rate: if dm.volume_rate > 0.0 {
+                    dm.volume_rate
+                } else {
+                    1000.0
+                },
+                filter: super::gas_mask(&dm.filter_types),
+                tank: super::pipe_scrubber::InternalTank::new(f64::from(quality.unit())),
+            });
         } else {
-            // shortcut: pipe scrubbers and bluespace sinks hold gas but do nothing yet.
+            // shortcut: bluespace sinks hold gas but do nothing yet.
         }
         entity.insert(PortableAtmos {
             air: Some(air),

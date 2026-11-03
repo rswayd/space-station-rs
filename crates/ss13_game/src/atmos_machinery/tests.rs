@@ -421,6 +421,36 @@ fn tank_groups_merge_on_joining_and_share_on_leaving() {
 }
 
 #[test]
+fn pipe_scrubber_moves_scrubbed_gases_into_its_tank() {
+    use super::pipe_scrubber::{InternalTank, scrub};
+    // A 200 L buffer with N2 and plasma; 1000 L/fire takes all of it (`min(1, 1000 / 200)`).
+    let mut buffer = PipeAir::new(200.0);
+    buffer.gas.set(GasId::N2, 10.0);
+    buffer.gas.set(GasId::PLASMA, 4.0);
+    buffer.gas.temperature = T20C;
+    let mut tank = InternalTank::new(0.0);
+    let plasma_only = 1 << GasId::PLASMA.0;
+    scrub(&mut buffer, &mut tank.air, plasma_only, 1000.0);
+    assert!(close(tank.air.gas.get(GasId::PLASMA), 4.0));
+    assert!(close(tank.air.gas.get(GasId::N2), 0.0));
+    assert!(close(buffer.gas.get(GasId::N2), 10.0));
+    assert!(close(buffer.gas.get(GasId::PLASMA), 0.0));
+    // A smaller rate takes its share of the buffer: 100 / 200 of it.
+    buffer.gas.set(GasId::PLASMA, 4.0);
+    scrub(&mut buffer, &mut tank.air, plasma_only, 100.0);
+    assert!(close(tank.air.gas.get(GasId::PLASMA), 6.0));
+    // At `PUMP_MAX_PRESSURE` the tank takes nothing more.
+    tank.air.gas.set(GasId::PLASMA, 1e6);
+    scrub(&mut buffer, &mut tank.air, plasma_only, 1000.0);
+    assert!(close(buffer.gas.get(GasId::PLASMA), 2.0));
+    // The internal canister breaks at 40% of 300.
+    assert!(!tank.broken());
+    tank.integrity = 120.0;
+    assert!(tank.broken());
+    assert_eq!(InternalTank::new(1.0).pressure_limit, 600_000.0);
+}
+
+#[test]
 fn canisters_fill_and_release_like_tg() {
     let mut air = dm("/obj/machinery/portable_atmospherics/canister/air");
     air.volume = 2000.0;
