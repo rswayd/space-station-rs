@@ -83,6 +83,23 @@ pub fn examine_lines(world: &World, examiner: Entity, target: Entity) -> (String
             format!("Это {} предмет.", weight_class_text(w_class.w_class)),
         ));
     }
+    // `multitool/examine`.
+    if matches!(
+        crate::tools::tool_of(world, target),
+        Some((crate::tools::ToolKind::Multitool, _))
+    ) {
+        let line = match crate::tools::multitool_buffer(world, target) {
+            Some(b) => {
+                let name = world
+                    .get::<DmName>(b)
+                    .map(|n| crate::vending::plain_name(&n.name).to_owned())
+                    .unwrap_or_default();
+                format!("В буфере: {name}.")
+            }
+            None => "Буфер пуст.".to_owned(),
+        };
+        lines.push((Span::Notice, line));
+    }
     crate::chem::examine_lines(world, target, &mut lines);
     crate::botany::examine_lines(world, target, &mut lines);
     crate::atmos_machinery::examine_lines(world, target, &mut lines);

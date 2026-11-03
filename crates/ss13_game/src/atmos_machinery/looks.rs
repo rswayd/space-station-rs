@@ -625,6 +625,15 @@ fn redraw_portables(world: &mut World, icons: &AtmosIcons) {
                 }
             }
         } else if let Some(a) = alarm {
+            // `update_icon_state`: `alarmp`, or `alarmp_remote` with a sensor.
+            let base = if a.sensor.is_some() {
+                "alarmp_remote"
+            } else {
+                "alarmp"
+            };
+            if let Some(s) = icons.get(&atom.icon, base) {
+                bases.push((e, s));
+            }
             if unpowered {
                 updates.push((e, Vec::new()));
                 continue;

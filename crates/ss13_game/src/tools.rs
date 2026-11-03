@@ -60,6 +60,22 @@ pub fn tool_of(world: &World, item: Entity) -> Option<(ToolKind, f32)> {
     Some((ToolKind::from_dm(&tool.behaviour)?, tool.speed))
 }
 
+/// tg `/obj/item/multitool` `buffer`: the machine it remembers for linking (`set_buffer`). No
+/// component: empty.
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MultitoolBuffer(pub Entity);
+
+/// The multitool's buffer, if what it holds still exists (`remove_buffer` on `COMSIG_QDELETING`).
+pub fn multitool_buffer(world: &World, tool: Entity) -> Option<Entity> {
+    let target = world.get::<MultitoolBuffer>(tool)?.0;
+    world.get_entity(target).is_ok().then_some(target)
+}
+
+/// `set_buffer`.
+pub fn set_multitool_buffer(world: &mut World, tool: Entity, target: Entity) {
+    world.entity_mut(tool).insert(MultitoolBuffer(target));
+}
+
 /// A welding tool's live state. Starts full and off (`starting_fuel`, `welding = FALSE`).
 #[derive(Component, Clone, Debug, PartialEq)]
 pub struct Welder {

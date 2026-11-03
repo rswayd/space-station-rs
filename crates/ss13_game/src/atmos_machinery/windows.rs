@@ -1125,6 +1125,7 @@ pub enum AlarmAct {
     Alarm,
     Reset,
     Lock,
+    DisconnectSensor,
 }
 
 type AlarmUser = (
@@ -1143,6 +1144,12 @@ type AlarmUser = (
     Query<'static, 'static, (&'static VentScrubber, Option<&'static DmName>)>,
     Query<'static, 'static, &'static DmName>,
     crate::silicon::interact::SiliconUsers<'static, 'static>,
+    Query<
+        'static,
+        'static,
+        (&'static TilePos, &'static super::control::AirSensor),
+        Without<AirAlarm>,
+    >,
 );
 
 /// tg `REF(vent)` stand-in: the entity bits.
@@ -1177,11 +1184,27 @@ impl ServerUi for AirAlarmWindow {
     fn data(
         (alarm, &pos): (&AirAlarm, &TilePos),
         user: Entity,
-        (atmos, area_atmos, vents, scrubbers, names, silicons): &SystemParamItem<'_, '_, AlarmUser>,
+        (atmos, area_atmos, vents, scrubbers, names, silicons, sensors): &SystemParamItem<
+            '_,
+            '_,
+            AlarmUser,
+        >,
     ) -> AirAlarmData {
         let silicon = silicons.contains(user);
         let mut env_data = Vec::new();
-        if let Some(env) = atmos.air(pos) {
+        if alarm.sensor.is_some() {
+            env_data.push(EnvEntry {
+                name: "Linked area".into(),
+                value: alarm
+                    .area
+                    .and_then(|a| names.get(a).ok())
+                    .map(|n| crate::vending::plain_name(&n.name).to_owned())
+                    .unwrap_or_default(),
+                danger: None,
+            });
+        }
+        let sensed = super::alarm::sensed_tile(alarm, pos, sensors);
+        if let Some(env) = sensed.and_then(|p| atmos.air(p)) {
             let total = env.total_moles();
             let (temp, pressure) = (env.temperature, env.pressure());
             env_data.push(EnvEntry {
@@ -1319,6 +1342,8 @@ impl ServerUi for AirAlarmWindow {
             danger_level: alarm.danger_level,
             atmos_alarm: alarm.area_danger,
             fire_alarm: false,
+            sensor: alarm.sensor.is_some(),
+            allow_link_change: alarm.allow_link_change,
             env_data,
             tlv_settings,
             controls,
@@ -1402,6 +1427,7 @@ impl ServerUi for AirAlarmWindow {
             "alarm" => AlarmAct::Alarm,
             "reset" => AlarmAct::Reset,
             "lock" => AlarmAct::Lock,
+            "disconnect_sensor" => AlarmAct::DisconnectSensor,
             _ => return Err(UiReject::UnknownAction),
         })
     }
@@ -1526,6 +1552,11 @@ fn alarm_act(world: &mut World, alarm: Entity, client: Entity, actor: Entity, ac
         AlarmAct::Reset => {
             if let Some(mut a) = world.get_mut::<AirAlarm>(alarm) {
                 a.danger_level = super::alarm::ALERT_NONE;
+            }
+        }
+        AlarmAct::DisconnectSensor => {
+            if state.allow_link_change && state.sensor.is_some() {
+                super::alarm::disconnect_sensor(world, alarm);
             }
         }
         AlarmAct::Lock => {}
@@ -2014,6 +2045,11 @@ pub fn item_interaction(
         return true;
     }
     if super::thermo::item_interaction(world, client, target, tool, modifiers.right) {
+        return true;
+    }
+    if tool == Some(ToolKind::Multitool)
+        && super::control::multitool_act(world, client, held, target, modifiers.right)
+    {
         return true;
     }
     // `temperature_gate/multitool_act`: flips which side of the target lets gas through.

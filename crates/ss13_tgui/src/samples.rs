@@ -603,7 +603,10 @@ fn air_alarm() -> Sample {
             danger_level: 1,
             atmos_alarm: false,
             fire_alarm: false,
+            sensor: true,
+            allow_link_change: true,
             env_data: vec![
+                env("Linked area", "Ordnance Freezer Chamber", None),
                 env("Pressure", "98.4 kPa", Some(0)),
                 env("Temperature", "293.15 K (20 C)", Some(0)),
                 env("Oxygen", "20.9%", Some(0)),

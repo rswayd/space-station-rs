@@ -93,6 +93,9 @@ pub struct AirAlarmData {
     pub danger_level: u8,
     pub atmos_alarm: bool,
     pub fire_alarm: bool,
+    /// A sensor is connected (`connected_sensor`).
+    pub sensor: bool,
+    pub allow_link_change: bool,
     pub env_data: Vec<EnvEntry>,
     pub tlv_settings: Vec<TlvEntry>,
     pub controls: Option<AlarmControls>,
@@ -184,6 +187,20 @@ mod client_side {
                 c.panic_siphon_path.clone()
             },
         )]);
+        // shortcut: tgui's `Button.Confirm` asks a second click; a plain button here.
+        let disconnect: Vec<_> = (data.sensor && data.allow_link_change)
+            .then(|| {
+                bsn! {
+                    @StackItem
+                    Children [
+                        @ss13_ui_kit::Button { @icon: "link-slash", @content: "Disconnect Sensor" }
+                        ss13_ui_kit::Button { color: UiColor::Danger }
+                        Act("disconnect_sensor")
+                    ]
+                }
+            })
+            .into_iter()
+            .collect();
         bsn! {
             @Stack { @vertical: true }
             Children [
@@ -209,6 +226,8 @@ mod client_side {
                 {EntityScene(screen_button("cog", "Operating Mode", "modes"))}
                 --
                 {EntityScene(screen_button("chart-bar", "Alarm Thresholds", "thresholds"))}
+                --
+                {disconnect}
             ]
         }
     }

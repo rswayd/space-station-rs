@@ -5,9 +5,13 @@
 //!
 //! Access: the interface opens locked; an ID with `req_access` (`atmos_equip`) toggles the
 //! lock (click with the ID, or right click), as tg `togglelock`.
+//!
+//! A linked air sensor (`connected_sensor`: the `link` helper's chamber at round start, or a
+//! multitool carrying the sensor) moves the alarm to the sensor: it rates the sensor's tile
+//! (nothing while the sensor is off) and controls the sensor's area. A mapped link cannot be
+//! undone from the alarm (`allow_link_change`) until the sensor is reset.
 // shortcut: no wires, no emag (flood and vent siphon modes stay hidden), no construction
-// stages, no air sensors (`link` helper), no fire alarm / fault status; add with wires and
-// atmos control consoles.
+// stages, no fire alarm / fault status; add with wires.
 
 use std::collections::HashSet;
 
@@ -374,6 +378,10 @@ pub struct AirAlarm {
     pub initial: (Tlv, Tlv),
     pub warning: Option<&'static str>,
     pub next_warning: f64,
+    /// `connected_sensor`.
+    pub sensor: Option<Entity>,
+    /// `allow_link_change`: the window may disconnect the sensor and a multitool link another.
+    pub allow_link_change: bool,
     /// Total moles and temperature last rated: the same air is not rated again (tg rates on
     /// `COMSIG_TURF_EXPOSE`, i.e. only while the tile's air changes).
     sampled: Option<(f64, f64)>,
@@ -395,6 +403,8 @@ impl AirAlarm {
             initial: (Tlv::PRESSURE, Tlv::TEMPERATURE),
             warning: None,
             next_warning: 0.0,
+            sensor: None,
+            allow_link_change: true,
             sampled: None,
         }
     }
@@ -475,14 +485,14 @@ pub fn init_alarms(world: &mut World) {
         if is_under(&dm.path, AIR_ALARM) {
             alarms.push((e, dm.clone(), pos));
         } else if is_under(&dm.path, HELPER) {
-            helpers.push((e, dm.path.clone(), pos));
+            helpers.push((e, dm.path.clone(), pos, dm.chamber_id.clone()));
         }
     }
     let count = alarms.len();
     for (e, dm, pos) in alarms {
         let area = world.resource::<Areas>().area_at(pos);
         let mut alarm = AirAlarm::new(area, &dm);
-        for (_, path, _) in helpers.iter().filter(|(_, _, p)| *p == pos) {
+        for (_, path, _, chamber) in helpers.iter().filter(|(_, _, p, _)| *p == pos) {
             let helper = path.strip_prefix(HELPER).unwrap_or_default();
             match helper {
                 "/unlocked" => alarm.locked = false,
@@ -520,7 +530,19 @@ pub fn init_alarms(world: &mut World) {
                     alarm.gases = [Tlv::NO_CHECKS; GAS_COUNT];
                     alarm.initial = (Tlv::NO_CHECKS, Tlv::NO_CHECKS);
                 }
-                // shortcut: `link` (air sensors) and `surgery` do nothing yet.
+                // `setup_chamber_link`: the sensor of that chamber on this z-level; the link
+                // helper's `allow_link_change` (never set on the maps) is FALSE.
+                "/link" => match chamber_sensor(world, chamber, pos.z) {
+                    Some(sensor) => {
+                        alarm.sensor = Some(sensor);
+                        alarm.allow_link_change = false;
+                        alarm.area = world
+                            .get::<TilePos>(sensor)
+                            .and_then(|&p| world.resource::<Areas>().area_at(p));
+                    }
+                    None => warn!("air alarm at {pos:?}: no sensor with chamber_id {chamber}"),
+                },
+                // shortcut: `surgery` does nothing yet.
                 _ => {}
             }
         }
@@ -530,6 +552,64 @@ pub fn init_alarms(world: &mut World) {
         world.despawn(e);
     }
     world.resource_mut::<super::AtmosMachineryReport>().alarms = count;
+}
+
+/// The first `/obj/machinery/air_sensor` of `chamber` on z-level `z`.
+fn chamber_sensor(world: &mut World, chamber: &str, z: u16) -> Option<Entity> {
+    let mut q = world.query::<(Entity, &DmAtmosDevice, &TilePos)>();
+    q.iter(world)
+        .filter(|(_, dm, p)| {
+            is_under(&dm.path, ss13_mapload::atmos_machine::AIR_SENSOR_ROOT)
+                && dm.chamber_id == chamber
+                && p.z == z
+        })
+        .map(|(e, ..)| e)
+        .min()
+}
+
+/// The alarm a sensor is connected to (`connected_airalarm`).
+pub fn alarm_of(world: &mut World, sensor: Entity) -> Option<Entity> {
+    let mut q = world.query::<(Entity, &AirAlarm)>();
+    q.iter(world)
+        .find(|(_, a)| a.sensor == Some(sensor))
+        .map(|(e, _)| e)
+}
+
+/// `connect_sensor`: the alarm rates and controls the sensor's place.
+pub fn connect_sensor(world: &mut World, alarm: Entity, sensor: Entity) {
+    let area = world
+        .get::<TilePos>(sensor)
+        .and_then(|&p| world.resource::<Areas>().area_at(p));
+    if let Some(mut a) = world.get_mut::<AirAlarm>(alarm) {
+        a.sensor = Some(sensor);
+        a.area = area;
+        a.sampled = None;
+    }
+}
+
+/// `disconnect_sensor`: back to its own tile and area.
+pub fn disconnect_sensor(world: &mut World, alarm: Entity) {
+    let area = world
+        .get::<TilePos>(alarm)
+        .and_then(|&p| world.resource::<Areas>().area_at(p));
+    if let Some(mut a) = world.get_mut::<AirAlarm>(alarm) {
+        a.sensor = None;
+        a.area = area;
+        a.sampled = None;
+    }
+}
+
+/// Where the alarm reads the air: its sensor's tile (`None` while the sensor is off), else its
+/// own.
+pub fn sensed_tile(
+    alarm: &AirAlarm,
+    own: TilePos,
+    sensors: &Query<(&TilePos, &super::control::AirSensor), Without<AirAlarm>>,
+) -> Option<TilePos> {
+    match alarm.sensor {
+        None => Some(own),
+        Some(s) => sensors.get(s).ok().filter(|(_, s)| s.on).map(|(p, _)| *p),
+    }
 }
 
 /// Words the alarms speak this fire, for [`speak_alarms`].
@@ -543,6 +623,7 @@ pub fn process_alarms(
     time: Res<Time>,
     area_atmos: Res<AreaAtmos>,
     mut alarms: Query<(Entity, &TilePos, &mut AirAlarm, Has<Unpowered>)>,
+    sensors: Query<(&TilePos, &super::control::AirSensor), Without<AirAlarm>>,
     mut vents: Query<&mut VentPump>,
     mut scrubbers: Query<&mut VentScrubber>,
     mut speech: Local<Vec<(Entity, &'static str)>>,
@@ -555,7 +636,23 @@ pub fn process_alarms(
         if unpowered {
             continue;
         }
-        let Some(env) = atmos.air(pos) else { continue };
+        // A sensor that is gone (`COMSIG_QDELETING`): back to the alarm's own tile.
+        if let Some(s) = alarm.sensor
+            && sensors.get(s).is_err()
+        {
+            commands.queue(move |world: &mut World| {
+                if world
+                    .get::<AirAlarm>(e)
+                    .is_some_and(|a| a.sensor == Some(s))
+                {
+                    disconnect_sensor(world, e);
+                }
+            });
+            continue;
+        }
+        let Some(env) = sensed_tile(&alarm, pos, &sensors).and_then(|p| atmos.air(p)) else {
+            continue;
+        };
         let sample = Some((env.total_moles(), env.temperature));
         if alarm.sampled != sample {
             alarm.sampled = sample;

@@ -10,8 +10,11 @@
 //!   monitored meter on its z-level: the gas, and, with `control`, the inlet's power and rate and
 //!   the outlet's power and pressure bound. `reconnecting` consoles pick another station chamber
 //!   from a list (not the distro or waste loops).
-// shortcut: no multitool linking of sensors and ports (or air alarms), no taking a sensor off
-// the wall; `oview(4)` is taken nearest first.
+//! - Multitool ([`multitool_act`]): an injector or vent goes into the buffer, and onto a
+//!   buffered sensor as its port; a sensor configures the buffered device and goes into the
+//!   buffer; an unlocked air alarm links the buffered sensor; right-click resets a sensor.
+// shortcut: no taking a sensor off the wall (`attack_hand` into `/obj/item/air_sensor`, its
+// wrench, welder and chamber choice); `oview(4)` is taken nearest first.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -29,8 +32,8 @@ use ss13_tgui::prompt::{Ask, PromptAnswer, PromptAnswered, PromptKind, PromptSys
 use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiActed, UiParams, UiReject, UiSystems};
 
 use super::devices::{
-    ATMOS_PUMP_MAX_PRESSURE, EXTERNAL_BOUND, INTERNAL_BOUND, MAX_OUTPUT_PRESSURE,
-    MAX_TRANSFER_RATE, OutletInjector, VentPump,
+    ATMOS_PUMP_MAX_PRESSURE, INTERNAL_BOUND, MAX_OUTPUT_PRESSURE, MAX_TRANSFER_RATE,
+    OutletInjector, VentPump,
 };
 use super::meter::Meter;
 use crate::obj_damage::is_under;
@@ -112,13 +115,13 @@ fn init_control(world: &mut World) {
         .collect();
     for (e, dm, pos) in &found {
         if is_under(&dm.path, SENSOR) {
-            let (inlet, outlet) = link_ports(world, *pos);
             world.entity_mut(*e).insert(AirSensor {
                 chamber: dm.chamber_id.clone(),
-                inlet,
-                outlet,
+                inlet: None,
+                outlet: None,
                 on: true,
             });
+            link_ports(world, *e, *pos);
         } else if is_under(&dm.path, MONITORED_METER) {
             world.entity_mut(*e).insert(MonitoredMeter {
                 chamber: dm.chamber_id.clone(),
@@ -147,59 +150,210 @@ fn init_control(world: &mut World) {
     }
 }
 
-/// `post_machine_initialize`: the first injector and vent in `oview(4)`; plain ones are
-/// configured for the chamber.
-fn link_ports(world: &mut World, pos: TilePos) -> (Option<Entity>, Option<Entity>) {
-    let mut q = world.query::<(
-        Entity,
-        &TilePos,
-        &DmAtmosDevice,
-        Has<OutletInjector>,
-        Has<VentPump>,
-    )>();
-    let mut near: Vec<(u32, Entity, String, bool)> = q
+/// `post_machine_initialize`: the first injector and vent in `oview(4)` (`configure` each until
+/// both are set).
+fn link_ports(world: &mut World, sensor: Entity, pos: TilePos) {
+    let mut q =
+        world.query_filtered::<(Entity, &TilePos), Or<(With<OutletInjector>, With<VentPump>)>>();
+    let mut near: Vec<(u32, Entity)> = q
         .iter(world)
-        .filter(|(_, _, _, injector, vent)| *injector || *vent)
-        .filter_map(|(e, p, dm, injector, _)| {
+        .filter_map(|(e, p)| {
             let d = pos.chebyshev(*p)?;
-            (d > 0 && d <= SENSOR_RANGE).then(|| (d, e, dm.path.clone(), injector))
+            (d > 0 && d <= SENSOR_RANGE).then_some((d, e))
         })
         .collect();
-    near.sort_by_key(|&(d, e, ..)| (d, e));
-    let (mut inlet, mut outlet) = (None, None);
-    for (_, e, path, injector) in near {
+    near.sort_by_key(|&(d, e)| (d, e));
+    for (_, e) in near {
+        if world
+            .get::<AirSensor>(sensor)
+            .is_some_and(|s| s.inlet.is_some() && s.outlet.is_some())
+        {
+            break;
+        }
         let Some(&target) = world.get::<TilePos>(e) else {
             continue;
         };
-        if !crate::mobs::ai::behaviors::can_see(world, pos, target, SENSOR_RANGE) {
-            continue;
+        if crate::mobs::ai::behaviors::can_see(world, pos, target, SENSOR_RANGE) {
+            configure(world, sensor, e, false);
         }
-        if injector && inlet.is_none() {
-            if path == PLAIN_INJECTOR
-                && let Some(mut i) = world.get_mut::<OutletInjector>(e)
+    }
+}
+
+/// `INLET` / `OUTLET`: which port of a sensor a device became.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SensorPort {
+    Inlet,
+    Outlet,
+}
+
+/// `air_sensor/configure`: an injector on the sensor's z-level becomes its inlet (a plain one
+/// at the maximum rate), a vent pump its outlet (a plain one a full-pressure siphon off its
+/// area's alarms, `disconnect_from_area`). Without `reconfigure` a port already set stays.
+pub fn configure(
+    world: &mut World,
+    sensor: Entity,
+    port: Entity,
+    reconfigure: bool,
+) -> Option<SensorPort> {
+    let (&at, &port_at) = (world.get::<TilePos>(sensor)?, world.get::<TilePos>(port)?);
+    let current = world.get::<AirSensor>(sensor)?.clone();
+    if at.z != port_at.z {
+        return None;
+    }
+    let path = world.get::<DmAtmosDevice>(port)?.path.clone();
+    if world.get::<OutletInjector>(port).is_some() {
+        if !reconfigure && current.inlet.is_some() {
+            return Some(SensorPort::Inlet);
+        }
+        if path == PLAIN_INJECTOR
+            && let Some(mut i) = world.get_mut::<OutletInjector>(port)
+        {
+            i.volume_rate = MAX_TRANSFER_RATE;
+        }
+        world.get_mut::<AirSensor>(sensor)?.inlet = Some(port);
+        return Some(SensorPort::Inlet);
+    }
+    if world.get::<VentPump>(port).is_some() {
+        if !reconfigure && current.outlet.is_some() {
+            return Some(SensorPort::Outlet);
+        }
+        if path == PLAIN_VENT {
+            let area = world.get::<VentPump>(port).and_then(|v| v.area);
+            if let Some(area) = area
+                && let Some(lists) = world.resource_mut::<super::AreaAtmos>().0.get_mut(&area)
             {
-                i.volume_rate = MAX_TRANSFER_RATE;
+                lists.vents.retain(|&e| e != port);
             }
-            inlet = Some(e);
-        } else if !injector && outlet.is_none() {
-            if path == PLAIN_VENT
-                && let Some(mut v) = world.get_mut::<VentPump>(e)
-            {
-                // A siphon at full pressure, off its area's alarms.
+            if let Some(mut v) = world.get_mut::<VentPump>(port) {
                 v.area = None;
                 v.releasing = false;
                 v.pressure_checks = INTERNAL_BOUND;
                 v.internal_pressure_bound = MAX_OUTPUT_PRESSURE;
                 v.external_pressure_bound = 0.0;
             }
-            outlet = Some(e);
         }
-        if inlet.is_some() && outlet.is_some() {
-            break;
+        world.get_mut::<AirSensor>(sensor)?.outlet = Some(port);
+        return Some(SensorPort::Outlet);
+    }
+    None
+}
+
+fn short_name(world: &World, e: Entity) -> String {
+    world
+        .get::<DmName>(e)
+        .map(|n| crate::vending::plain_name(&n.name).to_owned())
+        .unwrap_or_default()
+}
+
+/// A multitool (`held`) on a sensor, an injector, a vent pump or an air alarm (`multitool_act`,
+/// `multitool_act_secondary` with `right`). True when the click was theirs.
+pub fn multitool_act(
+    world: &mut World,
+    client: Entity,
+    held: Entity,
+    target: Entity,
+    right: bool,
+) -> bool {
+    use crate::tools::{multitool_buffer, set_multitool_buffer, tell};
+    use ss13_chat::Span;
+    let buffer = multitool_buffer(world, held);
+    let buffered_sensor = buffer.filter(|&b| world.get::<AirSensor>(b).is_some());
+    if world.get::<AirSensor>(target).is_some() {
+        if right {
+            reset_sensor(world, target);
+            tell(world, client, Span::Notice, "порты сброшены");
+        } else {
+            sensor_multitool(world, client, held, target, buffer);
+        }
+        return true;
+    }
+    if right {
+        return false;
+    }
+    let injector = world.get::<OutletInjector>(target).is_some();
+    if injector || world.get::<VentPump>(target).is_some() {
+        // `outlet_injector`/`vent_pump` `multitool_act`: into the buffer, and with a sensor
+        // there, straight onto that sensor.
+        set_multitool_buffer(world, held, target);
+        if let Some(sensor) = buffered_sensor {
+            sensor_multitool(world, client, held, sensor, Some(target));
+        } else {
+            let text = if injector {
+                "инжектор сохранён в буфер"
+            } else {
+                "вентиляция сохранена в буфер"
+            };
+            tell(world, client, Span::Notice, text);
+        }
+        return true;
+    }
+    // `airalarm/multitool_act`: only unlocked, only with a sensor in the buffer.
+    let Some(alarm) = world.get::<super::AirAlarm>(target).cloned() else {
+        return false;
+    };
+    let Some(sensor) = buffered_sensor.filter(|_| !alarm.locked) else {
+        return false;
+    };
+    if !alarm.allow_link_change {
+        tell(world, client, Span::Warning, "привязка отключена");
+    } else if alarm.sensor.is_some() || super::alarm::alarm_of(world, sensor).is_some() {
+        tell(world, client, Span::Warning, "датчик уже подключён!");
+    } else {
+        super::alarm::connect_sensor(world, target, sensor);
+        tell(world, client, Span::Notice, "датчик подключён");
+    }
+    true
+}
+
+/// `air_sensor/multitool_act`: the buffered injector or vent becomes a port, then the sensor
+/// goes into the buffer.
+fn sensor_multitool(
+    world: &mut World,
+    client: Entity,
+    held: Entity,
+    sensor: Entity,
+    buffer: Option<Entity>,
+) {
+    use crate::tools::tell;
+    use ss13_chat::Span;
+    if let Some(port) = buffer
+        && let Some(kind) = configure(world, sensor, port, true)
+    {
+        let side = match kind {
+            SensorPort::Inlet => "входной порт",
+            SensorPort::Outlet => "выходной порт",
+        };
+        let (name, port_name) = (short_name(world, sensor), short_name(world, port));
+        tell(world, client, Span::Notice, format!("{side} настроен"));
+        tell(
+            world,
+            client,
+            Span::Notice,
+            format!("{name}: {port_name} подключён как {side}."),
+        );
+    }
+    let name = short_name(world, sensor);
+    tell(
+        world,
+        client,
+        Span::Notice,
+        format!("{name} добавлен в буфер мультитула."),
+    );
+    crate::tools::set_multitool_buffer(world, held, sensor);
+}
+
+/// `air_sensor/reset`: no ports; its alarm lets go and may link anew (`allow_link_change`).
+pub fn reset_sensor(world: &mut World, sensor: Entity) {
+    if let Some(mut s) = world.get_mut::<AirSensor>(sensor) {
+        s.inlet = None;
+        s.outlet = None;
+    }
+    if let Some(alarm) = super::alarm::alarm_of(world, sensor) {
+        super::alarm::disconnect_sensor(world, alarm);
+        if let Some(mut a) = world.get_mut::<super::AirAlarm>(alarm) {
+            a.allow_link_change = true;
         }
     }
-    let _ = EXTERNAL_BOUND;
-    (inlet, outlet)
 }
 
 /// `scan`: per chamber id, the closest sensor or monitored meter on the console's z-level.

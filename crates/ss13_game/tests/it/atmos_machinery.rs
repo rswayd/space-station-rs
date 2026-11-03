@@ -886,6 +886,112 @@ fn metastation() {
         assert_eq!(made.len(), 1, "one pellet south of the crystallizer");
         assert!(made[0].contains(' '), "a quality word in front: {made:?}");
         server.update();
+
+        // Chamber sensors: the three `link` helpers tie their alarms to the ordnance freezer,
+        // ordnance burn and engine sensors, read there and locked to them; plain outlet vents
+        // left their areas' alarm lists. A multitool: right-click resets a sensor (the alarm
+        // lets go and may relink), the sensor goes into the buffer, the unlocked alarm links it
+        // again.
+        use ss13_game::atmos_machinery::control::{self, AirSensor};
+        use ss13_game::atmos_machinery::{AirAlarm, AreaAtmos, alarm};
+        let world = server.world_mut();
+        let mut q = world.query::<(Entity, &AirAlarm, &TilePos)>();
+        let linked: Vec<(Entity, Entity, TilePos)> = q
+            .iter(world)
+            .filter_map(|(e, a, &p)| Some((e, a.sensor?, p)))
+            .collect();
+        assert_eq!(linked.len(), 3, "the three link helpers");
+        for &(e, sensor, _) in &linked {
+            let a = world.get::<AirAlarm>(e).unwrap();
+            let sensor_pos = *world.get::<TilePos>(sensor).unwrap();
+            assert!(!a.allow_link_change);
+            assert_eq!(a.area, world.resource::<Areas>().area_at(sensor_pos));
+            assert!(world.get::<AirSensor>(sensor).is_some());
+        }
+        let mut sensors = world.query::<&AirSensor>();
+        let outlets: Vec<Entity> = sensors.iter(world).filter_map(|s| s.outlet).collect();
+        let plain = "/obj/machinery/atmospherics/components/unary/vent_pump";
+        let plain_outlets: Vec<Entity> = outlets
+            .into_iter()
+            .filter(|&v| world.get::<ss13_mapload::DmAtmosDevice>(v).unwrap().path == plain)
+            .collect();
+        println!("sensors: {} plain outlet vents", plain_outlets.len());
+        for vent in plain_outlets {
+            let area = world.get::<VentPump>(vent).unwrap().area;
+            assert_eq!(area, None, "a plain outlet vent leaves its area");
+            assert!(
+                world
+                    .resource::<AreaAtmos>()
+                    .0
+                    .values()
+                    .all(|d| !d.vents.contains(&vent)),
+                "and its alarms' lists"
+            );
+        }
+        let (alarm_e, sensor, alarm_pos) = linked[0];
+        let tool = ss13_game::construction::spawn_obj(world, "/obj/item/multitool", alarm_pos)
+            .expect("a multitool");
+        let nobody = Entity::PLACEHOLDER;
+        assert!(control::multitool_act(world, nobody, tool, sensor, true));
+        let a = world.get::<AirAlarm>(alarm_e).unwrap();
+        assert!(a.sensor.is_none() && a.allow_link_change);
+        assert_eq!(a.area, world.resource::<Areas>().area_at(alarm_pos));
+        assert!(control::multitool_act(world, nobody, tool, sensor, false));
+        assert_eq!(
+            ss13_game::tools::multitool_buffer(world, tool),
+            Some(sensor)
+        );
+        world.get_mut::<AirAlarm>(alarm_e).unwrap().locked = true;
+        assert!(
+            !control::multitool_act(world, nobody, tool, alarm_e, false),
+            "locked"
+        );
+        world.get_mut::<AirAlarm>(alarm_e).unwrap().locked = false;
+        assert!(control::multitool_act(world, nobody, tool, alarm_e, false));
+        assert_eq!(world.get::<AirAlarm>(alarm_e).unwrap().sensor, Some(sensor));
+        assert_eq!(alarm::alarm_of(world, sensor), Some(alarm_e));
+        // The buffered sensor onto a plain station vent: it becomes the outlet, a siphon off
+        // its area's alarms.
+        // Plain vents only come from fittings (the maps place subtypes): build one by the
+        // alarm, on the first free layer.
+        let vent = (1..=5)
+            .find_map(|layer| {
+                let d = ss13_game::atmos_machinery::dispenser::PipeDispenser {
+                    layer,
+                    ..Default::default()
+                };
+                let fitting =
+                    ss13_game::atmos_machinery::dispenser::dispense(world, alarm_pos, &d, 2, 5, 1)?;
+                let f = world.get::<PipeFitting>(fitting)?.clone();
+                world.despawn(fitting);
+                fitting::build(world, alarm_pos, f).ok()
+            })
+            .expect("a plain vent by the alarm");
+        assert_eq!(
+            world.get::<ss13_mapload::DmAtmosDevice>(vent).unwrap().path,
+            plain
+        );
+        assert!(world.get::<VentPump>(vent).unwrap().area.is_some());
+        assert!(control::multitool_act(world, nobody, tool, vent, false));
+        assert_eq!(world.get::<AirSensor>(sensor).unwrap().outlet, Some(vent));
+        let v = world.get::<VentPump>(vent).unwrap();
+        assert!(v.area.is_none() && !v.releasing);
+        assert!(
+            world
+                .resource::<AreaAtmos>()
+                .0
+                .values()
+                .all(|d| !d.vents.contains(&vent))
+        );
+        assert_eq!(
+            ss13_game::tools::multitool_buffer(world, tool),
+            Some(sensor)
+        );
+        println!(
+            "sensors: {} linked alarms, relinked {alarm_e:?} by multitool",
+            linked.len()
+        );
+        server.update();
     }
 
     // A meter without a pipe on its layer stays unattached, as in tg (MetaStation has one
