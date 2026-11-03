@@ -4,6 +4,9 @@
 
 pub mod netlog;
 pub mod profile;
+// Prometheus metrics of a server (`SS13_METRICS_ADDR`); not in the browser server.
+#[cfg(all(feature = "server", not(target_arch = "wasm32")))]
+pub mod metrics;
 
 #[cfg(feature = "client")]
 pub mod client;

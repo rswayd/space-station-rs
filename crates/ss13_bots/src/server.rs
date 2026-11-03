@@ -75,6 +75,8 @@ impl Server {
         // Every game RNG from the case's seed, one tick of game time per update, random events
         // only when a case forces one (`event`).
         ss13_game::testing::deterministic(&mut app, spec.seed);
+        // SS13_METRICS_ADDR: the case's server serves Prometheus metrics (load cases).
+        app.add_plugins(ss13_debug::metrics::MetricsPlugin);
         app.add_plugins((MinimalPlugins, ss13_world::WorldPlugin))
             .insert_resource(ss13_game::round::RoundConfig::skip_lobby())
             .insert_resource(NetServerConfig {

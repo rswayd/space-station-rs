@@ -4,9 +4,6 @@ use bevy::app::ScheduleRunnerPlugin;
 use bevy::log::LogPlugin;
 use bevy::prelude::*;
 
-#[cfg(not(target_arch = "wasm32"))]
-mod metrics;
-
 fn main() -> AppExit {
     // Set by the client's single-player launch: the parent holds our stdin open, so its end, even
     // when the parent is killed, ends this server too instead of leaving a hidden process behind.
@@ -54,7 +51,7 @@ fn server(first: bool) -> App {
     ));
     // SS13_METRICS_ADDR: Prometheus `/metrics` (off when unset).
     #[cfg(not(target_arch = "wasm32"))]
-    app.add_plugins(metrics::MetricsPlugin);
+    app.add_plugins(ss13_debug::metrics::MetricsPlugin);
     // SS13_MAP=MetaStation (see `MapLoadPlugin::from_env`); unset = empty world.
     if let Some(map) = ss13_mapload::MapLoadPlugin::from_env() {
         app.add_plugins((

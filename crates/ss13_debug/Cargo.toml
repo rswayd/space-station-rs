@@ -21,6 +21,11 @@ bevy_egui = { workspace = true, optional = true }
 serde_json = { version = "1.0.154", optional = true }
 ss13_reagents = { workspace = true, optional = true }
 
+# `metrics` (server, native): Prometheus metrics at `SS13_METRICS_ADDR`.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+metrics = { version = "0.24", optional = true }
+metrics-exporter-prometheus = { version = "0.17", default-features = false, optional = true }
+
 [features]
 client = [
     "ss13_net/client",
@@ -37,6 +42,8 @@ client = [
     "bevy/ui",
 ]
 server = [
+    "dep:metrics",
+    "dep:metrics-exporter-prometheus",
     "ss13_net/server",
     "ss13_game/server",
     "dep:ss13_net",

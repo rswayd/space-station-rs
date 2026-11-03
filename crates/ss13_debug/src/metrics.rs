@@ -1,6 +1,7 @@
-//! Prometheus metrics: `SS13_METRICS_ADDR=127.0.0.1:9100` serves `GET /metrics` in the
+//! Prometheus metrics of a server (`ss13_server`, the bot runner's servers):
+//! `SS13_METRICS_ADDR=127.0.0.1:9100` serves `GET /metrics` in the
 //! Prometheus text format. Values go through the `metrics` facade (any code may add its own with
-//! `metrics::counter!`/`gauge!`/`histogram!`); `metrics-exporter-prometheus` only keeps and
+//! `metrics::counter!`/`gauge!`/`histogram!` with this crate's `metrics` dependency); `metrics-exporter-prometheus` only keeps and
 //! renders them, the HTTP side is a plain blocking listener on its own thread. Unset, no recorder
 //! is installed and nothing here runs.
 //!

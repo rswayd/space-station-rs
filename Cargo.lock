@@ -6225,6 +6225,8 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "bevy_egui",
+ "metrics",
+ "metrics-exporter-prometheus",
  "postcard",
  "serde_json",
  "ss13_assets",
@@ -6362,8 +6364,6 @@ name = "ss13_server"
 version = "0.1.0"
 dependencies = [
  "bevy",
- "metrics",
- "metrics-exporter-prometheus",
  "ss13_admin",
  "ss13_atmos",
  "ss13_chat",
