@@ -29,6 +29,214 @@ pub const ATMOS_CONTROL_ROOT: &str = "/obj/machinery/computer/atmos_control";
 /// `/obj/structure/tank_frame`: what cutting open a stationary tank leaves, spawned at runtime.
 pub const TANK_FRAME: &str = "/obj/structure/tank_frame";
 
+/// `/obj/item/pipe` and `/obj/item/pipe_meter`: what wrenching a pipe, device or meter off
+/// leaves, spawned at runtime.
+pub const PIPE_FITTING: &str = "/obj/item/pipe";
+pub const PIPE_METER_ITEM: &str = "/obj/item/pipe_meter";
+
+/// `/obj/machinery/pipedispenser`: the atmos pipe dispenser (its `disposal` and `transit_tube`
+/// subtypes are other machines).
+pub const PIPE_DISPENSER: &str = "/obj/machinery/pipedispenser";
+
+/// One `/datum/pipe_info` of `GLOB.atmos_pipe_recipes`: its name, the machine it makes (`None`:
+/// the meter) and `all_layers` (the RPD can lay it on several layers at once).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PipeRecipe {
+    pub name: &'static str,
+    pub path: Option<&'static str>,
+    pub all_layers: bool,
+    /// `desc` (`<br>` between lines; empty for none).
+    pub desc: &'static str,
+}
+
+const fn recipe(name: &'static str, path: &'static str, all_layers: bool) -> PipeRecipe {
+    PipeRecipe {
+        name,
+        path: Some(path),
+        all_layers,
+        desc: "",
+    }
+}
+
+const fn described(
+    name: &'static str,
+    path: &'static str,
+    all_layers: bool,
+    desc: &'static str,
+) -> PipeRecipe {
+    PipeRecipe {
+        name,
+        path: Some(path),
+        all_layers,
+        desc,
+    }
+}
+
+/// `GLOB.atmos_pipe_recipes` (`_globalvars/lists/pipe_recipes.dm`), in its order: the pipe
+/// dispenser's and the RPD's atmos categories.
+pub const ATMOS_PIPE_RECIPES: [(&str, &[PipeRecipe]); 4] = [
+    (
+        "Pipes",
+        &[
+            recipe("Pipe", "/obj/machinery/atmospherics/pipe/smart", true),
+            recipe(
+                "Layer Adapter",
+                "/obj/machinery/atmospherics/pipe/layer_manifold",
+                true,
+            ),
+            recipe(
+                "Color Adapter",
+                "/obj/machinery/atmospherics/pipe/color_adapter",
+                true,
+            ),
+            described(
+                "Bridge Pipe",
+                "/obj/machinery/atmospherics/pipe/bridge_pipe",
+                true,
+                "Can be used to cross pipelines of the same layer and color without accidentally joining them together.<br>Redundant for pipelines on different layers or of different colors.",
+            ),
+            described(
+                "Multi-Deck Adapter",
+                "/obj/machinery/atmospherics/pipe/multiz",
+                false,
+                "Directly connects pipelines vertically across station levels.",
+            ),
+        ],
+    ),
+    (
+        "Binary",
+        &[
+            described(
+                "Manual Valve",
+                "/obj/machinery/atmospherics/components/binary/valve",
+                true,
+                "Blocks the flow of gas through the pipeline.<br>Cannot be operated by silicons. Does not require power.",
+            ),
+            described(
+                "Digital Valve",
+                "/obj/machinery/atmospherics/components/binary/valve/digital",
+                true,
+                "Blocks the flow of gas through the pipeline.<br>Can be operated by silicons. Does not require power, despite being digital.",
+            ),
+            described(
+                "Pressure Pump",
+                "/obj/machinery/atmospherics/components/binary/pump",
+                true,
+                "Moves gas from one pipeline to another.<br>Transfers a variable amount of gas until the output network reaches the configured pressure.",
+            ),
+            described(
+                "Volume Pump",
+                "/obj/machinery/atmospherics/components/binary/volume_pump",
+                true,
+                "Moves gas from one pipeline to another.<br>Transfers a fixed volume of gas based on the configured volume.<br>Can be overclocked to increase volume moved, though potentially causing leaks.",
+            ),
+            described(
+                "Passive Gate",
+                "/obj/machinery/atmospherics/components/binary/passive_gate",
+                true,
+                "Blocks the flow of gas through the pipeline while the output pipeline has higher pressure than either the configured pressure or the input pipeline's pressure.<br>Does not allow backwards flow, and does not require power.",
+            ),
+            described(
+                "Pressure Gate",
+                "/obj/machinery/atmospherics/components/binary/pressure_valve",
+                true,
+                "Blocks the flow of gas through the pipeline while the input pipeline's pressure is below the configured pressure.<br>Does not allow backwards flow, and does not require power.",
+            ),
+            described(
+                "Temperature Gate",
+                "/obj/machinery/atmospherics/components/binary/temperature_gate",
+                true,
+                "Blocks the flow of gas through the pipeline while the input pipeline's temperature is below the configured temperature.<br>Does not allow backwards flow, and can be multitooled to instead check for exceeding the configured temperature.",
+            ),
+            described(
+                "Temperature Pump",
+                "/obj/machinery/atmospherics/components/binary/temperature_pump",
+                true,
+                "Moves heat from one pipeline to another, cooling the input pipeline and heating the output pipeline. No gas is transferred.",
+            ),
+        ],
+    ),
+    (
+        "Devices",
+        &[
+            recipe(
+                "Gas Filter",
+                "/obj/machinery/atmospherics/components/trinary/filter",
+                true,
+            ),
+            recipe(
+                "Gas Mixer",
+                "/obj/machinery/atmospherics/components/trinary/mixer",
+                true,
+            ),
+            recipe(
+                "Connector",
+                "/obj/machinery/atmospherics/components/unary/portables_connector",
+                true,
+            ),
+            recipe(
+                "Injector",
+                "/obj/machinery/atmospherics/components/unary/outlet_injector",
+                true,
+            ),
+            recipe(
+                "Scrubber",
+                "/obj/machinery/atmospherics/components/unary/vent_scrubber",
+                true,
+            ),
+            described(
+                "Pump Vent",
+                "/obj/machinery/atmospherics/components/unary/vent_pump",
+                true,
+                "A vent with an inbuilt pressure pump.<br>Forces gas from the connected pipeline into the exterior atmosphere, or pulls gas from the exterior atmosphere into the connected pipeline, depending on air alarm configuration.<br>Can be overclocked.",
+            ),
+            described(
+                "Passive Vent",
+                "/obj/machinery/atmospherics/components/unary/passive_vent",
+                true,
+                "Combines exterior atmosphere with the connected pipeline.<br>Does not require power.",
+            ),
+            PipeRecipe {
+                name: "Meter",
+                path: None,
+                all_layers: true,
+                desc: "",
+            },
+        ],
+    ),
+    (
+        "Heat Exchange",
+        &[
+            recipe(
+                "Pipe",
+                "/obj/machinery/atmospherics/pipe/heat_exchanging/simple",
+                false,
+            ),
+            recipe(
+                "Manifold",
+                "/obj/machinery/atmospherics/pipe/heat_exchanging/manifold",
+                false,
+            ),
+            recipe(
+                "4-Way Manifold",
+                "/obj/machinery/atmospherics/pipe/heat_exchanging/manifold4w",
+                false,
+            ),
+            recipe(
+                "Junction",
+                "/obj/machinery/atmospherics/pipe/heat_exchanging/junction",
+                false,
+            ),
+            described(
+                "Heat Exchanger",
+                "/obj/machinery/atmospherics/components/unary/heat_exchanger",
+                false,
+                "When directly facing another heat exchanger, balances the temperature of the gases within each connected pipeline.",
+            ),
+        ],
+    ),
+];
+
 /// `GLOB.gas_id_to_canister` in `sort_list` order: a canister's `relabel` choices and the type
 /// each copies. Read at runtime, so `convert` keeps their prototypes.
 pub const CANISTER_LABELS: [(&str, &str); 22] = [
@@ -187,6 +395,11 @@ pub struct DmAtmosDevice {
     pub req_access: Vec<String>,
     pub req_one_access: Vec<String>,
     pub locked: bool,
+    /// Wrenching it off leaves a fitting (`can_unwrench`); the fitting's type
+    /// (`construction_type`) and its icon state in `pipe_item.dmi` (`pipe_state`).
+    pub can_unwrench: bool,
+    pub construction_type: String,
+    pub pipe_state: String,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -196,10 +409,12 @@ enum Kind {
     Text,
     /// A gas path, stored as its tg id.
     Gas,
+    /// A type path.
+    Path,
 }
 
 /// Scalar vars: DM name, kind, field name.
-const VARS: [(&str, Kind, &str); 51] = [
+const VARS: [(&str, Kind, &str); 54] = [
     ("piping_layer", Kind::Num, "piping_layer"),
     ("target_layer", Kind::Num, "piping_layer"),
     ("pipe_color", Kind::Text, "pipe_color"),
@@ -264,6 +479,9 @@ const VARS: [(&str, Kind, &str); 51] = [
     ("output_pressure_max", Kind::Num, "output_pressure_max"),
     // A vent scrubber's `scrubbing` is a number; a portable scrubber's is its gas list.
     ("scrubbing", Kind::Num, "scrubbing"),
+    ("can_unwrench", Kind::Flag, "can_unwrench"),
+    ("construction_type", Kind::Path, "construction_type"),
+    ("pipe_state", Kind::Text, "pipe_state"),
 ];
 
 /// List vars: gas lists, then access lists.
@@ -409,6 +627,10 @@ fn json_ron(kind: Kind, value: &Value) -> Option<String> {
                 .and_then(gas_id)
                 .map(|g| ron_str(&g)),
         },
+        Kind::Path => match value {
+            Value::Null => Some(ron_str("")),
+            _ => value.get("path").and_then(Value::as_str).map(ron_str),
+        },
     }
 }
 
@@ -426,7 +648,7 @@ pub fn ext_field(path: &str, var: &str, value: Val) -> Result<Field, Skip> {
         (Kind::Flag, Val::Num(n)) => (n != 0.0).to_string(),
         (Kind::Flag, Val::Null) => "false".to_owned(),
         (Kind::Text, Val::Str(s)) => ron_str(s),
-        (Kind::Text | Kind::Gas, Val::Null) => ron_str(""),
+        (Kind::Text | Kind::Gas | Kind::Path, Val::Null) => ron_str(""),
         _ => return Err(Skip::Unsupported),
     };
     Ok(ext(COMPONENT, key, ron))

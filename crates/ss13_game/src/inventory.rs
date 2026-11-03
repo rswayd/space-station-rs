@@ -529,6 +529,14 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 Some(item)
                     if hand == inventory.active
                         && crate::tables::attack_self(world, client, mob, item) => {}
+                // The RPD opens its window.
+                Some(item)
+                    if hand == inventory.active
+                        && crate::atmos_machinery::rpd::attack_self(world, client, mob, item) => {}
+                // A pipe fitting turns clockwise.
+                Some(item)
+                    if hand == inventory.active
+                        && crate::atmos_machinery::fitting::attack_self(world, item) => {}
                 // A PDA turns on and opens its NtOS window.
                 Some(item)
                     if hand == inventory.active

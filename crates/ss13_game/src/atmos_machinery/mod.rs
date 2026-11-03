@@ -562,6 +562,47 @@ fn machine_state(world: &mut World, e: Entity, dm: &DmAtmosDevice, area: Option<
     }
 }
 
+/// What a device's entity carries besides [`AtmosDevice`]: the heat exchange markers and its
+/// machine state; vents and scrubbers join their area's lists (map load and
+/// [`fitting::build`]).
+fn install_device(
+    world: &mut World,
+    e: Entity,
+    dm: &DmAtmosDevice,
+    pos: TilePos,
+    he: HeatExchange,
+    area_atmos: &mut AreaAtmos,
+) {
+    match he {
+        HeatExchange::Pipe => {
+            world
+                .entity_mut(e)
+                .insert((devices::HePipe::PIPE, devices::HeGlow::default()));
+            let lava = crate::construction::turf_at(world, pos)
+                .and_then(|t| crate::construction::path_of(world, t))
+                .is_some_and(|p| is_under(&p, "/turf/open/lava"));
+            if lava {
+                world.entity_mut(e).insert(devices::HeOnLava);
+            }
+        }
+        HeatExchange::Junction { .. } => {
+            world
+                .entity_mut(e)
+                .insert((devices::HePipe::JUNCTION, devices::HeGlow::default()));
+        }
+        HeatExchange::None => {}
+    }
+    let area = world.resource::<Areas>().area_at(pos);
+    machine_state(world, e, dm, area);
+    if let Some(v) = world.get::<VentPump>(e).and_then(|v| v.area) {
+        area_atmos.0.entry(v).or_default().vents.push(e);
+    } else if world.get::<VentScrubber>(e).is_some()
+        && let Some(area) = area
+    {
+        area_atmos.0.entry(area).or_default().scrubbers.push(e);
+    }
+}
+
 /// tg `SSair.Initialize` for machines: every map atmos object into the pipe graph, connected
 /// and in pipelines, with its machine state; vents and scrubbers listed by area.
 pub fn init_atmos_machinery(world: &mut World) {
@@ -600,35 +641,11 @@ pub fn init_atmos_machinery(world: &mut World) {
             if is_tank {
                 tanks.push((*e, id, *pos, dm.clone()));
             }
-            match he {
-                HeatExchange::Pipe => {
-                    world
-                        .entity_mut(*e)
-                        .insert((devices::HePipe::PIPE, devices::HeGlow::default()));
-                    let lava = crate::construction::turf_at(world, *pos)
-                        .and_then(|t| crate::construction::path_of(world, t))
-                        .is_some_and(|p| is_under(&p, "/turf/open/lava"));
-                    if lava {
-                        world.entity_mut(*e).insert(devices::HeOnLava);
-                    }
-                }
-                HeatExchange::Junction { .. } => {
-                    world
-                        .entity_mut(*e)
-                        .insert((devices::HePipe::JUNCTION, devices::HeGlow::default()));
-                }
-                HeatExchange::None => {}
-            }
-            let area = world.resource::<Areas>().area_at(*pos);
-            machine_state(world, *e, dm, area);
-            if let Some(v) = world.get::<VentPump>(*e).and_then(|v| v.area) {
+            install_device(world, *e, dm, *pos, he, &mut area_atmos);
+            if world.get::<VentPump>(*e).is_some_and(|v| v.area.is_some()) {
                 report.vents += 1;
-                area_atmos.0.entry(v).or_default().vents.push(*e);
             } else if world.get::<VentScrubber>(*e).is_some() {
                 report.scrubbers += 1;
-                if let Some(area) = area {
-                    area_atmos.0.entry(area).or_default().scrubbers.push(*e);
-                }
             }
         }
     }
@@ -655,11 +672,14 @@ pub mod canister;
 pub mod consoles;
 pub mod control;
 pub mod damage;
+pub mod dispenser;
+pub mod fitting;
 pub mod gas_visuals;
 pub mod meter;
 pub mod miner;
 pub mod overclock;
 pub mod pipe_scrubber;
+pub mod rpd;
 pub mod tank;
 pub mod tank_frame;
 #[cfg(test)]
@@ -681,6 +701,8 @@ pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<(ss13_chat::
     canister::examine_lines(world, target, lines);
     thermo::examine_lines(world, target, lines);
     tank_frame::examine_lines(world, target, lines);
+    fitting::examine_lines(world, target, lines);
+    rpd::examine_lines(world, target, lines);
     portable::examine_lines(world, target, lines);
     if let Some(status) = meter::status(world, target) {
         lines.push((ss13_chat::Span::Plain, status));

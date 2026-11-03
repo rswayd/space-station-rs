@@ -1615,7 +1615,9 @@ pub fn interact(
     if super::consoles::interact(world, client, mob, target) {
         return true;
     }
-    if super::control::interact(world, client, mob, target) {
+    if super::control::interact(world, client, mob, target)
+        || super::dispenser::interact(world, client, mob, target)
+    {
         return true;
     }
     let Ok(e) = world.get_entity(target) else {
@@ -1623,6 +1625,10 @@ pub fn interact(
     };
     if modifiers.alt {
         return click_alt(world, client, mob, target);
+    }
+    // `pipe/attack_hand_secondary`: the fitting's next layer.
+    if modifiers.right && e.contains::<super::fitting::PipeFitting>() {
+        return super::fitting::next_layer(world, client, target);
     }
     // `meter/interact`: the reading, unless unpowered or broken.
     if e.contains::<super::meter::Meter>() {
@@ -1844,14 +1850,20 @@ pub enum AtmosJob {
     Repair,
     /// `vent_pump/screwdriver_act`: the fan back to full integrity.
     FanRepair,
-    /// `huge/wrench_act` -> `default_unfasten_wrench`: (un)anchor a huge scrubber that was
+    /// `default_unfasten_wrench`: (un)anchor a huge scrubber or a pipe dispenser that was
     /// `anchored` when the wrenching began.
     Unfasten { anchored: bool },
+    /// Wrenching a pipe, device or meter off.
+    Fitting(super::fitting::FittingJob),
+    /// One layer of an RPD build.
+    Rpd(super::rpd::RpdJob),
 }
 
 /// The end of an [`AtmosJob`] (tg `use_tool` succeeded).
 pub fn complete(world: &mut World, mob: Entity, action: &crate::tools::DoAfter, job: AtmosJob) {
     match job {
+        AtmosJob::Fitting(job) => super::fitting::complete(world, mob, action, job),
+        AtmosJob::Rpd(job) => super::rpd::complete(world, mob, action, job),
         AtmosJob::Repair => {
             let target = action.target;
             let Some(max) = world
@@ -1902,8 +1914,14 @@ pub fn complete(world: &mut World, mob: Entity, action: &crate::tools::DoAfter, 
             if now != was {
                 return;
             }
+            let huge = world.get::<PortableScrubber>(target).is_some();
             if !was && crate::construction::blocked_for(world, target) {
-                tell(world, action.client, Span::Notice, HUGE_BLOCKED);
+                let text = if huge {
+                    HUGE_BLOCKED
+                } else {
+                    "Вам не удалось прикрутить раздатчик труб."
+                };
+                tell(world, action.client, Span::Notice, text);
                 return;
             }
             crate::obj_damage::set_anchored(world, target, !was);
@@ -1912,10 +1930,11 @@ pub fn complete(world: &mut World, mob: Entity, action: &crate::tools::DoAfter, 
             {
                 s.on = false;
             }
-            let text = if was {
-                "Вы откручиваете большой воздушный скруббер."
-            } else {
-                "Вы прикручиваете большой воздушный скруббер."
+            let text = match (huge, was) {
+                (true, true) => "Вы откручиваете большой воздушный скруббер.",
+                (true, false) => "Вы прикручиваете большой воздушный скруббер.",
+                (false, true) => "Вы откручиваете раздатчик труб.",
+                (false, false) => "Вы прикручиваете раздатчик труб.",
             };
             tell(world, action.client, Span::Notice, text);
             if let Some(&pos) = world.get::<TilePos>(target) {
@@ -2061,6 +2080,29 @@ pub fn item_interaction(
                 crate::construction::Job::Atmos(AtmosJob::TankPort(dir)),
             );
         }
+        return true;
+    }
+    let actor = Actor {
+        client,
+        mob,
+        item: Some(held),
+    };
+    if super::rpd::item_interaction(world, actor, held, target, modifiers)
+        || super::dispenser::item_interaction(world, actor, held, target, tool)
+    {
+        return true;
+    }
+    // `wrench_act` of pipes, devices and meters (off) and of fittings (on).
+    if super::fitting::item_interaction(
+        world,
+        Actor {
+            client,
+            mob,
+            item: Some(held),
+        },
+        target,
+        tool,
+    ) {
         return true;
     }
     if super::canister::item_interaction(world, client, mob, held, target, tool)
@@ -2234,6 +2276,9 @@ pub fn plugin(app: &mut App) {
         .register_ui::<PortableScrubberWindow>()
         .register_ui::<PipeScrubberWindow>()
         .register_ui::<AirAlarmWindow>()
+        .register_ui::<super::dispenser::PipeDispenserWindow>()
+        .register_ui::<super::rpd::RpdWindow>()
+        .add_observer(super::rpd::attach)
         .add_systems(
             Update,
             (
@@ -2249,12 +2294,15 @@ pub fn plugin(app: &mut App) {
                     apply_portable_scrubber_acts,
                     apply_pipe_scrubber_acts,
                     apply_alarm_acts,
+                    super::dispenser::dispenser_acts,
+                    super::rpd::rpd_acts,
                 )
                     .in_set(UiSystems::Handle),
+                super::dispenser::init_dispensers,
                 super::canister::relabel_answers
                     .in_set(UiSystems::Handle)
                     .after(ss13_tgui::prompt::PromptSystems::Answer),
-                unpowered_windows.in_set(UiSystems::StatusHook),
+                (unpowered_windows, super::rpd::window_status).in_set(UiSystems::StatusHook),
                 ctrl_clicks
                     .after(ss13_world::WorldSystems::Movement)
                     .after(crate::click::ResolveClicks),

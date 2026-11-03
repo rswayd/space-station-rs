@@ -3,8 +3,8 @@
 //! the temperature (its GAGS `meter` config, drawn here from the raw `meter.dmi` layers:
 //! `meter_base`, a tinted `pressure*`, `buttons*`) and glowing buttons. Examining or clicking
 //! it reads the numbers out.
-// shortcut: no wrenching off (`/obj/item/pipe_meter`), no USB port; the meter does not fall
-// off when its pipe goes (pipes are not removed yet).
+// shortcut: no USB port. Wrenching off and on, and falling off with its pipe:
+// `super::fitting`.
 
 use bevy::prelude::*;
 use ss13_atmos::gas::{ONE_ATMOSPHERE, T0C};

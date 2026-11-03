@@ -104,12 +104,13 @@ pub struct SetLocal {
 pub struct LocalOnInput(pub String);
 
 /// An atlas sprite inside a window (tgui `DmIcon`): the client's renderer gives the node its
-/// `ImageNode` (south-facing first frame).
+/// `ImageNode` (first frame, facing `dir`, south when unset).
 #[derive(Component, Clone, Debug, Default, PartialEq)]
 #[require(Node)]
 pub struct UiSprite {
     pub icon_state: Option<IconStateId>,
     pub color: Option<[u8; 4]>,
+    pub dir: Option<ss13_shared::Dir>,
 }
 
 /// The root of a subtree that stays the same while its key does (React `memo` with a key): a
@@ -463,6 +464,8 @@ impl Plugin for TguiClientPlugin {
             .register_ui_view::<crate::interfaces::atmos::PortablePumpUi>()
             .register_ui_view::<crate::interfaces::atmos::PortableScrubberUi>()
             .register_ui_view::<crate::interfaces::atmos::PipeScrubberUi>()
+            .register_ui_view::<crate::interfaces::pipe_dispenser::PipeDispenserUi>()
+            .register_ui_view::<crate::interfaces::rapid_pipe_dispenser::RapidPipeDispenserUi>()
             .register_ui_view::<crate::interfaces::air_alarm::AirAlarmUi>()
             .register_ui_view::<crate::interfaces::solar_control::SolarControlUi>()
             .register_ui_view::<crate::interfaces::mech_bay::MechBayPowerConsoleUi>()

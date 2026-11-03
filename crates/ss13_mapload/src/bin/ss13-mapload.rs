@@ -204,6 +204,15 @@ fn convert_cmd(config: &MapLoadPlugin, mut map_dirs: Vec<PathBuf>) -> anyhow::Re
     );
     // Cutting a stationary tank open leaves its frame.
     used.insert(ss13_mapload::atmos_machine::TANK_FRAME.to_owned());
+    // Wrenching pipes, devices and meters off leaves fittings.
+    used.insert(ss13_mapload::atmos_machine::PIPE_FITTING.to_owned());
+    used.insert(ss13_mapload::atmos_machine::PIPE_METER_ITEM.to_owned());
+    // The pipe dispenser and RPD make every recipe's machine.
+    used.insert(ss13_mapload::atmos_machine::PIPE_DISPENSER.to_owned());
+    used.insert("/obj/item/pipe_dispenser".to_owned());
+    for (_, recipes) in ss13_mapload::atmos_machine::ATMOS_PIPE_RECIPES {
+        used.extend(recipes.iter().filter_map(|r| r.path).map(str::to_owned));
+    }
     let conversion = convert(&types, used.iter().map(String::as_str))?;
     let out = config.prototypes_dir().join("dm_types.ron");
     std::fs::create_dir_all(config.prototypes_dir())?;

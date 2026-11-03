@@ -39,6 +39,13 @@ use crate::interfaces::mech_bay::{
     BayCell, BayMech, MechBayData, MechBayPowerConsoleUi, RechargePort,
 };
 use crate::interfaces::number_input::{NumberInputStatic, NumberInputUi};
+use crate::interfaces::pipe_dispenser::{
+    InitDirections, PipeCategory, PipeDispenserData, PipeDispenserStatic, PipeDispenserUi,
+    PipeRecipeEntry,
+};
+use crate::interfaces::rapid_pipe_dispenser::{
+    RapidPipeDispenserUi, RpdCategory, RpdData, RpdPreview, RpdRecipe, RpdStatic,
+};
 use crate::interfaces::solar_control::{SolarControlData, SolarControlUi};
 use crate::interfaces::text_input::{TextInputStatic, TextInputUi};
 use crate::interfaces::thermo_machine::{ThermoMachineData, ThermoMachineUi};
@@ -119,6 +126,23 @@ fn handbook() -> AtmosHandbook {
             entry("o2", "Oxygen", "Нужен для дыхания и горения.", 20.0),
             entry("n2", "Nitrogen", "Инертный газ, основа воздуха.", 20.0),
             entry("plasma", "Plasma", "Горючий и токсичный газ.", 200.0),
+            entry("bz", "Bz", "Образец для прокрутки.", 20.0),
+            entry("freon", "Freon", "Образец для прокрутки.", 20.0),
+            entry("halon", "Halon", "Образец для прокрутки.", 20.0),
+            entry("healium", "Healium", "Образец для прокрутки.", 20.0),
+            entry("helium", "Helium", "Образец для прокрутки.", 20.0),
+            entry("hydrogen", "Hydrogen", "Образец для прокрутки.", 20.0),
+            entry("nitrium", "Nitrium", "Образец для прокрутки.", 20.0),
+            entry("pluoxium", "Pluoxium", "Образец для прокрутки.", 20.0),
+            entry(
+                "proto_nitrate",
+                "Proto_nitrate",
+                "Образец для прокрутки.",
+                20.0,
+            ),
+            entry("tritium", "Tritium", "Образец для прокрутки.", 20.0),
+            entry("water_vapor", "Water_vapor", "Образец для прокрутки.", 20.0),
+            entry("zauker", "Zauker", "Образец для прокрутки.", 20.0),
         ],
         reaction_info: Vec::new(),
         money_symbol: "cr".into(),
@@ -259,6 +283,30 @@ pub fn sample(name: &str) -> Option<Sample> {
                 has_hypernob_crystal: true,
                 reaction_suppression_enabled: true,
                 filter_types: gas_list(),
+            },
+        ),
+        PipeDispenserUi::NAME => of::<PipeDispenserUi>(
+            "Pipe dispenser",
+            &pipe_dispenser_static(),
+            &PipeDispenserData {
+                piping_layer: 3,
+                selected_color: "green".into(),
+                init_directions: InitDirections::from_bits(1 | 2 | 4),
+            },
+        ),
+        RapidPipeDispenserUi::NAME => of::<RapidPipeDispenserUi>(
+            "rapid pipe dispenser (RPD)",
+            &rpd_static(),
+            &RpdData {
+                category: 0,
+                mode: 1 | 2 | 4 | 8,
+                multi_layer: false,
+                pipe_layers: 1 << 2,
+                selected_category: "Binary".into(),
+                selected_recipe: 1,
+                p_dir: 4,
+                selected_color: "blue".into(),
+                init_directions: InitDirections::from_bits(15),
             },
         ),
         ThermoMachineUi::NAME => of::<ThermoMachineUi>(
@@ -820,4 +868,95 @@ fn dna_console() -> Sample {
             ],
         },
     )
+}
+
+/// A short version of `GLOB.atmos_pipe_recipes` and `GLOB.pipe_paint_colors`.
+fn pipe_dispenser_static() -> PipeDispenserStatic {
+    let category = |name: &str, recipes: &[&str]| PipeCategory {
+        cat_name: name.into(),
+        recipes: recipes
+            .iter()
+            .enumerate()
+            .map(|(i, r)| PipeRecipeEntry {
+                pipe_name: (*r).into(),
+                pipe_index: i as u32 + 1,
+                all_layers: true,
+                dir: 1,
+            })
+            .collect(),
+    };
+    PipeDispenserStatic {
+        paint_colors: [
+            ("omni", "#EEEEEE"),
+            ("green", "#00FF00"),
+            ("blue", "#0000FF"),
+            ("red", "#FF0000"),
+            ("orange", "#FFA62B"),
+            ("cyan", "#00FFFF"),
+        ]
+        .map(|(n, h)| (n.to_owned(), h.to_owned()))
+        .to_vec(),
+        categories: vec![
+            category(
+                "Pipes",
+                &["Pipe", "Layer Adapter", "Color Adapter", "Bridge Pipe"],
+            ),
+            category(
+                "Binary",
+                &["Manual Valve", "Digital Valve", "Pressure Pump"],
+            ),
+            category(
+                "Devices",
+                &["Gas Filter", "Gas Mixer", "Connector", "Meter"],
+            ),
+            category("Heat Exchange", &["Pipe", "Manifold", "Junction"]),
+        ],
+    }
+}
+
+/// Two categories of the RPD's list.
+fn rpd_static() -> RpdStatic {
+    let preview = |dir: u8, name: &str| RpdPreview {
+        dir,
+        dir_name: name.into(),
+        flipped: false,
+    };
+    let straight = || vec![preview(1, "Vertical"), preview(4, "Horizontal")];
+    RpdStatic {
+        paint_colors: pipe_dispenser_static().paint_colors,
+        max_pipe_layers: 5,
+        categories: vec![
+            RpdCategory {
+                cat_name: "Pipes".into(),
+                recipes: vec![RpdRecipe {
+                    pipe_index: 1,
+                    pipe_name: "Pipe".into(),
+                    previews: vec![preview(2, "Pipe")],
+                    ..Default::default()
+                }],
+            },
+            RpdCategory {
+                cat_name: "Binary".into(),
+                recipes: vec![
+                    RpdRecipe {
+                        pipe_index: 1,
+                        pipe_name: "Manual Valve".into(),
+                        pipe_desc: "Blocks the flow of gas through the pipeline.<br>Does not \
+                                    require power."
+                            .into(),
+                        previews: straight(),
+                        ..Default::default()
+                    },
+                    RpdRecipe {
+                        pipe_index: 2,
+                        pipe_name: "Pressure Pump".into(),
+                        previews: [(1, "North"), (2, "South"), (8, "West"), (4, "East")]
+                            .map(|(d, n)| preview(d, n))
+                            .to_vec(),
+                        ..Default::default()
+                    },
+                ],
+            },
+        ],
+    }
 }

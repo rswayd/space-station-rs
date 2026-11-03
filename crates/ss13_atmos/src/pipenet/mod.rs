@@ -1099,9 +1099,10 @@ impl Pipenet {
         }
     }
 
-    /// `reconnect_nodes` of a component whose direction, layer or color changed: it leaves its
-    /// pipelines and connects again as `init_dirs`, `node_dirs`, `layer` and `color` say,
-    /// keeping its port gas. Returns its new id.
+    /// `reconnect_nodes` of a component whose direction, layer or color changed, or a smart
+    /// pipe's `set_init_directions`: it leaves its pipelines and connects again as `init_dirs`,
+    /// `node_dirs`, `layer` and `color` say, keeping its port gas (a pipe: its share of the
+    /// pipeline). Returns its new id.
     pub fn reconnect(
         &mut self,
         id: DeviceId,
@@ -1115,9 +1116,9 @@ impl Pipenet {
         for air in &mut self.dev_mut(id).airs {
             *air = PipeAir::new(air.volume);
         }
-        // What it would release is now only a connector's attached mixture, which `custom`
-        // carries over.
-        self.remove(id);
+        // A component would release only a connector's attached mixture now, which `custom`
+        // carries over; a pipe releases its share of its pipeline, which goes back below.
+        let released = self.remove(id).filter(|_| d.is_pipe());
         let new = self.add(DeviceSpec {
             entity: d.entity,
             pos: d.pos,
@@ -1133,6 +1134,23 @@ impl Pipenet {
         if let Some(airs) = self.airs_mut(new) {
             for (slot, air) in airs.iter_mut().zip(d.airs) {
                 *slot = air;
+            }
+        }
+        if let Some(gas) = released {
+            match self.dev(new).parent {
+                Some(line) => {
+                    if let Some(l) = self.lines[line.0 as usize].as_mut() {
+                        l.air.merge(&gas);
+                        l.update = true;
+                    }
+                }
+                None => {
+                    let dev = self.dev_mut(new);
+                    let volume = dev.volume;
+                    dev.air_temporary
+                        .get_or_insert_with(|| PipeAir::new(volume))
+                        .merge(&gas);
+                }
             }
         }
         self.mark_parents(new);

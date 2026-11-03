@@ -68,6 +68,7 @@ fn resolve_style_sprites(
             commands.entity(entity).insert(UiSprite {
                 icon_state: Some(id),
                 color: sprite.color,
+                dir: None,
             });
         }
     }

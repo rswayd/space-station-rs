@@ -240,31 +240,13 @@ pub fn deconstruct(world: &mut World, target: Entity, disassembled: bool) -> boo
     true
 }
 
-/// `components/on_deconstruction` -> `relocate_airs`: the port gas onto the tile, the machine out
-/// of the pipe graph (a vent worn out by overclocking).
-fn component_deconstruct(world: &mut World, target: Entity) -> bool {
-    let (Some(&pos), Some(device)) = (
-        world.get::<TilePos>(target),
-        world.get::<super::AtmosDevice>(target).copied(),
-    ) else {
-        return true;
-    };
-    let released = world.resource_scope(|_, mut net: Mut<Pipenet>| net.remove(device.id));
-    if let Some(gas) = released {
-        world.resource_mut::<Atmos>().merge_air(pos, &gas);
-    }
-    true
-}
-
 /// `tank/on_deconstruction`: `assume_air(air_contents)`, which is the whole group's shared
 /// mixture, onto the tile, and the tank out of the pipe graph; cut open (`disassembled`), it
 /// leaves a plated, unsecured frame.
 fn tank_deconstruct(world: &mut World, target: Entity, disassembled: bool) -> bool {
-    if world.get::<super::devices::VentPump>(target).is_some() {
-        return component_deconstruct(world, target);
-    }
     if world.get::<StationaryTank>(target).is_none() {
-        return false;
+        // Pipes and devices (a vent worn out by overclocking, one wrenched off).
+        return super::fitting::deconstruct(world, target);
     }
     let Some(&pos) = world.get::<TilePos>(target) else {
         return true;

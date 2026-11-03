@@ -20,6 +20,8 @@ pub mod key_combo;
 pub mod list_input;
 pub mod mech_bay;
 pub mod number_input;
+pub mod pipe_dispenser;
+pub mod rapid_pipe_dispenser;
 pub mod ru_jobs;
 pub mod solar_control;
 pub mod text_input;

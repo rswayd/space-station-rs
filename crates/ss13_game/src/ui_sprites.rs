@@ -17,7 +17,7 @@ impl Plugin for UiSpritesPlugin {
     }
 }
 
-// shortcut: the base icon's south-facing first frame; no overlays or animation in windows.
+// shortcut: the base icon's first frame; no overlays or animation in windows.
 fn resolve_sprites(
     sprites: Query<(Entity, &UiSprite), Changed<UiSprite>>,
     mut atlas: Option<ResMut<IconAtlas>>,
@@ -35,7 +35,7 @@ fn resolve_sprites(
             .map_or(Color::WHITE, |[r, g, b, a]| Color::srgba_u8(r, g, b, a));
         commands.entity(entity).insert(ImageNode {
             image,
-            rect: frame_rect(info, Dir::South, 0),
+            rect: frame_rect(info, sprite.dir.unwrap_or(Dir::South), 0),
             color,
             ..default()
         });

@@ -577,6 +577,201 @@ fn metastation() {
         server.update();
     }
 
+    // Wrenching a straight smart pipe with gas off: its share goes onto the tile and a fitting
+    // is left, which rebuilds the same joints; the same fitting again crosses the rebuilt pipe,
+    // narrowing it to its axis; a third has nowhere to go.
+    {
+        use ss13_atmos::pipenet::DeviceKind;
+        use ss13_game::atmos_machinery::fitting::{self, FittingKind, PipeFitting};
+
+        let world = server.world_mut();
+        let mut q = world.query::<(Entity, &AtmosDevice, &TilePos)>();
+        let candidates: Vec<(Entity, AtmosDevice, TilePos)> =
+            q.iter(world).map(|(e, d, &p)| (e, *d, p)).collect();
+        let net = world.resource::<Pipenet>();
+        let (pipe, device, pos) = candidates
+            .into_iter()
+            .find(|(_, d, p)| {
+                net.devices_on(*p).len() == 1
+                    && net.device(d.id).is_some_and(|dev| {
+                        matches!(dev.kind, DeviceKind::Pipe { smart: true, .. })
+                            && dev.init_dirs == 15
+                            && matches!(dev.connections(net), 3 | 12)
+                    })
+                    && net
+                        .pipeline_air(d.id, 0)
+                        .is_some_and(|a| a.total_moles() > 1.0)
+            })
+            .expect("a straight smart pipe with gas, alone on its tile");
+        let axis = net.device(device.id).unwrap().connections(net);
+        let neighbour = net
+            .device(device.id)
+            .unwrap()
+            .nodes
+            .iter()
+            .flatten()
+            .copied()
+            .next()
+            .unwrap();
+        let moles = |world: &World| {
+            world.resource::<Pipenet>().total_moles()
+                + world
+                    .resource::<Atmos>()
+                    .air(pos)
+                    .map_or(0.0, |a| a.total_moles())
+        };
+        let before = moles(world);
+        ss13_game::obj_damage::deconstruct(world, pipe, true);
+        assert!(world.get_entity(pipe).is_err());
+        assert!(
+            (moles(world) - before).abs() < 1e-3,
+            "gas kept on unwrenching"
+        );
+        let found = world
+            .resource::<SpatialIndex>()
+            .on_tile(pos)
+            .iter()
+            .copied()
+            .find(|&e| world.get::<PipeFitting>(e).is_some())
+            .expect("a fitting");
+        let f = world.get::<PipeFitting>(found).unwrap().clone();
+        assert_eq!(
+            (f.kind, f.layer, f.init_dir),
+            (FittingKind::Quaternary, device.layer, 15)
+        );
+        world.despawn(found);
+        let rebuilt = fitting::build(world, pos, f.clone()).expect("rebuilt");
+        let id = world.get::<AtmosDevice>(rebuilt).unwrap().id;
+        let net = world.resource::<Pipenet>();
+        assert_eq!(net.device(id).unwrap().connections(net), axis);
+        assert_eq!(net.pipeline_of(id, 0), net.pipeline_of(neighbour, 0));
+        let before = moles(world);
+        let crossing = fitting::build(world, pos, f.clone()).expect("crosses");
+        let net = world.resource::<Pipenet>();
+        let first = world.get::<AtmosDevice>(rebuilt).unwrap().id;
+        let second = world.get::<AtmosDevice>(crossing).unwrap().id;
+        assert_eq!(net.device(first).unwrap().init_dirs, axis);
+        assert_eq!(net.device(second).unwrap().init_dirs, 15 & !axis);
+        assert_eq!(net.pipeline_of(first, 0), net.pipeline_of(neighbour, 0));
+        assert!(
+            (moles(world) - before).abs() < 1e-3,
+            "gas kept on narrowing"
+        );
+        assert!(fitting::build(world, pos, f).is_err());
+        println!("pipe {pos:?}: wrenched off, rebuilt, crossed");
+        server.update();
+
+        // A pipe dispenser set to red, layer 2, north-south pipes: its fittings carry that; a
+        // layer adapter stays on layer 3; the meter recipe is a meter item; the red pipe builds
+        // red next to the wrenched pipe's layer.
+        use ss13_game::atmos_machinery::dispenser::{PipeDispenser, dispense};
+        let world = server.world_mut();
+        let machine = ss13_game::construction::spawn_obj(
+            world,
+            ss13_mapload::atmos_machine::PIPE_DISPENSER,
+            pos,
+        )
+        .expect("a dispenser");
+        server.update();
+        let world = server.world_mut();
+        assert!(world.get::<PipeDispenser>(machine).is_some());
+        let red = PipeDispenser {
+            layer: 2,
+            color: 3,
+            init_dir: 1 | 2,
+            ready_at: 0.0,
+        };
+        let pipe = dispense(world, pos, &red, 0, 0, 1).expect("a pipe fitting");
+        let f = world.get::<PipeFitting>(pipe).unwrap().clone();
+        assert_eq!(
+            (f.pipe_type.as_str(), f.kind, f.layer, f.init_dir, f.color),
+            (
+                "/obj/machinery/atmospherics/pipe/smart",
+                FittingKind::Quaternary,
+                2,
+                1 | 2,
+                [0xFF, 0, 0]
+            )
+        );
+        let adapter = dispense(world, pos, &red, 0, 1, 1).expect("an adapter");
+        assert_eq!(world.get::<PipeFitting>(adapter).unwrap().layer, 3);
+        let meter = dispense(world, pos, &red, 2, 7, 1).expect("a meter item");
+        assert!(
+            world
+                .get::<ss13_game::atmos_machinery::fitting::MeterFitting>(meter)
+                .is_some()
+        );
+        let built = fitting::build(world, pos, f).expect("a red pipe on layer 2");
+        assert_eq!(
+            world.get::<ss13_shared::Appearance>(built).unwrap().color,
+            Some([0xFF, 0, 0, 255])
+        );
+        let id = world.get::<AtmosDevice>(built).unwrap().id;
+        let d = world.resource::<Pipenet>().device(id).unwrap();
+        assert_eq!((d.layer, d.init_dirs, d.color), (2, 1 | 2, [0xFF, 0, 0]));
+        println!("dispenser: red layer 2 pipe built at {pos:?}");
+        server.update();
+
+        // An RPD: its catalog has the fitting icons; one layer of a pressure pump facing east
+        // on layer 3 in Connect mode builds the pump, switched off; a heat exchanging pipe
+        // refuses layer 1.
+        use ss13_game::atmos_machinery::rpd::{self, Rpd, RpdJob};
+        let world = server.world_mut();
+        let item = ss13_game::construction::spawn_obj(world, rpd::RPD, pos).expect("an RPD");
+        server.update();
+        let world = server.world_mut();
+        assert!(world.get::<Rpd>(item).is_some());
+        let catalog = rpd::catalog_of(world, item);
+        let with_icons = catalog
+            .iter()
+            .flat_map(|c| &c.recipes)
+            .filter(|r| r.icon.is_some())
+            .count();
+        assert_eq!(with_icons, 26, "every recipe has its pipe_item.dmi state");
+        let turf = ss13_game::construction::turf_at(world, pos).expect("a turf");
+        let action = |job: RpdJob| ss13_game::tools::DoAfter {
+            client: Entity::PLACEHOLDER,
+            target: turf,
+            target_pos: pos,
+            user_pos: pos,
+            item: Some(item),
+            amount: 0,
+            ends_at: 0.0,
+            job: ss13_game::construction::Job::Atmos(
+                ss13_game::atmos_machinery::windows::AtmosJob::Rpd(job),
+            ),
+        };
+        let pumps = |world: &mut World| {
+            let mut q =
+                world.query::<(&ss13_game::atmos_machinery::GasPump, &AtmosDevice, &TilePos)>();
+            q.iter(world)
+                .filter(|(p, d, at)| **at == pos && d.layer == 3 && d.dir == 4 && !p.on)
+                .count()
+        };
+        // The pipes there are on layers 2 and 4.
+        let job = RpdJob {
+            layers: 1 << 2,
+            category: 1,
+            index: 2,
+            dir: 4,
+            flipped: false,
+        };
+        rpd::complete(world, Entity::PLACEHOLDER, &action(job), job);
+        assert_eq!(pumps(world), 1, "a pump on layer 3 facing east");
+        let he = RpdJob {
+            layers: 1,
+            category: 3,
+            index: 0,
+            dir: 1,
+            flipped: false,
+        };
+        let before = world.resource::<SpatialIndex>().on_tile(pos).len();
+        rpd::complete(world, Entity::PLACEHOLDER, &action(he), he);
+        assert_eq!(world.resource::<SpatialIndex>().on_tile(pos).len(), before);
+        println!("rpd: pump built, layer 1 refused for heat exchange");
+        server.update();
+    }
+
     // A meter without a pipe on its layer stays unattached, as in tg (MetaStation has one
     // over a layer 2/4/5 manifold).
     let mut q = server.world_mut().query::<(

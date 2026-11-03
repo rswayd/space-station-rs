@@ -333,3 +333,27 @@ fn temperature_interact_follows_tg_conduction() {
     assert!(pl.update);
     assert!(pl.air.gas.temperature < 1000.0);
 }
+
+#[test]
+fn reconfiguring_a_smart_pipe_keeps_its_gas_and_connections() {
+    let mut net = Pipenet::default();
+    let ids: Vec<_> = (0..3).map(|x| net.add(pipe(x, 0, 3, BLUE))).collect();
+    net.build();
+    let line = net.pipeline_of(ids[0], 0).expect("one pipeline");
+    net.pipeline_air_mut(line).expect("line").merge(&o2(30.0));
+    let before = net.total_moles();
+    // The middle pipe keeps east-west (its connections) and drops north-south, as
+    // `try_smart_reconfiguration` does to a straight pipe crossed by a new one.
+    let mid = net
+        .reconnect(ids[1], 4 | 8, default_node_dirs(4, 4 | 8), 3, BLUE)
+        .expect("reconnected");
+    assert!(
+        close(net.total_moles(), before),
+        "{} vs {before}",
+        net.total_moles()
+    );
+    let line = net.pipeline_of(mid, 0).expect("still in a pipeline");
+    assert_eq!(net.pipeline_of(ids[0], 0), Some(line));
+    assert_eq!(net.pipeline_of(ids[2], 0), Some(line));
+    assert_eq!(net.device(mid).expect("mid").init_dirs, 4 | 8);
+}
