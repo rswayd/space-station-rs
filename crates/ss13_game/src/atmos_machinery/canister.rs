@@ -73,7 +73,7 @@ pub fn shield_energy(pressure: f64, temperature: f64, canister: &Canister, dt: f
 }
 
 /// tg `powered(AREA_USAGE_EQUIP, ignore_use_power = TRUE)`.
-fn equipment_powered(world: &World, canister: Entity) -> bool {
+pub(super) fn equipment_powered(world: &World, canister: Entity) -> bool {
     crate::power::machine_power(world, canister)
         .and_then(|pm| world.get::<AreaPower>(pm.area))
         .is_some_and(|a| a.powered(Channel::Equip))

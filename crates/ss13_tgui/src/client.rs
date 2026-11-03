@@ -480,6 +480,8 @@ impl Plugin for TguiClientPlugin {
             .register_ui_view::<crate::interfaces::color_picker::ColorPickerUi>()
             .register_ui_view::<crate::interfaces::disposal_unit::DisposalUnitUi>()
             .register_ui_view::<crate::interfaces::dna_console::DnaConsoleUi>()
+            .register_ui_view::<crate::interfaces::electrolyzer::ElectrolyzerUi>()
+            .register_ui_view::<crate::interfaces::crystallizer::CrystallizerUi>()
             .register_ui_view::<crate::interfaces::destination_tagger::DestinationTaggerUi>();
         app.init_resource::<ClientWindows>()
             .init_resource::<HeadlessUis>()

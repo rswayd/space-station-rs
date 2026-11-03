@@ -16,6 +16,7 @@
 //! lit with [`Atmos::hotspot_expose`], drawn as [`HotspotEffect`] entities (tg's sprite and
 //! light) and burn what is on their tile through [`FireAct`] messages.
 
+pub mod electrolysis;
 pub mod gas;
 pub mod level;
 pub mod pipenet;

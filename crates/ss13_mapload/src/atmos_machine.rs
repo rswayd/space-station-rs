@@ -237,6 +237,219 @@ pub const ATMOS_PIPE_RECIPES: [(&str, &[PipeRecipe]); 4] = [
     ),
 ];
 
+/// `/obj/machinery/atmospherics/components/binary/crystallizer`.
+pub const CRYSTALLIZER: &str = "/obj/machinery/atmospherics/components/binary/crystallizer";
+
+/// One `/datum/gas_recipe/crystallizer` (`gas_recipe_machines/atmos_machines_recipes.dm`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GasRecipe {
+    pub id: &'static str,
+    pub name: &'static str,
+    /// Kelvin; `TCMB` and `INFINITY` by default.
+    pub min_temp: f64,
+    pub max_temp: f64,
+    /// Joules a step releases (negative: absorbs).
+    pub energy_release: f64,
+    /// `dangerous`: its making is reported to the admins.
+    pub dangerous: bool,
+    /// Gas (the `/datum/gas` path's last element) and moles.
+    pub requirements: &'static [(&'static str, f64)],
+    /// Path and count.
+    pub products: &'static [(&'static str, u32)],
+}
+
+const TCMB: f64 = 2.7;
+/// DM `INFINITY`.
+const INFINITY: f64 = 1e31;
+
+/// `GLOB.gas_recipe_meta` for the crystallizer, in declaration order.
+pub const CRYSTALLIZER_RECIPES: [GasRecipe; 17] = [
+    GasRecipe {
+        id: "hyper_crystalium",
+        name: "Hyper-Noblium Crystal",
+        min_temp: 3.0,
+        max_temp: 250.0,
+        energy_release: -250_000.0,
+        dangerous: false,
+        requirements: &[("oxygen", 1000.0), ("hypernoblium", 85.0)],
+        products: &[("/obj/item/hypernoblium_crystal", 1)],
+    },
+    GasRecipe {
+        id: "metal_h",
+        name: "Metallic Hydrogen",
+        min_temp: 50_000.0,
+        max_temp: 150_000.0,
+        energy_release: -2_500_000.0,
+        dangerous: false,
+        requirements: &[("hydrogen", 300.0), ("bz", 50.0)],
+        products: &[("/obj/item/stack/sheet/mineral/metal_hydrogen", 1)],
+    },
+    GasRecipe {
+        id: "healium_g",
+        name: "Healium Crystal",
+        min_temp: 200.0,
+        max_temp: 400.0,
+        energy_release: -2_000_000.0,
+        dangerous: false,
+        requirements: &[("healium", 100.0), ("oxygen", 120.0), ("plasma", 50.0)],
+        products: &[("/obj/item/grenade/gas_crystal/healium_crystal", 1)],
+    },
+    GasRecipe {
+        id: "proto_nitrate_g",
+        name: "Proto-Nitrate Crystal",
+        min_temp: 200.0,
+        max_temp: 400.0,
+        energy_release: 1_500_000.0,
+        dangerous: false,
+        requirements: &[
+            ("proto_nitrate", 100.0),
+            ("nitrogen", 80.0),
+            ("oxygen", 80.0),
+        ],
+        products: &[("/obj/item/grenade/gas_crystal/proto_nitrate_crystal", 1)],
+    },
+    GasRecipe {
+        id: "hot_ice",
+        name: "Hot Ice",
+        min_temp: 15.0,
+        max_temp: 35.0,
+        energy_release: -3_000_000.0,
+        dangerous: false,
+        requirements: &[("freon", 60.0), ("plasma", 160.0), ("oxygen", 80.0)],
+        products: &[("/obj/item/stack/sheet/hot_ice", 1)],
+    },
+    GasRecipe {
+        id: "ammonia_crystal",
+        name: "Ammonia Crystal",
+        min_temp: 200.0,
+        max_temp: 240.0,
+        energy_release: 950_000.0,
+        dangerous: false,
+        requirements: &[("hydrogen", 50.0), ("nitrogen", 40.0)],
+        products: &[("/obj/item/stack/ammonia_crystals", 2)],
+    },
+    GasRecipe {
+        id: "crystal_shard",
+        name: "Supermatter Crystal Shard",
+        min_temp: 10.0,
+        max_temp: 20.0,
+        energy_release: 3_500_000.0,
+        dangerous: true,
+        requirements: &[
+            ("hypernoblium", 250.0),
+            ("antinoblium", 250.0),
+            ("bz", 200.0),
+            ("plasma", 5000.0),
+            ("oxygen", 4500.0),
+        ],
+        products: &[("/obj/machinery/power/supermatter_crystal/shard", 1)],
+    },
+    GasRecipe {
+        id: "n2o_crystal",
+        name: "Nitrous Oxide Crystal",
+        min_temp: 50.0,
+        max_temp: 350.0,
+        energy_release: 3_500_000.0,
+        dangerous: false,
+        requirements: &[("nitrous_oxide", 150.0), ("bz", 30.0)],
+        products: &[("/obj/item/grenade/gas_crystal/nitrous_oxide_crystal", 1)],
+    },
+    GasRecipe {
+        id: "diamond",
+        name: "Diamond",
+        min_temp: 10_000.0,
+        max_temp: 30_000.0,
+        energy_release: 9_500_000.0,
+        dangerous: false,
+        requirements: &[("carbon_dioxide", 1500.0)],
+        products: &[("/obj/item/stack/sheet/mineral/diamond", 1)],
+    },
+    GasRecipe {
+        id: "plasma_sheet",
+        name: "Solidified Plasma",
+        min_temp: 10.0,
+        max_temp: 20.0,
+        energy_release: 3_500_000.0,
+        dangerous: false,
+        requirements: &[("plasma", 450.0)],
+        products: &[("/obj/item/stack/sheet/mineral/plasma", 1)],
+    },
+    GasRecipe {
+        id: "crystal_cell",
+        name: "Crystal Cell",
+        min_temp: 50.0,
+        max_temp: 90.0,
+        energy_release: -800_000.0,
+        dangerous: false,
+        requirements: &[("plasma", 800.0), ("helium", 100.0), ("bz", 50.0)],
+        products: &[("/obj/item/stock_parts/power_store/cell/crystal_cell", 1)],
+    },
+    GasRecipe {
+        id: "zaukerite",
+        name: "Solidified Zauker",
+        min_temp: 5.0,
+        max_temp: 20.0,
+        energy_release: 2_900_000.0,
+        dangerous: false,
+        requirements: &[("antinoblium", 5.0), ("zauker", 20.0), ("bz", 7.5)],
+        products: &[("/obj/item/stack/sheet/mineral/zaukerite", 2)],
+    },
+    GasRecipe {
+        id: "fuel_basic",
+        name: "Standard Fuel Pellet",
+        min_temp: TCMB,
+        max_temp: INFINITY,
+        energy_release: -6_000_000.0,
+        dangerous: false,
+        requirements: &[("oxygen", 50.0), ("plasma", 100.0)],
+        products: &[("/obj/item/fuel_pellet", 1)],
+    },
+    GasRecipe {
+        id: "fuel_advanced",
+        name: "Advanced Fuel Pellet",
+        min_temp: TCMB,
+        max_temp: INFINITY,
+        energy_release: -6_000_000.0,
+        dangerous: false,
+        requirements: &[("tritium", 100.0), ("hydrogen", 100.0)],
+        products: &[("/obj/item/fuel_pellet/advanced", 1)],
+    },
+    GasRecipe {
+        id: "fuel_exotic",
+        name: "Exotic Fuel Pellet",
+        min_temp: TCMB,
+        max_temp: INFINITY,
+        energy_release: -6_000_000.0,
+        dangerous: false,
+        requirements: &[("hypernoblium", 100.0), ("nitrium", 100.0)],
+        products: &[("/obj/item/fuel_pellet/exotic", 1)],
+    },
+    GasRecipe {
+        id: "crystal_foam",
+        name: "Foam Crystal",
+        min_temp: TCMB,
+        max_temp: INFINITY,
+        energy_release: 140_000.0,
+        dangerous: false,
+        requirements: &[
+            ("carbon_dioxide", 150.0),
+            ("nitrous_oxide", 100.0),
+            ("water_vapor", 25.0),
+        ],
+        products: &[("/obj/item/grenade/gas_crystal/crystal_foam", 1)],
+    },
+    GasRecipe {
+        id: "crystallized_nitrium",
+        name: "Nitrium Crystal",
+        min_temp: 10.0,
+        max_temp: 25.0,
+        energy_release: -45_000.0,
+        dangerous: false,
+        requirements: &[("nitrium", 150.0), ("oxygen", 70.0), ("bz", 50.0)],
+        products: &[("/obj/item/nitrium_crystal", 1)],
+    },
+];
+
 /// `GLOB.gas_id_to_canister` in `sort_list` order: a canister's `relabel` choices and the type
 /// each copies. Read at runtime, so `convert` keeps their prototypes.
 pub const CANISTER_LABELS: [(&str, &str); 22] = [

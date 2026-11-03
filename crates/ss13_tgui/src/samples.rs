@@ -21,11 +21,15 @@ use crate::interfaces::atmos_control::{
 };
 use crate::interfaces::checkbox_input::{CheckboxInputStatic, CheckboxInputUi};
 use crate::interfaces::color_picker::{ColorPickerStatic, ColorPickerUi};
+use crate::interfaces::crystallizer::{
+    CrystallizerData, CrystallizerStatic, CrystallizerUi, InternalGas, RecipeEntry,
+};
 use crate::interfaces::destination_tagger::{
     DestinationTaggerData, DestinationTaggerStatic, DestinationTaggerUi,
 };
 use crate::interfaces::disposal_unit::{DisposalUnitData, DisposalUnitUi};
 use crate::interfaces::dna_console::{DnaConsoleData, DnaConsoleUi, DnaMutation};
+use crate::interfaces::electrolyzer::{ElectrolyzerData, ElectrolyzerUi};
 use crate::interfaces::gas_analyzer::{
     AtmosHandbook, GasAnalyzerData, GasAnalyzerUi, Gasmix, HandbookGas,
 };
@@ -448,6 +452,18 @@ pub fn sample(name: &str) -> Option<Sample> {
             },
         ),
         DnaConsoleUi::NAME => dna_console(),
+        CrystallizerUi::NAME => crystallizer(),
+        ElectrolyzerUi::NAME => of::<ElectrolyzerUi>(
+            "electrolyzer",
+            &(),
+            &ElectrolyzerData {
+                open: true,
+                on: true,
+                has_powercell: true,
+                anchored: false,
+                power_level: Some(47.0),
+            },
+        ),
         DestinationTaggerUi::NAME => of::<DestinationTaggerUi>(
             "Destination tagger",
             &DestinationTaggerStatic {
@@ -871,6 +887,49 @@ fn dna_console() -> Sample {
 }
 
 /// A short version of `GLOB.atmos_pipe_recipes` and `GLOB.pipe_paint_colors`.
+fn crystallizer() -> Sample {
+    let recipes = [
+        ("Nothing", ""),
+        ("Hyper-Noblium Crystal", "hyper_crystalium"),
+        ("Metallic Hydrogen", "metal_h"),
+        ("Healium Crystal", "healium_g"),
+        ("Hot Ice", "hot_ice"),
+        ("Diamond", "diamond"),
+        ("Solidified Plasma", "plasma_sheet"),
+        ("Standard Fuel Pellet", "fuel_basic"),
+        ("Nitrium Crystal", "crystallized_nitrium"),
+    ];
+    let gas = |name: &str, id: &str, amount: f32| InternalGas {
+        name: name.into(),
+        id: id.into(),
+        amount,
+    };
+    of::<CrystallizerUi>(
+        "crystallizer",
+        &CrystallizerStatic {
+            selected_recipes: recipes
+                .iter()
+                .map(|(name, id)| RecipeEntry {
+                    name: (*name).into(),
+                    id: (*id).into(),
+                })
+                .collect(),
+        },
+        &CrystallizerData {
+            on: true,
+            selected: "fuel_basic".into(),
+            internal_gas_data: vec![gas("Oxygen", "o2", 61.27), gas("Plasma", "plasma", 118.4)],
+            requirements: "To create Standard Fuel Pellet you will need:\n-50 moles of Oxygen\n\
+                           -100 moles of Plasma\nIn a temperature range between 2.7 K and 1e+31 \
+                           K\nThe crystallization reaction will be endothermic"
+                .into(),
+            internal_temperature: 412.6,
+            progress_bar: 42.0,
+            gas_input: 0.5,
+        },
+    )
+}
+
 fn pipe_dispenser_static() -> PipeDispenserStatic {
     let category = |name: &str, recipes: &[&str]| PipeCategory {
         cat_name: name.into(),

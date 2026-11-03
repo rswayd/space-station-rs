@@ -213,6 +213,10 @@ fn convert_cmd(config: &MapLoadPlugin, mut map_dirs: Vec<PathBuf>) -> anyhow::Re
     for (_, recipes) in ss13_mapload::atmos_machine::ATMOS_PIPE_RECIPES {
         used.extend(recipes.iter().filter_map(|r| r.path).map(str::to_owned));
     }
+    // The crystallizer makes its recipes' products.
+    for recipe in ss13_mapload::atmos_machine::CRYSTALLIZER_RECIPES {
+        used.extend(recipe.products.iter().map(|(path, _)| (*path).to_owned()));
+    }
     let conversion = convert(&types, used.iter().map(String::as_str))?;
     let out = config.prototypes_dir().join("dm_types.ron");
     std::fs::create_dir_all(config.prototypes_dir())?;

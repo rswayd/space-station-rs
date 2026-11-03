@@ -1617,6 +1617,8 @@ pub fn interact(
     }
     if super::control::interact(world, client, mob, target)
         || super::dispenser::interact(world, client, mob, target)
+        || super::electrolyzer::interact(world, client, mob, target, modifiers.alt)
+        || (!modifiers.alt && super::crystallizer::interact(world, client, mob, target))
     {
         return true;
     }
@@ -1914,13 +1916,9 @@ pub fn complete(world: &mut World, mob: Entity, action: &crate::tools::DoAfter, 
             if now != was {
                 return;
             }
-            let huge = world.get::<PortableScrubber>(target).is_some();
+            let what = unfasten_noun(world, target);
             if !was && crate::construction::blocked_for(world, target) {
-                let text = if huge {
-                    HUGE_BLOCKED
-                } else {
-                    "Вам не удалось прикрутить раздатчик труб."
-                };
+                let text = format!("Вам не удалось прикрутить {what}.");
                 tell(world, action.client, Span::Notice, text);
                 return;
             }
@@ -1930,11 +1928,10 @@ pub fn complete(world: &mut World, mob: Entity, action: &crate::tools::DoAfter, 
             {
                 s.on = false;
             }
-            let text = match (huge, was) {
-                (true, true) => "Вы откручиваете большой воздушный скруббер.",
-                (true, false) => "Вы прикручиваете большой воздушный скруббер.",
-                (false, true) => "Вы откручиваете раздатчик труб.",
-                (false, false) => "Вы прикручиваете раздатчик труб.",
+            let text = if was {
+                format!("Вы откручиваете {what}.")
+            } else {
+                format!("Вы прикручиваете {what}.")
             };
             tell(world, action.client, Span::Notice, text);
             if let Some(&pos) = world.get::<TilePos>(target) {
@@ -1981,6 +1978,20 @@ pub fn complete(world: &mut World, mob: Entity, action: &crate::tools::DoAfter, 
 }
 
 const HUGE_BLOCKED: &str = "Вам не удалось прикрутить большой воздушный скруббер.";
+
+/// What a `default_unfasten_wrench` message names, in the accusative.
+fn unfasten_noun(world: &World, target: Entity) -> &'static str {
+    if world.get::<PortableScrubber>(target).is_some() {
+        "большой воздушный скруббер"
+    } else if world
+        .get::<super::electrolyzer::Electrolyzer>(target)
+        .is_some()
+    {
+        "электролизёр"
+    } else {
+        "раздатчик труб"
+    }
+}
 
 /// An item on an atmos machine. True when handled.
 pub fn item_interaction(
@@ -2089,6 +2100,8 @@ pub fn item_interaction(
     };
     if super::rpd::item_interaction(world, actor, held, target, modifiers)
         || super::dispenser::item_interaction(world, actor, held, target, tool)
+        || super::electrolyzer::item_interaction(world, actor, held, target, tool)
+        || super::crystallizer::item_interaction(world, client, target, tool)
     {
         return true;
     }
@@ -2278,6 +2291,8 @@ pub fn plugin(app: &mut App) {
         .register_ui::<AirAlarmWindow>()
         .register_ui::<super::dispenser::PipeDispenserWindow>()
         .register_ui::<super::rpd::RpdWindow>()
+        .register_ui::<super::electrolyzer::ElectrolyzerWindow>()
+        .register_ui::<super::crystallizer::CrystallizerWindow>()
         .add_observer(super::rpd::attach)
         .add_systems(
             Update,
@@ -2296,14 +2311,21 @@ pub fn plugin(app: &mut App) {
                     apply_alarm_acts,
                     super::dispenser::dispenser_acts,
                     super::rpd::rpd_acts,
+                    super::electrolyzer::electrolyzer_acts,
+                    super::crystallizer::crystallizer_acts,
                 )
                     .in_set(UiSystems::Handle),
                 super::dispenser::init_dispensers,
+                super::electrolyzer::init_electrolyzers,
+                super::crystallizer::init_crystallizers,
                 super::canister::relabel_answers
                     .in_set(UiSystems::Handle)
                     .after(ss13_tgui::prompt::PromptSystems::Answer),
                 (unpowered_windows, super::rpd::window_status).in_set(UiSystems::StatusHook),
                 ctrl_clicks
+                    .after(ss13_world::WorldSystems::Movement)
+                    .after(crate::click::ResolveClicks),
+                super::crystallizer::crystallizer_ctrl_clicks
                     .after(ss13_world::WorldSystems::Movement)
                     .after(crate::click::ResolveClicks),
             ),

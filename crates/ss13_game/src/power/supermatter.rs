@@ -838,8 +838,8 @@ enum Target {
 
 /// `supermatter_zap`: picks the best target class in range (coils 70%, rods, living 20%,
 /// machines 40%, any object), hits it and arcs on with what is left.
-// shortcut: range only, no line of sight (`oview`); no electrolysis of the target's air; mobs
-// take the shock without gloves or stun; machines and objects do not take damage or explode.
+// shortcut: range only, no line of sight (`oview`); mobs take the shock without gloves or
+// stun; machines and objects do not take damage or explode.
 pub fn zap(world: &mut World, rng: &mut CombatRng, arc: ZapArc, hit: &mut Vec<Entity>, depth: u32) {
     let ZapArc {
         mut energy,
@@ -973,9 +973,16 @@ pub fn zap(world: &mut World, rng: &mut CombatRng, arc: ZapArc, hit: &mut Vec<En
             energy /= 2.0;
         }
     }
+    // The target's air: its pressure, then `electrolyze(zap_str / 200, power_level)`.
     let pressure = world
-        .get_resource::<Atmos>()
-        .and_then(|a| a.pressure(target_pos))
+        .get_resource_mut::<Atmos>()
+        .and_then(|mut a| {
+            a.modify_air(target_pos, |air| {
+                let pressure = air.pressure();
+                air.electrolyze(energy / 200.0, Some(power_level));
+                pressure
+            })
+        })
         .unwrap_or(1.0)
         .max(1.0);
     let range = (energy / pressure * 10.0).clamp(2.0, 7.0) as u32;

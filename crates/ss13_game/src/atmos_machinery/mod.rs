@@ -199,6 +199,11 @@ impl Plugin for AtmosMachineryPlugin {
                     devices::process_he_pipes,
                     portable::process_portables,
                     pipe_scrubber::process_pipe_scrubbers,
+                    (
+                        electrolyzer::process_electrolyzers,
+                        crystallizer::process_crystallizers,
+                    )
+                        .chain(),
                     tank::process_tanks,
                     damage::process_container_damage,
                     alarm::process_alarms,
@@ -216,6 +221,8 @@ impl Plugin for AtmosMachineryPlugin {
                     looks::sync_machine_looks,
                     thermo::sync_thermo_looks,
                     pipe_scrubber::pipe_scrubber_looks,
+                    electrolyzer::electrolyzer_looks,
+                    crystallizer::crystallizer_looks,
                     devices::glow_he_pipes,
                     canister::process_canister_shielding,
                     gas_visuals::sync_gas_visuals.run_if(air_tick_due),
@@ -671,8 +678,10 @@ pub mod airlock_pump;
 pub mod canister;
 pub mod consoles;
 pub mod control;
+pub mod crystallizer;
 pub mod damage;
 pub mod dispenser;
+pub mod electrolyzer;
 pub mod fitting;
 pub mod gas_visuals;
 pub mod meter;
@@ -699,6 +708,7 @@ pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<(ss13_chat::
     }
     overclock::examine_lines(world, target, lines);
     canister::examine_lines(world, target, lines);
+    electrolyzer::examine_lines(world, target, lines);
     thermo::examine_lines(world, target, lines);
     tank_frame::examine_lines(world, target, lines);
     fitting::examine_lines(world, target, lines);

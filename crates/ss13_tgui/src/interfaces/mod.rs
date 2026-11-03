@@ -9,9 +9,11 @@ pub mod atmos_alert;
 pub mod atmos_control;
 pub mod checkbox_input;
 pub mod color_picker;
+pub mod crystallizer;
 pub mod destination_tagger;
 pub mod disposal_unit;
 pub mod dna_console;
+pub mod electrolyzer;
 pub mod gas_analyzer;
 #[cfg(feature = "client")]
 pub(crate) mod input_buttons;

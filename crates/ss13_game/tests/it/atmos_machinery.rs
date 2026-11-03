@@ -770,6 +770,122 @@ fn metastation() {
         assert_eq!(world.resource::<SpatialIndex>().on_tile(pos).len(), before);
         println!("rpd: pump built, layer 1 refused for heat exchange");
         server.update();
+
+        // An electrolyzer: the panel opens, a cell goes in, the panel closes, alt-click turns
+        // it on; over humid air it makes hydrogen and oxygen, draws on the cell and looks
+        // busy. The mapped one is set up too.
+        use ss13_game::atmos_machinery::electrolyzer::{self as electro, Electrolyzer};
+        use ss13_game::mecha::core::ItemCell;
+        use ss13_game::tools::{Actor, ToolKind};
+        let world = server.world_mut();
+        let machine = ss13_game::construction::spawn_obj(world, electro::ELECTROLYZER, pos)
+            .expect("an electrolyzer");
+        let cell = ss13_game::construction::spawn_obj(
+            world,
+            "/obj/item/stock_parts/power_store/cell/high",
+            pos,
+        )
+        .expect("a cell");
+        server.update();
+        let world = server.world_mut();
+        let mut q = world.query::<&Electrolyzer>();
+        assert!(q.iter(world).count() >= 2, "the mapped one and ours");
+        let nobody = Entity::PLACEHOLDER;
+        let actor = Actor {
+            client: nobody,
+            mob: nobody,
+            item: None,
+        };
+        let screwdriver = |world: &mut World| {
+            electro::item_interaction(world, actor, machine, machine, Some(ToolKind::Screwdriver))
+        };
+        assert!(electro::item_interaction(world, actor, cell, machine, None));
+        assert_eq!(electro::cell_of(world, machine), None, "the panel is shut");
+        screwdriver(world);
+        electro::item_interaction(world, actor, cell, machine, None);
+        assert_eq!(electro::cell_of(world, machine), Some(cell));
+        electro::interact(world, nobody, nobody, machine, true);
+        assert!(
+            !world.get::<Electrolyzer>(machine).unwrap().on,
+            "not with the panel open"
+        );
+        screwdriver(world);
+        electro::interact(world, nobody, nobody, machine, true);
+        assert!(world.get::<Electrolyzer>(machine).unwrap().on);
+        world
+            .resource_mut::<Atmos>()
+            .modify_air(pos, |a| a.set(ss13_atmos::GasId::WATER_VAPOR, 50.0));
+        let charge = |world: &World| world.get::<ItemCell>(cell).unwrap().0.charge;
+        let before = charge(server.world());
+        run(&mut server, 2.0);
+        let world = server.world_mut();
+        let hydrogen: f64 = std::iter::once(pos)
+            .chain(world.resource::<Atmos>().adjacent_turfs(pos, true))
+            .filter_map(|t| {
+                world
+                    .resource::<Atmos>()
+                    .moles(t, ss13_atmos::GasId::HYDROGEN)
+            })
+            .sum();
+        let used = before - charge(world);
+        let m = world.get::<Electrolyzer>(machine).unwrap();
+        assert!(m.on && m.working);
+        assert!(hydrogen > 1.0, "hydrogen around: {hydrogen}");
+        assert!(used > 0.0 && used < 1000.0, "cell used {used} J");
+        println!("electrolyzer: {hydrogen:.2} mol of hydrogen for {used:.0} J of the cell");
+        server.update();
+
+        // The mapped crystallizer set to a standard fuel pellet (any temperature) with its
+        // input port holding twice the recipe: it draws the gases in, and a pellet drops south
+        // named after its quality.
+        use ss13_game::atmos_machinery::crystallizer::{self, Crystallizer};
+        let world = server.world_mut();
+        let mut q = world.query::<(Entity, &Crystallizer, &AtmosDevice, &TilePos)>();
+        let (machine, id, at) = q
+            .iter(world)
+            .map(|(e, _, d, &p)| (e, d.id, p))
+            .next()
+            .expect("MetaStation has a crystallizer");
+        let fuel = crystallizer::CRYSTALLIZER_RECIPES
+            .iter()
+            .position(|r| r.id == "fuel_basic")
+            .unwrap();
+        crystallizer::select_recipe(world, machine, Some(fuel));
+        {
+            let mut c = world.get_mut::<Crystallizer>(machine).unwrap();
+            c.on = true;
+            c.gas_input = 1.0;
+        }
+        {
+            let mut net = world.resource_mut::<Pipenet>();
+            let input = &mut net.airs_mut(id).unwrap()[1];
+            input.gas.set(ss13_atmos::GasId::O2, 100.0);
+            input.gas.set(ss13_atmos::GasId::PLASMA, 200.0);
+            input.gas.temperature = 300.0;
+            net.update_parents(id);
+        }
+        let south = at.step(ss13_shared::Dir::South);
+        let pellets = |world: &mut World| {
+            let mut q =
+                world.query::<(&ss13_mapload::item::DmItem, &ss13_mapload::DmName, &TilePos)>();
+            q.iter(world)
+                .filter(|(o, _, p)| **p == south && o.path == "/obj/item/fuel_pellet")
+                .map(|(_, n, _)| n.name.clone())
+                .collect::<Vec<_>>()
+        };
+        assert!(pellets(world).is_empty());
+        run(&mut server, 6.0);
+        let world = server.world_mut();
+        let made = pellets(world);
+        let c = world.get::<Crystallizer>(machine).unwrap();
+        println!(
+            "crystallizer {at:?}: {made:?}, progress {:.1}, {:.1} mol inside",
+            c.progress,
+            c.internal.total_moles()
+        );
+        assert_eq!(made.len(), 1, "one pellet south of the crystallizer");
+        assert!(made[0].contains(' '), "a quality word in front: {made:?}");
+        server.update();
     }
 
     // A meter without a pipe on its layer stays unattached, as in tg (MetaStation has one
