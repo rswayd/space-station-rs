@@ -6054,6 +6054,7 @@ name = "ss13_client"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "serde",
  "ss13_admin",
  "ss13_chat",
  "ss13_debug",

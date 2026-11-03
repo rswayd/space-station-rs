@@ -266,6 +266,20 @@ quit
 
 To look at a screenshot, open the PNG (an agent reads it as an image file).
 
+## UI gallery
+
+Every tgui window the client knows, without a server or assets:
+
+```sh
+cargo run -p ss13_client --bin ui_gallery                      # the list; click a name to open it
+cargo run -p ss13_client --bin ui_gallery -- Canister          # and open one at once
+cargo run -p ss13_client --bin ui_gallery -- Canister --screenshot out.png   # PNG, then exit
+```
+
+Windows open with sample data (`crates/ss13_tgui/src/samples.rs`); their buttons change nothing,
+the list shows the last action and logs it. A new interface needs a sample there:
+`cargo test -p ss13_tgui --features client --test samples` fails for a view without one.
+
 ## Debug UI
 
 An egui overlay in the client (`crates/ss13_debug`): built into debug builds and the browser

@@ -8,6 +8,7 @@ license.workspace = true
 
 [dependencies]
 ss13_shared.workspace = true
+serde.workspace = true
 ss13_game = { workspace = true, features = ["client"] }
 ss13_net = { workspace = true, features = ["client"] }
 ss13_render.workspace = true

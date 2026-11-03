@@ -36,12 +36,12 @@ required-features = ["client"]
 name = "modals"
 required-features = ["client"]
 
-[[example]]
-name = "vending_bench"
+[[test]]
+name = "samples"
 required-features = ["client"]
 
 [[example]]
-name = "modals_gallery"
+name = "vending_bench"
 required-features = ["client"]
 
 [[example]]

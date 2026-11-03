@@ -19,6 +19,8 @@ pub mod client;
 pub mod interfaces;
 #[cfg(feature = "server")]
 pub mod prompt;
+#[cfg(feature = "client")]
+pub mod samples;
 #[cfg(feature = "server")]
 pub mod server;
 

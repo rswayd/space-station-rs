@@ -324,6 +324,24 @@ impl AppTguiClientExt for App {
     }
 }
 
+/// The names of the views this app can draw, sorted (the `ui_gallery` list).
+pub fn view_names(world: &World) -> Vec<&'static str> {
+    let mut names: Vec<&'static str> = world
+        .get_resource::<UiViews>()
+        .map(|v| v.0.keys().copied().collect())
+        .unwrap_or_default();
+    names.sort_unstable();
+    names
+}
+
+/// Whether `static_data` and `data` decode as the view `name` expects.
+pub fn view_decodes(world: &World, name: &str, static_data: &[u8], data: &[u8]) -> bool {
+    world
+        .get_resource::<UiViews>()
+        .and_then(|v| v.0.get(name))
+        .is_some_and(|view| (view.size)(static_data, data).is_some())
+}
+
 type Render = fn(&[u8], &[u8], &UiLocalState) -> Result<Box<dyn Scene>, postcard::Error>;
 
 fn size<T: ClientUi>(static_data: &[u8], data: &[u8]) -> Option<(f32, f32)> {
