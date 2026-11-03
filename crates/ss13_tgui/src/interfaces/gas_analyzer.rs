@@ -267,11 +267,13 @@ pub(crate) mod client_side {
             .collect()
     }
 
-    fn search(key: &str, placeholder: &str) -> impl Scene + use<> {
+    /// The search field; it shows what was typed before a tab switch (`inputText={query}`).
+    fn search(key: &str, placeholder: &str, local: &UiLocalState) -> impl Scene + use<> {
+        let value = local.get(key).to_owned();
         let key = key.to_owned();
         let placeholder = placeholder.to_owned();
         bsn! {
-            Input { placeholder: placeholder, fluid: true }
+            Input { value: value, placeholder: placeholder, fluid: true }
             LocalOnInput(key)
         }
     }
@@ -337,7 +339,7 @@ pub(crate) mod client_side {
                     EntityScene(bsn! {
                         @StackItem { @grow: 1.0 }
                         Children [
-                            @Section { @title: "Relevant Reactions", @scrollable: true }
+                            @Section { @title: "Relevant Reactions", @scrollable: true, @fill: true }
                             Children [ @Stack { @vertical: true } Children [ {related} ] ]
                         ]
                     })
@@ -347,7 +349,7 @@ pub(crate) mod client_side {
                     the gas, the harder it will be to heat it up."
                     .to_owned();
                 Box::new(EntityScene(bsn! {
-                    @Stack { @vertical: true }
+                    @Stack { @vertical: true, @fill: true }
                     Children [
                         @StackItem Propagate::<Bold>(Bold(true)) Children [ Text(title) ]
                         --
@@ -382,19 +384,19 @@ pub(crate) mod client_side {
             LOCAL_GAS_SEARCH,
             &active,
         );
-        let bar = search(LOCAL_GAS_SEARCH, "Gas Lookup");
+        let bar = search(LOCAL_GAS_SEARCH, "Gas Lookup", local);
         bsn! {
-            @Section
+            @Section { @fill: true }
             Children [
                 {EntityScene(bar)}
                 --
-                @Stack
+                @Stack { @fill: true }
                 Children [
                     @StackItem Node { width: percent(60) } Children [ {detail} ]
                     --
                     @StackItem { @grow: 1.0 }
                     Children [
-                        @Section { @scrollable: true }
+                        @Section { @scrollable: true, @fill: true }
                         Children [ @Stack { @vertical: true } Children [ {list} ] ]
                     ]
                 ]
@@ -462,7 +464,7 @@ pub(crate) mod client_side {
                         --
                         @StackItem { @grow: 1.0 }
                         Children [
-                            @Section { @scrollable: true }
+                            @Section { @scrollable: true, @fill: true }
                             Children [ @LabeledList Children [ {factors} ] ]
                         ]
                     ]
@@ -478,19 +480,19 @@ pub(crate) mod client_side {
             LOCAL_REACTION_SEARCH,
             &active,
         );
-        let bar = search(LOCAL_REACTION_SEARCH, "Reaction Lookup");
+        let bar = search(LOCAL_REACTION_SEARCH, "Reaction Lookup", local);
         bsn! {
-            @Section
+            @Section { @fill: true }
             Children [
                 {EntityScene(bar)}
                 --
-                @Stack
+                @Stack { @fill: true }
                 Children [
                     @StackItem Node { width: percent(60) } Children [ {detail} ]
                     --
                     @StackItem { @grow: 1.0 }
                     Children [
-                        @Section { @scrollable: true }
+                        @Section { @scrollable: true, @fill: true }
                         Children [ @Stack { @vertical: true } Children [ {list} ] ]
                     ]
                 ]
@@ -516,7 +518,7 @@ pub(crate) mod client_side {
         bsn! {
             @WindowContent
             Children [
-                @Stack { @vertical: true }
+                @Stack { @vertical: true, @fill: true }
                 Children [
                     @StackItem Children [ {mixes} ]
                     --
@@ -547,11 +549,11 @@ pub(crate) mod client_side {
             Box::new(EntityScene(gas_tab(st, local)))
         };
         bsn! {
-            Node { flex_direction: FlexDirection::Column }
+            @Stack { @vertical: true, @fill: true }
             Children [
-                @Tabs Children [ {Vec::from(tabs)} ]
+                @StackItem Children [ @Tabs Children [ {Vec::from(tabs)} ] ]
                 --
-                {body}
+                @StackItem { @grow: 1.0 } Children [ {body} ]
             ]
         }
     }

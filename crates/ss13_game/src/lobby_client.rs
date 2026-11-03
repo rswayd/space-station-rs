@@ -482,7 +482,13 @@ impl ClientUi for JobPrefsUi {
                 ("toggled".to_owned(), if on { "0" } else { "1" }.to_owned()),
             ];
             bsn! {
-                @Button { @content: label, @icon: {if on { "check-square-o" } else { "square-o" }} }
+                @Button {
+                    @content: label,
+                    @icon: {if on { "check-square-o" } else { "square-o" }},
+                    @fluid: true,
+                    @ellipsis: true,
+                    @tooltip: label,
+                }
                 Button { selected: on }
                 Act({SET_ANTAGS.to_owned()})
                 ActParams(params)
@@ -504,7 +510,13 @@ impl ClientUi for JobPrefsUi {
                 --
                 @Section { @title: "Антагонисты" }
                 Children [
-                    Node { flex_direction: FlexDirection::Row, column_gap: px(4) }
+                    // Equal cells, four to a row (tg's antagonists page is a grid of cards).
+                    Node {
+                        display: Display::Grid,
+                        grid_template_columns: {RepeatedGridTrack::flex::<Vec<RepeatedGridTrack>>(4, 1.0)},
+                        column_gap: px(4),
+                        row_gap: px(2),
+                    }
                     Children [ {antags} ]
                 ]
                 --

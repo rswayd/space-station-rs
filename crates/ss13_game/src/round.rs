@@ -830,32 +830,37 @@ pub enum AppearanceField {
 }
 
 impl ServerUi for JobPrefsUi {
+    /// `NewPlayer`: the window closes on joining the round, as tg's closes with the new player
+    /// mob (`SStgui.close_user_uis`).
     type Source = (
         &'static JobPreferences,
         &'static PrefsBoard,
         &'static AntagPreferences,
         &'static AppearancePrefs,
+        &'static NewPlayer,
     );
     type UserParam = Option<Res<'static, Jobs>>;
     type Act = PrefAct;
 
     fn static_data(
-        (_, board, _, _): (
+        (_, board, ..): (
             &JobPreferences,
             &PrefsBoard,
             &AntagPreferences,
             &AppearancePrefs,
+            &NewPlayer,
         ),
     ) -> JobPrefsStatic {
         (*board.0).clone()
     }
 
     fn data(
-        (prefs, _, antag, look): (
+        (prefs, _, antag, look, _): (
             &JobPreferences,
             &PrefsBoard,
             &AntagPreferences,
             &AppearancePrefs,
+            &NewPlayer,
         ),
         _: Entity,
         jobs: &Option<Res<Jobs>>,

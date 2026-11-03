@@ -79,9 +79,12 @@ fn section(props: SectionProps) -> impl Scene {
         Box::new(bsn! {
             Children [
                 @block()
+                // A filled section's content takes the section's height, not its own content's
+                // (`min-height: auto` would let a long child stretch the whole chain).
                 Node {
                     padding: content_padding,
                     flex_grow: grow,
+                    min_height: {if props.fill { px(0) } else { Val::Auto }},
                 }
                 Part
                 Slot

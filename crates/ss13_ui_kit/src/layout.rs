@@ -265,7 +265,7 @@ fn stack(props: StackProps) -> impl Scene {
         },
         props
             .fill
-            .then(|| bsn! { Node { height: percent(100), flex_grow: 1.0 } }),
+            .then(|| bsn! { Node { height: percent(100), flex_grow: 1.0, min_height: px(0) } }),
         props.zebra.then_some(bsn! { Zebra }),
     )
 }

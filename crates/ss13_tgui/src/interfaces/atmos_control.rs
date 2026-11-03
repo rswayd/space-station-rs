@@ -209,7 +209,7 @@ mod client_side {
         bsn! {
             @WindowContent
             Children [
-                @Stack { @vertical: true }
+                @Stack { @vertical: true, @fill: true }
                 Children [
                     @StackItem
                     Children [
