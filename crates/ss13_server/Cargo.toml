@@ -20,5 +20,9 @@ bevy = { workspace = true, features = ["std", "multi_threaded", "bevy_log", "bev
 ss13_debug = { workspace = true, features = ["server"] }
 ss13_admin = { workspace = true, features = ["server"] }
 
+[features]
+# Bevy's system spans for `SS13_PROFILE=1` (`ss13_debug::profile`, docs/RUNNING.md).
+profile = ["bevy/trace"]
+
 [lints]
 workspace = true

@@ -32,14 +32,15 @@ fn main() -> AppExit {
         }),
         ..default()
     });
-    let defaults = if debug_ui {
-        defaults.set(bevy::log::LogPlugin {
-            custom_layer: ss13_debug::client::log_layer,
-            ..default()
-        })
-    } else {
-        defaults
-    };
+    // `SS13_PROFILE=1`: per-system time every 10 s (a `--features profile` build).
+    let defaults = defaults.set(bevy::log::LogPlugin {
+        custom_layer: if debug_ui {
+            debug_layers
+        } else {
+            ss13_debug::profile::profile_layer
+        },
+        ..default()
+    });
     let defaults = match &script {
         Some(script) => script.adjust_defaults(defaults),
         None => defaults,
@@ -130,4 +131,16 @@ fn log_errors_keep_panics(mut error: BevyError, ctx: ErrorContext) {
         std::panic::resume_unwind(payload);
     }
     bevy::ecs::error::error(error, ctx);
+}
+
+/// The debug overlay's log tail and, with `SS13_PROFILE`, the per-system profile.
+fn debug_layers(app: &mut App) -> Option<bevy::log::BoxedLayer> {
+    let layers: Vec<bevy::log::BoxedLayer> = [
+        ss13_debug::client::log_layer(app),
+        ss13_debug::profile::profile_layer(app),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    Some(Box::new(layers))
 }

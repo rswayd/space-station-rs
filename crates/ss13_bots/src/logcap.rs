@@ -97,6 +97,9 @@ impl<S: Subscriber> Layer<S> for Capture {
 
 /// Installs the capture as the global subscriber (once per process; later calls do nothing).
 pub fn install() {
-    let subscriber = bevy::log::tracing_subscriber::registry().with(Capture);
+    // `SS13_PROFILE=1` with the `profile` feature: per-system time on stderr every 10 s.
+    let subscriber = bevy::log::tracing_subscriber::registry()
+        .with(ss13_debug::profile::layer())
+        .with(Capture);
     let _ = bevy::log::tracing::subscriber::set_global_default(subscriber);
 }

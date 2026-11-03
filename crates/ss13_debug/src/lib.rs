@@ -3,6 +3,7 @@
 //! its debug queries and applies its dev tools behind a gate. See `docs/RUNNING.md`, "Debug UI".
 
 pub mod netlog;
+pub mod profile;
 
 #[cfg(feature = "client")]
 pub mod client;

@@ -243,6 +243,10 @@ pub fn sync_machine_looks(world: &mut World) {
         return;
     };
     let mut changed: Vec<(Entity, Look, u8, u8, TilePos)> = Vec::new();
+    // Devices without a look here (pipes, thermomachines, tanks...): their `LookDirty` from
+    // `init_looks` is dropped too, or the filter matches them on every tick (5900 on
+    // MetaStation, about 1 ms a tick for nothing).
+    let mut no_look: Vec<Entity> = Vec::new();
     {
         let mut q = world.query_filtered::<MachineData, MachineFilter>();
         let net = world.resource::<Pipenet>();
@@ -400,10 +404,14 @@ pub fn sync_machine_looks(world: &mut World) {
             } else if passive {
                 look("passive_vent".into(), true, true)
             } else {
+                no_look.push(e);
                 continue;
             };
             changed.push((e, look, device.layer, device.dir, pos));
         }
+    }
+    for e in no_look {
+        world.entity_mut(e).remove::<LookDirty>();
     }
     for (e, look, layer, dir, pos) in changed {
         world.entity_mut(e).remove::<LookDirty>();

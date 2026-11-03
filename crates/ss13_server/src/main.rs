@@ -32,7 +32,11 @@ fn server(first: bool) -> App {
     )));
     // The global logger is set once per process.
     if first {
-        app.add_plugins(LogPlugin::default());
+        app.add_plugins(LogPlugin {
+            // `SS13_PROFILE=1`: per-system time every 10 s (a `--features profile` build).
+            custom_layer: ss13_debug::profile::profile_layer,
+            ..Default::default()
+        });
     }
     app.add_plugins((
         ss13_world::WorldPlugin,

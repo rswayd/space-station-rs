@@ -266,6 +266,31 @@ quit
 
 To look at a screenshot, open the PNG (an agent reads it as an image file).
 
+## Per-system profile
+
+Which systems take the tick (server) or the frame (client), summed in process, nothing on disk:
+
+```sh
+cargo build -p ss13_server -p ss13_client --features ss13_server/profile,ss13_client/profile
+SS13_PROFILE=1 SS13_MAP=MetaStation SS13_ASSETS=$ASSETS target/debug/ss13_server
+SS13_PROFILE=1 SS13_ASSETS=$ASSETS SS13_TOKEN=alice target/debug/ss13_client
+```
+
+Every 10 s each prints `profile:` lines: the frame count, the average `Main` schedule time, the
+sum of all system runs, and the top systems (`SS13_PROFILE_TOP`, default 25) with time per frame,
+share of `Main`, average and slowest run, and run count. The `profile` feature turns on Bevy's
+system spans, which cost too: the absolute numbers run high, the ranking holds. Render-world
+systems run in parallel with `Main` on the client, so their shares can pass 100%. Bevy's
+`trace_chrome` writes every span to a file instead: gigabytes a minute for the client.
+
+Under load: the bot runner takes the same switch, its server and bots share the report (read the
+average run, `Main` counts every app's frames). A case with N bots walking on a station map:
+
+```sh
+SS13_PROFILE=1 SS13_ASSETS=$ASSETS cargo run -p ss13_bots --features ss13_bots/profile \
+    --bin ss13-bots -- --jobs 1 load30.case
+```
+
 ## UI gallery
 
 Every tgui window the client knows, without a server or assets:

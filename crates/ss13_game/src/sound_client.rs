@@ -6,6 +6,10 @@
 //! applies: the server already attenuated the volume as tg does.
 //!
 //! `SS13_VOLUME` (0-100, default 100) is the master volume.
+//!
+//! Every sound file (13 MB on MetaStation's assets) is read in the background at startup
+//! ([`preload`]); a sound played before that finishes is read on the spot, as before (a cold
+//! read took ~10 ms of the frame).
 // shortcut: the master volume is an environment variable (like `SS13_LIGHTING`); move it to a
 // settings window when the client has one.
 
@@ -15,6 +19,8 @@ use std::path::PathBuf;
 use bevy::audio::{AudioPlayer, AudioSource, GlobalVolume, PlaybackSettings, SpatialListener};
 use bevy::audio::{SpatialScale, Volume};
 use bevy::prelude::*;
+use bevy::tasks::futures_lite::future::poll_once;
+use bevy::tasks::{IoTaskPool, Task, block_on};
 use ss13_net::sound::client::SoundReceived;
 
 /// Tiles between the ears: a source this far to one side plays from that side only.
@@ -36,6 +42,10 @@ struct SoundFiles {
     loaded: HashMap<String, Option<Handle<AudioSource>>>,
 }
 
+/// The background read of every sound file: (path under the sound directory, bytes).
+#[derive(Resource)]
+struct Preloading(Task<Vec<(String, Vec<u8>)>>);
+
 impl Plugin for SoundClientPlugin {
     fn build(&self, app: &mut App) {
         let master = std::env::var("SS13_VOLUME")
@@ -47,9 +57,65 @@ impl Plugin for SoundClientPlugin {
                 root: self.asset_root.join(SOUND_DIR),
                 loaded: HashMap::new(),
             })
-            .add_systems(Startup, spawn_listener)
-            .add_systems(Update, play);
+            .add_systems(Startup, (spawn_listener, start_preload))
+            .add_systems(Update, (preload, play).chain());
     }
+}
+
+/// Every file under `dir`, as paths relative to `root` with `/` separators.
+fn sound_files(root: &std::path::Path, dir: &std::path::Path, out: &mut Vec<String>) {
+    let Ok(entries) = ss13_data::read_dir(dir) else {
+        return;
+    };
+    for path in entries {
+        if ss13_data::is_dir(&path) {
+            sound_files(root, &path, out);
+        } else if let Ok(rel) = path.strip_prefix(root)
+            && path
+                .extension()
+                .is_some_and(|e| matches!(e.to_str(), Some("ogg" | "wav" | "mp3" | "flac")))
+        {
+            out.push(rel.to_string_lossy().replace('\\', "/"));
+        }
+    }
+}
+
+fn start_preload(files: Res<SoundFiles>, mut commands: Commands) {
+    let root = files.root.clone();
+    let task = IoTaskPool::get().spawn(async move {
+        let mut names = Vec::new();
+        sound_files(&root, &root, &mut names);
+        names
+            .into_iter()
+            .filter_map(|name| Some((name.clone(), ss13_data::read(&root.join(&name)).ok()?)))
+            .collect()
+    });
+    commands.insert_resource(Preloading(task));
+}
+
+/// Takes the preloaded files once they are read.
+fn preload(
+    task: Option<ResMut<Preloading>>,
+    mut files: ResMut<SoundFiles>,
+    mut sources: ResMut<Assets<AudioSource>>,
+    mut commands: Commands,
+) {
+    let Some(mut task) = task else {
+        return;
+    };
+    let Some(read) = block_on(poll_once(&mut task.0)) else {
+        return;
+    };
+    commands.remove_resource::<Preloading>();
+    let count = read.len();
+    for (name, bytes) in read {
+        files.loaded.entry(name).or_insert_with(|| {
+            Some(sources.add(AudioSource {
+                bytes: bytes.into(),
+            }))
+        });
+    }
+    info!("sound: {count} files preloaded");
 }
 
 fn spawn_listener(mut commands: Commands) {

@@ -32,5 +32,9 @@ postcard.workspace = true
 name = "ss13-bots"
 path = "src/main.rs"
 
+[features]
+# Bevy's system spans for `SS13_PROFILE=1` (`ss13_debug::profile`).
+profile = ["bevy/trace", "bevy/debug"]
+
 [lints]
 workspace = true
