@@ -25,8 +25,9 @@ use ss13_tgui::interfaces::air_alarm::{
 };
 use ss13_tgui::interfaces::atmos::{
     AtmosFilterData, AtmosFilterUi, AtmosMixerData, AtmosMixerUi, AtmosPumpData, AtmosPumpUi,
-    CanisterData, CanisterStatic, CanisterUi, GasToggle, HoldingTank, PortablePumpData,
-    PortablePumpUi, PortableScrubberData, PortableScrubberUi,
+    AtmosTempGateData, AtmosTempGateUi, AtmosTempPumpData, AtmosTempPumpUi, CanisterData,
+    CanisterStatic, CanisterUi, GasToggle, HoldingTank, PortablePumpData, PortablePumpUi,
+    PortableScrubberData, PortableScrubberUi,
 };
 use ss13_tgui::interfaces::thermo_machine::{ThermoMachineData, ThermoMachineUi};
 use ss13_tgui::server::{
@@ -54,6 +55,16 @@ window!(
     AtmosPumpUi
 );
 window!(FilterWindow, AtmosFilterUi);
+window!(
+    /// `AtmosTempGate`: temperature gates.
+    TempGateWindow,
+    AtmosTempGateUi
+);
+window!(
+    /// `AtmosTempPump`: temperature pumps.
+    TempPumpWindow,
+    AtmosTempPumpUi
+);
 window!(MixerWindow, AtmosMixerUi);
 window!(CanisterWindow, CanisterUi);
 window!(PortablePumpWindow, PortablePumpUi);
@@ -62,14 +73,15 @@ window!(AirAlarmWindow, AirAlarmUi);
 
 use super::alarm::{AirAlarm, AlarmMode, TLV_IGNORE, select_mode};
 use super::devices::{
-    ATMOS_PUMP_MAX_PRESSURE, EXTERNAL_BOUND, GasFilter, GasMixer, GasPump, INTERNAL_BOUND,
-    MAX_OUTPUT_PRESSURE, MAX_TRANSFER_RATE, OutletInjector, PassiveGate, ThermoMachine, Valve,
-    VentPump, VentScrubber, VolumePump,
+    ATMOS_PUMP_MAX_PRESSURE, ConditionalGate, EXTERNAL_BOUND, GasFilter, GasMixer, GasPump,
+    GateCondition, INTERNAL_BOUND, MAX_HEAT_TRANSFER_RATE, MAX_OUTPUT_PRESSURE, MAX_TRANSFER_RATE,
+    OutletInjector, PassiveGate, TEMPERATURE_GATE_MAX, TEMPERATURE_GATE_MIN, TemperaturePump,
+    ThermoMachine, Valve, VentPump, VentScrubber, VolumePump,
 };
 use super::portable::{
     CAN_DEFAULT_RELEASE_PRESSURE, CAN_MAX_RELEASE_PRESSURE, CAN_MIN_RELEASE_PRESSURE, Canister,
-    PRESSURE_LIMIT, PUMP_DEFAULT_PRESSURE, PUMP_MAX_PRESSURE, PUMP_MIN_PRESSURE, PortableAtmos,
-    PortablePump, PortableScrubber, TANK_FRAGMENT_PRESSURE, TANK_LEAK_PRESSURE,
+    PUMP_DEFAULT_PRESSURE, PUMP_MAX_PRESSURE, PUMP_MIN_PRESSURE, PortableAtmos, PortablePump,
+    PortableScrubber, TANK_FRAGMENT_PRESSURE, TANK_LEAK_PRESSURE,
 };
 use super::{AreaAtmos, AtmosDevice};
 use crate::click::CtrlClick;
@@ -133,6 +145,7 @@ impl ServerUi for PumpWindow {
         Option<&'static PassiveGate>,
         Option<&'static VolumePump>,
         Option<&'static OutletInjector>,
+        Option<&'static ConditionalGate>,
     );
     type UserParam = ();
     type Act = PumpAct;
@@ -143,16 +156,18 @@ impl ServerUi for PumpWindow {
             Option<&PassiveGate>,
             Option<&VolumePump>,
             Option<&OutletInjector>,
+            Option<&ConditionalGate>,
         ),
     ) {
     }
 
     fn data(
-        (pump, gate, volume, injector): (
+        (pump, gate, volume, injector, valve): (
             Option<&GasPump>,
             Option<&PassiveGate>,
             Option<&VolumePump>,
             Option<&OutletInjector>,
+            Option<&ConditionalGate>,
         ),
         _: Entity,
         _: &(),
@@ -186,6 +201,18 @@ impl ServerUi for PumpWindow {
                 max_rate: round(MAX_TRANSFER_RATE),
                 ..default()
             }
+        } else if let Some(ConditionalGate {
+            on,
+            condition: GateCondition::Pressure { target },
+            ..
+        }) = valve
+        {
+            AtmosPumpData {
+                on: *on,
+                pressure: round(*target),
+                max_pressure: round(ONE_ATMOSPHERE * 100.0),
+                ..default()
+            }
         } else {
             AtmosPumpData::default()
         }
@@ -209,14 +236,35 @@ type PumpQuery<'w, 's> = Query<
         Option<&'static mut PassiveGate>,
         Option<&'static mut VolumePump>,
         Option<&'static mut OutletInjector>,
+        Option<&'static mut ConditionalGate>,
     ),
 >;
 
 fn apply_pump_acts(mut acts: MessageReader<UiActed<PumpWindow>>, mut machines: PumpQuery) {
     for acted in acts.read() {
-        let Ok((pump, gate, volume, injector)) = machines.get_mut(acted.source) else {
+        let Ok((pump, gate, volume, injector, valve)) = machines.get_mut(acted.source) else {
             continue;
         };
+        // `pressure_valve/ui_act`: 0..100 atmospheres, "max" is 100 atmospheres.
+        if let Some(mut v) = valve {
+            let ConditionalGate {
+                on,
+                condition: GateCondition::Pressure { target },
+                ..
+            } = &mut *v
+            else {
+                continue;
+            };
+            match acted.act {
+                PumpAct::Power => *on = !*on,
+                PumpAct::Pressure(a) => {
+                    let top = ONE_ATMOSPHERE * 100.0;
+                    *target = resolve(a, 0.0, top, *target);
+                }
+                PumpAct::Rate(_) => {}
+            }
+            continue;
+        }
         match acted.act {
             PumpAct::Power => {
                 if let Some(mut p) = pump {
@@ -246,6 +294,111 @@ fn apply_pump_acts(mut acts: MessageReader<UiActed<PumpWindow>>, mut machines: P
                 } else if let Some(mut i) = injector {
                     i.volume_rate = resolve(a, 0.0, MAX_TRANSFER_RATE, i.volume_rate);
                 }
+            }
+        }
+    }
+}
+
+// --- AtmosTempGate, AtmosTempPump ----------------------------------------------------------
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum TempAct {
+    Power,
+    /// `temperature` (gates) or `rate` (pumps).
+    Set(Amount),
+}
+
+impl ServerUi for TempGateWindow {
+    type Source = &'static ConditionalGate;
+    type UserParam = ();
+    type Act = TempAct;
+
+    fn static_data(_: &ConditionalGate) {}
+
+    fn data(gate: &ConditionalGate, _: Entity, _: &()) -> AtmosTempGateData {
+        let target = match gate.condition {
+            GateCondition::Temperature { target, .. } => target,
+            GateCondition::Pressure { .. } => 0.0,
+        };
+        AtmosTempGateData {
+            on: gate.on,
+            temperature: target.round() as f32,
+            min_temperature: TEMPERATURE_GATE_MIN.round() as f32,
+            max_temperature: TEMPERATURE_GATE_MAX.round() as f32,
+        }
+    }
+
+    fn parse_act(action: &str, params: &UiParams) -> Result<TempAct, UiReject> {
+        match action {
+            "power" => Ok(TempAct::Power),
+            "temperature" => amount(params, "temperature").map(TempAct::Set),
+            _ => Err(UiReject::UnknownAction),
+        }
+    }
+}
+
+impl ServerUi for TempPumpWindow {
+    type Source = &'static TemperaturePump;
+    type UserParam = ();
+    type Act = TempAct;
+
+    fn static_data(_: &TemperaturePump) {}
+
+    fn data(pump: &TemperaturePump, _: Entity, _: &()) -> AtmosTempPumpData {
+        AtmosTempPumpData {
+            on: pump.on,
+            rate: pump.heat_transfer_rate.round() as f32,
+            max_heat_transfer_rate: MAX_HEAT_TRANSFER_RATE.round() as f32,
+        }
+    }
+
+    fn parse_act(action: &str, params: &UiParams) -> Result<TempAct, UiReject> {
+        match action {
+            "power" => Ok(TempAct::Power),
+            "rate" => amount(params, "rate").map(TempAct::Set),
+            _ => Err(UiReject::UnknownAction),
+        }
+    }
+}
+
+fn apply_temp_gate_acts(
+    mut acts: MessageReader<UiActed<TempGateWindow>>,
+    mut gates: Query<&mut ConditionalGate>,
+) {
+    for acted in acts.read() {
+        let Ok(mut gate) = gates.get_mut(acted.source) else {
+            continue;
+        };
+        let ConditionalGate {
+            on,
+            condition: GateCondition::Temperature { target, .. },
+            ..
+        } = &mut *gate
+        else {
+            continue;
+        };
+        match acted.act {
+            TempAct::Power => *on = !*on,
+            TempAct::Set(a) => {
+                *target = resolve(a, TEMPERATURE_GATE_MIN, TEMPERATURE_GATE_MAX, *target);
+            }
+        }
+    }
+}
+
+fn apply_temp_pump_acts(
+    mut acts: MessageReader<UiActed<TempPumpWindow>>,
+    mut pumps: Query<&mut TemperaturePump>,
+) {
+    for acted in acts.read() {
+        let Ok(mut pump) = pumps.get_mut(acted.source) else {
+            continue;
+        };
+        match acted.act {
+            TempAct::Power => pump.on = !pump.on,
+            TempAct::Set(a) => {
+                pump.heat_transfer_rate =
+                    resolve(a, 0.0, MAX_HEAT_TRANSFER_RATE, pump.heat_transfer_rate);
             }
         }
     }
@@ -446,6 +599,7 @@ fn apply_thermo_acts(
 type PortableUser = (
     Res<'static, Pipenet>,
     Query<'static, 'static, (&'static TankAir, Option<&'static DmName>)>,
+    Query<'static, 'static, &'static crate::mecha::core::ItemCell>,
 );
 
 fn holding_tank(
@@ -467,28 +621,45 @@ pub enum CanisterAct {
     Pressure(Amount),
     Valve,
     Eject,
+    Shielding,
+    Suppression,
+    Relabel,
 }
 
 impl ServerUi for CanisterWindow {
-    type Source = (&'static Canister, &'static PortableAtmos);
+    type Source = (
+        &'static Canister,
+        &'static PortableAtmos,
+        Option<&'static super::portable::NobCrystal>,
+    );
     type UserParam = PortableUser;
     type Act = CanisterAct;
 
-    fn static_data(_: (&Canister, &PortableAtmos)) -> CanisterStatic {
+    fn static_data(
+        (canister, ..): (
+            &Canister,
+            &PortableAtmos,
+            Option<&super::portable::NobCrystal>,
+        ),
+    ) -> CanisterStatic {
         CanisterStatic {
             default_release_pressure: CAN_DEFAULT_RELEASE_PRESSURE.round() as f32,
             min_release_pressure: CAN_MIN_RELEASE_PRESSURE.round() as f32,
             max_release_pressure: CAN_MAX_RELEASE_PRESSURE.round() as f32,
-            pressure_limit: PRESSURE_LIMIT as f32,
+            pressure_limit: canister.pressure_limit.round() as f32,
             holding_tank_leak_pressure: TANK_LEAK_PRESSURE.round() as f32,
             holding_tank_frag_pressure: TANK_FRAGMENT_PRESSURE.round() as f32,
         }
     }
 
     fn data(
-        (canister, portable): (&Canister, &PortableAtmos),
+        (canister, portable, crystal): (
+            &Canister,
+            &PortableAtmos,
+            Option<&super::portable::NobCrystal>,
+        ),
         _: Entity,
-        (net, tanks): &SystemParamItem<'_, '_, PortableUser>,
+        (net, tanks, cells): &SystemParamItem<'_, '_, PortableUser>,
     ) -> CanisterData {
         CanisterData {
             port_connected: portable.port.is_some(),
@@ -496,8 +667,14 @@ impl ServerUi for CanisterWindow {
             release_pressure: canister.release_pressure.round() as f32,
             valve_open: canister.valve_open,
             holding_tank: holding_tank(portable, tanks),
-            shielding: false,
-            cell_charge: 0.0,
+            shielding: canister.shielding,
+            // `internal_cell.percent()`.
+            cell_charge: canister
+                .cell
+                .and_then(|c| cells.get(c).ok())
+                .map_or(0.0, |c| c.0.percent()) as f32,
+            has_hypernob_crystal: crystal.is_some(),
+            reaction_suppression_enabled: crystal.is_some_and(|c| c.suppress),
         }
     }
 
@@ -506,7 +683,10 @@ impl ServerUi for CanisterWindow {
             "pressure" => amount(params, "pressure").map(CanisterAct::Pressure),
             "valve" => Ok(CanisterAct::Valve),
             "eject" => Ok(CanisterAct::Eject),
-            // `relabel`, `recolor`, `shielding`, `reaction_suppression`: not ported.
+            "shielding" => Ok(CanisterAct::Shielding),
+            "reaction_suppression" => Ok(CanisterAct::Suppression),
+            "relabel" => Ok(CanisterAct::Relabel),
+            // `recolor`: not ported.
             _ => Err(UiReject::UnknownAction),
         }
     }
@@ -514,7 +694,7 @@ impl ServerUi for CanisterWindow {
 
 fn apply_canister_acts(mut acts: MessageReader<UiActed<CanisterWindow>>, mut commands: Commands) {
     for acted in acts.read() {
-        let (source, actor, act) = (acted.source, acted.actor, acted.act);
+        let (source, client, actor, act) = (acted.source, acted.client, acted.actor, acted.act);
         commands.queue(move |world: &mut World| {
             let Some(mut canister) = world.get_mut::<Canister>(source) else {
                 return;
@@ -540,6 +720,18 @@ fn apply_canister_acts(mut acts: MessageReader<UiActed<CanisterWindow>>, mut com
                 CanisterAct::Eject => {
                     eject_tank(world, source, actor);
                 }
+                // `toggle_shielding`.
+                CanisterAct::Shielding => {
+                    canister.shielding = !canister.shielding;
+                    let text = if canister.shielding { "on" } else { "off" };
+                    info!("canister {source:?} shielding turned {text} by {actor:?}");
+                }
+                CanisterAct::Suppression => {
+                    super::portable::toggle_reaction_suppression(world, source, actor);
+                }
+                CanisterAct::Relabel => {
+                    super::canister::ask_relabel(world, client, actor, source);
+                }
             }
         });
     }
@@ -551,19 +743,35 @@ pub enum PortablePumpAct {
     Direction,
     Pressure(Amount),
     Eject,
+    Suppression,
 }
 
 impl ServerUi for PortablePumpWindow {
-    type Source = (&'static PortablePump, &'static PortableAtmos);
+    type Source = (
+        &'static PortablePump,
+        &'static PortableAtmos,
+        Option<&'static super::portable::NobCrystal>,
+    );
     type UserParam = PortableUser;
     type Act = PortablePumpAct;
 
-    fn static_data(_: (&PortablePump, &PortableAtmos)) {}
+    fn static_data(
+        _: (
+            &PortablePump,
+            &PortableAtmos,
+            Option<&super::portable::NobCrystal>,
+        ),
+    ) {
+    }
 
     fn data(
-        (pump, portable): (&PortablePump, &PortableAtmos),
+        (pump, portable, crystal): (
+            &PortablePump,
+            &PortableAtmos,
+            Option<&super::portable::NobCrystal>,
+        ),
         _: Entity,
-        (net, tanks): &SystemParamItem<'_, '_, PortableUser>,
+        (net, tanks, _): &SystemParamItem<'_, '_, PortableUser>,
     ) -> PortablePumpData {
         PortablePumpData {
             on: pump.on,
@@ -575,6 +783,8 @@ impl ServerUi for PortablePumpWindow {
             min_pressure: PUMP_MIN_PRESSURE.round() as f32,
             max_pressure: PUMP_MAX_PRESSURE.round() as f32,
             holding: holding_tank(portable, tanks),
+            has_hypernob_crystal: crystal.is_some(),
+            reaction_suppression_enabled: crystal.is_some_and(|c| c.suppress),
         }
     }
 
@@ -584,6 +794,7 @@ impl ServerUi for PortablePumpWindow {
             "direction" => Ok(PortablePumpAct::Direction),
             "pressure" => amount(params, "pressure").map(PortablePumpAct::Pressure),
             "eject" => Ok(PortablePumpAct::Eject),
+            "reaction_suppression" => Ok(PortablePumpAct::Suppression),
             _ => Err(UiReject::UnknownAction),
         }
     }
@@ -613,6 +824,9 @@ fn apply_portable_pump_acts(
                 PortablePumpAct::Eject => {
                     eject_tank(world, source, actor);
                 }
+                PortablePumpAct::Suppression => {
+                    super::portable::toggle_reaction_suppression(world, source, actor);
+                }
             }
         });
     }
@@ -623,19 +837,35 @@ pub enum PortableScrubberAct {
     Power,
     Toggle(GasId),
     Eject,
+    Suppression,
 }
 
 impl ServerUi for PortableScrubberWindow {
-    type Source = (&'static PortableScrubber, &'static PortableAtmos);
+    type Source = (
+        &'static PortableScrubber,
+        &'static PortableAtmos,
+        Option<&'static super::portable::NobCrystal>,
+    );
     type UserParam = PortableUser;
     type Act = PortableScrubberAct;
 
-    fn static_data(_: (&PortableScrubber, &PortableAtmos)) {}
+    fn static_data(
+        _: (
+            &PortableScrubber,
+            &PortableAtmos,
+            Option<&super::portable::NobCrystal>,
+        ),
+    ) {
+    }
 
     fn data(
-        (scrubber, portable): (&PortableScrubber, &PortableAtmos),
+        (scrubber, portable, crystal): (
+            &PortableScrubber,
+            &PortableAtmos,
+            Option<&super::portable::NobCrystal>,
+        ),
         _: Entity,
-        (net, tanks): &SystemParamItem<'_, '_, PortableUser>,
+        (net, tanks, _): &SystemParamItem<'_, '_, PortableUser>,
     ) -> PortableScrubberData {
         PortableScrubberData {
             on: scrubber.on,
@@ -643,6 +873,8 @@ impl ServerUi for PortableScrubberWindow {
             pressure: portable.air(net).map_or(0.0, Mix::pressure).round() as f32,
             filter_types: gas_toggles(scrubber.filter),
             holding: holding_tank(portable, tanks),
+            has_hypernob_crystal: crystal.is_some(),
+            reaction_suppression_enabled: crystal.is_some_and(|c| c.suppress),
         }
     }
 
@@ -651,6 +883,7 @@ impl ServerUi for PortableScrubberWindow {
             "power" => Ok(PortableScrubberAct::Power),
             "toggle_filter" => gas_param(params).map(PortableScrubberAct::Toggle),
             "eject" => Ok(PortableScrubberAct::Eject),
+            "reaction_suppression" => Ok(PortableScrubberAct::Suppression),
             _ => Err(UiReject::UnknownAction),
         }
     }
@@ -671,6 +904,9 @@ fn apply_portable_scrubber_acts(
                 PortableScrubberAct::Toggle(g) => scrubber.filter ^= 1 << g.0,
                 PortableScrubberAct::Eject => {
                     eject_tank(world, source, actor);
+                }
+                PortableScrubberAct::Suppression => {
+                    super::portable::toggle_reaction_suppression(world, source, actor);
                 }
             }
         });
@@ -733,20 +969,62 @@ fn give_to_hands(world: &mut World, user: Entity, item: Entity, from: Entity) {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum AlarmAct {
-    Power { r: Entity, on: bool },
-    Direction { r: Entity, releasing: bool },
-    InCheck { r: Entity, checks: u8 },
-    ExCheck { r: Entity, checks: u8 },
-    SetInternal { r: Entity, value: f64 },
-    ResetInternal { r: Entity },
-    SetExternal { r: Entity, value: f64 },
-    ResetExternal { r: Entity },
-    Scrubbing { r: Entity, on: bool },
-    Widenet { r: Entity, on: bool },
-    ToggleFilter { r: Entity, gas: GasId },
+    Power {
+        r: Entity,
+        on: bool,
+    },
+    Direction {
+        r: Entity,
+        releasing: bool,
+    },
+    /// `overclock`: a vent's `toggle_overclock`.
+    Overclock {
+        r: Entity,
+    },
+    InCheck {
+        r: Entity,
+        checks: u8,
+    },
+    ExCheck {
+        r: Entity,
+        checks: u8,
+    },
+    SetInternal {
+        r: Entity,
+        value: f64,
+    },
+    ResetInternal {
+        r: Entity,
+    },
+    SetExternal {
+        r: Entity,
+        value: f64,
+    },
+    ResetExternal {
+        r: Entity,
+    },
+    Scrubbing {
+        r: Entity,
+        on: bool,
+    },
+    Widenet {
+        r: Entity,
+        on: bool,
+    },
+    ToggleFilter {
+        r: Entity,
+        gas: GasId,
+    },
     Mode(AlarmMode),
-    SetThreshold { id: String, bits: u8, value: f64 },
-    ResetThreshold { id: String, bits: u8 },
+    SetThreshold {
+        id: String,
+        bits: u8,
+        value: f64,
+    },
+    ResetThreshold {
+        id: String,
+        bits: u8,
+    },
     Alarm,
     Reset,
     Lock,
@@ -755,7 +1033,16 @@ pub enum AlarmAct {
 type AlarmUser = (
     Res<'static, Atmos>,
     Res<'static, AreaAtmos>,
-    Query<'static, 'static, (&'static VentPump, Option<&'static DmName>)>,
+    Query<
+        'static,
+        'static,
+        (
+            &'static VentPump,
+            Option<&'static DmName>,
+            Option<&'static crate::obj_damage::Integrity>,
+            Option<&'static ss13_mapload::DmObj>,
+        ),
+    >,
     Query<'static, 'static, (&'static VentScrubber, Option<&'static DmName>)>,
     Query<'static, 'static, &'static DmName>,
     crate::silicon::interact::SiliconUsers<'static, 'static>,
@@ -870,11 +1157,19 @@ impl ServerUi for AirAlarmWindow {
                     .flat_map(|d| d.vents.iter())
                     .enumerate()
                     .filter_map(|(i, &e)| {
-                        let (v, name) = vents.get(e).ok()?;
+                        let (v, name, integrity, obj) = vents.get(e).ok()?;
+                        let integrity = match (integrity, obj) {
+                            (Some(i), Some(o)) if o.max_integrity > 0.0 => {
+                                (f64::from(i.current / o.max_integrity) * 100.0).round() / 100.0
+                            }
+                            _ => 1.0,
+                        };
                         Some(VentEntry {
                             ref_id: entity_ref(e),
                             long_name: long_name(name, i),
                             power: v.on,
+                            overclock: v.overclocked,
+                            integrity: integrity as f32,
                             checks: v.pressure_checks,
                             excheck: v.pressure_checks & EXTERNAL_BOUND != 0,
                             incheck: v.pressure_checks & INTERNAL_BOUND != 0,
@@ -947,6 +1242,9 @@ impl ServerUi for AirAlarmWindow {
             "direction" => AlarmAct::Direction {
                 r: ref_param(params)?,
                 releasing: flag(params)?,
+            },
+            "overclock" => AlarmAct::Overclock {
+                r: ref_param(params)?,
             },
             "incheck" => AlarmAct::InCheck {
                 r: ref_param(params)?,
@@ -1045,6 +1343,11 @@ fn alarm_act(world: &mut World, alarm: Entity, client: Entity, actor: Entity, ac
                 v.on = on;
             } else if let Some(mut s) = scrubber(r).and_then(|r| world.get_mut::<VentScrubber>(r)) {
                 s.on = on;
+            }
+        }
+        AlarmAct::Overclock { r } => {
+            if let Some(r) = vent(r).filter(|&r| world.get::<VentPump>(r).is_some()) {
+                super::overclock::toggle_vent_overclock(world, r);
             }
         }
         AlarmAct::Direction { r, releasing } => {
@@ -1173,8 +1476,10 @@ fn toggle_lock(world: &mut World, alarm: Entity, client: Entity, mob: Entity) {
 
 /// tg `can_interact` of an unpowered machine: its window only updates.
 fn unpowered_windows(mut windows: Query<&mut UiWindow>, unpowered: Query<(), With<Unpowered>>) {
-    const POWERED: [&str; 5] = [
+    const POWERED: [&str; 7] = [
         PumpWindow::NAME,
+        TempGateWindow::NAME,
+        TempPumpWindow::NAME,
         FilterWindow::NAME,
         MixerWindow::NAME,
         ThermoMachineUi::NAME,
@@ -1210,8 +1515,30 @@ pub fn interact(
         return false;
     };
     let powered = !e.contains::<Unpowered>();
+    if super::consoles::interact(world, client, mob, target) {
+        return true;
+    }
+    if super::control::interact(world, client, mob, target) {
+        return true;
+    }
+    let Ok(e) = world.get_entity(target) else {
+        return false;
+    };
     if modifiers.alt {
         return click_alt(world, client, mob, target);
+    }
+    // `meter/interact`: the reading, unless unpowered or broken.
+    if e.contains::<super::meter::Meter>() {
+        let broken = e
+            .get::<crate::obj_damage::Integrity>()
+            .is_some_and(|i| i.broken);
+        if powered
+            && !broken
+            && let Some(status) = super::meter::status(world, target)
+        {
+            tell(world, client, Span::Notice, &status);
+        }
+        return true;
     }
     if e.contains::<AirAlarm>() {
         if modifiers.right {
@@ -1241,6 +1568,23 @@ pub fn interact(
         open::<PumpWindow>(world, client, mob, target);
         return true;
     }
+    if let Some(gate) = e.get::<ConditionalGate>() {
+        match gate.condition {
+            // `NO_POWER_USE`.
+            GateCondition::Pressure { .. } => open::<PumpWindow>(world, client, mob, target),
+            GateCondition::Temperature { .. } if powered => {
+                open::<TempGateWindow>(world, client, mob, target);
+            }
+            GateCondition::Temperature { .. } => {}
+        }
+        return true;
+    }
+    if e.contains::<TemperaturePump>() {
+        if powered {
+            open::<TempPumpWindow>(world, client, mob, target);
+        }
+        return true;
+    }
     if e.contains::<GasFilter>() {
         if powered {
             open::<FilterWindow>(world, client, mob, target);
@@ -1253,8 +1597,9 @@ pub fn interact(
         }
         return true;
     }
-    if e.contains::<ThermoMachine>() {
-        if powered {
+    if let Some(m) = e.get::<ThermoMachine>() {
+        // `ui_interact`: nothing with the panel open.
+        if powered && !m.panel_open {
             open::<ThermoWindow>(world, client, mob, target);
         }
         return true;
@@ -1295,6 +1640,17 @@ fn click_alt(world: &mut World, client: Entity, mob: Entity, target: Entity) -> 
         v.transfer_rate = MAX_TRANSFER_RATE;
         return true;
     }
+    if let Some(mut g) = world.get_mut::<ConditionalGate>(target) {
+        match &mut g.condition {
+            GateCondition::Pressure { target } => *target = MAX_OUTPUT_PRESSURE,
+            GateCondition::Temperature { target, .. } => *target = TEMPERATURE_GATE_MAX,
+        }
+        return true;
+    }
+    if let Some(mut p) = world.get_mut::<TemperaturePump>(target) {
+        p.heat_transfer_rate = MAX_HEAT_TRANSFER_RATE;
+        return true;
+    }
     if let Some(mut f) = world.get_mut::<GasFilter>(target) {
         f.transfer_rate = MAX_TRANSFER_RATE;
         return true;
@@ -1305,6 +1661,13 @@ fn click_alt(world: &mut World, client: Entity, mob: Entity, target: Entity) -> 
     }
     if let Some(mut i) = world.get_mut::<OutletInjector>(target) {
         i.volume_rate = MAX_TRANSFER_RATE;
+        return true;
+    }
+    if world
+        .get::<ThermoMachine>(target)
+        .is_some_and(|t| t.panel_open)
+    {
+        tell(world, client, Span::Warning, "Сначала закройте панель!");
         return true;
     }
     if let Some(mut t) = world.get_mut::<ThermoMachine>(target) {
@@ -1333,17 +1696,23 @@ fn ctrl_clicks(
             Option<&mut GasMixer>,
             Option<&mut OutletInjector>,
             Option<&mut ThermoMachine>,
+            Option<&mut ConditionalGate>,
+            Option<&mut TemperaturePump>,
         ),
         Without<Unpowered>,
     >,
 ) {
     for click in clicks.read() {
-        let Ok((pump, gate, volume, filter, mixer, injector, thermo)) =
+        let Ok((pump, gate, volume, filter, mixer, injector, thermo, conditional, heat_pump)) =
             machines.get_mut(click.target)
         else {
             continue;
         };
-        if let Some(mut m) = pump {
+        if let Some(mut m) = conditional {
+            m.on = !m.on;
+        } else if let Some(mut m) = heat_pump {
+            m.on = !m.on;
+        } else if let Some(mut m) = pump {
             m.on = !m.on;
         } else if let Some(mut m) = gate {
             m.on = !m.on;
@@ -1355,7 +1724,7 @@ fn ctrl_clicks(
             m.on = !m.on;
         } else if let Some(mut m) = injector {
             m.on = !m.on;
-        } else if let Some(mut m) = thermo {
+        } else if let Some(mut m) = thermo.filter(|m| !m.panel_open) {
             m.on = !m.on;
         }
     }
@@ -1366,11 +1735,105 @@ fn ctrl_clicks(
 pub enum AtmosJob {
     /// `welder_act` of a vent or scrubber: weld or unweld it.
     Weld,
+    /// Cutting a tank open and the steps of its frame.
+    Frame(super::tank_frame::FrameJob),
+    /// `tank/wrench_act`: open or close the port in this direction.
+    TankPort(u8),
+    /// `welder_act` of a canister or tank: one round of repair, repeated until whole.
+    Repair,
+    /// `vent_pump/screwdriver_act`: the fan back to full integrity.
+    FanRepair,
+    /// `huge/wrench_act` -> `default_unfasten_wrench`: (un)anchor a huge scrubber that was
+    /// `anchored` when the wrenching began.
+    Unfasten { anchored: bool },
 }
 
 /// The end of an [`AtmosJob`] (tg `use_tool` succeeded).
-pub fn complete(world: &mut World, action: &crate::tools::DoAfter, job: AtmosJob) {
+pub fn complete(world: &mut World, mob: Entity, action: &crate::tools::DoAfter, job: AtmosJob) {
     match job {
+        AtmosJob::Repair => {
+            let target = action.target;
+            let Some(max) = world
+                .get::<ss13_mapload::DmObj>(target)
+                .map(|o| o.max_integrity)
+            else {
+                return;
+            };
+            // Portables mend 25 a round, tanks a tenth of their integrity (`repair_damage`).
+            let step = if world.get::<PortableAtmos>(target).is_some() {
+                25.0
+            } else {
+                max / 10.0
+            };
+            let Some(mut integrity) = world.get_mut::<crate::obj_damage::Integrity>(target) else {
+                return;
+            };
+            integrity.current = (integrity.current + step).min(max);
+            if integrity.current < max {
+                tell(
+                    world,
+                    action.client,
+                    Span::Notice,
+                    "Частично отремонтировано...",
+                );
+                let actor = Actor {
+                    client: action.client,
+                    mob,
+                    item: action.item,
+                };
+                crate::tools::use_tool(
+                    world,
+                    actor,
+                    target,
+                    25.0,
+                    0,
+                    crate::construction::Job::Atmos(AtmosJob::Repair),
+                );
+            } else {
+                tell(world, action.client, Span::Notice, "Отремонтировано.");
+            }
+        }
+        AtmosJob::Unfasten { anchored: was } => {
+            let target = action.target;
+            let now = world
+                .get::<crate::obj_damage::Anchored>(target)
+                .is_some_and(|a| a.0);
+            if now != was {
+                return;
+            }
+            if !was && crate::construction::blocked_for(world, target) {
+                tell(world, action.client, Span::Notice, HUGE_BLOCKED);
+                return;
+            }
+            crate::obj_damage::set_anchored(world, target, !was);
+            if let Some(mut s) = world.get_mut::<PortableScrubber>(target)
+                && !s.movable
+            {
+                s.on = false;
+            }
+            let text = if was {
+                "Вы откручиваете большой воздушный скруббер."
+            } else {
+                "Вы прикручиваете большой воздушный скруббер."
+            };
+            tell(world, action.client, Span::Notice, text);
+            if let Some(&pos) = world.get::<TilePos>(target) {
+                let sound = crate::sound::PlaySound::new(
+                    pos,
+                    ss13_mapload::sound::files::DECONSTRUCT,
+                    50.0,
+                    true,
+                );
+                crate::sound::playsound(world, sound);
+            }
+        }
+        AtmosJob::Frame(job) => super::tank_frame::complete(world, action, job),
+        AtmosJob::FanRepair => {
+            super::overclock::repair_vent(world, action.client, action.target);
+        }
+        AtmosJob::TankPort(dir) => {
+            super::tank::toggle_port(world, action.target, dir);
+        }
         AtmosJob::Weld => {
             let target = action.target;
             if let Some(item) = action.item
@@ -1397,6 +1860,8 @@ pub fn complete(world: &mut World, action: &crate::tools::DoAfter, job: AtmosJob
     }
 }
 
+const HUGE_BLOCKED: &str = "Вам не удалось прикрутить большой воздушный скруббер.";
+
 /// An item on an atmos machine. True when handled.
 pub fn item_interaction(
     world: &mut World,
@@ -1404,7 +1869,7 @@ pub fn item_interaction(
     mob: Entity,
     held: Entity,
     target: Entity,
-    _modifiers: ClickModifiers,
+    modifiers: ClickModifiers,
 ) -> bool {
     let Ok(e) = world.get_entity(target) else {
         return false;
@@ -1412,13 +1877,159 @@ pub fn item_interaction(
     let is_portable = e.contains::<PortableAtmos>();
     let is_alarm = e.contains::<AirAlarm>();
     let is_vent = e.contains::<VentPump>() || e.contains::<VentScrubber>();
+    let is_tank = e.contains::<super::tank::StationaryTank>();
     let tool = tool_of(world, held).map(|t| t.0);
+    if super::tank_frame::item_interaction(world, client, mob, held, target, modifiers) {
+        return true;
+    }
+    if super::thermo::item_interaction(world, client, target, tool, modifiers.right) {
+        return true;
+    }
+    // `temperature_gate/multitool_act`: flips which side of the target lets gas through.
+    if tool == Some(ToolKind::Multitool)
+        && let Some(mut gate) = world.get_mut::<ConditionalGate>(target)
+        && let GateCondition::Temperature { inverted, .. } = &mut gate.condition
+    {
+        *inverted = !*inverted;
+        let text = if *inverted {
+            "Вы настраиваете датчики клапана пропускать газ, когда он горячее заданной температуры."
+        } else {
+            "Вы возвращаете датчики клапана к настройкам по умолчанию."
+        };
+        tell(world, client, Span::Notice, text);
+        return true;
+    }
+    if tool == Some(ToolKind::Multitool)
+        && super::overclock::multitool_volume_pump(world, client, target)
+    {
+        return true;
+    }
+    // `vent_pump/screwdriver_act`: up to 10 s, by how worn the fan is.
+    if tool == Some(ToolKind::Screwdriver)
+        && let Some(delay) = super::overclock::vent_repair_delay(world, target)
+    {
+        tell(
+            world,
+            client,
+            Span::Notice,
+            "Вы начинаете ремонт вентиляции...",
+        );
+        let actor = Actor {
+            client,
+            mob,
+            item: Some(held),
+        };
+        crate::tools::use_tool(
+            world,
+            actor,
+            target,
+            delay,
+            0,
+            crate::construction::Job::Atmos(AtmosJob::FanRepair),
+        );
+        return true;
+    }
     if is_alarm && crate::inventory::get_id(world, held).is_some() {
         toggle_lock(world, target, client, mob);
         return true;
     }
+    // `tank/wrench_act`: three seconds, the port on the side the user stands.
+    if tool == Some(ToolKind::Wrench) && is_tank {
+        let dir = match (world.get::<TilePos>(target), world.get::<TilePos>(mob)) {
+            (Some(t), Some(m)) => match (m.x - t.x, m.y - t.y) {
+                (0, 1) => 1,
+                (0, -1) => 2,
+                (1, 0) => 4,
+                (-1, 0) => 8,
+                _ => 0,
+            },
+            _ => 0,
+        };
+        if dir != 0 {
+            let actor = Actor {
+                client,
+                mob,
+                item: Some(held),
+            };
+            crate::tools::use_tool(
+                world,
+                actor,
+                target,
+                30.0,
+                0,
+                crate::construction::Job::Atmos(AtmosJob::TankPort(dir)),
+            );
+        }
+        return true;
+    }
+    if super::canister::item_interaction(world, client, mob, held, target, tool)
+        || super::portable::insert_nob_crystal(world, client, held, target)
+    {
+        return true;
+    }
+    // `welder_act`: a hot welder mends a damaged, unbroken canister or tank.
+    if (is_portable || is_tank) && tool == Some(ToolKind::Welder) {
+        let integrity = world.get::<crate::obj_damage::Integrity>(target).copied();
+        let max = world
+            .get::<ss13_mapload::DmObj>(target)
+            .map_or(0.0, |o| o.max_integrity);
+        if !integrity.is_some_and(|i| i.current < max && !i.broken) {
+            return false;
+        }
+        if !crate::tools::tool_usable(world, held, 0, crate::tools::HIGH_TEMPERATURE_REQUIRED) {
+            return true;
+        }
+        tell(world, client, Span::Notice, "Вы начинаете ремонт...");
+        let actor = Actor {
+            client,
+            mob,
+            item: Some(held),
+        };
+        crate::tools::use_tool(
+            world,
+            actor,
+            target,
+            25.0,
+            0,
+            crate::construction::Job::Atmos(AtmosJob::Repair),
+        );
+        return true;
+    }
     if is_portable && tool == Some(ToolKind::Wrench) {
         wrench_portable(world, client, target);
+        // `huge/wrench_act`: after the port, `default_unfasten_wrench` (2 s).
+        if world
+            .get::<PortableScrubber>(target)
+            .is_some_and(|s| s.huge)
+        {
+            let anchored = world
+                .get::<crate::obj_damage::Anchored>(target)
+                .is_some_and(|a| a.0);
+            if !anchored && crate::construction::blocked_for(world, target) {
+                tell(world, client, Span::Notice, HUGE_BLOCKED);
+                return true;
+            }
+            let actor = Actor {
+                client,
+                mob,
+                item: Some(held),
+            };
+            if crate::tools::use_tool(
+                world,
+                actor,
+                target,
+                20.0,
+                0,
+                crate::construction::Job::Atmos(AtmosJob::Unfasten { anchored }),
+            ) {
+                let text = if anchored {
+                    "Вы начинаете откреплять большой воздушный скруббер..."
+                } else {
+                    "Вы начинаете прикреплять большой воздушный скруббер..."
+                };
+                tell(world, client, Span::Notice, text);
+            }
+        }
         return true;
     }
     if is_portable && world.get::<TankAir>(held).is_some() {
@@ -1507,6 +2118,8 @@ fn insert_tank(world: &mut World, client: Entity, mob: Entity, tank: Entity, por
 pub fn plugin(app: &mut App) {
     app.register_ui::<PumpWindow>()
         .register_ui::<FilterWindow>()
+        .register_ui::<TempGateWindow>()
+        .register_ui::<TempPumpWindow>()
         .register_ui::<MixerWindow>()
         .register_ui::<ThermoWindow>()
         .register_ui::<CanisterWindow>()
@@ -1518,6 +2131,8 @@ pub fn plugin(app: &mut App) {
             (
                 (
                     apply_pump_acts,
+                    apply_temp_gate_acts,
+                    apply_temp_pump_acts,
                     apply_filter_acts,
                     apply_mixer_acts,
                     apply_thermo_acts,
@@ -1527,6 +2142,9 @@ pub fn plugin(app: &mut App) {
                     apply_alarm_acts,
                 )
                     .in_set(UiSystems::Handle),
+                super::canister::relabel_answers
+                    .in_set(UiSystems::Handle)
+                    .after(ss13_tgui::prompt::PromptSystems::Answer),
                 unpowered_windows.in_set(UiSystems::StatusHook),
                 ctrl_clicks
                     .after(ss13_world::WorldSystems::Movement)

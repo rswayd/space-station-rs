@@ -220,8 +220,15 @@ impl Plugin for JanitorServerPlugin {
                 Update,
                 (
                     toggle_move_intent.before(HealthSystems),
-                    (slip_on_entered, wet_floors, dry_blood, bucket_overlays)
+                    (
+                        condensation,
+                        slip_on_entered,
+                        wet_floors,
+                        dry_blood,
+                        bucket_overlays,
+                    )
                         .chain()
+                        .after(ss13_atmos::AtmosSystems::Fire)
                         .after(WorldSystems::Movement)
                         .before(crate::status_effects::StatusSystems),
                 ),
@@ -388,6 +395,51 @@ pub fn expose(world: &mut World, target: Entity, holder: &Holder, modifier: f32)
                     wash(world, target, CLEAN_WASH);
                 }
                 None => {}
+            }
+        }
+    }
+}
+
+/// `isnoslipturf` (`GLOB.turfs_no_slip_water`): vapor does not wet them.
+const NO_SLIP_WATER_TURFS: [&str; 8] = [
+    "/turf/open/misc/asteroid",
+    "/turf/open/misc/dirt",
+    "/turf/open/misc/grass",
+    "/turf/open/misc/basalt",
+    "/turf/open/misc/ashplanet",
+    "/turf/open/misc/snow",
+    "/turf/open/misc/sandy_dirt",
+    "/turf/open/floor/noslip",
+];
+
+/// Water vapor condensing on turfs (tg `/datum/gas_reaction/standard/water_vapor`):
+/// `water_vapor_gas_act` wets (10 s, +5 s) and washes a grounded, slippable turf;
+/// `freeze_turf` makes it permafrost for 10 s.
+// shortcut: freezing does not freeze the objects (`/datum/element/frozen`) or give cold mobs
+// the freon status, and slimes are not watered; add with those mechanics.
+fn condensation(world: &mut World) {
+    let Some(tiles) = world
+        .get_resource_mut::<ss13_atmos::Atmos>()
+        .map(|mut a| a.drain_condensed())
+    else {
+        return;
+    };
+    for (pos, kind) in tiles {
+        match kind {
+            ss13_atmos::reactions::Condensation::Freeze => {
+                make_slippery(world, pos, TURF_WET_PERMAFROST, 10.0, 0.0);
+            }
+            ss13_atmos::reactions::Condensation::Wet => {
+                let Some(turf) = turf_at(world, pos) else {
+                    continue;
+                };
+                let groundless = world.get::<DmTurf>(turf).is_some_and(|t| t.groundless);
+                let no_slip = crate::construction::path_of(world, turf)
+                    .is_some_and(|p| NO_SLIP_WATER_TURFS.iter().any(|r| is_under(&p, r)));
+                if !groundless && !no_slip {
+                    make_slippery(world, pos, TURF_WET_WATER, 10.0, 5.0);
+                    wash_turf(world, pos, CLEAN_WASH, true);
+                }
             }
         }
     }

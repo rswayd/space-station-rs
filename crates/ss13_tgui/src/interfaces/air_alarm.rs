@@ -41,6 +41,10 @@ pub struct VentEntry {
     pub ref_id: String,
     pub long_name: String,
     pub power: bool,
+    /// `fan_overclocked`.
+    pub overclock: bool,
+    /// `get_integrity_percentage()`, 0..1.
+    pub integrity: f32,
     pub checks: u8,
     pub excheck: bool,
     pub incheck: bool,
@@ -249,6 +253,12 @@ mod client_side {
         }
     }
 
+    /// `AtmosControls.tsx` integrity hint.
+    const INTEGRITY_TIP: &str = "Overclocking will allow the vent to overpower extreme pressure \
+        conditions. However, it will also cause the vent to become damaged over time and \
+        eventually fail. The lower the integrity, the less effective the vent will be when in \
+        normal operation.";
+
     fn vent(v: &VentEntry) -> impl Scene + use<> {
         let r = v.ref_id.clone();
         let p = |extra: &[(&str, String)]| {
@@ -257,6 +267,19 @@ mod client_side {
             params(&all)
         };
         let power = p(&[("val", u8::from(!v.power).to_string())]);
+        let overclock = p(&[]);
+        let overclock_color = if v.overclock {
+            UiColor::Green
+        } else {
+            UiColor::Yellow
+        };
+        let overclock_tip = if v.overclock {
+            "Disable overclocking"
+        } else {
+            "Enable overclocking"
+        };
+        let dead = v.integrity <= 0.0;
+        let integrity = format!("{:.2}%", v.integrity * 100.0);
         let direction = p(&[("val", u8::from(!v.direction).to_string())]);
         let (incheck, excheck) = (
             p(&[("val", v.checks.to_string())]),
@@ -304,15 +327,29 @@ mod client_side {
             @Section {
                 @title: title,
                 @buttons: bsn! {
-                    @ss13_ui_kit::Button { @icon: power_icon, @content: power_text }
-                    ss13_ui_kit::Button { selected: on }
-                    Act("power")
-                    power
+                    Node { flex_direction: FlexDirection::Row }
+                    Children [
+                        @ss13_ui_kit::Button { @icon: power_icon, @content: power_text }
+                        ss13_ui_kit::Button { selected: on, disabled: dead }
+                        Act("power")
+                        power
+                        --
+                        @ss13_ui_kit::Button { @icon: "gauge-high", @tooltip: overclock_tip }
+                        ss13_ui_kit::Button { color: overclock_color, disabled: dead }
+                        Act("overclock")
+                        overclock
+                    ]
                 },
             }
             Children [
                 @LabeledList
                 Children [
+                    @LabeledListItem {
+                        @label: "Integrity",
+                        @tooltip: INTEGRITY_TIP,
+                    }
+                    Children [ Text(integrity) ]
+                    --
                     @LabeledListItem { @label: "Mode" }
                     Children [
                         @ss13_ui_kit::Button { @icon: "sign-in-alt", @content: mode_text }

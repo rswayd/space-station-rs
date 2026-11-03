@@ -20,6 +20,95 @@ pub const ATMOS_ROOT: &str = "/obj/machinery/atmospherics";
 pub const PORTABLE_ROOT: &str = "/obj/machinery/portable_atmospherics";
 pub const AIR_ALARM_ROOT: &str = "/obj/machinery/airalarm";
 pub const AIR_ALARM_HELPER_ROOT: &str = "/obj/effect/mapping_helpers/airalarm";
+/// `/obj/machinery/meter`: its `target_layer` lands in `piping_layer`.
+pub const METER_ROOT: &str = "/obj/machinery/meter";
+/// Chamber sensors and the consoles that read them (`atmos_computers/`).
+pub const AIR_SENSOR_ROOT: &str = "/obj/machinery/air_sensor";
+pub const ATMOS_CONTROL_ROOT: &str = "/obj/machinery/computer/atmos_control";
+
+/// `/obj/structure/tank_frame`: what cutting open a stationary tank leaves, spawned at runtime.
+pub const TANK_FRAME: &str = "/obj/structure/tank_frame";
+
+/// `GLOB.gas_id_to_canister` in `sort_list` order: a canister's `relabel` choices and the type
+/// each copies. Read at runtime, so `convert` keeps their prototypes.
+pub const CANISTER_LABELS: [(&str, &str); 22] = [
+    ("air", "/obj/machinery/portable_atmospherics/canister/air"),
+    (
+        "antinoblium",
+        "/obj/machinery/portable_atmospherics/canister/antinoblium",
+    ),
+    ("bz", "/obj/machinery/portable_atmospherics/canister/bz"),
+    ("caution", "/obj/machinery/portable_atmospherics/canister"),
+    (
+        "co2",
+        "/obj/machinery/portable_atmospherics/canister/carbon_dioxide",
+    ),
+    (
+        "freon",
+        "/obj/machinery/portable_atmospherics/canister/freon",
+    ),
+    (
+        "halon",
+        "/obj/machinery/portable_atmospherics/canister/halon",
+    ),
+    (
+        "healium",
+        "/obj/machinery/portable_atmospherics/canister/healium",
+    ),
+    (
+        "helium",
+        "/obj/machinery/portable_atmospherics/canister/helium",
+    ),
+    (
+        "hydrogen",
+        "/obj/machinery/portable_atmospherics/canister/hydrogen",
+    ),
+    (
+        "hypernoblium",
+        "/obj/machinery/portable_atmospherics/canister/nob",
+    ),
+    (
+        "miasma",
+        "/obj/machinery/portable_atmospherics/canister/miasma",
+    ),
+    (
+        "n2",
+        "/obj/machinery/portable_atmospherics/canister/nitrogen",
+    ),
+    (
+        "n2o",
+        "/obj/machinery/portable_atmospherics/canister/nitrous_oxide",
+    ),
+    (
+        "nitrium",
+        "/obj/machinery/portable_atmospherics/canister/nitrium",
+    ),
+    ("o2", "/obj/machinery/portable_atmospherics/canister/oxygen"),
+    (
+        "plasma",
+        "/obj/machinery/portable_atmospherics/canister/plasma",
+    ),
+    (
+        "pluoxium",
+        "/obj/machinery/portable_atmospherics/canister/pluoxium",
+    ),
+    (
+        "proto_nitrate",
+        "/obj/machinery/portable_atmospherics/canister/proto_nitrate",
+    ),
+    (
+        "tritium",
+        "/obj/machinery/portable_atmospherics/canister/tritium",
+    ),
+    (
+        "water_vapor",
+        "/obj/machinery/portable_atmospherics/canister/water_vapor",
+    ),
+    (
+        "zauker",
+        "/obj/machinery/portable_atmospherics/canister/zauker",
+    ),
+];
 
 /// The atmos vars of a DM type (type defaults + map var edits); fields read 0/false/empty
 /// where the type has no such var.
@@ -55,6 +144,33 @@ pub struct DmAtmosDevice {
     /// Valves: `"m"` manual, `"d"` digital.
     pub valve_type: String,
     pub target_temperature: f64,
+    /// `binary/temperature_pump`: percent of the heat delta moved per fire.
+    pub heat_transfer_rate: f64,
+    /// `binary/temperature_gate`: let gas through when hotter, not colder.
+    pub inverted: bool,
+    /// `binary/dp_vent_pump`: the input port's floor and the output port's ceiling.
+    pub input_pressure_min: f64,
+    pub output_pressure_max: f64,
+    /// `/obj/machinery/atmospherics/miner`: the gas (tg id, empty for none), its temperature,
+    /// moles per second, the limits it stops at, its light's color, whether it runs.
+    pub spawn_id: String,
+    /// Air sensors and monitored meters: the chamber they read (`chamber_id`).
+    pub chamber_id: String,
+    /// `atmos_control` consoles: `atmos_chambers` (id, name), `control`, `reconnecting`.
+    pub atmos_chambers: Vec<(String, String)>,
+    pub control: bool,
+    pub reconnecting: bool,
+    /// `GLOB.station_gas_chambers` (id, name), for reconnecting consoles.
+    pub station_chambers: Vec<(String, String)>,
+    /// `components/tank`: the pressure it takes damage over, and how full it starts.
+    pub max_pressure: f64,
+    pub starting_pressure_percent: f64,
+    pub spawn_temp: f64,
+    pub spawn_mol: f64,
+    pub max_ext_kpa: f64,
+    pub max_ext_mol: f64,
+    pub overlay_color: String,
+    pub active: bool,
     pub base_heating: f64,
     pub base_cooling: f64,
     /// Canisters: the gas `create_gas` fills (tg id), how full and the pressure scale.
@@ -83,8 +199,9 @@ enum Kind {
 }
 
 /// Scalar vars: DM name, kind, field name.
-const VARS: [(&str, Kind, &str); 34] = [
+const VARS: [(&str, Kind, &str); 51] = [
     ("piping_layer", Kind::Num, "piping_layer"),
+    ("target_layer", Kind::Num, "piping_layer"),
     ("pipe_color", Kind::Text, "pipe_color"),
     ("pipe_flags", Kind::Num, "pipe_flags"),
     ("device_type", Kind::Num, "device_type"),
@@ -125,6 +242,26 @@ const VARS: [(&str, Kind, &str); 34] = [
     ("direction", Kind::Flag, "direction"),
     ("overpressure_m", Kind::Num, "overpressure_m"),
     ("locked", Kind::Flag, "locked"),
+    ("heat_transfer_rate", Kind::Num, "heat_transfer_rate"),
+    ("inverted", Kind::Flag, "inverted"),
+    ("input_pressure_min", Kind::Num, "input_pressure_min"),
+    ("spawn_id", Kind::Gas, "spawn_id"),
+    ("chamber_id", Kind::Text, "chamber_id"),
+    ("control", Kind::Flag, "control"),
+    ("reconnecting", Kind::Flag, "reconnecting"),
+    ("max_pressure", Kind::Num, "max_pressure"),
+    (
+        "starting_pressure_percent",
+        Kind::Num,
+        "starting_pressure_percent",
+    ),
+    ("spawn_temp", Kind::Num, "spawn_temp"),
+    ("spawn_mol", Kind::Num, "spawn_mol"),
+    ("max_ext_kpa", Kind::Num, "max_ext_kpa"),
+    ("max_ext_mol", Kind::Num, "max_ext_mol"),
+    ("overlay_color", Kind::Text, "overlay_color"),
+    ("active", Kind::Flag, "active"),
+    ("output_pressure_max", Kind::Num, "output_pressure_max"),
     // A vent scrubber's `scrubbing` is a number; a portable scrubber's is its gas list.
     ("scrubbing", Kind::Num, "scrubbing"),
 ];
@@ -139,6 +276,9 @@ pub fn is_atmos_type(path: &str) -> bool {
         PORTABLE_ROOT,
         AIR_ALARM_ROOT,
         AIR_ALARM_HELPER_ROOT,
+        METER_ROOT,
+        AIR_SENSOR_ROOT,
+        ATMOS_CONTROL_ROOT,
     ]
     .iter()
     .any(|root| is_under(path, root))
@@ -167,6 +307,31 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
             out.push(ext(COMPONENT, "filter_types", ron_list(&json_gases(list))));
         }
     }
+    if path == ATMOS_CONTROL_ROOT
+        && let Some(list) = types
+            .globals
+            .get("station_gas_chambers")
+            .and_then(|v| v.get("list"))
+            .and_then(Value::as_array)
+    {
+        out.push(ext(
+            COMPONENT,
+            "station_chambers",
+            ron::to_string(&assoc_pairs(list)).expect("strings serialize"),
+        ));
+    }
+    if let Some(list) = types
+        .resolved(path, "atmos_chambers")
+        .and_then(|v| v.get("list"))
+        .and_then(Value::as_array)
+    {
+        let pairs = assoc_pairs(list);
+        out.push(ext(
+            COMPONENT,
+            "atmos_chambers",
+            ron::to_string(&pairs).expect("strings serialize"),
+        ));
+    }
     for var in ACCESS_LISTS {
         if let Some(value) = types.resolved(path, var) {
             let items: Vec<String> = value
@@ -177,6 +342,29 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
                 .filter_map(|v| v.as_str().map(str::to_owned))
                 .collect();
             out.push(ext(COMPONENT, access_key(var), ron_list(&items)));
+        }
+    }
+    out
+}
+
+/// `{ "assoc": [key, value] }` text pairs; a later key replaces an earlier one, as in DM.
+fn assoc_pairs(list: &[Value]) -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = Vec::new();
+    for v in list {
+        let Some([k, v]) = v
+            .get("assoc")
+            .and_then(Value::as_array)
+            .map(Vec::as_slice)
+            .and_then(|a| <&[Value; 2]>::try_from(a).ok())
+        else {
+            continue;
+        };
+        let (Some(k), Some(v)) = (k.as_str(), v.as_str()) else {
+            continue;
+        };
+        match out.iter_mut().find(|(key, _)| key == k) {
+            Some(entry) => entry.1 = v.to_owned(),
+            None => out.push((k.to_owned(), v.to_owned())),
         }
     }
     out

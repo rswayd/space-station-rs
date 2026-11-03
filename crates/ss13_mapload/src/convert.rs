@@ -33,6 +33,9 @@ pub struct DmTypes {
     /// `GLOBAL_LIST_INIT` values (`ss13_dm_extract::DUMPED_GLOBALS`). Absent in older dumps.
     #[serde(default)]
     pub globals: HashMap<String, serde_json::Value>,
+    /// `init_factors()` lists by reaction type (`ss13_dm_extract`). Absent in older dumps.
+    #[serde(default)]
+    pub reaction_factors: BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Deserialize, Clone, Debug, PartialEq)]

@@ -325,6 +325,17 @@ fn metastation_atmos() {
         worst < 50,
         "station stable at round start: {worst} active turfs"
     );
+    let level = atmos.level(1).unwrap();
+    assert_eq!(level.conducting_count(), 0, "nothing hot enough to conduct");
+    let floor = level.thermal(level.tile(100, 100).unwrap());
+    println!("thermal of (100, 100): {floor:?}");
+    let heat_proof = app
+        .world_mut()
+        .query_filtered::<(), (With<AtmosBlocker>, With<ss13_atmos::BlocksHeat>)>()
+        .iter(app.world())
+        .count();
+    println!("blockers that stop heat: {heat_proof}");
+    assert!(heat_proof > 100, "opaque airlocks and firelocks stop heat");
 
     // Breach: the first full-tile window (by position) with space on one side and station air
     // on the other is removed, as if smashed.

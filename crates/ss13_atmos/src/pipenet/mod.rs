@@ -105,6 +105,18 @@ pub enum Custom {
     Valve { open: bool },
     /// `portables_connector`: the connected portable machine's mixture while attached.
     Connector { attached: Option<Box<PipeAir>> },
+    /// `unary/airlock_pump`: two nodes toward its `dir`, distro on layer 4 and waste on 2.
+    AirlockPump,
+    /// `components/tank`: a member of a merge group of adjacent tanks sharing one mixture
+    /// (tg `/datum/merger` `stationary_tanks`, [`TankGroup`]).
+    Tank { group: u32 },
+}
+
+/// Stationary tanks touching each other, with their shared `air_contents`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TankGroup {
+    pub air: PipeAir,
+    pub members: Vec<DeviceId>,
 }
 
 /// What the game knows about one atmos object when it adds it.
@@ -230,6 +242,7 @@ enum AirRef {
     Line(PipelineId),
     Port(DeviceId, u8),
     Extra(DeviceId),
+    Tank(u32),
 }
 
 /// Every pipe network. Empty until the game adds devices.
@@ -247,6 +260,7 @@ pub struct Pipenet {
     changed: Vec<DeviceId>,
     /// CPU time of the last [`Self::process`] in the SSair fire.
     pub last_process: std::time::Duration,
+    tank_groups: Vec<Option<TankGroup>>,
 }
 
 impl Pipenet {
@@ -380,6 +394,17 @@ impl Pipenet {
         }
         if missing {
             self.dirty.push(id);
+        }
+    }
+
+    /// Marks the pipelines a device has for reconciliation, without queueing a rebuild for
+    /// unconnected nodes (a tank's closed ports).
+    pub fn mark_parents(&mut self, id: DeviceId) {
+        let Some(d) = self.device(id) else { return };
+        for p in d.parents.clone().into_iter().flatten() {
+            if let Some(Some(line)) = self.lines.get_mut(p.0 as usize) {
+                line.update = true;
+            }
         }
     }
 
@@ -572,15 +597,22 @@ impl Pipenet {
             return;
         }
         let dirs = d.node_dirs.clone();
+        let airlock_pump = matches!(d.custom, Custom::AirlockPump);
         for (i, dir) in dirs.into_iter().enumerate() {
             let Some(target_pos) = step(pos, dir) else {
                 continue;
+            };
+            // `airlock_pump/atmos_init`: node 1 on layer 4, node 2 on layer 2.
+            let layer = if airlock_pump {
+                if i == 0 { 4 } else { 2 }
+            } else {
+                layer
             };
             let found = self
                 .devices_on(target_pos)
                 .iter()
                 .copied()
-                .find(|&t| self.connection_check(id, t, layer));
+                .find(|&t| t != id && self.connection_check(id, t, layer));
             if let Some(found) = found {
                 self.dev_mut(id).nodes[i] = Some(found);
             }
@@ -843,6 +875,20 @@ impl Pipenet {
                         }
                     }
                     Custom::Connector { attached: Some(_) } => airs.push(AirRef::Extra(d)),
+                    // `return_pipenets_for_reconcilation`: every member's pipelines too.
+                    &Custom::Tank { group } => {
+                        airs.push(AirRef::Tank(group));
+                        let members = self
+                            .tank_group(group)
+                            .map_or_else(Vec::new, |g| g.members.clone());
+                        for m in members {
+                            for p in self.dev(m).parents.iter().flatten() {
+                                if !lines.contains(p) {
+                                    lines.push(*p);
+                                }
+                            }
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -886,6 +932,7 @@ impl Pipenet {
                 Custom::Connector { attached } => attached.as_deref(),
                 _ => None,
             },
+            AirRef::Tank(g) => self.tank_group(g).map(|g| &g.air),
         }
     }
 
@@ -906,6 +953,7 @@ impl Pipenet {
                 Custom::Connector { attached } => attached.as_deref_mut(),
                 _ => None,
             },
+            AirRef::Tank(g) => self.tank_group_mut(g).map(|g| &mut g.air),
         }
     }
 
@@ -972,6 +1020,145 @@ impl Pipenet {
         }
     }
 
+    /// Makes `members` one tank group with `air` (their merged `air_contents`).
+    pub fn add_tank_group(&mut self, air: PipeAir, members: Vec<DeviceId>) -> u32 {
+        let group = self.tank_groups.len() as u32;
+        for &m in &members {
+            if let Some(Some(d)) = self.devices.get_mut(m.0 as usize) {
+                d.custom = Custom::Tank { group };
+            }
+        }
+        self.tank_groups.push(Some(TankGroup { air, members }));
+        group
+    }
+
+    pub fn tank_group(&self, group: u32) -> Option<&TankGroup> {
+        self.tank_groups.get(group as usize)?.as_ref()
+    }
+
+    pub fn tank_group_mut(&mut self, group: u32) -> Option<&mut TankGroup> {
+        self.tank_groups.get_mut(group as usize)?.as_mut()
+    }
+
+    /// A new tank `id` joins the groups of the tanks next to it (`GetMergeGroup`,
+    /// `merger_refresh_complete`): they become one group holding all their air and `air` (its
+    /// own `air_contents`); with no neighbours it is a group of its own. Returns the group;
+    /// the groups in `neighbours` other than it are gone.
+    pub fn join_tank_groups(&mut self, id: DeviceId, air: PipeAir, neighbours: &[u32]) -> u32 {
+        let mut groups: Vec<u32> = Vec::new();
+        for &g in neighbours {
+            if self.tank_group(g).is_some() && !groups.contains(&g) {
+                groups.push(g);
+            }
+        }
+        let Some((&into, rest)) = groups.split_first() else {
+            return self.add_tank_group(air, vec![id]);
+        };
+        let mut joining = vec![(air, vec![id])];
+        for &g in rest {
+            if let Some(TankGroup { air, members }) = self.tank_groups[g as usize].take() {
+                joining.push((air, members));
+            }
+        }
+        for (air, members) in joining {
+            for &m in &members {
+                if let Some(Some(d)) = self.devices.get_mut(m.0 as usize) {
+                    d.custom = Custom::Tank { group: into };
+                }
+            }
+            if let Some(g) = self.tank_group_mut(into) {
+                g.air.merge(&air.gas);
+                g.air.volume += air.volume;
+                g.members.extend(members);
+            }
+        }
+        into
+    }
+
+    /// A member of `volume` litres leaves its group (`merger_refresh_complete` for a leaver):
+    /// it takes `1 / members` of the shared gas, which is returned, and its volume. The rest
+    /// stays with the others.
+    pub fn leave_tank_group(&mut self, id: DeviceId, volume: f64) -> Option<GasMixture> {
+        let group = self.tank_group_of(id)?;
+        let g = self.tank_group_mut(group)?;
+        let shares = g.members.len().max(1) as f64;
+        let share = g.air.remove_ratio(1.0 / shares);
+        g.air.volume = (g.air.volume - volume).max(0.0);
+        g.members.retain(|&m| m != id);
+        if g.members.is_empty() {
+            self.tank_groups[group as usize] = None;
+        }
+        Some(share)
+    }
+
+    /// The tank group a device is a member of.
+    pub fn tank_group_of(&self, id: DeviceId) -> Option<u32> {
+        match self.device(id)?.custom {
+            Custom::Tank { group } => Some(group),
+            _ => None,
+        }
+    }
+
+    /// `reconnect_nodes` of a component whose direction, layer or color changed: it leaves its
+    /// pipelines and connects again as `init_dirs`, `node_dirs`, `layer` and `color` say,
+    /// keeping its port gas. Returns its new id.
+    pub fn reconnect(
+        &mut self,
+        id: DeviceId,
+        init_dirs: u8,
+        node_dirs: Vec<u8>,
+        layer: u8,
+        color: [u8; 3],
+    ) -> Option<DeviceId> {
+        let d = self.device(id)?.clone();
+        // Emptied first: `remove` would hand the port gas to the pipelines it leaves.
+        for air in &mut self.dev_mut(id).airs {
+            *air = PipeAir::new(air.volume);
+        }
+        // What it would release is now only a connector's attached mixture, which `custom`
+        // carries over.
+        self.remove(id);
+        let new = self.add(DeviceSpec {
+            entity: d.entity,
+            pos: d.pos,
+            init_dirs,
+            node_dirs,
+            layer,
+            color,
+            flags: d.flags,
+            kind: d.kind,
+            port_volumes: d.airs.iter().map(|a| a.volume).collect(),
+            custom: d.custom,
+        });
+        if let Some(airs) = self.airs_mut(new) {
+            for (slot, air) in airs.iter_mut().zip(d.airs) {
+                *slot = air;
+            }
+        }
+        self.mark_parents(new);
+        Some(new)
+    }
+
+    /// `toggle_side_port`: a tank member opens or closes ports (`init_dirs`), keeping its
+    /// group and port gas; returns its new id.
+    pub fn retarget_tank(&mut self, id: DeviceId, mut spec: DeviceSpec) -> Option<DeviceId> {
+        let group = self.tank_group_of(id)?;
+        // Port gas with nowhere to go comes back below.
+        let released = self.remove(id);
+        spec.custom = Custom::Tank { group };
+        let new = self.add(spec);
+        if let Some(g) = self.tank_group_mut(group) {
+            for m in g.members.iter_mut().filter(|m| **m == id) {
+                *m = new;
+            }
+            if let Some(gas) = released {
+                g.air.merge(&gas);
+            }
+        }
+        self.mark_parents(new);
+        Some(new)
+    }
+
     /// Total moles in every pipeline, port and attached mixture (conservation checks).
     pub fn total_moles(&self) -> f64 {
         let lines: f64 = self.pipelines().map(|(_, l)| l.air.total_moles()).sum();
@@ -988,7 +1175,13 @@ impl Pipenet {
                     }
             })
             .sum();
-        lines + devices
+        let tanks: f64 = self
+            .tank_groups
+            .iter()
+            .flatten()
+            .map(|g| g.air.total_moles())
+            .sum();
+        lines + devices + tanks
     }
 }
 

@@ -45,6 +45,10 @@ pub const WINDOW: &str = "/obj/structure/window";
 pub const GRILLE: &str = "/obj/structure/grille";
 pub const GIRDER: &str = "/obj/structure/girder";
 const RODS: &str = "/obj/item/stack/rods";
+/// Gas containers ([`crate::atmos_machinery::damage`]).
+const CANISTER: &str = "/obj/machinery/portable_atmospherics/canister";
+const STATIONARY_TANK: &str = "/obj/machinery/atmospherics/components/tank";
+const VENT_PUMP: &str = "/obj/machinery/atmospherics/components/unary/vent_pump";
 const SHARD: &str = "/obj/item/shard";
 
 /// `/a/b` is under `/a` and `/a/b`, not under `/a/bc`.
@@ -141,7 +145,7 @@ fn add_obj_state(add: On<Add<DmObj>>, objs: Query<&DmObj>, mut commands: Command
     let mut entity = commands.entity(add.entity);
     // Spawners that set these themselves (`replace_girder`, glass on a grille) win.
     entity.insert_if_new(Anchored(obj.anchored));
-    let breakable = [WINDOW, GRILLE, GIRDER]
+    let breakable = [WINDOW, GRILLE, GIRDER, CANISTER, STATIONARY_TANK, VENT_PUMP]
         .iter()
         .any(|root| is_under(&obj.path, root));
     if !breakable {
@@ -233,23 +237,37 @@ pub fn strip(name: &str) -> &str {
 /// tg `take_damage` with its effects: `atom_break` at `integrity_failure`, `atom_destruction`
 /// at 0.
 pub fn take_damage(world: &mut World, target: Entity, amount: f32, damtype: DamageType) -> Hit {
-    let (Some(obj), Some(mut integrity)) = (
-        world.get::<DmObj>(target).cloned(),
-        world.get::<Integrity>(target).copied(),
-    ) else {
+    let Some(obj) = world.get::<DmObj>(target).cloned() else {
         return Hit {
             damage: 0.0,
             broke: false,
             destroyed: false,
         };
     };
-    let hit = damage_numbers(&obj, &mut integrity, amount, damtype);
+    apply_damage(world, target, &obj, amount, damtype)
+}
+
+fn apply_damage(
+    world: &mut World,
+    target: Entity,
+    obj: &DmObj,
+    amount: f32,
+    damtype: DamageType,
+) -> Hit {
+    let Some(mut integrity) = world.get::<Integrity>(target).copied() else {
+        return Hit {
+            damage: 0.0,
+            broke: false,
+            destroyed: false,
+        };
+    };
+    let hit = damage_numbers(obj, &mut integrity, amount, damtype);
     if hit.damage <= 0.0 {
         return hit;
     }
     world.entity_mut(target).insert(integrity);
     if hit.broke {
-        atom_break(world, target, &obj);
+        atom_break(world, target, obj);
     }
     if hit.destroyed {
         deconstruct(world, target, false);
@@ -259,8 +277,26 @@ pub fn take_damage(world: &mut World, target: Entity, amount: f32, damtype: Dama
     hit
 }
 
+/// tg `take_damage(amount)` with no damage flag (`run_atom_armor` skips armor and deflection):
+/// brute, with the same break and destruction effects.
+pub fn take_damage_flagless(world: &mut World, target: Entity, amount: f32) -> Hit {
+    let Some(mut obj) = world.get::<DmObj>(target).cloned() else {
+        return Hit {
+            damage: 0.0,
+            broke: false,
+            destroyed: false,
+        };
+    };
+    obj.armor_melee = 0.0;
+    obj.damage_deflection = 0.0;
+    apply_damage(world, target, &obj, amount, DamageType::Brute)
+}
+
 /// tg `atom_break`: a grille falls apart (`/obj/structure/grille/atom_break`).
 fn atom_break(world: &mut World, target: Entity, obj: &DmObj) {
+    if crate::atmos_machinery::damage::atom_break(world, target) {
+        return;
+    }
     if !is_under(&obj.path, GRILLE) {
         return;
     }
@@ -336,7 +372,9 @@ pub fn deconstruct(world: &mut World, target: Entity, disassembled: bool) {
         return;
     };
     let broken = world.get::<Integrity>(target).is_some_and(|i| i.broken);
-    if is_under(&obj.path, WINDOW) {
+    if crate::atmos_machinery::damage::deconstruct(world, target, disassembled) {
+        // Its gas and parts are out; a tank's group keeps the shared air.
+    } else if is_under(&obj.path, WINDOW) {
         if !disassembled {
             // `spawn_debris`: glass shards, rods of the reinforcement.
             let shards = if obj.fulltile { 2 } else { 1 };

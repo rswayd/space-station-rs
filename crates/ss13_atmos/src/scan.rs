@@ -4,47 +4,98 @@ use ss13_shared::chat::{ChatChannel, ChatMessage, ChatSegment, Span};
 
 use crate::gas::{CELL_VOLUME, GASES, GasMixture, T0C, byond_round};
 
-/// The readout for `air` on `target` (the scanned atom's name, tg `[target]`).
+/// One mixture a scanned atom holds.
+#[derive(Clone, Copy, Debug)]
+pub struct ScanMix<'a> {
+    pub gas: &'a GasMixture,
+    pub volume: f64,
+    /// A turf's mixture (an empty one counts `HEAT_CAPACITY_VACUUM`).
+    pub turf: bool,
+}
+
+impl ScanMix<'_> {
+    pub fn pressure(&self) -> f64 {
+        if self.volume <= 0.0 {
+            return 0.0;
+        }
+        self.gas.total_moles() * crate::gas::R_IDEAL_GAS_EQUATION * self.gas.temperature
+            / self.volume
+    }
+
+    pub fn heat_capacity(&self) -> f64 {
+        if self.turf {
+            self.gas.heat_capacity()
+        } else {
+            self.gas.heat_capacity_raw()
+        }
+    }
+}
+
+/// The readout for `air` on `target` (the scanned atom's name, tg `[target]`): a turf.
 pub fn scan_message(target: &str, air: &GasMixture) -> ChatMessage {
+    scan_mixes(
+        target,
+        &[ScanMix {
+            gas: air,
+            volume: CELL_VOLUME,
+            turf: true,
+        }],
+    )
+}
+
+/// tg `atmos_scan` of an atom holding `mixes` (machine ports are "Node N").
+pub fn scan_mixes(target: &str, mixes: &[ScanMix]) -> ChatMessage {
     let mut lines = vec![(
         Span::BoldNotice,
         format!("Results of analysis of {target}."),
     )];
-    let total = air.total_moles();
     let r = |x: f64| num(byond_round(x, 0.01));
-    if total > 0.0 {
-        lines.push((Span::Notice, format!("Moles: {} mol", r(total))));
-        for (info, &amount) in GASES.iter().zip(&air.moles) {
-            if amount != 0.0 {
-                lines.push((
-                    Span::Notice,
-                    format!(
-                        "{}: {} mol ({} %)",
-                        info.name,
-                        r(amount),
-                        r(amount / total * 100.0)
-                    ),
-                ));
-            }
+    for (i, mix) in mixes.iter().enumerate() {
+        if mixes.len() > 1 {
+            lines.push((Span::BoldNotice, format!("Node {}", i + 1)));
         }
-        let t = air.temperature;
-        lines.push((
-            Span::Notice,
-            format!("Temperature: {} °C ({} K)", r(t - T0C), r(t)),
-        ));
-        lines.push((Span::Notice, format!("Volume: {} L", num(CELL_VOLUME))));
-        lines.push((Span::Notice, format!("Pressure: {} kPa", r(air.pressure()))));
-        lines.push((
-            Span::Notice,
-            format!("Heat Capacity: {} / K", display_energy(air.heat_capacity())),
-        ));
-        lines.push((
-            Span::Notice,
-            format!("Thermal Energy: {}", display_energy(air.thermal_energy())),
-        ));
-    } else {
-        lines.push((Span::Notice, format!("{target} is empty!")));
-        lines.push((Span::Notice, format!("Volume: {} L", num(CELL_VOLUME))));
+        let air = mix.gas;
+        let total = air.total_moles();
+        if total > 0.0 {
+            lines.push((Span::Notice, format!("Moles: {} mol", r(total))));
+            for (info, &amount) in GASES.iter().zip(&air.moles) {
+                if amount != 0.0 {
+                    lines.push((
+                        Span::Notice,
+                        format!(
+                            "{}: {} mol ({} %)",
+                            info.name,
+                            r(amount),
+                            r(amount / total * 100.0)
+                        ),
+                    ));
+                }
+            }
+            let t = air.temperature;
+            lines.push((
+                Span::Notice,
+                format!("Temperature: {} °C ({} K)", r(t - T0C), r(t)),
+            ));
+            lines.push((Span::Notice, format!("Volume: {} L", num(mix.volume))));
+            lines.push((Span::Notice, format!("Pressure: {} kPa", r(mix.pressure()))));
+            let capacity = mix.heat_capacity();
+            lines.push((
+                Span::Notice,
+                format!("Heat Capacity: {} / K", display_energy(capacity)),
+            ));
+            lines.push((
+                Span::Notice,
+                format!("Thermal Energy: {}", display_energy(t * capacity)),
+            ));
+        } else {
+            let empty = if mixes.len() > 1 {
+                "This node is empty!".to_owned()
+            } else {
+                format!("{target} is empty!")
+            };
+            lines.push((Span::Notice, empty));
+            lines.push((Span::Notice, format!("Volume: {} L", num(mix.volume))));
+        }
     }
     let segments = lines
         .into_iter()

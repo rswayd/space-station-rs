@@ -423,11 +423,15 @@ fn click_slot(
     map: Res<NetEntityMap>,
     mut intents: MessageWriter<SendIntent>,
 ) {
-    if click.button != PointerButton::Primary || map.controlled().is_none() {
+    if map.controlled().is_none() {
         return;
     }
     if let Ok(&HudSlot(slot)) = slots.get(click.entity) {
-        let intent = if keys.any_pressed([KeyCode::AltLeft, KeyCode::AltRight]) {
+        let intent = if click.button == PointerButton::Secondary {
+            ClientIntent::RightClickSlot(slot)
+        } else if click.button != PointerButton::Primary {
+            return;
+        } else if keys.any_pressed([KeyCode::AltLeft, KeyCode::AltRight]) {
             ClientIntent::AltClickSlot(slot)
         } else {
             ClientIntent::ClickSlot(slot)

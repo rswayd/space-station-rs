@@ -19,8 +19,11 @@ use crate::internals::TankAir;
 
 pub const CANISTER: &str = "/obj/machinery/portable_atmospherics/canister";
 const AIR_CANISTER: &str = "/obj/machinery/portable_atmospherics/canister/air";
+const FUSION_TEST_CANISTER: &str = "/obj/machinery/portable_atmospherics/canister/fusion_test";
 const PORTABLE_PUMP: &str = "/obj/machinery/portable_atmospherics/pump";
 const PORTABLE_SCRUBBER: &str = "/obj/machinery/portable_atmospherics/scrubber";
+const HUGE_SCRUBBER: &str = "/obj/machinery/portable_atmospherics/scrubber/huge";
+const MOVABLE_HUGE_SCRUBBER: &str = "/obj/machinery/portable_atmospherics/scrubber/huge/movable";
 const PORTABLE_ROOT: &str = "/obj/machinery/portable_atmospherics";
 
 /// `CAN_DEFAULT_RELEASE_PRESSURE`, `CAN_MIN_RELEASE_PRESSURE`, `CAN_MAX_RELEASE_PRESSURE`.
@@ -31,8 +34,6 @@ pub const CAN_MAX_RELEASE_PRESSURE: f64 = ONE_ATMOSPHERE * 25.0;
 pub const PUMP_DEFAULT_PRESSURE: f64 = ONE_ATMOSPHERE;
 pub const PUMP_MIN_PRESSURE: f64 = PUMP_DEFAULT_PRESSURE / 10.0;
 pub const PUMP_MAX_PRESSURE: f64 = PUMP_DEFAULT_PRESSURE * 25.0;
-/// `/obj/machinery/portable_atmospherics` `pressure_limit`.
-pub const PRESSURE_LIMIT: f64 = 500_000.0;
 /// `TANK_LEAK_PRESSURE`, `TANK_FRAGMENT_PRESSURE`.
 pub const TANK_LEAK_PRESSURE: f64 = 30.0 * ONE_ATMOSPHERE;
 pub const TANK_FRAGMENT_PRESSURE: f64 = 40.0 * ONE_ATMOSPHERE;
@@ -65,15 +66,114 @@ impl PortableAtmos {
     }
 }
 
-/// `/obj/machinery/portable_atmospherics/canister`.
-// shortcut: no internal cell or shielding, no hull damage from pressure or heat, no relabel,
-// no recolor (the GAGS icon keeps the type's colors) and no hypernoblium crystal.
+/// `/obj/machinery/portable_atmospherics/canister`. Its cell and shielding live in
+/// [`super::canister`].
+// shortcut: no relabel, no recolor (the GAGS icon keeps the type's colors) and no
+// hypernoblium crystal.
 #[derive(Component, Clone, Debug, PartialEq)]
 pub struct Canister {
     pub valve_open: bool,
     pub release_pressure: f64,
     /// `current_pressure_state` (the light overlay drawn).
     pub light: Option<&'static str>,
+    /// `machine_stat & BROKEN` ([`super::damage::canister_break`]).
+    pub broken: bool,
+    /// `pressure_limit`, `temp_limit` (`take_atmos_damage`).
+    pub pressure_limit: f64,
+    pub temp_limit: f64,
+    /// `shielding_powered`.
+    pub shielding: bool,
+    /// `internal_cell` (an item inside the canister).
+    pub cell: Option<Entity>,
+    pub panel_open: bool,
+}
+
+impl Canister {
+    /// A fresh canister: valve shut, default release pressure, the default limits.
+    pub fn new(valve_open: bool, release_pressure: f64) -> Self {
+        Self {
+            valve_open,
+            release_pressure,
+            light: None,
+            broken: false,
+            pressure_limit: super::damage::PRESSURE_LIMIT,
+            temp_limit: super::damage::TEMP_LIMIT,
+            shielding: false,
+            cell: None,
+            panel_open: false,
+        }
+    }
+}
+
+/// `nob_crystal_inserted`: a hypernoblium crystal inside; `suppress` is `suppress_reactions`.
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq)]
+pub struct NobCrystal {
+    pub suppress: bool,
+}
+
+pub const NOB_CRYSTAL: &str = "/obj/item/hypernoblium_crystal";
+
+/// `hypernoblium_crystal/interact_with_atom` on a portable machine: it goes in (`uses = 1`, the
+/// crystal is spent). True when the click was the crystal's.
+// shortcut: on clothing it does nothing yet (pressure-proofing, see `crystals`).
+pub fn insert_nob_crystal(world: &mut World, client: Entity, held: Entity, target: Entity) -> bool {
+    let is_crystal = world
+        .get::<ss13_mapload::DmItem>(held)
+        .is_some_and(|i| is_under(&i.path, NOB_CRYSTAL));
+    if !is_crystal || world.get::<PortableAtmos>(target).is_none() {
+        return false;
+    }
+    let name = world
+        .get::<ss13_mapload::DmName>(target)
+        .map(|n| crate::vending::plain_name(&n.name).to_owned())
+        .unwrap_or_default();
+    if world.get::<NobCrystal>(target).is_some() {
+        crate::tools::tell(
+            world,
+            client,
+            ss13_chat::Span::Warning,
+            format!("В {name} уже вставлен кристалл гипер-ноблия!"),
+        );
+        return true;
+    }
+    world.entity_mut(target).insert(NobCrystal::default());
+    crate::tools::tell(
+        world,
+        client,
+        ss13_chat::Span::Notice,
+        format!("Вы вставляете кристалл гипер-ноблия в {name}."),
+    );
+    world.despawn(held);
+    true
+}
+
+/// `portable_atmospherics/examine`: the crystal and its glow.
+pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<(ss13_chat::Span, String)>) {
+    let Some(crystal) = world.get::<NobCrystal>(target) else {
+        return;
+    };
+    lines.push((
+        ss13_chat::Span::Plain,
+        "Внутри находится кристалл гипер-ноблия, позволяющий подавлять реакции.".into(),
+    ));
+    if crystal.suppress {
+        lines.push((
+            ss13_chat::Span::Plain,
+            "Кристалл гипер-ноблия внутри слабо светится голубым: реакции сейчас подавлены.".into(),
+        ));
+    }
+}
+
+/// The UI's `reaction_suppression`: flips it, refused without a crystal (tg logs a possible
+/// href exploit).
+pub fn toggle_reaction_suppression(world: &mut World, target: Entity, actor: Entity) {
+    let Some(mut crystal) = world.get_mut::<NobCrystal>(target) else {
+        warn!("{actor:?} toggled reaction suppression on {target:?} without a crystal");
+        return;
+    };
+    crystal.suppress = !crystal.suppress;
+    let text = if crystal.suppress { "on" } else { "off" };
+    info!("{actor:?} turned {text} the reaction suppression of {target:?}");
 }
 
 /// `/obj/machinery/portable_atmospherics/pump`.
@@ -92,6 +192,9 @@ pub struct PortableScrubber {
     pub filter: u32,
     pub volume_rate: f64,
     pub overpressure_m: f64,
+    /// `scrubber/huge`: off unless anchored or `movable`; scrubs the tiles around twice.
+    pub huge: bool,
+    pub movable: bool,
 }
 
 /// `create_gas()`: `filled` of `maximum_pressure` of the canister's gas (air: O2/N2 mix).
@@ -140,6 +243,12 @@ pub fn pressure_light(pressure: f64) -> Option<&'static str> {
 /// Portable machines from the map: their gas and state.
 pub fn init_portables(world: &mut World, found: &[(Entity, DmAtmosDevice, TilePos, u8)]) {
     let mut count = 0;
+    let mut quality = world
+        .get_resource::<crate::combat::CombatRng>()
+        .map_or_else(
+            || crate::combat::CombatRng(0),
+            |r| crate::combat::CombatRng(r.0),
+        );
     for (e, dm, _, _) in found {
         let path = dm.path.as_str();
         if !is_under(path, PORTABLE_ROOT) {
@@ -151,16 +260,21 @@ pub fn init_portables(world: &mut World, found: &[(Entity, DmAtmosDevice, TilePo
         let mut entity = world.entity_mut(*e);
         if is_under(path, CANISTER) {
             air.gas = canister_gas(dm);
-            let light = pressure_light(air.pressure());
-            entity.insert(Canister {
-                valve_open: dm.valve_open,
-                release_pressure: if dm.release_pressure > 0.0 {
+            let mut canister = Canister::new(
+                dm.valve_open,
+                if dm.release_pressure > 0.0 {
                     dm.release_pressure
                 } else {
                     CAN_DEFAULT_RELEASE_PRESSURE
                 },
-                light,
-            });
+            );
+            canister.light = pressure_light(air.pressure());
+            if is_under(path, FUSION_TEST_CANISTER) {
+                (canister.temp_limit, canister.pressure_limit) = (1e12, 1e14);
+            }
+            // `Initialize`: `pressure_limit *= 1 + 0.2 * rand()`.
+            canister.pressure_limit *= 1.0 + 0.2 * f64::from(quality.unit());
+            entity.insert(canister);
         } else if is_under(path, PORTABLE_PUMP) {
             entity.insert(PortablePump {
                 on: dm.on,
@@ -181,6 +295,8 @@ pub fn init_portables(world: &mut World, found: &[(Entity, DmAtmosDevice, TilePo
                 } else {
                     100.0
                 },
+                huge: is_under(path, HUGE_SCRUBBER),
+                movable: is_under(path, MOVABLE_HUGE_SCRUBBER),
             });
         } else {
             // shortcut: pipe scrubbers and bluespace sinks hold gas but do nothing yet.
@@ -191,6 +307,9 @@ pub fn init_portables(world: &mut World, found: &[(Entity, DmAtmosDevice, TilePo
             holding: None,
         });
         count += 1;
+    }
+    if let Some(mut rng) = world.get_resource_mut::<crate::combat::CombatRng>() {
+        rng.0 = quality.0;
     }
     world
         .resource_mut::<super::AtmosMachineryReport>()
@@ -211,7 +330,11 @@ type PortableQuery<'w, 's> = Query<
         &'static mut PortableAtmos,
         Option<&'static mut Canister>,
         Option<&'static PortablePump>,
-        Option<&'static PortableScrubber>,
+        Option<&'static mut PortableScrubber>,
+        (
+            Option<&'static crate::obj_damage::Anchored>,
+            Option<&'static NobCrystal>,
+        ),
     ),
 >;
 
@@ -222,14 +345,25 @@ pub fn process_portables(
     mut portables: PortableQuery,
     mut tanks: Query<&mut TankAir>,
 ) {
-    for (_, &pos, mut portable, canister, pump, scrubber) in &mut portables {
+    for (_, &pos, mut portable, canister, pump, scrubber, (anchored, crystal)) in &mut portables {
+        // `huge/process_atmos`: a loose, unmovable huge scrubber switches off.
+        let mut scrubber = scrubber;
+        if let Some(s) = scrubber.as_mut()
+            && s.huge
+            && s.on
+            && !s.movable
+            && !anchored.is_some_and(|a| a.0)
+        {
+            s.on = false;
+        }
         let holding = portable.holding;
         // The gas is no part of the look: `Changed<PortableAtmos>` stays for the port and the
         // tank, or every portable's overlays would be rebuilt on every fire.
         let Some(air) = portable.bypass_change_detection().air_mut(&mut net) else {
             continue;
         };
-        if air.total_moles() > 0.0 {
+        // `process_atmos`: `!suppress_reactions && air_contents.react(src)`.
+        if air.total_moles() > 0.0 && !crystal.is_some_and(|c| c.suppress) {
             let volume = air.volume;
             air.gas
                 .react(Holder::Other, volume, &mut Exposures::default());
@@ -252,7 +386,12 @@ pub fn process_portables(
         } else if let Some(pump) = pump.filter(|p| p.on) {
             portable_pump(air, tank.as_deref_mut(), &mut atmos, pos, pump);
         } else if let Some(scrubber) = scrubber.filter(|s| s.on) {
-            portable_scrub(air, tank.as_deref_mut(), &mut atmos, pos, scrubber);
+            // `huge/process_atmos` scrubs the tiles around, then `..()` does the usual pass.
+            if scrubber.huge && tank.is_none() {
+                let around = atmos.adjacent_turfs(pos, true);
+                scrub_tiles(air, &mut atmos, around, &scrubber);
+            }
+            portable_scrub(air, tank.as_deref_mut(), &mut atmos, pos, &scrubber);
         }
     }
 }
@@ -350,9 +489,20 @@ fn portable_scrub(
         air.merge(&taken);
         return;
     }
-    let ratio = (scrubber.volume_rate / CELL_VOLUME).min(1.0);
     let mut tiles = vec![pos];
     tiles.extend(atmos.adjacent_turfs(pos, true));
+    scrub_tiles(air, atmos, tiles, scrubber);
+}
+
+/// `scrub(turf.return_air())` on each tile in turn.
+fn scrub_tiles(
+    air: &mut PipeAir,
+    atmos: &mut Atmos,
+    tiles: Vec<TilePos>,
+    scrubber: &PortableScrubber,
+) {
+    let minimum = MOLAR_ACCURACY * 1000.0;
+    let ratio = (scrubber.volume_rate / CELL_VOLUME).min(1.0);
     for tile in tiles {
         if air.pressure() >= scrubber.overpressure_m * ONE_ATMOSPHERE {
             return;

@@ -140,6 +140,8 @@ pub struct DmObj {
     pub rods_type: String,
     pub rods_amount: u32,
     pub broken: bool,
+    /// Windows: `heat_resistance` (°C over 0 °C before hot air damages it).
+    pub heat_resistance: f32,
 }
 
 #[derive(Clone, Copy)]
@@ -225,7 +227,7 @@ const TURF_VARS: [(&str, &str, Kind); 7] = [
     ("slicing_duration", "slicing_duration", Kind::Num),
 ];
 
-const OBJ_VARS: [(&str, &str, Kind); 20] = [
+const OBJ_VARS: [(&str, &str, Kind); 21] = [
     ("anchored", "anchored", Kind::Bool),
     ("max_integrity", "max_integrity", Kind::Num),
     ("integrity_failure", "integrity_failure", Kind::Num),
@@ -246,6 +248,7 @@ const OBJ_VARS: [(&str, &str, Kind); 20] = [
     ("rods_amount", "rods_amount", Kind::Count),
     ("broken", "broken", Kind::Bool),
     ("armor_type", "armor_melee", Kind::Num),
+    ("heat_resistance", "heat_resistance", Kind::Num),
 ];
 
 /// A dumped value as a number: plain numbers and constant expressions the extractor kept as

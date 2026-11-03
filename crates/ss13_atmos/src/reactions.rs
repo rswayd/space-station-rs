@@ -129,6 +129,22 @@ const H2_FIRE: usize = 1;
 const TRIT_FIRE: usize = 2;
 const FREON_FIRE: usize = 3;
 
+/// `reaction_results` of the fire reactions a mixture last ran: (id, name, amount), nonzero.
+pub fn fire_results(air: &GasMixture) -> Vec<(&'static str, &'static str, f64)> {
+    const FIRES: [(&str, &str); FIRE_RESULTS] = [
+        ("plasmafire", "Plasma Combustion"),
+        ("h2fire", "Hydrogen Combustion"),
+        ("tritfire", "Tritium Combustion"),
+        ("freonfire", "Freon Combustion"),
+    ];
+    FIRES
+        .iter()
+        .zip(air.reaction_results)
+        .filter(|(_, amount)| *amount != 0.0)
+        .map(|(&(id, name), amount)| (id, name, amount))
+        .collect()
+}
+
 /// What tg passes as `holder` to `react()`: reactions that touch the location (fires expose
 /// the turf, steam condenses on it) do that only for a turf.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -149,6 +165,18 @@ pub enum Holder {
 pub struct Exposures {
     temperatures: [f64; FIRE_RESULTS],
     len: usize,
+    /// Vapor condensed on the turf: `water_vapor_gas_act` or `freeze_turf`.
+    pub condensed: Option<Condensation>,
+}
+
+/// What water vapor did to the turf it condensed on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Condensation {
+    /// `water_vapor_gas_act`: wet (`TURF_WET_WATER`, 10 s, +5 s) and washed; not on
+    /// groundless or no-slip turfs.
+    Wet,
+    /// `freeze_turf`: permafrost for 10 s, objects freeze, cold mobs get frozen.
+    Freeze,
 }
 
 impl Exposures {
@@ -555,8 +583,6 @@ impl GasMixture {
     }
 }
 
-// shortcut: no wet or frozen floors (`water_vapor_gas_act`, `freeze_turf`); the vapor still
-// condenses out of the air as in tg. Add with slippery turfs.
 fn water_vapor(air: &mut GasMixture, ctx: &mut Ctx) -> u8 {
     if ctx.holder != Holder::Turf {
         return NO_REACTION;
@@ -565,8 +591,10 @@ fn water_vapor(air: &mut GasMixture, ctx: &mut Ctx) -> u8 {
     let consumed = if air.temperature <= WATER_VAPOR_DEPOSITION_POINT {
         // `freeze_turf()` always freezes an open turf: its permafrost keeps the group volatile.
         flags |= VOLATILE_REACTION;
+        ctx.exposures.condensed = Some(Condensation::Freeze);
         MOLES_GAS_VISIBLE
     } else if air.temperature <= WATER_VAPOR_CONDENSATION_POINT {
+        ctx.exposures.condensed = Some(Condensation::Wet);
         MOLES_GAS_VISIBLE
     } else {
         0.0
@@ -1349,7 +1377,9 @@ mod tests {
     fn steam_condenses_on_turfs_only() {
         // 1 mol vapor at 293.15 K: 0.25 condenses per reaction, nothing in a tank.
         let mut air = mix("water_vapor=1;n2=50;TEMP=293.15");
-        assert_eq!(react(&mut air, Holder::Turf).0, REACTING);
+        let (flags, exposures) = react(&mut air, Holder::Turf);
+        assert_eq!(flags, REACTING);
+        assert_eq!(exposures.condensed, Some(Condensation::Wet));
         assert!(close(air.get(G::WATER_VAPOR), 0.75));
         let mut tank = mix("water_vapor=1;TEMP=293.15");
         assert_eq!(react(&mut tank, Holder::Other).0, NO_REACTION);
@@ -1357,10 +1387,9 @@ mod tests {
         let mut warm = mix("water_vapor=1;TEMP=310");
         assert_eq!(react(&mut warm, Holder::Turf).0, NO_REACTION);
         let mut cold = mix("water_vapor=1;TEMP=200");
-        assert_eq!(
-            react(&mut cold, Holder::Turf).0,
-            REACTING | VOLATILE_REACTION
-        );
+        let (flags, exposures) = react(&mut cold, Holder::Turf);
+        assert_eq!(flags, REACTING | VOLATILE_REACTION);
+        assert_eq!(exposures.condensed, Some(Condensation::Freeze));
     }
 
     #[test]

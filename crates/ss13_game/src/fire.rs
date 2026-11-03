@@ -116,14 +116,27 @@ pub struct Burning;
 struct FireClocks {
     flames: f64,
     burning: f64,
+    sound: f64,
 }
+
+/// `/datum/looping_sound/fire`: `volume`, `mid_length` (s).
+pub const FIRE_LOOP_VOLUME: f32 = 30.0;
+pub const FIRE_LOOP_SECS: f64 = 2.0;
 
 pub struct FireServerPlugin;
 
 impl Plugin for FireServerPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<FireClocks>()
+            .init_resource::<crate::atmos_exposure::AtomProcess>()
             .add_observer(network_hotspot)
+            .add_systems(
+                Update,
+                crate::atmos_exposure::process_atoms
+                    .run_if(ss13_atmos::air_tick_due)
+                    .after(AtmosSystems::Fire)
+                    .before(HealthSystems),
+            )
             .add_systems(
                 Update,
                 (
@@ -134,6 +147,8 @@ impl Plugin for FireServerPlugin {
                     rolling_tick,
                     burning_objects,
                     space_wind,
+                    fire_sound_loops,
+                    crate::turf_damage::burn_turfs,
                 )
                     .chain()
                     .after(AtmosSystems::Fire)
@@ -143,6 +158,38 @@ impl Plugin for FireServerPlugin {
                     .before(HealthSystems),
             )
             .add_systems(PostUpdate, fire_overlays.before(NetServerSystems::Send));
+    }
+}
+
+/// Every `mid_length` each hot group plays a random fire clip at its middle, carrying
+/// `drop_off_dist` further and fading from that far (tg `update_sound`).
+// shortcut: one clock for every group (tg times each loop from its start); fine while the
+// clips last as long as the loop.
+fn fire_sound_loops(world: &mut World) {
+    let delta = world.resource::<Time>().delta_secs_f64();
+    {
+        let mut clocks = world.resource_mut::<FireClocks>();
+        clocks.sound += delta;
+        if clocks.sound < FIRE_LOOP_SECS {
+            return;
+        }
+        clocks.sound -= FIRE_LOOP_SECS;
+    }
+    let Some(sounds) = world.get_resource::<Atmos>().map(Atmos::fire_sounds) else {
+        return;
+    };
+    for (pos, drop_off) in sounds {
+        let files = ss13_mapload::sound::files::FIRE_LOOP;
+        let clip = files[world
+            .resource_mut::<CombatRng>()
+            .range(0, files.len() as u32 - 1) as usize];
+        let drop_off = drop_off as f32;
+        crate::sound::playsound(
+            world,
+            crate::sound::PlaySound::new(pos, clip, FIRE_LOOP_VOLUME, false)
+                .extrarange(drop_off)
+                .falloff_distance(drop_off),
+        );
     }
 }
 

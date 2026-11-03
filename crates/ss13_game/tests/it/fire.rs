@@ -77,7 +77,7 @@ const TYPES: &str = r##"{
         "name": "window", "icon_state": "window", "density": 1, "can_atmos_pass": -1,
         "flags_1": 2, "max_integrity": 50, "state": 0, "reinf": 0, "fulltile": 0,
         "glass_type": { "path": "/obj/item/stack/sheet/glass" }, "glass_amount": 1,
-        "decon_speed": 30 } },
+        "decon_speed": 30, "heat_resistance": 800 } },
     "/obj/structure/window/fulltile": { "parent": "/obj/structure/window",
         "vars": { "name": "full tile window" }, "declared_vars": {
         "name": "full tile window", "flags_1": 0, "fulltile": 1, "glass_amount": 2,
@@ -93,6 +93,8 @@ const TYPES: &str = r##"{
     "/turf/open": { "parent": "/turf", "declared_vars": { "can_atmos_pass": -1,
         "planetary_atmos": 0 } },
     "/turf/open/floor": { "parent": "/turf/open", "declared_vars": { "icon_state": "floor",
+        "damaged_dmi": { "resource": "icons/turf/damaged.dmi" },
+        "thermal_conductivity": 0.02, "heat_capacity": 20000,
         "baseturfs": { "path": "/turf/open/floor/plating" }, "overfloor_placed": 1,
         "floor_tile": null } },
     "/turf/open/floor/iron": { "parent": "/turf/open/floor" },
@@ -138,7 +140,7 @@ const TABLE_AT: TilePos = TilePos::new(6, 4, 1);
 const WINDOW_AT: TilePos = TilePos::new(4, 2, 1);
 
 /// Manifest order = `IconStateId`.
-const STATES: [(&str, &str); 18] = [
+const STATES: [(&str, &str); 20] = [
     ("t.dmi", "floor"),
     ("t.dmi", "plating"),
     ("t.dmi", "wall"),
@@ -157,6 +159,8 @@ const STATES: [(&str, &str); 18] = [
     ("icons/effects/fire.dmi", "heavy"),
     ("icons/mob/effects/onfire.dmi", "human_small_fire"),
     ("icons/mob/effects/onfire.dmi", "human_big_fire"),
+    ("icons/turf/damaged.dmi", "floorscorched1"),
+    ("icons/turf/damaged.dmi", "floorscorched2"),
 ];
 
 const SMALL_FIRE_ICON: IconStateId = IconStateId(16);
@@ -330,6 +334,9 @@ fn a_welder_lights_plasma_and_the_room_burns() {
     };
     let start_plasma = plasma(&s);
     let table = s.obj_at(TABLE_AT, "/obj/structure/table/wood").unwrap();
+    let window = s
+        .obj_at(WINDOW_AT, "/obj/structure/window/fulltile")
+        .unwrap();
     for _ in 0..40 {
         s.step();
     }
@@ -391,6 +398,31 @@ fn a_welder_lights_plasma_and_the_room_burns() {
         .sum();
     assert!(co2 > 10.0, "{co2}");
     assert!(s.atmos().hotspots() > 1, "the fire spread");
+
+    // A heavy fire scorches the iron floor (`burn_tile`: one of `floorscorched1/2`).
+    s.run_until("a scorched floor", |s| {
+        room.iter().any(|&p| {
+            s.find(p, |w, e| {
+                w.get::<ss13_mapload::Turf>(e).is_some()
+                    && w.get::<Appearance>(e).is_some_and(|a| {
+                        a.overlays.iter().any(|o| matches!(o.icon_state.0, 18 | 19))
+                    })
+            })
+            .is_some()
+        })
+    });
+    // Heat crosses the window (superconduction) and its tile's hot air damages it
+    // (`atmos_sensitive`: over 1073 K, 25 burn a fire).
+    s.run_until("the heat cracks the window", |s| {
+        s.world().get_entity(window).is_err()
+            || s.world()
+                .get::<ss13_game::obj_damage::Integrity>(window)
+                .is_some_and(|i| i.current < 100.0)
+    });
+    eprintln!(
+        "fire: window tile at {:.0} K",
+        s.atmos().temperature(WINDOW_AT).unwrap_or_default()
+    );
 
     // The wooden table caught fire and burns down (70 integrity, 10/s plus exposures).
     s.run_until("the table burns", |s| {

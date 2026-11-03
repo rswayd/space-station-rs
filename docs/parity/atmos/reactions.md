@@ -11,7 +11,7 @@
 Пар конденсируется при низкой температуре, делая пол мокрым, а ниже 0 °C — обледенелым.
 
 - **Код:** [`/datum/gas_reaction/standard/water_vapor`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/gasmixtures/reactions.dm#L98), [`react()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/gasmixtures/reactions.dm#L110), [`init_factors()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/gasmixtures/reaction_factors.dm#L1)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_atmos/src/reactions.rs`: пар уходит из воздуха, но пол не становится мокрым или ледяным (`water_vapor_gas_act`, `freeze_turf`)
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_atmos/src/reactions.rs` (`Condensation`), `crates/ss13_game/src/janitor.rs` (`condensation`): пол мокнет и моется (не на беспочвенных и нескользящих тайлах), ниже точки осаждения — вечная мерзлота; заморозка предметов и мобов → ../effects/misc-effects.md «Заморозка предметов», ../mobs/status-effects-incapacitating.md «Заморозка (freon, ледяной блок)»
 
 ### Стерилизация миазмов
 Миазмы распадаются при высокой температуре (с водяным паром медленнее), выделяя кислород.
@@ -35,13 +35,13 @@
 Тритий горит с кислородом, при большом выгорании испускает радиационный импульс.
 
 - **Код:** [`/datum/gas_reaction/standard/tritfire`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/gasmixtures/reactions.dm#L316), [`react()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/gasmixtures/reactions.dm#L330), [`init_factors()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/gasmixtures/reaction_factors.dm#L51)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_atmos/src/reactions.rs`: нет радиационного импульса
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_atmos/src/reactions.rs`; радиационный импульс → ../effects/radiation.md «Радиационный импульс и SSradiation»
 
 ### Горение фреона
 Эндотермическая реакция фреона с кислородом охлаждает смесь; в узком окне 120–160 K может выпасть горячий лёд.
 
 - **Код:** [`/datum/gas_reaction/standard/freonfire`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/gasmixtures/reactions.dm#L380), [`react()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/gasmixtures/reactions.dm#L395), [`init_factors()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/gasmixtures/reaction_factors.dm#L63)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_atmos/src/reactions.rs`: нет листов горячего льда (`/obj/item/stack/sheet/hot_ice`)
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_atmos/src/reactions.rs`; выпадение листов горячего льда → ../engineering/stacks-materials.md «Органические и прочие листы»
 
 ### Образование N2O
 Азот и кислород с BZ-катализатором образуют закись азота в окне температур.
@@ -95,7 +95,7 @@ CO2, кислород и тритий в холоде дают плюоксий 
 Галон при горении поглощает кислород и создаёт смоляную пену, тушащую пожар.
 
 - **Код:** [`/datum/gas_reaction/standard/halon_o2removal`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/gasmixtures/reactions.dm#L843), [`react()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/gasmixtures/reactions.dm#L856), [`init_factors()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/gasmixtures/reaction_factors.dm#L187)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_atmos/src/reactions.rs`: нет смоляной пены (`do_foam`)
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_atmos/src/reactions.rs`; смоляная пена → ../effects/effect-systems.md «Пена (do_foam) и её виды»
 
 ### Образование хилиума
 BZ и фреон в холоде образуют хилиум.
@@ -131,13 +131,13 @@ BZ и фреон в холоде образуют хилиум.
 Прото-нитрат перерабатывает тритий в водород с радиационным импульсом.
 
 - **Код:** [`/datum/gas_reaction/standard/proto_nitrate_tritium_response`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/gasmixtures/reactions.dm#L1100), [`react()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/gasmixtures/reactions.dm#L1114), [`init_factors()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/gasmixtures/reaction_factors.dm#L244)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_atmos/src/reactions.rs`: нет радиационного импульса
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_atmos/src/reactions.rs`; радиационный импульс → ../effects/radiation.md «Радиационный импульс и SSradiation»
 
 ### Прото-нитрат + BZ
 Прото-нитрат разлагает BZ на азот, гелий и плазму, излучая радиацию и ядерные частицы.
 
 - **Код:** [`/datum/gas_reaction/standard/proto_nitrate_bz_response`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/gasmixtures/reactions.dm#L1153), [`react()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/gasmixtures/reactions.dm#L1167), [`init_factors()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/gasmixtures/reaction_factors.dm#L253)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_atmos/src/reactions.rs`: нет радиации и ядерных частиц
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_atmos/src/reactions.rs`; радиация → ../effects/radiation.md, ядерные частицы → ../combat/ammo-projectiles.md «Особые снаряды»
 
 ### Репликация антиноблия
 Антиноблий размножается за счёт любых других газов выше порога температуры.

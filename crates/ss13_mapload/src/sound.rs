@@ -79,6 +79,30 @@ pub mod files {
     pub const TABLE_SLAM: &str = "sound/effects/tableslam.ogg";
     /// `wrench_act` of tables and table frames.
     pub const DECONSTRUCT: &str = "sound/items/deconstruct.ogg";
+    /// Atmos: the analyzer's barometer (`pop`, `ping`'s click), a stationary tank over its
+    /// limit (`breaking_sounds`), a canister breaking (`canister_break`).
+    pub const ATMOS: [&str; 9] = [
+        "sound/effects/pop.ogg",
+        "sound/machines/click.ogg",
+        "sound/effects/structure_stress/pop1.ogg",
+        "sound/effects/structure_stress/pop2.ogg",
+        "sound/effects/structure_stress/pop3.ogg",
+        "sound/effects/spray.ogg",
+        // `/datum/looping_sound/vent_pump_overclock`.
+        "sound/machines/fan/fan_start.ogg",
+        "sound/machines/fan/fan_loop.ogg",
+        "sound/machines/fan/fan_stop.ogg",
+    ];
+    /// `/datum/looping_sound/fire` `mid_sounds` (equal weights).
+    pub const FIRE_LOOP: [&str; 7] = [
+        "sound/effects/fireclip1.ogg",
+        "sound/effects/fireclip2.ogg",
+        "sound/effects/fireclip3.ogg",
+        "sound/effects/fireclip4.ogg",
+        "sound/effects/fireclip5.ogg",
+        "sound/effects/fireclip6.ogg",
+        "sound/effects/fireclip7.ogg",
+    ];
 }
 
 pub const RUNTIME_SOUNDS: [&str; 15] = [
@@ -230,7 +254,8 @@ pub fn sound_var(types: &DmTypes, path: &str, var: &str) -> String {
     }
 }
 
-/// The files the server can name: SFX files, [`SOUND_VARS`] of `converted`, [`RUNTIME_SOUNDS`].
+/// The files the server can name: SFX files, [`SOUND_VARS`] of `converted`, [`RUNTIME_SOUNDS`]
+/// and the fire loop.
 pub fn referenced<'a>(
     types: &DmTypes,
     sfx: &SfxData,
@@ -238,6 +263,8 @@ pub fn referenced<'a>(
 ) -> BTreeSet<String> {
     let mut out: BTreeSet<String> = sfx.files().map(str::to_owned).collect();
     out.extend(RUNTIME_SOUNDS.map(str::to_owned));
+    out.extend(files::FIRE_LOOP.map(str::to_owned));
+    out.extend(files::ATMOS.map(str::to_owned));
     for path in converted {
         for var in SOUND_VARS {
             let s = sound_var(types, path, var);

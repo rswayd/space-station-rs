@@ -526,7 +526,7 @@ fn vending_tool(world: &mut World, actor: Actor, kind: ToolKind, machine: Entity
 }
 
 /// tg `is_blocked_turf(exclude_mobs = TRUE, source_atom = obj)` of the obj's own tile.
-fn blocked_for(world: &World, obj: Entity) -> bool {
+pub(crate) fn blocked_for(world: &World, obj: Entity) -> bool {
     let Some(&pos) = world.get::<TilePos>(obj) else {
         return true;
     };
@@ -860,7 +860,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         Job::Food(job) => crate::food::complete(world, mob, action, *job),
         &Job::Clean(job) => crate::janitor::complete(world, mob, action, job),
         Job::Botany(job) => crate::botany::complete(world, mob, action, *job),
-        Job::Atmos(job) => crate::atmos_machinery::windows::complete(world, action, *job),
+        Job::Atmos(job) => crate::atmos_machinery::windows::complete(world, mob, action, *job),
         Job::Interact(job) => crate::drag::complete(world, mob, action, *job),
         &Job::Table(job) => crate::tables::complete(world, mob, action, job),
         Job::Strip(job) => crate::strip::complete(world, mob, action, *job),
@@ -1247,7 +1247,9 @@ pub fn change_turf(
     let air = world.get::<TurfAir>(turf).cloned();
     if let (Some(air), Some(mut atmos)) = (air, world.get_resource_mut::<Atmos>()) {
         let both_open = old_kind == Some(TileKind::Open) && air.kind == TileKind::Open;
-        if !(inherit_air && both_open) {
+        if inherit_air && both_open {
+            atmos.replace_turf_keeping_air(pos, &air);
+        } else {
             atmos.change_turf(pos, &air);
         }
     }

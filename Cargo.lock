@@ -6009,6 +6009,7 @@ dependencies = [
  "bevy",
  "ss13_shared",
  "ss13_world",
+ "web-time",
 ]
 
 [[package]]
@@ -6154,6 +6155,7 @@ dependencies = [
  "ss13_proto",
  "ss13_reagents",
  "ss13_shared",
+ "ss13_tgui",
  "ss13_world",
  "thiserror 2.0.21",
  "web-time",
@@ -6238,6 +6240,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "postcard",
+ "ron",
  "serde",
  "ss13_net",
  "ss13_shared",

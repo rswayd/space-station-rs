@@ -160,6 +160,11 @@ pub struct Door {
     pub sounds: Arc<DoorSounds>,
     /// The animation sound to play this tick ([`door_sounds`]).
     sound: Option<DoorSound>,
+    /// tg `cycle_pump`: the airlock pump cycling this airlock
+    /// (`crate::atmos_machinery::airlock_pump`).
+    pub cycle_pump: Option<Entity>,
+    /// An opening was turned into a cycle request this tick (tg `airlock_act`).
+    pub cycle_requested: bool,
 }
 
 /// An airlock's sound vars (empty: silent).
@@ -462,6 +467,8 @@ fn init_doors(world: &mut World) {
                     .or_insert_with_key(|k| Arc::new(k.clone()))
                     .clone(),
                 sound: None,
+                cycle_pump: None,
+                cycle_requested: false,
             };
             (entity, door)
         })
@@ -695,6 +702,11 @@ fn open(
     env: DoorEnv,
     forced: bool,
 ) -> bool {
+    // `airlock/open`: a bolted airlock with a cycling pump asks the pump instead.
+    if door.cycle_pump.is_some() && door.state == DoorState::Closed && door.locked && !door.welded {
+        door.cycle_requested = true;
+        return false;
+    }
     if door.state != DoorState::Closed || door.locked || door.welded {
         return false;
     }
@@ -1199,6 +1211,8 @@ pub(crate) fn test_airlock(req_access: &[&str]) -> Door {
         ai_disabled_id_scanner: false,
         sounds: default(),
         sound: None,
+        cycle_pump: None,
+        cycle_requested: false,
     }
 }
 

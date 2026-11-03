@@ -7,7 +7,8 @@ use std::sync::Arc;
 
 use bevy::prelude::*;
 use ss13_atmos::{
-    AtmosBlocker, AtmosPass, FireStage, GASES, GasOverlayIcons, HotspotIcons, TileKind, TurfAir,
+    AtmosBlocker, AtmosPass, FireStage, GASES, GasOverlayIcons, HotspotIcons, Thermal, TileKind,
+    TurfAir,
 };
 
 use crate::convert::DmTypes;
@@ -37,6 +38,11 @@ pub struct DmTurfAtmos {
     /// tg `create_gas_mixture` uses the turf's `temperature` only when the type's own value
     /// differs from its parent type's, or a map edit sets it: not inherited by subtypes.
     pub temperature: Option<f32>,
+    /// Superconduction: `thermal_conductivity`, `heat_capacity` (`INFINITY` is 1e31) and the
+    /// turf's own `temperature` (inherited, unlike [`Self::temperature`]).
+    pub thermal_conductivity: f64,
+    pub heat_capacity: f64,
+    pub turf_temperature: f64,
 }
 
 impl Default for DmTurfAtmos {
@@ -47,6 +53,9 @@ impl Default for DmTurfAtmos {
             planetary_atmos: false,
             can_atmos_pass: ATMOS_PASS_NO,
             temperature: None,
+            thermal_conductivity: Thermal::TURF.conductivity,
+            heat_capacity: Thermal::TURF.heat_capacity,
+            turf_temperature: Thermal::TURF.temperature,
         }
     }
 }
@@ -67,22 +76,60 @@ impl DmTurfAtmos {
             initial_gas_mix: Arc::from(self.initial_gas_mix.as_str()),
             temperature: self.temperature.map(f64::from),
             planetary: self.planetary_atmos,
+            thermal: Thermal {
+                conductivity: self.thermal_conductivity,
+                heat_capacity: self.heat_capacity,
+                temperature: self.turf_temperature,
+            },
         }
     }
+}
+
+/// An area's `outdoors` (tg `/area`): weather reaches it, barometers work in it.
+#[derive(Component, Reflect, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct DmArea {
+    pub outdoors: bool,
 }
 
 /// On object types that declare `can_atmos_pass`.
 #[derive(Component, Reflect, Clone, Copy, Debug, PartialEq)]
 pub struct DmAtmosPass {
     pub can_atmos_pass: i8,
+    /// tg `block_superconductivity()`, a proc: [`blocks_heat`] evaluates it per type.
+    pub block_superconductivity: bool,
 }
 
 impl Default for DmAtmosPass {
     fn default() -> Self {
         Self {
             can_atmos_pass: ATMOS_PASS_YES,
+            block_superconductivity: false,
         }
     }
+}
+
+/// tg `block_superconductivity()` of a closed `path`: doors that are opaque or `heat_proof`
+/// (not plasma airlocks), reinforced plasma windows, and the structures that always return
+/// TRUE (`atmos_field_gen.dm`, `holosign.dm`, `_blob.dm`, `turbine.dm`, `aliens.dm`).
+pub fn blocks_heat(types: &DmTypes, path: &str) -> bool {
+    const ALWAYS: [&str; 6] = [
+        "/obj/structure/window/reinforced/plasma",
+        "/obj/structure/holosign/barrier/atmos",
+        "/obj/effect/atmos_shield",
+        "/obj/structure/blob",
+        "/obj/machinery/power/turbine",
+        "/obj/structure/alien/resin/wall",
+    ];
+    if ALWAYS.iter().any(|root| is_under(path, root)) {
+        return true;
+    }
+    if !is_under(path, "/obj/machinery/door")
+        || is_under(path, "/obj/machinery/door/airlock/plasma")
+    {
+        return false;
+    }
+    let set = |var| num(types.resolved(path, var)).is_some_and(|n| n != 0.0);
+    set("opacity") || set("heat_proof")
 }
 
 impl DmAtmosPass {
@@ -119,11 +166,13 @@ pub fn hotspot_icons(icons: &crate::IconIndex) -> HotspotIcons {
     out
 }
 
-const TURF_VARS: [&str; 4] = [
+const TURF_VARS: [&str; 6] = [
     "initial_gas_mix",
     "blocks_air",
     "planetary_atmos",
     "can_atmos_pass",
+    "thermal_conductivity",
+    "heat_capacity",
 ];
 
 /// Converter fields of `path`: the turf root carries every turf var resolved, subtypes what
@@ -145,16 +194,39 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
                 out.push(f);
             }
         }
+        let declared = if path == TURF {
+            types.resolved(path, "temperature")
+        } else {
+            ty.declared_vars.get("temperature")
+        };
+        if let Some(t) = declared.and_then(serde_json::Value::as_f64) {
+            out.push(ext(TURF_COMPONENT, "turf_temperature", format!("{t:?}")));
+        }
         let parent = ty.parent.as_deref().filter(|p| is_under(p, TURF));
         let own = temperature_override(types, path);
         if own != parent.and_then(|p| temperature_override(types, p)) {
             out.push(ext(TURF_COMPONENT, "temperature", option_ron(own)));
         }
-    } else if is_under(path, "/obj")
-        && let Some(v) = ty.declared_vars.get("can_atmos_pass")
-        && let Some(n) = num(Some(v))
-    {
-        out.push(ext(PASS_COMPONENT, "can_atmos_pass", (n as i8).to_string()));
+    } else if is_under(path, "/area") {
+        if let Some(v) = ty.declared_vars.get("outdoors") {
+            let on = num(Some(v)).is_some_and(|n| n != 0.0);
+            out.push(ext("dm_area", "outdoors", on.to_string()));
+        }
+    } else if is_under(path, "/obj") {
+        if let Some(v) = ty.declared_vars.get("can_atmos_pass")
+            && let Some(n) = num(Some(v))
+        {
+            out.push(ext(PASS_COMPONENT, "can_atmos_pass", (n as i8).to_string()));
+        }
+        let heat = blocks_heat(types, path);
+        let parent = ty.parent.as_deref();
+        if heat != parent.is_some_and(|p| blocks_heat(types, p)) {
+            out.push(ext(
+                PASS_COMPONENT,
+                "block_superconductivity",
+                heat.to_string(),
+            ));
+        }
     }
     out
 }
@@ -185,6 +257,8 @@ fn turf_field(var: &str, value: Val) -> Result<Field, Skip> {
         },
         "blocks_air" | "planetary_atmos" => (json_num(value)? != 0.0).to_string(),
         "can_atmos_pass" => (json_num(value)? as i8).to_string(),
+        "thermal_conductivity" => format!("{:?}", json_num(value)?),
+        "heat_capacity" => format!("{:?}", json_num(value)?),
         _ => return Err(Skip::UnknownVar),
     };
     Ok(ext(TURF_COMPONENT, static_var(var), ron))
@@ -205,6 +279,8 @@ pub fn ext_field(path: &str, var: &str, value: Val) -> Result<Field, Skip> {
             let Val::Num(t) = value else {
                 return Err(Skip::Unsupported);
             };
+            // shortcut: an edit sets the air's and not the solid's (`turf_temperature`) one;
+            // a field carries one var, and edited temperatures are rare on station turfs.
             return Ok(ext(
                 TURF_COMPONENT,
                 "temperature",
@@ -236,12 +312,20 @@ mod tests {
             "planetary_atmos": 0 } },
         "/turf/open/space": { "parent": "/turf/open", "declared_vars": { "temperature": 2.7 } },
         "/turf/open/space/basic": { "parent": "/turf/open/space" },
-        "/turf/open/floor": { "parent": "/turf/open" },
+        "/turf/open/floor": { "parent": "/turf/open",
+            "declared_vars": { "thermal_conductivity": 0.02, "heat_capacity": 20000 } },
         "/turf/open/floor/airless": { "parent": "/turf/open/floor",
             "declared_vars": { "initial_gas_mix": "TEMP=2.7" } },
         "/turf/closed": { "parent": "/turf", "declared_vars": { "blocks_air": 1 } },
         "/obj": { "parent": "/atom" },
-        "/obj/machinery/door": { "parent": "/obj", "declared_vars": { "can_atmos_pass": -2 } },
+        "/obj/machinery/door": { "parent": "/obj", "declared_vars": { "can_atmos_pass": -2,
+            "opacity": 1, "heat_proof": 0 } },
+        "/obj/machinery/door/airlock": { "parent": "/obj/machinery/door" },
+        "/obj/machinery/door/airlock/glass": { "parent": "/obj/machinery/door/airlock",
+            "declared_vars": { "opacity": 0 } },
+        "/obj/machinery/door/airlock/plasma": { "parent": "/obj/machinery/door/airlock" },
+        "/obj/machinery/door/firedoor": { "parent": "/obj/machinery/door",
+            "declared_vars": { "opacity": 0, "heat_proof": 1 } },
         "/obj/structure/window": { "parent": "/obj", "declared_vars": { "can_atmos_pass": -1 } }
       }
     }"##;
@@ -257,13 +341,24 @@ mod tests {
                 e("initial_gas_mix", "\"o2=22;n2=82;TEMP=293.15\""),
                 e("blocks_air", "false"),
                 e("can_atmos_pass", "0"),
+                e("turf_temperature", "293.15"),
             ]
         );
         assert_eq!(
             f("/turf/open"),
             [e("planetary_atmos", "false"), e("can_atmos_pass", "-1")]
         );
-        assert_eq!(f("/turf/open/space"), [e("temperature", "Some(2.7)")]);
+        assert_eq!(
+            f("/turf/open/space"),
+            [e("turf_temperature", "2.7"), e("temperature", "Some(2.7)")]
+        );
+        assert_eq!(
+            f("/turf/open/floor"),
+            [
+                e("thermal_conductivity", "0.02"),
+                e("heat_capacity", "20000.0")
+            ]
+        );
         assert_eq!(f("/turf/open/space/basic"), [e("temperature", "None")]);
         assert_eq!(
             f("/turf/open/floor/airless"),
@@ -271,8 +366,18 @@ mod tests {
         );
         assert_eq!(
             f("/obj/machinery/door"),
-            [ext(PASS_COMPONENT, "can_atmos_pass", "-2")]
+            [
+                ext(PASS_COMPONENT, "can_atmos_pass", "-2"),
+                ext(PASS_COMPONENT, "block_superconductivity", "true"),
+            ]
         );
+        // Opaque doors stop heat, glass ones do not, plasma airlocks never, firelocks are
+        // `heat_proof`; a subtype that agrees with its parent carries nothing.
+        assert_eq!(f("/obj/machinery/door/airlock"), []);
+        let heat = |p| blocks_heat(&types, p);
+        assert!(!heat("/obj/machinery/door/airlock/glass"));
+        assert!(!heat("/obj/machinery/door/airlock/plasma"));
+        assert!(heat("/obj/machinery/door/firedoor"));
         assert!(f("/obj").is_empty());
         let space = DmTurfAtmos {
             can_atmos_pass: ATMOS_PASS_PROC,

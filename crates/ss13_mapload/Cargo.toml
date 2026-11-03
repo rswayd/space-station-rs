@@ -20,6 +20,7 @@ ss13_world.workspace = true
 # Not in the workspace dependency table yet; path dep until the coordinator adds it.
 ss13_proto.workspace = true
 ss13_atmos = { workspace = true }
+ss13_tgui.workspace = true
 # Chemistry data written by the converter (`reagents.ron`).
 ss13_reagents.workspace = true
 bevy = { workspace = true, features = ["std", "bevy_log"] }

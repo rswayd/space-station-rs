@@ -42,8 +42,9 @@ use ss13_shared::TilePos;
 
 pub use alarm::AirAlarm;
 pub use devices::{
-    GasFilter, GasMixer, GasPump, OutletInjector, PassiveGate, PassiveVent, PortsConnector,
-    ThermoMachine, Valve, VentPump, VentScrubber, VolumePump,
+    ConditionalGate, DpVentPump, GasFilter, GasMixer, GasPump, GateCondition, HeatExchanger,
+    OutletInjector, PassiveGate, PassiveVent, PortsConnector, TemperaturePump, ThermoMachine,
+    Valve, VentPump, VentScrubber, VolumePump,
 };
 pub use portable::{Canister, PortableAtmos, PortablePump, PortableScrubber};
 
@@ -64,6 +65,13 @@ const PUMP: &str = "/obj/machinery/atmospherics/components/binary/pump";
 const VOLUME_PUMP: &str = "/obj/machinery/atmospherics/components/binary/volume_pump";
 const PASSIVE_GATE: &str = "/obj/machinery/atmospherics/components/binary/passive_gate";
 const VALVE: &str = "/obj/machinery/atmospherics/components/binary/valve";
+const DP_VENT: &str = "/obj/machinery/atmospherics/components/binary/dp_vent_pump";
+const DP_VENT_HIGH_VOLUME: &str =
+    "/obj/machinery/atmospherics/components/binary/dp_vent_pump/high_volume";
+const HEAT_EXCHANGER: &str = "/obj/machinery/atmospherics/components/unary/heat_exchanger";
+const PRESSURE_VALVE: &str = "/obj/machinery/atmospherics/components/binary/pressure_valve";
+const TEMPERATURE_GATE: &str = "/obj/machinery/atmospherics/components/binary/temperature_gate";
+const TEMPERATURE_PUMP: &str = "/obj/machinery/atmospherics/components/binary/temperature_pump";
 const FILTER: &str = "/obj/machinery/atmospherics/components/trinary/filter";
 const MIXER: &str = "/obj/machinery/atmospherics/components/trinary/mixer";
 const THERMOMACHINE: &str = "/obj/machinery/atmospherics/components/unary/thermomachine";
@@ -132,24 +140,68 @@ impl Plugin for AtmosMachineryPlugin {
         if !app.world().contains_resource::<ss13_atmos::Atmos>() {
             app.init_resource::<ss13_atmos::Atmos>();
         }
+        // `find_density` reads which tiles hold air: after atmos is built.
+        app.add_systems(
+            PostStartup,
+            (
+                airlock_pump::init_airlock_pumps.after(ss13_atmos::init_atmos),
+                canister::init_canister_cells,
+            ),
+        )
+        .add_systems(
+            Update,
+            (
+                airlock_pump::cycle_requests,
+                airlock_pump::pump_timers,
+                overclock::fan_loops,
+            )
+                .chain(),
+        );
         app.init_resource::<AreaAtmos>()
+            .init_resource::<miner::MinerClock>()
+            .add_systems(
+                Update,
+                (
+                    miner::process_miners,
+                    miner::miner_looks,
+                    tank::tank_looks,
+                    damage::tank_cracks,
+                )
+                    .chain()
+                    .after(AtmosSystems::Machinery),
+            )
             .init_resource::<AtmosMachineryReport>()
             .add_systems(
                 Startup,
-                (init_atmos_machinery, alarm::init_alarms, looks::init_looks).chain(),
+                (
+                    init_atmos_machinery,
+                    meter::init_meters,
+                    miner::init_miners,
+                    alarm::init_alarms,
+                    looks::init_looks,
+                )
+                    .chain(),
             )
             .add_systems(
                 Update,
                 (
                     machinery_start,
+                    overclock::damage_overclocked_vents,
                     devices::process_vents,
                     devices::process_scrubbers,
                     devices::process_binary,
+                    devices::process_dp_vents,
                     devices::process_trinary,
                     devices::process_unary,
+                    devices::draw_thermo_energy,
+                    devices::process_heat_exchangers,
+                    airlock_pump::process_airlock_pumps,
                     devices::process_he_pipes,
                     portable::process_portables,
+                    tank::process_tanks,
+                    damage::process_container_damage,
                     alarm::process_alarms,
+                    meter::process_meters,
                     machinery_end,
                 )
                     .chain()
@@ -158,9 +210,18 @@ impl Plugin for AtmosMachineryPlugin {
             )
             .add_systems(
                 Update,
-                (looks::sync_pipe_looks, looks::sync_machine_looks).after(AtmosSystems::Machinery),
+                (
+                    looks::sync_pipe_looks,
+                    looks::sync_machine_looks,
+                    thermo::sync_thermo_looks,
+                    devices::glow_he_pipes,
+                    canister::process_canister_shielding,
+                    gas_visuals::sync_gas_visuals.run_if(air_tick_due),
+                )
+                    .chain()
+                    .after(AtmosSystems::Machinery),
             )
-            .add_plugins(windows::plugin);
+            .add_plugins((windows::plugin, consoles::plugin, control::plugin));
     }
 }
 
@@ -325,11 +386,23 @@ pub fn device_spec(
         }
         (DeviceKind::Component, init, vec![n1, n2, n3])
     } else if is_under(path, BINARY) {
-        port_volumes = vec![PORT_VOLUME; 2];
+        // `dp_vent_pump/high_volume/Initialize`: both ports 1000 L.
+        let volume = if is_under(path, DP_VENT_HIGH_VOLUME) {
+            1000.0
+        } else {
+            PORT_VOLUME
+        };
+        port_volumes = vec![volume; 2];
         if is_under(path, VALVE) {
             custom = Custom::Valve { open: dm.on };
         }
         (DeviceKind::Component, axis, vec![reverse_dir(dir), dir])
+    } else if is_under(path, airlock_pump::AIRLOCK_PUMP) {
+        // `device_type = BINARY` on one side: distro (layer 4) and waste (layer 2) toward its
+        // dir, 1000 L each.
+        custom = Custom::AirlockPump;
+        port_volumes = vec![1000.0; 2];
+        (DeviceKind::Component, dir, vec![dir, dir])
     } else if is_under(path, UNARY) {
         let volume = if is_under(path, CONNECTOR) {
             custom = Custom::Connector { attached: None };
@@ -341,9 +414,13 @@ pub fn device_spec(
         };
         port_volumes = vec![volume];
         (DeviceKind::Component, dir, vec![dir])
+    } else if is_under(path, tank::TANK) {
+        // Ports come from `init_atmos_machinery` (they depend on the neighbouring tanks).
+        port_volumes = vec![PORT_VOLUME; 4];
+        (DeviceKind::Component, 0, tank::tank_nodes(0))
     } else {
-        // shortcut: other components (stationary tanks, cryo, the HFR, crystallizers) take
-        // part in the graph as plain unary machines facing their dir and do nothing yet.
+        // shortcut: other components (cryo, the HFR, crystallizers) take part in the graph as
+        // plain unary machines facing their dir and do nothing yet.
         port_volumes = vec![PORT_VOLUME];
         (DeviceKind::Component, dir, vec![dir])
     };
@@ -378,6 +455,7 @@ fn machine_state(world: &mut World, e: Entity, dm: &DmAtmosDevice, area: Option<
             internal_pressure_bound: dm.internal_pressure_bound,
             welded: dm.welded,
             area: if monitored { None } else { area },
+            overclocked: false,
         });
     } else if is_under(path, VENT_SCRUBBER) {
         entity.insert(VentScrubber {
@@ -398,11 +476,43 @@ fn machine_state(world: &mut World, e: Entity, dm: &DmAtmosDevice, area: Option<
         entity.insert(VolumePump {
             on: dm.on,
             transfer_rate: dm.transfer_rate,
+            overclocked: false,
         });
     } else if is_under(path, PASSIVE_GATE) {
         entity.insert(PassiveGate {
             on: dm.on,
             target_pressure: dm.target_pressure,
+        });
+    } else if is_under(path, DP_VENT) {
+        entity.insert(DpVentPump {
+            on: dm.on,
+            releasing: dm.pump_direction != 0.0,
+            pressure_checks: dm.pressure_checks as u8,
+            external_pressure_bound: dm.external_pressure_bound,
+            input_pressure_min: dm.input_pressure_min,
+            output_pressure_max: dm.output_pressure_max,
+        });
+    } else if is_under(path, PRESSURE_VALVE) {
+        entity.insert(ConditionalGate {
+            on: dm.on,
+            condition: GateCondition::Pressure {
+                target: dm.target_pressure,
+            },
+            flowing: false,
+        });
+    } else if is_under(path, TEMPERATURE_GATE) {
+        entity.insert(ConditionalGate {
+            on: dm.on,
+            condition: GateCondition::Temperature {
+                target: dm.target_temperature,
+                inverted: dm.inverted,
+            },
+            flowing: false,
+        });
+    } else if is_under(path, TEMPERATURE_PUMP) {
+        entity.insert(TemperaturePump {
+            on: dm.on,
+            heat_transfer_rate: dm.heat_transfer_rate,
         });
     } else if is_under(path, VALVE) {
         entity.insert(Valve {
@@ -432,6 +542,8 @@ fn machine_state(world: &mut World, e: Entity, dm: &DmAtmosDevice, area: Option<
             machine.target_temperature = machine.min_temperature;
         }
         entity.insert(machine);
+    } else if is_under(path, HEAT_EXCHANGER) {
+        entity.insert(HeatExchanger { partner: None });
     } else if is_under(path, CONNECTOR) {
         entity.insert(PortsConnector { connected: None });
     } else if is_under(path, INJECTOR) {
@@ -463,8 +575,19 @@ pub fn init_atmos_machinery(world: &mut World) {
     let mut net = world.remove_resource::<Pipenet>().unwrap_or_default();
     let mut area_atmos = AreaAtmos::default();
     let mut report = AtmosMachineryReport::default();
+    let tank_tiles: std::collections::HashSet<TilePos> = found
+        .iter()
+        .filter(|(_, dm, ..)| is_under(&dm.path, tank::TANK))
+        .map(|(_, _, pos, _)| *pos)
+        .collect();
+    let mut tanks = Vec::new();
     for (e, dm, pos, dir) in &found {
-        if let Some((spec, dir)) = device_spec(*e, *pos, dm, *dir) {
+        if let Some((mut spec, dir)) = device_spec(*e, *pos, dm, *dir) {
+            let is_tank = is_under(&dm.path, tank::TANK);
+            if is_tank {
+                spec.init_dirs = tank::mapped_ports(*pos, dir, &tank_tiles);
+                spec.node_dirs = tank::tank_nodes(spec.init_dirs);
+            }
             let layer = spec.layer;
             let he = match spec.kind {
                 DeviceKind::Pipe { he, .. } => he,
@@ -472,12 +595,25 @@ pub fn init_atmos_machinery(world: &mut World) {
             };
             let id = net.add(spec);
             world.entity_mut(*e).insert(AtmosDevice { id, layer, dir });
+            if is_tank {
+                tanks.push((*e, id, *pos, dm.clone()));
+            }
             match he {
                 HeatExchange::Pipe => {
-                    world.entity_mut(*e).insert(devices::HePipe::PIPE);
+                    world
+                        .entity_mut(*e)
+                        .insert((devices::HePipe::PIPE, devices::HeGlow::default()));
+                    let lava = crate::construction::turf_at(world, *pos)
+                        .and_then(|t| crate::construction::path_of(world, t))
+                        .is_some_and(|p| is_under(&p, "/turf/open/lava"));
+                    if lava {
+                        world.entity_mut(*e).insert(devices::HeOnLava);
+                    }
                 }
                 HeatExchange::Junction { .. } => {
-                    world.entity_mut(*e).insert(devices::HePipe::JUNCTION);
+                    world
+                        .entity_mut(*e)
+                        .insert((devices::HePipe::JUNCTION, devices::HeGlow::default()));
                 }
                 HeatExchange::None => {}
             }
@@ -494,6 +630,10 @@ pub fn init_atmos_machinery(world: &mut World) {
             }
         }
     }
+    tank::init_tank_groups(world, &mut net, &tanks);
+    world.insert_resource(std::mem::take(&mut net));
+    devices::pair_heat_exchangers(world);
+    let mut net = world.remove_resource::<Pipenet>().expect("just inserted");
     net.build();
     report.devices = net.device_count();
     report.pipelines = net.pipelines().count();
@@ -508,5 +648,84 @@ pub fn init_atmos_machinery(world: &mut World) {
     portable::init_portables(world, &found);
 }
 
+pub mod airlock_pump;
+pub mod canister;
+pub mod consoles;
+pub mod control;
+pub mod damage;
+pub mod gas_visuals;
+pub mod meter;
+pub mod miner;
+pub mod overclock;
+pub mod tank;
+pub mod tank_frame;
 #[cfg(test)]
 mod tests;
+pub mod thermo;
+
+/// `examine` of atmos machines: what a temperature gate lets through and how to change it.
+pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<(ss13_chat::Span, String)>) {
+    for line in tank::examine_lines(world, target) {
+        lines.push((ss13_chat::Span::Notice, line));
+    }
+    if let Some(line) = consoles::examine_line(world, target) {
+        lines.push((ss13_chat::Span::Info, line));
+    }
+    if let Some(line) = miner::examine_line(world, target) {
+        lines.push((ss13_chat::Span::Plain, line));
+    }
+    overclock::examine_lines(world, target, lines);
+    canister::examine_lines(world, target, lines);
+    thermo::examine_lines(world, target, lines);
+    tank_frame::examine_lines(world, target, lines);
+    portable::examine_lines(world, target, lines);
+    if let Some(status) = meter::status(world, target) {
+        lines.push((ss13_chat::Span::Plain, status));
+    }
+    if let Some(ConditionalGate {
+        condition: GateCondition::Temperature { inverted, .. },
+        ..
+    }) = world.get::<ConditionalGate>(target)
+    {
+        let (side, hint) = if *inverted {
+            ("выше", "Настройки можно сбросить мультитулом.")
+        } else {
+            ("ниже", "Настройки датчика можно изменить мультитулом.")
+        };
+        lines.push((
+            ss13_chat::Span::Plain,
+            format!(
+                "Устройство пропускает газ, если его температура на входе {side} заданной в \
+                 интерфейсе."
+            ),
+        ));
+        lines.push((ss13_chat::Span::Plain, hint.to_owned()));
+    }
+}
+
+/// A machine's `say(text)`: its name and the text to every player within hearing.
+pub fn machine_say(world: &mut World, speaker: Entity, text: &str) {
+    let Some(&pos) = world.get::<TilePos>(speaker) else {
+        return;
+    };
+    let name = world
+        .get::<ss13_mapload::DmName>(speaker)
+        .map(|n| crate::vending::plain_name(&n.name).to_owned())
+        .unwrap_or_default();
+    let mut query = world.query_filtered::<Entity, With<ss13_net::server::ClientToken>>();
+    let clients: Vec<Entity> = query
+        .iter(world)
+        .filter(|&c| {
+            let mob = world.resource::<crate::server::Players>().mob(c);
+            mob.and_then(|m| world.get::<TilePos>(m))
+                .and_then(|p| p.chebyshev(pos))
+                .is_some_and(|d| d <= 7)
+        })
+        .collect();
+    if !clients.is_empty() {
+        world.write_message(ss13_net::chat::server::SendChat {
+            clients,
+            message: ss13_chat::server::say_message(&name, text),
+        });
+    }
+}

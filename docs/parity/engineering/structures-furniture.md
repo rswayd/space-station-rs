@@ -25,7 +25,7 @@
 
 - **Код:** [`/obj/structure/chair`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/beds_chairs/chair.dm#L3), [`sofa.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/beds_chairs/sofa.dm), [`pew.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/beds_chairs/pew.dm)
 - **BandaStation:** [`chair.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/beds_chairs/chair.dm#L1) — русские склонения в сообщениях; [`modular_bandastation/objects/code/structures/chairs.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/structures/chairs.dm)
-- **Статус в ss13-rs:** ❌ нет — пристёгивания нет (`crates/ss13_game/src/server.rs`, shortcut)
+- **Статус в ss13-rs:** ❌ нет — пристёгивания нет (`crates/ss13_game/src/server.rs`, shortcut); когда появится, к нему же относятся HE-трубы (`can_buckle`: `heat_exchanging/process_atmos` выравнивает температуру тела с трубой, `process` жжёт выше 1000 K)
 
 ### Кровати и роллеры
 Кровати и медицинские роллеры: лечь/пристегнуть, роллер складывается и катается; собачья лежанка.

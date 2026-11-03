@@ -7,7 +7,9 @@
 //! Hotspots live in their level ([`Hotspots`]); what they do to things on their turf leaves as
 //! [`FireExposure`]s (tg `fire_act(temperature, volume)` of every atom there), their looks as
 //! dirty tiles for the visuals.
-// shortcut: no `/datum/hot_group` (the fire sound loop) and no `burn_tile` (burnt floor icons).
+//!
+//! Touching hotspots form a [`HotGroup`] (tg `/datum/hot_group`), which places the looping fire
+//! sound in its middle once it has more than [`MIN_SIZE_SOUND`] spots.
 
 use ss13_shared::Dir;
 
@@ -56,6 +58,28 @@ pub struct Hotspot {
     pub color_temperature: f64,
     visual_update_tick: u32,
     serial: u64,
+    /// `our_hot_group`: its slot in [`Hotspots::groups`].
+    group: u32,
+}
+
+/// `MIN_SIZE_SOUND`: a group plays its sound only above this many spots.
+pub const MIN_SIZE_SOUND: usize = 2;
+/// `tiles_limit`: groups this big do not merge.
+pub const HOT_GROUP_TILES_LIMIT: usize = 80;
+/// `update_sound_center` cooldown, 5 s in fires.
+const SOUND_CENTER_COOLDOWN_FIRES: u32 = 10;
+
+/// tg `/datum/hot_group`: hotspots that spread from each other.
+#[derive(Clone, Debug, Default)]
+struct HotGroup {
+    spots: Vec<u32>,
+    /// `x_coord`, `y_coord`: one entry per spot, removed by value (`-=`).
+    xs: Vec<i32>,
+    ys: Vec<i32>,
+    /// First fire the sound center may move again.
+    cooldown_until: u32,
+    /// The looping sound once started: its tile and `drop_off_dist`.
+    sound: Option<(u32, i32)>,
 }
 
 /// `fire_act(temperature, volume)` of everything on a tile.
@@ -76,6 +100,10 @@ pub(super) struct Hotspots {
     /// Cells whose hotspot appeared, changed its looks or went out.
     dirty: Vec<u32>,
     rng: u64,
+    groups: Vec<Option<HotGroup>>,
+    free_groups: Vec<u32>,
+    /// Tiles a heavy fire burnt (`burn_tile()`), each once per cell.
+    burns: Vec<u32>,
 }
 
 impl Hotspots {
@@ -88,15 +116,50 @@ impl Hotspots {
             exposures: Vec::new(),
             dirty: Vec::new(),
             rng: seed | 1,
+            groups: Vec::new(),
+            free_groups: Vec::new(),
+            burns: Vec::new(),
         }
+    }
+
+    pub(super) fn clear_burns(&mut self) {
+        self.burns.clear();
+    }
+
+    fn next_random(&mut self) -> u64 {
+        self.rng ^= self.rng << 13;
+        self.rng ^= self.rng >> 7;
+        self.rng ^= self.rng << 17;
+        self.rng
     }
 
     /// `pick(GLOB.cardinals)` (xorshift; the looks only).
     fn pick_cardinal(&mut self) -> Dir {
-        self.rng ^= self.rng << 13;
-        self.rng ^= self.rng >> 7;
-        self.rng ^= self.rng << 17;
-        Dir::CARDINALS[(self.rng % 4) as usize]
+        Dir::CARDINALS[(self.next_random() % 4) as usize]
+    }
+
+    fn new_group(&mut self) -> u32 {
+        match self.free_groups.pop() {
+            Some(g) => {
+                self.groups[g as usize] = Some(HotGroup::default());
+                g
+            }
+            None => {
+                self.groups.push(Some(HotGroup::default()));
+                (self.groups.len() - 1) as u32
+            }
+        }
+    }
+
+    fn group(&mut self, g: u32) -> &mut HotGroup {
+        self.groups[g as usize]
+            .as_mut()
+            .expect("hotspots point at live groups")
+    }
+
+    fn free_group(&mut self, g: u32) {
+        self.groups[g as usize] = None;
+        self.free_groups.push(g);
     }
 }
 
@@ -114,6 +177,13 @@ impl LevelAir {
     pub fn hotspot(&self, tile: u32) -> Option<&Hotspot> {
         let slot = self.cell(tile)?.hotspot;
         self.hotspots.slots.get(slot as usize)?.as_ref()
+    }
+
+    /// Tiles whose floor a heavy (non-freon) fire burnt since the last call (tg `burn_tile()`).
+    pub fn drain_burns(&mut self, mut f: impl FnMut(u32)) {
+        for tile in self.hotspots.burns.drain(..) {
+            f(tile);
+        }
     }
 
     /// Fire exposures since the last call.
@@ -214,6 +284,7 @@ impl LevelAir {
             color_temperature: temperature,
             visual_update_tick: 0,
             serial,
+            group: NONE,
         };
         let slot = match self.hotspots.free.pop() {
             Some(slot) => {
@@ -227,6 +298,7 @@ impl LevelAir {
         };
         self.hotspots.order.push((slot, serial));
         self.cells[c as usize].hotspot = slot;
+        self.join_hot_group(slot);
         self.perform_exposure(slot);
         // `air_update_turf(FALSE, FALSE)`.
         self.add_to_active(c, false);
@@ -352,6 +424,10 @@ impl LevelAir {
             hotspot.color_temperature = hotspot.temperature;
             self.mark_hotspot_dirty(c);
         }
+        if bypassing && !cold_fire && !self.cells[c as usize].burn_reported {
+            self.cells[c as usize].burn_reported = true;
+            self.hotspots.burns.push(self.cells[c as usize].tile);
+        }
         if bypassing {
             // Radiated heat spreads it.
             let air_temperature = self.cells[c as usize].mix.temperature;
@@ -386,10 +462,149 @@ impl LevelAir {
         };
         self.hotspots.free.push(slot);
         let c = hotspot.cell;
+        if hotspot.group != NONE {
+            self.remove_from_hot_group(hotspot.group, slot, c);
+        }
         if self.cells[c as usize].hotspot == slot {
             self.cells[c as usize].hotspot = NONE;
         }
         self.mark_hotspot_dirty(c);
+    }
+
+    /// The hot groups' looping fire sounds: the tile each plays on and its `drop_off_dist`
+    /// (`falloff_distance` and `extra_range` of the sound).
+    pub fn fire_sounds(&self) -> impl Iterator<Item = (u32, i32)> + '_ {
+        self.hotspots
+            .groups
+            .iter()
+            .flatten()
+            .filter_map(|g| g.sound)
+    }
+
+    pub fn hot_group_count(&self) -> usize {
+        self.hotspots.groups.len() - self.hotspots.free_groups.len()
+    }
+
+    /// `/obj/effect/hotspot/Initialize`: join the group of an air-adjacent hotspot, merge
+    /// with the other groups met, or start a group.
+    fn join_hot_group(&mut self, slot: u32) {
+        let c = self.hotspot_mut(slot).cell;
+        let tile = self.cells[c as usize].tile;
+        let mut ours = NONE;
+        for dir in Dir::CARDINALS {
+            if !self.adjacent(tile, dir) {
+                continue;
+            }
+            let Some(other) = self
+                .neighbor(tile, dir)
+                .and_then(|n| self.cell(n))
+                .map(|cell| cell.hotspot)
+                .filter(|&h| h != NONE)
+            else {
+                continue;
+            };
+            let theirs = self.hotspots.slots[other as usize]
+                .as_ref()
+                .map_or(NONE, |h| h.group);
+            if theirs == NONE {
+                continue;
+            }
+            if ours == NONE {
+                self.add_to_hot_group(theirs, slot);
+                ours = theirs;
+            } else if ours != theirs {
+                ours = self.merge_hot_groups(ours, theirs);
+            }
+        }
+        if ours == NONE {
+            let g = self.hotspots.new_group();
+            self.add_to_hot_group(g, slot);
+        }
+    }
+
+    /// `add_to_group`.
+    fn add_to_hot_group(&mut self, g: u32, slot: u32) {
+        let c = self.hotspot_mut(slot).cell;
+        self.hotspot_mut(slot).group = g;
+        let (x, y) = self.pos(self.cells[c as usize].tile);
+        let group = self.hotspots.group(g);
+        group.spots.push(slot);
+        group.xs.push(x);
+        group.ys.push(y);
+        self.maybe_update_fire_sound(g);
+    }
+
+    /// `merge_hot_groups`: the bigger group (a coin toss on ties) takes the other's spots
+    /// unless either has reached [`HOT_GROUP_TILES_LIMIT`]. Returns the group `ours` is now.
+    // tg checks the cooldown and size of `src` afterwards even when `src` was merged away
+    // (and starts a sound on the deleted group); the surviving group is checked instead.
+    fn merge_hot_groups(&mut self, ours: u32, theirs: u32) -> u32 {
+        let (a, b) = (
+            self.hotspots.group(ours).spots.len(),
+            self.hotspots.group(theirs).spots.len(),
+        );
+        if a >= HOT_GROUP_TILES_LIMIT || b >= HOT_GROUP_TILES_LIMIT {
+            return ours;
+        }
+        let keep_ours = a > b || (a == b && self.hotspots.next_random().is_multiple_of(2));
+        let (saving, sacrificial) = if keep_ours {
+            (ours, theirs)
+        } else {
+            (theirs, ours)
+        };
+        let gone = self.hotspots.groups[sacrificial as usize]
+            .take()
+            .expect("live group");
+        self.hotspots.free_groups.push(sacrificial);
+        for &spot in &gone.spots {
+            self.hotspot_mut(spot).group = saving;
+        }
+        let group = self.hotspots.group(saving);
+        group.spots.extend(gone.spots);
+        group.xs.extend(gone.xs);
+        group.ys.extend(gone.ys);
+        self.maybe_update_fire_sound(saving);
+        saving
+    }
+
+    /// `remove_from_group`: the group (and its sound) goes with its last spot.
+    fn remove_from_hot_group(&mut self, g: u32, slot: u32, c: u32) {
+        let (x, y) = self.pos(self.cells[c as usize].tile);
+        let group = self.hotspots.group(g);
+        group.spots.retain(|&s| s != slot);
+        if let Some(i) = group.xs.iter().position(|&v| v == x) {
+            group.xs.remove(i);
+        }
+        if let Some(i) = group.ys.iter().position(|&v| v == y) {
+            group.ys.remove(i);
+        }
+        if group.spots.is_empty() {
+            self.hotspots.free_group(g);
+        }
+    }
+
+    /// The `update_sound_center` cooldown and size check, then `update_sound`: the middle of
+    /// the group's bounding box (`round` is floor) and its larger side as the drop-off.
+    fn maybe_update_fire_sound(&mut self, g: u32) {
+        let fc = self.fire_count;
+        let group = self.hotspots.group(g);
+        if fc < group.cooldown_until || group.spots.len() <= MIN_SIZE_SOUND {
+            return;
+        }
+        group.cooldown_until = fc + SOUND_CENTER_COOLDOWN_FIRES;
+        let bounds = |v: &[i32]| {
+            let (lo, hi) = (*v.iter().min()?, *v.iter().max()?);
+            Some((lo, hi))
+        };
+        let (Some((x0, x1)), Some((y0, y1))) = (bounds(&group.xs), bounds(&group.ys)) else {
+            return;
+        };
+        let middle = |lo: i32, hi: i32| (f64::from(lo + hi) / 2.0).floor() as i32;
+        let drop_off = (y1 - y0).max(x1 - x0).max(1);
+        let (x, y) = (middle(x0, x1), middle(y0, y1));
+        if let Some(tile) = self.tile(x, y) {
+            self.hotspots.group(g).sound = Some((tile, drop_off));
+        }
     }
 
     /// The turf goes away (`ChangeTurf` deletes its hotspot).
@@ -420,6 +635,33 @@ mod tests {
     fn fire(level: &mut LevelAir) {
         let mut out: Vec<PressureDelta> = Vec::new();
         level.fire(&mut out);
+    }
+
+    /// Touching hotspots share a group; it places its sound once it has 3 spots, merges
+    /// when a fire bridges two groups and goes away with the fire.
+    #[test]
+    fn hot_groups_follow_tg() {
+        let mut level = room(5, "plasma=20;o2=20;TEMP=293.15");
+        for x in [0, 1] {
+            assert!(level.hotspot_expose(x, 700.0, 5.0, false));
+        }
+        assert_eq!(level.hot_group_count(), 1);
+        assert_eq!(level.fire_sounds().count(), 0, "two spots are too few");
+        assert!(level.hotspot_expose(2, 700.0, 5.0, false));
+        // x 1..=3: the middle is x 2 (tile 1), the drop-off the width, 2.
+        assert_eq!(level.fire_sounds().collect::<Vec<_>>(), [(1, 2)]);
+        assert!(level.hotspot_expose(4, 700.0, 5.0, false));
+        assert_eq!(level.hot_group_count(), 2, "not touching");
+        assert!(level.hotspot_expose(3, 700.0, 5.0, false));
+        assert_eq!(level.hot_group_count(), 1, "the bridge merged them");
+        assert_eq!(level.fire_sounds().count(), 1);
+        for x in 0..5 {
+            level.change_tile(x, TileKind::Blocked, None);
+        }
+        assert_eq!(
+            (level.hot_group_count(), level.fire_sounds().count()),
+            (0, 0)
+        );
     }
 
     #[test]

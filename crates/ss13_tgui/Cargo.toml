@@ -20,6 +20,7 @@ server = ["ss13_net/server", "dep:ss13_world"]
 client = ["ss13_net/client", "dep:ss13_ui_kit"]
 
 [dev-dependencies]
+ron = "0.12"
 # The demo draws and screenshots the client half.
 bevy = { workspace = true, features = ["2d", "ui", "png", "bevy_log", "async_executor", "multi_threaded"] }
 

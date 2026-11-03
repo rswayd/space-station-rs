@@ -92,7 +92,7 @@
 
 - **Код:** [`proc/cyclelinkairlock()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/doors/airlock.dm#L225), [`proc/update_other_id()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/doors/airlock.dm#L217)
 - **BandaStation:** [`airlock.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/doors/airlock.dm#L702) — санитизация ID цикла в осмотре
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_mapload/src/door.rs` (shortcut: cyclelink helpers not applied)
+- **Статус в ss13-rs:** ❌ нет — `crates/ss13_mapload/src/door.rs` (shortcut: cyclelink helpers not applied). Сюда же входит запасной поиск насоса шлюза через `close_others` (`airlock_pump/set_links`): без него на MetaStation не связывается насос шаттла трудового лагеря (`crates/ss13_game/src/atmos_machinery/airlock_pump.rs`)
 
 ### Окно управления шлюзом (tgui)
 Окно шлюза для ИИ и для взломанных систем: питание, болты, ток, аварийный доступ, скорость, огни, безопасность.

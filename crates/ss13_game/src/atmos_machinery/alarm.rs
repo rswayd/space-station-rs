@@ -718,6 +718,7 @@ mod tests {
             internal_pressure_bound: 0.0,
             welded: false,
             area: None,
+            overclocked: false,
         };
         let mut scrubber = VentScrubber {
             on: false,

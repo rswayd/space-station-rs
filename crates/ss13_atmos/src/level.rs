@@ -17,6 +17,10 @@ use crate::gas::{
     MINIMUM_MOLES_DELTA_TO_MOVE, OPEN_HEAT_TRANSFER_COEFFICIENT, TCMB,
 };
 
+/// `temperature_expose` of a processed turf is reported from this air temperature up: below
+/// every `should_atmos_process` threshold of the ported atoms (tg sends it at any temperature).
+pub const EXPOSE_REPORT_MIN: f64 = crate::gas::T0C + 100.0;
+
 /// `EXCITED_GROUP_BREAKDOWN_CYCLES`: fires before a group averages its air.
 pub const EXCITED_GROUP_BREAKDOWN_CYCLES: u32 = 5;
 /// `EXCITED_GROUP_DISMANTLE_CYCLES`: fires without significant sharing before a group sleeps.
@@ -26,8 +30,10 @@ pub(crate) const NONE: u32 = u32::MAX;
 const NO_PLANETARY: u16 = u16::MAX;
 use crate::reactions::{Exposures, Holder, REACTING, STOP_REACTIONS, VOLATILE_REACTION};
 
+pub mod conduct;
 pub mod hotspot;
 
+pub use conduct::Thermal;
 pub use hotspot::{FireExposure, FireStage, Hotspot};
 
 pub(crate) static VACUUM: GasMixture = GasMixture::vacuum();
@@ -89,6 +95,8 @@ pub(crate) struct Cell {
     visual_dirty: bool,
     /// tg `active_hotspot`: its slot in [`hotspot::Hotspots`], `NONE` without.
     hotspot: u32,
+    /// A heavy fire has burnt this turf (reported once; a new turf is a new cell).
+    burn_reported: bool,
 }
 
 #[derive(Default)]
@@ -129,6 +137,19 @@ pub struct LevelAir {
     /// Inside [`Self::fire`]: hotspots compare their turf's cycle with this fire.
     in_fire: bool,
     hotspots: hotspot::Hotspots,
+    /// Per tile: the turf's own heat ([`conduct`]).
+    solid: Vec<conduct::Solid>,
+    /// Distinct (`thermal_conductivity`, `heat_capacity`) of the level's turfs.
+    materials: Vec<(f64, f64)>,
+    /// Per tile: cardinal edges whose blockers also stop heat (`block_superconductivity`).
+    heat_block: Vec<u8>,
+    /// tg `active_super_conductivity`, in insertion order.
+    conducting: Vec<u32>,
+    /// `temperature_expose(air, air.temperature)` at the end of `process_cell`, from
+    /// [`EXPOSE_REPORT_MIN`]: (tile, temperature).
+    exposed: Vec<(u32, f64)>,
+    /// Turfs water vapor condensed on this fire.
+    condensed: Vec<(u32, crate::reactions::Condensation)>,
 }
 
 impl LevelAir {
@@ -156,6 +177,15 @@ impl LevelAir {
             group_scratch: Vec::new(),
             in_fire: false,
             hotspots: hotspot::Hotspots::new(u64::from(width) << 32 | u64::from(height)),
+            solid: vec![conduct::Solid::new(Thermal::SPACE, 0); n],
+            materials: vec![
+                (Thermal::SPACE.conductivity, Thermal::SPACE.heat_capacity),
+                (Thermal::TURF.conductivity, Thermal::TURF.heat_capacity),
+            ],
+            heat_block: vec![0; n],
+            conducting: Vec::new(),
+            exposed: Vec::new(),
+            condensed: Vec::new(),
         }
     }
 
@@ -198,6 +228,14 @@ impl LevelAir {
     ) {
         let t = tile as usize;
         self.kind[t] = kind;
+        self.set_thermal(
+            tile,
+            if kind == TileKind::Space {
+                Thermal::SPACE
+            } else {
+                Thermal::TURF
+            },
+        );
         if kind != TileKind::Open {
             return;
         }
@@ -238,6 +276,7 @@ impl LevelAir {
             in_high_pressure: false,
             visual_dirty: false,
             hotspot: NONE,
+            burn_reported: false,
         };
         if self.cell_of[t] == NONE {
             self.cell_of[t] = self.cells.len() as u32;
@@ -275,6 +314,13 @@ impl LevelAir {
         self.kind[t] = kind;
         if kind == TileKind::Open {
             self.set_tile(tile, kind, air, None);
+        } else {
+            let thermal = if kind == TileKind::Space {
+                Thermal::SPACE
+            } else {
+                Thermal::TURF
+            };
+            self.set_thermal(tile, thermal);
         }
         self.recalculate_adjacency(tile);
         self.activate(tile, true);
@@ -493,6 +539,10 @@ impl LevelAir {
     /// differences of the fire (tg `high_pressure_delta`), returned and reset.
     pub fn fire(&mut self, pressure: &mut Vec<PressureDelta>) {
         self.fire_count += 1;
+        // Reports of the last fire nobody read (a world without the game side).
+        self.exposed.clear();
+        self.condensed.clear();
+        self.hotspots.clear_burns();
         self.in_fire = true;
         let fc = self.fire_count;
         let mut run = std::mem::take(&mut self.scratch);
@@ -509,6 +559,7 @@ impl LevelAir {
         self.scratch = run;
         self.process_hotspots();
         self.process_excited_groups();
+        self.process_super_conductivity();
         self.in_fire = false;
         for c in self.high_pressure.drain(..) {
             let cell = &mut self.cells[c as usize];
@@ -541,6 +592,8 @@ impl LevelAir {
         let cell = &mut self.cells[c as usize];
         cell.mix.archive();
         cell.archived_cycle = fc;
+        let tile = cell.tile;
+        self.solid[tile as usize].archive(fc);
     }
 
     fn pair(&mut self, a: u32, b: u32) -> (&mut Cell, &mut Cell) {
@@ -696,10 +749,16 @@ impl LevelAir {
         for &temperature in exposures.temperatures() {
             self.hotspot_expose(tile, temperature, CELL_VOLUME, false);
         }
+        if let Some(condensed) = exposures.condensed {
+            self.condensed.push((tile, condensed));
+        }
 
-        // shortcut: no superconduction (heat through walls); tg also keeps such turfs awake.
+        let conducting = self.consider_superconductivity(tile, true);
         self.update_visuals(c);
-        if self.cells[c as usize].hotspot == NONE && reacting & (REACTING | STOP_REACTIONS) == 0 {
+        if !conducting
+            && self.cells[c as usize].hotspot == NONE
+            && reacting & (REACTING | STOP_REACTIONS) == 0
+        {
             if self.cells[c as usize].group == NONE {
                 self.remove_from_active(c);
             }
@@ -708,6 +767,24 @@ impl LevelAir {
             }
         }
         self.cells[c as usize].ticker = ticker;
+        let temperature = self.cells[c as usize].mix.temperature;
+        if temperature >= EXPOSE_REPORT_MIN {
+            self.exposed.push((tile, temperature));
+        }
+    }
+
+    /// Turfs water vapor condensed on since the last call.
+    pub fn drain_condensed(&mut self, mut f: impl FnMut(u32, crate::reactions::Condensation)) {
+        for (tile, kind) in self.condensed.drain(..) {
+            f(tile, kind);
+        }
+    }
+
+    /// Turfs `temperature_expose`d since the last call (hot ones, see [`EXPOSE_REPORT_MIN`]).
+    pub fn drain_exposed(&mut self, mut f: impl FnMut(u32, f64)) {
+        for (tile, temperature) in self.exposed.drain(..) {
+            f(tile, temperature);
+        }
     }
 
     /// A space turf in a group processing before `c`: its `process_cell` towards `c`, sharing

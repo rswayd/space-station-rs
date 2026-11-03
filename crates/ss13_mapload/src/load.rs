@@ -13,7 +13,7 @@ use bevy::platform::time::Instant;
 use ss13_assets::dmm::{DmmMap, DmmObject, NO_PREFAB};
 use ss13_assets::import::MANIFEST_FILE;
 use ss13_assets::manifest::AssetManifest;
-use ss13_atmos::{AtmosBlocker, TurfAir};
+use ss13_atmos::{AtmosBlocker, BlocksHeat, TurfAir};
 use ss13_proto::{Prototype, Prototypes};
 use ss13_shared::{
     Appearance, Dir, Facing, IconStateId, Layer, LightSource, MouseOpacity, Optics, TilePos,
@@ -96,6 +96,8 @@ pub struct Template {
     pub turf_air: Option<TurfAir>,
     /// Objects that can block air.
     pub atmos_blocker: Option<AtmosBlocker>,
+    /// The blocker also stops heat (superconduction).
+    pub blocks_heat: bool,
     pub icon: IconResolution,
     /// Sprites of its [`DmLook`] the manifest lacks (`icon:"state"`): not drawn.
     pub missing_look: Vec<String>,
@@ -145,7 +147,9 @@ impl Template {
         let turf_air = (category == Category::Turf)
             .then(|| proto.get::<DmTurfAtmos>().map(|a| a.turf_air(proto.id())))
             .flatten();
-        let atmos_blocker = proto.get::<DmAtmosPass>().and_then(|p| p.blocker());
+        let pass = proto.get::<DmAtmosPass>();
+        let atmos_blocker = pass.and_then(|p| p.blocker());
+        let blocks_heat = pass.is_some_and(|p| p.block_superconductivity);
         Self {
             proto,
             category,
@@ -157,6 +161,7 @@ impl Template {
             light,
             turf_air,
             atmos_blocker,
+            blocks_heat,
             icon,
             missing_look,
         }
@@ -190,6 +195,9 @@ impl Template {
         }
         if let Some(air) = &self.turf_air {
             e.insert(air.clone());
+        }
+        if self.blocks_heat {
+            e.insert(BlocksHeat);
         }
         if let Some(blocker) = self.atmos_blocker {
             e.insert(blocker);

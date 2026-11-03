@@ -23,8 +23,9 @@ use ss13_mapload::undertile::{BELOW_CATWALK_LAYER, FLOOR_PLANE, accessibility};
 use ss13_shared::{Appearance, Dir, Facing, IconStateId, Layer, Overlay, TilePos};
 
 use super::devices::{
-    GasFilter, GasMixer, GasPump, OutletInjector, PassiveGate, PassiveVent, PortsConnector, Valve,
-    VentPump, VentScrubber, VolumePump, valve_open,
+    ConditionalGate, DpVentPump, GasFilter, GasMixer, GasPump, GateCondition, HeatExchanger,
+    OutletInjector, PassiveGate, PassiveVent, PortsConnector, TemperaturePump, Valve, VentPump,
+    VentScrubber, VolumePump, valve_open,
 };
 use super::portable::Canister;
 use super::{AirAlarm, AtmosDevice};
@@ -32,6 +33,7 @@ use crate::power::Unpowered;
 
 const BITMASK: &str = "icons/obj/pipes_n_cables/!pipes_bitmask.dmi";
 const UNDERLAYS: &str = "icons/obj/pipes_n_cables/pipe_underlays.dmi";
+const GAS_OVERLAYS: &str = "icons/obj/pipes_n_cables/!pipe_gas_overlays.dmi";
 const CANISTERS: &str = "icons/obj/pipes_n_cables/canisters.dmi";
 /// `UNDERFLOOR_INTERACTABLE`.
 const INTERACTABLE: u8 = 2;
@@ -109,13 +111,26 @@ pub fn sync_pipe_looks(
     mut net: ResMut<Pipenet>,
     icons: Option<Res<AtmosIcons>>,
     devices: Query<&AtmosDevice>,
-    mut pipes: Query<(&DmAtom, &mut Appearance, Option<&mut Facing>)>,
+    mut pipes: Query<(
+        &DmAtom,
+        &mut Appearance,
+        Option<&mut Facing>,
+        Option<&super::gas_visuals::PipeGasOverlay>,
+    )>,
     mut commands: Commands,
 ) {
     let changed = net.take_changed();
     let Some(icons) = icons else { return };
     for id in changed {
         let Some(d) = net.device(id) else { continue };
+        let gas_visual = matches!(
+            d.kind,
+            DeviceKind::Pipe {
+                smart: true,
+                he: ss13_atmos::pipenet::HeatExchange::None,
+                ..
+            }
+        );
         let entity = d.entity;
         if !matches!(d.kind, DeviceKind::Pipe { smart: true, .. }) {
             commands.entity(entity).insert(LookDirty);
@@ -127,11 +142,28 @@ pub fn sync_pipe_looks(
         let Some(state) = icons.get(BITMASK, &format!("{bitfield}_{layer}")) else {
             continue;
         };
-        let Ok((_, mut appearance, facing)) = pipes.get_mut(entity) else {
+        let Ok((_, mut appearance, facing, gas)) = pipes.get_mut(entity) else {
             continue;
         };
         if appearance.icon_state != state {
             appearance.icon_state = state;
+        }
+        // `replace_pipenet`: the gas visual follows the pipe's state; its color comes from
+        // `gas_visuals::sync_gas_visuals`.
+        if gas_visual
+            && let Some(gas_state) = icons.get(GAS_OVERLAYS, &format!("{bitfield}_{layer}"))
+            && gas.is_none_or(|g| g.state != gas_state)
+        {
+            if let Some(old) = gas {
+                let old = old.state;
+                appearance.overlays.retain(|o| o.icon_state != old);
+            }
+            commands
+                .entity(entity)
+                .insert(super::gas_visuals::PipeGasOverlay {
+                    state: gas_state,
+                    color: [0; 3],
+                });
         }
         let dir = Dir::from_bits(dir).unwrap_or_default();
         match facing {
@@ -153,6 +185,8 @@ struct Look {
     hides: bool,
     /// tg `shift_underlay_only = FALSE`: underlays drawn on layer 3, the atom shifted.
     underlay_layer_3: bool,
+    /// An overlay of the same icon over the machine (`overclocked`, `vpumpoverclock`).
+    top: Option<String>,
 }
 
 fn layer_offset(layer: u8) -> u8 {
@@ -177,6 +211,13 @@ type MachineData = (
         Option<&'static OutletInjector>,
         Option<&'static PortsConnector>,
         Has<PassiveVent>,
+        Option<&'static ConditionalGate>,
+        Option<&'static TemperaturePump>,
+        Option<&'static DpVentPump>,
+        (
+            Has<HeatExchanger>,
+            Option<&'static super::airlock_pump::AirlockPump>,
+        ),
     ),
 );
 
@@ -190,6 +231,10 @@ type MachineFilter = Or<(
     Changed<GasFilter>,
     Changed<GasMixer>,
     Changed<OutletInjector>,
+    Changed<ConditionalGate>,
+    Changed<TemperaturePump>,
+    Changed<DpVentPump>,
+    Changed<super::airlock_pump::AirlockPump>,
 )>;
 
 /// Machines whose state, power or nodes changed redraw.
@@ -214,6 +259,10 @@ pub fn sync_machine_looks(world: &mut World) {
                 injector,
                 connector,
                 passive,
+                conditional,
+                heat_pump,
+                dp_vent,
+                (exchanger, airlock_pump),
             ) = m;
             let id = device.id;
             let all_nodes = net
@@ -230,6 +279,7 @@ pub fn sync_machine_looks(world: &mut World) {
                 shift,
                 hides,
                 underlay_layer_3: shift,
+                top: None,
             };
             let look = if let Some(v) = vent {
                 let s = if v.welded {
@@ -241,7 +291,12 @@ pub fn sync_machine_looks(world: &mut World) {
                 } else {
                     "vent_in"
                 };
-                look(s.into(), true, true)
+                // `vent_pump/update_overlays`.
+                let top = (v.overclocked && !unpowered).then(|| "overclocked".to_owned());
+                Look {
+                    top,
+                    ..look(s.into(), true, true)
+                }
             } else if let Some(s) = scrubber {
                 let st = if s.welded {
                     "scrub_welded"
@@ -260,10 +315,42 @@ pub fn sync_machine_looks(world: &mut World) {
                 look(format!("pump_{on}-{o}"), true, false)
             } else if let Some(p) = volume {
                 let on = if p.on && !unpowered { "on" } else { "off" };
-                look(format!("volpump_{on}-{o}"), true, false)
+                // `overclock_overlay`: `vpumpoverclock`, `2` on the even layers.
+                let lit = p.overclocked && p.on && !unpowered;
+                let top = lit.then(|| format!("vpumpoverclock{}", if o == 2 { "2" } else { "" }));
+                Look {
+                    top,
+                    ..look(format!("volpump_{on}-{o}"), true, false)
+                }
             } else if let Some(p) = gate {
                 let on = if p.on { "on" } else { "off" };
                 look(format!("passgate_{on}-{o}"), true, false)
+            } else if let Some(v) = dp_vent {
+                // `dp_vent_pump/update_icon_nopipes` (its `dpvent_cap` underfloor overlay is
+                // not drawn).
+                let s = if !v.on || unpowered {
+                    "vent_off"
+                } else if v.releasing {
+                    "vent_out"
+                } else {
+                    "vent_in"
+                };
+                look(s.into(), true, true)
+            } else if let Some(g) = conditional {
+                // `update_icon_nopipes`: the pressure valve needs no power.
+                let (name, operational) = match g.condition {
+                    GateCondition::Pressure { .. } => ("pvalve", true),
+                    GateCondition::Temperature { .. } => ("tgate", !unpowered),
+                };
+                let state = match (g.on && operational, g.flowing) {
+                    (true, true) => "flow",
+                    (true, false) => "on",
+                    _ => "off",
+                };
+                look(format!("{name}_{state}-{o}"), true, false)
+            } else if let Some(p) = heat_pump {
+                let on = if p.on && !unpowered { "on" } else { "off" };
+                look(format!("tpump_{on}-{o}"), true, false)
             } else if let Some(v) = valve {
                 let kind = if v.digital { "d" } else { "m" };
                 let on = if valve_open(net, id) { "on" } else { "off" };
@@ -295,6 +382,19 @@ pub fn sync_machine_looks(world: &mut World) {
                     "inje_off"
                 };
                 look(on.into(), true, true)
+            } else if let Some(p) = airlock_pump {
+                // `update_icon_nopipes` (its two pipe underlays are not drawn).
+                let s = if !p.on || unpowered {
+                    "vent_off"
+                } else if p.releasing {
+                    "vent_out"
+                } else {
+                    "vent_in"
+                };
+                look(s.into(), true, true)
+            } else if exchanger {
+                // `update_icon_state` (its node's color tint is not applied).
+                look(format!("he{}", u8::from(node1)), true, false)
             } else if connector.is_some() {
                 look("connector".into(), true, true)
             } else if passive {
@@ -326,6 +426,7 @@ fn draw_component(
     let Some(sprite) = icons.get(&look.icon, &look.state) else {
         return;
     };
+    let top = look.top.as_ref().and_then(|t| icons.get(&look.icon, t));
     let access = accessibility(world, pos);
     let interactable = access >= INTERACTABLE || !look.hides;
     let Some(atom) = world.get::<DmAtom>(e).cloned() else {
@@ -398,6 +499,10 @@ fn draw_component(
         }
         None => (sprite, None, Vec::new()),
     };
+    let mut overlays = overlays;
+    if let Some(top) = top {
+        overlays.push(overlay(top, white, None));
+    }
     let Some(mut appearance) = world.get_mut::<Appearance>(e) else {
         return;
     };
@@ -427,11 +532,17 @@ fn cardinal(from: TilePos, to: TilePos) -> u8 {
 }
 
 /// Canisters: the pressure light and the connector overlay (`canister/update_overlays`);
-/// air alarms: the alert light (`airalarm/update_overlays`).
+/// portable pumps and scrubbers: `[initial(icon_state)]_[on]`, the open tank and connector
+/// overlays (`pump`/`scrubber` `update_overlays`, none for huge scrubbers); air alarms: the
+/// alert light (`airalarm/update_overlays`).
 fn redraw_portables(world: &mut World, icons: &AtmosIcons) {
     let mut q = world.query_filtered::<(
         Entity,
-        Option<&Canister>,
+        (
+            Option<&Canister>,
+            Option<&super::portable::PortablePump>,
+            Option<&super::portable::PortableScrubber>,
+        ),
         Option<&super::PortableAtmos>,
         Option<&AirAlarm>,
         Has<Unpowered>,
@@ -439,15 +550,54 @@ fn redraw_portables(world: &mut World, icons: &AtmosIcons) {
     ), Or<(
         With<LookDirty>,
         Changed<Canister>,
+        Changed<super::portable::PortablePump>,
+        Changed<super::portable::PortableScrubber>,
         Changed<super::PortableAtmos>,
         Changed<AirAlarm>,
         Added<Unpowered>,
     )>>();
     // (state, emissive): tg adds the alert light twice, as a sprite and as an emissive.
     let mut updates: Vec<(Entity, Vec<(IconStateId, bool)>)> = Vec::new();
-    for (e, canister, portable, alarm, unpowered, atom) in q.iter(world) {
+    let mut bases: Vec<(Entity, IconStateId)> = Vec::new();
+    for (e, (canister, pump, scrubber), portable, alarm, unpowered, atom) in q.iter(world) {
         let mut overlays = Vec::new();
-        if let Some(c) = canister {
+        let machine = pump
+            .map(|p| (p.on, Some("siphon")))
+            .or_else(|| scrubber.map(|s| (s.on, (!s.huge).then_some("scrubber"))));
+        if let Some((on, prefix)) = machine {
+            if let Some(s) = icons.get(&atom.icon, &format!("{}_{}", atom.icon_state, u8::from(on)))
+            {
+                bases.push((e, s));
+            }
+            if let Some(prefix) = prefix {
+                if portable.is_some_and(|p| p.holding.is_some())
+                    && let Some(s) = icons.get(&atom.icon, &format!("{prefix}-open"))
+                {
+                    overlays.push((s, false));
+                }
+                if portable.is_some_and(|p| p.port.is_some())
+                    && let Some(s) = icons.get(&atom.icon, &format!("{prefix}-connector"))
+                {
+                    overlays.push((s, false));
+                }
+            }
+        } else if let Some(c) = canister {
+            if c.shielding
+                && let Some(s) = icons.get(CANISTERS, "shielding")
+            {
+                overlays.push((s, false));
+                overlays.push((s, true));
+            }
+            if c.panel_open
+                && let Some(s) = icons.get(CANISTERS, "cell_hatch")
+            {
+                overlays.push((s, false));
+            }
+            if c.broken
+                && let Some(s) = icons.get(CANISTERS, "broken")
+            {
+                overlays.push((s, false));
+            }
             if portable.is_some_and(|p| p.holding.is_some())
                 && let Some(s) = icons.get(CANISTERS, "can-open")
             {
@@ -458,8 +608,13 @@ fn redraw_portables(world: &mut World, icons: &AtmosIcons) {
             {
                 overlays.push((s, false));
             }
-            if let Some(s) = c.light.and_then(|l| icons.get(CANISTERS, l)) {
-                overlays.push((s, false));
+            if let Some(light) = c.light {
+                if let Some(s) = icons.get(CANISTERS, light) {
+                    overlays.push((s, false));
+                }
+                if let Some(s) = icons.get(CANISTERS, &format!("{light}-light")) {
+                    overlays.push((s, true));
+                }
             }
         } else if let Some(a) = alarm {
             if unpowered {
@@ -481,6 +636,13 @@ fn redraw_portables(world: &mut World, icons: &AtmosIcons) {
             continue;
         }
         updates.push((e, overlays));
+    }
+    for (e, base) in bases {
+        if let Some(mut appearance) = world.get_mut::<Appearance>(e)
+            && appearance.icon_state != base
+        {
+            appearance.icon_state = base;
+        }
     }
     for (e, states) in updates {
         world.entity_mut(e).remove::<LookDirty>();

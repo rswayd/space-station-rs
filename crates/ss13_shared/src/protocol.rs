@@ -74,6 +74,9 @@ pub enum ClientIntent {
     },
     /// tg `toggle_move_intent`: the own mob switches between running and walking.
     ToggleMoveIntent,
+    /// A right click on a HUD inventory slot: on the active hand's item, tg
+    /// `attack_self_secondary` (a gas analyzer opens its window).
+    RightClickSlot(InventorySlot),
 }
 
 /// One end of a [`ClientIntent::Drag`].

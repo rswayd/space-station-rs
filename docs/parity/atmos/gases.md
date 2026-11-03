@@ -11,7 +11,7 @@
 Общая математика насосов и клапанов: сколько молей перенести, чтобы достичь целевого давления на выходе (квадратичное приближение с учётом температур).
 
 - **Код:** [`proc/pump_gas_to()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/gasmixtures/gas_mixture.dm#L696), [`proc/release_gas_to()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/gasmixtures/gas_mixture.dm#L718), [`proc/gas_pressure_calculate()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/gasmixtures/gas_mixture.dm#L584)
-- **Статус в ss13-rs:** ❌ нет — в `crates/ss13_atmos/src/gas.rs` нет аналога; баки отдают газ через `TankAir::remove_air_volume` (`crates/ss13_game/src/internals.rs`)
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_atmos/src/pipenet/air.rs` (`gas_pressure_calculate` с квадратичным решением и Ньютоном, `pump_moles`, `release_moles`); используют насосы, клапаны, канистры
 
 ### Каталог газов
 20 газов с удельной теплоёмкостью, молярной массой, оверлеем, ценой и флагами: кислород, азот, CO2, плазма, водяной пар, гипер-ноблий, N2O, нитрий, тритий, BZ, плюоксий, миазмы, фреон, водород, хилиум, прото-нитрат, заукер, галон, гелий, антиноблий.

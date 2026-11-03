@@ -436,3 +436,106 @@ fn list_arrows_follow_the_search_and_letters_jump_in_hotkey_mode() {
     key(&mut app, KeyCode::Enter, Key::Enter);
     assert_eq!(acts(&mut app), [act("submit", &[("entry", "Бар")])]);
 }
+
+/// The gas analyzer window: the scanned mixture, then a gas picked from it opens in the
+/// handbook with its description and reactions.
+#[test]
+fn gas_analyzer_shows_mix_and_handbook() {
+    use ss13_tgui::client::SetLocal;
+    use ss13_tgui::interfaces::gas_analyzer::{
+        AtmosHandbook, GasAnalyzerData, GasAnalyzerUi, Gasmix, HandbookGas, LOCAL_GAS,
+    };
+    let mut app = headless();
+    let book = AtmosHandbook {
+        gas_info: vec![HandbookGas {
+            id: "o2".into(),
+            name: "Oxygen".into(),
+            description: "The gas most life forms need to be able to survive.".into(),
+            specific_heat: 20.0,
+            export_value: 0.2,
+            reactions: vec![("plasmafire".into(), "Plasma Combustion".into())],
+        }],
+        money_symbol: "¢".into(),
+        money_name: "¢".into(),
+        ..Default::default()
+    };
+    let data = GasAnalyzerData {
+        gasmixes: vec![Gasmix {
+            name: "Floor".into(),
+            gases: vec![("o2".into(), "Oxygen".into(), 22.0)],
+            temperature: 293.15,
+            volume: 2500.0,
+            pressure: 21.43,
+            total_moles: 22.0,
+            reactions: Vec::new(),
+            reference: "1:0".into(),
+        }],
+    };
+    open_with::<GasAnalyzerUi>(&mut app, &book, &data);
+    assert!(shows(&mut app, "22.00 mol (100.00 %)"));
+    assert!(shows(&mut app, "21.43 kPa"));
+    assert!(shows(&mut app, "No Gas Selected"));
+    let pick = {
+        let world = app.world_mut();
+        let mut q = world.query::<(Entity, &SetLocal)>();
+        q.iter(world)
+            .filter(|(_, s)| s.key == LOCAL_GAS && s.value == "o2")
+            .map(|(e, _)| e)
+            .last()
+            .expect("a gas button")
+    };
+    app.world_mut().trigger(Activate { entity: pick });
+    settle(&mut app);
+    assert!(shows(&mut app, "> Oxygen"));
+    assert!(shows(&mut app, "most life forms"));
+    assert!(shows(&mut app, "Plasma Combustion"));
+}
+
+/// The atmos control console: a chamber picked by button shows its reading and controls.
+#[test]
+fn atmos_control_shows_chamber_and_controls() {
+    use ss13_tgui::interfaces::atmos_control::{
+        AtmosControlData, AtmosControlStatic, AtmosControlUi, Chamber, PortInfo,
+    };
+    let mut app = headless();
+    let st = AtmosControlStatic {
+        max_input: 200.0,
+        max_output: 4500.0,
+        control: true,
+        reconnecting: true,
+        ..Default::default()
+    };
+    let chamber = |id: &str, name: &str, ports: bool| Chamber {
+        id: id.into(),
+        name: name.into(),
+        gasmix: None,
+        input_info: ports.then_some(PortInfo {
+            active: true,
+            amount: 200.0,
+        }),
+        output_info: None,
+    };
+    let data = AtmosControlData {
+        chambers: vec![
+            chamber("distro", "Distribution Loop", false),
+            chamber("o2", "Oxygen Supply", true),
+        ],
+    };
+    open_with::<AtmosControlUi>(&mut app, &st, &data);
+    assert!(shows(&mut app, "Chamber Selection"));
+    assert!(shows(&mut app, "No Sensors Detected!"));
+    assert!(shows(&mut app, "No Input Device Detected!"));
+    let pick = {
+        let world = app.world_mut();
+        let mut q = world.query::<(Entity, &ss13_tgui::client::SetLocal)>();
+        q.iter(world)
+            .filter(|(_, s)| s.value == "o2")
+            .map(|(e, _)| e)
+            .last()
+            .expect("the oxygen button")
+    };
+    app.world_mut().trigger(Activate { entity: pick });
+    settle(&mut app);
+    assert!(shows(&mut app, "Injecting"));
+    assert!(shows(&mut app, "No Output Device Detected!"));
+}

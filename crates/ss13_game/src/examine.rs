@@ -85,6 +85,7 @@ pub fn examine_lines(world: &World, examiner: Entity, target: Entity) -> (String
     }
     crate::chem::examine_lines(world, target, &mut lines);
     crate::botany::examine_lines(world, target, &mut lines);
+    crate::atmos_machinery::examine_lines(world, target, &mut lines);
     (name, lines)
 }
 

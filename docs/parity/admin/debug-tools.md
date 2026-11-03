@@ -31,6 +31,12 @@ Debug-Game, счётчики атомов/датумов, Del-All/Hard-Del-All, 
 - **Код:** [`debug.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/verbs/debug.dm#L1), [`plane_debugger.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/verbs/plane_debugger.dm#L1), [`light_debug.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/verbs/light_debug.dm#L1), [`path_debugger.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/verbs/path_debugger.dm#L1)
 - **Статус в ss13-rs:** 🟡 частично — `crates/ss13_debug` (отладочный UI разработчика, см. `docs/RUNNING.md` «Debug UI»): не внутриигровые админ-вербы
 
+### Атмосферная отладка
+Панель SSair (`Atmos Control Panel`: группы возбуждённых тайлов и их показ `display_turfs`, заморозка подсистемы), `Debug Air Status`, проверка трубных сетей (`Check Plumbing`), выпуск газа в тайл. Перенесено из ../atmos/linda.md.
+
+- **Код:** [`atmos_control`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/admin_verbs.dm#L322), [`/datum/excited_group/proc/display_turfs()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/environmental/LINDA_turf_tile.dm#L545), [`debug_air_status`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/verbs/diagnostics.dm#L3), [`atmos_debug`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/verbs/atmosdebug.dm#L2)
+- **Статус в ss13-rs:** ❌ нет — в отладочном оверлее `crates/ss13_debug` только счётчики SSair
+
 ### Маппинг-вербы
 Отчёты карты, проверка зон, атмоса, питания, водопровода, диапазоны камер/интеркомов, счётчики объектов, загрузка шаблонов и руин, экспорт карты, дебаг z-уровней.
 

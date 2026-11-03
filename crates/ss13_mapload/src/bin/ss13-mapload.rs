@@ -196,6 +196,14 @@ fn convert_cmd(config: &MapLoadPlugin, mut map_dirs: Vec<PathBuf>) -> anyhow::Re
             .filter(|p| types.types.contains_key(*p))
             .map(str::to_owned),
     );
+    // A canister's `relabel` copies another canister type's name and look.
+    used.extend(
+        ss13_mapload::atmos_machine::CANISTER_LABELS
+            .into_iter()
+            .map(|(_, path)| path.to_owned()),
+    );
+    // Cutting a stationary tank open leaves its frame.
+    used.insert(ss13_mapload::atmos_machine::TANK_FRAME.to_owned());
     let conversion = convert(&types, used.iter().map(String::as_str))?;
     let out = config.prototypes_dir().join("dm_types.ron");
     std::fs::create_dir_all(config.prototypes_dir())?;
@@ -255,6 +263,21 @@ fn convert_cmd(config: &MapLoadPlugin, mut map_dirs: Vec<PathBuf>) -> anyhow::Re
         research.materials.len(),
         research.lathes.len(),
         research_out.display()
+    );
+    let handbook = ss13_mapload::atmos_handbook::resolve(&types);
+    let handbook_out = config
+        .assets
+        .join(ss13_mapload::atmos_handbook::HANDBOOK_FILE);
+    std::fs::write(
+        &handbook_out,
+        ss13_mapload::atmos_handbook::to_ron(&handbook),
+    )
+    .with_context(|| format!("writing {}", handbook_out.display()))?;
+    println!(
+        "{} gases, {} reactions -> {}",
+        handbook.gas_info.len(),
+        handbook.reaction_info.len(),
+        handbook_out.display()
     );
     let sfx = ss13_mapload::sound::resolve_sfx(&types);
     let sfx_out = config.assets.join(ss13_mapload::sound::SFX_FILE);

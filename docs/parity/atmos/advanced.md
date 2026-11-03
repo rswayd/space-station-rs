@@ -23,7 +23,7 @@
 Продукты кристаллизатора: кристалл гипер-ноблия вставляется в канистру или баллон и подавляет реакции, кристалл нитрия — стимулятор.
 
 - **Код:** [`/obj/item/hypernoblium_crystal`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/components/gas_recipe_machines/crystallizer_items.dm#L1), [`/obj/item/nitrium_crystal`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/components/gas_recipe_machines/crystallizer_items.dm#L42)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ❌ нет — вставка в портативные машины и подавление реакций сделаны в `portable.md` «Базовая портативная машина» (`crates/ss13_game/src/atmos_machinery/portable.rs`); нет получения в кристаллизаторе, герметизации одежды и кристалла нитрия
 
 ### Hypertorus Fusion Reactor: сборка и управление
 Многоблочный термоядерный реактор 3x3 (ядро, топливный вход, вход модератора, выход отходов, интерфейс, углы) собирается из коробок-деталей и управляется через окно: подача топлива, модератора, охлаждение, мощность нагрева.

@@ -37,7 +37,14 @@ pub const DUMPED_VARS: [&str; 16] = [
 
 /// `GLOBAL_LIST_INIT` globals whose constant value is dumped (top-level `globals`): the footstep
 /// tables of `code/__DEFINES/footsteps.dm`.
-pub const DUMPED_GLOBALS: [&str; 4] = ["footstep", "barefootstep", "clawfootstep", "heavyfootstep"];
+pub const DUMPED_GLOBALS: [&str; 5] = [
+    "footstep",
+    "barefootstep",
+    "clawfootstep",
+    "heavyfootstep",
+    // `atmos_computers/__identifiers.dm`: chamber id -> name.
+    "station_gas_chambers",
+];
 
 /// Map directories (relative to the source root) checked by the acceptance scan.
 pub const ACCEPTANCE_MAP_DIRS: [&str; 2] =
@@ -177,6 +184,10 @@ pub struct Dump {
     /// Per [`DUMPED_GLOBALS`] entry: its constant initial value (same encoding as `vars`).
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub globals: BTreeMap<&'static str, Value>,
+    /// `/datum/gas_reaction/standard/*/init_factors()`: the constant `factor = list(...)` of
+    /// each reaction type that sets one (the atmos handbook's text).
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub reaction_factors: BTreeMap<String, Value>,
     /// Access helpers whose `get_access()` [`get_access_adds`] does not understand. Their
     /// `get_access` would be empty, which leaves a door open to everyone, so
     /// [`Dump::ensure_complete`] refuses the dump instead.
@@ -241,8 +252,25 @@ pub fn extract(env: &Environment) -> (Dump, NonConstStats) {
             None => *stats.entry("globals").or_default() += 1,
         }
     }
+    let mut reaction_factors = BTreeMap::new();
+    for ty in env.tree.iter_types() {
+        let path = &ty.get().path;
+        if !path.starts_with("/datum/gas_reaction/standard/") {
+            continue;
+        }
+        let Some(code) = proc_code(env, path, "init_factors") else {
+            continue;
+        };
+        match assigned_factor_list(env, code) {
+            Some(value) => {
+                reaction_factors.insert(path.clone(), value);
+            }
+            None => *stats.entry("reaction_factors").or_default() += 1,
+        }
+    }
     let dump = Dump {
         schema: SCHEMA,
+        reaction_factors,
         vars: DUMPED_VARS.to_vec(),
         types,
         element_calls,
@@ -373,6 +401,167 @@ fn global_init(env: &Environment, name: &str) -> Option<Value> {
         }
         _ => None,
     })
+}
+
+/// `factor = list(<gas path or text> = "<text>", ...)` of an `init_factors()`: SpacemanDMM does
+/// not fold strings that interpolate `[/datum/gas/x::name]`, so the texts are put together here
+/// ([`interp_text`]). `{ "list": [{ "assoc": [key, text] }] }`, keys as `{ "path": ... }` or text.
+fn assigned_factor_list(
+    env: &Environment,
+    code: &[dm::ast::Spanned<dm::ast::Statement>],
+) -> Option<Value> {
+    use dm::ast::{AssignOp, Expression, Statement, Term};
+    let (rhs, loc) = code.iter().find_map(|s| match &s.elem {
+        Statement::Expr(Expression::AssignOp {
+            op: AssignOp::Assign,
+            lhs,
+            rhs,
+        }) if matches!(lhs.as_ref(), Expression::Base { term, follow }
+            if follow.is_empty() && matches!(&term.elem, Term::Ident(i) if i.as_str() == "factor")) =>
+        {
+            Some((rhs.as_ref(), s.location))
+        }
+        _ => None,
+    })?;
+    let Expression::Base { term, follow } = rhs else {
+        return None;
+    };
+    let Term::List(items) = &term.elem else {
+        return None;
+    };
+    if !follow.is_empty() {
+        return None;
+    }
+    let mut out = Vec::new();
+    for item in items.iter() {
+        let Expression::AssignOp {
+            op: AssignOp::Assign,
+            lhs,
+            rhs,
+        } = item
+        else {
+            return None;
+        };
+        let key = match lhs.as_ref().clone().simple_evaluate(loc).ok()? {
+            Constant::Prefab(pop) => json!({ "path": pop.to_string() }),
+            Constant::String(s) => Value::String(s.to_string()),
+            _ => return None,
+        };
+        out.push(json!({ "assoc": [key, interp_text(env, rhs, loc)?] }));
+    }
+    Some(json!({ "list": out }))
+}
+
+/// A text expression: a constant, or an interpolated string whose parts are constants or
+/// `/type::var` initial values.
+fn interp_text(env: &Environment, e: &dm::ast::Expression, loc: dm::Location) -> Option<String> {
+    use dm::ast::{Expression, Follow, Term};
+    if let Ok(c) = e.clone().simple_evaluate(loc) {
+        return constant_text(&c);
+    }
+    let Expression::Base { term, follow } = e else {
+        return Some(dm_num2text(interp_number(env, e, loc)?));
+    };
+    match (&term.elem, follow.as_ref()) {
+        (Term::InterpString(first, parts), []) => {
+            let mut s = first.to_string();
+            for (expr, lit) in parts.iter() {
+                if let Some(expr) = expr {
+                    s.push_str(&interp_text(env, expr, loc)?);
+                }
+                s.push_str(lit);
+            }
+            Some(s)
+        }
+        (Term::Prefab(prefab), [f]) => {
+            let Follow::StaticField(var) = &f.elem else {
+                return None;
+            };
+            let path: String = prefab
+                .path
+                .iter()
+                .map(|(_, seg)| format!("/{seg}"))
+                .collect();
+            let value = env.tree.find(&path)?.get_value(var.as_str())?;
+            constant_text(value.constant.as_ref()?)
+        }
+        (Term::Expr(inner), []) => interp_text(env, inner, loc),
+        _ => Some(dm_num2text(interp_number(env, e, loc)?)),
+    }
+}
+
+/// Arithmetic over constants and `SSxxx.var` initial values (`SSair.wait`, which the
+/// handbook divides by): SpacemanDMM does not fold those.
+fn interp_number(env: &Environment, e: &dm::ast::Expression, loc: dm::Location) -> Option<f64> {
+    use dm::ast::{BinaryOp, Expression, Follow, Term};
+    if let Ok(Constant::Float(f)) = e.clone().simple_evaluate(loc) {
+        return Some(f64::from(f));
+    }
+    match e {
+        Expression::BinaryOp { op, lhs, rhs } => {
+            let (a, b) = (interp_number(env, lhs, loc)?, interp_number(env, rhs, loc)?);
+            match op {
+                BinaryOp::Add => Some(a + b),
+                BinaryOp::Sub => Some(a - b),
+                BinaryOp::Mul => Some(a * b),
+                BinaryOp::Div => (b != 0.0).then(|| a / b),
+                _ => None,
+            }
+        }
+        Expression::Base { term, follow } => match (&term.elem, follow.as_ref()) {
+            (Term::Expr(inner), []) => interp_number(env, inner, loc),
+            (Term::Ident(name), [f]) if name.starts_with("SS") => {
+                let Follow::Field(_, var) = &f.elem else {
+                    return None;
+                };
+                let ty = format!("/datum/controller/subsystem/{}", name[2..].to_lowercase());
+                match env
+                    .tree
+                    .find(&ty)?
+                    .get_value(var.as_str())?
+                    .constant
+                    .as_ref()?
+                {
+                    Constant::Float(f) => Some(f64::from(*f)),
+                    _ => None,
+                }
+            }
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// How DM writes a constant into a string: numbers like `num2text` (6 significant digits).
+fn constant_text(c: &Constant) -> Option<String> {
+    match c {
+        Constant::String(s) => Some(s.to_string()),
+        Constant::Float(f) => Some(dm_num2text(f64::from(*f))),
+        Constant::Prefab(pop) => Some(pop.to_string()),
+        _ => None,
+    }
+}
+
+/// BYOND `num2text(x)`: `%g` with 6 significant digits (`373.15`, `1e+06`).
+pub fn dm_num2text(x: f64) -> String {
+    if x == 0.0 {
+        return "0".into();
+    }
+    let exp = x.abs().log10().floor() as i32;
+    if !(-5..6).contains(&exp) {
+        let mantissa = x / 10f64.powi(exp);
+        let m = format!("{mantissa:.5}");
+        let m = m.trim_end_matches('0').trim_end_matches('.');
+        let sign = if exp < 0 { '-' } else { '+' };
+        return format!("{m}e{sign}{:02}", exp.abs());
+    }
+    let decimals = (5 - exp).max(0) as usize;
+    let s = format!("{x:.decimals$}");
+    if s.contains('.') {
+        s.trim_end_matches('0').trim_end_matches('.').to_owned()
+    } else {
+        s
+    }
 }
 
 /// A constant integer expression (macros are expanded: `(1 << 3)`).
@@ -837,5 +1026,20 @@ mod tests {
         assert_eq!(number(10002.0).unwrap().to_string(), "10002");
         assert_eq!(number(-4.0).unwrap().to_string(), "-4");
         assert!(number(f32::INFINITY).is_none());
+    }
+}
+
+#[cfg(test)]
+mod factor_text_tests {
+    use super::dm_num2text;
+
+    /// BYOND `num2text`: 6 significant digits, exponent form from 1e6.
+    #[test]
+    fn numbers_read_like_dm() {
+        assert_eq!(dm_num2text(373.15), "373.15");
+        assert_eq!(dm_num2text(40.0), "40");
+        assert_eq!(dm_num2text(0.01), "0.01");
+        assert_eq!(dm_num2text(1e6), "1e+06");
+        assert_eq!(dm_num2text(1_643.15), "1643.15");
     }
 }

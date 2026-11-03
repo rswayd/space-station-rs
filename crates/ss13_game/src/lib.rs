@@ -127,6 +127,8 @@ pub mod armor;
 #[cfg(feature = "server")]
 pub mod atmos;
 #[cfg(feature = "server")]
+pub mod atmos_exposure;
+#[cfg(feature = "server")]
 pub mod atmos_machinery;
 #[cfg(feature = "server")]
 pub mod botany;
@@ -272,6 +274,8 @@ pub mod testing;
 pub mod throw;
 #[cfg(feature = "server")]
 pub mod tools;
+#[cfg(feature = "server")]
+pub mod turf_damage;
 #[cfg(feature = "client")]
 pub mod ui_sprites;
 #[cfg(feature = "server")]

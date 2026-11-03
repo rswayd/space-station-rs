@@ -19,6 +19,7 @@
 pub mod gas;
 pub mod level;
 pub mod pipenet;
+pub mod planetary;
 pub mod reactions;
 pub mod scan;
 
@@ -39,7 +40,9 @@ use ss13_shared::{
 use ss13_world::{Border, Density, SpatialIndex, WorldSystems};
 
 pub use gas::{GAS_COUNT, GASES, GasId, GasInfo, GasMixture, ParseError};
-pub use level::{FireExposure, FireStage, Hotspot, LevelAir, PressureDelta, SetupReport, TileKind};
+pub use level::{
+    FireExposure, FireStage, Hotspot, LevelAir, PressureDelta, SetupReport, Thermal, TileKind,
+};
 
 /// tg `SSair.wait`.
 pub const FIRE_INTERVAL: f64 = 0.5;
@@ -58,6 +61,8 @@ pub struct TurfAir {
     pub temperature: Option<f64>,
     /// `planetary_atmos`: relaxes to its initial mix.
     pub planetary: bool,
+    /// The turf's own heat for superconduction.
+    pub thermal: Thermal,
 }
 
 /// tg `can_atmos_pass` of an object other than `ATMOS_PASS_YES`.
@@ -91,6 +96,11 @@ impl AtmosBlocker {
         }
     }
 }
+
+/// On an [`AtmosBlocker`] that also stops heat while it blocks air (tg
+/// `block_superconductivity`: opaque or heat-proof doors, plasma windows, atmos holobarriers).
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct BlocksHeat;
 
 /// Icon states of the gas overlays (`icons/effects/atmospherics.dmi`), by gas.
 #[derive(Resource, Clone, Debug, Default)]
@@ -180,6 +190,8 @@ pub struct Atmos {
     pub last_fire: Duration,
     /// What each level's setup found, by z.
     pub setup: Vec<(u16, SetupReport)>,
+    /// `SSair.atmos_gen`: this round's gas string per planetary atmosphere id.
+    pub atmos_gen: Vec<(&'static str, String)>,
 }
 
 impl Atmos {
@@ -216,6 +228,20 @@ impl Atmos {
     pub fn air(&self, pos: TilePos) -> Option<&GasMixture> {
         let (level, tile) = self.locate(pos)?;
         level.air(tile)
+    }
+
+    /// A wall's (or any airless turf's) own temperature and heat capacity; `None` where the
+    /// tile has air and off the map.
+    pub fn solid_heat(&self, pos: TilePos) -> Option<(f64, f64)> {
+        let (level, tile) = self.locate(pos)?;
+        level.solid_heat(tile)
+    }
+
+    /// `/turf/TakeTemperature` of an airless turf; it is exposed to its new temperature like a
+    /// superconducting one. False where the tile has air.
+    pub fn take_solid_temperature(&mut self, pos: TilePos, delta: f64) -> bool {
+        self.locate_mut(pos)
+            .is_some_and(|(level, tile)| level.take_solid_temperature(tile, delta))
     }
 
     /// kPa.
@@ -363,6 +389,67 @@ impl Atmos {
             .sum()
     }
 
+    /// The fire sound loops of the hot groups (tg `/datum/hot_group/sound`): where each plays
+    /// and its `drop_off_dist`.
+    pub fn fire_sounds(&self) -> Vec<(TilePos, i32)> {
+        let mut out = Vec::new();
+        for (z, level) in self.levels.iter().enumerate() {
+            let Some(level) = level else { continue };
+            out.extend(level.fire_sounds().map(|(tile, drop_off)| {
+                let (x, y) = level.pos(tile);
+                (TilePos::new(x, y, z as u16), drop_off)
+            }));
+        }
+        out
+    }
+
+    /// Turfs a heavy fire burnt since the last call (tg `burn_tile()` of the hotspot's turf).
+    pub fn drain_burnt_turfs(&mut self) -> Vec<TilePos> {
+        let mut out = Vec::new();
+        for (z, level) in self.levels.iter_mut().enumerate() {
+            let Some(level) = level else { continue };
+            let mut tiles = Vec::new();
+            level.drain_burns(|t| tiles.push(t));
+            out.extend(tiles.into_iter().map(|t| {
+                let (x, y) = level.pos(t);
+                TilePos::new(x, y, z as u16)
+            }));
+        }
+        out
+    }
+
+    /// Hot turfs that processed since the last call, with their air temperature (tg
+    /// `temperature_expose` → `COMSIG_TURF_EXPOSE`, which starts atmos-sensitive atoms there).
+    pub fn drain_exposed_turfs(&mut self) -> Vec<(TilePos, f64)> {
+        let mut out = Vec::new();
+        for (z, level) in self.levels.iter_mut().enumerate() {
+            let Some(level) = level else { continue };
+            let mut tiles = Vec::new();
+            level.drain_exposed(|t, temperature| tiles.push((t, temperature)));
+            out.extend(tiles.into_iter().map(|(t, temperature)| {
+                let (x, y) = level.pos(t);
+                (TilePos::new(x, y, z as u16), temperature)
+            }));
+        }
+        out
+    }
+
+    /// Turfs water vapor condensed on since the last call (tg `water_vapor_gas_act`,
+    /// `freeze_turf`), for the game to wet or freeze.
+    pub fn drain_condensed(&mut self) -> Vec<(TilePos, reactions::Condensation)> {
+        let mut out = Vec::new();
+        for (z, level) in self.levels.iter_mut().enumerate() {
+            let Some(level) = level else { continue };
+            let mut tiles = Vec::new();
+            level.drain_condensed(|t, kind| tiles.push((t, kind)));
+            out.extend(tiles.into_iter().map(|(t, kind)| {
+                let (x, y) = level.pos(t);
+                (TilePos::new(x, y, z as u16), kind)
+            }));
+        }
+        out
+    }
+
     pub fn excited_groups(&self) -> usize {
         self.levels
             .iter()
@@ -378,9 +465,21 @@ impl Atmos {
         if !self.initialized {
             return;
         }
-        let air = (turf.kind == TileKind::Open).then(|| initial_mix(turf));
+        let air = (turf.kind == TileKind::Open).then(|| initial_mix(turf, &self.atmos_gen));
         if let Some((level, tile)) = self.locate_mut(pos) {
             level.change_tile(tile, turf.kind, air);
+            level.set_thermal(tile, turf.thermal);
+        }
+    }
+
+    /// `ChangeTurf` with `CHANGETURF_INHERIT_AIR` between open turfs: the air stays, the new
+    /// turf brings its own heat ([`LevelAir::replace_turf_keeping_air`]).
+    pub fn replace_turf_keeping_air(&mut self, pos: TilePos, turf: &TurfAir) {
+        if !self.initialized {
+            return;
+        }
+        if let Some((level, tile)) = self.locate_mut(pos) {
+            level.replace_turf_keeping_air(tile, turf.thermal);
         }
     }
 
@@ -520,21 +619,40 @@ fn density_removed(
 }
 
 /// Builds every level from the turfs and blockers on the map (tg `SSair.Initialize`).
-fn init_atmos(world: &mut World) {
+pub fn init_atmos(world: &mut World) {
     let start = Instant::now();
     let mut turfs = world.query::<(&TurfAir, &TilePos)>();
     let mut by_z: HashMap<u16, Vec<(TilePos, TurfAir)>> = HashMap::new();
     for (air, &pos) in turfs.iter(world) {
         by_z.entry(pos.z).or_default().push((pos, air.clone()));
     }
-    let mut blockers = world.query::<(&AtmosBlocker, &TilePos, Has<Density>, Option<&Border>)>();
-    let mut edges: HashMap<TilePos, u8> = HashMap::new();
-    for (blocker, &pos, dense, border) in blockers.iter(world) {
-        *edges.entry(pos).or_default() |= blocker.edges(dense, border.copied());
+    let mut blockers = world.query::<(
+        &AtmosBlocker,
+        &TilePos,
+        Has<Density>,
+        Option<&Border>,
+        Has<BlocksHeat>,
+    )>();
+    let mut edges: HashMap<TilePos, (u8, u8)> = HashMap::new();
+    for (blocker, &pos, dense, border, heat) in blockers.iter(world) {
+        let mask = blocker.edges(dense, border.copied());
+        let entry = edges.entry(pos).or_default();
+        entry.0 |= mask;
+        if heat {
+            entry.1 |= mask;
+        }
     }
     let index = world.resource::<SpatialIndex>();
     let mut built = Vec::new();
     let mut mixes: HashMap<(Arc<str>, Option<u64>), GasMixture> = HashMap::new();
+    // `generate_atmos`: once a round, from the clock.
+    let seed = web_time::SystemTime::now()
+        .duration_since(web_time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_nanos() as u64);
+    let atmos_gen = planetary::generate_atmos(seed);
+    for (id, text) in &atmos_gen {
+        info!("planetary atmosphere {id}: {text}");
+    }
     for (z, tiles) in by_z {
         let Some((width, height)) = index.level_size(z) else {
             continue;
@@ -550,14 +668,16 @@ fn init_atmos(world: &mut World) {
             );
             let mix = mixes
                 .entry(key)
-                .or_insert_with(|| initial_mix(&air))
+                .or_insert_with(|| initial_mix(&air, &atmos_gen))
                 .clone();
             let planetary = air.planetary.then_some((&*air.initial_gas_mix, &mix));
             level.set_tile(tile, air.kind, Some(mix.clone()), planetary);
+            level.set_thermal(tile, air.thermal);
         }
-        for (&pos, &mask) in edges.iter().filter(|(p, _)| p.z == z) {
+        for (&pos, &(mask, heat)) in edges.iter().filter(|(p, _)| p.z == z) {
             if let Some(tile) = level.tile(pos.x, pos.y) {
                 level.set_edge_block(tile, mask);
+                level.set_heat_block(tile, heat);
             }
         }
         let report = level.setup();
@@ -573,17 +693,22 @@ fn init_atmos(world: &mut World) {
         atmos.insert_level(z, level);
         atmos.setup.push((z, report));
     }
+    atmos.atmos_gen = atmos_gen;
     atmos.initialized = true;
     world.add_observer(density_inserted);
     world.add_observer(density_removed);
     info!("atmos ready in {:.2?}", start.elapsed());
 }
 
-/// The turf's starting air; an unparsable string (tg's random planetary atmosphere ids such
-/// as `LAVALAND_ATMOS`) falls back to station air.
-// shortcut: `/datum/atmosphere` generators are not ported; planets get station air.
-fn initial_mix(air: &TurfAir) -> GasMixture {
-    let mut mix = GasMixture::parse(&air.initial_gas_mix).unwrap_or_else(|e| {
+/// The turf's starting air (`parse_gas_string`): a planetary atmosphere id becomes this
+/// round's generated string (`preprocess_gas_string`); an unparsable string falls back to
+/// station air.
+fn initial_mix(air: &TurfAir, atmos_gen: &[(&'static str, String)]) -> GasMixture {
+    let text = atmos_gen
+        .iter()
+        .find(|(id, _)| **id == *air.initial_gas_mix)
+        .map_or(&*air.initial_gas_mix, |(_, s)| s.as_str());
+    let mut mix = GasMixture::parse(text).unwrap_or_else(|e| {
         warn!(
             "initial_gas_mix {:?}: {e}; using station air",
             air.initial_gas_mix
@@ -599,24 +724,31 @@ fn initial_mix(air: &TurfAir) -> GasMixture {
 fn apply_blocker_changes(
     mut atmos: ResMut<Atmos>,
     index: Res<SpatialIndex>,
-    blockers: Query<(&AtmosBlocker, Has<Density>, Option<&Border>)>,
+    blockers: Query<(
+        &AtmosBlocker,
+        Has<Density>,
+        Option<&Border>,
+        Has<BlocksHeat>,
+    )>,
 ) {
     if atmos.dirty.is_empty() {
         return;
     }
     let dirty = std::mem::take(&mut atmos.dirty);
     for (pos, closing) in dirty {
-        let mask = index
+        let (mask, heat) = index
             .on_tile(pos)
             .iter()
             .filter_map(|&e| blockers.get(e).ok())
-            .fold(0, |m, (b, dense, border)| {
-                m | b.edges(dense, border.copied())
+            .fold((0, 0), |(m, h), (b, dense, border, stops_heat)| {
+                let edges = b.edges(dense, border.copied());
+                (m | edges, if stops_heat { h | edges } else { h })
             });
         let Some((level, tile)) = atmos.locate_mut(pos) else {
             continue;
         };
         level.set_edge_block(tile, mask);
+        level.set_heat_block(tile, heat);
         level.recalculate_adjacency(tile);
         if closing {
             level.deactivate(tile);

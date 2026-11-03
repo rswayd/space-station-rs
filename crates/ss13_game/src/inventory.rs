@@ -389,6 +389,7 @@ enum Action {
     Drop,
     Slot(InventorySlot),
     AltSlot(InventorySlot),
+    RightSlot(InventorySlot),
 }
 
 /// Every action, in the order it arrived (the network caps intents per client per tick): keys
@@ -407,6 +408,7 @@ pub(crate) fn inventory_intents(
                 ClientIntent::DropActive => Action::Drop,
                 ClientIntent::ClickSlot(slot) => Action::Slot(slot),
                 ClientIntent::AltClickSlot(slot) => Action::AltSlot(slot),
+                ClientIntent::RightClickSlot(slot) => Action::RightSlot(slot),
                 _ => return None,
             };
             Some((i.client, action))
@@ -486,7 +488,7 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 Some(item)
                     if hand == inventory.active && crate::atmos::is_analyzer(world, item) =>
                 {
-                    crate::atmos::analyze(world, client, mob_pos);
+                    crate::atmos::analyze_self(world, client, item, mob_pos);
                 }
                 Some(item)
                     if hand == inventory.active
@@ -595,11 +597,29 @@ fn apply(world: &mut World, client: Entity, action: Action) {
             ) => {}
         Action::Slot(slot) => click_equip_slot(world, client, mob, mob_pos, &inventory, slot),
         // tg `click_alt` of the item in the slot: a gas tank toggles internals.
+        // tg `attack_self_secondary` of the active hand's item.
+        Action::RightSlot(slot) => {
+            let active = if inventory.active == 0 {
+                InventorySlot::LeftHand
+            } else {
+                InventorySlot::RightHand
+            };
+            if slot == active
+                && let Some(item) = inventory.slot(slot)
+                && crate::atmos::is_analyzer(world, item)
+            {
+                crate::atmos::open_analyzer(world, client, mob, item);
+            }
+        }
         Action::AltSlot(slot) => {
             if let Some(item) = inventory.slot(slot)
                 && world.get::<crate::internals::TankAir>(item).is_some()
             {
                 crate::internals::toggle(world, client, mob, item);
+            } else if let Some(item) = inventory.slot(slot)
+                && crate::atmos::is_analyzer(world, item)
+            {
+                crate::atmos::barometer(world, client, mob, item);
             } else if let Some(item) = inventory.slot(slot) {
                 // A PDA gives back its ID.
                 crate::modpc::pda::alt_click(world, mob, item);
@@ -782,9 +802,10 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 Some(held) if world.get::<crate::storage::Storage>(target).is_some() => {
                     crate::storage::insert_from_hand(world, held, target);
                 }
-                // tg `interact_with_atom` of an analyzer: scans the clicked atom's turf.
+                // tg `interact_with_atom` of an analyzer: scans the clicked atom when it holds
+                // gas, else its turf.
                 Some(held) if crate::atmos::is_analyzer(world, held) => {
-                    crate::atmos::analyze(world, client, pos);
+                    crate::atmos::scan_target(world, client, held, target);
                 }
                 // tg `item_interaction` of a PDA with an ID card.
                 Some(held)

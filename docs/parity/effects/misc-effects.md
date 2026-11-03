@@ -102,6 +102,18 @@
 - **Код:** [`/obj/structure/spider`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/spiderwebs.dm#L3), [`/obj/structure/spider/stickyweb`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/spiderwebs.dm#L35), [`/obj/structure/spider/cocoon`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/spiderwebs.dm#L225), [`/obj/structure/spider/passage`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/spiderwebs.dm#L202)
 - **Статус в ss13-rs:** ❌ нет — нет паутины
 
+### Горение предметов и одежды
+Горючий предмет или структура от огня получает компонент горения: горит, получает урон, может сгореть в пепел; на горящем человеке одежда повреждается и сгорает (`burn_clothing`). Перенесено из ../atmos/fire.md.
+
+- **Код:** [`/datum/component/burning`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/burning.dm#L8), [`proc/burn_clothing()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/human/human_defense.dm#L674)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/fire.rs` (`Burning`): горят только структуры и машины; предметы и одежда не горят
+
+### Заморозка предметов
+Конденсация пара при очень низкой температуре (`freeze_turf`) замораживает предметы на тайле: элемент `frozen` (синий оттенок, ломкость). Перенесено из ../atmos/reactions.md.
+
+- **Код:** [`/datum/element/frozen`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/elements/frozen.dm#L4), [`proc/freeze_turf()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/open/_open.dm#L540)
+- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/janitor.rs` (`condensation`): тайл становится вечной мерзлотой, предметы не замерзают
+
 ### Бонусы (powerup) и прочие эффекты
 Подбираемые бонусы (здоровье, патроны, скорость, «безумие» — CTF и арены), фазовый моб (бестелесное перемещение заклинаний и демонов), информационный значок (`abstract/info`), трещины-«слабые точки» (`weakpoint`, от Earthcracker из аплинка или при генерации карты): от взрыва проламывают пол цепочкой трещин.
 

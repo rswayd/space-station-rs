@@ -23,19 +23,19 @@
 Специальные трубы: соединение всех слоёв (`layer_manifold`), перекрещивание (`bridge_pipe`), соединение труб разных цветов (`color_adapter`), переход между уровнями (`multiz`).
 
 - **Код:** [`layer_manifold`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/pipes/layermanifold.dm#L1), [`bridge_pipe`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/pipes/bridge_pipe.dm#L1), [`color_adapter`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/pipes/color_adapter.dm#L1), [`pipe/multiz`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/pipes/multiz.dm#L2)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_atmos/src/pipenet/mod.rs`: слоевой коллектор (все слои, 200 л), мост и цветовой адаптер как бинарные трубы; нет межэтажных труб и их оверлеев
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_atmos/src/pipenet/mod.rs`: слоевой коллектор (все слои, 200 л), мост и цветовой адаптер как бинарные трубы; межэтажные трубы — вместе с многоуровневостью карт → ../mobs/movement.md «Перемещение по z-уровням» (уровни не стыкуются)
 
 ### Теплообменные трубы (HE pipes)
 Трубы, которые обмениваются теплом с окружением (космосом или тайлом) и светятся при нагреве; применяются для охлаждения газа в космосе. Переходник `junction` соединяет их с обычными.
 
 - **Код:** [`/obj/machinery/atmospherics/pipe/heat_exchanging`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/pipes/heat_exchange/he_pipes.dm#L1), [`heat_exchanging/simple`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/pipes/heat_exchange/simple.dm#L1), [`heat_exchanging/junction`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/pipes/heat_exchange/junction.dm#L1)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_atmos/src/pipenet/mod.rs` (`HeatExchange`, `temperature_interact`), `crates/ss13_game/src/atmos_machinery/devices.rs` (`HePipe`, `he_step`): соединяются только между собой и через junction, изгибы по диагональному `dir`, теплообмен с космосом (2,7 K, `HEAT_CAPACITY_VACUUM`) и воздухом тайла каждый fire; нет свечения выше 500 K, нагрева пристёгнутых мобов, обмена под стенами и с лавой
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_atmos/src/pipenet/mod.rs` (`HeatExchange`, `temperature_interact`), `crates/ss13_game/src/atmos_machinery/devices.rs` (`HePipe`, `he_step`, `HeOnLava`), `crates/ss13_atmos/src/level/conduct.rs` (`solid_heat`, `take_solid_temperature`): соединяются только между собой и через junction, изгибы по диагональному `dir`, теплообмен с космосом (2,7 K, `HEAT_CAPACITY_VACUUM`) и воздухом тайла каждый fire, под стеной — с самой стеной (её температура и теплоёмкость, `TakeTemperature` и `temperature_expose`), на лаве порог сравнивается с 5000 K (флаг ставится при загрузке карты), свечение выше 500 K по такту машин (`HeGlow`, `glow_he_pipes`, без 2-секундного перехода цвета); нагрев и ожоги пристёгнутых к трубе мобов → [../engineering/structures-furniture.md](../engineering/structures-furniture.md) «Стулья, диваны, скамьи» (пристёгивания стоя нет)
 
 ### Отображение газа в трубах
 Прозрачные участки и устройства показывают цвет смеси внутри сети.
 
 - **Код:** [`proc/UpdateGasVisuals()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/datum_pipeline.dm#L319), [`/obj/effect/abstract/gas_visual`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/datum_pipeline.dm#L353)
-- **Статус в ss13-rs:** ❌ нет — цвет газа в трубах (`gas_visual`) не рисуется
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/atmos_machinery/gas_visuals.rs`: цвет сети по `CalculateGasmixColor` (смешение `primary_color` газов в HSV, затемнение неполной трубы), оверлей `!pipe_gas_overlays.dmi` на умных трубах (без HE, мостов и адаптеров, как `has_gas_visuals`); цвет меняется сразу, без анимации, с шагом 4 на канал (shortcut)
 
 ### Фитинги и сборка труб
 Предмет `/obj/item/pipe` (и счётчик `pipe_meter`), который гаечным ключом превращается в трубу или устройство на нужном слое и направлении.
@@ -53,4 +53,4 @@
 Прибор на трубе, показывающий давление и температуру сети (и пригодный для консолей и интегральных схем).
 
 - **Код:** [`/obj/machinery/meter`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/other/meter.dm#L1), [`/obj/machinery/meter/turf`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/other/meter.dm#L237), [`circuit_component/atmos_meter`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/other/meter.dm#L197)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/atmos_machinery/meter.rs`: привязка к трубе своего тайла и слоя, сдвиг по слою, шкала давления и цвет по температуре (GAGS `meter` из слоёв `meter.dmi`), светящиеся кнопки, показания при осмотре и клике; снятие ключом → «Фитинги и сборка труб», USB-порт → ../science/wiremod.md

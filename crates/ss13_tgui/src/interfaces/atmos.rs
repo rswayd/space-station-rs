@@ -1,4 +1,5 @@
-//! Atmos machine windows: `AtmosPump`, `AtmosFilter`, `AtmosMixer`, `Canister`, `PortablePump`
+//! Atmos machine windows: `AtmosPump`, `AtmosTempGate`, `AtmosTempPump`, `AtmosFilter`,
+//! `AtmosMixer`, `Canister`, `PortablePump`
 //! and `PortableScrubber` (`tgui/packages/tgui/interfaces/*.tsx`, the `ui_data` of
 //! `code/modules/atmospherics/machinery/`). The server halves live with the machines
 //! (`ss13_game::atmos_machinery`); this module has the data both halves share and the views.
@@ -28,6 +29,39 @@ pub struct AtmosPumpUi;
 impl UiInterface for AtmosPumpUi {
     const NAME: &'static str = "AtmosPump";
     type Data = AtmosPumpData;
+    type StaticData = ();
+}
+
+/// `binary/temperature_gate` (`AtmosTempGate.tsx`).
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct AtmosTempGateData {
+    pub on: bool,
+    pub temperature: f32,
+    pub min_temperature: f32,
+    pub max_temperature: f32,
+}
+
+pub struct AtmosTempGateUi;
+
+impl UiInterface for AtmosTempGateUi {
+    const NAME: &'static str = "AtmosTempGate";
+    type Data = AtmosTempGateData;
+    type StaticData = ();
+}
+
+/// `binary/temperature_pump` (`AtmosTempPump.tsx`): percent of the heat delta moved.
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct AtmosTempPumpData {
+    pub on: bool,
+    pub rate: f32,
+    pub max_heat_transfer_rate: f32,
+}
+
+pub struct AtmosTempPumpUi;
+
+impl UiInterface for AtmosTempPumpUi {
+    const NAME: &'static str = "AtmosTempPump";
+    type Data = AtmosTempPumpData;
     type StaticData = ();
 }
 
@@ -100,6 +134,9 @@ pub struct CanisterData {
     pub shielding: bool,
     /// Percent; 0 shows "Missing Cell".
     pub cell_charge: f32,
+    /// A hypernoblium crystal inside, and whether it holds back reactions.
+    pub has_hypernob_crystal: bool,
+    pub reaction_suppression_enabled: bool,
 }
 
 pub struct CanisterUi;
@@ -122,6 +159,9 @@ pub struct PortablePumpData {
     pub min_pressure: f32,
     pub max_pressure: f32,
     pub holding: Option<HoldingTank>,
+    /// A hypernoblium crystal inside, and whether it holds back reactions.
+    pub has_hypernob_crystal: bool,
+    pub reaction_suppression_enabled: bool,
 }
 
 pub struct PortablePumpUi;
@@ -139,6 +179,9 @@ pub struct PortableScrubberData {
     pub pressure: f32,
     pub filter_types: Vec<GasToggle>,
     pub holding: Option<HoldingTank>,
+    /// A hypernoblium crystal inside, and whether it holds back reactions.
+    pub has_hypernob_crystal: bool,
+    pub reaction_suppression_enabled: bool,
 }
 
 pub struct PortableScrubberUi;
@@ -199,9 +242,21 @@ mod client_side {
         action: &str,
         key: &str,
     ) -> impl Scene + use<> {
+        number_in_range(value, 0.0, max, step, unit, action, key)
+    }
+
+    fn number_in_range(
+        value: f32,
+        min: f32,
+        max: f32,
+        step: f64,
+        unit: &str,
+        action: &str,
+        key: &str,
+    ) -> impl Scene + use<> {
         let input = NumberInput {
             value: f64::from(value),
-            min_value: 0.0,
+            min_value: f64::from(min),
             max_value: f64::from(max),
             step,
             unit: unit.to_owned(),
@@ -291,6 +346,62 @@ mod client_side {
                     ]
                 ]
             }
+        }
+    }
+
+    /// The power row and one labelled number row (`AtmosTempGate`, `AtmosTempPump`).
+    fn power_and_row(on: bool, label: &'static str, row: impl Scene) -> impl Scene {
+        let power = power_button(on);
+        bsn! {
+            @WindowContent
+            Children [
+                @Section
+                Children [
+                    @LabeledList
+                    Children [
+                        @LabeledListItem { @label: "Power" }
+                        Children [ {EntityScene(power)} ]
+                        --
+                        @LabeledListItem { @label: label }
+                        Children [ {EntityScene(row)} ]
+                    ]
+                ]
+            ]
+        }
+    }
+
+    impl ClientUi for AtmosTempGateUi {
+        const WIDTH: f32 = 335.0;
+        const HEIGHT: f32 = 115.0;
+
+        fn content(_: &(), data: &AtmosTempGateData) -> impl Scene {
+            let row = number_in_range(
+                data.temperature,
+                data.min_temperature,
+                data.max_temperature,
+                1.0,
+                "K",
+                "temperature",
+                "temperature",
+            );
+            power_and_row(data.on, "Heat settings", row)
+        }
+    }
+
+    impl ClientUi for AtmosTempPumpUi {
+        const WIDTH: f32 = 335.0;
+        const HEIGHT: f32 = 115.0;
+
+        fn content(_: &(), data: &AtmosTempPumpData) -> impl Scene {
+            let row = number_with_max(
+                data.rate,
+                data.max_heat_transfer_rate,
+                1.0,
+                "%",
+                "rate",
+                "rate",
+            );
+            power_and_row(data.on, "Heat transfer rate", row)
         }
     }
 
@@ -478,10 +589,31 @@ mod client_side {
                 "Missing Cell".to_owned()
             };
             let holding = holding_section(data.holding_tank.as_ref(), data.valve_open);
+            let shielding = data.shielding;
+            let suppression =
+                suppression_row((data.has_hypernob_crystal, data.reaction_suppression_enabled));
+            let (shield_icon, shield_text) = if shielding {
+                ("power-off", "Shielding-ON")
+            } else {
+                ("times", "Shielding-OFF")
+            };
             bsn! {
                 @WindowContent
                 Children [
-                    @Section { @title: "Canister" }
+                    @Section {
+                        @title: "Canister",
+                        @buttons: bsn! {
+                            Node { flex_direction: FlexDirection::Row }
+                            Children [
+                                @ss13_ui_kit::Button { @icon: shield_icon, @content: shield_text }
+                                ss13_ui_kit::Button { selected: shielding }
+                                Act("shielding")
+                                --
+                                @ss13_ui_kit::Button { @icon: "pencil-alt", @content: "Relabel" }
+                                Act("relabel")
+                            ]
+                        },
+                    }
                     Children [
                         @LabeledList
                         Children [
@@ -514,6 +646,8 @@ mod client_side {
                             @LabeledListItem { @label: "Port", @content: port_text, @color: port_color }
                             --
                             @LabeledListItem { @label: "Cell Charge", @content: cell }
+                            --
+                            {suppression}
                         ]
                     ]
                     --
@@ -524,7 +658,13 @@ mod client_side {
     }
 
     /// `PortableBasicInfo` (`common/PortableAtmos.tsx`).
-    fn portable_status(on: bool, pressure: f32, connected: bool) -> impl Scene + use<> {
+    fn portable_status(
+        on: bool,
+        pressure: f32,
+        connected: bool,
+        crystal: (bool, bool),
+    ) -> impl Scene + use<> {
+        let suppression = suppression_row(crystal);
         let pressure = format!("{pressure:.0} kPa");
         let (port, port_color) = if connected {
             ("Connected", UiColor::Good)
@@ -547,9 +687,30 @@ mod client_side {
                     @LabeledListItem { @label: "Pressure", @content: pressure }
                     --
                     @LabeledListItem { @label: "Port", @content: port, @color: port_color }
+                    --
+                    {suppression}
                 ]
             ]
         }
+    }
+
+    /// The `Reaction Suppression` row, shown only with a hypernoblium crystal inside.
+    fn suppression_row((has, enabled): (bool, bool)) -> Option<EntityScene<impl Scene + use<>>> {
+        let (icon, text) = if enabled {
+            ("snowflake", "Enabled")
+        } else {
+            ("times", "Disabled")
+        };
+        has.then(|| {
+            EntityScene(bsn! {
+                @LabeledListItem { @label: "Reaction Suppression" }
+                Children [
+                    @ss13_ui_kit::Button { @icon: icon, @content: text }
+                    ss13_ui_kit::Button { selected: enabled }
+                    Act("reaction_suppression")
+                ]
+            })
+        })
     }
 
     impl ClientUi for PortablePumpUi {
@@ -557,7 +718,12 @@ mod client_side {
         const HEIGHT: f32 = 340.0;
 
         fn content(_: &(), data: &PortablePumpData) -> impl Scene {
-            let status = portable_status(data.on, data.pressure, data.connected);
+            let status = portable_status(
+                data.on,
+                data.pressure,
+                data.connected,
+                (data.has_hypernob_crystal, data.reaction_suppression_enabled),
+            );
             let (dir_icon, dir_text) = if data.direction {
                 ("sign-in-alt", "In")
             } else {
@@ -631,7 +797,12 @@ mod client_side {
         const HEIGHT: f32 = 420.0;
 
         fn content(_: &(), data: &PortableScrubberData) -> impl Scene {
-            let status = portable_status(data.on, data.pressure, data.connected);
+            let status = portable_status(
+                data.on,
+                data.pressure,
+                data.connected,
+                (data.has_hypernob_crystal, data.reaction_suppression_enabled),
+            );
             let buttons = gas_buttons(&data.filter_types);
             let holding = holding_section(data.holding.as_ref(), false);
             bsn! {

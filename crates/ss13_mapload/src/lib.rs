@@ -13,6 +13,7 @@
 
 pub mod antag;
 pub mod atmos;
+pub mod atmos_handbook;
 pub mod atmos_machine;
 pub mod audit;
 pub mod border;
@@ -47,6 +48,7 @@ pub mod silicon;
 pub mod smooth;
 pub mod sound;
 pub mod spawner;
+pub mod turf_damage;
 pub mod undertile;
 pub mod value;
 pub mod vending;
@@ -56,7 +58,7 @@ use std::path::PathBuf;
 use bevy::prelude::*;
 use ss13_proto::ProtoAppExt;
 
-pub use atmos::{DmAtmosPass, DmTurfAtmos};
+pub use atmos::{DmArea, DmAtmosPass, DmTurfAtmos};
 pub use atmos_machine::DmAtmosDevice;
 pub use border::DmBorder;
 pub use cable::DmCable;
@@ -259,6 +261,8 @@ impl Plugin for DmProtoPlugin {
             .register_proto_component::<DmBorder>("dm_border")
             .register_proto_component::<DmTurfAtmos>("dm_turf_atmos")
             .register_proto_component::<DmAtmosPass>("dm_atmos_pass")
+            .register_proto_component::<DmArea>("dm_area")
+            .register_proto_component::<turf_damage::DmTurfDamage>("dm_turf_damage")
             .register_proto_component::<DmAtmosDevice>("dm_atmos_device")
             .register_proto_component::<DmCloset>("dm_closet")
             .register_proto_component::<DmContents>("dm_contents")

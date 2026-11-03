@@ -17,7 +17,7 @@
 Пол ломается и обгорает (`break_tile`, `burn_tile`) от взрывов, огня и ударов, превращаясь в повреждённую плитку или обшивку; обшивку чинят сваркой.
 
 - **Код:** [`proc/break_tile_to_plating()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/open/floor.dm#L103), [`proc/make_plating()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/open/floor.dm#L110), [`plating/welder_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/open/floor/plating.dm#L150)
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_atmos/src/level/hotspot.rs`: `burn_tile` не перенесён
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/turf_damage.rs` (`burn_tile` от сильного огня, `break_tile`, оверлеи `damaged_dmi`), `crates/ss13_mapload/src/turf_damage.rs`: никто ещё не ломает пол (взрывы, удары), нет `break_tile_to_plating` и ремонта сваркой
 
 ### Виды полов
 Стальные полы (сотни раскрасок `iron`), деревянные, ковры, минеральные (плазма — горит, уран — фонит, бананиум — пищит), бетон, «цепные» полы, полы-схемы (светятся), голые решётчатые (`catwalk_floor`), корпус, светящиеся полы (мультитулом меняют цвет), стеклянные (видно, что под ними).
@@ -62,7 +62,7 @@
 
 - **Код:** [`proc/MakeSlippery()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/open/_open.dm#L631), [`handle_slip()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/open/_open.dm#L560)
 - **BandaStation:** [`_open.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/open/_open.dm#L560) — поскальзывание дополнительно обездвиживает
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/janitor.rs` (`WetFloor`, `make_slippery`, поскальзывание; источники — швабра, спреи, конденсация пара), подробности в ../service/janitorial.md
 
 ### Неразрушимые и минеральные стены-тайлы
 `/turf/closed/indestructible` — стены ЦК и руин, их нельзя разрушить; `/turf/closed/mineral` — породы с рудой, копаются киркой/буром (добыча руды — см. ../cargo/).

@@ -105,6 +105,33 @@ fn message(which: &str) -> UiServerMessage {
             }),
             timer,
         ),
+        "analyzer" => {
+            use ss13_tgui::interfaces::gas_analyzer::{
+                AtmosHandbook, GasAnalyzerData, GasAnalyzerUi, Gasmix,
+            };
+            let book: AtmosHandbook =
+                std::fs::read_to_string("assets/generated/atmos_handbook.ron")
+                    .ok()
+                    .and_then(|t| ron::from_str(&t).ok())
+                    .unwrap_or_default();
+            let data = GasAnalyzerData {
+                gasmixes: vec![Gasmix {
+                    name: "Floor".into(),
+                    gases: vec![
+                        ("o2".into(), "Oxygen".into(), 21.82),
+                        ("n2".into(), "Nitrogen".into(), 82.09),
+                        ("plasma".into(), "Plasma".into(), 5.0),
+                    ],
+                    temperature: 293.15,
+                    volume: 2500.0,
+                    pressure: 106.4,
+                    total_moles: 108.91,
+                    reactions: vec![("plasmafire".into(), "Plasma Combustion".into(), 0.4)],
+                    reference: "1:0".into(),
+                }],
+            };
+            (GasAnalyzerUi::NAME, encode(&book), encode(&data))
+        }
         _ => (
             AlertUi::NAME,
             encode(&AlertStatic {

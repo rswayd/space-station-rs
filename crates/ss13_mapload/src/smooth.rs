@@ -352,7 +352,11 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
     {
         out.push(ext(COMPONENT, "icon", str_ron(icon)));
     }
-    if let Some(n) = num(declared("smoothing_flags")) {
+    // Only a declared value: `num` reads an absent var as 0, which would turn smoothing off
+    // for every subtype of a smoothing type.
+    if let Some(v) = declared("smoothing_flags")
+        && let Some(n) = num(Some(v))
+    {
         out.push(ext(COMPONENT, "flags", format!("{}", n as i64 as u8)));
     }
     for (var, key) in [

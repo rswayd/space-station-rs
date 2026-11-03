@@ -11,7 +11,7 @@
 Перекачивает заданный объём (до 200 л/с) независимо от давления; при перегрузке может «надорваться» (overclock через мультитул).
 
 - **Код:** [`/obj/machinery/atmospherics/components/binary/volume_pump`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/components/binary_devices/volume_pump.dm#L13), [`circuit_component/atmos_volume_pump`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/components/binary_devices/volume_pump.dm#L195); tgui: [`AtmosPump.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/AtmosPump.tsx)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/atmos_machinery/devices.rs`, окно `AtmosPump`; нет разгона мультитулом (утечка, снятие лимитов)
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/atmos_machinery/devices.rs`, окно `AtmosPump`; разгон мультитулом (`overclock.rs`): без лимита 9000 кПа на выходе, 10% потока утекает на тайл, заклинивание на закрытом тайле, оверлей `vpumpoverclock`, строки осмотра; нет USB-схем
 
 ### Пассивный клапан (passive_gate)
 Пропускает газ, пока давление на выходе ниже заданного, без питания.
@@ -23,25 +23,25 @@
 Открывается, когда давление на входе превышает порог.
 
 - **Код:** [`/obj/machinery/atmospherics/components/binary/pressure_valve`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/components/binary_devices/pressure_valve.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/atmos_machinery/devices.rs` (`ConditionalGate`, `conditional_gate_step`: выпуск до давления входа выше порога, без питания), окно `AtmosPump` (0–100 атм), ctrl/alt-клик, спрайты `pvalve_on/off/flow`
 
 ### Ручной и цифровой вентиль (valve)
 Соединяет или разъединяет две сети: ручной — кликом, цифровой — удалённо (консоли, схемы, сигналы).
 
 - **Код:** [`/obj/machinery/atmospherics/components/binary/valve`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/components/binary_devices/valve.dm#L7), [`circuit_component/digital_valve`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/components/binary_devices/valve.dm#L94)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/atmos_machinery/devices.rs`, `crates/ss13_atmos/src/pipenet/mod.rs` (`set_valve_open`, объединение сетей при открытии): поворот рукой за 1 с; цифровой вентиль тоже только рукой (нет ИИ)
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/atmos_machinery/devices.rs`, `crates/ss13_atmos/src/pipenet/mod.rs` (`set_valve_open`, объединение сетей при открытии): поворот рукой за 1 с, цифровой тоже; управление цифровым вентилем ИИ → ../silicon/ai.md «Управление машинами и дверями»
 
 ### Температурный клапан и тепловой насос (temperature_gate, temperature_pump)
 Клапан пропускает газ по порогу температуры; тепловой насос переносит тепло между двумя сетями без переноса газа.
 
 - **Код:** [`/obj/machinery/atmospherics/components/binary/temperature_gate`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/components/binary_devices/temperature_gate.dm#L1), [`/obj/machinery/atmospherics/components/binary/temperature_pump`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/components/binary_devices/temperature_pump.dm#L1); tgui: [`AtmosTempGate.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/AtmosTempGate.tsx), [`AtmosTempPump.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/AtmosTempPump.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/atmos_machinery/devices.rs` (`ConditionalGate` по температуре с инверсией мультитулом, `TemperaturePump`: 90% сторон, `heat_transfer_rate`% энергии теплопроводности), окна `AtmosTempGate`/`AtmosTempPump` (`crates/ss13_tgui/src/interfaces/atmos.rs`), ctrl/alt-клик, осмотр, спрайты; USB-порт насоса → ../science/wiremod.md
 
 ### Двухпортовая вентиляция (dp_vent_pump)
 Вентиляция с входом и выходом: выпускает в тайл из одной сети или вытягивает в другую; используется в шлюзах инсинератора и токсинов.
 
 - **Код:** [`/obj/machinery/atmospherics/components/binary/dp_vent_pump`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/components/binary_devices/dp_vent_pump.dm#L5), [`dp_vent_pump/high_volume`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/components/binary_devices/dp_vent_pump.dm#L102)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/atmos_machinery/devices.rs` (`DpVentPump`, `dp_vent_step`: выпуск из входа в тайл, откачка тайла в выход, границы `external_pressure_bound`/`input_pressure_min`/`output_pressure_max`, high volume 1000 л), спрайты вентиляции; управление по `id_tag` — в «Консоль контроля атмосферы и датчики» (../atmos/air-alarm.md)
 
 ### Циркулятор ТЭГ (circulator)
 Горячий и холодный контуры термоэлектрического генератора; передают газ и отдают тепло генератору (см. power/generators.md).

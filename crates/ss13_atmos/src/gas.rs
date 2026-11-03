@@ -73,6 +73,30 @@ const fn gas(
 /// `GAS_TYPE_COUNT`.
 pub const GAS_COUNT: usize = 20;
 
+/// `/datum/gas::primary_color` in [`GASES`] order (pipe gas visuals).
+pub const PRIMARY_COLORS: [[u8; 3]; GAS_COUNT] = [
+    [0x00, 0x00, 0xff], // oxygen
+    [0xff, 0xff, 0x00], // nitrogen
+    [0x80, 0x80, 0x80], // carbon dioxide, COLOR_GRAY
+    [0xff, 0xc0, 0xcb], // plasma
+    [0xb0, 0xc4, 0xde], // water vapor
+    [0x00, 0x80, 0x80], // hyper-noblium, COLOR_TEAL
+    [0xff, 0xe4, 0xc4], // nitrous oxide
+    [0xa5, 0x2a, 0x2a], // nitrium
+    [0x32, 0xcd, 0x32], // tritium
+    [0x93, 0x70, 0xdb], // bz
+    [0x7b, 0x68, 0xee], // pluoxium
+    [0x80, 0x80, 0x00], // miasma, COLOR_OLIVE
+    [0xaf, 0xee, 0xee], // freon
+    [0xff, 0xff, 0xff], // hydrogen
+    [0xfa, 0x80, 0x72], // healium
+    [0xad, 0xff, 0x2f], // proto-nitrate
+    [0x00, 0x64, 0x00], // zauker
+    [0x80, 0x00, 0x80], // halon, COLOR_PURPLE
+    [0xf0, 0xf8, 0xff], // helium
+    [0x80, 0x00, 0x00], // antinoblium, COLOR_MAROON
+];
+
 /// Every tg gas, in `gas_types.dm` order; [`GasId`] indexes it.
 // shortcut: a table in code instead of reading `/datum/gas` from dm_types.json; tg changes gases
 // rarely and the simulation must not depend on generated assets. Read it from the dump when a
