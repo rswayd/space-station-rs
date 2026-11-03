@@ -36,6 +36,10 @@ pub struct ParallaxPlugin;
 impl Plugin for ParallaxPlugin {
     fn build(&self, app: &mut App) {
         embedded_asset!(app, "parallax.wgsl");
+        app.init_resource::<crate::order::DrawOrder>()
+            .world_mut()
+            .resource_mut::<crate::order::DrawOrder>()
+            .insert_plane(PLANE_SPACE + 1);
         app.add_plugins(Material2dPlugin::<ParallaxMaterial>::default())
             .add_systems(Startup, spawn_parallax)
             .add_systems(

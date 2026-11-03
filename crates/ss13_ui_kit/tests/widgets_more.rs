@@ -507,6 +507,28 @@ fn tooltip_is_never_drawn_off_its_place_and_survives_a_rerender() {
         app.world().get::<Visibility>(popup),
         Some(&Visibility::Inherited)
     );
+
+    // The next re-render changes the text (a countdown): the popup stays and shows the new one.
+    app.world_mut().despawn(twin);
+    let ticked = app
+        .world_mut()
+        .spawn_scene(bsn! { @Button { @content: "Hover me", @tooltip: "Ready in 49 s" } })
+        .unwrap()
+        .id();
+    app.world_mut().entity_mut(ticked).insert(ChildOf(parent));
+    settle(&mut app, 3);
+    assert_eq!(
+        single::<TooltipPopup>(&mut app),
+        popup,
+        "not closed and reopened"
+    );
+    let text = app.world().get::<Children>(popup).unwrap()[0];
+    assert_eq!(
+        app.world()
+            .get::<bevy::ui::widget::Text>(text)
+            .map(|t| t.0.as_str()),
+        Some("Ready in 49 s")
+    );
 }
 
 fn modal_window(with_modal: bool) -> impl Scene {
@@ -619,4 +641,73 @@ fn table_columns_line_up_across_rows() {
     let (_, qty) = rows[0][1];
     assert!(qty < 60.0, "collapsing column hugs its content: {qty}");
     assert!(rows[0][0].1 > 250.0);
+}
+
+/// Drags with the real pointer from `from` by `by` (press, moves, release).
+fn drag_pointer(app: &mut App, from: Vec2, by: Vec2) {
+    move_to(app, from);
+    pointer(app, from, PointerAction::Press(PointerButton::Primary));
+    let steps = 4;
+    for i in 1..=steps {
+        let at = from + by * (i as f32 / steps as f32);
+        pointer(
+            app,
+            at,
+            PointerAction::Move {
+                delta: by / steps as f32,
+            },
+        );
+    }
+    pointer(
+        app,
+        from + by,
+        PointerAction::Release(PointerButton::Primary),
+    );
+}
+
+#[test]
+fn a_window_is_resized_by_dragging_its_edges_and_corner() {
+    let mut app = headless();
+    spawn(
+        &mut app,
+        bsn! {
+            @Window { @width: 300.0, @height: 200.0, @left: 50.0, @top: 50.0 }
+            Marker
+            Children [
+                @WindowContent { @scrollable: true }
+                Children [ Text("Long content that wants a wider window") ]
+            ]
+        },
+    );
+    settle(&mut app, 2);
+    let window = single::<Marker>(&mut app);
+    let size = |app: &App| {
+        let node = app.world().get::<Node>(window).unwrap();
+        (node.width, node.height)
+    };
+    // The title bar moves it (checks the pointer drag itself).
+    drag_pointer(&mut app, Vec2::new(150.0, 60.0), Vec2::new(10.0, 10.0));
+    let node = app.world().get::<Node>(window).unwrap();
+    assert_eq!(
+        (node.left, node.top),
+        (Val::Px(60.0), Val::Px(60.0)),
+        "the title bar"
+    );
+    // The bottom-right corner, 2 px inside.
+    drag_pointer(&mut app, Vec2::new(358.0, 258.0), Vec2::new(100.0, 60.0));
+    assert_eq!(size(&app), (Val::Px(400.0), Val::Px(260.0)), "the corner");
+    // The window now spans 60..460 x 60..320. The right edge: only the width.
+    drag_pointer(&mut app, Vec2::new(457.0, 150.0), Vec2::new(40.0, 30.0));
+    assert_eq!(
+        size(&app),
+        (Val::Px(440.0), Val::Px(260.0)),
+        "the right edge"
+    );
+    // The bottom edge: only the height.
+    drag_pointer(&mut app, Vec2::new(200.0, 317.0), Vec2::new(30.0, 40.0));
+    assert_eq!(
+        size(&app),
+        (Val::Px(440.0), Val::Px(300.0)),
+        "the bottom edge"
+    );
 }

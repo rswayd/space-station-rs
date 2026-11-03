@@ -14,13 +14,14 @@ use bevy::picking::hover::Hovered;
 use bevy::prelude::{
     AlignItems, App, BackgroundColor, BackgroundGradient, BorderColor, BoxShadow, Changed, ChildOf,
     Children, Color, ColorStop, Commands, Component, Entity, EntityEvent, FlexDirection,
-    GlobalZIndex, JustifyContent, LinearGradient, Node, On, Overflow, PositionType, PostUpdate,
-    Query, Res, ResMut, Resource, UiRect, UiScale, Val, With, percent, px,
+    GlobalZIndex, JustifyContent, LinearGradient, Local, Node, On, Overflow, PositionType,
+    PostUpdate, Query, Res, ResMut, Resource, UiRect, UiScale, Val, With, ZIndex, percent, px,
 };
 use bevy::scene::{Scene, SceneComponent, bsn};
 use bevy::text::TextColor;
 use bevy::ui::widget::Text;
 use bevy::ui_widgets::Activate;
+use bevy::window::{CursorIcon, SystemCursorIcon};
 
 use crate::button::ActScope;
 use crate::icon::Icon;
@@ -79,6 +80,23 @@ pub struct TitleBar;
 /// The bottom-right resize grip.
 #[derive(Component, Clone, Debug, Default)]
 pub struct ResizeHandle;
+
+/// The right (`width`) or bottom (`height`) resize edge, tgui `Window__resizeHandle__e`/`__s`.
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ResizeEdge {
+    #[default]
+    Right,
+    Bottom,
+}
+
+/// Thickness of the edge handles, logical px.
+const EDGE_PX: f32 = 6.0;
+/// Side of the corner grip.
+const GRIP_PX: f32 = 20.0;
+/// Above the title bar and the content of its window (a local z, unlike the window's global
+/// one: a `GlobalZIndex(0)` here put the grip under every raised window, out of the pointer's
+/// reach).
+const HANDLE_Z: i32 = 10;
 
 /// The title bar close button.
 #[derive(Component, Clone, Debug, Default)]
@@ -147,13 +165,38 @@ fn window(props: WindowProps) -> impl Scene {
                     Node {
                         position_type: PositionType::Absolute,
                         right: px(0),
+                        top: px(0),
+                        bottom: px(GRIP_PX),
+                        width: px(EDGE_PX),
+                    }
+                    Part
+                    ResizeEdge::Right
+                    Hovered
+                    ZIndex(HANDLE_Z)
+                    --
+                    Node {
+                        position_type: PositionType::Absolute,
+                        left: px(0),
+                        right: px(GRIP_PX),
                         bottom: px(0),
-                        width: px(20),
-                        height: px(20),
+                        height: px(EDGE_PX),
+                    }
+                    Part
+                    ResizeEdge::Bottom
+                    Hovered
+                    ZIndex(HANDLE_Z)
+                    --
+                    Node {
+                        position_type: PositionType::Absolute,
+                        right: px(0),
+                        bottom: px(0),
+                        width: px(GRIP_PX),
+                        height: px(GRIP_PX),
                     }
                     Part
                     ResizeHandle
-                    GlobalZIndex(0)
+                    Hovered
+                    ZIndex(HANDLE_Z)
                 ]
             }
         }),
@@ -287,6 +330,7 @@ fn drag_window(
     mut drag: On<PointerDrag>,
     bars: Query<(), With<TitleBar>>,
     grips: Query<(), With<ResizeHandle>>,
+    edges: Query<&ResizeEdge>,
     widgets: Query<(), With<bevy::ui_widgets::Button>>,
     parents: Query<&ChildOf>,
     mut windows: Query<&mut Node, With<Window>>,
@@ -294,7 +338,8 @@ fn drag_window(
 ) {
     let target = drag.entity;
     let is_bar = bars.contains(target);
-    if !is_bar && !grips.contains(target) {
+    let edge = edges.get(target).ok().copied();
+    if !is_bar && !grips.contains(target) && edge.is_none() {
         return;
     }
     drag.propagate(false);
@@ -315,8 +360,12 @@ fn drag_window(
     if is_bar {
         node.left = shift(node.left, delta.x, f32::MIN);
         node.top = shift(node.top, delta.y, f32::MIN);
-    } else {
+        return;
+    }
+    if edge != Some(ResizeEdge::Bottom) {
         node.width = shift(node.width, delta.x, MIN_WIDTH);
+    }
+    if edge != Some(ResizeEdge::Right) {
         node.height = shift(node.height, delta.y, MIN_HEIGHT);
     }
 }
@@ -359,11 +408,41 @@ fn style_close_buttons(
     }
 }
 
+/// The resize cursor over a window's edges and grip (tgui's CSS `cursor`), the default elsewhere.
+fn resize_cursor(
+    grips: Query<&Hovered, With<ResizeHandle>>,
+    edges: Query<(&Hovered, &ResizeEdge)>,
+    screens: Query<Entity, With<bevy::window::PrimaryWindow>>,
+    mut shown: Local<Option<SystemCursorIcon>>,
+    mut commands: Commands,
+) {
+    let wanted = if grips.iter().any(Hovered::get) {
+        Some(SystemCursorIcon::SeResize)
+    } else {
+        edges
+            .iter()
+            .find(|(h, _)| h.get())
+            .map(|(_, edge)| match edge {
+                ResizeEdge::Right => SystemCursorIcon::EwResize,
+                ResizeEdge::Bottom => SystemCursorIcon::NsResize,
+            })
+    };
+    if *shown == wanted {
+        return;
+    }
+    let Ok(screen) = screens.single() else {
+        return;
+    };
+    *shown = wanted;
+    let icon = wanted.unwrap_or_default();
+    commands.entity(screen).insert(CursorIcon::System(icon));
+}
+
 pub(crate) fn plugin(app: &mut App) {
     app.init_resource::<WindowOrder>()
         .add_observer(raise_new_window)
         .add_observer(raise_on_press)
         .add_observer(drag_window)
         .add_observer(close_window)
-        .add_systems(PostUpdate, style_close_buttons);
+        .add_systems(PostUpdate, (style_close_buttons, resize_cursor));
 }

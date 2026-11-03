@@ -1,6 +1,8 @@
 [package]
 name = "ss13_client"
 description = "Native game client."
+# `src/bin/ui_gallery.rs` is a second binary; plain `cargo run -p ss13_client` is the game.
+default-run = "ss13_client"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

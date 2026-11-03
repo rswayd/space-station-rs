@@ -37,9 +37,9 @@ const TOOLTIP_MAX_WIDTH: f32 = 250.0;
 #[derive(Component, Clone, Debug, Default)]
 pub struct TooltipPopup;
 
-/// Seconds a shown tooltip outlives its despawned anchor, waiting for a hovered anchor with the
-/// same text to take it over: a tgui window re-renders its content on every data update (the
-/// autoupdate, ~1 s), which replaces the button under the pointer with an equal one.
+/// Seconds a shown tooltip outlives its despawned anchor, waiting for a hovered anchor to take it
+/// over: a tgui window re-renders its content on every data update (the autoupdate, ~1 s), which
+/// replaces the button under the pointer with a new one, maybe with new text (a countdown).
 const ORPHAN_GRACE: f32 = 0.25;
 
 /// Which anchor the pointer rests on, for how long, and its popup once shown.
@@ -57,22 +57,28 @@ pub struct TooltipState {
 fn track_hover(
     changed: Query<(Entity, &Hovered, &Tooltip), Changed<Hovered>>,
     anchors: Query<(), bevy::prelude::With<Tooltip>>,
-    mut popups: Query<&mut Anchored, bevy::prelude::With<TooltipPopup>>,
+    mut popups: Query<(&mut Anchored, &Children), bevy::prelude::With<TooltipPopup>>,
+    mut texts: Query<&mut Text>,
     mut state: ResMut<TooltipState>,
     mut commands: Commands,
 ) {
     for (entity, hovered, tooltip) in &changed {
         if hovered.get() && state.anchor != Some(entity) {
-            // The re-rendered twin of the anchor whose popup is shown: the popup moves over.
+            // The re-rendered twin of the anchor whose popup is shown: the popup moves over,
+            // taking the twin's text (a countdown in it changes with every update).
             let orphan = state.orphaned > 0.0 || state.anchor.is_some_and(|a| !anchors.contains(a));
             if orphan
                 && let Some(popup) = state.popup
-                && tooltip.content == state.content
-                && let Ok(mut anchored) = popups.get_mut(popup)
+                && !tooltip.content.is_empty()
+                && let Ok((mut anchored, children)) = popups.get_mut(popup)
             {
                 anchored.anchor = entity;
                 state.anchor = Some(entity);
                 state.orphaned = 0.0;
+                if tooltip.content != state.content {
+                    set_text(children, &mut texts, &tooltip.content);
+                    state.content.clone_from(&tooltip.content);
+                }
                 continue;
             }
             close(&mut state, &mut commands);
@@ -80,6 +86,36 @@ fn track_hover(
         } else if !hovered.get() && state.anchor == Some(entity) {
             close(&mut state, &mut commands);
         }
+    }
+}
+
+fn set_text(children: &Children, texts: &mut Query<&mut Text>, content: &str) {
+    for &child in children {
+        if let Ok(mut text) = texts.get_mut(child) {
+            text.0 = content.to_owned();
+        }
+    }
+}
+
+/// The hovered anchor's text changed in place: the shown popup follows.
+fn follow_content(
+    anchors: Query<&Tooltip, Changed<Tooltip>>,
+    popups: Query<&Children, bevy::prelude::With<TooltipPopup>>,
+    mut texts: Query<&mut Text>,
+    mut state: ResMut<TooltipState>,
+) {
+    let (Some(anchor), Some(popup)) = (state.anchor, state.popup) else {
+        return;
+    };
+    let Ok(tooltip) = anchors.get(anchor) else {
+        return;
+    };
+    if tooltip.content != state.content
+        && !tooltip.content.is_empty()
+        && let Ok(children) = popups.get(popup)
+    {
+        set_text(children, &mut texts, &tooltip.content);
+        state.content.clone_from(&tooltip.content);
     }
 }
 
@@ -152,6 +188,8 @@ fn show_after_delay(
 }
 
 pub(crate) fn plugin(app: &mut App) {
-    app.init_resource::<TooltipState>()
-        .add_systems(Update, (track_hover, show_after_delay).chain());
+    app.init_resource::<TooltipState>().add_systems(
+        Update,
+        (track_hover, follow_content, show_after_delay).chain(),
+    );
 }

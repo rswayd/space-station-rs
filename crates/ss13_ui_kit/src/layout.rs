@@ -298,6 +298,11 @@ fn flex_item(props: FlexItemProps) -> impl Scene {
     let basis = props
         .basis
         .unwrap_or(if props.grow > 0.0 { px(0) } else { Val::Auto });
+    // A grown item takes the height left, never its content's: tgui's scrolling `Section--fill`
+    // positions its content absolutely, so it adds nothing to the item's `min-height: auto`;
+    // here the content counts, and without a zero minimum the item stays as tall as the list
+    // inside, which then never scrolls and is cut off by the window.
+    let min_height = if props.grow > 0.0 { px(0) } else { Val::Auto };
     (
         block(),
         bsn! {
@@ -306,6 +311,7 @@ fn flex_item(props: FlexItemProps) -> impl Scene {
                 flex_shrink: {props.shrink.unwrap_or(1.0)},
                 flex_basis: basis,
                 align_self: {props.align.unwrap_or_default()},
+                min_height: min_height,
             }
         },
     )

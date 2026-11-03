@@ -12,9 +12,9 @@ use bevy::prelude::{
     JustifyContent, Node, On, Or, PostUpdate, Query, RemovedComponents, UiRect, Val, With, px,
 };
 use bevy::scene::{Scene, SceneComponent, bsn};
-use bevy::text::TextColor;
+use bevy::text::{TextColor, TextLayout};
 use bevy::ui::widget::Text;
-use bevy::ui::{InteractionDisabled, Pressed, UiSystems};
+use bevy::ui::{InteractionDisabled, Overflow, Pressed, UiSystems};
 use bevy::ui_widgets::Activate;
 
 use crate::icon::Icon;
@@ -43,6 +43,10 @@ pub struct ButtonProps {
     /// `fluid`: full width.
     pub fluid: bool,
     pub circular: bool,
+    /// `Button--ellipsis`: one line, the rest cut off instead of wrapping onto the next row.
+    // shortcut: cut at the button's edge without the trailing "…" (Bevy text has no
+    // `text-overflow`); pair it with a tooltip of the whole text, as tgui pairs it with `title`.
+    pub ellipsis: bool,
     /// Hover text, see [`Tooltip`].
     pub tooltip: String,
     pub tooltip_position: Placement,
@@ -146,7 +150,17 @@ fn button(props: ButtonProps) -> impl Scene {
                 ]
             }
         }),
-        has_content.then(|| bsn! { Children [ Text(content) ] }),
+        (has_content && !props.ellipsis).then(|| {
+            let content = content.clone();
+            bsn! { Children [ Text(content) ] }
+        }),
+        (has_content && props.ellipsis).then(|| {
+            let one_line = TextLayout::no_wrap();
+            bsn! {
+                Node { min_width: px(0), overflow: Overflow::clip() }
+                Children [ Text(content) one_line ]
+            }
+        }),
         // `.Button--fluid` is `display: block`; any other button is inline-block.
         if props.fluid {
             Box::new(bsn! {

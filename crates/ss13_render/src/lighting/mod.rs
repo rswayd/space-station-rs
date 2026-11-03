@@ -106,6 +106,10 @@ pub struct LightingStats {
 impl Plugin for LightingPlugin {
     fn build(&self, app: &mut App) {
         embedded_asset!(app, "lightmap.wgsl");
+        app.init_resource::<crate::order::DrawOrder>()
+            .world_mut()
+            .resource_mut::<crate::order::DrawOrder>()
+            .insert_plane(LIGHTING_PLANE);
         app.add_plugins(Material2dPlugin::<LightmapMaterial>::default())
             .init_resource::<LightingSettings>()
             .init_resource::<LightingStats>()

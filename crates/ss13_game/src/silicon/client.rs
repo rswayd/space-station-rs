@@ -37,6 +37,10 @@ pub struct SiliconClientPlugin;
 
 impl Plugin for SiliconClientPlugin {
     fn build(&self, app: &mut App) {
+        app.init_resource::<DrawOrder>()
+            .world_mut()
+            .resource_mut::<DrawOrder>()
+            .insert_plane(CAMERA_STATIC_PLANE);
         app.register_ui_headless::<CameraViewUi>()
             .register_ui_view::<CameraConsoleUi>()
             .register_ui_view::<ListInputUi>()
@@ -270,7 +274,12 @@ fn console_view(st: &CameraConsoleStatic, data: &CameraConsoleData) -> impl Scen
             let name = Name::new(format!("camera: {}", c.name));
             let params = switch(c.cam_ref.clone());
             bsn! {
-                @ss13_ui_kit::Button { @content: {c.name.clone()}, @fluid: true }
+                @ss13_ui_kit::Button {
+                    @content: {c.name.clone()},
+                    @fluid: true,
+                    @ellipsis: true,
+                    @tooltip: {c.name.clone()},
+                }
                 ss13_ui_kit::Button { selected: selected, color: UiColor::Transparent }
                 name
                 Act({SWITCH_CAMERA.to_owned()})

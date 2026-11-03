@@ -44,6 +44,13 @@ impl DrawOrder {
         }
     }
 
+    /// Reserves a rank for a full-screen effect drawn at [`Self::plane_z`] of `plane`. Without
+    /// it two effects on different planes with no sprite between them (the lighting and the
+    /// camera static) share a z, and their order flips from frame to frame.
+    pub fn insert_plane(&mut self, plane: i16) -> bool {
+        self.insert(plane, f32::NEG_INFINITY)
+    }
+
     fn rank(&self, plane: i16, layer: f32) -> u32 {
         let i = match self.keys.binary_search_by(|k| cmp(k, &(plane, layer))) {
             Ok(i) | Err(i) => i as u32,
@@ -121,6 +128,22 @@ mod tests {
         let z = o.plane_z(10);
         assert!(o.z(-4, 4.1, TIEBREAKS - 1) + overlay_z(1000) < z);
         assert!(z < o.z(10, 1.0, 0));
+    }
+
+    #[test]
+    fn effect_planes_never_share_a_z() {
+        let mut o = DrawOrder::default();
+        o.insert(-4, 4.1);
+        // No sprite between planes 10 and 31: both effects would sit at the same z.
+        assert_eq!(o.plane_z(10), o.plane_z(31));
+        o.insert_plane(10);
+        o.insert_plane(31);
+        assert!(o.plane_z(10) < o.plane_z(31));
+        assert!(o.z(-4, 4.1, TIEBREAKS - 1) + overlay_z(1000) < o.plane_z(10));
+        // A sprite of plane 10 is drawn above the effect of its own plane.
+        o.insert(10, 1.0);
+        assert!(o.plane_z(10) < o.z(10, 1.0, 0));
+        assert!(o.z(10, 1.0, TIEBREAKS - 1) < o.plane_z(31));
     }
 
     #[test]
