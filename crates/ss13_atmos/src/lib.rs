@@ -188,6 +188,8 @@ pub struct Atmos {
     pub fires: u64,
     /// CPU time of the last fire.
     pub last_fire: Duration,
+    /// CPU time of each level in the last fire, by z (they run in parallel).
+    pub last_fire_levels: Vec<(u16, Duration)>,
     /// What each level's setup found, by z.
     pub setup: Vec<(u16, SetupReport)>,
     /// `SSair.atmos_gen`: this round's gas string per planetary atmosphere id.
@@ -197,6 +199,14 @@ pub struct Atmos {
 impl Atmos {
     pub fn level(&self, z: u16) -> Option<&LevelAir> {
         self.levels.get(usize::from(z)).and_then(Option::as_ref)
+    }
+
+    /// Every level with its z.
+    pub fn levels(&self) -> impl Iterator<Item = (u16, &LevelAir)> {
+        self.levels
+            .iter()
+            .enumerate()
+            .filter_map(|(z, l)| l.as_ref().map(|l| (z as u16, l)))
     }
 
     pub fn level_mut(&mut self, z: u16) -> Option<&mut LevelAir> {
@@ -500,28 +510,27 @@ impl Atmos {
             .enumerate()
             .filter_map(|(z, l)| l.as_mut().map(|l| (z as u16, l)))
             .collect();
-        let per_level: Vec<(u16, Vec<PressureDelta>)> = if levels.len() > 1 {
+        let fire_level = |z: u16, level: &mut LevelAir| {
+            let start = Instant::now();
+            let mut out = Vec::new();
+            level.fire(&mut out);
+            (z, out, start.elapsed())
+        };
+        let per_level: Vec<(u16, Vec<PressureDelta>, Duration)> = if levels.len() > 1 {
             ComputeTaskPool::get_or_init(TaskPool::default).scope(|s| {
                 for (z, level) in levels.drain(..) {
-                    s.spawn(async move {
-                        let mut out = Vec::new();
-                        level.fire(&mut out);
-                        (z, out)
-                    });
+                    s.spawn(async move { fire_level(z, level) });
                 }
             })
         } else {
             levels
                 .drain(..)
-                .map(|(z, level)| {
-                    let mut out = Vec::new();
-                    level.fire(&mut out);
-                    (z, out)
-                })
+                .map(|(z, level)| fire_level(z, level))
                 .collect()
         };
+        self.last_fire_levels = per_level.iter().map(|(z, _, t)| (*z, *t)).collect();
         let mut out = Vec::new();
-        for (z, deltas) in per_level {
+        for (z, deltas, _) in per_level {
             let level = self.level(z).expect("fired above");
             out.extend(deltas.into_iter().map(|d| {
                 let (x, y) = level.pos(d.tile);

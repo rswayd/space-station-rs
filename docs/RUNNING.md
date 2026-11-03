@@ -67,6 +67,17 @@ SS13_MAP=MetaStation SS13_ASSETS=$ASSETS cargo run -p ss13_server
 - `SS13_DEV_SPAWNS=alice=108,66;bob=98,72` (dev, debug builds only; a release build ignores it):
   the client whose handshake token is `alice` spawns on (108,66), whatever order clients join in.
 - Every 10 s logs `replication: N clients, bytes/s per client ...`.
+- `SS13_METRICS_ADDR=127.0.0.1:9100`: Prometheus metrics at `http://127.0.0.1:9100/metrics`
+  (`crates/ss13_server/src/metrics.rs`; off when unset). Every tick: `ss13_tick_seconds`,
+  `ss13_clients`, `ss13_entities`, `ss13_replication_seconds`,
+  `ss13_network_sent_bytes_per_second`, `ss13_replication_{spawned,despawned,appearances_sent}_total`,
+  `ss13_round_state` (0 startup, 1 lobby, 2 setting up, 3 playing, 4 finished),
+  `ss13_round_duration_seconds`; every atmos fire: `ss13_atmos_fire_seconds`,
+  `ss13_atmos_machinery_seconds` and by `z`: `ss13_atmos_level_fire_seconds`,
+  `ss13_atmos_active_tiles`, `ss13_atmos_excited_groups`, `ss13_atmos_superconducting_tiles`.
+  Durations are summaries (quantiles). New ones: `metrics::counter!`/`gauge!`/`histogram!` from
+  `ss13_server` code. The endpoint has no auth: keep it on loopback or behind a firewall.
+  A Prometheus scrape config: `- job_name: ss13` / `static_configs: [{targets: ["127.0.0.1:9100"]}]`.
 
 ## 3. Clients (one per player, each in its own terminal)
 
