@@ -136,6 +136,8 @@ pub struct HealthHudData {
     pub move_delay: f32,
     /// The controlled mob cannot move at all (crit, stuns, stamcrit): no steps are predicted.
     pub immobile: bool,
+    /// It walks through anything (a ghost, the AI's eye): prediction ignores what blocks.
+    pub phasing: bool,
     /// tg `zone_selected`, drawn on the zone selector.
     pub zone_selected: TargetZone,
 }

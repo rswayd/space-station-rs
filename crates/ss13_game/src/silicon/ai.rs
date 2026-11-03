@@ -191,6 +191,7 @@ pub(crate) fn join(
             HealthHudData {
                 health: None,
                 move_delay: TICK_DURATION.as_secs_f32(),
+                phasing: true,
                 ..default()
             },
             CameraViewSource(CameraViewData {

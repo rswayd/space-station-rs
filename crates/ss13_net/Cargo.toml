@@ -27,7 +27,7 @@ bevy = { workspace = true, features = ["web"] }
 ss13_world.workspace = true
 
 [features]
-client = []
+client = ["dep:ss13_world"]
 server = ["dep:ss13_world"]
 
 [[example]]

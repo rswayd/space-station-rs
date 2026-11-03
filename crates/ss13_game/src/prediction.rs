@@ -9,14 +9,14 @@
 //! `TilePos`/`Facing`, so drawing, gliding and the camera need nothing special; every other
 //! entity keeps the server's `TilePos`.
 //!
-//! Blocking: density is not replicated, so a step is predicted optimistically and a refused one
-//! is learnt from the ack: that step (tile and direction, so a border object such as a windoor
-//! or a directional window blocks only the edge it faces, as on the server) is then treated as
-//! blocked until the server moves the mob somewhere else. Walking into a wall therefore shows at most the steps taken within one round
-//! trip, glides back once, and stays put while the key is held (no oscillation); a door that
-//! opens on the bump or a mob that walks away is passed as soon as the server moves the mob.
-// shortcut: optimistic blocking costs one visible bounce per newly hit obstacle; replicate a
-// density flag and predict against it if that bounce turns out to bother players.
+//! Blocking: the server replicates what blocks walking (walls, closed doors, windows, tables,
+//! border objects with their edges; `ss13_net` files them in the client's
+//! [`SpatialIndex`]), so a step into them is not taken locally, by the same `exit_blockers` /
+//! `enter_blockers` rule as the server's. The step is still sent: a closed door opens on the
+//! bump, its density replicates away and the next step passes. Mobs are not replicated as
+//! blockers (they are pushed, swap places and walk away): a step into one is predicted and, if
+//! the server refuses it, learnt from the ack as blocked until the server moves the mob
+//! somewhere else. A ghost or the AI's eye ([`OwnPhasing`]) ignores blockers.
 
 use std::collections::VecDeque;
 
@@ -26,7 +26,7 @@ use ss13_net::client::{NetClientState, NetEntityMap, SendIntent};
 use ss13_net::move_ack::client::MoveAckReceived;
 use ss13_shared::protocol::{ClientIntent, MoveAck, TICK_DURATION};
 use ss13_shared::{Dir, Facing, TilePos};
-use ss13_world::{next_ready_at, resolve_move};
+use ss13_world::{ClimbWalkable, SpatialIndex, next_ready_at, resolve_move};
 
 use crate::{MAX_UNACKED_STEPS, RUN_DELAY_SECS};
 
@@ -52,6 +52,10 @@ impl Default for OwnMoveDelay {
 #[derive(Resource, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct OwnImmobile(pub bool);
 
+/// The own mob walks through anything (a ghost, the AI's eye; `crate::health_client`).
+#[derive(Resource, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct OwnPhasing(pub bool);
+
 /// `Update`: reconcile, predict, write the own mob.
 #[derive(SystemSet, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct PredictionSystems;
@@ -62,6 +66,7 @@ impl Plugin for PredictionPlugin {
             .init_resource::<Prediction>()
             .init_resource::<OwnMoveDelay>()
             .init_resource::<OwnImmobile>()
+            .init_resource::<OwnPhasing>()
             .add_systems(
                 Update,
                 (track_control, reconcile, predict_steps, write_own_mob)
@@ -119,13 +124,16 @@ impl Prediction {
     }
 
     /// Server state plus the unacked steps; their predicted outcome is refreshed on the way.
-    fn replay(&mut self) {
+    /// `walls`: what the replicated blockers refuse.
+    fn replay(&mut self, walls: &dyn Fn(TilePos, Dir) -> bool) {
         let Some(auth) = self.auth else {
             return;
         };
         let (mut pos, mut facing) = (auth.pos, auth.facing);
+        let learnt = &self.blocked;
+        let blocked = |at: TilePos, d: Dir| learnt.contains(&(at, d)) || walls(at, d);
         for step in &mut self.pending {
-            (*step, facing) = predict(pos, facing, step.seq, step.dir, &self.blocked);
+            (*step, facing) = predict(pos, facing, step.seq, step.dir, &blocked);
             pos = step.to;
         }
         (self.pos, self.facing) = (Some(pos), facing);
@@ -138,7 +146,7 @@ fn predict(
     facing: Option<Dir>,
     seq: u32,
     dir: Dir,
-    blocked: &HashSet<(TilePos, Dir)>,
+    blocked: &dyn Fn(TilePos, Dir) -> bool,
 ) -> (Step, Option<Dir>) {
     let (mut at, mut face) = (pos, facing);
     let mut moves = [None; 2];
@@ -150,7 +158,7 @@ fn predict(
     };
     let turn_to = resolve_move(dir, |d| {
         turn(d, &mut face);
-        if blocked.contains(&(at, d)) {
+        if blocked(at, d) {
             return false;
         }
         moves[usize::from(moves[0].is_some())] = Some((at, d));
@@ -171,12 +179,52 @@ fn predict(
     )
 }
 
+/// The replicated blockers' verdict on a cardinal move of `mover` from `at` in `d`: `ss13_world`'s
+/// `step` (`exit_blockers`, then `enter_blockers`, tables walked across from a table).
+fn index_blocks(
+    index: &SpatialIndex,
+    climbable: &dyn Fn(Entity) -> bool,
+    mover: Entity,
+    at: TilePos,
+    d: Dir,
+) -> bool {
+    if index.exit_blockers(at, d, mover).next().is_some() {
+        return true;
+    }
+    let on_climbable = index.on_tile(at).iter().any(|&e| climbable(e));
+    index
+        .enter_blockers(at.step(d), d, mover)
+        .any(|e| !(on_climbable && climbable(e)))
+}
+
+/// What the systems need to ask [`index_blocks`].
+#[derive(bevy::ecs::system::SystemParam)]
+struct Walls<'w, 's> {
+    index: Option<Res<'w, SpatialIndex>>,
+    climbable: Query<'w, 's, (), With<ClimbWalkable>>,
+    phasing: Option<Res<'w, OwnPhasing>>,
+}
+
+impl Walls<'_, '_> {
+    fn check(&self, mover: Option<Entity>) -> impl Fn(TilePos, Dir) -> bool + '_ {
+        let index = self
+            .index
+            .as_deref()
+            .filter(|_| !self.phasing.as_deref().is_some_and(|p| p.0));
+        let mover = mover.unwrap_or(Entity::PLACEHOLDER);
+        move |at, d| {
+            index.is_some_and(|i| index_blocks(i, &|e| self.climbable.contains(e), mover, at, d))
+        }
+    }
+}
+
 /// A new own mob (or none) starts from its replicated state; a new connection from scratch.
 fn track_control(
     map: Res<NetEntityMap>,
     net: Res<NetClientState>,
     positions: Query<(&TilePos, Option<&Facing>)>,
     mut state: ResMut<Prediction>,
+    walls: Walls,
 ) {
     if net.is_changed() && *net != NetClientState::Connected {
         *state = Prediction::default();
@@ -202,10 +250,14 @@ fn track_control(
         pos: *pos,
         facing: facing.map(|f| f.0),
     }));
-    state.replay();
+    state.replay(&walls.check(controlled));
 }
 
-fn reconcile(mut acks: MessageReader<MoveAckReceived>, mut state: ResMut<Prediction>) {
+fn reconcile(
+    mut acks: MessageReader<MoveAckReceived>,
+    mut state: ResMut<Prediction>,
+    walls: Walls,
+) {
     let mut any = false;
     for &MoveAckReceived(ack) in acks.read() {
         any = true;
@@ -230,7 +282,8 @@ fn reconcile(mut acks: MessageReader<MoveAckReceived>, mut state: ResMut<Predict
         state.auth = Some(ack);
     }
     if any && state.entity.is_some() {
-        state.replay();
+        let entity = state.entity;
+        state.replay(&walls.check(entity));
     }
 }
 
@@ -241,6 +294,7 @@ fn predict_steps(
     time: Res<Time>,
     mut state: ResMut<Prediction>,
     mut intents: MessageWriter<SendIntent>,
+    walls: Walls,
 ) {
     let now = time.elapsed_secs_f64();
     let (Some(dir), Some(pos)) = (input.0, state.pos) else {
@@ -254,7 +308,10 @@ fn predict_steps(
         return;
     }
     let seq = state.last_seq + 1;
-    let (step, facing) = predict(pos, state.facing, seq, dir, &state.blocked);
+    let wall = walls.check(state.entity);
+    let learnt = &state.blocked;
+    let blocked = |at: TilePos, d: Dir| learnt.contains(&(at, d)) || wall(at, d);
+    let (step, facing) = predict(pos, state.facing, seq, dir, &blocked);
     let diagonal_reached = !Dir::CARDINALS.contains(&dir) && step.to == pos.step(dir);
     state.ready_at = next_ready_at(
         state.ready_at,
@@ -313,14 +370,17 @@ mod tests {
             }),
             ..default()
         };
-        state.replay();
+        state.replay(&|_, _| false);
         state
     }
 
     /// Sends a step the way `predict_steps` does, without the cooldown.
     fn step(state: &mut Prediction, dir: Dir) -> u32 {
         let seq = state.last_seq + 1;
-        let (step, facing) = predict(state.pos.unwrap(), state.facing, seq, dir, &state.blocked);
+        let learnt = &state.blocked;
+        let (step, facing) = predict(state.pos.unwrap(), state.facing, seq, dir, &|a, d| {
+            learnt.contains(&(a, d))
+        });
         state.last_seq = seq;
         state.pending.push_back(step);
         (state.pos, state.facing) = (Some(step.to), facing);
@@ -343,17 +403,21 @@ mod tests {
 
     #[test]
     fn diagonals_follow_the_world_rules() {
-        let blocked = HashSet::from_iter([(at(5, 5), Dir::North)]);
-        let (s, face) = predict(at(5, 5), Some(Dir::South), 1, Dir::NorthEast, &blocked);
+        let blocked: HashSet<(TilePos, Dir)> = HashSet::from_iter([(at(5, 5), Dir::North)]);
+        let (s, face) = predict(at(5, 5), Some(Dir::South), 1, Dir::NorthEast, &|a, d| {
+            blocked.contains(&(a, d))
+        });
         assert_eq!((s.to, face), (at(6, 6), Some(Dir::North)));
         assert_eq!(
             s.moves,
             [Some((at(5, 5), Dir::East)), Some((at(6, 5), Dir::North))]
         );
-        let blocked = HashSet::from_iter([(at(5, 6), Dir::East)]);
-        let (s, face) = predict(at(5, 5), Some(Dir::South), 1, Dir::NorthEast, &blocked);
+        let blocked: HashSet<(TilePos, Dir)> = HashSet::from_iter([(at(5, 6), Dir::East)]);
+        let (s, face) = predict(at(5, 5), Some(Dir::South), 1, Dir::NorthEast, &|a, d| {
+            blocked.contains(&(a, d))
+        });
         assert_eq!((s.to, face), (at(5, 6), Some(Dir::North)));
-        let (s, face) = predict(at(5, 5), None, 1, Dir::NorthEast, &HashSet::new());
+        let (s, face) = predict(at(5, 5), None, 1, Dir::NorthEast, &|_, _| false);
         assert_eq!((s.to, face), (at(6, 6), None));
     }
 

@@ -24,7 +24,7 @@ pub struct WorldPlugin;
 
 impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<SpatialIndex>()
+        app.add_plugins(SpatialIndexPlugin)
             .add_message::<MoveRequest>()
             .add_message::<Moved>()
             .add_message::<Bumped>()
@@ -32,6 +32,17 @@ impl Plugin for WorldPlugin {
                 Update,
                 movement::apply_move_requests.in_set(WorldSystems::Movement),
             );
+    }
+}
+
+/// The [`SpatialIndex`] alone, kept by the `TilePos`, `Density` and `Border` hooks: the server
+/// gets it with [`WorldPlugin`]; a client adds it to file what it was told blocks walking, for
+/// its movement prediction. The same rule as [`WorldPlugin`] about when to add it.
+pub struct SpatialIndexPlugin;
+
+impl Plugin for SpatialIndexPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<SpatialIndex>();
         // Hooks, not observers: one fn-pointer call per change, no observer dispatch, which
         // matters for map load (200k inserts) and every step. Insert + Discard together cover
         // spawn, replace, remove and despawn.

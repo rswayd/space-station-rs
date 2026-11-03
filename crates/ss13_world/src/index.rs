@@ -88,13 +88,24 @@ impl Level {
 /// Z-levels with their bounds and the per-tile entity lists.
 ///
 /// Entities whose `TilePos` is outside every level are not indexed: create a level before
-/// spawning anything on it.
+/// spawning anything on it (or make the index with [`Self::auto_levels`]).
 #[derive(Resource, Default)]
 pub struct SpatialIndex {
     levels: Vec<Option<Level>>,
+    /// Bounds of the levels made on the first entity of a new z ([`Self::auto_levels`]).
+    auto_level: Option<(u32, u32)>,
 }
 
 impl SpatialIndex {
+    /// An index that makes a `width` x `height` level on the first entity of each new z: a
+    /// client's, which is not told the level bounds.
+    pub fn auto_levels(width: u32, height: u32) -> Self {
+        Self {
+            auto_level: Some((width, height)),
+            ..Self::default()
+        }
+    }
+
     pub fn create_level(&mut self, z: u16, width: u32, height: u32) -> Result<(), LevelError> {
         if width == 0 || height == 0 {
             return Err(LevelError::EmptyBounds);
@@ -337,6 +348,11 @@ impl SpatialIndex {
     }
 
     fn insert(&mut self, entity: Entity, pos: TilePos, dense: bool, border: Option<Border>) {
+        if let Some((width, height)) = self.auto_level
+            && self.level(pos.z).is_none()
+        {
+            let _ = self.create_level(pos.z, width, height);
+        }
         let Some(tile) = self.tile_mut(pos) else {
             warn!("{entity} has TilePos {pos:?} outside every z-level; not indexed");
             return;

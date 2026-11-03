@@ -32,12 +32,12 @@ use bevy::platform::time::Instant;
 use bevy::prelude::*;
 use ss13_shared::protocol::NetId;
 use ss13_shared::{Appearance, Facing, Optics, TilePos, light_block};
-use ss13_world::{ChunkPos, SpatialIndex};
+use ss13_world::{Border, ChunkPos, ClimbWalkable, Density, Mover, SpatialIndex};
 
 use crate::light_server::{LIGHT_MARGIN, LightGrid, block_overlaps, blocks_in};
 use crate::protocol::ServerMessage;
 use crate::replication::{
-    AppearanceId, Look, Motion, ReplicationBatch, ReplicationOp, SETTLE_TICKS, Spawned,
+    AppearanceId, Blocks, Look, Motion, ReplicationBatch, ReplicationOp, SETTLE_TICKS, Spawned,
 };
 use crate::server::{ClientLink, NetServerSystems};
 use crate::view_mask::{MASK_CHUNK, MaskId, ViewMask, ViewMasks, block_seen};
@@ -391,6 +391,8 @@ struct Known {
     id: NetId,
     /// The appearance the client has for the entity.
     appearance: Option<AppearanceId>,
+    /// What the client was told about it blocking walking.
+    blocks: Option<Blocks>,
 }
 
 impl ClientView {
@@ -490,16 +492,25 @@ impl ClientView {
         pos: TilePos,
         facing: Option<&Facing>,
         appearance: Option<AppearanceId>,
+        blocks: Option<Blocks>,
         table: &Appearances,
     ) {
         let id = self.alloc_id(tick);
-        self.known.insert(entity, Known { id, appearance });
+        self.known.insert(
+            entity,
+            Known {
+                id,
+                appearance,
+                blocks,
+            },
+        );
         self.by_net.insert(id, entity);
         self.use_appearance(appearance, table);
         let spawned = Spawned {
             id,
             facing: facing.map(|f| f.0),
             appearance,
+            blocks,
         };
         match self.ops.last_mut() {
             Some(ReplicationOp::Spawn {
@@ -544,6 +555,17 @@ impl ClientView {
         self.use_appearance(new, table);
         self.drop_appearance(old);
         self.ops.push(ReplicationOp::Appearance(id, new));
+    }
+
+    /// Brings a known entity's blocking to `new`, if the client was told otherwise.
+    fn set_blocks(&mut self, entity: Entity, new: Option<Blocks>) {
+        let Some(known) = self.known.get_mut(&entity) else {
+            return;
+        };
+        if known.blocks != new {
+            known.blocks = new;
+            self.ops.push(ReplicationOp::Blocks(known.id, new));
+        }
     }
 }
 
@@ -693,9 +715,32 @@ type States<'w, 's> = Query<
             Option<&'static Invisibility>,
             Option<&'static VisibleToGroups>,
         ),
+        BlockData,
     ),
     With<Networked>,
 >;
+
+/// What [`Blocks`] is made of.
+type BlockData = (
+    Has<Density>,
+    Option<&'static Border>,
+    Has<ClimbWalkable>,
+    Has<Mover>,
+);
+
+/// [`Blocks`] of an entity: dense things that do not move by themselves.
+fn blocks_of(
+    (dense, border, climbable, mover): (bool, Option<&Border>, bool, bool),
+) -> Option<Blocks> {
+    if !dense || mover {
+        return None;
+    }
+    Some(match (border, climbable) {
+        (Some(b), _) => Blocks::Edges(b.edges),
+        (None, true) => Blocks::Climbable,
+        (None, false) => Blocks::Dense,
+    })
+}
 
 fn replicate(
     mut interest: ResMut<Interest>,
@@ -739,6 +784,23 @@ fn replicate(
     >,
     mut removed_viewers: RemovedComponents<Viewer>,
     links: Query<&ClientLink>,
+    (blocking_changed, mut lost_density, mut lost_border, mut lost_climbable): (
+        Query<
+            Entity,
+            (
+                With<Networked>,
+                Or<(
+                    Added<Density>,
+                    Changed<Border>,
+                    Added<ClimbWalkable>,
+                    Added<Mover>,
+                )>,
+            ),
+        >,
+        RemovedComponents<Density>,
+        RemovedComponents<Border>,
+        RemovedComponents<ClimbWalkable>,
+    ),
 ) {
     let start = Instant::now();
     let interest = &mut *interest;
@@ -765,7 +827,7 @@ fn replicate(
     }
     let lost_optics: Vec<Entity> = removed_optics.read().collect();
     for &entity in &lost_optics {
-        if let Ok((&pos, _, _, None, _)) = states.get(entity) {
+        if let Ok((&pos, _, _, None, ..)) = states.get(entity) {
             lights.set(entity, index.in_bounds(pos).then_some(pos), None);
         }
     }
@@ -831,7 +893,7 @@ fn replicate(
 
     // Lost optics: the appearance is interned again without them.
     for entity in lost_optics {
-        if let (Some(t), Ok((_, _, Some(appearance), None, _))) =
+        if let (Some(t), Ok((_, _, Some(appearance), None, ..))) =
             (tracked.get_mut(&entity), states.get(entity))
         {
             let new = appearances.acquire(appearance, None);
@@ -894,7 +956,8 @@ fn replicate(
                             optics,
                         )
                     });
-                    view.spawn(tick, entity, *pos, facing, id, appearances);
+                    let blocks = states.get(entity).ok().and_then(|s| blocks_of(s.5));
+                    view.spawn(tick, entity, *pos, facing, id, blocks, appearances);
                     spawned += 1;
                 }
                 Some(known) if in_keep => {
@@ -913,6 +976,26 @@ fn replicate(
                 Some(_) => despawned += u64::from(view.despawn(tick, entity)),
                 None => {}
             }
+        }
+    }
+
+    // 2a. Blocking that changed (doors opening and closing): the clients that know the entity.
+    // Entities spawned above already went with their current blocking (a no-op here).
+    let mut reblocked: Vec<Entity> = blocking_changed.iter().collect();
+    reblocked.extend(lost_density.read());
+    reblocked.extend(lost_border.read());
+    reblocked.extend(lost_climbable.read());
+    reblocked.sort_unstable();
+    reblocked.dedup();
+    for entity in reblocked {
+        let Some(t) = tracked.get(&entity) else {
+            continue;
+        };
+        let new = states.get(entity).ok().and_then(|s| blocks_of(s.5));
+        collect_viewers(chunk_viewers, &mut candidates, [Some(t.pos), None]);
+        for client in &candidates {
+            let view = clients.get_mut(client).expect("registered viewer");
+            view.set_blocks(entity, new);
         }
     }
 
@@ -1025,7 +1108,7 @@ fn replicate(
                 .keys()
                 .copied()
                 .filter(|&e| {
-                    states.get(e).is_ok_and(|(pos, _, _, _, invisibility)| {
+                    states.get(e).is_ok_and(|(pos, _, _, _, invisibility, _)| {
                         !view.sees(invisibility)
                             || !keep.contains(*pos)
                             || !view.shows(masks, e, *pos)
@@ -1067,7 +1150,8 @@ fn replicate(
                     if view.known.contains_key(&entity) {
                         continue;
                     }
-                    if let Ok((&pos, facing, appearance, optics, invisibility)) = states.get(entity)
+                    if let Ok((&pos, facing, appearance, optics, invisibility, block)) =
+                        states.get(entity)
                         && view.sees(invisibility)
                         && view.shows(masks, entity, pos)
                     {
@@ -1075,7 +1159,15 @@ fn replicate(
                             Some(t) => t.appearance,
                             None => track(tracked, appearances, entity, pos, appearance, optics),
                         };
-                        view.spawn(tick, entity, pos, facing, interned, appearances);
+                        view.spawn(
+                            tick,
+                            entity,
+                            pos,
+                            facing,
+                            interned,
+                            blocks_of(block),
+                            appearances,
+                        );
                         spawned += 1;
                     }
                 }
@@ -1410,7 +1502,7 @@ fn refresh(
     tracked: &mut HashMap<Entity, Tracked>,
     appearances: &mut Appearances,
 ) -> (u64, u64) {
-    let Ok((&pos, facing, appearance, optics, invisibility)) = states.get(entity) else {
+    let Ok((&pos, facing, appearance, optics, invisibility, block)) = states.get(entity) else {
         return (0, 0);
     };
     let shown = index.in_bounds(pos) && view.shows(masks, entity, pos);
@@ -1426,7 +1518,15 @@ fn refresh(
         Some(t) => t.appearance,
         None => track(tracked, appearances, entity, pos, appearance, optics),
     };
-    view.spawn(tick, entity, pos, facing, interned, appearances);
+    view.spawn(
+        tick,
+        entity,
+        pos,
+        facing,
+        interned,
+        blocks_of(block),
+        appearances,
+    );
     (1, 0)
 }
 
@@ -1654,7 +1754,7 @@ mod tests {
         let mut view = ClientView::default();
         let tile = TilePos::new(1, 1, 1);
         for i in 1..=3 {
-            view.spawn(1, entity(i), tile, None, Some(floor), &table);
+            view.spawn(1, entity(i), tile, None, Some(floor), None, &table);
         }
         view.spawn(
             1,
@@ -1662,6 +1762,7 @@ mod tests {
             tile.step(Dir::North),
             None,
             Some(wall),
+            None,
             &table,
         );
         assert_eq!(
@@ -1678,7 +1779,7 @@ mod tests {
         for i in 1..=3 {
             view.despawn(2, entity(i));
         }
-        view.spawn(2, entity(5), tile, None, Some(floor), &table);
+        view.spawn(2, entity(5), tile, None, Some(floor), None, &table);
         assert!(view.appearances.is_empty());
         assert_eq!(view.ops.len(), 2, "one despawn group, one spawn group");
         view.evict_unused();
@@ -1688,7 +1789,7 @@ mod tests {
         view.despawn(3, entity(5));
         view.evict_unused();
         assert_eq!(view.cached.len(), 1);
-        view.spawn(4, entity(6), tile, None, Some(floor), &table);
+        view.spawn(4, entity(6), tile, None, Some(floor), None, &table);
         assert_eq!(view.appearances.len(), 1);
     }
 
@@ -1696,7 +1797,15 @@ mod tests {
     fn freed_net_ids_wait_before_reuse() {
         let mut view = ClientView::default();
         let table = Appearances::default();
-        view.spawn(1, entity(1), TilePos::new(1, 1, 1), None, None, &table);
+        view.spawn(
+            1,
+            entity(1),
+            TilePos::new(1, 1, 1),
+            None,
+            None,
+            None,
+            &table,
+        );
         let first = view.known[&entity(1)].id;
         view.despawn(1, entity(1));
         assert_ne!(view.alloc_id(NET_ID_REUSE_TICKS), first);

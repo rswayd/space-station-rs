@@ -56,12 +56,25 @@ pub(crate) struct Look {
     pub optics: Option<Optics>,
 }
 
+/// What an entity does to walking through its tile, for the client's movement prediction
+/// (`ss13_world::Density`, `Border`, `ClimbWalkable`). Movers (mobs) are never sent: they are
+/// pushed, swapped and walk away, which the client cannot foresee.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Blocks {
+    Dense,
+    /// A table: dense, but walked across from another one.
+    Climbable,
+    /// A dense border object: the tile edges it blocks (BYOND dir bits).
+    Edges(u8),
+}
+
 /// One entity of a [`ReplicationOp::Spawn`] tile group.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub(crate) struct Spawned {
     pub id: NetId,
     pub facing: Option<Dir>,
     pub appearance: Option<AppearanceId>,
+    pub blocks: Option<Blocks>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -74,6 +87,8 @@ pub(crate) enum ReplicationOp {
     },
     Despawn(Vec<NetId>),
     Appearance(NetId, Option<AppearanceId>),
+    /// A known entity started or stopped blocking (a door closed or opened).
+    Blocks(NetId, Option<Blocks>),
     /// Current position and facing of an entity that stopped changing.
     Settle {
         id: NetId,

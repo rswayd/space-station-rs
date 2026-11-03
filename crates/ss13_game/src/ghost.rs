@@ -153,6 +153,7 @@ pub(crate) fn spawn_ghost(
                 health: None,
                 combat_mode: false,
                 move_delay: TICK_DURATION.as_secs_f32(),
+                phasing: true,
                 ..default()
             },
         ))

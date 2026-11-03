@@ -179,6 +179,12 @@ impl ClientTransport {
 
 impl Plugin for NetClientPlugin {
     fn build(&self, app: &mut App) {
+        // Replicated blockers are filed in a local index for movement prediction.
+        // shortcut: levels of tg's 255 x 255; send the level bounds if bigger maps come.
+        if !app.world().contains_resource::<ss13_world::SpatialIndex>() {
+            app.insert_resource(ss13_world::SpatialIndex::auto_levels(255, 255))
+                .add_plugins(ss13_world::SpatialIndexPlugin);
+        }
         app.add_plugins((
             crate::ui::client::plugin,
             crate::chat::client::plugin,

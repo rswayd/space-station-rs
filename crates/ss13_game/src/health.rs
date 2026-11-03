@@ -640,6 +640,7 @@ fn body_state(
             combat_mode: combat.0,
             move_delay: delay,
             immobile: !health.can_move(*stat) || traits.immobilized,
+            phasing: false,
             zone_selected: zone.copied().unwrap_or_default().0,
         });
         if let Some(player) = player {

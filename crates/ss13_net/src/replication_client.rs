@@ -15,9 +15,11 @@ use ss13_shared::{
     Appearance, Facing, LIGHT_BLOCK, LightSource, LightUpdate, Optics, TilePos, light_block,
 };
 
+use ss13_world::{Border, ClimbWalkable, Density};
+
 use crate::client::NetClientState;
 use crate::replication::{
-    AppearanceId, BlockLights, Look, MotionBatch, ReplicationBatch, ReplicationOp, Spawned,
+    AppearanceId, BlockLights, Blocks, Look, MotionBatch, ReplicationBatch, ReplicationOp, Spawned,
 };
 
 /// The server id of a replicated entity.
@@ -304,6 +306,23 @@ pub(crate) fn receive_replication(
     }
 }
 
+/// What the server said the entity does to walking, as the components `ss13_world`'s index
+/// files (the client's movement prediction asks it).
+fn insert_blocks(entity: &mut EntityCommands, blocks: Option<Blocks>) {
+    match blocks {
+        None => {}
+        Some(Blocks::Dense) => {
+            entity.try_insert(Density);
+        }
+        Some(Blocks::Climbable) => {
+            entity.try_insert((Density, ClimbWalkable));
+        }
+        Some(Blocks::Edges(edges)) => {
+            entity.try_insert((Density, Border { edges }));
+        }
+    }
+}
+
 fn apply_op(map: &mut NetEntityMap, commands: &mut Commands, tick: u32, op: ReplicationOp) {
     match op {
         ReplicationOp::Spawn { pos, entities } => {
@@ -311,6 +330,7 @@ fn apply_op(map: &mut NetEntityMap, commands: &mut Commands, tick: u32, op: Repl
                 id,
                 facing,
                 appearance,
+                blocks,
             } in entities
             {
                 map.remove(id, commands);
@@ -318,6 +338,7 @@ fn apply_op(map: &mut NetEntityMap, commands: &mut Commands, tick: u32, op: Repl
                 if let Some(dir) = facing {
                     spawned.insert(Facing(dir));
                 }
+                insert_blocks(&mut spawned, blocks);
                 if let Some(Look { appearance, optics }) = map.use_appearance(appearance) {
                     spawned.insert(appearance);
                     if let Some(optics) = optics {
@@ -338,6 +359,13 @@ fn apply_op(map: &mut NetEntityMap, commands: &mut Commands, tick: u32, op: Repl
         ReplicationOp::Despawn(ids) => {
             for id in ids {
                 map.remove(id, commands);
+            }
+        }
+        ReplicationOp::Blocks(id, blocks) => {
+            if let Some(replicated) = map.entities.get(&id) {
+                let mut entity = commands.entity(replicated.entity);
+                entity.try_remove::<(Density, Border, ClimbWalkable)>();
+                insert_blocks(&mut entity, blocks);
             }
         }
         ReplicationOp::Appearance(id, appearance) => {

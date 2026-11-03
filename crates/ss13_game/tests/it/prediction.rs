@@ -1,6 +1,7 @@
 //! Own-mob prediction over real WebTransport on 127.0.0.1 with 50 ms of simulated latency on
-//! each side (100 ms round trip): holding a direction, walking into a wall, through a door that
-//! opens on the bump, and key spam. Every frame the predicted tile may lead the server's by at
+//! each side (100 ms round trip): holding a direction, walking into a wall (never predicted into
+//! it: walls replicate as blockers), through a door that opens on the bump (no bounce), and key
+//! spam. Every frame the predicted tile may lead the server's by at
 //! most one step, and after each phase prediction, ack and server agree.
 //!
 //! `cargo test -p ss13_game --all-features --test it prediction:: -- --nocapture` prints the
@@ -344,9 +345,11 @@ fn prediction_under_latency() {
     assert!((8..=allowed).contains(&steps), "{steps} steps in 2 s");
     assert_eq!(s.prediction().corrections(), 0);
 
-    // 2. Into the wall: one predicted step into it at most, one correction, then it stays.
+    // 2. Into the wall: the replicated wall stops the prediction, no step into it, nothing
+    //    corrected.
     s.hold(Some(Dir::East));
     s.run_until("the wall-adjacent tile", |s| s.server_pos() == EAST_END);
+    let before_wall = s.prediction().corrections();
     let mut changes = 0;
     let mut last = s.predicted();
     s.run_for(1.5, |s| {
@@ -355,29 +358,31 @@ fn prediction_under_latency() {
             changes += 1;
             last = s.predicted();
         }
-        assert!(
-            s.predicted().x <= EAST_END.x + 1,
-            "predicted through the wall"
-        );
+        assert!(s.predicted().x <= EAST_END.x, "predicted into the wall");
     });
     assert_eq!(s.settle("held into the wall"), EAST_END);
-    assert!(
-        changes <= 2,
-        "{changes} predicted moves while held into the wall"
-    );
-    assert!(
-        s.prediction().corrections() <= 1,
-        "oscillates against the wall"
+    assert_eq!(changes, 0, "predicted moves while held into the wall");
+    assert_eq!(
+        s.prediction().corrections(),
+        before_wall,
+        "bounced off the wall"
     );
 
     // 3. Down the shaft, then west through the airlock that opens on the bump.
     s.hold(Some(Dir::South));
     s.run_until("the shaft bottom", |s| s.server_pos() == SHAFT_BOTTOM);
     s.settle("down the shaft");
+    let before_door = s.prediction().corrections();
     s.hold(Some(Dir::West));
     s.run_until("past the door", |s| s.server_pos().x < DOOR_X - 2);
     let past = s.settle("through the door");
     assert!(past.x < DOOR_X, "{past:?} is not past the door");
+    // The closed door is not walked into: it opens on the bump, then the step is taken.
+    assert_eq!(
+        s.prediction().corrections(),
+        before_door,
+        "bounced off the closed door"
+    );
 
     // 4. Key spam (a new press every other frame) walks no faster than holding and never
     //    outruns the server.
