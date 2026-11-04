@@ -771,6 +771,46 @@ fn general_beepsky_is_built_with_four_swords() {
     assert_eq!(s.get::<Name>(grievous[0]).as_str(), "General Beepsky");
 }
 
+/// Unlocks the first MULEbot with a home and sends it to the delivery beacon furthest away;
+/// prints how long one A* over that distance takes.
+fn send_furthest_mule(s: &mut Station, user: Entity) -> Option<(Entity, TilePos)> {
+    let world = s.0.server.world_mut();
+    let mules: Vec<(Entity, TilePos, String)> = world
+        .query::<(Entity, &bots::mule::Mule, &TilePos)>()
+        .iter(world)
+        .filter(|(_, m, _)| !m.home.is_empty())
+        .map(|(e, m, p)| (e, *p, m.home.clone()))
+        .collect();
+    let (mule, from, _) = mules.into_iter().next()?;
+    let (tag, to) = world
+        .resource::<bots::NavBeacons>()
+        .0
+        .values()
+        .filter(|b| b.delivery && b.pos.z == from.z)
+        .max_by_key(|b| (from.chebyshev(b.pos).unwrap_or(0), b.entity.to_bits()))
+        .map(|b| (b.location.clone(), b.pos))?;
+    let opens = |e: Entity| ss13_game::mobs::ai::movement::bot_opens(world, mule, e);
+    let pathing = ss13_game::mobs::ai::movement::pathing_of(world, mule, &opens);
+    let started = std::time::Instant::now();
+    let path = ss13_game::mobs::ai::movement::find_path(
+        world.resource::<ss13_world::SpatialIndex>(),
+        mule,
+        from,
+        to,
+        0,
+        &pathing,
+    );
+    println!(
+        "  MULEbot A* {from:?} -> {tag} {to:?}: {:?} steps, {:.2} ms",
+        path.as_ref().map(Vec::len),
+        started.elapsed().as_secs_f64() * 1000.0
+    );
+    world.get_mut::<Bot>(mule)?.cover &= !bots::COVER_LOCKED;
+    bots::mule::act_on(world, user, mule, bots::mule::MuleAct::Destination(tag));
+    bots::mule::act_on(world, user, mule, bots::mule::MuleAct::Go);
+    Some((mule, to))
+}
+
 /// `SS13_ASSETS` must hold assets converted with this version (`mobs.ron` bot vars, navbeacon
 /// codes). Loads `SS13_BOTS_MAP` (default MetaStation), prints the bots and the patrol beacons,
 /// runs two minutes with a player and prints how far each bot got and the AI cost per pass.
@@ -800,12 +840,36 @@ fn station_bots() {
     println!("{map_name}: {} bots, {beacons} beacons", bots.len());
     assert!(!bots.is_empty(), "the map has bots");
     assert!(beacons > 0, "and beacons");
-    s.join("p0", |_| {});
+    let p = s.join("p0", |_| {});
+    let me = s.players[p].mob;
+    // A MULEbot sent to the delivery beacon furthest from its home; the A* it plans first is
+    // timed (the worst case: the whole path at once).
+    let delivery = send_furthest_mule(&mut s, me);
     let before =
         *s.0.server
             .world()
             .resource::<ss13_game::mobs::ai::AiStats>();
-    s.run_for(120.0);
+    // Two minutes in one-second steps; the MULEbot's closest approach to its destination.
+    let mut closest: Option<(u32, f64)> = None;
+    for second in 1..=120 {
+        s.run_for(1.0);
+        if let Some((mule, target)) = delivery {
+            let d = s.pos(mule).chebyshev(target).unwrap_or(u32::MAX);
+            if closest.is_none_or(|(c, _)| d < c) {
+                closest = Some((d, f64::from(second)));
+            }
+        }
+    }
+    if let Some((mule, _)) = delivery {
+        let m = s.get::<bots::mule::Mule>(mule).clone();
+        let (d, at) = closest.unwrap_or((u32::MAX, 0.0));
+        println!(
+            "  MULEbot {}: reached {d} tiles from its destination at {at} s, now {:?}, {}",
+            m.id,
+            s.pos(mule),
+            s.bot(mule).mode,
+        );
+    }
     let after =
         *s.0.server
             .world()

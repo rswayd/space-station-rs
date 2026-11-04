@@ -1084,8 +1084,9 @@ SS13_LIGHTING=0 SS13_MAP=$PWD/scripts/visual/maps/mobs.dmm SS13_ASSETS=$ASSETS \
 `crates/ss13_game/src/bots/`, after tg `/mob/living/basic/bot` and `code/datums/ai/bots/`.
 `ss13-mapload convert` adds the bot vars to `mobs.ron` (`bot`: mode and cover flags,
 `req_one_access`, the access card with the `additional_access` trim, radio channel, the kinds'
-settings) and a `dm_navbeacon` component (`location`, `codes_txt`, map edits included): rerun it
-after updating. Mapped bots (MetaStation: Beepsky, Armsky, Pingsky, cleanbots, the medbay
+settings) and a `dm_navbeacon` component (`location`, `codes_txt`, map edits included), the
+items' `item_flags` (`NEEDS_PERMIT` for the weapon check), the bots' runtime types and voice
+recordings: rerun it after updating. Mapped bots (MetaStation: Beepsky, Armsky, Pingsky, cleanbots, the medbay
 medibot, MULEbots, the repairbot) load as basic mobs with a `Bot`.
 
 - Patrol: with `BOT_MODE_AUTOPATROL`, beacon to beacon along `next_patrol` (else the closest);
@@ -1096,24 +1097,46 @@ medibot, MULEbots, the repairbot) load as basic mobs with a `Bot`.
   always; AI and cyborgs open it too). ID or alt-click: lock/unlock; screwdriver: hatch;
   welder: repair 10 with the hatch open; emag: unlock, then (hatch open) emag.
 - Cleanbot: cleans decals (blood, graffiti, trash, pests by its controls) within 5 tiles, 2 s
-  each. Medbot: tends humans whose damage of its kit's type is over the threshold (2.5 per 2 s),
+  each; a knife used on it out of combat mode (2.5 s) stabs who steps onto it and gives it job
+  titles from their ID (Russian assignments too); emagged it sprays acid at a human every 30 s.
+  Medbot: tends humans whose damage of its kit's type is over the threshold (2.5 per 2 s),
   calls crit patients on its radio channel; emagged it injects chloral hydrate. Securitron:
-  stuns (8 s) and zip-ties humans with a threat over 4 (wanted records, ID check, emag) or who
-  hit it, announcing arrests on the security channel. Firebot: puts out burning people and
-  fires within 5 tiles. Others (MULEbot, repairbot, honkbot, ...) only patrol and salute.
+  stuns (8 s) and zip-ties humans with a threat over 4 (wanted records, ID check, weapons
+  without a `weapons` permit, a wizard hat, emag) or who hit it, announcing arrests on the
+  security channel; it trips who steps onto it while its target is away. ED-209: shoots a
+  disabler (a laser emagged) every 3 s from 2-3 tiles, cuffs the downed. Honkbot: an air horn
+  and fake zipties, slips who steps onto it while hunting, celebrates with clowns. General
+  Beepsky cuts with energy swords. Firebot: puts out burning people and fires within 5 tiles.
+  Hygienebot: an emagged one sets people alight (no blood on clothes here, so it finds no one
+  otherwise). Dedbot: slashes the living within 2 tiles. Voiced lines play their recordings;
+  bots speak with their say verbs ("сообщает").
+- MULEbot (`crate::bots::mule`): the `Mule` window (empty hand, unlocked by cargo or robotics
+  access) sets the destination among the delivery beacons (`codes_txt = "delivery;dir=N"`),
+  home and id; "Go" drives there, unloads (or picks up the crate in the beacon's `dir`), then
+  returns home. A crate dragged onto it is loaded (anything, a rider too, once the load check
+  wire is cut). With the panel open an empty hand or a wire tool opens its wires; a crowbar
+  takes out its cell. Emagged or with the avoidance wire cut it runs over lying people.
+- Others (repairbot, vibebot) only patrol and salute.
 - Building: prox sensor on a bucket, then a robot arm (cleanbot); robot arm on an empty medkit,
   health analyzer, prox sensor (medbot, the kit's skin and healing type); signaler on a
   security helmet, welder, prox sensor, robot arm, stun baton (securitron; a screwdriver steps
-  back); robot arm on an extinguisher, red hardhat, prox sensor (firebot).
+  back; a wrench and four energy swords instead: General Beepsky); robot arm on an
+  extinguisher, red hardhat, prox sensor (firebot); iron sheet on a robot endoskeleton, two
+  robot legs, armor vest, welder, security helmet, prox sensor, cable (4 s), disabler,
+  screwdriver (4 s) (ED-209); robot arm on an empty clown box, prox sensor, bike horn
+  (honkbot).
 
 ```sh
 cargo test -p ss13_game --all-features --lib bots        # threat, cleanables, healing, window
 cargo test -p ss13_game --all-features --test it bots::  # patrol through a door, off bot stays,
                                                          # securitron stuns and cuffs, cleanbot,
-                                                         # medbot, firebot, building two bots
+                                                         # medbot, firebot, building two bots,
+                                                         # MULEbot delivery and its wires,
+                                                         # honkbot, General Beepsky
 SS13_ASSETS=$ASSETS cargo test -p ss13_game --all-features --test it bots::station_bots -- --ignored --nocapture
                                                          # MetaStation (SS13_BOTS_MAP=Cyberiad):
-                                                         # bots, beacons, 2 min of patrols, AI µs
+                                                         # bots, beacons, 2 min of patrols, AI µs,
+                                                         # a MULEbot's longest A* and delivery
 ```
 
 ### Tools and construction

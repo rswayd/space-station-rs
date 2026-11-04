@@ -1,31 +1,33 @@
 //! Station bots, after tg `/mob/living/basic/bot` (`code/modules/mob/living/basic/
-//! bots/_bots.dm`, `bot_ai.dm`, `code/datums/ai/bots/`) and its cleanbot, medbot, secbot and
-//! firebot subtypes; navigation beacons (`code/game/machinery/navbeacon.dm`).
+//! bots/_bots.dm`, `bot_ai.dm`, `code/datums/ai/bots/`) and its subtypes; navigation beacons
+//! (`code/game/machinery/navbeacon.dm`).
 //!
 //! A basic mob whose `mobs.ron` definition has bot vars ([`ss13_mapload::mobs::BotDef`]) gets a
 //! [`Bot`]: its mode flags (on, autopatrol, remote control), cover flags (maintenance panel,
 //! control lock, emagged), its access card (`ACCESS_ROBOTICS` plus the `additional_access` trim;
 //! doors open to it, `crate::doors`, and its AI paths through them,
 //! `crate::mobs::ai::movement`), its radio channel and its kind's settings. Its AI tree is
-//! [`ai`]'s.
+//! [`ai`]'s (the secbot family's and the smaller kinds' parts in [`sec`]).
 //!
-//! - A human's empty hand out of combat mode opens the `SimpleBot` window ([`ui`]); an ID card
-//!   or an alt-click with one locks or unlocks the controls (tg `unlock_with_id`, with the
-//!   bot's `req_one_access`); a screwdriver opens the maintenance panel while unlocked; a welder
-//!   out of combat mode repairs 10 with the panel open; an emag unlocks the controls, then
-//!   (panel open) emags the bot. Melee and other items fall through to `crate::mobs::defense`.
-//! - [`speak`]: the bot says a line, and on its radio channel when asked (tg
-//!   `bot_announcement/announce`), only while on.
+//! - A human's empty hand out of combat mode opens the `SimpleBot` window ([`ui`], the MULEbot's
+//!   `Mule`, [`mule`]); an ID card or an alt-click with one locks or unlocks the controls (tg
+//!   `unlock_with_id`, with the bot's `req_one_access`); a screwdriver opens the maintenance
+//!   panel while unlocked; a welder out of combat mode repairs 10 with the panel open; an emag
+//!   unlocks the controls, then (panel open) emags the bot. Melee and other items fall through
+//!   to `crate::mobs::defense`.
+//! - [`speak`]: the bot says a line with its say verbs, plays the line's recording ([`voice`])
+//!   and says it on its radio channel when asked (tg `bot_announcement/announce`), only while
+//!   on.
 //! - Death (tg `explode`): "blows apart!", its kind's parts drop, the robot arm in half the
 //!   cases; bots are `DEL_ON_DEATH`.
 //! - [`BotTask`]: the bot's own `do_after` (cleaning, tending, cuffing); the AI pauses while it
 //!   runs (tg pauses controllers during `do_after`), and it ends if either side moves.
-//! - [`construction`]: bot assemblies built from items.
+//! - [`construction`]: bot assemblies built from items; [`cleanbot`]: its knife, titles and acid.
 //!
-//! The `SimpleBot` window's data is here (both halves); [`client`] draws it, `ui` serves it.
-// shortcut: no pAI cards, ghost possession, renaming, path HUD, diagnostic HUD, EMP, sentient
-// bot controls, voice line sounds (their `.ogg` files are not converted) or PDA/AI remote
-// control and summoning; add with pAIs, ghost roles and the bot control program.
+//! The `SimpleBot` and `Mule` windows' data is here (both halves); [`client`] draws them.
+// shortcut: no pAI cards, ghost possession (so no `BotAnnouncement` action), path HUD,
+// diagnostic HUD, EMP or PDA/AI remote control and summoning; add with pAIs, ghost roles, EMPs
+// and the bot control program.
 
 #[cfg(feature = "server")]
 pub mod ai;
