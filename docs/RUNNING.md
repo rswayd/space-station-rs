@@ -1096,6 +1096,21 @@ SS13_LIGHTING=0 SS13_MAP=$PWD/scripts/visual/maps/construction.dmm SS13_ASSETS=$
 `ss13-mapload convert` emits the construction types (`CONSTRUCTION_TYPES`) and the components
 the code reads (`dm_tool`, `dm_stack`, `dm_turf_build`, `dm_obj`): rerun it after updating.
 
+Machines and frames (`crates/ss13_game/src/machine_frame.rs`): a screwdriver opens the panel of
+a covered machine (chargers, kitchen machines, hydroponics trays, the cyborg charger, the
+destructive analyzer, thermomachines) and a crowbar takes it apart into a wired frame, its board
+and parts; a screwdriver unscrews a covered computer (R&D, supply, atmospheric alert consoles)
+into its glassed frame. Iron sheets right-clicked on a floor with a board in the other hand
+build a frame. The converter emits the boards, their parts and the frames of mapped machines
+(`dm_circuit`, `dm_machine`, `FRAME_RUNTIME_TYPES`): rerun it after updating.
+
+```sh
+cargo test -p ss13_game --all-features --test it machine_frame::   # recharger, supply console,
+                                                                   # frame from sheets (fixture)
+SS13_ASSETS=$ASSETS cargo test -p ss13_game --all-features --test it machine_frame:: -- --ignored
+                                                                   # every family on MetaStation
+```
+
 ### Wires and hacking
 
 Airlocks, APCs and vending machines carry tg `/datum/wires` (`crates/ss13_game/src/wires.rs`):

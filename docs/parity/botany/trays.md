@@ -61,7 +61,7 @@ Ctrl+клик по закреплённому и запитанному лотк
 Лоток собирается из платы (`/obj/machinery/hydroponics/constructable`), детали (матлазеры/манипуляторы) повышают `maxwater`, `maxnutri` и снижают расход; есть старый вид лотка и «делюкс»-вариант с максимальными деталями. Отвёртка/лом — разборка.
 
 - **Код:** [`/obj/machinery/hydroponics/constructable`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L165), [`fullupgrade`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L174)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload/src/plants.rs`: типы лотков и грядок с карты; `// shortcut:` детали всегда первого уровня, постройки и улучшения нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload/src/plants.rs`: типы лотков и грядок с карты; отвёртка/лом разбирают лоток в раму, из рамы с платой, 2 бункерами материи, сервоприводом и стеклом собирается пустой сухой лоток (`crates/ss13_game/src/machine_frame.rs`, `botany::setup_tray`); `// shortcut:` детали всегда первого уровня (нет `RefreshParts`), улучшения нет
 
 ### Компонент схемы лотка
 USB-компонент wiremod для лотка: выдаёт уровни воды/удобрений/сорняков/вредителей/здоровья, событие сбора и смерти, управляет автополивом.

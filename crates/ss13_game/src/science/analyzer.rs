@@ -77,8 +77,13 @@ fn setup_analyzers(world: &mut World) {
         .map(|(e, _)| e)
         .collect();
     for e in found {
-        world.entity_mut(e).insert(Analyzer::default());
+        setup(world, e);
     }
+}
+
+/// A destructive analyzer's state (map load and `crate::machine_frame`).
+pub(crate) fn setup(world: &mut World, e: Entity) {
+    world.entity_mut(e).insert(Analyzer::default());
 }
 
 fn now(world: &World) -> f64 {

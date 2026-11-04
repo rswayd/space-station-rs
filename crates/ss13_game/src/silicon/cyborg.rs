@@ -494,11 +494,16 @@ fn init_stations(world: &mut World) {
         .map(|(e, _)| e)
         .collect();
     for e in stations {
-        world.entity_mut(e).insert(RechargeStation {
-            open: true,
-            occupant: None,
-        });
+        setup_station(world, e);
     }
+}
+
+/// A recharging station's state (map load and `crate::machine_frame`).
+pub(crate) fn setup_station(world: &mut World, e: Entity) {
+    world.entity_mut(e).insert(RechargeStation {
+        open: true,
+        occupant: None,
+    });
 }
 
 /// tg `recharge_station/interact` -> `toggle_open` on an empty-handed click; `close_machine`

@@ -128,33 +128,38 @@ pub fn catalogue(db: &ResearchDb, icons: Option<&ResearchIcons>) -> TechwebStati
 
 fn setup_consoles(world: &mut World) {
     let mut query = world.query::<(Entity, &DmObj)>();
-    let found: Vec<(Entity, String)> = query
+    let found: Vec<Entity> = query
         .iter(world)
         .filter(|(_, o)| is_under(&o.path, CONSOLE_ROOT))
-        .map(|(e, o)| (e, o.path.clone()))
+        .map(|(e, _)| e)
         .collect();
     let Some(db) = world.get_resource::<ResearchDb>() else {
         return;
     };
     let catalogue = Arc::new(catalogue(db, world.get_resource::<ResearchIcons>()));
-    let consoles: Vec<(Entity, RdConsole)> = found
-        .into_iter()
-        .map(|(e, path)| {
-            let def = db.consoles.get(&path);
-            (
-                e,
-                RdConsole {
-                    locked: def.is_some_and(|d| d.locked),
-                    req_access: def.map(|d| d.req_access.clone()).unwrap_or_default(),
-                    catalogue: catalogue.clone(),
-                },
-            )
-        })
-        .collect();
-    info!("research: {} R&D consoles", consoles.len());
-    for (e, console) in consoles {
-        world.entity_mut(e).insert(console);
+    info!("research: {} R&D consoles", found.len());
+    for e in found {
+        setup_console(world, e, Some(catalogue.clone()));
     }
+}
+
+/// An R&D console's state (map load, and `crate::machine_frame` without a shared `catalogue`).
+pub(crate) fn setup_console(world: &mut World, e: Entity, shared: Option<Arc<TechwebStatic>>) {
+    let Some(db) = world.get_resource::<ResearchDb>() else {
+        return;
+    };
+    let Some(path) = world.get::<DmObj>(e).map(|o| o.path.clone()) else {
+        return;
+    };
+    let catalogue =
+        shared.unwrap_or_else(|| Arc::new(catalogue(db, world.get_resource::<ResearchIcons>())));
+    let def = db.consoles.get(&path);
+    let console = RdConsole {
+        locked: def.is_some_and(|d| d.locked),
+        req_access: def.map(|d| d.req_access.clone()).unwrap_or_default(),
+        catalogue,
+    };
+    world.entity_mut(e).insert(console);
 }
 
 fn plain(name: &str) -> &str {

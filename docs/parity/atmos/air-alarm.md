@@ -30,7 +30,7 @@
 Список зон с активными воздушными тревогами станции.
 
 - **Код:** [`/obj/machinery/computer/atmos_alert`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/computer/atmos_alert.dm#L1); tgui: [`AtmosAlertConsole.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/AtmosAlertConsole.tsx)
-- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/atmos_machinery/consoles.rs`, окно `AtmosAlertConsole` (`crates/ss13_tgui/src/interfaces/atmos_alert.rs`): каждые 2 с зоны тревог hazard/warning своего уровня или станции и шахты (`station_only`, по пути области), экран `alert:1/2`, сброс зоны кнопкой, осмотр; плата консоли и сборка компьютеров → ../engineering/machines.md
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/atmos_machinery/consoles.rs`, окно `AtmosAlertConsole` (`crates/ss13_tgui/src/interfaces/atmos_alert.rs`): каждые 2 с зоны тревог hazard/warning своего уровня или станции и шахты (`station_only`, по пути области), экран `alert:1/2`, сброс зоны кнопкой, осмотр; разборка отвёрткой в компьютерную раму и сборка из рамы с платой — `crates/ss13_game/src/machine_frame.rs` (../engineering/machines.md)
 
 ### Консоль контроля атмосферы и датчики (atmos_control, air_sensor)
 Показывает воздух в камерах хранения газов, двигателя и инсинератора по датчикам и управляет их входными инжекторами и выходными вентиляциями.

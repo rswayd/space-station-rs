@@ -179,6 +179,14 @@ pub fn convert<'a>(
             .chain(loot.iter().map(String::as_str)),
     );
     loot.extend(guns);
+    let machines = crate::circuit::machine_closure(
+        types,
+        needed
+            .iter()
+            .copied()
+            .chain(loot.iter().map(String::as_str)),
+    );
+    loot.extend(machines);
     let mut closure = BTreeSet::new();
     let mut bad = Vec::new();
     for path in needed

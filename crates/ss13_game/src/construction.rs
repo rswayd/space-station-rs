@@ -13,7 +13,8 @@
 //! The chains, with tg's numbers (delays × `toolspeed`):
 //! - floor: crowbar pries the tile off (instant, drops `floor_tile`, `ScrapeAway` to plating);
 //!   a floor tile on plating places it (`place_on_top`);
-//! - iron sheets, right click on an open turf: 4 s, 2 sheets -> displaced girder; wrench 4 s
+//! - iron sheets, right click on an open turf: 4 s, 2 sheets -> displaced girder (with a circuit
+//!   board in the other hand: 2.5 s, 5 sheets -> a frame, [`crate::machine_frame`]); wrench 4 s
 //!   secures it (girder) or loosens it again; screwdriver on a displaced girder 4 s -> 2 sheets;
 //! - 2 iron sheets on a girder on a floor: 4 s -> wall (`place_on_top`); a lit welder with 2
 //!   fuel on a wall: 10 s -> 2 sheets + girder, the tile scraped to plating;
@@ -152,6 +153,8 @@ pub enum Job {
     Genetics(crate::genetics::console::InjectJob),
     /// Unlocking a fire axe cabinet ([`crate::wallmount`]).
     WallMount(crate::wallmount::WallJob),
+    /// Frames and taking computers apart ([`crate::machine_frame`]).
+    Frame(crate::machine_frame::FrameJob),
 }
 
 /// A turf's baseturf stack, bottom first (tg `baseturfs`). Absent: assembled from the type's
@@ -643,10 +646,28 @@ fn interact_secondary(world: &mut World, actor: Actor, target: Entity) -> Intera
             tell(world, client, Span::Warning, "Сюда это не поставить!");
         } else if tile_blocked(world, pos) {
             tell(world, client, Span::Warning, "Что-то загораживает клетку!");
-        } else if crate::tools::stack_amount(world, held) < 2 {
-            tell(world, client, Span::Warning, "Нужно 2 листа металла!");
         } else {
-            do_after(world, actor, target, 40.0, 2, Job::BuildGirder);
+            // A board in the other hand makes it a machine or computer frame instead.
+            let frame = crate::machine_frame::held_board_frame(world, actor.mob, held);
+            let (cost, delay, job) = match frame {
+                Some(computer) => (
+                    crate::machine_frame::FRAME_SHEETS,
+                    crate::machine_frame::BUILD_DS,
+                    Job::Frame(crate::machine_frame::FrameJob::Build { computer }),
+                ),
+                None => (2, 40.0, Job::BuildGirder),
+            };
+            if crate::tools::stack_amount(world, held) < cost {
+                let sheets = if cost < 5 {
+                    "листа"
+                } else {
+                    "листов"
+                };
+                let text = format!("Нужно {cost} {sheets} металла!");
+                tell(world, client, Span::Warning, text);
+            } else {
+                do_after(world, actor, target, delay, cost, job);
+            }
         }
         return Interact::Done;
     }
@@ -781,7 +802,7 @@ fn wall_recipe_ok(world: &mut World, actor: Actor, girder: Entity) -> bool {
 }
 
 /// tg `is_blocked_turf()`: something dense on the tile (the turf itself included).
-fn tile_blocked(world: &World, pos: TilePos) -> bool {
+pub(crate) fn tile_blocked(world: &World, pos: TilePos) -> bool {
     !world
         .resource::<SpatialIndex>()
         .dense_on_tile(pos)
@@ -883,6 +904,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         }
         Job::Genetics(_) => crate::genetics::console::complete(world, mob, action),
         &Job::WallMount(job) => crate::wallmount::complete(world, client, target, job),
+        &Job::Frame(job) => crate::machine_frame::complete(world, mob, action, job),
         &Job::Emitter(job) => crate::power::emitter::complete(world, client, target, job, consume),
         Job::GirderBolts { from } => {
             if !is_under(&path, GIRDER) || obj_state(world, target) != *from || !consume(world) {

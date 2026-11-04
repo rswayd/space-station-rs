@@ -632,6 +632,35 @@ fn install_device(
     }
 }
 
+/// A machine built from a frame (`crate::machine_frame`, tg `on_construction` ->
+/// `SSair.add_to_rebuild_queue`): into the pipe graph facing its dir, connected, with its
+/// machine state. False when it is no pipe device.
+pub fn join_built(world: &mut World, e: Entity) -> bool {
+    let (Some(dm), Some(&pos)) = (
+        world.get::<DmAtmosDevice>(e).cloned(),
+        world.get::<TilePos>(e),
+    ) else {
+        return false;
+    };
+    let dir = world
+        .get::<ss13_shared::Facing>(e)
+        .map(|f| f.0 as u8)
+        .or_else(|| world.get::<DmAtom>(e).map(|a| a.dir))
+        .unwrap_or(2);
+    let Some((spec, dir)) = device_spec(e, pos, &dm, dir) else {
+        return false;
+    };
+    let layer = spec.layer;
+    let id = world.resource_mut::<Pipenet>().add(spec);
+    world
+        .entity_mut(e)
+        .insert((AtmosDevice { id, layer, dir }, looks::LookDirty));
+    let mut areas = world.remove_resource::<AreaAtmos>().unwrap_or_default();
+    install_device(world, e, &dm, pos, HeatExchange::None, &mut areas);
+    world.insert_resource(areas);
+    true
+}
+
 /// tg `SSair.Initialize` for machines: every map atmos object into the pipe graph, connected
 /// and in pipelines, with its machine state; vents and scrubbers listed by area.
 pub fn init_atmos_machinery(world: &mut World) {

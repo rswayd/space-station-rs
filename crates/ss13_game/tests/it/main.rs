@@ -28,6 +28,7 @@ mod janitor;
 mod jobs;
 mod loopback;
 mod los;
+mod machine_frame;
 mod mecha;
 mod medical;
 mod medicine;

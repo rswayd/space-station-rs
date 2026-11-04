@@ -7,9 +7,10 @@
 //!   gas in its port.
 //! - Sprite: `thermo-open`, `thermo_1` (on and powered) or `thermo_base`, with its pipe stub in
 //!   the node's color shifted by layer, and the emissive while it runs.
-// shortcut: no unanchoring (right-click wrench) or crowbar deconstruction, no frames to rebuild
-// it from (docs/parity/engineering/machines.md); the GAGS color by target temperature keeps the
-// type's color (only the mapped colors are rendered, see `ss13_mapload::gags`).
+// shortcut: no unanchoring (right-click wrench) and no `RefreshParts` (tier 1 numbers whatever
+// its parts; a crowbar with the panel open takes it apart into a frame, `crate::machine_frame`);
+// the GAGS color by target temperature keeps the type's color (only the mapped colors are
+// rendered, see `ss13_mapload::gags`).
 
 use bevy::prelude::*;
 use ss13_atmos::pipenet::Pipenet;

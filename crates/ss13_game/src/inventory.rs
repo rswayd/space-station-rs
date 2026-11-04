@@ -732,6 +732,11 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                     if crate::antag::heretic::server::item_interaction(
                         world, client, mob, held, target,
                     ) => {}
+                // Frames, and screwdrivers and crowbars on machines that come apart
+                // (`crate::machine_frame`): tool acts come before the machines' own handlers.
+                Some(held)
+                    if crate::machine_frame::item_interaction(world, client, mob, held, target) => {
+                }
                 // tg `item_interaction` of kitchen machines (inserting), then food on a mob
                 // (eating) and tools on food (slicing); food has reagents, so before chem.
                 Some(held)
