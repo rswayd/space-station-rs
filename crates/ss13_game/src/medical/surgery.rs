@@ -315,6 +315,7 @@ pub enum Op {
     Debride,
     RepairPuncture,
     SealVeins,
+    FilterBlood,
 }
 
 /// The static part of an operation.
@@ -435,6 +436,7 @@ impl Op {
             Self::Debride,
             Self::RepairPuncture,
             Self::SealVeins,
+            Self::FilterBlood,
         ]);
         ops
     }
@@ -993,6 +995,20 @@ impl Op {
                 required: &[],
                 blocked: SENSE_REPAIR_BLOCKED,
                 ..organ_repair
+            },
+            Self::FilterBlood => OpDef {
+                path: "/datum/surgery_operation/limb/filter_blood",
+                name: "Фильтрация крови",
+                catalog_name: "Гемодиализ (Фильтрация крови)",
+                desc: "Удаление нежелательных химических веществ из кровотока пациента.",
+                time: 25.0,
+                flags: flags::LOOPING,
+                all_required: SKIN_OPEN,
+                any_blocked: VESSELS_UNCLAMPED,
+                implements: &[(Path("/obj/item/blood_filter"), 1.0)],
+                tool_rec: "blood filter",
+                required: &["операция на груди", "пациент не должен быть хаском"],
+                ..base
             },
             Self::Debride => OpDef {
                 path: "/datum/surgery_operation/limb/debride",
@@ -1653,6 +1669,8 @@ pub(crate) fn is_available(world: &World, op: Op, mob: Entity, zone: TargetZone)
         Op::Gastrectomy => repairable(GASTRECTOMY_HEAL_TO),
         Op::EarSurgery | Op::EyeSurgery => bones_intact,
         Op::Debride => limb.wound(Series::Burn).is_some_and(|w| w.infection > 0.0),
+        // shortcut: no husks yet.
+        Op::FilterBlood => body == BodyZone::Chest,
         Op::RepairPuncture => limb
             .wound(Series::Pierce)
             .is_some_and(|w| w.blood_flow > 0.0 && !w.mend_state),
@@ -2103,6 +2121,11 @@ fn preop(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: TargetZone)
             ),
             format!("Вы чувствуете жжение в вашей {place}!"),
         ),
+        Op::FilterBlood => (
+            format!("Вы начинаете оперировать {target}..."),
+            format!("{user} начинает оперировать {target}."),
+            "Вы чувствуете пульсирующую боль в груди!".into(),
+        ),
         _ => {
             let verb = op.def().verb;
             (
@@ -2242,6 +2265,7 @@ pub fn complete(world: &mut World, surgeon: Entity, action: &DoAfter, op: Op, zo
     let tool = ToolInfo::read(world, actor.item);
     if op.def().flags & flags::LOOPING != 0
         && still_holding
+        && can_loop(world, op, mob)
         && offered(world, op, mob, surgeon, zone, &tool)
     {
         let delay = op.def().time
@@ -2282,6 +2306,49 @@ fn repair_organ(world: &mut World, mob: Entity, slot: Slot, heal_to: f32) {
         && let Some(mut state) = world.get_mut::<organs::Organ>(organ)
     {
         state.operated = true;
+    }
+}
+
+/// An operation's own `can_loop`: blood filtering goes on while there is something to filter
+/// (`has_filterable_chems`, the filter beeps when done).
+fn can_loop(world: &mut World, op: Op, mob: Entity) -> bool {
+    if op != Op::FilterBlood {
+        return true;
+    }
+    let any = world
+        .get::<crate::chem::MobReagents>(mob)
+        .is_some_and(|r| !r.blood.reagents.is_empty());
+    if !any {
+        let target = name_of(world, mob);
+        let text = format!(
+            "Фильтр крови сигнализирует о том, что в крови у {target} не обнаружено химических \
+             веществ."
+        );
+        super::visible(world, mob, &text, &text, Span::Notice);
+    }
+    any
+}
+
+/// `filter_blood/on_success`: each reagent in the blood loses 22% (0.4 to 10 units, rounded
+/// to 0.2).
+// shortcut: no whitelist (the filter's own UI), no chemical scan with an analyzer in hand.
+fn filter_blood(world: &mut World, mob: Entity) {
+    let Some(mut reagents) = world.get_mut::<crate::chem::MobReagents>(mob) else {
+        return;
+    };
+    let amounts: Vec<_> = reagents
+        .blood
+        .reagents
+        .iter()
+        .map(|r| {
+            (
+                r.id,
+                ((r.volume * 0.22 / 0.2).round() * 0.2).clamp(0.4, 10.0),
+            )
+        })
+        .collect();
+    for (id, amount) in amounts {
+        reagents.blood.remove_reagent(id, amount);
     }
 }
 
@@ -2677,6 +2744,12 @@ fn success(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: TargetZon
                 );
             }
         }
+        Op::FilterBlood => {
+            filter_blood(world, mob);
+            let tool = capitalize(&tool);
+            own = format!("{tool} завершает цикл фильтрации крови у {target}.");
+            others = format!("{tool} гудит, фильтруя кровь у {target}.");
+        }
         Op::Lobotomy => {
             own = format!("Вы успешно провели лоботомию {target}!");
             others = format!("{user} успешно проводит лоботомию {target}!");
@@ -2972,6 +3045,15 @@ fn failure(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: TargetZon
                 "Ваша голова пульсирует от ужасной боли; даже думать больно!",
             );
             severe_lobotomy_trauma(world, mob);
+            return;
+        }
+        Op::FilterBlood => {
+            say(
+                world,
+                format!("Вы ошибаетесь, оставляя синяк на груди у {target}!"),
+                format!("{user} ошибается, оставляя синяк на груди у {target}!"),
+            );
+            damage_limb(world, mob, BodyZone::Chest, DamageType::Brute, 5.0);
             return;
         }
         Op::Lobotomy => {
@@ -3383,6 +3465,58 @@ pub fn combat_mode(world: &World, mob: Entity) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn blood_filter_takes_a_share_of_each_reagent() {
+        use ss13_reagents::{Holder, Owner, Reagent};
+        let mut world = World::new();
+        let reagent = |id, volume| Reagent {
+            id,
+            volume,
+            purity: 1.0,
+            creation_purity: 1.0,
+            ph: 7.0,
+            metabolizing: false,
+            overdosed: false,
+            current_cycle: 0,
+            overdose_threshold: 0.0,
+            metabolization_rate: 0.2,
+            data: None,
+        };
+        let mut blood = Holder::new(1000.0, 0, Owner::default());
+        blood.reagents = vec![reagent(1, 100.0), reagent(2, 10.0), reagent(3, 0.5)];
+        blood.update_total();
+        let mob = world
+            .spawn(crate::chem::MobReagents {
+                blood,
+                stomach: Holder::new(1000.0, 0, Owner::default()),
+                drunk: 0.0,
+            })
+            .id();
+        filter_blood(&mut world, mob);
+        let left: Vec<f32> = world
+            .get::<crate::chem::MobReagents>(mob)
+            .unwrap()
+            .blood
+            .reagents
+            .iter()
+            .map(|r| r.volume)
+            .collect();
+        // 22%: capped at 10, 2.2 rounded to 0.2 steps, at least 0.4.
+        let want = [90.0, 7.8, 0.1];
+        assert!(
+            left.iter().zip(want).all(|(l, w)| (l - w).abs() < 1e-3),
+            "{left:?}"
+        );
+        assert!(can_loop(&mut world, Op::FilterBlood, mob));
+        world
+            .get_mut::<crate::chem::MobReagents>(mob)
+            .unwrap()
+            .blood
+            .reagents
+            .clear();
+        assert!(!can_loop(&mut world, Op::FilterBlood, mob));
+    }
 
     fn tool(path: &str, behaviour: &str, sharpness: u32, force: f32) -> ToolInfo {
         ToolInfo {
