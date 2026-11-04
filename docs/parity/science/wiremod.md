@@ -39,6 +39,12 @@
 - **BandaStation:** [`remotecam.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/wiremod/components/atom/remotecam.dm#L179) — санитизация имени сети камер
 - **Статус в ss13-rs:** ❌ нет
 
+### Компоненты интегральных схем воздушной тревоги
+Чтение показаний и управление вентиляциями/скрубберами тревоги из интегральных схем.
+
+- **Код:** [`circuit_component/air_alarm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/air_alarm/air_alarm_circuit.dm#L101), [`air_alarm_vents`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/air_alarm/air_alarm_circuit.dm#L448), [`air_alarm_scrubbers`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/air_alarm/air_alarm_circuit.dm#L238)
+- **Статус в ss13-rs:** ❌ нет
+
 ### Компоненты ID и доступа
 Чтение доступа и информации с ID, проверка доступа (с отдельным окном настройки).
 
