@@ -66,17 +66,27 @@ pub fn pathing_of<'a>(
 }
 
 /// Whether `blocker` is a closed door (or a multi-tile door's filler) that `mob` (a bot) opens
-/// by bumping it: not bolted or welded, and its access allows the bot's card.
+/// by bumping it (tg `CanAStarPass` of doors): an airlock, windoor or plain door, not bolted or
+/// welded, powered, whose access allows the bot's card. Shutters, blast doors and firelocks
+/// never open to a bump.
 pub fn bot_opens(world: &World, mob: Entity, blocker: Entity) -> bool {
+    use ss13_mapload::DoorKind;
     let Some(bot) = world.get::<crate::bots::Bot>(mob) else {
         return false;
     };
     let door = world
         .get::<crate::doors::DoorFiller>(blocker)
         .map_or(blocker, |f| f.0);
-    world
-        .get::<crate::doors::Door>(door)
-        .is_some_and(|d| !d.locked && !d.welded && d.allows(Some(&bot.access)))
+    let powered = world.get::<crate::power::Unpowered>(door).is_none();
+    world.get::<crate::doors::Door>(door).is_some_and(|d| {
+        matches!(
+            d.kind,
+            DoorKind::Basic | DoorKind::Airlock | DoorKind::Windoor
+        ) && !d.locked
+            && !d.welded
+            && d.has_power(powered)
+            && d.allows(Some(&bot.access))
+    })
 }
 /// Steps without progress before the movement fails (tg `max_pathing_attempts`).
 const MAX_FAILS: u32 = 8;

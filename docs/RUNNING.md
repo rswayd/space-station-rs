@@ -1079,6 +1079,43 @@ SS13_LIGHTING=0 SS13_MAP=$PWD/scripts/visual/maps/mobs.dmm SS13_ASSETS=$ASSETS \
     scripts/visual-check.sh scripts/visual/mobs.txt      # Ian, a carp, Runtime, Renault, Tom
 ```
 
+### Station bots
+
+`crates/ss13_game/src/bots/`, after tg `/mob/living/basic/bot` and `code/datums/ai/bots/`.
+`ss13-mapload convert` adds the bot vars to `mobs.ron` (`bot`: mode and cover flags,
+`req_one_access`, the access card with the `additional_access` trim, radio channel, the kinds'
+settings) and a `dm_navbeacon` component (`location`, `codes_txt`, map edits included): rerun it
+after updating. Mapped bots (MetaStation: Beepsky, Armsky, Pingsky, cleanbots, the medbay
+medibot, MULEbots, the repairbot) load as basic mobs with a `Bot`.
+
+- Patrol: with `BOT_MODE_AUTOPATROL`, beacon to beacon along `next_patrol` (else the closest);
+  bots path through airlocks their access card opens (bumping opens them), never through
+  shutters. A bot that is off does nothing.
+- Empty hand out of combat mode: the `SimpleBot` window (power, airplane mode, patrol,
+  maintenance hatch, the kind's controls; locked unless the ID has the bot's access, silicons
+  always; AI and cyborgs open it too). ID or alt-click: lock/unlock; screwdriver: hatch;
+  welder: repair 10 with the hatch open; emag: unlock, then (hatch open) emag.
+- Cleanbot: cleans decals (blood, graffiti, trash, pests by its controls) within 5 tiles, 2 s
+  each. Medbot: tends humans whose damage of its kit's type is over the threshold (2.5 per 2 s),
+  calls crit patients on its radio channel; emagged it injects chloral hydrate. Securitron:
+  stuns (8 s) and zip-ties humans with a threat over 4 (wanted records, ID check, emag) or who
+  hit it, announcing arrests on the security channel. Firebot: puts out burning people and
+  fires within 5 tiles. Others (MULEbot, repairbot, honkbot, ...) only patrol and salute.
+- Building: prox sensor on a bucket, then a robot arm (cleanbot); robot arm on an empty medkit,
+  health analyzer, prox sensor (medbot, the kit's skin and healing type); signaler on a
+  security helmet, welder, prox sensor, robot arm, stun baton (securitron; a screwdriver steps
+  back); robot arm on an extinguisher, red hardhat, prox sensor (firebot).
+
+```sh
+cargo test -p ss13_game --all-features --lib bots        # threat, cleanables, healing, window
+cargo test -p ss13_game --all-features --test it bots::  # patrol through a door, off bot stays,
+                                                         # securitron stuns and cuffs, cleanbot,
+                                                         # medbot, firebot, building two bots
+SS13_ASSETS=$ASSETS cargo test -p ss13_game --all-features --test it bots::station_bots -- --ignored --nocapture
+                                                         # MetaStation (SS13_BOTS_MAP=Cyberiad):
+                                                         # bots, beacons, 2 min of patrols, AI µs
+```
+
 ### Tools and construction
 
 Items with a tg `tool_behaviour` act before they hit (tg `base_item_interaction`, out of combat
