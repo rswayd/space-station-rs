@@ -1,7 +1,10 @@
 //! Silicons and cameras, after tg `/mob/living/silicon` (`code/modules/mob/living/silicon/`):
 //!
 //! - [`cameras`] (server): security cameras, `SScameras` chunks, the camera console;
-//! - [`ai`] (server): the AI in its core, its eye, AI clicks on doors and APCs;
+//! - [`ai`] (server): the AI in its core, its eye, AI clicks on doors and APCs; [`ai_power`]
+//!   (server): the core's power loss and restore routine; [`ai_hud`] (server): the AI's and
+//!   cyborgs' HUD buttons, VOX announcements, the core display;
+//! - [`alarms`] (server): station alarms, their silicon listeners and the alert console;
 //! - [`cyborg`] (server): cyborgs, their models, cell and the recharging station;
 //! - [`laws`] (server): lawsets, the round default, lawsync;
 //! - [`interact`] (server): silicons opening machine windows (`attack_ai`), their window
@@ -20,7 +23,13 @@
 #[cfg(feature = "server")]
 pub mod ai;
 #[cfg(feature = "server")]
+pub mod ai_hud;
+#[cfg(feature = "server")]
+pub mod ai_power;
+#[cfg(feature = "server")]
 pub mod airlock;
+#[cfg(feature = "server")]
+pub mod alarms;
 #[cfg(feature = "server")]
 pub mod cameras;
 #[cfg(feature = "client")]
@@ -74,6 +83,9 @@ mod server {
                 .add_plugins((
                     super::cameras::CamerasPlugin,
                     super::ai::AiPlugin,
+                    super::ai_power::AiPowerPlugin,
+                    super::alarms::AlarmsPlugin,
+                    super::ai_hud::AiHudPlugin,
                     super::cyborg::CyborgPlugin,
                     super::interact::SiliconInteractPlugin,
                     super::airlock::AiAirlockPlugin,
@@ -203,18 +215,21 @@ mod server {
         });
     }
 
-    /// Silicons take no oxygen or toxin damage and have no crit (tg robot and AI
-    /// `update_stat`: dead at `-maxHealth`, conscious above).
+    /// Silicons take no toxin damage, only the AI oxygen damage, and they have no crit (tg
+    /// robot and AI `update_stat`: dead at `-maxHealth`, conscious above).
     fn silicon_stat(
         mut mobs: Query<
-            (&mut Health, &mut Stat),
+            (&mut Health, &mut Stat, Has<super::ai::AiCore>),
             (With<Silicon>, Or<(Changed<Health>, Changed<Stat>)>),
         >,
     ) {
-        for (mut health, mut stat) in &mut mobs {
-            if health.tox != 0.0 || health.oxy != 0.0 {
+        for (mut health, mut stat, ai) in &mut mobs {
+            // tg `/mob/living/silicon/adjust_oxy_loss`: the AI takes it (a dead backup battery).
+            if health.tox != 0.0 || (health.oxy != 0.0 && !ai) {
                 health.tox = 0.0;
-                health.oxy = 0.0;
+                if !ai {
+                    health.oxy = 0.0;
+                }
             }
             let wanted = if *stat == Stat::Dead || health.health() <= -health.max {
                 Stat::Dead

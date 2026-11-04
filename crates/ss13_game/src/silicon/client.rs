@@ -6,11 +6,14 @@
 //!   `CAMERA_STATIC_PLANE`);
 //! - the camera console window (`CameraConsole220`): the camera list with prev/next and the
 //!   active camera's name;
-//! - `ListInputModal` (tg `tgui_input_list`): one button per choice.
+//! - `ListInputModal` (tg `tgui_input_list`): one button per choice;
+//! - `StationAlertConsole`: a section per alarm type, the alarmed areas, and for the AI each
+//!   area's camera button.
 // shortcut: the static is plain dark tiles, not tg's animated `cameravis.dmi` static.
 // shortcut: the console's camera list has no search field and no nanomap tab; its map pane is
 // the main map view.
 
+use bevy::app::Propagate;
 use bevy::asset::RenderAssetUsages;
 use bevy::image::ImageSampler;
 use bevy::prelude::*;
@@ -44,6 +47,7 @@ impl Plugin for SiliconClientPlugin {
         app.register_ui_headless::<CameraViewUi>()
             .register_ui_view::<CameraConsoleUi>()
             .register_ui_view::<ListInputUi>()
+            .register_ui_view::<StationAlertUi>()
             .init_resource::<CameraView>()
             .add_systems(Startup, spawn_static)
             .add_systems(Update, receive_view)
@@ -361,6 +365,92 @@ impl ClientUi for ListInputUi {
             Children [
                 @Section { @fill: true, @scrollable: true, @title: message }
                 Children [ {rows} ]
+            ]
+        }
+    }
+}
+
+/// tgui `StationAlertConsole`'s camera button text.
+pub fn camera_label(cameras: u32) -> String {
+    match cameras {
+        0 => "No Camera".to_owned(),
+        1 => "1 Camera".to_owned(),
+        n => format!("{n} Cameras"),
+    }
+}
+
+fn alert_row(alert: &AlarmAlert, camera_view: bool) -> Box<dyn SceneList> {
+    let sources = alert.sources.unwrap_or(0);
+    let text = if camera_view && sources > 1 {
+        format!("{}  ({sources} sources)", alert.name)
+    } else {
+        alert.name.clone()
+    };
+    let average = UiColor::Average.base();
+    let label = EntityScene(bsn! {
+        Node Propagate::<TextColor>(TextColor(average)) Children [ Text(text) ]
+    });
+    if !camera_view {
+        return Box::new(EntityScene(bsn! {
+            Node { margin: UiRect::bottom(px(4)) } Children [ {label} ]
+        }));
+    }
+    let cameras = alert.cameras.unwrap_or(0);
+    let params = ActParams(vec![(
+        "alert".to_owned(),
+        alert.alert_ref.clone().unwrap_or_default(),
+    )]);
+    let icon = if cameras > 0 { "video" } else { "" };
+    Box::new(EntityScene(bsn! {
+        @Stack
+        Node { margin: UiRect::bottom(px(4)) }
+        Children [
+            @StackItem { @grow: 1.0 } Children [ {label} ]
+            --
+            @StackItem
+            Children [
+                @ss13_ui_kit::Button { @icon: icon, @content: {camera_label(cameras)} }
+                ss13_ui_kit::Button { disabled: {cameras == 0} }
+                Node { width: px(100) }
+                Act({SELECT_CAMERA.to_owned()})
+                params
+            ]
+        ]
+    }))
+}
+
+impl ClientUi for StationAlertUi {
+    const WIDTH: f32 = 390.0;
+    const HEIGHT: f32 = 587.0;
+
+    fn content(_: &(), data: &StationAlertData) -> impl Scene {
+        let good = UiColor::Good.base();
+        let sections: Vec<Box<dyn SceneList>> = data
+            .alarms
+            .iter()
+            .map(|category| -> Box<dyn SceneList> {
+                let title = format!("{} Alarms", category.name);
+                let rows: Vec<Box<dyn SceneList>> = if category.alerts.is_empty() {
+                    vec![Box::new(EntityScene(bsn! {
+                        Node Propagate::<TextColor>(TextColor(good))
+                        Children [ Text("Systems nominal") ]
+                    }))]
+                } else {
+                    category
+                        .alerts
+                        .iter()
+                        .map(|a| alert_row(a, data.camera_view))
+                        .collect()
+                };
+                Box::new(EntityScene(bsn! {
+                    @Section { @title: title } Children [ {rows} ]
+                }))
+            })
+            .collect();
+        bsn! {
+            @WindowContent
+            Children [
+                @Section { @fill: true, @scrollable: true } Children [ {sections} ]
             ]
         }
     }

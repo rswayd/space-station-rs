@@ -1924,6 +1924,16 @@ silicon mobs and module items: rerun it after updating.
   click it to open the modules, Q puts the active one back. The cell loses 1 W while conscious;
   a recharging station (empty-hand click opens/closes it, closing takes in the cyborg on it)
   charges it at 1 kW while powered.
+- AI power (`silicon/ai_power.rs`): without equipment power in the core's area the AI is
+  incapacitated and sees no camera tile; tg's restore routine (chat lines over ~40 s) finds the
+  area's APC and opens its window, usable blind; the backup battery lasts 400 s, then the AI dies.
+- HUD buttons (action row, `silicon/ai_hud.rs`): AI core (eye back), Show Camera List, Show Alerts,
+  Make Vox Announcement (VOX words only, 60 s for all AIs; the words play in order, their
+  lengths from `sfx.ron`: rerun `ss13-mapload convert`), Call Emergency Shuttle, Change Core
+  Display; a cyborg has the Alert Panel.
+- Station alarms (`silicon/alarms.rs`): fire, atmosphere and power alarms per area; the AI and
+  cyborgs read them in chat after 3 s and in `StationAlertConsole` (the AI's lists the area's
+  cameras and jumps there); the station alert console lists the station's (or its level's).
 - `SS13_DEV_JOB=AI` (dev, debug builds, with the lobby skipped): every client joins as that job.
 
 ```sh
@@ -1933,7 +1943,9 @@ cargo test -p ss13_game --all-features --test it silicon::    # AI eye, camera v
                                                          # the AI wire, AiAirlock and Apc windows,
                                                          # none out of view; nothing replicated under
                                                          # static; console viewer and its mask;
-                                                         # cyborg link, model, station (fixture)
+                                                         # cyborg link, model, station; AI power
+                                                         # loss and restore; HUD alerts, camera
+                                                         # jump, announcement; alert console
 SS13_ASSETS=$ASSETS cargo test -p ss13_game --all-features --test it silicon:: -- --ignored --nocapture
                                                          # MetaStation: AI replication cost
 cargo test -p ss13_net --all-features masked_view        # the interest mask over WebTransport

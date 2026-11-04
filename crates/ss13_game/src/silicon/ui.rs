@@ -113,3 +113,41 @@ pub struct ListInputStatic {
 
 /// `act('submit', { entry })`.
 pub const SUBMIT: &str = "submit";
+
+/// tg `StationAlertConsole` (`/datum/station_alert`): the alarms a listener tracks, by type.
+/// Opened by the station alert console, the AI's and a cyborg's alerts button.
+pub struct StationAlertUi;
+
+impl UiInterface for StationAlertUi {
+    const NAME: &'static str = "StationAlertConsole";
+    type Data = StationAlertData;
+    type StaticData = ();
+}
+
+/// `ui_data`: `cameraView`, `alarms` (a category per tracked type, nominal ones empty), in the
+/// tgui's sorting order (fire, atmosphere, power, burglar, motion, camera).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct StationAlertData {
+    pub camera_view: bool,
+    pub alarms: Vec<AlarmCategory>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct AlarmCategory {
+    /// tg `ALARM_*` name (`"Fire"`, `"Atmosphere"`, ...).
+    pub name: String,
+    pub alerts: Vec<AlarmAlert>,
+}
+
+/// One alarmed area; the counts and the ref only with `camera_view`.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct AlarmAlert {
+    pub name: String,
+    pub cameras: Option<u32>,
+    pub sources: Option<u32>,
+    /// tg `REF(alert)`: an opaque id the `select_camera` act names.
+    pub alert_ref: Option<String>,
+}
+
+/// `act('select_camera', { alert })`.
+pub const SELECT_CAMERA: &str = "select_camera";

@@ -295,7 +295,8 @@ fn convert_cmd(config: &MapLoadPlugin, mut map_dirs: Vec<PathBuf>) -> anyhow::Re
         handbook.reaction_info.len(),
         handbook_out.display()
     );
-    let sfx = ss13_mapload::sound::resolve_sfx(&types);
+    let mut sfx = ss13_mapload::sound::resolve_sfx(&types);
+    sfx.vox = ss13_mapload::sound::resolve_vox(&config.source);
     let sfx_out = config.assets.join(ss13_mapload::sound::SFX_FILE);
     std::fs::write(&sfx_out, sfx.to_ron())
         .with_context(|| format!("writing {}", sfx_out.display()))?;
@@ -308,8 +309,9 @@ fn convert_cmd(config: &MapLoadPlugin, mut map_dirs: Vec<PathBuf>) -> anyhow::Re
         &ss13_mapload::sound::source_commit(&config.source),
     )?;
     println!(
-        "{} sfx keys -> {}; {} sound files ({:.1} MB, {} attribution files) -> {}",
+        "{} sfx keys, {} VOX words -> {}; {} sound files ({:.1} MB, {} attribution files) -> {}",
         sfx.sfx.len(),
+        sfx.vox.len(),
         sfx_out.display(),
         copied.copied,
         copied.bytes as f64 / 1e6,

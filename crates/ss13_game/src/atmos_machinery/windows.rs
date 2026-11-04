@@ -1643,7 +1643,9 @@ pub fn interact(
         return false;
     };
     let powered = !e.contains::<Unpowered>();
-    if super::consoles::interact(world, client, mob, target) {
+    if super::consoles::interact(world, client, mob, target)
+        || crate::silicon::alarms::interact(world, client, mob, target)
+    {
         return true;
     }
     if super::control::interact(world, client, mob, target)
