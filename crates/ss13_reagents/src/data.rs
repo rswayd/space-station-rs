@@ -50,6 +50,9 @@ pub struct ReagentDef {
     /// `/datum/reagent/consumable`: `nutriment_factor`.
     #[serde(default)]
     pub nutriment_factor: f32,
+    /// `default_container`: what the ChemMaster suggests for it (a type path).
+    #[serde(default)]
+    pub default_container: String,
 }
 
 /// One tg `/datum/chemical_reaction` type. Reagent lists keep their DM order (it decides what is

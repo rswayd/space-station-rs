@@ -23,6 +23,11 @@ use crate::interfaces::checkbox_input::{CheckboxInputStatic, CheckboxInputUi};
 use crate::interfaces::chem_dispenser::{
     ChemDispenserData, ChemDispenserUi, DispensableReagent, DispenserBeaker,
 };
+use crate::interfaces::chem_heater::{ActiveReaction, ChemHeaterData, ChemHeaterUi, HeaterBeaker};
+use crate::interfaces::chem_master::{
+    AnalyzableBeaker, AnalyzableReagent, ChemMasterData, ChemMasterStatic, ChemMasterUi,
+    ContainerCategory, PrintableContainer,
+};
 use crate::interfaces::color_picker::{ColorPickerStatic, ColorPickerUi};
 use crate::interfaces::crystallizer::{
     CrystallizerData, CrystallizerStatic, CrystallizerUi, InternalGas, RecipeEntry,
@@ -532,6 +537,37 @@ pub fn sample(name: &str) -> Option<Sample> {
                     current_volume: 20.0,
                     contents: vec![("Space Cola".into(), 10.0), ("Ice".into(), 10.0)],
                 }),
+            },
+        ),
+        ChemMasterUi::NAME => chem_master(),
+        ChemHeaterUi::NAME => of::<ChemHeaterUi>(
+            "reaction chamber",
+            &(),
+            &ChemHeaterData {
+                target_temp: 450.0,
+                is_active: true,
+                upgrade_level: 2.0,
+                has_beaker_in_hand: false,
+                beaker: Some(HeaterBeaker {
+                    max_volume: 100.0,
+                    ph: 6.4,
+                    current_volume: 40.0,
+                    contents: vec![("Welding Fuel".into(), 25.0), ("Oxygen".into(), 15.0)],
+                }),
+                current_temp: 431.0,
+                active_reactions: vec![ActiveReaction {
+                    name: "Napalm".into(),
+                    quality: 0.85,
+                    inverse: 0.25,
+                    min_pure: 0.0,
+                    reacted_vol: 6.0,
+                    target_vol: 15.0,
+                    ..Default::default()
+                }],
+                is_flashing: false,
+                acidic_buffer_vol: 20.0,
+                basic_buffer_vol: 0.0,
+                dispense_volume: 1.0,
             },
         ),
         ElectrolyzerUi::NAME => of::<ElectrolyzerUi>(
@@ -1102,4 +1138,75 @@ fn rpd_static() -> RpdStatic {
             },
         ],
     }
+}
+
+fn chem_master() -> Sample {
+    let reagent = |name: &str, volume: f32, color: &str| AnalyzableReagent {
+        r#ref: format!("/datum/reagent/{}", name.to_lowercase()),
+        name: name.into(),
+        volume,
+        ph: 7.0,
+        color: color.into(),
+        description: format!("Some {name}."),
+        purity: 1.0,
+        meta_rate: 0.2,
+        overdose: 30.0,
+        addiction_types: Vec::new(),
+    };
+    let container = |r: &str, name: &str, volume: f32| PrintableContainer {
+        r#ref: r.into(),
+        name: name.into(),
+        icon: None,
+        volume,
+    };
+    let categories = vec![
+        ContainerCategory {
+            name: "tubes".into(),
+            containers: vec![container(
+                "/obj/item/reagent_containers/cup/tube",
+                "tube",
+                20.0,
+            )],
+        },
+        ContainerCategory {
+            name: "pills".into(),
+            containers: (1..=6)
+                .map(|i| {
+                    container(
+                        &format!("/obj/item/reagent_containers/applicator/pill/style/{i}"),
+                        "pill",
+                        50.0,
+                    )
+                })
+                .collect(),
+        },
+    ];
+    of::<ChemMasterUi>(
+        "ChemMaster 3000",
+        &ChemMasterStatic {
+            max_printable: 50,
+            max_pill_duration: 30,
+            categories,
+        },
+        &ChemMasterData {
+            selected_pill_duration: 3.0,
+            custom_transfer_amount: 15.0,
+            beaker: Some(AnalyzableBeaker {
+                max_volume: 100.0,
+                current_volume: 30.0,
+                contents: vec![reagent("Bicaridine", 30.0, "#C8A5DC")],
+            }),
+            buffer: AnalyzableBeaker {
+                max_volume: 100.0,
+                current_volume: 20.0,
+                contents: vec![reagent("Kelotane", 20.0, "#FFA800")],
+            },
+            is_transfering: true,
+            suggested_container_ref: "/obj/item/reagent_containers/cup/tube".into(),
+            selected_container_ref: "/obj/item/reagent_containers/applicator/pill/style/1".into(),
+            selected_container_volume: 50.0,
+            selected_container_category: Some("pills".into()),
+            ..Default::default()
+        },
+    )
 }

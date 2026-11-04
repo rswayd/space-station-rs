@@ -103,6 +103,12 @@ pub struct SetLocal {
 #[derive(Component, Clone, Debug, Default, PartialEq)]
 pub struct LocalOnInput(pub String);
 
+/// On a `NumberInput`: every change is stored under this key of the window's [`UiLocalState`]
+/// and the window re-renders (`onChange={(value) => setState(value)}` of a number other parts
+/// of the view show).
+#[derive(Component, Clone, Debug, Default, PartialEq)]
+pub struct LocalOnNumber(pub String);
+
 /// An atlas sprite inside a window (tgui `DmIcon`): the client's renderer gives the node its
 /// `ImageNode` (first frame, facing `dir`, south when unset).
 #[derive(Component, Clone, Debug, Default, PartialEq)]
@@ -483,6 +489,8 @@ impl Plugin for TguiClientPlugin {
             .register_ui_view::<crate::interfaces::dna_console::DnaConsoleUi>()
             .register_ui_view::<crate::interfaces::electrolyzer::ElectrolyzerUi>()
             .register_ui_view::<crate::interfaces::chem_dispenser::ChemDispenserUi>()
+            .register_ui_view::<crate::interfaces::chem_master::ChemMasterUi>()
+            .register_ui_view::<crate::interfaces::chem_heater::ChemHeaterUi>()
             .register_ui_view::<crate::interfaces::smart_vend::SmartVendUi>()
             .register_ui_view::<crate::interfaces::crystallizer::CrystallizerUi>()
             .register_ui_view::<crate::interfaces::destination_tagger::DestinationTaggerUi>();
@@ -517,6 +525,7 @@ impl Plugin for TguiClientPlugin {
             .add_observer(crate::interfaces::key_combo::client_side::capture_combo)
             .add_plugins(crate::interfaces::color_picker::client_side::plugin)
             .add_observer(local_on_input)
+            .add_observer(local_on_number)
             .add_observer(send_act)
             .add_observer(submit_act)
             .add_observer(key_acts)
@@ -1022,6 +1031,30 @@ fn local_on_input(
         && local.get(key) != changed.value
     {
         local.set(key, &changed.value);
+    }
+}
+
+fn local_on_number(
+    changed: On<NumberInputChanged>,
+    inputs: Query<&LocalOnNumber>,
+    parents: Query<&ChildOf>,
+    mut windows: Query<(&mut ClientWindow, &mut UiLocalState)>,
+) {
+    let Ok(LocalOnNumber(key)) = inputs.get(changed.entity) else {
+        return;
+    };
+    let Some(root) = parents
+        .iter_ancestors(changed.entity)
+        .find(|e| windows.contains(*e))
+    else {
+        return;
+    };
+    if let Ok((mut window, mut local)) = windows.get_mut(root) {
+        let value = changed.value.to_string();
+        if local.get(key) != value {
+            local.set(key, &value);
+            window.dirty = true;
+        }
     }
 }
 

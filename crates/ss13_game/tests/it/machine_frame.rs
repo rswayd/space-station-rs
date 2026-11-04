@@ -597,7 +597,7 @@ fn metastation_families() {
         "covered families on MetaStation: {:?}",
         picked.iter().map(|p| p.0).collect::<Vec<_>>()
     );
-    assert_eq!(picked.len(), 12, "every family is mapped: {picked:?}");
+    assert_eq!(picked.len(), 14, "every family is mapped: {picked:?}");
     for (fam, machine, path, pos) in picked {
         let board = world.get::<DmMachine>(machine).unwrap().circuit.clone();
         let def = world
@@ -677,6 +677,15 @@ fn metastation_families() {
                 .get::<ss13_game::chem_dispenser::ChemDispenser>()
                 .is_some_and(|d| d.cell.is_some() && !d.dispensable.is_empty()),
             Family::SmartFridge => e.contains::<ss13_game::smartfridge::SmartFridge>(),
+            // The buffer is the volume of the two beakers among its parts.
+            Family::ChemMaster => {
+                e.get::<ss13_game::chem::Reagents>()
+                    .is_some_and(|r| r.0.maximum_volume == 100.0)
+                    && e.contains::<ss13_game::chem_master::ChemMaster>()
+            }
+            Family::ChemHeater => e
+                .get::<ss13_game::chem_heater::ChemHeater>()
+                .is_some_and(|h| h.heater_coefficient == 0.1),
         };
         assert!(live, "{fam:?}: {} has its live state", def.build_path);
         println!("{fam:?}: {path} -> {board} -> {}", def.build_path);

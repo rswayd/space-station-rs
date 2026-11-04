@@ -709,6 +709,20 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                     target,
                     modifiers.right,
                 ) => {}
+                None if crate::chem_master::interact(
+                    world,
+                    client,
+                    mob,
+                    target,
+                    modifiers.right,
+                ) => {}
+                None if crate::chem_heater::interact(
+                    world,
+                    client,
+                    mob,
+                    target,
+                    modifiers.right,
+                ) => {}
                 // tg `attack_hand` of hydroponics trays (harvest, dead plant, examine).
                 None if crate::botany::interact(world, client, mob, target, modifiers.right) => {}
                 // tg `attack_hand` / `attack_hand_secondary` of a ladder: climb up or down.
@@ -784,6 +798,12 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 Some(held)
                     if crate::chem_dispenser::item_interaction(
                         world, client, mob, held, target,
+                    ) => {}
+                Some(held)
+                    if crate::chem_master::item_interaction(world, client, mob, held, target) => {}
+                Some(held)
+                    if crate::chem_heater::item_interaction(
+                        world, client, mob, held, target, modifiers,
                     ) => {}
                 // tg `item_interaction` of wall mounts: a button pressed with an item, cabinets.
                 Some(held)

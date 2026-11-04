@@ -250,6 +250,8 @@ pub fn refresh(world: &mut World, machine: Entity) {
     crate::science::lathe::refresh_parts(world, machine);
     crate::vending::refill::refresh_parts(world, machine);
     crate::chem_dispenser::refresh_parts(world, machine);
+    crate::chem_master::refresh_parts(world, machine);
+    crate::chem_heater::refresh_parts(world, machine);
 }
 
 /// Into `owner`'s parts from wherever it is (a hand, a storage, the floor).

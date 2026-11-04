@@ -153,6 +153,7 @@ impl Plugin for ChemServerPlugin {
                 Update,
                 (
                     metabolize_mobs.before(HealthSystems),
+                    digest_pills,
                     process_reactions,
                     refresh_containers,
                 )
@@ -236,10 +237,16 @@ fn create_container_reagents(
             holder.set_data_if_none(id, blood_type);
         }
     }
+    let pill = is_under(&holder.owner.path, PILL_ROOT);
     commands.entity(add.entity).insert((
         Reagents(holder),
         TransferAmount(dm.amount_per_transfer_from_this),
     ));
+    if pill {
+        commands
+            .entity(add.entity)
+            .insert_if_new(PillShell(crate::chem_master::PILL_LAYERS));
+    }
 }
 
 fn mob_holder() -> Holder {
@@ -508,6 +515,10 @@ pub fn item_interaction(
     }
     if !is_under(&item_path, CUP_ROOT) {
         return living;
+    }
+    // `pill/item_interaction`: a cup's sugar thickens a pill's shell, its water dissolves it.
+    if world.get::<PillShell>(target).is_some() && !modifiers.right {
+        return coat_pill(world, actor, target);
     }
     let held_holder = holder(world, held).expect("checked above");
     if !held_holder.is_open_container() {
@@ -893,15 +904,143 @@ fn apply_pill(world: &mut World, actor: Actor, target: Entity) {
     );
 }
 
-/// tg `/obj/item/reagent_containers/applicator/pill/on_consumption`.
-// shortcut: the sugar shell (`layers_remaining`, digested in the stomach over seconds) is not
-// modelled: the contents go into the stomach at once.
+/// tg `layers_remaining` of a pill: seconds its sugar shell lasts in a stomach.
+#[derive(Component, Clone, Copy, Debug, PartialEq)]
+pub struct PillShell(pub f32);
+
+/// A swallowed pill whose shell is dissolving in `eater`'s stomach (tg `stomach.consume_thing`
+/// and `on_digestion`): off the map, its contents go in at `at` (`Time` seconds).
+#[derive(Component, Clone, Copy, Debug, PartialEq)]
+pub struct DigestingPill {
+    pub eater: Entity,
+    pub at: f64,
+}
+
+/// tg `/obj/item/reagent_containers/applicator/pill/on_consumption`: a pill with a shell waits
+/// in the stomach for its layers' seconds, one without (or a mob without a stomach) goes in at
+/// once.
+// shortcut: no taste messages ("starchy sugar") and no red pill question.
 fn swallow(world: &mut World, pill: Entity, eater: Entity) {
+    let layers = world.get::<PillShell>(pill).map_or(0.0, |s| s.0);
+    let stomach =
+        !crate::medical::organs::lacks(world, eater, crate::medical::organs::Slot::Stomach);
+    if layers > 0.0 && stomach && world.get::<MobReagents>(eater).is_some() {
+        if let Some(carrier) = world.get::<CarriedBy>(pill).map(|c| c.0)
+            && let Some(mut inventory) = world.get_mut::<Inventory>(carrier)
+            && let Some(slot) = inventory.hands.iter_mut().find(|h| **h == Some(pill))
+        {
+            *slot = None;
+        }
+        let at = world.resource::<Time>().elapsed_secs_f64() + f64::from(layers);
+        world
+            .entity_mut(pill)
+            .remove::<(CarriedBy, TilePos)>()
+            .insert(DigestingPill { eater, at });
+        return;
+    }
+    digest(world, pill, eater);
+}
+
+/// The end of a pill: its contents into the eater's stomach.
+fn digest(world: &mut World, pill: Entity, eater: Entity) {
     let total = holder(world, pill).map_or(0.0, |h| h.total_volume);
-    if total > 0.0 {
+    if total > 0.0 && world.get::<MobReagents>(eater).is_some() {
         transfer_to_mob(world, pill, eater, total, true);
     }
     world.despawn(pill);
+}
+
+/// `PILL_MAX_LAYERS`: a minute of shell.
+const PILL_MAX_LAYERS: f32 = 60.0;
+const SUGAR: &str = "/datum/reagent/consumable/sugar";
+const WATER: &str = "/datum/reagent/water";
+
+/// tg `pill/item_interaction` with a held cup: sugar adds layers (whole units, up to a
+/// minute), else water removes them. False when the cup has neither (it falls through).
+fn coat_pill(world: &mut World, actor: Actor, pill: Entity) -> bool {
+    let held = actor.item.expect("a held cup");
+    let chem = chem(world);
+    let (src, dst) = (name_of(world, held), name_of(world, pill));
+    let Some(h) = holder(world, held) else {
+        return false;
+    };
+    if !h.is_drainable() {
+        tell(
+            world,
+            actor.client,
+            Span::Warning,
+            format!("Нельзя вылить содержимое {src} на {dst}!"),
+        );
+        return true;
+    }
+    let layers = world.get::<PillShell>(pill).map_or(0.0, |s| s.0);
+    let amount = transfer_amount(world, held);
+    let (sugar, water) = (chem.id(SUGAR), chem.id(WATER));
+    let sugar_volume = sugar.map_or(0.0, |id| h.amount(id));
+    let water_volume = water.map_or(0.0, |id| h.amount(id));
+    let (id, delta, text) = if sugar_volume > 0.0 {
+        if layers >= PILL_MAX_LAYERS {
+            tell(
+                world,
+                actor.client,
+                Span::Warning,
+                format!("Оболочка {dst} слишком толстая, больше сахара не нанести!"),
+            );
+            return true;
+        }
+        let apply = amount
+            .min(sugar_volume)
+            .min(PILL_MAX_LAYERS - layers)
+            .floor();
+        (
+            sugar,
+            apply,
+            format!("Вы поливаете {dst} содержимым {src}, утолщая сахарную оболочку."),
+        )
+    } else if water_volume > 0.0 {
+        if layers <= 0.0 {
+            tell(
+                world,
+                actor.client,
+                Span::Warning,
+                format!("У {dst} больше нет внешних слоёв, которые можно растворить!"),
+            );
+            return true;
+        }
+        let apply = amount.min(water_volume).min(layers).floor();
+        (
+            water,
+            -apply,
+            format!("Вы поливаете {dst} содержимым {src}, растворяя сахарную оболочку."),
+        )
+    } else {
+        return false;
+    };
+    if let (Some(id), Some(mut r)) = (id, world.get_mut::<Reagents>(held)) {
+        r.0.remove_reagent(id, delta.abs());
+    }
+    world.entity_mut(pill).insert(PillShell(layers + delta));
+    tell(world, actor.client, Span::Notice, text);
+    true
+}
+
+/// Swallowed pills whose shells are gone.
+// Cost: one pass over the pills being digested (a few at most).
+fn digest_pills(world: &mut World) {
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    let mut q = world.query::<(Entity, &DigestingPill)>();
+    let due: Vec<(Entity, Entity)> = q
+        .iter(world)
+        .filter(|(_, d)| now >= d.at)
+        .map(|(e, d)| (e, d.eater))
+        .collect();
+    for (pill, eater) in due {
+        if world.get_entity(eater).is_err() {
+            world.despawn(pill);
+            continue;
+        }
+        digest(world, pill, eater);
+    }
 }
 
 /// tg `/obj/item/reagent_containers/applicator/pill/interact_with_atom` on a container.
@@ -1106,6 +1245,22 @@ pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<(Span, Strin
             ));
         }
     }
+    if let Some(shell) = world.get::<PillShell>(target) {
+        if shell.0 > 0.0 {
+            lines.push((
+                Span::Notice,
+                format!(
+                    "Его сахарная оболочка продержится в желудке примерно {} сек.",
+                    dm_num(shell.0)
+                ),
+            ));
+        } else {
+            lines.push((
+                Span::Warning,
+                "Его оболочка полностью растворилась!".to_owned(),
+            ));
+        }
+    }
     if h.flags & flags::TRANSPARENT != 0 {
         if h.total_volume > 0.0 {
             lines.push((
@@ -1151,25 +1306,28 @@ pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<(Span, Strin
     }
 }
 
-/// Reacting holders step every [`REAGENTS_WAIT_SECS`] (tg `SSreagents`, real time).
+/// Reacting holders step every [`REAGENTS_WAIT_SECS`] (tg `SSreagents`, real time); one in a
+/// reaction chamber is heated first (`COMSIG_REAGENTS_REACTION_STEP`).
 // Cost: every 0.25 s one pass over the containers that are reacting (usually none or a few).
-fn process_reactions(
-    time: Res<Time>,
-    mut clock: ResMut<ReagentsClock>,
-    chem: Option<Res<Chem>>,
-    mut holders: Query<&mut Reagents, With<Reacting>>,
-) {
-    let Some(chem) = chem else {
+fn process_reactions(world: &mut World) {
+    let Some(chem) = world.get_resource::<Chem>().map(|c| c.0.clone()) else {
         return;
     };
-    clock.0 += time.delta_secs_f64();
+    let delta = world.resource::<Time>().delta_secs_f64();
+    let mut clock = world.resource_mut::<ReagentsClock>();
+    clock.0 += delta;
     if clock.0 < REAGENTS_WAIT_SECS {
         return;
     }
     let seconds = clock.0 as f32;
     clock.0 = 0.0;
-    for mut reagents in &mut holders {
-        reagents.0.process(&chem.0, seconds);
+    let mut q = world.query_filtered::<Entity, With<Reacting>>();
+    let reacting: Vec<Entity> = q.iter(world).collect();
+    for e in reacting {
+        crate::chem_heater::reaction_step(world, e, seconds);
+        if let Some(mut reagents) = world.get_mut::<Reagents>(e) {
+            reagents.0.process(&chem, seconds);
+        }
     }
 }
 
@@ -1427,13 +1585,7 @@ pub fn glass_style<'a>(chem: &'a Chemistry, path: &str, h: &Holder) -> Option<&'
     if h.total_volume <= 0.0 {
         return None;
     }
-    let mut main: Option<&ss13_reagents::Reagent> = None;
-    for r in &h.reagents {
-        if main.is_none_or(|m| r.volume > m.volume) {
-            main = Some(r);
-        }
-    }
-    chem.glass_style(container, main?.id)
+    chem.glass_style(container, h.master_reagent()?.id)
 }
 
 /// A styled container's prototype name and description, kept to reset to.

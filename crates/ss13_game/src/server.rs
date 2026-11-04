@@ -259,6 +259,8 @@ impl Plugin for GameServerPlugin {
         .add_plugins((
             crate::cooking::CookingServerPlugin,
             crate::chem_dispenser::ChemDispenserPlugin,
+            crate::chem_master::ChemMasterPlugin,
+            crate::chem_heater::ChemHeaterPlugin,
             crate::smartfridge::SmartFridgePlugin,
         ))
         .add_plugins((

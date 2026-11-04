@@ -43,11 +43,16 @@ const BIN_POWER_CUT: f32 = 250.0;
 /// `CHEMICAL_VOLUME_ROUNDING`.
 const VOLUME_ROUNDING: f32 = 0.01;
 
+/// The container a chem machine holds (tg `beaker` of dispensers, the ChemMaster and the
+/// heater); [`beaker_of`] reads it.
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq)]
+pub struct InsertedBeaker(pub Option<Entity>);
+
 /// A dispenser's live state.
 #[derive(Component, Clone, Debug, Default, PartialEq)]
+#[require(InsertedBeaker)]
 pub struct ChemDispenser {
     pub amount: f32,
-    pub beaker: Option<Entity>,
     pub emagged: bool,
     /// The cell part (`/obj/item/stock_parts/power_store`), [`ItemCell`].
     pub cell: Option<Entity>,
@@ -172,7 +177,7 @@ fn operational(world: &World, e: Entity) -> bool {
 }
 
 /// A held open reagent container (`is_chem_container`).
-fn chem_container(world: &World, item: Entity) -> bool {
+pub(crate) fn chem_container(world: &World, item: Entity) -> bool {
     world.get::<DmReagents>(item).is_some()
         && world
             .get::<Reagents>(item)
@@ -223,9 +228,10 @@ fn open_window(world: &mut World, client: Entity, mob: Entity, target: Entity) {
     world.write_message(OpenUi::new::<DispenserWindow>(client, mob, target, title));
 }
 
-/// tg `replace_beaker`: the old beaker to the user's hands, `new` (from them) in.
-fn replace_beaker(world: &mut World, mob: Entity, e: Entity, new: Option<Entity>) {
-    let old = world.get::<ChemDispenser>(e).and_then(|d| d.beaker);
+/// tg `replace_beaker` of the chem machines: the old beaker to the user's hands, `new` (from
+/// them) in.
+pub(crate) fn replace_beaker(world: &mut World, mob: Entity, e: Entity, new: Option<Entity>) {
+    let old = beaker_of(world, e);
     if let Some(new) = new {
         if let Some(mut inventory) = world.get_mut::<Inventory>(mob)
             && let Some(slot) = inventory.hands.iter_mut().find(|h| **h == Some(new))
@@ -247,14 +253,14 @@ fn replace_beaker(world: &mut World, mob: Entity, e: Entity, new: Option<Entity>
             crate::inventory::pick_up(world, mob, old, hand);
         }
     }
-    if let Some(mut d) = world.get_mut::<ChemDispenser>(e) {
-        d.beaker = new;
+    if let Some(mut b) = world.get_mut::<InsertedBeaker>(e) {
+        b.0 = new;
     }
 }
 
-/// The beaker, if it is still inside.
-fn beaker_of(world: &World, e: Entity) -> Option<Entity> {
-    let beaker = world.get::<ChemDispenser>(e)?.beaker?;
+/// The beaker, if it is still inside (tg `Exited` clears it).
+pub(crate) fn beaker_of(world: &World, e: Entity) -> Option<Entity> {
+    let beaker = world.get::<InsertedBeaker>(e)?.0?;
     world
         .get::<crate::storage::StoredIn>(beaker)
         .filter(|s| s.0 == e)
@@ -319,7 +325,12 @@ pub enum DispenserAct {
 }
 
 impl ServerUi for DispenserWindow {
-    type Source = (Entity, &'static ChemDispenser, &'static DmChemDispenser);
+    type Source = (
+        Entity,
+        &'static ChemDispenser,
+        &'static DmChemDispenser,
+        &'static InsertedBeaker,
+    );
     type UserParam = (
         Query<'static, 'static, &'static Reagents>,
         Query<'static, 'static, &'static DmReagents>,
@@ -330,10 +341,10 @@ impl ServerUi for DispenserWindow {
     );
     type Act = DispenserAct;
 
-    fn static_data(_: (Entity, &ChemDispenser, &DmChemDispenser)) {}
+    fn static_data(_: (Entity, &ChemDispenser, &DmChemDispenser, &InsertedBeaker)) {}
 
     fn data(
-        (e, d, _): (Entity, &ChemDispenser, &DmChemDispenser),
+        (e, d, _, inserted): (Entity, &ChemDispenser, &DmChemDispenser, &InsertedBeaker),
         user: Entity,
         (reagents, dm_reagents, cells, inventories, stored, chem): &SystemParamItem<
             '_,
@@ -344,10 +355,7 @@ impl ServerUi for DispenserWindow {
         let cell = d.cell.and_then(|c| cells.get(c).ok()).map(|c| c.0);
         let (charge, max) = cell.map_or((0.0, 0.0), |c| (c.charge as f32, c.maxcharge as f32));
         let cost = d.power_cost.max(1.0);
-        let held = inventories.get(user).ok().and_then(Inventory::active_item);
-        let has_beaker_in_hand = held.is_some_and(|h| {
-            dm_reagents.contains(h) && reagents.get(h).is_ok_and(|r| r.0.is_open_container())
-        });
+        let has_beaker_in_hand = beaker_in_hand(user, inventories, dm_reagents, reagents);
         let chemicals = chem
             .as_ref()
             .map(|chem| {
@@ -365,8 +373,8 @@ impl ServerUi for DispenserWindow {
                     .collect()
             })
             .unwrap_or_default();
-        let beaker = d
-            .beaker
+        let beaker = inserted
+            .0
             .filter(|&b| stored.get(b).is_ok_and(|s| s.0 == e))
             .and_then(|b| {
                 let holder = &reagents.get(b).ok()?.0;
@@ -418,6 +426,29 @@ impl ServerUi for DispenserWindow {
             "insert" => DispenserAct::Insert,
             _ => return Err(UiReject::UnknownAction),
         })
+    }
+}
+
+/// `hasBeakerInHand`: the user's active hand holds an open reagent container.
+pub(crate) fn beaker_in_hand(
+    user: Entity,
+    inventories: &Query<&Inventory>,
+    dm_reagents: &Query<&DmReagents>,
+    reagents: &Query<&Reagents>,
+) -> bool {
+    let held = inventories.get(user).ok().and_then(Inventory::active_item);
+    held.is_some_and(|h| {
+        dm_reagents.contains(h) && reagents.get(h).is_ok_and(|r| r.0.is_open_container())
+    })
+}
+
+/// tg `ui_act` `insert`: the held open container in (the old one out).
+pub(crate) fn insert_held(world: &mut World, actor: Entity, e: Entity) {
+    let held = world
+        .get::<Inventory>(actor)
+        .and_then(Inventory::active_item);
+    if let Some(held) = held.filter(|&h| chem_container(world, h)) {
+        replace_beaker(world, actor, e, Some(held));
     }
 }
 
@@ -521,14 +552,7 @@ pub fn apply_act(world: &mut World, actor: Entity, e: Entity, act: DispenserAct)
             }
         }
         DispenserAct::Eject => replace_beaker(world, actor, e, None),
-        DispenserAct::Insert => {
-            let held = world
-                .get::<Inventory>(actor)
-                .and_then(Inventory::active_item);
-            if let Some(held) = held.filter(|&h| chem_container(world, h)) {
-                replace_beaker(world, actor, e, Some(held));
-            }
-        }
+        DispenserAct::Insert => insert_held(world, actor, e),
     }
 }
 
@@ -576,6 +600,7 @@ mod tests {
             boozepwr: 0.0,
             brute_heal: 0.0,
             nutriment_factor: 0.0,
+            default_container: String::new(),
         }
     }
 

@@ -94,9 +94,13 @@ pub enum Family {
     ChemDispenser,
     /// Smart fridges (`crate::smartfridge`).
     SmartFridge,
+    /// ChemMasters and CondiMasters (`crate::chem_master`).
+    ChemMaster,
+    /// Reaction chambers (`crate::chem_heater`).
+    ChemHeater,
 }
 
-const FAMILIES: [(&str, Family); 19] = [
+const FAMILIES: [(&str, Family); 21] = [
     (CELL_CHARGER, Family::Charger),
     (RECHARGER, Family::Charger),
     (crate::kitchen::MICROWAVE_ROOT, Family::Kitchen),
@@ -107,6 +111,8 @@ const FAMILIES: [(&str, Family); 19] = [
     (crate::cooking::FRYER_ROOT, Family::Kitchen),
     (crate::chem_dispenser::DISPENSER_ROOT, Family::ChemDispenser),
     (crate::smartfridge::FRIDGE_ROOT, Family::SmartFridge),
+    (crate::chem_master::MASTER_ROOT, Family::ChemMaster),
+    (crate::chem_heater::HEATER_ROOT, Family::ChemHeater),
     ("/obj/machinery/hydroponics/constructable", Family::Tray),
     ("/obj/machinery/recharge_station", Family::Station),
     (crate::science::analyzer::ANALYZER_ROOT, Family::Analyzer),
@@ -1031,6 +1037,8 @@ pub fn setup_built(world: &mut World, machine: Entity) {
         Family::Vending => crate::vending::refill::setup_built(world, machine),
         Family::ChemDispenser => crate::chem_dispenser::setup(world, machine),
         Family::SmartFridge => crate::smartfridge::setup(world, machine),
+        Family::ChemMaster => crate::chem_master::setup(world, machine),
+        Family::ChemHeater => crate::chem_heater::setup(world, machine),
     }
 }
 

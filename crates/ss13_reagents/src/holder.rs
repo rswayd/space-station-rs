@@ -123,6 +123,17 @@ impl Holder {
         }
     }
 
+    /// tg `get_master_reagent`: the largest volume, the first on a tie.
+    pub fn master_reagent(&self) -> Option<&Reagent> {
+        let mut main: Option<&Reagent> = None;
+        for r in &self.reagents {
+            if main.is_none_or(|m| r.volume > m.volume) {
+                main = Some(r);
+            }
+        }
+        main
+    }
+
     /// tg `get_reagent_amount` (exact type).
     pub fn amount(&self, id: ReagentId) -> f32 {
         self.has(id).map_or(0.0, |r| r.volume)
@@ -747,9 +758,21 @@ pub struct Equilibrium {
     pub to_delete: bool,
     min_rate: f32,
     time_deficit: f32,
+    /// tg `reaction_quality`: the last step's purity (UI only).
+    pub reaction_quality: f32,
 }
 
 impl Equilibrium {
+    /// tg `reacted_vol`: product made so far (UI).
+    pub fn reacted_vol(&self) -> f32 {
+        self.reacted_vol
+    }
+
+    /// tg `target_vol`: product expected at the end (UI).
+    pub fn target_vol(&self) -> f32 {
+        self.target_vol
+    }
+
     /// tg `New` -> `check_inital_conditions`; `None` when it cannot start.
     fn new(chem: &Chemistry, reaction: u32, holder: &Holder) -> Option<Self> {
         let r = &chem.reactions[reaction as usize];
@@ -782,6 +805,7 @@ impl Equilibrium {
             to_delete: false,
             min_rate: product_ratio * (CHEMICAL_VOLUME_ROUNDING / 2.0),
             time_deficit: 0.0,
+            reaction_quality: 1.0,
         })
     }
 
@@ -942,6 +966,7 @@ impl Equilibrium {
             self.reacted_vol += added;
             total_step_added += added;
         }
+        self.reaction_quality = purity;
         let heat = def.thermic_constant * total_step_added;
         if def.reaction_flags & reaction_flags::REACTION_HEAT_ARBITARY != 0 {
             holder.set_temperature(

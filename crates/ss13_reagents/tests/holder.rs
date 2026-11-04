@@ -32,6 +32,7 @@ fn reagent(path: &str, name: &str) -> ReagentDef {
         boozepwr: 0.0,
         brute_heal: 0.0,
         nutriment_factor: 0.0,
+        default_container: String::new(),
     }
 }
 
