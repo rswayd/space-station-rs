@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>space-station-rs: устройство</title>
+<style>
+:root{
+  --bg:#f6f5f1;--panel:#fff;--ink:#1d1f23;--muted:#62666e;--line:#d5d3cc;
+  --tool:#e8eefc;--tool-b:#5872c9;--data:#fdf1dc;--data-b:#c48a1d;
+  --srv:#e5f4ea;--srv-b:#3b8f5a;--cli:#f6e6f1;--cli-b:#a24c88;--core:#ececec;--core-b:#7a7a7a;
+  --net:#e3f3f6;--net-b:#2f8796;--web:#fbe9e5;--web-b:#c0533a;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#16171a;--panel:#1f2125;--ink:#e6e6e3;--muted:#9a9ea6;--line:#34373d;
+  --tool:#1f2840;--tool-b:#7f97e6;--data:#3a2e17;--data-b:#e0aa4a;
+  --srv:#183022;--srv-b:#62c286;--cli:#331d2d;--cli-b:#d681bd;--core:#2a2b2e;--core-b:#a3a3a3;
+  --net:#14303a;--net-b:#5fc2d2;--web:#3a201a;--web-b:#e98a70;}}
+:root[data-theme="dark"]{
+  --bg:#16171a;--panel:#1f2125;--ink:#e6e6e3;--muted:#9a9ea6;--line:#34373d;
+  --tool:#1f2840;--tool-b:#7f97e6;--data:#3a2e17;--data-b:#e0aa4a;
+  --srv:#183022;--srv-b:#62c286;--cli:#331d2d;--cli-b:#d681bd;--core:#2a2b2e;--core-b:#a3a3a3;
+  --net:#14303a;--net-b:#5fc2d2;--web:#3a201a;--web-b:#e98a70;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1180px;margin:0 auto;padding:28px 16px 80px}
+h1{font-size:30px;margin:0 0 4px}
+h2{font-size:22px;margin:52px 0 10px;padding-top:10px;border-top:1px solid var(--line)}
+h3{font-size:16px;margin:22px 0 8px}
+p,li{max-width:900px}
+code{font:13px/1.4 ui-monospace,"JetBrains Mono",monospace;background:var(--core);padding:1px 5px;border-radius:4px}
+.muted{color:var(--muted)}
+nav{display:flex;flex-wrap:wrap;gap:6px 14px;margin:14px 0 0;font-size:14px}
+nav a{color:var(--ink)}
+.legend{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}
+.chip{border:1.5px solid;border-radius:999px;padding:2px 10px;font-size:13px}
+.tool{background:var(--tool);border-color:var(--tool-b)}
+.data{background:var(--data);border-color:var(--data-b)}
+.srv{background:var(--srv);border-color:var(--srv-b)}
+.cli{background:var(--cli);border-color:var(--cli-b)}
+.core{background:var(--core);border-color:var(--core-b)}
+.net{background:var(--net);border-color:var(--net-b)}
+.web{background:var(--web);border-color:var(--web-b)}
+.box{border:1.5px solid;border-radius:10px;padding:10px 12px;font-size:13.5px;line-height:1.4}
+.box b{display:block;font-size:14px;margin-bottom:2px}
+.box code{background:transparent;padding:0}
+.box small{color:var(--muted);display:block;margin-top:3px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;margin:14px 0;overflow-x:auto}
+/* layered crate map */
+.layer{display:grid;grid-template-columns:150px 1fr;gap:12px;align-items:stretch;margin:8px 0}
+.layer>.lbl{font-size:12.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;padding-top:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px}
+.row .box{flex:1 1 170px;min-width:150px}
+.down{text-align:center;color:var(--muted);font-size:18px;line-height:1;margin:2px 0}
+/* flow */
+.flow{display:flex;flex-direction:column;gap:0}
+.step{display:grid;grid-template-columns:1fr 46px 1fr;align-items:center}
+.arrow{text-align:center;color:var(--muted);font-size:20px}
+.vline{height:22px;border-left:2px dashed var(--line);margin-left:50%}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+th{color:var(--muted);font-weight:600}
+td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.bar{height:9px;border-radius:4px;background:var(--srv-b);opacity:.75}
+svg text{fill:var(--ink);font:13px system-ui,sans-serif}
+svg .m{fill:var(--muted);font-size:11.5px}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:760px){.cols{grid-template-columns:1fr}.layer{grid-template-columns:1fr}.layer>.lbl{padding:0}.step{grid-template-columns:1fr}.step .arrow{transform:rotate(90deg)}}
+.note{border-left:3px solid var(--data-b);padding:6px 12px;background:var(--data);border-radius:0 8px 8px 0;margin:12px 0;max-width:900px}
+</style>
+</head>
+<body>
+<main>
+<h1>space-station-rs: как это устроено</h1>
+<div class="muted">Порт BandaStation (BYOND/DM, tgstation) на Rust + Bevy 0.20. Срез на 2026-11-05, <code>main</code> = <code>dba0453</code>, <code>PROTOCOL_VERSION = 75</code>, 24 крейта, ~330 тыс. строк Rust.</div>
+<nav>
+  <a href="#big">1. Большая картина</a><a href="#crates">2. Карта крейтов</a><a href="#assets">3. Пайплайн ассетов</a>
+  <a href="#server">4. Сервер</a><a href="#net">5. Сеть и репликация</a><a href="#client">6. Клиент и рендер</a>
+  <a href="#tgui">7. tgui-окна</a><a href="#web">8. Веб-демо</a><a href="#dev">9. Процесс разработки</a><a href="#sizes">10. Размеры</a>
+</nav>
+<div class="legend">
+  <span class="chip tool">офлайн-инструмент</span><span class="chip data">данные/файлы</span><span class="chip core">общее ядро</span>
+  <span class="chip srv">сервер</span><span class="chip net">сеть</span><span class="chip cli">клиент</span><span class="chip web">веб (wasm)</span>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="big">1. Большая картина</h2>
+<p>Проект живёт в трёх фазах. <b>Офлайн</b> один раз (и после изменений в BandaStation) читаем исходники DM и <code>.dmi</code> и превращаем их в наши форматы. <b>Сервер</b> грузит прототипы и <code>.dmm</code>, держит авторитетный мир и всю логику. <b>Клиент</b> ничего не решает: рисует то, что пришло по репликации, и отправляет намерения (intents).</p>
+<div class="panel">
+<svg viewBox="0 0 1100 330" width="100%" style="min-width:820px" role="img" aria-label="Три фазы: офлайн-импорт, сервер, клиент">
+  <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="currentColor" style="color:var(--muted)"/></marker></defs>
+  <style>.e{stroke:var(--muted);stroke-width:1.6;fill:none;marker-end:url(#ah)}</style>
+  <!-- source -->
+  <rect x="10" y="20" width="190" height="290" rx="12" style="fill:var(--data);stroke:var(--data-b);stroke-width:1.5"/>
+  <text x="105" y="46" text-anchor="middle" font-weight="700">BandaStation (read-only)</text>
+  <text x="25" y="80">code/**/*.dm, .dme</text>
+  <text x="25" y="108">icons/**/*.dmi</text>
+  <text x="25" y="136">code/datums/greyscale</text>
+  <text x="25" y="164">sound/**/*.ogg</text>
+  <text x="25" y="192">_maps/**/*.dmm, json</text>
+  <text x="25" y="220">config/admin_ranks.txt</text>
+  <text class="m" x="25" y="260">SS13_SOURCE или ../BandaStation</text>
+  <!-- offline -->
+  <rect x="270" y="20" width="230" height="290" rx="12" style="fill:var(--tool);stroke:var(--tool-b);stroke-width:1.5"/>
+  <text x="385" y="46" text-anchor="middle" font-weight="700">Офлайн-инструменты</text>
+  <text x="285" y="82">ss13-dm-extract</text><text class="m" x="285" y="98">DM → dm_types.json (46 MB)</text>
+  <text x="285" y="134">ss13-import dmi</text><text class="m" x="285" y="150">.dmi/GAGS → atlas/*.qoi + manifest</text>
+  <text x="285" y="186">ss13-mapload convert</text><text class="m" x="285" y="202">типы → prototypes, *.ron, sound/</text>
+  <text x="285" y="238">ss13-mapload audit</text><text class="m" x="285" y="254">лицензии → ASSET-AUDIT.md</text>
+  <!-- generated -->
+  <rect x="570" y="20" width="200" height="290" rx="12" style="fill:var(--data);stroke:var(--data-b);stroke-width:1.5"/>
+  <text x="670" y="46" text-anchor="middle" font-weight="700">assets/generated</text>
+  <text x="585" y="80">prototypes/*.ron</text>
+  <text x="585" y="106">jobs, cargo, reagents…</text>
+  <text x="585" y="132">manifest.postcard</text>
+  <text x="585" y="158">atlas/0..236.qoi</text>
+  <text x="585" y="184">sound/*.ogg</text>
+  <text x="585" y="210">ICON-SOURCES, licenses/</text>
+  <text class="m" x="585" y="260">~170 MB, не в git</text>
+  <!-- runtime -->
+  <rect x="840" y="20" width="250" height="130" rx="12" style="fill:var(--srv);stroke:var(--srv-b);stroke-width:1.5"/>
+  <text x="965" y="46" text-anchor="middle" font-weight="700">ss13_server</text>
+  <text x="855" y="74">прототипы + .dmm → мир</text>
+  <text x="855" y="98">вся логика, тик 50 мс</text>
+  <text class="m" x="855" y="122">манифест: имя иконки → id</text>
+  <rect x="840" y="180" width="250" height="130" rx="12" style="fill:var(--cli);stroke:var(--cli-b);stroke-width:1.5"/>
+  <text x="965" y="206" text-anchor="middle" font-weight="700">ss13_client</text>
+  <text x="855" y="234">манифест + атласы лениво</text>
+  <text x="855" y="258">рендер, звук, UI, ввод</text>
+  <text class="m" x="855" y="282">ничего не решает сам</text>
+  <path class="e" d="M200,120 H268"/><path class="e" d="M500,120 H568"/>
+  <path class="e" d="M770,90 H838"/><path class="e" d="M770,230 H838"/>
+  <path class="e" d="M200,192 C230,192 230,330 520,320 C800,312 810,140 838,140" style="stroke-dasharray:5 4"/>
+  <text class="m" x="430" y="300">.dmm и json шаттлов читаются сервером прямо из BandaStation</text>
+  <path class="e" d="M940,150 V178"/><path class="e" d="M990,178 V152"/>
+  <text class="m" x="1000" y="170">WebTransport / loopback</text>
+</svg>
+</div>
+<div class="note"><b>Главная идея.</b> DM-типы не переписываются руками в Rust-структуры. Мы <i>извлекаем</i> переменные каждого DM-типа, превращаем их в прототипы с той же иерархией наследования (<code>id</code> = DM path, <code>parent</code> = DM parent) и спавним по ним сущности Bevy. Поведение (procs) пишется в Rust вручную, в <code>ss13_game</code>, по коду tg.</div>
+
+<!-- ============================================================ -->
+<h2 id="crates">2. Карта крейтов</h2>
+<p>Слои сверху вниз: кто от кого зависит. Стрелка вниз читается как «использует то, что ниже». <code>ss13_game</code>, <code>ss13_net</code>, <code>ss13_tgui</code>, <code>ss13_chat</code>, <code>ss13_admin</code> и <code>ss13_debug</code> — это <b>один крейт на две половины</b>: фичи <code>server</code> и <code>client</code>. Общие типы данных (окна, HUD) лежат вне фич, поэтому обе половины используют один и тот же код сериализации.</p>
+<div class="panel">
+  <div class="layer"><div class="lbl">Точки входа (бинарники)</div><div class="row">
+    <div class="box srv"><b>ss13_server</b>Headless-сервер: список плагинов, <code>ScheduleRunner</code><small>76 строк</small></div>
+    <div class="box cli"><b>ss13_client</b>Нативный клиент; в демо-пакете сам запускает локальный сервер<small>573</small></div>
+    <div class="box web"><b>ss13_web_server</b>Сервер в Web Worker, тик своим таймером<small>236</small></div>
+    <div class="box web"><b>ss13_web_client</b>Клиент на WebGL2-canvas<small>141</small></div>
+    <div class="box web"><b>ss13_web_common</b>Мост postMessage, монтирование бандла<small>222</small></div>
+  </div></div>
+  <div class="down">▼</div>
+  <div class="layer"><div class="lbl">Геймплей</div><div class="row">
+    <div class="box srv" style="flex:3 1 400px"><b>ss13_game</b>Вся игровая логика: мобы, движение, клики, двери, инвентарь, бой, здоровье, медицина, хирургия, органы, химия, кухня, ботаника, карго, наука, силиконы, боты, шаттлы, антагонисты (трейторы, нюки, культ, еретик), атмос-машины, питание, провода, конструкция… ~117 модулей. Клиентские части — <code>*_client.rs</code> за фичей <code>client</code><small>222 тыс. строк — две трети проекта</small></div>
+    <div class="box srv"><b>ss13_admin</b>Ранги, права, админ-верби, ахелпы, asay; клиентская панель<small>3.6 тыс.</small></div>
+    <div class="box srv"><b>ss13_debug</b>egui-оверлей (пакеты, инспектор, Screen FX), debug-запросы, Prometheus-метрики<small>4.5 тыс.</small></div>
+  </div></div>
+  <div class="down">▼</div>
+  <div class="layer"><div class="lbl">Подсистемы</div><div class="row">
+    <div class="box srv"><b>ss13_mapload</b><code>convert</code>: DM → прототипы; на старте: .dmm → сущности на z-уровнях; аудит лицензий<small>23 тыс.</small></div>
+    <div class="box srv"><b>ss13_atmos</b>LINDA из tg: газовые смеси, активные тайлы, excited groups, реакции, хотспоты. Без Bevy-рендера<small>9 тыс.</small></div>
+    <div class="box core"><b>ss13_reagents</b>Реагенты, реакции, метаболизм. Чистая логика, без Bevy<small>2.7 тыс.</small></div>
+    <div class="box net"><b>ss13_tgui</b>Модель окон tgui: <code>ui_data</code>/<code>ui_act</code>/<code>ui_status</code> на сервере, билдеры на клиенте<small>17.7 тыс.</small></div>
+    <div class="box net"><b>ss13_chat</b>Say, дальность слышимости, панель чата (порт tgui-panel)<small>3.7 тыс.</small></div>
+  </div></div>
+  <div class="down">▼</div>
+  <div class="layer"><div class="lbl">Мир, сеть, рендер</div><div class="row">
+    <div class="box srv"><b>ss13_world</b>Авторитетная сетка тайлов, пространственный индекс, движение. Без рендера и сети<small>1.5 тыс.</small></div>
+    <div class="box net"><b>ss13_net</b>Единственный крейт с сетевой библиотекой: WebTransport (wtransport) или loopback; репликация с interest management<small>8.8 тыс.</small></div>
+    <div class="box cli"><b>ss13_render</b>Appearance → спрайты, атласы с LRU, планы/слои, освещение, фильтры, параллакс<small>5 тыс.</small></div>
+    <div class="box cli"><b>ss13_ui_kit</b>Примитивы tgui-core на bevy_ui с теми же именами и пропсами<small>8.7 тыс.</small></div>
+  </div></div>
+  <div class="down">▼</div>
+  <div class="layer"><div class="lbl">Фундамент</div><div class="row">
+    <div class="box core"><b>ss13_shared</b>Типы для обеих сторон: тайлы, направления, Appearance, протокол, line of sight<small>1.7 тыс.</small></div>
+    <div class="box core"><b>ss13_proto</b>Прототипы с наследованием, загрузка из RON<small>1.2 тыс.</small></div>
+    <div class="box core"><b>ss13_assets</b>Импорт .dmi/.dmm/GAGS, пакер атласов, QOI-страницы, манифест<small>4.1 тыс.</small></div>
+    <div class="box core"><b>ss13_data</b>Чтение файлов по пути: <code>std::fs</code> нативно, бандл в памяти в браузере<small>192</small></div>
+  </div></div>
+  <div class="down">· · ·</div>
+  <div class="layer"><div class="lbl">Инструменты и тесты</div><div class="row">
+    <div class="box tool"><b>ss13_dm_extract</b>Использует SpacemanDMM <code>dreammaker</code> (GPL-3.0), поэтому не линкуется в игру<small>2.4 тыс.</small></div>
+    <div class="box tool"><b>ss13_bots</b>Headless-боты: настоящие клиенты по настоящему транспорту, кейсы, пул серверов<small>4 тыс.</small></div>
+    <div class="box tool"><b>ss13_devtools</b>Скриптовый клиент: инжект ввода, скриншоты, offscreen<small>1.4 тыс.</small></div>
+  </div></div>
+</div>
+
+<h3>Правила границ</h3>
+<ul>
+  <li><b>Сетевая библиотека — только в <code>ss13_net</code>.</b> Игровой код видит типы <code>ss13_shared::protocol</code> (<code>ClientIntent</code>, <code>ServerMessage</code>), а не QUIC.</li>
+  <li><b><code>ss13_world</code> и <code>ss13_atmos</code> ничего не знают о рендере.</b> <code>ss13_render</code> ничего не знает о сети: он рисует компоненты <code>Appearance</code> + <code>Facing</code> + <code>TilePos</code>, откуда бы они ни пришли.</li>
+  <li><b>Клиент никогда не видит серверные <code>Entity</code></b>, только свои <code>NetId</code>.</li>
+  <li><b>GPL-код SpacemanDMM изолирован</b> в офлайн-инструменте, сам проект — AGPL-3.0-only.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="assets">3. Пайплайн ассетов</h2>
+<p>Три команды, порядок важен: импорт иконок использует <code>dm_types.json</code>, чтобы упорядочить атласы по использованию на картах, а <code>convert</code> берёт из манифеста GAGS-иконки.</p>
+<div class="panel">
+<div class="flow">
+  <div class="step">
+    <div class="box data"><b>BandaStation <code>.dme</code> + <code>code/**/*.dm</code></b>~всё дерево типов tg + модпаки форка</div>
+    <div class="arrow">→</div>
+    <div class="box tool"><b>① <code>ss13-dm-extract --out dm_types.json</code></b>Парсер <code>dreammaker</code> строит объектное дерево, для каждого типа выписывает статические переменные: свои и резолвнутые (наследованные, const-вычисленные). Отдельно <code>populate.rs</code>: что кладёт <code>PopulateContents()</code>. <code>check-maps</code> проверяет, что все типы с карт резолвятся.</div>
+  </div>
+  <div class="vline"></div>
+  <div class="step">
+    <div class="box data"><b><code>icons/**/*.dmi</code></b>PNG-лист спрайтов + zTXt-чанк «Description» со списком состояний (dirs, frames, delays)</div>
+    <div class="arrow">→</div>
+    <div class="box tool"><b>② <code>ss13-import dmi --types dm_types.json</code></b>
+      <code>dmi.rs</code> режет лист: кадр <code>f</code>, направление <code>d</code> → иконка <code>f·dirs+d</code>.<br>
+      <code>usage.rs</code>: какие .dmi рисуют карты (icon + оверлеи + спавнеры); самые используемые идут первыми, чтобы клиент грузил мало страниц.<br>
+      <code>gags.rs</code>: рендер greyscale-конфигов tg во все используемые цвета, совпадает с превью tg пиксель в пиксель.<br>
+      <code>atlas.rs</code>: shelf-пакер, один .dmi целиком на одной странице 1024×1024.<br>
+      <code>page.rs</code>: страница = RGBA8 в QOI.<br>
+      <code>license.rs</code>: ICON-SOURCES.txt + копии файлов атрибуции.
+      <small>Код выхода 1 из-за 7 известных пропущенных слишком больших состояний — это нормально</small></div>
+  </div>
+  <div class="vline"></div>
+  <div class="step">
+    <div class="box data"><b>Выход импорта</b><code>manifest.postcard</code> (4.9 MB): <code>IconStateId(n)</code> = индекс в <code>states</code>, у каждого состояния страница, прямоугольники, dirs, delays.<br><code>atlas/0..236.qoi</code> (72 MB, 237 страниц)</div>
+    <div class="arrow">→</div>
+    <div class="box tool"><b>③ <code>ss13-mapload convert --assets …</code></b>
+      <code>convert.rs</code>: один прототип на каждый нужный DM-тип и его предков; в прототипе только переменные, объявленные в самом типе, а слияние прототипов воспроизводит наследование DM.<br>
+      Около 40 модулей-«выжималок» (<code>door, power, food, reagents, jobs, cargo, mobs, research, vending, wallmount, light, look, sound…</code>) превращают DM-переменные в типизированные компоненты прототипов и в отдельные <code>*.ron</code> с таблицами.<br>
+      <code>sound.rs</code>: копирует нужные .ogg + SOURCES.txt.</div>
+  </div>
+  <div class="vline"></div>
+  <div class="step">
+    <div class="box data"><b>Выход convert</b><code>prototypes/dm_types.ron</code> (8.5 MB), <code>jobs/cargo/reagents/research/mobs/plants/mecha/silicon/sfx/antag/atmos_handbook.ron</code>, <code>sound/</code> (43 MB)</div>
+    <div class="arrow">→</div>
+    <div class="box tool"><b>④ <code>ss13-mapload audit</code></b>Сверяет атрибуцию звуков и иконок с <code>asset_terms.tsv</code>, пишет <code>docs/ASSET-AUDIT.md</code>. NC-ассеты помечаются (например звуки gamma/epsilon).</div>
+  </div>
+</div>
+</div>
+
+<h3>Что происходит с ассетами в рантайме</h3>
+<div class="cols">
+  <div class="box srv"><b>Сервер на старте (<code>MapLoadPlugin</code>)</b>
+  1. <code>ProtoPlugin</code> грузит прототипы из RON.<br>
+  2. Читает <code>.dmm</code> из BandaStation, на каждый z карты создаёт z-уровень <code>ss13_world</code>.<br>
+  3. Спавнит турфы и объекты по прототипам; правки переменных в <code>.dmm</code> применяются как overrides прототипа.<br>
+  4. Иконки хранятся в прототипах <i>строками</i> и резолвятся по текущему манифесту один раз на пару (тип, правки). Поэтому после регенерации ассетов в прототипах не остаётся устаревших id.<br>
+  5. Атмос читает <code>TurfAir</code> турфов, строит <code>LevelAir</code>.
+  <small>MetaStation: загрузка ~16 с в release (нативно)</small></div>
+  <div class="box cli"><b>Клиент</b>
+  1. На старте читает только <code>manifest.postcard</code>.<br>
+  2. Страница атласа запрашивается, когда спрайту впервые нужно состояние с неё. Декодируется не на главном потоке, пару кадров спрайт не рисуется.<br>
+  3. Спрайты держат сильные handles, поэтому используемые страницы не выгружаются. Простаивающие больше 10 с выгружаются по LRU, когда загружено больше <code>SS13_ATLAS_BUDGET_MB</code> (256).<br>
+  4. Для каждой страницы хранится <code>AlphaMask</code> (1 бит на пиксель) — пиксельные клики как в BYOND (<code>mouse_opacity</code>).<br>
+  5. Звуки (.ogg) грузятся при первом проигрывании.</div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="server">4. Сервер</h2>
+<p>Это Bevy-приложение без окна: <code>MinimalPlugins</code> + <code>ScheduleRunnerPlugin</code>. Всё состояние живёт в ECS. Порядок плагинов (<code>crates/ss13_server/src/main.rs</code>):</p>
+<div class="panel">
+<svg viewBox="0 0 1100 200" width="100%" style="min-width:820px" role="img" aria-label="Плагины сервера">
+  <style>.p{stroke-width:1.5;rx:9}</style>
+  <g font-size="13">
+  <rect class="p" x="10" y="20" width="160" height="56" style="fill:var(--srv);stroke:var(--srv-b)"/><text x="22" y="44">WorldPlugin</text><text class="m" x="22" y="62">сетка, индекс</text>
+  <rect class="p" x="180" y="20" width="190" height="56" style="fill:var(--net);stroke:var(--net-b)"/><text x="192" y="44">NetServerPlugin</text><text class="m" x="192" y="62">сессии, handshake, лимиты</text>
+  <rect class="p" x="380" y="20" width="210" height="56" style="fill:var(--net);stroke:var(--net-b)"/><text x="392" y="44">ReplicationServerPlugin</text><text class="m" x="392" y="62">кто что видит</text>
+  <rect class="p" x="600" y="20" width="160" height="56" style="fill:var(--net);stroke:var(--net-b)"/><text x="612" y="44">TguiServerPlugin</text><text class="m" x="612" y="62">окна</text>
+  <rect class="p" x="770" y="20" width="150" height="56" style="fill:var(--net);stroke:var(--net-b)"/><text x="782" y="44">ChatServerPlugin</text><text class="m" x="782" y="62">say, радио</text>
+  <rect class="p" x="930" y="20" width="160" height="56" style="fill:var(--srv);stroke:var(--srv-b)"/><text x="942" y="44">Debug / Admin</text><text class="m" x="942" y="62">+ MetricsPlugin</text>
+  <rect class="p" x="10" y="110" width="220" height="70" style="fill:var(--srv);stroke:var(--srv-b)"/><text x="22" y="136">MapLoadPlugin (SS13_MAP)</text><text class="m" x="22" y="156">.dmm → сущности; без него мир пуст</text>
+  <rect class="p" x="240" y="110" width="160" height="70" style="fill:var(--core);stroke:var(--core-b)"/><text x="252" y="136">ProtoPlugin</text><text class="m" x="252" y="156">прототипы из RON</text>
+  <rect class="p" x="410" y="110" width="200" height="70" style="fill:var(--srv);stroke:var(--srv-b)"/><text x="422" y="136">AtmosPlugin</text><text class="m" x="422" y="156">SSair, раз в 0.5 с, z параллельно</text>
+  <rect class="p" x="620" y="110" width="470" height="70" style="fill:var(--srv);stroke:var(--srv-b)"/><text x="632" y="136">GameServerPlugin — весь ss13_game::server</text><text class="m" x="632" y="156">раунд/лобби, мобы, клики, инвентарь, бой, химия, питание, шаттлы, антаги, боты…</text>
+  </g>
+</svg>
+</div>
+<h3>Один тик сервера (50 мс)</h3>
+<ol>
+  <li><b>PreUpdate.</b> Приём: фреймы и датаграммы по каждой сессии превращаются в сообщения <code>ClientIntent</code> (Move, Click, Drag, UiAct, Say, клавиши…).</li>
+  <li><b>Update.</b> Игровые системы валидируют намерения (дистанция, видимость, кулдауны, права) и меняют компоненты. Атмос и машины работают на своих частотах по образцу tg-подсистем. <code>process(dt)</code> зависит от времени, а не от числа кадров.</li>
+  <li><b>tgui.</b> Пересчитывается <code>ui_status</code> открытых окон, данные отправляются при изменении или по таймеру.</li>
+  <li><b>Репликация.</b> Change detection по <code>Networked</code>: каждому клиенту уходят изменения того, что он видит.</li>
+  <li><b>Метрики</b> (по желанию): <code>ss13_tick_seconds</code>, <code>ss13_atmos_*</code>… Простой MetaStation: ~0.65 мс на тик в release.</li>
+</ol>
+
+<!-- ============================================================ -->
+<h2 id="net">5. Сеть и репликация</h2>
+<div class="panel">
+<svg viewBox="0 0 1100 300" width="100%" style="min-width:820px" role="img" aria-label="Каналы между клиентом и сервером">
+  <defs><marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="currentColor" style="color:var(--muted)"/></marker></defs>
+  <style>.e2{stroke:var(--muted);stroke-width:1.6;fill:none;marker-end:url(#ah2)}</style>
+  <rect x="10" y="20" width="250" height="260" rx="12" style="fill:var(--cli);stroke:var(--cli-b);stroke-width:1.5"/>
+  <text x="135" y="46" text-anchor="middle" font-weight="700">Клиент</text>
+  <text x="25" y="80">ввод → ClientIntent</text>
+  <text x="25" y="108">предсказание своего шага</text>
+  <text x="25" y="136">NetEntityMap: NetId → Entity</text>
+  <text x="25" y="164">TilePos/Facing/Appearance</text>
+  <text x="25" y="192">LightBlocks → освещение</text>
+  <text x="25" y="220">UiUpdate → билдер окна</text>
+  <rect x="840" y="20" width="250" height="260" rx="12" style="fill:var(--srv);stroke:var(--srv-b);stroke-width:1.5"/>
+  <text x="965" y="46" text-anchor="middle" font-weight="700">Сервер</text>
+  <text x="855" y="80">Hello: версия + токен</text>
+  <text x="855" y="108">Viewer на соединении</text>
+  <text x="855" y="136">Interest: NetId ↔ Entity</text>
+  <text x="855" y="164">ViewMask / line of sight</text>
+  <text x="855" y="192">AppearanceId (интернинг)</text>
+  <text x="855" y="220">MoveAck</text>
+  <path class="e2" d="M262,70 H838"/><text x="550" y="62" text-anchor="middle">Hello{PROTOCOL_VERSION, token} → HelloReply accept/reject</text>
+  <path class="e2" d="M262,120 H838"/><text x="550" y="112" text-anchor="middle">надёжный поток: ClientMessage (intents) — u32 len + postcard</text>
+  <path class="e2" d="M838,170 H262"/><text x="550" y="162" text-anchor="middle">надёжный поток: ServerMessage (репликация, UI, чат, звук) — строго по порядку</text>
+  <path class="e2" d="M838,220 H262" style="stroke-dasharray:6 4"/><text x="550" y="212" text-anchor="middle">QUIC-датаграммы: MotionBatch (движение), ≤1200 байт, теряемые</text>
+  <text class="m" x="550" y="262" text-anchor="middle">Лимиты проверяются по длине до аллокации; битый или слишком большой фрейм закрывает сессию.</text>
+</svg>
+</div>
+<div class="cols">
+<div>
+<h3>Interest management</h3>
+<ul>
+  <li>Клиент получает <code>Networked</code>-сущности в Chebyshev-коробке вокруг своего <code>Viewer</code> и держит их, пока они не уйдут на <code>KEEP_MARGIN</code> за её край.</li>
+  <li>Поверх — <b>line of sight</b>, как в BYOND <code>view()</code>: сущности за стенами не отправляются вообще. Наблюдатели видят сквозь стены (<code>Sight</code>).</li>
+  <li>Свет и непрозрачность идут блоками 16×16 из более широкой коробки, чтобы тени на краю экрана были правильными.</li>
+  <li>Стоимость тика пропорциональна изменениям, а не размеру мира. Appearance хешируется один раз на изменение, клиенты получают интернированные <code>AppearanceId</code>.</li>
+</ul>
+</div>
+<div>
+<h3>Версия протокола</h3>
+<ul>
+  <li><code>PROTOCOL_VERSION</code> в <code>ss13_shared/src/protocol.rs</code> (сейчас 75). Поднимается при любом изменении формата: данные tgui-окна, новые сообщения, поля Appearance.</li>
+  <li>Клиент с другой версией получает отказ в handshake с причиной, а не тихо ломается.</li>
+  <li>Транспорты: <code>client_quic</code>/<code>server_quic</code> (wtransport, нативно) и <code>loopback</code> — тот же фрейминг в памяти; в браузере работает только он.</li>
+  <li><code>SS13_SIM_LATENCY_MS</code> добавляет искусственную задержку для проверки предсказания.</li>
+</ul>
+</div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="client">6. Клиент и рендер</h2>
+<div class="panel">
+<div class="flow">
+  <div class="step"><div class="box net"><b>Репликация</b>Локальные сущности с <code>NetEntity</code>, <code>TilePos</code>, <code>Facing</code>, <code>Appearance</code>, <code>Optics</code></div><div class="arrow">→</div>
+  <div class="box cli"><b><code>ss13_render::sprites</code></b>Change detection: неизменённая сущность стоит одной проверки тика. Appearance (icon state, dir, оверлеи, цвет, transform) → Bevy <code>Sprite</code> + дочерние спрайты-оверлеи; пиксельные смещения BYOND уходят в <code>Anchor</code>.</div></div>
+  <div class="vline"></div>
+  <div class="step"><div class="box cli"><b><code>order.rs</code></b>Плоскости и слои BYOND → z-порядок</div><div class="arrow">→</div>
+  <div class="box cli"><b><code>anim.rs</code></b>Анимация по delays из .dmi; глайдинг между тайлами как в BYOND</div></div>
+  <div class="vline"></div>
+  <div class="step"><div class="box cli"><b><code>lighting/</code></b>Освещение tg: источники и непрозрачность по блокам света, тени, emissive-оверлеи (экраны и лампы светятся в темноте); туман видимости с затуханием 0.2 с</div><div class="arrow">→</div>
+  <div class="box cli"><b><code>filter.rs</code> + <code>filter.wgsl</code></b>Пост-процесс всего экрана: матрица цвета (монохром, тинт), размытие. <code>fullscreen_client</code>: виньетки (сварочная маска, близорукость), вспышки, урон, крит, слепота</div></div>
+  <div class="vline"></div>
+  <div class="step"><div class="box cli"><b>HUD и окна</b><code>ss13_ui_kit</code> (bevy_ui) — инвентарь, здоровье, алерты, tgui-окна, чат. egui — только debug и админка</div><div class="arrow">→</div>
+  <div class="box cli"><b>Ввод</b>Клик по верхнему непрозрачному пикселю (<code>AlphaMask</code>), drag как <code>MouseDrop</code>, модификаторы, хоткеи → <code>ClientIntent</code></div></div>
+</div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="tgui">7. tgui-окна</h2>
+<p>Как в BYOND, вся логика окна живёт на сервере. Клиент только рисует данные билдером, зарегистрированным под тем же именем интерфейса, что в tg (<code>Vending</code>, <code>ChemMaster</code>, <code>Cargo</code>, <code>Wires</code>…).</p>
+<div class="panel">
+<svg viewBox="0 0 1100 170" width="100%" style="min-width:820px" role="img" aria-label="Цикл tgui-окна">
+  <defs><marker id="ah3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="currentColor" style="color:var(--muted)"/></marker></defs>
+  <style>.e3{stroke:var(--muted);stroke-width:1.6;fill:none;marker-end:url(#ah3)}</style>
+  <rect x="10" y="30" width="330" height="110" rx="12" style="fill:var(--srv);stroke:var(--srv-b);stroke-width:1.5"/>
+  <text x="25" y="56" font-weight="700">Сервер: интерфейс окна</text>
+  <text x="25" y="80">ui_static_data / ui_data → типизированная структура</text>
+  <text x="25" y="102">ui_status каждый тик (дистанция, крит, права)</text>
+  <text x="25" y="124">ui_act: проверка параметров и состояния</text>
+  <rect x="760" y="30" width="330" height="110" rx="12" style="fill:var(--cli);stroke:var(--cli-b);stroke-width:1.5"/>
+  <text x="775" y="56" font-weight="700">Клиент: билдер</text>
+  <text x="775" y="80">та же структура (общий код в interfaces)</text>
+  <text x="775" y="102">→ дерево ss13_ui_kit (Section, Button, …)</text>
+  <text x="775" y="124">кнопка → ClientIntent::UiAct</text>
+  <path class="e3" d="M342,70 H758"/><text x="550" y="62" text-anchor="middle">UiOpen / UiUpdate (при открытии, изменении, по таймеру)</text>
+  <path class="e3" d="M758,115 H342"/><text x="550" y="107" text-anchor="middle">UiAct{action, params} — недоверенный ввод</text>
+  <text class="m" x="550" y="158" text-anchor="middle">Изменение структуры данных окна → подъём PROTOCOL_VERSION</text>
+</svg>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="web">8. Веб-демо</h2>
+<p>Статический сайт без бэкенда. Сервер и клиент — два отдельных wasm-модуля в одной вкладке, связанные мостом через <code>postMessage</code>. Перезагрузка страницы сбрасывает всё.</p>
+<div class="panel">
+<svg viewBox="0 0 1100 260" width="100%" style="min-width:820px" role="img" aria-label="Веб-демо: страница и worker">
+  <defs><marker id="ah4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="currentColor" style="color:var(--muted)"/></marker></defs>
+  <style>.e4{stroke:var(--muted);stroke-width:1.6;fill:none;marker-end:url(#ah4)}</style>
+  <rect x="10" y="20" width="420" height="220" rx="12" style="fill:var(--web);stroke:var(--web-b);stroke-width:1.5"/>
+  <text x="220" y="46" text-anchor="middle" font-weight="700">Главный поток: ss13_web_client</text>
+  <text x="25" y="76">Bevy-клиент, WebGL2 canvas, bevy_audio</text>
+  <text x="25" y="100">requestAnimationFrame (bevy_winit)</text>
+  <text x="25" y="124">NetClientPlugin + LoopbackConnector</text>
+  <text x="25" y="148">мост: LoopbackListener страницы</text>
+  <text x="25" y="172">ss13_data: бандл в памяти</text>
+  <text class="m" x="25" y="210">main.js: скачивает files.json (~105 MB), распаковывает .gz</text>
+  <text class="m" x="25" y="226">через DecompressionStream</text>
+  <rect x="670" y="20" width="420" height="220" rx="12" style="fill:var(--web);stroke:var(--web-b);stroke-width:1.5"/>
+  <text x="880" y="46" text-anchor="middle" font-weight="700">Web Worker: ss13_web_server</text>
+  <text x="685" y="76">тот же список серверных плагинов</text>
+  <text x="685" y="100">свой таймер: App::update раз в 50 мс</text>
+  <text x="685" y="124">NetServerPlugin + LoopbackListener</text>
+  <text x="685" y="148">мост: connect() на каждый «open»</text>
+  <text x="685" y="172">MetaStation, ~5 мс на тик в wasm</text>
+  <path class="e4" d="M432,90 H668"/><text x="550" y="82" text-anchor="middle">init{files, wasm}</text>
+  <path class="e4" d="M668,125 H432"/><text x="550" y="117" text-anchor="middle">progress / ready</text>
+  <path class="e4" d="M432,165 H668"/><path class="e4" d="M668,175 H432"/><text x="550" y="157" text-anchor="middle">open / frame / dgram / close</text>
+  <text class="m" x="550" y="200" text-anchor="middle">ArrayBuffer передаются (transfer), мосты не декодируют —</text>
+  <text class="m" x="550" y="216" text-anchor="middle">вся валидация остаётся в ss13_net</text>
+</svg>
+</div>
+<p class="muted">Сборка: <code>scripts/demo-package.sh</code> (данные) → <code>scripts/web-build.sh</code>: release wasm → <code>wasm-bindgen --target web</code> → <code>wasm-opt -Oz</code>; страницы атласа в <code>.qoi.gz</code>, <code>progress.html</code> из <code>docs/parity/</code>. Те же данные упаковываются в Windows-демо (<code>.github/workflows/demo.yml</code>).</p>
+
+<!-- ============================================================ -->
+<h2 id="dev">9. Процесс разработки</h2>
+<div class="cols">
+<div class="box core"><b>Паритет с tg</b>
+<code>docs/parity/&lt;группа&gt;/*.md</code> — 29 групп (atmos, medical, kitchen, silicon…). Каждая механика tg имеет статус ✅/🟡/❌. Правило: ✅ ставится, когда сделан собственный механизм записи; чужие части переносятся в их группу. Очевидные баги tg не переносятся. <code>scripts/parity-count.py</code> пересчитывает итоги и генерирует <code>PROGRESS.html</code>.<small>Сейчас: ✅ 260 · 🟡 756 · ❌ 1464</small></div>
+<div class="box core"><b>Волны агентов</b>
+Ветка <code>wave/&lt;тема&gt;</code> от <code>main</code> в git worktree (<code>space-station-rs-wt/*</code>), по 2 агента одновременно. Агент реализует, сам вливает <code>main</code> и прогоняет gate, но не пушит и не трогает версию протокола. Координатор мержит по одной ветке, поднимает <code>PROTOCOL_VERSION</code>, регенерирует ассеты, прогоняет gate на <code>main</code> и пушит.</div>
+</div>
+<h3><code>scripts/gate.sh</code> — обязательная проверка перед пушем (~2–2.5 мин)</h3>
+<div class="row">
+  <div class="box tool"><b>fmt</b>cargo fmt --check</div>
+  <div class="box tool"><b>deny</b>лицензии зависимостей</div>
+  <div class="box tool"><b>clippy</b>весь workspace, все фичи</div>
+  <div class="box tool"><b>nextest</b>юнит + один it-бинарник на крейт</div>
+  <div class="box tool"><b>bins</b>сборка бинарников</div>
+  <div class="box web"><b>wasm-server / wasm-client</b>отдельные check для wasm32, чтобы фичи не склеивались</div>
+  <div class="box tool"><b>bots</b>headless-боты на настоящем транспорте</div>
+</div>
+<p class="muted">Визуальные проверки: <code>scripts/visual-check.sh</code> + сценарии <code>scripts/visual/*.txt</code> (скриптовый клиент из <code>ss13_devtools</code>, offscreen-скриншоты).</p>
+
+<!-- ============================================================ -->
+<h2 id="sizes">10. Размеры</h2>
+<div class="cols">
+<div class="panel" style="margin:0">
+<table>
+<thead><tr><th>Крейт</th><th class="n">строк</th><th style="width:45%"></th></tr></thead>
+<tbody>
+<tr><td>ss13_game</td><td class="n">222 211</td><td><div class="bar" style="width:100%"></div></td></tr>
+<tr><td>ss13_mapload</td><td class="n">23 165</td><td><div class="bar" style="width:10.4%"></div></td></tr>
+<tr><td>ss13_tgui</td><td class="n">17 688</td><td><div class="bar" style="width:8%"></div></td></tr>
+<tr><td>ss13_atmos</td><td class="n">9 024</td><td><div class="bar" style="width:4.1%"></div></td></tr>
+<tr><td>ss13_net</td><td class="n">8 764</td><td><div class="bar" style="width:3.9%"></div></td></tr>
+<tr><td>ss13_ui_kit</td><td class="n">8 670</td><td><div class="bar" style="width:3.9%"></div></td></tr>
+<tr><td>ss13_render</td><td class="n">5 042</td><td><div class="bar" style="width:2.3%"></div></td></tr>
+<tr><td>ss13_debug</td><td class="n">4 518</td><td><div class="bar" style="width:2%"></div></td></tr>
+<tr><td>ss13_assets</td><td class="n">4 095</td><td><div class="bar" style="width:1.8%"></div></td></tr>
+<tr><td>ss13_bots</td><td class="n">3 971</td><td><div class="bar" style="width:1.8%"></div></td></tr>
+<tr><td>ss13_chat</td><td class="n">3 662</td><td><div class="bar" style="width:1.6%"></div></td></tr>
+<tr><td>ss13_admin</td><td class="n">3 648</td><td><div class="bar" style="width:1.6%"></div></td></tr>
+<tr><td>остальные 12</td><td class="n">~13 200</td><td><div class="bar" style="width:5.9%"></div></td></tr>
+</tbody></table>
+</div>
+<div class="panel" style="margin:0">
+<table>
+<thead><tr><th>Данные</th><th class="n">размер</th><th>кто читает</th></tr></thead>
+<tbody>
+<tr><td><code>dm_types.json</code></td><td class="n">46 MB</td><td>только конвертеры</td></tr>
+<tr><td><code>atlas/*.qoi</code> (237 стр.)</td><td class="n">72 MB</td><td>клиент, лениво; в вебе 28 MB gzip</td></tr>
+<tr><td><code>sound/</code></td><td class="n">43 MB</td><td>клиент, лениво</td></tr>
+<tr><td><code>prototypes/</code></td><td class="n">8.5 MB</td><td>сервер</td></tr>
+<tr><td><code>manifest.postcard</code></td><td class="n">4.9 MB</td><td>оба</td></tr>
+<tr><td><code>*.ron</code> таблицы</td><td class="n">~5.7 MB</td><td>сервер</td></tr>
+<tr><td>QOI vs PNG, декод страницы</td><td class="n">1.6 / 5.1 мс</td><td>wasm, 1024×1024</td></tr>
+</tbody></table>
+</div>
+</div>
+<p class="muted" style="margin-top:30px">Источники: <code>Cargo.toml</code> и описания крейтов, module docs (<code>//!</code>), <code>docs/RUNNING.md</code>, <code>docs/WEB.md</code>. Строки посчитаны через <code>wc -l</code> по <code>*.rs</code>, включая тесты и комментарии.</p>
+</main>
+</body>
+</html>
