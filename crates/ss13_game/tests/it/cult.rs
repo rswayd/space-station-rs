@@ -169,6 +169,8 @@ fn human_states() -> Vec<(String, String)> {
                 uniform: Some(ASSISTANT_UNIFORM.into()),
                 shoes: Some(ASSISTANT_SHOES.into()),
                 husk: false,
+                missing: 0,
+                eyeless: false,
             };
             for part in parts(&look).unwrap() {
                 out.push((part.dmi.to_owned(), part.state));

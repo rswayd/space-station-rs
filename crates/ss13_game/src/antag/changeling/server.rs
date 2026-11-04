@@ -746,6 +746,8 @@ fn dna_of(world: &World, mob: Entity) -> (String, Option<HumanLook>) {
         uniform: None,
         shoes: None,
         husk: false,
+        missing: 0,
+        eyeless: false,
         ..l.clone()
     });
     (name_of(world, mob), look)
@@ -1561,6 +1563,8 @@ pub fn transform(world: &mut World, mob: Entity, profile: &Profile) {
             uniform: body.uniform.clone(),
             shoes: body.shoes.clone(),
             husk: false,
+            missing: body.missing,
+            eyeless: body.eyeless,
             ..look.clone()
         };
     }
@@ -1634,8 +1638,10 @@ fn revive(world: &mut World, mob: Entity) {
     info!("{mob} revived from stasis (changeling)");
 }
 
-/// `fully_heal(HEAL_BODY)`: the blood and the wounds.
+/// `fully_heal(HEAL_BODY)`: organs, limbs, the blood and the wounds.
 fn heal_body(world: &mut World, mob: Entity) {
+    crate::medical::organs::regenerate(world, mob);
+    crate::medical::bodyparts::regenerate_limbs(world, mob);
     if let Some(mut blood) = world.get_mut::<Blood>(mob)
         && blood.volume < BLOOD_VOLUME_NORMAL
     {

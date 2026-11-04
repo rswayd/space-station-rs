@@ -204,10 +204,16 @@ impl Blood {
     }
 }
 
-/// The blood regrown in `secs` and the nutrition it costs (tg `handle_blood`'s regeneration):
-/// `(restored, nutrition_cost)`.
-pub fn regeneration(blood: &mut Blood, nutrition: f32, satiety: f32, secs: f32) -> (f32, f32) {
-    if blood.volume >= BLOOD_VOLUME_NORMAL {
+/// The blood regrown in `secs` and the nutrition it costs (tg `handle_blood`'s regeneration),
+/// `heart` the heart's `get_blood_regeneration_multiplier`: `(restored, nutrition_cost)`.
+pub fn regeneration(
+    blood: &mut Blood,
+    nutrition: f32,
+    satiety: f32,
+    secs: f32,
+    heart: f32,
+) -> (f32, f32) {
+    if blood.volume >= BLOOD_VOLUME_NORMAL || heart <= 0.0 {
         return (0.0, 0.0);
     }
     // DM `round(x, 0.2)`.
@@ -215,7 +221,7 @@ pub fn regeneration(blood: &mut Blood, nutrition: f32, satiety: f32, secs: f32) 
     if satiety > 80.0 {
         ratio *= 1.25;
     }
-    let to_restore = BLOOD_REGEN_FACTOR * ratio * secs;
+    let to_restore = BLOOD_REGEN_FACTOR * heart * ratio * secs;
     let restored = blood.adjust(to_restore, 0.0, BLOOD_VOLUME_NORMAL);
     if restored > 0.0 {
         (
@@ -336,7 +342,8 @@ pub fn handle_blood(world: &mut World, mob: Entity, secs: f32, now: f64) {
     }
     // Regeneration, paid in nutrition.
     if let Some(hunger) = world.get::<crate::hunger::Hunger>(mob).cloned() {
-        let (_, cost) = regeneration(&mut blood, hunger.nutrition, hunger.satiety, secs);
+        let heart = super::organs::heart_blood_multiplier(world, mob);
+        let (_, cost) = regeneration(&mut blood, hunger.nutrition, hunger.satiety, secs, heart);
         if cost > 0.0
             && let Some(mut h) = world.get_mut::<crate::hunger::Hunger>(mob)
         {
@@ -985,17 +992,20 @@ mod tests {
         let mut blood = Blood::new(BloodType::OPlus);
         blood.volume = 500.0;
         // 400 nutrition: round(0.888, 0.2) = 0.8 -> 0.2 u/s, 0.04 nutrition/s.
-        let (restored, cost) = regeneration(&mut blood, 400.0, 0.0, 2.0);
+        let (restored, cost) = regeneration(&mut blood, 400.0, 0.0, 2.0, 1.0);
         assert!((restored - 0.4).abs() < 1e-5, "{restored}");
         assert!((cost - 0.08).abs() < 1e-5, "{cost}");
         // Well fed (satiety > 80): ×1.25.
-        let (restored, _) = regeneration(&mut blood, 400.0, 100.0, 2.0);
+        let (restored, _) = regeneration(&mut blood, 400.0, 100.0, 2.0, 1.0);
         assert!((restored - 0.5).abs() < 1e-5, "{restored}");
-        // Starving: nothing regrows.
-        assert_eq!(regeneration(&mut blood, 40.0, 0.0, 2.0), (0.0, 0.0));
+        // Starving or without a beating heart: nothing regrows; a half-healthy heart, half.
+        assert_eq!(regeneration(&mut blood, 40.0, 0.0, 2.0, 1.0), (0.0, 0.0));
+        assert_eq!(regeneration(&mut blood, 400.0, 0.0, 2.0, 0.0), (0.0, 0.0));
+        let (restored, _) = regeneration(&mut blood, 400.0, 0.0, 2.0, 0.5);
+        assert!((restored - 0.2).abs() < 1e-4, "{restored}");
         // Capped at normal.
         blood.volume = 559.9;
-        let (restored, _) = regeneration(&mut blood, 450.0, 0.0, 2.0);
+        let (restored, _) = regeneration(&mut blood, 450.0, 0.0, 2.0, 1.0);
         assert!((restored - 0.1).abs() < 1e-3 && blood.volume == 560.0);
     }
 

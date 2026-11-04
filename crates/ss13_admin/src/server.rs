@@ -859,8 +859,8 @@ fn answer(world: &mut World, client: Entity, request: AdminRequest) -> AnswerRes
             let Some(health) = world.get::<Health>(body).cloned() else {
                 return Err("Это не живое существо.".into());
             };
-            // shortcut: tg `revive(ADMIN_HEAL_ALL)` also restores organs, limbs and status
-            // effects; here damage, blood, wounds, stat and the breath alerts.
+            // shortcut: tg `revive(ADMIN_HEAL_ALL)` also clears status effects; here damage,
+            // blood, wounds, organs, limbs, stat and the breath alerts.
             world.entity_mut(body).insert(health.healed());
             ss13_game::medical::heal_all(world, body);
             if world.get::<Stat>(body) == Some(&Stat::Dead) {

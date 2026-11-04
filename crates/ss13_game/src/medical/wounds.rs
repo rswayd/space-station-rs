@@ -543,6 +543,8 @@ pub struct Limb {
     pub surgery: u16,
     /// `TRAIT_READY_TO_OPERATE` of the bodypart (surgical drapes).
     pub prepped: bool,
+    /// Amputated: the stump (tg `BODYPART_STUMP`) left by `super::bodyparts::drop_limb`.
+    pub missing: bool,
 }
 
 impl Limb {
@@ -636,7 +638,7 @@ impl Limb {
 
     /// tg `bodypart_disabled` of a limb that `can_be_disabled` (arms and legs).
     pub fn disabled(&self, damage: f32, max_damage: f32) -> bool {
-        self.wounds.iter().any(|w| w.disabling) || damage >= max_damage
+        self.missing || self.wounds.iter().any(|w| w.disabling) || damage >= max_damage
     }
 
     /// The limp of a leg: (`limp_slowdown` sum, max `limp_chance`), scaled by its splint
@@ -1889,6 +1891,12 @@ pub fn finish_treatment(
 pub fn after_hit(world: &mut World, victim: Entity, zone: BodyZone, hit: Hit) {
     let Some(mut limbs) = world.get::<Limbs>(victim).cloned() else {
         return;
+    };
+    // The hit went to the chest (`crate::health::Health::damage_zone`).
+    let zone = if limbs.limb(zone).missing {
+        BodyZone::Chest
+    } else {
+        zone
     };
     let dead = world.get::<Stat>(victim) == Some(&Stat::Dead);
     let has_blood = world

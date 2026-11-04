@@ -1,7 +1,8 @@
 //! Surgery over real WebTransport on 127.0.0.1: the operating computer next to an operating
 //! table (its window, a surgery disk unlocking the locked tend wounds operations for a patient on
 //! the table only), and the operations on organs and wounds: coronary bypass, brain surgery,
-//! debridement, joining and sealing punctured vessels, revival by a shock to the brain.
+//! debridement, joining and sealing punctured vessels, revival by a shock to the brain; taking
+//! organs out and putting them back, lobectomy, amputating an arm and attaching it again.
 
 use std::path::{Path, PathBuf};
 
@@ -9,8 +10,10 @@ use bevy::prelude::*;
 use ss13_game::combat::NextMove;
 use ss13_game::health::{BodyPosition, DamageType, Health, Stat, ZoneSelected};
 use ss13_game::inventory::Inventory;
-use ss13_game::medical::defib::{Defib, OrganDecay};
+use ss13_game::medical::bodyparts::Limb;
+use ss13_game::medical::defib::Defib;
 use ss13_game::medical::operating::OperatingComputer;
+use ss13_game::medical::organs::{self, Organ, OrganOf, Slot};
 use ss13_game::medical::wounds::{Limbs, Series, WoundKind, apply_wound, state};
 use ss13_game::operating::{OperatingComputerData, OperatingComputerUi};
 use ss13_game::testing::{self, Drive, fixture_map, write_fixture};
@@ -69,6 +72,21 @@ const TYPES: &str = r##"{
     "/obj/item/cautery": { "parent": "/obj/item", "declared_vars": { "name": "cautery",
         "icon_state": "cautery", "item_flags": 1024, "tool_behaviour": "cautery",
         "heat": 500 } },
+    "/obj/item/circular_saw": { "parent": "/obj/item", "declared_vars": { "name": "circular saw",
+        "icon_state": "saw", "item_flags": 1024, "tool_behaviour": "saw", "sharpness": 1,
+        "force": 15 } },
+    "/obj/item/scalpel": { "parent": "/obj/item", "declared_vars": { "name": "scalpel",
+        "icon_state": "scalpel", "item_flags": 1024, "tool_behaviour": "scalpel",
+        "sharpness": 1 } },
+    "/obj/item/organ": { "parent": "/obj/item", "declared_vars": { "name": "organ",
+        "icon_state": "organ" } },
+    "/obj/item/organ/heart": { "parent": "/obj/item/organ", "declared_vars": { "name": "heart",
+        "icon_state": "heart-on" } },
+    "/obj/item/organ/lungs": { "parent": "/obj/item/organ", "declared_vars": { "name": "lungs" } },
+    "/obj/item/bodypart": { "parent": "/obj/item", "declared_vars": { "name": "limb" } },
+    "/obj/item/bodypart/arm": { "parent": "/obj/item/bodypart" },
+    "/obj/item/bodypart/arm/left": { "parent": "/obj/item/bodypart/arm", "declared_vars": {
+        "name": "left arm", "icon_state": "default_human_l_arm" } },
     "/obj/item/disk": { "parent": "/obj/item", "declared_vars": { "icon_state": "datadisk1" } },
     "/obj/item/disk/surgery": { "parent": "/obj/item/disk", "declared_vars": {
         "name": "диск хирургических процедур" } },
@@ -111,8 +129,8 @@ const TYPES: &str = r##"{
 
 /// Rows top-down, the last line is y = 1. A stands at (3,3) with the operating table `T` north
 /// of it, the operating computer `O` west of the table and around it a hemostat `H`, a
-/// defibrillator `D`, a cautery `K`, mechanical pinches `P` and a debug surgery disk `X`; B
-/// starts at (5,3).
+/// defibrillator `D`, a cautery `K`, mechanical pinches `P` and a debug surgery disk `X`; a saw
+/// `S` and a scalpel `L` north of the table; B starts at (5,3).
 const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 "f" = (/turf/open/floor,/area/space)
 "s" = (/obj/effect/landmark/start/assistant,/turf/open/floor,/area/space)
@@ -123,10 +141,12 @@ const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 "X" = (/obj/item/disk/surgery/debug,/turf/open/floor,/area/space)
 "O" = (/obj/machinery/computer/operating,/turf/open/floor,/area/space)
 "T" = (/obj/structure/table/optable,/turf/open/floor,/area/space)
+"S" = (/obj/item/circular_saw,/turf/open/floor,/area/space)
+"L" = (/obj/item/scalpel,/turf/open/floor,/area/space)
 
 (1,1,1) = {"
 wwwwwwww
-wffffffw
+wSfLfffw
 wOTHfffw
 wDsfsffw
 wXPKfffw
@@ -142,9 +162,11 @@ const PINCHES: TilePos = TilePos::new(3, 2, 1);
 const COMPUTER: TilePos = TilePos::new(2, 4, 1);
 const TABLE: TilePos = TilePos::new(3, 4, 1);
 const FLOOR: TilePos = TilePos::new(4, 3, 1);
+const SAW: TilePos = TilePos::new(2, 5, 1);
+const SCALPEL: TilePos = TilePos::new(4, 5, 1);
 
 /// Manifest order = `IconStateId`.
-const STATES: [(&str, &str); 12] = [
+const STATES: [(&str, &str); 17] = [
     ("t.dmi", "floor"),
     ("t.dmi", "wall"),
     ("t.dmi", "surgery_table"),
@@ -157,6 +179,11 @@ const STATES: [(&str, &str); 12] = [
     ("i.dmi", "defibunit"),
     ("i.dmi", "defibpaddles0"),
     ("m.dmi", "computer"),
+    ("i.dmi", "saw"),
+    ("i.dmi", "scalpel"),
+    ("i.dmi", "heart-on"),
+    ("i.dmi", "organ"),
+    ("i.dmi", "default_human_l_arm"),
 ];
 
 fn fixture_assets(test: &str) -> PathBuf {
@@ -173,6 +200,11 @@ fn fixture_assets(test: &str) -> PathBuf {
         "/obj/item/defibrillator/loaded",
         "/obj/item/shockpaddles",
         "/obj/machinery/computer/operating",
+        "/obj/item/circular_saw",
+        "/obj/item/scalpel",
+        "/obj/item/organ/heart",
+        "/obj/item/organ/lungs",
+        "/obj/item/bodypart/arm/left",
         "/turf/open/floor",
         "/turf/closed/wall",
         "/turf/open/space/basic",
@@ -299,6 +331,10 @@ impl Station {
                 s.get::<Inventory>(mob).active_item().is_none()
             });
         }
+        // The client's own click cooldown (its last click on B) runs out first.
+        for _ in 0..20 {
+            self.step();
+        }
         let item = self.on_tile(pos, root);
         self.click(p, item);
         self.run_until("the item is held", |s| {
@@ -327,6 +363,30 @@ impl Station {
             600.0,
         );
         self.run_until("B lies", |s| s.get::<BodyPosition>(b).lying());
+    }
+
+    /// The operations A's held tool offers on B's selected zone, by name.
+    fn ops(&self) -> Vec<&'static str> {
+        use ss13_game::medical::surgery;
+        let (a, b) = (self.players[0].mob, self.players[1].mob);
+        let world = self.server.world();
+        let zone = world.get::<ZoneSelected>(a).unwrap().0;
+        let tool = surgery::ToolInfo::read(world, world.get::<Inventory>(a).unwrap().active_item());
+        let pool = surgery::pool_for(world, b);
+        surgery::available_ops(world, &pool, b, a, zone, &tool)
+            .into_iter()
+            .map(|op| op.def().name)
+            .collect()
+    }
+
+    /// B's organ in `slot`.
+    fn organ(&self, slot: Slot) -> Option<Organ> {
+        organs::state(self.server.world(), self.players[1].mob, slot).cloned()
+    }
+
+    fn set_organ(&mut self, slot: Slot, damage: f32) {
+        let b = self.players[1].mob;
+        organs::set_organ_damage(self.server.world_mut(), b, slot, damage);
     }
 
     fn limbs(&mut self, f: impl FnOnce(&mut Limbs)) {
@@ -542,13 +602,13 @@ fn organ_and_wound_operations() {
         chest.surgery =
             state::SKIN_OPEN | state::ORGANS_CUT | state::BONE_SAWED | state::VESSELS_CLAMPED;
     });
-    s.server.world_mut().get_mut::<OrganDecay>(b).unwrap().heart = 80.0;
+    s.set_organ(Slot::Heart, 80.0);
     s.take(0, HEMOSTAT, "/obj/item/hemostat");
     s.zone(0, TargetZone::Chest);
     s.operate("Коронарное шунтирование", |s| {
-        s.get::<OrganDecay>(s.players[1].mob).heart_operated
+        s.organ(Slot::Heart).unwrap().operated
     });
-    assert!((s.get::<OrganDecay>(b).heart - 60.0).abs() < 0.01);
+    assert!((s.organ(Slot::Heart).unwrap().damage - 60.0).abs() < 0.01);
 
     // Brain surgery loops, 50 a step, while the surgeon keeps at it.
     s.limbs(|l| {
@@ -556,10 +616,10 @@ fn organ_and_wound_operations() {
         head.prepped = true;
         head.surgery = state::SKIN_OPEN | state::BONE_SAWED | state::VESSELS_CLAMPED;
     });
-    s.server.world_mut().get_mut::<OrganDecay>(b).unwrap().brain = 120.0;
+    s.set_organ(Slot::Brain, 120.0);
     s.zone(0, TargetZone::Head);
     s.operate("Операция на мозге", |s| {
-        s.get::<OrganDecay>(s.players[1].mob).brain <= 20.0
+        s.organ(Slot::Brain).unwrap().damage <= 20.0
     });
 
     // Debridement: the infection of a burn comes off 4 a step.
@@ -635,7 +695,7 @@ fn organ_and_wound_operations() {
         let head = l.limb_mut(BodyZone::Head);
         head.surgery = state::SKIN_OPEN | state::BONE_SAWED | state::VESSELS_CLAMPED;
     });
-    let brain = s.get::<OrganDecay>(b).brain;
+    let brain = s.organ(Slot::Brain).unwrap().damage;
     let defib = s.take(0, DEFIB, "/obj/item/defibrillator");
     s.send(0, ClientIntent::ClickSlot(InventorySlot::Back));
     s.run_until("the defibrillator is worn", |s| {
@@ -650,9 +710,129 @@ fn organ_and_wound_operations() {
         *s.get::<Stat>(s.players[1].mob) != Stat::Dead
     });
     assert!(s.said(0, "искру жизни"));
-    let after = s.get::<OrganDecay>(b).brain;
+    let after = s.organ(Slot::Brain).unwrap().damage;
     assert!(
         (after - (brain + 15.0)).abs() < 3.0,
         "15 brain damage: {brain} -> {after}"
     );
+
+    // Alive, healed, its heart stops: the paddles on the chest start it again.
+    {
+        let world = s.server.world_mut();
+        let healed = world.get::<Health>(b).unwrap().healed();
+        world.entity_mut(b).insert(healed);
+        organs::set_heartattack(world, b, true);
+    }
+    s.zone(0, TargetZone::Chest);
+    s.run_until("the defibrillator recharges", |s| {
+        s.server.world().resource::<Time>().elapsed_secs_f64()
+            >= s.get::<Defib>(defib).cooldown_until
+    });
+    s.click(0, b);
+    s.run_until("the heart beats again", |s| {
+        !organs::cardiac_arrest(s.server.world(), s.players[1].mob)
+    });
+    s.run_until("the unit pings", |s| {
+        s.said(0, "heart is now beating again")
+    });
+}
+
+#[test]
+fn organs_and_limbs_move() {
+    let mut s = Station::start("organs_and_limbs_move");
+    let (a, b) = (s.players[0].mob, s.players[1].mob);
+    // A works from north of the table, next to the saw and the scalpel.
+    s.server
+        .world_mut()
+        .entity_mut(a)
+        .insert(TilePos::new(3, 5, 1));
+    s.lay_down(TABLE);
+    s.limbs(|l| {
+        let chest = l.limb_mut(BodyZone::Chest);
+        chest.prepped = true;
+        chest.surgery = state::SKIN_OPEN | state::ORGANS_CUT | state::VESSELS_CLAMPED;
+    });
+    s.take(0, HEMOSTAT, "/obj/item/hemostat");
+    s.zone(0, TargetZone::Chest);
+    // Chest organs stay in until the bone is sawed (`organ_check`).
+    let items = s.ops();
+    assert!(!items.iter().any(|i| i.starts_with("Извлечь")), "{items:?}");
+    s.limbs(|l| l.limb_mut(BodyZone::Chest).surgery |= state::BONE_SAWED);
+    let items = s.ops();
+    for organ in ["сердце", "лёгкие", "печень", "желудок"] {
+        assert!(
+            items.contains(&format!("Извлечь {organ}").as_str()),
+            "{items:?}"
+        );
+    }
+    assert!(!items.contains(&"Извлечь аппендикс"), "{items:?}");
+    s.zone(0, TargetZone::Groin);
+    assert!(s.ops().contains(&"Извлечь аппендикс"));
+    s.zone(0, TargetZone::Chest);
+
+    // The heart comes out onto the floor: no heartbeat, the body suffocates.
+    s.operate("Извлечь сердце", |s| {
+        s.organ(Slot::Heart).is_none()
+    });
+    let heart = s.on_tile(TABLE, "/obj/item/organ/heart");
+    assert!(s.server.world().get::<OrganOf>(heart).is_none());
+    assert!(organs::cardiac_arrest(s.server.world(), b));
+    let oxy = s.get::<Health>(b).oxy;
+    s.run_until("the arrest suffocates", |s| {
+        s.get::<Health>(b).oxy >= oxy + 7.0
+    });
+
+    // It goes back in from the hand.
+    s.take(0, TABLE, "/obj/item/organ/heart");
+    s.operate("Вставить сердце", |s| {
+        s.organ(Slot::Heart).is_some()
+    });
+    assert_eq!(s.server.world().get::<OrganOf>(heart).map(|o| o.0), Some(b));
+    assert!(s.get::<Inventory>(a).active_item().is_none());
+    // A heart out for over 12 s has stopped; the defibrillator's job, done here directly.
+    organs::set_heartattack(s.server.world_mut(), b, false);
+
+    // Lobectomy: lungs at 80 cut back to 60, once.
+    s.set_organ(Slot::Lungs, 80.0);
+    s.take(0, SCALPEL, "/obj/item/scalpel");
+    s.operate(
+        "Удаление поврежденной доли легкого",
+        |s| s.organ(Slot::Lungs).unwrap().operated,
+    );
+    assert!((s.organ(Slot::Lungs).unwrap().damage - 60.0).abs() < 0.01);
+
+    // The left arm comes off with its damage and goes back on.
+    s.server
+        .world_mut()
+        .get_mut::<Health>(b)
+        .unwrap()
+        .damage_zone(BodyZone::LArm, DamageType::Burn, 12.0);
+    s.limbs(|l| {
+        let arm = l.limb_mut(BodyZone::LArm);
+        arm.prepped = true;
+        arm.surgery = state::SKIN_OPEN | state::BONE_SAWED | state::VESSELS_CLAMPED;
+    });
+    s.take(0, SAW, "/obj/item/circular_saw");
+    s.zone(0, TargetZone::LArm);
+    s.operate("Ампутация конечности", |s| {
+        s.get::<Limbs>(s.players[1].mob)
+            .limb(BodyZone::LArm)
+            .missing
+    });
+    let arm = s.on_tile(TABLE, "/obj/item/bodypart/arm/left");
+    assert_eq!(s.get::<Limb>(arm).burn, 12.0);
+    let health = s.get::<Health>(b).clone();
+    assert!(!health.has_part(BodyZone::LArm) && health.part(BodyZone::LArm).burn == 0.0);
+    assert_ne!(s.get::<ss13_game::human::HumanLook>(b).missing, 0);
+    s.take(0, TABLE, "/obj/item/bodypart/arm/left");
+    s.operate("Прикрепить конечность", |s| {
+        !s.get::<Limbs>(s.players[1].mob)
+            .limb(BodyZone::LArm)
+            .missing
+    });
+    let health = s.get::<Health>(b).clone();
+    assert!(health.has_part(BodyZone::LArm));
+    assert_eq!(health.part(BodyZone::LArm).burn, 12.0);
+    assert!(health.tox >= 10.0, "rejection: {}", health.tox);
+    assert_eq!(s.get::<ss13_game::human::HumanLook>(b).missing, 0);
 }

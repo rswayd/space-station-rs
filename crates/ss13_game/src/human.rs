@@ -192,6 +192,10 @@ pub struct HumanLook {
     /// tg `TRAIT_HUSK` (`HUSKED_BURN`): limbs husked (`huskify_image`), no hair
     /// (`head_hair_and_lips.dm`) and no eyes (`update_body_parts`).
     pub husk: bool,
+    /// Amputated bodyparts, bits by [`crate::zone::BodyZone::index`] (tg draws no limb there).
+    pub missing: u8,
+    /// No eyes organ (tg `update_body_parts` draws eyes only from the organ).
+    pub eyeless: bool,
 }
 
 impl HumanLook {
@@ -253,6 +257,8 @@ impl AppearancePrefs {
             uniform: None,
             shoes: None,
             husk: false,
+            missing: 0,
+            eyeless: false,
         }
     }
 }
@@ -326,32 +332,54 @@ pub fn parts(look: &HumanLook) -> Result<Vec<Part>, LookError> {
         Dir::East as u8,
         Dir::West as u8,
     );
-    let mut parts = vec![
-        limb(BODYPARTS_LAYER, "l_arm", 0),
-        limb(BODYPARTS_HIGH_LAYER, "l_hand", 0),
-        limb(BODYPARTS_LAYER, "r_arm", 0),
-        limb(BODYPARTS_HIGH_LAYER, "r_hand", 0),
-        limb(BODYPARTS_LAYER, &format!("head_{gender}"), 0),
+    use crate::zone::BodyZone;
+    let has = |zone: BodyZone| look.missing & (1 << zone.index()) == 0;
+    let mut parts: Vec<Part> = [
+        (BodyZone::LArm, limb(BODYPARTS_LAYER, "l_arm", 0)),
+        (BodyZone::LArm, limb(BODYPARTS_HIGH_LAYER, "l_hand", 0)),
+        (BodyZone::RArm, limb(BODYPARTS_LAYER, "r_arm", 0)),
+        (BodyZone::RArm, limb(BODYPARTS_HIGH_LAYER, "r_hand", 0)),
+        (
+            BodyZone::Head,
+            limb(BODYPARTS_LAYER, &format!("head_{gender}"), 0),
+        ),
         // `left_leg` / `left_leg_lower` masks.
-        limb(BODYPARTS_LAYER, "l_leg", s | n | w),
-        limb(BODYPARTS_LOW_LAYER, "l_leg", e),
+        (BodyZone::LLeg, limb(BODYPARTS_LAYER, "l_leg", s | n | w)),
+        (BodyZone::LLeg, limb(BODYPARTS_LOW_LAYER, "l_leg", e)),
         // `right_leg` / `right_leg_lower`.
-        limb(BODYPARTS_LAYER, "r_leg", s | n | e),
-        limb(BODYPARTS_LOW_LAYER, "r_leg", w),
-        limb(BODYPARTS_LAYER, &format!("chest_{gender}"), 0),
-    ];
+        (BodyZone::RLeg, limb(BODYPARTS_LAYER, "r_leg", s | n | e)),
+        (BodyZone::RLeg, limb(BODYPARTS_LOW_LAYER, "r_leg", w)),
+        (
+            BodyZone::Chest,
+            limb(BODYPARTS_LAYER, &format!("chest_{gender}"), 0),
+        ),
+    ]
+    .into_iter()
+    .filter(|(zone, _)| has(*zone))
+    .map(|(_, part)| part)
+    .collect();
     if look.husk {
         // Blend-inset in tg (masked by the limb); these sprites stay inside their limbs.
-        for zone in ["l_arm", "r_arm", "head", "l_leg", "r_leg", "chest"] {
+        for (zone, name) in [
+            (BodyZone::LArm, "l_arm"),
+            (BodyZone::RArm, "r_arm"),
+            (BodyZone::Head, "head"),
+            (BodyZone::LLeg, "l_leg"),
+            (BodyZone::RLeg, "r_leg"),
+            (BodyZone::Chest, "chest"),
+        ] {
+            if !has(zone) {
+                continue;
+            }
             parts.push(Part {
                 layer: BODYPARTS_LAYER,
                 dmi: HUSK_DMI,
-                state: format!("humanoid_husk_{zone}"),
+                state: format!("humanoid_husk_{name}"),
                 color: Some(HUSK_BLOOD),
                 only_dirs: 0,
             });
         }
-    } else {
+    } else if !look.eyeless {
         for side in ["l", "r"] {
             parts.push(Part {
                 layer: EYES_LAYER,

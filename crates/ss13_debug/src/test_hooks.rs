@@ -682,8 +682,10 @@ fn medical(world: &World, e: Entity, out: &mut Map<String, Value>) {
         }
         out.insert("limbs".into(), Value::Object(parts));
     }
-    if let Some(organs) = world.get::<defib::OrganDecay>(e) {
-        out.insert("heart_damage".into(), json!(organs.heart));
+    if let Some(heart) =
+        ss13_game::medical::organs::state(world, e, ss13_game::medical::organs::Slot::Heart)
+    {
+        out.insert("heart_damage".into(), json!(heart.damage));
     }
     if world.get::<surgery::Buckled>(e).is_some() {
         out.insert("buckled".into(), json!(true));

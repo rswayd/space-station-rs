@@ -11,13 +11,13 @@
 Извлечение и вставка внутренних и внешних органов (в том числе кибернетики и имплантов-органов) в открытой полости.
 
 - **Код:** [`/datum/surgery_operation/limb/organ_manipulation`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/operations/operation_organ_manip.dm#L4), [`/datum/surgery_operation/limb/organ_manipulation/internal`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/operations/operation_organ_manip.dm#L271), [`/datum/surgery_operation/limb/organ_manipulation/external`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/operations/operation_organ_manip.dm#L315)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/medical/surgery.rs`: операция доступна по состояниям tg, но `// shortcut:` органов нет — извлекать нечего
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/medical/surgery.rs`, `crates/ss13_game/src/medical/organs.rs`: внутренние органы операционной зоны (глаза — `eyes`, язык — `mouth`, аппендикс — `groin`) извлекаются зажимом/ломом/вилкой на пол и вставляются из руки в пустой слот, органы груди и мозг — только при распиленной кости; нет еды и растений как муляжей органов (`random_item_organ_pool`); внешние органы — organs.md, импланты — cybernetics.md, механические и абдукторские варианты — свои группы
 
 ### Восстановление органов
 Лобэктомия (лёгкие), гепатэктомия (печень), коронарное шунтирование (сердце), гастрэктомия (желудок), лечение глаз, ушей, мозга (снимает травмы мозга).
 
 - **Код:** [`/datum/surgery_operation/organ/repair`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/operations/operation_organ_repair.dm#L2), [`/datum/surgery_operation/organ/repair/lobectomy`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/operations/operation_organ_repair.dm#L47), [`/datum/surgery_operation/organ/repair/hepatectomy`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/operations/operation_organ_repair.dm#L111), [`/datum/surgery_operation/organ/repair/coronary_bypass`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/operations/operation_organ_repair.dm#L176), [`/datum/surgery_operation/organ/repair/gastrectomy`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/operations/operation_organ_repair.dm#L241), [`/datum/surgery_operation/organ/repair/brain`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/operations/operation_organ_repair.dm#L461)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/medical/surgery.rs`: коронарное шунтирование (урон сердца ≥ 60 → 60, один раз на сердце, при провале +20) и операция на мозге (цикл, −50 за шаг, при провале +60) над уроном органов `OrganDecay`; лобэктомия, гепатэктомия, гастрэктомия, глаза и уши ждут органов с уроном (organs.md), снятие травм мозга и промывки — травмы мозга, кровотечение при провале шунтирования (`adjustBleedStacks`) — blood.md
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/medical/surgery.rs`: коронарное шунтирование, лобэктомия (при провале +4 `losebreath`), гепатэктомия, гастрэктомия (любой острый предмет) — один раз на орган, ставят урон органа в долю tg, при провале урон; операции на ушах и глазах (урон 0, 40 с глухоты; при провале 70 мозгу — tg бьёт сам орган вопреки своим строкам) и на мозге (цикл, −50); снятие травм мозга и промывки — травмы мозга, кровотечение при провале шунтирования (`adjustBleedStacks`) — blood.md, слепота/размытие после операции на глазах — зрение (organs.md)
 
 ### Лечение костей и ран операцией
 Вправление вывиха, лечение трещины и открытого перелома, восстановление черепа, санация ожогов (debride), зашивание проколов и вен.
@@ -29,7 +29,7 @@
 Отрезание конечности (в том числе замена ноги на деревянную), пришивание новой или протеза, крепление произвольного предмета как протеза.
 
 - **Код:** [`/datum/surgery_operation/limb/amputate`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/operations/operation_amputation.dm#L1), [`/datum/surgery_operation/limb/replace_limb`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/operations/operation_replace_limb.dm#L1), [`/datum/surgery_operation/limb/prosthetic_replacement`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/operations/operation_add_limb.dm#L4)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/medical/surgery.rs`: ампутация доступна по состояниям tg, но `// shortcut:` части тела не отделяются — операция сообщает о неудаче; замены нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/medical/surgery.rs`, `crates/ss13_game/src/medical/bodyparts.rs`: ампутация руки или ноги (часть тела падает предметом с уроном), прикрепление конечности-предмета к обрубку (`prosthetic_replacement`, 10 токсина); `// shortcut:` нет обезглавливания, деревянных ног, произвольных предметов как протеза и его закрепления; аугментация роботизированными — роботизированные конечности (bodyparts.md)
 
 ### Реанимация операцией
 Оживление мёртвого пациента разрядом прямо в мозг (дефибриллятор или шоковый инструмент) при допустимом уроне.
@@ -41,7 +41,7 @@
 Лоботомия лечит глубокие травмы ценой новой, промывка мозгов вписывает директиву (синдикат), «спящий агент», усмирение (пацифизм).
 
 - **Код:** [`/datum/surgery_operation/organ/lobotomy`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/operations/operation_lobotomy.dm#L1), [`/datum/surgery_operation/organ/brainwash`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/operations/operation_brainwash.dm#L3), [`/datum/surgery_operation/organ/pacify`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/operations/operation_pacify.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ❌ нет — ждут травм мозга (лоботомия и усмирение — травмы, промывка — антагонист-директива); органы и операция на мозге есть
 
 ### Биоапгрейды (bioware)
 Экспериментальные операции: прошивка вен (меньше кровотечение), мышечные вены, сращивание и заземление нервов, усиление связок или крючки, складывание и отпечаток коры.

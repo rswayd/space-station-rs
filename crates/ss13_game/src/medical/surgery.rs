@@ -3,8 +3,9 @@
 //! `/datum/surgery_operation` `check_availability`, `is_available`, `get_tool_quality`,
 //! `get_time_modifiers`, `get_location_modifier`, `try_perform`, `display_pain`, `on_failure`;
 //! `operation_generic.dm`, `operation_healing.dm`, `operation_bone_repair.dm`,
-//! `operation_organ_manip.dm`, `operation_amputation.dm`, `operation_revival.dm`,
-//! `operation_organ_repair.dm` (heart and brain), `operation_debride.dm`,
+//! `operation_organ_manip.dm`, `operation_amputation.dm`, `operation_add_limb.dm`
+//! (`prosthetic_replacement` with a limb), `operation_revival.dm`, `operation_organ_repair.dm`,
+//! `operation_debride.dm`,
 //! `operation_puncture.dm`), the BandaStation failure chance
 //! (`modular_bandastation/medical/code/surgery/fail_chance.dm`), `/datum/element/surgery_aid`,
 //! the advanced tools' mode switch (`surgery_tools.dm`) and buckling to operating tables and beds
@@ -25,11 +26,17 @@
 //! base, +40% on a patient who feels it, darkness, +5% for basic tools, +10% for improvised
 //! ones) or succeeds. A buckled mob lies on the table (dragged onto it, 2 s for someone else)
 //! until an empty hand clicks the table or it resists.
+//
+// Organ manipulation takes an organ of the operated zone out onto the floor (hemostat) or puts
+// the held organ into its empty slot ([`super::organs`]); amputation drops an arm or leg as an
+// item and a limb item goes back onto its stump ([`super::bodyparts`]); the organ repairs
+// (coronary bypass, lobectomy, hepatectomy, gastrectomy, ear, eye and brain surgery) work on the
+// organ's damage.
 // shortcut: no mood events, sounds, surgical memory, blood on the surgeon's gloves, self-surgery
-// trait, manual cauterizing of yourself, ring accessories on gloves, wound scanning; no limb
-// removal, so amputation fails with a message; organs are not items, so organ manipulation finds
-// nothing to take out and only the heart and brain (their decay damage) can be repaired; no
-// prosthetic, abductor, robotic, thick-skin or skull operations; no brain traumas.
+// trait, manual cauterizing of yourself, ring accessories on gloves, wound scanning; no external
+// organs, cybernetic implants or dummy organs from food; no decapitation, robotic limb
+// replacement or arbitrary prosthetics; no abductor, robotic, thick-skin or skull operations; no
+// brain traumas (so no lobotomy, pacification or brainwashing).
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
@@ -41,8 +48,8 @@ use ss13_tgui::interfaces::list_input::{ListInputData, ListInputUi};
 use ss13_tgui::server::{OpenUi, ServerUi, UiActed, UiParams, UiReject, UiWindow};
 use ss13_tgui::{UiInterface, UiStatus};
 
-use super::defib::{BRAIN_MAX_HEALTH, HEART_MAX_HEALTH, OrganDecay};
 use super::operating::{OperatingComputer, advanced_surgeries};
+use super::organs::{self, Slot};
 use super::wounds::{CANT_WOUND, Limbs, Series, WoundKind, state};
 use super::{MedJob, name_of, visible_range};
 use crate::combat::CombatMode;
@@ -70,9 +77,18 @@ const BALLMER_PEAK_HIGH_END: f32 = 13.8;
 /// `/datum/surgery_operation/organ/repair` `heal_to_percent`, `failure_damage_percent`.
 const REPAIR_HEAL_TO: f32 = 0.6;
 const REPAIR_FAILURE_DAMAGE: f32 = 0.2;
+/// Hepatectomy and gastrectomy `heal_to_percent`; their and lobectomy's `failure_damage_percent`.
+const HEPATECTOMY_HEAL_TO: f32 = 0.1;
+const GASTRECTOMY_HEAL_TO: f32 = 0.2;
+const LOBECTOMY_FAILURE_DAMAGE: f32 = 0.1;
+const CUT_FAILURE_DAMAGE: f32 = 0.15;
+/// Ear and eye surgery's failure: the brain behind them takes 70.
+const SENSE_FAILURE_BRAIN_DAMAGE: f32 = 70.0;
 /// The brain's: `heal_to_percent` 0.25 (healed per step), `failure_damage_percent` 0.3.
 const BRAIN_HEAL: f32 = 0.25;
 const BRAIN_FAILURE_DAMAGE: f32 = 0.3;
+/// Ear surgery's `40 SECONDS - temporary_deafness` added: 40 s of deafness left.
+const EAR_SURGERY_DEAFNESS: f32 = 40.0;
 /// Items with `/datum/element/surgery_aid`: drapes, the surgical processor, bedsheets, cloaks
 /// and robe capes.
 const AIDS: [&str; 5] = [
@@ -257,7 +273,8 @@ impl Tend {
 pub enum Target {
     Limb,
     Basic(TargetZone),
-    Organ(TargetZone),
+    /// The organ of this slot, on its `zone`.
+    Organ(Slot),
 }
 
 /// The operations of a human (one per tg operation type and radial option).
@@ -277,11 +294,21 @@ pub enum Op {
     RepairHairline,
     ResetCompound,
     RepairCompound,
-    OrganManipulation,
+    /// Organ manipulation taking this organ out (`hemostat`).
+    RemoveOrgan(Slot),
+    /// Organ manipulation putting the held organ of this slot in.
+    InsertOrgan(Slot),
     Amputate,
+    /// `prosthetic_replacement` with a limb item on a stump.
+    AttachLimb,
     Revival,
     CoronaryBypass,
     BrainSurgery,
+    Lobectomy,
+    Hepatectomy,
+    Gastrectomy,
+    EarSurgery,
+    EyeSurgery,
     Debride,
     RepairPuncture,
     SealVeins,
@@ -339,6 +366,21 @@ const TEND: &[(Implement, f32)] = &[
     (Tool("cutters"), 1.67),
     (Path("/obj/item/pen"), 1.8),
 ];
+const ORGAN_CUT: &[(Implement, f32)] = &[
+    (Tool("scalpel"), 1.05),
+    (Path("/obj/item/melee/energy/sword"), 1.5),
+    (Path("/obj/item/knife"), 2.25),
+    (Path("/obj/item/shard"), 2.85),
+];
+const SENSE_REPAIR: &[(Implement, f32)] = &[
+    (Tool("hemostat"), 1.05),
+    (Tool("screwdriver"), 2.25),
+    (Path("/obj/item/pen"), 4.0),
+];
+const SENSE_REPAIR_BLOCKED: &[&str] = &[
+    "орган не должен быть кибернетическим",
+    "если в конечности есть кости, они должны быть целы",
+];
 const ORGAN_REPAIR_BLOCKED: &[&str] = &[
     "орган не должен быть кибернетическим",
     "орган не должен был подвергаться хирургическому восстановлению ранее",
@@ -371,11 +413,20 @@ impl Op {
             Self::RepairHairline,
             Self::ResetCompound,
             Self::RepairCompound,
-            Self::OrganManipulation,
+        ]);
+        ops.extend(Slot::ALL.map(Self::RemoveOrgan));
+        ops.extend(Slot::ALL.map(Self::InsertOrgan));
+        ops.extend([
             Self::Amputate,
+            Self::AttachLimb,
             Self::Revival,
             Self::CoronaryBypass,
             Self::BrainSurgery,
+            Self::Lobectomy,
+            Self::Hepatectomy,
+            Self::Gastrectomy,
+            Self::EarSurgery,
+            Self::EyeSurgery,
             Self::Debride,
             Self::RepairPuncture,
             Self::SealVeins,
@@ -421,6 +472,25 @@ impl Op {
             tool_rec: "",
             required: &[],
             blocked: &[],
+        };
+        let organ_manipulation = OpDef {
+            path: "/datum/surgery_operation/limb/organ_manipulation/internal",
+            catalog_name: "Манипуляции с органами",
+            desc: "Манипуляции с внутренними органами пациента.",
+            time: 24.0,
+            all_required: SKIN_OPEN | ORGANS_CUT,
+            tool_rec: "hemostat / орган",
+            required: &[
+                "если оперируется мозг или любые органы грудной клетки, кость ДОЛЖНА быть \
+                 распилена",
+            ],
+            ..base
+        };
+        let organ_repair = OpDef {
+            all_required: SKIN_OPEN | ORGANS_CUT | BONE_SAWED,
+            required: &["орган должен быть умеренно поврежден"],
+            blocked: ORGAN_REPAIR_BLOCKED,
+            ..base
         };
         let def = match self {
             Self::InciseSkin => OpDef {
@@ -688,16 +758,22 @@ impl Op {
                 required: &["сложный перелом конечности должен быть вправлен"],
                 ..base
             },
-            Self::OrganManipulation => OpDef {
-                path: "/datum/surgery_operation/limb/organ_manipulation/internal",
-                name: "Манипуляции с органами",
-                desc: "Манипуляции с внутренними органами пациента.",
-                time: 24.0,
-                all_required: SKIN_OPEN | ORGANS_CUT,
-                implements: &[(Tool("hemostat"), 1.0), (Tool("crowbar"), 1.8)],
-                verb: "искать органы в",
-                tool_rec: "hemostat",
-                ..base
+            Self::RemoveOrgan(slot) => OpDef {
+                name: manip_names(slot).0,
+                verb: "извлекать",
+                implements: &[
+                    (Tool("hemostat"), 1.0),
+                    (Tool("crowbar"), 1.8),
+                    (Path("/obj/item/kitchen/fork"), 2.85),
+                ],
+                ..organ_manipulation
+            },
+            Self::InsertOrgan(slot) => OpDef {
+                name: manip_names(slot).1,
+                verb: "вставлять",
+                // shortcut: no food or plants as dummy organs (`random_item_organ_pool`).
+                implements: &[(Path("/obj/item/organ"), 1.0)],
+                ..organ_manipulation
             },
             Self::Amputate => OpDef {
                 path: "/datum/surgery_operation/limb/amputate",
@@ -719,6 +795,22 @@ impl Op {
                 ],
                 verb: "ампутировать",
                 tool_rec: "amputation shears",
+                ..base
+            },
+            Self::AttachLimb => OpDef {
+                path: "/datum/surgery_operation/limb/prosthetic_replacement",
+                name: "Прикрепить конечность",
+                catalog_name: "prosthetic replacement",
+                desc: "Замена отсутствующей конечности протезом (или произвольным предметом).",
+                time: 32.0,
+                flags: flags::STANDING_ALLOWED | flags::PRIORITY_NEXT_STEP | flags::IGNORE_CLOTHES,
+                all_required: SKIN_OPEN,
+                any_blocked: VESSELS_UNCLAMPED,
+                // shortcut: no arbitrary items as prosthetic arms.
+                implements: &[(Path("/obj/item/bodypart"), 1.0)],
+                verb: "заменять отсутствующую конечность в",
+                tool_rec: "любая конечность / любой предмет",
+                required: &["конечность должна отсутствовать / быть повреждённой"],
                 ..base
             },
             Self::Revival => OpDef {
@@ -750,7 +842,7 @@ impl Op {
                        нормального кровотока. Эту процедуру можно провести только один раз для \
                        каждого органа.",
                 time: 90.0,
-                target: Target::Organ(TargetZone::Chest),
+                target: Target::Organ(Slot::Heart),
                 all_required: SKIN_OPEN | ORGANS_CUT | BONE_SAWED,
                 implements: &[
                     (Tool("hemostat"), 1.05),
@@ -771,7 +863,7 @@ impl Op {
                        когнитивных функций.",
                 time: 100.0,
                 flags: flags::LOOPING,
-                target: Target::Organ(TargetZone::Head),
+                target: Target::Organ(Slot::Brain),
                 all_required: SKIN_OPEN | BONE_SAWED,
                 any_blocked: VESSELS_UNCLAMPED,
                 implements: &[
@@ -782,6 +874,80 @@ impl Op {
                 tool_rec: "hemostat",
                 blocked: &["орган не должен быть кибернетическим"],
                 ..base
+            },
+            Self::Lobectomy => OpDef {
+                path: "/datum/surgery_operation/organ/repair/lobectomy",
+                name: "Удаление поврежденной доли легкого",
+                catalog_name: "Лобэктомия (Восстановление лёгких)",
+                desc: "Восстановление поврежденных лёгких пациента путем удаления наиболее \
+                       поврежденной доли. Эту процедуру можно провести только один раз для \
+                       каждого органа.",
+                time: 42.0,
+                target: Target::Organ(Slot::Lungs),
+                implements: ORGAN_CUT,
+                tool_rec: "scalpel",
+                ..organ_repair
+            },
+            Self::Hepatectomy => OpDef {
+                path: "/datum/surgery_operation/organ/repair/hepatectomy",
+                name: "Удаление поврежденной части печени",
+                catalog_name: "Гепатэктомия (Восстановление печени)",
+                desc: "Восстановление поврежденной печени пациента путем удаления наиболее \
+                       поврежденного сегмента. Эту процедуру можно провести только один раз \
+                       для каждого органа.",
+                time: 52.0,
+                target: Target::Organ(Slot::Liver),
+                implements: ORGAN_CUT,
+                tool_rec: "scalpel",
+                ..organ_repair
+            },
+            Self::Gastrectomy => OpDef {
+                path: "/datum/surgery_operation/organ/repair/gastrectomy",
+                name: "Удаление поврежденной части желудка",
+                catalog_name: "Гастрэктомия (Восстановление желудка)",
+                desc: "Восстановление желудка пациента путем удаления поврежденного сегмента. \
+                       Эту процедуру можно провести только один раз для каждого органа.",
+                time: 52.0,
+                target: Target::Organ(Slot::Stomach),
+                implements: &[
+                    (Tool("scalpel"), 1.05),
+                    (Path("/obj/item/melee/energy/sword"), 1.5),
+                    (Path("/obj/item/knife"), 2.25),
+                    (Path("/obj/item/shard"), 2.85),
+                    (Path("/obj/item"), 4.0),
+                ],
+                tool_rec: "scalpel",
+                ..organ_repair
+            },
+            Self::EarSurgery => OpDef {
+                path: "/datum/surgery_operation/organ/repair/ears",
+                name: "Операция на ушах",
+                catalog_name: "Ототомия (Хирургия ушей)",
+                desc: "Восстановление поврежденных ушей пациента для возвращения слуха.",
+                time: 64.0,
+                target: Target::Organ(Slot::Ears),
+                all_required: SKIN_OPEN,
+                any_blocked: VESSELS_UNCLAMPED,
+                implements: SENSE_REPAIR,
+                tool_rec: "hemostat",
+                required: &[],
+                blocked: SENSE_REPAIR_BLOCKED,
+                ..organ_repair
+            },
+            Self::EyeSurgery => OpDef {
+                path: "/datum/surgery_operation/organ/repair/eyes",
+                name: "Операция на глазах",
+                catalog_name: "Витрэктомия (Хирургия глаз)",
+                desc: "Восстановление поврежденных глаз пациента для возвращения зрения.",
+                time: 64.0,
+                target: Target::Organ(Slot::Eyes),
+                all_required: SKIN_OPEN,
+                any_blocked: VESSELS_UNCLAMPED,
+                implements: SENSE_REPAIR,
+                tool_rec: "hemostat",
+                required: &[],
+                blocked: SENSE_REPAIR_BLOCKED,
+                ..organ_repair
             },
             Self::Debride => OpDef {
                 path: "/datum/surgery_operation/limb/debride",
@@ -854,8 +1020,11 @@ impl Op {
                 let zone = zone_name(zone);
                 vec![format!("операция на {zone} (цель: {zone})")]
             }
-            Target::Organ(TargetZone::Head) => vec!["операция на brain (цель head)".into()],
-            Target::Organ(_) => vec!["операция на heart (цель chest)".into()],
+            Target::Organ(slot) => vec![format!(
+                "операция на {} (цель {})",
+                slot.spec().name,
+                slot.spec().zone.dm()
+            )],
             Target::Limb => Vec::new(),
         };
         all.extend(state_guides(def.all_required, "требуется"));
@@ -908,6 +1077,29 @@ impl Op {
             blocked.push("рабочая область не должна быть закрыта одеждой".into());
         }
         [all, any, optional, blocked]
+    }
+}
+
+/// Organ manipulation's radial options: "Извлечь …", "Вставить …".
+fn manip_names(slot: Slot) -> (&'static str, &'static str) {
+    match slot {
+        Slot::Brain => ("Извлечь мозг", "Вставить мозг"),
+        Slot::Appendix => ("Извлечь аппендикс", "Вставить аппендикс"),
+        Slot::Stomach => ("Извлечь желудок", "Вставить желудок"),
+        Slot::Ears => ("Извлечь уши", "Вставить уши"),
+        Slot::Eyes => ("Извлечь глаза", "Вставить глаза"),
+        Slot::Lungs => ("Извлечь лёгкие", "Вставить лёгкие"),
+        Slot::Heart => ("Извлечь сердце", "Вставить сердце"),
+        Slot::Liver => ("Извлечь печень", "Вставить печень"),
+        Slot::Tongue => ("Извлечь язык", "Вставить язык"),
+    }
+}
+
+/// The organ an `organ` operation works on.
+pub fn organ_target(op: Op) -> Option<Slot> {
+    match op.def().target {
+        Target::Organ(slot) => Some(slot),
+        _ => None,
     }
 }
 
@@ -1106,6 +1298,7 @@ fn tool_check(op: Op, tool: &ToolInfo) -> bool {
                 || tool.temperature >= FIRE_MINIMUM_TEMPERATURE_TO_EXIST
         }
         Op::SealVeins => tool.temperature >= FIRE_MINIMUM_TEMPERATURE_TO_EXIST,
+        Op::Gastrectomy => tool.sharpness & super::wounds::SHARP_EDGED != 0 || listed,
         // shortcut: an energy gun never counts as charged with an electrode (no fire modes
         // here), so only paddles and batons shock a brain.
         Op::Revival => {
@@ -1302,7 +1495,6 @@ struct Patient {
     prepped_any: bool,
     brute: f32,
     burn: f32,
-    organs: Option<OrganDecay>,
 }
 
 fn patient(world: &World, mob: Entity) -> Option<Patient> {
@@ -1325,7 +1517,6 @@ fn patient(world: &World, mob: Entity) -> Option<Patient> {
         prepped_any: limbs.parts.iter().any(|l| l.prepped),
         brute: health.brute,
         burn: health.burn,
-        organs: world.get::<OrganDecay>(mob).copied(),
     })
 }
 
@@ -1344,17 +1535,22 @@ pub(crate) fn is_available(world: &World, op: Op, mob: Entity, zone: TargetZone)
             }
             target.check_zone()
         }
-        // `organ`: the organ's exact zone, its bodypart prepared.
-        Target::Organ(target) => {
-            if zone != target || p.organs.is_none() {
+        // `organ`: the organ's exact zone, its bodypart prepared; organic (`required_organ_flag`).
+        Target::Organ(slot) => {
+            let organic = organs::state(world, mob, slot).is_some_and(|o| !o.robotic);
+            if zone != slot.spec().zone || !organic {
                 return false;
             }
-            target.check_zone()
+            slot.bodypart()
         }
         Target::Limb => zone.check_zone(),
     };
     let limb = limbs.limb(body);
     if !limb.prepped {
+        return false;
+    }
+    // A stump takes only operations with `allow_stumps`.
+    if limb.missing != (op == Op::AttachLimb) {
         return false;
     }
     if def.all_required != 0 && !limb.has_state(def.all_required) {
@@ -1366,7 +1562,12 @@ pub(crate) fn is_available(world: &World, op: Op, mob: Entity, zone: TargetZone)
     if def.any_blocked != 0 && limb.has_any_state(def.any_blocked) {
         return false;
     }
-    let organs = p.organs.unwrap_or_default();
+    let organ = organ_target(op).and_then(|slot| organs::state(world, mob, slot));
+    let damage = organ.map_or(0.0, |o| o.damage);
+    let max = organ.map_or(0.0, |o| o.spec().max_health);
+    // `organ/repair/state_check`: moderately damaged and not repaired before.
+    let repairable = |heal_to: f32| organ.is_some_and(|o| !o.operated) && damage >= max * heal_to;
+    let bones_intact = !limb.has_any_state(state::BONE_SAWED | state::BONE_DRILLED);
     let state_ok = match op {
         Op::TendWounds(_, Heal::Brute) => p.brute > 0.0,
         Op::TendWounds(_, Heal::Burn) => p.burn > 0.0,
@@ -1388,12 +1589,22 @@ pub(crate) fn is_available(world: &World, op: Op, mob: Entity, zone: TargetZone)
         Op::RepairCompound => limb
             .wound(Series::Bone)
             .is_some_and(|w| w.kind == WoundKind::Compound && w.reset),
+        // shortcut: no decapitation (heads with their organs are not items).
         Op::Amputate => !matches!(body, BodyZone::Head | BodyZone::Chest),
+        Op::RemoveOrgan(slot) => {
+            zone == slot.spec().zone
+                && organs::organ(world, mob, slot).is_some()
+                && organ_bone_ok(slot, limb)
+        }
+        Op::InsertOrgan(slot) => {
+            zone == slot.spec().zone && organs::lacks(world, mob, slot) && organ_bone_ok(slot, limb)
+        }
         // shortcut: no suicide, husk or DNR flags yet, so every corpse with a brain qualifies.
         Op::Revival => p.dead,
-        Op::CoronaryBypass => {
-            organs.heart >= HEART_MAX_HEALTH * REPAIR_HEAL_TO && !organs.heart_operated
-        }
+        Op::CoronaryBypass | Op::Lobectomy => repairable(REPAIR_HEAL_TO),
+        Op::Hepatectomy => repairable(HEPATECTOMY_HEAL_TO),
+        Op::Gastrectomy => repairable(GASTRECTOMY_HEAL_TO),
+        Op::EarSurgery | Op::EyeSurgery => bones_intact,
         Op::Debride => limb.wound(Series::Burn).is_some_and(|w| w.infection > 0.0),
         Op::RepairPuncture => limb
             .wound(Series::Pierce)
@@ -1409,6 +1620,23 @@ pub(crate) fn is_available(world: &World, op: Op, mob: Entity, zone: TargetZone)
     def.flags & flags::IGNORE_CLOTHES != 0 || p.covered & crate::chem::body_part_bit(body) == 0
 }
 
+/// `organ_manipulation/internal/organ_check`: chest organs and the brain need the bone sawed.
+fn organ_bone_ok(slot: Slot, limb: &super::wounds::Limb) -> bool {
+    let locked = slot.spec().zone == TargetZone::Chest || slot == Slot::Brain;
+    !locked || limb.has_state(state::BONE_SAWED)
+}
+
+/// tg `snowflake_check_availability` with the tool in hand: an organ goes into its own slot, a
+/// limb onto its own stump.
+fn tool_fits(op: Op, zone: TargetZone, tool: &ToolInfo) -> bool {
+    let path = tool.path.as_deref().unwrap_or_default();
+    match op {
+        Op::InsertOrgan(slot) => Slot::of_path(path) == Some(slot),
+        Op::AttachLimb => super::bodyparts::zone_of_path(path) == Some(zone.check_zone()),
+        _ => true,
+    }
+}
+
 /// tg `check_availability` of `op` on `mob`'s `zone` with `tool`, by `surgeon`.
 fn available(
     world: &World,
@@ -1418,7 +1646,10 @@ fn available(
     zone: TargetZone,
     tool: &ToolInfo,
 ) -> bool {
-    if tool_quality(op, tool) <= 0.0 || !is_available(world, op, mob, zone) {
+    if tool_quality(op, tool) <= 0.0
+        || !tool_fits(op, zone, tool)
+        || !is_available(world, op, mob, zone)
+    {
         return false;
     }
     let def = op.def();
@@ -1730,6 +1961,61 @@ fn preop(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: TargetZone)
             format!("{user} начинает лечить мозг {target}."),
             "Ваша голова пульсирует от невообразимой боли!".into(),
         ),
+        Op::RemoveOrgan(slot) => {
+            let organ = slot.spec().ru.0;
+            (
+                format!("Вы начинаете извлекать {organ} у {target}..."),
+                format!("{user} начинает извлекать {organ} у {target}."),
+                format!("Вы чувствуете тянущее ощущение в {place}!"),
+            )
+        }
+        Op::InsertOrgan(_) => (
+            format!("Вы начинаете вставлять {tool} в {target}..."),
+            format!("{user} начинает вставлять {tool} в {target}."),
+            format!(
+                "Вы чувствуете, как что-то помещают в вашу {}!",
+                zone.check_zone().ru().1
+            ),
+        ),
+        Op::AttachLimb => (
+            format!(
+                "Вы начинаете заменять отсутствующую {} у {target}...",
+                zone.check_zone().ru().1
+            ),
+            format!(
+                "{user} начинает заменять отсутствующую {} у {target}.",
+                zone.check_zone().ru().1
+            ),
+            format!(
+                "Вы испытываете неприятное ощущение там, где должна быть ваша {}!",
+                zone.check_zone().ru().0
+            ),
+        ),
+        Op::Lobectomy => (
+            format!("Вы начинаете делать надрез в легких {target}..."),
+            format!("{user} начинает делать надрез у {target}."),
+            "Вы чувствуете колющую боль в груди!".into(),
+        ),
+        Op::Hepatectomy => (
+            format!("Вы начинаете вырезать поврежденный фрагмент печени {target}..."),
+            format!("{user} начинает делать надрез у {target}."),
+            "Ваш живот горит от ужасной колющей боли!".into(),
+        ),
+        Op::Gastrectomy => (
+            format!("Вы начинаете вырезать поврежденный фрагмент желудка {target}..."),
+            format!("{user} начинает делать надрез у {target}."),
+            "Вы чувствуете ужасную колющую боль в животе!".into(),
+        ),
+        Op::EarSurgery => (
+            format!("Вы начинаете лечить уши {target}..."),
+            format!("{user} начинает лечить уши {target}."),
+            "Вы чувствуете головокружительную боль в голове!".into(),
+        ),
+        Op::EyeSurgery => (
+            format!("Вы начинаете лечить глаза {target}..."),
+            format!("{user} начинает лечить глаза {target}."),
+            "Вы чувствуете колющую боль в глазах!".into(),
+        ),
         Op::Debride => (
             format!("Вы начинаете удалять зараженную плоть с {place} у {target}..."),
             format!(
@@ -1932,18 +2218,20 @@ fn with_limbs(world: &mut World, mob: Entity, f: impl FnOnce(&mut Limbs)) {
     }
 }
 
-fn with_organs(world: &mut World, mob: Entity, f: impl FnOnce(&mut OrganDecay)) {
-    if let Some(mut organs) = world.get::<OrganDecay>(mob).copied() {
-        f(&mut organs);
-        world.entity_mut(mob).insert(organs);
+/// `organ/repair/on_success`: the organ set to `heal_to` of its max health, marked operated on.
+fn repair_organ(world: &mut World, mob: Entity, slot: Slot, heal_to: f32) {
+    organs::set_organ_damage(world, mob, slot, slot.spec().max_health * heal_to);
+    if let Some(organ) = organs::organ(world, mob, slot)
+        && let Some(mut state) = world.get_mut::<organs::Organ>(organ)
+    {
+        state.operated = true;
     }
 }
 
-/// `apply_organ_damage(amount, maximum)`: nothing past `maximum`.
-fn organ_damage(damage: &mut f32, amount: f32, maximum: f32) {
-    if *damage <= maximum {
-        *damage = (*damage + amount).clamp(0.0, maximum);
-    }
+/// `organ/repair/on_failure`: `failure_damage_percent` of the organ's max health.
+fn fail_organ(world: &mut World, mob: Entity, slot: Slot, share: f32) {
+    let max = slot.spec().max_health;
+    organs::adjust_organ_loss(world, mob, slot, max * share);
 }
 
 fn damage_limb(world: &mut World, mob: Entity, zone: BodyZone, kind: DamageType, amount: f32) {
@@ -2180,11 +2468,78 @@ fn success(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: TargetZon
                 w.reset = true;
             }
         }),
-        Op::OrganManipulation => {
-            own = "Вы не находите органов, которые можно извлечь.".into();
+        Op::RemoveOrgan(slot) => {
+            let organ = slot.spec().ru.0;
+            visible_range(
+                world,
+                actor.mob,
+                &format!("Вы успешно извлекаете {organ} у {target}."),
+                &format!("{user} успешно извлекает {organ} у {target}!"),
+                Span::Notice,
+                1,
+            );
+            pain(
+                world,
+                mob,
+                &format!(
+                    "Ваша {} пульсирует от боли, вы больше не чувствуете свой {organ}!",
+                    body.ru().0
+                ),
+            );
+            if let (Some(removed), Some(&pos)) =
+                (organs::organ(world, mob, slot), world.get::<TilePos>(mob))
+            {
+                organs::remove(world, removed, false);
+                crate::storage::take_out(world, removed, pos);
+            }
+            return;
+        }
+        Op::InsertOrgan(_) => {
+            let Some(organ) = actor.item else {
+                return;
+            };
+            if !organs::insert(world, organ, mob) {
+                return;
+            }
+            own = format!("Вы успешно вставляете {tool} в {target}.");
+            others = format!("{user} успешно вставляет {tool} в {target}.");
+            pain(
+                world,
+                mob,
+                &format!(
+                    "Ваша {} пульсирует от боли, пока орган начинает приживаться!",
+                    body.ru().0
+                ),
+            );
         }
         Op::Amputate => {
-            own = "Конечность не поддаётся: отделить её не выходит.".into();
+            let part = body.ru().1;
+            own = format!("Вы успешно ампутировали {part} у {target}!");
+            others = format!("{user} успешно ампутировал {part} у {target}!");
+            pain(world, mob, &format!("Вы больше не чувствуете свою {part}!"));
+            super::bodyparts::drop_limb(world, mob, body);
+        }
+        Op::AttachLimb => {
+            let Some(limb) = actor.item else {
+                return;
+            };
+            // `OPERATION_REJECTION_DAMAGE` of a flesh limb of the same species.
+            super::hurt_limb(world, mob, BodyZone::Chest, DamageType::Tox, 10.0);
+            if !super::bodyparts::attach_limb(world, mob, limb) {
+                return;
+            }
+            let part = body.ru().1;
+            own = format!("Вам удалось заменить {part} у {target}.");
+            others = format!("{user} успешно заменяет {part} у {target}!");
+            pain(
+                world,
+                mob,
+                &format!(
+                    "Вы ощущаете синтетическое чувство, которое распространяется от вашей {}, \
+                     снова чувствуя её!",
+                    super::wounds::zone_prepositional(body)
+                ),
+            );
         }
         Op::Revival => {
             visible_range(
@@ -2199,10 +2554,7 @@ fn success(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: TargetZon
             return;
         }
         Op::CoronaryBypass => {
-            with_organs(world, mob, |o| {
-                o.heart = HEART_MAX_HEALTH * REPAIR_HEAL_TO;
-                o.heart_operated = true;
-            });
+            repair_organ(world, mob, Slot::Heart, REPAIR_HEAL_TO);
             own = format!("Вы успешно установили шунт на сердце {target}.");
             others = format!("{user} успешно установил шунт на сердце {target}.");
             pain(
@@ -2212,9 +2564,14 @@ fn success(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: TargetZon
             );
         }
         Op::BrainSurgery => {
-            with_organs(world, mob, |o| {
-                o.brain = (o.brain - BRAIN_MAX_HEALTH * BRAIN_HEAL).max(0.0);
-            });
+            if let Some(brain) = organs::organ(world, mob, Slot::Brain) {
+                organs::damage_organ(
+                    world,
+                    brain,
+                    -organs::BRAIN_DAMAGE_DEATH * BRAIN_HEAL,
+                    organs::BRAIN_DAMAGE_DEATH,
+                );
+            }
             own = format!("Вам удалось прооперировать мозг {target}.");
             others = format!("{user} успешно оперирует мозг {target}!");
             pain(
@@ -2222,8 +2579,8 @@ fn success(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: TargetZon
                 mob,
                 "Боль в голове отступает, думать становится немного легче!",
             );
-            let brain = world.get::<OrganDecay>(mob).map_or(0.0, |o| o.brain);
-            if brain > BRAIN_MAX_HEALTH * 0.1 {
+            let brain = organs::state(world, mob, Slot::Brain).map_or(0.0, |o| o.damage);
+            if brain > organs::BRAIN_DAMAGE_DEATH * 0.1 {
                 tell(
                     world,
                     actor.client,
@@ -2231,6 +2588,58 @@ fn success(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: TargetZon
                     format!("Мозг {target} выглядит так, будто его можно вылечить еще немного."),
                 );
             }
+        }
+        Op::Lobectomy | Op::Hepatectomy | Op::Gastrectomy => {
+            let (slot, heal_to, organ, pain_text) = match op {
+                Op::Lobectomy => (
+                    Slot::Lungs,
+                    REPAIR_HEAL_TO,
+                    "наиболее повреждённую долю легкого",
+                    "",
+                ),
+                Op::Hepatectomy => (
+                    Slot::Liver,
+                    HEPATECTOMY_HEAL_TO,
+                    "повреждённую часть печени",
+                    "Боль немного отступает!",
+                ),
+                _ => (
+                    Slot::Stomach,
+                    GASTRECTOMY_HEAL_TO,
+                    "повреждённую часть желудка",
+                    "Боль в животе немного утихает!",
+                ),
+            };
+            repair_organ(world, mob, slot, heal_to);
+            own = format!("Вы успешно удаляете {organ} {target}.");
+            others = format!("{user} успешно удаляет {organ} {target}.");
+            pain(world, mob, pain_text);
+        }
+        Op::EarSurgery | Op::EyeSurgery => {
+            let ears = op == Op::EarSurgery;
+            let slot = if ears { Slot::Ears } else { Slot::Eyes };
+            repair_organ(world, mob, slot, 0.0);
+            // shortcut: no temporary blindness to cure or eye blur (no sight effects yet).
+            if ears
+                && let Some(organ) = organs::organ(world, mob, slot)
+                && let Some(mut state) = world.get_mut::<organs::Organ>(organ)
+            {
+                state.deafness = EAR_SURGERY_DEAFNESS;
+            }
+            let (what, text) = if ears {
+                (
+                    "уши",
+                    "Голова идет кругом, но, кажется, слух начинает возвращаться!",
+                )
+            } else {
+                (
+                    "глаза",
+                    "Зрение затуманено, но кажется, теперь вы видите немного лучше!",
+                )
+            };
+            own = format!("Вы успешно вылечили {what} {target}.");
+            others = format!("{user} успешно вылечил {what} {target}.");
+            pain(world, mob, text);
         }
         Op::Debride => {
             damage_limb(world, mob, body, DamageType::Brute, 3.0);
@@ -2317,11 +2726,11 @@ fn revive_by_shock(world: &mut World, mob: Entity) {
     if super::defib::revive(world, mob) {
         let text = format!("...{target} приходит в себя - живой и в сознании!");
         super::visible(world, mob, &text, &text, Span::Notice);
-        with_organs(world, mob, |o| organ_damage(&mut o.brain, 15.0, 180.0));
+        organs::adjust_organ_loss_up_to(world, mob, Slot::Brain, 15.0, 180.0);
     } else {
         let text = format!("...{target} дёргается в конвульсиях и замирает.");
         super::visible(world, mob, &text, &text, Span::Warning);
-        with_organs(world, mob, |o| organ_damage(&mut o.brain, 50.0, 199.0));
+        organs::adjust_organ_loss_up_to(world, mob, Slot::Brain, 50.0, 199.0);
     }
 }
 
@@ -2412,13 +2821,7 @@ fn failure(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: TargetZon
             return;
         }
         Op::CoronaryBypass => {
-            with_organs(world, mob, |o| {
-                organ_damage(
-                    &mut o.heart,
-                    HEART_MAX_HEALTH * REPAIR_FAILURE_DAMAGE,
-                    HEART_MAX_HEALTH,
-                )
-            });
+            fail_organ(world, mob, Slot::Heart, REPAIR_FAILURE_DAMAGE);
             say(
                 world,
                 "Вы ошибаетесь при креплении шунта, и он отрывается, повреждая часть сердца!"
@@ -2435,13 +2838,7 @@ fn failure(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: TargetZon
             return;
         }
         Op::BrainSurgery => {
-            with_organs(world, mob, |o| {
-                organ_damage(
-                    &mut o.brain,
-                    BRAIN_MAX_HEALTH * BRAIN_FAILURE_DAMAGE,
-                    BRAIN_MAX_HEALTH,
-                )
-            });
+            fail_organ(world, mob, Slot::Brain, BRAIN_FAILURE_DAMAGE);
             say(
                 world,
                 "Вы совершаете ошибку, нанося еще больше повреждений!".into(),
@@ -2452,6 +2849,77 @@ fn failure(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: TargetZon
                 mob,
                 "Ваша голова пульсирует от ужасной боли; даже думать больно!",
             );
+            return;
+        }
+        Op::Lobectomy => {
+            fail_organ(world, mob, Slot::Lungs, LOBECTOMY_FAILURE_DAMAGE);
+            if let Some(mut resp) = world.get_mut::<crate::breath::Respiration>(mob) {
+                resp.losebreath += 4.0;
+            }
+            say(
+                world,
+                format!(
+                    "Вы совершаете ошибку, не сумев удалить повреждённую долю легкого {target}!"
+                ),
+                format!("{user} совершает ошибку!"),
+            );
+            pain(
+                world,
+                mob,
+                "Вы чувствуете резкий укол в груди; у вас перехватывает дыхание, и каждый вдох \
+                 причиняет боль!",
+            );
+            return;
+        }
+        Op::Hepatectomy | Op::Gastrectomy => {
+            let (slot, what) = if op == Op::Hepatectomy {
+                (Slot::Liver, "печени")
+            } else {
+                (Slot::Stomach, "желудка")
+            };
+            fail_organ(world, mob, slot, CUT_FAILURE_DAMAGE);
+            say(
+                world,
+                format!("Вы отрезали не ту часть {what} {target}!"),
+                format!("{user} отрезал не ту часть {what} {target}!"),
+            );
+            pain(world, mob, "Боль в животе усиливается!");
+            return;
+        }
+        // tg damages the ears or eyes themselves here, against its own lines (and the older
+        // surgeries) that hit the brain; the brain it is.
+        Op::EarSurgery | Op::EyeSurgery => {
+            match organs::organ(world, mob, Slot::Brain) {
+                Some(brain) => {
+                    say(
+                        world,
+                        format!("Вы случайно тычите инструментом прямо в мозг {target}!"),
+                        format!("{user} случайно тычет инструментом прямо в мозг {target}!"),
+                    );
+                    pain(
+                        world,
+                        mob,
+                        "Вы чувствуете пронзающую боль, проходящую сквозь голову прямо в мозг!",
+                    );
+                    organs::damage_organ(
+                        world,
+                        brain,
+                        SENSE_FAILURE_BRAIN_DAMAGE,
+                        organs::BRAIN_DAMAGE_DEATH,
+                    );
+                }
+                None => say(
+                    world,
+                    format!(
+                        "Вы случайно тыкаете туда, где должен быть мозг {target}! Хорошо, что \
+                         его там нет."
+                    ),
+                    format!(
+                        "{user} случайно тыкает инструментом прямо в мозг {target}! Или сделал \
+                         бы это, будь у пациента мозг."
+                    ),
+                ),
+            }
             return;
         }
         Op::Debride => {

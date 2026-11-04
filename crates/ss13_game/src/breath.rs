@@ -310,9 +310,11 @@ pub fn temp_change_amount(diff: f64, change_rate: f64) -> f64 {
 }
 
 impl Respiration {
-    /// The crit part of tg `breathe`: `true` when this breath is missed (`losebreath`).
-    pub fn misses_breath(&mut self, stat: Stat) -> bool {
+    /// The missed breaths of tg `breathe` (failing lungs, crit): `true` when this breath is
+    /// missed (`losebreath`).
+    pub fn misses_breath(&mut self, stat: Stat, lungs_failing: bool) -> bool {
         match stat {
+            _ if lungs_failing => self.losebreath += 1.0,
             Stat::HardCrit => self.losebreath += 1.0,
             Stat::SoftCrit => self.losebreath += 0.25,
             _ => {}
@@ -324,12 +326,26 @@ impl Respiration {
         false
     }
 
+    /// Human `check_breath` without lungs: `SUFFOCATION_OXYLOSS + 1` (less in crit), a failed
+    /// breath; the air is breathed back unchanged.
+    pub fn no_lungs(&mut self, ctx: &mut LifeCtx) {
+        let mut damage = f64::from(SUFFOCATION_OXYLOSS + 1.0);
+        if matches!(ctx.stat, Stat::SoftCrit | Stat::HardCrit) {
+            damage *= f64::from(SUFFOCATION_OXYLOSS_CRIT_MODIFIER);
+        }
+        ctx.damage(DamageType::Oxy, damage);
+        self.failed_last_breath = true;
+        ctx.alerts
+            .throw(AlertCategory::NotEnoughOxygen, "not_enough_oxy", 0);
+    }
+
     /// Lungs `check_breath` of a human. `breath` (`None`: nothing to breathe) is changed in
     /// place: O2 becomes CO2, pluoxium is consumed, it takes the body temperature. Returns
     /// whether the breath succeeded.
     // shortcut: BZ, freon, healium, helium, hypernoblium, miasma, nitrium, tritium, zauker and
     // antinoblium have no effect yet; N2O throws its alert but does not knock out or sleep, CO2
-    // does not knock out (no unconsciousness status yet); no lung organ damage.
+    // does not knock out (no unconsciousness status yet); breath temperature does not damage the
+    // lungs (tg's early return, see below).
     pub fn check_breath(&mut self, breath: Option<&mut GasMixture>, ctx: &mut LifeCtx) -> bool {
         let mut empty = GasMixture::vacuum();
         let breath = breath.unwrap_or(&mut empty);
@@ -958,10 +974,23 @@ fn live(world: &mut World, mob: Entity, fired: u64, now: f64) {
         events: Vec::new(),
     };
 
-    // `handle_breathing`: every 4th fire, or every fire after a failed breath.
-    if stat != Stat::Dead && (fired.is_multiple_of(4) || resp.failed_last_breath) {
+    // The lungs and heart organs (`crate::medical::organs`): a mob without modelled organs
+    // breathes with healthy ones.
+    use crate::medical::organs::{self, Slot};
+    let host = world.get::<organs::OrganHost>(mob).is_some();
+    let lungs = organs::state(world, mob, Slot::Lungs);
+    let has_lungs = !host || lungs.is_some();
+    let lungs_failing = lungs.is_some_and(|l| l.failing);
+    let strained =
+        |o: Option<&organs::Organ>| o.is_some_and(|o| o.damage > o.spec().high_threshold);
+    let next_breath = 4
+        - u64::from(strained(lungs))
+        - u64::from(strained(organs::state(world, mob, Slot::Heart)));
+    // `handle_breathing`: every 4th fire (3rd or 2nd with badly damaged lungs or heart), or every
+    // fire after a failed breath.
+    if stat != Stat::Dead && (fired.is_multiple_of(next_breath) || resp.failed_last_breath) {
         let mut breath = None;
-        if !resp.misses_breath(stat) {
+        if !resp.misses_breath(stat, lungs_failing) {
             // `get_breath_from_internal`; `Some(None)` is an open but empty tank.
             let mut from_tank = None;
             if let Some(tank) = internal {
@@ -983,7 +1012,11 @@ fn live(world: &mut World, mob: Entity, fired: u64, now: f64) {
                 }
             };
         }
-        resp.check_breath(breath.as_mut(), &mut ctx);
+        if has_lungs {
+            resp.check_breath(breath.as_mut(), &mut ctx);
+        } else {
+            resp.no_lungs(&mut ctx);
+        }
         // `loc.assume_air(breath)`: the exhaled breath goes to the tile, also from internals.
         if let Some(breath) = breath
             && simulated
@@ -1221,12 +1254,30 @@ mod tests {
     #[test]
     fn crit_misses_breaths_like_tg_losebreath() {
         let mut resp = Respiration::default();
-        assert!(resp.misses_breath(Stat::HardCrit));
-        assert!(resp.misses_breath(Stat::HardCrit));
+        assert!(resp.misses_breath(Stat::HardCrit, false));
+        assert!(resp.misses_breath(Stat::HardCrit, false));
         // Soft crit: one breath in four.
-        let misses: Vec<bool> = (0..4).map(|_| resp.misses_breath(Stat::SoftCrit)).collect();
+        let misses: Vec<bool> = (0..4)
+            .map(|_| resp.misses_breath(Stat::SoftCrit, false))
+            .collect();
         assert_eq!(misses, [false, false, false, true]);
-        assert!(!resp.misses_breath(Stat::Conscious));
+        assert!(!resp.misses_breath(Stat::Conscious, false));
+        // Failing lungs miss every breath, awake or not.
+        assert!(resp.misses_breath(Stat::Conscious, true));
+        assert!(resp.misses_breath(Stat::SoftCrit, true));
+    }
+
+    #[test]
+    fn no_lungs_suffocate_like_human_check_breath() {
+        let mut resp = Respiration::default();
+        let mut body = Body::new();
+        resp.no_lungs(&mut body.ctx(Stat::Conscious));
+        assert_eq!(body.health.oxy, SUFFOCATION_OXYLOSS + 1.0);
+        assert!(resp.failed_last_breath);
+        assert!(body.alerts.get(AlertCategory::NotEnoughOxygen).is_some());
+        let mut body = Body::new();
+        resp.no_lungs(&mut body.ctx(Stat::HardCrit));
+        assert!((body.health.oxy - 4.0 * SUFFOCATION_OXYLOSS_CRIT_MODIFIER).abs() < 1e-5);
     }
 
     #[test]

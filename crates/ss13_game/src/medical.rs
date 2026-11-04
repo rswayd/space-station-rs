@@ -21,15 +21,17 @@
 //!   every 0.8 s while it stays there.
 //!
 //! Submodules: [`blood`] (blood volume, bleeding, transfusions, IV drips), [`wounds`], [`surgery`]
-//! (operations, drapes, operating tables), [`defib`] (defibrillators, organ decay, revival).
+//! (operations, drapes, operating tables), [`defib`] (defibrillators, revival), [`organs`].
 //! Clicks on living mobs that these take (wound treatments, drapes, surgery, paddles, IV drips,
 //! tables) are claimed in [`MedicalClicks`] before melee and the inventory see them.
 // shortcut: no `try_inject` check (thick clothing blocks treatment in tg), no sounds, balloon
 // alerts are chat notices.
 
 pub mod blood;
+pub mod bodyparts;
 pub mod defib;
 pub mod operating;
+pub mod organs;
 pub mod surgery;
 pub mod wounds;
 
@@ -65,9 +67,11 @@ pub const CPR_PANIC_DELAY: f32 = 8.0;
 /// Oxyloss one CPR heals at most.
 pub const CPR_OXY_HEAL: f32 = 7.0;
 
-/// The medical part of tg `fully_heal(HEAL_ALL)` (admin rejuvenate): `restore_blood` and
-/// `HEAL_WOUNDS`. Damage and stat are the caller's.
+/// The medical part of tg `fully_heal(HEAL_ALL)` (admin rejuvenate): `restore_blood`,
+/// `HEAL_WOUNDS`, `HEAL_ORGANS`, `HEAL_LIMBS`. Damage and stat are the caller's.
 pub fn heal_all(world: &mut World, mob: Entity) {
+    organs::regenerate(world, mob);
+    bodyparts::regenerate_limbs(world, mob);
     if let Some(mut blood) = world.get_mut::<blood::Blood>(mob) {
         blood.volume = blood::BLOOD_VOLUME_NORMAL;
     }
@@ -189,6 +193,7 @@ impl Plugin for MedicalServerPlugin {
         surgery::build(app);
         operating::build(app);
         defib::build(app);
+        organs::build(app);
     }
 }
 
@@ -207,7 +212,6 @@ fn give_body(
     commands.entity(add.entity).insert((
         blood::Blood::new(blood_type),
         wounds::Limbs::default(),
-        defib::OrganDecay::default(),
         LimbLimits::default(),
     ));
 }
@@ -306,7 +310,7 @@ fn selected_zone(world: &World, mob: Entity) -> BodyZone {
 }
 
 /// tg `visible_message(message, self_message)` with `ALWAYS_SHOW_SELF_MESSAGE`: `others` to
-/// every client in view of `actor` but the actor, `own` to the actor.
+/// every client in view of `actor` but the actor, `own` to the actor (an empty text to nobody).
 // shortcut: range only, no line of sight, as `crate::health::clients_in_view`.
 pub(crate) fn visible(world: &mut World, actor: Entity, own: &str, others: &str, span: Span) {
     visible_range(world, actor, own, others, span, DEFAULT_MESSAGE_RANGE);
@@ -329,11 +333,14 @@ pub(crate) fn visible_range(
         channel: ChatChannel::Info,
         segments: vec![ChatSegment::new(span, text)],
     };
-    if !clients.is_empty() {
+    if !clients.is_empty() && !others.is_empty() {
         world.write_message(SendChat {
             clients,
             message: message(others),
         });
+    }
+    if own.is_empty() {
+        return;
     }
     if let Some(client) = world.get::<PlayerMob>(actor).map(|p| p.client) {
         world.write_message(SendChat {
@@ -1128,13 +1135,8 @@ fn life_tick(world: &mut World, mob: Entity, secs: f32, now: f64) {
             }
         }
     }
-    // Organs.
-    if let Some(mut organs) = world.get::<defib::OrganDecay>(mob).copied() {
-        organs.tick(dead, bodytemperature, secs);
-        if world.get::<defib::OrganDecay>(mob) != Some(&organs) {
-            world.entity_mut(mob).insert(organs);
-        }
-    }
+    organs::life(world, mob, secs, dead, bodytemperature);
+    let dead = world.get::<Stat>(mob) == Some(&Stat::Dead);
     if !dead {
         blood::handle_blood(world, mob, secs, now);
     }

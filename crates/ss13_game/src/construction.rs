@@ -1380,6 +1380,21 @@ pub fn spawn_obj(world: &mut World, path: &str, pos: TilePos) -> Option<Entity> 
     Some(entity)
 }
 
+/// A new `path` object nowhere (tg `new path()` in nullspace): not on the map, not replicated
+/// until placed. `None` without its prototype.
+pub fn spawn_detached(world: &mut World, path: &str) -> Option<Entity> {
+    let entity = world
+        .try_resource_scope(|world, mut cache: Mut<BuildTemplates>| {
+            if !template(world, &mut cache, path) {
+                return None;
+            }
+            Some(cache.0.get(path)?.as_ref()?.spawn(world, None))
+        })
+        .flatten()?;
+    crate::storage::finish_item(world, entity, 0);
+    Some(entity)
+}
+
 /// tg `new stack_type(loc, amount)`: merges into stacks of its kind on the tile first
 /// (`/obj/item/stack/Initialize(merge = TRUE)`), the rest is a new stack (split at
 /// `max_amount`).

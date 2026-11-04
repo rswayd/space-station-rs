@@ -256,8 +256,9 @@ pub fn hitsound(item: &DmItem) -> &str {
     }
 }
 
-/// tg `TRAIT_DEAF` sources ported: the deafness mutation and earmuffs.
-// shortcut: no ear damage, deafness quirk or disease; add with ear organs.
+/// tg `TRAIT_DEAF` sources ported: the deafness mutation and earmuffs (the ears' own in
+/// `crate::medical::organs::ear_deaf`).
+// shortcut: no deafness quirk or disease.
 fn is_deaf(dna: Option<&Dna>, inventory: Option<&Inventory>, items: &Query<&DmItem>) -> bool {
     dna.is_some_and(|d| mutation_id(DEAF_MUTATION).is_some_and(|id| d.get_mutation(id).is_some()))
         || inventory
@@ -301,6 +302,10 @@ type Listener<'a> = (
     Option<&'a Dna>,
     Option<&'a Inventory>,
     Has<Ghost>,
+    (
+        Option<&'a crate::medical::organs::Organs>,
+        Has<crate::medical::organs::OrganHost>,
+    ),
 );
 
 /// tg `get_hearers_in_view(max_distance, source)`: the tiles BYOND `view()` sees from `source`
@@ -325,6 +330,7 @@ fn deliver(
     listeners: Query<Listener>,
     locs: Query<(Option<&TilePos>, Option<&CarriedBy>, Option<&StoredIn>)>,
     items: Query<&DmItem>,
+    organs: Query<&crate::medical::organs::Organ>,
     sfx: Res<Sfx>,
     mut rng: ResMut<SoundRng>,
     atmos: Option<Res<ss13_atmos::Atmos>>,
@@ -371,8 +377,10 @@ fn deliver(
             )),
             _ => None,
         };
-        for (player, mob, dna, inventory, ghost) in &listeners {
-            if is_deaf(dna, inventory, &items) {
+        for (player, mob, dna, inventory, ghost, (owned, host)) in &listeners {
+            if is_deaf(dna, inventory, &items)
+                || crate::medical::organs::ear_deaf(owned, host, |e| organs.get(e).ok())
+            {
                 continue;
             }
             let Some(at) = turf(mob) else {
