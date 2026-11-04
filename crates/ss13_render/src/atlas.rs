@@ -2,7 +2,7 @@
 //! a memory budget. Rect selection per the `IconStateInfo` contract.
 //!
 //! A page is requested the first time a sprite needs it: the sprite gets the page's handle at
-//! once and draws nothing until the PNG is decoded off the main thread and inserted (a few
+//! once and draws nothing until the page is decoded off the main thread and inserted (a few
 //! frames). Sprites hold strong handles, so a page in use is never freed; the atlas keeps its
 //! own handle to idle pages until the resident total exceeds the budget, then drops the least
 //! recently used ones (Bevy frees the GPU texture with the last handle).
@@ -18,10 +18,11 @@ use anyhow::{Context, ensure};
 use bevy::asset::{AssetHandleProvider, Handle, RenderAssetUsages};
 use bevy::ecs::resource::Resource;
 use bevy::image::Image;
-use bevy::image::{CompressedImageFormats, ImageSampler, ImageType};
+use bevy::image::ImageSampler;
 use bevy::log::error;
 use bevy::math::Rect;
 use bevy::platform::time::Instant;
+use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy::tasks::futures::check_ready;
 use bevy::tasks::{AsyncComputeTaskPool, Task};
 use ss13_assets::manifest::{AssetManifest, IconStateInfo};
@@ -254,23 +255,27 @@ fn held_elsewhere(handle: &Handle<Image>) -> bool {
 
 fn decode(path: &Path) -> anyhow::Result<(Image, AlphaMask)> {
     let bytes = ss13_data::read(path).with_context(|| format!("reading {}", path.display()))?;
-    let image = Image::from_buffer(
-        &bytes,
-        ImageType::Extension("png"),
-        CompressedImageFormats::NONE,
-        true,
-        ImageSampler::nearest(),
+    page_image(&bytes).with_context(|| format!("decoding {}", path.display()))
+}
+
+/// An atlas page file as an sRGB RGBA8 texture with nearest sampling, plus its alpha mask.
+fn page_image(bytes: &[u8]) -> anyhow::Result<(Image, AlphaMask)> {
+    let page = ss13_assets::page::decode(bytes)?;
+    let mask = AlphaMask::from_rgba8(page.width, page.height, &page.rgba)
+        .context("pixel count does not match the size")?;
+    let mut image = Image::new(
+        Extent3d {
+            width: page.width,
+            height: page.height,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        page.rgba,
+        TextureFormat::Rgba8UnormSrgb,
         // The pixels live on the GPU only: Bevy drops the CPU copy after the upload.
         RenderAssetUsages::RENDER_WORLD,
-    )
-    .with_context(|| format!("decoding {}", path.display()))?;
-    // `from_buffer` converts every PNG color type to 4-byte RGBA.
-    let mask = image
-        .data
-        .as_deref()
-        .filter(|_| image.texture_descriptor.format.block_copy_size(None) == Some(4))
-        .and_then(|rgba| AlphaMask::from_rgba8(image.width(), image.height(), rgba))
-        .with_context(|| format!("{}: not an RGBA8 page", path.display()))?;
+    );
+    image.sampler = ImageSampler::nearest();
     Ok((image, mask))
 }
 
@@ -373,13 +378,56 @@ mod tests {
         let images = Assets::<Image>::default();
         let mut a = atlas(&images, [0.0; 4], 0);
         a.handles = Some(images.get_handle_provider());
-        a.manifest.atlases = (0..4).map(|i| format!("atlas/{i}.png")).collect();
+        a.manifest.atlases = (0..4).map(ss13_assets::import::atlas_path).collect();
         let old = a.pages[1].handle.as_ref().unwrap().id();
         assert_eq!(a.evict(MIN_IDLE_SECS), [0, 1, 2, 3]);
         bevy::tasks::AsyncComputeTaskPool::get_or_init(bevy::tasks::TaskPool::default);
         let new = a.page(1).unwrap();
         assert_ne!(new.id(), old);
         assert_eq!(a.stats().loading, 1);
+    }
+
+    #[test]
+    fn page_file_becomes_an_srgb_texture_and_its_mask() {
+        // 2x2, rows top-down: only (1,0) is drawn.
+        let rgba = [0, 0, 0, 0, 10, 20, 30, 255, 1, 2, 3, 0, 0, 0, 0, 0];
+        let file = ss13_assets::page::encode(2, 2, &rgba).unwrap();
+        let (image, mask) = page_image(&file).unwrap();
+        assert_eq!((image.width(), image.height()), (2, 2));
+        assert_eq!(
+            image.texture_descriptor.format,
+            TextureFormat::Rgba8UnormSrgb
+        );
+        assert_eq!(image.data.as_deref(), Some(&rgba[..]));
+        let ImageSampler::Descriptor(sampler) = &image.sampler else {
+            panic!("nearest sampler expected")
+        };
+        assert_eq!(sampler.mag_filter, bevy::image::ImageFilterMode::Nearest);
+        assert_eq!(mask, AlphaMask::from_rgba8(2, 2, &rgba).unwrap());
+        assert!(mask.opaque(1, 0) && !mask.opaque(0, 1));
+        assert!(page_image(b"png?").is_err());
+    }
+
+    /// Decode cost of every page of real assets through the client's path.
+    /// `SS13_ASSETS=... cargo test --release -p ss13_render page_decode_time -- --ignored --nocapture`
+    #[test]
+    #[ignore = "needs generated assets; time it in release"]
+    fn page_decode_time() {
+        let root = PathBuf::from(std::env::var("SS13_ASSETS").expect("SS13_ASSETS"));
+        let images = Assets::<Image>::default();
+        let atlas = IconAtlas::open(&root, images.get_handle_provider(), 0).unwrap();
+        let mut times = Vec::new();
+        for rel in &atlas.manifest.atlases {
+            let start = Instant::now();
+            decode(&root.join(rel)).unwrap();
+            times.push(start.elapsed().as_secs_f64() * 1e3);
+        }
+        let mean = times.iter().sum::<f64>() / times.len() as f64;
+        let max = times.iter().copied().fold(0.0, f64::max);
+        println!(
+            "{} pages: mean {mean:.2} ms, max {max:.2} ms (read + decode + mask)",
+            times.len()
+        );
     }
 
     #[test]

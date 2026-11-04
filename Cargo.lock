@@ -5280,6 +5280,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d55d956fa96f5ec02be2e13af0e20391a5aa83d6a074e3ad368959d0fab299ea"
 
 [[package]]
+name = "qoi"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f6d64c71eb498fe9eae14ce4ec935c555749aef511cca85b5568910d6e48001"
+dependencies = [
+ "bytemuck",
+]
+
+[[package]]
 name = "quanta"
 version = "0.12.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6142,6 +6151,7 @@ version = "0.1.0"
 dependencies = [
  "png",
  "postcard",
+ "qoi",
  "rayon",
  "serde",
  "serde_json",
@@ -6166,7 +6176,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bevy",
- "png",
  "postcard",
  "serde",
  "serde_json",
@@ -6352,7 +6361,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bevy",
- "png",
  "postcard",
  "ss13_assets",
  "ss13_data",

@@ -52,9 +52,14 @@ function wasmSizes() {
   }
 }
 
+// A data file gzipped by web-build.sh (atlas pages): inflated and mounted without `.gz`.
+const isGz = (path) => path.endsWith(".gz");
+
+const isGzip = (bytes) => bytes[0] === 0x1f && bytes[1] === 0x8b;
+
 // Inflates a gzip body unless the host already decoded it (Content-Encoding: gzip).
 async function gunzip(bytes) {
-  if (bytes[0] !== 0x1f || bytes[1] !== 0x8b) return bytes;
+  if (!isGzip(bytes)) return bytes;
   const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
@@ -107,11 +112,11 @@ async function run() {
   }
 
   const sizes = wasmSizes();
+  // Not exact: a host that decodes gzip itself delivers more bytes than the file size.
   const jobs = [
-    // Not exact: a host that decodes gzip itself delivers more bytes than the file size.
     { url: CLIENT_WASM, size: sizes.client, exact: false },
     { url: SERVER_WASM, size: sizes.server, exact: false },
-    ...list.map((f) => ({ url: `data/${f.path}`, size: f.size, path: f.path })),
+    ...list.map((f) => ({ url: `data/${f.path}`, size: f.size, gz: isGz(f.path) })),
   ];
   const total = jobs.reduce((sum, j) => sum + (j.size ?? 0), 0);
   let loaded = 0;
@@ -123,7 +128,12 @@ async function run() {
   onBytes(0);
   const got = new Map();
   await inParallel(jobs, PARALLEL_FETCHES, async (j) => {
-    got.set(j.url, await download(j.url, j.size, onBytes, j.exact ?? true));
+    const bytes = await download(j.url, j.size, onBytes, !j.gz && (j.exact ?? true));
+    // Still gzip: the host sent the file as stored, so the size check of `download` applies.
+    if (j.gz && isGzip(bytes) && bytes.length !== j.size) {
+      throw new Error(`${j.url}: ожидалось ${j.size} байт, получено ${bytes.length}. Обновите страницу.`);
+    }
+    got.set(j.url, j.gz ? await gunzip(bytes) : bytes);
   });
 
   const serverFiles = new Map();
@@ -131,8 +141,9 @@ async function run() {
   const transfer = [];
   for (const f of list) {
     const bytes = got.get(`data/${f.path}`);
-    if (f.side !== "client") serverFiles.set(f.path, bytes);
-    if (f.side !== "server") clientFiles.set(f.path, bytes);
+    const path = isGz(f.path) ? f.path.slice(0, -3) : f.path;
+    if (f.side !== "client") serverFiles.set(path, bytes);
+    if (f.side !== "server") clientFiles.set(path, bytes);
     if (f.side === "server") transfer.push(bytes.buffer);
   }
   const serverWasm = await gunzip(got.get(SERVER_WASM));

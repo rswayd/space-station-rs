@@ -6,6 +6,8 @@
 //! (`ss13_assets::usage`), so a client that loads atlas pages on demand loads few of them, and
 //! the GAGS icons every type with `greyscale_config` + `greyscale_colors` uses are rendered into
 //! the atlases too (`ss13_assets::gags`); without `--types` there are none.
+//!
+//! `ss13-import page-png <atlas/N.qoi> <out.png>` converts an atlas page to PNG for viewing.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -14,12 +16,26 @@ use std::time::Instant;
 use ss13_assets::import::import_dmi;
 use ss13_assets::usage::{DmTypes, DmiUsage, find_files, map_usage};
 
-const USAGE: &str =
-    "usage: ss13-import dmi [--source <repo root>] [--out <dir>] [--types <dm_types.json>]";
+const USAGE: &str = "usage: ss13-import dmi [--source <repo root>] [--out <dir>] [--types \
+                     <dm_types.json>]\n       ss13-import page-png <atlas/N.qoi> <out.png>";
 
 fn main() -> ExitCode {
     let mut args = std::env::args().skip(1);
-    if args.next().as_deref() != Some("dmi") {
+    let command = args.next();
+    if command.as_deref() == Some("page-png") {
+        let (Some(page), Some(out)) = (args.next(), args.next()) else {
+            eprintln!("{USAGE}");
+            return ExitCode::FAILURE;
+        };
+        return match page_png(page.as_ref(), out.as_ref()) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("{e}");
+                ExitCode::FAILURE
+            }
+        };
+    }
+    if command.as_deref() != Some("dmi") {
         eprintln!("{USAGE}");
         return ExitCode::FAILURE;
     }
@@ -101,6 +117,18 @@ fn main() -> ExitCode {
     } else {
         ExitCode::FAILURE
     }
+}
+
+fn page_png(page: &std::path::Path, out: &std::path::Path) -> Result<(), String> {
+    let bytes = std::fs::read(page).map_err(|e| format!("{}: {e}", page.display()))?;
+    let px = ss13_assets::page::decode(&bytes).map_err(|e| format!("{}: {e}", page.display()))?;
+    let file = std::fs::File::create(out).map_err(|e| format!("{}: {e}", out.display()))?;
+    let mut enc = png::Encoder::new(std::io::BufWriter::new(file), px.width, px.height);
+    enc.set_color(png::ColorType::Rgba);
+    enc.set_depth(png::BitDepth::Eight);
+    enc.write_header()
+        .and_then(|mut w| w.write_image_data(&px.rgba))
+        .map_err(|e| format!("{}: {e}", out.display()))
 }
 
 fn read_types(path: &std::path::Path) -> Result<DmTypes, String> {

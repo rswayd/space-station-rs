@@ -223,7 +223,7 @@ impl<'a> Atlases<'a> {
         let (aw, _, pixels) = self
             .pages
             .entry(info.atlas)
-            .or_insert_with(|| read_png(&root.join(&manifest.atlases[info.atlas as usize])));
+            .or_insert_with(|| read_page(&root.join(&manifest.atlases[info.atlas as usize])));
         let tint = color.unwrap_or([255; 4]);
         let top = bottom - rh as i32;
         for sy in 0..rh {
@@ -251,23 +251,11 @@ impl<'a> Atlases<'a> {
     }
 }
 
-fn read_png(path: &std::path::Path) -> (u32, u32, Vec<u8>) {
-    let file = std::fs::File::open(path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
-    let mut decoder = png::Decoder::new(std::io::BufReader::new(file));
-    decoder.set_transformations(png::Transformations::normalize_to_color8());
-    let mut reader = decoder.read_info().expect("atlas png");
-    let mut buf = vec![0; reader.output_buffer_size().expect("atlas fits in memory")];
-    let frame = reader.next_frame(&mut buf).expect("atlas frame");
-    buf.truncate(frame.buffer_size());
-    let rgba = match frame.color_type {
-        png::ColorType::Rgba => buf,
-        png::ColorType::Rgb => buf
-            .chunks_exact(3)
-            .flat_map(|p| [p[0], p[1], p[2], 255])
-            .collect(),
-        other => panic!("atlas color type {other:?}"),
-    };
-    (frame.width, frame.height, rgba)
+fn read_page(path: &std::path::Path) -> (u32, u32, Vec<u8>) {
+    let bytes = std::fs::read(path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+    let page =
+        ss13_assets::page::decode(&bytes).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+    (page.width, page.height, page.rgba)
 }
 
 fn write_png(path: &std::path::Path, rgba: &[u8], w: u32, h: u32, scale: u32) {

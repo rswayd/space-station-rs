@@ -51,7 +51,7 @@ entry `ss13_web_client`, shared bridge `ss13_web_common`), page and build script
 | server | `prototypes/` (7.9 MB), `*.ron` (jobs, cargo, mobs, reagents, research, ...; ~5.5 MB), `manifest.postcard` (4.9 MB) | 18.8 MB | 1.9 MB | start |
 | server | map files: `MetaStation.dmm`, `metastation.json`, emergency/cargo/infiltrator shuttles (the list in `scripts/demo-package.sh`) | 2.3 MB | ~0.35 MB | start |
 | client | `manifest.postcard` (shared with the server: fetch once, hand the bytes to the worker) | 4.9 MB | 0.73 MB | start |
-| client | `atlas/*.png`, 237 pages of up to 1024x1024 | 102 MB | (PNG) | lazily, per page on first use (the native client already loads pages on demand and evicts by `SS13_ATLAS_BUDGET_MB`) |
+| client | `atlas/*.qoi`, 237 pages of up to 1024x1024 (QOI: decodes 1.4 ms per page natively in release vs 3.1 ms for the PNG pages before; 1.6 vs 5.1 ms in wasm) | 74 MB (PNG was 106 MB) | 28 MB (`web-build.sh` ships `atlas/N.qoi.gz`) | lazily, per page on first use (the native client already loads pages on demand and evicts by `SS13_ATLAS_BUDGET_MB`) |
 | client | `sound/` (ogg) | 12 MB | (ogg) | lazily, on first play |
 | — | `dm_types.json` (46 MB), `licenses/`, `ICON-SOURCES.txt` | | | not shipped (converter input, attribution files linked from the page) |
 

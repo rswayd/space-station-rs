@@ -20,6 +20,9 @@ same for sounds (`$ASSETS/sound/SOURCES.txt`). After either, refresh the audit o
 `cargo run -p ss13_mapload --bin ss13-mapload -- audit --assets $ASSETS` (writes
 `docs/ASSET-AUDIT.md`; the terms are in `crates/ss13_mapload/src/asset_terms.tsv`).
 
+Atlas pages are QOI files (`atlas/N.qoi`, `ss13_assets::page`: decode about twice as fast as PNG).
+To look at one: `cargo run -p ss13_assets --bin ss13-import -- page-png $ASSETS/atlas/0.qoi page0.png`.
+
 `--types` packs the `.dmi` files the maps place first (most placed first), so a client, which loads
 1024x1024 atlas pages only when a sprite needs them, loads few pages. Without it the import still
 works, in `.dmi` path order, and clients load more pages.
@@ -169,7 +172,7 @@ SS13_ADMIN_UI=players SS13_SCRIPT=$PWD/scripts/visual/demo.txt SS13_SCRIPT_OUT=/
 A single-player static site (architecture: `docs/WEB.md`): the server runs in a Web Worker, the
 client on a WebGL2 canvas, connected in memory; Chrome only. The landing page explains it and
 links the source (AGPL §13, the exact commit) and the asset licenses; "Запустить игру" downloads
-every file of `data/files.json` and both wasm binaries with a progress bar (~150 MB, no lazy
+every file of `data/files.json` and both wasm binaries with a progress bar (~104 MB, no lazy
 loading), starts the worker, waits for its `ready` and then starts the client. A reload resets
 everything.
 
@@ -186,6 +189,8 @@ python3 -m http.server -d dist 8000                     # then open http://127.0
 `data/` (the package's assets and `BandaStation/_maps/...` files, keyed by these relative paths)
 and `data/files.json` (`[{path, size, side}]`, `side` = `server`, `client` (atlas pages, sounds)
 or `both` (`manifest.postcard`)). Attribution texts are shipped but not downloaded up front.
+Atlas pages ship gzipped (`atlas/N.qoi.gz`; the host does not compress unknown types): the page
+inflates every `.gz` of `files.json` with `DecompressionStream` and mounts it without the suffix.
 Page/worker messages: `{t: "init", files, wasm}` page→worker (`wasm`: the server binary the page
 already downloaded), `progress`/`ready`/`error` worker→page, then `open`/`frame`/`dgram`/`close`
 both ways (`ArrayBuffer`s transferred).

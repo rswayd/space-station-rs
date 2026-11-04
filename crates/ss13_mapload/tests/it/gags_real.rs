@@ -26,15 +26,8 @@ impl Atlases<'_> {
     fn frame(&mut self, manifest: &AssetManifest, s: &IconStateInfo, i: usize) -> Vec<u8> {
         let (width, rgba) = self.pages.entry(s.atlas).or_insert_with(|| {
             let path = self.root.join(&manifest.atlases[s.atlas as usize]);
-            let mut dec =
-                png::Decoder::new(std::io::BufReader::new(std::fs::File::open(&path).unwrap()));
-            dec.set_transformations(png::Transformations::normalize_to_color8());
-            let mut reader = dec.read_info().unwrap();
-            let mut buf = vec![0; reader.output_buffer_size().unwrap()];
-            let info = reader.next_frame(&mut buf).unwrap();
-            assert_eq!(info.color_type, png::ColorType::Rgba);
-            buf.truncate(info.buffer_size());
-            (info.width, buf)
+            let page = ss13_assets::page::decode(&std::fs::read(&path).unwrap()).unwrap();
+            (page.width, page.rgba)
         });
         let [x, y, w, h] = s.rects[i];
         let mut out = Vec::with_capacity((w * h * 4) as usize);

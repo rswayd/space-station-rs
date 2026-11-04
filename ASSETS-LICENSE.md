@@ -46,7 +46,7 @@ exclude or replace these assets first.
 
 ## Converted derivatives
 
-The atlases (`atlas/*.png`, packed from `.dmi` files, including rendered GAGS icons), the
+The atlases (`atlas/*.qoi`, packed from `.dmi` files, including rendered GAGS icons), the
 manifest, re-encoded or copied sound files and the other generated data are adaptations of
 those assets and are distributed under CC BY-SA 3.0 as well, except where an attribution file
 of a source asset states other terms; those terms then apply to that asset's part.

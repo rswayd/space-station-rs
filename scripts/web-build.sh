@@ -43,6 +43,10 @@ cp docs/parity/PROGRESS.html "$out/progress.html"
 cp -a "$pkg/assets/." "$out/data/"
 cp -a "$pkg/data/BandaStation" "$out/data/"
 cp "$pkg/LICENSE" "$pkg/ASSETS-LICENSE.md" "$out/"
+# Atlas pages are QOI (fast to decode, not entropy-coded): gzip halves them again, and the host
+# does not compress unknown types. main.js inflates every `.gz` of files.json and mounts it
+# without the suffix.
+gzip -9 "$out"/data/atlas/*.qoi
 
 # Runtime files only: attribution texts and licenses/ are shipped (linked from the page) but not
 # downloaded up front.

@@ -1,7 +1,7 @@
-//! `.dmi` files -> atlas PNGs + [`AssetManifest`].
+//! `.dmi` files -> atlas pages ([`crate::page`]) + [`AssetManifest`].
 //!
 //! Output layout under `<out>`: `manifest.postcard` (postcard-encoded [`AssetManifest`]) and
-//! `atlas/<n>.png`. Files are packed in [`order_by_usage`] order when map usage is given (else by
+//! `atlas/<n>.qoi`. Files are packed in [`order_by_usage`] order when map usage is given (else by
 //! sorted path), states of a file in Description order, so `IconStateId`s are stable for an
 //! unchanged source tree and maps.
 //!
@@ -13,7 +13,7 @@
 use std::collections::HashMap;
 use std::fs;
 use std::hash::{DefaultHasher, Hash, Hasher};
-use std::io::{self, BufWriter};
+use std::io;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -42,8 +42,8 @@ const BATCH: usize = 256;
 pub enum ImportError {
     #[error("{path}: {source}")]
     Io { path: PathBuf, source: io::Error },
-    #[error("png encode: {0}")]
-    Encode(#[from] png::EncodingError),
+    #[error("atlas page encode: {0}")]
+    Encode(#[from] qoi::Error),
     #[error("manifest encode: {0}")]
     Manifest(#[from] postcard::Error),
 }
@@ -146,7 +146,7 @@ pub fn import_dmi(
         ATLAS_MAX,
         |page, img| {
             let path = out.join(atlas_path(page));
-            write_png(&path, &img)
+            write_page(&path, &img)
         },
     )?;
     report.gags = manifest
@@ -184,7 +184,7 @@ fn write_icon_sources(
     }
     let commit = crate::license::source_commit(source);
     let mut text = format!(
-        "# Icons packed into atlas/*.png by `ss13-import dmi` from BandaStation (tgstation fork), \
+        "# Icons packed into atlas/*.qoi by `ss13-import dmi` from BandaStation (tgstation fork), \
          commit {commit}.\n# Licenses: CC BY-SA 3.0 unless the attribution/license files in \
          {LICENSES_DIR}/ (at the source paths) say otherwise; see ASSETS-LICENSE.md.\n\
          # .dmi or GAGS icon\tsource .dmi\tatlas pages\n"
@@ -215,19 +215,12 @@ fn write_icon_sources(
 }
 
 pub fn atlas_path(page: u32) -> String {
-    format!("{ATLAS_DIR}/{page}.png")
+    format!("{ATLAS_DIR}/{page}.{}", crate::page::EXTENSION)
 }
 
-fn write_png(path: &Path, img: &AtlasImage) -> Result<(), ImportError> {
-    let file = fs::File::create(path).map_err(io_err(path))?;
-    let mut enc = png::Encoder::new(BufWriter::new(file), img.width, img.height);
-    enc.set_color(png::ColorType::Rgba);
-    enc.set_depth(png::BitDepth::Eight);
-    enc.set_compression(png::Compression::Fast);
-    let mut writer = enc.write_header()?;
-    writer.write_image_data(&img.rgba)?;
-    writer.finish()?;
-    Ok(())
+fn write_page(path: &Path, img: &AtlasImage) -> Result<(), ImportError> {
+    let bytes = crate::page::encode(img.width, img.height, &img.rgba)?;
+    fs::write(path, bytes).map_err(io_err(path))
 }
 
 /// A decoded `.dmi` with identical icons collapsed.
@@ -564,7 +557,7 @@ mod tests {
         assert_eq!(r.failures[0].dmi, "bad.dmi");
         assert_eq!((r.files, r.states, r.icons), (3, 12, 87));
         assert_eq!((r.atlases, r.stored_frames), (2, 58));
-        assert_eq!(m.atlases, ["atlas/0.png", "atlas/1.png"]);
+        assert_eq!(m.atlases, ["atlas/0.qoi", "atlas/1.qoi"]);
         assert_eq!(pages.len(), 2);
 
         for (k, s) in m.states.iter().enumerate() {
@@ -670,8 +663,12 @@ mod tests {
         assert!(licenses.join("icons/license.txt").is_file());
         assert!(!licenses.join("old").exists());
         let sources = fs::read_to_string(out.join(ICON_SOURCES_FILE)).unwrap();
-        assert!(sources.contains("icons/obj/a.dmi\ticons/obj/a.dmi\tatlas/0.png"));
+        assert!(sources.contains("icons/obj/a.dmi\ticons/obj/a.dmi\tatlas/0.qoi"));
         assert!(sources.contains("modular/turfs/water.dmi\tmodular/turfs/water.dmi\tatlas/"));
+        // The page on disk is a QOI file holding the icons (icon `i` filled with `[i, i, i, 255]`).
+        let page = crate::page::decode(&fs::read(out.join(atlas_path(0))).unwrap()).unwrap();
+        assert_eq!(page.rgba.len(), (page.width * page.height * 4) as usize);
+        assert!(page.rgba.chunks_exact(4).any(|p| p == [1, 1, 1, 255]));
         let _ = fs::remove_dir_all(&dir);
     }
 }
