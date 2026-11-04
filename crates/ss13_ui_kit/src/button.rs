@@ -11,6 +11,7 @@ use bevy::prelude::{
     Color, Commands, Component, Entity, EntityEvent, FlexDirection, Has, IntoScheduleConfigs,
     JustifyContent, Node, On, Or, PostUpdate, Query, RemovedComponents, UiRect, Val, With, px,
 };
+use bevy::prelude::{Res, ResMut, Resource};
 use bevy::scene::{Scene, SceneComponent, bsn};
 use bevy::text::{TextColor, TextLayout};
 use bevy::ui::widget::Text;
@@ -340,17 +341,96 @@ pub(crate) fn act_event(
     }
 }
 
+/// The [`Act`] and [`ActParams`] of the button under the pointer. A window re-renders whole when
+/// its data changes (a clock ticking once a second), and the new button under a still pointer
+/// learns it is hovered only after its first layout and picking pass: a frame or two drawn
+/// plain, a blink (tgui keeps its DOM nodes). The new button doing the same thing starts
+/// hovered; picking confirms or clears it on its next pass.
+#[derive(Resource, Default)]
+struct HoverMemory(Option<(String, Vec<(String, String)>)>);
+
+fn hover_key(
+    act: Option<&Act>,
+    params: Option<&ActParams>,
+) -> Option<(String, Vec<(String, String)>)> {
+    Some((
+        act?.0.clone(),
+        params.map(|p| p.0.clone()).unwrap_or_default(),
+    ))
+}
+
+fn remember_hover(
+    changed: Query<(&Hovered, Option<&Act>, Option<&ActParams>), (With<Button>, Changed<Hovered>)>,
+    mut memory: ResMut<HoverMemory>,
+) {
+    for (hovered, act, params) in &changed {
+        let key = hover_key(act, params);
+        if hovered.get() {
+            if key.is_some() {
+                memory.0 = key;
+            }
+        } else if key.is_some() && memory.0 == key {
+            memory.0 = None;
+        }
+    }
+}
+
+fn restore_hover(
+    added: Query<(Entity, &Hovered, Option<&Act>, Option<&ActParams>), Added<Button>>,
+    memory: Res<HoverMemory>,
+    mut commands: Commands,
+) {
+    let Some(remembered) = memory.0.as_ref() else {
+        return;
+    };
+    for (entity, hovered, act, params) in &added {
+        if hover_key(act, params).as_ref() == Some(remembered) && !hovered.get() {
+            // `Hovered` is immutable: replaced (the chain applies it before styling).
+            commands.entity(entity).insert(Hovered(true));
+        }
+    }
+}
+
 pub(crate) fn plugin(app: &mut App) {
-    app.add_observer(emit_act).add_systems(
-        PostUpdate,
-        (style_buttons, trailing_margins).before(UiSystems::Layout),
-    );
+    app.init_resource::<HoverMemory>()
+        .add_observer(emit_act)
+        .add_systems(
+            PostUpdate,
+            (
+                (restore_hover, remember_hover, style_buttons).chain(),
+                trailing_margins,
+            )
+                .before(UiSystems::Layout),
+        );
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use bevy::color::Alpha;
+
+    #[test]
+    fn a_re_rendered_button_under_the_pointer_starts_hovered() {
+        let mut app = bevy::app::App::new();
+        app.init_resource::<HoverMemory>()
+            .add_systems(bevy::app::Update, (restore_hover, remember_hover).chain());
+        let act = |name: &str| {
+            (
+                Button::default(),
+                Act(name.into()),
+                ActParams(vec![("name".into(), "crew".into())]),
+            )
+        };
+        let old = app.world_mut().spawn((act("run"), Hovered(true))).id();
+        app.update();
+        // The window re-renders: the old button goes, the same and another one come.
+        app.world_mut().despawn(old);
+        let same = app.world_mut().spawn((act("run"), Hovered(false))).id();
+        let other = app.world_mut().spawn((act("close"), Hovered(false))).id();
+        app.update();
+        assert!(app.world().get::<Hovered>(same).unwrap().get());
+        assert!(!app.world().get::<Hovered>(other).unwrap().get());
+    }
 
     #[test]
     fn disabled_button_is_half_transparent() {
