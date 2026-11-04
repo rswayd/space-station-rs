@@ -306,6 +306,26 @@ fn throw_clicks(world: &mut World, mut clicks: Local<MessageCursor<ThrowClick>>)
     }
 }
 
+/// tg `throw_at(target, range, speed)` of an item on a tile with no thrower (machines throwing
+/// out what they made). False when it does not fly.
+pub fn throw_at(world: &mut World, item: Entity, target: TilePos, range: u32, speed: f32) -> bool {
+    let Some(&from) = world.get::<TilePos>(item) else {
+        return false;
+    };
+    let now_ds = world.resource::<Time>().elapsed_secs_f64() * 10.0;
+    let Some(path) = Trajectory::new(from, target, range, speed, now_ds) else {
+        return false;
+    };
+    world.entity_mut(item).insert(Thrown {
+        path,
+        thrower: None,
+        target: None,
+        last_dir: None,
+    });
+    fly_one(world, item, now_ds);
+    true
+}
+
 /// `SSthrowing.fire`: every item in flight takes this tick's steps.
 // Cost: per tick, one pass over items in flight only.
 fn fly(world: &mut World, mut flying: Local<Vec<Entity>>) {
@@ -428,6 +448,9 @@ fn finish(world: &mut World, item: Entity, thrown: &Thrown, hit: Option<Entity>)
     world.entity_mut(item).remove::<Thrown>();
     let Some(hit) = hit else {
         crate::chem::soda_thrown(world, item);
+        if world.get_entity(item).is_ok() {
+            crate::bar::glass_thrown(world, item, None);
+        }
         return;
     };
     if world.get::<Health>(hit).is_some() {
@@ -435,6 +458,9 @@ fn finish(world: &mut World, item: Entity, thrown: &Thrown, hit: Option<Entity>)
         // Not caught.
         if world.get::<CarriedBy>(item).is_none() && world.get_entity(item).is_ok() {
             crate::chem::soda_thrown(world, item);
+            if world.get_entity(item).is_ok() {
+                crate::bar::glass_thrown(world, item, Some(hit));
+            }
         }
     } else if crate::disposals::hitby(world, item, hit) {
     } else if world.get::<DmCloset>(hit).is_some_and(|c| !c.wall_mounted) {
@@ -442,6 +468,9 @@ fn finish(world: &mut World, item: Entity, thrown: &Thrown, hit: Option<Entity>)
     }
     if world.get::<Health>(hit).is_none() && world.get_entity(item).is_ok() {
         crate::chem::soda_thrown(world, item);
+        if world.get_entity(item).is_ok() {
+            crate::bar::glass_thrown(world, item, Some(hit));
+        }
     }
 }
 

@@ -44,6 +44,7 @@ const CRUSHED_CAN: &str = "/obj/item/trash/can";
 const PROCESSABLE: &str = "/datum/element/processable";
 const MICROWAVABLE: &str = "/datum/element/microwavable";
 const BAKEABLE: &str = "/datum/component/bakeable";
+const DRYABLE: &str = "/datum/element/dryable";
 const GRILLABLE: &str = "/datum/component/grillable";
 /// `DEFAULT_EDIBLE_VOLUME`.
 pub const DEFAULT_EDIBLE_VOLUME: f32 = 50.0;
@@ -118,6 +119,22 @@ pub struct DmFood {
     pub grill_result: String,
     pub grill_time: [f32; 2],
     pub grill_good: bool,
+    /// `/datum/element/dryable` (`make_dryable()`): what a drying rack makes of it (its own type:
+    /// it is just marked dried); empty: not dryable.
+    pub dry_result: String,
+    /// `foodtypes` bits (`MEAT`, `RAW`, ...).
+    pub foodtypes: u32,
+    /// `crafting_complexity` (0-5): the quality of a handmade one.
+    pub crafting_complexity: u32,
+    /// `make_germ_sensitive` adds `/datum/component/decomposition`: not `preserved_food`, no
+    /// `trash_type`, and the type does not override it (canned, bowled food).
+    pub decomposes: bool,
+    /// `decomp_type`; empty: it just goes (moldy food).
+    pub decomp_type: String,
+    /// Seconds: `decomposition_time`, else 5 minutes raw, 7 gross, 10 otherwise.
+    pub decomp_secs: f32,
+    pub decomp_req_handle: bool,
+    pub ant_attracting: bool,
 }
 
 /// A cooking component's result, time range (deciseconds) and whether it is a real recipe.
@@ -232,6 +249,10 @@ fn arg_value(types: &DmTypes, path: &str, text: &str) -> Option<Arg> {
     }
     if text.starts_with('/') {
         return Some(Arg::Path(text.to_owned()));
+    }
+    // `src.type`: the type itself (`AddElement(/datum/element/dryable, type)`).
+    if text == "type" {
+        return Some(Arg::Path(path.to_owned()));
     }
     if let Some(inner) = text.strip_prefix("rand(").and_then(|t| t.strip_suffix(')')) {
         let (low, high) = inner.split_once(',')?;
@@ -483,11 +504,45 @@ pub fn food(types: &DmTypes, path: &str) -> Option<DmFood> {
         food.processor_multiplier = num(r("food_multiplier")).unwrap_or(1.0) as u32;
         food.processor_time = num(r("time")).unwrap_or(40.0) as f32;
     }
+    food.dry_result = proc_owner(types, path, "make_dryable")
+        .and_then(|owner| calls(types, DRYABLE, owner, "make_dryable").last())
+        .and_then(|line| {
+            let args = bind(types, path, &call_args(line)?, &["dry_result"]);
+            match args[0].clone() {
+                Some(Arg::Path(p)) => Some(p),
+                _ => None,
+            }
+        })
+        .unwrap_or_default();
+    food.foodtypes = n("foodtypes").unwrap_or(0.0) as u32;
+    food.crafting_complexity = n("crafting_complexity").unwrap_or(0.0) as u32;
+    let overrides_germs = types.chain(path).take_while(|p| *p != FOOD_ROOT).any(|p| {
+        types.types[p]
+            .procs
+            .iter()
+            .any(|q| q == "make_germ_sensitive")
+    });
+    food.decomposes = food.trash_type.is_empty()
+        && !overrides_germs
+        && n("preserved_food").is_none_or(|v| v == 0.0);
+    food.decomp_type = path_value(get("decomp_type")).unwrap_or_default();
+    food.decomp_secs = match n("decomposition_time").filter(|t| *t > 0.0) {
+        Some(ds) => ds / 10.0,
+        None if food.foodtypes & RAW != 0 => 300.0,
+        None if food.foodtypes & GROSS != 0 => 420.0,
+        None => 600.0,
+    };
+    food.decomp_req_handle = n("decomp_req_handle").is_some_and(|v| v != 0.0);
+    food.ant_attracting = n("ant_attracting").is_some_and(|v| v != 0.0);
     if is_under(path, GROWN_ROOT) {
         grown(types, path, &mut food);
     }
     Some(food)
 }
+
+/// `foodtypes` bits (`code/__DEFINES/food.dm`).
+pub const RAW: u32 = 1 << 2;
+pub const GROSS: u32 = 1 << 10;
 
 /// `/obj/item/food/grown/Initialize` of a map-placed item: its seed at potency 50.
 fn grown(types: &DmTypes, path: &str, food: &mut DmFood) {
@@ -529,6 +584,75 @@ fn grown(types: &DmTypes, path: &str, food: &mut DmFood) {
 
 /// Every type food on the map can turn into (microwave and processor results, slices, trash),
 /// transitively, plus the burned mess and the grinder's beaker.
+/// What kitchen machines and drinks make at runtime, by type (`ss13_game::gibber`, `coffee`,
+/// `icecream`, `stove`, the ash of things burnt in `cooking`, `bar`'s broken glass).
+const RUNTIME_SPAWNS: [(&str, &[&str]); 10] = [
+    (crate::drinks::GLASS_ROOT, &["/obj/item/broken_bottle"]),
+    (
+        "/obj/machinery/gibber",
+        &[
+            "/obj/item/food/meat/slab/human",
+            "/obj/item/stack/sheet/animalhide/carbon/human",
+            "/obj/effect/decal/cleanable/blood/gibs/up",
+            "/obj/effect/decal/cleanable/blood/gibs/down",
+            "/obj/effect/decal/cleanable/blood/gibs",
+            "/obj/effect/decal/cleanable/blood/gibs/body",
+            "/obj/effect/decal/cleanable/blood/gibs/limb",
+            "/obj/effect/decal/cleanable/blood/gibs/core",
+        ],
+    ),
+    (
+        "/obj/machinery/coffeemaker",
+        &[
+            "/obj/item/reagent_containers/cup/coffeepot",
+            "/obj/item/coffee_cartridge",
+            "/obj/item/reagent_containers/cup/glass/coffee_cup",
+            "/obj/item/reagent_containers/condiment/pack/sugar",
+            "/obj/item/reagent_containers/condiment/pack/astrotame",
+            "/obj/item/reagent_containers/condiment/creamer",
+        ],
+    ),
+    (
+        "/obj/machinery/coffeemaker/impressa",
+        &["/obj/item/reagent_containers/cup/glass/coffee/no_lid"],
+    ),
+    (
+        "/obj/machinery/icecream_vat",
+        &[
+            "/obj/item/food/icecream",
+            "/obj/item/food/icecream/chocolate",
+            "/obj/item/food/icecream/korta",
+        ],
+    ),
+    (
+        "/obj/machinery/oven/range",
+        &["/obj/item/reagent_containers/cup/soup_pot"],
+    ),
+    ("/obj/machinery/stove", &[SOUP_POT_RESULTS[0]]),
+    (
+        "/obj/item/reagent_containers/cup/soup_pot",
+        &SOUP_POT_RESULTS,
+    ),
+    ("/obj/machinery/oven", &ASH),
+    ("/obj/machinery/griddle", &ASH),
+];
+
+const ASH: [&str; 2] = [
+    "/obj/effect/decal/cleanable/ash",
+    "/obj/effect/decal/cleanable/ash/large",
+];
+
+/// `/datum/component/decomposition/decompose` of an ant-attracting food.
+const ANTS: &str = "/obj/effect/decal/cleanable/ants";
+
+/// Foods soup reactions make (`resulting_food_path`).
+const SOUP_POT_RESULTS: [&str; 4] = [
+    "/obj/item/reagent_containers/cup/soup_pot",
+    "/obj/item/food/spaghetti/boilednoodles",
+    "/obj/item/food/spaghetti/ramen_beef",
+    "/obj/item/food/volt_fish",
+];
+
 pub fn food_closure<'a>(
     types: &DmTypes,
     needed: impl IntoIterator<Item = &'a str>,
@@ -551,6 +675,11 @@ pub fn food_closure<'a>(
         if is_under(&path, SODA_CANS) {
             next.push(CRUSHED_CAN.to_owned());
         }
+        for (root, spawned) in RUNTIME_SPAWNS {
+            if is_under(&path, root) {
+                next.extend(spawned.iter().map(|s| (*s).to_owned()));
+            }
+        }
         if let Some(f) = food(types, &path) {
             next.push(BAD_RECIPE.to_owned());
             next.extend([
@@ -559,7 +688,12 @@ pub fn food_closure<'a>(
                 f.trash_type,
                 f.bake_result,
                 f.grill_result,
+                f.decomp_type,
+                f.dry_result,
             ]);
+            if f.ant_attracting {
+                next.push(ANTS.to_owned());
+            }
             next.extend(f.processing.into_iter().map(|p| p.result));
         }
         for p in next {
@@ -635,6 +769,14 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
         ext(c, "grill_result", s(&f.grill_result)),
         ext(c, "grill_time", pair(f.grill_time)),
         ext(c, "grill_good", f.grill_good.to_string()),
+        ext(c, "dry_result", s(&f.dry_result)),
+        ext(c, "foodtypes", f.foodtypes.to_string()),
+        ext(c, "crafting_complexity", f.crafting_complexity.to_string()),
+        ext(c, "decomposes", f.decomposes.to_string()),
+        ext(c, "decomp_type", s(&f.decomp_type)),
+        ext(c, "decomp_secs", format!("{:?}", f.decomp_secs)),
+        ext(c, "decomp_req_handle", f.decomp_req_handle.to_string()),
+        ext(c, "ant_attracting", f.ant_attracting.to_string()),
     ]
 }
 

@@ -31,6 +31,7 @@ mod inventory;
 mod janitor;
 mod jobs;
 mod kitchen;
+mod kitchen_machines;
 mod loopback;
 mod los;
 mod machine_frame;

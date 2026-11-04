@@ -73,6 +73,23 @@ pub enum FoodJob {
     Process(u8),
 }
 
+/// tg `TRAIT_DRIED` (`/datum/element/dryable/apply_dried_status`).
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Dried;
+
+/// `COLOR_DRIED_TAN`.
+const DRIED_TAN: [u8; 4] = [0xAD, 0x72, 0x57, 0xFF];
+
+/// Dried in place (tg `finish_drying` when the dried type is the item's own): `TRAIT_DRIED` and
+/// the tan color.
+// shortcut: a plain multiply by the tan instead of `color_transition_filter`.
+pub fn dry(world: &mut World, item: Entity) {
+    world.entity_mut(item).insert(Dried);
+    if let Some(mut look) = world.get_mut::<ss13_shared::Appearance>(item) {
+        look.color = Some(DRIED_TAN);
+    }
+}
+
 pub struct FoodServerPlugin;
 
 impl Plugin for FoodServerPlugin {
@@ -441,8 +458,159 @@ fn take_bite(world: &mut World, eater: Entity, feeder: Entity, food: Entity) {
     }
     let text = taste_message(&chem, &bite, &dm.tastes, TASTE_SENSITIVITY);
     taste(world, eater, text);
+    check_liked(world, eater, food, &dm);
     if left <= 0.0 {
         on_consume(world, eater, feeder, food, &dm);
+    }
+}
+
+/// `foodtypes` bits of a human tongue's tastes (`/obj/item/organ/tongue`): `JUNKFOOD | FRIED`,
+/// `GROSS | RAW | CLOTH | BUGS | GORE`, `TOXIC`.
+pub const LIKED_FOODTYPES: u32 = (1 << 3) | (1 << 7);
+pub const DISLIKED_FOODTYPES: u32 = (1 << 10) | (1 << 2) | (1 << 14) | (1 << 18) | (1 << 19);
+pub const TOXIC_FOODTYPES: u32 = 1 << 11;
+/// `LIKED_FOOD_QUALITY_CHANGE`, `TOXIC_FOOD_QUALITY_THRESHOLD`, `FOOD_QUALITY_TOP`.
+const LIKED_CHANGE: i32 = 2;
+pub const TOXIC_QUALITY: i32 = -8;
+const QUALITY_TOP: i32 = 7;
+/// `GLOB.food_quality_description`, from `FOOD_QUALITY_NORMAL` (1).
+const QUALITY_LABELS: [&str; 7] = [
+    "неплохая",
+    "хорошая",
+    "вкусная",
+    "очень вкусная",
+    "фантастическая",
+    "превосходная",
+    "богоподобная",
+];
+/// `FOOD_FLAGS_IC`, lowercased for the examine line.
+const FOODTYPE_NAMES: [&str; 22] = [
+    "meat",
+    "vegetables",
+    "raw",
+    "junk food",
+    "grain",
+    "fruit",
+    "dairy",
+    "fried",
+    "alcohol",
+    "sugar",
+    "gross",
+    "toxic",
+    "pineapple",
+    "breakfast",
+    "cloth",
+    "nuts",
+    "seafood",
+    "oranges",
+    "bugs",
+    "gore",
+    "rocks",
+    "egg",
+];
+
+/// `TRAIT_HANDMADE`: a player made it (in a kitchen machine), so its `crafting_complexity`
+/// counts.
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Handmade;
+
+/// A food's `last_check_time` (game seconds) of `checkLiked`.
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq)]
+struct LikedChecked(f64);
+
+/// tg `get_perceived_food_quality` for a human eater whose tongue has these tastes (`None`: no
+/// tongue, it tastes nothing).
+pub fn perceived_quality(dm: &DmFood, handmade: bool, tongue: Option<(u32, u32, u32)>) -> i32 {
+    let mut quality = if handmade {
+        dm.crafting_complexity as i32
+    } else {
+        0
+    };
+    let Some((liked, disliked, toxic)) = tongue else {
+        // `TRAIT_AGEUSIA`.
+        return 0;
+    };
+    if dm.foodtypes & toxic != 0 {
+        return TOXIC_QUALITY;
+    }
+    quality -= LIKED_CHANGE * (dm.foodtypes & disliked).count_ones() as i32;
+    quality += LIKED_CHANGE * (dm.foodtypes & liked).count_ones() as i32;
+    quality.min(QUALITY_TOP)
+}
+
+fn tongue_of(world: &World, mob: Entity) -> Option<(u32, u32, u32)> {
+    (world.get::<crate::medical::wounds::Limbs>(mob).is_some()
+        && !crate::medical::organs::lacks(world, mob, crate::medical::organs::Slot::Tongue))
+    .then_some((LIKED_FOODTYPES, DISLIKED_FOODTYPES, TOXIC_FOODTYPES))
+}
+
+/// tg `checkLiked` (every 5 s of a food's bites): what the eater thinks of it.
+// shortcut: no mood events, disgust or allergies (not ported); only the messages.
+fn check_liked(world: &mut World, eater: Entity, food: Entity, dm: &DmFood) {
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    if world
+        .get::<LikedChecked>(food)
+        .is_some_and(|c| c.0 + 5.0 > now)
+        || world.get::<crate::medical::wounds::Limbs>(eater).is_none()
+    {
+        return;
+    }
+    world.entity_mut(food).insert(LikedChecked(now));
+    let handmade = world.get::<Handmade>(food).is_some();
+    let quality = perceived_quality(dm, handmade, tongue_of(world, eater));
+    let (span, text) = if quality <= TOXIC_QUALITY {
+        (Span::Warning, "Что это, черт побери, было?!".to_owned())
+    } else if quality < 0 {
+        (Span::Notice, "Эта пища была ужасна...".to_owned())
+    } else if quality == 0 {
+        return;
+    } else {
+        let label = QUALITY_LABELS[(quality - 1) as usize];
+        (Span::Notice, format!("Это {label} пища."))
+    };
+    tell_mob(world, eater, span, &text);
+}
+
+/// The edible's examine: its food types and how good it looks to `viewer`.
+pub fn examine_lines(world: &World, food: Entity, viewer: Entity, lines: &mut Vec<(Span, String)>) {
+    let Some(dm) = world.get::<DmFood>(food) else {
+        return;
+    };
+    // `FOOD_NO_EXAMINE`.
+    if dm.food_flags & (1 << 2) != 0 {
+        return;
+    }
+    if dm.foodtypes != 0 {
+        let types: Vec<&str> = (0..FOODTYPE_NAMES.len())
+            .filter(|i| dm.foodtypes & (1 << i) != 0)
+            .map(|i| FOODTYPE_NAMES[i])
+            .collect();
+        lines.push((
+            Span::Notice,
+            format!("Состав пищи: {}.", types_list(&types)),
+        ));
+    }
+    let handmade = world.get::<Handmade>(food).is_some();
+    let quality = perceived_quality(dm, handmade, tongue_of(world, viewer));
+    lines.push(if quality > 0 {
+        let label = QUALITY_LABELS[(quality.min(QUALITY_TOP) - 1) as usize];
+        (Span::GreenText, format!("Это выглядит, как {label} пища."))
+    } else if quality == 0 {
+        (Span::Notice, "Это пища выглядит съедобно.".to_owned())
+    } else if quality <= TOXIC_QUALITY {
+        (Span::Warning, "Эта пища выглядит отвратительно!".to_owned())
+    } else {
+        (Span::Warning, "Эта пища выглядит несъедобной.".to_owned())
+    });
+}
+
+/// DM `english_list`.
+fn types_list(items: &[&str]) -> String {
+    match items {
+        [] => String::new(),
+        [one] => (*one).to_owned(),
+        [a, b] => format!("{a} and {b}"),
+        [rest @ .., last] => format!("{}, and {last}", rest.join(", ")),
     }
 }
 
@@ -699,6 +867,30 @@ fn finish_process(world: &mut World, actor: Actor, food: Entity, index: usize) {
 mod tests {
     use super::*;
     use ss13_reagents::{ChemData, ReagentDef};
+
+    #[test]
+    fn quality_follows_the_tongue() {
+        let human = Some((LIKED_FOODTYPES, DISLIKED_FOODTYPES, TOXIC_FOODTYPES));
+        let food = |foodtypes, crafting_complexity| DmFood {
+            foodtypes,
+            crafting_complexity,
+            ..default()
+        };
+        // Raw meat: disliked once (RAW), MEAT is neutral.
+        assert_eq!(perceived_quality(&food(1 | 4, 0), false, human), -2);
+        // Fried junk food, handmade with complexity 3: 3 + 2 + 2.
+        assert_eq!(perceived_quality(&food(8 | 128, 3), true, human), 7);
+        // Not handmade: the complexity does not count.
+        assert_eq!(perceived_quality(&food(8, 3), false, human), 2);
+        // Capped at FOOD_QUALITY_TOP.
+        assert_eq!(perceived_quality(&food(8 | 128, 5), true, human), 7);
+        // Toxic beats everything; no tongue tastes nothing.
+        assert_eq!(
+            perceived_quality(&food(2048 | 8, 5), true, human),
+            TOXIC_QUALITY
+        );
+        assert_eq!(perceived_quality(&food(2048, 0), false, None), 0);
+    }
 
     fn reagent(path: &str, taste: &str, mult: f32) -> ReagentDef {
         ReagentDef {

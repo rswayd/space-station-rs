@@ -431,6 +431,7 @@ fn populate_storage(world: &mut World, storage: Entity, depth: u32) {
     };
     spawn_contents(world, storage, &contents.immediate, depth);
     spawn_contents(world, storage, &contents.populate, depth);
+    crate::coffee::populated(world, storage);
 }
 
 /// Runs `fills` with `container` as `src`.

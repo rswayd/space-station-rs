@@ -1576,7 +1576,16 @@ pays per unit and recharges from the area. A drinking glass, shot glass or juice
 glass style of its main reagent (name and sprite, `reagents.ron` `glass_styles`). A soda can
 opens when clicked in hand; a thrown closed can may burst. Smart fridges start with their
 `initial_contents`, take what their kind accepts (bags too) and hand items out from the
-`SmartVend` window. There is no crafting menu, grill, stove, gibber or juicing yet.
+`SmartVend` window. Gibber: pulling a naked human, an empty hand stuffs it in, another click
+gibs it into human meat and skin. Coffeemaker: an empty hand opens its menu (brew, eject, take a
+cup or pack), right click takes the pot. Ice cream vat: an empty hand picks the flavour (right
+click: cone mode, then it makes a cone), a cone on it gets a scoop. Range and stove: an open
+container goes on the burner, right click lights it; food clicked on the soup pot goes in, and
+with 50 water at 450 K a soup reacts (`reagents.ron` soups, started by the game). Food left on
+the bare floor rots (5/7/10 minutes) into moldy food; drying racks dry what is dryable ("Dry"
+in their window). A thrown glass smashes; a bar sign takes a sign from someone with bar access.
+`ss13-dm-extract` dumps the `dryable` element calls; `convert` emits `dm_glass`, `dm_barsign`
+and the new `dm_food` fields. There is no crafting menu, grill or juicing yet.
 
 ```sh
 cargo test -p ss13_mapload --lib food                 # microwave/processable/processor data
@@ -1585,6 +1594,9 @@ cargo test -p ss13_game --all-features --test it food::    # nutrition drops, mi
                                                       # (taste, trash, nutrition up), slice bread
 cargo test -p ss13_game --all-features --test it kitchen::  # bake, grill, fry; soda dispenser window,
                                                       # glass style, soda can; smart fridge
+cargo test -p ss13_game --all-features --test it kitchen_machines::  # gibber, coffee, ice cream,
+                                                      # soup, burning, smashed glass, rotting,
+                                                      # bar sign, drying rack
 SS13_ASSETS=$ASSETS cargo test -p ss13_game --all-features --test it food:: -- --ignored --nocapture
                                                       # MetaStation: an egg from the kitchen
                                                       # fridge cooked in its microwave, eaten

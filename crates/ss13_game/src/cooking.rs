@@ -18,10 +18,13 @@
 //!   `fry_speed * 2 s`. An empty hand takes it out: it becomes fried (name, color) and edible.
 //!   `RefreshParts`: `fry_speed` is the micro-lasers' tier sum, `oil_use = 0.025 - 0.00475 *
 //!   fry_speed`.
-// shortcut: no sounds, smoke particles, emissive light, stove/soup pot of the range, grilling by
-// hot air, `fire_act` of non-food left in an oven or on a griddle (it just lies there), pancake
-// batter on a griddle, freeze cubes, dunking mobs in the fryer, the fryer's fishing spot or its
-// `chem_temp`; the tray and griddle contents are drawn as their base sprites.
+//! - What nothing bakes or grills burns (`fire_act(1000)`, [`scorch`]): 20 damage a tick until
+//!   it is ash; a griddle uses its active power only for those, as tg does, and exposes its tile
+//!   to 800 K.
+// shortcut: no sounds, smoke particles, emissive light, grilling by hot air, the `burning`
+// component of burning items, pancake batter on a griddle, freeze cubes, dunking mobs in the
+// fryer, the fryer's fishing spot or its `chem_temp`; the tray and griddle contents are drawn as
+// their base sprites. The range's burner is `crate::stove`.
 
 use bevy::prelude::*;
 use ss13_mapload::{DmAtom, DmFood, DmItem, DmName, DmPower, IconIndex};
@@ -256,6 +259,10 @@ pub fn interact(
             }
             return true;
         }
+        // A closed range's right click is its burner's (`crate::stove`).
+        if right && world.get::<crate::stove::Stove>(target).is_some() {
+            return false;
+        }
         toggle_oven(world, client, target);
         return true;
     }
@@ -285,7 +292,7 @@ pub fn interact(
 }
 
 /// `user.put_in_hands(...)`, else onto the machine's tile.
-fn give_to(world: &mut World, mob: Entity, machine: Entity, item: Entity) {
+pub(crate) fn give_to(world: &mut World, mob: Entity, machine: Entity, item: Entity) {
     if let Some(&pos) = world.get::<TilePos>(machine) {
         take_out(world, item, pos);
     }
@@ -439,12 +446,28 @@ fn process_oven(world: &mut World, e: Entity, dt: f32) {
         return;
     };
     for item in contents(world, tray) {
-        let Some(food) = world.get::<DmFood>(item).cloned() else {
+        let Some(food) = world
+            .get::<DmFood>(item)
+            .filter(|f| !f.bake_result.is_empty())
+            .cloned()
+        else {
+            // Nothing bakes it: `fire_act(1000)`, and now and then the smell.
+            scorch(world, item, e, COOKING_FIRE_TEMP);
+            if world
+                .resource_mut::<CombatRng>()
+                .chance(spt_percent(10.0, dt))
+            {
+                let name = capitalize(&name_of(world, e));
+                visible(
+                    world,
+                    e,
+                    "",
+                    &format!("{name} источает запах гари!"),
+                    Span::Danger,
+                );
+            }
             continue;
         };
-        if food.bake_result.is_empty() {
-            continue;
-        }
         let mut times = cook_times(world, item);
         let required = *times
             .bake_required
@@ -499,6 +522,8 @@ fn finish_cooking(
         .copied()?;
     let offset = world.get::<Appearance>(item).map(|a| a.pixel_offset);
     let made = crate::construction::spawn_obj(world, result, pos)?;
+    // `ADD_TRAIT(result, TRAIT_HANDMADE, who_baked_us)`.
+    world.entity_mut(made).insert(crate::food::Handmade);
     let source = world.get::<Reagents>(item).map(|r| r.0.clone());
     let chem = world.get_resource::<Chem>().map(|c| c.0.clone());
     if let (Some(mut source), Some(chem)) = (source, chem)
@@ -634,12 +659,29 @@ fn process_griddle(world: &mut World, e: Entity, dt: f32) {
         return;
     }
     for item in griddle.items {
-        let Some(food) = world.get::<DmFood>(item).cloned() else {
+        let Some(food) = world
+            .get::<DmFood>(item)
+            .filter(|f| !f.grill_result.is_empty())
+            .cloned()
+        else {
+            // Nothing grills it: it burns, and only burning draws the active power (tg
+            // `use_energy` sits inside this branch of the loop).
+            let what = capitalize(&name_of(world, item));
+            scorch(world, item, e, COOKING_FIRE_TEMP);
+            if world.resource_mut::<CombatRng>().chance(10.0) {
+                let name = name_of(world, e);
+                visible(
+                    world,
+                    e,
+                    "",
+                    &format!("Кажется, {what} не очень удачно готовится на {name}!"),
+                    Span::Danger,
+                );
+            }
+            let joules = active_power(world, e);
+            crate::kitchen::machine_use_energy(world, e, joules);
             continue;
         };
-        if food.grill_result.is_empty() {
-            continue;
-        }
         let mut times = cook_times(world, item);
         let required = *times
             .grill_required
@@ -656,10 +698,83 @@ fn process_griddle(world: &mut World, e: Entity, dt: f32) {
             *slot = made;
         }
     }
-    // tg uses the active power only for burning items, an indentation slip: a running griddle
-    // draws it every tick.
-    let joules = active_power(world, e);
-    crate::kitchen::machine_use_energy(world, e, joules);
+    // `griddle_loc.hotspot_expose(800, 100)`: a hot griddle lights plasma in the air.
+    if let Some(&pos) = world.get::<TilePos>(e)
+        && let Some(mut atmos) = world.get_resource_mut::<ss13_atmos::Atmos>()
+    {
+        atmos.hotspot_expose(pos, 800.0, 100.0, false);
+    }
+}
+
+/// `fire_act(1000)` of the oven and the griddle.
+const COOKING_FIRE_TEMP: f32 = 1000.0;
+/// `/obj/item` `max_integrity` when the prototype has none.
+const ITEM_MAX_INTEGRITY: f32 = 200.0;
+/// `w_class` from which `/obj/item/burn()` leaves large ash (`WEIGHT_CLASS_HUGE`).
+const WEIGHT_CLASS_HUGE: u32 = 5;
+const ASH: &str = "/obj/effect/decal/cleanable/ash";
+const ASH_LARGE: &str = "/obj/effect/decal/cleanable/ash/large";
+
+/// `SPT_PROB(percent, seconds)`: the chance over `seconds` of a per-second `percent`.
+fn spt_percent(percent: f32, seconds: f32) -> f32 {
+    100.0 * (1.0 - (1.0 - percent / 100.0).powf(seconds))
+}
+
+pub(crate) fn capitalize(s: &str) -> String {
+    let mut chars = s.chars();
+    chars.next().map_or_else(String::new, |c| {
+        c.to_uppercase().chain(chars).collect::<String>()
+    })
+}
+
+/// `/obj/fire_act(temperature)` of an item in a cooking machine: `0.02 × temperature` damage
+/// (at most 20) unless `FIRE_PROOF`; at 0 integrity it burns to ash (`/obj/item/burn()`).
+// shortcut: no `/datum/component/burning` (flames on the item, damage while it burns outside the
+// machine); items that are not food burn only in ovens and on griddles, not in other fires.
+pub fn scorch(world: &mut World, item: Entity, machine: Entity, temperature: f32) {
+    let Some(dm) = world.get::<DmItem>(item).cloned() else {
+        return;
+    };
+    let damage = (0.02 * temperature).clamp(0.0, 20.0);
+    if dm.resistance_flags & (crate::fire::FIRE_PROOF | crate::obj_damage::INDESTRUCTIBLE) != 0
+        || damage <= 0.0
+    {
+        return;
+    }
+    let max = if dm.max_integrity > 0.0 {
+        dm.max_integrity
+    } else {
+        ITEM_MAX_INTEGRITY
+    };
+    let mut integrity = world
+        .get::<crate::obj_damage::Integrity>(item)
+        .copied()
+        .unwrap_or(crate::obj_damage::Integrity {
+            current: max,
+            broken: false,
+        });
+    integrity.current = (integrity.current - damage).max(0.0);
+    world.entity_mut(item).insert(integrity);
+    if integrity.current > 0.0 {
+        return;
+    }
+    let pos = world
+        .get::<TilePos>(item)
+        .or_else(|| world.get::<TilePos>(machine))
+        .copied();
+    let large = world
+        .get::<ss13_mapload::DmWeight>(item)
+        .is_some_and(|w| u32::from(w.w_class) >= WEIGHT_CLASS_HUGE);
+    let name = name_of(world, item);
+    if let Some(pos) = pos
+        && let Some(ash) =
+            crate::construction::spawn_obj(world, if large { ASH_LARGE } else { ASH }, pos)
+        && let Some(mut desc) = world.get_mut::<ss13_mapload::DmName>(ash)
+    {
+        desc.desc
+            .push_str(&format!("\nПохоже, когда-то это было {name}."));
+    }
+    world.despawn(item);
 }
 
 // --- Deep fryer --------------------------------------------------------------------------
@@ -1058,6 +1173,9 @@ pub fn refresh_look(world: &mut World, e: Entity) {
     } else {
         return;
     };
+    // The range's burner (`/datum/component/stove` adds its overlays).
+    let mut overlays = overlays;
+    overlays.extend(crate::stove::burner_overlays(world, e));
     let id = icon_state(world, e, &state);
     let Some(mut look) = world.get_mut::<Appearance>(e) else {
         return;

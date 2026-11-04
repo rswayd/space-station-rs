@@ -545,7 +545,7 @@ impl Holder {
             for &index in chem.reactions_of(reagent) {
                 let reaction = &chem.reactions[index as usize];
                 let def = &reaction.def;
-                if self.reactions.iter().any(|e| e.reaction == index) {
+                if self.reactions.iter().any(|e| e.reaction == index) || def.soup.is_some() {
                     continue;
                 }
                 let granularity = if def.reaction_flags & reaction_flags::REACTION_INSTANT != 0 {
@@ -615,6 +615,45 @@ impl Holder {
         }
         self.is_reacting = !self.reactions.is_empty();
         reacted
+    }
+
+    /// Starts the equilibrium of reaction `index` if its reagents and temperature allow it and
+    /// it is not running: the game's half of reactions whose `pre_reaction_other_checks` it
+    /// decides (soups). The container check is the caller's. True when it started.
+    pub fn start_reaction(&mut self, chem: &Chemistry, index: u32) -> bool {
+        let Some(reaction) = chem.reactions.get(index as usize) else {
+            return false;
+        };
+        let def = &reaction.def;
+        if self.flags & flags::NO_REACT != 0
+            || self.reactions.iter().any(|e| e.reaction == index)
+            || reaction
+                .required
+                .iter()
+                .any(|&(id, needed)| self.amount(id) < needed * CHEMICAL_QUANTISATION_LEVEL)
+            || (def.required_temp != 0.0
+                && def.is_cold_recipe
+                && self.chem_temp > def.required_temp)
+            || (!def.is_cold_recipe && self.chem_temp < def.required_temp)
+        {
+            return false;
+        }
+        let Some(eq) = Equilibrium::new(chem, index, self) else {
+            return false;
+        };
+        self.reactions.push(eq);
+        self.is_reacting = true;
+        let last = self.reactions.len() - 1;
+        self.step_equilibrium(chem, last, 1.0);
+        true
+    }
+
+    /// The running reactions' indices.
+    pub fn running(&self) -> impl Iterator<Item = u32> + '_ {
+        self.reactions
+            .iter()
+            .filter(|e| !e.to_delete)
+            .map(|e| e.reaction)
     }
 
     /// tg `instant_react`.

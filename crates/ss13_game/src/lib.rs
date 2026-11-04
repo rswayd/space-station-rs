@@ -136,6 +136,10 @@ pub mod atmos_exposure;
 #[cfg(feature = "server")]
 pub mod atmos_machinery;
 #[cfg(feature = "server")]
+pub mod bar;
+#[cfg(feature = "server")]
+pub mod barsign;
+#[cfg(feature = "server")]
 pub mod botany;
 pub mod bots;
 #[cfg(feature = "server")]
@@ -158,6 +162,8 @@ pub mod client;
 #[cfg(feature = "server")]
 pub mod closets;
 #[cfg(feature = "server")]
+pub mod coffee;
+#[cfg(feature = "server")]
 pub mod combat;
 pub mod comms;
 #[cfg(feature = "client")]
@@ -168,6 +174,8 @@ pub mod comms_server;
 pub mod construction;
 #[cfg(feature = "server")]
 pub mod cooking;
+#[cfg(feature = "server")]
+pub mod decay;
 #[cfg(feature = "server")]
 pub mod disposals;
 #[cfg(feature = "server")]
@@ -191,6 +199,8 @@ pub mod genetics;
 #[cfg(feature = "server")]
 pub mod ghost;
 #[cfg(feature = "server")]
+pub mod gibber;
+#[cfg(feature = "server")]
 pub mod guns;
 #[cfg(feature = "server")]
 pub mod health;
@@ -205,6 +215,8 @@ pub mod human;
 pub mod hunger;
 #[cfg(feature = "client")]
 pub mod hunger_client;
+#[cfg(feature = "server")]
+pub mod icecream;
 #[cfg(feature = "server")]
 pub mod id_access;
 #[cfg(feature = "client")]
@@ -296,6 +308,8 @@ pub mod stock_parts;
 pub mod storage;
 #[cfg(feature = "client")]
 pub mod storage_client;
+#[cfg(feature = "server")]
+pub mod stove;
 #[cfg(feature = "server")]
 pub mod strip;
 #[cfg(feature = "server")]

@@ -63,6 +63,7 @@ fn reaction(path: &str, required: &[(&str, f32)], results: &[(&str, f32)]) -> Re
         reaction_flags: reaction_flags::REACTION_INSTANT,
         special: false,
         explosion: None,
+        soup: None,
     }
 }
 

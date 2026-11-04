@@ -702,6 +702,16 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 // tg `attack_hand` of ovens, griddles and fryers; the soda and booze dispensers.
                 None if crate::cooking::interact(world, client, mob, target, modifiers.right) => {}
                 None if crate::smartfridge::interact(world, client, mob, target) => {}
+                // tg `attack_hand` of the gibber (a pulled human in, or start), its eject verb.
+                None if crate::gibber::interact(world, client, mob, target, modifiers.right) => {}
+                // tg `ui_interact` (the radial menu) and `attack_hand_secondary` of coffeemakers.
+                None if crate::coffee::interact(world, client, mob, target, modifiers.right) => {}
+                // A stove's burner, a soup pot's first ingredient out (right clicks).
+                None if crate::stove::interact(world, client, mob, target, modifiers.right) => {}
+                // tg `attack_hand` of a bar sign: pick the sign.
+                None if crate::barsign::interact(world, client, mob, target) => {}
+                // tg `interact` and `attack_hand_secondary` of the ice cream vat.
+                None if crate::icecream::interact(world, client, mob, target, modifiers.right) => {}
                 None if crate::chem_dispenser::interact(
                     world,
                     client,
@@ -794,6 +804,26 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                     ) => {}
                 Some(held)
                     if crate::smartfridge::item_interaction(world, client, mob, held, target) => {}
+                Some(held) if crate::coffee::item_interaction(world, client, mob, held, target) => {
+                }
+                Some(held)
+                    if crate::stove::item_interaction(
+                        world,
+                        client,
+                        mob,
+                        held,
+                        target,
+                        modifiers.right,
+                    ) => {}
+                Some(held)
+                    if crate::icecream::item_interaction(
+                        world,
+                        client,
+                        mob,
+                        held,
+                        target,
+                        modifiers.right,
+                    ) => {}
                 // A container into a chem dispenser (before pouring into it).
                 Some(held)
                     if crate::chem_dispenser::item_interaction(

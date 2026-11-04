@@ -89,6 +89,11 @@ pub struct ReactionDef {
     /// A `/datum/chemical_reaction/reagent_explosion` that only has its base `on_reaction`.
     #[serde(default)]
     pub explosion: Option<ExplosionDef>,
+    /// A soup (`/datum/chemical_reaction/food/soup`): [`crate::Holder::handle_reactions`] never
+    /// starts it; the game does ([`crate::Holder::start_reaction`]) once the pot holds its
+    /// ingredients.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub soup: Option<SoupDef>,
 }
 
 /// `reagent_explosion`'s `strengthdiv` and `modifier`: power `modifier + round(volume /
@@ -97,6 +102,18 @@ pub struct ReactionDef {
 pub struct ExplosionDef {
     pub strengthdiv: f32,
     pub modifier: f32,
+}
+
+/// The vars of a `/datum/chemical_reaction/food/soup`.
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct SoupDef {
+    /// `required_ingredients`: item type -> how many (a stack counts its amount).
+    pub required_ingredients: Vec<(String, f32)>,
+    pub ingredient_reagent_multiplier: f32,
+    pub percentage_of_nutriment_converted: f32,
+    /// `resulting_food_path`.
+    #[serde(default)]
+    pub resulting_food_path: Option<String>,
 }
 
 /// One tg `/datum/glass_style` (`reagent_containers/cups/_glass_datum.dm`): a container of

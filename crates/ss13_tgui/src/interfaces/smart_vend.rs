@@ -2,7 +2,8 @@
 //! `/obj/machinery/smartfridge/ui_data` (`code/modules/food_and_drinks/machinery/
 //! smartfridge.dm`). The server half lives with the game (`ss13_game::smartfridge`).
 // shortcut: the list layout only, without the search box or the layout toggle; the amount
-// `NumberInput` and the right click "vend all" are one "all" button on each row.
+// `NumberInput` and the right click "vend all" are one "all" button on each row; a dryer shows
+// its "Dry" button instead of the help button.
 
 use serde::{Deserialize, Serialize};
 
@@ -58,13 +59,26 @@ mod client_side {
             } else {
                 data.contents.iter().map(row).collect()
             };
-            let help: Box<dyn SceneList> = Box::new(EntityScene(bsn! {
-                @Button {
-                    @icon: "question",
-                    @tooltip: "LMB - Vend one\nAll - Vend all",
-                    @tooltip_position: Placement::BottomEnd,
-                }
-            }));
+            // A dryer's "Dry" / "Stop drying" (tgui shows it next to the help button).
+            let help: Box<dyn SceneList> = if data.isdryer {
+                let (icon, text) = if data.drying {
+                    ("stop", "Stop drying")
+                } else {
+                    ("tint", "Dry")
+                };
+                Box::new(EntityScene(bsn! {
+                    @Button { @icon: icon, @content: text }
+                    Act("Dry")
+                }))
+            } else {
+                Box::new(EntityScene(bsn! {
+                    @Button {
+                        @icon: "question",
+                        @tooltip: "LMB - Vend one\nAll - Vend all",
+                        @tooltip_position: Placement::BottomEnd,
+                    }
+                }))
+            };
             bsn! {
                 @WindowContent
                 Children [
