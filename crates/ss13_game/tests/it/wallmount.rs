@@ -19,7 +19,8 @@ use ss13_game::tools::DoAfter;
 use ss13_game::wallmount::LightSwitch;
 use ss13_game::wallmount::cabinets::{ExtinguisherCabinet, FireaxeCabinet};
 use ss13_game::wallmount::controls::{Button, Flasher};
-use ss13_game::wallmount::fire_alarm::{FireAlarm, Firelock};
+use ss13_game::wallmount::fire_alarm::FireAlarm;
+use ss13_game::wallmount::firelock::Firelock;
 use ss13_mapload::{Areas, DmItem, DmWallMount};
 use ss13_net::chat::client::ChatReceived;
 use ss13_shared::protocol::ClickModifiers;
@@ -544,7 +545,8 @@ fn cabinets() {
 }
 
 /// MetaStation's wall mounts: counts by kind, buttons that reach something, the brig flashers;
-/// pulls the fire alarm of the area with the most firelocks and resets it.
+/// with air, no firelock closes by itself in the first seconds (beyond mapped `/closed` ones);
+/// pulls the fire alarm of the area with the most firelocks.
 /// `SS13_ASSETS=$ASSETS cargo test -p ss13_game --all-features --test it wallmount::metastation -- --ignored --nocapture`
 #[test]
 #[ignore = "needs generated assets in SS13_ASSETS"]
@@ -559,7 +561,12 @@ fn metastation() {
                 .into(),
         })
     };
-    let mut app = testing::server_app(map, |_| {});
+    let mut app = testing::server_app(map, |app| {
+        app.add_plugins(ss13_atmos::AtmosPlugin);
+    });
+    for _ in 0..200 {
+        app.update();
+    }
     let world = app.world_mut();
     let count = |name: &str, n: usize| {
         println!("{name}: {n}");
@@ -569,6 +576,16 @@ fn metastation() {
     count("fire alarms", n);
     let n = world.query::<&Firelock>().iter(world).count();
     count("firelocks", n);
+    let active = world
+        .query::<&Firelock>()
+        .iter(world)
+        .filter(|l| l.active)
+        .count();
+    println!("active firelocks after 10 s: {active}");
+    assert!(
+        active * 20 < n,
+        "the station's air does not close its firelocks"
+    );
     let n = world.query::<&LightSwitch>().iter(world).count();
     count("light switches", n);
     let n = world.query::<&Flasher>().iter(world).count();
@@ -579,6 +596,9 @@ fn metastation() {
     count("fire axe cabinets", n);
     let buttons: Vec<Button> = world.query::<&Button>().iter(world).cloned().collect();
     let links = world.resource::<ss13_game::wallmount::controls::Links>();
+    count("mass driver ids", links.mass_drivers.len());
+    count("igniter ids", links.igniters.len());
+    count("sparker ids", links.sparkers.len());
     let linked = buttons
         .iter()
         .filter(|b| {
@@ -586,6 +606,9 @@ fn metastation() {
                 links.poddoors.contains_key(id)
                     || links.airlocks.contains_key(id)
                     || links.flashers.contains_key(id)
+                    || links.mass_drivers.contains_key(id)
+                    || links.igniters.contains_key(id)
+                    || links.sparkers.contains_key(id)
             })
         })
         .count();

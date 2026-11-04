@@ -807,6 +807,26 @@ pub fn use_energy_from(
     used
 }
 
+/// tg `update_use_power`: the static load follows idle/active.
+pub fn update_use_power(world: &mut World, machine: Entity, active: bool) {
+    let Some(dm) = world.get::<DmPower>(machine) else {
+        return;
+    };
+    let watts = if active {
+        dm.active_power_usage
+    } else {
+        dm.idle_power_usage
+    };
+    if let Some(mut pm) = world.get_mut::<PowerMachine>(machine) {
+        let old = pm.watts;
+        pm.watts = watts;
+        let (area, channel) = (pm.area, pm.channel);
+        if let Some(mut a) = world.get_mut::<AreaPower>(area) {
+            a.static_power[channel as usize] += watts - old;
+        }
+    }
+}
+
 /// The machine's area and channel: its [`PowerMachine`], else (machines that use no power) the
 /// area of its tile and its `power_channel`.
 pub fn machine_power(world: &World, machine: Entity) -> Option<PowerMachine> {
