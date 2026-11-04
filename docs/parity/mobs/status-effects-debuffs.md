@@ -30,7 +30,7 @@
 
 - **Код:** [`/datum/status_effect/speech`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/speech_debuffs.dm#L1), [`/datum/status_effect/speech/stutter`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/speech_debuffs.dm#L62), [`/datum/status_effect/speech/slurring`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/speech_debuffs.dm#L211)
 - **BandaStation:** [`speech_debuffs.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/speech_debuffs.dm#L81) — заикание для кириллицы (социальная тревожность), санитизация эмоутов
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_chat/src/speech.rs` (`Impediments`, `stutter`, `derpspeech`, `unintelligize`): заикание (с кириллицей BandaStation) и «дерп» от травм мозга, пока травма есть; нет временного статус-эффекта с длительностью, невнятной речи, тревожного и одержимого заикания, TTS-фильтров
 
 ### Немота (silenced)
 Временный запрет речи.
@@ -48,7 +48,7 @@
 Запрещает причинять вред (`TRAIT_PACIFISM`); временный от реагентов и гонболы.
 
 - **Код:** [`/datum/status_effect/pacify`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/pacifism.dm#L1), [`/datum/status_effect/gonbola_pacify`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/debuffs.dm#L667)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ❌ нет — временного эффекта нет; сам запрет (`TRAIT_PACIFISM`) есть от травмы мозга (`medical/traumas.rs` `Pacifist`: ближний бой, летальные выстрелы)
 
 ### Горение и мокрота (fire/wet stacks)
 `fire_stacks` поджигают моба, распадаются, нагревают тело и тайл, требуют кислорода; `wet_stacks` гасят огонь и повышают проводимость.

@@ -38,6 +38,112 @@ pub struct ChangelingHivemind;
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Tongueless;
 
+/// What impairs a body's speech (tg `TRAIT_MUTE`, `TRAIT_UNINTELLIGIBLE_SPEECH`, the `stutter`
+/// and `derpspeech` status effects), kept by the game (brain traumas).
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Impediments {
+    /// `can_speak()` fails: no say, whisper or radio.
+    pub mute: bool,
+    pub stutter: bool,
+    pub derp: bool,
+    pub unintelligible: bool,
+}
+
+/// tg `/datum/status_effect/speech/stutter/stutter_char` (`roll` gives 0..100 per call).
+fn stutter_char(c: &str, roll: &mut impl FnMut() -> f32) -> String {
+    let times = if roll() < 10.0 {
+        4
+    } else if roll() < 20.0 {
+        3
+    } else if roll() < 90.0 {
+        2
+    } else {
+        1
+    };
+    vec![c; times].join("-")
+}
+
+/// tg `/datum/status_effect/speech/stutter/apply_speech` on one word: 75% of words repeat
+/// their first sound (`stutter_regex`, then BandaStation's Cyrillic consonant regex).
+fn stutter_word(word: &str, roll: &mut impl FnMut() -> f32) -> String {
+    const LEADING: &str = " \t\"'()[]{}.!?,:;_`~-";
+    const CYRILLIC: &str = "бвгджзйклмнпрстфхцчшщБВГДЖЗЙКЛМНПРСТФХЦЧШЩ";
+    if roll() >= 75.0 {
+        return word.to_owned();
+    }
+    let rest = word.trim_start_matches(|c| LEADING.contains(c));
+    let lead = &word[..word.len() - rest.len()];
+    let mut chars = rest.chars();
+    let Some(first) = chars.next() else {
+        return word.to_owned();
+    };
+    let sound_len = if (first.is_ascii_alphanumeric() || first == '_') && !first.is_ascii_digit() {
+        // `([^aeoiuh\d]h|qu|[^\d])`, case-insensitive.
+        let second = chars.next().map(|c| c.to_ascii_lowercase());
+        let lower = first.to_ascii_lowercase();
+        let digraph = (second == Some('h') && !"aeoiuh".contains(lower))
+            || (lower == 'q' && second == Some('u'));
+        if digraph { 2 } else { 1 }
+    } else if CYRILLIC.contains(first) {
+        1
+    } else {
+        return word.to_owned();
+    };
+    let split = rest
+        .char_indices()
+        .nth(sound_len)
+        .map_or(rest.len(), |(i, _)| i);
+    let (sound, tail) = rest.split_at(split);
+    format!("{lead}{}{tail}", stutter_char(sound, roll))
+}
+
+/// The stutter of every word of `text`.
+pub fn stutter(text: &str, mut roll: impl FnMut() -> f32) -> String {
+    text.split(' ')
+        .map(|w| stutter_word(w, &mut roll))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// tg `/datum/status_effect/speech/stutter/derpspeech/handle_message`: English simplifications,
+/// half the time shouted with a stuttered exclamation, and 15% of the time stuttered unless
+/// the speaker stutters anyway.
+pub fn derpspeech(text: &str, stuttering: bool, mut roll: impl FnMut() -> f32) -> String {
+    let mut message = text.to_owned();
+    for (from, to) in [
+        (" am ", " "),
+        (" is ", " "),
+        (" are ", " "),
+        ("you", "u"),
+        ("help", "halp"),
+        ("grief", "grife"),
+        ("space", "spess"),
+        ("carp", "crap"),
+        ("reason", "raisin"),
+    ] {
+        message = message.replace(from, to);
+    }
+    if roll() < 50.0 {
+        let exclamation = ["!", "!!", "!!!"][(roll() as usize * 3) / 100];
+        message = message.to_uppercase();
+        message.push_str(&stutter_char(exclamation, &mut roll));
+    }
+    if !stuttering && roll() < 15.0 {
+        message = stutter(&message, roll);
+    }
+    message
+}
+
+/// tg `unintelligize`: the words in a random order.
+pub fn unintelligize(text: &str, mut roll: impl FnMut() -> f32) -> String {
+    let mut words: Vec<&str> = text.split_whitespace().collect();
+    for i in (1..words.len()).rev() {
+        let j = ((roll() / 100.0) * (i + 1) as f32) as usize;
+        words.swap(i, j.min(i));
+    }
+    words.join(" ")
+}
+
 /// tg `/mob/living/carbon/human/say` without `TRAIT_SPEAKS_CLEARLY`: every run of `[gdntke]`
 /// (and `[GDNTKE]`) becomes `replacement` ("aa", "oo" or "'", one pick per message).
 // tg's pattern is Latin only, so Cyrillic speech passes unchanged, as on the original server.
@@ -277,6 +383,28 @@ mod tests {
             "AAaa aahaa aaifaa!"
         );
         assert_eq!(tongueless("Тут нож", "'", "'"), "Тут нож");
+    }
+
+    #[test]
+    fn stutter_repeats_the_first_sound() {
+        // Every roll 50: each word stutters (< 75) twice (not < 10, not < 20, < 90).
+        let half = || 50.0;
+        assert_eq!(stutter("the quick dog", half), "th-the qu-quick d-dog");
+        assert_eq!(stutter("\"Привет, это я", half), "\"П-Привет, это я");
+        assert_eq!(stutter("42 ok", half), "42 o-ok");
+        // A roll of 80 leaves words alone.
+        assert_eq!(stutter("hello", || 80.0), "hello");
+    }
+
+    #[test]
+    fn derpspeech_and_unintelligible_speech() {
+        assert_eq!(derpspeech("you are in space", true, || 60.0), "u in spess");
+        assert_eq!(derpspeech("help", true, || 0.0), "HALP!-!-!-!");
+        let shuffled = unintelligize("один два три", || 0.0);
+        let mut words: Vec<&str> = shuffled.split(' ').collect();
+        assert_ne!(shuffled, "один два три");
+        words.sort_unstable();
+        assert_eq!(words, ["два", "один", "три"]);
     }
     use crate::radio::*;
 

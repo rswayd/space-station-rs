@@ -380,6 +380,23 @@ fn try_fire(world: &mut World, client: Entity, mob: Entity, gun_entity: Entity, 
         empty_click(world, client, &dm, gun_entity);
         return !combat;
     }
+    // `process_fire`: `TRAIT_PACIFISM` and a harmful round chambered.
+    if world
+        .get::<crate::medical::traumas::Pacifist>(mob)
+        .is_some()
+        && ready_round(&dm, &gun).is_some_and(|c| c.harmful)
+    {
+        let name = name_of(world, gun_entity);
+        tell(
+            world,
+            client,
+            Span::Warning,
+            format!(
+                "Летальный снаряд заряжен в {name}! Вы не хотите рисковать причинить кому-то вред..."
+            ),
+        );
+        return true;
+    }
     if world.resource::<Time>().elapsed_secs_f64() < gun.ready_at {
         return false;
     }

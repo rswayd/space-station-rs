@@ -61,7 +61,7 @@ fn hand_of(zone: BodyZone) -> Option<usize> {
     }
 }
 
-/// The hand at `hand` is there to hold things.
+/// The hand at `hand` is there to hold things (not amputated or paralyzed).
 pub fn has_hand(world: &World, mob: Entity, hand: usize) -> bool {
     let zone = if hand == 0 {
         BodyZone::LArm
@@ -70,7 +70,7 @@ pub fn has_hand(world: &World, mob: Entity, hand: usize) -> bool {
     };
     world
         .get::<Limbs>(mob)
-        .is_none_or(|l| !l.limb(zone).missing)
+        .is_none_or(|l| !l.limb(zone).missing && !l.limb(zone).paralyzed)
 }
 
 /// tg `drop_limb()`: `zone` leaves `mob` as an item on its tile with the part's damage. `None`

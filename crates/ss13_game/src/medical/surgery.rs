@@ -36,7 +36,8 @@
 // trait, manual cauterizing of yourself, ring accessories on gloves, wound scanning; no external
 // organs, cybernetic implants or dummy organs from food; no decapitation, robotic limb
 // replacement or arbitrary prosthetics; no abductor, robotic, thick-skin or skull operations; no
-// brain traumas (so no lobotomy, pacification or brainwashing).
+// brainwashing. Lobotomy, pacification and brain surgery work on the brain's traumas
+// ([`super::traumas`]).
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
@@ -304,6 +305,8 @@ pub enum Op {
     Revival,
     CoronaryBypass,
     BrainSurgery,
+    Lobotomy,
+    Pacify,
     Lobectomy,
     Hepatectomy,
     Gastrectomy,
@@ -422,6 +425,8 @@ impl Op {
             Self::Revival,
             Self::CoronaryBypass,
             Self::BrainSurgery,
+            Self::Lobotomy,
+            Self::Pacify,
             Self::Lobectomy,
             Self::Hepatectomy,
             Self::Gastrectomy,
@@ -875,6 +880,46 @@ impl Op {
                 blocked: &["орган не должен быть кибернетическим"],
                 ..base
             },
+            Self::Lobotomy => OpDef {
+                path: "/datum/surgery_operation/organ/lobotomy",
+                name: "Лоботомия",
+                catalog_name: "Лоботомия (Лоботомия)",
+                desc: "Исправление большинства травм мозга пациента с риском вызвать новые \
+                       постоянные травмы.",
+                flags: flags::LOCKED,
+                target: Target::Organ(Slot::Brain),
+                all_required: SKIN_OPEN | BONE_SAWED,
+                any_blocked: VESSELS_UNCLAMPED,
+                implements: &[
+                    (Tool("scalpel"), 1.15),
+                    (Path("/obj/item/melee/energy/sword"), 0.55),
+                    (Path("/obj/item/knife"), 2.85),
+                    (Path("/obj/item/shard"), 4.0),
+                    (Path("/obj/item"), 5.0),
+                ],
+                tool_rec: "Любой острый предмет",
+                blocked: &["орган не должен быть кибернетическим"],
+                ..base
+            },
+            Self::Pacify => OpDef {
+                path: "/datum/surgery_operation/organ/pacify",
+                name: "pacification",
+                catalog_name: "Паксопсия (Пацификация)",
+                desc: "Удаление агрессивных наклонностей из мозга пациента.",
+                time: 40.0,
+                flags: flags::LOCKED,
+                target: Target::Organ(Slot::Brain),
+                all_required: SKIN_OPEN | BONE_SAWED,
+                any_blocked: VESSELS_UNCLAMPED,
+                implements: &[
+                    (Tool("hemostat"), 1.0),
+                    (Tool("screwdriver"), 2.85),
+                    (Path("/obj/item/pen"), 6.67),
+                ],
+                tool_rec: "hemostat",
+                blocked: &["орган не должен быть кибернетическим"],
+                ..base
+            },
             Self::Lobectomy => OpDef {
                 path: "/datum/surgery_operation/organ/repair/lobectomy",
                 name: "Удаление поврежденной доли легкого",
@@ -1298,7 +1343,9 @@ fn tool_check(op: Op, tool: &ToolInfo) -> bool {
                 || tool.temperature >= FIRE_MINIMUM_TEMPERATURE_TO_EXIST
         }
         Op::SealVeins => tool.temperature >= FIRE_MINIMUM_TEMPERATURE_TO_EXIST,
-        Op::Gastrectomy => tool.sharpness & super::wounds::SHARP_EDGED != 0 || listed,
+        Op::Gastrectomy | Op::Lobotomy => {
+            tool.sharpness & super::wounds::SHARP_EDGED != 0 || listed
+        }
         // shortcut: an energy gun never counts as charged with an electrode (no fire modes
         // here), so only paddles and batons shock a brain.
         Op::Revival => {
@@ -1961,6 +2008,16 @@ fn preop(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: TargetZone)
             format!("{user} начинает лечить мозг {target}."),
             "Ваша голова пульсирует от невообразимой боли!".into(),
         ),
+        Op::Lobotomy => (
+            format!("Вы начинаете проводить лоботомию мозга {target}..."),
+            format!("{user} начинает проводить лоботомию мозга {target}."),
+            "Ваша голова пульсирует от невообразимой боли!".into(),
+        ),
+        Op::Pacify => (
+            format!("Вы начинаете пацификацию {target}..."),
+            format!("{user} начинает оперировать мозг {target}."),
+            "Ваша голова разрывается от невообразимой боли!".into(),
+        ),
         Op::RemoveOrgan(slot) => {
             let organ = slot.spec().ru.0;
             (
@@ -2225,6 +2282,34 @@ fn repair_organ(world: &mut World, mob: Entity, slot: Slot, heal_to: f32) {
         && let Some(mut state) = world.get_mut::<organs::Organ>(organ)
     {
         state.operated = true;
+    }
+}
+
+/// The new trauma of a lobotomy (75% on success, always on failure): a mild, severe or special
+/// one that only magic cures.
+fn lobotomy_trauma(world: &mut World, brain: Entity, rng: &mut crate::combat::CombatRng) {
+    use super::traumas::{Category, Resilience, gain_type};
+    let category = match rng.range(1, 3) {
+        1 => Category::Mild,
+        2 => Category::Severe,
+        _ => Category::Special,
+    };
+    gain_type(world, brain, category, Some(Resilience::Magic), false, rng);
+}
+
+/// A failed brain surgery or pacification: a severe trauma that only a lobotomy cures.
+fn severe_lobotomy_trauma(world: &mut World, mob: Entity) {
+    use super::traumas::{Category, Resilience, gain_type};
+    if let Some(brain) = organs::organ(world, mob, Slot::Brain) {
+        let mut rng = super::fork_rng(world);
+        gain_type(
+            world,
+            brain,
+            Category::Severe,
+            Some(Resilience::Lobotomy),
+            false,
+            &mut rng,
+        );
     }
 }
 
@@ -2579,6 +2664,9 @@ fn success(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: TargetZon
                 mob,
                 "Боль в голове отступает, думать становится немного легче!",
             );
+            if let Some(brain) = organs::organ(world, mob, Slot::Brain) {
+                super::traumas::cure_all(world, brain, super::traumas::Resilience::Surgery);
+            }
             let brain = organs::state(world, mob, Slot::Brain).map_or(0.0, |o| o.damage);
             if brain > organs::BRAIN_DAMAGE_DEATH * 0.1 {
                 tell(
@@ -2586,6 +2674,40 @@ fn success(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: TargetZon
                     actor.client,
                     Span::Notice,
                     format!("Мозг {target} выглядит так, будто его можно вылечить еще немного."),
+                );
+            }
+        }
+        Op::Lobotomy => {
+            own = format!("Вы успешно провели лоботомию {target}!");
+            others = format!("{user} успешно проводит лоботомию {target}!");
+            pain(
+                world,
+                mob,
+                "Ваша голова на мгновение полностью немеет, боль просто невыносима!",
+            );
+            if let Some(brain) = organs::organ(world, mob, Slot::Brain) {
+                super::traumas::cure_all(world, brain, super::traumas::Resilience::Lobotomy);
+                let mut rng = super::fork_rng(world);
+                if rng.chance(75.0) {
+                    lobotomy_trauma(world, brain, &mut rng);
+                }
+            }
+        }
+        Op::Pacify => {
+            own = format!("Вам удалось пацифицировать {target}.");
+            others = format!("{user} успешно оперирует мозг {target}!");
+            pain(
+                world,
+                mob,
+                "Ваша голова пульсирует... мысль о насилии вспыхивает в вашем разуме, и вас \
+                 едва не выворачивает наизнанку!",
+            );
+            if let Some(brain) = organs::organ(world, mob, Slot::Brain) {
+                super::traumas::gain(
+                    world,
+                    brain,
+                    super::traumas::Kind::Pacifism,
+                    Some(super::traumas::Resilience::Lobotomy),
                 );
             }
         }
@@ -2849,6 +2971,39 @@ fn failure(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: TargetZon
                 mob,
                 "Ваша голова пульсирует от ужасной боли; даже думать больно!",
             );
+            severe_lobotomy_trauma(world, mob);
+            return;
+        }
+        Op::Lobotomy => {
+            say(
+                world,
+                "Вы удалили не ту часть, нанеся еще больше повреждений!".into(),
+                format!("{user} безуспешно пытается провести лоботомию {target}!"),
+            );
+            pain(
+                world,
+                mob,
+                "Боль в вашей голове, кажется, только усиливается!",
+            );
+            if let Some(brain) = organs::organ(world, mob, Slot::Brain) {
+                organs::damage_organ(world, brain, 80.0, organs::BRAIN_DAMAGE_DEATH);
+                let mut rng = super::fork_rng(world);
+                lobotomy_trauma(world, brain, &mut rng);
+            }
+            return;
+        }
+        Op::Pacify => {
+            say(
+                world,
+                format!("Вы совершаете ошибку, перепутав все связи в мозгу {target}..."),
+                format!("{user} совершает ошибку, вызывая повреждение мозга!"),
+            );
+            pain(
+                world,
+                mob,
+                "Ваша голова пульсирует, и кажется, становится только хуже!",
+            );
+            severe_lobotomy_trauma(world, mob);
             return;
         }
         Op::Lobectomy => {

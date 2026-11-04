@@ -21,7 +21,8 @@
 //!   every 0.8 s while it stays there.
 //!
 //! Submodules: [`blood`] (blood volume, bleeding, transfusions, IV drips), [`wounds`], [`surgery`]
-//! (operations, drapes, operating tables), [`defib`] (defibrillators, revival), [`organs`].
+//! (operations, drapes, operating tables), [`defib`] (defibrillators, revival), [`organs`],
+//! [`traumas`] (brain traumas).
 //! Clicks on living mobs that these take (wound treatments, drapes, surgery, paddles, IV drips,
 //! tables) are claimed in [`MedicalClicks`] before melee and the inventory see them.
 // shortcut: no `try_inject` check (thick clothing blocks treatment in tg), no sounds, balloon
@@ -33,6 +34,7 @@ pub mod defib;
 pub mod operating;
 pub mod organs;
 pub mod surgery;
+pub mod traumas;
 pub mod wounds;
 
 use bevy::ecs::entity::EntityHashSet;

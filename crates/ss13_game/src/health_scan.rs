@@ -172,6 +172,10 @@ pub fn healthscan(world: &World, target: Entity) -> Option<ChatMessage> {
             }
         }
     }
+    // The brain's row of tg's organ table: its `get_status_appendix`.
+    if let Some(traumas) = crate::medical::traumas::scan_line(world, target) {
+        lines.text(Span::Warning, format!("Мозг: ↳ {traumas}"));
+    }
     // tg prints the human species name (`/datum/species/human`, untranslated).
     lines.text(Span::Info, "Вид: Human");
     if let Some(blood) = world.get::<crate::medical::blood::Blood>(target) {

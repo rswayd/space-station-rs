@@ -1388,6 +1388,7 @@ fn life(world: &mut World, chem: &Chemistry, mob: Entity, seconds: f32) {
     if world.get::<Stat>(mob) != Some(&Stat::Dead) && blood_amount(world, mob, MUTADONE) > 0.0 {
         crate::genetics::mutadone(world, mob);
     }
+    crate::medical::traumas::brain_reagents(world, mob, seconds);
     let entity = world.entity(mob);
     let (Some(health), Some(&stat), Some(reagents)) = (
         entity.get::<Health>(),

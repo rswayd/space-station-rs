@@ -836,3 +836,57 @@ fn organs_and_limbs_move() {
     assert!(health.tox >= 10.0, "rejection: {}", health.tox);
     assert_eq!(s.get::<ss13_game::human::HumanLook>(b).missing, 0);
 }
+
+#[test]
+fn lobotomy_and_pacification() {
+    use ss13_game::medical::traumas::{self, Kind, Resilience};
+    let mut s = Station::start("lobotomy_and_pacification");
+    let (a, b) = (s.players[0].mob, s.players[1].mob);
+    // A works from north of the table, next to the scalpel and the hemostat; the computer has
+    // the debug disk's operations.
+    s.server
+        .world_mut()
+        .entity_mut(a)
+        .insert(TilePos::new(3, 5, 1));
+    let computer = s.on_tile(COMPUTER, "/obj/machinery/computer/operating");
+    s.server
+        .world_mut()
+        .get_mut::<OperatingComputer>(computer)
+        .unwrap()
+        .disks = ss13_game::medical::operating::disk_surgeries("/obj/item/disk/surgery/debug");
+    s.lay_down(TABLE);
+    s.limbs(|l| {
+        let head = l.limb_mut(BodyZone::Head);
+        head.prepped = true;
+        head.surgery = state::SKIN_OPEN | state::BONE_SAWED | state::VESSELS_CLAMPED;
+    });
+    {
+        let world = s.server.world_mut();
+        let brain = organs::organ(world, b, Slot::Brain).unwrap();
+        assert!(traumas::gain(world, brain, Kind::Mute, None));
+        assert!(traumas::gain(
+            world,
+            brain,
+            Kind::Stuttering,
+            Some(Resilience::Lobotomy)
+        ));
+    }
+    s.zone(0, TargetZone::Head);
+
+    // A lobotomy takes every trauma up to deep-rooted ones; what it may leave only magic cures.
+    s.take(0, SCALPEL, "/obj/item/scalpel");
+    s.operate("Лоботомия", |s| {
+        s.said(0, "Вы успешно провели лоботомию")
+    });
+    let left = traumas::of_mob(s.server.world(), b);
+    assert!(
+        left.iter().all(|t| t.resilience == Resilience::Magic),
+        "{left:?}"
+    );
+
+    // Pacification: a deep-rooted pacifism.
+    s.take(0, HEMOSTAT, "/obj/item/hemostat");
+    s.operate("pacification", |s| s.said(0, "Вам удалось пацифицировать"));
+    assert!(traumas::has(s.server.world(), b, Kind::Pacifism));
+    assert!(s.server.world().get::<traumas::Pacifist>(b).is_some());
+}

@@ -545,6 +545,8 @@ pub struct Limb {
     pub prepped: bool,
     /// Amputated: the stump (tg `BODYPART_STUMP`) left by `super::bodyparts::drop_limb`.
     pub missing: bool,
+    /// tg `TRAIT_PARALYSIS_*` of this limb (brain traumas, `super::traumas`): disabled.
+    pub paralyzed: bool,
 }
 
 impl Limb {
@@ -638,7 +640,10 @@ impl Limb {
 
     /// tg `bodypart_disabled` of a limb that `can_be_disabled` (arms and legs).
     pub fn disabled(&self, damage: f32, max_damage: f32) -> bool {
-        self.missing || self.wounds.iter().any(|w| w.disabling) || damage >= max_damage
+        self.missing
+            || self.paralyzed
+            || self.wounds.iter().any(|w| w.disabling)
+            || damage >= max_damage
     }
 
     /// The limp of a leg: (`limp_slowdown` sum, max `limp_chance`), scaled by its splint

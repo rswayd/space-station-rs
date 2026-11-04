@@ -34,8 +34,9 @@ use ss13_world::{SpatialIndex, WorldSystems};
 
 use crate::emote::{EMOTE_COOLDOWN_SECS, EmoteOutcome};
 use crate::speech::{
-    BinaryCapable, ChangelingHivemind, EarsWorn, RadioExtension, RadioTarget, SpeakerStat,
-    Tongueless, WhisperHeard, capitalize, parse_mods, stars, whisper_heard,
+    BinaryCapable, ChangelingHivemind, EarsWorn, Impediments, RadioExtension, RadioTarget,
+    SpeakerStat, Tongueless, WhisperHeard, capitalize, derpspeech, parse_mods, stars, stutter,
+    unintelligize, whisper_heard,
 };
 
 /// tg `get_hearers_in_view(world.view)`: 7 tiles, Chebyshev, like BYOND `view()`.
@@ -394,6 +395,7 @@ type Body<'a> = (
     Has<BinaryCapable>,
     Has<ChangelingHivemind>,
     Has<Tongueless>,
+    Option<&'a Impediments>,
 );
 
 fn handle_say(
@@ -446,7 +448,18 @@ fn handle_say(
                     .map_err(|r| (r, true))
             });
         let (
-            (speaker, pos, name, invisibility, stat, ears_worn, binary, hivemind, tongueless),
+            (
+                speaker,
+                pos,
+                name,
+                invisibility,
+                stat,
+                ears_worn,
+                binary,
+                hivemind,
+                tongueless,
+                impediments,
+            ),
             text,
         ) = match checked {
             Ok(said) => said,
@@ -572,6 +585,26 @@ fn handle_say(
         // shortcut: no last words (a hard crit whisper that succumbs); add with `succumb`.
         if message.is_empty() || stat >= SpeakerStat::HardCrit {
             continue;
+        }
+        let impediments = impediments.copied().unwrap_or_default();
+        // tg `try_speak` -> `can_speak()`.
+        if impediments.mute {
+            chat.write(SendChat {
+                clients: vec![client],
+                message: warning("Вы осознаете, что не можете говорить!"),
+            });
+            continue;
+        }
+        // tg `treat_message`: `TRAIT_UNINTELLIGIBLE_SPEECH`, then the speech status effects.
+        let mut message = message;
+        if impediments.unintelligible {
+            message = unintelligize(&message, || rng.percent());
+        }
+        if impediments.stutter {
+            message = stutter(&message, || rng.percent());
+        }
+        if impediments.derp {
+            message = derpspeech(&message, impediments.stutter, || rng.percent());
         }
         let mut message = capitalize(&message);
         if tongueless {

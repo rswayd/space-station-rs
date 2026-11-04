@@ -57,6 +57,7 @@ mod surgery;
 mod tables;
 mod teg;
 mod traitor;
+mod traumas;
 mod vampire;
 mod vending;
 mod wallmount;

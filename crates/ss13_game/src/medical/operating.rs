@@ -51,7 +51,15 @@ pub struct OperatingComputer {
 }
 
 /// The research designs that unlock ported operations (`/datum/design/surgery` `surgery`).
-const DESIGNS: [(&str, &str); 5] = [
+const DESIGNS: [(&str, &str); 7] = [
+    (
+        "/datum/design/surgery/lobotomy",
+        "/datum/surgery_operation/organ/lobotomy",
+    ),
+    (
+        "/datum/design/surgery/pacify",
+        "/datum/surgery_operation/organ/pacify",
+    ),
     (
         "/datum/design/surgery/tend_wounds_upgrade",
         "/datum/surgery_operation/basic/tend_wounds/upgraded",

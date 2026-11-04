@@ -230,7 +230,10 @@ fn melee(
     handled: Res<crate::security::MeleeHandled>,
     medical: Res<crate::medical::MedicalHandled>,
     clothing: Query<(&ss13_mapload::DmClothing, &ss13_mapload::DmArmor)>,
-    mut sounds: MessageWriter<PlaySound>,
+    (mut sounds, pacifists): (
+        MessageWriter<PlaySound>,
+        Query<(), With<crate::medical::traumas::Pacifist>>,
+    ),
     mut commands: Commands,
 ) {
     let now = time.elapsed_secs_f64();
@@ -289,6 +292,23 @@ fn melee(
         }
         let name = |e: Entity| names.get(e).map_or("Кто-то", |n| n.as_str()).to_owned();
         let (user, victim) = (name(attacker), name(target));
+        // tg `TRAIT_PACIFISM`: `attack` with a damaging item (not stamina), `harm` unarmed.
+        if pacifists.contains(attacker) {
+            let refusal = match &weapon {
+                Some(w) if w.force > 0.0 && w.kind != DamageType::Stamina => {
+                    Some("Вы не хотите причинять вред другим живым существам!".to_owned())
+                }
+                None if combat.0 => Some(format!("Вы не хотите причинить вред {victim}!")),
+                _ => None,
+            };
+            if let Some(text) = refusal {
+                chat.write(SendChat {
+                    clients: vec![click.client],
+                    message: ChatMessage::simple(ChatChannel::Warning, Span::Warning, text),
+                });
+                continue;
+            }
+        }
         let Ok((mut health, mut target_stat, _, _, _, worn, _, _, limbs)) = mobs.get_mut(target)
         else {
             continue;

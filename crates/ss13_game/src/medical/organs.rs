@@ -18,7 +18,7 @@
 //! `crate::breath`, `crate::chem`, `crate::hunger` and `crate::sound`; without a tongue the
 //! mob's speech gurgles (`ss13_chat::speech::Tongueless`).
 // shortcut: no brainmob (the mind stays with the body: a removed brain does not carry the
-// player, an inserted one does not bring one), no brain traumas, skillchips, organ traits,
+// player, an inserted one does not bring one), no skillchips, organ traits,
 // actions or status effects, no eating organs, no blood DNA, no EMP, no organ cell lines; eyes
 // have no sight effects (no blindness, blur or night vision yet) besides being drawn; species
 // organ variants beyond the human set keep the standard numbers.
@@ -483,13 +483,19 @@ pub fn damage_organ(world: &mut World, organ: Entity, amount: f32, maximum: f32)
     let Some(mut state) = world.get::<Organ>(organ).cloned() else {
         return;
     };
+    let prev = state.damage;
     let message = state.apply_damage(amount, maximum);
     let owner = world.get::<OrganOf>(organ).map(|o| o.0);
+    let (slot, damage) = (state.slot, state.damage);
     if world.get::<Organ>(organ) != Some(&state) {
         world.entity_mut(organ).insert(state);
     }
     if let (Some(owner), Some(text)) = (owner, message) {
         tell_owner(world, owner, Span::Warning, text);
+    }
+    // The brain's `apply_organ_damage`: more damage past the mild threshold rolls a trauma.
+    if slot == Slot::Brain && damage > prev && damage > BRAIN_DAMAGE_MILD {
+        super::traumas::roll(world, organ, damage - prev, damage);
     }
 }
 
@@ -588,6 +594,7 @@ pub fn insert(world: &mut World, organ: Entity, mob: Entity) -> bool {
 /// `on_mob_insert` of the organ types.
 fn on_insert(world: &mut World, organ: Entity, mob: Entity, slot: Slot) {
     match slot {
+        Slot::Brain => super::traumas::refresh(world, mob),
         Slot::Stomach => crate::chem::stomach_inserted(world, organ, mob),
         Slot::Eyes => refresh_look(world, mob),
         Slot::Tongue => {
@@ -621,6 +628,7 @@ pub fn remove(world: &mut World, organ: Entity, special: bool) {
         Slot::Tongue => {
             world.entity_mut(mob).insert(ss13_chat::speech::Tongueless);
         }
+        Slot::Brain => super::traumas::refresh(world, mob),
         _ => {}
     }
     if state.spec().vital && !special && world.get::<Stat>(mob) != Some(&Stat::Dead) {
@@ -757,6 +765,7 @@ pub fn life(world: &mut World, mob: Entity, secs: f32, dead: bool, bodytemperatu
     if world.get::<Stat>(mob) == Some(&Stat::Dead) {
         return;
     }
+    super::traumas::life(world, mob, secs);
     handle_heart(world, mob, secs);
     handle_liver(world, mob, secs);
 }
