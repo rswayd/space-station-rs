@@ -597,7 +597,7 @@ fn metastation_families() {
         "covered families on MetaStation: {:?}",
         picked.iter().map(|p| p.0).collect::<Vec<_>>()
     );
-    assert_eq!(picked.len(), 11, "every family is mapped: {picked:?}");
+    assert_eq!(picked.len(), 12, "every family is mapped: {picked:?}");
     for (fam, machine, path, pos) in picked {
         let board = world.get::<DmMachine>(machine).unwrap().circuit.clone();
         let def = world
@@ -676,6 +676,7 @@ fn metastation_families() {
             Family::ChemDispenser => e
                 .get::<ss13_game::chem_dispenser::ChemDispenser>()
                 .is_some_and(|d| d.cell.is_some() && !d.dispensable.is_empty()),
+            Family::SmartFridge => e.contains::<ss13_game::smartfridge::SmartFridge>(),
         };
         assert!(live, "{fam:?}: {} has its live state", def.build_path);
         println!("{fam:?}: {path} -> {board} -> {}", def.build_path);

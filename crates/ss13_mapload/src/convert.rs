@@ -147,6 +147,14 @@ pub fn convert<'a>(
             .chain(loot.iter().map(String::as_str)),
     );
     loot.extend(products);
+    let fridges = crate::smartfridge::fridge_closure(
+        types,
+        needed
+            .iter()
+            .copied()
+            .chain(loot.iter().map(String::as_str)),
+    );
+    loot.extend(fridges);
     let contents = crate::contents::contents_closure(
         types,
         needed

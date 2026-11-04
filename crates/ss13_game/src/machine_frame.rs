@@ -92,9 +92,11 @@ pub enum Family {
     Vending,
     /// Chem, soda and booze dispensers (`crate::chem_dispenser`).
     ChemDispenser,
+    /// Smart fridges (`crate::smartfridge`).
+    SmartFridge,
 }
 
-const FAMILIES: [(&str, Family); 18] = [
+const FAMILIES: [(&str, Family); 19] = [
     (CELL_CHARGER, Family::Charger),
     (RECHARGER, Family::Charger),
     (crate::kitchen::MICROWAVE_ROOT, Family::Kitchen),
@@ -104,6 +106,7 @@ const FAMILIES: [(&str, Family); 18] = [
     (crate::cooking::GRIDDLE_ROOT, Family::Kitchen),
     (crate::cooking::FRYER_ROOT, Family::Kitchen),
     (crate::chem_dispenser::DISPENSER_ROOT, Family::ChemDispenser),
+    (crate::smartfridge::FRIDGE_ROOT, Family::SmartFridge),
     ("/obj/machinery/hydroponics/constructable", Family::Tray),
     ("/obj/machinery/recharge_station", Family::Station),
     (crate::science::analyzer::ANALYZER_ROOT, Family::Analyzer),
@@ -1027,6 +1030,7 @@ pub fn setup_built(world: &mut World, machine: Entity) {
         Family::Autolathe => crate::science::autolathe::setup(world, machine),
         Family::Vending => crate::vending::refill::setup_built(world, machine),
         Family::ChemDispenser => crate::chem_dispenser::setup(world, machine),
+        Family::SmartFridge => crate::smartfridge::setup(world, machine),
     }
 }
 

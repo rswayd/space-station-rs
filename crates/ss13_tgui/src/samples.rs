@@ -53,6 +53,7 @@ use crate::interfaces::pipe_dispenser::{
 use crate::interfaces::rapid_pipe_dispenser::{
     RapidPipeDispenserUi, RpdCategory, RpdData, RpdPreview, RpdRecipe, RpdStatic,
 };
+use crate::interfaces::smart_vend::{FridgeItem, SmartVendData, SmartVendUi};
 use crate::interfaces::solar_control::{SolarControlData, SolarControlUi};
 use crate::interfaces::teg::{
     CirculatorData, ThermoElectricGeneratorData, ThermoElectricGeneratorUi,
@@ -479,6 +480,24 @@ pub fn sample(name: &str) -> Option<Sample> {
         ),
         DnaConsoleUi::NAME => dna_console(),
         CrystallizerUi::NAME => crystallizer(),
+        SmartVendUi::NAME => of::<SmartVendUi>(
+            "smartfridge",
+            &(),
+            &SmartVendData {
+                contents: [("Apple", 3), ("Banana", 1), ("Carrot", 12)]
+                    .iter()
+                    .map(|(name, amount)| FridgeItem {
+                        path: format!("/obj/item/food/grown/{}-{name}", name.to_lowercase()),
+                        name: (*name).into(),
+                        amount: *amount,
+                        icon: None,
+                    })
+                    .collect(),
+                name: "smartfridge".into(),
+                isdryer: false,
+                drying: false,
+            },
+        ),
         ChemDispenserUi::NAME => of::<ChemDispenserUi>(
             "soda dispenser",
             &(),

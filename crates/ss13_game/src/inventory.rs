@@ -701,6 +701,7 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 None if crate::kitchen::interact(world, client, mob, target, modifiers.right) => {}
                 // tg `attack_hand` of ovens, griddles and fryers; the soda and booze dispensers.
                 None if crate::cooking::interact(world, client, mob, target, modifiers.right) => {}
+                None if crate::smartfridge::interact(world, client, mob, target) => {}
                 None if crate::chem_dispenser::interact(
                     world,
                     client,
@@ -777,6 +778,8 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                         target,
                         modifiers.pixel,
                     ) => {}
+                Some(held)
+                    if crate::smartfridge::item_interaction(world, client, mob, held, target) => {}
                 // A container into a chem dispenser (before pouring into it).
                 Some(held)
                     if crate::chem_dispenser::item_interaction(world, client, mob, held, target) => {

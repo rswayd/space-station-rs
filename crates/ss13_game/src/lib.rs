@@ -277,6 +277,8 @@ pub mod server;
 pub mod shuttle;
 pub mod silicon;
 #[cfg(feature = "server")]
+pub mod smartfridge;
+#[cfg(feature = "server")]
 pub mod sound;
 #[cfg(feature = "client")]
 pub mod sound_client;

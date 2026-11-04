@@ -48,6 +48,7 @@ pub mod reagents;
 pub mod research;
 pub mod security;
 pub mod silicon;
+pub mod smartfridge;
 pub mod smooth;
 pub mod sound;
 pub mod spawner;
@@ -94,6 +95,7 @@ pub use radio::DmRadio;
 pub use reagents::DmReagents;
 pub use security::{DmBaton, DmHandcuffs};
 pub use silicon::{DmCamera, DmCameraConsole};
+pub use smartfridge::DmSmartFridge;
 pub use smooth::DmSmooth;
 pub use spawner::{DmSpawner, LootEntry};
 pub use undertile::{DmTurf, DmUndertile, HiddenUnderTile};
@@ -306,6 +308,7 @@ impl Plugin for DmProtoPlugin {
             .register_proto_component::<DmReagents>(reagents::CONTAINER_COMPONENT)
             .register_proto_component::<DmFood>(food::FOOD_COMPONENT)
             .register_proto_component::<DmChemDispenser>(dispenser::DISPENSER_COMPONENT)
+            .register_proto_component::<DmSmartFridge>(smartfridge::FRIDGE_COMPONENT)
             .register_proto_component::<DmMob>("dm_mob")
             .register_proto_component::<DmWallMount>("dm_wallmount")
             .register_proto_component::<DmCircuit>("dm_circuit")

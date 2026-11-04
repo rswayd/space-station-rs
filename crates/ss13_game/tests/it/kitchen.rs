@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use bevy::prelude::*;
 use ss13_game::chem::{Chem, Reagents};
 use ss13_game::chem_dispenser::ChemDispenser;
+use ss13_game::smartfridge::SmartFridge;
 use ss13_game::combat::NextMove;
 use ss13_game::cooking::{CookTimes, DeepFryer, Griddle, Oven};
 use ss13_game::inventory::Inventory;
@@ -26,6 +27,7 @@ use ss13_shared::ui::UiServerMessage;
 use ss13_shared::{Appearance, TilePos};
 use ss13_tgui::UiInterface;
 use ss13_tgui::interfaces::chem_dispenser::{ChemDispenserData, ChemDispenserUi};
+use ss13_tgui::interfaces::smart_vend::SmartVendUi;
 use ss13_world::SpatialIndex;
 
 /// tg's vars for what the test uses, trimmed to the ones read.
@@ -113,6 +115,14 @@ const TYPES: &str = r##"{
             { "path": "/datum/reagent/consumable/ice" }, { "path": "/datum/reagent/water" }] },
         "drink_emagged_reagents": { "list": [] },
         "circuit": { "path": "/obj/item/circuitboard/machine/chem_dispenser/drinks" } } },
+    "/obj/machinery/smartfridge": { "parent": "/obj/machinery", "declared_vars": {
+        "name": "smartfridge", "icon": { "resource": "sf.dmi" }, "icon_state": "smartfridge-icon",
+        "contents_overlay_icon": "plant", "visible_contents": 1, "has_emissive": 1,
+        "max_n_of_items": 1500, "initial_contents": null } },
+    "/obj/machinery/smartfridge/food": { "parent": "/obj/machinery/smartfridge",
+        "vars": { "name": "food fridge" }, "declared_vars": { "name": "food fridge",
+        "contents_overlay_icon": "food",
+        "initial_contents": { "list": [{ "assoc": [{ "path": "/obj/item/food/dough" }, 2] }] } } },
     "/obj/item": { "parent": "/obj", "declared_vars": {
         "icon": { "resource": "i.dmi" }, "icon_state": "toy", "interaction_flags_item": 1,
         "slot_flags": 0, "inhand_icon_state": null, "w_class": 2,
@@ -246,8 +256,9 @@ const TYPES: &str = r##"{
   }
 }"##;
 
-/// Rows top-down, the last line is y = 1. The spawn `s` (3,3) with the ingredients, the deep
-/// fryer north of it, the oven west, the griddle east and the soda dispenser south.
+/// Rows top-down, the last line is y = 1. The spawn `s` (3,4) with the ingredients, the deep
+/// fryer north of it, the oven west, the griddle east, the soda dispenser south and the food
+/// fridge south of that.
 const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 "f" = (/turf/open/floor,/area/space)
 "s" = (/obj/effect/landmark/start/assistant,/obj/item/food/dough,/obj/item/food/meat/slab,/obj/item/toy,/obj/item/reagent_containers/cup/glass/drinkingglass,/obj/item/reagent_containers/cup/soda_cans/cola,/turf/open/floor,/area/space)
@@ -255,24 +266,29 @@ const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 "G" = (/obj/machinery/griddle,/turf/open/floor,/area/space)
 "F" = (/obj/machinery/deepfryer,/turf/open/floor,/area/space)
 "D" = (/obj/machinery/chem_dispenser/drinks,/turf/open/floor,/area/space)
+"R" = (/obj/machinery/smartfridge/food,/turf/open/floor,/area/space)
 
 (1,1,1) = {"
 wwwww
 wfFfw
 wOsGw
 wfDfw
+wfRfw
 wwwww
 "}
 "##;
 
-const SPAWN: TilePos = TilePos::new(3, 3, 1);
-const FRYER: TilePos = TilePos::new(3, 4, 1);
-const OVEN: TilePos = TilePos::new(2, 3, 1);
-const GRIDDLE: TilePos = TilePos::new(4, 3, 1);
-const DISPENSER: TilePos = TilePos::new(3, 2, 1);
+const SPAWN: TilePos = TilePos::new(3, 4, 1);
+const FRYER: TilePos = TilePos::new(3, 5, 1);
+const OVEN: TilePos = TilePos::new(2, 4, 1);
+const GRIDDLE: TilePos = TilePos::new(4, 4, 1);
+const DISPENSER: TilePos = TilePos::new(3, 3, 1);
+/// South of the dispenser, reached from [`BY_FRIDGE`].
+const FRIDGE: TilePos = TilePos::new(3, 2, 1);
+const BY_FRIDGE: TilePos = TilePos::new(2, 2, 1);
 
 /// Manifest order = `IconStateId`.
-const STATES: [(&str, &str); 22] = [
+const STATES: [(&str, &str); 26] = [
     ("t.dmi", "floor"),
     ("t.dmi", "wall"),
     ("l.dmi", "x2"),
@@ -295,6 +311,10 @@ const STATES: [(&str, &str); 22] = [
     ("d.dmi", "glass_empty"),
     ("d.dmi", "spacecola"),
     ("s.dmi", "cola"),
+    ("sf.dmi", "smartfridge-icon"),
+    ("sf.dmi", "smartfridge"),
+    ("sf.dmi", "smartfridge-food-1"),
+    ("sf.dmi", "smartfridge-glass"),
 ];
 
 fn fixture_assets(test: &str) -> PathBuf {
@@ -307,6 +327,7 @@ fn fixture_assets(test: &str) -> PathBuf {
         "/obj/machinery/griddle",
         "/obj/machinery/deepfryer",
         "/obj/machinery/chem_dispenser/drinks",
+        "/obj/machinery/smartfridge/food",
         "/obj/item/food/dough",
         "/obj/item/food/meat/slab",
         "/obj/item/toy",
@@ -680,4 +701,54 @@ fn soda_dispenser_glass_style_and_cans() {
     s.run_until("opened", |s| s.get::<Reagents>(can).0.is_drainable());
     assert_eq!(s.amount(can, "/datum/reagent/consumable/space_cola"), 30.0);
     s.run_until("the pop", |s| s.said("приятным хлопком"));
+}
+
+#[test]
+fn smart_fridge() {
+    let mut s = Station::start("smart_fridge");
+    let a = s.players[0].mob;
+    let toy = s.item(SPAWN, "/obj/item/toy").unwrap();
+    s.take(toy);
+    s.server.world_mut().entity_mut(a).insert(BY_FRIDGE);
+    s.run_until("moved", |s| *s.get::<TilePos>(a) == BY_FRIDGE);
+    s.send(0, ss13_shared::protocol::ClientIntent::DropActive);
+    s.run_until("the toy dropped", |s| s.held().is_none());
+    let fridge = s.machine::<SmartFridge>(FRIDGE);
+    // `initial_contents`: two dough; the sprite shows it holds food.
+    assert_eq!(s.get::<Stored>(fridge).items().len(), 2);
+    let world = s.server.world();
+    let food_overlay = world
+        .resource::<IconIndex>()
+        .get("sf.dmi", "smartfridge-food-1")
+        .unwrap();
+    assert!(
+        world
+            .get::<Appearance>(fridge)
+            .unwrap()
+            .overlays
+            .iter()
+            .any(|o| o.icon_state == food_overlay)
+    );
+    // The window groups them; releasing one puts it in the hand.
+    s.click(fridge);
+    s.run_until("the window", |s| s.window::<SmartVendUi>().is_some());
+    let (window, data) = s.window::<SmartVendUi>().unwrap();
+    assert_eq!(data.contents.len(), 1);
+    assert_eq!(data.contents[0].amount, 2);
+    assert_eq!(data.contents[0].name, "Dough");
+    let key = data.contents[0].path.clone();
+    s.act(0, window, "Release", &[("path", &key), ("amount", "1")]);
+    s.run_until("a dough in hand", |s| {
+        s.held()
+            .is_some_and(|h| s.path(h) == "/obj/item/food/dough")
+    });
+    assert_eq!(s.get::<Stored>(fridge).items().len(), 1);
+    // Back in; a toy is refused.
+    s.click(fridge);
+    s.run_until("loaded back", |s| s.get::<Stored>(fridge).items().len() == 2);
+    s.take(toy);
+    s.click(fridge);
+    s.run_until("refused", |s| s.said("отказывается принимать"));
+    assert_eq!(s.held(), Some(toy));
+    assert_eq!(s.get::<Stored>(fridge).items().len(), 2);
 }

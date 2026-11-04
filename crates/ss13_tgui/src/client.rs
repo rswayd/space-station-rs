@@ -483,6 +483,7 @@ impl Plugin for TguiClientPlugin {
             .register_ui_view::<crate::interfaces::dna_console::DnaConsoleUi>()
             .register_ui_view::<crate::interfaces::electrolyzer::ElectrolyzerUi>()
             .register_ui_view::<crate::interfaces::chem_dispenser::ChemDispenserUi>()
+            .register_ui_view::<crate::interfaces::smart_vend::SmartVendUi>()
             .register_ui_view::<crate::interfaces::crystallizer::CrystallizerUi>()
             .register_ui_view::<crate::interfaces::destination_tagger::DestinationTaggerUi>();
         app.init_resource::<ClientWindows>()

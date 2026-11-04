@@ -26,6 +26,7 @@ pub mod number_input;
 pub mod pipe_dispenser;
 pub mod rapid_pipe_dispenser;
 pub mod ru_jobs;
+pub mod smart_vend;
 pub mod solar_control;
 pub mod teg;
 pub mod text_input;
