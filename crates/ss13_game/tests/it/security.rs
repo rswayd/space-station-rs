@@ -1,15 +1,17 @@
 //! Security gear over real WebTransport on 127.0.0.1: officer A batons B into stamina crit (B
 //! lies and cannot move), cuffs B (B cannot pick things up), drags the cuffed B, takes the cuffs
 //! off; B steps away from a second cuffing, is cuffed with tg's fake handcuffs and resists out
-//! after their `breakouttime`. A flash knocks down a mob facing it, not one in sunglasses; a
-//! shove pushes a mob away.
+//! after their `breakouttime`. A flash knocks down a mob facing it (only its client sees the flash
+//! overlay), not one in sunglasses; a shove pushes a mob away.
 
 use std::path::{Path, PathBuf};
 
 use bevy::prelude::*;
 use ss13_game::combat::{CombatRng, NextMove};
 use ss13_game::health::BodyPosition;
-use ss13_game::hud::{HealthHudData, HealthHudUi};
+use ss13_game::hud::{
+    FullscreenHudData, FullscreenHudUi, HealthHudData, HealthHudUi, ScreenCategory,
+};
 use ss13_game::inventory::Inventory;
 use ss13_game::pull::Pulling;
 use ss13_game::restraints::Handcuffed;
@@ -182,6 +184,8 @@ struct Received {
     hud: Option<HealthHudData>,
     hud_window: Option<u32>,
     strip_window: Option<u32>,
+    fullscreen: Option<FullscreenHudData>,
+    fullscreen_window: Option<u32>,
 }
 
 fn record(
@@ -193,6 +197,27 @@ fn record(
         received.chat.push(message.plain_text());
     }
     for UiMessageReceived(message) in ui.read() {
+        let fullscreen = match message {
+            UiServerMessage::Open {
+                window,
+                interface,
+                data,
+                ..
+            } if interface == FullscreenHudUi::NAME => {
+                received.fullscreen_window = Some(*window);
+                Some(data)
+            }
+            UiServerMessage::Update {
+                window,
+                data: Some(data),
+                ..
+            } if received.fullscreen_window == Some(*window) => Some(data),
+            _ => None,
+        };
+        if let Some(data) = fullscreen.filter(|d| !d.is_empty()) {
+            received.fullscreen = Some(ss13_tgui::decode(data).unwrap());
+            continue;
+        }
         if let UiServerMessage::Open {
             window, interface, ..
         } = message
@@ -313,6 +338,21 @@ impl Station {
             .chat
             .iter()
             .any(|line| line.contains(text))
+    }
+
+    /// `p` sees the flash overlay (its own fullscreen data, the only copy it gets).
+    fn sees_flash(&self, p: usize) -> bool {
+        self.players[p]
+            .app
+            .world()
+            .resource::<Received>()
+            .fullscreen
+            .as_ref()
+            .is_some_and(|f| {
+                f.screens
+                    .iter()
+                    .any(|s| s.category == ScreenCategory::Flash)
+            })
     }
 
     fn hud(&self, p: usize) -> Option<HealthHudData> {
@@ -525,6 +565,10 @@ fn flash_and_shove() {
     assert!(e.stamina >= 80.0 && e.confusion > 0.0, "{e:?}");
     s.run_until("B lies", |s| s.lying(b));
     s.run_until("B reads it", |s| s.said(pb, "ослепляет вас вспышкой"));
+    // Only B's client gets the white flash overlay (tg `flash_act`), for 2.5 s.
+    s.run_until("B sees the flash", |s| s.sees_flash(pb));
+    assert!(!s.sees_flash(pa) && !s.sees_flash(pc));
+    s.run_until("B's flash is cleared", |s| !s.sees_flash(pb));
 
     // C faces A too, but the sunglasses block the flash.
     s.click(pa, c);

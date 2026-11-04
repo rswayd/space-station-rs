@@ -1498,13 +1498,26 @@ fn grasp_hit(world: &mut World, mob: Entity, hand: Entity, target: Entity) {
             until: t + MARK_SECS,
             repetitions: 5,
         });
-        // shortcut: no eye organs or blur: the message only.
+    }
+    // `base_ash/on_mansus_grasp`: the eyes burn unless blind or missing.
+    if ash
+        && !crate::vision::is_blind(world, target)
+        && crate::medical::organs::organ(world, target, crate::medical::organs::Slot::Eyes)
+            .is_some()
+    {
         chat_to(
             world,
             target,
             Span::Danger,
             "Яркий зеленый свет ужасно жжет глаза!",
         );
+        crate::medical::organs::adjust_organ_loss(
+            world,
+            target,
+            crate::medical::organs::Slot::Eyes,
+            15.0,
+        );
+        crate::vision::set_eye_blur_if_lower(world, target, 20.0);
     }
     hurt(world, target, DamageType::Brute, 10.0);
     if world.get::<HumanLook>(target).is_some() {

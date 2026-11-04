@@ -176,6 +176,8 @@ pub mod fire;
 pub mod food;
 #[cfg(feature = "server")]
 pub mod footsteps;
+#[cfg(feature = "client")]
+pub mod fullscreen_client;
 #[cfg(feature = "server")]
 pub mod genetics;
 #[cfg(feature = "server")]
@@ -301,6 +303,8 @@ pub mod turf_damage;
 pub mod ui_sprites;
 #[cfg(feature = "server")]
 pub mod vending;
+#[cfg(feature = "server")]
+pub mod vision;
 #[cfg(feature = "server")]
 pub mod wallmount;
 #[cfg(feature = "server")]

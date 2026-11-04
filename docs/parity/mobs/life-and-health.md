@@ -30,7 +30,7 @@
 Повреждённые части тела рисуются оверлеями крови/ожогов; HUD показывает куклу здоровья по частям тела, индикатор здоровья и экранные эффекты (красная виньетка боли, затемнение в крите, oxy-оверлей).
 
 - **Код:** [`carbon/update_damage_overlays()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/carbon_update_icons.dm#L283), [`carbon/update_damage_hud()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/carbon.dm#L480), [`human/update_health_hud()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/human/human.dm#L679)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/health.rs`, `crates/ss13_game/src/hud.rs`: кукла здоровья по частям тела; нет оверлеев повреждений на спрайте и экранных эффектов крита/боли
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/health.rs`, `crates/ss13_game/src/hud.rs`, `crates/ss13_game/src/vision.rs` (`damage_screens`): кукла здоровья по частям тела, экранные эффекты `update_damage_hud` (красная виньетка по brute+burn, `oxydamageoverlay`, `passage` и крит-зрение по порогам tg); нет оверлеев повреждений на спрайте, `damageoverlaytemp`
 
 ### Замедление от урона
 Человек с большим уроном двигается медленнее (`damage_slowdown` от 40 потерянного здоровья), в софт-крите и лёжа ползает с отдельными модификаторами.

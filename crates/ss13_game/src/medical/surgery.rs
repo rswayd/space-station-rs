@@ -2814,7 +2814,11 @@ fn success(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: TargetZon
             let ears = op == Op::EarSurgery;
             let slot = if ears { Slot::Ears } else { Slot::Eyes };
             repair_organ(world, mob, slot, 0.0);
-            // shortcut: no temporary blindness to cure or eye blur (no sight effects yet).
+            if !ears {
+                crate::vision::cure_temp_blindness(world, mob);
+                // "This will fix itself slowly."
+                crate::vision::set_eye_blur_if_lower(world, mob, 70.0);
+            }
             if ears
                 && let Some(organ) = organs::organ(world, mob, slot)
                 && let Some(mut state) = world.get_mut::<organs::Organ>(organ)

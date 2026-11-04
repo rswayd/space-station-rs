@@ -17,8 +17,7 @@
 //!   `SSmachines` tick (2 s), and tears out (3 brute and a puncture on an arm) when the mob moves
 //!   away. An empty-hand right click detaches it, ejects the container or switches the mode.
 // shortcut: no blood sprays or hit splatters (drips and pools: `crate::janitor`), no dragging
-// bleed, no
-// DNA/virus data, eye blur and dizziness are only their messages, `Unconscious` is a paralysis,
+// bleed, no DNA/virus data, dizziness is only its message, `Unconscious` is a paralysis,
 // no saline/salglu dilution or synthetic blood content; iron in the blood also metabolizes at its
 // own rate besides refilling blood (tg skips the normal tick). The IV drip has no tgui window
 // (`IVDrip`: rate, mode, eject) and no beam; its rate stays at 5 u/s.
@@ -450,6 +449,7 @@ fn blood_loss_effects(world: &mut World, mob: Entity, volume: f32, secs: f32) {
         }
         BloodBand::Okay => {
             if spt(&mut rng, 2.5) {
+                crate::vision::set_eye_blur_if_lower(world, mob, 2.0);
                 if rng.chance(50.0) {
                     tell_mob(
                         world,
@@ -474,6 +474,7 @@ fn blood_loss_effects(world: &mut World, mob: Entity, volume: f32, secs: f32) {
         BloodBand::Risky | BloodBand::Bad => {
             let bad = BloodBand::of(volume) == BloodBand::Bad;
             if spt(&mut rng, 5.0) {
+                crate::vision::set_eye_blur_if_lower(world, mob, if bad { 4.0 } else { 2.0 });
                 if rng.chance(50.0) {
                     let text = if bad {
                         format!(

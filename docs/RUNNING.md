@@ -1436,6 +1436,26 @@ SS13_LIGHTING=0 SS13_MAP=$PWD/scripts/visual/maps/medical.dmm SS13_ASSETS=$ASSET
                                                           # zone selector, a scan in chat
 ```
 
+### Vision and screen effects
+
+A carbon's client draws tg's fullscreen overlays over the map (under the HUD), sent to its owner
+only: the red brute vignette, the oxygen and crit overlays by tg's `update_damage_hud`
+thresholds, the black blind overlay (missing or failing eyes, knocked out, temporary blindness, a
+blindfold, cortical blindness) with a dimmed world, the nearsighted overlay (eye damage above
+20/30; prescription glasses correct it), a welding visor's dark tint (a welding helmet, goggles
+or mask flips its visor up or down when used in hand), the white flash, the eye blur and the
+grey world of achromatopsia. A flash (handheld, wall flasher, the start of a welding job without
+protection) burns unprotected eyes; past 10 eye damage it blinds for a moment and blurs.
+
+```sh
+cargo nt -E 'test(/vision::|fullscreen_client::|filter::/)'   # thresholds, sight sources, flash_act,
+                                                          # visors, overlay diff, colour matrices
+cargo test -p ss13_game --all-features --test it security::flash   # only the flashed client sees it
+SS13_LIGHTING=0 SS13_MAP=$PWD/scripts/visual/maps/vision.dmm SS13_ASSETS=$ASSETS \
+    scripts/visual-check.sh scripts/visual/vision_gear.txt scripts/visual/vision_officer.txt \
+    scripts/visual/vision_victim.txt          # welding tint, blindfold, flash, brute vignette
+```
+
 ### Chemistry
 
 `ss13-mapload convert` also writes `<assets>/reagents.ron`: every tg `/datum/reagent` (name,

@@ -17,15 +17,16 @@
 //! item and holds nothing). The rest acts every `Life()` ([`life`]).
 //!
 //! Ported traumas: mild — stuttering, dumbness, speech impediment, concussion, anosognosia
-//! (`healthy`), muscle weakness, nervous cough, possessiveness; severe — mute, paralysis,
-//! pacifism, kleptomania. Random gains pick among all of tg's types ([`TG_POOL`]): an
-//! unported pick gives nothing, so each ported trauma comes as often as in tg.
+//! (`healthy`), muscle weakness, nervous cough, possessiveness, achromatopsia; severe — mute,
+//! paralysis, pacifism, kleptomania, cortical blindness (both read by `crate::vision`). Random
+//! gains pick among all of tg's types ([`TG_POOL`]): an unported pick gives nothing, so each
+//! ported trauma comes as often as in tg.
 // shortcut: no hallucinations, muscle spasms, expressive aphasia (needs the common words list),
-// mind echo (needs hearing hooks), color blindness or cortical blindness (no client colour or
-// vision), aphasia (no languages), narcolepsy and hypnotic stupor (no sleep or trance),
+// mind echo (needs hearing hooks), aphasia (no languages), narcolepsy and hypnotic stupor (no
+// sleep or trance), achromatopsia's `TRAIT_COLORBLIND` (wire colours),
 // monophobia, discoordination, dyslexia, hypnotic triggers, split personality, imaginary friend,
 // obsession, special and magic traumas, phobias; no forced brain damage lines of dumbness
-// (`traumas.json` is not converted), no concussion vomiting, dizziness, blur, slurring or
+// (`traumas.json` is not converted), no concussion vomiting, dizziness, slurring or
 // fainting, no fake health HUD, mood events or `TRAIT_DUMB`; kleptomania ignores the damage
 // cooldown; an inserted brain applies its traumas without their gain messages; no head-wound
 // (`TRAUMA_RESILIENCE_WOUND`) traumas, no `TRAIT_SPECIAL_TRAUMA_BOOST`. Add each with the
@@ -165,6 +166,8 @@ pub enum Kind {
     Paralysis(Paralysis),
     Pacifism,
     Kleptomaniac,
+    ColorBlindness,
+    Blindness,
 }
 
 /// The static part of a trauma type (tg vars).
@@ -286,6 +289,20 @@ impl Kind {
                     "Вы больше не чувствуете себя обязанным не причинять вреда.",
                 ),
             ),
+            Self::ColorBlindness => mild(
+                "/datum/brain_trauma/mild/color_blindness",
+                "Ахроматопсия",
+                "цветовая слепота",
+                (Warning, "Кажется, что мир вокруг вас теряет свои краски."),
+                (Notice, "Мир снова кажется ярким и красочным."),
+            ),
+            Self::Blindness => severe(
+                "/datum/brain_trauma/severe/blindness",
+                "Корковая слепота",
+                "обширное повреждение затылочной доли мозга",
+                (Warning, "Вы не можете видеть!"),
+                (Notice, "Ваше зрение возвращается."),
+            ),
             Self::Kleptomaniac => severe(
                 "/datum/brain_trauma/severe/kleptomaniac",
                 "Клептомания",
@@ -336,7 +353,7 @@ pub const TG_POOL: [(&str, Option<Kind>, Category, Resilience); 37] = {
     [
         (
             "/datum/brain_trauma/mild/color_blindness",
-            None,
+            Some(Kind::ColorBlindness),
             Mild,
             Basic,
         ),
@@ -401,7 +418,7 @@ pub const TG_POOL: [(&str, Option<Kind>, Category, Resilience); 37] = {
         ("/datum/brain_trauma/severe/aphasia", None, Severe, Surgery),
         (
             "/datum/brain_trauma/severe/blindness",
-            None,
+            Some(Kind::Blindness),
             Severe,
             Surgery,
         ),
@@ -938,6 +955,7 @@ fn on_life(world: &mut World, mob: Entity, trauma: &mut Trauma, secs: f32, rng: 
                     if let Some(mut effects) = crate::status_effects::effects_mut(world, mob) {
                         effects.confusion += 10.0;
                     }
+                    crate::vision::set_eye_blur_if_lower(world, mob, 20.0);
                 }
                 10 => {
                     say_to(
@@ -1171,9 +1189,9 @@ mod tests {
             }
             world.entity_mut(brain).remove::<Traumas>();
         }
-        // 1/13 each (1000 expected); 9 of 13 unported give nothing.
+        // 1/13 each (1000 expected); 8 of 13 unported give nothing.
         assert!((850..1150).contains(&paralysis), "{paralysis}");
-        assert!((8_500..9_500).contains(&none), "{none}");
+        assert!((7_500..8_500).contains(&none), "{none}");
     }
 
     #[test]

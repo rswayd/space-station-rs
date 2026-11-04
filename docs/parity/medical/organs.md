@@ -35,7 +35,7 @@
 Зрение, ночное зрение, защита от вспышек; повреждение размывает и ослепляет; видовые глаза, цветовая слепота.
 
 - **Код:** [`/obj/item/organ/eyes`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/organs/internal/eyes/_eyes.dm#L1), [`/obj/item/organ/eyes/night_vision`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/organs/internal/eyes/_eyes.dm#L594)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/medical/organs.rs`, `crates/ss13_game/src/human.rs`: глаза — орган с уроном и порогами tg, извлекаются и лечатся операцией, без глаз не рисуются; нет зрения: слепоты, размытия, ночного зрения, защиты от вспышек (систем зрения в порту нет)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/medical/organs.rs`, `crates/ss13_game/src/human.rs`, `crates/ss13_game/src/vision.rs`: глаза — орган с уроном и порогами tg, извлекаются и лечатся операцией (снимает временную слепоту, размытие 70 с), без глаз не рисуются; без глаз или с отказавшими глазами — слепота, урон выше 20/30 — близорукость 2/3 (очки с `TRAIT_NEARSIGHTED_CORRECTED` исправляют), вспышка без глаз невозможна, жжёт глаза по `flash_act`, после 10 урона — временная слепота и размытие; нет ночного зрения, собственного `tint`/`flash_protect` и видовых глаз, шрамов, цвета глаз от органа
 
 ### Уши
 Слух; повреждение вызывает глухоту; кошачьи, кибернетические (громкость, шёпот, рентген).

@@ -607,6 +607,7 @@ ui_decoders!(
     ss13_game::hud::InteractHudUi,
     ss13_game::hud::AlertHudUi,
     ss13_game::hud::HungerHudUi,
+    ss13_game::hud::FullscreenHudUi,
     ss13_game::lobby::LobbyUi,
     ss13_game::lobby::JobPrefsUi,
     ss13_game::comms::CommsConsoleUi,
