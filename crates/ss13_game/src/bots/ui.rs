@@ -195,14 +195,15 @@ pub(super) fn build(app: &mut App) {
         .add_systems(Update, bot_acts.in_set(UiSystems::Handle));
 }
 
-/// tg `attack_hand` / `attack_ai` -> `ui_interact`: an emagged bot's controls do not answer
-/// (`topic_denied`) unless a silicon hacked it.
+/// tg `attack_hand` / `attack_ai` -> `ui_interact`: an emagged bot does not answer a silicon
+/// (`attack_ai` -> `topic_denied`) unless a silicon hacked it; hands always open the window (an
+/// emagged bot is locked, so it shows nothing to change).
 pub fn open(world: &mut World, client: Entity, actor: Entity, bot: Entity) {
     let Some(b) = world.get::<Bot>(bot) else {
         return;
     };
     let silicon = crate::silicon::interact::has_silicon_access(world, actor);
-    if b.emagged() && !(b.cover & COVER_HACKED != 0 && silicon) {
+    if silicon && b.emagged() && b.cover & COVER_HACKED == 0 {
         if let Some(c) = world
             .get::<crate::server::PlayerMob>(actor)
             .map(|p| p.client)

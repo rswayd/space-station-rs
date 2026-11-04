@@ -891,9 +891,18 @@ pub fn heal(world: &mut World, patient: Entity, healer: Healer, amount: f32) {
             }
         }
     }
-    let mut stat = world.get::<Stat>(patient).copied().unwrap_or_default();
-    crate::health::update_stat(&health, &mut stat);
-    world.entity_mut(patient).insert((health, stat));
+    set_health(world, patient, health);
+}
+
+/// The new health and, when it changed, the stat (tg `updatehealth` -> `update_stat`).
+fn set_health(world: &mut World, mob: Entity, health: Health) {
+    let mut stat = world.get::<Stat>(mob).copied().unwrap_or_default();
+    let changed = crate::health::update_stat(&health, &mut stat).is_some();
+    let mut e = world.entity_mut(mob);
+    e.insert(health);
+    if changed {
+        e.insert(stat);
+    }
 }
 
 fn medbot_speech(ctx: &mut AiCtx) -> Perform {
@@ -1275,9 +1284,7 @@ fn clean_target(world: &mut World, mob: Entity, target: Entity) {
         // `our_mop.melee_attack_chain`: the mop's `force` 8.
         if let Some(mut health) = world.get::<Health>(target).cloned() {
             health.adjust(DamageType::Brute, 8.0);
-            let mut stat = world.get::<Stat>(target).copied().unwrap_or_default();
-            crate::health::update_stat(&health, &mut stat);
-            world.entity_mut(target).insert((health, stat));
+            set_health(world, target, health);
         }
         show(
             world,

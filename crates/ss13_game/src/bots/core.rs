@@ -456,6 +456,8 @@ pub fn bot_name(world: &World, mob: Entity) -> String {
 
 /// tg `speak` -> `bot_announcement/announce`: says `line` while on, and into its radio channel
 /// with `radio`.
+// shortcut: spoken with the default say verbs (`говорит`), not the bot's `verb_say` ("states",
+// BandaStation `сообщает`); add when `ss13_chat` takes a speaker's verbs.
 pub fn speak(world: &mut World, mob: Entity, line: &str, radio: bool) {
     let Some(bot) = world.get::<Bot>(mob) else {
         return;

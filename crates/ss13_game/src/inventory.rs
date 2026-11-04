@@ -477,6 +477,15 @@ fn apply(world: &mut World, client: Entity, action: Action) {
             // The item in the other hand is clicked, not the slot (tg draws held items over
             // their slots): a storage opens or takes the active hand's item.
             match inventory.hands[hand] {
+                // A bot part on a bot assembly (or what starts one) in the other hand: before
+                // storage, as tg `medkit/tool_act` takes a robot arm before its storage.
+                Some(item)
+                    if hand != inventory.active
+                        && inventory.active_item().is_some_and(|held| {
+                            crate::bots::construction::item_interaction(
+                                world, client, mob, held, item,
+                            )
+                        }) => {}
                 Some(item)
                     if hand != inventory.active
                         && world.get::<crate::storage::Storage>(item).is_some() =>
@@ -546,14 +555,6 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                     if hand != inventory.active
                         && inventory.active_item().is_some_and(|held| {
                             crate::modpc::pda::item_interaction(world, client, mob, held, item)
-                        }) => {}
-                // A bot part on a bot assembly (or what starts one) in the other hand.
-                Some(item)
-                    if hand != inventory.active
-                        && inventory.active_item().is_some_and(|held| {
-                            crate::bots::construction::item_interaction(
-                                world, client, mob, held, item,
-                            )
                         }) => {}
                 // A tagger on a parcel, the package wrapper on an item, in the other hand.
                 Some(item)
