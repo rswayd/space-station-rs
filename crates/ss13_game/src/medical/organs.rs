@@ -20,8 +20,9 @@
 // shortcut: no brainmob (the mind stays with the body: a removed brain does not carry the
 // player, an inserted one does not bring one), no skillchips, organ traits,
 // actions or status effects, no eating organs, no blood DNA, no EMP, no organ cell lines; eyes
-// have no sight effects (no blindness, blur or night vision yet) besides being drawn; species
-// organ variants beyond the human set keep the standard numbers.
+// give sight through `crate::vision` (blind when missing or failing, nearsighted when damaged),
+// without night vision, tint or flash protection of their own; species organ variants beyond the
+// human set keep the standard numbers.
 
 use bevy::prelude::*;
 use ss13_mapload::DmItem;

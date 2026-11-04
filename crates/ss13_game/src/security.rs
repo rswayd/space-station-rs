@@ -14,8 +14,9 @@
 //!   adds confusion and knocks down `knockdown_time` 2 s later (`apply_stun_effect_end`);
 //!   a telescopic baton dazes;
 //! - a flash: tg `flash_mob` (targeted): unless eye protection (the sum of worn clothing's
-//!   `flash_protect`) reaches 1 or the victim faces away, confusion, 80-120 stamina damage and a
-//!   2.5-5 s knockdown, halved from the side; each use may burn it out;
+//!   `flash_protect`; infinite without eyes or when blind) reaches 1 or the victim faces away,
+//!   `flash_act` (`crate::vision`: the flash overlay, eye damage), confusion, 80-120 stamina
+//!   damage and a 2.5-5 s knockdown, halved from the side; each use may burn it out;
 //! - handcuffs: `crate::restraints::attempt_to_cuff` (taking them off is the strip menu's,
 //!   `crate::strip`);
 //! - an empty hand's right click (any mode): the shove. The target is pushed one tile away; if
@@ -26,9 +27,9 @@
 //! Using a baton or a flash in hand (`attack_self`) toggles the baton or flashes everyone
 //! around (`AOE_flash`: confusion only).
 // shortcut: no armor (the stun's `run_armor_check`), no clumsiness, no cyborg branches, no
-// sounds, sparks or baton light, no jitter or stutter, no eye damage or blindness from flashes,
-// no flash overlay animation, no cell removal or replacement (the cell is the baton's charge),
-// no shoves into tables, lockers or disposal bins and no directional (border) shove checks.
+// sounds, sparks or baton light, no jitter or stutter, no cell removal or replacement (the cell
+// is the baton's charge), no shoves into tables, lockers or disposal bins and no directional
+// (border) shove checks.
 
 use bevy::ecs::entity::EntityHashSet;
 use bevy::ecs::message::MessageCursor;
@@ -597,31 +598,15 @@ pub fn refresh_baton(world: &mut World, item: Entity) {
 }
 
 /// tg `get_eye_protection` of a human: the summed `flash_protect` of what it wears (hands and
-/// pockets excluded).
+/// pockets excluded); infinite without eyes or when blind (`crate::vision::eye_protection`).
 pub fn eye_protection(world: &World, mob: Entity) -> i32 {
-    let Some(inventory) = world.get::<Inventory>(mob) else {
-        return 0;
-    };
-    [
-        inventory.uniform,
-        inventory.shoes,
-        inventory.back,
-        inventory.head,
-        inventory.mask,
-        inventory.neck,
-        inventory.eyes,
-        inventory.ears,
-        inventory.gloves,
-        inventory.suit,
-        inventory.suit_storage,
-        inventory.belt,
-        inventory.id,
-    ]
-    .into_iter()
-    .flatten()
-    .filter_map(|item| world.get::<DmClothing>(item))
-    .map(|c| c.flash_protect)
-    .sum()
+    let worn = world.get::<Inventory>(mob).map_or(0, |inventory| {
+        crate::vision::worn(inventory)
+            .filter_map(|item| world.get::<DmClothing>(item))
+            .map(|c| c.flash_protect)
+            .sum()
+    });
+    crate::vision::eye_protection(world, mob, worn)
 }
 
 /// tg `calculate_deviation`: 0 facing the flash, 1 sideways (or on the same tile), 2 facing
@@ -819,17 +804,16 @@ pub(crate) fn flash_mob_from(
         return false;
     }
     let (name_user, name_victim) = (source.name.clone(), name_of(world, victim));
-    // `flash_act(1)`: eye protection at or above the intensity blocks it.
-    let damage = 1 - protection;
-    if damage <= 0 {
-        if damage == 0 && world.resource_mut::<CombatRng>().chance(20.0) {
-            tell_mob(
-                world,
-                victim,
-                Span::Notice,
-                "Что-то яркое вспыхивает в углу вашего зрения!".to_owned(),
-            );
-        }
+    // `flash_act(1, override_blindness_check = targeted)`: eye protection at or above the
+    // intensity blocks it; the eyes burn by how much it gets through.
+    if !crate::vision::flash_act(
+        world,
+        victim,
+        1,
+        targeted,
+        false,
+        crate::vision::FLASH_LENGTH,
+    ) {
         if targeted {
             if source.user.is_some() {
                 show(
@@ -858,12 +842,6 @@ pub(crate) fn flash_mob_from(
         }
         return false;
     }
-    let burn = match damage {
-        1 => "Ваши глаза немного щиплет.",
-        2 => "Ваши глаза горят.",
-        _ => "Ваши глаза сильно зудят и горят!",
-    };
-    tell_mob(world, victim, Span::Warning, burn.to_owned());
     if let Some(mut e) = effects_mut(world, victim) {
         e.adjust_confusion_up_to(confusion, confusion * CONFUSION_STACK_MAX_MULTIPLIER);
     }

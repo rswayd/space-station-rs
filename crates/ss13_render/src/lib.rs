@@ -6,6 +6,7 @@
 pub mod anim;
 pub mod atlas;
 pub mod camera;
+pub mod filter;
 pub mod lighting;
 pub mod order;
 pub mod parallax;
@@ -18,6 +19,7 @@ use bevy::prelude::*;
 
 pub use atlas::{AlphaMask, IconAtlas};
 pub use camera::{CameraTarget, MapInsets, WorldCamera};
+pub use filter::ScreenFilter;
 pub use lighting::{LightingPlugin, LightingSettings};
 pub use order::DrawOrder;
 pub use parallax::ParallaxPlugin;
@@ -60,7 +62,8 @@ pub struct RenderSystems;
 
 impl Plugin for RenderPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(AssetRoot(self.asset_root.clone()))
+        app.add_plugins(filter::ScreenFilterPlugin)
+            .insert_resource(AssetRoot(self.asset_root.clone()))
             .init_resource::<IconAtlas>()
             .init_resource::<DrawOrder>()
             .init_resource::<ActiveZ>()

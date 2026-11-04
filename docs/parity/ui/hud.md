@@ -36,7 +36,7 @@
 Оверлеи: крит, урон (красная рамка), нехватка кислорода, слепота, размытие, вспышка, галлюцинации, ночное зрение.
 
 - **Код:** [`/atom/movable/screen/fullscreen`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/_onclick/hud/screen_objects/fullscreen.dm#L75)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/vision.rs` (сервер: `hud_data`, `damage_screens` — `update_damage_hud`, `flash_act`, `Vision`), `crates/ss13_game/src/hud.rs` (`FullscreenHudUi`/`FullscreenHudData`: категория, severity, время затухания; клиентские цвета), `crates/ss13_game/src/fullscreen_client.rs` (оверлеи `screen_full.dmi`/`screen_gen.dmi` растянуты на вид карты под HUD, по слоям tg, анимация `.dmi`, затухание `clear_fullscreen`), `crates/ss13_render/src/filter.rs` (`ScreenFilter`: цветовая матрица `client_colours` с затуханием 2 с и гауссово размытие `eye_blur` на мире): крит (`passage`, `crit/vision`), урон (brute), кислород, слепота (мерцающая/статичная + приглушённый цвет), близорукость и затемнение (`impaired`), вспышка, размытие, ахроматопсия; данные только владельцу (headless tgui). Галлюцинации, ночное зрение (`see_through_darkness`), `high`/наркотики, `curse`, помехи киборгов — у своих систем; нет `damageoverlaytemp`, `TRAIT_NOCRITOVERLAY`, предпочтения тёмной вспышки. Состояния `curse1` и `kinesis0` (19 кадров 480×480) импортёр пропускает (не влезают в страницу 2048) — они не нужны ни одной перенесённой системе
 
 ### Радиальные меню
 Круговые меню выбора (инструменты, крафт, режимы машин, смена формы).

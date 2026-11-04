@@ -1,0 +1,30 @@
+# Vision, officer (with vision_victim.txt): picks up the flash east of it, flashes the victim
+# north of it, drops the flash and punches the victim six times in combat mode.
+#   SS13_LIGHTING=0 SS13_MAP=$PWD/scripts/visual/maps/vision.dmm scripts/visual-check.sh \
+#       scripts/visual/vision_officer.txt scripts/visual/vision_victim.txt
+# spawn: 11,4
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 3                 # the victim joins
+click_tile 1 0
+wait_secs 0.5
+click_tile 0 1
+wait_until chat "ослепляет" timeout=5
+wait_secs 6                 # the victim's flash fades
+tap Q                       # drop the flash: punches need an empty hand
+wait_secs 0.3
+tap F
+click_tile 0 1
+wait_secs 1
+click_tile 0 1
+wait_secs 1
+click_tile 0 1
+wait_secs 1
+click_tile 0 1
+wait_secs 1
+click_tile 0 1
+wait_secs 1
+click_tile 0 1
+wait_secs 4
+log_state
+quit

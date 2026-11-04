@@ -29,6 +29,10 @@ pub struct DmClothing {
     pub flash_protect: i32,
     /// `siemens_coefficient`: how much of a shock gets through (insulated gloves 0).
     pub siemens_coefficient: f32,
+    /// `tint`: how much the item darkens the wearer's view (`TINT_*`; a blindfold is infinite).
+    pub tint: f32,
+    /// `clothing_traits` has `TRAIT_NEARSIGHTED_CORRECTED` (prescription glasses).
+    pub vision_correction: bool,
 }
 
 impl Default for DmClothing {
@@ -44,6 +48,8 @@ impl Default for DmClothing {
             allowed: Vec::new(),
             flash_protect: 0,
             siemens_coefficient: 1.0,
+            tint: 0.0,
+            vision_correction: false,
         }
     }
 }
@@ -66,8 +72,9 @@ impl Default for DmTank {
     }
 }
 
-const CLOTHING_VARS: [&str; 8] = [
+const CLOTHING_VARS: [&str; 9] = [
     "flash_protect",
+    "tint",
     "siemens_coefficient",
     "clothing_flags",
     "body_parts_covered",
@@ -76,6 +83,9 @@ const CLOTHING_VARS: [&str; 8] = [
     "min_cold_protection_temperature",
     "max_heat_protection_temperature",
 ];
+
+/// `TRAIT_NEARSIGHTED_CORRECTED`.
+const NEARSIGHTED_CORRECTED: &str = "fixes_nearsighted";
 
 const TANK_VARS: [&str; 2] = ["volume", "distribute_pressure"];
 
@@ -97,14 +107,26 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
             let Some(n) = value(CLOTHING_ROOT, var).and_then(|v| num(Some(v))) else {
                 continue;
             };
-            let ron = if var.ends_with("temperature") || var == "siemens_coefficient" {
-                format!("{:?}", n as f32)
-            } else if var == "flash_protect" {
-                (n as i32).to_string()
-            } else {
-                (n.max(0.0) as u32).to_string()
-            };
+            let ron =
+                if var.ends_with("temperature") || var == "siemens_coefficient" || var == "tint" {
+                    format!("{:?}", n as f32)
+                } else if var == "flash_protect" {
+                    (n as i32).to_string()
+                } else {
+                    (n.max(0.0) as u32).to_string()
+                };
             out.push(ext("dm_clothing", var, ron));
+        }
+        if let Some(traits) = value(CLOTHING_ROOT, "clothing_traits") {
+            let corrects = traits
+                .get("list")
+                .and_then(|l| l.as_array())
+                .is_some_and(|l| l.iter().any(|t| t.as_str() == Some(NEARSIGHTED_CORRECTED)));
+            out.push(ext(
+                "dm_clothing",
+                "vision_correction",
+                corrects.to_string(),
+            ));
         }
         if let Some(allowed) = value(CLOTHING_ROOT, "allowed").and_then(path_list) {
             out.push(ext(
@@ -151,9 +173,13 @@ mod tests {
             "heat_protection": 0, "cold_protection": 0, "min_cold_protection_temperature": 0,
             "max_heat_protection_temperature": 0, "allowed": null } },
         "/obj/item/clothing": { "parent": "/obj/item", "declared_vars": { "clothing_flags": 0,
-            "flash_protect": 0 } },
+            "flash_protect": 0, "tint": 0, "clothing_traits": null } },
         "/obj/item/clothing/glasses/sunglasses": { "parent": "/obj/item/clothing",
             "declared_vars": { "flash_protect": 1 } },
+        "/obj/item/clothing/glasses/regular": { "parent": "/obj/item/clothing",
+            "declared_vars": { "clothing_traits": { "list": ["fixes_nearsighted"] } } },
+        "/obj/item/clothing/glasses/blindfold": { "parent": "/obj/item/clothing",
+            "declared_vars": { "tint": 1e+31 } },
         "/obj/item/clothing/suit/space": { "parent": "/obj/item/clothing", "declared_vars": {
             "body_parts_covered": 2043, "clothing_flags": 18, "min_cold_protection_temperature": 72,
             "allowed": { "list": [{ "path": "/obj/item/tank/internals" }] } } },
@@ -188,6 +214,12 @@ mod tests {
         assert_eq!(gloves, [("siemens_coefficient".into(), "0.0".into())]);
         let glasses = fields(&types, "/obj/item/clothing/glasses/sunglasses");
         assert_eq!(glasses, [("flash_protect".into(), "1".into())]);
+        assert!(root.contains(&("tint".into(), "0.0".into())));
+        assert!(root.contains(&("vision_correction".into(), "false".into())));
+        let regular = fields(&types, "/obj/item/clothing/glasses/regular");
+        assert_eq!(regular, [("vision_correction".into(), "true".into())]);
+        let blindfold = fields(&types, "/obj/item/clothing/glasses/blindfold");
+        assert_eq!(blindfold, [("tint".into(), "1e31".into())]);
         let suit = fields(&types, "/obj/item/clothing/suit/space");
         assert!(suit.contains(&("clothing_flags".into(), "18".into())));
         assert!(suit.contains(&("min_cold_protection_temperature".into(), "72.0".into())));

@@ -1,0 +1,28 @@
+# Vision, alone: on scripts/visual/maps/vision.dmm. Puts on the welding helmet west of it (tint 2:
+# the dark `impairedoverlay2`), takes it off, puts on the blindfold east of it (blind: the static
+# black overlay and the dim, desaturated world after its 2 s fade).
+#   SS13_LIGHTING=0 SS13_MAP=$PWD/scripts/visual/maps/vision.dmm scripts/visual-check.sh \
+#       scripts/visual/vision_gear.txt
+# spawn: 11,8
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_secs 2
+screenshot "clear.png"
+click_tile -1 0             # the welding helmet
+wait_secs 0.5
+click_ui "hud_toggle"
+wait_secs 0.3
+click_ui "hud_head"
+wait_secs 1
+screenshot "welding.png"
+click_ui "hud_head"         # back into the hand
+wait_secs 0.3
+tap Q
+wait_secs 0.5
+click_tile 1 0              # the blindfold
+wait_secs 0.5
+click_ui "hud_eyes"
+wait_secs 3
+screenshot "blindfold.png"
+log_state
+quit

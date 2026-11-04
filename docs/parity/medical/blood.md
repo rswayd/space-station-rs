@@ -5,7 +5,7 @@
 У человека 560 единиц крови; при нехватке — бледность, oxy-урон, головокружение, потеря сознания и смерть по порогам `BLOOD_VOLUME_*`; кровь восполняется со временем (быстрее с железом, едой и сердцем).
 
 - **Код:** [`human/handle_blood()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/blood.dm#L154), [`proc/get_blood_volume()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/blood.dm#L20), [`proc/adjust_blood_volume()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/blood.dm#L71), [`proc/update_blood_status()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/blood.dm#L98)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/medical/blood.rs`: 560 ед., пороги `BLOOD_VOLUME_*`, восполнение от питания/сытости и железа, кислородный урон, потеря дыхания и выносливости, обмороки, смерть ниже 112; нет головокружения и размытия (только сообщения), `Unconscious` — паралич, нет сердечного множителя и солевого раствора
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/medical/blood.rs`: 560 ед., пороги `BLOOD_VOLUME_*`, восполнение от питания/сытости и железа, кислородный урон, потеря дыхания и выносливости, обмороки, смерть ниже 112; размытие зрения при нехватке крови (`crates/ss13_game/src/vision.rs`); нет головокружения (только сообщения), `Unconscious` — паралич, нет сердечного множителя и солевого раствора
 
 ### Кровотечение
 Раны (порезы, проколы) дают скорость кровотечения; кровь капает на пол, оверлеи кровотечения на частях тела; коагулянты, бинты, жгуты и лёжа — замедляют.

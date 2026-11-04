@@ -9,6 +9,8 @@
 //! keeps enough for it. When the time is up `crate::construction::complete` re-checks the job's
 //! own state (the girder is still a girder in the state it had, ...) at the moment of effect.
 //! One timed action per mob (tg's default `max_interact_count`); a second one is refused.
+//! Starting a welding job flashes the welder and the mobs next to it (`tool_flash`): bare eyes
+//! burn, welding protection blocks it.
 
 use bevy::prelude::*;
 use ss13_mapload::{DmAtom, DmItem, DmStack, DmTool, IconIndex};
@@ -442,8 +444,41 @@ pub fn use_tool(
         tell(world, actor.client, Span::Warning, text);
         return false;
     }
+    if world.get::<Welder>(item).is_some() {
+        welder_flash(world, actor.mob);
+    }
     let speed = world.get::<DmTool>(item).map_or(1.0, |t| t.speed);
     do_after(world, actor, target, delay_ds * speed, amount, job)
+}
+
+/// The welder's `light_range`, the strength of its `/datum/element/tool_flash`.
+const WELDER_FLASH: i32 = 2;
+
+/// `/datum/element/tool_flash/flash` on `COMSIG_TOOL_START_USE`: every living mob within a tile
+/// of the weld is flashed by `flash_strength - get_dist`.
+// shortcut: no 10% flash on each tick of use (`COMSIG_TOOL_IN_USE`), no line of sight; the
+// strength is the basic welder's for every welder.
+fn welder_flash(world: &mut World, user: Entity) {
+    let Some(&at) = world.get::<TilePos>(user) else {
+        return;
+    };
+    let victims: Vec<(Entity, u32)> = world
+        .resource::<ss13_world::SpatialIndex>()
+        .in_radius(at, 1)
+        .filter(|&e| world.get::<crate::health::Health>(e).is_some())
+        .filter_map(|e| Some((e, at.chebyshev(*world.get::<TilePos>(e)?)?)))
+        .collect();
+    for (victim, dist) in victims {
+        let strength = (WELDER_FLASH - dist as i32).max(0);
+        crate::vision::flash_act(
+            world,
+            victim,
+            strength,
+            false,
+            false,
+            crate::vision::FLASH_LENGTH,
+        );
+    }
 }
 
 /// Every tick: interrupted actions end, finished ones complete.

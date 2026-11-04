@@ -221,6 +221,124 @@ pub struct HungerHudData {
     pub shown: bool,
 }
 
+/// The owner's fullscreen overlays and screen filters (tg `overlay_fullscreen`,
+/// `add_client_colour`, the `eye_blur` filter), a headless tgui interface like [`HealthHudUi`]:
+/// only the owner learns what its eyes see.
+pub struct FullscreenHudUi;
+
+impl UiInterface for FullscreenHudUi {
+    const NAME: &'static str = "FullscreenHud";
+    type Data = FullscreenHudData;
+    type StaticData = ();
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(bevy::prelude::Component))]
+pub struct FullscreenHudData {
+    /// One per category, in draw order (bottom first).
+    pub screens: Vec<FullscreenScreen>,
+    /// tg `gauss_blur_filter(size)` on the game plane, in icon pixels; 0: none.
+    pub blur: f32,
+    /// tg `client_colours` on the game plane, lowest priority first.
+    pub colours: Vec<ClientColour>,
+}
+
+/// tg's `screens` categories the port draws, in draw order: by tg layer (`FULLSCREEN_LAYER` 2
+/// for flash and the impaired overlays, `UI_DAMAGE_LAYER` 3, `BLIND_LAYER` 4, `CRIT_LAYER` 5).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub enum ScreenCategory {
+    /// `"tint"`: `/atom/movable/screen/fullscreen/impaired` from worn tint.
+    Tint,
+    /// `"nearsighted"`: `impaired` by severity.
+    Nearsighted,
+    /// `"flash"`: `/atom/movable/screen/fullscreen/flash` over the whole view.
+    Flash,
+    /// `"brute"`: `/atom/movable/screen/fullscreen/brute`.
+    Brute,
+    /// `"oxy"`: `/atom/movable/screen/fullscreen/oxy`.
+    Oxy,
+    /// `"blindness"`: `/atom/movable/screen/fullscreen/blind` (flickering) or `blind/noflicker`.
+    Blind,
+    /// `"critvision"`: `/atom/movable/screen/fullscreen/crit/vision`.
+    CritVision,
+    /// `"crit"`: `/atom/movable/screen/fullscreen/crit`.
+    Crit,
+}
+
+/// One shown overlay.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct FullscreenScreen {
+    pub category: ScreenCategory,
+    /// tg `severity`, appended to the icon state; `None` appends nothing.
+    pub severity: Option<u8>,
+    /// [`ScreenCategory::Blind`]: the flickering overlay (temporary blindness alone).
+    pub flicker: bool,
+    /// Seconds it fades out over once cleared (tg `clear_fullscreen(category, animated)`).
+    pub fade: f32,
+}
+
+pub const SCREEN_FULL_DMI: &str = "icons/hud/screen_full.dmi";
+pub const SCREEN_GEN_DMI: &str = "icons/hud/screen_gen.dmi";
+
+impl FullscreenScreen {
+    /// tg `clear_fullscreen`'s default animation, seconds.
+    pub const FADE: f32 = 1.0;
+
+    pub fn new(category: ScreenCategory, severity: Option<u8>) -> Self {
+        Self {
+            category,
+            severity,
+            flicker: false,
+            fade: Self::FADE,
+        }
+    }
+
+    /// The `.dmi` and icon state tg's `overlay_fullscreen` gives the screen
+    /// (`"[initial(icon_state)][severity]"`).
+    pub fn icon(&self) -> (&'static str, String) {
+        let base = match self.category {
+            ScreenCategory::Flash => return (SCREEN_GEN_DMI, "flash".to_owned()),
+            ScreenCategory::Tint | ScreenCategory::Nearsighted => "impairedoverlay",
+            ScreenCategory::Brute => "brutedamageoverlay",
+            ScreenCategory::Oxy | ScreenCategory::CritVision => "oxydamageoverlay",
+            ScreenCategory::Crit => "passage",
+            ScreenCategory::Blind if self.flicker => "blackimageoverlay",
+            ScreenCategory::Blind => "blackimageoverlaystatic",
+        };
+        let severity = self.severity.map(|s| s.to_string()).unwrap_or_default();
+        (SCREEN_FULL_DMI, format!("{base}{severity}"))
+    }
+}
+
+/// tg `/datum/client_colour` types the port applies.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub enum ClientColour {
+    /// `/datum/client_colour/blindness` (`CLIENT_COLOR_HELMET_PRIORITY`): dim and less saturated.
+    Blindness,
+    /// `/datum/client_colour/monochrome` (`CLIENT_COLOR_FILTER_PRIORITY`): grayscale.
+    Monochrome,
+}
+
+impl ClientColour {
+    /// tg `fade_in`/`fade_out`, seconds.
+    pub const FADE: f32 = 2.0;
+
+    /// The BYOND colour matrix (rows r, g, b, a, constant).
+    pub fn matrix(self) -> [f32; 20] {
+        match self {
+            Self::Blindness => [
+                0.51, 0.3, 0.3, 0.0, 0.29, 0.51, 0.29, 0.0, 0.3, 0.3, 0.61, 0.0, 0.0, 0.0, 0.0,
+                1.0, 0.0, 0.0, 0.0, 0.0,
+            ],
+            // `COLOR_MATRIX_GRAYSCALE`.
+            Self::Monochrome => [
+                0.33, 0.33, 0.33, 0.0, 0.59, 0.59, 0.59, 0.0, 0.11, 0.11, 0.11, 0.0, 0.0, 0.0, 0.0,
+                1.0, 0.0, 0.0, 0.0, 0.0,
+            ],
+        }
+    }
+}
+
 /// tg `get_ui_alert_placement`: only the first 5 alerts are shown.
 pub const MAX_SHOWN_ALERTS: usize = 5;
 
@@ -272,6 +390,40 @@ mod tests {
         // A box (7 slots) never grows a row past full.
         assert_eq!(storage_grid(7, 7), (7, 1));
         assert_eq!(storage_grid(5, 2), (5, 1));
+    }
+
+    #[test]
+    fn fullscreen_icons_follow_overlay_fullscreen() {
+        let icon = |c, s| FullscreenScreen::new(c, s).icon();
+        assert_eq!(
+            icon(ScreenCategory::Brute, Some(3)),
+            (SCREEN_FULL_DMI, "brutedamageoverlay3".to_owned())
+        );
+        assert_eq!(icon(ScreenCategory::Crit, Some(0)).1, "passage0");
+        assert_eq!(
+            icon(ScreenCategory::CritVision, Some(9)).1,
+            "oxydamageoverlay9"
+        );
+        assert_eq!(
+            icon(ScreenCategory::Nearsighted, Some(2)).1,
+            "impairedoverlay2"
+        );
+        assert_eq!(
+            icon(ScreenCategory::Blind, None).1,
+            "blackimageoverlaystatic"
+        );
+        let flicker = FullscreenScreen {
+            flicker: true,
+            ..FullscreenScreen::new(ScreenCategory::Blind, None)
+        };
+        assert_eq!(flicker.icon().1, "blackimageoverlay");
+        assert_eq!(
+            icon(ScreenCategory::Flash, None),
+            (SCREEN_GEN_DMI, "flash".to_owned())
+        );
+        // Draw order is tg's layer order.
+        assert!(ScreenCategory::Flash < ScreenCategory::Brute);
+        assert!(ScreenCategory::Blind < ScreenCategory::Crit);
     }
 
     fn at(health: f32) -> HealthReadout {

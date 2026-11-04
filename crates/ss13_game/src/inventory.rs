@@ -511,6 +511,10 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                     if hand == inventory.active
                         && crate::antag::heretic::server::attack_self(world, client, mob, item) => {
                 }
+                // A welding visor flips up or down.
+                Some(item)
+                    if hand == inventory.active
+                        && crate::vision::visor_attack_self(world, client, mob, item) => {}
                 // A baton toggles, a flash flashes around.
                 Some(item)
                     if hand == inventory.active

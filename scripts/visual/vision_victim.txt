@@ -1,0 +1,14 @@
+# Vision, victim (see vision_officer.txt): flashed (the white flash overlay), then beaten (the
+# red brute vignette).
+# spawn: 11,5
+wait_connected timeout=60
+wait_until controlled timeout=30
+wait_until chat "ослепляет вас" timeout=60
+wait_secs 0.3
+screenshot "flashed.png"
+wait_secs 4                 # 2.5 s shown, then fading
+screenshot "flash_fading.png"
+wait_secs 9
+screenshot "beaten.png"
+log_state
+quit

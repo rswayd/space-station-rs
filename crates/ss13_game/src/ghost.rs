@@ -260,6 +260,11 @@ fn reopen_body_huds(world: &mut World, client: Entity, body: Entity) {
     if e.contains::<HungerHudData>() {
         open.push(OpenUi::new::<HungerHudUi>(client, body, body, ""));
     }
+    if e.contains::<crate::hud::FullscreenHudData>() {
+        open.push(OpenUi::new::<crate::hud::FullscreenHudUi>(
+            client, body, body, "",
+        ));
+    }
     for message in open {
         world.write_message(message);
     }
