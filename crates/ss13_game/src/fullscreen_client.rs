@@ -9,8 +9,11 @@
 //! (`clear_fullscreen(category, animated)`). Client colours and the eye blur become the world
 //! camera's [`ScreenFilter`]; colours fade in and out over 2 s (`fade_in`, `fade_out`).
 
+use bevy::asset::RenderAssetUsages;
+use bevy::image::ImageSampler;
 use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
+use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use ss13_net::ui::client::UiMessageReceived;
 use ss13_render::atlas::frame_rect;
 use ss13_render::filter::{IDENTITY, compose, lerp};
@@ -71,7 +74,63 @@ pub struct ScreenNode {
 #[derive(Resource, Default)]
 struct ScreenIcons(HashMap<(String, String), IconStateId>);
 
-fn spawn_root(atlas: Option<Res<IconAtlas>>, mut commands: Commands) {
+/// Smooth darkening for [`ScreenCategory::Tint`] and [`ScreenCategory::Nearsighted`], severities
+/// 1 and 2+. tg's `impairedoverlay` is a dithered 480x480 sprite drawn 1:1 in BYOND; stretched
+/// over a large window its noise turns into coarse blocks, so the client draws its own gradient.
+#[derive(Resource, Default)]
+struct Vignettes(Vec<Handle<Image>>);
+
+/// Side of a generated vignette; linear sampling smooths it at any window size.
+const VIGNETTE_SIDE: u32 = 128;
+
+/// Alpha of the darkening at `r` (0 at the view centre, 1 at the middle of an edge).
+pub fn vignette_alpha(r: f32, severity: u8) -> f32 {
+    // (alpha at the centre, alpha at the edge, radius where the rise starts)
+    let (centre, edge, start) = if severity >= 2 {
+        (0.55, 0.95, 0.1)
+    } else {
+        (0.3, 0.8, 0.25)
+    };
+    let t = ((r - start) / (1.2 - start)).clamp(0.0, 1.0);
+    let smooth = t * t * (3.0 - 2.0 * t);
+    centre + (edge - centre) * smooth
+}
+
+fn vignette_image(severity: u8) -> Image {
+    let side = VIGNETTE_SIDE;
+    let mut data = Vec::with_capacity((side * side * 4) as usize);
+    for y in 0..side {
+        for x in 0..side {
+            let fx = (x as f32 + 0.5) / side as f32 * 2.0 - 1.0;
+            let fy = (y as f32 + 0.5) / side as f32 * 2.0 - 1.0;
+            let a = vignette_alpha((fx * fx + fy * fy).sqrt(), severity);
+            data.extend_from_slice(&[0, 0, 0, (a * 255.0).round() as u8]);
+        }
+    }
+    let mut image = Image::new(
+        Extent3d {
+            width: side,
+            height: side,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        data,
+        TextureFormat::Rgba8UnormSrgb,
+        RenderAssetUsages::RENDER_WORLD | RenderAssetUsages::MAIN_WORLD,
+    );
+    image.sampler = ImageSampler::linear();
+    image
+}
+
+fn spawn_root(
+    atlas: Option<Res<IconAtlas>>,
+    images: Option<ResMut<Assets<Image>>>,
+    mut commands: Commands,
+) {
+    if let Some(mut images) = images {
+        let vignettes = [1, 2].map(|s| images.add(vignette_image(s)));
+        commands.insert_resource(Vignettes(vignettes.to_vec()));
+    }
     let mut icons = HashMap::new();
     if let Some(atlas) = atlas {
         let index = atlas.manifest.index();
@@ -211,6 +270,7 @@ pub fn fade_alpha(elapsed: f32, secs: f32) -> f32 {
 fn draw_screens(
     hud: Res<FullscreenHud>,
     icons: Res<ScreenIcons>,
+    vignettes: Option<Res<Vignettes>>,
     time: Res<Time>,
     mut atlas: Option<ResMut<IconAtlas>>,
     root: Single<Entity, With<FullscreenRoot>>,
@@ -270,16 +330,29 @@ fn draw_screens(
             commands.entity(e).despawn();
             continue;
         }
-        let (dmi, state) = node.screen.icon();
-        let Some((info, handle)) = icons
-            .0
-            .get(&(dmi.to_owned(), state))
-            .and_then(|&id| atlas.as_deref_mut()?.state(id))
-        else {
-            continue;
+        let smooth = matches!(
+            node.screen.category,
+            ScreenCategory::Tint | ScreenCategory::Nearsighted
+        )
+        .then(|| {
+            let i = usize::from(node.screen.severity.unwrap_or(1).clamp(1, 2) - 1);
+            vignettes.as_deref()?.0.get(i).cloned()
+        })
+        .flatten();
+        let (handle, rect) = if let Some(handle) = smooth {
+            (handle, None)
+        } else {
+            let (dmi, state) = node.screen.icon();
+            let Some((info, handle)) = icons
+                .0
+                .get(&(dmi.to_owned(), state))
+                .and_then(|&id| atlas.as_deref_mut()?.state(id))
+            else {
+                continue;
+            };
+            let (frame, _) = ss13_render::anim::frame_at(info, now - node.shown_at);
+            (handle, frame_rect(info, Dir::South, frame))
         };
-        let (frame, _) = ss13_render::anim::frame_at(info, now - node.shown_at);
-        let rect = frame_rect(info, Dir::South, frame);
         if image.image != handle || image.rect != rect {
             image.image = handle;
             image.rect = rect;
@@ -372,6 +445,20 @@ fn follow_map_insets(insets: Res<MapInsets>, mut roots: Query<&mut Node, With<Fu
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn vignette_darkens_towards_the_edges_and_more_at_severity_two() {
+        for severity in [1, 2] {
+            let mut last = 0.0;
+            for step in 0..=12 {
+                let a = vignette_alpha(step as f32 * 0.1, severity);
+                assert!(a >= last && a <= 1.0, "{severity} {step} {a}");
+                last = a;
+            }
+        }
+        assert!(vignette_alpha(0.0, 2) > vignette_alpha(0.0, 1));
+        assert!(vignette_alpha(1.0, 2) > vignette_alpha(1.0, 1));
+    }
 
     fn screen(category: ScreenCategory, severity: u8) -> FullscreenScreen {
         FullscreenScreen::new(category, Some(severity))
