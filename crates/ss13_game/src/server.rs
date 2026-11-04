@@ -258,6 +258,8 @@ impl Plugin for GameServerPlugin {
         .add_plugins(crate::announce::AnnouncePlugin)
         .add_plugins((
             crate::cooking::CookingServerPlugin,
+            crate::gibber::GibberServerPlugin,
+            crate::coffee::CoffeeServerPlugin,
             crate::chem_dispenser::ChemDispenserPlugin,
             crate::smartfridge::SmartFridgePlugin,
         ))

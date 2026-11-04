@@ -54,6 +54,10 @@ pub struct DmItem {
     pub hitsound: String,
     /// `item_flags` (`NEEDS_PERMIT` and the rest; the static value of the type).
     pub item_flags: u32,
+    /// `resistance_flags` (`FLAMMABLE`, `FIRE_PROOF`, ... inherited from `/obj`).
+    pub resistance_flags: u32,
+    /// `max_integrity` (`/obj/item` 200).
+    pub max_integrity: f32,
 }
 
 impl DmItem {
@@ -68,7 +72,7 @@ impl DmItem {
 }
 
 /// Item vars and their [`DmItem`] field names.
-const VARS: [(&str, &str); 17] = [
+const VARS: [(&str, &str); 19] = [
     ("anchored", "anchored"),
     ("interaction_flags_item", "interaction_flags_item"),
     ("slot_flags", "slot_flags"),
@@ -86,6 +90,8 @@ const VARS: [(&str, &str); 17] = [
     ("throw_range", "throw_range"),
     ("hitsound", "hitsound"),
     ("item_flags", "item_flags"),
+    ("resistance_flags", "resistance_flags"),
+    ("max_integrity", "max_integrity"),
 ];
 
 /// Converter fields of `path`: its type path, and the item vars it declares. The root
@@ -175,10 +181,13 @@ fn json_ron(var: &str, path: &str, value: &serde_json::Value) -> Result<String, 
 fn scalar_ron(var: &str, n: f64, text: &str) -> Option<String> {
     Some(match var {
         "anchored" => (n != 0.0).to_string(),
-        "interaction_flags_item" | "slot_flags" | "item_flags" => (n.max(0.0) as u32).to_string(),
+        "interaction_flags_item" | "slot_flags" | "item_flags" | "resistance_flags" => {
+            (n.max(0.0) as u32).to_string()
+        }
         "inhand_icon_state" | "lefthand_file" | "righthand_file" | "worn_icon"
         | "worn_icon_state" | "damtype" | "hitsound" => str_ron(text),
-        "force" | "attack_speed" | "throwforce" | "throw_speed" | "throw_range" => {
+        "force" | "attack_speed" | "throwforce" | "throw_speed" | "throw_range"
+        | "max_integrity" => {
             format!("{:?}", n as f32)
         }
         _ => return None,

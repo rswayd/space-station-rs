@@ -306,6 +306,26 @@ fn throw_clicks(world: &mut World, mut clicks: Local<MessageCursor<ThrowClick>>)
     }
 }
 
+/// tg `throw_at(target, range, speed)` of an item on a tile with no thrower (machines throwing
+/// out what they made). False when it does not fly.
+pub fn throw_at(world: &mut World, item: Entity, target: TilePos, range: u32, speed: f32) -> bool {
+    let Some(&from) = world.get::<TilePos>(item) else {
+        return false;
+    };
+    let now_ds = world.resource::<Time>().elapsed_secs_f64() * 10.0;
+    let Some(path) = Trajectory::new(from, target, range, speed, now_ds) else {
+        return false;
+    };
+    world.entity_mut(item).insert(Thrown {
+        path,
+        thrower: None,
+        target: None,
+        last_dir: None,
+    });
+    fly_one(world, item, now_ds);
+    true
+}
+
 /// `SSthrowing.fire`: every item in flight takes this tick's steps.
 // Cost: per tick, one pass over items in flight only.
 fn fly(world: &mut World, mut flying: Local<Vec<Entity>>) {

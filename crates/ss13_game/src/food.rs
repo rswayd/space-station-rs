@@ -73,6 +73,23 @@ pub enum FoodJob {
     Process(u8),
 }
 
+/// tg `TRAIT_DRIED` (`/datum/element/dryable/apply_dried_status`).
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Dried;
+
+/// `COLOR_DRIED_TAN`.
+const DRIED_TAN: [u8; 4] = [0xAD, 0x72, 0x57, 0xFF];
+
+/// Dried in place (tg `finish_drying` when the dried type is the item's own): `TRAIT_DRIED` and
+/// the tan color.
+// shortcut: a plain multiply by the tan instead of `color_transition_filter`.
+pub fn dry(world: &mut World, item: Entity) {
+    world.entity_mut(item).insert(Dried);
+    if let Some(mut look) = world.get_mut::<ss13_shared::Appearance>(item) {
+        look.color = Some(DRIED_TAN);
+    }
+}
+
 pub struct FoodServerPlugin;
 
 impl Plugin for FoodServerPlugin {

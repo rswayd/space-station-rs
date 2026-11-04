@@ -161,11 +161,15 @@ pub mod comms_client;
 #[cfg(feature = "server")]
 pub mod comms_server;
 #[cfg(feature = "server")]
+pub mod coffee;
+#[cfg(feature = "server")]
 pub mod construction;
 #[cfg(feature = "server")]
 pub mod cooking;
 #[cfg(feature = "server")]
 pub mod disposals;
+#[cfg(feature = "server")]
+pub mod gibber;
 #[cfg(feature = "server")]
 pub mod doors;
 #[cfg(feature = "server")]

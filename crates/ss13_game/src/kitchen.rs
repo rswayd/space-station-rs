@@ -196,6 +196,14 @@ pub(crate) fn setup_machine(world: &mut World, e: Entity, mapload: bool) {
         crate::cooking::setup_machine(world, e, mapload);
         return;
     }
+    if is_under(&path, crate::gibber::GIBBER_ROOT) {
+        crate::gibber::setup(world, e, mapload);
+        return;
+    }
+    if is_under(&path, crate::coffee::COFFEEMAKER_ROOT) {
+        crate::coffee::setup(world, e, mapload);
+        return;
+    }
     if is_under(&path, MICROWAVE_ROOT) {
         world.entity_mut(e).insert(Microwave::default());
         refresh_microwave(world, e);
