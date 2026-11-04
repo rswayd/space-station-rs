@@ -51,3 +51,38 @@ mod tests {
         assert_eq!(a.chebyshev(TilePos::new(5, 5, 2)), None);
     }
 }
+
+/// Which z-levels stand over which (tg `ZTRAIT_UP` / `ZTRAIT_DOWN`: the levels of one
+/// multi-deck map, stacked as loaded). The server sets it at round start; a client gets it
+/// with its first replication batch, to draw the level below its own through open space.
+#[derive(Resource, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LevelStack {
+    /// `(below, above)` pairs.
+    pub links: Vec<(u16, u16)>,
+}
+
+impl LevelStack {
+    pub fn link(&mut self, below: u16, above: u16) {
+        if !self.links.contains(&(below, above)) {
+            self.links.push((below, above));
+        }
+    }
+
+    pub fn above(&self, z: u16) -> Option<u16> {
+        self.links.iter().find(|(b, _)| *b == z).map(|(_, a)| *a)
+    }
+
+    pub fn below(&self, z: u16) -> Option<u16> {
+        self.links.iter().find(|(_, a)| *a == z).map(|(b, _)| *b)
+    }
+
+    /// `get_step_multiz(pos, UP/DOWN)`.
+    pub fn step(&self, pos: TilePos, up: bool) -> Option<TilePos> {
+        let z = if up {
+            self.above(pos.z)
+        } else {
+            self.below(pos.z)
+        }?;
+        Some(TilePos { z, ..pos })
+    }
+}

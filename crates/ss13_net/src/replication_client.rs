@@ -320,6 +320,18 @@ fn insert_blocks(entity: &mut EntityCommands, blocks: Option<Blocks>) {
         Some(Blocks::Edges(edges)) => {
             entity.try_insert((Density, Border { edges }));
         }
+        Some(Blocks::Hole) => {
+            entity.try_insert(ss13_world::FallsThrough);
+        }
+        Some(Blocks::Stairs(dir)) => {
+            if let Some(dir) = ss13_shared::Dir::from_bits(dir) {
+                entity.try_insert((
+                    ss13_world::NonDenseBorder,
+                    Border::facing(dir, false),
+                    ss13_world::ClimbsUp(dir),
+                ));
+            }
+        }
     }
 }
 
@@ -364,7 +376,14 @@ fn apply_op(map: &mut NetEntityMap, commands: &mut Commands, tick: u32, op: Repl
         ReplicationOp::Blocks(id, blocks) => {
             if let Some(replicated) = map.entities.get(&id) {
                 let mut entity = commands.entity(replicated.entity);
-                entity.try_remove::<(Density, Border, ClimbWalkable)>();
+                entity.try_remove::<(
+                    Density,
+                    Border,
+                    ClimbWalkable,
+                    ss13_world::NonDenseBorder,
+                    ss13_world::ClimbsUp,
+                    ss13_world::FallsThrough,
+                )>();
                 insert_blocks(&mut entity, blocks);
             }
         }
@@ -405,6 +424,9 @@ fn apply_op(map: &mut NetEntityMap, commands: &mut Commands, tick: u32, op: Repl
                 commands.entity(entity).try_insert(LocalControl);
                 map.controlled = Some(entity);
             }
+        }
+        ReplicationOp::Stack(links) => {
+            commands.insert_resource(ss13_shared::LevelStack { links });
         }
         ReplicationOp::LightBlock { .. }
         | ReplicationOp::Opacity { .. }

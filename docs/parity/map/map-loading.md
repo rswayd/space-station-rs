@@ -31,7 +31,7 @@ JSON карты: имя, путь к `.dmm`, шаттлы, трейты уров
 Уровни с `Up`/`Down` образуют один многоэтажный объект: открытое пространство (`openspace`) с падением, лестницы, лестницы-стремянки, вид вниз, газ и свет через перекрытия. Нужна для Tramstation, Cyberiad, Nebula, Wawa, IceBox. Сами лестницы и стремянки — см. ../engineering/.
 
 - **Код:** [`multiz_helpers.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mapping/space_management/multiz_helpers.dm#L1), [`ZTRAIT_UP/DOWN`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/__DEFINES/maps.dm#L77)
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/pull.rs` прямо запрещает действия между уровнями; `crates/ss13_game/src/power/mod.rs`: «add with multi-z maps»
+- **Статус в ss13-rs:** 🟡 частично — какой уровень над каким (`crates/ss13_mapload/src/load.rs`, `MapLoadReport::stacked_levels`, как tg `height_autosetup`): по ней соединяются межэтажные трубы атмоса; все уровни станционной карты — станционные (`station_levels`). переход между этажами (`crates/ss13_game/src/multiz.rs`: ступени, стремянки, падение, PgUp/PgDn) и вид вниз сквозь открытое пространство и стекло — в записях ../engineering/ и ../mobs/movement.md. Нет газа и света через перекрытия, звука с соседних уровней; `crates/ss13_game/src/pull.rs` запрещает действия между уровнями; `crates/ss13_game/src/power/mod.rs`: «add with multi-z maps»
 
 ### Переходы через край карты
 Космические уровни с `Linkage = Cross` склеены краями: улетевший за край карты попадает на соседний космический уровень.

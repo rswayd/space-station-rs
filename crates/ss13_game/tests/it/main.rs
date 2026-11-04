@@ -32,6 +32,7 @@ mod mecha;
 mod medical;
 mod medicine;
 mod mobs;
+mod multiz;
 mod nukeops;
 mod pda;
 mod play;

@@ -224,6 +224,7 @@ fn resolve_clicks(
         Has<crate::mecha::Pilot>,
         Has<ClickIntercept>,
         Has<crate::silicon::cyborg::Cyborg>,
+        Has<crate::ghost::Ghost>,
     )>,
     movers: Query<(), With<Mover>>,
     objs: Query<&ss13_mapload::DmObj>,
@@ -275,6 +276,7 @@ fn resolve_clicks(
             piloting,
             intercept,
             robot,
+            ghost,
         )) = mobs.get(mob)
         else {
             continue;
@@ -402,6 +404,17 @@ fn resolve_clicks(
             });
             continue;
         }
+        // tg `observer/ClickOn` -> `attack_ghost` of the target, from any distance it sees.
+        if ghost {
+            if !modifiers.ctrl && !modifiers.shift && !modifiers.right {
+                out.ghost.write(crate::multiz::GhostClick {
+                    client,
+                    ghost: mob,
+                    target,
+                });
+            }
+            continue;
+        }
         let traits = traits.copied().unwrap_or_default();
         // tg `INCAPACITATED_IGNORING(src, INCAPABLE_RESTRAINTS)`: stuns and stamcrit too.
         if stat != Some(&Stat::Conscious) || traits.incapacitated {
@@ -489,4 +502,5 @@ struct ClickWriters<'w> {
     intercept: MessageWriter<'w, InterceptedClick>,
     robot: MessageWriter<'w, crate::silicon::interact::RobotClick>,
     ranged: MessageWriter<'w, RangedClick>,
+    ghost: MessageWriter<'w, crate::multiz::GhostClick>,
 }

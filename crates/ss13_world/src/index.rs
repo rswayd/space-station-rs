@@ -71,6 +71,8 @@ struct Tile {
     dense: Vec<Entity>,
     /// Subset of `entities` with `Density` and [`Border`], with its edges.
     border: Vec<(Entity, u8)>,
+    /// tg `TRAIT_TURF_TRANSPARENT` (open space, glass floors): the level below shows through.
+    transparent: bool,
 }
 
 impl Level {
@@ -145,6 +147,18 @@ impl SpatialIndex {
     /// Entities on one tile, in no particular order.
     pub fn on_tile(&self, pos: TilePos) -> &[Entity] {
         self.tile(pos).map_or(&[], |t| t.entities.as_slice())
+    }
+
+    /// Whether the level below shows through this tile (open space, glass floors); the game
+    /// keeps it with the tile's turf.
+    pub fn transparent(&self, pos: TilePos) -> bool {
+        self.tile(pos).is_some_and(|t| t.transparent)
+    }
+
+    pub fn set_transparent(&mut self, pos: TilePos, transparent: bool) {
+        if let Some(tile) = self.tile_mut(pos) {
+            tile.transparent = transparent;
+        }
     }
 
     /// Full-tile blockers on one tile: entities with `Density` and no [`Border`] (tg
@@ -419,8 +433,9 @@ pub(crate) fn on_tile_pos_insert(mut world: DeferredWorld, ctx: HookContext) {
     let pos = *entity
         .get::<TilePos>()
         .expect("insert hook runs with the component present");
-    let dense = entity.contains::<Density>();
     let border = entity.get::<Border>().copied();
+    let dense = entity.contains::<Density>()
+        || (border.is_some() && entity.contains::<crate::movement::NonDenseBorder>());
     world
         .resource_mut::<SpatialIndex>()
         .insert(ctx.entity, pos, dense, border);
@@ -444,7 +459,9 @@ pub(crate) fn on_density_discard(world: DeferredWorld, ctx: HookContext) {
 }
 
 pub(crate) fn on_border_insert(world: DeferredWorld, ctx: HookContext) {
-    let dense = world.entity(ctx.entity).contains::<Density>();
+    let entity = world.entity(ctx.entity);
+    let dense =
+        entity.contains::<Density>() || entity.contains::<crate::movement::NonDenseBorder>();
     let border = world.get::<Border>(ctx.entity).copied();
     set_blocker(world, ctx, dense, border);
 }

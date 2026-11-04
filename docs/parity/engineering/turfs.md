@@ -42,7 +42,7 @@
 `openspace` показывает уровень ниже; всё, что на нём не держится, падает (`zFall`) с уроном; решётка или мостик закрывают его.
 
 - **Код:** [`/turf/open/openspace`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/open/openspace.dm#L1), [`proc/zFall()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/turf.dm#L349), [`proc/zPassIn()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/turf.dm#L333)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/multiz.rs` (`fall_through_openspace`, `z_fall`, `z_impact`): падает всё живое, предметы и незакреплённые объекты, пришедшие или появившиеся на открытом пространстве, с продолжением на уровень ниже; урон `(5·уровни)^1.5` по ногам стоящего, сбивание с ног; решётки и мостики (`BLOCK_Z_*`) держат; виден уровень ниже со своим светом (`crates/ss13_render/src/sprites.rs`, вторая карта света в `crates/ss13_render/src/lighting/mod.rs`), его можно кликать и осматривать; воздух через открытое пространство обменивается с уровнем ниже (`ss13_atmos::Atmos::share_vertical`), клиент предсказывает падение своего моба (`ss13_world::FallsThrough`). Кошачья грация, крылья и паркур — в своих группах; постройка пола на открытом пространстве — в записи о полах
 
 ### Пропасти, лава, вода
 Пропасть (`chasm`) роняет всё на уровень ниже или уничтожает; лава поджигает и сжигает всё, что не огнеупорно (`burn_stuff`); вода мочит и тушит, в ней можно рыбачить.

@@ -117,6 +117,10 @@ pub enum Job {
     Botany(crate::botany::BotanyJob),
     /// Welding a vent or scrubber ([`crate::atmos_machinery`]).
     Atmos(crate::atmos_machinery::windows::AtmosJob),
+    /// Climbing a ladder ([`crate::multiz`]).
+    Climb(crate::multiz::Climb),
+    /// Flying a level up or down (PgUp/PgDn, [`crate::multiz`]).
+    Fly(crate::multiz::Climb),
     /// Dumping a storage, stuffing a mob into a closet ([`crate::drag`]).
     Interact(crate::drag::DragJob),
     /// Flipping, climbing, taking apart tables and racks ([`crate::tables`]).
@@ -861,6 +865,8 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Clean(job) => crate::janitor::complete(world, mob, action, job),
         Job::Botany(job) => crate::botany::complete(world, mob, action, *job),
         Job::Atmos(job) => crate::atmos_machinery::windows::complete(world, mob, action, *job),
+        &Job::Climb(climb) => crate::multiz::complete_climb(world, mob, target, climb),
+        &Job::Fly(climb) => crate::multiz::complete_flight(world, client, mob, climb),
         Job::Interact(job) => crate::drag::complete(world, mob, action, *job),
         &Job::Table(job) => crate::tables::complete(world, mob, action, job),
         Job::Strip(job) => crate::strip::complete(world, mob, action, *job),
@@ -1262,6 +1268,7 @@ pub fn tile_changed(world: &mut World, pos: TilePos) {
     if world.contains_resource::<IconIndex>() {
         ss13_mapload::tile_changed(world, pos);
     }
+    crate::multiz::refresh_transparency(world, pos);
 }
 
 fn has_template(world: &mut World, path: &str) -> bool {

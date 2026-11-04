@@ -340,7 +340,7 @@ fn send_clicks(
     ui_nodes: Query<(), With<Node>>,
     hud_slots: Query<&crate::inventory_client::HudSlot>,
     parents: Query<&ChildOf>,
-    active_z: Res<ActiveZ>,
+    (active_z, stack): (Res<ActiveZ>, Option<Res<ss13_shared::LevelStack>>),
     map: Res<NetEntityMap>,
     atlas: Option<Res<IconAtlas>>,
     sprites: Query<SpriteItem>,
@@ -393,7 +393,12 @@ fn send_clicks(
                 };
                 let (id, pos, appearance) = owners.get(owner).ok()?;
                 let opacity = appearance.map_or(MouseOpacity::Icon, |a| a.mouse_opacity);
-                if pos.z != active_z.0 || opacity == MouseOpacity::Transparent {
+                // The camera's level and, through open space, the one below it (tg z-mimic:
+                // seen, so examined and pointed at; out of reach for the rest).
+                let below = stack.as_deref().and_then(|s| s.below(active_z.0));
+                if (pos.z != active_z.0 && Some(pos.z) != below)
+                    || opacity == MouseOpacity::Transparent
+                {
                     return None;
                 }
                 let known = atlas

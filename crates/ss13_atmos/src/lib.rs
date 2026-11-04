@@ -195,6 +195,9 @@ pub struct Atmos {
     pub setup: Vec<(u16, SetupReport)>,
     /// `SSair.atmos_gen`: this round's gas string per planetary atmosphere id.
     pub atmos_gen: Vec<(&'static str, String)>,
+    /// Tiles air moves between across levels (tg `zAirOut`/`zAirIn`): `(upper, lower)`, the
+    /// upper one open space. Kept by the game ([`Self::set_vertical`]).
+    vertical: Vec<(TilePos, TilePos)>,
 }
 
 impl Atmos {
@@ -502,6 +505,70 @@ impl Atmos {
     }
 
     /// One SSair fire on every level, in parallel when there are several.
+    /// Links or unlinks `upper` (open space) and `lower` (the tile under it) for air.
+    pub fn set_vertical(&mut self, upper: TilePos, lower: TilePos, linked: bool) {
+        let at = self.vertical.iter().position(|&p| p == (upper, lower));
+        match (at, linked) {
+            (None, true) => self.vertical.push((upper, lower)),
+            (Some(i), false) => {
+                self.vertical.swap_remove(i);
+            }
+            _ => {}
+        }
+    }
+
+    /// A side of a vertical link: its kind, air and open neighbours on its level.
+    fn vertical_side(&self, pos: TilePos) -> Option<(TileKind, &GasMixture, Option<u8>)> {
+        let (level, tile) = self.locate(pos)?;
+        Some((
+            level.kind(tile),
+            level.air(tile)?,
+            level.adjacent_count(tile),
+        ))
+    }
+
+    pub fn vertical_links(&self) -> usize {
+        self.vertical.len()
+    }
+
+    /// The share across each vertical link, after the levels fired: tg counts the tile above or
+    /// below among `atmos_adjacent_turfs`, so the two share like neighbours (each side's
+    /// coefficient `1 / (neighbours + 1)`, the other level counted). Space on one side vents
+    /// the other. Idle links cost a comparison.
+    // shortcut: the link is not part of the levels' excited groups (each side wakes as a whole
+    // tile instead) and moves no pressure difference (spacewind) across levels.
+    fn share_vertical(&mut self) {
+        for i in 0..self.vertical.len() {
+            let (upper, lower) = self.vertical[i];
+            let (Some((ku, a, au)), Some((kl, b, bl))) =
+                (self.vertical_side(upper), self.vertical_side(lower))
+            else {
+                continue;
+            };
+            let moves = a
+                .moles
+                .iter()
+                .zip(b.moles)
+                .any(|(&x, y)| (x - y).abs() > gas::MINIMUM_MOLES_DELTA_TO_MOVE)
+                || (a.temperature - b.temperature).abs()
+                    > gas::MINIMUM_TEMPERATURE_DELTA_TO_CONSIDER;
+            if !moves || (ku != TileKind::Open && kl != TileKind::Open) {
+                continue;
+            }
+            let (mut a, mut b) = (a.clone(), b.clone());
+            let coeff = |n: Option<u8>| 1.0 / f64::from(n.unwrap_or(0) + 2);
+            a.archive();
+            b.archive();
+            a.share(&mut b, coeff(au), coeff(bl));
+            if ku == TileKind::Open {
+                self.modify_air(upper, |m| *m = a);
+            }
+            if kl == TileKind::Open {
+                self.modify_air(lower, |m| *m = b);
+            }
+        }
+    }
+
     pub fn fire(&mut self) -> Vec<PressureDifference> {
         let start = Instant::now();
         self.fires += 1;
@@ -530,6 +597,7 @@ impl Atmos {
                 .collect()
         };
         self.last_fire_levels = per_level.iter().map(|(z, _, t)| (*z, *t)).collect();
+        self.share_vertical();
         let mut out = Vec::new();
         for (z, deltas, _) in per_level {
             let level = self.level(z).expect("fired above");
@@ -1046,5 +1114,59 @@ fn sync_hotspots(
             }
             (None, None) => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod vertical_tests {
+    use super::*;
+
+    fn deck(moles: f64) -> LevelAir {
+        let mut level = LevelAir::new(1, 1);
+        let air = (moles > 0.0).then(|| {
+            let mut m = GasMixture::vacuum();
+            m.set(GasId::O2, moles);
+            m.temperature = gas::T20C;
+            m
+        });
+        level.set_tile(
+            0,
+            TileKind::Open,
+            Some(air.unwrap_or_else(|| {
+                let mut m = GasMixture::vacuum();
+                m.temperature = gas::T20C;
+                m
+            })),
+            None,
+        );
+        level.setup();
+        level
+    }
+
+    #[test]
+    fn air_falls_through_open_space_and_evens_out() {
+        let mut atmos = Atmos::default();
+        atmos.insert_level(1, deck(0.0));
+        atmos.insert_level(2, deck(100.0));
+        let (upper, lower) = (TilePos::new(1, 1, 2), TilePos::new(1, 1, 1));
+        atmos.fire();
+        assert_eq!(atmos.moles(lower, GasId::O2), Some(0.0), "not linked yet");
+        atmos.set_vertical(upper, lower, true);
+        atmos.fire();
+        let (u, l) = (
+            atmos.moles(upper, GasId::O2).unwrap(),
+            atmos.moles(lower, GasId::O2).unwrap(),
+        );
+        // One neighbour each (the other level): coefficient 1/2, half the difference moves.
+        assert!(
+            (u - 50.0).abs() < 1e-6 && (l - 50.0).abs() < 1e-6,
+            "{u} {l}"
+        );
+        for _ in 0..5 {
+            atmos.fire();
+        }
+        assert!((atmos.moles(lower, GasId::O2).unwrap() - 50.0).abs() < 1e-6);
+        atmos.set_vertical(upper, lower, false);
+        assert_eq!(atmos.vertical_links(), 0);
     }
 }

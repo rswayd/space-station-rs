@@ -107,6 +107,9 @@ pub enum Custom {
     Connector { attached: Option<Box<PipeAir>> },
     /// `unary/airlock_pump`: two nodes toward its `dir`, distro on layer 4 and waste on 2.
     AirlockPump,
+    /// `pipe/multiz`: node 1 toward its `dir`, node 2 the multi-deck adapter on the level above,
+    /// node 3 the one below (`pipeline_expansion`), each on a connectable layer and color.
+    MultiZ,
     /// `components/tank`: a member of a merge group of adjacent tanks sharing one mixture
     /// (tg `/datum/merger` `stationary_tanks`, [`TankGroup`]).
     Tank { group: u32 },
@@ -261,9 +264,39 @@ pub struct Pipenet {
     /// CPU time of the last [`Self::process`] in the SSair fire.
     pub last_process: std::time::Duration,
     tank_groups: Vec<Option<TankGroup>>,
+    /// tg `ZTRAIT_UP`: the level above each level that has one.
+    levels_above: HashMap<u16, u16>,
 }
 
 impl Pipenet {
+    /// `ZTRAIT_UP` / `ZTRAIT_DOWN`: `above` is the level over `below` (multi-deck adapters
+    /// connect across them). Set before [`Self::build`].
+    pub fn link_levels(&mut self, below: u16, above: u16) {
+        self.levels_above.insert(below, above);
+    }
+
+    /// `GET_TURF_ABOVE` / `GET_TURF_BELOW` of a tile.
+    fn vertical(&self, pos: TilePos, up: bool) -> Option<TilePos> {
+        let z = if up {
+            *self.levels_above.get(&pos.z)?
+        } else {
+            self.levels_above
+                .iter()
+                .find(|&(_, &a)| a == pos.z)
+                .map(|(&b, _)| b)?
+        };
+        Some(TilePos { z, ..pos })
+    }
+
+    /// The multi-deck adapter over or under `id` it connects to.
+    fn multiz_partner(&self, id: DeviceId, up: bool) -> Option<DeviceId> {
+        let d = self.dev(id);
+        let pos = self.vertical(d.pos, up)?;
+        self.devices_on(pos).iter().copied().find(|&t| {
+            let target = self.dev(t);
+            matches!(target.custom, Custom::MultiZ) && is_connectable(d, target, d.layer)
+        })
+    }
     pub fn device(&self, id: DeviceId) -> Option<&Device> {
         self.devices.get(id.0 as usize).and_then(Option::as_ref)
     }
@@ -598,6 +631,7 @@ impl Pipenet {
         }
         let dirs = d.node_dirs.clone();
         let airlock_pump = matches!(d.custom, Custom::AirlockPump);
+        let multiz = matches!(d.custom, Custom::MultiZ);
         for (i, dir) in dirs.into_iter().enumerate() {
             let Some(target_pos) = step(pos, dir) else {
                 continue;
@@ -615,6 +649,17 @@ impl Pipenet {
                 .find(|&t| t != id && self.connection_check(id, t, layer));
             if let Some(found) = found {
                 self.dev_mut(id).nodes[i] = Some(found);
+            }
+        }
+        if multiz {
+            let (up, down) = (
+                self.multiz_partner(id, true),
+                self.multiz_partner(id, false),
+            );
+            let nodes = &mut self.dev_mut(id).nodes;
+            if nodes.len() == 3 {
+                nodes[1] = up;
+                nodes[2] = down;
             }
         }
         self.changed.push(id);

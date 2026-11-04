@@ -49,13 +49,13 @@
 Лестница связывает уровни по вертикали: клик — подъём или спуск с задержкой; разборка сваркой, крафтовая лестница.
 
 - **Код:** [`/obj/structure/ladder`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/ladders.dm#L2), [`proc/link_down()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/ladders.dm#L151), [`/obj/structure/ladder/crafted`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/ladders.dm#L475)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/multiz.rs` (`Ladder`, `interact`, `ghost_clicks`): связь со стремянками точно над и под, ЛКМ — вверх, ПКМ — вниз за секунду, утаскиваемое следом, призраки сразу, спрайт `ladder[up][down]`; нет радиального меню (кликнуть ещё раз), дыры в полу, разборки сваркой и крафта, атлетики
 
 ### Ступени и марши (stairs)
 Марш лестницы переводит идущего на уровень выше при шаге в направлении подъёма; декоративные ступени (`steps`) и фальшлестницы, телепортирующие между точками карты.
 
 - **Код:** [`/obj/structure/stairs`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/stairs.dm#L14), [`proc/on_exit_stairs()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/stairs.dm#L181), [`/obj/structure/steps`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/steps.dm#L2), [`/obj/structure/fake_stairs`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/fake_stairs.dm#L2)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/multiz.rs` (`Stairs`, `climb_stairs`): последняя ступень марша не выпускает за свой дальний край (граница без плотности, `ss13_world::NonDenseBorder`, клиент предсказывает и сам подъём — `Blocks::Stairs`), шаг туда — на этаж выше, если там не открытое пространство; спуск — падением на неё (ловит без урона, бессознательные скатываются с уроном), составные спрайты `-l/-m/-r`; нет указателей и меток миникарты, рамы ступеней, `force_open_above`, толчка при скатывании, декоративных ступеней (`steps`) и фальшлестниц-телепортов
 
 ### Транзитные трубы
 Пневмотрубы со станциями: в капсуле игрок едет по трубам между станциями; сборка труб из деталей, капсулы из РПД.

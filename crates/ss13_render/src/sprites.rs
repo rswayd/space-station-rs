@@ -9,10 +9,69 @@ use bevy::ecs::entity::EntityHashSet;
 use bevy::prelude::*;
 use bevy::sprite::Anchor;
 use ss13_shared::{
-    Appearance, Dir, EMISSIVE_PLANE, Facing, IconStateId, Overlay, TILE_SIZE, TilePos,
+    Appearance, Dir, EMISSIVE_PLANE, Facing, IconStateId, LevelStack, Overlay, TILE_SIZE, TilePos,
 };
 
 use crate::ActiveZ;
+use crate::order::Z_RANGE;
+
+/// Space (`PLANE_SPACE` and below) of every drawn level, under the parallax: z in
+/// `[-2 * Z_RANGE - 4, -Z_RANGE - 4)` (f32 steps of 2 there; space is flat).
+pub const SPACE_BAND: f32 = -2.0 * Z_RANGE - 4.0;
+/// The level below the camera's: z in `[-Z_RANGE, 0)`, over the parallax
+/// ([`PARALLAX_Z`]), under the camera's level.
+pub const BELOW_BAND: f32 = -Z_RANGE;
+/// The parallax quad: between space and the level below.
+pub const PARALLAX_Z: f32 = -Z_RANGE - 2.0;
+/// tg `TRANSPARENT_FLOOR_PLANE`: open space.
+pub const TRANSPARENT_FLOOR_PLANE: i16 = -10;
+/// How bright the level below is drawn (tg darkens what is seen through open space).
+const BELOW_BRIGHTNESS: f32 = 0.8;
+
+/// Where a sprite is drawn relative to [`DrawOrder`]'s z: the camera's level as is, the level
+/// below it (seen through open space and glass floors, tg's z-mimic; the server sends only
+/// what lies under those) in [`BELOW_BAND`], space of both in [`SPACE_BAND`] so the parallax
+/// stays over it; `None` for other levels, hidden.
+pub fn level_offset(z: u16, plane: i16, active: u16, stack: Option<&LevelStack>) -> Option<f32> {
+    let below = stack.and_then(|s| s.below(active)) == Some(z);
+    // tg `plane_master/transparent_floor`: open space is drawn into the light mask only, never
+    // onto the screen (its `pure_white` state would hide the level below).
+    if (z != active && !below) || plane == TRANSPARENT_FLOOR_PLANE {
+        return None;
+    }
+    Some(if plane <= crate::parallax::PLANE_SPACE {
+        SPACE_BAND
+    } else if below {
+        BELOW_BAND
+    } else {
+        0.0
+    })
+}
+
+/// The [`DrawOrder`] z of a sprite drawn at `z` ([`level_offset`] taken off).
+fn order_z(z: f32) -> f32 {
+    if z < BELOW_BAND {
+        z - SPACE_BAND
+    } else if z < 0.0 {
+        z - BELOW_BAND
+    } else {
+        z
+    }
+}
+
+/// The level below is drawn darker.
+fn shade(color: Color, offset: f32) -> Color {
+    if offset != BELOW_BAND {
+        return color;
+    }
+    let c = color.to_srgba();
+    Color::srgba(
+        c.red * BELOW_BRIGHTNESS,
+        c.green * BELOW_BRIGHTNESS,
+        c.blue * BELOW_BRIGHTNESS,
+        c.alpha,
+    )
+}
 use crate::anim::frame_at;
 use crate::atlas::{IconAtlas, frame_count, frame_rect};
 use crate::order::{DrawOrder, overlay_z};
@@ -190,6 +249,7 @@ pub fn sync_appearance(
     mut entities: Query<AppearanceItem>,
     overlay_state: Query<(&IconSprite, Option<&Animated>)>,
     mut overlay_transforms: Query<&mut Transform, Without<Appearance>>,
+    (active_z, stack): (Res<ActiveZ>, Option<Res<LevelStack>>),
 ) {
     let mut rekey = false;
     for a in &changed {
@@ -214,7 +274,9 @@ pub fn sync_appearance(
             continue;
         }
         let tiebreak = entity.index_u32();
-        let z = order.z(appearance.plane, appearance.layer.0, tiebreak);
+        let level =
+            level_offset(pos.z, appearance.plane, active_z.0, stack.as_deref()).unwrap_or(0.0);
+        let z = order.z(appearance.plane, appearance.layer.0, tiebreak) + level;
         let (rotation, offset) = turn(appearance.rotation, pixels(appearance.pixel_offset));
         match transform {
             Some(mut t) => {
@@ -250,7 +312,7 @@ pub fn sync_appearance(
         let built = make_sprite(
             &mut atlas,
             base,
-            tint(appearance.color),
+            shade(tint(appearance.color), level),
             offset,
             icon.zip(Some(anim)),
             now,
@@ -268,7 +330,7 @@ pub fn sync_appearance(
             let built = make_sprite(
                 &mut atlas,
                 icon,
-                tint(overlay_color(overlay.color, appearance.color)),
+                shade(tint(overlay_color(overlay.color, appearance.color)), level),
                 offset + pixels(overlay.pixel_offset),
                 prev,
                 now,
@@ -329,18 +391,21 @@ pub fn strip_removed(
     }
 }
 
-/// Moves sprites to their tile and shows only the camera's z-level.
+/// Moves sprites to their tile and shows only the camera's z-level and the one below it
+/// ([`level_offset`]).
 pub fn sync_tile_pos(
     active_z: Res<ActiveZ>,
+    stack: Option<Res<LevelStack>>,
     mut moved: Query<(
         Ref<TilePos>,
         Ref<IconSprite>,
         &mut Transform,
         &mut Visibility,
+        Option<Mut<Appearance>>,
     )>,
 ) {
-    let all = active_z.is_changed();
-    for (pos, icon, mut transform, mut visibility) in &mut moved {
+    let all = active_z.is_changed() || stack.as_ref().is_some_and(|s| s.is_changed());
+    for (pos, icon, mut transform, mut visibility, appearance) in &mut moved {
         if !all && !pos.is_changed() && !icon.is_added() {
             continue;
         }
@@ -349,7 +414,21 @@ pub fn sync_tile_pos(
             transform.translation.x = xy.x;
             transform.translation.y = xy.y;
         }
-        let wanted = if pos.z == active_z.0 {
+        let plane = appearance.as_ref().map_or(0, |a| a.plane);
+        let offset = level_offset(pos.z, plane, active_z.0, stack.as_deref());
+        let old = transform.translation.z;
+        let z = order_z(old) + offset.unwrap_or(0.0);
+        if old != z {
+            transform.translation.z = z;
+            // Into or out of the level below: rebuilt next frame with or without its shade.
+            let was_below = (BELOW_BAND..0.0).contains(&old);
+            if was_below != (offset == Some(BELOW_BAND))
+                && let Some(mut a) = appearance
+            {
+                a.set_changed();
+            }
+        }
+        let wanted = if offset.is_some() {
             Visibility::Inherited
         } else {
             Visibility::Hidden

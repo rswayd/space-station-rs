@@ -8,7 +8,8 @@ pub mod movement;
 
 pub use index::{CHUNK_SIZE, ChunkPos, LevelError, SpatialIndex};
 pub use movement::{
-    Border, Bumped, ClimbWalkable, Density, MoveRequest, Moved, Mover, next_ready_at, resolve_move,
+    Border, Bumped, ClimbWalkable, ClimbsUp, Density, FallsThrough, MoveRequest, Moved, Mover,
+    NonDenseBorder, next_ready_at, resolve_move,
 };
 
 /// Ordering points for other plugins: write `MoveRequest` before `Movement`, read `Moved`

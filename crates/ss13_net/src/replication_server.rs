@@ -31,8 +31,11 @@ use bevy::platform::hash::FixedHasher;
 use bevy::platform::time::Instant;
 use bevy::prelude::*;
 use ss13_shared::protocol::NetId;
-use ss13_shared::{Appearance, Facing, Optics, TilePos, light_block};
-use ss13_world::{Border, ChunkPos, ClimbWalkable, Density, Mover, SpatialIndex};
+use ss13_shared::{Appearance, Facing, LevelStack, Optics, TilePos, light_block};
+use ss13_world::{
+    Border, ChunkPos, ClimbWalkable, ClimbsUp, Density, FallsThrough, Mover, NonDenseBorder,
+    SpatialIndex,
+};
 
 use crate::light_server::{LIGHT_MARGIN, LightGrid, block_overlaps, blocks_in};
 use crate::protocol::ServerMessage;
@@ -371,6 +374,10 @@ struct ClientView {
     los_sent: Option<u32>,
     /// Origins of the light blocks this client subscribes to.
     light_blocks: Vec<TilePos>,
+    /// The viewer's level and the one below it, from the last pass.
+    levels: Option<(u16, Option<u16>)>,
+    /// [`ReplicationOp::Stack`] went out.
+    stack_sent: bool,
     appearances: Vec<(AppearanceId, Look)>,
     ops: Vec<ReplicationOp>,
     moves: Vec<Motion>,
@@ -408,7 +415,18 @@ impl ClientView {
 
     /// Whether the mask lets `entity` on `pos` through: everything without a mask, the
     /// controlled entity always.
-    fn shows(&self, masks: &ViewMasks, entity: Entity, pos: TilePos) -> bool {
+    fn shows(&self, masks: &ViewMasks, index: &SpatialIndex, entity: Entity, pos: TilePos) -> bool {
+        // The level below shows through a transparent tile over it, where that tile shows.
+        let pos = match self.levels {
+            Some((z, Some(below))) if pos.z == below => {
+                let over = TilePos { z, ..pos };
+                if !index.transparent(over) {
+                    return false;
+                }
+                over
+            }
+            _ => pos,
+        };
         self.mask
             .is_none_or(|m| self.control == Some(entity) || masks.visible(m, pos))
     }
@@ -569,20 +587,23 @@ impl ClientView {
     }
 }
 
-/// Inclusive tile box on one z-level.
+/// Inclusive tile box on one z-level and, on a multi-deck map, the same box on the level below
+/// (seen through open space: tg's z-mimic).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct ViewBox {
     z: u16,
+    below: Option<u16>,
     min: (i32, i32),
     max: (i32, i32),
 }
 
 impl ViewBox {
-    fn of(viewer: &Viewer) -> Self {
+    fn of(viewer: &Viewer, stack: Option<&LevelStack>) -> Self {
         let r = viewer.radius.min(i32::MAX as u32) as i32;
         let c = viewer.center;
         Self {
             z: c.z,
+            below: stack.and_then(|s| s.below(c.z)),
             min: (c.x.saturating_sub(r), c.y.saturating_sub(r)),
             max: (c.x.saturating_add(r), c.y.saturating_add(r)),
         }
@@ -592,13 +613,19 @@ impl ViewBox {
         let by = by.min(i32::MAX as u32) as i32;
         Self {
             z: self.z,
+            below: self.below,
             min: (self.min.0.saturating_sub(by), self.min.1.saturating_sub(by)),
             max: (self.max.0.saturating_add(by), self.max.1.saturating_add(by)),
         }
     }
 
+    /// The box's levels: its own, then the one below.
+    fn levels(&self) -> impl Iterator<Item = u16> + use<> {
+        std::iter::once(self.z).chain(self.below)
+    }
+
     fn contains(&self, pos: TilePos) -> bool {
-        pos.z == self.z
+        (pos.z == self.z || Some(pos.z) == self.below)
             && (self.min.0..=self.max.0).contains(&pos.x)
             && (self.min.1..=self.max.1).contains(&pos.y)
     }
@@ -612,18 +639,22 @@ impl ViewBox {
 
     fn chunks(&self) -> impl Iterator<Item = ChunkPos> + use<> {
         let (lo, hi) = self.chunk_range();
-        let z = self.z;
-        (lo.y..=hi.y).flat_map(move |y| (lo.x..=hi.x).map(move |x| ChunkPos { x, y, z }))
+        self.levels().flat_map(move |z| {
+            (lo.y..=hi.y).flat_map(move |y| (lo.x..=hi.x).map(move |x| ChunkPos { x, y, z }))
+        })
     }
 
     fn has_chunk(&self, chunk: ChunkPos) -> bool {
         let (lo, hi) = self.chunk_range();
-        chunk.z == self.z && (lo.x..=hi.x).contains(&chunk.x) && (lo.y..=hi.y).contains(&chunk.y)
+        (chunk.z == self.z || Some(chunk.z) == self.below)
+            && (lo.x..=hi.x).contains(&chunk.x)
+            && (lo.y..=hi.y).contains(&chunk.y)
     }
 
-    /// The part of `self` outside `other`, as up to four disjoint `(min, max)` rects.
+    /// The part of `self` outside `other` on each of its levels, as up to four disjoint
+    /// `(min, max)` rects.
     fn minus(&self, other: Option<&ViewBox>) -> Vec<((i32, i32), (i32, i32))> {
-        let Some(other) = other.filter(|o| o.z == self.z) else {
+        let Some(other) = other.filter(|o| o.z == self.z && o.below == self.below) else {
             return vec![(self.min, self.max)];
         };
         let lo = (self.min.0.max(other.min.0), self.min.1.max(other.min.1));
@@ -726,12 +757,30 @@ type BlockData = (
     Option<&'static Border>,
     Has<ClimbWalkable>,
     Has<Mover>,
+    Has<NonDenseBorder>,
+    Option<&'static ClimbsUp>,
+    Has<FallsThrough>,
 );
 
 /// [`Blocks`] of an entity: dense things that do not move by themselves.
 fn blocks_of(
-    (dense, border, climbable, mover): (bool, Option<&Border>, bool, bool),
+    (dense, border, climbable, mover, edge_only, climbs, hole): (
+        bool,
+        Option<&Border>,
+        bool,
+        bool,
+        bool,
+        Option<&ClimbsUp>,
+        bool,
+    ),
 ) -> Option<Blocks> {
+    if let Some(ClimbsUp(dir)) = climbs {
+        return Some(Blocks::Stairs(*dir as u8));
+    }
+    if hole {
+        return Some(Blocks::Hole);
+    }
+    let dense = dense || (edge_only && border.is_some());
     if !dense || mover {
         return None;
     }
@@ -784,7 +833,7 @@ fn replicate(
     >,
     mut removed_viewers: RemovedComponents<Viewer>,
     links: Query<&ClientLink>,
-    (blocking_changed, mut lost_density, mut lost_border, mut lost_climbable): (
+    (blocking_changed, mut lost_density, mut lost_border, mut lost_climbable, mut lost_hole): (
         Query<
             Entity,
             (
@@ -794,13 +843,16 @@ fn replicate(
                     Changed<Border>,
                     Added<ClimbWalkable>,
                     Added<Mover>,
+                    Added<FallsThrough>,
                 )>,
             ),
         >,
         RemovedComponents<Density>,
         RemovedComponents<Border>,
         RemovedComponents<ClimbWalkable>,
+        RemovedComponents<FallsThrough>,
     ),
+    stack: Option<Res<LevelStack>>,
 ) {
     let start = Instant::now();
     let interest = &mut *interest;
@@ -908,6 +960,19 @@ fn replicate(
         }
     }
 
+    // A viewer changing level this tick (its mob climbed or fell): its entities are judged
+    // against the new box already, or the mob itself would leave the old one and come back as a
+    // new entity in 3 (drawn popping onto its tile instead of stepping).
+    let next_level: HashMap<Entity, ViewBox> = viewers
+        .iter()
+        .filter(|v| v.1.is_changed())
+        .filter_map(|(client, viewer, ..)| {
+            let new = ViewBox::of(&viewer, stack.as_deref());
+            let old = clients.get(&client)?.view?;
+            (old.z != new.z).then_some((client, new.grow(KEEP_MARGIN)))
+        })
+        .collect();
+
     // 2. Changed entities, against the current view boxes.
     for (entity, pos, facing, appearance, optics, networked, invisibility) in &changed {
         let motion = pos.is_changed() || facing.as_ref().is_some_and(|f| f.is_changed());
@@ -940,10 +1005,11 @@ fn replicate(
         let mut interned = interned;
         for client in &candidates {
             let view = clients.get_mut(client).expect("registered viewer");
-            let shown = indexed && view.shows(masks, entity, *pos);
+            let shown = indexed && view.shows(masks, &index, entity, *pos);
             let in_view =
                 shown && view.sees(invisibility) && view.view.is_some_and(|v| v.contains(*pos));
-            let in_keep = shown && view.keep().is_some_and(|v| v.contains(*pos));
+            let keep = next_level.get(client).copied().or_else(|| view.keep());
+            let in_keep = shown && keep.is_some_and(|v| v.contains(*pos));
             match view.known.get(&entity).copied() {
                 None if in_view => {
                     let id = *interned.get_or_insert_with(|| {
@@ -985,6 +1051,7 @@ fn replicate(
     reblocked.extend(lost_density.read());
     reblocked.extend(lost_border.read());
     reblocked.extend(lost_climbable.read());
+    reblocked.extend(lost_hole.read());
     reblocked.sort_unstable();
     reblocked.dedup();
     for entity in reblocked {
@@ -1026,7 +1093,18 @@ fn replicate(
                 if !keep.contains(pos) {
                     continue;
                 }
-                for &entity in index.on_tile(pos) {
+                // The tile below shows or hides with this one.
+                let under = view
+                    .levels
+                    .and_then(|(z, below)| below.filter(|_| z == pos.z))
+                    .map(|below| TilePos { z: below, ..pos });
+                let on_tiles: Vec<Entity> = index
+                    .on_tile(pos)
+                    .iter()
+                    .chain(under.iter().flat_map(|&u| index.on_tile(u)))
+                    .copied()
+                    .collect();
+                for entity in on_tiles {
                     let (s, d) = refresh(
                         view,
                         tick,
@@ -1065,8 +1143,16 @@ fn replicate(
         }
     }
     for (client, viewer, controlled, see, mask, _) in &viewers {
-        let new_view = ViewBox::of(&viewer);
+        let new_view = ViewBox::of(&viewer, stack.as_deref());
         let view = clients.entry(client).or_default();
+        view.levels = Some((new_view.z, new_view.below));
+        // The level stack goes once, before anything of a level below is spawned.
+        if !view.stack_sent
+            && let Some(stack) = stack.as_deref().filter(|s| !s.links.is_empty())
+        {
+            view.stack_sent = true;
+            view.ops.push(ReplicationOp::Stack(stack.links.clone()));
+        }
         let (see, groups) = (see.0.map_or(0, |s| s.0), see.1.map_or(0, |g| g.0));
         let viewer_mask = mask;
         let mask = mask
@@ -1111,7 +1197,7 @@ fn replicate(
                     states.get(e).is_ok_and(|(pos, _, _, _, invisibility, _)| {
                         !view.sees(invisibility)
                             || !keep.contains(*pos)
-                            || !view.shows(masks, e, *pos)
+                            || !view.shows(masks, &index, e, *pos)
                     })
                 })
                 .collect();
@@ -1138,22 +1224,48 @@ fn replicate(
         if old_view != Some(new_view) {
             let old_keep = view.keep();
             let new_keep = new_view.grow(KEEP_MARGIN);
-            if let Some(old) = old_keep {
-                for (min, max) in old.minus(Some(&new_keep)) {
-                    for entity in index.in_rect(old.z, min, max) {
+            match old_keep {
+                // Another level: what shows in both boxes stays (the mob that climbed, the hall
+                // under the open space it looked down through), the rest goes.
+                Some(old) if (old.z, old.below) != (new_keep.z, new_keep.below) => {
+                    let gone: Vec<Entity> = view
+                        .known
+                        .keys()
+                        .copied()
+                        .filter(|&e| {
+                            states.get(e).is_ok_and(|(pos, ..)| {
+                                !new_keep.contains(*pos) || !view.shows(masks, &index, e, *pos)
+                            })
+                        })
+                        .collect();
+                    for entity in gone {
                         despawned += u64::from(view.despawn(tick, entity));
                     }
                 }
+                Some(old) => {
+                    for (min, max) in old.minus(Some(&new_keep)) {
+                        for z in old.levels() {
+                            for entity in index.in_rect(z, min, max) {
+                                despawned += u64::from(view.despawn(tick, entity));
+                            }
+                        }
+                    }
+                }
+                None => {}
             }
-            for (min, max) in new_view.minus(old_view.as_ref()) {
-                for entity in index.in_rect(new_view.z, min, max) {
+            let rects = new_view.minus(old_view.as_ref());
+            let fresh = rects
+                .iter()
+                .flat_map(|&(min, max)| new_view.levels().map(move |z| (z, min, max)));
+            for (z, min, max) in fresh {
+                for entity in index.in_rect(z, min, max) {
                     if view.known.contains_key(&entity) {
                         continue;
                     }
                     if let Ok((&pos, facing, appearance, optics, invisibility, block)) =
                         states.get(entity)
                         && view.sees(invisibility)
-                        && view.shows(masks, entity, pos)
+                        && view.shows(masks, &index, entity, pos)
                     {
                         let interned = match tracked.get(&entity) {
                             Some(t) => t.appearance,
@@ -1335,7 +1447,9 @@ fn update_light_interest(
     let keep = view.view.map(|v| v.grow(LIGHT_MARGIN + KEEP_MARGIN));
     let mut forgotten = Vec::new();
     view.light_blocks.retain(|&origin| {
-        let kept = keep.is_some_and(|k| block_overlaps(origin, k.z, k.min, k.max));
+        // Also the level below: its own lights light what shows through open space.
+        let kept =
+            keep.is_some_and(|k| k.levels().any(|z| block_overlaps(origin, z, k.min, k.max)));
         if !kept {
             lights.unsubscribe(origin, client);
             forgotten.push(origin);
@@ -1348,7 +1462,11 @@ fn update_light_interest(
     let Some(want) = view.view.map(|v| v.grow(LIGHT_MARGIN)) else {
         return;
     };
-    for origin in blocks_in(want.z, want.min, want.max) {
+    let origins: Vec<TilePos> = want
+        .levels()
+        .flat_map(|z| blocks_in(z, want.min, want.max))
+        .collect();
+    for origin in origins {
         if !view.light_blocks.contains(&origin) {
             view.light_blocks.push(origin);
             let op = lights.subscribe(origin, client);
@@ -1505,7 +1623,7 @@ fn refresh(
     let Ok((&pos, facing, appearance, optics, invisibility, block)) = states.get(entity) else {
         return (0, 0);
     };
-    let shown = index.in_bounds(pos) && view.shows(masks, entity, pos);
+    let shown = index.in_bounds(pos) && view.shows(masks, index, entity, pos);
     if view.known.contains_key(&entity) {
         let kept = shown && view.keep().is_some_and(|k| k.contains(pos));
         return (0, u64::from(!kept && view.despawn(tick, entity)));
@@ -1647,7 +1765,12 @@ mod tests {
     use super::*;
 
     fn bx(min: (i32, i32), max: (i32, i32)) -> ViewBox {
-        ViewBox { z: 1, min, max }
+        ViewBox {
+            z: 1,
+            below: None,
+            min,
+            max,
+        }
     }
 
     fn tiles(rects: &[((i32, i32), (i32, i32))]) -> HashSet<(i32, i32)> {

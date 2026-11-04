@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::{Dir, TilePos};
 
 /// Bumped on every incompatible change; checked during the handshake.
-pub const PROTOCOL_VERSION: u32 = 60;
+pub const PROTOCOL_VERSION: u32 = 63;
 
 /// Simulation tick (20 Hz, as BYOND tg). Server loop and network tick sync must agree on it.
 pub const TICK_DURATION: Duration = Duration::from_millis(50);
@@ -74,6 +74,10 @@ pub enum ClientIntent {
     },
     /// tg `toggle_move_intent`: the own mob switches between running and walking.
     ToggleMoveIntent,
+    /// tg `/mob/proc/up` (PgUp): the ladder underfoot, flight, or a ghost through the floor.
+    MoveUp,
+    /// tg `/mob/proc/down` (PgDn).
+    MoveDown,
     /// A right click on a HUD inventory slot: on the active hand's item, tg
     /// `attack_self_secondary` (a gas analyzer opens its window).
     RightClickSlot(InventorySlot),

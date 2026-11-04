@@ -282,13 +282,18 @@ pub fn active_players(world: &mut World) -> u32 {
     q.iter(world).filter(|s| **s != Stat::Dead).count() as u32
 }
 
-/// The station's z-levels (tg `ZTRAIT_STATION`): the maps loaded at startup, before shuttle
-/// templates.
+/// The station's z-levels (tg `ZTRAIT_STATION`): every level of the maps loaded at startup
+/// (a multi-deck map has several), before shuttle templates.
 pub fn station_levels(world: &World) -> std::ops::RangeInclusive<u16> {
     let maps = world
         .get_resource::<MapLoadPlugin>()
         .map_or(0, |m| m.maps.len());
-    1..=maps as u16
+    let levels: u32 = world
+        .get_resource::<ss13_mapload::MapLoadReport>()
+        .map_or(maps as u32, |r| {
+            r.maps.iter().take(maps).map(|m| m.size.2).sum()
+        });
+    1..=levels as u16
 }
 
 pub(super) fn init_events(world: &mut World) {

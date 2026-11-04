@@ -162,6 +162,11 @@ pub struct LightWorld {
     tracked: EntityHashMap<(TilePos, Optics)>,
     /// Tiles whose opacity changed since the sources were last updated.
     dirty_tiles: Vec<TilePos>,
+    /// Open space (`TRANSPARENT_FLOOR_PLANE` turfs) per tile and where each is: the camera's
+    /// level is not lit there (x1), the level below shows with its own light
+    /// ([`LowerLightmap`]).
+    see_through: HashMap<TilePos, u32>,
+    see_through_at: EntityHashMap<TilePos>,
     /// Something in the lightmap may have changed.
     changed: bool,
 }
@@ -181,6 +186,28 @@ struct Source {
 }
 
 impl LightWorld {
+    /// Files `entity` as open space on `pos` (`None`: not, or gone).
+    fn see_through(&mut self, entity: Entity, pos: Option<TilePos>) {
+        let old = self.see_through_at.get(&entity).copied();
+        if old == pos {
+            return;
+        }
+        if let Some(old) = old {
+            self.see_through_at.remove(&entity);
+            if let Some(n) = self.see_through.get_mut(&old) {
+                *n -= 1;
+                if *n == 0 {
+                    self.see_through.remove(&old);
+                }
+            }
+        }
+        if let Some(pos) = pos {
+            self.see_through_at.insert(entity, pos);
+            *self.see_through.entry(pos).or_default() += 1;
+        }
+        self.changed = true;
+    }
+
     pub fn is_opaque(&self, pos: TilePos) -> bool {
         opaque_at(&self.opaque, &self.blocks, pos)
     }
@@ -408,6 +435,11 @@ fn opaque_at(
 fn track_optics(
     settings: Res<LightingSettings>,
     mut world: ResMut<LightWorld>,
+    open_space: Query<
+        (Entity, &TilePos, &ss13_shared::Appearance),
+        Or<(Changed<ss13_shared::Appearance>, Changed<TilePos>)>,
+    >,
+    mut lost_appearance: RemovedComponents<ss13_shared::Appearance>,
     mut updates: MessageReader<LightUpdate>,
     changed: Query<(Entity, &TilePos, &Optics), Or<(Changed<Optics>, Changed<TilePos>)>>,
     moved: Query<(Entity, &TilePos), Changed<TilePos>>,
@@ -424,6 +456,14 @@ fn track_optics(
     for entity in lost_pos.read() {
         world.untrack(entity);
         world.occupy(entity, None);
+        world.see_through(entity, None);
+    }
+    for entity in lost_appearance.read() {
+        world.see_through(entity, None);
+    }
+    for (entity, &pos, appearance) in &open_space {
+        let open = appearance.plane == crate::sprites::TRANSPARENT_FLOOR_PLANE;
+        world.see_through(entity, open.then_some(pos));
     }
     for entity in lost_optics.read() {
         world.untrack(entity);
@@ -449,12 +489,14 @@ fn track_optics(
 fn update_sources(
     settings: Res<LightingSettings>,
     active_z: Res<ActiveZ>,
+    stack: Option<Res<ss13_shared::LevelStack>>,
     mut world: ResMut<LightWorld>,
     mut stats: ResMut<LightingStats>,
 ) {
     if !settings.enabled {
         return;
     }
+    let below = stack.as_deref().and_then(|s| s.below(active_z.0));
     let start = Instant::now();
     let world = &mut *world;
     let dirty = DirtyTiles::new(std::mem::take(&mut world.dirty_tiles));
@@ -470,7 +512,7 @@ fn update_sources(
         if source.corners.is_some() && dirty.near(source.pos, reach + 1) {
             source.corners = None;
         }
-        if source.corners.is_some() || source.pos.z != active_z.0 {
+        if source.corners.is_some() || (source.pos.z != active_z.0 && Some(source.pos.z) != below) {
             continue;
         }
         let at = source.pos;
@@ -547,6 +589,14 @@ struct Lightmap {
 #[derive(Component)]
 struct EmissiveCamera;
 
+/// The lightmap of the level below the camera's (tg's z-mimic lights the levels seen through
+/// open space with their own lights): drawn between that level and the camera's
+/// ([`crate::sprites::BELOW_BAND`]), it multiplies only what lies under it, and leaves alone
+/// (x1) the tiles where nothing of that level is known (under floors; the server sends that
+/// level only under open space and glass).
+#[derive(Component)]
+struct LowerLightmap;
+
 #[derive(Asset, TypePath, AsBindGroup, Clone, Debug)]
 pub struct LightmapMaterial {
     /// Region origin (tiles) in xy, size (tiles) in zw.
@@ -563,6 +613,10 @@ pub struct LightmapMaterial {
     /// Tiles in view (r), sampled with the corners' linear sampler.
     #[texture(5)]
     view: Handle<Image>,
+    /// x: 1 for [`LowerLightmap`]: `view` is where that level is known and the light outside
+    /// it is 1 (untouched) instead of black.
+    #[uniform(6)]
+    mode: Vec4,
 }
 
 impl Material2d for LightmapMaterial {
@@ -639,33 +693,40 @@ fn spawn_lightmap(
     mut images: ResMut<Assets<Image>>,
     mut materials: ResMut<Assets<LightmapMaterial>>,
 ) {
-    let corners = images.add(lightmap_image(UVec2::ONE, true));
-    let tiles = images.add(lightmap_image(UVec2::ONE, false));
     let emissive = images.add(emissive_image(UVec2::ONE));
-    let view = images.add(lightmap_image(UVec2::ONE, true));
-    commands.spawn((
-        Name::new("lightmap"),
-        Mesh2d(meshes.add(Rectangle::new(1.0, 1.0))),
-        MeshMaterial2d(materials.add(LightmapMaterial {
-            region: Vec4::ZERO,
-            corners: corners.clone(),
-            tiles: tiles.clone(),
-            emissive: emissive.clone(),
-            view: view.clone(),
-        })),
-        Transform::default(),
-        Visibility::Hidden,
-        Lightmap {
-            region: None,
-            corners,
-            tiles,
-            emissive,
-            view,
-            view_now: Vec::new(),
-            view_target: Vec::new(),
-            rebind: 0,
-        },
-    ));
+    let quad = meshes.add(Rectangle::new(1.0, 1.0));
+    for lower in [false, true] {
+        let corners = images.add(lightmap_image(UVec2::ONE, true));
+        let tiles = images.add(lightmap_image(UVec2::ONE, false));
+        let view = images.add(lightmap_image(UVec2::ONE, true));
+        let mut lightmap = commands.spawn((
+            Name::new(if lower { "lightmap below" } else { "lightmap" }),
+            Mesh2d(quad.clone()),
+            MeshMaterial2d(materials.add(LightmapMaterial {
+                region: Vec4::ZERO,
+                corners: corners.clone(),
+                tiles: tiles.clone(),
+                emissive: emissive.clone(),
+                view: view.clone(),
+                mode: Vec4::new(if lower { 1.0 } else { 0.0 }, 0.0, 0.0, 0.0),
+            })),
+            Transform::default(),
+            Visibility::Hidden,
+            Lightmap {
+                region: None,
+                corners,
+                tiles,
+                emissive: emissive.clone(),
+                view,
+                view_now: Vec::new(),
+                view_target: Vec::new(),
+                rebind: 0,
+            },
+        ));
+        if lower {
+            lightmap.insert(LowerLightmap);
+        }
+    }
 }
 
 /// A camera rendering into `Rgba8Unorm` gets an sRGB view of its main texture, which needs
@@ -703,9 +764,11 @@ fn sync_emissive_camera(
         With<EmissiveCamera>,
     >,
 ) {
-    let (Ok(mut lightmap), Some((camera, projection, transform))) =
-        (lightmaps.single_mut(), world_cameras.iter().next())
-    else {
+    let Some((camera, projection, transform)) = world_cameras.iter().next() else {
+        return;
+    };
+    // Both lightmaps share the mask.
+    let Some(handle) = lightmaps.iter().next().map(|l| l.emissive.clone()) else {
         return;
     };
     let (Some(size), Some(scale)) = (
@@ -715,15 +778,17 @@ fn sync_emissive_camera(
         return;
     };
     if images
-        .get(&lightmap.emissive)
+        .get(&handle)
         .is_some_and(|image| image.size() != size)
-        && let Some(mut image) = images.get_mut(&lightmap.emissive)
+        && let Some(mut image) = images.get_mut(&handle)
     {
         *image = emissive_image(size);
-        lightmap.rebind = 2;
+        for mut lightmap in &mut lightmaps {
+            lightmap.rebind = 2;
+        }
     }
     let target = RenderTarget::Image(ImageRenderTarget {
-        handle: lightmap.emissive.clone(),
+        handle: handle.clone(),
         scale_factor: scale,
     });
     let Ok((entity, mut e_camera, mut e_projection, mut e_transform, e_target)) =
@@ -771,7 +836,7 @@ fn sync_emissive_camera(
         *e_transform = *transform;
     }
     let stale = match e_target {
-        RenderTarget::Image(t) => t.scale_factor != scale || t.handle != lightmap.emissive,
+        RenderTarget::Image(t) => t.scale_factor != scale || t.handle != handle,
         _ => true,
     };
     if stale {
@@ -804,11 +869,13 @@ fn view_region(center: Vec2, area: Rect, z: u16) -> Region {
 }
 
 /// Rebuilds the lightmap textures when something in the region changed or the region moved, and
-/// fades the view toward what the eye sees.
+/// fades the view toward what the eye sees. The same for the level below ([`LowerLightmap`]),
+/// whose "view" is where that level is known.
 #[allow(clippy::too_many_arguments)]
 fn update_lightmap(
     settings: Res<LightingSettings>,
     active_z: Res<ActiveZ>,
+    stack: Option<Res<ss13_shared::LevelStack>>,
     order: Res<DrawOrder>,
     mut world: ResMut<LightWorld>,
     mut stats: ResMut<LightingStats>,
@@ -819,80 +886,115 @@ fn update_lightmap(
         &MeshMaterial2d<LightmapMaterial>,
         &mut Transform,
         &mut Visibility,
+        Has<LowerLightmap>,
     )>,
     mut images: ResMut<Assets<Image>>,
     mut materials: ResMut<Assets<LightmapMaterial>>,
     time: Res<Time>,
 ) {
     let start = Instant::now();
-    let Ok((mut lightmap, material, mut transform, mut visibility)) = lightmaps.single_mut() else {
-        return;
-    };
-    visibility.set_if_neq(if settings.enabled {
-        Visibility::Inherited
-    } else {
-        Visibility::Hidden
-    });
-    if !settings.enabled {
-        return;
-    }
-    if lightmap.rebind > 0 {
-        lightmap.rebind -= 1;
-        materials.get_mut(&material.0);
-    }
-    let Some(region) = camera_region(&cameras, active_z.0) else {
-        return;
-    };
-    if order.is_changed() || transform.translation.z == 0.0 {
-        transform.translation.z = order.plane_z(LIGHTING_PLANE);
-    }
+    let below = stack.as_deref().and_then(|s| s.below(active_z.0));
     let eye = targets.iter().next().copied();
     if world.eye != eye {
         world.changed = true;
     }
-    if !world.changed && lightmap.region == Some(region) {
-        fade_view(&mut lightmap, &mut images, time.delta_secs(), false);
-        stats.frame_time += start.elapsed();
-        return;
-    }
-    world.changed = false;
-    stats.rebuilds += 1;
-    world.update_los(eye);
-    let old = lightmap.region;
-    let target = view_targets(&world, region);
-    lightmap.view_now = moved_view(old, &lightmap.view_now, region, &target);
-    lightmap.view_target = target;
+    let changed = std::mem::take(&mut world.changed);
+    let mut los_updated = false;
+    for (mut lightmap, material, mut transform, mut visibility, lower) in &mut lightmaps {
+        let z = if lower { below } else { Some(active_z.0) };
+        let shown = settings.enabled && z.is_some();
+        visibility.set_if_neq(if shown {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        });
+        let (true, Some(z)) = (shown, z) else {
+            continue;
+        };
+        if lightmap.rebind > 0 {
+            lightmap.rebind -= 1;
+            materials.get_mut(&material.0);
+        }
+        let Some(region) = camera_region(&cameras, z) else {
+            continue;
+        };
+        // The level below's between its own sprites and the camera's level's.
+        let wanted_z = if lower {
+            -0.5
+        } else {
+            order.plane_z(LIGHTING_PLANE)
+        };
+        if order.is_changed() || transform.translation.z != wanted_z {
+            transform.translation.z = wanted_z;
+        }
+        if !changed && lightmap.region == Some(region) {
+            fade_view(&mut lightmap, &mut images, time.delta_secs(), false);
+            continue;
+        }
+        stats.rebuilds += 1;
+        if !los_updated {
+            world.update_los(eye);
+            los_updated = true;
+        }
+        let old = lightmap.region;
+        let target = if lower {
+            known_targets(&world, region)
+        } else {
+            view_targets(&world, region)
+        };
+        lightmap.view_now = moved_view(old, &lightmap.view_now, region, &target);
+        lightmap.view_target = target;
 
-    let (corner_bytes, tile_bytes, in_region) = bake(&world, region);
-    stats.sources_in_region = in_region;
-    let corners_size = region.size + 1;
-    if write_image(
-        &mut images,
-        &lightmap.corners,
-        corners_size,
-        corner_bytes,
-        true,
-    ) | write_image(&mut images, &lightmap.tiles, region.size, tile_bytes, false)
-    {
-        lightmap.rebind = 2;
+        let (corner_bytes, tile_bytes, in_region) = bake(&world, region, !lower);
+        if !lower {
+            stats.sources_in_region = in_region;
+        }
+        let corners_size = region.size + 1;
+        if write_image(
+            &mut images,
+            &lightmap.corners,
+            corners_size,
+            corner_bytes,
+            true,
+        ) | write_image(&mut images, &lightmap.tiles, region.size, tile_bytes, false)
+        {
+            lightmap.rebind = 2;
+        }
+        // Touching the material rebinds the (possibly reallocated) textures.
+        if let Some(mut m) = materials.get_mut(&material.0) {
+            m.region = Vec4::new(
+                region.min.x as f32,
+                region.min.y as f32,
+                region.size.x as f32,
+                region.size.y as f32,
+            );
+        }
+        let tile = TILE_SIZE as f32;
+        let size = region.size.as_vec2() * tile;
+        transform.translation.x = region.min.x as f32 * tile + size.x / 2.0;
+        transform.translation.y = region.min.y as f32 * tile + size.y / 2.0;
+        transform.scale = size.extend(1.0);
+        lightmap.region = Some(region);
+        fade_view(&mut lightmap, &mut images, time.delta_secs(), true);
     }
-    // Touching the material rebinds the (possibly reallocated) textures.
-    if let Some(mut m) = materials.get_mut(&material.0) {
-        m.region = Vec4::new(
-            region.min.x as f32,
-            region.min.y as f32,
-            region.size.x as f32,
-            region.size.y as f32,
-        );
-    }
-    let tile = TILE_SIZE as f32;
-    let size = region.size.as_vec2() * tile;
-    transform.translation.x = region.min.x as f32 * tile + size.x / 2.0;
-    transform.translation.y = region.min.y as f32 * tile + size.y / 2.0;
-    transform.scale = size.extend(1.0);
-    lightmap.region = Some(region);
-    fade_view(&mut lightmap, &mut images, time.delta_secs(), true);
     stats.frame_time += start.elapsed();
+}
+
+/// Per region tile of the level below: 1 where something of it is known (the server sends it
+/// only under open space and glass floors), else 0.
+fn known_targets(world: &LightWorld, region: Region) -> Vec<f32> {
+    let (w, h) = (region.size.x as i32, region.size.y as i32);
+    (0..h)
+        .flat_map(|y| (0..w).map(move |x| (x, y)))
+        .map(|(x, y)| {
+            let pos = TilePos::new(region.min.x + x, region.min.y + y, region.z);
+            if world.occupied.contains_key(&pos) {
+                1.0
+            } else {
+                0.0
+            }
+        })
+        .collect()
 }
 
 /// Per region tile: 1 if it is drawn ([`LightWorld::in_view`]), else 0.
@@ -963,7 +1065,7 @@ fn fade_view(lightmap: &mut Lightmap, images: &mut Assets<Image>, dt: f32, force
 /// Lightmap texels for `region`: corners (`size + 1`, RGBA8) and tiles (`size`, RGBA8: ambient
 /// premultiplied by its alpha, a = 255 where sources light the tile), and how many sources
 /// reach the region.
-fn bake(world: &LightWorld, region: Region) -> (Vec<u8>, Vec<u8>, usize) {
+fn bake(world: &LightWorld, region: Region, camera_level: bool) -> (Vec<u8>, Vec<u8>, usize) {
     let (w, h) = (region.size.x as i32, region.size.y as i32);
     // Corner (i, j) of the texture is corner (min - 1 + i, min - 1 + j) in tg terms.
     let cw = (w + 1) as usize;
@@ -1007,6 +1109,11 @@ fn bake(world: &LightWorld, region: Region) -> (Vec<u8>, Vec<u8>, usize) {
     for y in 0..h {
         for x in 0..w {
             let pos = TilePos::new(region.min.x + x, region.min.y + y, region.z);
+            // Open space on the camera's level: untouched here, the level below has its own.
+            if camera_level && world.see_through.contains_key(&pos) {
+                tile_bytes.extend([255, 255, 255, 0]);
+                continue;
+            }
             let tile = world
                 .tiles
                 .get(&pos)

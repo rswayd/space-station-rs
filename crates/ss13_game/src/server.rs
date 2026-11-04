@@ -199,6 +199,7 @@ impl Plugin for GameServerPlugin {
             crate::health::HealthServerPlugin,
             crate::combat::CombatServerPlugin,
             crate::ghost::GhostServerPlugin,
+            crate::multiz::MultiZPlugin,
             crate::power::PowerServerPlugin,
             crate::jobs::JobsServerPlugin,
             crate::atmos::AtmosGluePlugin,
@@ -865,7 +866,7 @@ pub(crate) fn ack_moves(
 }
 
 /// The client's view box follows its mob; only mobs that moved this tick are touched.
-fn follow_mobs(
+pub(crate) fn follow_mobs(
     mobs: Query<(&TilePos, &PlayerMob), Changed<TilePos>>,
     // A camera console places the view of its user (`crate::silicon::cameras`).
     mut viewers: Query<&mut Viewer, Without<crate::silicon::cameras::ViewOverride>>,

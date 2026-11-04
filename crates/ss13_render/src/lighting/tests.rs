@@ -48,7 +48,7 @@ const REGION: Region = Region {
 
 /// Red channel of tg corner `(cx, cy)` in the baked region.
 fn corner(app: &App, cx: i32, cy: i32) -> u8 {
-    let (corners, _, _) = bake(app.world().resource::<LightWorld>(), REGION);
+    let (corners, _, _) = bake(app.world().resource::<LightWorld>(), REGION, true);
     let i = (cx - (REGION.min.x - 1)) as usize;
     let j = (cy - (REGION.min.y - 1)) as usize;
     corners[(j * (REGION.size.x as usize + 1) + i) * 4]
@@ -133,7 +133,7 @@ fn removed_light_goes_dark_and_ambient_tiles_bake() {
     app.update();
     assert_eq!(corner(&app, 3, 3), 0);
 
-    let (_, tiles, _) = bake(app.world().resource::<LightWorld>(), REGION);
+    let (_, tiles, _) = bake(app.world().resource::<LightWorld>(), REGION, true);
     let at = |x: i32, y: i32| {
         let i = ((y - REGION.min.y) * REGION.size.x as i32 + (x - REGION.min.x)) as usize * 4;
         [tiles[i], tiles[i + 1], tiles[i + 2], tiles[i + 3]]
@@ -414,7 +414,7 @@ fn lighting_cost() {
         z: 1,
     };
     let start = Instant::now();
-    let (_, _, in_region) = bake(app.world().resource::<LightWorld>(), region);
+    let (_, _, in_region) = bake(app.world().resource::<LightWorld>(), region, true);
     let baked = start.elapsed();
     assert_eq!(in_region, 100);
     println!("100 sources from scratch: {sources:?}; bake 40x30: {baked:?}");

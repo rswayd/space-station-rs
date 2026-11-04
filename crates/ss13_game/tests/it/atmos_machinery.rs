@@ -1285,3 +1285,183 @@ fn he_report(server: &mut App) {
         println!("  a minute later, line {line} ({n} pipes): {p:.0} kPa {t:.0} K");
     }
 }
+
+/// Cyberiad: a two-deck station (one `.dmm`, levels stacked as tg's `height_autosetup` does).
+/// The multi-deck adapters join each deck's distro and scrubber loops, so after a minute the
+/// vents of both decks get distro pressure; the chamber sensors link their alarms.
+#[test]
+#[ignore = "needs generated assets and Cyberiad; run with --ignored"]
+fn cyberiad() {
+    use ss13_game::atmos_machinery::looks::MultiZAdapter;
+    let map = MapLoadPlugin {
+        maps: vec!["Cyberiad".into()],
+        ..metastation_map()
+    };
+    let mut server = server_app(map, |app| {
+        app.add_plugins(AtmosPlugin);
+    });
+    let report = server.world().resource::<AtmosMachineryReport>().clone();
+    println!(
+        "Cyberiad atmos machinery: {} devices, {} pipelines, {} vents, {} scrubbers, {} alarms",
+        report.devices, report.pipelines, report.vents, report.scrubbers, report.alarms
+    );
+    let levels = ss13_game::events::controller::station_levels(server.world());
+    assert_eq!(levels, 1..=2, "both decks are station levels");
+
+    let mut adapters = server
+        .world_mut()
+        .query_filtered::<(&AtmosDevice, &TilePos), With<MultiZAdapter>>();
+    let world = server.world();
+    let net = world.resource::<Pipenet>();
+    let all: Vec<(TilePos, [bool; 3])> = adapters
+        .iter(world)
+        .map(|(d, &p)| {
+            let n = &net.device(d.id).unwrap().nodes;
+            (p, [n[0].is_some(), n[1].is_some(), n[2].is_some()])
+        })
+        .collect();
+    let vertical = all.iter().filter(|(_, n)| n[1] || n[2]).count();
+    let lonely: Vec<&TilePos> = all
+        .iter()
+        .filter(|(_, n)| !n[1] && !n[2])
+        .map(|(p, _)| p)
+        .collect();
+    println!(
+        "multi-deck adapters: {} on the map, {vertical} joined to another deck, alone: {lonely:?}",
+        all.len()
+    );
+    assert!(all.len() >= 10 && vertical == all.len());
+
+    let (p, m, max) = run(&mut server, 60.0);
+    println!("first minute: pipenets {p:.1} µs, machinery {m:.1} µs per fire, max {max:.1} µs");
+    let mut vents = server
+        .world_mut()
+        .query::<(&AtmosDevice, &VentPump, &TilePos)>();
+    let world = server.world();
+    let net = world.resource::<Pipenet>();
+    for z in levels {
+        let on_deck: Vec<f64> = vents
+            .iter(world)
+            .filter(|(_, v, p)| p.z == z && v.area.is_some())
+            .map(|(d, ..)| net.pipeline_air(d.id, 0).map_or(0.0, |a| a.pressure()))
+            .collect();
+        let pressurized = on_deck.iter().filter(|&&p| p > 50.0).count();
+        println!(
+            "deck {z}: {pressurized}/{} area vents over 50 kPa",
+            on_deck.len()
+        );
+        let dry: Vec<(TilePos, String, Option<String>)> = vents
+            .iter(world)
+            .filter(|(d, v, p)| {
+                p.z == z
+                    && v.area.is_some()
+                    && net.pipeline_air(d.id, 0).map_or(0.0, |a| a.pressure()) <= 50.0
+            })
+            .map(|(d, v, &p)| {
+                let area = v
+                    .area
+                    .and_then(|a| world.get::<ss13_mapload::DmName>(a))
+                    .map(|n| n.name.clone())
+                    .unwrap_or_default();
+                let path = world
+                    .get::<ss13_mapload::DmAtmosDevice>(net.device(d.id).unwrap().entity)
+                    .map(|dm| dm.path.clone());
+                (p, area, path)
+            })
+            .collect();
+        if !dry.is_empty() {
+            println!("  without pressure: {dry:#?}");
+        }
+        assert!(
+            pressurized * 10 >= on_deck.len() * 9,
+            "deck {z}: most vents get distro pressure"
+        );
+    }
+    let mut alarms = server
+        .world_mut()
+        .query::<&ss13_game::atmos_machinery::AirAlarm>();
+    let linked = alarms
+        .iter(server.world())
+        .filter(|a| a.sensor.is_some())
+        .count();
+    println!("alarms linked to chamber sensors: {linked}");
+}
+
+/// Every station map through atmos start-up and a minute of air: what it has, what joins
+/// across decks, which alarms found their sensors. A survey (`--nocapture`): it fails only on
+/// a crash or on a multi-deck adapter left alone on a stacked level.
+#[test]
+#[ignore = "needs generated assets and every station map; run with --ignored"]
+fn station_maps() {
+    use ss13_game::atmos_machinery::looks::MultiZAdapter;
+    let maps = [
+        "_maps/map_files/MetaStation/MetaStation.dmm",
+        "_maps/map_files/Cyberiad/Cyberiad.dmm",
+        "_maps/map_files/Deltastation/DeltaStation2.dmm",
+        "_maps/map_files/IceBoxStation/IceBoxStation.dmm",
+        "_maps/map_files/KiloStation/KiloStation.dmm",
+        "_maps/map_files/NebulaStation/NebulaStation.dmm",
+        "_maps/map_files/tramstation/tramstation.dmm",
+        "_maps/map_files/wawastation/wawastation.dmm",
+        "_maps/map_files/CatwalkStation/CatwalkStation_2023.dmm",
+        "_maps/map_files/debug/runtimestation.dmm",
+        "_maps/map_files/debug/multiz.dmm",
+    ];
+    let mut lonely_total = 0;
+    for path in maps {
+        let map = MapLoadPlugin {
+            maps: vec![path.into()],
+            ..metastation_map()
+        };
+        let mut server = server_app(map, |app| {
+            app.add_plugins(AtmosPlugin);
+        });
+        let report = server.world().resource::<AtmosMachineryReport>().clone();
+        let levels = ss13_game::events::controller::station_levels(server.world());
+        let mut adapters = server
+            .world_mut()
+            .query_filtered::<(&AtmosDevice, &TilePos), With<MultiZAdapter>>();
+        let world = server.world();
+        let net = world.resource::<Pipenet>();
+        let all: Vec<(TilePos, bool)> = adapters
+            .iter(world)
+            .map(|(d, &p)| {
+                let n = &net.device(d.id).unwrap().nodes;
+                (p, n[1].is_some() || n[2].is_some())
+            })
+            .collect();
+        let lonely: Vec<TilePos> = all.iter().filter(|(_, j)| !j).map(|(p, _)| *p).collect();
+        lonely_total += lonely.len();
+        run(&mut server, 60.0);
+        let mut vents = server.world_mut().query::<(&AtmosDevice, &VentPump)>();
+        let world = server.world();
+        let net = world.resource::<Pipenet>();
+        let area_vents: Vec<f64> = vents
+            .iter(world)
+            .filter(|(_, v)| v.area.is_some())
+            .map(|(d, _)| net.pipeline_air(d.id, 0).map_or(0.0, |a| a.pressure()))
+            .collect();
+        let pressurized = area_vents.iter().filter(|&&p| p > 50.0).count();
+        let mut alarms = server
+            .world_mut()
+            .query::<&ss13_game::atmos_machinery::AirAlarm>();
+        let linked = alarms
+            .iter(server.world())
+            .filter(|a| a.sensor.is_some())
+            .count();
+        println!(
+            "{path}: levels {levels:?}, {} devices, {} pipelines, {} alarms ({linked} on a \
+             sensor), adapters {} (alone {lonely:?}), vents over 50 kPa after 60 s: \
+             {pressurized}/{}",
+            report.devices,
+            report.pipelines,
+            report.alarms,
+            all.len(),
+            area_vents.len()
+        );
+    }
+    assert_eq!(
+        lonely_total, 0,
+        "every multi-deck adapter finds its other deck"
+    );
+}

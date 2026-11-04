@@ -688,6 +688,15 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 None if crate::kitchen::interact(world, client, mob, target, modifiers.right) => {}
                 // tg `attack_hand` of hydroponics trays (harvest, dead plant, examine).
                 None if crate::botany::interact(world, client, mob, target, modifiers.right) => {}
+                // tg `attack_hand` / `attack_hand_secondary` of a ladder: climb up or down.
+                None if crate::multiz::interact(
+                    world,
+                    client,
+                    mob,
+                    None,
+                    target,
+                    modifiers.right,
+                ) => {}
                 // tg `attack_hand`/`click_alt` of atmos machines (windows, valves, tanks out).
                 None if crate::atmos_machinery::windows::interact(
                     world, client, mob, target, modifiers,
@@ -773,6 +782,19 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                     if crate::medical::item_interaction(
                         world, client, mob, held, target, modifiers,
                     ) => {}
+                // tg `ladder/item_interaction(_secondary)`: out of combat mode, a climb.
+                Some(held)
+                    if !world
+                        .get::<crate::combat::CombatMode>(mob)
+                        .is_some_and(|c| c.0)
+                        && crate::multiz::interact(
+                            world,
+                            client,
+                            mob,
+                            Some(held),
+                            target,
+                            modifiers.right,
+                        ) => {}
                 // tg `item_interaction`/`wrench_act` of atmos machines (ports, tanks, IDs).
                 Some(held)
                     if crate::atmos_machinery::windows::item_interaction(

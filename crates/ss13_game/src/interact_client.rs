@@ -212,6 +212,13 @@ fn send_keys(
     if keys.just_pressed(KeyCode::KeyR) {
         intents.write(SendIntent(ClientIntent::ToggleThrowMode));
     }
+    // `keybinding/movement/zlevel_upwards` / `zlevel_downwards`.
+    if keys.just_pressed(KeyCode::PageUp) {
+        intents.write(SendIntent(ClientIntent::MoveUp));
+    }
+    if keys.just_pressed(KeyCode::PageDown) {
+        intents.write(SendIntent(ClientIntent::MoveDown));
+    }
 }
 
 fn receive_hud(mut received: MessageReader<UiMessageReceived>, mut hud: ResMut<InteractHud>) {

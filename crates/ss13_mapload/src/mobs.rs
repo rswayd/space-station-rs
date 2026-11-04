@@ -112,6 +112,10 @@ pub struct MobDef {
     pub cowardly: bool,
     /// Mice: `cable_zap_prob`.
     pub cable_zap_prob: f32,
+    /// `AddElement(/datum/element/simple_flying)` in its `Initialize` (or an ancestor's): it
+    /// flies (`movement_type |= FLYING`) and does not fall through open space.
+    #[serde(default)]
+    pub flying: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
@@ -224,6 +228,24 @@ pub fn resolve(types: &DmTypes, verbs: &RuVerbs, factions: &HashMap<String, Stri
         .map(|p| (p.clone(), mob_def(types, p, verbs, factions)))
         .collect();
     MobsData { mobs }
+}
+
+/// The element that makes basic mobs fly.
+const SIMPLE_FLYING: &str = "/datum/element/simple_flying";
+
+/// `simple_flying` added in the `Initialize` of `path` or an ancestor (calls in other procs come
+/// and go with status effects and fish traits).
+fn flies(types: &DmTypes, path: &str) -> bool {
+    types
+        .element_calls
+        .get(SIMPLE_FLYING)
+        .into_iter()
+        .flatten()
+        .any(|c| {
+            c.call == "AddElement"
+                && c.proc == "Initialize"
+                && crate::fidelity::is_under(path, &c.owner)
+        })
 }
 
 fn mob_def(
@@ -343,6 +365,7 @@ fn mob_def(
         cowardly: v("cowardly")
             .and_then(Value::as_f64)
             .is_some_and(|c| c != 0.0),
+        flying: flies(types, path),
         cable_zap_prob: num("cable_zap_prob", 0.0),
     }
 }

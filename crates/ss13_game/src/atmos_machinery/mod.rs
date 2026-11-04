@@ -51,6 +51,7 @@ pub use portable::{Canister, PortableAtmos, PortablePump, PortableScrubber};
 const PIPE_ROOT: &str = "/obj/machinery/atmospherics/pipe";
 const SMART_PIPE: &str = "/obj/machinery/atmospherics/pipe/smart";
 const LAYER_MANIFOLD: &str = "/obj/machinery/atmospherics/pipe/layer_manifold";
+pub const MULTIZ_PIPE: &str = "/obj/machinery/atmospherics/pipe/multiz";
 pub const HE_PIPE: &str = "/obj/machinery/atmospherics/pipe/heat_exchanging";
 const HE_JUNCTION: &str = "/obj/machinery/atmospherics/pipe/heat_exchanging/junction";
 const COMPONENTS: &str = "/obj/machinery/atmospherics/components";
@@ -219,6 +220,7 @@ impl Plugin for AtmosMachineryPlugin {
                 (
                     looks::sync_pipe_looks,
                     looks::sync_machine_looks,
+                    looks::multiz_looks,
                     thermo::sync_thermo_looks,
                     pipe_scrubber::pipe_scrubber_looks,
                     electrolyzer::electrolyzer_looks,
@@ -342,8 +344,21 @@ pub fn device_spec(
             init,
             default_node_dirs(4, init),
         )
+    } else if is_under(path, MULTIZ_PIPE) {
+        // `multiz/set_init_directions`: its `dir` only; the decks above and below are nodes 2
+        // and 3.
+        custom = Custom::MultiZ;
+        (
+            DeviceKind::Pipe {
+                volume: dm.volume,
+                smart: false,
+                he: HeatExchange::None,
+            },
+            dir,
+            vec![dir, 0, 0],
+        )
     } else if is_under(path, PIPE_ROOT) {
-        // shortcut: multi-z and other special pipes connect like plain binary pipes along their
+        // shortcut: bridge and other special pipes connect like plain binary pipes along their
         // axis; port them with their features.
         let count = device_type.clamp(1, 4);
         let init = match count {
@@ -643,8 +658,12 @@ pub fn init_atmos_machinery(world: &mut World) {
                 DeviceKind::Pipe { he, .. } => he,
                 _ => HeatExchange::None,
             };
+            let multiz = matches!(spec.custom, Custom::MultiZ);
             let id = net.add(spec);
             world.entity_mut(*e).insert(AtmosDevice { id, layer, dir });
+            if multiz {
+                world.entity_mut(*e).insert(looks::MultiZAdapter);
+            }
             if is_tank {
                 tanks.push((*e, id, *pos, dm.clone()));
             }
@@ -660,6 +679,11 @@ pub fn init_atmos_machinery(world: &mut World) {
     world.insert_resource(std::mem::take(&mut net));
     devices::pair_heat_exchangers(world);
     let mut net = world.remove_resource::<Pipenet>().expect("just inserted");
+    if let Some(report) = world.get_resource::<ss13_mapload::MapLoadReport>() {
+        for (below, above) in report.stacked_levels() {
+            net.link_levels(below, above);
+        }
+    }
     net.build();
     report.devices = net.device_count();
     report.pipelines = net.pipelines().count();

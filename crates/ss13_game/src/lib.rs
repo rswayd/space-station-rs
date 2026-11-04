@@ -215,6 +215,8 @@ pub mod medical;
 pub mod mobs;
 pub mod modpc;
 #[cfg(feature = "server")]
+pub mod multiz;
+#[cfg(feature = "server")]
 pub mod obj_damage;
 #[cfg(feature = "server")]
 pub mod outfit;

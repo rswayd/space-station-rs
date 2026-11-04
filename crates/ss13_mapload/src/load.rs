@@ -378,6 +378,19 @@ impl MapLoadReport {
     pub fn entities(&self) -> usize {
         self.counts.values().sum()
     }
+
+    /// tg `height_autosetup` (on unless a map config opts out; no station or shuttle map
+    /// does): a multi-level map's levels are stacked, map z `n + 1` over `n` (`ZTRAIT_UP`,
+    /// `ZTRAIT_DOWN`). Pairs of (below, above) world levels.
+    pub fn stacked_levels(&self) -> Vec<(u16, u16)> {
+        self.maps
+            .iter()
+            .flat_map(|m| {
+                let levels = m.size.2 as u16;
+                (0..levels.saturating_sub(1)).map(move |i| (m.first_z + i, m.first_z + i + 1))
+            })
+            .collect()
+    }
 }
 
 impl fmt::Display for MapLoadReport {

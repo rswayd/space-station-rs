@@ -357,3 +357,55 @@ fn reconfiguring_a_smart_pipe_keeps_its_gas_and_connections() {
     assert_eq!(net.pipeline_of(ids[2], 0), Some(line));
     assert_eq!(net.device(mid).expect("mid").init_dirs, 4 | 8);
 }
+
+/// A multi-deck adapter at `(x, y, z)` facing `dir` on `layer`.
+fn multiz(x: i32, y: i32, z: u16, dir: u8, layer: u8, color: [u8; 3]) -> DeviceSpec {
+    DeviceSpec {
+        entity: Entity::PLACEHOLDER,
+        pos: TilePos::new(x, y, z),
+        init_dirs: dir,
+        node_dirs: vec![dir, 0, 0],
+        layer,
+        color,
+        flags: 0,
+        kind: DeviceKind::Pipe {
+            volume: 0.0,
+            smart: false,
+            he: HeatExchange::None,
+        },
+        port_volumes: Vec::new(),
+        custom: Custom::MultiZ,
+    }
+}
+
+#[test]
+fn multi_deck_adapters_join_pipelines_across_linked_levels_only() {
+    let build = |linked: bool, upper_layer: u8| {
+        let mut net = Pipenet::default();
+        if linked {
+            net.link_levels(1, 2);
+        }
+        // Level 1: a pipe south of the adapter; level 2: the same.
+        let lower = net.add(multiz(5, 5, 1, 2, 3, BLUE));
+        let below = net.add(DeviceSpec {
+            pos: TilePos::new(5, 4, 1),
+            ..pipe(0, 0, 3, BLUE)
+        });
+        let upper = net.add(multiz(5, 5, 2, 2, upper_layer, BLUE));
+        let above = net.add(DeviceSpec {
+            pos: TilePos::new(5, 4, 2),
+            ..pipe(0, 0, upper_layer, BLUE)
+        });
+        net.build();
+        net.process();
+        let same = net.pipeline_of(below, 0) == net.pipeline_of(above, 0);
+        let nodes = net.device(lower).unwrap().nodes.clone();
+        (same, nodes, upper)
+    };
+    let (same, nodes, upper) = build(true, 3);
+    assert!(same, "one pipeline through both decks");
+    assert_eq!(nodes[1], Some(upper));
+    assert_eq!(nodes[2], None, "nothing below level 1");
+    assert!(!build(false, 3).0, "levels not stacked");
+    assert!(!build(true, 2).0, "another layer");
+}

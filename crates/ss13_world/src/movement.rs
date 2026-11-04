@@ -51,6 +51,24 @@ impl Border {
     }
 }
 
+/// A [`Border`] that blocks without [`Density`]: tg stairs keep movers off their far side
+/// through `COMSIG_ATOM_EXIT` and `Cross`, yet are not dense (bullets, throws and crates pass).
+/// Insert it with the `Border` (the index files it when the `Border` comes).
+#[derive(Component, Clone, Copy, Debug, Default)]
+pub struct NonDenseBorder;
+
+/// The last stair of a flight going up in this direction (tg `stairs/isTerminator`): a step off
+/// its far side from on it climbs to the level above. The server acts on the bump; the client
+/// predicts it ([`Border`] + [`NonDenseBorder`] come with it).
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ClimbsUp(pub Dir);
+
+/// Open space whatever walks onto falls through (the level below exists, nothing like a
+/// lattice holds, there is gravity): on the turf entity. The server makes things fall; the
+/// client predicts its own mob's fall.
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct FallsThrough;
+
 /// Something that moves by itself on request.
 #[derive(Component, Clone, Copy, Debug)]
 pub struct Mover {

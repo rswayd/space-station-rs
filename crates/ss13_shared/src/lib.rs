@@ -20,4 +20,4 @@ pub use dir::{Dir, Facing};
 pub use light::{
     LIGHT_BLOCK, LightSource, LightUpdate, Optics, STARLIGHT_AMBIENT, TileLighting, light_block,
 };
-pub use tile::{TILE_SIZE, TilePos};
+pub use tile::{LevelStack, TILE_SIZE, TilePos};

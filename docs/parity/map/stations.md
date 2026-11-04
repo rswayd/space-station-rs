@@ -28,7 +28,7 @@
 
 - **Код:** [`cyberiad.json`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/_maps/map_jsons/cyberiad.json#L1), [`Cyberiad.dmm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/_maps/map_files/Cyberiad/Cyberiad.dmm)
 - **BandaStation:** вся карта — форк; [`cyberiad.json`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/_maps/map_jsons/cyberiad.json#L6)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_assets/tests/dmm_real_maps.rs`: `.dmm` разбирается (тест `cyberiad`), грузится общим загрузчиком; два уровня не связаны (нет мульти-Z), игровой раунд не проверялся
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_assets/tests/dmm_real_maps.rs`: `.dmm` разбирается (тест `cyberiad`), грузится общим загрузчиком и запускается сервером (`SS13_MAP=Cyberiad`, раунд стартует); оба уровня станционные и стыкуются для атмоса (межэтажные трубы, тест `atmos_machinery::cyberiad`); нет остального мульти-Z ([map-loading.md](map-loading.md) «Мульти-Z»), крюков игрокам (`give_players_hooks`), приветственного звука и `job_changes`; 2 из 42 профессий без точки появления, 560 случайных спаунеров (в основном техтоннели) не раскрываются
 
 ### IceBox Station
 Планетарная станция на ледяной луне: 3 уровня станции поверх подземных уровней с лавой и пещерами, 2 уровня «дикой местности» (`wilderness`), генерация пещер, ледяные руины, без космических руин и параллакса.

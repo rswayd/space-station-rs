@@ -330,6 +330,12 @@ impl LevelAir {
         self.edge_block[tile as usize] = edges;
     }
 
+    /// The open neighbours air flows to on this level (tg `atmos_adjacent_turfs_amount` before
+    /// the levels above and below are counted); `None` outside open cells.
+    pub(crate) fn adjacent_count(&self, tile: u32) -> Option<u8> {
+        self.cell(tile).map(|c| c.adj_count)
+    }
+
     pub(crate) fn cell(&self, tile: u32) -> Option<&Cell> {
         let c = *self.cell_of.get(tile as usize)?;
         (c != NONE).then(|| &self.cells[c as usize])

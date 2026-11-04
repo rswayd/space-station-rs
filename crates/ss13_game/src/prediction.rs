@@ -26,7 +26,9 @@ use ss13_net::client::{NetClientState, NetEntityMap, SendIntent};
 use ss13_net::move_ack::client::MoveAckReceived;
 use ss13_shared::protocol::{ClientIntent, MoveAck, TICK_DURATION};
 use ss13_shared::{Dir, Facing, TilePos};
-use ss13_world::{ClimbWalkable, SpatialIndex, next_ready_at, resolve_move};
+use ss13_world::{
+    ClimbWalkable, ClimbsUp, FallsThrough, SpatialIndex, next_ready_at, resolve_move,
+};
 
 use crate::{MAX_UNACKED_STEPS, RUN_DELAY_SECS};
 
@@ -125,7 +127,7 @@ impl Prediction {
 
     /// Server state plus the unacked steps; their predicted outcome is refreshed on the way.
     /// `walls`: what the replicated blockers refuse.
-    fn replay(&mut self, walls: &dyn Fn(TilePos, Dir) -> bool) {
+    fn replay(&mut self, walls: &dyn Fn(TilePos, Dir) -> bool, levels: &Levels) {
         let Some(auth) = self.auth else {
             return;
         };
@@ -133,20 +135,65 @@ impl Prediction {
         let learnt = &self.blocked;
         let blocked = |at: TilePos, d: Dir| learnt.contains(&(at, d)) || walls(at, d);
         for step in &mut self.pending {
-            (*step, facing) = predict(pos, facing, step.seq, step.dir, &blocked);
+            (*step, facing) = predict_with(pos, facing, step.seq, step.dir, &blocked, levels);
             pos = step.to;
         }
         (self.pos, self.facing) = (Some(pos), facing);
     }
 }
 
+/// Where a step off the last stair of a flight lands (`ClimbsUp`), if it is one.
+type Climb<'a> = dyn Fn(TilePos, Dir) -> Option<TilePos> + 'a;
+/// Where a walker on this tile falls to (`FallsThrough`: open space), if it does.
+type Fall<'a> = dyn Fn(TilePos) -> Option<TilePos> + 'a;
+
+/// The level changes a step leads to: [`Walls::climb`], [`Walls::fall`].
+struct Levels<'a> {
+    climb: &'a Climb<'a>,
+    fall: &'a Fall<'a>,
+}
+
+impl Levels<'_> {
+    #[cfg(test)]
+    const NONE: Levels<'static> = Levels {
+        climb: &|_, _| None,
+        fall: &|_| None,
+    };
+
+    /// tg `zFall`: down while there is open space under.
+    fn land(&self, mut at: TilePos) -> TilePos {
+        for _ in 0..8 {
+            match (self.fall)(at) {
+                Some(below) => at = below,
+                None => break,
+            }
+        }
+        at
+    }
+}
+
 /// One step from `pos` by the `ss13_world` rules, with unknown moves taken as free.
+#[cfg(test)]
 fn predict(
     pos: TilePos,
     facing: Option<Dir>,
     seq: u32,
     dir: Dir,
     blocked: &dyn Fn(TilePos, Dir) -> bool,
+) -> (Step, Option<Dir>) {
+    predict_with(pos, facing, seq, dir, blocked, &Levels::NONE)
+}
+
+/// [`predict`], and a step off the last stair of a flight climbs, a step onto open space falls,
+/// as the server's `crate::multiz` does in the same tick (so each is drawn as the step it is,
+/// not as a jump two tiles on when the ack comes).
+fn predict_with(
+    pos: TilePos,
+    facing: Option<Dir>,
+    seq: u32,
+    dir: Dir,
+    blocked: &dyn Fn(TilePos, Dir) -> bool,
+    levels: &Levels,
 ) -> (Step, Option<Dir>) {
     let (mut at, mut face) = (pos, facing);
     let mut moves = [None; 2];
@@ -158,11 +205,16 @@ fn predict(
     };
     let turn_to = resolve_move(dir, |d| {
         turn(d, &mut face);
+        if let Some(to) = (levels.climb)(at, d) {
+            moves[usize::from(moves[0].is_some())] = Some((at, d));
+            at = levels.land(to);
+            return true;
+        }
         if blocked(at, d) {
             return false;
         }
         moves[usize::from(moves[0].is_some())] = Some((at, d));
-        at = at.step(d);
+        at = levels.land(at.step(d));
         true
     });
     if let Some(d) = turn_to {
@@ -203,6 +255,9 @@ struct Walls<'w, 's> {
     index: Option<Res<'w, SpatialIndex>>,
     climbable: Query<'w, 's, (), With<ClimbWalkable>>,
     phasing: Option<Res<'w, OwnPhasing>>,
+    stairs: Query<'w, 's, &'static ClimbsUp>,
+    holes: Query<'w, 's, (), With<FallsThrough>>,
+    stack: Option<Res<'w, ss13_shared::LevelStack>>,
 }
 
 impl Walls<'_, '_> {
@@ -215,6 +270,41 @@ impl Walls<'_, '_> {
         move |at, d| {
             index.is_some_and(|i| index_blocks(i, &|e| self.climbable.contains(e), mover, at, d))
         }
+    }
+
+    /// The last stair of a flight on `at` going up toward `d`: the tile beyond it upstairs.
+    // shortcut: tg also refuses a landing on open space (it would drop the climber back); the
+    // client does not know the turfs, the server's ack corrects that rare case.
+    fn climb(&self) -> impl Fn(TilePos, Dir) -> Option<TilePos> + '_ {
+        let phasing = self.phasing.as_deref().is_some_and(|p| p.0);
+        move |at, d| {
+            let index = self.index.as_deref().filter(|_| !phasing)?;
+            index
+                .on_tile(at)
+                .iter()
+                .any(|&e| self.stairs.get(e).is_ok_and(|c| c.0 == d))
+                .then(|| self.stack.as_deref()?.step(at, true))
+                .flatten()
+                .map(|above| above.step(d))
+        }
+    }
+
+    /// Open space on `at` a walker falls through: the tile under it.
+    fn fall(&self) -> impl Fn(TilePos) -> Option<TilePos> + '_ {
+        let phasing = self.phasing.as_deref().is_some_and(|p| p.0);
+        move |at| {
+            let index = self.index.as_deref().filter(|_| !phasing)?;
+            index
+                .on_tile(at)
+                .iter()
+                .any(|&e| self.holes.contains(e))
+                .then(|| self.stack.as_deref()?.step(at, false))
+                .flatten()
+        }
+    }
+
+    fn levels<'a>(climb: &'a Climb<'a>, fall: &'a Fall<'a>) -> Levels<'a> {
+        Levels { climb, fall }
     }
 }
 
@@ -250,7 +340,8 @@ fn track_control(
         pos: *pos,
         facing: facing.map(|f| f.0),
     }));
-    state.replay(&walls.check(controlled));
+    let (climb, fall) = (walls.climb(), walls.fall());
+    state.replay(&walls.check(controlled), &Walls::levels(&climb, &fall));
 }
 
 fn reconcile(
@@ -283,7 +374,8 @@ fn reconcile(
     }
     if any && state.entity.is_some() {
         let entity = state.entity;
-        state.replay(&walls.check(entity));
+        let (climb, fall) = (walls.climb(), walls.fall());
+        state.replay(&walls.check(entity), &Walls::levels(&climb, &fall));
     }
 }
 
@@ -311,7 +403,9 @@ fn predict_steps(
     let wall = walls.check(state.entity);
     let learnt = &state.blocked;
     let blocked = |at: TilePos, d: Dir| learnt.contains(&(at, d)) || wall(at, d);
-    let (step, facing) = predict(pos, state.facing, seq, dir, &blocked);
+    let (climb, fall) = (walls.climb(), walls.fall());
+    let levels = Walls::levels(&climb, &fall);
+    let (step, facing) = predict_with(pos, state.facing, seq, dir, &blocked, &levels);
     let diagonal_reached = !Dir::CARDINALS.contains(&dir) && step.to == pos.step(dir);
     state.ready_at = next_ready_at(
         state.ready_at,
@@ -370,7 +464,7 @@ mod tests {
             }),
             ..default()
         };
-        state.replay(&|_, _| false);
+        state.replay(&|_, _| false, &Levels::NONE);
         state
     }
 

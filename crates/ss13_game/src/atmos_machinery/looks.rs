@@ -701,3 +701,52 @@ mod tests {
         assert_eq!(smart_pipe_icon(0, 15), ((1 | 2) << 4, 0));
     }
 }
+
+/// A multi-deck pipe adapter (`pipe/multiz`), drawn by [`multiz_looks`].
+#[derive(Component, Clone, Copy, Debug, Default)]
+pub struct MultiZAdapter;
+
+/// `multiz/update_overlays`: `pipe-[layer]` in its first node's color (`RESET_COLOR`, so the
+/// adapter's own color is not mixed in) under `adapter_center`, shifted with its layer; the
+/// adapter itself has no icon state (`Initialize`).
+pub fn multiz_looks(
+    net: Res<Pipenet>,
+    icons: Option<Res<IconIndex>>,
+    mut q: Query<(&AtmosDevice, &DmAtom, &mut Appearance), With<MultiZAdapter>>,
+) {
+    let Some(icons) = icons else { return };
+    for (device, atom, mut appearance) in &mut q {
+        let Some(d) = net.device(device.id) else {
+            continue;
+        };
+        let (Some(pipe), Some(center)) = (
+            icons.get(&atom.icon, &format!("pipe-{}", device.layer)),
+            icons.get(&atom.icon, "adapter_center"),
+        ) else {
+            continue;
+        };
+        // `SELECT_ATMOS_NODE_COLOR(src, nodes[1])`.
+        let color = d
+            .nodes
+            .first()
+            .copied()
+            .flatten()
+            .and_then(|n| net.device(n))
+            .filter(|n| {
+                n.flags & ss13_atmos::pipenet::flags::DONT_SHARE_COLOR == 0
+                    && n.color != ss13_atmos::pipenet::COLOR_OMNI
+            })
+            .map_or(d.color, |n| n.color);
+        let mut new = appearance.clone();
+        new.icon_state = pipe;
+        new.color = Some([color[0], color[1], color[2], 255]);
+        new.overlays = vec![Overlay {
+            color: Some([255; 4]),
+            pixel_offset: [(i16::from(device.layer) - 3) * LAYER_SHIFT, 0],
+            ..Overlay::new(center)
+        }];
+        if *appearance != new {
+            *appearance = new;
+        }
+    }
+}

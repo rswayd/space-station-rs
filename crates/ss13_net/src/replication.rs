@@ -66,6 +66,11 @@ pub(crate) enum Blocks {
     Climbable,
     /// A dense border object: the tile edges it blocks (BYOND dir bits).
     Edges(u8),
+    /// The last stair of a flight going up toward this dir (BYOND dir bits): its far edge
+    /// blocks, and a step off it there climbs (`ss13_world::ClimbsUp`).
+    Stairs(u8),
+    /// Open space a walker falls through (`ss13_world::FallsThrough`), on its turf.
+    Hole,
 }
 
 /// One entity of a [`ReplicationOp::Spawn`] tile group.
@@ -125,6 +130,9 @@ pub(crate) enum ReplicationOp {
         origin: TilePos,
         seen: [u8; 32],
     },
+    /// Which levels stand over which (`ss13_shared::LevelStack::links`): sent once, before the
+    /// first spawn on a level below the viewer's.
+    Stack(Vec<(u16, u16)>),
 }
 
 /// Light sources of some tiles of one light block. Most lights of a block share a few values

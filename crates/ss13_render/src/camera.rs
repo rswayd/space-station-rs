@@ -78,10 +78,10 @@ pub fn spawn_camera(mut commands: Commands) {
     commands.spawn((
         Camera2d,
         WorldCamera { zoom: 2 },
-        // Sprites use z in [0, Z_RANGE); see `order`.
+        // Sprites use z in [0, Z_RANGE), the level below and space under it; see `sprites`.
         Projection::Orthographic(OrthographicProjection {
             near: 0.0,
-            far: Z_RANGE + 1.0,
+            far: 3.0 * Z_RANGE + 8.0,
             scaling_mode: ScalingMode::WindowSize,
             ..OrthographicProjection::default_2d()
         }),
@@ -209,7 +209,7 @@ mod tests {
             let size = camera.physical_viewport_size().unwrap();
             let mut projection = OrthographicProjection {
                 near: 0.0,
-                far: Z_RANGE + 1.0,
+                far: 3.0 * Z_RANGE + 8.0,
                 scaling_mode: ScalingMode::WindowSize,
                 scale: scale / zoom as f32,
                 ..OrthographicProjection::default_2d()

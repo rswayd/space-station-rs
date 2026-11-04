@@ -1,7 +1,8 @@
 //! tg's space parallax (`code/_onclick/hud/parallax/parallax.dm`): space turfs are black
 //! (`icons/turf/space.dmi:space`) and the stars are three 480 px layers of
 //! `icons/effects/parallax.dmi`, added (`BLEND_ADD`) on top of them, each shifted by `speed` pixels
-//! per tile the view moves. One quad over the view, drawn right above `PLANE_SPACE`: floors and
+//! per tile the view moves. One quad over the view, drawn right above space
+//! ([`crate::sprites::PARALLAX_Z`], under the level below the camera's too): floors and
 //! everything else cover it, glass floors and empty tiles show it.
 // shortcut: the per-round random layer (planet, asteroids, gas) and shuttle-flight scrolling are
 // not drawn.
@@ -21,7 +22,6 @@ use bevy::sprite_render::{
 use ss13_shared::TILE_SIZE;
 
 use crate::camera::WorldCamera;
-use crate::order::DrawOrder;
 use crate::{IconAtlas, RenderSystems};
 
 /// tg `PLANE_SPACE`: space turfs.
@@ -167,7 +167,6 @@ fn spawn_parallax(
 /// Covers the camera's view and follows it. Per frame: one transform write and one uniform
 /// update while the camera moves.
 fn update_parallax(
-    order: Res<DrawOrder>,
     cameras: Query<(&Transform, &Projection), (With<WorldCamera>, Without<Parallax>)>,
     mut quads: Query<(&MeshMaterial2d<ParallaxMaterial>, &mut Transform), With<Parallax>>,
     mut materials: ResMut<Assets<ParallaxMaterial>>,
@@ -180,7 +179,8 @@ fn update_parallax(
     let center = camera.translation.xy();
     // One tile of margin against gaps while the camera glides.
     let size = ortho.area.size() + Vec2::splat(2.0 * TILE_SIZE as f32);
-    let z = order.plane_z(PLANE_SPACE + 1);
+    // Over space of every drawn level, under the level below the camera's (`sprites`).
+    let z = crate::sprites::PARALLAX_Z;
     let wanted = Transform::from_translation((center + ortho.area.center()).extend(z))
         .with_scale(size.extend(1.0));
     if *transform != wanted {
