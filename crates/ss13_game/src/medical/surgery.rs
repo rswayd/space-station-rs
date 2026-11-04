@@ -1,28 +1,35 @@
 //! Surgery (server), after tg `code/modules/surgery/operations` (`_operation.dm`
-//! `/mob/living/perform_surgery`, `get_available_operations`, `/datum/surgery_operation`
-//! `check_availability`, `get_tool_quality`, `get_time_modifiers`, `get_location_modifier`,
-//! `try_perform`, `on_failure`; `operation_generic.dm`, `operation_healing.dm`,
-//! `operation_bone_repair.dm`, `operation_organ_manip.dm`, `operation_amputation.dm`), the
-//! BandaStation failure chance (`modular_bandastation/medical/code/surgery/fail_chance.dm`), the
-//! surgical drapes' `/datum/element/surgery_aid` and buckling to operating tables and beds
+//! `/mob/living/perform_surgery`, `get_available_operations`, `/datum/operation_holder`,
+//! `/datum/surgery_operation` `check_availability`, `is_available`, `get_tool_quality`,
+//! `get_time_modifiers`, `get_location_modifier`, `try_perform`, `display_pain`, `on_failure`;
+//! `operation_generic.dm`, `operation_healing.dm`, `operation_bone_repair.dm`,
+//! `operation_organ_manip.dm`, `operation_amputation.dm`, `operation_revival.dm`,
+//! `operation_organ_repair.dm` (heart and brain), `operation_debride.dm`,
+//! `operation_puncture.dm`), the BandaStation failure chance
+//! (`modular_bandastation/medical/code/surgery/fail_chance.dm`), `/datum/element/surgery_aid`,
+//! the advanced tools' mode switch (`surgery_tools.dm`) and buckling to operating tables and beds
 //! (`game/objects/buckling.dm`, `buckle_lying`).
 //!
 //! The checked-out tg has no `/datum/surgery` + `/datum/surgery_step` any more: an operation is
-//! picked by the tool used on a bodypart in some surgical state ([`state`]). Drapes clicked on a
-//! mob prepare the selected bodypart; out of combat mode a click on a prepared mob lists the
-//! operations the held tool (or the empty hand) can do on the selected zone: one starts at once,
-//! several open the tgui `ListInputWindow` (tg's radial menu). Each operation is a `do_after` of
+//! picked by the tool used on a bodypart in some surgical state ([`state`]). A surgical aid
+//! (drapes, bedsheet, cloak) clicked on a mob prepares the selected bodypart; out of combat mode
+//! a click on a prepared mob lists the operations the held tool (or the empty hand) can do on the
+//! selected zone: one starts at once, several open the tgui `ListInputWindow` (tg's radial
+//! menu). The offered operations are the unlocked ones plus, for a patient lying on an operating
+//! table, its operating computer's list ([`super::operating`]: disks, research), without those
+//! another offered one replaces (`replaced_by`). Each operation is a `do_after` of
 //! `time × min(speed, 2.5)`, where speed multiplies the tool quality (its `implements` entry ×
-//! `toolspeed`), the surface (operating table 1, table 1.25, bed 1.5, floor 2) and 0.8 for an
-//! unconscious patient; then it fails with BandaStation's chance (the time over 2.5× of the base,
-//! +40% on a conscious patient, darkness, +5% for basic tools) or succeeds. A buckled mob lies on
-//! the table (dragged onto it, 2 s for someone else) until an empty hand clicks the table or it
-//! resists.
-// shortcut: no operating computer, surgery disks or locked (upgraded) operations, no mood events,
-// sounds, surgical memory, blood on the surgeon's gloves, self-surgery trait, manual cauterizing
-// of yourself; no limb removal, so amputation fails with a message; organs are not modelled, so
-// organ manipulation finds nothing to take out; a drunk surgeon is not slowed; no prosthetic,
-// abductor, thick-skin or skull operations (cranial fissures, debridement, organ repair, ...).
+//! `toolspeed`), the surgeon's drunkenness (0.8 at the Ballmer peak), the surface (operating table
+//! 1, table 1.25, bed 1.5, floor 2) and 0.8 for a patient who feels nothing (unconscious or an
+//! analgesic in the blood); then it fails with BandaStation's chance (the time over 2.5× of the
+//! base, +40% on a patient who feels it, darkness, +5% for basic tools, +10% for improvised
+//! ones) or succeeds. A buckled mob lies on the table (dragged onto it, 2 s for someone else)
+//! until an empty hand clicks the table or it resists.
+// shortcut: no mood events, sounds, surgical memory, blood on the surgeon's gloves, self-surgery
+// trait, manual cauterizing of yourself, ring accessories on gloves, wound scanning; no limb
+// removal, so amputation fails with a message; organs are not items, so organ manipulation finds
+// nothing to take out and only the heart and brain (their decay damage) can be repaired; no
+// prosthetic, abductor, robotic, thick-skin or skull operations; no brain traumas.
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
@@ -34,6 +41,8 @@ use ss13_tgui::interfaces::list_input::{ListInputData, ListInputUi};
 use ss13_tgui::server::{OpenUi, ServerUi, UiActed, UiParams, UiReject, UiWindow};
 use ss13_tgui::{UiInterface, UiStatus};
 
+use super::defib::{BRAIN_MAX_HEALTH, HEART_MAX_HEALTH, OrganDecay};
+use super::operating::{OperatingComputer, advanced_surgeries};
 use super::wounds::{CANT_WOUND, Limbs, Series, WoundKind, state};
 use super::{MedJob, name_of, visible_range};
 use crate::combat::CombatMode;
@@ -54,7 +63,87 @@ const TOOL_MOD_ADVANCED: f32 = 0.0;
 const TOOL_MOD_ALIEN: f32 = 1.0;
 const TOOL_MOD_AUGMENT: f32 = 0.0;
 const TOOL_MOD_BASIC: f32 = 5.0;
-pub const DRAPES: &str = "/obj/item/surgical_drapes";
+const TOOL_MOD_GHETTO: f32 = 10.0;
+/// `BALLMER_PEAK_LOW_END`, `BALLMER_PEAK_HIGH_END`.
+const BALLMER_PEAK_LOW_END: f32 = 12.9;
+const BALLMER_PEAK_HIGH_END: f32 = 13.8;
+/// `/datum/surgery_operation/organ/repair` `heal_to_percent`, `failure_damage_percent`.
+const REPAIR_HEAL_TO: f32 = 0.6;
+const REPAIR_FAILURE_DAMAGE: f32 = 0.2;
+/// The brain's: `heal_to_percent` 0.25 (healed per step), `failure_damage_percent` 0.3.
+const BRAIN_HEAL: f32 = 0.25;
+const BRAIN_FAILURE_DAMAGE: f32 = 0.3;
+/// Items with `/datum/element/surgery_aid`: drapes, the surgical processor, bedsheets, cloaks
+/// and robe capes.
+const AIDS: [&str; 5] = [
+    "/obj/item/surgical_drapes",
+    "/obj/item/surgical_processor",
+    "/obj/item/bedsheet",
+    "/obj/item/clothing/neck/cloak",
+    "/obj/item/clothing/neck/robe_cape",
+];
+
+/// The item prepares patients for surgery (`surgery_aid`).
+pub fn is_aid(path: &str) -> bool {
+    AIDS.iter().any(|root| is_under(path, root))
+}
+
+/// The advanced tools' `/datum/component/transforming`: (type, inactive and active behaviour,
+/// the message for inactive and active).
+const ADVANCED_TOOLS: [(&str, &str, &str, &str, &str); 3] = [
+    (
+        "/obj/item/scalpel/advanced",
+        "scalpel",
+        "saw",
+        "disabled bone-cutting mode",
+        "enabled bone-cutting mode",
+    ),
+    (
+        "/obj/item/retractor/advanced",
+        "retractor",
+        "hemostat",
+        "gears set to retract",
+        "gears set to clamp",
+    ),
+    (
+        "/obj/item/cautery/advanced",
+        "cautery",
+        "drill",
+        "lenses set to mend",
+        "lenses set to drill",
+    ),
+];
+
+/// tg `attack_self` of the laser scalpel, mechanical pinches and searing tool: the other
+/// `tool_behaviour` (the laser scalpel also gains 1 force while sawing). True when `item` is one.
+pub fn toggle_advanced_tool(world: &mut World, client: Entity, item: Entity) -> bool {
+    let Some(path) = world.get::<DmItem>(item).map(|i| i.path.clone()) else {
+        return false;
+    };
+    let Some(&(root, off, on, off_text, on_text)) = ADVANCED_TOOLS
+        .iter()
+        .find(|(root, ..)| is_under(&path, root))
+    else {
+        return false;
+    };
+    let Some(mut tool) = world.get_mut::<DmTool>(item) else {
+        return false;
+    };
+    let active = tool.behaviour != on;
+    tool.behaviour = if active { on } else { off }.to_owned();
+    if root == "/obj/item/scalpel/advanced"
+        && let Some(mut dm) = world.get_mut::<DmItem>(item)
+    {
+        dm.force += if active { 1.0 } else { -1.0 };
+    }
+    tell(
+        world,
+        client,
+        Span::Notice,
+        if active { on_text } else { off_text },
+    );
+    true
+}
 /// `buckle_delay`.
 pub const BUCKLE_DELAY: f32 = 20.0;
 
@@ -75,6 +164,10 @@ pub mod flags {
     pub const SELF_OPERABLE: u16 = 1 << 5;
     pub const STANDING_ALLOWED: u16 = 1 << 6;
     pub const IGNORE_CLOTHES: u16 = 1 << 8;
+    /// `OPERATION_LOCKED`: offered only from an operating computer's list (disks, research).
+    pub const LOCKED: u16 = 1 << 9;
+    /// `OPERATION_PRIORITY_NEXT_STEP`: the computer recommends it first.
+    pub const PRIORITY_NEXT_STEP: u16 = 1 << 10;
 }
 
 /// tend wounds' radial options.
@@ -82,9 +175,92 @@ pub mod flags {
 pub enum Heal {
     Brute,
     Burn,
+    /// `COMBO_SURGERY`: both at once.
+    Combo,
 }
 
-/// The unlocked operations of a human.
+/// The tend wounds operation types (tg `/datum/surgery_operation/basic/tend_wounds` and the
+/// researched upgrades).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Tend {
+    Basic,
+    Upgraded,
+    Master,
+    Combo,
+    ComboUpgraded,
+    ComboMaster,
+}
+
+impl Tend {
+    pub const ALL: [Self; 6] = [
+        Self::Basic,
+        Self::Upgraded,
+        Self::Master,
+        Self::Combo,
+        Self::ComboUpgraded,
+        Self::ComboMaster,
+    ];
+
+    /// `can_heal = COMBO_SURGERY`.
+    pub fn combo(self) -> bool {
+        matches!(self, Self::Combo | Self::ComboUpgraded | Self::ComboMaster)
+    }
+
+    /// `healing_amount`, `healing_multiplier`.
+    pub fn healing(self) -> (f32, f32) {
+        match self {
+            Self::Basic => (5.0, 0.07),
+            Self::Upgraded => (5.0, 0.1),
+            Self::Master => (5.0, 0.2),
+            Self::Combo => (3.0, 0.07),
+            Self::ComboUpgraded => (3.0, 0.1),
+            Self::ComboMaster => (1.0, 0.4),
+        }
+    }
+
+    fn path(self) -> &'static str {
+        match self {
+            Self::Basic => "/datum/surgery_operation/basic/tend_wounds",
+            Self::Upgraded => "/datum/surgery_operation/basic/tend_wounds/upgraded",
+            Self::Master => "/datum/surgery_operation/basic/tend_wounds/upgraded/master",
+            Self::Combo => "/datum/surgery_operation/basic/tend_wounds/combo",
+            Self::ComboUpgraded => "/datum/surgery_operation/basic/tend_wounds/combo/upgraded",
+            Self::ComboMaster => "/datum/surgery_operation/basic/tend_wounds/combo/upgraded/master",
+        }
+    }
+
+    fn replaced_by(self) -> Option<Self> {
+        match self {
+            Self::Basic => Some(Self::Upgraded),
+            Self::Upgraded => Some(Self::Master),
+            Self::Master | Self::ComboUpgraded => Some(Self::ComboMaster),
+            Self::Combo => Some(Self::ComboUpgraded),
+            Self::ComboMaster => None,
+        }
+    }
+
+    fn rnd_name(self) -> &'static str {
+        match self {
+            Self::Basic => "Обработка ран",
+            Self::Upgraded => "Обработка ран+",
+            Self::Master => "Обработка ран++",
+            Self::Combo => "Улучшенная обработка ран",
+            Self::ComboUpgraded => "Улучшенная обработка ран+",
+            Self::ComboMaster => "Улучшенная обработка ран++",
+        }
+    }
+}
+
+/// Where an operation works: tg `/datum/surgery_operation/limb` (the selected bodypart),
+/// `basic` (its `target_zone` exactly) or `organ` (its organ's `zone` exactly).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Target {
+    Limb,
+    Basic(TargetZone),
+    Organ(TargetZone),
+}
+
+/// The operations of a human (one per tg operation type and radial option).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Op {
     InciseSkin,
@@ -96,28 +272,48 @@ pub enum Op {
     FixBones,
     DrillBones,
     InciseOrgans,
-    TendWounds(Heal),
+    TendWounds(Tend, Heal),
     RepairDislocation,
     RepairHairline,
     ResetCompound,
     RepairCompound,
     OrganManipulation,
     Amputate,
+    Revival,
+    CoronaryBypass,
+    BrainSurgery,
+    Debride,
+    RepairPuncture,
+    SealVeins,
 }
 
 /// The static part of an operation.
 #[derive(Clone, Copy, Debug)]
 pub struct OpDef {
+    /// The tg type, what disks and research designs unlock.
+    pub path: &'static str,
+    /// The radial option's name.
     pub name: &'static str,
+    /// `rnd_name || name`: the operating computer's catalog name.
+    pub catalog_name: &'static str,
+    pub desc: &'static str,
     /// Deciseconds.
     pub time: f32,
     pub flags: u16,
+    pub target: Target,
     pub all_required: u16,
     pub any_required: u16,
     pub any_blocked: u16,
     pub implements: &'static [(Implement, f32)],
     /// The preop phrase: "Вы начинаете {verb} {zone} у {patient}...".
     pub verb: &'static str,
+    /// `replaced_by`: hidden while that operation is offered too.
+    pub replaced_by: Option<&'static str>,
+    /// `get_recommended_tool()`.
+    pub tool_rec: &'static str,
+    /// The operation's own `all_required_strings()` / `all_blocked_strings()` additions.
+    pub required: &'static [&'static str],
+    pub blocked: &'static [&'static str],
 }
 
 use Implement::{Hand, Path, Tool};
@@ -137,51 +333,113 @@ const CLAMP: &[(Implement, f32)] = &[
     (Path("/obj/item/stack/package_wrap"), 2.85),
     (Path("/obj/item/stack/cable_coil"), 6.67),
 ];
+const TEND: &[(Implement, f32)] = &[
+    (Tool("hemostat"), 1.0),
+    (Tool("screwdriver"), 1.5),
+    (Tool("cutters"), 1.67),
+    (Path("/obj/item/pen"), 1.8),
+];
+const ORGAN_REPAIR_BLOCKED: &[&str] = &[
+    "орган не должен быть кибернетическим",
+    "орган не должен был подвергаться хирургическому восстановлению ранее",
+];
 
 impl Op {
-    pub const ALL: [Self; 17] = [
-        Self::InciseSkin,
-        Self::RetractSkin,
-        Self::CloseSkin,
-        Self::ClampBleeders,
-        Self::UnclampBleeders,
-        Self::SawBones,
-        Self::FixBones,
-        Self::DrillBones,
-        Self::InciseOrgans,
-        Self::TendWounds(Heal::Brute),
-        Self::TendWounds(Heal::Burn),
-        Self::RepairDislocation,
-        Self::RepairHairline,
-        Self::ResetCompound,
-        Self::RepairCompound,
-        Self::OrganManipulation,
-        Self::Amputate,
-    ];
+    /// Every operation and option, in tg type order.
+    pub fn all() -> Vec<Self> {
+        let mut ops = vec![
+            Self::InciseSkin,
+            Self::RetractSkin,
+            Self::CloseSkin,
+            Self::ClampBleeders,
+            Self::UnclampBleeders,
+            Self::SawBones,
+            Self::FixBones,
+            Self::DrillBones,
+            Self::InciseOrgans,
+        ];
+        for tend in Tend::ALL {
+            if tend.combo() {
+                ops.push(Self::TendWounds(tend, Heal::Combo));
+            } else {
+                ops.push(Self::TendWounds(tend, Heal::Brute));
+                ops.push(Self::TendWounds(tend, Heal::Burn));
+            }
+        }
+        ops.extend([
+            Self::RepairDislocation,
+            Self::RepairHairline,
+            Self::ResetCompound,
+            Self::RepairCompound,
+            Self::OrganManipulation,
+            Self::Amputate,
+            Self::Revival,
+            Self::CoronaryBypass,
+            Self::BrainSurgery,
+            Self::Debride,
+            Self::RepairPuncture,
+            Self::SealVeins,
+        ]);
+        ops
+    }
+
+    /// One operation per tg type (the operating computer's catalog).
+    pub fn types() -> Vec<Self> {
+        let mut seen = Vec::new();
+        Self::all()
+            .into_iter()
+            .filter(|op| {
+                let path = op.def().path;
+                let new = !seen.contains(&path);
+                seen.push(path);
+                new
+            })
+            .collect()
+    }
+
+    /// The operation of a tg type path, for disks and designs (`None`: not ported).
+    pub fn of_path(path: &str) -> Option<Self> {
+        Self::types().into_iter().find(|op| op.def().path == path)
+    }
 
     pub fn def(self) -> OpDef {
         use state::*;
         let base = OpDef {
+            path: "",
             name: "",
+            catalog_name: "",
+            desc: "",
             time: 10.0,
             flags: 0,
+            target: Target::Limb,
             all_required: 0,
             any_required: 0,
             any_blocked: 0,
             implements: &[],
             verb: "оперировать",
+            replaced_by: None,
+            tool_rec: "",
+            required: &[],
+            blocked: &[],
         };
-        match self {
+        let def = match self {
             Self::InciseSkin => OpDef {
+                path: "/datum/surgery_operation/limb/incise_skin",
                 name: "Сделать разрез кожи",
+                desc: "Сделайте разрез на коже пациента, чтобы получить доступ к внутренним \
+                       органам. Вызывает хирургическое состояние \"кожа разрезана\".",
                 time: 16.0,
                 any_blocked: ALL_SKIN,
                 implements: INCISE,
                 verb: "делать разрез на",
+                tool_rec: "scalpel",
                 ..base
             },
             Self::RetractSkin => OpDef {
+                path: "/datum/surgery_operation/limb/retract_skin",
                 name: "retract skin",
+                desc: "Раздвигает кожу пациента, чтобы получить доступ к внутренним органам. \
+                       Вызывает хирургическое состояние \"кожа раздвинута\".",
                 time: 24.0,
                 all_required: SKIN_CUT,
                 implements: &[
@@ -192,10 +450,14 @@ impl Op {
                     (Path("/obj/item/kitchen/fork"), 2.85),
                 ],
                 verb: "раздвигать кожу на",
+                tool_rec: "retractor",
                 ..base
             },
             Self::CloseSkin => OpDef {
+                path: "/datum/surgery_operation/limb/close_skin",
                 name: "Прижечь разрез кожи",
+                desc: "Прижечь разрез на коже пациента, закрывая его. Устраняет большинство \
+                       хирургических состояний.",
                 time: 24.0,
                 any_required: ALL_SKIN,
                 implements: &[
@@ -206,26 +468,40 @@ impl Op {
                     (Path("/obj/item"), 3.33),
                 ],
                 verb: "прижигать разрез на",
+                tool_rec: "cautery",
+                required: &["конечность должна иметь кожу"],
                 ..base
             },
             Self::ClampBleeders => OpDef {
+                path: "/datum/surgery_operation/limb/clamp_bleeders",
                 name: "Зажать сосуды",
+                desc: "Накладывает зажим на кровеносных сосудах пациента, чтобы предотвратить \
+                       потерю крови. Вызывает хирургическое состояние \"сосуды зажаты\".",
                 time: 24.0,
                 all_required: SKIN_OPEN | VESSELS_UNCLAMPED,
                 implements: CLAMP,
                 verb: "зажимать кровеносные сосуды в",
+                tool_rec: "hemostat",
                 ..base
             },
             Self::UnclampBleeders => OpDef {
+                path: "/datum/surgery_operation/limb/unclamp_bleeders",
                 name: "Разжать сосуды",
+                desc: "Снять зажимы с кровеносных сосудов в теле пациента, чтобы восстановить \
+                       кровоток. Убирает хирургическое состояние \"сосуды зажаты\".",
                 time: 24.0,
                 all_required: SKIN_OPEN | VESSELS_CLAMPED,
                 implements: CLAMP,
                 verb: "разжимать кровеносные сосуды в",
+                tool_rec: "hemostat",
+                required: &["конечность должна иметь кровеносные сосуды"],
                 ..base
             },
             Self::SawBones => OpDef {
+                path: "/datum/surgery_operation/limb/saw_bones",
                 name: "Распилить кость",
+                desc: "Пропилите кость пациента, чтобы получить доступ к внутренним органам. \
+                       Вызывает хирургическое состояние \"кость распилена\".",
                 time: 54.0,
                 all_required: SKIN_OPEN,
                 any_blocked: BONE_SAWED | BONE_DRILLED,
@@ -239,10 +515,14 @@ impl Op {
                     (Path("/obj/item"), 4.0),
                 ],
                 verb: "пилить кости в",
+                tool_rec: "saw",
                 ..base
             },
             Self::FixBones => OpDef {
+                path: "/datum/surgery_operation/limb/fix_bones",
                 name: "Фиксация сломанной кости",
+                desc: "Соединить рассечённые или зафиксировать сломанные кости. Убирает \
+                       хирургические состояния \"кость распилена\" и \"кость просверлена\".",
                 time: 40.0,
                 all_required: SKIN_OPEN,
                 any_required: ALL_BONE,
@@ -256,10 +536,15 @@ impl Op {
                     (Path("/obj/item/stack/medical/wrap/sticky_tape"), 3.33),
                 ],
                 verb: "лечить кости в",
+                tool_rec: "bone gel",
+                required: &["конечность должна иметь кости"],
                 ..base
             },
             Self::DrillBones => OpDef {
+                path: "/datum/surgery_operation/limb/drill_bones",
                 name: "Сверление кости",
+                desc: "Просверливание кости пациента. Вызывает хирургическое состояние \"кость \
+                       просверлена\".",
                 time: 30.0,
                 all_required: SKIN_OPEN,
                 any_blocked: BONE_SAWED | BONE_DRILLED,
@@ -272,10 +557,15 @@ impl Op {
                     (Path("/obj/item"), 6.67),
                 ],
                 verb: "просверливать кость в",
+                tool_rec: "drill",
                 ..base
             },
             Self::InciseOrgans => OpDef {
+                path: "/datum/surgery_operation/limb/incise_organs",
                 name: "Сделать разрез органа",
+                desc: "Сделайте разрез на тканях внутренних органов, что позволит вылечить или \
+                       манипулировать с органом. Вызывает хирургическое состояние \"орган \
+                       разрезан\".",
                 time: 24.0,
                 all_required: SKIN_OPEN,
                 any_blocked: ORGANS_CUT,
@@ -288,27 +578,41 @@ impl Op {
                     (Path("/obj/item"), 3.33),
                 ],
                 verb: "делать разрез органа в",
+                tool_rec: "scalpel",
                 ..base
             },
-            Self::TendWounds(heal) => OpDef {
+            Self::TendWounds(tend, heal) => OpDef {
+                path: tend.path(),
                 name: match heal {
                     Heal::Brute => "Обработка ушибов",
                     Heal::Burn => "Обработка ожогов",
+                    Heal::Combo => "Обработайте ушибы и ожоги",
                 },
-                time: 25.0,
-                flags: flags::LOOPING | flags::IGNORE_CLOTHES,
+                catalog_name: tend.rnd_name(),
+                desc: "Проведите поверхностный уход за ушибами и ожогами пациента.",
+                time: if tend.combo() { 10.0 } else { 25.0 },
+                flags: flags::LOOPING
+                    | flags::IGNORE_CLOTHES
+                    | if tend == Tend::Basic {
+                        0
+                    } else {
+                        flags::LOCKED
+                    },
+                target: Target::Basic(TargetZone::Chest),
                 any_required: ALL_SKIN,
-                implements: &[
-                    (Tool("hemostat"), 1.0),
-                    (Tool("screwdriver"), 1.5),
-                    (Tool("cutters"), 1.67),
-                    (Path("/obj/item/pen"), 1.8),
-                ],
+                implements: TEND,
                 verb: "обрабатывать раны:",
+                replaced_by: tend.replaced_by().map(Tend::path),
+                tool_rec: "hemostat",
+                required: &["у пациента должны быть ушибы или ожоги"],
                 ..base
             },
             Self::RepairDislocation => OpDef {
+                path: "/datum/surgery_operation/limb/repair_dislocation",
                 name: "reset dislocation",
+                desc: "Reset a dislocated bone in a patient's limb. Similar to the field \
+                       procedure, but quicker and safer due to being performed in a controlled \
+                       environment.",
                 time: 24.0,
                 flags: flags::STANDING_ALLOWED | flags::IGNORE_CLOTHES,
                 implements: &[
@@ -317,10 +621,14 @@ impl Op {
                     (Hand, 5.0),
                 ],
                 verb: "вправлять вывих на",
+                tool_rec: "bonesetter",
+                required: &["the limb must be dislocated"],
                 ..base
             },
             Self::RepairHairline => OpDef {
+                path: "/datum/surgery_operation/limb/repair_hairline",
                 name: "Сращивание трещины",
+                desc: "Заживление трещины в кости пациента.",
                 time: 40.0,
                 any_required: ALL_SKIN,
                 implements: &[
@@ -334,10 +642,15 @@ impl Op {
                     (Path("/obj/item/stack/medical/wrap/sticky_tape"), 3.33),
                 ],
                 verb: "сращивать трещину в",
+                tool_rec: "bonesetter",
+                required: &["конечность должна иметь трещину"],
                 ..base
             },
             Self::ResetCompound => OpDef {
+                path: "/datum/surgery_operation/limb/reset_compound",
                 name: "reset compound fracture",
+                desc: "Вправление сложного перелома кости пациента, для подготавливки её к \
+                       правильному заживлению.",
                 time: 60.0,
                 all_required: SKIN_OPEN,
                 any_blocked: VESSELS_UNCLAMPED,
@@ -351,10 +664,14 @@ impl Op {
                     (Path("/obj/item/stack/medical/wrap/sticky_tape"), 5.0),
                 ],
                 verb: "вправлять открытый перелом в",
+                tool_rec: "bonesetter",
+                required: &["конечность должна иметь сложный перелом"],
                 ..base
             },
             Self::RepairCompound => OpDef {
+                path: "/datum/surgery_operation/limb/repair_compound",
                 name: "repair compound fracture",
+                desc: "Залечивание сложного перелома кости пациента.",
                 time: 40.0,
                 any_required: ALL_SKIN,
                 implements: &[
@@ -367,18 +684,26 @@ impl Op {
                     (Path("/obj/item/stack/medical/wrap/sticky_tape"), 3.33),
                 ],
                 verb: "заживлять открытый перелом в",
+                tool_rec: "bone gel",
+                required: &["сложный перелом конечности должен быть вправлен"],
                 ..base
             },
             Self::OrganManipulation => OpDef {
+                path: "/datum/surgery_operation/limb/organ_manipulation/internal",
                 name: "Манипуляции с органами",
+                desc: "Манипуляции с внутренними органами пациента.",
                 time: 24.0,
                 all_required: SKIN_OPEN | ORGANS_CUT,
                 implements: &[(Tool("hemostat"), 1.0), (Tool("crowbar"), 1.8)],
                 verb: "искать органы в",
+                tool_rec: "hemostat",
                 ..base
             },
             Self::Amputate => OpDef {
+                path: "/datum/surgery_operation/limb/amputate",
                 name: "Ампутация конечности",
+                catalog_name: "Разъединение (Ампутация)",
+                desc: "Отделение конечности от тела пациента.",
                 time: 64.0,
                 all_required: SKIN_OPEN | BONE_SAWED,
                 any_blocked: VESSELS_UNCLAMPED,
@@ -393,10 +718,304 @@ impl Op {
                     (Path("/obj/item/knife/butcher"), 4.0),
                 ],
                 verb: "ампутировать",
+                tool_rec: "amputation shears",
                 ..base
             },
+            Self::Revival => OpDef {
+                path: "/datum/surgery_operation/basic/revival",
+                name: "Дефибрилляция мозга",
+                catalog_name: "Дефибриляция мозга (Оживление)",
+                desc: "Использование дефибриллятора, чтобы вернуть мозг пациента к жизни.",
+                time: 50.0,
+                target: Target::Basic(TargetZone::Head),
+                all_required: SKIN_OPEN | BONE_SAWED,
+                implements: &[
+                    (Path("/obj/item/shockpaddles"), 1.0),
+                    (Path("/obj/item/melee/touch_attack/shock"), 1.0),
+                    (Path("/obj/item/melee/baton/security"), 1.33),
+                    (Path("/obj/item/gun/energy"), 1.67),
+                ],
+                tool_rec: "defibrillator paddles",
+                required: &[
+                    "пациент должен быть мёртв",
+                    "пациент должен быть в состоянии, пригодном для реанимации",
+                ],
+                ..base
+            },
+            Self::CoronaryBypass => OpDef {
+                path: "/datum/surgery_operation/organ/repair/coronary_bypass",
+                name: "Коронарное шунтирование",
+                catalog_name: "Аортокоронарное шунтирование (Восстановление сердца)",
+                desc: "Установка шунта на поврежденное сердце пациента для восстановления \
+                       нормального кровотока. Эту процедуру можно провести только один раз для \
+                       каждого органа.",
+                time: 90.0,
+                target: Target::Organ(TargetZone::Chest),
+                all_required: SKIN_OPEN | ORGANS_CUT | BONE_SAWED,
+                implements: &[
+                    (Tool("hemostat"), 1.05),
+                    (Tool("cutters"), 2.85),
+                    (Path("/obj/item/stack/package_wrap"), 6.67),
+                    (Path("/obj/item/stack/cable_coil"), 2.0),
+                ],
+                tool_rec: "hemostat",
+                required: &["орган должен быть умеренно поврежден"],
+                blocked: ORGAN_REPAIR_BLOCKED,
+                ..base
+            },
+            Self::BrainSurgery => OpDef {
+                path: "/datum/surgery_operation/organ/repair/brain",
+                name: "Операция на мозге",
+                catalog_name: "Нейрохирургия (Хирургия мозга)",
+                desc: "Восстановление поврежденных тканей мозга пациента для возвращения \
+                       когнитивных функций.",
+                time: 100.0,
+                flags: flags::LOOPING,
+                target: Target::Organ(TargetZone::Head),
+                all_required: SKIN_OPEN | BONE_SAWED,
+                any_blocked: VESSELS_UNCLAMPED,
+                implements: &[
+                    (Tool("hemostat"), 1.05),
+                    (Tool("screwdriver"), 2.85),
+                    (Path("/obj/item/pen"), 6.67),
+                ],
+                tool_rec: "hemostat",
+                blocked: &["орган не должен быть кибернетическим"],
+                ..base
+            },
+            Self::Debride => OpDef {
+                path: "/datum/surgery_operation/limb/debride",
+                name: "Обработка зараженной плоти",
+                catalog_name: "Обработка раны",
+                desc: "Удаление инфицированной или омертвевшей плоти из раны пациента, чтобы \
+                       ускорить заживление.",
+                time: 30.0,
+                flags: flags::LOOPING | flags::PRIORITY_NEXT_STEP,
+                implements: &[
+                    (Tool("hemostat"), 1.0),
+                    (Tool("scalpel"), 1.25),
+                    (Tool("saw"), 1.66),
+                    (Tool("cutters"), 2.5),
+                ],
+                tool_rec: "hemostat",
+                required: &["на конечности должен быть ожог второй степени или хуже"],
+                ..base
+            },
+            Self::RepairPuncture => OpDef {
+                path: "/datum/surgery_operation/limb/repair_puncture",
+                name: "Соединение сосудов",
+                desc: "Соединение разорванных кровеносных сосудов пациента для подготовки к их \
+                       прижиганию.",
+                time: 30.0,
+                flags: flags::PRIORITY_NEXT_STEP,
+                all_required: SKIN_OPEN | ORGANS_CUT,
+                implements: &[
+                    (Tool("hemostat"), 1.0),
+                    (Tool("scalpel"), 1.15),
+                    (Tool("cutters"), 2.5),
+                ],
+                tool_rec: "hemostat",
+                required: &["конечность должна иметь необработанную колотую рану"],
+                ..base
+            },
+            Self::SealVeins => OpDef {
+                path: "/datum/surgery_operation/limb/seal_veins",
+                name: "Прижигание сосудов",
+                desc: "Прижигание ранее соединенных кровеносных сосудов пациента.",
+                time: 32.0,
+                flags: flags::PRIORITY_NEXT_STEP,
+                all_required: SKIN_OPEN | ORGANS_CUT,
+                implements: &[
+                    (Tool("cautery"), 1.0),
+                    (Path("/obj/item/gun/energy/laser"), 1.12),
+                    (Tool("welder"), 1.5),
+                    (Path("/obj/item"), 3.33),
+                ],
+                tool_rec: "cautery",
+                required: &["конечность должна иметь подготовленную колотую рану"],
+                ..base
+            },
+        };
+        OpDef {
+            catalog_name: if def.catalog_name.is_empty() {
+                def.name
+            } else {
+                def.catalog_name
+            },
+            ..def
         }
     }
+
+    /// tg `get_requirements()`: all of, one of, optional, blocking.
+    pub fn requirements(self) -> [Vec<String>; 4] {
+        let def = self.def();
+        let mut all: Vec<String> = match def.target {
+            Target::Basic(zone) => {
+                let zone = zone_name(zone);
+                vec![format!("операция на {zone} (цель: {zone})")]
+            }
+            Target::Organ(TargetZone::Head) => vec!["операция на brain (цель head)".into()],
+            Target::Organ(_) => vec!["операция на heart (цель chest)".into()],
+            Target::Limb => Vec::new(),
+        };
+        all.extend(state_guides(def.all_required, "требуется"));
+        if def.flags & flags::STANDING_ALLOWED == 0 {
+            all.push("пациент должен лежать".into());
+        }
+        all.extend(def.required.iter().map(|s| (*s).to_owned()));
+        let mut any = Vec::new();
+        let mut parsed = def.any_required;
+        for (group, text) in [
+            (
+                state::ALL_BONE,
+                "кость должна быть распилена или просверлена",
+            ),
+            (state::ALL_SKIN, "кожа должна быть разрезана или вскрыта"),
+            (
+                state::ALL_VESSEL,
+                "кровеносные сосуды должны быть зажаты или разжаты",
+            ),
+        ] {
+            if parsed & group == group {
+                parsed &= !group;
+                any.push(text.to_owned());
+            }
+        }
+        any.extend(state_guides(parsed, "требуется"));
+        let optional = if def.flags & flags::SELF_OPERABLE != 0 {
+            vec!["хирург может сделать это самостоятельно".to_owned()]
+        } else {
+            Vec::new()
+        };
+        let mut blocked = Vec::new();
+        let mut parsed = def.any_blocked;
+        for (group, text) in [
+            (state::ALL_BONE, "кость должна быть целой"),
+            (state::ALL_SKIN, "кожа должна быть целой"),
+            (state::ALL_VESSEL, "кровеносные сосуды должны быть целы"),
+        ] {
+            if parsed & group == group {
+                parsed &= !group;
+                blocked.push(text.to_owned());
+            }
+        }
+        blocked.extend(state_guides(parsed, "не требуется"));
+        if matches!(def.target, Target::Basic(_)) {
+            blocked.push("пациент не должен быть роботом".into());
+        }
+        blocked.extend(def.blocked.iter().map(|s| (*s).to_owned()));
+        if def.flags & flags::IGNORE_CLOTHES == 0 {
+            blocked.push("рабочая область не должна быть закрыта одеждой".into());
+        }
+        [all, any, optional, blocked]
+    }
+}
+
+/// `parse_zone`.
+fn zone_name(zone: TargetZone) -> &'static str {
+    match zone {
+        TargetZone::Head => "голова",
+        TargetZone::Eyes => "глаза",
+        TargetZone::Mouth => "рот",
+        TargetZone::Chest => "грудь",
+        TargetZone::Groin => "пах",
+        TargetZone::LArm => "левая рука",
+        TargetZone::RArm => "правая рука",
+        TargetZone::LLeg => "левая нога",
+        TargetZone::RLeg => "правая нога",
+    }
+}
+
+/// `SURGERY_STATE_READABLE`, in bit order.
+pub const STATE_READABLE: [(u16, &str); 8] = [
+    (state::SKIN_CUT, "Кожа разрезана"),
+    (state::SKIN_OPEN, "Кожа раскрыта"),
+    (state::VESSELS_UNCLAMPED, "Сосуды не зажаты"),
+    (state::VESSELS_CLAMPED, "Сосуды зажаты"),
+    (state::ORGANS_CUT, "Органы разрезаны"),
+    (state::BONE_DRILLED, "Кость просверлена"),
+    (state::BONE_SAWED, "Кость распилена"),
+    (state::CAVITY_WIDENED, "Грудная полость широко раскрыта"),
+];
+
+/// `bitfield_to_list(states, SURGERY_STATE_READABLE)`.
+pub fn readable_states(states: u16) -> Vec<&'static str> {
+    STATE_READABLE
+        .iter()
+        .filter(|(bit, _)| states & bit != 0)
+        .map(|(_, text)| *text)
+        .collect()
+}
+
+/// `bitfield_to_list(states, SURGERY_STATE_GUIDES(must))`.
+fn state_guides(states: u16, must: &str) -> Vec<String> {
+    [
+        (state::SKIN_CUT, format!("{must} разрез кожи")),
+        (
+            state::SKIN_OPEN,
+            format!("{must}, чтобы кожа была раскрыта"),
+        ),
+        (
+            state::VESSELS_UNCLAMPED,
+            format!("{must}, чтобы сосуды были разжаты"),
+        ),
+        (
+            state::VESSELS_CLAMPED,
+            format!("{must}, чтобы сосуды были зажаты"),
+        ),
+        (
+            state::ORGANS_CUT,
+            format!("{must}, чтобы орган был разрезан"),
+        ),
+        (
+            state::BONE_DRILLED,
+            format!("{must}, чтобы кость была просверлена"),
+        ),
+        (
+            state::BONE_SAWED,
+            format!("{must}, чтобы кость была распилена"),
+        ),
+        (
+            state::CAVITY_WIDENED,
+            format!("{must}, чтобы грудная полость была раскрыта"),
+        ),
+    ]
+    .into_iter()
+    .filter(|(bit, _)| states & bit != 0)
+    .map(|(_, text)| text)
+    .collect()
+}
+
+/// tg `is_replaced`: an operation hidden because what replaces it (directly or down the chain)
+/// is offered too.
+pub fn is_replaced(op: Op, pool: &[&str]) -> bool {
+    let mut next = op.def().replaced_by;
+    while let Some(path) = next {
+        if pool.contains(&path) {
+            return true;
+        }
+        next = Op::of_path(path).and_then(|o| o.def().replaced_by);
+    }
+    false
+}
+
+/// The operations a surgeon may pick from: tg `GLOB.operations.unlocked` plus `extra` (the
+/// operating computer's list), without the replaced ones.
+pub fn operation_pool(extra: &[&'static str]) -> Vec<Op> {
+    let mut paths: Vec<&str> = Op::types()
+        .into_iter()
+        .filter(|op| op.def().flags & flags::LOCKED == 0)
+        .map(|op| op.def().path)
+        .collect();
+    for path in extra {
+        if !paths.contains(path) {
+            paths.push(path);
+        }
+    }
+    Op::all()
+        .into_iter()
+        .filter(|op| paths.contains(&op.def().path) && !is_replaced(*op, &paths))
+        .collect()
 }
 
 /// The tool as an operation sees it.
@@ -410,6 +1029,9 @@ pub struct ToolInfo {
     pub force: f32,
     /// `get_temperature()`.
     pub temperature: f32,
+    /// Revival's `tool_check`: paddles of a powered unit, wielded and off cooldown; an active
+    /// stun baton.
+    pub shock_ready: bool,
 }
 
 impl ToolInfo {
@@ -430,12 +1052,29 @@ impl ToolInfo {
             } else {
                 0.0
             },
+            shock_ready: shock_ready(world, item),
         }
     }
 
     fn under(&self, root: &str) -> bool {
         self.path.as_deref().is_some_and(|p| is_under(p, root))
     }
+}
+
+fn shock_ready(world: &World, item: Entity) -> bool {
+    if let Some(super::defib::Paddles(unit)) = world.get::<super::defib::Paddles>(item) {
+        let now = world.resource::<Time>().elapsed_secs_f64();
+        let wielded = world
+            .get::<crate::inventory::CarriedBy>(item)
+            .is_some_and(|c| super::defib::is_wielded(world, c.0));
+        return wielded
+            && world
+                .get::<super::defib::Defib>(*unit)
+                .is_some_and(|d| d.powered() && now >= d.cooldown_until);
+    }
+    world
+        .get::<crate::security::Baton>(item)
+        .is_some_and(|b| b.active)
 }
 
 /// tg `tool_check` overrides.
@@ -466,6 +1105,13 @@ fn tool_check(op: Op, tool: &ToolInfo) -> bool {
             tool.under("/obj/item/stack/medical/suture")
                 || tool.temperature >= FIRE_MINIMUM_TEMPERATURE_TO_EXIST
         }
+        Op::SealVeins => tool.temperature >= FIRE_MINIMUM_TEMPERATURE_TO_EXIST,
+        // shortcut: an energy gun never counts as charged with an electrode (no fire modes
+        // here), so only paddles and batons shock a brain.
+        Op::Revival => {
+            !tool.under("/obj/item/gun/energy")
+                && (tool.shock_ready || tool.under("/obj/item/melee/touch_attack/shock"))
+        }
         _ => true,
     }
 }
@@ -490,18 +1136,12 @@ fn leak(behaviour: &str) -> &'static str {
     KNOWN.into_iter().find(|k| *k == behaviour).unwrap_or("")
 }
 
-/// tg `get_tool_quality`: 0 when the tool cannot do the operation.
-pub fn tool_quality(op: Op, tool: &ToolInfo) -> f32 {
+/// The `implements` entry `tool` matches (its behaviour first, else its type), unscaled.
+fn listed_quality(op: Op, tool: &ToolInfo) -> Option<f32> {
     let implements = op.def().implements;
     let Some(path) = &tool.path else {
-        return implements
-            .iter()
-            .find(|(i, _)| *i == Hand)
-            .map_or(0.0, |(_, q)| *q);
+        return implements.iter().find(|(i, _)| *i == Hand).map(|(_, q)| *q);
     };
-    if !tool_check(op, tool) {
-        return 0.0;
-    }
     let by_tool = implements
         .iter()
         .find(|(i, _)| !tool.behaviour.is_empty() && *i == Tool(leak(&tool.behaviour)))
@@ -510,7 +1150,18 @@ pub fn tool_quality(op: Op, tool: &ToolInfo) -> f32 {
         .iter()
         .find(|(i, _)| matches!(i, Path(root) if is_under(path, root)))
         .map(|(_, q)| *q);
-    tool.toolspeed * by_tool.or(by_path).unwrap_or(0.0)
+    by_tool.or(by_path)
+}
+
+/// tg `get_tool_quality`: 0 when the tool cannot do the operation.
+pub fn tool_quality(op: Op, tool: &ToolInfo) -> f32 {
+    if tool.path.is_none() {
+        return listed_quality(op, tool).unwrap_or(0.0);
+    }
+    if !tool_check(op, tool) {
+        return 0.0;
+    }
+    tool.toolspeed * listed_quality(op, tool).unwrap_or(0.0)
 }
 
 /// tg `get_location_modifier`: the best surface on the patient's tile.
@@ -533,14 +1184,25 @@ pub fn location_modifier(paths: &[String]) -> f32 {
         .fold(2.0, f32::min)
 }
 
-/// tg `get_time_modifiers` (tool quality × surface × patient), rounded to 0.01.
-pub fn speed_modifier(quality: f32, location: f32, patient_unconscious: bool) -> f32 {
-    let mut total = if quality > 0.0 { quality } else { 1.0 };
-    total *= location;
-    if patient_unconscious {
-        total *= 0.8;
-    }
+/// tg `get_time_modifiers`: tool quality × surgeon × surface × patient, rounded to 0.01.
+pub fn speed_modifier(quality: f32, surgeon: f32, location: f32, patient: f32) -> f32 {
+    let total = if quality > 0.0 { quality } else { 1.0 } * surgeon * location * patient;
     (total * 100.0).round() / 100.0
+}
+
+/// `get_mob_surgery_speed_mod`: ×0.8 on a patient who feels nothing (BandaStation: analgesia or
+/// `stat >= UNCONSCIOUS`).
+pub fn patient_speed_mod(painless: bool) -> f32 {
+    if painless { 0.8 } else { 1.0 }
+}
+
+/// `get_surgeon_surgery_speed_mod`: drunkenness slows the surgeon, except at the Ballmer peak.
+pub fn surgeon_speed_mod(drunk: f32) -> f32 {
+    if (BALLMER_PEAK_LOW_END..=BALLMER_PEAK_HIGH_END).contains(&drunk) {
+        0.8
+    } else {
+        1.0 + (drunk.powf(1.5) / 90.0 * 10.0).round() / 10.0
+    }
 }
 
 /// `GET_FAILURE_CHANCE(base_time, speed_mod)`, time in deciseconds.
@@ -548,17 +1210,39 @@ pub fn base_failure_chance(time: f32, speed: f32) -> f32 {
     FAILURE_CHANCE_PER_SECOND * ((speed * time - SURGERY_MODIFIER_FAILURE_THRESHOLD * time) / 10.0)
 }
 
+/// BandaStation's tool grade: an improvised implement (listed above 1.15) +10, else by the type
+/// path: advanced 0, alien 1, augment 0, anything else 5.
+pub fn tool_mod(op: Op, tool: &ToolInfo) -> f32 {
+    // tg indexes `implements` with the tool object, which is never a key, so the improvised
+    // grade never applied there; the listed quality of the matched implement is what it meant.
+    if listed_quality(op, tool).is_some_and(|q| q > 1.15) {
+        return TOOL_MOD_GHETTO;
+    }
+    let Some(path) = tool.path.as_deref() else {
+        return 0.0;
+    };
+    if path.contains("/advanced") {
+        TOOL_MOD_ADVANCED
+    } else if path.contains("/alien") {
+        TOOL_MOD_ALIEN
+    } else if path.contains("/augment") {
+        TOOL_MOD_AUGMENT
+    } else {
+        TOOL_MOD_BASIC
+    }
+}
+
 /// BandaStation `get_modified_failure_chance`: the base chance (clamped), +40 on a patient who
-/// feels it, darkness (`lumcount` below 0.6) and the tool's grade.
+/// feels it, darkness (`lumcount` below 0.6), the tool's grade.
 pub fn failure_chance(
     time: f32,
     speed: f32,
-    patient_unconscious: bool,
+    painless: bool,
     lumcount: Option<f32>,
-    tool_path: Option<&str>,
+    tool_mod: f32,
 ) -> f32 {
     let mut chance = base_failure_chance(time, speed).clamp(0.0, 99.0);
-    if !patient_unconscious {
+    if !painless {
         chance += 40.0;
     }
     if let Some(light) = lumcount
@@ -566,20 +1250,44 @@ pub fn failure_chance(
     {
         chance += (1.0 - light / 0.6).powf(1.5) * 60.0;
     }
-    // The "ghetto tool" test indexes `implements` with the tool object, which is never a key:
-    // every item is graded by its type path.
-    if let Some(path) = tool_path {
-        chance += if path.contains("/advanced") {
-            TOOL_MOD_ADVANCED
-        } else if path.contains("/alien") {
-            TOOL_MOD_ALIEN
-        } else if path.contains("/augment") {
-            TOOL_MOD_AUGMENT
-        } else {
-            TOOL_MOD_BASIC
-        };
-    }
-    chance
+    chance + tool_mod
+}
+
+/// Reagents with `TRAIT_ANALGESIA` in `metabolized_traits` (BandaStation adds tramadol).
+const ANALGESICS: [&str; 12] = [
+    "/datum/reagent/medicine/adminordrazine",
+    "/datum/reagent/medicine/mine_salve",
+    "/datum/reagent/medicine/morphine",
+    "/datum/reagent/medicine/stimulants",
+    "/datum/reagent/medicine/muscle_stimulant",
+    "/datum/reagent/medicine/granibitaluri",
+    "/datum/reagent/medicine/tramadol",
+    "/datum/reagent/toxin/berserker",
+    "/datum/reagent/drug/bath_salts",
+    "/datum/reagent/drug/happiness",
+    "/datum/reagent/drug/pumpup",
+    "/datum/reagent/drug/maint/sludge",
+];
+
+/// `HAS_TRAIT(mob, TRAIT_ANALGESIA)` from what is metabolizing in its blood.
+pub fn analgesia(world: &World, mob: Entity) -> bool {
+    let (Some(reagents), Some(chem)) = (
+        world.get::<crate::chem::MobReagents>(mob),
+        world.get_resource::<crate::chem::Chem>(),
+    ) else {
+        return false;
+    };
+    reagents
+        .blood
+        .reagents
+        .iter()
+        .any(|r| r.metabolizing && ANALGESICS.contains(&chem.0.def(r.id).path.as_str()))
+}
+
+fn drunkenness(world: &World, mob: Entity) -> f32 {
+    world
+        .get::<crate::chem::MobReagents>(mob)
+        .map_or(0.0, |r| r.drunk)
 }
 
 /// Mob-level facts operations check.
@@ -587,10 +1295,14 @@ pub fn failure_chance(
 struct Patient {
     lying: bool,
     unconscious: bool,
+    /// Analgesia or unconscious (BandaStation `stat >= UNCONSCIOUS`).
+    painless: bool,
+    dead: bool,
     covered: u32,
     prepped_any: bool,
     brute: f32,
     burn: f32,
+    organs: Option<OrganDecay>,
 }
 
 fn patient(world: &World, mob: Entity) -> Option<Patient> {
@@ -603,43 +1315,48 @@ fn patient(world: &World, mob: Entity) -> Option<Patient> {
             .filter_map(|item| world.get::<ss13_mapload::DmClothing>(item))
             .fold(0, |bits, c| bits | c.body_parts_covered)
     });
+    let unconscious = health.knocked_out(stat);
     Some(Patient {
         lying: world.get::<BodyPosition>(mob).is_some_and(|b| b.lying()),
-        unconscious: health.knocked_out(stat),
+        unconscious,
+        painless: unconscious || analgesia(world, mob),
+        dead: stat == Stat::Dead,
         covered,
         prepped_any: limbs.parts.iter().any(|l| l.prepped),
         brute: health.brute,
         burn: health.burn,
+        organs: world.get::<OrganDecay>(mob).copied(),
     })
 }
 
-/// tg `check_availability` of `op` on `mob`'s `zone` with `tool`, by `surgeon`.
-fn available(
-    world: &World,
-    op: Op,
-    mob: Entity,
-    surgeon: Entity,
-    zone: TargetZone,
-    tool: &ToolInfo,
-) -> bool {
+/// tg `is_available`: the target's state allows `op` on `zone` (no tool, posture or surgeon
+/// checks; what the operating computer shows as a next step).
+pub(crate) fn is_available(world: &World, op: Op, mob: Entity, zone: TargetZone) -> bool {
     let (Some(p), Some(limbs)) = (patient(world, mob), world.get::<Limbs>(mob)) else {
         return false;
     };
-    if tool_quality(op, tool) <= 0.0 {
-        return false;
-    }
     let def = op.def();
-    // `basic` operations (tend wounds) work on the chest of a prepared patient.
-    let body = match op {
-        Op::TendWounds(_) => {
-            if zone != TargetZone::Chest || !p.prepped_any || !limbs.limb(BodyZone::Chest).prepped {
+    let body = match def.target {
+        // `basic`: the exact zone, a prepared patient and bodypart.
+        Target::Basic(target) => {
+            if zone != target || !p.prepped_any {
                 return false;
             }
-            BodyZone::Chest
+            target.check_zone()
         }
-        _ => zone.check_zone(),
+        // `organ`: the organ's exact zone, its bodypart prepared.
+        Target::Organ(target) => {
+            if zone != target || p.organs.is_none() {
+                return false;
+            }
+            target.check_zone()
+        }
+        Target::Limb => zone.check_zone(),
     };
     let limb = limbs.limb(body);
+    if !limb.prepped {
+        return false;
+    }
     if def.all_required != 0 && !limb.has_state(def.all_required) {
         return false;
     }
@@ -649,9 +1366,11 @@ fn available(
     if def.any_blocked != 0 && limb.has_any_state(def.any_blocked) {
         return false;
     }
+    let organs = p.organs.unwrap_or_default();
     let state_ok = match op {
-        Op::TendWounds(Heal::Brute) => p.brute > 0.0,
-        Op::TendWounds(Heal::Burn) => p.burn > 0.0,
+        Op::TendWounds(_, Heal::Brute) => p.brute > 0.0,
+        Op::TendWounds(_, Heal::Burn) => p.burn > 0.0,
+        Op::TendWounds(_, Heal::Combo) => p.brute > 0.0 || p.burn > 0.0,
         // A wound's own broken-bone state does not offer the fix (tg avoids the confusion).
         Op::FixBones => !limb
             .wounds
@@ -670,37 +1389,113 @@ fn available(
             .wound(Series::Bone)
             .is_some_and(|w| w.kind == WoundKind::Compound && w.reset),
         Op::Amputate => !matches!(body, BodyZone::Head | BodyZone::Chest),
+        // shortcut: no suicide, husk or DNR flags yet, so every corpse with a brain qualifies.
+        Op::Revival => p.dead,
+        Op::CoronaryBypass => {
+            organs.heart >= HEART_MAX_HEALTH * REPAIR_HEAL_TO && !organs.heart_operated
+        }
+        Op::Debride => limb.wound(Series::Burn).is_some_and(|w| w.infection > 0.0),
+        Op::RepairPuncture => limb
+            .wound(Series::Pierce)
+            .is_some_and(|w| w.blood_flow > 0.0 && !w.mend_state),
+        Op::SealVeins => limb
+            .wound(Series::Pierce)
+            .is_some_and(|w| w.blood_flow > 0.0 && w.mend_state),
         _ => true,
     };
     if !state_ok {
         return false;
     }
-    if def.flags & flags::IGNORE_CLOTHES == 0 && p.covered & crate::chem::body_part_bit(body) != 0 {
-        return false;
-    }
-    if def.flags & flags::STANDING_ALLOWED == 0 && !p.lying {
-        return false;
-    }
-    if def.flags & flags::SELF_OPERABLE == 0 && mob == surgeon {
-        return false;
-    }
-    true
+    def.flags & flags::IGNORE_CLOTHES != 0 || p.covered & crate::chem::body_part_bit(body) == 0
 }
 
-/// tg `get_available_operations`, sorted by name (`cmp_name_asc`).
+/// tg `check_availability` of `op` on `mob`'s `zone` with `tool`, by `surgeon`.
+fn available(
+    world: &World,
+    op: Op,
+    mob: Entity,
+    surgeon: Entity,
+    zone: TargetZone,
+    tool: &ToolInfo,
+) -> bool {
+    if tool_quality(op, tool) <= 0.0 || !is_available(world, op, mob, zone) {
+        return false;
+    }
+    let def = op.def();
+    if def.flags & flags::STANDING_ALLOWED == 0 && !patient(world, mob).is_some_and(|p| p.lying) {
+        return false;
+    }
+    def.flags & flags::SELF_OPERABLE != 0 || mob != surgeon
+}
+
+/// tg `get_available_operations` over `pool` ([`operation_pool`]), sorted by name
+/// (`cmp_name_asc`).
 pub fn available_ops(
     world: &World,
+    pool: &[Op],
     mob: Entity,
     surgeon: Entity,
     zone: TargetZone,
     tool: &ToolInfo,
 ) -> Vec<Op> {
-    let mut ops: Vec<Op> = Op::ALL
-        .into_iter()
+    let mut ops: Vec<Op> = pool
+        .iter()
+        .copied()
         .filter(|&op| available(world, op, mob, surgeon, zone, tool))
         .collect();
     ops.sort_by_key(|op| op.def().name.to_lowercase());
     ops
+}
+
+/// The operating table `mob` lies on and the operating computer next to it (tg
+/// `table.patient`, `table.computer`: the first computer around the table in `alldirs` order).
+pub fn table_and_computer(world: &World, mob: Entity) -> Option<(Entity, Option<Entity>)> {
+    let lying = world.get::<BodyPosition>(mob).is_some_and(|b| b.lying());
+    let pos = *world.get::<TilePos>(mob)?;
+    if !lying {
+        return None;
+    }
+    let index = world.resource::<ss13_world::SpatialIndex>();
+    let table = index.on_tile(pos).iter().copied().find(|&e| {
+        crate::construction::path_of(world, e)
+            .is_some_and(|p| is_under(&p, "/obj/structure/table/optable"))
+    })?;
+    Some((table, computer_near(world, pos)))
+}
+
+/// tg `alldirs`.
+pub const ALLDIRS: [(i32, i32); 8] = [
+    (0, 1),
+    (0, -1),
+    (1, 0),
+    (-1, 0),
+    (1, 1),
+    (-1, 1),
+    (1, -1),
+    (-1, -1),
+];
+
+/// The first operating computer around `pos` (`locate() in get_step(src, direction)`).
+pub fn computer_near(world: &World, pos: TilePos) -> Option<Entity> {
+    let index = world.resource::<ss13_world::SpatialIndex>();
+    ALLDIRS.iter().find_map(|&(dx, dy)| {
+        let tile = TilePos::new(pos.x + dx, pos.y + dy, pos.z);
+        index
+            .on_tile(tile)
+            .iter()
+            .copied()
+            .find(|&e| world.get::<OperatingComputer>(e).is_some())
+    })
+}
+
+/// The operations offered on `mob`: tg `unlocked` plus, for a patient lying on an operating
+/// table, its computer's `advanced_surgeries` (`get_surgeries`, no power check).
+pub fn pool_for(world: &World, mob: Entity) -> Vec<Op> {
+    let extra = table_and_computer(world, mob)
+        .and_then(|(_, computer)| computer)
+        .map(|c| advanced_surgeries(world, c))
+        .unwrap_or_default();
+    operation_pool(&extra)
 }
 
 /// A list of operations waiting for the surgeon's pick (tg's radial menu).
@@ -781,7 +1576,8 @@ pub fn perform_surgery(world: &mut World, actor: Actor, mob: Entity) -> bool {
         .unwrap_or_default()
         .0;
     let tool = ToolInfo::read(world, actor.item);
-    let ops = available_ops(world, mob, actor.mob, zone, &tool);
+    let pool = pool_for(world, mob);
+    let ops = available_ops(world, &pool, mob, actor.mob, zone, &tool);
     match ops.as_slice() {
         [] => {
             let Some(item) = actor.item else {
@@ -834,15 +1630,28 @@ pub fn perform_surgery(world: &mut World, actor: Actor, mob: Entity) -> bool {
     }
 }
 
+/// `op` is still offered to `surgeon` (the pool may have changed: the patient left the table)
+/// and available: tg `operate_check`.
+fn offered(
+    world: &World,
+    op: Op,
+    mob: Entity,
+    surgeon: Entity,
+    zone: TargetZone,
+    tool: &ToolInfo,
+) -> bool {
+    pool_for(world, mob).contains(&op) && available(world, op, mob, surgeon, zone, tool)
+}
+
 /// tg `try_perform` up to its `do_after`.
 fn try_perform(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: TargetZone) {
     let tool = ToolInfo::read(world, actor.item);
-    if !available(world, op, mob, actor.mob, zone, &tool) {
+    if !offered(world, op, mob, actor.mob, zone, &tool) {
         return;
     }
     preop(world, actor, mob, op, zone);
-    let delay =
-        op.def().time * speed(world, op, mob, &tool).min(SURGERY_MODIFIER_FAILURE_THRESHOLD);
+    let delay = op.def().time
+        * speed(world, op, mob, actor.mob, &tool).min(SURGERY_MODIFIER_FAILURE_THRESHOLD);
     do_after(
         world,
         actor,
@@ -853,7 +1662,7 @@ fn try_perform(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: Targe
     );
 }
 
-fn speed(world: &World, op: Op, mob: Entity, tool: &ToolInfo) -> f32 {
+fn speed(world: &World, op: Op, mob: Entity, surgeon: Entity, tool: &ToolInfo) -> f32 {
     let location = world.get::<TilePos>(mob).map_or(2.0, |&pos| {
         let paths: Vec<String> = world
             .resource::<ss13_world::SpatialIndex>()
@@ -863,45 +1672,133 @@ fn speed(world: &World, op: Op, mob: Entity, tool: &ToolInfo) -> f32 {
             .collect();
         location_modifier(&paths)
     });
-    let unconscious = patient(world, mob).is_some_and(|p| p.unconscious);
-    speed_modifier(tool_quality(op, tool), location, unconscious)
+    let painless = patient(world, mob).is_some_and(|p| p.painless);
+    speed_modifier(
+        tool_quality(op, tool),
+        surgeon_speed_mod(drunkenness(world, surgeon)),
+        location,
+        patient_speed_mod(painless),
+    )
 }
 
 fn zone_words(op: Op, zone: TargetZone) -> String {
     match op {
-        Op::TendWounds(Heal::Brute) => "ушибы".into(),
-        Op::TendWounds(Heal::Burn) => "ожоги".into(),
         Op::Amputate => zone.check_zone().ru().1.into(),
         _ => super::wounds::zone_prepositional(zone.check_zone()).into(),
+    }
+}
+
+fn item_name(world: &World, item: Option<Entity>) -> String {
+    item.map(|i| name_of(world, i)).unwrap_or_default()
+}
+
+/// tend wounds' word for what it treats.
+fn wound_words(heal: Heal) -> &'static str {
+    match heal {
+        Heal::Combo => "раны",
+        Heal::Brute => "ушибы",
+        Heal::Burn => "ожоги",
     }
 }
 
 /// tg `on_preop` (`display_results` reaches only adjacent mobs) and `display_pain`.
 fn preop(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: TargetZone) {
     let (user, target) = (name_of(world, actor.mob), name_of(world, mob));
-    let verb = op.def().verb;
-    let what = zone_words(op, zone);
-    visible_range(
-        world,
-        actor.mob,
-        &format!("Вы начинаете {verb} {what} у {target}..."),
-        &format!("{user} начинает {verb} {what} у {target}."),
-        Span::Notice,
-        1,
-    );
-    pain(
-        world,
-        mob,
-        "Вы чувствуете острую боль, когда вас оперируют!",
-    );
+    let tool = item_name(world, actor.item);
+    let place = zone_words(op, zone);
+    let (own, others, hurt) = match op {
+        Op::TendWounds(_, heal) => {
+            let what = wound_words(heal);
+            (
+                format!("Вы пытаетесь наложить швы на {what} у {target}."),
+                format!("{user} пытается наложить швы на {what} у {target}."),
+                format!("Ваши {what} адски болят!"),
+            )
+        }
+        Op::Revival => (
+            format!("Вы готовитесь дать мозгу {target} искру жизни с помощью {tool}."),
+            format!("{user} готовится дать мозгу {target} искру жизни с помощью {tool}."),
+            String::new(),
+        ),
+        Op::CoronaryBypass => (
+            format!("Вы начинаете устанавливать шунт на сердце {target}..."),
+            format!("{user} начинает устанавливать шунт на сердце {target}."),
+            "Боль в груди невыносима! Вы едва можете это терпеть!".into(),
+        ),
+        Op::BrainSurgery => (
+            format!("Вы начинаете лечить мозг {target}..."),
+            format!("{user} начинает лечить мозг {target}."),
+            "Ваша голова пульсирует от невообразимой боли!".into(),
+        ),
+        Op::Debride => (
+            format!("Вы начинаете удалять зараженную плоть с {place} у {target}..."),
+            format!(
+                "{user} начинает удалять зараженную плоть с {place} у {target} с помощью {tool}."
+            ),
+            format!(
+                "Инфекция в вашей {place} приносит адскую боль! Такое чувство, что вас режут \
+                 ножом!"
+            ),
+        ),
+        Op::RepairPuncture => (
+            format!(
+                "Вы начинаете соединять разорванные кровеносные сосуды в {place} у {target}..."
+            ),
+            format!(
+                "{user} начинает соединять разорванные кровеносные сосуды в {place} у {target} с \
+                 помощью {tool}."
+            ),
+            format!("Вы чувствуете ужасную колющую боль в вашей {place}!"),
+        ),
+        Op::SealVeins => (
+            format!(
+                "Вы начинаете прижигать соединенные кровеносные сосуды в {place} у {target}..."
+            ),
+            format!(
+                "{user} начинает прижигать соединенные кровеносные сосуды в {place} у {target} с \
+                 помощью {tool}."
+            ),
+            format!("Вы чувствуете жжение в вашей {place}!"),
+        ),
+        _ => {
+            let verb = op.def().verb;
+            (
+                format!("Вы начинаете {verb} {place} у {target}..."),
+                format!("{user} начинает {verb} {place} у {target}."),
+                "Вы чувствуете острую боль, когда вас оперируют!".into(),
+            )
+        }
+    };
+    visible_range(world, actor.mob, &own, &others, Span::Notice, 1);
+    pain(world, mob, &hurt);
 }
 
-/// tg `display_pain`: nothing for the unconscious.
+/// tg `display_pain`: nothing for the unconscious; a dull tingle under analgesia, and maybe for
+/// a drunk patient (its drunkenness as a percent, at most 90).
 fn pain(world: &mut World, mob: Entity, text: &str) {
-    if patient(world, mob).is_some_and(|p| p.unconscious) {
+    if text.is_empty() {
         return;
     }
-    if let Some(client) = world.get::<PlayerMob>(mob).map(|p| p.client) {
+    let Some(p) = patient(world, mob) else {
+        return;
+    };
+    if p.unconscious {
+        return;
+    }
+    let Some(client) = world.get::<PlayerMob>(mob).map(|p| p.client) else {
+        return;
+    };
+    let drunk = drunkenness(world, mob);
+    let dulled =
+        p.painless || (drunk > 0.0 && super::fork_rng(world).chance(drunk.clamp(0.0, 90.0)));
+    if dulled {
+        tell(
+            world,
+            client,
+            Span::Notice,
+            "Вы испытываете притупленное покалывание, пока ваше тело оперируют.",
+        );
+    } else {
         tell(world, client, Span::BoldWarning, text);
     }
 }
@@ -973,21 +1870,15 @@ pub fn complete(world: &mut World, surgeon: Entity, action: &DoAfter, op: Op, zo
         item: action.item,
     };
     let tool = ToolInfo::read(world, actor.item);
-    if !available(world, op, mob, surgeon, zone, &tool) {
+    if !offered(world, op, mob, surgeon, zone, &tool) {
         return;
     }
-    let speed = speed(world, op, mob, &tool);
-    let unconscious = patient(world, mob).is_some_and(|p| p.unconscious);
+    let speed = speed(world, op, mob, surgeon, &tool);
+    let painless = patient(world, mob).is_some_and(|p| p.painless);
     let light = world
         .get::<TilePos>(mob)
         .and_then(|&p| crate::botany::lumcount(world, p));
-    let chance = failure_chance(
-        op.def().time,
-        speed,
-        unconscious,
-        light,
-        tool.path.as_deref(),
-    );
+    let chance = failure_chance(op.def().time, speed, painless, light, tool_mod(op, &tool));
     let failed = super::fork_rng(world).chance(chance.clamp(0.0, 99.0));
     if failed {
         failure(world, actor, mob, op, zone, speed);
@@ -1005,18 +1896,13 @@ pub fn complete(world: &mut World, surgeon: Entity, action: &DoAfter, op: Op, zo
     let still_holding = actor
         .item
         .is_none_or(|i| world.get_entity(i).is_ok() && stack_amount(world, i) > 0);
+    let tool = ToolInfo::read(world, actor.item);
     if op.def().flags & flags::LOOPING != 0
         && still_holding
-        && available(
-            world,
-            op,
-            mob,
-            surgeon,
-            zone,
-            &ToolInfo::read(world, actor.item),
-        )
+        && offered(world, op, mob, surgeon, zone, &tool)
     {
-        let delay = op.def().time * speed.min(SURGERY_MODIFIER_FAILURE_THRESHOLD);
+        let delay = op.def().time
+            * self::speed(world, op, mob, surgeon, &tool).min(SURGERY_MODIFIER_FAILURE_THRESHOLD);
         do_after(
             world,
             actor,
@@ -1046,6 +1932,20 @@ fn with_limbs(world: &mut World, mob: Entity, f: impl FnOnce(&mut Limbs)) {
     }
 }
 
+fn with_organs(world: &mut World, mob: Entity, f: impl FnOnce(&mut OrganDecay)) {
+    if let Some(mut organs) = world.get::<OrganDecay>(mob).copied() {
+        f(&mut organs);
+        world.entity_mut(mob).insert(organs);
+    }
+}
+
+/// `apply_organ_damage(amount, maximum)`: nothing past `maximum`.
+fn organ_damage(damage: &mut f32, amount: f32, maximum: f32) {
+    if *damage <= maximum {
+        *damage = (*damage + amount).clamp(0.0, maximum);
+    }
+}
+
 fn damage_limb(world: &mut World, mob: Entity, zone: BodyZone, kind: DamageType, amount: f32) {
     if let Some(mut health) = world.get::<Health>(mob).cloned() {
         health.damage_zone(zone, kind, amount);
@@ -1060,10 +1960,118 @@ fn heal_limb(world: &mut World, mob: Entity, zone: BodyZone, brute: f32) {
     }
 }
 
+/// tend wounds' `show_stats`: the surgeon holds a health analyzer, or an operating computer
+/// next to the patient has it on its table.
+fn shows_stats(world: &World, surgeon: Entity, mob: Entity) -> bool {
+    let analyzer = world.get::<Inventory>(surgeon).is_some_and(|inv| {
+        inv.hands.iter().flatten().any(|&i| {
+            world
+                .get::<DmItem>(i)
+                .is_some_and(|d| is_under(&d.path, super::ANALYZER_ROOT))
+        })
+    });
+    analyzer
+        || table_and_computer(world, mob).is_some_and(|(_, computer)| {
+            let near = |c: Entity| match (world.get::<TilePos>(c), world.get::<TilePos>(mob)) {
+                (Some(a), Some(b)) => a.chebyshev(*b).is_some_and(|d| d <= 1),
+                _ => false,
+            };
+            computer.is_some_and(near)
+        })
+}
+
+/// tend wounds' `get_progress`.
+fn tend_progress(
+    world: &World,
+    surgeon: Entity,
+    mob: Entity,
+    heal: Heal,
+    brute: f32,
+    burn: f32,
+) -> String {
+    let Some(health) = world.get::<Health>(mob) else {
+        return String::new();
+    };
+    let mut text = String::new();
+    if shows_stats(world, surgeon, mob) {
+        if brute > 0.0 && health.brute > 0.0 {
+            text += &format!(". Оставшиеся раны: {}", health.brute.round());
+        }
+        if burn > 0.0 && health.burn > 0.0 {
+            text += &format!(". Оставшиеся ожоги: {}", health.burn.round());
+        }
+        return text;
+    }
+    let mut steps: f32 = 0.0;
+    if brute > 0.0 {
+        steps = (health.brute / brute).max(0.0);
+    }
+    if burn > 0.0 {
+        steps = steps.max(health.burn / burn);
+    }
+    let pick = |combo: &'static str, b: &'static str, f: &'static str| match heal {
+        Heal::Combo => combo,
+        Heal::Brute => b,
+        Heal::Burn => f,
+    };
+    if steps <= 1.0 {
+        String::new()
+    } else if steps <= 3.0 {
+        format!(
+            ", заканчиваю работу над последними {}",
+            pick("признаками повреждения", "ссадинами", "ожогами")
+        )
+    } else if steps <= 6.0 {
+        format!(
+            ", считаю последние {}",
+            pick("очаги повреждений", "гематомы", "ожоговые пузыри")
+        )
+    } else if steps <= 9.0 {
+        format!(
+            ", продолжаю методично обрабатывать его обширные {}",
+            pick("травмы", "разрывы", "ожоги")
+        )
+    } else if steps <= 12.0 {
+        ", настраиваясь на долгую операцию впереди".into()
+    } else if steps <= 15.0 {
+        format!(
+            ", хотя всё ещё больше напоминает {}, чем на человека",
+            pick("мясное пюре", "говяжий фарш", "обугленный стейк")
+        )
+    } else {
+        format!(
+            ", хотя кажется, будто ваши усилия почти не сокращают объём {} тела",
+            pick("искореженного", "размозжённого", "обугленного")
+        )
+    }
+}
+
+/// debride's `get_progress`.
+fn debride_progress(infection: f32) -> &'static str {
+    let steps = infection / DEBRIDE_INFECTION_REMOVED;
+    if infection <= 0.0 || steps <= 1.0 {
+        ""
+    } else if steps <= 2.0 {
+        ", подготовка к удалению последних остатков инфекции"
+    } else if steps <= 4.0 {
+        ", неуклонно сокращая количество оставшихся очагов инфекции"
+    } else if steps >= 5.0 {
+        ", хотя ещё довольно много подлежит удалению"
+    } else {
+        ""
+    }
+}
+
+/// debride's `infestation_removed`, `sanitization_added`.
+const DEBRIDE_INFECTION_REMOVED: f32 = 4.0;
+const DEBRIDE_SANITIZATION_ADDED: f32 = 0.5;
+
 /// tg `on_success` of each operation.
 fn success(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: TargetZone) {
     let body = zone.check_zone();
     let (user, target) = (name_of(world, actor.mob), name_of(world, mob));
+    let tool = item_name(world, actor.item);
+    let place = super::wounds::zone_prepositional(body);
     let mut own = "Вы преуспеваете.".to_owned();
     let mut others = format!("{user} преуспел!");
     match op {
@@ -1115,14 +2123,8 @@ fn success(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: TargetZon
                 l.limb_mut(body).add_surgery(state::BONE_SAWED)
             });
             damage_limb(world, mob, body, DamageType::Brute, 50.0);
-            own = format!(
-                "Вы распилили кости в {} {target}.",
-                super::wounds::zone_prepositional(body)
-            );
-            others = format!(
-                "{user} распилил кости в {} у {target}!",
-                super::wounds::zone_prepositional(body)
-            );
+            own = format!("Вы распилили кости в {place} {target}.");
+            others = format!("{user} распилил кости в {place} у {target}!");
         }
         Op::FixBones => {
             with_limbs(world, mob, |l| {
@@ -1139,14 +2141,22 @@ fn success(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: TargetZon
             });
             damage_limb(world, mob, body, DamageType::Brute, 10.0);
         }
-        Op::TendWounds(heal) => {
-            let (brute, burn) = tend_amounts(world, mob, heal, 1.0);
+        Op::TendWounds(tend, heal) => {
+            let (brute, burn) = tend_amounts(world, mob, tend, heal);
             if let Some(mut health) = world.get::<Health>(mob).cloned() {
                 heal_bodypart_damage(&mut health, brute, burn);
                 world.entity_mut(mob).insert(health);
             }
-            own = format!("Вам удается залечить некоторые раны {target}");
-            others = format!("{user} залечивает некоторые раны {target}");
+            let covered = patient(world, mob)
+                .is_some_and(|p| p.covered & crate::chem::body_part_bit(BodyZone::Chest) != 0);
+            let clothes = if covered {
+                " насколько это возможно, пока на нём одежда"
+            } else {
+                ""
+            };
+            let progress = tend_progress(world, actor.mob, mob, heal, brute, burn);
+            own = format!("Вам удается залечить некоторые раны {target}{clothes}{progress}.");
+            others = format!("{user} залечивает некоторые раны {target}{clothes}.");
         }
         Op::RepairDislocation | Op::RepairHairline | Op::RepairCompound => {
             with_limbs(world, mob, |l| {
@@ -1176,16 +2186,149 @@ fn success(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: TargetZon
         Op::Amputate => {
             own = "Конечность не поддаётся: отделить её не выходит.".into();
         }
+        Op::Revival => {
+            visible_range(
+                world,
+                actor.mob,
+                &format!("Вам удаётся успешно ударить мозг {target} разрядом с помощью {tool}..."),
+                &format!("{user} посылает мощный разряд в мозг {target} с помощью {tool}..."),
+                Span::Notice,
+                1,
+            );
+            revive_by_shock(world, mob);
+            return;
+        }
+        Op::CoronaryBypass => {
+            with_organs(world, mob, |o| {
+                o.heart = HEART_MAX_HEALTH * REPAIR_HEAL_TO;
+                o.heart_operated = true;
+            });
+            own = format!("Вы успешно установили шунт на сердце {target}.");
+            others = format!("{user} успешно установил шунт на сердце {target}.");
+            pain(
+                world,
+                mob,
+                "Боль в груди пульсирует, но сердце чувствует себя лучше, чем когда-либо!",
+            );
+        }
+        Op::BrainSurgery => {
+            with_organs(world, mob, |o| {
+                o.brain = (o.brain - BRAIN_MAX_HEALTH * BRAIN_HEAL).max(0.0);
+            });
+            own = format!("Вам удалось прооперировать мозг {target}.");
+            others = format!("{user} успешно оперирует мозг {target}!");
+            pain(
+                world,
+                mob,
+                "Боль в голове отступает, думать становится немного легче!",
+            );
+            let brain = world.get::<OrganDecay>(mob).map_or(0.0, |o| o.brain);
+            if brain > BRAIN_MAX_HEALTH * 0.1 {
+                tell(
+                    world,
+                    actor.client,
+                    Span::Notice,
+                    format!("Мозг {target} выглядит так, будто его можно вылечить еще немного."),
+                );
+            }
+        }
+        Op::Debride => {
+            damage_limb(world, mob, body, DamageType::Brute, 3.0);
+            let mut left = 0.0;
+            with_limbs(world, mob, |l| {
+                if let Some(w) = l
+                    .limb_mut(body)
+                    .wounds
+                    .iter_mut()
+                    .find(|w| w.def().series == Series::Burn)
+                {
+                    w.infection -= DEBRIDE_INFECTION_REMOVED;
+                    w.sanitization += DEBRIDE_SANITIZATION_ADDED;
+                    left = w.infection;
+                }
+            });
+            let progress = debride_progress(left);
+            own = format!(
+                "Вы успешно удалили часть зараженной плоти с {place}{progress} у {target}."
+            );
+            others = format!(
+                "{user} успешно удалил часть зараженной плоти с {place} у {target} с помощью {tool}!"
+            );
+        }
+        Op::RepairPuncture | Op::SealVeins => {
+            let seal = op == Op::SealVeins;
+            if !seal {
+                damage_limb(world, mob, body, DamageType::Brute, 3.0);
+            }
+            let mut closed = false;
+            with_limbs(world, mob, |l| {
+                let limb = l.limb_mut(body);
+                let Some(i) = limb
+                    .wounds
+                    .iter()
+                    .position(|w| w.def().series == Series::Pierce)
+                else {
+                    return;
+                };
+                let by = if seal { -0.5 } else { -0.25 };
+                if super::wounds::adjust_pierce(limb, i, by) {
+                    limb.wounds[i].mend_state = !seal;
+                } else {
+                    closed = true;
+                }
+            });
+            let (verb_own, verb_others) = if seal {
+                ("прижгли", "прижигает")
+            } else {
+                ("соединили", "соединяет")
+            };
+            if closed {
+                own = format!(
+                    "Вы успешно {verb_own} последние разорванные кровеносные сосуды в {place} у \
+                     {target}."
+                );
+                others = format!(
+                    "{user} успешно {verb_others} последние разорванные кровеносные сосуды в \
+                     {place} у {target} с помощью {tool}!"
+                );
+            } else {
+                own = format!(
+                    "Вы успешно {verb_own} часть кровеносных сосудов в {place} у {target}."
+                );
+                others = format!(
+                    "{user} успешно {verb_others} часть кровеносных сосудов в {place} у {target} \
+                     с помощью {tool}!"
+                );
+            }
+        }
     }
     visible_range(world, actor.mob, &own, &others, Span::Notice, 1);
 }
 
+/// revival's `on_success` after the shock: the ghost back, 50 oxygen healed, `revive()`; brain
+/// damage either way (15 up to 180 alive, 50 up to 199 not).
+fn revive_by_shock(world: &mut World, mob: Entity) {
+    crate::ghost::return_to_body(world, mob);
+    if let Some(mut health) = world.get::<Health>(mob).cloned() {
+        health.adjust(DamageType::Oxy, -50.0);
+        world.entity_mut(mob).insert(health);
+    }
+    let target = name_of(world, mob);
+    if super::defib::revive(world, mob) {
+        let text = format!("...{target} приходит в себя - живой и в сознании!");
+        super::visible(world, mob, &text, &text, Span::Notice);
+        with_organs(world, mob, |o| organ_damage(&mut o.brain, 15.0, 180.0));
+    } else {
+        let text = format!("...{target} дёргается в конвульсиях и замирает.");
+        super::visible(world, mob, &text, &text, Span::Warning);
+        with_organs(world, mob, |o| organ_damage(&mut o.brain, 50.0, 199.0));
+    }
+}
+
 /// tend wounds' healing: the flat amount plus a share of the patient's damage (×0.2 dead,
 /// ×0.55 through clothes on the chest).
-fn tend_amounts(world: &World, mob: Entity, heal: Heal, multiplier: f32) -> (f32, f32) {
-    // tg `/datum/surgery_operation/basic/tend_wounds`: `healing_amount` 5, `healing_multiplier`
-    // 0.07.
-    let (amount, share) = (5.0, 0.07 * multiplier);
+fn tend_amounts(world: &World, mob: Entity, tend: Tend, heal: Heal) -> (f32, f32) {
+    let (amount, share) = tend.healing();
     let Some(health) = world.get::<Health>(mob) else {
         return (0.0, 0.0);
     };
@@ -1198,9 +2341,12 @@ fn tend_amounts(world: &World, mob: Entity, heal: Heal, multiplier: f32) -> (f32
         .is_some_and(|p| p.covered & crate::chem::body_part_bit(BodyZone::Chest) != 0);
     let access = if covered { 0.55 } else { 1.0 };
     let round = |x: f32| (x * 10.0).round() / 10.0;
+    let brute = amount + round(health.brute * share * dead * access);
+    let burn = amount + round(health.burn * share * dead * access);
     match heal {
-        Heal::Brute => (amount + round(health.brute * share * dead * access), 0.0),
-        Heal::Burn => (0.0, amount + round(health.burn * share * dead * access)),
+        Heal::Brute => (brute, 0.0),
+        Heal::Burn => (0.0, burn),
+        Heal::Combo => (brute, burn),
     }
 }
 
@@ -1214,35 +2360,30 @@ fn heal_bodypart_damage(health: &mut Health, brute: f32, burn: f32) {
     }
 }
 
-/// tg `on_failure` (and the operations' own).
+/// tg `on_failure` (the operations' own replace the generic message where tg does not call the
+/// parent).
 fn failure(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: TargetZone, speed: f32) {
-    let screwed = if speed >= 5.0 {
-        " В данных условиях это практически невозможно..."
-    } else if speed >= 4.0 {
-        " В таких условиях это трудно сделать правильно..."
-    } else if (2.5..3.0).contains(&speed) {
-        " А ведь у вас почти получилось..."
-    } else {
-        ""
+    let body = zone.check_zone();
+    let place = super::wounds::zone_prepositional(body);
+    let (user, target) = (name_of(world, actor.mob), name_of(world, mob));
+    let tool = item_name(world, actor.item);
+    let say = |world: &mut World, own: String, others: String| {
+        visible_range(world, actor.mob, &own, &others, Span::Warning, 1);
     };
-    let (user, _) = (name_of(world, actor.mob), name_of(world, mob));
-    visible_range(
-        world,
-        actor.mob,
-        &format!("Вы облажались!{screwed}"),
-        &format!("{user} облажался!"),
-        Span::Warning,
-        1,
-    );
     match op {
-        Op::TendWounds(heal) => {
+        Op::TendWounds(tend, heal) => {
+            say(world, "Вы ошибаетесь!".into(), format!("{user} ошибается!"));
             // tg: 80% of the flat amount and half the share, as damage.
+            let (amount, share) = tend.healing();
             let (brute, burn) = match world.get::<Health>(mob) {
                 Some(h) => {
                     let round = |x: f32| (x * 10.0).round() / 10.0;
+                    let brute = amount * 0.8 + round(h.brute * share * 0.5);
+                    let burn = amount * 0.8 + round(h.burn * share * 0.5);
                     match heal {
-                        Heal::Brute => (5.0 * 0.8 + round(h.brute * 0.07 * 0.5), 0.0),
-                        Heal::Burn => (0.0, 5.0 * 0.8 + round(h.burn * 0.07 * 0.5)),
+                        Heal::Brute => (brute, 0.0),
+                        Heal::Burn => (0.0, burn),
+                        Heal::Combo => (brute, burn),
                     }
                 }
                 None => (0.0, 0.0),
@@ -1256,12 +2397,107 @@ fn failure(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: TargetZon
                 }
                 world.entity_mut(mob).insert(health);
             }
+            return;
         }
-        Op::RepairDislocation => {
-            damage_limb(world, mob, zone.check_zone(), DamageType::Brute, 25.0);
-            pain(world, mob, "Боль в конечности усиливается!");
+        Op::Revival => {
+            say(
+                world,
+                format!(
+                    "Вы бьёте мозг {target} разрядом с помощью {tool}, но он никак не реагирует."
+                ),
+                format!(
+                    "{user} бьёт мозг {target} разрядом с помощью {tool}, но он никак не реагирует."
+                ),
+            );
+            return;
+        }
+        Op::CoronaryBypass => {
+            with_organs(world, mob, |o| {
+                organ_damage(
+                    &mut o.heart,
+                    HEART_MAX_HEALTH * REPAIR_FAILURE_DAMAGE,
+                    HEART_MAX_HEALTH,
+                )
+            });
+            say(
+                world,
+                "Вы ошибаетесь при креплении шунта, и он отрывается, повреждая часть сердца!"
+                    .into(),
+                format!(
+                    "{user} совершает ошибку, из-за чего поток крови обильно хлещет из груди {target}!"
+                ),
+            );
+            pain(
+                world,
+                mob,
+                "Грудь горит; кажется, вы сходите с ума от боли!",
+            );
+            return;
+        }
+        Op::BrainSurgery => {
+            with_organs(world, mob, |o| {
+                organ_damage(
+                    &mut o.brain,
+                    BRAIN_MAX_HEALTH * BRAIN_FAILURE_DAMAGE,
+                    BRAIN_MAX_HEALTH,
+                )
+            });
+            say(
+                world,
+                "Вы совершаете ошибку, нанося еще больше повреждений!".into(),
+                format!("{user} совершает ошибку, вызывая повреждение мозга!"),
+            );
+            pain(
+                world,
+                mob,
+                "Ваша голова пульсирует от ужасной боли; даже думать больно!",
+            );
+            return;
+        }
+        Op::Debride => {
+            let hurt = super::fork_rng(world).range(4, 8) as f32;
+            damage_limb(world, mob, body, DamageType::Brute, hurt);
+            say(
+                world,
+                format!("Вы отрезаете немного здоровой плоти с {place} у {target}."),
+                format!(
+                    "{user} отрезает немного здоровой плоти с {place} у {target} с помощью {tool}!"
+                ),
+            );
+            return;
+        }
+        Op::RepairPuncture => {
+            // shortcut: the damage rolls no new wound (tg `wound_bonus = 10`, edged).
+            let hurt = super::fork_rng(world).range(4, 8) as f32;
+            damage_limb(world, mob, body, DamageType::Brute, hurt);
+            say(
+                world,
+                format!("Вы случайно разрываете кровеносные сосуды в {place} у {target}."),
+                format!(
+                    "{user} разрывает кровеносные сосуды в {place} у {target} с помощью {tool}!"
+                ),
+            );
+            return;
         }
         _ => {}
+    }
+    let screwed = if speed >= 5.0 {
+        " В данных условиях это практически невозможно..."
+    } else if speed >= 4.0 {
+        " В таких условиях это трудно сделать правильно..."
+    } else if (2.5..3.0).contains(&speed) {
+        " А ведь у вас почти получилось..."
+    } else {
+        ""
+    };
+    say(
+        world,
+        format!("Вы облажались!{screwed}"),
+        format!("{user} облажался!"),
+    );
+    if op == Op::RepairDislocation {
+        damage_limb(world, mob, body, DamageType::Brute, 25.0);
+        pain(world, mob, "Боль в конечности усиливается!");
     }
     let _ = CANT_WOUND;
 }
@@ -1533,6 +2769,7 @@ mod tests {
             sharpness,
             force,
             temperature: 0.0,
+            shock_ready: false,
         }
     }
 
@@ -1563,7 +2800,10 @@ mod tests {
             5.0
         );
         let hemostat = tool("/obj/item/hemostat", "hemostat", 0, 0.0);
-        assert_eq!(tool_quality(Op::TendWounds(Heal::Brute), &hemostat), 1.0);
+        assert_eq!(
+            tool_quality(Op::TendWounds(Tend::Basic, Heal::Brute), &hemostat),
+            1.0
+        );
         let mut fast = hemostat.clone();
         fast.toolspeed = 0.5;
         assert_eq!(tool_quality(Op::ClampBleeders, &fast), 0.5);
@@ -1589,37 +2829,92 @@ mod tests {
             1.0
         );
         // A scalpel on an operating table: speed 1, no time penalty.
-        assert_eq!(speed_modifier(1.0, 1.0, false), 1.0);
+        assert_eq!(speed_modifier(1.0, 1.0, 1.0, 1.0), 1.0);
         assert_eq!(base_failure_chance(16.0, 1.0).clamp(0.0, 99.0), 0.0);
         // A conscious patient: +40; a basic tool: +5; in the dark up to +60.
-        assert_eq!(
-            failure_chance(16.0, 1.0, false, None, Some("/obj/item/scalpel")),
-            45.0
-        );
-        assert_eq!(
-            failure_chance(16.0, 1.0, true, None, Some("/obj/item/scalpel")),
-            5.0
-        );
-        assert_eq!(
-            failure_chance(16.0, 1.0, true, None, Some("/obj/item/scalpel/advanced")),
-            0.0
-        );
-        assert_eq!(
-            failure_chance(
-                16.0,
-                1.0,
-                true,
-                Some(0.0),
-                Some("/obj/item/scalpel/advanced")
-            ),
-            60.0
-        );
+        let scalpel = tool("/obj/item/scalpel", "scalpel", 1, 10.0);
+        let basic = tool_mod(Op::InciseSkin, &scalpel);
+        assert_eq!(basic, 5.0);
+        assert_eq!(failure_chance(16.0, 1.0, false, None, basic), 45.0);
+        assert_eq!(failure_chance(16.0, 1.0, true, None, basic), 5.0);
+        let advanced = tool("/obj/item/scalpel/advanced", "scalpel", 1, 10.0);
+        let advanced = tool_mod(Op::InciseSkin, &advanced);
+        assert_eq!(failure_chance(16.0, 1.0, true, None, advanced), 0.0);
+        assert_eq!(failure_chance(16.0, 1.0, true, Some(0.0), advanced), 60.0);
+        // An improvised implement (listed above 1.15): +10, whatever its type.
+        let knife = tool("/obj/item/knife/kitchen", "knife", 1, 10.0);
+        assert_eq!(tool_mod(Op::InciseSkin, &knife), 10.0);
+        assert_eq!(tool_mod(Op::RepairDislocation, &ToolInfo::default()), 10.0);
         // A kitchen knife on the floor: 1.5 × 2 = 3 -> 0.5 × 1.6 s over the threshold = 8%.
-        let speed = speed_modifier(1.5, 2.0, false);
+        let speed = speed_modifier(1.5, 1.0, 2.0, 1.0);
         assert_eq!(speed, 3.0);
         assert!((base_failure_chance(16.0, speed) - 8.0).abs() < 1e-4);
-        // Asleep: ×0.8.
-        assert!((speed_modifier(1.5, 2.0, true) - 2.4).abs() < 1e-5);
+        // Asleep or numbed: ×0.8.
+        let numb = speed_modifier(1.5, 1.0, 2.0, patient_speed_mod(true));
+        assert!((numb - 2.4).abs() < 1e-5);
         assert!(base_failure_chance(16.0, 2.4) < 0.0);
+    }
+
+    #[test]
+    fn drunk_surgeons_are_slow_except_at_the_ballmer_peak() {
+        assert_eq!(surgeon_speed_mod(0.0), 1.0);
+        assert_eq!(surgeon_speed_mod(13.0), 0.8);
+        // 30^1.5 / 90 = 1.83 -> 1.8.
+        assert!((surgeon_speed_mod(30.0) - 2.8).abs() < 1e-5);
+    }
+
+    #[test]
+    fn locked_operations_and_replacements() {
+        let unlocked = operation_pool(&[]);
+        assert!(unlocked.contains(&Op::TendWounds(Tend::Basic, Heal::Brute)));
+        assert!(
+            !unlocked
+                .iter()
+                .any(|op| matches!(op, Op::TendWounds(t, _) if *t != Tend::Basic))
+        );
+        // The upgrade replaces the basic tending; the combo sits next to it.
+        let upgraded = operation_pool(&[Tend::Upgraded.path(), Tend::Combo.path()]);
+        assert!(!upgraded.contains(&Op::TendWounds(Tend::Basic, Heal::Brute)));
+        assert!(upgraded.contains(&Op::TendWounds(Tend::Upgraded, Heal::Burn)));
+        assert!(upgraded.contains(&Op::TendWounds(Tend::Combo, Heal::Combo)));
+        // The best combo replaces every tending below it, down the chain.
+        let master = operation_pool(&[
+            Tend::Upgraded.path(),
+            Tend::Master.path(),
+            Tend::ComboMaster.path(),
+        ]);
+        let tends: Vec<_> = master
+            .iter()
+            .filter(|op| matches!(op, Op::TendWounds(..)))
+            .collect();
+        assert_eq!(tends, [&Op::TendWounds(Tend::ComboMaster, Heal::Combo)]);
+        // A disk path the port has no operation for is ignored.
+        assert_eq!(
+            operation_pool(&["/datum/surgery_operation/organ/brainwash"]).len(),
+            unlocked.len()
+        );
+        // Every type maps back to itself.
+        for op in Op::types() {
+            assert_eq!(Op::of_path(op.def().path), Some(op));
+        }
+    }
+
+    #[test]
+    fn requirements_read_like_tg() {
+        let [all, any, optional, blocked] = Op::InciseSkin.requirements();
+        assert_eq!(all, ["пациент должен лежать"]);
+        assert!(any.is_empty() && optional.is_empty());
+        assert_eq!(
+            blocked,
+            [
+                "кожа должна быть целой",
+                "рабочая область не должна быть закрыта одеждой"
+            ]
+        );
+        let [all, ..] = Op::Revival.requirements();
+        assert_eq!(all[0], "операция на голова (цель: голова)");
+        assert!(all.contains(&"требуется, чтобы кость была распилена".to_owned()));
+        let [_, any, ..] = Op::TendWounds(Tend::Basic, Heal::Brute).requirements();
+        assert_eq!(any, ["кожа должна быть разрезана или вскрыта"]);
     }
 }

@@ -58,6 +58,8 @@ pub const PADDLES_ROOT: &str = "/obj/item/shockpaddles";
 pub struct OrganDecay {
     pub heart: f32,
     pub brain: f32,
+    /// The heart's `TRAIT_ORGAN_OPERATED_ON`: coronary bypass is done once per heart.
+    pub heart_operated: bool,
 }
 
 impl OrganDecay {
@@ -674,7 +676,7 @@ mod tests {
         );
         let decayed = OrganDecay {
             heart: 100.0,
-            brain: 0.0,
+            ..default()
         };
         assert_eq!(
             can_defib(&Health::default(), decayed),

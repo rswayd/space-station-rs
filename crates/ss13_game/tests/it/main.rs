@@ -52,6 +52,7 @@ mod sound;
 mod stock_parts;
 mod storage;
 mod surfaces;
+mod surgery;
 mod tables;
 mod teg;
 mod traitor;
