@@ -19,7 +19,10 @@ step clippy cargo lint
 step tests cargo nextest run --workspace --all-features --no-fail-fast
 step bins cargo bins
 # The browser roots (docs/WEB.md): std::fs, threads or Instant in shared code break them.
-step wasm cargo check --target wasm32-unknown-unknown -p ss13_server -p ss13_client -p ss13_web_server -p ss13_web_client
+# Server and client separately, as scripts/web-build.sh builds them: one check would unify their
+# features and hide a server-only module the client side still declares.
+step wasm-server cargo check --target wasm32-unknown-unknown -p ss13_server -p ss13_web_server
+step wasm-client cargo check --target wasm32-unknown-unknown -p ss13_client -p ss13_web_client
 if [[ ${1:-} != --no-bots ]]; then
     step bots env SS13_ASSETS="$assets" cargo test --workspace --all-features --test seed -- --ignored
 fi
