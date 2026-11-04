@@ -783,14 +783,18 @@ fn entered(world: &mut World, bot: Entity, mob: Entity, now: f64) {
                 .is_some_and(|d| d <= 1);
             if !near {
                 let (name, who) = (bot_name(world, bot), bot_name(world, mob));
-                crate::status_effects::knockdown(world, mob, 2.0, 0.0);
+                // `knockOver`: `Paralyze(40)`.
+                crate::status_effects::apply(world, mob, Incap::Paralyze, 4.0);
                 if let Some(&pos) = world.get::<TilePos>(mob) {
                     show(
                         world,
                         pos,
                         DEFAULT_MESSAGE_RANGE,
                         ChatChannel::Combat,
-                        (Span::Danger, format!("{name} сбивает с ног {who}!")),
+                        (
+                            Span::Warning,
+                            format!("{who} спотыкается об {name} и падает!"),
+                        ),
                         &[],
                     );
                 }
