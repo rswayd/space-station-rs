@@ -1,7 +1,11 @@
 //! Station bots on a fixture station over real WebTransport: Beepsky patrols from beacon to
 //! beacon through a door his access opens; an emagged securitron stuns and cuffs a player; a
 //! cleanbot cleans dirt; a medbot tends an injured player; a firebot puts a burning player out;
-//! a medbot and a cleanbot are built from their parts; the window's controls need access.
+//! a medbot and a cleanbot are built from their parts; the window's controls need access; a
+//! MULEbot fetches a crate from a delivery beacon and unloads it at home; a MULEbot runs over
+//! the lying only with its avoidance wire cut and loads only crates until its load check wire is
+//! cut; an emagged honkbot honks and fake-cuffs a player; General Beepsky is built from a
+//! securitron assembly and four energy swords.
 
 use std::path::{Path, PathBuf};
 
@@ -34,7 +38,17 @@ const TYPES: &str = r##"{
         "declared_vars": { "name": "dirt", "icon": { "resource": "e.dmi" }, "icon_state": "dirt" } },
     "/obj/item": { "parent": "/obj", "declared_vars": {
         "icon": { "resource": "i.dmi" }, "icon_state": "toy", "interaction_flags_item": 1,
-        "slot_flags": 0, "inhand_icon_state": null, "attack_speed": 8 } },
+        "slot_flags": 0, "inhand_icon_state": null, "attack_speed": 8,
+        "tool_behaviour": null, "toolspeed": 1, "heat": 0 } },
+    "/obj/item/wrench": { "parent": "/obj/item", "declared_vars": {
+        "icon_state": "wrench", "tool_behaviour": "wrench", "force": 5 } },
+    "/obj/item/melee": { "parent": "/obj/item" },
+    "/obj/item/melee/energy": { "parent": "/obj/item/melee" },
+    "/obj/item/melee/energy/sword": { "parent": "/obj/item/melee/energy" },
+    "/obj/item/melee/energy/sword/saber": { "parent": "/obj/item/melee/energy/sword",
+        "declared_vars": { "name": "energy sword" } },
+    "/obj/item/bot_assembly/secbot": { "parent": "/obj/item/bot_assembly",
+        "declared_vars": { "name": "helmet/signaler assembly", "icon_state": "helmet_signaler" } },
     "/obj/item/card": { "parent": "/obj/item" },
     "/obj/item/card/id": { "parent": "/obj/item/card", "declared_vars": { "slot_flags": 256,
         "access": { "list": [] } } },
@@ -54,6 +68,8 @@ const TYPES: &str = r##"{
     "/obj/item/restraints/handcuffs/cable/zipties": { "parent": "/obj/item/restraints/handcuffs/cable",
         "declared_vars": { "name": "zipties" } },
     "/obj/item/restraints/handcuffs/cable/zipties/used": {
+        "parent": "/obj/item/restraints/handcuffs/cable/zipties" },
+    "/obj/item/restraints/handcuffs/cable/zipties/fake": {
         "parent": "/obj/item/restraints/handcuffs/cable/zipties" },
     "/obj/item/assembly/prox_sensor": { "parent": "/obj/item/assembly",
         "declared_vars": { "name": "proximity sensor" } },
@@ -76,6 +92,22 @@ const TYPES: &str = r##"{
         "declared_vars": { "name": "incomplete cleanbot assembly", "icon_state": "cleanbot_assembly" } },
     "/obj/item/bot_assembly/medbot": { "parent": "/obj/item/bot_assembly",
         "declared_vars": { "name": "incomplete medibot assembly", "icon_state": "medbot_assembly_generic" } },
+    "/obj/structure": { "parent": "/obj", "declared_vars": { "anchored": 1 } },
+    "/obj/structure/closet": { "parent": "/obj/structure", "declared_vars": {
+        "icon": { "resource": "cr.dmi" }, "icon_state": "generic", "density": 1,
+        "anchored": 0, "opened": 0, "locked": 0, "welded": 0, "secure": 0, "icon_door": null,
+        "icon_welded": "welded", "enable_door_overlay": 1, "has_opened_overlay": 1,
+        "has_closed_overlay": 1, "dense_when_open": 0, "wall_mounted": 0, "horizontal": 0,
+        "storage_capacity": 30, "name": "closet" } },
+    "/obj/structure/closet/crate": { "parent": "/obj/structure/closet", "declared_vars": {
+        "icon_state": "crate", "base_icon_state": "crate", "dense_when_open": 1,
+        "horizontal": 1, "name": "crate" } },
+    "/obj/item/stock_parts": { "parent": "/obj/item" },
+    "/obj/item/stock_parts/power_store": { "parent": "/obj/item/stock_parts" },
+    "/obj/item/stock_parts/power_store/cell": { "parent": "/obj/item/stock_parts/power_store" },
+    "/obj/item/stock_parts/power_store/cell/upgraded": {
+        "parent": "/obj/item/stock_parts/power_store/cell",
+        "declared_vars": { "name": "upgraded power cell" } },
     "/obj/machinery": { "parent": "/obj" },
     "/obj/machinery/navbeacon": { "parent": "/obj/machinery", "declared_vars": {
         "name": "navigation beacon", "icon": { "resource": "n.dmi" }, "icon_state": "navbeacon0",
@@ -125,6 +157,19 @@ const TYPES: &str = r##"{
         "speed": 2, "heal_amount": 2.5, "heal_threshold": 10, "damage_type_healer": "brute",
         "medical_mode_flags": 5, "skin": "generic", "radio_channel": "Медицина",
         "ai_controller": { "path": "/datum/ai_controller/basic_controller/bot/medbot" } } },
+    "/mob/living/basic/bot/secbot/honkbot": { "parent": "/mob/living/basic/bot/secbot",
+        "declared_vars": { "name": "\\improper Honkbot", "icon_state": "honkbot",
+        "base_icon_state": "honkbot", "security_mode_flags": 89,
+        "ai_controller": { "path": "/datum/ai_controller/basic_controller/bot/honkbot" } } },
+    "/mob/living/basic/bot/secbot/grievous": { "parent": "/mob/living/basic/bot/secbot",
+        "declared_vars": { "name": "General Beepsky", "icon_state": "grievous",
+        "base_icon_state": "grievous", "maxHealth": 150, "health": 150,
+        "ai_controller": { "path": "/datum/ai_controller/basic_controller/bot/secbot/super_beepsky" } } },
+    "/mob/living/basic/bot/mulebot": { "parent": "/mob/living/basic/bot", "declared_vars": {
+        "name": "\\improper MULEbot", "icon_state": "mulebot0", "base_icon_state": "mulebot",
+        "density": 1, "maxHealth": 50, "health": 50, "bot_mode_flags": 13,
+        "req_one_access": { "list": ["robotics", "cargo"] }, "radio_channel": "Снабжение",
+        "ai_controller": { "path": "/datum/ai_controller/basic_controller/bot/mulebot" } } },
     "/mob/living/basic/bot/firebot": { "parent": "/mob/living/basic/bot", "declared_vars": {
         "name": "\\improper Firebot", "icon_state": "firebot1",
         "ai_controller": { "path": "/datum/ai_controller/basic_controller/bot/firebot" } } },
@@ -184,7 +229,17 @@ wwwwwwwwww
     )
 }
 
-const STATES: [(&str, &str); 24] = [
+const STATES: [(&str, &str); 34] = [
+    ("b.dmi", "honkbot1"),
+    ("b.dmi", "honkbot-c"),
+    ("b.dmi", "grievous-c"),
+    ("b.dmi", "grievous_assembly"),
+    ("b.dmi", "helmet_signaler"),
+    ("i.dmi", "wrench"),
+    ("cr.dmi", "crate"),
+    ("b.dmi", "mulebot0"),
+    ("b.dmi", "mulebot1"),
+    ("b.dmi", "mulebot-hatch"),
     ("b.dmi", "medbot_assembly_generic"),
     ("b.dmi", "cleanbot_assembly"),
     ("t.dmi", "floor"),
@@ -233,6 +288,15 @@ fn fixture(test: &str, map: &str) -> PathBuf {
         "/mob/living/basic/bot/cleanbot",
         "/mob/living/basic/bot/medbot",
         "/mob/living/basic/bot/firebot",
+        "/mob/living/basic/bot/mulebot",
+        "/mob/living/basic/bot/secbot/honkbot",
+        "/mob/living/basic/bot/secbot/grievous",
+        "/obj/item/restraints/handcuffs/cable/zipties/fake",
+        "/obj/item/wrench",
+        "/obj/item/melee/energy/sword/saber",
+        "/obj/item/bot_assembly/secbot",
+        "/obj/structure/closet/crate",
+        "/obj/item/stock_parts/power_store/cell/upgraded",
         "/turf/open/floor",
         "/turf/closed/wall",
         "/area/station/bots_test",
@@ -537,6 +601,216 @@ fn medbot_and_cleanbot_are_built_from_parts() {
     assert!(s.bot(cleanbot).on());
 }
 
+/// The MULEbot (`M`) waits on its home beacon; the crate (`C`) sits east of the Cargo beacon.
+const MULE_MAP: &str = r##""w" = (/turf/closed/wall,/area/station/bots_test)
+"f" = (/turf/open/floor,/area/station/bots_test)
+"s" = (/obj/effect/landmark/start/assistant,/turf/open/floor,/area/station/bots_test)
+"M" = (/obj/machinery/navbeacon{codes_txt = "delivery;dir=4"; location = "Home"},/mob/living/basic/bot/mulebot,/turf/open/floor,/area/station/bots_test)
+"K" = (/obj/machinery/navbeacon{codes_txt = "delivery;dir=4"; location = "Cargo"},/turf/open/floor,/area/station/bots_test)
+"C" = (/obj/structure/closet/crate,/turf/open/floor,/area/station/bots_test)
+
+(1,1,1) = {"
+wwwwwwwwwwww
+wsfffffffffw
+wMffffffffKC
+wfffffffffff
+wwwwwwwwwwww
+"}
+"##;
+
+#[test]
+fn a_mulebot_fetches_a_crate_and_brings_it_home() {
+    use bots::mule::{Mule, MuleAct, act_on};
+    let mut s = Station::start("mule", MULE_MAP);
+    let mule = s.mob_of("/mob/living/basic/bot/mulebot");
+    let home = s.beacon("Home");
+    let crate_ = {
+        let world = s.0.server.world_mut();
+        world
+            .query_filtered::<Entity, With<ss13_mapload::DmCloset>>()
+            .iter(world)
+            .next()
+            .unwrap()
+    };
+    let m = s.get::<Mule>(mule).clone();
+    assert_eq!(m.home, "Home", "the beacon under it");
+    assert!(
+        s.get::<Name>(mule).as_str().ends_with(&m.id),
+        "named after its id"
+    );
+    assert!(
+        bots::mule::has_power(s.0.server.world(), mule),
+        "a charged cell"
+    );
+    let p = s.join("p0", |_| {});
+    let me = s.players[p].mob;
+    let world = s.0.server.world_mut();
+    // Locked: no cargo access, nothing changes.
+    act_on(world, me, mule, MuleAct::Destination("Cargo".into()));
+    assert_eq!(world.get::<Mule>(mule).unwrap().destination, None);
+    world.get_mut::<Bot>(mule).unwrap().cover &= !bots::COVER_LOCKED;
+    act_on(world, me, mule, MuleAct::Destination("Nowhere".into()));
+    assert_eq!(
+        world.get::<Mule>(mule).unwrap().destination,
+        None,
+        "not a beacon"
+    );
+    act_on(world, me, mule, MuleAct::Destination("Cargo".into()));
+    act_on(world, me, mule, MuleAct::Go);
+    assert_eq!(world.get::<Bot>(mule).unwrap().mode, bots::BOT_DELIVER);
+    s.run_until_for(30.0, "the crate is loaded", |s| {
+        s.get::<Mule>(mule).load == Some(crate_)
+    });
+    assert!(
+        s.try_get::<TilePos>(crate_).is_none(),
+        "on the platform, off the map"
+    );
+    let east = TilePos::new(home.x + 1, home.y, home.z);
+    s.run_until_for(30.0, "unloaded east of home", |s| {
+        s.try_get::<TilePos>(crate_) == Some(&east)
+    });
+    assert_eq!(s.pos(mule), home);
+    assert_eq!(s.get::<Mule>(mule).load, None);
+    s.run_for(1.0);
+    assert_eq!(s.bot(mule).mode, bots::BOT_IDLE, "home: idle");
+}
+
+#[test]
+fn a_mulebot_runs_over_people_only_when_hacked() {
+    let mut s = Station::start("mule_hack", MULE_MAP);
+    let mule = s.mob_of("/mob/living/basic/bot/mulebot");
+    let p = s.join("p0", |_| {});
+    let me = s.players[p].mob;
+    s.run_for(0.5);
+    let world = s.0.server.world_mut();
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    bots::mule::run_over(world, mule, me, now);
+    assert_eq!(world.get::<Health>(me).unwrap().brute, 0.0, "it slows down");
+    assert!(world.get::<bots::mule::Mule>(mule).unwrap().careful_until > now);
+    ss13_game::wires::cut(world, mule, bots::mule::WIRE_AVOIDANCE, None);
+    bots::mule::run_over(world, mule, me, now);
+    let brute = world.get::<Health>(me).unwrap().brute;
+    assert!(
+        brute >= 5.0 * 7.0 * 0.99,
+        "5-15 x the zone weights: {brute}"
+    );
+    // Loading: crates only until the load check wire is cut; nothing from a hand.
+    let at = *world.get::<TilePos>(me).unwrap();
+    let toy = ss13_game::construction::spawn_obj(world, "/obj/item/healthanalyzer", at).unwrap();
+    world.flush();
+    assert!(!bots::mule::load(world, mule, toy), "not a crate");
+    ss13_game::wires::cut(world, mule, bots::mule::WIRE_LOADCHECK, None);
+    assert!(bots::mule::load(world, mule, toy), "hacked: anything");
+    assert!(!bots::mule::load(world, mule, me), "one load at a time");
+    bots::mule::unload(world, mule, None);
+    assert!(world.get::<TilePos>(toy).is_some(), "back on the floor");
+    // Both power wires intact; one cut and it cannot run.
+    ss13_game::wires::cut(world, mule, ss13_game::wires::WIRE_POWER1, None);
+    assert!(!bots::mule::has_power(world, mule));
+    assert!(!world.get::<Bot>(mule).unwrap().on(), "it turned off");
+}
+
+#[test]
+fn an_emagged_honkbot_honks_and_fake_cuffs_a_player() {
+    let map = room("/mob/living/basic/bot/secbot/honkbot", "f");
+    let mut s = Station::start("honkbot", &map);
+    let honkbot = s.mob_of("/mob/living/basic/bot/secbot/honkbot");
+    assert_eq!(s.bot(honkbot).kind, bots::BotKind::Honk);
+    let p = s.join("p0", |_| {});
+    let me = s.players[p].mob;
+    s.bot_mut(honkbot).cover |= bots::COVER_EMAGGED;
+    s.run_until_for(20.0, "stunned", |s| {
+        s.try_get::<ss13_game::status_effects::StatusEffects>(me)
+            .is_some_and(|e| e.paralyze > 0.0)
+    });
+    s.run_until_for(20.0, "fake-cuffed", |s| {
+        s.try_get::<ss13_game::restraints::Handcuffed>(me).is_some()
+    });
+    assert_eq!(
+        s.items_at("/obj/item/restraints/handcuffs/cable/zipties/fake")
+            .len(),
+        1,
+        "the honkbot's own cuffs"
+    );
+}
+
+#[test]
+fn general_beepsky_is_built_with_four_swords() {
+    let map = room("/mob/living/basic/bot/firebot", "f");
+    let mut s = Station::start("grievous", &map);
+    let p = s.join("p0", |_| {});
+    let me = s.players[p].mob;
+    let client = s.get::<ss13_game::server::PlayerMob>(me).client;
+    let floor = TilePos::new(s.pos(me).x + 1, s.pos(me).y, s.pos(me).z);
+    let assembly = s.spawn("/obj/item/bot_assembly/secbot", floor);
+    s.0.server
+        .world_mut()
+        .get_mut::<bots::construction::BotAssembly>(assembly)
+        .unwrap()
+        .step = 4;
+    let use_on = |s: &mut Station, path: &str| {
+        let tool = s.give(p, path);
+        let world = s.0.server.world_mut();
+        assert!(bots::construction::item_interaction(
+            world, client, me, tool, assembly
+        ));
+        world.flush();
+    };
+    use_on(&mut s, "/obj/item/wrench");
+    assert_eq!(s.get::<bots::construction::BotAssembly>(assembly).step, 5);
+    for n in 1..=3 {
+        use_on(&mut s, "/obj/item/melee/energy/sword/saber");
+        let a = s.get::<bots::construction::BotAssembly>(assembly);
+        assert_eq!((a.swords, a.created_name.as_str()), (n, "General Beepsky"));
+    }
+    use_on(&mut s, "/obj/item/melee/energy/sword/saber");
+    s.run_for(0.2);
+    let grievous = s.mobs_of("/mob/living/basic/bot/secbot/grievous");
+    assert_eq!(grievous.len(), 1, "the fourth sword finishes it");
+    assert_eq!(s.bot(grievous[0]).kind, bots::BotKind::Grievous);
+    assert_eq!(s.get::<Name>(grievous[0]).as_str(), "General Beepsky");
+}
+
+/// Unlocks the first MULEbot with a home and sends it to the delivery beacon furthest away;
+/// prints how long one A* over that distance takes.
+fn send_furthest_mule(s: &mut Station, user: Entity) -> Option<(Entity, TilePos)> {
+    let world = s.0.server.world_mut();
+    let mules: Vec<(Entity, TilePos, String)> = world
+        .query::<(Entity, &bots::mule::Mule, &TilePos)>()
+        .iter(world)
+        .filter(|(_, m, _)| !m.home.is_empty())
+        .map(|(e, m, p)| (e, *p, m.home.clone()))
+        .collect();
+    let (mule, from, _) = mules.into_iter().next()?;
+    let (tag, to) = world
+        .resource::<bots::NavBeacons>()
+        .0
+        .values()
+        .filter(|b| b.delivery && b.pos.z == from.z)
+        .max_by_key(|b| (from.chebyshev(b.pos).unwrap_or(0), b.entity.to_bits()))
+        .map(|b| (b.location.clone(), b.pos))?;
+    let opens = |e: Entity| ss13_game::mobs::ai::movement::bot_opens(world, mule, e);
+    let pathing = ss13_game::mobs::ai::movement::pathing_of(world, mule, &opens);
+    let started = std::time::Instant::now();
+    let path = ss13_game::mobs::ai::movement::find_path(
+        world.resource::<ss13_world::SpatialIndex>(),
+        mule,
+        from,
+        to,
+        0,
+        &pathing,
+    );
+    println!(
+        "  MULEbot A* {from:?} -> {tag} {to:?}: {:?} steps, {:.2} ms",
+        path.as_ref().map(Vec::len),
+        started.elapsed().as_secs_f64() * 1000.0
+    );
+    world.get_mut::<Bot>(mule)?.cover &= !bots::COVER_LOCKED;
+    bots::mule::act_on(world, user, mule, bots::mule::MuleAct::Destination(tag));
+    bots::mule::act_on(world, user, mule, bots::mule::MuleAct::Go);
+    Some((mule, to))
+}
+
 /// `SS13_ASSETS` must hold assets converted with this version (`mobs.ron` bot vars, navbeacon
 /// codes). Loads `SS13_BOTS_MAP` (default MetaStation), prints the bots and the patrol beacons,
 /// runs two minutes with a player and prints how far each bot got and the AI cost per pass.
@@ -566,12 +840,36 @@ fn station_bots() {
     println!("{map_name}: {} bots, {beacons} beacons", bots.len());
     assert!(!bots.is_empty(), "the map has bots");
     assert!(beacons > 0, "and beacons");
-    s.join("p0", |_| {});
+    let p = s.join("p0", |_| {});
+    let me = s.players[p].mob;
+    // A MULEbot sent to the delivery beacon furthest from its home; the A* it plans first is
+    // timed (the worst case: the whole path at once).
+    let delivery = send_furthest_mule(&mut s, me);
     let before =
         *s.0.server
             .world()
             .resource::<ss13_game::mobs::ai::AiStats>();
-    s.run_for(120.0);
+    // Two minutes in one-second steps; the MULEbot's closest approach to its destination.
+    let mut closest: Option<(u32, f64)> = None;
+    for second in 1..=120 {
+        s.run_for(1.0);
+        if let Some((mule, target)) = delivery {
+            let d = s.pos(mule).chebyshev(target).unwrap_or(u32::MAX);
+            if closest.is_none_or(|(c, _)| d < c) {
+                closest = Some((d, f64::from(second)));
+            }
+        }
+    }
+    if let Some((mule, _)) = delivery {
+        let m = s.get::<bots::mule::Mule>(mule).clone();
+        let (d, at) = closest.unwrap_or((u32::MAX, 0.0));
+        println!(
+            "  MULEbot {}: reached {d} tiles from its destination at {at} s, now {:?}, {}",
+            m.id,
+            s.pos(mule),
+            s.bot(mule).mode,
+        );
+    }
     let after =
         *s.0.server
             .world()

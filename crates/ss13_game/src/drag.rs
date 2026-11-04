@@ -258,6 +258,12 @@ fn drag(world: &mut World, client: Entity, from: DragEnd, to: DragEnd) {
     {
         return;
     }
+    // `mulebot/mouse_drop_receive`: loading a MULEbot.
+    if let (End::World(over), End::World(_)) = (to, from)
+        && crate::bots::mule::mouse_drop_receive(world, actor, over, dragged)
+    {
+        return;
+    }
     // `dna_scannernew/mouse_drop_receive`.
     if let (End::World(over), End::World(_)) = (to, from)
         && crate::genetics::console::mouse_drop_receive(world, over, dragged)

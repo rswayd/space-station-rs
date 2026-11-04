@@ -35,6 +35,8 @@ pub const SECBOT_CHECK_IDS: u32 = 1 << 1;
 pub const SECBOT_CHECK_WEAPONS: u32 = 1 << 2;
 pub const SECBOT_CHECK_RECORDS: u32 = 1 << 3;
 pub const SECBOT_HANDCUFF_TARGET: u32 = 1 << 4;
+/// `HONKBOT_MODE_SLIP`.
+pub const HONKBOT_MODE_SLIP: u32 = 1 << 6;
 /// `MEDBOT_*`.
 pub const MEDBOT_DECLARE_CRIT: u32 = 1 << 0;
 pub const MEDBOT_STATIONARY_MODE: u32 = 1 << 1;
@@ -58,6 +60,9 @@ pub const BOT_PREP_ARREST: &str = "Preparing to Arrest";
 pub const BOT_ARREST: &str = "Arresting";
 pub const BOT_CLEANING: &str = "Cleaning";
 pub const BOT_HEALING: &str = "Healing";
+pub const BOT_DELIVER: &str = "Delivering";
+pub const BOT_GO_HOME: &str = "Returning";
+pub const BOT_BLOCKED: &str = "Blocked";
 
 pub const BOT_ROOT: &str = "/mob/living/basic/bot";
 const EMAG: &str = "/obj/item/card/emag";
@@ -65,35 +70,71 @@ const EMAG: &str = "/obj/item/card/emag";
 pub const ROBOT_ARM: &str = "/obj/item/bodypart/arm/right/robot";
 const PROX_SENSOR: &str = "/obj/item/assembly/prox_sensor";
 const OIL: &str = "/obj/effect/decal/cleanable/blood/oil";
+const BEEPSKY: &str = "/mob/living/basic/bot/secbot/beepsky";
+const GRIEVOUS_TOY: &str = "/mob/living/basic/bot/secbot/grievous/toy";
+
+/// The bot's DM type.
+pub fn mob_path(world: &World, mob: Entity) -> String {
+    world
+        .get::<BasicMob>(mob)
+        .map(|b| b.def.path.clone())
+        .unwrap_or_default()
+}
 
 /// What a bot is (its AI tree and settings).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BotKind {
     Clean,
     Med,
+    /// Securitrons (Beepsky and his variants).
     Sec,
+    /// `secbot/ed209`: shoots a disabler, cuffs whom it downed.
+    Ed209,
+    /// `secbot/honkbot`: honks at criminals with an air horn, fake zipties.
+    Honk,
+    /// `secbot/grievous` (General Beepsky): cuts with energy swords, never arrests.
+    Grievous,
     Fire,
-    /// Bots whose own behavior is not ported (MULEbot, repairbot, honkbot, hygienebot,
-    /// vibebot, ED-209, dedbot): the base bot tree.
+    /// `mulebot`: deliveries between beacons ([`super::mule`]).
+    Mule,
+    Hygiene,
+    /// `dedbot`: the Donk exenteration drone.
+    Ded,
+    /// Bots whose own behavior is not ported (repairbot, vibebot): the base bot tree.
     Other,
 }
 
 impl BotKind {
-    fn of(path: &str) -> Self {
+    pub fn of(path: &str) -> Self {
         let under = |root: &str| is_under(path, &format!("{BOT_ROOT}/{root}"));
         if under("cleanbot") {
             Self::Clean
         } else if under("medbot") {
             Self::Med
-        } else if under("secbot/honkbot") || under("secbot/ed209") || under("secbot/grievous") {
-            Self::Other
+        } else if under("secbot/honkbot") {
+            Self::Honk
+        } else if under("secbot/ed209") {
+            Self::Ed209
+        } else if under("secbot/grievous") {
+            Self::Grievous
         } else if under("secbot") {
             Self::Sec
         } else if under("firebot") {
             Self::Fire
+        } else if under("mulebot") {
+            Self::Mule
+        } else if under("hygienebot") {
+            Self::Hygiene
+        } else if under("dedbot") {
+            Self::Ded
         } else {
             Self::Other
         }
+    }
+
+    /// `/mob/living/basic/bot/secbot` and its subtypes (the security toggles, threat checks).
+    pub fn is_sec(self) -> bool {
+        matches!(self, Self::Sec | Self::Ed209 | Self::Honk | Self::Grievous)
     }
 }
 
@@ -186,6 +227,45 @@ pub struct Bot {
     /// The medkit a medbot was built from (`medkit_type`, dropped on death).
     pub medkit: String,
     pub task: Option<BotTask>,
+    /// A cleanbot's taped-on knife (`weapon`), off the map inside it.
+    pub knife: Option<Entity>,
+    /// A cleanbot's job titles (`stolen_valor`).
+    pub stolen_valor: Vec<String>,
+    /// The hygienebot sprays until this game time (`washing`, `WASH_PERIOD`).
+    pub washing_until: f64,
+}
+
+impl Default for Bot {
+    fn default() -> Self {
+        Self {
+            kind: BotKind::Other,
+            mode_flags: MODE_ON,
+            cover: 0,
+            mode: BOT_IDLE,
+            req_one_access: Vec::new(),
+            initial_access: Vec::new(),
+            access: Vec::new(),
+            radio: None,
+            base_icon: String::new(),
+            commissioned: false,
+            security_flags: 0,
+            medical_flags: 0,
+            heal_amount: 0.0,
+            heal_threshold: 0.0,
+            healer: Healer::Type(DamageType::Brute),
+            skin: String::new(),
+            janitor_flags: 0,
+            firebot_flags: 0,
+            robot_arm: ROBOT_ARM.to_owned(),
+            stun_ready_at: 0.0,
+            threat: 0,
+            medkit: String::new(),
+            task: None,
+            knife: None,
+            stolen_valor: Vec::new(),
+            washing_until: 0.0,
+        }
+    }
 }
 
 impl Bot {
@@ -215,6 +295,8 @@ pub struct Beacon {
     pub location: String,
     /// `codes[NAVBEACON_PATROL_NEXT]`.
     pub next: Option<String>,
+    /// `codes[NAVBEACON_DELIVERY_DIRECTION]`: BYOND direction bits.
+    pub dir: Option<u8>,
     pub patrol: bool,
     pub delivery: bool,
 }
@@ -264,6 +346,8 @@ impl Plugin for BotsServerPlugin {
             );
         ui::build(app);
         construction::build(app);
+        super::mule::build(app);
+        super::sec::build(app);
     }
 }
 
@@ -281,6 +365,7 @@ fn register_mapped_beacons(world: &mut World) {
     for beacon in beacons {
         register_beacon(world, beacon);
     }
+    super::mule::assign_homes(world);
 }
 
 fn register_beacon(world: &mut World, entity: Entity) {
@@ -300,6 +385,10 @@ fn register_beacon(world: &mut World, entity: Entity) {
             .iter()
             .find(|(c, _)| c == "next_patrol")
             .map(|(_, v)| v.clone()),
+        dir: codes
+            .iter()
+            .find(|(c, _)| c == "dir")
+            .and_then(|(_, v)| v.parse().ok()),
         patrol: has("patrol"),
         delivery: has("delivery"),
     };
@@ -371,9 +460,12 @@ pub fn attach(world: &mut World, entity: Entity) {
         stun_ready_at: 0.0,
         threat: 0,
         medkit: "/obj/item/storage/medkit".to_owned(),
-        task: None,
+        ..Bot::default()
     };
     world.entity_mut(entity).insert(bot);
+    if kind == BotKind::Mule {
+        super::mule::attach(world, entity);
+    }
     refresh_look(world, entity);
 }
 
@@ -397,14 +489,86 @@ pub fn refresh_look(world: &mut World, mob: Entity) {
             };
             format!("{base}_{}_{suffix}", bot.skin)
         }
-        BotKind::Sec if bot.mode == BOT_HUNT && bot.on() => format!("{base}-c"),
+        BotKind::Sec | BotKind::Honk if bot.mode == BOT_HUNT && bot.on() => format!("{base}-c"),
+        // `grievous/update_icon_state`: its swords are always lit (`attack_self` at init).
+        BotKind::Grievous => format!("{base}-c"),
+        BotKind::Hygiene if bot.on() => format!("{base}-on"),
+        BotKind::Hygiene => base.clone(),
+        BotKind::Mule => {
+            let avoidance_cut = super::mule::wire_cut(world, mob, super::mule::WIRE_AVOIDANCE);
+            let digit = if bot.on() { u8::from(avoidance_cut) } else { 0 };
+            format!("{base}{digit}")
+        }
         BotKind::Fire if !bot.on() => "firebot0".to_owned(),
         BotKind::Fire if bot.firebot_flags & FIREBOT_STATIONARY_MODE != 0 => "firebots1".to_owned(),
         BotKind::Fire => "firebot1".to_owned(),
         _ => format!("{base}{on}"),
     };
     crate::mobs::set_icon_state(world, mob, &icon, &state);
+    refresh_overlays(world, mob, &icon);
 }
+
+/// tg `update_overlays` of the kinds that have them: the MULEbot's hatch and load, the
+/// hygienebot's flame and spray.
+fn refresh_overlays(world: &mut World, mob: Entity, icon: &str) {
+    let Some(bot) = world.get::<Bot>(mob) else {
+        return;
+    };
+    let mut states: Vec<String> = Vec::new();
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    match bot.kind {
+        BotKind::Mule if bot.cover & COVER_MAINTS_OPEN != 0 => {
+            states.push(format!("{}-hatch", bot.base_icon));
+        }
+        BotKind::Hygiene => {
+            if bot.on() {
+                states.push("hygienebot-flame".to_owned());
+            }
+            if now < bot.washing_until {
+                states.push(if bot.emagged() {
+                    "hygienebot-fire".to_owned()
+                } else {
+                    "hygienebot-water".to_owned()
+                });
+            }
+        }
+        _ => {}
+    }
+    let kind = bot.kind;
+    let ids: Vec<ss13_shared::IconStateId> = states
+        .iter()
+        .filter_map(|s| {
+            world
+                .get_resource::<ss13_mapload::IconIndex>()
+                .and_then(|i| i.get(icon, s))
+        })
+        .collect();
+    let load = if kind == BotKind::Mule {
+        super::mule::load_overlays(world, mob)
+    } else {
+        Vec::new()
+    };
+    let mut overlays: Vec<ss13_shared::Overlay> =
+        ids.into_iter().map(ss13_shared::Overlay::new).collect();
+    overlays.extend(load);
+    let old = world
+        .get::<BotOverlays>(mob)
+        .map(|o| o.0.clone())
+        .unwrap_or_default();
+    if old == overlays {
+        return;
+    }
+    if let Some(mut look) = world.get_mut::<ss13_shared::Appearance>(mob) {
+        // Only the overlays this module added go; others (fire, ...) stay.
+        look.overlays.retain(|o| !old.contains(o));
+        look.overlays.extend(overlays.iter().cloned());
+    }
+    world.entity_mut(mob).insert(BotOverlays(overlays));
+}
+
+/// The overlays [`refresh_look`] put on a bot, replaced on the next refresh.
+#[derive(Component, Clone, Debug, Default)]
+pub struct BotOverlays(pub Vec<ss13_shared::Overlay>);
 
 /// tg `update_bot_mode`.
 pub fn set_mode(world: &mut World, mob: Entity, mode: &'static str) {
@@ -420,7 +584,7 @@ pub fn set_mode(world: &mut World, mob: Entity, mode: &'static str) {
 
 /// tg `turn_on`.
 pub fn turn_on(world: &mut World, mob: Entity) {
-    if world.get::<Stat>(mob) == Some(&Stat::Dead) {
+    if world.get::<Stat>(mob) == Some(&Stat::Dead) || !super::mule::can_turn_on(world, mob, None) {
         return;
     }
     if let Some(mut bot) = world.get_mut::<Bot>(mob) {
@@ -445,8 +609,131 @@ pub fn bot_reset(world: &mut World, mob: Entity) {
         bot.mode = BOT_IDLE;
         bot.task = None;
     }
+    super::mule::reset_mule(world, mob);
     ai::reset(world, mob);
     refresh_look(world, mob);
+}
+
+/// A user's timed step on a bot or an assembly (`crate::construction::Job::Bot`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BotUserJob {
+    /// `attach_knife` on a cleanbot.
+    AttachKnife,
+    /// Cable on the wiring step of an ED-209 assembly.
+    WireEd209,
+    /// A screwdriver attaching the ED-209's gun.
+    FinishEd209,
+}
+
+/// End of a [`BotUserJob`] `do_after` (`crate::tools` checked that neither side moved).
+pub fn complete_job(
+    world: &mut World,
+    mob: Entity,
+    action: &crate::tools::DoAfter,
+    job: BotUserJob,
+) {
+    match job {
+        BotUserJob::AttachKnife => {
+            super::cleanbot::deputize(world, action.client, mob, action.target);
+        }
+        BotUserJob::WireEd209 | BotUserJob::FinishEd209 => {
+            construction::complete_ed209(world, mob, action, job);
+        }
+    }
+}
+
+/// The cleanbot's knife on someone stepping onto it ([`super::cleanbot::stab`]).
+pub fn cleanbot_stab(world: &mut World, mob: Entity, victim: Entity) {
+    super::cleanbot::stab(world, mob, victim);
+}
+
+/// `apply_damage(amount, kind, zone)` without armor (acid), then the stat.
+pub fn hurt_zone_raw(
+    world: &mut World,
+    victim: Entity,
+    zone: crate::zone::BodyZone,
+    kind: DamageType,
+    amount: f32,
+) {
+    let (Some(mut health), Some(mut stat)) = (
+        world.get::<Health>(victim).cloned(),
+        world.get::<Stat>(victim).copied(),
+    ) else {
+        return;
+    };
+    let changed = crate::health::apply_damage_zone(&mut health, &mut stat, zone, kind, amount);
+    let mut e = world.entity_mut(victim);
+    e.insert(health);
+    if changed.is_some() {
+        e.insert(stat);
+    }
+}
+
+/// `MAX_NAME_LEN`.
+pub const MAX_NAME_LEN: u32 = 42;
+
+/// tg `sanitize_name(reject_bad_text(text), allow_numbers = TRUE)`: no control characters, at
+/// most `MAX_NAME_LEN` characters, trimmed; empty when nothing is left.
+pub fn sanitize_name(text: &str) -> String {
+    let clean: String = text
+        .chars()
+        .filter(|c| !c.is_control())
+        .take(MAX_NAME_LEN as usize)
+        .collect();
+    clean.trim().to_owned()
+}
+
+/// `rename(user)`'s `tgui_input_text`.
+pub fn rename_ask(
+    world: &World,
+    client: Entity,
+    user: Entity,
+    mob: Entity,
+) -> ss13_tgui::prompt::Ask {
+    let current = bot_name(world, mob);
+    ss13_tgui::prompt::Ask::new(
+        client,
+        user,
+        "Name change",
+        format!("This machine is designated {current}. Would you like to update its registration?"),
+        ss13_tgui::prompt::PromptKind::Text {
+            default: current,
+            max_length: MAX_NAME_LEN,
+            multiline: false,
+        },
+    )
+}
+
+/// `fully_replace_character_name` with the sanitized answer.
+pub fn rename(world: &mut World, mob: Entity, text: &str) {
+    let name = sanitize_name(text);
+    if !name.is_empty() && world.get::<Bot>(mob).is_some() {
+        world.entity_mut(mob).insert(Name::new(name));
+    }
+}
+
+/// `apply_damage(amount, kind, zone, run_armor_check(zone, MELEE))` on a human, then the stat.
+pub fn hurt_zone(
+    world: &mut World,
+    victim: Entity,
+    zone: crate::zone::BodyZone,
+    kind: DamageType,
+    amount: f32,
+) {
+    let armor = crate::armor::getarmor(world, victim, zone, "melee").clamp(0.0, 100.0);
+    let amount = amount * (1.0 - armor / 100.0);
+    let (Some(mut health), Some(mut stat)) = (
+        world.get::<Health>(victim).cloned(),
+        world.get::<Stat>(victim).copied(),
+    ) else {
+        return;
+    };
+    let changed = crate::health::apply_damage_zone(&mut health, &mut stat, zone, kind, amount);
+    let mut e = world.entity_mut(victim);
+    e.insert(health);
+    if changed.is_some() {
+        e.insert(stat);
+    }
 }
 
 /// The bot's name as players see it.
@@ -454,10 +741,12 @@ pub fn bot_name(world: &World, mob: Entity) -> String {
     name_of(world, mob)
 }
 
-/// tg `speak` -> `bot_announcement/announce`: says `line` while on, and into its radio channel
-/// with `radio`.
-// shortcut: spoken with the default say verbs (`говорит`), not the bot's `verb_say` ("states",
-// BandaStation `сообщает`); add when `ss13_chat` takes a speaker's verbs.
+/// The bot's `verb_say`, `verb_ask`, `verb_exclaim`, `verb_yell` ("states", "queries",
+/// "declares", "alarms") in BandaStation's `ru_verbs.toml`.
+pub const BOT_VERBS: [&str; 4] = ["сообщает", "спрашивает", "восклицает", "сигнализирует"];
+
+/// tg `speak` -> `bot_announcement/announce`: says `line` while on, into its radio channel with
+/// `radio`, and plays the line's recording when it is a voiced one ([`super::voice`]).
 pub fn speak(world: &mut World, mob: Entity, line: &str, radio: bool) {
     let Some(bot) = world.get::<Bot>(mob) else {
         return;
@@ -478,8 +767,11 @@ pub fn speak(world: &mut World, mob: Entity, line: &str, radio: bool) {
     if !clients.is_empty() {
         world.write_message(SendChat {
             clients,
-            message: ss13_chat::server::say_message(&name, line),
+            message: ss13_chat::server::say_message_verbs(&name, line, BOT_VERBS),
         });
+    }
+    if let Some(file) = super::voice::sound_of(line) {
+        play(world, mob, file, 50.0);
     }
     if let Some(freq) = freq {
         world.write_message(crate::radio::MachineRadio {
@@ -488,6 +780,16 @@ pub fn speak(world: &mut World, mob: Entity, line: &str, radio: bool) {
             name,
             text: line.to_owned(),
         });
+    }
+}
+
+/// `playsound(src, file, volume, vary = FALSE)` at the bot.
+pub fn play(world: &mut World, mob: Entity, file: &str, volume: f32) {
+    if let Some(&pos) = world.get::<TilePos>(mob) {
+        crate::sound::playsound(
+            world,
+            crate::sound::PlaySound::new(pos, file, volume, false),
+        );
     }
 }
 
@@ -650,12 +952,23 @@ fn emag_effects(world: &mut World, mob: Entity) {
     let Some(kind) = world.get::<Bot>(mob).map(|b| b.kind) else {
         return;
     };
+    let mut text = "странно жужжит!";
     match kind {
         BotKind::Med => {
             world.get_mut::<Bot>(mob).expect("checked").medical_flags &= !MEDBOT_DECLARE_CRIT;
         }
-        BotKind::Sec => {
+        // `secbot/emag_act` (the ED-209 also `set_weapon`s: lethal beams, [`super::sec`]).
+        BotKind::Sec | BotKind::Ed209 | BotKind::Honk | BotKind::Grievous => {
             world.get_mut::<Bot>(mob).expect("checked").security_flags &= !SECBOT_DECLARE_ARRESTS;
+            match kind {
+                BotKind::Ed209 => text = "угрожающе жужжит!",
+                // `honkbot/retrieve_emag_message`.
+                BotKind::Honk => {
+                    text = "зловеще хохочет!";
+                    play(world, mob, super::sec::HONK_LAUGH, 75.0);
+                }
+                _ => {}
+            }
         }
         _ => {}
     }
@@ -666,7 +979,7 @@ fn emag_effects(world: &mut World, mob: Entity) {
             pos,
             DEFAULT_MESSAGE_RANGE,
             ChatChannel::Info,
-            (Span::Danger, format!("{name} странно жужжит!")),
+            (Span::Danger, format!("{name} {text}")),
             &[],
         );
     }
@@ -697,7 +1010,9 @@ fn bot_clicks(world: &mut World, mut clicks: Local<MessageCursor<ClickResolved>>
             .and_then(Inventory::active_item);
         let handled = match held {
             None if !combat => {
-                ui::open(world, click.client, user, mob);
+                if !super::mule::attack_hand(world, click.client, user, mob) {
+                    ui::open(world, click.client, user, mob);
+                }
                 true
             }
             None => false,
@@ -721,8 +1036,32 @@ fn item_interaction(
     mob: Entity,
     combat: bool,
 ) -> bool {
+    if let Some(client) = world
+        .get::<crate::server::PlayerMob>(user)
+        .map(|p| p.client)
+        && let Some(handled) = super::mule::item_interaction(world, client, user, item, mob, combat)
+    {
+        return handled;
+    }
     if crate::inventory::get_id(world, item).is_some() {
         unlock_with_id(world, mob, user);
+        return true;
+    }
+    if !combat
+        && let Some(client) = world
+            .get::<crate::server::PlayerMob>(user)
+            .map(|p| p.client)
+        && super::cleanbot::knife_interaction(
+            world,
+            crate::tools::Actor {
+                client,
+                mob: user,
+                item: Some(item),
+            },
+            item,
+            mob,
+        )
+    {
         return true;
     }
     if world
@@ -735,6 +1074,7 @@ fn item_interaction(
     match crate::tools::tool_of(world, item).map(|t| t.0) {
         Some(ToolKind::Screwdriver) => {
             screwdriver(world, mob, user);
+            refresh_look(world, mob);
             true
         }
         Some(ToolKind::Welder) if !combat => {
@@ -804,6 +1144,28 @@ pub fn examine_lines(world: &World, mob: Entity, lines: &mut Vec<crate::examine:
             ),
         ));
     }
+    // `mulebot/examine`: the cell slot with the panel open, the load.
+    if let Some(mule) = world.get::<super::mule::Mule>(mob) {
+        if open {
+            if super::mule::cell_of(world, mob).is_some() {
+                lines.push((
+                    Span::Notice,
+                    "Внутри установлен элемент питания.".to_owned(),
+                ));
+                lines.push((Span::Info, "Его можно извлечь ломом.".to_owned()));
+            } else {
+                lines.push((Span::Notice, "Отсек для элемента питания пуст.".to_owned()));
+            }
+        }
+        if let Some(load) = mule.load {
+            let what = bot_name(world, load);
+            lines.push((Span::Notice, format!("На платформе погрузки: {what}.")));
+        }
+    }
+    // `cleanbot/examine`.
+    if bot.knife.is_some() {
+        lines.push((Span::Warning, "К нему примотан нож...?".to_owned()));
+    }
 }
 
 /// tg `/mob/living/basic/bot/death` -> `explode`: the parts of the bot's kind drop. Called by
@@ -823,24 +1185,73 @@ pub fn explode(world: &mut World, mob: Entity) {
         &[],
     );
     let mut drops: Vec<&str> = Vec::new();
+    let roll = |chance: f32, world: &mut World| {
+        world
+            .resource_mut::<crate::combat::CombatRng>()
+            .chance(chance)
+    };
     match bot.kind {
         BotKind::Clean => drops.extend(["/obj/item/reagent_containers/cup/bucket", PROX_SENSOR]),
         BotKind::Med => drops.extend([bot.medkit.as_str(), "/obj/item/healthanalyzer"]),
+        // `retrieve_secbot_drops` and the secbot's oil; Beepsky's potato battery.
         BotKind::Sec => {
             drops.extend([PROX_SENSOR, "/obj/item/melee/baton/security", OIL]);
+            if is_under(&mob_path(world, mob), BEEPSKY) {
+                drops.push("/obj/item/stock_parts/power_store/cell/potato");
+            }
+        }
+        BotKind::Honk => drops.extend([PROX_SENSOR, "/obj/item/bikehorn/airhorn", OIL]),
+        BotKind::Grievous => {
+            let sword = if is_under(&mob_path(world, mob), GRIEVOUS_TOY) {
+                "/obj/item/toy/sword"
+            } else {
+                "/obj/item/melee/energy/sword/saber"
+            };
+            drops.extend([PROX_SENSOR, OIL, sword, sword, sword, sword]);
+        }
+        BotKind::Ed209 => {
+            drops.extend([PROX_SENSOR, "/obj/item/gun/energy/disabler", OIL]);
+            if roll(50.0, world) {
+                drops.push("/obj/item/bodypart/leg/left/robot");
+                if roll(25.0, world) {
+                    drops.push("/obj/item/bodypart/leg/right/robot");
+                }
+            }
+            if !roll(75.0, world) {
+                drops.push(if roll(50.0, world) {
+                    "/obj/item/clothing/head/helmet"
+                } else {
+                    "/obj/item/clothing/suit/armor/vest"
+                });
+            }
         }
         BotKind::Fire => drops.extend([PROX_SENSOR, "/obj/item/clothing/head/utility/hardhat/red"]),
-        BotKind::Other => {}
+        // The load comes off; the cell is lost with the bot (`QDEL_NULL(cell)`).
+        BotKind::Mule => super::mule::unload(world, mob, None),
+        BotKind::Hygiene | BotKind::Ded | BotKind::Other => {}
     }
     for path in drops {
         crate::construction::spawn_obj(world, path, pos);
     }
-    if bot.kind == BotKind::Sec {
-        // `retrieve_secbot_drops`: the assembly at its first step, with the hole welded.
-        if let Some(assembly) =
-            crate::construction::spawn_obj(world, construction::SECBOT_ASSEMBLY, pos)
-        {
+    if let Some(knife) = bot.knife
+        && world.get_entity(knife).is_ok()
+    {
+        crate::storage::take_out(world, knife, pos);
+    }
+    // `retrieve_secbot_drops`: the assembly at its first step, with the hole welded.
+    let assembly = match bot.kind {
+        BotKind::Sec | BotKind::Grievous => Some(construction::SECBOT_ASSEMBLY),
+        BotKind::Honk => Some(construction::HONKBOT_ASSEMBLY),
+        BotKind::Ed209 => Some(construction::ED209_ASSEMBLY),
+        _ => None,
+    };
+    if let Some(path) = assembly
+        && let Some(assembly) = crate::construction::spawn_obj(world, path, pos)
+    {
+        if path == construction::SECBOT_ASSEMBLY {
             construction::set_secbot_step(world, assembly, 2, &name);
+        } else {
+            construction::set_name(world, assembly, &name);
         }
     }
     if world
@@ -940,8 +1351,14 @@ mod tests {
         );
         assert_eq!(
             BotKind::of("/mob/living/basic/bot/secbot/honkbot"),
-            BotKind::Other
+            BotKind::Honk
         );
+        assert_eq!(
+            BotKind::of("/mob/living/basic/bot/secbot/ed209/nukie"),
+            BotKind::Ed209
+        );
+        assert!(BotKind::of("/mob/living/basic/bot/secbot/grievous/toy").is_sec());
+        assert_eq!(BotKind::of("/mob/living/basic/bot/vibebot"), BotKind::Other);
         assert_eq!(
             BotKind::of("/mob/living/basic/bot/medbot/autopatrol"),
             BotKind::Med
@@ -950,7 +1367,10 @@ mod tests {
             BotKind::of("/mob/living/basic/bot/cleanbot"),
             BotKind::Clean
         );
-        assert_eq!(BotKind::of("/mob/living/basic/bot/mulebot"), BotKind::Other);
+        assert_eq!(
+            BotKind::of("/mob/living/basic/bot/mulebot/paranormal"),
+            BotKind::Mule
+        );
     }
 
     #[test]

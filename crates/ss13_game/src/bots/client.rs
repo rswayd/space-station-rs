@@ -1,20 +1,24 @@
-//! The `SimpleBot` window (client), after `SimpleBot.tsx`: the lock and hack buttons, the
-//! settings (power, airplane mode, patrol, maintenance hatch) and the kind's controls (toggles;
-//! the medbot's threshold steps by 5).
-// shortcut: buttons instead of tgui's icon toggles and slider; no rename or pAI buttons.
+//! The `SimpleBot` window (client), after `SimpleBot.tsx`: the lock, hack and rename buttons,
+//! the settings (power, airplane mode, patrol, maintenance hatch) and the kind's controls
+//! (toggles; the medbot's threshold steps by 5). The `Mule` window, after `Mule.tsx`: status
+//! (rename, power, the cell, mode, load), then unless locked the controls (unload, ID, home,
+//! destination), go/stop/home and the delivery settings.
+// shortcut: buttons instead of tgui's icon toggles, slider and checkboxes; no pAI or personality
+// buttons (no pAIs or ghost possession here).
 
 use bevy::scene::EntityScene;
 use ss13_tgui::client::{AppTguiClientExt, ClientUi};
 use ss13_ui_kit::prelude::*;
 use ss13_ui_kit::{ActParams, UiColor};
 
-use super::{HEAL_THRESHOLD, SimpleBotData, SimpleBotUi};
+use super::{HEAL_THRESHOLD, MuleData, MuleUi, SimpleBotData, SimpleBotUi};
 
 pub struct BotsClientPlugin;
 
 impl Plugin for BotsClientPlugin {
     fn build(&self, app: &mut App) {
-        app.register_ui_view::<SimpleBotUi>();
+        app.register_ui_view::<SimpleBotUi>()
+            .register_ui_view::<MuleUi>();
     }
 }
 
@@ -120,6 +124,9 @@ impl ClientUi for SimpleBotUi {
                         Button { color: danger, disabled: hack_hidden }
                         Act("hack")
                         --
+                        @Button { @icon: "fa-poll-h", @content: "Переименовать" }
+                        Act("rename")
+                        --
                         @Button { @icon: lock_icon, @content: "Controls Lock" }
                         Button { selected: locked, disabled: lock_disabled }
                         Act("lock")
@@ -132,6 +139,170 @@ impl ClientUi for SimpleBotUi {
             ]
         }
     }
+}
+
+fn checkbox(text: &'static str, on: bool, act: &'static str) -> Box<dyn SceneList> {
+    let icon = if on { "check-square-o" } else { "square-o" };
+    Box::new(EntityScene(bsn! {
+        Node { margin: UiRect::bottom(px(2)) }
+        Children [
+            @Button { @icon: icon, @content: text }
+            Button { selected: on }
+            Act(act)
+        ]
+    }))
+}
+
+/// `MuleControls`.
+fn mule_controls(data: &MuleData) -> Box<dyn SceneList> {
+    let unload_hidden = data.load_name.is_none();
+    let id = data.bot_id.clone();
+    let home = data.home.clone().unwrap_or_default();
+    let options = data.destinations.clone();
+    let shown = data
+        .destination
+        .clone()
+        .unwrap_or_else(|| "None".to_owned());
+    let settings = vec![
+        checkbox("Auto-Return", data.auto_return, "autoret"),
+        checkbox("Auto-Pickup", data.auto_pickup, "autopick"),
+        checkbox("Report-Delivery", data.report_delivery, "report"),
+    ];
+    let bad = UiColor::Bad;
+    let average = UiColor::Average;
+    Box::new(EntityScene(bsn! {
+        Node { flex_direction: FlexDirection::Column }
+        Children [
+            @Section {
+                @title: "Controls",
+                @buttons: bsn_list! {
+                    @Button { @icon: "eject", @content: "Unload" }
+                    Button { disabled: unload_hidden }
+                    Act("unload")
+                },
+            }
+            Children [
+                @LabeledList
+                Children [
+                    @LabeledListItem { @label: "ID" }
+                    Children [ @Button { @content: id } Act("setid") ]
+                    --
+                    @LabeledListItem { @label: "Home" }
+                    Children [ @Button { @content: home } Act("sethome") ]
+                    --
+                    @LabeledListItem { @label: "Destination" }
+                    Children [
+                        @Dropdown { @value_param: "value", @width: 12.0, @over: true }
+                        Dropdown { options: options, selected: shown }
+                        Act("destination")
+                    ]
+                ]
+            ]
+            --
+            @Section { @title: "Actions" }
+            Children [
+                @Stack
+                Children [
+                    @Button { @icon: "stop", @content: "Stop" }
+                    Button { color: bad }
+                    Act("stop")
+                    --
+                    @Button { @icon: "play", @content: "Go" }
+                    Button { color: average }
+                    Act("go")
+                    --
+                    @Button { @icon: "home", @content: "Home" }
+                    Act("home")
+                ]
+            ]
+            --
+            @Section { @title: "Settings" }
+            Children [ @Stack { @vertical: true } Children [ {settings} ] ]
+        ]
+    }))
+}
+
+impl ClientUi for MuleUi {
+    const WIDTH: f32 = 350.0;
+    const HEIGHT: f32 = 540.0;
+
+    fn content(_: &(), data: &MuleData) -> impl Scene {
+        let locked = data.locked && !data.silicon;
+        let power = data.power;
+        let (power_icon, power_text) = if power {
+            ("power-off", "On")
+        } else {
+            ("times", "Off")
+        };
+        let percent = data.cell_percent.unwrap_or(0.0) / 100.0;
+        let bar_color = if data.cell_percent.unwrap_or(0.0) > 0.0 {
+            UiColor::Good
+        } else {
+            UiColor::Bad
+        };
+        let mode_color = match data.mode_status.as_str() {
+            "good" => UiColor::Good,
+            "average" => UiColor::Average,
+            "bad" => UiColor::Bad,
+            _ => UiColor::Default,
+        };
+        let mode = data.mode.clone();
+        let (load_color, load) = match &data.load_name {
+            Some(name) => (UiColor::Good, capitalize(name)),
+            None => (UiColor::Average, "None".to_owned()),
+        };
+        let notice: Vec<Box<dyn SceneList>> = if data.locked {
+            vec![Box::new(EntityScene(bsn! {
+                @NoticeBox
+                Children [ Text("Swipe an ID card to unlock this interface.") ]
+            }))]
+        } else {
+            Vec::new()
+        };
+        let controls: Vec<Box<dyn SceneList>> = if locked {
+            Vec::new()
+        } else {
+            vec![mule_controls(data)]
+        };
+        bsn! {
+            @WindowContent
+            Children [
+                {notice}
+                @Section {
+                    @title: "Status",
+                    @buttons: bsn_list! {
+                        @Button { @icon: "fa-poll-h", @content: "Rename" }
+                        Act("rename")
+                        --
+                        @Button { @icon: power_icon, @content: power_text }
+                        Button { selected: power, disabled: locked }
+                        Act("on")
+                    },
+                }
+                Children [
+                    @ProgressBar { @empty: true }
+                    ProgressBar { value: percent, color: bar_color }
+                    --
+                    @LabeledList
+                    Children [
+                        @LabeledListItem { @label: "Mode", @color: mode_color, @content: mode }
+                        --
+                        @LabeledListItem { @label: "Load", @color: load_color, @content: load }
+                    ]
+                ]
+                --
+                {controls}
+            ]
+        }
+    }
+}
+
+/// tgui `capitalize`.
+fn capitalize(text: &str) -> String {
+    let mut c = text.chars();
+    c.next()
+        .map(|f| f.to_uppercase().chain(c).collect())
+        .unwrap_or_default()
 }
 
 #[cfg(test)]

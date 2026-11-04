@@ -28,12 +28,12 @@ use ss13_shared::chat::{ChatChannel, Span};
 use ss13_world::SpatialIndex;
 
 use super::{
-    BOT_CLEANING, BOT_HEALING, BOT_HUNT, BOT_IDLE, BOT_PATROL, BOT_PREP_ARREST, Bot, BotJob,
-    BotKind, BotTask, CLEANBOT_CLEAN_BLOOD, CLEANBOT_CLEAN_DRAWINGS, CLEANBOT_CLEAN_PESTS,
+    BOT_CLEANING, BOT_HEALING, BOT_IDLE, BOT_PATROL, BOT_PREP_ARREST, Bot, BotJob, BotKind,
+    BotTask, CLEANBOT_CLEAN_BLOOD, CLEANBOT_CLEAN_DRAWINGS, CLEANBOT_CLEAN_PESTS,
     CLEANBOT_CLEAN_TRASH, FIREBOT_EXTINGUISH_FLAMES, FIREBOT_EXTINGUISH_PEOPLE,
     FIREBOT_STATIONARY_MODE, Healer, MEDBOT_STATIONARY_MODE, NavBeacons, SECBOT_CHECK_IDS,
-    SECBOT_CHECK_RECORDS, SECBOT_DECLARE_ARRESTS, SECBOT_HANDCUFF_TARGET, bot_name, set_mode,
-    speak,
+    SECBOT_CHECK_RECORDS, SECBOT_CHECK_WEAPONS, SECBOT_DECLARE_ARRESTS, SECBOT_HANDCUFF_TARGET,
+    bot_name, set_mode, speak,
 };
 use crate::health::{DEFAULT_MESSAGE_RANGE, DamageType, Health, Stat};
 use crate::inventory::Inventory;
@@ -58,12 +58,12 @@ const CRIT_ANNOUNCE_COOLDOWN: f64 = 180.0;
 /// Firebot `ANNOUNCEMENT_TIMER`.
 const FIRE_ANNOUNCE_COOLDOWN: f64 = 10.0;
 /// `THREAT_ASSESS_DANGEROUS`.
-const THREAT_ASSESS_DANGEROUS: i32 = 4;
+pub(super) const THREAT_ASSESS_DANGEROUS: i32 = 4;
 /// `stun_n_cuff`: `stun_timer`, `stun_cooldown_timer`, `handcuff_timer`.
-const STUN_SECS: f32 = 8.0;
-const STUN_COOLDOWN: f64 = 10.0;
-const CUFF_SECS: f64 = 4.0;
-const ZIPTIES_USED: &str = "/obj/item/restraints/handcuffs/cable/zipties/used";
+pub(super) const STUN_SECS: f32 = 8.0;
+pub(super) const STUN_COOLDOWN: f64 = 10.0;
+pub(super) const CUFF_SECS: f64 = 4.0;
+pub(super) const ZIPTIES_USED: &str = "/obj/item/restraints/handcuffs/cable/zipties/used";
 const CHLORAL: &str = "/datum/reagent/toxin/chloralhydrate";
 /// Candidates a search tries to path to per perform (tg tries them all).
 // shortcut: at most 3 reachability searches per perform, nearest first; tg tries every
@@ -76,6 +76,12 @@ pub enum BotCond {
     ModeFlag(u32),
     Emagged,
     MedicalFlag(u32),
+    /// `bot_mode`: the bot's `mode` is this one.
+    Mode(&'static str),
+    /// `bot_wire_cut`.
+    WireCut(&'static str),
+    /// `is_target_stunned` on `BB_CURRENT_TARGET` ([`super::sec::target_down`]).
+    TargetDown,
 }
 
 impl BotCond {
@@ -87,6 +93,12 @@ impl BotCond {
             Self::ModeFlag(flag) => bot.mode_flags & flag != 0,
             Self::Emagged => bot.emagged(),
             Self::MedicalFlag(flag) => bot.medical_flags & flag != 0,
+            Self::Mode(mode) => bot.mode == mode,
+            Self::WireCut(wire) => super::mule::wire_cut(ctx.world, ctx.pawn, wire),
+            Self::TargetDown => ctx
+                .bb
+                .entity(Key::CurrentTarget)
+                .is_some_and(|t| super::sec::target_down(ctx.world, t)),
         }
     }
 }
@@ -132,17 +144,28 @@ pub enum BotLeaf {
     Extinguish,
     /// `handle_firebot_speech` (20 s).
     FirebotSpeech,
+    /// `find_delivery_beacon` with `BB_MULEBOT_HOME_BEACON` (`home`) or
+    /// `BB_MULEBOT_DESTINATION_BEACON` (2 s).
+    FindDeliveryBeacon { home: bool },
+    /// `handle_delivery` (1 s).
+    HandleDelivery,
+    /// The secbot family's leaves ([`super::sec`]).
+    Sec(super::sec::SecLeaf),
+    /// The emagged cleanbot's `update_interaction_target` of `BB_ACID_SPRAY_TARGET` (30 s).
+    AcquireAcidVictim,
+    /// The emagged cleanbot's `execute_clean` on it.
+    AcidSpray,
 }
 
 const fn perform(delay: bool, outcome: Option<bool>) -> Perform {
     Perform { delay, outcome }
 }
-const SUCCEED: Perform = perform(false, Some(true));
-const FAIL: Perform = perform(false, Some(false));
-const RUNNING: Perform = perform(false, None);
-const DELAY_SUCCEED: Perform = perform(true, Some(true));
-const DELAY_FAIL: Perform = perform(true, Some(false));
-const DELAY_RUNNING: Perform = perform(true, None);
+pub(super) const SUCCEED: Perform = perform(false, Some(true));
+pub(super) const FAIL: Perform = perform(false, Some(false));
+pub(super) const RUNNING: Perform = perform(false, None);
+pub(super) const DELAY_SUCCEED: Perform = perform(true, Some(true));
+pub(super) const DELAY_FAIL: Perform = perform(true, Some(false));
+pub(super) const DELAY_RUNNING: Perform = perform(true, None);
 
 impl BotLeaf {
     pub fn cooldown(&self) -> f64 {
@@ -153,6 +176,10 @@ impl BotLeaf {
             Self::Salute { .. } => 1.0,
             Self::AcquireCleanable => 3.0,
             Self::MedbotSpeech | Self::FirebotSpeech => 20.0,
+            Self::FindDeliveryBeacon { .. } => 2.0,
+            Self::HandleDelivery => 1.0,
+            Self::Sec(leaf) => leaf.cooldown(),
+            Self::AcquireAcidVictim => super::cleanbot::ACID_SEARCH_SECS,
             // `melee_attack_cooldown` of bots (`/mob/living/basic` 2 s).
             Self::SecAttack => 2.0,
             _ => 0.0,
@@ -201,6 +228,39 @@ impl BotLeaf {
                 SUCCEED
             }
             Self::Extinguish => extinguish(ctx),
+            Self::FindDeliveryBeacon { home } => {
+                let tag = ctx.world.get::<super::mule::Mule>(ctx.pawn).and_then(|m| {
+                    if *home {
+                        Some(m.home.clone())
+                    } else {
+                        m.destination.clone()
+                    }
+                });
+                match tag.and_then(|t| super::mule::delivery_beacon(ctx.world, &t)) {
+                    Some(beacon) => {
+                        ctx.bb.set(Key::TravelTarget, Value::Entity(beacon));
+                        DELAY_SUCCEED
+                    }
+                    None => DELAY_FAIL,
+                }
+            }
+            Self::HandleDelivery => {
+                let Some(beacon) = ctx
+                    .bb
+                    .entity(Key::TravelTarget)
+                    .filter(|&b| ctx.world.get_entity(b).is_ok())
+                else {
+                    return DELAY_FAIL;
+                };
+                // The bot is reset from inside its own plan: the keys go here, not through
+                // `reset` (the controller is out of its component while it plans).
+                ctx.bb.clear(Key::TravelTarget);
+                super::mule::handle_delivery(ctx.world, ctx.pawn, beacon);
+                DELAY_SUCCEED
+            }
+            Self::Sec(leaf) => leaf.perform(ctx),
+            Self::AcquireAcidVictim => super::cleanbot::acquire_victim(ctx),
+            Self::AcidSpray => super::cleanbot::spray(ctx),
             Self::FirebotSpeech => {
                 // `SPT_PROB(3, seconds_per_tick)`.
                 if !ctx.spt_prob(3.0) {
@@ -223,6 +283,7 @@ impl BotLeaf {
 
     pub fn finish(&mut self, ctx: &mut AiCtx, succeeded: bool) {
         match self {
+            Self::Sec(leaf) => leaf.finish(ctx, succeeded),
             Self::Wait { waited, .. } => *waited = false,
             Self::Clean => {
                 ctx.bb.set(
@@ -270,38 +331,38 @@ impl BotLeaf {
     }
 }
 
-fn bot<'a>(ctx: &'a AiCtx) -> Option<&'a Bot> {
+pub(super) fn bot<'a>(ctx: &'a AiCtx) -> Option<&'a Bot> {
     ctx.world.get::<Bot>(ctx.pawn)
 }
 
-fn pick(ctx: &mut AiCtx, lines: &'static [&'static str]) -> &'static str {
+pub(super) fn pick(ctx: &mut AiCtx, lines: &'static [&'static str]) -> &'static str {
     if lines.is_empty() {
         return "";
     }
     lines[ctx.rng.range(0, lines.len() as u32 - 1) as usize]
 }
 
-fn dist(ctx: &AiCtx, pos: TilePos) -> Option<u32> {
+pub(super) fn dist(ctx: &AiCtx, pos: TilePos) -> Option<u32> {
     ctx.pawn_pos()?.chebyshev(pos)
 }
 
 /// The kind's `BB_UNREACHABLE_LIST_COOLDOWN`.
-fn unreachable_secs(kind: BotKind) -> f64 {
+pub(super) fn unreachable_secs(kind: BotKind) -> f64 {
     match kind {
         BotKind::Clean | BotKind::Fire => 180.0,
-        BotKind::Sec => 60.0,
+        k if k.is_sec() => 60.0,
         _ => UNREACHABLE_SECS,
     }
 }
 
 /// `LAZYACCESS(BB_TEMPORARY_IGNORE_LIST, target)`.
-fn ignored(ctx: &AiCtx, target: Entity) -> bool {
+pub(super) fn ignored(ctx: &AiCtx, target: Entity) -> bool {
     matches!(ctx.bb.get(Key::IgnoreList), Some(Value::Attackers(list))
         if list.iter().any(|&(e, until)| e == target && until > ctx.now))
 }
 
 /// `add_to_blacklist`: ignored for the kind's unreachable cooldown.
-fn blacklist(ctx: &mut AiCtx, target: Entity) {
+pub(super) fn blacklist(ctx: &mut AiCtx, target: Entity) {
     let secs = bot(ctx).map_or(UNREACHABLE_SECS, |b| unreachable_secs(b.kind));
     let now = ctx.now;
     let mut list = match ctx.bb.get(Key::IgnoreList) {
@@ -315,7 +376,7 @@ fn blacklist(ctx: &mut AiCtx, target: Entity) {
 
 /// `can_reach_target(target, distance)`: a path within `max` steps that ends next to the
 /// target (on it with `min_dist` 0).
-fn reachable(ctx: &AiCtx, to: TilePos, min_dist: u32, max: usize) -> bool {
+pub(super) fn reachable(ctx: &AiCtx, to: TilePos, min_dist: u32, max: usize) -> bool {
     let Some(from) = ctx.pawn_pos() else {
         return false;
     };
@@ -344,7 +405,7 @@ fn reachable(ctx: &AiCtx, to: TilePos, min_dist: u32, max: usize) -> bool {
 
 /// Of `candidates` (nearest first), the first one reachable within `max` steps; unreachable
 /// ones tried on the way are blacklisted unless `keep`.
-fn first_reachable(
+pub(super) fn first_reachable(
     ctx: &mut AiCtx,
     candidates: Vec<(Entity, TilePos)>,
     min_dist: u32,
@@ -364,7 +425,7 @@ fn first_reachable(
 
 /// Things within `range` of the bot it sees, nearest first, that pass `valid` and are not on
 /// its ignore list.
-fn search(
+pub(super) fn search(
     ctx: &AiCtx,
     range: u32,
     valid: impl Fn(&World, Entity) -> bool,
@@ -635,7 +696,7 @@ const MEDBOT_EMAGGED_LINES: &[&str] = &[
 ];
 
 /// A human (carbon) mob: an inventory and a carbon health.
-fn is_human(world: &World, e: Entity) -> bool {
+pub(super) fn is_human(world: &World, e: Entity) -> bool {
     world.get::<Inventory>(e).is_some() && world.get::<Health>(e).is_some_and(|h| h.basic.is_none())
 }
 
@@ -895,7 +956,7 @@ pub fn heal(world: &mut World, patient: Entity, healer: Healer, amount: f32) {
 }
 
 /// The new health and, when it changed, the stat (tg `updatehealth` -> `update_stat`).
-fn set_health(world: &mut World, mob: Entity, health: Health) {
+pub(super) fn set_health(world: &mut World, mob: Entity, health: Health) {
     let mut stat = world.get::<Stat>(mob).copied().unwrap_or_default();
     let changed = crate::health::update_stat(&health, &mut stat).is_some();
     let mut e = world.entity_mut(mob);
@@ -928,6 +989,8 @@ fn medbot_speech(ctx: &mut AiCtx) -> Perform {
 // Secbot.
 
 /// tg `/mob/living/carbon/human/assess_threat` with the secbot's `judgement_criteria`.
+// shortcut: no ID trim `threat_modifier` and no non-human species term (every crew mob here is
+// a human).
 pub fn assess_threat(world: &World, secbot: &Bot, target: Entity) -> i32 {
     if secbot.emagged() {
         return 10;
@@ -937,12 +1000,33 @@ pub fn assess_threat(world: &World, secbot: &Bot, target: Entity) -> i32 {
         .get::<Name>(target)
         .map(|n| n.as_str().to_owned())
         .unwrap_or_default();
-    let has_id = world
-        .get::<Inventory>(target)
-        .and_then(|i| i.id_card(world))
-        .is_some();
-    if secbot.security_flags & SECBOT_CHECK_IDS != 0 && !has_id && name == "Unknown" {
+    let inventory = world.get::<Inventory>(target);
+    let id = inventory.and_then(|i| i.id_card(world));
+    if secbot.security_flags & SECBOT_CHECK_IDS != 0 && id.is_none() && name == "Unknown" {
         threat += 4;
+    }
+    // `JUDGE_WEAPONCHECK`: unless the ID carries a weapon permit, a `NEEDS_PERMIT` item held is
+    // 4, one on the belt or back 2.
+    if secbot.security_flags & SECBOT_CHECK_WEAPONS != 0
+        && let Some(inventory) = inventory
+    {
+        let permit = id
+            .and_then(|card| world.get::<crate::inventory::IdCard>(card))
+            .is_some_and(|c| c.access.iter().any(|a| a == ACCESS_WEAPONS));
+        if !permit {
+            let needs_permit = |item: Option<Entity>| {
+                item.and_then(|i| world.get::<DmItem>(i))
+                    .is_some_and(|i| i.item_flags & ss13_mapload::item::NEEDS_PERMIT != 0)
+            };
+            for held in inventory.hands {
+                if needs_permit(held) {
+                    threat += 4;
+                }
+            }
+            if needs_permit(inventory.belt) || needs_permit(inventory.back) {
+                threat += 2;
+            }
+        }
     }
     if secbot.security_flags & SECBOT_CHECK_RECORDS != 0
         && let Some(record) = world
@@ -956,24 +1040,36 @@ pub fn assess_threat(world: &World, secbot: &Bot, target: Entity) -> i32 {
             _ => 0,
         };
     }
+    // Dresscode violations.
+    if inventory
+        .and_then(|i| i.head)
+        .and_then(|h| world.get::<DmItem>(h))
+        .is_some_and(|h| is_under(&h.path, WIZARD_HAT))
+    {
+        threat += 2;
+    }
     if crate::antag::revolution::server::mindshielded(world, target) {
         threat -= 1;
     }
     threat
 }
 
-fn paralyzed(world: &World, e: Entity) -> bool {
+/// `ACCESS_WEAPONS`: a weapon permit.
+const ACCESS_WEAPONS: &str = "weapons";
+const WIZARD_HAT: &str = "/obj/item/clothing/head/wizard";
+
+pub(super) fn paralyzed(world: &World, e: Entity) -> bool {
     world
         .get::<crate::status_effects::StatusEffects>(e)
         .is_some_and(|s| s.remaining(Incap::Paralyze) > 0.0)
 }
 
-fn retaliating_against(ctx: &AiCtx, e: Entity) -> bool {
+pub(super) fn retaliating_against(ctx: &AiCtx, e: Entity) -> bool {
     matches!(ctx.bb.get(Key::RetaliateList), Some(Value::Attackers(list)) if list.iter().any(|&(a, _)| a == e))
 }
 
 /// `targeting_strategy/basic/secbot`: the threat, or `None` when not a target.
-fn criminal_threat(ctx: &AiCtx, secbot: &Bot, e: Entity) -> Option<i32> {
+pub(super) fn criminal_threat(ctx: &AiCtx, secbot: &Bot, e: Entity) -> Option<i32> {
     if !is_human(ctx.world, e) || ignored(ctx, e) {
         return None;
     }
@@ -993,7 +1089,7 @@ fn criminal_threat(ctx: &AiCtx, secbot: &Bot, e: Entity) -> Option<i32> {
 }
 
 /// `update_combat_targets` (`vision_range` 9, kept up to 16 tiles while valid).
-fn acquire_criminal(ctx: &mut AiCtx) -> Perform {
+pub(super) fn acquire_criminal(ctx: &mut AiCtx) -> Perform {
     let Some(secbot) = bot(ctx).cloned() else {
         return FAIL;
     };
@@ -1020,20 +1116,13 @@ fn acquire_criminal(ctx: &mut AiCtx) -> Perform {
     if let Some(mut b) = ctx.world.get_mut::<Bot>(ctx.pawn) {
         b.threat = threat;
     }
-    // `on_target_set`.
-    speak(
-        ctx.world,
-        ctx.pawn,
-        &format!("Level {threat} infraction alert!"),
-        false,
-    );
-    set_mode(ctx.world, ctx.pawn, BOT_HUNT);
+    super::sec::on_target_set(ctx.world, ctx.pawn, target, threat);
     SUCCEED
 }
 
 /// `basic_melee_attack` -> `stun_n_cuff/on_unarmed_attack`: cuffs a paralyzed target, stuns
 /// the others.
-fn sec_attack(ctx: &mut AiCtx) -> Perform {
+pub(super) fn sec_attack(ctx: &mut AiCtx) -> Perform {
     let Some(target) = ctx
         .bb
         .entity(Key::CurrentTarget)
@@ -1047,6 +1136,11 @@ fn sec_attack(ctx: &mut AiCtx) -> Perform {
     if dist(ctx, pos).is_none_or(|d| d > 1) || !is_human(ctx.world, target) {
         return DELAY_FAIL;
     }
+    // General Beepsky has no `stun_n_cuff`: its swords.
+    if bot(ctx).is_some_and(|b| b.kind == BotKind::Grievous) {
+        super::sec::grievous_slash(ctx.world, ctx.pawn, target);
+        return DELAY_SUCCEED;
+    }
     if paralyzed(ctx.world, target) {
         if ctx
             .world
@@ -1056,6 +1150,12 @@ fn sec_attack(ctx: &mut AiCtx) -> Perform {
             return DELAY_FAIL;
         }
         if super::start_task(ctx.world, ctx.pawn, BotJob::Cuff, target, CUFF_SECS) {
+            super::play(
+                ctx.world,
+                ctx.pawn,
+                "sound/items/weapons/cablecuff.ogg",
+                30.0,
+            );
             let (name, victim) = (bot_name(ctx.world, ctx.pawn), bot_name(ctx.world, target));
             set_mode(ctx.world, ctx.pawn, super::BOT_ARREST);
             show(
@@ -1092,6 +1192,13 @@ pub fn stun(world: &mut World, secbot: Entity, target: Entity, now: f64) {
         return;
     };
     crate::status_effects::apply(world, target, Incap::Paralyze, STUN_SECS);
+    // `stun_sound`: the honkbot's air horn, the others' stun gloves.
+    let sound = if bot.kind == BotKind::Honk {
+        super::sec::AIRHORN
+    } else {
+        super::sec::EGLOVES
+    };
+    super::play(world, secbot, sound, 50.0);
     let (name, victim) = (bot_name(world, secbot), bot_name(world, target));
     show(
         world,
@@ -1103,6 +1210,15 @@ pub fn stun(world: &mut World, secbot: Entity, target: Entity, now: f64) {
     );
     if let Some(mut b) = world.get_mut::<Bot>(secbot) {
         b.stun_ready_at = now + STUN_COOLDOWN;
+    }
+    // `post_stun_callback`: the ED-209 has none, the honkbot its own.
+    match bot.kind {
+        BotKind::Ed209 => return,
+        BotKind::Honk => {
+            super::sec::honk_post_stun(world, secbot);
+            return;
+        }
+        _ => {}
     }
     if bot.security_flags & SECBOT_DECLARE_ARRESTS != 0 {
         let verb = if bot.security_flags & SECBOT_HANDCUFF_TARGET != 0 {
@@ -1123,7 +1239,7 @@ pub fn stun(world: &mut World, secbot: Entity, target: Entity, now: f64) {
 }
 
 /// `stun_n_cuff/cuff_target` after its `do_after`: new used zipties onto the target.
-fn cuff(world: &mut World, secbot: Entity, target: Entity) {
+pub(super) fn cuff(world: &mut World, secbot: Entity, target: Entity) {
     set_mode(world, secbot, BOT_IDLE);
     if world.get::<crate::restraints::Handcuffed>(target).is_some() {
         return;
@@ -1131,10 +1247,23 @@ fn cuff(world: &mut World, secbot: Entity, target: Entity) {
     let Some(&pos) = world.get::<TilePos>(target) else {
         return;
     };
-    let Some(cuffs) = crate::construction::spawn_obj(world, ZIPTIES_USED, pos) else {
+    let kind = world.get::<Bot>(secbot).map(|b| b.kind);
+    // `handcuff_type` of the kind.
+    let cuffs = match kind {
+        Some(BotKind::Honk) => "/obj/item/restraints/handcuffs/cable/zipties/fake",
+        Some(BotKind::Ed209) => "/obj/item/restraints/handcuffs/cable/zipties",
+        _ => ZIPTIES_USED,
+    };
+    let Some(cuffs) = crate::construction::spawn_obj(world, cuffs, pos) else {
         return;
     };
     crate::restraints::apply_cuffs(world, cuffs, target);
+    // `post_arrest_callback`.
+    match kind {
+        Some(BotKind::Sec) => super::play(world, secbot, "law", 50.0),
+        Some(BotKind::Honk) => super::sec::honk_post_arrest(world, secbot),
+        _ => {}
+    }
 }
 
 // Firebot.
@@ -1319,6 +1448,8 @@ pub fn reset(world: &mut World, mob: Entity) {
             Key::BeaconTarget,
             Key::PreviousBeacon,
             Key::SummonTarget,
+            Key::TravelTarget,
+            Key::FriendTarget,
         ] {
             controller.bb.clear(key);
         }
@@ -1329,7 +1460,7 @@ pub fn reset(world: &mut World, mob: Entity) {
 
 // Trees.
 
-fn par(children: Vec<Node>, repeat_delay: f64, finish_on_primary: bool) -> Node {
+pub(super) fn par(children: Vec<Node>, repeat_delay: f64, finish_on_primary: bool) -> Node {
     parallel(
         children,
         ParallelOpts {
@@ -1341,11 +1472,11 @@ fn par(children: Vec<Node>, repeat_delay: f64, finish_on_primary: bool) -> Node 
     )
 }
 
-fn bot_leaf(l: BotLeaf) -> Node {
+pub(super) fn bot_leaf(l: BotLeaf) -> Node {
     leaf(Behavior::Bot(l))
 }
 
-fn move_to(key: Key, dist: u32) -> Node {
+pub(super) fn move_to(key: Key, dist: u32) -> Node {
     leaf(Behavior::MoveToTarget {
         key,
         dist,
@@ -1354,7 +1485,7 @@ fn move_to(key: Key, dist: u32) -> Node {
 }
 
 /// `bot_respond_to_summon.bt.json`.
-fn respond_to_summon() -> Node {
+pub(super) fn respond_to_summon() -> Node {
     decorator(
         Cond::KeySet(Key::SummonTarget),
         false,
@@ -1367,7 +1498,7 @@ fn respond_to_summon() -> Node {
 }
 
 /// `bot_salute_authority.bt.json`.
-fn salute_authority(messages: &'static [&'static str]) -> Node {
+pub(super) fn salute_authority(messages: &'static [&'static str]) -> Node {
     decorator(
         Cond::KeyOffCooldown(Key::SaluteCooldown),
         false,
@@ -1377,7 +1508,7 @@ fn salute_authority(messages: &'static [&'static str]) -> Node {
 }
 
 /// `bot_patrol.bt.json`.
-fn patrol() -> Node {
+pub(super) fn patrol() -> Node {
     selector(vec![
         decorator(
             Cond::KeyOffCooldown(Key::BeaconCooldown),
@@ -1425,7 +1556,7 @@ fn base() -> Node {
     ])
 }
 
-/// `cleanbot.bt.json` (its unemagged branch; an emagged cleanbot only patrols).
+/// `cleanbot.bt.json` (without pet commands, janitor befriending and the foam ability).
 fn cleanbot() -> Node {
     let work = par(
         vec![
@@ -1452,10 +1583,39 @@ fn cleanbot() -> Node {
         FIND_TARGET_RATE,
         true,
     );
+    let emagged = par(
+        vec![
+            selector(vec![
+                decorator(
+                    Cond::KeyOffCooldown(Key::AcidSprayCooldown),
+                    false,
+                    Abort::Lower,
+                    decorator(
+                        Cond::KeySet(Key::CurrentTarget),
+                        false,
+                        Abort::Both,
+                        sequence(vec![
+                            move_to(Key::CurrentTarget, 1),
+                            bot_leaf(BotLeaf::AcidSpray),
+                        ]),
+                    ),
+                ),
+                decorator(
+                    Cond::KeyOffCooldown(Key::PostCleanCooldown),
+                    false,
+                    Abort::None,
+                    patrol(),
+                ),
+            ]),
+            bot_leaf(BotLeaf::AcquireAcidVictim),
+        ],
+        FIND_TARGET_RATE,
+        true,
+    );
     selector(vec![
         respond_to_summon(),
         decorator(Cond::Bot(BotCond::Emagged), true, Abort::None, work),
-        patrol(),
+        decorator(Cond::Bot(BotCond::Emagged), false, Abort::None, emagged),
     ])
 }
 
@@ -1511,9 +1671,9 @@ fn medbot() -> Node {
     ])
 }
 
-/// `secbot.bt.json`.
-fn secbot() -> Node {
-    let combat = parallel(
+/// The secbot's combat branch: `stun_n_cuff` through `basic_melee_attack` while closing in.
+pub(super) fn sec_combat() -> Node {
+    parallel(
         vec![
             subplan(bot_leaf(BotLeaf::SecAttack), true, true, 0.0),
             leaf(Behavior::MoveToTarget {
@@ -1527,13 +1687,22 @@ fn secbot() -> Node {
             finish_on_primary: true,
             ..ParallelOpts::default()
         },
-    );
+    )
+}
+
+/// `secbot.bt.json` (General Beepsky's `super_beepsky` controller too).
+pub(super) fn secbot_tree() -> Node {
     selector(vec![
         respond_to_summon(),
         par(
             vec![
                 selector(vec![
-                    decorator(Cond::KeySet(Key::CurrentTarget), false, Abort::Both, combat),
+                    decorator(
+                        Cond::KeySet(Key::CurrentTarget),
+                        false,
+                        Abort::Both,
+                        sec_combat(),
+                    ),
                     patrol(),
                 ]),
                 bot_leaf(BotLeaf::AcquireCriminal),
@@ -1581,6 +1750,54 @@ fn firebot() -> Node {
     )
 }
 
+/// `mulebot.bt.json`.
+fn mulebot() -> Node {
+    let find = |mode: &'static str, home: bool| {
+        decorator(
+            Cond::Bot(BotCond::Mode(mode)),
+            false,
+            Abort::None,
+            bot_leaf(BotLeaf::FindDeliveryBeacon { home }),
+        )
+    };
+    par(
+        vec![
+            selector(vec![
+                respond_to_summon(),
+                decorator(
+                    Cond::KeySet(Key::TravelTarget),
+                    false,
+                    Abort::None,
+                    sequence(vec![
+                        move_to(Key::TravelTarget, 0),
+                        bot_leaf(BotLeaf::HandleDelivery),
+                    ]),
+                ),
+                decorator(
+                    Cond::Bot(BotCond::WireCut(super::mule::WIRE_BEACON)),
+                    true,
+                    Abort::None,
+                    decorator(
+                        Cond::KeySet(Key::TravelTarget),
+                        true,
+                        Abort::None,
+                        selector(vec![
+                            find(super::BOT_DELIVER, false),
+                            find(super::BOT_GO_HOME, true),
+                        ]),
+                    ),
+                ),
+            ]),
+            salute_authority(MULEBOT_SALUTES),
+        ],
+        1.0,
+        true,
+    )
+}
+
+/// The MULEbot's `BB_SALUTE_MESSAGES`.
+const MULEBOT_SALUTES: &[&str] = &["blinks its light in appreciation towards"];
+
 /// The tree of a bot controller (`/datum/ai_controller/basic_controller/bot/*`).
 pub fn tree(path: &str) -> Built {
     let root = |p: &str| format!("/datum/ai_controller/basic_controller/bot{p}");
@@ -1589,14 +1806,13 @@ pub fn tree(path: &str) -> Built {
     } else if is_under(path, &root("/medbot")) {
         medbot()
     } else if path == root("/secbot") {
-        secbot()
+        secbot_tree()
     } else if is_under(path, &root("/firebot")) {
         firebot()
     } else if is_under(path, &root("/mulebot")) {
-        // `mulebot.bt.json` without its deliveries: MULEbots do not patrol.
-        // shortcut: no deliveries (loading crates, delivery beacons, the `Mule` window); add
-        // with the MULEbot's cargo and PDA control.
-        selector(vec![respond_to_summon(), salute_authority(BOT_SALUTES)])
+        mulebot()
+    } else if let Some(tree) = super::sec::tree(path) {
+        tree
     } else {
         // shortcut: the repairbot, honkbot, hygienebot, vibebot, ED-209 and dedbot trees are
         // not ported; they summon, salute and patrol like the base bot.
@@ -1617,28 +1833,9 @@ mod tests {
     fn secbot(flags: u32) -> Bot {
         Bot {
             kind: BotKind::Sec,
-            mode_flags: super::super::MODE_ON,
-            cover: 0,
-            mode: BOT_IDLE,
-            req_one_access: Vec::new(),
-            initial_access: Vec::new(),
-            access: Vec::new(),
-            radio: None,
             base_icon: "secbot".into(),
-            commissioned: false,
             security_flags: flags,
-            medical_flags: 0,
-            heal_amount: 0.0,
-            heal_threshold: 0.0,
-            healer: Healer::All,
-            skin: String::new(),
-            janitor_flags: 0,
-            firebot_flags: 0,
-            robot_arm: String::new(),
-            stun_ready_at: 0.0,
-            threat: 0,
-            medkit: String::new(),
-            task: None,
+            ..Bot::default()
         }
     }
 
@@ -1658,6 +1855,57 @@ mod tests {
         let mut emagged = secbot(0);
         emagged.cover = super::super::COVER_EMAGGED;
         assert_eq!(assess_threat(&world, &emagged, named), 10, "everyone");
+    }
+
+    #[test]
+    fn weapons_need_a_permit() {
+        let mut world = World::new();
+        let item = |world: &mut World, path: &str, flags: u32| {
+            world
+                .spawn(DmItem {
+                    path: path.into(),
+                    item_flags: flags,
+                    ..default()
+                })
+                .id()
+        };
+        let gun = item(&mut world, "/obj/item/gun/energy/laser", 4);
+        let baton = item(&mut world, "/obj/item/melee/baton", 4);
+        let hat = item(&mut world, "/obj/item/clothing/head/wizard/red", 0);
+        let me = world
+            .spawn((
+                Name::new("John"),
+                Inventory {
+                    hands: [Some(gun), None],
+                    belt: Some(baton),
+                    ..default()
+                },
+            ))
+            .id();
+        let checks = secbot(SECBOT_CHECK_WEAPONS);
+        assert_eq!(
+            assess_threat(&world, &checks, me),
+            6,
+            "a gun in hand, a baton on the belt"
+        );
+        assert_eq!(
+            assess_threat(&world, &secbot(0), me),
+            0,
+            "weapons not checked"
+        );
+        let permit = world
+            .spawn(crate::inventory::IdCard {
+                access: vec!["weapons".into()],
+            })
+            .id();
+        world.get_mut::<Inventory>(me).unwrap().id = Some(permit);
+        assert_eq!(assess_threat(&world, &checks, me), 0, "a weapon permit");
+        world.get_mut::<Inventory>(me).unwrap().head = Some(hat);
+        assert_eq!(
+            assess_threat(&world, &checks, me),
+            2,
+            "a wizard hat is never allowed"
+        );
     }
 
     #[test]

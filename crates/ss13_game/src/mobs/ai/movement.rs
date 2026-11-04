@@ -26,6 +26,11 @@ const MAX_PATH: usize = 30;
 /// tg `AI_BOT_PATH_LENGTH`, and the expansions a search of that length may need.
 const BOT_MAX_PATH: usize = 60;
 const BOT_MAX_NODES: usize = 3000;
+/// tg `AI_MULEBOT_PATH_LENGTH` (deliveries cross the station) and its expansion budget.
+// shortcut: A* within 12000 expansions where tg's JPS plans 150 tiles; a MULEbot plans only
+// when no greedy step is free and follows the plan while it stays free.
+const MULE_MAX_PATH: usize = 150;
+const MULE_MAX_NODES: usize = 12_000;
 
 /// How a mob plans its steps: which blockers it can open (closed doors with its access) and
 /// how long a detour may be.
@@ -54,7 +59,13 @@ pub fn pathing_of<'a>(
     mob: Entity,
     opens: &'a dyn Fn(Entity) -> bool,
 ) -> Pathing<'a> {
-    if world.get::<crate::bots::Bot>(mob).is_some() {
+    if world.get::<crate::bots::mule::Mule>(mob).is_some() {
+        Pathing {
+            opens,
+            max_path: MULE_MAX_PATH,
+            max_nodes: MULE_MAX_NODES,
+        }
+    } else if world.get::<crate::bots::Bot>(mob).is_some() {
         Pathing {
             opens,
             max_path: BOT_MAX_PATH,

@@ -12,10 +12,19 @@
 //! - Firebot: a robot arm on an extinguisher gives the assembly; a red hardhat, then a proximity
 //!   sensor build it.
 //!
+//! - General Beepsky: a wrench on a finished-arm securitron assembly opens the arm slots; three
+//!   energy swords bolted on and a fourth build it (toy swords glued on at the arm step build the
+//!   toy one); a screwdriver takes the swords back off.
+//! - ED-209: an iron sheet on a robot endoskeleton gives the assembly; two robot legs, an armor
+//!   vest, a welder, a security helmet, a proximity sensor, a cable (4 s), a disabler and a
+//!   screwdriver (4 s) build it.
+//! - Honkbot: a robot arm on an empty clown box gives the assembly; a proximity sensor and a bike
+//!   horn build it.
+//!
 //! The built bot appears where the assembly was and takes the assembly's name. Each step checks
 //! the held item and the assembly's step at the moment of effect; consumed parts are deleted.
-// shortcut: no ED-209, honkbot, hygienebot, repairbot or Vim assemblies, no General Beepsky
-// swords, no renaming assemblies with a pen.
+// shortcut: no hygienebot (its assembly is a stack recipe, no crafting menu here), repairbot or
+// Vim assemblies, no renaming assemblies with a pen.
 
 use bevy::prelude::*;
 use ss13_mapload::fidelity::is_under;
@@ -32,6 +41,23 @@ pub const CLEANBOT_ASSEMBLY: &str = "/obj/item/bot_assembly/cleanbot";
 pub const MEDBOT_ASSEMBLY: &str = "/obj/item/bot_assembly/medbot";
 pub const SECBOT_ASSEMBLY: &str = "/obj/item/bot_assembly/secbot";
 pub const FIREBOT_ASSEMBLY: &str = "/obj/item/bot_assembly/firebot";
+pub const ED209_ASSEMBLY: &str = "/obj/item/bot_assembly/ed209";
+pub const HONKBOT_ASSEMBLY: &str = "/obj/item/bot_assembly/honkbot";
+const ROBOT_SUIT: &str = "/obj/item/robot_suit";
+const IRON: &str = "/obj/item/stack/sheet/iron";
+const LEGS: [&str; 2] = [
+    "/obj/item/bodypart/leg/left/robot",
+    "/obj/item/bodypart/leg/right/robot",
+];
+const VEST: &str = "/obj/item/clothing/suit/armor/vest";
+const CABLE: &str = "/obj/item/stack/cable_coil";
+const DISABLER: &str = "/obj/item/gun/energy/disabler";
+const CLOWN_BOX: &str = "/obj/item/storage/box/clown";
+const BIKEHORN: &str = "/obj/item/bikehorn";
+const SABER: &str = "/obj/item/melee/energy/sword/saber";
+const TOY_SWORD: &str = "/obj/item/toy/sword";
+/// The ED-209's cable and gun steps: `do_after(user, 4 SECONDS)`, `use_tool(src, user, 40)`.
+const ED209_STEP_DS: f32 = 40.0;
 const BUCKET: &str = "/obj/item/reagent_containers/cup/bucket";
 const PROX: &str = "/obj/item/assembly/prox_sensor";
 const SIGNALER: &str = "/obj/item/assembly/signaler";
@@ -56,6 +82,9 @@ pub struct BotAssembly {
     pub skin: String,
     pub medkit: String,
     pub robot_arm: String,
+    /// Secbot assembly: `swordamt`, `toyswordamt`.
+    pub swords: u8,
+    pub toy_swords: u8,
 }
 
 pub(super) fn build(app: &mut App) {
@@ -74,6 +103,10 @@ fn add_assembly_state(add: On<Add<DmItem>>, items: Query<&DmItem>, mut commands:
         "Securitron"
     } else if is_under(&item.path, FIREBOT_ASSEMBLY) {
         "Firebot"
+    } else if is_under(&item.path, ED209_ASSEMBLY) {
+        "ED-209 Security Robot"
+    } else if is_under(&item.path, HONKBOT_ASSEMBLY) {
+        "Honkbot"
     } else {
         return;
     };
@@ -83,6 +116,8 @@ fn add_assembly_state(add: On<Add<DmItem>>, items: Query<&DmItem>, mut commands:
         skin: "generic".to_owned(),
         medkit: MEDKIT.to_owned(),
         robot_arm: super::ROBOT_ARM.to_owned(),
+        swords: 0,
+        toy_swords: 0,
     });
 }
 
@@ -145,6 +180,35 @@ pub fn item_interaction(
     if is_under(&target_path, EXTINGUISHER) && is_arm(&tool_path) {
         return start(world, ctx, FIREBOT_ASSEMBLY, None);
     }
+    // `robot_suit/item_interaction` with iron: one sheet.
+    if is_under(&target_path, ROBOT_SUIT) && is_under(&tool_path, IRON) {
+        if !crate::tools::use_stack(world, tool, 1) {
+            tell(
+                world,
+                client,
+                Span::Warning,
+                "Нужен лист железа, чтобы начать сборку ED-209!",
+            );
+            return true;
+        }
+        let ctx = Ctx {
+            tool: target,
+            ..ctx
+        };
+        // The endoskeleton is the "part" used up; the sheet was spent above.
+        return start_from(world, ctx, ED209_ASSEMBLY, target);
+    }
+    // `box/clown/tool_act` with a robot arm: an empty box only.
+    if is_under(&target_path, CLOWN_BOX) && is_arm(&tool_path) {
+        let empty = world
+            .get::<crate::storage::Stored>(target)
+            .is_none_or(|s| s.items().is_empty());
+        if !empty {
+            tell(world, client, Span::Warning, "Внутри есть предметы!");
+            return true;
+        }
+        return start(world, ctx, HONKBOT_ASSEMBLY, None);
+    }
     if is_under(&target_path, MEDKIT) && is_arm(&tool_path) {
         let empty = world
             .get::<crate::storage::Stored>(target)
@@ -170,6 +234,12 @@ pub fn item_interaction(
     }
     if is_under(&target_path, FIREBOT_ASSEMBLY) {
         return firebot_step(world, ctx, &assembly, &tool_path);
+    }
+    if is_under(&target_path, ED209_ASSEMBLY) {
+        return ed209_step(world, ctx, &assembly, &tool_path);
+    }
+    if is_under(&target_path, HONKBOT_ASSEMBLY) {
+        return honkbot_step(world, ctx, &assembly, &tool_path);
     }
     false
 }
@@ -240,6 +310,49 @@ fn start(world: &mut World, ctx: Ctx, kind: &str, medkit: Option<String>) -> boo
         format!("Вы добавляете {tool_name}."),
     );
     true
+}
+
+/// [`start`] where only `consumed` goes (the other part was a stack, already used).
+fn start_from(world: &mut World, ctx: Ctx, kind: &str, consumed: Entity) -> bool {
+    let Some((pos, hand)) = place_of(
+        world,
+        Ctx {
+            target: consumed,
+            ..ctx
+        },
+    ) else {
+        return true;
+    };
+    consume(world, consumed);
+    let Some(assembly) = crate::construction::spawn_obj(world, kind, pos) else {
+        return true;
+    };
+    world.flush();
+    if let Some(hand) = hand
+        && let Some(inventory) = world.get::<Inventory>(ctx.mob).cloned()
+        && inventory.hands[hand].is_none()
+    {
+        world
+            .entity_mut(assembly)
+            .remove::<TilePos>()
+            .insert(CarriedBy(ctx.mob));
+        world.get_mut::<Inventory>(ctx.mob).expect("cloned").hands[hand] = Some(assembly);
+    }
+    tell(
+        world,
+        ctx.client,
+        Span::Notice,
+        "Вы вооружаете каркас робота.",
+    );
+    true
+}
+
+/// An assembly dropped by a dying bot keeps its name (`created_name = name`).
+pub fn set_name(world: &mut World, assembly: Entity, name: &str) {
+    world.flush();
+    if let Some(mut a) = world.get_mut::<BotAssembly>(assembly) {
+        a.created_name = name.to_owned();
+    }
 }
 
 fn set_icon(world: &mut World, e: Entity, state: &str) {
@@ -426,11 +539,256 @@ fn secbot_step(world: &mut World, ctx: Ctx, a: &BotAssembly, tool: &str) -> bool
         (4, _) if is_under(tool, SEC_BATON) => {
             finish(world, ctx, "/mob/living/basic/bot/secbot", a)
         }
+        (4, Some(ToolKind::Wrench)) => {
+            set_step(world, ctx.target, 5);
+            tell(
+                world,
+                ctx.client,
+                Span::Notice,
+                "Вы настраиваете слоты для дополнительного оружия.",
+            );
+            true
+        }
+        (4, _) if is_under(tool, TOY_SWORD) && a.swords == 0 => {
+            if a.toy_swords < 3 {
+                add_sword(world, ctx, true);
+                true
+            } else {
+                finish(world, ctx, "/mob/living/basic/bot/secbot/grievous/toy", a)
+            }
+        }
+        (5, Some(ToolKind::Screwdriver)) => {
+            // tg resets `swordamt` before dropping them, losing the swords.
+            for _ in 0..a.swords {
+                drop_part(world, ctx, SABER);
+            }
+            if let Some(mut asm) = world.get_mut::<BotAssembly>(ctx.target) {
+                asm.swords = 0;
+            }
+            set_step(world, ctx.target, 4);
+            set_icon(world, ctx.target, "helmet_signaler");
+            tell(
+                world,
+                ctx.client,
+                Span::Notice,
+                "Вы откручиваете энергетические мечи.",
+            );
+            true
+        }
+        (5, _) if is_under(tool, SABER) => {
+            if a.swords < 3 {
+                add_sword(world, ctx, false);
+                true
+            } else {
+                finish(world, ctx, "/mob/living/basic/bot/secbot/grievous", a)
+            }
+        }
         (4, Some(ToolKind::Screwdriver)) => {
             drop_part(world, ctx, &a.robot_arm);
             set_step(world, ctx.target, 3);
             overlay(world, ctx.target, "hs_arm", false);
+            // The glue of the toy swords snaps (tg resets the count first and drops none).
+            for _ in 0..a.toy_swords {
+                drop_part(world, ctx, TOY_SWORD);
+            }
+            if a.toy_swords > 0 {
+                if let Some(mut asm) = world.get_mut::<BotAssembly>(ctx.target) {
+                    asm.toy_swords = 0;
+                }
+                set_icon(world, ctx.target, "helmet_signaler");
+            }
             true
+        }
+        _ => false,
+    }
+}
+
+/// A sword bolted (or a toy one glued) onto an arm slot.
+fn add_sword(world: &mut World, ctx: Ctx, toy: bool) {
+    consume(world, ctx.tool);
+    if let Some(mut asm) = world.get_mut::<BotAssembly>(ctx.target) {
+        asm.created_name = "General Beepsky".to_owned();
+        if toy {
+            asm.toy_swords += 1;
+        } else {
+            asm.swords += 1;
+        }
+    }
+    set_icon(world, ctx.target, "grievous_assembly");
+    let text = if toy {
+        "Вы приклеиваете игрушечный меч к слоту руки."
+    } else {
+        "Вы прикручиваете энергетический меч к слоту руки."
+    };
+    tell(world, ctx.client, Span::Notice, text);
+}
+
+/// `/obj/item/bot_assembly/ed209/item_interaction`.
+fn ed209_step(world: &mut World, ctx: Ctx, a: &BotAssembly, tool: &str) -> bool {
+    let kind = tool_kind(world, ctx.tool);
+    match (a.step, kind) {
+        (1 | 2, _) if LEGS.iter().any(|l| is_under(tool, l)) => {
+            let next = a.step + 1;
+            add_part(world, ctx, next);
+            set_icon(
+                world,
+                ctx.target,
+                if next == 2 { "ed209_leg" } else { "ed209_legs" },
+            );
+            true
+        }
+        (3, _) if is_under(tool, VEST) => {
+            add_part(world, ctx, 4);
+            set_icon(world, ctx.target, "ed209_shell");
+            true
+        }
+        (4, Some(ToolKind::Welder)) => {
+            if welder_ready(world, ctx) {
+                set_step(world, ctx.target, 5);
+                tell(
+                    world,
+                    ctx.client,
+                    Span::Notice,
+                    "Вы привариваете жилет к каркасу.",
+                );
+            }
+            true
+        }
+        (5, _) if is_under(tool, SEC_HELMET) => {
+            add_part(world, ctx, 6);
+            set_icon(world, ctx.target, "ed209_hat");
+            true
+        }
+        (6, _) if is_under(tool, PROX) => {
+            add_part(world, ctx, 7);
+            set_icon(world, ctx.target, "ed209_prox");
+            true
+        }
+        (7, _) if is_under(tool, CABLE) => {
+            if crate::tools::stack_amount(world, ctx.tool) < 1 {
+                tell(
+                    world,
+                    ctx.client,
+                    Span::Warning,
+                    "Нужен кусок кабеля, чтобы подключить ED-209!",
+                );
+                return true;
+            }
+            tell(
+                world,
+                ctx.client,
+                Span::Notice,
+                "Вы начинаете подключать проводку...",
+            );
+            crate::tools::do_after(
+                world,
+                crate::tools::Actor {
+                    client: ctx.client,
+                    mob: ctx.mob,
+                    item: Some(ctx.tool),
+                },
+                ctx.target,
+                ED209_STEP_DS,
+                0,
+                crate::construction::Job::Bot(super::BotUserJob::WireEd209),
+            );
+            true
+        }
+        (8, _) if is_under(tool, DISABLER) => {
+            add_part(world, ctx, 9);
+            set_icon(world, ctx.target, "ed209_taser");
+            true
+        }
+        (9, Some(ToolKind::Screwdriver)) => {
+            tell(
+                world,
+                ctx.client,
+                Span::Notice,
+                "Вы начинаете закреплять оружие на каркасе...",
+            );
+            crate::tools::do_after(
+                world,
+                crate::tools::Actor {
+                    client: ctx.client,
+                    mob: ctx.mob,
+                    item: Some(ctx.tool),
+                },
+                ctx.target,
+                ED209_STEP_DS,
+                0,
+                crate::construction::Job::Bot(super::BotUserJob::FinishEd209),
+            );
+            true
+        }
+        _ => false,
+    }
+}
+
+/// End of the ED-209's timed steps, rechecked: the assembly at the same step, the tool in hand.
+pub fn complete_ed209(
+    world: &mut World,
+    mob: Entity,
+    action: &crate::tools::DoAfter,
+    job: super::BotUserJob,
+) {
+    let target = action.target;
+    let Some(a) = world.get::<BotAssembly>(target).cloned() else {
+        return;
+    };
+    let Some(tool) = action.item.filter(|&i| {
+        world
+            .get::<Inventory>(mob)
+            .is_some_and(|inv| inv.active_item() == Some(i))
+    }) else {
+        return;
+    };
+    let ctx = Ctx {
+        client: action.client,
+        mob,
+        tool,
+        target,
+    };
+    match job {
+        super::BotUserJob::WireEd209 => {
+            if a.step != 7 || !crate::tools::use_stack(world, tool, 1) {
+                return;
+            }
+            set_step(world, target, 8);
+            tell(world, ctx.client, Span::Notice, "Вы подключаете проводку.");
+        }
+        super::BotUserJob::FinishEd209 => {
+            if a.step != 9 || tool_kind(world, tool) != Some(ToolKind::Screwdriver) {
+                return;
+            }
+            // The screwdriver stays: only the assembly goes.
+            let ctx = Ctx {
+                tool: target,
+                ..ctx
+            };
+            finish(world, ctx, "/mob/living/basic/bot/secbot/ed209", &a);
+            tell(world, ctx.client, Span::Notice, "Вы завершаете ED-209.");
+        }
+        super::BotUserJob::AttachKnife => {}
+    }
+}
+
+/// `/obj/item/bot_assembly/honkbot/item_interaction`.
+fn honkbot_step(world: &mut World, ctx: Ctx, a: &BotAssembly, tool: &str) -> bool {
+    match a.step {
+        1 if is_under(tool, PROX) => {
+            add_part(world, ctx, 2);
+            set_icon(world, ctx.target, "honkbot_proxy");
+            true
+        }
+        2 if is_under(tool, BIKEHORN) => {
+            let done = finish(world, ctx, "/mob/living/basic/bot/secbot/honkbot", a);
+            if let Some(&pos) = world.get::<TilePos>(ctx.mob) {
+                crate::sound::playsound(
+                    world,
+                    crate::sound::PlaySound::new(pos, "sound/machines/ping.ogg", 50.0, true),
+                );
+            }
+            done
         }
         _ => false,
     }
