@@ -18,7 +18,8 @@
 //!
 //! Ported traumas: mild — stuttering, dumbness, speech impediment, concussion, anosognosia
 //! (`healthy`), muscle weakness, nervous cough, possessiveness; severe — mute, paralysis,
-//! pacifism, kleptomania. Random gains pick among these only.
+//! pacifism, kleptomania. Random gains pick among all of tg's types ([`TG_POOL`]): an
+//! unported pick gives nothing, so each ported trauma comes as often as in tg.
 // shortcut: no hallucinations, muscle spasms, expressive aphasia (needs the common words list),
 // mind echo (needs hearing hooks), color blindness or cortical blindness (no client colour or
 // vision), aphasia (no languages), narcolepsy and hypnotic stupor (no sleep or trance),
@@ -179,22 +180,6 @@ pub struct Def {
 }
 
 impl Kind {
-    /// The randomly gainable types (`random_gain`), paralysis with a placeholder type.
-    pub const RANDOM: [Self; 12] = [
-        Self::Stuttering,
-        Self::Dumbness,
-        Self::SpeechImpediment,
-        Self::Concussion,
-        Self::Healthy,
-        Self::MuscleWeakness,
-        Self::NervousCough,
-        Self::Possessive,
-        Self::Mute,
-        Self::Paralysis(Paralysis::Full),
-        Self::Pacifism,
-        Self::Kleptomaniac,
-    ];
-
     pub fn def(self) -> Def {
         use Span::{Danger, Notice, Warning};
         let mild = |path, name, scan_desc, gain, lose| Def {
@@ -340,6 +325,200 @@ impl Kind {
     }
 }
 
+/// tg's randomly gainable trauma types (`subtypesof(category)` with `random_gain` and
+/// `can_gain`, the abstract roots out): type, the ported kind (a paralysis of a placeholder
+/// kind), category, `initial(resilience)`. Random gains pick among all of them, so each ported
+/// trauma comes as often as in tg.
+// shortcut: a pick of an unported type gives no trauma; add each type's kind as it is ported.
+pub const TG_POOL: [(&str, Option<Kind>, Category, Resilience); 37] = {
+    use Category::{Mild, Severe, Special};
+    use Resilience::{Basic, Surgery};
+    [
+        (
+            "/datum/brain_trauma/mild/color_blindness",
+            None,
+            Mild,
+            Basic,
+        ),
+        (
+            "/datum/brain_trauma/mild/concussion",
+            Some(Kind::Concussion),
+            Mild,
+            Basic,
+        ),
+        (
+            "/datum/brain_trauma/mild/dumbness",
+            Some(Kind::Dumbness),
+            Mild,
+            Basic,
+        ),
+        (
+            "/datum/brain_trauma/mild/expressive_aphasia",
+            None,
+            Mild,
+            Basic,
+        ),
+        ("/datum/brain_trauma/mild/hallucinations", None, Mild, Basic),
+        (
+            "/datum/brain_trauma/mild/healthy",
+            Some(Kind::Healthy),
+            Mild,
+            Basic,
+        ),
+        ("/datum/brain_trauma/mild/mind_echo", None, Mild, Basic),
+        ("/datum/brain_trauma/mild/muscle_spasms", None, Mild, Basic),
+        (
+            "/datum/brain_trauma/mild/muscle_weakness",
+            Some(Kind::MuscleWeakness),
+            Mild,
+            Basic,
+        ),
+        (
+            "/datum/brain_trauma/mild/nervous_cough",
+            Some(Kind::NervousCough),
+            Mild,
+            Basic,
+        ),
+        ("/datum/brain_trauma/mild/phobia", None, Mild, Basic),
+        (
+            "/datum/brain_trauma/mild/possessive",
+            Some(Kind::Possessive),
+            Mild,
+            Basic,
+        ),
+        (
+            "/datum/brain_trauma/mild/speech_impediment",
+            Some(Kind::SpeechImpediment),
+            Mild,
+            Basic,
+        ),
+        (
+            "/datum/brain_trauma/mild/stuttering",
+            Some(Kind::Stuttering),
+            Mild,
+            Basic,
+        ),
+        ("/datum/brain_trauma/severe/aphasia", None, Severe, Surgery),
+        (
+            "/datum/brain_trauma/severe/blindness",
+            None,
+            Severe,
+            Surgery,
+        ),
+        (
+            "/datum/brain_trauma/severe/discoordination",
+            None,
+            Severe,
+            Surgery,
+        ),
+        ("/datum/brain_trauma/severe/dyslexia", None, Severe, Surgery),
+        (
+            "/datum/brain_trauma/severe/hypnotic_stupor",
+            None,
+            Severe,
+            Surgery,
+        ),
+        (
+            "/datum/brain_trauma/severe/kleptomaniac",
+            Some(Kind::Kleptomaniac),
+            Severe,
+            Surgery,
+        ),
+        (
+            "/datum/brain_trauma/severe/monophobia",
+            None,
+            Severe,
+            Surgery,
+        ),
+        (
+            "/datum/brain_trauma/severe/mute",
+            Some(Kind::Mute),
+            Severe,
+            Surgery,
+        ),
+        (
+            "/datum/brain_trauma/severe/narcolepsy",
+            None,
+            Severe,
+            Surgery,
+        ),
+        (
+            "/datum/brain_trauma/severe/narcolepsy/permanent",
+            None,
+            Severe,
+            Surgery,
+        ),
+        (
+            "/datum/brain_trauma/severe/pacifism",
+            Some(Kind::Pacifism),
+            Severe,
+            Surgery,
+        ),
+        (
+            "/datum/brain_trauma/severe/paralysis",
+            Some(Kind::Paralysis(Paralysis::Full)),
+            Severe,
+            Surgery,
+        ),
+        (
+            "/datum/brain_trauma/severe/split_personality",
+            None,
+            Severe,
+            Surgery,
+        ),
+        (
+            "/datum/brain_trauma/special/bluespace_prophet",
+            None,
+            Special,
+            Basic,
+        ),
+        (
+            "/datum/brain_trauma/special/death_whispers",
+            None,
+            Special,
+            Basic,
+        ),
+        (
+            "/datum/brain_trauma/special/existential_crisis",
+            None,
+            Special,
+            Basic,
+        ),
+        ("/datum/brain_trauma/special/godwoken", None, Special, Basic),
+        (
+            "/datum/brain_trauma/special/imaginary_friend",
+            None,
+            Special,
+            Basic,
+        ),
+        (
+            "/datum/brain_trauma/special/primal_instincts",
+            None,
+            Special,
+            Surgery,
+        ),
+        (
+            "/datum/brain_trauma/special/psychotic_brawling",
+            None,
+            Special,
+            Basic,
+        ),
+        (
+            "/datum/brain_trauma/special/psychotic_brawling/bath_salts",
+            None,
+            Special,
+            Basic,
+        ),
+        (
+            "/datum/brain_trauma/special/quantum_alignment",
+            None,
+            Special,
+            Basic,
+        ),
+        ("/datum/brain_trauma/special/tenacity", None, Special, Basic),
+    ]
+};
+
 /// One trauma in a brain.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Trauma {
@@ -435,7 +614,8 @@ pub fn gain(world: &mut World, brain: Entity, kind: Kind, resilience: Option<Res
 }
 
 /// tg `gain_trauma_type(category, resilience, natural_gain)`: a random gainable type of the
-/// category (a paralysis of a random kind). The gained type, if any.
+/// category from [`TG_POOL`] (a paralysis of a random kind). The gained type, if any: none
+/// when the pick is not ported.
 pub fn gain_type(
     world: &mut World,
     brain: Entity,
@@ -445,14 +625,26 @@ pub fn gain_type(
     rng: &mut CombatRng,
 ) -> Option<Kind> {
     let have = traumas(world, brain);
-    let pool: Vec<Kind> = Kind::RANDOM
+    let pool: Vec<Option<Kind>> = TG_POOL
         .into_iter()
-        .filter(|k| k.def().category == category && can_gain(have, *k, resilience, natural))
+        .filter(|&(_, kind, cat, initial)| {
+            cat == category
+                && match kind {
+                    Some(kind) => can_gain(have, kind, resilience, natural),
+                    // `can_gain_trauma` of a type that cannot be present: the tier limit only.
+                    None => {
+                        let tier = resilience.unwrap_or(initial);
+                        !natural
+                            || have.iter().filter(|t| t.resilience == tier).count() < tier.limit()
+                    }
+                }
+        })
+        .map(|(_, kind, _, _)| kind)
         .collect();
     if pool.is_empty() {
         return None;
     }
-    let mut kind = pool[rng.range(0, pool.len() as u32 - 1) as usize];
+    let mut kind = pool[rng.range(0, pool.len() as u32 - 1) as usize]?;
     if let Kind::Paralysis(_) = kind {
         kind = Kind::Paralysis(Paralysis::ALL[rng.range(0, 8) as usize]);
     }
@@ -963,13 +1155,39 @@ mod tests {
     }
 
     #[test]
+    fn random_severe_gains_come_as_often_as_in_tg() {
+        // tg has 13 randomly gainable severe types; paralysis is one of them.
+        let severe = TG_POOL.iter().filter(|e| e.2 == Category::Severe).count();
+        assert_eq!(severe, 13);
+        let mut world = World::new();
+        let brain = world.spawn_empty().id();
+        let mut rng = CombatRng(11);
+        let (rolls, mut paralysis, mut none) = (13_000, 0, 0);
+        for _ in 0..rolls {
+            match gain_type(&mut world, brain, Category::Severe, None, true, &mut rng) {
+                Some(Kind::Paralysis(_)) => paralysis += 1,
+                None => none += 1,
+                Some(_) => {}
+            }
+            world.entity_mut(brain).remove::<Traumas>();
+        }
+        // 1/13 each (1000 expected); 9 of 13 unported give nothing.
+        assert!((850..1150).contains(&paralysis), "{paralysis}");
+        assert!((8_500..9_500).contains(&none), "{none}");
+    }
+
+    #[test]
     fn categories_and_scan_words() {
-        assert!(
-            Kind::RANDOM
-                .iter()
-                .filter(|k| k.def().category == Category::Severe)
-                .all(|k| k.def().resilience == Resilience::Surgery)
-        );
+        // The ported kinds sit in the pool under their own type, category and resilience.
+        for (path, kind, category, resilience) in TG_POOL {
+            if let Some(kind) = kind {
+                let def = kind.def();
+                assert_eq!(
+                    (def.path, def.category, def.resilience),
+                    (path, category, resilience)
+                );
+            }
+        }
         assert_eq!(Resilience::Lobotomy.scan_word(), "Deep-rooted");
         assert!(Resilience::Basic < Resilience::Surgery);
         assert_eq!(
