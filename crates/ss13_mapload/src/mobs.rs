@@ -116,7 +116,42 @@ pub struct MobDef {
     /// flies (`movement_type |= FLYING`) and does not fall through open space.
     #[serde(default)]
     pub flying: bool,
+    /// `/mob/living/basic/bot` vars, for bots only.
+    #[serde(default)]
+    pub bot: Option<BotDef>,
 }
+
+/// The vars of a `/mob/living/basic/bot` type (`_bots.dm` and the bot subtypes).
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct BotDef {
+    /// `bot_mode_flags` (`BOT_MODE_*`).
+    pub mode_flags: u32,
+    /// `bot_access_flags` (`BOT_COVER_*`).
+    pub access_flags: u32,
+    pub req_one_access: Vec<String>,
+    /// `ACCESS_ROBOTICS` plus the `additional_access` trim's `access` and wildcards
+    /// (`provide_additional_access`).
+    pub access: Vec<String>,
+    /// `radio_channel`, as the channel's name.
+    pub radio_channel: String,
+    pub icon_state: String,
+    pub base_icon_state: String,
+    /// Secbots: `security_mode_flags`, `commissioned`.
+    pub security_mode_flags: u32,
+    pub commissioned: bool,
+    /// Medbots: `medical_mode_flags`, `heal_amount`, `heal_threshold`, `damage_type_healer`,
+    /// `skin`.
+    pub medical_mode_flags: u32,
+    pub heal_amount: f32,
+    pub heal_threshold: f32,
+    pub damage_type_healer: String,
+    pub skin: String,
+    /// Cleanbots: `janitor_mode_flags`.
+    pub janitor_mode_flags: u32,
+}
+
+/// `/mob/living/basic/bot`.
+pub const BOT_ROOT: &str = "/mob/living/basic/bot";
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct MobsData {
@@ -367,6 +402,54 @@ fn mob_def(
             .is_some_and(|c| c != 0.0),
         flying: flies(types, path),
         cable_zap_prob: num("cable_zap_prob", 0.0),
+        bot: is_under(path, BOT_ROOT).then(|| bot_def(types, path)),
+    }
+}
+
+fn bot_def(types: &DmTypes, path: &str) -> BotDef {
+    let v = |var: &str| types.resolved(path, var);
+    let int = |var: &str| v(var).and_then(Value::as_f64).unwrap_or(0.0) as i64 as u32;
+    let num = |var: &str| v(var).and_then(Value::as_f64).unwrap_or(0.0) as f32;
+    let strings = |value: Option<&Value>| -> Vec<String> {
+        list(value)
+            .into_iter()
+            .filter_map(|(k, _)| k.as_str().map(str::to_owned))
+            .collect()
+    };
+    let flag_groups = crate::jobs::flag_groups(types);
+    let mut access = vec!["robotics".to_owned()];
+    if let Some(trim) = dm_path(v("additional_access")) {
+        let (trim_access, _) = crate::jobs::trim_access(types, &trim, &flag_groups);
+        for a in strings(types.resolved(&trim, "access"))
+            .into_iter()
+            .chain(trim_access)
+            .chain(crate::jobs::trim_wildcard_access(
+                types,
+                &trim,
+                &flag_groups,
+            ))
+        {
+            if !access.contains(&a) {
+                access.push(a);
+            }
+        }
+    }
+    BotDef {
+        mode_flags: int("bot_mode_flags"),
+        access_flags: int("bot_access_flags"),
+        req_one_access: strings(v("req_one_access")),
+        access,
+        radio_channel: text(v("radio_channel")),
+        icon_state: text(v("icon_state")),
+        base_icon_state: text(v("base_icon_state")),
+        security_mode_flags: int("security_mode_flags"),
+        commissioned: num("commissioned") != 0.0,
+        medical_mode_flags: int("medical_mode_flags"),
+        heal_amount: num("heal_amount"),
+        heal_threshold: num("heal_threshold"),
+        damage_type_healer: text(v("damage_type_healer")),
+        skin: text(v("skin")),
+        janitor_mode_flags: int("janitor_mode_flags"),
     }
 }
 

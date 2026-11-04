@@ -7,7 +7,7 @@
 //!   from `crate::click`). It opens the machine's window: an airlock's `AiAirlock`
 //!   ([`super::airlock`]), an APC's `Apc` (`crate::power::apc_ui`), air alarms and atmos
 //!   machines (`crate::atmos_machinery::windows`), the solar control, the mech bay console, the
-//!   communications console (`crate::comms_server`).
+//!   communications console (`crate::comms_server`), a bot's `SimpleBot` (`crate::bots`).
 //!   The cell charger ignores silicons (`attack_ai` returns), as in tg.
 //! - Windows of a silicon actor ([`RemoteActor`]) are not judged by distance: the AI's are
 //!   interactive while its core is conscious with control enabled and the cameras see the
@@ -102,6 +102,11 @@ pub fn attack_ai(world: &mut World, client: Entity, user: Entity, target: Entity
     }
     if e.contains::<crate::comms_server::CommsConsole>() {
         crate::comms_server::open(world, client, user, target);
+        return true;
+    }
+    // `/mob/living/basic/bot/attack_ai`.
+    if e.contains::<crate::bots::Bot>() {
+        crate::bots::ui::open(world, client, user, target);
         return true;
     }
     crate::atmos_machinery::windows::interact(

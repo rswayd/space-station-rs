@@ -477,6 +477,15 @@ fn apply(world: &mut World, client: Entity, action: Action) {
             // The item in the other hand is clicked, not the slot (tg draws held items over
             // their slots): a storage opens or takes the active hand's item.
             match inventory.hands[hand] {
+                // A bot part on a bot assembly (or what starts one) in the other hand: before
+                // storage, as tg `medkit/tool_act` takes a robot arm before its storage.
+                Some(item)
+                    if hand != inventory.active
+                        && inventory.active_item().is_some_and(|held| {
+                            crate::bots::construction::item_interaction(
+                                world, client, mob, held, item,
+                            )
+                        }) => {}
                 Some(item)
                     if hand != inventory.active
                         && world.get::<crate::storage::Storage>(item).is_some() =>
@@ -730,6 +739,11 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 // A pen draws a heretic's rune, the codex drains, the grasp erases a rune.
                 Some(held)
                     if crate::antag::heretic::server::item_interaction(
+                        world, client, mob, held, target,
+                    ) => {}
+                // Bot parts on bot assemblies and what starts them (`crate::bots`).
+                Some(held)
+                    if crate::bots::construction::item_interaction(
                         world, client, mob, held, target,
                     ) => {}
                 // Frames, and screwdrivers and crowbars on machines that come apart

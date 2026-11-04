@@ -821,7 +821,7 @@ type DoorItem<'a> = (
 /// tg `Bumped`: a mob walking into a closed door tries to open it.
 /// Windoors are border objects (`ss13_world::Border`), so movement bumps them only across their
 /// edge: from the front, or leaving their own tile through it. A bumped filler bumps its door.
-/// A mech opens doors with its pilot's access (`/obj/vehicle/sealed/Bump`).
+/// A mech opens doors with its pilot's access (`/obj/vehicle/sealed/Bump`), a bot with its own.
 // shortcut: "mob" = has `Mover`; tg also lets thrown items with access bump doors.
 #[allow(clippy::too_many_arguments)]
 fn door_bumps(
@@ -829,7 +829,15 @@ fn door_bumps(
     fillers: Query<&DoorFiller>,
     time: Res<Time>,
     index: Res<SpatialIndex>,
-    movers: Query<(&TilePos, Option<&Inventory>, Option<&crate::mecha::Mech>), With<Mover>>,
+    movers: Query<
+        (
+            &TilePos,
+            Option<&Inventory>,
+            Option<&crate::mecha::Mech>,
+            Option<&crate::bots::Bot>,
+        ),
+        With<Mover>,
+    >,
     pilots: Query<&Inventory>,
     cards: IdCards,
     // Electrified airlocks shock first (`crate::wires`).
@@ -838,7 +846,7 @@ fn door_bumps(
 ) {
     let now = time.elapsed_secs_f64();
     for bump in bumps.read() {
-        let Ok((&mover_pos, inventory, mech)) = movers.get(bump.entity) else {
+        let Ok((&mover_pos, inventory, mech, bot)) = movers.get(bump.entity) else {
             continue;
         };
         let inventory = match mech {
@@ -850,7 +858,10 @@ fn door_bumps(
         else {
             continue;
         };
-        let access = inventory.and_then(|i| i.access(&cards));
+        // A bot opens with its access card (`/mob/living/basic/bot` `access_card`).
+        let access = inventory
+            .and_then(|i| i.access(&cards))
+            .or(bot.map(|b| b.access.as_slice()));
         if activate(
             &mut door,
             &mut appearance,

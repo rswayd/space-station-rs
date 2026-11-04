@@ -263,6 +263,8 @@ pub enum Behavior {
     ClearArrivedMigration,
     ClearKey(Key),
     SetBool(Key, bool),
+    /// A bot leaf (`crate::bots::ai`).
+    Bot(crate::bots::ai::BotLeaf),
 }
 
 impl Behavior {
@@ -271,6 +273,7 @@ impl Behavior {
         match self {
             Self::RandomSpeech(_) => 1.0,
             Self::PlayWithMouse { .. } => 10.0,
+            Self::Bot(leaf) => leaf.cooldown(),
             _ => 0.0,
         }
     }
@@ -462,10 +465,15 @@ impl Behavior {
                 ctx.bb.set(key, Value::Bool(value));
                 SUCCEED
             }
+            Self::Bot(ref mut leaf) => leaf.perform(ctx),
         }
     }
 
     pub fn finish(&mut self, ctx: &mut AiCtx, succeeded: bool) {
+        if let Self::Bot(leaf) = self {
+            leaf.finish(ctx, succeeded);
+            return;
+        }
         match *self {
             Self::MoveToTarget { .. } => {
                 ctx.movement.failed = false;

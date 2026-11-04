@@ -48,7 +48,7 @@
 Способы перемещения: «тупой» шаг к цели, обход препятствий, поиск пути JPS (боты, мулботы), полная остановка; счётчик неудач пути.
 
 - **Код:** [`/datum/ai_movement`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/ai/movement/_ai_movement.dm#L2), [`/datum/ai_movement/dumb`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/ai/movement/ai_movement_dumb.dm#L2), [`/datum/ai_movement/basic_avoidance`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/ai/movement/ai_movement_basic_avoidance.dm#L2), [`/datum/ai_movement/jps`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/ai/movement/ai_movement_jps.dm#L4)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/mobs/ai/movement.rs`: `basic_avoidance` (шаг к цели с обходом на 45°), объезд через ограниченный A* (`// shortcut:` вместо JPS, двери считаются стенами), провал после 8 заблокированных шагов; скорость моба `speed`
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/mobs/ai/movement.rs`: `basic_avoidance` (шаг к цели с обходом на 45°), объезд через ограниченный A* (`// shortcut:` вместо JPS; для обычных мобов двери — стены, боты прокладывают путь через шлюзы, открываемые их картой доступа, длиной до `AI_BOT_PATH_LENGTH`), провал после 8 заблокированных шагов; скорость моба `speed`
 
 ### ИИ мартышек
 Мартышки (и Пун-Пун бармена) ищут оружие, мстят обидчикам, дурачатся, разносят еду; применяется и к людям, обращённым в мартышек.

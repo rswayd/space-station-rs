@@ -49,6 +49,8 @@ pub enum Cond {
     CarpShouldFlee(Key),
     /// `no_humans_watching`: no player's mob within view.
     NoHumansWatching,
+    /// The bot decorators (`crate::bots::ai`).
+    Bot(crate::bots::ai::BotCond),
 }
 
 impl Cond {
@@ -59,6 +61,7 @@ impl Cond {
             Self::KeyOffCooldown(key) => ctx.bb.time(key).is_none_or(|t| t <= ctx.now),
             Self::CarpShouldFlee(key) => ctx.truthy(key) && !ctx.truthy(Key::StopFleeing),
             Self::NoHumansWatching => !super::behaviors::player_in_view(ctx),
+            Self::Bot(ref cond) => cond.check(ctx),
         }
     }
 }
