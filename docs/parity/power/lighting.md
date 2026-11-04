@@ -12,7 +12,7 @@
 Без питания лампа с аварийной ячейкой светит красным в четверть дальности, ячейка тратится (~10 минут) и подзаряжается при питании; «major emergency» от пожарной тревоги.
 
 - **Код:** [`proc/use_emergency_power()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light.dm#L526), [`proc/has_emergency_power()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light.dm#L516), [`process()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light.dm#L329), [`proc/set_major_emergency_light()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light.dm#L648)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/power/model.rs` (`light_mode`, `EMERGENCY_CELL_CHARGE`), `crates/ss13_game/src/power/mod.rs`: аварийный режим и подзарядка; нет режима пожарной тревоги
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/power/model.rs` (`light_mode`, `EMERGENCY_CELL_CHARGE`), `crates/ss13_game/src/power/mod.rs` (`set_area_fire`): аварийный режим и подзарядка, красный свет `fire_*` при пожарной тревоге зоны; нет «major emergency» (уровень угрозы)
 
 ### Поломка, перегорание и мерцание ламп
 Лампы бьются ударами и взрывами (искры, осколки), перегорают при включении, случайная поломка на старте раунда, мерцание (ЭМИ, события, призраки), удар током при вынимании голой рукой горячей лампы.
@@ -43,7 +43,7 @@
 
 - **Код:** [`/obj/machinery/light_switch`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/lightswitch.dm#L2), [`interact()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/lightswitch.dm#L79), [`proc/set_lights()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/lightswitch.dm#L93)
 - **BandaStation:** [`modular_bandastation/aesthetics/lightswitch/code/lightswitch.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/aesthetics/lightswitch/code/lightswitch.dm#L4) — звук и иконка
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/power/model.rs` (`AreaPower::lightswitch`), `crates/ss13_mapload/src/power.rs`: состояние выключателя зоны из карты (`turn_off_lights_with_lightswitch`); кликом переключить нельзя
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/wallmount/mod.rs` (`LightSwitch`, `set_lights`): клик с питанием переключает `lightswitch` зоны (лампы гаснут/зажигаются через `AreaPowerChanged`), все выключатели зоны меняют вид (`-on/-off/-nopower`, эмиссив), выключенный светится; звуки tg и BandaStation. Нет переменной `area` (управление чужой зоной), разборки отвёрткой, ЭМИ
 
 ### Лампозаменитель (light replacer)
 Инструмент уборщика: меняет лампы на расстоянии, перерабатывает осколки стекла в новые лампы.

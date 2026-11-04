@@ -64,7 +64,24 @@ impl Timings {
                 close_opaque: 0.9,
                 close_done: 0.9,
             },
-            DoorKind::Basic | DoorKind::Firedoor | DoorKind::Poddoor => Self {
+            // `animation_segment_delay` of `poddoor` and `firedoor`.
+            DoorKind::Poddoor => Self {
+                open_transparent: 0.0,
+                open_passable: 0.5,
+                open_done: 1.1,
+                close_dense: 0.2,
+                close_opaque: 1.1,
+                close_done: 1.1,
+            },
+            DoorKind::Firedoor => Self {
+                open_transparent: 0.0,
+                open_passable: 1.0,
+                open_done: 1.2,
+                close_dense: 0.2,
+                close_opaque: 1.2,
+                close_done: 1.2,
+            },
+            DoorKind::Basic => Self {
                 open_transparent: 0.0,
                 open_passable: 0.5,
                 open_done: 0.6,
@@ -602,9 +619,9 @@ fn resolve_sprites(
         DoorKind::Airlock => get(icon, &format!("{base}{f}")),
         DoorKind::Windoor if f == "closed" => get(icon, base),
         DoorKind::Windoor => get(icon, &format!("{base}{f}")),
-        DoorKind::Basic => get(icon, &format!("{base}_{f}")),
-        // Never animated by hand; keep whatever the map drew.
-        DoorKind::Firedoor | DoorKind::Poddoor => None,
+        DoorKind::Basic | DoorKind::Firedoor => get(icon, &format!("{base}_{f}")),
+        // `poddoor/update_icon_state`: the bare frame names.
+        DoorKind::Poddoor => get(icon, f),
     });
     if kind != DoorKind::Airlock {
         let deny = match kind {

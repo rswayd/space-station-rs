@@ -91,6 +91,11 @@ pub struct DmDoor {
     pub bolt_down: String,
     /// Blast doors and shutters: `animation_sound`.
     pub animation_sound: String,
+    /// Poddoors (and brig windoors): `id`, the channel buttons open them by; empty is `null`.
+    /// A number is kept as its text (DM `"[id]"`).
+    pub id: String,
+    /// Airlocks: `id_tag`, the channel airlock buttons (`assembly/control/airlock`) match.
+    pub id_tag: String,
 }
 
 /// An airlock mapping helper's payload.
@@ -134,6 +139,8 @@ pub enum DoorField {
     BoltUp(String),
     BoltDown(String),
     AnimationSound(String),
+    Id(String),
+    IdTag(String),
 }
 
 fn under(path: &str, root: &str) -> bool {
@@ -276,8 +283,25 @@ fn field(
         "boltUp" => text(value).map(DoorField::BoltUp),
         "boltDown" => text(value).map(DoorField::BoltDown),
         "animation_sound" => text(value).map(DoorField::AnimationSound),
+        "id" => link_id(value).map(DoorField::Id),
+        "id_tag" => link_id(value).map(DoorField::IdTag),
         _ => return None,
     })
+}
+
+/// A DM `id`/`id_tag` value as text: strings as they are, numbers as DM prints them
+/// (`"[id]"`), `null` empty.
+pub fn link_id(value: Val) -> Result<String, Skip> {
+    match value {
+        Val::Str(s) => Ok(s.to_owned()),
+        Val::Num(n) => Ok(if n.fract() == 0.0 && n.abs() < 1e15 {
+            format!("{}", n as i64)
+        } else {
+            format!("{n}")
+        }),
+        Val::Null => Ok(String::new()),
+        _ => Err(Skip::Unsupported),
+    }
 }
 
 /// `"dm_door": (...)` for a prototype patch; `None` without fields. Later fields win.
@@ -314,6 +338,8 @@ pub fn patch_entry(fields: &[DoorField]) -> Option<String> {
             DoorField::BoltUp(s) => ("bolt_up", ron_str(s)),
             DoorField::BoltDown(s) => ("bolt_down", ron_str(s)),
             DoorField::AnimationSound(s) => ("animation_sound", ron_str(s)),
+            DoorField::Id(s) => ("id", ron_str(s)),
+            DoorField::IdTag(s) => ("id_tag", ron_str(s)),
         };
         if !out.is_empty() {
             out.push_str(", ");
@@ -378,6 +404,14 @@ mod tests {
             r#""dm_door": (kind: Airlock, locked: true, req_access: ["a\"b"])"#
         );
         assert_eq!(patch_entry(&[]), None);
+        assert_eq!(
+            field_dmm("id", &DmValue::Number(3.0)),
+            Some(Ok(DoorField::Id("3".into())))
+        );
+        assert_eq!(
+            field_dmm("id_tag", &DmValue::Str("lock".into())),
+            Some(Ok(DoorField::IdTag("lock".into())))
+        );
         assert!(is_door("/obj/machinery/door/airlock/glass"));
         assert!(!is_door("/obj/machinery/door_buttons"));
     }

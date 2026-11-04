@@ -107,6 +107,10 @@ pub struct LightFixture {
     pub watts: f64,
     /// `base_state` and `"[base_state]_emergency"` icon states.
     pub states: [Option<IconStateId>; 2],
+    /// The light while on in an area with a fire alarm (`fire_brightness`, `fire_power`,
+    /// `fire_colour`), and whether the area has one now (tg `local_area.fire`).
+    pub fire_light: Option<LightSource>,
+    pub fire: bool,
 }
 
 impl LightFixture {
@@ -127,6 +131,7 @@ impl LightFixture {
 
     fn light(&self) -> Option<LightSource> {
         match self.mode {
+            LightMode::On if self.fire => self.fire_light,
             LightMode::On => self.on_light,
             LightMode::Emergency => self.emergency_light(),
             LightMode::Off => None,
@@ -540,6 +545,13 @@ pub(crate) fn init_power(world: &mut World) {
             )
             .ceil(),
             states: [state(""), state("_emergency")],
+            fire_light: on_light.map(|on| LightSource {
+                range: light.fire_brightness,
+                power: light.fire_power,
+                color: light.fire_colour.map_or([255; 3], |[r, g, b, _]| [r, g, b]),
+                ..on
+            }),
+            fire: false,
         };
         world.entity_mut(e).insert(fixture);
         world
@@ -942,12 +954,46 @@ fn refresh_light(
     {
         optics.light = source;
     }
-    let state = light.states[usize::from(light.mode == LightMode::Emergency)];
+    // tg `update_icon_state`: `_emergency` in low power mode or while the area is on fire.
+    let emergency = match light.mode {
+        LightMode::Emergency => true,
+        LightMode::On => light.fire,
+        LightMode::Off => false,
+    };
+    let state = light.states[usize::from(emergency)];
     if let (Some(mut appearance), Some(state)) = (appearance, state)
         && appearance.icon_state != state
     {
         appearance.icon_state = state;
     }
+}
+
+/// tg `/area/proc/set_fire_effect(new_fire)`: the area's `fire` and its lights' `handle_fire`
+/// (red while on). False when it did not change.
+pub fn set_area_fire(world: &mut World, area: Entity, fire: bool) -> bool {
+    let Some(mut power) = world.get_mut::<AreaPower>(area) else {
+        return false;
+    };
+    if power.fire == fire {
+        return false;
+    }
+    power.fire = fire;
+    let lights = world
+        .get::<AreaMembers>(area)
+        .map(|m| m.lights.clone())
+        .unwrap_or_default();
+    let mut query = world.query::<(
+        &mut LightFixture,
+        Option<&mut Optics>,
+        Option<&mut Appearance>,
+    )>();
+    for light in lights {
+        if let Ok((mut fixture, optics, appearance)) = query.get_mut(world, light) {
+            fixture.fire = fire;
+            refresh_light(&fixture, optics, appearance);
+        }
+    }
+    true
 }
 
 /// tg `/obj/machinery/light/proc/break_light_tube()`: the bulb breaks (`LIGHT_BROKEN`,

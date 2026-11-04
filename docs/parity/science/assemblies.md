@@ -74,4 +74,4 @@
 Сборки внутри настенных кнопок: открыть шлюзы/бласт-двери/шторы по id, управлять болтами/аварийным доступом, запустить масс-драйвер.
 
 - **Код:** [`/obj/item/assembly/control`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/assembly/doorcontrol.dm#L1), [`control/blast_door`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/assembly/doorcontrol.dm#L60), [`control/airlock`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/assembly/doorcontrol.dm#L130), [`/obj/machinery/button`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/buttons.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/wallmount/controls.rs` (`Device`): контроллеры гермодверей, шлюзов, масс-драйвера (двери), вспышек живут внутри кнопок с карты; как отдельные предметы-сборки (вставка в кнопку, мультитул, копирование id) нет; зажигатель, шторы, крематорий не работают

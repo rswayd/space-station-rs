@@ -287,6 +287,7 @@ impl<'a> ConvertContext<'a> {
         fields.extend(crate::food::type_fields(self.types, path));
         fields.extend(crate::disposal::type_fields(self.types, path));
         fields.extend(crate::mobs::type_fields(self.types, path));
+        fields.extend(crate::wallmount::type_fields(self.types, path));
         // Last: GAGS replaces the icon vars read above.
         fields.extend(crate::gags::type_fields(self.types, path));
         fields

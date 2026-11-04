@@ -104,6 +104,9 @@ pub struct AreaPower {
     /// tg `energy_usage[AREA_USAGE_APC_CHARGE]`.
     pub apc_charge: f64,
     pub apc: Option<Entity>,
+    /// tg `area.fire`: a fire alarm is active (firelocks activated), its lights burn red.
+    /// Changed through [`super::set_area_fire`].
+    pub fire: bool,
 }
 
 impl AreaPower {

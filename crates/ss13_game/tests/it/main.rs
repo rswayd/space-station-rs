@@ -52,4 +52,5 @@ mod tables;
 mod traitor;
 mod vampire;
 mod vending;
+mod wallmount;
 mod wires;

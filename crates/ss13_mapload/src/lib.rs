@@ -52,6 +52,7 @@ pub mod turf_damage;
 pub mod undertile;
 pub mod value;
 pub mod vending;
+pub mod wallmount;
 
 use std::path::PathBuf;
 
@@ -91,6 +92,7 @@ pub use smooth::DmSmooth;
 pub use spawner::{DmSpawner, LootEntry};
 pub use undertile::{DmTurf, DmUndertile, HiddenUnderTile};
 pub use vending::{DmVending, VendCategory, VendProduct};
+pub use wallmount::{DmWallMount, WALLMOUNT_RUNTIME_TYPES};
 
 /// BYOND `name` and `desc`. Text macros (`\improper`, ...) are kept verbatim for the text layer.
 #[derive(Component, Reflect, Default, Clone, Debug, PartialEq)]
@@ -294,7 +296,8 @@ impl Plugin for DmProtoPlugin {
             .register_proto_component::<DmDefib>(medical::DEFIB_COMPONENT)
             .register_proto_component::<DmReagents>(reagents::CONTAINER_COMPONENT)
             .register_proto_component::<DmFood>(food::FOOD_COMPONENT)
-            .register_proto_component::<DmMob>("dm_mob");
+            .register_proto_component::<DmMob>("dm_mob")
+            .register_proto_component::<DmWallMount>("dm_wallmount");
     }
 }
 
