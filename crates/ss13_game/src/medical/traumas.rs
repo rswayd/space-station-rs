@@ -655,6 +655,24 @@ fn drop_from_hand(world: &mut World, mob: Entity, hand: usize) -> bool {
     true
 }
 
+/// Possessiveness lets go of everything it holds on to: the brain left the body or the body
+/// died (tg's `relax` timers would still fire; here `on_life` stops).
+pub fn let_go(world: &mut World, brain: Entity) {
+    if !traumas(world, brain)
+        .iter()
+        .any(|t| !t.possessed.is_empty())
+    {
+        return;
+    }
+    let mut all = world.get::<Traumas>(brain).cloned().unwrap_or_default();
+    for trauma in &mut all.0 {
+        for (item, _) in std::mem::take(&mut trauma.possessed) {
+            release(world, item);
+        }
+    }
+    world.entity_mut(brain).insert(all);
+}
+
 /// Possessiveness lets go of `item` (`clear_trait`).
 fn release(world: &mut World, item: Entity) {
     if let Ok(mut entity) = world.get_entity_mut(item) {
@@ -1124,6 +1142,16 @@ mod world_tests {
             }
         }
         assert!(world.get::<NoDrop>(item).is_some(), "5% a second");
+        // Taking the brain out lets go (no `on_life` holds it any more).
+        remove(&mut world, b, true);
+        assert!(world.get::<NoDrop>(item).is_none());
+        insert(&mut world, b, mob);
+        for _ in 0..200 {
+            life(&mut world, mob, 2.0);
+            if world.get::<NoDrop>(item).is_some() {
+                break;
+            }
+        }
         cure_all(&mut world, b, Resilience::Basic);
         assert!(world.get::<NoDrop>(item).is_none(), "the cure lets go");
     }

@@ -615,6 +615,9 @@ pub fn remove(world: &mut World, organ: Entity, special: bool) {
     let Some(state) = world.get::<Organ>(organ).cloned() else {
         return;
     };
+    if state.slot == Slot::Brain {
+        super::traumas::let_go(world, organ);
+    }
     world.entity_mut(organ).remove::<OrganOf>();
     match state.slot {
         Slot::Heart if !special => {
@@ -729,6 +732,9 @@ pub fn life(world: &mut World, mob: Entity, secs: f32, dead: bool, bodytemperatu
         .map(|o| o.iter().collect())
         .unwrap_or_default();
     if dead {
+        if let Some(brain) = organ(world, mob, Slot::Brain) {
+            super::traumas::let_go(world, brain);
+        }
         let preserved = PRESERVATIVES
             .iter()
             .any(|p| crate::chem::blood_amount(world, mob, p) >= 1.0);
