@@ -8,6 +8,8 @@ use bevy::diagnostic::{
 };
 use bevy::prelude::*;
 use bevy_egui::{EguiContexts, egui};
+use ss13_game::fullscreen_client::FullscreenHud;
+use ss13_game::hud::{ClientColour, FullscreenHudData, FullscreenScreen, ScreenCategory};
 use ss13_game::prediction::Prediction;
 use ss13_net::client::{LightBlocks, LocalControl, NetClientState, NetEntity, NetEntityMap};
 use ss13_net::debug::client::SendDebugRequest;
@@ -56,6 +58,7 @@ fn default_pos(panel: Panel) -> [f32; 2] {
         Panel::Tile => [740.0, 420.0],
         Panel::Prediction => [740.0, 760.0],
         Panel::Log => [8.0, 600.0],
+        Panel::ScreenFx => [740.0, 420.0],
     }
 }
 
@@ -864,4 +867,92 @@ pub(super) fn server(
 /// Not `mouse_opacity = MOUSE_OPACITY_TRANSPARENT`: clicks can stop at it.
 fn clickable(a: Option<&Appearance>) -> bool {
     a.is_none_or(|a| a.mouse_opacity != ss13_shared::MouseOpacity::Transparent)
+}
+
+/// Fullscreen effect previews: each button draws a sample of what the server would send
+/// (`FullscreenHud::preview`), on this client only, until "Off".
+pub(super) fn screen_fx(
+    mut contexts: EguiContexts,
+    mut ui_state: ResMut<DebugUi>,
+    hud: Option<ResMut<FullscreenHud>>,
+) -> Result {
+    window(
+        &mut contexts,
+        &mut ui_state,
+        Panel::ScreenFx,
+        [260.0, 320.0],
+        |ui| {
+            let Some(mut hud) = hud else {
+                ui.label("no fullscreen HUD");
+                return;
+            };
+            ui.label(if hud.preview.is_some() {
+                "preview on (server data hidden)"
+            } else {
+                "showing server data"
+            });
+            if ui.button("Off").clicked() {
+                hud.preview = None;
+            }
+            ui.separator();
+            for (name, data) in screen_fx_presets() {
+                if ui.button(name).clicked() {
+                    hud.preview = Some(data);
+                }
+            }
+        },
+    )
+}
+
+/// The previews: one per overlay family the server can send, at telling severities.
+fn screen_fx_presets() -> Vec<(&'static str, FullscreenHudData)> {
+    use ScreenCategory as C;
+    let screens = |list: &[(C, Option<u8>)]| FullscreenHudData {
+        screens: list
+            .iter()
+            .map(|&(c, s)| FullscreenScreen::new(c, s))
+            .collect(),
+        ..default()
+    };
+    let mut blind = screens(&[]);
+    let mut flicker = FullscreenScreen::new(C::Blind, None);
+    flicker.flicker = true;
+    blind.screens.push(flicker);
+    blind.colours = vec![ClientColour::Blindness];
+    vec![
+        ("Tint 1 (sunglasses)", screens(&[(C::Tint, Some(1))])),
+        ("Tint 2 (welding mask)", screens(&[(C::Tint, Some(2))])),
+        ("Nearsighted 2", screens(&[(C::Nearsighted, Some(2))])),
+        ("Flash", screens(&[(C::Flash, None)])),
+        ("Brute 3", screens(&[(C::Brute, Some(3))])),
+        ("Brute 6", screens(&[(C::Brute, Some(6))])),
+        ("Oxy 5", screens(&[(C::Oxy, Some(5))])),
+        (
+            "Crit 7",
+            screens(&[(C::CritVision, Some(7)), (C::Crit, Some(7))]),
+        ),
+        ("Blind (temporary)", blind),
+        ("Blind (static)", screens(&[(C::Blind, None)])),
+        (
+            "Monochrome",
+            FullscreenHudData {
+                colours: vec![ClientColour::Monochrome],
+                ..default()
+            },
+        ),
+        (
+            "Blur 3",
+            FullscreenHudData {
+                blur: 3.0,
+                ..default()
+            },
+        ),
+        (
+            "Blur 8",
+            FullscreenHudData {
+                blur: 8.0,
+                ..default()
+            },
+        ),
+    ]
 }

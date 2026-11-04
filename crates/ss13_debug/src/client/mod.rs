@@ -66,10 +66,11 @@ pub enum Panel {
     Ui,
     Log,
     Server,
+    ScreenFx,
 }
 
 impl Panel {
-    pub const ALL: [Panel; 8] = [
+    pub const ALL: [Panel; 9] = [
         Panel::Perf,
         Panel::Network,
         Panel::Entities,
@@ -78,6 +79,7 @@ impl Panel {
         Panel::Ui,
         Panel::Log,
         Panel::Server,
+        Panel::ScreenFx,
     ];
 
     pub fn title(self) -> &'static str {
@@ -90,6 +92,7 @@ impl Panel {
             Panel::Ui => "UI",
             Panel::Log => "Log",
             Panel::Server => "Server",
+            Panel::ScreenFx => "Screen FX",
         }
     }
 
@@ -104,6 +107,7 @@ impl Panel {
             Panel::Ui => "ui",
             Panel::Log => "log",
             Panel::Server => "server",
+            Panel::ScreenFx => "fx",
         }
     }
 }
@@ -289,6 +293,7 @@ impl Plugin for DebugUiPlugin {
                     panels::ui,
                     log::panel,
                     panels::server,
+                    panels::screen_fx,
                 )
                     .chain()
                     .run_if(|ui: Res<DebugUi>| ui.open),

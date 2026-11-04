@@ -55,6 +55,15 @@ impl Plugin for FullscreenPlugin {
 pub struct FullscreenHud {
     pub window: Option<u32>,
     pub data: FullscreenHudData,
+    /// Drawn instead of [`Self::data`] while set: the debug overlay's effect preview, client only.
+    pub preview: Option<FullscreenHudData>,
+}
+
+impl FullscreenHud {
+    /// What is drawn: the preview while one is set, else the server's data.
+    pub fn shown(&self) -> &FullscreenHudData {
+        self.preview.as_ref().unwrap_or(&self.data)
+    }
 }
 
 #[derive(Component)]
@@ -288,7 +297,7 @@ fn draw_screens(
         .iter()
         .map(|(e, n, ..)| (e, n.screen, n.fading_since.is_some()))
         .collect();
-    let (update, spawn, fade) = diff_screens(&drawn, &hud.data.screens);
+    let (update, spawn, fade) = diff_screens(&drawn, &hud.shown().screens);
     for (e, screen) in update {
         if let Ok((_, mut node, ..)) = nodes.get_mut(e) {
             node.screen = screen;
@@ -410,7 +419,7 @@ fn apply_filter(
     mut commands: Commands,
 ) {
     let now = time.elapsed_secs();
-    let target = colour_matrix(&hud.data.colours);
+    let target = colour_matrix(&hud.shown().colours);
     if target != fade.to {
         *fade = FilterFade {
             from: fade.at(now),
@@ -422,7 +431,7 @@ fn apply_filter(
     for (entity, world, camera, current) in &cameras {
         let scale = camera.target_scaling_factor().unwrap_or(1.0);
         // BYOND's blur size is in icon pixels; the camera draws `zoom` screen pixels each.
-        let blur = hud.data.blur * world.zoom as f32 * scale;
+        let blur = hud.shown().blur * world.zoom as f32 * scale;
         let filter = ScreenFilter::from_matrix(matrix, blur);
         if filter.is_identity() {
             if current.is_some() {
