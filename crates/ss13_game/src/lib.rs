@@ -171,6 +171,8 @@ pub mod disposals;
 #[cfg(feature = "server")]
 pub mod gibber;
 #[cfg(feature = "server")]
+pub mod icecream;
+#[cfg(feature = "server")]
 pub mod doors;
 #[cfg(feature = "server")]
 pub mod drag;

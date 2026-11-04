@@ -706,6 +706,9 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 None if crate::gibber::interact(world, client, mob, target, modifiers.right) => {}
                 // tg `ui_interact` (the radial menu) and `attack_hand_secondary` of coffeemakers.
                 None if crate::coffee::interact(world, client, mob, target, modifiers.right) => {}
+                // tg `interact` and `attack_hand_secondary` of the ice cream vat.
+                None if crate::icecream::interact(world, client, mob, target, modifiers.right) => {
+                }
                 None if crate::chem_dispenser::interact(
                     world,
                     client,
@@ -786,6 +789,15 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                     if crate::smartfridge::item_interaction(world, client, mob, held, target) => {}
                 Some(held)
                     if crate::coffee::item_interaction(world, client, mob, held, target) => {}
+                Some(held)
+                    if crate::icecream::item_interaction(
+                        world,
+                        client,
+                        mob,
+                        held,
+                        target,
+                        modifiers.right,
+                    ) => {}
                 // A container into a chem dispenser (before pouring into it).
                 Some(held)
                     if crate::chem_dispenser::item_interaction(
