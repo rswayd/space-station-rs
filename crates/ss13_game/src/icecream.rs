@@ -261,7 +261,11 @@ pub struct Scoops(pub Vec<String>);
 #[derive(Component, Clone, Debug)]
 enum Question {
     /// The radial menu: flavours (by [`FLAVOURS`] index) or cones (by [`CONES`] index).
-    Menu { vat: Entity, cones: bool, options: Vec<usize> },
+    Menu {
+        vat: Entity,
+        cones: bool,
+        options: Vec<usize>,
+    },
     /// `spill_reagents`: which reagent (by path) to pour out.
     Spill { vat: Entity, reagents: Vec<String> },
 }
@@ -314,7 +318,10 @@ pub fn setup(world: &mut World, e: Entity, path: &str) {
     world.entity_mut(e).insert((
         IceCreamVat {
             cones_mode: false,
-            flavour: FLAVOURS.iter().position(|f| f.name == "vanilla").unwrap_or(0),
+            flavour: FLAVOURS
+                .iter()
+                .position(|f| f.name == "vanilla")
+                .unwrap_or(0),
             beaker: None,
         },
         Reagents(holder),
@@ -562,8 +569,7 @@ fn answers(world: &mut World, mut cursor: Local<MessageCursor<PromptAnswered>>) 
         let vat = match &question {
             Question::Menu { vat, .. } | Question::Spill { vat, .. } => *vat,
         };
-        let able = world.get::<crate::health::Stat>(actor)
-            == Some(&crate::health::Stat::Conscious)
+        let able = world.get::<crate::health::Stat>(actor) == Some(&crate::health::Stat::Conscious)
             && world.get_entity(vat).is_ok()
             && world.get::<IceCreamVat>(vat).is_some()
             && crate::storage::in_reach(world, actor, vat);
@@ -680,7 +686,10 @@ fn add_scoop(world: &mut World, client: Entity, cone: Entity, e: Entity) {
                     .and_then(|m| ss13_reagents::parse_color(&chem.def(m.id).color));
             }
             _ => {
-                flavour = FLAVOURS.iter().find(|f| f.name == "bland").unwrap_or(flavour);
+                flavour = FLAVOURS
+                    .iter()
+                    .find(|f| f.name == "bland")
+                    .unwrap_or(flavour);
                 beaker = None;
             }
         }
@@ -695,7 +704,16 @@ fn add_scoop(world: &mut World, client: Entity, cone: Entity, e: Entity) {
         food.add_reagent(&chem, reagent, 3.0, T0C, None, None, false, false);
     }
     if let Some(sweet) = chem.id(sweetener) {
-        food.add_reagent(&chem, sweet, SWEETENER_PER_SCOOP, T0C, None, None, false, false);
+        food.add_reagent(
+            &chem,
+            sweet,
+            SWEETENER_PER_SCOOP,
+            T0C,
+            None,
+            None,
+            false,
+            false,
+        );
     }
     if let Some((b, mut from)) = beaker {
         from.trans_to(&chem, &mut food, 4.0, 1.0, None, false, false);
@@ -771,7 +789,10 @@ mod tests {
     #[test]
     fn names_follow_the_scoops() {
         let s = |v: &[&str]| v.iter().map(|x| (*x).to_owned()).collect::<Vec<_>>();
-        assert_eq!(scoop_name(&s(&["vanilla"]), "ice cream"), "vanilla ice cream");
+        assert_eq!(
+            scoop_name(&s(&["vanilla"]), "ice cream"),
+            "vanilla ice cream"
+        );
         assert_eq!(
             scoop_name(&s(&["vanilla", "vanilla"]), "ice cream"),
             "double vanilla ice cream"

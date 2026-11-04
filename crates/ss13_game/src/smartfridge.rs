@@ -417,7 +417,10 @@ pub fn refresh_look(world: &mut World, e: Entity) {
         names.push(format!("{base}-{}-{level}", dm.overlay));
     }
     // `drying/update_overlays` and `drying/rack/update_overlays`.
-    if let Some(f) = world.get::<SmartFridge>(e).filter(|f| f.kind == FridgeKind::Drying) {
+    if let Some(f) = world
+        .get::<SmartFridge>(e)
+        .filter(|f| f.kind == FridgeKind::Drying)
+    {
         if is_under(&path_of(world, e), "/obj/machinery/smartfridge/drying/rack") {
             if f.drying {
                 names.push(format!("{base}-drying"));
@@ -614,7 +617,9 @@ pub fn dry_item(world: &mut World, fridge: Entity, item: Entity) {
     let Some(made) = crate::construction::spawn_obj(world, &result, pos) else {
         return;
     };
-    let chem = world.get_resource::<crate::chem::Chem>().map(|c| c.0.clone());
+    let chem = world
+        .get_resource::<crate::chem::Chem>()
+        .map(|c| c.0.clone());
     if let Some(chem) = chem
         && world.get::<DmFood>(made).is_some()
         && let Some(mut from) = world.get::<Reagents>(item).map(|r| r.0.clone())

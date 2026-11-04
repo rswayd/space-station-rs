@@ -250,10 +250,18 @@ pub fn item_interaction(
         COFFEE_CUP
     };
     if is_under(&path, cup_type) && open {
-        if world.get::<Reagents>(held).is_some_and(|r| r.0.total_volume > 0.0) {
+        if world
+            .get::<Reagents>(held)
+            .is_some_and(|r| r.0.total_volume > 0.0)
+        {
             tell(world, client, Span::Warning, "чашка должна быть пустой!");
         } else if maker.cups >= MAX_CUPS {
-            tell(world, client, Span::Warning, "отделение для чашек заполнено!");
+            tell(
+                world,
+                client,
+                Span::Warning,
+                "отделение для чашек заполнено!",
+            );
         } else {
             world.despawn(held);
             set(world, e, |m| m.cups += 1);
@@ -261,12 +269,18 @@ pub fn item_interaction(
         return true;
     }
     let packs: [(&str, u32, &str, fn(&mut CoffeeMaker)); 3] = [
-        (SUGAR, maker.sugar, "отделение для сахара заполнено!", |m| {
-            m.sugar += 1
-        }),
-        (CREAMER, maker.creamer, "отделение для сливок заполнено!", |m| {
-            m.creamer += 1
-        }),
+        (
+            SUGAR,
+            maker.sugar,
+            "отделение для сахара заполнено!",
+            |m| m.sugar += 1,
+        ),
+        (
+            CREAMER,
+            maker.creamer,
+            "отделение для сливок заполнено!",
+            |m| m.creamer += 1,
+        ),
         (
             SWEETENER,
             maker.sweetener,
@@ -301,7 +315,12 @@ pub fn item_interaction(
         if maker.beans.len() >= BEAN_CAPACITY {
             tell(world, client, Span::Warning, "емкость для кофе заполнена!");
         } else if world.get::<crate::food::Dried>(held).is_none() {
-            tell(world, client, Span::Warning, "кофейные зерна должны быть сухими!");
+            tell(
+                world,
+                client,
+                Span::Warning,
+                "кофейные зерна должны быть сухими!",
+            );
         } else {
             take_from_hand(world, mob, held, e);
             set(world, e, |m| m.beans.push(held));
@@ -434,8 +453,7 @@ fn menu_answers(world: &mut World, mut cursor: Local<MessageCursor<PromptAnswere
         let Some(&choice) = options.get(i) else {
             continue;
         };
-        let able = world.get::<crate::health::Stat>(actor)
-            == Some(&crate::health::Stat::Conscious)
+        let able = world.get::<crate::health::Stat>(actor) == Some(&crate::health::Stat::Conscious)
             && !crate::status_effects::incapacitation(world, actor).incapacitated
             && world.get_entity(e).is_ok()
             && crate::storage::in_reach(world, actor, e)
@@ -515,7 +533,10 @@ fn brew_problem(world: &World, maker: &CoffeeMaker, e: Entity) -> Option<&'stati
         let Some(cartridge) = maker.cartridge else {
             return Some("не вставлен картридж для кофе!");
         };
-        if world.get::<Cartridge>(cartridge).is_none_or(|c| c.charges < 1) {
+        if world
+            .get::<Cartridge>(cartridge)
+            .is_none_or(|c| c.charges < 1)
+        {
             return Some("кофейный картридж пуст!");
         }
     }
@@ -626,7 +647,9 @@ fn refresh_look(world: &mut World, e: Entity) {
     };
     let pot = maker.pot.map(|p| {
         let bluespace = path_of(world, p).is_some_and(|x| is_under(&x, BLUESPACE_POT));
-        let full = world.get::<Reagents>(p).is_some_and(|r| r.0.total_volume > 0.0);
+        let full = world
+            .get::<Reagents>(p)
+            .is_some_and(|r| r.0.total_volume > 0.0);
         (bluespace, full)
     });
     let mut states: Vec<String> = Vec::new();

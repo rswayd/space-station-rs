@@ -37,7 +37,9 @@ pub fn glass_thrown(world: &mut World, item: Entity, target: Option<Entity>) {
 
 /// `smash`: `splash_reagents(allow_closed_splash = TRUE)`, the broken bottle, the glass gone.
 pub fn smash(world: &mut World, item: Entity, target: Option<Entity>, pos: TilePos) {
-    let volume = world.get::<Reagents>(item).map_or(0.0, |r| r.0.total_volume);
+    let volume = world
+        .get::<Reagents>(item)
+        .map_or(0.0, |r| r.0.total_volume);
     let no_splash = world
         .get::<Reagents>(item)
         .is_some_and(|r| r.0.flags & ss13_reagents::flags::NO_SPLASH != 0);

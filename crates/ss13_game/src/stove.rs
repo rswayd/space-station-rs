@@ -93,10 +93,7 @@ pub struct StovePlugin;
 impl Plugin for StovePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<SoupClock>()
-            .add_systems(
-                Startup,
-                setup_mapped.after(crate::power::init_power),
-            )
+            .add_systems(Startup, setup_mapped.after(crate::power::init_power))
             .add_systems(
                 Update,
                 (
@@ -113,7 +110,9 @@ fn add_pot_state(add: On<Add<DmItem>>, items: Query<&DmItem>, mut commands: Comm
         .get(add.entity)
         .is_ok_and(|i| is_under(&i.path, SOUP_POT))
     {
-        commands.entity(add.entity).insert_if_new(SoupPot::default());
+        commands
+            .entity(add.entity)
+            .insert_if_new(SoupPot::default());
     }
 }
 
@@ -350,7 +349,13 @@ fn load_from(world: &mut World, client: Entity, storage: Entity, pot: Entity) {
 
 /// An empty-hand click: a stove's right click switches its burner; a pot's right click takes its
 /// first ingredient out. True when the click was theirs.
-pub fn interact(world: &mut World, client: Entity, mob: Entity, target: Entity, right: bool) -> bool {
+pub fn interact(
+    world: &mut World,
+    client: Entity,
+    mob: Entity,
+    target: Entity,
+    right: bool,
+) -> bool {
     if !right {
         return false;
     }
@@ -382,7 +387,11 @@ fn toggle(world: &mut World, client: Entity, e: Entity, on: bool) {
     if let Some(mut s) = world.get_mut::<Stove>(e) {
         s.on = !on;
     }
-    let state = if on { "отключен" } else { "включен" };
+    let state = if on {
+        "отключен"
+    } else {
+        "включен"
+    };
     tell(world, client, Span::Notice, format!("прожиг {state}"));
     refresh_look(world, e);
 }
@@ -405,7 +414,11 @@ fn stove_tick(world: &mut World, mut last: Local<Option<u64>>) {
     *last = Some(ticks);
     for _ in from..ticks {
         let mut q = world.query::<(Entity, &Stove)>();
-        let lit: Vec<Entity> = q.iter(world).filter(|(_, s)| s.on).map(|(e, _)| e).collect();
+        let lit: Vec<Entity> = q
+            .iter(world)
+            .filter(|(_, s)| s.on)
+            .map(|(e, _)| e)
+            .collect();
         for e in lit {
             process_stove(world, e);
         }
@@ -776,7 +789,14 @@ fn step_soup(world: &mut World, chem: &Chemistry, pot: Entity, mut soup: ActiveS
         return;
     };
     for &(i, initial) in &soup.cached {
-        if !transfer(world, chem, &def, i, &mut holder, Some((initial * 0.2).max(2.0))) {
+        if !transfer(
+            world,
+            chem,
+            &def,
+            i,
+            &mut holder,
+            Some((initial * 0.2).max(2.0)),
+        ) {
             continue;
         }
         if holder.total_volume >= holder.maximum_volume * 0.95 {

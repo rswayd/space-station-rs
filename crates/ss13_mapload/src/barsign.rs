@@ -108,8 +108,16 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
         })
         .collect();
     vec![
-        ext(BARSIGN_COMPONENT, "req_access", format!("[{}]", access.join(", "))),
-        ext(BARSIGN_COMPONENT, "signs", format!("[{}]", signs.join(", "))),
+        ext(
+            BARSIGN_COMPONENT,
+            "req_access",
+            format!("[{}]", access.join(", ")),
+        ),
+        ext(
+            BARSIGN_COMPONENT,
+            "signs",
+            format!("[{}]", signs.join(", ")),
+        ),
     ]
 }
 

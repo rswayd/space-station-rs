@@ -516,10 +516,12 @@ pub fn food(types: &DmTypes, path: &str) -> Option<DmFood> {
         .unwrap_or_default();
     food.foodtypes = n("foodtypes").unwrap_or(0.0) as u32;
     food.crafting_complexity = n("crafting_complexity").unwrap_or(0.0) as u32;
-    let overrides_germs = types
-        .chain(path)
-        .take_while(|p| *p != FOOD_ROOT)
-        .any(|p| types.types[p].procs.iter().any(|q| q == "make_germ_sensitive"));
+    let overrides_germs = types.chain(path).take_while(|p| *p != FOOD_ROOT).any(|p| {
+        types.types[p]
+            .procs
+            .iter()
+            .any(|q| q == "make_germ_sensitive")
+    });
     food.decomposes = food.trash_type.is_empty()
         && !overrides_germs
         && n("preserved_food").is_none_or(|v| v == 0.0);
@@ -585,10 +587,7 @@ fn grown(types: &DmTypes, path: &str, food: &mut DmFood) {
 /// What kitchen machines and drinks make at runtime, by type (`ss13_game::gibber`, `coffee`,
 /// `icecream`, `stove`, the ash of things burnt in `cooking`, `bar`'s broken glass).
 const RUNTIME_SPAWNS: [(&str, &[&str]); 10] = [
-    (
-        crate::drinks::GLASS_ROOT,
-        &["/obj/item/broken_bottle"],
-    ),
+    (crate::drinks::GLASS_ROOT, &["/obj/item/broken_bottle"]),
     (
         "/obj/machinery/gibber",
         &[

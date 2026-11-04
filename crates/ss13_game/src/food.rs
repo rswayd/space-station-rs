@@ -885,7 +885,10 @@ mod tests {
         // Capped at FOOD_QUALITY_TOP.
         assert_eq!(perceived_quality(&food(8 | 128, 5), true, human), 7);
         // Toxic beats everything; no tongue tastes nothing.
-        assert_eq!(perceived_quality(&food(2048 | 8, 5), true, human), TOXIC_QUALITY);
+        assert_eq!(
+            perceived_quality(&food(2048 | 8, 5), true, human),
+            TOXIC_QUALITY
+        );
         assert_eq!(perceived_quality(&food(2048, 0), false, None), 0);
     }
 

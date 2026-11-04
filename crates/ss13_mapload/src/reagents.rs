@@ -211,8 +211,8 @@ pub fn chem_data(types: &DmTypes) -> (ChemData, Skipped) {
         }
         let soup = (check == Some(SOUP_REACTIONS)).then(|| ss13_reagents::SoupDef {
             required_ingredients: amounts(get("required_ingredients")).unwrap_or_default(),
-            ingredient_reagent_multiplier: num(get("ingredient_reagent_multiplier"))
-                .unwrap_or(0.8) as f32,
+            ingredient_reagent_multiplier: num(get("ingredient_reagent_multiplier")).unwrap_or(0.8)
+                as f32,
             percentage_of_nutriment_converted: num(get("percentage_of_nutriment_converted"))
                 .unwrap_or(0.25) as f32,
             resulting_food_path: path_value(get("resulting_food_path")),

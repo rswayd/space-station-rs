@@ -173,7 +173,9 @@ pub fn interact(world: &mut World, client: Entity, mob: Entity, e: Entity, right
         return true;
     }
     if world.get::<crate::power::Unpowered>(e).is_some()
-        || world.get::<crate::obj_damage::Integrity>(e).is_some_and(|i| i.broken)
+        || world
+            .get::<crate::obj_damage::Integrity>(e)
+            .is_some_and(|i| i.broken)
     {
         return true;
     }
@@ -542,7 +544,10 @@ fn finish(world: &mut World, e: Entity) {
         let (dir, gib) = {
             let mut rng = world.resource_mut::<CombatRng>();
             let dir = Dir::DMI_ORDER[rng.range(0, 7) as usize];
-            (dir, HUMAN_GIBS[rng.range(0, HUMAN_GIBS.len() as u32 - 1) as usize])
+            (
+                dir,
+                HUMAN_GIBS[rng.range(0, HUMAN_GIBS.len() as u32 - 1) as usize],
+            )
         };
         let at = pos.step(dir);
         if crate::construction::tile_blocked(world, at) {
@@ -586,7 +591,12 @@ fn refresh_look(world: &mut World, e: Entity) {
         } else {
             &["grinder_loaded"]
         };
-        overlays.extend(states.iter().filter_map(|s| icon(world, s)).map(Overlay::new));
+        overlays.extend(
+            states
+                .iter()
+                .filter_map(|s| icon(world, s))
+                .map(Overlay::new),
+        );
     }
     let Some(mut look) = world.get_mut::<Appearance>(e) else {
         return;
@@ -636,11 +646,14 @@ pub fn examine_lines(world: &World, e: Entity, lines: &mut Vec<(Span, String)>) 
         return;
     }
     let (efficiency, gibtime, ignore) = ratings(world, e);
-    lines.push((Span::Notice, format!(
-        "На дисплее состояния отображается: Вывод {efficiency} мясных кусков через {} секунд \
+    lines.push((
+        Span::Notice,
+        format!(
+            "На дисплее состояния отображается: Вывод {efficiency} мясных кусков через {} секунд \
          работы.",
-        gibtime * 0.1
-    )));
+            gibtime * 0.1
+        ),
+    ));
     if ignore {
         lines.push((
             Span::Notice,
@@ -681,7 +694,12 @@ mod tests {
         assert_eq!(rolls, [100.0, 50.0, 100.0, 50.0, 100.0, 50.0, 100.0]);
         assert_eq!(
             out,
-            [(HUMAN_MEAT, 1), (HUMAN_SKIN, 1), (HUMAN_MEAT, 1), (HUMAN_MEAT, 1)]
+            [
+                (HUMAN_MEAT, 1),
+                (HUMAN_SKIN, 1),
+                (HUMAN_MEAT, 1),
+                (HUMAN_MEAT, 1)
+            ]
         );
         // Four tier 4 bins: 4.25 per amount, so floor + 1 every time.
         let out = roll_drops(&human[..2], 4.25, |_| true);

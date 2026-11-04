@@ -711,8 +711,7 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 // tg `attack_hand` of a bar sign: pick the sign.
                 None if crate::barsign::interact(world, client, mob, target) => {}
                 // tg `interact` and `attack_hand_secondary` of the ice cream vat.
-                None if crate::icecream::interact(world, client, mob, target, modifiers.right) => {
-                }
+                None if crate::icecream::interact(world, client, mob, target, modifiers.right) => {}
                 None if crate::chem_dispenser::interact(
                     world,
                     client,
@@ -791,8 +790,8 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                     ) => {}
                 Some(held)
                     if crate::smartfridge::item_interaction(world, client, mob, held, target) => {}
-                Some(held)
-                    if crate::coffee::item_interaction(world, client, mob, held, target) => {}
+                Some(held) if crate::coffee::item_interaction(world, client, mob, held, target) => {
+                }
                 Some(held)
                     if crate::stove::item_interaction(
                         world,

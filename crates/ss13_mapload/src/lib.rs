@@ -67,6 +67,7 @@ use ss13_proto::ProtoAppExt;
 
 pub use atmos::{DmArea, DmAtmosPass, DmTurfAtmos};
 pub use atmos_machine::DmAtmosDevice;
+pub use barsign::DmBarsign;
 pub use border::DmBorder;
 pub use bots::{BOT_RUNTIME_TYPES, DmNavBeacon};
 pub use cable::DmCable;
@@ -78,6 +79,7 @@ pub use dispenser::DmChemDispenser;
 pub use disposal::{DISPOSAL_RUNTIME_TYPES, DmMailSort};
 pub use dock::{DmDockingPort, ShuttleTemplates};
 pub use door::{DmAirlockHelper, DmDoor, DoorKind};
+pub use drinks::DmGlass;
 pub use fidelity::{FidelityReport, IconIndex, MapSeed, tile_changed};
 pub use food::{DmFood, Processing, Taste};
 pub use guns::{
@@ -97,8 +99,6 @@ pub use radio::DmRadio;
 pub use reagents::DmReagents;
 pub use security::{DmBaton, DmHandcuffs};
 pub use silicon::{DmCamera, DmCameraConsole};
-pub use barsign::DmBarsign;
-pub use drinks::DmGlass;
 pub use smartfridge::DmSmartFridge;
 pub use smooth::DmSmooth;
 pub use spawner::{DmSpawner, LootEntry};

@@ -601,7 +601,9 @@ fn gibber_coffee_and_ice_cream() {
     s.click(gibber);
     s.run_until("gibbing", |s| s.get::<Gibber>(gibber).finishes_at.is_some());
     assert!(s.server.world().get_entity(b).is_err(), "B is gone");
-    s.run_until_for(6.0, "done", |s| s.get::<Gibber>(gibber).finishes_at.is_none());
+    s.run_until_for(6.0, "done", |s| {
+        s.get::<Gibber>(gibber).finishes_at.is_none()
+    });
     // One tier 1 matter bin: efficiency 0.5, so the carried chance makes at least the chest's
     // meat, one of the two skins and two of the four limbs drop.
     let meat = s.count("/obj/item/food/meat/slab/human");
@@ -615,7 +617,9 @@ fn gibber_coffee_and_ice_cream() {
     let (pot, cartridge) = (m.pot.unwrap(), m.cartridge.unwrap());
     assert_eq!(s.get::<Cartridge>(cartridge).charges, 4);
     s.pick(maker, "Заварить");
-    s.run_until("brewing", |s| s.get::<CoffeeMaker>(maker).brewing_until.is_some());
+    s.run_until("brewing", |s| {
+        s.get::<CoffeeMaker>(maker).brewing_until.is_some()
+    });
     assert_eq!(s.amount(pot, "/datum/reagent/consumable/coffee"), 120.0);
     assert_eq!(s.get::<Cartridge>(cartridge).charges, 3);
     // Busy for 20 s: a right click does nothing; then it takes the pot out.
@@ -659,7 +663,10 @@ fn soup_and_burning() {
 
     // The mapped range has a soup pot on its burner; the meatball goes in, water is poured.
     let range = s.machine::<Stove>(RANGE);
-    let pot = s.get::<Stove>(range).container.expect("a mapped range has a pot");
+    let pot = s
+        .get::<Stove>(range)
+        .container
+        .expect("a mapped range has a pot");
     assert_eq!(*s.get::<TilePos>(pot), RANGE);
     let meatball = s.on_tile(SPAWN, "/obj/item/food/meatball").unwrap();
     s.take(meatball);
@@ -680,11 +687,17 @@ fn soup_and_burning() {
     s.click_with(range, RIGHT);
     s.run_until("lit", |s| s.get::<Stove>(range).on);
     s.run_until_for(30.0, "soup", |s| {
-        s.amount(pot, "/datum/reagent/consumable/nutriment/soup/meatball_soup") > 0.0
+        s.amount(
+            pot,
+            "/datum/reagent/consumable/nutriment/soup/meatball_soup",
+        ) > 0.0
     });
     s.run_until_for(30.0, "the soup done", |s| {
         s.get::<SoupPot>(pot).soup.is_none()
-            && s.amount(pot, "/datum/reagent/consumable/nutriment/soup/meatball_soup") >= 29.0
+            && s.amount(
+                pot,
+                "/datum/reagent/consumable/nutriment/soup/meatball_soup",
+            ) >= 29.0
     });
     assert!(s.server.world().get_entity(meatball).is_err(), "used up");
     assert!(s.get::<SoupPot>(pot).ingredients.is_empty());
@@ -698,7 +711,9 @@ fn soup_and_burning() {
     let toy = s.on_tile(SPAWN, "/obj/item/toy").unwrap();
     s.take(toy);
     s.click(griddle);
-    s.run_until("on the griddle", |s| s.get::<Griddle>(griddle).items == [toy]);
+    s.run_until("on the griddle", |s| {
+        s.get::<Griddle>(griddle).items == [toy]
+    });
     s.click(griddle);
     s.run_until("on", |s| s.get::<Griddle>(griddle).on);
     s.run_until_for(30.0, "burnt", |s| s.server.world().get_entity(toy).is_err());
@@ -707,17 +722,16 @@ fn soup_and_burning() {
         .resource::<SpatialIndex>()
         .on_tile(GRIDDLE)
         .iter()
-        .find(|&&e| {
-            world
-                .get::<DmName>(e)
-                .is_some_and(|n| n.name == "ashes")
-        })
+        .find(|&&e| world.get::<DmName>(e).is_some_and(|n| n.name == "ashes"))
         .copied();
     assert!(ash.is_some(), "ashes on the griddle");
 
     // A glass of water thrown onto the floor south: it smashes, a broken bottle is left.
     let glass = s
-        .on_tile(SPAWN, "/obj/item/reagent_containers/cup/glass/drinkingglass")
+        .on_tile(
+            SPAWN,
+            "/obj/item/reagent_containers/cup/glass/drinkingglass",
+        )
         .unwrap();
     {
         let world = s.0.server.world_mut();
@@ -729,14 +743,21 @@ fn soup_and_burning() {
         assert!(ss13_game::throw::throw_at(world, glass, south, 3, 1.0));
     }
     s.run_until("smashed", |s| s.server.world().get_entity(glass).is_err());
-    assert!(s.on_tile(TilePos::new(3, 2, 1), "/obj/item/broken_bottle").is_some());
-    s.run_until("the splash is seen", |s| s.said("разливает своё содержимое"));
+    assert!(
+        s.on_tile(TilePos::new(3, 2, 1), "/obj/item/broken_bottle")
+            .is_some()
+    );
+    s.run_until("the splash is seen", |s| {
+        s.said("разливает своё содержимое")
+    });
 }
 
 #[test]
 fn food_goes_bad_on_the_floor() {
     let mut s = Station::start("food_goes_bad_on_the_floor", 1);
-    let mapped = s.on_tile(TilePos::new(2, 4, 1), "/obj/item/food/meat/slab").unwrap();
+    let mapped = s
+        .on_tile(TilePos::new(2, 4, 1), "/obj/item/food/meat/slab")
+        .unwrap();
     // A slab that was not mapped, on the bare floor: 5 s of germs, then its 5 s
     // (`decomposition_time = 50`) into a moldy mess with its reagents, and ants.
     let floor = TilePos::new(4, 4, 1);
@@ -744,20 +765,30 @@ fn food_goes_bad_on_the_floor() {
         let world = s.0.server.world_mut();
         ss13_game::construction::spawn_obj(world, "/obj/item/food/meat/slab", floor).unwrap()
     };
-    s.run_until_for(20.0, "rotten", |s| s.server.world().get_entity(slab).is_err());
-    let moldy = s.on_tile(floor, "/obj/item/food/badrecipe/moldy").expect("moldy");
+    s.run_until_for(20.0, "rotten", |s| {
+        s.server.world().get_entity(slab).is_err()
+    });
+    let moldy = s
+        .on_tile(floor, "/obj/item/food/badrecipe/moldy")
+        .expect("moldy");
     assert_eq!(s.amount(moldy, "/datum/reagent/consumable/nutriment"), 4.0);
     // The moldy mess attracts ants: in its turn (3 s) it leaves them.
     s.run_until_for(20.0, "ants", |s| {
         let world = s.server.world();
         world.get_entity(moldy).is_err()
-            && world.resource::<SpatialIndex>().on_tile(floor).iter().any(|&e| {
-                world
-                    .get::<DmName>(e)
-                    .is_some_and(|n| n.name == "space ants")
-            })
+            && world
+                .resource::<SpatialIndex>()
+                .on_tile(floor)
+                .iter()
+                .any(|&e| {
+                    world
+                        .get::<DmName>(e)
+                        .is_some_and(|n| n.name == "space ants")
+                })
     });
-    s.run_until("the mold is seen", |s| s.said("gets overtaken by mold and ants"));
+    s.run_until("the mold is seen", |s| {
+        s.said("gets overtaken by mold and ants")
+    });
     // The mapped one has not moved: still fresh.
     assert!(s.server.world().get_entity(mapped).is_ok());
 }
@@ -766,7 +797,10 @@ fn food_goes_bad_on_the_floor() {
 fn bar_sign() {
     let mut s = Station::start("bar_sign", 1);
     let a = s.players[0].mob;
-    s.server.world_mut().entity_mut(a).insert(TilePos::new(5, 3, 1));
+    s.server
+        .world_mut()
+        .entity_mut(a)
+        .insert(TilePos::new(5, 3, 1));
     s.run_until("moved", |s| *s.get::<TilePos>(a) == TilePos::new(5, 3, 1));
     let sign = s.machine::<ss13_game::barsign::Barsign>(TilePos::new(5, 4, 1));
     assert_eq!(s.get::<ss13_game::barsign::Barsign>(sign).sign, "Off");
@@ -795,7 +829,12 @@ fn bar_sign() {
     assert_eq!(s.get::<DmName>(sign).desc, "Ian's bar of choice.");
     let world = s.server.world();
     assert_eq!(
-        Some(world.get::<ss13_shared::Appearance>(sign).unwrap().icon_state),
+        Some(
+            world
+                .get::<ss13_shared::Appearance>(sign)
+                .unwrap()
+                .icon_state
+        ),
         world
             .resource::<ss13_mapload::IconIndex>()
             .get("bs.dmi", "thebark")

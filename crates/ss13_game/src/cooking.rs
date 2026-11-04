@@ -767,7 +767,8 @@ pub fn scorch(world: &mut World, item: Entity, machine: Entity, temperature: f32
         .is_some_and(|w| u32::from(w.w_class) >= WEIGHT_CLASS_HUGE);
     let name = name_of(world, item);
     if let Some(pos) = pos
-        && let Some(ash) = crate::construction::spawn_obj(world, if large { ASH_LARGE } else { ASH }, pos)
+        && let Some(ash) =
+            crate::construction::spawn_obj(world, if large { ASH_LARGE } else { ASH }, pos)
         && let Some(mut desc) = world.get_mut::<ss13_mapload::DmName>(ash)
     {
         desc.desc
