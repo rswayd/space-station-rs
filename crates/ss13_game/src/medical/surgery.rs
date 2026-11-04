@@ -5,8 +5,8 @@
 //! `operation_generic.dm`, `operation_healing.dm`, `operation_bone_repair.dm`,
 //! `operation_organ_manip.dm`, `operation_amputation.dm`, `operation_add_limb.dm`
 //! (`prosthetic_replacement` with a limb), `operation_revival.dm`, `operation_organ_repair.dm`,
-//! `operation_debride.dm`,
-//! `operation_puncture.dm`), the BandaStation failure chance
+//! `operation_debride.dm`, `operation_puncture.dm`, `operation_lobotomy.dm`, `operation_pacify.dm`,
+//! `operation_filter.dm`), the BandaStation failure chance
 //! (`modular_bandastation/medical/code/surgery/fail_chance.dm`), `/datum/element/surgery_aid`,
 //! the advanced tools' mode switch (`surgery_tools.dm`) and buckling to operating tables and beds
 //! (`game/objects/buckling.dm`, `buckle_lying`).
