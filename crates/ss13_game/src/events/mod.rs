@@ -7,8 +7,8 @@
 //! - [`explosion`]: `ex_act` and a radius stand-in for `explosion()`, used by meteors.
 //! - [`carp_migration`]: spawns basic mobs (`crate::mobs`).
 //!
-//! Announcements are tg `priority_announce` from Central Command.
-// shortcut: no announcement sounds (`ANNOUNCER_*`): chat only; add with audio.
+//! Announcements are tg `priority_announce` from Central Command (`crate::announce`), with the
+//! announcer's `ANNOUNCER_*` sound where tg names one, else its random alert sound.
 
 pub mod brand_intelligence;
 pub mod carp_migration;
@@ -33,7 +33,14 @@ pub const COMMAND_NAME: &str = "Центральное Командование"
 
 /// tg `priority_announce(text, title)` with no sender override.
 pub fn priority_announce(world: &mut World, title: &str, text: &str) {
-    crate::shuttle::priority_announce(world, &format!("{COMMAND_NAME}: Сообщение"), title, text);
+    crate::announce::Priority::new(text, title).send(world);
+}
+
+/// tg `priority_announce(text, title, ANNOUNCER_*)`.
+pub fn priority_announce_sound(world: &mut World, title: &str, text: &str, sound: &str) {
+    crate::announce::Priority::new(text, title)
+        .sound(sound)
+        .send(world);
 }
 
 /// tg `station_name()`.

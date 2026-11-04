@@ -9,12 +9,12 @@ use std::path::{Path, PathBuf};
 
 use bevy::prelude::*;
 use ss13_game::comms::{CommsConsoleData, CommsConsoleUi, SWIPE_NEEDED};
+use ss13_game::comms_server::CommsConsole;
 use ss13_game::doors::{Door, DoorState};
 use ss13_game::inventory::{IdCard, Inventory};
 use ss13_game::keycard::{KeycardAuthData, KeycardAuthUi};
 use ss13_game::security_level::keycard::KeycardAuth;
 use ss13_game::security_level::{self, SecLevel, StationAccess};
-use ss13_game::shuttle::CommsConsole;
 use ss13_game::testing::{self, Drive, fixture_map, write_fixture};
 use ss13_game::wallmount::fire_alarm::FireAlarm;
 use ss13_net::chat::client::ChatReceived;

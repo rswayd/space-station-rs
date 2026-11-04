@@ -1,13 +1,13 @@
 //! The communications console window (client): `CommunicationsConsole/index.tsx` with the
-//! authentication section, and `Main.tsx`'s emergency shuttle section with the call reason
-//! `MessageModal` and its alert level section (`AlertButton.tsx`) with the "Swipe ID" modal.
-//! The data is `crate::comms`, the server half `crate::shuttle`.
-// shortcut: the other main page sections (functions, sectors) and pages (messages, status
-// display, shuttle purchase) are not ported; the server refuses their acts.
-// The recall button sends at once (tgui `Button.Confirm` asks a second click), and the call
-// button's "longer reason" check runs on submit (the window does not re-render on typing).
+//! authentication section and its pages: `Main.tsx` (emergency shuttle, alert level with the
+//! "Swipe ID" modal, functions, the `MessageModal`s), `Messages.tsx` and `ChangingStatus.tsx`
+//! (`common/StatusDisplayControls.tsx`). The data is `crate::comms`, the server half
+//! `crate::comms_server`.
+// shortcut: no shuttle purchase page and no allied sectors (the server has neither), no
+// `syndicate` theme. `Button.Confirm`s (recall, emergency access, delete) send at once, and a
+// modal's "longer reason" check runs on submit (the window does not re-render on typing).
 
-use bevy::scene::EntityScene;
+use bevy::scene::{EntityScene, SceneList};
 use bevy::ui_widgets::Activate;
 use ss13_net::client::SendIntent;
 use ss13_shared::protocol::ClientIntent;
@@ -16,35 +16,37 @@ use ss13_tgui::client::{
 };
 use ss13_ui_kit::prelude::*;
 
-use crate::comms::{
-    CALL_SHUTTLE, CHANGE_SECURITY_LEVEL, CommsConsoleData, CommsConsoleUi, NEW_SECURITY_LEVEL,
-    REASON, RECALL_SHUTTLE, SWIPE_NEEDED, TOGGLE_AUTHENTICATION,
-};
+use crate::comms::*;
 
 /// `useState` keys.
-const CALLING: &str = "callingShuttle";
+const MODAL: &str = "modal";
 const INPUT: &str = "input";
 const NEW_ALERT_LEVEL: &str = "newAlertLevel";
+/// `useSharedState` keys of `StatusDisplayControls`.
+const STATUS_UPPER: &str = "statusUpperText";
+const STATUS_LOWER: &str = "statusLowerText";
 
 pub struct CommsClientPlugin;
 
 impl Plugin for CommsClientPlugin {
     fn build(&self, app: &mut App) {
         app.register_ui_view::<CommsConsoleUi>()
-            .add_observer(submit_reason);
+            .add_observer(submit_local);
     }
 }
 
-/// On the modal's submit button: `onSubmit(input)` -> `act(action, { [param]: input })` when
-/// the input has at least `min_length` characters.
+/// On a submit button: `act(action, { [param]: local value })` for each `(param, key, default)`
+/// (the default when the key is unset), when the first value has at least `min_length`
+/// characters; `clear` empties the keys after.
 #[derive(Component, Clone, Debug, Default, PartialEq)]
 pub struct SubmitLocal {
     pub action: String,
-    pub param: String,
+    pub params: Vec<(String, String, String)>,
     pub min_length: u32,
+    pub clear: bool,
 }
 
-fn submit_reason(
+fn submit_local(
     activate: On<Activate>,
     submits: Query<&SubmitLocal>,
     parents: Query<&ChildOf>,
@@ -63,16 +65,28 @@ fn submit_reason(
     let Ok((window, mut local)) = windows.get_mut(root) else {
         return;
     };
-    let input = local.get(INPUT).to_owned();
-    if (input.chars().count() as u32) < submit.min_length {
+    let params: Vec<(String, String)> = submit
+        .params
+        .iter()
+        .map(|(param, key, default)| {
+            let value = local.value(key).unwrap_or(default).to_owned();
+            (param.clone(), value)
+        })
+        .collect();
+    let first = params.first().map_or(0, |(_, v)| v.chars().count() as u32);
+    if first < submit.min_length {
         return;
     }
     intents.write(SendIntent(ClientIntent::UiAct {
         window: window.id,
         action: submit.action.clone(),
-        params: vec![(submit.param.clone(), input)],
+        params,
     }));
-    local.set(INPUT, "");
+    if submit.clear {
+        for (_, key, _) in &submit.params {
+            local.set(key, "");
+        }
+    }
 }
 
 impl ClientUi for CommsConsoleUi {
@@ -85,6 +99,30 @@ impl ClientUi for CommsConsoleUi {
 
     fn content_local(_: &(), data: &CommsConsoleData, local: &UiLocalState) -> impl Scene {
         view(data, local)
+    }
+}
+
+fn button(icon: &'static str, content: String, action: &str) -> impl Scene + use<> {
+    let action = action.to_owned();
+    bsn! {
+        @ss13_ui_kit::Button { @icon: icon, @content: content }
+        Act(action)
+    }
+}
+
+fn set_state(page: &str) -> ActParams {
+    ActParams(vec![(STATE.to_owned(), page.to_owned())])
+}
+
+fn back_section() -> impl Scene {
+    let params = set_state(PAGE_MAIN);
+    bsn! {
+        @Section
+        Children [
+            @ss13_ui_kit::Button { @icon: "chevron-left", @content: "Back" }
+            Act({SET_STATE.to_owned()})
+            params
+        ]
     }
 }
 
@@ -109,16 +147,11 @@ fn view(data: &CommsConsoleData, local: &UiLocalState) -> impl Scene + use<> {
             ]
         })
     });
-    let calling = data.authenticated && !data.shuttle_called && local.get(CALLING) == "1";
-    let main = data
-        .authenticated
-        .then(|| EntityScene(shuttle_section(data)));
-    let can_set_alert = data.authenticated && data.can_set_alert_level.is_some();
-    let alert = can_set_alert.then(|| EntityScene(alert_section(data)));
-    let new_level = local.get(NEW_ALERT_LEVEL).to_owned();
-    let swipe = (can_set_alert && !new_level.is_empty() && new_level != data.alert_level)
-        .then(|| EntityScene(swipe_modal(new_level)));
-    let modal = calling.then(|| EntityScene(reason_modal(data)));
+    let page = data.authenticated.then_some(data.page.as_str());
+    let main = (page == Some(PAGE_MAIN)).then(|| EntityScene(main_page(data, local)));
+    let messages = (page == Some(PAGE_MESSAGES)).then(|| EntityScene(messages_page(data)));
+    let status =
+        (page == Some(PAGE_CHANGING_STATUS)).then(|| EntityScene(status_page(data, local)));
     bsn! {
         @WindowContent
         Children [
@@ -126,11 +159,189 @@ fn view(data: &CommsConsoleData, local: &UiLocalState) -> impl Scene + use<> {
             --
             {main}
             --
+            {messages}
+            --
+            {status}
+        ]
+    }
+}
+
+/// `Main.tsx`.
+fn main_page(data: &CommsConsoleData, local: &UiLocalState) -> impl Scene + use<> {
+    let shuttle = (!data.syndicate).then(|| EntityScene(shuttle_section(data)));
+    let can_set_alert = data.can_set_alert_level.is_some();
+    let alert = can_set_alert.then(|| EntityScene(alert_section(data)));
+    let new_level = local.get(NEW_ALERT_LEVEL).to_owned();
+    let swipe = (can_set_alert && !new_level.is_empty() && new_level != data.alert_level)
+        .then(|| EntityScene(swipe_modal(new_level)));
+    let modal = match local.get(MODAL) {
+        CALL_SHUTTLE if !data.shuttle_called => Some(ModalProps {
+            label: "Nature of emergency".into(),
+            notice: None,
+            icon: "space-shuttle",
+            button: "Call Shuttle",
+            action: CALL_SHUTTLE,
+            param: REASON,
+            min_length: data.call_shuttle_reason_min_length,
+        }),
+        MESSAGE_ASSOCIATES if data.can_message_associates => Some(ModalProps {
+            label: format!(
+                "Message to transmit to {} via quantum entanglement",
+                if data.emagged {
+                    "[ABNORMAL ROUTING COORDINATES]"
+                } else {
+                    "CentCom"
+                }
+            ),
+            notice: Some(
+                "Please be aware that this process is very expensive, and abuse will lead \
+                 to...termination. Transmission does not guarantee a response.",
+            ),
+            icon: "bullhorn",
+            button: "Send",
+            action: MESSAGE_ASSOCIATES,
+            param: MESSAGE,
+            min_length: 0,
+        }),
+        REQUEST_NUKE_CODES if data.can_request_nuke => Some(ModalProps {
+            label: "Reason for requesting nuclear self-destruct codes".into(),
+            notice: Some(
+                "Misuse of the nuclear request system will not be tolerated under any \
+                 circumstances. Transmission does not guarantee a response.",
+            ),
+            icon: "bomb",
+            button: "Request Codes",
+            action: REQUEST_NUKE_CODES,
+            param: REASON,
+            min_length: 0,
+        }),
+        REQUEST_ERT if data.can_request_ert => Some(ModalProps {
+            label: "Reason for requesting Emergency Response Team".into(),
+            notice: Some(
+                "Misuse of the ERT system will not be tolerated under any circumstances. \
+                 Transmission does not guarantee a response.",
+            ),
+            icon: "people-group",
+            button: "Request ERT",
+            action: REQUEST_ERT,
+            param: REASON,
+            min_length: 0,
+        }),
+        _ => None,
+    }
+    .map(|m| EntityScene(message_modal(m, data.max_message_length)));
+    let functions = EntityScene(functions_section(data));
+    bsn! {
+        Node { flex_direction: FlexDirection::Column }
+        Children [
+            {shuttle}
+            --
             {alert}
+            --
+            {functions}
             --
             {swipe}
             --
             {modal}
+        ]
+    }
+}
+
+/// `Main.tsx` `<Section title="Functions">`.
+fn functions_section(data: &CommsConsoleData) -> impl Scene + use<> {
+    let open_modal = |icon: &'static str, content: String, action: &str, disabled: bool| {
+        let action = action.to_owned();
+        EntityScene(bsn! {
+            @ss13_ui_kit::Button { @icon: icon, @content: content }
+            ss13_ui_kit::Button { disabled: disabled }
+            SetLocal { key: {MODAL.to_owned()}, value: action, rerender: true }
+        })
+    };
+    let announce = data.can_make_announcement.then(|| {
+        EntityScene(button(
+            "bullhorn",
+            "Make Priority Announcement".into(),
+            MAKE_PRIORITY_ANNOUNCEMENT,
+        ))
+    });
+    let access = data.can_toggle_emergency_access.then(|| {
+        let (verb, color) = if data.emergency_access {
+            ("Disable", UiColor::Bad)
+        } else {
+            ("Enable", UiColor::Default)
+        };
+        let content = format!("{verb} Emergency Maintenance Access");
+        EntityScene(bsn! {
+            @ss13_ui_kit::Button { @icon: "id-card-o", @content: content }
+            ss13_ui_kit::Button { color: color }
+            Act({TOGGLE_EMERGENCY_ACCESS.to_owned()})
+        })
+    });
+    let status = (!data.syndicate).then(|| {
+        let params = set_state(PAGE_CHANGING_STATUS);
+        EntityScene(bsn! {
+            @ss13_ui_kit::Button { @icon: "desktop", @content: "Set Status Display" }
+            Act({SET_STATE.to_owned()})
+            params
+        })
+    });
+    let list = set_state(PAGE_MESSAGES);
+    let not_ready = !data.important_action_ready;
+    let associates = data.can_message_associates.then(|| {
+        let to = if data.emagged { "[UNKNOWN]" } else { "CentCom" };
+        open_modal(
+            "comment-o",
+            format!("Send message to {to}"),
+            MESSAGE_ASSOCIATES,
+            not_ready,
+        )
+    });
+    let nuke = data.can_request_nuke.then(|| {
+        open_modal(
+            "radiation",
+            "Request Nuclear Authentication Codes".into(),
+            REQUEST_NUKE_CODES,
+            not_ready,
+        )
+    });
+    let ert = data.can_request_ert.then(|| {
+        open_modal(
+            "people-group",
+            "Request Emergency Response Team".into(),
+            REQUEST_ERT,
+            not_ready,
+        )
+    });
+    let restore = (data.emagged && !data.syndicate).then(|| {
+        EntityScene(button(
+            "undo",
+            "Restore Backup Routing Data".into(),
+            RESTORE_BACKUP_ROUTING_DATA,
+        ))
+    });
+    bsn! {
+        @Section { @title: "Functions" }
+        Children [
+            Node { flex_direction: FlexDirection::Column }
+            Children [
+                {announce}
+                --
+                {access}
+                --
+                {status}
+                --
+                @ss13_ui_kit::Button { @icon: "envelope-o", @content: "Message List" }
+                Act({SET_STATE.to_owned()})
+                list
+                --
+                {associates}
+                --
+                {nuke}
+                --
+                {ert}
+                --
+                {restore}
+            ]
         ]
     }
 }
@@ -268,7 +479,7 @@ fn shuttle_section(data: &CommsConsoleData) -> impl Scene + use<> {
                 @tooltip_position: Placement::Top,
             }
             ss13_ui_kit::Button { disabled: disabled }
-            SetLocal { key: {CALLING.to_owned()}, value: {"1".to_owned()}, rerender: true }
+            SetLocal { key: {MODAL.to_owned()}, value: {CALL_SHUTTLE.to_owned()}, rerender: true }
         })
     });
     let traced = data.shuttle_called_previously.then(|| {
@@ -290,22 +501,43 @@ fn shuttle_section(data: &CommsConsoleData) -> impl Scene + use<> {
     }
 }
 
-/// `MessageModal` for `callShuttle`.
-fn reason_modal(data: &CommsConsoleData) -> impl Scene + use<> {
-    let max = data.max_message_length as usize;
-    let min = data.call_shuttle_reason_min_length;
+/// `MessageModal`'s props.
+struct ModalProps {
+    label: String,
+    notice: Option<&'static str>,
+    icon: &'static str,
+    button: &'static str,
+    action: &'static str,
+    param: &'static str,
+    min_length: u32,
+}
+
+/// `MessageModal`: the text, then `act(action, { [param]: text })`.
+fn message_modal(m: ModalProps, max: u32) -> impl Scene + use<> {
+    let notice = m
+        .notice
+        .map(|n| EntityScene(bsn! { Node { max_width: px(300) } Children [ Text(n) ] }));
+    let label = format!("{}:", m.label);
+    let placeholder = m.label;
+    let submit = SubmitLocal {
+        action: m.action.to_owned(),
+        params: vec![(m.param.to_owned(), INPUT.to_owned(), String::new())],
+        min_length: m.min_length,
+        clear: true,
+    };
+    let (icon, content) = (m.icon, m.button);
     bsn! {
         @Modal
         Children [
             Node { flex_direction: FlexDirection::Column }
             Children [
-                Node { margin: UiRect::bottom(px(6)) }
-                Children [ Text({"Nature of emergency:".to_owned()}) ]
+                Node { margin: UiRect::bottom(px(6)), max_width: px(300) }
+                Children [ Text(label) ]
                 --
                 Node { width: px(300), margin: UiRect::bottom(px(6)) }
                 Input {
-                    placeholder: {"Nature of emergency".to_owned()},
-                    max_length: {Some(max)},
+                    placeholder: placeholder,
+                    max_length: {Some(max as usize)},
                     fluid: true,
                     auto_focus: true,
                 }
@@ -314,18 +546,169 @@ fn reason_modal(data: &CommsConsoleData) -> impl Scene + use<> {
                 --
                 Node
                 Children [
-                    @ss13_ui_kit::Button { @icon: "space-shuttle", @content: "Call Shuttle" }
+                    @ss13_ui_kit::Button { @icon: icon, @content: content }
                     ss13_ui_kit::Button { color: UiColor::Good }
-                    SubmitLocal {
-                        action: {CALL_SHUTTLE.to_owned()},
-                        param: {REASON.to_owned()},
-                        min_length: min,
-                    }
-                    SetLocal { key: {CALLING.to_owned()}, value: {String::new()}, rerender: true }
+                    submit
+                    SetLocal { key: {MODAL.to_owned()}, value: {String::new()}, rerender: true }
                     --
                     @ss13_ui_kit::Button { @icon: "times", @content: "Cancel" }
                     ss13_ui_kit::Button { color: UiColor::Bad }
-                    SetLocal { key: {CALLING.to_owned()}, value: {String::new()}, rerender: true }
+                    SetLocal { key: {MODAL.to_owned()}, value: {String::new()}, rerender: true }
+                ]
+                --
+                {notice}
+            ]
+        ]
+    }
+}
+
+/// `Messages.tsx`: newest first; answers until one is chosen, delete.
+fn messages_page(data: &CommsConsoleData) -> impl Scene + use<> {
+    let sections: Vec<_> = data
+        .messages
+        .iter()
+        .enumerate()
+        .rev()
+        .map(|(i, message)| {
+            let index = (i + 1).to_string();
+            let delete_params = ActParams(vec![(MESSAGE.to_owned(), index.clone())]);
+            let delete: Box<dyn SceneList> = Box::new(EntityScene(bsn! {
+                @ss13_ui_kit::Button { @icon: "trash", @content: "Delete" }
+                ss13_ui_kit::Button { color: UiColor::Red }
+                Act({DELETE_MESSAGE.to_owned()})
+                delete_params
+            }));
+            let answers: Vec<_> = message
+                .possible_answers
+                .iter()
+                .enumerate()
+                .map(|(a, answer)| {
+                    let chosen = message.answered == a as u32 + 1;
+                    let color = if chosen {
+                        UiColor::Good
+                    } else {
+                        UiColor::Default
+                    };
+                    let content = answer.clone();
+                    let open = message.answered == 0;
+                    let pick = open.then(|| {
+                        let params = ActParams(vec![
+                            (MESSAGE.to_owned(), index.clone()),
+                            (ANSWER.to_owned(), (a + 1).to_string()),
+                        ]);
+                        let content = content.clone();
+                        EntityScene(bsn! {
+                            @ss13_ui_kit::Button { @content: content }
+                            Act({ANSWER_MESSAGE.to_owned()})
+                            params
+                        })
+                    });
+                    let shown = (!open).then(|| {
+                        EntityScene(bsn! {
+                            @ss13_ui_kit::Button { @content: content }
+                            ss13_ui_kit::Button { color: color }
+                        })
+                    });
+                    bsn! { Node Children [ {pick} -- {shown} ] }
+                })
+                .collect();
+            let (title, content) = (message.title.clone(), message.content.clone());
+            bsn! {
+                @Section { @title: title, @buttons: delete }
+                Children [
+                    Node Children [ Text(content) ]
+                    --
+                    Node { margin: UiRect::top(px(6)) }
+                    Children [ {answers} ]
+                ]
+            }
+        })
+        .collect();
+    let back = EntityScene(back_section());
+    bsn! {
+        Node { flex_direction: FlexDirection::Column }
+        Children [
+            {back}
+            --
+            {sections}
+        ]
+    }
+}
+
+/// `ChangingStatus.tsx` with `StatusDisplayControls`.
+fn status_page(data: &CommsConsoleData, local: &UiLocalState) -> impl Scene + use<> {
+    let picture = |icon: &'static str, content: &'static str, picture: &str| {
+        let params = ActParams(vec![(PICTURE.to_owned(), picture.to_owned())]);
+        bsn! {
+            @ss13_ui_kit::Button { @icon: icon, @content: content }
+            Act({SET_STATUS_PICTURE.to_owned()})
+            params
+        }
+    };
+    let max = data.max_status_line_length as usize;
+    let line = |key: &str, initial: &str| {
+        let value = local.value(key).unwrap_or(initial).to_owned();
+        let key = key.to_owned();
+        EntityScene(bsn! {
+            Node { margin: UiRect::bottom(px(6)) }
+            Input { value: value, max_length: {Some(max)}, fluid: true }
+            LocalOnInput(key)
+        })
+    };
+    let (upper, lower) = (
+        line(STATUS_UPPER, &data.upper_text),
+        line(STATUS_LOWER, &data.lower_text),
+    );
+    let send = SubmitLocal {
+        action: SET_STATUS_MESSAGE.to_owned(),
+        params: vec![
+            (
+                UPPER_TEXT.to_owned(),
+                STATUS_UPPER.to_owned(),
+                data.upper_text.clone(),
+            ),
+            (
+                LOWER_TEXT.to_owned(),
+                STATUS_LOWER.to_owned(),
+                data.lower_text.clone(),
+            ),
+        ],
+        min_length: 0,
+        clear: false,
+    };
+    let (off, shuttle) = (
+        EntityScene(picture("toggle-off", "Off", "blank")),
+        EntityScene(picture("space-shuttle", "Shuttle ETA / Off", "shuttle")),
+    );
+    let graphics = vec![
+        picture("flag", "Logo", "default"),
+        picture("exclamation", "Security Alert Level", "currentalert"),
+        picture("exclamation-triangle", "Lockdown", "lockdown"),
+        picture("biohazard", "Biohazard", "biohazard"),
+        picture("radiation", "Radiation", "radiation"),
+    ];
+    let back = EntityScene(back_section());
+    bsn! {
+        Node { flex_direction: FlexDirection::Column }
+        Children [
+            {back}
+            --
+            @Section
+            Children [ {off} -- {shuttle} ]
+            --
+            @Section { @title: "Graphics" }
+            Children [ {graphics} ]
+            --
+            @Section { @title: "Message" }
+            Children [
+                Node { flex_direction: FlexDirection::Column }
+                Children [
+                    {upper}
+                    --
+                    {lower}
+                    --
+                    @ss13_ui_kit::Button { @icon: "comment-o", @content: "Send" }
+                    send
                 ]
             ]
         ]

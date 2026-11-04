@@ -37,7 +37,12 @@ impl RoundEvent for GridCheck {
              питание будет отключено на неопределенный срок.",
             super::station_name(world)
         );
-        super::priority_announce(world, "Критический сбой системы питания", &text);
+        super::priority_announce_sound(
+            world,
+            "Критический сбой системы питания",
+            &text,
+            crate::announce::ANNOUNCER_POWEROFF,
+        );
         if !fake {
             world.resource_mut::<GridCheckCooldown>().0 = now + ANNOUNCE_COOLDOWN_SECS;
         }

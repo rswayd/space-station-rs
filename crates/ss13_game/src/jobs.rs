@@ -153,7 +153,7 @@ impl Jobs {
     }
 
     /// tg `random_unique_name(MALE)`: a name no current player has, if one is found.
-    fn random_name(&mut self, taken: &HashSet<String>) -> Option<String> {
+    pub(crate) fn random_name(&mut self, taken: &HashSet<String>) -> Option<String> {
         let names = &self.data.names;
         if names.first_male.is_empty() || names.last.is_empty() {
             return None;

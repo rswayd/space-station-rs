@@ -574,6 +574,10 @@ fn target_interaction(world: &mut World, actor: Actor, target: Entity) -> Intera
     let Some(path) = path_of(world, target) else {
         return Interact::None;
     };
+    // `/obj/machinery/computer/communications/emag_act`.
+    if crate::comms_server::item_interaction(world, actor.client, held, target) {
+        return Interact::Done;
+    }
     // `/obj/machinery/vending/item_interaction`: canisters, emags, IDs, items back in.
     if is_under(&path, VENDING) {
         return if crate::vending::item_interaction(world, actor, held, target) {

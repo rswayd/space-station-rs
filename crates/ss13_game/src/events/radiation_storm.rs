@@ -63,11 +63,12 @@ impl RoundEvent for RadiationStormEvent {
     }
 
     fn announce(&mut self, world: &mut World, _: &mut EventState, _: bool) {
-        super::priority_announce(
+        super::priority_announce_sound(
             world,
             "Обнаружена аномалия",
             "Вблизи станции обнаружено радиационное поле высокой интенсивности. Всему персоналу \
              надлежит проследовать в технические тоннели.",
+            crate::announce::ANNOUNCER_RADIATION,
         );
     }
 
