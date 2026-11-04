@@ -323,6 +323,22 @@ pub fn say_message(name: &str, text: &str) -> ChatMessage {
     quote_message(name, say_verb(text), text, Span::Say)
 }
 
+/// [`say_message`] of a speaker with its own `verb_say`, `verb_ask`, `verb_exclaim` and
+/// `verb_yell` (tg `say_mod`), e.g. a bot's "сообщает".
+pub fn say_message_verbs(name: &str, text: &str, verbs: [&str; 4]) -> ChatMessage {
+    let [say, ask, exclaim, yell] = verbs;
+    let verb = if text.ends_with("!!") {
+        yell
+    } else if text.ends_with('?') {
+        ask
+    } else if text.ends_with('!') {
+        exclaim
+    } else {
+        say
+    };
+    quote_message(name, verb, text, Span::Say)
+}
+
 /// `Имя шепчет, "текст"` in italics (tg `verb_whisper`, `SPAN_ITALICS`).
 pub fn whisper_message(name: &str, text: &str) -> ChatMessage {
     quote_message(name, WHISPER_VERB, text, Span::Italics)

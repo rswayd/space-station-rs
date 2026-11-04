@@ -3,8 +3,8 @@
 //!
 //! Every act needs `allowed(user)` (unlocked, or the bot's access on the user's ID, or a
 //! silicon); the custom controls also need the controls unlocked unless a silicon acts; `hack`
-//! is silicons' only.
-// shortcut: no rename, pAI eject or personality acts (no pAIs or ghost possession here).
+//! is silicons' only; "rename" asks for the new name (`tgui_input_text`).
+// shortcut: no pAI eject or personality acts (no pAIs or ghost possession here).
 
 use bevy::ecs::message::MessageCursor;
 use bevy::ecs::system::SystemParamItem;
@@ -45,12 +45,13 @@ pub enum BotAct {
     Toggle(String),
     /// The medbot's `heal_threshold` (`params["threshold"]`).
     Threshold(f64),
+    Rename,
 }
 
 /// The toggles of a kind: name and flag field and bit.
 fn toggles(kind: BotKind) -> &'static [(&'static str, Flags, u32)] {
     match kind {
-        BotKind::Sec => &[
+        k if k.is_sec() => &[
             ("check_id", Flags::Security, SECBOT_CHECK_IDS),
             ("check_weapons", Flags::Security, SECBOT_CHECK_WEAPONS),
             ("check_warrants", Flags::Security, SECBOT_CHECK_RECORDS),
@@ -81,8 +82,18 @@ fn toggles(kind: BotKind) -> &'static [(&'static str, Flags, u32)] {
             ),
             ("stationary_mode", Flags::Firebot, FIREBOT_STATIONARY_MODE),
         ],
-        BotKind::Other => &[],
+        _ => &[],
     }
+}
+
+/// The toggles shown for `kind`: the securitron's for its whole family, then the kind's own
+/// (the ED-209's and honkbot's `ui_data` add theirs after the parent's).
+fn all_toggles(kind: BotKind) -> impl Iterator<Item = (&'static str, Flags, u32)> {
+    toggles(kind).iter().copied().chain(
+        super::sec::toggles(kind)
+            .iter()
+            .map(|&(name, bit)| (name, Flags::Security, bit)),
+    )
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -120,7 +131,7 @@ pub fn data(bot: &Bot, access: Option<&[String]>) -> SimpleBotData {
     let open = !bot.locked() || silicon;
     let mut custom_controls = Vec::new();
     if open {
-        for &(name, which, bit) in toggles(bot.kind) {
+        for (name, which, bit) in all_toggles(bot.kind) {
             custom_controls.push((name.to_owned(), i32::from(flags(bot, which) & bit != 0)));
         }
         if bot.kind == BotKind::Med {
@@ -177,11 +188,19 @@ impl ServerUi for SimpleBotWindow {
             "airplane" => BotAct::Airplane,
             "lock" => BotAct::Lock,
             "hack" => BotAct::Hack,
+            "rename" => BotAct::Rename,
             HEAL_THRESHOLD => BotAct::Threshold(params.number("threshold")?),
             other
-                if [BotKind::Sec, BotKind::Med, BotKind::Clean, BotKind::Fire]
-                    .into_iter()
-                    .any(|k| toggles(k).iter().any(|t| t.0 == other)) =>
+                if [
+                    BotKind::Sec,
+                    BotKind::Ed209,
+                    BotKind::Honk,
+                    BotKind::Med,
+                    BotKind::Clean,
+                    BotKind::Fire,
+                ]
+                .into_iter()
+                .any(|k| all_toggles(k).any(|t| t.0 == other)) =>
             {
                 BotAct::Toggle(other.to_owned())
             }
@@ -191,8 +210,46 @@ impl ServerUi for SimpleBotWindow {
 }
 
 pub(super) fn build(app: &mut App) {
-    app.register_ui::<SimpleBotWindow>()
-        .add_systems(Update, bot_acts.in_set(UiSystems::Handle));
+    app.register_ui::<SimpleBotWindow>().add_systems(
+        Update,
+        (
+            bot_acts.in_set(UiSystems::Handle),
+            rename_answers
+                .in_set(UiSystems::Handle)
+                .after(ss13_tgui::prompt::PromptSystems::Answer),
+        ),
+    );
+}
+
+/// The bot a "rename" prompt names.
+#[derive(Component, Clone, Copy, Debug)]
+struct RenamePrompt(Entity);
+
+/// `rename(user)` after the input: still a bot the user may control, still near (or a
+/// silicon).
+fn rename_answers(
+    world: &mut World,
+    mut cursor: Local<MessageCursor<ss13_tgui::prompt::PromptAnswered>>,
+) {
+    let answers: Vec<(Entity, Entity, Option<ss13_tgui::prompt::PromptAnswer>)> = cursor
+        .read(world.resource::<Messages<ss13_tgui::prompt::PromptAnswered>>())
+        .map(|a| (a.prompt, a.actor, a.answer.clone()))
+        .collect();
+    for (prompt, user, answer) in answers {
+        let Some(RenamePrompt(mob)) = world.get::<RenamePrompt>(prompt).copied() else {
+            continue;
+        };
+        let Some(ss13_tgui::prompt::PromptAnswer::Text(name)) = answer else {
+            continue;
+        };
+        let silicon = crate::silicon::interact::has_silicon_access(world, user);
+        if !super::allowed(world, mob, user)
+            || !(silicon || crate::storage::in_reach(world, user, mob))
+        {
+            continue;
+        }
+        super::rename(world, mob, &name);
+    }
 }
 
 /// tg `attack_hand` / `attack_ai` -> `ui_interact`: an emagged bot does not answer a silicon
@@ -202,6 +259,10 @@ pub fn open(world: &mut World, client: Entity, actor: Entity, bot: Entity) {
     let Some(b) = world.get::<Bot>(bot) else {
         return;
     };
+    if b.kind == BotKind::Mule {
+        super::mule::open(world, client, actor, bot);
+        return;
+    }
     let silicon = crate::silicon::interact::has_silicon_access(world, actor);
     if silicon && b.emagged() && b.cover & COVER_HACKED == 0 {
         if let Some(c) = world
@@ -292,11 +353,21 @@ pub fn act_on(world: &mut World, user: Entity, mob: Entity, act: BotAct) {
             if bot.locked() && !silicon {
                 return;
             }
-            if let Some(&(_, which, bit)) = toggles(bot.kind).iter().find(|t| t.0 == name) {
+            if let Some((_, which, bit)) = all_toggles(bot.kind).find(|t| t.0 == name) {
                 *flags_mut(&mut bot, which) ^= bit;
             }
             if bot.kind == BotKind::Fire {
                 super::refresh_look(world, mob);
+            }
+        }
+        BotAct::Rename => {
+            if let Some(client) = world
+                .get::<crate::server::PlayerMob>(user)
+                .map(|p| p.client)
+            {
+                let ask = super::rename_ask(world, client, user, mob);
+                let prompt = ss13_tgui::prompt::ask_world(world, ask);
+                world.entity_mut(prompt).insert(RenamePrompt(mob));
             }
         }
         BotAct::Threshold(value) => {
@@ -322,24 +393,13 @@ mod tests {
             cover: COVER_LOCKED,
             mode: BOT_IDLE,
             req_one_access: vec!["medical".into()],
-            initial_access: Vec::new(),
-            access: Vec::new(),
-            radio: None,
             base_icon: "medbot".into(),
-            commissioned: false,
-            security_flags: 0,
             medical_flags: MEDBOT_SPEAK_MODE,
             heal_amount: 2.5,
             heal_threshold: 10.0,
             healer: Healer::All,
             skin: "generic".into(),
-            janitor_flags: 0,
-            firebot_flags: 0,
-            robot_arm: String::new(),
-            stun_ready_at: 0.0,
-            threat: 0,
-            medkit: String::new(),
-            task: None,
+            ..Bot::default()
         }
     }
 
@@ -374,5 +434,10 @@ mod tests {
             Ok(BotAct::Toggle("check_id".into()))
         );
         assert!(SimpleBotWindow::parse_act("rm -rf", &p).is_err());
+        assert_eq!(
+            SimpleBotWindow::parse_act("slip_people", &p),
+            Ok(BotAct::Toggle("slip_people".into()))
+        );
+        assert_eq!(SimpleBotWindow::parse_act("rename", &p), Ok(BotAct::Rename));
     }
 }

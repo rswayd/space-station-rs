@@ -146,6 +146,73 @@ pub mod files {
         "sound/effects/splat.ogg",
         "sound/effects/blob/blobattack.ogg",
     ];
+    /// Station bots (`ss13_game::bots`): the voiced lines of the kinds (`generate_speak_list`),
+    /// the MULEbot's `buzz`, the stun, cuff and honk sounds of the secbots and honkbots, the
+    /// ED-209's shot, the dedbot's blades, the cleanbot's acid spray.
+    pub const BOTS: [&str; 62] = [
+        "sound/machines/buzz/buzz-sigh.ogg",
+        "sound/machines/buzz/buzz-two.ogg",
+        "sound/machines/ping.ogg",
+        "sound/machines/chime.ogg",
+        "sound/items/weapons/egloves.ogg",
+        "sound/items/weapons/cablecuff.ogg",
+        "sound/items/bikehorn.ogg",
+        "sound/misc/sadtrombone.ogg",
+        "sound/items/airhorn/airhorn.ogg",
+        "sound/mobs/non-humanoids/honkbot/honkbot_evil_laugh.ogg",
+        "sound/items/weapons/laser.ogg",
+        "sound/items/weapons/bladeslice.ogg",
+        "sound/items/weapons/drill.ogg",
+        "sound/items/weapons/blade1.ogg",
+        "sound/effects/spray2.ogg",
+        "sound/mobs/non-humanoids/beepsky/criminal.ogg",
+        "sound/mobs/non-humanoids/beepsky/freeze.ogg",
+        "sound/mobs/non-humanoids/beepsky/justice.ogg",
+        "sound/mobs/non-humanoids/beepsky/creep.ogg",
+        "sound/mobs/non-humanoids/beepsky/iamthelaw.ogg",
+        "sound/mobs/non-humanoids/beepsky/secureday.ogg",
+        "sound/mobs/non-humanoids/medbot/coming.ogg",
+        "sound/mobs/non-humanoids/medbot/help.ogg",
+        "sound/mobs/non-humanoids/medbot/injured.ogg",
+        "sound/mobs/non-humanoids/medbot/patchedup.ogg",
+        "sound/mobs/non-humanoids/medbot/apple.ogg",
+        "sound/mobs/non-humanoids/medbot/feelbetter.ogg",
+        "sound/mobs/non-humanoids/medbot/no.ogg",
+        "sound/mobs/non-humanoids/medbot/live.ogg",
+        "sound/mobs/non-humanoids/medbot/lost.ogg",
+        "sound/mobs/non-humanoids/medbot/delicious.ogg",
+        "sound/mobs/non-humanoids/medbot/surgeon.ogg",
+        "sound/mobs/non-humanoids/medbot/radar.ogg",
+        "sound/mobs/non-humanoids/medbot/catch.ogg",
+        "sound/mobs/non-humanoids/medbot/flies.ogg",
+        "sound/mobs/non-humanoids/medbot/why.ogg",
+        "sound/mobs/non-humanoids/medbot/fuck_you.ogg",
+        "sound/mobs/non-humanoids/medbot/turn_off.ogg",
+        "sound/mobs/non-humanoids/medbot/im_different.ogg",
+        "sound/mobs/non-humanoids/medbot/close.ogg",
+        "sound/mobs/non-humanoids/medbot/shindemashou.ogg",
+        "sound/mobs/non-humanoids/firebot/nofires.ogg",
+        "sound/mobs/non-humanoids/firebot/onlyyou.ogg",
+        "sound/mobs/non-humanoids/firebot/tempnominal.ogg",
+        "sound/mobs/non-humanoids/firebot/keepitcool.ogg",
+        "sound/mobs/non-humanoids/firebot/detected.ogg",
+        "sound/mobs/non-humanoids/firebot/stopdropnroll.ogg",
+        "sound/mobs/non-humanoids/firebot/extinguishing.ogg",
+        "sound/mobs/non-humanoids/firebot/candle_tip.ogg",
+        "sound/mobs/non-humanoids/firebot/electric_fire_tip.ogg",
+        "sound/mobs/non-humanoids/firebot/gasoline_tip.ogg",
+        "sound/mobs/non-humanoids/hygienebot/unhygienicclient.ogg",
+        "sound/mobs/non-humanoids/hygienebot/dragyouout.ogg",
+        "sound/mobs/non-humanoids/hygienebot/foulsmelling.ogg",
+        "sound/mobs/non-humanoids/hygienebot/troglodyte.ogg",
+        "sound/mobs/non-humanoids/hygienebot/greencloud.ogg",
+        "sound/mobs/non-humanoids/hygienebot/letmeclean.ogg",
+        "sound/mobs/non-humanoids/hygienebot/cutarteries.ogg",
+        "sound/mobs/non-humanoids/hygienebot/stoprunning.ogg",
+        "sound/mobs/non-humanoids/hygienebot/finally.ogg",
+        "sound/mobs/non-humanoids/hygienebot/thankgod.ogg",
+        "sound/mobs/non-humanoids/hygienebot/degenerate.ogg",
+    ];
     /// `/datum/looping_sound/fire` `mid_sounds` (equal weights).
     pub const FIRE_LOOP: [&str; 7] = [
         "sound/effects/fireclip1.ogg",
@@ -409,6 +476,7 @@ pub fn referenced<'a>(
     out.extend(files::SECURITY_LEVELS.map(str::to_owned));
     out.extend(files::VENDING.map(str::to_owned));
     out.extend(files::COMMS.map(str::to_owned));
+    out.extend(files::BOTS.map(str::to_owned));
     for path in converted {
         for var in SOUND_VARS {
             let s = sound_var(types, path, var);

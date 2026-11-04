@@ -15,24 +15,47 @@ use crate::value::{Field, Skip, Val};
 pub const NAVBEACON_ROOT: &str = "/obj/machinery/navbeacon";
 const COMPONENT: &str = "dm_navbeacon";
 
-/// Built by bot construction or dropped by dying bots.
-pub const BOT_RUNTIME_TYPES: [&str; 16] = [
+/// Built by bot construction or dropped by dying bots, and what MULEbots, ED-209s, honkbots and
+/// hygienebots use at runtime (cells, cuffs, the clown box a honkbot starts from).
+pub const BOT_RUNTIME_TYPES: [&str; 38] = [
     "/mob/living/basic/bot/cleanbot",
     "/mob/living/basic/bot/medbot",
     "/mob/living/basic/bot/secbot",
     "/mob/living/basic/bot/firebot",
+    "/mob/living/basic/bot/secbot/ed209",
+    "/mob/living/basic/bot/secbot/honkbot",
+    "/mob/living/basic/bot/secbot/grievous",
+    "/mob/living/basic/bot/secbot/grievous/toy",
+    "/mob/living/basic/bot/hygienebot",
     "/obj/item/bot_assembly/cleanbot",
     "/obj/item/bot_assembly/medbot",
     "/obj/item/bot_assembly/secbot",
     "/obj/item/bot_assembly/firebot",
+    "/obj/item/bot_assembly/ed209",
+    "/obj/item/bot_assembly/honkbot",
+    "/obj/item/bot_assembly/hygienebot",
     "/obj/item/assembly/prox_sensor",
     "/obj/item/assembly/signaler",
     "/obj/item/bodypart/arm/right/robot",
+    "/obj/item/bodypart/leg/left/robot",
+    "/obj/item/bodypart/leg/right/robot",
     "/obj/item/reagent_containers/cup/bucket",
     "/obj/item/clothing/head/utility/hardhat/red",
+    "/obj/item/restraints/handcuffs/cable/zipties",
     "/obj/item/restraints/handcuffs/cable/zipties/used",
+    "/obj/item/restraints/handcuffs/cable/zipties/fake",
     "/obj/effect/decal/cleanable/blood/oil",
     "/obj/item/healthanalyzer",
+    "/obj/item/stock_parts/power_store/cell/upgraded",
+    "/obj/item/stock_parts/power_store/cell/potato",
+    "/obj/item/gun/energy/disabler",
+    "/obj/item/clothing/head/helmet",
+    "/obj/item/clothing/suit/armor/vest",
+    "/obj/item/bikehorn/airhorn",
+    "/obj/item/storage/box/clown",
+    "/obj/item/stack/sheet/iron",
+    "/obj/item/melee/energy/sword/saber",
+    "/obj/item/toy/sword",
 ];
 
 /// `/obj/machinery/navbeacon` `location` and `codes_txt` ("patrol;next_patrol=X").

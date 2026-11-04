@@ -77,6 +77,15 @@ pub enum Key {
     PatientInCrit,
     PostCleanCooldown,
     AnnounceCooldown,
+    /// `BB_MULEBOT_TRAVEL_TARGET` (the beacon a MULEbot drives to).
+    TravelTarget,
+    /// The hygienebot's `BB_WASH_FRUSTRATION` (a count in [`Value::Time`]) and
+    /// `BB_TRASH_TALK_COOLDOWN`; the cleanbot's `BB_ACID_SPRAY_COOLDOWN`.
+    WashFrustration,
+    TrashTalkCooldown,
+    AcidSprayCooldown,
+    /// The honkbot's `BB_CLOWN_FRIEND`, the vibebot's `BB_VIBEBOT_PARTY_TARGET`.
+    FriendTarget,
 }
 
 #[derive(Clone, Debug, PartialEq)]

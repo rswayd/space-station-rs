@@ -29,6 +29,8 @@
 
 #[cfg(feature = "server")]
 pub mod ai;
+#[cfg(feature = "server")]
+pub mod cleanbot;
 #[cfg(feature = "client")]
 pub mod client;
 #[cfg(feature = "server")]
@@ -36,7 +38,13 @@ pub mod construction;
 #[cfg(feature = "server")]
 mod core;
 #[cfg(feature = "server")]
+pub mod mule;
+#[cfg(feature = "server")]
+pub mod sec;
+#[cfg(feature = "server")]
 pub mod ui;
+#[cfg(feature = "server")]
+pub mod voice;
 
 #[cfg(feature = "server")]
 pub use core::*;
@@ -72,6 +80,41 @@ pub struct BotSettings {
     pub maintenance_lock: bool,
     pub power: bool,
     pub patrol_station: bool,
+}
+
+/// tgui `Mule` (`tgui/packages/tgui/interfaces/Mule.tsx`).
+pub struct MuleUi;
+
+impl UiInterface for MuleUi {
+    const NAME: &'static str = "Mule";
+    type Data = MuleData;
+    type StaticData = ();
+}
+
+/// `/mob/living/basic/bot/mulebot/ui_data`.
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct MuleData {
+    /// `powerStatus`.
+    pub power: bool,
+    /// `cellPercent` (`None`: no cell).
+    pub cell_percent: Option<f32>,
+    /// `loadName` while loaded (`load`).
+    pub load_name: Option<String>,
+    pub locked: bool,
+    /// `siliconUser`.
+    pub silicon: bool,
+    pub mode: String,
+    /// `modeStatus`: `good`, `average`, `bad` or empty.
+    pub mode_status: String,
+    pub auto_return: bool,
+    pub auto_pickup: bool,
+    pub report_delivery: bool,
+    pub destination: Option<String>,
+    /// `destinationsList` (`GLOB.deliverybeacontags`).
+    pub destinations: Vec<String>,
+    /// `homeDestination`.
+    pub home: Option<String>,
+    pub bot_id: String,
 }
 
 /// The medbot's slider control (`MedbotThreshold`).

@@ -145,6 +145,8 @@ pub enum WireHolder {
     Apc,
     Vending,
     Autolathe,
+    /// `/datum/wires/mulebot` (`crate::bots::mule`).
+    Mulebot,
 }
 
 /// tg `/datum/wires` of one holder.
@@ -666,6 +668,8 @@ fn status(s: &WiresSourceItem<'_, '_>) -> Vec<String> {
                 ),
             ]
         }
+        // `/datum/wires/mulebot` has no `get_status`.
+        WireHolder::Mulebot => Vec::new(),
         WireHolder::Autolathe => {
             let Some(a) = s.autolathe else {
                 return Vec::new();
@@ -833,7 +837,8 @@ pub fn screwdriver_act(world: &mut World, actor: Actor, kind: ToolKind, target: 
         }
         // `crate::construction` handles the vending panel, `crate::machine_frame` the
         // autolathe's.
-        WireHolder::Vending | WireHolder::Autolathe => return false,
+        // `crate::bots` handles the bot's panel.
+        WireHolder::Vending | WireHolder::Autolathe | WireHolder::Mulebot => return false,
     };
     crate::tools::tell(world, actor.client, Span::Notice, text);
     true
@@ -917,6 +922,7 @@ pub fn interactable(world: &World, holder: Entity, user: Entity) -> bool {
             door.panel_open
         }
         WireHolder::Apc | WireHolder::Autolathe => panel_open(world, holder),
+        WireHolder::Mulebot => crate::bots::mule::interactable(world, holder),
         WireHolder::Vending => {
             if electrified && should_electrocute(world, holder, user) {
                 return false;
@@ -962,6 +968,8 @@ pub fn shock(world: &mut World, holder: Entity, mob: Entity, chance: f32) -> boo
             }
             (area_power_source(world, holder), VENDING_SIEMENS)
         }
+        // MULEbots never shock (no `shock` override, no electrified state).
+        WireHolder::Mulebot => return false,
         // `get_cell()`: the APC's own cell.
         WireHolder::Apc => (
             world
@@ -1201,7 +1209,7 @@ fn touches(
                     title,
                 ));
             }
-            WireHolder::Apc | WireHolder::Autolathe => {}
+            WireHolder::Apc | WireHolder::Autolathe | WireHolder::Mulebot => {}
         }
     }
 }
@@ -1311,6 +1319,7 @@ pub fn cut(world: &mut World, holder: Entity, wire: &str, source: Option<Entity>
         WireHolder::Apc => apc_on_cut(world, holder, wire, mend, source),
         WireHolder::Vending => vending_on_cut(world, holder, wire, mend, source),
         WireHolder::Autolathe => autolathe_on_cut(world, holder, wire, mend, source),
+        WireHolder::Mulebot => crate::bots::mule::on_cut(world, holder, wire, source),
     }
 }
 
@@ -1327,6 +1336,7 @@ pub fn pulse(world: &mut World, holder: Entity, wire: &str, user: Option<Entity>
         WireHolder::Apc => apc_on_pulse(world, holder, wire, user),
         WireHolder::Vending => vending_on_pulse(world, holder, wire, user),
         WireHolder::Autolathe => autolathe_on_pulse(world, holder, wire),
+        WireHolder::Mulebot => crate::bots::mule::on_pulse(world, holder, wire),
     }
 }
 

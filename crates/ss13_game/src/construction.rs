@@ -157,6 +157,8 @@ pub enum Job {
     Frame(crate::machine_frame::FrameJob),
     /// Righting a tilted vendor ([`crate::vending`]).
     Vending(crate::vending::VendJob),
+    /// Taping a knife to a cleanbot, wiring and finishing an ED-209 ([`crate::bots`]).
+    Bot(crate::bots::BotUserJob),
 }
 
 /// A turf's baseturf stack, bottom first (tg `baseturfs`). Absent: assembled from the type's
@@ -934,6 +936,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::WallMount(job) => crate::wallmount::complete(world, client, mob, target, job),
         &Job::Frame(job) => crate::machine_frame::complete(world, mob, action, job),
         &Job::Vending(job) => crate::vending::complete(world, mob, action, job),
+        &Job::Bot(job) => crate::bots::complete_job(world, mob, action, job),
         &Job::Emitter(job) => crate::power::emitter::complete(world, client, target, job, consume),
         Job::GirderBolts { from } => {
             if !is_under(&path, GIRDER) || obj_state(world, target) != *from || !consume(world) {
