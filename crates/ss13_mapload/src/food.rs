@@ -529,6 +529,71 @@ fn grown(types: &DmTypes, path: &str, food: &mut DmFood) {
 
 /// Every type food on the map can turn into (microwave and processor results, slices, trash),
 /// transitively, plus the burned mess and the grinder's beaker.
+/// What kitchen machines make at runtime, by machine type (`ss13_game::gibber`, `coffee`,
+/// `icecream`, `stove`, and the ash of things burnt in `cooking`).
+const MACHINE_SPAWNS: [(&str, &[&str]); 9] = [
+    (
+        "/obj/machinery/gibber",
+        &[
+            "/obj/item/food/meat/slab/human",
+            "/obj/item/stack/sheet/animalhide/carbon/human",
+            "/obj/effect/decal/cleanable/blood/gibs/up",
+            "/obj/effect/decal/cleanable/blood/gibs/down",
+            "/obj/effect/decal/cleanable/blood/gibs",
+            "/obj/effect/decal/cleanable/blood/gibs/body",
+            "/obj/effect/decal/cleanable/blood/gibs/limb",
+            "/obj/effect/decal/cleanable/blood/gibs/core",
+        ],
+    ),
+    (
+        "/obj/machinery/coffeemaker",
+        &[
+            "/obj/item/reagent_containers/cup/coffeepot",
+            "/obj/item/coffee_cartridge",
+            "/obj/item/reagent_containers/cup/glass/coffee_cup",
+            "/obj/item/reagent_containers/condiment/pack/sugar",
+            "/obj/item/reagent_containers/condiment/pack/astrotame",
+            "/obj/item/reagent_containers/condiment/creamer",
+        ],
+    ),
+    (
+        "/obj/machinery/coffeemaker/impressa",
+        &["/obj/item/reagent_containers/cup/glass/coffee/no_lid"],
+    ),
+    (
+        "/obj/machinery/icecream_vat",
+        &[
+            "/obj/item/food/icecream",
+            "/obj/item/food/icecream/chocolate",
+            "/obj/item/food/icecream/korta",
+        ],
+    ),
+    (
+        "/obj/machinery/oven/range",
+        &["/obj/item/reagent_containers/cup/soup_pot"],
+    ),
+    ("/obj/machinery/stove", &[SOUP_POT_RESULTS[0]]),
+    (
+        "/obj/item/reagent_containers/cup/soup_pot",
+        &SOUP_POT_RESULTS,
+    ),
+    ("/obj/machinery/oven", &ASH),
+    ("/obj/machinery/griddle", &ASH),
+];
+
+const ASH: [&str; 2] = [
+    "/obj/effect/decal/cleanable/ash",
+    "/obj/effect/decal/cleanable/ash/large",
+];
+
+/// Foods soup reactions make (`resulting_food_path`).
+const SOUP_POT_RESULTS: [&str; 4] = [
+    "/obj/item/reagent_containers/cup/soup_pot",
+    "/obj/item/food/spaghetti/boilednoodles",
+    "/obj/item/food/spaghetti/ramen_beef",
+    "/obj/item/food/volt_fish",
+];
+
 pub fn food_closure<'a>(
     types: &DmTypes,
     needed: impl IntoIterator<Item = &'a str>,
@@ -550,6 +615,11 @@ pub fn food_closure<'a>(
         // A soda can that bursts leaves a crushed can (`soda_cans/throw_impact`).
         if is_under(&path, SODA_CANS) {
             next.push(CRUSHED_CAN.to_owned());
+        }
+        for (root, spawned) in MACHINE_SPAWNS {
+            if is_under(&path, root) {
+                next.extend(spawned.iter().map(|s| (*s).to_owned()));
+            }
         }
         if let Some(f) = food(types, &path) {
             next.push(BAD_RECIPE.to_owned());
