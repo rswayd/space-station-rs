@@ -16,7 +16,8 @@
 //! - `{"op":"hurt","kind":"oxy","amount":150}`: damage to the asking client's mob (spread over
 //!   the body for brute and burn), then its stat;
 //! - `{"op":"event","name":"Grid Check","announce":true}`: forces a random event by its tg name
-//!   (the admin Force Event; `announce` overrides its announcement chance).
+//!   (the admin Force Event; `announce` overrides its announcement chance);
+//! - `{"op":"emp","pos":[x,y,z],"heavy":1,"light":3}`: an EMP there (the admin "EM Pulse").
 //!
 //! Positions in answers are `[x, y]` with `z` apart, as the case files write tiles.
 
@@ -48,6 +49,9 @@ use ss13_world::SpatialIndex;
 
 use crate::server::{TIME_SCALE_RANGE, on_map, tile_report};
 
+/// The largest EMP range a hook may ask for (tg's admin verb has none; this keeps a typo cheap).
+const MAX_EMP_RANGE: i64 = 30;
+
 /// Answers one command for `client`.
 pub fn answer(world: &mut World, client: Entity, command: &str) -> Result<String, String> {
     let command: Value = serde_json::from_str(command).map_err(|e| format!("bad command: {e}"))?;
@@ -71,6 +75,22 @@ pub fn answer(world: &mut World, client: Entity, command: &str) -> Result<String
         "event" => {
             let name = str_field(&command, "name")?;
             ss13_game::events::force_event(world, name, command["announce"].as_bool())?;
+            Value::Null
+        }
+        "emp" => {
+            let pos = pos_field(world, &command)?;
+            let range = |key: &str| {
+                command[key]
+                    .as_i64()
+                    .filter(|r| (0..=MAX_EMP_RANGE).contains(r))
+                    .ok_or_else(|| format!("{key}: expected 0..={MAX_EMP_RANGE}"))
+            };
+            let (heavy, light) = (range("heavy")?, range("light")?);
+            world.write_message(ss13_game::emp::Empulse {
+                epicenter: pos,
+                heavy: heavy as i32,
+                light: light as i32,
+            });
             Value::Null
         }
         "time_scale" => {

@@ -218,7 +218,7 @@ fn state_id(dmi: &str, state: &str) -> IconStateId {
     IconStateId(i as u32)
 }
 
-fn fixture_assets(test: &str) -> PathBuf {
+pub(crate) fn fixture_assets(test: &str) -> PathBuf {
     fixture_assets_with(test, MAP)
 }
 

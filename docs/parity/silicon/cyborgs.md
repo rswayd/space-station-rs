@@ -85,7 +85,7 @@
 Брутальный урон чинится сваркой, ожоги — кабелем; EMP оглушает, флеш ослепляет; при смерти мозг можно извлечь.
 
 - **Код:** [`robot_defense.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/silicon/robot/robot_defense.dm#L7), [`robot/death.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/silicon/robot/death.dm#L10), [`proc/dump_into_mmi()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/silicon/robot/robot.dm#L573)
-- **Статус в ss13-rs:** 🟡 частично — только brute/burn, без крита, смерть на −100 (`crates/ss13_game/src/silicon/mod.rs`), мёртвый киборг инертен, при движении — призрак; нет ремонта сваркой и кабелем, поломки модулей, обломков, EMP
+- **Статус в ss13-rs:** 🟡 частично — только brute/burn, без крита, смерть на −100 (`crates/ss13_game/src/silicon/mod.rs`), мёртвый киборг инертен, при движении — призрак; нет ремонта сваркой и кабелем, поломки модулей, обломков; ЭМИ (`crates/ss13_game/src/emp/mobs.rs`): общий силиконовый урон, паралич 16/6 с вместо `Unconscious`, ячейка разряжается (high-ячейка ×3)
 
 ### NTOS Robotact и BorgPanel
 Встроенный в киборга компьютер (законы, апгрейды, журнал) и админская панель киборга.

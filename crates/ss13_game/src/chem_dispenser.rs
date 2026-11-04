@@ -13,7 +13,7 @@
 //!   window's acts (`amount`, `dispense`, `remove`, `eject`, `insert`) are checked on the server
 //!   at the moment of effect: power, the beaker, the amount among the beaker's transfer amounts,
 //!   the reagent among the dispensable ones.
-// shortcut: no custom recipes, reaction lookup, EMP spray, hallucinated names, beaker overlay or
+// shortcut: no custom recipes, reaction lookup, hallucinated names, beaker overlay or
 // working animation; an emag only exists as the `fullupgrade` subtypes' starting state.
 
 use bevy::ecs::message::{MessageCursor, Messages};

@@ -1043,6 +1043,23 @@ SS13_FORCE_EVENT="Meteor Wave: Catastrophic" SS13_LIGHTING=0 \
     scripts/visual-check.sh scripts/visual/meteors.txt   # meteors hitting a room in space
 ```
 
+### EMP
+
+`crates/ss13_game/src/emp/`, after tg `empulse()` and `emp_act`: a pulse (`Empulse`) hits every
+atom within its light range (heavy inside the heavy range), its wires, worn and held items,
+organs, bag and closet contents. Cells drain; APCs drop their channels for a minute; lights burn
+out; SMES, thermomachines, portable pumps and scrubbers scramble; cameras go dark for 90 s,
+radios for 20 s, R&D servers for 60 s; airlocks may open; secure closets flip their locks; bots
+switch off (and break); silicons burn and cyborgs drop; cybernetic organs fail. Sources: the EMP
+reaction (uranium, iron, aluminium), electromagnetic meteors, ion bolts, the cult's EMP spell,
+Communications Blackout (the telecomms), and the debug test hook
+`{"op":"emp","pos":[x,y,z],"heavy":1,"light":3}`.
+
+```sh
+cargo test -p ss13_game --all-features --test it emp::     # falloff, protection, contents, APC,
+                                                       # lights, SMES, radio, camera
+```
+
 ### Basic mobs and their AI
 
 `crates/ss13_game/src/mobs/`, after tg `/mob/living/basic` and `/datum/ai_controller`.

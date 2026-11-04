@@ -22,7 +22,7 @@
 //! ([`ShootsInventory`]) and mobs waiting for their second shock ([`SecondaryShock`]).
 // shortcut: no assemblies (signalers) on wires: `attach` does nothing and nothing is ever
 // attached; add them with assemblies. No wire revealing (blueprints, abductor multitool,
-// `TRAIT_KNOW_ENGI_WIRES`), no colorblindness, no EMP pulses, no silicon access (the AI wire
+// `TRAIT_KNOW_ENGI_WIRES`), no colorblindness, no silicon access (the AI wire
 // only changes the stub state and its status light), no airlock security plating.
 
 use std::collections::HashMap;
@@ -105,6 +105,8 @@ pub const POSSIBLE_COLORS: [(&str, &str); 17] = [
     ("yellow", "light grey"),
 ];
 
+/// `MAXIMUM_EMP_WIRES`.
+const MAXIMUM_EMP_WIRES: usize = 3;
 /// `MACHINE_DEFAULT_ELECTRIFY_TIME`: seconds for airlocks, machine ticks for vendors.
 pub const MACHINE_DEFAULT_ELECTRIFY_TIME: f64 = 30.0;
 /// tg airlock `loseMainPower`/`loseBackupPower` outages, seconds.
@@ -1337,6 +1339,36 @@ pub fn pulse(world: &mut World, holder: Entity, wire: &str, user: Option<Entity>
         WireHolder::Vending => vending_on_pulse(world, holder, wire, user),
         WireHolder::Autolathe => autolathe_on_pulse(world, holder, wire),
         WireHolder::Mulebot => crate::bots::mule::on_pulse(world, holder, wire),
+    }
+}
+
+/// tg `emp_pulse()`: in a shuffled order each wire is pulsed at 33%, at most
+/// `MAXIMUM_EMP_WIRES` (3) of them.
+pub fn emp_pulse(world: &mut World, holder: Entity) {
+    let Some(mut wires) = world
+        .get::<Wires>(holder)
+        .map(|w| w.colors.iter().map(|(_, w)| w.clone()).collect::<Vec<_>>())
+    else {
+        return;
+    };
+    let mut pulsed = Vec::new();
+    {
+        let mut rng = world.resource_mut::<crate::emp::EmpRng>();
+        for i in (1..wires.len()).rev() {
+            let j = rng.range(0, i as i64) as usize;
+            wires.swap(i, j);
+        }
+        for wire in wires {
+            if pulsed.len() == MAXIMUM_EMP_WIRES {
+                break;
+            }
+            if rng.prob(33.0) {
+                pulsed.push(wire);
+            }
+        }
+    }
+    for wire in pulsed {
+        pulse(world, holder, &wire, None);
     }
 }
 

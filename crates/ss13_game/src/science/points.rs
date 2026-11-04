@@ -5,7 +5,7 @@
 //! the science budget `SSeconomy.techweb_bounty`.
 //!
 //! Cost: one pass over the servers per second (MetaStation has two).
-// shortcut: no server control console (`rdservercontrol`), EMP, the master server's HDD theft
+// shortcut: no server control console (`rdservercontrol`), the master server's HDD theft
 // (`income_modifier` stays 1) or the servers' random name suffix.
 
 use std::collections::HashMap;
@@ -139,7 +139,7 @@ fn research_tick(
     mut next: Local<f64>,
     db: Option<Res<ResearchDb>>,
     web: Option<ResMut<Techweb>>,
-    servers: Query<(&ResearchServer, Has<Unpowered>)>,
+    servers: Query<(&ResearchServer, Has<Unpowered>, Has<crate::emp::Emped>)>,
     economy: Option<ResMut<Economy>>,
 ) {
     let (Some(db), Some(mut web)) = (db, web) else {
@@ -150,10 +150,10 @@ fn research_tick(
         return;
     }
     *next = now + RESEARCH_TICK_SECS;
-    // `refresh_working`: `machine_stat & NOPOWER` or `research_disabled` stop a server.
+    // `refresh_working`: `machine_stat & (NOPOWER|EMPED)` or `research_disabled` stop a server.
     let working = servers
         .iter()
-        .any(|(s, unpowered)| !unpowered && !s.research_disabled);
+        .any(|(s, unpowered, emped)| !unpowered && !emped && !s.research_disabled);
     web.generate_points(&db, working, now);
     if web.queue.is_empty() {
         return;

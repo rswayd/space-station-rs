@@ -22,7 +22,7 @@
 //! firelocks and buttons with a pending flick or timer; everything else runs on a click or a
 //! power change.
 // shortcut: no construction or deconstruction (wall frames, screwdriver panels, wires,
-// electronics), no damage, breaking, emag or EMP, no silicon access (AI clicks, ctrl-click
+// electronics), no damage, breaking or emag (EMPs: `crate::emp::machines`), no silicon access (AI clicks, ctrl-click
 // thermal sensors), no circuit USB ports; the light switch's `area` var (controlling another
 // area) is not read. Add each with its mechanic.
 

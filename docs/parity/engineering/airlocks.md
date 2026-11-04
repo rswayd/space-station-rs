@@ -78,7 +78,7 @@
 Шлюзы получают урон и ломаются (сыплются искры, перестают работать), ЭМИ сбивает питание и может открыть; взрывы, удары разряда тесла.
 
 - **Код:** [`take_damage()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/doors/door.dm#L498), [`proc/on_break()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/doors/airlock.dm#L1609), [`emp_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/doors/airlock.dm#L1615), [`ex_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/doors/door.dm#L760)
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/obj_damage.rs`: двери урон не получают
+- **Статус в ss13-rs:** 🟡 частично — ЭМИ (`crates/ss13_game/src/emp/machines.rs`, провода — `crates/ss13_game/src/wires.rs` `emp_pulse`): провода пульсируют (до 3, по 33%), шлюз или винтовая дверь открываются с `20/severity`%, электризация на 30 с с `severity × 10 − 20`% (для обычного импульса — никогда, как в tg); урона и поломки шлюзов нет (`crates/ss13_game/src/obj_damage.rs`)
 
 ### Виды шлюзов
 ~220 подтипов: отделов (командный, СБ, инженерный, медицинский, научный, ...), стеклянные, техобслуживания, внешние, хранилище, высокозащищённые, шаттловые, минеральные (урановый фонит, плазменный горит), деревянные, культистские, абдукторские, многотайловые (`multi_tile`).

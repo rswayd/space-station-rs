@@ -1804,6 +1804,12 @@ fn refresh_containers(world: &mut World) {
                 continue;
             }
         }
+        if reacted
+            .iter()
+            .any(|&(i, _)| chem.reactions[i as usize].def.path == EMP_REACTION)
+        {
+            reagent_emps(world, &chem, e, &reacted);
+        }
         let reacting = holder(world, e).is_some_and(|h| h.is_reacting);
         match (reacting, world.get::<Reacting>(e).is_some()) {
             (true, false) => {
@@ -1862,6 +1868,40 @@ fn reagent_explosions(world: &mut World, chem: &Chemistry, e: Entity, reacted: &
             return;
         };
         r.0.clear();
+    }
+}
+
+/// `/datum/chemical_reaction/emp_pulse`.
+const EMP_REACTION: &str = "/datum/chemical_reaction/emp_pulse";
+
+/// `emp_pulse/on_reaction`: an EMP from the container's tile, `round(volume / 1.5 / 12)` heavy
+/// and `round(volume / 1.5 / 7)` light, and the container is emptied.
+/// `emp_pulse/on_reaction` ranges: "pretending this reaction took two ingredients", DM
+/// one-argument `round` (down).
+fn emp_reaction_ranges(volume: f32) -> (i32, i32) {
+    let two_thirds = volume / 1.5;
+    (
+        (two_thirds / 12.0).floor() as i32,
+        (two_thirds / 7.0).floor() as i32,
+    )
+}
+
+fn reagent_emps(world: &mut World, chem: &Chemistry, e: Entity, reacted: &[(u32, f32)]) {
+    for &(index, volume) in reacted {
+        if chem.reactions[index as usize].def.path != EMP_REACTION {
+            continue;
+        }
+        if let Some(pos) = map_pos(world, e) {
+            let (heavy, light) = emp_reaction_ranges(volume);
+            world.write_message(crate::emp::Empulse {
+                epicenter: pos,
+                heavy,
+                light,
+            });
+        }
+        if let Some(mut r) = world.get_mut::<Reagents>(e) {
+            r.0.clear();
+        }
     }
 }
 
@@ -2370,6 +2410,13 @@ pub fn blood_amount(world: &World, mob: Entity, path: &str) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn emp_reaction_ranges_follow_volume() {
+        assert_eq!(emp_reaction_ranges(100.0), (5, 9));
+        assert_eq!(emp_reaction_ranges(200.0), (11, 19));
+        assert_eq!(emp_reaction_ranges(10.0), (0, 0));
+    }
 
     #[test]
     fn reagents_are_seen_with_scanner_glasses_or_dead() {

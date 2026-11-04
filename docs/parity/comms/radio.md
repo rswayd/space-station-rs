@@ -43,7 +43,7 @@ EMP временно выключает радио; глушилка радио�
 
 - **Код:** [`/obj/item/radio/emp_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/devices/radio/radio.dm#L651)
 - **BandaStation:** [`radio.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/devices/radio/radio.dm#L354) — глушилка учитывает частоту
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — ЭМИ (`crates/ss13_game/src/emp/mobs.rs`): рация выключается, все каналы перестают прослушиваться, в руках или на теле — «перегружается», через 20 с после последнего импульса включается (каналы остаются выключены, как в tg); нет глушилки
 
 ### Радиошум и звук радио
 Звук-помеха при передаче; форк убирает часть ванильной логики шума.

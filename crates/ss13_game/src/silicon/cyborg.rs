@@ -24,7 +24,6 @@
 // no lamp, ion thrusters, model transform animation, skins, upgrades, emag modules, lockdown,
 // tipping or MMI; consumables are not respawned at the station (nor their 0.5% of the charge
 // drawn, which tg takes only when something was restocked).
-// shortcut: cyborgs are not EMP-able (no EMP effects exist yet).
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;

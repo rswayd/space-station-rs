@@ -105,6 +105,9 @@
 //! - `mobs` (feature `server`): tg basic mobs (`/mob/living/basic`) from map placements and
 //!   spawns, their environment, fighting them, and their AI controllers (behavior trees).
 //!
+//! - `emp` (feature `server`): tg `empulse()` and `emp_act`: pulses, protection, contents, and
+//!   each ported family's EMP effect.
+//!
 //! - `events` (feature `server`): tg `SSevents`, the random event scheduler, and the round
 //!   events that act on ported systems (grid check, electrical storm, communications blackout,
 //!   meteors, radiation storm, brand intelligence, market crash, false alarm, carp migration).
@@ -182,6 +185,8 @@ pub mod disposals;
 pub mod doors;
 #[cfg(feature = "server")]
 pub mod drag;
+#[cfg(feature = "server")]
+pub mod emp;
 #[cfg(feature = "server")]
 pub mod events;
 #[cfg(feature = "server")]

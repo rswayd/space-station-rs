@@ -5,7 +5,7 @@
 //! asks which sign to show (tg's sorted `tgui_input_list` of the signs that are not hidden);
 //! the sign takes its sprite, `bar sign (<name>)` and its description. Without power it shows
 //! nothing ("empty") and does not listen.
-// shortcut: no renaming of the bar's area, neon light, emissive mask, EMP or emag signs,
+// shortcut: no renaming of the bar's area, neon light, emissive mask, emag signs,
 // breaking, cable repair or taking it off the wall.
 
 use bevy::ecs::message::{MessageCursor, Messages};
@@ -101,7 +101,7 @@ pub fn interact(world: &mut World, client: Entity, mob: Entity, e: Entity) -> bo
         tell(world, client, Span::Warning, "в доступе отказано!");
         return true;
     }
-    if world.get::<Unpowered>(e).is_some() {
+    if world.get::<Unpowered>(e).is_some() || world.get::<crate::emp::Emped>(e).is_some() {
         tell(world, client, Span::Warning, "controls are unresponsive!");
         return true;
     }

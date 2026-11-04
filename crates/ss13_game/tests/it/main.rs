@@ -19,6 +19,7 @@ mod cult;
 mod disposals;
 mod doors;
 mod drag;
+mod emp;
 mod engine;
 mod fire;
 mod firelocks;

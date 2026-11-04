@@ -11,7 +11,7 @@
 //!   exposes its tile to 1000 K (`hotspot_expose(1000, 2500, TRUE)`).
 // shortcut: flicks (`mass_driver1`, `migniter-spark`) show for a fixed second instead of their
 // animation's length; no spark particles (their own `hotspot_expose` and light), no wires,
-// panel, deconstruction, direction wrench, multitool id, EMP, sparker screwdriver disable; a
+// panel, deconstruction, direction wrench, multitool id, sparker screwdriver disable; a
 // thrown mob flies without impact damage (`crate::throw` hits with items only); the mass
 // driver's parts are the tier 1 servo of a mapped one (`RefreshParts`: `drive_range + 10`).
 

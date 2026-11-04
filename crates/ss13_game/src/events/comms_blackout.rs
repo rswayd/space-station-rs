@@ -1,17 +1,13 @@
 //! Communications Blackout (`code/modules/events/communications_blackout.dm`): a heavy EMP on
-//! every telecomms machine (`emp_act(EMP_HEAVY)`: `EMPED` for `rand(298, 302)` s), so headsets
-//! go silent ([`crate::radio::TelecommsOutage`]). The announcement comes only 30% of the time,
+//! every telecomms machine ([`crate::emp::machines::telecomms_emp`]: `EMPED` for
+//! `rand(298, 302)` s), so headsets go silent ([`crate::radio::TelecommsOutage`]). The announcement comes only 30% of the time,
 //! garbled.
 
 use bevy::prelude::*;
 
 use super::controller::{EventRng, EventState, RoundEvent};
-use crate::radio::TelecommsOutage;
 
 pub const NAME: &str = "Communications Blackout";
-/// `/obj/machinery/telecomms/emp_act`: `(300 SECONDS) / severity` (`EMP_HEAVY` = 1), ±2 s.
-const EMP_SECS: i64 = 300;
-
 const ALERTS: [&str; 6] = [
     "Обнаружены ионосферные аномалии. Временный сбой в телекоммуникации неизбежен. Пожалуйста, \
      свяжитесь с вашим*%fj00)`5vc-BZZT",
@@ -43,15 +39,6 @@ impl RoundEvent for Blackout {
     }
 
     fn start(&mut self, world: &mut World, _: &mut EventState) {
-        let now = world.resource::<Time>().elapsed_secs_f64();
-        let secs = world
-            .resource_mut::<EventRng>()
-            .0
-            .range(EMP_SECS - 2, EMP_SECS + 2);
-        let mut outage = world.resource_mut::<TelecommsOutage>();
-        // An EMPed machine is not EMPed again (`!(machine_stat & EMPED)`).
-        if outage.until <= now {
-            outage.until = now + secs as f64;
-        }
+        crate::emp::machines::telecomms_emp(world, crate::emp::EMP_HEAVY);
     }
 }

@@ -18,7 +18,7 @@
 ЭМИ по всем машинам телекоммуникаций: радио глохнет до перезапуска, ИИ получает искажённое сообщение.
 
 - **Код:** [`/datum/round_event_control/communications_blackout`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/communications_blackout.dm#L1)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/events/comms_blackout.rs` + `crates/ss13_game/src/radio.rs` `TelecommsOutage`: на 298–302 с гарнитуры не передают и не принимают, интеркомы и прочие не-subspace радио вещают только друг другу на уровне (tg `backup_transmission`), объявление в 30% случаев с искажённым текстом; телекомы как машины не моделируются, резервная передача без задержки 2 с, нет ИИ и трамвая
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/events/comms_blackout.rs` + `crates/ss13_game/src/radio.rs` `TelecommsOutage` через общий ЭМИ телекомов (`crate::emp::machines::telecomms_emp`, `EMP_HEAVY`): на 298–302 с гарнитуры не передают и не принимают, интеркомы и прочие не-subspace радио вещают только друг другу на уровне (tg `backup_transmission`), объявление в 30% случаев с искажённым текстом; телекомы как машины не моделируются, резервная передача без задержки 2 с, нет ИИ и трамвая
 
 ### Processor Overload
 ЭМИ процессоров телекомов: речь по радио искажается, часть процессоров может взорваться.
