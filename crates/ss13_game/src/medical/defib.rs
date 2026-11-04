@@ -468,19 +468,15 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter, unit: Entity, 
             if !organs::cardiac_arrest(world, target)
                 && organs::state(world, target, organs::Slot::Heart).is_some_and(|h| !h.robotic)
             {
-                let awake = world.get::<Stat>(target) == Some(&Stat::Conscious);
-                let others = if awake {
-                    format!("{victim} thrashes wildly, clutching at their chest!")
-                } else {
-                    String::new()
-                };
-                visible(
-                    world,
-                    target,
-                    "You feel a horrible agony in your chest!",
-                    &others,
-                    Span::Warning,
-                );
+                if world.get::<Stat>(target) == Some(&Stat::Conscious) {
+                    visible(
+                        world,
+                        target,
+                        "You feel a horrible agony in your chest!",
+                        &format!("{victim} thrashes wildly, clutching at their chest!"),
+                        Span::Warning,
+                    );
+                }
                 organs::set_heartattack(world, target, true);
             }
             hurt(world, target, BodyZone::Chest, DamageType::Burn, 50.0);

@@ -310,7 +310,7 @@ fn selected_zone(world: &World, mob: Entity) -> BodyZone {
 }
 
 /// tg `visible_message(message, self_message)` with `ALWAYS_SHOW_SELF_MESSAGE`: `others` to
-/// every client in view of `actor` but the actor, `own` to the actor.
+/// every client in view of `actor` but the actor, `own` to the actor (an empty text to nobody).
 // shortcut: range only, no line of sight, as `crate::health::clients_in_view`.
 pub(crate) fn visible(world: &mut World, actor: Entity, own: &str, others: &str, span: Span) {
     visible_range(world, actor, own, others, span, DEFAULT_MESSAGE_RANGE);
@@ -333,11 +333,14 @@ pub(crate) fn visible_range(
         channel: ChatChannel::Info,
         segments: vec![ChatSegment::new(span, text)],
     };
-    if !clients.is_empty() {
+    if !clients.is_empty() && !others.is_empty() {
         world.write_message(SendChat {
             clients,
             message: message(others),
         });
+    }
+    if own.is_empty() {
+        return;
     }
     if let Some(client) = world.get::<PlayerMob>(actor).map(|p| p.client) {
         world.write_message(SendChat {
