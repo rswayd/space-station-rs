@@ -459,6 +459,8 @@ pub struct Wound {
     pub regen_ticks_needed: u32,
     /// Compound fracture reset in surgery.
     pub reset: bool,
+    /// Pierce: `mend_state`, vessels joined and waiting to be sealed.
+    pub mend_state: bool,
     /// Burns.
     pub flesh_damage: f32,
     pub flesh_healing: f32,
@@ -482,6 +484,7 @@ impl Wound {
             regen_ticks: 0,
             regen_ticks_needed: def.regen_ticks_needed,
             reset: false,
+            mend_state: false,
             flesh_damage: def.flesh_damage,
             flesh_healing: 0.0,
             infection: 0.0,

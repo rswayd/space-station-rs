@@ -225,6 +225,9 @@ pub mod modpc;
 pub mod multiz;
 #[cfg(feature = "server")]
 pub mod obj_damage;
+pub mod operating;
+#[cfg(feature = "client")]
+pub mod operating_client;
 #[cfg(feature = "server")]
 pub mod outfit;
 pub mod panels;

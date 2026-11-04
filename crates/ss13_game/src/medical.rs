@@ -29,6 +29,7 @@
 
 pub mod blood;
 pub mod defib;
+pub mod operating;
 pub mod surgery;
 pub mod wounds;
 
@@ -108,6 +109,8 @@ pub enum MedJob {
     },
     /// Buckling someone to a table or a bed ([`surgery::buckle`]).
     Buckle { to: Entity },
+    /// A surgery disk loading into an operating computer ([`operating::finish_load`]).
+    LoadDisk,
     /// A stage of a defibrillator shock ([`defib::complete`]).
     Defib { unit: Entity, stage: defib::Stage },
     /// A wound treatment ([`wounds::finish_treatment`]).
@@ -135,6 +138,7 @@ pub fn complete_med(world: &mut World, mob: Entity, action: &DoAfter, job: MedJo
         MedJob::AttachIv { drip } => blood::finish_attach(world, actor, drip, target),
         MedJob::Surgery { op, zone } => surgery::complete(world, mob, action, op, zone),
         MedJob::Buckle { to } => surgery::buckle(world, actor, target, to),
+        MedJob::LoadDisk => operating::finish_load(world, actor, target),
         MedJob::Defib { unit, stage } => defib::complete(world, mob, action, unit, stage),
         MedJob::Treat { zone, treat, kind } => {
             wounds::finish_treatment(world, actor, target, zone, treat, kind);
@@ -183,6 +187,7 @@ impl Plugin for MedicalServerPlugin {
                     .before(crate::health::HealthSystems),
             );
         surgery::build(app);
+        operating::build(app);
         defib::build(app);
     }
 }
@@ -1016,6 +1021,9 @@ fn claim_click(world: &mut World, actor: Actor, target: Entity, modifiers: Click
             return defib::paddles_attack(world, actor, item, target, modifiers.right);
         }
         return false;
+    }
+    if operating::interact(world, actor, target) {
+        return true;
     }
     if world.get::<blood::IvDrip>(target).is_some() {
         return match actor.item {
