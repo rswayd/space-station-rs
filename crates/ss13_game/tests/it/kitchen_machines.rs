@@ -199,14 +199,24 @@ const TYPES: &str = r##"{
         "food_reagents": null, "max_volume": null, "bite_consumption": null,
         "eat_time": null, "tastes": null, "eatverbs": null, "trash_type": null,
         "junkiness": null, "food_flags": null, "starting_reagent_purity": null,
-        "resistance_flags": 4 } },
+        "resistance_flags": 4, "foodtypes": null, "crafting_complexity": 0,
+        "preserved_food": 0, "decomp_type": { "path": "/obj/item/food/badrecipe/moldy" },
+        "decomp_req_handle": 0, "decomposition_time": 0, "ant_attracting": 0 },
+        "procs": ["make_germ_sensitive"] },
     "/obj/item/food/meatball": { "parent": "/obj/item/food", "vars": { "name": "meatball" },
         "declared_vars": { "name": "meatball",
         "food_reagents": { "list": [{ "assoc": [{ "path": "/datum/reagent/consumable/nutriment" }, 4] }] } } },
     "/obj/item/food/meat": { "parent": "/obj/item/food" },
     "/obj/item/food/meat/slab": { "parent": "/obj/item/food/meat", "vars": { "name": "meat" },
-        "declared_vars": { "name": "meat",
+        "declared_vars": { "name": "meat", "foodtypes": 5, "decomposition_time": 50,
         "food_reagents": { "list": [{ "assoc": [{ "path": "/datum/reagent/consumable/nutriment" }, 4] }] } } },
+    "/obj/item/food/badrecipe": { "parent": "/obj/item/food", "vars": { "name": "burned mess" },
+        "declared_vars": { "name": "burned mess" } },
+    "/obj/item/food/badrecipe/moldy": { "parent": "/obj/item/food/badrecipe",
+        "vars": { "name": "moldy mess" }, "declared_vars": { "name": "moldy mess",
+        "ant_attracting": 1, "decomp_type": null, "decomposition_time": 30 } },
+    "/obj/effect/decal/cleanable/ants": { "parent": "/obj/effect/decal/cleanable",
+        "vars": { "name": "space ants" }, "declared_vars": { "name": "space ants" } },
     "/obj/item/food/meat/slab/human": { "parent": "/obj/item/food/meat/slab",
         "vars": { "name": "meat" } },
     "/obj/item/food/icecream": { "parent": "/obj/item/food", "vars": { "name": "waffle cone" },
@@ -252,10 +262,11 @@ const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 "V" = (/obj/machinery/icecream_vat,/turf/open/floor,/area/space)
 "R" = (/obj/machinery/oven/range,/turf/open/floor,/area/space)
 "G" = (/obj/machinery/griddle,/turf/open/floor,/area/space)
+"m" = (/obj/item/food/meat/slab,/turf/open/floor,/area/space)
 
 (1,1,1) = {"
 wwwww
-wfVfw
+wmVfw
 wCsBw
 wRfGw
 wwwww
@@ -310,6 +321,7 @@ fn fixture_assets(test: &str) -> PathBuf {
         "/obj/machinery/oven/range",
         "/obj/machinery/griddle",
         "/obj/item/food/meatball",
+        "/obj/item/food/meat/slab",
         "/obj/item/toy",
         "/obj/item/reagent_containers/cup/glass/drinkingglass",
         "/turf/open/floor",
@@ -667,4 +679,33 @@ fn soup_and_burning() {
     s.run_until("smashed", |s| s.server.world().get_entity(glass).is_err());
     assert!(s.on_tile(TilePos::new(3, 2, 1), "/obj/item/broken_bottle").is_some());
     s.run_until("the splash is seen", |s| s.said("разливает своё содержимое"));
+}
+
+#[test]
+fn food_goes_bad_on_the_floor() {
+    let mut s = Station::start("food_goes_bad_on_the_floor", 1);
+    let mapped = s.on_tile(TilePos::new(2, 4, 1), "/obj/item/food/meat/slab").unwrap();
+    // A slab that was not mapped, on the bare floor: 5 s of germs, then its 5 s
+    // (`decomposition_time = 50`) into a moldy mess with its reagents, and ants.
+    let floor = TilePos::new(4, 4, 1);
+    let slab = {
+        let world = s.0.server.world_mut();
+        ss13_game::construction::spawn_obj(world, "/obj/item/food/meat/slab", floor).unwrap()
+    };
+    s.run_until_for(20.0, "rotten", |s| s.server.world().get_entity(slab).is_err());
+    let moldy = s.on_tile(floor, "/obj/item/food/badrecipe/moldy").expect("moldy");
+    assert_eq!(s.amount(moldy, "/datum/reagent/consumable/nutriment"), 4.0);
+    // The moldy mess attracts ants: in its turn (3 s) it leaves them.
+    s.run_until_for(20.0, "ants", |s| {
+        let world = s.server.world();
+        world.get_entity(moldy).is_err()
+            && world.resource::<SpatialIndex>().on_tile(floor).iter().any(|&e| {
+                world
+                    .get::<DmName>(e)
+                    .is_some_and(|n| n.name == "space ants")
+            })
+    });
+    s.run_until("the mold is seen", |s| s.said("gets overtaken by mold and ants"));
+    // The mapped one has not moved: still fresh.
+    assert!(s.server.world().get_entity(mapped).is_ok());
 }

@@ -118,6 +118,19 @@ pub struct DmFood {
     pub grill_result: String,
     pub grill_time: [f32; 2],
     pub grill_good: bool,
+    /// `foodtypes` bits (`MEAT`, `RAW`, ...).
+    pub foodtypes: u32,
+    /// `crafting_complexity` (0-5): the quality of a handmade one.
+    pub crafting_complexity: u32,
+    /// `make_germ_sensitive` adds `/datum/component/decomposition`: not `preserved_food`, no
+    /// `trash_type`, and the type does not override it (canned, bowled food).
+    pub decomposes: bool,
+    /// `decomp_type`; empty: it just goes (moldy food).
+    pub decomp_type: String,
+    /// Seconds: `decomposition_time`, else 5 minutes raw, 7 gross, 10 otherwise.
+    pub decomp_secs: f32,
+    pub decomp_req_handle: bool,
+    pub ant_attracting: bool,
 }
 
 /// A cooking component's result, time range (deciseconds) and whether it is a real recipe.
@@ -483,11 +496,33 @@ pub fn food(types: &DmTypes, path: &str) -> Option<DmFood> {
         food.processor_multiplier = num(r("food_multiplier")).unwrap_or(1.0) as u32;
         food.processor_time = num(r("time")).unwrap_or(40.0) as f32;
     }
+    food.foodtypes = n("foodtypes").unwrap_or(0.0) as u32;
+    food.crafting_complexity = n("crafting_complexity").unwrap_or(0.0) as u32;
+    let overrides_germs = types
+        .chain(path)
+        .take_while(|p| *p != FOOD_ROOT)
+        .any(|p| types.types[p].procs.iter().any(|q| q == "make_germ_sensitive"));
+    food.decomposes = food.trash_type.is_empty()
+        && !overrides_germs
+        && n("preserved_food").is_none_or(|v| v == 0.0);
+    food.decomp_type = path_value(get("decomp_type")).unwrap_or_default();
+    food.decomp_secs = match n("decomposition_time").filter(|t| *t > 0.0) {
+        Some(ds) => ds / 10.0,
+        None if food.foodtypes & RAW != 0 => 300.0,
+        None if food.foodtypes & GROSS != 0 => 420.0,
+        None => 600.0,
+    };
+    food.decomp_req_handle = n("decomp_req_handle").is_some_and(|v| v != 0.0);
+    food.ant_attracting = n("ant_attracting").is_some_and(|v| v != 0.0);
     if is_under(path, GROWN_ROOT) {
         grown(types, path, &mut food);
     }
     Some(food)
 }
+
+/// `foodtypes` bits (`code/__DEFINES/food.dm`).
+pub const RAW: u32 = 1 << 2;
+pub const GROSS: u32 = 1 << 10;
 
 /// `/obj/item/food/grown/Initialize` of a map-placed item: its seed at potency 50.
 fn grown(types: &DmTypes, path: &str, food: &mut DmFood) {
@@ -590,6 +625,9 @@ const ASH: [&str; 2] = [
     "/obj/effect/decal/cleanable/ash/large",
 ];
 
+/// `/datum/component/decomposition/decompose` of an ant-attracting food.
+const ANTS: &str = "/obj/effect/decal/cleanable/ants";
+
 /// Foods soup reactions make (`resulting_food_path`).
 const SOUP_POT_RESULTS: [&str; 4] = [
     "/obj/item/reagent_containers/cup/soup_pot",
@@ -633,7 +671,11 @@ pub fn food_closure<'a>(
                 f.trash_type,
                 f.bake_result,
                 f.grill_result,
+                f.decomp_type,
             ]);
+            if f.ant_attracting {
+                next.push(ANTS.to_owned());
+            }
             next.extend(f.processing.into_iter().map(|p| p.result));
         }
         for p in next {
@@ -709,6 +751,13 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
         ext(c, "grill_result", s(&f.grill_result)),
         ext(c, "grill_time", pair(f.grill_time)),
         ext(c, "grill_good", f.grill_good.to_string()),
+        ext(c, "foodtypes", f.foodtypes.to_string()),
+        ext(c, "crafting_complexity", f.crafting_complexity.to_string()),
+        ext(c, "decomposes", f.decomposes.to_string()),
+        ext(c, "decomp_type", s(&f.decomp_type)),
+        ext(c, "decomp_secs", format!("{:?}", f.decomp_secs)),
+        ext(c, "decomp_req_handle", f.decomp_req_handle.to_string()),
+        ext(c, "ant_attracting", f.ant_attracting.to_string()),
     ]
 }
 

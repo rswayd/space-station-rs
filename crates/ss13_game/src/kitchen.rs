@@ -691,6 +691,8 @@ pub fn microwave_act(
     pos: TilePos,
 ) -> Option<Entity> {
     let made = crate::construction::spawn_obj(world, result, pos)?;
+    // `microwavable`: `ADD_TRAIT(result, TRAIT_HANDMADE, ...)` for the microwaver.
+    world.entity_mut(made).insert(crate::food::Handmade);
     let source = world.get::<Reagents>(item).map(|r| r.0.clone());
     let chem = world.get_resource::<Chem>().map(|c| c.0.clone());
     if let (Some(mut source), Some(chem)) = (source, chem)

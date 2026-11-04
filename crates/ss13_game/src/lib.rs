@@ -169,6 +169,8 @@ pub mod construction;
 #[cfg(feature = "server")]
 pub mod cooking;
 #[cfg(feature = "server")]
+pub mod decay;
+#[cfg(feature = "server")]
 pub mod disposals;
 #[cfg(feature = "server")]
 pub mod gibber;

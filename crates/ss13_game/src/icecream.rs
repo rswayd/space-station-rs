@@ -16,7 +16,7 @@
 //!   `reagent_type`, 10 units of the holder's sweetener, 20 more units of room, a colored scoop
 //!   overlay and a new name ("double vanilla ice cream"). The custom flavour takes 4 units from
 //!   the beaker (bland without 4).
-// shortcut: no Ice Cream Day, no `crafted_food_buff`/`TRAIT_HANDMADE`, no restaurant orders,
+// shortcut: no Ice Cream Day, no `crafted_food_buff`, no restaurant orders,
 // descriptions keep their type's text; the names of the flavours and cones are tg's English.
 
 use bevy::ecs::message::{MessageCursor, Messages};
@@ -725,7 +725,10 @@ fn add_scoop(world: &mut World, client: Entity, cone: Entity, e: Entity) {
         .map(|n| n.name.clone())
         .unwrap_or_default();
     let name = scoop_name(&scoops.0, filled_name.unwrap_or(&base));
-    world.entity_mut(cone).insert((scoops, Name::new(name)));
+    // `ADD_TRAIT(cone, TRAIT_HANDMADE, REF(user.mind))`.
+    world
+        .entity_mut(cone)
+        .insert((scoops, Name::new(name), crate::food::Handmade));
     let flavour_name = flavour.name;
     tell(
         world,

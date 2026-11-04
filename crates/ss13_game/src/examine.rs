@@ -104,6 +104,8 @@ pub fn examine_lines(world: &World, examiner: Entity, target: Entity) -> (String
     crate::chem_dispenser::examine_lines(world, target, &mut lines);
     crate::cooking::examine_lines(world, target, &mut lines);
     crate::gibber::examine_lines(world, target, &mut lines);
+    crate::food::examine_lines(world, target, examiner, &mut lines);
+    crate::decay::examine_lines(world, target, &mut lines);
     crate::coffee::examine_lines(world, target, &mut lines);
     crate::smartfridge::examine_lines(world, target, &mut lines);
     crate::botany::examine_lines(world, target, &mut lines);
