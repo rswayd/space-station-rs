@@ -166,9 +166,28 @@ const TYPES: &str = r##"{
         "parent": "/obj/item/reagent_containers/cup/beaker", "declared_vars": {
         "list_reagents": { "list": [{ "assoc": [{ "path": "/datum/reagent/alpha" }, 10] },
             { "assoc": [{ "path": "/datum/reagent/beta" }, 10] }] } } },
+    "/obj/item/reagent_containers/hypospray": { "parent": "/obj/item/reagent_containers",
+        "vars": { "name": "hypospray" }, "declared_vars": { "name": "hypospray",
+        "icon_state": "hypo", "amount_per_transfer_from_this": 5,
+        "possible_transfer_amounts": { "list": [5] }, "initial_reagent_flags": 2108 } },
+    "/obj/item/reagent_containers/hypospray/medipen": {
+        "parent": "/obj/item/reagent_containers/hypospray", "vars": { "name": "medipen" },
+        "declared_vars": { "name": "medipen", "icon_state": "medipen",
+        "amount_per_transfer_from_this": 15, "has_variable_transfer_amount": 0, "volume": 15,
+        "initial_reagent_flags": 0,
+        "list_reagents": { "list": [{ "assoc": [{ "path": "/datum/reagent/water" }, 15] }] } } },
+    "/obj/item/reagent_containers/dropper": { "parent": "/obj/item/reagent_containers",
+        "vars": { "name": "dropper" }, "declared_vars": { "name": "dropper",
+        "icon_state": "dropper0", "volume": 5,
+        "possible_transfer_amounts": { "list": [1, 2, 3, 4, 5] }, "initial_reagent_flags": 32 } },
     "/obj/item/reagent_containers/applicator": { "parent": "/obj/item/reagent_containers",
         "declared_vars": { "abstract_type": { "path": "/obj/item/reagent_containers/applicator" },
         "has_variable_transfer_amount": 0 } },
+    "/obj/item/reagent_containers/applicator/patch": {
+        "parent": "/obj/item/reagent_containers/applicator", "vars": { "name": "patch" },
+        "declared_vars": { "name": "patch", "icon_state": "bandaid_blank", "volume": 40,
+        "possible_transfer_amounts": { "list": [] },
+        "list_reagents": { "list": [{ "assoc": [{ "path": "/datum/reagent/water" }, 3] }] } } },
     "/obj/item/reagent_containers/applicator/pill": {
         "parent": "/obj/item/reagent_containers/applicator", "vars": { "name": "pill" },
         "declared_vars": { "name": "pill", "icon_state": "pill", "volume": 50 } },
@@ -215,6 +234,7 @@ const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 "f" = (/turf/open/floor,/area/space)
 "s" = (/obj/effect/landmark/start/assistant,/obj/item/reagent_containers/cup/beaker/water,/obj/item/reagent_containers/cup/beaker/mix,/obj/item/reagent_containers/cup/beaker,/obj/item/card/emag,/turf/open/floor,/area/space)
 "D" = (/obj/machinery/chem_dispenser,/turf/open/floor,/area/space)
+"t" = (/obj/item/reagent_containers/hypospray/medipen,/obj/item/reagent_containers/applicator/patch,/obj/item/reagent_containers/dropper,/turf/open/floor,/area/space)
 "M" = (/obj/machinery/chem_master,/turf/open/floor,/area/space)
 "H" = (/obj/machinery/chem_heater/withbuffer,/turf/open/floor,/area/space)
 
@@ -222,7 +242,7 @@ const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 wwwww
 wfDfw
 wHsMw
-wfffw
+wftfw
 wwwww
 "}
 "##;
@@ -231,11 +251,13 @@ const SPAWN: TilePos = TilePos::new(3, 3, 1);
 const MASTER: TilePos = TilePos::new(4, 3, 1);
 const HEATER: TilePos = TilePos::new(2, 3, 1);
 const DISPENSER: TilePos = TilePos::new(3, 4, 1);
+/// South of the spawn: a medipen, a patch and a dropper.
+const TOOLS: TilePos = TilePos::new(3, 2, 1);
 const PILL: &str = "/obj/item/reagent_containers/applicator/pill/style/red";
 const WATER: &str = "/datum/reagent/water";
 
 /// Manifest order = `IconStateId`.
-const STATES: [(&str, &str); 14] = [
+const STATES: [(&str, &str); 19] = [
     ("t.dmi", "floor"),
     ("t.dmi", "wall"),
     ("l.dmi", "x2"),
@@ -250,6 +272,11 @@ const STATES: [(&str, &str); 14] = [
     ("i.dmi", "toy"),
     ("c.dmi", "dispenser"),
     ("i.dmi", "emag"),
+    ("c.dmi", "medipen"),
+    ("c.dmi", "medipen0"),
+    ("c.dmi", "hypo"),
+    ("c.dmi", "dropper0"),
+    ("c.dmi", "bandaid_blank"),
 ];
 
 fn fixture_assets(test: &str) -> PathBuf {
@@ -262,6 +289,9 @@ fn fixture_assets(test: &str) -> PathBuf {
         "/obj/machinery/chem_heater/withbuffer",
         "/obj/machinery/chem_dispenser",
         "/obj/item/card/emag",
+        "/obj/item/reagent_containers/hypospray/medipen",
+        "/obj/item/reagent_containers/applicator/patch",
+        "/obj/item/reagent_containers/dropper",
         "/obj/item/stock_parts/capacitor",
         "/obj/item/stock_parts/power_store/cell",
         "/obj/item/circuitboard/machine/chem_dispenser",
@@ -686,4 +716,61 @@ fn dispenser_recipes_and_emag() {
         .map(|&id| chem.def(id).name.clone())
         .collect();
     assert_eq!(names, ["Water", "Toxin"]);
+}
+
+#[test]
+fn medipen_patch_and_dropper() {
+    use ss13_game::chem::{AppliedPatch, UsedUp};
+
+    let mut s = Station::start("medipen_patch_and_dropper");
+    let mob = s.players[0].mob;
+    let blood_water = |s: &Station| {
+        let id = s.server.world().resource::<Chem>().0.id(WATER).unwrap();
+        s.get::<MobReagents>(mob).blood.amount(id)
+    };
+    let drop = |s: &mut Station| {
+        s.send(0, ss13_shared::protocol::ClientIntent::DropActive);
+        s.run_until("dropped", |s| {
+            s.get::<Inventory>(mob).active_item().is_none()
+        });
+    };
+
+    // A medipen on oneself: all 15 at once into the blood, then spent.
+    let pen = s.items(TOOLS, "/obj/item/reagent_containers/hypospray/medipen")[0];
+    s.take(pen);
+    s.click(mob);
+    s.run_until("injected", |s| blood_water(s) > 14.0);
+    assert_eq!(s.amount(pen, WATER), 0.0);
+    assert!(s.server.world().get::<UsedUp>(pen).is_some());
+    drop(&mut s);
+
+    // A patch: 1.5 s to put on, then 0.75 u a second into the blood until it falls off.
+    let patch = s.items(TOOLS, "/obj/item/reagent_containers/applicator/patch")[0];
+    s.take(patch);
+    s.click(mob);
+    s.run_until_for(3.0, "stuck", |s| {
+        s.server.world().get::<AppliedPatch>(patch).is_some()
+    });
+    assert!(
+        s.get::<Inventory>(mob).active_item().is_none(),
+        "it left the hand"
+    );
+    let stuck = s.now();
+    s.run_until_for(10.0, "used up", |s| {
+        s.server.world().get_entity(patch).is_err()
+    });
+    // 3 u at 0.75 u/s: four transfers, gone on the fifth second.
+    assert!(s.now() - stuck >= 4.0, "{}", s.now() - stuck);
+
+    // A dropper draws its 5 from the water beaker and squirts them into the empty one.
+    let dropper = s.items(TOOLS, "/obj/item/reagent_containers/dropper")[0];
+    let full = s.items(SPAWN, "/obj/item/reagent_containers/cup/beaker/water")[0];
+    let empty = s.items(SPAWN, "/obj/item/reagent_containers/cup/beaker")[0];
+    s.take(dropper);
+    s.click(full);
+    s.run_until("drawn", |s| s.amount(dropper, WATER) == 5.0);
+    assert_eq!(s.amount(full, WATER), 35.0);
+    s.click(empty);
+    s.run_until("squirted", |s| s.amount(empty, WATER) == 5.0);
+    assert_eq!(s.amount(dropper, WATER), 0.0);
 }

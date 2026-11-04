@@ -57,6 +57,21 @@ pub const CONTAINER_ROOT: &str = "/obj/item/reagent_containers";
 const CUP_ROOT: &str = "/obj/item/reagent_containers/cup";
 const SYRINGE_ROOT: &str = "/obj/item/reagent_containers/syringe";
 const PILL_ROOT: &str = "/obj/item/reagent_containers/applicator/pill";
+const PATCH_ROOT: &str = "/obj/item/reagent_containers/applicator/patch";
+/// `/datum/embedding/med_patch/instant` patches: all at once.
+const INSTANT_PATCH: &str = "/obj/item/reagent_containers/applicator/patch/synthflesh";
+const HYPOSPRAY_ROOT: &str = "/obj/item/reagent_containers/hypospray";
+const MEDIPEN_ROOT: &str = "/obj/item/reagent_containers/hypospray/medipen";
+/// Hyposprays with `ignore_flags` (through thick clothing).
+const IGNORE_CLOTHING: [&str; 2] = [
+    MEDIPEN_ROOT,
+    "/obj/item/reagent_containers/hypospray/combat",
+];
+const DROPPER_ROOT: &str = "/obj/item/reagent_containers/dropper";
+/// Deciseconds: a patch's `application_delay` and `self_delay`.
+const PATCH_DELAY: f32 = 15.0;
+/// `/datum/embedding/med_patch::transfer_per_second`.
+const PATCH_RATE: f32 = 0.75;
 /// tg `SSreagents` `wait`.
 pub const REAGENTS_WAIT_SECS: f64 = 0.25;
 /// tg `try_drink` on someone else, `try_syringe` and `applicator` `application_delay`: 3 s.
@@ -137,6 +152,8 @@ pub enum ChemJob {
     Inject,
     /// A pill forced down someone else.
     ForcePill,
+    /// A patch put on someone (anyone, oneself too).
+    Patch,
 }
 
 #[derive(Resource, Default)]
@@ -154,6 +171,7 @@ impl Plugin for ChemServerPlugin {
                 (
                     metabolize_mobs.before(HealthSystems),
                     digest_pills,
+                    process_patches,
                     process_reactions,
                     refresh_containers,
                 )
@@ -483,6 +501,9 @@ pub fn item_interaction(
     target: Entity,
     modifiers: ClickModifiers,
 ) -> bool {
+    if heat_with_tool(world, client, held, target) {
+        return true;
+    }
     if world.get::<Reagents>(held).is_none() || !world.contains_resource::<Chem>() {
         return false;
     }
@@ -493,6 +514,25 @@ pub fn item_interaction(
         item: Some(held),
     };
     let living = world.get::<MobReagents>(target).is_some();
+    if is_under(&item_path, HYPOSPRAY_ROOT) {
+        if modifiers.right {
+            return hypospray_draw(world, actor, target);
+        }
+        if living {
+            hypospray_inject(world, actor, target);
+            return true;
+        }
+        return false;
+    }
+    if is_under(&item_path, DROPPER_ROOT) {
+        return dropper(world, actor, target);
+    }
+    if is_under(&item_path, PATCH_ROOT) {
+        if living {
+            apply_patch(world, actor, target);
+        }
+        return living;
+    }
     if is_under(&item_path, SYRINGE_ROOT) {
         if modifiers.right {
             syringe_draw(world, actor, target);
@@ -904,6 +944,340 @@ fn apply_pill(world: &mut World, actor: Actor, target: Entity) {
     );
 }
 
+/// tg `used_up` of a medipen: emptied, its tip is broken.
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct UsedUp;
+
+/// A lit welder's `heat` (`get_temperature`).
+const WELDER_HEAT: f32 = 3800.0;
+
+/// tg `/datum/element/reagents_item_heatable` of cups: a hot tool heats a non-empty cup
+/// (`expose_temperature`, 2% of the difference, at least 1 K), which may start reactions.
+// shortcut: only a lit welder is hot (lighters, matches and burners have no lit state yet); no
+// extinguisher cooling.
+fn heat_with_tool(world: &mut World, client: Entity, held: Entity, target: Entity) -> bool {
+    if !world
+        .get::<crate::tools::Welder>(held)
+        .is_some_and(|w| w.on)
+        || !is_under(&path(world, target), CUP_ROOT)
+        || holder(world, target).is_none_or(|h| h.total_volume <= 0.0)
+    {
+        return false;
+    }
+    let chem = chem(world);
+    if let Some(mut r) = world.get_mut::<Reagents>(target) {
+        r.0.expose_temperature(&chem, WELDER_HEAT, 0.02);
+    }
+    let dst = name_of(world, target);
+    tell(world, client, Span::Notice, format!("{dst} нагрет"));
+    true
+}
+
+/// tg `/obj/item/reagent_containers/hypospray/inject`: the transfer amount into the blood at
+/// once, through thick clothing for medipens and combat injectors; a medipen is spent when empty.
+// shortcut: the `infinite` (admin/borg) hyposprays are not special.
+fn hypospray_inject(world: &mut World, actor: Actor, target: Entity) {
+    let held = actor.item.expect("a held hypospray");
+    let src = name_of(world, held);
+    if world.get::<UsedUp>(held).is_some() {
+        tell(
+            world,
+            actor.client,
+            Span::Warning,
+            format!("Наконечник {src} сломан, им больше нельзя пользоваться!"),
+        );
+        return;
+    }
+    if world.get::<MobReagents>(target).is_none() || !melee_cooldown(world, actor.mob) {
+        return;
+    }
+    let item_path = path(world, held);
+    let ignore = IGNORE_CLOTHING.iter().any(|r| is_under(&item_path, r));
+    if !ignore && !try_inject(world, actor, target) {
+        return;
+    }
+    let victim = name_of(world, target);
+    tell_mob(world, target, Span::Warning, "Вы чувствуете лёгкий укол!");
+    tell(
+        world,
+        actor.client,
+        Span::Notice,
+        format!("Вы делаете инъекцию {victim} с помощью {src}."),
+    );
+    if let Some(pos) = map_pos(world, target) {
+        crate::sound::playsound(
+            world,
+            crate::sound::PlaySound::new(pos, "sound/items/hypospray.ogg", 50.0, true),
+        );
+    }
+    let amount = transfer_amount(world, held);
+    let moved = transfer_to_mob(world, held, target, amount, false);
+    let left = holder(world, held).map_or(0.0, |h| h.total_volume);
+    tell(
+        world,
+        actor.client,
+        Span::Notice,
+        format!(
+            "Введено {} ед. В {src} осталось {} ед.",
+            dm_num(round_to(moved, 0.01)),
+            dm_num(left)
+        ),
+    );
+    if is_under(&item_path, MEDIPEN_ROOT) && left == 0.0 {
+        world.entity_mut(held).insert(UsedUp);
+        if let Some(mut r) = world.get_mut::<Reagents>(held) {
+            r.0.flags = 0;
+        }
+        if let Some(state) = world
+            .get::<DmAtom>(held)
+            .map(|a| format!("{}0", a.icon_state))
+        {
+            crate::obj_damage::set_icon_state(world, held, &state);
+        }
+    }
+}
+
+/// tg `hypospray/interact_with_atom_secondary`: refilled from a drawable container.
+fn hypospray_draw(world: &mut World, actor: Actor, target: Entity) -> bool {
+    let held = actor.item.expect("a held hypospray");
+    if holder(world, target).is_none() && world.get::<MobReagents>(target).is_none() {
+        return false;
+    }
+    let (src, dst) = (name_of(world, held), name_of(world, target));
+    if world.get::<MobReagents>(target).is_some() {
+        tell(
+            world,
+            actor.client,
+            Span::Warning,
+            format!("{src} не может набирать кровь!"),
+        );
+        return true;
+    }
+    if holder(world, held).is_some_and(Holder::holder_full) {
+        tell(world, actor.client, Span::Notice, format!("{src} полон."));
+        return true;
+    }
+    let Some(h) = holder(world, target) else {
+        return true;
+    };
+    if h.total_volume == 0.0 {
+        tell(world, actor.client, Span::Warning, format!("{dst} пуст!"));
+        return true;
+    }
+    if !h.is_drawable() {
+        tell(
+            world,
+            actor.client,
+            Span::Warning,
+            format!("Нельзя напрямую набрать из {dst}!"),
+        );
+        return true;
+    }
+    let amount = transfer_amount(world, held);
+    let moved = transfer(world, target, held, amount);
+    if moved > 0.0 {
+        let now = holder(world, held).map_or(0.0, |h| h.total_volume);
+        tell(
+            world,
+            actor.client,
+            Span::Notice,
+            format!(
+                "Вы наполняете {src} {} ед. раствора. Теперь в нём {} ед.",
+                dm_num(round_to(moved, 0.01)),
+                dm_num(now)
+            ),
+        );
+    }
+    true
+}
+
+/// tg `/obj/item/reagent_containers/dropper/interact_with_atom`: a full dropper squirts its
+/// transfer amount into an injectable container or someone's eyes, an empty one draws from a
+/// drawable container (never a mob).
+// shortcut: eye protection does not catch the drops (`is_eyes_covered`) and the drops expose
+// nothing (no `expose`, see the module's shortcut); no droplet sound (not converted).
+fn dropper(world: &mut World, actor: Actor, target: Entity) -> bool {
+    let held = actor.item.expect("a held dropper");
+    let living = world.get::<MobReagents>(target).is_some();
+    if holder(world, target).is_none() && !living {
+        return false;
+    }
+    let (src, dst) = (name_of(world, held), name_of(world, target));
+    let amount = transfer_amount(world, held);
+    if holder(world, held).is_some_and(|h| h.total_volume > 0.0) {
+        if target_full(world, target) {
+            tell(world, actor.client, Span::Notice, format!("{dst} полон."));
+            return true;
+        }
+        if !living && !holder(world, target).is_some_and(Holder::is_injectable) {
+            tell(
+                world,
+                actor.client,
+                Span::Warning,
+                format!("Нельзя перелить реагенты в {dst}!"),
+            );
+            return true;
+        }
+        let moved = if living {
+            if !melee_cooldown(world, actor.mob) {
+                return true;
+            }
+            let user = name_of(world, actor.mob);
+            visible(
+                world,
+                actor.mob,
+                &format!("Вы капаете что-то в глаза {dst}!"),
+                &format!("{user} капает что-то в глаза {dst}!"),
+                Span::Danger,
+            );
+            transfer_to_mob(world, held, target, amount, false)
+        } else {
+            transfer(world, held, target, amount)
+        };
+        let moved = round_to(moved, 0.01);
+        if moved > 0.0 {
+            tell(
+                world,
+                actor.client,
+                Span::Notice,
+                format!("Вы переливаете {} ед. раствора.", dm_num(moved)),
+            );
+        }
+        return true;
+    }
+    let Some(h) = holder(world, target).filter(|_| !living) else {
+        tell(
+            world,
+            actor.client,
+            Span::Warning,
+            format!("Нельзя напрямую набрать из {dst}!"),
+        );
+        return true;
+    };
+    if !h.is_drawable() {
+        tell(
+            world,
+            actor.client,
+            Span::Warning,
+            format!("Нельзя напрямую набрать из {dst}!"),
+        );
+        return true;
+    }
+    if h.total_volume == 0.0 {
+        tell(world, actor.client, Span::Warning, format!("{dst} пуст!"));
+        return true;
+    }
+    let moved = round_to(transfer(world, target, held, amount), 0.01);
+    if moved > 0.0 {
+        tell(
+            world,
+            actor.client,
+            Span::Notice,
+            format!("Вы наполняете {src} {} ед. раствора.", dm_num(moved)),
+        );
+    }
+    true
+}
+
+/// A patch stuck on `mob` (tg `/datum/embedding/med_patch`): off the map, it gives `rate` units
+/// a second to the blood (`trans_to(owner, transfer_per_second, methods = PATCH)`) and falls
+/// off empty.
+#[derive(Component, Clone, Copy, Debug, PartialEq)]
+pub struct AppliedPatch {
+    pub mob: Entity,
+    pub rate: f32,
+    /// Seconds towards the next transfer (`SSprocessing`, 1 s).
+    pub clock: f32,
+}
+
+/// tg `/obj/item/reagent_containers/applicator/interact_with_atom` of a patch: 1.5 s on
+/// anyone, oneself included.
+// shortcut: no limb checks (missing or robotic limbs), no overlay on the mob, patches cannot
+// be ripped off (no embedded-object removal yet).
+fn apply_patch(world: &mut World, actor: Actor, target: Entity) {
+    let held = actor.item.expect("a held patch");
+    if !melee_cooldown(world, actor.mob) || world.get::<DoAfter>(actor.mob).is_some() {
+        return;
+    }
+    let (user, victim, patch) = (
+        name_of(world, actor.mob),
+        name_of(world, target),
+        name_of(world, held),
+    );
+    if target == actor.mob {
+        visible(
+            world,
+            actor.mob,
+            &format!("Вы пытаетесь наклеить {patch}."),
+            &format!("{user} пытается наклеить {patch}."),
+            Span::Notice,
+        );
+    } else {
+        visible(
+            world,
+            actor.mob,
+            &format!("Вы пытаетесь наклеить {patch} на {victim}."),
+            &format!("{user} пытается наклеить {patch} на {victim}."),
+            Span::Danger,
+        );
+    }
+    do_after(
+        world,
+        actor,
+        target,
+        PATCH_DELAY,
+        0,
+        crate::construction::Job::Chem(ChemJob::Patch),
+    );
+}
+
+/// `on_consumption` of a patch: it leaves the hand and sticks.
+fn stick_patch(world: &mut World, patch: Entity, mob: Entity) {
+    if let Some(carrier) = world.get::<CarriedBy>(patch).map(|c| c.0)
+        && let Some(mut inventory) = world.get_mut::<Inventory>(carrier)
+        && let Some(slot) = inventory.hands.iter_mut().find(|h| **h == Some(patch))
+    {
+        *slot = None;
+    }
+    let rate = if is_under(&path(world, patch), INSTANT_PATCH) {
+        world.get::<DmReagents>(patch).map_or(40.0, |d| d.volume)
+    } else {
+        PATCH_RATE
+    };
+    world
+        .entity_mut(patch)
+        .remove::<(CarriedBy, TilePos)>()
+        .insert(AppliedPatch {
+            mob,
+            rate,
+            clock: 0.0,
+        });
+}
+
+/// Stuck patches feed the blood once a second; empty ones (or their wearer's) are gone.
+// Cost: one pass over the stuck patches each tick (a few per medbay).
+fn process_patches(world: &mut World) {
+    let delta = world.resource::<Time>().delta_secs();
+    let mut q = world.query::<(Entity, &mut AppliedPatch)>();
+    let mut due = Vec::new();
+    for (e, mut p) in q.iter_mut(world) {
+        p.clock += delta;
+        if p.clock >= 1.0 {
+            p.clock -= 1.0;
+            due.push((e, p.mob, p.rate));
+        }
+    }
+    for (patch, mob, rate) in due {
+        if world.get::<MobReagents>(mob).is_none()
+            || holder(world, patch).is_none_or(|h| h.total_volume == 0.0)
+        {
+            world.despawn(patch);
+            continue;
+        }
+        transfer_to_mob(world, patch, mob, rate, false);
+    }
+}
+
 /// tg `layers_remaining` of a pill: seconds its sugar shell lasts in a stomach.
 #[derive(Component, Clone, Copy, Debug, PartialEq)]
 pub struct PillShell(pub f32);
@@ -1127,6 +1501,18 @@ pub fn attack_self(world: &mut World, client: Entity, item: Entity) -> bool {
     if world.get::<DmReagents>(item).is_none() {
         return false;
     }
+    // `medipen/attack_self`: into oneself.
+    if is_under(&path(world, item), MEDIPEN_ROOT)
+        && let Some(mob) = world.get::<CarriedBy>(item).map(|c| c.0)
+    {
+        let actor = Actor {
+            client,
+            mob,
+            item: Some(item),
+        };
+        hypospray_inject(world, actor, mob);
+        return true;
+    }
     // `soda_cans/attack_self`: a closed can opens.
     if is_under(&path(world, item), SODA_CANS)
         && holder(world, item).is_some_and(|h| !h.is_drainable())
@@ -1207,6 +1593,25 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter, job: ChemJob) 
                 Span::Danger,
             );
             inject(world, actor, target);
+        }
+        ChemJob::Patch => {
+            if target == mob {
+                tell(
+                    world,
+                    action.client,
+                    Span::Notice,
+                    format!("Вы наклеиваете {src}."),
+                );
+            } else {
+                visible(
+                    world,
+                    mob,
+                    &format!("Вы наклеиваете {src} на {victim}."),
+                    &format!("{user} наклеивает {src} на {victim}."),
+                    Span::Danger,
+                );
+            }
+            stick_patch(world, held, target);
         }
         ChemJob::ForcePill => {
             visible(
