@@ -410,7 +410,20 @@ fn take_bite(world: &mut World, eater: Entity, feeder: Entity, food: Entity) {
         .iter()
         .map(|r| (r.id, r.volume * part))
         .collect();
-    if let Some(mut m) = world.get_mut::<MobReagents>(eater) {
+    // tg `expel_ingested` without a stomach.
+    // shortcut: the bite is lost (no vomit decal with the reagents).
+    if crate::medical::organs::lacks(world, eater, crate::medical::organs::Slot::Stomach) {
+        let mut gone = Holder::new(dm.bite_consumption, 0, Owner::default());
+        holder.trans_to(
+            &chem,
+            &mut gone,
+            dm.bite_consumption,
+            1.0,
+            None,
+            false,
+            false,
+        );
+    } else if let Some(mut m) = world.get_mut::<MobReagents>(eater) {
         holder.trans_to(
             &chem,
             &mut m.stomach,

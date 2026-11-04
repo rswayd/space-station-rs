@@ -84,6 +84,38 @@ pub struct MobReagents {
     pub drunk: f32,
 }
 
+/// What a removed stomach holds (tg `stomach.reagents` goes with the organ).
+#[derive(Component, Clone, Debug)]
+pub struct StomachContents(pub Holder);
+
+/// The stomach left `mob`: its contents go with it.
+pub(crate) fn stomach_removed(world: &mut World, organ: Entity, mob: Entity) {
+    let Some(mut m) = world.get_mut::<MobReagents>(mob) else {
+        return;
+    };
+    let empty = Holder {
+        reagents: Vec::new(),
+        total_volume: 0.0,
+        reactions: Vec::new(),
+        is_reacting: false,
+        messages: Vec::new(),
+        ..m.stomach.clone()
+    };
+    let held = std::mem::replace(&mut m.stomach, empty);
+    world.entity_mut(organ).insert(StomachContents(held));
+}
+
+/// A stomach went into `mob`: what it holds is the mob's stomach now.
+pub(crate) fn stomach_inserted(world: &mut World, organ: Entity, mob: Entity) {
+    let Some(StomachContents(held)) = world.entity_mut(organ).take::<StomachContents>() else {
+        return;
+    };
+    if let Some(mut m) = world.get_mut::<MobReagents>(mob) {
+        let owner = m.stomach.owner.clone();
+        m.stomach = Holder { owner, ..held };
+    }
+}
+
 /// On a container whose holder is reacting (stepped by [`process_reactions`]).
 #[derive(Component, Clone, Copy, Debug, Default)]
 pub struct Reacting;
@@ -378,7 +410,14 @@ fn transfer_to_mob(world: &mut World, from: Entity, mob: Entity, amount: f32, in
     let blood = chem.id(crate::medical::blood::BLOOD_REAGENT);
     let blood_before = blood.map_or(0.0, |id| a.amount(id));
     let blood_data = blood.and_then(|id| a.has(id)).and_then(|r| r.data.clone());
-    if let Some(mut m) = world.get_mut::<MobReagents>(mob) {
+    // tg `expel_ingested`: without a stomach what is swallowed comes back out.
+    // shortcut: it is lost (no vomit decal with the reagents).
+    let expelled =
+        ingest && crate::medical::organs::lacks(world, mob, crate::medical::organs::Slot::Stomach);
+    if expelled {
+        let mut gone = Holder::new(amount, 0, Owner::default());
+        moved = a.trans_to(&chem, &mut gone, amount, 1.0, None, false, false);
+    } else if let Some(mut m) = world.get_mut::<MobReagents>(mob) {
         let target = if ingest { &mut m.stomach } else { &mut m.blood };
         moved = a.trans_to(&chem, target, amount, 1.0, None, false, false);
     }
@@ -1365,6 +1404,18 @@ fn life(world: &mut World, chem: &Chemistry, mob: Entity, seconds: f32) {
     let mut hunger = entity.get::<crate::hunger::Hunger>().cloned();
     let mut rng = CombatRng(world.get_resource_or_init::<CombatRng>().0);
     let dead = stat == Stat::Dead;
+    use crate::medical::organs::{self, Slot};
+    let has_stomach = !organs::lacks(world, mob, Slot::Stomach);
+    let liver_organ = organs::organ(world, mob, Slot::Liver);
+    let liver = match liver_organ.and_then(|o| world.get::<organs::Organ>(o)) {
+        Some(l) if !l.failing => metabolism::Liver::Working {
+            health: (l.spec().max_health - l.damage) / l.spec().max_health,
+        },
+        Some(_) => metabolism::Liver::Liverless,
+        None if world.get::<organs::OrganHost>(mob).is_some() => metabolism::Liver::Liverless,
+        None => metabolism::Liver::Working { health: 1.0 },
+    };
+    let liver_damage;
     let told = {
         let mut body = MobBody {
             health: &mut health,
@@ -1375,17 +1426,18 @@ fn life(world: &mut World, chem: &Chemistry, mob: Entity, seconds: f32) {
             told: Vec::new(),
             hunger: hunger.as_mut(),
         };
-        if !dead {
+        if !dead && has_stomach {
             metabolism::digest(chem, &mut reagents.stomach, &mut reagents.blood, seconds);
         }
         let stomach = reagents.stomach.clone();
-        metabolism::metabolize(
+        liver_damage = metabolism::metabolize_with(
             chem,
             &mut reagents.blood,
             &stomach,
             &mut body,
             body_temperature,
             seconds,
+            liver,
         );
         metabolism::inebriation_tick(&mut body);
         body.told
@@ -1417,6 +1469,28 @@ fn life(world: &mut World, chem: &Chemistry, mob: Entity, seconds: f32) {
     }
     for text in told {
         tell_mob(world, mob, Span::BoldWarning, &text);
+    }
+    if let Some(liver) = liver_organ {
+        if liver_damage > 0.0 {
+            organs::damage_organ(world, liver, liver_damage, organs::STANDARD_ORGAN_THRESHOLD);
+        }
+        // "the higher the damage the higher the probability".
+        let damage = world.get::<organs::Organ>(liver).map_or(0.0, |l| l.damage);
+        if !dead
+            && damage > 10.0
+            && crate::medical::wounds::spt_prob(
+                &mut crate::medical::fork_rng(world),
+                damage / 6.0,
+                seconds,
+            )
+        {
+            tell_mob(
+                world,
+                mob,
+                Span::Warning,
+                "You feel a dull pain in your abdomen.",
+            );
+        }
     }
 }
 

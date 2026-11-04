@@ -1,6 +1,8 @@
 //! Holder math, reaction matching and metabolism amounts against tg's formulas.
 
-use ss13_reagents::metabolism::{Body, Damage, digest, inebriation_tick, metabolize};
+use ss13_reagents::metabolism::{
+    Body, Damage, Liver, digest, inebriation_tick, metabolize, metabolize_with,
+};
 use ss13_reagents::{
     ChemData, Chemistry, DEFAULT_REAGENT_TEMPERATURE, Holder, Owner, ReactionDef, ReagentDef,
     flags, mix_color, reaction_flags,
@@ -431,6 +433,58 @@ fn metabolism_amounts_per_tick() {
     body.drunk = 1.0;
     metabolize(&chem, &mut blood, &stomach, &mut body, 310.15, 2.0);
     assert!((body.drunk - 0.75).abs() < 1e-5);
+}
+
+#[test]
+fn the_liver_filters_and_suffers_toxins() {
+    let chem = chem();
+    let stomach = mob();
+    let mut body = TestBody::default();
+    // A half-dead liver filters half as much: 3 u of toxin are over its 1.5 u tolerance.
+    let mut blood = mob();
+    add(&mut blood, &chem, TOXIN, 3.0);
+    let damage = metabolize_with(
+        &chem,
+        &mut blood,
+        &stomach,
+        &mut body,
+        310.15,
+        2.0,
+        Liver::Working { health: 0.5 },
+    );
+    assert_eq!(body.tox, 1.5);
+    // `(amount / 15) * toxpwr` a second: 3 / 15 × 1.5 × 2 s.
+    assert!((damage - 0.6).abs() < 1e-5, "{damage}");
+    // At most 2 a second however much there is.
+    add(&mut blood, &chem, TOXIN, 200.0);
+    let damage = metabolize_with(
+        &chem,
+        &mut blood,
+        &stomach,
+        &mut body,
+        310.15,
+        2.0,
+        Liver::Working { health: 1.0 },
+    );
+    assert_eq!(damage, 4.0);
+    // Without a liver nothing (but `self_consuming` reagents) metabolizes or hurts the liver.
+    let mut blood = mob();
+    add(&mut blood, &chem, LIBITAL, 5.0);
+    let mut body = TestBody {
+        brute: 20.0,
+        ..Default::default()
+    };
+    let damage = metabolize_with(
+        &chem,
+        &mut blood,
+        &stomach,
+        &mut body,
+        310.15,
+        2.0,
+        Liver::Liverless,
+    );
+    assert_eq!((damage, body.brute), (0.0, 20.0));
+    assert!((amount(&blood, &chem, LIBITAL) - 5.0).abs() < 1e-5);
 }
 
 #[test]

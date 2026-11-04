@@ -121,8 +121,7 @@ impl Bodypart {
 
 /// Damage of a carbon mob: brute and burn per bodypart (tg `/obj/item/bodypart`), toxin and
 /// oxygen on the mob.
-// shortcut: no wounds, dismemberment, disabled limbs or prosthetics; every human has its six
-// organic bodyparts.
+// shortcut: no prosthetics; amputated limbs are `missing` (`crate::medical::bodyparts`).
 #[derive(Component, Clone, Debug, PartialEq)]
 pub struct Health {
     pub max: f32,
@@ -135,6 +134,9 @@ pub struct Health {
     pub oxy: f32,
     /// Indexed by [`BodyZone::index`].
     pub parts: [Bodypart; 6],
+    /// Amputated bodyparts, bits by [`BodyZone::index`]: damage aimed there hits the chest (tg
+    /// `get_bodypart(zone) || get_bodypart()`).
+    pub missing: u8,
     /// A basic mob (`crate::mobs`, tg `/mob/living/basic`): its `physiology` multipliers (brute,
     /// burn, toxin, oxygen, stamina). Every damage type becomes brute (tg
     /// `simple_transfer_to_brute_loss`), kept on the chest; no crit, dead at 0 health.
@@ -150,6 +152,7 @@ impl Default for Health {
             tox: 0.0,
             oxy: 0.0,
             parts: [Bodypart::default(); 6],
+            missing: 0,
             basic: None,
         }
     }
@@ -175,6 +178,7 @@ impl Health {
         Self {
             max: self.max,
             basic: self.basic,
+            missing: self.missing,
             ..Self::default()
         }
     }
@@ -187,6 +191,11 @@ impl Health {
 
     pub fn part(&self, zone: BodyZone) -> Bodypart {
         self.parts[zone.index()]
+    }
+
+    /// The bodypart is attached (not amputated).
+    pub fn has_part(&self, zone: BodyZone) -> bool {
+        self.missing & (1 << zone.index()) == 0
     }
 
     /// Adds `amount` (negative heals) of `kind`; no damage type goes below zero. Brute and burn
@@ -236,6 +245,11 @@ impl Health {
             DamageType::Brute => false,
             DamageType::Burn => true,
             _ => return self.adjust(kind, amount),
+        };
+        let zone = if self.has_part(zone) {
+            zone
+        } else {
+            BodyZone::Chest
         };
         if amount < 0.0 {
             let (brute, burn) = if burn { (0.0, -amount) } else { (-amount, 0.0) };
@@ -288,7 +302,7 @@ impl Health {
         let mut left = amount;
         let mut parts: Vec<BodyZone> = BodyZone::ALL
             .into_iter()
-            .filter(|z| self.part(*z).damage() < z.max_damage())
+            .filter(|z| self.has_part(*z) && self.part(*z).damage() < z.max_damage())
             .collect();
         while let Some(zone) = parts.first().copied()
             && left > 0.0

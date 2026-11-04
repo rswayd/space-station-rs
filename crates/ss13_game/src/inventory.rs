@@ -873,7 +873,7 @@ pub(crate) fn pick_up(world: &mut World, mob: Entity, target: Entity, hand: usiz
     let pickable = entity.get::<DmItem>().is_some_and(DmItem::pickable)
         && entity.contains::<TilePos>()
         && !entity.contains::<CarriedBy>();
-    if !pickable {
+    if !pickable || !crate::medical::bodyparts::has_hand(world, mob, hand) {
         return;
     }
     world
@@ -1046,6 +1046,13 @@ pub fn can_equip(world: &World, inventory: &Inventory, item: Entity, slot: Inven
             w_class <= WEIGHT_CLASS_BULKY && suit.allowed.iter().any(|r| is_under(&dm.path, r))
         }
         _ => true,
+    }
+}
+
+/// The mob is drawn again from its body and inventory (tg `update_body_parts`).
+pub(crate) fn refresh_look(world: &mut World, mob: Entity) {
+    if let Some(mut inventory) = world.get_mut::<Inventory>(mob) {
+        inventory.set_changed();
     }
 }
 

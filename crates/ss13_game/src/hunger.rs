@@ -29,6 +29,7 @@ use crate::chem::{Chem, MobReagents};
 use crate::combat::CombatRng;
 use crate::health::{Health, HealthSystems, Stat};
 use crate::hud::{HungerHudData, HungerHudUi};
+use crate::medical::organs::{Organ, OrganHost, Organs, Slot};
 use crate::server::PlayerMob;
 
 /// `HUNGER_FACTOR`: nutrition lost per second.
@@ -247,13 +248,30 @@ fn give_stomach(
 fn hunger_life(
     clock: Res<MobsClock>,
     mut last_fired: Local<u64>,
-    mut mobs: Query<(&mut Hunger, &mut Fat, &Stat, Option<&PlayerMob>)>,
+    mut mobs: Query<(
+        &mut Hunger,
+        &mut Fat,
+        &Stat,
+        Option<&PlayerMob>,
+        Option<&Organs>,
+        Has<OrganHost>,
+    )>,
+    organs: Query<&Organ>,
     mut chat: MessageWriter<SendChat>,
 ) {
     let fires = clock.times_fired - *last_fired;
     *last_fired = clock.times_fired;
     for _ in 0..fires {
-        for (mut hunger, mut fat, stat, player) in &mut mobs {
+        for (mut hunger, mut fat, stat, player, owned, host) in &mut mobs {
+            // The stomach's `on_life` runs `handle_hunger` unless it is missing or failing.
+            let stomach = owned.and_then(|o| {
+                o.iter()
+                    .filter_map(|e| organs.get(e).ok())
+                    .find(|s| s.slot == Slot::Stomach)
+            });
+            if host && stomach.is_none_or(|s| s.failing) {
+                continue;
+            }
             let (mut h, mut f) = (hunger.clone(), fat.0);
             let told = handle_hunger(&mut h, &mut f, *stat == Stat::Dead, metabolism::SSMOBS_DT);
             hunger.set_if_neq(h);

@@ -1,30 +1,30 @@
 //! Defibrillators (server), after tg `code/game/objects/items/tools/medical/defib.dm`
 //! (`/obj/item/defibrillator`, `/obj/item/shockpaddles` `attack`, `do_help`, `do_harm`,
-//! `do_disarm`), `carbon.dm` (`can_defib`, `revive`) and the organ decay of a corpse
-//! (`_organ.dm` `on_death`, `STANDARD_ORGAN_DECAY`).
+//! `do_disarm`) and `carbon.dm` (`can_defib`, `can_defib_heart`, `can_defib_brain`, `revive`).
 //!
 //! - A defibrillator worn in its slot (back, or belt for the compact ones) clicked with an empty
 //!   hand puts its paddles into that hand (tg `toggle_paddles`); the paddles snap back when they
 //!   leave the hand or the unit leaves the wearer. A unit `/loaded` with a cell has 10 shocks
 //!   (`revivecost` = a tenth of a standard cell); the combat one recharges forever.
 //! - Paddles wielded (the other hand empty) on someone's chest: `do_help` (3 s placing, 2 s
-//!   charging). A dead patient comes back if the brute and burn are each under 180 and the heart
-//!   and brain have not decayed (a corpse's heart fails after about 6 minutes at body
-//!   temperature, `decay_factor` 2.5 × `STANDARD_ORGAN_DECAY`; the brain after 30): the damage
-//!   is brought to `HALFWAYCRITDEATH` (-50, oxygen first), the mob revives in crit and its ghost
-//!   returns. The unit then recharges for `cooldown_duration` (5 s).
+//!   charging). A dead patient comes back if the brute and burn are each under 180 and it has a
+//!   heart and a brain that have not failed (`super::organs`: a corpse's heart decays in about 6
+//!   minutes at body temperature, the brain in 30): the damage is brought to
+//!   `HALFWAYCRITDEATH` (-50, oxygen first), the heart restarts, the mob revives in crit and its
+//!   ghost returns. A living patient in cardiac arrest gets its heart restarted unless the heart
+//!   failed. The unit then recharges for `cooldown_duration` (5 s).
 //! - In combat mode, with a combat defibrillator (or one with its safety off): `do_harm`
-//!   (1.5 s + 1.5 s) burns the chest for 50 and paralyzes for 10 s; right click knocks down.
-// shortcut: no heart attacks (`set_heartattack`, cardiac arrest), so a living patient is "not in
-// a valid state" and a harm shock does not stop the heart; no jitter, convulsions, mood, sounds,
-// shocking whoever pulls the patient, suicide/DNR/husk checks, emag, EMP, cell swapping, wall
-// mounts; paddles count as wielded while the other hand is empty (no two-handed component).
+//!   (1.5 s + 1.5 s) stops an organic heart, burns the chest for 50 and paralyzes for 10 s;
+//!   right click knocks down.
+// shortcut: no `/datum/status_effect/heart_attack`, jitter, convulsions, mood, sounds, shocking
+// whoever pulls the patient, suicide/DNR/husk checks, emag, EMP, cell swapping, wall mounts;
+// paddles count as wielded while the other hand is empty (no two-handed component).
 
 use bevy::prelude::*;
 use ss13_mapload::{DmClothing, DmDefib, DmItem};
 use ss13_shared::chat::Span;
 
-use super::{MedJob, name_of, visible};
+use super::{MedJob, name_of, organs, visible};
 use crate::combat::CombatMode;
 use crate::health::{
     DamageType, HEALTH_THRESHOLD_CRIT, HEALTH_THRESHOLD_DEAD, Health, Stat, ZoneSelected,
@@ -41,61 +41,18 @@ pub const MAX_REVIVE_DAMAGE: f32 = 180.0;
 /// `STANDARD_CELL_CHARGE` (joules) and the paddles' `revivecost`.
 pub const STANDARD_CELL_CHARGE: f32 = 10_000.0;
 pub const REVIVE_COST: f32 = STANDARD_CELL_CHARGE * 0.1;
-/// `STANDARD_ORGAN_DECAY`, `STANDARD_ORGAN_HEALING`, per second of the organ's max health.
-pub const STANDARD_ORGAN_DECAY: f32 = 111.0 / 100_000.0;
-pub const STANDARD_ORGAN_HEALING: f32 = 50.0 / 100_000.0;
-/// Heart (`STANDARD_ORGAN_THRESHOLD`) and brain (`BRAIN_DAMAGE_DEATH`) max health.
-pub const HEART_MAX_HEALTH: f32 = 100.0;
-pub const BRAIN_MAX_HEALTH: f32 = 200.0;
-const T0C: f64 = 273.15;
 const THICKMATERIAL: u32 = 1 << 4;
 const CHEST: u32 = 1 << 0;
 pub const DEFIB_ROOT: &str = "/obj/item/defibrillator";
 pub const PADDLES_ROOT: &str = "/obj/item/shockpaddles";
 
-/// The heart and brain damage a corpse accrues (tg organ `damage`).
-#[derive(Component, Clone, Copy, Debug, Default, PartialEq)]
-pub struct OrganDecay {
-    pub heart: f32,
-    pub brain: f32,
-    /// The heart's `TRAIT_ORGAN_OPERATED_ON`: coronary bypass is done once per heart.
-    pub heart_operated: bool,
-}
-
-impl OrganDecay {
-    /// tg `handle_organs`: organs of the dead decay (by body temperature), of the living heal.
-    pub fn tick(&mut self, dead: bool, bodytemperature: f64, secs: f32) {
-        if dead {
-            if bodytemperature > T0C {
-                let factor = ((bodytemperature - T0C) / 20.0).min(1.0) as f32;
-                self.heart = (self.heart
-                    + 2.5 * STANDARD_ORGAN_DECAY * HEART_MAX_HEALTH * secs * factor)
-                    .min(HEART_MAX_HEALTH);
-                self.brain = (self.brain
-                    + 0.5 * STANDARD_ORGAN_DECAY * BRAIN_MAX_HEALTH * secs * factor)
-                    .min(BRAIN_MAX_HEALTH);
-            }
-        } else if !self.heart_failing() {
-            self.heart = (self.heart - STANDARD_ORGAN_HEALING * HEART_MAX_HEALTH * secs).max(0.0);
-            self.brain = (self.brain - STANDARD_ORGAN_HEALING * BRAIN_MAX_HEALTH * secs).max(0.0);
-        }
-    }
-
-    /// `ORGAN_FAILING`: damage at the organ's max health.
-    pub fn heart_failing(&self) -> bool {
-        self.heart >= HEART_MAX_HEALTH
-    }
-
-    pub fn brain_failing(&self) -> bool {
-        self.brain >= BRAIN_MAX_HEALTH
-    }
-}
-
 /// Why `can_defib` refuses (tg `DEFIB_FAIL_*`), with the unit's buzz.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DefibFail {
     TissueDamage,
+    NoHeart,
     FailingHeart,
+    NoBrain,
     FailingBrain,
 }
 
@@ -103,24 +60,40 @@ impl DefibFail {
     pub fn reason(self) -> &'static str {
         match self {
             Self::TissueDamage => "Tissue damage too severe, repair and try again.",
+            Self::NoHeart => "Patient's heart is missing.",
             Self::FailingHeart => "Patient's heart too damaged, replace or repair and try again.",
+            Self::NoBrain => "Patient's brain is missing. Further attempts futile.",
             Self::FailingBrain => "Patient's brain is too damaged, repair and try again.",
         }
     }
 }
 
-/// tg `can_defib` of a human.
-pub fn can_defib(health: &Health, organs: OrganDecay) -> Result<(), DefibFail> {
+/// What `can_defib` reads of an organ: `None` missing, `Some(failing)`.
+pub type VitalOrgan = Option<bool>;
+
+/// tg `can_defib` of a human (`can_defib_heart`, `can_defib_brain`).
+pub fn can_defib(health: &Health, heart: VitalOrgan, brain: VitalOrgan) -> Result<(), DefibFail> {
     if health.brute >= MAX_REVIVE_DAMAGE || health.burn >= MAX_REVIVE_DAMAGE {
         return Err(DefibFail::TissueDamage);
     }
-    if organs.heart_failing() {
-        return Err(DefibFail::FailingHeart);
+    match heart {
+        None => return Err(DefibFail::NoHeart),
+        Some(true) => return Err(DefibFail::FailingHeart),
+        Some(false) => {}
     }
-    if organs.brain_failing() {
-        return Err(DefibFail::FailingBrain);
+    match brain {
+        None => Err(DefibFail::NoBrain),
+        Some(true) => Err(DefibFail::FailingBrain),
+        Some(false) => Ok(()),
     }
-    Ok(())
+}
+
+/// A mob's heart or brain for [`can_defib`]; a mob without modelled organs has healthy ones.
+pub fn vital_organ(world: &World, mob: Entity, slot: organs::Slot) -> VitalOrgan {
+    if world.get::<organs::OrganHost>(mob).is_none() {
+        return Some(false);
+    }
+    organs::state(world, mob, slot).map(|o| o.failing)
 }
 
 /// The damage changes of a successful `do_help` on a corpse: up to crit again with oxygen
@@ -403,8 +376,11 @@ pub enum Stage {
 
 fn revivable(world: &World, mob: Entity) -> Result<(), DefibFail> {
     let health = world.get::<Health>(mob).cloned().unwrap_or_default();
-    let organs = world.get::<OrganDecay>(mob).copied().unwrap_or_default();
-    can_defib(&health, organs)
+    can_defib(
+        &health,
+        vital_organ(world, mob, organs::Slot::Heart),
+        vital_organ(world, mob, organs::Slot::Brain),
+    )
 }
 
 /// The end of a shock stage.
@@ -489,6 +465,24 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter, unit: Entity, 
                 &format!("{user} shocks {victim} with {item}!"),
                 Span::Danger,
             );
+            if !organs::cardiac_arrest(world, target)
+                && organs::state(world, target, organs::Slot::Heart).is_some_and(|h| !h.robotic)
+            {
+                let awake = world.get::<Stat>(target) == Some(&Stat::Conscious);
+                let others = if awake {
+                    format!("{victim} thrashes wildly, clutching at their chest!")
+                } else {
+                    String::new()
+                };
+                visible(
+                    world,
+                    target,
+                    "You feel a horrible agony in your chest!",
+                    &others,
+                    Span::Warning,
+                );
+                organs::set_heartattack(world, target, true);
+            }
             hurt(world, target, BodyZone::Chest, DamageType::Burn, 50.0);
             crate::status_effects::apply(
                 world,
@@ -525,8 +519,19 @@ fn do_help(
         }
     }
     if world.get::<Stat>(target) != Some(&Stat::Dead) {
-        let text =
-            format!("{unit_name} buzzes: Patient is not in a valid state. Operation aborted.");
+        let text = if organs::lacks(world, target, organs::Slot::Heart) {
+            format!("{unit_name} buzzes: Patient's heart is missing. Operation aborted.")
+        } else if organs::cardiac_arrest(world, target) {
+            if organs::state(world, target, organs::Slot::Heart).is_some_and(|h| !h.failing) {
+                organs::set_heartattack(world, target, false);
+                success(world, unit);
+                format!("{unit_name} pings: Patient's heart is now beating again.")
+            } else {
+                format!("{unit_name} buzzes: Resuscitation failed, heart damage detected.")
+            }
+        } else {
+            format!("{unit_name} buzzes: Patient is not in a valid state. Operation aborted.")
+        };
         visible(world, actor.mob, &text, &text, Span::Warning);
         return;
     }
@@ -566,6 +571,8 @@ pub fn revive(world: &mut World, mob: Entity) -> bool {
     if world.get::<Stat>(mob) != Some(&Stat::Dead) || health.health() <= HEALTH_THRESHOLD_DEAD {
         return false;
     }
+    // carbon `revive`: `set_heartattack(FALSE)`.
+    organs::set_heartattack(world, mob, false);
     let stat = Stat::for_health(health.health());
     world.entity_mut(mob).insert(stat);
     if let Some(mut alerts) = world.get_mut::<crate::breath::Alerts>(mob) {
@@ -629,23 +636,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn organ_decay_sets_the_defib_window() {
-        let mut organs = OrganDecay::default();
-        // 2 s ticks at body temperature: the heart fails after ~360 s.
-        let mut secs = 0;
-        while !organs.heart_failing() {
-            organs.tick(true, 310.15, 2.0);
-            secs += 2;
-        }
-        assert!((358..=362).contains(&secs), "{secs}");
-        assert!(!organs.brain_failing());
-        // A cold corpse does not decay.
-        let mut cold = OrganDecay::default();
-        cold.tick(true, 270.0, 1000.0);
-        assert_eq!(cold, OrganDecay::default());
-    }
-
-    #[test]
     fn defib_heal_puts_the_body_halfway_to_death() {
         // Died of suffocation then patched up: oxygen brings it back to -50.
         let mut health = Health::default();
@@ -667,20 +657,21 @@ mod tests {
             health.health()
         );
         assert!(health.brute < 160.0 && health.oxy < 60.0);
-        assert_eq!(can_defib(&health, OrganDecay::default()), Ok(()));
+        let ok = Some(false);
+        assert_eq!(can_defib(&health, ok, ok), Ok(()));
         let mut torn = Health::default();
         torn.adjust(DamageType::Burn, 190.0);
+        assert_eq!(can_defib(&torn, ok, ok), Err(DefibFail::TissueDamage));
+        let healthy = Health::default();
         assert_eq!(
-            can_defib(&torn, OrganDecay::default()),
-            Err(DefibFail::TissueDamage)
-        );
-        let decayed = OrganDecay {
-            heart: 100.0,
-            ..default()
-        };
-        assert_eq!(
-            can_defib(&Health::default(), decayed),
+            can_defib(&healthy, Some(true), ok),
             Err(DefibFail::FailingHeart)
+        );
+        assert_eq!(can_defib(&healthy, None, ok), Err(DefibFail::NoHeart));
+        assert_eq!(can_defib(&healthy, ok, None), Err(DefibFail::NoBrain));
+        assert_eq!(
+            can_defib(&healthy, ok, Some(true)),
+            Err(DefibFail::FailingBrain)
         );
     }
 }

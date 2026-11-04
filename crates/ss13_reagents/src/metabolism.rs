@@ -163,6 +163,43 @@ pub fn digest(chem: &Chemistry, stomach: &mut Holder, body: &mut Holder, seconds
     }
 }
 
+/// `MAX_TOXIN_LIVER_DAMAGE`: liver damage per second from toxins at most.
+pub const MAX_TOXIN_LIVER_DAMAGE: f32 = 2.0;
+
+/// Reagent types with `self_consuming = TRUE` (they work without a liver), subtypes included.
+const SELF_CONSUMING: [&str; 21] = [
+    "/datum/reagent/consumable/tinlux",
+    "/datum/reagent/cryostylane",
+    "/datum/reagent/determination",
+    "/datum/reagent/eldritch",
+    "/datum/reagent/fuel/unholywater",
+    "/datum/reagent/gravitum",
+    "/datum/reagent/inverse/corazargh",
+    "/datum/reagent/inverse/healing/syriniver",
+    "/datum/reagent/inverse/healing/tirimol",
+    "/datum/reagent/inverse/penthrite",
+    "/datum/reagent/luminescent_fluid",
+    "/datum/reagent/medicine/cordiolis_hepatico",
+    "/datum/reagent/medicine/higadrite",
+    "/datum/reagent/medicine/neurine",
+    "/datum/reagent/napalm",
+    "/datum/reagent/phlogiston",
+    "/datum/reagent/pyrosium",
+    "/datum/reagent/teslium",
+    "/datum/reagent/toxin/acid",
+    "/datum/reagent/toxin/carnivorousblood",
+    "/datum/reagent/water/holywater",
+];
+
+/// The liver `metabolize` works with (tg `/obj/item/organ/liver`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Liver {
+    /// A working liver: `(maxHealth - damage) / maxHealth`.
+    Working { health: f32 },
+    /// Missing or failing: the `liverless` metabolism, where only `self_consuming` reagents act.
+    Liverless,
+}
+
 /// tg `metabolize(owner, seconds_per_tick, can_overdose = TRUE)` of a carbon with a healthy
 /// liver; `stomach` is only read (the liver counts a toxin there too). `body_temperature`
 /// first warms the holder (`expose_temperature(bodytemperature, 0.25)`).
@@ -174,8 +211,38 @@ pub fn metabolize(
     body_temperature: f32,
     seconds: f32,
 ) {
+    metabolize_with(
+        chem,
+        holder,
+        stomach,
+        body,
+        body_temperature,
+        seconds,
+        Liver::Working { health: 1.0 },
+    );
+}
+
+/// [`metabolize`] with `liver`: its tolerance scales with its health, toxins damage it
+/// (`(amount / 15) * toxpwr` a second, at most [`MAX_TOXIN_LIVER_DAMAGE`]); without one only
+/// `self_consuming` reagents metabolize. Returns the liver damage of this tick.
+// shortcut: every toxin has `liver_damage_multiplier` 1 and is painful (`silent_toxin`), and
+// none skips a liver type (`affected_organ_flags`); the generated data lacks those vars.
+pub fn metabolize_with(
+    chem: &Chemistry,
+    holder: &mut Holder,
+    stomach: &Holder,
+    body: &mut dyn Body,
+    body_temperature: f32,
+    seconds: f32,
+    liver: Liver,
+) -> f32 {
     holder.expose_temperature(chem, body_temperature, 0.25);
     let dead = body.dead();
+    let (liverless, tolerance) = match liver {
+        Liver::Working { health } => (false, LIVER_DEFAULT_TOX_TOLERANCE * health),
+        Liver::Liverless => (true, 0.0),
+    };
+    let mut liver_damage = 0.0;
     // tg iterates the live list; reagents removed by an effect are skipped.
     let order: Vec<ReagentId> = holder.reagents.iter().map(|r| r.id).collect();
     for id in order {
@@ -184,17 +251,26 @@ pub fn metabolize(
         };
         let def = chem.def(id);
         let is_toxin = is_under(&def.path, "/datum/reagent/toxin");
-        if is_toxin && !dead {
-            let amount = holder.reagents[i].volume + stomach.amount(id);
-            // Liver at full health: `toxTolerance * liver_health_percent`.
-            if amount <= LIVER_DEFAULT_TOX_TOLERANCE * def.liver_tolerance_multiplier {
+        let amount = holder.reagents[i].volume + stomach.amount(id);
+        if is_toxin && !liverless && !dead {
+            // `toxTolerance * liver_health_percent`.
+            if amount <= tolerance * def.liver_tolerance_multiplier {
                 let rate = holder.reagents[i].metabolization_rate;
                 holder.remove_reagent(id, rate * body.metabolism_efficiency() * seconds);
                 continue;
             }
         }
+        let self_consuming = SELF_CONSUMING.iter().any(|root| is_under(&def.path, root));
+        if liverless && !self_consuming {
+            continue;
+        }
         metabolize_reagent(chem, holder, i, body, seconds, dead);
+        if is_toxin && !liverless && !dead {
+            // "a 15u syringe is a nice baseline to scale lethality by".
+            liver_damage += (amount / 15.0) * def.toxpwr;
+        }
     }
+    (liver_damage * seconds).min(MAX_TOXIN_LIVER_DAMAGE * seconds)
 }
 
 /// tg `metabolize_reagent` (+ `compute_metabolization`, the overdose checks and the reagent's
