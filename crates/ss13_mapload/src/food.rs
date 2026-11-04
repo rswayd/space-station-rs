@@ -529,9 +529,13 @@ fn grown(types: &DmTypes, path: &str, food: &mut DmFood) {
 
 /// Every type food on the map can turn into (microwave and processor results, slices, trash),
 /// transitively, plus the burned mess and the grinder's beaker.
-/// What kitchen machines make at runtime, by machine type (`ss13_game::gibber`, `coffee`,
-/// `icecream`, `stove`, and the ash of things burnt in `cooking`).
-const MACHINE_SPAWNS: [(&str, &[&str]); 9] = [
+/// What kitchen machines and drinks make at runtime, by type (`ss13_game::gibber`, `coffee`,
+/// `icecream`, `stove`, the ash of things burnt in `cooking`, `bar`'s broken glass).
+const RUNTIME_SPAWNS: [(&str, &[&str]); 10] = [
+    (
+        crate::drinks::GLASS_ROOT,
+        &["/obj/item/broken_bottle"],
+    ),
     (
         "/obj/machinery/gibber",
         &[
@@ -616,7 +620,7 @@ pub fn food_closure<'a>(
         if is_under(&path, SODA_CANS) {
             next.push(CRUSHED_CAN.to_owned());
         }
-        for (root, spawned) in MACHINE_SPAWNS {
+        for (root, spawned) in RUNTIME_SPAWNS {
             if is_under(&path, root) {
                 next.extend(spawned.iter().map(|s| (*s).to_owned()));
             }

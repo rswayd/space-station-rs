@@ -448,6 +448,9 @@ fn finish(world: &mut World, item: Entity, thrown: &Thrown, hit: Option<Entity>)
     world.entity_mut(item).remove::<Thrown>();
     let Some(hit) = hit else {
         crate::chem::soda_thrown(world, item);
+        if world.get_entity(item).is_ok() {
+            crate::bar::glass_thrown(world, item, None);
+        }
         return;
     };
     if world.get::<Health>(hit).is_some() {
@@ -455,6 +458,9 @@ fn finish(world: &mut World, item: Entity, thrown: &Thrown, hit: Option<Entity>)
         // Not caught.
         if world.get::<CarriedBy>(item).is_none() && world.get_entity(item).is_ok() {
             crate::chem::soda_thrown(world, item);
+            if world.get_entity(item).is_ok() {
+                crate::bar::glass_thrown(world, item, Some(hit));
+            }
         }
     } else if crate::disposals::hitby(world, item, hit) {
     } else if world.get::<DmCloset>(hit).is_some_and(|c| !c.wall_mounted) {
@@ -462,6 +468,9 @@ fn finish(world: &mut World, item: Entity, thrown: &Thrown, hit: Option<Entity>)
     }
     if world.get::<Health>(hit).is_none() && world.get_entity(item).is_ok() {
         crate::chem::soda_thrown(world, item);
+        if world.get_entity(item).is_ok() {
+            crate::bar::glass_thrown(world, item, Some(hit));
+        }
     }
 }
 

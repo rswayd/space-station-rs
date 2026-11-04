@@ -2,7 +2,8 @@
 //! into the gibber and gibbed into meat and skin (tg `gibber.dm`), coffee brewed from a
 //! cartridge (`coffeemaker.dm`), a waffle cone made and filled at the ice cream vat
 //! (`icecream_vat.dm`, `ice_cream_holder`), a meatball soup cooked in the range's pot
-//! (`stove_component.dm`, `soup_mixtures.dm`) and a toy burnt to ash on the griddle.
+//! (`stove_component.dm`, `soup_mixtures.dm`), a toy burnt to ash on the griddle and a thrown
+//! glass smashed (`drinks.dm`).
 
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
@@ -179,7 +180,14 @@ const TYPES: &str = r##"{
     "/obj/item/reagent_containers/cup": { "parent": "/obj/item/reagent_containers",
         "declared_vars": { "amount_per_transfer_from_this": 10,
         "possible_transfer_amounts": { "list": [5, 10, 15, 20, 25, 30, 50] }, "volume": 50,
-        "initial_reagent_flags": 60, "gulp_size": 5, "icon_state": "bottle" } },
+        "initial_reagent_flags": 60, "gulp_size": 5, "icon_state": "bottle", "isGlass": 0 } },
+    "/obj/item/reagent_containers/cup/glass": { "parent": "/obj/item/reagent_containers/cup",
+        "declared_vars": { "isGlass": 1 } },
+    "/obj/item/reagent_containers/cup/glass/drinkingglass": {
+        "parent": "/obj/item/reagent_containers/cup/glass", "vars": { "name": "drinking glass" },
+        "declared_vars": { "name": "drinking glass" } },
+    "/obj/item/broken_bottle": { "parent": "/obj/item", "vars": { "name": "broken bottle" },
+        "declared_vars": { "name": "broken bottle" } },
     "/obj/item/reagent_containers/cup/coffeepot": { "parent": "/obj/item/reagent_containers/cup",
         "vars": { "name": "coffeepot" }, "declared_vars": { "name": "coffeepot",
         "volume": 120 } },
@@ -238,7 +246,7 @@ const TYPES: &str = r##"{
 /// north, the range south-west and the griddle south-east (reached past the free tile south).
 const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 "f" = (/turf/open/floor,/area/space)
-"s" = (/obj/effect/landmark/start/assistant,/obj/item/food/meatball,/obj/item/toy,/turf/open/floor,/area/space)
+"s" = (/obj/effect/landmark/start/assistant,/obj/item/food/meatball,/obj/item/toy,/obj/item/reagent_containers/cup/glass/drinkingglass,/turf/open/floor,/area/space)
 "B" = (/obj/machinery/gibber,/turf/open/floor,/area/space)
 "C" = (/obj/machinery/coffeemaker,/turf/open/floor,/area/space)
 "V" = (/obj/machinery/icecream_vat,/turf/open/floor,/area/space)
@@ -303,6 +311,7 @@ fn fixture_assets(test: &str) -> PathBuf {
         "/obj/machinery/griddle",
         "/obj/item/food/meatball",
         "/obj/item/toy",
+        "/obj/item/reagent_containers/cup/glass/drinkingglass",
         "/turf/open/floor",
         "/turf/closed/wall",
         "/turf/open/space/basic",
@@ -641,4 +650,21 @@ fn soup_and_burning() {
         })
         .copied();
     assert!(ash.is_some(), "ashes on the griddle");
+
+    // A glass of water thrown onto the floor south: it smashes, a broken bottle is left.
+    let glass = s
+        .on_tile(SPAWN, "/obj/item/reagent_containers/cup/glass/drinkingglass")
+        .unwrap();
+    {
+        let world = s.0.server.world_mut();
+        let chem = world.resource::<Chem>().0.clone();
+        let water = chem.id("/datum/reagent/water").unwrap();
+        let mut r = world.get_mut::<Reagents>(glass).unwrap();
+        r.0.add_reagent(&chem, water, 10.0, 300.0, None, None, true, false);
+        let south = TilePos::new(3, 2, 1);
+        assert!(ss13_game::throw::throw_at(world, glass, south, 3, 1.0));
+    }
+    s.run_until("smashed", |s| s.server.world().get_entity(glass).is_err());
+    assert!(s.on_tile(TilePos::new(3, 2, 1), "/obj/item/broken_bottle").is_some());
+    s.run_until("the splash is seen", |s| s.said("разливает своё содержимое"));
 }

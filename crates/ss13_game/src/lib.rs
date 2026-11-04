@@ -136,6 +136,8 @@ pub mod atmos_exposure;
 #[cfg(feature = "server")]
 pub mod atmos_machinery;
 #[cfg(feature = "server")]
+pub mod bar;
+#[cfg(feature = "server")]
 pub mod botany;
 pub mod bots;
 #[cfg(feature = "server")]

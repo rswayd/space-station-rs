@@ -29,6 +29,7 @@ pub mod dispenser;
 pub mod disposal;
 pub mod dock;
 pub mod door;
+pub mod drinks;
 pub mod fidelity;
 pub mod food;
 pub mod gags;
@@ -95,6 +96,7 @@ pub use radio::DmRadio;
 pub use reagents::DmReagents;
 pub use security::{DmBaton, DmHandcuffs};
 pub use silicon::{DmCamera, DmCameraConsole};
+pub use drinks::DmGlass;
 pub use smartfridge::DmSmartFridge;
 pub use smooth::DmSmooth;
 pub use spawner::{DmSpawner, LootEntry};
@@ -309,6 +311,7 @@ impl Plugin for DmProtoPlugin {
             .register_proto_component::<DmFood>(food::FOOD_COMPONENT)
             .register_proto_component::<DmChemDispenser>(dispenser::DISPENSER_COMPONENT)
             .register_proto_component::<DmSmartFridge>(smartfridge::FRIDGE_COMPONENT)
+            .register_proto_component::<DmGlass>(drinks::GLASS_COMPONENT)
             .register_proto_component::<DmMob>("dm_mob")
             .register_proto_component::<DmWallMount>("dm_wallmount")
             .register_proto_component::<DmCircuit>("dm_circuit")
