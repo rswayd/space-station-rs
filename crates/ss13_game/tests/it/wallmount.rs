@@ -561,22 +561,22 @@ fn metastation() {
     };
     let mut app = testing::server_app(map, |_| {});
     let world = app.world_mut();
-    let count = |world: &mut World, name: &str, n: usize| {
+    let count = |name: &str, n: usize| {
         println!("{name}: {n}");
         assert!(n > 0, "no {name}");
     };
     let n = world.query::<&FireAlarm>().iter(world).count();
-    count(world, "fire alarms", n);
+    count("fire alarms", n);
     let n = world.query::<&Firelock>().iter(world).count();
-    count(world, "firelocks", n);
+    count("firelocks", n);
     let n = world.query::<&LightSwitch>().iter(world).count();
-    count(world, "light switches", n);
+    count("light switches", n);
     let n = world.query::<&Flasher>().iter(world).count();
-    count(world, "flashers", n);
+    count("flashers", n);
     let n = world.query::<&ExtinguisherCabinet>().iter(world).count();
-    count(world, "extinguisher cabinets", n);
+    count("extinguisher cabinets", n);
     let n = world.query::<&FireaxeCabinet>().iter(world).count();
-    count(world, "fire axe cabinets", n);
+    count("fire axe cabinets", n);
     let buttons: Vec<Button> = world.query::<&Button>().iter(world).cloned().collect();
     let links = world.resource::<ss13_game::wallmount::controls::Links>();
     let linked = buttons
