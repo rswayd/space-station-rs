@@ -17,7 +17,7 @@
 Зажигалка (Zippo и дешёвые цветные) открывается и зажигается, поджигает сигареты, свечи и людей; спички зажигаются о коробок, гаснут со временем.
 
 - **Код:** [`/obj/item/lighter`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/lighter.dm#L1), [`set_lit()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/lighter.dm#L121), [`/obj/item/match`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/cigarettes.dm#L16), [`matchignite()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/cigarettes.dm#L96)
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/fire.rs`: «no lighters, matches, cigarettes or igniters as flame sources»
+- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/fire.rs`: «no lighters, matches or cigarettes as flame sources»
 
 ### Сигареты и окурки
 Сигарета поджигается от огня, тлеет, выпуская свои реагенты (никотин и др.) в курильщика, оставляет окурок; марки отличаются составом (синдикатовские лечат, «flash powder» взрываются); самокрутки из бумаги и сушёных растений.

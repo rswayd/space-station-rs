@@ -2,11 +2,13 @@
 //! (`code/game/machinery/firealarm.dm`), buttons (`buttons.dm`, the `assembly/control` they
 //! hold: `code/modules/assembly/doorcontrol.dm`), light switches (`lightswitch.dm`), mounted
 //! flashers (`flasher.dm`), extinguisher cabinets (`code/game/objects/structures/extinguisher.dm`)
-//! and fire axe cabinets (`fireaxe.dm`). Only those families get [`DmWallMount`]; the game
-//! (`ss13_game::wallmount`) builds their live state from it once.
+//! and fire axe cabinets (`fireaxe.dm`), and the machines buttons drive on the floor and walls:
+//! mass drivers (`mass_driver.dm`), igniters and sparkers (`igniter.dm`). Only those families get
+//! [`DmWallMount`]; the game (`ss13_game::wallmount`) builds their live state from it once.
 //!
 //! Map var edits of `id`, `req_access`, `req_one_access`, `normaldoorcontrol`,
-//! `specialfunctions`, `sync_doors`, `skin`, `flash_range` and `locked` are supported.
+//! `specialfunctions`, `sync_doors`, `skin`, `flash_range`, `locked`, `on` and `power` are
+//! supported.
 
 use bevy::prelude::*;
 use serde_json::Value;
@@ -27,18 +29,24 @@ pub const FLASHER_ROOT: &str = "/obj/machinery/flasher";
 pub const PORTABLE_FLASHER: &str = "/obj/machinery/flasher/portable";
 pub const EXTINGUISHER_CABINET_ROOT: &str = "/obj/structure/extinguisher_cabinet";
 pub const FIREAXE_CABINET_ROOT: &str = "/obj/structure/fireaxecabinet";
+pub const MASS_DRIVER_ROOT: &str = "/obj/machinery/mass_driver";
+pub const IGNITER_ROOT: &str = "/obj/machinery/igniter";
+pub const SPARKER_ROOT: &str = "/obj/machinery/sparker";
 /// What the cabinets create in `Initialize(mapload)` (`new /obj/item/extinguisher(src)`, a fire
 /// axe cabinet's default `item_path`).
 pub const WALLMOUNT_RUNTIME_TYPES: [&str; 2] = ["/obj/item/extinguisher", "/obj/item/fireaxe"];
 
 const COMPONENT: &str = "dm_wallmount";
-const ROOTS: [&str; 6] = [
+const ROOTS: [&str; 9] = [
     FIREALARM_ROOT,
     BUTTON_ROOT,
     LIGHT_SWITCH_ROOT,
     FLASHER_ROOT,
     EXTINGUISHER_CABINET_ROOT,
     FIREAXE_CABINET_ROOT,
+    MASS_DRIVER_ROOT,
+    IGNITER_ROOT,
+    SPARKER_ROOT,
 ];
 
 /// The vars of a wall mount (type defaults + map edits). Prototype data like
@@ -47,8 +55,8 @@ const ROOTS: [&str; 6] = [
 pub struct DmWallMount {
     /// The DM type: every wall-mount type sets its own, so instances keep their type's.
     pub path: String,
-    /// Buttons and flashers: `id`, the channel they control or listen on (DM `"[id]"`; empty is
-    /// `null`).
+    /// Buttons, flashers, mass drivers, igniters and sparkers: `id`, the channel they control or
+    /// listen on (DM `"[id]"`; empty is `null`).
     pub id: String,
     /// Buttons: the access their airlock electronics hold.
     pub req_access: Vec<String>,
@@ -75,6 +83,13 @@ pub struct DmWallMount {
     pub locked: bool,
     /// Light switches: `light_on_range` (the glow while the lights are off).
     pub light_on_range: f32,
+    /// Igniters: lit at start (`/obj/machinery/igniter/on`).
+    pub on: bool,
+    /// Mass drivers: `power` (throw speed, range multiplier), `drive_range` before its parts,
+    /// `power_per_obj` joules.
+    pub power: f32,
+    pub drive_range: f32,
+    pub power_per_obj: f32,
 }
 
 #[derive(Clone, Copy)]
@@ -90,7 +105,7 @@ enum Kind {
 }
 
 /// Wall-mount vars, their [`DmWallMount`] field (same name) and kind.
-const VARS: [(&str, Kind); 15] = [
+const VARS: [(&str, Kind); 19] = [
     ("id", Kind::Id),
     ("req_access", Kind::List),
     ("req_one_access", Kind::List),
@@ -106,9 +121,13 @@ const VARS: [(&str, Kind); 15] = [
     ("item_overlay", Kind::Text),
     ("populate_contents", Kind::Flag),
     ("locked", Kind::Flag),
+    ("on", Kind::Flag),
+    ("power", Kind::Num),
+    ("drive_range", Kind::Num),
+    ("power_per_obj", Kind::Num),
 ];
 /// Vars a map may edit (the rest are type data).
-const MAP_VARS: [&str; 9] = [
+const MAP_VARS: [&str; 11] = [
     "id",
     "req_access",
     "req_one_access",
@@ -118,6 +137,8 @@ const MAP_VARS: [&str; 9] = [
     "skin",
     "flash_range",
     "locked",
+    "on",
+    "power",
 ];
 
 pub fn is_wallmount(path: &str) -> bool {
@@ -232,7 +253,13 @@ mod tests {
             "declared_vars": { "id": 1, "device_type": { "path": "/obj/item/assembly/control/crematorium" } } },
         "/obj/machinery/flasher": { "parent": "/obj/machinery", "declared_vars": {
             "id": null, "flash_range": 2, "strength": 50 } },
-        "/obj/machinery/flasher/portable": { "parent": "/obj/machinery/flasher" }
+        "/obj/machinery/flasher/portable": { "parent": "/obj/machinery/flasher" },
+        "/obj/machinery/mass_driver": { "parent": "/obj/machinery", "declared_vars": {
+            "id": 1, "power": 1, "drive_range": 10, "power_per_obj": 1000 } },
+        "/obj/machinery/igniter": { "parent": "/obj/machinery", "declared_vars": {
+            "id": null, "on": 0 } },
+        "/obj/machinery/igniter/on": { "parent": "/obj/machinery/igniter", "declared_vars": {
+            "on": 1 } }
       }
     }"##;
 
@@ -265,6 +292,16 @@ mod tests {
                 "path"
             ),
             Some(r#""/obj/machinery/flasher/portable""#)
+        );
+        let driver = type_fields(&types, "/obj/machinery/mass_driver");
+        assert_eq!(get(&driver, "id"), Some(r#""1""#));
+        assert_eq!(get(&driver, "drive_range"), Some("10.0"));
+        assert_eq!(get(&driver, "power_per_obj"), Some("1000.0"));
+        let igniter = type_fields(&types, "/obj/machinery/igniter/on");
+        assert_eq!(get(&igniter, "on"), Some("true"));
+        assert_eq!(
+            field_dmm("/obj/machinery/mass_driver", "power", &DmValue::Number(5.0)),
+            Some(Ok(ext(COMPONENT, "power", "5.0")))
         );
     }
 

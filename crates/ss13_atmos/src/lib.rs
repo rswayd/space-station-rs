@@ -448,6 +448,31 @@ impl Atmos {
         out
     }
 
+    /// Starts or stops reporting the tile on `pos` ([`LevelAir::watch`]).
+    pub fn watch(&mut self, pos: TilePos, on: bool) {
+        if let Some((level, tile)) = self.locate_mut(pos) {
+            level.watch(tile, on);
+        }
+    }
+
+    /// Watched tiles processed or with their adjacency recomputed since the last call, each
+    /// once.
+    pub fn drain_watch_reports(&mut self) -> Vec<TilePos> {
+        let mut out = Vec::new();
+        for (z, level) in self.levels.iter_mut().enumerate() {
+            let Some(level) = level else { continue };
+            let mut tiles = Vec::new();
+            level.drain_watch_reports(|t| tiles.push(t));
+            tiles.sort_unstable();
+            tiles.dedup();
+            out.extend(tiles.into_iter().map(|t| {
+                let (x, y) = level.pos(t);
+                TilePos::new(x, y, z as u16)
+            }));
+        }
+        out
+    }
+
     /// Turfs water vapor condensed on since the last call (tg `water_vapor_gas_act`,
     /// `freeze_turf`), for the game to wet or freeze.
     pub fn drain_condensed(&mut self) -> Vec<(TilePos, reactions::Condensation)> {

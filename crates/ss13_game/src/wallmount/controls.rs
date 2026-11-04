@@ -10,15 +10,17 @@
 //! - airlock controller (`normaldoorcontrol`): per `specialfunctions` bit opens/closes the
 //!   airlocks with that `id_tag` (all close if any is open), toggles their ID scan, bolts
 //!   (powered, bolt wire intact), electrification and safety, 1 s;
-//! - mass driver controller: opens the blast doors, closes them 7 s later, 8 s;
+//! - mass driver controller: opens the blast doors, drives the mass drivers 1 s later
+//!   ([`super::machines::drive`]), closes the doors 6 s after that, 8 s;
+//! - ignition controller: sparks the sparkers and toggles the igniters
+//!   ([`super::machines`]), 3 s;
 //! - flasher controller: fires the mounted flashers, 5 s.
 //!
 //! A mounted flasher (`flash()`), powered, with a working bulb and off its 15 s cooldown, may
 //! burn its bulb out (`flash_recharge(30)`: 3% per recent use), then flashes every living mob
 //! that sees it within `flash_range`: the bulb's targeted `flash_mob` (from the flasher, no
 //! user; `strength * 1.5` confusion) and `strength` of paralysis on success.
-// shortcut: the mass driver itself does not throw (no mass drivers); igniter, curtain,
-// crematorium, photobooth and ticket buttons do nothing; no panel (devices and boards in and
+// shortcut: curtain, crematorium, photobooth and ticket buttons do nothing; no panel (devices and boards in and
 // out, renaming, skins), no shuttle id prefixes (`connect_to_shuttle`), the airlock controller's
 // shock bit sets the intended toggle (tg's `secondsElectrified` check is inverted). Flashers:
 // no bulb removal or replacement (wirecutters), no flick or flash light, no portable flasher.
@@ -54,6 +56,7 @@ pub const SAFE: u8 = 16;
 /// `flick_overlay_view(..., 1 SECONDS)` of a press.
 const FLICK_SECS: f64 = 1.0;
 const MASSDRIVER: &str = "/obj/item/assembly/control/massdriver";
+const IGNITER_CONTROL: &str = "/obj/item/assembly/control/igniter";
 const FLASHER_CONTROL: &str = "/obj/item/assembly/control/flasher";
 const BLAST_DOOR_CONTROL: &str = "/obj/item/assembly/control/blast_door";
 const AIRLOCK_CONTROL: &str = "/obj/item/assembly/control/airlock";
@@ -73,8 +76,9 @@ pub enum Device {
         functions: u8,
     },
     MassDriver,
+    Igniter,
     Flasher,
-    /// A controller this server does not run (igniter, curtain, crematorium, ...).
+    /// A controller this server does not run (curtain, crematorium, ...).
     Other,
 }
 
@@ -85,6 +89,7 @@ impl Device {
             Self::BlastDoor { .. } | Self::Airlock { .. } => 1.0,
             // Open, 1 s, drive, 6 s, close, 1 s.
             Self::MassDriver => 8.0,
+            Self::Igniter => 3.0,
             Self::Flasher => 5.0,
             Self::Other => 0.0,
         }
@@ -103,7 +108,8 @@ pub struct Button {
     pub ready_at: f64,
     /// The `-overlay-success` (true) or `-overlay-error` flick and its end.
     pub flick: Option<(bool, f64)>,
-    /// A mass driver controller's closing of its blast doors.
+    /// A mass driver controller's drive (`activate_stage2`) and closing of its blast doors.
+    pub drive_at: Option<f64>,
     pub close_at: Option<f64>,
 }
 
@@ -124,7 +130,8 @@ pub struct Flasher {
     pub last_used: f64,
 }
 
-/// Who listens on which `id`: blast doors (`poddoor.id`), airlocks (`id_tag`), flashers. Built
+/// Who listens on which `id`: blast doors (`poddoor.id`), airlocks (`id_tag`), flashers, mass
+/// drivers, igniters and sparkers. Built
 /// at startup; entries are checked to still be what they were at the moment of effect.
 // shortcut: doors and flashers exist only from map load; register built ones when
 // construction makes them.
@@ -133,6 +140,33 @@ pub struct Links {
     pub poddoors: HashMap<String, Vec<Entity>>,
     pub airlocks: HashMap<String, Vec<Entity>>,
     pub flashers: HashMap<String, Vec<Entity>>,
+    pub mass_drivers: HashMap<String, Vec<Entity>>,
+    pub igniters: HashMap<String, Vec<Entity>>,
+    pub sparkers: HashMap<String, Vec<Entity>>,
+}
+
+/// Registers `e` on `id` in one of the [`Links`] lists.
+pub(super) fn link(
+    world: &mut World,
+    list: impl FnOnce(&mut Links) -> &mut HashMap<String, Vec<Entity>>,
+    id: &Option<String>,
+    e: Entity,
+) {
+    if let Some(id) = id {
+        let mut links = world.resource_mut::<Links>();
+        list(&mut links).entry(id.clone()).or_default().push(e);
+    }
+}
+
+fn linked(
+    world: &World,
+    list: impl FnOnce(&Links) -> &HashMap<String, Vec<Entity>>,
+    id: &str,
+) -> Vec<Entity> {
+    list(world.resource::<Links>())
+        .get(id)
+        .cloned()
+        .unwrap_or_default()
 }
 
 pub(super) fn init_links(world: &mut World) {
@@ -152,7 +186,7 @@ pub(super) fn init_links(world: &mut World) {
     world.insert_resource(links);
 }
 
-fn id_of(dm: &DmWallMount) -> Option<String> {
+pub(super) fn id_of(dm: &DmWallMount) -> Option<String> {
     (!dm.id.is_empty()).then(|| dm.id.clone())
 }
 
@@ -172,6 +206,8 @@ pub(super) fn add_button(world: &mut World, e: Entity, dm: &DmWallMount) {
         None
     } else if is_under(&dm.device_type, MASSDRIVER) {
         Some(Device::MassDriver)
+    } else if is_under(&dm.device_type, IGNITER_CONTROL) {
+        Some(Device::Igniter)
     } else if is_under(&dm.device_type, FLASHER_CONTROL) {
         Some(Device::Flasher)
     } else if is_under(&dm.device_type, BLAST_DOOR_CONTROL) {
@@ -188,20 +224,14 @@ pub(super) fn add_button(world: &mut World, e: Entity, dm: &DmWallMount) {
         req_one_access: dm.req_one_access.clone(),
         ready_at: 0.0,
         flick: None,
+        drive_at: None,
         close_at: None,
     });
 }
 
 pub(super) fn add_flasher(world: &mut World, e: Entity, dm: &DmWallMount) {
     let id = id_of(dm);
-    if let Some(id) = &id {
-        world
-            .resource_mut::<Links>()
-            .flashers
-            .entry(id.clone())
-            .or_default()
-            .push(e);
-    }
+    link(world, |l| &mut l.flashers, &id, e);
     world.entity_mut(e).insert(Flasher {
         id,
         range: dm.flash_range.max(0.0) as u32,
@@ -295,18 +325,21 @@ fn activate(world: &mut World, button: Entity, device: Device, id: &str, t: f64)
         Device::MassDriver => {
             move_poddoors(world, id, true);
             if let Some(mut b) = world.get_mut::<Button>(button) {
+                b.drive_at = Some(t + 1.0);
                 b.close_at = Some(t + 7.0);
             }
             world.entity_mut(button).insert(ButtonPending);
         }
+        Device::Igniter => {
+            for sparker in linked(world, |l| &l.sparkers, id) {
+                super::machines::ignite(world, sparker);
+            }
+            for igniter in linked(world, |l| &l.igniters, id) {
+                super::machines::toggle_igniter(world, igniter);
+            }
+        }
         Device::Flasher => {
-            let flashers = world
-                .resource::<Links>()
-                .flashers
-                .get(id)
-                .cloned()
-                .unwrap_or_default();
-            for f in flashers {
+            for f in linked(world, |l| &l.flashers, id) {
                 flash(world, f);
             }
         }
@@ -427,7 +460,7 @@ pub fn airlocks(world: &mut World, id: &str, functions: u8) {
     }
 }
 
-/// Flick ends and mass driver closings.
+/// Flick ends, mass driver drives and closings.
 pub(super) fn run_timers(world: &mut World) {
     let t = now(world);
     let mut query = world.query_filtered::<(Entity, &Button), With<ButtonPending>>();
@@ -439,16 +472,25 @@ pub(super) fn run_timers(world: &mut World) {
             b.flick = None;
             changed = true;
         }
+        if b.drive_at.is_some_and(|at| t >= at) {
+            b.drive_at = None;
+            if let Some(id) = b.id.as_deref() {
+                for driver in linked(world, |l| &l.mass_drivers, id) {
+                    super::machines::drive(world, driver);
+                }
+            }
+        }
         if b.close_at.is_some_and(|at| t >= at) {
             b.close_at = None;
             if let Some(id) = b.id.as_deref() {
                 move_poddoors(world, id, false);
             }
         }
-        let done = b.flick.is_none() && b.close_at.is_none();
-        let (flick, close_at) = (b.flick, b.close_at);
+        let done = b.flick.is_none() && b.drive_at.is_none() && b.close_at.is_none();
+        let (flick, drive_at, close_at) = (b.flick, b.drive_at, b.close_at);
         if let Some(mut live) = world.get_mut::<Button>(e) {
             live.flick = flick;
+            live.drive_at = drive_at;
             live.close_at = close_at;
         }
         if done {

@@ -18,6 +18,7 @@ mod doors;
 mod drag;
 mod engine;
 mod fire;
+mod firelocks;
 mod food;
 mod genetics;
 mod guns;

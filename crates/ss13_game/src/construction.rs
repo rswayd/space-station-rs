@@ -299,7 +299,10 @@ fn tool_act(world: &mut World, actor: Actor, kind: ToolKind, target: Entity) -> 
     if crate::wires::screwdriver_act(world, actor, kind, target) {
         return Interact::Done;
     }
-    if kind == ToolKind::Crowbar && crate::doors::crowbar_act(world, client, target) {
+    if kind == ToolKind::Crowbar
+        && (crate::wallmount::firelock::crowbar_act(world, actor, target, false)
+            || crate::doors::crowbar_act(world, client, target))
+    {
         return Interact::Done;
     }
     Interact::None
@@ -320,6 +323,11 @@ fn tool_act_secondary(world: &mut World, actor: Actor, kind: ToolKind, target: E
             Span::Notice,
             "Вы перекусываете решётку.",
         );
+        return Interact::Done;
+    }
+    if kind == ToolKind::Crowbar
+        && crate::wallmount::firelock::crowbar_act(world, actor, target, true)
+    {
         return Interact::Done;
     }
     Interact::None
@@ -882,7 +890,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
             crate::antag::changeling::server::complete(world, mob, action, job)
         }
         Job::Genetics(_) => crate::genetics::console::complete(world, mob, action),
-        &Job::WallMount(job) => crate::wallmount::complete(world, client, target, job),
+        &Job::WallMount(job) => crate::wallmount::complete(world, client, mob, target, job),
         &Job::Emitter(job) => crate::power::emitter::complete(world, client, target, job, consume),
         Job::GirderBolts { from } => {
             if !is_under(&path, GIRDER) || obj_state(world, target) != *from || !consume(world) {

@@ -9,16 +9,18 @@
 //! needs the usual adjacency to that tile. Unpowered machines (tg `NOPOWER`) do nothing on a
 //! click (`can_interact`); their looks follow [`Unpowered`].
 //!
-//! - [`fire_alarm`]: pull (left click) and reset (right click), the area's firelocks, red
-//!   lights, the siren.
+//! - [`fire_alarm`]: pull (left click) and reset (right click), red lights, the siren.
+//! - [`firelock`]: the firelocks the alarms and the air close, opening them by hand or crowbar.
 //! - [`controls`]: buttons opening blast doors and airlocks by `id`, mass driver and flasher
 //!   buttons; mounted flashers.
+//! - [`machines`]: mass drivers, igniters and sparkers the buttons drive.
 //! - [`cabinets`]: extinguisher and fire axe cabinets.
 //! - The light switch, here: it flips its area's `lightswitch`.
 //!
-//! Cost: nothing per tick but the firelocks still moving to their alarm state, ringing fire
-//! alarms (one sound per 2.4 s each) and buttons with a pending flick or timer; everything else
-//! runs on a click or a power change.
+//! Cost: nothing per tick but the firelocks with something pending, a pass over the fire alarms
+//! and the ringing firelocks (one sound per 2.4 s each), the reported air tiles next to
+//! firelocks and buttons with a pending flick or timer; everything else runs on a click or a
+//! power change.
 // shortcut: no construction or deconstruction (wall frames, screwdriver panels, wires,
 // electronics), no damage, breaking, emag or EMP, no silicon access (AI clicks, ctrl-click
 // thermal sensors), no circuit USB ports; the light switch's `area` var (controlling another
@@ -27,13 +29,15 @@
 pub mod cabinets;
 pub mod controls;
 pub mod fire_alarm;
+pub mod firelock;
+pub mod machines;
 
 use bevy::prelude::*;
 use ss13_mapload::fidelity::{IconIndex, is_under};
 use ss13_mapload::light::{DmLight, MINIMUM_USEFUL_LIGHT_RANGE, source};
 use ss13_mapload::wallmount::{
     BUTTON_ROOT, EXTINGUISHER_CABINET_ROOT, FIREALARM_ROOT, FIREAXE_CABINET_ROOT, FLASHER_ROOT,
-    LIGHT_SWITCH_ROOT, PORTABLE_FLASHER,
+    IGNITER_ROOT, LIGHT_SWITCH_ROOT, MASS_DRIVER_ROOT, PORTABLE_FLASHER, SPARKER_ROOT,
 };
 use ss13_mapload::{Areas, DmAtom, DmWallMount};
 use ss13_shared::protocol::ClickModifiers;
@@ -59,6 +63,8 @@ pub struct LightSwitch {
 pub enum WallJob {
     /// tg `fireaxecabinet/toggle_lock`.
     ToggleLock,
+    /// BandaStation's `firedoor/attack_hand`: opening a firelock by hand.
+    OpenFirelock,
 }
 
 pub struct WallMountPlugin;
@@ -67,18 +73,22 @@ impl Plugin for WallMountPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<controls::Links>()
             // After doors (`Door`) and power (`AreaPower`, `PowerMachine`) are built.
-            .add_systems(PostStartup, init_wallmounts)
+            .add_systems(PostStartup, init_wallmounts.after(ss13_atmos::init_atmos))
             .add_systems(
                 Update,
                 (
-                    fire_alarm::correct_firelocks,
+                    firelock::firelock_atmos,
+                    firelock::run_firelocks,
                     fire_alarm::ring_alarms,
                     controls::run_timers,
+                    machines::process_igniters,
+                    machines::end_flicks,
                     power_looks,
                 )
                     .chain()
                     .after(crate::power::PowerSystems)
-                    .after(crate::click::ResolveClicks),
+                    .after(crate::click::ResolveClicks)
+                    .after(ss13_atmos::AtmosSystems::Fire),
             );
     }
 }
@@ -90,7 +100,7 @@ fn init_wallmounts(world: &mut World) {
         .iter(world)
         .map(|(e, dm, &pos)| (e, dm.clone(), pos))
         .collect();
-    fire_alarm::init_firelocks(world);
+    firelock::init_firelocks(world);
     controls::init_links(world);
     for (e, dm, pos) in mounts {
         let area = world.resource::<Areas>().area_at(pos);
@@ -111,6 +121,12 @@ fn init_wallmounts(world: &mut World) {
             cabinets::add_extinguisher_cabinet(world, e);
         } else if is_under(path, FIREAXE_CABINET_ROOT) {
             cabinets::add_fireaxe_cabinet(world, e, &dm);
+        } else if is_under(path, MASS_DRIVER_ROOT) {
+            machines::add_mass_driver(world, e, &dm);
+        } else if is_under(path, IGNITER_ROOT) {
+            machines::add_igniter(world, e, &dm);
+        } else if is_under(path, SPARKER_ROOT) {
+            machines::add_sparker(world, e, &dm);
         }
         refresh_look(world, e);
     }
@@ -137,6 +153,9 @@ pub fn interact(
         flip_switch(world, target);
         return true;
     }
+    if firelock::attack_hand(world, client, mob, target) || machines::interact(world, target) {
+        return true;
+    }
     if world.get::<controls::Button>(target).is_some() {
         // `attack_hand_secondary` with the panel closed falls through to the normal press.
         controls::attempt_press(world, client, mob, target);
@@ -158,11 +177,18 @@ pub fn item_interaction(
         || cabinets::item_interaction(world, client, mob, held, target, modifiers)
 }
 
-/// `crate::construction::complete` of a [`WallJob`].
-pub fn complete(world: &mut World, client: Entity, target: Entity, job: WallJob) {
+/// `crate::construction::complete` of a [`WallJob`] by `mob`.
+pub fn complete(world: &mut World, client: Entity, mob: Entity, target: Entity, job: WallJob) {
     match job {
         WallJob::ToggleLock => cabinets::finish_toggle_lock(world, client, target),
+        WallJob::OpenFirelock => firelock::finish_hand_open(world, mob, target),
     }
+}
+
+/// tg `examine()` additions of fire alarms and firelocks.
+pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<crate::examine::Line>) {
+    fire_alarm::examine_lines(world, target, lines);
+    firelock::examine_lines(world, target, lines);
 }
 
 /// tg `light_switch/interact`: the sound, then `set_lights(!area.lightswitch)`.
@@ -271,14 +297,14 @@ fn look_of(world: &World, e: Entity) -> Option<Look> {
     if let Some(flasher) = world.get::<controls::Flasher>(e) {
         return Some(controls::flasher_look(world, e, flasher, powered));
     }
-    cabinets::look(world, e)
+    machines::look(world, e, powered).or_else(|| cabinets::look(world, e))
 }
 
 /// Writes `e`'s [`Look`]: the appearance and light, touching them only on a change so
 /// replication sends nothing for an unchanged mount.
 pub(crate) fn refresh_look(world: &mut World, e: Entity) {
-    if world.get::<fire_alarm::Firelock>(e).is_some() {
-        fire_alarm::refresh_firelock(world, e);
+    if world.get::<firelock::Firelock>(e).is_some() {
+        firelock::refresh_firelock(world, e);
         return;
     }
     let Some(look) = look_of(world, e) else {
@@ -341,11 +367,11 @@ fn power_looks(
         Entity,
         (
             Added<Unpowered>,
-            Or<(With<DmWallMount>, With<fire_alarm::Firelock>)>,
+            Or<(With<DmWallMount>, With<firelock::Firelock>)>,
         ),
     >,
     mut removed: RemovedComponents<Unpowered>,
-    mounts: Query<(), Or<(With<DmWallMount>, With<fire_alarm::Firelock>)>>,
+    mounts: Query<(), Or<(With<DmWallMount>, With<firelock::Firelock>)>>,
     mut commands: Commands,
 ) {
     let changed: Vec<Entity> = added

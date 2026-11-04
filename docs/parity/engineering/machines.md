@@ -36,13 +36,13 @@
 Напольный зажигатель и настенный искритель поджигают газ по кнопке (инсинератор, токсины).
 
 - **Код:** [`/obj/machinery/igniter`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/igniter.dm#L1), [`/obj/item/wallframe/sparker`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/igniter.dm#L135)
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/fire.rs` (shortcut: no igniters as flame sources)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/wallmount/machines.rs`, `crates/ss13_mapload/src/wallmount.rs` (`DmWallMount`: `id`, `on`): кнопка зажигания (`assembly/control/igniter`, откат 3 с) переключает зажигатели и искрит искрители с тем же `id`; включённый зажигатель (также рукой, с питанием) каждый тик `SSmachines` (2 с) тратит активную мощность и делает `hotspot_expose(1000, 500)` своего тайла, без питания/открытого тайла гаснет; искритель с питанием раз в 5 с — звук искр и `hotspot_expose(1000, 2500)`, без питания `-p`; `/igniter/on` с карты. Нет: частиц искр (их свет и собственный `hotspot_expose`), длины анимации вспышки (показ 1 с), мультитула (смена `id`), сварки/разборки, отвёртки искрителя, ЭМИ, рамки искрителя
 
 ### Массдрайвер
 По кнопке выбрасывает всё со своего тайла в направлении с силой (мусор в космос, часовня, токсины); пульт управления.
 
 - **Код:** [`/obj/machinery/mass_driver`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/mass_driver.dm#L1); tgui: [`MassDriverControl.jsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/MassDriverControl.jsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/wallmount/machines.rs`, `crates/ss13_game/src/wallmount/controls.rs`, `crates/ss13_mapload/src/wallmount.rs` (`DmWallMount`: `id`, `power`, `drive_range`, `power_per_obj`): кнопка масс-драйвера открывает гермодвери, через 1 с масс-драйверы с тем же `id` (с питанием) бросают со своего тайла предметы, живых мобов, мехи и незакреплённые объекты (до 19, на 20-м — скрежет) по направлению к краю карты на `drive_range * power` тайлов со скоростью `power` (`crates/ss13_game/src/throw.rs`), энергия за каждый; через 6 с двери закрываются. Нет: пульта (`computer/pod`, MassDriverControl), проводов, панели, разборки, поворота ключом, ЭМИ, урона брошенным мобам при ударе, деталей (дальность как у карточного с сервой 1-го уровня)
 
 ### Аварийные щиты и щитовые стены
 Генератор аварийного щита закрывает пробоины голографическими щитами; генератор щитовой стены соединяет пары генераторов энергетической стеной (питание от кабеля).

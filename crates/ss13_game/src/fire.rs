@@ -14,9 +14,10 @@
 //! - gas tanks react their contents (`/obj/item/tank/process`);
 //! - space wind (tg `high_pressure_movements`): every [`PressureDifference`] pushes the
 //!   unanchored, unpulled movables on its tile one step with tg's `move_prob`.
-// shortcut: no lighters, matches, cigarettes or igniters as flame sources (no lit state for them
-// yet), no fire alarms or firelock closing, no burning items or clothing (`burn_clothing`, ash):
-// add with their items and machines.
+// shortcut: no lighters, matches or cigarettes as flame sources (no lit state for them yet; igniters
+// and sparkers are `crate::wallmount::machines`, firelocks closing on hot air
+// `crate::wallmount::firelock`), no burning items or clothing (`burn_clothing`, ash): add with
+// their items.
 
 use bevy::ecs::message::{MessageCursor, Messages};
 use bevy::prelude::*;

@@ -150,6 +150,12 @@ pub struct LevelAir {
     exposed: Vec<(u32, f64)>,
     /// Turfs water vapor condensed on this fire.
     condensed: Vec<(u32, crate::reactions::Condensation)>,
+    /// Per tile, empty until the first [`Self::watch`]: the game listens to it (tg
+    /// `COMSIG_TURF_EXPOSE` at any temperature and `COMSIG_TURF_CALCULATED_ADJACENT_ATMOS`,
+    /// which firelocks register).
+    watched: Vec<bool>,
+    /// Watched tiles processed or with their adjacency recomputed since the last drain.
+    watch_reports: Vec<u32>,
 }
 
 impl LevelAir {
@@ -186,6 +192,35 @@ impl LevelAir {
             conducting: Vec::new(),
             exposed: Vec::new(),
             condensed: Vec::new(),
+            watched: Vec::new(),
+            watch_reports: Vec::new(),
+        }
+    }
+
+    /// Starts or stops reporting `tile` ([`Self::drain_watch_reports`]).
+    pub fn watch(&mut self, tile: u32, on: bool) {
+        if self.watched.is_empty() {
+            if !on {
+                return;
+            }
+            self.watched = vec![false; self.kind.len()];
+        }
+        if let Some(w) = self.watched.get_mut(tile as usize) {
+            *w = on;
+        }
+    }
+
+    fn report_watched(&mut self, tile: u32) {
+        if self.watched.get(tile as usize).copied().unwrap_or(false) {
+            self.watch_reports.push(tile);
+        }
+    }
+
+    /// Watched tiles that were processed (`temperature_expose` at the end of `process_cell`) or
+    /// had their adjacency recomputed since the last call; a tile may repeat.
+    pub fn drain_watch_reports(&mut self, mut f: impl FnMut(u32)) {
+        for tile in self.watch_reports.drain(..) {
+            f(tile);
         }
     }
 
@@ -398,12 +433,14 @@ impl LevelAir {
 
     /// tg `immediate_calculate_adjacent_turfs` for one tile: its four edges, both sides.
     pub fn recalculate_adjacency(&mut self, tile: u32) {
+        self.report_watched(tile);
         for dir in Dir::CARDINALS {
             let n = self.neighbor(tile, dir);
             let open = self.passes(tile, dir).is_some();
             self.set_adj_bit(tile, dir, open);
             if let Some(n) = n {
                 self.set_adj_bit(n, dir.reverse(), open);
+                self.report_watched(n);
             }
         }
     }
@@ -777,6 +814,7 @@ impl LevelAir {
         if temperature >= EXPOSE_REPORT_MIN {
             self.exposed.push((tile, temperature));
         }
+        self.report_watched(tile);
     }
 
     /// Turfs water vapor condensed on since the last call.
@@ -1426,6 +1464,31 @@ mod tests {
         level.set_edge_block(0, Dir::North as u8);
         level.recalculate_adjacency(0);
         assert!(level.adjacent(1, Dir::West));
+    }
+
+    /// A watched tile is reported when it processes at any temperature and when its own or a
+    /// neighbour's adjacency is recomputed; unwatched tiles never are.
+    #[test]
+    fn watched_tiles_report() {
+        let mut level = pair();
+        let drain = |level: &mut LevelAir| {
+            let mut out = Vec::new();
+            level.drain_watch_reports(|t| out.push(t));
+            out.sort_unstable();
+            out.dedup();
+            out
+        };
+        level.watch(1, true);
+        assert!(level.merge_into(0, &GasMixture::parse("o2=5;TEMP=293.15").unwrap()));
+        fire(&mut level);
+        fire(&mut level);
+        assert_eq!(drain(&mut level), [1], "the neighbour woke and processed");
+        level.set_edge_block(0, Dir::East as u8);
+        level.recalculate_adjacency(0);
+        assert_eq!(drain(&mut level), [1]);
+        level.watch(1, false);
+        level.recalculate_adjacency(0);
+        assert!(drain(&mut level).is_empty());
     }
 
     #[test]

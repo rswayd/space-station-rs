@@ -1,26 +1,25 @@
-//! Fire alarms and the firelocks they drive (tg `firealarm.dm`, `firedoor.dm` `activate`,
-//! `crack_open`, `add_as_source`, `remove_as_source`, `correct_state`; `areas.dm`
-//! `set_fire_effect`).
+//! Fire alarms (tg `firealarm.dm`; `areas.dm` `set_fire_effect`); the firelocks they drive are
+//! [`super::firelock`].
 //!
-//! A left click pulls the alarm (`alarm()`: powered, the area not already alarmed): every
+//! A left click pulls the alarm (`alarm()`: powered, the area not already `fire`): every
 //! firelock serving the area activates and closes, the first active firelock of an area sets its
-//! `fire` (lights red, every fire alarm there flashes red), and the pulled alarm rings. A right
-//! click resets (`reset()`): the area's firelocks crack open, the area's `fire` clears with its
-//! last active firelock, the alarm stops ringing. A firelock serves its own area and the areas
-//! of the open turfs next to it (`CalculateAffectingAreas`).
-// shortcut: firelocks do not watch the air (`check_atmos`, `issue_turfs`): only alarms activate
-// them, so `crack_open`'s `release_constraints` never re-closes one; no alarm manager (consoles,
-// AI), no fault location examine, no `fire_detect` toggle (silicon ctrl-click), no security
-// level (the alarm shows green), no active power use while ringing. Add with those systems.
+//! `fire` (lights red, every fire alarm there flashes red), the pulled alarm rings and draws its
+//! active power. A right click resets (`reset()`): the area's firelocks crack open, the area's
+//! `fire` clears with its last active firelock, the alarm stops ringing and goes back to idle
+//! power. Hot or cold air next to a firelock activates its row the same way
+//! ([`super::firelock`]), so the alarms alert without being pulled. The examine shows the
+//! hazard light, the fault (location, automatic or manual), the security level and the thermal
+//! detection light.
+// shortcut: no alarm manager (consoles, AI), no `fire_detect` toggle (silicon ctrl-click,
+// multitool), no off-station look (`fire_offstation`); the station has no security levels yet,
+// so the alarm shows and names the green one. Add with those systems.
 
 use bevy::prelude::*;
-use ss13_mapload::fidelity::is_under;
-use ss13_mapload::{Areas, DmTurfBuild, DoorKind};
+use ss13_shared::TilePos;
 use ss13_shared::chat::Span;
-use ss13_shared::{Dir, EMISSIVE_PLANE, Overlay, TilePos};
 
+use super::firelock::{self, Firelock};
 use super::{Look, light_of, refresh_look};
-use crate::doors::{Door, DoorState, with_door};
 use crate::power::{AreaPower, Unpowered};
 use crate::sound::{PlaySound, SoundRng, playsound};
 use crate::tools::tell;
@@ -39,8 +38,6 @@ const SIREN_VOLUME: f32 = 30.0;
 const BLUEGREEN: [u8; 3] = [0x7D, 0xE1, 0xAF];
 const WHITE: [u8; 3] = [0xFF, 0xFF, 0xFF];
 const INTENSE_RED: [u8; 3] = [0xC8, 0x19, 0x19];
-/// `firedoor/update_overlays`: the hazard lights of an alarmed firelock.
-const FIRELOCK_LIGHTS: &str = "firelock_alarm_type_generic";
 
 /// `/obj/machinery/firealarm`: its `my_area` and its siren (`soundloop`).
 #[derive(Component, Clone, Copy, Debug)]
@@ -58,8 +55,18 @@ pub struct AreaFire {
     pub active_firelocks: Vec<Entity>,
     pub firealarms: Vec<Entity>,
     pub fire_detect: bool,
-    /// `fault_status == AREA_FAULT_MANUAL`: an alarm was pulled.
-    pub manual: bool,
+    /// `fault_status`, `fault_location`.
+    pub fault: Fault,
+    pub fault_location: String,
+}
+
+/// tg `AREA_FAULT_*`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Fault {
+    #[default]
+    None,
+    Automatic,
+    Manual,
 }
 
 impl Default for AreaFire {
@@ -69,64 +76,13 @@ impl Default for AreaFire {
             active_firelocks: Vec::new(),
             firealarms: Vec::new(),
             fire_detect: true,
-            manual: false,
+            fault: Fault::None,
+            fault_location: String::new(),
         }
     }
 }
 
-/// `/obj/machinery/door/firedoor`: `active`, `affecting_areas`.
-// shortcut: no `ignore_alarms` window after `crack_open` (it only delays atmos re-activation
-// and hides the hazard lights of a generic alarm pulled within 3 s); add with `check_atmos`.
-#[derive(Component, Clone, Debug)]
-pub struct Firelock {
-    pub active: bool,
-    pub areas: Vec<Entity>,
-}
-
-/// A firelock whose door does not match `active` yet (tg `correct_state` and its re-checks after
-/// a move).
-#[derive(Component, Clone, Copy, Debug, Default)]
-pub struct FirelockPending;
-
-fn is_open_turf(world: &World, pos: TilePos) -> bool {
-    crate::construction::turf_at(world, pos)
-        .and_then(|t| world.get::<DmTurfBuild>(t))
-        .is_some_and(|b| is_under(&b.path, "/turf/open"))
-}
-
-/// tg `CalculateAffectingAreas` of every firelock: its area and those of the open turfs next to
-/// it.
-pub(super) fn init_firelocks(world: &mut World) {
-    let mut query = world.query::<(Entity, &Door, &TilePos)>();
-    let firelocks: Vec<(Entity, TilePos)> = query
-        .iter(world)
-        .filter(|(_, d, _)| d.kind == DoorKind::Firedoor)
-        .map(|(e, _, &p)| (e, p))
-        .collect();
-    for (e, pos) in firelocks {
-        let mut areas: Vec<Entity> = Vec::new();
-        let around = Dir::CARDINALS
-            .into_iter()
-            .map(|d| pos.step(d))
-            .filter(|&p| is_open_turf(world, p));
-        for p in std::iter::once(pos).chain(around) {
-            if let Some(area) = world.resource::<Areas>().area_at(p)
-                && !areas.contains(&area)
-            {
-                areas.push(area);
-            }
-        }
-        for &area in &areas {
-            area_fire(world, area).firedoors.push(e);
-        }
-        world.entity_mut(e).insert(Firelock {
-            active: false,
-            areas,
-        });
-    }
-}
-
-fn area_fire(world: &mut World, area: Entity) -> Mut<'_, AreaFire> {
+pub(super) fn area_fire(world: &mut World, area: Entity) -> Mut<'_, AreaFire> {
     if world.get::<AreaFire>(area).is_none() {
         world.entity_mut(area).insert(AreaFire::default());
     }
@@ -197,12 +153,16 @@ pub fn alarm(world: &mut World, alarm: Entity, client: Option<Entity>) {
         .map(|f| f.firedoors.clone())
         .unwrap_or_default();
     for firelock in firelocks {
-        activate(world, firelock);
+        firelock::activate(world, firelock, firelock::AlarmType::Generic);
     }
     if let Some(client) = client {
         tell(world, client, Span::Notice, "triggered alarm!");
     }
-    area_fire(world, area).manual = true;
+    let name = name_of(world, alarm);
+    let mut fire = area_fire(world, area);
+    fire.fault = Fault::Manual;
+    fire.fault_location = name;
+    crate::power::update_use_power(world, alarm, true);
     let at = now(world);
     if let Some(mut a) = world.get_mut::<FireAlarm>(alarm) {
         a.ringing = Some(at);
@@ -223,73 +183,37 @@ pub fn reset(world: &mut World, alarm: Entity, client: Option<Entity>) {
         .map(|f| f.firedoors.clone())
         .unwrap_or_default();
     for firelock in firelocks {
-        crack_open(world, firelock);
+        firelock::crack_open(world, firelock);
     }
     if let Some(client) = client {
         tell(world, client, Span::Notice, "reset alarm");
     }
+    crate::power::update_use_power(world, alarm, false);
     if let Some(mut a) = world.get_mut::<FireAlarm>(alarm) {
         a.ringing = None;
     }
     refresh_look(world, alarm);
 }
 
-/// tg `firedoor/activate(FIRELOCK_ALARM_TYPE_GENERIC)`.
-pub fn activate(world: &mut World, firelock: Entity) {
-    let Some(mut lock) = world.get_mut::<Firelock>(firelock) else {
-        return;
-    };
-    if lock.active {
-        return;
-    }
-    lock.active = true;
-    let areas = lock.areas.clone();
-    for area in areas {
-        let mut fire = area_fire(world, area);
-        if !fire.active_firelocks.contains(&firelock) {
-            fire.active_firelocks.push(firelock);
-        }
-        // The first active firelock of the area bathes it in red.
-        if fire.active_firelocks.len() == 1 {
-            set_fire_effect(world, area, true);
-        }
-    }
-    world.entity_mut(firelock).insert(FirelockPending);
-    refresh_firelock(world, firelock);
-}
-
-/// tg `firedoor/crack_open()`: inactive, open.
-pub fn crack_open(world: &mut World, firelock: Entity) {
-    let Some(mut lock) = world.get_mut::<Firelock>(firelock) else {
-        return;
-    };
-    lock.active = false;
-    let areas = lock.areas.clone();
-    for area in areas {
-        let Some(mut fire) = world.get_mut::<AreaFire>(area) else {
-            continue;
-        };
-        let Some(i) = fire.active_firelocks.iter().position(|&f| f == firelock) else {
-            continue;
-        };
-        fire.active_firelocks.swap_remove(i);
-        if fire.active_firelocks.is_empty() {
-            set_fire_effect(world, area, false);
-        }
-    }
-    world.entity_mut(firelock).insert(FirelockPending);
-    refresh_firelock(world, firelock);
-}
-
 /// tg `/area/proc/set_fire_effect` and the `COMSIG_AREA_FIRE_CHANGED` handlers: the lights, and
 /// every fire alarm's `set_status()`.
-fn set_fire_effect(world: &mut World, area: Entity, fire: bool) {
+pub(super) fn set_fire_effect(
+    world: &mut World,
+    area: Entity,
+    fire: bool,
+    fault: Fault,
+    source: &str,
+) {
     if !crate::power::set_area_fire(world, area, fire) {
         return;
     }
-    if !fire {
-        area_fire(world, area).manual = false;
-    }
+    let mut state = area_fire(world, area);
+    state.fault = fault;
+    state.fault_location = if fire {
+        source.to_owned()
+    } else {
+        String::new()
+    };
     let alarms = world
         .get::<AreaFire>(area)
         .map(|f| f.firealarms.clone())
@@ -312,62 +236,6 @@ fn set_status(world: &mut World, alarm: Entity) {
     refresh_look(world, alarm);
 }
 
-/// tg `firedoor/update_overlays`: the hazard lights while alarmed and powered.
-pub(super) fn refresh_firelock(world: &mut World, firelock: Entity) {
-    let lit = world.get::<Firelock>(firelock).is_some_and(|l| l.active)
-        && world.get::<Unpowered>(firelock).is_none();
-    let id = world
-        .get::<ss13_mapload::DmAtom>(firelock)
-        .map(|a| a.icon.clone())
-        .and_then(|icon| {
-            world
-                .get_resource::<ss13_mapload::IconIndex>()?
-                .get(&icon, FIRELOCK_LIGHTS)
-        });
-    let Some(id) = id else {
-        return;
-    };
-    let Some(mut appearance) = world.get_mut::<ss13_shared::Appearance>(firelock) else {
-        return;
-    };
-    let lights = [
-        Overlay::new(id),
-        Overlay {
-            plane: Some(EMISSIVE_PLANE),
-            ..Overlay::new(id)
-        },
-    ];
-    let has = appearance.overlays.iter().any(|o| o.icon_state == id);
-    if lit && !has {
-        appearance.overlays.extend(lights);
-    } else if !lit && has {
-        appearance.overlays.retain(|o| o.icon_state != id);
-    }
-}
-
-/// tg `correct_state()` of the firelocks still moving to their state: an active one closes, an
-/// inactive one opens; a firelock that cannot (welded) stays as it is.
-pub(super) fn correct_firelocks(world: &mut World) {
-    let mut query = world.query_filtered::<(Entity, &Firelock), With<FirelockPending>>();
-    let pending: Vec<(Entity, bool)> = query.iter(world).map(|(e, l)| (e, l.active)).collect();
-    for (e, active) in pending {
-        let settled = with_door(world, e, |door, appearance, ctx| {
-            if door.is_operating() {
-                return (false, false);
-            }
-            let moved = match (active, door.state) {
-                (true, DoorState::Open) => ctx.close(door, appearance, false),
-                (false, DoorState::Closed) => ctx.open(door, appearance, false),
-                _ => false,
-            };
-            (!moved, moved)
-        });
-        if settled != Some(false) {
-            world.entity_mut(e).remove::<FirelockPending>();
-        }
-    }
-}
-
 /// The sirens of the ringing alarms (`soundloop`), one random sound per 2.4 s.
 pub(super) fn ring_alarms(world: &mut World) {
     let t = now(world);
@@ -386,5 +254,80 @@ pub(super) fn ring_alarms(world: &mut World) {
         if let Some(mut a) = world.get_mut::<FireAlarm>(e) {
             a.ringing = Some(t + SIREN_SECS);
         }
+    }
+    // The firelocks' own `soundloop`, silent without power (`on_power_loss`).
+    let mut query = world
+        .query_filtered::<(Entity, &Firelock, &TilePos), (With<firelock::Ringing>, Without<Unpowered>)>();
+    let due: Vec<(Entity, TilePos)> = query
+        .iter(world)
+        .filter(|(_, l, _)| l.ringing.is_some_and(|next| t >= next))
+        .map(|(e, _, &p)| (e, p))
+        .collect();
+    for (e, pos) in due {
+        let i = world
+            .resource_mut::<SoundRng>()
+            .0
+            .range(0, SIREN.len() as u32 - 1) as usize;
+        playsound(world, PlaySound::new(pos, SIREN[i], SIREN_VOLUME, false));
+        if let Some(mut l) = world.get_mut::<Firelock>(e) {
+            l.ringing = Some(t + SIREN_SECS);
+        }
+    }
+}
+
+fn name_of(world: &World, e: Entity) -> String {
+    world.get::<ss13_mapload::DmName>(e).map_or_else(
+        || "fire alarm".to_owned(),
+        |n| crate::vending::plain_name(&n.name).to_owned(),
+    )
+}
+
+/// tg `firealarm/examine` (on a station level).
+pub(super) fn examine_lines(world: &World, target: Entity, lines: &mut Vec<(Span, String)>) {
+    let Some(alarm) = world.get::<FireAlarm>(target) else {
+        return;
+    };
+    let fire = world.get::<AreaFire>(alarm.area);
+    // shortcut: no security levels: always green.
+    let level = "The station security alert level is green.".to_owned();
+    if alerting(world, alarm.area) {
+        lines.push((
+            Span::Plain,
+            "The local area hazard light is flashing.".to_owned(),
+        ));
+        let (location, kind) =
+            fire.map_or(("", Fault::None), |f| (f.fault_location.as_str(), f.fault));
+        let kind = if kind == Fault::Automatic {
+            "Automatic Detection"
+        } else {
+            "Manual Trigger"
+        };
+        lines.push((
+            Span::Plain,
+            format!("The fault location display is {location} ({kind})."),
+        ));
+        lines.push((Span::Plain, level));
+        lines.push((
+            Span::Plain,
+            "Left-Click to activate all firelocks in this area.".to_owned(),
+        ));
+        lines.push((
+            Span::Plain,
+            "Right-Click to reset firelocks in this area.".to_owned(),
+        ));
+    } else {
+        let detect = fire.is_none_or(|f| f.fire_detect);
+        lines.push((Span::Plain, level));
+        lines.push((
+            Span::Plain,
+            format!(
+                "The local area thermal detection light is {}.",
+                if detect { "lit" } else { "unlit" }
+            ),
+        ));
+        lines.push((
+            Span::Plain,
+            "Left-Click to activate all firelocks in this area.".to_owned(),
+        ));
     }
 }

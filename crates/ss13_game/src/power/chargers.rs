@@ -26,8 +26,8 @@ use ss13_shared::chat::Span;
 use ss13_shared::{Appearance, EMISSIVE_PLANE, Overlay, TilePos};
 
 use super::{
-    AreaPower, Cell, Channel, MACHINE_TICK_SECS, MachineTicks, PowerMachine, Unpowered,
-    charge_cell, machine_use_energy,
+    AreaPower, Cell, Channel, MACHINE_TICK_SECS, MachineTicks, Unpowered, charge_cell,
+    machine_use_energy,
 };
 use crate::inventory::Inventory;
 use crate::mecha::core::ItemCell;
@@ -213,7 +213,7 @@ pub fn item_interaction(
                 charging: Some(held),
                 using_power: true,
             });
-            set_active(world, target, true);
+            super::update_use_power(world, target, true);
         }
         return true;
     }
@@ -242,7 +242,7 @@ pub fn interact(world: &mut World, client: Entity, mob: Entity, target: Entity) 
     if let Some(recharger) = world.get::<Recharger>(target).copied() {
         if let Some(item) = recharger.charging {
             world.entity_mut(target).insert(Recharger::default());
-            set_active(world, target, false);
+            super::update_use_power(world, target, false);
             give_back(world, mob, target, item);
         }
         return true;
@@ -256,26 +256,6 @@ fn give_back(world: &mut World, mob: Entity, machine: Entity, item: Entity) {
         crate::storage::put_in_hands(world, mob, &inventory, item);
     } else if let Some(&pos) = world.get::<TilePos>(machine) {
         crate::storage::take_out(world, item, pos);
-    }
-}
-
-/// tg `update_use_power`: the static load follows idle/active.
-fn set_active(world: &mut World, machine: Entity, active: bool) {
-    let Some(dm) = world.get::<super::DmPower>(machine) else {
-        return;
-    };
-    let watts = if active {
-        dm.active_power_usage
-    } else {
-        dm.idle_power_usage
-    };
-    if let Some(mut pm) = world.get_mut::<PowerMachine>(machine) {
-        let old = pm.watts;
-        pm.watts = watts;
-        let (area, channel) = (pm.area, pm.channel);
-        if let Some(mut a) = world.get_mut::<AreaPower>(area) {
-            a.static_power[channel as usize] += watts - old;
-        }
     }
 }
 

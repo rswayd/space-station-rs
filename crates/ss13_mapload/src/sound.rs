@@ -96,8 +96,8 @@ pub mod files {
     /// Wall mounts (`ss13_game::wallmount`): `/datum/looping_sound/firealarm` `mid_sounds`, the
     /// light switch's `sound_on`/`sound_off` and BandaStation's click
     /// (`modular_bandastation/aesthetics/lightswitch`), the mounted flasher's flash, the fire
-    /// axe cabinet's `toggle_lock`.
-    pub const WALLMOUNT: [&str; 9] = [
+    /// axe cabinet's `toggle_lock`, a firelock's `bash_sound`.
+    pub const WALLMOUNT: [&str; 10] = [
         "sound/machines/fire_alarm/fire_alarm1.ogg",
         "sound/machines/fire_alarm/fire_alarm2.ogg",
         "sound/machines/fire_alarm/fire_alarm3.ogg",
@@ -107,6 +107,7 @@ pub mod files {
         "modular_bandastation/aesthetics/lightswitch/sound/lightswitch.ogg",
         "sound/items/weapons/flash.ogg",
         "sound/machines/locktoggle.ogg",
+        "sound/effects/glass/glassbash.ogg",
     ];
     /// `/datum/looping_sound/fire` `mid_sounds` (equal weights).
     pub const FIRE_LOOP: [&str; 7] = [
