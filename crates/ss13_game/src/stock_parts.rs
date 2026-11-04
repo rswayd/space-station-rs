@@ -22,8 +22,8 @@
 //! board's few default parts.
 // shortcut: no base `RefreshParts` power scaling (`idle/active_power_usage * (1 + energy
 // ratings)`): mapped machines run on their DM power numbers; add it with per-machine power
-// curves. Parts rated by `get_part_rating` are stock parts and cells (no beakers, assemblies or
-// vending refills); the RPED splits no stacks (a stack over its 30 quota is refused), has no
+// curves. Parts rated by `get_part_rating` are stock parts, cells and vending refills (no beakers
+// or assemblies); the RPED splits no stacks (a stack over its 30 quota is refused), has no
 // quick gather, no "dump the lowest tier" and no rigged-cell explosions; several boards in an
 // RPED on a frame install the first (tg asks with a list).
 
@@ -197,6 +197,9 @@ pub fn part_rating(world: &World, item: Entity) -> f64 {
             .get::<ItemCell>(item)
             .map_or(1.0, |c| c.0.maxcharge * 10.0 + c.0.charge);
     }
+    if is_under(&path, crate::vending::refill::REFILL_ROOT) {
+        return crate::vending::refill::rating(world, item);
+    }
     0.0
 }
 
@@ -245,6 +248,7 @@ pub fn refresh(world: &mut World, machine: Entity) {
     crate::atmos_machinery::refresh_thermo_parts(world, machine);
     crate::science::autolathe::refresh_parts(world, machine);
     crate::science::lathe::refresh_parts(world, machine);
+    crate::vending::refill::refresh_parts(world, machine);
 }
 
 /// Into `owner`'s parts from wherever it is (a hand, a storage, the floor).
@@ -269,6 +273,10 @@ pub fn ensure_parts(world: &mut World, machine: Entity) -> bool {
         .is_some_and(|p| !p.parts().is_empty())
     {
         return true;
+    }
+    // A vendor's board carries its brand and its canister is its own type.
+    if let Some(done) = crate::vending::refill::ensure_parts(world, machine) {
+        return done;
     }
     let Some(board) = world.get::<DmMachine>(machine).map(|m| m.circuit.clone()) else {
         return false;

@@ -201,6 +201,8 @@ pub struct UiWindow {
     next_refresh: f64,
     /// Send this tick regardless of the timer (opened again, act applied).
     dirty: bool,
+    /// Send the static data again (`update_static_data`).
+    static_stale: bool,
     pending: Vec<(String, Vec<(String, String)>)>,
 }
 
@@ -212,6 +214,13 @@ impl UiWindow {
     /// tgui combines status checks with `min`: a hook can only lower the status.
     pub fn cap_status(&mut self, cap: UiStatus) {
         self.status = self.status.min(cap);
+    }
+
+    /// tgui `update_static_data`: the window goes out again as an `Open` with fresh static data
+    /// (same id; the client replaces it).
+    pub fn refresh_static(&mut self) {
+        self.static_stale = true;
+        self.dirty = true;
     }
 }
 
@@ -363,6 +372,7 @@ fn open<T: ServerUi>(
                 last_data: Vec::new(),
                 next_refresh: 0.0,
                 dirty: true,
+                static_stale: false,
                 pending: Vec::new(),
             },
         );
@@ -639,7 +649,8 @@ fn send<T: ServerUi>(
         window.dirty = false;
         window.next_refresh = now + REFRESH_SECS;
         let id = window.id;
-        if window.sent_status.is_none() {
+        if window.sent_status.is_none() || window.static_stale {
+            window.static_stale = false;
             let (Ok(for_static), Ok(for_data)) =
                 (sources.get(window.source), sources.get(window.source))
             else {
@@ -804,6 +815,7 @@ mod tests {
                 last_data: Vec::new(),
                 next_refresh: 0.0,
                 dirty: false,
+                static_stale: false,
                 pending: Vec::new(),
             })
             .id();

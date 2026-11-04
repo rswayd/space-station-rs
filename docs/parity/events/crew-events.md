@@ -52,7 +52,7 @@
 Цены торговых автоматов временно растут; объявление о крахе рынка.
 
 - **Код:** [`/datum/round_event_control/market_crash`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/market_crash.dm#L6)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/events/market_crash.rs`: объявления о росте и стабилизации цен (50–100 тиков); `// shortcut:` автоматы ничего не списывают (`crates/ss13_game/src/vending.rs`), так что инфляции нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/events/market_crash.rs`: объявления о росте и стабилизации цен (50–100 тиков), инфляция `5.5 * log(activeFor + 1)` цен станционных автоматов (обновление раз в 5 тиков, открытые окна получают новые цены), в конце — обратно (`crates/ss13_game/src/vending/mod.rs` `update_prices`)
 
 ### Stray Cargo Pod / Stray Syndicate Cargo Pod
 На станцию падает дроп-под со случайным ящиком карго (или с вещами Синдиката); падение повреждает место приземления.

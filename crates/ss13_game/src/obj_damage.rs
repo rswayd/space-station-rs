@@ -9,8 +9,9 @@
 //! sheet). A destroyed window takes its `AtmosBlocker` with it, so its tile opens to the air.
 //!
 //! Every structure and machine also gets [`Anchored`] (tg `anchored`), which pulling reads.
-// shortcut: only windows, grilles and girders take damage; other structures and machines
-// (tables, closets, doors, vendors) wait for their own `atom_break`/`atom_deconstruct`.
+// shortcut: only windows, grilles, girders, frames, gas machines and vendors take damage; other
+// structures and machines (tables, closets, doors) wait for their own
+// `atom_break`/`atom_deconstruct`.
 
 use bevy::prelude::*;
 use ss13_atmos::{AtmosBlocker, AtmosPass};
@@ -52,6 +53,7 @@ const STATIONARY_TANK: &str = "/obj/machinery/atmospherics/components/tank";
 const FRAME: &str = "/obj/structure/frame";
 const VENT_PUMP: &str = "/obj/machinery/atmospherics/components/unary/vent_pump";
 const SHARD: &str = "/obj/item/shard";
+const VENDING: &str = "/obj/machinery/vending";
 
 /// `/a/b` is under `/a` and `/a/b`, not under `/a/bc`.
 pub fn is_under(path: &str, root: &str) -> bool {
@@ -155,6 +157,7 @@ fn add_obj_state(add: On<Add<DmObj>>, objs: Query<&DmObj>, mut commands: Command
         STATIONARY_TANK,
         VENT_PUMP,
         FRAME,
+        VENDING,
     ]
     .iter()
     .any(|root| is_under(&obj.path, root));
@@ -213,6 +216,10 @@ pub fn attackby(world: &mut World, actor: Actor, target: Entity) -> bool {
     let (user, thing, weapon) = (name(actor.mob), name(target), name(item));
     // shortcut: `demolition_mod` and `armour_penetration` are 1 and 0 for every item.
     let hit = take_damage(world, target, dm.force, damtype);
+    // `/obj/machinery/vending/attacked_by`: a hit that did damage may tip it or shake goods out.
+    if hit.damage > 0.0 && !hit.destroyed {
+        crate::vending::tilt::attacked(world, actor.mob, target);
+    }
     let tail = if hit.damage > 0.0 {
         ".".to_owned()
     } else {
@@ -305,6 +312,10 @@ pub fn take_damage_flagless(world: &mut World, target: Entity, amount: f32) -> H
 /// tg `atom_break`: a grille falls apart (`/obj/structure/grille/atom_break`).
 fn atom_break(world: &mut World, target: Entity, obj: &DmObj) {
     if crate::atmos_machinery::damage::atom_break(world, target) {
+        return;
+    }
+    if is_under(&obj.path, VENDING) {
+        crate::vending::atom_break(world, target);
         return;
     }
     if !is_under(&obj.path, GRILLE) {
@@ -418,6 +429,8 @@ pub fn deconstruct(world: &mut World, target: Entity, disassembled: bool) {
     } else if is_under(&obj.path, FRAME) {
         crate::machine_frame::frame_deconstruct(world, target, pos, disassembled);
     }
+    // A vendor's stock into its canister and its returned items out, before its parts leave.
+    crate::vending::on_deconstruction(world, target, pos, disassembled);
     if machine {
         crate::machine_frame::on_deconstruction(world, target, pos, disassembled);
     }

@@ -54,7 +54,7 @@ use crate::power::{Apc, AreaPower, AreaPowerChanged, Channel, Grid, MACHINE_TICK
 use crate::server::PlayerMob;
 use crate::status_effects::Incap;
 use crate::tools::{Actor, ToolKind, tool_of};
-use crate::vending::{ProductTemplates, RecordKind, Vendor};
+use crate::vending::{RecordKind, Vendor};
 
 pub const WIRE_AI: &str = "AI Connection";
 pub const WIRE_BACKUP1: &str = "Auxiliary Power 1";
@@ -370,6 +370,14 @@ pub fn add_autolathe_wires(world: &mut World, e: Entity) {
         .get_resource_or_init::<WireColors>()
         .wires_for(WireHolder::Autolathe, &autolathe_set());
     world.entity_mut(e).insert(wires);
+}
+
+/// [`Wires`] and [`VendorHack`] on a vendor built from a frame.
+pub fn add_vending_wires(world: &mut World, e: Entity) {
+    let wires = world
+        .get_resource_or_init::<WireColors>()
+        .wires_for(WireHolder::Vending, &vending_set());
+    world.entity_mut(e).insert((wires, VendorHack::default()));
 }
 
 /// FNV-1a, to give every wire set key its own stream from the round seed.
@@ -1814,13 +1822,12 @@ fn throw_item(world: &mut World, vendor: Entity) {
     let Some(machine) = world.get::<Vendor>(vendor) else {
         return;
     };
-    let path_of = |i: usize| machine.records[i].path.clone();
-    let mut stocked: Vec<(usize, String)> = machine
+    let mut stocked: Vec<usize> = machine
         .records
         .iter()
         .enumerate()
         .filter(|(_, r)| r.kind == RecordKind::Product && r.amount > 0)
-        .map(|(i, _)| (i, path_of(i)))
+        .map(|(i, _)| i)
         .collect();
     if stocked.is_empty() {
         return;
@@ -1828,17 +1835,15 @@ fn throw_item(world: &mut World, vendor: Entity) {
     let pick = world
         .resource_mut::<CombatRng>()
         .range(0, stocked.len() as u32 - 1) as usize;
-    let (record, path) = stocked.swap_remove(pick);
-    let item = world.resource_scope(|world, templates: Mut<ProductTemplates>| {
-        templates.0.get(&path).map(|t| t.spawn(world, None))
-    });
-    let Some(item) = item else {
+    let record = stocked.swap_remove(pick);
+    // "Always throw new stuff that costs before free returned stuff".
+    let only_returned = world
+        .get::<Vendor>(vendor)
+        .is_some_and(|v| v.records[record].amount as usize <= v.records[record].returned.len());
+    let Some(item) = crate::vending::dispense(world, vendor, record, pos, true, only_returned)
+    else {
         return;
     };
-    if let Some(mut v) = world.get_mut::<Vendor>(vendor) {
-        v.records[record].amount -= 1;
-    }
-    crate::storage::finish_item(world, item, 0);
     let now_ds = world.resource::<Time>().elapsed_secs_f64() * 10.0;
     let Some(path) =
         crate::throw::Trajectory::new(pos, target_pos, SHOOT_RANGE, SHOOT_SPEED, now_ds)

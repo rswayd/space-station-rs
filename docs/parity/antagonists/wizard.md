@@ -54,3 +54,9 @@ TGUI `Spellbook`: 10 очков на заклинания и артефакты,
 
 - **Код:** [`/datum/antagonist/slaughter`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/wizard/slaughter_antag.dm#L1), [`/datum/antagonist/slaughter/laughter`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/wizard/slaughter_antag.dm#L68), [`/datum/antagonist/imp`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/wizard/imp_antag.dm#L7)
 - **Статус в ss13-rs:** ❌ нет
+
+### Рунический торговый автомат
+Скипетр мага ставит временный рунический автомат с волшебной одеждой: при появлении отталкивает людей вокруг, через 30 с распадается, скипетр (или отвёртка) взрывает его. Общая механика автомата — ../cargo/vending.md.
+
+- **Код:** [`/obj/machinery/vending/runic_vendor`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/vending/runic_vendor.dm#L3), [`/obj/item/runic_vendor_scepter`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/wizard/equipment/artefact.dm#L398)
+- **Статус в ss13-rs:** ❌ нет

@@ -93,7 +93,7 @@ pub use silicon::{DmCamera, DmCameraConsole};
 pub use smooth::DmSmooth;
 pub use spawner::{DmSpawner, LootEntry};
 pub use undertile::{DmTurf, DmUndertile, HiddenUnderTile};
-pub use vending::{DmVending, VendCategory, VendProduct};
+pub use vending::{DmPrice, DmVending, DmVendingRefill, VendCategory, VendProduct};
 pub use wallmount::{DmWallMount, WALLMOUNT_RUNTIME_TYPES};
 
 /// BYOND `name` and `desc`. Text macros (`\improper`, ...) are kept verbatim for the text layer.
@@ -262,6 +262,8 @@ impl Plugin for DmProtoPlugin {
             .register_proto_component::<DmSpawner>("dm_spawner")
             .register_proto_component::<DmItem>("dm_item")
             .register_proto_component::<DmVending>("dm_vending")
+            .register_proto_component::<DmVendingRefill>("dm_vending_refill")
+            .register_proto_component::<DmPrice>("dm_price")
             .register_proto_component::<DmBorder>("dm_border")
             .register_proto_component::<DmTurfAtmos>("dm_turf_atmos")
             .register_proto_component::<DmAtmosPass>("dm_atmos_pass")

@@ -30,6 +30,8 @@ pub struct VendProduct {
     pub price: u32,
     /// Index into [`DmVending::categories`].
     pub category: u16,
+    /// The item's `age_restricted` (alcohol, tobacco).
+    pub age_restricted: bool,
 }
 
 #[derive(Reflect, Default, Clone, Debug, PartialEq)]
@@ -58,7 +60,43 @@ pub struct DmVending {
     pub displayed_currency_name: String,
     /// Why the product lists are not static (empty = resolved).
     pub unresolved: String,
+    /// `product_slogans`, `;`-separated.
+    pub product_slogans: String,
+    /// `vend_reply`; empty: tg's default thanks.
+    pub vend_reply: String,
+    /// `refill_canister` type; empty: no circuit (cannot be restocked or taken apart).
+    pub refill_canister: String,
+    pub tiltable: bool,
+    pub squish_damage: f32,
+    /// Percent.
+    pub crit_chance: f32,
+    pub age_restrictions: bool,
+    /// The type's `onstation` (map load also clears it off the station levels).
+    pub onstation: bool,
+    /// `req_access`: who may load items back (`compartmentLoadAccessCheck`).
+    pub req_access: Vec<String>,
+    /// `allow_custom`: a brand the vendor board's dial offers.
+    pub allow_custom: bool,
+    /// `/obj/machinery/vending/custom::max_loaded_items`.
+    pub max_loaded_items: u32,
 }
+
+/// `/obj/item/vending_refill`: the vendor it belongs to (`machine_name`, its name's prefix).
+#[derive(Component, Reflect, Default, Clone, Debug, PartialEq)]
+pub struct DmVendingRefill {
+    pub machine_name: String,
+}
+
+/// An item's `custom_price` (custom vendors sell only priced items).
+#[derive(Component, Reflect, Default, Clone, Copy, Debug, PartialEq)]
+pub struct DmPrice {
+    pub custom_price: u32,
+}
+
+pub const REFILL_ROOT: &str = "/obj/item/vending_refill";
+const ITEM_ROOT: &str = "/obj/item";
+const REFILL_COMPONENT: &str = "dm_vending_refill";
+const PRICE_COMPONENT: &str = "dm_price";
 
 /// The whole model for `path`, inherited vars resolved.
 pub fn vending(types: &DmTypes, path: &str) -> DmVending {
@@ -75,6 +113,19 @@ pub fn vending(types: &DmTypes, path: &str) -> DmVending {
         product_ads: text("product_ads"),
         displayed_currency_icon: text("displayed_currency_icon"),
         displayed_currency_name: text("displayed_currency_name"),
+        product_slogans: text("product_slogans"),
+        vend_reply: text("vend_reply"),
+        refill_canister: path_var(types.resolved(path, "refill_canister")),
+        tiltable: truthy(types.resolved(path, "tiltable")),
+        squish_damage: num(types.resolved(path, "squish_damage")).unwrap_or(0.0) as f32,
+        crit_chance: num(types.resolved(path, "crit_chance")).unwrap_or(0.0) as f32,
+        age_restrictions: truthy(types.resolved(path, "age_restrictions")),
+        onstation: truthy(types.resolved(path, "onstation")),
+        req_access: string_list(types.resolved(path, "req_access")),
+        allow_custom: truthy(types.resolved(path, "allow_custom")),
+        max_loaded_items: num(types.resolved(path, "max_loaded_items"))
+            .unwrap_or(0.0)
+            .max(0.0) as u32,
         ..default()
     };
     // `build_inventory` rounds both after the (here absent) inflation multiplier.
@@ -124,6 +175,7 @@ pub fn vending(types: &DmTypes, path: &str) -> DmVending {
     };
     let record = |(path, amount, category): (String, u32, u16), premium: bool| VendProduct {
         price: price(&path, premium),
+        age_restricted: truthy(types.resolved(&path, "age_restricted")),
         path,
         amount,
         category,
@@ -178,17 +230,44 @@ pub fn product_closure<'a>(
         .filter(|p| is_under(p, VENDING_ROOT))
         .flat_map(|p| {
             let v = vending(types, p);
-            [v.products, v.contraband, v.premium].into_iter().flatten()
+            let canister = (!v.refill_canister.is_empty()).then_some(v.refill_canister);
+            [v.products, v.contraband, v.premium]
+                .into_iter()
+                .flatten()
+                .map(|p| p.path)
+                .chain(canister)
         })
-        .map(|p| p.path)
         .filter(|p| types.types.contains_key(p))
         .collect()
 }
 
-/// Converter fields of a vendor type: the whole model.
+/// Converter fields of a vendor type (the whole model), of a refill canister, and an item's
+/// declared `custom_price`.
 pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
+    let mut out = Vec::new();
+    let declared = |var: &str| types.types.get(path).and_then(|t| t.declared_vars.get(var));
+    if is_under(path, ITEM_ROOT)
+        && let Some(price) = declared("custom_price").and_then(|v| num(Some(v)))
+    {
+        out.push(ext(
+            PRICE_COMPONENT,
+            "custom_price",
+            dm_round(price).to_string(),
+        ));
+    }
+    if is_under(path, REFILL_ROOT) && (path == REFILL_ROOT || declared("machine_name").is_some()) {
+        let name = match types.resolved(path, "machine_name") {
+            Some(Value::String(s)) => s.clone(),
+            _ => String::new(),
+        };
+        out.push(ext(
+            REFILL_COMPONENT,
+            "machine_name",
+            ron::to_string(&name).expect("strings serialize"),
+        ));
+    }
     if !is_under(path, VENDING_ROOT) {
-        return Vec::new();
+        return out;
     }
     let v = vending(types, path);
     let s = |s: &str| ron::to_string(s).expect("strings serialize");
@@ -197,11 +276,12 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
             .iter()
             .map(|p| {
                 format!(
-                    "(path: {}, amount: {}, price: {}, category: {})",
+                    "(path: {}, amount: {}, price: {}, category: {}, age_restricted: {})",
                     s(&p.path),
                     p.amount,
                     p.price,
-                    p.category
+                    p.category,
+                    p.age_restricted
                 )
             })
             .collect();
@@ -212,7 +292,7 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
         .iter()
         .map(|c| format!("(name: {}, icon: {})", s(&c.name), s(&c.icon)))
         .collect();
-    vec![
+    out.extend([
         ext(COMPONENT, "products", products(&v.products)),
         ext(COMPONENT, "contraband", products(&v.contraband)),
         ext(COMPONENT, "premium", products(&v.premium)),
@@ -239,7 +319,54 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
             s(&v.displayed_currency_name),
         ),
         ext(COMPONENT, "unresolved", s(&v.unresolved)),
-    ]
+        ext(COMPONENT, "product_slogans", s(&v.product_slogans)),
+        ext(COMPONENT, "vend_reply", s(&v.vend_reply)),
+        ext(COMPONENT, "refill_canister", s(&v.refill_canister)),
+        ext(COMPONENT, "tiltable", v.tiltable.to_string()),
+        ext(COMPONENT, "squish_damage", format!("{:?}", v.squish_damage)),
+        ext(COMPONENT, "crit_chance", format!("{:?}", v.crit_chance)),
+        ext(
+            COMPONENT,
+            "age_restrictions",
+            v.age_restrictions.to_string(),
+        ),
+        ext(COMPONENT, "onstation", v.onstation.to_string()),
+        ext(
+            COMPONENT,
+            "req_access",
+            ron::to_string(&v.req_access).expect("string lists serialize"),
+        ),
+        ext(COMPONENT, "allow_custom", v.allow_custom.to_string()),
+        ext(
+            COMPONENT,
+            "max_loaded_items",
+            v.max_loaded_items.to_string(),
+        ),
+    ]);
+    out
+}
+
+/// A path var (`{ "path": ... }`); empty for `null`.
+fn path_var(value: Option<&Value>) -> String {
+    value
+        .and_then(|v| v.get("path"))
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_owned()
+}
+
+/// `list("a", "b")` of strings (access lists); anything else is empty.
+fn string_list(value: Option<&Value>) -> Vec<String> {
+    value
+        .and_then(|v| v.get("list"))
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|i| i.as_str().map(str::to_owned))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 fn category((name, icon): (&str, &str)) -> VendCategory {
@@ -411,5 +538,70 @@ mod tests {
             vending(&t, "/obj/machinery/vending/expr").unresolved,
             "products"
         );
+    }
+
+    /// The vars the game reads past the records: slogans, reply, canister (also in the
+    /// closure), tilting, age checks, access; a canister's machine name, an item's price.
+    #[test]
+    fn behaviour_vars_canisters_and_prices() {
+        let t = types(serde_json::json!({
+            "/obj/machinery/vending": { "parent": null, "declared_vars": {
+                "default_price": 25, "extra_price": 50, "tiltable": 1, "squish_damage": 75,
+                "crit_chance": 15, "age_restrictions": 1, "onstation": 1, "allow_custom": 1,
+                "refill_canister": null, "products": { "list": [] } } },
+            "/obj/machinery/vending/snack": { "parent": "/obj/machinery/vending",
+                "declared_vars": {
+                "product_slogans": "a;b", "vend_reply": "Bye!", "req_access": { "list": ["kitchen"] },
+                "refill_canister": { "path": "/obj/item/vending_refill/snack" },
+                "products": list(&[("/obj/item/beer", 2.0)]) } },
+            "/obj/machinery/vending/wallmed": { "parent": "/obj/machinery/vending",
+                "declared_vars": { "tiltable": 0, "age_restrictions": 0 } },
+            "/obj/item": { "parent": null, "declared_vars": { "age_restricted": 0 } },
+            "/obj/item/beer": { "parent": "/obj/item", "declared_vars": {
+                "age_restricted": 1, "custom_price": 49.6 } },
+            "/obj/item/vending_refill": { "parent": "/obj/item", "declared_vars": {
+                "machine_name": "Generic" } },
+            "/obj/item/vending_refill/snack": { "parent": "/obj/item/vending_refill",
+                "declared_vars": { "machine_name": "Getmore" } },
+        }));
+        let v = vending(&t, "/obj/machinery/vending/snack");
+        assert_eq!(
+            (v.product_slogans.as_str(), v.vend_reply.as_str()),
+            ("a;b", "Bye!")
+        );
+        assert_eq!(v.refill_canister, "/obj/item/vending_refill/snack");
+        assert_eq!(v.req_access, ["kitchen"]);
+        assert!(v.tiltable && v.age_restrictions && v.onstation && v.allow_custom);
+        assert_eq!((v.squish_damage, v.crit_chance), (75.0, 15.0));
+        assert!(v.products[0].age_restricted);
+        assert_eq!(v.products[0].price, 50);
+        let wall = vending(&t, "/obj/machinery/vending/wallmed");
+        assert!(!wall.tiltable && !wall.age_restrictions && wall.refill_canister.is_empty());
+        assert!(
+            product_closure(&t, ["/obj/machinery/vending/snack"])
+                .contains("/obj/item/vending_refill/snack")
+        );
+        let ext = |path: &str, component: &str| -> Vec<(String, String)> {
+            type_fields(&t, path)
+                .into_iter()
+                .filter_map(|f| match f {
+                    Field::Ext {
+                        component: c,
+                        key,
+                        ron,
+                    } if c == component => Some((key.to_owned(), ron)),
+                    _ => None,
+                })
+                .collect()
+        };
+        assert_eq!(
+            ext("/obj/item/vending_refill/snack", REFILL_COMPONENT),
+            [("machine_name".to_owned(), "\"Getmore\"".to_owned())]
+        );
+        assert_eq!(
+            ext("/obj/item/beer", PRICE_COMPONENT),
+            [("custom_price".to_owned(), "50".to_owned())]
+        );
+        assert!(ext("/obj/item/vending_refill", PRICE_COMPONENT).is_empty());
     }
 }

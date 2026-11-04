@@ -1,7 +1,10 @@
 //! Market Crash (`code/modules/events/market_crash.dm`): vending prices go up for 50-100
 //! fires (1.7-3.3 minutes), announced at both ends.
-// shortcut: vending charges nothing yet (`ss13_game::vending`), so the crash only announces; add
-// `SSeconomy.inflation_value = 5.5 * log(activeFor + 1)` with vending prices.
+//!
+//! While it runs, `SSeconomy.inflation_value = 5.5 * log(activeFor + 1)` multiplies the station
+//! vendors' prices (`crate::vending::update_prices`), refreshed every 5 ticks; the end puts
+//! them back. (tg's `tick_counter = tick_counter++` never counts and its start refreshes the
+//! prices before the crash trait is set; the intended refresh is ported.)
 
 use bevy::prelude::*;
 
@@ -23,10 +26,22 @@ const REASONS: [&str; 9] = [
 const SENDER_TITLE: &str = "Отдел бухгалтерского учета Нанотрейзен";
 
 pub fn make(_: &mut World) -> Box<dyn RoundEvent> {
-    Box::new(MarketCrash)
+    Box::new(MarketCrash { ticks: 0 })
 }
 
-struct MarketCrash;
+struct MarketCrash {
+    ticks: u32,
+}
+
+/// `5.5 * log(activeFor + 1)` (DM `log` with one argument is natural), at least 1.
+pub fn inflation(active_for: u32) -> f32 {
+    (5.5 * (f64::from(active_for) + 1.0).ln()).max(1.0) as f32
+}
+
+fn set_prices(world: &mut World, value: f32) {
+    world.insert_resource(crate::vending::VendingInflation(value));
+    crate::vending::update_prices(world);
+}
 
 impl RoundEvent for MarketCrash {
     fn setup(&mut self, world: &mut World, ev: &mut EventState) {
@@ -48,7 +63,19 @@ impl RoundEvent for MarketCrash {
         super::priority_announce(world, SENDER_TITLE, &text);
     }
 
+    fn start(&mut self, world: &mut World, ev: &mut EventState) {
+        set_prices(world, inflation(ev.active_for));
+    }
+
+    fn tick(&mut self, world: &mut World, ev: &mut EventState) {
+        self.ticks += 1;
+        if self.ticks.is_multiple_of(5) {
+            set_prices(world, inflation(ev.active_for));
+        }
+    }
+
     fn end(&mut self, world: &mut World, _: &mut EventState) {
+        set_prices(world, 1.0);
         super::priority_announce(
             world,
             SENDER_TITLE,

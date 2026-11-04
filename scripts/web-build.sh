@@ -36,6 +36,8 @@ for side in client server; do
     gzip -9 "$out/$side/${crate}_bg.wasm"
 done
 cp web/index.html web/style.css web/main.js web/server-worker.js "$out/"
+# The parity readiness page (scripts/parity_progress.py), self-contained, linked from the landing.
+cp docs/parity/PROGRESS.html "$out/progress.html"
 
 # Data root = the assets root; the map files keep the BandaStation/ prefix of the package.
 cp -a "$pkg/assets/." "$out/data/"

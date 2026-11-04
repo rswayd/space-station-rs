@@ -125,6 +125,15 @@ pub mod files {
         "sound/machines/terminal/terminal_prompt_deny.ogg",
         "sound/machines/terminal/terminal_prompt_confirm.ogg",
     ];
+    /// Vending machines (`ss13_game::vending`): `dispense`, the payment component's register,
+    /// `fall_and_crush`.
+    pub const VENDING: [&str; 5] = [
+        "sound/machines/machine_vend.ogg",
+        "sound/effects/cashregister.ogg",
+        "sound/effects/bang.ogg",
+        "sound/effects/splat.ogg",
+        "sound/effects/blob/blobattack.ogg",
+    ];
     /// `/datum/looping_sound/fire` `mid_sounds` (equal weights).
     pub const FIRE_LOOP: [&str; 7] = [
         "sound/effects/fireclip1.ogg",
@@ -299,6 +308,7 @@ pub fn referenced<'a>(
     out.extend(files::ATMOS.map(str::to_owned));
     out.extend(files::WALLMOUNT.map(str::to_owned));
     out.extend(files::SECURITY_LEVELS.map(str::to_owned));
+    out.extend(files::VENDING.map(str::to_owned));
     for path in converted {
         for var in SOUND_VARS {
             let s = sound_var(types, path, var);

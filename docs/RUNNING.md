@@ -182,7 +182,7 @@ python3 -m http.server -d dist 8000                     # then open http://127.0
 `web-build.sh` needs the `wasm32-unknown-unknown` target (`rust-toolchain.toml` installs it),
 `wasm-bindgen` at the exact version of the `wasm-bindgen` crate in `Cargo.lock` (it checks) and
 `wasm-opt` (binaryen). `dist/`: `index.html`, `main.js`, `style.css`, `server-worker.js` (from
-`web/`), `client/` and `server/` (wasm-bindgen `--target web` output after `wasm-opt -Oz`),
+`web/`), `progress.html` (`docs/parity/PROGRESS.html`, linked from the landing), `client/` and `server/` (wasm-bindgen `--target web` output after `wasm-opt -Oz`),
 `data/` (the package's assets and `BandaStation/_maps/...` files, keyed by these relative paths)
 and `data/files.json` (`[{path, size, side}]`, `side` = `server`, `client` (atlas pages, sounds)
 or `both` (`manifest.postcard`)). Attribution texts are shipped but not downloaded up front.
@@ -587,7 +587,13 @@ cargo test -p ss13_game --all-features --test it drag::        # strip menu (unc
                                                           # loot panel, pointing, middle click
 SS13_LIGHTING=0 SS13_MAP=$PWD/scripts/visual/maps/arena.dmm SS13_ASSETS=$ASSETS scripts/visual-check.sh \
     scripts/visual/strip_stripper.txt scripts/visual/strip_victim.txt  # strip menu, loot panel
-cargo test -p ss13_game --all-features --test it vending::     # vending window, vend checks, spam, close
+cargo test -p ss13_game --all-features --test it vending::     # window, vend checks, payment and
+                                                          # discounts, age, spam, items back,
+                                                          # canisters, tilting, taking apart,
+                                                          # custom vendor, slogans (fixture)
+SS13_ASSETS=$ASSETS cargo test -p ss13_game --all-features --test it vending:: -- --ignored --nocapture
+                                                          # every MetaStation vendor with a canister
+                                                          # taken apart and built back
 cargo test -p ss13_game --all-features --test it storage::     # open a locker, item into the backpack and out
 SS13_ASSETS=$ASSETS cargo test -p ss13_game --all-features --test it storage:: -- --ignored --nocapture
                                                           # MetaStation: closet/storage contents coverage,
@@ -607,11 +613,24 @@ SS13_SKIP_LOBBY=1 SS13_ASSETS=$ASSETS scripts/visual-check.sh scripts/visual/eng
                                                             # the engine room, an emitter turned on
 ```
 
-Vending machines open the tgui `Vending` window on a click with an empty active hand next to
-them; products cost nothing yet (vending does not charge accounts), an ID is still required. A vendor without power
-goes dark (`-off` sprite, no glow), opens nothing and refuses to vend from an open window. `scripts/visual/vending.txt`
+Vending machines (`crates/ss13_game/src/vending/`) open the tgui `Vending` window on a click with
+an empty active hand next to them. A vend is paid from the account of the ID found first (hands,
+then the ID slot) into the vendor's department budget: 20% of the price for that department and
+the captain (not for premium or contraband), nothing at a free vendor (off the station, or
+`all_products_free`); age-restricted products need an ID of 20 or older. A vendor without power
+or broken (a third of its integrity) goes dark (`-off`/`-broken`), opens nothing and refuses to
+vend from an open window. Items of its types go back in out of combat mode (with its
+`req_access`, an emag or a cut ID wire) and come out first, free. With the panel open its refill
+canister restocks it (or an RPED holding canisters); a crowbar takes it apart into a frame, the
+vendor board (its brand; a screwdriver turns the brand dial) and the canister holding its stock.
+A damaging hit may shake goods out or tip it onto the attacker (75 brute, 6 s paralysis, rare
+crits; an empty hand rights it in 5 s). Slogans come at most every 10 minutes. The custom
+vendor takes its owner's ID swipe, priced items from the owner, and pays the owner. A Market
+Crash multiplies station vendors' prices. `scripts/visual/vending.txt`
 spawns under the Getmore machine in the MetaStation departure lounge, switches the layout, searches,
-vends and walks away.
+vends and walks away. `ss13-mapload convert` emits the vendors' slogans, canister types, tilt and
+age vars, the canisters (`dm_vending_refill`), item prices (`dm_price`) and the vending sounds:
+rerun it after updating.
 
 Power follows tg: every 2 s the SMES feed their powernets, APCs pay their area's machine loads
 from the grid, then from their cell, and switch channels off by cell charge (equipment below 30%,
@@ -996,7 +1015,7 @@ Russian announcements (chat only, no sounds): Grid Check (APCs fail for 1-4 minu
 by themselves), Electrical Storm (light tubes break around a random spot), Communications
 Blackout (headsets dead for ~5 minutes; intercoms only reach each other), Radiation Storm (hide in
 maintenance; outside it hurts), Brand Intelligence (vending machines shoot their stock), Market
-Crash (announcements only: vending is free), False Alarm, the meteor waves, Major Space Dust,
+Crash (vendor prices inflate while it runs), False Alarm, the meteor waves, Major Space Dust,
 Space Dust: Minor and the Stray Meteor (meteors fly in from the edges of the station level and
 break walls and floors where they hit), Carp Migration (a school of space carp from the carp
 landmarks, see "Basic mobs and their AI").
@@ -1083,7 +1102,8 @@ click on its hand slot (fuel 20, one unit per 5 s while lit, 15 burn force lit).
   armor (a full-tile window: 16 toolbox hits); a destroyed window leaves shards and opens its tile
   to the air, a grille breaks at 40% (a rod drops, it lets things through) and falls to rods.
 - Vending machines: screwdriver toggles the panel, wrench 6 s with the panel open unanchors
-  them; unanchored structures and machines can be pulled.
+  them, crowbar with the panel open takes them apart (`crate::vending::refill`); unanchored
+  structures and machines can be pulled.
 - Stacks: a stack in the other hand gives one unit to the empty active hand on a click of its
   slot; a stack clicked with the same stack in hand merges into it.
 
@@ -1103,7 +1123,8 @@ a covered machine (chargers, kitchen machines, hydroponics trays, the cyborg cha
 destructive analyzer, thermomachines) and a crowbar takes it apart into a wired frame, its board
 and parts; a screwdriver unscrews a covered computer (R&D, supply, atmospheric alert consoles)
 into its glassed frame. Iron sheets right-clicked on a floor with a board in the other hand
-build a frame. The converter emits the boards, their parts and the frames of mapped machines
+build a frame; vendors with a refill canister come apart and build back the same way
+(`crate::vending::refill`). The converter emits the boards, their parts and the frames of mapped machines
 (`dm_circuit`, `dm_machine`, `FRAME_RUNTIME_TYPES`): rerun it after updating.
 
 ```sh

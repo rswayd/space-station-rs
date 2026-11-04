@@ -47,7 +47,7 @@
 Автоматы-гардеробы ЦК и юристов с наборами формы.
 
 - **Код:** [`/obj/machinery/vending/wardrobe/cent_wardrobe`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/aesthetics/vending/code/vending.dm#L1), [`/obj/machinery/vending/wardrobe/law_wardrobe`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/aesthetics/vending/code/vending.dm#L44)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/vending.rs`: работают как автоматы с ассортиментом; без оплаты
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/vending/`: работают как автоматы с ассортиментом и оплатой (механика — ../cargo/vending.md)
 
 ### Телепорт-поды
 Поды доставки в стиле телепорта: портал вместо капсулы, без взрыва и дыма при посадке; используются маяками выбора и королевской битвой.

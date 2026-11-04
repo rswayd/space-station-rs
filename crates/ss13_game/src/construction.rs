@@ -155,6 +155,8 @@ pub enum Job {
     WallMount(crate::wallmount::WallJob),
     /// Frames and taking computers apart ([`crate::machine_frame`]).
     Frame(crate::machine_frame::FrameJob),
+    /// Righting a tilted vendor ([`crate::vending`]).
+    Vending(crate::vending::VendJob),
 }
 
 /// A turf's baseturf stack, bottom first (tg `baseturfs`). Absent: assembled from the type's
@@ -262,6 +264,12 @@ fn tool_act(world: &mut World, actor: Actor, kind: ToolKind, target: Entity) -> 
     let Some(path) = path_of(world, target) else {
         return Interact::None;
     };
+    // The vendor board's brand dial.
+    if kind == ToolKind::Screwdriver
+        && crate::vending::refill::screwdriver_board(world, actor, target)
+    {
+        return Interact::Done;
+    }
     let client = actor.client;
     if world.get::<Turf>(target).is_some() {
         // `/turf/open/floor/crowbar_act`: pry the tile.
@@ -566,6 +574,14 @@ fn target_interaction(world: &mut World, actor: Actor, target: Entity) -> Intera
     let Some(path) = path_of(world, target) else {
         return Interact::None;
     };
+    // `/obj/machinery/vending/item_interaction`: canisters, emags, IDs, items back in.
+    if is_under(&path, VENDING) {
+        return if crate::vending::item_interaction(world, actor, held, target) {
+            Interact::Done
+        } else {
+            Interact::None
+        };
+    }
     let client = actor.client;
     if world.get::<Turf>(target).is_some() {
         if is_under(&path, WALL) && tool_of(world, held).map(|t| t.0) == Some(ToolKind::Welder) {
@@ -913,6 +929,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         Job::Genetics(_) => crate::genetics::console::complete(world, mob, action),
         &Job::WallMount(job) => crate::wallmount::complete(world, client, mob, target, job),
         &Job::Frame(job) => crate::machine_frame::complete(world, mob, action, job),
+        &Job::Vending(job) => crate::vending::complete(world, mob, action, job),
         &Job::Emitter(job) => crate::power::emitter::complete(world, client, target, job, consume),
         Job::GirderBolts { from } => {
             if !is_under(&path, GIRDER) || obj_state(world, target) != *from || !consume(world) {

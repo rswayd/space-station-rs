@@ -19,7 +19,7 @@
 Карта привязана к банковскому счёту: оплата в автоматах, внесение наличных и голочипов прямо на карту, выплата долга. (Экономика — см. ../cargo/.)
 
 - **Код:** [`set_account()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/cards_ids.dm#L478), [`insert_money()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/cards_ids.dm#L599), [`can_be_used_in_payment()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/cards_ids.dm#L533)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/cargo/economy.rs` (`BankAccountId`): счёт профессии привязан к ID-карте и платит за частные заказы снабжения; баланса в осмотре, ввода наличных и оплаты в автоматах нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/cargo/economy.rs` (`BankAccountId`): счёт профессии привязан к ID-карте и платит за частные заказы снабжения; оплачивает покупки в торговых автоматах (`crates/ss13_game/src/vending/`); баланса в осмотре и ввода наличных нет
 
 ### Продвинутые и особые карты
 Серебряные, золотые (капитанская запасная), платиновые, ЦК, ОБР, Дедсквад, синдиката, отладочная; перекраска карты мелком, статус стажёра при малом наигрыше.

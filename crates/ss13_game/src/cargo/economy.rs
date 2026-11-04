@@ -93,6 +93,8 @@ pub struct BankAccount {
     pub paycheck: u32,
     /// `account_job.paycheck_department`; empty for department accounts.
     pub paycheck_department: String,
+    /// `account_job.title`.
+    pub job: String,
 }
 
 impl BankAccount {
@@ -214,6 +216,7 @@ impl Economy {
                 balance: 0,
                 paycheck,
                 paycheck_department: department.to_owned(),
+                job: String::new(),
             },
         );
         id
@@ -278,6 +281,9 @@ pub fn open_job_account(world: &mut World, job: &Job, name: &str, card: Option<E
         return;
     };
     let id = economy.open_account(name, job.paycheck, &job.paycheck_department);
+    if let Some(account) = economy.account_mut(id) {
+        account.job.clone_from(&job.title);
+    }
     let _ = economy.payday(id, STARTING_PAYCHECKS, true);
     if let Some(card) = card {
         world.entity_mut(card).insert(BankAccountId(id));
