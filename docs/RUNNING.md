@@ -21,7 +21,7 @@ same for sounds (`$ASSETS/sound/SOURCES.txt`). After either, refresh the audit o
 `docs/ASSET-AUDIT.md`; the terms are in `crates/ss13_mapload/src/asset_terms.tsv`).
 
 `--types` packs the `.dmi` files the maps place first (most placed first), so a client, which loads
-2048x2048 atlas pages only when a sprite needs them, loads few pages. Without it the import still
+1024x1024 atlas pages only when a sprite needs them, loads few pages. Without it the import still
 works, in `.dmi` path order, and clients load more pages.
 
 `--types` also renders tg's GAGS icons (`code/datums/greyscale/`, `ss13_assets::gags`): every

@@ -27,7 +27,9 @@ use crate::gags::{Gags, PREFIX as GAGS_PREFIX};
 use crate::manifest::{AssetManifest, IconStateInfo};
 use crate::usage::{DmiUsage, order_by_usage};
 
-pub const ATLAS_MAX: u32 = 2048;
+/// Regular page side. 1024: a page decodes and uploads within a frame (2048 took ~30 ms each
+/// on the browser main thread, a visible hitch whenever a page was first needed).
+pub const ATLAS_MAX: u32 = 1024;
 pub const MANIFEST_FILE: &str = "manifest.postcard";
 pub const ATLAS_DIR: &str = "atlas";
 pub const ICON_SOURCES_FILE: &str = "ICON-SOURCES.txt";

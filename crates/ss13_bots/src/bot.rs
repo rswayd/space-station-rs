@@ -63,7 +63,7 @@ impl IconNames {
 }
 
 /// Atlas alpha, decoded per page on the first click that needs it and shared by every bot.
-// Cost: a 2048x2048 page decode (tens of ms) once per page per run; clicks are a few per case.
+// Cost: a 1024x1024 page decode (a few ms) once per page per run; clicks are a few per case.
 struct IconPixels {
     assets: std::path::PathBuf,
     manifest: AssetManifest,
