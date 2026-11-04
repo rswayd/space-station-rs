@@ -147,7 +147,9 @@ pub mod cargo;
 pub mod chem;
 #[cfg(feature = "server")]
 pub mod chem_dispenser;
+#[cfg(feature = "server")]
 pub mod chem_heater;
+#[cfg(feature = "server")]
 pub mod chem_master;
 #[cfg(feature = "server")]
 pub mod click;

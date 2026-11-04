@@ -49,4 +49,4 @@
 Реагенты имеют вкус (`taste_description`); содержимое контейнера видно при осмотре только с научными очками или аналогами.
 
 - **Код:** [`taste.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/reagents/chemistry/taste.dm#L1), [`ui_data.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/reagents/chemistry/holder/ui_data.dm#L1)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/chem.rs`: содержимое при осмотре видно всем (shortcut); вкус напитков — нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/chem.rs` (`can_see_reagents`): состав при осмотре видят мёртвые и призраки, синтетики и носящие очки с `TRAIT_REAGENT_SCANNER` (`DmClothing::reagent_scanner`: научные, химические), остальные — только общий объём; вкус напитков — нет
