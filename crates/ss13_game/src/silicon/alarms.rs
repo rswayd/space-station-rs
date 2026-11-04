@@ -113,8 +113,8 @@ pub struct AreaInfo {
 }
 
 impl StationAlarms {
-    /// tg `send_alarm` (`on`) / `clear_alarm` of `source`'s handler. `Some(true)` when the area
-    /// became alarmed, `Some(false)` when its last source cleared.
+    /// tg `send_alarm` (`on`) / `clear_alarm` of `source`'s handler: the change when the area
+    /// became alarmed or its last source cleared.
     pub fn set(
         &mut self,
         kind: AlarmKind,
@@ -122,7 +122,7 @@ impl StationAlarms {
         area: Option<Entity>,
         on: bool,
         info: impl FnOnce(Entity) -> AreaInfo,
-    ) -> Option<(Entity, bool)> {
+    ) -> Option<AlarmChanged> {
         let sent = self.sent.get(&(kind, source)).copied();
         match (on, area) {
             (true, Some(area)) if sent == Some(area) => None,
@@ -140,6 +140,13 @@ impl StationAlarms {
                     }
                     None => {
                         let i = info(area);
+                        let changed = AlarmChanged {
+                            kind,
+                            area,
+                            raised: true,
+                            station: i.station,
+                            z: i.z,
+                        };
                         self.active.insert(
                             (kind, area),
                             ActiveAlarm {
@@ -150,7 +157,7 @@ impl StationAlarms {
                                 z: i.z,
                             },
                         );
-                        Some((area, true))
+                        Some(changed)
                     }
                 }
             }
@@ -158,15 +165,21 @@ impl StationAlarms {
         }
     }
 
-    fn clear(&mut self, kind: AlarmKind, source: Entity, area: Entity) -> Option<(Entity, bool)> {
+    fn clear(&mut self, kind: AlarmKind, source: Entity, area: Entity) -> Option<AlarmChanged> {
         self.sent.remove(&(kind, source));
         let alarm = self.active.get_mut(&(kind, area))?;
         alarm.sources.retain(|&s| s != source);
         if !alarm.sources.is_empty() {
             return None;
         }
-        self.active.remove(&(kind, area));
-        Some((area, false))
+        let alarm = self.active.remove(&(kind, area))?;
+        Some(AlarmChanged {
+            kind,
+            area,
+            raised: false,
+            station: alarm.station,
+            z: alarm.z,
+        })
     }
 
     /// The alarms `listener` lists, by type.
@@ -213,12 +226,15 @@ impl AlertListener {
     }
 }
 
-/// An area's first source raised (`raised`) or its last one cleared an alarm.
+/// An area's first source raised (`raised`) or its last one cleared an alarm; where the area
+/// is, for the listeners' scopes.
 #[derive(Message, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AlarmChanged {
     pub kind: AlarmKind,
     pub area: Entity,
     pub raised: bool,
+    pub station: bool,
+    pub z: u16,
 }
 
 /// tg `queueAlarm`'s pending lines and counts, on a silicon listener.
@@ -324,8 +340,8 @@ fn sync_sources(
     }
     for (kind, source, area, on, z) in updates {
         let info = |area| area_info(&world_areas, &cameras, areas.as_deref(), area, z);
-        if let Some((area, raised)) = alarms.set(kind, source, area, on, info) {
-            changed.write(AlarmChanged { kind, area, raised });
+        if let Some(change) = alarms.set(kind, source, area, on, info) {
+            changed.write(change);
         }
     }
 }
@@ -340,7 +356,14 @@ fn queue_alarms(
     time: Res<Time>,
 ) {
     let now = time.elapsed_secs_f64();
-    for &AlarmChanged { kind, area, raised } in changed.read() {
+    for &AlarmChanged {
+        kind,
+        area,
+        raised,
+        station,
+        z,
+    } in changed.read()
+    {
         let alarm = alarms.active.get(&(kind, area));
         let name = alarm.map_or_else(
             || {
@@ -352,7 +375,11 @@ fn queue_alarms(
             |a| a.name.clone(),
         );
         for (listener, mut queue) in &mut listeners {
-            if !listener.kinds.contains(&kind) {
+            let in_scope = match listener.scope {
+                AlertScope::Station => station,
+                AlertScope::Level(level) => level == z,
+            };
+            if !listener.kinds.contains(&kind) || !in_scope {
                 continue;
             }
             if raised {
@@ -724,6 +751,10 @@ fn camera_chosen(world: &mut World, mut answers: Local<MessageCursor<PromptAnswe
 mod tests {
     use super::*;
 
+    fn raised(change: Option<AlarmChanged>) -> Option<bool> {
+        change.map(|c| c.raised)
+    }
+
     fn info(z: u16) -> impl FnOnce(Entity) -> AreaInfo {
         move |_| AreaInfo {
             name: "Bridge".into(),
@@ -745,33 +776,33 @@ mod tests {
         );
         let k = AlarmKind::Atmosphere;
         assert_eq!(
-            alarms.set(k, a, Some(area), true, info(1)),
-            Some((area, true))
+            raised(alarms.set(k, a, Some(area), true, info(1))),
+            Some(true)
         );
         assert_eq!(
-            alarms.set(k, a, Some(area), true, info(1)),
+            raised(alarms.set(k, a, Some(area), true, info(1))),
             None,
             "sent once"
         );
-        assert_eq!(alarms.set(k, b, Some(area), true, info(1)), None);
+        assert_eq!(raised(alarms.set(k, b, Some(area), true, info(1))), None);
         assert_eq!(alarms.active[&(k, area)].sources.len(), 2);
-        assert_eq!(alarms.set(k, a, Some(area), false, info(1)), None);
+        assert_eq!(raised(alarms.set(k, a, Some(area), false, info(1))), None);
         assert_eq!(
-            alarms.set(k, a, Some(area), false, info(1)),
+            raised(alarms.set(k, a, Some(area), false, info(1))),
             None,
             "not sent"
         );
         assert_eq!(
-            alarms.set(k, b, None, false, info(1)),
-            Some((area, false)),
+            raised(alarms.set(k, b, None, false, info(1))),
+            Some(false),
             "a removed source clears its area"
         );
         assert!(alarms.active.is_empty());
         // Other types of the same area are separate.
         alarms.set(k, a, Some(area), true, info(1));
         assert_eq!(
-            alarms.set(AlarmKind::Power, b, Some(area), true, info(1)),
-            Some((area, true))
+            raised(alarms.set(AlarmKind::Power, b, Some(area), true, info(1))),
+            Some(true)
         );
     }
 
