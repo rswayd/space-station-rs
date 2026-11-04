@@ -26,7 +26,7 @@
 Серверы (`/obj/machinery/rnd/server`, мастер-сервер с особым уничтожением) генерируют очки, перегреваются, ломаются от ЭМИ; консоль управления позволяет включать/выключать серверы и смотреть логи исследований.
 
 - **Код:** [`/obj/machinery/rnd/server`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/server.dm#L14), [`/obj/machinery/rnd/server/master`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/server.dm#L118), [`/obj/machinery/computer/rdservercontrol`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/server_control.dm#L1); tgui: [`ServerControl.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/ServerControl.tsx)
-- **Статус в ss13-rs:** 🟡 `ss13_game::science::points` (`ResearchServer`): серверы дают очки, пока запитаны; нет консоли управления серверами, ЭМИ, кражи HDD мастер-сервера, случайного суффикса имени
+- **Статус в ss13-rs:** 🟡 `ss13_game::science::points` (`ResearchServer`): серверы дают очки, пока запитаны и не под ЭМИ (`EMPED` на 60 с — `crates/ss13_game/src/emp/machines.rs`); нет консоли управления серверами, кражи HDD мастер-сервера, случайного суффикса имени
 
 ### Базовая R&D-машина
 Общий предок научных машин: подключение к техвебу, панель, разборка, взлом емагом.

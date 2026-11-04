@@ -26,7 +26,7 @@
 // Boil Blood, Spirit Realm, Apocalypse and Manifest need projectiles, ghosts as players and
 // hallucinations (not ported). Blood magic is stun, teleport, shadow shackles, twisted
 // construction (plasteel into runed metal only: no construct shells, constructs or soulstones
-// until basic mobs exist) and summon dagger; no EMP (no EMP effects yet), equipment, horror,
+// until basic mobs exist), EMP and summon dagger; no equipment, horror,
 // veiling or blood rites. No cult master abilities (marks, final reckoning, pulse), no
 // structures, no Nar'Sie language or TTS, no silence/stutter/slur effects (no speech status
 // effects yet: tg's `Unconscious` and silence are a paralyze here). A sacrifice destroys the
@@ -350,6 +350,7 @@ pub struct CultBarrier {
 pub enum Spell {
     Stun,
     Teleport,
+    Emp,
     Shackles,
     Construction,
     Dagger,
@@ -367,9 +368,10 @@ pub struct SpellDef {
 }
 
 impl Spell {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::Stun,
         Self::Teleport,
+        Self::Emp,
         Self::Shackles,
         Self::Construction,
         Self::Dagger,
@@ -392,6 +394,14 @@ impl Spell {
                 health_cost: 7.0,
                 aura: Some("/obj/item/melee/blood_magic/teleport"),
                 invocation: "Sas'so c'arta forbici!",
+            },
+            Self::Emp => SpellDef {
+                name: "Electromagnetic Pulse",
+                icon: "emp",
+                charges: 1,
+                health_cost: 10.0,
+                aura: None,
+                invocation: "Ta'gh fara'qha fel d'amar det!",
             },
             Self::Shackles => SpellDef {
                 name: "Shadow Shackles",
@@ -3070,6 +3080,28 @@ fn activate_spell(world: &mut World, client: Entity, mob: Entity, id: u32) {
         return;
     }
     let def = spell.spell.def();
+    if spell.spell == Spell::Emp {
+        // `emp/Activate`: an EMP from the cultist (2 heavy, 5 light).
+        whisper(world, mob, def.invocation);
+        let Some(&pos) = world.get::<TilePos>(mob) else {
+            return;
+        };
+        let name = name_of(world, mob);
+        visible(
+            world,
+            mob,
+            "You speak the cursed words, emitting an EMP blast from your hand.",
+            &format!("{name}'s hand flashes a bright blue!"),
+            Span::Warning,
+        );
+        world.write_message(crate::emp::Empulse {
+            epicenter: pos,
+            heavy: 2,
+            light: 5,
+        });
+        use_charge(world, mob, id);
+        return;
+    }
     let Some(aura_path) = def.aura else {
         // `dagger/Activate`.
         whisper(world, mob, def.invocation);
@@ -3313,7 +3345,7 @@ fn cast_aura(
         }
         Spell::Shackles => cast_shackles(world, client, mob, item, target),
         Spell::Construction => cast_construction(world, client, mob, item, target),
-        Spell::Dagger => {}
+        Spell::Dagger | Spell::Emp => {}
     }
 }
 

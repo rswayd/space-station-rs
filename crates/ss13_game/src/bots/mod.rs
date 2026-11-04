@@ -26,8 +26,8 @@
 //!
 //! The `SimpleBot` and `Mule` windows' data is here (both halves); [`client`] draws them.
 // shortcut: no pAI cards, ghost possession (so no `BotAnnouncement` action), path HUD,
-// diagnostic HUD, EMP or PDA/AI remote control and summoning; add with pAIs, ghost roles, EMPs
-// and the bot control program.
+// diagnostic HUD or PDA/AI remote control and summoning; add with pAIs, ghost roles and the
+// bot control program. EMPs: `crate::emp::mobs`.
 
 #[cfg(feature = "server")]
 pub mod ai;

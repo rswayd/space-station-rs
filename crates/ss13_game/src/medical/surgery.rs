@@ -2306,6 +2306,8 @@ fn repair_organ(world: &mut World, mob: Entity, slot: Slot, heal_to: f32) {
         && let Some(mut state) = world.get_mut::<organs::Organ>(organ)
     {
         state.operated = true;
+        // `operation_organ_repair`: an EMPed organ works again.
+        state.emped = false;
     }
 }
 

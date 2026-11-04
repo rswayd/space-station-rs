@@ -14,7 +14,7 @@
 //!   when full the recharger says so; its overlay shows empty, charging or full.
 //!
 //! Cost: O(chargers) per machine tick (0.5 Hz); MetaStation maps ~20 of each.
-// shortcut: no wrench (unanchoring), no EMP, telekinesis or sounds; the recharger takes only stun
+// shortcut: no wrench (unanchoring), telekinesis or sounds; the recharger takes only stun
 // batons (no energy guns, recharge magazines, modular computers or battle rifles exist yet).
 // shortcut: the "charged" line uses the neuter ending (`genderize_ru` of the DM `gender`, which
 // objects leave `NEUTER`); use the ru_names gender once names carry it.

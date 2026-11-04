@@ -1083,13 +1083,23 @@ pub fn set_area_fire(world: &mut World, area: Entity, fire: bool) -> bool {
 /// no working bulb.
 // shortcut: no sparks, sound or glass shards; replacing the tube is not ported.
 pub fn break_light_tube(world: &mut World, light: Entity) -> bool {
+    ruin_tube(world, light, "broken")
+}
+
+/// tg `/obj/machinery/light/proc/burn_out()` of a working bulb (an EMP): `LIGHT_BURNED`,
+/// `"[base_state]-burned"`, dark for good like a broken one.
+pub fn burn_out_light(world: &mut World, light: Entity) -> bool {
+    ruin_tube(world, light, "burned")
+}
+
+fn ruin_tube(world: &mut World, light: Entity, suffix: &str) -> bool {
     let broken = world
         .get::<DmAtom>(light)
         .zip(world.get::<DmPower>(light))
         .and_then(|(atom, dm)| {
             world
                 .get_resource::<IconIndex>()?
-                .get(&atom.icon, &format!("{}-broken", dm.base_state))
+                .get(&atom.icon, &format!("{}-{suffix}", dm.base_state))
         });
     let Some(fixture) = world.get::<LightFixture>(light) else {
         return false;

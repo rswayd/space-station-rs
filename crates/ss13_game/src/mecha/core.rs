@@ -33,7 +33,7 @@
 //! Cost: one relay per pilot step, one alert pass per occupied mech per tick.
 // shortcut: no Mecha tgui window (stats, equipment selection, the drill toggle, cargo eject,
 // lights, cabin seal, internals, DNA lock), no action buttons; the drill acts on clicks while
-// attached. No internal damage, overclock, EMP, thrusters, MMI/AI pilots, mech bay recharging,
+// attached. No internal damage, overclock, thrusters, MMI/AI pilots, mech bay recharging,
 // tracking beacons, mouse pointer, sounds, speech bubbles, open-canopy hits on the pilot,
 // thrown-item hits, wall punches or `TRAIT_HANDS_BLOCKED` for the HUD slots of a pilot.
 
@@ -1203,11 +1203,27 @@ fn on_mouseclick(world: &mut World, click: MechClick) {
             .get::<MechEquip>(equip)
             .is_some_and(|e| world.resource::<MechaDb>().data.equipment[e.def].range & 1 != 0)
     {
+        // `action_checks`: an EMP took the equipment control unit down.
+        if world
+            .get::<crate::emp::power::MechEquipmentDisabled>(mech)
+            .is_some()
+        {
+            tell_occupant(
+                world,
+                mech,
+                Span::Warning,
+                "Error -- Equipment control unit is unresponsive.",
+            );
+            return;
+        }
         equipment::action(world, click, mech, equip);
         return;
     }
+    let disabled = world
+        .get::<crate::emp::power::MechEquipmentDisabled>(mech)
+        .is_some();
     // A drill takes the melee clicks while attached (tg: while toggled on in the Mecha window).
-    if adjacent && equipment::drill_click(world, click, mech) {
+    if adjacent && !disabled && equipment::drill_click(world, click, mech) {
         return;
     }
     let now = world.resource::<Time>().elapsed_secs_f64();

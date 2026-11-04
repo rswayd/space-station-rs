@@ -9,8 +9,8 @@
 //! - A screwdriver opens the hatch, a cell goes in (swapping the old one into the hand), a
 //!   crowbar drops it.
 //! - `relabel` takes the name, description and look of another canister type, keeping the gas.
-// shortcut: no EMP (the cell's drain and the 75% chance to flip the shielding) and no `recolor`
-// (the greyscale menu needs runtime GAGS rendering, see `ss13_mapload::gags`).
+// shortcut: no `recolor` (the greyscale menu needs runtime GAGS rendering, see
+// `ss13_mapload::gags`). EMPs: `crate::emp::power`.
 
 use bevy::prelude::*;
 use ss13_chat::Span;

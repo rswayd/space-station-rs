@@ -59,6 +59,8 @@ enum Special {
     Banana,
     /// Rams nothing on moving; a bump `ex_act`s only what it hit.
     Meaty,
+    /// `meteor/emp/meteor_effect`: `empulse(src, 3, 8)`.
+    Emp,
     /// 20% to explode on a bump.
     Tunguska,
 }
@@ -102,7 +104,7 @@ const fn kind(path: &'static str, name: &'static str, icon_state: &'static str) 
 }
 
 // shortcut: no screen shake or impact sound for `heavy` meteors, no spin animation, no
-// greenglow from irradiated ones, no EMP from electromagnetic ones and no carp from frozen ones
+// greenglow from irradiated ones, no zap sound of electromagnetic ones and no carp from frozen ones
 // (no simple mobs); bananium ones do not throw things around.
 static DUST: MeteorKind = MeteorKind {
     hits: 1,
@@ -177,6 +179,7 @@ static BANANA: MeteorKind = MeteorKind {
 static EMP: MeteorKind = MeteorKind {
     hits: 6,
     signature: "электромагнитных помех",
+    special: Special::Emp,
     ..kind(
         "/obj/effect/meteor/emp",
         "electromagnetically charged meteor",
@@ -838,6 +841,13 @@ fn meteor_effect(world: &mut World, kind: &MeteorKind, pos: TilePos) {
             .flash(flash)
             .cause("meteor");
         explosion(world, pos, ex);
+    }
+    if kind.special == Special::Emp {
+        world.write_message(crate::emp::Empulse {
+            epicenter: pos,
+            heavy: 3,
+            light: 8,
+        });
     }
 }
 

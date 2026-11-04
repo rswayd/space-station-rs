@@ -17,7 +17,7 @@
 Чертежи, абдукторский мультитул, черта инженера (`TRAIT_KNOW_ENGI_WIRES`) и фото проводки показывают назначение проводов; дальтонизм путает цвета; ЭМИ пульсирует случайные провода.
 
 - **Код:** [`proc/can_reveal_wires()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/wires/_wires.dm#L276), [`proc/try_study_photo()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/wires/_wires.dm#L312), [`proc/emp_pulse()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/wires/_wires.dm#L230)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — ЭМИ пульсирует до 3 случайных проводов по 33% (`crates/ss13_game/src/wires.rs` `emp_pulse`, если нет `EMP_PROTECT_WIRES`); нет раскрытия проводов и дальтонизма
 
 ### Провода шлюза
 Основное/резервное питание, болты, ID-сканер, открытие, безопасность, тайминг, обратная связь (огни), высокое напряжение, связь с ИИ, зап-провода; набор по области шлюза; защищённый вариант.

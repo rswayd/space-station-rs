@@ -86,7 +86,7 @@ fn setup_displays(world: &mut World) {
 }
 
 /// Draws `state`: a picture with the lit outline, or nothing.
-fn show(world: &mut World, e: Entity, state: DisplayState) {
+pub(crate) fn show(world: &mut World, e: Entity, state: DisplayState) {
     match &state {
         DisplayState::Picture(picture) => set_picture(world, e, picture),
         DisplayState::Logo => set_picture(world, e, LOGO),

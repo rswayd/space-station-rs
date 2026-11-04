@@ -6,7 +6,7 @@
 
 - **Код:** [`/obj/machinery/telecomms`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/telecomms/telecomunications.dm#L9), [`proc/relay_information()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/telecomms/telecomunications.dm#L48), [`/datum/signal/subspace`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/telecomms/broadcasting.dm#L2)
 - **BandaStation:** [`bus.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/telecomms/machines/bus.dm#L69), [`server.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/telecomms/machines/server.dm#L195) — частота Justice в шине и сервере
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/radio.rs` считает, что телекомы всегда работают (shortcut)
+- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/radio.rs` считает телекомы одной сетью: работают, кроме общего сбоя `TelecommsOutage` (событие Communications Blackout и ЭМИ любого телеком-аппарата карты, кроме ретранслятора, — `crates/ss13_game/src/emp/machines.rs` `telecomms_emp`) (shortcut)
 
 ### Приёмник, шина, процессор, сервер, хаб, вещатель, ретранслятор
 Отдельные машины цепочки: приёмник ловит сигнал, шина распределяет по частотам, процессор раскомпрессирует (выключенный — речь искажена), сервер логирует, хаб связывает z-уровни, вещатель передаёт на радио; «всё-в-одном» для аванпостов и нюкеров.

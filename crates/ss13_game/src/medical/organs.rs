@@ -19,7 +19,7 @@
 //! mob's speech gurgles (`ss13_chat::speech::Tongueless`).
 // shortcut: no brainmob (the mind stays with the body: a removed brain does not carry the
 // player, an inserted one does not bring one), no skillchips, organ traits,
-// actions or status effects, no eating organs, no blood DNA, no EMP, no organ cell lines; eyes
+// actions or status effects, no eating organs, no blood DNA, no organ cell lines; eyes
 // give sight through `crate::vision` (blind when missing or failing, nearsighted when damaged),
 // without night vision, tint or flash protection of their own; species organ variants beyond the
 // human set keep the standard numbers.
@@ -308,6 +308,8 @@ pub struct Organ {
     pub deafness: f32,
     /// The lungs' `failed` (the "can't breathe" message was shown).
     pub lungs_failed: bool,
+    /// `ORGAN_EMP`: a synthetic organ an EMP broke; it decays until repaired or replaced.
+    pub emped: bool,
 }
 
 impl Organ {
@@ -323,6 +325,7 @@ impl Organ {
             stop_at: None,
             deafness: 0.0,
             lungs_failed: false,
+            emped: false,
         }
     }
 
@@ -409,6 +412,10 @@ impl Organ {
         }
         if self.failure_time > 0.0 {
             self.failure_time = (self.failure_time - 1.0).max(0.0);
+        }
+        if self.emped {
+            let spec = self.spec();
+            return self.apply_damage(spec.decay_factor * spec.max_health * secs, spec.max_health);
         }
         if self.damage == 0.0 || self.robotic {
             return None;
@@ -717,6 +724,7 @@ pub fn regenerate(world: &mut World, mob: Entity) {
         {
             state.failure_time = 0.0;
             state.deafness = 0.0;
+            state.emped = false;
         }
     }
     set_heartattack(world, mob, false);

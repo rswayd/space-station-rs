@@ -102,7 +102,7 @@
 Ядро получает урон, EMP отключает ИИ, смерть оставляет корпус; возможна перекарта в MMI.
 
 - **Код:** [`ai_defense.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/silicon/ai/ai_defense.dm#L1), [`ai/death.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/silicon/ai/death.dm#L1), [`proc/make_mmi()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/silicon/ai/ai.dm#L409)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/silicon/mod.rs`: brute/burn и кислород (только ИИ, от севшей батареи), без крита, смерть на −100, мёртвый ИИ не двигает глаз и не кликает, глаз возвращается на ядро (`ai.rs`), ядро показывает мёртвый дисплей (`ai_hud.rs`); нет EMP, перегрузки, взрыва, сообщения смерти ИИ (текст deathgasp как у карбона)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/silicon/mod.rs`: brute/burn и кислород (только ИИ, от севшей батареи), без крита, смерть на −100, мёртвый ИИ не двигает глаз и не кликает, глаз возвращается на ядро (`ai.rs`), ядро показывает мёртвый дисплей (`ai_hud.rs`); ЭМИ (`crates/ss13_game/src/emp/mobs.rs`): ожог 20/10, «*БЗЗЗТ*», статика, с 30% глаз на ядро или вызов эвакуации с текстом tg (нет оболочек для отключения); нет перегрузки, взрыва, сообщения смерти ИИ (текст deathgasp как у карбона)
 
 ### Апгрейды ИИ
 Модули-апгрейды: наблюдение (слух через камеры), передача энергии, боевые (малф).

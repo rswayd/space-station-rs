@@ -37,7 +37,7 @@ tgui-окно: заряд ячейки, включение главного ру
 ЭМИ разряжает ячейку и вырубает щиток на время, перегрузка освещения бьёт лампы зоны, `energy_fail` вызывает временный блэкаут (события grid check), поломка APC.
 
 - **Код:** [`emp_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/apc/apc_tool_act.dm#L460), [`proc/overload_lighting()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/apc/apc_main.dm#L749), [`proc/energy_fail()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/apc/apc_power_proc.dm#L137), [`atom_break()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/apc/apc_main.dm#L368)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/wires.rs`: короткое замыкание и отключение главного питания через провода; нет ЭМИ, перегрузки ламп, поломки
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/wires.rs`: короткое замыкание и отключение главного питания через провода; ЭМИ (`crates/ss13_game/src/emp/power.rs`): ячейка разряжается, все каналы выключены, через 60 с оборудование и среда снова auto (свет остаётся выключенным, как в tg); нет перегрузки ламп, поломки
 
 ### Ночной режим освещения
 Переключатель в APC (и автоматический при низком заряде) приглушает лампы зоны.

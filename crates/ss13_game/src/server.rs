@@ -249,6 +249,7 @@ impl Plugin for GameServerPlugin {
         .add_plugins(crate::records::RecordsServerPlugin)
         .add_plugins(crate::events::EventsServerPlugin)
         .add_plugins(crate::explosions::ExplosionsServerPlugin)
+        .add_plugins(crate::emp::EmpPlugin)
         .add_plugins(crate::mobs::MobsServerPlugin)
         .add_plugins(crate::bots::BotsServerPlugin)
         .add_plugins(crate::mecha::MechaServerPlugin)
@@ -336,6 +337,9 @@ pub fn seed_rngs(world: &mut World) {
     world.insert_resource(ss13_chat::server::SpeechRng(seed ^ 0x7370_6565_6368));
     world.insert_resource(crate::sound::SoundRng(crate::combat::CombatRng(
         seed ^ 0x0073_6f75_6e64,
+    )));
+    world.insert_resource(crate::emp::EmpRng(ss13_mapload::spawner::Rng::new(
+        seed ^ 0x0065_6d70_756c_7365,
     )));
     world.insert_resource(crate::genetics::GeneticsRng(
         ss13_mapload::spawner::Rng::new(seed ^ 0x6765_6e65_7469_6373),

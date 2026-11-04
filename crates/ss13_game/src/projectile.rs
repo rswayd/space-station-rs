@@ -446,6 +446,7 @@ fn select_target(world: &World, p: &Projectile, me: Entity, tile: TilePos) -> Op
 
 /// tg `on_hit` -> `bullet_act` of `target`.
 fn impact(world: &mut World, p: &Projectile, name: &str, target: Entity) {
+    ion_pulse(world, p, target);
     let kind = DamageType::from_dm(&p.data.damage_type).unwrap_or(DamageType::Brute);
     if world.get::<Health>(target).is_some() {
         hit_living(world, p, name, target);
@@ -470,6 +471,25 @@ fn impact(world: &mut World, p: &Projectile, name: &str, target: Entity) {
     if world.get::<Turf>(target).is_none() && matches!(kind, DamageType::Brute | DamageType::Burn) {
         // shortcut: objects check their melee armor, not the projectile's flag.
         crate::obj_damage::take_damage(world, target, p.data.damage, kind);
+    }
+}
+
+/// `/obj/projectile/ion/on_hit`: `empulse(target, emp_radius, emp_radius)` (`ion/weak`: 0).
+fn ion_pulse(world: &mut World, p: &Projectile, target: Entity) {
+    const ION: &str = "/obj/projectile/ion";
+    if !ss13_mapload::fidelity::is_under(&p.data.path, ION) {
+        return;
+    }
+    let radius = i32::from(!ss13_mapload::fidelity::is_under(
+        &p.data.path,
+        "/obj/projectile/ion/weak",
+    ));
+    if let Some(&pos) = world.get::<TilePos>(target) {
+        world.write_message(crate::emp::Empulse {
+            epicenter: pos,
+            heavy: radius,
+            light: radius,
+        });
     }
 }
 

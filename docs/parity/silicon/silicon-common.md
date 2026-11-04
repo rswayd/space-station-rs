@@ -24,7 +24,7 @@
 Синтетики не получают токсинов и удушья; EMP наносит урон и оглушает, флеш ослепляет киборгов, электрошок.
 
 - **Код:** [`silicon_defense.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/silicon/silicon_defense.dm#L2), [`damage_procs.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/silicon/damage_procs.dm#L1)
-- **Статус в ss13-rs:** 🟡 частично — только brute/burn, oxy/tox обнуляются, без крита, смерть на −maxHealth (`crates/ss13_game/src/silicon/mod.rs`); EMP и флеш не действуют
+- **Статус в ss13-rs:** 🟡 частично — только brute/burn, oxy/tox обнуляются, без крита, смерть на −maxHealth (`crates/ss13_game/src/silicon/mod.rs`); ЭМИ (`crates/ss13_game/src/emp/mobs.rs`): «Предупреждение», ожог 20/10, «*БЗЗЗТ*», статика (`flash_act`); нет сбрасывания наездников, флеш руками не действует
 
 ### Автоответ и озвучка законов
 Автосообщения (`set_autosay`) и проверка/озвучивание законов в канал.

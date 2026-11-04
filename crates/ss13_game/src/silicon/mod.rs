@@ -18,7 +18,7 @@
 //! until then; the binary chat (`:b`, tg `robot_talk`); a built-in radio
 //! (`crate::radio::BuiltInRadio`).
 // shortcut: a dead silicon stays where it died, inert, with the carbon deathgasp text; no
-// gibbing, debris or MMI; no EMP.
+// gibbing, debris or MMI. EMPs: `crate::emp::mobs`.
 
 #[cfg(feature = "server")]
 pub mod ai;
