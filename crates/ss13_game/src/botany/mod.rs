@@ -209,35 +209,49 @@ fn add_seed(
 /// The trays on the map (`Initialize(mapload)`): full of water, half their nutrients (at least
 /// 10) as E-Z-Nutrient.
 fn setup_trays(world: &mut World) {
-    let Some(botany) = world.get_resource::<Botany>().cloned() else {
+    let mut query = world.query::<(Entity, &DmObj)>();
+    let trays: Vec<Entity> = query
+        .iter(world)
+        .filter(|(_, o)| is_under(&o.path, TRAY_ROOT))
+        .map(|(e, _)| e)
+        .collect();
+    for e in trays {
+        setup_tray(world, e, true);
+    }
+}
+
+/// A tray's state; one built from a frame (`crate::machine_frame`) starts dry and empty.
+pub(crate) fn setup_tray(world: &mut World, e: Entity, mapload: bool) {
+    let Some(botany) = world.get_resource::<Botany>() else {
+        return;
+    };
+    let Some(def) = world
+        .get::<DmObj>(e)
+        .and_then(|o| botany.0.tray_def(&o.path))
+        .cloned()
+    else {
         return;
     };
     let chem = world.get_resource::<Chem>().map(|c| c.0.clone());
-    let mut query = world.query::<(Entity, &DmObj)>();
-    let trays: Vec<(Entity, TrayDef)> = query
-        .iter(world)
-        .filter(|(_, o)| is_under(&o.path, TRAY_ROOT))
-        .filter_map(|(e, o)| botany.0.tray_def(&o.path).map(|d| (e, d.clone())))
-        .collect();
-    for (e, def) in trays {
-        let mut tray = Tray::new(&def);
+    let mut tray = Tray::new(&def);
+    let mut holder = Holder::new(
+        tray.maxnutri,
+        flags::INJECTABLE,
+        Owner {
+            path: def.path.clone(),
+            living: false,
+        },
+    );
+    if mapload {
         tray.waterlevel = tray.maxwater;
-        let mut holder = Holder::new(
-            tray.maxnutri,
-            flags::INJECTABLE,
-            Owner {
-                path: def.path.clone(),
-                living: false,
-            },
-        );
         if let Some(chem) = &chem
             && let Some(id) = chem.id(EZ_NUTRIENT)
         {
             holder.add_reagent_list(chem, &[(id, (tray.maxnutri / 2.0).max(10.0))], None, true);
         }
-        world.entity_mut(e).insert((tray, Reagents(holder)));
-        refresh_tray(world, e);
     }
+    world.entity_mut(e).insert((tray, Reagents(holder)));
+    refresh_tray(world, e);
 }
 
 fn now(world: &World) -> f64 {

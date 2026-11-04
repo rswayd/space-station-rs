@@ -143,10 +143,10 @@ pub fn catalogue(packs: &SupplyPacks, contraband: bool) -> CargoStatic {
 
 fn setup_consoles(world: &mut World) {
     let mut query = world.query::<(Entity, &DmObj)>();
-    let consoles: Vec<(Entity, bool)> = query
+    let consoles: Vec<Entity> = query
         .iter(world)
         .filter(|(_, o)| is_under(&o.path, CARGO_CONSOLE) && !is_under(&o.path, EXPRESS_CONSOLE))
-        .map(|(e, o)| (e, is_under(&o.path, REQUEST_CONSOLE)))
+        .map(|(e, _)| e)
         .collect();
     let catalogue = Arc::new(
         world
@@ -159,16 +159,37 @@ fn setup_consoles(world: &mut World) {
         "{} supply consoles, {packs} packs in their catalogue",
         consoles.len()
     );
-    for (e, request_only) in consoles {
-        world.entity_mut(e).insert(CargoConsole {
-            request_only,
-            can_send: !request_only,
-            can_approve_requests: !request_only,
-            contraband: false,
-            self_paid: false,
-            catalogue: catalogue.clone(),
-        });
+    for e in consoles {
+        setup_console(world, e, Some(catalogue.clone()));
     }
+}
+
+/// A supply or request console's state (map load, and `crate::machine_frame` without a shared
+/// `catalogue`).
+pub(crate) fn setup_console(world: &mut World, e: Entity, shared: Option<Arc<CargoStatic>>) {
+    let Some(path) = world.get::<DmObj>(e).map(|o| o.path.clone()) else {
+        return;
+    };
+    if !is_under(&path, CARGO_CONSOLE) || is_under(&path, EXPRESS_CONSOLE) {
+        return;
+    }
+    let request_only = is_under(&path, REQUEST_CONSOLE);
+    let catalogue = shared.unwrap_or_else(|| {
+        Arc::new(
+            world
+                .get_resource::<SupplyPacks>()
+                .map(|p| catalogue(p, false))
+                .unwrap_or_default(),
+        )
+    });
+    world.entity_mut(e).insert(CargoConsole {
+        request_only,
+        can_send: !request_only,
+        can_approve_requests: !request_only,
+        contraband: false,
+        self_paid: false,
+        catalogue,
+    });
 }
 
 fn plain(name: &str) -> &str {

@@ -129,6 +129,7 @@ fn convert_cmd(config: &MapLoadPlugin, mut map_dirs: Vec<PathBuf>) -> anyhow::Re
     used.extend(ss13_mapload::MEDICAL_RUNTIME_TYPES.map(str::to_owned));
     used.extend(ss13_mapload::DISPOSAL_RUNTIME_TYPES.map(str::to_owned));
     used.extend(ss13_mapload::WALLMOUNT_RUNTIME_TYPES.map(str::to_owned));
+    used.extend(ss13_mapload::FRAME_RUNTIME_TYPES.map(str::to_owned));
     used.extend(ss13_mapload::antag::CHANGELING_RUNTIME_TYPES.map(str::to_owned));
     used.extend(ss13_mapload::mobs::MOB_RUNTIME_TYPES.map(str::to_owned));
     used.extend(ss13_mapload::antag::CULT_RUNTIME_TYPES.map(str::to_owned));

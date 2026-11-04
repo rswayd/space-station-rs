@@ -48,6 +48,8 @@ const RODS: &str = "/obj/item/stack/rods";
 /// Gas containers ([`crate::atmos_machinery::damage`]).
 const CANISTER: &str = "/obj/machinery/portable_atmospherics/canister";
 const STATIONARY_TANK: &str = "/obj/machinery/atmospherics/components/tank";
+/// `/obj/structure/frame`: machine and computer frames (`crate::machine_frame`).
+const FRAME: &str = "/obj/structure/frame";
 const VENT_PUMP: &str = "/obj/machinery/atmospherics/components/unary/vent_pump";
 const SHARD: &str = "/obj/item/shard";
 
@@ -145,9 +147,17 @@ fn add_obj_state(add: On<Add<DmObj>>, objs: Query<&DmObj>, mut commands: Command
     let mut entity = commands.entity(add.entity);
     // Spawners that set these themselves (`replace_girder`, glass on a grille) win.
     entity.insert_if_new(Anchored(obj.anchored));
-    let breakable = [WINDOW, GRILLE, GIRDER, CANISTER, STATIONARY_TANK, VENT_PUMP]
-        .iter()
-        .any(|root| is_under(&obj.path, root));
+    let breakable = [
+        WINDOW,
+        GRILLE,
+        GIRDER,
+        CANISTER,
+        STATIONARY_TANK,
+        VENT_PUMP,
+        FRAME,
+    ]
+    .iter()
+    .any(|root| is_under(&obj.path, root));
     if !breakable {
         return;
     }
@@ -372,6 +382,7 @@ pub fn deconstruct(world: &mut World, target: Entity, disassembled: bool) {
         return;
     };
     let broken = world.get::<Integrity>(target).is_some_and(|i| i.broken);
+    let machine = crate::machine_frame::buildable_machine(world, target).is_some();
     if crate::atmos_machinery::damage::deconstruct(world, target, disassembled) {
         // Its gas and parts are out; a tank's group keeps the shared air.
     } else if is_under(&obj.path, WINDOW) {
@@ -404,6 +415,11 @@ pub fn deconstruct(world: &mut World, target: Entity, disassembled: bool) {
             let remains = if rod { RODS } else { obj.stack_type.as_str() };
             crate::construction::spawn_stack(world, remains, pos, 1);
         }
+    } else if is_under(&obj.path, FRAME) {
+        crate::machine_frame::frame_deconstruct(world, target, pos, disassembled);
+    }
+    if machine {
+        crate::machine_frame::on_deconstruction(world, target, pos, disassembled);
     }
     world.despawn(target);
     crate::construction::tile_changed(world, pos);

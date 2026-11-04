@@ -78,24 +78,25 @@ impl Plugin for ChargersPlugin {
 
 fn init_chargers(world: &mut World) {
     let mut query = world.query::<(Entity, &super::DmPower)>();
-    let found: Vec<(Entity, bool)> = query
+    let found: Vec<Entity> = query
         .iter(world)
-        .filter_map(|(e, dm)| {
-            if is_under(&dm.path, CELL_CHARGER) {
-                Some((e, true))
-            } else if is_under(&dm.path, RECHARGER) {
-                Some((e, false))
-            } else {
-                None
-            }
-        })
+        .filter(|(_, dm)| is_under(&dm.path, CELL_CHARGER) || is_under(&dm.path, RECHARGER))
+        .map(|(e, _)| e)
         .collect();
-    for (e, cell_charger) in found {
-        if cell_charger {
-            world.entity_mut(e).insert(CellCharger::default());
-        } else {
-            world.entity_mut(e).insert(Recharger::default());
-        }
+    for e in found {
+        setup(world, e);
+    }
+}
+
+/// The live state of a cell charger or recharger (map load and `crate::machine_frame`).
+pub(crate) fn setup(world: &mut World, e: Entity) {
+    let Some(path) = world.get::<super::DmPower>(e).map(|d| d.path.clone()) else {
+        return;
+    };
+    if is_under(&path, CELL_CHARGER) {
+        world.entity_mut(e).insert(CellCharger::default());
+    } else if is_under(&path, RECHARGER) {
+        world.entity_mut(e).insert(Recharger::default());
     }
 }
 

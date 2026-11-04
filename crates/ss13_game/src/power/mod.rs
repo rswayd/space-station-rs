@@ -296,8 +296,7 @@ fn layer(dm: &DmPower) -> u8 {
 }
 
 /// Live power state from [`DmPower`], once after map load.
-// shortcut: machines exist only from map load; machines built later need the same setup from an
-// observer once construction exists.
+// Machines built later get the same through `register_machine` (`crate::machine_frame`).
 pub(crate) fn init_power(world: &mut World) {
     let start = Instant::now();
     let mut report = PowerReport::default();
@@ -821,6 +820,62 @@ pub fn machine_power(world: &World, machine: Entity) -> Option<PowerMachine> {
         area: world.resource::<Areas>().area_at(*pos)?,
         watts: 0.0,
     })
+}
+
+/// tg `SSmachines.register_machine` + `power_change` of a machine built after map load
+/// (`crate::machine_frame`): what [`init_power`] gives a mapped machine of its type.
+pub fn register_machine(world: &mut World, machine: Entity) {
+    let (Some(dm), Some(&pos)) = (
+        world.get::<DmPower>(machine).cloned(),
+        world.get::<TilePos>(machine),
+    ) else {
+        return;
+    };
+    if !is_under(&dm.path, MACHINE_ROOT) || dm.use_power <= 0.0 {
+        return;
+    }
+    let Some(area) = world.resource::<Areas>().area_at(pos) else {
+        return;
+    };
+    let watts = if dm.use_power >= 2.0 {
+        dm.active_power_usage
+    } else {
+        dm.idle_power_usage
+    };
+    let channel = Channel::from_dm(dm.power_channel);
+    let Some(powered) = world.get_mut::<AreaPower>(area).map(|mut a| {
+        a.static_power[channel as usize] += watts;
+        a.powered(channel)
+    }) else {
+        return;
+    };
+    if let Some(mut members) = world.get_mut::<AreaMembers>(area) {
+        members.machines.push((machine, channel));
+    }
+    let mut entity = world.entity_mut(machine);
+    entity.insert(PowerMachine {
+        channel,
+        area,
+        watts,
+    });
+    if !powered {
+        entity.insert(Unpowered);
+    }
+}
+
+/// A machine taken apart: its static load and area membership go.
+pub fn unregister_machine(world: &mut World, machine: Entity) {
+    let Some(pm) = world.get::<PowerMachine>(machine).copied() else {
+        return;
+    };
+    if let Some(mut area) = world.get_mut::<AreaPower>(pm.area) {
+        let load = &mut area.static_power[pm.channel as usize];
+        *load = (*load - pm.watts).max(0.0);
+    }
+    if let Some(mut members) = world.get_mut::<AreaMembers>(pm.area) {
+        members.machines.retain(|&(e, _)| e != machine);
+    }
+    world.entity_mut(machine).remove::<PowerMachine>();
 }
 
 /// tg `/obj/machinery/proc/use_energy(joules, ignore_apc)` of `machine` from its area (grid

@@ -121,33 +121,47 @@ fn any_running(
 /// The machines on the map get their state; grinders their beaker (`Initialize(mapload)`).
 fn setup_machines(world: &mut World) {
     let mut query = world.query::<(Entity, &DmPower)>();
-    let machines: Vec<(Entity, String)> = query
+    let machines: Vec<Entity> = query
         .iter(world)
-        .map(|(e, p)| (e, p.path.clone()))
         .filter(|(_, p)| {
             [MICROWAVE_ROOT, PROCESSOR_ROOT, GRINDER_ROOT]
                 .iter()
-                .any(|root| is_under(p, root))
+                .any(|root| is_under(&p.path, root))
         })
+        .map(|(e, _)| e)
         .collect();
-    for (e, path) in machines {
-        if is_under(&path, MICROWAVE_ROOT) {
-            world.entity_mut(e).insert(Microwave::default());
-            refresh_microwave(world, e);
-        } else if is_under(&path, PROCESSOR_ROOT) {
-            world.entity_mut(e).insert(Processor::default());
-        } else {
-            let beaker = world.get::<TilePos>(e).copied().and_then(|pos| {
+    for e in machines {
+        setup_machine(world, e, true);
+    }
+}
+
+/// A microwave's, processor's or grinder's state; only a mapped grinder starts with a beaker
+/// (`reagentgrinder/Initialize(mapload)`). Also for machines built from a frame
+/// (`crate::machine_frame`).
+pub(crate) fn setup_machine(world: &mut World, e: Entity, mapload: bool) {
+    let Some(path) = world.get::<DmPower>(e).map(|p| p.path.clone()) else {
+        return;
+    };
+    if is_under(&path, MICROWAVE_ROOT) {
+        world.entity_mut(e).insert(Microwave::default());
+        refresh_microwave(world, e);
+    } else if is_under(&path, PROCESSOR_ROOT) {
+        world.entity_mut(e).insert(Processor::default());
+    } else if is_under(&path, GRINDER_ROOT) {
+        let beaker = world
+            .get::<TilePos>(e)
+            .copied()
+            .filter(|_| mapload)
+            .and_then(|pos| {
                 crate::construction::spawn_obj(world, ss13_mapload::food::GRINDER_BEAKER, pos)
             });
-            if let Some(beaker) = beaker {
-                put_inside(world, beaker, e);
-            }
-            world.entity_mut(e).insert(Grinder {
-                beaker,
-                ends_at: None,
-            });
+        if let Some(beaker) = beaker {
+            put_inside(world, beaker, e);
         }
+        world.entity_mut(e).insert(Grinder {
+            beaker,
+            ends_at: None,
+        });
     }
 }
 

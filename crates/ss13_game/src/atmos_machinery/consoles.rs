@@ -50,14 +50,24 @@ pub fn plugin(app: &mut App) {
 
 fn init_consoles(world: &mut World) {
     let mut q = world.query::<(Entity, &DmPower)>();
-    let found: Vec<(Entity, bool)> = q
+    let found: Vec<Entity> = q
         .iter(world)
         .filter(|(_, dm)| is_under(&dm.path, ALERT_CONSOLE))
-        .map(|(e, dm)| (e, is_under(&dm.path, STATION_ONLY)))
+        .map(|(e, _)| e)
         .collect();
-    for (e, station_only) in found {
+    for e in found {
+        setup_console(world, e);
+    }
+}
+
+/// An atmospheric alert console's state (map load and `crate::machine_frame`).
+pub(crate) fn setup_console(world: &mut World, e: Entity) {
+    let Some(path) = world.get::<DmPower>(e).map(|d| d.path.clone()) else {
+        return;
+    };
+    if is_under(&path, ALERT_CONSOLE) {
         world.entity_mut(e).insert(AtmosAlertConsole {
-            station_only,
+            station_only: is_under(&path, STATION_ONLY),
             ..default()
         });
     }
