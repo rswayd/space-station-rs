@@ -584,7 +584,9 @@ fn metastation_families() {
     let mut q = world.query::<(Entity, &DmObj, &TilePos)>();
     let mut picked: Vec<(Family, Entity, String, TilePos)> = Vec::new();
     for (e, obj, &pos) in q.iter(world) {
+        // Vendors keep their brand's canister, not the board's default parts: `vending::`.
         if let Some(f) = family(&obj.path)
+            && f != Family::Vending
             && !picked.iter().any(|p| p.0 == f)
             && buildable_machine(world, e).is_some()
         {
@@ -667,6 +669,7 @@ fn metastation_families() {
                 e.contains::<ss13_game::atmos_machinery::consoles::AtmosAlertConsole>()
             }
             Family::Autolathe => e.contains::<ss13_game::science::autolathe::Autolathe>(),
+            Family::Vending => e.contains::<ss13_game::vending::Vendor>(),
         };
         assert!(live, "{fam:?}: {} has its live state", def.build_path);
         println!("{fam:?}: {path} -> {board} -> {}", def.build_path);

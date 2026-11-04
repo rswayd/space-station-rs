@@ -19,9 +19,9 @@
 //! - Boards and parts are the items put in ([`crate::stock_parts::PartOf`]): taking a machine or
 //!   frame apart gives the same items back. A built machine runs `RefreshParts` on its parts
 //!   ([`crate::stock_parts::refresh`]); an RPED exchanges them or fills a frame.
-// shortcut: a board keeps no instance state (a vendor board's brand, a thermomachine board's
-// layer), no panel sprites, no stack recipe menu (the board-in-hand right-click is tg's own
-// shortcut for frames).
+// shortcut: a board keeps no instance state but a vendor board's brand
+// (`crate::vending::refill::VendorBoard`; not a thermomachine board's layer), no panel sprites,
+// no stack recipe menu (the board-in-hand right-click is tg's own shortcut for frames).
 // shortcut: only the families in `FAMILIES` can be taken apart or built; other boards are
 // refused by frames.
 
@@ -88,9 +88,11 @@ pub enum Family {
     CargoConsole,
     AtmosAlert,
     Autolathe,
+    /// Vendors with a refill canister type (`crate::vending::refill`).
+    Vending,
 }
 
-const FAMILIES: [(&str, Family); 13] = [
+const FAMILIES: [(&str, Family); 14] = [
     (CELL_CHARGER, Family::Charger),
     (RECHARGER, Family::Charger),
     (crate::kitchen::MICROWAVE_ROOT, Family::Kitchen),
@@ -107,6 +109,7 @@ const FAMILIES: [(&str, Family); 13] = [
         Family::AtmosAlert,
     ),
     (crate::science::autolathe::AUTOLATHE_ROOT, Family::Autolathe),
+    (crate::vending::VENDING_ROOT, Family::Vending),
 ];
 
 /// The covered family of a machine type (`None`: not built or taken apart here).
@@ -206,6 +209,10 @@ fn is_frame(world: &World, e: Entity) -> Option<bool> {
 pub fn buildable_machine(world: &World, e: Entity) -> Option<Family> {
     let path = &world.get::<DmObj>(e)?.path;
     let fam = family(path)?;
+    // `if(!refill_canister) circuit = null`.
+    if fam == Family::Vending && !crate::vending::refill::has_circuit(world, e) {
+        return None;
+    }
     let has_board = world
         .get::<ComponentParts>(e)
         .is_some_and(|p| !p.parts().is_empty())
@@ -339,6 +346,9 @@ pub fn rped_interaction(world: &mut World, client: Entity, rped: Entity, target:
             // `istype(attacked_object, /obj/machinery/computer)`.
             return false;
         }
+        if fam == Family::Vending {
+            return crate::vending::refill::rped_restock(world, client, rped, target);
+        }
         crate::stock_parts::exchange_parts(world, client, rped, target);
         true
     } else {
@@ -387,8 +397,9 @@ fn machine_tool(
             }
             true
         }
-        // The thermomachine's own `screwdriver_act` (`atmos_machinery::thermo`).
-        ToolKind::Screwdriver if fam == Family::Thermo => false,
+        // The thermomachine's own `screwdriver_act` (`atmos_machinery::thermo`), the vendors'
+        // (`crate::construction`: only while anchored).
+        ToolKind::Screwdriver if matches!(fam, Family::Thermo | Family::Vending) => false,
         ToolKind::Screwdriver => {
             if busy {
                 tell(world, client, Span::Warning, "Машина ещё работает!");
@@ -421,6 +432,12 @@ fn machine_tool(
             true
         }
         ToolKind::Crowbar if computer => false,
+        ToolKind::Crowbar
+            if fam == Family::Vending
+                && crate::vending::custom::asks_before_crowbar(world, actor, machine) =>
+        {
+            true
+        }
         ToolKind::Crowbar => {
             if busy {
                 tell(world, client, Span::Warning, "Машина ещё работает!");
@@ -706,6 +723,9 @@ fn install_board(
     attach(world, board, frame);
     let needed = if computer {
         Vec::new()
+    } else if let Some((_, parts)) = crate::vending::refill::board_override(world, board) {
+        // A vendor board takes its brand's canister (`set_type`).
+        parts
     } else {
         def.req_components.clone()
     };
@@ -958,8 +978,13 @@ pub fn build_machine(
     facing: Option<Facing>,
 ) -> Option<Entity> {
     let def = board_def(world, &board)?;
-    let Some(machine) = spawn_obj(world, &def.build_path, pos) else {
-        warn!("frame at {pos:?}: no prototype for {}", def.build_path);
+    // A vendor board builds its brand.
+    let build_path = parts
+        .iter()
+        .find_map(|&p| crate::vending::refill::board_override(world, p))
+        .map_or(def.build_path, |(path, _)| path);
+    let Some(machine) = spawn_obj(world, &build_path, pos) else {
+        warn!("frame at {pos:?}: no prototype for {build_path}");
         return None;
     };
     if let Some(facing) = facing {
@@ -994,6 +1019,7 @@ pub fn setup_built(world: &mut World, machine: Entity) {
         Family::CargoConsole => crate::cargo::console::setup_console(world, machine, None),
         Family::AtmosAlert => crate::atmos_machinery::consoles::setup_console(world, machine),
         Family::Autolathe => crate::science::autolathe::setup(world, machine),
+        Family::Vending => crate::vending::refill::setup_built(world, machine),
     }
 }
 

@@ -104,6 +104,7 @@ pub fn examine_lines(world: &World, examiner: Entity, target: Entity) -> (String
     crate::botany::examine_lines(world, target, &mut lines);
     crate::atmos_machinery::examine_lines(world, target, &mut lines);
     crate::machine_frame::examine_lines(world, target, &mut lines);
+    crate::vending::examine_lines(world, target, &mut lines);
     crate::wallmount::examine_lines(world, target, &mut lines);
     crate::security_level::examine_lines(world, target, &mut lines);
     (name, lines)

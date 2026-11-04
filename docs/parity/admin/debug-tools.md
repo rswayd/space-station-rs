@@ -48,3 +48,9 @@ Line profiling (старт/стоп/просмотр), профайлер BYOND,
 
 - **Код:** [`Start Line Profiling`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/verbs/debug.dm#L728)
 - **Статус в ss13-rs:** ❌ нет
+
+### Автомат подтипов (subtype vendor)
+Админский автомат, бесплатно выдающий все подтипы заданного типа; тип меняется правым кликом (только с правами R_SERVER/R_DEBUG). Общая механика автомата — ../cargo/vending.md.
+
+- **Код:** [`/obj/machinery/vending/subtype_vendor`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/vending/subtype.dm#L2)
+- **Статус в ss13-rs:** ❌ нет

@@ -71,3 +71,9 @@ _«Броня одежды» описано в [../combat/armor.md](../combat/ar
 - **Статус в ss13-rs:** ❌ нет
 
 _«Наборы снаряжения (`/datum/outfit`)» описано в [../round/outfits.md](../round/outfits.md)._
+
+### Меню перекраски GAGS
+`/datum/greyscale_modify_menu`: окно выбора цветов GAGS-предмета (предпросмотр, слои), которым торговые автоматы перекрашивают выдаваемые `colorable` товары, а админы — любые GAGS-атомы.
+
+- **Код:** [`/datum/greyscale_modify_menu`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/greyscale_modify_menu.dm#L3), [`_vend_greyscale()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/vending/vendor/ui_data.dm#L178)
+- **Статус в ss13-rs:** ❌ нет — автоматы выдают товары в цветах по умолчанию (`colorable` всегда false)

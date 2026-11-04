@@ -222,7 +222,7 @@ impl Inventory {
     }
 
     /// Where tg's `get_idcard(hand_first = TRUE)` looks: active hand, other hand, ID slot.
-    fn id_search(&self) -> impl Iterator<Item = Entity> {
+    pub fn id_search(&self) -> impl Iterator<Item = Entity> {
         [
             self.hands[self.active],
             self.hands[1 - self.active],

@@ -24,7 +24,7 @@ SMG-дизейблер и снайперская винтовка становя
 Свой ассортимент автомата СБ (наручники, стяжки, флешки, светошумовые...), запрет взаимодействия инструментами с «ожившим» автоматом (с ai_controller), премиум-цена RLD.
 
 - **Код:** [`/obj/machinery/vending/security`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/balance/code/vending_security.dm#L1), [`/obj/machinery/vending/tool_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/balance/code/vending.dm#L1), [`/obj/item/construction/rld`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/balance/code/tools.dm#L2)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/vending.rs`, `crates/ss13_mapload/src/vending.rs`: ассортимент приходит из DM, но нет оживших автоматов, экономики и механик большинства товаров
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/vending/`, `crates/ss13_mapload/src/vending.rs`: ассортимент и премиум-цены приходят из DM, оплата работает; запрет инструментов касается только «оживших» автоматов — ../mobs/mob-ai.md (их нет); механики самих товаров — в их разделах
 
 ### Обыск карманов
 Тихо вытащенный из кармана предмет попадает в руки обыскивающего, с логированием.
