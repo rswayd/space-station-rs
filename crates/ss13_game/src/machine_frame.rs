@@ -16,12 +16,12 @@
 //! - A finished frame spawns the board's `build_path` as the map would and gives it the setup
 //!   map load gives its family ([`setup_built`]): power, the family's live state, the pipe graph
 //!   for thermomachines.
-// shortcut: parts are kept as their types (tg regenerates stock part datums the same way; power
-// cells and other object parts lose their charge or contents), and a board keeps no instance
-// state (a vendor board's brand, a thermomachine board's layer).
-// shortcut: no RPED, no `RefreshParts` from better parts (built machines run with tier 1
-// numbers like mapped ones), no panel sprites, no stack recipe menu (the board-in-hand
-// right-click is tg's own shortcut for frames).
+//! - Boards and parts are the items put in ([`crate::stock_parts::PartOf`]): taking a machine or
+//!   frame apart gives the same items back. A built machine runs `RefreshParts` on its parts
+//!   ([`crate::stock_parts::refresh`]); an RPED exchanges them or fills a frame.
+// shortcut: a board keeps no instance state (a vendor board's brand, a thermomachine board's
+// layer), no panel sprites, no stack recipe menu (the board-in-hand right-click is tg's own
+// shortcut for frames).
 // shortcut: only the families in `FAMILIES` can be taken apart or built; other boards are
 // refused by frames.
 
@@ -34,6 +34,7 @@ use ss13_world::{Mover, SpatialIndex};
 
 use crate::construction::{Job, PanelOpen, spawn_obj, spawn_stack, tile_changed, turf_at};
 use crate::obj_damage::{Anchored, Integrity, ObjState, is_under, set_anchored, set_icon_state};
+use crate::stock_parts::{ComponentParts, attach, detach};
 use crate::storage::{Stored, take_out};
 use crate::tools::{Actor, DoAfter, Stack, ToolKind, tell, tool_of, use_tool};
 
@@ -86,9 +87,10 @@ pub enum Family {
     RdConsole,
     CargoConsole,
     AtmosAlert,
+    Autolathe,
 }
 
-const FAMILIES: [(&str, Family); 12] = [
+const FAMILIES: [(&str, Family); 13] = [
     (CELL_CHARGER, Family::Charger),
     (RECHARGER, Family::Charger),
     (crate::kitchen::MICROWAVE_ROOT, Family::Kitchen),
@@ -104,6 +106,7 @@ const FAMILIES: [(&str, Family); 12] = [
         crate::atmos_machinery::consoles::ALERT_CONSOLE,
         Family::AtmosAlert,
     ),
+    (crate::science::autolathe::AUTOLATHE_ROOT, Family::Autolathe),
 ];
 
 /// The covered family of a machine type (`None`: not built or taken apart here).
@@ -118,23 +121,14 @@ pub fn family(path: &str) -> Option<Family> {
         .map(|&(_, f)| f)
 }
 
-/// A frame's board and parts; its `state` is the frame's [`ObjState`].
+/// A frame's board and what it still needs; its `state` is the frame's [`ObjState`], the board
+/// and parts put in are its [`ComponentParts`].
 #[derive(Component, Clone, Debug, Default, PartialEq)]
 pub struct Frame {
     /// The installed board's type.
     pub board: Option<String>,
     /// Machine frames: what is still needed (`req_components` counting down).
     pub needed: Vec<CircuitPart>,
-    /// Machine frames: the non-stack parts put in, by type.
-    pub parts: Vec<String>,
-}
-
-/// A built machine's `component_parts` besides stacks: its board and non-stack parts, by type.
-/// Mapped machines have none and hold their board's default parts.
-#[derive(Component, Clone, Debug, PartialEq)]
-pub struct MachineParts {
-    pub board: String,
-    pub parts: Vec<String>,
 }
 
 /// A timed frame or machine step, with the state it started from.
@@ -177,7 +171,7 @@ fn board_def(world: &World, board: &str) -> Option<DmCircuit> {
 }
 
 /// A prototype's name for messages (`singular_name` of stacks).
-fn type_name(world: &World, path: &str) -> String {
+pub(crate) fn type_name(world: &World, path: &str) -> String {
     let proto = world.get_resource::<Prototypes>().and_then(|p| p.get(path));
     let singular = proto
         .and_then(|p| p.get::<DmStack>())
@@ -212,7 +206,9 @@ fn is_frame(world: &World, e: Entity) -> Option<bool> {
 pub fn buildable_machine(world: &World, e: Entity) -> Option<Family> {
     let path = &world.get::<DmObj>(e)?.path;
     let fam = family(path)?;
-    let has_board = world.get::<MachineParts>(e).is_some()
+    let has_board = world
+        .get::<ComponentParts>(e)
+        .is_some_and(|p| !p.parts().is_empty())
         || world
             .get::<DmMachine>(e)
             .is_some_and(|m| board_def(world, &m.circuit).is_some());
@@ -235,7 +231,7 @@ pub fn held_board_frame(world: &World, mob: Entity, held: Entity) -> Option<bool
         })
 }
 
-fn panel_open(world: &World, e: Entity) -> bool {
+pub(crate) fn panel_open(world: &World, e: Entity) -> bool {
     world.get::<PanelOpen>(e).is_some_and(|p| p.0)
         || world
             .get::<crate::atmos_machinery::devices::ThermoMachine>(e)
@@ -264,6 +260,12 @@ pub fn item_interaction(
     } else {
         tool_of(world, held).map(|t| t.0)
     };
+    if !combat
+        && crate::stock_parts::is_rped(world, held)
+        && rped_interaction(world, client, held, target)
+    {
+        return true;
+    }
     if let Some(computer) = is_frame(world, target) {
         if let Some(kind) = tool
             && frame_tool(world, actor, kind, target, computer)
@@ -285,6 +287,54 @@ pub fn item_interaction(
     false
 }
 
+/// An RPED on a machine (`exchange_parts`) or a machine frame (`install_circuit_from_part_replacer`,
+/// `install_parts_from_part_replacer`). True when the click was its.
+pub fn rped_interaction(world: &mut World, client: Entity, rped: Entity, target: Entity) -> bool {
+    if let Some(computer) = is_frame(world, target) {
+        if computer {
+            return false;
+        }
+        match state(world, target) {
+            FRAME_WIRED => {
+                let Some(board) = crate::stock_parts::board_in(world, rped, false) else {
+                    return false;
+                };
+                let path = item_path(world, board).unwrap_or_default();
+                if install_board(world, client, board, &path, target, false) {
+                    rped_fill(world, client, rped, target);
+                }
+                true
+            }
+            FRAME_BOARD => {
+                rped_fill(world, client, rped, target);
+                true
+            }
+            _ => false,
+        }
+    } else if let Some(fam) = buildable_machine(world, target) {
+        if matches!(
+            fam,
+            Family::RdConsole | Family::CargoConsole | Family::AtmosAlert
+        ) {
+            // `istype(attacked_object, /obj/machinery/computer)`.
+            return false;
+        }
+        crate::stock_parts::exchange_parts(world, client, rped, target);
+        true
+    } else {
+        false
+    }
+}
+
+fn rped_fill(world: &mut World, client: Entity, rped: Entity, frame: Entity) {
+    let Some(mut f) = world.get::<Frame>(frame).cloned() else {
+        return;
+    };
+    if crate::stock_parts::install_into_frame(world, client, rped, frame, &mut f.needed) {
+        world.entity_mut(frame).insert(f);
+    }
+}
+
 /// `screwdriver_act`/`crowbar_act` of the covered machines.
 fn machine_tool(
     world: &mut World,
@@ -299,7 +349,10 @@ fn machine_tool(
     // `if(operating) balloon_alert("still operating!")` and the chargers' `charging` checks.
     let busy = world
         .get::<crate::kitchen::Grinder>(machine)
-        .is_some_and(|g| g.ends_at.is_some());
+        .is_some_and(|g| g.ends_at.is_some())
+        || world
+            .get::<crate::science::autolathe::Autolathe>(machine)
+            .is_some_and(|a| a.busy);
     match kind {
         ToolKind::Screwdriver if computer => {
             if use_tool(
@@ -480,8 +533,8 @@ fn frame_tool(
         ToolKind::Crowbar if !computer => {
             if st == FRAME_BOARD {
                 let had_parts = world
-                    .get::<Frame>(frame)
-                    .is_some_and(|f| !f.parts.is_empty());
+                    .get::<ComponentParts>(frame)
+                    .is_some_and(|p| p.parts().len() > 1);
                 dump_frame(world, frame);
                 let text = if had_parts {
                     "плата и детали извлечены"
@@ -591,6 +644,7 @@ fn frame_item(
     false
 }
 
+/// True when the board went in.
 fn install_board(
     world: &mut World,
     client: Entity,
@@ -598,26 +652,26 @@ fn install_board(
     path: &str,
     frame: Entity,
     computer: bool,
-) {
+) -> bool {
     let st = state(world, frame);
     let def = board_def(world, path);
     if computer {
         if st != FRAME_EMPTY {
             tell(world, client, Span::Warning, "Плата уже установлена!");
-            return;
+            return false;
         }
     } else {
         if st == FRAME_EMPTY {
             tell(world, client, Span::Warning, "Сначала проложите кабели!");
-            return;
+            return false;
         }
         if st == FRAME_BOARD {
             tell(world, client, Span::Warning, "Плата уже установлена!");
-            return;
+            return false;
         }
         if def.as_ref().is_some_and(|d| d.needs_anchored) && !anchored(world, frame) {
             tell(world, client, Span::Warning, "Рама должна быть закреплена!");
-            return;
+            return false;
         }
     }
     // `istype(board, board_type) && board.build_path`; a type this port does not build yet is
@@ -627,9 +681,9 @@ fn install_board(
     });
     let Some(def) = def.filter(|_| fits) else {
         tell(world, client, Span::Warning, "Неподходящая плата!");
-        return;
+        return false;
     };
-    world.despawn(board);
+    attach(world, board, frame);
     let needed = if computer {
         Vec::new()
     } else {
@@ -638,7 +692,6 @@ fn install_board(
     world.entity_mut(frame).insert(Frame {
         board: Some(path.to_owned()),
         needed,
-        parts: Vec::new(),
     });
     set_state(
         world,
@@ -656,6 +709,7 @@ fn install_board(
         );
     }
     tell(world, client, Span::Notice, "плата установлена");
+    true
 }
 
 /// `machine/add_part`: the held part or stack into what the frame still needs.
@@ -685,8 +739,7 @@ fn add_part(world: &mut World, actor: Actor, held: Entity, frame: Entity) {
         slot.amount -= used;
     } else {
         slot.amount -= 1;
-        f.parts.push(path);
-        world.despawn(held);
+        attach(world, held, frame);
     }
     world.entity_mut(frame).insert(f);
     tell(
@@ -734,7 +787,7 @@ fn dump_frame(world: &mut World, frame: Entity) {
     else {
         return;
     };
-    drop_frame_contents(world, pos, &f);
+    drop_frame_contents(world, frame, pos, &f);
     let computer = is_frame(world, frame) == Some(true);
     set_state(
         world,
@@ -743,7 +796,7 @@ fn dump_frame(world: &mut World, frame: Entity) {
     );
 }
 
-fn drop_frame_contents(world: &mut World, pos: TilePos, f: &Frame) {
+fn drop_frame_contents(world: &mut World, frame: Entity, pos: TilePos, f: &Frame) {
     let Some(board) = &f.board else {
         return;
     };
@@ -761,10 +814,13 @@ fn drop_frame_contents(world: &mut World, pos: TilePos, f: &Frame) {
             spawn_stack(world, &req.path, pos, req.amount.saturating_sub(left));
         }
     }
-    for part in &f.parts {
-        spawn_obj(world, part, pos);
+    let parts: Vec<Entity> = world
+        .get::<ComponentParts>(frame)
+        .map(|p| p.parts().to_vec())
+        .unwrap_or_default();
+    for part in parts {
+        detach(world, part, pos);
     }
-    spawn_obj(world, board, pos);
 }
 
 /// tg `/obj/structure/frame/atom_deconstruct` (from [`crate::obj_damage::deconstruct`]):
@@ -792,7 +848,7 @@ pub fn frame_deconstruct(world: &mut World, frame: Entity, pos: TilePos, disasse
         spawn_stack(world, CABLE_COIL, pos, FRAME_CABLE);
     }
     if let Some(f) = world.get::<Frame>(frame).cloned() {
-        drop_frame_contents(world, pos, &f);
+        drop_frame_contents(world, frame, pos, &f);
     }
     spawn_stack(world, IRON, pos, FRAME_SHEETS);
 }
@@ -835,8 +891,9 @@ fn finalize_machine(world: &mut World, actor: Actor, frame: Entity) {
         return;
     }
     let anchored_now = anchored(world, frame);
-    world.despawn(frame);
-    if build_machine(world, pos, board, f.parts, anchored_now, None).is_some() {
+    let parts = frame_parts(world, frame);
+    if build_machine(world, pos, board, parts, anchored_now, None).is_some() {
+        world.despawn(frame);
         tell(world, client, Span::Notice, "машина собрана");
     }
 }
@@ -855,19 +912,28 @@ fn finalize_computer(world: &mut World, actor: Actor, frame: Entity) {
         return;
     };
     let facing = world.get::<Facing>(frame).copied();
-    world.despawn(frame);
-    if build_machine(world, pos, board, Vec::new(), true, facing).is_some() {
+    let parts = frame_parts(world, frame);
+    if build_machine(world, pos, board, parts, true, facing).is_some() {
+        world.despawn(frame);
         tell(world, client, Span::Notice, "монитор подключён");
     }
 }
 
+fn frame_parts(world: &World, frame: Entity) -> Vec<Entity> {
+    world
+        .get::<ComponentParts>(frame)
+        .map(|p| p.parts().to_vec())
+        .unwrap_or_default()
+}
+
 /// The board's machine on `pos` (`new circuit.build_path(loc)`, `set_anchored`,
-/// `on_construction`): spawned as the map would, with its parts and its family's setup.
+/// `on_construction`): spawned as the map would, with `parts` (its board item included) and its
+/// family's setup, then `RefreshParts`.
 pub fn build_machine(
     world: &mut World,
     pos: TilePos,
     board: String,
-    parts: Vec<String>,
+    parts: Vec<Entity>,
     anchored: bool,
     facing: Option<Facing>,
 ) -> Option<Entity> {
@@ -880,10 +946,11 @@ pub fn build_machine(
         world.entity_mut(machine).insert(facing);
     }
     set_anchored(world, machine, anchored);
-    world
-        .entity_mut(machine)
-        .insert(MachineParts { board, parts });
+    for part in parts {
+        attach(world, part, machine);
+    }
     setup_built(world, machine);
+    crate::stock_parts::refresh(world, machine);
     tile_changed(world, pos);
     Some(machine)
 }
@@ -906,22 +973,8 @@ pub fn setup_built(world: &mut World, machine: Entity) {
         Family::RdConsole => crate::science::console::setup_console(world, machine, None),
         Family::CargoConsole => crate::cargo::console::setup_console(world, machine, None),
         Family::AtmosAlert => crate::atmos_machinery::consoles::setup_console(world, machine),
+        Family::Autolathe => crate::science::autolathe::setup(world, machine),
     }
-}
-
-/// A machine's board and non-stack parts: its [`MachineParts`], else its board's defaults.
-fn parts_of(world: &World, machine: Entity) -> Option<MachineParts> {
-    if let Some(parts) = world.get::<MachineParts>(machine) {
-        return Some(parts.clone());
-    }
-    let board = world.get::<DmMachine>(machine)?.circuit.clone();
-    let def = board_def(world, &board)?;
-    let parts = def
-        .default_parts
-        .iter()
-        .flat_map(|p| std::iter::repeat_n(p.path.clone(), p.amount as usize))
-        .collect();
-    Some(MachineParts { board, parts })
 }
 
 /// Dense non-mob objects on `pos` other than `except` (tg `is_blocked_turf(TRUE, ignore_atoms)`).
@@ -941,7 +994,15 @@ fn blocked_except(world: &World, pos: TilePos, except: &[Entity]) -> bool {
 /// it is despawned): out of its area's power, its contents onto the tile (`dump_contents`), a
 /// frame (`spawn_frame`), its board, parts and the stacks its board needs.
 pub fn on_deconstruction(world: &mut World, machine: Entity, pos: TilePos, disassembled: bool) {
-    let Some(parts) = parts_of(world, machine) else {
+    if !crate::stock_parts::ensure_parts(world, machine) {
+        return;
+    }
+    let parts = frame_parts(world, machine);
+    let Some((board_item, board)) = parts.iter().find_map(|&e| {
+        item_path(world, e)
+            .filter(|p| is_under(p, BOARD_ROOT))
+            .map(|p| (e, p))
+    }) else {
         return;
     };
     crate::power::unregister_machine(world, machine);
@@ -952,7 +1013,8 @@ pub fn on_deconstruction(world: &mut World, machine: Entity, pos: TilePos, disas
     for item in contents {
         take_out(world, item, pos);
     }
-    let Some(def) = board_def(world, &parts.board) else {
+    crate::science::autolathe::drop_sheets(world, machine, pos);
+    let Some(def) = board_def(world, &board) else {
         return;
     };
     let path = path_of(world, machine).unwrap_or_default();
@@ -975,9 +1037,10 @@ pub fn on_deconstruction(world: &mut World, machine: Entity, pos: TilePos, disas
             COMPUTER_GLASSED
         };
         world.entity_mut(frame).insert(Frame {
-            board: Some(parts.board),
+            board: Some(board),
             ..default()
         });
+        attach(world, board_item, frame);
         set_state(world, frame, st);
         return;
     }
@@ -998,10 +1061,9 @@ pub fn on_deconstruction(world: &mut World, machine: Entity, pos: TilePos, disas
             }
         }
     }
-    for part in &parts.parts {
-        spawn_obj(world, part, pos);
+    for part in parts {
+        detach(world, part, pos);
     }
-    spawn_obj(world, &parts.board, pos);
     for req in def
         .req_components
         .iter()

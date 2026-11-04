@@ -32,6 +32,7 @@ impl Plugin for ScienceClientPlugin {
     fn build(&self, app: &mut App) {
         app.register_ui_view::<TechwebUi>()
             .register_ui_view::<FabricatorUi>()
+            .register_ui_view::<AutolatheUi>()
             .register_ui_view::<DestructiveAnalyzerUi>();
     }
 }
@@ -553,7 +554,7 @@ impl ClientUi for FabricatorUi {
     const HEIGHT: f32 = 600.0;
 
     fn content(st: &FabricatorStatic, data: &FabricatorData) -> impl Scene {
-        fabricator_view(st, data, &UiLocalState::default())
+        fabricator_view(st, data, &UiLocalState::default(), FABRICATOR_ACTS)
     }
 
     fn content_local(
@@ -561,7 +562,76 @@ impl ClientUi for FabricatorUi {
         data: &FabricatorData,
         local: &UiLocalState,
     ) -> impl Scene {
-        fabricator_view(st, data, local)
+        fabricator_view(st, data, local, FABRICATOR_ACTS)
+    }
+}
+
+/// The acts a fabrication window sends: printing (with its amount parameter) and ejecting.
+#[derive(Clone, Copy)]
+pub(crate) struct FabActs {
+    build: &'static str,
+    amount: &'static str,
+    remove: &'static str,
+}
+
+const FABRICATOR_ACTS: FabActs = FabActs {
+    build: BUILD,
+    amount: AMOUNT,
+    remove: REMOVE_MAT,
+};
+const AUTOLATHE_ACTS: FabActs = FabActs {
+    build: MAKE,
+    amount: MULTIPLIER,
+    remove: EJECT,
+};
+
+// --- Autolathe -----------------------------------------------------------------------------
+
+impl ClientUi for AutolatheUi {
+    const WIDTH: f32 = 800.0;
+    const HEIGHT: f32 = 600.0;
+
+    fn content(st: &AutolatheStatic, data: &AutolatheData) -> impl Scene {
+        autolathe_view(st, data, &UiLocalState::default())
+    }
+
+    fn content_local(
+        st: &AutolatheStatic,
+        data: &AutolatheData,
+        local: &UiLocalState,
+    ) -> impl Scene {
+        autolathe_view(st, data, local)
+    }
+}
+
+/// `Autolathe.tsx` on the Fabricator layout: the designs at the current efficiency, the hacked
+/// ones while hacked, and the storage total.
+fn autolathe_view(
+    st: &AutolatheStatic,
+    data: &AutolatheData,
+    local: &UiLocalState,
+) -> impl Scene + use<> {
+    let fab = st.priced(data.efficiency);
+    let fdata = FabricatorData {
+        materials: data.materials.clone(),
+        on_hold: false,
+        busy: data.active,
+        material_maximum: data.materials_max,
+        researched: st.shown(data.hacked),
+    };
+    let total = format!(
+        "Всего материалов: {}/{} листов",
+        sheets_text(f64::from(data.material_total) / fab.sheet_amount),
+        sheets_text(f64::from(data.materials_max) / fab.sheet_amount),
+    );
+    bsn! {
+        Node { flex_direction: FlexDirection::Column, width: percent(100), height: percent(100) }
+        Children [
+            Node { margin: UiRect::all(px(4)) } Children [ Text(total) Name("autolathe: total") ]
+            --
+            Node { flex_grow: 1.0, min_height: px(0) }
+            Children [ {EntityScene(fabricator_view(&fab, &fdata, local, AUTOLATHE_ACTS))} ]
+        ]
     }
 }
 
@@ -588,6 +658,7 @@ fn fabricator_view(
     st: &FabricatorStatic,
     data: &FabricatorData,
     local: &UiLocalState,
+    acts: FabActs,
 ) -> impl Scene + use<> {
     let designs: Vec<&FabDesign> = data
         .researched
@@ -633,7 +704,10 @@ fn fabricator_view(
         .filter(|d| selected == ALL_CATEGORY || top_categories(d).contains(&selected))
         .collect();
     shown.sort_by(|a, b| a.name.cmp(&b.name));
-    let rows: Vec<_> = shown.into_iter().map(|d| recipe(st, data, d)).collect();
+    let rows: Vec<_> = shown
+        .into_iter()
+        .map(|d| recipe(st, data, d, acts))
+        .collect();
     let busy = data.busy.then(|| {
         EntityScene(bsn! {
             @Dimmer
@@ -680,7 +754,7 @@ fn fabricator_view(
                 ]
                 --
                 @StackItem
-                Children [ @Section Children [ {EntityScene(material_bar(st, data))} ] ]
+                Children [ @Section Children [ {EntityScene(material_bar_with(st, data, acts.remove))} ] ]
             ]
             --
             {on_hold}
@@ -702,12 +776,17 @@ fn cost_text(st: &FabricatorStatic, design: &FabDesign, amount: u32) -> String {
 }
 
 /// `Recipe`: the design (prints one), `x5`, `x10` and the maximum.
-fn recipe(st: &FabricatorStatic, data: &FabricatorData, design: &FabDesign) -> impl Scene + use<> {
+fn recipe(
+    st: &FabricatorStatic,
+    data: &FabricatorData,
+    design: &FabDesign,
+    acts: FabActs,
+) -> impl Scene + use<> {
     let can_print = data.can_print(design, 1);
     let build = |amount: u32| {
         ActParams(vec![
             (DESIGN_PATH.to_owned(), design.path.clone()),
-            (AMOUNT.to_owned(), amount.to_string()),
+            (acts.amount.to_owned(), amount.to_string()),
         ])
     };
     let max = data.max_prints(design);
@@ -717,7 +796,7 @@ fn recipe(st: &FabricatorStatic, data: &FabricatorData, design: &FabDesign) -> i
         EntityScene(bsn! {
             @ss13_ui_kit::Button { @content: label, @compact: true }
             ss13_ui_kit::Button { color: UiColor::Transparent, disabled: disabled }
-            Act({BUILD.to_owned()})
+            Act({acts.build.to_owned()})
             params
         })
     };
@@ -745,7 +824,7 @@ fn recipe(st: &FabricatorStatic, data: &FabricatorData, design: &FabDesign) -> i
             @buttons_alt: buttons,
         }
         ImageButton { disabled: {!can_print} }
-        Act({BUILD.to_owned()})
+        Act({acts.build.to_owned()})
         params
         button_name
         Children [ Text(name) ]
@@ -754,6 +833,14 @@ fn recipe(st: &FabricatorStatic, data: &FabricatorData, design: &FabDesign) -> i
 
 /// `MaterialAccessBar`: each material's sheets with eject buttons.
 pub(crate) fn material_bar(st: &FabricatorStatic, data: &FabricatorData) -> impl Scene + use<> {
+    material_bar_with(st, data, REMOVE_MAT)
+}
+
+fn material_bar_with(
+    st: &FabricatorStatic,
+    data: &FabricatorData,
+    remove: &'static str,
+) -> impl Scene + use<> {
     let docks: Vec<_> = st
         .materials
         .iter()
@@ -778,7 +865,7 @@ pub(crate) fn material_bar(st: &FabricatorStatic, data: &FabricatorData) -> impl
                     bsn! {
                         @ss13_ui_kit::Button { @content: {format!("×{amount}")}, @compact: true }
                         ss13_ui_kit::Button { color: UiColor::Transparent, disabled: disabled }
-                        Act({REMOVE_MAT.to_owned()})
+                        Act({remove.to_owned()})
                         params
                     }
                 })

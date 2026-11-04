@@ -17,7 +17,8 @@
 //!   (`allowed()` is TRUE for silicons): an internal ID with every job's access.
 //! - The recharging station: a click with an empty hand opens or closes it (tg `toggle_open`);
 //!   closing takes the cyborg on its tile in, and while closed and powered it charges the cell
-//!   by tg's `recharge_speed` (two tier 1 capacitors, a high-capacity cell: 1 kW). Walking out
+//!   by tg's `recharge_speed` (`5e-3 * capacitor tiers * cell maxcharge`; a mapped one has two
+//!   tier 1 capacitors and a high-capacity cell: 1 kW). Walking out
 //!   opens it (tg `relaymove`).
 // shortcut: no cyborg HUD (the human slots are shown; only the hands and the back slot work),
 // no lamp, ion thrusters, model transform animation, skins, upgrades, emag modules, lockdown,
@@ -550,15 +551,30 @@ fn station_clicks(world: &mut World, mut clicks: Local<MessageCursor<ClickResolv
     }
 }
 
+/// tg `recharge_station/RefreshParts`: `5e-3 * tier` per capacitor, times each cell's
+/// `maxcharge`, watts.
+pub fn recharge_speed(parts: &crate::stock_parts::PartRatings) -> f64 {
+    let caps: f64 = parts
+        .tiers(crate::stock_parts::PartKind::Capacitor)
+        .map(|t| 5e-3 * f64::from(t))
+        .sum();
+    parts.cells.iter().fold(caps, |speed, max| speed * max)
+}
+
 /// tg `recharge_station/process` -> `robot/charge`: the cell fills by `recharge_speed`; an
 /// occupant who left opens the station (`relaymove`).
 fn charge_occupants(
     time: Res<Time>,
-    mut stations: Query<(&mut RechargeStation, &TilePos, Has<Unpowered>)>,
+    mut stations: Query<(
+        &mut RechargeStation,
+        &TilePos,
+        Has<Unpowered>,
+        Option<&crate::stock_parts::PartRatings>,
+    )>,
     mut borgs: Query<(&mut Cyborg, &TilePos)>,
 ) {
     let dt = time.delta_secs_f64();
-    for (mut station, pos, unpowered) in &mut stations {
+    for (mut station, pos, unpowered, parts) in &mut stations {
         let Some(occupant) = station.occupant else {
             continue;
         };
@@ -576,7 +592,9 @@ fn charge_occupants(
         if unpowered {
             continue;
         }
-        cyborg.charge = (cyborg.charge + RECHARGE_SPEED * dt).min(cyborg.max_charge);
+        // A mapped station without refreshed parts has its board's defaults.
+        let speed = parts.map_or(RECHARGE_SPEED, recharge_speed);
+        cyborg.charge = (cyborg.charge + speed * dt).min(cyborg.max_charge);
     }
 }
 

@@ -270,8 +270,20 @@ pub fn catalogue(
             icon: icons.and_then(|icons| icons.designs.get(i).copied().flatten()),
         });
     }
-    let materials = db
-        .materials
+    (
+        FabricatorStatic {
+            fab_name: name.to_owned(),
+            materials: material_infos(db, icons),
+            designs,
+            sheet_amount: SHEET_MATERIAL_AMOUNT,
+        },
+        ids,
+    )
+}
+
+/// `mat_container.ui_static_data`: every silo material with its color and sheet icon.
+pub(crate) fn material_infos(db: &ResearchDb, icons: Option<&ResearchIcons>) -> Vec<MaterialInfo> {
+    db.materials
         .iter()
         .enumerate()
         .map(|(i, m)| MaterialInfo {
@@ -279,16 +291,7 @@ pub fn catalogue(
             color: m.color.as_deref().and_then(parse_color),
             icon: icons.and_then(|icons| icons.materials.get(i).copied().flatten()),
         })
-        .collect();
-    (
-        FabricatorStatic {
-            fab_name: name.to_owned(),
-            materials,
-            designs,
-            sheet_amount: SHEET_MATERIAL_AMOUNT,
-        },
-        ids,
-    )
+        .collect()
 }
 
 pub(crate) fn parse_color(hex: &str) -> Option<[u8; 4]> {

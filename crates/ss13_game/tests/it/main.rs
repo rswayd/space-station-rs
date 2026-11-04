@@ -48,6 +48,7 @@ mod security;
 mod shuttle;
 mod silicon;
 mod sound;
+mod stock_parts;
 mod storage;
 mod surfaces;
 mod tables;

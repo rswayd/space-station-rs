@@ -4,17 +4,17 @@
 //!
 //! - Cell charger: a power cell clicked onto it goes in (it must be anchored, empty, and its
 //!   area must have equipment power); an empty hand takes it out. Every machine tick it charges
-//!   the cell by `charge_rate` (0.25 × `STANDARD_CELL_RATE` × capacitor tier: 2.5 kW) from the
+//!   the cell by `charge_rate` (0.25 × `STANDARD_CELL_RATE` × capacitor tier: 2.5 kW at tier 1) from the
 //!   grid's surplus only (`charge_cell(grid_only = TRUE)`) and pays 1% of that plus its active
 //!   load as heat loss. Its overlays show the charge in quarters, the cell, the connector and
 //!   the cell's charge light.
 //! - Recharger: a stun baton or an energy gun clicked onto it goes in; an empty hand takes it out. Every machine
-//!   tick its cell gets `chargerate × recharge_coeff` from the grid, then the APC cell;
+//!   tick its cell gets `chargerate × recharge_coeff` (the capacitor tier) from the grid, then
+//!   the APC cell;
 //!   when full the recharger says so; its overlay shows empty, charging or full.
 //!
 //! Cost: O(chargers) per machine tick (0.5 Hz); MetaStation maps ~20 of each.
-// shortcut: stock parts are tier 1 (no RefreshParts), no wrench/screwdriver/crowbar
-// (unanchoring, deconstruction), no EMP, telekinesis or sounds; the recharger takes only stun
+// shortcut: no wrench (unanchoring), no EMP, telekinesis or sounds; the recharger takes only stun
 // batons (no energy guns, recharge magazines, modular computers or battle rifles exist yet).
 // shortcut: the "charged" line uses the neuter ending (`genderize_ru` of the DM `gender`, which
 // objects leave `NEUTER`); use the ru_names gender once names carry it.
@@ -43,8 +43,20 @@ const RECHARGER_DMI: &str = "icons/obj/machines/sec.dmi";
 pub const STANDARD_CELL_RATE: f64 = 10_000.0;
 /// `cell_charger` `charge_rate` with a tier 1 capacitor.
 pub const CELL_CHARGER_RATE: f64 = 0.25 * STANDARD_CELL_RATE;
-/// `recharger` `recharge_coeff` with a tier 1 capacitor.
-const RECHARGE_COEFF: f64 = 1.0;
+
+/// tg `cell_charger/RefreshParts`: `0.25 * STANDARD_CELL_RATE` times each capacitor's tier.
+pub fn cell_charger_rate(world: &World, charger: Entity) -> f64 {
+    crate::stock_parts::ratings(world, charger)
+        .tiers(crate::stock_parts::PartKind::Capacitor)
+        .fold(CELL_CHARGER_RATE, |rate, tier| rate * f64::from(tier))
+}
+
+/// tg `recharger/RefreshParts`: `recharge_coeff` is the (last) capacitor's tier, else 1.
+pub fn recharge_coeff(world: &World, recharger: Entity) -> f64 {
+    crate::stock_parts::ratings(world, recharger)
+        .last(crate::stock_parts::PartKind::Capacitor)
+        .map_or(1.0, f64::from)
+}
 /// `power_store` `charge_light_type` and `connector_type` of every plain cell.
 const CHARGE_LIGHT: &str = "standard";
 const CONNECTOR: &str = "standard";
@@ -303,7 +315,8 @@ pub fn process_cell_charger(world: &mut World, charger: Entity, cell: Entity, dt
     if state.percent() >= 100.0 || !anchored(world, charger) {
         return;
     }
-    let given = charge_cell(world, charger, CELL_CHARGER_RATE * dt, &mut state, true);
+    let rate = cell_charger_rate(world, charger);
+    let given = charge_cell(world, charger, rate * dt, &mut state, true);
     if given > 0.0 {
         let active = world
             .get::<super::DmPower>(charger)
@@ -335,13 +348,8 @@ pub fn process_recharger(world: &mut World, recharger: Entity, item: Entity, dt:
             maxcharge,
             chargerate: rate,
         };
-        charge_cell(
-            world,
-            recharger,
-            rate * RECHARGE_COEFF * dt,
-            &mut cell,
-            false,
-        );
+        let coeff = recharge_coeff(world, recharger);
+        charge_cell(world, recharger, rate * coeff * dt, &mut cell, false);
         if let Some(mut b) = world.get_mut::<Baton>(item) {
             b.charge = Some(cell.charge);
         } else if let Some(mut g) = world.get_mut::<crate::guns::Gun>(item) {

@@ -12,10 +12,11 @@ use ss13_game::cargo::console::CargoConsole;
 use ss13_game::combat::NextMove;
 use ss13_game::construction::PanelOpen;
 use ss13_game::inventory::Inventory;
-use ss13_game::machine_frame::{Frame, MachineParts};
+use ss13_game::machine_frame::Frame;
 use ss13_game::obj_damage::{Anchored, ObjState};
 use ss13_game::power::PowerMachine;
 use ss13_game::power::chargers::Recharger;
+use ss13_game::stock_parts::ComponentParts;
 use ss13_game::testing::{self, Drive, fixture_map, write_fixture};
 use ss13_game::tools::{DoAfter, Stack};
 use ss13_mapload::{DmItem, DmObj, Turf};
@@ -422,7 +423,10 @@ fn recharger_comes_apart_and_back() {
     s.take(board);
     s.click(frame);
     s.run_until("the board is in", |s| s.state(frame) == 2);
-    assert!(s.world().get_entity(board).is_err());
+    assert!(
+        s.world().get::<TilePos>(board).is_none(),
+        "inside the frame"
+    );
     s.take(capacitor);
     // A screwdriver with a part missing refuses.
     s.swap_hands();
@@ -448,10 +452,11 @@ fn recharger_comes_apart_and_back() {
         "on its area's power"
     );
     assert_eq!(world.get::<Anchored>(built), Some(&Anchored(true)));
+    let parts: Vec<Entity> = world.get::<ComponentParts>(built).unwrap().parts().to_vec();
     assert_eq!(
-        world.get::<MachineParts>(built).unwrap().parts,
-        [CAPACITOR],
-        "the parts it was built with"
+        parts,
+        [board, capacitor],
+        "the board and capacitor it was built with"
     );
 }
 
@@ -590,7 +595,7 @@ fn metastation_families() {
         "covered families on MetaStation: {:?}",
         picked.iter().map(|p| p.0).collect::<Vec<_>>()
     );
-    assert_eq!(picked.len(), 9, "every family is mapped: {picked:?}");
+    assert_eq!(picked.len(), 10, "every family is mapped: {picked:?}");
     for (fam, machine, path, pos) in picked {
         let board = world.get::<DmMachine>(machine).unwrap().circuit.clone();
         let def = world
@@ -627,10 +632,16 @@ fn metastation_families() {
                 assert!(has(&part.path), "{path}: {}", part.path);
             }
         }
-        let parts = def
-            .default_parts
+        let paths: Vec<String> = std::iter::once(board.clone())
+            .chain(
+                def.default_parts
+                    .iter()
+                    .flat_map(|p| std::iter::repeat_n(p.path.clone(), p.amount as usize)),
+            )
+            .collect();
+        let parts = paths
             .iter()
-            .flat_map(|p| std::iter::repeat_n(p.path.clone(), p.amount as usize))
+            .filter_map(|p| ss13_game::construction::spawn_obj(world, p, pos))
             .collect();
         let built = build_machine(world, pos, board.clone(), parts, true, None)
             .unwrap_or_else(|| panic!("{path}: {} builds", def.build_path));
@@ -655,6 +666,7 @@ fn metastation_families() {
             Family::AtmosAlert => {
                 e.contains::<ss13_game::atmos_machinery::consoles::AtmosAlertConsole>()
             }
+            Family::Autolathe => e.contains::<ss13_game::science::autolathe::Autolathe>(),
         };
         assert!(live, "{fam:?}: {} has its live state", def.build_path);
         println!("{fam:?}: {path} -> {board} -> {}", def.build_path);

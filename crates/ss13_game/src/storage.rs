@@ -91,6 +91,8 @@ pub enum Refusal {
     Outer,
     /// The item is the container.
     Itself,
+    /// Not a type this storage takes (an RPED: parts, boards and a few stacks).
+    CantHold,
 }
 
 /// What [`fits`] needs to know about the item and the container.
@@ -153,6 +155,11 @@ pub fn can_insert(world: &World, storage: Entity, item: Entity) -> Result<(), Re
     let Some(dm) = world.get::<DmItem>(item) else {
         return Err(Refusal::TooBig);
     };
+    if crate::stock_parts::is_rped(world, storage)
+        && !crate::stock_parts::rped_accepts(world, storage, item)
+    {
+        return Err(Refusal::CantHold);
+    }
     let contents: Vec<u8> = world
         .get::<Stored>(storage)
         .map(|s| s.items().iter().map(|&e| w_class(world, e)).collect())

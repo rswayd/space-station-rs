@@ -18,7 +18,7 @@
 //!   takes the beaker out, or ejects the contents without a beaker.
 // shortcut: the radial menus are fixed clicks (microwave: cook / right click eject; grinder:
 // grind / right click beaker or eject); no juicing or mixing, no `grind_results()` procs, no
-// stock part ratings (tier 1 everywhere), wires, panels, anchoring, deconstruction, cleaning
+// wires, anchoring, cleaning
 // a filthy microwave, repairing a broken one, PDA charging, cells, shocks of mobs inside, the
 // processor's mob gibbing, sounds or the ingredients drawn inside the microwave.
 
@@ -40,19 +40,57 @@ pub const PROCESSOR_ROOT: &str = ss13_mapload::food::PROCESSOR;
 pub const GRINDER_ROOT: &str = ss13_mapload::food::GRINDER;
 /// `MAX_MICROWAVE_DIRTINESS`.
 pub const MAX_MICROWAVE_DIRTINESS: u32 = 100;
-/// `max_n_of_items` with a tier 1 matter bin.
-const MICROWAVE_MAX_ITEMS: usize = 10;
-/// `cook_loop` `wait = max(12 - 2 * efficiency, 2)` deciseconds with a tier 1 laser.
-const MICROWAVE_CYCLE_SECS: f64 = 1.0;
+/// `WEIGHT_CLASS_GIGANTIC`: the grinder's `maximum_weight` per matter bin tier.
+const WEIGHT_CLASS_GIGANTIC: u32 = 6;
 /// `start()`: 10 cycles; `muck()` and `start_can_fail()`: 4.
 const COOK_CYCLES: u32 = 10;
 const SHORT_CYCLES: u32 = 4;
 /// `open(autoclose = 2 SECONDS)` after a cook, `0.6 SECONDS` after an insert.
 const OPEN_AFTER_COOK: f64 = 2.0;
 const OPEN_AFTER_INSERT: f64 = 0.6;
-/// `WEIGHT_CLASS_NORMAL`, `WEIGHT_CLASS_BULKY` (the grinder's `maximum_weight`).
+/// `WEIGHT_CLASS_NORMAL`, `WEIGHT_CLASS_BULKY` (the grinder's `maximum_weight` without parts).
 const WEIGHT_CLASS_NORMAL: u8 = 3;
 const WEIGHT_CLASS_BULKY: u8 = 5;
+
+use crate::stock_parts::PartKind;
+
+/// tg `microwave/RefreshParts`: `max_n_of_items = 10 * (first) matter bin tier`.
+pub fn microwave_max_items(world: &World, e: Entity) -> usize {
+    crate::stock_parts::ratings(world, e)
+        .first(PartKind::MatterBin)
+        .map_or(10, |t| 10 * t as usize)
+}
+
+/// tg `microwave/RefreshParts`: `efficiency` is the sum of the micro-laser tiers.
+pub fn microwave_efficiency(world: &World, e: Entity) -> f64 {
+    f64::from(crate::stock_parts::ratings(world, e).sum(PartKind::MicroLaser))
+}
+
+/// `cook_loop` `wait = max(12 - 2 * efficiency, 2)` deciseconds.
+pub fn microwave_cycle_secs(efficiency: f64) -> f64 {
+    (12.0 - 2.0 * efficiency).max(2.0) / 10.0
+}
+
+/// tg `processor/RefreshParts`: (`rating_amount`, `rating_speed`) the last matter bin's and
+/// servo's tiers, else 1.
+pub fn processor_ratings(world: &World, e: Entity) -> (u32, u32) {
+    let r = crate::stock_parts::ratings(world, e);
+    (
+        r.last(PartKind::MatterBin).unwrap_or(1),
+        r.last(PartKind::Servo).unwrap_or(1).max(1),
+    )
+}
+
+/// tg `reagentgrinder/RefreshParts`: (`speed`, `maximum_weight`): the servo's tier and
+/// `WEIGHT_CLASS_GIGANTIC * matter bin tier` (the last of each), else 1 and bulky.
+pub fn grinder_ratings(world: &World, e: Entity) -> (u32, u32) {
+    let r = crate::stock_parts::ratings(world, e);
+    (
+        r.last(PartKind::Servo).unwrap_or(1).max(1),
+        r.last(PartKind::MatterBin)
+            .map_or(u32::from(WEIGHT_CLASS_BULKY), |t| WEIGHT_CLASS_GIGANTIC * t),
+    )
+}
 /// `operate_for(6 SECONDS)`.
 const GRIND_SECS: f64 = 6.0;
 
@@ -301,7 +339,7 @@ pub fn load_from(world: &mut World, client: Entity, storage: Entity, mw: Entity)
         if world.get::<DmFood>(item).is_none() {
             continue;
         }
-        if contents(world, mw).len() >= MICROWAVE_MAX_ITEMS {
+        if contents(world, mw).len() >= microwave_max_items(world, mw) {
             tell(world, client, Span::Warning, "заполнено!");
             break;
         }
@@ -443,7 +481,7 @@ fn microwave_insert(
     {
         return false;
     }
-    if contents(world, mw_entity).len() >= MICROWAVE_MAX_ITEMS {
+    if contents(world, mw_entity).len() >= microwave_max_items(world, mw_entity) {
         tell(world, client, Span::Warning, "заполнено!");
         return true;
     }
@@ -494,8 +532,15 @@ fn cook(world: &mut World, e: Entity) {
         .iter()
         .any(|&i| world.get::<DmFood>(i).is_none());
     // `prob(max((5 / efficiency) - 5, dirty * 5))`: a clean tier 1 microwave never mucks.
+    let efficiency = microwave_efficiency(world, e);
+    let fail = if efficiency > 0.0 {
+        5.0 / efficiency - 5.0
+    } else {
+        // Not buildable without a micro-laser (DM would divide by zero).
+        100.0
+    };
     let mut rng = world.resource_mut::<CombatRng>();
-    let muck = rng.chance(mw.dirty as f32 * 5.0);
+    let muck = rng.chance((fail as f32).max(mw.dirty as f32 * 5.0));
     let risky = rng.chance((mw.dirty as f32 * 5.0).min(100.0));
     let (kind, cycles) = if muck {
         (CookKind::Muck, SHORT_CYCLES)
@@ -566,7 +611,7 @@ fn microwave_cycle(world: &mut World, e: Entity, cooking: Cooking) {
         return;
     }
     machine_use_energy(world, e, active_power(world, e));
-    let next = now(world) + MICROWAVE_CYCLE_SECS;
+    let next = now(world) + microwave_cycle_secs(microwave_efficiency(world, e));
     if let Some(mut mw) = world.get_mut::<Microwave>(e) {
         mw.operating = Some(Cooking {
             cycles_left: cooking.cycles_left - 1,
@@ -706,7 +751,8 @@ fn processor_interact(world: &mut World, client: Entity, mob: Entity, e: Entity)
         .iter()
         .filter_map(|&i| world.get::<DmFood>(i).map(|f| f.processor_time))
         .sum();
-    let ends_at = now(world) + f64::from(total_ds) / 10.0;
+    let (_, speed) = processor_ratings(world, e);
+    let ends_at = now(world) + f64::from(total_ds) / 10.0 / f64::from(speed);
     if let Some(mut p) = world.get_mut::<Processor>(e) {
         p.ends_at = Some(ends_at);
     }
@@ -721,6 +767,7 @@ fn complete_processing(world: &mut World, e: Entity) {
         return;
     };
     let chem = world.get_resource::<Chem>().map(|c| c.0.clone());
+    let (amount, _) = processor_ratings(world, e);
     for item in contents(world, e) {
         let Some(dm) = world.get::<DmFood>(item).cloned() else {
             continue;
@@ -728,7 +775,8 @@ fn complete_processing(world: &mut World, e: Entity) {
         if dm.processor_output.is_empty() {
             continue;
         }
-        let multiplier = dm.processor_multiplier.max(1);
+        // `food_multiplier * rating_amount`.
+        let multiplier = dm.processor_multiplier.max(1) * amount.max(1);
         let source = world.get::<Reagents>(item).map(|r| r.0.clone());
         for _ in 0..multiplier {
             let Some(made) = crate::construction::spawn_obj(world, &dm.processor_output, pos)
@@ -820,7 +868,8 @@ fn grinder_insert(
         .filter(|&&i| Some(i) != grinder.beaker)
         .map(|&i| u32::from(w_class(world, i)))
         .sum();
-    if weight + u32::from(w_class(world, held)) > u32::from(WEIGHT_CLASS_BULKY) {
+    let (_, maximum_weight) = grinder_ratings(world, e);
+    if weight + u32::from(w_class(world, held)) > maximum_weight {
         tell(
             world,
             client,
@@ -933,10 +982,12 @@ fn grind(world: &mut World, client: Entity, e: Entity) {
         // `blended()`: the ground item is gone.
         world.despawn(item);
     }
-    let joules =
-        active_power(world, e) * GRIND_SECS * f64::from(weight) / f64::from(WEIGHT_CLASS_BULKY);
+    // `operate_for`: `duration = time / speed`, energy `active * duration * weight / maximum`.
+    let (speed, maximum_weight) = grinder_ratings(world, e);
+    let duration = GRIND_SECS / f64::from(speed);
+    let joules = active_power(world, e) * duration * f64::from(weight) / f64::from(maximum_weight);
     machine_use_energy(world, e, joules);
-    let ends_at = now(world) + GRIND_SECS;
+    let ends_at = now(world) + duration;
     if let Some(mut g) = world.get_mut::<Grinder>(e) {
         g.ends_at = Some(ends_at);
     }

@@ -262,6 +262,8 @@ pub mod speech;
 #[cfg(feature = "server")]
 pub mod status_effects;
 #[cfg(feature = "server")]
+pub mod stock_parts;
+#[cfg(feature = "server")]
 pub mod storage;
 #[cfg(feature = "client")]
 pub mod storage_client;

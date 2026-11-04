@@ -466,6 +466,34 @@ fn line_clear(a: TilePos, b: TilePos, opaque: &impl Fn(TilePos) -> bool) -> bool
     }
 }
 
+/// tg `hydroponics/constructable/RefreshParts` (no soils here): `maxwater = bins * 50`,
+/// `maxnutri = bins * 5 + STATIC_NUTRIENT_CAPACITY`, `rating` the servo tier, `nutridrain =
+/// 1 / rating`.
+pub(crate) fn refresh_parts(world: &mut World, e: Entity) {
+    let constructable = world
+        .get::<DmObj>(e)
+        .is_some_and(|o| is_under(&o.path, ss13_mapload::plants::CONSTRUCTABLE_TRAY));
+    if !constructable || world.get::<Tray>(e).is_none() {
+        return;
+    }
+    let r = crate::stock_parts::ratings(world, e);
+    let bins = r.sum(crate::stock_parts::PartKind::MatterBin) as f32;
+    let servo = r.last(crate::stock_parts::PartKind::Servo);
+    let Some(mut tray) = world.get_mut::<Tray>(e) else {
+        return;
+    };
+    tray.maxwater = bins * 50.0;
+    tray.maxnutri = bins * 5.0 + 10.0;
+    if let Some(servo) = servo {
+        tray.rating = servo as f32;
+    }
+    tray.nutridrain = 1.0 / tray.rating.max(1.0);
+    let maxnutri = tray.maxnutri;
+    if let Some(mut reagents) = world.get_mut::<Reagents>(e) {
+        reagents.0.maximum_volume = maxnutri;
+    }
+}
+
 /// tg `update_overlays()`: the plant (`get_tray_overlay`) and the status lights with their
 /// emissive copies.
 pub fn refresh_tray(world: &mut World, e: Entity) {

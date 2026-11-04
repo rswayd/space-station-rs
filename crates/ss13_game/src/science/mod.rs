@@ -17,6 +17,8 @@ use ss13_tgui::interfaces::vending::ProductIcon;
 
 #[cfg(feature = "server")]
 pub mod analyzer;
+#[cfg(feature = "server")]
+pub mod autolathe;
 #[cfg(feature = "client")]
 pub mod client;
 #[cfg(feature = "server")]
@@ -40,6 +42,7 @@ impl bevy::prelude::Plugin for ScienceServerPlugin {
             console::ConsolePlugin,
             lathe::LathePlugin,
             analyzer::AnalyzerPlugin,
+            autolathe::AutolathePlugin,
         ));
     }
 }
@@ -55,6 +58,7 @@ pub fn item_interaction(
 ) -> bool {
     lathe::item_interaction(world, client, mob, held, target)
         || analyzer::item_interaction(world, client, mob, held, target)
+        || autolathe::item_interaction(world, client, mob, held, target)
 }
 
 /// tgui `Techweb`.
@@ -233,6 +237,68 @@ pub const REMOVE_MAT: &str = "remove_mat";
 pub const DESIGN_PATH: &str = "design_path";
 pub const AMOUNT: &str = "amount";
 pub const MATERIAL_REF: &str = "ref";
+
+/// tgui `Autolathe`.
+pub struct AutolatheUi;
+
+impl UiInterface for AutolatheUi {
+    const NAME: &'static str = "Autolathe";
+    type Data = AutolatheData;
+    type StaticData = AutolatheStatic;
+}
+
+/// `ui_static_data`: every design the autolathe prints, researched (`initial`) or hacked.
+// Not tg: tg resends static data on hacking and on `RefreshParts`; here the costs are at
+// efficiency 1 and `ui_data` carries the efficiency and the hack state.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct AutolatheStatic {
+    pub fab: FabricatorStatic,
+    /// Designs printed at their exact cost (stacks, `fixed_cost_efficiency`).
+    pub exact: Vec<u16>,
+    /// Designs shown only while hacked.
+    pub hacked_only: Vec<u16>,
+}
+
+impl AutolatheStatic {
+    /// The catalogue with each cost at `efficiency` (`OPTIMAL_COST(cost * coeff)`).
+    pub fn priced(&self, efficiency: f64) -> FabricatorStatic {
+        let mut fab = self.fab.clone();
+        for (i, d) in fab.designs.iter_mut().enumerate() {
+            if self.exact.contains(&(i as u16)) {
+                continue;
+            }
+            for (_, n) in &mut d.cost {
+                *n = (f64::from(*n) * efficiency).floor().max(1.0) as u32;
+            }
+        }
+        fab
+    }
+
+    /// The designs shown: all but the hacked ones unless hacked.
+    pub fn shown(&self, hacked: bool) -> Vec<u16> {
+        (0..self.fab.designs.len() as u16)
+            .filter(|i| hacked || !self.hacked_only.contains(i))
+            .collect()
+    }
+}
+
+/// `ui_data`.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct AutolatheData {
+    /// Units per material index.
+    pub materials: Vec<u32>,
+    pub material_total: u32,
+    pub materials_max: u32,
+    /// `busy`.
+    pub active: bool,
+    /// `creation_efficiency`.
+    pub efficiency: f64,
+    pub hacked: bool,
+}
+
+pub const MAKE: &str = "make";
+pub const EJECT: &str = "eject";
+pub const MULTIPLIER: &str = "multiplier";
 
 /// tgui `DestructiveAnalyzer`.
 pub struct DestructiveAnalyzerUi;

@@ -635,6 +635,23 @@ fn install_device(
 /// A machine built from a frame (`crate::machine_frame`, tg `on_construction` ->
 /// `SSair.add_to_rebuild_queue`): into the pipe graph facing its dir, connected, with its
 /// machine state. False when it is no pipe device.
+/// tg `thermomachine/RefreshParts`: heat capacity from the matter bins, the temperature range
+/// from the micro-lasers.
+pub fn refresh_thermo_parts(world: &mut World, e: Entity) {
+    let (Some(dm), true) = (
+        world.get::<DmAtmosDevice>(e).cloned(),
+        world.get::<ThermoMachine>(e).is_some(),
+    ) else {
+        return;
+    };
+    let r = crate::stock_parts::ratings(world, e);
+    let bins = f64::from(r.sum(crate::stock_parts::PartKind::MatterBin));
+    let lasers = f64::from(r.sum(crate::stock_parts::PartKind::MicroLaser));
+    if let Some(mut m) = world.get_mut::<ThermoMachine>(e) {
+        m.set_parts(bins, lasers, dm.base_heating, dm.base_cooling);
+    }
+}
+
 pub fn join_built(world: &mut World, e: Entity) -> bool {
     let (Some(dm), Some(&pos)) = (
         world.get::<DmAtmosDevice>(e).cloned(),

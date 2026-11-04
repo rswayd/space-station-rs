@@ -61,6 +61,9 @@ pub const WIRE_BACKUP1: &str = "Auxiliary Power 1";
 pub const WIRE_BACKUP2: &str = "Auxiliary Power 2";
 pub const WIRE_BOLTS: &str = "Bolts";
 pub const WIRE_CONTRABAND: &str = "Contraband";
+pub const WIRE_DISABLE: &str = "Disable";
+pub const WIRE_HACK: &str = "Hack";
+pub const WIRE_ZAP: &str = "High Voltage Circuit";
 pub const WIRE_EQUIPMENT: &str = "Equipment";
 pub const WIRE_ENVIRONMENT: &str = "Environment";
 pub const WIRE_FEEDBACK: &str = "Feedback";
@@ -141,6 +144,7 @@ pub enum WireHolder {
     Airlock,
     Apc,
     Vending,
+    Autolathe,
 }
 
 /// tg `/datum/wires` of one holder.
@@ -350,6 +354,24 @@ pub fn vending_set() -> WireSet {
     }
 }
 
+/// `/datum/wires/autolathe`.
+pub fn autolathe_set() -> WireSet {
+    WireSet {
+        key: crate::science::autolathe::AUTOLATHE_ROOT,
+        proper_name: "Autolathe",
+        wires: with_duds(&[WIRE_HACK, WIRE_DISABLE, WIRE_SHOCK, WIRE_ZAP], 6),
+    }
+}
+
+/// [`Wires`] on an autolathe (map load replaces them with the round's colors in
+/// [`init_wires`]).
+pub fn add_autolathe_wires(world: &mut World, e: Entity) {
+    let wires = world
+        .get_resource_or_init::<WireColors>()
+        .wires_for(WireHolder::Autolathe, &autolathe_set());
+    world.entity_mut(e).insert(wires);
+}
+
 /// FNV-1a, to give every wire set key its own stream from the round seed.
 fn key_hash(key: &str) -> u64 {
     key.bytes().fold(0xcbf2_9ce4_8422_2325, |h, b| {
@@ -480,6 +502,7 @@ pub struct WiresSource {
     vendor: Option<&'static Vendor>,
     hack: Option<&'static VendorHack>,
     electrified: Has<Electrified>,
+    autolathe: Option<&'static crate::science::autolathe::Autolathe>,
 }
 
 impl ServerUi for WiresWindow {
@@ -635,6 +658,15 @@ fn status(s: &WiresSourceItem<'_, '_>) -> Vec<String> {
                 ),
             ]
         }
+        WireHolder::Autolathe => {
+            let Some(a) = s.autolathe else {
+                return Vec::new();
+            };
+            vec![
+                format!("The red light is {}.", on_off(a.disabled)),
+                format!("The blue light is {}.", on_off(a.hacked)),
+            ]
+        }
     }
 }
 
@@ -692,6 +724,10 @@ fn init_wires(world: &mut World) {
     let vendors: Vec<Entity> = vendors.iter(world).collect();
     for &e in &vendors {
         new.push((e, colors.wires_for(WireHolder::Vending, &vending_set())));
+    }
+    let mut lathes = world.query_filtered::<Entity, With<crate::science::autolathe::Autolathe>>();
+    for e in lathes.iter(world).collect::<Vec<_>>() {
+        new.push((e, colors.wires_for(WireHolder::Autolathe, &autolathe_set())));
     }
     info!("wires on {} holders", new.len());
     world.insert_batch(new);
@@ -787,8 +823,9 @@ pub fn screwdriver_act(world: &mut World, actor: Actor, kind: ToolKind, target: 
                 "панель проводов закрыта"
             }
         }
-        // `crate::construction` handles the vending panel.
-        WireHolder::Vending => return false,
+        // `crate::construction` handles the vending panel, `crate::machine_frame` the
+        // autolathe's.
+        WireHolder::Vending | WireHolder::Autolathe => return false,
     };
     crate::tools::tell(world, actor.client, Span::Notice, text);
     true
@@ -871,7 +908,7 @@ pub fn interactable(world: &World, holder: Entity, user: Entity) -> bool {
             }
             door.panel_open
         }
-        WireHolder::Apc => panel_open(world, holder),
+        WireHolder::Apc | WireHolder::Autolathe => panel_open(world, holder),
         WireHolder::Vending => {
             if electrified && should_electrocute(world, holder, user) {
                 return false;
@@ -910,7 +947,8 @@ pub fn shock(world: &mut World, holder: Entity, mob: Entity, chance: f32) -> boo
             }
             (area_power_source(world, holder), 1.0)
         }
-        WireHolder::Vending => {
+        // `autolathe/shock`: `siemens_coeff` 0.7 too.
+        WireHolder::Vending | WireHolder::Autolathe => {
             if unpowered {
                 return false;
             }
@@ -1155,7 +1193,7 @@ fn touches(
                     title,
                 ));
             }
-            WireHolder::Apc => {}
+            WireHolder::Apc | WireHolder::Autolathe => {}
         }
     }
 }
@@ -1264,6 +1302,7 @@ pub fn cut(world: &mut World, holder: Entity, wire: &str, source: Option<Entity>
         WireHolder::Airlock => airlock_on_cut(world, holder, wire, mend, source),
         WireHolder::Apc => apc_on_cut(world, holder, wire, mend, source),
         WireHolder::Vending => vending_on_cut(world, holder, wire, mend, source),
+        WireHolder::Autolathe => autolathe_on_cut(world, holder, wire, mend, source),
     }
 }
 
@@ -1279,6 +1318,7 @@ pub fn pulse(world: &mut World, holder: Entity, wire: &str, user: Option<Entity>
         WireHolder::Airlock => airlock_on_pulse(world, holder, wire, user),
         WireHolder::Apc => apc_on_pulse(world, holder, wire, user),
         WireHolder::Vending => vending_on_pulse(world, holder, wire, user),
+        WireHolder::Autolathe => autolathe_on_pulse(world, holder, wire),
     }
 }
 
@@ -1928,11 +1968,75 @@ fn tick_wires(world: &mut World) {
     }
 }
 
-/// tg airlock `reset_ai_wire` and APC `reset(wire)`.
+/// `/datum/wires/autolathe/on_cut`: the wire's state follows the cut; zap shocks.
+fn autolathe_on_cut(
+    world: &mut World,
+    lathe: Entity,
+    wire: &str,
+    mend: bool,
+    source: Option<Entity>,
+) {
+    match wire {
+        WIRE_HACK => crate::science::autolathe::set_hacked(world, lathe, !mend),
+        WIRE_SHOCK | WIRE_DISABLE => {
+            if let Some(mut a) = world.get_mut::<crate::science::autolathe::Autolathe>(lathe) {
+                if wire == WIRE_SHOCK {
+                    a.shocked = !mend;
+                } else {
+                    a.disabled = !mend;
+                }
+            }
+        }
+        WIRE_ZAP => shock_user(world, lathe, source, 50.0),
+        _ => {}
+    }
+}
+
+/// `/datum/wires/autolathe/on_pulse`: hack, shock and disable flip for 6 s.
+fn autolathe_on_pulse(world: &mut World, lathe: Entity, wire: &str) {
+    let Some(mut a) = world.get_mut::<crate::science::autolathe::Autolathe>(lathe) else {
+        return;
+    };
+    let wire: &'static str = match wire {
+        WIRE_HACK => {
+            a.hacked = !a.hacked;
+            WIRE_HACK
+        }
+        WIRE_SHOCK => {
+            a.shocked = !a.shocked;
+            WIRE_SHOCK
+        }
+        WIRE_DISABLE => {
+            a.disabled = !a.disabled;
+            WIRE_DISABLE
+        }
+        _ => return,
+    };
+    schedule_reset(world, lathe, AUTOLATHE_RESET_SECS, wire);
+}
+
+/// `addtimer(CALLBACK(A, reset, wire), 6 SECONDS)`.
+const AUTOLATHE_RESET_SECS: f64 = 6.0;
+
+/// tg airlock `reset_ai_wire`, APC and autolathe `reset(wire)`.
 fn reset(world: &mut World, holder: Entity, wire: &'static str) {
     let Some(wires) = world.get::<Wires>(holder).cloned() else {
         return;
     };
+    if wires.holder == WireHolder::Autolathe {
+        // `reset(wire)`: back to off unless the wire is cut.
+        if !wires.is_cut(wire)
+            && let Some(mut a) = world.get_mut::<crate::science::autolathe::Autolathe>(holder)
+        {
+            match wire {
+                WIRE_HACK => a.hacked = false,
+                WIRE_SHOCK => a.shocked = false,
+                WIRE_DISABLE => a.disabled = false,
+                _ => {}
+            }
+        }
+        return;
+    }
     match (wires.holder, wire) {
         (WireHolder::Airlock, WIRE_AI) => {
             if let Some(mut d) = world.get_mut::<Door>(holder) {

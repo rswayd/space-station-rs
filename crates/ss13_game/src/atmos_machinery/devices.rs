@@ -311,8 +311,6 @@ pub struct GasMixer {
 }
 
 /// `unary/thermomachine`.
-// shortcut: stock parts are tier 1 (`RefreshParts` needs machine parts, see
-// docs/parity/engineering/machines.md).
 #[derive(Component, Clone, Debug, PartialEq)]
 pub struct ThermoMachine {
     pub on: bool,
@@ -332,7 +330,22 @@ pub struct ThermoMachine {
 impl ThermoMachine {
     /// `RefreshParts` with the board's two tier 1 matter bins and micro lasers.
     pub fn tier1(base_heating: f64, base_cooling: f64, on: bool) -> Self {
-        let (bins, lasers) = (2.0_f64, 2.0_f64);
+        let mut m = Self {
+            on,
+            min_temperature: T20C,
+            max_temperature: T20C,
+            target_temperature: T20C,
+            heat_capacity: 0.0,
+            energy_due: 0.0,
+            panel_open: false,
+            color_index: 0,
+        };
+        m.set_parts(2.0, 2.0, base_heating, base_cooling);
+        m
+    }
+
+    /// `RefreshParts` with these matter bin and micro-laser tier sums (0 bases: tg's 140, 170).
+    pub fn set_parts(&mut self, bins: f64, lasers: f64, base_heating: f64, base_cooling: f64) {
         let base_heating = if base_heating > 0.0 {
             base_heating
         } else {
@@ -343,16 +356,9 @@ impl ThermoMachine {
         } else {
             170.0
         };
-        Self {
-            on,
-            min_temperature: (T0C - (base_cooling + lasers * 15.0)).max(TCMB),
-            max_temperature: T20C + base_heating * lasers,
-            target_temperature: T20C,
-            heat_capacity: 5000.0 * (bins - 1.0).powi(2),
-            energy_due: 0.0,
-            panel_open: false,
-            color_index: 0,
-        }
+        self.heat_capacity = 5000.0 * (bins - 1.0).powi(2);
+        self.min_temperature = (T0C - (base_cooling + lasers * 15.0)).max(TCMB);
+        self.max_temperature = T20C + base_heating * lasers;
     }
 }
 
