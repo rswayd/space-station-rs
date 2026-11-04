@@ -99,7 +99,10 @@ pub fn write_fixture(
     let mut used = used.to_vec();
     used.extend(ss13_mapload::RUNTIME_TYPES);
     let conversion = convert(&types, used).unwrap();
-    std::fs::write(dir.join("prototypes/dm_types.ron"), conversion.ron).unwrap();
+    write_atomic(
+        &dir.join("prototypes/dm_types.ron"),
+        conversion.ron.as_bytes(),
+    );
     let manifest = AssetManifest {
         atlases: vec![],
         states: states
@@ -119,15 +122,22 @@ pub fn write_fixture(
             })
             .collect(),
     };
-    std::fs::write(
-        dir.join(ss13_assets::import::MANIFEST_FILE),
-        postcard::to_stdvec(&manifest).unwrap(),
-    )
-    .unwrap();
+    write_atomic(
+        &dir.join(ss13_assets::import::MANIFEST_FILE),
+        &postcard::to_stdvec(&manifest).unwrap(),
+    );
     for (name, text) in files {
-        std::fs::write(dir.join(name), text).unwrap();
+        write_atomic(&dir.join(name), text.as_bytes());
     }
     dir.to_path_buf()
+}
+
+/// Tests of one module share a fixture dir and nextest runs them as parallel processes: a plain
+/// `fs::write` truncates a file another process may be reading. Same content, so rename wins.
+fn write_atomic(path: &Path, bytes: &[u8]) {
+    let tmp = path.with_extension(format!("tmp{}", std::process::id()));
+    std::fs::write(&tmp, bytes).unwrap();
+    std::fs::rename(&tmp, path).unwrap();
 }
 
 /// A started server app: [`deterministic`] with [`test_seed`], lobby skipped, a free loopback
