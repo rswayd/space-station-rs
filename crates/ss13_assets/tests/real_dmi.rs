@@ -140,14 +140,15 @@ fn full_import_writes_a_consistent_manifest() {
     assert_eq!(manifest.states.len(), report.states);
     assert_eq!(manifest.atlases.len(), report.atlases);
     let mut sizes = Vec::new();
+    let mut atlases = Vec::new();
     for (i, a) in manifest.atlases.iter().enumerate() {
-        assert_eq!(a, &format!("{ATLAS_DIR}/{i}.png"));
-        let reader = png::Decoder::new(std::io::BufReader::new(
-            std::fs::File::open(out.join(a)).unwrap(),
-        ))
-        .read_info()
-        .unwrap();
-        sizes.push(reader.info().size());
+        assert_eq!(
+            a,
+            &format!("{ATLAS_DIR}/{i}.{}", ss13_assets::page::EXTENSION)
+        );
+        let page = ss13_assets::page::decode(&std::fs::read(out.join(a)).unwrap()).unwrap();
+        sizes.push((page.width, page.height));
+        atlases.push((page.width, page.rgba));
     }
     for s in &manifest.states {
         let (w, h) = sizes[s.atlas as usize];
@@ -162,20 +163,6 @@ fn full_import_writes_a_consistent_manifest() {
         }
     }
     // Pixel check: sampled states' atlas rects hold exactly the source icons.
-    let atlases: Vec<(u32, Vec<u8>)> = manifest
-        .atlases
-        .iter()
-        .map(|a| {
-            let mut r = png::Decoder::new(std::io::BufReader::new(
-                std::fs::File::open(out.join(a)).unwrap(),
-            ))
-            .read_info()
-            .unwrap();
-            let mut buf = vec![0; r.output_buffer_size().unwrap()];
-            r.next_frame(&mut buf).unwrap();
-            (r.info().width, buf)
-        })
-        .collect();
     for s in manifest.states.iter().step_by(499) {
         let dmi = read(&s.dmi);
         let src = dmi.meta.states.iter().find(|d| d.name == s.state).unwrap();

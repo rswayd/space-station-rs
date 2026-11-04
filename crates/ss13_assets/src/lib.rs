@@ -8,4 +8,5 @@ pub mod gags;
 pub mod import;
 pub mod license;
 pub mod manifest;
+pub mod page;
 pub mod usage;

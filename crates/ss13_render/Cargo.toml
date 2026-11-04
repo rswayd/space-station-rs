@@ -13,8 +13,6 @@ ss13_assets.workspace = true
 bevy = { workspace = true, features = ["2d"] }
 postcard.workspace = true
 anyhow.workspace = true
-# Encodes the synthetic atlas used by tests, the example and the benchmark.
-png.workspace = true
 
 [lints]
 workspace = true

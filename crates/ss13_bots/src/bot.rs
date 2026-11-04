@@ -78,26 +78,22 @@ struct PageAlpha {
 
 impl PageAlpha {
     fn decode(path: &std::path::Path) -> anyhow::Result<Self> {
-        let mut decoder = png::Decoder::new(std::io::BufReader::new(std::fs::File::open(path)?));
-        decoder.set_transformations(png::Transformations::EXPAND | png::Transformations::STRIP_16);
-        let mut reader = decoder.read_info()?;
-        let mut buf = vec![0; reader.output_buffer_size().unwrap_or_default()];
-        let info = reader.next_frame(&mut buf)?;
-        let channels = info.color_type.samples();
-        let (width, height) = (info.width, info.height);
-        let mut bits = vec![0u64; (width as usize * height as usize).div_ceil(64)];
-        for i in 0..width as usize * height as usize {
-            let alpha = match info.color_type {
-                png::ColorType::Rgba | png::ColorType::GrayscaleAlpha => {
-                    buf[i * channels + channels - 1]
-                }
-                _ => 255,
-            };
-            if alpha > 0 {
+        Ok(Self::from_page(ss13_assets::page::decode(&std::fs::read(
+            path,
+        )?)?))
+    }
+
+    fn from_page(page: ss13_assets::page::PagePixels) -> Self {
+        let mut bits = vec![0u64; (page.rgba.len() / 4).div_ceil(64)];
+        for (i, px) in page.rgba.chunks_exact(4).enumerate() {
+            if px[3] > 0 {
                 bits[i / 64] |= 1 << (i % 64);
             }
         }
-        Ok(Self { width, bits })
+        Self {
+            width: page.width,
+            bits,
+        }
     }
 
     fn opaque(&self, x: u32, y: u32) -> bool {
@@ -673,5 +669,29 @@ fn named_icons(value: Value, icons: &IconNames) -> Value {
         ),
         Value::Array(a) => Value::Array(a.into_iter().map(|v| named_icons(v, icons)).collect()),
         v => v,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PageAlpha;
+
+    #[test]
+    fn page_alpha_from_a_page_file() {
+        // 3x2, rows top-down: (1,0) has alpha 1, (2,1) alpha 255, the rest 0.
+        let mut rgba = vec![200u8; 3 * 2 * 4];
+        for (i, px) in rgba.chunks_exact_mut(4).enumerate() {
+            px[3] = [0, 1, 0, 0, 0, 255][i];
+        }
+        let file = std::env::temp_dir().join(format!("ss13_bots_page_{}.qoi", std::process::id()));
+        std::fs::write(&file, ss13_assets::page::encode(3, 2, &rgba).unwrap()).unwrap();
+        let page = PageAlpha::decode(&file).unwrap();
+        std::fs::remove_file(&file).ok();
+        let drawn: Vec<(u32, u32)> = (0..2)
+            .flat_map(|y| (0..3).map(move |x| (x, y)))
+            .filter(|&(x, y)| page.opaque(x, y))
+            .collect();
+        assert_eq!(drawn, [(1, 0), (2, 1)]);
+        assert!(!page.opaque(0, 9), "outside");
     }
 }

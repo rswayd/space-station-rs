@@ -1,8 +1,6 @@
 //! Tiny generated atlas set in the importer's output format (`manifest.postcard` +
-//! `atlas/<n>.png`), for tests, the example and the benchmark before real assets exist.
+//! `atlas/<n>.qoi`), for tests, the example and the benchmark before real assets exist.
 
-use std::fs::File;
-use std::io::BufWriter;
 use std::path::Path;
 
 use ss13_assets::manifest::{AssetManifest, IconStateInfo};
@@ -240,7 +238,9 @@ pub fn build() -> (AssetManifest, Vec<(u32, u32, Vec<u8>)>) {
             });
             y += s.size;
         }
-        manifest.atlases.push(format!("atlas/{atlas}.png"));
+        manifest
+            .atlases
+            .push(ss13_assets::import::atlas_path(atlas));
         images.push((canvas.w, canvas.h, canvas.px));
     }
     // The ids above rely on `specs()` listing atlas 0 states first.
@@ -256,11 +256,7 @@ pub fn write(root: &Path) -> anyhow::Result<()> {
         postcard::to_stdvec(&manifest)?,
     )?;
     for ((w, h, px), rel) in images.iter().zip(&manifest.atlases) {
-        let file = BufWriter::new(File::create(root.join(rel))?);
-        let mut encoder = png::Encoder::new(file, *w, *h);
-        encoder.set_color(png::ColorType::Rgba);
-        encoder.set_depth(png::BitDepth::Eight);
-        encoder.write_header()?.write_image_data(px)?;
+        std::fs::write(root.join(rel), ss13_assets::page::encode(*w, *h, px)?)?;
     }
     Ok(())
 }
@@ -289,12 +285,8 @@ mod tests {
             .atlases
             .iter()
             .map(|a| {
-                let file = std::fs::File::open(dir.join(a)).unwrap();
-                png::Decoder::new(std::io::BufReader::new(file))
-                    .read_info()
-                    .unwrap()
-                    .info()
-                    .size()
+                let page = ss13_assets::page::decode(&std::fs::read(dir.join(a)).unwrap()).unwrap();
+                (page.width, page.height)
             })
             .collect();
         for s in &atlas.manifest.states {
