@@ -1338,14 +1338,21 @@ Advanced medicine (`ss13_game::medical::{blood, wounds, surgery, defib}`), as cu
   (infection without sanitization). Gauze soaks bleeding and splints, sutures and cauteries stop
   bleeding, ointment and mesh dress burns, a bonesetter resets a dislocation, bone gel then
   surgical tape knit a fracture.
-- **Surgery.** Drapes prepare the selected bodypart; out of combat mode a tool on a prepared,
-  lying mob offers the operations it can do there (several: the `ListInputWindow`): incision,
-  retraction, clamping, sawing, drilling, closing, fixing bones, tend wounds (brute/burn),
-  dislocation/hairline/compound repairs, organ manipulation and amputation (both stubs). Times
-  and tools follow tg; an operating table (1×), table (1.25×), bed (1.5×) or the floor (2×)
-  scales them; failures follow BandaStation (+40% on a conscious patient, up to +60% in the
-  dark, +5% for basic tools). Drag a mob (or yourself) onto an operating table or a bed to lie
-  on it; an empty hand on the table or resisting gets up.
+- **Surgery.** Drapes (or a bedsheet, cloak, cape) prepare the selected bodypart; out of combat
+  mode a tool on a prepared, lying mob offers the operations it can do there (several: the
+  `ListInputWindow`): incision, retraction, clamping, sawing, drilling, closing, fixing bones,
+  tend wounds (brute/burn), dislocation/hairline/compound repairs, debridement of infected
+  burns, joining and sealing punctured vessels, coronary bypass and brain surgery (heart and
+  brain decay damage), revival by paddles on an opened skull, organ manipulation and amputation
+  (both stubs). Times and tools follow tg; an operating table (1×), table (1.25×), bed (1.5×) or
+  the floor (2×) scales them, an unconscious or numbed (morphine, tramadol...) patient is 0.8×,
+  a drunk surgeon slower; failures follow BandaStation (+40% on a patient who feels it, up to
+  +60% in the dark, +5% for basic tools, +10% for improvised ones). The laser scalpel,
+  mechanical pinches and searing tool switch mode in hand. An operating computer next to an
+  operating table shows the patient on it (empty hand or a surgical tool), loads surgery disks
+  (1 s) and follows the station's research: its locked operations (tend wounds upgrades and
+  combos) are offered for a patient on that table only. Drag a mob (or yourself) onto an
+  operating table or a bed to lie on it; an empty hand on the table or resisting gets up.
 - **Defibrillators.** A unit worn in its slot clicked with an empty hand gives its paddles;
   wielded (the other hand empty) on a corpse's chest: 3 s + 2 s, then revival into crit if
   brute and burn are under 180 and the heart has not decayed (~6 minutes after death). Combat
@@ -1358,6 +1365,11 @@ cargo test -p ss13_game --all-features --test it medical::    # zone selection, 
 cargo test -p ss13_game --all-features --test it medicine::    # a self-inflicted cut bleeds, a blood
                                                           # sample, an IV of O-, the operation
                                                           # list and tend wounds, a defib revival
+cargo test -p ss13_game --all-features --test it surgery::     # operating computer window, a debug
+                                                          # disk unlocking tend wounds combos on
+                                                          # the table only, coronary bypass, brain
+                                                          # surgery, debridement, punctures with
+                                                          # mechanical pinches, revival
 SS13_SKIP_LOBBY=1 SS13_LIGHTING=0 SS13_MAP=$PWD/scripts/visual/maps/surgery.dmm SS13_ASSETS=$ASSETS \
     scripts/visual-check.sh scripts/visual/surgery_surgeon.txt scripts/visual/surgery_patient.txt
                                                           # a head incision on an operating table

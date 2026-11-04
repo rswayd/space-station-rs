@@ -5,7 +5,7 @@
 Лечение brute/burn через операцию (обычная, улучшенная, мастерская и комбинированная) — тем сильнее, чем больше урона.
 
 - **Код:** [`/datum/surgery_operation/basic/tend_wounds`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/operations/operation_healing.dm#L8), [`/datum/surgery_operation/basic/tend_wounds/combo`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/operations/operation_healing.dm#L248)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/medical/surgery.rs`: ушибы/ожоги по формуле tg, урон при провале, повтор; нет комбо и улучшенных версий (заблокированы дисками)
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/medical/surgery.rs`: ушибы/ожоги по формуле tg, урон при провале, повтор, улучшенные версии и комбо (`Tend`, заблокированы, открываются дисками и исследованием) с заменой по `replaced_by`, точные остатки урона с анализатором в руке или у операционного компьютера; настроения морбидных — группа настроения
 
 ### Манипуляции с органами
 Извлечение и вставка внутренних и внешних органов (в том числе кибернетики и имплантов-органов) в открытой полости.
@@ -17,13 +17,13 @@
 Лобэктомия (лёгкие), гепатэктомия (печень), коронарное шунтирование (сердце), гастрэктомия (желудок), лечение глаз, ушей, мозга (снимает травмы мозга).
 
 - **Код:** [`/datum/surgery_operation/organ/repair`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/operations/operation_organ_repair.dm#L2), [`/datum/surgery_operation/organ/repair/lobectomy`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/operations/operation_organ_repair.dm#L47), [`/datum/surgery_operation/organ/repair/hepatectomy`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/operations/operation_organ_repair.dm#L111), [`/datum/surgery_operation/organ/repair/coronary_bypass`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/operations/operation_organ_repair.dm#L176), [`/datum/surgery_operation/organ/repair/gastrectomy`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/operations/operation_organ_repair.dm#L241), [`/datum/surgery_operation/organ/repair/brain`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/operations/operation_organ_repair.dm#L461)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/medical/surgery.rs`: коронарное шунтирование (урон сердца ≥ 60 → 60, один раз на сердце, при провале +20) и операция на мозге (цикл, −50 за шаг, при провале +60) над уроном органов `OrganDecay`; лобэктомия, гепатэктомия, гастрэктомия, глаза и уши ждут органов с уроном (organs.md), снятие травм мозга и промывки — травмы мозга, кровотечение при провале шунтирования (`adjustBleedStacks`) — blood.md
 
 ### Лечение костей и ран операцией
 Вправление вывиха, лечение трещины и открытого перелома, восстановление черепа, санация ожогов (debride), зашивание проколов и вен.
 
 - **Код:** [`/datum/surgery_operation/limb/repair_dislocation`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/operations/operation_bone_repair.dm#L2), [`/datum/surgery_operation/limb/repair_hairline`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/operations/operation_bone_repair.dm#L68), [`/datum/surgery_operation/limb/repair_compound`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/operations/operation_bone_repair.dm#L175), [`/datum/surgery_operation/limb/repair_cranium`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/operations/operation_bone_repair.dm#L272), [`/datum/surgery_operation/limb/debride`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/operations/operation_debride.dm#L1), [`/datum/surgery_operation/limb/repair_puncture`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/operations/operation_puncture.dm#L1)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/medical/surgery.rs`: вправление вывиха, сращивание трещины, вправление и заживление открытого перелома; нет черепной трещины, санации ожогов, швов колотых ран
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/medical/surgery.rs`: вправление вывиха, сращивание трещины, вправление и заживление открытого перелома, санация инфицированного ожога (−4 инфекции, +0.5 санации за шаг), соединение и прижигание сосудов колотой раны (`mend_state`); нет черепной трещины (рана — wounds.md), ускорения отсканированных ран
 
 ### Ампутация и замена конечности
 Отрезание конечности (в том числе замена ноги на деревянную), пришивание новой или протеза, крепление произвольного предмета как протеза.
@@ -35,7 +35,7 @@
 Оживление мёртвого пациента разрядом прямо в мозг (дефибриллятор или шоковый инструмент) при допустимом уроне.
 
 - **Код:** [`/datum/surgery_operation/basic/revival`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/operations/operation_revival.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/medical/surgery.rs` (`Op::Revival`, `revive_by_shock`): мёртвый пациент с открытым черепом, лопасти включённого дефибриллятора в руках (заряд, без перезарядки) или активная дубинка; призрак возвращается, −50 удушья, `revive()`, мозгу +15 (до 180) при успехе и +50 (до 199) при неудаче; механический вариант — «Операции на роботизированных частях», запреты для самоубийц, хасков и DNR — cpr-revival.md, разряд из энергооружия — оружие
 
 ### Мозговые операции: лоботомия, промывка мозгов, усмирение
 Лоботомия лечит глубокие травмы ценой новой, промывка мозгов вписывает директиву (синдикат), «спящий агент», усмирение (пацифизм).

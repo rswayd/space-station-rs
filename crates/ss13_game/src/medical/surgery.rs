@@ -1,28 +1,35 @@
 //! Surgery (server), after tg `code/modules/surgery/operations` (`_operation.dm`
-//! `/mob/living/perform_surgery`, `get_available_operations`, `/datum/surgery_operation`
-//! `check_availability`, `get_tool_quality`, `get_time_modifiers`, `get_location_modifier`,
-//! `try_perform`, `on_failure`; `operation_generic.dm`, `operation_healing.dm`,
-//! `operation_bone_repair.dm`, `operation_organ_manip.dm`, `operation_amputation.dm`), the
-//! BandaStation failure chance (`modular_bandastation/medical/code/surgery/fail_chance.dm`), the
-//! surgical drapes' `/datum/element/surgery_aid` and buckling to operating tables and beds
+//! `/mob/living/perform_surgery`, `get_available_operations`, `/datum/operation_holder`,
+//! `/datum/surgery_operation` `check_availability`, `is_available`, `get_tool_quality`,
+//! `get_time_modifiers`, `get_location_modifier`, `try_perform`, `display_pain`, `on_failure`;
+//! `operation_generic.dm`, `operation_healing.dm`, `operation_bone_repair.dm`,
+//! `operation_organ_manip.dm`, `operation_amputation.dm`, `operation_revival.dm`,
+//! `operation_organ_repair.dm` (heart and brain), `operation_debride.dm`,
+//! `operation_puncture.dm`), the BandaStation failure chance
+//! (`modular_bandastation/medical/code/surgery/fail_chance.dm`), `/datum/element/surgery_aid`,
+//! the advanced tools' mode switch (`surgery_tools.dm`) and buckling to operating tables and beds
 //! (`game/objects/buckling.dm`, `buckle_lying`).
 //!
 //! The checked-out tg has no `/datum/surgery` + `/datum/surgery_step` any more: an operation is
-//! picked by the tool used on a bodypart in some surgical state ([`state`]). Drapes clicked on a
-//! mob prepare the selected bodypart; out of combat mode a click on a prepared mob lists the
-//! operations the held tool (or the empty hand) can do on the selected zone: one starts at once,
-//! several open the tgui `ListInputWindow` (tg's radial menu). Each operation is a `do_after` of
+//! picked by the tool used on a bodypart in some surgical state ([`state`]). A surgical aid
+//! (drapes, bedsheet, cloak) clicked on a mob prepares the selected bodypart; out of combat mode
+//! a click on a prepared mob lists the operations the held tool (or the empty hand) can do on the
+//! selected zone: one starts at once, several open the tgui `ListInputWindow` (tg's radial
+//! menu). The offered operations are the unlocked ones plus, for a patient lying on an operating
+//! table, its operating computer's list ([`super::operating`]: disks, research), without those
+//! another offered one replaces (`replaced_by`). Each operation is a `do_after` of
 //! `time × min(speed, 2.5)`, where speed multiplies the tool quality (its `implements` entry ×
-//! `toolspeed`), the surface (operating table 1, table 1.25, bed 1.5, floor 2) and 0.8 for an
-//! unconscious patient; then it fails with BandaStation's chance (the time over 2.5× of the base,
-//! +40% on a conscious patient, darkness, +5% for basic tools) or succeeds. A buckled mob lies on
-//! the table (dragged onto it, 2 s for someone else) until an empty hand clicks the table or it
-//! resists.
-// shortcut: no operating computer, surgery disks or locked (upgraded) operations, no mood events,
-// sounds, surgical memory, blood on the surgeon's gloves, self-surgery trait, manual cauterizing
-// of yourself; no limb removal, so amputation fails with a message; organs are not modelled, so
-// organ manipulation finds nothing to take out; a drunk surgeon is not slowed; no prosthetic,
-// abductor, thick-skin or skull operations (cranial fissures, debridement, organ repair, ...).
+//! `toolspeed`), the surgeon's drunkenness (0.8 at the Ballmer peak), the surface (operating table
+//! 1, table 1.25, bed 1.5, floor 2) and 0.8 for a patient who feels nothing (unconscious or an
+//! analgesic in the blood); then it fails with BandaStation's chance (the time over 2.5× of the
+//! base, +40% on a patient who feels it, darkness, +5% for basic tools, +10% for improvised
+//! ones) or succeeds. A buckled mob lies on the table (dragged onto it, 2 s for someone else)
+//! until an empty hand clicks the table or it resists.
+// shortcut: no mood events, sounds, surgical memory, blood on the surgeon's gloves, self-surgery
+// trait, manual cauterizing of yourself, ring accessories on gloves, wound scanning; no limb
+// removal, so amputation fails with a message; organs are not items, so organ manipulation finds
+// nothing to take out and only the heart and brain (their decay damage) can be repaired; no
+// prosthetic, abductor, robotic, thick-skin or skull operations; no brain traumas.
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
@@ -66,7 +73,77 @@ const REPAIR_FAILURE_DAMAGE: f32 = 0.2;
 /// The brain's: `heal_to_percent` 0.25 (healed per step), `failure_damage_percent` 0.3.
 const BRAIN_HEAL: f32 = 0.25;
 const BRAIN_FAILURE_DAMAGE: f32 = 0.3;
-pub const DRAPES: &str = "/obj/item/surgical_drapes";
+/// Items with `/datum/element/surgery_aid`: drapes, the surgical processor, bedsheets, cloaks
+/// and robe capes.
+const AIDS: [&str; 5] = [
+    "/obj/item/surgical_drapes",
+    "/obj/item/surgical_processor",
+    "/obj/item/bedsheet",
+    "/obj/item/clothing/neck/cloak",
+    "/obj/item/clothing/neck/robe_cape",
+];
+
+/// The item prepares patients for surgery (`surgery_aid`).
+pub fn is_aid(path: &str) -> bool {
+    AIDS.iter().any(|root| is_under(path, root))
+}
+
+/// The advanced tools' `/datum/component/transforming`: (type, inactive and active behaviour,
+/// the message for inactive and active).
+const ADVANCED_TOOLS: [(&str, &str, &str, &str, &str); 3] = [
+    (
+        "/obj/item/scalpel/advanced",
+        "scalpel",
+        "saw",
+        "disabled bone-cutting mode",
+        "enabled bone-cutting mode",
+    ),
+    (
+        "/obj/item/retractor/advanced",
+        "retractor",
+        "hemostat",
+        "gears set to retract",
+        "gears set to clamp",
+    ),
+    (
+        "/obj/item/cautery/advanced",
+        "cautery",
+        "drill",
+        "lenses set to mend",
+        "lenses set to drill",
+    ),
+];
+
+/// tg `attack_self` of the laser scalpel, mechanical pinches and searing tool: the other
+/// `tool_behaviour` (the laser scalpel also gains 1 force while sawing). True when `item` is one.
+pub fn toggle_advanced_tool(world: &mut World, client: Entity, item: Entity) -> bool {
+    let Some(path) = world.get::<DmItem>(item).map(|i| i.path.clone()) else {
+        return false;
+    };
+    let Some(&(root, off, on, off_text, on_text)) = ADVANCED_TOOLS
+        .iter()
+        .find(|(root, ..)| is_under(&path, root))
+    else {
+        return false;
+    };
+    let Some(mut tool) = world.get_mut::<DmTool>(item) else {
+        return false;
+    };
+    let active = tool.behaviour != on;
+    tool.behaviour = if active { on } else { off }.to_owned();
+    if root == "/obj/item/scalpel/advanced"
+        && let Some(mut dm) = world.get_mut::<DmItem>(item)
+    {
+        dm.force += if active { 1.0 } else { -1.0 };
+    }
+    tell(
+        world,
+        client,
+        Span::Notice,
+        if active { on_text } else { off_text },
+    );
+    true
+}
 /// `buckle_delay`.
 pub const BUCKLE_DELAY: f32 = 20.0;
 

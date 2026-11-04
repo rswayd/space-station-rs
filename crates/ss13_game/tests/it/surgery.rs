@@ -62,6 +62,10 @@ const TYPES: &str = r##"{
         "worn_icon": null, "worn_icon_state": null, "attack_speed": 8 } },
     "/obj/item/hemostat": { "parent": "/obj/item", "declared_vars": { "name": "hemostat",
         "icon_state": "hemostat", "item_flags": 1024, "tool_behaviour": "hemostat" } },
+    "/obj/item/retractor": { "parent": "/obj/item", "declared_vars": { "name": "retractor",
+        "icon_state": "retractor", "item_flags": 1024, "tool_behaviour": "retractor" } },
+    "/obj/item/retractor/advanced": { "parent": "/obj/item/retractor", "declared_vars": {
+        "name": "mechanical pinches", "icon_state": "adv_retractor", "toolspeed": 0.7 } },
     "/obj/item/cautery": { "parent": "/obj/item", "declared_vars": { "name": "cautery",
         "icon_state": "cautery", "item_flags": 1024, "tool_behaviour": "cautery",
         "heat": 500 } },
@@ -107,13 +111,15 @@ const TYPES: &str = r##"{
 
 /// Rows top-down, the last line is y = 1. A stands at (3,3) with the operating table `T` north
 /// of it, the operating computer `O` west of the table and around it a hemostat `H`, a
-/// defibrillator `D`, a cautery `K` and a debug surgery disk `X`; B starts at (5,3).
+/// defibrillator `D`, a cautery `K`, mechanical pinches `P` and a debug surgery disk `X`; B
+/// starts at (5,3).
 const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 "f" = (/turf/open/floor,/area/space)
 "s" = (/obj/effect/landmark/start/assistant,/turf/open/floor,/area/space)
 "H" = (/obj/item/hemostat,/turf/open/floor,/area/space)
 "D" = (/obj/item/defibrillator/loaded,/turf/open/floor,/area/space)
 "K" = (/obj/item/cautery,/turf/open/floor,/area/space)
+"P" = (/obj/item/retractor/advanced,/turf/open/floor,/area/space)
 "X" = (/obj/item/disk/surgery/debug,/turf/open/floor,/area/space)
 "O" = (/obj/machinery/computer/operating,/turf/open/floor,/area/space)
 "T" = (/obj/structure/table/optable,/turf/open/floor,/area/space)
@@ -123,7 +129,7 @@ wwwwwwww
 wffffffw
 wOTHfffw
 wDsfsffw
-wXfKfffw
+wXPKfffw
 wwwwwwww
 "}
 "##;
@@ -132,18 +138,20 @@ const HEMOSTAT: TilePos = TilePos::new(4, 4, 1);
 const DEFIB: TilePos = TilePos::new(2, 3, 1);
 const CAUTERY: TilePos = TilePos::new(4, 2, 1);
 const DISK: TilePos = TilePos::new(2, 2, 1);
+const PINCHES: TilePos = TilePos::new(3, 2, 1);
 const COMPUTER: TilePos = TilePos::new(2, 4, 1);
 const TABLE: TilePos = TilePos::new(3, 4, 1);
 const FLOOR: TilePos = TilePos::new(4, 3, 1);
 
 /// Manifest order = `IconStateId`.
-const STATES: [(&str, &str); 11] = [
+const STATES: [(&str, &str); 12] = [
     ("t.dmi", "floor"),
     ("t.dmi", "wall"),
     ("t.dmi", "surgery_table"),
     ("l.dmi", "x2"),
     ("h.dmi", "human_basic"),
     ("i.dmi", "hemostat"),
+    ("i.dmi", "adv_retractor"),
     ("i.dmi", "cautery"),
     ("i.dmi", "datadisk1"),
     ("i.dmi", "defibunit"),
@@ -159,6 +167,7 @@ fn fixture_assets(test: &str) -> PathBuf {
         "/obj/effect/landmark/start/assistant",
         "/obj/structure/table/optable",
         "/obj/item/hemostat",
+        "/obj/item/retractor/advanced",
         "/obj/item/cautery",
         "/obj/item/disk/surgery/debug",
         "/obj/item/defibrillator/loaded",
@@ -572,7 +581,18 @@ fn organ_and_wound_operations() {
             .is_none_or(|w| w.infection <= 0.0)
     });
 
-    // A puncture: the vessels joined with a hemostat, then sealed with a lit cautery.
+    // A puncture: the vessels joined with mechanical pinches set to clamp (use in hand), then
+    // sealed with a lit cautery.
+    let pinches = s.take(0, PINCHES, "/obj/item/retractor/advanced");
+    let hand = if s.get::<Inventory>(a).active == 0 {
+        InventorySlot::LeftHand
+    } else {
+        InventorySlot::RightHand
+    };
+    s.send(0, ClientIntent::ClickSlot(hand));
+    s.run_until("the pinches clamp", |s| {
+        s.get::<ss13_mapload::DmTool>(pinches).behaviour == "hemostat"
+    });
     s.limbs(|l| {
         let arm = l.limb_mut(BodyZone::RArm);
         arm.prepped = true;

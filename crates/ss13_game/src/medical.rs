@@ -804,8 +804,12 @@ fn complete_wrap(world: &mut World, actor: Actor, patient: Entity, zone: BodyZon
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct WoundScanMode(pub bool);
 
-/// tg `/obj/item/healthanalyzer/attack_self` (not the wound analyzer). True when `item` is one.
+/// tg `/obj/item/healthanalyzer/attack_self` (not the wound analyzer) and the advanced surgical
+/// tools' mode switch. True when `item` is one.
 pub fn attack_self(world: &mut World, client: Entity, item: Entity) -> bool {
+    if surgery::toggle_advanced_tool(world, client, item) {
+        return true;
+    }
     let Some(path) = world.get::<DmItem>(item).map(|i| i.path.clone()) else {
         return false;
     };
@@ -1002,7 +1006,7 @@ fn claim_click(world: &mut World, actor: Actor, target: Entity, modifiers: Click
         if !modifiers.right && wounds::try_treating(world, actor, target) {
             return true;
         }
-        if is_under(&held_path, surgery::DRAPES) {
+        if surgery::is_aid(&held_path) {
             surgery::drapes(world, actor, target);
             return true;
         }
