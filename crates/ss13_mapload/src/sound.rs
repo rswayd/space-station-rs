@@ -109,6 +109,22 @@ pub mod files {
         "sound/machines/locktoggle.ogg",
         "sound/effects/glass/glassbash.ogg",
     ];
+    /// Security levels (`ss13_game::security_level`): the levels' `sound`s, `minor_announce`'s
+    /// notices, BandaStation's Epsilon intro and law notice, the airlocks lifting their access,
+    /// the communications console's swipe prompts.
+    pub const SECURITY_LEVELS: [&str; 11] = [
+        "sound/announcer/notice/notice1.ogg",
+        "sound/announcer/notice/notice2.ogg",
+        "sound/announcer/notice/notice3.ogg",
+        "sound/announcer/alarm/airraid.ogg",
+        "modular_bandastation/security_levels/sound/gamma.ogg",
+        "modular_bandastation/security_levels/sound/epsilon.ogg",
+        "modular_bandastation/aesthetics_sounds/sound/powerloss.ogg",
+        "modular_bandastation/aesthetics_sounds/sound/epsilon_laws.ogg",
+        "sound/machines/airlock/boltsup.ogg",
+        "sound/machines/terminal/terminal_prompt_deny.ogg",
+        "sound/machines/terminal/terminal_prompt_confirm.ogg",
+    ];
     /// `/datum/looping_sound/fire` `mid_sounds` (equal weights).
     pub const FIRE_LOOP: [&str; 7] = [
         "sound/effects/fireclip1.ogg",
@@ -270,8 +286,8 @@ pub fn sound_var(types: &DmTypes, path: &str, var: &str) -> String {
     }
 }
 
-/// The files the server can name: SFX files, [`SOUND_VARS`] of `converted`, [`RUNTIME_SOUNDS`]
-/// and the fire loop.
+/// The files the server can name: SFX files, [`SOUND_VARS`] of `converted`, [`RUNTIME_SOUNDS`],
+/// the fire loop and the other `files` lists.
 pub fn referenced<'a>(
     types: &DmTypes,
     sfx: &SfxData,
@@ -282,6 +298,7 @@ pub fn referenced<'a>(
     out.extend(files::FIRE_LOOP.map(str::to_owned));
     out.extend(files::ATMOS.map(str::to_owned));
     out.extend(files::WALLMOUNT.map(str::to_owned));
+    out.extend(files::SECURITY_LEVELS.map(str::to_owned));
     for path in converted {
         for var in SOUND_VARS {
             let s = sound_var(types, path, var);

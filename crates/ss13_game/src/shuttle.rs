@@ -17,10 +17,13 @@
 //!   rectangles. Entities keep their identity, so clients see a block of entity moves.
 //! - Modes ([`Emergency`]): idle at CentCom -> called (`request`) -> after the call time docked at
 //!   `emergency_home` -> igniting 10 s before the dock time ends -> escape (transit) -> endgame at
-//!   `emergency_away`, which ends the round (`SSticker.check_finished`). A call is recalled by the
-//!   console while more than the base call time is left (green alert, `past_restriction_point`).
+//!   `emergency_away`, which ends the round (`SSticker.check_finished`). The call time is the
+//!   base time times the security level's `shuttle_call_time_mod`, rescaled when the level changes
+//!   during a call or a recall (`alert_coeff_change`). A call is recalled by the console while
+//!   enough of the call is left for the level (`past_restriction_point`).
 //! - The console ([`CommsConsoleUi`]): log in with an ID that has `ACCESS_COMMAND`, call with a
-//!   reason of at least 12 characters, recall; everything checked at the moment of effect.
+//!   reason of at least 12 characters, recall, set the green or blue alert (logged in with
+//!   captain access and swiping a captain's ID); everything checked at the moment of effect.
 //! - Announcements: tg's priority announcements with BandaStation's Russian texts to every
 //!   player's chat.
 // shortcut: there is no CentCom level: the template's own level stands in for it, with
@@ -28,8 +31,8 @@
 // space level made at round start (tg reserves one per flight with hyperspace turfs). Both have
 // the shuttle's own direction, so the emergency shuttle never rotates there (tg turns it at
 // CentCom and in transit); a dock of another direction turns `Facing` only.
-// shortcut: no security levels (always green: call time x2), no hostile environments, ripples,
-// hyperspace sounds, shuttle events, hijacks or airlock cycling on docking.
+// shortcut: no hostile environments, ripples, hyperspace sounds, shuttle events, hijacks or
+// airlock cycling on docking.
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -57,7 +60,8 @@ use ss13_world::{SpatialIndex, WorldSystems};
 
 use crate::click::{ClickResolved, ResolveClicks};
 use crate::comms::{
-    CALL_SHUTTLE, CommsConsoleData, CommsConsoleUi, REASON, RECALL_SHUTTLE, TOGGLE_AUTHENTICATION,
+    CALL_SHUTTLE, CHANGE_SECURITY_LEVEL, CommsConsoleData, CommsConsoleUi, NEW_SECURITY_LEVEL,
+    REASON, RECALL_SHUTTLE, SWIPE_NEEDED, TOGGLE_AUTHENTICATION,
 };
 use crate::construction::{Baseturfs, baseturfs_of, change_turf, path_of, turf_at};
 use crate::health::{DamageType, Health, Stat, apply_damage};
@@ -68,17 +72,20 @@ use crate::obj_damage::{Anchored, is_under};
 use crate::outfit::IdRegistration;
 use crate::power::Unpowered;
 use crate::round::{NewPlayer, Ticker};
+use crate::security_level::{ALERT_COEFF_GREEN, SecLevel, SecurityLevel};
 
 /// tg `ENGINE_START_TIME`: the docked shuttle starts its engines this long before leaving.
 pub const ENGINE_START_SECS: f64 = 10.0;
-/// tg `ALERT_COEFF_GREEN` (`/datum/security_level/green`): the call time multiplier.
-pub const ALERT_COEFF_GREEN: f64 = 2.0;
 /// tg `ALERT_COEFF_AUTOEVAC_CRITICAL`.
 pub const ALERT_COEFF_AUTOEVAC_CRITICAL: f64 = 0.4;
 /// tg `CALL_SHUTTLE_REASON_LENGTH`.
 pub const CALL_SHUTTLE_REASON_LENGTH: usize = 12;
 /// tg `ACCESS_COMMAND`, the console's `req_access`.
 pub const ACCESS_COMMAND: &str = "command";
+/// tg `ACCESS_CAPTAIN`: the console's alert level section.
+pub const ACCESS_CAPTAIN: &str = "captain";
+const PROMPT_DENY: &str = "sound/machines/terminal/terminal_prompt_deny.ogg";
+const PROMPT_CONFIRM: &str = "sound/machines/terminal/terminal_prompt_confirm.ogg";
 /// tg `setTimer(20)` after a failed docking.
 const RETRY_SECS: f64 = 2.0;
 const EMERGENCY_PORT: &str = "/obj/docking_port/mobile/emergency";
@@ -98,7 +105,8 @@ const COMMAND_NAME: &str = "Центральное Командование";
 
 /// Emergency shuttle timing (tg `SSshuttle` vars and config). Insert before `GameServerPlugin`
 /// to override; otherwise tg's defaults with these environment overrides (seconds):
-/// `SS13_SHUTTLE_CALL_SECONDS` (`emergency_call_time`, 600; green alert doubles it),
+/// `SS13_SHUTTLE_CALL_SECONDS` (`emergency_call_time`, 600; times the security level's
+/// `shuttle_call_time_mod`: green doubles it),
 /// `SS13_SHUTTLE_DOCK_SECONDS` (`emergency_dock_time`, 180), `SS13_SHUTTLE_ESCAPE_SECONDS`
 /// (`emergency_escape_time`, 120), `SS13_SHUTTLE_REFUEL_SECONDS` (`SHUTTLE_REFUEL_DELAY`, 1200:
 /// no call before that much round time), `SS13_SHUTTLE_AUTOCALL_THRESHOLD`
@@ -315,12 +323,36 @@ impl Emergency {
         Err(reason.to_owned())
     }
 
-    /// tg `can_recall` for a non-admin at green alert: a call with more than the base call time
-    /// left (`past_restriction_point`).
-    pub fn can_recall(&self, now: f64, call_secs: f64) -> bool {
+    /// tg `can_recall` for a non-admin: a call with enough of it left for the security level
+    /// (`past_restriction_point`: the base call time at green, half of it at blue, a quarter
+    /// above).
+    pub fn can_recall(&self, now: f64, call_secs: f64, level: SecLevel) -> bool {
+        let needed = match level {
+            SecLevel::Green => call_secs,
+            SecLevel::Blue => call_secs * 0.5,
+            _ => call_secs * 0.25,
+        };
         self.mode == ShuttleMode::Call
             && !self.no_recall
-            && self.timer.left(now).is_some_and(|left| left >= call_secs)
+            && self.timer.left(now).is_some_and(|left| left >= needed)
+    }
+
+    /// tg `alert_coeff_change`: the time left (and the length a recall inverts) scale by the new
+    /// coefficient over the old.
+    // tg's `setTimer` here also overwrites `last_timer_length` with the time left, so a recall
+    // after a level change would return at once; the scaled length is kept instead.
+    pub fn alert_coeff_change(&mut self, now: f64, coeff: f64) {
+        let Some(at) = self.timer.at else {
+            return;
+        };
+        let remaining = at - now;
+        if remaining < 0.0 || self.timer.last_length <= 0.0 || self.alert_coeff <= 0.0 {
+            return;
+        }
+        let multiplier = coeff / self.alert_coeff;
+        self.timer.at = Some(now + remaining * multiplier);
+        self.timer.last_length *= multiplier;
+        self.alert_coeff = coeff;
     }
 
     /// `EMERGENCY_ESCAPED_OR_ENDGAMED`.
@@ -385,6 +417,13 @@ pub struct EmergencyShuttle {
 pub struct CommsConsole {
     pub authorize_name: Option<String>,
     pub authorize_access: Vec<String>,
+}
+
+impl CommsConsole {
+    /// tg `authenticated_as_silicon_or_captain` for a non-silicon.
+    pub fn is_captain(&self) -> bool {
+        self.authorize_access.iter().any(|a| a == ACCESS_CAPTAIN)
+    }
 }
 
 #[derive(Resource)]
@@ -1097,8 +1136,31 @@ fn trace(world: &mut World, area: Option<String>) -> Option<String> {
     area.filter(|_| traced)
 }
 
-/// tg `SSshuttle.call_evac_shuttle` + `emergency.request`: the shuttle is called and announced.
+/// tg `SSshuttle.call_evac_shuttle`: called with the security level's coefficient, announced
+/// as a priority shuttle at red alert and above.
+pub fn call_evac_shuttle(world: &mut World, reason: &str, origin: Option<String>) -> bool {
+    let level = crate::security_level::current(world);
+    request(
+        world,
+        reason,
+        origin,
+        level.shuttle_call_time_mod(),
+        level >= SecLevel::Red,
+    )
+}
+
+/// tg `emergency.request(set_coefficient = coeff)`: the shuttle is called and announced.
 pub fn call_shuttle(world: &mut World, reason: &str, origin: Option<String>, coeff: f64) -> bool {
+    request(world, reason, origin, coeff, false)
+}
+
+fn request(
+    world: &mut World,
+    reason: &str,
+    origin: Option<String>,
+    coeff: f64,
+    red_alert: bool,
+) -> bool {
     let now = world.resource::<Time>().elapsed_secs_f64();
     let call_secs = world.resource::<ShuttleConfig>().call_secs;
     let traced = trace(world, origin);
@@ -1120,8 +1182,13 @@ pub fn call_shuttle(world: &mut World, reason: &str, origin: Option<String>, coe
     } else {
         ""
     };
+    let red = if red_alert {
+        "Красный уровень угрозы подтверждён: Отправлен приоритетный шаттл. "
+    } else {
+        ""
+    };
     let text = format!(
-        "Эвакуационный шаттл вызван. Ожидаемое время прибытия: {minutes} {}.{reason}{traced}",
+        "Эвакуационный шаттл вызван. {red}Ожидаемое время прибытия: {minutes} {}.{reason}{traced}",
         declension_minutes(minutes)
     );
     announce(world, "Вызван эвакуационный шаттл", &text);
@@ -1150,6 +1217,19 @@ pub fn recall_shuttle(world: &mut World, origin: Option<String>) -> bool {
         &format!("Эвакуационный шаттл был отозван.{traced}"),
     );
     true
+}
+
+/// `/obj/docking_port/mobile/emergency/on_security_level_changed`: a call or a recall in
+/// progress takes the new level's coefficient.
+pub fn on_security_level_changed(world: &mut World, level: SecLevel) {
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    if let Some(mut shuttle) = world.get_resource_mut::<EmergencyShuttle>()
+        && matches!(shuttle.state.mode, ShuttleMode::Call | ShuttleMode::Recall)
+    {
+        shuttle
+            .state
+            .alert_coeff_change(now, level.shuttle_call_time_mod());
+    }
 }
 
 /// `SSshuttle.fire` for the emergency shuttle: `CheckAutoEvac` and `emergency.check`.
@@ -1357,6 +1437,7 @@ pub enum CommsAct {
     ToggleAuthentication,
     CallShuttle(String),
     RecallShuttle,
+    ChangeSecurityLevel(SecLevel),
 }
 
 type ConsoleParams = (
@@ -1364,6 +1445,7 @@ type ConsoleParams = (
     Res<'static, Time>,
     Res<'static, Ticker>,
     Res<'static, ShuttleConfig>,
+    Res<'static, SecurityLevel>,
 );
 
 impl ServerUi for CommsConsoleUi {
@@ -1376,7 +1458,11 @@ impl ServerUi for CommsConsoleUi {
     fn data(
         console: &CommsConsole,
         _: Entity,
-        (shuttle, time, ticker, config): &bevy::ecs::system::SystemParamItem<'_, '_, ConsoleParams>,
+        (shuttle, time, ticker, config, level): &bevy::ecs::system::SystemParamItem<
+            '_,
+            '_,
+            ConsoleParams,
+        >,
     ) -> CommsConsoleData {
         let now = time.elapsed_secs_f64();
         let authenticated = console.authorize_name.is_some();
@@ -1387,6 +1473,8 @@ impl ServerUi for CommsConsoleUi {
             can_recall_shuttles: true,
             call_shuttle_reason_min_length: CALL_SHUTTLE_REASON_LENGTH as u32,
             max_message_length: ss13_tgui::server::MAX_PARAM_LEN as u32,
+            alert_level: level.current.name().to_owned(),
+            can_set_alert_level: console.is_captain().then(|| SWIPE_NEEDED.to_owned()),
             ..default()
         };
         match shuttle.as_deref() {
@@ -1397,7 +1485,7 @@ impl ServerUi for CommsConsoleUi {
                     .err();
                 data.shuttle_called =
                     !matches!(state.mode, ShuttleMode::Idle | ShuttleMode::Recall);
-                data.shuttle_recallable = state.can_recall(now, config.call_secs);
+                data.shuttle_recallable = state.can_recall(now, config.call_secs, level.current);
                 data.shuttle_called_previously = state.call_count > 0;
                 data.shuttle_last_called = state.last_call_area.clone();
             }
@@ -1419,8 +1507,13 @@ impl ServerUi for CommsConsoleUi {
                     .to_owned(),
             )),
             RECALL_SHUTTLE => Ok(CommsAct::RecallShuttle),
-            // shortcut: messages, status displays, alert levels, shuttle purchases,
-            // announcements and the rest of the console are not ported.
+            CHANGE_SECURITY_LEVEL => params
+                .get(NEW_SECURITY_LEVEL)
+                .and_then(SecLevel::from_name)
+                .map(CommsAct::ChangeSecurityLevel)
+                .ok_or_else(|| UiReject::BadParams("newSecurityLevel: a level name".into())),
+            // shortcut: messages, status displays, shuttle purchases, announcements and the rest
+            // of the console are not ported.
             _ => Err(UiReject::UnknownAction),
         }
     }
@@ -1473,17 +1566,95 @@ fn console_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed<CommsCo
                 }
                 let now = world.resource::<Time>().elapsed_secs_f64();
                 let call_secs = world.resource::<ShuttleConfig>().call_secs;
+                let level = crate::security_level::current(world);
                 let can = world
                     .get_resource::<EmergencyShuttle>()
-                    .is_some_and(|s| s.state.can_recall(now, call_secs));
+                    .is_some_and(|s| s.state.can_recall(now, call_secs, level));
                 if can {
                     let origin = actor_area(world, actor);
                     recall_shuttle(world, origin);
                     info!("{actor} recalled the emergency shuttle");
                 }
             }
+            CommsAct::ChangeSecurityLevel(level) => {
+                if state.is_captain() {
+                    change_security_level(world, client, actor, console, level);
+                }
+            }
         }
     }
+}
+
+/// tg `ui_act "changeSecurityLevel"` after `authenticated_as_silicon_or_captain`: a captain's ID
+/// swiped in the active hand sets green or blue, unless CentCom locked the level.
+// shortcut: silicons do not use the console here, so the swipe is always needed.
+fn change_security_level(
+    world: &mut World,
+    client: Entity,
+    actor: Entity,
+    console: Entity,
+    level: SecLevel,
+) {
+    let tell = |world: &mut World, span: Span, text: &str| {
+        world.write_message(SendChat {
+            clients: vec![client],
+            message: ChatMessage::simple(ChatChannel::System, span, text),
+        });
+    };
+    let pos = world.get::<TilePos>(console).copied();
+    let beep = |world: &mut World, sound: &str| {
+        if let Some(pos) = pos {
+            crate::sound::playsound(world, crate::sound::PlaySound::new(pos, sound, 50.0, false));
+        }
+    };
+    let held = world
+        .get::<Inventory>(actor)
+        .and_then(Inventory::active_item)
+        .and_then(|item| crate::inventory::get_id(world, item));
+    let Some(card) = held else {
+        tell(world, Span::Warning, "You need to swipe your ID!");
+        beep(world, PROMPT_DENY);
+        return;
+    };
+    let captain = world
+        .get::<IdCard>(card)
+        .is_some_and(|c| c.access.iter().any(|a| a == ACCESS_CAPTAIN));
+    if !captain {
+        tell(world, Span::Warning, "You are not authorized to do this!");
+        beep(world, PROMPT_DENY);
+        return;
+    }
+    if !matches!(level, SecLevel::Green | SecLevel::Blue) {
+        return;
+    }
+    let current = crate::security_level::current(world);
+    if current >= SecLevel::Delta {
+        tell(
+            world,
+            Span::Warning,
+            "Central Command has placed a lock on the alert level due to a doomsday!",
+        );
+        return;
+    }
+    if current >= SecLevel::Gamma {
+        tell(
+            world,
+            Span::Warning,
+            "Центральным командованием установлено военное положение. Изменение кода невозможно.",
+        );
+        return;
+    }
+    if current == level {
+        return;
+    }
+    crate::security_level::set_level(world, level, true);
+    tell(
+        world,
+        Span::Notice,
+        "Authorization confirmed. Modifying security level.",
+    );
+    beep(world, PROMPT_CONFIRM);
+    info!("{actor} changed the security level to {}", level.name());
 }
 
 /// tg `get_idcard(hand_first = TRUE)`: the access and `"<name> - <assignment>"` of the first ID
@@ -1533,7 +1704,7 @@ fn request_evac(world: &mut World, client: Entity, actor: Entity, reason: &str) 
         return;
     }
     let origin = actor_area(world, actor);
-    if call_shuttle(world, reason, origin, ALERT_COEFF_GREEN) {
+    if call_evac_shuttle(world, reason, origin) {
         info!("{actor} called the emergency shuttle: {reason}");
     }
 }
@@ -1578,8 +1749,8 @@ mod tests {
         let mut e = Emergency::default();
         e.request(100.0, 600.0, ALERT_COEFF_GREEN);
         // Green: recallable while at least the base call time (600 s) is left.
-        assert!(e.can_recall(100.0 + 599.0, 600.0));
-        assert!(!e.can_recall(100.0 + 601.0, 600.0));
+        assert!(e.can_recall(100.0 + 599.0, 600.0, SecLevel::Green));
+        assert!(!e.can_recall(100.0 + 601.0, 600.0, SecLevel::Green));
         assert!(e.cancel(400.0));
         assert_eq!(e.mode, ShuttleMode::Recall);
         assert_eq!(
@@ -1588,7 +1759,7 @@ mod tests {
             "flew 300 s, returns in 300 s"
         );
         assert!(!e.cancel(400.0));
-        assert!(!e.can_recall(400.0, 600.0));
+        assert!(!e.can_recall(400.0, 600.0, SecLevel::Green));
         assert_eq!(e.check(699.0), None);
         assert_eq!(e.mode, ShuttleMode::Recall);
         assert_eq!(e.check(700.0), None);
@@ -1600,7 +1771,40 @@ mod tests {
         assert_eq!(e.timer.left(950.0), Some(1200.0));
         assert_eq!(e.call_count, 3);
         e.no_recall = true;
-        assert!(!e.can_recall(950.0, 600.0));
+        assert!(!e.can_recall(950.0, 600.0, SecLevel::Green));
+    }
+
+    #[test]
+    fn recall_window_follows_the_level() {
+        let mut e = Emergency::default();
+        e.request(0.0, 600.0, ALERT_COEFF_GREEN);
+        // 400 s left: past green's 600 s, within blue's 300 s and red's 150 s.
+        assert!(!e.can_recall(800.0, 600.0, SecLevel::Green));
+        assert!(e.can_recall(800.0, 600.0, SecLevel::Blue));
+        assert!(!e.can_recall(1000.0, 600.0, SecLevel::Blue));
+        assert!(e.can_recall(1000.0, 600.0, SecLevel::Red));
+        assert!(!e.can_recall(1100.0, 600.0, SecLevel::Gamma));
+    }
+
+    #[test]
+    fn level_change_rescales_the_call_and_the_recall() {
+        let mut e = Emergency::default();
+        e.request(0.0, 600.0, ALERT_COEFF_GREEN);
+        // Green -> red at 200 s: 1000 s left become 250 s; the 1200 s flight counts as 300 s.
+        e.alert_coeff_change(200.0, SecLevel::Red.shuttle_call_time_mod());
+        assert_eq!(e.timer.left(200.0), Some(250.0));
+        assert_eq!(e.alert_coeff, 0.5);
+        // A recall 50 s later returns after the 50 s flown at the red rate (tg's `setTimer`
+        // would make it return at once).
+        assert!(e.cancel(250.0));
+        assert_eq!(e.timer.left(250.0), Some(100.0));
+        // Red -> green during the recall: the way back doubles.
+        e.alert_coeff_change(250.0, ALERT_COEFF_GREEN);
+        assert_eq!(e.timer.left(250.0), Some(400.0));
+        // Nothing to rescale without a timer.
+        let mut idle = Emergency::default();
+        idle.alert_coeff_change(0.0, 1.0);
+        assert_eq!(idle.timer.left(0.0), None);
     }
 
     #[test]

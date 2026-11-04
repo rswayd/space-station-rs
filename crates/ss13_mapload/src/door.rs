@@ -34,9 +34,11 @@ pub const HELPER_UNRES_DELAYED: &str = "/obj/effect/mapping_helpers/airlock/unre
 /// `req_one_access` (`any`) or `req_access` (`all`).
 pub const HELPER_ACCESS_ANY: &str = "/obj/effect/mapping_helpers/airlock/access/any";
 pub const HELPER_ACCESS_ALL: &str = "/obj/effect/mapping_helpers/airlock/access/all";
+/// `red_alert_access`: the airlock lifts its access at red alert and above.
+pub const HELPER_RED_ALERT_ACCESS: &str = "/obj/effect/mapping_helpers/airlock/red_alert_access";
 // shortcut: `cyclelink_helper`(_multi) (cycling airlock pairs), `abandoned` (random wall/weld/
-// bolt per round), `red_alert_access` (needs alert levels) and the rarer airlock helpers are
-// not applied; their entities stay inert. Add each with the mechanic it configures.
+// bolt per round) and the rarer airlock helpers are not applied; their entities stay inert. Add
+// each with the mechanic it configures.
 
 /// Which tg door family a type belongs to; decides timings, icon state names and who may open it.
 #[derive(Reflect, Default, Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -111,6 +113,8 @@ pub struct DmAirlockHelper {
     pub access_any: Vec<String>,
     /// `access/all`: appended to `req_access` (only while `req_one_access` is null).
     pub access_all: Vec<String>,
+    /// `red_alert_access`.
+    pub red_alert_access: bool,
 }
 
 /// One door var with its converted value.
@@ -196,6 +200,11 @@ pub fn helper(types: &DmTypes, path: &str) -> Option<DmAirlockHelper> {
     } else if under(path, HELPER_ACCESS_ALL) {
         DmAirlockHelper {
             access_all: access(),
+            ..default()
+        }
+    } else if under(path, HELPER_RED_ALERT_ACCESS) {
+        DmAirlockHelper {
+            red_alert_access: true,
             ..default()
         }
     } else {
@@ -354,13 +363,14 @@ pub fn helper_entry(h: &DmAirlockHelper) -> String {
     let list = |l: &[String]| ron::to_string(l).expect("string lists always serialize");
     format!(
         "\"dm_airlock_helper\": (locked: {}, welded: {}, unres: {}, unres_delayed: {}, \
-         access_any: {}, access_all: {})",
+         access_any: {}, access_all: {}, red_alert_access: {})",
         h.locked,
         h.welded,
         h.unres,
         h.unres_delayed,
         list(&h.access_any),
-        list(&h.access_all)
+        list(&h.access_all),
+        h.red_alert_access
     )
 }
 
@@ -429,6 +439,7 @@ mod tests {
             "/obj/effect/mapping_helpers/airlock/unres": {"parent": "/obj/effect/mapping_helpers/airlock"},
             "/obj/effect/mapping_helpers/airlock/unres/delayed": {"parent": "/obj/effect/mapping_helpers/airlock/unres"},
             "/obj/effect/mapping_helpers/airlock/cyclelink_helper": {"parent": "/obj/effect/mapping_helpers/airlock"},
+            "/obj/effect/mapping_helpers/airlock/red_alert_access": {"parent": "/obj/effect/mapping_helpers/airlock"},
             "/obj/effect/mapping_helpers/airlock/access": {"parent": "/obj/effect/mapping_helpers/airlock"},
             "/obj/effect/mapping_helpers/airlock/access/any": {"parent": "/obj/effect/mapping_helpers/airlock/access"},
             "/obj/effect/mapping_helpers/airlock/access/any/command": {"parent": "/obj/effect/mapping_helpers/airlock/access/any"},
@@ -457,6 +468,7 @@ mod tests {
             })
         );
         assert_eq!(h("cyclelink_helper"), None);
+        assert!(h("red_alert_access").unwrap().red_alert_access);
         assert_eq!(
             h("access/any/command/maintenance/extra")
                 .unwrap()
@@ -470,7 +482,7 @@ mod tests {
         );
         assert_eq!(
             helper_entry(&h("access/all/security/brig").unwrap()),
-            r#""dm_airlock_helper": (locked: false, welded: false, unres: false, unres_delayed: false, access_any: [], access_all: ["brig"])"#
+            r#""dm_airlock_helper": (locked: false, welded: false, unres: false, unres_delayed: false, access_any: [], access_all: ["brig"], red_alert_access: false)"#
         );
     }
 }

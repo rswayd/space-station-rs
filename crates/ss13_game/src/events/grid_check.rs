@@ -65,6 +65,31 @@ pub fn power_fail(world: &mut World, min_secs: i64, max_secs: i64) {
     }
 }
 
+/// BandaStation `/obj/machinery/power/apc/proc/reboot()` on every APC with a cell on a station
+/// level: a power failure ends at once.
+pub fn reboot_station_apcs(world: &mut World) {
+    let levels = station_levels(world);
+    let mut q = world.query::<(Entity, &Apc, &ss13_shared::TilePos)>();
+    let apcs: Vec<Entity> = q
+        .iter(world)
+        .filter(|(_, apc, pos)| apc.cell.is_some() && levels.contains(&pos.z))
+        .map(|(e, ..)| e)
+        .collect();
+    for apc in apcs {
+        let Some(mut state) = world.get_mut::<Apc>(apc) else {
+            continue;
+        };
+        state.failure_timer = 0.0;
+        let state = state.clone();
+        let changed = world
+            .get_mut::<AreaPower>(state.area)
+            .is_some_and(|mut area| state.update(&mut area));
+        if changed {
+            world.write_message(AreaPowerChanged(state.area));
+        }
+    }
+}
+
 /// tg `/obj/machinery/power/apc/proc/energy_fail(duration)`: `failure_timer` rounded to the
 /// machine tick, then `update()`.
 fn energy_fail(world: &mut World, apc: Entity, secs: f64) {

@@ -57,7 +57,7 @@ _«Шаттлы майнинга и трудового лагеря» описа
 - **Статус в ss13-rs:** ❌ нет
 
 ### Шаттлы форка: SIT, SST, Аргос, спецназ, Гамма, капсула NT
-Дополнительные шаттлы BandaStation: ударные отряды Синдиката (SIT/SST), «Аргос», спецопераций ЦК, шаттл Гамма-арсенала, штурмовая капсула Nanotrasen; свои области, консоли, платы, доки и звук высадки.
+Дополнительные шаттлы BandaStation: ударные отряды Синдиката (SIT/SST), «Аргос», спецопераций ЦК, шаттл Гамма-арсенала, штурмовая капсула Nanotrasen; свои области, консоли, платы, доки и звук высадки. Установившему код Гамма админу предлагается сразу отправить шаттл Гамма-арсенала (`/datum/security_level/gamma/post_set_security_level`; сам код — ../security/security-levels.md).
 
 - **Код:** [`/obj/docking_port/mobile`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/mobile_port/mobile_port.dm#L1)
 - **BandaStation:** [`docking_ports.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/shuttles/code/docking_ports.dm#L77), [`terminals.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/shuttles/code/terminals.dm#L1), [`areas.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/shuttles/code/areas.dm#L1) — новые шаттлы и их оборудование

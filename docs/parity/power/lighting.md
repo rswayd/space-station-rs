@@ -12,7 +12,7 @@
 Без питания лампа с аварийной ячейкой светит красным в четверть дальности, ячейка тратится (~10 минут) и подзаряжается при питании; «major emergency» от пожарной тревоги.
 
 - **Код:** [`proc/use_emergency_power()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light.dm#L526), [`proc/has_emergency_power()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light.dm#L516), [`process()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light.dm#L329), [`proc/set_major_emergency_light()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light.dm#L648)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/power/model.rs` (`light_mode`, `EMERGENCY_CELL_CHARGE`), `crates/ss13_game/src/power/mod.rs` (`set_area_fire`): аварийный режим и подзарядка, красный свет `fire_*` при пожарной тревоге зоны; нет «major emergency» (уровень угрозы)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/power/model.rs` (`light_mode`, `EMERGENCY_CELL_CHARGE`), `crates/ss13_game/src/power/mod.rs` (`set_area_fire`): аварийный режим и подзарядка, красный свет `fire_*` при пожарной тревоге зоны; нет «major emergency» (ставят код Эпсилон после установки и каскад суперматерии; сам код — ../security/security-levels.md)
 
 ### Поломка, перегорание и мерцание ламп
 Лампы бьются ударами и взрывами (искры, осколки), перегорают при включении, случайная поломка на старте раунда, мерцание (ЭМИ, события, призраки), удар током при вынимании голой рукой горячей лампы.

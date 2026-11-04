@@ -171,6 +171,12 @@ pub struct Door {
     pub unres_latch: bool,
     /// tg `emergency`: emergency access, anyone opens it (`allowed()`).
     pub emergency: bool,
+    /// tg `red_alert_access` (the `red_alert_access` mapping helper): at red alert and above
+    /// the door takes any access (`check_access_list`).
+    pub red_alert_access: bool,
+    /// The station is at red alert or above (`crate::security_level` keeps it on the doors with
+    /// [`Self::red_alert_access`]).
+    pub red_alert: bool,
     /// tg `aiDisabledIdScanner`: the AI turned the ID scanner off.
     pub ai_disabled_id_scanner: bool,
     /// Airlocks: `doorOpen`, `doorClose`, `doorDeni`, `boltUp`, `boltDown`.
@@ -234,6 +240,10 @@ impl Door {
 
     /// tg `allowed()` against the opener's ID access (`None`: no ID).
     pub fn allows(&self, access: Option<&[String]>) -> bool {
+        // `door/check_access_list`.
+        if self.red_alert_access && self.red_alert {
+            return true;
+        }
         check_access(
             &self.req_access,
             &self.req_one_access,
@@ -471,6 +481,8 @@ fn init_doors(world: &mut World) {
                 shock_ready_at: 0.0,
                 unres_latch: false,
                 emergency: false,
+                red_alert_access: false,
+                red_alert: false,
                 ai_disabled_id_scanner: false,
                 sounds: sounds
                     .entry(DoorSounds {
@@ -583,6 +595,7 @@ fn spawn_fillers(world: &mut World) {
 fn apply_helper(door: &mut Door, h: &DmAirlockHelper, dir: u8, pos: TilePos) {
     door.locked |= h.locked;
     door.welded |= h.welded;
+    door.red_alert_access |= h.red_alert_access;
     if h.unres {
         door.unres_sides ^= dir;
         door.unres_latch = true;
@@ -1225,6 +1238,8 @@ pub(crate) fn test_airlock(req_access: &[&str]) -> Door {
         shock_ready_at: 0.0,
         unres_latch: false,
         emergency: false,
+        red_alert_access: false,
+        red_alert: false,
         ai_disabled_id_scanner: false,
         sounds: default(),
         sound: None,

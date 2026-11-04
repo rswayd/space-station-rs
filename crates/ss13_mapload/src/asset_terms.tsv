@@ -6,7 +6,10 @@
 # Restrictive sources.
 sound/items/weapons/gun/revolver/spin*.ogg	Cut from a BBC Sound Effects recording (bbcsfx.acropolis.org.uk, "(c) copyright 2018 BBC"); renamed from sound/weapons/revolverspin1-3.ogg (git log --follow). The BBC archive is under the RemArc licence: personal, educational and research use only	high	sound/attributions.txt
 sound/items/handling/helmet/visor_*	"Bike helmet visor.wav" by Didi0508, freesound.org/s/541921: CC BY-NC 4.0	high	sound/items/handling/helmet/attribution.txt
+modular_bandastation/security_levels/sound/*.ogg	dj-34 (github.com/dj-34): CC BY-NC 4.0	high	modular_bandastation/security_levels/sound/attributions.txt
+modular_bandastation/aesthetics_sounds/sound/epsilon_laws.ogg	dj-34 (github.com/dj-34): CC BY-NC 4.0	high	modular_bandastation/aesthetics_sounds/sound/attributions.txt
 # Third-party sources without a stated license, or site licenses that limit redistribution.
+sound/announcer/alarm/airraid.ogg	Jwade722, freesound.org/people/Jwade722/sounds/534550 (shortened and cut); no license stated	medium	sound/announcer/alarm/attribution.txt
 sound/items/weapons/bulletflyby*.ogg	kMoon, freesound.org (90782, 90783, 90784); no license stated	medium	sound/attributions.txt
 sound/items/reel/reel*.ogg	pixabay.com/sound-effects/reel-78063: Pixabay Content License (no redistribution of the file on its own)	medium	sound/attributions.txt
 sound/items/rattle/rattle*.ogg	pixabay.com/sound-effects/chain-6073: Pixabay Content License (no redistribution of the file on its own)	medium	sound/attributions.txt
@@ -31,6 +34,7 @@ sound/mobs/non-humanoids/cat/oranges_meow*	orangesnz: CC0	low	sound/mobs/non-hum
 # Reviewed: named, but the entry is a contributor's work under the repository's CC BY-SA 3.0, or
 # the name only describes another file.
 sound/effects/portal/*	@virgilcore, no separate license (repository CC BY-SA 3.0)	-	sound/attributions.txt
+sound/effects/pop.ogg	only in the names champagne_pop.ogg and bubblegum-pop.ogg	-	sound/attributions.txt
 sound/items/weapons/drill.ogg	only named as a source of refinery/smelter ("electric drill")	-	sound/attributions.txt
 sound/items/weapons/flashbang.ogg	only in the title of a solarflare.ogg source	-	sound/attributions.txt
 sound/items/weapons/genhit.ogg	only named as part of parry.ogg	-	sound/attributions.txt

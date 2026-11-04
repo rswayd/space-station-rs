@@ -251,6 +251,7 @@ impl Plugin for GameServerPlugin {
         .add_plugins(crate::disposals::DisposalsServerPlugin)
         .add_plugins(crate::genetics::GeneticsServerPlugin)
         .add_plugins(crate::wallmount::WallMountPlugin)
+        .add_plugins(crate::security_level::SecurityLevelPlugin)
         .add_plugins((
             crate::projectile::ProjectileServerPlugin,
             crate::guns::GunsServerPlugin,

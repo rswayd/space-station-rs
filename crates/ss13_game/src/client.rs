@@ -29,6 +29,7 @@ pub struct GameClientPlugin;
 
 impl Plugin for GameClientPlugin {
     fn build(&self, app: &mut App) {
+        app.add_plugins(crate::keycard_client::KeycardClientPlugin);
         app.add_plugins((
             PredictionPlugin,
             crate::ui_sprites::UiSpritesPlugin,

@@ -122,6 +122,9 @@ pub enum AdminRequest {
     Dynamic,
     /// `R_ADMIN`: run a midround ruleset now, by config tag (tg `force_run_midround`).
     ForceMidround(String),
+    /// `R_ADMIN`: tg "Set Security Level", by level name (`green` ... `delta`, BandaStation's
+    /// `gamma` and `epsilon`).
+    SetSecurityLevel(String),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]

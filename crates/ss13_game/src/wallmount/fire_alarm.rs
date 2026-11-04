@@ -9,10 +9,11 @@
 //! power. Hot or cold air next to a firelock activates its row the same way
 //! ([`super::firelock`]), so the alarms alert without being pulled. The examine shows the
 //! hazard light, the fault (location, automatic or manual), the security level and the thermal
-//! detection light.
+//! detection light. An idle alarm shows the security level (`fire_<number>`, the level's light
+//! color) and follows its changes (`check_security_level`).
 // shortcut: no alarm manager (consoles, AI), no `fire_detect` toggle (silicon ctrl-click,
-// multitool), no off-station look (`fire_offstation`); the station has no security levels yet,
-// so the alarm shows and names the green one. Add with those systems.
+// multitool), no off-station look (`fire_offstation`): every alarm counts as on the station.
+// Add with those systems.
 
 use bevy::prelude::*;
 use ss13_shared::TilePos;
@@ -33,9 +34,8 @@ const SIREN: [&str; 4] = [
 ];
 const SIREN_SECS: f64 = 2.4;
 const SIREN_VOLUME: f32 = 30.0;
-/// tg light colors: `LIGHT_COLOR_BLUEGREEN` (green security level), `COLOR_WHITE` (detection
-/// off), `LIGHT_COLOR_INTENSE_RED` (alarm).
-const BLUEGREEN: [u8; 3] = [0x7D, 0xE1, 0xAF];
+/// tg light colors: `COLOR_WHITE` (detection off), `LIGHT_COLOR_INTENSE_RED` (alarm); the
+/// security level's own otherwise.
 const WHITE: [u8; 3] = [0xFF, 0xFF, 0xFF];
 const INTENSE_RED: [u8; 3] = [0xC8, 0x19, 0x19];
 
@@ -122,8 +122,12 @@ pub(super) fn look(world: &World, e: Entity, alarm: &FireAlarm, powered: bool) -
     let (overlay, emissive, range, power, color) = if alerting(world, alarm.area) {
         ("fire_alerting", "fire_alerting_e", 2.5, 1.5, INTENSE_RED)
     } else if detect {
-        // `fire_[SSsecurity_level.get_current_level_as_number()]`: green.
-        ("fire_0", "fire_level_e", 1.6, 1.0, BLUEGREEN)
+        // `fire_[SSsecurity_level.get_current_level_as_number()]`.
+        let level = crate::security_level::current(world);
+        let overlay = format!("fire_{}", level.number());
+        look.overlays = vec![(overlay, false), ("fire_level_e".to_owned(), true)];
+        look.light = light_of(world, e, 1.6, 1.0, level.fire_alarm_light_color());
+        return look;
     } else {
         ("fire_disabled", "fire_level_e", 1.6, 1.0, WHITE)
     };
@@ -134,6 +138,15 @@ pub(super) fn look(world: &World, e: Entity, alarm: &FireAlarm, powered: bool) -
 
 fn now(world: &World) -> f64 {
     world.resource::<Time>().elapsed_secs_f64()
+}
+
+/// tg `firealarm/check_security_level`: every alarm's look follows the new level.
+pub fn on_security_level_changed(world: &mut World) {
+    let mut query = world.query_filtered::<Entity, With<FireAlarm>>();
+    let alarms: Vec<Entity> = query.iter(world).collect();
+    for alarm in alarms {
+        refresh_look(world, alarm);
+    }
 }
 
 /// tg `firealarm/alarm(user)`: closes every firelock of the area and rings. `client`: the user
@@ -288,8 +301,10 @@ pub(super) fn examine_lines(world: &World, target: Entity, lines: &mut Vec<(Span
         return;
     };
     let fire = world.get::<AreaFire>(alarm.area);
-    // shortcut: no security levels: always green.
-    let level = "The station security alert level is green.".to_owned();
+    let level = format!(
+        "The station security alert level is {}.",
+        crate::security_level::current(world).name()
+    );
     if alerting(world, alarm.area) {
         lines.push((
             Span::Plain,

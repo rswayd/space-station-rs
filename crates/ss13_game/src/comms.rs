@@ -1,6 +1,6 @@
 //! The communications console window's data, shared by both halves: a minimal port of tgui
 //! `CommunicationsConsole` (`tgui/packages/tgui/interfaces/CommunicationsConsole/`) with the
-//! authentication section and the emergency shuttle section of the main page. The server half
+//! authentication section and the emergency shuttle and alert level sections of the main page. The server half
 //! is `crate::shuttle`, the client view `crate::comms_client`.
 
 use serde::{Deserialize, Serialize};
@@ -35,10 +35,21 @@ pub struct CommsConsoleData {
     pub call_shuttle_reason_min_length: u32,
     /// tg `maxMessageLength`, capped by the act param limit.
     pub max_message_length: u32,
+    /// tg `alertLevel`: the security level's name.
+    pub alert_level: String,
+    /// tg `canSetAlertLevel`: `None` (`FALSE`), [`SWIPE_NEEDED`] or [`NO_SWIPE_NEEDED`].
+    pub can_set_alert_level: Option<String>,
 }
+
+/// `CommunicationsConsole/constants.ts`.
+pub const SWIPE_NEEDED: &str = "SWIPE_NEEDED";
+pub const NO_SWIPE_NEEDED: &str = "NO_SWIPE_NEEDED";
 
 pub const TOGGLE_AUTHENTICATION: &str = "toggleAuthentication";
 /// `act('callShuttle', { reason })`.
 pub const CALL_SHUTTLE: &str = "callShuttle";
 pub const RECALL_SHUTTLE: &str = "recallShuttle";
 pub const REASON: &str = "reason";
+/// `act('changeSecurityLevel', { newSecurityLevel })`.
+pub const CHANGE_SECURITY_LEVEL: &str = "changeSecurityLevel";
+pub const NEW_SECURITY_LEVEL: &str = "newSecurityLevel";

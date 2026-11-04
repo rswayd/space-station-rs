@@ -56,6 +56,9 @@
 //! - `shuttle` (feature `server`): docking ports, shuttle templates and moves, the emergency
 //!   shuttle's modes as the round's end, the communications console's server half; `comms`
 //!   holds the console window's data, `comms_client` (feature `client`) draws it.
+//! - `security_level` (feature `server`): the station's security level, its announcements and
+//!   consumers, evac status displays, the keycard authentication device; `keycard` holds the
+//!   device window's data, `keycard_client` (feature `client`) draws it.
 //! - `vending` (feature `server`): vending machines, the tgui `Vending` window's server half.
 //! - `disposals` (feature `server`): disposal pipes, bins and chutes (tgui `DisposalUnit`),
 //!   holders travelling to outlets, mail sorting, destination taggers and parcels.
@@ -201,6 +204,9 @@ pub mod inventory_client;
 pub mod janitor;
 #[cfg(feature = "server")]
 pub mod jobs;
+pub mod keycard;
+#[cfg(feature = "client")]
+pub mod keycard_client;
 #[cfg(feature = "server")]
 pub mod kitchen;
 pub mod lobby;
@@ -248,6 +254,8 @@ pub mod round;
 pub mod science;
 #[cfg(feature = "server")]
 pub mod security;
+#[cfg(feature = "server")]
+pub mod security_level;
 #[cfg(feature = "server")]
 pub mod server;
 #[cfg(feature = "server")]

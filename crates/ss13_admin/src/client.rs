@@ -28,6 +28,8 @@ use ss13_shared::admin::{
 
 /// The player list is asked for this often while it is shown (seconds).
 const PLAYERS_POLL_SECS: f64 = 1.0;
+/// `SSsecurity_level.available_levels` in BandaStation's order (`ss13_game::security_level`).
+const SECURITY_LEVELS: [&str; 6] = ["green", "blue", "red", "gamma", "epsilon", "delta"];
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Tab {
@@ -735,6 +737,18 @@ fn game_tab(ui: &mut egui::Ui, state: &mut AdminUi, out: &mut Vec<AdminRequest>)
                             name: name.clone(),
                             announce: None,
                         });
+                    }
+                }
+            });
+        });
+        ui.separator();
+        ui.add_enabled_ui(state.can(R_ADMIN), |ui| {
+            // tg "Set Security Level" (`SSsecurity_level.available_levels`).
+            ui.horizontal_wrapped(|ui| {
+                ui.strong("Уровень угрозы");
+                for level in SECURITY_LEVELS {
+                    if ui.small_button(level).clicked() {
+                        out.push(AdminRequest::SetSecurityLevel(level.to_owned()));
                     }
                 }
             });
