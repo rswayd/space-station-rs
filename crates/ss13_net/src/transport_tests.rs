@@ -119,11 +119,16 @@ async fn raw_session(
         .with_server_certificate_hashes([parse_digest(&digest).unwrap()])
         .build();
     let endpoint = Endpoint::client(config).map_err(|e| e.to_string())?;
-    let conn = endpoint
-        .connect(format!("https://{addr}"))
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok((endpoint, conn))
+    let mut tries = 0;
+    loop {
+        match endpoint.connect(format!("https://{addr}")).await {
+            Ok(conn) => return Ok((endpoint, conn)),
+            // wtransport itself answers H3_EXCESSIVE_LOAD (0x107) to a session setup now and then
+            // when the whole test suite loads the CPU; the code under test never ran.
+            Err(e) if e.to_string().ends_with(": 263") && tries < 3 => tries += 1,
+            Err(e) => return Err(e.to_string()),
+        }
+    }
 }
 
 async fn raw_stream(conn: &Connection) -> (SendStream, RecvStream) {
