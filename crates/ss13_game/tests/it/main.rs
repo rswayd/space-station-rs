@@ -28,6 +28,7 @@ mod heretic;
 mod interact;
 mod inventory;
 mod janitor;
+mod kitchen;
 mod jobs;
 mod loopback;
 mod los;

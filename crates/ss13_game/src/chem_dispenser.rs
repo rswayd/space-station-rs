@@ -64,7 +64,12 @@ pub struct ChemDispenserPlugin;
 impl Plugin for ChemDispenserPlugin {
     fn build(&self, app: &mut App) {
         app.register_ui::<DispenserWindow>()
-            .add_systems(Startup, setup_mapped.after(crate::power::init_power))
+            .add_systems(
+                Startup,
+                setup_mapped
+                    .after(crate::power::init_power)
+                    .after(crate::mecha::core::MechaLoaded),
+            )
             .add_systems(
                 Update,
                 (
