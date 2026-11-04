@@ -73,3 +73,9 @@ _«Заменитель ламп» описано в [../power/lighting.md](../p
 
 - **Код:** [`/obj/machinery/shower`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/shower.dm#L29), [`/obj/structure/sink`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/water_structures/sink.dm#L1)
 - **Статус в ss13-rs:** ❌ нет
+
+### Ключ уборщика и доступ отдела с ключ-карты
+Глава на устройстве авторизации ключ-картой нажимает «Grant Janitor Access» (откат 30 с, должность главы по карте): ключ уборщика временно получает доступ регионов его отдела.
+
+- **Код:** [`ui_act "give_janitor_access"`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/security_levels/keycard_authentication.dm#L89), [`/obj/item/access_key`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/tools/janitorial/janitor_key.dm#L4)
+- **Статус в ss13-rs:** ❌ нет — устройство ключ-карт есть (`crates/ss13_game/src/security_level/keycard.rs`), кнопки и ключа нет

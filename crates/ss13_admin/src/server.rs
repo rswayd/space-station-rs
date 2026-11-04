@@ -508,7 +508,8 @@ pub fn required_rights(request: &AdminRequest) -> Option<u32> {
         | Announce { .. }
         | MakeAntag { .. }
         | Dynamic
-        | ForceMidround(_) => R_ADMIN,
+        | ForceMidround(_)
+        | SetSecurityLevel(_) => R_ADMIN,
         Ban { .. } | Unban(_) => R_BAN,
         FindPrototypes(_) | Spawn(_) => R_SPAWN,
         Smite { .. } => R_ADMIN | R_FUN,
@@ -985,6 +986,16 @@ fn answer(world: &mut World, client: Entity, request: AdminRequest) -> AnswerRes
                 ),
             );
             Ok(Some(AdminResponse::Dynamic(dynamic_report(world))))
+        }
+        AdminRequest::SetSecurityLevel(name) => {
+            let level = ss13_game::security_level::SecLevel::from_name(&name)
+                .ok_or_else(|| format!("Нет уровня угрозы {name:?}."))?;
+            ss13_game::security_level::set_level(world, level, true);
+            admin_action(
+                world,
+                &format!("{key} changed the security level to {}", level.name()),
+            );
+            done(format!("security level {}", level.name()))
         }
     }
 }

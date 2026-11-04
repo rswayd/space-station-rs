@@ -54,5 +54,5 @@ _«Законы ИИ и киборги» описано в [../silicon/laws.md](
 ### Уровень тревоги и шаттл
 Set Security Level, вызов/отзыв/отключение шаттла, враждебная среда, менеджер шаттлов, события шаттла.
 
-- **Код:** [`adminshuttle.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/verbs/adminshuttle.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — админ-системы нет
+- **Код:** [`adminshuttle.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/verbs/adminshuttle.dm#L1), [`ADMIN_VERB(change_sec_level)`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/verbs/adminevents.dm#L152)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_admin/src/server.rs`, `crates/ss13_admin/src/client.rs` (вкладка игры: «Уровень угрозы», `AdminRequest::SetSecurityLevel`, `R_ADMIN`); нет вызова/отзыва/отключения шаттла, враждебной среды, менеджера и событий шаттла

@@ -37,6 +37,9 @@ the `high` rows of [`docs/ASSET-AUDIT.md`](docs/ASSET-AUDIT.md):
   ("Bike helmet visor.wav" by Didi0508, freesound.org/s/541921);
 - `sound/items/weapons/gun/revolver/spin1-3.ogg`: cut from a BBC Sound Effects recording, RemArc
   licence (personal, educational and research use only).
+- `modular_bandastation/security_levels/sound/gamma.ogg`, `epsilon.ogg` and
+  `modular_bandastation/aesthetics_sounds/sound/epsilon_laws.ogg`: CC BY-NC 4.0 (dj-34,
+  github.com/dj-34), the Gamma and Epsilon security level sounds.
 
 Anyone who runs or distributes this project commercially (paid access, ads, paid perks) must
 exclude or replace these assets first.

@@ -962,10 +962,12 @@ also scans `_maps/shuttles` for its types and emits `dm_docking_port` (rerun it)
 `/obj/docking_port/stationary` with `shuttle_id = "emergency_home"` is where it docks.
 
 - Communications console (`/obj/machinery/computer/communications`, tgui `CommunicationsConsole`:
-  authentication and the emergency shuttle section): log in with an ID that has command access,
-  call with a reason of at least 12 characters, recall while more than the base call time is
-  left. Calls are refused for the first `SHUTTLE_REFUEL_DELAY` of the round.
-- Modes: called -> docked after the call time (x2, green alert) -> engines start 10 s before the
+  authentication, the emergency shuttle and alert level sections): log in with an ID that has
+  command access, call with a reason of at least 12 characters, recall while enough of the call
+  is left for the security level (the base call time at green, half at blue, a quarter above).
+  Calls are refused for the first `SHUTTLE_REFUEL_DELAY` of the round.
+- Modes: called -> docked after the call time (times the security level's coefficient, x2 at
+  green; "Security levels" below) -> engines start 10 s before the
   dock time ends -> escape (transit level) -> CentCom: round end report with "Коэффициент
   эвакуированных" / "На эвакуационном шаттле" and a personal "брошены на станции" for those left
   behind. Priority announcements in BandaStation's Russian go to every player's chat.
@@ -1173,6 +1175,35 @@ SS13_LIGHTING=0 SS13_MAP=$PWD/scripts/visual/maps/security.dmm SS13_ASSETS=$ASSE
 
 `ss13-mapload convert` emits `dm_baton`, `dm_handcuffs` and `flash_protect` in `dm_clothing`:
 rerun it after updating.
+
+### Security levels
+
+The station's code (`crates/ss13_game/src/security_level/`): green, blue, red, delta and
+BandaStation's Gamma and Epsilon. A change is announced to every player with the level's sound;
+fire alarms take its color, evac status displays show its picture for 30 s, airlocks with the
+`red_alert_access` helper open for anyone from red up, the emergency shuttle's call time follows
+`shuttle_call_time_mod` (green x2, blue x1, red and Gamma x0.5, delta x0.25, Epsilon x10, also
+during a call or a recall) and so does the recall window. Epsilon arrives 15 s later, after a
+power loss, with Epsilon laws and a CentCom radio for the AI and its cyborgs.
+
+- Communications console: logged in with captain access, the "Alert Level" section sets green
+  or blue after "Swipe ID" with a captain's ID in the active hand; refused under delta, Gamma and
+  Epsilon.
+- Keycard authentication devices (head offices, `keycard_auth` access): one head picks red
+  alert, emergency maintenance access (every maintenance airlock opens for anyone) or the
+  bluespace artillery lock; another head confirms on another device within 2 s.
+- Arming the nuke sets delta; disarming it restores the previous level.
+- Admins: the game tab's "Уровень угрозы" buttons (`R_ADMIN`).
+
+```sh
+cargo test -p ss13_game --all-features --lib security_level   # levels, delayed Epsilon set
+cargo test -p ss13_game --all-features --lib shuttle          # recall window, rescaled timer
+cargo test -p ss13_game --all-features --test it security_level::  # console swipe, keycards,
+                                       # red alert airlock, fire alarm, evac display, maint access
+```
+
+`ss13-mapload convert` emits `red_alert_access` in `dm_airlock_helper` and copies the levels'
+sounds: rerun it after updating.
 
 ### Wall mounts
 

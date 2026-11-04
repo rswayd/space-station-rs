@@ -9,8 +9,11 @@
 //! `memorized_code` for the syndicate bomb) unlocks the timer input (90-3600 s), which takes the
 //! safety off; ARM starts the countdown, ARM again (disk in, code entered) stops it. `anchor`
 //! needs the disk and the code and refuses in space.
+//! Arming sets the delta security level and disarming restores the level it was armed at
+//! (`arm_nuke`, `disarm_nuke`).
 // shortcut: no deconstruction (nuke core, screwdriver/welder states), countdown effect, sounds,
-// security level (delta), pinpointer alert, ghost notification, minimap blip or cinematic.
+// pinpointer alert, ghost notification, minimap blip or cinematic; no red alert after an
+// off-station detonation (`drop_level`).
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
@@ -327,6 +330,8 @@ pub struct NuclearBomb {
     pub syndicate: bool,
     /// Game seconds of `actually_explode` once exploding.
     pub actually_explode_at: Option<f64>,
+    /// tg `previous_level`: the security level when it was armed.
+    pub previous_level: crate::security_level::SecLevel,
 }
 
 pub struct NuclearBombPlugin;
@@ -371,6 +376,7 @@ fn setup_bombs(world: &mut World) {
             disk: None,
             syndicate,
             actually_explode_at: None,
+            previous_level: default(),
         });
     }
 }
@@ -512,14 +518,24 @@ fn bomb_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed<NuclearBom
             BombAct::Keypad(digit) => {
                 if bomb.state.keypad(&digit) == Some(KeyEffect::Disarmed) {
                     info!("{bomb_e} was disarmed by {actor}");
+                    crate::security_level::set_level(world, bomb.previous_level, true);
                 }
             }
             BombAct::Arm => match bomb.state.arm(now) {
                 Some(true) => {
                     info!("{bomb_e} was armed by {actor} ({} s)", bomb.state.timer_set);
                     super::server::bomb_armed(world, bomb_e);
+                    bomb.previous_level = crate::security_level::current(world);
+                    crate::security_level::set_level(
+                        world,
+                        crate::security_level::SecLevel::Delta,
+                        true,
+                    );
                 }
-                Some(false) => info!("{bomb_e} was disarmed by {actor}"),
+                Some(false) => {
+                    info!("{bomb_e} was disarmed by {actor}");
+                    crate::security_level::set_level(world, bomb.previous_level, true);
+                }
                 None => {}
             },
             BombAct::Anchor => {

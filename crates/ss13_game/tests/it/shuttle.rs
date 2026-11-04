@@ -540,6 +540,39 @@ fn call_dock_board_launch_arrive_escape() {
     assert!(s.said("Вам удалось пережить события на map как"));
 }
 
+/// At red alert a call is a priority shuttle at half the call time; going back to green
+/// during the call rescales what is left (x4).
+#[test]
+fn red_alert_call_and_level_change() {
+    use ss13_game::security_level::{self, SecLevel};
+    let mut s = Station::fixture("red_alert_call_and_level_change");
+    s.set_access(&["command"]);
+    s.open_console();
+    s.act("toggleAuthentication", &[]);
+    s.run_until_for(10.0, "logged in", |s| s.data().authenticated);
+    security_level::set_level(s.server.world_mut(), SecLevel::Red, true);
+    s.act("callShuttle", &[("reason", "the station is on fire")]);
+    s.run_until_for(10.0, "called", |s| s.mode() == ShuttleMode::Call);
+    s.run_until_for(10.0, "announced", |s| {
+        s.said("Красный уровень угрозы подтверждён: Отправлен приоритетный шаттл.")
+    });
+    let left = |s: &Station| {
+        let now = s.now();
+        s.server
+            .world()
+            .resource::<EmergencyShuttle>()
+            .state
+            .timer
+            .left(now)
+            .unwrap()
+    };
+    let before = left(&s);
+    assert!(before <= 2.5, "red: 5 s x 0.5, {before} left");
+    security_level::set_level(s.server.world_mut(), SecLevel::Green, true);
+    let after = left(&s);
+    assert!((after - before * 4.0).abs() < 1e-6, "{before} -> {after}");
+}
+
 /// Docks the real MetaStation emergency shuttle with a client in the departure lounge and
 /// reports the move's time and the replication bytes it cost that client.
 #[test]

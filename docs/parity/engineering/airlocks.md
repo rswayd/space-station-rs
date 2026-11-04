@@ -66,7 +66,7 @@
 Режим аварийного доступа открывает шлюз всем; при красной тревоге шлюзы с `red_alert_access` пускают людей без доступа.
 
 - **Код:** [`proc/toggle_emergency()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/doors/airlock.dm#L1868), [`proc/has_active_reta_access()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/doors/airlock.dm#L510), [`proc/check_security_level()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/doors/door.dm#L234)
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/wires.rs` (shortcut: no emergency access)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/doors.rs` (`emergency`, `red_alert_access` из хелпера карты, `allows`), `crates/ss13_game/src/security_level/mod.rs` (шлюзы следуют уровню, сообщение и звук при снятии доступа выше синего, осмотр), аварийный доступ ставят окно ИИ (`crates/ss13_game/src/silicon/airlock.rs`) и ключ-карты (техтоннели); нет огней аварийного доступа на шлюзе (`AIRLOCK_LIGHT_EMERGENCY`) и RETA (`has_active_reta_access`, включён в конфиге BandaStation)
 
 ### Укрепление шлюза и уплотнитель двери
 Пластины пласталевого укрепления на шлюзе мешают взлому; уплотнитель (`door_seal`) блокирует открытие, пока его не снимут.

@@ -5,7 +5,7 @@
 Вход по ID с доступом командования (капитан — расширенные права), ИИ и борги авторизуются сами; выход.
 
 - **Код:** [`/obj/machinery/computer/communications`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/computer/communications.dm#L10), [`proc/authenticated()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/computer/communications.dm#L110); tgui: [`CommunicationsConsole`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/CommunicationsConsole)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/shuttle.rs`, `crates/ss13_game/src/comms.rs`, `crates/ss13_game/src/comms_client.rs`: вход/выход по ID с командным доступом; нет капитанских прав, синтетиков, взлома
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/shuttle.rs`, `crates/ss13_game/src/comms.rs`, `crates/ss13_game/src/comms_client.rs`: вход/выход по ID с командным доступом, капитанский доступ открывает раздел уровня тревоги; нет синтетиков, взлома
 
 ### Консоль связи: вызов и отзыв эвакуационного шаттла
 Раздел главной страницы: вызов с причиной (≥ 12 символов), отзыв, след места вызова. Сама механика шаттла — см. ../shuttles/.
@@ -18,7 +18,7 @@
 
 - **Код:** [`ui_act "changeSecurityLevel"`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/computer/communications.dm#L188)
 - **BandaStation:** [`communications.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/computer/communications.dm#L211) — военное положение
-- **Статус в ss13-rs:** ❌ нет — уровней тревоги нет (shortcut в `crates/ss13_game/src/shuttle.rs`)
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/shuttle.rs` (`change_security_level`: вход с капитанским доступом, карта капитана в активной руке, только зелёный/синий, блокировка при дельте и при Гамме/Эпсилоне форка, сообщения и звуки отказа/подтверждения), `crates/ss13_game/src/comms_client.rs` (раздел «Alert Level» и окно «Swipe ID»); синтетики консолью не пользуются (их ветка `NO_SWIPE_NEEDED` в окне есть)
 
 ### Консоль связи: приоритетное объявление и сообщения ЦК/Синдикату
 Объявление капитана на всю станцию (с кулдауном), сообщение Центральному командованию (или Синдикату через взломанную консоль), в другие сектора; входящие сообщения ЦК, ответы на них.
@@ -56,7 +56,7 @@
 `priority_announce`, `minor_announce`, отчёт ЦК (`print_command_report`): крупный текст всем игрокам, звук диктора, печать в консоли связи.
 
 - **Код:** [`/proc/priority_announce()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/__HELPERS/priority_announce.dm#L40), [`/proc/minor_announce()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/__HELPERS/priority_announce.dm#L142), [`/proc/print_command_report()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/__HELPERS/priority_announce.dm#L110); tgui: [`CommandReport.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/CommandReport.tsx)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/shuttle.rs` (`announce`): приоритетные объявления шаттла в чат всем; нет звуков, `minor_announce`, отчётов ЦК
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/shuttle.rs` (`announce`): приоритетные объявления шаттла в чат всем; `minor_announce` со звуком и объявления уровня угрозы — `crates/ss13_game/src/security_level/mod.rs`; нет звуков приоритетных объявлений, цветов, отчётов ЦК
 
 ### Дикторы объявлений (announcers)
 Наборы звуков дикторов ЦК (приветствие, тревоги, шаттл и т. д.), выбирается на раунд; форк добавляет диктора «стажёр».

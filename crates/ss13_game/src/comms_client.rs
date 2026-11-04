@@ -1,8 +1,9 @@
 //! The communications console window (client): `CommunicationsConsole/index.tsx` with the
 //! authentication section, and `Main.tsx`'s emergency shuttle section with the call reason
-//! `MessageModal`. The data is `crate::comms`, the server half `crate::shuttle`.
-// shortcut: the other main page sections (alert level, functions, sectors) and pages
-// (messages, status display, shuttle purchase) are not ported; the server refuses their acts.
+//! `MessageModal` and its alert level section (`AlertButton.tsx`) with the "Swipe ID" modal.
+//! The data is `crate::comms`, the server half `crate::shuttle`.
+// shortcut: the other main page sections (functions, sectors) and pages (messages, status
+// display, shuttle purchase) are not ported; the server refuses their acts.
 // The recall button sends at once (tgui `Button.Confirm` asks a second click), and the call
 // button's "longer reason" check runs on submit (the window does not re-render on typing).
 
@@ -16,12 +17,14 @@ use ss13_tgui::client::{
 use ss13_ui_kit::prelude::*;
 
 use crate::comms::{
-    CALL_SHUTTLE, CommsConsoleData, CommsConsoleUi, REASON, RECALL_SHUTTLE, TOGGLE_AUTHENTICATION,
+    CALL_SHUTTLE, CHANGE_SECURITY_LEVEL, CommsConsoleData, CommsConsoleUi, NEW_SECURITY_LEVEL,
+    REASON, RECALL_SHUTTLE, SWIPE_NEEDED, TOGGLE_AUTHENTICATION,
 };
 
 /// `useState` keys.
 const CALLING: &str = "callingShuttle";
 const INPUT: &str = "input";
+const NEW_ALERT_LEVEL: &str = "newAlertLevel";
 
 pub struct CommsClientPlugin;
 
@@ -110,6 +113,11 @@ fn view(data: &CommsConsoleData, local: &UiLocalState) -> impl Scene + use<> {
     let main = data
         .authenticated
         .then(|| EntityScene(shuttle_section(data)));
+    let can_set_alert = data.authenticated && data.can_set_alert_level.is_some();
+    let alert = can_set_alert.then(|| EntityScene(alert_section(data)));
+    let new_level = local.get(NEW_ALERT_LEVEL).to_owned();
+    let swipe = (can_set_alert && !new_level.is_empty() && new_level != data.alert_level)
+        .then(|| EntityScene(swipe_modal(new_level)));
     let modal = calling.then(|| EntityScene(reason_modal(data)));
     bsn! {
         @WindowContent
@@ -118,7 +126,113 @@ fn view(data: &CommsConsoleData, local: &UiLocalState) -> impl Scene + use<> {
             --
             {main}
             --
+            {alert}
+            --
+            {swipe}
+            --
             {modal}
+        ]
+    }
+}
+
+/// tgui `capitalize`.
+fn capitalize(s: &str) -> String {
+    let mut chars = s.chars();
+    chars
+        .next()
+        .map(|c| c.to_uppercase().chain(chars).collect())
+        .unwrap_or_default()
+}
+
+/// `Main.tsx` `<Section title="Alert Level">` with green and blue `AlertButton`s: the current
+/// one does nothing, the other asks for the swipe (`SWIPE_NEEDED`) or sets the level at once.
+fn alert_section(data: &CommsConsoleData) -> impl Scene + use<> {
+    let current = format!("Currently on {} Alert", capitalize(&data.alert_level));
+    let swipe = data.can_set_alert_level.as_deref() == Some(SWIPE_NEEDED);
+    let button = |level: &str| {
+        let is_current = data.alert_level == level;
+        let color = if is_current {
+            UiColor::Good
+        } else {
+            UiColor::Default
+        };
+        let content = capitalize(level);
+        let level = level.to_owned();
+        // Exactly one of the three is built.
+        let current = is_current.then(|| {
+            let content = content.clone();
+            EntityScene(bsn! {
+                @ss13_ui_kit::Button { @icon: "exclamation-triangle", @content: content }
+                ss13_ui_kit::Button { color: color }
+            })
+        });
+        let ask = (!is_current && swipe).then(|| {
+            let (content, level) = (content.clone(), level.clone());
+            EntityScene(bsn! {
+                @ss13_ui_kit::Button { @icon: "exclamation-triangle", @content: content }
+                SetLocal { key: {NEW_ALERT_LEVEL.to_owned()}, value: level, rerender: true }
+            })
+        });
+        let set = (!is_current && !swipe).then(|| {
+            EntityScene(bsn! {
+                @ss13_ui_kit::Button { @icon: "exclamation-triangle", @content: content }
+                Act({CHANGE_SECURITY_LEVEL.to_owned()})
+                ActParams({vec![(NEW_SECURITY_LEVEL.to_owned(), level)]})
+            })
+        });
+        EntityScene(bsn! {
+            Node
+            Children [
+                {current}
+                --
+                {ask}
+                --
+                {set}
+            ]
+        })
+    };
+    let (green, blue) = (button("green"), button("blue"));
+    bsn! {
+        @Section { @title: "Alert Level" }
+        Children [
+            Node { justify_content: JustifyContent::SpaceBetween }
+            Children [
+                Node Children [ Text(current) ]
+                --
+                Node
+                Children [
+                    {green}
+                    --
+                    {blue}
+                ]
+            ]
+        ]
+    }
+}
+
+/// `Main.tsx`'s "Swipe ID to confirm change" modal.
+fn swipe_modal(level: String) -> impl Scene + use<> {
+    bsn! {
+        @Modal
+        Children [
+            Node { flex_direction: FlexDirection::Column, width: px(300) }
+            Children [
+                Node { margin: UiRect::bottom(px(12)) }
+                Children [ Text({"Swipe ID to confirm change".to_owned()}) ]
+                --
+                Node
+                Children [
+                    @ss13_ui_kit::Button { @icon: "id-card-o", @content: "Swipe ID" }
+                    ss13_ui_kit::Button { color: UiColor::Good }
+                    Act({CHANGE_SECURITY_LEVEL.to_owned()})
+                    ActParams({vec![(NEW_SECURITY_LEVEL.to_owned(), level)]})
+                    SetLocal { key: {NEW_ALERT_LEVEL.to_owned()}, value: {String::new()}, rerender: true }
+                    --
+                    @ss13_ui_kit::Button { @icon: "times", @content: "Cancel" }
+                    ss13_ui_kit::Button { color: UiColor::Bad }
+                    SetLocal { key: {NEW_ALERT_LEVEL.to_owned()}, value: {String::new()}, rerender: true }
+                ]
+            ]
         ]
     }
 }
