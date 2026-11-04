@@ -44,6 +44,7 @@ const CRUSHED_CAN: &str = "/obj/item/trash/can";
 const PROCESSABLE: &str = "/datum/element/processable";
 const MICROWAVABLE: &str = "/datum/element/microwavable";
 const BAKEABLE: &str = "/datum/component/bakeable";
+const DRYABLE: &str = "/datum/element/dryable";
 const GRILLABLE: &str = "/datum/component/grillable";
 /// `DEFAULT_EDIBLE_VOLUME`.
 pub const DEFAULT_EDIBLE_VOLUME: f32 = 50.0;
@@ -118,6 +119,9 @@ pub struct DmFood {
     pub grill_result: String,
     pub grill_time: [f32; 2],
     pub grill_good: bool,
+    /// `/datum/element/dryable` (`make_dryable()`): what a drying rack makes of it (its own type:
+    /// it is just marked dried); empty: not dryable.
+    pub dry_result: String,
     /// `foodtypes` bits (`MEAT`, `RAW`, ...).
     pub foodtypes: u32,
     /// `crafting_complexity` (0-5): the quality of a handmade one.
@@ -245,6 +249,10 @@ fn arg_value(types: &DmTypes, path: &str, text: &str) -> Option<Arg> {
     }
     if text.starts_with('/') {
         return Some(Arg::Path(text.to_owned()));
+    }
+    // `src.type`: the type itself (`AddElement(/datum/element/dryable, type)`).
+    if text == "type" {
+        return Some(Arg::Path(path.to_owned()));
     }
     if let Some(inner) = text.strip_prefix("rand(").and_then(|t| t.strip_suffix(')')) {
         let (low, high) = inner.split_once(',')?;
@@ -496,6 +504,16 @@ pub fn food(types: &DmTypes, path: &str) -> Option<DmFood> {
         food.processor_multiplier = num(r("food_multiplier")).unwrap_or(1.0) as u32;
         food.processor_time = num(r("time")).unwrap_or(40.0) as f32;
     }
+    food.dry_result = proc_owner(types, path, "make_dryable")
+        .and_then(|owner| calls(types, DRYABLE, owner, "make_dryable").last())
+        .and_then(|line| {
+            let args = bind(types, path, &call_args(line)?, &["dry_result"]);
+            match args[0].clone() {
+                Some(Arg::Path(p)) => Some(p),
+                _ => None,
+            }
+        })
+        .unwrap_or_default();
     food.foodtypes = n("foodtypes").unwrap_or(0.0) as u32;
     food.crafting_complexity = n("crafting_complexity").unwrap_or(0.0) as u32;
     let overrides_germs = types
@@ -672,6 +690,7 @@ pub fn food_closure<'a>(
                 f.bake_result,
                 f.grill_result,
                 f.decomp_type,
+                f.dry_result,
             ]);
             if f.ant_attracting {
                 next.push(ANTS.to_owned());
@@ -751,6 +770,7 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
         ext(c, "grill_result", s(&f.grill_result)),
         ext(c, "grill_time", pair(f.grill_time)),
         ext(c, "grill_good", f.grill_good.to_string()),
+        ext(c, "dry_result", s(&f.dry_result)),
         ext(c, "foodtypes", f.foodtypes.to_string()),
         ext(c, "crafting_complexity", f.crafting_complexity.to_string()),
         ext(c, "decomposes", f.decomposes.to_string()),

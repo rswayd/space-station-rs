@@ -5,7 +5,7 @@
 Базовый тип еды: при `Initialize` получает реагенты (`food_reagents`), объём, размер укуса, вкусы, тип пищи (`foodtypes`) и подключает компонент `edible`, элементы обработки, готовки и мусора.
 
 - **Код:** [`/obj/item/food`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/food_and_drinks/food/_food.dm#L2), [`proc/make_edible()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/food_and_drinks/food/_food.dm#L130), [`/datum/component/edible`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/food/edible.dm#L17)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload/src/food.rs` (`DmFood` для всех `/obj/item/food`), `crates/ss13_game/src/food.rs`: нет `foodtypes`, кастомных материалов и сигналов компонента для других систем
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload/src/food.rs` (`DmFood` для всех `/obj/item/food`, с `foodtypes`, `crafting_complexity`, данными гниения и сушки), `crates/ss13_game/src/food.rs`: нет кастомных материалов и сигналов компонента для других систем
 
 ### Поедание и кормление
 Еда в руке, кликнутая на себя вне боевого режима, съедается по укусам (`eat_time`, сообщения о сытости, отказ при переедании); на другого — после 3 с, по одному укусу. Закрытый рот (маска) мешает.
@@ -37,19 +37,19 @@ _«Вкус» описано в [../mobs/hunger-taste.md](../mobs/hunger-taste.m
 У еды есть `foodtypes` (мясо, овощи, жареное, токсичное...), у языка вида — списки любимого, нелюбимого и токсичного; от этого зависят мудлеты, рвота от токсичной еды и качество.
 
 - **Код:** [`/datum/component/edible`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/food/edible.dm#L17) (проверка `foodtypes`, `get_perceived_food_quality`), [`/obj/item/organ/tongue`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/organs/internal/tongue/_tongue.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/food.rs` прямо исключает foodtypes и likes/dislikes (shortcut)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/food.rs` (`perceived_quality`, `check_liked`, `examine_lines`): `foodtypes` из `DmFood`, язык человека (любит JUNKFOOD|FRIED, не любит GROSS|RAW|CLOTH|BUGS|GORE, токсично TOXIC; без языка — вкус 0), раз в 5 с укусов — сообщения tg («Что это, черт побери, было?!», «Эта пища была ужасна...», «Это … пища.»), в осмотре — состав и как выглядит; нет мудлетов, отвращения (disgust) и рвоты, аллергий, видов кроме человека, `FRIED` от фритюра
 
 ### Качество блюда и баффы еды
 Скрафченная еда имеет сложность рецепта; качество (с учётом вкусов едока) даёт мудлет от «отвратительно» до «фантастически», а сложные блюда — временные баффы.
 
 - **Код:** [`proc/apply_buff()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/food/edible.dm#L586), [`proc/get_recipe_complexity()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/food/edible.dm#L648), [`/datum/element/quality_food_ingredient`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/elements/quality_food_ingredient.dm#L2), [`/datum/element/love_food_buff`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/elements/food/love_food_buff.dm#L2)
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/food.rs`: нет баффов и качества (shortcut)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/food.rs`: качество = `crafting_complexity` у `Handmade` (результаты духовки, сковороды, микроволновки, сушилки, мороженого) ± вкусы, потолок 7, ярлыки `food_quality_description`; нет баффов (`/datum/status_effect/food/*`), мудлетов, крафта
 
 ### Микробы и гниение еды
 Еда, полежавшая на полу (или взятая грязными руками), заражается и через время гниёт: превращается в плесневелую версию, может заразить болезнью.
 
 - **Код:** [`/datum/component/germ_sensitive`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/food/germ_sensitive.dm#L14), [`/datum/component/decomposition`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/food/decomposition.dm#L8), [`proc/make_germ_sensitive()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/food_and_drinks/food/_food.dm#L224)
-- **Статус в ss13-rs:** ❌ нет — нет в `crates/ss13_game/src/food.rs` (shortcut: decomposition)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/decay.rs`, данные `crates/ss13_mapload/src/food.rs` (`decomposes`, `decomp_type`, `decomp_secs`, `decomp_req_handle`, `ant_attracting`): еда на открытом полу без стола/шкафа/кухонной машины 5 с — микробы; первый раз лишь «помечает» еду с карты (она защищена, пока не сдвинется), дальше идёт таймер (5/7/10 мин по RAW/GROSS или `decomposition_time`), по истечении — `decomp_type` с реагентами, муравьи, «gets overtaken by mold»; осмотр — «stale/gross/barely edible»; нет болезней с пола (`infective`), частиц вони; проверка раз в секунду
 
 ### Тайник в еде (food_storage)
 В крупную еду (хлеб, торт) можно спрятать маленький предмет; его находят, откусив или разрезав.

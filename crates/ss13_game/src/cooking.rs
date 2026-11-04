@@ -18,10 +18,13 @@
 //!   `fry_speed * 2 s`. An empty hand takes it out: it becomes fried (name, color) and edible.
 //!   `RefreshParts`: `fry_speed` is the micro-lasers' tier sum, `oil_use = 0.025 - 0.00475 *
 //!   fry_speed`.
-// shortcut: no sounds, smoke particles, emissive light, stove/soup pot of the range, grilling by
-// hot air, `fire_act` of non-food left in an oven or on a griddle (it just lies there), pancake
-// batter on a griddle, freeze cubes, dunking mobs in the fryer, the fryer's fishing spot or its
-// `chem_temp`; the tray and griddle contents are drawn as their base sprites.
+//! - What nothing bakes or grills burns (`fire_act(1000)`, [`scorch`]): 20 damage a tick until
+//!   it is ash; a griddle uses its active power only for those, as tg does, and exposes its tile
+//!   to 800 K.
+// shortcut: no sounds, smoke particles, emissive light, grilling by hot air, the `burning`
+// component of burning items, pancake batter on a griddle, freeze cubes, dunking mobs in the
+// fryer, the fryer's fishing spot or its `chem_temp`; the tray and griddle contents are drawn as
+// their base sprites. The range's burner is `crate::stove`.
 
 use bevy::prelude::*;
 use ss13_mapload::{DmAtom, DmFood, DmItem, DmName, DmPower, IconIndex};

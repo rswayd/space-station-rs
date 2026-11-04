@@ -9,8 +9,11 @@
 //!   `Release` act hands out up to `amount` items of a group (the hands, else the floor), each
 //!   using `active_power_usage`; everything is checked on the server at the moment of effect.
 //! - The sprite shows how full it is (`[base]-[overlay]-1..3`), the glass and the powered screen.
-// shortcut: no drying (racks and dehydrators accept nothing), organ preservation, welding to the
-// floor, prying, breaking, emissive light or vend sound; the window has no search.
+// - Drying racks and dehydrators take what is dryable and not dried yet; their window's "Dry"
+//   switches drying: every machine tick everything inside dries (`dryable`: marked dried and tan,
+//   or replaced by its `dry_result`), using `active_power_usage`.
+// shortcut: no organ preservation, welding to the floor, prying, breaking, emissive light or
+// vend sound; the window has no search.
 
 use bevy::ecs::message::{MessageCursor, Messages};
 use bevy::ecs::system::SystemParamItem;
@@ -77,6 +80,8 @@ pub fn kind(path: &str) -> FridgeKind {
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SmartFridge {
     pub kind: FridgeKind,
+    /// A drying rack's or dehydrator's `drying`.
+    pub drying: bool,
 }
 
 pub struct SmartFridgePlugin;
@@ -90,7 +95,13 @@ impl Plugin for SmartFridgePlugin {
                     .after(crate::power::init_power)
                     .after(crate::storage::StorageStartup),
             )
-            .add_systems(Update, fridge_acts.in_set(UiSystems::Handle));
+            .add_systems(
+                Update,
+                (
+                    fridge_acts.in_set(UiSystems::Handle),
+                    drying_tick.after(crate::power::PowerSystems),
+                ),
+            );
     }
 }
 
@@ -116,7 +127,10 @@ pub fn setup(world: &mut World, e: Entity) {
         return;
     };
     let kind = kind(&path_of(world, e));
-    world.entity_mut(e).insert(SmartFridge { kind });
+    world.entity_mut(e).insert(SmartFridge {
+        kind,
+        drying: false,
+    });
     if let Some(&pos) = world.get::<TilePos>(e) {
         for (path, amount) in &dm.initial_contents {
             for _ in 0..*amount {
@@ -173,8 +187,13 @@ pub fn accepts(world: &World, kind: FridgeKind, item: Entity) -> bool {
         ]
         .iter()
         .any(|r| under(r)),
-        // shortcut: no `dryable` items yet.
-        FridgeKind::Drying => false,
+        // `HAS_TRAIT(O, TRAIT_DRYABLE) && !HAS_TRAIT(O, TRAIT_DRIED)`.
+        FridgeKind::Drying => {
+            world
+                .get::<DmFood>(item)
+                .is_some_and(|f| !f.dry_result.is_empty())
+                && world.get::<crate::food::Dried>(item).is_none()
+        }
         FridgeKind::Drinks => {
             under(CONTAINER)
                 && !under(BOWL)
@@ -397,6 +416,19 @@ pub fn refresh_look(world: &mut World, e: Entity) {
         };
         names.push(format!("{base}-{}-{level}", dm.overlay));
     }
+    // `drying/update_overlays` and `drying/rack/update_overlays`.
+    if let Some(f) = world.get::<SmartFridge>(e).filter(|f| f.kind == FridgeKind::Drying) {
+        if is_under(&path_of(world, e), "/obj/machinery/smartfridge/drying/rack") {
+            if f.drying {
+                names.push(format!("{base}-drying"));
+            }
+            if shown > 0 {
+                names.push(format!("{base}-filled"));
+            }
+        } else if dm.visible_contents && world.get::<Unpowered>(e).is_none() {
+            names.push(format!("{base}-{}", if f.drying { "on" } else { "off" }));
+        }
+    }
     names.push(format!("{base}-glass"));
     if dm.has_emissive && world.get::<Unpowered>(e).is_none() {
         names.push(format!("{base}-powered"));
@@ -443,12 +475,12 @@ impl ServerUi for FridgeWindow {
         Query<'static, 'static, (&'static DmItem, Option<&'static DmName>)>,
         Query<'static, 'static, &'static Appearance>,
     );
-    type Act = Release;
+    type Act = FridgeAct;
 
     fn static_data(_: (Entity, &SmartFridge, Option<&Stored>, &DmName)) {}
 
     fn data(
-        (_, _, stored, name): (Entity, &SmartFridge, Option<&Stored>, &DmName),
+        (_, fridge, stored, name): (Entity, &SmartFridge, Option<&Stored>, &DmName),
         _: Entity,
         (items, looks): &SystemParamItem<'_, '_, Self::UserParam>,
     ) -> SmartVendData {
@@ -478,30 +510,126 @@ impl ServerUi for FridgeWindow {
         SmartVendData {
             contents: groups,
             name: crate::vending::plain_name(&name.name).to_owned(),
-            isdryer: false,
-            drying: false,
+            isdryer: fridge.kind == FridgeKind::Drying,
+            drying: fridge.drying,
         }
     }
 
-    fn parse_act(action: &str, params: &UiParams) -> Result<Release, UiReject> {
+    fn parse_act(action: &str, params: &UiParams) -> Result<FridgeAct, UiReject> {
         match action {
-            "Release" => Ok(Release {
+            "Release" => Ok(FridgeAct::Release(Release {
                 key: params.text("path")?,
                 amount: params.number("amount")?.clamp(0.0, 10_000.0) as u32,
-            }),
+            })),
+            "Dry" => Ok(FridgeAct::Dry),
             _ => Err(UiReject::UnknownAction),
         }
     }
 }
 
+/// The window's acts.
+#[derive(Clone, Debug, PartialEq)]
+pub enum FridgeAct {
+    Release(Release),
+    /// A dryer's `toggle_drying(FALSE, user)`.
+    Dry,
+}
+
 fn fridge_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed<FridgeWindow>>>) {
-    let pending: Vec<(Entity, Entity, Release)> = acts
+    let pending: Vec<(Entity, Entity, FridgeAct)> = acts
         .read(world.resource::<Messages<UiActed<FridgeWindow>>>())
         .map(|a| (a.actor, a.source, a.act.clone()))
         .collect();
     for (actor, source, act) in pending {
-        release(world, actor, source, &act);
+        match act {
+            FridgeAct::Release(act) => {
+                release(world, actor, source, &act);
+            }
+            FridgeAct::Dry => toggle_drying(world, source, false),
+        }
     }
+}
+
+/// `toggle_drying(forceoff)`.
+pub fn toggle_drying(world: &mut World, fridge: Entity, force_off: bool) {
+    let Some(mut f) = world.get_mut::<SmartFridge>(fridge) else {
+        return;
+    };
+    if f.kind != FridgeKind::Drying {
+        return;
+    }
+    f.drying = !(f.drying || force_off);
+    refresh_look(world, fridge);
+}
+
+/// Every `SSmachines` tick: drying fridges dry what they hold (`drying/process`): each item at
+/// once (`COMSIG_ITEM_FINISH_DRYING`), using `active_power_usage`; without power they stop
+/// (`power_change`).
+// Cost: a scan of the fridges (a dozen a map) every 2 s.
+fn drying_tick(world: &mut World, mut last: Local<Option<u64>>) {
+    let ticks = world.resource::<crate::power::MachineTicks>().0;
+    let from = last.unwrap_or(ticks);
+    *last = Some(ticks);
+    if from == ticks {
+        return;
+    }
+    let mut q = world.query::<(Entity, &SmartFridge)>();
+    let drying: Vec<Entity> = q
+        .iter(world)
+        .filter(|(_, f)| f.drying)
+        .map(|(e, _)| e)
+        .collect();
+    for e in drying {
+        if world.get::<Unpowered>(e).is_some() {
+            toggle_drying(world, e, true);
+            continue;
+        }
+        for item in contents(world, e) {
+            if accepts(world, FridgeKind::Drying, item) {
+                dry_item(world, e, item);
+            }
+        }
+        let joules = world
+            .get::<DmPower>(e)
+            .map_or(0.0, |p| p.active_power_usage);
+        crate::kitchen::machine_use_energy(world, e, joules);
+        refresh_look(world, e);
+    }
+}
+
+/// `/datum/element/dryable/finish_drying`: the item itself marked dried when it dries into its
+/// own type, else its `dry_result` (with a food's reagents) in its place.
+pub fn dry_item(world: &mut World, fridge: Entity, item: Entity) {
+    let Some(result) = world.get::<DmFood>(item).map(|f| f.dry_result.clone()) else {
+        return;
+    };
+    if result == path_of(world, item) {
+        crate::food::dry(world, item);
+        world.entity_mut(item).insert(crate::food::Handmade);
+        return;
+    }
+    let Some(&pos) = world.get::<TilePos>(fridge) else {
+        return;
+    };
+    let Some(made) = crate::construction::spawn_obj(world, &result, pos) else {
+        return;
+    };
+    let chem = world.get_resource::<crate::chem::Chem>().map(|c| c.0.clone());
+    if let Some(chem) = chem
+        && world.get::<DmFood>(made).is_some()
+        && let Some(mut from) = world.get::<Reagents>(item).map(|r| r.0.clone())
+        && let Some(mut into) = world.get::<Reagents>(made).map(|r| r.0.clone())
+    {
+        into.clear();
+        let all = from.total_volume;
+        from.trans_to(&chem, &mut into, all, 1.0, None, false, false);
+        world.entity_mut(made).insert(Reagents(into));
+    }
+    world
+        .entity_mut(made)
+        .insert((crate::food::Dried, crate::food::Handmade));
+    put_inside(world, made, fridge);
+    world.despawn(item);
 }
 
 /// tg `ui_act("Release")`: up to `amount` items of the group, each into the hands or onto the

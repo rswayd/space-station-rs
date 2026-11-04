@@ -146,6 +146,20 @@ const TYPES: &str = r##"{
         "desc": "This sign doesn't seem to be on." } },
     "/datum/barsign/thebark": { "parent": "/datum/barsign", "declared_vars": {
         "name": "The Bark", "icon_state": "thebark", "desc": "Ian's bar of choice." } },
+    "/obj/machinery/smartfridge": { "parent": "/obj/machinery", "declared_vars": {
+        "name": "smartfridge", "icon": { "resource": "sf.dmi" }, "icon_state": "smartfridge-icon",
+        "contents_overlay_icon": "plant", "visible_contents": 1, "has_emissive": 1,
+        "max_n_of_items": 1500, "initial_contents": null } },
+    "/obj/machinery/smartfridge/drying": { "parent": "/obj/machinery/smartfridge",
+        "vars": { "name": "dehydrator" }, "declared_vars": { "name": "dehydrator",
+        "icon_state": "dehydrator-icon", "contents_overlay_icon": "contents",
+        "has_emissive": 0, "max_n_of_items": 25 } },
+    "/obj/machinery/smartfridge/drying/rack": { "parent": "/obj/machinery/smartfridge/drying",
+        "vars": { "name": "drying rack" }, "declared_vars": { "name": "drying rack",
+        "icon_state": "drying-rack", "visible_contents": 0, "use_power": 0 } },
+    "/obj/item/food/sosjerky": { "parent": "/obj/item/food", "vars": { "name": "jerky" },
+        "declared_vars": { "name": "jerky" } },
+    "/obj/item/food/sosjerky/healthy": { "parent": "/obj/item/food/sosjerky" },
     "/obj/machinery/griddle": { "parent": "/obj/machinery", "vars": { "name": "griddle" },
         "declared_vars": { "name": "griddle", "icon": { "resource": "k.dmi" },
         "icon_state": "griddle1_off" } },
@@ -213,12 +227,13 @@ const TYPES: &str = r##"{
         "resistance_flags": 4, "foodtypes": null, "crafting_complexity": 0,
         "preserved_food": 0, "decomp_type": { "path": "/obj/item/food/badrecipe/moldy" },
         "decomp_req_handle": 0, "decomposition_time": 0, "ant_attracting": 0 },
-        "procs": ["make_germ_sensitive"] },
+        "procs": ["make_germ_sensitive", "make_dryable"] },
     "/obj/item/food/meatball": { "parent": "/obj/item/food", "vars": { "name": "meatball" },
         "declared_vars": { "name": "meatball",
         "food_reagents": { "list": [{ "assoc": [{ "path": "/datum/reagent/consumable/nutriment" }, 4] }] } } },
     "/obj/item/food/meat": { "parent": "/obj/item/food" },
     "/obj/item/food/meat/slab": { "parent": "/obj/item/food/meat", "vars": { "name": "meat" },
+        "procs": ["make_dryable"],
         "declared_vars": { "name": "meat", "foodtypes": 5, "decomposition_time": 50,
         "food_reagents": { "list": [{ "assoc": [{ "path": "/datum/reagent/consumable/nutriment" }, 4] }] } } },
     "/obj/item/food/badrecipe": { "parent": "/obj/item/food", "vars": { "name": "burned mess" },
@@ -260,6 +275,12 @@ const TYPES: &str = r##"{
     "/turf/closed/wall": { "parent": "/turf/closed", "declared_vars": { "icon_state": "wall" } },
     "/area": { "parent": "/atom", "declared_vars": { "requires_power": 0 } },
     "/area/space": { "parent": "/area" }
+  },
+  "element_calls": {
+    "/datum/element/dryable": [
+      { "type": "/obj/item/food/meat/slab", "proc": "make_dryable", "call": "AddElement",
+        "line": "AddElement(/datum/element/dryable,  /obj/item/food/sosjerky/healthy)" }
+    ]
   }
 }"##;
 
@@ -275,12 +296,13 @@ const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 "G" = (/obj/machinery/griddle,/turf/open/floor,/area/space)
 "m" = (/obj/item/food/meat/slab,/turf/open/floor,/area/space)
 "Z" = (/obj/machinery/barsign,/turf/open/floor,/area/space)
+"D" = (/obj/machinery/smartfridge/drying/rack,/turf/open/floor,/area/space)
 
 (1,1,1) = {"
 wwwwww
 wmVfZw
 wCsBfw
-wRfGfw
+wRfGDw
 wwwwww
 "}
 "##;
@@ -292,7 +314,7 @@ const VAT: TilePos = TilePos::new(3, 4, 1);
 const RANGE: TilePos = TilePos::new(2, 2, 1);
 const GRIDDLE: TilePos = TilePos::new(4, 2, 1);
 
-const STATES: [(&str, &str); 28] = [
+const STATES: [(&str, &str); 29] = [
     ("t.dmi", "floor"),
     ("t.dmi", "wall"),
     ("l.dmi", "x2"),
@@ -321,6 +343,7 @@ const STATES: [(&str, &str); 28] = [
     ("kt.dmi", "pot"),
     ("bs.dmi", "empty"),
     ("bs.dmi", "thebark"),
+    ("sf.dmi", "drying-rack"),
 ];
 
 fn fixture_assets(test: &str) -> PathBuf {
@@ -335,6 +358,7 @@ fn fixture_assets(test: &str) -> PathBuf {
         "/obj/machinery/oven/range",
         "/obj/machinery/griddle",
         "/obj/machinery/barsign",
+        "/obj/machinery/smartfridge/drying/rack",
         "/obj/item/food/meatball",
         "/obj/item/food/meat/slab",
         "/obj/item/toy",
@@ -357,6 +381,19 @@ fn fixture_assets(test: &str) -> PathBuf {
 struct Received {
     chat: Vec<String>,
     windows: HashMap<u32, (String, Vec<u8>)>,
+}
+
+/// The newest `SmartVend` window.
+fn fridge_window(s: &Station) -> Option<u32> {
+    s.players[0]
+        .app
+        .world()
+        .resource::<Received>()
+        .windows
+        .iter()
+        .filter(|(_, (name, _))| name == "SmartVend")
+        .map(|(id, _)| *id)
+        .max()
 }
 
 fn record(
@@ -763,4 +800,41 @@ fn bar_sign() {
             .resource::<ss13_mapload::IconIndex>()
             .get("bs.dmi", "thebark")
     );
+}
+
+#[test]
+fn drying_rack() {
+    let mut s = Station::start("drying_rack", 1);
+    let a = s.players[0].mob;
+    let by = TilePos::new(5, 3, 1);
+    s.server.world_mut().entity_mut(a).insert(by);
+    s.run_until("moved", |s| *s.get::<TilePos>(a) == by);
+    let rack = s.machine::<ss13_game::smartfridge::SmartFridge>(TilePos::new(5, 2, 1));
+    let slab = {
+        let world = s.0.server.world_mut();
+        ss13_game::construction::spawn_obj(world, "/obj/item/food/meat/slab", by).unwrap()
+    };
+    s.run_for(1.0);
+    s.take(slab);
+    s.click(rack);
+    s.run_until("on the rack", |s| {
+        s.try_get::<ss13_game::storage::Stored>(rack)
+            .is_some_and(|st| st.items().contains(&slab))
+    });
+    // Its window's "Dry": the next machine tick turns the slab into jerky (with its reagents).
+    s.click(rack);
+    s.run_until("the window", |s| fridge_window(s).is_some());
+    let window = fridge_window(&s).unwrap();
+    s.act(0, window, "Dry", &[]);
+    s.run_until("drying", |s| {
+        s.get::<ss13_game::smartfridge::SmartFridge>(rack).drying
+    });
+    s.run_until_for(5.0, "jerky", |s| s.server.world().get_entity(slab).is_err());
+    let jerky = s.get::<ss13_game::storage::Stored>(rack).items()[0];
+    assert_eq!(
+        s.get::<DmItem>(jerky).path,
+        "/obj/item/food/sosjerky/healthy"
+    );
+    assert!(s.try_get::<ss13_game::food::Dried>(jerky).is_some());
+    assert_eq!(s.amount(jerky, "/datum/reagent/consumable/nutriment"), 4.0);
 }

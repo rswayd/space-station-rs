@@ -11,7 +11,7 @@
 Разновидность умного холодильника: включённая сушит предметы с `dryable` (мясо в вяленое, фрукты в сухофрукты, табак, кожу); деревянная стойка работает без питания.
 
 - **Код:** [`/obj/machinery/smartfridge/drying`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/food_and_drinks/machinery/smartfridge.dm#L449), [`/obj/machinery/smartfridge/drying/rack`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/food_and_drinks/machinery/smartfridge.dm#L556), [`/datum/element/dryable`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/elements/dryable.dm#L2), [`proc/make_dryable()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/food_and_drinks/food/_food.dm#L211)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/smartfridge.rs` (`toggle_drying`, `drying_tick`, `dry_item`), `dryable` из `AddElement` (`ss13_dm_extract` `SCANNED_ELEMENTS`, `crates/ss13_mapload/src/food.rs` `dry_result`, `type` = сам тип): принимают сушимое и не высушенное, кнопка «Dry» в окне SmartVend, каждый тик машин всё внутри сохнет (свой тип — `Dried` и загар, иначе `dry_result` с реагентами), энергия, без питания выключается; оверлеи стойки и дегидратора; нет `TRAIT_HANDMADE` от конкретного игрока (результат просто `Handmade`), ЭМИ дегидратора, сушки кожи (не еда)
 
 ### Тарелки
 Тарелка держит одно (большая — несколько) блюдо, отображая его на себе; бьётся при падении/броске в осколки. Малая, большая, железная.
