@@ -92,6 +92,8 @@ const TYPES: &str = r##"{
         "icon": { "resource": "computer.dmi" }, "icon_state": "computer", "density": 1 } },
     "/obj/machinery/computer/security": { "parent": "/obj/machinery/computer", "declared_vars": {
         "name": "security camera console", "network": { "list": ["ss13"] } } },
+    "/obj/machinery/computer/station_alert": { "parent": "/obj/machinery/computer",
+        "declared_vars": { "name": "station alert console" } },
     "/obj/machinery/recharge_station": { "parent": "/obj/machinery", "declared_vars": {
         "name": "recharging station", "icon": { "resource": "borg_charger.dmi" },
         "icon_state": "borgcharger0" } },
@@ -138,7 +140,8 @@ const TYPES: &str = r##"{
     "/turf/closed/wall": { "parent": "/turf/closed", "declared_vars": { "icon_state": "wall" } },
     "/area": { "parent": "/atom", "declared_vars": { "requires_power": 0 } },
     "/area/space": { "parent": "/area" },
-    "/area/station": { "parent": "/area" }
+    "/area/station": { "parent": "/area" },
+    "/area/station/ai": { "parent": "/area/station", "declared_vars": { "requires_power": 1 } }
   }
 }"##;
 
@@ -229,6 +232,7 @@ fn fixture_assets_on(test: &str, map: &str) -> PathBuf {
         "/obj/effect/landmark/start/ai",
         "/obj/machinery/camera",
         "/obj/machinery/computer/security",
+        "/obj/machinery/computer/station_alert",
         "/obj/machinery/recharge_station",
         "/obj/machinery/door/airlock",
         "/obj/machinery/power/apc",
@@ -242,6 +246,7 @@ fn fixture_assets_on(test: &str, map: &str) -> PathBuf {
         "/turf/open/space/basic",
         "/area/space",
         "/area/station",
+        "/area/station/ai",
     ];
     write_fixture(&dir, TYPES, &used, &STATES, &[("map.dmm", map)]);
     let types = DmTypes::parse(TYPES.as_bytes()).unwrap();
@@ -1118,4 +1123,235 @@ fn metastation_ai_replication() {
          {} known",
         fly.4, fly.0, fly.1, fly.2, fly.3, idle.4, idle.0, idle.1, idle.2, idle.3
     );
+}
+
+/// Room 2 is the AI's own powered area (`/area/station/ai`), its APC `P` (7,2) with the
+/// breaker off: no equipment power.
+const MAP_AI_UNPOWERED: &str = r##""w" = (/turf/closed/wall,/area/station)
+"f" = (/turf/open/floor,/area/station)
+"s" = (/obj/effect/landmark/start/assistant,/turf/open/floor,/area/station)
+"1" = (/obj/machinery/camera{c_tag = "Room One"},/turf/open/floor,/area/station)
+"c" = (/obj/machinery/computer/security,/turf/open/floor,/area/station)
+"D" = (/obj/machinery/door/airlock,/turf/open/floor,/area/station)
+"E" = (/obj/machinery/door/airlock,/turf/open/floor,/area/station)
+"g" = (/turf/open/floor,/area/station/ai)
+"A" = (/obj/effect/landmark/start/ai,/turf/open/floor,/area/station/ai)
+"P" = (/obj/machinery/power/apc{operating = 0},/turf/open/floor,/area/station/ai)
+
+(1,1,1) = {"
+wwwwwwwwwww
+w1cwgggwffw
+wsfDgAgEffw
+wffwggPwffw
+wwwwwwwwwww
+"}
+"##;
+
+/// tg `ai_lose_power` / `start_RestorePowerRoutine` / `ai_restore_power`: without equipment
+/// power the AI goes blind and incapacitated, its routine finds the APC and opens its window,
+/// the breaker turned on from it restores the AI; a dead backup battery kills it.
+#[test]
+fn ai_loses_and_restores_power() {
+    use ss13_game::health::Stat;
+    use ss13_game::silicon::ai::AI_BLIND_MASK;
+    use ss13_game::silicon::ai_power::{AiPower, Routine};
+    use ss13_net::server::ViewMask;
+    let mut s = Station::start_on("ai_loses_and_restores_power", MAP_AI_UNPOWERED, 1, true);
+    let core = s.join("AI");
+    let eye = s.mob();
+    let apc = s.find::<Apc>(TilePos::new(7, 2, 1));
+    s.run_until("the AI loses power", |s| {
+        s.heard(0, None, "You've lost power!")
+    });
+    s.run_until("the eye goes blind", |s| {
+        s.server.world().get::<ViewMask>(s.link()) == Some(&ViewMask(AI_BLIND_MASK))
+    });
+    assert!(s.server.world().get::<AiEye>(eye).unwrap().blind);
+    s.run_until_for(60.0, "the routine hacks the APC", |s| {
+        s.window::<ApcUi>().is_some()
+    });
+    for line in [
+        "Backup battery online",
+        "Fault confirmed",
+        "APC located",
+        "Transfer complete",
+        "APC ready for connection.",
+    ] {
+        assert!(s.heard(0, None, line), "{line}");
+    }
+    let power = s.server.world().get::<AiPower>(core).unwrap().clone();
+    assert_eq!(power.routine, Routine::ApcFound);
+    assert_eq!(power.apc_override, Some(apc));
+    assert!(
+        power.battery < 190.0,
+        "drained while depowered: {}",
+        power.battery
+    );
+
+    // The camera does not see the APC, but the hacked window works: the breaker restores.
+    s.act::<ApcUi>("breaker", &[]);
+    s.run_until("the AI's power is restored", |s| {
+        s.heard(0, None, "Alert cancelled. Power has been restored.")
+    });
+    assert!(s.heard(0, None, "APC backdoor has been closed."));
+    s.run_until("the eye sees again", |s| {
+        !s.server.world().get::<AiEye>(eye).unwrap().blind
+            && s.server.world().get::<ViewMask>(s.link()) != Some(&ViewMask(AI_BLIND_MASK))
+    });
+
+    // Breaker off again with an empty battery: the AI dies.
+    {
+        let world = s.server.world_mut();
+        world.get_mut::<AiPower>(core).unwrap().battery = 0.0;
+        let mut a = world.get_mut::<Apc>(apc).unwrap();
+        a.operating = false;
+        a.force_update = true;
+    }
+    s.run_until_for(10.0, "the backup battery fails", |s| {
+        s.heard(0, None, "backup battery's output drops below usable levels")
+    });
+    s.run_until("the core dies", |s| {
+        s.server.world().get::<Stat>(core) == Some(&Stat::Dead)
+    });
+}
+
+/// The AI's HUD buttons: the alerts window lists a fire alarm raised in its area (and the AI is
+/// told after tg's 3 s), its camera button jumps the eye to the area's camera; the eye goes back
+/// to the core; a VOX announcement (text only on fixture assets) reaches the players on the
+/// level once a minute. A cyborg has the alert panel too.
+#[test]
+fn ai_hud_alerts_and_announcement() {
+    use ss13_game::actions::{ActionButtonsData, ActionButtonsUi};
+    use ss13_game::silicon::ui::{StationAlertData, StationAlertUi};
+    use ss13_tgui::interfaces::text_input::TextInputUi;
+    let mut s = Station::start_on("ai_hud_alerts_and_announcement", MAP, 2, true);
+    let core = s.join("AI");
+    s.run_until("the HUD buttons arrive", |s| {
+        s.window::<ActionButtonsUi>().is_some()
+    });
+    let (_, (), buttons): (u32, (), ActionButtonsData) = s.window::<ActionButtonsUi>().unwrap();
+    let ids: Vec<&str> = buttons.buttons.iter().map(|b| b.id.as_str()).collect();
+    assert_eq!(
+        ids,
+        [
+            "ai_core",
+            "camera",
+            "alerts",
+            "announcement",
+            "call_shuttle",
+            "core_display"
+        ]
+    );
+    s.act::<ActionButtonsUi>("trigger", &[("id", "alerts")]);
+    s.run_until("the alerts window opens", |s| {
+        s.window::<StationAlertUi>().is_some()
+    });
+    let (_, (), data): (u32, (), StationAlertData) = s.window::<StationAlertUi>().unwrap();
+    assert!(data.camera_view);
+    assert_eq!(data.alarms.len(), 6);
+    assert!(data.alarms.iter().all(|c| c.alerts.is_empty()));
+
+    let area = {
+        let world = s.server.world();
+        world
+            .resource::<ss13_mapload::Areas>()
+            .area_at(CAMERA)
+            .unwrap()
+    };
+    assert!(ss13_game::power::set_area_fire(
+        s.server.world_mut(),
+        area,
+        true
+    ));
+    s.run_until("the window lists the fire alarm", |s| {
+        s.window::<StationAlertUi>()
+            .is_some_and(|(_, (), d)| d.alarms[0].name == "Fire" && d.alarms[0].alerts.len() == 1)
+    });
+    let (_, (), data): (u32, (), StationAlertData) = s.window::<StationAlertUi>().unwrap();
+    let alert = data.alarms[0].alerts[0].clone();
+    assert_eq!((alert.cameras, alert.sources), (Some(1), Some(1)));
+    s.run_until("the AI is told after 3 s", |s| {
+        s.heard(0, None, "--- Fire alarm detected in") && s.heard(0, None, "(Room One)")
+    });
+    s.act::<StationAlertUi>("select_camera", &[("alert", &alert.alert_ref.unwrap())]);
+    s.run_until("the eye jumps to the camera", |s| s.pos() == CAMERA);
+    s.act::<ActionButtonsUi>("trigger", &[("id", "ai_core")]);
+    s.run_until("the eye is back on the core", |s| s.pos() == AI_START);
+    assert!(ss13_game::power::set_area_fire(
+        s.server.world_mut(),
+        area,
+        false
+    ));
+    s.run_until("cleared", |s| s.heard(0, None, "has been cleared."));
+
+    // The announcement: the other player on the level reads it.
+    s.act::<ActionButtonsUi>("trigger", &[("id", "announcement")]);
+    s.run_until("the announcement prompt", |s| {
+        s.window::<TextInputUi>().is_some()
+    });
+    s.act::<TextInputUi>("submit", &[("entry", "attention crew")]);
+    s.run_until("the crew reads it", |s| {
+        s.heard(1, None, "объявляет") && s.heard(1, None, "Attention crew")
+    });
+    s.act::<ActionButtonsUi>("trigger", &[("id", "announcement")]);
+    s.run_until("the cooldown", |s| s.heard(0, None, "Please wait"));
+    assert!(
+        s.server
+            .world()
+            .get::<ss13_game::silicon::ai::AiCore>(core)
+            .is_some()
+    );
+}
+
+/// [`MAP`] with a station alert console `S` (3,3) next to the assistant start.
+const MAP_ALERT_CONSOLE: &str = r##""w" = (/turf/closed/wall,/area/station)
+"f" = (/turf/open/floor,/area/station)
+"s" = (/obj/effect/landmark/start/assistant,/turf/open/floor,/area/station)
+"1" = (/obj/machinery/camera{c_tag = "Room One"},/turf/open/floor,/area/station)
+"S" = (/obj/machinery/computer/station_alert,/turf/open/floor,/area/station)
+"D" = (/obj/machinery/door/airlock,/turf/open/floor,/area/station)
+"E" = (/obj/machinery/door/airlock,/turf/open/floor,/area/station)
+"A" = (/obj/effect/landmark/start/ai,/turf/open/floor,/area/station)
+
+(1,1,1) = {"
+wwwwwwwwwww
+w1fwfffwffw
+wsSDfAfEffw
+wffwfffwffw
+wwwwwwwwwww
+"}
+"##;
+
+/// tg `/obj/machinery/computer/station_alert`: the crew's window lists fire, atmosphere and
+/// power alarms of station areas, without cameras.
+#[test]
+fn station_alert_console_lists_alarms() {
+    use ss13_game::silicon::alarms::StationAlertConsole;
+    use ss13_game::silicon::ui::{StationAlertData, StationAlertUi};
+    let mut s = Station::start_on(
+        "station_alert_console_lists_alarms",
+        MAP_ALERT_CONSOLE,
+        1,
+        false,
+    );
+    s.join("Assistant");
+    let console = s.find::<StationAlertConsole>(TilePos::new(3, 3, 1));
+    let area = {
+        let world = s.server.world();
+        world
+            .resource::<ss13_mapload::Areas>()
+            .area_at(SPAWN)
+            .unwrap()
+    };
+    ss13_game::power::set_area_fire(s.server.world_mut(), area, true);
+    s.click(console, PLAIN);
+    s.run_until("the console's window opens", |s| {
+        s.window::<StationAlertUi>().is_some()
+    });
+    let (_, (), data): (u32, (), StationAlertData) = s.window::<StationAlertUi>().unwrap();
+    assert!(!data.camera_view);
+    let names: Vec<&str> = data.alarms.iter().map(|c| c.name.as_str()).collect();
+    assert_eq!(names, ["Fire", "Atmosphere", "Power"]);
+    assert_eq!(data.alarms[0].alerts.len(), 1);
+    assert_eq!(data.alarms[0].alerts[0].alert_ref, None);
 }

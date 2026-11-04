@@ -395,12 +395,26 @@ pub fn minor_announce_to(
         world,
         title,
         text,
-        if alert { NOTICE_ALERT } else { NOTICE },
+        Some(if alert { NOTICE_ALERT } else { NOTICE }),
         players,
     );
 }
 
-fn announce(world: &mut World, title: &str, text: &str, sound: &str, players: Option<Vec<Entity>>) {
+/// [`minor_announce_to`] with `should_play_sound` false for everyone (the AI's VOX
+/// announcement, whose words play instead).
+pub fn minor_announce_silent_to(world: &mut World, title: &str, text: &str, players: Vec<Entity>) {
+    if !text.is_empty() {
+        announce(world, title, text, None, Some(players));
+    }
+}
+
+fn announce(
+    world: &mut World,
+    title: &str,
+    text: &str,
+    sound: Option<&str>,
+    players: Option<Vec<Entity>>,
+) {
     info!("announcement: {title}: {text}");
     let mut segments = Vec::new();
     if !title.is_empty() {
@@ -411,7 +425,7 @@ fn announce(world: &mut World, title: &str, text: &str, sound: &str, players: Op
         channel: ChatChannel::System,
         segments,
     };
-    crate::announce::dispatch(world, message, players, Some(sound.to_owned()));
+    crate::announce::dispatch(world, message, players, sound.map(str::to_owned));
 }
 
 /// tg `level_announce(selected_level, previous_level_number)`.
@@ -427,7 +441,7 @@ fn level_announce(world: &mut World, level: SecLevel, previous: SecLevel) {
             level.lowering_to(),
         )
     };
-    announce(world, &title, text, level.sound(), None);
+    announce(world, &title, text, Some(level.sound()), None);
 }
 
 /// `door/check_security_level`: doors with `red_alert_access` follow the level, and say so

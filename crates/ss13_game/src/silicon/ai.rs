@@ -90,7 +90,12 @@ pub struct AiCore {
 #[derive(Component, Clone, Copy, Debug)]
 pub struct AiEye {
     pub ai: Entity,
+    /// The AI lost power: no camera tile is seen ([`super::ai_power`]).
+    pub blind: bool,
 }
+
+/// The replication mask of a depowered AI: never set, so nothing is seen.
+pub const AI_BLIND_MASK: ss13_net::server::MaskId = ss13_net::server::MaskId(u64::MAX - 1);
 
 /// One step of an AI eye, already taken from its client's queue (`crate::server`).
 #[derive(Message, Clone, Copy, Debug)]
@@ -172,7 +177,10 @@ pub(crate) fn join(
     let eye_icon = icon(EYE_ICON.0, EYE_ICON.1, world);
     let eye = world
         .spawn((
-            AiEye { ai: core },
+            AiEye {
+                ai: core,
+                blind: false,
+            },
             pos,
             Facing(Dir::South),
             Appearance {
@@ -203,6 +211,8 @@ pub(crate) fn join(
             SpeakerStat::Conscious,
             MaskedSenses(CAMERANET_MASK),
             ss13_tgui::server::RemoteActor,
+            super::alarms::AlertListener::silicon(true),
+            super::alarms::AlarmQueue::default(),
         ))
         .id();
     world.entity_mut(core).insert((
@@ -216,6 +226,8 @@ pub(crate) fn join(
         laws.clone(),
         living_bundle(),
         PlayerJob(job),
+        super::ai_power::AiPower::default(),
+        super::ai_hud::CoreDisplay::default(),
     ));
     world.resource_mut::<Jobs>().add_position(job);
     attach_client(world, client, eye, pos);
@@ -225,6 +237,7 @@ pub(crate) fn join(
         .entity_mut(client)
         .insert((SeeInvisible(AI_EYE_INVISIBILITY), ViewMask(CAMERANET_MASK)));
     give_radio(world, eye, &AI_CHANNELS.map(str::to_owned));
+    super::ai_hud::give_ai_buttons(world, eye);
     world.write_message(OpenUi::new::<HealthHudUi>(client, eye, eye, ""));
     world.write_message(OpenUi::new::<CameraViewWindow>(client, eye, eye, ""));
     // tg `/datum/job/ai/after_spawn`: borgs without an AI link to it.
@@ -244,14 +257,19 @@ pub(crate) fn join(
 }
 
 /// The client speaks through the eye with the core's stat (tg: the AI mob says and dies): a dead
-/// AI's words go to deadchat, never to the radio or binary.
+/// AI's words go to deadchat, never to the radio or binary. Dying puts the eye back on the core
+/// (tg `death`: `eyeobj.setLoc(get_turf(src))`).
 fn eye_speaker_stat(
-    cores: Query<(&AiCore, &Stat), Changed<Stat>>,
-    mut eyes: Query<&mut SpeakerStat, With<AiEye>>,
+    cores: Query<(&AiCore, &Stat, &TilePos), Changed<Stat>>,
+    mut eyes: Query<(&mut SpeakerStat, &TilePos), (With<AiEye>, Without<AiCore>)>,
+    mut commands: Commands,
 ) {
-    for (core, &stat) in &cores {
-        if let Ok(mut speaker) = eyes.get_mut(core.eye) {
+    for (core, &stat, &pos) in &cores {
+        if let Ok((mut speaker, &eye_pos)) = eyes.get_mut(core.eye) {
             speaker.set_if_neq(crate::speech::speaker_stat(stat));
+            if stat == Stat::Dead && eye_pos != pos {
+                commands.entity(core.eye).insert(pos);
+            }
         }
     }
 }
@@ -280,21 +298,26 @@ fn move_eyes(
     }
 }
 
-/// The eye's CameraView follows the eye and the network.
+/// The eye's CameraView follows the eye and the network; a blind eye sees no tile.
 fn refresh_eye_views(
     net: Res<CameraNet>,
-    mut eyes: Query<(Ref<TilePos>, &mut CameraViewSource), With<AiEye>>,
+    mut eyes: Query<(Ref<TilePos>, Ref<AiEye>, &mut CameraViewSource)>,
     mut seen: Local<u64>,
 ) {
     let changed = std::mem::replace(&mut *seen, net.version) != net.version;
-    for (pos, mut view) in &mut eyes {
-        if !changed && !pos.is_changed() {
+    for (pos, eye, mut view) in &mut eyes {
+        if !changed && !pos.is_changed() && !eye.is_changed() {
             continue;
         }
+        let visible = if eye.blind {
+            super::cameras::box_bits(*pos, VIEW_RADIUS, |_| false)
+        } else {
+            net.view_bits(*pos, VIEW_RADIUS)
+        };
         let data = CameraViewData {
             center: *pos,
             radius: VIEW_RADIUS,
-            visible: net.view_bits(*pos, VIEW_RADIUS),
+            visible,
             moves_view: false,
         };
         view.set_if_neq(CameraViewSource(data));
@@ -308,13 +331,16 @@ fn ai_clicks(world: &mut World, mut clicks: Local<MessageCursor<AiClick>>) {
         .copied()
         .collect();
     for click in clicks {
-        let Some(&AiEye { ai }) = world.get::<AiEye>(click.eye) else {
+        let Some(&AiEye { ai, .. }) = world.get::<AiEye>(click.eye) else {
             continue;
         };
         let Some(core) = world.get::<AiCore>(ai) else {
             continue;
         };
-        if core.control_disabled || world.get::<Stat>(ai) != Some(&Stat::Conscious) {
+        if core.control_disabled
+            || world.get::<Stat>(ai) != Some(&Stat::Conscious)
+            || super::ai_power::depowered(world, ai)
+        {
             continue;
         }
         // tg `can_see(A)`: `GLOB.cameranet.checkTurfVis(get_turf_pixel(A))`.

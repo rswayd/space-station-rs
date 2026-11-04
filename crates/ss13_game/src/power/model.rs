@@ -171,6 +171,9 @@ pub struct Apc {
     pub coverlocked: bool,
     pub emergency_lights: bool,
     pub nightshift_lights: bool,
+    /// tg `alarm_manager`'s `ALARM_POWER`: sent below the equipment threshold or without a
+    /// cell, cleared above [`ALARM_THRESHOLD`] (`crate::silicon::alarms`).
+    pub power_alarm: bool,
 }
 
 impl Apc {
@@ -194,6 +197,7 @@ impl Apc {
             coverlocked: true,
             emergency_lights: false,
             nightshift_lights: false,
+            power_alarm: false,
         }
     }
 
@@ -319,6 +323,13 @@ impl Apc {
             HAS_POWER
         };
         use Autoset::*;
+        self.power_alarm = match &self.cell {
+            Some(_) if self.shorted => self.power_alarm,
+            Some(cell) if cell.charge <= 0.0 || cell.percent() < EQUIP_THRESHOLD => true,
+            Some(cell) if cell.percent() > ALARM_THRESHOLD => false,
+            Some(_) => self.power_alarm,
+            None => true,
+        };
         let [equip, light, env] = match &self.cell {
             Some(_) if self.shorted => [Keep, Keep, Keep],
             Some(cell) if cell.charge <= 0.0 => [ForceOff, ForceOff, ForceOff],
@@ -604,6 +615,29 @@ mod tests {
         }
         assert!(apc.cell.unwrap().percent() >= EQUIP_THRESHOLD);
         assert_eq!(a.power, [true, true, false]);
+    }
+
+    /// tg `late_process`'s `ALARM_POWER`: sent below 30% (or without a cell), kept between 30%
+    /// and 75%, cleared above 75%.
+    #[test]
+    fn power_alarm_has_hysteresis() {
+        let mut a = area([0.0; 3]);
+        let mut apc = apc(2.5e6 * 0.5);
+        let mut no_grid = None;
+        tick(&mut apc, &mut a, &mut no_grid);
+        assert!(!apc.power_alarm, "50% from the start: never sent");
+        apc.cell.as_mut().unwrap().charge = 2.5e6 * 0.2;
+        tick(&mut apc, &mut a, &mut no_grid);
+        assert!(apc.power_alarm);
+        apc.cell.as_mut().unwrap().charge = 2.5e6 * 0.5;
+        tick(&mut apc, &mut a, &mut no_grid);
+        assert!(apc.power_alarm, "kept until above 75%");
+        apc.cell.as_mut().unwrap().charge = 2.5e6 * 0.8;
+        tick(&mut apc, &mut a, &mut no_grid);
+        assert!(!apc.power_alarm);
+        apc.cell = None;
+        tick(&mut apc, &mut a, &mut no_grid);
+        assert!(apc.power_alarm, "no cell");
     }
 
     #[test]

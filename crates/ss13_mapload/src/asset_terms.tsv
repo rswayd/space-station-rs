@@ -53,3 +53,4 @@ sound/machines/buckle/*	sadboysuss	-	sound/machines/buckle/attribution.txt
 sound/mobs/non-humanoids/cat/cat_*	sadboysuss, CC-BY-SA	-	sound/mobs/non-humanoids/cat/attribution.txt
 modular_bandastation/aesthetics/*	"Works below licensed with Creative Commons 3.0 BY-SA"	-	modular_bandastation/aesthetics/attributions.txt
 sound/machines/shutter.ogg	adapted from Joseph Sardin on BigSoundBank (bigsoundbank.com/detail-2475); site license, not verified	medium	sound/machines/license.txt
+sound/announcer/vox_fem/*	the AI's VOX words: no entry of their own, only their common names (fire, door, all, ...) appear in other files' lines (repository CC BY-SA 3.0)	-	sound/attributions.txt

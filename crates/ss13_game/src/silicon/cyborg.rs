@@ -243,9 +243,14 @@ pub(crate) fn join(
         PlayerJob(job),
         ListInput(choices),
     ));
+    world.entity_mut(borg).insert((
+        super::alarms::AlertListener::silicon(false),
+        super::alarms::AlarmQueue::default(),
+    ));
     world.resource_mut::<Jobs>().add_position(job);
     attach_client(world, client, borg, pos);
     give_radio(world, borg, &[]);
+    super::ai_hud::give_borg_buttons(world, borg);
     if let Some(ai) = fewest_borgs_ai(world) {
         connect(world, borg, ai);
     }

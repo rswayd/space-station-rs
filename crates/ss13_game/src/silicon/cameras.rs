@@ -832,15 +832,19 @@ fn assign_view_masks(
         ),
         With<Viewer>,
     >,
-    eyes: Query<(), With<super::ai::AiEye>>,
+    eyes: Query<&super::ai::AiEye>,
     mut commands: Commands,
 ) {
     for (client, console, controlled, mask) in &clients {
         let want = match console.and_then(|c| c.camera) {
             Some(camera) => Some(camera_mask(camera)),
-            None => controlled
-                .filter(|c| eyes.contains(c.0))
-                .map(|_| CAMERANET_MASK),
+            None => controlled.and_then(|c| eyes.get(c.0).ok()).map(|eye| {
+                if eye.blind {
+                    super::ai::AI_BLIND_MASK
+                } else {
+                    CAMERANET_MASK
+                }
+            }),
         };
         if mask.map(|m| m.0) == want {
             continue;

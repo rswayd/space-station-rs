@@ -1035,19 +1035,29 @@ fn actor_area(world: &World, actor: Entity) -> Option<String> {
     Some(crate::shuttle::area_name(world, area))
 }
 
-/// tg `SSshuttle.requestEvac`, then `post_status("shuttle")`.
-fn request_evac(world: &mut World, client: Entity, actor: Entity, reason: &str) {
+/// tg `SSshuttle.canEvac()`; `None` without an emergency shuttle.
+pub(crate) fn can_evac(world: &World) -> Option<Result<(), String>> {
     let now = world.resource::<Time>().elapsed_secs_f64();
     let round = world.resource::<Ticker>().round_duration(now);
     let refuel = world.resource::<ShuttleConfig>().refuel_secs;
-    let Some(check) = world
+    world
         .get_resource::<EmergencyShuttle>()
         .map(|s| s.state.can_evac(round, refuel))
-    else {
+}
+
+/// tg `SSshuttle.requestEvac`, then `post_status("shuttle")`.
+pub(crate) fn request_evac(world: &mut World, client: Entity, actor: Entity, reason: &str) {
+    let Some(check) = can_evac(world) else {
         return;
     };
     if let Err(why) = check {
         tell(world, client, Span::Warning, &why);
+        return;
+    }
+    if reason.trim().chars().count() < CALL_SHUTTLE_REASON_LENGTH
+        && crate::security_level::current(world) > SecLevel::Green
+    {
+        tell(world, client, Span::Warning, "You must provide a reason.");
         return;
     }
     let origin = actor_area(world, actor);

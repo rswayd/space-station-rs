@@ -143,7 +143,7 @@ fn robot_clicks(world: &mut World, mut clicks: Local<MessageCursor<RobotClick>>)
 fn silicon_status(
     mut windows: Query<&mut UiWindow>,
     eyes: Query<&AiEye>,
-    cores: Query<(&AiCore, &Stat)>,
+    cores: Query<(&AiCore, &Stat, Option<&super::ai_power::AiPower>)>,
     borgs: Query<(&TilePos, &Stat), With<Cyborg>>,
     positions: Query<&TilePos>,
     remote: Query<(), With<RemoteActor>>,
@@ -162,10 +162,18 @@ fn silicon_status(
             if eye.ai == source {
                 continue;
             }
-            let controls = cores
-                .get(eye.ai)
-                .is_ok_and(|(core, stat)| !core.control_disabled && *stat == Stat::Conscious);
-            if controls && net.as_ref().is_some_and(|n| n.visible(source_pos)) {
+            let Ok((core, stat, power)) = cores.get(eye.ai) else {
+                window.cap_status(UiStatus::Close);
+                continue;
+            };
+            // tg `shared_ui_interaction`: the hacked APC works while depowered, nothing else.
+            if power.is_some_and(|p| p.apc_override == Some(source)) {
+                continue;
+            }
+            let controls = !core.control_disabled && *stat == Stat::Conscious;
+            if power.is_some_and(|p| p.incapacitated()) {
+                UiStatus::Disabled
+            } else if controls && net.as_ref().is_some_and(|n| n.visible(source_pos)) {
                 UiStatus::Interactive
             } else {
                 UiStatus::Close

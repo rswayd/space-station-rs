@@ -265,6 +265,61 @@ pub struct SfxData {
     /// `/datum/centcom_announcer` subtype -> its sounds.
     #[serde(default)]
     pub announcers: BTreeMap<String, AnnouncerSounds>,
+    /// tg `GLOB.vox_sounds`: the AI's VOX words ([`resolve_vox`]).
+    #[serde(default)]
+    pub vox: BTreeMap<String, VoxWord>,
+}
+
+/// One VOX word: its file and how long it plays (the client queues the words, tg `wait = 1`).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct VoxWord {
+    pub file: String,
+    pub secs: f32,
+}
+
+/// tg `GLOB.vox_sounds`' directory (`vox_sounds.dm`: every word is its file's name).
+pub const VOX_DIR: &str = "sound/announcer/vox_fem";
+
+/// The VOX words: every `.ogg` of [`VOX_DIR`] under `source`, by lowercase name, with its
+/// length. Empty without the directory.
+pub fn resolve_vox(source: &Path) -> BTreeMap<String, VoxWord> {
+    let Ok(dir) = std::fs::read_dir(source.join(VOX_DIR)) else {
+        return BTreeMap::new();
+    };
+    dir.filter_map(Result::ok)
+        .filter_map(|e| {
+            let name = e.file_name().to_string_lossy().into_owned();
+            let word = name.strip_suffix(".ogg")?.to_lowercase();
+            let bytes = std::fs::read(e.path()).ok()?;
+            let secs = ogg_duration(&bytes)? as f32;
+            Some((
+                word,
+                VoxWord {
+                    file: format!("{VOX_DIR}/{name}"),
+                    secs,
+                },
+            ))
+        })
+        .collect()
+}
+
+/// The length of an Ogg Vorbis file: the last page's granule position (samples) over the
+/// identification header's sample rate.
+pub fn ogg_duration(bytes: &[u8]) -> Option<f64> {
+    const CAPTURE: &[u8] = b"OggS";
+    if !bytes.starts_with(CAPTURE) {
+        return None;
+    }
+    // First page: 27-byte header, the segment table, then the `\x01vorbis` packet.
+    let segments = usize::from(*bytes.get(26)?);
+    let packet = bytes.get(27 + segments..)?;
+    if packet.get(..7)? != b"\x01vorbis" {
+        return None;
+    }
+    let rate = u32::from_le_bytes(packet.get(12..16)?.try_into().ok()?);
+    let last = bytes.windows(4).rposition(|w| w == CAPTURE)?;
+    let granule = u64::from_le_bytes(bytes.get(last + 6..last + 14)?.try_into().ok()?);
+    (rate > 0).then(|| granule as f64 / f64::from(rate))
 }
 
 /// A `/datum/centcom_announcer`: the sound sets of announcements.
@@ -307,6 +362,7 @@ impl SfxData {
         (self.sfx.values().flatten().map(|(f, _)| f.as_str()))
             .chain(steps.flat_map(|s| s.files.iter().map(String::as_str)))
             .chain(announcers)
+            .chain(self.vox.values().map(|w| w.file.as_str()))
     }
 }
 
@@ -346,6 +402,7 @@ pub fn resolve_sfx(types: &DmTypes) -> SfxData {
         sfx,
         footsteps: resolve_footsteps(types),
         announcers: resolve_announcers(types),
+        vox: BTreeMap::new(),
     }
 }
 
@@ -650,5 +707,45 @@ mod tests {
         assert!(sources.contains("commit abc"));
         assert!(sources.contains("sound/items/weapons/shot.ogg\tsound/items/weapons/Shot.ogg"));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A first page with the Vorbis identification header (22050 Hz) and a last page at
+    /// 44100 samples: two seconds.
+    fn ogg(rate: u32, granule: u64) -> Vec<u8> {
+        let page = |granule: u64, packet: &[u8]| {
+            let mut p = b"OggS".to_vec();
+            p.extend([0, 0]);
+            p.extend(granule.to_le_bytes());
+            p.extend([0; 12]);
+            p.push(1);
+            p.push(packet.len() as u8);
+            p.extend(packet);
+            p
+        };
+        let mut id = b"\x01vorbis".to_vec();
+        id.extend(0u32.to_le_bytes());
+        id.push(1);
+        id.extend(rate.to_le_bytes());
+        id.extend([0; 13]);
+        let mut out = page(0, &id);
+        out.extend(page(granule / 2, b"audio"));
+        out.extend(page(granule, b"audio"));
+        out
+    }
+
+    #[test]
+    fn ogg_duration_is_the_last_granule_over_the_rate() {
+        assert_eq!(ogg_duration(&ogg(22050, 44100)), Some(2.0));
+        assert_eq!(ogg_duration(b"RIFF...."), None);
+        assert_eq!(ogg_duration(&ogg(0, 44100)), None);
+        // A real VOX word, when the source checkout is there.
+        let source = std::env::var_os("SS13_SOURCE")
+            .map_or_else(|| PathBuf::from(env!("SS13_SOURCE")), PathBuf::from);
+        let vox = resolve_vox(&source);
+        if let Some(word) = vox.get("alert") {
+            assert_eq!(word.file, "sound/announcer/vox_fem/alert.ogg");
+            assert!((0.2..3.0).contains(&word.secs), "{}", word.secs);
+            assert!(vox.contains_key(",") && vox.len() > 1000);
+        }
     }
 }
