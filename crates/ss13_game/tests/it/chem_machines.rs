@@ -42,6 +42,8 @@ const TYPES: &str = r##"{
         "default_container": { "path": "/obj/item/reagent_containers/cup/bottle" } } },
     "/datum/reagent/water": { "parent": "/datum/reagent", "declared_vars": {
         "name": "Water", "color": "#AAAAAA77" } },
+    "/datum/reagent/potassium": { "parent": "/datum/reagent", "declared_vars": {
+        "name": "Potassium" } },
     "/datum/reagent/toxin": { "parent": "/datum/reagent", "declared_vars": { "name": "Toxin" } },
     "/datum/reagent/alpha": { "parent": "/datum/reagent", "declared_vars": { "name": "Alpha" } },
     "/datum/reagent/beta": { "parent": "/datum/reagent", "declared_vars": { "name": "Beta" } },
@@ -66,6 +68,14 @@ const TYPES: &str = r##"{
         "required_reagents": { "list": [
             { "assoc": [{ "path": "/datum/reagent/alpha" }, 1] },
             { "assoc": [{ "path": "/datum/reagent/beta" }, 1] }] } } },
+    "/datum/chemical_reaction/reagent_explosion": { "parent": "/datum/chemical_reaction",
+        "declared_vars": { "strengthdiv": 10, "modifier": 0, "reaction_flags": 2,
+        "required_temp": 0 }, "procs": ["on_reaction"] },
+    "/datum/chemical_reaction/reagent_explosion/potassium_explosion": {
+        "parent": "/datum/chemical_reaction/reagent_explosion", "declared_vars": {
+        "required_reagents": { "list": [
+            { "assoc": [{ "path": "/datum/reagent/water" }, 1] },
+            { "assoc": [{ "path": "/datum/reagent/potassium" }, 1] }] } } },
     "/datum/stock_part": { "parent": "/datum" },
     "/datum/stock_part/capacitor": { "parent": "/datum/stock_part", "declared_vars": {
         "physical_object_type": { "path": "/obj/item/stock_parts/capacitor" } } },
@@ -162,6 +172,9 @@ const TYPES: &str = r##"{
     "/obj/item/reagent_containers/cup/beaker/water": {
         "parent": "/obj/item/reagent_containers/cup/beaker", "declared_vars": {
         "list_reagents": { "list": [{ "assoc": [{ "path": "/datum/reagent/water" }, 40] }] } } },
+    "/obj/item/reagent_containers/cup/beaker/potassium": {
+        "parent": "/obj/item/reagent_containers/cup/beaker", "declared_vars": {
+        "list_reagents": { "list": [{ "assoc": [{ "path": "/datum/reagent/potassium" }, 20] }] } } },
     "/obj/item/reagent_containers/cup/beaker/mix": {
         "parent": "/obj/item/reagent_containers/cup/beaker", "declared_vars": {
         "list_reagents": { "list": [{ "assoc": [{ "path": "/datum/reagent/alpha" }, 10] },
@@ -234,7 +247,7 @@ const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 "f" = (/turf/open/floor,/area/space)
 "s" = (/obj/effect/landmark/start/assistant,/obj/item/reagent_containers/cup/beaker/water,/obj/item/reagent_containers/cup/beaker/mix,/obj/item/reagent_containers/cup/beaker,/obj/item/card/emag,/turf/open/floor,/area/space)
 "D" = (/obj/machinery/chem_dispenser,/turf/open/floor,/area/space)
-"t" = (/obj/item/reagent_containers/hypospray/medipen,/obj/item/reagent_containers/applicator/patch,/obj/item/reagent_containers/dropper,/turf/open/floor,/area/space)
+"t" = (/obj/item/reagent_containers/hypospray/medipen,/obj/item/reagent_containers/applicator/patch,/obj/item/reagent_containers/dropper,/obj/item/reagent_containers/cup/beaker/potassium,/turf/open/floor,/area/space)
 "M" = (/obj/machinery/chem_master,/turf/open/floor,/area/space)
 "H" = (/obj/machinery/chem_heater/withbuffer,/turf/open/floor,/area/space)
 
@@ -292,6 +305,7 @@ fn fixture_assets(test: &str) -> PathBuf {
         "/obj/item/reagent_containers/hypospray/medipen",
         "/obj/item/reagent_containers/applicator/patch",
         "/obj/item/reagent_containers/dropper",
+        "/obj/item/reagent_containers/cup/beaker/potassium",
         "/obj/item/stock_parts/capacitor",
         "/obj/item/stock_parts/power_store/cell",
         "/obj/item/circuitboard/machine/chem_dispenser",
@@ -773,4 +787,25 @@ fn medipen_patch_and_dropper() {
     s.click(empty);
     s.run_until("squirted", |s| s.amount(empty, WATER) == 5.0);
     assert_eq!(s.amount(dropper, WATER), 0.0);
+}
+
+#[test]
+fn potassium_in_water_explodes() {
+    let mut s = Station::start("potassium_in_water_explodes");
+    let potassium = s.items(TOOLS, "/obj/item/reagent_containers/cup/beaker/potassium")[0];
+    let water = s.items(SPAWN, "/obj/item/reagent_containers/cup/beaker/water")[0];
+    s.take(potassium);
+    // 10 u of potassium into 40 of water: 10 react, power round(10 / 10) = 1.
+    s.click(water);
+    s.run_until("the explosion", |s| {
+        let chat = &s.players[0].app.world().resource::<Received>().chat;
+        chat.iter().any(|l| l.contains("Раствор бурно взрывается!"))
+    });
+    let world = s.server.world();
+    assert!(
+        world
+            .get::<Reagents>(water)
+            .is_none_or(|r| r.0.total_volume == 0.0),
+        "the water beaker's reagents are gone"
+    );
 }

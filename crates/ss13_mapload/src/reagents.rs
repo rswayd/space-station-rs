@@ -19,6 +19,7 @@ pub const REACTION_ROOT: &str = "/datum/chemical_reaction";
 pub const RANDOMIZED_REACTIONS: &str = "/datum/chemical_reaction/randomized";
 /// Its `pre_reaction_other_checks` always passes.
 const FOOD_REACTIONS: &str = "/datum/chemical_reaction/food";
+const REAGENT_EXPLOSION: &str = "/datum/chemical_reaction/reagent_explosion";
 const GLASS_STYLE_ROOT: &str = "/datum/glass_style";
 /// `/datum/glass_style/has_foodtype/soup/New()`: no name or description means the soup's.
 const SOUP_STYLE: &str = "/datum/glass_style/has_foodtype/soup";
@@ -232,6 +233,12 @@ pub fn chem_data(types: &DmTypes) -> (ChemData, Skipped) {
             rate_up_lim: n("rate_up_lim"),
             purity_min: n("purity_min"),
             reaction_flags: n("reaction_flags") as u32,
+            explosion: (is_under(path, REAGENT_EXPLOSION)
+                && !overrides(types, path, REAGENT_EXPLOSION, &["on_reaction", "New"]))
+            .then(|| ss13_reagents::ExplosionDef {
+                strengthdiv: n("strengthdiv"),
+                modifier: n("modifier"),
+            }),
             special: overrides(
                 types,
                 path,
@@ -402,6 +409,17 @@ mod tests {
         "/datum/chemical_reaction/checked": { "parent": "/datum/chemical_reaction/water",
             "procs": ["pre_reaction_other_checks", "on_reaction"] },
         "/datum/chemical_reaction/randomized": { "parent": "/datum/chemical_reaction" },
+        "/datum/chemical_reaction/reagent_explosion": { "parent": "/datum/chemical_reaction",
+            "declared_vars": { "strengthdiv": 10, "modifier": 0, "reaction_flags": 2 },
+            "procs": ["on_reaction"] },
+        "/datum/chemical_reaction/reagent_explosion/potassium": {
+            "parent": "/datum/chemical_reaction/reagent_explosion", "declared_vars": {
+            "required_reagents": { "list": [{ "assoc": [{ "path": "/datum/reagent/water" }, 1] }] },
+            "modifier": 2 } },
+        "/datum/chemical_reaction/reagent_explosion/stabilized": {
+            "parent": "/datum/chemical_reaction/reagent_explosion", "declared_vars": {
+            "required_reagents": { "list": [{ "assoc": [{ "path": "/datum/reagent/water" }, 2] }] } },
+            "procs": ["on_reaction"] },
         "/obj": { "parent": "/datum" },
         "/obj/item": { "parent": "/obj" },
         "/obj/item/reagent_containers": { "parent": "/obj/item", "declared_vars": {
@@ -443,8 +461,10 @@ mod tests {
         let sugar = &data.reagents[0];
         assert_eq!(sugar.chemical_flags, REAGENT_UNAFFECTED_BY_METABOLISM);
         assert_eq!(sugar.inverse_chem, None);
-        assert_eq!(data.reactions.len(), 1);
-        let r = &data.reactions[0];
+        // The water one and the two explosions of `reagent_explosions_carry_their_power`.
+        assert_eq!(data.reactions.len(), 3);
+        let r = &data.reactions[2];
+        assert_eq!(r.path, "/datum/chemical_reaction/water");
         assert_eq!(
             r.required_reagents[0],
             ("/datum/reagent/sugar".to_owned(), 1.0)
@@ -456,6 +476,26 @@ mod tests {
         );
         assert_eq!(skipped.own_checks, ["/datum/chemical_reaction/checked"]);
         assert_eq!(skipped.randomized, 1);
+    }
+
+    /// Only explosions with the base `on_reaction` are plain explosions.
+    #[test]
+    fn reagent_explosions_carry_their_power() {
+        let types = DmTypes::parse(TYPES.as_bytes()).unwrap();
+        let (data, _) = chem_data(&types);
+        let get = |p: &str| data.reactions.iter().find(|r| r.path == p).unwrap();
+        assert_eq!(
+            get("/datum/chemical_reaction/reagent_explosion/potassium").explosion,
+            Some(ss13_reagents::ExplosionDef {
+                strengthdiv: 10.0,
+                modifier: 2.0
+            })
+        );
+        assert_eq!(
+            get("/datum/chemical_reaction/reagent_explosion/stabilized").explosion,
+            None
+        );
+        assert_eq!(get("/datum/chemical_reaction/water").explosion, None);
     }
 
     #[test]

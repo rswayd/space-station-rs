@@ -17,19 +17,19 @@
 Таблетку глотают или растворяют в стакане; пластырь клеится на кожу и медленно всасывается; производятся химмастером и пресс-машиной.
 
 - **Код:** [`/obj/item/reagent_containers/applicator/pill`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/reagents/reagent_containers/pill.dm#L1), [`/obj/item/reagent_containers/applicator/patch`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/reagents/reagent_containers/patch.dm#L1)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/chem.rs`: таблетки (проглатывание, растворение), сахарная оболочка (`PillShell`: содержимое попадает в желудок через её секунды, сахар из стакана утолщает, вода растворяет, осмотр), печать химмастером (`crates/ss13_game/src/chem_master.rs`, пластыри печатаются как предметы); нет наклеивания пластырей и их всасывания, вкуса оболочки
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/chem.rs`: таблетки (проглатывание, растворение), сахарная оболочка (`PillShell`: содержимое попадает в желудок через её секунды, сахар из стакана утолщает, вода растворяет, осмотр), пластыри (1,5 с на себя и на другого, `AppliedPatch`: 0,75 ед./с в кровь, синтплоть — сразу, отпадают пустыми), печать химмастером (`crates/ss13_game/src/chem_master.rs`); нет проверки конечностей, оверлея пластыря на мобе и снятия пластыря, вкуса оболочки
 
 ### Пипетки
 Капают малый объём, в том числе в глаза.
 
 - **Код:** [`/obj/item/reagent_containers/dropper`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/reagents/reagent_containers/dropper.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/chem.rs` (`dropper`): набор из набираемых ёмкостей (не из мобов), закапывание в ёмкости и в глаза (в кровь), объём 1-5, пипетка по мензурке в нагревателе; нет защиты глаз (очки ловят капли), воздействия на глаза (`expose`), звука капли (не сконвертирован), оверлея заполнения
 
 ### Гипоспреи, медипены, ингаляторы, медгель
 Мгновенный безыгольный ввод (гипоспрей КМО, медипены с эпинефрином и др.), ингалятор для астматиков, медгель-распылитель на кожу; борг-гипоспрей.
 
 - **Код:** [`/obj/item/reagent_containers/hypospray`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/reagents/reagent_containers/hypospray.dm#L1), [`/obj/item/reagent_containers/hypospray/medipen`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/reagents/reagent_containers/hypospray.dm#L140), [`/obj/item/inhaler`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/reagents/reagent_containers/inhaler.dm#L1), [`/obj/item/reagent_containers/medigel`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/reagents/reagent_containers/medigel.dm#L29), [`/obj/item/reagent_containers/borghypo`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/robot/items/hypo.dm#L103); tgui: [`BorgHypo.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/BorgHypo.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/chem.rs`: гипоспрей (мгновенный ввод в кровь, проверка плотной одежды, ПКМ — набор из ёмкостей, не из мобов, звук), медипены и боевые инъекторы сквозь одежду, медипен ЛКМ в руке — себе, пустой ломается (`UsedUp`, спрайт `…0`); нет ингалятора, медгеля, борг-гипоспрея (окно `BorgHypo`), бесконечных гипоспреев, наклейки состава медипена при осмотре
 
 ### Распылители
 Пульверизатор (космоочиститель, перцовый баллончик, огнетушащий), химраспылитель; струя переносит реагенты на тайлы и мобов.

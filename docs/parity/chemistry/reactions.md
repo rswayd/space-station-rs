@@ -30,13 +30,13 @@
 Реакции со своими эффектами (`on_reaction`): взрывы (нитроглицерин, чёрный порох, плазма), вспышки, ЭМИ, дым, пена, огонь (CLF3, напалм), создание мобов и предметов, телепорт.
 
 - **Код:** [`proc/on_reaction()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/reagents/chemistry/recipes.dm#L82), [`/datum/chemical_reaction/reagent_explosion`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/reagents/chemistry/recipes/pyrotechnics.dm#L10), [`recipes/pyrotechnics.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/reagents/chemistry/recipes/pyrotechnics.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_reagents/src/holder.rs`: собственные процедуры реакций не моделируются
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_reagents/src/holder.rs` (`reacted`), `crates/ss13_game/src/chem.rs` (`reagent_explosions`), данные `ExplosionDef` (`crates/ss13_mapload/src/reagents.rs`): взрывы `reagent_explosion` без своего `on_reaction` (калий+вода, нитроглицерин при нагреве, RDX, пентрит и др.) — сила `modifier + round(объём / strengthdiv)`, `dyn_explosion`, сообщение, очистка ёмкости; нет взрывов со своими условиями (стабилизаторы, TATP, святая вода, порох, теслиум), взрывов в мобах, вспышек, ЭМИ, дыма, пены, огня, создания мобов и предметов
 
 ### Нагрев от внешних источников
 Содержимое нагревается от зажигалок, сварки, горелок, огня и пожара в комнате (`expose_temperature`), запуская температурные реакции.
 
 - **Код:** [`proc/expose_temperature()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/reagents/chemistry/holder/holder.dm#L769)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_reagents/src/holder.rs` (`expose_temperature`), `crates/ss13_game/src/chem.rs` (`heat_with_tool`): зажжённая сварка греет стакан (`reagents_item_heatable`); химнагреватель — [chem-machines.md](chem-machines.md); нет зажигалок, спичек, горелок (у них нет состояния «горит»), огнетушителя, огня и пожара в комнате, тепла тела
 
 ### Реакции экстрактов слаймов
 Экстракты слаймов с плазмой/кровью/водой дают особые эффекты (см. агента science).

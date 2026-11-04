@@ -24,12 +24,15 @@
 //!   in hearing range of the container.
 //! - Mobs have blood and stomach holders ([`MobReagents`]): every `SSmobs` fire the stomach
 //!   drips into the blood and the blood metabolizes (`ss13_reagents::metabolism`).
-// shortcut: no chem master or heater (dispensers: `crate::chem_dispenser`); no sprays,
-// droppers, patches, hyposprays or IV drips; no lids; splashing and pouring expose nothing
-// (reagents' `expose_*` procs are not ported: water does not put out fires, acid does not melt);
-// no sounds.
-// shortcut: anyone sees a container's contents on examine (tg: only with science goggles or a
-// similar `can_see_reagents`).
+//! - A pill's sugar shell keeps it whole in the stomach for its seconds ([`PillShell`]); a
+//!   patch stuck on a mob feeds the blood 0.75 u a second ([`AppliedPatch`]); hyposprays and
+//!   medipens inject at once (a medipen is spent empty); droppers draw and squirt small amounts.
+//! - An explosive instant reaction (`reagent_explosion`) blows up and empties its container; a
+//!   lit welder heats a cup.
+// shortcut: the machines are `crate::chem_dispenser`, `crate::chem_master` and
+// `crate::chem_heater`; no sprays or IV drips here; no lids; splashing and pouring expose
+// nothing (reagents' `expose_*` procs are not ported: water does not put out fires, acid does
+// not melt); no mixing sounds.
 
 use std::sync::Arc;
 
@@ -118,6 +121,7 @@ pub(crate) fn stomach_removed(world: &mut World, organ: Entity, mob: Entity) {
         reactions: Vec::new(),
         is_reacting: false,
         messages: Vec::new(),
+        reacted: Vec::new(),
         ..m.stomach.clone()
     };
     let held = std::mem::replace(&mut m.stomach, empty);
@@ -1626,9 +1630,27 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter, job: ChemJob) 
     }
 }
 
+/// tg `can_see_reagents`: the dead (ghosts too), silicons and whoever wears glasses with
+/// `TRAIT_REAGENT_SCANNER` see what a container holds.
+pub fn can_see_reagents(world: &World, mob: Entity) -> bool {
+    world.get::<Stat>(mob) == Some(&Stat::Dead)
+        || world.get::<crate::ghost::Ghost>(mob).is_some()
+        || world.get::<crate::silicon::Silicon>(mob).is_some()
+        || world
+            .get::<Inventory>(mob)
+            .and_then(|i| i.slot(InventorySlot::Eyes))
+            .and_then(|g| world.get::<DmClothing>(g))
+            .is_some_and(|c| c.reagent_scanner)
+}
+
 /// tg `/atom/examine` for reagents (`TRANSPARENT`, `AMOUNT_VISIBLE`) and the transfer amount
 /// hint of `/obj/item/reagent_containers/examine`.
-pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<(Span, String)>) {
+pub fn examine_lines(
+    world: &World,
+    examiner: Entity,
+    target: Entity,
+    lines: &mut Vec<(Span, String)>,
+) {
     let (Some(h), Some(chem)) = (holder(world, target), world.get_resource::<Chem>()) else {
         return;
     };
@@ -1668,13 +1690,18 @@ pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<(Span, Strin
     }
     if h.flags & flags::TRANSPARENT != 0 {
         if h.total_volume > 0.0 {
+            let sees = can_see_reagents(world, examiner);
             lines.push((
                 Span::Plain,
                 format!(
-                    "Имеется {} юнитов различных химикатов:",
-                    dm_num(h.total_volume)
+                    "Имеется {} юнитов различных химикатов{}",
+                    dm_num(h.total_volume),
+                    if sees { ":" } else { "." }
                 ),
             ));
+            if !sees {
+                return;
+            }
             for r in &h.reagents {
                 lines.push((
                     Span::Plain,
@@ -1749,10 +1776,12 @@ fn refresh_containers(world: &mut World) {
         return;
     };
     for e in changed {
-        let messages = {
-            let mut r = world.get_mut::<Reagents>(e).expect("queried");
-            std::mem::take(&mut r.bypass_change_detection().0.messages)
+        let Some(mut r) = world.get_mut::<Reagents>(e) else {
+            continue; // blown up by an earlier container's explosion
         };
+        let holder_mut = &mut r.bypass_change_detection().0;
+        let messages = std::mem::take(&mut holder_mut.messages);
+        let reacted = std::mem::take(&mut holder_mut.reacted);
         if !messages.is_empty()
             && let Some(pos) = map_pos(world, e)
         {
@@ -1766,6 +1795,15 @@ fn refresh_containers(world: &mut World) {
                 }
             }
         }
+        if reacted
+            .iter()
+            .any(|&(i, _)| chem.reactions[i as usize].def.explosion.is_some())
+        {
+            reagent_explosions(world, &chem, e, &reacted);
+            if world.get_entity(e).is_err() {
+                continue;
+            }
+        }
         let reacting = holder(world, e).is_some_and(|h| h.is_reacting);
         match (reacting, world.get::<Reacting>(e).is_some()) {
             (true, false) => {
@@ -1777,6 +1815,53 @@ fn refresh_containers(world: &mut World) {
             _ => {}
         }
         refresh_look(world, &chem, e);
+    }
+}
+
+/// `GLOB.DYN_EX_SCALE`.
+const DYN_EX_SCALE: f32 = 0.5;
+
+/// DM `round(x, 1)`: to the nearest, halves up.
+fn dm_round(x: f32) -> f32 {
+    (x + 0.5).floor()
+}
+
+/// tg `reagent_explosion/on_reaction` -> `reagent_explode` of each explosive instant reaction a
+/// container ran: power `modifier + round(volume / strengthdiv)`, the "violently explodes"
+/// message and `dyn_explosion` (range `round((2 * power) ** DYN_EX_SCALE)`, devastation a
+/// quarter, heavy a half of it); the container's reagents are gone either way.
+// shortcut: reactions with their own `on_reaction` (stabilizers, TATP, holy water, gunpowder,
+// teslium...) are not explosions here (`ExplosionDef`); mobs' holders do not explode.
+fn reagent_explosions(world: &mut World, chem: &Chemistry, e: Entity, reacted: &[(u32, f32)]) {
+    for &(index, volume) in reacted {
+        let Some(ex) = chem.reactions[index as usize].def.explosion else {
+            continue;
+        };
+        let power = ex.modifier + dm_round(volume / ex.strengthdiv.max(f32::EPSILON));
+        if power > 0.0
+            && let Some(pos) = map_pos(world, e)
+        {
+            let clients = clients_near(world, pos, None);
+            if !clients.is_empty() {
+                world.write_message(SendChat {
+                    clients,
+                    message: line(Span::Danger, "Раствор бурно взрывается!"),
+                });
+            }
+            let range = dm_round((2.0 * power).powf(DYN_EX_SCALE));
+            crate::events::explosion::explosion(
+                world,
+                pos,
+                dm_round(range * 0.25) as i32,
+                dm_round(range * 0.5) as i32,
+                range as i32,
+                0,
+            );
+        }
+        let Some(mut r) = world.get_mut::<Reagents>(e) else {
+            return;
+        };
+        r.0.clear();
     }
 }
 
@@ -2169,6 +2254,11 @@ fn life(world: &mut World, chem: &Chemistry, mob: Entity, seconds: f32) {
     };
     let mut health = health.clone();
     let mut reagents = reagents.clone();
+    // A mob's holders are silent (`ismob(my_atom)`), and their explosions are not ported.
+    for h in [&mut reagents.blood, &mut reagents.stomach] {
+        h.messages.clear();
+        h.reacted.clear();
+    }
     let respiration = entity.get::<Respiration>();
     let body_temperature = respiration.map_or(310.15, |r| r.bodytemperature as f32);
     let mut losebreath = respiration.map_or(0.0, |r| r.losebreath);
@@ -2280,6 +2370,26 @@ pub fn blood_amount(world: &World, mob: Entity, path: &str) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reagents_are_seen_with_scanner_glasses_or_dead() {
+        let mut world = World::new();
+        let glasses = |scanner: bool| DmClothing {
+            reagent_scanner: scanner,
+            ..DmClothing::default()
+        };
+        let sunglasses = world.spawn(glasses(false)).id();
+        let science = world.spawn(glasses(true)).id();
+        let mob = world.spawn((Inventory::default(), Stat::Conscious)).id();
+        assert!(!can_see_reagents(&world, mob), "bare eyes");
+        world.get_mut::<Inventory>(mob).unwrap().eyes = Some(sunglasses);
+        assert!(!can_see_reagents(&world, mob), "plain glasses");
+        world.get_mut::<Inventory>(mob).unwrap().eyes = Some(science);
+        assert!(can_see_reagents(&world, mob), "science goggles");
+        world.get_mut::<Inventory>(mob).unwrap().eyes = None;
+        world.entity_mut(mob).insert(Stat::Dead);
+        assert!(can_see_reagents(&world, mob), "the dead");
+    }
 
     #[test]
     fn numbers_print_like_dm() {

@@ -33,6 +33,8 @@ pub struct DmClothing {
     pub tint: f32,
     /// `clothing_traits` has `TRAIT_NEARSIGHTED_CORRECTED` (prescription glasses).
     pub vision_correction: bool,
+    /// `clothing_traits` has `TRAIT_REAGENT_SCANNER` (science and chemical glasses).
+    pub reagent_scanner: bool,
 }
 
 impl Default for DmClothing {
@@ -50,6 +52,7 @@ impl Default for DmClothing {
             siemens_coefficient: 1.0,
             tint: 0.0,
             vision_correction: false,
+            reagent_scanner: false,
         }
     }
 }
@@ -86,6 +89,8 @@ const CLOTHING_VARS: [&str; 9] = [
 
 /// `TRAIT_NEARSIGHTED_CORRECTED`.
 const NEARSIGHTED_CORRECTED: &str = "fixes_nearsighted";
+/// `TRAIT_REAGENT_SCANNER`.
+const REAGENT_SCANNER: &str = "reagent_scanner";
 
 const TANK_VARS: [&str; 2] = ["volume", "distribute_pressure"];
 
@@ -118,14 +123,21 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
             out.push(ext("dm_clothing", var, ron));
         }
         if let Some(traits) = value(CLOTHING_ROOT, "clothing_traits") {
-            let corrects = traits
-                .get("list")
-                .and_then(|l| l.as_array())
-                .is_some_and(|l| l.iter().any(|t| t.as_str() == Some(NEARSIGHTED_CORRECTED)));
+            let has = |name: &str| {
+                traits
+                    .get("list")
+                    .and_then(|l| l.as_array())
+                    .is_some_and(|l| l.iter().any(|t| t.as_str() == Some(name)))
+            };
             out.push(ext(
                 "dm_clothing",
                 "vision_correction",
-                corrects.to_string(),
+                has(NEARSIGHTED_CORRECTED).to_string(),
+            ));
+            out.push(ext(
+                "dm_clothing",
+                "reagent_scanner",
+                has(REAGENT_SCANNER).to_string(),
             ));
         }
         if let Some(allowed) = value(CLOTHING_ROOT, "allowed").and_then(path_list) {
@@ -217,7 +229,13 @@ mod tests {
         assert!(root.contains(&("tint".into(), "0.0".into())));
         assert!(root.contains(&("vision_correction".into(), "false".into())));
         let regular = fields(&types, "/obj/item/clothing/glasses/regular");
-        assert_eq!(regular, [("vision_correction".into(), "true".into())]);
+        assert_eq!(
+            regular,
+            [
+                ("vision_correction".into(), "true".into()),
+                ("reagent_scanner".into(), "false".into())
+            ]
+        );
         let blindfold = fields(&types, "/obj/item/clothing/glasses/blindfold");
         assert_eq!(blindfold, [("tint".into(), "1e31".into())]);
         let suit = fields(&types, "/obj/item/clothing/suit/space");

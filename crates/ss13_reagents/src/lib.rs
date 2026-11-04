@@ -15,7 +15,7 @@ pub mod metabolism;
 
 use std::collections::HashMap;
 
-pub use data::{CHEM_FILE, ChemData, GlassStyleDef, ReactionDef, ReagentDef};
+pub use data::{CHEM_FILE, ChemData, ExplosionDef, GlassStyleDef, ReactionDef, ReagentDef};
 pub use holder::{Equilibrium, Holder, Owner, Reagent};
 
 /// `CHEMICAL_QUANTISATION_LEVEL`: the smallest amount a holder keeps track of.

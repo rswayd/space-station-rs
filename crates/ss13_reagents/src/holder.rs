@@ -64,6 +64,9 @@ pub struct Holder {
     pub is_reacting: bool,
     /// Mix messages waiting for the owner's `audible_message` (drained by the game).
     pub messages: Vec<String>,
+    /// Instant reactions that ran (`instant_react` -> `on_reaction(created_volume)`), as
+    /// (reaction index, multiplier); the owner's game code drains it.
+    pub reacted: Vec<(u32, f32)>,
 }
 
 impl Holder {
@@ -80,6 +83,7 @@ impl Holder {
             reactions: Vec::new(),
             is_reacting: false,
             messages: Vec::new(),
+            reacted: Vec::new(),
         }
     }
 
@@ -644,6 +648,7 @@ impl Holder {
         if !self.owner.path.is_empty() && !self.owner.living {
             self.messages.push(reaction.def.mix_message.clone());
         }
+        self.reacted.push((index, multiplier));
     }
 
     /// Steps `self.reactions[i]` by `seconds`; the list may grow meanwhile (the products start

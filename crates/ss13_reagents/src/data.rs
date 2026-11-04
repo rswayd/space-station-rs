@@ -86,6 +86,17 @@ pub struct ReactionDef {
     /// The type overrides `on_reaction`, `reaction_step`, `reaction_finish`, `overheated` or
     /// `overly_impure`: what those procs do beyond moving reagents is not modelled.
     pub special: bool,
+    /// A `/datum/chemical_reaction/reagent_explosion` that only has its base `on_reaction`.
+    #[serde(default)]
+    pub explosion: Option<ExplosionDef>,
+}
+
+/// `reagent_explosion`'s `strengthdiv` and `modifier`: power `modifier + round(volume /
+/// strengthdiv)`.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+pub struct ExplosionDef {
+    pub strengthdiv: f32,
+    pub modifier: f32,
 }
 
 /// One tg `/datum/glass_style` (`reagent_containers/cups/_glass_datum.dm`): a container of
