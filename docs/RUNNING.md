@@ -182,7 +182,7 @@ python3 -m http.server -d dist 8000                     # then open http://127.0
 `web-build.sh` needs the `wasm32-unknown-unknown` target (`rust-toolchain.toml` installs it),
 `wasm-bindgen` at the exact version of the `wasm-bindgen` crate in `Cargo.lock` (it checks) and
 `wasm-opt` (binaryen). `dist/`: `index.html`, `main.js`, `style.css`, `server-worker.js` (from
-`web/`), `client/` and `server/` (wasm-bindgen `--target web` output after `wasm-opt -Oz`),
+`web/`), `progress.html` (`docs/parity/PROGRESS.html`, linked from the landing), `client/` and `server/` (wasm-bindgen `--target web` output after `wasm-opt -Oz`),
 `data/` (the package's assets and `BandaStation/_maps/...` files, keyed by these relative paths)
 and `data/files.json` (`[{path, size, side}]`, `side` = `server`, `client` (atlas pages, sounds)
 or `both` (`manifest.postcard`)). Attribution texts are shipped but not downloaded up front.
