@@ -309,6 +309,21 @@ pub fn take_damage_flagless(world: &mut World, target: Entity, amount: f32) -> H
     apply_damage(world, target, &obj, amount, DamageType::Brute)
 }
 
+/// tg `take_damage(amount, BRUTE, BOMB)`: through the `bomb` armor, no deflection
+/// (`/obj/ex_act`).
+pub fn take_bomb_damage(world: &mut World, target: Entity, amount: f32) -> Hit {
+    let Some(mut obj) = world.get::<DmObj>(target).cloned() else {
+        return Hit {
+            damage: 0.0,
+            broke: false,
+            destroyed: false,
+        };
+    };
+    obj.armor_melee = obj.armor_bomb;
+    obj.damage_deflection = 0.0;
+    apply_damage(world, target, &obj, amount, DamageType::Brute)
+}
+
 /// tg `atom_break`: a grille falls apart (`/obj/structure/grille/atom_break`).
 fn atom_break(world: &mut World, target: Entity, obj: &DmObj) {
     if crate::atmos_machinery::damage::atom_break(world, target) {
@@ -428,6 +443,8 @@ pub fn deconstruct(world: &mut World, target: Entity, disassembled: bool) {
         }
     } else if is_under(&obj.path, FRAME) {
         crate::machine_frame::frame_deconstruct(world, target, pos, disassembled);
+    } else if is_under(&obj.path, crate::explosions::ex_act::LATTICE) {
+        crate::explosions::ex_act::lattice_debris(world, &obj.path, pos);
     }
     // A vendor's stock into its canister and its returned items out, before its parts leave.
     crate::vending::on_deconstruction(world, target, pos, disassembled);

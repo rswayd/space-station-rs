@@ -125,6 +125,27 @@ pub enum AdminRequest {
     /// `R_ADMIN`: tg "Set Security Level", by level name (`green` ... `delta`, BandaStation's
     /// `gamma` and `epsilon`).
     SetSecurityLevel(String),
+    /// `R_FUN`: tg "Drop Bomb": an explosion on the own tile, ignoring the bomb cap.
+    DropBomb(BombSize),
+}
+
+/// tg "Drop Bomb" choices: `(devastation, heavy, light, flash)` ranges.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BombSize {
+    /// `(1, 2, 3, 3)`.
+    Small,
+    /// `(2, 3, 4, 4)`.
+    Medium,
+    /// `(3, 5, 7, 5)`.
+    Big,
+    /// The bomb cap's ranges.
+    Maxcap,
+    Custom {
+        devastation: u8,
+        heavy: u8,
+        light: u8,
+        flash: u8,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]

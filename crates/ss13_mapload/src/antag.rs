@@ -139,9 +139,10 @@ pub const UPLINK_ITEMS: [&str; 17] = [
     // shortcut: an ID card without the agent card's forging and access copying.
     "/datum/uplink_item/stealthy_tools/agent_card",
     "/datum/uplink_item/stealthy_tools/syndigaloshes",
-    // shortcut: an inert charge until explosions exist.
+    // C-4 (`ss13_game::explosions::sources`): timer, planting, the blast; no wires or
+    // assemblies.
     "/datum/uplink_item/explosives/c4",
-    // shortcut: inert charges until explosions exist (the nuclear operatives' bag of C-4).
+    // The nuclear operatives' bag of C-4.
     "/datum/uplink_item/explosives/military_grade/c4bag",
     "/datum/uplink_item/badass/balloon",
 ];

@@ -1769,6 +1769,29 @@ SS13_MAP=$PWD/scripts/visual/maps/fire.dmm SS13_ASSETS=$ASSETS scripts/visual-ch
     scripts/visual/fire.txt                                # a plasma room catches fire, the player burns
 ```
 
+### Explosions
+
+tg `SSexplosions` (`crates/ss13_game/src/explosions/`): `explosion()` caps the ranges by the bomb
+cap (`SS13_BOMBCAP`, default tg's 14: devastation 3, heavy 7, light 14; admin bombs, reagents and
+`dyn_explosion` callers may ignore it), plays the near/far/echo sounds and shakes every player's
+view on the z-level (`CameraEffect::Shake`), flashes mobs that see the epicenter, and walks the
+tiles out to the largest range: walls (1, reinforced 2), closed doors and reinforced full-tile
+windows (`explosion_block`) weaken the blast for everything behind them. The next tick blasts
+turfs, then what stood on them, then throws loose items away from the epicenter. Sources: gas
+tanks over 40 atm when they break, canisters and pipe tanks, fuel tanks (explosion, fire,
+bullet, lit welder), explosive reactions, meteors, C-4/X-4 (use in hand: timer; click an
+adjacent atom: plant, 3 s). Admins: game tab "Бомба под собой" (tg "Drop Bomb", `R_FUN`).
+
+```sh
+cargo test -p ss13_game --all-features explosions::        # wave math, ex_act numbers, rumble
+cargo test -p ss13_game --all-features --test it explosions::   # walls block, arcs, the cap, dyn
+                                                           # ranges; a light blast hurts, deafens,
+                                                           # shakes and throws; devastation gibs;
+                                                           # a planted C-4 takes a wall down
+SS13_ASSETS=$ASSETS cargo test -p ss13_game --all-features --test it explosions::metastation_cap \
+    -- --ignored --nocapture                               # bomb-cap blast on MetaStation, ms
+```
+
 ### Cargo and the economy
 
 `crates/ss13_game/src/cargo/`, after tg `SSeconomy`, `/datum/bank_account`, `SSshuttle.supply`,

@@ -161,6 +161,9 @@ pub enum CameraEffect {
         out_ds: f32,
         back_ds: f32,
     },
+    /// tg `shake_camera`: for `duration_ds` deciseconds the view jumps between random offsets
+    /// up to `strength` tiles away, then eases back over 3 deciseconds.
+    Shake { duration_ds: f32, strength: f32 },
 }
 
 /// Server → client: one sound for this client (tg `SEND_SOUND` from `playsound_local`), already

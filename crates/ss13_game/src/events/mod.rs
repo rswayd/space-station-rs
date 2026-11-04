@@ -4,7 +4,6 @@
 //! - [`controller`]: the scheduler, the event lifecycle, forced events.
 //! - One file per event family; [`controls`] lists them with tg's control vars (weight,
 //!   `earliest_start`, `min_players`, `max_occurrences`).
-//! - [`explosion`]: `ex_act` and a radius stand-in for `explosion()`, used by meteors.
 //! - [`carp_migration`]: spawns basic mobs (`crate::mobs`).
 //!
 //! Announcements are tg `priority_announce` from Central Command (`crate::announce`), with the
@@ -15,7 +14,6 @@ pub mod carp_migration;
 pub mod comms_blackout;
 pub mod controller;
 pub mod electrical_storm;
-pub mod explosion;
 pub mod false_alarm;
 pub mod grid_check;
 pub mod market_crash;

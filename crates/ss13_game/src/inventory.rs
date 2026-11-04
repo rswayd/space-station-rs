@@ -538,6 +538,11 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 Some(item)
                     if hand == inventory.active
                         && crate::antag::nukeop::server::attack_self(world, client, mob, item) => {}
+                // A C-4 charge asks for its timer.
+                Some(item)
+                    if hand == inventory.active
+                        && crate::explosions::sources::c4_attack_self(world, client, mob, item) => {
+                }
                 // Rack parts build a rack.
                 Some(item)
                     if hand == inventory.active
@@ -769,6 +774,28 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 // click), knocking a climber down, kicking a rack.
                 None if crate::tables::attack_hand(world, client, mob, target, modifiers) => {}
                 None => pick_up(world, mob, target, inventory.active),
+                // A C-4 charge is planted on what it touches; a welder refills from a fuel tank
+                // (or blows it up, lit).
+                Some(held)
+                    if crate::explosions::sources::c4_interact(
+                        world,
+                        crate::tools::Actor {
+                            client,
+                            mob,
+                            item: Some(held),
+                        },
+                        target,
+                    ) => {}
+                Some(held)
+                    if crate::explosions::sources::fueltank_welder_act(
+                        world,
+                        crate::tools::Actor {
+                            client,
+                            mob,
+                            item: Some(held),
+                        },
+                        target,
+                    ) => {}
                 // The ritual dagger scrapes a rune away; a blood magic aura on an object.
                 Some(held)
                     if crate::antag::cult::server::item_interaction(

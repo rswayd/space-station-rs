@@ -29,7 +29,7 @@
 Биокостюмы с капюшоном (общий, вирусолог, СБ, уборщик), огнеупорные костюмы пожарных и атмосферщиков, сапёрный костюм, радиационный костюм.
 
 - **Код:** [`/obj/item/clothing/suit/bio_suit`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/suits/bio.dm#L32), [`/obj/item/clothing/suit/utility/fire`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/suits/utility.dm#L17), [`/obj/item/clothing/suit/utility/bomb_suit`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/suits/utility.dm#L129), [`/obj/item/clothing/suit/utility/radiation`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/suits/utility.dm#L214)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/breath.rs`, `crates/ss13_game/src/fire.rs`: тепловая защита (огнеупорные); нет био- и радиационной защиты, брони от взрывов, замедления
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/breath.rs`, `crates/ss13_game/src/fire.rs`: тепловая защита (огнеупорные); броня `bomb` защищает от взрывов (`crates/ss13_game/src/explosions/ex_act.rs`); нет био- и радиационной защиты, замедления
 
 ### Костюмы и маскарад
 Костюмы для вечеринок и праздников: фальшивый синдикатовский скафандр, костюмы животных, призрачная простыня, знак мокрого пола (носится как костюм) и т.п.

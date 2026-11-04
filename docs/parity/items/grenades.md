@@ -35,7 +35,7 @@
 Заряд крепится к стене, двери или человеку, взрывается по таймеру; X4 направленный.
 
 - **Код:** [`/obj/item/grenade/c4`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/grenades/plastic.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/explosions/sources.rs` (`c4_attack_self`, `c4_interact`, `complete`, `detonate_charges`): таймер через `tgui_input_number` (от 10 с), установка на соседний атом за 3 с (оверлей на цели), по таймеру цель (не моб) получает heavy, затем взрыв `boom_sizes` (C-4 `0,0,3`, X-4 `0,5,7`), X-4 направленный (120°) на плотной цели; нет проводов и сборок (`receive_signal`), суицида, уведомления призракам
 
 ### Петарды
 Праздничные петарды и хлопушки.
@@ -48,4 +48,4 @@
 
 - **Код:** [`/obj/item/transfer_valve`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/devices/transfer_valve.dm#L1), [`toggle_valve()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/devices/transfer_valve.dm#L321); tgui: [`TransferValve.jsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/TransferValve.jsx)
 - **BandaStation:** [`transfer_valve.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/devices/transfer_valve.dm#L178) — запись сборки TTV-бомбы (давление и температура баллонов) в лог бомберов
-- **Статус в ss13-rs:** ❌ нет — газ в баллонах реагирует (`crates/ss13_game/src/fire.rs`), но клапана и взрывов нет
+- **Статус в ss13-rs:** ❌ нет — баллоны взрываются от давления (`crates/ss13_game/src/explosions/sources.rs`), но клапана, смешивающего два баллона, нет

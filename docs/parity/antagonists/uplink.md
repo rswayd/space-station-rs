@@ -90,7 +90,7 @@ TGUI `Uplink`: категории, поиск, компактный режим, 
 C-4, X-4, мешок C-4, гранаты (осколочная, EMP, дымовая), бомба-пицца, минибомба, бомба Синдиката, Earthcracker, Detomatix, слипокалипсис.
 
 - **Код:** [`/datum/uplink_item/explosives`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/uplink/uplink_items/explosive.dm#L5)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload/src/antag.rs`: продаётся только C-4, инертный (взрывов нет)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload/src/antag.rs`: продаются C-4 и мешок C-4, заряды работают (`crates/ss13_game/src/explosions/sources.rs`, см. ../items/grenades.md); нет X-4 в списке аплинка, гранат, минибомбы, бомбы Синдиката, Detomatix
 
 ### Категория «Боеприпасы»
 Магазины 9 мм (обычные, бронебойные, экспансивные, зажигательные), спидлоадер .357, патроны Donksoft.

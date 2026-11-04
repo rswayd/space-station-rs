@@ -17,7 +17,7 @@
 Пол ломается и обгорает (`break_tile`, `burn_tile`) от взрывов, огня и ударов, превращаясь в повреждённую плитку или обшивку; обшивку чинят сваркой.
 
 - **Код:** [`proc/break_tile_to_plating()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/open/floor.dm#L103), [`proc/make_plating()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/open/floor.dm#L110), [`plating/welder_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/open/floor/plating.dm#L150)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/turf_damage.rs` (`burn_tile` от сильного огня, `break_tile`, оверлеи `damaged_dmi`), `crates/ss13_mapload/src/turf_damage.rs`: никто ещё не ломает пол (взрывы, удары), нет `break_tile_to_plating` и ремонта сваркой
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/turf_damage.rs` (`burn_tile` от сильного огня, `break_tile`, оверлеи `damaged_dmi`), `crates/ss13_mapload/src/turf_damage.rs`: пол ломают взрывы (`crates/ss13_game/src/explosions/ex_act.rs`: лёгкий взрыв с шансом 50%, тяжёлый в одном из трёх исходов); нет поломки ударами, `break_tile_to_plating` и ремонта сваркой
 
 ### Виды полов
 Стальные полы (сотни раскрасок `iron`), деревянные, ковры, минеральные (плазма — горит, уран — фонит, бананиум — пищит), бетон, «цепные» полы, полы-схемы (светятся), голые решётчатые (`catwalk_floor`), корпус, светящиеся полы (мультитулом меняют цвет), стеклянные (видно, что под ними).

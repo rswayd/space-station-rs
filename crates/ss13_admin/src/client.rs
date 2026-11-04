@@ -742,6 +742,24 @@ fn game_tab(ui: &mut egui::Ui, state: &mut AdminUi, out: &mut Vec<AdminRequest>)
             });
         });
         ui.separator();
+        ui.add_enabled_ui(state.can(R_FUN), |ui| {
+            // tg "Drop Bomb": on the own tile, ignoring the bomb cap.
+            use ss13_shared::admin::BombSize;
+            ui.horizontal_wrapped(|ui| {
+                ui.strong("Бомба под собой");
+                for (label, size) in [
+                    ("Малая (1, 2, 3)", BombSize::Small),
+                    ("Средняя (2, 3, 4)", BombSize::Medium),
+                    ("Большая (3, 5, 7)", BombSize::Big),
+                    ("Максимальная", BombSize::Maxcap),
+                ] {
+                    if ui.small_button(label).clicked() {
+                        out.push(AdminRequest::DropBomb(size));
+                    }
+                }
+            });
+        });
+        ui.separator();
         ui.add_enabled_ui(state.can(R_ADMIN), |ui| {
             // tg "Set Security Level" (`SSsecurity_level.available_levels`).
             ui.horizontal_wrapped(|ui| {

@@ -278,7 +278,18 @@ pub fn mob_is_deaf(world: &World, mob: Entity) -> bool {
             .is_some_and(|i| ss13_mapload::fidelity::is_under(&i.path, EARMUFFS))
 }
 
-fn pick_sfx(sfx: &Sfx, rng: &mut CombatRng, sound: &str) -> String {
+/// tg `can_hear()` of a mob, from an exclusive system: not deaf ([`mob_is_deaf`], the ears).
+pub fn can_hear(world: &World, mob: Entity) -> bool {
+    use crate::medical::organs::{Organ, OrganHost, Organs, ear_deaf};
+    !mob_is_deaf(world, mob)
+        && !ear_deaf(
+            world.get::<Organs>(mob),
+            world.get::<OrganHost>(mob).is_some(),
+            |e| world.get::<Organ>(e),
+        )
+}
+
+pub(crate) fn pick_sfx(sfx: &Sfx, rng: &mut CombatRng, sound: &str) -> String {
     let Some(files) = sfx.0.sfx.get(sound) else {
         return sound.to_owned();
     };

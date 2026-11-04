@@ -555,7 +555,7 @@ pub fn required_rights(request: &AdminRequest) -> Option<u32> {
         Ban { .. } | Unban(_) => R_BAN,
         FindPrototypes(_) | Spawn(_) => R_SPAWN,
         Smite { .. } => R_ADMIN | R_FUN,
-        Events | ForceEvent { .. } => R_FUN,
+        Events | ForceEvent { .. } | DropBomb(_) => R_FUN,
         StartNow | EndRound | Restart => R_SERVER,
         TimeScale(_) => R_DEBUG,
     })
@@ -1029,6 +1029,26 @@ fn answer(world: &mut World, client: Entity, request: AdminRequest) -> AnswerRes
             );
             Ok(Some(AdminResponse::Dynamic(dynamic_report(world))))
         }
+        AdminRequest::DropBomb(size) => {
+            let own = own_mob(world, client)?;
+            let pos = mob_pos(world, own)?;
+            let (dev, heavy, light, flash) = bomb_ranges(world, size)?;
+            let ex = ss13_game::explosions::Explosion {
+                devastation: dev,
+                heavy,
+                light,
+                flash: Some(flash),
+                ignorecap: true,
+                cause: key.clone(),
+                ..ss13_game::explosions::Explosion::new(0, 0, 0)
+            };
+            ss13_game::explosions::explosion(world, pos, ex);
+            admin_action(
+                world,
+                &format!("{key} creating an admin explosion at {}.", coords(pos)),
+            );
+            done(format!("explosion ({dev}, {heavy}, {light}, {flash})"))
+        }
         AdminRequest::SetSecurityLevel(name) => {
             let level = ss13_game::security_level::SecLevel::from_name(&name)
                 .ok_or_else(|| format!("Нет уровня угрозы {name:?}."))?;
@@ -1040,6 +1060,50 @@ fn answer(world: &mut World, client: Entity, request: AdminRequest) -> AnswerRes
             done(format!("security level {}", level.name()))
         }
     }
+}
+
+/// Custom "Drop Bomb" ranges beyond this many tiles are refused: tg asks to confirm a bomb over
+/// the cap; here a blast walks `(2r + 1)^2` tiles in one tick, so it is bounded.
+const MAX_ADMIN_BOMB: u8 = 40;
+
+/// tg "Drop Bomb" choices as `(devastation, heavy, light, flash)`.
+fn bomb_ranges(
+    world: &World,
+    size: ss13_shared::admin::BombSize,
+) -> Result<(f32, f32, f32, f32), String> {
+    use ss13_shared::admin::BombSize;
+    Ok(match size {
+        BombSize::Small => (1.0, 2.0, 3.0, 3.0),
+        BombSize::Medium => (2.0, 3.0, 4.0, 4.0),
+        BombSize::Big => (3.0, 5.0, 7.0, 5.0),
+        BombSize::Maxcap => {
+            let cap = ss13_game::explosions::wave::BombCap::new(
+                world
+                    .get_resource::<ss13_game::explosions::ExplosionConfig>()
+                    .map_or(14.0, |c| c.bombcap),
+            );
+            (cap.devastation, cap.heavy, cap.light, cap.flash)
+        }
+        BombSize::Custom {
+            devastation,
+            heavy,
+            light,
+            flash,
+        } => {
+            if [devastation, heavy, light, flash]
+                .iter()
+                .any(|&r| r > MAX_ADMIN_BOMB)
+            {
+                return Err(format!("Не больше {MAX_ADMIN_BOMB} тайлов."));
+            }
+            (
+                f32::from(devastation),
+                f32::from(heavy),
+                f32::from(light),
+                f32::from(flash),
+            )
+        }
+    })
 }
 
 /// tg `check_if_greater_rights_than` against the admin listed as `target_ckey` (online or not).

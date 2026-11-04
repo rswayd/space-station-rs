@@ -1896,7 +1896,7 @@ fn do_ritual(world: &mut World, client: Entity, mob: Entity, rune: Entity, path:
     // `cleanup_atoms`: everything but the living goes.
     for &e in &matched.atoms {
         if def.kind == Kind::Ultimate && is_living(world, e) {
-            gib(world, e);
+            crate::health::gib(world, e);
             continue;
         }
         if !is_living(world, e) {
@@ -2068,7 +2068,11 @@ fn limit_check(world: &mut World, client: Entity, mob: Entity, def: &'static Kno
         "we renounce the furthest blade!",
     );
     if let Some(pos) = crate::modpc::pda::turf_of(world, item) {
-        crate::events::explosion::explosion(world, pos, 0, 0, 1, 0);
+        crate::explosions::explosion(
+            world,
+            pos,
+            crate::explosions::Explosion::new(0, 0, 1).cause("heretic blade"),
+        );
     }
     if let Some(holder) = world.get::<CarriedBy>(item).map(|c| c.0) {
         despawn_held(world, holder, item);
@@ -2328,7 +2332,7 @@ fn sacrifice_process(world: &mut World, mob: Entity, victim: Entity) {
             "A servant of the Sanguine Apostate!",
         );
         chat_to(world, mob, Span::Mansus, "Your patrons are rapturous!");
-        gib(world, victim);
+        crate::health::gib(world, victim);
         info!("heretic {mob} sacrificed the cultist {victim}");
         return;
     }
@@ -2507,38 +2511,6 @@ fn disembowel(world: &mut World, victim: Entity) {
         &format!("Органы {name} вытаскиваются из их груди теневыми руами!"),
         Span::Danger,
     );
-}
-
-/// `gib(DROP_ALL_REMAINS)`: the body goes, its items fall, its player becomes a ghost.
-fn gib(world: &mut World, mob: Entity) {
-    let Some(&pos) = world.get::<TilePos>(mob) else {
-        return;
-    };
-    world.entity_mut(mob).insert(Stat::Dead);
-    if let Some(client) = world.get::<PlayerMob>(mob).map(|p| p.client)
-        && let Some(ghost) = crate::ghost::ghostize_client(world, client)
-        && let Some(mut g) = world.get_mut::<Ghost>(ghost)
-    {
-        g.body = None;
-    }
-    if let Some(inventory) = world.get::<Inventory>(mob).cloned() {
-        let items: Vec<Entity> = crate::inventory::ALL_SLOTS
-            .iter()
-            .filter_map(|&s| inventory.slot(s))
-            .collect();
-        for item in items {
-            if world.get::<NoDrop>(item).is_some() {
-                world.despawn(item);
-            } else {
-                crate::inventory::put_down(world, item, pos);
-            }
-        }
-    }
-    if let Some(cuffs) = world.get::<crate::restraints::Handcuffed>(mob).map(|h| h.0) {
-        crate::inventory::put_down(world, cuffs, pos);
-    }
-    world.despawn(mob);
-    crate::construction::tile_changed(world, pos);
 }
 
 // ---------------------------------------------------------------------------------------------

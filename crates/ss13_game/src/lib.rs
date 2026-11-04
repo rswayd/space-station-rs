@@ -187,6 +187,8 @@ pub mod events;
 #[cfg(feature = "server")]
 pub mod examine;
 #[cfg(feature = "server")]
+pub mod explosions;
+#[cfg(feature = "server")]
 pub mod fire;
 #[cfg(feature = "server")]
 pub mod food;

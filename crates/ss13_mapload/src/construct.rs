@@ -105,6 +105,9 @@ pub struct DmTurfBuild {
     pub sheet_amount: u32,
     pub girder_type: String,
     pub slicing_duration: f32,
+    /// `explosive_resistance`: how much the turf weakens a blast passing it (walls 1,
+    /// reinforced 2; `INFINITY` is dumped as 1e31).
+    pub explosive_resistance: f32,
 }
 
 /// Integrity, anchoring and construction vars of `/obj/structure`, `/obj/machinery` and
@@ -142,6 +145,10 @@ pub struct DmObj {
     pub broken: bool,
     /// Windows: `heat_resistance` (°C over 0 °C before hot air damages it).
     pub heat_resistance: f32,
+    /// `armor_type`'s `bomb` rating, percent.
+    pub armor_bomb: f32,
+    /// `explosion_block` (`blocks_explosives`): how much it weakens a blast passing its tile.
+    pub explosion_block: f32,
 }
 
 #[derive(Clone, Copy)]
@@ -217,7 +224,7 @@ pub fn table_runtime_types(types: &DmTypes) -> Vec<String> {
     out
 }
 
-const TURF_VARS: [(&str, &str, Kind); 7] = [
+const TURF_VARS: [(&str, &str, Kind); 8] = [
     ("baseturfs", "baseturf", Kind::Path),
     ("floor_tile", "floor_tile", Kind::Path),
     ("overfloor_placed", "overfloor_placed", Kind::Bool),
@@ -225,9 +232,10 @@ const TURF_VARS: [(&str, &str, Kind); 7] = [
     ("sheet_amount", "sheet_amount", Kind::Count),
     ("girder_type", "girder_type", Kind::Path),
     ("slicing_duration", "slicing_duration", Kind::Num),
+    ("explosive_resistance", "explosive_resistance", Kind::Num),
 ];
 
-const OBJ_VARS: [(&str, &str, Kind); 21] = [
+const OBJ_VARS: [(&str, &str, Kind); 23] = [
     ("anchored", "anchored", Kind::Bool),
     ("max_integrity", "max_integrity", Kind::Num),
     ("integrity_failure", "integrity_failure", Kind::Num),
@@ -248,7 +256,9 @@ const OBJ_VARS: [(&str, &str, Kind); 21] = [
     ("rods_amount", "rods_amount", Kind::Count),
     ("broken", "broken", Kind::Bool),
     ("armor_type", "armor_melee", Kind::Num),
+    ("armor_type", "armor_bomb", Kind::Num),
     ("heat_resistance", "heat_resistance", Kind::Num),
+    ("explosion_block", "explosion_block", Kind::Num),
 ];
 
 /// A dumped value as a number: plain numbers and constant expressions the extractor kept as
@@ -307,10 +317,11 @@ fn fields(
 ) {
     for &(var, key, kind) in vars {
         let value = if var == "armor_type" {
-            // The rating of the armor datum, not the path.
+            // The rating of the armor datum (`armor_<rating>`), not the path.
             let armor = type_path(types.resolved(path, var)).unwrap_or_default();
-            let melee = number(types.resolved(&armor, "melee")).unwrap_or(0.0);
-            Some(format!("{:?}", melee as f32))
+            let rating = key.trim_start_matches("armor_");
+            let value = number(types.resolved(&armor, rating)).unwrap_or(0.0);
+            Some(format!("{:?}", value as f32))
         } else {
             value_ron(kind, types.resolved(path, var))
         };

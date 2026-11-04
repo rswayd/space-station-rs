@@ -2285,38 +2285,12 @@ fn do_sacrifice(world: &mut World, target: Entity, invokers: &[Entity]) -> bool 
     true
 }
 
-/// `gib(DROP_ALL_REMAINS)`: the body is gone, its items fall; its player becomes a ghost.
+/// `gib(DROP_ALL_REMAINS)` of a sacrifice: out of the cult first.
 fn gib(world: &mut World, mob: Entity) {
-    let Some(&pos) = world.get::<TilePos>(mob) else {
-        return;
-    };
     if world.get::<Cultist>(mob).is_some() {
         remove_cultist(world, mob, true);
     }
-    world.entity_mut(mob).insert(Stat::Dead);
-    if let Some(client) = world.get::<PlayerMob>(mob).map(|p| p.client)
-        && let Some(ghost) = crate::ghost::ghostize_client(world, client)
-        && let Some(mut g) = world.get_mut::<Ghost>(ghost)
-    {
-        g.body = None;
-    }
-    if let Some(inventory) = world.get::<Inventory>(mob).cloned() {
-        let items: Vec<Entity> = crate::inventory::ALL_SLOTS
-            .iter()
-            .filter_map(|&s| inventory.slot(s))
-            .collect();
-        for item in items {
-            if world.get::<NoDrop>(item).is_some() {
-                world.despawn(item);
-            } else {
-                crate::inventory::put_down(world, item, pos);
-            }
-        }
-    }
-    if let Some(cuffs) = world.get::<crate::restraints::Handcuffed>(mob).map(|h| h.0) {
-        crate::inventory::put_down(world, cuffs, pos);
-    }
-    world.despawn(mob);
+    crate::health::gib(world, mob);
 }
 
 /// `teleport/invoke`: the list of the other teleport runes.

@@ -1818,18 +1818,10 @@ fn refresh_containers(world: &mut World) {
     }
 }
 
-/// `GLOB.DYN_EX_SCALE`.
-const DYN_EX_SCALE: f32 = 0.5;
-
-/// DM `round(x, 1)`: to the nearest, halves up.
-fn dm_round(x: f32) -> f32 {
-    (x + 0.5).floor()
-}
-
 /// tg `reagent_explosion/on_reaction` -> `reagent_explode` of each explosive instant reaction a
-/// container ran: power `modifier + round(volume / strengthdiv)`, the "violently explodes"
-/// message and `dyn_explosion` (range `round((2 * power) ** DYN_EX_SCALE)`, devastation a
-/// quarter, heavy a half of it); the container's reagents are gone either way.
+/// container ran: power `modifier + round(volume / strengthdiv, 1)`, "The solution violently
+/// explodes!" and `dyn_explosion(power)` with the default flame and flash ranges
+/// (`reagents_explosion`); the container's reagents are gone either way.
 // shortcut: reactions with their own `on_reaction` (stabilizers, TATP, holy water, gunpowder,
 // teslium...) are not explosions here (`ExplosionDef`); mobs' holders do not explode.
 fn reagent_explosions(world: &mut World, chem: &Chemistry, e: Entity, reacted: &[(u32, f32)]) {
@@ -1837,7 +1829,8 @@ fn reagent_explosions(world: &mut World, chem: &Chemistry, e: Entity, reacted: &
         let Some(ex) = chem.reactions[index as usize].def.explosion else {
             continue;
         };
-        let power = ex.modifier + dm_round(volume / ex.strengthdiv.max(f32::EPSILON));
+        // DM `round(x, 1)`: to the nearest, halves up.
+        let power = ex.modifier + (volume / ex.strengthdiv.max(f32::EPSILON) + 0.5).floor();
         if power > 0.0
             && let Some(pos) = map_pos(world, e)
         {
@@ -1848,15 +1841,7 @@ fn reagent_explosions(world: &mut World, chem: &Chemistry, e: Entity, reacted: &
                     message: line(Span::Danger, "Раствор бурно взрывается!"),
                 });
             }
-            let range = dm_round((2.0 * power).powf(DYN_EX_SCALE));
-            crate::events::explosion::explosion(
-                world,
-                pos,
-                dm_round(range * 0.25) as i32,
-                dm_round(range * 0.5) as i32,
-                range as i32,
-                0,
-            );
+            crate::explosions::dyn_explosion(world, pos, power, None, None, true);
         }
         let Some(mut r) = world.get_mut::<Reagents>(e) else {
             return;

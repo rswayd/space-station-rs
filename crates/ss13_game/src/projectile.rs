@@ -458,6 +458,15 @@ fn impact(world: &mut World, p: &Projectile, name: &str, target: Entity) {
     {
         return;
     }
+    // `fueltank/bullet_act`: a brute or burn hit blows it up.
+    if p.data.damage > 0.0
+        && matches!(kind, DamageType::Brute | DamageType::Burn)
+        && crate::explosions::sources::is_fueltank(world, target)
+    {
+        info!("{:?} detonated a fuel tank via projectile", p.firer);
+        crate::explosions::sources::boom(world, target);
+        return;
+    }
     if world.get::<Turf>(target).is_none() && matches!(kind, DamageType::Brute | DamageType::Burn) {
         // shortcut: objects check their melee armor, not the projectile's flag.
         crate::obj_damage::take_damage(world, target, p.data.damage, kind);

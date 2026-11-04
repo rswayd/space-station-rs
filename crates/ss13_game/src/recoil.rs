@@ -51,7 +51,10 @@ mod tests {
             offset,
             out_ds,
             back_ds,
-        } = recoil_effect(2.0, 2.5, 1.0, 270.0);
+        } = recoil_effect(2.0, 2.5, 1.0, 270.0)
+        else {
+            panic!("a recoil");
+        };
         assert_eq!(offset, [-32, 0]);
         assert_eq!((out_ds, back_ds), (2.0, 2.5));
     }

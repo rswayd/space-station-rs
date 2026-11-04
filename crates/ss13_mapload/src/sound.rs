@@ -213,6 +213,12 @@ pub mod files {
         "sound/mobs/non-humanoids/hygienebot/thankgod.ogg",
         "sound/mobs/non-humanoids/hygienebot/degenerate.ogg",
     ];
+    /// `SSexplosions.shake_the_room`: the far and distant explosion sounds (the near one, the
+    /// creaking and the hull creaking are SFX keys).
+    pub const EXPLOSION: [&str; 2] = [
+        "sound/effects/explosion/explosionfar.ogg",
+        "sound/effects/explosion/explosion_distant.ogg",
+    ];
     /// `/datum/looping_sound/fire` `mid_sounds` (equal weights).
     pub const FIRE_LOOP: [&str; 7] = [
         "sound/effects/fireclip1.ogg",
@@ -534,6 +540,7 @@ pub fn referenced<'a>(
     out.extend(files::VENDING.map(str::to_owned));
     out.extend(files::COMMS.map(str::to_owned));
     out.extend(files::BOTS.map(str::to_owned));
+    out.extend(files::EXPLOSION.map(str::to_owned));
     for path in converted {
         for var in SOUND_VARS {
             let s = sound_var(types, path, var);

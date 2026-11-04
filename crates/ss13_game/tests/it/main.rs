@@ -20,6 +20,7 @@ mod disposals;
 mod doors;
 mod drag;
 mod engine;
+mod explosions;
 mod fire;
 mod firelocks;
 mod food;

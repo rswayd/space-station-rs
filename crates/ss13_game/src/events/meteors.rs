@@ -7,7 +7,7 @@
 //! 0.1 s (tg `move_towards`, `delay = 1`). Entering a tile rams it (`ram_turf`: `ex_act` with
 //! the meteor's `hitpwr`) and, off space, takes a hit 10% of the time; a dense thing in the way
 //! is bumped: rammed, and a hit taken. Out of hits it drops its ore and goes off (its
-//! `meteor_effect`: an [`explosion`](super::explosion::explosion) for the bigger ones).
+//! `meteor_effect`: an [`explosion`](crate::explosions::explosion) for the bigger ones).
 //!
 //! Cost: a wave keeps up to ~100 meteors in flight, 10 steps per second each, every step one
 //! tile lookup; far below a millisecond per tick.
@@ -20,8 +20,9 @@ use ss13_shared::{Appearance, IconStateId, TilePos};
 use ss13_world::{Density, SpatialIndex};
 
 use super::controller::{EventRng, EventState, RoundEvent, pick_weight, station_levels};
-use super::explosion::{Severity, ex_act_movable, ex_act_tile, ex_act_turf, explosion};
 use crate::construction::{path_of, spawn_obj, spawn_stack, turf_at};
+use crate::explosions::ex_act::{ex_act_movable, ex_act_tile, ex_act_turf};
+use crate::explosions::{Explosion, Severity, explosion};
 use crate::obj_damage::is_under;
 
 pub const WAVE_NORMAL: &str = "Meteor Wave: Normal";
@@ -73,8 +74,9 @@ pub struct MeteorKind {
     hitpwr: Severity,
     dropamt: u32,
     drops: &'static [&'static str],
-    /// `explosion(devastation, heavy, light, flame)` of `meteor_effect`.
-    blast: Option<[i32; 4]>,
+    /// `explosion(devastation, heavy, light, flame, flash)` of `meteor_effect` (a `null`
+    /// flame range is the light range).
+    blast: Option<[i32; 5]>,
     /// `PASSGRILLE` (space dust).
     pass_grille: bool,
     /// `signature`: what "detected" it in the Stray Meteor announcement.
@@ -111,32 +113,32 @@ static DUST: MeteorKind = MeteorKind {
 };
 static MEDIUM: MeteorKind = MeteorKind {
     dropamt: 3,
-    blast: Some([0, 1, 2, 0]),
+    blast: Some([0, 1, 2, 2, 3]),
     ..kind("/obj/effect/meteor/medium", "meteor", "small")
 };
 static BIG: MeteorKind = MeteorKind {
     hits: 6,
     dropamt: 4,
-    blast: Some([1, 2, 3, 0]),
+    blast: Some([1, 2, 3, 3, 4]),
     ..kind("/obj/effect/meteor/big", "big meteor", "large")
 };
 static FLAMING: MeteorKind = MeteorKind {
     hits: 5,
     drops: &["/obj/item/stack/ore/plasma"],
-    blast: Some([1, 2, 3, 5]),
+    blast: Some([1, 2, 3, 5, 4]),
     signature: "тепла",
     ..kind("/obj/effect/meteor/flaming", "flaming meteor", "flaming")
 };
 static IRRADIATED: MeteorKind = MeteorKind {
     hits: 9,
     drops: &["/obj/item/stack/ore/uranium"],
-    blast: Some([0, 1, 3, 0]),
+    blast: Some([0, 1, 3, 3, 6]),
     signature: "радиации",
     ..kind("/obj/effect/meteor/irradiated", "glowing meteor", "glowing")
 };
 static CLUSTER: MeteorKind = MeteorKind {
     hits: 9,
-    blast: Some([0, 2, 3, 0]),
+    blast: Some([0, 2, 3, 3, 4]),
     signature: "артиллерии",
     special: Special::Cluster,
     ..kind("/obj/effect/meteor/cluster", "cluster meteor", "sharp")
@@ -210,7 +212,7 @@ static TUNGUSKA: MeteorKind = MeteorKind {
     hits: 30,
     hitpwr: Severity::Devastate,
     drops: &["/obj/item/stack/ore/plasma"],
-    blast: Some([5, 10, 15, 0]),
+    blast: Some([5, 10, 15, 15, 20]),
     signature: "армаггедона",
     special: Special::Tunguska,
     ..kind("/obj/effect/meteor/tunguska", "tunguska meteor", "flaming")
@@ -750,7 +752,11 @@ fn bump(world: &mut World, e: Entity, blocker: Entity, pos: TilePos) {
             }
         }
         Special::Tunguska if world.resource_mut::<EventRng>().0.prob(20.0) => {
-            explosion(world, here, 2, 4, 6, 0);
+            explosion(
+                world,
+                here,
+                Explosion::new(2, 4, 6).flash(8).cause("tunguska"),
+            );
         }
         _ => {}
     }
@@ -826,8 +832,12 @@ fn meteor_effect(world: &mut World, kind: &MeteorKind, pos: TilePos) {
             spawn_meteor_at(world, &CLUSTER_FRAGMENT, pos, dest);
         }
     }
-    if let Some([dev, heavy, light, flame]) = kind.blast {
-        explosion(world, pos, dev, heavy, light, flame);
+    if let Some([dev, heavy, light, flame, flash]) = kind.blast {
+        let ex = Explosion::new(dev, heavy, light)
+            .flame(flame)
+            .flash(flash)
+            .cause("meteor");
+        explosion(world, pos, ex);
     }
 }
 

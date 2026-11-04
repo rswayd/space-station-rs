@@ -24,7 +24,7 @@ tgui-окно баллона: текущее давление, регулиро�
 Баллон с перегретой или пережатой смесью трескается, протекает и взрывается (основа плазменных бомб); к баллону можно прикрепить сборку с воспламенителем.
 
 - **Код:** [`handle_tolerances()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/tanks/tanks.dm#L354), [`bomb_assemble()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/tanks/tanks.dm#L454), [`ignite()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/tanks/tanks.dm#L500)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/fire.rs`: газ в баллоне реагирует каждую секунду; «tanks never rupture or explode», бомб из баллонов нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/explosions/sources.rs` (`tank_tolerances`, `item_break`, `item_destruction`), вызывается из `crates/ss13_game/src/fire.rs` каждую секунду: выше `TANK_LEAK_PRESSURE` баллон получает урон (броня `bomb`), на половине прочности даёт течь (четверть газа в тайл за такт), при разрушении выше `TANK_FRAGMENT_PRESSURE` ещё раз реагирует и взрывается (`dyn_explosion` с вспышкой 1.5, с лимитом), газ выходит в тайл; нет сборок с воспламенителем (`bomb_assemble`, `ignite`), урона от `TANK_MELT_TEMPERATURE` с бронёй `fire`
 
 ### Джетпаки
 Включаемый джетпак расходует газ и даёт движение в невесомости, со стабилизацией; капитанский, СБ, пустотный, импровизированный, CO2, обвязка; переключение на дыхание из джетпака.

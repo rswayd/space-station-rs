@@ -214,10 +214,10 @@ fn flame_turf(world: &World, item: Entity) -> Option<TilePos> {
 }
 
 /// `SSobj` -> `/obj/item/weldingtool/process` -> `open_flame()` of every lit welder, and
-/// `/obj/item/tank/process` -> `air_contents.react()`.
+/// `/obj/item/tank/process` -> `air_contents.react()` and `handle_tolerances`
+/// ([`crate::explosions::sources::tank_tolerances`]).
 // Cost: once a second, one pass over welders (dozens) and gas tanks (hundreds); a tank of
 // oxygen or air returns from `react` after one pass over its gases.
-// shortcut: tanks never rupture or explode (`check_status`); add with explosions.
 fn open_flames(world: &mut World) {
     let delta = world.resource::<Time>().delta_secs_f64();
     {
@@ -255,6 +255,7 @@ fn open_flames(world: &mut World) {
             tank.set_changed();
         }
     }
+    crate::explosions::sources::tank_tolerances(world, SSOBJ_WAIT_SECS as f32);
 }
 
 /// Hotspot exposures: `fire_act(temperature, volume)` of everything on the tile.
@@ -283,6 +284,9 @@ pub fn fire_act(world: &mut World, thing: Entity, temperature: f64) {
     if world.get::<Health>(thing).is_some() {
         adjust_fire_stacks(world, thing, FIRE_ACT_STACKS);
         ignite_mob(world, thing);
+    } else if crate::explosions::sources::is_fueltank(world, thing) {
+        // `fueltank/fire_act`: it blows up.
+        crate::explosions::sources::boom(world, thing);
     } else if world.get::<DmObj>(thing).is_some() {
         obj_fire_act(world, thing, temperature);
     }

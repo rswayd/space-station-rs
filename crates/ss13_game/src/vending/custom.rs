@@ -105,7 +105,13 @@ pub(super) fn blasts(world: &mut World) {
     };
     let due = std::mem::take(&mut pending.0);
     for pos in due {
-        crate::events::explosion::explosion(world, pos, -1, -1, 3, 0);
+        // `devastation_range = -1, light_impact_range = 3`: flame defaults to the light range,
+        // flash to the (negative, none) devastation range.
+        crate::explosions::explosion(
+            world,
+            pos,
+            crate::explosions::Explosion::new(-1, 0, 3).cause("custom vendor"),
+        );
     }
 }
 

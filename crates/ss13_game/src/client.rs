@@ -531,34 +531,119 @@ impl Kick {
     }
 }
 
-/// tg `recoil_camera` on the client: animates [`ss13_render::camera::CameraOffset`].
+/// A running [`CameraEffect::Shake`](ss13_shared::protocol::CameraEffect::Shake): tg
+/// `shake_camera` animates the view between random points of a box `max` pixels wide, each leg
+/// `max(round(min(|dx|, |dy|) * 0.7 / 32), 1)` deciseconds, then back to rest in 3.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Shake {
+    pub max: f32,
+    /// Seconds of jumping left (tg may overshoot it by one leg).
+    pub left: f32,
+    pub from: Vec2,
+    pub to: Vec2,
+    pub leg: f32,
+    pub leg_started: f32,
+    pub rng: u32,
+}
+
+/// tg `shake_camera`'s `animate` back to rest, deciseconds.
+const SHAKE_BACK_DS: f32 = 3.0;
+
+impl Shake {
+    pub fn new(duration_ds: f32, strength: f32, now: f32, seed: u32) -> Self {
+        Self {
+            max: strength.clamp(0.0, 8.0) * ss13_shared::TILE_SIZE as f32,
+            left: duration_ds.clamp(0.0, 100.0) / 10.0,
+            from: Vec2::ZERO,
+            to: Vec2::ZERO,
+            leg: 0.0,
+            leg_started: now,
+            rng: seed | 1,
+        }
+    }
+
+    fn roll(&mut self) -> f32 {
+        // xorshift32: a visual jitter, no need for the game's RNG streams.
+        self.rng ^= self.rng << 13;
+        self.rng ^= self.rng >> 17;
+        self.rng ^= self.rng << 5;
+        (self.rng as f32 / u32::MAX as f32 * 2.0 - 1.0) * self.max
+    }
+
+    /// The view offset at `now`; `None` once it is back at rest.
+    pub fn at(&mut self, now: f32) -> Option<Vec2> {
+        while now - self.leg_started >= self.leg {
+            self.leg_started += self.leg;
+            self.from = self.to;
+            if self.left <= 0.0 {
+                if self.to == Vec2::ZERO {
+                    return None;
+                }
+                self.to = Vec2::ZERO;
+                self.leg = SHAKE_BACK_DS / 10.0;
+                continue;
+            }
+            self.to = Vec2::new(self.roll(), self.roll()).round();
+            let d = (self.to - self.from).abs();
+            let ds = (d.x.min(d.y) * 0.7 / ss13_shared::TILE_SIZE as f32)
+                .round()
+                .max(1.0);
+            self.leg = ds / 10.0;
+            self.left -= self.leg;
+        }
+        let t = ((now - self.leg_started) / self.leg.max(1e-3)).clamp(0.0, 1.0);
+        Some(self.from.lerp(self.to, t))
+    }
+}
+
+/// tg `recoil_camera` and `shake_camera` on the client: animate
+/// [`ss13_render::camera::CameraOffset`].
 fn apply_camera_effects(
     mut effects: MessageReader<ss13_net::camera::client::CameraEffectReceived>,
     time: Res<Time>,
     mut kick: Local<Option<Kick>>,
+    mut shake: Local<Option<Shake>>,
     mut offset: ResMut<ss13_render::camera::CameraOffset>,
 ) {
+    use ss13_shared::protocol::CameraEffect;
     let now = time.elapsed_secs();
     for effect in effects.read() {
-        let ss13_shared::protocol::CameraEffect::Recoil {
-            offset: [x, y],
-            out_ds,
-            back_ds,
-        } = effect.0;
-        // shortcut: a new kick restarts from the rest point (tg animates from where the view
-        // is); kicks come a fire delay apart, after most of the previous one.
-        *kick = Some(Kick {
-            offset: Vec2::new(f32::from(x), f32::from(y)),
-            out: out_ds.clamp(0.0, 20.0) / 10.0,
-            back: back_ds.clamp(0.0, 40.0) / 10.0,
-            started: now,
-        });
+        match effect.0 {
+            CameraEffect::Recoil {
+                offset: [x, y],
+                out_ds,
+                back_ds,
+            } => {
+                // shortcut: a new kick restarts from the rest point (tg animates from where
+                // the view is); kicks come a fire delay apart, after most of the previous one.
+                *kick = Some(Kick {
+                    offset: Vec2::new(f32::from(x), f32::from(y)),
+                    out: out_ds.clamp(0.0, 20.0) / 10.0,
+                    back: back_ds.clamp(0.0, 40.0) / 10.0,
+                    started: now,
+                });
+            }
+            CameraEffect::Shake {
+                duration_ds,
+                strength,
+            } => {
+                // tg `shake_camera` ignores durations under a decisecond.
+                if duration_ds >= 1.0 && strength > 0.0 {
+                    *shake = Some(Shake::new(duration_ds, strength, now, now.to_bits()));
+                }
+            }
+        }
     }
     let at = kick.and_then(|k| k.at(now));
     if at.is_none() {
         *kick = None;
     }
-    offset.set_if_neq(ss13_render::camera::CameraOffset(at.unwrap_or(Vec2::ZERO)));
+    let shaken = shake.as_mut().and_then(|s| s.at(now));
+    if shaken.is_none() {
+        *shake = None;
+    }
+    let total = at.unwrap_or(Vec2::ZERO) + shaken.unwrap_or(Vec2::ZERO);
+    offset.set_if_neq(ss13_render::camera::CameraOffset(total));
 }
 
 /// A sprite gliding from where it was drawn to its tile, BYOND `glide_size`. Visual only:

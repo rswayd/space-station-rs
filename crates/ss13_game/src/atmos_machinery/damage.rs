@@ -184,7 +184,12 @@ pub fn atom_break(world: &mut World, target: Entity) -> bool {
     // `AtmosComponentBreak` reads a tank's port mixtures, which reconcile to its air.
     let pressure = container_air(world, target).map_or(0.0, |a| a.pressure());
     if let Some(force) = explosive_force(pressure) {
-        crate::events::explosion::explosion(world, pos, 0, 0, force, 0);
+        // `volatile_gas_storage`: `explosion(light_impact_range = force, smoke = FALSE)`.
+        crate::explosions::explosion(
+            world,
+            pos,
+            crate::explosions::Explosion::new(0, 0, force).cause("gas container"),
+        );
     }
     if canister && world.get_entity(target).is_ok() {
         canister_break(world, target, pos);

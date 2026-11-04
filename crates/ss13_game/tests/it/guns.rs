@@ -646,7 +646,10 @@ fn a_shotgun_fires_pellets_and_pumps() {
         offset,
         out_ds,
         back_ds,
-    } = s.players[0].app.world().resource::<Kicks>().0[0];
+    } = s.players[0].app.world().resource::<Kicks>().0[0]
+    else {
+        panic!("a recoil kick");
+    };
     assert!(offset[0] < -25 && offset[1].abs() <= 12, "{offset:?}");
     assert_eq!((out_ds, back_ds), (2.0, 2.5));
     s.run_until_for(3.0, "they land", |s| s.projectiles() == 0);

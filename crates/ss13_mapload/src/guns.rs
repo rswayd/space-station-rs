@@ -546,13 +546,14 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
     if is_under(path, CASING_ROOT) {
         out.push(ext(CASING_COMPONENT, "data", ron(&casing(types, path))));
     }
-    if is_under(path, CLOTHING_ROOT) {
+    // Clothing protects its wearer; any item's own armor softens what hits it (explosions).
+    if is_under(path, crate::item::ITEM_ROOT) {
         // Prototypes inherit their parent's component: only a change of ratings is written.
         let own = armor(types, path);
         let parent = types.types[path]
             .parent
             .as_deref()
-            .filter(|p| is_under(p, CLOTHING_ROOT))
+            .filter(|p| is_under(p, crate::item::ITEM_ROOT))
             .map(|p| armor(types, p))
             .unwrap_or_default();
         if own != parent {
