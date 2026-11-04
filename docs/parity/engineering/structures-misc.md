@@ -12,7 +12,7 @@
 
 - **Код:** [`/obj/structure/extinguisher_cabinet`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/extinguisher.dm#L1), [`/obj/structure/fireaxecabinet`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/fireaxe.dm#L1), [`/obj/item/wallframe/fireaxecabinet`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/fireaxe.dm#L239)
 - **BandaStation:** [`aesthetics/extinguisher_cabinet`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/aesthetics/extinguisher_cabinet/code/extinguisher_cabinet.dm) — спрайты шкафа
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/wallmount/cabinets.rs`: шкаф с огнетушителем (с карты закрыт с огнетушителем; взять/положить, открыть/закрыть ЛКМ/ПКМ/предметом, вид по типу огнетушителя и дверце), шкаф с топором (заперт; мультитул 2 с снимает/ставит замок, открыть/закрыть, взять/положить топор, оверлеи стекла и замка). Нет: повреждения и разбития стекла, ремонта, разборки ключом, монтажа из настенной рамы, проверки двуручного хвата
 
 ### Сейфы
 Механический сейф с кодовым замком (крутить диск, слушать стетоскопом), напольный сейф, настенные секретные сейфы с паролем (ГСБ, капитан).

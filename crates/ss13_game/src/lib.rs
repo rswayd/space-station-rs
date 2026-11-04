@@ -283,6 +283,8 @@ pub mod ui_sprites;
 #[cfg(feature = "server")]
 pub mod vending;
 #[cfg(feature = "server")]
+pub mod wallmount;
+#[cfg(feature = "server")]
 pub mod wires;
 pub mod zone;
 

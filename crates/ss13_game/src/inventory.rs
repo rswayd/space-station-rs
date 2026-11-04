@@ -703,6 +703,9 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 ) => {}
                 // tg `attack_hand` of cell chargers and rechargers: the cell or device out.
                 None if crate::power::chargers::interact(world, client, mob, target) => {}
+                // tg `attack_hand(_secondary)` of wall mounts: fire alarms, light switches,
+                // buttons, cabinets.
+                None if crate::wallmount::interact(world, client, mob, target, modifiers) => {}
                 // tg `attack_hand` of an APC with its cover closed: its window.
                 None if crate::power::apc_ui::interact(world, client, mob, target) => {}
                 // tg `attack_hand` of the mech bay console: its window.
@@ -733,6 +736,11 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 // (eating) and tools on food (slicing); food has reagents, so before chem.
                 Some(held)
                     if crate::kitchen::item_interaction(world, client, mob, held, target) => {}
+                // tg `item_interaction` of wall mounts: a button pressed with an item, cabinets.
+                Some(held)
+                    if crate::wallmount::item_interaction(
+                        world, client, mob, held, target, modifiers,
+                    ) => {}
                 // tg `item_interaction` of cell chargers (cells) and rechargers (batons).
                 Some(held)
                     if crate::power::chargers::item_interaction(

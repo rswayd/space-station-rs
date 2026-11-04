@@ -1159,6 +1159,24 @@ SS13_LIGHTING=0 SS13_MAP=$PWD/scripts/visual/maps/security.dmm SS13_ASSETS=$ASSE
 `ss13-mapload convert` emits `dm_baton`, `dm_handcuffs` and `flash_protect` in `dm_clothing`:
 rerun it after updating.
 
+### Wall mounts
+
+Fire alarms, buttons, light switches, mounted flashers and the extinguisher and fire axe
+cabinets work by hand (`ss13_game::wallmount`): a fire alarm pulled (left click) closes the
+firelocks of its area and the open tiles beside them, turns the area's lights red and rings
+until a right click resets it; door buttons open blast doors by `id` or bolt/open airlocks by
+`id_tag` (power and access), flasher buttons fire the mounted flashers with their `id`; a light
+switch turns its area's lights off and on; cabinets give and take their extinguisher or axe (a
+multitool unlocks the axe cabinet).
+
+```sh
+cargo test -p ss13_game --all-features --test it wallmount::      # fixture: alarm, switch,
+                                                                  # buttons, flasher, cabinets
+SS13_ASSETS=$ASSETS cargo test -p ss13_game --all-features --test it wallmount::metastation -- --ignored --nocapture
+                                                                  # MetaStation counts, linked
+                                                                  # buttons, a pulled alarm
+```
+
 ### Guns and armor
 
 Guns (`ss13_game::guns`, `ss13_game::projectile`, `ss13_game::armor`), from tg's gun, casing,

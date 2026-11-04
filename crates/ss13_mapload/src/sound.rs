@@ -93,6 +93,21 @@ pub mod files {
         "sound/machines/fan/fan_loop.ogg",
         "sound/machines/fan/fan_stop.ogg",
     ];
+    /// Wall mounts (`ss13_game::wallmount`): `/datum/looping_sound/firealarm` `mid_sounds`, the
+    /// light switch's `sound_on`/`sound_off` and BandaStation's click
+    /// (`modular_bandastation/aesthetics/lightswitch`), the mounted flasher's flash, the fire
+    /// axe cabinet's `toggle_lock`.
+    pub const WALLMOUNT: [&str; 9] = [
+        "sound/machines/fire_alarm/fire_alarm1.ogg",
+        "sound/machines/fire_alarm/fire_alarm2.ogg",
+        "sound/machines/fire_alarm/fire_alarm3.ogg",
+        "sound/machines/fire_alarm/fire_alarm4.ogg",
+        "sound/items/weapons/magin.ogg",
+        "sound/items/weapons/magout.ogg",
+        "modular_bandastation/aesthetics/lightswitch/sound/lightswitch.ogg",
+        "sound/items/weapons/flash.ogg",
+        "sound/machines/locktoggle.ogg",
+    ];
     /// `/datum/looping_sound/fire` `mid_sounds` (equal weights).
     pub const FIRE_LOOP: [&str; 7] = [
         "sound/effects/fireclip1.ogg",
@@ -265,6 +280,7 @@ pub fn referenced<'a>(
     out.extend(RUNTIME_SOUNDS.map(str::to_owned));
     out.extend(files::FIRE_LOOP.map(str::to_owned));
     out.extend(files::ATMOS.map(str::to_owned));
+    out.extend(files::WALLMOUNT.map(str::to_owned));
     for path in converted {
         for var in SOUND_VARS {
             let s = sound_var(types, path, var);

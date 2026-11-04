@@ -150,6 +150,8 @@ pub enum Job {
     Heretic(crate::antag::heretic::server::HereticJob),
     /// A DNA injector on someone else ([`crate::genetics::console`]).
     Genetics(crate::genetics::console::InjectJob),
+    /// Unlocking a fire axe cabinet ([`crate::wallmount`]).
+    WallMount(crate::wallmount::WallJob),
 }
 
 /// A turf's baseturf stack, bottom first (tg `baseturfs`). Absent: assembled from the type's
@@ -880,6 +882,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
             crate::antag::changeling::server::complete(world, mob, action, job)
         }
         Job::Genetics(_) => crate::genetics::console::complete(world, mob, action),
+        &Job::WallMount(job) => crate::wallmount::complete(world, client, target, job),
         &Job::Emitter(job) => crate::power::emitter::complete(world, client, target, job, consume),
         Job::GirderBolts { from } => {
             if !is_under(&path, GIRDER) || obj_state(world, target) != *from || !consume(world) {

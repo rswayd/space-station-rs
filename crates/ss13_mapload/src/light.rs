@@ -42,6 +42,8 @@ const LIGHT_OK: u8 = 0;
 /// tg `LIGHT_IGNORE_OFFSET`.
 const LIGHT_IGNORE_OFFSET: u16 = 1 << 2;
 const WHITE: [u8; 4] = [255, 255, 255, 255];
+/// tg `COLOR_FIRE_LIGHT_RED`, a fixture's `fire_colour`.
+const COLOR_FIRE_LIGHT_RED: [u8; 4] = [0xB6, 0x1C, 0x1C, 255];
 /// tg `LIGHT_COLOR_BLUEGREEN`, the green security level's fire alarm light.
 const LIGHT_COLOR_BLUEGREEN: [u8; 4] = [0x7d, 0xe1, 0xaf, 255];
 
@@ -64,6 +66,11 @@ pub struct DmLight {
     pub bulb_power: f32,
     pub bulb_colour: Option<[u8; 4]>,
     pub status: u8,
+    /// Fixtures in an area with a fire alarm (`area.fire`): `fire_brightness`, `fire_power`,
+    /// `fire_colour`.
+    pub fire_brightness: f32,
+    pub fire_power: f32,
+    pub fire_colour: Option<[u8; 4]>,
     /// `/obj/machinery/computer`.
     pub brightness_on: f32,
     /// `/obj/item/flashlight`.
@@ -91,6 +98,10 @@ impl Default for DmLight {
             bulb_power: 1.0,
             bulb_colour: Some(WHITE),
             status: LIGHT_OK,
+            // `/obj/machinery/light` defaults (only fixtures read them).
+            fire_brightness: 9.0,
+            fire_power: 0.5,
+            fire_colour: Some(COLOR_FIRE_LIGHT_RED),
             brightness_on: 0.0,
             start_on: false,
             static_lighting: true,
@@ -102,7 +113,7 @@ impl Default for DmLight {
 }
 
 /// The var names [`field`] understands.
-pub const LIGHT_VARS: [&str; 18] = [
+pub const LIGHT_VARS: [&str; 21] = [
     "light_range",
     "light_power",
     "light_color",
@@ -115,6 +126,9 @@ pub const LIGHT_VARS: [&str; 18] = [
     "bulb_power",
     "bulb_colour",
     "status",
+    "fire_brightness",
+    "fire_power",
+    "fire_colour",
     "brightness_on",
     "start_on",
     "static_lighting",
@@ -135,7 +149,7 @@ pub fn field(var: &str, value: Val) -> Result<Field, Skip> {
     };
     let byte = |n: f64| n.round().clamp(0.0, 255.0) as u8;
     let ron = match var {
-        "light_color" | "bulb_colour" | "base_lighting_color" => match value {
+        "light_color" | "bulb_colour" | "fire_colour" | "base_lighting_color" => match value {
             Val::Null => "None".to_owned(),
             Val::Str(s) => {
                 let [r, g, b, a] = parse_color(s).ok_or(Skip::Unsupported)?;

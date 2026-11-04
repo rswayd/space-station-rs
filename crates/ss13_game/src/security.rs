@@ -774,16 +774,42 @@ fn flash_mob(
     confusion: f32,
     targeted: bool,
 ) -> bool {
-    let (Some(&victim_at), Some(&user_at)) =
-        (world.get::<TilePos>(victim), world.get::<TilePos>(user))
-    else {
+    let Some(&user_at) = world.get::<TilePos>(user) else {
+        return false;
+    };
+    let source = FlashSource {
+        user: Some(user),
+        at: user_at,
+        name: name_of(world, user),
+    };
+    flash_mob_from(world, &source, victim, confusion, targeted)
+}
+
+/// Who or what flashes: tg `flash_mob(flashed, user)` with `user`, or `user = null` (a mounted
+/// flasher's bulb: the deviation is from the bulb, the victim's own lines name it).
+pub(crate) struct FlashSource {
+    pub user: Option<Entity>,
+    pub at: TilePos,
+    pub name: String,
+}
+
+/// tg `/obj/item/assembly/flash/proc/flash_mob`.
+pub(crate) fn flash_mob_from(
+    world: &mut World,
+    source: &FlashSource,
+    victim: Entity,
+    confusion: f32,
+    targeted: bool,
+) -> bool {
+    let Some(&victim_at) = world.get::<TilePos>(victim) else {
         return false;
     };
     let protection = eye_protection(world, victim);
     let facing = world.get::<Facing>(victim).map_or(Dir::South, |f| f.0);
-    let mut deviation = deviation(protection, victim_at, facing, user_at);
+    let mut deviation = deviation(protection, victim_at, facing, source.at);
     // `COMSIG_MOB_PRE_FLASHED_MOB`: `can_flash_from_behind` makes a full deviation partial.
-    if deviation == 2
+    if let Some(user) = source.user
+        && deviation == 2
         && (crate::antag::brother::can_flash_from_behind(world, user)
             || crate::antag::revolution::server::can_flash_from_behind(world, user))
     {
@@ -792,7 +818,7 @@ fn flash_mob(
     if deviation == 2 {
         return false;
     }
-    let (name_user, name_victim) = (name_of(world, user), name_of(world, victim));
+    let (name_user, name_victim) = (source.name.clone(), name_of(world, victim));
     // `flash_act(1)`: eye protection at or above the intensity blocks it.
     let damage = 1 - protection;
     if damage <= 0 {
@@ -805,21 +831,30 @@ fn flash_mob(
             );
         }
         if targeted {
-            show(
-                world,
-                victim_at,
-                DEFAULT_MESSAGE_RANGE,
-                ChatChannel::Combat,
-                (
-                    Span::Warning,
-                    format!("{name_user} не удаётся ослепить {name_victim} вспышкой!"),
-                ),
-                &[(
+            if source.user.is_some() {
+                show(
+                    world,
+                    victim_at,
+                    DEFAULT_MESSAGE_RANGE,
+                    ChatChannel::Combat,
+                    (
+                        Span::Warning,
+                        format!("{name_user} не удаётся ослепить {name_victim} вспышкой!"),
+                    ),
+                    &[(
+                        victim,
+                        Span::Danger,
+                        format!("{name_user} не удаётся ослепить вас вспышкой!"),
+                    )],
+                );
+            } else {
+                tell_mob(
+                    world,
                     victim,
                     Span::Danger,
-                    format!("{name_user} не удаётся ослепить вас вспышкой!"),
-                )],
-            );
+                    format!("{name_user} не удаётся ослепить вас!"),
+                );
+            }
         }
         return false;
     }
@@ -842,21 +877,30 @@ fn flash_mob(
     };
     adjust_stamina(world, victim, stamina * scale);
     knockdown(world, victim, down * scale / 10.0, 0.0);
-    show(
-        world,
-        victim_at,
-        DEFAULT_MESSAGE_RANGE,
-        ChatChannel::Combat,
-        (
-            Span::Danger,
-            format!("{name_user} ослепляет {name_victim} вспышкой!"),
-        ),
-        &[(
+    if source.user.is_some() {
+        show(
+            world,
+            victim_at,
+            DEFAULT_MESSAGE_RANGE,
+            ChatChannel::Combat,
+            (
+                Span::Danger,
+                format!("{name_user} ослепляет {name_victim} вспышкой!"),
+            ),
+            &[(
+                victim,
+                Span::BoldWarning,
+                format!("{name_user} ослепляет вас вспышкой!"),
+            )],
+        );
+    } else {
+        tell_mob(
+            world,
             victim,
-            Span::BoldWarning,
-            format!("{name_user} ослепляет вас вспышкой!"),
-        )],
-    );
+            Span::Danger,
+            format!("Вас ослепляет {name_user}!"),
+        );
+    }
     true
 }
 
