@@ -19,6 +19,9 @@ pub const REACTION_ROOT: &str = "/datum/chemical_reaction";
 pub const RANDOMIZED_REACTIONS: &str = "/datum/chemical_reaction/randomized";
 /// Its `pre_reaction_other_checks` always passes.
 const FOOD_REACTIONS: &str = "/datum/chemical_reaction/food";
+/// Its `pre_reaction_other_checks` counts the pot's ingredients: the game runs it
+/// ([`ss13_reagents::SoupDef`]).
+pub const SOUP_REACTIONS: &str = "/datum/chemical_reaction/food/soup";
 const GLASS_STYLE_ROOT: &str = "/datum/glass_style";
 /// `/datum/glass_style/has_foodtype/soup/New()`: no name or description means the soup's.
 const SOUP_STYLE: &str = "/datum/glass_style/has_foodtype/soup";
@@ -202,10 +205,18 @@ pub fn chem_data(types: &DmTypes) -> (ChemData, Skipped) {
                     .iter()
                     .any(|q| q == "pre_reaction_other_checks")
             });
-        if check.is_some_and(|c| c != FOOD_REACTIONS) {
+        if check.is_some_and(|c| c != FOOD_REACTIONS && c != SOUP_REACTIONS) {
             skipped.own_checks.push(path.to_owned());
             continue;
         }
+        let soup = (check == Some(SOUP_REACTIONS)).then(|| ss13_reagents::SoupDef {
+            required_ingredients: amounts(get("required_ingredients")).unwrap_or_default(),
+            ingredient_reagent_multiplier: num(get("ingredient_reagent_multiplier"))
+                .unwrap_or(0.8) as f32,
+            percentage_of_nutriment_converted: num(get("percentage_of_nutriment_converted"))
+                .unwrap_or(0.25) as f32,
+            resulting_food_path: path_value(get("resulting_food_path")),
+        });
         let n = |var: &str| num(get(var)).unwrap_or(0.0) as f32;
         let truthy = |var: &str| n(var) != 0.0;
         data.reactions.push(ReactionDef {
@@ -243,6 +254,7 @@ pub fn chem_data(types: &DmTypes) -> (ChemData, Skipped) {
                     "overly_impure",
                 ],
             ),
+            soup,
         });
     }
     data.glass_styles = glass_styles(types, &data.reagents);

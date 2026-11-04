@@ -261,6 +261,7 @@ impl Plugin for GameServerPlugin {
             crate::gibber::GibberServerPlugin,
             crate::coffee::CoffeeServerPlugin,
             crate::icecream::IceCreamPlugin,
+            crate::stove::StovePlugin,
             crate::chem_dispenser::ChemDispenserPlugin,
             crate::smartfridge::SmartFridgePlugin,
         ))

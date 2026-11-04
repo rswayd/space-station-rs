@@ -296,6 +296,8 @@ pub mod status_effects;
 pub mod stock_parts;
 #[cfg(feature = "server")]
 pub mod storage;
+#[cfg(feature = "server")]
+pub mod stove;
 #[cfg(feature = "client")]
 pub mod storage_client;
 #[cfg(feature = "server")]

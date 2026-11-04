@@ -194,6 +194,13 @@ pub(crate) fn setup_machine(world: &mut World, e: Entity, mapload: bool) {
     .any(|r| is_under(&path, r))
     {
         crate::cooking::setup_machine(world, e, mapload);
+        if is_under(&path, "/obj/machinery/oven/range") {
+            crate::stove::setup(world, e, mapload);
+        }
+        return;
+    }
+    if is_under(&path, crate::stove::STOVE_ROOT) {
+        crate::stove::setup(world, e, mapload);
         return;
     }
     if is_under(&path, crate::gibber::GIBBER_ROOT) {

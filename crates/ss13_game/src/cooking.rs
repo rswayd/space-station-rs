@@ -256,6 +256,10 @@ pub fn interact(
             }
             return true;
         }
+        // A closed range's right click is its burner's (`crate::stove`).
+        if right && world.get::<crate::stove::Stove>(target).is_some() {
+            return false;
+        }
         toggle_oven(world, client, target);
         return true;
     }
@@ -1163,6 +1167,9 @@ pub fn refresh_look(world: &mut World, e: Entity) {
     } else {
         return;
     };
+    // The range's burner (`/datum/component/stove` adds its overlays).
+    let mut overlays = overlays;
+    overlays.extend(crate::stove::burner_overlays(world, e));
     let id = icon_state(world, e, &state);
     let Some(mut look) = world.get_mut::<Appearance>(e) else {
         return;

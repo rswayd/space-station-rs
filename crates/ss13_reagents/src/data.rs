@@ -83,6 +83,23 @@ pub struct ReactionDef {
     /// The type overrides `on_reaction`, `reaction_step`, `reaction_finish`, `overheated` or
     /// `overly_impure`: what those procs do beyond moving reagents is not modelled.
     pub special: bool,
+    /// A soup (`/datum/chemical_reaction/food/soup`): [`crate::Holder::handle_reactions`] never
+    /// starts it; the game does ([`crate::Holder::start_reaction`]) once the pot holds its
+    /// ingredients.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub soup: Option<SoupDef>,
+}
+
+/// The vars of a `/datum/chemical_reaction/food/soup`.
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct SoupDef {
+    /// `required_ingredients`: item type -> how many (a stack counts its amount).
+    pub required_ingredients: Vec<(String, f32)>,
+    pub ingredient_reagent_multiplier: f32,
+    pub percentage_of_nutriment_converted: f32,
+    /// `resulting_food_path`.
+    #[serde(default)]
+    pub resulting_food_path: Option<String>,
 }
 
 /// One tg `/datum/glass_style` (`reagent_containers/cups/_glass_datum.dm`): a container of

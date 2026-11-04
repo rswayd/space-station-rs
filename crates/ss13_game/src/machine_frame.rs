@@ -96,7 +96,7 @@ pub enum Family {
     SmartFridge,
 }
 
-const FAMILIES: [(&str, Family); 21] = [
+const FAMILIES: [(&str, Family); 22] = [
     (CELL_CHARGER, Family::Charger),
     (RECHARGER, Family::Charger),
     (crate::kitchen::MICROWAVE_ROOT, Family::Kitchen),
@@ -107,6 +107,7 @@ const FAMILIES: [(&str, Family); 21] = [
     (crate::cooking::FRYER_ROOT, Family::Kitchen),
     (crate::gibber::GIBBER_ROOT, Family::Kitchen),
     (crate::coffee::COFFEEMAKER_ROOT, Family::Kitchen),
+    (crate::stove::STOVE_ROOT, Family::Kitchen),
     (crate::chem_dispenser::DISPENSER_ROOT, Family::ChemDispenser),
     (crate::smartfridge::FRIDGE_ROOT, Family::SmartFridge),
     ("/obj/machinery/hydroponics/constructable", Family::Tray),

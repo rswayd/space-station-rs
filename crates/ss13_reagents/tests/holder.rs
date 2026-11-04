@@ -61,6 +61,7 @@ fn reaction(path: &str, required: &[(&str, f32)], results: &[(&str, f32)]) -> Re
         purity_min: 0.15,
         reaction_flags: reaction_flags::REACTION_INSTANT,
         special: false,
+        soup: None,
     }
 }
 
