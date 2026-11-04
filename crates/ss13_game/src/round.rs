@@ -472,6 +472,15 @@ fn setup(world: &mut World, now: f64) {
     let station = station_name(world);
     let text = format!("Приветствуем вас на {station}. Приятного вам пребывания!");
     to_world(world, Span::BoldNotice, text);
+    // `SEND_SOUND(world, SSstation.announcer.get_rand_welcome_sound())`.
+    if let Some(welcome) = crate::announce::welcome_sound(world) {
+        crate::sound::playsound(
+            world,
+            crate::sound::PlaySound::to_playing_players(welcome, 100.0, false),
+        );
+    }
+    // `PostSetup`: `queue_roundstart_report`.
+    crate::announce::queue_roundstart_report(world);
     info!(
         "round started: {} players spawned",
         ready.len() + operatives.len()

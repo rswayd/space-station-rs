@@ -125,6 +125,18 @@ pub mod files {
         "sound/machines/terminal/terminal_prompt_deny.ogg",
         "sound/machines/terminal/terminal_prompt_confirm.ogg",
     ];
+    /// The communications console (`ss13_game::comms_server`): its terminal sounds and
+    /// `make_announcement`'s captain and Syndicate sounds (the announcers' are in `sfx.ron`), the
+    /// admins' request notification (`ss13_admin`).
+    pub const COMMS: [&str; 7] = [
+        "sound/machines/terminal/terminal_prompt.ogg",
+        "sound/machines/terminal/terminal_alert.ogg",
+        "sound/machines/terminal/terminal_on.ogg",
+        "sound/machines/terminal/terminal_off.ogg",
+        "sound/announcer/announcement/announce.ogg",
+        "sound/announcer/announcement/announce_syndi.ogg",
+        "sound/misc/server-ready.ogg",
+    ];
     /// Vending machines (`ss13_game::vending`): `dispense`, the payment component's register,
     /// `fall_and_crush`.
     pub const VENDING: [&str; 5] = [
@@ -183,6 +195,25 @@ pub struct SfxData {
     /// Footstep table name -> turf footstep key (`/turf/open` `footstep` etc.) -> sound.
     #[serde(default)]
     pub footsteps: BTreeMap<String, BTreeMap<String, StepSound>>,
+    /// `/datum/centcom_announcer` subtype -> its sounds.
+    #[serde(default)]
+    pub announcers: BTreeMap<String, AnnouncerSounds>,
+}
+
+/// A `/datum/centcom_announcer`: the sound sets of announcements.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct AnnouncerSounds {
+    /// `welcome_sounds`: the round start.
+    pub welcome: Vec<String>,
+    /// `alert_sounds`: a priority announcement without its own sound.
+    pub alert: Vec<String>,
+    /// `command_report_sounds`.
+    pub command_report: Vec<String>,
+    /// `event_sounds`: `ANNOUNCER_*` key -> file.
+    pub events: BTreeMap<String, String>,
+    /// `custom_alert_message`, its markup stripped: replaces the text of announcements that are
+    /// not `has_important_message`.
+    pub custom_alert_message: Option<String>,
 }
 
 impl SfxData {
@@ -201,8 +232,14 @@ impl SfxData {
 
     pub fn files(&self) -> impl Iterator<Item = &str> {
         let steps = self.footsteps.values().flat_map(|t| t.values());
+        let announcers = self.announcers.values().flat_map(|a| {
+            (a.welcome.iter().chain(&a.alert).chain(&a.command_report))
+                .chain(a.events.values())
+                .map(String::as_str)
+        });
         (self.sfx.values().flatten().map(|(f, _)| f.as_str()))
             .chain(steps.flat_map(|s| s.files.iter().map(String::as_str)))
+            .chain(announcers)
     }
 }
 
@@ -241,7 +278,69 @@ pub fn resolve_sfx(types: &DmTypes) -> SfxData {
     SfxData {
         sfx,
         footsteps: resolve_footsteps(types),
+        announcers: resolve_announcers(types),
     }
+}
+
+const ANNOUNCER_ROOT: &str = "/datum/centcom_announcer";
+
+/// Every `/datum/centcom_announcer` subtype with its sound lists.
+fn resolve_announcers(types: &DmTypes) -> BTreeMap<String, AnnouncerSounds> {
+    let files = |path: &str, var: &str| -> Vec<String> {
+        types
+            .resolved(path, var)
+            .map(list)
+            .unwrap_or_default()
+            .iter()
+            .filter_map(|f| resource(f).map(str::to_owned))
+            .collect()
+    };
+    types
+        .types
+        .keys()
+        .filter(|p| is_under(p, ANNOUNCER_ROOT) && p.as_str() != ANNOUNCER_ROOT)
+        .map(|path| {
+            let events = types
+                .resolved(path, "event_sounds")
+                .map(list)
+                .unwrap_or_default()
+                .iter()
+                .filter_map(|item| match item.get("assoc")?.as_array()?.as_slice() {
+                    [key, file] => Some((key.as_str()?.to_owned(), resource(file)?.to_owned())),
+                    _ => None,
+                })
+                .collect();
+            let custom_alert_message = types
+                .resolved(path, "custom_alert_message")
+                .and_then(Value::as_str)
+                .map(strip_markup)
+                .filter(|m| !m.is_empty());
+            let sounds = AnnouncerSounds {
+                welcome: files(path, "welcome_sounds"),
+                alert: files(path, "alert_sounds"),
+                command_report: files(path, "command_report_sounds"),
+                events,
+                custom_alert_message,
+            };
+            (path.clone(), sounds)
+        })
+        .collect()
+}
+
+/// Chat is not HTML: `<br>` becomes a line break, other tags go.
+fn strip_markup(html: &str) -> String {
+    let html = html.replace("<br>", "\n");
+    let mut out = String::new();
+    let mut in_tag = false;
+    for c in html.chars() {
+        match c {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            c if !in_tag => out.push(c),
+            _ => {}
+        }
+    }
+    out.trim().to_owned()
 }
 
 fn list(v: &Value) -> &[Value] {
@@ -309,6 +408,7 @@ pub fn referenced<'a>(
     out.extend(files::WALLMOUNT.map(str::to_owned));
     out.extend(files::SECURITY_LEVELS.map(str::to_owned));
     out.extend(files::VENDING.map(str::to_owned));
+    out.extend(files::COMMS.map(str::to_owned));
     for path in converted {
         for var in SOUND_VARS {
             let s = sound_var(types, path, var);
@@ -402,6 +502,15 @@ mod tests {
             "declared_vars": { "key": "cat_meow", "file_paths": { "list": [
             { "assoc": [ { "resource": "sound/m1.ogg" }, 8 ] },
             { "assoc": [ { "resource": "sound/m2.ogg" }, 23 ] } ] } } },
+        "/datum/centcom_announcer": { "parent": "/datum", "declared_vars": {
+            "welcome_sounds": { "list": [] }, "alert_sounds": { "list": [] },
+            "command_report_sounds": { "list": [] }, "event_sounds": { "list": [] },
+            "custom_alert_message": null } },
+        "/datum/centcom_announcer/intern": { "parent": "/datum/centcom_announcer",
+            "declared_vars": { "alert_sounds": { "list": [ { "resource": "sound/a1.ogg" } ] },
+            "event_sounds": { "list": [ { "assoc": [ "announcer_meteors",
+            { "resource": "sound/meteors.ogg" } ] } ] },
+            "custom_alert_message": "<span class='alert'>Wait for the intern.<br></span>" } },
         "/obj": { "parent": null },
         "/obj/item": { "parent": "/obj", "declared_vars": { "hitsound": null } },
         "/obj/item/gun": { "parent": "/obj/item", "declared_vars": {
@@ -433,6 +542,16 @@ mod tests {
             (75.0, -1.0, 2)
         );
         assert!(files.contains("sound/effects/footstep/floor2.ogg"));
+        // `/datum/centcom_announcer/intern`: its lists, the message without markup, its files.
+        assert_eq!(sfx.announcers.len(), 1);
+        let intern = &sfx.announcers["/datum/centcom_announcer/intern"];
+        assert_eq!(intern.alert, ["sound/a1.ogg"]);
+        assert_eq!(intern.events["announcer_meteors"], "sound/meteors.ogg");
+        assert_eq!(
+            intern.custom_alert_message.as_deref(),
+            Some("Wait for the intern.")
+        );
+        assert!(files.contains("sound/meteors.ogg"));
         assert_eq!(SfxData::read_str(&sfx.to_ron()), sfx);
     }
 

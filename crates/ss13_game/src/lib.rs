@@ -124,6 +124,8 @@ use std::path::{Path, PathBuf};
 pub mod actions;
 #[cfg(feature = "client")]
 pub mod actions_client;
+#[cfg(feature = "server")]
+pub mod announce;
 pub mod antag;
 #[cfg(feature = "server")]
 pub mod armor;
@@ -154,6 +156,8 @@ pub mod combat;
 pub mod comms;
 #[cfg(feature = "client")]
 pub mod comms_client;
+#[cfg(feature = "server")]
+pub mod comms_server;
 #[cfg(feature = "server")]
 pub mod construction;
 #[cfg(feature = "server")]

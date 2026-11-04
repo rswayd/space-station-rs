@@ -16,10 +16,11 @@ use std::time::{Duration, Instant};
 use bevy::prelude::*;
 use ss13_atmos::AtmosPlugin;
 use ss13_game::comms::{CommsConsoleData, CommsConsoleUi};
+use ss13_game::comms_server::CommsConsole;
 use ss13_game::construction::{Baseturfs, turf_at};
 use ss13_game::inventory::{IdCard, Inventory};
 use ss13_game::shuttle::{
-    CommsConsole, EmergencyShuttle, MobileDock, ShuttleConfig, ShuttleMode, StationaryDock,
+    EmergencyShuttle, MobileDock, ShuttleConfig, ShuttleMode, StationaryDock,
 };
 use ss13_game::testing::{self, Drive, fixture_map, write_fixture};
 use ss13_mapload::{Areas, DmPower, MapLoadPlugin};

@@ -28,6 +28,7 @@ use ss13_game::antag::brother::{Brother, add_brother};
 use ss13_game::antag::changeling::server::{Changeling, add_changeling};
 use ss13_game::antag::traitor::{Traitor, add_traitor};
 use ss13_game::antag::vampire::server::{Vampire, add_vampire};
+use ss13_game::comms_server::CommsRequest;
 use ss13_game::ghost::{Ghost, ghostize_client, return_to_body};
 use ss13_game::health::{DamageType, Health, Stat, apply_damage};
 use ss13_game::jobs::{Jobs, PlayerJob};
@@ -47,6 +48,9 @@ use ss13_shared::chat::{ChatChannel, ChatMessage, MAX_MESSAGE_LEN, Span};
 
 use crate::rights::{Holder, ckey, greater_rights, has, parse_admins, parse_ranks, rights_text};
 use crate::tickets::{self, Tickets};
+
+/// The admins' request notification (`comms_notification`).
+const SERVER_READY: &str = "sound/misc/server-ready.ogg";
 
 /// Requests per second per client, and the burst. The panel polls the player list once a
 /// second; a burst of clicks on its buttons stays under it.
@@ -205,6 +209,7 @@ impl Plugin for AdminServerPlugin {
                     tickets::autoclose,
                     tickets::push.run_if(|t: Res<Tickets>| t.dirty),
                     follow,
+                    comms_requests.run_if(on_message::<CommsRequest>),
                 )
                     .chain(),
             );
@@ -312,6 +317,43 @@ pub fn message_admins(world: &mut World, text: &str) {
             format!("ADMIN LOG: {text}"),
         ),
     );
+}
+
+/// tg `message_centcom`, `message_syndicate`, `nuke_request` and BandaStation's `ert_request`:
+/// the request to the admins with `R_ADMIN`, with `server-ready.ogg`.
+// shortcut: no reply links or request manager panel; admins answer with the command report.
+fn comms_requests(world: &mut World, mut cursor: Local<MessageCursor<CommsRequest>>) {
+    let requests: Vec<CommsRequest> = cursor
+        .read(world.resource::<Messages<CommsRequest>>())
+        .cloned()
+        .collect();
+    for request in requests {
+        let key = client_ckey(world, request.client);
+        let text = format!(
+            "{}: {} ({key}): {}",
+            request.kind.label(),
+            request.sender,
+            request.text
+        );
+        log_admin(world, "REQUEST", &text);
+        let to = admins_with(world, R_ADMIN);
+        for &admin in &to {
+            world.write_message(ss13_net::sound::server::SendSound {
+                client: admin,
+                sound: ss13_shared::protocol::SoundEvent {
+                    file: SERVER_READY.to_owned(),
+                    volume: 100.0,
+                    speed: 1.0,
+                    offset: None,
+                },
+            });
+        }
+        chat(
+            world,
+            to,
+            ChatMessage::simple(ChatChannel::AdminLog, Span::AdminNotice, text),
+        );
+    }
 }
 
 /// An admin action: logged and announced to the admins.

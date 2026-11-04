@@ -267,6 +267,17 @@ fn is_deaf(dna: Option<&Dna>, inventory: Option<&Inventory>, items: &Query<&DmIt
             .is_some_and(|i| ss13_mapload::fidelity::is_under(&i.path, EARMUFFS))
 }
 
+/// [`is_deaf`] of a mob, from an exclusive system.
+pub fn mob_is_deaf(world: &World, mob: Entity) -> bool {
+    let dna = world.get::<Dna>(mob);
+    dna.is_some_and(|d| mutation_id(DEAF_MUTATION).is_some_and(|id| d.get_mutation(id).is_some()))
+        || world
+            .get::<Inventory>(mob)
+            .and_then(|i| i.ears)
+            .and_then(|e| world.get::<DmItem>(e))
+            .is_some_and(|i| ss13_mapload::fidelity::is_under(&i.path, EARMUFFS))
+}
+
 fn pick_sfx(sfx: &Sfx, rng: &mut CombatRng, sound: &str) -> String {
     let Some(files) = sfx.0.sfx.get(sound) else {
         return sound.to_owned();

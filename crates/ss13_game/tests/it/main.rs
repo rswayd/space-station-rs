@@ -12,6 +12,7 @@ mod cargo;
 mod changeling;
 mod chem;
 mod combat;
+mod comms;
 mod construction;
 mod cult;
 mod disposals;

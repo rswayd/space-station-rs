@@ -319,10 +319,11 @@ fn wave(wave: Wave, announce: fn(&mut World)) -> Box<dyn RoundEvent> {
 }
 
 fn announce_meteors(world: &mut World) {
-    super::priority_announce(
+    super::priority_announce_sound(
         world,
         "Метеоры",
         "Зафиксировано движение метеоритов на встречном со станцией курсе.",
+        crate::announce::ANNOUNCER_METEORS,
     );
 }
 
@@ -340,10 +341,11 @@ pub fn make_catastrophic(_: &mut World) -> Box<dyn RoundEvent> {
 
 pub fn make_meaty(_: &mut World) -> Box<dyn RoundEvent> {
     wave(MEATEORS, |world| {
-        super::priority_announce(
+        super::priority_announce_sound(
             world,
             "Мясориты",
             "Зафиксировано движение мясоритов на встречном со станцией курсе.",
+            crate::announce::ANNOUNCER_METEORS,
         );
     })
 }

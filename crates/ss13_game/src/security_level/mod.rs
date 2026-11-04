@@ -32,10 +32,8 @@ pub mod keycard;
 
 use bevy::prelude::*;
 use ss13_net::chat::server::SendChat;
-use ss13_net::server::ClientToken;
 use ss13_shared::chat::{ChatChannel, ChatMessage, ChatSegment, Span};
 
-use crate::round::NewPlayer;
 use crate::sound::{PlaySound, playsound};
 
 /// tg `ALERT_COEFF_*` (`code/__DEFINES/shuttles.dm`): the emergency shuttle's call time
@@ -376,39 +374,44 @@ fn reprogram_silicon(world: &mut World, mob: Entity, laws: crate::silicon::laws:
     }
 }
 
-/// Every player not in the lobby (tg `GLOB.player_list` minus new players).
-fn playing_clients(world: &mut World) -> Vec<Entity> {
-    let mut query = world.query_filtered::<Entity, (With<ClientToken>, Without<NewPlayer>)>();
-    query.iter(world).collect()
-}
-
 /// tg `minor_announce(message, title, alert)`: the title and the text to every player, with
 /// `notice1` (`alert`) or `notice2`.
 pub fn minor_announce(world: &mut World, title: &str, text: &str, alert: bool) {
+    minor_announce_to(world, title, text, alert, None);
+}
+
+/// [`minor_announce`] to `players` (mobs; `None`: every player).
+pub fn minor_announce_to(
+    world: &mut World,
+    title: &str,
+    text: &str,
+    alert: bool,
+    players: Option<Vec<Entity>>,
+) {
+    if text.is_empty() {
+        return;
+    }
     announce(
         world,
         title,
         text,
         if alert { NOTICE_ALERT } else { NOTICE },
+        players,
     );
 }
 
-fn announce(world: &mut World, title: &str, text: &str, sound: &str) {
+fn announce(world: &mut World, title: &str, text: &str, sound: &str, players: Option<Vec<Entity>>) {
     info!("announcement: {title}: {text}");
-    let clients = playing_clients(world);
     let mut segments = Vec::new();
     if !title.is_empty() {
         segments.push(ChatSegment::new(Span::BoldAnnounce, format!("{title}\n")));
     }
     segments.push(ChatSegment::new(Span::Plain, text));
-    world.write_message(SendChat {
-        clients,
-        message: ChatMessage {
-            channel: ChatChannel::System,
-            segments,
-        },
-    });
-    playsound(world, PlaySound::to_playing_players(sound, 100.0, false));
+    let message = ChatMessage {
+        channel: ChatChannel::System,
+        segments,
+    };
+    crate::announce::dispatch(world, message, players, Some(sound.to_owned()));
 }
 
 /// tg `level_announce(selected_level, previous_level_number)`.
@@ -424,7 +427,7 @@ fn level_announce(world: &mut World, level: SecLevel, previous: SecLevel) {
             level.lowering_to(),
         )
     };
-    announce(world, &title, text, level.sound());
+    announce(world, &title, text, level.sound(), None);
 }
 
 /// `door/check_security_level`: doors with `red_alert_access` follow the level, and say so
@@ -472,6 +475,7 @@ fn doors_on_level_changed(world: &mut World, level: SecLevel) {
 
 /// `door/examine` of a door with `red_alert_access`.
 pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<crate::examine::Line>) {
+    displays::examine_lines(world, target, lines);
     let Some(door) = world.get::<crate::doors::Door>(target) else {
         return;
     };
@@ -583,19 +587,22 @@ mod tests {
         world.init_resource::<StationAccess>();
         world.init_resource::<Messages<SendChat>>();
         world.init_resource::<Messages<PlaySound>>();
+        world.init_resource::<Messages<ss13_net::sound::server::SendSound>>();
         world
     }
 
     #[test]
     fn set_level_is_instant_and_announced_once() {
         let mut world = world();
+        let client = world.spawn_empty().id();
+        world.spawn(crate::server::PlayerMob { client });
         set_level(&mut world, SecLevel::Red, true);
         assert_eq!(current(&world), SecLevel::Red);
         set_level(&mut world, SecLevel::Red, true);
         let announced = world
-            .resource::<Messages<PlaySound>>()
+            .resource::<Messages<ss13_net::sound::server::SendSound>>()
             .iter_current_update_messages()
-            .filter(|s| s.sound == SecLevel::Red.sound())
+            .filter(|s| s.sound.file == SecLevel::Red.sound())
             .count();
         assert_eq!(announced, 1);
     }

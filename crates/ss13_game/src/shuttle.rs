@@ -21,11 +21,9 @@
 //!   base time times the security level's `shuttle_call_time_mod`, rescaled when the level changes
 //!   during a call or a recall (`alert_coeff_change`). A call is recalled by the console while
 //!   enough of the call is left for the level (`past_restriction_point`).
-//! - The console ([`CommsConsoleUi`]): log in with an ID that has `ACCESS_COMMAND`, call with a
-//!   reason of at least 12 characters, recall, set the green or blue alert (logged in with
-//!   captain access and swiping a captain's ID); everything checked at the moment of effect.
-//! - Announcements: tg's priority announcements with BandaStation's Russian texts to every
-//!   player's chat.
+//! - The communications console calls and recalls it (`crate::comms_server`).
+//! - Announcements: tg's priority announcements with BandaStation's Russian texts and the
+//!   announcer's shuttle sounds (`crate::announce`).
 // shortcut: there is no CentCom level: the template's own level stands in for it, with
 // `emergency_away` placed where the template put the shuttle, and the transit dock is a fixed
 // space level made at round start (tg reserves one per flight with hyperspace turfs). Both have
@@ -38,41 +36,29 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::time::Duration;
 
-use bevy::ecs::message::MessageCursor;
 use bevy::platform::time::Instant;
 use bevy::prelude::*;
 use ss13_atmos::{Atmos, GasMixture, GasOverlay, HotspotEffect, TurfAir};
 use ss13_mapload::dock::{SHUTTLE_SKIPOVER, map_shuttle, shuttle_template_path};
 use ss13_mapload::spawner::Rng;
 use ss13_mapload::{
-    Areas, DEFAULT_AREA, DEFAULT_TURF, DmAtom, DmDockingPort, DmName, DmObj, DmPower,
-    MapLoadPlugin, MapLoadReport, MapSeed, ShuttleTemplates, Turf,
+    Areas, DEFAULT_AREA, DEFAULT_TURF, DmAtom, DmDockingPort, DmName, DmPower, MapLoadPlugin,
+    MapLoadReport, MapSeed, ShuttleTemplates, Turf,
 };
-use ss13_net::chat::server::SendChat;
-use ss13_net::server::ClientToken;
-use ss13_shared::chat::{ChatChannel, ChatMessage, ChatSegment, Span};
 use ss13_shared::{Dir, Facing, TilePos};
-use ss13_tgui::server::{
-    AppTguiExt, OpenUi, ServerUi, UiActed, UiParams, UiReject, UiSystems, UiWindow,
-};
-use ss13_tgui::{UiInterface as _, UiStatus};
-use ss13_world::{SpatialIndex, WorldSystems};
+use ss13_world::SpatialIndex;
 
-use crate::click::{ClickResolved, ResolveClicks};
-use crate::comms::{
-    CALL_SHUTTLE, CHANGE_SECURITY_LEVEL, CommsConsoleData, CommsConsoleUi, NEW_SECURITY_LEVEL,
-    REASON, RECALL_SHUTTLE, SWIPE_NEEDED, TOGGLE_AUTHENTICATION,
+use crate::announce::{
+    ANNOUNCER_SHUTTLECALLED, ANNOUNCER_SHUTTLEDOCK, ANNOUNCER_SHUTTLERECALLED, Priority,
 };
 use crate::construction::{Baseturfs, baseturfs_of, change_turf, path_of, turf_at};
 use crate::health::{DamageType, Health, Stat, apply_damage};
-use crate::inventory::{IdCard, Inventory, check_access};
+use crate::inventory::Inventory;
 use crate::jobs::{PlayerJob, display_time_text};
 use crate::lobby::GameState;
 use crate::obj_damage::{Anchored, is_under};
-use crate::outfit::IdRegistration;
-use crate::power::Unpowered;
-use crate::round::{NewPlayer, Ticker};
-use crate::security_level::{ALERT_COEFF_GREEN, SecLevel, SecurityLevel};
+use crate::round::Ticker;
+use crate::security_level::{ALERT_COEFF_GREEN, SecLevel};
 
 /// tg `ENGINE_START_TIME`: the docked shuttle starts its engines this long before leaving.
 pub const ENGINE_START_SECS: f64 = 10.0;
@@ -84,13 +70,9 @@ pub const CALL_SHUTTLE_REASON_LENGTH: usize = 12;
 pub const ACCESS_COMMAND: &str = "command";
 /// tg `ACCESS_CAPTAIN`: the console's alert level section.
 pub const ACCESS_CAPTAIN: &str = "captain";
-const PROMPT_DENY: &str = "sound/machines/terminal/terminal_prompt_deny.ogg";
-const PROMPT_CONFIRM: &str = "sound/machines/terminal/terminal_prompt_confirm.ogg";
 /// tg `setTimer(20)` after a failed docking.
 const RETRY_SECS: f64 = 2.0;
 const EMERGENCY_PORT: &str = "/obj/docking_port/mobile/emergency";
-const COMMS_CONSOLE: &str = "/obj/machinery/computer/communications";
-const COMMS_SYNDICATE: &str = "/obj/machinery/computer/communications/syndicate";
 /// tg `SHUTTLE_DEFAULT_SHUTTLE_AREA_TYPE`.
 const SHUTTLE_AREA: &str = "/area/shuttle";
 const SPACE_TURF: &str = "/turf/open/space";
@@ -412,20 +394,6 @@ pub struct EmergencyShuttle {
     pub last_move: Option<MoveReport>,
 }
 
-/// A communications console's login (tg `authorize_name`, `authorize_access`).
-#[derive(Component, Clone, Debug, Default)]
-pub struct CommsConsole {
-    pub authorize_name: Option<String>,
-    pub authorize_access: Vec<String>,
-}
-
-impl CommsConsole {
-    /// tg `authenticated_as_silicon_or_captain` for a non-silicon.
-    pub fn is_captain(&self) -> bool {
-        self.authorize_access.iter().any(|a| a == ACCESS_CAPTAIN)
-    }
-}
-
 #[derive(Resource)]
 struct ShuttleRng(Rng);
 
@@ -470,20 +438,9 @@ impl Plugin for ShuttleServerPlugin {
             app.insert_resource(ShuttleTemplates(vec![template.clone()]));
             app.insert_resource(EmergencyTemplate(template));
         }
-        app.register_ui::<CommsConsoleUi>()
-            .add_systems(Startup, (setup_shuttle, setup_consoles))
-            .add_systems(
-                Update,
-                (
-                    tick,
-                    open_console
-                        .after(WorldSystems::Movement)
-                        .after(ResolveClicks)
-                        .before(UiSystems::Open),
-                    console_acts.in_set(UiSystems::Handle),
-                    unpowered_windows.in_set(UiSystems::StatusHook),
-                ),
-            );
+        app.add_systems(Startup, setup_shuttle)
+            .add_systems(Update, tick)
+            .add_plugins(crate::comms_server::CommsServerPlugin);
     }
 }
 
@@ -503,7 +460,7 @@ fn area_named(world: &World, path: &str) -> Option<Entity> {
         .find(|&a| area_path(world, a) == Some(path))
 }
 
-fn area_name(world: &World, area: Entity) -> String {
+pub(crate) fn area_name(world: &World, area: Entity) -> String {
     world
         .get::<DmName>(area)
         .map(|n| plain(&n.name).to_owned())
@@ -1094,29 +1051,18 @@ fn relight(world: &mut World, turfs: &[TilePos]) {
     ss13_mapload::light::relight_rect(world, first.z, min, max);
 }
 
-/// tg `priority_announce(text, title, sender_override = SENDER)` to every player.
-pub fn announce(world: &mut World, title: &str, text: &str) {
-    priority_announce(world, SENDER, title, text);
+/// tg `priority_announce(text, title, sound, sender_override = SENDER)` to every player.
+pub fn announce(world: &mut World, title: &str, text: &str, sound: Option<&str>) {
+    let mut priority = Priority::new(text, title).sender(SENDER);
+    priority.sound = sound.map(str::to_owned);
+    priority.send(world);
 }
 
 /// tg `priority_announce(text, title, sender_override = sender)` to every player not in the
-/// lobby: the sender header, the title (when not empty) and the text.
+/// lobby: the sender header, the title (when not empty) and the text, with the announcer's
+/// alert sound.
 pub fn priority_announce(world: &mut World, sender: &str, title: &str, text: &str) {
-    let mut query = world.query_filtered::<Entity, (With<ClientToken>, Without<NewPlayer>)>();
-    let clients: Vec<Entity> = query.iter(world).collect();
-    info!("announcement: {title}: {text}");
-    let mut segments = vec![ChatSegment::new(Span::BoldAnnounce, format!("{sender}\n"))];
-    if !title.is_empty() {
-        segments.push(ChatSegment::new(Span::Bold, format!("{title}\n")));
-    }
-    segments.push(ChatSegment::new(Span::Plain, text));
-    world.write_message(SendChat {
-        clients,
-        message: ChatMessage {
-            channel: ChatChannel::System,
-            segments,
-        },
-    });
+    Priority::new(text, title).sender(sender).send(world);
 }
 
 fn declension_minutes(n: u64) -> &'static str {
@@ -1191,7 +1137,12 @@ fn request(
         "Эвакуационный шаттл вызван. {red}Ожидаемое время прибытия: {minutes} {}.{reason}{traced}",
         declension_minutes(minutes)
     );
-    announce(world, "Вызван эвакуационный шаттл", &text);
+    announce(
+        world,
+        "Вызван эвакуационный шаттл",
+        &text,
+        Some(ANNOUNCER_SHUTTLECALLED),
+    );
     true
 }
 
@@ -1215,6 +1166,7 @@ pub fn recall_shuttle(world: &mut World, origin: Option<String>) -> bool {
         world,
         "Эвакуационный шаттл отозван",
         &format!("Эвакуационный шаттл был отозван.{traced}"),
+        Some(ANNOUNCER_SHUTTLERECALLED),
     );
     true
 }
@@ -1267,7 +1219,12 @@ fn tick(world: &mut World) {
                     "{name} состыковался со станцией. У вас есть {}, чтобы прибыть на борт шаттла.",
                     display_time_text(config.dock_secs)
                 );
-                announce(world, "Эвакуационный шаттл прибыл", &text);
+                announce(
+                    world,
+                    "Эвакуационный шаттл прибыл",
+                    &text,
+                    Some(ANNOUNCER_SHUTTLEDOCK),
+                );
             }
         }
         ShuttleStep::Launch => {
@@ -1281,7 +1238,12 @@ fn tick(world: &mut World) {
                  прежде чем шаттл прибудет на {COMMAND_NAME}.",
                 declension_minutes(minutes)
             );
-            announce(world, "Произведена отстыковка эвакуационного шаттла", &text);
+            announce(
+                world,
+                "Произведена отстыковка эвакуационного шаттла",
+                &text,
+                None,
+            );
         }
         ShuttleStep::DockAway => {
             let result = initiate_docking(world, port, away);
@@ -1336,6 +1298,7 @@ fn check_auto_evac(world: &mut World, config: &ShuttleConfig, now: f64) {
         "Отправлен эвакуационный шаттл",
         "Обнаружены катастрофические потери: активированы протоколы кризисного шаттла - глушение \
          сигналов отзыва на всех частотах.",
+        None,
     );
     if call {
         call_shuttle(world, "", None, ALERT_COEFF_AUTOEVAC_CRITICAL);
@@ -1376,337 +1339,6 @@ pub fn escape_status(world: &World, mob: Entity) -> (bool, bool) {
                 .is_some_and(|m| m.areas.contains(&a))
         });
     (escaped, on_shuttle)
-}
-
-fn setup_consoles(world: &mut World) {
-    let mut query = world.query::<(Entity, &DmObj)>();
-    let consoles: Vec<Entity> = query
-        .iter(world)
-        .filter(|(_, o)| is_under(&o.path, COMMS_CONSOLE) && !is_under(&o.path, COMMS_SYNDICATE))
-        .map(|(e, _)| e)
-        .collect();
-    info!("{} communications consoles", consoles.len());
-    for e in consoles {
-        world.entity_mut(e).insert(CommsConsole::default());
-    }
-}
-
-/// tg `attack_hand` (empty hand) or `item_interaction` with an ID card: opens the window.
-fn open_console(
-    mut clicks: MessageReader<ClickResolved>,
-    consoles: Query<&DmName, (With<CommsConsole>, Without<Unpowered>)>,
-    inventories: Query<&Inventory>,
-    cards: Query<(), With<IdCard>>,
-    mut open: MessageWriter<OpenUi>,
-) {
-    for click in clicks.read() {
-        let Ok(name) = consoles.get(click.target) else {
-            continue;
-        };
-        let Ok(inventory) = inventories.get(click.mob) else {
-            continue;
-        };
-        if inventory
-            .active_item()
-            .is_none_or(|item| cards.contains(item))
-        {
-            open.write(OpenUi::new::<CommsConsoleUi>(
-                click.client,
-                click.mob,
-                click.target,
-                plain(&name.name),
-            ));
-        }
-    }
-}
-
-/// An unpowered console is update-only (`can_interact` fails).
-fn unpowered_windows(
-    mut windows: Query<&mut UiWindow>,
-    unpowered: Query<(), (With<CommsConsole>, With<Unpowered>)>,
-) {
-    for mut window in &mut windows {
-        if window.interface == CommsConsoleUi::NAME && unpowered.contains(window.source) {
-            window.cap_status(UiStatus::Update);
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum CommsAct {
-    ToggleAuthentication,
-    CallShuttle(String),
-    RecallShuttle,
-    ChangeSecurityLevel(SecLevel),
-}
-
-type ConsoleParams = (
-    Option<Res<'static, EmergencyShuttle>>,
-    Res<'static, Time>,
-    Res<'static, Ticker>,
-    Res<'static, ShuttleConfig>,
-    Res<'static, SecurityLevel>,
-);
-
-impl ServerUi for CommsConsoleUi {
-    type Source = &'static CommsConsole;
-    type UserParam = ConsoleParams;
-    type Act = CommsAct;
-
-    fn static_data(_: &CommsConsole) {}
-
-    fn data(
-        console: &CommsConsole,
-        _: Entity,
-        (shuttle, time, ticker, config, level): &bevy::ecs::system::SystemParamItem<
-            '_,
-            '_,
-            ConsoleParams,
-        >,
-    ) -> CommsConsoleData {
-        let now = time.elapsed_secs_f64();
-        let authenticated = console.authorize_name.is_some();
-        let mut data = CommsConsoleData {
-            authenticated,
-            can_log_out: true,
-            authorize_name: console.authorize_name.clone(),
-            can_recall_shuttles: true,
-            call_shuttle_reason_min_length: CALL_SHUTTLE_REASON_LENGTH as u32,
-            max_message_length: ss13_tgui::server::MAX_PARAM_LEN as u32,
-            alert_level: level.current.name().to_owned(),
-            can_set_alert_level: console.is_captain().then(|| SWIPE_NEEDED.to_owned()),
-            ..default()
-        };
-        match shuttle.as_deref() {
-            Some(shuttle) => {
-                let state = &shuttle.state;
-                data.shuttle_can_evac_or_fail_reason = state
-                    .can_evac(ticker.round_duration(now), config.refuel_secs)
-                    .err();
-                data.shuttle_called =
-                    !matches!(state.mode, ShuttleMode::Idle | ShuttleMode::Recall);
-                data.shuttle_recallable = state.can_recall(now, config.call_secs, level.current);
-                data.shuttle_called_previously = state.call_count > 0;
-                data.shuttle_last_called = state.last_call_area.clone();
-            }
-            None => {
-                data.shuttle_can_evac_or_fail_reason =
-                    Some("Эвакуационный шаттл не найден.".into());
-            }
-        }
-        data
-    }
-
-    fn parse_act(action: &str, params: &UiParams) -> Result<CommsAct, UiReject> {
-        match action {
-            TOGGLE_AUTHENTICATION => Ok(CommsAct::ToggleAuthentication),
-            CALL_SHUTTLE => Ok(CommsAct::CallShuttle(
-                params
-                    .get(REASON)
-                    .ok_or_else(|| UiReject::BadParams("reason: missing".into()))?
-                    .to_owned(),
-            )),
-            RECALL_SHUTTLE => Ok(CommsAct::RecallShuttle),
-            CHANGE_SECURITY_LEVEL => params
-                .get(NEW_SECURITY_LEVEL)
-                .and_then(SecLevel::from_name)
-                .map(CommsAct::ChangeSecurityLevel)
-                .ok_or_else(|| UiReject::BadParams("newSecurityLevel: a level name".into())),
-            // shortcut: messages, status displays, shuttle purchases, announcements and the rest
-            // of the console are not ported.
-            _ => Err(UiReject::UnknownAction),
-        }
-    }
-}
-
-/// tg `ui_act`, one exclusive pass: logins read the actor's ID, calls and recalls change the
-/// shuttle; every check runs here, at the moment of effect.
-fn console_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed<CommsConsoleUi>>>) {
-    let pending: Vec<(Entity, Entity, Entity, CommsAct)> = acts
-        .read(world.resource::<Messages<UiActed<CommsConsoleUi>>>())
-        .map(|a| (a.client, a.actor, a.source, a.act.clone()))
-        .collect();
-    for (client, actor, console, act) in pending {
-        if world.get::<Unpowered>(console).is_some() {
-            continue;
-        }
-        let Some(state) = world.get::<CommsConsole>(console).cloned() else {
-            continue;
-        };
-        match act {
-            CommsAct::ToggleAuthentication => {
-                let mut state = state;
-                if state.authorize_name.is_some() {
-                    state = CommsConsole::default();
-                } else if let Some((access, name)) = id_card(world, actor)
-                    && check_access(&[ACCESS_COMMAND.to_owned()], &[], &access)
-                {
-                    state.authorize_access = access;
-                    state.authorize_name = Some(name);
-                }
-                world.entity_mut(console).insert(state);
-            }
-            CommsAct::CallShuttle(reason) => {
-                if state.authorize_name.is_none() {
-                    continue;
-                }
-                let reason: String = reason
-                    .trim()
-                    .chars()
-                    .take(ss13_shared::chat::MAX_MESSAGE_LEN)
-                    .collect();
-                if reason.chars().count() < CALL_SHUTTLE_REASON_LENGTH {
-                    continue;
-                }
-                request_evac(world, client, actor, &reason);
-            }
-            CommsAct::RecallShuttle => {
-                if state.authorize_name.is_none() {
-                    continue;
-                }
-                let now = world.resource::<Time>().elapsed_secs_f64();
-                let call_secs = world.resource::<ShuttleConfig>().call_secs;
-                let level = crate::security_level::current(world);
-                let can = world
-                    .get_resource::<EmergencyShuttle>()
-                    .is_some_and(|s| s.state.can_recall(now, call_secs, level));
-                if can {
-                    let origin = actor_area(world, actor);
-                    recall_shuttle(world, origin);
-                    info!("{actor} recalled the emergency shuttle");
-                }
-            }
-            CommsAct::ChangeSecurityLevel(level) => {
-                if state.is_captain() {
-                    change_security_level(world, client, actor, console, level);
-                }
-            }
-        }
-    }
-}
-
-/// tg `ui_act "changeSecurityLevel"` after `authenticated_as_silicon_or_captain`: a captain's ID
-/// swiped in the active hand sets green or blue, unless CentCom locked the level.
-// shortcut: silicons do not use the console here, so the swipe is always needed.
-fn change_security_level(
-    world: &mut World,
-    client: Entity,
-    actor: Entity,
-    console: Entity,
-    level: SecLevel,
-) {
-    let tell = |world: &mut World, span: Span, text: &str| {
-        world.write_message(SendChat {
-            clients: vec![client],
-            message: ChatMessage::simple(ChatChannel::System, span, text),
-        });
-    };
-    let pos = world.get::<TilePos>(console).copied();
-    let beep = |world: &mut World, sound: &str| {
-        if let Some(pos) = pos {
-            crate::sound::playsound(world, crate::sound::PlaySound::new(pos, sound, 50.0, false));
-        }
-    };
-    let held = world
-        .get::<Inventory>(actor)
-        .and_then(Inventory::active_item)
-        .and_then(|item| crate::inventory::get_id(world, item));
-    let Some(card) = held else {
-        tell(world, Span::Warning, "You need to swipe your ID!");
-        beep(world, PROMPT_DENY);
-        return;
-    };
-    let captain = world
-        .get::<IdCard>(card)
-        .is_some_and(|c| c.access.iter().any(|a| a == ACCESS_CAPTAIN));
-    if !captain {
-        tell(world, Span::Warning, "You are not authorized to do this!");
-        beep(world, PROMPT_DENY);
-        return;
-    }
-    if !matches!(level, SecLevel::Green | SecLevel::Blue) {
-        return;
-    }
-    let current = crate::security_level::current(world);
-    if current >= SecLevel::Delta {
-        tell(
-            world,
-            Span::Warning,
-            "Central Command has placed a lock on the alert level due to a doomsday!",
-        );
-        return;
-    }
-    if current >= SecLevel::Gamma {
-        tell(
-            world,
-            Span::Warning,
-            "Центральным командованием установлено военное положение. Изменение кода невозможно.",
-        );
-        return;
-    }
-    if current == level {
-        return;
-    }
-    crate::security_level::set_level(world, level, true);
-    tell(
-        world,
-        Span::Notice,
-        "Authorization confirmed. Modifying security level.",
-    );
-    beep(world, PROMPT_CONFIRM);
-    info!("{actor} changed the security level to {}", level.name());
-}
-
-/// tg `get_idcard(hand_first = TRUE)`: the access and `"<name> - <assignment>"` of the first ID
-/// in the active hand, the other hand, then the ID slot.
-fn id_card(world: &World, mob: Entity) -> Option<(Vec<String>, String)> {
-    let inventory = world.get::<Inventory>(mob)?;
-    [
-        inventory.hands[inventory.active],
-        inventory.hands[1 - inventory.active],
-        inventory.id,
-    ]
-    .into_iter()
-    .flatten()
-    .find_map(|item| {
-        let item = crate::inventory::get_id(world, item)?;
-        let card = world.get::<IdCard>(item)?;
-        let name = world
-            .get::<IdRegistration>(item)
-            .map(|r| format!("{} - {}", r.registered_name, r.assignment))
-            .unwrap_or_else(|| "Unknown".into());
-        Some((card.access.clone(), name))
-    })
-}
-
-fn actor_area(world: &World, actor: Entity) -> Option<String> {
-    let pos = *world.get::<TilePos>(actor)?;
-    let area = world.resource::<Areas>().area_at(pos)?;
-    Some(area_name(world, area))
-}
-
-/// tg `SSshuttle.requestEvac`.
-fn request_evac(world: &mut World, client: Entity, actor: Entity, reason: &str) {
-    let now = world.resource::<Time>().elapsed_secs_f64();
-    let round = world.resource::<Ticker>().round_duration(now);
-    let refuel = world.resource::<ShuttleConfig>().refuel_secs;
-    let Some(check) = world
-        .get_resource::<EmergencyShuttle>()
-        .map(|s| s.state.can_evac(round, refuel))
-    else {
-        return;
-    };
-    if let Err(why) = check {
-        world.write_message(SendChat {
-            clients: vec![client],
-            message: ChatMessage::simple(ChatChannel::System, Span::Warning, why),
-        });
-        return;
-    }
-    let origin = actor_area(world, actor);
-    if call_evac_shuttle(world, reason, origin) {
-        info!("{actor} called the emergency shuttle: {reason}");
-    }
 }
 
 #[cfg(test)]
