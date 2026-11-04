@@ -13,8 +13,8 @@
 //! - Food processor: food with a recipe goes in; an empty-hand click runs it for the recipes'
 //!   `time` and puts out `food_multiplier` of the output per input, splitting its reagents.
 //! - Grinder: starts with a large beaker (map load). An open container in hand replaces the
-//!   beaker, anything with reagents goes in (up to a bulky total weight); an empty-hand click
-//!   grinds for 6 s (every ingredient's reagents into the beaker, then it is gone), a right click
+//!   beaker, anything with reagents goes in (up to `6 * matter bin tier` total weight); an
+//!   empty-hand click grinds for `6 s / servo tier` (every ingredient's reagents into the beaker, then it is gone), a right click
 //!   takes the beaker out, or ejects the contents without a beaker.
 // shortcut: the radial menus are fixed clicks (microwave: cook / right click eject; grinder:
 // grind / right click beaker or eject); no juicing or mixing, no `grind_results()` procs, no

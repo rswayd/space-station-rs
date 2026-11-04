@@ -14,13 +14,15 @@
 //!   flags and build types, the amount (1-50) and the materials; then items come out one per
 //!   `(construction_time * lathe_time_factor * efficiency) ** 0.8` deciseconds, each using its
 //!   materials (times the efficiency, except stacks and `fixed_cost_efficiency` designs) and
-//!   energy; a stack design prints all its units at once. Parts are tier 1: efficiency is
-//!   `1.2 - 0.1 * servos` (protolathe, techfab) or `0.5 ** (servos - 1)` (imprinter).
+//!   energy; a stack design prints all its units at once. `RefreshParts` ([`refresh_parts`], after
+//!   an RPED; mapped ones have their board's tier 1 parts): efficiency is `1.2 - 0.1 * servo
+//!   tiers` (protolathe, techfab) or `0.5 ** (servo tiers - 1)` (imprinter), the local storage
+//!   `37.5 sheets * matter bin tiers`.
 //!
 //! Cost: lathes are scanned once at startup; a print is one timer per lathe that is printing.
 // shortcut: no silo holds, bans, logs or the silo's own window; no material insertion energy,
-// animations, department stripes, drop direction (`mouse_drop_dragged`), stock part upgrades
-// (RPED), wires, panels, deconstruction, design materials transferred to the printed item, the
+// animations, department stripes, drop direction (`mouse_drop_dragged`), wires,
+// deconstruction (a screwdriver opens the panel for the RPED only), design materials transferred to the printed item, the
 // payment component (departmental lathes are free), or designs whose materials are material
 // classes (`/datum/material_requirement`), which are not offered.
 
@@ -174,10 +176,64 @@ impl Lathe {
 
 /// tg `compute_efficiency()` with tier 1 parts.
 pub fn efficiency(def: &LatheDef) -> f64 {
-    if def.imprinter {
-        0.5_f64.powi(def.servos.saturating_sub(1) as i32)
+    efficiency_for(def.imprinter, def.servos)
+}
+
+/// tg `compute_efficiency()` for a sum of servo tiers: `0.5 ** max(servos - 1, 0)` (imprinter),
+/// `1.2 - 0.1 * servos` (the others).
+pub fn efficiency_for(imprinter: bool, servos: u32) -> f64 {
+    if imprinter {
+        0.5_f64.powi(servos.saturating_sub(1) as i32)
     } else {
-        1.2 - 0.1 * f64::from(def.servos)
+        1.2 - 0.1 * f64::from(servos)
+    }
+}
+
+/// tg `production/RefreshParts` (from [`crate::stock_parts::refresh`]): the local storage is
+/// `37.5 sheets * matter bin tiers`, the efficiency from the servos; the window's costs follow.
+pub(crate) fn refresh_parts(world: &mut World, e: Entity) {
+    let Some(lathe) = world.get::<Lathe>(e).cloned() else {
+        return;
+    };
+    let r = crate::stock_parts::ratings(world, e);
+    let bins = r.sum(crate::stock_parts::PartKind::MatterBin);
+    let servos = r.sum(crate::stock_parts::PartKind::Servo);
+    let efficiency = efficiency_for(lathe.def.imprinter, servos);
+    let local_size = (f64::from(bins) * UNITS_PER_BIN) as u32;
+    let catalogue = world.get_resource::<ResearchDb>().map(|db| {
+        let mut c = (*lathe.catalogue).clone();
+        priced(db, &mut c, &lathe.design_ids, efficiency);
+        Arc::new(c)
+    });
+    if let Some(mut l) = world.get_mut::<Lathe>(e) {
+        l.efficiency = efficiency;
+        l.local_size = local_size;
+        if let Some(c) = catalogue {
+            l.catalogue = c;
+        }
+    }
+    if let Some(mut store) = world.get_mut::<MaterialStore>(e) {
+        store.max = Some(local_size);
+    }
+}
+
+/// The catalogue's costs at `efficiency` (stacks and fixed designs at 1).
+fn priced(db: &ResearchDb, st: &mut FabricatorStatic, ids: &[usize], efficiency: f64) {
+    for (entry, &i) in st.designs.iter_mut().zip(ids) {
+        let d = &db.designs[i];
+        let coefficient = if d.stack || d.fixed_cost_efficiency {
+            1.0
+        } else {
+            efficiency
+        };
+        entry.cost = d
+            .materials
+            .iter()
+            .filter_map(|(m, n)| {
+                let index = *db.material_index.get(m)?;
+                Some((index as u8, optimal_cost(n * coefficient)))
+            })
+            .collect();
     }
 }
 
@@ -1025,6 +1081,9 @@ mod tests {
         );
         assert_eq!(efficiency(&def(true, 1)), 1.0, "imprinter");
         assert_eq!(efficiency(&def(true, 3)), 0.25);
+        // Two tier 4 servos (RefreshParts).
+        assert!((efficiency_for(false, 8) - 0.4).abs() < 1e-9);
+        assert_eq!(efficiency_for(true, 8), 0.5_f64.powi(7));
         // 3.2 s designs: 32 ** 0.8 = 16 ds.
         assert!((build_secs(32.0, 1.0, 1.0) - 1.6).abs() < 1e-9);
     }

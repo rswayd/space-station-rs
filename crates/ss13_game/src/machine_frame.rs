@@ -284,6 +284,22 @@ pub fn item_interaction(
     if let (Some(fam), Some(kind)) = (buildable_machine(world, target), tool) {
         return machine_tool(world, actor, kind, target, fam);
     }
+    // An R&D lathe's `default_deconstruction_screwdriver` (for its RPED; no deconstruction).
+    if tool == Some(ToolKind::Screwdriver)
+        && world
+            .get::<crate::science::lathe::Lathe>(target)
+            .is_some_and(|l| !l.busy)
+    {
+        let open = panel_open(world, target);
+        world.entity_mut(target).insert(PanelOpen(!open));
+        let text = if open {
+            "панель обслуживания закрыта"
+        } else {
+            "панель обслуживания открыта"
+        };
+        tell(world, actor.client, Span::Notice, text);
+        return true;
+    }
     false
 }
 
@@ -311,6 +327,10 @@ pub fn rped_interaction(world: &mut World, client: Entity, rped: Entity, target:
             }
             _ => false,
         }
+    } else if world.get::<crate::science::lathe::Lathe>(target).is_some() {
+        // Not built from frames here, but its parts upgrade like tg's.
+        crate::stock_parts::exchange_parts(world, client, rped, target);
+        true
     } else if let Some(fam) = buildable_machine(world, target) {
         if matches!(
             fam,

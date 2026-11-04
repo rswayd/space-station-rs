@@ -23,10 +23,10 @@
 Настольная машина, заряжающая вставленную ячейку от APC зоны.
 
 - **Код:** [`/obj/machinery/cell_charger`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/cell_charger.dm#L1), [`process()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/cell_charger.dm#L137)
-- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/power/chargers.rs` (`CellCharger`: вставка/извлечение, 2,5 кВт только из избытка сети, оверлеи заряда); нет разборки, ключа и ЭМИ (shortcut)
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/power/chargers.rs` (`CellCharger`: вставка/извлечение, `0,25 × STANDARD_CELL_RATE ×` тиры конденсаторов только из избытка сети — `chargers::cell_charger_rate`, оверлеи заряда); разборка и RPED — `crates/ss13_game/src/machine_frame.rs`, `crates/ss13_game/src/stock_parts.rs`; нет ключа и ЭМИ (shortcut)
 
 ### Зарядник оружия (recharger)
 Заряжает энергооружие, дубинки и подобные предметы.
 
 - **Код:** [`/obj/machinery/recharger`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/recharger.dm#L1), [`process()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/recharger.dm#L144)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/power/chargers.rs` (`Recharger`): оглушающие дубинки, `chargerate` ячейки из сети, затем ячейки APC, оверлеи empty/charging/full, «заряжено!»; энергооружия, магазинов и КПК нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/power/chargers.rs` (`Recharger`): оглушающие дубинки, `chargerate` ячейки из сети, затем ячейки APC, `recharge_coeff` — тир конденсатора (`chargers::recharge_coeff`), оверлеи empty/charging/full, «заряжено!»; энергооружия, магазинов и КПК нет

@@ -244,6 +244,7 @@ pub fn refresh(world: &mut World, machine: Entity) {
     crate::botany::refresh_parts(world, machine);
     crate::atmos_machinery::refresh_thermo_parts(world, machine);
     crate::science::autolathe::refresh_parts(world, machine);
+    crate::science::lathe::refresh_parts(world, machine);
 }
 
 /// Into `owner`'s parts from wherever it is (a hand, a storage, the floor).

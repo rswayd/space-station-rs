@@ -230,7 +230,8 @@ fn tray(types: &DmTypes, path: &str) -> TrayDef {
     if is_under(path, CONSTRUCTABLE_TRAY) {
         // `RefreshParts` with the board's two tier 1 matter bins and tier 1 servo:
         // `maxwater = bins * 50`, `maxnutri = bins * 5 + STATIC_NUTRIENT_CAPACITY`.
-        // shortcut: tier 1 parts for every board (the `fullupgrade` one has tier 4).
+        // shortcut: a mapped tray has tier 1 numbers whatever its board (the `fullupgrade` one
+        // has tier 4); built ones run `RefreshParts` (`ss13_game::botany::refresh_parts`).
         let bins = 2.0;
         maxwater = bins * 50.0;
         maxnutri = bins * 5.0 + 10.0;
