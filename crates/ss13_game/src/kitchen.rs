@@ -61,9 +61,14 @@ pub fn microwave_max_items(world: &World, e: Entity) -> usize {
         .map_or(10, |t| 10 * t as usize)
 }
 
-/// tg `microwave/RefreshParts`: `efficiency` is the sum of the micro-laser tiers.
+/// tg `microwave/RefreshParts`: `efficiency` is the sum of the micro-laser tiers (a microwave
+/// without a board, which tg cannot have, counts as one tier 1 laser).
 pub fn microwave_efficiency(world: &World, e: Entity) -> f64 {
-    f64::from(crate::stock_parts::ratings(world, e).sum(PartKind::MicroLaser))
+    let r = crate::stock_parts::ratings(world, e);
+    if r.first(PartKind::MicroLaser).is_none() {
+        return 1.0;
+    }
+    f64::from(r.sum(PartKind::MicroLaser))
 }
 
 /// `cook_loop` `wait = max(12 - 2 * efficiency, 2)` deciseconds.
@@ -533,12 +538,7 @@ fn cook(world: &mut World, e: Entity) {
         .any(|&i| world.get::<DmFood>(i).is_none());
     // `prob(max((5 / efficiency) - 5, dirty * 5))`: a clean tier 1 microwave never mucks.
     let efficiency = microwave_efficiency(world, e);
-    let fail = if efficiency > 0.0 {
-        5.0 / efficiency - 5.0
-    } else {
-        // Not buildable without a micro-laser (DM would divide by zero).
-        100.0
-    };
+    let fail = 5.0 / efficiency - 5.0;
     let mut rng = world.resource_mut::<CombatRng>();
     let muck = rng.chance((fail as f32).max(mw.dirty as f32 * 5.0));
     let risky = rng.chance((mw.dirty as f32 * 5.0).min(100.0));
