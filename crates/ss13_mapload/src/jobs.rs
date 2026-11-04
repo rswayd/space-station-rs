@@ -390,12 +390,17 @@ pub fn trim_wildcard_access(types: &DmTypes, trim: &str, flag_groups: &FlagGroup
 pub type FlagGroups = std::collections::HashMap<i64, Vec<String>>;
 
 /// Every joinable job and its departments.
-pub fn resolve(types: &DmTypes) -> JobsData {
-    let flag_groups: FlagGroups = types
+/// The access lists of `ACCESS_FLAG_*` groups (`SSid_access`).
+pub fn flag_groups(types: &DmTypes) -> FlagGroups {
+    types
         .access_flags
         .iter()
         .filter_map(|(k, v)| Some((k.parse().ok()?, v.clone())))
-        .collect();
+        .collect()
+}
+
+pub fn resolve(types: &DmTypes) -> JobsData {
+    let flag_groups = flag_groups(types);
     let mut paths: Vec<&str> = types
         .types
         .keys()

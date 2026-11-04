@@ -48,6 +48,9 @@ pub fn build(path: &str, _def: &MobDef) -> Option<Built> {
         traits: 0,
         retaliates: false,
     };
+    if under(path, "/datum/ai_controller/basic_controller/bot") {
+        return Some(crate::bots::ai::tree(path));
+    }
     if under(path, CARP) {
         let passive =
             path != CARP && path != format!("{CARP}/mega") && path != format!("{CARP}/ranged");

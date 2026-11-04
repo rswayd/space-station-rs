@@ -6,7 +6,7 @@ use ss13_shared::TilePos;
 
 use super::behaviors::{Behavior, Strategy};
 use super::bt::{Abort, Cond, ParallelOpts, Tree, decorator, leaf, parallel, selector, sequence};
-use super::movement::{AiMovement, find_path};
+use super::movement::{AiMovement, Pathing, find_path};
 use super::{AiCtx, Blackboard, Key, Value};
 use crate::combat::CombatRng;
 use crate::health::{Health, Stat};
@@ -195,6 +195,7 @@ fn injured_carp_flees_away_from_its_target() {
         last_tick: 0.0,
         traits: 0,
         retaliates: true,
+        cancel: false,
         active: 0,
     };
     let mut health = Health::basic(20.0, [1.0; 5]);
@@ -220,7 +221,15 @@ fn paths_go_around_walls() {
         w.spawn((TilePos::new(5, y, 1), ss13_world::Density));
     }
     let index = w.resource::<ss13_world::SpatialIndex>();
-    let path = find_path(index, pawn, TilePos::new(2, 5, 1), TilePos::new(8, 5, 1), 0).unwrap();
+    let path = find_path(
+        index,
+        pawn,
+        TilePos::new(2, 5, 1),
+        TilePos::new(8, 5, 1),
+        0,
+        &Pathing::BASIC,
+    )
+    .unwrap();
     assert_eq!(path.last(), Some(&TilePos::new(8, 5, 1)));
     assert!(path.iter().all(|p| p.x != 5 || p.y > 8), "{path:?}");
     // Walled in: no path.
@@ -228,5 +237,15 @@ fn paths_go_around_walls() {
         w.spawn((TilePos::new(x, 9, 1), ss13_world::Density));
     }
     let index = w.resource::<ss13_world::SpatialIndex>();
-    assert!(find_path(index, pawn, TilePos::new(2, 5, 1), TilePos::new(8, 5, 1), 0).is_none());
+    assert!(
+        find_path(
+            index,
+            pawn,
+            TilePos::new(2, 5, 1),
+            TilePos::new(8, 5, 1),
+            0,
+            &Pathing::BASIC
+        )
+        .is_none()
+    );
 }

@@ -3,8 +3,12 @@
 //! detours: when no step towards the target is free, a bounded A* over cardinal steps finds the
 //! way around. A target that stays unreachable fails the movement (tg
 //! `COMSIG_MOB_AI_MOVEMENT_FAILED`), which fails the `move_to_target` behavior.
-// shortcut: A* over free tiles only (closed doors and dense mobs count as walls) and at most
-// `MAX_NODES` expansions; tg JPS also plans through doors it has access to. Upgrade with doors.
+//!
+//! Bots ([`crate::bots::Bot`], tg `/datum/ai_movement/jps/bot`) plan through closed doors their
+//! access opens (bumping one opens it, `crate::doors`) and get tg's longer bot paths
+//! (`AI_BOT_PATH_LENGTH`).
+// shortcut: A* over free tiles only for other mobs (closed doors and dense mobs count as walls)
+// and at most `MAX_NODES` expansions; tg JPS plans further. Upgrade when mobs open doors.
 
 use std::collections::{BinaryHeap, HashMap};
 
@@ -19,6 +23,61 @@ use crate::health::Stat;
 const MAX_NODES: usize = 600;
 /// tg `AI_MAX_PATH_LENGTH`.
 const MAX_PATH: usize = 30;
+/// tg `AI_BOT_PATH_LENGTH`, and the expansions a search of that length may need.
+const BOT_MAX_PATH: usize = 60;
+const BOT_MAX_NODES: usize = 3000;
+
+/// How a mob plans its steps: which blockers it can open (closed doors with its access) and
+/// how long a detour may be.
+pub struct Pathing<'a> {
+    pub opens: &'a dyn Fn(Entity) -> bool,
+    pub max_path: usize,
+    pub max_nodes: usize,
+}
+
+impl Pathing<'_> {
+    /// A mob that opens nothing (`AI_MAX_PATH_LENGTH`).
+    pub const BASIC: Pathing<'static> = Pathing {
+        opens: &opens_nothing,
+        max_path: MAX_PATH,
+        max_nodes: MAX_NODES,
+    };
+}
+
+fn opens_nothing(_: Entity) -> bool {
+    false
+}
+
+/// The pathing of `mob`: a bot opens the doors its access card opens.
+pub fn pathing_of<'a>(
+    world: &'a World,
+    mob: Entity,
+    opens: &'a dyn Fn(Entity) -> bool,
+) -> Pathing<'a> {
+    if world.get::<crate::bots::Bot>(mob).is_some() {
+        Pathing {
+            opens,
+            max_path: BOT_MAX_PATH,
+            max_nodes: BOT_MAX_NODES,
+        }
+    } else {
+        Pathing::BASIC
+    }
+}
+
+/// Whether `blocker` is a closed door (or a multi-tile door's filler) that `mob` (a bot) opens
+/// by bumping it: not bolted or welded, and its access allows the bot's card.
+pub fn bot_opens(world: &World, mob: Entity, blocker: Entity) -> bool {
+    let Some(bot) = world.get::<crate::bots::Bot>(mob) else {
+        return false;
+    };
+    let door = world
+        .get::<crate::doors::DoorFiller>(blocker)
+        .map_or(blocker, |f| f.0);
+    world
+        .get::<crate::doors::Door>(door)
+        .is_some_and(|d| !d.locked && !d.welded && d.allows(Some(&bot.access)))
+}
 /// Steps without progress before the movement fails (tg `max_pathing_attempts`).
 const MAX_FAILS: u32 = 8;
 
@@ -75,13 +134,24 @@ impl AiMovement {
 
 /// Whether a mob at `from` may step in `dir` (tg `Move` blockers: border edges, dense things).
 pub fn can_step(index: &SpatialIndex, mob: Entity, from: TilePos, dir: Dir) -> bool {
-    let to = from.step(dir);
-    index.in_bounds(to)
-        && index.exit_blockers(from, dir, mob).next().is_none()
-        && index.enter_blockers(to, dir, mob).next().is_none()
+    can_step_opening(index, mob, from, dir, &opens_nothing)
 }
 
-/// A diagonal step needs one of its two cardinal halves.
+/// [`can_step`] where blockers `opens` accepts open on a bump (doors).
+pub fn can_step_opening(
+    index: &SpatialIndex,
+    mob: Entity,
+    from: TilePos,
+    dir: Dir,
+    opens: &dyn Fn(Entity) -> bool,
+) -> bool {
+    let to = from.step(dir);
+    index.in_bounds(to)
+        && index.exit_blockers(from, dir, mob).all(opens)
+        && index.enter_blockers(to, dir, mob).all(opens)
+}
+
+/// A diagonal step needs one of its two cardinal halves (free, never through a door).
 fn can_move(index: &SpatialIndex, mob: Entity, from: TilePos, dir: Dir) -> bool {
     let (dx, dy) = dir.offset();
     if dx == 0 || dy == 0 {
@@ -131,6 +201,7 @@ pub fn find_path(
     from: TilePos,
     to: TilePos,
     min_dist: u32,
+    pathing: &Pathing,
 ) -> Option<Vec<TilePos>> {
     #[derive(PartialEq, Eq)]
     struct Open(u32, u32, TilePos);
@@ -161,17 +232,17 @@ pub fn find_path(
                 cur = prev;
             }
             path.reverse();
-            return (path.len() <= MAX_PATH).then_some(path);
+            return (path.len() <= pathing.max_path).then_some(path);
         }
         expanded += 1;
-        if expanded > MAX_NODES {
+        if expanded > pathing.max_nodes {
             return None;
         }
         let g = came[&pos].1;
         for dir in Dir::CARDINALS {
             let next = pos.step(dir);
             // The goal tile itself may hold the (dense) target.
-            let passable = can_step(index, mob, pos, dir)
+            let passable = can_step_opening(index, mob, pos, dir, pathing.opens)
                 || (next == to
                     && index.in_bounds(next)
                     && index.exit_blockers(pos, dir, mob).next().is_none());
@@ -198,6 +269,7 @@ fn next_step(
     from: TilePos,
     to: TilePos,
     order: &mut Order,
+    pathing: &Pathing,
 ) -> Next {
     if from.z != to.z {
         return Next::Blocked;
@@ -210,10 +282,12 @@ fn next_step(
     while order.path.first() == Some(&from) {
         order.path.remove(0);
     }
+    // A door on the way is stepped into: the bump opens it, the next steps go through.
     if let Some(&next) = order.path.first()
         && let Some(dir) = dir_towards(from, next)
         && from.chebyshev(next) == Some(1)
-        && can_move(index, mob, from, dir)
+        && (can_move(index, mob, from, dir)
+            || can_step_opening(index, mob, from, dir, pathing.opens))
     {
         return Next::Step(dir);
     }
@@ -221,7 +295,7 @@ fn next_step(
     if let Some(dir) = greedy_step(index, mob, from, to) {
         return Next::Step(dir);
     }
-    match find_path(index, mob, from, to, order.min_dist) {
+    match find_path(index, mob, from, to, order.min_dist, pathing) {
         Some(path) if !path.is_empty() => {
             let dir = dir_towards(from, path[0]);
             order.path = path;
@@ -253,6 +327,7 @@ pub(super) fn step_movers(world: &mut World) {
             || now < mover.ready_at()
             || stat.is_some_and(|s| *s != Stat::Conscious)
             || (pulled && c.traits & STOP_MOVING_WHEN_PULLED != 0)
+            || crate::bots::busy(world, e)
         {
             continue;
         }
@@ -264,7 +339,18 @@ pub(super) fn step_movers(world: &mut World) {
             Target::Tile(t) => Some(t),
         };
         let result = match to {
-            Some(to) => next_step(world.resource::<SpatialIndex>(), mob, from, to, &mut order),
+            Some(to) => {
+                let opens = |e: Entity| bot_opens(world, mob, e);
+                let pathing = pathing_of(world, mob, &opens);
+                next_step(
+                    world.resource::<SpatialIndex>(),
+                    mob,
+                    from,
+                    to,
+                    &mut order,
+                    &pathing,
+                )
+            }
             None => Next::Blocked,
         };
         let failed = match result {

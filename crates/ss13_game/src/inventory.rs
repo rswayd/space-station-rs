@@ -547,6 +547,14 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                         && inventory.active_item().is_some_and(|held| {
                             crate::modpc::pda::item_interaction(world, client, mob, held, item)
                         }) => {}
+                // A bot part on a bot assembly (or what starts one) in the other hand.
+                Some(item)
+                    if hand != inventory.active
+                        && inventory.active_item().is_some_and(|held| {
+                            crate::bots::construction::item_interaction(
+                                world, client, mob, held, item,
+                            )
+                        }) => {}
                 // A tagger on a parcel, the package wrapper on an item, in the other hand.
                 Some(item)
                     if hand != inventory.active
@@ -730,6 +738,11 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 // A pen draws a heretic's rune, the codex drains, the grasp erases a rune.
                 Some(held)
                     if crate::antag::heretic::server::item_interaction(
+                        world, client, mob, held, target,
+                    ) => {}
+                // Bot parts on bot assemblies and what starts them (`crate::bots`).
+                Some(held)
+                    if crate::bots::construction::item_interaction(
                         world, client, mob, held, target,
                     ) => {}
                 // Frames, and screwdrivers and crowbars on machines that come apart

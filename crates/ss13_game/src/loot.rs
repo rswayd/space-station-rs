@@ -211,7 +211,7 @@ fn click_alt(world: &mut World, client: Entity, mob: Entity, target: Entity) -> 
         crate::storage::open_view(world, client, mob, target);
         return true;
     }
-    crate::modpc::pda::alt_click(world, mob, target)
+    crate::bots::click_alt(world, mob, target) || crate::modpc::pda::alt_click(world, mob, target)
 }
 
 /// `try_open_loot_panel_on` -> `/datum/lootpanel/open(get_turf(target))`.

@@ -5,6 +5,7 @@
 mod atmos_machinery;
 mod border;
 mod botany;
+mod bots;
 mod breath;
 mod brothers;
 mod cargo;

@@ -17,6 +17,7 @@ pub mod atmos_handbook;
 pub mod atmos_machine;
 pub mod audit;
 pub mod border;
+pub mod bots;
 pub mod cable;
 pub mod cargo;
 pub mod circuit;
@@ -63,6 +64,7 @@ use ss13_proto::ProtoAppExt;
 pub use atmos::{DmArea, DmAtmosPass, DmTurfAtmos};
 pub use atmos_machine::DmAtmosDevice;
 pub use border::DmBorder;
+pub use bots::{BOT_RUNTIME_TYPES, DmNavBeacon};
 pub use cable::DmCable;
 pub use circuit::{CircuitPart, DmCircuit, DmMachine, FRAME_RUNTIME_TYPES};
 pub use clothing::{DmClothing, DmTank};
@@ -290,6 +292,7 @@ impl Plugin for DmProtoPlugin {
             .register_proto_component::<DmArmor>("dm_armor")
             .register_proto_component::<DmDockingPort>("dm_docking_port")
             .register_proto_component::<DmMailSort>("dm_mail_sort")
+            .register_proto_component::<DmNavBeacon>("dm_navbeacon")
             .register_proto_component::<DmTool>(construct::TOOL_COMPONENT)
             .register_proto_component::<DmStack>(construct::STACK_COMPONENT)
             .register_proto_component::<DmTurfBuild>(construct::TURF_COMPONENT)

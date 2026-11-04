@@ -64,6 +64,19 @@ pub enum Key {
     MigrationPath,
     /// `BB_BASIC_MOB_RETALIATE_LIST`.
     RetaliateList,
+    /// Bots (`crate::bots::ai`): `BB_BEACON_TARGET`, `BB_PREVIOUS_BEACON_TARGET`,
+    /// `BB_BOT_SUMMON_TARGET`, `BB_BOT_BEACON_COOLDOWN`, `BB_SALUTE_COOLDOWN`,
+    /// `BB_TEMPORARY_IGNORE_LIST` (target -> until), `BB_PATIENT_IN_CRIT`,
+    /// `BB_POST_CLEAN_COOLDOWN`, and the medbot's and firebot's announcement cooldowns.
+    BeaconTarget,
+    PreviousBeacon,
+    SummonTarget,
+    BeaconCooldown,
+    SaluteCooldown,
+    IgnoreList,
+    PatientInCrit,
+    PostCleanCooldown,
+    AnnounceCooldown,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -194,6 +207,8 @@ pub struct AiController {
     pub traits: u32,
     /// tg `ai_retaliate` on the mob ([`Retaliates`]).
     pub retaliates: bool,
+    /// tg `cancel_current_plan` asked from outside (a bot's reset): done before the next tick.
+    pub cancel: bool,
     active: u32,
 }
 
@@ -210,6 +225,7 @@ impl AiController {
             last_tick: 0.0,
             traits: built.traits,
             retaliates: built.retaliates,
+            cancel: false,
             active: 0,
         })
     }
@@ -355,7 +371,13 @@ fn plan(world: &mut World) {
                 controller.movement.stop();
             }
         }
-        if controller.status != AiStatus::Off {
+        if std::mem::take(&mut controller.cancel) {
+            with_ctx(world, mob, &mut controller, now, 0.0, |tree, ctx| {
+                tree.reset(ctx)
+            });
+        }
+        // tg pauses a controller while its pawn is in a `do_after` (a bot's task).
+        if controller.status != AiStatus::Off && !crate::bots::busy(world, mob) {
             stats.on += 1;
             stats.ticked += 1;
             let spt = if controller.last_tick > 0.0 {
@@ -421,9 +443,11 @@ fn expected_status(world: &World, mob: Entity, players: &[TilePos]) -> AiStatus 
     let traits = e.get::<AiController>().map_or(0, |c| c.traits);
     let dead = e.get::<Stat>().is_some_and(|s| *s != Stat::Conscious);
     // A closet is not a turf: tg `get_turf` still finds one, but the mob cannot act inside.
+    // A bot that is off cannot run (`/datum/ai_controller/basic_controller/bot/get_able_to_run`).
     if e.contains::<PlayerMob>()
         || (dead && traits & CAN_ACT_WHILE_DEAD == 0)
         || e.contains::<crate::closets::InCloset>()
+        || e.get::<crate::bots::Bot>().is_some_and(|b| !b.on())
     {
         return AiStatus::Off;
     }

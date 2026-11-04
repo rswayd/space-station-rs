@@ -303,7 +303,7 @@ fn plain_name(name: &str) -> String {
 }
 
 /// Points the mob's sprite at `state` of `icon`, when the manifest has it.
-fn set_icon_state(world: &mut World, entity: Entity, icon: &str, state: &str) {
+pub(crate) fn set_icon_state(world: &mut World, entity: Entity, icon: &str, state: &str) {
     let Some(id) = world
         .get_resource::<IconIndex>()
         .and_then(|i| i.get(icon, state))
@@ -515,6 +515,8 @@ fn death(world: &mut World, mob: Entity, basic: &BasicMob) {
         return;
     }
     if def.basic_mob_flags & DEL_ON_DEATH != 0 {
+        // A bot blows apart first (`/mob/living/basic/bot/death` -> `explode`).
+        crate::bots::explode(world, mob);
         world.despawn(mob);
         return;
     }
@@ -534,6 +536,7 @@ pub fn examine_lines(world: &World, mob: Entity, lines: &mut Vec<crate::examine:
     {
         lines.push((Span::Italics, desc));
     }
+    crate::bots::examine_lines(world, mob, lines);
     if world.get::<Stat>(mob) == Some(&Stat::Dead) {
         // tg `span_deadsay`, untranslated in BandaStation; the plural pronoun of
         // `p_they()` without a gender.

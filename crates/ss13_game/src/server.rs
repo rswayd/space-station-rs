@@ -248,6 +248,7 @@ impl Plugin for GameServerPlugin {
         .add_plugins(crate::records::RecordsServerPlugin)
         .add_plugins(crate::events::EventsServerPlugin)
         .add_plugins(crate::mobs::MobsServerPlugin)
+        .add_plugins(crate::bots::BotsServerPlugin)
         .add_plugins(crate::mecha::MechaServerPlugin)
         .add_plugins(crate::disposals::DisposalsServerPlugin)
         .add_plugins(crate::genetics::GeneticsServerPlugin)
