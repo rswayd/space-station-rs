@@ -1762,6 +1762,10 @@ pub fn interact(
 /// `click_alt`: portables give back their tank; pumps and filters go to their maximum;
 /// thermomachines cycle T20C -> max -> min.
 fn click_alt(world: &mut World, client: Entity, mob: Entity, target: Entity) -> bool {
+    // `gas_receiver/click_alt` replaces the tank's.
+    if super::portable::toggle_receiver(world, client, target) {
+        return true;
+    }
     if world.get::<PortableAtmos>(target).is_some() {
         if eject_tank(world, target, mob) {
             tell(world, client, Span::Notice, "Вы вынимаете баллон.");
@@ -2048,7 +2052,13 @@ pub fn item_interaction(
         return true;
     }
     if tool == Some(ToolKind::Multitool)
-        && super::control::multitool_act(world, client, held, target, modifiers.right)
+        && (super::portable::bluespace_multitool(world, client, held, target)
+            || super::control::multitool_act(world, client, held, target, modifiers.right))
+    {
+        return true;
+    }
+    if tool == Some(ToolKind::Wirecutters)
+        && super::portable::receiver_wirecutter(world, client, target)
     {
         return true;
     }

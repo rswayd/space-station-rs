@@ -35,7 +35,7 @@
 Скруббер, отправляющий собранный газ через блюспейс в привязанный приёмник на трубной сети.
 
 - **Код:** [`scrubber/bluespace`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/portable/bluespace_scrubber.dm#L2), [`/obj/machinery/portable_atmospherics/gas_receiver`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/portable/bluespace_scrubber.dm#L73)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/atmos_machinery/portable.rs` (`BluespaceScrubber`, `GasReceiver`, `process_receivers`): блюспейс-скруббер скребёт как портативный (окно `PortableScrubber`, порт, баллон); мультитул кладёт приёмник в буфер и привязывает его к скрубберу (чужой буфер — «Неверный буфер»); включённый и не сломанный приёмник раз в машинный тик (2 с) забирает отфильтрованные газы каждого привязанного скруббера (пока его давление ниже `overpressure_m` скруббера) и тянет 500 Вт × 2 с с APC зоны на каждый; alt-клик включает/выключает, кусачки отвязывают все скрубберы, удалённый приёмник забывается; спрайты `bluespace_gas_receiver_[on]` с `siphon-open`/`siphon-connector`. Платы и сборка машин → ../engineering/machines.md, узел техвеба → ../science/research.md
 
 _«Газовые баллоны (/obj/item/tank)» описано в [../items/tanks.md](../items/tanks.md)._
 

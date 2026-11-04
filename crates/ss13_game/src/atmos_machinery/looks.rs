@@ -540,8 +540,8 @@ fn cardinal(from: TilePos, to: TilePos) -> u8 {
 }
 
 /// Canisters: the pressure light and the connector overlay (`canister/update_overlays`);
-/// portable pumps and scrubbers: `[initial(icon_state)]_[on]`, the open tank and connector
-/// overlays (`pump`/`scrubber` `update_overlays`, none for huge scrubbers); air alarms: the
+/// portable pumps, scrubbers and gas receivers: `[initial(icon_state)]_[on]`, the open tank
+/// and connector overlays (`update_overlays`, none for huge scrubbers); air alarms: the
 /// alert light (`airalarm/update_overlays`).
 fn redraw_portables(world: &mut World, icons: &AtmosIcons) {
     let mut q = world.query_filtered::<(
@@ -550,6 +550,7 @@ fn redraw_portables(world: &mut World, icons: &AtmosIcons) {
             Option<&Canister>,
             Option<&super::portable::PortablePump>,
             Option<&super::portable::PortableScrubber>,
+            Option<&super::portable::GasReceiver>,
         ),
         Option<&super::PortableAtmos>,
         Option<&AirAlarm>,
@@ -560,6 +561,7 @@ fn redraw_portables(world: &mut World, icons: &AtmosIcons) {
         Changed<Canister>,
         Changed<super::portable::PortablePump>,
         Changed<super::portable::PortableScrubber>,
+        Changed<super::portable::GasReceiver>,
         Changed<super::PortableAtmos>,
         Changed<AirAlarm>,
         Added<Unpowered>,
@@ -567,11 +569,14 @@ fn redraw_portables(world: &mut World, icons: &AtmosIcons) {
     // (state, emissive): tg adds the alert light twice, as a sprite and as an emissive.
     let mut updates: Vec<(Entity, Vec<(IconStateId, bool)>)> = Vec::new();
     let mut bases: Vec<(Entity, IconStateId)> = Vec::new();
-    for (e, (canister, pump, scrubber), portable, alarm, unpowered, atom) in q.iter(world) {
+    for (e, (canister, pump, scrubber, receiver), portable, alarm, unpowered, atom) in q.iter(world)
+    {
         let mut overlays = Vec::new();
+        // `gas_receiver/update_overlays` uses the pump's `siphon-*` states.
         let machine = pump
             .map(|p| (p.on, Some("siphon")))
-            .or_else(|| scrubber.map(|s| (s.on, (!s.huge).then_some("scrubber"))));
+            .or_else(|| scrubber.map(|s| (s.on, (!s.huge).then_some("scrubber"))))
+            .or_else(|| receiver.map(|r| (r.on, Some("siphon"))));
         if let Some((on, prefix)) = machine {
             if let Some(s) = icons.get(&atom.icon, &format!("{}_{}", atom.icon_state, u8::from(on)))
             {

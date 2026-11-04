@@ -3,6 +3,10 @@
 //! connector port it moves into the [`Pipenet`] (`Pipenet::attach`) and the port's pipeline
 //! reconciles with it, as tg `connect` does. A gas tank inserted into one (`holding`) is where
 //! it releases, pumps or scrubs instead of the tile.
+//!
+//! Bluespace scrubbers (`portable/bluespace_scrubber.dm`) scrub like portable scrubbers; a gas
+//! receiver they are linked to (multitool: the receiver into the buffer, then onto the scrubber)
+//! pulls their scrubbed gases into its own tank every machine tick while it is on.
 
 use bevy::prelude::*;
 use ss13_atmos::gas::{CELL_VOLUME, MOLAR_ACCURACY, N2STANDARD, O2STANDARD, ONE_ATMOSPHERE, T20C};
@@ -25,6 +29,10 @@ const PORTABLE_SCRUBBER: &str = "/obj/machinery/portable_atmospherics/scrubber";
 const HUGE_SCRUBBER: &str = "/obj/machinery/portable_atmospherics/scrubber/huge";
 const MOVABLE_HUGE_SCRUBBER: &str = "/obj/machinery/portable_atmospherics/scrubber/huge/movable";
 const PORTABLE_ROOT: &str = "/obj/machinery/portable_atmospherics";
+const BLUESPACE_SCRUBBER: &str = "/obj/machinery/portable_atmospherics/scrubber/bluespace";
+pub const GAS_RECEIVER: &str = "/obj/machinery/portable_atmospherics/gas_receiver";
+/// `gas_receiver` `active_power_usage` (`BASE_MACHINE_ACTIVE_CONSUMPTION * 0.5`), per sender.
+pub const RECEIVER_POWER: f64 = 500.0;
 
 /// `CAN_DEFAULT_RELEASE_PRESSURE`, `CAN_MIN_RELEASE_PRESSURE`, `CAN_MAX_RELEASE_PRESSURE`.
 pub const CAN_DEFAULT_RELEASE_PRESSURE: f64 = ONE_ATMOSPHERE;
@@ -201,6 +209,20 @@ pub struct PortableScrubber {
     pub movable: bool,
 }
 
+/// `scrubber/bluespace`: the gas receiver it sends its scrubbed gases to (`target`).
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq)]
+pub struct BluespaceScrubber {
+    pub target: Option<Entity>,
+}
+
+/// `/obj/machinery/portable_atmospherics/gas_receiver`. Its `senders` are the bluespace
+/// scrubbers whose [`BluespaceScrubber::target`] it is: tg keeps both sides of the link, here
+/// the scrubber's side is the only one, so nothing dangles when either goes.
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq)]
+pub struct GasReceiver {
+    pub on: bool,
+}
+
 /// `create_gas()`: `filled` of `maximum_pressure` of the canister's gas (air: O2/N2 mix).
 // shortcut: special mixes (`anesthetic_mix`, `fusion_test`) start with their `gas_type` only.
 pub fn canister_gas(dm: &DmAtmosDevice) -> GasMixture {
@@ -302,6 +324,9 @@ pub fn init_portables(world: &mut World, found: &[(Entity, DmAtmosDevice, TilePo
                 huge: is_under(path, HUGE_SCRUBBER),
                 movable: is_under(path, MOVABLE_HUGE_SCRUBBER),
             });
+            if is_under(path, BLUESPACE_SCRUBBER) {
+                entity.insert(BluespaceScrubber::default());
+            }
         } else if is_under(path, super::pipe_scrubber::PIPE_SCRUBBER) {
             entity.insert(super::pipe_scrubber::PipeScrubber {
                 on: dm.on,
@@ -314,8 +339,8 @@ pub fn init_portables(world: &mut World, found: &[(Entity, DmAtmosDevice, TilePo
                 filter: super::gas_mask(&dm.filter_types),
                 tank: super::pipe_scrubber::InternalTank::new(f64::from(quality.unit())),
             });
-        } else {
-            // shortcut: bluespace sinks hold gas but do nothing yet.
+        } else if is_under(path, GAS_RECEIVER) {
+            entity.insert(GasReceiver { on: dm.on });
         }
         entity.insert(PortableAtmos {
             air: Some(air),
@@ -538,6 +563,179 @@ fn scrub_tiles(
             air.merge(&taken);
         }
     }
+}
+
+/// `scrubber/bluespace/transfer_gas` minus the receiver's pressure check: every scrubbed gas
+/// (`removal_ratio = 1`) leaves the scrubber's tank. `None` when it holds none of them.
+pub fn take_scrubbed(air: &mut PipeAir, filter: u32) -> Option<GasMixture> {
+    let taken = scrub_gases(&mut air.gas, filter, 1.0, MOLAR_ACCURACY * 1000.0);
+    (taken.total_moles() > 0.0).then_some(taken)
+}
+
+/// `gas_receiver/process` once per machine tick: each linked scrubber hands its scrubbed gases
+/// to a receiver that is on and not broken, and the receiver draws its active power per sender.
+pub fn process_receivers(world: &mut World, mut last: Local<Option<u64>>) {
+    let Some(ticks) = world
+        .get_resource::<crate::power::MachineTicks>()
+        .map(|t| t.0)
+    else {
+        return;
+    };
+    if last.replace(ticks) == Some(ticks) {
+        return;
+    }
+    let mut q = world.query::<(Entity, &BluespaceScrubber)>();
+    let links: Vec<(Entity, Option<Entity>)> = q.iter(world).map(|(e, s)| (e, s.target)).collect();
+    for (scrubber, target) in links {
+        let Some(receiver) = target else { continue };
+        let Some(state) = world.get::<GasReceiver>(receiver).copied() else {
+            // `clear_teleport_target`: the receiver is gone.
+            if let Some(mut s) = world.get_mut::<BluespaceScrubber>(scrubber) {
+                s.target = None;
+            }
+            continue;
+        };
+        let broken = world
+            .get::<crate::obj_damage::Integrity>(receiver)
+            .is_some_and(|i| i.broken);
+        if !state.on || broken {
+            continue;
+        }
+        transfer_gas(world, scrubber, receiver);
+        crate::power::machine_use_energy(
+            world,
+            receiver,
+            RECEIVER_POWER * crate::power::MACHINE_TICK_SECS,
+            false,
+        );
+    }
+}
+
+/// `scrubber/bluespace/transfer_gas(receiver.air_contents)`: nothing while the receiver is at
+/// the scrubber's `overpressure_m` atmospheres.
+fn transfer_gas(world: &mut World, scrubber: Entity, receiver: Entity) {
+    let Some(s) = world.get::<PortableScrubber>(scrubber) else {
+        return;
+    };
+    let (filter, limit) = (s.filter, s.overpressure_m * ONE_ATMOSPHERE);
+    world.resource_scope(|world, mut net: Mut<Pipenet>| {
+        let full = world
+            .get::<PortableAtmos>(receiver)
+            .and_then(|p| p.air(&net))
+            .is_none_or(|a| a.pressure() >= limit);
+        if full {
+            return;
+        }
+        let Some(mut from) = world.get_mut::<PortableAtmos>(scrubber) else {
+            return;
+        };
+        // The gas is no part of the look (see `process_portables`).
+        let Some(taken) = from
+            .bypass_change_detection()
+            .air_mut(&mut net)
+            .and_then(|a| take_scrubbed(a, filter))
+        else {
+            return;
+        };
+        if let Some(mut to) = world.get_mut::<PortableAtmos>(receiver)
+            && let Some(air) = to.bypass_change_detection().air_mut(&mut net)
+        {
+            air.merge(&taken);
+        }
+    });
+}
+
+fn plain_name(world: &World, e: Entity) -> String {
+    world
+        .get::<ss13_mapload::DmName>(e)
+        .map(|n| crate::vending::plain_name(&n.name).to_owned())
+        .unwrap_or_default()
+}
+
+/// `gas_receiver/multitool_act` (into the buffer) and `scrubber/bluespace/multitool_act` (links
+/// the buffered receiver). True when the click was theirs.
+pub fn bluespace_multitool(
+    world: &mut World,
+    client: Entity,
+    held: Entity,
+    target: Entity,
+) -> bool {
+    use crate::tools::{multitool_buffer, set_multitool_buffer, tell};
+    if world.get::<GasReceiver>(target).is_some() {
+        set_multitool_buffer(world, held, target);
+        tell(
+            world,
+            client,
+            ss13_chat::Span::Notice,
+            "Сохранено в буфер мультитула.",
+        );
+        return true;
+    }
+    if world.get::<BluespaceScrubber>(target).is_none() {
+        return false;
+    }
+    let Some(receiver) =
+        multitool_buffer(world, held).filter(|&b| world.get::<GasReceiver>(b).is_some())
+    else {
+        tell(world, client, ss13_chat::Span::Warning, "Неверный буфер.");
+        return true;
+    };
+    if let Some(mut s) = world.get_mut::<BluespaceScrubber>(target) {
+        s.target = Some(receiver);
+    }
+    let text = format!(
+        "Вы успешно связываете {} с {}.",
+        plain_name(world, target),
+        plain_name(world, receiver)
+    );
+    tell(world, client, ss13_chat::Span::Notice, text);
+    true
+}
+
+/// `gas_receiver/wirecutter_act`: every scrubber linked to it lets go.
+pub fn receiver_wirecutter(world: &mut World, client: Entity, target: Entity) -> bool {
+    if world.get::<GasReceiver>(target).is_none() {
+        return false;
+    }
+    let mut q = world.query::<&mut BluespaceScrubber>();
+    for mut s in q.iter_mut(world) {
+        if s.target == Some(target) {
+            s.target = None;
+        }
+    }
+    crate::tools::tell(
+        world,
+        client,
+        ss13_chat::Span::Warning,
+        "Все скрубберы отключены от приёмника.",
+    );
+    true
+}
+
+/// `gas_receiver/click_alt`: on or off, unless broken. True when the click was its.
+pub fn toggle_receiver(world: &mut World, client: Entity, target: Entity) -> bool {
+    let broken = world
+        .get::<crate::obj_damage::Integrity>(target)
+        .is_some_and(|i| i.broken);
+    let Some(mut r) = world.get_mut::<GasReceiver>(target) else {
+        return false;
+    };
+    if broken {
+        return true;
+    }
+    r.on = !r.on;
+    let on = r.on;
+    info!(
+        "gas receiver {target:?} was turned {}",
+        if on { "on" } else { "off" }
+    );
+    let text = if on {
+        "включён"
+    } else {
+        "выключен"
+    };
+    crate::tools::tell(world, client, ss13_chat::Span::Notice, text);
+    true
 }
 
 /// `connect(new_port)`: the portable's gas joins the port's pipeline. False when the port is

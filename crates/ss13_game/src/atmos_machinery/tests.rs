@@ -1035,3 +1035,124 @@ fn a_suppressing_nob_crystal_stops_reactions_in_portables() {
     assert_eq!(plasma(&world, quiet), 100.0);
     assert!(plasma(&world, lit) < 100.0, "{}", plasma(&world, lit));
 }
+
+#[test]
+fn bluespace_scrubber_sends_its_scrubbed_gas_to_the_linked_receiver() {
+    use super::portable::{
+        BluespaceScrubber, GasReceiver, bluespace_multitool, process_receivers,
+        receiver_wirecutter, toggle_receiver,
+    };
+    use bevy::ecs::system::RunSystemOnce;
+    let mut world = World::new();
+    world.insert_resource(Pipenet::default());
+    world.insert_resource(crate::power::MachineTicks(1));
+    world.init_resource::<bevy::ecs::message::Messages<ss13_net::chat::server::SendChat>>();
+    let client = world.spawn_empty().id();
+    // Plasma and CO2 scrubbed, O2 not; 2000 L tanks.
+    let mut gas = o2(100.0, T20C);
+    gas.set(GasId::PLASMA, 30.0);
+    gas.set(GasId::CO2, 10.0);
+    let filter = gas_mask(&["plasma".into(), "co2".into()]);
+    let scrubber = world
+        .spawn((
+            pos(1, 1),
+            PortableAtmos {
+                air: Some(PipeAir::with_gas(gas, 2000.0)),
+                port: None,
+                holding: None,
+            },
+            PortableScrubber {
+                on: false,
+                filter,
+                volume_rate: 650.0,
+                overpressure_m: 100.0,
+                huge: false,
+                movable: false,
+            },
+            BluespaceScrubber::default(),
+        ))
+        .id();
+    let receiver = world
+        .spawn((
+            pos(9, 9),
+            PortableAtmos {
+                air: Some(PipeAir::new(2000.0)),
+                port: None,
+                holding: None,
+            },
+            GasReceiver::default(),
+        ))
+        .id();
+    let tool = world.spawn_empty().id();
+    let air = |world: &World, e| {
+        world
+            .get::<PortableAtmos>(e)
+            .unwrap()
+            .air
+            .clone()
+            .unwrap()
+            .gas
+    };
+
+    // Unlinked: a scrubber with an empty buffer refuses; the receiver goes into the buffer, then
+    // onto the scrubber.
+    assert!(bluespace_multitool(&mut world, client, tool, scrubber));
+    assert_eq!(
+        world.get::<BluespaceScrubber>(scrubber).unwrap().target,
+        None
+    );
+    assert!(bluespace_multitool(&mut world, client, tool, receiver));
+    assert!(bluespace_multitool(&mut world, client, tool, scrubber));
+    assert_eq!(
+        world.get::<BluespaceScrubber>(scrubber).unwrap().target,
+        Some(receiver)
+    );
+
+    // Off: nothing moves.
+    world.run_system_once(process_receivers).unwrap();
+    assert_eq!(air(&world, receiver).total_moles(), 0.0);
+
+    // On: tg `transfer_gas` moves each scrubbed gas by its share of them (removal ratio 1):
+    // plasma 30 * 30/40, CO2 10 * 10/40; oxygen stays.
+    assert!(toggle_receiver(&mut world, client, receiver));
+    world.run_system_once(process_receivers).unwrap();
+    let got = air(&world, receiver);
+    assert!(close(got.get(GasId::PLASMA), 22.5), "{got:?}");
+    assert!(close(got.get(GasId::CO2), 2.5), "{got:?}");
+    assert_eq!(got.get(GasId::O2), 0.0);
+    assert!(close(air(&world, scrubber).get(GasId::PLASMA), 7.5));
+    assert_eq!(air(&world, scrubber).get(GasId::O2), 100.0);
+
+    // A receiver at the scrubber's `overpressure_m` takes nothing.
+    world
+        .get_mut::<PortableScrubber>(scrubber)
+        .unwrap()
+        .overpressure_m = 0.0;
+    let before = air(&world, scrubber).get(GasId::PLASMA);
+    world.run_system_once(process_receivers).unwrap();
+    assert_eq!(air(&world, scrubber).get(GasId::PLASMA), before);
+    world
+        .get_mut::<PortableScrubber>(scrubber)
+        .unwrap()
+        .overpressure_m = 100.0;
+
+    // Wirecutters drop every sender; a despawned receiver is forgotten too.
+    assert!(receiver_wirecutter(&mut world, client, receiver));
+    assert_eq!(
+        world.get::<BluespaceScrubber>(scrubber).unwrap().target,
+        None
+    );
+    assert!(bluespace_multitool(&mut world, client, tool, scrubber));
+    world.despawn(receiver);
+    world.run_system_once(process_receivers).unwrap();
+    assert_eq!(
+        world.get::<BluespaceScrubber>(scrubber).unwrap().target,
+        None
+    );
+    // A stale buffer is no receiver.
+    assert!(bluespace_multitool(&mut world, client, tool, scrubber));
+    assert_eq!(
+        world.get::<BluespaceScrubber>(scrubber).unwrap().target,
+        None
+    );
+}

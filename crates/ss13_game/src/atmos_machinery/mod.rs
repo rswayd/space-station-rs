@@ -227,6 +227,7 @@ impl Plugin for AtmosMachineryPlugin {
                     crystallizer::crystallizer_looks,
                     devices::glow_he_pipes,
                     canister::process_canister_shielding,
+                    portable::process_receivers,
                     gas_visuals::sync_gas_visuals.run_if(air_tick_due),
                 )
                     .chain()
