@@ -17,7 +17,7 @@
 Таблетку глотают или растворяют в стакане; пластырь клеится на кожу и медленно всасывается; производятся химмастером и пресс-машиной.
 
 - **Код:** [`/obj/item/reagent_containers/applicator/pill`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/reagents/reagent_containers/pill.dm#L1), [`/obj/item/reagent_containers/applicator/patch`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/reagents/reagent_containers/patch.dm#L1)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/chem.rs`: таблетки (проглатывание, растворение); нет пластырей и сахарной оболочки таблеток
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/chem.rs`: таблетки (проглатывание, растворение), сахарная оболочка (`PillShell`: содержимое попадает в желудок через её секунды, сахар из стакана утолщает, вода растворяет, осмотр), печать химмастером (`crates/ss13_game/src/chem_master.rs`, пластыри печатаются как предметы); нет наклеивания пластырей и их всасывания, вкуса оболочки
 
 ### Пипетки
 Капают малый объём, в том числе в глаза.

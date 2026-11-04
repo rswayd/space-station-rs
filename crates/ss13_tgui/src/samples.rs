@@ -528,6 +528,7 @@ pub fn sample(name: &str) -> Option<Sample> {
                     id: (*name).into(),
                     ph: 7.0,
                     color: (*color).into(),
+                    ph_col: "green".into(),
                 })
                 .collect(),
                 beaker: Some(DispenserBeaker {
@@ -537,6 +538,8 @@ pub fn sample(name: &str) -> Option<Sample> {
                     current_volume: 20.0,
                     contents: vec![("Space Cola".into(), 10.0), ("Ice".into(), 10.0)],
                 }),
+                recipes: vec!["Cuba Libre".into(), "Iced Coffee".into()],
+                recording_recipe: None,
             },
         ),
         ChemMasterUi::NAME => chem_master(),

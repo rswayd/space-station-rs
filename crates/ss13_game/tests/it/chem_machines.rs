@@ -1,7 +1,8 @@
 //! The chemist's machines over real WebTransport on 127.0.0.1: a beaker into the ChemMaster,
 //! reagents moved into its buffer and destroyed, two named pills printed with a thicker sugar
 //! shell and one swallowed (its contents reach the stomach when the shell is gone); a beaker in
-//! the reaction chamber heated until its reaction runs, and a buffer injected into it.
+//! the reaction chamber heated until its reaction runs, and a buffer injected into it; a chem
+//! dispenser's recipe recorded, saved and dispensed, and an emag unlocking its toxin.
 
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
@@ -41,6 +42,7 @@ const TYPES: &str = r##"{
         "default_container": { "path": "/obj/item/reagent_containers/cup/bottle" } } },
     "/datum/reagent/water": { "parent": "/datum/reagent", "declared_vars": {
         "name": "Water", "color": "#AAAAAA77" } },
+    "/datum/reagent/toxin": { "parent": "/datum/reagent", "declared_vars": { "name": "Toxin" } },
     "/datum/reagent/alpha": { "parent": "/datum/reagent", "declared_vars": { "name": "Alpha" } },
     "/datum/reagent/beta": { "parent": "/datum/reagent", "declared_vars": { "name": "Beta" } },
     "/datum/reagent/gamma": { "parent": "/datum/reagent", "declared_vars": { "name": "Gamma" } },
@@ -65,6 +67,8 @@ const TYPES: &str = r##"{
             { "assoc": [{ "path": "/datum/reagent/alpha" }, 1] },
             { "assoc": [{ "path": "/datum/reagent/beta" }, 1] }] } } },
     "/datum/stock_part": { "parent": "/datum" },
+    "/datum/stock_part/capacitor": { "parent": "/datum/stock_part", "declared_vars": {
+        "physical_object_type": { "path": "/obj/item/stock_parts/capacitor" } } },
     "/datum/stock_part/servo": { "parent": "/datum/stock_part", "declared_vars": {
         "physical_object_type": { "path": "/obj/item/stock_parts/servo" } } },
     "/datum/stock_part/micro_laser": { "parent": "/datum/stock_part", "declared_vars": {
@@ -84,6 +88,16 @@ const TYPES: &str = r##"{
     "/obj/machinery": { "parent": "/obj", "declared_vars": { "use_power": 1,
         "idle_power_usage": 100, "active_power_usage": 1000, "power_channel": 1,
         "density": 1, "anchored": 1 } },
+    "/obj/machinery/chem_dispenser": { "parent": "/obj/machinery", "vars": {
+        "name": "chem dispenser" }, "declared_vars": {
+        "name": "chem dispenser", "icon": { "resource": "c.dmi" }, "icon_state": "dispenser",
+        "amount": 30, "power_cost": 100, "recharge_amount": 300, "dispensed_temperature": 300,
+        "base_reagent_purity": 1, "dispensable_reagents": { "list": [] },
+        "upgrade_reagents": { "list": [] }, "emagged_reagents": { "list": [] },
+        "default_dispensable_reagents": { "list": [{ "path": "/datum/reagent/water" }] },
+        "default_upgrade_reagents": { "list": [] },
+        "default_emagged_reagents": { "list": [{ "path": "/datum/reagent/toxin" }] },
+        "circuit": { "path": "/obj/item/circuitboard/machine/chem_dispenser" } } },
     "/obj/machinery/chem_master": { "parent": "/obj/machinery", "vars": {
         "name": "ChemMaster 3000" }, "declared_vars": { "name": "ChemMaster 3000",
         "icon": { "resource": "c.dmi" }, "icon_state": "chemmaster",
@@ -100,6 +114,11 @@ const TYPES: &str = r##"{
         "worn_icon": null, "worn_icon_state": null, "attack_speed": 8, "tool_behaviour": null,
         "toolspeed": 1 } },
     "/obj/item/stock_parts": { "parent": "/obj/item" },
+    "/obj/item/stock_parts/capacitor": { "parent": "/obj/item/stock_parts", "declared_vars": {
+        "name": "capacitor", "rating": 1 } },
+    "/obj/item/stock_parts/power_store": { "parent": "/obj/item/stock_parts", "declared_vars": {
+        "maxcharge": 1000000, "chargerate": 1000000 } },
+    "/obj/item/stock_parts/power_store/cell": { "parent": "/obj/item/stock_parts/power_store" },
     "/obj/item/stock_parts/servo": { "parent": "/obj/item/stock_parts", "declared_vars": {
         "name": "servo", "rating": 1 } },
     "/obj/item/stock_parts/micro_laser": { "parent": "/obj/item/stock_parts", "declared_vars": {
@@ -107,6 +126,11 @@ const TYPES: &str = r##"{
     "/obj/item/circuitboard": { "parent": "/obj/item", "declared_vars": { "build_path": null } },
     "/obj/item/circuitboard/machine": { "parent": "/obj/item/circuitboard", "declared_vars": {
         "needs_anchored": 1, "req_components": null, "def_components": null } },
+    "/obj/item/circuitboard/machine/chem_dispenser": { "parent": "/obj/item/circuitboard/machine",
+        "declared_vars": { "build_path": { "path": "/obj/machinery/chem_dispenser" },
+        "req_components": { "list": [
+            { "assoc": [{ "path": "/datum/stock_part/capacitor" }, 1] },
+            { "assoc": [{ "path": "/obj/item/stock_parts/power_store/cell" }, 1] } ] } } },
     "/obj/item/circuitboard/machine/chem_master": { "parent": "/obj/item/circuitboard/machine",
         "declared_vars": { "build_path": { "path": "/obj/machinery/chem_master" },
         "req_components": { "list": [
@@ -154,6 +178,8 @@ const TYPES: &str = r##"{
     "/obj/item/reagent_containers/applicator/pill/style/red": {
         "parent": "/obj/item/reagent_containers/applicator/pill/style",
         "declared_vars": { "icon_state": "pill1" } },
+    "/obj/item/card/emag": { "parent": "/obj/item/card", "vars": { "name": "cryptographic sequencer" },
+        "declared_vars": { "name": "cryptographic sequencer", "icon_state": "emag" } },
     "/obj/item/card": { "parent": "/obj/item", "declared_vars": { "inhand_icon_state": "card-id" } },
     "/obj/item/card/id": { "parent": "/obj/item/card", "declared_vars": {
         "access": { "list": [] }, "icon_state": "card_grey", "slot_flags": 256,
@@ -187,13 +213,14 @@ const TYPES: &str = r##"{
 /// east of it and the reaction chamber (with buffers) west.
 const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 "f" = (/turf/open/floor,/area/space)
-"s" = (/obj/effect/landmark/start/assistant,/obj/item/reagent_containers/cup/beaker/water,/obj/item/reagent_containers/cup/beaker/mix,/turf/open/floor,/area/space)
+"s" = (/obj/effect/landmark/start/assistant,/obj/item/reagent_containers/cup/beaker/water,/obj/item/reagent_containers/cup/beaker/mix,/obj/item/reagent_containers/cup/beaker,/obj/item/card/emag,/turf/open/floor,/area/space)
+"D" = (/obj/machinery/chem_dispenser,/turf/open/floor,/area/space)
 "M" = (/obj/machinery/chem_master,/turf/open/floor,/area/space)
 "H" = (/obj/machinery/chem_heater/withbuffer,/turf/open/floor,/area/space)
 
 (1,1,1) = {"
 wwwww
-wfffw
+wfDfw
 wHsMw
 wfffw
 wwwww
@@ -203,11 +230,12 @@ wwwww
 const SPAWN: TilePos = TilePos::new(3, 3, 1);
 const MASTER: TilePos = TilePos::new(4, 3, 1);
 const HEATER: TilePos = TilePos::new(2, 3, 1);
+const DISPENSER: TilePos = TilePos::new(3, 4, 1);
 const PILL: &str = "/obj/item/reagent_containers/applicator/pill/style/red";
 const WATER: &str = "/datum/reagent/water";
 
 /// Manifest order = `IconStateId`.
-const STATES: [(&str, &str); 12] = [
+const STATES: [(&str, &str); 14] = [
     ("t.dmi", "floor"),
     ("t.dmi", "wall"),
     ("l.dmi", "x2"),
@@ -220,6 +248,8 @@ const STATES: [(&str, &str); 12] = [
     ("c.dmi", "pill0"),
     ("c.dmi", "pill1"),
     ("i.dmi", "toy"),
+    ("c.dmi", "dispenser"),
+    ("i.dmi", "emag"),
 ];
 
 fn fixture_assets(test: &str) -> PathBuf {
@@ -230,6 +260,11 @@ fn fixture_assets(test: &str) -> PathBuf {
         "/obj/effect/landmark/start/assistant",
         "/obj/machinery/chem_master",
         "/obj/machinery/chem_heater/withbuffer",
+        "/obj/machinery/chem_dispenser",
+        "/obj/item/card/emag",
+        "/obj/item/stock_parts/capacitor",
+        "/obj/item/stock_parts/power_store/cell",
+        "/obj/item/circuitboard/machine/chem_dispenser",
         "/obj/item/reagent_containers/cup/beaker/water",
         "/obj/item/reagent_containers/cup/beaker/mix",
         "/obj/item/reagent_containers/cup/beaker",
@@ -575,4 +610,80 @@ fn reaction_chamber_heats_until_the_reaction_runs() {
     });
     let temp = s.get::<Reagents>(beaker).0.chem_temp;
     assert!(temp > 400.0 && temp <= 500.0, "{temp}");
+}
+
+#[test]
+fn dispenser_recipes_and_emag() {
+    use ss13_game::chem_dispenser::ChemDispenser;
+    use ss13_tgui::interfaces::alert::AlertUi;
+    use ss13_tgui::interfaces::chem_dispenser::{ChemDispenserData, ChemDispenserUi};
+
+    let mut s = Station::start("dispenser_recipes_and_emag");
+    let mob = s.players[0].mob;
+    let dispenser = s.machine::<ChemDispenser>(DISPENSER);
+    let beaker = s.items(SPAWN, "/obj/item/reagent_containers/cup/beaker")[0];
+    s.take(beaker);
+    s.click(dispenser);
+    s.run_until("the beaker in the window", |s| {
+        s.window::<ChemDispenserUi>()
+            .is_some_and(|(_, d)| d.beaker.is_some())
+    });
+    let (window, data): (u32, ChemDispenserData) = s.window::<ChemDispenserUi>().unwrap();
+    assert!(data.show_ph, "a chem dispenser shows the pH");
+    assert_eq!(data.chemicals[0].ph_col, "green");
+
+    // Recording: dispensing adds up in the virtual beaker, nothing reaches the real one.
+    s.act(window, "record_recipe", &[]);
+    s.act(window, "amount", &[("target", "10")]);
+    s.act(window, "dispense", &[("reagent", "Water")]);
+    s.act(window, "dispense", &[("reagent", "Water")]);
+    s.run_until("20 recorded", |s| {
+        s.get::<ChemDispenser>(dispenser).recording == Some(vec![("Water".into(), 20.0)])
+    });
+    assert_eq!(s.amount(beaker, WATER), 0.0);
+    s.act(window, "save_recording", &[]);
+    s.run_until("the name prompt", |s| {
+        s.window_id(TextInputUi::NAME).is_some()
+    });
+    let prompt = s.window_id(TextInputUi::NAME).unwrap();
+    s.act(prompt, "submit", &[("entry", "twenty water")]);
+    s.run_until("saved", |s| {
+        let d = s.get::<ChemDispenser>(dispenser);
+        d.recording.is_none() && d.saved_recipes.len() == 1
+    });
+    // An unknown recipe does nothing; the saved one dispenses its 20.
+    s.act(window, "dispense_recipe", &[("recipe", "nope")]);
+    s.act(window, "dispense_recipe", &[("recipe", "twenty water")]);
+    s.run_until("the recipe dispensed", |s| s.amount(beaker, WATER) == 20.0);
+
+    // Clearing asks first.
+    s.act(window, "clear_recipes", &[]);
+    s.run_until("the alert", |s| s.window_id(AlertUi::NAME).is_some());
+    let alert = s.window_id(AlertUi::NAME).unwrap();
+    s.act(alert, "choose", &[("choice", "Yes")]);
+    s.run_until("cleared", |s| {
+        s.get::<ChemDispenser>(dispenser).saved_recipes.is_empty()
+    });
+
+    // The emag adds the toxin, once.
+    s.act(window, "eject", &[]);
+    s.run_until("the beaker back", |s| {
+        s.get::<Inventory>(mob).active_item() == Some(beaker)
+    });
+    s.send(0, ss13_shared::protocol::ClientIntent::DropActive);
+    s.run_until("dropped", |s| {
+        s.get::<Inventory>(mob).active_item().is_none()
+    });
+    let emag = s.items(SPAWN, "/obj/item/card/emag")[0];
+    s.take(emag);
+    s.click(dispenser);
+    s.run_until("emagged", |s| s.get::<ChemDispenser>(dispenser).emagged);
+    let chem = s.server.world().resource::<Chem>().0.clone();
+    let names: Vec<String> = s
+        .get::<ChemDispenser>(dispenser)
+        .dispensable
+        .iter()
+        .map(|&id| chem.def(id).name.clone())
+        .collect();
+    assert_eq!(names, ["Water", "Toxin"]);
 }

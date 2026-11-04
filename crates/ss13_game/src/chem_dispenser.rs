@@ -62,7 +62,30 @@ pub struct ChemDispenser {
     pub power_cost: f32,
     /// Watts.
     pub recharge_amount: f32,
+    /// `saved_recipes`: (name, (reagent name, units)), in saving order.
+    pub saved_recipes: Vec<(String, Vec<(String, f32)>)>,
+    /// `recording_recipe`: what dispensing adds up while recording.
+    pub recording: Option<Vec<(String, f32)>>,
+    /// `show_ph`: off for the bar's dispensers.
+    pub show_ph: bool,
 }
+
+/// What a prompt opened by the window was for.
+#[derive(Component, Clone, Debug)]
+enum DispenserPrompt {
+    /// `clear_recipes`: "Clear all recipes?".
+    Clear(Entity),
+    /// `save_recording`: the recipe's name.
+    Name(Entity),
+    /// `save_recording`: overwrite the recipe of this name?
+    Overwrite(Entity, String),
+}
+
+/// `/obj/item/card/emag`.
+const EMAG: &str = "/obj/item/card/emag";
+/// `MAX_NAME_LEN`.
+const MAX_NAME_LEN: u32 = 42;
+const DRINKS: &str = "/obj/machinery/chem_dispenser/drinks";
 
 pub struct ChemDispenserPlugin;
 
@@ -79,6 +102,9 @@ impl Plugin for ChemDispenserPlugin {
                 Update,
                 (
                     dispenser_acts.in_set(UiSystems::Handle),
+                    prompt_answers
+                        .in_set(UiSystems::Handle)
+                        .after(ss13_tgui::prompt::PromptSystems::Answer),
                     process_dispensers.after(crate::power::PowerSystems),
                 ),
             );
@@ -100,9 +126,13 @@ pub fn setup(world: &mut World, e: Entity) {
         return;
     };
     crate::stock_parts::ensure_parts(world, e);
+    let show_ph = world
+        .get::<ss13_mapload::DmObj>(e)
+        .is_none_or(|o| !crate::obj_damage::is_under(&o.path, DRINKS));
     world.entity_mut(e).insert(ChemDispenser {
         amount: dm.amount,
         emagged: dm.emagged_at_start,
+        show_ph,
         ..default()
     });
     refresh_parts(world, e);
@@ -193,12 +223,38 @@ pub fn item_interaction(
     held: Entity,
     target: Entity,
 ) -> bool {
-    if world.get::<ChemDispenser>(target).is_none() || !chem_container(world, held) {
+    if world.get::<ChemDispenser>(target).is_none() {
+        return false;
+    }
+    if world
+        .get::<ss13_mapload::DmItem>(held)
+        .is_some_and(|i| crate::obj_damage::is_under(&i.path, EMAG))
+    {
+        emag_act(world, client, target);
+        return true;
+    }
+    if !chem_container(world, held) {
         return false;
     }
     replace_beaker(world, mob, target, Some(held));
     open_window(world, client, mob, target);
     true
+}
+
+/// tg `emag_act`: the emagged reagents join the dispensable ones, once.
+pub fn emag_act(world: &mut World, client: Entity, e: Entity) {
+    let Some(d) = world.get::<ChemDispenser>(e) else {
+        return;
+    };
+    if d.emagged {
+        crate::tools::tell(world, client, Span::Warning, "уже взломан!");
+        return;
+    }
+    if let Some(mut d) = world.get_mut::<ChemDispenser>(e) {
+        d.emagged = true;
+    }
+    refresh_parts(world, e);
+    crate::tools::tell(world, client, Span::Notice, "предохранители закорочены");
 }
 
 /// `attack_hand` (the window) and `attack_hand_secondary` (the beaker out).
@@ -322,6 +378,11 @@ pub enum DispenserAct {
     Remove(f32),
     Eject,
     Insert,
+    DispenseRecipe(String),
+    ClearRecipes,
+    RecordRecipe,
+    SaveRecording,
+    CancelRecording,
 }
 
 impl ServerUi for DispenserWindow {
@@ -368,6 +429,7 @@ impl ServerUi for DispenserWindow {
                             id: def.name.clone(),
                             ph: def.ph,
                             color: def.color.clone(),
+                            ph_col: ss13_tgui::interfaces::chem_dispenser::ph_color(def.ph).into(),
                         }
                     })
                     .collect()
@@ -410,10 +472,12 @@ impl ServerUi for DispenserWindow {
             max_energy: max,
             displayed_units: charge / cost,
             displayed_max_units: max / cost,
-            show_ph: false,
+            show_ph: d.show_ph && d.recording.is_none(),
             has_beaker_in_hand,
             chemicals,
             beaker,
+            recipes: d.saved_recipes.iter().map(|(n, _)| n.clone()).collect(),
+            recording_recipe: d.recording.clone(),
         }
     }
 
@@ -424,6 +488,11 @@ impl ServerUi for DispenserWindow {
             "remove" => DispenserAct::Remove(params.number("amount")? as f32),
             "eject" => DispenserAct::Eject,
             "insert" => DispenserAct::Insert,
+            "dispense_recipe" => DispenserAct::DispenseRecipe(params.text("recipe")?),
+            "clear_recipes" => DispenserAct::ClearRecipes,
+            "record_recipe" => DispenserAct::RecordRecipe,
+            "save_recording" => DispenserAct::SaveRecording,
+            "cancel_recording" => DispenserAct::CancelRecording,
             _ => return Err(UiReject::UnknownAction),
         })
     }
@@ -460,13 +529,224 @@ fn transfer_amounts(world: &World, beaker: Entity) -> Vec<f32> {
 }
 
 fn dispenser_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed<DispenserWindow>>>) {
-    let pending: Vec<(Entity, Entity, DispenserAct)> = acts
+    let pending: Vec<(Entity, Entity, Entity, DispenserAct)> = acts
         .read(world.resource::<Messages<UiActed<DispenserWindow>>>())
-        .map(|a| (a.actor, a.source, a.act.clone()))
+        .map(|a| (a.client, a.actor, a.source, a.act.clone()))
         .collect();
-    for (actor, source, act) in pending {
+    for (client, actor, source, act) in pending {
+        if let Some(asked) = prompt_for(&act, source) {
+            if operational(world, source) {
+                ask(world, client, actor, asked);
+            }
+            continue;
+        }
         apply_act(world, actor, source, act);
     }
+}
+
+/// The acts that ask first (`tgui_alert`, `tgui_input_text`).
+fn prompt_for(act: &DispenserAct, e: Entity) -> Option<DispenserPrompt> {
+    match act {
+        DispenserAct::ClearRecipes => Some(DispenserPrompt::Clear(e)),
+        DispenserAct::SaveRecording => Some(DispenserPrompt::Name(e)),
+        _ => None,
+    }
+}
+
+fn ask(world: &mut World, client: Entity, actor: Entity, asked: DispenserPrompt) {
+    use ss13_tgui::prompt::{Ask, PromptKind};
+    let yes_no = || PromptKind::Alert {
+        buttons: vec!["Yes".into(), "No".into()],
+        autofocus: true,
+    };
+    let question = match &asked {
+        DispenserPrompt::Clear(_) => {
+            Ask::new(client, actor, "Clear?", "Clear all recipes?", yes_no())
+        }
+        DispenserPrompt::Name(_) => Ask::new(
+            client,
+            actor,
+            "Recipe Name",
+            "What do you want to name this recipe?",
+            PromptKind::Text {
+                default: String::new(),
+                max_length: MAX_NAME_LEN,
+                multiline: false,
+            },
+        ),
+        DispenserPrompt::Overwrite(_, name) => Ask::new(
+            client,
+            actor,
+            "",
+            format!("\"{name}\" already exists, do you want to overwrite it?"),
+            yes_no(),
+        ),
+    };
+    let prompt = ss13_tgui::prompt::ask_world(world, question);
+    world.entity_mut(prompt).insert(asked);
+}
+
+/// The answers to the recipe prompts, checked again now: power, the user next to it.
+fn prompt_answers(
+    world: &mut World,
+    mut cursor: Local<MessageCursor<ss13_tgui::prompt::PromptAnswered>>,
+) {
+    use ss13_tgui::prompt::{PromptAnswer, PromptAnswered};
+    let answers: Vec<(Entity, Entity, Entity, Option<PromptAnswer>)> = cursor
+        .read(world.resource::<Messages<PromptAnswered>>())
+        .map(|a| (a.prompt, a.client, a.actor, a.answer.clone()))
+        .collect();
+    for (prompt, client, actor, answer) in answers {
+        let Some(asked) = world.get::<DispenserPrompt>(prompt).cloned() else {
+            continue;
+        };
+        let e = match &asked {
+            DispenserPrompt::Clear(e)
+            | DispenserPrompt::Name(e)
+            | DispenserPrompt::Overwrite(e, _) => *e,
+        };
+        if world.get::<ChemDispenser>(e).is_none()
+            || !operational(world, e)
+            || !crate::storage::in_reach(world, actor, e)
+        {
+            continue;
+        }
+        match (asked, answer) {
+            (DispenserPrompt::Clear(_), Some(PromptAnswer::Button(0))) => {
+                if let Some(mut d) = world.get_mut::<ChemDispenser>(e) {
+                    d.saved_recipes.clear();
+                }
+            }
+            (DispenserPrompt::Name(_), Some(PromptAnswer::Text(name))) => {
+                let name = name.trim().to_owned();
+                let exists = world
+                    .get::<ChemDispenser>(e)
+                    .is_some_and(|d| d.saved_recipes.iter().any(|(n, _)| *n == name));
+                if exists {
+                    ask(world, client, actor, DispenserPrompt::Overwrite(e, name));
+                } else {
+                    save_recording(world, client, e, name);
+                }
+            }
+            // `tgui_alert(...) == "No"` returns; closing it (null) saves, as in tg.
+            (DispenserPrompt::Overwrite(_, name), answer)
+                if answer != Some(PromptAnswer::Button(1)) =>
+            {
+                save_recording(world, client, e, name);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// The end of `save_recording`: every recorded reagent must be dispensable here.
+fn save_recording(world: &mut World, client: Entity, e: Entity, name: String) {
+    let Some(d) = world.get::<ChemDispenser>(e).cloned() else {
+        return;
+    };
+    let Some(recording) = d.recording.clone() else {
+        return;
+    };
+    if name.is_empty() {
+        return;
+    }
+    let Some(chem) = world.get_resource::<Chem>().map(|c| c.0.clone()) else {
+        return;
+    };
+    for (reagent, _) in &recording {
+        if !d
+            .dispensable
+            .iter()
+            .any(|&id| chem.def(id).name == *reagent)
+        {
+            crate::tools::tell(
+                world,
+                client,
+                Span::Warning,
+                format!(
+                    "{} не может найти {reagent}!",
+                    crate::chem::name_of(world, e)
+                ),
+            );
+            if let Some(&pos) = world.get::<TilePos>(e) {
+                crate::sound::playsound(
+                    world,
+                    crate::sound::PlaySound::new(
+                        pos,
+                        "sound/machines/buzz/buzz-two.ogg",
+                        50.0,
+                        true,
+                    ),
+                );
+            }
+            return;
+        }
+    }
+    if let Some(mut d) = world.get_mut::<ChemDispenser>(e) {
+        match d.saved_recipes.iter_mut().find(|(n, _)| *n == name) {
+            Some(slot) => slot.1 = recording,
+            None => d.saved_recipes.push((name, recording)),
+        }
+        d.recording = None;
+    }
+}
+
+/// `recording_recipe[name] += amount` (DM assoc order: first addition).
+fn record(recording: &mut Vec<(String, f32)>, name: &str, amount: f32) {
+    match recording.iter_mut().find(|(n, _)| n == name) {
+        Some(slot) => slot.1 += amount,
+        None => recording.push((name.to_owned(), amount)),
+    }
+}
+
+/// Why [`dispense`] stopped.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DispenseFail {
+    Full,
+    NoEnergy,
+    Other,
+}
+
+/// One reagent into the beaker: `min(amount, free space)` units, paid from the cell.
+fn dispense(world: &mut World, e: Entity, id: ReagentId, amount: f32) -> Result<(), DispenseFail> {
+    let (Some(d), Some(beaker), Some(chem)) = (
+        world.get::<ChemDispenser>(e).cloned(),
+        beaker_of(world, e),
+        world.get_resource::<Chem>().map(|c| c.0.clone()),
+    ) else {
+        return Err(DispenseFail::Other);
+    };
+    let (Some(cell), Some(dm)) = (d.cell, world.get::<DmChemDispenser>(e).cloned()) else {
+        return Err(DispenseFail::Other);
+    };
+    let Some(mut holder) = world.get::<Reagents>(beaker).map(|r| r.0.clone()) else {
+        return Err(DispenseFail::Other);
+    };
+    let to_dispense = amount
+        .min(holder.maximum_volume - holder.total_volume)
+        .max(0.0);
+    if to_dispense <= 0.0 {
+        return Err(DispenseFail::Full);
+    }
+    let Some(mut state) = world.get::<ItemCell>(cell).map(|c| c.0) else {
+        return Err(DispenseFail::Other);
+    };
+    if state.take(f64::from(to_dispense * d.power_cost), false) <= 0.0 {
+        return Err(DispenseFail::NoEnergy);
+    }
+    world.entity_mut(cell).insert(ItemCell(state));
+    holder.add_reagent(
+        &chem,
+        id,
+        to_dispense,
+        dm.dispensed_temperature,
+        Some(dm.base_reagent_purity),
+        None,
+        false,
+        false,
+    );
+    world.entity_mut(beaker).insert(Reagents(holder));
+    Ok(())
 }
 
 /// tg `ui_act`, with every check at the moment of effect.
@@ -486,14 +766,10 @@ pub fn apply_act(world: &mut World, actor: Entity, e: Entity, act: DispenserAct)
             }
         }
         DispenserAct::Dispense(name) => {
-            if !operational(world, e) {
+            if !operational(world, e) || d.cell.is_none() {
                 return;
             }
-            let (Some(cell), Some(beaker), Some(chem)) = (
-                d.cell,
-                beaker,
-                world.get_resource::<Chem>().map(|c| c.0.clone()),
-            ) else {
+            let Some(chem) = world.get_resource::<Chem>().map(|c| c.0.clone()) else {
                 return;
             };
             let Some(id) = d
@@ -504,46 +780,89 @@ pub fn apply_act(world: &mut World, actor: Entity, e: Entity, act: DispenserAct)
             else {
                 return;
             };
-            let Some(mut holder) = world.get::<Reagents>(beaker).map(|r| r.0.clone()) else {
-                return;
-            };
-            let to_dispense = d
-                .amount
-                .min(holder.maximum_volume - holder.total_volume)
-                .max(0.0);
-            if to_dispense <= 0.0 {
-                crate::cargo::console::machine_say(world, e, "The container is full!");
+            if d.recording.is_some() {
+                if let Some(mut live) = world.get_mut::<ChemDispenser>(e)
+                    && let Some(r) = live.recording.as_mut()
+                {
+                    record(r, &name, d.amount);
+                }
                 return;
             }
-            let Some(mut state) = world.get::<ItemCell>(cell).map(|c| c.0) else {
+            if beaker.is_none() {
                 return;
-            };
-            if state.take(f64::from(to_dispense * d.power_cost), false) <= 0.0 {
-                crate::cargo::console::machine_say(
+            }
+            match dispense(world, e, id, d.amount) {
+                Err(DispenseFail::Full) => {
+                    crate::cargo::console::machine_say(world, e, "The container is full!");
+                }
+                Err(DispenseFail::NoEnergy) => crate::cargo::console::machine_say(
                     world,
                     e,
                     "Not enough energy to complete operation!",
-                );
+                ),
+                _ => {}
+            }
+        }
+        DispenserAct::DispenseRecipe(recipe) => {
+            if !operational(world, e) || d.cell.is_none() {
                 return;
             }
-            world.entity_mut(cell).insert(ItemCell(state));
-            let Some(dm) = world.get::<DmChemDispenser>(e).cloned() else {
+            let Some(chem) = world.get_resource::<Chem>().map(|c| c.0.clone()) else {
                 return;
             };
-            holder.add_reagent(
-                &chem,
-                id,
-                to_dispense,
-                dm.dispensed_temperature,
-                Some(dm.base_reagent_purity),
-                None,
-                false,
-                false,
-            );
-            world.entity_mut(beaker).insert(Reagents(holder));
+            let Some((_, list)) = d.saved_recipes.iter().find(|(n, _)| *n == recipe).cloned()
+            else {
+                return;
+            };
+            for (name, amount) in list {
+                let Some(id) = d
+                    .dispensable
+                    .iter()
+                    .copied()
+                    .find(|&id| chem.def(id).name == name)
+                else {
+                    return;
+                };
+                if d.recording.is_some() {
+                    if let Some(mut live) = world.get_mut::<ChemDispenser>(e)
+                        && let Some(r) = live.recording.as_mut()
+                    {
+                        record(r, &name, amount);
+                    }
+                    continue;
+                }
+                if beaker.is_none() {
+                    return;
+                }
+                if dispense(world, e, id, amount) == Err(DispenseFail::NoEnergy) {
+                    crate::cargo::console::machine_say(
+                        world,
+                        e,
+                        "Not enough energy to complete operation!",
+                    );
+                    return;
+                }
+            }
         }
+        DispenserAct::RecordRecipe => {
+            if operational(world, e)
+                && let Some(mut d) = world.get_mut::<ChemDispenser>(e)
+            {
+                d.recording = Some(Vec::new());
+            }
+        }
+        DispenserAct::CancelRecording => {
+            if operational(world, e)
+                && let Some(mut d) = world.get_mut::<ChemDispenser>(e)
+            {
+                d.recording = None;
+            }
+        }
+        // Asked first (`dispenser_acts`).
+        DispenserAct::ClearRecipes | DispenserAct::SaveRecording => {}
         DispenserAct::Remove(amount) => {
             if operational(world, e)
+                && d.recording.is_none()
                 && let Some(b) = beaker
                 && transfer_amounts(world, b).contains(&amount)
                 && let Some(mut r) = world.get_mut::<Reagents>(b)
