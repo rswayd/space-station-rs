@@ -263,6 +263,7 @@ impl Plugin for GameServerPlugin {
             crate::icecream::IceCreamPlugin,
             crate::stove::StovePlugin,
             crate::decay::DecayPlugin,
+            crate::barsign::BarsignPlugin,
             crate::chem_dispenser::ChemDispenserPlugin,
             crate::smartfridge::SmartFridgePlugin,
         ))

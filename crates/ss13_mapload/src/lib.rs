@@ -16,6 +16,7 @@ pub mod atmos;
 pub mod atmos_handbook;
 pub mod atmos_machine;
 pub mod audit;
+pub mod barsign;
 pub mod border;
 pub mod bots;
 pub mod cable;
@@ -96,6 +97,7 @@ pub use radio::DmRadio;
 pub use reagents::DmReagents;
 pub use security::{DmBaton, DmHandcuffs};
 pub use silicon::{DmCamera, DmCameraConsole};
+pub use barsign::DmBarsign;
 pub use drinks::DmGlass;
 pub use smartfridge::DmSmartFridge;
 pub use smooth::DmSmooth;
@@ -312,6 +314,7 @@ impl Plugin for DmProtoPlugin {
             .register_proto_component::<DmChemDispenser>(dispenser::DISPENSER_COMPONENT)
             .register_proto_component::<DmSmartFridge>(smartfridge::FRIDGE_COMPONENT)
             .register_proto_component::<DmGlass>(drinks::GLASS_COMPONENT)
+            .register_proto_component::<DmBarsign>(barsign::BARSIGN_COMPONENT)
             .register_proto_component::<DmMob>("dm_mob")
             .register_proto_component::<DmWallMount>("dm_wallmount")
             .register_proto_component::<DmCircuit>("dm_circuit")

@@ -708,6 +708,8 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 None if crate::coffee::interact(world, client, mob, target, modifiers.right) => {}
                 // A stove's burner, a soup pot's first ingredient out (right clicks).
                 None if crate::stove::interact(world, client, mob, target, modifiers.right) => {}
+                // tg `attack_hand` of a bar sign: pick the sign.
+                None if crate::barsign::interact(world, client, mob, target) => {}
                 // tg `interact` and `attack_hand_secondary` of the ice cream vat.
                 None if crate::icecream::interact(world, client, mob, target, modifiers.right) => {
                 }

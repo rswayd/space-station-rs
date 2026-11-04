@@ -135,6 +135,17 @@ const TYPES: &str = r##"{
     "/obj/machinery/oven/range": { "parent": "/obj/machinery/oven", "vars": { "name": "range" },
         "declared_vars": { "name": "range", "icon_state": "range_off",
         "base_icon_state": "range" } },
+    "/obj/machinery/barsign": { "parent": "/obj/machinery", "vars": { "name": "bar sign" },
+        "declared_vars": { "name": "bar sign", "icon": { "resource": "bs.dmi" },
+        "icon_state": "empty", "req_access": { "list": ["bar"] } } },
+    "/datum/barsign": { "parent": "/datum", "declared_vars": { "name": null,
+        "icon_state": null, "desc": null, "hidden": 0, "ss220_icon": null } },
+    "/datum/barsign/hiddensigns": { "parent": "/datum/barsign", "declared_vars": { "hidden": 1 } },
+    "/datum/barsign/hiddensigns/signoff": { "parent": "/datum/barsign/hiddensigns",
+        "declared_vars": { "name": "Off", "icon_state": "empty",
+        "desc": "This sign doesn't seem to be on." } },
+    "/datum/barsign/thebark": { "parent": "/datum/barsign", "declared_vars": {
+        "name": "The Bark", "icon_state": "thebark", "desc": "Ian's bar of choice." } },
     "/obj/machinery/griddle": { "parent": "/obj/machinery", "vars": { "name": "griddle" },
         "declared_vars": { "name": "griddle", "icon": { "resource": "k.dmi" },
         "icon_state": "griddle1_off" } },
@@ -263,13 +274,14 @@ const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 "R" = (/obj/machinery/oven/range,/turf/open/floor,/area/space)
 "G" = (/obj/machinery/griddle,/turf/open/floor,/area/space)
 "m" = (/obj/item/food/meat/slab,/turf/open/floor,/area/space)
+"Z" = (/obj/machinery/barsign,/turf/open/floor,/area/space)
 
 (1,1,1) = {"
-wwwww
-wmVfw
-wCsBw
-wRfGw
-wwwww
+wwwwww
+wmVfZw
+wCsBfw
+wRfGfw
+wwwwww
 "}
 "##;
 
@@ -280,7 +292,7 @@ const VAT: TilePos = TilePos::new(3, 4, 1);
 const RANGE: TilePos = TilePos::new(2, 2, 1);
 const GRIDDLE: TilePos = TilePos::new(4, 2, 1);
 
-const STATES: [(&str, &str); 26] = [
+const STATES: [(&str, &str); 28] = [
     ("t.dmi", "floor"),
     ("t.dmi", "wall"),
     ("l.dmi", "x2"),
@@ -307,6 +319,8 @@ const STATES: [(&str, &str); 26] = [
     ("kt.dmi", "icecream_cone_waffle"),
     ("kt.dmi", "icecream_custom"),
     ("kt.dmi", "pot"),
+    ("bs.dmi", "empty"),
+    ("bs.dmi", "thebark"),
 ];
 
 fn fixture_assets(test: &str) -> PathBuf {
@@ -320,6 +334,7 @@ fn fixture_assets(test: &str) -> PathBuf {
         "/obj/machinery/icecream_vat",
         "/obj/machinery/oven/range",
         "/obj/machinery/griddle",
+        "/obj/machinery/barsign",
         "/obj/item/food/meatball",
         "/obj/item/food/meat/slab",
         "/obj/item/toy",
@@ -708,4 +723,44 @@ fn food_goes_bad_on_the_floor() {
     s.run_until("the mold is seen", |s| s.said("gets overtaken by mold and ants"));
     // The mapped one has not moved: still fresh.
     assert!(s.server.world().get_entity(mapped).is_ok());
+}
+
+#[test]
+fn bar_sign() {
+    let mut s = Station::start("bar_sign", 1);
+    let a = s.players[0].mob;
+    s.server.world_mut().entity_mut(a).insert(TilePos::new(5, 3, 1));
+    s.run_until("moved", |s| *s.get::<TilePos>(a) == TilePos::new(5, 3, 1));
+    let sign = s.machine::<ss13_game::barsign::Barsign>(TilePos::new(5, 4, 1));
+    assert_eq!(s.get::<ss13_game::barsign::Barsign>(sign).sign, "Off");
+    // An assistant's ID has no bar access.
+    s.click(sign);
+    s.run_until("denied", |s| s.said("в доступе отказано"));
+    {
+        let world = s.0.server.world_mut();
+        let card = world
+            .get::<Inventory>(a)
+            .unwrap()
+            .clone()
+            .id_card(world)
+            .unwrap();
+        world
+            .get_mut::<ss13_game::inventory::IdCard>(card)
+            .unwrap()
+            .access
+            .push("bar".into());
+    }
+    s.pick(sign, "The Bark");
+    s.run_until("the bark", |s| {
+        s.get::<ss13_game::barsign::Barsign>(sign).sign == "The Bark"
+    });
+    assert_eq!(s.get::<Name>(sign).as_str(), "bar sign (The Bark)");
+    assert_eq!(s.get::<DmName>(sign).desc, "Ian's bar of choice.");
+    let world = s.server.world();
+    assert_eq!(
+        Some(world.get::<ss13_shared::Appearance>(sign).unwrap().icon_state),
+        world
+            .resource::<ss13_mapload::IconIndex>()
+            .get("bs.dmi", "thebark")
+    );
 }

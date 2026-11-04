@@ -138,6 +138,8 @@ pub mod atmos_machinery;
 #[cfg(feature = "server")]
 pub mod bar;
 #[cfg(feature = "server")]
+pub mod barsign;
+#[cfg(feature = "server")]
 pub mod botany;
 pub mod bots;
 #[cfg(feature = "server")]
