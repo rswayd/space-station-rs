@@ -12,7 +12,7 @@
 
 - **Код:** [`/datum/glass_style`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/reagents/reagent_containers/cups/_glass_datum.dm#L51), [`/datum/component/takes_reagent_appearance`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/takes_reagent_appearance.dm#L14)
 - **BandaStation:** [`modular_bandastation/objects/code/items/consumables/drinks.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/items/consumables/drinks.dm#L22) — стили стаканов для напитков форка
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/chem.rs` меняет только оверлей заполнения цветом смеси
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/chem.rs` (`glass_style`, `apply_glass_style`): стакан, рюмка и коробка сока принимают имя, описание и спрайт стиля главного реагента (`GLOB.glass_style_singletons` из `reagents.ron`: `crates/ss13_mapload/src/reagents.rs` `glass_styles`, включая стили форка), без стиля возвращаются к своим; стилизованный стакан теряет оверлей заполнения; рюмка зовётся «(filled) shot glass»; спрайт в руке не меняется; миски с супами — с супами
 
 ### Разбивание стеклянной посуды
 Брошенный стакан или бутылка разбивается о цель, расплёскивая содержимое; бутылка, разбитая о голову, оглушает и оставляет «розочку» (`broken_bottle`) — колющее оружие.
@@ -31,7 +31,7 @@
 
 - **Код:** [`/obj/item/reagent_containers/cup/soda_cans`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/reagents/reagent_containers/cups/soda.dm#L11), [`proc/open_soda()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/reagents/reagent_containers/cups/soda.dm#L111), [`proc/burst_soda()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/reagents/reagent_containers/cups/soda.dm#L137)
 - **BandaStation:** [`modular_bandastation/food_and_drinks/code/drinks.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/food_and_drinks/code/drinks.dm#L1) — банка «Lip-O» (кола с липолитиком)
-- **Статус в ss13-rs:** ❌ нет — банки создаются с `initial_reagent_flags = NONE`, открывания (`open_soda`) в `crates/ss13_game/src/chem.rs` нет, поэтому пить из них нельзя
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/chem.rs` (`open_soda`, `soda_thrown`), `crates/ss13_game/src/throw.rs`: клик по банке в руке открывает её (шанс `fizziness` облить открывающего и опустошить), брошенная закрытая полная банка (не пойманная) получает +15 шипучести и с этим шансом лопается в смятую банку того же спрайта; нет встряхивания (ПКМ по руке), смятия о лоб, бомбы с фитилём, разрыва в вакууме, скотча, звуков
 
 ### Шейкер, фляга и барный инвентарь
 Шейкер смешивает коктейли (переключение «кастомных» напитков Alt-кликом), фляга носится в кармане.
@@ -44,7 +44,7 @@
 
 - **Код:** [`/obj/machinery/chem_dispenser/drinks`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/reagents/chemistry/machinery/chem_dispenser.dm#L575), [`/obj/machinery/chem_dispenser/drinks/beer`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/reagents/chemistry/machinery/chem_dispenser.dm#L670); tgui: [`ChemDispenser.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/ChemDispenser.tsx)
 - **BandaStation:** [`modular_bandastation/objects/code/items/consumables/drinks.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/items/consumables/drinks.dm#L1) — доп. напитки форка в раздатчике алкоголя
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/chem.rs`: shortcut «no chem dispenser»
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/chem_dispenser.rs`, окно `crates/ss13_tgui/src/interfaces/chem_dispenser.rs`: списки реагентов типа (`static`-списки tg выгружает `ss13_dm_extract`, `crates/ss13_mapload/src/dispenser.rs`; добавки бара форка: самбука, ягермейстер, блю кюрасао), сортировка по имени, тир-4 сервопривод и `fullupgrade` (emag) добавляют свои; ёмкость вставляется кликом (окно открывается), ПКМ вынимает; окно: энергия, кнопки количества по `possible_transfer_amounts`, выдача (`power_cost` Дж/ед. из ячейки-детали, температура и чистота типа), удаление, вставка/извлечение — всё проверяется на сервере; перезарядка ячейки каждый тик машин (`recharge_amount` × тиры конденсаторов); сборка из платы; нет рецептов (запись/воспроизведение), списка реакций, ЭМИ, емага в руке, галлюцинаций, оверлея мензурки
 
 ### Кеги и бочки напитков
 Стационарные бочки (пиво и др.), из которых наливают в посуду.

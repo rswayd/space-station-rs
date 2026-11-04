@@ -1,11 +1,11 @@
 # Химические машины
-Раздатчики, химмастер, нагреватель, пандемия, дым-машина, гриндер и прочее оборудование химлаборатории и бара. В ss13-rs из них есть только гриндер (`crates/ss13_game/src/kitchen.rs`).
+Раздатчики, химмастер, нагреватель, пандемия, дым-машина, гриндер и прочее оборудование химлаборатории и бара. В ss13-rs из них есть гриндер (`crates/ss13_game/src/kitchen.rs`) и раздатчики (`crates/ss13_game/src/chem_dispenser.rs`).
 
 ### Химический раздатчик
 Выдаёт базовые реагенты из энергии в вставленную мензурку (tgui), набор зависит от деталей; запись и воспроизведение рецептов; емаг открывает опасные реагенты.
 
 - **Код:** [`/obj/machinery/chem_dispenser`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/reagents/chemistry/machinery/chem_dispenser.dm#L1); tgui: [`ChemDispenser.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/ChemDispenser.tsx)
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/chem.rs` (shortcut: нет раздатчика)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/chem_dispenser.rs`, окно `crates/ss13_tgui/src/interfaces/chem_dispenser.rs` (общие с раздатчиками бара, [../kitchen/drinks-bar.md](../kitchen/drinks-bar.md)): базовый список, апгрейд-реагенты от сервопривода тир 4, выдача из ячейки, перезарядка, сборка из платы; нет записи рецептов, списка реакций с pH, цветов pH, емага в руке, ЭМИ
 
 _«Раздатчики напитков и алкоголя» описано в [../kitchen/drinks-bar.md](../kitchen/drinks-bar.md)._
 

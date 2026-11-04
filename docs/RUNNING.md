@@ -1558,13 +1558,28 @@ reagents. Microwave: click it with an item to put it in, with an empty hand to c
 right click ejects; an egg becomes a boiled egg, other food a burned mess; cooking dirties it.
 Food processor: food with a recipe in, empty hand runs it. Grinder: a beaker in hand replaces its
 beaker, food goes in, empty hand grinds it into the beaker, right click takes the beaker out.
-There is no oven, griddle, crafting menu, grill or juicing yet.
+Oven (and range): an empty hand opens or closes it; open, food goes onto its tray (a bag loads
+its food), a right click takes the tray out; closed with food on the tray it bakes every machine
+tick (2 s) into each item's `bake_result` (dough into bread; anything else burns). Griddle: any
+item clicked on it lies on it at the clicked point, an empty hand switches it on; on, food grills
+into its `grill_result` (a slab into a steak). Deep fryer: an item goes in when it has oil, an
+empty hand takes it out fried (name, color, edible, oily). `ss13-dm-extract` also dumps the
+`bakeable`/`grillable` `AddComponent` lines, `convert` reads them into `dm_food`.
+Soda and booze dispensers (and the chem dispenser): a container in hand goes in and opens the
+`ChemDispenser` window (dispense, amount, remove, eject), right click takes it out; the cell part
+pays per unit and recharges from the area. A drinking glass, shot glass or juice carton takes the
+glass style of its main reagent (name and sprite, `reagents.ron` `glass_styles`). A soda can
+opens when clicked in hand; a thrown closed can may burst. Smart fridges start with their
+`initial_contents`, take what their kind accepts (bags too) and hand items out from the
+`SmartVend` window. There is no crafting menu, grill, stove, gibber or juicing yet.
 
 ```sh
 cargo test -p ss13_mapload --lib food                 # microwave/processable/processor data
 cargo test -p ss13_game --all-features --lib hunger   # decay, thresholds, overeating
 cargo test -p ss13_game --all-features --test it food::    # nutrition drops, microwave egg, eat it
                                                       # (taste, trash, nutrition up), slice bread
+cargo test -p ss13_game --all-features --test it kitchen::  # bake, grill, fry; soda dispenser window,
+                                                      # glass style, soda can; smart fridge
 SS13_ASSETS=$ASSETS cargo test -p ss13_game --all-features --test it food:: -- --ignored --nocapture
                                                       # MetaStation: an egg from the kitchen
                                                       # fridge cooked in its microwave, eaten

@@ -16,15 +16,18 @@
 //!   selected zone stops it, tg `try_inject`), right click draws from a drawable container.
 //! - A pill is swallowed (someone else: after 3 s) or dissolved in a refillable container.
 //! - A click on the held container's own hand slot cycles the transfer amount through
-//!   `possible_transfer_amounts` (tg `attack_self`).
+//!   `possible_transfer_amounts` (tg `attack_self`); a closed soda can opens instead
+//!   (`open_soda`), a thrown one may burst (`soda_thrown`).
+//! - Drinking glasses, shot glasses and juice cartons take the glass style of their main reagent
+//!   (`takes_reagent_appearance`).
 //! - Holders that are reacting step every 0.25 s (tg `SSreagents`); mix messages go to everyone
 //!   in hearing range of the container.
 //! - Mobs have blood and stomach holders ([`MobReagents`]): every `SSmobs` fire the stomach
 //!   drips into the blood and the blood metabolizes (`ss13_reagents::metabolism`).
-// shortcut: no chem dispenser, chem master or heater (map-placed bottles and beakers with their
-// `list_reagents` are the source); no sprays, droppers, patches, hyposprays or IV drips; no lids;
-// splashing and pouring expose nothing (reagents' `expose_*`
-// procs are not ported: water does not put out fires, acid does not melt); no sounds.
+// shortcut: no chem master or heater (dispensers: `crate::chem_dispenser`); no sprays,
+// droppers, patches, hyposprays or IV drips; no lids; splashing and pouring expose nothing
+// (reagents' `expose_*` procs are not ported: water does not put out fires, acid does not melt);
+// no sounds.
 // shortcut: anyone sees a container's contents on examine (tg: only with science goggles or a
 // similar `can_see_reagents`).
 
