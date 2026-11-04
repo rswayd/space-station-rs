@@ -33,6 +33,36 @@ pub struct BinaryCapable;
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ChangelingHivemind;
 
+/// On a body without a tongue (tg: no `TRAIT_SPEAKS_CLEARLY` from one), kept by the game: its
+/// speech loses its hard consonants and it gurgles ([`tongueless`]).
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Tongueless;
+
+/// tg `/mob/living/carbon/human/say` without `TRAIT_SPEAKS_CLEARLY`: every run of `[gdntke]`
+/// (and `[GDNTKE]`) becomes `replacement` ("aa", "oo" or "'", one pick per message).
+// tg's pattern is Latin only, so Cyrillic speech passes unchanged, as on the original server.
+pub fn tongueless(text: &str, lower: &str, upper: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut run: Option<bool> = None;
+    for c in text.chars() {
+        let class = match c {
+            'g' | 'd' | 'n' | 't' | 'k' | 'e' => Some(false),
+            'G' | 'D' | 'N' | 'T' | 'K' | 'E' => Some(true),
+            _ => None,
+        };
+        if class.is_some() && class == run {
+            continue;
+        }
+        run = class;
+        match class {
+            Some(false) => out.push_str(lower),
+            Some(true) => out.push_str(upper),
+            None => out.push(c),
+        }
+    }
+    out
+}
+
 /// tg `RADIO_EXTENSION`: what a `:x` / `.x` key names (`GLOB.department_radio_keys`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum RadioExtension {
@@ -239,6 +269,15 @@ pub fn whisper_heard(distance: u32) -> WhisperHeard {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tongueless_speech_follows_tg_regex() {
+        assert_eq!(
+            tongueless("Get the knife!", "aa", "AA"),
+            "AAaa aahaa aaifaa!"
+        );
+        assert_eq!(tongueless("Тут нож", "'", "'"), "Тут нож");
+    }
     use crate::radio::*;
 
     #[test]

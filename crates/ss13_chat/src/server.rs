@@ -35,7 +35,7 @@ use ss13_world::{SpatialIndex, WorldSystems};
 use crate::emote::{EMOTE_COOLDOWN_SECS, EmoteOutcome};
 use crate::speech::{
     BinaryCapable, ChangelingHivemind, EarsWorn, RadioExtension, RadioTarget, SpeakerStat,
-    WhisperHeard, capitalize, parse_mods, stars, whisper_heard,
+    Tongueless, WhisperHeard, capitalize, parse_mods, stars, whisper_heard,
 };
 
 /// tg `get_hearers_in_view(world.view)`: 7 tiles, Chebyshev, like BYOND `view()`.
@@ -393,6 +393,7 @@ type Body<'a> = (
     Has<EarsWorn>,
     Has<BinaryCapable>,
     Has<ChangelingHivemind>,
+    Has<Tongueless>,
 );
 
 fn handle_say(
@@ -444,35 +445,37 @@ fn handle_say(
                     .map(|text| (body, text))
                     .map_err(|r| (r, true))
             });
-        let ((speaker, pos, name, invisibility, stat, ears_worn, binary, hivemind), text) =
-            match checked {
-                Ok(said) => said,
-                Err((reason, notify)) => {
-                    let feedback = match reason {
-                        _ if !notify => None,
-                        SayReject::NoBody => Some("Вам нечем говорить.".to_string()),
-                        SayReject::RateLimited => {
-                            Some("Вы отправляете сообщения слишком часто.".to_string())
-                        }
-                        SayReject::TooLong => Some(format!(
-                            "Сообщение слишком длинное: больше {MAX_MESSAGE_LEN} символов."
-                        )),
-                        SayReject::Empty => None,
-                        SayReject::Muted => {
-                            Some("Вы не можете разговаривать в IC-чате (мут).".to_string())
-                        }
-                    };
-                    if let Some(text) = feedback {
-                        chat.write(SendChat {
-                            clients: vec![client],
-                            message: warning(text),
-                        });
+        let (
+            (speaker, pos, name, invisibility, stat, ears_worn, binary, hivemind, tongueless),
+            text,
+        ) = match checked {
+            Ok(said) => said,
+            Err((reason, notify)) => {
+                let feedback = match reason {
+                    _ if !notify => None,
+                    SayReject::NoBody => Some("Вам нечем говорить.".to_string()),
+                    SayReject::RateLimited => {
+                        Some("Вы отправляете сообщения слишком часто.".to_string())
                     }
-                    debug!("say from {client} rejected: {reason:?}");
-                    rejected.write(SayRejected { client, reason });
-                    continue;
+                    SayReject::TooLong => Some(format!(
+                        "Сообщение слишком длинное: больше {MAX_MESSAGE_LEN} символов."
+                    )),
+                    SayReject::Empty => None,
+                    SayReject::Muted => {
+                        Some("Вы не можете разговаривать в IC-чате (мут).".to_string())
+                    }
+                };
+                if let Some(text) = feedback {
+                    chat.write(SendChat {
+                        clients: vec![client],
+                        message: warning(text),
+                    });
                 }
-            };
+                debug!("say from {client} rejected: {reason:?}");
+                rejected.write(SayRejected { client, reason });
+                continue;
+            }
+        };
         let name = speaker_name(name);
         let stat = stat.copied().unwrap_or_default();
         let notice = |text: String| SendChat {
@@ -571,6 +574,16 @@ fn handle_say(
             continue;
         }
         let mut message = capitalize(&message);
+        if tongueless {
+            const SOUNDS: [(&str, &str); 3] = [("aa", "AA"), ("oo", "OO"), ("'", "'")];
+            let (lower, upper) = SOUNDS[(rng.percent() as usize * SOUNDS.len()) / 100];
+            message = crate::speech::tongueless(&message, lower, upper);
+        }
+        // `get_default_say_verb` of a human without a tongue.
+        let say_verb = |text: &str| match say_verb(text) {
+            "говорит" if tongueless => "булькает",
+            verb => verb,
+        };
         if mods.sing {
             let notes = ['\u{2669}', '\u{266A}', '\u{266B}'];
             let note = notes[(rng.percent() as usize * notes.len()) / 100];
@@ -632,7 +645,7 @@ fn handle_say(
                 .collect();
             chat.write(SendChat {
                 clients,
-                message: say_message(&name, &message),
+                message: quote_message(&name, say_verb(&message), &message, Span::Say),
             });
             continue;
         }

@@ -15,7 +15,8 @@
 //! organ decays by the air around it (a freezer crate or closet keeps it), a removed heart stops
 //! after 12 s. Damage crosses thresholds with tg's messages; at `maxHealth` the organ fails.
 //! Losing the brain kills (`ORGAN_VITAL`); the lungs, liver, stomach and ears are read by
-//! `crate::breath`, `crate::chem`, `crate::hunger` and `crate::sound`.
+//! `crate::breath`, `crate::chem`, `crate::hunger` and `crate::sound`; without a tongue the
+//! mob's speech gurgles (`ss13_chat::speech::Tongueless`).
 // shortcut: no brainmob (the mind stays with the body: a removed brain does not carry the
 // player, an inserted one does not bring one), no brain traumas, skillchips, organ traits,
 // actions or status effects, no eating organs, no blood DNA, no EMP, no organ cell lines; eyes
@@ -589,6 +590,11 @@ fn on_insert(world: &mut World, organ: Entity, mob: Entity, slot: Slot) {
     match slot {
         Slot::Stomach => crate::chem::stomach_inserted(world, organ, mob),
         Slot::Eyes => refresh_look(world, mob),
+        Slot::Tongue => {
+            world
+                .entity_mut(mob)
+                .remove::<ss13_chat::speech::Tongueless>();
+        }
         _ => {}
     }
 }
@@ -612,6 +618,9 @@ pub fn remove(world: &mut World, organ: Entity, special: bool) {
         }
         Slot::Stomach => crate::chem::stomach_removed(world, organ, mob),
         Slot::Eyes => refresh_look(world, mob),
+        Slot::Tongue => {
+            world.entity_mut(mob).insert(ss13_chat::speech::Tongueless);
+        }
         _ => {}
     }
     if state.spec().vital && !special && world.get::<Stat>(mob) != Some(&Stat::Dead) {
@@ -641,6 +650,20 @@ fn refresh_look(world: &mut World, mob: Entity) {
 pub fn cardiac_arrest(world: &World, mob: Entity) -> bool {
     world.get::<OrganHost>(mob).is_some()
         && state(world, mob, Slot::Heart).is_none_or(|h| !h.beating)
+}
+
+/// tg `get_heart_blood_regeneration_multiplier()`: 0 without a working, beating heart, else
+/// its share of health; 1 for a mob without modelled organs.
+pub fn heart_blood_multiplier(world: &World, mob: Entity) -> f32 {
+    if world.get::<OrganHost>(mob).is_none() {
+        return 1.0;
+    }
+    match state(world, mob, Slot::Heart) {
+        Some(h) if h.beating && !h.failing => {
+            ((h.spec().max_health - h.damage) / h.spec().max_health).clamp(0.0, 1.0)
+        }
+        _ => 0.0,
+    }
 }
 
 /// tg `set_heartattack(status)`: stops (`can_heartattack`: an organic heart) or restarts the

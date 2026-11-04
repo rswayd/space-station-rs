@@ -715,6 +715,26 @@ fn organ_and_wound_operations() {
         (after - (brain + 15.0)).abs() < 3.0,
         "15 brain damage: {brain} -> {after}"
     );
+
+    // Alive, healed, its heart stops: the paddles on the chest start it again.
+    {
+        let world = s.server.world_mut();
+        let healed = world.get::<Health>(b).unwrap().healed();
+        world.entity_mut(b).insert(healed);
+        organs::set_heartattack(world, b, true);
+    }
+    s.zone(0, TargetZone::Chest);
+    s.run_until("the defibrillator recharges", |s| {
+        s.server.world().resource::<Time>().elapsed_secs_f64()
+            >= s.get::<Defib>(defib).cooldown_until
+    });
+    s.click(0, b);
+    s.run_until("the heart beats again", |s| {
+        !organs::cardiac_arrest(s.server.world(), s.players[1].mob)
+    });
+    s.run_until("the unit pings", |s| {
+        s.said(0, "heart is now beating again")
+    });
 }
 
 #[test]
