@@ -23,6 +23,7 @@ pub mod grid;
 pub mod model;
 pub mod solar;
 pub mod supermatter;
+pub mod teg;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -195,6 +196,7 @@ pub struct Generation<'w, 's> {
     beams: ResMut<'w, emitter::PendingBeams>,
     accumulators: Query<'w, 's, (Entity, &'static mut accumulator::Accumulator)>,
     solars: solar::Solars<'w, 's>,
+    tegs: Query<'w, 's, (Entity, &'static mut teg::Teg)>,
 }
 
 impl Generation<'_, '_> {
@@ -209,9 +211,13 @@ impl Generation<'_, '_> {
         }
     }
 
-    /// tg `processing`: solars and accumulators feed their powernets.
+    /// tg `processing`: solars, accumulators and thermoelectric generators feed their
+    /// powernets.
     fn process(&mut self, grid: &mut Grid, dt: f64) {
         self.solars.process(grid);
+        for (e, mut teg) in &mut self.tegs {
+            teg::machine_tick(grid, e, &mut teg);
+        }
         for (e, mut acc) in &mut self.accumulators {
             let joules = acc.process(dt);
             if let Some(net) = grid.node_net(e).and_then(|n| grid.net_mut(n)) {
@@ -265,6 +271,7 @@ impl Plugin for PowerServerPlugin {
                 supermatter::SupermatterServerPlugin,
                 chargers::ChargersPlugin,
                 apc_ui::ApcUiPlugin,
+                teg::TegPlugin,
             ))
             .add_systems(
                 Startup,

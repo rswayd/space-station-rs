@@ -1657,6 +1657,9 @@ pub fn interact(
         return false;
     };
     if modifiers.alt {
+        if crate::power::teg::rotate(world, client, target, modifiers.right) {
+            return true;
+        }
         return click_alt(world, client, mob, target);
     }
     // `pipe/attack_hand_secondary`: the fitting's next layer.
@@ -2045,6 +2048,9 @@ pub fn item_interaction(
     let is_vent = e.contains::<VentPump>() || e.contains::<VentScrubber>();
     let is_tank = e.contains::<super::tank::StationaryTank>();
     let tool = tool_of(world, held).map(|t| t.0);
+    if crate::power::teg::tool_act(world, client, target, tool) {
+        return true;
+    }
     if super::tank_frame::item_interaction(world, client, mob, held, target, modifiers) {
         return true;
     }

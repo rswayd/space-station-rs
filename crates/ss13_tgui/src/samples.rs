@@ -51,6 +51,9 @@ use crate::interfaces::rapid_pipe_dispenser::{
     RapidPipeDispenserUi, RpdCategory, RpdData, RpdPreview, RpdRecipe, RpdStatic,
 };
 use crate::interfaces::solar_control::{SolarControlData, SolarControlUi};
+use crate::interfaces::teg::{
+    CirculatorData, ThermoElectricGeneratorData, ThermoElectricGeneratorUi,
+};
 use crate::interfaces::text_input::{TextInputStatic, TextInputUi};
 use crate::interfaces::thermo_machine::{ThermoMachineData, ThermoMachineUi};
 use crate::interfaces::vending::{
@@ -382,6 +385,26 @@ pub fn sample(name: &str) -> Option<Sample> {
                 connected_tracker: true,
                 history_supply: (0..20).map(|i| 20_000.0 + 800.0 * i as f32).collect(),
                 history_capacity: vec![64_000.0; 20],
+            },
+        ),
+        ThermoElectricGeneratorUi::NAME => of::<ThermoElectricGeneratorUi>(
+            "thermoelectric generator",
+            &(),
+            &ThermoElectricGeneratorData {
+                error_message: None,
+                last_power_output: 245_000.0,
+                cold_data: Some(CirculatorData {
+                    temperature_inlet: 73.2,
+                    temperature_outlet: 312.8,
+                    pressure_inlet: 4_520.0,
+                    pressure_outlet: 4_490.6,
+                }),
+                hot_data: Some(CirculatorData {
+                    temperature_inlet: 1_830.0,
+                    temperature_outlet: 640.4,
+                    pressure_inlet: 3_010.0,
+                    pressure_outlet: 2_987.3,
+                }),
             },
         ),
         MechBayPowerConsoleUi::NAME => of::<MechBayPowerConsoleUi>(

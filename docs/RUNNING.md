@@ -1514,7 +1514,12 @@ pump; alt+click maxes a pump or takes a portable's tank out; a wrench (dis)conne
 to the connector port under it; a gas tank goes into a portable; a welder welds a vent. Air
 alarms rate their tile's air (tg thresholds), warn aloud every 10 s, start locked (an ID with
 `atmos_equip`, or the access their mapping helper gives, toggles the lock; right click too) and
-apply their mode to the vents and scrubbers of their area.
+apply their mode to the vents and scrubbers of their area. A multitool saves a gas receiver to
+its buffer and links it to a bluespace scrubber; the receiver (alt+click on/off, wirecutters
+unlink) pulls the scrubbed gases every machine tick. A thermoelectric generator links the
+circulators beside it (hot and cold, facing it; a multitool flips a circulator or relinks the
+generator), turns the heat moved between the two loops into power on its cable, and opens its
+`ThermoElectricGenerator` window on a click (`cargo nt -E 'test(/^teg::/)'`).
 
 ```sh
 cargo test -p ss13_atmos pipenet                         # pipeline merge/split, reconcile, valves,

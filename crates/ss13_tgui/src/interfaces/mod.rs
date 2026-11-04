@@ -26,6 +26,7 @@ pub mod pipe_dispenser;
 pub mod rapid_pipe_dispenser;
 pub mod ru_jobs;
 pub mod solar_control;
+pub mod teg;
 pub mod text_input;
 pub mod thermo_machine;
 pub mod vending;

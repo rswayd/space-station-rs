@@ -190,7 +190,7 @@ impl Plugin for AtmosMachineryPlugin {
                     overclock::damage_overclocked_vents,
                     devices::process_vents,
                     devices::process_scrubbers,
-                    devices::process_binary,
+                    (devices::process_binary, crate::power::teg::process_tegs).chain(),
                     devices::process_dp_vents,
                     devices::process_trinary,
                     devices::process_unary,
@@ -410,6 +410,10 @@ pub fn device_spec(
             port_volumes[2] = 300.0;
         }
         (DeviceKind::Component, init, vec![n1, n2, n3])
+    } else if is_under(path, crate::power::teg::CIRCULATOR) {
+        port_volumes = vec![PORT_VOLUME; 2];
+        let (init, nodes) = crate::power::teg::circulator_nodes(dir, dm.flipped);
+        (DeviceKind::Component, init, nodes)
     } else if is_under(path, BINARY) {
         // `dp_vent_pump/high_volume/Initialize`: both ports 1000 L.
         let volume = if is_under(path, DP_VENT_HIGH_VOLUME) {
@@ -582,6 +586,8 @@ fn machine_state(world: &mut World, e: Entity, dm: &DmAtmosDevice, area: Option<
         });
     } else if is_under(path, PASSIVE_VENT) {
         entity.insert(PassiveVent);
+    } else if is_under(path, crate::power::teg::CIRCULATOR) {
+        entity.insert(crate::power::teg::Circulator::of(path));
     }
 }
 

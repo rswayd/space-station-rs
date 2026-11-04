@@ -47,7 +47,7 @@
 Горячий и холодный контуры термоэлектрического генератора; передают газ и отдают тепло генератору (см. power/generators.md).
 
 - **Код:** [`/obj/machinery/atmospherics/components/binary/circulator`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/components/binary_devices/circulator.dm#L4)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/power/teg.rs` (`Circulator`, `circulator_nodes`, `return_transfer_air`), граф труб в `crates/ss13_game/src/atmos_machinery/mod.rs` (`device_spec`): бинарное устройство поперёк своего `dir` (выход `turn(dir, 90)`, вход `turn(dir, 270)`, `flipped` меняет местами), 200 л на порт; при перепаде больше 10 кПа пропускает половину перепада к генератору; мультитул переключает горячий/холодный и отвязывает от генератора, отвёртка (закреплённый) открывает панель, гаечный ключ (панель открыта) откручивает — циркулятор уходит из графа труб со своим газом и возвращается с ним; alt/правый alt-клик поворачивает открученный; оверлеи `circ_anchor`, `panel_*`, `flow_on`(+emissive)/`flow`, `display_*`, `fan_*` по питанию и перепаду. Без подложек труб под спрайтом (shortcut); режим берётся из типа (`circulator/cold`), не из правки `mode` на карте. Плата и разборка ломом → ../engineering/machines.md; генератор → ../power/generators.md
 
 ### Газовый фильтр (filter)
 Отделяет выбранные газы во второй выход, остальное пропускает дальше; предустановленные фильтры по газам для атмос-отсека.

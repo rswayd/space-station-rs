@@ -49,6 +49,7 @@ mod sound;
 mod storage;
 mod surfaces;
 mod tables;
+mod teg;
 mod traitor;
 mod vampire;
 mod vending;

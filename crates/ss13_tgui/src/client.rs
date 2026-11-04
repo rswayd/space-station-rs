@@ -468,6 +468,7 @@ impl Plugin for TguiClientPlugin {
             .register_ui_view::<crate::interfaces::rapid_pipe_dispenser::RapidPipeDispenserUi>()
             .register_ui_view::<crate::interfaces::air_alarm::AirAlarmUi>()
             .register_ui_view::<crate::interfaces::solar_control::SolarControlUi>()
+            .register_ui_view::<crate::interfaces::teg::ThermoElectricGeneratorUi>()
             .register_ui_view::<crate::interfaces::mech_bay::MechBayPowerConsoleUi>()
             .register_ui_view::<crate::interfaces::ai_airlock::AiAirlockUi>()
             .register_ui_view::<crate::interfaces::apc::ApcUi>()
