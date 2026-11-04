@@ -504,20 +504,14 @@ fn choose(world: &mut World, client: Entity, mob: Entity, e: Entity, choice: Cho
                 set(world, e, |m| m.cups -= 1);
             }
         }
-        Choice::TakeSugar if maker.sugar > 0 => {
-            if take(world, SUGAR) {
-                set(world, e, |m| m.sugar -= 1);
-            }
+        Choice::TakeSugar if maker.sugar > 0 && take(world, SUGAR) => {
+            set(world, e, |m| m.sugar -= 1);
         }
-        Choice::TakeSweetener if maker.sweetener > 0 => {
-            if take(world, SWEETENER) {
-                set(world, e, |m| m.sweetener -= 1);
-            }
+        Choice::TakeSweetener if maker.sweetener > 0 && take(world, SWEETENER) => {
+            set(world, e, |m| m.sweetener -= 1);
         }
-        Choice::TakeCreamer if maker.creamer > 0 => {
-            if take(world, CREAMER) {
-                set(world, e, |m| m.creamer -= 1);
-            }
+        Choice::TakeCreamer if maker.creamer > 0 && take(world, CREAMER) => {
+            set(world, e, |m| m.creamer -= 1);
         }
         _ => {}
     }
