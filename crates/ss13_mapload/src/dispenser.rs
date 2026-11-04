@@ -195,7 +195,10 @@ mod tests {
         let full = dispenser(&types, "/obj/machinery/chem_dispenser/drinks/fullupgrade").unwrap();
         assert!(full.emagged_at_start);
         let beer = dispenser(&types, BEER).unwrap();
-        assert_eq!(beer.dispensable[0], "/datum/reagent/consumable/ethanol/beer");
+        assert_eq!(
+            beer.dispensable[0],
+            "/datum/reagent/consumable/ethanol/beer"
+        );
         assert_eq!(&beer.dispensable[1..], BANDASTATION_BEER);
         assert_eq!(beer.emagged, ["/datum/reagent/iron"]);
     }

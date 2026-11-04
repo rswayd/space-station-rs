@@ -371,7 +371,13 @@ fn microwave(types: &DmTypes, path: &str) -> Option<(String, bool)> {
 /// result, rand(low, high), positive_result, ...)`.
 // shortcut: no `added_reagents` (donk pockets' omnizine), no multi-line calls (raw pancakes);
 // grilling by hot air (`on_turf_atmos_changed`) is not ported.
-fn cook(types: &DmTypes, path: &str, component: &str, proc: &str, names: [&str; 3]) -> Option<Cook> {
+fn cook(
+    types: &DmTypes,
+    path: &str,
+    component: &str,
+    proc: &str,
+    names: [&str; 3],
+) -> Option<Cook> {
     let owner = proc_owner(types, path, proc)?;
     let line = calls(types, component, owner, proc).last()?;
     let args = bind(types, path, &call_args(line)?, &names);

@@ -61,7 +61,10 @@ pub fn kind(path: &str) -> FridgeKind {
         ("/obj/machinery/smartfridge/extract", FridgeKind::Extract),
         ("/obj/machinery/smartfridge/petri", FridgeKind::Petri),
         ("/obj/machinery/smartfridge/organ", FridgeKind::Organ),
-        ("/obj/machinery/smartfridge/chemistry", FridgeKind::Chemistry),
+        (
+            "/obj/machinery/smartfridge/chemistry",
+            FridgeKind::Chemistry,
+        ),
         ("/obj/machinery/smartfridge/disks", FridgeKind::Disks),
     ];
     KINDS
@@ -303,7 +306,12 @@ pub fn item_interaction(
             Span::Notice,
         );
         if !contents(world, held).is_empty() {
-            tell(world, client, Span::Warning, "Некоторые предметы не влазят.");
+            tell(
+                world,
+                client,
+                Span::Warning,
+                "Некоторые предметы не влазят.",
+            );
         }
         refresh_look(world, target);
         return true;
@@ -312,7 +320,10 @@ pub fn item_interaction(
         world,
         client,
         Span::Warning,
-        format!("{name} умно отказывается принимать {}.", name_of(world, held)),
+        format!(
+            "{name} умно отказывается принимать {}.",
+            name_of(world, held)
+        ),
     );
     true
 }
@@ -422,7 +433,12 @@ pub struct Release {
 }
 
 impl ServerUi for FridgeWindow {
-    type Source = (Entity, &'static SmartFridge, Option<&'static Stored>, &'static DmName);
+    type Source = (
+        Entity,
+        &'static SmartFridge,
+        Option<&'static Stored>,
+        &'static DmName,
+    );
     type UserParam = (
         Query<'static, 'static, (&'static DmItem, Option<&'static DmName>)>,
         Query<'static, 'static, &'static Appearance>,

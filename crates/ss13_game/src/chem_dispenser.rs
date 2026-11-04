@@ -119,8 +119,8 @@ pub fn refresh_parts(world: &mut World, e: Entity) {
             .filter(|&p| world.get::<ItemCell>(p).is_some())
             .last()
     });
-    let power_cost = (dm.power_cost - r.sum(PartKind::MatterBin) as f32 * BIN_POWER_CUT)
-        .max(MIN_POWER_COST);
+    let power_cost =
+        (dm.power_cost - r.sum(PartKind::MatterBin) as f32 * BIN_POWER_CUT).max(MIN_POWER_COST);
     let recharge_amount = r
         .tiers(PartKind::Capacitor)
         .fold(dm.recharge_amount, |a, t| a * t as f32);
@@ -197,7 +197,13 @@ pub fn item_interaction(
 }
 
 /// `attack_hand` (the window) and `attack_hand_secondary` (the beaker out).
-pub fn interact(world: &mut World, client: Entity, mob: Entity, target: Entity, right: bool) -> bool {
+pub fn interact(
+    world: &mut World,
+    client: Entity,
+    mob: Entity,
+    target: Entity,
+    right: bool,
+) -> bool {
     if world.get::<ChemDispenser>(target).is_none() {
         return false;
     }
@@ -279,7 +285,9 @@ fn process_dispensers(world: &mut World, mut last: Local<Option<u64>>) {
             if state.charge >= state.maxcharge {
                 continue;
             }
-            let active = world.get::<DmPower>(e).map_or(0.0, |p| p.active_power_usage);
+            let active = world
+                .get::<DmPower>(e)
+                .map_or(0.0, |p| p.active_power_usage);
             crate::kitchen::machine_use_energy(world, e, active * MACHINE_TICK_SECS);
             crate::power::charge_cell(
                 world,
@@ -514,7 +522,9 @@ pub fn apply_act(world: &mut World, actor: Entity, e: Entity, act: DispenserAct)
         }
         DispenserAct::Eject => replace_beaker(world, actor, e, None),
         DispenserAct::Insert => {
-            let held = world.get::<Inventory>(actor).and_then(Inventory::active_item);
+            let held = world
+                .get::<Inventory>(actor)
+                .and_then(Inventory::active_item);
             if let Some(held) = held.filter(|&h| chem_container(world, h)) {
                 replace_beaker(world, actor, e, Some(held));
             }
@@ -589,7 +599,10 @@ mod tests {
         let names = |ids: Vec<ReagentId>| -> Vec<String> {
             ids.into_iter().map(|i| chem.def(i).name.clone()).collect()
         };
-        assert_eq!(names(dispensable(&chem, &dm, false, false)), ["Cola", "Water"]);
+        assert_eq!(
+            names(dispensable(&chem, &dm, false, false)),
+            ["Cola", "Water"]
+        );
         assert_eq!(
             names(dispensable(&chem, &dm, true, true)),
             ["Cola", "Water", "Ice", "Toxin"]

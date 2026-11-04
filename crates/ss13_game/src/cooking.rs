@@ -242,7 +242,13 @@ pub fn item_interaction(
 
 /// An empty-hand click (`attack_hand`), a right click on an open oven takes its tray out. True
 /// when the click was theirs.
-pub fn interact(world: &mut World, client: Entity, mob: Entity, target: Entity, right: bool) -> bool {
+pub fn interact(
+    world: &mut World,
+    client: Entity,
+    mob: Entity,
+    target: Entity,
+    right: bool,
+) -> bool {
     if let Some(oven) = world.get::<Oven>(target).cloned() {
         if right && oven.open {
             if let Some(tray) = oven.tray {
@@ -446,7 +452,14 @@ fn process_oven(world: &mut World, e: Entity, dt: f32) {
         times.baked += dt * 10.0;
         world.entity_mut(item).insert(times);
         if times.baked >= required {
-            finish_cooking(world, item, &food.bake_result, food.bake_good, e, Some(tray));
+            finish_cooking(
+                world,
+                item,
+                &food.bake_result,
+                food.bake_good,
+                e,
+                Some(tray),
+            );
         }
     }
     let joules = active_power(world, e);
@@ -465,7 +478,9 @@ fn roll(world: &mut World, [low, high]: [f32; 2]) -> f32 {
 }
 
 fn active_power(world: &World, e: Entity) -> f64 {
-    world.get::<DmPower>(e).map_or(0.0, |p| p.active_power_usage)
+    world
+        .get::<DmPower>(e)
+        .map_or(0.0, |p| p.active_power_usage)
 }
 
 /// `finish_baking` / `finish_grilling`: the result where the item was (on the tray, or on the
@@ -682,7 +697,10 @@ fn fryer_item(world: &mut World, client: Entity, mob: Entity, held: Entity, e: E
     if FRY_BLACKLIST.iter().any(|b| is_under(&path, b)) || is_storage(world, held) {
         return false;
     }
-    if world.get::<DeepFryer>(e).is_some_and(|f| f.frying.is_some()) {
+    if world
+        .get::<DeepFryer>(e)
+        .is_some_and(|f| f.frying.is_some())
+    {
         return false;
     }
     let what = name_of(world, held);
@@ -737,7 +755,15 @@ fn process_fryer(world: &mut World, e: Entity, dt: f32) {
         && let Some(mut soaked) = world.get::<Reagents>(item).map(|r| r.0.clone())
     {
         // "Fried foods gain more of the reagent thanks to space magic."
-        oil.trans_to(&chem, &mut soaked, oil_use * dt, speed * 3.0, None, false, false);
+        oil.trans_to(
+            &chem,
+            &mut soaked,
+            oil_use * dt,
+            speed * 3.0,
+            None,
+            false,
+            false,
+        );
         world.entity_mut(e).insert(Reagents(oil));
         world.entity_mut(item).insert(Reagents(soaked));
     }
@@ -790,7 +816,11 @@ pub fn on_removed(world: &mut World, e: Entity) {
     if world
         .get::<DeepFryer>(e)
         .and_then(|f| f.frying)
-        .is_some_and(|i| world.get::<crate::storage::StoredIn>(i).is_none_or(|s| s.0 != e))
+        .is_some_and(|i| {
+            world
+                .get::<crate::storage::StoredIn>(i)
+                .is_none_or(|s| s.0 != e)
+        })
     {
         stop_frying(world, e);
     }
@@ -812,7 +842,8 @@ pub fn fry(world: &mut World, item: Entity, fry_time: f32) {
         match level {
             0 => {
                 name.name = format!("{prefix} {}", name.name);
-                name.desc.push_str(" It's been lightly fried in a deep fryer.");
+                name.desc
+                    .push_str(" It's been lightly fried in a deep fryer.");
             }
             1 => {
                 name.name = format!("{prefix} {}", name.name);
@@ -911,11 +942,20 @@ pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<(Span, Strin
     if !food.grill_result.is_empty() && times.grilled > 0.0 {
         let required = times.grill_required.unwrap_or(f32::INFINITY);
         let text = if !food.grill_good {
-            (Span::Danger, format!("{name} should probably not be put on the grill."))
+            (
+                Span::Danger,
+                format!("{name} should probably not be put on the grill."),
+            )
         } else if times.grilled <= required * 0.75 {
-            (Span::Notice, format!("{name} probably needs to be cooked a bit longer!"))
+            (
+                Span::Notice,
+                format!("{name} probably needs to be cooked a bit longer!"),
+            )
         } else {
-            (Span::Notice, format!("{name} seems to be almost finished cooking!"))
+            (
+                Span::Notice,
+                format!("{name} seems to be almost finished cooking!"),
+            )
         };
         lines.push(text);
     } else if food.grill_good {
@@ -953,7 +993,10 @@ pub fn refresh_look(world: &mut World, e: Entity) {
         .get::<DmAtom>(e)
         .map(|a| a.icon_state.clone())
         .unwrap_or_default();
-    let base_state = base.rsplit_once('_').map_or(base.as_str(), |(b, _)| b).to_owned();
+    let base_state = base
+        .rsplit_once('_')
+        .map_or(base.as_str(), |(b, _)| b)
+        .to_owned();
     let (state, overlays): (String, Vec<Overlay>) = if let Some(oven) = world.get::<Oven>(e) {
         let oven = oven.clone();
         let active = oven_active(world, e);
@@ -1039,7 +1082,8 @@ fn cooking_tick(world: &mut World, mut last: Local<Option<u64>>) {
     *last = Some(ticks);
     for _ in from..ticks {
         let dt = MACHINE_TICK_SECS as f32;
-        let mut q = world.query_filtered::<Entity, Or<(With<Oven>, With<Griddle>, With<DeepFryer>)>>();
+        let mut q =
+            world.query_filtered::<Entity, Or<(With<Oven>, With<Griddle>, With<DeepFryer>)>>();
         let machines: Vec<Entity> = q.iter(world).collect();
         for e in machines {
             if world.get::<Oven>(e).is_some() {

@@ -112,7 +112,10 @@ mod tests {
         let chem = fridge(&types, "/obj/machinery/smartfridge/chem").unwrap();
         assert_eq!(
             chem.initial_contents,
-            [("/obj/item/pill".into(), 12), ("/obj/item/bottle".into(), 1)]
+            [
+                ("/obj/item/pill".into(), 12),
+                ("/obj/item/bottle".into(), 1)
+            ]
         );
         assert_eq!(chem.overlay, "chem");
         assert!(chem.visible_contents && chem.has_emissive);

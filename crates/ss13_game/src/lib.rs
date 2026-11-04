@@ -155,8 +155,6 @@ pub mod client;
 pub mod closets;
 #[cfg(feature = "server")]
 pub mod combat;
-#[cfg(feature = "server")]
-pub mod cooking;
 pub mod comms;
 #[cfg(feature = "client")]
 pub mod comms_client;
@@ -164,6 +162,8 @@ pub mod comms_client;
 pub mod comms_server;
 #[cfg(feature = "server")]
 pub mod construction;
+#[cfg(feature = "server")]
+pub mod cooking;
 #[cfg(feature = "server")]
 pub mod disposals;
 #[cfg(feature = "server")]

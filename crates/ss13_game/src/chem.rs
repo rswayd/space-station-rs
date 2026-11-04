@@ -1333,9 +1333,7 @@ fn open_soda(world: &mut World, client: Entity, can: Entity) {
             visible(
                 world,
                 mob,
-                &format!(
-                    "Вы открываете {name}, и вас внезапно окатывает потоком жидкости! Ааа!!"
-                ),
+                &format!("Вы открываете {name}, и вас внезапно окатывает потоком жидкости! Ааа!!"),
                 &format!(
                     "{} открывает {name}, и его внезапно окатывает шипучим содержимым!",
                     user.unwrap_or_default()

@@ -11,11 +11,11 @@ use std::path::{Path, PathBuf};
 use bevy::prelude::*;
 use ss13_game::chem::{Chem, Reagents};
 use ss13_game::chem_dispenser::ChemDispenser;
-use ss13_game::smartfridge::SmartFridge;
 use ss13_game::combat::NextMove;
 use ss13_game::cooking::{CookTimes, DeepFryer, Griddle, Oven};
 use ss13_game::inventory::Inventory;
 use ss13_game::mecha::core::ItemCell;
+use ss13_game::smartfridge::SmartFridge;
 use ss13_game::storage::Stored;
 use ss13_game::testing::{self, Drive, fixture_map, write_fixture};
 use ss13_mapload::convert::DmTypes;
@@ -539,7 +539,10 @@ fn oven_griddle_and_fryer() {
                 .any(|&i| s.path(i) == "/obj/item/food/bread/plain")
         })
     });
-    assert!(s.server.world().get_entity(dough).is_err(), "the dough is gone");
+    assert!(
+        s.server.world().get_entity(dough).is_err(),
+        "the dough is gone"
+    );
     let bread = s.get::<Stored>(tray).items()[0];
     assert_eq!(
         s.amount(bread, "/datum/reagent/consumable/nutriment"),
@@ -581,13 +584,18 @@ fn oven_griddle_and_fryer() {
     s.click(griddle);
     s.run_until("on", |s| s.get::<Griddle>(griddle).on);
     s.run_until_for(10.0, "grilling", |s| {
-        s.try_get::<CookTimes>(slab).is_some_and(|t| t.grilled > 0.0)
+        s.try_get::<CookTimes>(slab)
+            .is_some_and(|t| t.grilled > 0.0)
     });
     s.run_until_for(100.0, "a steak", |s| {
         s.item(GRIDDLE, "/obj/item/food/meat/steak").is_some()
     });
     let steak = s.item(GRIDDLE, "/obj/item/food/meat/steak").unwrap();
-    assert_eq!(s.get::<Griddle>(griddle).items, [steak], "the result stays on it");
+    assert_eq!(
+        s.get::<Griddle>(griddle).items,
+        [steak],
+        "the result stays on it"
+    );
     assert_eq!(s.get::<Appearance>(steak).pixel_offset, [4, -3]);
     assert_eq!(s.amount(steak, "/datum/reagent/consumable/nutriment"), 4.0);
     // Picked up, it is off the griddle.
@@ -631,10 +639,18 @@ fn soda_dispenser_glass_style_and_cans() {
     let cell = d.cell.expect("the board's high-capacity cell part");
     let full = s.get::<ItemCell>(cell).0.charge;
     assert_eq!(full, 10_000_000.0);
-    assert_eq!((d.amount, d.power_cost, d.recharge_amount), (10.0, 100.0, 300.0));
+    assert_eq!(
+        (d.amount, d.power_cost, d.recharge_amount),
+        (10.0, 100.0, 300.0)
+    );
 
     // The glass in hand goes in and the window opens: cola, ice and water sorted by name.
-    let glass = s.item(SPAWN, "/obj/item/reagent_containers/cup/glass/drinkingglass").unwrap();
+    let glass = s
+        .item(
+            SPAWN,
+            "/obj/item/reagent_containers/cup/glass/drinkingglass",
+        )
+        .unwrap();
     s.take(glass);
     s.click(dispenser);
     s.run_until("the window", |s| s.window::<ChemDispenserUi>().is_some());
@@ -745,7 +761,9 @@ fn smart_fridge() {
     assert_eq!(s.get::<Stored>(fridge).items().len(), 1);
     // Back in; a toy is refused.
     s.click(fridge);
-    s.run_until("loaded back", |s| s.get::<Stored>(fridge).items().len() == 2);
+    s.run_until("loaded back", |s| {
+        s.get::<Stored>(fridge).items().len() == 2
+    });
     s.take(toy);
     s.click(fridge);
     s.run_until("refused", |s| s.said("отказывается принимать"));

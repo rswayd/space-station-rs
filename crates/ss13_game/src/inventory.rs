@@ -782,8 +782,9 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                     if crate::smartfridge::item_interaction(world, client, mob, held, target) => {}
                 // A container into a chem dispenser (before pouring into it).
                 Some(held)
-                    if crate::chem_dispenser::item_interaction(world, client, mob, held, target) => {
-                }
+                    if crate::chem_dispenser::item_interaction(
+                        world, client, mob, held, target,
+                    ) => {}
                 // tg `item_interaction` of wall mounts: a button pressed with an item, cabinets.
                 Some(held)
                     if crate::wallmount::item_interaction(
