@@ -26,6 +26,7 @@ pub mod construct;
 pub mod contents;
 pub mod convert;
 pub mod disposal;
+pub mod dispenser;
 pub mod dock;
 pub mod door;
 pub mod fidelity;
@@ -70,6 +71,7 @@ pub use circuit::{CircuitPart, DmCircuit, DmMachine, FRAME_RUNTIME_TYPES};
 pub use clothing::{DmClothing, DmTank};
 pub use construct::{CONSTRUCTION_TYPES, DmObj, DmStack, DmTable, DmTool, DmTurfBuild};
 pub use contents::{DmCloset, DmContents, DmStorage, DmWeight, Fill, PickArm};
+pub use dispenser::DmChemDispenser;
 pub use disposal::{DISPOSAL_RUNTIME_TYPES, DmMailSort};
 pub use dock::{DmDockingPort, ShuttleTemplates};
 pub use door::{DmAirlockHelper, DmDoor, DoorKind};
@@ -303,6 +305,7 @@ impl Plugin for DmProtoPlugin {
             .register_proto_component::<DmDefib>(medical::DEFIB_COMPONENT)
             .register_proto_component::<DmReagents>(reagents::CONTAINER_COMPONENT)
             .register_proto_component::<DmFood>(food::FOOD_COMPONENT)
+            .register_proto_component::<DmChemDispenser>(dispenser::DISPENSER_COMPONENT)
             .register_proto_component::<DmMob>("dm_mob")
             .register_proto_component::<DmWallMount>("dm_wallmount")
             .register_proto_component::<DmCircuit>("dm_circuit")

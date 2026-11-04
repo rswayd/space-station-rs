@@ -36,8 +36,15 @@ pub const PROCESSOR: &str = "/obj/machinery/processor";
 /// `/obj/machinery/reagentgrinder/Initialize(mapload)` puts one in.
 pub const GRINDER_BEAKER: &str = "/obj/item/reagent_containers/cup/beaker/large";
 pub const GRINDER: &str = "/obj/machinery/reagentgrinder";
+/// `/obj/machinery/oven/Initialize(mapload)` puts one in.
+pub const OVEN: &str = "/obj/machinery/oven";
+pub const OVEN_TRAY: &str = "/obj/item/plate/oven_tray";
+const SODA_CANS: &str = "/obj/item/reagent_containers/cup/soda_cans";
+const CRUSHED_CAN: &str = "/obj/item/trash/can";
 const PROCESSABLE: &str = "/datum/element/processable";
 const MICROWAVABLE: &str = "/datum/element/microwavable";
+const BAKEABLE: &str = "/datum/component/bakeable";
+const GRILLABLE: &str = "/datum/component/grillable";
 /// `DEFAULT_EDIBLE_VOLUME`.
 pub const DEFAULT_EDIBLE_VOLUME: f32 = 50.0;
 /// `/datum/component/edible/Initialize` defaults: `eat_time = 1 SECONDS`, `bite_consumption = 2`,
@@ -101,6 +108,24 @@ pub struct DmFood {
     pub processor_multiplier: u32,
     /// Deciseconds.
     pub processor_time: f32,
+    /// `/datum/component/bakeable` (`make_bakeable()`): the oven turns it into this after a
+    /// time rolled in `bake_time` (deciseconds); empty: not bakeable.
+    pub bake_result: String,
+    pub bake_time: [f32; 2],
+    /// `positive_result`: a real recipe (else it burns).
+    pub bake_good: bool,
+    /// `/datum/component/grillable` (`make_grillable()`) on a griddle, the same way.
+    pub grill_result: String,
+    pub grill_time: [f32; 2],
+    pub grill_good: bool,
+}
+
+/// A cooking component's result, time range (deciseconds) and whether it is a real recipe.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Cook {
+    pub result: String,
+    pub time: [f32; 2],
+    pub good: bool,
 }
 
 fn texts(value: Option<&Value>) -> Vec<String> {
@@ -132,7 +157,9 @@ fn tastes(value: Option<&Value>) -> Vec<Taste> {
 
 /// The arguments of an `AddElement(...)` line, split at top-level commas (the element first).
 fn call_args(line: &str) -> Option<Vec<String>> {
-    let start = line.find("AddElement(")? + "AddElement(".len();
+    let start = ["AddElement(", "AddComponent("]
+        .iter()
+        .find_map(|call| Some(line.find(call)? + call.len()))?;
     let mut args = Vec::new();
     let (mut depth, mut current, mut quoted) = (0, String::new(), false);
     for c in line[start..].chars() {
@@ -166,6 +193,8 @@ fn call_args(line: &str) -> Option<Vec<String>> {
 enum Arg {
     Path(String),
     Num(f32),
+    /// `rand(low, high)`.
+    Range(f32, f32),
     Text(String),
     Null,
 }
@@ -175,6 +204,7 @@ impl Arg {
         match self {
             Arg::Path(_) => true,
             Arg::Num(n) => *n != 0.0,
+            Arg::Range(..) => true,
             Arg::Text(t) => !t.is_empty(),
             Arg::Null => false,
         }
@@ -202,6 +232,14 @@ fn arg_value(types: &DmTypes, path: &str, text: &str) -> Option<Arg> {
     }
     if text.starts_with('/') {
         return Some(Arg::Path(text.to_owned()));
+    }
+    if let Some(inner) = text.strip_prefix("rand(").and_then(|t| t.strip_suffix(')')) {
+        let (low, high) = inner.split_once(',')?;
+        let n = |t: &str| match arg_value(types, path, t)? {
+            Arg::Num(n) => Some(n),
+            _ => None,
+        };
+        return Some(Arg::Range(n(low)?, n(high)?));
     }
     if let Some(n) = text.strip_suffix("SECONDS") {
         return n.trim().parse::<f32>().ok().map(|n| Arg::Num(n * 10.0));
@@ -267,7 +305,11 @@ fn calls<'a>(
         .get(element)
         .into_iter()
         .flatten()
-        .filter(move |c| c.call == "AddElement" && c.owner == owner && c.proc == proc)
+        .filter(move |c| {
+            matches!(c.call.as_str(), "AddElement" | "AddComponent")
+                && c.owner == owner
+                && c.proc == proc
+        })
         .map(|c| c.line.as_str())
 }
 
@@ -323,6 +365,29 @@ fn microwave(types: &DmTypes, path: &str) -> Option<(String, bool)> {
     };
     let bad = args[2].as_ref().is_some_and(Arg::truthy);
     Some((result, !bad))
+}
+
+/// `make_bakeable()`/`make_grillable()` of the nearest override: `AddComponent(component,
+/// result, rand(low, high), positive_result, ...)`.
+// shortcut: no `added_reagents` (donk pockets' omnizine), no multi-line calls (raw pancakes);
+// grilling by hot air (`on_turf_atmos_changed`) is not ported.
+fn cook(types: &DmTypes, path: &str, component: &str, proc: &str, names: [&str; 3]) -> Option<Cook> {
+    let owner = proc_owner(types, path, proc)?;
+    let line = calls(types, component, owner, proc).last()?;
+    let args = bind(types, path, &call_args(line)?, &names);
+    let Some(Arg::Path(result)) = args[0].clone() else {
+        return None;
+    };
+    let time = match args[1] {
+        Some(Arg::Range(low, high)) => [low, high],
+        Some(Arg::Num(n)) => [n, n],
+        _ => return None,
+    };
+    Some(Cook {
+        result,
+        time,
+        good: args[2].as_ref().is_some_and(Arg::truthy),
+    })
 }
 
 /// The `/datum/food_processor_process` that takes `path` in a plain food processor: tg files
@@ -387,6 +452,24 @@ pub fn food(types: &DmTypes, path: &str) -> Option<DmFood> {
     if let Some((result, good)) = microwave(types, path) {
         food.microwaved = result;
         food.microwave_good = good;
+    }
+    if let Some(c) = cook(
+        types,
+        path,
+        BAKEABLE,
+        "make_bakeable",
+        ["bake_result", "required_bake_time", "positive_result"],
+    ) {
+        (food.bake_result, food.bake_time, food.bake_good) = (c.result, c.time, c.good);
+    }
+    if let Some(c) = cook(
+        types,
+        path,
+        GRILLABLE,
+        "make_grillable",
+        ["cook_result", "required_cook_time", "positive_result"],
+    ) {
+        (food.grill_result, food.grill_time, food.grill_good) = (c.result, c.time, c.good);
     }
     if let Some(recipe) = processor_recipe(types, path) {
         let r = |var: &str| types.resolved(recipe, var);
@@ -455,9 +538,22 @@ pub fn food_closure<'a>(
         if is_under(&path, GRINDER) {
             next.push(GRINDER_BEAKER.to_owned());
         }
+        if is_under(&path, OVEN) {
+            next.push(OVEN_TRAY.to_owned());
+        }
+        // A soda can that bursts leaves a crushed can (`soda_cans/throw_impact`).
+        if is_under(&path, SODA_CANS) {
+            next.push(CRUSHED_CAN.to_owned());
+        }
         if let Some(f) = food(types, &path) {
             next.push(BAD_RECIPE.to_owned());
-            next.extend([f.microwaved, f.processor_output, f.trash_type]);
+            next.extend([
+                f.microwaved,
+                f.processor_output,
+                f.trash_type,
+                f.bake_result,
+                f.grill_result,
+            ]);
             next.extend(f.processing.into_iter().map(|p| p.result));
         }
         for p in next {
@@ -467,6 +563,11 @@ pub fn food_closure<'a>(
         }
     }
     out
+}
+
+/// A reflected `[f32; 2]` is a RON tuple.
+fn pair([a, b]: [f32; 2]) -> String {
+    format!("({a:?}, {b:?})")
 }
 
 /// Converter fields of a food type: the whole [`DmFood`].
@@ -522,6 +623,12 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
             f.processor_multiplier.to_string(),
         ),
         ext(c, "processor_time", format!("{:?}", f.processor_time)),
+        ext(c, "bake_result", s(&f.bake_result)),
+        ext(c, "bake_time", pair(f.bake_time)),
+        ext(c, "bake_good", f.bake_good.to_string()),
+        ext(c, "grill_result", s(&f.grill_result)),
+        ext(c, "grill_time", pair(f.grill_time)),
+        ext(c, "grill_good", f.grill_good.to_string()),
     ]
 }
 
@@ -554,7 +661,11 @@ mod tests {
             "food_reagents": null, "max_volume": null, "bite_consumption": null,
             "eat_time": null, "tastes": null, "eatverbs": null, "trash_type": null,
             "junkiness": null, "food_flags": null, "starting_reagent_purity": null },
-            "procs": ["make_microwaveable", "make_processable"] },
+            "procs": ["make_microwaveable", "make_processable", "make_bakeable", "make_grillable"] },
+        "/obj/item/food/dough": { "parent": "/obj/item/food", "procs": ["make_bakeable"] },
+        "/obj/item/food/donkpocket": { "parent": "/obj/item/food", "declared_vars": {
+            "warm_type": { "path": "/obj/item/food/bread/plain" }, "baking_time_short": 250,
+            "baking_time_long": 300 }, "procs": ["make_bakeable"] },
         "/obj/item/food/badrecipe": { "parent": "/obj/item/food", "declared_vars": {
             "name": "burned mess" } },
         "/obj/item/food/bread": { "parent": "/obj/item/food", "declared_vars": {
@@ -592,6 +703,18 @@ mod tests {
             "line": "AddElement(/datum/element/microwavable, /obj/item/food/badrecipe, bad_recipe = TRUE)" },
           { "type": "/obj/item/food/egg", "proc": "make_microwaveable", "call": "AddElement",
             "line": "AddElement(/datum/element/microwavable, /obj/item/food/boiledegg)" }
+        ],
+        "/datum/component/bakeable": [
+          { "type": "/obj/item/food", "proc": "make_bakeable", "call": "AddComponent",
+            "line": "AddComponent(/datum/component/bakeable, /obj/item/food/badrecipe, rand(25 SECONDS, 40 SECONDS), FALSE)" },
+          { "type": "/obj/item/food/dough", "proc": "make_bakeable", "call": "AddComponent",
+            "line": "AddComponent(/datum/component/bakeable, /obj/item/food/bread/plain, rand(30 SECONDS, 45 SECONDS), TRUE, TRUE)" },
+          { "type": "/obj/item/food/donkpocket", "proc": "make_bakeable", "call": "AddComponent",
+            "line": "AddComponent(/datum/component/bakeable, warm_type, rand(baking_time_short, baking_time_long), TRUE, TRUE, list(/datum/reagent/medicine/omnizine = 6))" }
+        ],
+        "/datum/component/grillable": [
+          { "type": "/obj/item/food", "proc": "make_grillable", "call": "AddComponent",
+            "line": "AddComponent(/datum/component/grillable, /obj/item/food/badrecipe, rand(20 SECONDS, 30 SECONDS), FALSE)" }
         ],
         "/datum/element/processable": [
           { "type": "/obj/item/food/bread", "proc": "make_processable", "call": "AddElement",
@@ -634,6 +757,32 @@ mod tests {
         assert_eq!(slice.eatverbs.len(), 6);
         assert_eq!(bread.volume, 80.0);
         assert_eq!(bread.tastes[0].text, "bread");
+    }
+
+    #[test]
+    fn bake_and_grill_components_follow_the_nearest_override() {
+        let types = types();
+        let dough = food(&types, "/obj/item/food/dough").unwrap();
+        assert_eq!(
+            (dough.bake_result.as_str(), dough.bake_time, dough.bake_good),
+            ("/obj/item/food/bread/plain", [300.0, 450.0], true)
+        );
+        // `rand(baking_time_short, baking_time_long)` reads the type's vars.
+        let pocket = food(&types, "/obj/item/food/donkpocket").unwrap();
+        assert_eq!(
+            (pocket.bake_result.as_str(), pocket.bake_time),
+            ("/obj/item/food/bread/plain", [250.0, 300.0])
+        );
+        // Everything else burns: `/obj/item/food`'s own procs.
+        let egg = food(&types, "/obj/item/food/egg").unwrap();
+        assert_eq!(
+            (egg.bake_result.as_str(), egg.bake_time, egg.bake_good),
+            (BAD_RECIPE, [250.0, 400.0], false)
+        );
+        assert_eq!(
+            (egg.grill_result.as_str(), egg.grill_time, egg.grill_good),
+            (BAD_RECIPE, [200.0, 300.0], false)
+        );
     }
 
     #[test]

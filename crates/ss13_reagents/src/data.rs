@@ -85,10 +85,26 @@ pub struct ReactionDef {
     pub special: bool,
 }
 
+/// One tg `/datum/glass_style` (`reagent_containers/cups/_glass_datum.dm`): a container of
+/// exactly `container`'s type whose main reagent is exactly `drink` looks like this.
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct GlassStyleDef {
+    pub container: String,
+    pub drink: String,
+    /// Empty: the container keeps its name (or description).
+    pub name: String,
+    pub desc: String,
+    /// Empty: the container keeps its sprite.
+    pub icon: String,
+    pub icon_state: String,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct ChemData {
     pub reagents: Vec<ReagentDef>,
     pub reactions: Vec<ReactionDef>,
+    #[serde(default)]
+    pub glass_styles: Vec<GlassStyleDef>,
 }
 
 impl ChemData {

@@ -7,7 +7,7 @@ use std::collections::BTreeSet;
 
 use bevy::prelude::*;
 use serde_json::Value;
-use ss13_reagents::{ChemData, ReactionDef, ReagentDef};
+use ss13_reagents::{ChemData, GlassStyleDef, ReactionDef, ReagentDef};
 
 use crate::convert::DmTypes;
 use crate::fidelity::{ext, is_under, num};
@@ -19,6 +19,9 @@ pub const REACTION_ROOT: &str = "/datum/chemical_reaction";
 pub const RANDOMIZED_REACTIONS: &str = "/datum/chemical_reaction/randomized";
 /// Its `pre_reaction_other_checks` always passes.
 const FOOD_REACTIONS: &str = "/datum/chemical_reaction/food";
+const GLASS_STYLE_ROOT: &str = "/datum/glass_style";
+/// `/datum/glass_style/has_foodtype/soup/New()`: no name or description means the soup's.
+const SOUP_STYLE: &str = "/datum/glass_style/has_foodtype/soup";
 pub const CONTAINER_ROOT: &str = "/obj/item/reagent_containers";
 pub const CONTAINER_COMPONENT: &str = "dm_reagents";
 
@@ -242,7 +245,46 @@ pub fn chem_data(types: &DmTypes) -> (ChemData, Skipped) {
             ),
         });
     }
+    data.glass_styles = glass_styles(types, &data.reagents);
     (data, skipped)
+}
+
+/// `create_glass_styles()`: every style type with both required types set.
+fn glass_styles(types: &DmTypes, reagents: &[ReagentDef]) -> Vec<GlassStyleDef> {
+    let mut out = Vec::new();
+    let paths: BTreeSet<&String> = types.types.keys().collect();
+    for path in paths {
+        if !is_under(path, GLASS_STYLE_ROOT) {
+            continue;
+        }
+        let get = |var: &str| types.resolved(path, var);
+        let (Some(container), Some(drink)) = (
+            path_value(get("required_container_type")),
+            path_value(get("required_drink_type")),
+        ) else {
+            continue;
+        };
+        let mut style = GlassStyleDef {
+            name: string(get("name")),
+            desc: string(get("desc")),
+            icon: string(get("icon")),
+            icon_state: string(get("icon_state")),
+            container,
+            drink,
+        };
+        if is_under(path, SOUP_STYLE)
+            && let Some(r) = reagents.iter().find(|r| r.path == style.drink)
+        {
+            if style.name.is_empty() {
+                style.name = r.name.clone();
+            }
+            if style.desc.is_empty() {
+                style.desc = r.description.clone();
+            }
+        }
+        out.push(style);
+    }
+    out
 }
 
 /// Reactions [`chem_data`] did not convert.

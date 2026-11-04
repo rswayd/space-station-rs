@@ -35,7 +35,8 @@ use ss13_mapload::{DmAtom, DmClothing, DmItem, DmName, DmReagents, IconIndex, Ma
 use ss13_net::chat::server::SendChat;
 use ss13_reagents::metabolism::{self, Body, Damage};
 use ss13_reagents::{
-    CHEM_FILE, ChemData, Chemistry, Holder, Owner, flags, is_under, mix_color, round_to,
+    CHEM_FILE, ChemData, Chemistry, GlassStyleDef, Holder, Owner, flags, is_under, mix_color,
+    round_to,
 };
 use ss13_shared::chat::{ChatChannel, ChatMessage, ChatSegment, Span};
 use ss13_shared::protocol::{ClickModifiers, InventorySlot};
@@ -981,6 +982,16 @@ fn try_splash(world: &mut World, actor: Actor, target: Entity) -> bool {
 /// tg `attack_self` of a held container: the next of `possible_transfer_amounts`. False for
 /// other items.
 pub fn attack_self(world: &mut World, client: Entity, item: Entity) -> bool {
+    if world.get::<DmReagents>(item).is_none() {
+        return false;
+    }
+    // `soda_cans/attack_self`: a closed can opens.
+    if is_under(&path(world, item), SODA_CANS)
+        && holder(world, item).is_some_and(|h| !h.is_drainable())
+    {
+        open_soda(world, client, item);
+        return true;
+    }
     let Some(dm) = world.get::<DmReagents>(item) else {
         return false;
     };
@@ -1214,10 +1225,14 @@ fn refresh_look(world: &mut World, chem: &Chemistry, e: Entity) {
     let Some(icons) = world.get_resource::<IconIndex>() else {
         return;
     };
-    let syringe = is_under(&path(world, e), SYRINGE_ROOT);
+    let item_path = path(world, e);
+    let syringe = is_under(&item_path, SYRINGE_ROOT);
     let color = mix_color(chem, &h.reagents);
     let total = h.total_volume;
     let (mut state, mut fill) = (None, None);
+    let style = glass_style(chem, &item_path, h);
+    // `drinkingglass/on_cup_change`: a styled glass drops its fill thresholds.
+    let styled_sprite = style.is_some_and(|s| !s.icon.is_empty() && !s.icon_state.is_empty());
     if syringe {
         // `get_rounded_vol`; the base state is `[base_icon_state]_0` at spawn.
         let rounded = if total == 0.0 {
@@ -1236,7 +1251,7 @@ fn refresh_look(world: &mut World, chem: &Chemistry, e: Entity) {
         if total > 0.0 {
             fill = icons.get(&dm.fill_icon, &format!("syringe{rounded}"));
         }
-    } else if !dm.fill_icon_thresholds.is_empty() && total > 0.0 {
+    } else if !styled_sprite && !dm.fill_icon_thresholds.is_empty() && total > 0.0 {
         let prefix = if dm.fill_icon_state.is_empty() {
             &atom.icon_state
         } else {
@@ -1280,6 +1295,8 @@ fn refresh_look(world: &mut World, chem: &Chemistry, e: Entity) {
             appearance.icon_state = *id;
         }
     }
+    let style = style.cloned();
+    apply_glass_style(world, e, &item_path, style.as_ref(), total > 0.0);
     if let Some((_, name)) = state
         && let Some(mut item) = world.get_mut::<DmItem>(e)
         && item.inhand_icon_state != name
@@ -1290,6 +1307,201 @@ fn refresh_look(world: &mut World, chem: &Chemistry, e: Entity) {
         {
             inventory.set_changed();
         }
+    }
+}
+
+pub const SODA_CANS: &str = "/obj/item/reagent_containers/cup/soda_cans";
+/// `/obj/item/trash/can`: what a burst can leaves.
+pub const CRUSHED_CAN: &str = "/obj/item/trash/can";
+/// `SODA_FIZZINESS_THROWN`.
+const FIZZINESS_THROWN: f32 = 15.0;
+
+/// A closed soda can's `fizziness`: the chance (percent) it bursts when opened.
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq)]
+pub struct Fizziness(pub f32);
+
+/// tg `open_soda`: `prob(fizziness)` sprays the opener, else the tab pops; open either way.
+fn open_soda(world: &mut World, client: Entity, can: Entity) {
+    let fizz = world.get::<Fizziness>(can).map_or(0.0, |f| f.0);
+    let mob = world.get::<CarriedBy>(can).map(|c| c.0);
+    if world.resource_mut::<CombatRng>().chance(fizz) {
+        let (user, name) = (mob.map(|m| name_of(world, m)), name_of(world, can));
+        if let Some(mob) = mob {
+            visible(
+                world,
+                mob,
+                &format!(
+                    "Вы открываете {name}, и вас внезапно окатывает потоком жидкости! Ааа!!"
+                ),
+                &format!(
+                    "{} открывает {name}, и его внезапно окатывает шипучим содержимым!",
+                    user.unwrap_or_default()
+                ),
+                Span::Danger,
+            );
+        }
+        burst_soda(world, can);
+        return;
+    }
+    tell(
+        world,
+        client,
+        Span::Plain,
+        "Вы отгибаете язычок банки с приятным хлопком.",
+    );
+    if let Some(mut r) = world.get_mut::<Reagents>(can) {
+        r.0.flags |= flags::OPENCONTAINER;
+    }
+}
+
+/// tg `burst_soda`: open and empty.
+// shortcut: the contents are not exposed to the target (`expose_*` procs are not ported).
+fn burst_soda(world: &mut World, can: Entity) {
+    if let Some(mut r) = world.get_mut::<Reagents>(can) {
+        r.0.flags |= flags::OPENCONTAINER;
+        r.0.clear();
+    }
+}
+
+/// tg `soda_cans/throw_impact` of a closed, full can that was not caught: 15 more fizziness,
+/// then `prob(fizziness)` it bursts into a crushed can.
+pub fn soda_thrown(world: &mut World, can: Entity) {
+    if !is_under(&path(world, can), SODA_CANS)
+        || holder(world, can).is_none_or(|h| h.is_open_container() || h.total_volume <= 0.0)
+    {
+        return;
+    }
+    let fizz = world.get::<Fizziness>(can).map_or(0.0, |f| f.0) + FIZZINESS_THROWN;
+    world.entity_mut(can).insert(Fizziness(fizz));
+    if !world.resource_mut::<CombatRng>().chance(fizz) {
+        return;
+    }
+    burst_soda(world, can);
+    let name = name_of(world, can);
+    visible(
+        world,
+        can,
+        "",
+        &format!("{name} разрывается от удара, всё разливается!"),
+        Span::Danger,
+    );
+    let Some(pos) = world.get::<TilePos>(can).copied() else {
+        return;
+    };
+    let state = world.get::<Appearance>(can).map(|a| a.icon_state);
+    if let Some(crushed) = crate::construction::spawn_obj(world, CRUSHED_CAN, pos)
+        && let Some(state) = state
+        && let Some(mut look) = world.get_mut::<Appearance>(crushed)
+    {
+        // `crushed_can.icon_state = icon_state`.
+        look.icon_state = state;
+    }
+    world.despawn(can);
+    crate::construction::tile_changed(world, pos);
+}
+
+/// Containers with tg `/datum/component/takes_reagent_appearance` and the container type their
+/// styles are filed under (`base_container_type`, else their own type).
+const SHOT_GLASS: &str = "/obj/item/reagent_containers/cup/glass/drinkingglass/shotglass";
+const DRINKING_GLASS: &str = "/obj/item/reagent_containers/cup/glass/drinkingglass";
+const FILLED_GLASS: &str = "/obj/item/reagent_containers/cup/glass/drinkingglass/filled";
+const SMALL_CARTON: &str = "/obj/item/reagent_containers/cup/glass/bottle/juice/smallcarton";
+
+fn style_container(path: &str) -> Option<&'static str> {
+    if path == SHOT_GLASS {
+        Some(SHOT_GLASS)
+    } else if path == DRINKING_GLASS || is_under(path, FILLED_GLASS) {
+        Some(DRINKING_GLASS)
+    } else if is_under(path, SMALL_CARTON) {
+        Some(SMALL_CARTON)
+    } else {
+        None
+    }
+}
+
+/// `get_main_reagent_style()`: the style of the main reagent (the largest volume, the first on
+/// a tie: `get_master_reagent`) for the container's type.
+pub fn glass_style<'a>(chem: &'a Chemistry, path: &str, h: &Holder) -> Option<&'a GlassStyleDef> {
+    let container = style_container(path)?;
+    if h.total_volume <= 0.0 {
+        return None;
+    }
+    let mut main: Option<&ss13_reagents::Reagent> = None;
+    for r in &h.reagents {
+        if main.is_none_or(|m| r.volume > m.volume) {
+            main = Some(r);
+        }
+    }
+    chem.glass_style(container, main?.id)
+}
+
+/// A styled container's prototype name and description, kept to reset to.
+#[derive(Component, Clone, Debug, PartialEq)]
+struct UnstyledName(DmName);
+
+/// `takes_reagent_appearance/on_update_appearance`: the name, description and sprite of the
+/// style, or the container's own without one; a shot glass is only ever "(filled) shot glass"
+/// (`shotglass/update_name`, `update_desc`).
+fn apply_glass_style(
+    world: &mut World,
+    e: Entity,
+    path: &str,
+    style: Option<&GlassStyleDef>,
+    filled: bool,
+) {
+    if style_container(path).is_none() {
+        return;
+    }
+    let Some(own) = world
+        .get::<UnstyledName>(e)
+        .map(|u| u.0.clone())
+        .or_else(|| world.get::<DmName>(e).cloned())
+    else {
+        return;
+    };
+    if world.get::<UnstyledName>(e).is_none() {
+        world.entity_mut(e).insert(UnstyledName(own.clone()));
+    }
+    let mut name = own.clone();
+    if let Some(style) = style {
+        if !style.name.is_empty() {
+            name.name = style.name.clone();
+        }
+        if !style.desc.is_empty() {
+            name.desc = style.desc.clone();
+        }
+    }
+    if path == SHOT_GLASS {
+        name.name = format!("{}shot glass", if filled { "filled " } else { "" });
+        name.desc = if filled {
+            "The challenge is not taking as many as you can, but guessing what it is before you \
+             pass out."
+                .into()
+        } else {
+            "A shot glass - the universal symbol for bad decisions.".into()
+        };
+    }
+    if world.get::<DmName>(e) != Some(&name) {
+        world.entity_mut(e).insert(name);
+    }
+    let sprite = style
+        .filter(|s| !s.icon.is_empty() && !s.icon_state.is_empty())
+        .map(|s| (s.icon.clone(), s.icon_state.clone()))
+        .or_else(|| {
+            world
+                .get::<DmAtom>(e)
+                .map(|a| (a.icon.clone(), a.icon_state.clone()))
+        });
+    let id = sprite.and_then(|(icon, state)| {
+        world
+            .get_resource::<IconIndex>()
+            .and_then(|i| i.get(&icon, &state))
+    });
+    if let Some(id) = id
+        && let Some(mut look) = world.get_mut::<Appearance>(e)
+        && look.icon_state != id
+    {
+        look.icon_state = id;
     }
 }
 

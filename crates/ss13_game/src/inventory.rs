@@ -699,6 +699,15 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 ) => {}
                 // tg `interact` / `attack_hand_secondary` of kitchen machines.
                 None if crate::kitchen::interact(world, client, mob, target, modifiers.right) => {}
+                // tg `attack_hand` of ovens, griddles and fryers; the soda and booze dispensers.
+                None if crate::cooking::interact(world, client, mob, target, modifiers.right) => {}
+                None if crate::chem_dispenser::interact(
+                    world,
+                    client,
+                    mob,
+                    target,
+                    modifiers.right,
+                ) => {}
                 // tg `attack_hand` of hydroponics trays (harvest, dead plant, examine).
                 None if crate::botany::interact(world, client, mob, target, modifiers.right) => {}
                 // tg `attack_hand` / `attack_hand_secondary` of a ladder: climb up or down.
@@ -759,6 +768,19 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 // (eating) and tools on food (slicing); food has reagents, so before chem.
                 Some(held)
                     if crate::kitchen::item_interaction(world, client, mob, held, target) => {}
+                Some(held)
+                    if crate::cooking::item_interaction(
+                        world,
+                        client,
+                        mob,
+                        held,
+                        target,
+                        modifiers.pixel,
+                    ) => {}
+                // A container into a chem dispenser (before pouring into it).
+                Some(held)
+                    if crate::chem_dispenser::item_interaction(world, client, mob, held, target) => {
+                }
                 // tg `item_interaction` of wall mounts: a button pressed with an item, cabinets.
                 Some(held)
                     if crate::wallmount::item_interaction(

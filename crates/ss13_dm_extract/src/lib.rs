@@ -60,13 +60,16 @@ pub const ALL_MAPS_DIR: &str = "_maps/map_files";
 /// `access_flags`, top-level `globals`.
 pub const SCHEMA: u32 = 3;
 
-/// Elements whose `AddElement`/`RemoveElement` calls are dumped with the type and proc that make
-/// them: what an element does to an atom is decided in procs, which static vars cannot show.
-pub const SCANNED_ELEMENTS: [&str; 4] = [
+/// Elements whose `AddElement`/`RemoveElement` calls (components: `AddComponent`) are dumped with
+/// the type and proc that make them: what an element does to an atom is decided in procs, which
+/// static vars cannot show.
+pub const SCANNED_ELEMENTS: [&str; 6] = [
     "/datum/element/undertile",
     "/datum/element/processable",
     "/datum/element/microwavable",
     "/datum/element/simple_flying",
+    "/datum/component/bakeable",
+    "/datum/component/grillable",
 ];
 
 pub struct Environment {
@@ -164,7 +167,7 @@ pub struct ElementCall {
     #[serde(rename = "type")]
     pub owner: String,
     pub proc: String,
-    /// `AddElement` or `RemoveElement`.
+    /// `AddElement`, `RemoveElement` or `AddComponent`.
     pub call: &'static str,
     /// The source line, trimmed: conditions and arguments are for people reading the dump.
     pub line: String,
@@ -311,7 +314,9 @@ fn type_entry(
         .iter()
         .filter(|(_, v)| !v.value.location.is_builtins())
         .map(|(k, v)| {
-            let value = var_value(env, &v.value, sources).unwrap_or_else(|expr| expr);
+            let value = var_value(env, &v.value, sources)
+                .or_else(|expr| static_list(ty, k, &v.value).ok_or(expr))
+                .unwrap_or_else(|expr| expr);
             (k.clone(), value)
         })
         .collect();
@@ -763,12 +768,12 @@ fn element_calls(
         let lines = sources.lines(&env.context, env.root(), file);
         for (i, line) in lines.iter().enumerate() {
             let code = line.split_once("//").map_or(line.as_str(), |(c, _)| c);
-            if !code.contains("Element(") {
+            if !code.contains("Element(") && !code.contains("Component(") {
                 continue;
             }
             let compact: String = code.chars().filter(|c| !c.is_whitespace()).collect();
             for element in SCANNED_ELEMENTS {
-                for call in ["AddElement", "RemoveElement"] {
+                for call in ["AddElement", "RemoveElement", "AddComponent"] {
                     if !compact.contains(&format!("{call}({element}")) {
                         continue;
                     }
@@ -815,6 +820,24 @@ fn var_value(
         (None, None) => Ok(Value::Null),
         (None, Some(_)) => Err(expr_fallback(sources)),
     }
+}
+
+/// A `var/static/list` initializer of plain data (`list(/datum/reagent/water, ...)`): the
+/// object tree leaves static vars unevaluated, and some hold the only copy of tg data (the
+/// chem dispensers' reagent lists).
+fn static_list(ty: TypeRef<'_>, name: &str, value: &VarValue) -> Option<Value> {
+    let decl = ty.get_var_declaration(name)?;
+    if !decl.var_type.flags.is_static() {
+        return None;
+    }
+    let constant = value
+        .expression
+        .clone()?
+        .simple_evaluate(value.location)
+        .ok()?;
+    matches!(constant, Constant::List(_))
+        .then(|| constant_to_json(&constant))
+        .flatten()
 }
 
 /// Plain data → JSON; `None` for `new`, constant-function calls and non-finite numbers.

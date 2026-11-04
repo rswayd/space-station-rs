@@ -8,6 +8,7 @@ pub mod atmos;
 pub mod atmos_alert;
 pub mod atmos_control;
 pub mod checkbox_input;
+pub mod chem_dispenser;
 pub mod color_picker;
 pub mod crystallizer;
 pub mod destination_tagger;

@@ -90,14 +90,20 @@ pub enum Family {
     Autolathe,
     /// Vendors with a refill canister type (`crate::vending::refill`).
     Vending,
+    /// Chem, soda and booze dispensers (`crate::chem_dispenser`).
+    ChemDispenser,
 }
 
-const FAMILIES: [(&str, Family); 14] = [
+const FAMILIES: [(&str, Family); 18] = [
     (CELL_CHARGER, Family::Charger),
     (RECHARGER, Family::Charger),
     (crate::kitchen::MICROWAVE_ROOT, Family::Kitchen),
     (crate::kitchen::PROCESSOR_ROOT, Family::Kitchen),
     (crate::kitchen::GRINDER_ROOT, Family::Kitchen),
+    (crate::cooking::OVEN_ROOT, Family::Kitchen),
+    (crate::cooking::GRIDDLE_ROOT, Family::Kitchen),
+    (crate::cooking::FRYER_ROOT, Family::Kitchen),
+    (crate::chem_dispenser::DISPENSER_ROOT, Family::ChemDispenser),
     ("/obj/machinery/hydroponics/constructable", Family::Tray),
     ("/obj/machinery/recharge_station", Family::Station),
     (crate::science::analyzer::ANALYZER_ROOT, Family::Analyzer),
@@ -1020,6 +1026,7 @@ pub fn setup_built(world: &mut World, machine: Entity) {
         Family::AtmosAlert => crate::atmos_machinery::consoles::setup_console(world, machine),
         Family::Autolathe => crate::science::autolathe::setup(world, machine),
         Family::Vending => crate::vending::refill::setup_built(world, machine),
+        Family::ChemDispenser => crate::chem_dispenser::setup(world, machine),
     }
 }
 

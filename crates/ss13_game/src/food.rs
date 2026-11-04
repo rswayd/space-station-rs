@@ -730,6 +730,7 @@ mod tests {
     #[test]
     fn tastes_follow_generate_reagents_taste_message() {
         let chem = Chemistry::new(ChemData {
+            glass_styles: Vec::new(),
             reagents: vec![
                 reagent("/datum/reagent/consumable/nutriment", "generic food", 4.0),
                 reagent("/datum/reagent/consumable/salt", "salt", 2.0),

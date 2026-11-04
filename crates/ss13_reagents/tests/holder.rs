@@ -107,6 +107,7 @@ fn chem() -> Chemistry {
     );
     hot.required_temp = 400.0;
     Chemistry::new(ChemData {
+        glass_styles: Vec::new(),
         reagents: vec![
             water,
             ethanol,

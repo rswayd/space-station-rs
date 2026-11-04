@@ -920,6 +920,7 @@ mod tests {
 
     fn chem() -> Chemistry {
         Chemistry::new(ChemData {
+            glass_styles: Vec::new(),
             reagents: [
                 WATER,
                 "/datum/reagent/plantnutriment/eznutriment",

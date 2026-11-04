@@ -101,6 +101,8 @@ pub fn examine_lines(world: &World, examiner: Entity, target: Entity) -> (String
         lines.push((Span::Notice, line));
     }
     crate::chem::examine_lines(world, target, &mut lines);
+    crate::chem_dispenser::examine_lines(world, target, &mut lines);
+    crate::cooking::examine_lines(world, target, &mut lines);
     crate::botany::examine_lines(world, target, &mut lines);
     crate::atmos_machinery::examine_lines(world, target, &mut lines);
     crate::machine_frame::examine_lines(world, target, &mut lines);

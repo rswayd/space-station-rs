@@ -29,6 +29,9 @@ use crate::interfaces::destination_tagger::{
 };
 use crate::interfaces::disposal_unit::{DisposalUnitData, DisposalUnitUi};
 use crate::interfaces::dna_console::{DnaConsoleData, DnaConsoleUi, DnaMutation};
+use crate::interfaces::chem_dispenser::{
+    ChemDispenserData, ChemDispenserUi, DispensableReagent, DispenserBeaker,
+};
 use crate::interfaces::electrolyzer::{ElectrolyzerData, ElectrolyzerUi};
 use crate::interfaces::gas_analyzer::{
     AtmosHandbook, GasAnalyzerData, GasAnalyzerUi, Gasmix, HandbookGas,
@@ -476,6 +479,42 @@ pub fn sample(name: &str) -> Option<Sample> {
         ),
         DnaConsoleUi::NAME => dna_console(),
         CrystallizerUi::NAME => crystallizer(),
+        ChemDispenserUi::NAME => of::<ChemDispenserUi>(
+            "soda dispenser",
+            &(),
+            &ChemDispenserData {
+                amount: 10.0,
+                energy: 9_000_000.0,
+                max_energy: 10_000_000.0,
+                displayed_units: 90_000.0,
+                displayed_max_units: 100_000.0,
+                show_ph: false,
+                has_beaker_in_hand: false,
+                chemicals: [
+                    ("Coffee", "#482000"),
+                    ("Cream", "#DFD7AF"),
+                    ("Ice", "#619494"),
+                    ("Space Cola", "#100800"),
+                    ("Tonic Water", "#0064C8"),
+                    ("Water", "#AAAAAA77"),
+                ]
+                .iter()
+                .map(|(name, color)| DispensableReagent {
+                    title: (*name).into(),
+                    id: (*name).into(),
+                    ph: 7.0,
+                    color: (*color).into(),
+                })
+                .collect(),
+                beaker: Some(DispenserBeaker {
+                    max_volume: 50.0,
+                    transfer_amounts: vec![5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 50.0],
+                    ph: 7.0,
+                    current_volume: 20.0,
+                    contents: vec![("Space Cola".into(), 10.0), ("Ice".into(), 10.0)],
+                }),
+            },
+        ),
         ElectrolyzerUi::NAME => of::<ElectrolyzerUi>(
             "electrolyzer",
             &(),

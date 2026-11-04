@@ -15,7 +15,7 @@ pub mod metabolism;
 
 use std::collections::HashMap;
 
-pub use data::{CHEM_FILE, ChemData, ReactionDef, ReagentDef};
+pub use data::{CHEM_FILE, ChemData, GlassStyleDef, ReactionDef, ReagentDef};
 pub use holder::{Equilibrium, Holder, Owner, Reagent};
 
 /// `CHEMICAL_QUANTISATION_LEVEL`: the smallest amount a holder keeps track of.
@@ -98,6 +98,8 @@ pub struct Chemistry {
     by_reactant: Vec<Vec<u32>>,
     /// Reactions dropped because they name a reagent that does not exist.
     pub unresolved_reactions: Vec<String>,
+    /// `GLOB.glass_style_singletons`: (container type, reagent) -> style.
+    glass_styles: HashMap<(String, ReagentId), GlassStyleDef>,
 }
 
 impl Chemistry {
@@ -157,13 +159,24 @@ impl Chemistry {
                 by_reactant[p as usize].push(i as u32);
             }
         }
+        let glass_styles = data
+            .glass_styles
+            .into_iter()
+            .filter_map(|g| Some(((g.container.clone(), *ids.get(&g.drink)?), g)))
+            .collect();
         Self {
             reagents: data.reagents,
             ids,
             reactions,
             by_reactant,
             unresolved_reactions,
+            glass_styles,
         }
+    }
+
+    /// The glass style of a `container` type whose main reagent is `id`.
+    pub fn glass_style(&self, container: &str, id: ReagentId) -> Option<&GlassStyleDef> {
+        self.glass_styles.get(&(container.to_owned(), id))
     }
 
     pub fn id(&self, path: &str) -> Option<ReagentId> {

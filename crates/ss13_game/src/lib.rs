@@ -146,6 +146,8 @@ pub mod cargo;
 #[cfg(feature = "server")]
 pub mod chem;
 #[cfg(feature = "server")]
+pub mod chem_dispenser;
+#[cfg(feature = "server")]
 pub mod click;
 #[cfg(feature = "client")]
 pub mod client;
@@ -153,6 +155,8 @@ pub mod client;
 pub mod closets;
 #[cfg(feature = "server")]
 pub mod combat;
+#[cfg(feature = "server")]
+pub mod cooking;
 pub mod comms;
 #[cfg(feature = "client")]
 pub mod comms_client;

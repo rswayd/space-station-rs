@@ -185,6 +185,17 @@ pub(crate) fn setup_machine(world: &mut World, e: Entity, mapload: bool) {
     let Some(path) = world.get::<DmPower>(e).map(|p| p.path.clone()) else {
         return;
     };
+    if [
+        crate::cooking::OVEN_ROOT,
+        crate::cooking::GRIDDLE_ROOT,
+        crate::cooking::FRYER_ROOT,
+    ]
+    .iter()
+    .any(|r| is_under(&path, r))
+    {
+        crate::cooking::setup_machine(world, e, mapload);
+        return;
+    }
     if is_under(&path, MICROWAVE_ROOT) {
         world.entity_mut(e).insert(Microwave::default());
         refresh_microwave(world, e);
@@ -301,7 +312,13 @@ const DUMP_DELAY_DS: f32 = 20.0;
 /// other storage after a `do_after`.
 // shortcut: the `do_after` targets the microwave (tg: the storage in hand, which has no tile
 // here); the user moving or switching hands still interrupts it.
-fn handle_dumping(world: &mut World, client: Entity, mob: Entity, storage: Entity, mw: Entity) {
+pub(crate) fn handle_dumping(
+    world: &mut World,
+    client: Entity,
+    mob: Entity,
+    storage: Entity,
+    mw: Entity,
+) {
     let tray = world
         .get::<ss13_mapload::DmItem>(storage)
         .is_some_and(|i| is_under(&i.path, TRAY));
@@ -331,8 +348,12 @@ fn handle_dumping(world: &mut World, client: Entity, mob: Entity, storage: Entit
     );
 }
 
-/// The rest of `handle_dumping`: every edible item of `storage` in, until the microwave is full.
+/// The rest of `handle_dumping`: every edible item of `storage` in, until the microwave (an
+/// oven's tray, a griddle: [`crate::cooking::load_from`]) is full.
 pub fn load_from(world: &mut World, client: Entity, storage: Entity, mw: Entity) {
+    if crate::cooking::load_from(world, client, storage, mw) {
+        return;
+    }
     if world
         .get::<Microwave>(mw)
         .is_none_or(|m| m.operating.is_some())
@@ -364,7 +385,7 @@ pub fn load_from(world: &mut World, client: Entity, storage: Entity, mw: Entity)
 }
 
 /// `declension_ru(n, "предмет", "предмета", "предметов")`.
-fn items_word(n: usize) -> &'static str {
+pub(crate) fn items_word(n: usize) -> &'static str {
     match (n % 10, n % 100) {
         (1, h) if h != 11 => "предмет",
         (2..=4, h) if !(12..=14).contains(&h) => "предмета",

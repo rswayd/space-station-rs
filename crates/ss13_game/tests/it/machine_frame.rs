@@ -597,7 +597,7 @@ fn metastation_families() {
         "covered families on MetaStation: {:?}",
         picked.iter().map(|p| p.0).collect::<Vec<_>>()
     );
-    assert_eq!(picked.len(), 10, "every family is mapped: {picked:?}");
+    assert_eq!(picked.len(), 11, "every family is mapped: {picked:?}");
     for (fam, machine, path, pos) in picked {
         let board = world.get::<DmMachine>(machine).unwrap().circuit.clone();
         let def = world
@@ -656,6 +656,9 @@ fn metastation_families() {
                 e.contains::<ss13_game::kitchen::Microwave>()
                     || e.contains::<ss13_game::kitchen::Grinder>()
                     || e.contains::<ss13_game::kitchen::Processor>()
+                    || e.contains::<ss13_game::cooking::Oven>()
+                    || e.contains::<ss13_game::cooking::Griddle>()
+                    || e.contains::<ss13_game::cooking::DeepFryer>()
             }
             Family::Tray => e.contains::<ss13_game::botany::tray::Tray>(),
             Family::Station => e.contains::<ss13_game::silicon::cyborg::RechargeStation>(),
@@ -670,6 +673,9 @@ fn metastation_families() {
             }
             Family::Autolathe => e.contains::<ss13_game::science::autolathe::Autolathe>(),
             Family::Vending => e.contains::<ss13_game::vending::Vendor>(),
+            Family::ChemDispenser => e
+                .get::<ss13_game::chem_dispenser::ChemDispenser>()
+                .is_some_and(|d| d.cell.is_some() && !d.dispensable.is_empty()),
         };
         assert!(live, "{fam:?}: {} has its live state", def.build_path);
         println!("{fam:?}: {path} -> {board} -> {}", def.build_path);
