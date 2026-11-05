@@ -1072,7 +1072,7 @@ fn claim_click(world: &mut World, actor: Actor, target: Entity, modifiers: Click
     let furniture = crate::construction::path_of(world, target).unwrap_or_default();
     if actor.item.is_none()
         && !modifiers.right
-        && surgery::buckles_lying(&furniture)
+        && crate::furniture::can_buckle(&furniture)
         && let Some(buckled) = surgery::buckled_to(world, target)
     {
         surgery::unbuckle(world, actor, buckled);
@@ -1194,18 +1194,20 @@ fn refresh_limits(
         &wounds::Limbs,
         &Health,
         Has<surgery::Buckled>,
+        Has<crate::furniture::Seated>,
         &mut LimbLimits,
     )>,
 ) {
     let gone: Vec<Entity> = unbuckled.read().collect();
     for mob in changed.iter().chain(gone) {
-        let Ok((limbs, health, buckled, mut out)) = mobs.get_mut(mob) else {
+        let Ok((limbs, health, buckled, seated, mut out)) = mobs.get_mut(mob) else {
             continue;
         };
         let limits = limbs.limits(health);
         out.set_if_neq(LimbLimits {
             slowdown: limits.slowdown,
-            floored: limits.floored || buckled,
+            // A chair seats its mob upright (`buckle_lying = 0`).
+            floored: limits.floored || (buckled && !seated),
             immobilized: buckled,
         });
     }

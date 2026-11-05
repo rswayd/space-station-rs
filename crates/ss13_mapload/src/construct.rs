@@ -168,6 +168,24 @@ pub struct DmObj {
     pub mineral: String,
     pub mineral_amount: u32,
     pub wall_type: String,
+    /// Chairs (`buildstacktype`, `buildstackamount`) and beds (`build_stack_type`,
+    /// `build_stack_amount`): what taking them apart leaves.
+    pub build_stack: String,
+    pub build_stack_amount: u32,
+    /// Chairs: `item_chair`, the item they are picked up as (empty: they are not).
+    pub item_chair: String,
+    /// Beds: `elevation` (mobs on it are drawn this many pixels up) and `can_deconstruct`.
+    pub elevation: i32,
+    pub can_deconstruct: bool,
+    /// Chairs and beds: `buckle_sound`, `unbuckle_sound` (files or SFX keys; empty: none).
+    pub buckle_sound: String,
+    pub unbuckle_sound: String,
+    /// Sinks: `capacity`, `dispensedreagent`, `has_water_reclaimer`, `reclaim_rate` (units per
+    /// second); their stack is `build_stack`.
+    pub capacity: f32,
+    pub dispensed_reagent: String,
+    pub water_reclaimer: bool,
+    pub reclaim_rate: f32,
 }
 
 #[derive(Clone, Copy)]
@@ -283,6 +301,76 @@ const OBJ_VARS: [(&str, &str, Kind); 26] = [
     ("walltype", "wall_type", Kind::Path),
 ];
 
+const CHAIR_VARS: [(&str, &str, Kind); 5] = [
+    ("buildstacktype", "build_stack", Kind::Path),
+    ("buildstackamount", "build_stack_amount", Kind::Count),
+    ("item_chair", "item_chair", Kind::Path),
+    ("buckle_sound", "buckle_sound", Kind::Text),
+    ("unbuckle_sound", "unbuckle_sound", Kind::Text),
+];
+
+const BED_VARS: [(&str, &str, Kind); 6] = [
+    ("build_stack_type", "build_stack", Kind::Path),
+    ("build_stack_amount", "build_stack_amount", Kind::Count),
+    ("elevation", "elevation", Kind::Int),
+    ("can_deconstruct", "can_deconstruct", Kind::Bool),
+    ("buckle_sound", "buckle_sound", Kind::Text),
+    ("unbuckle_sound", "unbuckle_sound", Kind::Text),
+];
+
+const SINK_VARS: [(&str, &str, Kind); 6] = [
+    ("buildstacktype", "build_stack", Kind::Path),
+    ("buildstackamount", "build_stack_amount", Kind::Count),
+    ("capacity", "capacity", Kind::Num),
+    ("dispensedreagent", "dispensed_reagent", Kind::Path),
+    ("has_water_reclaimer", "water_reclaimer", Kind::Bool),
+    ("reclaim_rate", "reclaim_rate", Kind::Num),
+];
+
+/// Every chair and bed type, the chairs' items and what taking them apart leaves, so
+/// `ss13-mapload convert` emits them even when no map uses them (a chair is picked up as its
+/// `item_chair`, which is set down as the chair again).
+pub fn furniture_runtime_types(types: &DmTypes) -> Vec<String> {
+    let mut out: Vec<String> = types
+        .types
+        .keys()
+        .filter(|p| {
+            [
+                "/obj/structure/chair",
+                "/obj/item/chair",
+                "/obj/structure/bed",
+            ]
+            .iter()
+            .any(|root| is_under(p, root))
+        })
+        .cloned()
+        .collect();
+    // A sink taken apart or pried leaves its water recycler.
+    out.extend(
+        ["/obj/item/stock_parts/water_recycler"]
+            .into_iter()
+            .filter(|p| types.types.contains_key(*p))
+            .map(str::to_owned),
+    );
+    let made: Vec<String> = out
+        .iter()
+        .flat_map(|p| ["buildstacktype", "build_stack_type"].map(|v| (p, v)))
+        .chain(
+            types
+                .types
+                .keys()
+                .filter(|p| is_under(p, "/obj/structure/sink"))
+                .map(|p| (p, "buildstacktype")),
+        )
+        .filter_map(|(p, var)| type_path(types.resolved(p, var)))
+        .filter(|p| types.types.contains_key(p))
+        .collect();
+    out.extend(made);
+    out.sort();
+    out.dedup();
+    out
+}
+
 /// A dumped value as a number: plain numbers and constant expressions the extractor kept as
 /// text (`{"expr": "50"}`); null is 0.
 fn number(v: Option<&serde_json::Value>) -> Option<f64> {
@@ -378,6 +466,15 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
         fields(types, path, OBJ_COMPONENT, &OBJ_VARS, &mut out);
         if is_under(path, "/obj/structure/table") || is_under(path, "/obj/structure/table_frame") {
             fields(types, path, TABLE_COMPONENT, &TABLE_VARS, &mut out);
+        }
+        if is_under(path, "/obj/structure/chair") {
+            fields(types, path, OBJ_COMPONENT, &CHAIR_VARS, &mut out);
+        }
+        if is_under(path, "/obj/structure/bed") {
+            fields(types, path, OBJ_COMPONENT, &BED_VARS, &mut out);
+        }
+        if is_under(path, "/obj/structure/sink") {
+            fields(types, path, OBJ_COMPONENT, &SINK_VARS, &mut out);
         }
     }
     out
@@ -513,5 +610,59 @@ mod tests {
             assert!(got.iter().any(|p| p == want), "{want} missing from {got:?}");
         }
         assert!(!got.iter().any(|p| p == "/obj/structure/girder"));
+    }
+
+    #[test]
+    fn chairs_and_beds_bring_their_stacks_and_items() {
+        let types = DmTypes::parse(
+            br##"{ "schema": 3, "types": {
+              "/datum": { "parent": null },
+              "/atom": { "parent": "/datum" },
+              "/obj": { "parent": "/atom" },
+              "/obj/item": { "parent": "/obj" },
+              "/obj/item/stack": { "parent": "/obj/item" },
+              "/obj/item/stack/sheet/iron": { "parent": "/obj/item/stack" },
+              "/obj/item/stack/sheet/mineral/wood": { "parent": "/obj/item/stack" },
+              "/obj/item/chair": { "parent": "/obj/item" },
+              "/obj/structure": { "parent": "/obj" },
+              "/obj/structure/chair": { "parent": "/obj/structure", "declared_vars": {
+                  "buildstacktype": { "path": "/obj/item/stack/sheet/iron" },
+                  "buildstackamount": 1, "item_chair": { "path": "/obj/item/chair" } } },
+              "/obj/structure/chair/comfy": { "parent": "/obj/structure/chair",
+                  "declared_vars": { "buildstackamount": 2, "item_chair": null } },
+              "/obj/structure/bed": { "parent": "/obj/structure", "declared_vars": {
+                  "build_stack_type": { "path": "/obj/item/stack/sheet/mineral/wood" },
+                  "build_stack_amount": 2, "elevation": 8, "can_deconstruct": 1 } },
+              "/obj/structure/girder": { "parent": "/obj/structure" }
+            } }"##,
+        )
+        .unwrap();
+        let got = furniture_runtime_types(&types);
+        for want in [
+            "/obj/structure/chair",
+            "/obj/structure/chair/comfy",
+            "/obj/item/chair",
+            "/obj/structure/bed",
+            "/obj/item/stack/sheet/iron",
+            "/obj/item/stack/sheet/mineral/wood",
+        ] {
+            assert!(got.iter().any(|p| p == want), "{want} missing from {got:?}");
+        }
+        assert!(!got.iter().any(|p| p == "/obj/structure/girder"));
+        let ron = |path| crate::value::patch_ron(&type_fields(&types, path));
+        let comfy = ron("/obj/structure/chair/comfy");
+        assert!(
+            comfy.contains(r#"build_stack: "/obj/item/stack/sheet/iron""#),
+            "{comfy}"
+        );
+        assert!(comfy.contains("build_stack_amount: 2"), "{comfy}");
+        assert!(comfy.contains(r#"item_chair: """#), "{comfy}");
+        let bed = ron("/obj/structure/bed");
+        assert!(bed.contains("elevation: 8"), "{bed}");
+        assert!(bed.contains("can_deconstruct: true"), "{bed}");
+        assert!(
+            bed.contains(r#"build_stack: "/obj/item/stack/sheet/mineral/wood""#),
+            "{bed}"
+        );
     }
 }

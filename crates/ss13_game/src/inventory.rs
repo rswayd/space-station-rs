@@ -574,6 +574,10 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 Some(item)
                     if hand == inventory.active
                         && crate::antag::syndie_items::attack_self(world, client, mob, item) => {}
+                // A pair pinpointer toggles.
+                Some(item)
+                    if hand == inventory.active
+                        && crate::devices::attack_self(world, client, mob, item) => {}
                 // A C-4 charge asks for its timer.
                 Some(item)
                     if hand == inventory.active
@@ -587,6 +591,10 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 Some(item)
                     if hand == inventory.active
                         && crate::tables::attack_self(world, client, mob, item) => {}
+                // An item chair is set down.
+                Some(item)
+                    if hand == inventory.active
+                        && crate::furniture::attack_self(world, client, mob, item) => {}
                 // The RPD opens its window.
                 Some(item)
                     if hand == inventory.active
@@ -877,6 +885,8 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 None if crate::falsewall::attack_hand(world, target) => {}
                 // tg `attack_holosign`: a swat.
                 None if crate::holosign::attack_hand(world, mob, target) => {}
+                // tg `attack_hand` of a sink: washing the hands or face.
+                None if crate::plumbing::interact(world, client, mob, target) => {}
                 // tg `attack_hand` of paper bins, bookcases and desk bells.
                 None if crate::service::server::interact(world, client, mob, target) => {}
                 // tg `attack_hand` of turrets and the turret control panel: their windows.
@@ -1040,6 +1050,11 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                         world, client, mob, held, target, modifiers,
                     ) => {}
                 Some(held) if crate::food::item_interaction(world, client, mob, held, target) => {}
+                // tg `sink/item_interaction(_secondary)`: washing, emptying, a mop wetted.
+                Some(held)
+                    if crate::plumbing::item_interaction(
+                        world, client, mob, held, target, modifiers,
+                    ) => {}
                 // tg cleaner component of mops and soap, mop buckets, spray bottles.
                 Some(held)
                     if crate::janitor::item_interaction(

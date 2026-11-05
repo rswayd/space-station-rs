@@ -245,6 +245,13 @@ fn drag(world: &mut World, client: Entity, from: DragEnd, to: DragEnd) {
     if !in_reach(from, |e| adjacent(world, e)) || !in_reach(to, |e| adjacent(world, e)) {
         return;
     }
+    // `/obj/structure/chair/mouse_drop_dragged` onto its user: picked up.
+    if to == End::World(mob)
+        && matches!(from, End::World(_))
+        && crate::furniture::mouse_drop_dragged(world, actor, dragged)
+    {
+        return;
+    }
     // `/obj/vehicle/sealed/mouse_drop_receive` (`NEED_HANDS`): climbing into a mech.
     if let (End::World(over), End::World(_)) = (to, from)
         && !traits.hands_blocked

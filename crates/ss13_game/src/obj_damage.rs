@@ -446,6 +446,10 @@ pub fn deconstruct(world: &mut World, target: Entity, disassembled: bool) {
         crate::machine_frame::frame_deconstruct(world, target, pos, disassembled);
     } else if is_under(&obj.path, crate::explosions::ex_act::LATTICE) {
         crate::explosions::ex_act::lattice_debris(world, &obj.path, pos);
+    } else if crate::furniture::deconstruct(world, &obj, pos)
+        || crate::plumbing::deconstruct(world, target, &obj, pos)
+    {
+        // A chair's, bed's or sink's build stack is out.
     }
     // A vendor's stock into its canister and its returned items out, before its parts leave.
     crate::vending::on_deconstruction(world, target, pos, disassembled);

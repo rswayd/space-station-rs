@@ -247,6 +247,8 @@ pub enum Job {
     Camera(crate::defenses::cameras::CameraJob),
     /// A rite's step at the altar, unpacking a bible into an altar ([`crate::service`]).
     Religion(crate::service::ReligionJob),
+    /// Washing at a sink ([`crate::plumbing`]).
+    Sink(crate::plumbing::SinkJob),
 }
 
 /// A turf's baseturf stack, bottom first (tg `baseturfs`). Absent: assembled from the type's
@@ -474,6 +476,10 @@ fn tool_act_secondary(world: &mut World, actor: Actor, kind: ToolKind, target: E
         return Interact::Done;
     }
     if crate::reinforced::window_secondary(world, actor, kind, target) {
+        return Interact::Done;
+    }
+    // `wrench_act_secondary` of chairs and beds.
+    if kind == ToolKind::Wrench && crate::furniture::wrench_secondary(world, target) {
         return Interact::Done;
     }
     Interact::None
@@ -1198,6 +1204,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Martial(job) => crate::martial::complete_reading(world, mob, action, job),
         &Job::Religion(job) => crate::service::religion_complete(world, mob, action, job),
         &Job::Camera(job) => crate::defenses::cameras::complete(world, mob, action, job),
+        &Job::Sink(job) => crate::plumbing::complete(world, mob, action, job),
         &Job::Emitter(job) => crate::power::emitter::complete(world, client, target, job, consume),
         Job::GirderBolts { from } => {
             if !is_under(&path, GIRDER) || obj_state(world, target) != *from || !consume(world) {

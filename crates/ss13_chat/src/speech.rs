@@ -33,6 +33,11 @@ pub struct BinaryCapable;
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ChangelingHivemind;
 
+/// On a body whose spoken words are drawn in this span instead of `.say` (tg `SPEECH_SPANS`
+/// a held megaphone adds), kept by the game.
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct VoiceSpan(pub ss13_shared::chat::Span);
+
 /// On a body without a tongue (tg: no `TRAIT_SPEAKS_CLEARLY` from one), kept by the game: its
 /// speech loses its hard consonants and it gurgles ([`tongueless`]).
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]

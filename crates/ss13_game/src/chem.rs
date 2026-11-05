@@ -421,7 +421,7 @@ fn put(world: &mut World, e: Entity, holder: Holder) {
 }
 
 /// tg `trans_to` between two item holders. Returns the amount moved.
-fn transfer(world: &mut World, from: Entity, to: Entity, amount: f32) -> f32 {
+pub(crate) fn transfer(world: &mut World, from: Entity, to: Entity, amount: f32) -> f32 {
     let chem = chem(world);
     let (Some(mut a), Some(mut b)) = (take(world, from), take(world, to)) else {
         return 0.0;

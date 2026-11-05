@@ -201,6 +201,8 @@ pub mod cooking;
 pub mod decay;
 pub mod defenses;
 #[cfg(feature = "server")]
+pub mod devices;
+#[cfg(feature = "server")]
 pub mod disposals;
 #[cfg(feature = "server")]
 pub mod doors;
@@ -227,6 +229,8 @@ pub mod footsteps;
 pub mod forensics;
 #[cfg(feature = "client")]
 pub mod fullscreen_client;
+#[cfg(feature = "server")]
+pub mod furniture;
 #[cfg(feature = "server")]
 pub mod genetics;
 #[cfg(feature = "server")]
@@ -313,6 +317,8 @@ pub mod outfit;
 pub mod panels;
 #[cfg(feature = "client")]
 pub mod panels_client;
+#[cfg(feature = "server")]
+pub mod plumbing;
 #[cfg(feature = "server")]
 pub mod point;
 #[cfg(feature = "server")]
