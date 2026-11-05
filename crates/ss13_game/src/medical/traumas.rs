@@ -1281,9 +1281,9 @@ mod tests {
             }
             world.entity_mut(brain).remove::<Traumas>();
         }
-        // 1/13 each (1000 expected); 8 of 13 unported give nothing.
+        // 1/13 each (1000 expected); 7 of 13 unported give nothing (aphasia is ported).
         assert!((850..1150).contains(&paralysis), "{paralysis}");
-        assert!((7_500..8_500).contains(&none), "{none}");
+        assert!((6_500..7_500).contains(&none), "{none}");
     }
 
     #[test]
