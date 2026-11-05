@@ -35,7 +35,7 @@
 Тритий горит с кислородом, при большом выгорании испускает радиационный импульс.
 
 - **Код:** [`/datum/gas_reaction/standard/tritfire`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/gasmixtures/reactions.dm#L316), [`react()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/gasmixtures/reactions.dm#L330), [`init_factors()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/gasmixtures/reaction_factors.dm#L51)
-- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_atmos/src/reactions.rs`; радиационный импульс → ../effects/radiation.md «Радиационный импульс и SSradiation»
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_atmos/src/reactions.rs`; радиационный импульс с турфа и горячей точки (`RadiationRelease`, `crates/ss13_game/src/radiation.rs`); `// shortcut:` не из трубопроводов
 
 ### Горение фреона
 Эндотермическая реакция фреона с кислородом охлаждает смесь; в узком окне 120–160 K может выпасть горячий лёд.
@@ -131,13 +131,13 @@ BZ и фреон в холоде образуют хилиум.
 Прото-нитрат перерабатывает тритий в водород с радиационным импульсом.
 
 - **Код:** [`/datum/gas_reaction/standard/proto_nitrate_tritium_response`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/gasmixtures/reactions.dm#L1100), [`react()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/gasmixtures/reactions.dm#L1114), [`init_factors()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/gasmixtures/reaction_factors.dm#L244)
-- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_atmos/src/reactions.rs`; радиационный импульс → ../effects/radiation.md «Радиационный импульс и SSradiation»
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_atmos/src/reactions.rs`; радиационный импульс с турфа и горячей точки (`RadiationRelease`, `crates/ss13_game/src/radiation.rs`); `// shortcut:` не из трубопроводов
 
 ### Прото-нитрат + BZ
 Прото-нитрат разлагает BZ на азот, гелий и плазму, излучая радиацию и ядерные частицы.
 
 - **Код:** [`/datum/gas_reaction/standard/proto_nitrate_bz_response`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/gasmixtures/reactions.dm#L1153), [`react()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/gasmixtures/reactions.dm#L1167), [`init_factors()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/gasmixtures/reaction_factors.dm#L253)
-- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_atmos/src/reactions.rs`; радиация → ../effects/radiation.md, ядерные частицы → ../combat/ammo-projectiles.md «Особые снаряды»
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_atmos/src/reactions.rs`; радиационный импульс (за вычетом доли частиц, `crates/ss13_game/src/radiation.rs`); ядерные частицы → ../combat/ammo-projectiles.md «Особые снаряды»
 
 ### Репликация антиноблия
 Антиноблий размножается за счёт любых других газов выше порога температуры.

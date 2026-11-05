@@ -42,7 +42,7 @@
 Станционная погода: тревога, все прячутся в техтоннелях; в открытых зонах облучает (мутации, токсины). Вариант `nebula` для туманностей станционного трейта.
 
 - **Код:** [`/datum/weather/rad_storm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/weather/weather_types/radiation_storm.dm#L2), [`/datum/weather/rad_storm/nebula`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/weather/weather_types/radiation_storm.dm#L103)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/events/radiation_storm.rs`: только `rad_storm` без SSweather: стадии и сообщения tg, незащищённые зоны уровней станции, бросок мутации 40%/с; `// shortcut:` вместо мутаций 1 токсин (и 1 ожог в половине случаев), нет оверлея, статус-дисплеев и варианта `nebula`
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/events/radiation_storm.rs`: только `rad_storm` без SSweather: стадии и сообщения tg, незащищённые зоны уровней станции, бросок мутации 40%/с незащищённым (иммунитет вида, радзащитная одежда); нет оверлея, статус-дисплеев и варианта `nebula`
 
 ### Пустотная буря (void storm)
 Буря еретика Пустоты (вознесение по пути Void): чёрная метель по всей станции, бесконечная, пока жив еретик; сама по себе почти только визуальная, силу даёт еретику.

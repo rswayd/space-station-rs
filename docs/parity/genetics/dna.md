@@ -18,7 +18,7 @@
 Радиация, мутаген и токсины вызывают случайные мутации и перемешивание UI/UF/SE (`scramble_dna`).
 
 - **Код:** [`proc/random_mutate()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/dna/dna.dm#L585), [`proc/easy_random_mutate()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/dna/dna.dm#L610), [`proc/scramble_dna()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/dna/dna.dm#L646)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/genetics/mod.rs`, `crates/ss13_game/src/events/radiation_storm.rs`: `easy_random_mutate`, `random_mutate_unique_identity`, радиационный шторм мутирует незащищённых людей (90% негативная); нет мутагена, `scramble_dna`, UF, проверки радзащиты одежды
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/genetics/mod.rs`, `crates/ss13_game/src/events/radiation_storm.rs`: `easy_random_mutate`, `random_mutate_unique_identity`, радиационный шторм мутирует незащищённых людей (90% негативная); радиация мутирует облучённых через 2 мин (`crates/ss13_game/src/radiation.rs`), шторм пропускает радзащищённых; нет мутагена, `scramble_dna`, UF
 
 ### Мутационные токсины видов форка (BandaStation)
 Реагенты-мутагены и рецепты экстрактов слаймов, превращающие в вульпканина, таяра, скрелла.

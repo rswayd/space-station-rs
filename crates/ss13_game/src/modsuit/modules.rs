@@ -17,7 +17,7 @@
 //!
 //! Every other module still installs, counts its complexity, toggles or selects, pays its power
 //! and cooldown.
-// shortcut: jetpacks, magboots' `TRAIT_NEGATES_GRAVITY`, t-ray, radiation protection, tethers,
+// shortcut: jetpacks, magboots' `TRAIT_NEGATES_GRAVITY`, t-ray, the radiation counter, tethers,
 // visors and the department modules toggle and pay power but have no effect yet (no zero-g
 // drift, t-ray reveal, radiation, HUDs); no worn overlays, no light color picker, the light is
 // omnidirectional (tg: directional), no chemical scan mode effect. Add them with their mechanics.
@@ -59,7 +59,11 @@ pub enum Kind {
     Flashlight,
     Magboot,
     HealthAnalyzer,
-    EmpShield { advanced: bool },
+    EmpShield {
+        advanced: bool,
+    },
+    /// `rad_protection`: its parts protect from radiation (`crate::radiation`).
+    RadProtection,
     Other,
 }
 
@@ -82,6 +86,8 @@ impl Kind {
             Self::EmpShield { advanced: true }
         } else if under("emp_shield") {
             Self::EmpShield { advanced: false }
+        } else if under("rad_protection") {
+            Self::RadProtection
         } else {
             Self::Other
         }

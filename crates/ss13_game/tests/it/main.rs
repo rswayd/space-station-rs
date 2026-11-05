@@ -62,6 +62,7 @@ mod play;
 mod plumbing;
 mod power;
 mod prediction;
+mod radiation;
 mod radio;
 mod records;
 mod religion;

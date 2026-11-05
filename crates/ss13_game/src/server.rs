@@ -265,6 +265,7 @@ impl Plugin for GameServerPlugin {
         .add_plugins(crate::brig::BrigServerPlugin)
         .add_plugins(crate::events::EventsServerPlugin)
         .add_plugins(crate::explosions::ExplosionsServerPlugin)
+        .add_plugins(crate::radiation::RadiationPlugin)
         .add_plugins(crate::emp::EmpPlugin)
         .add_plugins(crate::emag::EmagPlugin)
         .add_plugins(crate::grenades::GrenadesServerPlugin)

@@ -568,6 +568,10 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 && crate::forensics::server::clear_logs(world, client, item)
             {
                 // The forensic scanner's log is cleared.
+            } else if let Some(item) = inventory.slot(slot)
+                && crate::radiation::geiger_alt_click(world, client, item)
+            {
+                // The Geiger counter's level is cleared.
             } else if let Some(item) = inventory.slot(slot) {
                 // A PDA gives back its ID.
                 crate::modpc::pda::alt_click(world, mob, item);

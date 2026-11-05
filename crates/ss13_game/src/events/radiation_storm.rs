@@ -5,8 +5,7 @@
 //!
 //! During the storm, every SSweather fire (1 s), each living human in an impacted area rolls
 //! `prob(40)` to mutate (`weather_act_mob`).
-// shortcut: no radiation-protective clothing check (`wearing_rad_protected_clothing`), no unique
-// features to scramble; no area overlay, status display alert or sounds.
+// shortcut: no unique features to scramble; no area overlay, status display alert or sounds.
 
 use bevy::prelude::*;
 use ss13_mapload::{Areas, DmPower};
@@ -182,8 +181,8 @@ fn impacted(world: &World, pos: TilePos) -> bool {
     !PROTECTED_AREAS.iter().any(|root| is_under(path, root))
 }
 
-/// `/datum/weather/rad_storm/weather_act_mob`: humans (`can_mutate`) get a unique identity
-/// block scrambled and half the time `do_mutate`: a random negative (90%) or positive mutation.
+/// `/datum/weather/rad_storm/weather_act_mob`: humans (`can_mutate`) that are not radiation
+/// immune or covered in radiation-protected clothing get a unique identity block scrambled and half the time `do_mutate`: a random negative (90%) or positive mutation.
 fn weather_act_mob(world: &mut World, mob: Entity) {
     let mut rng = world.resource_mut::<EventRng>();
     if !rng.0.prob(MUTATE_CHANCE) {
@@ -192,6 +191,11 @@ fn weather_act_mob(world: &mut World, mob: Entity) {
     let do_mutate = rng.0.prob(50.0);
     let negative = rng.0.prob(NEGATIVE_MUTATION_CHANCE);
     if world.get::<Dna>(mob).is_none() || world.get::<Stat>(mob) == Some(&Stat::Dead) {
+        return;
+    }
+    if crate::radiation::rad_immune(world, mob)
+        || crate::radiation::wearing_rad_protected_clothing(world, mob)
+    {
         return;
     }
     genetics::random_mutate_unique_identity(world, mob);

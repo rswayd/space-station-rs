@@ -33,6 +33,7 @@
 //! | 1500 | `antag::nukeop::server::attack_self` |
 //! | 1600 | `antag::syndie_items::attack_self` |
 //! | 1700 | `devices::attack_self` |
+//! | 1750 | `radiation::geiger_attack_self` |
 //! | 1800 | `explosions::sources::c4_attack_self` |
 //! | 1900 | `assemblies::server::attack_self` |
 //! | 2000 | `grenades::attack_self` |
@@ -65,6 +66,7 @@
 //! | 1000 | `antag::uplink::item_interaction` |
 //! | 1100 | `antag::syndie_items::item_interaction` |
 //! | 1200 | `modpc::pda::item_interaction` |
+//! | 1250 | `radiation::geiger_interact` |
 //! | 1300 | `disposals::mail_interaction` |
 //! | 1400 | `chem::item_interaction` |
 //! | 1500 | `guns::item_interaction` |
@@ -132,6 +134,7 @@
 //! | 1450 | `silicon::mmi::item_interaction` |
 //! | 1500 | `bots::construction::item_interaction` |
 //! | 1600 | `machine_frame::item_interaction` |
+//! | 1650 | `radiation::geiger_interact` |
 //! | 1700 | `service::server::item_interaction` |
 //! | 1750 | `medical::bodyparts::item_interaction` |
 //! | 1800 | `kitchen::item_interaction` |

@@ -25,7 +25,7 @@
 Кристалл излучает радиацию по мощности, вызывает галлюцинации у смотрящих без мезонов и психологический эффект на осмотре.
 
 - **Код:** [`proc/emit_radiation()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter_extra_effects.dm#L20), [`proc/psychological_examination()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter_extra_effects.dm#L76), [`proc/processing_sound()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter_extra_effects.dm#L57)
-- **Статус в ss13-rs:** ❌ нет — радиации, галлюцинаций и психолога нет (`psy_coeff` всегда 0)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/power/supermatter.rs` (`Crystal::radiation`): импульс `emit_radiation` (радиус 8, порог и шанс по мощности и целостности) каждый вдох; галлюцинаций и психолога нет (`psy_coeff` всегда 0)
 
 ### Повреждение и предупреждения
 Урон кристалла от перегрева, давления и мощности, лечение в холоде; предупреждения по инженерному каналу, затем по общему, отсчёт деламинации.
