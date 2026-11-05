@@ -205,7 +205,10 @@ fn convert_cmd(config: &MapLoadPlugin, mut map_dirs: Vec<PathBuf>) -> anyhow::Re
             .filter(|p| types.types.contains_key(*p))
             .map(str::to_owned),
     );
-    let silicon = ss13_mapload::silicon::resolve(&types);
+    let mut silicon = ss13_mapload::silicon::resolve(&types);
+    if let Some(problem) = ss13_mapload::silicon::read_malf_flavor(&config.source, &mut silicon) {
+        println!("malf flavor missing: {problem}");
+    }
     // The silicon mobs, the cyborg models and their modules are spawned at runtime.
     used.extend(
         ss13_mapload::silicon::SILICON_TYPES

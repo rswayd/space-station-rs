@@ -6,7 +6,7 @@
 
 - **Код:** [`/datum/antagonist/malf_ai`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/malf_ai/malf_ai.dm#L5), [`/datum/antagonist/malf_ai/infected`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/malf_ai/malf_ai.dm#L213)
 - **BandaStation:** [`malf_ai.dm#L82`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/malf_ai/malf_ai.dm#L82) — переработаны особые цели, убран шанс особой цели
-- **Статус в ss13-rs:** ❌ нет — ИИ нет; рулсет `Roundstart Malfunctioning AI` в `crates/ss13_game/src/antag/dynamic.rs` никого не спавнит
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/silicon/malf.rs`: работодатель из `GLOB.ai_employers` и флейвор (`malfunction_flavor.json` → `silicon.ron`), задачи BandaStation (блок органиков или армия из 8 киборгов, убийство, «Предотвратите вашу деактивацию.»), защищённый закон 0 (киборгам — `law_borg`), канал Синдиката `:t`, 50 процессорного времени, приветствие в чат; взлом ЛКП кнопкой «Override Programming» в окне `Apc` (30 + 10 × взломанных с, по одному; ЛКП запирается, контрвзлом чужого малфа, +`max(0, 9 − n)` очков, затем по 1 очку раз в 30 с с работающего ЛКП до 400); рулсет `Roundstart Malfunctioning AI` (`antag/dynamic.rs`) выбирает одного с `be_special` «Malf AI» и ставит ему работу ИИ. Нет перемещения в ЛКП (shunt), кодовых слов, окна `AntagInfoMalf`, HUD взломанных ЛКП, итогов раунда, заражённого варианта (плата малфа), мидраунд-рулсета
 
 ### Выбор модулей
 TGUI-магазин модулей за процессорное время.

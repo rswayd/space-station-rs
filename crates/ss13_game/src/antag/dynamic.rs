@@ -16,7 +16,8 @@
 //! Admins can queue rulesets instead of the roll ([`DynamicConfig::forced_rulesets`]); tests use
 //! that to get deterministic antagonists.
 // shortcut: only the traitor, blood brothers, the vampire, the changeling, the nuclear
-// operatives, the blood cult, the heretics, the revolution and the wizard are implemented; other picked
+// operatives, the blood cult, the heretics, the revolution, the wizard and the malfunctioning
+// AI (forced into the AI job, `crate::silicon::malf`) are implemented; other picked
 // rulesets spawn nobody (logged). Midround and latejoin rulesets: [`super::midround`]. BandaStation's weighted
 // selection by antag history (`ANTAG_WEIGHTED_SELECTION`) is off in its config and needs a
 // database.
@@ -290,6 +291,8 @@ pub const WIZARD_RULESET: &str = "Roundstart Wizard";
 pub const REVOLUTION_RULESET: &str = "Roundstart Revolution";
 /// `/datum/dynamic_ruleset/roundstart/revolution` `min_antag_cap = 1`, `max_antag_cap = 3`.
 pub const REVOLUTION_CAPS: (u32, u32) = (3, 1);
+/// `/datum/dynamic_ruleset/roundstart/malf_ai`: one, forced into the AI job.
+pub const MALF_RULESET: &str = "Roundstart Malfunctioning AI";
 /// `/datum/dynamic_ruleset/roundstart/heretic` `max_antag_cap = list("denominator" = 24)`.
 pub const HERETIC_CAP_DENOMINATOR: u32 = 24;
 
@@ -343,7 +346,7 @@ pub const ROUNDSTART_RULESETS: [Ruleset; 12] = [
         high_impact: false,
     },
     Ruleset {
-        config_tag: "Roundstart Malfunctioning AI",
+        config_tag: MALF_RULESET,
         weight: [0, 1, 3, 3],
         min_pop: 30,
         repeatable: false,
@@ -583,6 +586,13 @@ pub fn prepare_roundstart(
             (super::nukeop::ROLE_OPERATIVE, (cap, cap))
         } else if ruleset == WIZARD_RULESET {
             (super::wizard::ROLE_WIZARD, (1, 1))
+        } else if ruleset == MALF_RULESET {
+            // `ruleset_forced_job_check`: the AI job must exist.
+            if world.resource::<Jobs>().data.job("AI").is_none() {
+                info!("dynamic: {ruleset} has no AI job, nobody spawns for it");
+                continue;
+            }
+            (crate::silicon::malf::ROLE_MALF, (1, 1))
         } else {
             let Some((role, denominator)) = implemented(ruleset) else {
                 info!("dynamic: {ruleset} is not implemented here, nobody spawns for it");
@@ -617,6 +627,13 @@ pub fn prepare_roundstart(
             .iter()
             .filter_map(|title| data.job(title));
         ready[i].1.prevented = blacklist.iter().copied().chain(own).collect();
+        // `prepare_for_role`: `SSjob.forced_occupations[candidate] = /datum/job/ai`.
+        if ruleset == MALF_RULESET
+            && let Some(ai) = data.job("AI")
+        {
+            ready[i].1.levels = std::iter::once((ai, crate::lobby::JobPriority::High)).collect();
+            ready[i].1.prevented = (0..data.jobs.len()).filter(|&j| j != ai).collect();
+        }
     }
     let clients: Vec<(Entity, &'static str)> =
         selected.iter().map(|&(i, r)| (ready[i].0, r)).collect();
@@ -635,6 +652,17 @@ pub fn execute_roundstart(world: &mut World, selected: &[(Entity, &'static str)]
             continue;
         }
         let mob = world.resource::<Players>().mob(client);
+        // The AI's client controls its eye; the antagonist is the core.
+        if ruleset == MALF_RULESET {
+            let core = mob.and_then(|m| world.get::<crate::silicon::ai::AiEye>(m).map(|e| e.ai));
+            match core {
+                Some(core) => {
+                    crate::silicon::malf::add_malf(world, core);
+                }
+                None => info!("dynamic: selected {ruleset} antagonist {client} is no AI, skipped"),
+            }
+            continue;
+        }
         let Some(mob) = mob.filter(|&m| world.get::<PlayerJob>(m).is_some()) else {
             info!("dynamic: selected {ruleset} antagonist {client} has no body, skipped");
             continue;

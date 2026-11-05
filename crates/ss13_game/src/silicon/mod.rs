@@ -3,13 +3,16 @@
 //! - [`cameras`] (server): security cameras, `SScameras` chunks, the camera console;
 //! - [`ai`] (server): the AI in its core, its eye, AI clicks on doors and APCs; [`ai_power`]
 //!   (server): the core's power loss and restore routine; [`ai_hud`] (server): the AI's and
-//!   cyborgs' HUD buttons, VOX announcements, the core display;
+//!   cyborgs' HUD buttons, VOX announcements, the core display; [`ai_track`] (server): camera
+//!   tracking;
 //! - [`alarms`] (server): station alarms, their silicon listeners and the alert console;
 //! - [`cyborg`] (server): cyborgs, their models, cell and the recharging station;
 //!   [`chassis`] (server): the cover and its lock, the cell slot, emags, lockdown, the
 //!   cyborg's law display; [`borg_upgrades`] (server): upgrade boards; [`robotics`] (server):
 //!   the robotics control console;
-//! - [`laws`] (server): lawsets, the round default, lawsync;
+//! - [`laws`] (server): lawsets, the round default, lawsync; [`law_rack`] (server): law racks,
+//!   their modules and the silicons linked to them;
+//! - [`malf`] (server): the malfunctioning AI and its APC hacks;
 //! - [`interact`] (server): silicons opening machine windows (`attack_ai`), their window
 //!   status; [`airlock`] (server): the airlock's `AiAirlock` window;
 //! - [`ui`]: the windows' data both halves share; [`client`] (client) draws the camera view's
@@ -30,6 +33,8 @@ pub mod ai_hud;
 #[cfg(feature = "server")]
 pub mod ai_power;
 #[cfg(feature = "server")]
+pub mod ai_track;
+#[cfg(feature = "server")]
 pub mod airlock;
 #[cfg(feature = "server")]
 pub mod alarms;
@@ -46,7 +51,11 @@ pub mod cyborg;
 #[cfg(feature = "server")]
 pub mod interact;
 #[cfg(feature = "server")]
+pub mod law_rack;
+#[cfg(feature = "server")]
 pub mod laws;
+#[cfg(feature = "server")]
+pub mod malf;
 #[cfg(feature = "server")]
 pub mod robotics;
 pub mod ui;
@@ -100,6 +109,9 @@ mod server {
                     super::robotics::RoboticsPlugin,
                     super::interact::SiliconInteractPlugin,
                     super::airlock::AiAirlockPlugin,
+                    super::law_rack::LawRackPlugin,
+                    super::ai_track::AiTrackPlugin,
+                    super::malf::MalfPlugin,
                 ))
                 .add_systems(PreStartup, load_data)
                 .add_systems(

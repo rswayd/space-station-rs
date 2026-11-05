@@ -188,3 +188,71 @@ pub struct RoboticsConsoleData {
 
 /// `act('stopbot', { ref })`.
 pub const STOPBOT: &str = "stopbot";
+
+/// tg `LawRack`: a module rack's slots and links.
+pub struct LawRackUi;
+
+impl UiInterface for LawRackUi {
+    const NAME: &'static str = "LawRack";
+    type Data = LawRackData;
+    type StaticData = ();
+}
+
+/// tg `MODULE_UNSECURED`, `MODULE_SCREWED`, `MODULE_WELDED`.
+pub const SLOT_UNSECURED: u8 = 0;
+pub const SLOT_SCREWED: u8 = 1;
+pub const SLOT_WELDED: u8 = 2;
+
+/// One entry of `slots` (the first is the core slot when `has_core_slot`).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct LawSlotData {
+    /// tg `MODULE_NAME`: "Empty", the module's name, or "unidentified welded module".
+    pub name: String,
+    pub security: u8,
+    pub ioned: bool,
+    pub empty: bool,
+}
+
+/// tg `format_linkable`: a name and an opaque ref the link acts name.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct Linkable {
+    pub name: String,
+    pub link_ref: String,
+}
+
+/// `ui_data` and `ui_static_data` together (the static lists change only on refresh, link and
+/// unlink, when tg updates the static data of every viewer).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct LawRackData {
+    pub slots: Vec<LawSlotData>,
+    pub holding_module: bool,
+    pub holding_screwdriver: bool,
+    pub holding_welder: bool,
+    pub holding_multitool: bool,
+    pub has_core_slot: bool,
+    pub depowered: bool,
+    /// Seconds until `refresh` works again.
+    pub refresh_cooldown: u32,
+    /// A broadcaster's: the rack it feeds, the racks it may link to.
+    pub parent_rack: Option<Linkable>,
+    pub linkable_racks: Option<Vec<Linkable>>,
+    /// A base rack's: who is linked (names), who may be, how many modules the linked
+    /// broadcasters add.
+    pub linked_mobs: Option<Vec<String>>,
+    pub linkable_silicons: Option<Vec<Linkable>>,
+    pub linked_rack_module_count: Option<u32>,
+}
+
+/// `act(name, { slot })` with the 1-based slot.
+pub const INSERT_MODULE: &str = "insert_module";
+pub const REMOVE_MODULE: &str = "remove_module";
+pub const SCREW_MODULE: &str = "screw_module";
+pub const WELD_MODULE: &str = "weld_module";
+pub const MULTITOOL_MODULE: &str = "multitool_module";
+/// `act('link_silicon', { silicon_ref })`, `act('unlink_silicon', { silicon_index })` (0-based).
+pub const LINK_SILICON: &str = "link_silicon";
+pub const UNLINK_SILICON: &str = "unlink_silicon";
+/// `act('link_rack', { rack_ref })`, `act('unlink_rack')`.
+pub const LINK_RACK: &str = "link_rack";
+pub const UNLINK_RACK: &str = "unlink_rack";
+pub const REFRESH: &str = "refresh";

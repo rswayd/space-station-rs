@@ -73,6 +73,17 @@ const TYPES: &str = r##"{
         "name": "Engineering", "cyborg_base_icon": "engineer",
         "basic_modules": { "list": [{ "path": "/obj/item/screwdriver" }, { "path": "/obj/item/multitool" }] },
         "radio_channels": { "list": ["Инженерия"] } } },
+    "/obj/item/ai_module": { "parent": "/obj/item", "declared_vars": { "name": "AI module" } },
+    "/obj/item/ai_module/law": { "parent": "/obj/item/ai_module", "declared_vars": {
+        "laws": { "list": [] } } },
+    "/obj/item/ai_module/law/core": { "parent": "/obj/item/ai_module/law" },
+    "/obj/item/ai_module/law/core/full": { "parent": "/obj/item/ai_module/law/core",
+        "declared_vars": { "law_id": null } },
+    "/obj/item/ai_module/law/core/full/crewsimovpp": { "parent": "/obj/item/ai_module/law/core/full",
+        "declared_vars": { "name": "crew module", "law_id": "crewsimovpp" } },
+    "/obj/item/ai_module/law/supplied": { "parent": "/obj/item/ai_module/law" },
+    "/obj/item/ai_module/law/supplied/freeform": { "parent": "/obj/item/ai_module/law/supplied",
+        "declared_vars": { "name": "freeform module", "laws": { "list": [""] } } },
     "/obj/item/card": { "parent": "/obj/item" },
     "/obj/item/card/id": { "parent": "/obj/item/card", "declared_vars": { "slot_flags": 256 } },
     "/obj/item/card/id/advanced": { "parent": "/obj/item/card/id" },
@@ -94,6 +105,12 @@ const TYPES: &str = r##"{
         "name": "security camera console", "network": { "list": ["ss13"] } } },
     "/obj/machinery/computer/station_alert": { "parent": "/obj/machinery/computer",
         "declared_vars": { "name": "station alert console" } },
+    "/obj/machinery/ai_law_rack": { "parent": "/obj/machinery", "declared_vars": {
+        "name": "module rack", "icon": { "resource": "computer.dmi" }, "icon_state": "computer",
+        "density": 1 } },
+    "/obj/machinery/ai_law_rack/base": { "parent": "/obj/machinery/ai_law_rack" },
+    "/obj/machinery/ai_law_rack/base/core": { "parent": "/obj/machinery/ai_law_rack/base",
+        "declared_vars": { "name": "core module rack" } },
     "/obj/machinery/recharge_station": { "parent": "/obj/machinery", "declared_vars": {
         "name": "recharging station", "icon": { "resource": "borg_charger.dmi" },
         "icon_state": "borgcharger0" } },
@@ -189,6 +206,28 @@ wwwwwwwwwww
 "##;
 const APC_POS: TilePos = TilePos::new(3, 2, 1);
 
+/// [`MAP`] with a core law rack `K` (2,2) right below the assistant start.
+const MAP_RACK: &str = r##""w" = (/turf/closed/wall,/area/station)
+"f" = (/turf/open/floor,/area/station)
+"s" = (/obj/effect/landmark/start/assistant,/turf/open/floor,/area/station)
+"1" = (/obj/machinery/camera{c_tag = "Room One"},/turf/open/floor,/area/station)
+"c" = (/obj/machinery/computer/security,/turf/open/floor,/area/station)
+"D" = (/obj/machinery/door/airlock,/turf/open/floor,/area/station)
+"E" = (/obj/machinery/door/airlock,/turf/open/floor,/area/station)
+"A" = (/obj/effect/landmark/start/ai,/turf/open/floor,/area/station)
+"R" = (/obj/machinery/recharge_station,/turf/open/floor,/area/station)
+"K" = (/obj/machinery/ai_law_rack/base/core,/turf/open/floor,/area/station)
+
+(1,1,1) = {"
+wwwwwwwwwww
+w1cwfffwffw
+wsfDfAfEffw
+wKfwfRfwffw
+wwwwwwwwwww
+"}
+"##;
+const RACK_POS: TilePos = TilePos::new(2, 2, 1);
+
 const SPAWN: TilePos = TilePos::new(2, 3, 1);
 const CAMERA: TilePos = TilePos::new(2, 4, 1);
 const CONSOLE: TilePos = TilePos::new(3, 4, 1);
@@ -239,6 +278,9 @@ fn fixture_assets_on(test: &str, map: &str) -> PathBuf {
         "/obj/item/screwdriver",
         "/obj/item/multitool",
         "/obj/item/robot_model/engineering",
+        "/obj/machinery/ai_law_rack/base/core",
+        "/obj/item/ai_module/law/core/full/crewsimovpp",
+        "/obj/item/ai_module/law/supplied/freeform",
         "/mob/living/silicon/ai",
         "/mob/living/silicon/robot",
         "/turf/open/floor",
@@ -1236,6 +1278,7 @@ fn ai_hud_alerts_and_announcement() {
         [
             "ai_core",
             "camera",
+            "camera_track",
             "alerts",
             "announcement",
             "call_shuttle",
@@ -1354,4 +1397,167 @@ fn station_alert_console_lists_alarms() {
     assert_eq!(names, ["Fire", "Atmosphere", "Power"]);
     assert_eq!(data.alarms[0].alerts.len(), 1);
     assert_eq!(data.alarms[0].alerts[0].alert_ref, None);
+}
+
+/// The mapped core rack starts with the default lawset's module welded in and names itself; the
+/// AI links to it on joining. A human with a configured freeform module opens the rack, inserts
+/// it into slot 2 (the AI gets the supplied law), takes it out again (the law goes), and unlinks
+/// the AI (its laws are wiped).
+#[test]
+fn law_rack_modules_change_the_ai_laws() {
+    use ss13_game::inventory::CarriedBy;
+    use ss13_game::silicon::law_rack::{LawModule, LawRack, LinkedRack, ModuleKind, Security};
+    use ss13_game::silicon::ui::LawRackUi;
+    let mut s = Station::start_on("law_rack_modules_change_the_ai_laws", MAP_RACK, 2, false);
+    let rack = s.find::<LawRack>(RACK_POS);
+    {
+        let r = s.get::<LawRack>(rack);
+        assert_eq!(r.slots.len(), 10);
+        assert_eq!(r.slots[0].as_ref().unwrap().security, Security::Welded);
+        assert_eq!(r.combined.law_list(true), ["1: L1", "2: L2", "3: L3"]);
+    }
+    assert_eq!(s.get::<Name>(rack).as_str(), "core module rack 'alpha'");
+    // p1 becomes the AI.
+    let job = s.server.world().resource::<Jobs>().data.job("AI").unwrap();
+    let link = s.players[1].link;
+    let core = ss13_game::jobs::join(s.server.world_mut(), link, job, false);
+    s.step();
+    assert_eq!(s.get::<LinkedRack>(core), &LinkedRack(rack));
+    assert_eq!(
+        s.get::<Laws>(core).law_list(true),
+        ["1: L1", "2: L2", "3: L3"]
+    );
+
+    // p0 holds a configured freeform module.
+    let human = s.mob();
+    let module = ss13_game::construction::spawn_obj(
+        s.server.world_mut(),
+        "/obj/item/ai_module/law/supplied/freeform",
+        SPAWN,
+    )
+    .unwrap();
+    let world = s.server.world_mut();
+    world.entity_mut(module).remove::<TilePos>().insert((
+        CarriedBy(human),
+        LawModule {
+            kind: ModuleKind::Supplied,
+            laws: vec![("Obey Bob".to_owned(), false)],
+            ..default()
+        },
+    ));
+    let mut inventory = world.get_mut::<Inventory>(human).unwrap();
+    let active = inventory.active;
+    inventory.hands[active] = Some(module);
+    s.click(rack, PLAIN);
+    s.run_until("the rack window opens", |s| {
+        s.window::<LawRackUi>().is_some()
+    });
+    let (window, (), data) = s.window::<LawRackUi>().unwrap();
+    assert!(data.holding_module);
+    let ai_name = s.get::<Name>(core).as_str().to_owned();
+    assert_eq!(data.linked_mobs, Some(vec![ai_name]));
+    assert_eq!(data.slots[0].name, "unidentified welded module");
+    s.act(0, window, "insert_module", &[("slot", "2")]);
+    s.run_until("the AI gets the supplied law", |s| {
+        s.get::<Laws>(core)
+            .law_list(true)
+            .last()
+            .map(String::as_str)
+            == Some("4: Obey Bob")
+    });
+    assert_eq!(s.get::<StoredIn>(module).0, rack);
+    s.act(0, window, "remove_module", &[("slot", "2")]);
+    s.run_until("the module is back in hand", |s| {
+        s.get::<Inventory>(human).hands.contains(&Some(module))
+    });
+    assert_eq!(s.get::<Laws>(core).law_list(true).len(), 3);
+    s.act(0, window, "unlink_silicon", &[("silicon_index", "0")]);
+    s.run_until("the AI is unlinked", |s| {
+        s.try_get::<LinkedRack>(core).is_none()
+    });
+    assert!(s.get::<Laws>(core).law_list(true).is_empty());
+    assert!(s.get::<LawRack>(rack).linked_mobs.is_empty());
+}
+
+/// "Track With Camera" lists the human the room's camera sees; the eye follows it while the
+/// camera sees it, and a step of the eye ends the tracking.
+#[test]
+fn ai_tracks_a_mob_with_the_cameras() {
+    use ss13_game::actions::ActionButtonsUi;
+    use ss13_game::silicon::ai_track::AiTracking;
+    use ss13_tgui::interfaces::list_input::{ListInputData, ListInputUi as PromptList};
+    let mut s = Station::start_on("ai_tracks_a_mob_with_the_cameras", MAP, 2, false);
+    s.join("AI");
+    let human = s.players[1].mob;
+    assert_eq!(s.get::<TilePos>(human), &SPAWN);
+    s.run_until("the HUD buttons arrive", |s| {
+        s.window::<ActionButtonsUi>().is_some()
+    });
+    s.act::<ActionButtonsUi>("trigger", &[("id", "camera_track")]);
+    s.run_until("the target list", |s| s.window::<PromptList>().is_some());
+    let (_, (), data): (u32, (), ListInputData) = s.window::<PromptList>().unwrap();
+    assert_eq!(data.items.len(), 1);
+    let entry = data.items[0].clone();
+    s.act::<PromptList>("submit", &[("entry", &entry)]);
+    s.run_until("the eye is on the human", |s| s.pos() == SPAWN);
+    // The human steps east, still in the camera's room: the eye follows.
+    let east = TilePos::new(3, 3, 1);
+    s.server.world_mut().entity_mut(human).insert(east);
+    s.run_until("the eye follows", |s| s.pos() == east);
+    s.step_dir(Dir::South);
+    s.run_until("a manual step ends the tracking", |s| {
+        s.try_get::<AiTracking>(s.mob()).is_none()
+    });
+}
+
+/// A malfunctioning AI gets its protected law 0 and 50 processing time; the APC window offers it
+/// "Override Programming", and the finished hack locks the APC and adds 9 points (the first
+/// point of the hacked APC follows).
+#[test]
+fn malf_ai_hacks_an_apc() {
+    use ss13_game::silicon::malf::{MalfAi, MalfHacked, START_PROCESSING_TIME, add_malf};
+    let mut s = Station::start_on("malf_ai_hacks_an_apc", MAP_APC, 1, false);
+    let core = s.join("AI");
+    assert!(add_malf(s.server.world_mut(), core));
+    {
+        let laws = s.get::<Laws>(core);
+        assert!(laws.protected_zeroth && laws.zeroth.is_some());
+        assert_eq!(s.get::<MalfAi>(core).processing_time, START_PROCESSING_TIME);
+        assert_eq!(s.get::<MalfAi>(core).objectives.len(), 3);
+    }
+    let apc = s.find::<Apc>(APC_POS);
+    s.run_until("the camera view arrives", |s| {
+        s.window::<CameraViewUi>().is_some()
+    });
+    for _ in 0..3 {
+        s.step_dir(Dir::West);
+    }
+    s.run_until("the eye is in room 1", |s| s.pos().x == 3);
+    s.click(apc, PLAIN);
+    s.run_until("the Apc window opens", |s| s.window::<ApcUi>().is_some());
+    let (_, (), data): (u32, (), ApcData) = s.window::<ApcUi>().unwrap();
+    assert_eq!(data.malf_status, 1);
+    s.act::<ApcUi>("hack", &[]);
+    s.run_until("the hack starts", |s| {
+        s.get::<MalfAi>(core).hacking.is_some_and(|(a, _)| a == apc)
+    });
+    // Skip the 30 s.
+    let now = s.now();
+    s.server
+        .world_mut()
+        .get_mut::<MalfAi>(core)
+        .unwrap()
+        .hacking = Some((apc, now));
+    s.run_until("the APC is hacked", |s| {
+        s.try_get::<MalfHacked>(apc).is_some()
+    });
+    let world = s.server.world();
+    assert!(world.get::<Apc>(apc).unwrap().locked);
+    let malf = world.get::<MalfAi>(core).unwrap();
+    assert_eq!(malf.hacked_apcs, [apc]);
+    assert!(malf.processing_time >= START_PROCESSING_TIME + 9);
+    s.run_until("the window offers no second hack", |s| {
+        s.window::<ApcUi>()
+            .is_some_and(|(_, (), d)| d.malf_status == 0)
+    });
 }

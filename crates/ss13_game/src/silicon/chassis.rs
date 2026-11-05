@@ -525,6 +525,8 @@ fn emag_sequences(world: &mut World) {
             continue;
         }
         world.entity_mut(borg).remove::<EmagSequence>();
+        // A rack would overwrite the new laws on its next update (tg keeps the link).
+        super::law_rack::forget_link(world, borg);
         let laws = syndicate_laws(world, &seq.master);
         world.entity_mut(borg).insert(laws);
         tell_mob(

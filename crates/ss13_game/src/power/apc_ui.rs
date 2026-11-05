@@ -6,7 +6,8 @@
 //! for anyone else while the interface is locked, except "toggle_nightshift" and during a power
 //! failure (tg). Acts: the breaker, the charge mode, the three channels (`setsubsystem`), the
 //! silicon interface lock, the cover bolts, emergency lighting, night shift, reboot.
-// shortcut: no ID swipe to unlock the interface, no malfunction (hack/occupy), no remote
+// The malfunctioning AI's "hack" act: `crate::silicon::malf`.
+// shortcut: no ID swipe to unlock the interface, no malfunction shunt (occupy), no remote
 // control console; "overload" (silicons) does nothing; the cover bolts, emergency-lighting
 // and night-shift switches are kept and shown but do not change the cover, the lights' backup
 // cells or their brightness yet.
@@ -43,6 +44,8 @@ pub enum ApcAct {
     Overload,
     Reboot,
     EmergencyLighting,
+    /// A malfunctioning AI's `malfhack`.
+    Hack,
 }
 
 /// tg `siunit(value, unit, maxdecimals)`: an SI prefix and up to `maxdecimals` decimals, DM
@@ -77,17 +80,25 @@ pub fn display_power(joules: f64) -> String {
 }
 
 impl ServerUi for ApcWindow {
-    type Source = &'static Apc;
-    type UserParam = SiliconUsers<'static, 'static>;
+    type Source = (
+        &'static Apc,
+        Option<&'static crate::silicon::malf::MalfHacked>,
+    );
+    type UserParam = (
+        SiliconUsers<'static, 'static>,
+        Query<'static, 'static, &'static crate::silicon::ai::AiEye>,
+        Query<'static, 'static, (), With<crate::silicon::malf::MalfAi>>,
+    );
     type Act = ApcAct;
 
-    fn static_data(_: &Apc) {}
+    fn static_data(_: (&Apc, Option<&crate::silicon::malf::MalfHacked>)) {}
 
     fn data(
-        apc: &Apc,
+        (apc, hacked): (&Apc, Option<&crate::silicon::malf::MalfHacked>),
         user: Entity,
-        silicons: &SystemParamItem<'_, '_, Self::UserParam>,
+        (silicons, eyes, malfs): &SystemParamItem<'_, '_, Self::UserParam>,
     ) -> ApcData {
+        let user_ai = eyes.get(user).ok().map(|e| (e.ai, malfs.contains(e.ai)));
         let channel = |title: &str, ch: Channel, key: &str| PowerChannel {
             title: title.to_owned(),
             power_load: display_power(apc.lastused[ch as usize]),
@@ -107,7 +118,7 @@ impl ServerUi for ApcWindow {
             cover_locked: apc.coverlocked,
             remote_access: false,
             silicon_user: silicons.contains(user),
-            malf_status: 0,
+            malf_status: crate::silicon::malf::malf_status(user_ai, hacked.map(|h| h.ai)),
             emergency_lights: !apc.emergency_lights,
             nightshift_lights: apc.nightshift_lights,
             disable_nightshift_toggle: false,
@@ -144,6 +155,7 @@ impl ServerUi for ApcWindow {
             "overload" => ApcAct::Overload,
             "reboot" => ApcAct::Reboot,
             "emergency_lighting" => ApcAct::EmergencyLighting,
+            "hack" => ApcAct::Hack,
             _ => return Err(UiReject::UnknownAction),
         })
     }
@@ -267,6 +279,8 @@ pub fn apply_act(world: &mut World, client: Entity, actor: Entity, apc: Entity, 
                 a.emergency_lights = !a.emergency_lights;
             }
         }
+        ApcAct::Hack if silicon => crate::silicon::malf::start_hack(world, client, actor, apc),
+        ApcAct::Hack => {}
     }
 }
 

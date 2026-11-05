@@ -50,6 +50,19 @@ impl UiInterface for ApcUi {
     type StaticData = ();
 }
 
+/// tgui `malfMap`: icon, text and act of the malfunctioning AI's button by `malf_status`.
+pub fn malf_button(status: u8) -> (&'static str, &'static str, &'static str) {
+    match status {
+        1 => ("terminal", "Override Programming", "hack"),
+        3 => (
+            "caret-square-left",
+            "Вернуться к основному ядру",
+            "deoccupy",
+        ),
+        _ => ("caret-square-down", "Shunt Core Process", "occupy"),
+    }
+}
+
 /// `powerStatusMap`: color, external power text, charging text.
 pub fn power_status(level: u8) -> (&'static str, &'static str, &'static str) {
     match level {
@@ -65,7 +78,7 @@ mod client_side {
     use ss13_ui_kit::ActParams;
     use ss13_ui_kit::prelude::*;
 
-    use super::{ApcData, ApcUi, PowerChannel, power_status};
+    use super::{ApcData, ApcUi, PowerChannel, malf_button, power_status};
     use crate::client::ClientUi;
 
     fn color(name: &str) -> UiColor {
@@ -225,6 +238,15 @@ mod client_side {
             .collect();
         let total = data.total_load.clone();
         let silicon = data.silicon_user;
+        // `malfMap`: the malfunctioning AI's button.
+        let malf = (silicon && data.malf_status != 0).then(|| {
+            let (icon, content, action) = malf_button(data.malf_status);
+            EntityScene(bsn! {
+                @Button { @icon: icon, @content: content }
+                Button { color: UiColor::Bad }
+                Act({action.to_owned()})
+            })
+        });
         let overload = silicon.then(|| {
             EntityScene(bsn! {
                 @Button { @icon: "lightbulb-o", @content: "Перегрузка" }
@@ -300,7 +322,7 @@ mod client_side {
                 --
                 @Section {
                     @title: "Прочее",
-                    @buttons: bsn_list! { {overload} },
+                    @buttons: bsn_list! { {malf} -- {overload} },
                 }
                 Children [
                     @LabeledList
