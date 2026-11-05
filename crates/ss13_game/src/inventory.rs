@@ -477,6 +477,17 @@ fn apply(world: &mut World, client: Entity, action: Action) {
             // The item in the other hand is clicked, not the slot (tg draws held items over
             // their slots): a storage opens or takes the active hand's item.
             match inventory.hands[hand] {
+                // A MODsuit control unit in the other hand: modules, cores, cells, tools and IDs
+                // with the active hand, its cell with an empty one (before its storage).
+                Some(item)
+                    if hand != inventory.active
+                        && crate::modsuit::server::hand_interaction(
+                            world,
+                            client,
+                            mob,
+                            inventory.active_item(),
+                            item,
+                        ) => {}
                 // A bot part on a bot assembly (or what starts one) in the other hand: before
                 // storage, as tg `medkit/tool_act` takes a robot arm before its storage.
                 Some(item)
@@ -877,6 +888,11 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                             },
                             target,
                         ) => {}
+                // A MODsuit control unit: emags, modules, cores, cells, tools, IDs.
+                Some(held)
+                    if crate::modsuit::server::item_interaction(
+                        world, client, mob, held, target,
+                    ) => {}
                 // A screwdriver or multitool sets a grenade's fuse.
                 Some(held)
                     if crate::grenades::item_interaction(world, client, mob, held, target) => {}

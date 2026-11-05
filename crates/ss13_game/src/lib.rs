@@ -109,6 +109,8 @@
 //! - `mecha` (feature `server`; the fabricator window's data shared, `mecha::client` with
 //!   `client`): exosuits (entering, driving, equipment, damage, wreckage), building them from a
 //!   chassis and the exosuit fabricator (tgui `ExosuitFabricator`).
+//! - `modsuit` (server half with `server`, the `MODsuit` window with `client`): MODsuit control
+//!   units, their parts, cores and modules.
 //!
 //! - `service` (server half with `server`, the paper and book windows with `client`): paper,
 //!   pens, stamps, paper bins, the hand labeler, books, bookcases, the bible, dice, squeaky
@@ -290,6 +292,7 @@ pub mod medical;
 #[cfg(feature = "server")]
 pub mod mobs;
 pub mod modpc;
+pub mod modsuit;
 #[cfg(feature = "server")]
 pub mod mood;
 #[cfg(feature = "client")]

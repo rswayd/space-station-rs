@@ -190,6 +190,15 @@ fn convert_cmd(config: &MapLoadPlugin, mut map_dirs: Vec<PathBuf>) -> anyhow::Re
     let research = ss13_mapload::research::resolve(&types);
     // Printed designs and ejected sheets are spawned at runtime; every design shows its icon.
     used.extend(research.prototype_types().into_iter().map(str::to_owned));
+    let modsuits = ss13_mapload::modsuit::resolve(&types);
+    // MODsuit control units, their parts, modules, cores and cells are spawned at runtime.
+    used.extend(
+        modsuits
+            .prototype_types()
+            .into_iter()
+            .filter(|p| types.types.contains_key(*p))
+            .map(str::to_owned),
+    );
     let mecha = ss13_mapload::mecha::resolve(&types);
     // Mechs, their parts, equipment, wreckages and cells are spawned at runtime.
     used.extend(
@@ -309,8 +318,9 @@ fn convert_cmd(config: &MapLoadPlugin, mut map_dirs: Vec<PathBuf>) -> anyhow::Re
     let sfx_out = config.assets.join(ss13_mapload::sound::SFX_FILE);
     std::fs::write(&sfx_out, sfx.to_ron())
         .with_context(|| format!("writing {}", sfx_out.display()))?;
-    let sounds =
+    let mut sounds =
         ss13_mapload::sound::referenced(&types, &sfx, conversion.types.iter().map(String::as_str));
+    sounds.extend(modsuits.sounds().into_iter().map(str::to_owned));
     let copied = ss13_mapload::sound::copy_sounds(
         &config.source,
         &config.assets,
@@ -330,6 +340,16 @@ fn convert_cmd(config: &MapLoadPlugin, mut map_dirs: Vec<PathBuf>) -> anyhow::Re
     for missing in &copied.missing {
         println!("  sound file missing in the source: {missing}");
     }
+    let modsuit_out = config.assets.join(ss13_mapload::modsuit::MODSUIT_FILE);
+    std::fs::write(&modsuit_out, modsuits.to_ron())
+        .with_context(|| format!("writing {}", modsuit_out.display()))?;
+    println!(
+        "{} MOD themes, {} control units, {} modules -> {}",
+        modsuits.themes.len(),
+        modsuits.suits.len(),
+        modsuits.modules.len(),
+        modsuit_out.display()
+    );
     let mecha_out = config.assets.join(ss13_mapload::mecha::MECHA_FILE);
     std::fs::write(&mecha_out, mecha.to_ron())
         .with_context(|| format!("writing {}", mecha_out.display()))?;

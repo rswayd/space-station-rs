@@ -541,6 +541,10 @@ fn slip_on_entered(world: &mut World, mut cursor: Local<MessageCursor<Moved>>) {
         else {
             continue;
         };
+        // Active MOD magboots (`TRAIT_NO_SLIP_WATER`, `TRAIT_NO_SLIP_ICE`).
+        if crate::modsuit::modules::resists_slip(world, m.entity, slip.1, slip.0) {
+            continue;
+        }
         try_slip(world, m.entity, slip);
     }
 }
