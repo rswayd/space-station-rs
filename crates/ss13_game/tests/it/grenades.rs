@@ -60,6 +60,16 @@ const TYPES: &str = r##"{
     "/obj/item/grenade/clusterbuster": { "parent": "/obj/item/grenade", "declared_vars": {
         "name": "clusterbang" } },
     "/obj/item/grenade/clusterbuster/segment": { "parent": "/obj/item/grenade/clusterbuster" },
+    "/obj/item/card": { "parent": "/obj/item" },
+    "/obj/item/card/id": { "parent": "/obj/item/card", "declared_vars": { "slot_flags": 256 } },
+    "/obj/item/card/id/advanced": { "parent": "/obj/item/card/id" },
+    "/obj/item/clothing": { "parent": "/obj/item" },
+    "/obj/item/clothing/under": { "parent": "/obj/item/clothing" },
+    "/obj/item/clothing/under/color": { "parent": "/obj/item/clothing/under" },
+    "/obj/item/clothing/under/color/grey": { "parent": "/obj/item/clothing/under/color" },
+    "/obj/item/clothing/shoes": { "parent": "/obj/item/clothing" },
+    "/obj/item/clothing/shoes/sneakers": { "parent": "/obj/item/clothing/shoes" },
+    "/obj/item/clothing/shoes/sneakers/black": { "parent": "/obj/item/clothing/shoes/sneakers" },
     "/mob": { "parent": "/atom/movable", "declared_vars": { "layer": 4, "density": 1 } },
     "/mob/living": { "parent": "/mob" },
     "/mob/living/carbon": { "parent": "/mob/living" },
@@ -159,7 +169,9 @@ fn fixture_assets(test: &str) -> PathBuf {
 
 fn server(test: &str) -> App {
     let assets = fixture_assets(test);
-    let mut app = testing::server_app(fixture_map(&assets, &["map.dmm"]), |_| {});
+    let mut app = testing::server_app(fixture_map(&assets, &["map.dmm"]), |app| {
+        app.add_plugins(ss13_atmos::AtmosPlugin);
+    });
     app.update();
     app
 }
