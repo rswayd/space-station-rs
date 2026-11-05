@@ -6,28 +6,28 @@
 
 - **Код:** [`/mob/living/basic/cow`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/farm_animals/cow/_cow.dm#L2), [`/mob/living/basic/cow/moonicorn`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/farm_animals/cow/cow_moonicorn.dm#L2), [`/mob/living/basic/cow/wisdom`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/farm_animals/cow/cow_wisdom.dm#L2)
 - **BandaStation:** [`modular_bandastation/mobs/code/simple_animal/friendly/farm_animals.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/mobs/code/simple_animal/friendly/farm_animals.dm#L10) — чёрная, бурая, белая коровы, русские имена и звуки
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/mobs/ai/trees.rs`, `crates/ss13_game/src/mobs/eating.rs`: бродят, мычат фразами контроллера, ищут и едят пшеницу (с пола и из рук); нет доения, опрокидывания (`tip_reaction`), приручения, мунекорна и коровы мудрости
 
 ### Козы
 Агрессивны к обидчикам, жуют лианы и кудзу (полезны против ботанических сорняков), доятся.
 
 - **Код:** [`/mob/living/basic/goat`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/farm_animals/goat/_goat.dm#L2)
 - **BandaStation:** [`modular_bandastation/mobs/code/simple_animal/friendly/farm_animals.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/mobs/code/simple_animal/friendly/farm_animals.dm#L1) — переводы и звуки
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/mobs/ai/trees.rs`, `crates/ss13_game/src/mobs/eating.rs`: `forage_and_retaliate`: бьют обидчиков и иногда случайных встречных (`capricious_retaliate`, успокаиваются), ищут и съедают лианы, кудзу и светогрибы; нет доения, поедания растений под ногами
 
 ### Куры и цыплята
 Курица несёт яйца при кормлении зерном; оплодотворённые яйца вылупляются в цыплят, цыплята вырастают в кур.
 
 - **Код:** [`/mob/living/basic/chicken`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/farm_animals/chicken/chicken.dm#L9), [`/mob/living/basic/chick`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/farm_animals/chicken/chick.dm#L6)
 - **BandaStation:** [`chicken.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/farm_animals/chicken/chicken.dm#L68) — флаг `can_egg_layer`; [`modular_bandastation/mobs/code/simple_animal/friendly/farm_animals.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/mobs/code/simple_animal/friendly/farm_animals.dm#L50) — петухи (не несут яйца), «крутой» петух
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/mobs/ai/trees.rs`: куры бегают и кудахчут (`skittish_and_speak`), убегают от обидчиков; петух форка — капризный (`simple_capricious_combat`); нет яиц, кормления зерном, цыплят
 
 ### Гуси
 Злобные гуси нападают на прохожих; «рвотный» гусь Birdboat глотает предметы и извергает их.
 
 - **Код:** [`/mob/living/basic/goose`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/farm_animals/goose/goose.dm#L5), [`/mob/living/basic/goose/vomit`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/farm_animals/goose/goose.dm#L80)
 - **BandaStation:** [`modular_bandastation/mobs/code/simple_animal/friendly/farm_animals.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/mobs/code/simple_animal/friendly/farm_animals.dm#L132) — гусята и индейка
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/mobs/ai/trees.rs`: гуси бродят, гогочут, бьют обидчиков и случайных встречных (`forage_and_retaliate` с `capricious_pick_target`); Birdboat только отвечает на удары (`goose_calm`); нет поедания и извержения предметов
 
 ### Гориллы
 Сильные мобы, носят ящики (каргорилла — питомец карго), гориллы из генетики (обезьяна + мутация), барная горилла, враждебные варианты.
@@ -40,7 +40,7 @@
 
 - **Код:** [`/mob/living/basic/pig`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/farm_animals/pig.dm#L2), [`/mob/living/basic/sheep`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/farm_animals/sheep.dm#L1), [`/mob/living/basic/rabbit`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/farm_animals/rabbit.dm#L9), [`/mob/living/basic/deer`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/farm_animals/deer/deer.dm#L1), [`/mob/living/basic/pony`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/farm_animals/pony.dm#L1)
 - **BandaStation:** [`modular_bandastation/mobs/code/simple_animal/friendly/pigs.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/mobs/code/simple_animal/friendly/pigs.dm#L1) — свиньи переделаны в возрастные стадии (см. [basic-mobs-bandastation.md](basic-mobs-bandastation.md))
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/mobs/ai/trees.rs`: свиньи и пони дерутся с обидчиками и убегают раненными (`skittish_brawler_combat`, `ai_flee_while_injured`), овцы и кролики пугливы (`skittish_and_speak`), олени убегают от обидчиков и бродят; фразы контроллеров; нет стрижки, яиц, приручения и езды, жизни оленей (трава, вода, деревья)
 
 ### Пчёлы
 Пчёлы живут в улье (апиарий ботаники), опыляют растения, жалят с реагентом своей королевы; королеву можно пересадить в новый улей.
@@ -89,7 +89,7 @@
 
 - **Код:** [`/mob/living/basic/pet/penguin`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/pets/penguin/penguin.dm#L1), [`/mob/living/basic/sloth`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/pets/sloth.dm#L3), [`/mob/living/basic/pet/gondola`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/pets/gondolas/gondola.dm#L6), [`/mob/living/basic/pet/gondola/gondolapod`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/pets/gondolas/gondolapod.dm#L1)
 - **BandaStation:** [`modular_bandastation/mobs/code/simple_animal/pets/sloth.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/mobs/code/simple_animal/pets/sloth.dm#L1) — правки ленивца
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/mobs/ai/trees.rs`, `crates/ss13_game/src/mobs/eating.rs`: пингвины (и птенцы) нутят, убегают от обидчиков (раненые), едят рыбу; ленивцы бродят и убегают от обидчиков; гондолы бродят молча; нет рыбалки, яиц, лазанья по деревьям, гондолоподов
 
 ### Орби (виртуальный питомец КПК)
 Голографический питомец из КПК-приложения NtosVirtualPet: выходит в мир, повышает уровень, получает способности.

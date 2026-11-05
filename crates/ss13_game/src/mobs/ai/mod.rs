@@ -86,6 +86,11 @@ pub enum Key {
     AcidSprayCooldown,
     /// The honkbot's `BB_CLOWN_FRIEND`, the vibebot's `BB_VIBEBOT_PARTY_TARGET`.
     FriendTarget,
+    /// `BB_TEMPORARILY_IGNORE_FACTION`: the basic targeting strategy skips its faction check.
+    IgnoreFaction,
+    /// `BB_TARGET_FOOD`, `BB_NEXT_FOOD_EAT` (`find_food`, `move_to_and_eat`).
+    TargetFood,
+    NextFoodEat,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -270,14 +275,12 @@ pub fn record_attacker(world: &mut World, victim: Entity, attacker: Entity) {
 }
 
 /// tg `ai_flee_while_injured` (`stop_fleeing_at` 1, `start_fleeing_below` 0.5) on a controller
-/// that uses `BB_BASIC_MOB_STOP_FLEEING`.
+/// whose mob has the element: its tree starts with `BB_BASIC_MOB_STOP_FLEEING` set
+/// ([`trees::Built::blackboard`]; carp, pigs, ponies, penguins).
 pub fn flee_while_injured(controller: &mut AiController, health: &crate::health::Health) {
     let Some(Value::Bool(stop)) = controller.bb.get(Key::StopFleeing).cloned() else {
         return;
     };
-    if !controller.kind.starts_with(trees::CARP) {
-        return;
-    }
     let fraction = health.health() / health.max;
     if stop && fraction <= 0.5 {
         controller.bb.set(Key::StopFleeing, Value::Bool(false));
@@ -350,6 +353,10 @@ fn plan(world: &mut World) {
         ..default()
     };
     for mob in mobs {
+        // Eaten or gone earlier in this pass.
+        if world.get_entity(mob).is_err() {
+            continue;
+        }
         let status = expected_status(world, mob, &players);
         let Some(current) = world.get::<AiController>(mob).map(|c| c.status) else {
             continue;

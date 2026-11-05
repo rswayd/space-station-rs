@@ -20,6 +20,7 @@
 
 pub mod ai;
 pub mod defense;
+pub mod eating;
 pub mod spawn;
 
 use std::collections::HashMap;
@@ -27,7 +28,7 @@ use std::sync::Arc;
 
 use bevy::prelude::*;
 use ss13_atmos::{Atmos, GasId};
-use ss13_mapload::mobs::{MOBS_FILE, MobDef, MobsData};
+use ss13_mapload::mobs::{MOBS_FILE, MobDef, MobSpeech, MobsData};
 use ss13_mapload::{DmMob, DmName, IconIndex, MapLoadPlugin};
 use ss13_net::chat::server::SendChat;
 use ss13_shared::{Appearance, TilePos};
@@ -53,6 +54,11 @@ const DEAD_MOUSE: &str = "/obj/item/food/deadmouse";
 /// Every `mobs.ron` definition by DM path.
 #[derive(Resource, Default)]
 pub struct MobDefs(pub HashMap<String, Arc<MobDef>>);
+
+/// The `random_speech` types of `mobs.ron` by DM path (`MobsData::speech`), for the speech
+/// leaves of the AI.
+#[derive(Resource, Default)]
+pub struct MobSpeeches(pub HashMap<String, Arc<MobSpeech>>);
 
 /// A basic mob: its definition and its living/dead sprites (a mouse's body color picks them).
 #[derive(Component, Clone, Debug)]
@@ -138,21 +144,30 @@ pub fn mob_defs(world: &mut World) -> &MobDefs {
         let path = world
             .get_resource::<MapLoadPlugin>()
             .map(|m| m.assets.join(MOBS_FILE));
-        let defs = match path.as_deref().map(MobsData::read) {
+        let (defs, speech) = match path.as_deref().map(MobsData::read) {
             Some(Ok(data)) => {
                 info!("mobs: {} basic mob types", data.mobs.len());
-                data.mobs
-                    .into_iter()
-                    .map(|(k, v)| (k, Arc::new(v)))
-                    .collect()
+                (
+                    data.mobs
+                        .into_iter()
+                        .map(|(k, v)| (k, Arc::new(v)))
+                        .collect(),
+                    data.speech
+                        .into_iter()
+                        .map(|(k, v)| (k, Arc::new(v)))
+                        .collect(),
+                )
             }
             Some(Err(e)) => {
                 warn!("{e:#} (rerun `ss13-mapload convert`): basic mobs do nothing");
-                HashMap::new()
+                (HashMap::new(), HashMap::new())
             }
-            None => HashMap::new(),
+            None => (HashMap::new(), HashMap::new()),
         };
         world.insert_resource(MobDefs(defs));
+        if !world.contains_resource::<MobSpeeches>() {
+            world.insert_resource(MobSpeeches(speech));
+        }
     }
     world.resource::<MobDefs>()
 }

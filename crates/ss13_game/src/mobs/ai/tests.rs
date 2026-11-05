@@ -249,3 +249,217 @@ fn paths_go_around_walls() {
         .is_none()
     );
 }
+
+fn basic_mob(world: &mut World, x: i32, y: i32, faction: &str, path: &str) -> Entity {
+    let e = mob(world, x, y, faction);
+    world.entity_mut(e).insert(crate::mobs::BasicMob {
+        def: std::sync::Arc::new(ss13_mapload::mobs::MobDef {
+            path: path.to_owned(),
+            ..Default::default()
+        }),
+        icon_living: String::new(),
+        icon_dead: String::new(),
+        mouth: false,
+    });
+    e
+}
+
+const BASIC: &str = "/datum/ai_controller/basic_controller";
+
+#[test]
+fn retaliation_ignores_factions_only_while_picking() {
+    let mut w = world();
+    let pig = mob(&mut w, 5, 5, "neutral");
+    let human = mob(&mut w, 7, 5, "neutral");
+    let mut bb = Blackboard::default();
+    bb.set(Key::RetaliateList, Value::Attackers(vec![(human, 0.0)]));
+    let mut tree = Tree::new(vec![leaf(Behavior::TargetFromRetaliateList {
+        key: Key::CurrentTarget,
+        strategy: Strategy::Basic,
+    })]);
+    run(&mut w, pig, &mut tree, &mut bb, 1);
+    // tg `check_faction = FALSE`: a neutral attacker of a neutral pig is picked...
+    assert_eq!(bb.entity(Key::CurrentTarget), Some(human));
+    // ...and `BB_TEMPORARILY_IGNORE_FACTION` is back off for the attack's own check.
+    assert_eq!(bb.get(Key::IgnoreFaction), Some(&Value::Bool(false)));
+}
+
+#[test]
+fn lizard_finds_and_eats_a_cockroach_in_view() {
+    let mut w = world();
+    w.init_resource::<Time>();
+    w.insert_resource(CombatRng(3));
+    let lizard = basic_mob(&mut w, 5, 5, "neutral", "/mob/living/basic/lizard");
+    let roach = basic_mob(&mut w, 6, 5, "hostile", "/mob/living/basic/cockroach");
+    let far = basic_mob(&mut w, 18, 18, "hostile", "/mob/living/basic/cockroach");
+    let mouse = basic_mob(&mut w, 4, 5, "rats", "/mob/living/basic/mouse");
+    let built = super::trees::build(
+        &format!("{BASIC}/lizard"),
+        &ss13_mapload::mobs::MobDef::default(),
+    )
+    .unwrap();
+    let mut tree = Tree::new(built.roots);
+    let mut bb = Blackboard::default();
+    run(&mut w, lizard, &mut tree, &mut bb, 4);
+    assert!(w.get_entity(roach).is_err(), "eaten");
+    assert!(w.get_entity(far).is_ok(), "out of view");
+    assert!(w.get_entity(mouse).is_ok(), "not lizard food");
+    assert_eq!(
+        bb.time(Key::NextFoodEat),
+        Some(crate::mobs::eating::EAT_FOOD_COOLDOWN),
+        "`BB_NEXT_FOOD_EAT` from the world clock (0)"
+    );
+}
+
+#[test]
+fn food_lists_follow_the_mob_types() {
+    use crate::mobs::eating::eating_of;
+    let big = eating_of("/mob/living/basic/lizard/big/crocodile").unwrap();
+    assert!(big.foods.contains(&"/obj/item/food/meat"));
+    let lizard = eating_of("/mob/living/basic/lizard").unwrap();
+    assert!(!lizard.foods.contains(&"/obj/item/food/meat"));
+    assert_eq!(
+        eating_of("/mob/living/basic/mothroach").unwrap().cooldown,
+        60.0
+    );
+    assert!(eating_of("/mob/living/basic/pet/dog").is_none());
+}
+
+#[test]
+fn speech_reads_speech_types_and_the_mobs_lines() {
+    use ss13_mapload::mobs::MobSpeech;
+    let mut w = world();
+    let lines = MobSpeech {
+        chance: 100.0,
+        emote_see: vec!["shakes.".into()],
+        ..Default::default()
+    };
+    w.insert_resource(crate::mobs::MobSpeeches(
+        [("/speech/x".to_owned(), std::sync::Arc::new(lines.clone()))]
+            .into_iter()
+            .collect(),
+    ));
+    let pawn = basic_mob(&mut w, 5, 5, "neutral", "/mob/living/basic/cow");
+    let said = |w: &mut World, speech: Option<&'static str>| {
+        let mut bb = Blackboard::default();
+        let mut tree = Tree::new(vec![sequence(vec![
+            leaf(Behavior::Speak(speech)),
+            leaf(Behavior::SetBool(Key::WantsToEatCable, true)),
+        ])]);
+        run(w, pawn, &mut tree, &mut bb, 1);
+        bb.get(Key::WantsToEatCable).is_some()
+    };
+    assert!(said(&mut w, Some("/speech/x")));
+    assert!(!said(&mut w, Some("/speech/missing")));
+    assert!(!said(&mut w, None), "no `BB_BASIC_MOB_SPEAK_LINES`");
+    let def = ss13_mapload::mobs::MobDef {
+        speech_lines: Some(lines),
+        ..Default::default()
+    };
+    w.get_mut::<crate::mobs::BasicMob>(pawn).unwrap().def = std::sync::Arc::new(def);
+    assert!(said(&mut w, None));
+}
+
+#[test]
+fn generic_controllers_build_and_plan() {
+    let def = ss13_mapload::mobs::MobDef {
+        ai_traits: 21,
+        ..Default::default()
+    };
+    for sub in [
+        "simple/simple_hostile",
+        "simple/simple_hostile_obstacles",
+        "simple/simple_retaliate",
+        "simple/simple_fearful",
+        "simple/simple_skittish",
+        "simple/simple_capricious",
+        "talk",
+        "base_animal",
+        "possum",
+        "lizard",
+        "lizard/big",
+        "crocodile",
+        "chicken",
+        "chicken/cock",
+        "rabbit",
+        "sheep",
+        "pig",
+        "pig/big",
+        "pony",
+        "cow",
+        "goat",
+        "goose",
+        "goose/calm",
+        "penguin/baby",
+        "sloth",
+        "mothroach",
+        "penguin",
+        "snake",
+        "snake/banded",
+        "bear",
+        "frog",
+        "deer",
+        "space_bat",
+        "snail",
+        "butterfly",
+        "axolotl",
+        "gondola",
+        "mouse/rat",
+        "mouse/rat/syndi",
+    ] {
+        let built = super::trees::build(&format!("{BASIC}/{sub}"), &def).unwrap();
+        assert_eq!(built.roots.len(), 1, "{sub}");
+        assert_ne!(
+            built.traits & super::STOP_MOVING_WHEN_PULLED,
+            0,
+            "{sub}: DM `STOP_MOVING_WHEN_PULLED`"
+        );
+        // A few planning ticks next to a stranger: nothing panics.
+        let mut w = world();
+        w.init_resource::<Time>();
+        w.insert_resource(CombatRng(5));
+        let pawn = basic_mob(&mut w, 5, 5, "neutral", "/mob/living/basic/pig");
+        let stranger = mob(&mut w, 9, 5, "hostile");
+        let mut bb = Blackboard(built.blackboard.into_iter().collect());
+        bb.set(Key::RetaliateList, Value::Attackers(vec![(stranger, 0.0)]));
+        let mut tree = Tree::new(built.roots);
+        run(&mut w, pawn, &mut tree, &mut bb, 12);
+    }
+    let pig = super::trees::build(&format!("{BASIC}/pig"), &def).unwrap();
+    assert!(pig.retaliates);
+    assert_eq!(
+        pig.blackboard,
+        vec![(Key::StopFleeing, Value::Bool(true))],
+        "`ai_flee_while_injured`"
+    );
+    let passive = super::trees::build(
+        &format!("{BASIC}/cow"),
+        &ss13_mapload::mobs::MobDef::default(),
+    )
+    .unwrap();
+    assert_eq!(passive.traits, 0);
+}
+
+#[test]
+fn skittish_pig_fights_until_hurt_then_runs() {
+    let mut w = world();
+    let pig = mob(&mut w, 10, 10, "neutral");
+    let wolf = mob(&mut w, 12, 10, "hostile");
+    let built = super::trees::build(
+        &format!("{BASIC}/pig"),
+        &ss13_mapload::mobs::MobDef::default(),
+    )
+    .unwrap();
+    let mut tree = Tree::new(built.roots);
+    let mut bb = Blackboard(built.blackboard.into_iter().collect());
+    bb.set(Key::RetaliateList, Value::Attackers(vec![(wolf, 0.0)]));
+    run(&mut w, pig, &mut tree, &mut bb, 2);
+    assert_eq!(bb.entity(Key::CurrentTarget), Some(wolf));
+    assert_eq!(bb.get(Key::FleeLocation), None, "healthy: it fights");
+    bb.set(Key::StopFleeing, Value::Bool(false));
+    run(&mut w, pig, &mut tree, &mut bb, 2);
+    let Some(Value::Tile(to)) = bb.get(Key::FleeLocation).cloned() else {
+        panic!("no flee location");
+    };
+    assert!(to.x < 10, "away from the wolf on the east: {to:?}");
+}

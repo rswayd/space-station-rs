@@ -49,6 +49,9 @@ pub enum Cond {
     CarpShouldFlee(Key),
     /// `no_humans_watching`: no player's mob within view.
     NoHumansWatching,
+    /// `is_at_distance` with `maximum_distance` (no minimum, no reach check): the key's target
+    /// exists and is that close.
+    AtDistance(Key, u32),
     /// The bot decorators (`crate::bots::ai`).
     Bot(crate::bots::ai::BotCond),
 }
@@ -61,6 +64,11 @@ impl Cond {
             Self::KeyOffCooldown(key) => ctx.bb.time(key).is_none_or(|t| t <= ctx.now),
             Self::CarpShouldFlee(key) => ctx.truthy(key) && !ctx.truthy(Key::StopFleeing),
             Self::NoHumansWatching => !super::behaviors::player_in_view(ctx),
+            Self::AtDistance(key, max) => ctx
+                .pawn_pos()
+                .zip(ctx.target_pos(key))
+                .and_then(|(a, b)| a.chebyshev(b))
+                .is_some_and(|d| d <= max),
             Self::Bot(ref cond) => cond.check(ctx),
         }
     }
