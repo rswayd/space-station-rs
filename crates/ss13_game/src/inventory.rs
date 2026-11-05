@@ -551,6 +551,12 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 Some(item)
                     if hand == inventory.active
                         && crate::atmos_machinery::rpd::attack_self(world, client, mob, item) => {}
+                // The experi-scanner opens its experiment configuration.
+                Some(item)
+                    if hand == inventory.active
+                        && crate::science::experi_scanner::attack_self(
+                            world, client, mob, item,
+                        ) => {}
                 // A pipe fitting turns clockwise.
                 Some(item)
                     if hand == inventory.active
@@ -951,6 +957,13 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                     if crate::tables::item_interaction(
                         world, client, mob, held, target, modifiers,
                     ) => {}
+                // tg `pre_attack` of the experi-scanner: a scan instead of the attack (living mobs
+                // are taken before melee, `crate::science::experi_scanner`).
+                Some(held)
+                    if world.get::<crate::health::Health>(target).is_none()
+                        && crate::science::experi_scanner::pre_attack(
+                            world, client, mob, held, target,
+                        ) => {}
                 // tg `base_item_interaction` and `attackby` come before storage and dropping.
                 Some(held)
                     if crate::construction::item_interaction(

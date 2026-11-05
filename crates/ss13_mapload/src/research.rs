@@ -32,6 +32,7 @@ const ECONOMY_SS: &str = "/datum/controller/subsystem/economy";
 const DEPARTMENT_ROOT: &str = "/datum/job_department";
 const SERVO: &str = "/datum/stock_part/servo";
 const MATTER_BIN: &str = "/datum/stock_part/matter_bin";
+const EXPERIMENT_ROOT: &str = "/datum/experiment";
 /// `MATERIAL_SILO_STORED` (`code/__DEFINES/materials.dm`).
 const MATERIAL_SILO_STORED: u32 = 1 << 0;
 /// `SHEET_MATERIAL_AMOUNT`.
@@ -127,6 +128,62 @@ pub struct NodeDef {
     /// Item types whose deconstruction unhides it (`required_items_to_unlock`).
     pub required_items: Vec<String>,
     pub announce_channels: Vec<String>,
+    /// `experiments_to_unlock`: experiments the techweb gains when this node is researched.
+    #[serde(default)]
+    pub experiments_to_unlock: Vec<String>,
+}
+
+/// What an experiment checks beyond the scanned type (its `/datum/experiment` subtype).
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+pub enum ExperimentKind {
+    /// `/datum/experiment/scanning` (and plain `scanning/random`): scan the required atoms.
+    #[default]
+    Scanning,
+    /// `scanning/points`: each required atom type is worth its number of points.
+    Points,
+    /// `scanning/points/machinery_tiered_scan`: machines with a part of at least this tier.
+    MachineryTiered { tier: u32 },
+    /// `scanning/points/machinery_pinpoint_scan`: machines with this stock part type.
+    MachineryPinpoint { part: String, part_name: String },
+    /// `scanning/reagent`: a container whose master reagent is this one, pure enough.
+    Reagent {
+        reagent: String,
+        reagent_name: String,
+        min_purity: f64,
+    },
+    /// Experiments whose checks need systems the port does not model here (people, plants,
+    /// materials, mechs, cytology, fish, autopsies, ordnance, physical events, exploration).
+    Unsupported,
+}
+
+/// A `/datum/experiment` type.
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct ExperimentDef {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub exp_tag: String,
+    pub performance_hint: String,
+    /// `EXPERIMENT_TRAIT_*` bits.
+    pub traits: u32,
+    pub kind: ExperimentKind,
+    /// Types that may perform it (`allowed_experimentors`); empty: any.
+    pub allowed_experimentors: Vec<String>,
+    /// Type -> count to scan (points per scan for the points kinds).
+    pub required_atoms: Vec<(String, u32)>,
+    /// `scanning/points` `required_points`.
+    pub required_points: u32,
+    /// `scanning/random`: the types `New()` picks `total_requirement` scans from, at most
+    /// `max_requirement_per_type` of one.
+    pub possible_types: Vec<String>,
+    pub total_requirement: u32,
+    pub max_requirement_per_type: u32,
+    /// `scan_message`: replaces the generic stage text.
+    pub scan_message: String,
+    /// Point type -> amount given on completion (`points_reward`).
+    pub points_reward: Vec<(String, f64)>,
+    /// Names of the required and possible types, for the stage texts.
+    pub names: Vec<(String, String)>,
 }
 
 /// An R&D console type.
@@ -174,6 +231,8 @@ pub struct ResearchData {
     /// `SSeconomy.techweb_bounty`: credits to the science budget per researched node.
     pub techweb_bounty: f64,
     pub consoles: Vec<ConsoleDef>,
+    #[serde(default)]
+    pub experiments: Vec<ExperimentDef>,
 }
 
 impl ResearchData {
@@ -331,6 +390,7 @@ pub fn resolve(types: &DmTypes) -> ResearchData {
             discount_experiments: amounts(types.resolved(p, "discount_experiments")),
             required_items: paths(types.resolved(p, "required_items_to_unlock")),
             announce_channels: texts(types.resolved(p, "announce_channels")),
+            experiments_to_unlock: paths(types.resolved(p, "experiments_to_unlock")),
         })
         .collect();
     let lathes = subtypes(types, PRODUCTION_ROOT)
@@ -406,6 +466,102 @@ pub fn resolve(types: &DmTypes) -> ResearchData {
         point_items,
         techweb_bounty: num(types.resolved(ECONOMY_SS, "techweb_bounty")),
         consoles,
+        experiments: subtypes(types, EXPERIMENT_ROOT)
+            .into_iter()
+            .map(|p| experiment(types, p))
+            .collect(),
+    }
+}
+
+/// The checks of `/datum/experiment` subtypes, most specific first; `None`: unsupported.
+const EXPERIMENT_KINDS: [(&str, Option<&str>); 16] = [
+    (
+        "/datum/experiment/scanning/points/machinery_tiered_scan",
+        Some("tiered"),
+    ),
+    (
+        "/datum/experiment/scanning/points/machinery_pinpoint_scan",
+        Some("pinpoint"),
+    ),
+    ("/datum/experiment/scanning/points", Some("points")),
+    ("/datum/experiment/scanning/reagent", Some("reagent")),
+    ("/datum/experiment/scanning/random/plants", None),
+    ("/datum/experiment/scanning/random/material", None),
+    ("/datum/experiment/scanning/random/mecha_damage_scan", None),
+    (
+        "/datum/experiment/scanning/random/mecha_equipped_scan",
+        None,
+    ),
+    ("/datum/experiment/scanning/random/cytology", None),
+    ("/datum/experiment/scanning/cytology", None),
+    ("/datum/experiment/scanning/people", None),
+    ("/datum/experiment/scanning/fish", None),
+    ("/datum/experiment/scanning", Some("scanning")),
+    ("/datum/experiment/autopsy", None),
+    ("/datum/experiment/ordnance", None),
+    ("/datum/experiment/physical", None),
+];
+
+fn experiment(types: &DmTypes, p: &str) -> ExperimentDef {
+    let name_of = |t: &str| plain(&text(types.resolved(t, "name")));
+    let kind = match EXPERIMENT_KINDS
+        .iter()
+        .find(|(root, _)| is_under(p, root))
+        .and_then(|(_, k)| *k)
+    {
+        Some("tiered") => ExperimentKind::MachineryTiered {
+            tier: num(types.resolved(p, "required_tier")) as u32,
+        },
+        Some("pinpoint") => {
+            let part = path(types.resolved(p, "required_stock_part")).unwrap_or_default();
+            ExperimentKind::MachineryPinpoint {
+                part_name: name_of(part.as_str()),
+                part,
+            }
+        }
+        Some("points") => ExperimentKind::Points,
+        Some("reagent") => {
+            let reagent = path(types.resolved(p, "required_reagent")).unwrap_or_default();
+            ExperimentKind::Reagent {
+                reagent_name: name_of(reagent.as_str()),
+                reagent,
+                min_purity: num(types.resolved(p, "min_purity")),
+            }
+        }
+        Some(_) => ExperimentKind::Scanning,
+        None => ExperimentKind::Unsupported,
+    };
+    let required_atoms: Vec<(String, u32)> = amounts(types.resolved(p, "required_atoms"))
+        .into_iter()
+        .map(|(t, n)| (t, n as u32))
+        .collect();
+    let possible_types = paths(types.resolved(p, "possible_types"));
+    let names = required_atoms
+        .iter()
+        .map(|(t, _)| t)
+        .chain(&possible_types)
+        .map(|t| (t.clone(), name_of(t.as_str())))
+        .collect();
+    ExperimentDef {
+        id: p.to_owned(),
+        name: text(types.resolved(p, "name")),
+        description: text(types.resolved(p, "description")),
+        exp_tag: text(types.resolved(p, "exp_tag")),
+        performance_hint: text(types.resolved(p, "performance_hint")),
+        traits: num(types.resolved(p, "traits")) as u32,
+        kind,
+        allowed_experimentors: paths(types.resolved(p, "allowed_experimentors")),
+        required_atoms,
+        required_points: num(types.resolved(p, "required_points")) as u32,
+        possible_types,
+        total_requirement: num(types.resolved(p, "total_requirement")) as u32,
+        max_requirement_per_type: types
+            .resolved(p, "max_requirement_per_type")
+            .and_then(Value::as_f64)
+            .map_or(100, |n| n as u32),
+        scan_message: text(types.resolved(p, "scan_message")),
+        points_reward: amounts(types.resolved(p, "points_reward")),
+        names,
     }
 }
 
@@ -570,6 +726,107 @@ mod tests {
         assert_eq!(lathe.department_flags, ALL_FLAGS);
         assert_eq!(data.server_income, vec![("General Research".into(), 1.0)]);
         assert_eq!(data.techweb_bounty, 250.0);
+        let back: ResearchData = ron::from_str(&data.to_ron()).unwrap();
+        assert_eq!(back, data);
+    }
+
+    const EXPERIMENTS: &str = r##"{ "schema": 3, "types": {
+        "/datum": { "parent": null },
+        "/datum/experiment": { "parent": "/datum", "declared_vars": { "name": "Experiment",
+            "description": "Base", "exp_tag": "Base", "traits": null,
+            "allowed_experimentors": null, "performance_hint": null, "points_reward": null } },
+        "/datum/experiment/scanning": { "parent": "/datum/experiment", "declared_vars": {
+            "exp_tag": "Scan", "required_atoms": { "list": [] }, "scan_message": null,
+            "allowed_experimentors": { "list": [ { "path": "/obj/item/experi_scanner" } ] } } },
+        "/datum/experiment/scanning/points": { "parent": "/datum/experiment/scanning",
+            "declared_vars": { "required_points": null } },
+        "/datum/experiment/scanning/points/bluespace_crystal": {
+            "parent": "/datum/experiment/scanning/points", "declared_vars": {
+            "name": "Bluespace", "required_points": 1, "required_atoms": { "list": [
+                { "assoc": [ { "path": "/obj/item/crystal" }, 1 ] } ] } } },
+        "/datum/experiment/scanning/points/machinery_tiered_scan": {
+            "parent": "/datum/experiment/scanning/points", "declared_vars": { "required_tier": 1 } },
+        "/datum/experiment/scanning/points/machinery_tiered_scan/tier2_any": {
+            "parent": "/datum/experiment/scanning/points/machinery_tiered_scan",
+            "declared_vars": { "required_points": 6, "required_tier": 2 } },
+        "/datum/experiment/scanning/reagent": { "parent": "/datum/experiment/scanning",
+            "declared_vars": { "required_reagent": { "path": "/datum/reagent/water" },
+            "min_purity": 0 } },
+        "/datum/experiment/scanning/reagent/haloperidol": {
+            "parent": "/datum/experiment/scanning/reagent", "declared_vars": {
+            "required_reagent": { "path": "/datum/reagent/medicine/haloperidol" },
+            "min_purity": 0.98 } },
+        "/datum/experiment/scanning/random": { "parent": "/datum/experiment/scanning",
+            "declared_vars": { "possible_types": { "list": [] }, "total_requirement": 0,
+            "max_requirement_per_type": 100 } },
+        "/datum/experiment/scanning/random/janitor_trash": {
+            "parent": "/datum/experiment/scanning/random", "declared_vars": {
+            "possible_types": { "list": [ { "path": "/obj/effect/decal/cleanable/blood" } ] },
+            "total_requirement": 3 } },
+        "/datum/experiment/scanning/people": { "parent": "/datum/experiment/scanning" },
+        "/datum/experiment/ordnance": { "parent": "/datum/experiment" },
+        "/datum/reagent": { "parent": "/datum" },
+        "/datum/reagent/medicine": { "parent": "/datum/reagent" },
+        "/datum/reagent/medicine/haloperidol": { "parent": "/datum/reagent/medicine",
+            "declared_vars": { "name": "Haloperidol" } },
+        "/obj": { "parent": "/datum" },
+        "/obj/item": { "parent": "/obj" },
+        "/obj/item/crystal": { "parent": "/obj/item", "declared_vars": {
+            "name": "\\improper crystal" } },
+        "/obj/effect": { "parent": "/obj" },
+        "/obj/effect/decal": { "parent": "/obj/effect" },
+        "/obj/effect/decal/cleanable": { "parent": "/obj/effect/decal" },
+        "/obj/effect/decal/cleanable/blood": { "parent": "/obj/effect/decal/cleanable",
+            "declared_vars": { "name": "blood" } }
+    } }"##;
+
+    #[test]
+    fn resolves_experiments() {
+        let types = DmTypes::parse(EXPERIMENTS.as_bytes()).unwrap();
+        let data = resolve(&types);
+        let get = |id: &str| data.experiments.iter().find(|e| e.id == id).unwrap();
+        let crystal = get("/datum/experiment/scanning/points/bluespace_crystal");
+        assert_eq!(crystal.kind, ExperimentKind::Points);
+        assert_eq!(crystal.required_points, 1);
+        assert_eq!(
+            crystal.required_atoms,
+            vec![("/obj/item/crystal".to_owned(), 1)]
+        );
+        assert_eq!(
+            crystal.names,
+            vec![("/obj/item/crystal".to_owned(), "crystal".to_owned())]
+        );
+        assert_eq!(crystal.exp_tag, "Scan");
+        assert_eq!(
+            crystal.allowed_experimentors,
+            vec!["/obj/item/experi_scanner"]
+        );
+        assert_eq!(
+            get("/datum/experiment/scanning/points/machinery_tiered_scan/tier2_any").kind,
+            ExperimentKind::MachineryTiered { tier: 2 }
+        );
+        assert_eq!(
+            get("/datum/experiment/scanning/reagent/haloperidol").kind,
+            ExperimentKind::Reagent {
+                reagent: "/datum/reagent/medicine/haloperidol".into(),
+                reagent_name: "Haloperidol".into(),
+                min_purity: 0.98,
+            }
+        );
+        let trash = get("/datum/experiment/scanning/random/janitor_trash");
+        assert_eq!(trash.kind, ExperimentKind::Scanning);
+        assert_eq!(
+            (trash.total_requirement, trash.max_requirement_per_type),
+            (3, 100)
+        );
+        assert_eq!(
+            get("/datum/experiment/scanning/people").kind,
+            ExperimentKind::Unsupported
+        );
+        assert_eq!(
+            get("/datum/experiment/ordnance").kind,
+            ExperimentKind::Unsupported
+        );
         let back: ResearchData = ron::from_str(&data.to_ron()).unwrap();
         assert_eq!(back, data);
     }

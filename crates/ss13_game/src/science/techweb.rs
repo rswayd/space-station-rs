@@ -3,12 +3,13 @@
 //! `/datum/techweb/science`): researched, available, visible and hidden nodes, points, tiers, the
 //! research queue and the unlock rules of `_techweb.dm`.
 //!
-//! Experiments: required experiments count as done ([`Techweb::have_experiments_for_node`]),
-//! discount experiments as not done (no discounts, no skipped-experiment refunds).
-// shortcut: no experiment framework (`/datum/experiment`, experi-scanners, the experimentor,
-// ordnance papers); the six nodes with `required_experiments` (cyber_organs_upgraded, explosives,
-// fishing_equip_adv, mech_combat, medbay_equip_adv, selection) unlock on points and prerequisites
-// alone. Port `/datum/experiment` and gate them once experiments can be performed.
+//! Experiments ([`super::experiments`]): required experiments gate their nodes, completed discount
+//! experiments lower node prices, and a node researched without its discount experiment refunds
+//! the discount when the experiment is completed later.
+// shortcut: required experiments of kinds the port cannot perform count as done (see
+// `super::experiments`); of the six nodes with `required_experiments` only medbay_equip_adv
+// (haloperidol scan) is gated, the others (cyber_organs_upgraded, explosives, fishing_equip_adv,
+// mech_combat, selection) unlock on points and prerequisites alone.
 // shortcut: no tech or design disks, node boosts (`boost_techweb_node`, toxins papers) or
 // research announcements over the radio (`announce_channels`).
 
@@ -16,8 +17,10 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use bevy::prelude::*;
 use ss13_mapload::research::{
-    ConsoleDef, DesignDef, LatheDef, MaterialDef, NodeDef, ResearchData, node_flags,
+    ConsoleDef, DesignDef, ExperimentDef, LatheDef, MaterialDef, NodeDef, ResearchData, node_flags,
 };
+
+use super::experiments::{Experiment, ExperimentRng};
 
 /// `TECHWEB_POINT_TYPE_GENERIC`.
 pub const POINT_GENERIC: &str = "General Research";
@@ -51,6 +54,8 @@ pub struct ResearchDb {
     pub lathes: HashMap<String, LatheDef>,
     pub consoles: HashMap<String, ConsoleDef>,
     pub departments: Vec<(u32, String)>,
+    pub experiments: Vec<ExperimentDef>,
+    pub experiment_index: HashMap<String, usize>,
 }
 
 impl ResearchDb {
@@ -135,6 +140,13 @@ impl ResearchDb {
         db.server_income = data.server_income;
         db.techweb_bounty = data.techweb_bounty;
         db.departments = data.departments;
+        db.experiment_index = data
+            .experiments
+            .iter()
+            .enumerate()
+            .map(|(i, e)| (e.id.clone(), i))
+            .collect();
+        db.experiments = data.experiments;
         db
     }
 
@@ -170,6 +182,12 @@ pub struct Techweb {
     /// 0 researched, 1 available, more: steps away.
     pub tiers: BTreeMap<usize, u32>,
     pub completed_experiments: BTreeSet<String>,
+    /// `available_experiments`.
+    pub available_experiments: Vec<Experiment>,
+    /// `skipped_experiment_types`: discount experiments of nodes researched without them ->
+    /// the refund on completion (-1 once refunded).
+    pub skipped_experiments: HashMap<String, f64>,
+    pub experiment_rng: ExperimentRng,
     /// `research_queue_nodes` in order, with the mob that queued each.
     pub queue: Vec<(usize, Entity)>,
     pub logs: Vec<ResearchLog>,
@@ -187,10 +205,16 @@ impl Techweb {
     /// tg `/datum/techweb/science/New()`: the starting nodes researched for free, hidden nodes
     /// hidden.
     pub fn science(db: &ResearchDb) -> Self {
+        Self::science_seeded(db, ExperimentRng::default())
+    }
+
+    /// [`Self::science`] with the round's experiment randomness.
+    pub fn science_seeded(db: &ResearchDb, experiment_rng: ExperimentRng) -> Self {
         let mut web = Self {
             id: "SCIENCE".into(),
             organization: "Nanotrasen".into(),
             income_modifier: 1.0,
+            experiment_rng,
             ..default()
         };
         for &node in &db.starting {
@@ -244,8 +268,10 @@ impl Techweb {
     }
 
     /// tg `have_experiments_for_node`; see the module docs for the experiments shortcut.
-    pub fn have_experiments_for_node(&self, _db: &ResearchDb, _node: usize) -> bool {
-        true
+    pub fn have_experiments_for_node(&self, db: &ResearchDb, node: usize) -> bool {
+        db.nodes[node].required_experiments.iter().all(|e| {
+            self.completed_experiments.contains(e) || !super::experiments::performable(db, e)
+        })
     }
 
     /// tg `can_unlock_node`: affordable and experiments done.
@@ -340,10 +366,23 @@ impl Techweb {
             self.adjust_multiple_points(db, &cost);
         }
         self.researched.insert(node);
+        // Track any experiments we skipped relating to this.
+        for (missed, refund) in &db.nodes[node].discount_experiments {
+            if self.completed_experiments.contains(missed)
+                || self.skipped_experiments.contains_key(missed)
+            {
+                continue;
+            }
+            self.skipped_experiments.insert(missed.clone(), *refund);
+        }
         for &unlocked in &db.unlocks[node] {
             self.visible.insert(unlocked);
+            let def = &db.nodes[unlocked];
+            self.add_experiments(db, &def.required_experiments);
+            self.add_experiments(db, def.discount_experiments.iter().map(|(e, _)| e));
             self.update_node_status(db, unlocked);
         }
+        self.add_experiments(db, &db.nodes[node].experiments_to_unlock);
         for &design in &db.node_designs[node] {
             self.add_design(db, design);
         }

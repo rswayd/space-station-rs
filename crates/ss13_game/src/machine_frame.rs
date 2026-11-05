@@ -98,9 +98,13 @@ pub enum Family {
     ChemMaster,
     /// Reaction chambers (`crate::chem_heater`).
     ChemHeater,
+    /// Destructive scanners (`crate::science::experi_scanner`).
+    DestructiveScanner,
+    /// R&D server control consoles (`crate::science::server_control`).
+    ServerControl,
 }
 
-const FAMILIES: [(&str, Family); 24] = [
+const FAMILIES: [(&str, Family); 26] = [
     (CELL_CHARGER, Family::Charger),
     (RECHARGER, Family::Charger),
     (crate::kitchen::MICROWAVE_ROOT, Family::Kitchen),
@@ -128,6 +132,14 @@ const FAMILIES: [(&str, Family); 24] = [
     ),
     (crate::science::autolathe::AUTOLATHE_ROOT, Family::Autolathe),
     (crate::vending::VENDING_ROOT, Family::Vending),
+    (
+        crate::science::experi_scanner::DESTRUCTIVE_SCANNER,
+        Family::DestructiveScanner,
+    ),
+    (
+        crate::science::server_control::SERVER_CONTROL_ROOT,
+        Family::ServerControl,
+    ),
 ];
 
 /// The covered family of a machine type (`None`: not built or taken apart here).
@@ -359,7 +371,7 @@ pub fn rped_interaction(world: &mut World, client: Entity, rped: Entity, target:
     } else if let Some(fam) = buildable_machine(world, target) {
         if matches!(
             fam,
-            Family::RdConsole | Family::CargoConsole | Family::AtmosAlert
+            Family::RdConsole | Family::CargoConsole | Family::AtmosAlert | Family::ServerControl
         ) {
             // `istype(attacked_object, /obj/machinery/computer)`.
             return false;
@@ -1042,6 +1054,12 @@ pub fn setup_built(world: &mut World, machine: Entity) {
         Family::SmartFridge => crate::smartfridge::setup(world, machine),
         Family::ChemMaster => crate::chem_master::setup(world, machine),
         Family::ChemHeater => crate::chem_heater::setup(world, machine),
+        Family::DestructiveScanner => {
+            if let Some(path) = path_of(world, machine) {
+                crate::science::experi_scanner::setup(world, machine, path);
+            }
+        }
+        Family::ServerControl => crate::science::server_control::setup(world, machine),
     }
 }
 

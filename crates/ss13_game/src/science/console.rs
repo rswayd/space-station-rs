@@ -303,7 +303,7 @@ impl ServerUi for TechwebUi {
 
 /// The access of the ID `get_idcard(hand_first = TRUE)` finds, and of the worn ID alone
 /// (`wear_id?.GetAccess()`).
-fn id_access(world: &World, mob: Entity) -> (Vec<String>, Vec<String>) {
+pub(super) fn id_access(world: &World, mob: Entity) -> (Vec<String>, Vec<String>) {
     let Some(inventory) = world.get::<Inventory>(mob) else {
         return (Vec::new(), Vec::new());
     };

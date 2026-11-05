@@ -597,7 +597,7 @@ fn metastation_families() {
         "covered families on MetaStation: {:?}",
         picked.iter().map(|p| p.0).collect::<Vec<_>>()
     );
-    assert_eq!(picked.len(), 14, "every family is mapped: {picked:?}");
+    assert_eq!(picked.len(), 16, "every family is mapped: {picked:?}");
     for (fam, machine, path, pos) in picked {
         let board = world.get::<DmMachine>(machine).unwrap().circuit.clone();
         let def = world
@@ -686,6 +686,12 @@ fn metastation_families() {
             Family::ChemHeater => e
                 .get::<ss13_game::chem_heater::ChemHeater>()
                 .is_some_and(|h| h.heater_coefficient == 0.1),
+            Family::DestructiveScanner => {
+                e.contains::<ss13_game::science::experi_scanner::DestructiveScanner>()
+            }
+            Family::ServerControl => {
+                e.contains::<ss13_game::science::server_control::ServerControl>()
+            }
         };
         assert!(live, "{fam:?}: {} has its live state", def.build_path);
         println!("{fam:?}: {path} -> {board} -> {}", def.build_path);

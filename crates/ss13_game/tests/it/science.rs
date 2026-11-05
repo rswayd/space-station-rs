@@ -13,10 +13,14 @@ use ss13_game::cargo::economy::{ACCOUNT_SCI, BankAccountId, Economy};
 use ss13_game::inventory::{IdCard, Inventory};
 use ss13_game::science::analyzer::Analyzer;
 use ss13_game::science::console::RdConsole;
+use ss13_game::science::experi_scanner::{DestructiveScanner, ExperimentHandler};
 use ss13_game::science::lathe::{Lathe, MaterialStore, OreSilo};
+use ss13_game::science::points::ResearchServer;
+use ss13_game::science::server_control::ServerControl;
 use ss13_game::science::techweb::{POINT_GENERIC, ResearchDb, Techweb};
 use ss13_game::science::{
-    AnalyzerData, DestructiveAnalyzerUi, FabricatorData, FabricatorStatic, FabricatorUi,
+    AnalyzerData, DestructiveAnalyzerUi, ExperimentConfigureData, ExperimentConfigureUi,
+    FabricatorData, FabricatorStatic, FabricatorUi, ServerControlData, ServerControlUi,
     TechwebData, TechwebStatic, TechwebUi,
 };
 use ss13_game::testing::{self, Drive, fixture_map, write_fixture};
@@ -26,6 +30,7 @@ use ss13_mapload::{DmItem, MapLoadPlugin};
 use ss13_net::chat::client::ChatReceived;
 use ss13_net::ui::client::UiMessageReceived;
 use ss13_shared::TilePos;
+use ss13_shared::protocol::{ClientIntent, InventorySlot};
 use ss13_shared::ui::UiServerMessage;
 use ss13_tgui::{UiInterface, decode};
 use ss13_world::SpatialIndex;
@@ -83,6 +88,27 @@ const TYPES: &str = r##"{
         "prerequisite_nodes": { "list": [ { "path": "/datum/techweb_node/base" } ] },
         "required_items_to_unlock": { "list": [ { "path": "/obj/item/screwdriver" } ] },
         "research_costs": { "list": [ { "assoc": [ "General Research", 40 ] } ] } } },
+    "/datum/techweb_node/gated": { "parent": "/datum/techweb_node", "declared_vars": {
+        "display_name": "Gated",
+        "prerequisite_nodes": { "list": [ { "path": "/datum/techweb_node/base" } ] },
+        "required_experiments": { "list": [ { "path": "/datum/experiment/scanning/wrenches" } ] },
+        "discount_experiments": { "list": [ { "assoc": [
+            { "path": "/datum/experiment/scanning/shred" }, 20 ] } ] },
+        "research_costs": { "list": [ { "assoc": [ "General Research", 40 ] } ] } } },
+    "/datum/experiment": { "parent": "/datum", "declared_vars": { "name": "Experiment",
+        "description": "Base", "exp_tag": "Base", "traits": null,
+        "allowed_experimentors": null, "performance_hint": null, "points_reward": null } },
+    "/datum/experiment/scanning": { "parent": "/datum/experiment", "declared_vars": {
+        "exp_tag": "Scan", "required_atoms": { "list": [] }, "scan_message": null,
+        "allowed_experimentors": { "list": [ { "path": "/obj/item/experi_scanner" },
+            { "path": "/obj/machinery/destructive_scanner" } ] } } },
+    "/datum/experiment/scanning/wrenches": { "parent": "/datum/experiment/scanning",
+        "declared_vars": { "name": "Wrench Scan", "required_atoms": { "list": [
+            { "assoc": [ { "path": "/obj/item/wrench" }, 2 ] } ] } } },
+    "/datum/experiment/scanning/shred": { "parent": "/datum/experiment/scanning",
+        "declared_vars": { "name": "Screwdriver Shredding", "traits": 1,
+            "required_atoms": { "list": [
+                { "assoc": [ { "path": "/obj/item/screwdriver" }, 1 ] } ] } } },
     "/datum/stock_part": { "parent": "/datum" },
     "/datum/stock_part/servo": { "parent": "/datum/stock_part" },
     "/datum/stock_part/matter_bin": { "parent": "/datum/stock_part" },
@@ -105,6 +131,8 @@ const TYPES: &str = r##"{
     "/obj/machinery/computer/rdconsole": { "parent": "/obj/machinery/computer",
         "declared_vars": { "name": "R&D Console", "req_access": { "list": [ "research" ] },
             "circuit": { "path": "/obj/item/circuitboard/computer/rdconsole" } } },
+    "/obj/machinery/computer/rdservercontrol": { "parent": "/obj/machinery/computer",
+        "declared_vars": { "name": "\\improper R&D server control console" } },
     "/obj/machinery/rnd": { "parent": "/obj/machinery", "declared_vars": {
         "icon": { "resource": "r.dmi" }, "icon_state": "server" } },
     "/obj/machinery/rnd/server": { "parent": "/obj/machinery/rnd", "declared_vars": {
@@ -118,6 +146,9 @@ const TYPES: &str = r##"{
         "declared_vars": { "name": "protolathe", "icon_state": "protolathe",
             "allowed_buildtypes": 2,
             "circuit": { "path": "/obj/item/circuitboard/machine/protolathe" } } },
+    "/obj/machinery/destructive_scanner": { "parent": "/obj/machinery", "declared_vars": {
+        "name": "experimental destructive scanner", "icon": { "resource": "r.dmi" },
+        "icon_state": "tube_open" } },
     "/obj/machinery/ore_silo": { "parent": "/obj/machinery", "declared_vars": {
         "name": "ore silo", "icon": { "resource": "r.dmi" }, "icon_state": "silo" } },
     "/obj/item": { "parent": "/obj", "declared_vars": {
@@ -129,6 +160,8 @@ const TYPES: &str = r##"{
         "icon_state": "wrench" } },
     "/obj/item/screwdriver": { "parent": "/obj/item", "declared_vars": {
         "name": "screwdriver", "icon_state": "screwdriver" } },
+    "/obj/item/experi_scanner": { "parent": "/obj/item", "declared_vars": {
+        "name": "Experi-Scanner", "icon_state": "experiscanner" } },
     "/obj/item/circuitboard": { "parent": "/obj/item" },
     "/obj/item/circuitboard/computer": { "parent": "/obj/item/circuitboard" },
     "/obj/item/circuitboard/computer/rdconsole": { "parent": "/obj/item/circuitboard/computer",
@@ -184,8 +217,8 @@ const TYPES: &str = r##"{
 }"##;
 
 /// Rows top-down, the last line is y = 1. The player spawns at `s` (4,4) next to the console
-/// `C` (3,3), the protolathe `L` (4,3) and the destructive analyzer `A` (5,3); the server `R`
-/// and the ore silo `O` are further away.
+/// `C` (3,3), the protolathe `L` (4,3), the destructive analyzer `A` (5,3) and the destructive
+/// scanner `D` (3,4); the server `R` and the ore silo `O` are further away.
 const MAP: &str = r##""w" = (/turf/closed/wall,/area/station)
 "f" = (/turf/open/floor,/area/station)
 "s" = (/obj/effect/landmark/start/assistant,/turf/open/floor,/area/station)
@@ -194,10 +227,11 @@ const MAP: &str = r##""w" = (/turf/closed/wall,/area/station)
 "A" = (/obj/machinery/rnd/destructive_analyzer,/turf/open/floor,/area/station)
 "R" = (/obj/machinery/rnd/server,/turf/open/floor,/area/station)
 "O" = (/obj/machinery/ore_silo,/turf/open/floor,/area/station)
+"D" = (/obj/machinery/destructive_scanner,/turf/open/floor,/area/station)
 
 (1,1,1) = {"
 wwwwwwwww
-wffsfffOw
+wfDsfffOw
 wfCLAffRw
 wfffffffw
 wwwwwwwww
@@ -210,8 +244,12 @@ const LATHE: TilePos = TilePos::new(4, 3, 1);
 const ANALYZER: TilePos = TilePos::new(5, 3, 1);
 const TOOLS: &str = "/datum/techweb_node/tools";
 const SECRET: &str = "/datum/techweb_node/secret";
+const GATED: &str = "/datum/techweb_node/gated";
+const DESTRUCTIVE_SCANNER: TilePos = TilePos::new(3, 4, 1);
+const WRENCH_SCAN: &str = "/datum/experiment/scanning/wrenches";
+const SHRED: &str = "/datum/experiment/scanning/shred";
 
-const STATES: [(&str, &str); 15] = [
+const STATES: [(&str, &str); 17] = [
     ("t.dmi", "floor"),
     ("t.dmi", "plating"),
     ("t.dmi", "wall"),
@@ -227,6 +265,8 @@ const STATES: [(&str, &str); 15] = [
     ("r.dmi", "server"),
     ("r.dmi", "d_analyzer"),
     ("r.dmi", "protolathe"),
+    ("r.dmi", "tube_open"),
+    ("i.dmi", "experiscanner"),
 ];
 
 fn fixture_assets(test: &str) -> PathBuf {
@@ -243,6 +283,9 @@ fn fixture_assets(test: &str) -> PathBuf {
         "/obj/machinery/rnd/server",
         "/obj/machinery/ore_silo",
         "/obj/item/screwdriver",
+        "/obj/item/experi_scanner",
+        "/obj/machinery/destructive_scanner",
+        "/obj/machinery/computer/rdservercontrol",
         "/turf/open/floor",
         "/turf/open/floor/plating",
         "/turf/closed/wall",
@@ -677,6 +720,216 @@ fn research_insert_print_and_analyze() {
         s.web().points_of(POINT_GENERIC) - before < 5.0,
         "no points twice"
     );
+}
+
+/// Experiments on the fixture lab: the destructive scanner shreds a screwdriver for the gated
+/// node's discount experiment; the experi-scanner scans two wrenches for its required one, which
+/// then lets the node be researched.
+#[test]
+fn experiments_scan_and_unlock() {
+    let mut s = Lab::start("experiments_scan_and_unlock");
+    let gated = s.node(GATED);
+    // Both experiments came with the node becoming reachable; the node waits for its scan.
+    assert!(s.web().experiment(WRENCH_SCAN).is_some());
+    assert!(s.web().experiment(SHRED).is_some());
+    s.server
+        .world_mut()
+        .resource_scope(|world, mut web: Mut<Techweb>| {
+            web.adjust_points(world.resource::<ResearchDb>(), POINT_GENERIC, 1000.0);
+        });
+    let gated_now = |s: &Lab| {
+        let world = s.server.world();
+        let db = world.resource::<ResearchDb>();
+        let web = world.resource::<Techweb>();
+        (
+            web.have_experiments_for_node(db, gated),
+            web.price(db, gated),
+        )
+    };
+    assert_eq!(
+        gated_now(&s),
+        (false, vec![(POINT_GENERIC.to_owned(), 40.0)])
+    );
+
+    // The destructive scanner: a screwdriver under the tube, the shredding experiment selected.
+    let scanner = s.machine::<DestructiveScanner>(DESTRUCTIVE_SCANNER);
+    let screwdriver = ss13_game::construction::spawn_obj(
+        s.server.world_mut(),
+        "/obj/item/screwdriver",
+        DESTRUCTIVE_SCANNER,
+    )
+    .unwrap();
+    s.open::<ExperimentConfigureUi>(scanner);
+    let (_, (), data): (u32, (), ExperimentConfigureData) =
+        s.window::<ExperimentConfigureUi>().unwrap();
+    assert!(data.has_start_callback);
+    assert_eq!(data.techwebs.len(), 1);
+    assert!(data.techwebs[0].selected);
+    assert_eq!(data.experiments.len(), 2, "{:?}", data.experiments);
+    let shred = data.experiments.iter().find(|e| e.path == SHRED).unwrap();
+    assert_eq!(shred.tag, "Destructive Scan");
+    s.act::<ExperimentConfigureUi>("select_experiment", &[("ref", SHRED)]);
+    s.run_until_for(5.0, "shredding selected", |s| {
+        s.server
+            .world()
+            .get::<ExperimentHandler>(scanner)
+            .unwrap()
+            .selected
+            .as_deref()
+            == Some(SHRED)
+    });
+    s.act::<ExperimentConfigureUi>("start_experiment_callback", &[]);
+    s.run_until_for(5.0, "the tube closes", |s| {
+        s.server
+            .world()
+            .get::<DestructiveScanner>(scanner)
+            .unwrap()
+            .cycle
+            .is_some()
+    });
+    assert!(
+        s.server.world().get::<TilePos>(screwdriver).is_none(),
+        "the screwdriver is inside"
+    );
+    s.run_until_for(15.0, "shredded", |s| {
+        s.web().completed_experiments.contains(SHRED)
+    });
+    assert!(
+        s.server.world().get_entity(screwdriver).is_err(),
+        "destroyed"
+    );
+    s.run_until_for(5.0, "announced", |s| {
+        s.said("Screwdriver Shredding has been completed!")
+    });
+    assert_eq!(
+        gated_now(&s),
+        (false, vec![(POINT_GENERIC.to_owned(), 20.0)]),
+        "discounted, still gated"
+    );
+
+    // The experi-scanner: its window lists only the non-destructive experiment.
+    let handheld = s.give("/obj/item/experi_scanner", 1);
+    let mob = s.mob();
+    let slot = if s.server.world().get::<Inventory>(mob).unwrap().active == 0 {
+        InventorySlot::LeftHand
+    } else {
+        InventorySlot::RightHand
+    };
+    s.send(0, ClientIntent::ClickSlot(slot));
+    s.run_until_for(5.0, "the scanner's window", |s| {
+        s.window::<ExperimentConfigureUi>()
+            .is_some_and(|(_, _, d)| !d.has_start_callback)
+    });
+    let (_, (), data): (u32, (), ExperimentConfigureData) =
+        s.window::<ExperimentConfigureUi>().unwrap();
+    assert_eq!(data.experiments.len(), 1);
+    assert_eq!(data.experiments[0].path, WRENCH_SCAN);
+    s.act::<ExperimentConfigureUi>("select_experiment", &[("ref", WRENCH_SCAN)]);
+    s.run_until_for(5.0, "wrench scan selected", |s| {
+        s.server
+            .world()
+            .get::<ExperimentHandler>(handheld)
+            .unwrap()
+            .selected
+            .is_some()
+    });
+
+    // Unrelated things are refused; each wrench counts once, after a second.
+    let next_to = TilePos::new(5, 4, 1);
+    let spawn = |s: &mut Lab, path: &str| {
+        ss13_game::construction::spawn_obj(s.server.world_mut(), path, next_to).unwrap()
+    };
+    let other = spawn(&mut s, "/obj/item/screwdriver");
+    s.click(other);
+    s.run_until_for(5.0, "not related", |s| {
+        s.said("Screwdriver не имеет отношения к выбранному эксперименту.")
+    });
+    let first = spawn(&mut s, "/obj/item/wrench");
+    s.click(first);
+    s.run_until_for(5.0, "first scan", |s| s.said("Вы сканируете wrench."));
+    assert!(
+        s.web()
+            .experiment(WRENCH_SCAN)
+            .is_some_and(|e| e.scanned[0].seen.len() == 1)
+    );
+    let second = spawn(&mut s, "/obj/item/wrench");
+    s.click(second);
+    s.run_until_for(5.0, "completed", |s| {
+        s.web().completed_experiments.contains(WRENCH_SCAN)
+    });
+    assert!(
+        s.server.world().get_entity(second).is_ok(),
+        "handheld scans destroy nothing"
+    );
+    assert!(gated_now(&s).0, "the required experiment is done");
+    let researched = s
+        .server
+        .world_mut()
+        .resource_scope(|world, mut web: Mut<Techweb>| {
+            web.research_node(world.resource::<ResearchDb>(), gated, false, true)
+        });
+    assert!(researched);
+}
+
+/// The server control console: servers and consoles listed, toggling needs RD access, a
+/// disabled server stops the points.
+#[test]
+fn server_control_toggles_servers() {
+    let mut s = Lab::start("server_control_toggles_servers");
+    let console = ss13_game::construction::spawn_obj(
+        s.server.world_mut(),
+        "/obj/machinery/computer/rdservercontrol",
+        TilePos::new(5, 4, 1),
+    )
+    .unwrap();
+    s.server
+        .world_mut()
+        .entity_mut(console)
+        .insert(ServerControl);
+    s.open::<ServerControlUi>(console);
+    let (_, (), data): (u32, (), ServerControlData) = s.window::<ServerControlUi>().unwrap();
+    assert!(data.server_connected);
+    assert_eq!(data.servers.len(), 1);
+    assert_eq!(data.servers[0].server_details, "Nominal");
+    assert!(
+        data.servers[0].server_name.starts_with("R&D Server "),
+        "{}",
+        data.servers[0].server_name
+    );
+    assert_eq!(data.consoles.len(), 1);
+    assert!(data.consoles[0].console_locked);
+    assert_eq!(data.consoles[0].console_location, "Лаборатория");
+
+    s.act::<ServerControlUi>("lockdown_server", &[("selected_server", "0")]);
+    s.run_until_for(5.0, "access refusal", |s| s.said("в доступе отказано!"));
+    let card = s.card();
+    s.server.world_mut().entity_mut(card).insert(IdCard {
+        access: vec!["rd".into()],
+    });
+    s.act::<ServerControlUi>("lockdown_server", &[("selected_server", "0")]);
+    s.act::<ServerControlUi>("lock_console", &[("selected_console", "0")]);
+    s.run_until_for(5.0, "disabled", |s| {
+        s.window::<ServerControlUi>().is_some_and(|(_, _, d)| {
+            d.servers[0].server_disabled
+                && d.servers[0].server_details == "Offline - Server Control Disabled"
+                && !d.consoles[0].console_locked
+        })
+    });
+    let server = {
+        let world = s.server.world_mut();
+        let mut q = world.query_filtered::<Entity, With<ResearchServer>>();
+        q.iter(world).next().unwrap()
+    };
+    assert!(
+        s.server
+            .world()
+            .get::<ResearchServer>(server)
+            .unwrap()
+            .research_disabled
+    );
+    let before = s.web().points_of(POINT_GENERIC);
+    s.steps(testing::steps(3.0) as usize);
+    assert_eq!(s.web().points_of(POINT_GENERIC), before, "no income");
 }
 
 impl Lab {
