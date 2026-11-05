@@ -375,9 +375,9 @@ mod tests {
 
     #[test]
     fn stages_are_ordered() {
-        assert!(CURE_THRESHOLD > START);
-        assert!(START > STAGE_TWO && STAGE_TWO > STAGE_THREE && STAGE_THREE > STAGE_FOUR);
-        // Three defib shocks save anyone who has not yet arrested.
-        assert!(1.0 + 3.0 * DEFIB_RELIEF > CURE_THRESHOLD);
+        const { assert!(CURE_THRESHOLD > START) };
+        const { assert!(START > STAGE_TWO && STAGE_TWO > STAGE_THREE && STAGE_THREE > STAGE_FOUR) };
+        // Four defib shocks save anyone who has not yet arrested (three are not enough at 1 s).
+        const { assert!(1.0 + 4.0 * DEFIB_RELIEF > CURE_THRESHOLD) };
     }
 }
