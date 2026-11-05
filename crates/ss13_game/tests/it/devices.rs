@@ -225,7 +225,10 @@ fn megaphone_and_pair_pinpointers() {
     s.run_until("a loud line", |s| s.heard(Span::Bold, "Внимание") == 1);
     s.send(0, ClientIntent::Say("ещё раз".into()));
     s.run_until("a plain line", |s| s.heard(Span::Say, "Ещё раз") == 1);
-    assert!(s.heard(Span::Warning, "перезарядиться") >= 1);
+    // The recharge warning and the plain line are separate messages: either may land first.
+    s.run_until("the recharge warning", |s| {
+        s.heard(Span::Warning, "перезарядиться") >= 1
+    });
     assert_eq!(s.heard(Span::Bold, "Ещё раз"), 0);
 
     // The two pinpointers of the box track each other.
