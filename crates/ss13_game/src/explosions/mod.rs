@@ -399,8 +399,8 @@ pub fn explosion(world: &mut World, epicenter: TilePos, ex: Explosion) {
     world.resource_mut::<ExplosionQueue>().count += 1;
 }
 
-/// The tile of `e`, or of what carries or holds it.
-fn turf_of(world: &World, mut e: Entity) -> Option<TilePos> {
+/// The tile of `e`, or of what carries or holds it (tg `get_turf`).
+pub fn turf_of(world: &World, mut e: Entity) -> Option<TilePos> {
     for _ in 0..8 {
         if let Some(&pos) = world.get::<TilePos>(e) {
             return Some(pos);

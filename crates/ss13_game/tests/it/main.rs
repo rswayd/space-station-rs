@@ -27,6 +27,7 @@ mod fire;
 mod firelocks;
 mod food;
 mod genetics;
+mod grenades;
 mod guns;
 mod heretic;
 mod interact;

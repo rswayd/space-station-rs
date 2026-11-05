@@ -11,7 +11,8 @@
 //! - C-4 and X-4 (`/obj/item/grenade/c4`): use in hand sets the timer (10 s or more), a click
 //!   on an adjacent atom plants it after 3 s; when the timer runs out the target takes a heavy
 //!   blast (mobs do not) and the charge explodes with its `boom_sizes`; X-4 aims its blast
-//!   (120 degrees, away from the planter) when stuck to something dense.
+//!   (120 degrees, away from the planter) when stuck to something dense. A charge destroyed by a
+//!   blast before it is planted goes off where it lies.
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
@@ -575,8 +576,25 @@ pub(super) fn detonate_charges(world: &mut World) {
     }
 }
 
+/// `/obj/item/grenade/atom_deconstruct(FALSE)` of a charge (destroyed by a blast): it goes off
+/// where it is. False for anything that is not a charge.
+pub fn c4_destroyed(world: &mut World, item: Entity) -> bool {
+    let Some(c) = charge(world, item) else {
+        return false;
+    };
+    detonate(world, item, c);
+    true
+}
+
 fn detonate(world: &mut World, item: Entity, c: Charge) {
     let Some((target, _)) = c.planted else {
+        let [dev, heavy, light] = c.boom_sizes;
+        if let Some(pos) = item_turf(world, item) {
+            super::explosion(world, pos, Explosion::new(dev, heavy, light).cause("C-4"));
+        }
+        if world.get_entity(item).is_ok() {
+            world.despawn(item);
+        }
         return;
     };
     let mut location = None;

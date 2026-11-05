@@ -14,7 +14,7 @@ _«Запуск событий и погоды» описано в [../events/fr
 Взрывы и бомбы (DynEx), ЭМИ, полиморф всех, массовые зомби-инфекция/излечение, массовые трейты, ERT, «Global Man Up» (BandaStation).
 
 - **Код:** [`adminfun.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/verbs/adminfun.dm#L1), [`adminevents.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/verbs/adminevents.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — админ-системы нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_admin/src/server.rs`: «Drop Bomb» (`AdminRequest::DropBomb`, `R_FUN`) и «EM Pulse» (`AdminRequest::Emp { heavy, light }`, `R_ADMIN | R_FUN`, радиусы до 40) на своей клетке, кнопки в панели админа (`client.rs`). Нет: «Explosion»/DynEx на выбранном атоме, полиморфа, массовых инфекций и трейтов, ERT, «Global Man Up»
 
 ### Звуки админов
 Проиграть глобальный/локальный звук, звук от моба, интернет-звук (YouTube через yt-dlp), запросы интернет-звука, остановить все звуки; BandaStation — на z-уровне и в поле зрения.

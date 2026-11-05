@@ -543,6 +543,10 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                     if hand == inventory.active
                         && crate::explosions::sources::c4_attack_self(world, client, mob, item) => {
                 }
+                // A grenade is armed.
+                Some(item)
+                    if hand == inventory.active
+                        && crate::grenades::attack_self(world, client, mob, item) => {}
                 // Rack parts build a rack.
                 Some(item)
                     if hand == inventory.active
@@ -559,6 +563,12 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 Some(item)
                     if hand == inventory.active
                         && crate::modpc::pda::attack_self(world, client, mob, item) => {}
+                // A screwdriver or multitool sets the fuse of the grenade in the other hand.
+                Some(item)
+                    if hand != inventory.active
+                        && inventory.active_item().is_some_and(|held| {
+                            crate::grenades::item_interaction(world, client, mob, held, item)
+                        }) => {}
                 // An ID card in the active hand goes into the PDA in the other.
                 Some(item)
                     if hand != inventory.active
@@ -787,6 +797,9 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                             },
                             target,
                         ) => {}
+                // A screwdriver or multitool sets a grenade's fuse.
+                Some(held)
+                    if crate::grenades::item_interaction(world, client, mob, held, target) => {}
                 // A C-4 charge is planted on what it touches; a welder refills from a fuel tank
                 // (or blows it up, lit).
                 Some(held)

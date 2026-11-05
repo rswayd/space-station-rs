@@ -127,6 +127,11 @@ pub enum AdminRequest {
     SetSecurityLevel(String),
     /// `R_FUN`: tg "Drop Bomb": an explosion on the own tile, ignoring the bomb cap.
     DropBomb(BombSize),
+    /// `R_ADMIN | R_FUN`: tg "EM Pulse": `empulse()` on the own tile with these ranges.
+    Emp {
+        heavy: u8,
+        light: u8,
+    },
 }
 
 /// tg "Drop Bomb" choices: `(devastation, heavy, light, flash)` ranges.
