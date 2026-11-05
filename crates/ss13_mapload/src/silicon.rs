@@ -36,6 +36,14 @@ pub const ROBOT_CELL: &str = "/obj/item/stock_parts/power_store/cell/high";
 const CAMERA: &str = "dm_camera";
 const CONSOLE: &str = "dm_camera_console";
 
+/// Spawned at runtime by camera construction (`ss13_game::defenses::cameras`): the frame a
+/// camera assembly puts on a wall, the assembly a camera comes apart into, its cable.
+pub const CAMERA_RUNTIME_TYPES: [&str; 3] = [
+    "/obj/machinery/camera/autoname/deconstructed",
+    "/obj/item/wallframe/camera",
+    "/obj/item/stack/cable_coil",
+];
+
 /// Spawned at runtime by the silicon jobs: the mobs and the borg's cell.
 pub const SILICON_TYPES: [&str; 4] = [AI_TYPE, ROBOT_TYPE, AI_EYE_TYPE, ROBOT_CELL];
 

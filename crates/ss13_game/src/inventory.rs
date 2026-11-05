@@ -581,6 +581,12 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 Some(item)
                     if hand == inventory.active
                         && crate::modpc::pda::attack_self(world, client, mob, item) => {}
+                // An implanter and an implant case in the hands swap the implant.
+                Some(item)
+                    if hand != inventory.active
+                        && inventory.active_item().is_some_and(|held| {
+                            crate::implants::item_interaction(world, client, mob, held, item)
+                        }) => {}
                 // A screwdriver or multitool sets the fuse of the grenade in the other hand.
                 Some(item)
                     if hand != inventory.active
@@ -815,6 +821,8 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 // tg `attack_hand` of tables and racks: a pulled mob onto it, flipping (right
                 // click), knocking a climber down, kicking a rack.
                 None if crate::tables::attack_hand(world, client, mob, target, modifiers) => {}
+                // tg `attack_hand` of turrets and the turret control panel: their windows.
+                None if crate::defenses::server::interact(world, client, mob, target) => {}
                 None => pick_up(world, mob, target, inventory.active),
                 // tg `/obj/item/card/emag/interact_with_atom` on the families with an
                 // `emag_act` (`crate::emag`).
@@ -832,6 +840,14 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 // A screwdriver or multitool sets a grenade's fuse.
                 Some(held)
                     if crate::grenades::item_interaction(world, client, mob, held, target) => {}
+                // An implanter on an implant case, a case on the implant pad.
+                Some(held)
+                    if crate::implants::item_interaction(world, client, mob, held, target) => {}
+                // Turrets, the turret control panel and cameras: IDs, tools, assemblies.
+                Some(held)
+                    if crate::defenses::server::item_interaction(
+                        world, client, mob, held, target, modifiers,
+                    ) => {}
                 // The forensic scanner scans, an evidence bag takes the item.
                 Some(held)
                     if crate::forensics::server::item_interaction(

@@ -109,6 +109,10 @@ pub fn attack_ai(world: &mut World, client: Entity, user: Entity, target: Entity
         crate::bots::ui::open(world, client, user, target);
         return true;
     }
+    // Turrets and their control panels (`crate::defenses`).
+    if crate::defenses::server::attack_ai(world, client, user, target) {
+        return true;
+    }
     crate::atmos_machinery::windows::interact(
         world,
         client,

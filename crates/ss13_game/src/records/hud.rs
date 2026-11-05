@@ -11,7 +11,7 @@
 // shortcut: glasses give their HUD by type (`/obj/item/clothing/glasses/hud/security`,
 // `.../health`, `.../medsechud` and subtypes), not by `clothing_traits` (no toggling HUDs, no
 // HUD implants or silicon HUDs); the record is found by the mob's real name (tg: the face name,
-// which a mask hides); no implant icons, virus or defib states; refreshed every 0.5 s rather
+// which a mask hides); no second implant slot offset, virus or defib states; refreshed every 0.5 s rather
 // than on each change.
 
 use bevy::prelude::*;
@@ -161,6 +161,19 @@ fn refresh(world: &mut World, mut next: Local<f64>) {
                 .map(|t| t.sechud_icon_state.as_str())
                 .filter(|s| !s.is_empty());
             let mut sec: Vec<_> = icon(job.unwrap_or("hudno_id")).into_iter().collect();
+            // `sec_hud_set_implants`: the security implants, then the mindshield.
+            for imp in crate::implants::implants_of(world, e) {
+                match imp.kind {
+                    crate::implants::ImplantKind::Chem => sec.extend(icon("hud_imp_chem")),
+                    crate::implants::ImplantKind::Tracking => {
+                        sec.extend(icon("hud_imp_tracking"));
+                    }
+                    _ => {}
+                }
+            }
+            if crate::antag::revolution::server::mindshielded(world, e) {
+                sec.extend(icon("hud_imp_loyal"));
+            }
             if let Some(state) = manifest
                 .find(name.as_str())
                 .and_then(|r| wanted_state(&r.wanted_status))

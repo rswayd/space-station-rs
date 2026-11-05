@@ -108,7 +108,7 @@ pub enum Job {
     Heal(crate::medical::HealJob),
     /// tg `do_cpr` ([`crate::medical`]).
     Cpr { panicking: bool },
-    /// A mindshield implanter on a mob ([`crate::antag::revolution::server`]).
+    /// An implanter on a mob ([`crate::implants`]).
     Implant,
     /// Feeding, injecting or forcing a pill on someone ([`crate::chem`]).
     Chem(crate::chem::ChemJob),
@@ -167,6 +167,8 @@ pub enum Job {
     Experiment,
     /// Reading a martial arts manual or scroll ([`crate::martial`]).
     Martial(crate::martial::ReadJob),
+    /// Welding a camera frame or a camera off the wall ([`crate::defenses::cameras`]).
+    Camera(crate::defenses::cameras::CameraJob),
 }
 
 /// A turf's baseturf stack, bottom first (tg `baseturfs`). Absent: assembled from the type's
@@ -917,7 +919,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         Job::Heal(job) => crate::medical::complete_heal(world, mob, action, *job),
         Job::Cpr { panicking } => crate::medical::complete_cpr(world, mob, action, *panicking),
         Job::Chem(job) => crate::chem::complete(world, mob, action, *job),
-        Job::Implant => crate::antag::revolution::server::complete_implant(world, mob, action),
+        Job::Implant => crate::implants::complete_implant(world, mob, action),
         Job::Food(job) => crate::food::complete(world, mob, action, *job),
         &Job::Clean(job) => crate::janitor::complete(world, mob, action, job),
         Job::Botany(job) => crate::botany::complete(world, mob, action, *job),
@@ -945,6 +947,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Explosive(job) => crate::explosions::sources::complete(world, mob, action, job),
         Job::Experiment => crate::science::experi_scanner::complete(world, mob, action),
         &Job::Martial(job) => crate::martial::complete_reading(world, mob, action, job),
+        &Job::Camera(job) => crate::defenses::cameras::complete(world, mob, action, job),
         &Job::Emitter(job) => crate::power::emitter::complete(world, client, target, job, consume),
         Job::GirderBolts { from } => {
             if !is_under(&path, GIRDER) || obj_state(world, target) != *from || !consume(world) {

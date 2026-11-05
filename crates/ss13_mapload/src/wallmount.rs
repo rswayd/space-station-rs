@@ -32,12 +32,14 @@ pub const FIREAXE_CABINET_ROOT: &str = "/obj/structure/fireaxecabinet";
 pub const MASS_DRIVER_ROOT: &str = "/obj/machinery/mass_driver";
 pub const IGNITER_ROOT: &str = "/obj/machinery/igniter";
 pub const SPARKER_ROOT: &str = "/obj/machinery/sparker";
+/// `/obj/machinery/turretid`, the turret control panel.
+pub const TURRETID_ROOT: &str = "/obj/machinery/turretid";
 /// What the cabinets create in `Initialize(mapload)` (`new /obj/item/extinguisher(src)`, a fire
 /// axe cabinet's default `item_path`).
 pub const WALLMOUNT_RUNTIME_TYPES: [&str; 2] = ["/obj/item/extinguisher", "/obj/item/fireaxe"];
 
 const COMPONENT: &str = "dm_wallmount";
-const ROOTS: [&str; 9] = [
+const ROOTS: [&str; 10] = [
     FIREALARM_ROOT,
     BUTTON_ROOT,
     LIGHT_SWITCH_ROOT,
@@ -47,6 +49,7 @@ const ROOTS: [&str; 9] = [
     MASS_DRIVER_ROOT,
     IGNITER_ROOT,
     SPARKER_ROOT,
+    TURRETID_ROOT,
 ];
 
 /// The vars of a wall mount (type defaults + map edits). Prototype data like
@@ -90,6 +93,13 @@ pub struct DmWallMount {
     pub power: f32,
     pub drive_range: f32,
     pub power_per_obj: f32,
+    /// Turret control panels: `enabled`, `lethal`, `shoot_cyborgs`, `ailock` and
+    /// `control_area` (an area type; empty: the panel's own area).
+    pub enabled: bool,
+    pub lethal: bool,
+    pub shoot_cyborgs: bool,
+    pub ailock: bool,
+    pub control_area: String,
 }
 
 #[derive(Clone, Copy)]
@@ -102,10 +112,12 @@ enum Kind {
     Bits,
     Text,
     Path,
+    /// A type path written as a path or as a string (`control_area`).
+    AnyPath,
 }
 
 /// Wall-mount vars, their [`DmWallMount`] field (same name) and kind.
-const VARS: [(&str, Kind); 19] = [
+const VARS: [(&str, Kind); 24] = [
     ("id", Kind::Id),
     ("req_access", Kind::List),
     ("req_one_access", Kind::List),
@@ -125,9 +137,14 @@ const VARS: [(&str, Kind); 19] = [
     ("power", Kind::Num),
     ("drive_range", Kind::Num),
     ("power_per_obj", Kind::Num),
+    ("enabled", Kind::Flag),
+    ("lethal", Kind::Flag),
+    ("shoot_cyborgs", Kind::Flag),
+    ("ailock", Kind::Flag),
+    ("control_area", Kind::AnyPath),
 ];
 /// Vars a map may edit (the rest are type data).
-const MAP_VARS: [&str; 11] = [
+const MAP_VARS: [&str; 16] = [
     "id",
     "req_access",
     "req_one_access",
@@ -139,6 +156,11 @@ const MAP_VARS: [&str; 11] = [
     "locked",
     "on",
     "power",
+    "enabled",
+    "lethal",
+    "shoot_cyborgs",
+    "ailock",
+    "control_area",
 ];
 
 pub fn is_wallmount(path: &str) -> bool {
@@ -176,6 +198,11 @@ fn json_ron(kind: Kind, v: &Value) -> Option<String> {
         Kind::Bits => (num(Some(v))?.clamp(0.0, 255.0) as u8).to_string(),
         Kind::Text => str_ron(v.as_str().unwrap_or_default()),
         Kind::Path => str_ron(v.get("path").and_then(Value::as_str).unwrap_or_default()),
+        Kind::AnyPath => str_ron(
+            v.as_str()
+                .or_else(|| v.get("path").and_then(Value::as_str))
+                .unwrap_or_default(),
+        ),
     })
 }
 
@@ -227,7 +254,8 @@ pub fn field_dmm(path: &str, var: &str, value: &DmValue) -> Option<Result<Field,
         (Kind::Num, DmValue::Number(n)) => Ok(format!("{:?}", *n as f32)),
         (Kind::Bits, DmValue::Number(n)) => Ok((n.clamp(0.0, 255.0) as u8).to_string()),
         (Kind::Text, DmValue::Str(s)) => Ok(str_ron(s)),
-        (Kind::Text, DmValue::Null) => Ok("\"\"".to_owned()),
+        (Kind::Text | Kind::AnyPath, DmValue::Null) => Ok("\"\"".to_owned()),
+        (Kind::AnyPath, DmValue::Str(s) | DmValue::Path(s)) => Ok(str_ron(s)),
         _ => Err(Skip::Unsupported),
     };
     Some(ron.map(|r| ext(COMPONENT, key, r)))

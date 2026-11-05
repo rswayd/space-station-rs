@@ -10,7 +10,8 @@
 //!   staff and has no mindshield: it is flashed again and stunned for 10 s. A head can flash from
 //!   behind (`can_flash_from_behind`). Each conversion checks BandaStation's revolution size
 //!   (`check_size`): at half of the living crew (40% at 70 and more) the station is told.
-//! - Deconversion (`remove_revolutionary`): a mindshield implant (the implanter, [`Implanter`]),
+//! - Deconversion (`remove_revolutionary`): a mindshield implant (`crate::implants`,
+//!   [`on_mindshield_implant`]),
 //!   blunt brute force on the head ([`head_trauma`]), or the station's victory. A head
 //!   revolutionary resists the implant and blunt force.
 //! - Outcome ([`RevolutionHandler`] `process`): every mutiny target dead or off the station
@@ -20,14 +21,12 @@
 // shortcut: no mood, memories, codewords, conversion objective, clumsiness, holiday memes, AFK
 // grace for mutiny targets, hostile environment for the shuttle, syndicate security HUD implant
 // for heads, exiled heads (`enemy_of_the_state`), borging, silence or unconsciousness (the
-// deconversion's 10 s unconsciousness is a 10 s paralysis); the implanter keeps its sprite and
-// implant cases cannot reload it. tg `update_rev_heads` never promotes anyone (its
+// deconversion's 10 s unconsciousness is a 10 s paralysis). tg `update_rev_heads` never promotes anyone (its
 // `can_be_headrev` refuses antagonists and every candidate is a revolutionary), so it is left out.
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
-use ss13_mapload::fidelity::is_under;
-use ss13_mapload::{DmItem, IconIndex};
+use ss13_mapload::IconIndex;
 use ss13_net::server::ClientToken;
 use ss13_shared::chat::{ChatChannel, ChatMessage, ChatSegment, Span};
 use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiActed, UiParams, UiReject, UiSystems};
@@ -38,14 +37,13 @@ use crate::antag::dynamic::AntagPreferences;
 use crate::antag::objectives::{RoundEnd, considered_alive};
 use crate::antag::traitor::print_player;
 use crate::antag::{AntagHudData, AntagHudUi, BrotherInfo, ObjectiveInfo};
-use crate::construction::Job;
 use crate::health::{Health, Stat};
 use crate::inventory::Inventory;
 use crate::jobs::{Jobs, PlayerJob};
 use crate::medical::{name_of, visible};
 use crate::server::PlayerMob;
 use crate::status_effects::Incap;
-use crate::tools::{Actor, do_after, tell};
+use crate::tools::tell;
 
 /// `/datum/antagonist/rev` `name`.
 pub const REV_NAME: &str = "Революционер";
@@ -54,8 +52,7 @@ pub const HEAD_NAME: &str = "Глава Революционеров";
 const ANTAG_HUD_DMI: &str = "icons/mob/huds/antag_hud.dmi";
 /// `equip_conspicuous_item(new /obj/item/assembly/flash/handheld)`.
 pub const REV_FLASH: &str = "/obj/item/assembly/flash/handheld";
-/// `/obj/item/implanter` and its preloaded `/obj/item/implanter/mindshield`.
-pub const IMPLANTER_ROOT: &str = "/obj/item/implanter";
+/// The preloaded `/obj/item/implanter/mindshield` (`crate::implants`).
 pub const MINDSHIELD_IMPLANTER: &str = "/obj/item/implanter/mindshield";
 /// `/datum/dynamic_ruleset/roundstart/revolution/assign_role`: `addtimer(reveal_head, 7 MINUTES)`.
 pub const ROUNDSTART_REVEAL_SECS: f64 = 7.0 * 60.0;
@@ -65,8 +62,6 @@ pub const LATEJOIN_REVEAL_SECS: f64 = 60.0;
 pub const ROUNDSTART_HEADS_NECESSARY: usize = 2;
 /// The latejoin ruleset's `heads_necessary` (it reveals with one fewer, "a little leeway").
 pub const LATEJOIN_HEADS_NECESSARY: usize = 3;
-/// `implanter/attack`: `do_after(user, 5 SECONDS, target)` on someone else.
-const IMPLANT_DELAY_DS: f32 = 50.0;
 /// `add_revolutionary(stun = TRUE)`: `Stun(10 SECONDS)`; `remove_revolutionary`:
 /// `Unconscious(10 SECONDS)`.
 const CONVERT_STUN_SECS: f32 = 10.0;
@@ -105,12 +100,6 @@ pub struct Mindshield;
 pub struct DormantHeadRev {
     pub reveal_at: f64,
     pub latejoin: bool,
-}
-
-/// An implanter's `imp`: loaded with a mindshield implant or empty.
-#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Implanter {
-    pub loaded: bool,
 }
 
 /// The panel's content.
@@ -159,13 +148,6 @@ pub struct RevolutionPlugin;
 impl Plugin for RevolutionPlugin {
     fn build(&self, app: &mut App) {
         app.register_ui::<AntagInfoRevolutionUi>()
-            .add_observer(add_implanter_state)
-            .add_systems(
-                Update,
-                rev_clicks
-                    .after(crate::security::security_clicks)
-                    .before(crate::combat::MeleeSystems),
-            )
             .add_systems(Update, open_info.in_set(UiSystems::Handle))
             .add_systems(
                 Update,
@@ -176,17 +158,6 @@ impl Plugin for RevolutionPlugin {
                     .chain()
                     .before(UiSystems::Open),
             );
-    }
-}
-
-fn add_implanter_state(add: On<Add<DmItem>>, items: Query<&DmItem>, mut commands: Commands) {
-    if let Ok(item) = items.get(add.entity)
-        && is_under(&item.path, IMPLANTER_ROOT)
-    {
-        let loaded = item.path == MINDSHIELD_IMPLANTER;
-        commands
-            .entity(add.entity)
-            .insert_if_new(Implanter { loaded });
     }
 }
 
@@ -685,82 +656,14 @@ pub fn head_trauma(world: &mut World, attacker: Entity, target: Entity, damage: 
 }
 
 // ---------------------------------------------------------------------------------------------
-// The implanter
+// The mindshield
 
-/// An implanter's click on a living mob: `implanter/attack`.
-fn rev_clicks(world: &mut World, mut clicks: Local<MessageCursor<crate::click::ClickResolved>>) {
-    let clicks: Vec<crate::click::ClickResolved> = clicks
-        .read(world.resource::<Messages<crate::click::ClickResolved>>())
-        .copied()
-        .collect();
-    for click in clicks {
-        let (mob, target) = (click.mob, click.target);
-        if world
-            .resource::<crate::security::MeleeHandled>()
-            .0
-            .contains(&mob)
-            || world.get::<Health>(target).is_none()
-        {
-            continue;
-        }
-        let Some(held) = world.get::<Inventory>(mob).and_then(Inventory::active_item) else {
-            continue;
-        };
-        let Some(&implanter) = world.get::<Implanter>(held) else {
-            continue;
-        };
-        world
-            .resource_mut::<crate::security::MeleeHandled>()
-            .0
-            .insert(mob);
-        if !implanter.loaded {
-            continue;
-        }
-        let delay = if target == mob {
-            0.0
-        } else {
-            let (user, victim) = (name_of(world, mob), name_of(world, target));
-            let text = format!("{user} is attempting to implant {victim}.");
-            visible(world, target, &text, &text, Span::Warning);
-            IMPLANT_DELAY_DS
-        };
-        let actor = Actor {
-            client: click.client,
-            mob,
-            item: Some(held),
-        };
-        do_after(world, actor, target, delay, 0, Job::Implant);
-    }
-}
-
-/// The implanter's `do_after` ended: `imp.implant(target, user)` of the mindshield implant.
-pub fn complete_implant(world: &mut World, user: Entity, action: &crate::tools::DoAfter) {
-    let target = action.target;
-    let Some(implanter) = action.item else {
-        return;
-    };
-    if world.get::<Implanter>(implanter) != Some(&Implanter { loaded: true })
-        || world.get::<Health>(target).is_none()
-    {
-        return;
-    }
-    world
-        .entity_mut(implanter)
-        .insert(Implanter { loaded: false });
-    let (user_name, name) = (name_of(world, user), name_of(world, target));
-    if target == user {
-        chat_to(world, user, Span::Notice, "You implant yourself.");
-    } else {
-        visible(
-            world,
-            target,
-            &format!("{user_name} implants you."),
-            &format!("{user_name} implants {name}."),
-            Span::Notice,
-        );
-    }
-    // `COMSIG_PRE_MINDSHIELD_IMPLANT`: a head revolutionary resists and the implant is gone.
+/// A mindshield implant goes into `target` (`crate::implants`): `COMSIG_PRE_MINDSHIELD_IMPLANT`
+/// (a head revolutionary resists: true, the implant is gone) and `COMSIG_MINDSHIELD_IMPLANTED`
+/// (`on_mindshield` deconverts).
+pub fn on_mindshield_implant(world: &mut World, target: Entity, user: Option<Entity>) -> bool {
     if is_head_rev(world, target) {
+        let name = name_of(world, target);
         visible(
             world,
             target,
@@ -768,17 +671,11 @@ pub fn complete_implant(world: &mut World, user: Entity, action: &crate::tools::
             &format!("{name} seems to resist the implant!"),
             Span::Warning,
         );
-        return;
+        return true;
     }
-    // `COMSIG_MINDSHIELD_IMPLANTED`: `on_mindshield` deconverts.
-    remove_revolutionary(world, target, Deconverter::Mob(user));
-    world.entity_mut(target).insert(Mindshield);
-    chat_to(
-        world,
-        target,
-        Span::Notice,
-        "You feel a sense of peace and security. You are now protected from brainwashing.",
-    );
+    let source = user.map_or(Deconverter::Admin, Deconverter::Mob);
+    remove_revolutionary(world, target, source);
+    false
 }
 
 // ---------------------------------------------------------------------------------------------
