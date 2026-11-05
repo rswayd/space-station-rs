@@ -467,10 +467,6 @@ fn activate(world: &mut World, ai: Entity, index: usize) {
     spend_use(world, ai, index);
 }
 
-fn on_station(world: &World, pos: &TilePos) -> bool {
-    crate::events::controller::station_levels(world).contains(&pos.z)
-}
-
 /// `/datum/action/innate/ai/blackout/Activate`: `prob(30 * overload)` overloads, else
 /// `overload++`.
 // Cost: once per use, every APC (~150 on MetaStation).

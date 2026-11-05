@@ -126,9 +126,8 @@ mod server {
                     super::ai_track::AiTrackPlugin,
                     super::malf::MalfPlugin,
                     super::mmi::MmiPlugin,
-                    super::ai_core::AiCorePlugin,
-                    super::aicard::AiCardPlugin,
                 ))
+                .add_plugins((super::ai_core::AiCorePlugin, super::aicard::AiCardPlugin))
                 .add_systems(PreStartup, load_data)
                 .add_systems(
                     Update,

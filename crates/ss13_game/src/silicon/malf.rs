@@ -498,7 +498,7 @@ pub fn start_hack(world: &mut World, client: Entity, actor: Entity, apc: Entity)
     let Some(malf) = world.get::<MalfAi>(ai) else {
         return;
     };
-    if malf_status(Some((ai, true)), hacked_by) != APC_AI_NO_HACK {
+    if malf_status(Some((ai, true)), hacked_by, None, false) != APC_AI_NO_HACK {
         return;
     }
     if malf.hacking.is_some() {
