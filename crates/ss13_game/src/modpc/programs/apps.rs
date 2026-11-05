@@ -229,7 +229,7 @@ pub fn apply(
             );
             let (frequency, code) = (state.signal_frequency, state.signal_code);
             world.entity_mut(pc).insert(state);
-            crate::assemblies::server::post_signal(world, pc, frequency, code, 0);
+            crate::assemblies::server::send_signal(world, pc, frequency, code, 0);
             tell(world, client, Span::Notice, "signaled");
             return Ok(());
         }
