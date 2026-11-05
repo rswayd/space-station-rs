@@ -252,6 +252,13 @@ fn drag(world: &mut World, client: Entity, from: DragEnd, to: DragEnd) {
     {
         return;
     }
+    // A skateboard picked up, a wheelchair folded (`crate::vehicles`).
+    if to == End::World(mob)
+        && matches!(from, End::World(_))
+        && crate::vehicles::mouse_drop_dragged(world, actor, dragged)
+    {
+        return;
+    }
     // `/obj/vehicle/sealed/mouse_drop_receive` (`NEED_HANDS`): climbing into a mech.
     if let (End::World(over), End::World(_)) = (to, from)
         && !traits.hands_blocked

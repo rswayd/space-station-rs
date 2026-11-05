@@ -273,6 +273,7 @@ impl Plugin for GameServerPlugin {
         .add_plugins(crate::mobs::MobsServerPlugin)
         .add_plugins(crate::bots::BotsServerPlugin)
         .add_plugins(crate::mecha::MechaServerPlugin)
+        .add_plugins(crate::vehicles::VehiclesPlugin)
         .add_plugins(crate::modsuit::server::ModSuitPlugin)
         .add_plugins(crate::disposals::DisposalsServerPlugin)
         .add_plugins(crate::genetics::GeneticsServerPlugin)
@@ -773,9 +774,9 @@ fn nearest_free_tile(world: &World, start: TilePos) -> Option<TilePos> {
 /// A step of a mob that cannot move (tg `MOBILITY_MOVE`: hard crit, dead, `TRAIT_IMMOBILIZED`
 /// from `crate::status_effects`) is applied as blocked; a confused mob's step may turn;
 /// a dead mob's step ghostizes it (tg `client/Move`); a mob held in a grab resists first
-/// (`crate::pull`). A ghost (no `Mover`) takes one step per tick through `crate::ghost`.
+/// (`crate::pull`); a driver's step drives its vehicle (`crate::vehicles`). A ghost (no `Mover`)
+/// takes one step per tick through `crate::ghost`.
 // Cost: per tick, one lookup per received intent and per mob with waiting steps.
-// shortcut: no buckling yet.
 pub(crate) fn forward_moves(
     mut intents: MessageReader<IntentReceived>,
     players: Res<Players>,
@@ -787,9 +788,12 @@ pub(crate) fn forward_moves(
     mut ghostize: MessageWriter<Ghostize>,
     mut resists: MessageWriter<MoveResist>,
     mut relays: MessageWriter<crate::closets::ClosetRelayMove>,
-    mut mech_steps: MessageWriter<crate::mecha::core::MechRelayMove>,
+    (mut mech_steps, mut vehicle_steps): (
+        MessageWriter<crate::mecha::core::MechRelayMove>,
+        MessageWriter<crate::vehicles::VehicleRelayMove>,
+    ),
     mut jaunt_steps: MessageWriter<crate::spells::JauntStep>,
-    mechs: Query<&crate::mecha::Mech>,
+    (mechs, vehicles): (Query<&crate::mecha::Mech>, Query<&crate::vehicles::Vehicle>),
     mut waiting: Local<EntityHashSet>,
     mut rng: ResMut<crate::combat::CombatRng>,
 ) {
@@ -830,6 +834,7 @@ pub(crate) fn forward_moves(
             pilot,
             coma,
             jaunting,
+            rider,
         )) = mobs.get_mut(mob)
         else {
             return false;
@@ -840,6 +845,14 @@ pub(crate) fn forward_moves(
         // A pilot's steps wait for the mech's move cooldown (`crate::mecha`).
         if let Some(pilot) = pilot
             && mechs.get(pilot.mech).is_ok_and(|m| now < m.next_move)
+        {
+            return true;
+        }
+        // A driver's steps wait for the vehicle's move cooldown (`crate::vehicles`).
+        if let Some(rider) = rider
+            && vehicles
+                .get(rider.vehicle)
+                .is_ok_and(|v| now < v.next_move())
         {
             return true;
         }
@@ -878,6 +891,10 @@ pub(crate) fn forward_moves(
             _ if held => {
                 resists.write(MoveResist { mob, dir });
             }
+            // tg `buckled.relaymove` of the vehicle the mob drives (`crate::vehicles`).
+            _ if rider.is_some() => {
+                vehicle_steps.write(crate::vehicles::VehicleRelayMove { rider: mob, dir });
+            }
             (Some(health), Some(&stat)) if !health.can_move(stat) => {}
             _ if traits.is_some_and(|t| t.immobilized) => {}
             _ if mover.is_some() => {
@@ -905,6 +922,7 @@ type MoveItem<'a> = (
     Option<&'a crate::mecha::Pilot>,
     Has<crate::health::DeathComa>,
     Has<crate::spells::Jaunting>,
+    Option<&'a crate::vehicles::Rider>,
 );
 
 /// The mob's authoritative state to its client after a step was applied (moved or blocked) or

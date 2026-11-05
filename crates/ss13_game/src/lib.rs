@@ -415,6 +415,8 @@ pub mod turf_damage;
 #[cfg(feature = "client")]
 pub mod ui_sprites;
 #[cfg(feature = "server")]
+pub mod vehicles;
+#[cfg(feature = "server")]
 pub mod vending;
 #[cfg(feature = "server")]
 pub mod vision;
