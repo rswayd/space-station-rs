@@ -211,6 +211,9 @@ pub fn healthscan(world: &World, target: Entity) -> Option<ChatMessage> {
         );
         temperature(&mut lines, "Температура тела", body.bodytemperature);
     }
+    for (span, text) in crate::medical::diseases::scan_lines(world, target) {
+        lines.text(span, text);
+    }
     Some(lines.into_message())
 }
 

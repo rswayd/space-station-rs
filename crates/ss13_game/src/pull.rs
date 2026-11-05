@@ -563,6 +563,8 @@ fn ctrl_clicks(world: &mut World, mut clicks: Local<MessageCursor<CtrlClick>>) {
                 .entity_mut(mob)
                 .insert((Pulling(target), GrabState::Passive, PullSlowdown(0.0)));
             if living {
+                // tg `start_pulling`: skin-contact diseases pass both ways.
+                crate::medical::diseases::touch(world, mob, target);
                 chat.extend(visible_message(
                     world,
                     click.target_pos,

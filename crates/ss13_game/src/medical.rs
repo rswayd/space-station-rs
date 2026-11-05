@@ -22,7 +22,7 @@
 //!
 //! Submodules: [`blood`] (blood volume, bleeding, transfusions, IV drips), [`wounds`], [`surgery`]
 //! (operations, drapes, operating tables), [`defib`] (defibrillators, revival), [`organs`],
-//! [`traumas`] (brain traumas).
+//! [`traumas`] (brain traumas), [`diseases`] and [`symptoms`] (viruses and virology).
 //! Clicks on living mobs that these take (wound treatments, drapes, surgery, paddles, IV drips,
 //! tables) are claimed in [`MedicalClicks`] before melee and the inventory see them.
 // shortcut: no `try_inject` check (thick clothing blocks treatment in tg), no sounds, balloon
@@ -31,9 +31,11 @@
 pub mod blood;
 pub mod bodyparts;
 pub mod defib;
+pub mod diseases;
 pub mod operating;
 pub mod organs;
 pub mod surgery;
+pub mod symptoms;
 pub mod traumas;
 pub mod wounds;
 
@@ -72,6 +74,7 @@ pub const CPR_OXY_HEAL: f32 = 7.0;
 /// The medical part of tg `fully_heal(HEAL_ALL)` (admin rejuvenate): `restore_blood`,
 /// `HEAL_WOUNDS`, `HEAL_ORGANS`, `HEAL_LIMBS`. Damage and stat are the caller's.
 pub fn heal_all(world: &mut World, mob: Entity) {
+    diseases::cure_negative(world, mob);
     organs::regenerate(world, mob);
     bodyparts::regenerate_limbs(world, mob);
     if let Some(mut blood) = world.get_mut::<blood::Blood>(mob) {
@@ -1058,7 +1061,7 @@ fn claim_click(world: &mut World, actor: Actor, target: Entity, modifiers: Click
 }
 
 /// tg `Life()` of the medical parts each `SSmobs` fire: wounds (also of the dead), organ decay,
-/// `handle_blood` of the living, the drapes of a lying mob settling.
+/// `handle_blood` of the living, the drapes of a lying mob settling, diseases.
 // Cost: every 2 s one pass over humans (one per player); wound loops run over at most a few
 // wounds per limb.
 fn medical_life(world: &mut World, mut last_fired: Local<u64>) {
@@ -1142,6 +1145,8 @@ fn life_tick(world: &mut World, mob: Entity, secs: f32, now: f64) {
     if !dead {
         blood::handle_blood(world, mob, secs, now);
     }
+    // Last: GBS may gib the mob.
+    diseases::life(world, mob, secs);
 }
 
 /// `SSmachines` fires (2 s) for the IV drips.
