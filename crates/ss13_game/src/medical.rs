@@ -22,14 +22,17 @@
 //!
 //! Submodules: [`blood`] (blood volume, bleeding, transfusions, IV drips), [`wounds`], [`surgery`]
 //! (operations, drapes, operating tables), [`defib`] (defibrillators, revival), [`organs`],
+//! [`cyberimps`] (cybernetic implants, autosurgeons),
 //! [`traumas`] (brain traumas), [`diseases`] and [`symptoms`] (viruses and virology).
 //! Clicks on living mobs that these take (wound treatments, drapes, surgery, paddles, IV drips,
 //! tables) are claimed in [`MedicalClicks`] before melee and the inventory see them.
 // shortcut: no `try_inject` check (thick clothing blocks treatment in tg), no sounds, balloon
 // alerts are chat notices.
 
+pub mod bioware;
 pub mod blood;
 pub mod bodyparts;
+pub mod cyberimps;
 pub mod defib;
 pub mod diseases;
 pub mod operating;
@@ -122,6 +125,8 @@ pub enum MedJob {
     LoadDisk,
     /// A stage of a defibrillator shock ([`defib::complete`]).
     Defib { unit: Entity, stage: defib::Stage },
+    /// An autosurgeon implanting someone else ([`cyberimps::finish_autosurgeon`]).
+    Autosurgeon,
     /// A wound treatment ([`wounds::finish_treatment`]).
     Treat {
         zone: BodyZone,
@@ -149,6 +154,7 @@ pub fn complete_med(world: &mut World, mob: Entity, action: &DoAfter, job: MedJo
         MedJob::Buckle { to } => surgery::buckle(world, actor, target, to),
         MedJob::LoadDisk => operating::finish_load(world, actor, target),
         MedJob::Defib { unit, stage } => defib::complete(world, mob, action, unit, stage),
+        MedJob::Autosurgeon => cyberimps::finish_autosurgeon(world, actor, target),
         MedJob::Treat { zone, treat, kind } => {
             wounds::finish_treatment(world, actor, target, zone, treat, kind);
         }
@@ -199,6 +205,7 @@ impl Plugin for MedicalServerPlugin {
         operating::build(app);
         defib::build(app);
         organs::build(app);
+        cyberimps::build(app);
     }
 }
 
@@ -828,7 +835,9 @@ pub struct WoundScanMode(pub bool);
 /// tg `/obj/item/healthanalyzer/attack_self` (not the wound analyzer) and the advanced surgical
 /// tools' mode switch. True when `item` is one.
 pub fn attack_self(world: &mut World, client: Entity, item: Entity) -> bool {
-    if surgery::toggle_advanced_tool(world, client, item) {
+    if surgery::toggle_advanced_tool(world, client, item)
+        || cyberimps::attack_self(world, client, item)
+    {
         return true;
     }
     let Some(path) = world.get::<DmItem>(item).map(|i| i.path.clone()) else {
@@ -1038,6 +1047,9 @@ fn claim_click(world: &mut World, actor: Actor, target: Entity, modifiers: Click
             && !surgery::combat_mode(world, actor.mob)
             && surgery::perform_surgery(world, actor, target)
         {
+            return true;
+        }
+        if cyberimps::autosurgeon_attack(world, actor, target) {
             return true;
         }
         if let Some(item) = actor.item

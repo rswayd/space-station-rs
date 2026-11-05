@@ -1178,7 +1178,7 @@ fn live(world: &mut World, mob: Entity, fired: u64, now: f64) {
             // `get_breath_from_internal`; `Some(None)` is an open but empty tank.
             let mut from_tank = None;
             if let Some(tank) = internal {
-                if !inventory.holds(tank) || !can_breathe_internals(world, &inventory) {
+                if !inventory.holds(tank) || !can_breathe_internals(world, mob, &inventory) {
                     cutoff = true;
                 } else if let Some(mut air) = world.get_mut::<TankAir>(tank) {
                     from_tank = Some(air.remove_air_volume(BREATH_VOLUME));

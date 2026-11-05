@@ -376,6 +376,8 @@ pub fn bleed(world: &mut World, mob: Entity, amount: f32) {
     if crate::species::has_trait(world, mob, crate::species::Trait::NoBlood) {
         return;
     }
+    // `PHYS_COEFF_BLEED` (threaded veins).
+    let amount = amount * super::bioware::bleed_mod(world, mob);
     let Some(mut blood) = world.get_mut::<Blood>(mob) else {
         return;
     };
@@ -416,7 +418,8 @@ pub fn handle_blood(world: &mut World, mob: Entity, secs: f32, now: f64) {
         .is_some_and(|b| b.lying());
     let rate = world
         .get::<super::wounds::Limbs>(mob)
-        .map_or(0.0, |l| l.bleed_rate(lying));
+        .map_or(0.0, |l| l.bleed_rate(lying))
+        * super::bioware::bleed_mod(world, mob);
     if rate > 0.0 {
         let bled = -blood.adjust(-rate * secs, 0.0, BLOOD_VOLUME_MAXIMUM);
         crate::janitor::bleed_splatter(world, mob, bled);

@@ -9,8 +9,8 @@
 //! each): wearers × humans; a few wearers among 100 players is a few hundred lookups per
 //! refresh.
 // shortcut: glasses give their HUD by type (`/obj/item/clothing/glasses/hud/security`,
-// `.../health`, `.../medsechud` and subtypes), not by `clothing_traits` (no toggling HUDs, no
-// HUD implants or silicon HUDs); the record is found by the mob's real name (tg: the face name,
+// `.../health`, `.../medsechud` and subtypes), not by `clothing_traits` (no toggling HUD
+// glasses or silicon HUDs; HUD implants come from `crate::medical::cyberimps`); the record is found by the mob's real name (tg: the face name,
 // which a mask hides); no implant icons, virus or defib states; refreshed every 0.5 s rather
 // than on each change.
 
@@ -187,6 +187,8 @@ fn refresh(world: &mut World, mut next: Local<f64>) {
             .eyes
             .and_then(|e| world.get::<DmItem>(e))
             .map_or((false, false), |i| glasses_huds(&i.path));
+        let (implant_sec, implant_med) = crate::medical::cyberimps::implant_huds(world, mob);
+        let (sec, med) = (sec || implant_sec, med || implant_med);
         if !sec && !med && old.is_none_or(|d| d.entries.is_empty()) {
             continue;
         }

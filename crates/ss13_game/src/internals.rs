@@ -202,10 +202,14 @@ pub(crate) fn cutoff_message(client: Entity, tank: String) -> SendChat {
     )
 }
 
-/// tg `can_breathe_internals` of a human without a breathing tube: a worn mask with
-/// `MASKINTERNALS` or a helmet with `HEADINTERNALS`.
+/// tg `can_breathe_internals` of a human: a breathing tube implant
+/// (`crate::medical::cyberimps`), a worn mask with `MASKINTERNALS` or a helmet with
+/// `HEADINTERNALS`.
 // shortcut: masks and visors are never pulled down (`up`), so `visor_flags` never apply.
-pub fn can_breathe_internals(world: &World, inventory: &Inventory) -> bool {
+pub fn can_breathe_internals(world: &World, mob: Entity, inventory: &Inventory) -> bool {
+    if crate::medical::cyberimps::breathing_tube(world, mob) {
+        return true;
+    }
     let flags = |item: Option<Entity>| {
         item.and_then(|i| world.get::<DmClothing>(i))
             .map_or(0, |c| c.clothing_flags)
@@ -226,7 +230,7 @@ pub fn toggle(world: &mut World, client: Entity, mob: Entity, tank: Entity) {
     let text = if current == Some(tank) {
         world.entity_mut(mob).insert(Internals(None));
         format!("Вы перекрываете клапан на {name}.")
-    } else if can_breathe_internals(world, &inventory) {
+    } else if can_breathe_internals(world, mob, &inventory) {
         // tg `toggle_open_internals`: switching from another open tank reads differently.
         world.entity_mut(mob).insert(Internals(Some(tank)));
         if current.is_some() {
