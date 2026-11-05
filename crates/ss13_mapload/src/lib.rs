@@ -49,6 +49,7 @@ pub mod radio;
 pub mod reagents;
 pub mod research;
 pub mod security;
+pub mod service;
 pub mod silicon;
 pub mod smartfridge;
 pub mod smooth;
@@ -98,6 +99,7 @@ pub use power::DmPower;
 pub use radio::DmRadio;
 pub use reagents::DmReagents;
 pub use security::{DmBaton, DmHandcuffs};
+pub use service::DmService;
 pub use silicon::{DmCamera, DmCameraConsole};
 pub use smartfridge::DmSmartFridge;
 pub use smooth::DmSmooth;
@@ -315,6 +317,7 @@ impl Plugin for DmProtoPlugin {
             .register_proto_component::<DmSmartFridge>(smartfridge::FRIDGE_COMPONENT)
             .register_proto_component::<DmGlass>(drinks::GLASS_COMPONENT)
             .register_proto_component::<DmBarsign>(barsign::BARSIGN_COMPONENT)
+            .register_proto_component::<DmService>(service::SERVICE_COMPONENT)
             .register_proto_component::<DmMob>("dm_mob")
             .register_proto_component::<DmWallMount>("dm_wallmount")
             .register_proto_component::<DmCircuit>("dm_circuit")

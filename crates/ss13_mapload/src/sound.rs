@@ -229,6 +229,23 @@ pub mod files {
         "sound/effects/fireclip6.ogg",
         "sound/effects/fireclip7.ogg",
     ];
+    /// Paperwork, games, the clown's squeaky things, the desk bell and books
+    /// (`ss13_game::service`).
+    pub const SERVICE: [&str; 13] = [
+        "sound/items/bikehorn.ogg",
+        "sound/items/airhorn/airhorn2.ogg",
+        "sound/effects/quack.ogg",
+        "sound/items/toy_squeak/toysqueak1.ogg",
+        "sound/items/toy_squeak/toysqueak2.ogg",
+        "sound/items/toy_squeak/toysqueak3.ogg",
+        "sound/effects/footstep/clownstep1.ogg",
+        "sound/effects/footstep/clownstep2.ogg",
+        "sound/items/dice_roll.ogg",
+        "sound/items/handling/standard_stamp.ogg",
+        "sound/machines/microwave/microwave-end.ogg",
+        "sound/items/handling/paper_pickup.ogg",
+        "sound/items/handling/component_pickup.ogg",
+    ];
     /// The martial arts' moves, manuals and scrolls (`ss13_game::martial`).
     pub const MARTIAL: [&str; 17] = [
         "sound/items/weapons/slam.ogg",
@@ -562,6 +579,7 @@ pub fn referenced<'a>(
     out.extend(files::BOTS.map(str::to_owned));
     out.extend(files::EXPLOSION.map(str::to_owned));
     out.extend(files::MARTIAL.map(str::to_owned));
+    out.extend(files::SERVICE.map(str::to_owned));
     for path in converted {
         for var in SOUND_VARS {
             let s = sound_var(types, path, var);

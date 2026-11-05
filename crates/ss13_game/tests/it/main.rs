@@ -60,6 +60,7 @@ mod revolution;
 mod science;
 mod security;
 mod security_level;
+mod service;
 mod shuttle;
 mod silicon;
 mod sound;

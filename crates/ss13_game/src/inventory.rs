@@ -591,6 +591,16 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 Some(item)
                     if hand == inventory.active
                         && crate::martial::attack_self(world, client, mob, item) => {}
+                // Paper and books are read, dice rolled, horns honked (`crate::service`).
+                Some(item)
+                    if hand == inventory.active
+                        && crate::service::server::attack_self(world, client, mob, item) => {}
+                // A pen or stamp on the paper in the other hand.
+                Some(item)
+                    if hand != inventory.active
+                        && inventory.active_item().is_some_and(|held| {
+                            crate::service::server::item_interaction(world, client, mob, held, item)
+                        }) => {}
                 // An ID card in the active hand goes into the PDA in the other.
                 Some(item)
                     if hand != inventory.active
@@ -815,6 +825,8 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 // tg `attack_hand` of tables and racks: a pulled mob onto it, flipping (right
                 // click), knocking a climber down, kicking a rack.
                 None if crate::tables::attack_hand(world, client, mob, target, modifiers) => {}
+                // tg `attack_hand` of paper bins, bookcases and desk bells.
+                None if crate::service::server::interact(world, client, mob, target) => {}
                 None => pick_up(world, mob, target, inventory.active),
                 // tg `/obj/item/card/emag/interact_with_atom` on the families with an
                 // `emag_act` (`crate::emag`).
@@ -879,6 +891,11 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 Some(held)
                     if crate::machine_frame::item_interaction(world, client, mob, held, target) => {
                 }
+                // Pens, stamps, the labeler, books, the bible, horns (`crate::service`).
+                Some(held)
+                    if crate::service::server::item_interaction(
+                        world, client, mob, held, target,
+                    ) => {}
                 // tg `item_interaction` of kitchen machines (inserting), then food on a mob
                 // (eating) and tools on food (slicing); food has reagents, so before chem.
                 Some(held)

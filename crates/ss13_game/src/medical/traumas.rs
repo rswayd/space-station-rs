@@ -817,6 +817,8 @@ pub fn refresh(world: &mut World, mob: Entity) {
         speech.mute |= quirks.has(crate::quirks::Quirk::Mute);
         pacifist |= quirks.has(crate::quirks::Quirk::Pacifist);
     }
+    // The mime's vow (`TRAIT_MIMING`, `can_speak(allow_mimes = FALSE)`).
+    speech.mute |= world.get::<crate::service::MimeVow>(mob).is_some();
     let mut entity = world.entity_mut(mob);
     if speech == ss13_chat::speech::Impediments::default() {
         entity.remove::<ss13_chat::speech::Impediments>();

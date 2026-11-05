@@ -11,7 +11,7 @@
 Выбор облика библии при первом использовании, благословение (лечение верующих, удар по голове неверующих), превращение стола в алтарь, освящение воды, блок пули с шансом; сжигание библии проклинает. Варианты: синдикатская, «booze».
 
 - **Код:** [`/obj/item/book/bible`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/library/bibles.dm#L67), [`bless()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/library/bibles.dm#L210), [`make_new_altar()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/library/bibles.dm#L201), [`/obj/item/book/bible/syndicate`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/library/bibles.dm#L348)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/service/library.rs`: у капеллана лечит другого человека (по 10 brute/burn на раненую часть, mood `blessing`) в 40%, иначе бьёт по голове (5 урона мозгу без шлема); не-капеллана обжигает (10 burn); благословляет воду и нечестивую воду в ёмкости в святую; чтение как книги; нет скинов, сект, создания алтаря, проявления рун, мёртвых, неуклюжих
 
 ### Алтарь богов и религиозный инструмент
 Алтарь (и библия как инструмент) открывает tgui выбора секты, приём жертв за благосклонность и запуск ритуалов.

@@ -190,6 +190,7 @@ pub fn ext_field(path: &str, var: &str, value: Val) -> Result<Field, Skip> {
         .or_else(|_| crate::dock::ext_field(path, var, value))
         .or_else(|_| crate::disposal::ext_field(path, var, value))
         .or_else(|_| crate::bots::ext_field(path, var, value))
+        .or_else(|_| crate::service::ext_field(path, var, value))
 }
 
 pub(crate) fn ext(component: &'static str, key: &'static str, ron: impl Into<String>) -> Field {
@@ -290,6 +291,7 @@ impl<'a> ConvertContext<'a> {
         fields.extend(crate::smartfridge::type_fields(self.types, path));
         fields.extend(crate::drinks::type_fields(self.types, path));
         fields.extend(crate::barsign::type_fields(self.types, path));
+        fields.extend(crate::service::type_fields(self.types, path));
         fields.extend(crate::disposal::type_fields(self.types, path));
         fields.extend(crate::bots::type_fields(self.types, path));
         fields.extend(crate::mobs::type_fields(self.types, path));
