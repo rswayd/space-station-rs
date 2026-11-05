@@ -6,7 +6,7 @@
 Базовое событие выбирает безопасную зону через `/datum/anomaly_placer`, объявляет тип аномалии и место, спавнит её; если аномалию не нейтрализовать сигналером за время жизни, она срабатывает.
 
 - **Код:** [`/datum/round_event_control/anomaly`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/anomaly/_anomaly.dm#L1), [`/datum/anomaly_placer`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/anomaly/anomaly_placer.dm#L1)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/events/anomalies.rs`: выбор зоны станции вне «безопасных» (`anomaly_placer`, кроме комнаты отдыха инженеров), объявление с именем зоны, аномалия на свободном не-космическом тайле, процесс раз в 2 с (дрейф 45%/с), детонация через 120 с; нейтрализация сигналером, ядра и анализатор — наука (../science/anomalies.md); нет админского выбора места, оповещения призраков и отсчёта
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/events/anomalies.rs`: выбор зоны станции вне «безопасных» (`anomaly_placer`, кроме комнаты отдыха инженеров), объявление с именем зоны, аномалия на свободном не-космическом тайле, процесс раз в 2 с (дрейф 45%/с), детонация через 120 с, нейтрализация сигналером и ядра (../science/anomalies.md); нет админского выбора места, оповещения призраков и отсчёта
 
 ### Anomaly: Hyper-Energetic Flux
 Энергетическая аномалия: бьёт током подошедших, в конце взрывается.
@@ -36,7 +36,7 @@
 Блуждающий вихрь, разрушающий объекты на пути, в конце взрывается.
 
 - **Код:** [`/datum/round_event_control/anomaly/anomaly_vortex`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/anomaly/anomaly_vortex.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — нет аномалий
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/events/anomalies.rs`: событие (вес 10, мин. 20 игроков, до 2 раз), объявление через 15 тиков; сама аномалия — ../science/anomalies.md
 
 ### Anomaly: Bioscrambler
 Подменяет органы и конечности ближайших существ чужими.
@@ -61,7 +61,7 @@
 Вызывает галлюцинации у всех вокруг, в конце — сильная волна галлюцинаций.
 
 - **Код:** [`/datum/round_event_control/anomaly/anomaly_hallucination`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/anomaly/anomaly_hallucination.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — нет аномалии галлюцинаций (импульс есть: `crate::hallucination::hallucination_pulse`)
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/events/anomalies.rs`: событие (вес 20, мин. 10 игроков, до 5 раз), объявление сразу, аномалия на 3-м тике; сама аномалия — ../science/anomalies.md
 
 ### Anomaly: Weather / Thundering Weather
 Погодная аномалия: локальный дождь (или гроза с молниями) в зоне вокруг себя.

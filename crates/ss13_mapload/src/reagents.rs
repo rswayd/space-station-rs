@@ -23,6 +23,9 @@ const REAGENT_EXPLOSION: &str = "/datum/chemical_reaction/reagent_explosion";
 /// Its `pre_reaction_other_checks` counts the pot's ingredients: the game runs it
 /// ([`ss13_reagents::SoupDef`]).
 pub const SOUP_REACTIONS: &str = "/datum/chemical_reaction/food/soup";
+/// Its `pre_reaction_other_checks` wants a slime extract with uses left: the game keeps an
+/// extract's holder from reacting once they are gone (`ss13_game::science::xenobio`).
+pub const SLIME_REACTIONS: &str = "/datum/chemical_reaction/slime";
 const GLASS_STYLE_ROOT: &str = "/datum/glass_style";
 /// `/datum/glass_style/has_foodtype/soup/New()`: no name or description means the soup's.
 const SOUP_STYLE: &str = "/datum/glass_style/has_foodtype/soup";
@@ -207,7 +210,8 @@ pub fn chem_data(types: &DmTypes) -> (ChemData, Skipped) {
                     .iter()
                     .any(|q| q == "pre_reaction_other_checks")
             });
-        if check.is_some_and(|c| c != FOOD_REACTIONS && c != SOUP_REACTIONS) {
+        if check.is_some_and(|c| c != FOOD_REACTIONS && c != SOUP_REACTIONS && c != SLIME_REACTIONS)
+        {
             skipped.own_checks.push(path.to_owned());
             continue;
         }

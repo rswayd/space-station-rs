@@ -14,13 +14,26 @@
 //!   the same offsets around a random teleport beacon on a station level.
 //! - Pyroclastic: 5 mol of oxygen and plasma at 1000 K every 10 s; detonates in 500 mol of
 //!   each.
+//! - Vortex (`bhole`): pulls what is on a random ring around it (radius 0-3) a step closer
+//!   half the time and blasts a quarter of those tiles (heavy or devastating), throws the loose
+//!   objects within 2 at someone within 4 and blasts the anchored ones.
+//! - Hallucination: a hallucination pulse (radius 5, 50 s, up to 300 s) every 5 s, one of
+//!   radius 15 when it detonates; it comes with core-less decoys on 35% of the tiles around it,
+//!   which only drift and mislead analyzers.
+//!
+//! Every anomaly but a decoy holds an anomaly core (`anomaly_core`): a signaller on a random
+//! free frequency and code, which an analyzer reads off the anomaly. A signal on that
+//! frequency and code neutralizes it (`anomalyNeutralize`): the core drops (a typed
+//! `/obj/item/assembly/signaler/anomaly/*` on the same frequency and code) while the round's
+//! cap of that type (`MAX_CORES_*`) is not reached, an inert core otherwise.
 //!
 //! Cost: one anomaly at a time in practice; a process looks at the tiles within 4 (the
-//! gravitational one) every 2 s.
-// shortcut: no countdown, light, wibble filter or emissive overlay; no anomaly core and no
-// neutralizing by signaller or analyzer (science); explosions do not destroy anomalies; the
+//! gravitational one) every 2 s; a signal looks at the anomalies (a handful).
+// shortcut: no countdown, light, wibble filter or emissive overlay; no neutralization smoke;
+// explosions do not destroy anomalies; the cores' own `signal()` effects are not ported; the
 // gravitational one does not throw mobs (knockdown only) or check magboots; the pyroclastic
-// one makes no slime (no slimes or ghost polls); the bluespace one has no sparkle flash.
+// one makes no slime (no ghost polls); the bluespace one has no sparkle flash; the
+// hallucination pulse ignores line of sight (tg `visible_hallucination_pulse`).
 
 use std::collections::HashMap;
 
@@ -42,6 +55,8 @@ pub const FLUX: &str = "Anomaly: Hyper-Energetic Flux";
 pub const BLUESPACE: &str = "Anomaly: Bluespace";
 pub const GRAV: &str = "Anomaly: Gravitational";
 pub const PYRO: &str = "Anomaly: Pyroclastic";
+pub const VORTEX: &str = "Anomaly: Vortex";
+pub const HALLUCINATION: &str = "Anomaly: Hallucination";
 
 /// `ANOMALY_COUNTDOWN_TIMER`.
 const LIFESPAN_SECS: f64 = 120.0;
@@ -59,6 +74,26 @@ const COSMIC_ENERGY: &str = "sound/effects/magic/cosmic_energy.ogg";
 const BEACON: &str = "/obj/item/beacon";
 const EFFECT: &str = "/obj/effect";
 /// `/datum/anomaly_placer` `safe_area_types` and the subtypes that are not safe after all.
+/// `MIN_FREE_FREQ`, `MAX_FREE_FREQ`.
+const MIN_FREE_FREQ: i64 = 1201;
+const MAX_FREE_FREQ: i64 = 1599;
+const INERT_CORE: &str = "/obj/item/inert_anomaly";
+/// The hallucination anomaly's `messages`.
+const HALLUCINATION_MESSAGES: [&str; 4] = [
+    "Вы чувствуете, как ваш разум разваливается на части!",
+    "Реальность искажается вокруг вас!",
+    "Что-то шепчет вокруг вас!",
+    "Вы сходите с ума!",
+];
+/// The decoy's `report_text` (with `%TOOL%` for the analyzer).
+const DECOY_REPORTS: [&str; 6] = [
+    "нестабильное поле колеблется на частоте 9999999.99999, код 9999999.99999. Нет, нет, этого не может быть?",
+    "Он ничего не обнаруживает. Он ждёт ввода, будто вы направили его в пустоту. Что?",
+    "Ничего не происходит?",
+    "Он предлагает попробовать ещё раз, потому что вы всё делаете неправильно. Что?",
+    "Вам приходит в голову, что сканируемой аномалии на самом деле нет.",
+    "%TOOL% смотрит на вас с разочарованием: «Вы промахнулись мимо аномалии. Там ничего нет!»",
+];
 const SAFE_AREAS: [&str; 7] = [
     "/area/station/ai/satellite/chamber",
     "/area/station/ai/upload/chamber",
@@ -70,12 +105,14 @@ const SAFE_AREAS: [&str; 7] = [
 ];
 const UNSAFE_SUBTYPES: [&str; 1] = ["/area/station/engineering/break_room"];
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum AnomalyKind {
     Flux,
     Bluespace,
     Grav,
     Pyro,
+    Vortex,
+    Hallucination,
 }
 
 impl AnomalyKind {
@@ -85,6 +122,42 @@ impl AnomalyKind {
             Self::Bluespace => "/obj/effect/anomaly/bluespace",
             Self::Grav => "/obj/effect/anomaly/grav",
             Self::Pyro => "/obj/effect/anomaly/pyro",
+            Self::Vortex => "/obj/effect/anomaly/bhole",
+            Self::Hallucination => "/obj/effect/anomaly/hallucination",
+        }
+    }
+
+    /// `anomaly_core`.
+    pub fn core_path(self) -> &'static str {
+        match self {
+            Self::Flux => "/obj/item/assembly/signaler/anomaly/flux",
+            Self::Bluespace => "/obj/item/assembly/signaler/anomaly/bluespace",
+            Self::Grav => "/obj/item/assembly/signaler/anomaly/grav",
+            Self::Pyro => "/obj/item/assembly/signaler/anomaly/pyro",
+            Self::Vortex => "/obj/item/assembly/signaler/anomaly/vortex",
+            Self::Hallucination => "/obj/item/assembly/signaler/anomaly/hallucination",
+        }
+    }
+
+    /// `MAX_CORES_*` (`SSresearch.anomaly_hard_limit_by_type`).
+    pub fn max_cores(self) -> u32 {
+        match self {
+            Self::Bluespace | Self::Vortex => 3,
+            Self::Flux => 5,
+            Self::Grav => 6,
+            Self::Pyro | Self::Hallucination => 8,
+        }
+    }
+
+    fn desc(self) -> &'static str {
+        match self {
+            Self::Vortex => {
+                "That's a nice station you have there. It'd be a shame if something happened to it."
+            }
+            _ => {
+                "A mysterious anomaly, seen commonly only in the region of space that the station \
+                 orbits..."
+            }
         }
     }
 
@@ -94,6 +167,8 @@ impl AnomalyKind {
             Self::Bluespace => "bluespace anomaly",
             Self::Grav => "gravitational anomaly",
             Self::Pyro => "pyroclastic anomaly",
+            Self::Vortex => "vortex anomaly",
+            Self::Hallucination => "hallucination anomaly",
         }
     }
 
@@ -103,6 +178,8 @@ impl AnomalyKind {
             Self::Bluespace => ("icons/obj/weapons/guns/projectiles.dmi", "bluespace"),
             Self::Grav => ("icons/effects/effects.dmi", "shield2"),
             Self::Pyro => ("icons/effects/anomalies.dmi", "pyroclastic"),
+            Self::Vortex => ("icons/effects/anomalies.dmi", "vortex"),
+            Self::Hallucination => ("icons/effects/anomalies.dmi", "hallucination"),
         }
     }
 
@@ -113,8 +190,8 @@ impl AnomalyKind {
     /// The event's `start_when` and `announce_when` (`ANOMALY_*_TIME`, in fires).
     fn timing(self) -> (u32, u32) {
         match self {
-            Self::Bluespace => (3, 1),
-            Self::Flux | Self::Grav | Self::Pyro => (1, 15),
+            Self::Bluespace | Self::Hallucination => (3, 1),
+            Self::Flux | Self::Grav | Self::Pyro | Self::Vortex => (1, 15),
         }
     }
 }
@@ -131,9 +208,25 @@ pub struct Anomaly {
     next_process: f64,
     /// The flux's `canshock`, the gravitational one's `boing`.
     armed: bool,
-    /// The pyroclastic one's `ticks`: seconds towards the next gas release.
+    /// The pyroclastic and hallucination ones' `ticks`: seconds towards the next release.
     ticks: f64,
+    /// `anomaly_core`: the frequency and code that neutralize it (`None`: a decoy, or the
+    /// core is gone).
+    pub core: Option<CoreSignal>,
+    /// `/obj/effect/anomaly/hallucination/decoy`: drifts, misleads analyzers, nothing else.
+    pub decoy: bool,
 }
+
+/// The `frequency` and `code` of an anomaly's core signaller.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CoreSignal {
+    pub frequency: u16,
+    pub code: i32,
+}
+
+/// `SSresearch.created_anomaly_types`: cores of each type dropped this round.
+#[derive(Resource, Default, Debug)]
+pub struct CoresMade(pub HashMap<AnomalyKind, u32>);
 
 // --- Events -------------------------------------------------------------------------------
 
@@ -161,6 +254,14 @@ pub fn make_grav(_: &mut World) -> Box<dyn RoundEvent> {
 
 pub fn make_pyro(_: &mut World) -> Box<dyn RoundEvent> {
     event(AnomalyKind::Pyro)
+}
+
+pub fn make_vortex(_: &mut World) -> Box<dyn RoundEvent> {
+    event(AnomalyKind::Vortex)
+}
+
+pub fn make_hallucination(_: &mut World) -> Box<dyn RoundEvent> {
+    event(AnomalyKind::Hallucination)
 }
 
 impl RoundEvent for AnomalyEvent {
@@ -204,6 +305,18 @@ impl RoundEvent for AnomalyEvent {
                 world,
                 title,
                 &format!("Пирокластическая аномалия обнаружена на {HARMFUL_TEXT} {name}."),
+            ),
+            AnomalyKind::Vortex => super::priority_announce(
+                world,
+                title,
+                &format!(
+                    "Вихревая аномалия высокой интенсивности обнаружена на {HARMFUL_TEXT} {name}"
+                ),
+            ),
+            AnomalyKind::Hallucination => super::priority_announce(
+                world,
+                title,
+                &format!("Галлюцинаторное событие обнаружено на {MEDIUM_TEXT} {name}."),
             ),
         }
     }
@@ -265,13 +378,54 @@ fn valid_destination(world: &World, pos: TilePos) -> bool {
             .all(|&e| world.get::<Health>(e).is_some())
 }
 
-/// `new anomaly_path(pos)`.
+/// `new anomaly_path(pos)`; a hallucination anomaly brings its decoys (`generate_decoys`).
 pub fn spawn_anomaly(
     world: &mut World,
     kind: AnomalyKind,
     pos: TilePos,
     area: Option<Entity>,
 ) -> Entity {
+    let e = spawn_one(world, kind, pos, area, false);
+    if kind == AnomalyKind::Hallucination {
+        for dx in -1..=1 {
+            for dy in -1..=1 {
+                let at = TilePos::new(pos.x + dx, pos.y + dy, pos.z);
+                if (dx, dy) == (0, 0) || !world.resource::<SpatialIndex>().in_bounds(at) {
+                    continue;
+                }
+                let wall = turf_at(world, at).is_some_and(|t| world.get::<Density>(t).is_some());
+                if !wall && world.resource_mut::<EventRng>().0.prob(35.0) {
+                    spawn_one(world, kind, at, area, true);
+                }
+            }
+        }
+    }
+    e
+}
+
+/// tg `anomaly_core.code = rand(1, 100)` and `sanitize_frequency(rand(MIN_FREE_FREQ,
+/// MAX_FREE_FREQ), free = TRUE)` (odd, so never the even syndicate frequency).
+fn roll_core(world: &mut World) -> CoreSignal {
+    let rng = &mut world.resource_mut::<EventRng>().0;
+    let code = rng.range(1, 100) as i32;
+    let mut frequency = rng.range(MIN_FREE_FREQ, MAX_FREE_FREQ);
+    if frequency % 2 == 0 {
+        frequency += 1;
+    }
+    CoreSignal {
+        frequency: frequency.min(MAX_FREE_FREQ) as u16,
+        code,
+    }
+}
+
+fn spawn_one(
+    world: &mut World,
+    kind: AnomalyKind,
+    pos: TilePos,
+    area: Option<Entity>,
+    decoy: bool,
+) -> Entity {
+    let core = (!decoy).then(|| roll_core(world));
     let (dmi, state) = kind.icon();
     let icon = world
         .get_resource::<IconIndex>()
@@ -282,9 +436,7 @@ pub fn spawn_anomaly(
         Name::new(kind.path()),
         DmName {
             name: kind.name().to_owned(),
-            desc: "A mysterious anomaly, seen commonly only in the region of space that the \
-                   station orbits..."
-                .to_owned(),
+            desc: kind.desc().to_owned(),
         },
         pos,
         Appearance {
@@ -306,6 +458,8 @@ pub fn spawn_anomaly(
             next_process: now + PROCESS_SECS,
             armed: false,
             ticks: 0.0,
+            core,
+            decoy,
         },
     ));
     if kind.dense() {
@@ -342,7 +496,10 @@ pub(super) fn process_anomalies(world: &mut World) {
 
 /// `anomalyEffect(seconds_per_tick)`.
 fn anomaly_effect(world: &mut World, e: Entity, secs: f64) {
-    let Some((kind, move_chance)) = world.get::<Anomaly>(e).map(|a| (a.kind, a.move_chance)) else {
+    let Some((kind, move_chance, decoy)) = world
+        .get::<Anomaly>(e)
+        .map(|a| (a.kind, a.move_chance, a.decoy))
+    else {
         return;
     };
     // `SPT_PROB(move_chance, seconds_per_tick)`.
@@ -353,6 +510,9 @@ fn anomaly_effect(world: &mut World, e: Entity, secs: f64) {
     let Some(&pos) = world.get::<TilePos>(e) else {
         return;
     };
+    if decoy {
+        return;
+    }
     match kind {
         AnomalyKind::Flux => {
             arm(world, e);
@@ -383,6 +543,126 @@ fn anomaly_effect(world: &mut World, e: Entity, secs: f64) {
             a.ticks -= 10.0;
             spawn_air(world, pos, "o2=5;plasma=5;TEMP=1000");
         }
+        AnomalyKind::Vortex => vortex_effect(world, e, pos),
+        AnomalyKind::Hallucination => {
+            let Some(mut a) = world.get_mut::<Anomaly>(e) else {
+                return;
+            };
+            // `release_delay`.
+            a.ticks += secs;
+            if a.ticks < 5.0 {
+                return;
+            }
+            a.ticks -= 5.0;
+            crate::hallucination::hallucination_pulse(
+                world,
+                pos,
+                5,
+                50.0,
+                300.0,
+                &HALLUCINATION_MESSAGES,
+            );
+        }
+    }
+}
+
+/// tg `EXPLODE_*` force from `rand(lo, hi)` (0: none).
+fn severity_of(force: u32) -> Option<crate::explosions::wave::Severity> {
+    use crate::explosions::wave::Severity;
+    match force {
+        1 => Some(Severity::Light),
+        2 => Some(Severity::Heavy),
+        3 => Some(Severity::Devastate),
+        _ => None,
+    }
+}
+
+/// The vortex `anomalyEffect`: `grav(rand(0, 3), rand(2, 3), 50, 25)`, then the objects within
+/// 2: loose ones are thrown at the first conscious living thing within 4, anchored ones are
+/// blasted (`med_mov_atom`).
+fn vortex_effect(world: &mut World, e: Entity, pos: TilePos) {
+    let (r, force) = {
+        let rng = &mut world.resource_mut::<EventRng>().0;
+        (rng.range(0, 3) as i32, rng.range(2, 3) as u32)
+    };
+    let severity = severity_of(force);
+    // `grav()`: the ring of radius `r` (empty for 0: tg's `t < r` loop).
+    let mut ring = Vec::new();
+    for t in -r..r {
+        ring.push((pos.x + t, pos.y - r));
+        ring.push((pos.x - t, pos.y + r));
+        ring.push((pos.x + r, pos.y + t));
+        ring.push((pos.x - r, pos.y - t));
+    }
+    let mut blasted_turfs = Vec::new();
+    let mut blasted = Vec::new();
+    for (x, y) in ring {
+        let at = TilePos::new(x, y, pos.z);
+        if !world.resource::<SpatialIndex>().in_bounds(at) {
+            continue;
+        }
+        if world.resource_mut::<EventRng>().0.prob(50.0) {
+            let here: Vec<Entity> = world
+                .resource::<SpatialIndex>()
+                .on_tile(at)
+                .iter()
+                .copied()
+                .filter(|&t| t != e && world.get::<Turf>(t).is_none())
+                .collect();
+            for t in here {
+                let obj = world.get::<DmObj>(t).is_some() || world.get::<DmItem>(t).is_some();
+                if world.get::<Health>(t).is_some() || (obj && loose_obj(world, t)) {
+                    step_towards(world, t, pos);
+                } else if obj && anchored(world, t) {
+                    blasted.push(t);
+                }
+            }
+        }
+        if world.resource_mut::<EventRng>().0.prob(25.0) {
+            blasted_turfs.push(at);
+        }
+    }
+    // `for(var/obj/O in range(2, src))` (tg returns at itself, the intent is skipping it).
+    let target = world
+        .resource::<SpatialIndex>()
+        .in_radius(pos, 4)
+        .find(|&m| {
+            world.get::<Health>(m).is_some()
+                && world.get::<Stat>(m).is_some_and(|s| *s == Stat::Conscious)
+        })
+        .and_then(|m| world.get::<TilePos>(m).copied());
+    let near: Vec<Entity> = world
+        .resource::<SpatialIndex>()
+        .in_radius(pos, 2)
+        .filter(|&t| {
+            t != e
+                && world.get::<Turf>(t).is_none()
+                && world.get::<CarriedBy>(t).is_none()
+                && (world.get::<DmObj>(t).is_some() || world.get::<DmItem>(t).is_some())
+                && world.get::<Health>(t).is_none()
+                && path_of(world, t).is_none_or(|p| !is_under(&p, EFFECT))
+        })
+        .collect();
+    for t in near {
+        if !anchored(world, t) {
+            if let Some(to) = target {
+                crate::throw::throw_at(world, t, to, 7, 5.0);
+            }
+        } else {
+            blasted.push(t);
+        }
+    }
+    if !blasted.is_empty() {
+        crate::explosions::queue_movables(
+            world,
+            &blasted,
+            crate::explosions::wave::Severity::Heavy,
+        );
+    }
+    if let Some(severity) = severity
+        && !blasted_turfs.is_empty()
+    {
+        crate::explosions::queue_turfs(world, &blasted_turfs, severity);
     }
 }
 
@@ -631,6 +911,9 @@ fn detonate(world: &mut World, e: Entity) {
         return;
     };
     let (kind, area) = (a.kind, a.area);
+    if a.decoy {
+        return;
+    }
     match kind {
         AnomalyKind::Flux => {
             world.write_message(crate::emp::Empulse {
@@ -652,7 +935,151 @@ fn detonate(world: &mut World, e: Entity) {
             bluespace_mass_teleport(world, area);
         }
         AnomalyKind::Pyro => spawn_air(world, pos, "o2=500;plasma=500;TEMP=1000"),
+        AnomalyKind::Vortex => crate::sound::playsound(
+            world,
+            crate::sound::PlaySound::new(
+                pos,
+                "sound/effects/hallucinations/far_noise.ogg",
+                50.0,
+                false,
+            ),
+        ),
+        AnomalyKind::Hallucination => crate::hallucination::hallucination_pulse(
+            world,
+            pos,
+            15,
+            50.0,
+            300.0,
+            &HALLUCINATION_MESSAGES,
+        ),
     }
+}
+
+// --- Neutralization -----------------------------------------------------------------------
+
+/// A signaller sent `code` on `frequency` (`post_signal`): every anomaly whose core listens
+/// there is neutralized (the core's `receive_signal`). `range`: the sender's tile and range on
+/// its level (low-range signallers), `None` everywhere.
+pub fn signal_received(
+    world: &mut World,
+    frequency: u16,
+    code: i32,
+    range: Option<(TilePos, u32)>,
+) {
+    let mut q = world.query::<(Entity, &Anomaly, &TilePos)>();
+    let hit: Vec<Entity> = q
+        .iter(world)
+        .filter(|(_, a, pos)| {
+            a.core == Some(CoreSignal { frequency, code })
+                && range.is_none_or(|(from, r)| from.chebyshev(**pos).is_some_and(|d| d <= r))
+        })
+        .map(|(e, ..)| e)
+        .collect();
+    for e in hit {
+        neutralize(world, e);
+    }
+}
+
+/// `anomalyNeutralize()`: the core drops while the round's cap of its type allows, an inert
+/// core with a warning otherwise; the anomaly is gone.
+pub fn neutralize(world: &mut World, e: Entity) {
+    let (Some(&pos), Some(a)) = (world.get::<TilePos>(e), world.get::<Anomaly>(e)) else {
+        return;
+    };
+    let (kind, core) = (a.kind, a.core);
+    world.despawn(e);
+    let Some(core) = core else {
+        return;
+    };
+    let available = {
+        let mut made = world.get_resource_or_insert_with(CoresMade::default);
+        let n = made.0.entry(kind).or_default();
+        let ok = *n < kind.max_cores();
+        if ok {
+            *n += 1;
+        }
+        ok
+    };
+    if !available {
+        let clients = crate::chem::clients_near(world, pos, None);
+        if !clients.is_empty() {
+            world.write_message(ss13_net::chat::server::SendChat {
+                clients,
+                message: crate::chem::line(
+                    ss13_shared::chat::Span::Warning,
+                    "Ядро аномалии тускнеет, падая на пол: для ещё одного ядра этого типа \
+                     слишком мало фоновой энергии.",
+                ),
+            });
+        }
+        crate::construction::spawn_obj(world, INERT_CORE, pos);
+        return;
+    }
+    let Some(item) = crate::construction::spawn_obj(world, kind.core_path(), pos) else {
+        return;
+    };
+    world.flush();
+    if let Some(mut asm) = world.get_mut::<crate::assemblies::server::Assembly>(item)
+        && let crate::assemblies::server::Device::Signaler {
+            frequency, code, ..
+        } = &mut asm.device
+    {
+        *frequency = core.frequency;
+        *code = core.code;
+    }
+}
+
+/// tg `analyzer_act` of an anomaly (or of an anomaly core): its core's frequency and code.
+/// True when `target` is one.
+pub fn analyzer_act(world: &mut World, client: Entity, tool: Entity, target: Entity) -> bool {
+    use ss13_shared::chat::Span;
+    if !crate::atmos::is_analyzer(world, tool) {
+        return false;
+    }
+    let name = crate::chem::name_of(world, target);
+    let tool_name = crate::chem::name_of(world, tool);
+    if let Some(a) = world.get::<Anomaly>(target) {
+        let text = if a.decoy {
+            let i = (target.to_bits() % DECOY_REPORTS.len() as u64) as usize;
+            format!(
+                "Вы включаете {tool_name}. {}",
+                DECOY_REPORTS[i].replace("%TOOL%", &tool_name)
+            )
+        } else if let Some(core) = a.core {
+            format!(
+                "Анализ... нестабильное поле {name} колеблется на частоте {}, код {}.",
+                crate::assemblies::format_frequency(core.frequency),
+                core.code
+            )
+        } else {
+            format!("Анализ... нестабильное поле {name} не колеблется на стабильной частоте.")
+        };
+        crate::tools::tell(world, client, Span::Notice, text);
+        return true;
+    }
+    let core =
+        path_of(world, target).is_some_and(|p| is_under(&p, "/obj/item/assembly/signaler/anomaly"));
+    if !core {
+        return false;
+    }
+    let Some(crate::assemblies::server::Device::Signaler {
+        frequency, code, ..
+    }) = world
+        .get::<crate::assemblies::server::Assembly>(target)
+        .map(|a| a.device.clone())
+    else {
+        return false;
+    };
+    crate::tools::tell(
+        world,
+        client,
+        Span::Notice,
+        format!(
+            "Анализ... стабилизированное поле {name} колеблется на частоте {}, код {code}.",
+            crate::assemblies::format_frequency(frequency)
+        ),
+    );
+    true
 }
 
 fn cosmic_sound(world: &mut World, pos: TilePos) {

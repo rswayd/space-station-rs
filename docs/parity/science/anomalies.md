@@ -6,7 +6,7 @@
 `/obj/effect/anomaly` — движущийся по станции эффект с таймером: по истечении детонирует; сигналер, настроенный на частоту/код ядра (видны анализатором), нейтрализует её и оставляет ядро. Неисследованные ядра ограничены числом на раунд.
 
 - **Код:** [`/obj/effect/anomaly`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/anomalies/_anomalies.dm#L2), [`proc/anomalyEffect()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/anomalies/_anomalies.dm#L80), [`proc/detonate()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/anomalies/_anomalies.dm#L90), [`proc/anomalyNeutralize()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/anomalies/_anomalies.dm#L100)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/events/anomalies.rs` `Anomaly`: дрейф 45%/с, `anomalyEffect` раз в 2 с (`SSobj`), детонация через 120 с; нет нейтрализации сигналером, анализатора, ядер, отсчёта, света и стабилизации (поле `move_chance` есть)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/events/anomalies.rs` `Anomaly`: дрейф 45%/с, `anomalyEffect` раз в 2 с (`SSobj`), детонация через 120 с; ядро-сигналер со случайной свободной частотой (нечётной) и кодом, анализатор показывает их на аномалии и ядре (`analyzer_act`), сигнал с этими частотой и кодом (`assemblies::server::signal`, с учётом дальности) нейтрализует её (`anomalyNeutralize`): выпадает ядро её типа на той же частоте, пока не исчерпан лимит раунда `MAX_CORES_*` (`CoresMade`), иначе инертное ядро с предупреждением; нет дыма при нейтрализации, отсчёта, света и стабилизации (поле `move_chance` есть)
 
 _«События появления аномалий» описано в [../events/anomaly-events.md](../events/anomaly-events.md)._
 
@@ -14,7 +14,7 @@ _«События появления аномалий» описано в [../ev
 Выбрасывает горячую плазму и поджигает окружение; при детонации — слайм-пиромонстр.
 
 - **Код:** [`/obj/effect/anomaly/pyro`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/anomalies/anomalies_pyroclastic.dm#L2)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/events/anomalies.rs`: 5 моль O2 и плазмы при 1000 K каждые 10 с, при детонации по 500 моль; нет пирослайма (нет слаймов и опроса призраков)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/events/anomalies.rs`: 5 моль O2 и плазмы при 1000 K каждые 10 с, при детонации по 500 моль; нет пирослайма (слаймы есть — `crate::science::xenobio`, нет опроса призраков)
 
 ### Гравитационная аномалия
 Притягивает и швыряет предметы и людей; высокогравитационный вариант меняет гравитацию вокруг.
@@ -38,7 +38,7 @@ _«События появления аномалий» описано в [../ev
 Засасывает и уничтожает объекты, рушит конструкции вокруг.
 
 - **Код:** [`/obj/effect/anomaly/bhole`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/anomalies/anomalies_vortex.dm#L2)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/events/anomalies.rs` (`vortex_effect`): каждые 2 с кольцо радиуса 0–3 — 50% подтянуть незакреплённое и мобов на шаг, 25% тайлов в очередь взрыва (тяжёлый/опустошающий, `explosions::queue_turfs`); незакреплённые объекты в радиусе 2 бросаются в ближайшего живого в радиусе 4, закреплённые — под тяжёлый взрыв; детонация — звук `far_noise`; событие Vortex (вес 10, мин. 20 игроков, до 2 раз); нет визуальной волны `circle_wave`
 
 ### Биоскрамблер
 Заменяет конечности людей рядом на чужие.
@@ -50,7 +50,7 @@ _«События появления аномалий» описано в [../ev
 Вызывает галлюцинации у находящихся рядом; есть ложные копии.
 
 - **Код:** [`/obj/effect/anomaly/hallucination`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/anomalies/anomalies_hallucination.dm#L2)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/events/anomalies.rs`: импульс галлюцинаций (радиус 5, 50 с, до 300 с) каждые 5 с, при детонации радиус 15, с фразами; 35% соседних тайлов — ложные копии без ядра, которые только дрейфуют и выдают анализатору бессмыслицу; событие Hallucination (вес 20, до 5 раз); импульс без проверки прямой видимости (`visible_hallucination_pulse`), нет волнистого фильтра
 
 ### Пространственная (dimensional) аномалия
 Перекрашивает и трансмутирует тайлы вокруг в одну из тем (золото, плазма, клоун, ...).
@@ -75,7 +75,7 @@ _«События появления аномалий» описано в [../ev
 Ядро — сигналер особого типа (10 видов): используется в рефракторах/модулях MOD, оружии и броне; может быть активировано сигналом.
 
 - **Код:** [`/obj/item/assembly/signaler/anomaly`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/anomaly/anomaly_core.dm#L2)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/events/anomalies.rs` (`neutralize`, `analyzer_act`): ядро — сигналер `/obj/item/assembly/signaler/anomaly/<тип>` на частоте и коде своей аномалии, анализатор показывает их; лимит ядер на раунд; нет собственных эффектов ядер при сигнале (`signal()`: огонь, притяжение, разряд, телепорт, вихрь), рефракторов, модулей и оружия с ядрами
 
 ### Сырые ядра и рефайнери аномалий
 Сырое ядро (заказывается в карго) помещается в рефайнери вместе с ТТВ-бомбой; при достаточном радиусе взрыва получается готовое ядро.

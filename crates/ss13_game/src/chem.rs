@@ -1853,6 +1853,17 @@ pub(crate) fn refresh_container(world: &mut World, chem: &Chemistry, e: Entity) 
         {
             reagent_emps(world, chem, e, &reacted);
         }
+        // Slime extracts: their uses and `on_reaction` effects (`crate::science::xenobio`).
+        if !reacted.is_empty()
+            && world
+                .get::<crate::science::xenobio::SlimeExtract>(e)
+                .is_some()
+        {
+            crate::science::xenobio::extract_reacted(world, chem, e, &reacted);
+            if world.get_entity(e).is_err() {
+                return;
+            }
+        }
         let reacting = holder(world, e).is_some_and(|h| h.is_reacting);
         match (reacting, world.get::<Reacting>(e).is_some()) {
             (true, false) => {

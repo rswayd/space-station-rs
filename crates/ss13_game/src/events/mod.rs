@@ -258,6 +258,15 @@ pub fn controls() -> Vec<EventControl> {
         ),
         c(anomalies::GRAV, 25, 20.0, 1, 5, anomalies::make_grav),
         c(anomalies::PYRO, 20, 20.0, 1, 5, anomalies::make_pyro),
+        c(anomalies::VORTEX, 10, 20.0, 20, 2, anomalies::make_vortex),
+        c(
+            anomalies::HALLUCINATION,
+            20,
+            20.0,
+            10,
+            5,
+            anomalies::make_hallucination,
+        ),
         unfakeable(c(
             mass_hallucination::NAME,
             10,
@@ -319,7 +328,14 @@ pub struct EventsServerPlugin;
 
 impl Plugin for EventsServerPlugin {
     fn build(&self, app: &mut App) {
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // tg `analyzer_act` of anomalies and anomaly cores: their frequency and code.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 5090, |w, c| {
+            c.held
+                .is_some_and(|h| anomalies::analyzer_act(w, c.client, h, c.target))
+        });
         app.init_resource::<EventsConfig>()
+            .init_resource::<anomalies::CoresMade>()
             .init_resource::<grid_check::GridCheckCooldown>()
             .add_systems(Startup, controller::init_events)
             .add_systems(

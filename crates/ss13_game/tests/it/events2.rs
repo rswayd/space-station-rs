@@ -315,3 +315,35 @@ fn anomalies_pull_knock_down_and_detonate() {
     assert!(world.get_entity(flux).is_err(), "detonated");
     assert!(world.get_entity(grav).is_ok());
 }
+
+/// A signal on another code leaves an anomaly alone; its core's frequency and code neutralize
+/// it and count a core of its type for the round (`anomalyNeutralize`); a decoy has no core.
+#[test]
+fn signaller_neutralizes_anomaly() {
+    use ss13_game::events::anomalies::{CoresMade, signal_received};
+    let mut app = server("neutralize");
+    let world = app.world_mut();
+    let grav = spawn_anomaly(world, AnomalyKind::Grav, TilePos::new(8, 2, 1), None);
+    world.get_mut::<Anomaly>(grav).unwrap().move_chance = 0.0;
+    let core = world.get::<Anomaly>(grav).unwrap().core.expect("a core");
+    assert_eq!(core.frequency % 2, 1, "odd free frequency");
+    assert!((1201..=1599).contains(&core.frequency));
+    assert!((1..=100).contains(&core.code));
+
+    signal_received(world, core.frequency, core.code % 100 + 1, None);
+    assert!(world.get_entity(grav).is_ok(), "wrong code");
+    // Out of a low-range signaller's reach.
+    signal_received(
+        world,
+        core.frequency,
+        core.code,
+        Some((TilePos::new(30, 30, 1), 5)),
+    );
+    assert!(world.get_entity(grav).is_ok(), "out of range");
+    signal_received(world, core.frequency, core.code, None);
+    assert!(world.get_entity(grav).is_err(), "neutralized");
+    assert_eq!(
+        world.resource::<CoresMade>().0.get(&AnomalyKind::Grav),
+        Some(&1)
+    );
+}
