@@ -371,6 +371,8 @@ pub mod reinforced;
 #[cfg(feature = "server")]
 pub mod rest;
 #[cfg(feature = "server")]
+pub mod restaurant;
+#[cfg(feature = "server")]
 pub mod restraints;
 #[cfg(feature = "server")]
 pub mod round;

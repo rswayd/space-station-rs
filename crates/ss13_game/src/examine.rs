@@ -69,6 +69,7 @@ pub fn examine_lines(world: &World, examiner: Entity, target: Entity) -> (String
     let mut lines = Vec::new();
     if world.get::<crate::mobs::BasicMob>(target).is_some() {
         crate::mobs::examine_lines(world, target, &mut lines);
+        crate::restaurant::examine_lines(world, target, &mut lines);
         return (name, lines);
     }
     if world.get::<Health>(target).is_some() {

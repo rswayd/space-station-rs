@@ -322,7 +322,7 @@ pub const EVENT_RUNTIME_TYPES: &[&str] = &[
 pub fn runtime_types() -> BTreeSet<&'static str> {
     use crate::{antag, atmos_machine, cargo, mobs, service, silicon};
     let mut out = BTreeSet::new();
-    let tables: [&[&'static str]; 24] = [
+    let tables: [&[&'static str]; 25] = [
         &crate::RUNTIME_TYPES,
         &crate::RUNTIME_CONTAINER_TYPES,
         &crate::CONSTRUCTION_TYPES,
@@ -336,6 +336,7 @@ pub fn runtime_types() -> BTreeSet<&'static str> {
         &antag::HERETIC_RUNTIME_TYPES,
         &antag::WIZARD_RUNTIME_TYPES,
         &mobs::MOB_RUNTIME_TYPES,
+        &crate::restaurant::RESTAURANT_RUNTIME_TYPES,
         &silicon::CAMERA_RUNTIME_TYPES,
         &silicon::SILICON_TYPES,
         // The chaplain's gear, the null rod's forms and what rites make (`ss13_game::service`).

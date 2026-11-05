@@ -136,6 +136,19 @@ pub mod events {
         -15.0,
         0.0,
     );
+    // food_events.dm
+    pub const GROSS_FOOD: MoodEvent = ev(
+        "gross_food",
+        "Мне очень не понравилась эта еда.",
+        -2.0,
+        240.0,
+    );
+    pub const DISGUSTING_FOOD: MoodEvent = ev(
+        "disgusting_food",
+        "Эта еда была отвратительна!",
+        -6.0,
+        240.0,
+    );
     // generic_positive_events.dm
     pub const HUG: MoodEvent = ev("hug", "Люблю обнимашки.", 1.0, 120.0);
     pub const WARMHUG: MoodEvent = ev(
@@ -592,6 +605,48 @@ pub fn add_event(world: &mut World, mob: Entity, category: &str, event: &MoodEve
     if let Some(mut mood) = world.get_mut::<Mood>(mob) {
         mood.add_event(now, category, event);
     }
+}
+
+/// tg `/datum/mood_event/food` (`quality_food`) of a food of `quality` (1-7): `ceil(1 + 1.5 *
+/// quality)` for 5 minutes times `timeout_mod`; another one keeps the stronger change and the
+/// longer time (`be_refreshed`).
+// shortcut: no personalities (ascetic, gourmand).
+pub fn add_food_event(world: &mut World, mob: Entity, quality: i32, label: &str, timeout_mod: f32) {
+    const CATEGORY: &str = "quality_food";
+    const ID: &str = "food";
+    const TIMEOUT: f32 = 300.0;
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    let Some(mut mood) = world.get_mut::<Mood>(mob) else {
+        return;
+    };
+    let change = (1.0 + 1.5 * quality as f32).ceil();
+    if let Some(existing) = mood
+        .events
+        .iter_mut()
+        .find(|e| e.category == CATEGORY && e.id == ID)
+    {
+        existing.timeout = existing.timeout.max(TIMEOUT * timeout_mod);
+        if change > existing.mood_change {
+            existing.mood_change = change;
+            existing.description = format!("Эта еда была {label}.");
+        }
+        existing.expires = Some(now + f64::from(existing.timeout));
+        mood.update_mood();
+        return;
+    }
+    mood.add_instance(
+        now,
+        ActiveMood {
+            category: CATEGORY.to_owned(),
+            id: ID,
+            description: format!("Эта была {label} пища."),
+            mood_change: change,
+            timeout: TIMEOUT * timeout_mod,
+            expires: None,
+            hidden: false,
+            stacks: false,
+        },
+    );
 }
 
 /// tg `clear_mood_event` on `mob`.
@@ -1066,6 +1121,29 @@ mod tests {
         assert!(mood.clear_event("nutrition"));
         assert!(!mood.clear_event("nutrition"));
         assert_eq!((mood.mood, mood.mood_level), (0.0, 5));
+    }
+
+    #[test]
+    fn food_moodlets_keep_the_best() {
+        let mut world = World::new();
+        world.init_resource::<Time>();
+        let mob = world.spawn(Mood::default()).id();
+        add_food_event(&mut world, mob, 2, "хорошая", 1.0);
+        let get = |world: &World| {
+            world
+                .get::<Mood>(mob)
+                .unwrap()
+                .get("quality_food")
+                .unwrap()
+                .clone()
+        };
+        let e = get(&world);
+        assert_eq!((e.mood_change, e.expires), (4.0, Some(300.0)));
+        // A worse one refreshes: the stronger change stays, the longer time wins.
+        add_food_event(&mut world, mob, 1, "приличная", 2.0);
+        let e = get(&world);
+        assert_eq!((e.mood_change, e.timeout), (4.0, 600.0));
+        assert_eq!(world.get::<Mood>(mob).unwrap().mood, 4.0);
     }
 
     #[test]

@@ -29,9 +29,25 @@ pub const HOLOSIGN: &str = "/obj/structure/holosign";
 const BARRIER: &str = "/obj/structure/holosign/barrier";
 const ATMOS_PROJECTOR: &str = "/obj/item/holosign_creator/atmos";
 const PROJECTOR: &str = "/obj/item/holosign_creator";
+/// `robot_seat`: no clearing in hand (`attack_self` returns), no swatting its seats.
+const SEAT_PROJECTOR: &str = "/obj/item/holosign_creator/robot_seat";
+const ROBOT_SEAT: &str = "/obj/structure/holosign/robot_seat";
 
 /// (projector, `holosign_type`, `creation_time` ds, `max_signs`), subtypes before the base.
-const PROJECTORS: [(&str, &str, f32, usize); 7] = [
+const PROJECTORS: [(&str, &str, f32, usize); 9] = [
+    // The restaurant's and the bar's seats (`crate::restaurant`).
+    (
+        "/obj/item/holosign_creator/robot_seat/restaurant",
+        "/obj/structure/holosign/robot_seat/restaurant",
+        10.0,
+        10,
+    ),
+    (
+        "/obj/item/holosign_creator/robot_seat/bar",
+        "/obj/structure/holosign/robot_seat/bar",
+        10.0,
+        10,
+    ),
     (
         "/obj/item/holosign_creator/janibarrier",
         "/obj/structure/holosign/barrier/wetsign",
@@ -278,6 +294,12 @@ pub fn attack_self(world: &mut World, client: Entity, item: Entity) -> bool {
     if projector_of(world, item).is_none() {
         return false;
     }
+    if world
+        .get::<DmItem>(item)
+        .is_some_and(|i| is_under(&i.path, SEAT_PROJECTOR))
+    {
+        return true;
+    }
     let signs = live_signs(world, item);
     if signs.is_empty() {
         return true;
@@ -295,7 +317,7 @@ pub fn attack_self(world: &mut World, client: Entity, item: Entity) -> bool {
 pub fn attack_hand(world: &mut World, mob: Entity, target: Entity) -> bool {
     let sign = world
         .get::<DmObj>(target)
-        .is_some_and(|o| is_under(&o.path, HOLOSIGN));
+        .is_some_and(|o| is_under(&o.path, HOLOSIGN) && !is_under(&o.path, ROBOT_SEAT));
     if !sign {
         return false;
     }

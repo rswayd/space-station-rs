@@ -282,6 +282,8 @@ pub enum Behavior {
     EatFood,
     /// A bot leaf (`crate::bots::ai`).
     Bot(crate::bots::ai::BotLeaf),
+    /// A robot customer leaf (`crate::restaurant`).
+    Customer(crate::restaurant::CustomerLeaf),
 }
 
 impl Behavior {
@@ -461,11 +463,16 @@ impl Behavior {
                 SUCCEED
             }
             Self::Bot(ref mut leaf) => leaf.perform(ctx),
+            Self::Customer(ref mut leaf) => leaf.perform(ctx),
         }
     }
 
     pub fn finish(&mut self, ctx: &mut AiCtx, succeeded: bool) {
         if let Self::Bot(leaf) = self {
+            leaf.finish(ctx, succeeded);
+            return;
+        }
+        if let Self::Customer(leaf) = self {
             leaf.finish(ctx, succeeded);
             return;
         }
