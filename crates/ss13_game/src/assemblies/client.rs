@@ -130,7 +130,7 @@ impl ClientUi for SignalerUi {
                 false,
             )))
             .collect();
-        let send = plain("arrow-up", "Send Signal", acts::SIGNAL, false);
+        let send = vec![plain("arrow-up", "Send Signal", acts::SIGNAL, false)];
         bsn! {
             @WindowContent
             Children [
