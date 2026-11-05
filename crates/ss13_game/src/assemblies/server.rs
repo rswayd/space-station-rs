@@ -1073,6 +1073,13 @@ pub fn signal(world: &mut World, a: Entity) {
     else {
         return;
     };
+    post_signal(world, a, frequency, code, range);
+}
+
+/// `radio_connection.post_signal(source, signal)` on the signaler band: every signaler on
+/// `frequency` but `source` (within `range` tiles on the same level, when it is not 0) receives
+/// the code. Also sent by the PDA's SignalCommander (`crate::modpc`).
+pub fn post_signal(world: &mut World, a: Entity, frequency: u16, code: i32, range: u32) {
     let from = crate::explosions::turf_of(world, a);
     if range > 0 && from.is_none() {
         return;

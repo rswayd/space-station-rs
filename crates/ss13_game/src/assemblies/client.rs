@@ -3,6 +3,7 @@
 // shortcut: the number inputs are step buttons (as the radio's tuner); the signaler's
 // frequency and code are sent as the stepped values.
 
+use bevy::scene::EntityScene;
 use ss13_tgui::client::{AppTguiClientExt, ClientUi};
 use ss13_ui_kit::prelude::*;
 
@@ -77,6 +78,18 @@ impl ClientUi for SignalerUi {
     const HEIGHT: f32 = 160.0;
 
     fn content(_: &(), data: &SignalerData) -> impl Scene {
+        let section = EntityScene(signaler_section(data));
+        bsn! {
+            @WindowContent
+            Children [ {section} ]
+        }
+    }
+}
+
+/// `SignalerContent`: frequency and code with their steps, and the send button (also the PDA's
+/// SignalCommander, `crate::modpc`).
+pub fn signaler_section(data: &SignalerData) -> impl Scene + use<> {
+    {
         let freq_text = format_frequency(data.frequency);
         let code_text = data.code.to_string();
         let freq: Vec<_> = [-10i32, -2, 2, 10]
@@ -132,26 +145,23 @@ impl ClientUi for SignalerUi {
             .collect();
         let send = vec![plain("arrow-up", "Send Signal", acts::SIGNAL, false)];
         bsn! {
-            @WindowContent
+            @Section
             Children [
-                @Section
+                @LabeledList
                 Children [
-                    @LabeledList
-                    Children [
-                        @LabeledListItem { @label: "Frequency", @content: freq_text }
-                        --
-                        @LabeledListItem { @label: "Code", @content: code_text }
-                    ]
+                    @LabeledListItem { @label: "Frequency", @content: freq_text }
                     --
-                    Node { flex_direction: FlexDirection::Row, margin: UiRect::top(px(4)) }
-                    Children [ {freq} ]
-                    --
-                    Node { flex_direction: FlexDirection::Row, margin: UiRect::top(px(4)) }
-                    Children [ {code} ]
-                    --
-                    Node { margin: UiRect::top(px(4)) }
-                    Children [ {send} ]
+                    @LabeledListItem { @label: "Code", @content: code_text }
                 ]
+                --
+                Node { flex_direction: FlexDirection::Row, margin: UiRect::top(px(4)) }
+                Children [ {freq} ]
+                --
+                Node { flex_direction: FlexDirection::Row, margin: UiRect::top(px(4)) }
+                Children [ {code} ]
+                --
+                Node { margin: UiRect::top(px(4)) }
+                Children [ {send} ]
             ]
         }
     }

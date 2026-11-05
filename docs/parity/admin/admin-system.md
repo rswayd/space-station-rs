@@ -17,7 +17,7 @@
 `ADMIN_VERB` регистрирует ~380 вербов по категориям (Main, Game, Fun, Events, Server, Debug, Mapping, Shuttle, Profile...), скрытие вербов; TGUI-панель «Admin Verb Panel» с поиском и выбором цели.
 
 - **Код:** [`/datum/admin_verb`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/verb_datums/_admin_verb_datum.dm#L8), [`/datum/admin_verb_panel`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/admin_verb_panel.dm#L12), [`admin_verbs.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/admin_verbs.dm#L1)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_admin`: фиксированный набор вербов в админ-панели (egui, F7) с кнопками по правам; нет ~380 вербов, категорий и поиска TGUI-панели
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_admin`: фиксированный набор вербов в админ-панели (egui, F7) с кнопками по правам; нет ~380 вербов, категорий и поиска TGUI-панели; нет админ-режима меню языков (выдать/забрать язык моба, omnitongue — перенесено из `ui/languages.md`, окно `crates/ss13_game/src/language_menu.rs`)
 
 ### Админ-чаты
 ASay (админы), MSay (менторы, BandaStation), DSay (в мёртвый чат), Announce (всем игрокам), админ-уведомление (adminnotice).

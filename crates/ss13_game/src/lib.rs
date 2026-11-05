@@ -293,6 +293,9 @@ pub mod keycard;
 pub mod keycard_client;
 #[cfg(feature = "server")]
 pub mod kitchen;
+pub mod language_menu;
+#[cfg(feature = "client")]
+pub mod language_menu_client;
 pub mod lobby;
 #[cfg(feature = "client")]
 pub mod lobby_client;

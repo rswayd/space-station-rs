@@ -1,6 +1,8 @@
 //! Client half of the PDA: the NtOS window (tg `NtosWindow` with `NtosMain`, `NtosMessenger`,
-//! `NtosNotepad`, `NtosCrewManifest`, `NtosGasAnalyzer`).
+//! `NtosNotepad`, `NtosCrewManifest`, `NtosGasAnalyzer`, `NtosCard`, `NtosStationAlertConsole`,
+//! `NtosRecords`, `NtosSignaler`, `NtosStatus`).
 // shortcut: one window size for every screen (tg sizes each interface), no device themes, no
+// search field in the records (local input state does not re-render the view), no
 // photos or search field in the messenger, Enter sends (no send button: buttons carry fixed
 // params, the text is the input's), no "beginning of chat" divider or auto-scroll to the bottom.
 
@@ -44,6 +46,20 @@ fn view(data: &NtosData, local: &UiLocalState) -> impl Scene + use<> {
             NtosScreen::CrewManifest(m) => Box::new(EntityScene(manifest_screen(m))),
             NtosScreen::GasAnalyzer(g) => Box::new(EntityScene(gas_screen(g))),
             NtosScreen::Card(c) => Box::new(EntityScene(card_screen(c, local))),
+            NtosScreen::Alarms(a) => Box::new(EntityScene(alarms_screen(a))),
+            NtosScreen::SecRecords(r) => Box::new(EntityScene(security_records_screen(r))),
+            NtosScreen::MedRecords(r) => Box::new(EntityScene(medical_records_screen(r))),
+            NtosScreen::Signaler(d) => {
+                Box::new(EntityScene(crate::assemblies::client::signaler_section(d)))
+            }
+            NtosScreen::Status(d) => {
+                Box::new(EntityScene(crate::comms_client::status_display_controls(
+                    &d.upper_text,
+                    &d.lower_text,
+                    d.max_status_line_length as usize,
+                    local,
+                )))
+            }
         };
         bsn! {
             @WindowContent
@@ -634,6 +650,108 @@ fn gas_screen(mixes: &[GasMix]) -> impl Scene + use<> {
         @Section { @title: "AtmoZphere", @fill: true, @scrollable: true }
         Children [ {empty} -- {sections} ]
     }
+}
+
+/// `NtosStationAlertConsole`: `StationAlertContent` without cameras.
+fn alarms_screen(data: &crate::silicon::ui::StationAlertData) -> impl Scene + use<> {
+    let sections = crate::silicon::client::alert_sections(data);
+    bsn! {
+        @Section { @fill: true, @scrollable: true } Children [ {sections} ]
+    }
+}
+
+/// `NtosRecords`' heading.
+const RECORDS_TITLE: &str = "КАДРОВЫЕ ДОКУМЕНТЫ NANOTRASEN (СЕКРЕТНО)";
+
+/// A record's section: the bold name with the user icon, then its lines.
+fn record_section(name: &str, lines: Vec<String>) -> impl Scene + use<> {
+    let name = name.to_owned();
+    let lines: Vec<_> = lines
+        .into_iter()
+        .map(|line| bsn! { Node Children [ Text(line) ] })
+        .collect();
+    bsn! {
+        @Section
+        Children [
+            Node {
+                flex_direction: FlexDirection::Row,
+                column_gap: px(6),
+                margin: UiRect::bottom(px(4)),
+            }
+            Children [
+                @Icon { @name: "user" }
+                --
+                Node Propagate::<Bold>(Bold(true)) Children [ Text(name) ]
+            ]
+            --
+            Node { flex_direction: FlexDirection::Column }
+            Children [ {lines} ]
+        ]
+    }
+}
+
+fn records_screen(sections: Vec<Box<dyn SceneList>>) -> impl Scene + use<> {
+    let title = RECORDS_TITLE.to_owned();
+    bsn! {
+        @Section { @fill: true, @scrollable: true }
+        Children [
+            Node { justify_content: JustifyContent::Center, margin: UiRect::bottom(px(6)) }
+            Children [ Text(title) ]
+            --
+            {sections}
+        ]
+    }
+}
+
+/// `NtosRecords` in `security` mode.
+fn security_records_screen(records: &[SecurityRow]) -> impl Scene + use<> {
+    let sections: Vec<Box<dyn SceneList>> = records
+        .iter()
+        .map(|r| -> Box<dyn SceneList> {
+            let wanted = if r.wanted.is_empty() {
+                "DELETED"
+            } else {
+                r.wanted.as_str()
+            };
+            Box::new(EntityScene(record_section(
+                &r.name,
+                vec![
+                    format!("Должность: {}", r.rank),
+                    format!("Вид: {}", r.species),
+                    format!("Пол: {}", r.gender),
+                    format!("Возраст: {}", r.age),
+                    format!("Хэш отпечатков пальцев: {}", r.fingerprint),
+                    String::new(),
+                    format!("Криминальный статус: {wanted}"),
+                ],
+            )))
+        })
+        .collect();
+    records_screen(sections)
+}
+
+/// `NtosRecords` in `medical` mode: the disabilities are `<br>`-separated lists.
+fn medical_records_screen(records: &[MedicalRow]) -> impl Scene + use<> {
+    let bullets = |text: &str| -> Vec<String> {
+        text.split("<br>")
+            .filter(|e| !e.is_empty())
+            .map(|e| format!("• {e}"))
+            .collect()
+    };
+    let sections: Vec<Box<dyn SceneList>> = records
+        .iter()
+        .map(|r| -> Box<dyn SceneList> {
+            let mut lines = vec![format!("Тип крови: {}", r.bloodtype)];
+            lines.push("Незначительные нарушения:".to_owned());
+            lines.extend(bullets(&r.mi_dis));
+            lines.push("Основные нарушения:".to_owned());
+            lines.extend(bullets(&r.ma_dis));
+            lines.push(String::new());
+            lines.push(format!("Заметки: {}", r.notes));
+            Box::new(EntityScene(record_section(&r.name, lines)))
+        })
+        .collect();
+    records_screen(sections)
 }
 
 /// `NtosCard` local state: the wildcard tab (`"None"`: the trim's basic access) and the region.

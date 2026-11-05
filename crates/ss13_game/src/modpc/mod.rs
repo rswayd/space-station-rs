@@ -56,6 +56,16 @@ pub enum NtosScreen {
     CrewManifest(Vec<ManifestDepartment>),
     GasAnalyzer(Vec<GasMix>),
     Card(Box<CardModData>),
+    /// `NtosStationAlertConsole`.
+    Alarms(crate::silicon::ui::StationAlertData),
+    /// `NtosRecords` in `security` mode.
+    SecRecords(Vec<SecurityRow>),
+    /// `NtosRecords` in `medical` mode.
+    MedRecords(Vec<MedicalRow>),
+    /// `NtosSignaler`.
+    Signaler(crate::assemblies::SignalerData),
+    /// `NtosStatus`.
+    Status(StatusDisplayData),
 }
 
 impl Default for NtosScreen {
@@ -232,6 +242,40 @@ pub struct AccessUi {
     pub access: String,
     /// `access_flags[ref]`.
     pub flag: u32,
+}
+
+/// A security entry of `GetRecordsReadable()`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SecurityRow {
+    pub name: String,
+    pub rank: String,
+    pub species: String,
+    pub gender: String,
+    pub age: u32,
+    pub fingerprint: String,
+    pub wanted: String,
+}
+
+/// A medical entry of `GetRecordsReadable()`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MedicalRow {
+    pub name: String,
+    pub bloodtype: String,
+    /// `minor_disabilities_desc`, `major_disabilities_desc`: `<br>`-separated.
+    pub mi_dis: String,
+    pub ma_dis: String,
+    pub physical_status: String,
+    pub mental_status: String,
+    /// The medical notes' contents, joined with spaces.
+    pub notes: String,
+}
+
+/// `/datum/computer_file/program/status` `ui_data` + `ui_static_data`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StatusDisplayData {
+    pub upper_text: String,
+    pub lower_text: String,
+    pub max_status_line_length: u32,
 }
 
 // `NtosCard` acts.
