@@ -375,16 +375,16 @@ impl StockMarket {
             // `price - maximum` (never positive, clamped to 1); the distance to the maximum is
             // what mirrors the lower side.
             let new_trend = if price < baseline {
-                let chance = 100.0
-                    - ((price - minimum).clamp(1.0, 1000.0) / (baseline - minimum)) * 100.0;
+                let chance =
+                    100.0 - ((price - minimum).clamp(1.0, 1000.0) / (baseline - minimum)) * 100.0;
                 Some(if self.rng.prob(chance as f32) {
                     MARKET_TREND_UPWARD
                 } else {
                     MARKET_TREND_STABLE
                 })
             } else if price > baseline {
-                let chance = 100.0
-                    - ((maximum - price).clamp(1.0, 1000.0) / (maximum - baseline)) * 100.0;
+                let chance =
+                    100.0 - ((maximum - price).clamp(1.0, 1000.0) / (maximum - baseline)) * 100.0;
                 Some(if self.rng.prob(chance as f32) {
                     MARKET_TREND_DOWNWARD
                 } else {
@@ -590,7 +590,10 @@ mod tests {
         market.sold(gold, 50.0);
         assert_eq!(market.price(gold), 100.0, "clamped to 0.8x");
         market.sold(gold, 1000.0);
-        assert_eq!(market.entries[gold].quantity, 400.0, "at most twice the base");
+        assert_eq!(
+            market.entries[gold].quantity, 400.0,
+            "at most twice the base"
+        );
     }
 
     #[test]

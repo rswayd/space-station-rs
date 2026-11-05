@@ -99,11 +99,9 @@ pub(crate) fn item_interaction(
         message,
     });
     if price != 0
-        && let Some(&pos) = world
-            .get::<TilePos>(held)
-            .or_else(|| {
-                super::economy::holder_of(world, held).and_then(|m| world.get::<TilePos>(m))
-            })
+        && let Some(&pos) = world.get::<TilePos>(held).or_else(|| {
+            super::economy::holder_of(world, held).and_then(|m| world.get::<TilePos>(m))
+        })
     {
         crate::sound::playsound(
             world,
@@ -136,7 +134,10 @@ mod tests {
         assert_eq!(text(&parts), "Scanned toy, no export value.");
         assert!(warning);
         let (parts, warning) = scan_message("box", 0, true);
-        assert_eq!(text(&parts), "Scanned box and its contents, no export values.");
+        assert_eq!(
+            text(&parts),
+            "Scanned box and its contents, no export values."
+        );
         assert!(warning);
     }
 }

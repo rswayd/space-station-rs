@@ -544,7 +544,9 @@ fn add_item(
                 .filter(|d| d != ACCOUNT_CAR && economy.department(d).is_some());
         }
         let has_view = def.access_view.is_empty()
-            || id.as_ref().is_some_and(|i| i.access.contains(&def.access_view));
+            || id
+                .as_ref()
+                .is_some_and(|i| i.access.contains(&def.access_view));
         if personal_department.is_some() && !has_view {
             machine_say(
                 world,

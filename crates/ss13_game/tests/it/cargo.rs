@@ -705,7 +705,11 @@ fn department_request_is_paid_by_the_department() {
 
     s.act(
         "add",
-        &[("id", PACK), ("reason", "for the clinic"), ("department", "1")],
+        &[
+            ("id", PACK),
+            ("reason", "for the clinic"),
+            ("department", "1"),
+        ],
     );
     s.run_until_for(10.0, "the request is listed", |s| {
         !s.data().requests.is_empty()
@@ -723,14 +727,20 @@ fn department_request_is_paid_by_the_department() {
     s.act("approve", &[("id", id.as_str())]);
     s.steps(20);
     assert_eq!(
-        s.server.world().resource::<SupplyOrders>().request_list.len(),
+        s.server
+            .world()
+            .resource::<SupplyOrders>()
+            .request_list
+            .len(),
         1,
         "a request console cannot approve"
     );
 
     set_request_only(&mut s, false);
     s.act("approve", &[("id", id.as_str())]);
-    s.run_until_for(10.0, "approved into the cart", |s| !s.data().cart.is_empty());
+    s.run_until_for(10.0, "approved into the cart", |s| {
+        !s.data().cart.is_empty()
+    });
     let civ = s.economy().department(ACCOUNT_CIV).unwrap().balance;
     let cargo = s.cargo_budget();
     s.act("send", &[]);
@@ -742,7 +752,11 @@ fn department_request_is_paid_by_the_department() {
         s.economy().department(ACCOUNT_CIV).unwrap().balance,
         civ - 300
     );
-    assert_eq!(s.cargo_budget(), cargo, "a department order earns cargo nothing");
+    assert_eq!(
+        s.cargo_budget(),
+        cargo,
+        "a department order earns cargo nothing"
+    );
 }
 
 /// Registers MetaStation's supply shuttle from its map json and delivers one order to the

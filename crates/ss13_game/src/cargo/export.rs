@@ -540,6 +540,10 @@ mod tests {
         market.entries[3].quantity = 200.0;
         market.sold(3, 50.0);
         exports.sync_market(&market);
-        assert_eq!(exports.cost(0, path, Some(2), 0.0), 200, "100 per sheet now");
+        assert_eq!(
+            exports.cost(0, path, Some(2), 0.0),
+            200,
+            "100 per sheet now"
+        );
     }
 }
