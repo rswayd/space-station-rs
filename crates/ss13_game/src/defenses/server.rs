@@ -113,6 +113,25 @@ pub struct DefensesPlugin;
 
 impl Plugin for DefensesPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // tg `attack_hand` of turrets and the turret control panel: their windows.
+        app.add_click_handler(ClickPhase::EmptyHand, 3300, |w, c| {
+            crate::defenses::server::interact(w, c.client, c.mob, c.target)
+        });
+        // Turrets, the turret control panel and cameras: IDs, tools, assemblies.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 800, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::defenses::server::item_interaction(
+                    w,
+                    c.client,
+                    c.mob,
+                    h,
+                    c.target,
+                    c.modifiers,
+                )
+            })
+        });
         app.register_ui::<TurretWindow>()
             .register_ui::<TurretControlWindow>()
             .add_systems(PostStartup, (init_turrets, init_panels).chain())

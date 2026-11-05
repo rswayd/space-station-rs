@@ -62,6 +62,12 @@ pub struct MechBayPlugin;
 
 impl Plugin for MechBayPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // tg `attack_hand` of the mech bay console: its window.
+        app.add_click_handler(ClickPhase::EmptyHand, 2200, |w, c| {
+            crate::mecha::bay::interact(w, c.client, c.mob, c.target)
+        });
         app.register_ui::<MechBayWindow>()
             .add_systems(Startup, init_bays.after(crate::power::init_power))
             .add_systems(

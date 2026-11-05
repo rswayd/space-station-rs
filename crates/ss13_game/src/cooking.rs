@@ -129,6 +129,18 @@ pub struct CookingServerPlugin;
 
 impl Plugin for CookingServerPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // tg `attack_hand` of ovens, griddles and fryers; the soda and booze dispensers.
+        app.add_click_handler(ClickPhase::EmptyHand, 600, |w, c| {
+            crate::cooking::interact(w, c.client, c.mob, c.target, c.modifiers.right)
+        });
+        // Food on a mob (eating) and tools on food (slicing); before chem.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 1900, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::cooking::item_interaction(w, c.client, c.mob, h, c.target, c.modifiers.pixel)
+            })
+        });
         app.add_systems(Startup, setup_machines.after(crate::power::init_power))
             .add_systems(Update, cooking_tick.after(crate::power::PowerSystems));
     }

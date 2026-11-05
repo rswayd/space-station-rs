@@ -354,6 +354,12 @@ pub struct MartialPlugin;
 
 impl Plugin for MartialPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // A martial arts manual or scroll is read.
+        app.add_click_handler(ClickPhase::AttackSelf, 2800, |w, c| {
+            crate::martial::attack_self(w, c.client, c.mob, c.target)
+        });
         app.add_systems(
             Update,
             (sync_worn_styles, trigger_buttons)

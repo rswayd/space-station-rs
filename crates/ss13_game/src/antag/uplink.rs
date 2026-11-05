@@ -204,6 +204,20 @@ pub struct UplinkPlugin;
 
 impl Plugin for UplinkPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // Telecrystals into the uplink in the other hand.
+        app.add_click_handler(ClickPhase::OtherHand, 1000, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::antag::uplink::item_interaction(w, c.client, c.mob, h, c.target)
+            })
+        });
+        // Telecrystals into an active uplink (`load_tc`).
+        app.add_click_handler(ClickPhase::HeldOnTarget, 100, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::antag::uplink::item_interaction(w, c.client, c.mob, h, c.target)
+            })
+        });
         app.register_ui::<UplinkUi>()
             .init_resource::<UplinkCatalog>()
             .add_systems(Startup, load_catalog)

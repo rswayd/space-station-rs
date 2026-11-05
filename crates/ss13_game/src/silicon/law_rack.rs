@@ -435,6 +435,22 @@ pub struct LawRackPlugin;
 
 impl Plugin for LawRackPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // A law module shows its laws and asks for its configurable text.
+        app.add_click_handler(ClickPhase::AttackSelf, 3100, |w, c| {
+            crate::silicon::law_rack::attack_self(w, c.client, c.mob, c.target)
+        });
+        // tg `ui_interact` of law racks.
+        app.add_click_handler(ClickPhase::EmptyHand, 3400, |w, c| {
+            crate::silicon::law_rack::interact(w, c.client, c.mob, c.target)
+        });
+        // A module, screwdriver, welder or multitool on a law rack: its window.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 900, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::silicon::law_rack::item_interaction(w, c.client, c.mob, h, c.target)
+            })
+        });
         app.register_ui::<LawRackUi>()
             .add_systems(PostStartup, init_racks)
             .add_systems(

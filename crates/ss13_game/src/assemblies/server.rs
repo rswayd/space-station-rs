@@ -262,6 +262,25 @@ pub struct AssembliesServerPlugin;
 
 impl Plugin for AssembliesServerPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // Assemblies open their windows or act, holders use their parts; a chemical grenade casing
+        // primes or opens its wires, a transfer valve its window.
+        app.add_click_handler(ClickPhase::AttackSelf, 1900, |w, c| {
+            crate::assemblies::server::attack_self(w, c.client, c.mob, c.target)
+        });
+        // Assemblies, holders, casings, valves and tanks in the other hand.
+        app.add_click_handler(ClickPhase::OtherHand, 700, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::assemblies::server::item_interaction(w, c.client, c.mob, h, c.target)
+            })
+        });
+        // Assemblies, holders, casings, valves and tanks.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 500, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::assemblies::server::item_interaction(w, c.client, c.mob, h, c.target)
+            })
+        });
         app.register_ui::<SignalerUi>()
             .register_ui::<TimerUi>()
             .register_ui::<ProximitySensorUi>()

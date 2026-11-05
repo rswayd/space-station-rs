@@ -689,6 +689,22 @@ pub struct CultPlugin;
 
 impl Plugin for CultPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // The ritual dagger's rune list, a blood magic aura cast on the user.
+        app.add_click_handler(ClickPhase::AttackSelf, 500, |w, c| {
+            crate::antag::cult::server::attack_self(w, c.client, c.mob, c.target)
+        });
+        // tg `attack_hand` of a cult rune: invoked.
+        app.add_click_handler(ClickPhase::EmptyHand, 300, |w, c| {
+            crate::antag::cult::server::interact(w, c.client, c.mob, c.target)
+        });
+        // The ritual dagger scrapes a rune away; a blood magic aura on an object.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 1300, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::antag::cult::server::item_interaction(w, c.client, c.mob, h, c.target)
+            })
+        });
         app.register_ui::<AntagInfoGenericUi>()
             .register_ui::<CultListWindow>()
             .add_systems(
