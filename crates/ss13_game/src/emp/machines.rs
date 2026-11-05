@@ -134,7 +134,7 @@ fn cameras(world: &mut World, mut cursor: Local<MessageCursor<EmpAct>>) {
 }
 
 /// The camera's `can_use()` and its place on the network.
-fn set_camera(world: &mut World, camera: Entity, enabled: bool) {
+pub(crate) fn set_camera(world: &mut World, camera: Entity, enabled: bool) {
     let (Some(range), Some(&pos)) = (
         world.get::<Camera>(camera).map(|c| c.view_range),
         world.get::<TilePos>(camera),

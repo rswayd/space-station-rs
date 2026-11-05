@@ -117,7 +117,7 @@ pub fn random_station_turf(world: &mut World) -> Option<TilePos> {
     rng.pick(tiles).copied()
 }
 
-fn is_floor(world: &World, pos: TilePos) -> bool {
+pub(super) fn is_floor(world: &World, pos: TilePos) -> bool {
     crate::construction::turf_at(world, pos)
         .and_then(|t| crate::construction::path_of(world, t))
         .is_some_and(|p| crate::obj_damage::is_under(&p, "/turf/open/floor"))

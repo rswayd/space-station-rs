@@ -24,19 +24,19 @@
 ЭМИ процессоров телекомов: речь по радио искажается, часть процессоров может взорваться.
 
 - **Код:** [`/datum/round_event_control/processor_overload`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/processor_overload.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — нет телекомов
+- **Статус в ss13-rs:** ❌ нет — телекомы одной заглушкой (`crates/ss13_game/src/radio.rs` `TelecommsOutage`), нет процессоров и сжатия (искажения) радиосообщений; ЭМИ всех телекомов дало бы полный блэкаут вместо искажения
 
 ### Camera Failure
 Отключает одну или несколько случайных камер наблюдения (частое событие, вес 100).
 
 - **Код:** [`/datum/round_event_control/camera_failure`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/camerafailure.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — нет камер
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/events/camera_failure.rs`: камеры сети `ss13` гаснут с вероятностью `round(100 / iterations)`, `iterations ×= 2,5` (вес 100, до 20 раз, не фейкается); камера выключается через общий `crate::emp::machines::set_camera`; включить её обратно руками пока нельзя (камеры не переключаются вручную — силиконы/камеры)
 
 ### Grey Tide
 В нескольких отделах сбой открывает все шлюзы, болтирует их и выключает свет; двери тюрьмы и шкафчики брига отпираются.
 
 - **Код:** [`/datum/round_event_control/grey_tide`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/grey_tide.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — шлюзы и болты есть (`crates/ss13_game/src/doors.rs`), события нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/events/grey_tide.rs`: 1–3 отдела из шести, на 20–30 тике шлюзы в них отбалтываются, открываются (если есть питание) и болтируются, секьюрные шкафы отпираются, APC выключают освещение; объявление на 50–60 тике с уровнем угрозы; нет мерцания ламп (лампы не мерцают — питание), таймеров камер брига (нет), эмаг-проверки шлюза (нет эмага)
 
 ### Gravity Generator Blackout
 Генератор гравитации отключается: на станции пропадает гравитация, пока инженеры его не перезапустят.
@@ -90,7 +90,7 @@
 Вентиляция засоряется: из вентов вылезают мобы (тараканы, мыши, слаймы; на «Strange» — редкие твари) или идёт грязь, пока вент не прочистят вантузом. Тяжесть определяет типы и число мобов.
 
 - **Код:** [`/datum/round_event_control/vent_clog`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/vent_clog.dm#L3), [`/datum/round_event_control/vent_clog/major`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/vent_clog.dm#L212), [`/datum/round_event_control/vent_clog/critical`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/vent_clog.dm#L246), [`/datum/round_event_control/vent_clog/strange`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/vent_clog.dm#L278)
-- **Статус в ss13-rs:** ❌ нет — нет вентов и мобов
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/events/vent_clog.rs`: четыре события с весами/порогами tg, случайный незаваренный вент станции на свободном тайле (столы не мешают), грязь вокруг (85%, по радиусу 2, без `view`), моб из списка тяжести каждые `spawn_delay` тиков пока живых меньше `maximum_spawns` и вент не заварен, с грязью и звуком, переезд засора при уничтожении вента с объявлением, объявления (Strange — `ANNOUNCER_ALIENS`); нет прочистки вантузом (нет вантуза), осмотра вента; без вента событие гибнет в `setup`, а не исключается из ролла; мобы без прототипа/ИИ не появляются или стоят
 
 ### Scrubber Overflow (Normal / Threatening / Catastrophic / Every Vent)
 Скрубберы выбрасывают пену со случайными реагентами (на тяжёлых уровнях — опасными); «Every Vent» — только для админов, все скрубберы сразу.

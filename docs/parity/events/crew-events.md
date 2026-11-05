@@ -46,7 +46,7 @@
 Случайно открывает и закрывает слоты профессий в позднем входе и меняет роль переполнения.
 
 - **Код:** [`/datum/round_event_control/bureaucratic_error`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/bureaucratic_error.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — слоты профессий есть (`crates/ss13_game/src/jobs.rs`), события нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/events/bureaucratic_error.rs`: объявление, 33% — одна профессия без лимита, остальные закрыты, иначе каждой `rand(-2, 4)` слотов (не ниже 0); роль переполнения, ИИ и профессии станционных трейтов не трогаются
 
 ### Market Crash
 Цены торговых автоматов временно растут; объявление о крахе рынка.
