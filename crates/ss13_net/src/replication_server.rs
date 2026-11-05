@@ -11,6 +11,9 @@
 //! Every other client gets only what its eye sees (BYOND `view()`, `line_of_sight`): a mask of
 //! its own, recomputed when the viewer moves or opacity changes near it, unless its [`Sight`]
 //! sees through walls (observers).
+//! [`Invisibility`], [`VisibleToGroups`] and [`VisibleToMobs`] decide per client whether an
+//! entity exists for it at all; [`AltAppearances`] which appearance it gets (tg alternate
+//! appearances and override images), so the alternate value goes only to its seers.
 //!
 //! Cost per tick is proportional to what changed, never to the world size:
 //! - a changed entity touches only the clients registered on its old and new chunk;
@@ -20,7 +23,8 @@
 //! - change detection over `Networked` entities is the only per-entity pass (no data touched
 //!   for unchanged entities);
 //! - an appearance is hashed once when an entity is first replicated or changes it, never per
-//!   client: clients get interned [`AppearanceId`]s.
+//!   client: clients get interned [`AppearanceId`]s (an alternate appearance is one more
+//!   interned value; choosing it is a scan of the entity's few entries per client sent to).
 
 use std::collections::VecDeque;
 use std::hash::{BuildHasher, Hash, Hasher};
@@ -94,8 +98,62 @@ pub struct VisibleToGroups(pub u32);
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct SeeGroups(pub u32);
 
+/// tg `client.images` of one mob (a hallucination's images): a [`Networked`] entity also seen
+/// by the clients whose [`ControlledEntity`] is one of these mobs, whatever its [`Invisibility`].
+/// It follows the mob, not the connection, as tg images follow `hallucinator.client` of the
+/// mob. Same first-replication shortcut as [`Invisibility`]; a control change re-evaluates the
+/// client's whole view.
+#[derive(Component, Clone, Debug, Default, PartialEq, Eq)]
+pub struct VisibleToMobs(pub Vec<Entity>);
+
 /// What decides whether a client may see an entity at all.
-type Hidden<'a> = (Option<&'a Invisibility>, Option<&'a VisibleToGroups>);
+type Hidden<'a> = (
+    Option<&'a Invisibility>,
+    Option<&'a VisibleToGroups>,
+    Option<&'a VisibleToMobs>,
+);
+
+/// Who sees an [`AltAppearance`]: the clients controlling one of `mobs` ([`ControlledEntity`])
+/// and those whose [`SeeGroups`] share a bit with `groups`.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Seers {
+    pub mobs: Vec<Entity>,
+    pub groups: u32,
+}
+
+impl Seers {
+    /// Only the client controlling `mob` (tg `alternate_appearance/basic/one_person`).
+    pub fn mob(mob: Entity) -> Self {
+        Self {
+            mobs: vec![mob],
+            groups: 0,
+        }
+    }
+
+    fn include(&self, control: Option<Entity>, groups: u32) -> bool {
+        self.groups & groups != 0 || control.is_some_and(|c| self.mobs.contains(&c))
+    }
+}
+
+/// One alternate appearance of an entity.
+#[derive(Clone, Debug, PartialEq)]
+pub struct AltAppearance {
+    /// tg's `key`: what removes it again.
+    pub key: String,
+    pub seers: Seers,
+    pub appearance: Appearance,
+}
+
+/// tg alternate appearances (`add_alt_appearance`, `/datum/atom_hud/alternate_appearance`) and
+/// override images (`image.override` in `client.images`): a [`Networked`] entity looks like an
+/// entry's `appearance` to that entry's seers instead of its own `Appearance`, the last matching
+/// entry winning. Only the seers get the value: the others are sent the entity's own appearance
+/// and never learn an alternate exists. Position, facing, blocking and the tile lighting
+/// (`Optics::tile`) stay the entity's own for everyone.
+#[derive(Component, Clone, Debug, Default, PartialEq)]
+pub struct AltAppearances(pub Vec<AltAppearance>);
+
+type Alts<'w, 's> = Query<'w, 's, &'static AltAppearances, With<Networked>>;
 
 /// BYOND `sight` flags of a client: on the connection entity next to its [`Viewer`]. Absent = 0:
 /// the client gets only the tiles its eye sees (BYOND `view()` through opacity).
@@ -176,6 +234,49 @@ struct Tracked {
     pos: TilePos,
     /// Interned appearance as of the last replication pass.
     appearance: Option<AppearanceId>,
+    /// Interned [`AltAppearances`] with their seers, in order, as of the last replication pass.
+    alts: Vec<(Seers, AppearanceId)>,
+}
+
+impl Tracked {
+    /// The appearance of a client controlling `control` with `groups`: the last alternate
+    /// appearance it is a seer of, else the entity's own.
+    fn look_for(&self, control: Option<Entity>, groups: u32) -> Option<AppearanceId> {
+        match self
+            .alts
+            .iter()
+            .rev()
+            .find(|(s, _)| s.include(control, groups))
+        {
+            Some(&(_, id)) => Some(id),
+            None => self.appearance,
+        }
+    }
+}
+
+/// Interns `alts` with the entity's `optics` (the tile lighting stays the entity's own).
+fn intern_alts(
+    appearances: &mut Appearances,
+    alts: Option<&AltAppearances>,
+    optics: Option<&Optics>,
+) -> Vec<(Seers, AppearanceId)> {
+    let Some(alts) = alts else {
+        return Vec::new();
+    };
+    (alts.0.iter())
+        .map(|alt| {
+            (
+                alt.seers.clone(),
+                appearances.acquire(&alt.appearance, optics),
+            )
+        })
+        .collect()
+}
+
+fn release_alts(appearances: &mut Appearances, alts: Vec<(Seers, AppearanceId)>) {
+    for (_, id) in alts {
+        appearances.release(id);
+    }
 }
 
 impl Interest {
@@ -195,6 +296,13 @@ impl Interest {
         self.clients
             .get(&client)
             .is_some_and(|view| view.known.contains_key(&entity))
+    }
+
+    /// The appearance `client` has for `entity` (its own or an alternate one), while it has the
+    /// entity replicated.
+    pub fn appearance(&self, client: Entity, entity: Entity) -> Option<&Appearance> {
+        let id = self.clients.get(&client)?.known.get(&entity)?.appearance?;
+        Some(&self.appearances.entries.get(&id)?.look.appearance)
     }
 
     /// Number of entities replicated to `client`.
@@ -408,9 +516,15 @@ impl ClientView {
     }
 
     /// Whether this client may see an entity of that invisibility and those groups at all.
-    fn sees(&self, (invisibility, groups): Hidden<'_>) -> bool {
+    fn sees(&self, (invisibility, groups, mobs): Hidden<'_>) -> bool {
         invisibility.map_or(0, |i| i.0) <= self.see_invisible
             || groups.is_some_and(|g| g.0 & self.see_groups != 0)
+            || mobs.is_some_and(|m| self.control.is_some_and(|c| m.0.contains(&c)))
+    }
+
+    /// The appearance this client gets for a tracked entity.
+    fn look_of(&self, tracked: &Tracked) -> Option<AppearanceId> {
+        tracked.look_for(self.control, self.see_groups)
     }
 
     /// Whether the mask lets `entity` on `pos` through: everything without a mask, the
@@ -745,6 +859,7 @@ type States<'w, 's> = Query<
         (
             Option<&'static Invisibility>,
             Option<&'static VisibleToGroups>,
+            Option<&'static VisibleToMobs>,
         ),
         BlockData,
     ),
@@ -852,7 +967,12 @@ fn replicate(
         RemovedComponents<ClimbWalkable>,
         RemovedComponents<FallsThrough>,
     ),
-    stack: Option<Res<LevelStack>>,
+    (stack, alt_states, alt_changed, mut removed_alts): (
+        Option<Res<LevelStack>>,
+        Alts,
+        Query<Entity, (With<Networked>, Changed<AltAppearances>)>,
+        RemovedComponents<AltAppearances>,
+    ),
 ) {
     let start = Instant::now();
     let interest = &mut *interest;
@@ -907,6 +1027,7 @@ fn replicate(
         if let Some(id) = gone.appearance {
             appearances.release(id);
         }
+        release_alts(appearances, gone.alts);
         collect_viewers(chunk_viewers, &mut candidates, [Some(gone.pos), None]);
         for client in &candidates {
             let view = clients.get_mut(client).expect("registered viewer");
@@ -938,7 +1059,8 @@ fn replicate(
             collect_viewers(chunk_viewers, &mut candidates, [Some(t.pos), None]);
             for client in &candidates {
                 let view = clients.get_mut(client).expect("registered viewer");
-                view.set_appearance(entity, None, appearances);
+                let id = view.look_of(t);
+                view.set_appearance(entity, id, appearances);
             }
         }
     }
@@ -952,10 +1074,13 @@ fn replicate(
             if let Some(old) = t.appearance.replace(new) {
                 appearances.release(old);
             }
+            let alts = intern_alts(appearances, alt_states.get(entity).ok(), None);
+            release_alts(appearances, std::mem::replace(&mut t.alts, alts));
             collect_viewers(chunk_viewers, &mut candidates, [Some(t.pos), None]);
             for client in &candidates {
                 let view = clients.get_mut(client).expect("registered viewer");
-                view.set_appearance(entity, Some(new), appearances);
+                let id = view.look_of(t);
+                view.set_appearance(entity, id, appearances);
             }
         }
     }
@@ -981,8 +1106,8 @@ fn replicate(
             || optics.as_ref().is_some_and(|o| o.is_changed());
         let optics = optics.as_deref();
         let indexed = index.in_bounds(*pos);
-        // `Some(appearance)` for tracked entities, updated to the current value.
-        let (old_pos, interned) = match tracked.get_mut(&entity) {
+        // Tracked entities are updated to the current values.
+        let old_pos = match tracked.get_mut(&entity) {
             Some(t) => {
                 let old = t.pos;
                 t.pos = *pos;
@@ -995,14 +1120,17 @@ fn replicate(
                         appearances.release(id);
                     }
                     t.appearance = new;
+                    // The tile lighting they carry may have changed.
+                    let alts = intern_alts(appearances, alt_states.get(entity).ok(), optics);
+                    release_alts(appearances, std::mem::replace(&mut t.alts, alts));
                 }
-                (Some(old), Some(t.appearance))
+                Some(old)
             }
-            None => (None, None),
+            None => None,
         };
         collect_viewers(chunk_viewers, &mut candidates, [old_pos, Some(*pos)]);
         let facing = facing.as_deref();
-        let mut interned = interned;
+        let mut is_tracked = old_pos.is_some();
         for client in &candidates {
             let view = clients.get_mut(client).expect("registered viewer");
             let shown = indexed && view.shows(masks, &index, entity, *pos);
@@ -1012,7 +1140,8 @@ fn replicate(
             let in_keep = shown && keep.is_some_and(|v| v.contains(*pos));
             match view.known.get(&entity).copied() {
                 None if in_view => {
-                    let id = *interned.get_or_insert_with(|| {
+                    if !is_tracked {
+                        is_tracked = true;
                         track(
                             tracked,
                             appearances,
@@ -1020,8 +1149,10 @@ fn replicate(
                             *pos,
                             appearance.as_deref(),
                             optics,
-                        )
-                    });
+                            alt_states.get(entity).ok(),
+                        );
+                    }
+                    let id = view.look_of(&tracked[&entity]);
                     let blocks = states.get(entity).ok().and_then(|s| blocks_of(s.5));
                     view.spawn(tick, entity, *pos, facing, id, blocks, appearances);
                     spawned += 1;
@@ -1035,13 +1166,35 @@ fn replicate(
                         });
                         view.unsettled.insert(entity, tick);
                     }
-                    if let Some(new) = interned {
-                        view.set_appearance(entity, new, appearances);
+                    if is_tracked {
+                        let id = view.look_of(&tracked[&entity]);
+                        view.set_appearance(entity, id, appearances);
                     }
                 }
                 Some(_) => despawned += u64::from(view.despawn(tick, entity)),
                 None => {}
             }
+        }
+    }
+
+    // 2c. Alternate appearances that changed: the clients that know the entity. Entities
+    // tracked above already have their current ones (re-interning them is a no-op).
+    let mut realt: Vec<Entity> = alt_changed.iter().collect();
+    realt.extend(removed_alts.read());
+    realt.sort_unstable();
+    realt.dedup();
+    for entity in realt {
+        let Some(t) = tracked.get_mut(&entity) else {
+            continue;
+        };
+        let optics = states.get(entity).ok().and_then(|s| s.3);
+        let alts = intern_alts(appearances, alt_states.get(entity).ok(), optics);
+        release_alts(appearances, std::mem::replace(&mut t.alts, alts));
+        collect_viewers(chunk_viewers, &mut candidates, [Some(t.pos), None]);
+        for client in &candidates {
+            let view = clients.get_mut(client).expect("registered viewer");
+            let id = view.look_of(t);
+            view.set_appearance(entity, id, appearances);
         }
     }
 
@@ -1109,7 +1262,7 @@ fn replicate(
                         view,
                         tick,
                         entity,
-                        &states,
+                        (&states, &alt_states),
                         &index,
                         masks,
                         tracked,
@@ -1181,8 +1334,13 @@ fn replicate(
                 None => view.ops.push(ReplicationOp::Control(None)),
             }
         }
-        if view.see_invisible != see || view.see_groups != groups || view.mask != mask {
-            // Walk the whole box again below: some known entities may hide, others appear.
+        if view.see_invisible != see
+            || view.see_groups != groups
+            || view.mask != mask
+            || old_control != want
+        {
+            // Walk the whole box again below: some known entities may hide, others appear, and
+            // those with alternate appearances may look different.
             view.see_invisible = see;
             view.see_groups = groups;
             let mask_changed = view.mask != mask;
@@ -1203,6 +1361,14 @@ fn replicate(
                 .collect();
             for entity in hidden {
                 despawned += u64::from(view.despawn(tick, entity));
+            }
+            let alternated: Vec<Entity> = (view.known.keys())
+                .copied()
+                .filter(|e| tracked.get(e).is_some_and(|t| !t.alts.is_empty()))
+                .collect();
+            for entity in alternated {
+                let id = view.look_of(&tracked[&entity]);
+                view.set_appearance(entity, id, appearances);
             }
             if mask_changed {
                 // Every light block goes again, under the new mask (or none).
@@ -1267,10 +1433,11 @@ fn replicate(
                         && view.sees(invisibility)
                         && view.shows(masks, &index, entity, pos)
                     {
-                        let interned = match tracked.get(&entity) {
-                            Some(t) => t.appearance,
-                            None => track(tracked, appearances, entity, pos, appearance, optics),
-                        };
+                        if !tracked.contains_key(&entity) {
+                            let alts = alt_states.get(entity).ok();
+                            track(tracked, appearances, entity, pos, appearance, optics, alts);
+                        }
+                        let interned = view.look_of(&tracked[&entity]);
                         view.spawn(
                             tick,
                             entity,
@@ -1303,7 +1470,7 @@ fn replicate(
                     view,
                     tick,
                     entity,
-                    &states,
+                    (&states, &alt_states),
                     &index,
                     masks,
                     tracked,
@@ -1614,7 +1781,7 @@ fn refresh(
     view: &mut ClientView,
     tick: u32,
     entity: Entity,
-    states: &States<'_, '_>,
+    (states, alt_states): (&States<'_, '_>, &Alts<'_, '_>),
     index: &SpatialIndex,
     masks: &ViewMasks,
     tracked: &mut HashMap<Entity, Tracked>,
@@ -1632,10 +1799,11 @@ fn refresh(
     if !in_view {
         return (0, 0);
     }
-    let interned = match tracked.get(&entity) {
-        Some(t) => t.appearance,
-        None => track(tracked, appearances, entity, pos, appearance, optics),
-    };
+    if !tracked.contains_key(&entity) {
+        let alts = alt_states.get(entity).ok();
+        track(tracked, appearances, entity, pos, appearance, optics, alts);
+    }
+    let interned = view.look_of(&tracked[&entity]);
     view.spawn(
         tick,
         entity,
@@ -1648,7 +1816,7 @@ fn refresh(
     (1, 0)
 }
 
-/// Starts tracking an entity on its first replication; returns its interned appearance.
+/// Starts tracking an entity on its first replication.
 fn track(
     tracked: &mut HashMap<Entity, Tracked>,
     appearances: &mut Appearances,
@@ -1656,10 +1824,18 @@ fn track(
     pos: TilePos,
     appearance: Option<&Appearance>,
     optics: Option<&Optics>,
-) -> Option<AppearanceId> {
+    alts: Option<&AltAppearances>,
+) {
     let appearance = appearance.map(|a| appearances.acquire(a, optics));
-    tracked.insert(entity, Tracked { pos, appearance });
-    appearance
+    let alts = intern_alts(appearances, alts, optics);
+    tracked.insert(
+        entity,
+        Tracked {
+            pos,
+            appearance,
+            alts,
+        },
+    );
 }
 
 /// Fills `out` with the clients registered on the chunks of `positions`, without duplicates.

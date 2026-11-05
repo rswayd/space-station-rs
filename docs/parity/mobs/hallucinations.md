@@ -25,7 +25,7 @@
 
 - **Код:** [`/datum/hallucination/delusion`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hallucination/delusions.dm#L2), [`/datum/hallucination/delusion/preset`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hallucination/delusions.dm#L222), [`proc/create_delusion()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/__HELPERS/hallucinations.dm#L247)
 - **BandaStation:** [`delusions.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hallucination/delusions.dm#L73) — свой выбор целей и внешностей бреда
-- **Статус в ss13-rs:** ❌ нет — нет переопределения внешности других мобов для одного клиента
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/hallucination/delusion.rs`: пресеты с иконками (ничто, проклятие, обезьяна, корги, карп, скелет, зомби, демон, киборг со звуками wabbajack/liveagain, призрак для всех, кобыла и луна с весом 0), выбор целей BandaStation (`affects_us`/`affects_others`/`skip_nearby`), 30 с; внешность — альтернативная внешность цели (`crate::alt_appearance`, `ss13_net` `AltAppearances`), которую получает только клиент галлюцинирующего моба; нет динамических человеческих пресетов (синдикат, СБ, еретик, врата разума), подмены имени при осмотре и скринтипе, парения призрака, кастомного админского бреда и вампирской истерии BandaStation
 
 ### Ложный HUD и тревоги
 Фальшивые алерты (нет кислорода, жара, огонь, взлом), ложный индикатор здоровья (крит, смерть), неправильная кукла здоровья.

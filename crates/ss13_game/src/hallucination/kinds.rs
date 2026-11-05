@@ -1,7 +1,6 @@
 //! The ported `/datum/hallucination` subtypes: their weights and tiers ([`TABLE`]) and what each
 //! one's `start()` does ([`start`]).
-// shortcut: not ported — delusions (no per-client appearance override of other mobs), the
-// in-hand and nearby fake items, stray bullets, xeno and Bubblegum attacks, bolted airlocks,
+// shortcut: not ported — the dynamic human delusions (`super::delusion`), the in-hand and nearby fake items, stray bullets, xeno and Bubblegum attacks, bolted airlocks,
 // hazards, plasma floods, eyes in the dark (no server-side light levels), the hacked APC,
 // "your mother", the dusting death and the freezer body; the shock's black body override, the
 // fire's stop-drop-roll; the fake death's `TRAIT_MUTE` is a silence until it wakes (no
@@ -53,6 +52,26 @@ pub enum Kind {
     Fire,
     Death,
     Body(Body),
+    Delusion(Delusion),
+}
+
+/// `/datum/hallucination/delusion/preset/*` (`super::delusion`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Delusion {
+    Nothing,
+    Curse,
+    Monkey,
+    Corgi,
+    Carp,
+    Skeleton,
+    Zombie,
+    Demon,
+    Cyborg,
+    Ghost,
+    /// The nightmare vision goggles' (never random).
+    Mare,
+    /// The path of the moon's (never random).
+    Moon,
 }
 
 /// `/datum/hallucination/fake_sound/normal/*` and `weird/*`.
@@ -297,6 +316,78 @@ pub static TABLE: &[KindDef] = &[
     ),
     k(Kind::Chat, "/datum/hallucination/chat", 100.0, Common),
     k(Kind::Death, "/datum/hallucination/death", 1.0, Uncommon),
+    k(
+        Kind::Delusion(Delusion::Carp),
+        "/datum/hallucination/delusion/preset/carp",
+        2.0,
+        Uncommon,
+    ),
+    k(
+        Kind::Delusion(Delusion::Corgi),
+        "/datum/hallucination/delusion/preset/corgi",
+        2.0,
+        Uncommon,
+    ),
+    k(
+        Kind::Delusion(Delusion::Curse),
+        "/datum/hallucination/delusion/preset/curse",
+        2.0,
+        Uncommon,
+    ),
+    k(
+        Kind::Delusion(Delusion::Cyborg),
+        "/datum/hallucination/delusion/preset/cyborg",
+        2.0,
+        Uncommon,
+    ),
+    k(
+        Kind::Delusion(Delusion::Demon),
+        "/datum/hallucination/delusion/preset/demon",
+        2.0,
+        Uncommon,
+    ),
+    k(
+        Kind::Delusion(Delusion::Ghost),
+        "/datum/hallucination/delusion/preset/ghost",
+        2.0,
+        Uncommon,
+    ),
+    k(
+        Kind::Delusion(Delusion::Mare),
+        "/datum/hallucination/delusion/preset/mare",
+        0.0,
+        Uncommon,
+    ),
+    k(
+        Kind::Delusion(Delusion::Monkey),
+        "/datum/hallucination/delusion/preset/monkey",
+        2.0,
+        Uncommon,
+    ),
+    k(
+        Kind::Delusion(Delusion::Moon),
+        "/datum/hallucination/delusion/preset/moon",
+        0.0,
+        Uncommon,
+    ),
+    k(
+        Kind::Delusion(Delusion::Nothing),
+        "/datum/hallucination/delusion/preset/nothing",
+        2.0,
+        Uncommon,
+    ),
+    k(
+        Kind::Delusion(Delusion::Skeleton),
+        "/datum/hallucination/delusion/preset/skeleton",
+        2.0,
+        Uncommon,
+    ),
+    k(
+        Kind::Delusion(Delusion::Zombie),
+        "/datum/hallucination/delusion/preset/zombie",
+        2.0,
+        Uncommon,
+    ),
     k(
         Kind::Alert(FakeAlert::BadCo2),
         "/datum/hallucination/fake_alert/bad_co2",
@@ -694,6 +785,7 @@ pub fn start(world: &mut World, mob: Entity, kind: Kind) -> bool {
         Kind::Fire => fire(world, mob),
         Kind::Death => death(world, mob),
         Kind::Body(body) => self::body(world, mob, body),
+        Kind::Delusion(preset) => super::delusion::start(world, mob, preset, preset.args()),
     }
 }
 
@@ -720,7 +812,7 @@ fn prob(world: &mut World, percent: f32) -> bool {
 }
 
 /// `IS_UNCONSCIOUS`: hard crit, dead, or knocked out (`crate::status_effects`).
-fn unconscious(world: &World, mob: Entity) -> bool {
+pub(super) fn unconscious(world: &World, mob: Entity) -> bool {
     matches!(
         world.get::<Stat>(mob),
         Some(Stat::HardCrit | Stat::Dead) | None
@@ -906,6 +998,7 @@ pub fn sound_files() -> Vec<&'static str> {
         .copied()
         .collect();
     out.extend(EXTRA_SOUNDS);
+    out.extend(super::delusion::SOUNDS);
     out.sort_unstable();
     out.dedup();
     out
@@ -2447,7 +2540,13 @@ mod tests {
             // Weightless types (ice crack) are never picked.
             assert_ne!(weird, Kind::Sound(Snd::IceCrack));
         }
-        assert!(Kind::random_subtype(&mut rng, "/datum/hallucination/delusion/preset").is_none());
+        for _ in 0..50 {
+            let preset =
+                Kind::random_subtype(&mut rng, "/datum/hallucination/delusion/preset").unwrap();
+            // The goggles' and the moon path's are never picked.
+            assert!(matches!(preset, Kind::Delusion(_)), "{preset:?}");
+            assert!(preset.def().weight > 0.0, "{preset:?}");
+        }
     }
 
     #[test]

@@ -1,15 +1,15 @@
 //! Mass Hallucination (`code/modules/events/mass_hallucination.dm`): every living human gets
 //! the same hallucination type (`crate::hallucination`) at once: a normal or weird fake sound, a
-//! fake station announcement or one of the generic hallucinations.
-// shortcut: no delusion categories (delusions are not ported: those two rolls of ten take a
-// generic hallucination instead), the generic list holds only the ported types (chat, death,
-// fire, message; no bolts, plasma flood, Bubblegum or xeno attack), no CentCom level to skip
-// and no admin setup (`/datum/event_admin_setup/mass_hallucination`).
+//! fake station announcement, a delusion of everyone else or of oneself, or one of the generic
+//! hallucinations.
+// shortcut: the generic list holds only the ported types (chat, death, fire, message; no bolts,
+// plasma flood, Bubblegum or xeno attack), no CentCom level to skip and no admin setup
+// (`/datum/event_admin_setup/mass_hallucination`).
 
 use bevy::prelude::*;
 
 use super::controller::{EventRng, EventState, RoundEvent, station_levels};
-use crate::hallucination::{self, Kind};
+use crate::hallucination::{self, Kind, delusion};
 use crate::health::Stat;
 
 pub const NAME: &str = "Mass Hallucination";
@@ -33,29 +33,56 @@ pub struct MassHallucination {
 
 impl RoundEvent for MassHallucination {
     fn start(&mut self, world: &mut World, _: &mut EventState) {
-        let Some(kind) = self.forced.or_else(|| pick(world)) else {
+        let Some((kind, args)) = self.forced.map(|k| (k, None)).or_else(|| pick(world)) else {
             error!("{NAME} found no hallucination to play");
             return;
         };
         for mob in targets(world) {
-            hallucination::cause_hallucination(world, mob, kind, "mass hallucination");
+            match (kind, args) {
+                (Kind::Delusion(preset), Some(args)) => {
+                    delusion::start(world, mob, preset, args);
+                }
+                _ => {
+                    hallucination::cause_hallucination(world, mob, kind, "mass hallucination");
+                }
+            }
         }
     }
 }
 
-/// `start()`'s `rand(1, 10)` category.
-pub fn pick(world: &mut World) -> Option<Kind> {
+/// `start()`'s `rand(1, 10)` category: the type and, for a delusion, `admin_forced_args`.
+pub fn pick(world: &mut World) -> Option<(Kind, Option<delusion::Args>)> {
     let category = world
         .get_resource_mut::<EventRng>()
         .map_or(6, |mut rng| rng.0.range(1, 10));
     let mut rng = hallucination::rng(world);
-    let parent = match category {
-        1 => "/datum/hallucination/fake_sound/normal",
-        2 => "/datum/hallucination/fake_sound/weird",
-        3 => "/datum/hallucination/station_message",
-        _ => GENERIC[rng.range(0, GENERIC.len() as u32 - 1) as usize],
+    let forced_args = |others: bool| delusion::Args {
+        duration: if others { 30.0 } else { 45.0 },
+        affects_us: !others,
+        affects_others: others,
+        skip_nearby: false,
+        play_wabbajack: !others,
     };
-    Kind::by_path(parent).or_else(|| Kind::random_subtype(&mut rng, parent))
+    let (parent, args) = match category {
+        1 => ("/datum/hallucination/fake_sound/normal", None),
+        2 => ("/datum/hallucination/fake_sound/weird", None),
+        3 => ("/datum/hallucination/station_message", None),
+        // Everyone but the hallucinator, then only the hallucinator.
+        4 => (
+            "/datum/hallucination/delusion/preset",
+            Some(forced_args(true)),
+        ),
+        5 => (
+            "/datum/hallucination/delusion/preset",
+            Some(forced_args(false)),
+        ),
+        _ => (
+            GENERIC[rng.range(0, GENERIC.len() as u32 - 1) as usize],
+            None,
+        ),
+    };
+    let kind = Kind::by_path(parent).or_else(|| Kind::random_subtype(&mut rng, parent))?;
+    Some((kind, args))
 }
 
 /// The living humans; clientless ones only on the station levels (`GLOB.carbon_list` filters).
@@ -93,6 +120,7 @@ mod tests {
             "/datum/hallucination/fake_sound/normal",
             "/datum/hallucination/fake_sound/weird",
             "/datum/hallucination/station_message",
+            "/datum/hallucination/delusion/preset",
         ] {
             assert!(Kind::random_subtype(&mut rng, parent).is_some(), "{parent}");
         }
