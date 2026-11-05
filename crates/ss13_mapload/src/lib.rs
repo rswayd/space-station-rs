@@ -32,6 +32,7 @@ pub mod dock;
 pub mod door;
 pub mod drinks;
 pub mod fidelity;
+pub mod fishing;
 pub mod food;
 pub mod gags;
 pub mod guns;
@@ -88,6 +89,7 @@ pub use dock::{DmDockingPort, ShuttleTemplates};
 pub use door::{DmAirlockHelper, DmDoor, DoorKind};
 pub use drinks::DmGlass;
 pub use fidelity::{FidelityReport, IconIndex, MapSeed, tile_changed};
+pub use fishing::{DmFish, DmFishingRod};
 pub use food::{DmFood, Processing, Taste};
 pub use guns::{
     CasingData, DmArmor, DmCasing, DmGun, DmMagazine, DmTurret, GunSounds, MagazineData,
@@ -329,6 +331,8 @@ impl Plugin for DmProtoPlugin {
             .register_proto_component::<DmGlass>(drinks::GLASS_COMPONENT)
             .register_proto_component::<DmBarsign>(barsign::BARSIGN_COMPONENT)
             .register_proto_component::<DmService>(service::SERVICE_COMPONENT)
+            .register_proto_component::<DmFish>(fishing::FISH_COMPONENT)
+            .register_proto_component::<DmFishingRod>(fishing::ROD_COMPONENT)
             .register_proto_component::<DmMob>("dm_mob")
             .register_proto_component::<DmWallMount>("dm_wallmount")
             .register_proto_component::<DmCircuit>("dm_circuit")
