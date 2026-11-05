@@ -8,13 +8,13 @@
 23 цвета экстрактов (серый, золотой, серебряный, металлический, фиолетовый, ..., радужный): реагируют с плазмой/кровью/водой, дают предметы, мобов, взрывы, телепортацию; люминесценты активируют их в себе.
 
 - **Код:** [`/obj/item/slime_extract`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/xenobiology/xenobiology.dm#L3), [`proc/activate()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/xenobiology/xenobiology.dm#L60)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/science/xenobio.rs`: 22 типа экстрактов на 100 ед. (инъекции и забор шприцем), одно использование, реакции `/datum/chemical_reaction/slime` через химию (`extract_reacted`): слаймы, монкикубы, листы, зелья, предметы, ЭМИ, газ и взрыв через 5 с, бешенство слаймов; израсходованный «used slime extract» больше не реагирует; нет активации люминесцентами (вид jelly) и эффектов части реакций (призыв мобов, еда/напитки, пена, остановка времени, кластерные гранаты) — см. ../chemistry/reactions.md
 
 ### Слаймовые зелья
 Зелья из экстрактов: послушание, разум (sentience), перенос сознания, стероид, усилитель, стабилизатор, мутатор, скорость, огнеупорность, смена пола, переименование, радио для слаймов.
 
 - **Код:** [`/obj/item/slimepotion`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/xenobiology/xenobiology.dm#L682), [`slimepotion/sentience`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/xenobiology/xenobiology.dm#L735), [`slimepotion/transference`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/xenobiology/xenobiology.dm#L833), [`slimepotion/speed`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/xenobiology/xenobiology.dm#L955)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/science/xenobio.rs`: послушание (успокаивает бешеного или делает ручным «Pet Slime», без запроса имени), стероид (+1 ядро малышу, до 5), стабилизатор (−15% мутации), мутатор (+12%, один раз), усилитель/максимизатор экстракта (+1 / 5 использований); остальные зелья (разум, перенос, скорость, огнеупорность, пол, имя, радио) — предметы без эффекта
 
 ### Блюспейс- и сепиевая плитка
 Плитки из экстрактов: ускоряют передвижение / замедляют время на тайле.
@@ -33,7 +33,7 @@
 
 - **Код:** [`/obj/item/slimecross`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/xenobiology/crossbreeding/__corecross.dm#L27), [`stabilized`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/xenobiology/crossbreeding/stabilized.dm#L9), [`regenerative`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/xenobiology/crossbreeding/regenerative.dm#L6), [`burning`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/xenobiology/crossbreeding/burning.dm#L6), [`crossbreeding/`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/xenobiology/crossbreeding)
 - **BandaStation:** [`regenerative.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/xenobiology/crossbreeding/regenerative.dm#L33) — правка регенеративного экстракта и фикс клонирования
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/science/xenobio.rs` (`crossbreed`, `spawn_corecross`): 10 экстрактов одного вида, скормленные взрослому слайму, дают кросс-экстракт его цвета и семейства экстракта (или лужицу для семейств без кросса); эффекты самих кросс-экстрактов (11 семейств) не перенесены
 
 ### Чан выращивания (vatgrower)
 Чан, питаемый реагентами, выращивает мобов из образцов клеточных линий (34 обычных линии и органы); вирусы в образце мешают росту.

@@ -233,6 +233,14 @@ impl Plugin for ExplosionsServerPlugin {
     }
 }
 
+/// Queues the turfs of `tiles` for the blast of `severity` on the subsystem's next round
+/// (tg `SSexplosions.lowturf` / `medturf` / `highturf += T`).
+pub fn queue_turfs(world: &mut World, tiles: &[TilePos], severity: Severity) {
+    if let Some(mut q) = world.get_resource_mut::<ExplosionQueue>() {
+        q.turfs[slot(severity)].extend_from_slice(tiles);
+    }
+}
+
 /// Queues `things` for the blast of `severity` on the subsystem's next round.
 pub fn queue_movables(world: &mut World, things: &[Entity], severity: Severity) {
     if let Some(mut q) = world.get_resource_mut::<ExplosionQueue>() {

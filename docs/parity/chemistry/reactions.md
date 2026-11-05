@@ -43,7 +43,7 @@
 
 - **Код:** [`recipes/slime_extracts.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/reagents/chemistry/recipes/slime_extracts.dm#L1)
 - **BandaStation:** [`code/modules/reagents/chemistry/recipes/slime_extracts.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/reagents/chemistry/recipes/slime_extracts.dm#L583) — убрано зелье полёта
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload/src/reagents.rs` конвертирует `/datum/chemical_reaction/slime/*` (их проверку — заряд экстракта — ведёт игра), `crates/ss13_game/src/science/xenobio.rs` (`extract_reacted`): расход заряда, «used slime extract», реагентные продукты, спавн слаймов, монкикубов, листов, плитки, кристаллов, зелий и предметов, ЭМИ, газ и взрыв с задержкой 5 с, бешенство слаймов; без эффекта (только расход): призыв мобов золотым, еда/напитки серебряным, пена синего, остановка времени сепии, кластерные гранаты радужного
 
 ### Брызги химии и химический дым/пена
 Разбитый контейнер или реакция разбрызгивают реагенты (`chem_splash`), дым и пена разносят реагенты по площади и воздействуют на всех.

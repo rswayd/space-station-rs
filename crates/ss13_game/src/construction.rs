@@ -241,6 +241,8 @@ pub enum Job {
     Explosive(crate::explosions::sources::ExplosiveJob),
     /// An experi-scanner's scan ([`crate::science::experi_scanner`]).
     Experiment,
+    /// Taking a dead slime's cores out ([`crate::science::xenobio`]).
+    SlimeCores,
     /// Reading a martial arts manual or scroll ([`crate::martial`]).
     Martial(crate::martial::ReadJob),
     /// Welding a camera frame or a camera off the wall ([`crate::defenses::cameras`]).
@@ -1230,6 +1232,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Gibber(job) => crate::gibber::complete(world, mob, action, job),
         &Job::Explosive(job) => crate::explosions::sources::complete(world, mob, action, job),
         Job::Experiment => crate::science::experi_scanner::complete(world, mob, action),
+        Job::SlimeCores => crate::science::xenobio::complete_core_removal(world, action),
         &Job::Martial(job) => crate::martial::complete_reading(world, mob, action, job),
         &Job::Religion(job) => crate::service::religion_complete(world, mob, action, job),
         &Job::Camera(job) => crate::defenses::cameras::complete(world, mob, action, job),

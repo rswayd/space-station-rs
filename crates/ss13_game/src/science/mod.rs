@@ -7,7 +7,8 @@
 //! [`lathe`], the destructive analyzer (tgui `DestructiveAnalyzer`) in [`analyzer`], experiments
 //! (`code/modules/experisci/`) in [`experiments`] with their handlers (the experi-scanner, the
 //! destructive scanner, tgui `ExperimentConfigure`) in [`experi_scanner`], and the server control
-//! console (tgui `ServerControl`) in [`server_control`].
+//! console (tgui `ServerControl`) in [`server_control`]. Xenobiology's slimes, extracts and
+//! potions are in [`xenobio`].
 //! [`client`] draws the windows. This module holds the windows' data, which both halves
 //! share.
 //!
@@ -38,6 +39,8 @@ pub mod points;
 pub mod server_control;
 #[cfg(feature = "server")]
 pub mod techweb;
+#[cfg(feature = "server")]
+pub mod xenobio;
 
 /// Research on the server: the techweb, its servers, consoles, lathes and the analyzer.
 #[cfg(feature = "server")]
@@ -62,6 +65,7 @@ impl bevy::prelude::Plugin for ScienceServerPlugin {
             autolathe::AutolathePlugin,
             experi_scanner::ExperiScannerPlugin,
             server_control::ServerControlPlugin,
+            xenobio::XenobioPlugin,
         ));
     }
 }

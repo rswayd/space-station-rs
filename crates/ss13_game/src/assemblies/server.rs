@@ -1089,6 +1089,11 @@ pub fn signal(world: &mut World, a: Entity) {
         })
         .map(|(e, _)| e)
         .collect();
+    // Anomaly cores listen too (`crate::events::anomalies`).
+    let area = (range > 0).then(|| from.map(|f| (f, range))).flatten();
+    if range == 0 || area.is_some() {
+        crate::events::anomalies::signal_received(world, frequency, code, area);
+    }
     for r in receivers {
         if range > 0 {
             let (Some(from), Some(to)) = (from, crate::explosions::turf_of(world, r)) else {

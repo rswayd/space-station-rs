@@ -91,3 +91,4 @@ mod vending;
 mod wallmount;
 mod wires;
 mod wizard;
+mod xenobio;

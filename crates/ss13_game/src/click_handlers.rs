@@ -137,6 +137,7 @@
 //! | 1650 | `radiation::geiger_interact` |
 //! | 1700 | `service::server::item_interaction` |
 //! | 1750 | `medical::bodyparts::item_interaction` |
+//! | 1777 | `science::xenobio::item_interaction` (slimes, extracts) |
 //! | 1800 | `kitchen::item_interaction` |
 //! | 1900 | `cooking::item_interaction` |
 //! | 2000 | `smartfridge::item_interaction` |
@@ -171,6 +172,7 @@
 //! | 4800 | `cargo::bounty::item_interaction` |
 //! | 4900 | `brig::prisoner::item_interaction` |
 //! | 5000 | `cargo::scanner::item_interaction` |
+//! | 5090 | `events::anomalies::analyzer_act` (anomalies, anomaly cores) |
 //! | 5100 | `atmos` analyzer scans the clicked atom |
 //! | 5200 | `modpc::pda::item_interaction` |
 

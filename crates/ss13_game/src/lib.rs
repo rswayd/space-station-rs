@@ -96,7 +96,7 @@
 //! - `science` (feature `server`; the windows' data shared, `science::client` with `client`):
 //!   the station techweb, research points from R&D servers, the R&D console's tgui `Techweb`,
 //!   the protolathe, circuit imprinter and departmental techfabs (tgui `Fabricator`) with the ore
-//!   silo's material storage, and the destructive analyzer.
+//!   silo's material storage, the destructive analyzer, and xenobiology's slimes and extracts.
 //! - `silicon` (feature `server`; the windows' data shared, `silicon::client` with `client`):
 //!   security cameras and the camera network, the camera console, the AI (core, eye, AI
 //!   clicks), cyborgs (models, cell, recharging stations), laws, binary chat.
