@@ -138,6 +138,10 @@ pub struct JobPrefsStatic {
     /// tg `default_quirk_balance`, `max_positive_quirks`.
     pub default_quirk_balance: i32,
     pub max_positive_quirks: u8,
+    /// The selectable species' names (`crate::human::roundstart_species`) and the mutant colors
+    /// of species with `TRAIT_MUTANT_COLORS`.
+    pub species: Vec<String>,
+    pub mutant_colors: Vec<[u8; 3]>,
 }
 
 /// One quirk of the menu (tg `quirk_info` entry).
@@ -155,11 +159,13 @@ pub struct QuirkInfo {
 /// bald).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AppearanceData {
+    pub species: u8,
     pub female: bool,
     pub skin_tone: u8,
     pub hair_style: Option<u8>,
     pub hair_color: u8,
     pub eye_color: u8,
+    pub mutant_color: u8,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -207,3 +213,5 @@ pub const APPEARANCE_SKIN_TONE: &str = "skin_tone";
 pub const APPEARANCE_HAIR_STYLE: &str = "hair_style";
 pub const APPEARANCE_HAIR_COLOR: &str = "hair_color";
 pub const APPEARANCE_EYE_COLOR: &str = "eye_color";
+pub const APPEARANCE_SPECIES: &str = "species";
+pub const APPEARANCE_MUTANT_COLOR: &str = "mutant_color";

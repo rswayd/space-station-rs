@@ -176,8 +176,11 @@ pub fn healthscan(world: &World, target: Entity) -> Option<ChatMessage> {
     if let Some(traumas) = crate::medical::traumas::scan_line(world, target) {
         lines.text(Span::Warning, format!("Мозг: ↳ {traumas}"));
     }
-    // tg prints the human species name (`/datum/species/human`, untranslated).
-    lines.text(Span::Info, "Вид: Human");
+    // tg prints the species `name` (upstream's untranslated, BandaStation's in Russian).
+    lines.text(
+        Span::Info,
+        format!("Вид: {}", crate::species::def_of(world, target).name),
+    );
     if let Some(blood) = world.get::<crate::medical::blood::Blood>(target) {
         use crate::medical::blood::{BLOOD_VOLUME_NORMAL, BLOOD_VOLUME_OKAY, BLOOD_VOLUME_SAFE};
         let volume = blood.volume;

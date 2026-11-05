@@ -22,10 +22,11 @@ use ss13_ui_kit::theme::{Bold, FontPx, root_text_style};
 
 use crate::lobby::{
     APPEARANCE_EYE_COLOR, APPEARANCE_FEMALE, APPEARANCE_HAIR_COLOR, APPEARANCE_HAIR_STYLE,
-    APPEARANCE_SKIN_TONE, AppearanceData, CHARACTER_SETUP, GIVE_QUIRK, GameState, JOBLESS_ROLE,
-    JobPrefsData, JobPrefsStatic, JobPrefsUi, JobPriority, JoblessRole, LobbyData, LobbyUi,
-    OBSERVE, RANDOMIZE_APPEARANCE, REMOVE_QUIRK, SET_ANTAGS, SET_APPEARANCE, SET_JOB_PREFERENCE,
-    SET_PREFERENCE, TOGGLE_ANTAG_ROLL, TOGGLE_READY,
+    APPEARANCE_MUTANT_COLOR, APPEARANCE_SKIN_TONE, APPEARANCE_SPECIES, AppearanceData,
+    CHARACTER_SETUP, GIVE_QUIRK, GameState, JOBLESS_ROLE, JobPrefsData, JobPrefsStatic, JobPrefsUi,
+    JobPriority, JoblessRole, LobbyData, LobbyUi, OBSERVE, RANDOMIZE_APPEARANCE, REMOVE_QUIRK,
+    SET_ANTAGS, SET_APPEARANCE, SET_JOB_PREFERENCE, SET_PREFERENCE, TOGGLE_ANTAG_ROLL,
+    TOGGLE_READY,
 };
 
 /// tg `/datum/hud/new_player` title: `icons/runtime/default_title.dmi`, the unnamed state.
@@ -755,7 +756,8 @@ fn appearance_stepper(
     })
 }
 
-/// The appearance section: body type, skin tone, hair style and color, eye color, randomize.
+/// The appearance section: species, body type, skin tone, mutant color, hair style and color,
+/// eye color, randomize.
 fn appearance_rows(st: &JobPrefsStatic, look: &AppearanceData) -> impl SceneList + use<> {
     let female = look.female;
     let body = EntityScene(bsn! {
@@ -769,6 +771,26 @@ fn appearance_rows(st: &JobPrefsStatic, look: &AppearanceData) -> impl SceneList
         ]
     });
     let index = |i: usize| i.to_string();
+    let species = appearance_stepper(
+        "Вид",
+        APPEARANCE_SPECIES,
+        (look.species as usize, st.species.len().max(1)),
+        &index,
+        st.species
+            .get(look.species as usize)
+            .cloned()
+            .unwrap_or_default(),
+        None,
+    );
+    // shortcut: shown for every species; only those with `TRAIT_MUTANT_COLORS` use it.
+    let mutant_color = appearance_stepper(
+        "Цвет тела",
+        APPEARANCE_MUTANT_COLOR,
+        (look.mutant_color as usize, st.mutant_colors.len().max(1)),
+        &index,
+        String::new(),
+        st.mutant_colors.get(look.mutant_color as usize).copied(),
+    );
     let skin = st.skin_tones.get(look.skin_tone as usize);
     let skin = appearance_stepper(
         "Тон кожи",
@@ -818,5 +840,14 @@ fn appearance_rows(st: &JobPrefsStatic, look: &AppearanceData) -> impl SceneList
         Act({RANDOMIZE_APPEARANCE.to_owned()})
         Name("appearance: random")
     });
-    (body, skin, hair, hair_color, eye_color, random)
+    (
+        species,
+        body,
+        skin,
+        mutant_color,
+        hair,
+        hair_color,
+        eye_color,
+        random,
+    )
 }

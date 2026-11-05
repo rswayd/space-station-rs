@@ -6,6 +6,9 @@
 //! [`HumanAppearances`] turns a [`HumanLook`] into an [`Appearance`] once per distinct look and
 //! keeps it: spawning a player is a hash lookup plus a clone.
 //!
+//! The limbs are the species' (`crate::species::Limbs`): their icon, `limb_id`, dimorphism and
+//! color source (skin tone, mutant color, a fixed color or none).
+//!
 //! BandaStation (`modular_bandastation`) adds hair styles and other species but does not change
 //! how a human is drawn; everything here follows upstream tg.
 
@@ -15,6 +18,8 @@ use std::fmt;
 use bevy::prelude::*;
 use ss13_assets::manifest::AssetManifest;
 use ss13_shared::{Appearance, Dir, IconStateId, Overlay};
+
+use crate::species::{LimbColor, SpeciesId};
 
 /// tg standing overlay layers (`code/__DEFINES/mobs.dm`). They are applied as `-layer`, so a
 /// higher number draws further below.
@@ -114,6 +119,13 @@ pub const HAIR_COLORS: [u32; 36] = [
     0xba673c, 0xc89f73, 0xd9b380, 0xdbc9b8, 0xe1621d, 0xe17d17, 0xe1af93, 0xf1cc8f, 0xfbe7a1,
 ];
 
+/// Mutant colors (`features["mcolor"]`) offered for species with `TRAIT_MUTANT_COLORS`.
+// shortcut: a palette instead of tg's free color picker (`/datum/preference/color/mutant_color`).
+pub const MUTANT_COLORS: [u32; 12] = [
+    0x77dd44, 0x44aa33, 0x2f7a3a, 0xa9e25d, 0x6699cc, 0x3355aa, 0xcc6644, 0xaa3333, 0xddbb55,
+    0x886644, 0x9966cc, 0xdddddd,
+];
+
 /// The fixed colors of `/proc/random_eye_color` (brown, hazel, a grey, blue, green, amber).
 pub const EYE_COLORS: [u32; 6] = [0x663300, 0x554422, 0x888888, 0x3366cc, 0x006600, 0xffcc00];
 
@@ -178,6 +190,9 @@ pub const ASSISTANT_SHOES: &str = "/obj/item/clothing/shoes/sneakers/black";
 // (`masking_helpers.dmi`, `wear_female_version`), a pixel mask overlays cannot express.
 #[derive(Component, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct HumanLook {
+    /// The species whose limbs are drawn (`crate::species::set_species` keeps it in step with
+    /// the mob's `Species`).
+    pub species: SpeciesId,
     /// tg `physique == FEMALE`: the dimorphic parts (head, chest) use their `_f` states.
     pub female: bool,
     /// A name from [`SKIN_TONES`].
@@ -186,6 +201,8 @@ pub struct HumanLook {
     pub hair_style: Option<String>,
     pub hair_color: [u8; 3],
     pub eye_color: [u8; 3],
+    /// `features["mcolor"]`: the limbs' color for `LimbColor::Mutant` species.
+    pub mutant_color: [u8; 3],
     /// Item types, see [`WORN`].
     pub uniform: Option<String>,
     pub shoes: Option<String>,
@@ -216,12 +233,21 @@ impl HumanLook {
 // palettes of its random tables.
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AppearancePrefs {
+    /// Index into [`roundstart_species`].
+    pub species: usize,
     pub female: bool,
     pub skin_tone: usize,
     /// `None` = bald (tg "Bald").
     pub hair_style: Option<usize>,
     pub hair_color: usize,
     pub eye_color: usize,
+    /// Index into [`MUTANT_COLORS`].
+    pub mutant_color: usize,
+}
+
+/// The species a character may be (`get_selectable_species`), in preferences order.
+pub fn roundstart_species() -> Vec<SpeciesId> {
+    SpeciesId::roundstart().collect()
 }
 
 impl AppearancePrefs {
@@ -229,18 +255,23 @@ impl AppearancePrefs {
     pub fn random(seed: u64) -> Self {
         let mut state = seed;
         let mut pick = |n: usize| (splitmix64(&mut state) % n as u64) as usize;
+        // The species stays human (tg randomizes the species only when asked to).
         Self {
+            species: 0,
             female: pick(2) == 1,
             skin_tone: pick(SKIN_TONES.len()),
             hair_style: Some(pick(HAIR_STYLES.len())),
             hair_color: pick(HAIR_COLORS.len()),
             eye_color: pick(EYE_COLORS.len()),
+            mutant_color: pick(MUTANT_COLORS.len()),
         }
     }
 
     /// Every index inside its table (player input is checked with this before it is stored).
     pub fn is_valid(&self) -> bool {
-        self.skin_tone < SKIN_TONES.len()
+        self.species < roundstart_species().len()
+            && self.mutant_color < MUTANT_COLORS.len()
+            && self.skin_tone < SKIN_TONES.len()
             && self.hair_style.is_none_or(|h| h < HAIR_STYLES.len())
             && self.hair_color < HAIR_COLORS.len()
             && self.eye_color < EYE_COLORS.len()
@@ -248,12 +279,19 @@ impl AppearancePrefs {
 
     /// The naked body with this appearance.
     pub fn body(&self) -> HumanLook {
+        let species = roundstart_species()
+            .get(self.species)
+            .copied()
+            .unwrap_or_default();
         HumanLook {
-            female: self.female,
+            species,
+            // `sexes = FALSE`: never female.
+            female: self.female && species.def().sexes,
             skin_tone: SKIN_TONES[self.skin_tone].0.into(),
             hair_style: self.hair_style.map(|h| HAIR_STYLES[h].into()),
             hair_color: hex_rgb(HAIR_COLORS[self.hair_color]),
             eye_color: hex_rgb(EYE_COLORS[self.eye_color]),
+            mutant_color: hex_rgb(MUTANT_COLORS[self.mutant_color]),
             uniform: None,
             shoes: None,
             husk: false,
@@ -308,24 +346,49 @@ impl fmt::Display for LookError {
 /// leg of an east or west facing on [`BODYPARTS_LOW_LAYER`].
 pub fn parts(look: &HumanLook) -> Result<Vec<Part>, LookError> {
     let mut errors = Vec::new();
-    let mut skin = SKIN_TONES
-        .iter()
-        .find(|(name, _)| *name == look.skin_tone)
-        .map(|&(_, color)| color);
-    if skin.is_none() {
-        errors.push(format!("unknown skin tone {:?}", look.skin_tone));
-    }
+    let limbs = look.species.def().limbs;
+    let mut skin = match limbs.color {
+        LimbColor::Skin => {
+            let skin = SKIN_TONES
+                .iter()
+                .find(|(name, _)| *name == look.skin_tone)
+                .map(|&(_, color)| color);
+            if skin.is_none() {
+                errors.push(format!("unknown skin tone {:?}", look.skin_tone));
+            }
+            skin
+        }
+        LimbColor::Mutant => Some(look.mutant_color),
+        LimbColor::Fixed(color) => Some(color),
+        LimbColor::Static => None,
+    };
     if look.husk {
         skin = Some(HUSK_SKIN);
     }
     let limb = |layer, state: &str, only_dirs: u8| Part {
         layer,
-        dmi: BODYPARTS_DMI,
-        state: format!("human_{state}"),
+        dmi: limbs.dmi,
+        state: format!("{}_{state}", limbs.id),
         color: skin,
         only_dirs,
     };
+    // `digitigrade_*_leg` of the same icon (`limb_id = BODYPART_ID_DIGITIGRADE`).
+    let leg = |layer, side: &str, only_dirs: u8| Part {
+        state: if limbs.digitigrade {
+            format!("digitigrade_{side}_leg")
+        } else {
+            format!("{}_{side}_leg", limbs.id)
+        },
+        ..limb(layer, "", only_dirs)
+    };
     let gender = if look.female { "f" } else { "m" };
+    let dimorphic = |part: &str, dimorphic: bool| {
+        if dimorphic {
+            format!("{part}_{gender}")
+        } else {
+            part.to_owned()
+        }
+    };
     let (n, s, e, w) = (
         Dir::North as u8,
         Dir::South as u8,
@@ -334,30 +397,40 @@ pub fn parts(look: &HumanLook) -> Result<Vec<Part>, LookError> {
     );
     use crate::zone::BodyZone;
     let has = |zone: BodyZone| look.missing & (1 << zone.index()) == 0;
-    let mut parts: Vec<Part> = [
+    let mut limb_parts = vec![
         (BodyZone::LArm, limb(BODYPARTS_LAYER, "l_arm", 0)),
         (BodyZone::LArm, limb(BODYPARTS_HIGH_LAYER, "l_hand", 0)),
         (BodyZone::RArm, limb(BODYPARTS_LAYER, "r_arm", 0)),
         (BodyZone::RArm, limb(BODYPARTS_HIGH_LAYER, "r_hand", 0)),
         (
             BodyZone::Head,
-            limb(BODYPARTS_LAYER, &format!("head_{gender}"), 0),
+            limb(BODYPARTS_LAYER, &dimorphic("head", limbs.head_dimorphic), 0),
         ),
         // `left_leg` / `left_leg_lower` masks.
-        (BodyZone::LLeg, limb(BODYPARTS_LAYER, "l_leg", s | n | w)),
-        (BodyZone::LLeg, limb(BODYPARTS_LOW_LAYER, "l_leg", e)),
+        (BodyZone::LLeg, leg(BODYPARTS_LAYER, "l", s | n | w)),
+        (BodyZone::LLeg, leg(BODYPARTS_LOW_LAYER, "l", e)),
         // `right_leg` / `right_leg_lower`.
-        (BodyZone::RLeg, limb(BODYPARTS_LAYER, "r_leg", s | n | e)),
-        (BodyZone::RLeg, limb(BODYPARTS_LOW_LAYER, "r_leg", w)),
+        (BodyZone::RLeg, leg(BODYPARTS_LAYER, "r", s | n | e)),
+        (BodyZone::RLeg, leg(BODYPARTS_LOW_LAYER, "r", w)),
         (
             BodyZone::Chest,
-            limb(BODYPARTS_LAYER, &format!("chest_{gender}"), 0),
+            limb(
+                BODYPARTS_LAYER,
+                &dimorphic("chest", limbs.chest_dimorphic),
+                0,
+            ),
         ),
-    ]
-    .into_iter()
-    .filter(|(zone, _)| has(*zone))
-    .map(|(_, part)| part)
-    .collect();
+    ];
+    limb_parts.retain(|(zone, part)| {
+        let hand = part.state.ends_with("_hand");
+        let leg = matches!(zone, BodyZone::LLeg | BodyZone::RLeg);
+        (!hand || limbs.hands) && (!leg || limbs.legs)
+    });
+    let mut parts: Vec<Part> = limb_parts
+        .into_iter()
+        .filter(|(zone, _)| has(*zone))
+        .map(|(_, part)| part)
+        .collect();
     if look.husk {
         // Blend-inset in tg (masked by the limb); these sprites stay inside their limbs.
         for (zone, name) in [
@@ -368,7 +441,7 @@ pub fn parts(look: &HumanLook) -> Result<Vec<Part>, LookError> {
             (BodyZone::RLeg, "r_leg"),
             (BodyZone::Chest, "chest"),
         ] {
-            if !has(zone) {
+            if !has(zone) || (!limbs.legs && matches!(zone, BodyZone::LLeg | BodyZone::RLeg)) {
                 continue;
             }
             parts.push(Part {
@@ -379,12 +452,14 @@ pub fn parts(look: &HumanLook) -> Result<Vec<Part>, LookError> {
                 only_dirs: 0,
             });
         }
-    } else if !look.eyeless {
+    } else if !look.eyeless
+        && let Some(eyes) = limbs.eyes
+    {
         for side in ["l", "r"] {
             parts.push(Part {
                 layer: EYES_LAYER,
                 dmi: EYES_DMI,
-                state: format!("eyes_{side}"),
+                state: format!("{eyes}_{side}"),
                 color: Some(look.eye_color),
                 only_dirs: 0,
             });
@@ -403,7 +478,11 @@ pub fn parts(look: &HumanLook) -> Result<Vec<Part>, LookError> {
             only_dirs: 0,
         }));
     }
-    if let Some(style) = look.hair_style.as_ref().filter(|_| !look.husk) {
+    if let Some(style) = look
+        .hair_style
+        .as_ref()
+        .filter(|_| !look.husk && limbs.hair)
+    {
         parts.push(Part {
             layer: HAIR_LAYER,
             dmi: HAIR_DMI,
@@ -434,6 +513,7 @@ pub struct HumanAppearances {
 impl HumanAppearances {
     pub fn new(manifest: &AssetManifest, base: Appearance) -> Self {
         let mut dmis: HashSet<&str> = [BASE.0, BODYPARTS_DMI, EYES_DMI, HAIR_DMI, HUSK_DMI].into();
+        dmis.extend(crate::species::LIMB_DMIS);
         dmis.extend(
             WORN.iter()
                 .flat_map(|(_, _, s)| s.iter().map(|(dmi, ..)| *dmi)),

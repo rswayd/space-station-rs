@@ -291,6 +291,8 @@ pub struct OrganHost;
 #[derive(Component, Clone, Debug, PartialEq)]
 pub struct Organ {
     pub slot: Slot,
+    /// The organ's type (species variants differ: `crate::species`).
+    pub path: String,
     pub damage: f32,
     /// `ORGAN_FAILING`.
     pub failing: bool,
@@ -316,6 +318,7 @@ impl Organ {
     pub fn new(slot: Slot, path: &str) -> Self {
         Self {
             slot,
+            path: path.to_owned(),
             damage: 0.0,
             failing: false,
             robotic: path.contains("/cybernetic"),
@@ -545,7 +548,8 @@ pub fn spawn_organ(world: &mut World, path: &str) -> Option<Entity> {
     Some(entity)
 }
 
-/// The human species' organs (`/datum/species/human` `mutant*`).
+/// The species' organs (`mutant*` of its `/datum/species`; a mob without
+/// `crate::species::Species` is human).
 fn give_organs(
     add: On<Add<Health>>,
     excluded: Query<(), Or<(With<crate::mobs::BasicMob>, With<crate::silicon::Silicon>)>>,
@@ -560,8 +564,9 @@ fn give_organs(
             return;
         }
         world.entity_mut(mob).insert(OrganHost);
+        let set = crate::species::def_of(world, mob).organs;
         for slot in Slot::ALL {
-            if let Some(organ) = spawn_organ(world, slot.spec().path) {
+            if let Some(organ) = set.get(slot).and_then(|path| spawn_organ(world, path)) {
                 world.entity_mut(organ).insert(OrganOf(mob));
             }
         }
@@ -667,7 +672,11 @@ fn refresh_look(world: &mut World, mob: Entity) {
 
 /// tg `needs_heart()` of a human, `undergoing_cardiac_arrest()`: no beating heart.
 pub fn cardiac_arrest(world: &World, mob: Entity) -> bool {
+    use crate::species::{Trait, def_of, has_trait};
+    // `needs_heart()`: not a species without a heart or blood.
     world.get::<OrganHost>(mob).is_some()
+        && def_of(world, mob).organs.heart.is_some()
+        && !has_trait(world, mob, Trait::NoBlood)
         && state(world, mob, Slot::Heart).is_none_or(|h| !h.beating)
 }
 
@@ -712,9 +721,10 @@ pub fn regenerate(world: &mut World, mob: Entity) {
     if world.get::<OrganHost>(mob).is_none() {
         return;
     }
+    let set = crate::species::def_of(world, mob).organs;
     for slot in Slot::ALL {
         if organ(world, mob, slot).is_none()
-            && let Some(new) = spawn_organ(world, slot.spec().path)
+            && let Some(new) = set.get(slot).and_then(|path| spawn_organ(world, path))
         {
             insert(world, new, mob);
         }
@@ -974,7 +984,8 @@ fn handle_heart(world: &mut World, mob: Entity, secs: f32) {
 /// `handle_liver` without a liver: 0.6 toxin a second and 0.5 damage to a random organ (the
 /// liverless metabolism is `crate::chem`'s).
 fn handle_liver(world: &mut World, mob: Entity, secs: f32) {
-    if !lacks(world, mob, Slot::Liver) {
+    use crate::species::{Trait, has_trait};
+    if !lacks(world, mob, Slot::Liver) || has_trait(world, mob, Trait::LiverlessMetabolism) {
         return;
     }
     super::hurt_limb(world, mob, BodyZone::Chest, DamageType::Tox, 0.6 * secs);

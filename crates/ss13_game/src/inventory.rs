@@ -1188,7 +1188,7 @@ fn click_equip_slot(
                 .expect("checked by actor")
                 .hands[hand] = Some(worn);
         }
-        (Some(item), None) if can_equip(world, inventory, item, slot) => {
+        (Some(item), None) if can_equip(world, mob, inventory, item, slot) => {
             let mut inventory = world.get_mut::<Inventory>(mob).expect("checked by actor");
             inventory.hands[hand] = None;
             *inventory.slot_mut(slot) = Some(item);
@@ -1197,13 +1197,21 @@ fn click_equip_slot(
     }
 }
 
-/// tg `/datum/species/proc/can_equip` for an organic human with every limb, into an empty
-/// `slot` (hands excluded: they are not equipped through it here).
-pub fn can_equip(world: &World, inventory: &Inventory, item: Entity, slot: InventorySlot) -> bool {
+/// tg `/datum/species/proc/can_equip` for `mob`, an organic human with every limb, into an
+/// empty `slot` (hands excluded: they are not equipped through it here).
+pub fn can_equip(
+    world: &World,
+    mob: Entity,
+    inventory: &Inventory,
+    item: Entity,
+    slot: InventorySlot,
+) -> bool {
     let Some(dm) = world.get::<DmItem>(item) else {
         return false;
     };
-    if inventory.slot(slot).is_some() {
+    // The species' `no_equip_flags`.
+    // shortcut: no `species_exception` items.
+    if inventory.slot(slot).is_some() || !crate::species::can_wear(world, mob, slot_bit(slot)) {
         return false;
     }
     let w_class = world

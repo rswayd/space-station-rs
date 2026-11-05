@@ -162,6 +162,8 @@ fn human_states() -> Vec<(String, String)> {
         for hair in HAIR_STYLES {
             let look = HumanLook {
                 female,
+                species: Default::default(),
+                mutant_color: [0, 0, 0],
                 skin_tone: "albino".into(),
                 hair_style: Some(hair.into()),
                 hair_color: [0, 0, 0],

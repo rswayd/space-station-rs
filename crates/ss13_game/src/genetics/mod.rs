@@ -488,6 +488,10 @@ fn tell(world: &mut World, mob: Entity, span: Span, text: &str) {
 
 /// `add_mutation(mutation, sources)`. False when nothing changed.
 pub fn add_mutation(world: &mut World, mob: Entity, id: usize, sources: u8) -> bool {
+    // `can_mutate()`: an organic body that is not `TRAIT_GENELESS`.
+    if !crate::species::can_mutate(world, mob) {
+        return false;
+    }
     let db = db(world);
     let Some(mut dna) = world.get::<Dna>(mob).cloned() else {
         return false;

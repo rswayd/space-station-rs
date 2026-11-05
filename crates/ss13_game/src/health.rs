@@ -141,6 +141,34 @@ pub struct Health {
     /// burn, toxin, oxygen, stamina). Every damage type becomes brute (tg
     /// `simple_transfer_to_brute_loss`), kept on the chest; no crit, dead at 0 health.
     pub basic: Option<[f32; 5]>,
+    /// What the body's species does to damage (`crate::species`).
+    pub mods: BodyMods,
+}
+
+/// The damage rules a species brings: its bodyparts' `brute_modifier`/`burn_modifier`
+/// (`receive_damage`), `TRAIT_TOXINLOVER`/`TRAIT_TOXIMMUNE` (`adjust_tox_loss`) and
+/// `TRAIT_NOSOFTCRIT` (`update_stat`).
+// shortcut: a toxin lover's blood volume does not follow its toxin damage (tg
+// `adjust_blood_volume` in `adjust_tox_loss`); per-limb modifiers are one value for the body.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BodyMods {
+    pub brute: f32,
+    pub burn: f32,
+    pub tox_lover: bool,
+    pub tox_immune: bool,
+    pub no_softcrit: bool,
+}
+
+impl Default for BodyMods {
+    fn default() -> Self {
+        Self {
+            brute: 1.0,
+            burn: 1.0,
+            tox_lover: false,
+            tox_immune: false,
+            no_softcrit: false,
+        }
+    }
 }
 
 impl Default for Health {
@@ -154,6 +182,7 @@ impl Default for Health {
             parts: [Bodypart::default(); 6],
             missing: 0,
             basic: None,
+            mods: BodyMods::default(),
         }
     }
 }
@@ -179,6 +208,7 @@ impl Health {
             max: self.max,
             basic: self.basic,
             missing: self.missing,
+            mods: self.mods,
             ..Self::default()
         }
     }
@@ -227,7 +257,16 @@ impl Health {
                 }
                 return;
             }
-            DamageType::Tox => &mut self.tox,
+            DamageType::Tox => {
+                // `adjust_tox_loss`: damage becomes healing for a toxin lover; immunity stops
+                // damage, not healing.
+                let mut amount = if self.mods.tox_lover { -amount } else { amount };
+                if self.mods.tox_immune {
+                    amount = amount.min(0.0);
+                }
+                self.tox = (self.tox + amount).max(0.0);
+                return;
+            }
             DamageType::Oxy => &mut self.oxy,
             DamageType::Stamina => return,
         };
@@ -256,7 +295,15 @@ impl Health {
             self.heal_zone(zone, brute, burn);
             return;
         }
-        let amount = precise(amount);
+        // `receive_damage`: the bodypart's `brute_modifier`/`burn_modifier`.
+        let amount = precise(
+            amount
+                * if burn {
+                    self.mods.burn
+                } else {
+                    self.mods.brute
+                },
+        );
         let part = &mut self.parts[zone.index()];
         let can_inflict = zone.max_damage() - part.damage();
         if can_inflict <= 0.0 || amount <= 0.0 {
@@ -416,7 +463,11 @@ pub fn update_stat(health: &Health, stat: &mut Stat) -> Option<Stat> {
     let new = match health.basic {
         Some(_) if health.health() <= 0.0 => Stat::Dead,
         Some(_) => Stat::Conscious,
-        None => Stat::for_health(health.health()),
+        // `TRAIT_NOSOFTCRIT`: conscious until hard crit.
+        None => match Stat::for_health(health.health()) {
+            Stat::SoftCrit if health.mods.no_softcrit => Stat::Conscious,
+            stat => stat,
+        },
     };
     (new != *stat).then(|| std::mem::replace(stat, new))
 }

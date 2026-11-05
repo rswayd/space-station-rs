@@ -59,7 +59,7 @@ CO2 выше 10 кПа душит и в итоге вырубает, плазм�
 Вне безопасного диапазона — burn-урон, оповещения жары/холода, замедление от холода (`cold slowdown`), термальные раны и потливость; модификаторы вида `coldmod`/`heatmod`, черты `TRAIT_RESISTCOLD`/`TRAIT_RESISTHEAT`.
 
 - **Код:** [`proc/body_temperature_damage()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/human/_species.dm#L1196), [`proc/body_temperature_alerts()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/human/_species.dm#L1143), [`/datum/movespeed_modifier/cold`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/movespeed/modifiers/mobs.dm#L75)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/breath.rs`: урон и оповещения; нет замедления от холода, термальных ран, модификаторов вида
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/breath.rs`: урон и оповещения, пределы и норма температуры вида, `coldmod`/`heatmod`, `TRAIT_RESISTCOLD`/`TRAIT_RESISTHEAT`, холоднокровие (`crates/ss13_game/src/species/mod.rs`); нет замедления от холода, термальных ран
 
 ### Обмен теплом между мобами
 Объятия и тесный контакт передают тепло (`share_bodytemperature`) — греет замёрзших.

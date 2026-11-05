@@ -14,8 +14,8 @@
 //!   below 200 ("sluggish"); it scales how fast non-food reagents metabolize.
 //! - [`HungerHudData`] reaches the owner as the headless tgui interface [`HungerHudUi`]: the
 //!   hunger state and the bar's fullness (`get_fullness(only_consumable = TRUE)`).
-// shortcut: no jitter from negative satiety, no TRAIT_NOHUNGER/glutton species, no stomach lining
-// reagent. The nutrition moodlets are `crate::mood`'s.
+// shortcut: no jitter from negative satiety, no glutton species, no stomach lining reagent.
+// The nutrition moodlets are `crate::mood`'s.
 
 use bevy::prelude::*;
 use ss13_net::chat::server::SendChat;
@@ -263,6 +263,7 @@ fn hunger_life(
         Option<&Organs>,
         Has<OrganHost>,
         Option<&crate::mood::Mood>,
+        Option<&crate::species::Species>,
     )>,
     organs: Query<&Organ>,
     mut chat: MessageWriter<SendChat>,
@@ -270,7 +271,18 @@ fn hunger_life(
     let fires = clock.times_fired - *last_fired;
     *last_fired = clock.times_fired;
     for _ in 0..fires {
-        for (mut hunger, mut fat, stat, player, owned, host, mood) in &mut mobs {
+        for (mut hunger, mut fat, stat, player, owned, host, mood, species) in &mut mobs {
+            // `TRAIT_NOHUNGER` from the species or an organ (plasmaman lungs).
+            use crate::species::{Trait, organ_traits};
+            let no_hunger = species.is_some_and(|s| s.0.def().has(Trait::NoHunger))
+                || owned.is_some_and(|o| {
+                    o.iter()
+                        .filter_map(|e| organs.get(e).ok())
+                        .any(|organ| organ_traits(&organ.path).contains(&Trait::NoHunger))
+                });
+            if no_hunger {
+                continue;
+            }
             // The stomach's `on_life` runs `handle_hunger` unless it is missing or failing.
             let stomach = owned.and_then(|o| {
                 o.iter()

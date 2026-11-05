@@ -424,7 +424,7 @@ fn fits(world: &World, owner: Entity, reach: Reach, item: Entity) -> bool {
         Reach::Slot(slot @ (InventorySlot::LeftHand | InventorySlot::RightHand)) => {
             inventory.slot(slot).is_none()
         }
-        Reach::Slot(slot) => can_equip(world, inventory, item, slot),
+        Reach::Slot(slot) => can_equip(world, owner, inventory, item, slot),
     }
 }
 

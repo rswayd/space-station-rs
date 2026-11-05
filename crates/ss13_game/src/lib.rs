@@ -75,6 +75,8 @@
 //!   zones, the selector's hit map and numpad keys.
 //! - `chem` (feature `server`): reagent holders on containers and mobs (`ss13_reagents`),
 //!   pouring, drinking, syringes, pills, reactions over time, metabolism, fill overlays.
+//! - `species` (feature `server`): tg `/datum/species` (BandaStation's too): traits, organ
+//!   sets, limb sprites, damage and temperature modifiers, exotic blood, `set_species`.
 //! - `hunger` (feature `server`): nutrition, the stomach's `handle_hunger`, obesity, the hunger
 //!   bar's server half; `hunger_client` (feature `client`) draws the bar. `food` (feature
 //!   `server`): food items (`/obj/item/food`): eating and feeding bite by bite, tastes, trash,
@@ -329,6 +331,8 @@ pub mod smartfridge;
 pub mod sound;
 #[cfg(feature = "client")]
 pub mod sound_client;
+#[cfg(feature = "server")]
+pub mod species;
 #[cfg(feature = "server")]
 pub mod speech;
 #[cfg(feature = "server")]

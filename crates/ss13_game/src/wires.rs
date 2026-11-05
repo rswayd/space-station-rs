@@ -1089,7 +1089,8 @@ pub(crate) fn electrocute_act(
     source: Entity,
     siemens: f32,
 ) -> f32 {
-    let damage = damage * siemens;
+    // `physiology.siemens_coeff` of a human: its species' `siemens_coeff`.
+    let damage = damage * siemens * crate::species::def_of(world, mob).siemens_coeff;
     if damage < 1.0 {
         return 0.0;
     }
