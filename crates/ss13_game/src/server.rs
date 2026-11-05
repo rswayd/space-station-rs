@@ -268,6 +268,10 @@ impl Plugin for GameServerPlugin {
         .add_plugins(crate::security_level::SecurityLevelPlugin)
         .add_plugins(crate::announce::AnnouncePlugin)
         .add_plugins((
+            crate::implants::ImplantsPlugin,
+            crate::defenses::server::DefensesPlugin,
+        ))
+        .add_plugins((
             crate::cooking::CookingServerPlugin,
             crate::gibber::GibberServerPlugin,
             crate::coffee::CoffeeServerPlugin,

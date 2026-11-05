@@ -484,6 +484,108 @@ pub fn gun(types: &DmTypes, path: &str) -> DmGun {
     }
 }
 
+pub const TURRET_ROOT: &str = "/obj/machinery/porta_turret";
+const TURRET_COMPONENT: &str = "dm_turret";
+const LASERTAG_BLUE: &str = "/obj/item/gun/energy/laser/bluetag";
+const LASERTAG_RED: &str = "/obj/item/gun/energy/laser/redtag";
+
+/// `/obj/machinery/porta_turret` vars with its projectiles resolved: tg `setup()` takes them
+/// from the installed gun (`installation`, `get_turret_properties`: an energy gun's first and
+/// second shots, a ballistic gun's magazine ammo, the laser tag guns' tag beams), a gunless
+/// turret has its own `stun_projectile`/`lethal_projectile`. Times in deciseconds.
+#[derive(Component, Reflect, Default, Clone, Debug, PartialEq)]
+pub struct DmTurret {
+    pub path: String,
+    pub scan_range: f32,
+    pub shot_delay: f32,
+    /// `reqpower`, joules per stun shot (twice that per lethal one).
+    pub reqpower: f64,
+    pub always_up: bool,
+    pub has_cover: bool,
+    /// `mode == TURRET_LETHAL` at start.
+    pub lethal_mode: bool,
+    pub turret_flags: u32,
+    pub req_access: Vec<String>,
+    /// `base_icon_state` after `setup()`.
+    pub base_icon_state: String,
+    /// The installed gun (`installation`), empty for gunless turrets.
+    pub installation: String,
+    pub stun: ProjectileData,
+    pub stun_sound: String,
+    pub lethal: ProjectileData,
+    pub lethal_sound: String,
+    /// Laser tag turrets: `"red"` or `"blue"`.
+    pub team_color: String,
+}
+
+/// [`DmTurret`] of `path`.
+pub fn turret(types: &DmTypes, path: &str) -> DmTurret {
+    let n = |var| num(types, path, var);
+    let installation = type_var(types, path, "installation");
+    let mut t = DmTurret {
+        path: path.to_owned(),
+        scan_range: n("scan_range") as f32,
+        shot_delay: n("shot_delay") as f32,
+        reqpower: n("reqpower"),
+        always_up: truthy(types.resolved(path, "always_up")),
+        has_cover: truthy(types.resolved(path, "has_cover")),
+        lethal_mode: n("mode") == 1.0,
+        turret_flags: n("turret_flags") as u32,
+        req_access: match types.resolved(path, "req_access") {
+            Some(Value::Object(o)) => o
+                .get("list")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(|v| v.as_str().map(str::to_owned))
+                .collect(),
+            _ => Vec::new(),
+        },
+        base_icon_state: text(types, path, "base_icon_state"),
+        stun: projectile(types, &type_var(types, path, "stun_projectile")),
+        stun_sound: crate::sound::sound_var(types, path, "stun_projectile_sound"),
+        lethal: projectile(types, &type_var(types, path, "lethal_projectile")),
+        lethal_sound: crate::sound::sound_var(types, path, "lethal_projectile_sound"),
+        installation: installation.clone(),
+        team_color: String::new(),
+    };
+    if installation.is_empty() {
+        return t;
+    }
+    // `/obj/item/gun/get_turret_properties`.
+    t.base_icon_state = "standard".to_owned();
+    let g = gun(types, &installation);
+    let shots: Vec<CasingData> = if g.energy {
+        g.shots.clone()
+    } else if g.ballistic {
+        t.base_icon_state = "syndie".to_owned();
+        vec![g.magazine.ammo.clone()]
+    } else {
+        Vec::new()
+    };
+    let first = shots.first().cloned().unwrap_or_default();
+    let second = shots.get(1).cloned().unwrap_or_else(|| first.clone());
+    (t.stun, t.stun_sound) = (first.projectile, first.fire_sound);
+    (t.lethal, t.lethal_sound) = (second.projectile, second.fire_sound);
+    for (gun_path, team, beam) in [
+        (
+            LASERTAG_BLUE,
+            "blue",
+            "/obj/projectile/beam/lasertag/bluetag",
+        ),
+        (LASERTAG_RED, "red", "/obj/projectile/beam/lasertag/redtag"),
+    ] {
+        if is_under(&installation, gun_path) {
+            t.stun = projectile(types, beam);
+            t.lethal = t.stun.clone();
+            t.base_icon_state = team.to_owned();
+            t.shot_delay = 30.0;
+            t.team_color = team.to_owned();
+        }
+    }
+    t
+}
+
 fn ron<T: Serialize>(value: &T) -> String {
     ron::to_string(value).expect("prototype data always serializes")
 }
@@ -538,6 +640,28 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
             ),
             ext(c, "auto_rack", ron(&g.auto_rack)),
             ext(c, "sounds", ron(&g.sounds)),
+        ]);
+    }
+    if is_under(path, TURRET_ROOT) {
+        let t = turret(types, path);
+        let c = TURRET_COMPONENT;
+        out.extend([
+            ext(c, "path", ron(&t.path)),
+            ext(c, "scan_range", ron(&t.scan_range)),
+            ext(c, "shot_delay", ron(&t.shot_delay)),
+            ext(c, "reqpower", ron(&t.reqpower)),
+            ext(c, "always_up", ron(&t.always_up)),
+            ext(c, "has_cover", ron(&t.has_cover)),
+            ext(c, "lethal_mode", ron(&t.lethal_mode)),
+            ext(c, "turret_flags", ron(&t.turret_flags)),
+            ext(c, "req_access", ron(&t.req_access)),
+            ext(c, "base_icon_state", ron(&t.base_icon_state)),
+            ext(c, "installation", ron(&t.installation)),
+            ext(c, "stun", ron(&t.stun)),
+            ext(c, "stun_sound", ron(&t.stun_sound)),
+            ext(c, "lethal", ron(&t.lethal)),
+            ext(c, "lethal_sound", ron(&t.lethal_sound)),
+            ext(c, "team_color", ron(&t.team_color)),
         ]);
     }
     if is_under(path, AMMO_BOX_ROOT) {
@@ -602,6 +726,14 @@ pub fn gun_closure<'a>(
             for shot in &g.shots {
                 add_casing(&mut out, shot);
             }
+        } else if is_under(path, TURRET_ROOT) {
+            // The turret's shots are spawned at runtime.
+            let t = turret(types, path);
+            for p in [&t.stun.path, &t.lethal.path] {
+                if !p.is_empty() {
+                    out.insert(p.clone());
+                }
+            }
         } else if is_under(path, AMMO_BOX_ROOT) {
             add_casing(&mut out, &magazine(types, path).ammo);
         } else if is_under(path, CASING_ROOT) {
@@ -658,9 +790,42 @@ mod tests {
             "cell_type": { "path": "/obj/item/stock_parts/power_store/cell" },
             "ammo_type": { "list": [ { "path": "/obj/item/ammo_casing/energy" } ] } } },
         "/obj/item/gun/energy/disabler": { "parent": "/obj/item/gun/energy", "declared_vars": {
-            "ammo_type": { "list": [ { "path": "/obj/item/ammo_casing/energy/disabler" } ] } } }
+            "ammo_type": { "list": [ { "path": "/obj/item/ammo_casing/energy/disabler" } ] } } },
+        "/obj/machinery": { "parent": "/obj" },
+        "/obj/machinery/porta_turret": { "parent": "/obj/machinery", "declared_vars": {
+            "scan_range": 7, "shot_delay": 15, "mode": 0, "turret_flags": 20, "has_cover": 1,
+            "base_icon_state": "standard", "req_access": { "list": ["security"] },
+            "installation": { "path": "/obj/item/gun/energy/disabler" },
+            "stun_projectile": null, "lethal_projectile": null } },
+        "/obj/machinery/porta_turret/syndicate": { "parent": "/obj/machinery/porta_turret",
+            "declared_vars": { "installation": null, "mode": 1, "base_icon_state": "syndie",
+            "has_cover": 0, "always_up": 1,
+            "stun_projectile": { "path": "/obj/projectile/bullet/c9mm" },
+            "lethal_projectile": { "path": "/obj/projectile/bullet/c9mm" } } }
       }
     }"##;
+
+    /// tg `setup()`: a gun turret takes its gun's first shot for both modes when the gun has one
+    /// mode; a gunless turret keeps its own projectiles; both are spawned at runtime.
+    #[test]
+    fn turrets_resolve_their_projectiles() {
+        let types = DmTypes::parse(TYPES.as_bytes()).unwrap();
+        let t = turret(&types, "/obj/machinery/porta_turret");
+        assert_eq!(t.stun.path, "/obj/projectile/beam/disabler");
+        assert_eq!(t.lethal.path, t.stun.path);
+        assert_eq!(
+            (t.scan_range, t.shot_delay, t.turret_flags),
+            (7.0, 15.0, 20)
+        );
+        assert_eq!(t.req_access, vec!["security".to_owned()]);
+        assert!(t.has_cover && !t.lethal_mode);
+        let syndie = turret(&types, "/obj/machinery/porta_turret/syndicate");
+        assert!(syndie.installation.is_empty() && syndie.lethal_mode && syndie.always_up);
+        assert_eq!(syndie.base_icon_state, "syndie");
+        assert_eq!(syndie.lethal.damage, 30.0);
+        let closure = gun_closure(&types, ["/obj/machinery/porta_turret/syndicate"]);
+        assert!(closure.contains("/obj/projectile/bullet/c9mm"));
+    }
 
     #[test]
     fn guns_resolve_their_ammo_projectiles_and_pins() {

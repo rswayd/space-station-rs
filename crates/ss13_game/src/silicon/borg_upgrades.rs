@@ -326,14 +326,22 @@ mod tests {
         assert_eq!(check(&drill, Some(MINER), true, &[]), Err(Refusal::Dead));
         assert_eq!(check(&drill, Some(MINER), false, &[]), Ok(()));
         assert_eq!(
-            check(&drill, Some(MINER), false, std::slice::from_ref(&drill.path)),
+            check(
+                &drill,
+                Some(MINER),
+                false,
+                std::slice::from_ref(&drill.path)
+            ),
             Err(Refusal::Occupied)
         );
         let dup = BorgUpgrade {
             allow_duplicates: true,
             ..drill.clone()
         };
-        assert_eq!(check(&dup, Some(MINER), false, std::slice::from_ref(&dup.path)), Ok(()));
+        assert_eq!(
+            check(&dup, Some(MINER), false, std::slice::from_ref(&dup.path)),
+            Ok(())
+        );
         let locked = BorgUpgrade {
             locked: true,
             ..board("/obj/item/borg/upgrade/amop")

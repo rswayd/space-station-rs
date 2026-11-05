@@ -196,6 +196,7 @@ pub mod construction;
 pub mod cooking;
 #[cfg(feature = "server")]
 pub mod decay;
+pub mod defenses;
 #[cfg(feature = "server")]
 pub mod disposals;
 #[cfg(feature = "server")]
@@ -252,6 +253,8 @@ pub mod hunger_client;
 pub mod icecream;
 #[cfg(feature = "server")]
 pub mod id_access;
+#[cfg(feature = "server")]
+pub mod implants;
 #[cfg(feature = "client")]
 pub mod interact_client;
 #[cfg(feature = "server")]

@@ -22,9 +22,9 @@
 //!   gets a `ViewMask` of its camera's view, an AI eye's client the network's chunks.
 // shortcut: all chunks with cameras are built at startup instead of tg's on-demand
 // `generate_chunk`; MetaStation's are ~1.5k chunks, see the startup log line.
-// shortcut: cameras do not lose power, break or get toggled by hand (tg `toggle_cam`);
-// `enabled` comes from the map, EMPs (`crate::emp::machines`) and Camera Failure
-// (`crate::events::camera_failure`).
+// shortcut: cameras do not lose power or break; `enabled` comes from the map, EMPs
+// (`crate::emp::machines`), Camera Failure (`crate::events::camera_failure`) and wirecutters
+// (`crate::defenses::cameras`, which also builds and takes cameras apart).
 // shortcut: `/turf/open/ai_visible` is not always visible, x-ray cameras see like the others.
 
 use std::collections::{HashMap, HashSet};

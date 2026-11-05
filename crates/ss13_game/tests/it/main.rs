@@ -33,6 +33,7 @@ mod genetics;
 mod grenades;
 mod guns;
 mod heretic;
+mod implants;
 mod interact;
 mod inventory;
 mod janitor;

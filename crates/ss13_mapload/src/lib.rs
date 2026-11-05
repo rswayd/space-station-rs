@@ -84,7 +84,8 @@ pub use drinks::DmGlass;
 pub use fidelity::{FidelityReport, IconIndex, MapSeed, tile_changed};
 pub use food::{DmFood, Processing, Taste};
 pub use guns::{
-    CasingData, DmArmor, DmCasing, DmGun, DmMagazine, GunSounds, MagazineData, ProjectileData,
+    CasingData, DmArmor, DmCasing, DmGun, DmMagazine, DmTurret, GunSounds, MagazineData,
+    ProjectileData,
 };
 pub use item::DmItem;
 pub use light::{DmLight, OpticsPlugin};
@@ -300,6 +301,7 @@ impl Plugin for DmProtoPlugin {
             .register_proto_component::<DmMagazine>("dm_magazine")
             .register_proto_component::<DmCasing>("dm_casing")
             .register_proto_component::<DmArmor>("dm_armor")
+            .register_proto_component::<DmTurret>("dm_turret")
             .register_proto_component::<DmDockingPort>("dm_docking_port")
             .register_proto_component::<DmMailSort>("dm_mail_sort")
             .register_proto_component::<DmNavBeacon>("dm_navbeacon")
