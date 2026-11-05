@@ -17,7 +17,7 @@
 //!   `SSmachines` tick (2 s), and tears out (3 brute and a puncture on an arm) when the mob moves
 //!   away. An empty-hand right click detaches it, ejects the container or switches the mode.
 // shortcut: no blood sprays or hit splatters (drips and pools: `crate::janitor`), no dragging
-// bleed, no DNA/virus data, dizziness is only its message, `Unconscious` is a paralysis,
+// bleed, no DNA data (viruses: `super::diseases::BloodDiseases`), dizziness is only its message, `Unconscious` is a paralysis,
 // no saline/salglu dilution or synthetic blood content; iron in the blood also metabolizes at its
 // own rate besides refilling blood (tg skips the normal tick). The IV drip has no tgui window
 // (`IVDrip`: rate, mode, eject) and no beam; its rate stays at 5 u/s.
@@ -591,6 +591,9 @@ pub fn transfer_blood_to(
     reagents.0.set_data_if_none(id, blood.blood_type.path());
     if let Some(mut b) = world.get_mut::<Blood>(donor) {
         b.adjust(-added, 0.0, BLOOD_VOLUME_MAXIMUM);
+    }
+    if added > 0.0 {
+        super::diseases::blood_drawn(world, donor, container);
     }
     added
 }

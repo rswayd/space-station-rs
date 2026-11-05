@@ -311,6 +311,12 @@ fn melee(
                 continue;
             }
         }
+        // tg carbon `attack_hand`: skin-contact diseases pass both ways.
+        if weapon.is_none() && attacker != target {
+            commands.queue(move |world: &mut World| {
+                crate::medical::diseases::touch(world, attacker, target);
+            });
+        }
         let Ok((mut health, mut target_stat, _, _, _, worn, _, _, limbs)) = mobs.get_mut(target)
         else {
             continue;

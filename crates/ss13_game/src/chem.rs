@@ -429,6 +429,9 @@ fn transfer(world: &mut World, from: Entity, to: Entity, amount: f32) -> f32 {
     let moved = a.trans_to(&chem, &mut b, amount, 1.0, None, false, false);
     put(world, from, a);
     put(world, to, b);
+    if moved > 0.0 {
+        crate::medical::diseases::carry_blood(world, from, to);
+    }
     moved
 }
 
@@ -458,6 +461,10 @@ fn transfer_to_mob(world: &mut World, from: Entity, mob: Entity, amount: f32, in
     put(world, from, a);
     if !ingest {
         crate::medical::blood::expose_inject(world, mob, injected, blood_data);
+    }
+    // The viruses and antibodies of the blood (`blood_reagent` `on_expose_mob`).
+    if injected > 0.0 && !expelled {
+        crate::medical::diseases::blood_exposed(world, from, mob, ingest);
     }
     moved
 }

@@ -16,6 +16,7 @@ mod combat;
 mod comms;
 mod construction;
 mod cult;
+mod diseases;
 mod disposals;
 mod doors;
 mod drag;

@@ -24,7 +24,7 @@
 Кровь переносится шприцами и капельницей (`transfer_blood_to`), хранится в пакетах крови (по группам), содержит ДНК, болезни и данные.
 
 - **Код:** [`proc/transfer_blood_to()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/blood.dm#L370), [`proc/get_blood_data()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/blood.dm#L433), [`/obj/item/reagent_containers/blood`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/reagents/reagent_containers/blood_pack.dm#L1)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/medical/blood.rs`, `crates/ss13_game/src/chem.rs`: забор крови шприцем, пакеты крови по группам, `/datum/reagent/blood` с группой в `data`, введённая кровь становится объёмом, капельница; нет ДНК, вирусов и прочих данных крови
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/medical/blood.rs`, `crates/ss13_game/src/chem.rs`: забор крови шприцем, пакеты крови по группам, `/datum/reagent/blood` с группой в `data`, введённая кровь становится объёмом, капельница; вирусы и антитела в крови — `crates/ss13_game/src/medical/diseases.rs` (`BloodDiseases` на контейнере); нет ДНК и прочих данных крови
 
 ### Брызги и кровавые следы
 Удары и кровотечение оставляют брызги и лужи крови; наступивший разносит следы (`bloodysoles`); кровь на одежде и руках, криминалистика по ДНК.
