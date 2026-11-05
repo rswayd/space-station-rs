@@ -625,6 +625,10 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 Some(item)
                     if hand == inventory.active
                         && crate::service::server::attack_self(world, client, mob, item) => {}
+                // A law module shows its laws and asks for its configurable text.
+                Some(item)
+                    if hand == inventory.active
+                        && crate::silicon::law_rack::attack_self(world, client, mob, item) => {}
                 // A pen or stamp on the paper in the other hand.
                 Some(item)
                     if hand != inventory.active
@@ -863,6 +867,8 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 None if crate::service::server::interact(world, client, mob, target) => {}
                 // tg `attack_hand` of turrets and the turret control panel: their windows.
                 None if crate::defenses::server::interact(world, client, mob, target) => {}
+                // tg `ui_interact` of law racks.
+                None if crate::silicon::law_rack::interact(world, client, mob, target) => {}
                 None => pick_up(world, mob, target, inventory.active),
                 // tg `/obj/item/card/emag/interact_with_atom` on the families with an
                 // `emag_act` (`crate::emag`).
@@ -887,6 +893,11 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 Some(held)
                     if crate::defenses::server::item_interaction(
                         world, client, mob, held, target, modifiers,
+                    ) => {}
+                // A module, screwdriver, welder or multitool on a law rack: its window.
+                Some(held)
+                    if crate::silicon::law_rack::item_interaction(
+                        world, client, mob, held, target,
                     ) => {}
                 // The forensic scanner scans, an evidence bag takes the item.
                 Some(held)

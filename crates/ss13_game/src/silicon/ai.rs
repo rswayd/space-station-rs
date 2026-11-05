@@ -20,7 +20,7 @@
 //! - It talks with an integrated radio (`:h`/department keys, `:o` its private channel) and in
 //!   binary (`:b`). It hears speech and sees messages around its eye only where the cameras see
 //!   (tg `/mob/eye/camera/ai/Hear`: `checkCameraVis`). Dead (its core), it speaks in deadchat.
-// shortcut: no camera tracking, holopads, multicam, camera acceleration, law upload or malfunction.
+// shortcut: no camera tracking, holopads, multicam, camera acceleration or malfunction.
 // shortcut: the AI's speech is heard around its eye (the client's controlled entity), not
 // around the core; the core's own surroundings (tg `viewers()` of the core) are not perceived.
 // shortcut: the AI eye's marker sprite is drawn for the AI's own client too.
@@ -230,6 +230,10 @@ pub(crate) fn join(
         super::ai_hud::CoreDisplay::default(),
     ));
     world.resource_mut::<Jobs>().add_position(job);
+    // tg `make_laws` + `link_to_first_rack`: the core rack's lawset. Without a core rack (test
+    // maps) the round's default lawset stays, where tg would leave the AI lawless.
+    super::law_rack::link_to_first_rack(world, core);
+    let laws = world.get::<Laws>(core).cloned().unwrap_or(laws);
     attach_client(world, client, eye, pos);
     // The mask now, not when `cameras::assign_view_masks` runs: a join later in the tick would
     // replicate the full box around the core once.

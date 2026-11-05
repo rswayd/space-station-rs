@@ -274,6 +274,8 @@ pub(crate) fn join(
             if let Some(mut cyborg) = world.get_mut::<Cyborg>(borg) {
                 cyborg.lawupdate = false;
             }
+            // tg: no AI, the first law rack's lawset.
+            super::law_rack::link_to_first_rack(world, borg);
         }
     }
     world.write_message(OpenUi::new::<ListInputWindow>(

@@ -1,7 +1,8 @@
 //! Silicon laws, after tg `/datum/ai_laws` (`code/datums/ai_laws/ai_laws.dm`): the round's
 //! default lawset from the config, the law list as `show_laws` prints it, and a cyborg's copy of
-//! its AI's laws (`ai_to_cyborg`, `lawsync`).
-// shortcut: no law boards, upload console or ion laws events; laws change only by lawsync.
+//! its AI's laws (`ai_to_cyborg`, `lawsync`). Law racks combine their modules into one
+//! ([`super::law_rack`]).
+// shortcut: no ion law events (tg `generate_ion_law`).
 
 use bevy::prelude::*;
 use ss13_mapload::silicon::{Lawset, SiliconData};
@@ -24,6 +25,8 @@ pub struct Laws {
     pub inherent: Vec<(String, bool)>,
     pub supplied: Vec<(String, bool)>,
     pub hacked: Vec<String>,
+    /// tg `protected_zeroth`: a malfunctioning AI's law 0 survives racks and resets.
+    pub protected_zeroth: bool,
 }
 
 impl Laws {
@@ -35,7 +38,39 @@ impl Laws {
             inherent: set.inherent.iter().map(|l| (l.clone(), false)).collect(),
             supplied: Vec::new(),
             hacked: Vec::new(),
+            protected_zeroth: false,
         }
+    }
+
+    /// tg `add_inherent_law(law, index, ioned)`: the inherent list is keyed by the law text, so
+    /// a law already there moves (with an index) or only takes the new `ioned`.
+    pub fn add_inherent(&mut self, law: &str, index: Option<usize>, ioned: bool) {
+        let at = self.inherent.iter().position(|(l, _)| l == law);
+        match index.filter(|&i| i >= 1 && i <= self.inherent.len()) {
+            Some(i) => {
+                if let Some(at) = at {
+                    self.inherent.remove(at);
+                }
+                let i = (i - 1).min(self.inherent.len());
+                self.inherent.insert(i, (law.to_owned(), ioned));
+            }
+            None => match at {
+                Some(at) => self.inherent[at].1 = ioned,
+                None => self.inherent.push((law.to_owned(), ioned)),
+            },
+        }
+    }
+
+    /// tg `clear_zeroth_law` (not a protected one), `clear_hacked_laws`, `clear_inherent_laws`,
+    /// `clear_supplied_laws`.
+    pub fn clear(&mut self) {
+        if !self.protected_zeroth {
+            self.zeroth = None;
+            self.zeroth_borg = None;
+        }
+        self.hacked.clear();
+        self.inherent.clear();
+        self.supplied.clear();
     }
 
     /// tg `ai_to_cyborg`: the AI's laws as its cyborg gets them (`zeroth_borg || zeroth`).
@@ -47,6 +82,7 @@ impl Laws {
             inherent: self.inherent.clone(),
             supplied: self.supplied.clone(),
             hacked: self.hacked.clone(),
+            protected_zeroth: false,
         }
     }
 
@@ -134,6 +170,26 @@ mod tests {
         only_asimov.lawsets.remove(1);
         assert_eq!(round_default(&only_asimov).name, "Азимов");
         assert_eq!(round_default(&SiliconData::default()).inherent.len(), 3);
+    }
+
+    #[test]
+    fn inherent_laws_are_keyed_by_text() {
+        let mut laws = Laws::default();
+        laws.add_inherent("a", None, false);
+        laws.add_inherent("b", None, false);
+        laws.add_inherent("a", None, true);
+        assert_eq!(
+            laws.inherent,
+            [("a".to_owned(), true), ("b".to_owned(), false)]
+        );
+        laws.add_inherent("ion", Some(1), true);
+        laws.add_inherent("b", Some(1), false);
+        assert_eq!(laws.law_list(true), ["1: b", "#: ion", "#: a"]);
+        let mut empty = Laws::default();
+        empty.add_inherent("toy", Some(1), true);
+        assert_eq!(empty.inherent, [("toy".to_owned(), true)]);
+        laws.clear();
+        assert_eq!(laws, Laws::default());
     }
 
     #[test]

@@ -11,10 +11,14 @@
 //!   area's camera button.
 //! - `RoboticsControlConsole`: a section per cyborg (status, charge, model, master AI) with
 //!   its Lockdown / Release button.
+//! - `LawRack`: a row per slot (screw, weld, repair, insert or remove, by the tool in hand) and
+//!   the rack's links.
 // shortcut: the static is plain dark tiles, not tg's animated `cameravis.dmi` static.
 // shortcut: the console's camera list has no search field and no nanomap tab; its map pane is
 // the main map view.
 // shortcut: the robotics console has no drones tab and its Lockdown button no confirmation.
+// shortcut: the law rack's link menus are inline button lists (tgui `Floating` popups), one
+// screw button per slot instead of two, no AI face display and no tooltips.
 
 use bevy::app::Propagate;
 use bevy::asset::RenderAssetUsages;
@@ -52,6 +56,7 @@ impl Plugin for SiliconClientPlugin {
             .register_ui_view::<ListInputUi>()
             .register_ui_view::<StationAlertUi>()
             .register_ui_view::<RoboticsConsoleUi>()
+            .register_ui_view::<LawRackUi>()
             .init_resource::<CameraView>()
             .add_systems(Startup, spawn_static)
             .add_systems(Update, receive_view)
@@ -541,9 +546,243 @@ fn cyborg_section(borg: &RoboticsCyborg) -> Box<dyn SceneList> {
     }))
 }
 
+/// tgui `getSlotColor`.
+pub fn slot_color(slot: &LawSlotData, index: usize, has_core_slot: bool) -> Color {
+    let core = index == 0 && has_core_slot;
+    let hex = if slot.empty {
+        if core { 0x5AA6FF } else { 0x83BFB1 }
+    } else if slot.ioned {
+        0xDD7973
+    } else if core {
+        0x4183CD
+    } else {
+        0x14BB69
+    };
+    Color::srgb_u8((hex >> 16) as u8, (hex >> 8) as u8, hex as u8)
+}
+
+/// tgui `LawSlot`: what the slot's main button does with the tool in hand: `(label, act,
+/// disabled)`.
+pub fn slot_action(slot: &LawSlotData, data: &LawRackData) -> (String, &'static str, bool) {
+    let welded = slot.security == SLOT_WELDED;
+    if welded || data.holding_welder {
+        let label = if welded {
+            "Welded".to_owned()
+        } else if slot.empty {
+            slot.name.clone()
+        } else {
+            "Weld Module".to_owned()
+        };
+        let disabled = !data.holding_welder || slot.empty || slot.security == SLOT_UNSECURED;
+        return (label, WELD_MODULE, disabled);
+    }
+    if data.holding_multitool {
+        return (
+            "Repair Ion Damage".to_owned(),
+            MULTITOOL_MODULE,
+            !slot.ioned,
+        );
+    }
+    let act = if data.holding_module && slot.empty {
+        INSERT_MODULE
+    } else {
+        REMOVE_MODULE
+    };
+    let disabled = (!data.holding_module && slot.empty) || slot.security != SLOT_UNSECURED;
+    (slot.name.clone(), act, disabled)
+}
+
+fn slot_row(slot: &LawSlotData, index: usize, data: &LawRackData) -> Box<dyn SceneList> {
+    let color = slot_color(slot, index, data.has_core_slot);
+    let n = (index + 1).to_string();
+    let screw_params = ActParams(vec![("slot".to_owned(), n.clone())]);
+    let screw_disabled = !data.holding_screwdriver || slot.empty || slot.security == SLOT_WELDED;
+    let screw_icon = if slot.empty || slot.security == SLOT_UNSECURED {
+        ""
+    } else {
+        "screwdriver"
+    };
+    let (label, act, disabled) = slot_action(slot, data);
+    let params = ActParams(vec![("slot".to_owned(), n)]);
+    let name = Name::new(format!("law rack: slot {}", index + 1));
+    Box::new(EntityScene(bsn! {
+        Node { padding: UiRect::all(px(4)), margin: UiRect::bottom(px(2)) }
+        BackgroundColor(color)
+        Children [
+            @Stack
+            Children [
+                @StackItem
+                Children [
+                    @ss13_ui_kit::Button { @icon: screw_icon, @compact: true }
+                    ss13_ui_kit::Button { disabled: screw_disabled }
+                    Act({SCREW_MODULE.to_owned()})
+                    screw_params
+                ]
+                --
+                @StackItem { @grow: 1.0 }
+                Children [
+                    @ss13_ui_kit::Button { @content: label, @fluid: true }
+                    ss13_ui_kit::Button { disabled: disabled }
+                    Act({act.to_owned()})
+                    params
+                    name
+                ]
+            ]
+        ]
+    }))
+}
+
+fn link_button(
+    icon: &'static str,
+    label: String,
+    act: &'static str,
+    params: ActParams,
+    disabled: bool,
+) -> Box<dyn SceneList> {
+    Box::new(EntityScene(bsn! {
+        Node { margin: UiRect::bottom(px(2)) }
+        Children [
+            @ss13_ui_kit::Button { @icon: icon, @content: label, @fluid: true }
+            ss13_ui_kit::Button { disabled: disabled }
+            Act({act.to_owned()})
+            params
+        ]
+    }))
+}
+
+/// tgui `BaseDisplay` / `BroadcasterDisplay`, with the menus open.
+fn rack_controls(data: &LawRackData) -> Vec<Box<dyn SceneList>> {
+    let mut rows: Vec<Box<dyn SceneList>> = Vec::new();
+    let text = |t: String| -> Box<dyn SceneList> {
+        Box::new(EntityScene(bsn! {
+            Node { margin: UiRect::bottom(px(4)) } Children [ Text(t) ]
+        }))
+    };
+    if let Some(mobs) = &data.linked_mobs {
+        let names = if mobs.is_empty() {
+            "N/A".to_owned()
+        } else {
+            mobs.join(", ")
+        };
+        rows.push(text(format!("> Linked Silicons: {names}")));
+        for (i, name) in mobs.iter().enumerate() {
+            let params = ActParams(vec![("silicon_index".to_owned(), i.to_string())]);
+            rows.push(link_button(
+                "link-slash",
+                name.clone(),
+                UNLINK_SILICON,
+                params,
+                data.depowered,
+            ));
+        }
+        for linkable in data.linkable_silicons.iter().flatten() {
+            let params = ActParams(vec![("silicon_ref".to_owned(), linkable.link_ref.clone())]);
+            rows.push(link_button(
+                "link",
+                linkable.name.clone(),
+                LINK_SILICON,
+                params,
+                data.depowered,
+            ));
+        }
+        if let Some(count) = data.linked_rack_module_count {
+            rows.push(text(format!(
+                "{count} other module(s) are being loaded remotely."
+            )));
+        }
+    }
+    if let Some(racks) = &data.linkable_racks {
+        let parent = data
+            .parent_rack
+            .as_ref()
+            .map_or("N/A".to_owned(), |p| p.name.clone());
+        rows.push(text(format!("> Linked Rack: {parent}")));
+        rows.push(link_button(
+            "link-slash",
+            "> Unlink Rack".to_owned(),
+            UNLINK_RACK,
+            ActParams(Vec::new()),
+            data.depowered || data.parent_rack.is_none(),
+        ));
+        for linkable in racks {
+            let params = ActParams(vec![("rack_ref".to_owned(), linkable.link_ref.clone())]);
+            rows.push(link_button(
+                "link",
+                linkable.name.clone(),
+                LINK_RACK,
+                params,
+                data.depowered || data.parent_rack.is_some(),
+            ));
+        }
+    }
+    rows
+}
+
+impl ClientUi for LawRackUi {
+    const WIDTH: f32 = 400.0;
+    const HEIGHT: f32 = 600.0;
+
+    fn content(_: &(), data: &LawRackData) -> impl Scene {
+        let slots: Vec<Box<dyn SceneList>> = data
+            .slots
+            .iter()
+            .enumerate()
+            .map(|(i, slot)| slot_row(slot, i, data))
+            .collect();
+        let controls = rack_controls(data);
+        let refresh_disabled = data.depowered || data.refresh_cooldown > 0;
+        let refresh: Box<dyn SceneList> = Box::new(EntityScene(bsn! {
+            @ss13_ui_kit::Button { @icon: "refresh" }
+            ss13_ui_kit::Button { disabled: refresh_disabled }
+            Act({REFRESH.to_owned()})
+            Name("law rack: refresh")
+        }));
+        bsn! {
+            @WindowContent
+            Children [
+                @Section Children [ {slots} ]
+                --
+                @Section { @title: "Controls", @buttons: refresh, @scrollable: true, @fill: true }
+                Children [ {controls} ]
+            ]
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn law_rack_slot_buttons_follow_tgui() {
+        let slot = |empty, security| LawSlotData {
+            name: if empty { "Empty".into() } else { "M".into() },
+            security,
+            ioned: false,
+            empty,
+        };
+        let mut data = LawRackData::default();
+        assert_eq!(
+            slot_action(&slot(true, SLOT_UNSECURED), &data),
+            ("Empty".to_owned(), REMOVE_MODULE, true)
+        );
+        data.holding_module = true;
+        assert_eq!(
+            slot_action(&slot(true, SLOT_UNSECURED), &data).1,
+            INSERT_MODULE
+        );
+        assert!(slot_action(&slot(false, SLOT_SCREWED), &data).2);
+        assert_eq!(
+            slot_action(&slot(false, SLOT_WELDED), &data),
+            ("Welded".to_owned(), WELD_MODULE, true)
+        );
+        data.holding_welder = true;
+        assert!(!slot_action(&slot(false, SLOT_SCREWED), &data).2);
+        assert_eq!(
+            slot_color(&slot(true, 0), 0, true),
+            Color::srgb_u8(0x5A, 0xA6, 0xFF)
+        );
+    }
 
     #[test]
     fn robotics_console_texts_follow_tgui() {

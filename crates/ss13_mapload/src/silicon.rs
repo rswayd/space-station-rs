@@ -8,7 +8,8 @@
 //!   `modular_bandastation/ai_laws`) and the cyborg models `pick_model()` offers
 //!   (`/obj/item/robot_model/*`: name, sprite, `basic_modules`, `emag_modules`,
 //!   `radio_channels`) and the cyborg upgrade boards (`/obj/item/borg/upgrade/*`, their item
-//!   lists and mounting rules). The game (`ss13_game::silicon`) reads it at startup.
+//!   lists and mounting rules) and the law rack modules (`/obj/item/ai_module/*`: their
+//!   `laws`, `law_id`). The game (`ss13_game::silicon`) reads it at startup.
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -50,6 +51,8 @@ pub const SILICON_TYPES: [&str; 4] = [AI_TYPE, ROBOT_TYPE, AI_EYE_TYPE, ROBOT_CE
 
 /// `/obj/item/borg/upgrade`.
 pub const UPGRADE_ROOT: &str = "/obj/item/borg/upgrade";
+/// `/obj/item/ai_module`: what goes into a law rack.
+pub const AI_MODULE_ROOT: &str = "/obj/item/ai_module";
 
 /// tg `/mob/living/silicon/robot/proc/pick_model()`: the models offered, in its order, with
 /// BandaStation's `DISABLE_SECBORG` (on in `config/game_options.txt`) leaving security out.
@@ -119,6 +122,16 @@ pub struct BorgUpgrade {
     pub new_model: Option<String>,
 }
 
+/// A law rack module (tg `/obj/item/ai_module` vars).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct AiModuleDef {
+    pub path: String,
+    /// tg `laws` (the keys; none of the typed lists start ioned).
+    pub laws: Vec<String>,
+    /// `/obj/item/ai_module/law/core/full` `law_id`: its laws are that lawset's `inherent`.
+    pub law_id: Option<String>,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct SiliconData {
     pub lawsets: Vec<Lawset>,
@@ -127,6 +140,9 @@ pub struct SiliconData {
     /// Every `/obj/item/borg/upgrade` subtype, by path.
     #[serde(default)]
     pub upgrades: Vec<BorgUpgrade>,
+    /// Every `/obj/item/ai_module` subtype, by path.
+    #[serde(default)]
+    pub modules: Vec<AiModuleDef>,
 }
 
 impl SiliconData {
@@ -158,7 +174,12 @@ impl SiliconData {
             .iter()
             .flat_map(|u| &u.items_to_add)
             .map(String::as_str);
-        models.chain(upgrades).collect()
+        let modules = self.modules.iter().map(|m| m.path.as_str());
+        models.chain(upgrades).chain(modules).collect()
+    }
+
+    pub fn module(&self, path: &str) -> Option<&AiModuleDef> {
+        self.modules.iter().find(|m| m.path == path)
     }
 
     pub fn upgrade(&self, path: &str) -> Option<&BorgUpgrade> {
@@ -241,10 +262,22 @@ pub fn resolve(types: &DmTypes) -> SiliconData {
         })
         .collect();
     upgrades.sort_by(|a, b| a.path.cmp(&b.path));
+    let mut modules: Vec<AiModuleDef> = types
+        .types
+        .keys()
+        .filter(|p| is_under(p, AI_MODULE_ROOT) && p.as_str() != AI_MODULE_ROOT)
+        .map(|path| AiModuleDef {
+            path: path.clone(),
+            laws: list(types.resolved(path, "laws")),
+            law_id: text(types.resolved(path, "law_id")),
+        })
+        .collect();
+    modules.sort_by(|a, b| a.path.cmp(&b.path));
     SiliconData {
         lawsets,
         models,
         upgrades,
+        modules,
     }
 }
 
@@ -362,6 +395,13 @@ mod tests {
             "require_model": 1, "model_type": { "list": [{ "path": "/obj/item/robot_model/service" }] },
             "items_to_add": { "list": [{ "path": "/obj/item/pen" }] },
             "items_to_remove": { "list": [{ "path": "/obj/item/mop" }] } } },
+        "/obj/item/ai_module": { "parent": "/obj/item" },
+        "/obj/item/ai_module/law": { "parent": "/obj/item/ai_module", "declared_vars": {
+            "laws": { "list": [] } } },
+        "/obj/item/ai_module/law/supplied/quarantine": { "parent": "/obj/item/ai_module/law",
+            "declared_vars": { "laws": { "list": ["Q"] } } },
+        "/obj/item/ai_module/law/core/full/crew": { "parent": "/obj/item/ai_module/law",
+            "declared_vars": { "law_id": "crewsimovpp" } },
         "/obj/machinery": { "parent": "/obj" },
         "/obj/machinery/camera": { "parent": "/obj/machinery", "declared_vars": {
             "c_tag": null, "network": { "list": ["ss13"] }, "view_range": 7, "camera_enabled": 1 } },
@@ -395,6 +435,20 @@ mod tests {
         assert_eq!(amop.items_to_add, ["/obj/item/pen"]);
         assert_eq!(amop.items_to_remove, ["/obj/item/mop"]);
         assert!(data.spawned_types().contains("/obj/item/pen"));
+        assert_eq!(data.modules.len(), 3);
+        let q = data
+            .module("/obj/item/ai_module/law/supplied/quarantine")
+            .unwrap();
+        assert_eq!(q.laws, ["Q"]);
+        assert_eq!(q.law_id, None);
+        let crew = data
+            .module("/obj/item/ai_module/law/core/full/crew")
+            .unwrap();
+        assert_eq!(crew.law_id.as_deref(), Some("crewsimovpp"));
+        assert!(
+            data.spawned_types()
+                .contains("/obj/item/ai_module/law/core/full/crew")
+        );
         let cam = type_fields(&types, "/obj/machinery/camera/preset/ordnance");
         assert_eq!(get(&cam, "network"), Some(r#"["rd","ordnance"]"#));
         assert_eq!(get(&cam, "c_tag"), Some(r#""Bomb Testing Site""#));

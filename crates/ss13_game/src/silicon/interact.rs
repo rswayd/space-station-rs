@@ -105,6 +105,9 @@ pub fn attack_ai(world: &mut World, client: Entity, user: Entity, target: Entity
         crate::comms_server::open(world, client, user, target);
         return true;
     }
+    if super::law_rack::attack_ai(world, client, user, target) {
+        return true;
+    }
     if super::robotics::is_console(world, target) {
         super::robotics::open(world, client, user, target);
         return true;

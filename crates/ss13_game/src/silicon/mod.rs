@@ -9,7 +9,8 @@
 //!   [`chassis`] (server): the cover and its lock, the cell slot, emags, lockdown, the
 //!   cyborg's law display; [`borg_upgrades`] (server): upgrade boards; [`robotics`] (server):
 //!   the robotics control console;
-//! - [`laws`] (server): lawsets, the round default, lawsync;
+//! - [`laws`] (server): lawsets, the round default, lawsync; [`law_rack`] (server): law racks,
+//!   their modules and the silicons linked to them;
 //! - [`interact`] (server): silicons opening machine windows (`attack_ai`), their window
 //!   status; [`airlock`] (server): the airlock's `AiAirlock` window;
 //! - [`ui`]: the windows' data both halves share; [`client`] (client) draws the camera view's
@@ -45,6 +46,8 @@ pub mod client;
 pub mod cyborg;
 #[cfg(feature = "server")]
 pub mod interact;
+#[cfg(feature = "server")]
+pub mod law_rack;
 #[cfg(feature = "server")]
 pub mod laws;
 #[cfg(feature = "server")]
@@ -100,6 +103,7 @@ mod server {
                     super::robotics::RoboticsPlugin,
                     super::interact::SiliconInteractPlugin,
                     super::airlock::AiAirlockPlugin,
+                    super::law_rack::LawRackPlugin,
                 ))
                 .add_systems(PreStartup, load_data)
                 .add_systems(
