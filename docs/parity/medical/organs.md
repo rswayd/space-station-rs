@@ -47,7 +47,7 @@
 Язык задаёт речь (акценты, языки вида), вкус и любимую еду; голосовые связки — голос (у некоторых — особые силы).
 
 - **Код:** [`/obj/item/organ/tongue`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/organs/internal/tongue/_tongue.dm#L1), [`/obj/item/organ/vocal_cords`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/organs/internal/vocal_cords/_vocal_cords.dm#L1)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/medical/organs.rs`, `crates/ss13_chat/src/speech.rs` (`Tongueless`): язык — орган, без языка речь искажается регулярным выражением tg (только латиница, как на сервере) и «булькает»; нет вкуса, любимой еды, языков и акцентов видовых языков, голосовых связок
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/medical/organs.rs`, `crates/ss13_chat/src/speech.rs` (`Tongueless`): язык — орган, без языка речь искажается регулярным выражением tg (только латиница, как на сервере) и «булькает»; язык-орган ограничивает разговорные языки (`ss13_chat::language::Tongue`: родные языки видов, ксено, робо — любой + EAL); нет вкуса, любимой еды, акцентов видовых языков, голосовых связок
 
 ### Мозг как орган
 Мозг хранит разум игрока, травмы мозга и урон мозга; при 200 урона — смерть; извлекается в процессор мозга (см. ../mobs/aliens-brains.md).

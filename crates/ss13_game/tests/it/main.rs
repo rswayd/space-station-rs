@@ -44,6 +44,7 @@ mod janitor;
 mod jobs;
 mod kitchen;
 mod kitchen_machines;
+mod languages;
 mod loopback;
 mod los;
 mod machine_frame;

@@ -11,7 +11,7 @@
 Люди с кошачьими ушами и хвостом: боятся воды, ненавидимы собаками, особый язык и мозг; можно сделать генетикой.
 
 - **Код:** [`/datum/species/human/felinid`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/human/species_types/felinid.dm#L2)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/species/mod.rs`: органы (мозг, глаза, уши, язык кошки), черты, тон кожи; нет ушей и хвоста (аксессуары), боязни воды, языка
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/species/mod.rs`: органы (мозг, глаза, уши, язык кошки), черты, тон кожи; язык нэкомиметик (`ss13_chat::language`); нет ушей и хвоста (аксессуары), боязни воды
 
 ### Церулеане
 Люди-рыбы: рыбьи лёгкие, желудок, печень, язык; хвост-плавник даёт плавание.
@@ -49,7 +49,7 @@
 
 - **Код:** [`/datum/species/skrell`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/species/code/human/species_type/skrell.dm#L1)
 - **BandaStation:** [`modular_bandastation/species/code/human/species_type/skrell.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/species/code/human/species_type/skrell.dm#L1) — весь вид
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/species/mod.rs`: органы, части тела, кровь SK, `payday_modifier` 1.5, черты `TRAIT_NODROWN`/`TRAIT_SWIMMER` (их читатели — в своих группах); нет головного кармана, щупалец, языка
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/species/mod.rs`: органы, части тела, кровь SK, `payday_modifier` 1.5, черты `TRAIT_NODROWN`/`TRAIT_SWIMMER` (их читатели — в своих группах); язык курволиус (`ss13_chat::language`); нет головного кармана, щупалец
 
 ### Таяры (BandaStation)
 Вид форка: кошачьи, кошачьи инстинкты (приземляются на ноги), ненавидимы собаками, лучше переносят холод (`coldmod` 0.7), свои органы и аксессуары.

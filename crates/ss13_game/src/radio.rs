@@ -526,6 +526,8 @@ struct Transmission {
     verb: &'static str,
     text: String,
     italics: bool,
+    /// The language of the words: listeners hear them translated (`Hear`).
+    language: Option<ss13_chat::language::LanguageId>,
     /// From a subspace radio (a headset: tg `subspace_transmission`).
     subspace: bool,
     /// A CentCom radio on the CentCom frequency (`TRANSMISSION_SUPERSPACE`).
@@ -639,12 +641,13 @@ fn transmit_speech(
     senses: ss13_chat::server::Senses,
     mut chat: MessageWriter<SendChat>,
     mut machine: MessageReader<MachineRadio>,
-    (outage, time, machines, telecomms_levels, mut rng): (
+    (outage, time, machines, telecomms_levels, mut rng, understanding): (
         Res<TelecommsOutage>,
         Res<Time>,
         Query<(Entity, &Telecomms, &TilePos)>,
         Res<TelecommsLevels>,
         ResMut<CombatRng>,
+        ss13_chat::server::Understanding,
     ),
 ) {
     let now = time.elapsed_secs_f64();
@@ -720,6 +723,7 @@ fn transmit_speech(
                     spoke.text.clone()
                 },
                 italics: spoke.whisper,
+                language: spoke.language,
                 subspace: radio.subspace(),
                 superspace: radio.special_channels & RADIO_SPECIAL_CENTCOM != 0
                     && (freq == FREQ_CENTCOM || freq == FREQ_STATUS_DISPLAYS),
@@ -776,6 +780,7 @@ fn transmit_speech(
                     spoke.text.clone()
                 },
                 italics: spoke.heard_whisper,
+                language: spoke.language,
                 subspace: false,
                 superspace: radio.special_channels & RADIO_SPECIAL_CENTCOM != 0
                     && (radio.frequency == FREQ_CENTCOM || radio.frequency == FREQ_STATUS_DISPLAYS),
@@ -793,6 +798,8 @@ fn transmit_speech(
                 verb: MACHINE_VERB,
                 text: m.text.clone(),
                 italics: false,
+                // Machines speak Galactic Common (`atom_basic`).
+                language: Some(ss13_chat::language::LanguageId::Common),
                 subspace: false,
                 superspace: false,
             },
@@ -851,10 +858,20 @@ fn transmit_speech(
             continue;
         }
         info!(target: "say", "radio {} from {}: {}", tx.freq, name, reach.text);
-        chat.write(SendChat {
-            clients,
-            message: radio_message(tx.freq, &name, tx.verb, &reach.text, tx.italics),
-        });
+        for heard in understanding.split(clients, tx.language, &reach.text) {
+            let mut message = radio_message(tx.freq, &name, tx.verb, &heard.text, tx.italics);
+            // After the channel, before the name (tg `compose_message`'s `languageicon`).
+            if let Some(tag) = heard.tag {
+                message.segments.insert(
+                    2,
+                    ss13_shared::chat::ChatSegment::new(ss13_shared::chat::Span::Plain, tag),
+                );
+            }
+            chat.write(SendChat {
+                clients: heard.clients,
+                message,
+            });
+        }
     }
 }
 

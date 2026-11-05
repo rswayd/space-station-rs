@@ -1189,7 +1189,8 @@ fn shuffle<T>(rng: &mut CombatRng, items: &mut [T]) {
 
 /// `/datum/hallucination/chat`: a nearby human (or a corpse) says something, else a crew
 /// member on the common channel.
-// shortcut: no languages (everyone speaks and understands the common one), no runechat.
+// shortcut: the fake speaker always speaks Galactic Common (no pick from its species languages),
+// no runechat.
 pub fn chat(world: &mut World, mob: Entity, force_radio: bool, specific: Option<String>) -> bool {
     if unconscious(world, mob) {
         return false;

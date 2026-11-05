@@ -1376,6 +1376,22 @@ fn finish_absorb(world: &mut World, mob: Entity, target: Entity) {
     {
         hunger.nutrition = (hunger.nutrition + theirs).min(NUTRITION_LEVEL_WELL_FED);
     }
+    // "Absorb a lizard, speak Draconic" (`copy_languages(target, LANGUAGE_ABSORB)`).
+    {
+        use ss13_chat::language::{LanguageHolder, LanguageSource, Preset};
+        let theirs = world
+            .get::<LanguageHolder>(target)
+            .cloned()
+            .unwrap_or_else(|| {
+                LanguageHolder::from_preset(
+                    &Preset::of_path("/datum/language_holder/atom_basic").unwrap_or_default(),
+                    LanguageSource::Atom,
+                )
+            });
+        ss13_chat::language::edit_holder(world, mob, |h| {
+            h.copy_from(&theirs, LanguageSource::Absorb);
+        });
+    }
     absorb_changeling(world, mob, target, &victim);
     if let Some(mut ling) = world.get_mut::<Changeling>(mob) {
         ling.adjust_chemicals(10.0, None);

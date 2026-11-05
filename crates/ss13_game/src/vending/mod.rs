@@ -25,7 +25,7 @@
 //!   vendor: [`custom`].
 // shortcut: no greyscale (GAGS) colour menu, no cash or holochips (credits a vendor collects
 // stay in it until a restock pays them to the restocker's account), no AAS age announcement
-// (the announcement system is not ported), no speaker language.
+// (the announcement system is not ported), no speaker language (machine speech is Common).
 
 pub mod custom;
 pub mod refill;

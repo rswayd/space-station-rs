@@ -186,7 +186,7 @@ fn lights(world: &mut World, mut cursor: Local<MessageCursor<EmpAct>>) {
 
 /// `/obj/machinery/emp_act`: a working machine that uses power surges `7.5 kJ / severity`
 /// from its area and sparks.
-// shortcut: no random uncommon language (no languages).
+// shortcut: no random uncommon language: machine speech does not go through languages.
 fn machines(world: &mut World, mut cursor: Local<MessageCursor<EmpAct>>) {
     for ev in emp_acts(world, &mut cursor) {
         let Ok(e) = world.get_entity(ev.target) else {

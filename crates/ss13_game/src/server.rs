@@ -362,6 +362,7 @@ pub fn seed_rngs(world: &mut World) {
         seed ^ 0x656e_6769_6e65,
     )));
     world.insert_resource(ss13_chat::server::SpeechRng(seed ^ 0x7370_6565_6368));
+    world.insert_resource(ss13_chat::language::ScrambleSeed(seed ^ 0x6c61_6e67));
     world.insert_resource(crate::sound::SoundRng(crate::combat::CombatRng(
         seed ^ 0x0073_6f75_6e64,
     )));

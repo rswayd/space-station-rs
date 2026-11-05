@@ -3,10 +3,10 @@
 //! deflected and (in martial or carp clothing, lightly armed) blows dodged in combat mode; no
 //! guns (`TRAIT_NOGUNS`, `crate::guns`), punches never miss (`TRAIT_PERFECT_ATTACKER`,
 //! `crate::combat`) and grabs harder to resist (`grab_state_modifier`, `crate::pull`).
-// shortcut: no neck snap (no kill grab), no carp faction or language,
+// shortcut: no neck snap (no kill grab), no carp faction,
 // no `TRAIT_HARDLY_WOUNDED`/`TRAIT_NODISMEMBER`/`TRAIT_HEAVY_SLEEPER`, no carp organ set bonus,
 // no `TRAIT_WIELDED` or `block_chance` of held items, no hulk check, no touch spell dodge; add
-// them with those statuses, factions, languages and two-handed items.
+// them with those statuses, factions and two-handed items.
 
 use bevy::prelude::*;
 use ss13_mapload::fidelity::is_under;

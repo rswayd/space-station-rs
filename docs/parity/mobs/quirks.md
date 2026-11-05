@@ -26,7 +26,7 @@
 Второй язык, язык жестов, лучшие объятия, осмотр показывает настроение и намерения других, периодическое хорошее настроение.
 
 - **Код:** [`/datum/quirk/bilingual`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/positive_quirks/bilingual.dm#L1), [`/datum/quirk/item_quirk/signer`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/positive_quirks/signer.dm#L1), [`/datum/quirk/friendly`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/positive_quirks/friendly.dm#L1), [`/datum/quirk/empath`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/positive_quirks/empath.dm#L1), [`/datum/quirk/jolly`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/positive_quirks/jolly.dm#L1)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/quirks.rs`, `crates/ss13_game/src/mood.rs`: Friendly (лучшие объятия по рассудку), Jolly; нет Bilingual и Signer (языки), Empath (осмотр)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/quirks.rs`, `crates/ss13_game/src/mood.rs`: Friendly (лучшие объятия по рассудку), Jolly; Bilingual (случайный язык рас, без настроек в префах); нет Signer (язык жестов), Empath (осмотр)
 
 ### Движение: Freerunning, Light Step, Skittish, Settler, Spacer
 Быстрое перелезание столов, тихие шаги и защита от осколков, прыжок в шкаф при беге, планетарное происхождение (выносливость на планете, медленнее в космосе), рождённый в космосе (бонусы в невесомости, недомогание в гравитации).

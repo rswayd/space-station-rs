@@ -211,6 +211,20 @@ mod server {
         world
             .entity_mut(listener)
             .insert((SiliconRadio(radio), EarsWorn, BinaryCapable));
+        give_languages(world, listener);
+    }
+
+    /// `initial_language_holder = /datum/language_holder/synthetic/silicon`: Common, Uncommon
+    /// and Encoded Audio Language, and 66% of every roundstart species language.
+    pub(crate) fn give_languages(world: &mut World, body: Entity) {
+        use ss13_chat::language::{LanguageHolder, LanguageSource, Preset};
+        let preset =
+            Preset::of_path("/datum/language_holder/synthetic/silicon").unwrap_or_default();
+        let mut holder = LanguageHolder::from_preset(&preset, LanguageSource::Atom);
+        for language in crate::species::uncommon_roundstart_languages() {
+            holder.grant_partial(language, 66, LanguageSource::Atom);
+        }
+        world.entity_mut(body).insert(holder);
     }
 
     /// tg `/mob/living/silicon/proc/show_laws`.

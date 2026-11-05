@@ -449,6 +449,14 @@ fn activate(world: &mut World, mob: Entity, style: Style) {
             );
             judo::drop_batons(world, mob);
         }
+        // `grant_language(/datum/language/carptongue, ALL, type)`.
+        Style::SleepingCarp => ss13_chat::language::edit_holder(world, mob, |h| {
+            h.grant(
+                ss13_chat::language::LanguageId::Carptongue,
+                ss13_chat::language::ALL,
+                ss13_chat::language::LanguageSource::MartialArt,
+            );
+        }),
         _ => {}
     }
 }
@@ -468,6 +476,15 @@ fn deactivate(world: &mut World, mob: Entity, style: Style) {
             Span::BoldWarning,
             "Вы забываете мастерство корпоративного дзюдо...",
         ),
+        Style::SleepingCarp => {
+            if let Some(mut holder) = world.get_mut::<ss13_chat::language::LanguageHolder>(mob) {
+                holder.remove(
+                    ss13_chat::language::LanguageId::Carptongue,
+                    ss13_chat::language::ALL,
+                    Some(ss13_chat::language::LanguageSource::MartialArt),
+                );
+            }
+        }
         _ => {}
     }
 }

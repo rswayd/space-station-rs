@@ -10,12 +10,12 @@
 //!   [`Quirks`] component, the quirk's own effect and, once, its items (`item_quirk`).
 //! - Processing quirks act every `SSquirks` fire (1 s) while the holder is below hard crit.
 //!
-//! Ported quirks: Alcohol Tolerance and Light Drinker (booze power, `ss13_reagents`), Drunken
+//! Ported quirks: Bilingual (`ss13_chat::language`), Alcohol Tolerance and Light Drinker (booze power, `ss13_reagents`), Drunken
 //! Resilience, Friendly (`crate::mood::on_hug`), Jolly, Voracious (nutrition moodlets),
 //! Monochromacy, Blind and Nearsighted (`crate::vision`), Depression, Hypersensitive, Unstable
 //! (`crate::mood`), Mute and Pacifist (`crate::medical::traumas::refresh`), Brain Tumor,
 //! Bad Back, Paraplegic (an absolute paralysis trauma).
-// shortcut: the other tg quirks wait for their mechanics (languages, addictions, allergies,
+// shortcut: the other tg quirks wait for their mechanics (addictions, allergies,
 // phobias, skillchips, species, hallucinations, wheelchairs...); no medical record lines, no
 // customization options (blindfold colour, glasses type, paraplegic variant), no hardcore or
 // random quirks, no mail goodies, no quirk transfer between bodies; the point settings are tg's
@@ -58,6 +58,7 @@ pub const ITEM_PATHS: [&str; 3] = [BLINDFOLD, GLASSES, MANNITOL_BOTTLE];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Quirk {
     AlcoholTolerance,
+    Bilingual,
     DrunkHealing,
     Friendly,
     Jolly,
@@ -115,7 +116,7 @@ const fn q(
 
 /// Every ported quirk in tg's menu order (`cmp_quirk_asc`: positive, negative, neutral, then by
 /// name). BandaStation texts.
-pub const QUIRKS: [QuirkDef; 17] = [
+pub const QUIRKS: [QuirkDef; 18] = [
     q(
         Quirk::AlcoholTolerance,
         "/datum/quirk/alcohol_tolerance",
@@ -131,6 +132,20 @@ pub const QUIRKS: [QuirkDef; 17] = [
             Span::Danger,
             "Вы больше не испытываете особой стойкости к алкоголю.",
         )),
+    ),
+    q(
+        Quirk::Bilingual,
+        "/datum/quirk/bilingual",
+        "Bilingual",
+        "За эти годы вы освоили еще один язык!",
+        "globe",
+        4,
+        Some((
+            Span::Notice,
+            "Некоторые из слов ваших собеседников точно не являются обычными. Хорошо, что вы \
+             научились их понимать.",
+        )),
+        Some((Span::Notice, "Кажется, вы забыли свой второй язык.")),
     ),
     q(
         Quirk::DrunkHealing,
@@ -512,6 +527,7 @@ pub fn add_quirk(
             }
         }
         Quirk::Mute | Quirk::Pacifist => traumas::refresh(world, mob),
+        Quirk::Bilingual => bilingual(world, mob),
         // `/datum/brain_trauma/severe/paralysis/paraplegic`, `TRAUMA_RESILIENCE_ABSOLUTE`.
         Quirk::Paraplegic => {
             if let Some(brain) = organs::organ(world, mob, Slot::Brain) {
@@ -568,6 +584,44 @@ pub fn add_quirk(
     true
 }
 
+/// `/datum/quirk/bilingual/add` with the "Random" language preference: one roundstart species
+/// language, or Galactic Uncommon when that one is already known.
+// shortcut: no language, "speakable" or skill preferences (always spoken and understood).
+fn bilingual(world: &mut World, mob: Entity) {
+    use ss13_chat::language::{ALL, LanguageHolder, LanguageId, LanguageSource};
+    let pool = crate::species::uncommon_roundstart_languages();
+    if pool.is_empty() {
+        return;
+    }
+    let pick = {
+        let mut rng = world.get_resource_or_init::<CombatRng>();
+        pool[rng.range(0, pool.len() as u32 - 1) as usize]
+    };
+    let knows = |w: &World, l: LanguageId| {
+        ss13_chat::language::understanding(w.get::<LanguageHolder>(mob), false, l)
+            >= ss13_chat::language::FULL
+    };
+    let mut language = pick;
+    if knows(world, language) {
+        language = LanguageId::Uncommon;
+        let text = if knows(world, language) {
+            "Вы уже знакомы с данной чертой в своих предпочтениях, поэтому не стали изучать ее."
+        } else {
+            "Вы уже знакомы с данной чертой в своих предпочтениях, поэтому вместо нее вы выучили \
+             старогалактический."
+        };
+        if let Some(client) = world.get::<PlayerMob>(mob).map(|p| p.client) {
+            crate::tools::tell(world, client, Span::BoldNotice, text);
+        }
+        if knows(world, language) {
+            return;
+        }
+    }
+    ss13_chat::language::edit_holder(world, mob, |h| {
+        h.grant(language, ALL, LanguageSource::Quirk);
+    });
+}
+
 /// tg `remove_quirk`: false if the mob does not have it.
 pub fn remove_quirk(world: &mut World, mob: Entity, quirk: Quirk) -> bool {
     let Some(mut quirks) = world.get_mut::<Quirks>(mob) else {
@@ -593,6 +647,12 @@ pub fn remove_quirk(world: &mut World, mob: Entity, quirk: Quirk) -> bool {
         Quirk::Depression => mood::clear_event(world, mob, "depression"),
         Quirk::BadBack => mood::clear_event(world, mob, "back_pain"),
         Quirk::Mute | Quirk::Pacifist => traumas::refresh(world, mob),
+        // `remove_all_languages(LANGUAGE_QUIRK)`, `remove_all_partial_languages(LANGUAGE_QUIRK)`.
+        Quirk::Bilingual => {
+            if let Some(mut holder) = world.get_mut::<ss13_chat::language::LanguageHolder>(mob) {
+                holder.remove_all(Some(ss13_chat::language::LanguageSource::Quirk));
+            }
+        }
         _ => {}
     }
     if let Some(lose) = quirk.def().lose {
