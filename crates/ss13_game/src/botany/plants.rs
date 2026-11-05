@@ -95,6 +95,14 @@ pub fn tray_item_interaction(
         propagate_plant(world, client, mob, held, tray);
         return true;
     }
+    if is_under(&path, super::grafts::SECATEURS_ROOT) {
+        super::grafts::take_graft(world, client, mob, tray);
+        return true;
+    }
+    if is_under(&path, ss13_mapload::plants::GRAFT) {
+        super::grafts::use_graft(world, client, held, tray);
+        return true;
+    }
     if is_under(&path, CULTIVATOR_ROOT) {
         let Some(mut state) = world.get::<Tray>(tray).cloned() else {
             return true;
@@ -490,6 +498,7 @@ pub fn spawn_produce(
                 .collect();
             holder.add_reagent_list(&chem, &list, Some(purity), false);
         }
+        super::produce::on_harvest(world, e, &seed);
     }
     world.entity_mut(e).insert(seed);
     Some(e)
@@ -528,6 +537,14 @@ pub fn extractor_interaction(
 pub fn spawn_seed(world: &mut World, plants: &Plants, seed: &Seed, pos: TilePos) -> Option<Entity> {
     let e = crate::construction::spawn_obj(world, &seed.path, pos)?;
     world.entity_mut(e).insert(seed.copy(plants));
+    Some(e)
+}
+
+/// A `path` item on `pos` holding `seed.Copy()` (a graft's `plant_dna`).
+pub fn spawn_seed_like(world: &mut World, path: &str, seed: &Seed, pos: TilePos) -> Option<Entity> {
+    let plants = plants(world);
+    let e = crate::construction::spawn_obj(world, path, pos)?;
+    world.entity_mut(e).insert(seed.copy(&plants));
     Some(e)
 }
 

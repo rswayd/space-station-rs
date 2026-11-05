@@ -27,6 +27,14 @@ pub const CONSTRUCTABLE_TRAY: &str = "/obj/machinery/hydroponics/constructable";
 pub const SOIL_ROOT: &str = "/obj/machinery/hydroponics/soil";
 pub const TRAIT_ROOT: &str = "/datum/plant_gene/trait";
 pub const FUNGAL: &str = "/datum/plant_gene/trait/plant_type/fungal_metabolism";
+pub const GLOW_TRAIT: &str = "/datum/plant_gene/trait/glow";
+/// `/obj/item/graft`: a cutting taken with secateurs.
+pub const GRAFT: &str = "/obj/item/graft";
+/// What product traits leave behind: the teleport goo and the potato battery.
+pub const PRODUCE_RUNTIME_TYPES: [&str; 2] = [
+    "/obj/effect/decal/cleanable/molten_object",
+    "/obj/item/stock_parts/power_store/cell/potato",
+];
 const REAGENT_ROOT: &str = "/datum/reagent";
 const URANIUM: &str = "/datum/reagent/uranium";
 /// `REAGENT_SPAWN_RANDOM_PRODUCERS`.
@@ -98,6 +106,9 @@ pub struct TraitDef {
     pub trait_flags: u32,
     pub mutability_flags: u32,
     pub seed_blacklist: Vec<String>,
+    /// `/datum/plant_gene/trait/glow` `glow_color` (`"#RRGGBB"`); empty for other traits.
+    #[serde(default)]
+    pub glow_color: String,
 }
 
 /// An `/obj/machinery/hydroponics` type with what `Initialize`/`RefreshParts` leave in the vars
@@ -123,6 +134,15 @@ pub struct GrownDef {
     /// Its `seed` type.
     pub seed: String,
     pub bite_consumption_mod: f32,
+    /// `splat_type` (the squash decal); empty: none (inedible grown items).
+    #[serde(default)]
+    pub splat_type: String,
+    /// `filling_color` (`"#RRGGBB"`), the smudge's colour; empty: none.
+    #[serde(default)]
+    pub filling_color: String,
+    /// `distill_reagent` (auto-distilling); empty: fruit wine.
+    #[serde(default)]
+    pub distill_reagent: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
@@ -219,6 +239,11 @@ fn plant_trait(types: &DmTypes, path: &str) -> TraitDef {
         trait_flags: n("trait_flags") as u32,
         mutability_flags: n("mutability_flags") as u32,
         seed_blacklist: paths(get("seed_blacklist")),
+        glow_color: if is_under(path, GLOW_TRAIT) {
+            text(get("glow_color"))
+        } else {
+            String::new()
+        },
     }
 }
 
@@ -277,6 +302,10 @@ pub fn resolve(types: &DmTypes) -> PlantData {
                 path: p.to_owned(),
                 seed,
                 bite_consumption_mod: bite.and_then(|v| num(Some(v))).unwrap_or(1.0) as f32,
+                splat_type: path_value(types.resolved(p, "splat_type")).unwrap_or_default(),
+                filling_color: text(types.resolved(p, "filling_color")),
+                distill_reagent: path_value(types.resolved(p, "distill_reagent"))
+                    .unwrap_or_default(),
             });
         }
     }
@@ -296,7 +325,8 @@ pub fn resolve(types: &DmTypes) -> PlantData {
 }
 
 /// Every type a needed seed, grown item or tray can turn into, transitively: seeds' products and
-/// `mutatelist`, grown items' seeds, the weeds that overtake a tray.
+/// `mutatelist`, grown items' seeds, squash decals and grown trash (banana peels), the weeds
+/// that overtake a tray, the grafts cut from it and what product traits leave behind.
 pub fn plant_closure<'a>(
     types: &DmTypes,
     needed: impl IntoIterator<Item = &'a str>,
@@ -314,9 +344,16 @@ pub fn plant_closure<'a>(
             next.extend(paths(types.resolved(&path, "mutatelist")));
         } else if is_under(&path, GROWN_ROOT) || is_under(&path, GROWN_INEDIBLE_ROOT) {
             next.extend(path_value(types.resolved(&path, "seed")));
+            next.extend(path_value(types.resolved(&path, "splat_type")));
+            next.extend(
+                path_value(types.resolved(&path, "trash_type"))
+                    .filter(|t| is_under(t, GROWN_INEDIBLE_ROOT)),
+            );
+            next.extend(PRODUCE_RUNTIME_TYPES.iter().map(|p| (*p).to_owned()));
         } else if is_under(&path, TRAY_ROOT) {
             next.extend(WEED_INVASION.iter().map(|(p, _)| (*p).to_owned()));
             next.extend(MUTATED_WEEDS.iter().map(|p| (*p).to_owned()));
+            next.push(GRAFT.to_owned());
         }
         for p in next {
             // Products that are mobs (seedlings) are not spawned here.
@@ -392,9 +429,19 @@ mod tests {
             "species": "chanter", "product": { "path": "/mob/living/shroom" },
             "genes": { "list": [{ "path": "/datum/plant_gene/trait/plant_type/fungal_metabolism" }] } } },
         "/obj/item/food": { "parent": "/obj/item" },
-        "/obj/item/food/grown": { "parent": "/obj/item/food", "declared_vars": { "seed": null } },
+        "/obj/item/food/grown": { "parent": "/obj/item/food", "declared_vars": { "seed": null,
+            "splat_type": { "path": "/obj/effect/decal/cleanable/food/plant_smudge" },
+            "filling_color": null, "distill_reagent": null } },
         "/obj/item/food/grown/tomato": { "parent": "/obj/item/food/grown", "declared_vars": {
-            "seed": { "path": "/obj/item/seeds/tomato" } } },
+            "seed": { "path": "/obj/item/seeds/tomato" }, "filling_color": "#FF6347" } },
+        "/obj/effect": { "parent": "/obj" },
+        "/obj/effect/decal": { "parent": "/obj/effect" },
+        "/obj/effect/decal/cleanable": { "parent": "/obj/effect/decal" },
+        "/obj/effect/decal/cleanable/food": { "parent": "/obj/effect/decal/cleanable" },
+        "/obj/effect/decal/cleanable/food/plant_smudge": {
+            "parent": "/obj/effect/decal/cleanable/food" },
+        "/datum/plant_gene/trait/glow": { "parent": "/datum/plant_gene/trait",
+            "declared_vars": { "name": "Bioluminescence", "glow_color": "#C3E381" } },
         "/obj/item/food/grown/tomato/blue": { "parent": "/obj/item/food/grown/tomato",
             "declared_vars": { "seed": { "path": "/obj/item/seeds/tomato/blue" } } },
         "/obj/machinery": { "parent": "/obj" },
@@ -473,7 +520,17 @@ mod tests {
                 .iter()
                 .any(|g| g.path == "/obj/item/food/grown/tomato"
                     && g.seed == "/obj/item/seeds/tomato"
-                    && g.bite_consumption_mod == 1.0)
+                    && g.bite_consumption_mod == 1.0
+                    && g.splat_type == "/obj/effect/decal/cleanable/food/plant_smudge"
+                    && g.filling_color == "#FF6347"
+                    && g.distill_reagent.is_empty())
+        );
+        let glow = data.traits.iter().find(|t| t.path == GLOW_TRAIT).unwrap();
+        assert_eq!(glow.glow_color, "#C3E381");
+        assert!(
+            data.traits
+                .iter()
+                .all(|t| t.path == GLOW_TRAIT || t.glow_color.is_empty())
         );
     }
 
@@ -488,5 +545,9 @@ mod tests {
         assert!(out.contains("/obj/item/seeds/tomato/blue"));
         assert!(out.contains("/obj/item/food/grown/tomato/blue"));
         assert!(!out.contains("/mob/living/shroom"), "mobs are not spawned");
+        assert!(
+            out.contains("/obj/effect/decal/cleanable/food/plant_smudge"),
+            "squash decal"
+        );
     }
 }

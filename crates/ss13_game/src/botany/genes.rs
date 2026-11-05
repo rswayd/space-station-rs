@@ -2,10 +2,8 @@
 //! `plants.ron`) and reagent genes, what a seed may take (`can_add`) and the reagent gene
 //! upgrades of cross-pollination (`try_upgrade_gene`, `perform_reagent_pollination`).
 //!
-//! Only the traits the tray, the harvest and the seed stats read have effects here (see the
-//! constants); the others are carried, copied, mutated in and shown by the analyzer.
-// shortcut: no product traits (squash, slip, glow, teleport, batteries, ...), no `on_new_plant`
-// effects but densified chemicals; add them with the throwing/slipping/lighting of produce.
+//! The traits the tray, the harvest and the seed stats read have their effects here (see the
+//! constants); product traits act in [`super::produce`].
 
 use ss13_mapload::plants::TraitDef;
 use ss13_reagents::is_under;

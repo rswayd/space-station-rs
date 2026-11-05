@@ -13,14 +13,21 @@
 //!   composted, a cultivator pulls the weeds, a shovel digs the plant out (5 s); an empty hand
 //!   harvests a ready plant ([`plants::harvest`]) or removes a dead one. A plant analyzer prints
 //!   tg's analyzer fields for a tray, a seed or produce. Produce into a seed extractor gives
-//!   `rand(1, 4) + 1` seeds with its stats.
+//!   `rand(1, 4) + 1` seeds with its stats. Secateurs cut grafts, grafts go onto plants
+//!   ([`grafts`]).
+//! - Grown items act on their genes' product traits ([`produce`]): slipping, squashing,
+//!   glowing, teleporting, stinging, batteries, harvest-time chemistry; invasive plants spread
+//!   to the trays around.
 //! - `SS13_HYDRO_SPEED` (dev): every hydroponics timer runs this many times faster (tests use
 //!   [`HydroSpeed`]), so a cycle keeps tg's ratios.
 // shortcut: no plant bags, seed storage in the extractor (its tgui), biogenerator, sprays,
-// grafting or right click nutrient emptying; the analyzer prints to chat instead of its tgui.
+// gene shears or right click nutrient emptying; the analyzer prints to chat instead of its
+// tgui; invasive spreading ignores windows between trays (tg `Adjacent`).
 
 pub mod genes;
+pub mod grafts;
 pub mod plants;
+pub mod produce;
 pub mod seeds;
 pub mod tray;
 
@@ -99,6 +106,11 @@ impl Plants {
         })
     }
 
+    /// A grown item type's data.
+    pub fn grown_def(&self, path: &str) -> Option<&ss13_mapload::plants::GrownDef> {
+        self.grown.get(path).map(|&i| &self.data.grown[i])
+    }
+
     /// `tox_damage` of a uranium reagent.
     pub fn tox_damage(&self, reagent: &str) -> f32 {
         self.data
@@ -128,6 +140,8 @@ impl Default for HydroSpeed {
 pub enum BotanyJob {
     /// A shovel digging the plant out of a tray.
     Dig,
+    /// Squeezing a plant with liquid contents in hand (BandaStation).
+    Squash,
 }
 
 pub struct BotanyServerPlugin;
@@ -145,6 +159,7 @@ impl Plugin for BotanyServerPlugin {
         app.add_observer(add_seed)
             .add_systems(Startup, setup_trays)
             .add_systems(Update, process_trays);
+        produce::build(app);
     }
 
     /// After every plugin's `build`: the map plugin's assets dir is known by now.
@@ -181,6 +196,7 @@ fn add_seed(
     add: On<Add<DmItem>>,
     items: Query<&DmItem>,
     botany: Option<Res<Botany>>,
+    rng: Option<ResMut<CombatRng>>,
     mut commands: Commands,
 ) {
     let (Ok(item), Some(botany)) = (items.get(add.entity), botany) else {
@@ -188,7 +204,15 @@ fn add_seed(
     };
     let plants = &botany.0;
     let seed = if is_under(&item.path, SEED_ROOT) {
-        plants.seed_def(&item.path).map(|d| Seed::new(d, plants))
+        plants.seed_def(&item.path).map(|d| {
+            let mut seed = Seed::new(d, plants);
+            if is_under(&item.path, seeds::STRANGE_SEED)
+                && let Some(mut rng) = rng
+            {
+                seed.randomize_strange(plants, &mut *rng);
+            }
+            seed
+        })
     } else if is_under(&item.path, GROWN_ROOT) || is_under(&item.path, GROWN_INEDIBLE_ROOT) {
         plants
             .grown(&item.path)
@@ -309,6 +333,14 @@ fn run_cycle(world: &mut World, e: Entity, t: f64) {
         pollinate(world, &mut state, pos);
     }
     world.entity_mut(e).insert(state);
+    // `COMSIG_SEED_ON_GROW`.
+    if world
+        .get::<Tray>(e)
+        .and_then(|s| s.myseed.as_ref())
+        .is_some_and(|s| s.has_gene(produce::INVASIVE))
+    {
+        try_spread(world, e, pos, t);
+    }
     if let Some(mut r) = world.get_mut::<Reagents>(e)
         && r.0 != nutrients
     {
@@ -318,6 +350,57 @@ fn run_cycle(world: &mut World, e: Entity, t: f64) {
         crate::chem::visible(world, e, "", message, Span::Warning);
     }
     refresh_tray(world, e);
+}
+
+/// `/datum/plant_gene/trait/invasive/try_spread`: `5 × (11 - production)`% of the cycles, each
+/// tray around has a 15% chance to be overtaken by a copy (not one of its own living kind).
+// shortcut: windows between trays do not stop it (tg `Adjacent`).
+fn try_spread(world: &mut World, origin: Entity, pos: TilePos, t: f64) {
+    let Some(source) = world.get::<Tray>(origin).and_then(|s| s.myseed.clone()) else {
+        return;
+    };
+    let plants = world.resource::<Botany>().0.clone();
+    if roll_prob(world, 100.0 - 5.0 * (11.0 - source.production)) {
+        return;
+    }
+    let neighbours: Vec<Entity> = world
+        .resource::<SpatialIndex>()
+        .in_radius(pos, 1)
+        .filter(|&n| n != origin && world.get::<TilePos>(n) != Some(&pos))
+        .filter(|&n| world.get::<Tray>(n).is_some())
+        .collect();
+    for n in neighbours {
+        if !roll_prob(world, 15.0) {
+            continue;
+        }
+        let Some(mut target) = world.get::<Tray>(n).cloned() else {
+            continue;
+        };
+        if let Some(theirs) = &target.myseed {
+            if theirs.path == source.path && target.plant_status != PlantStatus::Dead {
+                continue; // it should not destroy its own kind
+            }
+            let text = format!(
+                "The {} is overtaken by {}!",
+                theirs.plantname, source.plantname
+            );
+            crate::chem::visible(world, n, "", &text, Span::Warning);
+        }
+        target.set_seed(Some(source.copy(&plants)));
+        target.set_plant_health(source.endurance, false);
+        target.lastcycle = t;
+        target.weedlevel = 0.0;
+        target.pestlevel = 0.0;
+        world.entity_mut(n).insert(target);
+        let text = format!("The {} spreads!", source.plantname);
+        crate::chem::visible(world, n, "", &text, Span::Warning);
+        refresh_tray(world, n);
+    }
+}
+
+fn roll_prob(world: &mut World, percent: f32) -> bool {
+    use seeds::Dice;
+    world.resource_mut::<CombatRng>().prob(percent)
 }
 
 /// `pollinate(range = 1)`: every tray around with a living plant gets averaged towards this one.
@@ -555,6 +638,9 @@ pub fn item_interaction(
     if is_under(&held_path, plants::ANALYZER_ROOT) {
         return plants::analyze(world, client, target);
     }
+    if produce::battery_interaction(world, client, mob, held, target) {
+        return true;
+    }
     if world.get::<Tray>(target).is_some() {
         return plants::tray_item_interaction(world, client, mob, held, target, modifiers);
     }
@@ -583,15 +669,22 @@ pub fn interact(
     true
 }
 
+/// tg `attack_self` of a held plant (squeezing liquid contents). False for other items.
+pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity) -> bool {
+    world.contains_resource::<Botany>() && produce::attack_self(world, client, mob, item)
+}
+
 /// The end of a [`BotanyJob`].
 pub fn complete(world: &mut World, mob: Entity, action: &crate::tools::DoAfter, job: BotanyJob) {
     match job {
         BotanyJob::Dig => plants::complete_dig(world, mob, action),
+        BotanyJob::Squash => produce::complete_squash(world, mob, action),
     }
 }
 
 /// tg `/obj/machinery/hydroponics/examine`.
 pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<(Span, String)>) {
+    produce::examine_lines(world, target, lines);
     let Some(state) = world.get::<Tray>(target) else {
         return;
     };
@@ -737,6 +830,7 @@ pub(crate) fn test_plants() -> Plants {
             path: "/obj/item/food/grown/tomato".into(),
             seed: "/obj/item/seeds/tomato".into(),
             bite_consumption_mod: 1.0,
+            ..Default::default()
         }],
         random_reagents: vec!["/datum/reagent/consumable/sugar".into()],
         tox_damage: vec![],

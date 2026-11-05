@@ -33,6 +33,9 @@ pub const SOIL_LOVER_HYDRO_POTENCY_MAX: f32 = 0.8;
 /// `MUTATE_EARLY`, `NO_PLANTING` (`seed_flags`).
 pub const MUTATE_EARLY: u32 = 1 << 0;
 pub const NO_PLANTING: u32 = 1 << 1;
+/// `/obj/item/seeds/random`, the strange seed.
+pub const STRANGE_SEED: &str = "/obj/item/seeds/random";
+const PLANT_TYPE: &str = "/datum/plant_gene/trait/plant_type";
 /// Tray `SOIL` flag.
 pub const SOIL: u32 = 1 << 1;
 /// `BITE_SIZE_POTENCY_MULTIPLIER`, `BITE_SIZE_VOLUME_MULTIPLIER`.
@@ -95,6 +98,8 @@ pub struct Seed {
     pub weed_chance: f32,
     pub genes: Vec<Gene>,
     pub mutatelist: Vec<String>,
+    /// `grafts_taken`: cuttings taken off this plant (not copied).
+    pub grafts_taken: u32,
 }
 
 /// The `mutate()` ranges (`rand(-x, x)` each; `traitmut` is a chance).
@@ -176,6 +181,7 @@ impl Seed {
             weed_chance: def.weed_chance,
             genes,
             mutatelist: def.mutatelist.clone(),
+            grafts_taken: 0,
         }
     }
 
@@ -185,6 +191,7 @@ impl Seed {
             mutatelist: plants
                 .seed_def(&self.path)
                 .map_or_else(|| self.mutatelist.clone(), |d| d.mutatelist.clone()),
+            grafts_taken: 0,
             ..self.clone()
         }
     }
@@ -368,6 +375,39 @@ impl Seed {
         }
     }
 
+    /// `/obj/item/seeds/random/Initialize`: `randomize_stats()`, then 60% one to three random
+    /// reagents, 50% one or two random traits, `add_random_plant_type(35)`.
+    pub fn randomize_strange(&mut self, plants: &Plants, dice: &mut impl Dice) {
+        self.set_lifespan(dice.rand(25, 60) as f32);
+        self.set_endurance(dice.rand(15, 35) as f32);
+        self.set_production(dice.rand(2, 10) as f32);
+        self.set_yield(dice.rand(1, 10) as f32);
+        self.set_potency(dice.rand(10, 35) as f32);
+        self.set_weed_rate(dice.rand(1, 10) as f32);
+        self.set_weed_chance(dice.rand(5, 100) as f32);
+        self.maturation = dice.rand(6, 12) as f32;
+        if dice.prob(60.0) {
+            self.add_random_reagents(1, 3, plants, dice);
+        }
+        if dice.prob(50.0) {
+            self.add_random_traits(1, 2, plants, dice);
+        }
+        if dice.prob(35.0) {
+            let types: Vec<&ss13_mapload::plants::TraitDef> = plants
+                .data
+                .traits
+                .iter()
+                .filter(|t| is_under(&t.path, PLANT_TYPE) && t.path != PLANT_TYPE)
+                .collect();
+            if !types.is_empty() {
+                let def = types[dice.pick(types.len())];
+                if trait_can_add(def, self) {
+                    self.genes.push(Gene::new_trait(def));
+                }
+            }
+        }
+    }
+
     /// `get_reagent_purity()`: 50% plus lifespan and endurance, +-instability at random.
     pub fn reagent_purity(&self, dice: &mut impl Dice) -> f32 {
         let instability = self.instability as i32;
@@ -425,6 +465,24 @@ mod tests {
     fn tomato() -> Seed {
         let plants = test_plants();
         Seed::new(plants.seed_def("/obj/item/seeds/tomato").unwrap(), &plants)
+    }
+
+    #[test]
+    fn strange_seeds_roll_their_stats() {
+        let plants = test_plants();
+        let mut s = tomato();
+        let mut dice = Script {
+            rolls: vec![40, 20, 5, 7, 30, 3, 50, 9, 0, 1, 0, 0, 0, 0],
+            probs: vec![false, false, true],
+        };
+        s.randomize_strange(&plants, &mut dice);
+        assert_eq!(
+            (s.lifespan, s.endurance, s.production, s.yield_, s.potency),
+            (40.0, 20.0, 5.0, 7.0, 30.0)
+        );
+        assert_eq!((s.weed_rate, s.weed_chance, s.maturation), (3.0, 50.0, 9.0));
+        // The plant type roll: the first plant type of the test traits (fungal).
+        assert!(s.has_gene(FUNGAL));
     }
 
     #[test]
