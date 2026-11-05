@@ -275,6 +275,10 @@ pub(crate) fn security_clicks(world: &mut World, mut clicks: Local<MessageCursor
             Some(_) => false,
             // The attacker's martial art takes the empty hand first (`crate::martial`).
             None if crate::martial::unarmed_attack(world, &click, now) => true,
+            // A cow is tipped over instead of shoved (`crate::mobs::farm`).
+            None if click.modifiers.right && crate::mobs::farm::tip_click(world, actor, target) => {
+                true
+            }
             // tg `check_block` of the defender against a punch or a shove.
             None if target != mob
                 && (click.modifiers.right || world.get::<CombatMode>(mob).is_some_and(|c| c.0))

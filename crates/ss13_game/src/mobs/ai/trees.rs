@@ -1,8 +1,8 @@
 //! The ported controllers' trees, node for node after their tg `*.bt.json` (the file named on
 //! each builder) or BandaStation's `behavior_nodes` (`modular_bandastation/mobs/code/
 //! ai_controller.dm`). Branches whose leaves need systems ss13-rs lacks are left out and named
-//! (escape captivity, pet commands, breeding, cheese, instruments, carp rifts and magic, cat
-//! homes and food, tipping, climbing trees, swimming, mob abilities); a selector then falls
+//! (escape captivity, cheese, instruments, carp rifts and magic, cat homes and food, climbing
+//! trees, swimming, attacking obstructions, most mob abilities); a selector then falls
 //! through to the next branch as tg's does when those fail. A parallel that keeps one child
 //! is that child.
 //!
@@ -10,6 +10,9 @@
 //! next to a looping `random_walk` sibling: the selector resumes the walk forever and the
 //! branch is never entered once the mob walks (skittish mobs never flee, goats never butt
 //! back). Those decorators abort lower priorities here too (marked `tg BT_ABORT_SELF`).
+//!
+//! Mobs with tg's `SUBPLAN_ID_PET_COMMAND` override slot get [`pet_command_root`] as their first
+//! root (`crate::mobs::pets`).
 //!
 //! Speech comes from `mobs.ron`: a `random_speech` type by path ([`Behavior::Speak`] with
 //! `Some`), or the controller's `BB_BASIC_MOB_SPEAK_LINES` (`None`).
@@ -24,7 +27,9 @@ use super::bt::{
     Abort, Cond, Node, ParallelOpts, decorator, leaf, parallel, selector, sequence, subplan,
     time_limit,
 };
+use super::fauna::{FaunaCond, FaunaLeaf};
 use super::{Key, STOP_MOVING_WHEN_PULLED, Value};
+use crate::mobs::pets::PetCommand;
 
 pub const CARP: &str = "/datum/ai_controller/basic_controller/carp";
 const DOG: &str = "/datum/ai_controller/basic_controller/dog";
@@ -103,6 +108,9 @@ pub fn build(path: &str, def: &MobDef) -> Option<Built> {
         // shortcut: controllers not ported yet only wander (`random_walk`), so placed pets are
         // not statues; port their trees one by one.
         built.roots = vec![random_walk(25.0)];
+    }
+    if crate::mobs::pets::has_pet_subtree(&def.path) {
+        built.roots.insert(0, pet_command_root());
     }
     Some(built)
 }
@@ -200,20 +208,23 @@ fn generic(path: &str) -> Option<Built> {
             1.0,
         )
     } else if is("cow") {
-        // `farm_animals/cow/cow.bt.json`; left out: `tip_reaction`.
-        selector(vec![par(
-            vec![
-                subplan(
-                    selector(vec![move_to_and_eat(), random_walk(25.0)]),
-                    true,
-                    true,
-                    0.0,
-                ),
-                find_food(),
-                speech_loop_of(None),
-            ],
-            FIND_TARGET_RATE,
-        )])
+        // `farm_animals/cow/cow.bt.json`.
+        selector(vec![
+            tip_reaction(),
+            par(
+                vec![
+                    subplan(
+                        selector(vec![move_to_and_eat(), random_walk(25.0)]),
+                        true,
+                        true,
+                        0.0,
+                    ),
+                    find_food(),
+                    speech_loop_of(None),
+                ],
+                FIND_TARGET_RATE,
+            ),
+        ])
     } else if is("goat") {
         // `farm_animals/goat/goat.bt.json`.
         retaliates = true;
@@ -266,7 +277,7 @@ fn generic(path: &str) -> Option<Built> {
             FIND_TARGET_RATE,
         )
     } else if is("mothroach") {
-        // `vermin/mothroach/mothroach.bt.json`; left out: pet commands.
+        // `vermin/mothroach/mothroach.bt.json`.
         retaliates = true;
         selector(vec![par(
             vec![
@@ -430,6 +441,173 @@ fn generic(path: &str) -> Option<Built> {
         random_walk(25.0)
     } else if is("gondola") {
         random_walk(10.0)
+    } else if is("crab") {
+        // `vermin/crab.bt.json`: hunts smaller mobs, flees whoever hurt it while hurt; left out:
+        // escape captivity, swimming.
+        retaliates = true;
+        flees_injured = true;
+        par(
+            vec![
+                selector(vec![
+                    decorator(
+                        Cond::KeySet(Key::FleeTarget),
+                        false,
+                        Abort::Both,
+                        run_away(Key::FleeTarget),
+                    ),
+                    decorator(
+                        Cond::KeySet(Key::CurrentTarget),
+                        false,
+                        Abort::Both,
+                        melee_combat(Strategy::Smaller),
+                    ),
+                    random_walk(25.0),
+                ]),
+                decorator(
+                    Cond::KeySet(Key::StopFleeing),
+                    true,
+                    Abort::None,
+                    leaf(Behavior::TargetFromRetaliateList {
+                        key: Key::FleeTarget,
+                        strategy: Strategy::Basic,
+                    }),
+                ),
+                leaf(Behavior::AcquireCombatTarget {
+                    key: Key::CurrentTarget,
+                    strategy: Strategy::Smaller,
+                }),
+            ],
+            FIND_TARGET_RATE,
+        )
+    } else if is("turtle") {
+        turtle()
+    } else if is("parrot") {
+        // `pets/parrot/parrot_ai/parrot.bt.json`; left out: escape captivity, perching, hoarding.
+        retaliates = true;
+        selector(vec![par(
+            vec![
+                selector(vec![
+                    decorator(
+                        Cond::KeySet(Key::CurrentTarget),
+                        false,
+                        Abort::Both,
+                        melee_combat(Strategy::Basic),
+                    ),
+                    random_walk(25.0),
+                ]),
+                retaliate_target(Key::CurrentTarget),
+                leaf(Behavior::Fauna(FaunaLeaf::ParrotRepeat)),
+            ],
+            FIND_TARGET_RATE,
+        )])
+    } else if is("hivebot/mechanic") {
+        // `hivebot_mechanic.bt.json`; left out: repairing machines, relaying to a partner.
+        hivebot(Some((0.6, false)))
+    } else if is("hivebot/ranged/rapid") {
+        hivebot(Some((1.5, true)))
+    } else if is("hivebot/ranged") {
+        hivebot(Some((3.0, true)))
+    } else if is("hivebot") {
+        hivebot(None)
+    } else if is("simple/simple_ranged_retaliate") {
+        // `simple_ranged_retaliate_combat.bt.json`.
+        retaliates = true;
+        ranged_combat(retaliate_target(Key::CurrentTarget))
+    } else if is("simple/simple_ranged") {
+        // `simple_ranged_combat.bt.json` (`idle_behavior` bound to `random_walk`).
+        ranged_combat(leaf(Behavior::AcquireCombatTarget {
+            key: Key::CurrentTarget,
+            strategy: Strategy::Basic,
+        }))
+    } else if is("simple/simple_skirmisher") {
+        // `simple_skirmisher_combat.bt.json`: walks up, bites and shoots.
+        par(
+            vec![
+                selector(vec![
+                    decorator(
+                        Cond::KeySet(Key::CurrentTarget),
+                        false,
+                        Abort::Both,
+                        while_closing_in(
+                            selector(vec![
+                                leaf(Behavior::MeleeAttack {
+                                    key: Key::CurrentTarget,
+                                    strategy: Strategy::Basic,
+                                }),
+                                ranged_attack(0.6, false),
+                            ]),
+                            leaf(Behavior::MoveToTarget {
+                                key: Key::CurrentTarget,
+                                dist: 1,
+                                finish_on_arrival: false,
+                            }),
+                        ),
+                    ),
+                    random_walk(25.0),
+                ]),
+                leaf(Behavior::AcquireCombatTarget {
+                    key: Key::CurrentTarget,
+                    strategy: Strategy::Basic,
+                }),
+            ],
+            FIND_TARGET_RATE,
+        )
+    } else if is("stickman/ranged") {
+        // `stickman_ranged.bt.json`: `simple_ranged_combat` (5 s between shots).
+        ranged_combat(leaf(Behavior::AcquireCombatTarget {
+            key: Key::CurrentTarget,
+            strategy: Strategy::Basic,
+        }))
+    } else if is("stickman") || is("fleshblob") || is("mad_piano") || is("faithless") {
+        // `stickman.bt.json`, `fleshblob.bt.json`, `mad_piano.bt.json`: `simple_hostile_combat`;
+        // `faithless.bt.json` without its light smashing and obstacle attacks.
+        hostile_combat(25.0)
+    } else if is("alien/sentinel") || is("alien/queen") {
+        // `ranged_alien_combat` without the alien projectiles (not ported): they only wander.
+        random_walk(25.0)
+    } else if is("alien") {
+        // `basic_alien.bt.json` with `melee_alien_combat`; left out: weeds and eggs.
+        hostile_combat(25.0)
+    } else if is("zombie") {
+        // `zombie.bt.json`, `zombie_stupid.bt.json`: hostile and moaning; left out: obstacles.
+        par(vec![hostile_combat(25.0), speech_loop_of(None)], 1.0)
+    } else if is("skeleton") {
+        // `skeleton.bt.json`; its "rattles" `perform_emote` is not a tg emote key (nothing shows).
+        par(
+            vec![
+                selector(vec![
+                    decorator(
+                        Cond::KeySet(Key::CurrentTarget),
+                        false,
+                        Abort::Both,
+                        melee_combat(Strategy::Basic),
+                    ),
+                    move_to_and_eat(),
+                    random_walk(25.0),
+                ]),
+                leaf(Behavior::AcquireCombatTarget {
+                    key: Key::CurrentTarget,
+                    strategy: Strategy::Basic,
+                }),
+                find_food(),
+            ],
+            FIND_TARGET_RATE,
+        )
+    } else if is("clown") {
+        // `clown/clown.bt.json`: `simple_retaliate_combat` and its honks.
+        retaliates = true;
+        par(vec![retaliate_combat(), speech_loop_of(None)], 1.0)
+    } else if is("cat_butcherer") {
+        // `simple_hostile_combat_with_retaliate`.
+        retaliates = true;
+        par(
+            vec![hostile_combat(25.0), retaliate_target(Key::CurrentTarget)],
+            FIND_TARGET_RATE,
+        )
+    } else if is("garden_gnome") {
+        // `garden_gnome.bt.json`: fights back; left out: escape captivity.
+        retaliates = true;
+        retaliate_combat()
     } else if is("mouse/rat/syndi") {
         // BandaStation `mouse/rat/syndi`: tg's rat tree binds the mouse's lines, so the
         // syndicate rats' own never play there; they are used here.
@@ -759,6 +937,283 @@ fn rat(speech: &'static str) -> Node {
     )])
 }
 
+/// `basic_subtrees/tip_reaction.bt.json`.
+fn tip_reaction() -> Node {
+    decorator(
+        Cond::KeySet(Key::TipReacting),
+        false,
+        Abort::Lower,
+        leaf(Behavior::Fauna(FaunaLeaf::TippedReaction)),
+    )
+}
+
+/// The `SUBPLAN_ID_PET_COMMAND` subtree with the ported commands' subtrees
+/// (`pet_command_stay`, `_follow`, `_attack`, `_play_dead`): active while a command is set.
+pub fn pet_command_root() -> Node {
+    let command = |c: PetCommand, child: Node| {
+        decorator(
+            Cond::Fauna(FaunaCond::PetCommand(c)),
+            false,
+            Abort::SelfOnly,
+            child,
+        )
+    };
+    decorator(
+        Cond::KeySet(Key::ActivePetCommand),
+        false,
+        Abort::Both,
+        selector(vec![
+            command(PetCommand::Stay, leaf(Behavior::Fauna(FaunaLeaf::Wait))),
+            command(
+                PetCommand::Follow,
+                decorator(
+                    Cond::KeySet(Key::PetTarget),
+                    false,
+                    Abort::Both,
+                    subplan(
+                        leaf(Behavior::MoveToTarget {
+                            key: Key::PetTarget,
+                            dist: 1,
+                            finish_on_arrival: true,
+                        }),
+                        true,
+                        false,
+                        0.0,
+                    ),
+                ),
+            ),
+            command(
+                PetCommand::Attack,
+                // No target pointed out yet: the subtree fails and the pet goes on with its
+                // own behaviour until one is.
+                decorator(
+                    Cond::KeySet(Key::PetTarget),
+                    false,
+                    Abort::Both,
+                    while_closing_in(
+                        leaf(Behavior::MeleeAttack {
+                            key: Key::PetTarget,
+                            strategy: Strategy::NotFriends,
+                        }),
+                        leaf(Behavior::MoveToTarget {
+                            key: Key::PetTarget,
+                            dist: 1,
+                            finish_on_arrival: false,
+                        }),
+                    ),
+                ),
+            ),
+            command(
+                PetCommand::PlayDead,
+                sequence(vec![
+                    leaf(Behavior::Fauna(FaunaLeaf::PlayDead)),
+                    leaf(Behavior::Fauna(FaunaLeaf::ClearPetCommand)),
+                ]),
+            ),
+        ]),
+    )
+}
+
+/// `generic_subtrees/find_partner.bt.json`.
+fn find_partner() -> Node {
+    decorator(
+        Cond::KeySet(Key::WantsToBreed),
+        false,
+        Abort::Lower,
+        decorator(
+            Cond::KeySet(Key::BreedReady),
+            false,
+            Abort::None,
+            decorator(
+                Cond::KeyOffCooldown(Key::PartnerSearchTimeout),
+                false,
+                Abort::None,
+                leaf(Behavior::Fauna(FaunaLeaf::FindPartner)),
+            ),
+        ),
+    )
+}
+
+/// `babies/make_babies.bt.json`.
+fn make_babies() -> Node {
+    decorator(
+        Cond::KeySet(Key::BabiesTarget),
+        false,
+        Abort::Both,
+        sequence(vec![
+            leaf(Behavior::MoveToTarget {
+                key: Key::BabiesTarget,
+                dist: 1,
+                finish_on_arrival: true,
+            }),
+            leaf(Behavior::Fauna(FaunaLeaf::MakeBabies {
+                key: Key::BabiesTarget,
+            })),
+        ]),
+    )
+}
+
+/// The attack parallel of the combat subtrees: `attack` looping while `mover` closes in.
+fn while_closing_in(attack: Node, mover: Node) -> Node {
+    parallel(
+        vec![subplan(attack, true, true, 0.0), mover],
+        ParallelOpts {
+            failure_any: true,
+            repeat_secondary: true,
+            finish_on_primary: true,
+            ..ParallelOpts::default()
+        },
+    )
+}
+
+/// `basic_ranged_attack` (`avoid_friendly_fire` with it).
+fn ranged_attack(cooldown: f64, avoid_friendly_fire: bool) -> Node {
+    leaf(Behavior::Fauna(FaunaLeaf::RangedAttack {
+        key: Key::CurrentTarget,
+        cooldown,
+        max_range: 9,
+        avoid_friendly_fire,
+    }))
+}
+
+/// `simple_ranged_combat.bt.json` / `simple_ranged_retaliate_combat.bt.json` with `targeting`:
+/// shoots every 0.6 s keeping 4-6 tiles away. The retaliate one's `BT_ABORT_SELF` next to the
+/// looping walk aborts lower priorities too (see the module docs).
+fn ranged_combat(targeting: Node) -> Node {
+    par(
+        vec![
+            selector(vec![
+                decorator(
+                    Cond::KeySet(Key::CurrentTarget),
+                    false,
+                    Abort::Both,
+                    while_closing_in(
+                        ranged_attack(0.6, false),
+                        leaf(Behavior::Fauna(FaunaLeaf::MaintainDistance {
+                            key: Key::CurrentTarget,
+                        })),
+                    ),
+                ),
+                random_walk(25.0),
+            ]),
+            targeting,
+        ],
+        FIND_TARGET_RATE,
+    )
+}
+
+/// `hivebot.bt.json` (melee, `None`) and `hivebot_ranged*.bt.json`/`hivebot_mechanic.bt.json`
+/// (`Some((time_between_perform, avoid_friendly_fire))`): they close in to one tile either way.
+/// Left out: escape captivity, attacking obstructions, relaying to a hive partner.
+fn hivebot(ranged: Option<(f64, bool)>) -> Node {
+    let attack = match ranged {
+        Some((cooldown, avoid)) => ranged_attack(cooldown, avoid),
+        None => leaf(Behavior::MeleeAttack {
+            key: Key::CurrentTarget,
+            strategy: Strategy::Basic,
+        }),
+    };
+    par(
+        vec![
+            subplan(
+                selector(vec![
+                    decorator(
+                        Cond::KeySet(Key::CurrentTarget),
+                        false,
+                        Abort::Both,
+                        while_closing_in(
+                            attack,
+                            leaf(Behavior::MoveToTarget {
+                                key: Key::CurrentTarget,
+                                dist: 1,
+                                finish_on_arrival: false,
+                            }),
+                        ),
+                    ),
+                    random_walk(25.0),
+                ]),
+                true,
+                true,
+                0.0,
+            ),
+            leaf(Behavior::AcquireCombatTarget {
+                key: Key::CurrentTarget,
+                strategy: Strategy::Basic,
+            }),
+        ],
+        FIND_TARGET_RATE,
+    )
+}
+
+/// `turtle/turtle.bt.json`: uses its tree's ability when ready, headbutts legs and sniffs
+/// flora once a minute, eats seeds. tg's flora branch checks the headbutt victim key (it never
+/// runs without someone to headbutt); here it checks its own target. Left out:
+/// `express_happiness` (no happiness component).
+fn turtle() -> Node {
+    let visit = |target: Key, cooldown: Key, act: FaunaLeaf| {
+        decorator(
+            Cond::KeySet(target),
+            false,
+            Abort::Lower,
+            sequence(vec![
+                leaf(Behavior::MoveToTarget {
+                    key: target,
+                    dist: 1,
+                    finish_on_arrival: true,
+                }),
+                leaf(Behavior::Fauna(FaunaLeaf::SetCooldown {
+                    key: cooldown,
+                    secs: 60.0,
+                })),
+                leaf(Behavior::Fauna(act)),
+            ]),
+        )
+    };
+    let acquire = |target: Key, cooldown: Key, flora: bool| {
+        decorator(
+            Cond::KeyOffCooldown(cooldown),
+            false,
+            Abort::None,
+            leaf(Behavior::Fauna(FaunaLeaf::AcquireTurtleTarget {
+                key: target,
+                flora,
+            })),
+        )
+    };
+    selector(vec![par(
+        vec![
+            selector(vec![
+                decorator(
+                    Cond::Fauna(FaunaCond::TurtleAbilityReady),
+                    false,
+                    Abort::Lower,
+                    leaf(Behavior::Fauna(FaunaLeaf::TurtleAbility)),
+                ),
+                visit(
+                    Key::HeadbuttVictim,
+                    Key::HeadbuttCooldown,
+                    FaunaLeaf::Headbutt {
+                        key: Key::HeadbuttVictim,
+                    },
+                ),
+                visit(
+                    Key::FloraTarget,
+                    Key::FloraCooldown,
+                    FaunaLeaf::SniffFlora {
+                        key: Key::FloraTarget,
+                    },
+                ),
+                move_to_and_eat(),
+                random_walk(25.0),
+            ]),
+            find_food(),
+            acquire(Key::HeadbuttVictim, Key::HeadbuttCooldown, false),
+            acquire(Key::FloraTarget, Key::FloraCooldown, true),
+        ],
+        FIND_TARGET_RATE,
+    )])
+}
+
 fn par(children: Vec<Node>, repeat_delay: f64) -> Node {
     parallel(
         children,
@@ -842,7 +1297,7 @@ fn melee_combat(strategy: Strategy) -> Node {
 
 /// `carp/basic_carp_tree.bt.json` with `carp_target_selection` (or, for passive carp,
 /// `carp_retaliate_selection`), `carp_flee`, `carp_combat` and `carp_migration`.
-// Left out: escape captivity, pet commands, magicarp spells, rifts, attacking obstacles.
+// Left out: escape captivity, magicarp spells, rifts, attacking obstacles.
 fn carp(passive: bool) -> Node {
     let flee = decorator(
         Cond::CarpShouldFlee(Key::CurrentTarget),
@@ -923,7 +1378,7 @@ fn carp(passive: bool) -> Node {
 }
 
 /// `dog/dog.bt.json`.
-// Left out: pet commands; `dog_harassment` (no `TRAIT_HATED_BY_DOGS` here, so it never fires).
+// Left out: `dog_harassment` (no `TRAIT_HATED_BY_DOGS` here, so it never fires).
 fn dog() -> Node {
     selector(vec![par(
         vec![
@@ -934,8 +1389,8 @@ fn dog() -> Node {
     )])
 }
 
-/// `dog/dog_corgi.bt.json`: runs from anyone holding tongs.
-// Left out: pet commands, harassment, breeding.
+/// `dog/dog_corgi.bt.json`: runs from anyone holding tongs, breeds.
+// Left out: harassment.
 fn corgi() -> Node {
     selector(vec![par(
         vec![
@@ -946,20 +1401,22 @@ fn corgi() -> Node {
                     Abort::Both,
                     run_away(Key::CurrentTarget),
                 ),
+                make_babies(),
                 subplan(leaf(Behavior::IdleDog), true, false, 0.0),
             ]),
             leaf(Behavior::AcquireCombatTarget {
                 key: Key::CurrentTarget,
                 strategy: Strategy::HoldingTongs,
             }),
+            find_partner(),
             speech_loop(&DOG_SPEECH),
         ],
         FIND_TARGET_RATE,
     )])
 }
 
-/// `pets/cat/cat.bt.json` with `cat_hunt_mice`.
-// Left out: resisting, pet commands, home, hauling and finding food, trespassers, breeding.
+/// `pets/cat/cat.bt.json` with `cat_hunt_mice` and breeding.
+// Left out: resisting, home, hauling and finding food, trespassers.
 fn cat() -> Node {
     selector(vec![
         decorator(
@@ -1002,6 +1459,7 @@ fn cat() -> Node {
                                     melee_combat(Strategy::Basic),
                                 ),
                             ),
+                            make_babies(),
                             random_walk(25.0),
                         ]),
                         speech_loop(&CAT_SPEECH),
@@ -1016,6 +1474,7 @@ fn cat() -> Node {
                     key: Key::MouseTarget,
                     vision: 9,
                 }),
+                find_partner(),
             ],
             FIND_TARGET_RATE,
         ),
@@ -1023,7 +1482,7 @@ fn cat() -> Node {
 }
 
 /// `vermin/mouse.bt.json` with `eat_cable.bt.json`.
-// Left out: pet commands, cheese, instruments.
+// Left out: cheese, instruments.
 fn mouse() -> Node {
     let flee = decorator(
         Cond::KeySet(Key::CurrentTarget),
@@ -1079,7 +1538,7 @@ fn cockroach() -> Node {
 }
 
 /// `pets/fox.bt.json`.
-// Left out: escape captivity, pet commands.
+// Left out: escape captivity.
 fn fox() -> Node {
     selector(vec![
         decorator(

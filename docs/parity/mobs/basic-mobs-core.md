@@ -19,7 +19,7 @@
 Компонент `ranged_attacks` даёт мобу стрельбу снарядами/кастингами с кулдауном и залпами; `basic_mob_attack_telegraph` показывает предупреждение перед ударом (сильные мобы вроде голиафа).
 
 - **Код:** [`/datum/component/ranged_attacks`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/ranged_attacks.dm#L4), [`/datum/component/basic_mob_attack_telegraph`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/basic_mob_attack_telegraph.dm#L4)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/mobs/ranged.rs`, `crates/ss13_game/src/mobs/ai/fauna.rs`: `ranged_attacks` (снаряд по цели с кулдауном, поворот к цели) хайвботов (10 урона) и стикмена-стрелка (9 мм, 5 с), `basic_ranged_attack` (в обзоре до 9, без огня по своим: шаг в сторону); нет залпов (`burst_shots`), гильз, звуков выстрела, телеграфа атак
 
 ### Требования к атмосфере и температуре
 Элементы `atmos_requirements` (мин/макс газы, урон `unsuitable_atmos_damage` вне нормы) и `body_temp_sensitive` (урон вне диапазона температур) — поэтому карпы живут в космосе, а корги умирают.
@@ -37,13 +37,13 @@
 Компонент `tameable`: скармливание любимой еды с шансом приручает моба (становится дружелюбным владельцу, иногда даёт езду или команды). Пример: лавовые ящеры, козы, гаты.
 
 - **Код:** [`/datum/component/tameable`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/tameable.dm#L2)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/mobs/pets.rs`, `crates/ss13_game/src/mobs/eating.rs`: `tameable` коров, свиней, пони, карпов (затем слушаются команд), попугаев, собак, мышей (не крыс), змей: любимая еда с руки, шанс `tame_chance` растёт на `bonus_tame_chance`, приручивший — друг (`BB_FRIENDS_LIST`, союзная фракция: моб его не трогает), реакции `tamed()` (корова, пони, карп, собака, мышь); карп разлюбляет ударившего друга; нет `TRAIT_BEAST_EMPATHY` (+50%, имя питомцу), езды после приручения
 
 ### Команды питомцам
 Компонент `obeys_commands`: друг моба выбирает команду в радиальном меню или голосом — «сидеть», «за мной», «фас», «охраняй», «притворись мёртвым», «апорт», «размножайся», «используй способность», «иди туда», «лови рыбу».
 
 - **Код:** [`/datum/component/obeys_commands`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/pet_commands/obeys_commands.dm#L7), [`/datum/pet_command`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/pet_commands/pet_command.dm#L6), [`pet_commands_basic.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/pet_commands/pet_commands_basic.dm#L7)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/mobs/pets.rs`, `crates/ss13_game/src/mobs/ai/trees.rs` (`pet_command_root`): друг в обзоре 7 клеток говорит слово команды (рус./англ. `speech_commands` форка): сидеть, гулять, за мной (`start_active` — сразу у нового друга), фас (затем указать цель, друзей отказывается), притворись мёртвым, «хороший мальчик»; поддерево команды во главе дерева моба; нет радиального меню, коллаутов, апорта, «иди туда», трюков, способностей и размножения по команде
 
 ### Езда на существах
 `riding/creature`: на некоторых мобов (лошади, гориллы, рапторы, крокодилы форка) можно сесть и управлять ими; смещения всадника по направлениям.

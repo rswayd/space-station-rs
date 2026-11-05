@@ -54,6 +54,8 @@ pub enum Cond {
     AtDistance(Key, u32),
     /// The bot decorators (`crate::bots::ai`).
     Bot(crate::bots::ai::BotCond),
+    /// Pet command, turtle ability and breeding decorators ([`super::fauna`]).
+    Fauna(super::fauna::FaunaCond),
 }
 
 impl Cond {
@@ -70,6 +72,7 @@ impl Cond {
                 .and_then(|(a, b)| a.chebyshev(b))
                 .is_some_and(|d| d <= max),
             Self::Bot(ref cond) => cond.check(ctx),
+            Self::Fauna(cond) => cond.check(ctx),
         }
     }
 }

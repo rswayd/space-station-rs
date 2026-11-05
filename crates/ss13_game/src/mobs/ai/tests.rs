@@ -463,3 +463,135 @@ fn skittish_pig_fights_until_hurt_then_runs() {
     };
     assert!(to.x < 10, "away from the wolf on the east: {to:?}");
 }
+
+fn sized_mob(world: &mut World, x: i32, y: i32, path: &str, mob_size: u8) -> Entity {
+    let e = mob(world, x, y, "neutral");
+    world.entity_mut(e).insert(crate::mobs::BasicMob {
+        def: std::sync::Arc::new(ss13_mapload::mobs::MobDef {
+            path: path.to_owned(),
+            mob_size,
+            ..Default::default()
+        }),
+        icon_living: String::new(),
+        icon_dead: String::new(),
+        mouth: false,
+    });
+    e
+}
+
+#[test]
+fn friends_are_never_targets() {
+    let mut w = world();
+    let carp = mob(&mut w, 5, 5, "carp");
+    let tamer = mob(&mut w, 7, 5, "neutral");
+    w.entity_mut(carp)
+        .insert(crate::mobs::pets::Friends(vec![tamer]));
+    let mut bb = Blackboard::default();
+    let mut tree = Tree::new(vec![leaf(Behavior::AcquireCombatTarget {
+        key: Key::CurrentTarget,
+        strategy: Strategy::Basic,
+    })]);
+    run(&mut w, carp, &mut tree, &mut bb, 1);
+    assert_eq!(bb.entity(Key::CurrentTarget), None, "the tamer is a friend");
+    let stranger = mob(&mut w, 8, 5, "neutral");
+    run(&mut w, carp, &mut tree, &mut bb, 1);
+    assert_eq!(bb.entity(Key::CurrentTarget), Some(stranger));
+}
+
+#[test]
+fn crabs_hunt_only_smaller_mobs() {
+    let mut w = world();
+    let crab = sized_mob(&mut w, 5, 5, "/mob/living/basic/crab", 1);
+    let _cat = sized_mob(&mut w, 6, 5, "/mob/living/basic/pet/cat", 1);
+    let _human = mob(&mut w, 4, 5, "neutral");
+    let mouse = sized_mob(&mut w, 8, 5, "/mob/living/basic/mouse", 0);
+    let mut bb = Blackboard::default();
+    let mut tree = Tree::new(vec![leaf(Behavior::AcquireCombatTarget {
+        key: Key::CurrentTarget,
+        strategy: Strategy::Smaller,
+    })]);
+    run(&mut w, crab, &mut tree, &mut bb, 1);
+    assert_eq!(
+        bb.entity(Key::CurrentTarget),
+        Some(mouse),
+        "same size and humans skipped"
+    );
+}
+
+#[test]
+fn pet_commands_take_over_the_tree() {
+    use crate::mobs::pets::PetCommand;
+    let mut w = world();
+    w.init_resource::<Time>();
+    w.insert_resource(CombatRng(5));
+    let dog = basic_mob(&mut w, 5, 5, "neutral", "/mob/living/basic/pet/dog/corgi");
+    let owner = mob(&mut w, 9, 5, "neutral");
+    let def = ss13_mapload::mobs::MobDef {
+        path: "/mob/living/basic/pet/dog/corgi".to_owned(),
+        ..Default::default()
+    };
+    let built = super::trees::build(&format!("{BASIC}/dog/corgi"), &def).unwrap();
+    assert_eq!(built.roots.len(), 2, "the pet command subtree comes first");
+    let mut tree = Tree::new(built.roots);
+    let mut bb = Blackboard::default();
+    let mut movement = AiMovement::default();
+    let mut tick = |w: &mut World, bb: &mut Blackboard, movement: &mut AiMovement, i: u32| {
+        let mut ctx = AiCtx {
+            world: &mut *w,
+            pawn: dog,
+            bb,
+            movement,
+            now: 1.0 + f64::from(i) * 0.25,
+            spt: 0.25,
+            // A new roll every tick (`play_dead` ends on `SPT_PROB`).
+            rng: CombatRng(7 + u64::from(i)),
+            active: 0,
+            cancelled: false,
+        };
+        tree.tick(&mut ctx);
+    };
+    bb.set(Key::ActivePetCommand, Value::Pet(PetCommand::Follow));
+    bb.set(Key::PetTarget, Value::Entity(owner));
+    tick(&mut w, &mut bb, &mut movement, 0);
+    assert_eq!(
+        movement.order.as_ref().map(|o| o.target),
+        Some(super::movement::Target::Entity(owner)),
+        "follows its owner"
+    );
+    // `play_dead`, then back to its own ways once it springs up.
+    bb.set(Key::ActivePetCommand, Value::Pet(PetCommand::PlayDead));
+    for i in 1..400 {
+        tick(&mut w, &mut bb, &mut movement, i);
+    }
+    assert_eq!(
+        bb.get(Key::ActivePetCommand),
+        None,
+        "the command is cleared"
+    );
+}
+
+#[test]
+fn hivebot_trees_shoot_or_bite() {
+    for sub in [
+        "hivebot",
+        "hivebot/ranged",
+        "hivebot/ranged/rapid",
+        "hivebot/mechanic",
+    ] {
+        let def = ss13_mapload::mobs::MobDef::default();
+        let built = super::trees::build(&format!("{BASIC}/{sub}"), &def).unwrap();
+        assert_eq!(built.roots.len(), 1, "{sub}");
+        let mut w = world();
+        w.init_resource::<Time>();
+        w.insert_resource(CombatRng(5));
+        let pawn = basic_mob(&mut w, 5, 5, "hivebot", "/mob/living/basic/hivebot/range");
+        let _victim = mob(&mut w, 9, 5, "neutral");
+        let mut bb = Blackboard::default();
+        let mut tree = Tree::new(built.roots);
+        run(&mut w, pawn, &mut tree, &mut bb, 8);
+        assert!(
+            bb.entity(Key::CurrentTarget).is_some(),
+            "{sub}: targets the stranger"
+        );
+    }
+}

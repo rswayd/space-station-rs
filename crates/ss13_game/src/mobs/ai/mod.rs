@@ -16,6 +16,7 @@
 
 pub mod behaviors;
 pub mod bt;
+pub mod fauna;
 pub mod movement;
 #[cfg(test)]
 mod tests;
@@ -91,6 +92,26 @@ pub enum Key {
     /// `BB_TARGET_FOOD`, `BB_NEXT_FOOD_EAT` (`find_food`, `move_to_and_eat`).
     TargetFood,
     NextFoodEat,
+    /// `BB_ACTIVE_PET_COMMAND` ([`Value::Pet`]) and `BB_CURRENT_PET_TARGET`
+    /// (`crate::mobs::pets`).
+    ActivePetCommand,
+    PetTarget,
+    /// `BB_BASIC_MOB_TIP_REACTING`, `BB_BASIC_MOB_TIPPER` (`crate::mobs::farm`).
+    TipReacting,
+    Tipper,
+    /// `BB_BREED_READY`, `BB_BABIES_TARGET`, `BB_PARTNER_SEARCH_TIMEOUT`, `BB_FUCKS`.
+    BreedReady,
+    BabiesTarget,
+    PartnerSearchTimeout,
+    WantsToBreed,
+    /// The turtle's `BB_TURTLE_HEADBUTT_VICTIM`, `BB_TURTLE_HEADBUTT_COOLDOWN`,
+    /// `BB_TURTLE_FLORA_TARGET`, `BB_TURTLE_FLORA_COOLDOWN`.
+    HeadbuttVictim,
+    HeadbuttCooldown,
+    FloraTarget,
+    FloraCooldown,
+    /// `BB_HIVE_PARTNER`.
+    HivePartner,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -103,6 +124,8 @@ pub enum Value {
     Tiles(Vec<TilePos>),
     /// Attacker -> game time of its last attack.
     Attackers(Vec<(Entity, f64)>),
+    /// A pet command (`BB_ACTIVE_PET_COMMAND`).
+    Pet(crate::mobs::pets::PetCommand),
 }
 
 /// tg `blackboard`.
@@ -162,7 +185,7 @@ impl AiCtx<'_> {
             Some(Value::Bool(b)) => *b,
             Some(Value::Tiles(t)) => !t.is_empty(),
             Some(Value::Attackers(a)) => !a.is_empty(),
-            Some(Value::Tile(_) | Value::Time(_)) => true,
+            Some(Value::Tile(_) | Value::Time(_) | Value::Pet(_)) => true,
         }
     }
 
@@ -252,6 +275,7 @@ pub struct Retaliates;
 /// tg `ai_retaliate` `on_attacked`: the attacker goes into `BB_BASIC_MOB_RETALIATE_LIST`.
 /// Also tg `ai_flee_while_injured` (carp): `BB_BASIC_MOB_STOP_FLEEING` follows the health.
 pub fn record_attacker(world: &mut World, victim: Entity, attacker: Entity) {
+    crate::mobs::pets::on_attacked(world, victim, attacker);
     let now = world.resource::<Time>().elapsed_secs_f64();
     let health = world.get::<crate::health::Health>(victim).cloned();
     let retaliates = world.get::<Retaliates>(victim).is_some();
