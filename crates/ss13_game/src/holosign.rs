@@ -256,12 +256,11 @@ fn project(world: &mut World, projector: Entity, pos: TilePos) {
     };
     world.entity_mut(new).insert(Holosign { projector });
     live_signs(world, projector);
-    match world.get_mut::<HoloSigns>(projector) {
-        Some(mut list) => list.0.push(new),
-        None => {
-            world.entity_mut(projector).insert(HoloSigns(vec![new]));
-        }
+    if let Some(mut list) = world.get_mut::<HoloSigns>(projector) {
+        list.0.push(new);
+        return;
     }
+    world.entity_mut(projector).insert(HoloSigns(vec![new]));
 }
 
 /// `attack_self`: the projector's signs are cleared. True when `item` is a projector.
