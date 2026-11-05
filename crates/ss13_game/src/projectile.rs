@@ -140,6 +140,12 @@ pub fn aim_angle(from: TilePos, to: TilePos, pixel: [i16; 2]) -> f32 {
 /// tg `fire_casing` -> `throw_proj` -> `fire`: spawns the projectile and, point blank (the
 /// target on an adjacent tile, tg `direct_target`), hits at once. `None` without a projectile.
 pub fn fire(world: &mut World, shot: Shot) -> Option<Entity> {
+    fire_with(world, shot, ())
+}
+
+/// [`fire`] with `extra` on the projectile before it flies or hits (a magic bolt's
+/// [`crate::spells::MagicBolt`]).
+pub fn fire_with(world: &mut World, shot: Shot, extra: impl Bundle) -> Option<Entity> {
     if shot.data.path.is_empty() {
         return None;
     }
@@ -170,14 +176,17 @@ pub fn fire(world: &mut World, shot: Shot) -> Option<Entity> {
         ricochets: 0,
     };
     let entity = crate::construction::spawn_obj(world, &shot.data.path, shot.from)?;
+    world.entity_mut(entity).insert(extra);
     if let Some(mut look) = world.get_mut::<Appearance>(entity) {
         look.rotation = angle.round() as u16 % 360;
         look.mouse_opacity = ss13_shared::MouseOpacity::Transparent;
     }
     if let Some(target) = direct {
         let name = crate::obj_damage::strip(&crate::security::name_of(world, entity)).to_owned();
-        impact(world, &projectile, &name, target);
-        world.despawn(entity);
+        hit(world, entity, &projectile, &name, target);
+        if let Ok(entity) = world.get_entity_mut(entity) {
+            entity.despawn();
+        }
         return None;
     }
     world.entity_mut(entity).insert(projectile);
@@ -250,7 +259,7 @@ fn step(world: &mut World, e: Entity, dt: f32) {
                 continue;
             }
             let name = crate::obj_damage::strip(&crate::security::name_of(world, e)).to_owned();
-            impact(world, &p, &name, target);
+            hit(world, e, &p, &name, target);
             if let Ok(entity) = world.get_entity_mut(e) {
                 entity.despawn();
             }
@@ -417,6 +426,15 @@ pub fn passes(world: &World, e: Entity, pass_flags: u32) -> bool {
 
 /// tg `select_target`: what the projectile hits on entering `tile`.
 fn select_target(world: &World, p: &Projectile, me: Entity, tile: TilePos) -> Option<Entity> {
+    // A magic missile's `can_only_hit_target`: it phases through everything else.
+    if world
+        .get::<crate::spells::MagicBolt>(me)
+        .is_some_and(|b| b.only_target)
+    {
+        return p
+            .original
+            .filter(|&o| world.get::<TilePos>(o) == Some(&tile));
+    }
     let index = world.resource::<SpatialIndex>();
     if let Some(original) = p.original
         && original != p.firer
@@ -426,10 +444,12 @@ fn select_target(world: &World, p: &Projectile, me: Entity, tile: TilePos) -> Op
         return Some(original);
     }
     let on_tile = index.on_tile(tile);
-    if let Some(&mob) = on_tile
-        .iter()
-        .find(|&&e| e != me && world.get::<Health>(e).is_some() && hits_mob(world, p, e))
-    {
+    if let Some(&mob) = on_tile.iter().find(|&&e| {
+        e != me
+            && world.get::<Health>(e).is_some()
+            && world.get::<crate::spells::Jaunting>(e).is_none()
+            && hits_mob(world, p, e)
+    }) {
         return Some(mob);
     }
     let mut turf = None;
@@ -449,6 +469,21 @@ fn select_target(world: &World, p: &Projectile, me: Entity, tile: TilePos) -> Op
         }
     }
     turf
+}
+
+/// A hit of projectile `e`: a magic bolt fizzles on antimagic (`prehit_pierce`), then
+/// [`impact`] and the bolt's `on_hit`.
+fn hit(world: &mut World, e: Entity, p: &Projectile, name: &str, target: Entity) {
+    let bolt = world.get::<crate::spells::MagicBolt>(e).copied();
+    if let Some(bolt) = &bolt
+        && crate::spells::effects::bolt_blocked(world, bolt, e, target)
+    {
+        return;
+    }
+    impact(world, p, name, target);
+    if let Some(bolt) = bolt {
+        crate::spells::effects::bolt_hit(world, &bolt, p, target);
+    }
 }
 
 /// tg `on_hit` -> `bullet_act` of `target`.

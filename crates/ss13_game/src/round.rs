@@ -461,13 +461,17 @@ fn setup(world: &mut World, now: f64) {
     ready.sort_by_key(|(e, _)| *e);
     // `SSdynamic.select_roundstart_antagonists`: before the jobs, which it restricts.
     let antags = crate::antag::dynamic::prepare_roundstart(world, &mut ready);
-    // The nuclear operatives get no station job (tg `forced_occupations`).
-    let operatives: Vec<Entity> = antags
-        .iter()
-        .filter(|(_, r)| *r == crate::antag::dynamic::NUKEOPS_RULESET)
-        .map(|(c, _)| *c)
-        .collect();
-    ready.retain(|(c, _)| !operatives.contains(c));
+    // The nuclear operatives and the wizard get no station job (tg `forced_occupations`).
+    let invaders = |ruleset: &str| -> Vec<Entity> {
+        antags
+            .iter()
+            .filter(|(_, r)| *r == ruleset)
+            .map(|(c, _)| *c)
+            .collect()
+    };
+    let operatives = invaders(crate::antag::dynamic::NUKEOPS_RULESET);
+    let wizards = invaders(crate::antag::dynamic::WIZARD_RULESET);
+    ready.retain(|(c, _)| !operatives.contains(c) && !wizards.contains(c));
     let prefs: Vec<&JobPreferences> = ready.iter().map(|(_, p)| p).collect();
     let assigned = divide_occupations(&mut world.resource_mut::<Jobs>(), &prefs);
     for ((client, _), assignment) in ready.iter().zip(assigned) {
@@ -491,6 +495,7 @@ fn setup(world: &mut World, now: f64) {
         }
     }
     crate::antag::nukeop::server::spawn_operatives(world, &operatives);
+    crate::antag::wizard::server::spawn_wizards(world, &wizards);
     crate::antag::dynamic::execute_roundstart(world, &antags);
     let mut ticker = world.resource_mut::<Ticker>();
     ticker.state = GameState::Playing;
@@ -622,6 +627,7 @@ fn declare_completion(world: &mut World, now: f64) {
     antags.extend(crate::antag::nukeop::server::roundend_report(world, end));
     antags.extend(crate::antag::cult::server::roundend_report(world, end));
     antags.extend(crate::antag::heretic::server::roundend_report(world, end));
+    antags.extend(crate::antag::wizard::server::roundend_report(world, end));
     antags.extend(crate::antag::revolution::server::roundend_report(
         world, end,
     ));
@@ -1148,6 +1154,8 @@ fn preference_acts(
                     crate::antag::ROLE_SLEEPER_AGENT,
                     crate::antag::ROLE_STOWAWAY_CHANGELING,
                     crate::antag::ROLE_OPERATIVE_MIDROUND,
+                    crate::antag::wizard::ROLE_WIZARD,
+                    crate::antag::wizard::ROLE_WIZARD_MIDROUND,
                     crate::antag::revolution::ROLE_REV_HEAD,
                     crate::antag::revolution::ROLE_PROVOCATEUR,
                 ]

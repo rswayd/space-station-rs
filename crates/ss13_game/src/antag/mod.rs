@@ -41,6 +41,7 @@ pub mod traitor;
 #[cfg(feature = "server")]
 pub mod uplink;
 pub mod vampire;
+pub mod wizard;
 
 /// Antagonists on the server: dynamic's state, the traitor and the uplink.
 #[cfg(feature = "server")]

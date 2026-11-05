@@ -279,6 +279,10 @@ pub fn dev_traitor(world: &mut World, client: Entity, mob: Entity) {
         super::heretic::server::add_heretic(world, mob);
         return;
     }
+    if dev == super::dynamic::DevTraitor::Wizard {
+        super::wizard::server::dev_wizard(world, client, mob);
+        return;
+    }
     if dev == super::dynamic::DevTraitor::Revolution {
         let head = !world.contains_resource::<super::revolution::server::RevolutionHandler>();
         super::revolution::server::add_revolutionary(world, mob, head);
