@@ -1081,11 +1081,28 @@ pub fn signal(world: &mut World, a: Entity) {
         "signaler {a} at {from:?} sent {}/{code}",
         format_frequency(frequency)
     );
+    post_signal(world, a, None, frequency, code, from, range);
+}
+
+/// `post_signal` on the signaler band from `source` (an assembly, or the circuit holding radio
+/// component `node`): every other signaler and circuit radio on `frequency` receives `code`
+/// (within `range` tiles of `from` on the same level, when it has one).
+pub fn post_signal(
+    world: &mut World,
+    source: Entity,
+    node: Option<u32>,
+    frequency: u16,
+    code: i32,
+    from: Option<TilePos>,
+    range: u32,
+) {
+    crate::wiremod::server::receive_signal(world, source, node, frequency, code, from, range);
     let receivers: Vec<Entity> = world
         .query::<(Entity, &Assembly)>()
         .iter(world)
         .filter(|&(e, r)| {
-            e != a && matches!(r.device, Device::Signaler { frequency: f, .. } if f == frequency)
+            e != source
+                && matches!(r.device, Device::Signaler { frequency: f, .. } if f == frequency)
         })
         .map(|(e, _)| e)
         .collect();

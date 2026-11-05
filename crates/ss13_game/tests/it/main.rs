@@ -89,5 +89,6 @@ mod ui_smoke;
 mod vampire;
 mod vending;
 mod wallmount;
+mod wiremod;
 mod wires;
 mod wizard;

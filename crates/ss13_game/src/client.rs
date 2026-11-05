@@ -33,6 +33,7 @@ impl Plugin for GameClientPlugin {
         app.add_plugins(crate::cargo::bounty_client::BountyClientPlugin);
         app.add_plugins(crate::defenses::client::DefensesClientPlugin);
         app.add_plugins(crate::assemblies::client::AssembliesClientPlugin);
+        app.add_plugins(crate::wiremod::client::WiremodClientPlugin);
         app.add_plugins(crate::operating_client::OperatingClientPlugin);
         app.add_plugins(crate::forensics::client::ForensicsClientPlugin);
         app.add_plugins(crate::service::client::ServiceClientPlugin);
