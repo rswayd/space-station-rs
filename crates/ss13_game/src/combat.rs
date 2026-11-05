@@ -475,14 +475,20 @@ fn melee(
                 others: format!("{user} трясет {victim}, пытаясь его поднять!"),
             }),
             // tg default `zone_selected` is the chest: a hug. `ru_p_them` of the male body.
-            None => Some(Seen {
-                range: DEFAULT_MESSAGE_RANGE,
-                channel: ChatChannel::Info,
-                span: Span::Notice,
-                actor: format!("Вы обнимаете {victim}, чтобы поднять его настроение!"),
-                target: format!("{user} обнимает вас, чтобы поднять ваше настроение!"),
-                others: format!("{user} обнимает {victim}, чтобы поднять его настроение!"),
-            }),
+            None => {
+                let helper = attacker;
+                commands.queue(move |world: &mut World| {
+                    crate::mood::on_hug(world, helper, target);
+                });
+                Some(Seen {
+                    range: DEFAULT_MESSAGE_RANGE,
+                    channel: ChatChannel::Info,
+                    span: Span::Notice,
+                    actor: format!("Вы обнимаете {victim}, чтобы поднять его настроение!"),
+                    target: format!("{user} обнимает вас, чтобы поднять ваше настроение!"),
+                    others: format!("{user} обнимает {victim}, чтобы поднять его настроение!"),
+                })
+            }
         };
         target_stat.set_if_neq(new_stat);
         if let Some((zone, hit)) = wound_hit {

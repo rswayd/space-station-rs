@@ -407,6 +407,11 @@ pub fn do_after(
     if world.get::<DoAfter>(actor.mob).is_some() {
         return false;
     }
+    // `cached_multiplicative_actions_slowdown`: the sanity action speed (`crate::mood`).
+    let delay_ds = delay_ds
+        * world
+            .get::<crate::mood::Mood>(actor.mob)
+            .map_or(1.0, |m| m.action_multiplier());
     let now = world.resource::<Time>().elapsed_secs_f64();
     let pending = DoAfter {
         client: actor.client,

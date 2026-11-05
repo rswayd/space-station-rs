@@ -22,10 +22,10 @@ use ss13_ui_kit::theme::{Bold, FontPx, root_text_style};
 
 use crate::lobby::{
     APPEARANCE_EYE_COLOR, APPEARANCE_FEMALE, APPEARANCE_HAIR_COLOR, APPEARANCE_HAIR_STYLE,
-    APPEARANCE_SKIN_TONE, AppearanceData, CHARACTER_SETUP, GameState, JOBLESS_ROLE, JobPrefsData,
-    JobPrefsStatic, JobPrefsUi, JobPriority, JoblessRole, LobbyData, LobbyUi, OBSERVE,
-    RANDOMIZE_APPEARANCE, SET_ANTAGS, SET_APPEARANCE, SET_JOB_PREFERENCE, SET_PREFERENCE,
-    TOGGLE_ANTAG_ROLL, TOGGLE_READY,
+    APPEARANCE_SKIN_TONE, AppearanceData, CHARACTER_SETUP, GIVE_QUIRK, GameState, JOBLESS_ROLE,
+    JobPrefsData, JobPrefsStatic, JobPrefsUi, JobPriority, JoblessRole, LobbyData, LobbyUi,
+    OBSERVE, RANDOMIZE_APPEARANCE, REMOVE_QUIRK, SET_ANTAGS, SET_APPEARANCE, SET_JOB_PREFERENCE,
+    SET_PREFERENCE, TOGGLE_ANTAG_ROLL, TOGGLE_READY,
 };
 
 /// tg `/datum/hud/new_player` title: `icons/runtime/default_title.dmi`, the unnamed state.
@@ -496,6 +496,36 @@ impl ClientUi for JobPrefsUi {
             }
         })
         .collect();
+        // tg's quirks page (`QuirksPage.tsx`) as a grid of toggles; the server checks the points.
+        let quirks: Vec<_> = st
+            .quirks
+            .iter()
+            .map(|quirk| {
+                let on = data.quirks.iter().any(|q| *q == quirk.name);
+                let label = format!("{} ({:+})", quirk.name, quirk.value);
+                let tooltip = quirk.description.clone();
+                let action = if on { REMOVE_QUIRK } else { GIVE_QUIRK };
+                let params = vec![("quirk".to_owned(), quirk.name.clone())];
+                let name = format!("quirk: {}", quirk.name);
+                bsn! {
+                    @Button {
+                        @content: label,
+                        @icon: {if on { "check-square-o" } else { "square-o" }},
+                        @fluid: true,
+                        @ellipsis: true,
+                        @tooltip: tooltip,
+                    }
+                    Button { selected: on }
+                    Act({action.to_owned()})
+                    ActParams(params)
+                    Name(name)
+                }
+            })
+            .collect();
+        let quirk_balance = format!(
+            "Очки квирков: {} (положительных не больше {})",
+            data.quirk_balance, st.max_positive_quirks
+        );
         let appearance = appearance_rows(st, &data.appearance);
         bsn! {
             @WindowContent
@@ -518,6 +548,20 @@ impl ClientUi for JobPrefsUi {
                         row_gap: px(2),
                     }
                     Children [ {antags} ]
+                ]
+                --
+                @Section { @title: "Квирки" }
+                Children [
+                    Node { margin: UiRect::bottom(px(4)) }
+                    Children [ Text(quirk_balance) ]
+                    --
+                    Node {
+                        display: Display::Grid,
+                        grid_template_columns: {RepeatedGridTrack::flex::<Vec<RepeatedGridTrack>>(4, 1.0)},
+                        column_gap: px(4),
+                        row_gap: px(2),
+                    }
+                    Children [ {quirks} ]
                 ]
                 --
                 @Section { @title: "Что делать если не удалось войти?" }

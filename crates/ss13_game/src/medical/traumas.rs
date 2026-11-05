@@ -788,7 +788,8 @@ pub fn scan_line(world: &World, mob: Entity) -> Option<String> {
     Some(format!("Mental trauma: {text}."))
 }
 
-/// Applies the traumas of `mob`'s brain to `mob` (the traits of their `on_gain`/`on_lose`).
+/// Applies the traumas of `mob`'s brain to `mob` (the traits of their `on_gain`/`on_lose`), with
+/// the quirks that give the same traits.
 pub fn refresh(world: &mut World, mob: Entity) {
     if world.get_entity(mob).is_err() {
         return;
@@ -810,6 +811,11 @@ pub fn refresh(world: &mut World, mob: Entity) {
             }
             _ => {}
         }
+    }
+    // The Mute (`TRAIT_MUTE`) and Pacifist (`TRAIT_PACIFISM`) quirks (`crate::quirks`).
+    if let Some(quirks) = world.get::<crate::quirks::Quirks>(mob) {
+        speech.mute |= quirks.has(crate::quirks::Quirk::Mute);
+        pacifist |= quirks.has(crate::quirks::Quirk::Pacifist);
     }
     let mut entity = world.entity_mut(mob);
     if speech == ss13_chat::speech::Impediments::default() {

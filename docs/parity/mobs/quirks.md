@@ -6,13 +6,13 @@
 
 - **Код:** [`/datum/quirk`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/_quirk.dm#L3), [`proc/add_to_holder()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/_quirk.dm#L70), [`PROCESSING_SUBSYSTEM_DEF(quirks)`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/processing/quirks.dm#L48), [`proc/AssignQuirks()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/processing/quirks.dm#L98), [`proc/add_quirk()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/status_procs.dm#L458)
 - **BandaStation:** [`quirks.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/processing/quirks.dm#L16) — квирки протезов, ампутации и трансгуманиста вырезаны (их заменяют аугментации форка); модпак `modular_bandastation/quirks` пока пустой
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/quirks.rs`: `Quirks` на мобе, `add_quirk`/`remove_quirk`, тексты получения/потери, выдача при входе в раунд (`crate::jobs::join`), предметы квирков (очки, повязка, маннитол: в слот/карман/рюкзак/руки), обработка раз в секунду до тяжёлого крита; настройки очков — константы tg (2 очка, 6 положительных), а не из `config/game_options.txt`; нет переноса квирков между телами, медзаписей и хардкор-режима
 
 ### Меню квирков в профиле
 Страница выбора квирков в настройках персонажа: очки, несовместимости, случайные квирки.
 
 - **Код:** [`proc/randomise_quirks()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/processing/quirks.dm#L115); tgui: [`QuirksPage.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/PreferencesMenu/CharacterPreferences/QuirksPage.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — раздел «Квирки» окна настройки персонажа (`crates/ss13_game/src/lobby_client.rs`, `JobPrefsUi`; акты `give_quirk`/`remove_quirk` проверяет сервер, `crate::quirks::filter_invalid`): очки, несовместимости, лимит положительных; нет случайных квирков и настроек квирков (цвет повязки, вид очков)
 
 ## Положительные
 
@@ -20,13 +20,13 @@
 Медленнее пьянеет; в опьянении лечит урон.
 
 - **Код:** [`/datum/quirk/alcohol_tolerance`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/positive_quirks/alcohol_tolerance.dm#L1), [`/datum/quirk/drunkhealing`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/positive_quirks/drunk_healing.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/quirks.rs`: сила алкоголя ×0.7 (`ss13_reagents` `booze_power_multiplier`), лечение урона по степени опьянения
 
 ### Общение: Bilingual, Signer, Friendly, Empath, Jolly
 Второй язык, язык жестов, лучшие объятия, осмотр показывает настроение и намерения других, периодическое хорошее настроение.
 
 - **Код:** [`/datum/quirk/bilingual`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/positive_quirks/bilingual.dm#L1), [`/datum/quirk/item_quirk/signer`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/positive_quirks/signer.dm#L1), [`/datum/quirk/friendly`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/positive_quirks/friendly.dm#L1), [`/datum/quirk/empath`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/positive_quirks/empath.dm#L1), [`/datum/quirk/jolly`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/positive_quirks/jolly.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/quirks.rs`, `crates/ss13_game/src/mood.rs`: Friendly (лучшие объятия по рассудку), Jolly; нет Bilingual и Signer (языки), Empath (осмотр)
 
 ### Движение: Freerunning, Light Step, Skittish, Settler, Spacer
 Быстрое перелезание столов, тихие шаги и защита от осколков, прыжок в шкаф при беге, планетарное происхождение (выносливость на планете, медленнее в космосе), рождённый в космосе (бонусы в невесомости, недомогание в гравитации).
@@ -38,7 +38,7 @@
 Имитация смерти, точное знание своих повреждений, иммунитет к рвоте от мерзкой еды, быстрая еда и прожорливость, острый нюх, дальний и точный бросок.
 
 - **Код:** [`/datum/quirk/death_mimicry`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/positive_quirks/death_mimicry.dm#L1), [`/datum/quirk/selfaware`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/positive_quirks/self_aware.dm#L1), [`/datum/quirk/strong_stomach`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/positive_quirks/strong_stomach.dm#L1), [`/datum/quirk/voracious`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/positive_quirks/voracious.dm#L1), [`/datum/quirk/keen_nose`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/positive_quirks/keen_nose.dm#L1), [`/datum/quirk/throwingarm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/positive_quirks/throwing_arm.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/quirks.rs`: Voracious меняет муд от сытости и ожирения; быстрая еда и нездоровая пища Voracious и остальные квирки группы — нет
 
 ### Чипы навыков: Chip Connector, Chipped
 Разъём для извлечения скиллчипов; стартовый скиллчип.
@@ -64,7 +64,7 @@
 Лысина с париком, глаза разного цвета, чёрно-белое зрение, «бегающие глаза» в осмотре.
 
 - **Код:** [`/datum/quirk/item_quirk/bald`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/neutral_quirks/bald.dm#L1), [`/datum/quirk/heterochromatic`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/neutral_quirks/heretochromatic.dm#L1), [`/datum/quirk/monochromatic`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/neutral_quirks/monochromatic.dm#L1), [`/datum/quirk/shifty_eyes`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/neutral_quirks/shifty_eyes.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/vision.rs`: Monochromacy (чёрно-белое зрение); остальные — нет
 
 ### Прочие нейтральные: Gamer, Fundamentally Evil, Foreigner, Phobia, Photographer, Thanatorenasia
 Геймер (муд от игр), злой по натуре, иностранец (не знает общий язык), выбираемая фобия (через травму мозга), фотограф с камерой, отказ от воскрешения (DNR).
@@ -90,25 +90,25 @@
 Слепота (повязка), глухота, близорукость (очки), шрам на глазу, отсутствие нюха, немигающие глаза (нужны капли).
 
 - **Код:** [`/datum/quirk/item_quirk/blindness`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/blindness.dm#L1), [`/datum/quirk/item_quirk/deafness`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/deafness.dm#L1), [`/datum/quirk/item_quirk/nearsighted`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/nearsighted.dm#L1), [`/datum/quirk/item_quirk/scarred_eye`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/scarred_eye.dm#L1), [`/datum/quirk/item_quirk/anosmia`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/anosmia.dm#L1), [`/datum/quirk/item_quirk/fluoride_stare`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/fluoride_stare.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/vision.rs`, `crates/ss13_game/src/quirks.rs`: Blind (слепота и белая повязка), Nearsighted (близорукость 1, исправляется очками, очки выдаются); нет Deaf, Scarred Eye, Anosmia, Fluoride Stare
 
 ### Тело и движение: Paraplegic, Hemiplegic, Limper, Bad Back, Frail, Glass Jaw, Pushover
 Парализованные ноги (кресло-каталка), паралич половины тела, хромота, больная спина (муд без поддержки), хрупкие кости (легче травмы), стеклянная челюсть (нокаут от удара в голову), легко вырваться из захвата.
 
 - **Код:** [`/datum/quirk/paraplegic`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/paraplegic.dm#L1), [`/datum/quirk/hemiplegic`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/hemiplegic.dm#L1), [`/datum/quirk/item_quirk/limper`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/limper.dm#L1), [`/datum/quirk/badback`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/bad_back.dm#L1), [`/datum/quirk/frail`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/frail.dm#L1), [`/datum/quirk/glass_jaw`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/glass_jaw.dm#L1), [`/datum/quirk/pushover`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/pushover.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/quirks.rs`: Paraplegic (неизлечимый паралич ног, без коляски), Bad Back (муд −15 с рюкзаком на спине); остальные — нет
 
 ### Болезни: Brain Tumor, Chronic Illness, Immunodeficiency, Blood Deficiency, Asthma, Narcolepsy, All Nighter
 Опухоль мозга (нужен маннитол), неизлечимая болезнь, ослабленный иммунитет, нехватка крови, астма (ингалятор), внезапный сон, хроническое недосыпание.
 
 - **Код:** [`/datum/quirk/item_quirk/brainproblems`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/brain_problems.dm#L6), [`/datum/quirk/item_quirk/chronic_illness`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/chronic_illness.dm#L1), [`/datum/quirk/item_quirk/immunodeficiency`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/immunodeficiency.dm#L1), [`/datum/quirk/blooddeficiency`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/blood_deficiency.dm#L1), [`/datum/quirk/item_quirk/asthma`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/asthma.dm#L1), [`/datum/quirk/item_quirk/narcolepsy`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/narcolepsy.dm#L1), [`/datum/quirk/all_nighter`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/all_nighter.dm#L3)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/quirks.rs`: Brain Tumor (0.2 урона мозгу в секунду, баночка маннитола); остальные — нет
 
 ### Фобии и психика: Claustrophobia, Monophobia, Nyctophobia, Pyrophobia, Photophobia, Depression, Reality Dissociation Syndrome, Unstable, Erratic, Hypersensitive, Numb, Body Purist
 Страх тесноты, одиночества, темноты, огня и яркого света; депрессия; галлюцинации без лекарств; нестабильный рассудок; резкие перепады; усиленные/подавленные муд-события; бесчувственность к боли; неприязнь к протезам.
 
 - **Код:** [`/datum/quirk/claustrophobia`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/claustrophobia.dm#L1), [`/datum/quirk/monophobia`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/monophobia.dm#L1), [`/datum/quirk/nyctophobia`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/nyctophobia.dm#L1), [`/datum/quirk/depression`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/depression.dm#L1), [`/datum/quirk/insanity`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/insanity.dm#L1), [`/datum/quirk/unstable`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/unstable.dm#L1), [`/datum/quirk/numb`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/numb.dm#L1), [`/datum/quirk/body_purist`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/body_purist.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/quirks.rs`, `crates/ss13_game/src/mood.rs`: Depression (приступы грусти), Unstable (рассудок не растёт), Hypersensitive (настроение ×1.5); фобии, RDS, Erratic, Numb и Body Purist — нет
 
 ### Социальная тревожность
 Заикание при людях, шанс промолчать, муд от зрительного контакта.
@@ -121,17 +121,17 @@
 Немота, только шёпот, плохое знание общего языка, неграмотность, неспособность различать лица.
 
 - **Код:** [`/datum/quirk/mute`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/mute.dm#L1), [`/datum/quirk/softspoken`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/softspoken.dm#L1), [`/datum/quirk/csl`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/csl.dm#L1), [`/datum/quirk/illiterate`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/illiterate.dm#L1), [`/datum/quirk/prosopagnosia`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/prosopagnosia.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/quirks.rs` (через `crate::medical::traumas::refresh`): Mute; остальные — нет
 
 ### Боевые: Pacifist, Stormtrooper Aim, Clumsy
 Не может причинять вред, разброс при стрельбе, неуклюжесть клоуна (ранит себя оружием).
 
 - **Код:** [`/datum/quirk/nonviolent`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/non_violent.dm#L1), [`/datum/quirk/poor_aim`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/poor_aim.dm#L1), [`/datum/quirk/clumsy`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/clumsy.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/quirks.rs` (через `crate::medical::traumas::refresh`): Pacifist; Stormtrooper Aim и Clumsy — нет
 
 ### Прочие отрицательные: Cursed, Family Heirloom, Indebted, Light Drinker, Tin Man, Touchy
 Невезение (случайные неприятности), семейная реликвия (муд без неё), долг (часть зарплаты списывается), быстро пьянеет, органы заменены плохими кибернетическими, осматривает только вплотную.
 
 - **Код:** [`/datum/quirk/cursed`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/cursed.dm#L1), [`/datum/quirk/item_quirk/family_heirloom`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/family_heirloom.dm#L1), [`/datum/quirk/indebted`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/indebted.dm#L1), [`/datum/quirk/light_drinker`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/light_drinker.dm#L1), [`/datum/quirk/tin_man`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/tin_man.dm#L1), [`/datum/quirk/touchy`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/unusual.dm#L1)
 - **BandaStation:** [`indebted.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/indebted.dm#L33) — другой тип капсулы доставки
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/quirks.rs`: Light Drinker (сила алкоголя ×2); остальные — нет

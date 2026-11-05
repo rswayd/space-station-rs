@@ -221,6 +221,29 @@ pub struct HungerHudData {
     pub shown: bool,
 }
 
+/// The owner's mood face (tg `/atom/movable/screen/mood`, `ui_mood`), a headless tgui interface
+/// like [`HealthHudUi`]. Its one act, [`MOOD_CLICK`], prints the mood to the owner's chat
+/// (`/datum/mood/proc/hud_click`).
+pub struct MoodHudUi;
+
+impl UiInterface for MoodHudUi {
+    const NAME: &'static str = "MoodHud";
+    type Data = MoodHudData;
+    type StaticData = ();
+}
+
+/// [`MoodHudUi`]'s act: a click on the face.
+pub const MOOD_CLICK: &str = "click";
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(bevy::prelude::Component))]
+pub struct MoodHudData {
+    /// `mood_level` 1..=9: the `icons/hud/screen_gen.dmi` state `mood[level]`; 0 hides the face.
+    pub level: u8,
+    /// The face's `color`, by sanity level (`update_mood_icon`).
+    pub color: [u8; 3],
+}
+
 /// The owner's fullscreen overlays and screen filters (tg `overlay_fullscreen`,
 /// `add_client_colour`, the `eye_blur` filter), a headless tgui interface like [`HealthHudUi`]:
 /// only the owner learns what its eyes see.

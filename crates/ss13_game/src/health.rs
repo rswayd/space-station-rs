@@ -561,6 +561,7 @@ type BodyItem<'a> = (
         Option<&'a MoveSpeedModifier>,
         Option<&'a crate::janitor::Walking>,
         Option<&'a crate::taser::TaseSlowdown>,
+        Option<&'a crate::mood::SanitySlowdown>,
     ),
 );
 
@@ -583,6 +584,7 @@ fn body_state(
             Changed<MoveSpeedModifier>,
             Changed<crate::janitor::Walking>,
             Changed<crate::taser::TaseSlowdown>,
+            Changed<crate::mood::SanitySlowdown>,
         )>,
     >,
     index: Res<SpatialIndex>,
@@ -608,7 +610,7 @@ fn body_state(
         name,
         drag,
         traits,
-        (zone, fat, limits, pilot, speed, walking, tased),
+        (zone, fat, limits, pilot, speed, walking, tased, sanity),
     ) in &mut mobs
     {
         let traits = traits.copied().unwrap_or_default();
@@ -628,6 +630,10 @@ fn body_state(
         }
         if fat.is_some_and(|f| f.0) {
             delay += crate::hunger::OBESITY_SLOWDOWN / 10.0;
+        }
+        // `/datum/movespeed_modifier/sanity` (`crate::mood`).
+        if let Some(sanity) = sanity {
+            delay += sanity.0 / 10.0;
         }
         // Limping and disabled legs (`crate::medical::wounds`).
         if let Some(limits) = limits {

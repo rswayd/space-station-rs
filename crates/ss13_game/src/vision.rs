@@ -17,7 +17,7 @@
 //! to the owner only, through the headless tgui interface [`FullscreenHudUi`]. tg hides the
 //! overlays of a dead mob (`should_show_to`), so a corpse sends none.
 // shortcut: carbons only (silicons have no static overlay, basic mobs cannot be blinded as in tg);
-// no `damageoverlaytemp` pulse, no `TRAIT_SIGHT_BYPASS`, `TRAIT_NOCRITOVERLAY`, quirks, genetic or
+// no `damageoverlaytemp` pulse, no `TRAIT_SIGHT_BYPASS`, `TRAIT_NOCRITOVERLAY`, genetic or
 // scarred blindness, no night vision, see_in_dark or `sight` flags; blind mobs still get visible
 // messages and examine text (tg `blind_message`); no darkened-flash preference.
 
@@ -34,6 +34,7 @@ use crate::hud::{
 use crate::inventory::Inventory;
 use crate::medical::organs::{self, OrganHost, Slot};
 use crate::medical::traumas::{self, Kind};
+use crate::quirks::{Quirk, Quirks};
 use crate::server::PlayerMob;
 
 /// `TINT_MILD`, `TINT_DARKENED`, `TINT_BLIND`.
@@ -97,10 +98,14 @@ pub fn sight(world: &World, mob: Entity) -> Option<Sight> {
     };
     let temp = world.get::<Vision>(mob).is_some_and(|v| v.temp_blind > 0.0);
     let trauma_kinds: Vec<Kind> = traumas::of_mob(world, mob).iter().map(|t| t.kind).collect();
-    // `become_blind` sources: NO_EYES, EYE_DAMAGE (failing), EYES_COVERED, TRAUMA_TRAIT.
+    let quirks = world.get::<Quirks>(mob);
+    let quirk = |q: Quirk| quirks.is_some_and(|quirks| quirks.has(q));
+    // `become_blind` sources: NO_EYES, EYE_DAMAGE (failing), EYES_COVERED, TRAUMA_TRAIT,
+    // QUIRK_TRAIT (the Blind quirk).
     let other = eyes.is_none_or(|e| e.failing)
         || tint >= TINT_BLIND
-        || trauma_kinds.contains(&Kind::Blindness);
+        || trauma_kinds.contains(&Kind::Blindness)
+        || quirk(Quirk::Blind);
     let blind = other || knocked_out || temp;
     // `assign_nearsightedness(EYE_DAMAGE, damage >= high ? 3 : 2, correctable = TRUE)`.
     let nearsighted = eyes.map_or(0, |e| {
@@ -113,6 +118,12 @@ pub fn sight(world: &World, mob: Entity) -> Option<Sight> {
             2
         }
     });
+    // The Nearsighted quirk: `assign_nearsightedness(QUIRK_TRAIT, 1, correctable = TRUE)`.
+    let nearsighted = if quirk(Quirk::Nearsighted) && !corrected {
+        nearsighted.max(1)
+    } else {
+        nearsighted
+    };
     Some(Sight {
         eyes: eyes.is_some(),
         blind,
@@ -120,7 +131,8 @@ pub fn sight(world: &World, mob: Entity) -> Option<Sight> {
         temp_only: temp && !other && !knocked_out,
         nearsighted,
         tint,
-        colorblind: trauma_kinds.contains(&Kind::ColorBlindness),
+        // Achromatopsia, or the Monochromacy quirk (`/datum/client_colour/monochrome`).
+        colorblind: trauma_kinds.contains(&Kind::ColorBlindness) || quirk(Quirk::Monochromacy),
     })
 }
 

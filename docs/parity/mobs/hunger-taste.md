@@ -6,7 +6,7 @@
 
 - **Код:** [`proc/adjust_nutrition()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/mob.dm#L1500), [`proc/set_nutrition()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/mob.dm#L1519), [`proc/handle_hunger()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/organs/internal/stomach/_stomach.dm#L137), [`расход при ходьбе`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/carbon_movement.dm#L15)
 - **BandaStation:** [`code/modules/mob/mob.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/mob.dm#L1503) — вампиры не получают сытость от обычной еды
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/hunger.rs`: стартовая сытость, расход `HUNGER_FACTOR`, питание от реагентов; нет зависимости от настроения, расхода за шаги, `TRAIT_NOHUNGER` и вампирской правки
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/hunger.rs`: стартовая сытость, расход `HUNGER_FACTOR`, питание от реагентов; скорость зависит от рассудка (`crate::mood`); нет расхода за шаги, `TRAIT_NOHUNGER` и вампирской правки
 
 ### Голодание и эффекты сытости
 Ниже порогов — «голоден»/«истощён»: моодлеты, вялый метаболизм (эффективность 0.8); хорошо сытый с высоким `satiety` метаболизирует быстрее; отрицательный `satiety` вызывает дрожь.

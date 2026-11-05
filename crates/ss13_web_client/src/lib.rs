@@ -81,6 +81,7 @@ pub fn start(canvas_selector: String, files: Map, post: Function) {
             ss13_chat::client::ChatPanelPlugin,
         ))
         .add_plugins(ss13_game::hunger_client::HungerHudPlugin)
+        .add_plugins(ss13_game::mood_client::MoodHudPlugin)
         .add_plugins(ss13_game::fullscreen_client::FullscreenPlugin)
         .add_plugins(ss13_game::sound_client::SoundClientPlugin { asset_root })
         .add_plugins(ss13_admin::client::AdminUiPlugin)

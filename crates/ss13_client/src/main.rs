@@ -77,6 +77,7 @@ fn main() -> AppExit {
             ss13_chat::client::ChatPanelPlugin,
         ))
         .add_plugins(ss13_game::hunger_client::HungerHudPlugin)
+        .add_plugins(ss13_game::mood_client::MoodHudPlugin)
         .add_plugins(ss13_game::fullscreen_client::FullscreenPlugin)
         .add_plugins(ss13_game::sound_client::SoundClientPlugin { asset_root })
         // F1 adminhelp and, for server-confirmed admins, the F7 admin panel: every build.

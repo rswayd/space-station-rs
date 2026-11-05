@@ -2183,6 +2183,8 @@ struct MobBody<'a> {
     told: Vec<String>,
     /// The mob's [`crate::hunger::Hunger`], if it has one.
     hunger: Option<&'a mut crate::hunger::Hunger>,
+    /// [`crate::quirks::booze_multiplier`].
+    booze: f32,
 }
 
 impl Body for MobBody<'_> {
@@ -2230,6 +2232,9 @@ impl Body for MobBody<'_> {
         self.hunger
             .as_deref()
             .map_or(1.0, |h| h.metabolism_efficiency)
+    }
+    fn booze_power_multiplier(&self) -> f32 {
+        self.booze
     }
 }
 
@@ -2301,6 +2306,7 @@ fn life(world: &mut World, chem: &Chemistry, mob: Entity, seconds: f32) {
         None if world.get::<organs::OrganHost>(mob).is_some() => metabolism::Liver::Liverless,
         None => metabolism::Liver::Working { health: 1.0 },
     };
+    let booze = crate::quirks::booze_multiplier(world, mob);
     let liver_damage;
     let told = {
         let mut body = MobBody {
@@ -2311,6 +2317,7 @@ fn life(world: &mut World, chem: &Chemistry, mob: Entity, seconds: f32) {
             rng: &mut rng,
             told: Vec::new(),
             hunger: hunger.as_mut(),
+            booze,
         };
         if !dead && has_stomach {
             metabolism::digest(chem, &mut reagents.stomach, &mut reagents.blood, seconds);

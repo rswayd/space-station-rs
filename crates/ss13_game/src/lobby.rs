@@ -131,6 +131,24 @@ pub struct JobPrefsStatic {
     pub hair_styles: Vec<String>,
     pub hair_colors: Vec<[u8; 3]>,
     pub eye_colors: Vec<[u8; 3]>,
+    /// tg `quirk_info`, in menu order (`crate::quirks::QUIRKS`).
+    pub quirks: Vec<QuirkInfo>,
+    /// tg `quirk_blacklist`: names that exclude each other.
+    pub quirk_blacklist: Vec<Vec<String>>,
+    /// tg `default_quirk_balance`, `max_positive_quirks`.
+    pub default_quirk_balance: i32,
+    pub max_positive_quirks: u8,
+}
+
+/// One quirk of the menu (tg `quirk_info` entry).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct QuirkInfo {
+    pub name: String,
+    pub description: String,
+    /// A FontAwesome icon name.
+    pub icon: String,
+    /// Positive: costs points; negative: gives them.
+    pub value: i32,
 }
 
 /// The character's appearance: indexes into [`JobPrefsStatic`]'s lists (`hair_style` `None` =
@@ -152,6 +170,10 @@ pub struct JobPrefsData {
     /// tg `be_special`: the antagonist roles the player wants (`ROLE_TRAITOR`, ...).
     pub be_special: Vec<String>,
     pub appearance: AppearanceData,
+    /// tg `selected_quirks`: the chosen quirks' names.
+    pub quirks: Vec<String>,
+    /// The points left: `default_quirk_balance` minus the chosen quirks' values.
+    pub quirk_balance: i32,
 }
 
 impl JobPrefsData {
@@ -170,6 +192,10 @@ pub const SET_PREFERENCE: &str = "set_preference";
 pub const JOBLESS_ROLE: &str = "joblessrole";
 /// tg `preference_middleware/antags` `set_antags`: `{ antags, toggled }` (`toggled` "1"/"0").
 pub const SET_ANTAGS: &str = "set_antags";
+
+/// tg `preference_middleware/quirks` `give_quirk`/`remove_quirk`: `{ quirk }` (a quirk name).
+pub const GIVE_QUIRK: &str = "give_quirk";
+pub const REMOVE_QUIRK: &str = "remove_quirk";
 
 /// `act('set_appearance', { key, value })`: `key` one of the `APPEARANCE_*` keys, `value` an index
 /// (`female`: "1"/"0"; `hair_style`: empty for bald).
