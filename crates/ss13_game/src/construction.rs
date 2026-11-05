@@ -165,6 +165,8 @@ pub enum Job {
     Explosive(crate::explosions::sources::ExplosiveJob),
     /// An experi-scanner's scan ([`crate::science::experi_scanner`]).
     Experiment,
+    /// Reading a martial arts manual or scroll ([`crate::martial`]).
+    Martial(crate::martial::ReadJob),
 }
 
 /// A turf's baseturf stack, bottom first (tg `baseturfs`). Absent: assembled from the type's
@@ -942,6 +944,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Gibber(job) => crate::gibber::complete(world, mob, action, job),
         &Job::Explosive(job) => crate::explosions::sources::complete(world, mob, action, job),
         Job::Experiment => crate::science::experi_scanner::complete(world, mob, action),
+        &Job::Martial(job) => crate::martial::complete_reading(world, mob, action, job),
         &Job::Emitter(job) => crate::power::emitter::complete(world, client, target, job, consume),
         Job::GirderBolts { from } => {
             if !is_under(&path, GIRDER) || obj_state(world, target) != *from || !consume(world) {

@@ -229,6 +229,26 @@ pub mod files {
         "sound/effects/fireclip6.ogg",
         "sound/effects/fireclip7.ogg",
     ];
+    /// The martial arts' moves, manuals and scrolls (`ss13_game::martial`).
+    pub const MARTIAL: [&str; 17] = [
+        "sound/items/weapons/slam.ogg",
+        "sound/items/weapons/genhit1.ogg",
+        "sound/items/weapons/cqchit1.ogg",
+        "sound/items/weapons/cqchit2.ogg",
+        "sound/effects/hit_kick.ogg",
+        "sound/effects/hit_punch.ogg",
+        "sound/effects/coin2.ogg",
+        "sound/items/weapons/slap.ogg",
+        "sound/items/weapons/whip.ogg",
+        "sound/items/weapons/slashmiss.ogg",
+        "sound/items/weapons/taser.ogg",
+        "sound/effects/magic/tail_swing.ogg",
+        "sound/effects/page_turn/pageturn1.ogg",
+        "sound/effects/page_turn/pageturn2.ogg",
+        "sound/effects/page_turn/pageturn3.ogg",
+        "sound/effects/explosion/explosion1.ogg",
+        "sound/items/weapons/punch1.ogg",
+    ];
 }
 
 pub const RUNTIME_SOUNDS: [&str; 15] = [
@@ -541,6 +561,7 @@ pub fn referenced<'a>(
     out.extend(files::COMMS.map(str::to_owned));
     out.extend(files::BOTS.map(str::to_owned));
     out.extend(files::EXPLOSION.map(str::to_owned));
+    out.extend(files::MARTIAL.map(str::to_owned));
     for path in converted {
         for var in SOUND_VARS {
             let s = sound_var(types, path, var);

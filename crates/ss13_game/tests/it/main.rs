@@ -41,6 +41,7 @@ mod kitchen_machines;
 mod loopback;
 mod los;
 mod machine_frame;
+mod martial;
 mod mecha;
 mod medical;
 mod medicine;

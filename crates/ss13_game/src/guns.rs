@@ -360,6 +360,16 @@ fn try_fire(world: &mut World, client: Entity, mob: Entity, gun_entity: Entity, 
     if crate::taser::tasing_with(world, gun_entity) {
         return true;
     }
+    // `can_trigger_gun`: `TRAIT_NOGUNS` (the sleeping carp, `crate::martial`).
+    if crate::martial::no_guns(world, mob) {
+        tell(
+            world,
+            client,
+            Span::Warning,
+            "Использовать огнестрельное оружие?! Ну уж нет.",
+        );
+        return true;
+    }
     if let Err(fail) = pin_auth(world, &dm, &gun, mob) {
         if gun.pin.is_empty() {
             let name = name_of(world, gun_entity);
