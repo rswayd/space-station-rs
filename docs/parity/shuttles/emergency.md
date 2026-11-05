@@ -24,19 +24,19 @@
 Пульт на борту: три главы свайпают ID, чтобы шаттл улетел раньше (запуск двигателей через 10 с); можно отозвать авторизацию; tgui-окно с числом оставшихся подписей.
 
 - **Код:** [`/obj/machinery/computer/emergency_shuttle`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/mobile_port/variants/emergency/emergency_console.dm#L6), [`proc/authorize()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/mobile_port/variants/emergency/emergency_console.dm#L160); tgui: [`EmergencyShuttleConsole.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/EmergencyShuttleConsole.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/shuttle_console_server.rs` (окно `EmergencyShuttleConsole`: `shuttle_console.rs`, `shuttle_console_client.rs`): три ID с доступом командования (по одному на имя), задержка 5 с на действие пользователя, «repeal»/«Repeal All», анонсы числа подписей и отзыва, ранний запуск двигателей через 10 с (`Emergency::early_launch`); только на борту (`/area/shuttle/escape`)
 
 ### Взлом консоли емагом
 Емаг на консоли аварийного шаттла запускает отлёт через 10 секунд без авторизаций и сбивает таймер в анонсе.
 
 - **Код:** [`emag_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/mobile_port/variants/emergency/emergency_console.dm#L296)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/shuttle_console_server.rs` (`emag_act`): десять выдуманных ID, отлёт через 10 с с анонсом «SYSTEM ERROR:», имена в окне — абракадабра; без `movement_force`
 
 ### Угон шаттла
 Антагонист с целью угона alt-кликом по консоли поэтапно перепрошивает навигацию (стадии с задержкой и анонсами); при успехе шаттл летит на базу Синдиката; также «элиминационный» угон — только антагонисты на борту.
 
 - **Код:** [`proc/attempt_hijack_stage()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/mobile_port/variants/emergency/emergency_console.dm#L229), [`proc/elimination_hijack()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/mobile_port/variants/emergency/emergency.dm#L100)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/shuttle_console_server.rs`: alt-клик антагониста (скорость `get_hijack_speed` по датумам: 0.5, 1 с целью угона, 2 у ядерных оперативников), пять стадий с do_after, таймаутом 5 с и анонсами, +30 с полёта за стадию в пути, 10 с после последней; цель угона и итог ядерных оперативников (`shuttle_landed_base`) читают угон; угнанный шаттл (и при победе революции) садится на заглушку ЦК с флагом `syndicate_landing` — нет уровня базы Синдиката; нет элиминационного угона (нужен горец/ОБР, не портированы)
 
 ### События полёта шаттла
 Во время перелёта на ЦК могут случаться события: карпы, метеоры, чёрная дыра, турбулентность (надо пристегнуться), огненные шары, призраки в роли пассажиров и т. п.; набор задаётся шаблоном шаттла.
@@ -48,13 +48,13 @@
 Капсулы улетают сами при красной тревоге или после отлёта шаттла (`/obj/machinery/computer/shuttle/pod`), садятся в случайную точку на ЦК/лаваленде; внутри ящик с припасами, открываемый при угрозе.
 
 - **Код:** [`/obj/docking_port/mobile/pod`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/mobile_port/variants/emergency/pods.dm#L3), [`/obj/machinery/computer/shuttle/pod`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/mobile_port/variants/emergency/pods.dm#L22), [`/obj/docking_port/stationary/random`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/mobile_port/variants/emergency/pods.dm#L80), [`/obj/item/storage/pod`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/mobile_port/variants/emergency/pods.dm#L130)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/escape_pods.rs`: капсулы грузятся на загрузчики станции (`escape_pod_default`, по копии шаблона на загрузчик), улетают в транзит вместе с аварийным шаттлом и стыкуются на заглушке ЦК (`pod_away`) — сидящие в них считаются сбежавшими; нет консоли капсулы и раннего запуска на красном/емагом (садится на лаваленд — уровень не грузится), нет замка ящика с припасами, нет станционных трейтов маленьких/больших капсул
 
 ### Каталог аварийных шаттлов
 74 шаблона (`box`, `meta`, `delta`, `luxury`, `arena`, `supermatter`, `scrapheap`, `disco`, ...) с ценой и особенностями; капитан покупает их через консоль связи, некоторые доступны только при условиях или емаге.
 
 - **Код:** [`/datum/map_template/shuttle/emergency`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/shuttles/emergency.dm#L3), [`proc/init_has_purchase_shuttle_access()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/shuttle.dm#L1209)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/shuttle.rs`: загружается только шаттл из json карты (MetaStation: `emergency_meta`); покупки и замены нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/shuttle.rs`: загружается только шаттл из json карты (MetaStation: `emergency_meta`); покупки и замены нет — шаблоны грузятся только при старте сервера (`ShuttleTemplates`), загрузки шаблона во время раунда нет
 
 ### Запасной шаттл и BYOS
 Если на карте нет эвакуационного шаттла, подгружается `backup`; «Build Your Own Shuttle» — пустая платформа, которую экипаж достраивает сам.

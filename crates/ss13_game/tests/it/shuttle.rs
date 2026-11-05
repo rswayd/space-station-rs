@@ -15,13 +15,16 @@ use std::time::{Duration, Instant};
 
 use bevy::prelude::*;
 use ss13_atmos::AtmosPlugin;
+use ss13_game::arrivals::ArrivalsShuttle;
 use ss13_game::comms::{CommsConsoleData, CommsConsoleUi};
 use ss13_game::comms_server::CommsConsole;
 use ss13_game::construction::{Baseturfs, turf_at};
+use ss13_game::escape_pods::{EscapePods, LaunchStatus};
 use ss13_game::inventory::{IdCard, Inventory};
 use ss13_game::shuttle::{
     EmergencyShuttle, MobileDock, ShuttleConfig, ShuttleMode, StationaryDock,
 };
+use ss13_game::shuttle_console_server::EmergencyConsole;
 use ss13_game::testing::{self, Drive, fixture_map, write_fixture};
 use ss13_mapload::{Areas, DmPower, MapLoadPlugin};
 use ss13_net::chat::client::ChatReceived;
@@ -654,4 +657,68 @@ fn metastation() {
     let world = s.server.world();
     let port = world.resource::<EmergencyShuttle>().port;
     assert_eq!(*world.get::<TilePos>(port).unwrap(), dock);
+
+    // The escape pods sit at their loaders; the arrivals shuttle has its latejoin chairs and has
+    // left the station with nobody aboard.
+    let pods = world.resource::<EscapePods>().0.clone();
+    assert_eq!(pods.len(), 2, "MetaStation has two escape pod loaders");
+    for pod in &pods {
+        assert_eq!(
+            world.get::<MobileDock>(pod.port).unwrap().docked,
+            Some(pod.station)
+        );
+    }
+    let arrivals = world.resource::<ArrivalsShuttle>();
+    assert!(
+        arrivals.chairs.len() >= 5,
+        "{} chairs",
+        arrivals.chairs.len()
+    );
+    let deadline = s.now() + 10.0;
+    while s.server.world().resource::<ArrivalsShuttle>().state.mode != ShuttleMode::Call {
+        assert!(s.now() < deadline, "the arrivals shuttle stays docked");
+        s.step();
+    }
+
+    // An emag on the shuttle's console: the engines start at once, the pods follow the shuttle
+    // out and dock at CentCom with it.
+    let (link, mob) = (s.link(), s.mob());
+    {
+        let world = s.server.world_mut();
+        let mut q = world.query_filtered::<Entity, With<EmergencyConsole>>();
+        let console = q
+            .iter(world)
+            .next()
+            .expect("the emergency shuttle's console");
+        assert!(ss13_game::shuttle_console_server::emag_act(
+            world, link, mob, console
+        ));
+    }
+    let deadline = s.now() + 15.0;
+    while s.mode() != ShuttleMode::Escape {
+        assert!(s.now() < deadline, "no early launch");
+        s.step();
+    }
+    let world = s.server.world();
+    assert!(
+        world
+            .resource::<EscapePods>()
+            .0
+            .iter()
+            .all(|p| p.status == LaunchStatus::EndgameLaunched)
+    );
+    let deadline = s.now() + 10.0;
+    while s.mode() != ShuttleMode::Endgame {
+        assert!(s.now() < deadline, "no arrival");
+        s.step();
+    }
+    let world = s.server.world();
+    assert!(
+        world
+            .resource::<EscapePods>()
+            .0
+            .iter()
+            .all(|p| p.status == LaunchStatus::Endgame)
+    );
+    assert!(!world.resource::<EmergencyShuttle>().syndicate_landing);
 }

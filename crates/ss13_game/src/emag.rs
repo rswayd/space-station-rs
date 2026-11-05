@@ -21,7 +21,7 @@
 //!     (`crate::silicon::chassis`): their own `emag_act`.
 //! - Bots take emags through their own clicks (`crate::bots`), after [`can_emag`].
 // shortcut: no bluespace emag reach (`prox_check`), no emags stuck together, no Donk Co. fake
-// emag, no `emag_act` of pAIs, the emergency shuttle console, the holodeck or other
+// emag, no `emag_act` of pAIs, the holodeck or other
 // unported families; no hacked-APC flicker; no blackbox or combat log of the attempt.
 
 use bevy::prelude::*;

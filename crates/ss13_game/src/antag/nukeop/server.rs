@@ -1145,8 +1145,7 @@ pub fn get_result(world: &mut World) -> Option<NukeResult> {
     let outcome = *world.resource::<NukeOutcome>();
     let inputs = ResultInputs {
         shuttle_evacuated: crate::shuttle::evacuated(world),
-        // shortcut: the emergency shuttle cannot be hijacked here.
-        shuttle_landed_base: false,
+        shuttle_landed_base: crate::shuttle::hijacked(world),
         disk_rescued: disk_rescued(world),
         syndies_didnt_escape: !infiltrator_home(world),
         team_is_dead: team_dead(world, &team),

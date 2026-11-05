@@ -29,8 +29,9 @@
 // space level made at round start (tg reserves one per flight with hyperspace turfs). Both have
 // the shuttle's own direction, so the emergency shuttle never rotates there (tg turns it at
 // CentCom and in transit); a dock of another direction turns `Facing` only.
-// shortcut: no hostile environments, ripples, hyperspace sounds, shuttle events, hijacks or
-// airlock cycling on docking.
+// shortcut: no hostile environments, ripples, hyperspace sounds, shuttle events or airlock
+// cycling on docking. A hijacked shuttle (`crate::shuttle_console_server`) docks at the CentCom
+// stand-in too (no Syndicate base level, `emergency_syndicate`); `syndicate_landing` records it.
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -38,8 +39,11 @@ use std::time::Duration;
 
 use bevy::platform::time::Instant;
 use bevy::prelude::*;
+use ss13_assets::dmm::{DmValue, DmmMap, DmmObject};
 use ss13_atmos::{Atmos, GasMixture, GasOverlay, HotspotEffect, TurfAir};
-use ss13_mapload::dock::{SHUTTLE_SKIPOVER, map_shuttle, shuttle_template_path};
+use ss13_mapload::dock::{
+    SHUTTLE_SKIPOVER, STATIONARY_PORT_ROOT, map_shuttle, shuttle_template_path,
+};
 use ss13_mapload::spawner::Rng;
 use ss13_mapload::{
     Areas, DEFAULT_AREA, DEFAULT_TURF, DmAtom, DmDockingPort, DmName, DmPower, MapLoadPlugin,
@@ -214,7 +218,16 @@ pub struct Emergency {
     pub last_call_area: Option<String>,
     /// tg `emergency_no_recall`.
     pub no_recall: bool,
+    /// tg `hijack_status`: `HIJACK_NOT_BEGUN` (0) to [`HIJACK_COMPLETED`].
+    pub hijack_status: u8,
 }
+
+/// tg `HIJACK_COMPLETED`: the fifth stage of the console's navigation override.
+pub const HIJACK_COMPLETED: u8 = 5;
+/// The console's `hijack_flight_time_increase`: a stage during the flight lengthens it.
+pub const HIJACK_FLIGHT_TIME_INCREASE: f64 = 30.0;
+/// The console's `hijack_completion_flight_time_set`: the flight left after the last stage.
+pub const HIJACK_COMPLETION_FLIGHT_SECS: f64 = 10.0;
 
 impl Emergency {
     /// tg `request`: from idle, called or recalling the shuttle is (re)called; false otherwise.
@@ -341,6 +354,42 @@ impl Emergency {
     pub fn escaped_or_endgamed(&self) -> bool {
         matches!(self.mode, ShuttleMode::Escape | ShuttleMode::Endgame)
     }
+
+    /// The console's `IS_DOCKED && !ENGINES_STARTED`: docked, engines not started.
+    pub fn docked_idle(&self) -> bool {
+        self.mode == ShuttleMode::Docked
+    }
+
+    /// The console's early launch (`setTimer(ENGINE_START_TIME)`): the engines start at once and
+    /// the shuttle leaves 10 s later. False unless [`docked_idle`](Self::docked_idle).
+    pub fn early_launch(&mut self, now: f64) -> bool {
+        // Already launching early: the console's `process` runs again before the mode turns.
+        if !self.docked_idle() || self.timer.left(now).is_some_and(|l| l <= ENGINE_START_SECS) {
+            return false;
+        }
+        self.timer.set(now, ENGINE_START_SECS);
+        true
+    }
+
+    /// tg `is_hijacked`.
+    pub fn is_hijacked(&self) -> bool {
+        self.hijack_status >= HIJACK_COMPLETED
+    }
+
+    /// The console's `increase_hijack_stage` on the shuttle: the next stage; in flight the last
+    /// stage cuts the flight to 10 s, the others lengthen it by 30 s.
+    pub fn hijack_stage(&mut self, now: f64) -> u8 {
+        self.hijack_status = (self.hijack_status + 1).min(HIJACK_COMPLETED);
+        if self.mode == ShuttleMode::Escape {
+            let wait = if self.is_hijacked() {
+                HIJACK_COMPLETION_FLIGHT_SECS
+            } else {
+                self.timer.left(now).unwrap_or(0.0) + HIJACK_FLIGHT_TIME_INCREASE
+            };
+            self.timer.set(now, wait);
+        }
+        self.hijack_status
+    }
 }
 
 /// tg `width`, `height`, `dwidth`, `dheight` of a docking port.
@@ -392,6 +441,8 @@ pub struct EmergencyShuttle {
     pub transit_z: u16,
     /// The last [`initiate_docking`].
     pub last_move: Option<MoveReport>,
+    /// It flew to the Syndicate instead of CentCom (hijacked, or the revolution won).
+    pub syndicate_landing: bool,
 }
 
 #[derive(Resource)]
@@ -435,17 +486,152 @@ impl Plugin for ShuttleServerPlugin {
         });
         if let Some(template) = template {
             info!("emergency shuttle template {}", template.display());
-            app.insert_resource(ShuttleTemplates(vec![template.clone()]));
+            push_template(app, template.clone());
             app.insert_resource(EmergencyTemplate(template));
         }
+        let roundstart = app
+            .world()
+            .get_resource::<MapLoadPlugin>()
+            .and_then(|map| {
+                // Only a real station map: fixture maps name `.dmm` files.
+                map.maps.first().filter(|m| !m.ends_with(".dmm"))?;
+                let path = map.map_paths().into_iter().next()?;
+                let dmm = DmmMap::from_file(&path)
+                    .map_err(|e| warn!("roundstart shuttles of {}: {e}", path.display()))
+                    .ok()?;
+                Some(RoundstartPorts {
+                    source: map.source.clone(),
+                    ports: roundstart_ports(&dmm),
+                })
+            })
+            .unwrap_or_default();
+        app.insert_resource(roundstart);
         app.add_systems(Startup, setup_shuttle)
             .add_systems(Update, tick)
-            .add_plugins(crate::comms_server::CommsServerPlugin);
+            .add_plugins((
+                crate::comms_server::CommsServerPlugin,
+                crate::shuttle_console_server::ShuttleConsoleServerPlugin,
+                crate::escape_pods::EscapePodsPlugin,
+                crate::arrivals::ArrivalsPlugin,
+            ));
     }
 }
 
 #[derive(Resource)]
 struct EmergencyTemplate(PathBuf);
+
+/// Adds `template` to the [`ShuttleTemplates`] the station loads with (plugin build time).
+pub fn push_template(app: &mut App, template: PathBuf) {
+    let world = app.world_mut();
+    match world.get_resource_mut::<ShuttleTemplates>() {
+        Some(mut templates) => templates.0.push(template),
+        None => {
+            world.insert_resource(ShuttleTemplates(vec![template]));
+        }
+    }
+}
+
+/// tg `/obj/docking_port/stationary/load_roundstart`: a stationary port of the station map with
+/// a `roundstart_template` (an escape pod loader has `escape_pod/default` by type).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RoundstartPort {
+    /// 1-based map coordinates (the map's own z).
+    pub x: u32,
+    pub y: u32,
+    pub z: u32,
+    /// The template's `port_id` (`arrival`, `escape_pod`) and id (`arrival_box`).
+    pub port_id: String,
+    pub id: String,
+}
+
+/// The station map's [`RoundstartPort`]s in map order (x fastest, then y, then z), read when the
+/// plugin builds, before the map loads.
+#[derive(Resource, Clone, Debug, Default)]
+pub struct RoundstartPorts {
+    /// The BYOND checkout the templates come from.
+    pub source: PathBuf,
+    pub ports: Vec<RoundstartPort>,
+}
+
+impl RoundstartPorts {
+    /// The ports of templates with `port_id`, with each template's `.dmm`.
+    pub fn of(&self, port_id: &str) -> Vec<(RoundstartPort, PathBuf)> {
+        self.ports
+            .iter()
+            .filter(|p| p.port_id == port_id)
+            .map(|p| {
+                let path = shuttle_template_path(&self.source, &p.port_id, &p.id);
+                (p.clone(), path)
+            })
+            .collect()
+    }
+}
+
+const ESCAPE_POD_LOADER: &str = "/obj/docking_port/stationary/escape_pod";
+const TEMPLATE_ROOT: &str = "/datum/map_template/shuttle/";
+
+/// `/datum/map_template/shuttle/<port_id>/<suffix>` -> `(port_id, "<port_id>_<suffix>")`.
+pub fn template_id(path: &str) -> Option<(String, String)> {
+    let rest = path.trim().strip_prefix(TEMPLATE_ROOT)?;
+    let (port_id, suffix) = rest.rsplit_once('/')?;
+    Some((
+        port_id.to_owned(),
+        format!("{}_{suffix}", port_id.replace('/', "_")),
+    ))
+}
+
+fn port_template(obj: &DmmObject) -> Option<(String, String)> {
+    if !is_under(&obj.path, STATIONARY_PORT_ROOT) {
+        return None;
+    }
+    match obj.var("roundstart_template") {
+        Some(DmValue::Path(path)) => template_id(path),
+        Some(_) => None,
+        // shortcut: no station traits, so never the cramped or luxury pods.
+        None => is_under(&obj.path, ESCAPE_POD_LOADER)
+            .then(|| ("escape_pod".to_owned(), "escape_pod_default".to_owned())),
+    }
+}
+
+/// The [`RoundstartPort`]s of a parsed station map.
+pub fn roundstart_ports(map: &DmmMap) -> Vec<RoundstartPort> {
+    let templates: Vec<Option<(String, String)>> = map
+        .prefabs
+        .iter()
+        .map(|p| p.objects.iter().find_map(port_template))
+        .collect();
+    let mut out = Vec::new();
+    if templates.iter().all(Option::is_none) {
+        return out;
+    }
+    let (sx, sy, sz) = map.size;
+    for z in 1..=sz {
+        for y in 1..=sy {
+            for x in 1..=sx {
+                if let Some(i) = map.index(x, y, z)
+                    && let Some(Some((port_id, id))) = templates.get(i as usize)
+                {
+                    out.push(RoundstartPort {
+                        x,
+                        y,
+                        z,
+                        port_id: port_id.clone(),
+                        id: id.clone(),
+                    });
+                }
+            }
+        }
+    }
+    out
+}
+
+/// The registered stationary dock at map coordinates `(x, y, z)` of the station map.
+pub fn dock_at_map_pos(world: &mut World, x: u32, y: u32, z: u32) -> Option<Entity> {
+    let first_z = world.get_resource::<MapLoadReport>()?.maps.first()?.first_z;
+    let pos = TilePos::new(x as i32, y as i32, first_z + z as u16 - 1);
+    let mut q = world.query_filtered::<(Entity, &TilePos), With<StationaryDock>>();
+    q.iter(world).find(|(_, p)| **p == pos).map(|(e, _)| e)
+}
 
 fn area_path(world: &World, area: Entity) -> Option<&str> {
     world.get::<DmPower>(area).map(|p| p.path.as_str())
@@ -644,6 +830,7 @@ pub(crate) fn setup_shuttle(world: &mut World) {
         centcom_z: shuttle.level_z,
         transit_z: shuttle.transit_z,
         last_move: None,
+        syndicate_landing: false,
     });
 }
 
@@ -672,10 +859,25 @@ pub fn setup_template_shuttle(
     away_id: &str,
     away_name: &str,
 ) -> Option<TemplateShuttle> {
+    setup_template_copy(world, template, 0, port_root, id, away_id, away_name)
+}
+
+/// [`setup_template_shuttle`] for the `nth` (0-based) copy of `template` in
+/// [`ShuttleTemplates`] (one template loaded several times, as escape pods are).
+pub fn setup_template_copy(
+    world: &mut World,
+    template: &std::path::Path,
+    nth: usize,
+    port_root: &str,
+    id: &str,
+    away_id: &str,
+    away_name: &str,
+) -> Option<TemplateShuttle> {
     let Some((level_z, (tw, th, _))) = world.get_resource::<MapLoadReport>().and_then(|r| {
         r.maps
             .iter()
-            .find(|m| m.path == template)
+            .filter(|m| m.path == template)
+            .nth(nth)
             .map(|m| (m.first_z, m.size))
     }) else {
         warn!(
@@ -1228,6 +1430,8 @@ fn tick(world: &mut World) {
             }
         }
         ShuttleStep::Launch => {
+            // Every escape pod still at the station follows it (`on_emergency_launch`).
+            crate::escape_pods::on_emergency_launch(world);
             let result = initiate_docking(world, port, transit);
             log_move(world, "enter transit", Some(result));
             let mut shuttle = world.resource_mut::<EmergencyShuttle>();
@@ -1246,9 +1450,28 @@ fn tick(world: &mut World) {
             );
         }
         ShuttleStep::DockAway => {
+            crate::escape_pods::on_emergency_dock(world);
+            // BandaStation: a won revolution sends it to the Syndicate too.
+            let revolution = world
+                .get_resource::<crate::antag::revolution::server::RevolutionHandler>()
+                .is_some_and(|r| {
+                    r.result == Some(crate::antag::revolution::server::RevResult::Revolution)
+                });
+            let redirect = revolution || world.resource::<EmergencyShuttle>().state.is_hijacked();
+            if redirect {
+                crate::security_level::minor_announce(
+                    world,
+                    "КРИТИЧЕСКАЯ НЕИСПРАВНОСТЬ",
+                    "Обнаружен сбой в навигационных протоколах. Пожалуйста, свяжитесь с \
+                     руководством.",
+                    true,
+                );
+            }
             let result = initiate_docking(world, port, away);
             log_move(world, "dock at CentCom", Some(result));
-            world.resource_mut::<EmergencyShuttle>().state.arrived();
+            let mut shuttle = world.resource_mut::<EmergencyShuttle>();
+            shuttle.syndicate_landing = redirect;
+            shuttle.state.arrived();
         }
     }
 }
@@ -1312,6 +1535,13 @@ pub fn endgame(world: &World) -> bool {
         .is_some_and(|s| s.state.mode == ShuttleMode::Endgame)
 }
 
+/// tg `SSshuttle.emergency.is_hijacked()`.
+pub fn hijacked(world: &World) -> bool {
+    world
+        .get_resource::<EmergencyShuttle>()
+        .is_some_and(|s| s.state.is_hijacked())
+}
+
 /// `EMERGENCY_ESCAPED_OR_ENDGAMED`.
 pub fn evacuated(world: &World) -> bool {
     world
@@ -1328,9 +1558,11 @@ pub fn escape_status(world: &World, mob: Entity) -> (bool, bool) {
     let Some(&pos) = world.get::<TilePos>(mob) else {
         return (false, false);
     };
+    // An escape pod docked at its own CentCom stand-in counts as CentCom.
     let escaped = shuttle.state.escaped_or_endgamed()
         && (pos.z == shuttle.centcom_z
-            || pos.z == shuttle.transit_z && shuttle.state.mode == ShuttleMode::Endgame);
+            || pos.z == shuttle.transit_z && shuttle.state.mode == ShuttleMode::Endgame
+            || crate::escape_pods::at_centcom(world, pos));
     let area = world.resource::<Areas>().area_at(pos);
     let on_shuttle = escaped
         && area.is_some_and(|a| {
@@ -1478,6 +1710,78 @@ mod tests {
         let east = ordered_turfs(TilePos::new(50, 50, 1), Dir::East, size);
         assert_eq!(east[0], TilePos::new(50, 55, 1));
         assert_eq!(angle_dir(angle(Dir::South) + 90), Dir::West);
+    }
+
+    #[test]
+    fn early_launch_and_hijack_stages() {
+        let mut e = Emergency::default();
+        assert!(!e.early_launch(0.0), "not docked");
+        e.request(0.0, 600.0, 1.0);
+        e.check(600.0);
+        e.docked_home(600.0, true, 180.0);
+        assert!(e.early_launch(610.0));
+        assert_eq!(e.timer.left(610.0), Some(ENGINE_START_SECS));
+        assert!(!e.early_launch(611.0), "already launching");
+        assert_eq!(e.check(611.0), None);
+        assert_eq!(e.mode, ShuttleMode::Igniting);
+        assert!(!e.early_launch(612.0), "engines started");
+        assert_eq!(e.check(620.0), Some(ShuttleStep::Launch));
+        e.launched(620.0, 120.0);
+        // In flight: a stage adds 30 s, the last one leaves 10 s.
+        e.hijack_status = 3;
+        assert_eq!(e.hijack_stage(640.0), 4);
+        assert_eq!(e.timer.left(640.0), Some(130.0));
+        assert!(!e.is_hijacked());
+        assert_eq!(e.hijack_stage(650.0), HIJACK_COMPLETED);
+        assert!(e.is_hijacked());
+        assert_eq!(e.timer.left(650.0), Some(HIJACK_COMPLETION_FLIGHT_SECS));
+        assert_eq!(e.hijack_stage(651.0), HIJACK_COMPLETED, "capped");
+        // Docked: stages leave the timer alone.
+        let mut d = Emergency {
+            mode: ShuttleMode::Docked,
+            ..default()
+        };
+        d.timer.set(0.0, 100.0);
+        d.hijack_stage(10.0);
+        assert_eq!(d.timer.left(10.0), Some(90.0));
+    }
+
+    #[test]
+    fn roundstart_templates_from_the_map() {
+        assert_eq!(
+            template_id("/datum/map_template/shuttle/arrival/box"),
+            Some(("arrival".into(), "arrival_box".into()))
+        );
+        assert_eq!(
+            template_id("/datum/map_template/shuttle/mining_common/meta"),
+            Some(("mining_common".into(), "mining_common_meta".into()))
+        );
+        assert_eq!(template_id("/datum/map_template/ruin/x"), None);
+        let map = DmmMap::parse(
+            r#""a" = (/turf/open/space,/area/space)
+"b" = (/obj/docking_port/stationary/escape_pod,/turf/open/space,/area/space)
+"c" = (/obj/docking_port/stationary{roundstart_template = /datum/map_template/shuttle/arrival/box; shuttle_id = "arrival_stationary"},/turf/open/space,/area/space)
+"d" = (/obj/docking_port/stationary{shuttle_id = "x"},/turf/open/space,/area/space)
+
+(1,1,1) = {"
+bab
+cdb
+"}
+"#,
+        )
+        .unwrap();
+        let ports = roundstart_ports(&map);
+        let found: Vec<(u32, u32, &str)> =
+            ports.iter().map(|p| (p.x, p.y, p.id.as_str())).collect();
+        assert_eq!(
+            found,
+            vec![
+                (1, 1, "arrival_box"),
+                (3, 1, "escape_pod_default"),
+                (1, 2, "escape_pod_default"),
+                (3, 2, "escape_pod_default"),
+            ]
+        );
     }
 
     #[test]

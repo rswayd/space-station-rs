@@ -6,7 +6,8 @@
 // Escape and maroon read the emergency shuttle (`crate::shuttle`): escaped is alive on CentCom
 // once the shuttle reached `SHUTTLE_ENDGAME`, or any living mind when the round was ended by
 // force (`SSticker.force_ending`).
-// shortcut: no shuttle hijacking yet, so hijack never succeeds; the shuttle brig is not told apart.
+// Hijack needs every owner alive aboard the hijacked shuttle at CentCom
+// (`crate::shuttle_console_server`). shortcut: the shuttle brig is not told apart.
 
 use bevy::prelude::*;
 use ss13_mapload::DmItem;
@@ -110,7 +111,15 @@ impl Objective {
                 .all(|&owner| considered_escaped(world, owner, end)),
             // `TRAITOR_SUICIDED` is not tracked: any death counts.
             ObjectiveKind::Martyr => owners.iter().all(|&owner| !considered_alive(world, owner)),
-            ObjectiveKind::Hijack => false,
+            // "Requires all owners to escape."
+            ObjectiveKind::Hijack => {
+                crate::shuttle::endgame(world)
+                    && owners.iter().all(|&owner| {
+                        considered_alive(world, owner)
+                            && crate::shuttle::escape_status(world, owner).1
+                    })
+                    && crate::shuttle::hijacked(world)
+            }
             ObjectiveKind::ConvertBrother => owners.len() > 1,
             ObjectiveKind::Custom => true,
         }

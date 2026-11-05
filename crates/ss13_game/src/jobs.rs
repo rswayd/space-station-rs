@@ -507,6 +507,9 @@ pub fn join(world: &mut World, client: Entity, job: usize, latejoin: bool) -> En
     }
     let forced =
         crate::server::dev_spawn(world, client).or_else(|| world.resource::<SpawnPoints>().forced);
+    if latejoin && forced.is_none() {
+        crate::arrivals::require_undocked(world);
+    }
     let pos = forced
         .or_else(|| (!latejoin).then(|| job_spawn(world, &def.title)).flatten())
         .unwrap_or_else(|| crate::server::pick_latejoin(world));
