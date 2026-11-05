@@ -17,6 +17,8 @@ pub const STACK_COMPONENT: &str = "dm_stack";
 pub const TURF_COMPONENT: &str = "dm_turf_build";
 pub const OBJ_COMPONENT: &str = "dm_obj";
 pub const TABLE_COMPONENT: &str = "dm_table";
+/// `/obj/item/stack/sheet/iron`.
+pub const IRON_SHEET: &str = "/obj/item/stack/sheet/iron";
 
 /// Types the construction code spawns or turns turfs into, so `ss13-mapload convert` emits them
 /// even when no converted map uses them. Fixtures convert without them; the game then skips
@@ -42,7 +44,7 @@ pub const CONSTRUCTION_TYPES: [&str; 26] = [
     "/obj/structure/lattice",
     "/obj/structure/lattice/catwalk",
     "/obj/structure/window/fulltile",
-    "/obj/item/stack/sheet/iron",
+    IRON_SHEET,
     "/obj/item/stack/sheet/glass",
     "/obj/item/stack/sheet/plasteel",
     "/obj/item/stack/rods",

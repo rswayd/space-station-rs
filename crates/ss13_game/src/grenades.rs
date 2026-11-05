@@ -55,10 +55,10 @@ const CONCUSSION: &str = "/obj/item/grenade/syndieminibomb/concussion";
 const FRAG: &str = "/obj/item/grenade/frag";
 const FRAG_MEGA: &str = "/obj/item/grenade/frag/mega";
 const CLUSTER: &str = "/obj/item/grenade/clusterbuster";
-const CLUSTER_SEGMENT: &str = "/obj/item/grenade/clusterbuster/segment";
-const SMOKE_EFFECT: &str = "/obj/effect/particle_effect/fluid/smoke/bad";
-const SHRAPNEL: &str = "/obj/projectile/bullet/shrapnel";
-const SHRAPNEL_MEGA: &str = "/obj/projectile/bullet/shrapnel/mega";
+const CLUSTER_SEGMENT: &str = ss13_mapload::runtime::CLUSTERBUSTER_SEGMENT;
+const SMOKE_EFFECT: &str = ss13_mapload::runtime::SMOKE_BAD;
+const SHRAPNEL: &str = ss13_mapload::runtime::SHRAPNEL;
+const SHRAPNEL_MEGA: &str = ss13_mapload::runtime::SHRAPNEL_MEGA;
 
 const ARM_SOUND: &str = "sound/items/weapons/armbomb.ogg";
 const FLASHBANG_SOUND: &str = "sound/items/weapons/flashbang.ogg";

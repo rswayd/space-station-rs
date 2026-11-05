@@ -1256,7 +1256,7 @@ pub fn add_apprentice(world: &mut World, mob: Entity, master: Entity, school: Sc
     }
     if school == School::Healing
         && let Some(staff) =
-            crate::construction::spawn_detached(world, "/obj/item/gun/magic/staff/healing")
+            crate::construction::spawn_detached(world, ss13_mapload::antag::HEALING_STAFF)
     {
         crate::spells::magic_guns::adopt_full(world, staff);
         give(world, mob, staff);

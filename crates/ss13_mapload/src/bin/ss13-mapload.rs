@@ -129,25 +129,6 @@ fn convert_cmd(config: &MapLoadPlugin, mut map_dirs: Vec<PathBuf>) -> anyhow::Re
         collect_dmm(dir, &mut maps).with_context(|| format!("scanning {}", dir.display()))?;
     }
     let mut used = BTreeSet::from([DEFAULT_TURF.to_owned(), DEFAULT_AREA.to_owned()]);
-    used.extend(ss13_mapload::RUNTIME_TYPES.map(str::to_owned));
-    used.extend(ss13_mapload::RUNTIME_CONTAINER_TYPES.map(str::to_owned));
-    used.extend(ss13_mapload::CONSTRUCTION_TYPES.map(str::to_owned));
-    used.extend(ss13_mapload::MEDICAL_RUNTIME_TYPES.map(str::to_owned));
-    used.extend(ss13_mapload::DISPOSAL_RUNTIME_TYPES.map(str::to_owned));
-    used.extend(ss13_mapload::BOT_RUNTIME_TYPES.map(str::to_owned));
-    used.extend(ss13_mapload::WALLMOUNT_RUNTIME_TYPES.map(str::to_owned));
-    used.extend(ss13_mapload::FRAME_RUNTIME_TYPES.map(str::to_owned));
-    used.extend(ss13_mapload::antag::CHANGELING_RUNTIME_TYPES.map(str::to_owned));
-    used.extend(ss13_mapload::mobs::MOB_RUNTIME_TYPES.map(str::to_owned));
-    used.extend(ss13_mapload::antag::CULT_RUNTIME_TYPES.map(str::to_owned));
-    used.extend(ss13_mapload::antag::HERETIC_RUNTIME_TYPES.map(str::to_owned));
-    used.extend(ss13_mapload::silicon::CAMERA_RUNTIME_TYPES.map(str::to_owned));
-    used.extend(ss13_mapload::antag::WIZARD_RUNTIME_TYPES.map(str::to_owned));
-    // The chaplain's gear, the null rod's forms and what rites make (`ss13_game::service`).
-    used.extend(ss13_mapload::service::RELIGION_RUNTIME_TYPES.map(str::to_owned));
-    used.extend(ss13_mapload::service::NULLROD_VARIANTS.map(str::to_owned));
-    used.extend(ss13_mapload::service::HOLY_ARMOR_KITS.map(str::to_owned));
-    used.extend(ss13_mapload::service::MACHINE_BLESSINGS.map(str::to_owned));
     for map in &maps {
         let parsed =
             DmmMap::from_file(map).with_context(|| format!("parsing {}", map.display()))?;
@@ -157,6 +138,15 @@ fn convert_cmd(config: &MapLoadPlugin, mut map_dirs: Vec<PathBuf>) -> anyhow::Re
         }
     }
     let types = DmTypes::read(&config.assets.join("dm_types.json"))?;
+    // What the game spawns by a constant path (`ss13_mapload::runtime`). A path the dump lacks
+    // (renamed upstream) is reported, not fatal; the `runtime_types` asset test fails on it.
+    for path in ss13_mapload::runtime::runtime_types() {
+        if types.types.contains_key(path) {
+            used.insert(path.to_owned());
+        } else {
+            println!("runtime type not in dm_types.json: {path}");
+        }
+    }
     used.extend(ss13_mapload::construct::table_runtime_types(&types));
     used.extend(ss13_mapload::construct::furniture_runtime_types(&types));
     let mut jobs = ss13_mapload::jobs::resolve(&types);
@@ -184,12 +174,11 @@ fn convert_cmd(config: &MapLoadPlugin, mut map_dirs: Vec<PathBuf>) -> anyhow::Re
             .map(str::to_owned),
     );
     let cargo = ss13_mapload::cargo::resolve(&types);
-    // Supply crates, their contents and manifests, bounty cubes and mail are spawned at runtime.
+    // Supply crates, their contents and manifests are spawned at runtime.
     used.extend(
         cargo
             .spawned_types()
             .into_iter()
-            .chain(ss13_mapload::cargo::RUNTIME_TYPES)
             .filter(|p| types.types.contains_key(*p))
             .map(str::to_owned),
     );
@@ -218,35 +207,14 @@ fn convert_cmd(config: &MapLoadPlugin, mut map_dirs: Vec<PathBuf>) -> anyhow::Re
     if let Some(problem) = ss13_mapload::silicon::read_malf_flavor(&config.source, &mut silicon) {
         println!("malf flavor missing: {problem}");
     }
-    // The silicon mobs, the cyborg models and their modules are spawned at runtime.
+    // The cyborg models and their modules are spawned at runtime.
     used.extend(
-        ss13_mapload::silicon::SILICON_TYPES
+        silicon
+            .spawned_types()
             .into_iter()
-            .chain(silicon.spawned_types())
             .filter(|p| types.types.contains_key(*p))
             .map(str::to_owned),
     );
-    // A canister's `relabel` copies another canister type's name and look.
-    used.extend(
-        ss13_mapload::atmos_machine::CANISTER_LABELS
-            .into_iter()
-            .map(|(_, path)| path.to_owned()),
-    );
-    // Cutting a stationary tank open leaves its frame.
-    used.insert(ss13_mapload::atmos_machine::TANK_FRAME.to_owned());
-    // Wrenching pipes, devices and meters off leaves fittings.
-    used.insert(ss13_mapload::atmos_machine::PIPE_FITTING.to_owned());
-    used.insert(ss13_mapload::atmos_machine::PIPE_METER_ITEM.to_owned());
-    // The pipe dispenser and RPD make every recipe's machine.
-    used.insert(ss13_mapload::atmos_machine::PIPE_DISPENSER.to_owned());
-    used.insert("/obj/item/pipe_dispenser".to_owned());
-    for (_, recipes) in ss13_mapload::atmos_machine::ATMOS_PIPE_RECIPES {
-        used.extend(recipes.iter().filter_map(|r| r.path).map(str::to_owned));
-    }
-    // The crystallizer makes its recipes' products.
-    for recipe in ss13_mapload::atmos_machine::CRYSTALLIZER_RECIPES {
-        used.extend(recipe.products.iter().map(|(path, _)| (*path).to_owned()));
-    }
     let conversion = convert(&types, used.iter().map(String::as_str))?;
     let out = config.prototypes_dir().join("dm_types.ron");
     std::fs::create_dir_all(config.prototypes_dir())?;

@@ -380,3 +380,28 @@ fn random_area_name(world: &mut World) -> String {
     let picked = world.resource_mut::<EventRng>().pick(&areas).copied();
     picked.map_or_else(String::new, |a| crate::shuttle::area_name(world, a))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mobs_and_filth_are_runtime_types() {
+        let registry = ss13_mapload::runtime::runtime_types();
+        let severities = [
+            Severity::Minor,
+            Severity::Major,
+            Severity::Critical,
+            Severity::Strange,
+        ];
+        let missing: Vec<&str> = severities
+            .into_iter()
+            .flat_map(|s| s.mobs().iter().chain(s.filth()).copied())
+            .filter(|p| !registry.contains(p))
+            .collect();
+        assert!(
+            missing.is_empty(),
+            "not in ss13_mapload::runtime: {missing:?}"
+        );
+    }
+}

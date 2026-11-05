@@ -241,7 +241,7 @@ pub fn deconstruct(world: &mut World, target: Entity, disassembled: bool) -> boo
         canister_break(world, target, pos);
     }
     let sheets = if disassembled { 10 } else { 5 };
-    crate::construction::spawn_stack(world, "/obj/item/stack/sheet/iron", pos, sheets);
+    crate::construction::spawn_stack(world, ss13_mapload::construct::IRON_SHEET, pos, sheets);
     true
 }
 
