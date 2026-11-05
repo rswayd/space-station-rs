@@ -1,13 +1,15 @@
 //! Brig cell timers over real WebTransport on 127.0.0.1 (`ss13_game::brig::timer`): an
 //! assistant without security access opens the timer but cannot start it; with access, a preset
 //! sets 5 minutes, stopping opens the cell's security airlock, a 2 second timer closes it and
-//! opens it again when it runs out.
+//! opens it again when it runs out. The cell's brig locker locks with every start and unlocks
+//! with every end.
 
 use std::path::{Path, PathBuf};
 
 use bevy::prelude::*;
 use ss13_game::brig::timer::DoorTimer;
 use ss13_game::brig::{BrigTimerData, BrigTimerUi, PRESET, PRESET_SHORT, START, STOP, TIME};
+use ss13_game::closets::Closet;
 use ss13_game::doors::Door;
 use ss13_game::inventory::{IdCard, Inventory};
 use ss13_game::testing::{self, Drive, fixture_map, write_fixture};
@@ -64,6 +66,17 @@ const TYPES: &str = r##"{
     "/obj/machinery/status_display/door_timer": { "parent": "/obj/machinery/status_display",
         "declared_vars": { "name": "door timer", "id": null,
         "req_access": { "list": ["security"] } } },
+    "/obj/structure": { "parent": "/obj", "declared_vars": { "anchored": 1 } },
+    "/obj/structure/closet": { "parent": "/obj/structure", "declared_vars": {
+        "icon": { "resource": "cl.dmi" }, "icon_state": "generic", "density": 1,
+        "anchored": 0, "opened": 0, "locked": 0, "welded": 0, "secure": 0, "icon_door": null,
+        "icon_welded": "welded", "enable_door_overlay": 1, "has_opened_overlay": 1,
+        "has_closed_overlay": 1, "dense_when_open": 0, "wall_mounted": 0, "horizontal": 0,
+        "storage_capacity": 30, "name": "closet" } },
+    "/obj/structure/closet/secure_closet": { "parent": "/obj/structure/closet",
+        "declared_vars": { "locked": 1, "secure": 1, "req_access": { "list": ["security"] } } },
+    "/obj/structure/closet/secure_closet/brig": { "parent": "/obj/structure/closet/secure_closet",
+        "declared_vars": { "id": null, "name": "brig locker" } },
     "/mob": { "parent": "/atom/movable", "declared_vars": { "layer": 4, "density": 1 } },
     "/mob/living": { "parent": "/mob" },
     "/mob/living/carbon": { "parent": "/mob/living" },
@@ -84,18 +97,19 @@ const TYPES: &str = r##"{
   }
 }"##;
 
-/// The player at (2,3), the timer at (3,3), the cell airlock at (5,3).
+/// The player at (2,3), the timer at (3,3), the cell airlock at (5,3), its locker at (4,2).
 const MAP: &str = r##""w" = (/turf/closed/wall,/area/station)
 "f" = (/turf/open/floor,/area/station)
 "s" = (/obj/effect/landmark/start/assistant,/turf/open/floor,/area/station)
 "T" = (/obj/machinery/status_display/door_timer{id = "Cell 1"; name = "Cell 1"},/turf/open/floor,/area/station)
 "A" = (/obj/machinery/door/airlock/security{id = "Cell 1"},/turf/open/floor,/area/station)
+"L" = (/obj/structure/closet/secure_closet/brig{id = "Cell 1"; name = "Cell 1 locker"},/turf/open/floor,/area/station)
 
 (1,1,1) = {"
 wwwwwww
 wfffffw
 wsTfAfw
-wfffffw
+wffLffw
 wwwwwww
 "}
 "##;
@@ -103,6 +117,7 @@ wwwwwww
 const SPAWN: TilePos = TilePos::new(2, 3, 1);
 const TIMER: TilePos = TilePos::new(3, 3, 1);
 const CELL_DOOR: TilePos = TilePos::new(5, 3, 1);
+const LOCKER: TilePos = TilePos::new(4, 2, 1);
 
 fn states() -> Vec<(&'static str, &'static str)> {
     let mut states = vec![
@@ -112,6 +127,7 @@ fn states() -> Vec<(&'static str, &'static str)> {
         ("h.dmi", "human_basic"),
         ("i.dmi", "toy"),
         ("sd.dmi", "frame"),
+        ("cl.dmi", "generic"),
     ];
     for f in ["closed", "opening", "open", "closing"] {
         states.push(("a.dmi", f));
@@ -127,6 +143,7 @@ fn fixture_assets(test: &str) -> PathBuf {
         "/obj/effect/landmark/start/assistant",
         "/obj/machinery/status_display/door_timer",
         "/obj/machinery/door/airlock/security",
+        "/obj/structure/closet/secure_closet/brig",
         "/turf/open/floor",
         "/turf/closed/wall",
         "/turf/open/space/basic",
@@ -251,6 +268,10 @@ fn cell_timer_closes_and_releases_the_cell() {
     let door = s.find::<Door>(CELL_DOOR);
     assert_eq!(s.get::<DoorTimer>(timer).doors, vec![door]);
     assert!(s.dense(door));
+    let locker = s.find::<Closet>(LOCKER);
+    assert_eq!(s.get::<DoorTimer>(timer).closets, vec![locker]);
+    assert_eq!(s.get::<Closet>(locker).id.as_deref(), Some("Cell 1"));
+    let locked = |s: &Station| s.get::<Closet>(locker).locked;
 
     let window = s.open_window(timer);
     // No security access: refused.
@@ -270,9 +291,11 @@ fn cell_timer_closes_and_releases_the_cell() {
         s.latest(window).is_some_and(|d| d.timing && d.minutes == 4)
     });
     assert!(s.dense(door), "a closed cell door stays closed");
+    assert!(locked(&s), "the locker locks");
 
     s.act(0, window, STOP, &[]);
     s.run_until("stopping releases the cell", |s| !s.dense(door));
+    assert!(!locked(&s), "stopping unlocks the locker");
     assert!(!s.get::<DoorTimer>(timer).timing);
     assert_eq!(s.get::<DoorTimer>(timer).duration, 0.0);
 
@@ -283,8 +306,10 @@ fn cell_timer_closes_and_releases_the_cell() {
     });
     s.act(0, window, START, &[]);
     s.run_until("starting closes the cell", |s| s.dense(door));
+    assert!(locked(&s));
     s.run_until_for(5.0, "the timer runs out", |s| {
         !s.get::<DoorTimer>(timer).timing
     });
     s.run_until("running out releases the cell", |s| !s.dense(door));
+    assert!(!locked(&s), "running out unlocks the locker");
 }

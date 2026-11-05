@@ -159,6 +159,7 @@
 //! | 4400 | `science::experi_scanner::pre_attack` (not on living mobs) |
 //! | 4500 | `construction::item_interaction` |
 //! | 4600 | core: a cyborg module or `NoDrop` item stops here |
+//! | 4650 | `lockbox::item_interaction` (`closets` plugin) |
 //! | 4700 | core: a storage takes the held item |
 //! | 4800 | `cargo::bounty::item_interaction` |
 //! | 4900 | `brig::prisoner::item_interaction` |

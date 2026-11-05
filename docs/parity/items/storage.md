@@ -77,7 +77,7 @@
 Локбоксы открываются ID с доступом (коробки медалей, имплантов лояльности, кластербангов); защищённые кейсы — кодовым замком; ломаются емагом.
 
 - **Код:** [`/obj/item/storage/lockbox`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/storage/lockbox.dm#L1), [`/obj/item/storage/briefcase/secure`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/storage/briefcase.dm#L86), [`/datum/component/lockable_storage`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/lockable_storage.dm#L7), [`/obj/item/storage/briefcase`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/storage/briefcase.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/storage.rs`: «no ... locked storages»
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/lockbox.rs`, `crates/ss13_mapload/src/contents.rs` (`DmLockbox`): локбоксы (медали, импланты, кластербанги, кейс заказа карго) появляются запертыми, ID с доступом (у кейса заказа — карта счёта покупателя) отпирает/запирает, запертый не открывается, не принимает и не вытряхивает (`crate::storage`), спрайт замка, емаг ломает навсегда; нет крышки коробки медалей и их оверлеев, ограничения «только медали», защищённых кейсов с кодом
 
 ### Кошельки
 Кошелёк в слоте ID: держит ID-карту, деньги, фото; доступ берётся из карты внутри, на спрайте видна карта.
