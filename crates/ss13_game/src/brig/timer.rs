@@ -3,15 +3,17 @@
 //! `BrigTimer`. Every act needs the timer's access (`allowed(usr)`, `ACCESS_SECURITY`).
 //!
 //! At map load a timer links the brig windoors (`/obj/machinery/door/window/brigdoor`) and
-//! security airlocks with its `id` within 20 tiles, and the flashers with it (`urange(20)`).
-//! Starting closes the open doors, stopping or running out opens the closed ones; running out
-//! also announces the release on the security channel. The timer is at most 30 minutes, with
+//! security airlocks with its `id` within 20 tiles, and the flashers and brig lockers
+//! (`secure_closet/brig`) with it (`urange(20)`). Starting closes the open doors and closes and
+//! locks the lockers (unless broken), stopping or running out opens the closed doors and
+//! unlocks the closed lockers; running out also announces the release on the security channel. The timer is at most 30 minutes, with
 //! BandaStation's 5/10/15 minute presets.
 //!
 //! Cost: a pass over the running timers per tick (a handful per map).
-// shortcut: the display's text is not drawn (no maptext; examine reads it); the brig lockers
-// (`secure_closet/brig` with the `id`) are not locked (closets carry no `id`); no AAS config
-// of the announcement (tg's default line), no investigate logs, no silicon access.
+// shortcut: the display's text is not drawn (no maptext; examine reads it); no AAS config
+// of the announcement (tg's default line), no investigate logs, no silicon access. tg breaks a
+// timer that links only lockers (`atom_break` when no doors and no flashers); not ported, the
+// lockers still follow it.
 
 use bevy::ecs::message::MessageCursor;
 use bevy::ecs::system::SystemParamItem;
@@ -41,6 +43,7 @@ pub const LONG_SECS: f64 = 15.0 * 60.0;
 const LINK_RANGE: u32 = 20;
 const BRIGDOOR: &str = "/obj/machinery/door/window/brigdoor";
 const SECURITY_AIRLOCK: &str = "/obj/machinery/door/airlock/security";
+const BRIG_CLOSET: &str = "/obj/structure/closet/secure_closet/brig";
 
 /// A door timer: its links, access and countdown.
 #[derive(Component, Clone, Debug, Default, PartialEq)]
@@ -50,6 +53,8 @@ pub struct DoorTimer {
     pub req_one_access: Vec<String>,
     pub doors: Vec<Entity>,
     pub flashers: Vec<Entity>,
+    /// `closets`: the brig lockers with the timer's `id`.
+    pub closets: Vec<Entity>,
     /// `activation_time`; `None` is tg's 0.
     pub activation_time: Option<f64>,
     /// `timer_duration`, seconds.
@@ -81,7 +86,8 @@ impl Plugin for DoorTimerPlugin {
     }
 }
 
-/// `door_timer/Initialize`: the doors and flashers with the timer's `id` within 20 tiles.
+/// `door_timer/Initialize`: the doors, flashers and brig lockers with the timer's `id` within
+/// 20 tiles.
 fn link_timers(world: &mut World) {
     let mut q = world.query::<(Entity, &DmWallMount, &TilePos)>();
     let mut timers = Vec::new();
@@ -104,6 +110,12 @@ fn link_timers(world: &mut World) {
         })
         .map(|(e, d, _, &p)| (e, d.id.clone(), p))
         .collect();
+    let mut q = world.query::<(Entity, &crate::closets::Closet, &DmObj, &TilePos)>();
+    let closets: Vec<(Entity, String, TilePos)> = q
+        .iter(world)
+        .filter(|(_, _, o, _)| is_under(&o.path, BRIG_CLOSET))
+        .filter_map(|(e, c, _, &p)| Some((e, c.id.clone()?, p)))
+        .collect();
     let near = |list: &[(Entity, String, TilePos)], id: &str, at: TilePos| -> Vec<Entity> {
         list.iter()
             .filter(|(_, i, p)| i == id && at.chebyshev(*p).is_some_and(|d| d <= LINK_RANGE))
@@ -112,9 +124,13 @@ fn link_timers(world: &mut World) {
     };
     for (e, dm, pos) in timers {
         let id = (!dm.id.is_empty()).then(|| dm.id.clone());
-        let (linked_doors, linked_flashers) = match id.as_deref() {
-            Some(id) => (near(&doors, id, pos), near(&flashers, id, pos)),
-            None => (Vec::new(), Vec::new()),
+        let (linked_doors, linked_flashers, linked_closets) = match id.as_deref() {
+            Some(id) => (
+                near(&doors, id, pos),
+                near(&flashers, id, pos),
+                near(&closets, id, pos),
+            ),
+            None => (Vec::new(), Vec::new(), Vec::new()),
         };
         world.entity_mut(e).insert(DoorTimer {
             id,
@@ -122,6 +138,7 @@ fn link_timers(world: &mut World) {
             req_one_access: dm.req_one_access.clone(),
             doors: linked_doors,
             flashers: linked_flashers,
+            closets: linked_closets,
             ..default()
         });
     }
@@ -309,19 +326,20 @@ pub fn set_timer(world: &mut World, timer: Entity, secs: f64) {
     }
 }
 
-/// `timer_start()`: counting from now, the open doors close. False without power.
+/// `timer_start()`: counting from now, the open doors close, the lockers lock. False without
+/// power.
 pub fn timer_start(world: &mut World, timer: Entity) -> bool {
     if world.get::<Unpowered>(timer).is_some() {
         return false;
     }
     let t = now(world);
-    let doors = {
+    let (doors, closets) = {
         let Some(mut state) = world.get_mut::<DoorTimer>(timer) else {
             return false;
         };
         state.activation_time = Some(t);
         state.timing = true;
-        state.doors.clone()
+        (state.doors.clone(), state.closets.clone())
     };
     for door in doors {
         with_door(world, door, |d, appearance, ctx| {
@@ -329,11 +347,15 @@ pub fn timer_start(world: &mut World, timer: Entity) -> bool {
             ((), moved)
         });
     }
+    for closet in closets {
+        crate::closets::timer_lock(world, closet);
+    }
     true
 }
 
-/// `timer_end(forced)`: the timer resets, the closed doors open; not `forced` (it ran out), the
-/// release is announced on the security channel. False without power.
+/// `timer_end(forced)`: the timer resets, the closed doors open, the closed lockers unlock; not
+/// `forced` (it ran out), the release is announced on the security channel. False without
+/// power.
 pub fn timer_end(world: &mut World, timer: Entity, forced: bool) -> bool {
     if world.get::<Unpowered>(timer).is_some() {
         return false;
@@ -341,20 +363,23 @@ pub fn timer_end(world: &mut World, timer: Entity, forced: bool) -> bool {
     if !forced {
         announce_release(world, timer);
     }
-    let doors = {
+    let (doors, closets) = {
         let Some(mut state) = world.get_mut::<DoorTimer>(timer) else {
             return false;
         };
         state.timing = false;
         state.activation_time = None;
         state.duration = 0.0;
-        state.doors.clone()
+        (state.doors.clone(), state.closets.clone())
     };
     for door in doors {
         with_door(world, door, |d, appearance, ctx| {
             let moved = ctx.open(d, appearance, false);
             ((), moved)
         });
+    }
+    for closet in closets {
+        crate::closets::timer_unlock(world, closet);
     }
     true
 }

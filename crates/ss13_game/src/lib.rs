@@ -291,6 +291,8 @@ pub mod lobby;
 #[cfg(feature = "client")]
 pub mod lobby_client;
 #[cfg(feature = "server")]
+pub mod lockbox;
+#[cfg(feature = "server")]
 pub mod loot;
 #[cfg(feature = "server")]
 pub mod machine_frame;

@@ -78,7 +78,7 @@ pub use cable::DmCable;
 pub use circuit::{CircuitPart, DmCircuit, DmMachine, FRAME_RUNTIME_TYPES};
 pub use clothing::{DmClothing, DmTank};
 pub use construct::{CONSTRUCTION_TYPES, DmObj, DmStack, DmTable, DmTool, DmTurfBuild};
-pub use contents::{DmCloset, DmContents, DmStorage, DmWeight, Fill, PickArm};
+pub use contents::{DmCloset, DmContents, DmLockbox, DmStorage, DmWeight, Fill, PickArm};
 pub use dispenser::DmChemDispenser;
 pub use disposal::{DISPOSAL_RUNTIME_TYPES, DmMailSort};
 pub use dock::{DmDockingPort, ShuttleTemplates};
@@ -288,6 +288,7 @@ impl Plugin for DmProtoPlugin {
             .register_proto_component::<turf_damage::DmTurfDamage>("dm_turf_damage")
             .register_proto_component::<DmAtmosDevice>("dm_atmos_device")
             .register_proto_component::<DmCloset>("dm_closet")
+            .register_proto_component::<DmLockbox>("dm_lockbox")
             .register_proto_component::<DmContents>("dm_contents")
             .register_proto_component::<DmStorage>("dm_storage")
             .register_proto_component::<DmWeight>("dm_weight")

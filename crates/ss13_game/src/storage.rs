@@ -93,6 +93,8 @@ pub enum Refusal {
     Itself,
     /// Not a type this storage takes (an RPED: parts, boards and a few stacks).
     CantHold,
+    /// A locked lockbox (`crate::lockbox`).
+    Locked,
 }
 
 /// What [`fits`] needs to know about the item and the container.
@@ -105,8 +107,9 @@ pub struct Candidate {
 
 /// tg `/datum/storage/proc/can_insert` for the rules that exist here: weight class, slots,
 /// total weight, anchoring, nesting (`allow_big_nesting = FALSE`) and the outer storage.
-// shortcut: no `can_hold`/`cant_hold` type lists, `exception_hold`, `TRAIT_NODROP` or locked
-// storages; add them with the storages that use them (belts, holsters, lockboxes).
+// shortcut: no `can_hold`/`cant_hold` type lists (the medal box takes anything), `exception_hold`
+// or `TRAIT_NODROP`; add them with the storages that use them (belts, holsters). A locked
+// lockbox is refused in [`can_insert`].
 pub fn fits(
     storage: &Storage,
     container_w_class: u8,
@@ -152,6 +155,9 @@ pub fn can_insert(world: &World, storage: Entity, item: Entity) -> Result<(), Re
     let Some(limits) = world.get::<Storage>(storage) else {
         return Err(Refusal::TooBig);
     };
+    if crate::lockbox::is_locked(world, storage) {
+        return Err(Refusal::Locked);
+    }
     let Some(dm) = world.get::<DmItem>(item) else {
         return Err(Refusal::TooBig);
     };
@@ -415,10 +421,12 @@ pub fn finish_item(world: &mut World, item: Entity, depth: u32) {
     if let Some(card) = card {
         world.entity_mut(item).insert(card);
     }
+    // Filled before it locks: the lock does not apply to its own contents program.
     if let Some(storage) = storage {
         world.entity_mut(item).insert(storage);
         populate_storage(world, item, depth);
     }
+    crate::lockbox::init(world, item);
 }
 
 /// tg `/obj/item/storage/Initialize` -> `PopulateContents`.
@@ -472,6 +480,8 @@ pub fn click_storage(world: &mut World, client: Entity, mob: Entity, storage: En
     };
     match inventory.active_item() {
         None => open_view(world, client, mob, storage),
+        // An ID on a lockbox toggles its lock instead of going in.
+        Some(held) if crate::lockbox::item_interaction(world, client, held, storage) => {}
         Some(held) => {
             insert_from_hand(world, held, storage);
         }
@@ -512,10 +522,11 @@ pub fn open_view(world: &mut World, client: Entity, mob: Entity, storage: Entity
 }
 
 /// Whether `mob` can reach into `storage` right now: it holds or wears it, or it lies on a tile
-/// next to the mob (tg `CanReach`).
+/// next to the mob (tg `CanReach`), and it is not a locked lockbox (tg `locked` storage shows,
+/// gives and dumps nothing; locking it closes the views).
 // shortcut: storages inside other storages are not opened (tg reaches into nested ones).
 pub fn reachable(world: &World, mob: Entity, storage: Entity) -> bool {
-    if world.get::<Storage>(storage).is_none() {
+    if world.get::<Storage>(storage).is_none() || crate::lockbox::is_locked(world, storage) {
         return false;
     }
     if world.get::<CarriedBy>(storage).is_some_and(|c| c.0 == mob) {

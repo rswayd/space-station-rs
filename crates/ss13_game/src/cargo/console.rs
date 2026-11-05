@@ -593,6 +593,14 @@ fn add_item(
             return false;
         }
     }
+    if def.has(ss13_mapload::cargo::order_flags::GOODY) && !state.self_paid {
+        machine_say(
+            world,
+            console,
+            "ERROR: Small crates may only be purchased by private accounts.",
+        );
+        return false;
+    }
     let to_requests = state.request_only && !state.self_paid;
     let mut reason_text = String::new();
     let mut personal_department = None;
