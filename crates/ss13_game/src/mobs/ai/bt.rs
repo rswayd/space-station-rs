@@ -56,6 +56,8 @@ pub enum Cond {
     Bot(crate::bots::ai::BotCond),
     /// The robot customer's state (`crate::restaurant`).
     Customer(crate::restaurant::CustomerCond),
+    /// Pet command, turtle ability and breeding decorators ([`super::fauna`]).
+    Fauna(super::fauna::FaunaCond),
 }
 
 impl Cond {
@@ -73,6 +75,7 @@ impl Cond {
                 .is_some_and(|d| d <= max),
             Self::Bot(ref cond) => cond.check(ctx),
             Self::Customer(cond) => cond.check(ctx),
+            Self::Fauna(cond) => cond.check(ctx),
         }
     }
 }

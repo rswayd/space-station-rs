@@ -86,7 +86,7 @@ fn send_seen(world: &mut World, actor: Entity, target: Entity, pos: TilePos, see
     }
 }
 
-fn name_of(world: &World, e: Entity) -> String {
+pub(super) fn name_of(world: &World, e: Entity) -> String {
     world
         .get::<Name>(e)
         .map(|n| n.as_str().to_owned())
@@ -104,7 +104,13 @@ fn capitalize(s: &str) -> String {
 }
 
 /// Applies `amount` of `kind` to a living mob and updates its stat; `zone` for carbons.
-fn hurt(world: &mut World, mob: Entity, kind: DamageType, amount: f32, zone: Option<BodyZone>) {
+pub(super) fn hurt(
+    world: &mut World,
+    mob: Entity,
+    kind: DamageType,
+    amount: f32,
+    zone: Option<BodyZone>,
+) {
     let mut e = world.entity_mut(mob);
     let (Some(mut health), Some(stat)) = (e.get::<Health>().cloned(), e.get::<Stat>().copied())
     else {
@@ -176,7 +182,7 @@ fn attacked_by_humans(
             Some((item, dm)) => {
                 // tg `basic_eating/try_feed` (`COMSIG_ATOM_ITEM_INTERACTION`, before the item's
                 // own use): out of combat mode the mob eats what it likes.
-                if !combat.0 && super::eating::try_feed(world, mob, item) {
+                if !combat.0 && super::eating::try_feed(world, mob, item, user) {
                     world
                         .entity_mut(user)
                         .insert(NextMove(now + CLICK_CD_MELEE));
@@ -236,6 +242,7 @@ fn attacked_by_humans(
                     },
                 );
                 pet_bonus(world, mob, &basic);
+                super::parrot::on_pet(world, mob);
             }
             None => {
                 world

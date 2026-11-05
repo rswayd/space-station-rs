@@ -1,12 +1,12 @@
 # Прочие basic-мобы
-Мобы антагонистов, руин, событий и отделов: ксеноморфы-NPC, миньоны блоба, конструкты, стражи, призывы еретика, слаймы, дроны, бойцы-NPC. Сами антагонисты описаны в каталоге антагонистов; здесь — только мобы. В ss13-rs ничего из этого нет.
+Мобы антагонистов, руин, событий и отделов: ксеноморфы-NPC, миньоны блоба, конструкты, стражи, призывы еретика, слаймы, дроны, бойцы-NPC. Сами антагонисты описаны в каталоге антагонистов; здесь — только мобы.
 
 ### Ксеноморфы-NPC
 Неигровые ксеноморфы руин и событий: дрон, страж, королева (большая), горничная-ксено.
 
 - **Код:** [`/mob/living/basic/alien`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/alien/_alien.dm#L1), [`/mob/living/basic/alien/queen`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/alien/queen.dm#L1)
 - **BandaStation:** [`modular_bandastation/mobs/code/simple_animal/hostile/alien.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/mobs/code/simple_animal/hostile/alien.dm#L1) — переводы
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/mobs/ai/trees.rs`: дрон и обычный ксеноморф нападают на чужих фракции вблизи (`melee_alien_combat`); страж и королева только бродят (кислотных снарядов нет); нет сорняков, яиц, ломания препятствий
 
 _«Миньоны блоба» описано в [../antagonists/blob.md](../antagonists/blob.md)._
 
@@ -14,7 +14,7 @@ _«Миньоны блоба» описано в [../antagonists/blob.md](../ant
 Враждебные клоуны (Клоунский мир, сатирические руины): смазочный, хонклинг, плотяной клоун, длиннолицый, клоунохалк.
 
 - **Код:** [`/mob/living/basic/clown`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/clown/clown.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/mobs/ai/trees.rs`: клоуны (и `clown/murder`) бьют обидчиков и хонкают фразами контроллера (`simple_retaliate_combat`); нет смазки, способностей и превращений вариантов
 
 ### Конструкты и тени культа
 Конструкты культа из оболочек и камней душ: артифицер (строит, лечит), джаггернаут (танк), призрак (телепорт), протеон, жнец (Нар-Си); ангельские/мистические варианты, тень в камне душ.
@@ -51,7 +51,7 @@ _«Ремонтные дроны» описано в [../silicon/drones.md](../s
 
 - **Код:** [`/mob/living/basic/mimic`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/ruin_defender/mimic/mimic.dm#L10), [`/mob/living/basic/living_floor`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/ruin_defender/living_floor.dm#L9), [`/mob/living/basic/living_limb_flesh`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/ruin_defender/flesh.dm#L17), [`/mob/living/basic/fleshblob`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/ruin_defender/blob_of_flesh.dm#L11), [`/mob/living/basic/mad_piano`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/ruin_defender/mad_piano.dm#L4), [`/mob/living/basic/skeleton`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/ruin_defender/skeleton.dm#L1), [`/mob/living/basic/stickman`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/ruin_defender/stickman.dm#L1), [`/mob/living/basic/wizard`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/ruin_defender/wizard/wizard.dm#L1), [`/mob/living/basic/dark_wizard`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/ruin_defender/dark_wizard.dm#L2), [`/mob/living/basic/zombie`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/ruin_defender/zombie.dm#L2), [`/mob/living/basic/cybersun_ai_core`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/ruin_defender/cybersun_aicore.dm#L6)
 - **BandaStation:** [`modular_bandastation/mobs/code/simple_animal/hostile/undead.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/mobs/code/simple_animal/hostile/undead.dm#L1) — переводы зомби
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/mobs/ai/trees.rs`, `crates/ss13_game/src/mobs/ranged.rs`: стикмены (и стрелок 9 мм, держит 4-6 клеток), плотяной шар, безумное пианино, скелеты (едят свою еду), зомби (стонут фразами) нападают на чужих фракции; нет мимиков, живого пола, куска плоти, волшебников, ИИ-ядра Киберсана, ломания препятствий
 
 ### Иллюзии
 Копии моба (от бутылки иллюзий, способностей): толкающие, убегающие, миражи.

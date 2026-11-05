@@ -349,6 +349,7 @@ pub(super) fn step_movers(world: &mut World) {
             || stat.is_some_and(|s| *s != Stat::Conscious)
             || (pulled && c.traits & STOP_MOVING_WHEN_PULLED != 0)
             || crate::bots::busy(world, e)
+            || crate::mobs::farm::immobilized(world, e)
         {
             continue;
         }

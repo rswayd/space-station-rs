@@ -17,10 +17,17 @@
 //! - `defense`: humans' hands and items on basic mobs (tg `attack_hand`, `attacked_by`), basic
 //!   mob melee (tg `melee_attack` -> `attack_animal`).
 //! - `spawn`: round-start vermin on exposed wires (tg `SSminor_mapping.trigger_migration`).
+//! - `pets` (friends, taming, pet commands, breeding), `farm` (udders, tipping, eggs, chicks),
+//!   `parrot` (speech learning), `critters` (crabs, turtles), `ranged` (shooting mobs).
 
 pub mod ai;
+pub mod critters;
 pub mod defense;
 pub mod eating;
+pub mod farm;
+pub mod parrot;
+pub mod pets;
+pub mod ranged;
 pub mod spawn;
 
 use std::collections::HashMap;
@@ -106,7 +113,7 @@ pub fn same_faction(world: &World, a: Entity, b: Entity) -> bool {
             .map_or_else(|| vec![Faction::NEUTRAL.to_owned()], |f| f.0.clone())
     };
     let fb = of(b);
-    of(a).iter().any(|f| fb.contains(f))
+    of(a).iter().any(|f| fb.contains(f)) || pets::allied(world, a, b)
 }
 
 /// tg `bodytemperature` of a basic mob, kelvin.
@@ -134,6 +141,10 @@ impl Plugin for MobsServerPlugin {
             .add_systems(PostStartup, spawn::roundstart_vermin);
         defense::build(app);
         ai::build(app);
+        farm::build(app);
+        pets::build(app);
+        parrot::build(app);
+        critters::build(app);
     }
 }
 
@@ -276,11 +287,17 @@ fn attach(world: &mut World, entity: Entity) {
     if let (Some([r, g, b]), Some(mut appearance)) = (tint, world.get_mut::<Appearance>(entity)) {
         appearance.color = Some([r, g, b, 255]);
     }
+    // Gender first: a goat's udder depends on it.
+    pets::attach(world, entity, &def);
+    farm::attach(world, entity, &def);
+    parrot::attach(world, entity, &def);
+    critters::attach(world, entity, &def);
+    ranged::attach(world, entity, &def);
     set_look(world, entity, false);
 }
 
 /// `icon_living` or `icon_dead`, with the carp's mouth layer.
-fn set_look(world: &mut World, entity: Entity, dead: bool) {
+pub(crate) fn set_look(world: &mut World, entity: Entity, dead: bool) {
     let Some(basic) = world.get::<BasicMob>(entity).cloned() else {
         return;
     };
@@ -552,6 +569,8 @@ pub fn examine_lines(world: &World, mob: Entity, lines: &mut Vec<crate::examine:
         lines.push((Span::Italics, desc));
     }
     crate::bots::examine_lines(world, mob, lines);
+    farm::examine_lines(world, mob, lines);
+    critters::examine_lines(world, mob, lines);
     if world.get::<Stat>(mob) == Some(&Stat::Dead) {
         // tg `span_deadsay`, untranslated in BandaStation; the plural pronoun of
         // `p_they()` without a gender.

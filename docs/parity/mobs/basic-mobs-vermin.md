@@ -6,7 +6,7 @@
 
 - **Код:** [`/mob/living/basic/mouse`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/vermin/mouse.dm#L1), [`/mob/living/basic/mouse/rat`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/vermin/mouse.dm#L322)
 - **BandaStation:** [`modular_bandastation/mobs/code/simple_animal/friendly/mouse.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/mobs/code/simple_animal/friendly/mouse.dm#L1) — шерстистая, заводная, «фабричная», джет-мыши; [`modular_bandastation/mobs/code/simple_animal/hostile/rat.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/mobs/code/simple_animal/hostile/rat.dm#L1) — серые/белые/ирландские крысы
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/mobs`: 10 мышей на открытых проводах станции в начале раунда (`SSminor_mapping`), окрас форка, бегут от людей, «Сквик!» под ногами, грызут провода (под током 85% гибнут, провод режется в моток), умирают в предмет «мертвая мышь», кошки их ловят, змеи и ящеры их едят; крысы (`mouse_rat.bt.json`) нападают на всех не-крыс, грызут провода и пищат фразами форка (со звуком); нет сыра, Короля крыс, переноски в руках, ломания препятствий
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/mobs`: 10 мышей на открытых проводах станции в начале раунда (`SSminor_mapping`), окрас форка, бегут от людей, «Сквик!» под ногами, грызут провода (под током 85% гибнут, провод режется в моток), умирают в предмет «мертвая мышь», кошки их ловят, змеи и ящеры их едят; крысы (`mouse_rat.bt.json`) нападают на всех не-крыс, грызут провода и пищат фразами форка (со звуком); мыши приручаются сыром (нейтральны и следуют за другом, команды «сидеть/гулять/за мной», `crate::mobs::pets`), Том ручной сразу; нет сыра в остальном, Короля крыс, переноски в руках, ломания препятствий
 
 ### Тараканы
 Переживают взрывы и радиацию, давятся ногой; варианты: канализационный, кровавый, хауберочь (с шипом), глокроуч (стреляет), бандитские.
@@ -20,7 +20,7 @@
 
 - **Код:** [`/mob/living/basic/mothroach`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/vermin/mothroach/mothroach.dm#L1)
 - **BandaStation:** [`modular_bandastation/mobs/code/simple_animal/friendly/ce_mothroach.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/mobs/code/simple_animal/friendly/ce_mothroach.dm#L1), [`modular_bandastation/mobs/code/simple_animal/friendly/wrynroach.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/mobs/code/simple_animal/friendly/wrynroach.dm#L1) — мотылеплотва СИ и вринроуч
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/mobs/ai/trees.rs`, `crates/ss13_game/src/mobs/eating.rs`: бродит, трепещет (`random_speech/mothroach`), убегает от обидчиков, находит и съедает одежду с пола (раз в минуту) и из рук; нет команд, ношения на голове и в руках, барной версии
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/mobs/ai/trees.rs`, `crates/ss13_game/src/mobs/eating.rs`: бродит, трепещет (`random_speech/mothroach`), убегает от обидчиков, находит и съедает одежду с пола (раз в минуту) и из рук, друзьям подчиняется командам «сидеть/гулять/за мной» (подружиться без зелья разума нельзя); нет трюков, ношения на голове и в руках, барной версии
 
 ### Ящерицы и аксолотли
 Ящерицы едят тараканов и мелких насекомых; космическая ящерица; аксолотль.
@@ -41,7 +41,7 @@
 
 - **Код:** [`/mob/living/basic/crab`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/vermin/crab.dm#L2)
 - **BandaStation:** [`modular_bandastation/mobs/code/simple_animal/friendly/crab.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/mobs/code/simple_animal/friendly/crab.dm#L1) — старый, морской, королевский краб
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/mobs/critters.rs`, `crates/ss13_game/src/mobs/ai/trees.rs`: ходят боком (поворот на 90° при шаге вперёд/назад, `sideway_movement`), охотятся на мобов меньше себя без учёта фракций, бьют обидчиков и убегают от них раненными (`ai_flee_while_injured`); Кофе, Джон, злой краб, Креб — по своему типу; нет плавания, речи «по-крабьи» (`crustacean`), крабов форка сверх ветки tg
 
 ### Бабочки и космические летучие мыши
 Декоративные бабочки (временные на Лаваленде), летучие мыши кусают и летают через космос.
@@ -61,4 +61,4 @@
 
 - **Код:** [`/mob/living/basic/stoat`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/stoats/stoat.dm#L1), [`/mob/living/basic/turtle`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/turtle/turtle.dm#L8)
 - **BandaStation:** [`modular_bandastation/mobs/code/simple_animal/friendly/snail.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/mobs/code/simple_animal/friendly/snail.dm#L43) — правки черепахи
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/mobs/critters.rs`, `crates/ss13_game/src/mobs/ai/trees.rs`: черепаха ест семена плодовых растений и через 30 с выплёвывает плод (случайные семена — через 20 с), пьёт удобрения из ёмкости (1,5 с, 5 ед.), дерево на панцире растёт по удобрениям (лечащее / мутирующее / против вредителей, 250) и меняет оверлей; выросшее раз в 2 мин даёт 6 импульсов по 3 с (лотки: +5 здоровья / +1 нестабильности / −2 сорняков; 20 урона тараканам и крысам), бодает ноги людей и нюхает растения раз в минуту, осмотр дерева; нет счастья (`express_happiness`), отражения спрайта; горностаев нет

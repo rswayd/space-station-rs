@@ -126,12 +126,14 @@ pub fn is_food(world: &World, thing: Entity, eating: &Eating) -> bool {
         .map(|b| b.def.path.as_str())
         .or_else(|| e.get::<ss13_mapload::DmItem>().map(|i| i.path.as_str()))
         .or_else(|| e.get::<ss13_mapload::DmObj>().map(|o| o.path.as_str()));
-    path.is_some_and(|p| {
+    let listed = path.is_some_and(|p| {
         eating
             .foods
             .iter()
             .any(|root| ss13_mapload::fidelity::is_under(p, root))
-    })
+    });
+    // The turtle's `pre_eat_food`: only seeds of plants that bear food.
+    listed && (!std::ptr::eq(eating, &TURTLE) || super::critters::turtle_accepts(world, thing))
 }
 
 /// tg `pickup_item` on a food target: on a turf (not carried), and never a player's mob (tg
@@ -152,8 +154,21 @@ pub fn eat(world: &mut World, eater: Entity, food: Entity) -> Option<f64> {
     if !is_food(world, food, eating) {
         return None;
     }
-    let &pos = world.get::<TilePos>(eater)?;
     let now = world.resource::<Time>().elapsed_secs_f64();
+    if std::ptr::eq(eating, &TURTLE) {
+        super::critters::turtle_ate(world, eater, food);
+    }
+    if !bite(world, eater, food, eating.heal) {
+        return None;
+    }
+    Some(now + eating.cooldown)
+}
+
+/// `finish_eating`: the bite message and sound, the heal, the food gone (one of a stack).
+pub fn bite(world: &mut World, eater: Entity, food: Entity, heal: f32) -> bool {
+    let Some(&pos) = world.get::<TilePos>(eater) else {
+        return false;
+    };
     let mut rng = CombatRng(world.resource::<CombatRng>().0);
     // tg `pick("bite","chew","nibble","gnaw","gobble","chomp")`, in BandaStation's
     // `[eat_verbs]` third person.
@@ -180,10 +195,10 @@ pub fn eat(world: &mut World, eater: Entity, food: Entity) -> Option<f64> {
         .next()
         .map(|c| c.to_uppercase().chain(chars).collect())
         .unwrap_or_default();
-    if eating.heal > 0.0
+    if heal > 0.0
         && let Some(mut health) = world.get_mut::<Health>(eater)
     {
-        health.adjust(DamageType::Brute, -eating.heal);
+        health.adjust(DamageType::Brute, -heal);
     }
     let clients = crate::obj_damage::clients_in_range(world, pos, DEFAULT_MESSAGE_RANGE, &[]);
     world.write_message(SendChat {
@@ -200,25 +215,47 @@ pub fn eat(world: &mut World, eater: Entity, food: Entity) -> Option<f64> {
         world,
         crate::sound::PlaySound::new(pos, "sound/items/eatfood.ogg", 30.0, true),
     );
-    world.despawn(food);
-    Some(now + eating.cooldown)
+    if world.get::<crate::tools::Stack>(food).is_some() {
+        crate::tools::consume(world, food, 1);
+    } else {
+        world.despawn(food);
+    }
+    true
 }
 
-/// A human feeds a basic mob what it eats, out of combat mode (tg `basic_eating/try_feed`):
-/// true when the mob ate it.
-pub fn try_feed(world: &mut World, mob: Entity, food: Entity) -> bool {
-    let Some(eating) = eating(world, mob) else {
-        return false;
-    };
+/// A human feeds a basic mob what it eats, out of combat mode (tg `basic_eating/try_feed`), or
+/// what tames it (the `basic_eating` `tameable` adds): true when the mob ate it. Then tg
+/// `COMSIG_MOB_ATE` with the feeder: `tameable/try_tame` (`crate::mobs::pets`), and a parrot's
+/// cracker (`consume_cracker`, `crate::mobs::parrot`).
+pub fn try_feed(world: &mut World, mob: Entity, food: Entity, feeder: Entity) -> bool {
     let conscious = world.get::<crate::health::Stat>(mob) == Some(&crate::health::Stat::Conscious);
-    if !conscious || !is_food(world, food, eating) {
+    if !conscious {
         return false;
     }
-    let Some(next) = eat(world, mob, food) else {
+    let food_path = world
+        .get::<ss13_mapload::DmItem>(food)
+        .map(|i| i.path.clone())
+        .unwrap_or_default();
+    let eats = eating(world, mob).is_some_and(|e| is_food(world, food, e));
+    if eats {
+        let Some(next) = eat(world, mob, food) else {
+            return false;
+        };
+        if let Some(mut controller) = world.get_mut::<AiController>(mob) {
+            controller.bb.set(Key::NextFoodEat, Value::Time(next));
+        }
+    } else if super::pets::is_tame_food(world, mob, &food_path) {
+        if !bite(world, mob, food, 0.0) {
+            return false;
+        }
+    } else {
         return false;
-    };
-    if let Some(mut controller) = world.get_mut::<AiController>(mob) {
-        controller.bb.set(Key::NextFoodEat, Value::Time(next));
     }
+    if world.get::<super::parrot::Parrot>(mob).is_some()
+        && ss13_mapload::fidelity::is_under(&food_path, "/obj/item/food/cracker")
+    {
+        super::parrot::ate_cracker(world, mob);
+    }
+    super::pets::try_tame(world, mob, feeder, &food_path);
     true
 }

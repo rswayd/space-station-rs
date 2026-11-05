@@ -38,6 +38,11 @@ pub enum Strategy {
     HoldingTongs,
     /// `huntable_mouse`: a living mouse without a mind.
     HuntableMouse,
+    /// `basic/not_friends`: `basic` without the faction check, never one of the mob's friends
+    /// (`BB_FRIENDS_LIST`, `crate::mobs::pets`).
+    NotFriends,
+    /// `basic/of_size/smaller` with `BB_ALWAYS_IGNORE_FACTION` (crabs): a smaller living mob.
+    Smaller,
 }
 
 impl Strategy {
@@ -64,6 +69,14 @@ impl Strategy {
         }
         let ignore_faction = ctx.truthy(super::Key::IgnoreFaction);
         let ok = match self {
+            Self::NotFriends => {
+                stat != Stat::Dead && !crate::mobs::pets::is_friend(world, ctx.pawn, target)
+            }
+            Self::Smaller => {
+                stat != Stat::Dead
+                    && crate::mobs::pets::mob_size(world, target)
+                        < crate::mobs::pets::mob_size(world, ctx.pawn)
+            }
             Self::Basic => {
                 // `BB_TARGET_MINIMUM_STAT` defaults to `HARD_CRIT`: not dead.
                 // `TARGETING_FACTION_CHECK` with `BB_TEMPORARILY_IGNORE_FACTION`.
@@ -134,27 +147,27 @@ pub struct Perform {
     pub outcome: Option<bool>,
 }
 
-const SUCCEED: Perform = Perform {
+pub(crate) const SUCCEED: Perform = Perform {
     delay: false,
     outcome: Some(true),
 };
-const FAIL: Perform = Perform {
+pub(crate) const FAIL: Perform = Perform {
     delay: false,
     outcome: Some(false),
 };
-const DELAY_SUCCEED: Perform = Perform {
+pub(crate) const DELAY_SUCCEED: Perform = Perform {
     delay: true,
     outcome: Some(true),
 };
-const DELAY_FAIL: Perform = Perform {
+pub(crate) const DELAY_FAIL: Perform = Perform {
     delay: true,
     outcome: Some(false),
 };
-const RUNNING: Perform = Perform {
+pub(crate) const RUNNING: Perform = Perform {
     delay: false,
     outcome: None,
 };
-const DELAY_RUNNING: Perform = Perform {
+pub(crate) const DELAY_RUNNING: Perform = Perform {
     delay: true,
     outcome: None,
 };
@@ -284,6 +297,8 @@ pub enum Behavior {
     Bot(crate::bots::ai::BotLeaf),
     /// A robot customer leaf (`crate::restaurant`).
     Customer(crate::restaurant::CustomerLeaf),
+    /// Farm, pet, parrot, ranged and critter leaves ([`super::fauna`]).
+    Fauna(super::fauna::FaunaLeaf),
 }
 
 impl Behavior {
@@ -293,6 +308,7 @@ impl Behavior {
             Self::RandomSpeech(_) | Self::Speak(_) | Self::CapriciousRetaliate => 1.0,
             Self::PlayWithMouse { .. } => 10.0,
             Self::Bot(leaf) => leaf.cooldown(),
+            Self::Fauna(leaf) => leaf.cooldown(),
             _ => 0.0,
         }
     }
@@ -308,6 +324,7 @@ impl Behavior {
                 true
             }
             Self::MeleeAttack { key, .. } | Self::PlayWithMouse { key } => ctx.truthy(key),
+            Self::Fauna(ref mut leaf) => leaf.setup(ctx),
             _ => true,
         }
     }
@@ -464,6 +481,7 @@ impl Behavior {
             }
             Self::Bot(ref mut leaf) => leaf.perform(ctx),
             Self::Customer(ref mut leaf) => leaf.perform(ctx),
+            Self::Fauna(ref mut leaf) => leaf.perform(ctx),
         }
     }
 
@@ -473,6 +491,10 @@ impl Behavior {
             return;
         }
         if let Self::Customer(leaf) = self {
+            leaf.finish(ctx, succeeded);
+            return;
+        }
+        if let Self::Fauna(leaf) = self {
             leaf.finish(ctx, succeeded);
             return;
         }
@@ -758,7 +780,7 @@ fn eat_food(ctx: &mut AiCtx) -> Perform {
     }
 }
 
-fn target_of(ctx: &AiCtx, key: Key) -> Option<Target> {
+pub(crate) fn target_of(ctx: &AiCtx, key: Key) -> Option<Target> {
     match ctx.bb.get(key)? {
         Value::Entity(e) if ctx.world.get_entity(*e).is_ok() => Some(Target::Entity(*e)),
         Value::Tile(t) => Some(Target::Tile(*t)),
@@ -789,7 +811,10 @@ pub fn is_space(world: &World, pos: TilePos) -> bool {
 /// `idle_random_walk/try_random_step` (`idle_dog` skips the safety check, as tg does).
 fn try_random_step(ctx: &mut AiCtx, chance: f64, safe: bool) {
     let pulled = ctx.world.get::<crate::pull::PulledBy>(ctx.pawn).is_some();
-    if pulled || ctx.world.get::<Stat>(ctx.pawn) != Some(&Stat::Conscious) {
+    if pulled
+        || ctx.world.get::<Stat>(ctx.pawn) != Some(&Stat::Conscious)
+        || crate::mobs::farm::immobilized(ctx.world, ctx.pawn)
+    {
         return;
     }
     if chance < 100.0 && !ctx.spt_prob(chance) {
@@ -837,7 +862,7 @@ fn random_speech(ctx: &mut AiCtx, speech: &Speech) -> Perform {
 }
 
 /// tg `say` of a basic mob: its `speak_emote` verb (`get_default_say_verb`).
-fn say(ctx: &mut AiCtx, text: &str) {
+pub(crate) fn say(ctx: &mut AiCtx, text: &str) {
     let Some(&pos) = ctx.world.get::<TilePos>(ctx.pawn) else {
         return;
     };
@@ -876,7 +901,7 @@ fn say(ctx: &mut AiCtx, text: &str) {
 }
 
 /// Living mobs within `range` of the pawn, nearest first (tg `hearers`/`oview` sources).
-fn candidates(ctx: &AiCtx, range: u32) -> Vec<Entity> {
+pub(crate) fn candidates(ctx: &AiCtx, range: u32) -> Vec<Entity> {
     let Some(from) = ctx.pawn_pos() else {
         return Vec::new();
     };
