@@ -62,7 +62,6 @@ pub fn valid_mouse_turf(world: &World, pos: TilePos) -> bool {
 }
 
 /// tg `trigger_migration(CONFIG_GET(number/mice_roundstart))` at round start.
-// shortcut: only mice from `vermin_chances` (snails, stoats and regal rats are not ported).
 pub(super) fn roundstart_vermin(world: &mut World) {
     if world
         .get_resource::<ss13_mapload::MapLoadPlugin>()
@@ -72,9 +71,19 @@ pub(super) fn roundstart_vermin(world: &mut World) {
         return;
     }
     let seed = world.get_resource::<MapSeed>().map_or(0, |s| s.0);
+    let spawned = trigger_migration(world, MICE_ROUNDSTART, seed);
+    if spawned > 0 {
+        info!("mobs: {spawned} mice on exposed wires");
+    }
+}
+
+/// tg `SSminor_mapping.trigger_migration(to_spawn)`: up to `to_spawn` mice on exposed wires
+/// (shuffled from `seed`) whose air a mouse survives. Returns how many came.
+// shortcut: only mice from `vermin_chances` (snails, stoats and regal rats are not ported).
+pub fn trigger_migration(world: &mut World, to_spawn: usize, seed: u64) -> usize {
     let mut spawned = 0;
     for pos in exposed_wires(world, seed) {
-        if spawned >= MICE_ROUNDSTART {
+        if spawned >= to_spawn {
             break;
         }
         if !valid_mouse_turf(world, pos) {
@@ -84,7 +93,5 @@ pub(super) fn roundstart_vermin(world: &mut World) {
             spawned += 1;
         }
     }
-    if spawned > 0 {
-        info!("mobs: {spawned} mice on exposed wires");
-    }
+    spawned
 }

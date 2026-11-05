@@ -39,6 +39,8 @@ pub const DEFAULT_ANNOUNCER: &str = "/datum/centcom_announcer/default";
 /// BandaStation's intern (`modular_bandastation/announcers`).
 pub const INTERN_ANNOUNCER: &str = "/datum/centcom_announcer/intern";
 /// `code/__DEFINES/sound.dm` `ANNOUNCER_*` keys of `event_sounds`.
+pub const ANNOUNCER_ALIENS: &str = "announcer_aliens";
+pub const ANNOUNCER_GRANOMALIES: &str = "announcer_granomalies";
 pub const ANNOUNCER_INTERCEPT: &str = "announcer_intercept";
 pub const ANNOUNCER_METEORS: &str = "announcer_meteors";
 pub const ANNOUNCER_POWEROFF: &str = "announcer_poweroff";
@@ -46,6 +48,7 @@ pub const ANNOUNCER_RADIATION: &str = "announcer_radiation";
 pub const ANNOUNCER_SHUTTLECALLED: &str = "announcer_shuttlecalled";
 pub const ANNOUNCER_SHUTTLEDOCK: &str = "announcer_shuttledock";
 pub const ANNOUNCER_SHUTTLERECALLED: &str = "announcer_shuttlerecalled";
+pub const ANNOUNCER_SPANOMALIES: &str = "announcer_spanomalies";
 /// `make_announcement`'s sounds.
 pub const ANNOUNCE_SOUND: &str = "sound/announcer/announcement/announce.ogg";
 pub const ANNOUNCE_SYNDI_SOUND: &str = "sound/announcer/announcement/announce_syndi.ogg";

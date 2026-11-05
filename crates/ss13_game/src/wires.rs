@@ -1082,7 +1082,7 @@ fn electrocute_mob(
 /// over the body, stun (paralysis when already incapacitated), paralysis 2 s later. Returns the
 /// damage dealt (0: blocked or too weak).
 // shortcut: no jitter, stutter, `force_say`, heart restarts or shocks passed on through pulls.
-fn electrocute_act(
+pub(crate) fn electrocute_act(
     world: &mut World,
     mob: Entity,
     damage: f32,

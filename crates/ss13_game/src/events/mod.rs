@@ -4,23 +4,34 @@
 //! - [`controller`]: the scheduler, the event lifecycle, forced events.
 //! - One file per event family; [`controls`] lists them with tg's control vars (weight,
 //!   `earliest_start`, `min_players`, `max_occurrences`).
-//! - [`carp_migration`]: spawns basic mobs (`crate::mobs`).
+//! - [`carp_migration`], [`mice_migration`], [`vent_clog`]: spawn basic mobs (`crate::mobs`).
+//! - [`anomalies`], [`immovable_rod`], [`wormholes`]: their own objects, moved and processed
+//!   by this plugin's systems.
 //!
 //! Announcements are tg `priority_announce` from Central Command (`crate::announce`), with the
 //! announcer's `ANNOUNCER_*` sound where tg names one, else its random alert sound.
 
+pub mod anomalies;
 pub mod brand_intelligence;
+pub mod bureaucratic_error;
+pub mod camera_failure;
 pub mod carp_migration;
 pub mod comms_blackout;
 pub mod controller;
 pub mod electrical_storm;
 pub mod false_alarm;
+pub mod grey_tide;
 pub mod grid_check;
+pub mod immovable_rod;
 pub mod market_crash;
 pub mod meteors;
+pub mod mice_migration;
 pub mod radiation_storm;
+pub mod vent_clog;
+pub mod wormholes;
 
 use bevy::prelude::*;
+use ss13_shared::TilePos;
 
 pub use controller::{
     EventControl, EventRng, EventState, Events, EventsConfig, RoundEvent, force_event,
@@ -44,6 +55,49 @@ pub fn priority_announce_sound(world: &mut World, title: &str, text: &str, sound
 /// tg `station_name()`.
 pub fn station_name(world: &World) -> String {
     crate::round::station_name(world)
+}
+
+/// The type of an area (areas carry it in [`ss13_mapload::DmPower`]).
+pub fn area_type(world: &World, area: Entity) -> Option<&str> {
+    world
+        .get::<ss13_mapload::DmPower>(area)
+        .map(|p| p.path.as_str())
+}
+
+/// The type of the area at `pos`.
+pub fn area_type_at(world: &World, pos: TilePos) -> Option<&str> {
+    let area = world.get_resource::<ss13_mapload::Areas>()?.area_at(pos)?;
+    area_type(world, area)
+}
+
+/// The tiles of `/area/station` areas on station levels, with their area (tg
+/// `GLOB.station_turfs`). One scan of the station levels (~65k tiles on MetaStation): for
+/// events that pick from them once.
+pub fn station_tiles(world: &World) -> Vec<(Entity, TilePos)> {
+    let Some(areas) = world.get_resource::<ss13_mapload::Areas>() else {
+        return Vec::new();
+    };
+    let index = world.resource::<ss13_world::SpatialIndex>();
+    let mut tiles = Vec::new();
+    for z in controller::station_levels(world) {
+        let Some((w, h)) = index.level_size(z) else {
+            continue;
+        };
+        for y in 1..=h as i32 {
+            for x in 1..=w as i32 {
+                let pos = TilePos::new(x, y, z);
+                let Some(area) = areas.area_at(pos) else {
+                    continue;
+                };
+                if area_type(world, area)
+                    .is_some_and(|p| crate::obj_damage::is_under(p, "/area/station"))
+                {
+                    tiles.push((area, pos));
+                }
+            }
+        }
+    }
+    tiles
 }
 
 const MINUTE: f64 = 60.0;
@@ -131,6 +185,48 @@ pub fn controls() -> Vec<EventControl> {
             3,
             meteors::make_stray,
         )),
+        unfakeable(c(
+            camera_failure::NAME,
+            100,
+            20.0,
+            0,
+            20,
+            camera_failure::make,
+        )),
+        c(grey_tide::NAME, 10, 20.0, 5, 2, grey_tide::make),
+        c(
+            bureaucratic_error::NAME,
+            5,
+            20.0,
+            0,
+            1,
+            bureaucratic_error::make,
+        ),
+        c(immovable_rod::NAME, 10, 20.0, 15, 5, immovable_rod::make),
+        c(wormholes::NAME, 2, 20.0, 2, 3, wormholes::make),
+        c(mice_migration::NAME, 10, 20.0, 0, 20, mice_migration::make),
+        c(vent_clog::MINOR, 25, 5.0, 0, 20, vent_clog::make_minor),
+        c(vent_clog::MAJOR, 12, 10.0, 0, 5, vent_clog::make_major),
+        c(
+            vent_clog::CRITICAL,
+            8,
+            25.0,
+            15,
+            3,
+            vent_clog::make_critical,
+        ),
+        c(vent_clog::STRANGE, 5, 5.0, 0, 2, vent_clog::make_strange),
+        c(anomalies::FLUX, 20, 20.0, 10, 5, anomalies::make_flux),
+        c(
+            anomalies::BLUESPACE,
+            15,
+            20.0,
+            1,
+            1,
+            anomalies::make_bluespace,
+        ),
+        c(anomalies::GRAV, 25, 20.0, 1, 5, anomalies::make_grav),
+        c(anomalies::PYRO, 20, 20.0, 1, 5, anomalies::make_pyro),
     ]
 }
 
@@ -146,9 +242,16 @@ impl Plugin for EventsServerPlugin {
                 (
                     controller::events_fire,
                     meteors::move_meteors,
+                    immovable_rod::move_rods,
+                    anomalies::process_anomalies,
                     radiation_storm::process_storm,
                 )
                     .chain(),
+            )
+            .add_systems(
+                Update,
+                (wormholes::enter_wormholes, anomalies::anomaly_contacts)
+                    .after(ss13_world::WorldSystems::Movement),
             );
     }
 }

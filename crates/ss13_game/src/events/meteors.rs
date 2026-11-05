@@ -302,13 +302,53 @@ pub struct Meteor {
     pub kind: &'static MeteorKind,
     pub hits: i32,
     pub dest: TilePos,
-    /// `move_towards`: steps per move along each axis (the longer axis is 1) and the
-    /// fractional progress along the shorter one.
+    towards: Towards,
+    next_move: f64,
+    expires: f64,
+}
+
+/// `move_towards`: steps per move along each axis (the longer axis is 1), the fractional
+/// progress along the shorter one and the direction (also flies the immovable rod).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct Towards {
     rate: (f64, f64),
     sign: (i32, i32),
     ticker: (f64, f64),
-    next_move: f64,
-    expires: f64,
+}
+
+impl Towards {
+    pub(super) fn new(start: TilePos, goal: TilePos) -> Self {
+        let (dx, dy) = (goal.x - start.x, goal.y - start.y);
+        let (ax, ay) = (f64::from(dx.abs()), f64::from(dy.abs()));
+        let rate = if ax == 0.0 && ay == 0.0 {
+            (0.0, 0.0)
+        } else if ax > ay {
+            (1.0, ay / ax)
+        } else {
+            (ax / ay, 1.0)
+        };
+        Self {
+            rate,
+            sign: (dx.signum(), dy.signum()),
+            ticker: (0.0, 0.0),
+        }
+    }
+
+    /// The next tile from `pos`; [`Self::advance`] commits the step.
+    pub(super) fn next(&self, pos: TilePos) -> TilePos {
+        let (sx, sy) = (
+            (self.ticker.0 + self.rate.0).floor() as i32,
+            (self.ticker.1 + self.rate.1).floor() as i32,
+        );
+        TilePos::new(pos.x + sx * self.sign.0, pos.y + sy * self.sign.1, pos.z)
+    }
+
+    pub(super) fn advance(&mut self) {
+        self.ticker = (
+            (self.ticker.0 + self.rate.0).fract(),
+            (self.ticker.1 + self.rate.1).fract(),
+        );
+    }
 }
 
 // --- Events -------------------------------------------------------------------------------
@@ -521,7 +561,7 @@ pub fn spawn_meteor(world: &mut World, wave: Wave) -> Option<Entity> {
 }
 
 /// Sides in `GLOB.cardinals` order: north, south, east, west.
-fn debris_start(
+pub(super) fn debris_start(
     side: usize,
     z: u16,
     (w, h): (u32, u32),
@@ -586,15 +626,6 @@ pub fn spawn_meteor_at(
         .and_then(|i| i.get(ICON, kind.icon_state))
         .unwrap_or(IconStateId(u32::MAX));
     let now = world.resource::<Time>().elapsed_secs_f64();
-    let (dx, dy) = (goal.x - start.x, goal.y - start.y);
-    let (ax, ay) = (f64::from(dx.abs()), f64::from(dy.abs()));
-    let rate = if ax == 0.0 && ay == 0.0 {
-        (0.0, 0.0)
-    } else if ax > ay {
-        (1.0, ay / ax)
-    } else {
-        (ax / ay, 1.0)
-    };
     let entity = world
         .spawn((
             Name::new(kind.path),
@@ -619,9 +650,7 @@ pub fn spawn_meteor_at(
                 kind,
                 hits: kind.hits,
                 dest: goal,
-                rate,
-                sign: (dx.signum(), dy.signum()),
-                ticker: (0.0, 0.0),
+                towards: Towards::new(start, goal),
                 next_move: now + MOVE_SECS,
                 expires: now + LIFETIME_SECS,
             },
@@ -658,17 +687,7 @@ fn step(world: &mut World, e: Entity) {
         return;
     };
     let kind = meteor.kind;
-    let mut ticker = (
-        meteor.ticker.0 + meteor.rate.0,
-        meteor.ticker.1 + meteor.rate.1,
-    );
-    let (sx, sy) = (ticker.0.floor() as i32, ticker.1.floor() as i32);
-    ticker = (ticker.0.fract(), ticker.1.fract());
-    let next = TilePos::new(
-        pos.x + sx * meteor.sign.0,
-        pos.y + sy * meteor.sign.1,
-        pos.z,
-    );
+    let next = meteor.towards.next(pos);
     if next == pos {
         // At the goal already (`home` reached): the loop has nothing left to do.
         world.despawn(e);
@@ -684,7 +703,11 @@ fn step(world: &mut World, e: Entity) {
         bump(world, e, blocker, next);
         return;
     }
-    world.get_mut::<Meteor>(e).expect("meteor").ticker = ticker;
+    world
+        .get_mut::<Meteor>(e)
+        .expect("meteor")
+        .towards
+        .advance();
     world.entity_mut(e).insert(next);
     moved(world, e, next);
 }

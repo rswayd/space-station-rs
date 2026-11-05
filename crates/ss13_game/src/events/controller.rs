@@ -10,7 +10,7 @@
 //! - [`force_event`]: the admin Force Event (`/datum/round_event_control/run_event` with
 //!   `admin_forced`), reached through the dev test hook and `SS13_FORCE_EVENT`.
 //!
-//! Cost: one pass over ~15 controls and the running events every 2 s.
+//! Cost: one pass over ~30 controls and the running events every 2 s.
 
 use bevy::prelude::*;
 use ss13_mapload::spawner::Rng;

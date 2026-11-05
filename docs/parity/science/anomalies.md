@@ -6,7 +6,7 @@
 `/obj/effect/anomaly` — движущийся по станции эффект с таймером: по истечении детонирует; сигналер, настроенный на частоту/код ядра (видны анализатором), нейтрализует её и оставляет ядро. Неисследованные ядра ограничены числом на раунд.
 
 - **Код:** [`/obj/effect/anomaly`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/anomalies/_anomalies.dm#L2), [`proc/anomalyEffect()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/anomalies/_anomalies.dm#L80), [`proc/detonate()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/anomalies/_anomalies.dm#L90), [`proc/anomalyNeutralize()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/anomalies/_anomalies.dm#L100)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/events/anomalies.rs` `Anomaly`: дрейф 45%/с, `anomalyEffect` раз в 2 с (`SSobj`), детонация через 120 с; нет нейтрализации сигналером, анализатора, ядер, отсчёта, света и стабилизации (поле `move_chance` есть)
 
 _«События появления аномалий» описано в [../events/anomaly-events.md](../events/anomaly-events.md)._
 
@@ -14,25 +14,25 @@ _«События появления аномалий» описано в [../ev
 Выбрасывает горячую плазму и поджигает окружение; при детонации — слайм-пиромонстр.
 
 - **Код:** [`/obj/effect/anomaly/pyro`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/anomalies/anomalies_pyroclastic.dm#L2)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/events/anomalies.rs`: 5 моль O2 и плазмы при 1000 K каждые 10 с, при детонации по 500 моль; нет пирослайма (нет слаймов и опроса призраков)
 
 ### Гравитационная аномалия
 Притягивает и швыряет предметы и людей; высокогравитационный вариант меняет гравитацию вокруг.
 
 - **Код:** [`/obj/effect/anomaly/grav`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/anomalies/anomalies_gravity.dm#L2), [`grav/high`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/anomalies/anomalies_gravity.dm#L59)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/events/anomalies.rs`: тянет незакреплённые объекты и мобов в радиусе 4 на шаг, сбивает с ног (4 с) вставшего на неё, бросает предметы со своего тайла в живого в радиусе 4 (20%), звук при детонации; мобов не отбрасывает (броска мобов нет), нет магбутсов, нет High Intensity
 
 ### Флюкс-аномалия
 Бьёт током при касании, при детонации взрывается.
 
 - **Код:** [`/obj/effect/anomaly/flux`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/anomalies/anomalies_flux.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/events/anomalies.rs`: плотная, после каждого процесса бьёт током 20 (без учёта перчаток) первого коснувшегося (столкновение, шаг на неё, врезавшись при дрейфе), детонация — `empulse(4, 16)` и взрыв 0/1/4 со вспышкой 6; нет варианта `big`/`minor` (не используются событиями)
 
 ### Блюспейс-аномалия
 Телепортирует касающихся; при детонации — массовая телепортация по станции.
 
 - **Код:** [`/obj/effect/anomaly/bluespace`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/anomalies/anomalies_bluespace.dm#L2)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/events/anomalies.rs`: телепорт живых в радиусе 1 на до 4 тайлов, врезавшегося — до 8; детонация переносит всё незакреплённое в радиусе 12 от случайного тайла зоны к случайному маяку (`/obj/item/beacon`) со сдвигом, с объявлением; маяки только на уровнях станции, нет вспышки «bluespace sparkle»
 
 ### Вихревая аномалия (чёрная дыра)
 Засасывает и уничтожает объекты, рушит конструкции вокруг.

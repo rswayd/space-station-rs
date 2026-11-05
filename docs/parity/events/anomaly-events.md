@@ -6,31 +6,31 @@
 Базовое событие выбирает безопасную зону через `/datum/anomaly_placer`, объявляет тип аномалии и место, спавнит её; если аномалию не нейтрализовать сигналером за время жизни, она срабатывает.
 
 - **Код:** [`/datum/round_event_control/anomaly`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/anomaly/_anomaly.dm#L1), [`/datum/anomaly_placer`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/anomaly/anomaly_placer.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — нет аномалий и событий
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/events/anomalies.rs`: выбор зоны станции вне «безопасных» (`anomaly_placer`, кроме комнаты отдыха инженеров), объявление с именем зоны, аномалия на свободном не-космическом тайле, процесс раз в 2 с (дрейф 45%/с), детонация через 120 с; нейтрализация сигналером, ядра и анализатор — наука (../science/anomalies.md); нет админского выбора места, оповещения призраков и отсчёта
 
 ### Anomaly: Hyper-Energetic Flux
 Энергетическая аномалия: бьёт током подошедших, в конце взрывается.
 
 - **Код:** [`/datum/round_event_control/anomaly/anomaly_flux`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/anomaly/anomaly_flux.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — нет аномалий
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/events/anomalies.rs`: событие (min_players 10, вес 20, до 5 раз), объявление через 15 тиков; сама аномалия — ../science/anomalies.md
 
 ### Anomaly: Bluespace
 Телепортирует всё вокруг, в конце — массовая телепортация зоны.
 
 - **Код:** [`/datum/round_event_control/anomaly/anomaly_bluespace`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/anomaly/anomaly_bluespace.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — нет аномалий
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/events/anomalies.rs`: событие (вес 15, 1 раз), объявление сразу, аномалия на 3-м тике; сама аномалия — ../science/anomalies.md
 
 ### Anomaly: Gravitational (обычная и High Intensity)
 Притягивает и швыряет предметы и мобов; высокоинтенсивный вариант создаёт вокруг поле изменённой гравитации радиусом 7.
 
 - **Код:** [`/datum/round_event_control/anomaly/anomaly_grav`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/anomaly/anomaly_grav.dm#L1), [`/datum/round_event_control/anomaly/anomaly_grav/high`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/anomaly/anomaly_grav.dm#L16)
-- **Статус в ss13-rs:** ❌ нет — нет аномалий
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/events/anomalies.rs`: обычная (вес 25, до 5 раз, звук `ANNOUNCER_GRANOMALIES`); нет High Intensity (нет поля гравитации и генератора гравитации); сама аномалия — ../science/anomalies.md
 
 ### Anomaly: Pyroclastic
 Выпускает горячую плазму вокруг, в конце порождает огненного слайма.
 
 - **Код:** [`/datum/round_event_control/anomaly/anomaly_pyro`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/anomaly/anomaly_pyro.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — нет аномалий (горение плазмы само по себе есть в `crates/ss13_atmos`)
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/events/anomalies.rs`: событие (вес 20, до 5 раз); сама аномалия — ../science/anomalies.md
 
 ### Anomaly: Vortex
 Блуждающий вихрь, разрушающий объекты на пути, в конце взрывается.
