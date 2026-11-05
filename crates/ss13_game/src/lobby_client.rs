@@ -501,7 +501,7 @@ impl ClientUi for JobPrefsUi {
             .quirks
             .iter()
             .map(|quirk| {
-                let on = data.quirks.iter().any(|q| *q == quirk.name);
+                let on = data.quirks.contains(&quirk.name);
                 let label = format!("{} ({:+})", quirk.name, quirk.value);
                 let tooltip = quirk.description.clone();
                 let action = if on { REMOVE_QUIRK } else { GIVE_QUIRK };
