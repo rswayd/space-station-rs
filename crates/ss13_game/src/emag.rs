@@ -22,8 +22,7 @@
 //! - Bots take emags through their own clicks (`crate::bots`), after [`can_emag`].
 // shortcut: no bluespace emag reach (`prox_check`), no emags stuck together, no Donk Co. fake
 // emag, no `emag_act` of pAIs, the emergency shuttle console, the holodeck or other
-// unported families; no spark flicks of the windoor and the APC (only the airlock's `sparks`
-// overlay), no hacked-APC flicker; no blackbox or combat log of the attempt.
+// unported families; no hacked-APC flicker; no blackbox or combat log of the attempt.
 
 use bevy::prelude::*;
 use ss13_mapload::fidelity::is_under;
@@ -357,6 +356,13 @@ fn windoor(world: &mut World, target: Entity) -> bool {
     if started != Some(true) {
         return false;
     }
+    // `flick("[base_state]spark", src)`.
+    if let Some(base) = world
+        .get::<ss13_mapload::DmDoor>(target)
+        .map(|d| d.base_icon_state.clone())
+    {
+        crate::animation::flick(world, target, &format!("{base}spark"));
+    }
     sparks(world, target, 75.0);
     let at = now(world) + FINISH_SECS;
     world.entity_mut(target).insert(EmagFinish { at });
@@ -496,6 +502,7 @@ fn apc(world: &mut World, mob: Entity, target: Entity) -> bool {
         tell_mob(world, mob, Span::Warning, "сначала закройте панель!");
         return false;
     }
+    crate::animation::flick(world, target, "apc-spark");
     sparks(world, target, 75.0);
     if let Some(mut a) = world.get_mut::<Apc>(target) {
         a.emagged = true;

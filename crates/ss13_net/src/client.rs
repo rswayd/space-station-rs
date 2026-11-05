@@ -193,6 +193,7 @@ impl Plugin for NetClientPlugin {
             crate::move_ack::client::plugin,
             crate::camera::client::plugin,
             crate::sound::client::plugin,
+            crate::animation::client::plugin,
             crate::sim_latency::plugin,
         ))
         .init_resource::<NetClientConfig>()
@@ -418,10 +419,11 @@ fn receive(
     mut notices: MessageWriter<NoticeReceived>,
     mut ui: MessageWriter<UiMessageReceived>,
     mut chat: MessageWriter<ChatReceived>,
-    (mut acks, mut camera, mut sounds): (
+    (mut acks, mut camera, mut sounds, mut animations): (
         MessageWriter<MoveAckReceived>,
         MessageWriter<crate::camera::client::CameraEffectReceived>,
         MessageWriter<crate::sound::client::SoundReceived>,
+        MessageWriter<crate::animation::client::AnimationReceived>,
     ),
     mut debug: MessageWriter<crate::debug::client::DebugResponseReceived>,
     mut admin: MessageWriter<crate::admin::client::AdminResponseReceived>,
@@ -488,6 +490,9 @@ fn receive(
                 }
                 ServerMessage::Sound(sound) => {
                     sounds.write(crate::sound::client::SoundReceived(sound));
+                }
+                ServerMessage::Animation(event) => {
+                    animations.write(crate::animation::client::AnimationReceived(event));
                 }
                 ServerMessage::MoveAck(ack) => {
                     acks.write(MoveAckReceived(ack));

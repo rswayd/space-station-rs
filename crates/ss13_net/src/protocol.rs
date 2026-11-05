@@ -109,6 +109,7 @@ pub(crate) enum ServerMessage {
     Admin(AdminResponse),
     Camera(ss13_shared::protocol::CameraEffect),
     Sound(ss13_shared::protocol::SoundEvent),
+    Animation(ss13_shared::animation::AnimationEvent),
 }
 
 /// An encoded frame, length prefix included; shared when one message goes to many clients.

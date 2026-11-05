@@ -9,8 +9,7 @@
 //!   gas there burns; no power or no open turf turns it off.
 //! - A sparker, powered and 5 s after its last spark, uses its active power, sparks (sound) and
 //!   exposes its tile to 1000 K (`hotspot_expose(1000, 2500, TRUE)`).
-// shortcut: flicks (`mass_driver1`, `migniter-spark`) show for a fixed second instead of their
-// animation's length; no spark particles (their own `hotspot_expose` and light), no wires,
+// shortcut: no spark particles (their own `hotspot_expose` and light), no wires,
 // panel, deconstruction, direction wrench, multitool id, sparker screwdriver disable; a
 // thrown mob flies without impact damage (`crate::throw` hits with items only); the mass
 // driver's parts are the tier 1 servo of a mapped one (`RefreshParts`: `drive_range + 10`).
@@ -32,7 +31,6 @@ const IGNITER_VOLUME: f64 = 500.0;
 const SPARKER_VOLUME: f64 = 2500.0;
 /// `last_spark + 50` deciseconds.
 const SPARK_COOLDOWN: f64 = 5.0;
-const FLICK_SECS: f64 = 1.0;
 /// `O_limit >= 20`.
 const DRIVE_LIMIT: u32 = 20;
 /// `RefreshParts` of a mapped driver: one tier 1 servo.
@@ -64,10 +62,6 @@ pub struct Sparker {
     pub id: Option<String>,
     pub last_spark: f64,
 }
-
-/// A machine showing its flick state until then.
-#[derive(Component, Clone, Copy, Debug)]
-pub struct Flick(pub f64);
 
 fn now(world: &World) -> f64 {
     world.resource::<Time>().elapsed_secs_f64()
@@ -118,10 +112,16 @@ fn use_active_power(world: &mut World, machine: Entity) -> bool {
     joules <= 0.0 || machine_use_energy(world, machine, joules, false) > 0.0
 }
 
-fn flick(world: &mut World, e: Entity) {
-    let t = now(world);
-    world.entity_mut(e).insert(Flick(t + FLICK_SECS));
-    refresh_look(world, e);
+/// `flick("[base_icon_state]1")` of a mass driver, `flick("[base_icon_state]-spark")` of a
+/// sparker.
+fn flick(world: &mut World, e: Entity, suffix: &str) {
+    let Some(base) = world
+        .get::<DmWallMount>(e)
+        .map(|d| d.base_icon_state.clone())
+    else {
+        return;
+    };
+    crate::animation::flick(world, e, &format!("{base}{suffix}"));
 }
 
 /// tg `mass_driver/drive()`.
@@ -182,7 +182,7 @@ pub fn drive(world: &mut World, driver: Entity) {
             });
         }
     }
-    flick(world, driver);
+    flick(world, driver, "1");
 }
 
 /// `!O.anchored || ismecha(O)`, without non-living mobs: items, living mobs, mechs, unanchored
@@ -240,7 +240,7 @@ pub fn ignite(world: &mut World, sparker: Entity) -> bool {
     {
         return false;
     }
-    flick(world, sparker);
+    flick(world, sparker, "-spark");
     crate::sound::playsound(
         world,
         crate::sound::PlaySound::new(pos, "sparks", 100.0, true)
@@ -293,41 +293,19 @@ pub(super) fn process_igniters(world: &mut World, mut last: Local<Option<u64>>) 
     }
 }
 
-/// Flicks that ended.
-pub(super) fn end_flicks(world: &mut World) {
-    let t = now(world);
-    let mut query = world.query::<(Entity, &Flick)>();
-    let done: Vec<Entity> = query
-        .iter(world)
-        .filter(|(_, f)| t >= f.0)
-        .map(|(e, _)| e)
-        .collect();
-    for e in done {
-        world.entity_mut(e).remove::<Flick>();
-        refresh_look(world, e);
-    }
-}
-
-/// tg `update_icon_state` of the three, and their flicks.
+/// tg `update_icon_state` of the three.
 pub(super) fn look(world: &World, e: Entity, powered: bool) -> Option<Look> {
     let base = world.get::<DmWallMount>(e)?.base_icon_state.as_str();
-    let flicking = world.get::<Flick>(e).is_some();
     let icon_state = if let Some(igniter) = world.get::<Igniter>(e) {
         format!("{base}{}", u8::from(igniter.on))
     } else if world.get::<Sparker>(e).is_some() {
-        if flicking {
-            format!("{base}-spark")
-        } else if powered {
+        if powered {
             base.to_owned()
         } else {
             format!("{base}-p")
         }
     } else if world.get::<MassDriver>(e).is_some() {
-        if flicking {
-            format!("{base}1")
-        } else {
-            base.to_owned()
-        }
+        base.to_owned()
     } else {
         return None;
     };

@@ -305,6 +305,23 @@ impl Interest {
         Some(&self.appearances.entries.get(&id)?.look.appearance)
     }
 
+    /// Fills `out` with the clients that have `entity` replicated and the id each knows it by.
+    pub(crate) fn viewers_of(&self, entity: Entity, out: &mut Vec<(Entity, NetId)>) {
+        out.clear();
+        let Some(tracked) = self.tracked.get(&entity) else {
+            return;
+        };
+        // A client that knows the entity keeps its chunk in its keep box.
+        let Some(clients) = self.chunk_viewers.get(&ChunkPos::of(tracked.pos)) else {
+            return;
+        };
+        out.extend(
+            clients
+                .iter()
+                .filter_map(|&client| Some((client, self.net_id(client, entity)?))),
+        );
+    }
+
     /// Number of entities replicated to `client`.
     pub fn visible_count(&self, client: Entity) -> usize {
         self.clients.get(&client).map_or(0, |view| view.known.len())
@@ -843,6 +860,12 @@ impl Plugin for ReplicationServerPlugin {
                 replicate
                     .in_set(NetServerSystems::Send)
                     .run_if(resource_exists::<SpatialIndex>),
+            )
+            .add_systems(
+                PostUpdate,
+                crate::animation::server::send
+                    .after(replicate)
+                    .in_set(NetServerSystems::Send),
             )
             .add_systems(PostUpdate, measure_traffic.after(NetServerSystems::Send));
     }
