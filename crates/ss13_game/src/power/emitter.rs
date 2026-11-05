@@ -337,7 +337,14 @@ fn contact(world: &World, pos: TilePos, angle: f64, firer: Entity) -> Contact {
         }
     }
     for &e in index.dense_on_tile(pos) {
-        if e == firer || world.get::<Density>(e).is_none() {
+        // Containment fields are dense here only to what walks into them
+        // (`field/CanAllowThrough` lets projectiles through).
+        if e == firer
+            || world.get::<Density>(e).is_none()
+            || world
+                .get::<super::field_generator::ContainmentField>(e)
+                .is_some()
+        {
             continue;
         }
         if world.get::<Turf>(e).is_some() {
@@ -407,6 +414,10 @@ fn fire_beams(world: &mut World) {
 
 /// `bullet_act` of what the beam hit.
 fn hit(world: &mut World, emitter: Entity, target: Entity) {
+    // `field/generator/bullet_act`: the beam charges it.
+    if super::field_generator::bullet_act(world, target, BEAM_DAMAGE) {
+        return;
+    }
     if let Some(mut sm) = world.get_mut::<super::supermatter::Supermatter>(target) {
         sm.eat_beam(BEAM_DAMAGE);
         return;

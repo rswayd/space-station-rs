@@ -5,7 +5,7 @@
 Каждые 2 с обрабатывает машины и энергосистему в порядке tg: сброс сетей, ранняя обработка APC, четыре шага зарядки APC, поздняя обработка, затем SMES, генераторы и остальные машины.
 
 - **Код:** [`SSmachines`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/machines.dm#L1), [`fire()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/machines.dm#L92)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/power/mod.rs` (`power_tick`, `Generation`, `MachineTicks`): порядок энергосистемы сохранён, ранняя фаза (эмиттеры), РИТЭГ, солнечные панели, консоли и аккумуляторы энергии; `process()` прочих машин (P.A.C.M.A.N., ТЭГ, турбина) нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/power/mod.rs` (`power_tick`, `Generation`, `MachineTicks`): порядок энергосистемы сохранён, ранняя фаза (эмиттеры), РИТЭГ, солнечные панели, консоли, аккумуляторы энергии, ТЭГ и P.A.C.M.A.N. (`crates/ss13_game/src/power/pacman.rs`), генераторы поля по тику машин (`crates/ss13_game/src/power/field_generator.rs`); `process()` турбины нет
 
 ### Powernet (/datum/powernet)
 Сеть соединённых кабелей с доступной мощностью (`avail`), нагрузкой (`load`) и отложенной нагрузкой; машины кладут и берут энергию из сети.

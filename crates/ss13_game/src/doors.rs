@@ -196,6 +196,8 @@ pub struct Door {
     /// tg `operating` (and an airlock's `MAINT` sparks) between `emag_act` and
     /// `finish_emag_act`.
     pub emagging: bool,
+    /// tg `dangerous_close`: the closing door crushes what is in its doorway ([`crush`]).
+    crush: bool,
 }
 
 /// An airlock's sound vars (empty: silent).
@@ -510,6 +512,7 @@ fn init_doors(world: &mut World) {
                 cycle_requested: false,
                 emagged: false,
                 emagging: false,
+                crush: false,
             };
             (entity, door)
         })
@@ -835,6 +838,8 @@ fn close(
         return false;
     }
     door.close_at = None;
+    // tg `dangerous_close = !safe`; windoors override `close` without `crush`.
+    door.crush = !door.safe && door.kind != DoorKind::Windoor;
     door.state = DoorState::Closing { since: now };
     door.sound = Some(DoorSound::Close);
     door.apply_look(appearance);
@@ -944,6 +949,17 @@ fn door_clicks(
         {
             continue;
         }
+        // BandaStation knock: a bare right click, unless an open panel takes the hand first
+        // (`machinery/attack_hand` -> the wires); firelocks keep their own `attack_hand`.
+        if click.modifiers.right
+            && held.is_none()
+            && door.kind != DoorKind::Firedoor
+            && !(door.kind == DoorKind::Airlock && door.panel_open)
+        {
+            let mob = click.mob;
+            commands.queue(move |world: &mut World| knock(world, mob, entity));
+            continue;
+        }
         let tool = held
             .and_then(|h| tools.get(h).ok())
             .and_then(|t| crate::tools::ToolKind::from_dm(&t.behaviour));
@@ -1043,6 +1059,18 @@ fn run_doors(
                         e.commands().entity(f).insert(Density);
                     }
                 }
+                // `airlock/close` crushes before turning opaque, `door/close` at the end.
+                let crush_at = if door.kind == DoorKind::Airlock {
+                    t.close_opaque
+                } else {
+                    t.close_done
+                };
+                if door.crush && elapsed >= crush_at {
+                    door.crush = false;
+                    let tiles: Vec<TilePos> = door.doorway(*pos).collect();
+                    e.commands()
+                        .queue(move |world: &mut World| crush(world, entity, &tiles));
+                }
                 if !opaque && door.opaque_when_closed && elapsed >= t.close_opaque {
                     e.insert(Opaque);
                     if let Some(f) = filler {
@@ -1052,13 +1080,14 @@ fn run_doors(
                 if elapsed >= t.close_done {
                     door.state = DoorState::Closed;
                     door.apply_look(&mut appearance);
-                    // tg `CheckForMobs`: a mob that stepped in while it closed reopens it;
-                    // windoors override `close` without it.
+                    // tg `CheckForMobs`: a mob that stepped in while it closed reopens a safe
+                    // door (an unsafe one crushed it instead); windoors override `close`
+                    // without it.
                     // shortcut: at once instead of tg's 0.1 s later.
                     let mob_inside = door
                         .doorway(*pos)
                         .any(|tile| index.on_tile(tile).iter().any(|&m| movers.contains(m)));
-                    if mob_inside && door.kind != DoorKind::Windoor {
+                    if mob_inside && door.safe && door.kind != DoorKind::Windoor {
                         open(&mut door, &mut appearance, now, false, env, false);
                     }
                 }
@@ -1112,6 +1141,82 @@ fn door_sounds(
     }
 }
 
+/// tg `DOOR_CRUSH_DAMAGE`.
+pub const DOOR_CRUSH_DAMAGE: f32 = 20.0;
+/// `crush()`: a human's `Paralyze(10 SECONDS)`.
+const CRUSH_PARALYZE_SECS: f32 = 10.0;
+
+/// tg `/obj/machinery/door/proc/crush`: every living mob in the doorway takes
+/// [`DOOR_CRUSH_DAMAGE`] brute to the chest (a human also screams and is paralyzed for 10 s),
+/// every mech takes it as object damage. Border firelocks have `can_crush = FALSE`.
+// shortcut: no blood splatter, wounds (`wound_bonus` 10) or xenomorph ×1.5 (no aliens yet).
+fn crush(world: &mut World, door: Entity, tiles: &[TilePos]) {
+    use crate::health::{DamageType, Health, Stat, apply_damage_zone};
+    if world.get_entity(door).is_err() || world.get::<ss13_world::Border>(door).is_some() {
+        return;
+    }
+    let door_name = crate::security::name_of(world, door);
+    for &tile in tiles {
+        let here: Vec<Entity> = world.resource::<SpatialIndex>().on_tile(tile).to_vec();
+        for victim in here {
+            if world.get::<crate::mecha::Mech>(victim).is_some() {
+                crate::mecha::core::take_damage(
+                    world,
+                    victim,
+                    DOOR_CRUSH_DAMAGE,
+                    DamageType::Brute,
+                    "",
+                    None,
+                );
+                continue;
+            }
+            if world.get::<Health>(victim).is_none() || world.get::<Stat>(victim).is_none() {
+                continue;
+            }
+            let name = crate::security::name_of(world, victim);
+            crate::security::show(
+                world,
+                tile,
+                7,
+                ss13_shared::chat::ChatChannel::Combat,
+                (
+                    ss13_shared::chat::Span::Warning,
+                    format!("{door_name} закрывается, раздавливая {name}!"),
+                ),
+                &[(
+                    victim,
+                    ss13_shared::chat::Span::Danger,
+                    format!("{door_name} закрывается и раздавливает вас!"),
+                )],
+            );
+            let human = world.get::<crate::human::HumanLook>(victim).is_some();
+            if human {
+                crate::medical::diseases::emote(world, victim, "scream");
+            }
+            if let Ok(mut entity) = world.get_entity_mut(victim)
+                && let Ok((mut health, mut stat)) =
+                    entity.get_components_mut::<(&mut Health, &mut Stat)>()
+            {
+                apply_damage_zone(
+                    &mut health,
+                    &mut stat,
+                    crate::zone::BodyZone::Chest,
+                    DamageType::Brute,
+                    DOOR_CRUSH_DAMAGE,
+                );
+            }
+            if human {
+                crate::status_effects::apply(
+                    world,
+                    victim,
+                    crate::status_effects::Incap::Paralyze,
+                    CRUSH_PARALYZE_SECS,
+                );
+            }
+        }
+    }
+}
+
 /// tg `/obj/machinery/door/airlock/try_to_crowbar` with a plain crowbar: bolts and welds stop
 /// it; an unpowered airlock that is not moving opens or closes at once with
 /// `BYPASS_DOOR_CHECKS` (`airlockforced`), a powered one resists. True when `target` is an
@@ -1150,6 +1255,167 @@ pub fn crowbar_act(world: &mut World, client: Entity, target: Entity) -> bool {
             true
         }
     }
+}
+
+/// A timed door tool action ([`crate::construction::Job::Door`]), with the welded state it
+/// started from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DoorJob {
+    /// `try_to_weld_secondary`: weld shut (`welded: false`) or unweld.
+    Weld { welded: bool },
+}
+
+/// `use_tool(src, user, 40)` of `try_to_weld_secondary`, deciseconds.
+const WELD_DS: f32 = 40.0;
+
+/// tg `weld_checks`: not moving and closed.
+fn weld_checks(door: &Door) -> bool {
+    !door.is_operating() && door.state == DoorState::Closed
+}
+
+/// The weld flips if the door still is as the job found it (`weld_checks`, same weld).
+fn toggle_weld(door: &mut Door, from: bool) -> bool {
+    if door.welded != from || !weld_checks(door) {
+        return false;
+    }
+    door.welded = !from;
+    true
+}
+
+/// tg `/obj/machinery/door/airlock/try_to_weld_secondary` (right click with a lit welder):
+/// 4 s, then the airlock is welded shut or unwelded. True when `target` is an airlock.
+// shortcut: no left-click repair (`try_to_weld`): doors have no integrity yet; no door seals.
+pub fn welder_act_secondary(world: &mut World, actor: crate::tools::Actor, target: Entity) -> bool {
+    use ss13_shared::chat::Span;
+    let Some(door) = world.get::<Door>(target) else {
+        return false;
+    };
+    if door.kind != DoorKind::Airlock {
+        return false;
+    }
+    let welded = door.welded;
+    let Some(item) = actor.item else {
+        return true;
+    };
+    // `tool_start_check(user, amount = 1)`.
+    if !crate::tools::tool_usable(world, item, 1, 0.0) {
+        let text = crate::tools::unusable_message(world, item, 1);
+        crate::tools::tell(world, actor.client, Span::Warning, text);
+        return true;
+    }
+    // `extra_checks = weld_checks` already fail on the first tick of the `do_after`.
+    if !world.get::<Door>(target).is_some_and(weld_checks) {
+        return true;
+    }
+    if crate::tools::use_tool(
+        world,
+        actor,
+        target,
+        WELD_DS,
+        0,
+        crate::construction::Job::Door(DoorJob::Weld { welded }),
+    ) {
+        let Some(&pos) = world.get::<TilePos>(target) else {
+            return true;
+        };
+        let user = crate::security::name_of(world, actor.mob);
+        let (others, own) = if welded {
+            (
+                format!("{user} начинает разваривать шлюз."),
+                "Вы начинаете разваривать шлюз...",
+            )
+        } else {
+            (
+                format!("{user} начинает заваривать шлюз."),
+                "Вы начинаете заваривать шлюз...",
+            )
+        };
+        crate::security::show(
+            world,
+            pos,
+            7,
+            ss13_shared::chat::ChatChannel::Local,
+            (Span::Notice, others),
+            &[(actor.mob, Span::Notice, own.to_owned())],
+        );
+    }
+    true
+}
+
+/// The end of a [`DoorJob`], re-checked at the moment of effect: the door is still closed and
+/// still, and its weld is as the job found it.
+pub fn complete(world: &mut World, _client: Entity, mob: Entity, target: Entity, job: DoorJob) {
+    use ss13_shared::chat::Span;
+    let DoorJob::Weld { welded: from } = job;
+    let Some(&pos) = world.get::<TilePos>(target) else {
+        return;
+    };
+    let done = with_door(world, target, |door, appearance, _| {
+        let done = toggle_weld(door, from);
+        if done {
+            door.apply_look(appearance);
+        }
+        (done, false)
+    });
+    if done != Some(true) {
+        return;
+    }
+    let user = crate::security::name_of(world, mob);
+    let (others, own) = if from {
+        (format!("{user} разваривает шлюз."), "Вы развариваете шлюз.")
+    } else {
+        (format!("{user} заваривает шлюз."), "Вы завариваете шлюз.")
+    };
+    info!(target: "game", "{mob:?} {} airlock {target:?}", if from { "unwelded" } else { "welded" });
+    crate::security::show(
+        world,
+        pos,
+        7,
+        ss13_shared::chat::ChatChannel::Local,
+        (Span::Notice, others),
+        &[(mob, Span::Notice, own.to_owned())],
+    );
+}
+
+/// BandaStation `knock_sound` of doors (`door_metal_knock_1.ogg`) and of glass airlocks and
+/// windoors (`glassknock.ogg`).
+pub const KNOCK_METAL: &str = ss13_mapload::sound::files::DOORS[0];
+pub const KNOCK_GLASS: &str = ss13_mapload::sound::files::DOORS[1];
+
+/// BandaStation `knock_on` (right click with an empty hand, `door/attack_hand`): the knock at
+/// volume 100, the message, `CLICK_CD_MELEE`.
+fn knock(world: &mut World, mob: Entity, door: Entity) {
+    use ss13_shared::chat::Span;
+    let Some((&pos, d)) = world.get::<TilePos>(door).zip(world.get::<Door>(door)) else {
+        return;
+    };
+    let glass =
+        d.kind == DoorKind::Windoor || (d.kind == DoorKind::Airlock && !d.opaque_when_closed);
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    world
+        .entity_mut(mob)
+        .insert(crate::combat::NextMove(now + crate::combat::CLICK_CD_MELEE));
+    crate::sound::playsound(
+        world,
+        crate::sound::PlaySound::new(
+            pos,
+            if glass { KNOCK_GLASS } else { KNOCK_METAL },
+            100.0,
+            true,
+        ),
+    );
+    let (user, name) = (
+        crate::security::name_of(world, mob),
+        crate::security::name_of(world, door),
+    );
+    crate::security::show(
+        world,
+        pos,
+        7,
+        ss13_shared::chat::ChatChannel::Local,
+        (Span::Notice, format!("{user} стучит в {name}.")),
+        &[(mob, Span::Notice, format!("Вы стучите в {name}."))],
+    );
 }
 
 /// Runs `f` on a door's live state at the moment of effect, for other modules (`crate::wires`),
@@ -1307,6 +1573,7 @@ pub(crate) fn test_airlock(req_access: &[&str]) -> Door {
         cycle_requested: false,
         emagged: false,
         emagging: false,
+        crush: false,
     }
 }
 
@@ -1379,6 +1646,46 @@ mod tests {
                 ("sound/machines/shutter.ogg".to_owned(), 50.0),
             ]
         );
+    }
+
+    #[test]
+    fn welding_needs_a_still_closed_door_in_the_state_the_job_saw() {
+        let mut door = airlock(&[]);
+        assert!(toggle_weld(&mut door, false));
+        assert!(door.welded);
+        // A second job that also started unwelded finds it welded.
+        assert!(!toggle_weld(&mut door, false));
+        assert!(toggle_weld(&mut door, true));
+        assert!(!door.welded);
+        door.state = DoorState::Opening { since: 0.0 };
+        assert!(!toggle_weld(&mut door, false));
+        door.state = DoorState::Open;
+        assert!(!toggle_weld(&mut door, false));
+        // A welded door does not open; an unsafe close arms the crush.
+        let mut door = airlock(&[]);
+        door.welded = true;
+        let mut look = Appearance {
+            icon_state: IconStateId(0),
+            layer: Layer(3.0),
+            plane: -1,
+            color: None,
+            pixel_offset: [0, 0],
+            rotation: 0,
+            mouse_opacity: default(),
+            overlays: vec![],
+        };
+        let env = DoorEnv {
+            powered: true,
+            wires: None,
+        };
+        assert!(!open(&mut door, &mut look, 0.0, false, env, false));
+        let mut door = airlock(&[]);
+        door.state = DoorState::Open;
+        door.safe = false;
+        let index = SpatialIndex::default();
+        let here = (TilePos::new(1, 1, 1), Entity::PLACEHOLDER, &index);
+        assert!(close(&mut door, &mut look, here, 0.0, false, env, false));
+        assert!(door.crush);
     }
 
     #[test]

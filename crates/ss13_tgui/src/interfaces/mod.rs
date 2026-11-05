@@ -26,6 +26,7 @@ pub mod list_input;
 pub mod mech_bay;
 pub mod number_input;
 pub mod pipe_dispenser;
+pub mod portable_generator;
 pub mod rapid_pipe_dispenser;
 pub mod ru_jobs;
 pub mod smart_vend;

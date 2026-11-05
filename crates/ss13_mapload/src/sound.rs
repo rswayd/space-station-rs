@@ -290,6 +290,13 @@ pub mod files {
     /// the bleeding and freezing ones and the delusions.
     /// Syndicate gear (`ss13_game::antag::syndie_items`): the energy blades' `saberon`,
     /// `saberoff` and active `hitsound`, the sleepy pen's stab (none).
+    /// Doors (`ss13_game::doors`): BandaStation's `knock_sound` of metal and glass doors;
+    /// a containment field's `bump_field` (`ss13_game::power::field_generator`).
+    pub const DOORS: [&str; 3] = [
+        "modular_bandastation/aesthetics_sounds/sound/door_metal_knock_1.ogg",
+        "sound/effects/glass/glassknock.ogg",
+        "sound/effects/gravhit.ogg",
+    ];
     pub const SYNDIE_ITEMS: [&str; 3] = [
         "sound/items/weapons/saberon.ogg",
         "sound/items/weapons/saberoff.ogg",
@@ -711,6 +718,7 @@ pub fn referenced<'a>(
     out.extend(files::RELIGION.map(str::to_owned));
     out.extend(files::HALLUCINATION.map(str::to_owned));
     out.extend(files::SYNDIE_ITEMS.map(str::to_owned));
+    out.extend(files::DOORS.map(str::to_owned));
     for path in converted {
         for var in SOUND_VARS {
             let s = sound_var(types, path, var);

@@ -786,7 +786,8 @@ pub fn airlock_takes_click(
     }
     match tool {
         // `screwdriver_act`, `crowbar_act` (`crate::doors::crowbar_act`).
-        Some(ToolKind::Screwdriver | ToolKind::Crowbar) => true,
+        // `welder_act` always ends the click (`crate::doors::welder_act_secondary`).
+        Some(ToolKind::Screwdriver | ToolKind::Crowbar | ToolKind::Welder) => true,
         Some(ToolKind::Wirecutters | ToolKind::Multitool) => door.panel_open,
         _ => !holding && (door.panel_open || electrified),
     }
@@ -1017,7 +1018,10 @@ pub fn shock(world: &mut World, holder: Entity, mob: Entity, chance: f32) -> boo
     if world.get::<Stat>(mob).is_none() || !world.resource_mut::<CombatRng>().chance(chance) {
         return false;
     }
-    // shortcut: no sparks (`do_sparks`).
+    // `/obj/shock`: `do_sparks(5, TRUE, src)` whether or not the shock gets through.
+    if let Some(&pos) = world.get::<TilePos>(holder) {
+        crate::emp::do_sparks(world, pos);
+    }
     let delivered = electrocute_mob(world, mob, source, holder, siemens);
     if delivered
         && kind == WireHolder::Airlock
@@ -1109,8 +1113,8 @@ fn electrocute_mob(
 /// tg `/mob/living/carbon/human/electrocute_act` (the gloves are already in `siemens`): burn
 /// over the body, stun (paralysis when already incapacitated), paralysis 2 s later. Returns the
 /// damage dealt (0: blocked or too weak).
-// shortcut: no `force_say`, heart restarts or shocks passed on through pulls; the jitter has no
-// sprite shake (`crate::status_effects`).
+// shortcut: no `force_say`, heart restarts, shocks passed on through pulls or the human's
+// skeleton flash (`electrocution_animation`).
 pub(crate) fn electrocute_act(
     world: &mut World,
     mob: Entity,
@@ -1147,7 +1151,9 @@ pub(crate) fn electrocute_act(
         Incap::Stun
     };
     crate::status_effects::apply(world, mob, kind, SHOCK_STUN_SECS);
-    // `adjust_jitter(jitter_time)`, `adjust_stutter(stutter_time)` (20 s, 4 s by default).
+    // `do_jitter_animation(300)`, `adjust_jitter(jitter_time)`, `adjust_stutter(stutter_time)`
+    // (20 s, 4 s by default).
+    crate::animation::do_jitter_animation(world, mob, 300.0);
     {
         use crate::status_effects::{Timed, adjust_timed};
         adjust_timed(world, mob, Timed::Jitter, 20.0, None);
@@ -1231,6 +1237,10 @@ fn touches(
             continue;
         }
         if world.get::<Electrified>(click.target).is_none() {
+            continue;
+        }
+        // A door's BandaStation knock (`crate::doors`) comes before the airlock's shock.
+        if kind == WireHolder::Airlock && click.modifiers.right {
             continue;
         }
         match kind {
