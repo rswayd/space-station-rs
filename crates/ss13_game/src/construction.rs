@@ -74,6 +74,10 @@ const DISPLACED_GIRDER: &str = "/obj/structure/girder/displaced";
 const REINFORCED_GIRDER: &str = "/obj/structure/girder/reinforced";
 const FULLTILE_WINDOW: &str = "/obj/structure/window/fulltile";
 const VENDING: &str = "/obj/machinery/vending";
+/// `/obj/structure/fans`: airtight fans; the shuttle bay shield cannot be wrenched apart.
+const FANS: &str = "/obj/structure/fans";
+const TINY_FAN: &str = "/obj/structure/fans/tiny";
+const FAN_SHIELD: &str = "/obj/structure/fans/tiny/shield";
 
 /// A `GLOB.main_girder_wall_recipes` entry (`create_girder_wall_recipes`): `wall` (a turf or
 /// a false wall) from `amount` of `stack` on a `girder` (or subtype) in `state`.
@@ -142,6 +146,10 @@ pub enum Job {
     GirderGrille,
     /// Reinforced wall and window steps ([`crate::reinforced`]).
     Reinforced(crate::reinforced::ReinforcedJob),
+    /// A holosign projector's `creation_time` ([`crate::holosign`]).
+    Holosign,
+    /// Wrench on fans.
+    FanDisassemble,
     /// Welder on a wall.
     SliceWall,
     /// Iron sheets on an open turf (right click).
@@ -248,15 +256,17 @@ pub struct ConstructionServerPlugin;
 
 impl Plugin for ConstructionServerPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<BuildTemplates>().add_systems(
-            Update,
-            (
-                crate::falsewall::finish_moving
-                    .run_if(any_with_component::<crate::falsewall::FalseWallMoving>),
-                crate::reinforced::cool_bolts
-                    .run_if(any_with_component::<crate::reinforced::BoltsCooling>),
-            ),
-        );
+        app.init_resource::<BuildTemplates>()
+            .add_plugins(crate::holosign::HolosignServerPlugin)
+            .add_systems(
+                Update,
+                (
+                    crate::falsewall::finish_moving
+                        .run_if(any_with_component::<crate::falsewall::FalseWallMoving>),
+                    crate::reinforced::cool_bolts
+                        .run_if(any_with_component::<crate::reinforced::BoltsCooling>),
+                ),
+            );
     }
 }
 
@@ -384,6 +394,18 @@ fn tool_act(world: &mut World, actor: Actor, kind: ToolKind, target: Entity) -> 
         return vending_tool(world, actor, kind, target);
     }
     if crate::falsewall::tool_act(world, actor, kind, target) {
+        return Interact::Done;
+    }
+    if kind == ToolKind::Wrench && is_under(&path, FANS) && !is_under(&path, FAN_SHIELD) {
+        // `/obj/structure/fans/wrench_act`.
+        if use_tool(world, actor, target, 20.0, 0, Job::FanDisassemble) {
+            tell(
+                world,
+                client,
+                Span::Notice,
+                "Вы начинаете разбирать вентилятор...",
+            );
+        }
         return Interact::Done;
     }
     if crate::power::emitter::tool_act(world, actor, kind, target) {
@@ -676,6 +698,9 @@ fn target_interaction(world: &mut World, actor: Actor, target: Entity) -> Intera
     };
     // `is_wire_tool(tool) && panel_open`: the wires window.
     if crate::wires::wire_tool_interaction(world, actor, held, target) {
+        return Interact::Done;
+    }
+    if crate::holosign::interact_with_atom(world, actor, held, target) {
         return Interact::Done;
     }
     let Some(path) = path_of(world, target) else {
@@ -1152,6 +1177,18 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
             );
         }
         &Job::Reinforced(job) => crate::reinforced::complete(world, client, target, job),
+        Job::Holosign => crate::holosign::complete(world, item, pos),
+        Job::FanDisassemble => {
+            if !is_under(&path, FANS) {
+                return;
+            }
+            // `buildstacktype`, `buildstackamount`.
+            let amount = if is_under(&path, TINY_FAN) { 2 } else { 5 };
+            world.despawn(target);
+            spawn_stack(world, IRON, pos, amount);
+            tile_changed(world, pos);
+            tell(world, client, Span::Notice, "Вы разбираете вентилятор.");
+        }
         Job::SliceWall => {
             if !is_under(&path, WALL) || !consume(world) {
                 return;
@@ -1833,6 +1870,34 @@ mod tests {
             },
         );
         assert_eq!(obj_state(world, girder), GIRDER_REINF);
+    }
+
+    #[test]
+    fn fans_come_apart_only_while_fans() {
+        let mut app = world();
+        let world = app.world_mut();
+        let fan = world
+            .spawn((
+                DmObj {
+                    path: TINY_FAN.into(),
+                    ..default()
+                },
+                TilePos::new(2, 2, 1),
+            ))
+            .id();
+        let girder = world
+            .spawn((
+                DmObj {
+                    path: GIRDER.into(),
+                    ..default()
+                },
+                TilePos::new(2, 2, 1),
+            ))
+            .id();
+        job(world, girder, Job::FanDisassemble);
+        assert!(world.get_entity(girder).is_ok(), "not a fan");
+        job(world, fan, Job::FanDisassemble);
+        assert!(world.get_entity(fan).is_err());
     }
 
     #[test]

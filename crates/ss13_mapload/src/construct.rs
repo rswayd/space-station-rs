@@ -21,7 +21,7 @@ pub const TABLE_COMPONENT: &str = "dm_table";
 /// Types the construction code spawns or turns turfs into, so `ss13-mapload convert` emits them
 /// even when no converted map uses them. Fixtures convert without them; the game then skips
 /// what has no prototype.
-pub const CONSTRUCTION_TYPES: [&str; 17] = [
+pub const CONSTRUCTION_TYPES: [&str; 24] = [
     "/turf/open/floor/plating",
     "/turf/open/floor/iron",
     "/turf/closed/wall",
@@ -31,6 +31,13 @@ pub const CONSTRUCTION_TYPES: [&str; 17] = [
     "/obj/structure/girder/reinforced",
     "/obj/structure/falsewall",
     "/obj/structure/falsewall/reinforced",
+    "/obj/structure/holosign/wetsign",
+    "/obj/structure/holosign/barrier",
+    "/obj/structure/holosign/barrier/wetsign",
+    "/obj/structure/holosign/barrier/engineering",
+    "/obj/structure/holosign/barrier/atmos",
+    "/obj/structure/holosign/barrier/medical",
+    "/obj/structure/holosign/barrier/cyborg",
     "/obj/structure/grille",
     "/obj/structure/window/fulltile",
     "/obj/item/stack/sheet/iron",

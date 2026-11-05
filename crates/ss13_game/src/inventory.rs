@@ -510,6 +510,10 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 Some(item)
                     if hand == inventory.active
                         && crate::tools::attack_self(world, client, mob, item) => {}
+                // A holosign projector clears its signs.
+                Some(item)
+                    if hand == inventory.active
+                        && crate::holosign::attack_self(world, client, item) => {}
                 // The forensic scanner's window, an evidence bag empties.
                 Some(item)
                     if hand == inventory.active
@@ -817,6 +821,8 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 None if crate::tables::attack_hand(world, client, mob, target, modifiers) => {}
                 // tg `attack_hand` of a false wall: open or close it.
                 None if crate::falsewall::attack_hand(world, target) => {}
+                // tg `attack_holosign`: a swat.
+                None if crate::holosign::attack_hand(world, mob, target) => {}
                 None => pick_up(world, mob, target, inventory.active),
                 // tg `/obj/item/card/emag/interact_with_atom` on the families with an
                 // `emag_act` (`crate::emag`).

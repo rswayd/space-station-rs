@@ -47,7 +47,7 @@ _«Лампозаменитель» описано в [../power/lighting.md](../
 Голознаки «мокрый пол», голобарьеры СБ и инженеров, атмосферные голобарьеры, проектор силового поля — временные непроходимые/предупреждающие голограммы.
 
 - **Код:** [`/obj/item/holosign_creator`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/holosign_creator.dm#L1), [`/obj/item/forcefield_projector`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/devices/forcefieldprojector.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — голопроекторы: `crates/ss13_game/src/holosign.rs` (подробности в ../engineering/windows-grilles.md, «Голографические знаки и барьеры»); проектора силового поля нет
 
 ### Ручной монитор экипажа
 Портативная версия консоли наблюдения за датчиками костюмов.

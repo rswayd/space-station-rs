@@ -43,7 +43,7 @@
 Маленькие вентиляторы удерживают воздух в проёме (шлюзы шахт, ангары), пропуская людей.
 
 - **Код:** [`/obj/structure/fans`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/fans.dm#L2), [`/obj/structure/fans/tiny`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/fans.dm#L24)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ есть — воздух держат прототипы (`can_atmos_pass = ATMOS_PASS_NO`, `crates/ss13_mapload/src/atmos.rs`), проходимость — плотность типа; `crates/ss13_game/src/construction.rs`: гаечный ключ за 2 с разбирает в 5 листов стали (маленький — 2), щит шаттлового ангара не разбирается
 
 ### Ловушки и растяжки
 Невидимые ловушки (оглушение, огонь, холод, телепорт), растяжки из кабеля между столбиками.

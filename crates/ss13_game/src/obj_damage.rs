@@ -158,6 +158,7 @@ fn add_obj_state(add: On<Add<DmObj>>, objs: Query<&DmObj>, mut commands: Command
         VENT_PUMP,
         FRAME,
         VENDING,
+        crate::holosign::HOLOSIGN,
     ]
     .iter()
     .any(|root| is_under(&obj.path, root));
