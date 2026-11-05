@@ -62,12 +62,11 @@ const SLIME_REACTIONS: &str = "/datum/chemical_reaction/slime/";
 const SLIME_DMI: &str = "icons/mob/simple/slimes.dmi";
 
 /// `SLIME_MAX_NUTRITION`, `SLIME_STARTING_NUTRITION`, `SLIME_GROW_NUTRITION`,
-/// `SLIME_HUNGER_NUTRITION`, `SLIME_STARVE_NUTRITION`.
+/// `SLIME_HUNGER_NUTRITION` (starving, below 10, is hungry too).
 const MAX_NUTRITION: f32 = 200.0;
 const STARTING_NUTRITION: f32 = 100.0;
 const GROW_NUTRITION: f32 = 150.0;
 const HUNGER_NUTRITION: f32 = 50.0;
-const STARVE_NUTRITION: f32 = 10.0;
 /// `SLIME_EVOLUTION_THRESHOLD`, `SLIME_EVOLUTION_COST`, `SLIME_OVERCROWD_AMOUNT`.
 const EVOLUTION_THRESHOLD: u32 = 10;
 const EVOLUTION_COST: f32 = 100.0;
@@ -585,15 +584,8 @@ pub fn handle_nutrition(s: &mut Slime, rng: &mut CombatRng, secs: f64) -> f32 {
         let rate = if s.adult { -1.0 } else { -0.5 };
         s.adjust_nutrition(rate * secs as f32);
     }
-    if s.nutrition < STARVE_NUTRITION {
-        s.hungry = true;
-    } else if s.nutrition < HUNGER_NUTRITION
-        || (s.nutrition < GROW_NUTRITION && spt_prob(rng, 25.0, secs))
-    {
-        s.hungry = true;
-    } else {
-        s.hungry = false;
-    }
+    s.hungry = s.nutrition < HUNGER_NUTRITION
+        || (s.nutrition < GROW_NUTRITION && spt_prob(rng, 25.0, secs));
     if s.nutrition == 0.0 {
         if spt_prob(rng, 50.0, secs) {
             return rng.range(0, 5) as f32;
@@ -1019,7 +1011,7 @@ enum Effect {
     Emp(i32, i32),
     Enrage,
     Later(Delayed),
-    NoEffect,
+    Nothing,
 }
 
 /// `on_reaction` of `/datum/chemical_reaction/slime/<name>`.
@@ -1095,7 +1087,7 @@ fn effect_of(name: &str) -> Effect {
         ]),
         "slime_rng" => RandomSlime,
         "slime_transfer" => Items(&["/obj/item/slimepotion/transference"]),
-        _ => NoEffect,
+        _ => Nothing,
     }
 }
 
@@ -1209,7 +1201,7 @@ pub(crate) fn extract_reacted(
                     x.delete_at = Some(now + DELAYED_DELETE_SECS);
                 }
             }
-            Effect::NoEffect => {}
+            Effect::Nothing => {}
         }
         if deletes && spent && !has_results {
             world.despawn(e);
