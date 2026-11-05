@@ -56,7 +56,7 @@ pub fn storm(world: &mut World, centre: TilePos) {
 }
 
 /// tg `overload_lighting()` + `break_lights()`.
-fn overload_lighting(world: &mut World, apc: Entity) {
+pub(crate) fn overload_lighting(world: &mut World, apc: Entity) {
     let Some(mut state) = world.get_mut::<Apc>(apc) else {
         return;
     };

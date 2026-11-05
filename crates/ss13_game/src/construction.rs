@@ -253,6 +253,8 @@ pub enum Job {
     LawRack(crate::silicon::law_rack::LawRackJob),
     /// Digging rock, prying an ore box apart ([`crate::mining`]).
     Mining(crate::mining::MiningJob),
+    /// Switching a satellite on or off ([`crate::station_goals`]).
+    Satellite,
 }
 
 /// A turf's baseturf stack, bottom first (tg `baseturfs`). Absent: assembled from the type's
@@ -1322,6 +1324,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         }
         &Job::Reinforced(job) => crate::reinforced::complete(world, client, target, job),
         Job::Holosign => crate::holosign::complete(world, item, pos),
+        Job::Satellite => crate::station_goals::complete_toggle(world, client, target),
         Job::FanDisassemble => {
             if !is_under(&path, FANS) {
                 return;

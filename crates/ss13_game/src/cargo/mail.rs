@@ -127,7 +127,9 @@ pub(crate) fn economy_tick(world: &mut World) {
 /// `create_mail`: a mail crate on a free tile of the shuttle among `turfs`, filled.
 pub(crate) fn create_mail(world: &mut World, turfs: &mut Vec<TilePos>) {
     let waiting = world.get_resource::<MailState>().map_or(0, |s| s.waiting);
+    // `SSeconomy.mail_blocked`: the mail strike station trait.
     if waiting == 0
+        || crate::station_traits::has(world, crate::station_traits::MAIL_BLOCKED)
         || turfs.is_empty()
         || matches!(
             crate::security_level::current(world),
