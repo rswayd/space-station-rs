@@ -1636,11 +1636,7 @@ fn kind_act(
                     );
                 }
             }
-            4 | 5 => {
-                if p(5.0) {
-                    emote(world, mob, "cough");
-                }
-            }
+            4 | 5 if p(5.0) => emote(world, mob, "cough"),
             _ => {}
         },
         Kind::Brainrot => brainrot(world, mob, stage, secs, rng),
