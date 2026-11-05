@@ -24,8 +24,9 @@
 use bevy::prelude::*;
 use ss13_chat::radio::{
     FREQ_AI_PRIVATE, FREQ_CENTCOM, FREQ_CONFESSIONAL, FREQ_ENTERTAINMENT, FREQ_INTERROGATION,
-    FREQ_STATUS_DISPLAYS, FREQ_SYNDICATE, RADIO_SPECIAL_CENTCOM, RADIO_SPECIAL_SYNDIE,
-    channel_freq, is_channel_freq, radio_message, sanitize_frequency,
+    FREQ_STATUS_DISPLAYS, FREQ_SYNDICATE, MAX_FREE_FREQ, MAX_FREQ, MIN_FREE_FREQ, MIN_FREQ,
+    RADIO_SPECIAL_CENTCOM, RADIO_SPECIAL_SYNDIE, channel_freq, is_channel_freq, radio_message,
+    sanitize_frequency,
 };
 use ss13_chat::server::{Listeners, SaySystems, Spoke};
 use ss13_chat::speech::{EarsWorn, RadioTarget};
@@ -34,12 +35,17 @@ use ss13_mapload::radio::{HEADSET_ROOT, INTERCOM_ROOT};
 use ss13_mapload::{Areas, DmRadio};
 use ss13_net::chat::server::SendChat;
 use ss13_shared::TilePos;
+use ss13_tgui::server::{
+    AlwaysState, AppTguiExt, OpenUi, ServerUi, UiActed, UiParams, UiReject, UiSystems, UiWindow,
+};
+use ss13_tgui::{UiInterface as _, UiStatus};
 use ss13_world::SpatialIndex;
 
 use crate::combat::CombatRng;
 use crate::ghost::Ghost;
 use crate::inventory::{CarriedBy, Inventory};
 use crate::power::{AreaPower, Channel};
+use crate::radio_ui::{self, RadioData, RadioUi};
 use crate::telecomms::{
     Levels, Net, Signal, Telecomms, TelecommsLevels, TelecommsSystems, broadcast_text,
     vocal_compression,
@@ -256,12 +262,19 @@ impl Plugin for RadioServerPlugin {
             .add_message::<MachineRadio>()
             .init_resource::<Listeners>()
             .init_resource::<TelecommsOutage>()
+            .register_ui::<RadioUi>()
             .add_observer(make_radio)
             .add_systems(
                 Update,
                 (
                     mark_ears,
                     transmit_speech.after(SaySystems).after(TelecommsSystems),
+                    open_intercoms
+                        .after(ss13_world::WorldSystems::Movement)
+                        .after(crate::click::ResolveClicks)
+                        .before(UiSystems::Open),
+                    radio_window_status.in_set(UiSystems::StatusHook),
+                    radio_acts.in_set(UiSystems::Handle),
                 ),
             );
     }
@@ -269,7 +282,215 @@ impl Plugin for RadioServerPlugin {
 
 fn make_radio(add: On<Add<DmRadio>>, radios: Query<&DmRadio>, mut commands: Commands) {
     if let Ok(dm) = radios.get(add.entity) {
-        commands.entity(add.entity).try_insert(Radio::new(dm));
+        let radio = Radio::new(dm);
+        let tuning = RadioTuning::new(dm);
+        let mut entity = commands.entity(add.entity);
+        // A carried radio's window follows its holder (`inventory_state`), an intercom's the
+        // distance (`default_state`).
+        if radio.kind != RadioKind::Intercom {
+            entity.try_insert(AlwaysState);
+        }
+        entity.try_insert((radio, tuning));
+    }
+}
+
+/// The tuning limits of a radio: `freerange` (the free band) and `freqlock`.
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RadioTuning {
+    pub freerange: bool,
+    pub freqlock: bool,
+}
+
+impl RadioTuning {
+    pub fn new(dm: &DmRadio) -> Self {
+        let path = dm.path.as_str();
+        let freqlock = [
+            "/obj/item/radio/intercom/chapel",
+            "/obj/item/radio/intercom/interrogation",
+            "/obj/item/radio/entertainment",
+        ]
+        .iter()
+        .any(|root| is_under(path, root));
+        Self {
+            freerange: dm.freerange,
+            freqlock,
+        }
+    }
+
+    /// `minFrequency`, `maxFrequency`.
+    pub fn band(self) -> (u16, u16) {
+        if self.freerange {
+            (MIN_FREE_FREQ, MAX_FREE_FREQ)
+        } else {
+            (MIN_FREQ, MAX_FREQ)
+        }
+    }
+}
+
+impl ServerUi for RadioUi {
+    type Source = (&'static Radio, Option<&'static RadioTuning>);
+    type UserParam = ();
+    type Act = RadioAct;
+
+    fn static_data(_: (&Radio, Option<&RadioTuning>)) {}
+
+    fn data((radio, tuning): (&Radio, Option<&RadioTuning>), _: Entity, _: &()) -> RadioData {
+        let tuning = tuning.copied().unwrap_or_default();
+        let (min_frequency, max_frequency) = tuning.band();
+        RadioData {
+            broadcasting: radio.broadcasting,
+            listening: radio.listening,
+            frequency: radio.frequency,
+            min_frequency,
+            max_frequency,
+            freqlock: tuning.freqlock,
+            channels: radio.channels.clone(),
+            headset: radio.kind == RadioKind::Headset,
+        }
+    }
+
+    fn parse_act(action: &str, params: &UiParams) -> Result<RadioAct, UiReject> {
+        let channel = || {
+            params
+                .get(radio_ui::CHANNEL)
+                .map(str::to_owned)
+                .ok_or_else(|| UiReject::BadParams("channel: missing".into()))
+        };
+        Ok(match action {
+            radio_ui::FREQUENCY => {
+                if let Ok(adjust) = params.number(radio_ui::ADJUST) {
+                    RadioAct::Adjust(adjust)
+                } else {
+                    RadioAct::Tune(params.number(radio_ui::TUNE)?)
+                }
+            }
+            radio_ui::TUNE_TO_CHANNEL => RadioAct::TuneToChannel(channel()?),
+            radio_ui::LISTEN => RadioAct::Listen,
+            radio_ui::BROADCAST => RadioAct::Broadcast,
+            radio_ui::CHANNEL => RadioAct::Channel(channel()?),
+            // shortcut: no loud mode (`command`) or subspace switch (no radio has them).
+            _ => return Err(UiReject::UnknownAction),
+        })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum RadioAct {
+    /// kHz to add.
+    Adjust(f64),
+    /// kHz.
+    Tune(f64),
+    TuneToChannel(String),
+    Listen,
+    Broadcast,
+    Channel(String),
+}
+
+/// `/obj/item/radio/attack_self` -> `interact`: the window of a radio used in hand.
+pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity) -> bool {
+    let Some(radio) = world.get::<Radio>(item) else {
+        return false;
+    };
+    if radio.kind == RadioKind::Intercom || world.get::<BuiltInRadio>(item).is_some() {
+        return false;
+    }
+    let title = crate::chem::name_of(world, item);
+    world.write_message(OpenUi::new::<RadioUi>(client, mob, item, title));
+    true
+}
+
+/// `/obj/item/radio/intercom/attack_hand`: an empty-hand click opens the intercom's window.
+fn open_intercoms(
+    mut clicks: MessageReader<crate::click::ClickResolved>,
+    radios: Query<(&Radio, Option<&ss13_mapload::DmName>)>,
+    inventories: Query<&Inventory>,
+    mut open: MessageWriter<OpenUi>,
+) {
+    for click in clicks.read() {
+        let Ok((radio, name)) = radios.get(click.target) else {
+            continue;
+        };
+        let empty = inventories
+            .get(click.mob)
+            .is_ok_and(|i| i.active_item().is_none());
+        if radio.kind != RadioKind::Intercom || !empty {
+            continue;
+        }
+        let title = name
+            .map(|n| crate::vending::plain_name(&n.name).to_owned())
+            .unwrap_or_default();
+        open.write(OpenUi::new::<RadioUi>(
+            click.client,
+            click.mob,
+            click.target,
+            title,
+        ));
+    }
+}
+
+/// `inventory_state` of a carried radio: only while its user carries it.
+fn radio_window_status(
+    mut windows: Query<&mut UiWindow>,
+    radios: Query<&Radio>,
+    carried: Query<&CarriedBy>,
+) {
+    for mut window in &mut windows {
+        if window.interface != RadioUi::NAME {
+            continue;
+        }
+        let held = radios
+            .get(window.source)
+            .is_ok_and(|r| r.kind == RadioKind::Intercom)
+            || carried
+                .get(window.source)
+                .is_ok_and(|c| c.0 == window.actor);
+        if !held {
+            window.cap_status(UiStatus::Close);
+        }
+    }
+}
+
+/// `/obj/item/radio/ui_act`, checked against the radio's state now.
+fn radio_acts(
+    mut acts: MessageReader<UiActed<RadioUi>>,
+    mut radios: Query<(&mut Radio, Option<&RadioTuning>)>,
+) {
+    for acted in acts.read() {
+        if let Ok((mut radio, tuning)) = radios.get_mut(acted.source) {
+            apply_act(&mut radio, tuning.copied().unwrap_or_default(), &acted.act);
+        }
+    }
+}
+
+/// One act on `radio`: a locked frequency stays, a channel must be one of the keys'.
+pub fn apply_act(radio: &mut Radio, tuning: RadioTuning, act: &RadioAct) {
+    let syndie = radio.special_channels & RADIO_SPECIAL_SYNDIE != 0;
+    match act {
+        RadioAct::Adjust(_) | RadioAct::Tune(_) | RadioAct::TuneToChannel(_) if tuning.freqlock => {
+        }
+        RadioAct::Adjust(adjust) => {
+            let tune = f64::from(radio.frequency) + (adjust * 10.0).round();
+            radio.frequency = sanitize_frequency(tune, tuning.freerange, syndie);
+        }
+        // tg reads no `tune` param (`else if(tune)` on a zero); the intended tuning is ported.
+        RadioAct::Tune(khz) => {
+            radio.frequency = sanitize_frequency(khz * 10.0, tuning.freerange, syndie);
+        }
+        RadioAct::TuneToChannel(name) => {
+            // Bypasses the band: tunes to the key's encrypted channel.
+            if radio.channels.iter().any(|(c, _)| c == name)
+                && let Some(freq) = channel_freq(name)
+            {
+                radio.frequency = freq;
+            }
+        }
+        RadioAct::Listen => radio.listening = !radio.listening,
+        RadioAct::Broadcast => radio.broadcasting = !radio.broadcasting,
+        RadioAct::Channel(name) => {
+            if let Some(entry) = radio.channels.iter_mut().find(|(c, _)| c == name) {
+                entry.1 = !entry.1;
+            }
+        }
     }
 }
 
@@ -709,6 +930,47 @@ mod tests {
         off.listening = true;
         off.on = false;
         assert!(!off.receives(FREQ_COMMON));
+    }
+
+    #[test]
+    fn the_window_tunes_and_switches() {
+        let mut radio = Radio::new(&dm(
+            "/obj/item/radio/headset/headset_eng",
+            &[(RADIO_CHANNEL_ENGINEERING, true)],
+        ));
+        let open = RadioTuning::default();
+        apply_act(&mut radio, open, &RadioAct::Adjust(0.2));
+        assert_eq!(radio.frequency, FREQ_COMMON + 2);
+        apply_act(&mut radio, open, &RadioAct::Adjust(-10.0));
+        assert_eq!(radio.frequency, MIN_FREQ, "kept in the band");
+        apply_act(&mut radio, open, &RadioAct::Tune(145.9));
+        assert_eq!(radio.frequency, FREQ_COMMON);
+        apply_act(
+            &mut radio,
+            open,
+            &RadioAct::TuneToChannel(RADIO_CHANNEL_ENGINEERING.into()),
+        );
+        assert_eq!(radio.frequency, FREQ_ENGINEERING);
+        apply_act(
+            &mut radio,
+            open,
+            &RadioAct::TuneToChannel(RADIO_CHANNEL_SECURITY.into()),
+        );
+        assert_eq!(radio.frequency, FREQ_ENGINEERING, "not a key channel");
+        apply_act(
+            &mut radio,
+            open,
+            &RadioAct::Channel(RADIO_CHANNEL_ENGINEERING.into()),
+        );
+        assert!(!radio.channels[0].1, "the channel is switched off");
+        apply_act(&mut radio, open, &RadioAct::Listen);
+        assert!(!radio.listening);
+        // A locked intercom keeps its frequency.
+        let mut chapel = Radio::new(&dm("/obj/item/radio/intercom/chapel/directional/west", &[]));
+        let lock = RadioTuning::new(&dm("/obj/item/radio/intercom/chapel/directional/west", &[]));
+        assert!(lock.freqlock);
+        apply_act(&mut chapel, lock, &RadioAct::Adjust(1.0));
+        assert_eq!(chapel.frequency, FREQ_CONFESSIONAL);
     }
 
     #[test]

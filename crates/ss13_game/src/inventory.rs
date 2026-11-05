@@ -581,6 +581,10 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 Some(item)
                     if hand == inventory.active
                         && crate::modpc::pda::attack_self(world, client, mob, item) => {}
+                // A radio opens its window.
+                Some(item)
+                    if hand == inventory.active
+                        && crate::radio::attack_self(world, client, mob, item) => {}
                 // A screwdriver or multitool sets the fuse of the grenade in the other hand.
                 Some(item)
                     if hand != inventory.active
