@@ -63,7 +63,7 @@ pub const SCHEMA: u32 = 3;
 /// Elements whose `AddElement`/`RemoveElement` calls (components: `AddComponent`) are dumped with
 /// the type and proc that make them: what an element does to an atom is decided in procs, which
 /// static vars cannot show.
-pub const SCANNED_ELEMENTS: [&str; 7] = [
+pub const SCANNED_ELEMENTS: [&str; 8] = [
     "/datum/element/undertile",
     "/datum/element/processable",
     "/datum/element/microwavable",
@@ -71,6 +71,7 @@ pub const SCANNED_ELEMENTS: [&str; 7] = [
     "/datum/component/bakeable",
     "/datum/component/grillable",
     "/datum/element/dryable",
+    "/datum/element/dunkable",
 ];
 
 pub struct Environment {

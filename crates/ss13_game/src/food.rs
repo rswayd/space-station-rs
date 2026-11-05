@@ -174,6 +174,9 @@ pub fn item_interaction(
     held: Entity,
     target: Entity,
 ) -> bool {
+    if dunk(world, client, held, target) {
+        return true;
+    }
     if world.get::<CombatMode>(mob).is_some_and(|c| c.0) {
         return false;
     }
@@ -196,6 +199,56 @@ pub fn item_interaction(
         return false;
     };
     try_process(world, actor, target, index);
+    true
+}
+
+/// tg `/datum/element/dunkable` `get_dunked`: a dunkable food used on a `DUNKABLE` container
+/// soaks up to `amount_per_dunk` units. True when it was a dunk.
+fn dunk(world: &mut World, client: Entity, held: Entity, target: Entity) -> bool {
+    let Some(amount) = world
+        .get::<DmFood>(held)
+        .map(|f| f.dunk_amount)
+        .filter(|&a| a > 0.0)
+    else {
+        return false;
+    };
+    let Some((container_flags, volume)) = world
+        .get::<Reagents>(target)
+        .map(|r| (r.0.flags, r.0.total_volume))
+    else {
+        return false;
+    };
+    if container_flags & flags::DUNKABLE == 0 {
+        return false;
+    }
+    let (food, container) = (name_of(world, held), name_of(world, target));
+    if container_flags & flags::DRAINABLE == 0 {
+        tell(
+            world,
+            client,
+            Span::Warning,
+            format!("{container} is unable to be dunked in!"),
+        );
+        return true;
+    }
+    // Not tg: its message names the container twice ("You dunk the cup into the cup").
+    if crate::chem::transfer(world, target, held, amount) > 0.0 {
+        tell(
+            world,
+            client,
+            Span::Notice,
+            format!("You dunk {food} into {container}."),
+        );
+    } else if volume <= 0.0 {
+        tell(
+            world,
+            client,
+            Span::Warning,
+            format!("{container} is empty!"),
+        );
+    } else {
+        tell(world, client, Span::Warning, format!("{food} is full!"));
+    }
     true
 }
 

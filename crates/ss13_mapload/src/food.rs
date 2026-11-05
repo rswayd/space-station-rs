@@ -45,6 +45,7 @@ const PROCESSABLE: &str = "/datum/element/processable";
 const MICROWAVABLE: &str = "/datum/element/microwavable";
 const BAKEABLE: &str = "/datum/component/bakeable";
 const DRYABLE: &str = "/datum/element/dryable";
+const DUNKABLE: &str = "/datum/element/dunkable";
 const GRILLABLE: &str = "/datum/component/grillable";
 /// `DEFAULT_EDIBLE_VOLUME`.
 pub const DEFAULT_EDIBLE_VOLUME: f32 = 50.0;
@@ -122,6 +123,9 @@ pub struct DmFood {
     /// `/datum/element/dryable` (`make_dryable()`): what a drying rack makes of it (its own type:
     /// it is just marked dried); empty: not dryable.
     pub dry_result: String,
+    /// `/datum/element/dunkable` (`Initialize()`): units a dunk soaks from a container; 0: not
+    /// dunkable.
+    pub dunk_amount: f32,
     /// `foodtypes` bits (`MEAT`, `RAW`, ...).
     pub foodtypes: u32,
     /// `crafting_complexity` (0-5): the quality of a handmade one.
@@ -514,6 +518,16 @@ pub fn food(types: &DmTypes, path: &str) -> Option<DmFood> {
             }
         })
         .unwrap_or_default();
+    food.dunk_amount = types
+        .chain(path)
+        .flat_map(|owner| calls(types, DUNKABLE, owner, "Initialize"))
+        .find_map(|line| {
+            match bind(types, path, &call_args(line)?, &["amount_per_dunk"])[0].clone() {
+                Some(Arg::Num(n)) => Some(n),
+                _ => None,
+            }
+        })
+        .unwrap_or(0.0);
     food.foodtypes = n("foodtypes").unwrap_or(0.0) as u32;
     food.crafting_complexity = n("crafting_complexity").unwrap_or(0.0) as u32;
     let overrides_germs = types.chain(path).take_while(|p| *p != FOOD_ROOT).any(|p| {
@@ -770,6 +784,7 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
         ext(c, "grill_time", pair(f.grill_time)),
         ext(c, "grill_good", f.grill_good.to_string()),
         ext(c, "dry_result", s(&f.dry_result)),
+        ext(c, "dunk_amount", format!("{:?}", f.dunk_amount)),
         ext(c, "foodtypes", f.foodtypes.to_string()),
         ext(c, "crafting_complexity", f.crafting_complexity.to_string()),
         ext(c, "decomposes", f.decomposes.to_string()),
@@ -864,6 +879,10 @@ mod tests {
           { "type": "/obj/item/food", "proc": "make_grillable", "call": "AddComponent",
             "line": "AddComponent(/datum/component/grillable, /obj/item/food/badrecipe, rand(20 SECONDS, 30 SECONDS), FALSE)" }
         ],
+        "/datum/element/dunkable": [
+          { "type": "/obj/item/food/bread", "proc": "Initialize", "call": "AddElement",
+            "line": "AddElement(/datum/element/dunkable, amount_per_dunk = 10)" }
+        ],
         "/datum/element/processable": [
           { "type": "/obj/item/food/bread", "proc": "make_processable", "call": "AddElement",
             "line": "AddElement(/datum/element/processable, TOOL_KNIFE, slice_type, yield, 3 SECONDS, table_required = TRUE, screentip_verb = \"Slice\", sound_to_play = SFX_KNIFE_SLICE)" },
@@ -956,6 +975,9 @@ mod tests {
         );
         let slab = food(&types, "/obj/item/food/meat/slab/corgi").unwrap();
         assert_eq!(slab.processing[0].amount, 3, "MEATSLAB_PROCESSED_AMOUNT");
+        // `Initialize()` of an ancestor adds the dunkable element (a named argument).
+        assert_eq!(bread.dunk_amount, 10.0);
+        assert_eq!(slab.dunk_amount, 0.0);
     }
 
     #[test]

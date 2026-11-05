@@ -61,7 +61,7 @@ _«Вкус» описано в [../mobs/hunger-taste.md](../mobs/hunger-taste.m
 Печенье и пончики можно обмакнуть в напиток: они впитывают часть реагентов из кружки.
 
 - **Код:** [`/datum/element/dunkable`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/elements/food/dunkable.dm#L3)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/food.rs` (`dunk`): еда с `dunk_amount` (`AddElement(/datum/element/dunkable, n)` в `Initialize()` по цепочке типов: `crates/ss13_dm_extract` сканирует элемент, `crates/ss13_mapload/src/food.rs`) на ёмкости с `DUNKABLE` впитывает до `n` ед. (сообщения «empty»/«full», не сливаемая — отказ); сообщение называет еду и ёмкость (в tg — ёмкость дважды)
 
 ### Шипение горячей еды (sizzle)
 Только что приготовленная на гриле или в сковороде еда некоторое время шипит (визуальный и звуковой эффект).
