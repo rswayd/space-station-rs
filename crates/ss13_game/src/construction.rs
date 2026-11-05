@@ -251,6 +251,8 @@ pub enum Job {
     Sink(crate::plumbing::SinkJob),
     /// Screwing, welding or repairing a law rack's module ([`crate::silicon::law_rack`]).
     LawRack(crate::silicon::law_rack::LawRackJob),
+    /// Digging rock, prying an ore box apart ([`crate::mining`]).
+    Mining(crate::mining::MiningJob),
 }
 
 /// A turf's baseturf stack, bottom first (tg `baseturfs`). Absent: assembled from the type's
@@ -1208,6 +1210,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Camera(job) => crate::defenses::cameras::complete(world, mob, action, job),
         &Job::Sink(job) => crate::plumbing::complete(world, mob, action, job),
         &Job::LawRack(job) => crate::silicon::law_rack::complete(world, mob, action, job),
+        &Job::Mining(job) => crate::mining::complete(world, mob, action, job),
         &Job::Emitter(job) => crate::power::emitter::complete(world, client, target, job, consume),
         Job::GirderBolts { from } => {
             if !is_under(&path, GIRDER) || obj_state(world, target) != *from || !consume(world) {

@@ -887,6 +887,8 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 None if crate::tables::attack_hand(world, client, mob, target, modifiers) => {}
                 // tg `attack_hand` of a false wall: open or close it.
                 None if crate::falsewall::attack_hand(world, target) => {}
+                // Weak rock by hand; the ore box, ORM and mining console windows.
+                None if crate::mining::interact(world, client, mob, target) => {}
                 // tg `attack_holosign`: a swat.
                 None if crate::holosign::attack_hand(world, mob, target) => {}
                 // tg `attack_hand` of a sink: washing the hands or face.
@@ -1050,6 +1052,9 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                     if crate::mecha::item_interaction(
                         world, client, mob, held, target, modifiers,
                     ) => {}
+                // Mining tools on rock, ore into the ORM or an ore box, a welder on ore.
+                Some(held) if crate::mining::item_interaction(world, client, mob, held, target) => {
+                }
                 // tg `item_interaction` of R&D machines: stacks into lathes, items into the
                 // destructive analyzer.
                 Some(held)

@@ -139,6 +139,15 @@ pub fn convert<'a>(
     let needed: Vec<&str> = needed.into_iter().collect();
     let ctx = crate::fidelity::ConvertContext::new(types);
     let mut loot = crate::spawner::loot_closure(&ctx, &needed);
+    // First: what the consoles sell goes through the closures below.
+    let mining = crate::mining::mining_closure(
+        types,
+        needed
+            .iter()
+            .copied()
+            .chain(loot.iter().map(String::as_str)),
+    );
+    loot.extend(mining);
     let products = crate::vending::product_closure(
         types,
         needed

@@ -42,6 +42,7 @@ pub mod load;
 pub mod look;
 pub mod mecha;
 pub mod medical;
+pub mod mining;
 pub mod mobs;
 pub mod plants;
 pub mod power;
@@ -95,6 +96,7 @@ pub use load::{
 };
 pub use look::{DmLook, DmSprite};
 pub use medical::{DmDefib, DmMedical, DmWounding, MEDICAL_RUNTIME_TYPES};
+pub use mining::{DmMineral, DmOrderConsole, DmOre, DmOreRedemption, OrderItem};
 pub use mobs::DmMob;
 pub use power::DmPower;
 pub use radio::DmRadio;
@@ -323,7 +325,11 @@ impl Plugin for DmProtoPlugin {
             .register_proto_component::<DmMob>("dm_mob")
             .register_proto_component::<DmWallMount>("dm_wallmount")
             .register_proto_component::<DmCircuit>("dm_circuit")
-            .register_proto_component::<DmMachine>("dm_machine");
+            .register_proto_component::<DmMachine>("dm_machine")
+            .register_proto_component::<DmMineral>(mining::MINERAL_COMPONENT)
+            .register_proto_component::<DmOre>(mining::ORE_COMPONENT)
+            .register_proto_component::<DmOreRedemption>(mining::ORM_COMPONENT)
+            .register_proto_component::<DmOrderConsole>(mining::ORDER_COMPONENT);
     }
 }
 

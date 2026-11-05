@@ -99,6 +99,8 @@ pub struct BankAccount {
     pub paycheck_department: String,
     /// `account_job.title`.
     pub job: String,
+    /// `mining_points`: earned at the ore redemption machine, spent at the mining vendor.
+    pub mining_points: i64,
 }
 
 impl BankAccount {
@@ -221,6 +223,7 @@ impl Economy {
                 paycheck,
                 paycheck_department: department.to_owned(),
                 job: String::new(),
+                mining_points: 0,
             },
         );
         id

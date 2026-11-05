@@ -652,6 +652,8 @@ pub fn buy(world: &mut World) {
         );
     }
     world.resource_mut::<SupplyOrders>().shopping_list = kept;
+    // The mining console's paid orders (`/datum/supply_order/disposable`).
+    crate::mining::console::ship_orders(world, &mut turfs);
     let left = world
         .resource::<Economy>()
         .department(ACCOUNT_CAR)
