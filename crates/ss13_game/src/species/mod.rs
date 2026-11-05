@@ -494,7 +494,7 @@ const SPIRIT: SpeciesDef = SpeciesDef {
     name: "Spirit",
     sexes: false,
     traits: SPIRIT_TRAITS,
-    biotypes: SPIRIT | UNDEAD,
+    biotypes: biotype::SPIRIT | UNDEAD,
     organs: OrganSet {
         brain: Some("/obj/item/organ/brain/ghost"),
         heart: None,

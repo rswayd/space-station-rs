@@ -681,7 +681,7 @@ fn give_item(
         {
             continue;
         }
-        if !crate::inventory::can_equip(world, &inventory, item, slot) {
+        if !crate::inventory::can_equip(world, mob, &inventory, item, slot) {
             continue;
         }
         match slot {
