@@ -35,6 +35,7 @@ impl Plugin for GameClientPlugin {
         app.add_plugins(crate::operating_client::OperatingClientPlugin);
         app.add_plugins(crate::forensics::client::ForensicsClientPlugin);
         app.add_plugins(crate::service::client::ServiceClientPlugin);
+        app.add_plugins(crate::brig::client::BrigClientPlugin);
         app.add_plugins((
             PredictionPlugin,
             crate::ui_sprites::UiSpritesPlugin,

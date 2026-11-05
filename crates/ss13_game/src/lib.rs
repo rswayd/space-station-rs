@@ -34,7 +34,8 @@
 //! - `status_effects` (feature `server`): tg stuns, knockdowns, paralysis, immobilization,
 //!   stamina and stamcrit, confusion; the traits moves, clicks and hands read. `restraints`
 //!   (feature `server`): handcuffs, resisting out, taking them off. `security` (feature
-//!   `server`): stun batons, flashes, the shove.
+//!   `server`): stun batons, flashes, the shove. `brig`: brig cell timers and the prisoner
+//!   management console (`BrigTimer`, `PrisonerManagement`).
 //! - `ghost` (feature `server`): a dead player's ghost, invisible to the living.
 //! - `atmos` (feature `server`): gas overlays replicate, gas analyzers print their readout.
 //!   `atmos_machinery` (feature `server`): pipe networks, vents, scrubbers, pumps, valves,
@@ -167,6 +168,7 @@ pub mod bots;
 pub mod breath;
 #[cfg(feature = "client")]
 pub mod breath_client;
+pub mod brig;
 pub mod cargo;
 #[cfg(feature = "server")]
 pub mod chem;

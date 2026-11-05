@@ -127,6 +127,15 @@ pub mod files {
         "sound/machines/terminal/terminal_prompt_deny.ogg",
         "sound/machines/terminal/terminal_prompt_confirm.ogg",
     ];
+    /// The prisoner management console (`ss13_game::brig::prisoner`): `id_insert`/`id_eject`
+    /// and its `ui_act` sounds.
+    pub const PRISONER: [&str; 5] = [
+        "sound/machines/terminal/terminal_insert_disc.ogg",
+        "sound/machines/terminal/terminal_prompt_confirm.ogg",
+        "sound/machines/terminal/terminal_on.ogg",
+        "sound/machines/terminal/terminal_off.ogg",
+        "sound/machines/terminal/terminal_error.ogg",
+    ];
     /// The communications console (`ss13_game::comms_server`): its terminal sounds and
     /// `make_announcement`'s captain and Syndicate sounds (the announcers' are in `sfx.ron`), the
     /// admins' request notification (`ss13_admin`).
@@ -676,6 +685,7 @@ pub fn referenced<'a>(
     out.extend(files::SECURITY_LEVELS.map(str::to_owned));
     out.extend(files::VENDING.map(str::to_owned));
     out.extend(files::COMMS.map(str::to_owned));
+    out.extend(files::PRISONER.map(str::to_owned));
     out.extend(files::BOTS.map(str::to_owned));
     out.extend(files::EXPLOSION.map(str::to_owned));
     out.extend(files::MARTIAL.map(str::to_owned));

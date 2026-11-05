@@ -3,7 +3,7 @@
 //! lockers unlock and the APCs turn their lighting off (`COMSIG_GLOB_GREY_TIDE`). The
 //! announcement comes 50-60 fires in, after the doors.
 // shortcut: no light flicker every 12 fires (`COMSIG_GLOB_GREY_TIDE_LIGHT`, lights cannot
-// flicker yet), no brig cell timers (not ported), no `critical_machine` doors (none ported).
+// flicker yet), no `critical_machine` doors (none ported).
 
 use std::ops::RangeInclusive;
 
@@ -111,6 +111,14 @@ pub fn grey_tide(world: &mut World, areas: &[&str]) {
         }
         crate::closets::refresh_look(world, closet);
     }
+
+    let mut q = world.query_filtered::<(Entity, &TilePos), With<crate::brig::timer::DoorTimer>>();
+    let timers: Vec<Entity> = q
+        .iter(world)
+        .filter(|&(_, &pos)| struck(world, pos, &levels, areas))
+        .map(|(e, _)| e)
+        .collect();
+    crate::brig::timer::grey_tide(world, timers);
 
     let mut q = world.query_filtered::<(Entity, &TilePos), With<Apc>>();
     let apcs: Vec<Entity> = q

@@ -7,6 +7,7 @@ mod border;
 mod botany;
 mod bots;
 mod breath;
+mod brig;
 mod brothers;
 mod cargo;
 mod changeling;

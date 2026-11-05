@@ -1101,6 +1101,11 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 Some(held)
                     if crate::cargo::bounty::item_interaction(world, client, mob, held, target) => {
                 }
+                // tg `item_interaction` of the prisoner console: a prisoner ID goes in.
+                Some(held)
+                    if crate::brig::prisoner::item_interaction(
+                        world, client, mob, held, target,
+                    ) => {}
                 // tg `interact_with_atom` of the universal scanner: an export scan.
                 Some(held)
                     if crate::cargo::scanner::item_interaction(world, client, held, target) => {}

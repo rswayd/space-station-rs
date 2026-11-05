@@ -3,7 +3,8 @@
 //! hold: `code/modules/assembly/doorcontrol.dm`), light switches (`lightswitch.dm`), mounted
 //! flashers (`flasher.dm`), extinguisher cabinets (`code/game/objects/structures/extinguisher.dm`)
 //! and fire axe cabinets (`fireaxe.dm`), and the machines buttons drive on the floor and walls:
-//! mass drivers (`mass_driver.dm`), igniters and sparkers (`igniter.dm`). Only those families get
+//! mass drivers (`mass_driver.dm`), igniters and sparkers (`igniter.dm`), and brig cell timers
+//! (`brigdoors.dm`, `ss13_game::brig`). Only those families get
 //! [`DmWallMount`]; the game (`ss13_game::wallmount`) builds their live state from it once.
 //!
 //! Map var edits of `id`, `req_access`, `req_one_access`, `normaldoorcontrol`,
@@ -34,12 +35,14 @@ pub const IGNITER_ROOT: &str = "/obj/machinery/igniter";
 pub const SPARKER_ROOT: &str = "/obj/machinery/sparker";
 /// `/obj/machinery/turretid`, the turret control panel.
 pub const TURRETID_ROOT: &str = "/obj/machinery/turretid";
+/// `/obj/machinery/status_display/door_timer`, the brig cell timer: its `id` and access.
+pub const DOOR_TIMER_ROOT: &str = "/obj/machinery/status_display/door_timer";
 /// What the cabinets create in `Initialize(mapload)` (`new /obj/item/extinguisher(src)`, a fire
 /// axe cabinet's default `item_path`).
 pub const WALLMOUNT_RUNTIME_TYPES: [&str; 2] = ["/obj/item/extinguisher", "/obj/item/fireaxe"];
 
 const COMPONENT: &str = "dm_wallmount";
-const ROOTS: [&str; 10] = [
+const ROOTS: [&str; 11] = [
     FIREALARM_ROOT,
     BUTTON_ROOT,
     LIGHT_SWITCH_ROOT,
@@ -50,6 +53,7 @@ const ROOTS: [&str; 10] = [
     IGNITER_ROOT,
     SPARKER_ROOT,
     TURRETID_ROOT,
+    DOOR_TIMER_ROOT,
 ];
 
 /// The vars of a wall mount (type defaults + map edits). Prototype data like
@@ -58,7 +62,7 @@ const ROOTS: [&str; 10] = [
 pub struct DmWallMount {
     /// The DM type: every wall-mount type sets its own, so instances keep their type's.
     pub path: String,
-    /// Buttons, flashers, mass drivers, igniters and sparkers: `id`, the channel they control or
+    /// Buttons, flashers, mass drivers, igniters, sparkers and door timers: `id`, the channel they control or
     /// listen on (DM `"[id]"`; empty is `null`).
     pub id: String,
     /// Buttons: the access their airlock electronics hold.
