@@ -21,9 +21,10 @@
 //!   tier 1 capacitors and a high-capacity cell: 1 kW). Walking out
 //!   opens it (tg `relaymove`).
 // shortcut: no cyborg HUD (the human slots are shown; only the hands and the back slot work),
-// no lamp, ion thrusters, model transform animation, skins, upgrades, emag modules, lockdown,
-// tipping or MMI; consumables are not respawned at the station (nor their 0.5% of the charge
-// drawn, which tg takes only when something was restocked).
+// no lamp, ion thrusters, model transform animation, skins, tipping or MMI (the cover, cell
+// slot, emag, lockdown and upgrades: `super::chassis`, `super::borg_upgrades`); consumables
+// are not respawned at the station (nor their 0.5% of the charge drawn, which tg takes only
+// when something was restocked).
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
@@ -37,9 +38,7 @@ use ss13_world::Mover;
 use super::ai::AiCore;
 use super::laws::{Laws, round_default};
 use super::ui::ListInputStatic;
-use super::{
-    ListInput, ListInputWindow, Silicon, Silicons, attach_client, give_radio, notice, show_laws,
-};
+use super::{ListInput, ListInputWindow, Silicon, Silicons, attach_client, give_radio, notice};
 use crate::click::{ClickResolved, ResolveClicks};
 use crate::health::{HealthSystems, Stat, living_bundle};
 use crate::hud::HudData;
@@ -164,37 +163,54 @@ pub(crate) fn connect(world: &mut World, borg: Entity, ai: Entity) {
     lawsync(world, borg);
 }
 
-/// tg `lawsync`: a linked cyborg with `lawupdate` takes its AI's laws.
-fn lawsync(world: &mut World, borg: Entity) {
+/// tg `lawsync`: a linked cyborg with `lawupdate` takes its AI's laws. True when they changed.
+pub(crate) fn lawsync(world: &mut World, borg: Entity) -> bool {
     let Some(cyborg) = world.get::<Cyborg>(borg) else {
-        return;
+        return false;
     };
     let Some(ai) = cyborg.connected_ai.filter(|_| cyborg.lawupdate) else {
-        return;
+        return false;
     };
     let Some(laws) = world.get::<Laws>(ai).map(Laws::for_cyborg) else {
+        return false;
+    };
+    if world.get::<Laws>(borg) == Some(&laws) {
+        return false;
+    }
+    world.entity_mut(borg).insert(laws);
+    true
+}
+
+/// tg `set_connected_ai(null)`: the cyborg leaves its AI's `connected_robots`.
+pub(crate) fn disconnect(world: &mut World, borg: Entity) {
+    let Some(ai) = world
+        .get_mut::<Cyborg>(borg)
+        .and_then(|mut c| c.connected_ai.take())
+    else {
         return;
     };
-    if world.get::<Laws>(borg) != Some(&laws) {
-        world.entity_mut(borg).insert(laws);
+    if let Some(mut core) = world.get_mut::<AiCore>(ai) {
+        core.connected_robots.retain(|&b| b != borg);
     }
 }
 
-/// Cyborgs without an AI link to `ai` (tg `/datum/job/ai/after_spawn`).
+/// Cyborgs without an AI link to `ai` (tg `/datum/job/ai/after_spawn` -> `try_connect_to_ai`:
+/// linked, synced, `lawupdate` on). Emagged and scrambled ones stay free.
 pub(crate) fn link_orphans(world: &mut World, ai: Entity) {
-    let mut borgs = world.query::<(Entity, &Cyborg)>();
+    let mut borgs = world.query::<(Entity, &Cyborg, Option<&super::chassis::Chassis>)>();
     let orphans: Vec<Entity> = borgs
         .iter(world)
-        .filter(|(_, c)| c.connected_ai.is_none())
-        .map(|(e, _)| e)
+        .filter(|(_, c, chassis)| {
+            c.connected_ai.is_none() && !chassis.is_some_and(|ch| ch.emagged || ch.scrambledcodes)
+        })
+        .map(|(e, ..)| e)
         .collect();
     for borg in orphans {
-        connect(world, borg, ai);
-        if let Some(player) = world.get::<crate::server::PlayerMob>(borg).copied()
-            && let Some(laws) = world.get::<Laws>(borg).cloned()
-        {
-            show_laws(world, player.client, &laws);
+        if let Some(mut cyborg) = world.get_mut::<Cyborg>(borg) {
+            cyborg.lawupdate = true;
         }
+        connect(world, borg, ai);
+        super::chassis::show_laws(world, borg);
     }
 }
 
@@ -246,12 +262,19 @@ pub(crate) fn join(
         super::alarms::AlertListener::silicon(false),
         super::alarms::AlarmQueue::default(),
     ));
+    super::chassis::setup(world, borg);
     world.resource_mut::<Jobs>().add_position(job);
     attach_client(world, client, borg, pos);
     give_radio(world, borg, &[]);
     super::ai_hud::give_borg_buttons(world, borg);
-    if let Some(ai) = fewest_borgs_ai(world) {
-        connect(world, borg, ai);
+    // tg `Initialize`: no AI to link to, no lawsync.
+    match fewest_borgs_ai(world) {
+        Some(ai) => connect(world, borg, ai),
+        None => {
+            if let Some(mut cyborg) = world.get_mut::<Cyborg>(borg) {
+                cyborg.lawupdate = false;
+            }
+        }
     }
     world.write_message(OpenUi::new::<ListInputWindow>(
         client,
@@ -259,9 +282,7 @@ pub(crate) fn join(
         borg,
         "Выбор модели",
     ));
-    if let Some(laws) = world.get::<Laws>(borg).cloned() {
-        show_laws(world, client, &laws);
-    }
+    super::chassis::show_laws(world, borg);
     notice(world, client, Span::BoldNotice, RADIO_INFO);
     info!(
         "{name} ({client}) joined as Cyborg at {pos:?}{}",
@@ -338,11 +359,22 @@ fn choose_model(world: &mut World, mut acts: Local<MessageCursor<UiActed<ListInp
     }
 }
 
-/// tg `transform_to`: the model's sprite, modules and radio channels.
+/// tg `transform_to`: the model's sprite, modules (and `emag_modules` when emagged) and radio
+/// channels; the old model and its modules go.
 pub fn transform_to(world: &mut World, borg: Entity, index: usize, model: &RobotModel) {
     let Some(&pos) = world.get::<TilePos>(borg) else {
         return;
     };
+    if let Some(old) = world.get::<Cyborg>(borg).and_then(|c| c.model_item) {
+        // `drop_all_held_items`, then `qdel(src)` with its modules.
+        stow_held(world, borg, false);
+        if let Some(mut inventory) = world.get_mut::<Inventory>(borg)
+            && inventory.back == Some(old)
+        {
+            inventory.back = None;
+        }
+        world.entity_mut(old).despawn();
+    }
     if let Some(id) = world
         .get_resource::<IconIndex>()
         .and_then(|i| i.get(ROBOTS_DMI, &model.cyborg_base_icon))
@@ -382,6 +414,12 @@ pub fn transform_to(world: &mut World, borg: Entity, index: usize, model: &Robot
     if let Some(mut cyborg) = world.get_mut::<Cyborg>(borg) {
         cyborg.model = Some(index);
         cyborg.model_item = item;
+    }
+    if world
+        .get::<super::chassis::Chassis>(borg)
+        .is_some_and(|c| c.emagged)
+    {
+        super::chassis::add_emag_modules(world, borg);
     }
 }
 
@@ -633,12 +671,15 @@ fn station_looks(
     }
 }
 
-/// Laws follow the AI (tg `lawsync` whenever the AI's laws change).
+/// Laws follow the AI (tg `lawsync` whenever the AI's laws change), and the cyborg is shown
+/// them (`post_lawchange` -> `show_laws`).
 fn sync_laws(world: &mut World, mut changed: Local<Vec<Entity>>) {
     let mut ais = world.query_filtered::<&AiCore, Changed<Laws>>();
     changed.extend(ais.iter(world).flat_map(|c| c.connected_robots.clone()));
     for borg in std::mem::take(&mut *changed) {
-        lawsync(world, borg);
+        if lawsync(world, borg) {
+            super::chassis::show_laws(world, borg);
+        }
     }
 }
 

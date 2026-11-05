@@ -6,6 +6,9 @@
 //!   cyborgs' HUD buttons, VOX announcements, the core display;
 //! - [`alarms`] (server): station alarms, their silicon listeners and the alert console;
 //! - [`cyborg`] (server): cyborgs, their models, cell and the recharging station;
+//!   [`chassis`] (server): the cover and its lock, the cell slot, emags, lockdown, the
+//!   cyborg's law display; [`borg_upgrades`] (server): upgrade boards; [`robotics`] (server):
+//!   the robotics control console;
 //! - [`laws`] (server): lawsets, the round default, lawsync;
 //! - [`interact`] (server): silicons opening machine windows (`attack_ai`), their window
 //!   status; [`airlock`] (server): the airlock's `AiAirlock` window;
@@ -31,7 +34,11 @@ pub mod airlock;
 #[cfg(feature = "server")]
 pub mod alarms;
 #[cfg(feature = "server")]
+pub mod borg_upgrades;
+#[cfg(feature = "server")]
 pub mod cameras;
+#[cfg(feature = "server")]
+pub mod chassis;
 #[cfg(feature = "client")]
 pub mod client;
 #[cfg(feature = "server")]
@@ -40,6 +47,8 @@ pub mod cyborg;
 pub mod interact;
 #[cfg(feature = "server")]
 pub mod laws;
+#[cfg(feature = "server")]
+pub mod robotics;
 pub mod ui;
 
 #[cfg(feature = "server")]
@@ -87,6 +96,8 @@ mod server {
                     super::alarms::AlarmsPlugin,
                     super::ai_hud::AiHudPlugin,
                     super::cyborg::CyborgPlugin,
+                    super::chassis::ChassisPlugin,
+                    super::robotics::RoboticsPlugin,
                     super::interact::SiliconInteractPlugin,
                     super::airlock::AiAirlockPlugin,
                 ))

@@ -151,3 +151,40 @@ pub struct AlarmAlert {
 
 /// `act('select_camera', { alert })`.
 pub const SELECT_CAMERA: &str = "select_camera";
+
+/// tg `RoboticsControlConsole`: the cyborgs the user may lock down.
+pub struct RoboticsConsoleUi;
+
+impl UiInterface for RoboticsConsoleUi {
+    const NAME: &'static str = "RoboticsControlConsole";
+    type Data = RoboticsConsoleData;
+    type StaticData = ();
+}
+
+/// One entry of `ui_data`'s `cyborgs`.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct RoboticsCyborg {
+    pub name: String,
+    pub locked_down: bool,
+    /// tg `stat`: 0 conscious.
+    pub status: u8,
+    /// Cell charge, percent; `None`: no cell.
+    pub charge: Option<u32>,
+    /// `"[model.name] Model"`.
+    pub module: String,
+    /// The master AI's name.
+    pub synchronization: Option<String>,
+    pub emagged: bool,
+    /// tg `REF(R)`: an opaque id the `stopbot` act names.
+    pub borg_ref: String,
+}
+
+/// `ui_data`: `cyborgs` (tg's `can_hack`, `can_detonate` and `drones` are not sent: no malf
+/// AI, no drones here).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct RoboticsConsoleData {
+    pub cyborgs: Vec<RoboticsCyborg>,
+}
+
+/// `act('stopbot', { ref })`.
+pub const STOPBOT: &str = "stopbot";
