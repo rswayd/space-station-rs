@@ -5,25 +5,25 @@
 Разум хранит опыт по каждому навыку; уровни от «Novice» до «Legendary» дают модификаторы (скорость действия, шанс) и сообщения о повышении; на высшем уровне выдаётся награда (плащ навыка).
 
 - **Код:** [`/datum/skill`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/skills/_skill.dm#L3), [`proc/level_gained()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/skills/_skill.dm#L50), [`proc/try_skill_reward()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/skills/_skill.dm#L70), [`/datum/mind/proc/adjust_experience()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/mind/skills.dm#L13), [`/datum/mind/proc/get_skill_modifier()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/mind/skills.dm#L49)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/skills.rs`: `Skills` на мобе (опыт и уровни по `SKILL_EXP_LIST`), `adjust_experience`/`set_level`, сообщения о повышении и понижении, `modifier` (скорость, шанс, разброс, значение); навыки принадлежат телу, а не разуму (не переносятся с разумом); нет множителей опыта и награды за легендарный уровень (её выдаёт приложение skill tracker в КПК — группа КПК)
 
 ### Навык уборки
 Опыт за уборку грязи; ускоряет мытьё шваброй и тряпкой.
 
 - **Код:** [`/datum/skill/cleaning`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/skills/cleaning.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/skills.rs`, `crates/ss13_game/src/janitor.rs`: швабра и мыло быстрее (`min(модификатор + смещение, 1)`), швабра тратит меньше реагентов, мыло реже теряет заряд; опыт `round(beauty / -15)` за каждое пятно и 1 за отмывание
 
 ### Навык атлетики
 Опыт за тренажёры; уменьшает усталость и усиливает эффект тренировки.
 
 - **Код:** [`/datum/skill/athletics`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/skills/athletics.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/skills.rs`, `crates/ss13_game/src/tables.rs`: опыт и ускорение за подъём на столы и стеллажи, модификаторы уровней; тренажёры, `exercised`, бокс, перенос на плечах и осмотр физформы — с их механиками
 
 ### Навык добычи (Mining)
 Опыт за копание руды; ускоряет кирку и бур.
 
 - **Код:** [`/datum/skill/mining`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/skills/mining.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/skills.rs`, `crates/ss13_game/src/mining/rocks.rs`: кирка/бур и копание руками быстрее по уровню, опыт за стены инструментом и кинетическим выстрелом (`mine_experience` × количество руды, 4 за пустую породу); нет скан-импульса с уровня Journeyman
 
 _«Навык рыбалки» описано в [../service/fishing.md](../service/fishing.md)._
 
@@ -31,7 +31,7 @@ _«Навык рыбалки» описано в [../service/fishing.md](../serv
 Опыт за аркадные автоматы и игры на планшете.
 
 - **Код:** [`/datum/skill/gaming`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/skills/gaming.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/skills.rs`: навык и модификаторы; опыт за аркады и игры на КПК — с аркадами (не портированы)
 
 ### Панель навыков (админ) и просмотр уровней
 TGUI-панель для просмотра и редактирования навыков разума; печать уровней.

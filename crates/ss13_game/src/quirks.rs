@@ -10,16 +10,26 @@
 //!   [`Quirks`] component, the quirk's own effect and, once, its items (`item_quirk`).
 //! - Processing quirks act every `SSquirks` fire (1 s) while the holder is below hard crit.
 //!
-//! Ported quirks: Bilingual (`ss13_chat::language`), Alcohol Tolerance and Light Drinker (booze power, `ss13_reagents`), Drunken
-//! Resilience, Friendly (`crate::mood::on_hug`), Jolly, Voracious (nutrition moodlets),
-//! Monochromacy, Blind and Nearsighted (`crate::vision`), Depression, Hypersensitive, Unstable
-//! (`crate::mood`), Mute and Pacifist (`crate::medical::traumas::refresh`), Brain Tumor,
-//! Bad Back, Paraplegic (an absolute paralysis trauma).
+//! Ported quirks: Bilingual, Foreigner and Common Second Language (`ss13_chat::language`),
+//! Alcohol Tolerance and Light Drinker (booze power, `ss13_reagents`), Drunken Resilience,
+//! Friendly (`crate::mood::on_hug`), Jolly, Voracious (nutrition moodlets), Monochromacy, Blind
+//! and Nearsighted (`crate::vision`), Depression, Hypersensitive, Unstable (`crate::mood`), Mute,
+//! Soft-Spoken and Pacifist (`crate::medical::traumas::refresh`), Brain Tumor, Bad Back,
+//! Paraplegic and Hemiplegic (absolute paralysis traumas), Freerunning (`crate::tables` climbing,
+//! `crate::multiz` short falls), Light Step (`crate::footsteps`), Deaf (`crate::sound`), Blood
+//! Deficiency (`crate::medical::blood`), Illiterate (papers), Tin Man (surplus cybernetic
+//! organs), Body Purist (a moodlet per cybernetic part), Smooth-Headed (bald, a moodlet when the
+//! head is uncovered), and the tastes of `crate::food`: Ageusia, Vegetarian, Deviant Tastes,
+//! Ananas Affinity and Aversion.
 // shortcut: the other tg quirks wait for their mechanics (addictions, allergies,
-// phobias, skillchips, species, hallucinations, wheelchairs...); no medical record lines, no
-// customization options (blindfold colour, glasses type, paraplegic variant), no hardcore or
-// random quirks, no mail goodies, no quirk transfer between bodies; the point settings are tg's
-// config defaults, not read from `config/game_options.txt`. Removing Paraplegic keeps its trauma.
+// phobias, skillchips, hallucinations, wheelchairs...); no medical record lines, no
+// customization options (blindfold colour, glasses type, paraplegic variant, hemiplegic side,
+// CSL strength), no hardcore or random quirks, no mail goodies, no quirk transfer between
+// bodies; the point settings are tg's config defaults, not read from `config/game_options.txt`.
+// Removing Paraplegic or Hemiplegic keeps its trauma. CSL does not fall back to the native
+// language at low sanity (`translate_parts`); Light Step leaves bloody soles and glass shards
+// alone (not ported); Smooth-Headed gives no wig; Deviant Tastes swaps the tastes of every
+// tongue, not the one it found; Ageusia still tastes handmade food's complexity.
 
 use bevy::prelude::*;
 use ss13_mapload::DmItem;
@@ -33,9 +43,10 @@ use crate::health::{DamageType, Health, Stat, update_stat};
 use crate::inventory::{CarriedBy, Inventory};
 use crate::medical::organs::{self, Slot};
 use crate::medical::traumas::{self, Kind, Paralysis, Resilience};
-use crate::mood::{self, Mood, events};
+use crate::mood::{self, ActiveMood, Mood, MoodEvent, events};
 use crate::outfit::OutfitTemplates;
 use crate::server::PlayerMob;
+use crate::species::Trait;
 
 /// `default_quirk_points` (config default).
 pub const DEFAULT_QUIRK_POINTS: i32 = 2;
@@ -51,8 +62,51 @@ const BACKPACK: &str = "/obj/item/storage/backpack";
 const BLINDFOLD: &str = "/obj/item/clothing/glasses/blindfold/white";
 const GLASSES: &str = "/obj/item/clothing/glasses/regular";
 const MANNITOL_BOTTLE: &str = "/obj/item/storage/pill_bottle/mannitol/braintumor";
+const DEAF_PIN: &str = "/obj/item/clothing/accessory/deaf_pin";
+/// `MEAT`, `PINEAPPLE` (`crate::food` foodtype bits).
+const MEAT: u32 = 1 << 0;
+const PINEAPPLE: u32 = 1 << 12;
+/// Tin Man's `organ_slots`: the surplus prosthetic and the species trait that skips it.
+const TIN_MAN_ORGANS: [(Slot, &str, Trait); 4] = [
+    (
+        Slot::Heart,
+        "/obj/item/organ/heart/cybernetic/surplus",
+        Trait::NoBlood,
+    ),
+    (
+        Slot::Lungs,
+        "/obj/item/organ/lungs/cybernetic/surplus",
+        Trait::NoBreath,
+    ),
+    (
+        Slot::Liver,
+        "/obj/item/organ/liver/cybernetic/surplus",
+        Trait::LiverlessMetabolism,
+    ),
+    (
+        Slot::Stomach,
+        "/obj/item/organ/stomach/cybernetic/surplus",
+        Trait::NoHunger,
+    ),
+];
+/// `/datum/mood_event/body_purist` (its `mood_change` is set per cybernetic part) and
+/// `/datum/mood_event/bald`.
+const BODY_PURIST_EVENT: MoodEvent = MoodEvent {
+    id: "body_purist",
+    description: "Я чувствую кибернетику в своем теле, и Я ЭТО НЕНАВИЖУ!",
+    mood_change: 0.0,
+    timeout: 0.0,
+    hidden: false,
+};
+const BALD_EVENT: MoodEvent = MoodEvent {
+    id: "bald",
+    description: "Мне бы прикрыть чем-нибудь мою голову...",
+    mood_change: -3.0,
+    timeout: 0.0,
+    hidden: false,
+};
 /// Items the quirks hand out: `crate::jobs` builds their templates with the outfits'.
-pub const ITEM_PATHS: [&str; 3] = [BLINDFOLD, GLASSES, MANNITOL_BOTTLE];
+pub const ITEM_PATHS: [&str; 4] = [BLINDFOLD, GLASSES, MANNITOL_BOTTLE, DEAF_PIN];
 
 /// The ported tg quirk types.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -75,6 +129,23 @@ pub enum Quirk {
     Paraplegic,
     Unstable,
     Monochromacy,
+    Freerunning,
+    LightStep,
+    BloodDeficiency,
+    BodyPurist,
+    Csl,
+    Deaf,
+    Hemiplegic,
+    Illiterate,
+    SoftSpoken,
+    TinMan,
+    Ageusia,
+    PineappleLiker,
+    PineappleHater,
+    DeviantTastes,
+    Foreigner,
+    Bald,
+    Vegetarian,
 }
 
 /// The static part of a quirk (tg vars).
@@ -116,7 +187,7 @@ const fn q(
 
 /// Every ported quirk in tg's menu order (`cmp_quirk_asc`: positive, negative, neutral, then by
 /// name). BandaStation texts.
-pub const QUIRKS: [QuirkDef; 18] = [
+pub const QUIRKS: [QuirkDef; 35] = [
     q(
         Quirk::AlcoholTolerance,
         "/datum/quirk/alcohol_tolerance",
@@ -162,6 +233,16 @@ pub const QUIRKS: [QuirkDef; 18] = [
         )),
     ),
     q(
+        Quirk::Freerunning,
+        "/datum/quirk/freerunning",
+        "Freerunning",
+        "У вас отлично получаются быстрые движения! Вы можете быстрее взбираться на столы и не получать повреждений от коротких падений.",
+        "running",
+        8,
+        Some((Span::Notice, "Вы чувствуете себя уверенно на своих двоих!")),
+        Some((Span::Danger, "Вы снова чувствуете себя неуклюжим.")),
+    ),
+    q(
         Quirk::Friendly,
         "/datum/quirk/friendly",
         "Friendly",
@@ -183,6 +264,16 @@ pub const QUIRKS: [QuirkDef; 18] = [
         4,
         None,
         None,
+    ),
+    q(
+        Quirk::LightStep,
+        "/datum/quirk/light_step",
+        "Light Step",
+        "Вы ходите мягким шагом; шаги и наступание на острые предметы будут тише и менее болезненными. Кроме того, вы не испачкаете руки и одежду, если наступите в кровь.",
+        "shoe-prints",
+        4,
+        Some((Span::Notice, "Вы ходите с большей гибкостью.")),
+        Some((Span::Danger, "Вы начинаете рыскать повсюду, как варвар.")),
     ),
     q(
         Quirk::Voracious,
@@ -217,6 +308,32 @@ pub const QUIRKS: [QuirkDef; 18] = [
         Some((Span::Notice, "Чудесным образом к вам вернулось зрение.")),
     ),
     q(
+        Quirk::BloodDeficiency,
+        "/datum/quirk/blooddeficiency",
+        "Blood Deficiency",
+        "Ваш организм не может вырабатывать достаточно крови для поддержания жизнедеятельности.",
+        "tint",
+        -8,
+        Some((Span::Danger, "Вы чувствуете, как силы покидают вас.")),
+        Some((Span::Notice, "Вы снова полны сил.")),
+    ),
+    q(
+        Quirk::BodyPurist,
+        "/datum/quirk/body_purist",
+        "Body Purist",
+        "Вы верите, что ваше тело - это храм, а его естественная форма - воплощение совершенства. Соответственно, вы презираете идею когда-либо дополнять его неестественными частями, кибернетическими протезами или чем-то подобным.",
+        "person-rays",
+        -2,
+        Some((
+            Span::Danger,
+            "Теперь вам начинает не нравиться идея установки каких-либо имплантатов.",
+        )),
+        Some((
+            Span::Notice,
+            "Может быть, импланты - это не так уж и плохо. Теперь вы нормально относитесь ко всем видам изменения тела.",
+        )),
+    ),
+    q(
         Quirk::BrainTumor,
         "/datum/quirk/item_quirk/brainproblems",
         "Brain Tumor",
@@ -228,6 +345,29 @@ pub const QUIRKS: [QuirkDef; 18] = [
         Some((Span::Notice, "Вы снова здраво мыслите.")),
     ),
     q(
+        Quirk::Csl,
+        "/datum/quirk/csl",
+        "Common Second Language",
+        "Общегалактический язык не является вашим родным языком — это нечто, чему вам пришлось научиться в процессе жизни. Некоторые слова на общем языке звучат чуждо, и в моменты тревоги или расстройства вы можете вернуться к своему родному языку.",
+        "landmark-dome",
+        -2,
+        Some((Span::Danger, "Вам трудно понимать общегалактический язык.")),
+        Some((
+            Span::Notice,
+            "Вы начинаете лучше разбираться в общегалактическом языке.",
+        )),
+    ),
+    q(
+        Quirk::Deaf,
+        "/datum/quirk/item_quirk/deafness",
+        "Deaf",
+        "Вы неизлечимо глухой.",
+        "deaf",
+        -8,
+        Some((Span::Danger, "Вы ничего не слышите.")),
+        Some((Span::Notice, "Вы снова можете слышать!")),
+    ),
+    q(
         Quirk::Depression,
         "/datum/quirk/depression",
         "Depression",
@@ -236,6 +376,16 @@ pub const QUIRKS: [QuirkDef; 18] = [
         -3,
         Some((Span::Danger, "У вас начинается депрессия.")),
         Some((Span::Notice, "Вы больше не испытываете депрессию.")),
+    ),
+    q(
+        Quirk::Hemiplegic,
+        "/datum/quirk/hemiplegic",
+        "Hemiplegic",
+        "Половина вашего тела не работает. Ничто никогда это не исправит.",
+        "circle-half-stroke",
+        -10,
+        None,
+        None,
     ),
     q(
         Quirk::Hypersensitive,
@@ -253,6 +403,16 @@ pub const QUIRKS: [QuirkDef; 18] = [
             Span::Notice,
             "Кажется, вы больше не придаете всему так много значения.",
         )),
+    ),
+    q(
+        Quirk::Illiterate,
+        "/datum/quirk/illiterate",
+        "Illiterate",
+        "Вы бросили школу и не умеете читать и писать. Это влияет на чтение, письмо, использование компьютеров и другой электроники.",
+        "graduation-cap",
+        -8,
+        None,
+        None,
     ),
     q(
         Quirk::LightDrinker,
@@ -329,6 +489,29 @@ pub const QUIRKS: [QuirkDef; 18] = [
         None,
     ),
     q(
+        Quirk::SoftSpoken,
+        "/datum/quirk/softspoken",
+        "Soft-Spoken",
+        "Вы немногословны, и ваш голос трудно услышать.",
+        "comment",
+        -2,
+        Some((Span::Danger, "Вам кажется, что вы стали говорить тише.")),
+        Some((
+            Span::Notice,
+            "Вам кажется, что вы стали говорить как обычно.",
+        )),
+    ),
+    q(
+        Quirk::TinMan,
+        "/datum/quirk/tin_man",
+        "Tin Man",
+        "Ой! Всё в протезах! В результате поистине жестокого космического наказания большинство ваших внутренних органов было заменено на дешевые протезы.",
+        "user-gear",
+        -6,
+        None,
+        None,
+    ),
+    q(
         Quirk::Unstable,
         "/datum/quirk/unstable",
         "Unstable",
@@ -343,6 +526,74 @@ pub const QUIRKS: [QuirkDef; 18] = [
         Some((Span::Notice, "Ваш разум наконец-то успокоился.")),
     ),
     q(
+        Quirk::Ageusia,
+        "/datum/quirk/no_taste",
+        "Ageusia",
+        "Вы не сможете ничего попробовать на вкус! Токсичная пища всё еще может отравить вас.",
+        "meh-blank",
+        0,
+        Some((
+            Span::Notice,
+            "Кажется, вы больше не чувствуете каких-либо вкусов при приеме пищи!",
+        )),
+        Some((Span::Notice, "У вас снова появилось ощущение вкуса во рту!")),
+    ),
+    q(
+        Quirk::PineappleLiker,
+        "/datum/quirk/pineapple_liker",
+        "Ananas Affinity",
+        "Вам очень нравятся ананасы. Кажется, вы никогда не сможете насытиться их великолепием!",
+        "thumbs-up",
+        0,
+        Some((Span::Notice, "Вы чувствуете сильную тягу к ананасам.")),
+        Some((
+            Span::Notice,
+            "Ваше отношение к ананасам, похоже, вернулось к нейтральному состоянию.",
+        )),
+    ),
+    q(
+        Quirk::PineappleHater,
+        "/datum/quirk/pineapple_hater",
+        "Ananas Aversion",
+        "Вы испытываете сильное отвращение к ананасам. Серьезно, как, черт возьми, кто-то может говорить, что они вкусные? И какой безумец вообще осмелится положить их на пиццу!?",
+        "thumbs-down",
+        0,
+        Some((
+            Span::Notice,
+            "Вы размышляете о том, каким извращенцам нравятся ананасы...",
+        )),
+        Some((
+            Span::Notice,
+            "Ваше отношение к ананасам, похоже, вернулось к нейтральному состоянию.",
+        )),
+    ),
+    q(
+        Quirk::DeviantTastes,
+        "/datum/quirk/deviant_tastes",
+        "Deviant Tastes",
+        "Вам не нравится еда, которая нравится большинству людей, и вы находите вкусным то, что не всем по нраву.",
+        "grin-tongue-squint",
+        0,
+        Some((
+            Span::Notice,
+            "Вам начинает хотеться чего-то странного на вкус.",
+        )),
+        Some((Span::Notice, "Вам снова хочется есть нормальную пищу.")),
+    ),
+    q(
+        Quirk::Foreigner,
+        "/datum/quirk/foreigner",
+        "Foreigner",
+        "Вы не местный. Вы не знаете общегалактический!",
+        "language",
+        0,
+        Some((
+            Span::Notice,
+            "Слова, которые произносятся вокруг вас, не имеют никакого смысла.",
+        )),
+        Some((Span::Notice, "Вы свободно владеете общегалактическим.")),
+    ),
+    q(
         Quirk::Monochromacy,
         "/datum/quirk/monochromatic",
         "Monochromacy",
@@ -352,14 +603,47 @@ pub const QUIRKS: [QuirkDef; 18] = [
         None,
         None,
     ),
+    q(
+        Quirk::Bald,
+        "/datum/quirk/item_quirk/bald",
+        "Smooth-Headed",
+        "У вас нет волос, и вы чувствуете себя неуверенно из-за этого! Не снимайте парик или хотя бы прикрывайте голову.",
+        "egg",
+        0,
+        Some((
+            Span::Notice,
+            "Ваша голова настолько гладкая, насколько это возможно, это ужасно.",
+        )),
+        Some((
+            Span::Notice,
+            "У вас чешется голова, может, это... растут волосы?!",
+        )),
+    ),
+    q(
+        Quirk::Vegetarian,
+        "/datum/quirk/vegetarian",
+        "Vegetarian",
+        "Вы считаете идею употребления мяса аморальной и физически отвратительной.",
+        "carrot",
+        0,
+        Some((Span::Notice, "Вы испытываете отвращение к идее есть мясо.")),
+        Some((
+            Span::Notice,
+            "Вам кажется, что есть мясо не так уж и плохо.",
+        )),
+    ),
 ];
 
 /// `GLOB.quirk_blacklist`, the lists with at least two ported quirks: quirks of one list
 /// exclude each other.
-pub const BLACKLIST: [&[Quirk]; 3] = [
+pub const BLACKLIST: [&[Quirk]; 7] = [
     &[Quirk::Blind, Quirk::Nearsighted],
     &[Quirk::Jolly, Quirk::Depression, Quirk::Hypersensitive],
+    &[Quirk::Ageusia, Quirk::Vegetarian, Quirk::DeviantTastes],
+    &[Quirk::PineappleLiker, Quirk::PineappleHater],
     &[Quirk::AlcoholTolerance, Quirk::LightDrinker],
+    &[Quirk::Mute, Quirk::SoftSpoken],
+    &[Quirk::Bilingual, Quirk::Foreigner, Quirk::Csl],
 ];
 
 impl Quirk {
@@ -385,6 +669,17 @@ impl Quirks {
         self.0.contains(&quirk)
     }
 }
+
+/// Smooth-Headed's `old_hair`, and whether the head was covered at the last check.
+#[derive(Component, Clone, Debug, Default, PartialEq, Eq)]
+pub struct BaldHead {
+    pub old_hair: Option<String>,
+    pub covered: bool,
+}
+
+/// Body Purist's `cybernetics_level` at the last check.
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Cybernetics(pub u32);
 
 /// On a client connection: the character's quirks by name (tg `prefs.all_quirks`).
 #[derive(Component, Clone, Debug, Default, PartialEq, Eq)]
@@ -526,8 +821,37 @@ pub fn add_quirk(
                 mood.unstable = true;
             }
         }
-        Quirk::Mute | Quirk::Pacifist => traumas::refresh(world, mob),
+        Quirk::Mute | Quirk::Pacifist | Quirk::SoftSpoken => traumas::refresh(world, mob),
         Quirk::Bilingual => bilingual(world, mob),
+        Quirk::Csl => csl(world, mob, true),
+        Quirk::Foreigner => foreigner(world, mob, true),
+        Quirk::Bald => {
+            let covered = head_covered(world, mob);
+            let old_hair = world
+                .get_mut::<crate::human::HumanLook>(mob)
+                .map(|mut look| look.hair_style.take());
+            if let Some(old_hair) = old_hair {
+                world.entity_mut(mob).insert(BaldHead { old_hair, covered });
+                crate::inventory::refresh_look(world, mob);
+            }
+        }
+        Quirk::BodyPurist => update_cybernetics(world, mob),
+        // `/datum/brain_trauma/severe/paralysis/hemiplegic` of a random side.
+        Quirk::Hemiplegic => {
+            let side = if world.get_resource_or_init::<CombatRng>().chance(50.0) {
+                Paralysis::Left
+            } else {
+                Paralysis::Right
+            };
+            if let Some(brain) = organs::organ(world, mob, Slot::Brain) {
+                traumas::gain(
+                    world,
+                    brain,
+                    Kind::Paralysis(side),
+                    Some(Resilience::Absolute),
+                );
+            }
+        }
         // `/datum/brain_trauma/severe/paralysis/paraplegic`, `TRAUMA_RESILIENCE_ABSOLUTE`.
         Quirk::Paraplegic => {
             if let Some(brain) = organs::organ(world, mob, Slot::Brain) {
@@ -557,6 +881,10 @@ pub fn add_quirk(
                     &[Location::Eyes, Location::Backpack, Location::Hands],
                 );
             }
+            Quirk::Deaf => {
+                give_item(world, mob, DEAF_PIN, &[Location::Backpack, Location::Hands]);
+            }
+            Quirk::TinMan => tin_man(world, mob),
             Quirk::BrainTumor => {
                 if let Some(at) = give_item(
                     world,
@@ -646,7 +974,31 @@ pub fn remove_quirk(world: &mut World, mob: Entity, quirk: Quirk) -> bool {
         Quirk::Jolly => mood::clear_event(world, mob, "jolly"),
         Quirk::Depression => mood::clear_event(world, mob, "depression"),
         Quirk::BadBack => mood::clear_event(world, mob, "back_pain"),
-        Quirk::Mute | Quirk::Pacifist => traumas::refresh(world, mob),
+        Quirk::Mute | Quirk::Pacifist | Quirk::SoftSpoken => traumas::refresh(world, mob),
+        Quirk::Csl => csl(world, mob, false),
+        Quirk::Foreigner => foreigner(world, mob, false),
+        Quirk::BodyPurist => {
+            world.entity_mut(mob).remove::<Cybernetics>();
+            mood::clear_event(world, mob, "body_purist");
+        }
+        Quirk::Bald => {
+            mood::clear_event(world, mob, "bad_hair_day");
+            let bald = world.entity_mut(mob).take::<BaldHead>();
+            let restored = bald.is_some_and(|bald| {
+                world
+                    .get_mut::<crate::human::HumanLook>(mob)
+                    .is_some_and(|mut look| {
+                        let bald_now = look.hair_style.is_none();
+                        if bald_now {
+                            look.hair_style = bald.old_hair;
+                        }
+                        bald_now
+                    })
+            });
+            if restored {
+                crate::inventory::refresh_look(world, mob);
+            }
+        }
         // `remove_all_languages(LANGUAGE_QUIRK)`, `remove_all_partial_languages(LANGUAGE_QUIRK)`.
         Quirk::Bilingual => {
             if let Some(mut holder) = world.get_mut::<ss13_chat::language::LanguageHolder>(mob) {
@@ -759,6 +1111,188 @@ fn give_item(
     Some("у ваших ног")
 }
 
+/// The taste quirks on a tongue's `(liked, disliked, toxic)` foodtypes: tg
+/// `get_liked_foodtypes`/`get_disliked_foodtypes` (`TRAIT_AGEUSIA`, `TRAIT_VEGETARIAN`) and the
+/// tongue changes of Deviant Tastes and Ananas Affinity/Aversion. Toxic food stays toxic.
+pub fn food_tastes(world: &World, mob: Entity, tastes: (u32, u32, u32)) -> (u32, u32, u32) {
+    let Some(quirks) = world.get::<Quirks>(mob) else {
+        return tastes;
+    };
+    let (mut liked, mut disliked, toxic) = tastes;
+    if quirks.has(Quirk::DeviantTastes) {
+        std::mem::swap(&mut liked, &mut disliked);
+    }
+    if quirks.has(Quirk::PineappleLiker) {
+        liked |= PINEAPPLE;
+    }
+    if quirks.has(Quirk::PineappleHater) {
+        disliked |= PINEAPPLE;
+    }
+    if quirks.has(Quirk::Ageusia) {
+        return (0, 0, toxic);
+    }
+    if quirks.has(Quirk::Vegetarian) {
+        liked &= !MEAT;
+        disliked |= MEAT;
+    }
+    (liked, disliked, toxic)
+}
+
+/// `/datum/quirk/csl/add` and `remove`: Galactic Common only partly understood (90%, the
+/// default strength), Galactic Uncommon for a mob left with no language at all.
+fn csl(world: &mut World, mob: Entity, add: bool) {
+    use ss13_chat::language::{ALL, LanguageId, LanguageSource, Preset, UNDERSTOOD};
+    let species_speaks_common = Preset::of_path(crate::species::def_of(world, mob).languages)
+        .is_some_and(|p| p.spoken.contains(&LanguageId::Common));
+    ss13_chat::language::edit_holder(world, mob, |h| {
+        if add {
+            h.remove(
+                LanguageId::Common,
+                UNDERSTOOD,
+                Some(LanguageSource::Species),
+            );
+            h.remove(LanguageId::Common, UNDERSTOOD, Some(LanguageSource::Atom));
+            if h.understood_languages().is_empty() {
+                h.grant(LanguageId::Uncommon, ALL, LanguageSource::Quirk);
+            }
+            h.grant_partial(LanguageId::Common, 90, LanguageSource::Quirk);
+        } else {
+            h.remove_partial(LanguageId::Common, LanguageSource::Quirk);
+            h.remove(LanguageId::Uncommon, ALL, Some(LanguageSource::Quirk));
+            // Only a species that speaks Common understands it again.
+            if species_speaks_common {
+                h.grant(LanguageId::Common, UNDERSTOOD, LanguageSource::Species);
+            }
+        }
+    });
+}
+
+/// CSL's `reremove_common` on `COMSIG_SPECIES_GAIN` (`crate::species::set_species`).
+pub fn reremove_common(world: &mut World, mob: Entity) {
+    use ss13_chat::language::{LanguageId, LanguageSource, UNDERSTOOD};
+    if !has(world, mob, Quirk::Csl) {
+        return;
+    }
+    ss13_chat::language::edit_holder(world, mob, |h| {
+        h.remove(
+            LanguageId::Common,
+            UNDERSTOOD,
+            Some(LanguageSource::Species),
+        );
+    });
+}
+
+/// `/datum/quirk/foreigner/add` and `remove`: Galactic Common blocked; a plain human learns
+/// Galactic Uncommon instead.
+// The removal takes back only the quirk's Uncommon (tg removes it from every source).
+fn foreigner(world: &mut World, mob: Entity, add: bool) {
+    use ss13_chat::language::{ALL, LanguageId, LanguageSource};
+    let human = crate::species::species_of(world, mob) == crate::species::SpeciesId::Human;
+    ss13_chat::language::edit_holder(world, mob, |h| {
+        if add {
+            h.block(LanguageId::Common, ALL, LanguageSource::Quirk);
+            if human {
+                h.grant(LanguageId::Uncommon, ALL, LanguageSource::Quirk);
+            }
+        } else {
+            h.unblock(LanguageId::Common, ALL, Some(LanguageSource::Quirk));
+            if human {
+                h.remove(LanguageId::Uncommon, ALL, Some(LanguageSource::Quirk));
+            }
+        }
+    });
+}
+
+/// `/datum/quirk/tin_man/add_unique`: the heart, lungs, liver and stomach the species has
+/// become surplus prosthetics (the old organs are deleted), then `post_add`'s warning.
+fn tin_man(world: &mut World, mob: Entity) {
+    for (slot, path, skip) in TIN_MAN_ORGANS {
+        if crate::species::has_trait(world, mob, skip) {
+            continue;
+        }
+        let Some(new) = organs::spawn_organ(world, path) else {
+            continue;
+        };
+        // `DELETE_IF_REPLACED`.
+        if let Some(old) = organs::organ(world, mob, slot) {
+            organs::remove(world, old, true);
+            world.despawn(old);
+        }
+        if !organs::insert(world, new, mob) {
+            world.despawn(new);
+        }
+    }
+    tell_mob(
+        world,
+        mob,
+        (
+            Span::BoldWarning,
+            "Большинство ваших внутренних органов заменены на дешевые протезы. Они хрупкие и \
+             легко разлетаются на части под давлением. Кроме того, любое ЭМИ воздействие \
+             заставит их полностью прекратить работу.",
+        ),
+    );
+}
+
+/// Body Purist's `check_cybernetics`/`update_mood`: −10 mood per robotic limb or organ.
+// Cost: 1 Hz per Body Purist, a pass over its organs (about ten).
+fn update_cybernetics(world: &mut World, mob: Entity) {
+    let limbs = world
+        .get::<crate::medical::wounds::Limbs>(mob)
+        .map_or(0, |l| {
+            l.parts.iter().filter(|p| p.robotic && !p.missing).count()
+        });
+    let organ_count = world.get::<organs::Organs>(mob).map_or(0, |owned| {
+        owned
+            .iter()
+            .filter_map(|o| world.get::<organs::Organ>(o))
+            .filter(|o| o.robotic)
+            .count()
+    });
+    let level = (limbs + organ_count) as u32;
+    if world.get::<Cybernetics>(mob) == Some(&Cybernetics(level)) {
+        return;
+    }
+    world.entity_mut(mob).insert(Cybernetics(level));
+    mood::clear_event(world, mob, "body_purist");
+    if level == 0 {
+        return;
+    }
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    if let Some(mut mood) = world.get_mut::<Mood>(mob) {
+        let mut event = ActiveMood::new("body_purist", &BODY_PURIST_EVENT);
+        event.mood_change = -(level as f32) * 10.0;
+        mood.add_instance(now, event);
+    }
+}
+
+fn head_covered(world: &World, mob: Entity) -> bool {
+    world
+        .get::<Inventory>(mob)
+        .is_some_and(|i| i.head.is_some())
+}
+
+/// Smooth-Headed's `equip_hat`/`unequip_hat`: taking the headwear off is a `bald` moodlet,
+/// putting one on clears it.
+// shortcut: no wigs (`confident_mane`).
+fn bald_head(world: &mut World, mob: Entity) {
+    let covered = head_covered(world, mob);
+    {
+        let Some(mut bald) = world.get_mut::<BaldHead>(mob) else {
+            return;
+        };
+        if bald.covered == covered {
+            return;
+        }
+        bald.covered = covered;
+    }
+    if covered {
+        mood::clear_event(world, mob, "bad_hair_day");
+    } else {
+        mood::add_event(world, mob, "bad_hair_day", &BALD_EVENT);
+    }
+}
+
 pub struct QuirksServerPlugin;
 
 impl Plugin for QuirksServerPlugin {
@@ -802,6 +1336,18 @@ fn process(world: &mut World, mob: Entity, quirk: Quirk, secs: f32) {
     let Some(&stat) = world.get::<Stat>(mob) else {
         return;
     };
+    // Signal-driven in tg (organ, limb and equipment changes): followed here every fire.
+    match quirk {
+        Quirk::BodyPurist => {
+            update_cybernetics(world, mob);
+            return;
+        }
+        Quirk::Bald => {
+            bald_head(world, mob);
+            return;
+        }
+        _ => {}
+    }
     if quirk == Quirk::BadBack {
         let backpack = world
             .get::<Inventory>(mob)
@@ -911,6 +1457,49 @@ mod tests {
             filter_invalid(&names(&["Friendly", "Jolly", "Light Drinker"])),
             names(&["Jolly", "Light Drinker"])
         );
+    }
+
+    #[test]
+    fn new_blacklists_hold() {
+        assert_eq!(
+            filter_invalid(&names(&["Mute", "Soft-Spoken"])),
+            names(&["Mute"])
+        );
+        assert_eq!(
+            filter_invalid(&names(&["Foreigner", "Common Second Language"])),
+            names(&["Foreigner"])
+        );
+        assert_eq!(
+            filter_invalid(&names(&["Ananas Affinity", "Ananas Aversion"])),
+            names(&["Ananas Affinity"])
+        );
+    }
+
+    #[test]
+    fn taste_quirks_change_the_tongue() {
+        let tastes = (
+            crate::food::LIKED_FOODTYPES,
+            crate::food::DISLIKED_FOODTYPES,
+            crate::food::TOXIC_FOODTYPES,
+        );
+        let mut world = World::new();
+        let none = world.spawn_empty().id();
+        assert_eq!(food_tastes(&world, none, tastes), tastes);
+        let with = |world: &mut World, list: Vec<Quirk>| world.spawn(Quirks(list)).id();
+        let vegetarian = with(&mut world, vec![Quirk::Vegetarian]);
+        let (liked, disliked, _) = food_tastes(&world, vegetarian, tastes);
+        assert_eq!(liked & MEAT, 0);
+        assert_ne!(disliked & MEAT, 0);
+        let deviant = with(&mut world, vec![Quirk::DeviantTastes]);
+        assert_eq!(
+            food_tastes(&world, deviant, tastes),
+            (tastes.1, tastes.0, tastes.2)
+        );
+        // Ageusia tastes nothing but toxic food.
+        let ageusia = with(&mut world, vec![Quirk::Ageusia, Quirk::PineappleLiker]);
+        assert_eq!(food_tastes(&world, ageusia, tastes), (0, 0, tastes.2));
+        let hater = with(&mut world, vec![Quirk::PineappleHater]);
+        assert_ne!(food_tastes(&world, hater, tastes).1 & PINEAPPLE, 0);
     }
 
     #[test]

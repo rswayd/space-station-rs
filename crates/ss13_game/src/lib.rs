@@ -391,6 +391,8 @@ pub mod shuttle_console_client;
 pub mod shuttle_console_server;
 pub mod silicon;
 #[cfg(feature = "server")]
+pub mod skills;
+#[cfg(feature = "server")]
 pub mod smartfridge;
 #[cfg(feature = "server")]
 pub mod sound;

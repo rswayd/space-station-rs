@@ -12,7 +12,7 @@
 //! Cost: one turf lookup per mob step (a few per player per second).
 // shortcut: humans only (basic mobs' claw/heavy/shoe elements are added in `Initialize` procs
 // the dump does not lower); no `footstep_override` (catwalks, tables), species or robotic legs,
-// `TRAIT_LIGHT_STEP`/`TRAIT_SILENT_FOOTSTEPS`, FOV effect, and gravity is everywhere (the
+// `TRAIT_SILENT_FOOTSTEPS`, FOV effect, and gravity is everywhere (the
 // every-sixth-step hop rule never applies). Add with those mechanics.
 
 use std::collections::HashSet;
@@ -64,6 +64,7 @@ type Stepper<'a> = (
     Option<&'a Stat>,
     Has<Buckled>,
     Option<&'a Inventory>,
+    Option<&'a crate::quirks::Quirks>,
 );
 
 #[allow(clippy::too_many_arguments)]
@@ -81,7 +82,8 @@ pub(crate) fn play_footsteps(
     // A diagonal move is two steps in one tick; tg skips the second (`SECOND_DIAG_STEP`).
     let mut stepped = HashSet::new();
     for m in moved.read() {
-        let Ok((count, walking, body, health, stat, buckled, inventory)) = mobs.get_mut(m.entity)
+        let Ok((count, walking, body, health, stat, buckled, inventory, quirks)) =
+            mobs.get_mut(m.entity)
         else {
             continue;
         };
@@ -136,9 +138,20 @@ pub(crate) fn play_footsteps(
             continue;
         }
         let file = &step.files[rng.0.range(1, step.files.len() as u32) as usize - 1];
-        let sound = PlaySound::new(m.to, file.as_str(), step.volume * HUMAN_VOLUME, false)
-            .extrarange(step.range + HUMAN_E_RANGE)
-            .falloff_distance(1.0);
+        // `TRAIT_LIGHT_STEP` (the Light Step quirk): ×0.6 volume, 2 tiles less range.
+        let (volume, range) = if quirks.is_some_and(|q| q.has(crate::quirks::Quirk::LightStep)) {
+            (0.6, -2.0)
+        } else {
+            (1.0, 0.0)
+        };
+        let sound = PlaySound::new(
+            m.to,
+            file.as_str(),
+            step.volume * HUMAN_VOLUME * volume,
+            false,
+        )
+        .extrarange(step.range + HUMAN_E_RANGE + range)
+        .falloff_distance(1.0);
         out.write(sound);
     }
 }

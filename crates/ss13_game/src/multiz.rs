@@ -388,6 +388,39 @@ fn on_z_impact(world: &mut World, e: Entity, at: TilePos, levels: u32) {
         .unwrap_or_default();
     let name = name_of(world, e);
     let living = world.get::<Health>(e).is_some();
+    // `ZImpactDamage`: a freerunner (the quirk) who can brace takes a short fall unscathed.
+    // shortcut: no cyberspine, wings, `TRAIT_CATLIKE_INSTINCT` landing or spin emote.
+    let incap = crate::status_effects::incapacitation(world, e);
+    if living
+        && levels <= 1
+        && !incap.incapacitated
+        && !incap.knocked_out
+        && crate::quirks::has(world, e, crate::quirks::Quirk::Freerunning)
+    {
+        crate::status_effects::knockdown(world, e, levels as f32 * 4.0, 0.0);
+        let lines = crate::pull::visible_message(
+            world,
+            at,
+            ChatChannel::Info,
+            (
+                Span::Notice,
+                format!(
+                    "{name} жестко падает на {turf} и не получает урона, группируясь и делая \
+                     перекат."
+                ),
+            ),
+            &[(
+                e,
+                Span::Notice,
+                format!(
+                    "Вы готовитесь к падению. Вы жестко падаете на {turf} и не получаете урона, \
+                     группируясь и делая перекат."
+                ),
+            )],
+        );
+        send(world, lines);
+        return;
+    }
     let lines = crate::pull::visible_message(
         world,
         at,

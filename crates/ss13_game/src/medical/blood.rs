@@ -43,6 +43,8 @@ pub const BLOOD_VOLUME_MAX_LETHAL: f32 = BLOOD_VOLUME_MAXIMUM * 1.075;
 pub const BLOOD_VOLUME_EXCESS: f32 = BLOOD_VOLUME_MAXIMUM * 1.05;
 pub const BLOOD_VOLUME_NORMAL: f32 = 560.0;
 pub const BLOOD_VOLUME_SAFE: f32 = BLOOD_VOLUME_NORMAL * (1.0 - 0.15);
+/// `blood_deficiency_drain_rate`: `BLOOD_REGEN_FACTOR + BLOOD_DEFICIENCY_MODIFIER`.
+const BLOOD_DEFICIENCY_DRAIN: f32 = BLOOD_REGEN_FACTOR + 0.025;
 pub const BLOOD_VOLUME_OKAY: f32 = BLOOD_VOLUME_NORMAL * (1.0 - 0.30);
 pub const BLOOD_VOLUME_RISKY: f32 = BLOOD_VOLUME_NORMAL * (1.0 - 0.45);
 pub const BLOOD_VOLUME_BAD: f32 = BLOOD_VOLUME_NORMAL * (1.0 - 0.60);
@@ -400,6 +402,16 @@ pub fn handle_blood(world: &mut World, mob: Entity, secs: f32, now: f64) {
         .map_or(crate::breath::BODYTEMP_NORMAL, |r| r.bodytemperature);
     if bodytemp < BLOOD_STOP_TEMP {
         return;
+    }
+    // `COMSIG_HUMAN_ON_HANDLE_BLOOD`: the Blood Deficiency quirk drains a little more than the
+    // regeneration, down to just above `BLOOD_VOLUME_SAFE`.
+    // shortcut: the species `blood_deficiency_drain_rate` is the default for every species.
+    if crate::quirks::has(world, mob, crate::quirks::Quirk::BloodDeficiency) {
+        blood.adjust(
+            -BLOOD_DEFICIENCY_DRAIN * secs,
+            BLOOD_VOLUME_SAFE + 1.0,
+            BLOOD_VOLUME_MAXIMUM,
+        );
     }
     // Regeneration, paid in nutrition.
     if let Some(hunger) = world.get::<crate::hunger::Hunger>(mob).cloned() {

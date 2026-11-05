@@ -52,6 +52,8 @@ pub struct Impediments {
     pub stutter: bool,
     pub derp: bool,
     pub unintelligible: bool,
+    /// `TRAIT_FORCE_WHISPER` (the Soft-Spoken quirk): every say is a whisper.
+    pub force_whisper: bool,
 }
 
 /// Timed speech status effects (tg `/datum/status_effect/speech/*`, `silenced`), kept by the

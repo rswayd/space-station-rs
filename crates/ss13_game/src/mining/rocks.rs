@@ -26,7 +26,8 @@
 //!   cell `recharge_time` (1.6 s) after it runs low. Kinetic force does a quarter of its damage
 //!   where the pressure is over 50 kPa.
 // shortcut: no ore veins (`spread_vein`), depth-based odds (`exposure_based`), scan overlays,
-// mining skill or experience, hulk/alien digging, `drill_aoe`, the armed gibtonite ore (rigs,
+// Journeyman scan pulses of the mining skill (its speed and experience are `crate::skills`'),
+// hulk/alien digging, `drill_aoe`, the armed gibtonite ore (rigs,
 // pickaxe hits), ore breaking on throw or melting in fire, PKA modkits, the satchel's
 // `can_hold` (it takes anything that fits) or the `extra` recharge time for several carried
 // PKAs.
@@ -260,6 +261,8 @@ fn manual_mine(world: &mut World, actor: Actor, wall: Entity) {
         return;
     }
     // shortcut: no `usesound` while digging (tools carry none here).
+    // `use_tool`'s `TOOL_MINING` skill modifier.
+    let speed = speed * mining_speed(world, actor.mob);
     use_tool(world, actor, wall, speed, 0, Job::Mining(MiningJob::Dig));
 }
 
@@ -280,11 +283,12 @@ pub fn attack_hand(world: &mut World, client: Entity, mob: Entity, target: Entit
         mob,
         item: None,
     };
+    let speed = m.hand_mine_speed * mining_speed(world, mob);
     if do_after(
         world,
         actor,
         target,
-        m.hand_mine_speed,
+        speed,
         0,
         Job::Mining(MiningJob::DigByHand),
     ) {
@@ -339,6 +343,10 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter, job: MiningJob
         MiningJob::Dig | MiningJob::DigByHand => {
             // `if(!ismineralturf(src))`: someone else got it first.
             if world.get::<DmMineral>(target).is_some() {
+                // `manual_mine` drills with `exp_multiplier = 1`, `attack_hand` with none.
+                if job == MiningJob::Dig {
+                    crate::skills::mining_experience(world, mob, target, 1.0);
+                }
                 gets_drilled(world, action.target_pos, Some(mob));
             }
         }
@@ -901,8 +909,20 @@ pub fn kinetic_strike(
         return;
     }
     if let Some(&pos) = world.get::<TilePos>(target) {
+        // `gets_drilled(firer, 1)`.
+        crate::skills::mining_experience(world, firer, target, 1.0);
         gets_drilled(world, pos, Some(firer));
     }
+}
+
+/// `get_skill_modifier(/datum/skill/mining, SKILL_SPEED_MODIFIER)`.
+fn mining_speed(world: &World, mob: Entity) -> f32 {
+    crate::skills::modifier(
+        world,
+        mob,
+        crate::skills::Skill::Mining,
+        crate::skills::Modifier::Speed,
+    )
 }
 
 /// Whether `item` is an ore stack (for other modules: the ORM).

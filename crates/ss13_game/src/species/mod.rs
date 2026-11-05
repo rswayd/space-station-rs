@@ -1418,6 +1418,8 @@ pub fn set_species(world: &mut World, mob: Entity, id: SpeciesId) {
     let def = id.def();
     world.entity_mut(mob).insert(Species(id));
     update_languages(world, mob, old.map(|o| o.def().languages), def.languages);
+    // `COMSIG_SPECIES_GAIN` of the Common Second Language quirk.
+    crate::quirks::reremove_common(world, mob);
     regenerate_organs(world, mob, true);
     if let Some(mut health) = world.get_mut::<Health>(mob) {
         let mods = def.body_mods();

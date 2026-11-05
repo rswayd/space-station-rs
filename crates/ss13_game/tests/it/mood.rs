@@ -295,3 +295,64 @@ fn quirks_apply_their_traits() {
             .colorblind
     );
 }
+
+#[test]
+fn more_quirks_and_skills_apply() {
+    use ss13_chat::language::{FULL, LanguageHolder, LanguageId, understanding};
+    use ss13_game::medical::wounds::Limbs;
+    use ss13_game::skills::{self, Skill};
+
+    let mut s = Station::start("more_quirks_and_skills_apply");
+    let (a, b) = (s.players[0].mob, s.players[1].mob);
+    {
+        let world = s.server.world_mut();
+        for quirk in [
+            Quirk::SoftSpoken,
+            Quirk::Deaf,
+            Quirk::Csl,
+            Quirk::Hemiplegic,
+            Quirk::BodyPurist,
+        ] {
+            assert!(quirks::add_quirk(world, a, quirk, false, false));
+        }
+        assert!(quirks::add_quirk(world, b, Quirk::Foreigner, false, false));
+        assert!(quirks::add_quirk(world, b, Quirk::TinMan, false, true));
+        assert!(quirks::add_quirk(world, b, Quirk::BodyPurist, false, false));
+    }
+    assert!(s.get::<Impediments>(a).force_whisper);
+    assert!(!ss13_game::sound::can_hear(s.server.world(), a));
+    let common = |s: &Station, mob: Entity| {
+        understanding(s.try_get::<LanguageHolder>(mob), false, LanguageId::Common)
+    };
+    assert_eq!(common(&s, a), 90);
+    assert!(common(&s, b) < FULL);
+    // One side of the body is paralyzed, not both.
+    let parts = &s.get::<Limbs>(a).parts;
+    assert!(parts.iter().any(|l| l.paralyzed) && !parts.iter().all(|l| l.paralyzed));
+    // Tin Man's prosthetics upset the Body Purist within a quirk fire; A has none.
+    s.run_until("B hates the prosthetics", |s| s.has_event(b, "body_purist"));
+    assert!(s.mood(b).get("body_purist").unwrap().mood_change <= -10.0);
+    assert!(!s.has_event(a, "body_purist"));
+    // CSL gone: the species' Common is back.
+    assert!(quirks::remove_quirk(s.server.world_mut(), a, Quirk::Csl));
+    assert_eq!(common(&s, a), FULL);
+
+    // Skills: experience levels up with the level's message; the modifier follows.
+    skills::adjust_experience(s.server.world_mut(), b, Skill::Cleaning, 120.0, false);
+    assert_eq!(
+        skills::level(s.server.world(), b, Skill::Cleaning),
+        skills::LEVEL_NOVICE
+    );
+    assert_eq!(
+        skills::modifier(
+            s.server.world(),
+            b,
+            Skill::Cleaning,
+            skills::Modifier::Speed
+        ),
+        0.9
+    );
+    s.run_until("B hears the level up", |s| {
+        s.heard(1, "I'm starting to figure out what Cleaning really is!")
+    });
+}

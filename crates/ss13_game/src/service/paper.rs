@@ -293,6 +293,16 @@ pub(super) fn read(world: &mut World, client: Entity, mob: Entity, paper: Entity
         return;
     }
     let title = crate::chem::name_of(world, paper);
+    // `can_read`'s `READING_CHECK_LITERACY`: `TRAIT_ILLITERATE` (the Illiterate quirk).
+    if crate::quirks::has(world, mob, crate::quirks::Quirk::Illiterate) {
+        tell(
+            world,
+            client,
+            Span::Warning,
+            format!("Вы пытаетесь прочитать {title}, но ничего не понимаете."),
+        );
+        return;
+    }
     world.write_message(ss13_tgui::server::OpenUi::new::<super::PaperSheetUi>(
         client, mob, paper, title,
     ));
@@ -335,6 +345,16 @@ pub(super) fn item_interaction(
         Some(Writing::Pen(_)) => {
             if crate::vision::is_blind(world, mob) {
                 tell(world, client, Span::Warning, "You can't see to write!");
+                return true;
+            }
+            // `can_write` -> `is_literate()`.
+            if crate::quirks::has(world, mob, crate::quirks::Quirk::Illiterate) {
+                tell(
+                    world,
+                    client,
+                    Span::Warning,
+                    "Вы пытаетесь писать, но вы же не умеете писать!",
+                );
                 return true;
             }
             let used = world.get::<Paper>(target).map_or(0, Paper::total_length);

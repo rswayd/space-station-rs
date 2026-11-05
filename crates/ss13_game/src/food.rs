@@ -547,7 +547,14 @@ pub fn perceived_quality(dm: &DmFood, handmade: bool, tongue: Option<(u32, u32, 
 fn tongue_of(world: &World, mob: Entity) -> Option<(u32, u32, u32)> {
     (world.get::<crate::medical::wounds::Limbs>(mob).is_some()
         && !crate::medical::organs::lacks(world, mob, crate::medical::organs::Slot::Tongue))
-    .then_some((LIKED_FOODTYPES, DISLIKED_FOODTYPES, TOXIC_FOODTYPES))
+    .then(|| {
+        // The taste quirks (`crate::quirks`): `get_liked_foodtypes` and its kin.
+        crate::quirks::food_tastes(
+            world,
+            mob,
+            (LIKED_FOODTYPES, DISLIKED_FOODTYPES, TOXIC_FOODTYPES),
+        )
+    })
 }
 
 /// tg `checkLiked` (every 5 s of a food's bites): what the eater thinks of it.
@@ -623,6 +630,10 @@ fn types_list(items: &[&str]) -> String {
 /// tg `/mob/living/check_tasting_blocks` and `send_taste_message`: at most one taste per 5 s,
 /// and the same taste not again within 10 s.
 fn taste(world: &mut World, mob: Entity, text: String) {
+    // `check_tasting_blocks`: `TRAIT_AGEUSIA`.
+    if crate::quirks::has(world, mob, crate::quirks::Quirk::Ageusia) {
+        return;
+    }
     let now = world.resource::<Time>().elapsed_secs_f64();
     let memory = world
         .get::<TasteMemory>(mob)

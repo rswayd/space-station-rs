@@ -27,7 +27,9 @@
 //!   its tile (`VAPOR`): space cleaner ≥ 1 u washes the turf and everything on it.
 //! - `ClientIntent::ToggleMoveIntent` switches the mob between running and walking
 //!   (`WALK_DELAY` 4 deciseconds per tile).
-// shortcut: no cleaning skill (every mob has the `None` level's modifier 1), no bubbles overlay,
+// The cleaning skill (`crate::skills`) shortens the do_after (`min(speed + offset, 1)`), soaks
+// less from the mop and spares soap uses; a clean that washed gives experience.
+// shortcut: no bubbles overlay,
 // no `TRAIT_CURRENTLY_CLEANING` (two mobs may scrub one tile at once), mobs are not washed
 // (soap and mops skip them; items lose their traces, `crate::forensics`); no footprints, blood
 // trails, flying hit splatters or bloody shoes; blood bloodiness does not decay while drying and dried blood keeps its name;
@@ -809,6 +811,8 @@ pub fn item_interaction(
             "/obj/item/soap/omega" => 3.0,
             _ => 35.0,
         };
+        // `AddComponent(/datum/component/cleaner, cleanspeed, 0.1)`: less scaling for soap.
+        let speed = speed * (cleaning_speed(world, mob) + 0.1).min(1.0);
         do_after(world, actor, target, speed, 0, Job::Clean(CleanJob::Soap));
         return true;
     }
@@ -862,20 +866,57 @@ fn start_mop(world: &mut World, actor: Actor, target: Entity) -> bool {
             .iter()
             .any(|r| r.volume >= 1.0 && chem.0.def(r.id).chemical_flags & REAGENT_CLEANS != 0)
     });
+    let speed = MOPSPEED * cleaning_speed(world, actor.mob).min(1.0);
     do_after(
         world,
         actor,
         target,
-        MOPSPEED,
+        speed,
         0,
         Job::Clean(CleanJob::Mop { wash }),
     );
     true
 }
 
+/// `get_skill_modifier(/datum/skill/cleaning, SKILL_SPEED_MODIFIER)`.
+fn cleaning_speed(world: &World, mob: Entity) -> f32 {
+    crate::skills::modifier(
+        world,
+        mob,
+        crate::skills::Skill::Cleaning,
+        crate::skills::Modifier::Speed,
+    )
+}
+
+/// The cleanables `target` holds (`for(var/obj/effect/decal/cleanable/c in target)`): those on
+/// a turf's tile.
+fn decals_in(world: &World, target: Entity) -> Vec<String> {
+    if world.get::<Turf>(target).is_none() {
+        return Vec::new();
+    }
+    let Some(&pos) = world.get::<TilePos>(target) else {
+        return Vec::new();
+    };
+    world
+        .resource::<SpatialIndex>()
+        .on_tile(pos)
+        .iter()
+        .filter(|&&e| world.get::<Cleanable>(e).is_some())
+        .filter_map(|&e| world.get::<DmCleanable>(e).map(|d| d.path.clone()))
+        .collect()
+}
+
+/// The cleaner's `clean()` experience (`grant_xp` with `call_wash`).
+fn clean_and_learn(world: &mut World, mob: Entity, target: Entity) {
+    let decals = decals_in(world, target);
+    let washed = wash(world, target, CLEAN_SCRUB);
+    let xp = crate::skills::cleaning_experience(&decals, washed);
+    crate::skills::adjust_experience(world, mob, crate::skills::Skill::Cleaning, xp, false);
+}
+
 /// The cleaner's `clean()` after its do_after, then the mop's `apply_reagents` or the soap's
 /// `decreaseUses`.
-pub fn complete(world: &mut World, _mob: Entity, action: &DoAfter, job: CleanJob) {
+pub fn complete(world: &mut World, mob: Entity, action: &DoAfter, job: CleanJob) {
     let target = action.target;
     let Some(item) = action.item.filter(|&i| world.get_entity(i).is_ok()) else {
         return;
@@ -883,7 +924,7 @@ pub fn complete(world: &mut World, _mob: Entity, action: &DoAfter, job: CleanJob
     match job {
         CleanJob::Mop { wash: do_wash } => {
             if do_wash {
-                wash(world, target, CLEAN_SCRUB);
+                clean_and_learn(world, mob, target);
             }
             let Some(holder) = world.get::<Reagents>(item).map(|r| r.0.clone()) else {
                 return;
@@ -892,16 +933,26 @@ pub fn complete(world: &mut World, _mob: Entity, action: &DoAfter, job: CleanJob
                 // `reagents.expose(cleaned_turf, TOUCH, 10)`: "Needed for proper floor wetting."
                 expose(world, target, &holder, 10.0);
             }
+            // `val2remove = round(cleaning speed modifier, 0.1)`.
+            let used = (cleaning_speed(world, mob) * 10.0).round() / 10.0;
             if let Some(mut r) = world.get_mut::<Reagents>(item) {
-                r.0.remove_all(1.0);
+                r.0.remove_all(used);
             }
         }
         CleanJob::Soap => {
-            wash(world, target, CLEAN_SCRUB);
+            clean_and_learn(world, mob, target);
             let Some(mut soap) = world.get::<Soap>(item).copied() else {
                 return;
             };
-            soap.uses = soap.uses.saturating_sub(1);
+            // `decreaseUses`: `prob(skillcheck * 100)`.
+            let skillcheck = cleaning_speed(world, mob);
+            if skillcheck >= 1.0
+                || world
+                    .get_resource_or_init::<CombatRng>()
+                    .chance(skillcheck * 100.0)
+            {
+                soap.uses = soap.uses.saturating_sub(1);
+            }
             if soap.uses == 0 {
                 let name = crate::chem::name_of(world, item);
                 tell(
