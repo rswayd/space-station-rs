@@ -47,6 +47,7 @@ mod mecha;
 mod medical;
 mod medicine;
 mod mobs;
+mod mood;
 mod multiz;
 mod nukeops;
 mod pda;

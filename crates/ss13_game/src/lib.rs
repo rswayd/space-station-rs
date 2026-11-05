@@ -80,6 +80,9 @@
 //!   `server`): food items (`/obj/item/food`): eating and feeding bite by bite, tastes, trash,
 //!   tool processing (slicing). `kitchen` (feature `server`): the microwave, the food processor
 //!   and the reagent grinder.
+//! - `mood` (feature `server`): mood events, sanity and its effects, the mood face's server half;
+//!   `mood_client` (feature `client`) draws the face. `quirks` (feature `server`): character
+//!   quirks, their points and effects.
 //! - `cargo` (feature `server`; the window's data shared, `cargo::client` with `client`): the
 //!   economy (department budgets, bank accounts on ID cards, paydays), supply packs and orders,
 //!   the supply shuttle (buying on the way in, selling on arrival at CentCom) and the supply
@@ -272,6 +275,10 @@ pub mod medical;
 pub mod mobs;
 pub mod modpc;
 #[cfg(feature = "server")]
+pub mod mood;
+#[cfg(feature = "client")]
+pub mod mood_client;
+#[cfg(feature = "server")]
 pub mod multiz;
 #[cfg(feature = "server")]
 pub mod obj_damage;
@@ -293,6 +300,8 @@ pub mod prediction;
 pub mod projectile;
 #[cfg(feature = "server")]
 pub mod pull;
+#[cfg(feature = "server")]
+pub mod quirks;
 #[cfg(feature = "server")]
 pub mod radio;
 #[cfg(feature = "server")]

@@ -5,18 +5,17 @@
 //!
 //! - A mob starts with `rand(NUTRITION_LEVEL_START_MIN, NUTRITION_LEVEL_START_MAX)`
 //!   (`/mob/Initialize`).
-//! - Every fire a living mob with nutrition loses `HUNGER_FACTOR` per second (scaled by mood
-//!   sanity, tripled while `satiety` is negative); consumable reagents in the blood give it back
-//!   (`ss13_reagents::metabolism`, `/datum/reagent/consumable/on_mob_life`).
+//! - Every fire a living mob with nutrition loses `HUNGER_FACTOR` per second (scaled by
+//!   `crate::mood` sanity, tripled while `satiety` is negative); consumable reagents in the
+//!   blood give it back (`ss13_reagents::metabolism`, `/datum/reagent/consumable/on_mob_life`).
 //! - Over `NUTRITION_LEVEL_FULL` the mob overeats; after `OVEREAT_TIME_LIMIT` it gets fat (move
 //!   slowdown 1.5), and loses it once the overeating time drains below the limit again.
 //! - The metabolism efficiency follows nutrition: 1.25 when well fed with high satiety, 0.8
 //!   below 200 ("sluggish"); it scales how fast non-food reagents metabolize.
 //! - [`HungerHudData`] reaches the owner as the headless tgui interface [`HungerHudUi`]: the
 //!   hunger state and the bar's fullness (`get_fullness(only_consumable = TRUE)`).
-// shortcut: no mood (sanity is tg's neutral 100, so the hunger rate is 0.04/s), no jitter from
-// negative satiety, no TRAIT_NOHUNGER/glutton/voracious species or quirks, no stomach lining
-// reagent, no starvation moodlets (current tg has no other starvation effect on humans).
+// shortcut: no jitter from negative satiety, no TRAIT_NOHUNGER/glutton species, no stomach lining
+// reagent. The nutrition moodlets are `crate::mood`'s.
 
 use bevy::prelude::*;
 use ss13_net::chat::server::SendChat;
@@ -49,9 +48,6 @@ pub const OVEREAT_TIME_LIMIT: f32 = 200.0;
 const OVEREAT_CAP: f32 = 1200.0;
 /// `MAX_SATIETY`.
 pub const MAX_SATIETY: f32 = 600.0;
-/// `SANITY_NEUTRAL` (the default `sanity` of `/datum/mood`) and `SANITY_DISTURBED`.
-const SANITY: f32 = 100.0;
-const SANITY_DISTURBED: f32 = 75.0;
 /// `/datum/movespeed_modifier/obesity` `multiplicative_slowdown`, deciseconds.
 pub const OBESITY_SLOWDOWN: f32 = 1.5;
 
@@ -111,13 +107,24 @@ pub fn hunger_state(fullness: f32, fat: bool) -> HungerState {
     }
 }
 
-/// tg `/obj/item/organ/stomach/handle_hunger` for `seconds`. Returns the lines for the mob
-/// (`to_chat`), in order.
+/// [`handle_hunger_at`] at the neutral sanity of a new mood.
 pub fn handle_hunger(
     hunger: &mut Hunger,
     fat: &mut bool,
     dead: bool,
     seconds: f32,
+) -> Vec<(Span, &'static str)> {
+    handle_hunger_at(hunger, fat, dead, seconds, crate::mood::SANITY_NEUTRAL)
+}
+
+/// tg `/obj/item/organ/stomach/handle_hunger` for `seconds` at `sanity`. Returns the lines for
+/// the mob (`to_chat`), in order.
+pub fn handle_hunger_at(
+    hunger: &mut Hunger,
+    fat: &mut bool,
+    dead: bool,
+    seconds: f32,
+    sanity: f32,
 ) -> Vec<(Span, &'static str)> {
     let mut told = Vec::new();
     if *fat {
@@ -131,8 +138,8 @@ pub fn handle_hunger(
     }
     if hunger.nutrition > 0.0 && !dead {
         let mut rate = HUNGER_FACTOR;
-        if SANITY > SANITY_DISTURBED {
-            rate *= (1.0 - 0.002 * SANITY).max(0.5);
+        if sanity > crate::mood::SANITY_DISTURBED {
+            rate *= (1.0 - 0.002 * sanity).max(0.5);
         }
         if hunger.satiety > MAX_SATIETY {
             hunger.satiety = MAX_SATIETY;
@@ -255,6 +262,7 @@ fn hunger_life(
         Option<&PlayerMob>,
         Option<&Organs>,
         Has<OrganHost>,
+        Option<&crate::mood::Mood>,
     )>,
     organs: Query<&Organ>,
     mut chat: MessageWriter<SendChat>,
@@ -262,7 +270,7 @@ fn hunger_life(
     let fires = clock.times_fired - *last_fired;
     *last_fired = clock.times_fired;
     for _ in 0..fires {
-        for (mut hunger, mut fat, stat, player, owned, host) in &mut mobs {
+        for (mut hunger, mut fat, stat, player, owned, host, mood) in &mut mobs {
             // The stomach's `on_life` runs `handle_hunger` unless it is missing or failing.
             let stomach = owned.and_then(|o| {
                 o.iter()
@@ -273,7 +281,14 @@ fn hunger_life(
                 continue;
             }
             let (mut h, mut f) = (hunger.clone(), fat.0);
-            let told = handle_hunger(&mut h, &mut f, *stat == Stat::Dead, metabolism::SSMOBS_DT);
+            let sanity = mood.map_or(crate::mood::SANITY_NEUTRAL, |m| m.sanity);
+            let told = handle_hunger_at(
+                &mut h,
+                &mut f,
+                *stat == Stat::Dead,
+                metabolism::SSMOBS_DT,
+                sanity,
+            );
             hunger.set_if_neq(h);
             fat.set_if_neq(Fat(f));
             let Some(player) = player else {

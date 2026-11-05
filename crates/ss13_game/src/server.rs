@@ -243,6 +243,10 @@ impl Plugin for GameServerPlugin {
         .add_plugins(crate::janitor::JanitorServerPlugin)
         .add_plugins(crate::forensics::server::ForensicsServerPlugin)
         .add_plugins(crate::martial::MartialPlugin)
+        .add_plugins((
+            crate::mood::MoodServerPlugin,
+            crate::quirks::QuirksServerPlugin,
+        ))
         .add_plugins(crate::vision::VisionServerPlugin)
         .add_plugins(crate::stock_parts::StockPartsPlugin)
         .add_plugins(crate::sound::SoundServerPlugin)

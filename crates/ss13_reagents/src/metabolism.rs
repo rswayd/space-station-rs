@@ -68,6 +68,11 @@ pub trait Body {
     fn metabolism_efficiency(&self) -> f32 {
         1.0
     }
+    /// The factor of ethanol's `boozepwr` on this mob (tg `TRAIT_ALCOHOL_TOLERANCE` ×0.7,
+    /// `TRAIT_LIGHT_DRINKER` ×2).
+    fn booze_power_multiplier(&self) -> f32 {
+        1.0
+    }
 }
 
 /// tg `/datum/reagent/consumable/get_nutriment_factor`: nutrition per metabolized unit and
@@ -477,7 +482,7 @@ fn on_mob_life(
                     .filter(|r| chem.is_type(r.id, "/datum/reagent/consumable/ethanol"))
                     .map(|r| r.volume)
                     .sum();
-                let mut power = def.boozepwr;
+                let mut power = def.boozepwr * body.booze_power_multiplier();
                 if alcohol + water > 0.0 {
                     power *= alcohol / (alcohol + water);
                 }

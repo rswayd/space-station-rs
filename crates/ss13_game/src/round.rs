@@ -41,11 +41,12 @@ use crate::human::{
 use crate::jobs::{CharacterName, Jobs, JobsStartup, PlayerJob, character_name, display_time_text};
 use crate::lobby::{
     APPEARANCE_EYE_COLOR, APPEARANCE_FEMALE, APPEARANCE_HAIR_COLOR, APPEARANCE_HAIR_STYLE,
-    APPEARANCE_SKIN_TONE, AppearanceData, CHARACTER_SETUP, GameState, JOBLESS_ROLE, JobPrefsData,
-    JobPrefsStatic, JobPrefsUi, JobPriority, JoblessRole, LobbyData, LobbyUi, OBSERVE,
-    RANDOMIZE_APPEARANCE, SET_ANTAGS, SET_APPEARANCE, SET_JOB_PREFERENCE, SET_PREFERENCE,
-    TOGGLE_ANTAG_ROLL, TOGGLE_READY,
+    APPEARANCE_SKIN_TONE, AppearanceData, CHARACTER_SETUP, GIVE_QUIRK, GameState, JOBLESS_ROLE,
+    JobPrefsData, JobPrefsStatic, JobPrefsUi, JobPriority, JoblessRole, LobbyData, LobbyUi,
+    OBSERVE, QuirkInfo, RANDOMIZE_APPEARANCE, REMOVE_QUIRK, SET_ANTAGS, SET_APPEARANCE,
+    SET_JOB_PREFERENCE, SET_PREFERENCE, TOGGLE_ANTAG_ROLL, TOGGLE_READY,
 };
+use crate::quirks::QuirkPrefs;
 use crate::server::{MoveQueue, Players, SpawnPoints};
 
 /// The server process builds a new `App` when one exits with this code (`ss13_server`).
@@ -280,6 +281,21 @@ fn build_prefs_static(world: &mut World) {
         hair_styles: HAIR_STYLE_NAMES.iter().map(|n| (*n).to_owned()).collect(),
         hair_colors: HAIR_COLORS.iter().map(|&c| hex_rgb(c)).collect(),
         eye_colors: EYE_COLORS.iter().map(|&c| hex_rgb(c)).collect(),
+        quirks: crate::quirks::QUIRKS
+            .iter()
+            .map(|q| QuirkInfo {
+                name: q.name.to_owned(),
+                description: q.desc.to_owned(),
+                icon: q.icon.to_owned(),
+                value: q.value,
+            })
+            .collect(),
+        quirk_blacklist: crate::quirks::BLACKLIST
+            .iter()
+            .map(|list| list.iter().map(|q| q.def().name.to_owned()).collect())
+            .collect(),
+        default_quirk_balance: crate::quirks::DEFAULT_QUIRK_POINTS,
+        max_positive_quirks: crate::quirks::MAX_POSITIVE_QUIRKS as u8,
     };
     world.insert_resource(PrefsStatic(Arc::new(prefs)));
 }
@@ -305,6 +321,7 @@ pub(crate) fn new_player(world: &mut World, client: Entity) {
         JobPreferences::default(),
         AntagPreferences::default(),
         AppearancePrefs::random(client.to_bits()),
+        QuirkPrefs::default(),
         board,
         AlwaysState,
     ));
@@ -827,6 +844,8 @@ pub enum PrefAct {
     /// `set_appearance`: one field; the index is checked against its table when applied.
     Appearance(AppearanceField),
     RandomAppearance,
+    /// tg `give_quirk` (true) / `remove_quirk` (false) by name.
+    Quirk(String, bool),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -847,6 +866,7 @@ impl ServerUi for JobPrefsUi {
         &'static AntagPreferences,
         &'static AppearancePrefs,
         &'static NewPlayer,
+        &'static QuirkPrefs,
     );
     type UserParam = Option<Res<'static, Jobs>>;
     type Act = PrefAct;
@@ -858,18 +878,20 @@ impl ServerUi for JobPrefsUi {
             &AntagPreferences,
             &AppearancePrefs,
             &NewPlayer,
+            &QuirkPrefs,
         ),
     ) -> JobPrefsStatic {
         (*board.0).clone()
     }
 
     fn data(
-        (prefs, _, antag, look, _): (
+        (prefs, _, antag, look, _, quirks): (
             &JobPreferences,
             &PrefsBoard,
             &AntagPreferences,
             &AppearancePrefs,
             &NewPlayer,
+            &QuirkPrefs,
         ),
         _: Entity,
         jobs: &Option<Res<Jobs>>,
@@ -896,6 +918,8 @@ impl ServerUi for JobPrefsUi {
                 hair_color: look.hair_color as u8,
                 eye_color: look.eye_color as u8,
             },
+            quirks: quirks.0.clone(),
+            quirk_balance: quirks.balance(),
         }
     }
 
@@ -943,6 +967,10 @@ impl ServerUi for JobPrefsUi {
                 Ok(PrefAct::Appearance(field))
             }
             RANDOMIZE_APPEARANCE => Ok(PrefAct::RandomAppearance),
+            GIVE_QUIRK | REMOVE_QUIRK => {
+                let quirk = params.get("quirk").ok_or_else(|| bad("quirk: missing"))?;
+                Ok(PrefAct::Quirk(quirk.to_owned(), action == GIVE_QUIRK))
+            }
             _ => Err(UiReject::UnknownAction),
         }
     }
@@ -1041,6 +1069,7 @@ fn preference_acts(
         &mut JobPreferences,
         &mut AntagPreferences,
         &mut AppearancePrefs,
+        &mut QuirkPrefs,
     )>,
     mut randomized: Local<u64>,
 ) {
@@ -1048,7 +1077,7 @@ fn preference_acts(
         return;
     };
     for act in acts.read() {
-        let Ok((mut prefs, mut antag, mut look)) = prefs.get_mut(act.client) else {
+        let Ok((mut prefs, mut antag, mut look, mut quirks)) = prefs.get_mut(act.client) else {
             continue;
         };
         match &act.act {
@@ -1064,6 +1093,13 @@ fn preference_acts(
                 // An index outside its table is refused.
                 if new.is_valid() {
                     *look = new;
+                }
+            }
+            // `change_prefs` refuses unknown names and any set that is not valid as a whole.
+            PrefAct::Quirk(name, give) => {
+                let mut new = (*quirks).clone();
+                if crate::quirks::change_prefs(&mut new, name, *give) {
+                    *quirks = new;
                 }
             }
             PrefAct::RandomAppearance => {

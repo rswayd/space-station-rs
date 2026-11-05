@@ -440,6 +440,8 @@ fn build_outfit_templates(world: &mut World) {
         jobs.data
             .outfit_items()
             .into_iter()
+            // The items quirks give at spawn (`crate::quirks`).
+            .chain(crate::quirks::ITEM_PATHS)
             .map(str::to_owned)
             .collect::<Vec<_>>()
     };
@@ -521,6 +523,8 @@ pub fn join(world: &mut World, client: Entity, job: usize, latejoin: bool) -> En
     }
     world.entity_mut(mob).insert(inventory);
     crate::modpc::pda::post_equip(world, mob, &name, &def.assignment);
+    // tg `equip_characters` / `AttemptLateSpawn`: `SSquirks.AssignQuirks` after the outfit.
+    crate::quirks::assign(world, client, mob);
     crate::records::manifest::inject_joiner(world, mob, job);
     world.entity_mut(client).remove::<(NewPlayer, JobBoard)>();
     info!(
