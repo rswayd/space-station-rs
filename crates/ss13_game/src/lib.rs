@@ -42,7 +42,9 @@
 //!   filters, mixers, thermomachines, canisters and portable machines, air alarms and their
 //!   tgui windows.
 //! - `fire` (feature `server`): open flames light hotspots, fire on mobs (fire stacks, stop drop
-//!   and roll) and flammable objects, gas tank reactions, space wind.
+//!   and roll) and flammable objects, gas tank reactions, space wind. `spacemove` (feature
+//!   `server`): zero gravity: pushing off, drifting, the weightless alert. `stumble` (feature
+//!   `server`): BandaStation's tripping from running too fast.
 //! - `pull` (feature `server`): ctrl+click pulling, pulled things following, grabs and resisting,
 //!   the pull/throw HUD's server half; `throw` (feature `server`): throw mode, flying items,
 //!   hits and catches; `examine` (feature `server`): shift+click examine text; `speech` (feature
@@ -386,6 +388,8 @@ pub mod sound;
 #[cfg(feature = "client")]
 pub mod sound_client;
 #[cfg(feature = "server")]
+pub mod spacemove;
+#[cfg(feature = "server")]
 pub mod species;
 #[cfg(feature = "server")]
 pub mod speech;
@@ -407,6 +411,8 @@ pub mod storage_client;
 pub mod stove;
 #[cfg(feature = "server")]
 pub mod strip;
+#[cfg(feature = "server")]
+pub mod stumble;
 #[cfg(feature = "server")]
 pub mod tables;
 #[cfg(feature = "server")]

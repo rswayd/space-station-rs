@@ -11,7 +11,7 @@
 Переключатель ходьбы/бега: бег быстрее (`RUN_DELAY`, из конфига), ходьба тише и не подскальзывает на мокром полу.
 
 - **Код:** [`proc/toggle_move_intent()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/mob_movement.dm#L515), [`proc/set_move_intent()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/mob_movement.dm#L526), [`/datum/movespeed_modifier/config_walk_run`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/movespeed/modifiers/mobs.dm#L51)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/lib.rs` (`RUN_DELAY_SECS`): только бег; нет переключения на ходьбу
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/janitor.rs` (`Walking`, `ClientIntent::ToggleMoveIntent`), `crates/ss13_game/src/health.rs` (`WALK_DELAY` вместо `RUN_DELAY`), `crates/ss13_game/src/interact_client.rs` (кнопка HUD): ходьба медленнее, тише (`crates/ss13_game/src/footsteps.rs`) и не скользит по воде
 
 ### Модификаторы скорости движения
 Система `movespeed_modifier`: аддитивные и мультипликативные модификаторы от урона, ожирения, одежды (`slowdown`), волочения, реагентов, статус-эффектов, конечностей, вида; результат кэшируется в `cached_multiplicative_slowdown`.
@@ -30,20 +30,20 @@
 
 - **Код:** [`/datum/movespeed_modifier/dna_vault_speedup`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/movespeed/modifiers/innate.dm#L18)
 - **BandaStation:** [`modular_bandastation/movespeed_limit/code/movement.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/movespeed_limit/code/movement.dm#L16) — механика спотыкания
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/stumble.rs`: после каждого перемещения человека с задержкой шага < 0,85 дс — 50% упасть (нокдаун 2 с), < 0,3 дс — ещё шанс `(0,3 − d) / 0,3` повредить обе ноги (40 brute); исключения `status_speed_boost` нет — его не даёт ни один перенесённый эффект
 
 ### Невесомость и инерция
 Без гравитации моб плывёт по инерции (`newtonian_move`, `drift_handler`) и может оттолкнуться только от стены, решётки или предмета; магнитные ботинки и джетпаки дают контроль.
 
 - **Код:** [`mob/Process_Spacemove()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/mob_movement.dm#L264), [`proc/newtonian_move()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/atoms_movable.dm#L1324), [`/datum/drift_handler`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/drift_handler.dm#L4), [`proc/mob_negates_gravity()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/mob_movement.dm#L367)
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/fire.rs`: только толкание космическим ветром, без инерции
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/spacemove.rs`: без гравитации живой моб `Weightless` (тревога «Невесомость»), шагает только отталкиваясь от опоры в радиусе тайла (плотный турф, плотный предмет, решётка/мостик, не то, во что идёт); без опоры шаг отклоняется, HUD сообщает клиенту, что моб неподвижен (клиент не предсказывает шаги); незакреплённая опора (ящик, моб) отлетает в обратную сторону (`last_pushoff`); всё, что сдвинуто новой силой (шаг, космический ветер, толчок) и не держится на новом тайле, дрейфует 1 тайл / 0,5 с (`get_loop_delay`) до опоры, столкновения (двери слышат `Bumped`) или гравитации, не поворачиваясь; MOD-магнитные ботинки держат. `// shortcut:` невесомость только над космическими турфами космических зон (нет генераторов гравитации), дрейф только по сторонам света, нет джетпаков (нет действий предметов для них), магнитных ботинок-предметов, отдачи броска, плавающей анимации (`DO_FLOATING_ANIM` — нужна реплицируемая петля, не событие)
 
 ### Подскальзывание
 Мокрый пол, лёд, смазка, банановая кожура сбивают с ног (`slip`), ходьба спасает от воды; галоши защищают.
 
 - **Код:** [`proc/slip()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/mob_movement.dm#L381), [`living/slip()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/mob_movement.dm#L385)
 - **BandaStation:** [`code/modules/mob/mob_movement.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/mob_movement.dm#L381) — параметр обездвиживающего подскальзывания
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/janitor.rs` (`try_slip`): мокрый пол сбивает стоящего (паралич 0,5 с BandaStation, нокдаун, daze), ходьба спасает от воды; `crates/ss13_game/src/botany/produce.rs`: скользкая кожура; MOD-магнитные ботинки (`crates/ss13_game/src/modsuit/modules.rs`); нет льда, смазки, галош, скольжения (`TRAIT_NO_SLIP_SLIDE`)
 
 ### Перемещение по z-уровням
 Глаголы «Move Upwards/Down» поднимают и опускают моба на соседний z-уровень (по лестницам, в невесомости, полётом); открытое пространство роняет вниз.

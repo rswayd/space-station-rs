@@ -119,6 +119,8 @@ pub enum AlertCategory {
     MechDamage,
     /// `ALERT_IRRADIATED` (`crate::radiation`).
     Irradiated,
+    /// `ALERT_GRAVITY` (`crate::spacemove`: weightless).
+    Gravity,
     /// A hallucination's fake alert (`crate::hallucination`), by its tg category: beside the
     /// real one, which never clears it.
     Hallucination(u8),

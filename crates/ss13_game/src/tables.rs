@@ -50,6 +50,7 @@ const TABLE: &str = "/obj/structure/table";
 const FRAME: &str = "/obj/structure/table_frame";
 const RACK: &str = "/obj/structure/rack";
 const RACK_PARTS: &str = "/obj/item/rack_parts";
+const RAILING_CORNER: &str = "/obj/structure/railing/corner";
 const GLASS_TABLE: &str = "/obj/structure/table/glass";
 const REINFORCED_TABLE: &str = "/obj/structure/table/reinforced";
 const TRAY: &str = "/obj/item/storage/bag/tray";
@@ -264,6 +265,13 @@ fn is_frame(world: &World, e: Entity) -> bool {
 
 fn is_rack(world: &World, e: Entity) -> bool {
     obj_path(world, e).is_some_and(|p| is_under(p, RACK))
+}
+
+/// A climbable railing (`railing/climbable`: not the corners and ends).
+fn is_railing(world: &World, e: Entity) -> bool {
+    obj_path(world, e).is_some_and(|p| {
+        is_under(p, ss13_mapload::border::RAILING_ROOT) && !is_under(p, RAILING_CORNER)
+    }) && world.get::<Border>(e).is_some()
 }
 
 fn flipped(world: &World, e: Entity) -> bool {
@@ -551,7 +559,9 @@ fn pushable(world: &World, e: Entity) -> bool {
 
 /// tg `climbable/mousedrop_receive`: `dropped` is the user, onto a table or rack it reaches.
 pub fn mousedropped_onto(world: &mut World, actor: Actor, over: Entity, dropped: Entity) -> bool {
-    if dropped != actor.mob || (!is_table(world, over) && !is_rack(world, over)) {
+    if dropped != actor.mob
+        || (!is_table(world, over) && !is_rack(world, over) && !is_railing(world, over))
+    {
         return false;
     }
     if flipped(world, over) {
@@ -584,9 +594,14 @@ fn climb(world: &mut World, action: &DoAfter, mob: Entity) {
     if flipped(world, target) || !crate::storage::in_reach(world, mob, target) {
         return;
     }
-    let to = action.target_pos;
     let what = name_of(world, target);
-    if !onto_tile(world, mob, to, target) {
+    let landed = if is_railing(world, target) {
+        vault(world, mob, target)
+    } else {
+        onto_tile(world, mob, action.target_pos, target)
+    };
+    let to = world.get::<TilePos>(mob).copied().filter(|_| landed);
+    let Some(to) = to else {
         tell(
             world,
             action.client,
@@ -594,7 +609,7 @@ fn climb(world: &mut World, action: &DoAfter, mob: Entity) {
             format!("Вам не удаётся взобраться на {what}."),
         );
         return;
-    }
+    };
     let user = name_of(world, mob);
     say(
         world,
@@ -614,6 +629,43 @@ fn climb(world: &mut World, action: &DoAfter, mob: Entity) {
         crate::medical::surgery::buckle(world, actor, mob, target);
     }
     after_landing(world, mob, target);
+}
+
+/// tg `climbable/do_climb` of a border railing: one step with the railing out of the way, over
+/// its edge (into the next tile) from its own tile or from the side it does not face.
+// shortcut: a diagonal railing is vaulted from its own tile over its vertical edge (tg picks the
+// edge by where the drag ended on the icon); a diagonal vault from another tile fails.
+fn vault(world: &mut World, mob: Entity, railing: Entity) -> bool {
+    let (Some(&from), Some(&at)) = (world.get::<TilePos>(mob), world.get::<TilePos>(railing))
+    else {
+        return false;
+    };
+    let Some(facing) = world
+        .get::<Border>(railing)
+        .and_then(|b| Dir::from_bits(b.edges))
+    else {
+        return false;
+    };
+    let toward = |to: TilePos| {
+        let (dx, dy) = ((to.x - from.x).signum(), (to.y - from.y).signum());
+        Dir::DMI_ORDER.into_iter().find(|d| d.offset() == (dx, dy))
+    };
+    let same_loc = from == at;
+    let mut step = toward(at);
+    if same_loc || step.is_some_and(|d| d as u8 & facing.reverse() as u8 == 0) {
+        step = toward(at.step(facing));
+        if same_loc && !Dir::CARDINALS.contains(&facing) {
+            step = Some(if facing as u8 & Dir::North as u8 != 0 {
+                Dir::North
+            } else {
+                Dir::South
+            });
+        }
+    }
+    let Some(step) = step.filter(|d| Dir::CARDINALS.contains(d)) else {
+        return false;
+    };
+    step_passing(world, mob, step, |_, e| e == railing).is_ok()
 }
 
 /// `mob` onto `to` (the tile of `surface`), past every table there but nothing else dense:
@@ -1132,4 +1184,35 @@ fn build_on_frame(world: &mut World, mob: Entity, action: &DoAfter) {
     }
     tile_changed(world, pos);
     reelevate(world, pos);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_railing_is_vaulted_over_its_edge() {
+        let mut app = App::new();
+        app.add_plugins(ss13_world::WorldPlugin);
+        let world = app.world_mut();
+        world
+            .resource_mut::<SpatialIndex>()
+            .create_level(1, 10, 10)
+            .unwrap();
+        let at = TilePos::new(5, 5, 1);
+        let railing = world
+            .spawn((at, Density, Border::facing(Dir::North, true)))
+            .id();
+        let mob = world.spawn((TilePos::new(5, 4, 1), Density)).id();
+        // From the side it does not face: onto its tile.
+        assert!(vault(world, mob, railing));
+        assert_eq!(world.get::<TilePos>(mob), Some(&at));
+        // Walking north off its tile is blocked; vaulting crosses the edge.
+        assert!(crate::pull::step_once(world, mob, Dir::North, None).is_err());
+        assert!(vault(world, mob, railing));
+        assert_eq!(world.get::<TilePos>(mob), Some(&TilePos::new(5, 6, 1)));
+        // From the side it faces: back over the edge onto its tile.
+        assert!(vault(world, mob, railing));
+        assert_eq!(world.get::<TilePos>(mob), Some(&at));
+    }
 }
