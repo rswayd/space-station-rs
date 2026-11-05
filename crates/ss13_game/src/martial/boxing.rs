@@ -15,9 +15,9 @@ use ss13_shared::chat::Span;
 
 use super::{
     AttackKind, COMBAT, Outcome, Style, active_arm, active_style, add_to_streak, adjacent,
-    capitalize, chance, check_block, dir_to, effects, fling, hurt, incapacitated, knock_out,
-    lying, melee_armor, message, name, play, reset_streak, roll, stamina_loss, streak,
-    throw_mode, unconscious, zone_selected,
+    capitalize, chance, check_block, dir_to, effects, fling, hurt, incapacitated, knock_out, lying,
+    melee_armor, message, name, play, reset_streak, roll, stamina_loss, streak, throw_mode,
+    unconscious, zone_selected,
 };
 use crate::combat::{ARM, CLICK_CD_MELEE, NextMove};
 use crate::health::{DamageType, Health, Stat};
@@ -98,7 +98,11 @@ pub fn combo(streak: &str, left: bool, behind: bool, honorable: bool, blind: boo
     }
     let (ll, rr) = (streak.contains("HH"), streak.contains("DD"));
     if (ll && !left) || (rr && left) {
-        return if blind { Combo::BlindJab } else { Combo::LightJab };
+        return if blind {
+            Combo::BlindJab
+        } else {
+            Combo::LightJab
+        };
     }
     if (ll && left) || (rr && !left) {
         return Combo::Straight;
@@ -116,8 +120,10 @@ pub fn combo(streak: &str, left: bool, behind: bool, honorable: bool, blind: boo
 
 /// tg `check_behind`: the same tile, lying, or the target's back turned to the attacker.
 fn behind(world: &World, a: Entity, d: Entity) -> bool {
-    let (Some(from), Some(to)) = (world.get::<ss13_shared::TilePos>(a), world.get::<ss13_shared::TilePos>(d))
-    else {
+    let (Some(from), Some(to)) = (
+        world.get::<ss13_shared::TilePos>(a),
+        world.get::<ss13_shared::TilePos>(d),
+    ) else {
         return false;
     };
     if from == to || lying(world, d) {
@@ -190,7 +196,14 @@ pub(super) fn grab(world: &mut World, style: Style, a: Entity) -> Outcome {
 fn extra_effect(world: &mut World, style: Style, d: Entity) {
     if style == Style::HunterBoxing && beast(world, d) {
         let extra = roll(world, 15, 20) as f32;
-        hurt(world, d, Some(BodyZone::Chest), DamageType::Brute, extra, Some(0.0));
+        hurt(
+            world,
+            d,
+            Some(BodyZone::Chest),
+            DamageType::Brute,
+            extra,
+            Some(0.0),
+        );
     }
 }
 
@@ -228,7 +241,13 @@ fn tussle(world: &mut World, style: Style, a: Entity, d: Entity) {
         let strength = if style == Style::EvilBoxing { 2.0 } else { 0.0 };
         let blind = crate::vision::is_blind(world, a);
         let behind = behind(world, a, d);
-        combo = self::combo(&streak(world, a), arm == BodyZone::LArm, behind, honor, blind);
+        combo = self::combo(
+            &streak(world, a),
+            arm == BodyZone::LArm,
+            behind,
+            honor,
+            blind,
+        );
         if combo != Combo::None {
             reset_streak(world, a);
         }
@@ -315,7 +334,14 @@ fn crit(world: &mut World, style: Style, a: Entity, d: Entity, armor: f32, damag
             )),
         );
         let doubled = crate::armor::blocked_damage(damage * 2.0, armor);
-        hurt(world, d, Some(BodyZone::Chest), DamageType::Brute, doubled, Some(0.0));
+        hurt(
+            world,
+            d,
+            Some(BodyZone::Chest),
+            DamageType::Brute,
+            doubled,
+            Some(0.0),
+        );
         // `heal_overall_damage(healing, healing, healing)`.
         // shortcut: healed on the chest only, no stamina; spread with `heal_overall_damage`.
         let healing = (damage / 3.0).round();
@@ -355,7 +381,9 @@ fn crit(world: &mut World, style: Style, a: Entity, d: Entity, armor: f32, damag
         stagger(world, d);
     }
     let grabbed = world.get::<Pulling>(a).map(|p| p.0) == Some(d)
-        && world.get::<GrabState>(a).is_some_and(|g| *g >= GrabState::Aggressive);
+        && world
+            .get::<GrabState>(a)
+            .is_some_and(|g| *g >= GrabState::Aggressive);
     if grabbed && let Some(dir) = dir_to(world, a, d) {
         fling(world, d, dir, 2, 2.0);
     }
@@ -389,12 +417,23 @@ pub(super) fn block(
         return false;
     }
     if adjacent(world, me, attacker) {
-        hurt(world, attacker, None, default_damage(style), 10.0, Some(0.0));
+        hurt(
+            world,
+            attacker,
+            None,
+            default_damage(style),
+            10.0,
+            Some(0.0),
+        );
         hurt(world, me, None, DamageType::Stamina, 5.0, None);
         extra_effect(world, style, attacker);
     }
     let dodged = chance(world, 50.0);
-    let verb = if dodged { "избегает" } else { "блокирует" };
+    let verb = if dodged {
+        "избегает"
+    } else {
+        "блокирует"
+    };
     let mn = name(world, me);
     message(
         world,

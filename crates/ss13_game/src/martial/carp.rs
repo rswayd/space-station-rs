@@ -14,9 +14,9 @@ use ss13_mapload::{DmClothing, DmItem, DmWeight};
 use ss13_shared::chat::Span;
 
 use super::{
-    AttackKind, COMBAT, NEAR, Outcome, add_to_streak, capitalize, chance, check_block,
-    combat_mode, dir_to, drop_held, fling, hurt, incap, incapacitated, knock_out, lying, message,
-    name, play, reset_streak, stamina_loss, streak, unconscious,
+    AttackKind, COMBAT, NEAR, Outcome, add_to_streak, capitalize, chance, check_block, combat_mode,
+    dir_to, drop_held, fling, hurt, incap, incapacitated, knock_out, lying, message, name, play,
+    reset_streak, stamina_loss, streak, unconscious,
 };
 use crate::health::DamageType;
 use crate::inventory::Inventory;
@@ -135,7 +135,10 @@ fn wrist_wrench(world: &mut World, a: Entity, d: Entity) -> bool {
             format!("{} яростно выкручивает {part} {dn}!", capitalize(&an)),
         ),
         format!("{} яростно выкручивает вам {part}!", capitalize(&an)),
-        Some((Span::Danger, format!("Вы яростно выкручиваете {part} {dn}!"))),
+        Some((
+            Span::Danger,
+            format!("Вы яростно выкручиваете {part} {dn}!"),
+        )),
     );
     play(world, d, PUNCH, 25.0);
     hurt(world, d, Some(arm), DamageType::Brute, 20.0, Some(30.0));
@@ -214,7 +217,10 @@ fn drop_kick(world: &mut World, a: Entity, d: Entity) -> bool {
                     capitalize(&an)
                 ),
             ),
-            format!("{} бьёт вас по голове, швыряя вас лицом в пол!", capitalize(&an)),
+            format!(
+                "{} бьёт вас по голове, швыряя вас лицом в пол!",
+                capitalize(&an)
+            ),
             None,
         );
     }
@@ -364,7 +370,11 @@ pub(super) fn style_points(world: &World, mob: Entity) -> f32 {
         if EXEMPT.iter().any(|root| is_under(path, root)) {
             continue;
         }
-        let w_class = world.get::<DmWeight>(item).copied().unwrap_or_default().w_class;
+        let w_class = world
+            .get::<DmWeight>(item)
+            .copied()
+            .unwrap_or_default()
+            .w_class;
         if w_class <= WEIGHT_CLASS_SMALL {
             continue;
         }

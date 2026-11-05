@@ -266,9 +266,9 @@ pub mod lobby_client;
 pub mod loot;
 #[cfg(feature = "server")]
 pub mod machine_frame;
-pub mod mecha;
 #[cfg(feature = "server")]
 pub mod martial;
+pub mod mecha;
 #[cfg(feature = "server")]
 pub mod medical;
 #[cfg(feature = "server")]

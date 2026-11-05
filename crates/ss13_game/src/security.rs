@@ -271,8 +271,7 @@ pub(crate) fn security_clicks(world: &mut World, mut clicks: Local<MessageCursor
             None if crate::martial::unarmed_attack(world, &click, now) => true,
             // tg `check_block` of the defender against a punch or a shove.
             None if target != mob
-                && (click.modifiers.right
-                    || world.get::<CombatMode>(mob).is_some_and(|c| c.0))
+                && (click.modifiers.right || world.get::<CombatMode>(mob).is_some_and(|c| c.0))
                 && {
                     let user = name_of(world, mob);
                     let text = if click.modifiers.right {

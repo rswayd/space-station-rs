@@ -136,7 +136,8 @@ impl Style {
 
     /// tg `can_teach`: boxing only to humans.
     fn can_teach(self, world: &World, mob: Entity) -> bool {
-        world.get::<Health>(mob).is_some() && (!self.boxing() || world.get::<Inventory>(mob).is_some())
+        world.get::<Health>(mob).is_some()
+            && (!self.boxing() || world.get::<Inventory>(mob).is_some())
     }
 
     /// tg `get_style_help`.
@@ -282,7 +283,11 @@ const PAGE_TURN_SOUNDS: [&str; 3] = [
 
 /// Granters: (type, style, `martial_name`).
 static GRANTERS: [(&str, Style, &str); 2] = [
-    ("/obj/item/book/granter/martial/cqc", Style::Cqc, "основы CQC"),
+    (
+        "/obj/item/book/granter/martial/cqc",
+        Style::Cqc,
+        "основы CQC",
+    ),
     (
         "/obj/item/book/granter/martial/carp",
         Style::SleepingCarp,
@@ -662,7 +667,12 @@ fn start_page(world: &mut World, client: Entity, mob: Entity, item: Entity, job:
 }
 
 /// A reading step finished: a remark and the next page, or the style learned.
-pub fn complete_reading(world: &mut World, mob: Entity, action: &crate::tools::DoAfter, job: ReadJob) {
+pub fn complete_reading(
+    world: &mut World,
+    mob: Entity,
+    action: &crate::tools::DoAfter,
+    job: ReadJob,
+) {
     let (client, Some(item)) = (action.client, action.item) else {
         return;
     };
@@ -801,7 +811,14 @@ pub(crate) fn grab(world: &mut World, attacker: Entity, defender: Entity) -> boo
         }
     }
     let text = format!("захват {}", name(world, attacker));
-    check_block(world, defender, Some(attacker), AttackKind::Unarmed, 0.0, &text)
+    check_block(
+        world,
+        defender,
+        Some(attacker),
+        AttackKind::Unarmed,
+        0.0,
+        &text,
+    )
 }
 
 /// tg `check_block` (`COMSIG_LIVING_CHECK_BLOCK`) of the defender's active style: true when the
@@ -873,9 +890,7 @@ fn harm_act(world: &mut World, style: Style, a: Entity, d: Entity) -> Outcome {
     match style {
         Style::Cqc => cqc::harm(world, a, d),
         Style::SleepingCarp => carp::harm(world, a, d),
-        Style::Boxing | Style::EvilBoxing | Style::HunterBoxing => {
-            boxing::harm(world, style, a, d)
-        }
+        Style::Boxing | Style::EvilBoxing | Style::HunterBoxing => boxing::harm(world, style, a, d),
         Style::Wrestling => wrestling::act(world, a, d),
         Style::Judo => judo::harm(world, a, d),
     }
@@ -1113,7 +1128,10 @@ pub(crate) fn dir_to(world: &World, a: Entity, d: Entity) -> Option<Dir> {
 
 pub(crate) fn play(world: &mut World, at: Entity, file: &str, volume: f32) {
     if let Some(&pos) = world.get::<TilePos>(at) {
-        crate::sound::playsound(world, PlaySound::new(pos, file, volume, true).extrarange(-1.0));
+        crate::sound::playsound(
+            world,
+            PlaySound::new(pos, file, volume, true).extrarange(-1.0),
+        );
     }
 }
 
@@ -1191,8 +1209,7 @@ pub(crate) fn hurt(
     let Ok(mut entity) = world.get_entity_mut(mob) else {
         return;
     };
-    let Ok((mut health, mut stat)) = entity.get_components_mut::<(&mut Health, &mut Stat)>()
-    else {
+    let Ok((mut health, mut stat)) = entity.get_components_mut::<(&mut Health, &mut Stat)>() else {
         return;
     };
     let before = health.part(zone).damage();
@@ -1230,7 +1247,10 @@ pub(crate) fn drop_held(world: &mut World, mob: Entity) {
     let Some(&at) = world.get::<TilePos>(mob) else {
         return;
     };
-    let held = world.get::<Inventory>(mob).map(|i| i.hands).unwrap_or_default();
+    let held = world
+        .get::<Inventory>(mob)
+        .map(|i| i.hands)
+        .unwrap_or_default();
     for item in held.into_iter().flatten() {
         if !crate::inventory::no_drop(world, item) {
             crate::inventory::put_down(world, item, at);
@@ -1241,7 +1261,9 @@ pub(crate) fn drop_held(world: &mut World, mob: Entity) {
 /// The defender's active item into the attacker's hands (tg `temporarilyRemoveItemFromInventory`
 /// then `put_in_hands`). Returns it.
 pub(crate) fn take_active_item(world: &mut World, from: Entity, to: Entity) -> Option<Entity> {
-    let item = world.get::<Inventory>(from).and_then(Inventory::active_item)?;
+    let item = world
+        .get::<Inventory>(from)
+        .and_then(Inventory::active_item)?;
     if crate::inventory::no_drop(world, item) {
         return None;
     }
@@ -1276,14 +1298,32 @@ pub(crate) fn fling(world: &mut World, mob: Entity, dir: Dir, range: u32, speed:
             return;
         };
         let what = name(world, hit);
-        let fast = if extra > 0.0 { " с большой скоростью" } else { "" };
+        let fast = if extra > 0.0 {
+            " с большой скоростью"
+        } else {
+            ""
+        };
         let who = name(world, mob);
         let carbon = world.get::<Inventory>(hit).is_some();
         if world.get::<ss13_mapload::Turf>(hit).is_some() {
             incap(world, mob, Incap::Paralyze, 2.0);
-            hurt(world, mob, None, DamageType::Brute, 10.0 + 5.0 * extra, Some(extra * 5.0));
+            hurt(
+                world,
+                mob,
+                None,
+                DamageType::Brute,
+                10.0 + 5.0 * extra,
+                Some(extra * 5.0),
+            );
         } else if carbon {
-            hurt(world, mob, None, DamageType::Brute, 10.0 + 5.0 * extra, Some(extra * 5.0));
+            hurt(
+                world,
+                mob,
+                None,
+                DamageType::Brute,
+                10.0 + 5.0 * extra,
+                Some(extra * 5.0),
+            );
             incap(world, mob, Incap::Paralyze, 2.0);
             incap(world, hit, Incap::Paralyze, 2.0);
         } else if extra > 0.0 {
@@ -1292,9 +1332,23 @@ pub(crate) fn fling(world: &mut World, mob: Entity, dir: Dir, range: u32, speed:
                 .is_some_and(|o| is_under(&o.path, "/obj/structure"));
             if structure {
                 incap(world, mob, Incap::Paralyze, 1.0);
-                hurt(world, mob, None, DamageType::Brute, 5.0 + 5.0 * extra, Some(extra * 5.0));
+                hurt(
+                    world,
+                    mob,
+                    None,
+                    DamageType::Brute,
+                    5.0 + 5.0 * extra,
+                    Some(extra * 5.0),
+                );
             } else {
-                hurt(world, mob, None, DamageType::Brute, 5.0 * extra, Some(extra * 5.0));
+                hurt(
+                    world,
+                    mob,
+                    None,
+                    DamageType::Brute,
+                    5.0 * extra,
+                    Some(extra * 5.0),
+                );
             }
         }
         if let Some(&at) = world.get::<TilePos>(mob) {
@@ -1307,7 +1361,11 @@ pub(crate) fn fling(world: &mut World, mob: Entity, dir: Dir, range: u32, speed:
                     Span::Danger,
                     format!("{} врезается в {what}{fast}!", capitalize(&who)),
                 ),
-                &[(mob, Span::BoldWarning, format!("Вы врезаетесь в {what}{fast}!"))],
+                &[(
+                    mob,
+                    Span::BoldWarning,
+                    format!("Вы врезаетесь в {what}{fast}!"),
+                )],
             );
         }
         return;
@@ -1391,7 +1449,10 @@ mod tests {
         art.add_to_streak("H", e(1), 5.0);
         assert_eq!(art.streak, "HH");
         art.add_to_streak("D", e(1), 6.5);
-        assert_eq!(art.streak, "D", "6 s after the first move the streak is gone");
+        assert_eq!(
+            art.streak, "D",
+            "6 s after the first move the streak is gone"
+        );
         let mut wrestling = Art::new(Style::Wrestling, Origin::Learned);
         wrestling.add_to_streak("H", e(1), 0.0);
         wrestling.add_to_streak("H", e(1), 100.0);
@@ -1401,11 +1462,17 @@ mod tests {
     #[test]
     fn givers_need_their_slot() {
         assert_eq!(
-            giver_style("/obj/item/clothing/gloves/boxing/evil", InventorySlot::Gloves),
+            giver_style(
+                "/obj/item/clothing/gloves/boxing/evil",
+                InventorySlot::Gloves
+            ),
             Some(Style::EvilBoxing)
         );
         assert_eq!(
-            giver_style("/obj/item/clothing/gloves/boxing/green", InventorySlot::Gloves),
+            giver_style(
+                "/obj/item/clothing/gloves/boxing/green",
+                InventorySlot::Gloves
+            ),
             Some(Style::Boxing)
         );
         assert_eq!(

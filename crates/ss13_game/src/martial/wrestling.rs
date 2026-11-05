@@ -73,7 +73,10 @@ pub(super) fn trigger(world: &mut World, mob: Entity, id: &str) {
         return;
     }
     let (others, own) = match kind {
-        "slam" => ("готовится к БРОСКУ ТЕЛА!", "Ваша следующая атака - БРОСОК ТЕЛА."),
+        "slam" => (
+            "готовится к БРОСКУ ТЕЛА!",
+            "Ваша следующая атака - БРОСОК ТЕЛА.",
+        ),
         "throw" => ("готовится к БРОСКУ!", "Ваша следующая атака - БРОСОК."),
         "kick" => ("готовится к ПИНКУ!", "Ваша следующая атака - ПИНОК."),
         "strike" => ("готовится к УДАРУ!", "Ваша следующая атака - УДАР."),
@@ -131,7 +134,10 @@ pub(super) fn grab(world: &mut World, a: Entity, d: Entity) -> Outcome {
 /// `check_streak`: the readied move, after the defender's block.
 fn check_streak(world: &mut World, a: Entity, d: Entity) -> bool {
     let streak = streak(world, a);
-    if !matches!(streak.as_str(), "drop" | "strike" | "kick" | "throw" | "slam") {
+    if !matches!(
+        streak.as_str(),
+        "drop" | "strike" | "kick" | "throw" | "slam"
+    ) {
         return false;
     }
     let text = format!("{} {}", streak, name(world, a));
@@ -256,10 +262,7 @@ fn kick(world: &mut World, a: Entity, d: Entity) {
         a,
         d,
         COMBAT,
-        (
-            Span::Danger,
-            format!("{an} бьёт {dn} ногой с разворота!"),
-        ),
+        (Span::Danger, format!("{an} бьёт {dn} ногой с разворота!")),
         format!("{} бьёт вас ногой с разворота!", capitalize(&an)),
         Some((Span::Danger, format!("Вы бьёте {dn} ногой с разворота!"))),
     );

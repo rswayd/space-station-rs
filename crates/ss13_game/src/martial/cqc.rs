@@ -216,9 +216,7 @@ fn consecutive(world: &mut World, a: Entity, d: Entity) -> bool {
             Span::Danger,
             format!("{an} последовательно наносит удары в живот, шею и спину {dn}."),
         ),
-        format!(
-            "Вы чувствуете, как {an} наносит последовательные удары в ваш живот, шею и спину!"
-        ),
+        format!("Вы чувствуете, как {an} наносит последовательные удары в ваш живот, шею и спину!"),
         Some((
             Span::Danger,
             format!("Вы наносите последовательные удары по животу, шее и спине {dn}!"),
@@ -323,7 +321,11 @@ pub(super) fn harm(world: &mut World, a: Entity, d: Entity) -> Outcome {
         ),
         // BandaStation's translation lost the line of a standing hit; tg prints one.
         (false, _) => {
-            let hit = if kicked { "CQC" } else { "Большой Босс" };
+            let hit = if kicked {
+                "CQC"
+            } else {
+                "Большой Босс"
+            };
             (
                 format!("{an} бьёт {dn} приёмом «{hit}»!"),
                 format!("{} бьёт вас приёмом «{hit}»!", capitalize(&an)),
@@ -376,8 +378,7 @@ pub(super) fn disarm(world: &mut World, a: Entity, d: Entity) -> Outcome {
     }
     // tg's condition `!crit || !paralyzed || !restraining` is true unless all three hold.
     let paralyzed = super::effects(world, d).paralyze > 0.0;
-    if chance(world, 65.0)
-        && (!unconscious_or_crit(world, d) || !paralyzed || restrained.is_none())
+    if chance(world, 65.0) && (!unconscious_or_crit(world, d) || !paralyzed || restrained.is_none())
     {
         let item = world
             .get::<crate::inventory::Inventory>(d)
@@ -391,7 +392,9 @@ pub(super) fn disarm(world: &mut World, a: Entity, d: Entity) -> Outcome {
             Some(i) => (
                 format!("{an} бьёт {dn} в челюсть рукой, выбивая из его рук {i}!"),
                 format!("{an} бьёт вам в челюсть, выбивая из ваших рук {i} и дезориентируя вас!"),
-                format!("Вы бьёте в челюсть {dn}, выбивая из его рук {i} и оставляя его дезориентированным!"),
+                format!(
+                    "Вы бьёте в челюсть {dn}, выбивая из его рук {i} и оставляя его дезориентированным!"
+                ),
             ),
             None => (
                 format!("{an} бьёт {dn} в челюсть рукой!"),
@@ -417,10 +420,7 @@ pub(super) fn disarm(world: &mut World, a: Entity, d: Entity) -> Outcome {
         a,
         d,
         COMBAT,
-        (
-            Span::Danger,
-            format!("У {an} не выходит разоружить {dn}!"),
-        ),
+        (Span::Danger, format!("У {an} не выходит разоружить {dn}!")),
         format!("{} почти удалось вас разоружить!", capitalize(&an)),
         Some((Span::Warning, format!("У вас не выходит разоружить {dn}!"))),
     );

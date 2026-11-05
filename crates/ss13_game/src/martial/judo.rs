@@ -9,8 +9,8 @@ use bevy::prelude::*;
 use ss13_shared::chat::Span;
 
 use super::{
-    AttackKind, NEAR, Outcome, add_to_streak, check_block, hurt, incap, lying, message, name,
-    play, reset_streak, roll, streak, tell_mob, with_art,
+    AttackKind, NEAR, Outcome, add_to_streak, check_block, hurt, incap, lying, message, name, play,
+    reset_streak, roll, streak, tell_mob, with_art,
 };
 use crate::combat::{CLICK_CD_MELEE, NextMove};
 use crate::health::DamageType;

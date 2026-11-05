@@ -191,7 +191,8 @@ fn boxing_gloves_teach_while_worn() {
     // A boxer's punch on a non-boxer: stamina only.
     s.punch();
     s.run_until("the punch tires B", |s| {
-        s.try_get::<StatusEffects>(b).is_some_and(|e| e.stamina > 0.0)
+        s.try_get::<StatusEffects>(b)
+            .is_some_and(|e| e.stamina > 0.0)
     });
     assert_eq!(s.get::<Health>(b).brute, 0.0, "boxing deals no brute");
 
