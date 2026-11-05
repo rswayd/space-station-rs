@@ -58,6 +58,7 @@ mod modsuit;
 mod mood;
 mod multiz;
 mod nukeops;
+mod paperwork;
 mod pda;
 mod play;
 mod plumbing;

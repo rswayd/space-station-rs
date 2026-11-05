@@ -59,6 +59,12 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/paper/construction",
     "/obj/item/paper/fluff/jobs/cargo/manifest",
     "/obj/item/paper/natural",
+    // Copies, printed and bound books, folded planes, the prebuilt copier's cartridge
+    // (`ss13_game::service`).
+    "/obj/item/book",
+    "/obj/item/paper",
+    "/obj/item/paperplane",
+    "/obj/item/toner",
     "/obj/item/plate/oven_tray",
     "/obj/item/rack_parts",
     "/obj/item/reagent_containers/cup/beaker/large",

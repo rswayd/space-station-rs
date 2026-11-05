@@ -19,7 +19,7 @@ use ss13_tgui::{UiInterface as _, UiStatus};
 
 use super::library::Book;
 use super::paper::Paper;
-use super::{MarkdownViewerData, MarkdownViewerUi, PaperSheetData, PaperSheetUi};
+use super::{MarkdownViewerData, MarkdownViewerUi, PaperInput, PaperSheetData, PaperSheetUi};
 use crate::inventory::Inventory;
 use crate::server::PlayerMob;
 
@@ -52,6 +52,7 @@ impl Plugin for ServiceServerPlugin {
         app.register_ui::<PaperSheetUi>()
             .register_ui::<MarkdownViewerUi>()
             .init_resource::<super::religion::Religion>()
+            .init_resource::<super::archive::LibraryArchive>()
             .add_systems(Startup, super::library::shelve_mapped_books)
             .add_systems(
                 Update,
@@ -60,6 +61,7 @@ impl Plugin for ServiceServerPlugin {
                         .in_set(UiSystems::Handle)
                         .after(PromptSystems::Answer),
                     window_status.in_set(UiSystems::StatusHook),
+                    run_timers.run_if(any_with_component::<ServiceTimer>),
                     super::clown::squeak_on_moves.after(ss13_world::WorldSystems::Movement),
                 ),
             )
@@ -73,8 +75,24 @@ impl Plugin for ServiceServerPlugin {
 /// A question waiting for its answer, on the prompt entity.
 #[derive(Component, Clone, Debug)]
 pub(super) enum PendingAsk {
-    /// A pen's text for a paper.
-    Write { paper: Entity, pen: Entity },
+    /// A pen's text for a paper: at the end, or into a field (`(input, field id, fields then)`).
+    Write {
+        paper: Entity,
+        pen: Entity,
+        field: Option<(usize, usize, usize)>,
+    },
+    /// Where a pen writes on a paper with fields: the end (item 0) or `fields[item - 1]`.
+    WriteWhere {
+        paper: Entity,
+        pen: Entity,
+        fields: Vec<(usize, usize)>,
+    },
+    /// Clipboards, folders, the photocopier and the fax.
+    Office(super::office::OfficeAsk),
+    /// Book alterations and the library's machines.
+    Archive(super::archive::ArchiveAsk),
+    /// Canvases.
+    Art(super::art::ArtAsk),
     /// The hand labeler's label.
     Label { labeler: Entity },
     /// A book off a bookcase; the list as it was asked.
@@ -91,6 +109,8 @@ fn add_item_parts(add: On<Add<DmItem>>, mut commands: Commands) {
             return;
         };
         super::clown::add_parts(world, e, &path);
+        super::office::add_parts(world, e, &path);
+        super::art::add_parts(world, e, &path);
         add_data_parts(world, e);
     });
 }
@@ -125,23 +145,35 @@ fn add_obj_parts(add: On<Add<DmObj>>, mut commands: Commands) {
         };
         super::clown::add_obj_parts(world, e, &path);
         super::library::add_obj_parts(world, e, &path);
+        super::office::add_obj_parts(world, e, &path);
+        super::archive::add_obj_parts(world, e, &path);
     });
 }
 
 /// tg `attack_self` of the held service item. True when it was one.
 pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity) -> bool {
     super::paper::attack_self(world, client, mob, item)
+        || super::office::attack_self(world, client, mob, item)
+        || super::art::attack_self(world, client, mob, item)
         || super::religion::attack_self(world, client, mob, item)
         || super::library::attack_self(world, client, mob, item)
         || super::games::attack_self(world, client, mob, item)
         || super::clown::attack_self(world, mob, item)
 }
 
-/// tg `attack_hand` of paper bins, bookcases and desk bells. True when it was one.
+/// tg `attack_hand` of paper bins, bookcases, desk bells, office and library machines. True
+/// when it was one.
 pub fn interact(world: &mut World, client: Entity, mob: Entity, target: Entity) -> bool {
     super::paper::take_from_bin(world, client, mob, target)
         || super::library::bookcase_hand(world, client, mob, target)
         || super::clown::ring_hand(world, client, mob, target)
+        || super::office::interact(world, client, mob, target)
+        || super::archive::interact(world, client, mob, target)
+}
+
+/// tg `click_alt` of papers: folded into a plane. True when `target` was a paper.
+pub fn click_alt(world: &mut World, client: Entity, mob: Entity, target: Entity) -> bool {
+    super::office::fold_plane(world, client, mob, target)
 }
 
 /// tg `item_interaction` / `attack` of the service items in hand (and of what they are used
@@ -157,8 +189,11 @@ pub fn item_interaction(
     // click goes on.
     super::clown::used_on(world, mob, held, target);
     super::paper::item_interaction(world, client, mob, held, target)
+        || super::office::item_interaction(world, client, mob, held, target)
         || super::religion::item_interaction(world, client, mob, held, target)
         || super::library::item_interaction(world, client, mob, held, target)
+        || super::archive::item_interaction(world, client, mob, held, target)
+        || super::art::item_interaction(world, client, mob, held, target)
 }
 
 fn prompt_answers(world: &mut World, mut cursor: Local<MessageCursor<PromptAnswered>>) {
@@ -177,8 +212,20 @@ fn prompt_answers(world: &mut World, mut cursor: Local<MessageCursor<PromptAnswe
             continue;
         }
         match (pending, answer) {
-            (PendingAsk::Write { paper, pen }, Some(PromptAnswer::Text(text))) => {
-                super::paper::write_answer(world, actor, paper, pen, &text);
+            (PendingAsk::Write { paper, pen, field }, Some(PromptAnswer::Text(text))) => {
+                super::paper::write_answer(world, actor, paper, pen, field, &text);
+            }
+            (PendingAsk::WriteWhere { paper, pen, fields }, Some(PromptAnswer::Item(i))) => {
+                super::paper::where_answer(world, actor, paper, pen, &fields, i);
+            }
+            (PendingAsk::Office(ask), Some(answer)) => {
+                super::office::answer(world, actor, ask, answer);
+            }
+            (PendingAsk::Archive(ask), Some(answer)) => {
+                super::archive::answer(world, actor, ask, answer);
+            }
+            (PendingAsk::Art(ask), Some(answer)) => {
+                super::art::answer(world, actor, ask, answer);
             }
             (PendingAsk::Label { labeler }, Some(PromptAnswer::Text(text))) => {
                 super::paper::label_answer(world, actor, labeler, &text);
@@ -207,7 +254,16 @@ impl ServerUi for PaperSheetUi {
     fn static_data((paper, name): (&Paper, Option<&DmName>)) -> PaperSheetData {
         PaperSheetData {
             paper_name: name.map(|n| n.name.clone()).unwrap_or_default(),
-            raw_text_input: paper.inputs.clone(),
+            // The fields' children in place (each in the input's look, not its own).
+            raw_text_input: paper
+                .inputs
+                .iter()
+                .map(|input| PaperInput {
+                    raw_text: input.display_text(),
+                    children: Vec::new(),
+                    ..input.clone()
+                })
+                .collect(),
             raw_stamp_input: paper.stamps.clone(),
         }
     }
@@ -240,20 +296,26 @@ impl ServerUi for MarkdownViewerUi {
 }
 
 /// tg `paper/ui_status`: readable while held or near (the source has `AlwaysState`, so the
-/// distance check is here); blind readers lose the window.
+/// distance check is here), also inside a clipboard or folder that is; blind readers lose the
+/// window.
 fn window_status(
     mut windows: Query<&mut UiWindow>,
     users: Query<(&Inventory, Option<&TilePos>)>,
     positions: Query<&TilePos>,
+    stored: Query<&crate::storage::StoredIn>,
 ) {
     for mut window in &mut windows {
         if window.interface != PaperSheetUi::NAME && window.interface != MarkdownViewerUi::NAME {
             continue;
         }
+        let source = match stored.get(window.source) {
+            Ok(holder) => holder.0,
+            Err(_) => window.source,
+        };
         let status = match users.get(window.actor) {
-            Ok((inventory, _)) if inventory.holds(window.source) => UiStatus::Interactive,
+            Ok((inventory, _)) if inventory.holds(source) => UiStatus::Interactive,
             Ok((_, Some(at))) => positions
-                .get(window.source)
+                .get(source)
                 .map_or(UiStatus::Close, |pos| distance_status(*at, *pos)),
             _ => UiStatus::Close,
         };
@@ -336,4 +398,62 @@ pub(super) fn refresh_windows(world: &mut World, source: Entity) {
 /// The text a paper or book was spawned with, for the item kinds that read it.
 pub(super) fn service_data(world: &World, e: Entity) -> DmService {
     world.get::<DmService>(e).cloned().unwrap_or_default()
+}
+
+/// A delayed step of a machine (tg `addtimer` / the sleeps of `do_copy_loop`).
+#[derive(Component, Clone, Debug)]
+pub(super) struct ServiceTimer {
+    at: f64,
+    job: TimerJob,
+}
+
+#[derive(Clone, Debug)]
+pub(super) enum TimerJob {
+    /// The photocopier's next copy.
+    Copy { copier: Entity },
+    /// A received fax comes out of `fax`.
+    FaxVend { fax: Entity, item: Entity },
+    /// The binder's book is done.
+    Bind { binder: Entity, paper: Entity },
+    /// The library console's printed book.
+    PrintBook { console: Entity, id: u32 },
+}
+
+pub(super) fn now(world: &World) -> f64 {
+    world.resource::<Time>().elapsed_secs_f64()
+}
+
+/// `addtimer(job, secs)`.
+pub(super) fn after(world: &mut World, secs: f64, job: TimerJob) {
+    let at = now(world) + secs;
+    world.spawn((Name::new("service timer"), ServiceTimer { at, job }));
+}
+
+fn run_timers(world: &mut World) {
+    let t = now(world);
+    let mut timers = world.query::<(Entity, &ServiceTimer)>();
+    let due: Vec<(Entity, TimerJob)> = timers
+        .iter(world)
+        .filter(|(_, timer)| timer.at <= t)
+        .map(|(e, timer)| (e, timer.job.clone()))
+        .collect();
+    for (e, job) in due {
+        world.despawn(e);
+        match job {
+            TimerJob::Copy { copier } => super::office::next_copy(world, copier),
+            TimerJob::FaxVend { fax, item } => super::office::vend(world, fax, item),
+            TimerJob::Bind { binder, paper } => super::archive::bind(world, binder, paper),
+            TimerJob::PrintBook { console, id } => super::archive::print(world, console, id),
+        }
+    }
+}
+
+/// Renames an item (its `DmName`, and its `Name` when it has one or no `DmName`).
+pub(super) fn set_name(world: &mut World, e: Entity, name: &str) {
+    if let Some(mut dm) = world.get_mut::<DmName>(e) {
+        name.clone_into(&mut dm.name);
+    }
+    if world.get::<Name>(e).is_some() || world.get::<DmName>(e).is_none() {
+        world.entity_mut(e).insert(Name::new(name.to_owned()));
+    }
 }
