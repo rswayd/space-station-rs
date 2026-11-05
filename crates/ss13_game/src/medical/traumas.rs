@@ -613,6 +613,11 @@ pub fn gain(world: &mut World, brain: Entity, kind: Kind, resilience: Option<Res
         return false;
     }
     let resilience = resilience.unwrap_or(kind.def().resilience);
+    // An imprinted cortex's `COMSIG_CARBON_BLOCK_TRAUMA`.
+    if owner(world, brain).is_some_and(|mob| super::bioware::blocks_trauma(world, mob, resilience))
+    {
+        return false;
+    }
     let trauma = Trauma {
         kind,
         resilience,

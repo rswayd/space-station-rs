@@ -494,6 +494,14 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                                 world, client, mob, held, item,
                             )
                         }) => {}
+                // An organ loads the autosurgeon in the other hand, a screwdriver unloads it.
+                Some(item)
+                    if hand != inventory.active
+                        && inventory.active_item().is_some_and(|held| {
+                            crate::medical::cyberimps::item_interaction(
+                                world, client, mob, held, item,
+                            )
+                        }) => {}
                 Some(item)
                     if hand != inventory.active
                         && world.get::<crate::storage::Storage>(item).is_some() =>

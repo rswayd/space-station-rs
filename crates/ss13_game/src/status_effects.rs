@@ -19,8 +19,9 @@
 //!
 //! The component exists only while something is active, so the per-tick countdown touches only
 //! affected mobs.
-// shortcut: no stun immunity (`check_stun_immunity`, `TRAIT_STUNIMMUNE`, godmode), no
-// physiology multipliers, no unconsciousness (`Unconscious`, sleeping), no force_say, jitter or
+// shortcut: no stun immunity (`check_stun_immunity`, `TRAIT_STUNIMMUNE`, godmode; the CNS
+// rebooter implant clears stuns itself), physiology multipliers only from bioware
+// (`crate::medical::bioware`, in [`apply`], [`knockdown`], [`adjust_stamina`]), no unconsciousness (`Unconscious`, sleeping), no force_say, jitter or
 // stutter; add them with the effects that grant them.
 
 use bevy::prelude::*;
@@ -384,11 +385,14 @@ fn is_dead(world: &World, mob: Entity) -> bool {
 
 /// tg `Stun`/`Paralyze`/`Immobilize`/`Knockdown(amount)` on a living mob.
 pub fn apply(world: &mut World, mob: Entity, kind: Incap, secs: f32) -> bool {
+    // `PHYS_COEFF_STUN` (spliced nerves).
+    let secs = secs * crate::medical::bioware::stun_mod(world, mob);
     effects_mut(world, mob).is_some_and(|mut e| e.apply(kind, secs))
 }
 
 /// tg `Knockdown(amount, daze_amount)`.
 pub fn knockdown(world: &mut World, mob: Entity, secs: f32, daze: f32) {
+    let secs = secs * crate::medical::bioware::stun_mod(world, mob);
     let dead = is_dead(world, mob);
     if let Some(mut e) = effects_mut(world, mob) {
         e.knockdown(secs, daze, dead);
@@ -397,6 +401,12 @@ pub fn knockdown(world: &mut World, mob: Entity, secs: f32, daze: f32) {
 
 /// tg `adjust_stamina_loss(amount)` with stamcrit's messages.
 pub fn adjust_stamina(world: &mut World, mob: Entity, amount: f32) {
+    // `GET_PHYSIOLOGY(src, STAMINA)` on damage (spliced nerves).
+    let amount = if amount > 0.0 {
+        amount * crate::medical::bioware::stamina_mod(world, mob)
+    } else {
+        amount
+    };
     let now = world.resource::<Time>().elapsed_secs_f64();
     let dead = is_dead(world, mob);
     let conscious = world.get::<Stat>(mob) == Some(&Stat::Conscious);

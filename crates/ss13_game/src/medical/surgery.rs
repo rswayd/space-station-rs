@@ -34,7 +34,8 @@
 // organ's damage.
 // shortcut: no mood events, sounds, surgical memory, blood on the surgeon's gloves, self-surgery
 // trait, manual cauterizing of yourself, ring accessories on gloves, wound scanning; no external
-// organs, cybernetic implants or dummy organs from food; no decapitation, robotic limb
+// organs or dummy organs from food (cybernetic implants go in and out like organs,
+// [`super::cyberimps`]); no decapitation, robotic limb
 // replacement or arbitrary prosthetics; no abductor, robotic, thick-skin or skull operations; no
 // brainwashing. Lobotomy, pacification and brain surgery work on the brain's traumas
 // ([`super::traumas`]).
@@ -49,6 +50,8 @@ use ss13_tgui::interfaces::list_input::{ListInputData, ListInputUi};
 use ss13_tgui::server::{OpenUi, ServerUi, UiActed, UiParams, UiReject, UiWindow};
 use ss13_tgui::{UiInterface, UiStatus};
 
+use super::bioware::Bioware;
+use super::cyberimps::{self, ImplantSlot};
 use super::operating::{OperatingComputer, advanced_surgeries};
 use super::organs::{self, Slot};
 use super::wounds::{CANT_WOUND, Limbs, Series, WoundKind, state};
@@ -299,6 +302,12 @@ pub enum Op {
     RemoveOrgan(Slot),
     /// Organ manipulation putting the held organ of this slot in.
     InsertOrgan(Slot),
+    /// Organ manipulation taking the implant of this slot out.
+    RemoveImplant(ImplantSlot),
+    /// Organ manipulation putting the held implant in (its slot by the zone).
+    InsertImplant,
+    /// A bioware operation ([`super::bioware`]).
+    Bioware(Bioware),
     Amputate,
     /// `prosthetic_replacement` with a limb item on a stump.
     AttachLimb,
@@ -376,6 +385,12 @@ const ORGAN_CUT: &[(Implement, f32)] = &[
     (Path("/obj/item/knife"), 2.25),
     (Path("/obj/item/shard"), 2.85),
 ];
+/// organ manipulation's `remove_implements`.
+const ORGAN_REMOVE: &[(Implement, f32)] = &[
+    (Tool("hemostat"), 1.0),
+    (Tool("crowbar"), 1.8),
+    (Path("/obj/item/kitchen/fork"), 2.85),
+];
 const SENSE_REPAIR: &[(Implement, f32)] = &[
     (Tool("hemostat"), 1.05),
     (Tool("screwdriver"), 2.25),
@@ -420,6 +435,8 @@ impl Op {
         ]);
         ops.extend(Slot::ALL.map(Self::RemoveOrgan));
         ops.extend(Slot::ALL.map(Self::InsertOrgan));
+        ops.extend(ImplantSlot::ALL.map(Self::RemoveImplant));
+        ops.push(Self::InsertImplant);
         ops.extend([
             Self::Amputate,
             Self::AttachLimb,
@@ -438,6 +455,7 @@ impl Op {
             Self::SealVeins,
             Self::FilterBlood,
         ]);
+        ops.extend(Bioware::ALL.map(Self::Bioware));
         ops
     }
 
@@ -768,11 +786,19 @@ impl Op {
             Self::RemoveOrgan(slot) => OpDef {
                 name: manip_names(slot).0,
                 verb: "извлекать",
-                implements: &[
-                    (Tool("hemostat"), 1.0),
-                    (Tool("crowbar"), 1.8),
-                    (Path("/obj/item/kitchen/fork"), 2.85),
-                ],
+                implements: ORGAN_REMOVE,
+                ..organ_manipulation
+            },
+            Self::RemoveImplant(slot) => OpDef {
+                name: slot.remove_name(),
+                verb: "извлекать",
+                implements: ORGAN_REMOVE,
+                ..organ_manipulation
+            },
+            Self::InsertImplant => OpDef {
+                name: "Вставить имплант",
+                verb: "вставлять",
+                implements: &[(Path(cyberimps::ROOT), 1.0)],
                 ..organ_manipulation
             },
             Self::InsertOrgan(slot) => OpDef {
@@ -1010,6 +1036,7 @@ impl Op {
                 required: &["операция на груди", "пациент не должен быть хаском"],
                 ..base
             },
+            Self::Bioware(kind) => bioware_def(kind, base),
             Self::Debride => OpDef {
                 path: "/datum/surgery_operation/limb/debride",
                 name: "Обработка зараженной плоти",
@@ -1139,6 +1166,141 @@ impl Op {
         }
         [all, any, optional, blocked]
     }
+}
+
+/// The bioware operations (`/datum/surgery_operation/limb/bioware`: by hand, through open skin,
+/// sawed bone and cut organs, locked).
+fn bioware_def(kind: Bioware, base: OpDef) -> OpDef {
+    use state::*;
+    const CIRCULATION: &[&str] = &[
+        "пациент ранее не должен был проходить Симваскулодез (Венозная \
+                                    нить) OR Миоваскулопластика (Мышечная мембрана вены)",
+    ];
+    const NERVES: &[&str] = &[
+        "пациент ранее не должен был проходить Симневродез (Сращивание \
+                               нервов) OR Ксантоневропластика (Заземление нервов)",
+    ];
+    const CORTEX: &[&str] = &[
+        "пациент ранее не должен был проходить Энцефалофрактопластика \
+                               (Складывание коры) OR Энцефалопластика (Отпечаток коры)",
+    ];
+    const CHEST: &[&str] = &["операция на грудь (цель грудь)"];
+    const HEAD: &[&str] = &["операция на голова (цель голова)"];
+    let bioware = OpDef {
+        time: 125.0,
+        flags: flags::LOCKED,
+        all_required: SKIN_OPEN | BONE_SAWED | ORGANS_CUT,
+        implements: &[(Hand, 1.0)],
+        tool_rec: "hands",
+        required: CHEST,
+        ..base
+    };
+    match kind {
+        Bioware::VeinThreading => OpDef {
+            path: "/datum/surgery_operation/limb/bioware/vein_threading",
+            name: "Венозная нить",
+            catalog_name: "Симваскулодез (Венозная нить)",
+            desc: "Сплетение вен пациента в усиленную сетку, для уменьшения кровопотери при \
+                   травмах.",
+            blocked: CIRCULATION,
+            ..bioware
+        },
+        Bioware::MuscledVeins => OpDef {
+            path: "/datum/surgery_operation/limb/bioware/muscled_veins",
+            name: "Мышечная мембрана вены",
+            catalog_name: "Миоваскулопластика (Мышечная мембрана вены)",
+            desc: "Добавление мышечной оболочки к венам пациента, что позволит ему перекачивать \
+                   кровь без участия сердца.",
+            blocked: CIRCULATION,
+            ..bioware
+        },
+        Bioware::NerveSplicing => OpDef {
+            path: "/datum/surgery_operation/limb/bioware/nerve_splicing",
+            name: "Сращивание нервов",
+            catalog_name: "Симневродез (Сращивание нервов)",
+            desc: "Соединение нервов пациента вместе, чтобы сделать их более устойчивыми к \
+                   оглушению.",
+            time: 155.0,
+            blocked: NERVES,
+            ..bioware
+        },
+        Bioware::NerveGrounding => OpDef {
+            path: "/datum/surgery_operation/limb/bioware/nerve_grounding",
+            name: "Заземление нервов",
+            catalog_name: "Ксантоневропластика (Заземление нервов)",
+            desc: "Перенаправление нервов пациента так, чтобы они действовали как заземляющие \
+                   стержни, защищая их от поражения электрическим током.",
+            time: 155.0,
+            blocked: NERVES,
+            ..bioware
+        },
+        Bioware::CortexImprint => OpDef {
+            path: "/datum/surgery_operation/limb/bioware/cortex_imprint",
+            name: "Отпечаток коры",
+            catalog_name: "Энцефалопластика (Отпечаток коры)",
+            desc: "Биологическая модернизация, которая формирует самозапечатлевающийся узор на \
+                   коре головного мозга пациента, увеличивая плотность и устойчивость нервных \
+                   клеток.",
+            required: HEAD,
+            blocked: CORTEX,
+            ..bioware
+        },
+    }
+}
+
+/// The bioware operations' `on_preop` and `on_success` lines: (own, others) of each, the pain.
+fn bioware_lines(kind: Bioware, target: &str, user: &str) -> [String; 6] {
+    let (start, started, done, did, pain_start, pain_done) = match kind {
+        Bioware::VeinThreading => (
+            "начинаете плести кровеносную систему",
+            "начинает плести кровеносную систему",
+            "сплетаете кровеносную систему у {t} в прочную сеть!",
+            "сплетает кровеносную систему у {t} в прочную сеть!",
+            "Всё ваше тело горит в агонии!",
+            "Вы можете почувствовать, как кровь движется по усиленным венам!",
+        ),
+        Bioware::MuscledVeins => (
+            "начинаете обматывать мышцами кровеносные сосуды",
+            "начинает обматывать мышцами кровеносные сосуды",
+            "изменяете форму кровеносных сосудов у {t}, добавляя мышечную оболочку!",
+            "изменяет форму кровеносных сосудов у {t}, добавляя мышечную оболочку!",
+            "Всё ваше тело горит в агонии!",
+            "Вы можете чувствовать, как мощные удары вашего сердца разносятся по всему телу!",
+        ),
+        Bioware::NerveSplicing => (
+            "начинаете соединять нервы",
+            "начинает соединять нервы",
+            "успешно сращиваете нервную систему у {t}!",
+            "успешно сращивает нервную систему у {t}!",
+            "Все ваше тело немеет!",
+            "Вы вновь обретаете чувствительность в своем теле; вам кажется, что всё происходит \
+             вокруг вас в замедлении!",
+        ),
+        Bioware::NerveGrounding => (
+            "начинаете перенаправлять нервы",
+            "начинает перенаправлять нервы",
+            "успешно перенаправляете нервную систему у {t}!",
+            "успешно перенаправляет нервы у {t}!",
+            "Все ваше тело немеет!",
+            "Вы возвращаете своему телу ощущение свежести! Вы чувствуете прилив сил!",
+        ),
+        Bioware::CortexImprint => (
+            "начинаете вырезать на внешней коре головного мозга самопечатающийся шаблон",
+            "начинает вырезать на внешней коре головного мозга самопечатающийся шаблон",
+            "преобразуете внешнюю кору головного мозга у {t} в самопечатающийся шаблон!",
+            "перестраивает внешнюю кору головного мозга у {t} в самопечатающийся шаблон!",
+            "Ваша голова раскалывается от ужасной боли, с ней почти невозможно справиться!",
+            "Ваш мозг становится сильнее... более устойчивым!",
+        ),
+    };
+    [
+        format!("Вы {start} у {target}."),
+        format!("{user} {started} у {target}."),
+        format!("Вы {}", done.replace("{t}", target)),
+        format!("{user} {}", did.replace("{t}", target)),
+        pain_start.to_owned(),
+        pain_done.to_owned(),
+    ]
 }
 
 /// Organ manipulation's radial options: "Извлечь …", "Вставить …".
@@ -1662,6 +1824,13 @@ pub(crate) fn is_available(world: &World, op: Op, mob: Entity, zone: TargetZone)
         Op::InsertOrgan(slot) => {
             zone == slot.spec().zone && organs::lacks(world, mob, slot) && organ_bone_ok(slot, limb)
         }
+        Op::RemoveImplant(slot) => {
+            zone == slot.zone()
+                && cyberimps::implant_in(world, mob, slot).is_some()
+                && implant_bone_ok(zone, limb)
+        }
+        // The held implant's slot is checked with the tool ([`available`]).
+        Op::InsertImplant => cyberimps::takes_implants(zone) && implant_bone_ok(zone, limb),
         // shortcut: no suicide, husk or DNR flags yet, so every corpse with a brain qualifies.
         Op::Revival => p.dead,
         Op::CoronaryBypass | Op::Lobectomy => repairable(REPAIR_HEAL_TO),
@@ -1671,6 +1840,10 @@ pub(crate) fn is_available(world: &World, op: Op, mob: Entity, zone: TargetZone)
         Op::Debride => limb.wound(Series::Burn).is_some_and(|w| w.infection > 0.0),
         // shortcut: no husks yet.
         Op::FilterBlood => body == BodyZone::Chest,
+        // `bioware/state_check`: its zone, no bioware of the same kind yet.
+        Op::Bioware(kind) => {
+            body == kind.zone().check_zone() && super::bioware::can_gain(world, mob, kind)
+        }
         Op::RepairPuncture => limb
             .wound(Series::Pierce)
             .is_some_and(|w| w.blood_flow > 0.0 && !w.mend_state),
@@ -1689,6 +1862,11 @@ pub(crate) fn is_available(world: &World, op: Op, mob: Entity, zone: TargetZone)
 fn organ_bone_ok(slot: Slot, limb: &super::wounds::Limb) -> bool {
     let locked = slot.spec().zone == TargetZone::Chest || slot == Slot::Brain;
     !locked || limb.has_state(state::BONE_SAWED)
+}
+
+/// `organ_check` of an implant: the ones in the chest need the bone sawed.
+fn implant_bone_ok(zone: TargetZone, limb: &super::wounds::Limb) -> bool {
+    zone != TargetZone::Chest || limb.has_state(state::BONE_SAWED)
 }
 
 /// tg `snowflake_check_availability` with the tool in hand: an organ goes into its own slot, a
@@ -1714,6 +1892,13 @@ fn available(
     if tool_quality(op, tool) <= 0.0
         || !tool_fits(op, zone, tool)
         || !is_available(world, op, mob, zone)
+    {
+        return false;
+    }
+    // `is_insert_available` of an implant: a slot of the zone, empty.
+    if op == Op::InsertImplant
+        && !cyberimps::slot_for(tool.path.as_deref().unwrap_or_default(), zone)
+            .is_some_and(|slot| cyberimps::implant_in(world, mob, slot).is_none())
     {
         return false;
     }
@@ -2044,7 +2229,17 @@ fn preop(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: TargetZone)
                 format!("Вы чувствуете тянущее ощущение в {place}!"),
             )
         }
-        Op::InsertOrgan(_) => (
+        Op::RemoveImplant(slot) => {
+            let implant = cyberimps::implant_in(world, mob, slot)
+                .map(|i| name_of(world, i))
+                .unwrap_or_default();
+            (
+                format!("Вы начинаете извлекать {implant} у {target}..."),
+                format!("{user} начинает извлекать {implant} у {target}."),
+                format!("Вы чувствуете тянущее ощущение в {place}!"),
+            )
+        }
+        Op::InsertOrgan(_) | Op::InsertImplant => (
             format!("Вы начинаете вставлять {tool} в {target}..."),
             format!("{user} начинает вставлять {tool} в {target}."),
             format!(
@@ -2121,6 +2316,10 @@ fn preop(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: TargetZone)
             ),
             format!("Вы чувствуете жжение в вашей {place}!"),
         ),
+        Op::Bioware(kind) => {
+            let [own, others, _, _, hurt, _] = bioware_lines(kind, &target, &user);
+            (own, others, hurt)
+        }
         Op::FilterBlood => (
             format!("Вы начинаете оперировать {target}..."),
             format!("{user} начинает оперировать {target}."),
@@ -2648,11 +2847,48 @@ fn success(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: TargetZon
             }
             return;
         }
-        Op::InsertOrgan(_) => {
+        Op::RemoveImplant(slot) => {
+            let Some(implant) = cyberimps::implant_in(world, mob, slot) else {
+                return;
+            };
+            let name = name_of(world, implant);
+            visible_range(
+                world,
+                actor.mob,
+                &format!("Вы успешно извлекаете {name} у {target}."),
+                &format!("{user} успешно извлекает {name} у {target}!"),
+                Span::Notice,
+                1,
+            );
+            pain(
+                world,
+                mob,
+                &format!(
+                    "Ваша {} пульсирует от боли, вы больше не чувствуете свой {name}!",
+                    body.ru().0
+                ),
+            );
+            cyberimps::remove(world, implant);
+            if let Some(&pos) = world.get::<TilePos>(mob) {
+                crate::storage::take_out(world, implant, pos);
+            }
+            return;
+        }
+        Op::InsertOrgan(_) | Op::InsertImplant => {
             let Some(organ) = actor.item else {
                 return;
             };
-            if !organs::insert(world, organ, mob) {
+            let inserted = if op == Op::InsertImplant {
+                let path = world
+                    .get::<DmItem>(organ)
+                    .map(|i| i.path.clone())
+                    .unwrap_or_default();
+                cyberimps::slot_for(&path, zone)
+                    .is_some_and(|slot| cyberimps::insert(world, organ, mob, slot))
+            } else {
+                organs::insert(world, organ, mob)
+            };
+            if !inserted {
                 return;
             }
             own = format!("Вы успешно вставляете {tool} в {target}.");
@@ -2745,6 +2981,13 @@ fn success(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: TargetZon
                     format!("Мозг {target} выглядит так, будто его можно вылечить еще немного."),
                 );
             }
+        }
+        Op::Bioware(kind) => {
+            super::bioware::gain(world, mob, kind);
+            let [_, _, done, did, _, hurt] = bioware_lines(kind, &target, &user);
+            own = done;
+            others = did;
+            pain(world, mob, &hurt);
         }
         Op::FilterBlood => {
             filter_blood(world, mob);
@@ -3050,6 +3293,23 @@ fn failure(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: TargetZon
                 mob,
                 "Ваша голова пульсирует от ужасной боли; даже думать больно!",
             );
+            severe_lobotomy_trauma(world, mob);
+            return;
+        }
+        // `cortex_imprint/on_failure`: 60 brain damage and a severe trauma (lobotomy-level).
+        Op::Bioware(Bioware::CortexImprint) if organs::organ(world, mob, Slot::Brain).is_some() => {
+            say(
+                world,
+                "Вы ошибаетесь, повреждая мозг!".into(),
+                format!("{user} ошибается, нанеся повреждения мозгу!"),
+            );
+            pain(
+                world,
+                mob,
+                "Голова раскалывается от ужасной боли; от одной мысли об этом уже начинает болеть \
+                 голова!",
+            );
+            organs::adjust_organ_loss(world, mob, Slot::Brain, 60.0);
             severe_lobotomy_trauma(world, mob);
             return;
         }
@@ -3471,6 +3731,69 @@ pub fn combat_mode(world: &World, mob: Entity) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn implants_and_bioware_need_their_zone_and_state() {
+        let mut world = World::new();
+        world.init_resource::<Time>();
+        let mob = world
+            .spawn((
+                Health::default(),
+                Stat::Conscious,
+                organs::OrganHost,
+                Limbs::default(),
+                BodyPosition::default(),
+            ))
+            .id();
+        let tube =
+            cyberimps::spawn_implant(&mut world, "/obj/item/organ/cyberimp/mouth/breathing_tube")
+                .unwrap();
+        assert!(cyberimps::insert(
+            &mut world,
+            tube,
+            mob,
+            ImplantSlot::BreathingTube
+        ));
+        let remove = Op::RemoveImplant(ImplantSlot::BreathingTube);
+        assert!(!is_available(&world, remove, mob, TargetZone::Mouth));
+        with_limbs(&mut world, mob, |l| {
+            let head = l.limb_mut(BodyZone::Head);
+            head.prepped = true;
+            head.add_surgery(state::SKIN_OPEN | state::ORGANS_CUT);
+        });
+        assert!(is_available(&world, remove, mob, TargetZone::Mouth));
+        assert!(!is_available(&world, remove, mob, TargetZone::Head));
+        // Chest implants and bioware need the chest's bone sawed too.
+        with_limbs(&mut world, mob, |l| {
+            let chest = l.limb_mut(BodyZone::Chest);
+            chest.prepped = true;
+            chest.add_surgery(state::SKIN_OPEN | state::ORGANS_CUT);
+        });
+        let veins = Op::Bioware(Bioware::VeinThreading);
+        assert!(!is_available(
+            &world,
+            Op::InsertImplant,
+            mob,
+            TargetZone::Chest
+        ));
+        assert!(!is_available(&world, veins, mob, TargetZone::Chest));
+        with_limbs(&mut world, mob, |l| {
+            l.limb_mut(BodyZone::Chest).add_surgery(state::BONE_SAWED)
+        });
+        assert!(is_available(
+            &world,
+            Op::InsertImplant,
+            mob,
+            TargetZone::Chest
+        ));
+        assert!(is_available(&world, veins, mob, TargetZone::Chest));
+        // One circulation bioware per patient.
+        super::super::bioware::gain(&mut world, mob, Bioware::MuscledVeins);
+        assert!(!is_available(&world, veins, mob, TargetZone::Chest));
+        // Bioware is locked: only disks and research offer it.
+        assert!(!operation_pool(&[]).contains(&veins));
+        assert!(operation_pool(&[veins.def().path]).contains(&veins));
+    }
 
     #[test]
     fn blood_filter_takes_a_share_of_each_reagent() {

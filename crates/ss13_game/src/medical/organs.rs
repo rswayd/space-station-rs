@@ -670,13 +670,15 @@ fn refresh_look(world: &mut World, mob: Entity) {
     crate::inventory::refresh_look(world, mob);
 }
 
-/// tg `needs_heart()` of a human, `undergoing_cardiac_arrest()`: no beating heart.
+/// tg `needs_heart()` of a human (not with `TRAIT_STABLEHEART`, [`super::bioware`]),
+/// `undergoing_cardiac_arrest()`: no beating heart.
 pub fn cardiac_arrest(world: &World, mob: Entity) -> bool {
     use crate::species::{Trait, def_of, has_trait};
     // `needs_heart()`: not a species without a heart or blood.
     world.get::<OrganHost>(mob).is_some()
         && def_of(world, mob).organs.heart.is_some()
         && !has_trait(world, mob, Trait::NoBlood)
+        && !super::bioware::stable_heart(world, mob)
         && state(world, mob, Slot::Heart).is_none_or(|h| !h.beating)
 }
 
