@@ -24,9 +24,9 @@ use ss13_ui_kit::prelude::*;
 use ss13_ui_kit::theme::{Bold, FontPx};
 
 use super::{
-    AntagHudData, AntagHudUi, AntagInfoBrotherUi, AntagInfoTraitorUi, BUY, BUY_RAW_TC, BrotherInfo,
-    LOCK, OPEN_INFO, RENEGOTIATE_OBJECTIVES, TraitorInfo, UplinkData, UplinkItemRecord,
-    UplinkStatic, UplinkUi,
+    AntagHudData, AntagHudUi, AntagInfoBrainwashedUi, AntagInfoBrotherUi, AntagInfoTraitorUi, BUY,
+    BUY_RAW_TC, BrotherInfo, LOCK, OPEN_INFO, RENEGOTIATE_OBJECTIVES, TraitorInfo, UplinkData,
+    UplinkItemRecord, UplinkStatic, UplinkUi,
 };
 
 /// One 32 px HUD tile at the map's zoom 2.
@@ -45,6 +45,7 @@ impl Plugin for AntagClientPlugin {
         app.register_ui_view::<UplinkUi>()
             .register_ui_view::<AntagInfoTraitorUi>()
             .register_ui_view::<AntagInfoBrotherUi>()
+            .register_ui_view::<AntagInfoBrainwashedUi>()
             .register_ui_headless::<AntagHudUi>()
             .init_resource::<AntagHud>()
             .add_systems(Startup, spawn_button)
@@ -676,5 +677,16 @@ impl ClientUi for AntagInfoBrotherUi {
                 ]
             ]
         }
+    }
+}
+
+// shortcut: drawn like the generic panel (title and objectives), without tg's purple
+// `abductor` theme and its "This Directive must be followed." lines.
+impl ClientUi for AntagInfoBrainwashedUi {
+    const WIDTH: f32 = crate::antag::cult::AntagInfoGenericUi::WIDTH;
+    const HEIGHT: f32 = crate::antag::cult::AntagInfoGenericUi::HEIGHT;
+
+    fn content(info: &BrotherInfo, data: &()) -> impl Scene {
+        crate::antag::cult::AntagInfoGenericUi::content(info, data)
     }
 }
