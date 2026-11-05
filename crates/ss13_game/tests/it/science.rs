@@ -892,7 +892,8 @@ fn server_control_toggles_servers() {
     assert_eq!(data.servers.len(), 1);
     assert_eq!(data.servers[0].server_details, "Nominal");
     assert!(
-        data.servers[0].server_name.starts_with("R&D Server "),
+        // The fixture names types after their path.
+        data.servers[0].server_name.starts_with("server "),
         "{}",
         data.servers[0].server_name
     );
