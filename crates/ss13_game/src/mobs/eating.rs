@@ -107,7 +107,7 @@ pub fn eating_of(path: &str) -> Option<&'static Eating> {
     ];
     table
         .into_iter()
-        .find(|(root, _)| under(*root))
+        .find(|(root, _)| under(root))
         .map(|(_, e)| e)
 }
 
