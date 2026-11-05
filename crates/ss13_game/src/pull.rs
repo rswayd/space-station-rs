@@ -171,7 +171,11 @@ fn open_interact_hud(
     add: On<Add<PlayerMob>>,
     mobs: Query<
         (&PlayerMob, Option<&crate::janitor::Walking>),
-        (With<Stat>, Without<crate::ghost::Ghost>),
+        (
+            With<Stat>,
+            Without<crate::ghost::Ghost>,
+            Without<crate::medical::brainmob::BrainMob>,
+        ),
     >,
     mut open: MessageWriter<OpenUi>,
     mut commands: Commands,

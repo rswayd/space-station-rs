@@ -16,6 +16,7 @@
 //! | prio | handler |
 //! | ---- | ------- |
 //! | 100 | `atmos` analyzer scans the user's turf |
+//! | 150 | `silicon::mmi::attack_self` |
 //! | 200 | `tools::attack_self` |
 //! | 300 | `holosign::attack_self` |
 //! | 400 | `forensics::server::attack_self` |
@@ -52,6 +53,7 @@
 //! | prio | handler |
 //! | ---- | ------- |
 //! | 100 | `modsuit::server::hand_interaction` |
+//! | 150 | `silicon::mmi::item_interaction` |
 //! | 200 | `bots::construction::item_interaction` |
 //! | 300 | `forensics::server::item_interaction` |
 //! | 400 | `medical::cyberimps::item_interaction` |
@@ -127,6 +129,7 @@
 //! | 1200 | `explosions::sources::fueltank_welder_act` |
 //! | 1300 | `antag::cult::server::item_interaction` |
 //! | 1400 | `antag::heretic::server::item_interaction` |
+//! | 1450 | `silicon::mmi::item_interaction` |
 //! | 1500 | `bots::construction::item_interaction` |
 //! | 1600 | `machine_frame::item_interaction` |
 //! | 1700 | `service::server::item_interaction` |

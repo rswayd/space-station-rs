@@ -17,8 +17,9 @@
 //! Losing the brain kills (`ORGAN_VITAL`); the lungs, liver, stomach and ears are read by
 //! `crate::breath`, `crate::chem`, `crate::hunger` and `crate::sound`; without a tongue the
 //! mob's speech gurgles (`ss13_chat::speech::Tongueless`).
-// shortcut: no brainmob (the mind stays with the body: a removed brain does not carry the
-// player, an inserted one does not bring one), no skillchips, organ traits,
+//! A removed brain carries the mind out and an inserted one brings it in
+//! (`super::brainmob`).
+// shortcut: no skillchips, organ traits,
 // actions or status effects, no eating organs, no blood DNA, no organ cell lines; eyes
 // give sight through `crate::vision` (blind when missing or failing, nearsighted when damaged),
 // without night vision, tint or flash protection of their own; species organ variants beyond the
@@ -282,6 +283,10 @@ impl Organs {
         self.0.iter().copied()
     }
 }
+
+/// tg `ORGAN_FROZEN`: a removed organ that does not decay (a brain in an MMI).
+#[derive(Component, Clone, Copy, Debug, Default)]
+pub struct OrganFrozen;
 
 /// The mob has organs modelled (a carbon): a slot without its organ is a missing organ.
 #[derive(Component, Clone, Copy, Debug, Default)]
@@ -607,7 +612,10 @@ pub fn insert(world: &mut World, organ: Entity, mob: Entity) -> bool {
 /// `on_mob_insert` of the organ types.
 fn on_insert(world: &mut World, organ: Entity, mob: Entity, slot: Slot) {
     match slot {
-        Slot::Brain => super::traumas::refresh(world, mob),
+        Slot::Brain => {
+            super::traumas::refresh(world, mob);
+            super::brainmob::brain_inserted(world, organ, mob);
+        }
         Slot::Stomach => crate::chem::stomach_inserted(world, organ, mob),
         Slot::Eyes => refresh_look(world, mob),
         Slot::Tongue => {
@@ -644,7 +652,12 @@ pub fn remove(world: &mut World, organ: Entity, special: bool) {
         Slot::Tongue => {
             world.entity_mut(mob).insert(ss13_chat::speech::Tongueless);
         }
-        Slot::Brain => super::traumas::refresh(world, mob),
+        Slot::Brain => {
+            super::traumas::refresh(world, mob);
+            if !special {
+                super::brainmob::brain_removed(world, organ, mob);
+            }
+        }
         _ => {}
     }
     if state.spec().vital && !special && world.get::<Stat>(mob) != Some(&Stat::Dead) {
@@ -1060,7 +1073,7 @@ fn loose_organs(world: &mut World, mut last_fired: Local<u64>) {
 
 fn process_loose(world: &mut World, fires: u64, secs: f32, now: f64) {
     let loose: Vec<Entity> = world
-        .query_filtered::<Entity, (With<Organ>, Without<OrganOf>)>()
+        .query_filtered::<Entity, (With<Organ>, Without<OrganOf>, Without<OrganFrozen>)>()
         .iter(world)
         .collect();
     for organ in loose {

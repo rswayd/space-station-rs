@@ -53,7 +53,7 @@
 Мозг хранит разум игрока, травмы мозга и урон мозга; при 200 урона — смерть; извлекается в процессор мозга (см. ../mobs/aliens-brains.md).
 
 - **Код:** [`/obj/item/organ/brain`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/brain/brain_item.dm#L1), [`proc/handle_brain_damage()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/life.dm#L758)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/medical/organs.rs`, `crates/ss13_game/src/medical/defib.rs`: мозг — жизненно важный орган: урон с сообщениями tg, смерть на 200, смерть при извлечении, гниение трупа (30 мин), без естественного лечения (`healing_factor` 0), травмы мозга живут в нём и переходят с ним (`medical/traumas.rs`, ../mobs/brain-traumas.md), маннитол лечит мозг; нет `brainmob` (разум не уходит с мозгом), скиллчипов, процессора мозга (aliens-brains.md)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/medical/organs.rs`, `crates/ss13_game/src/medical/defib.rs`: мозг — жизненно важный орган: урон с сообщениями tg, смерть на 200, смерть при извлечении, гниение трупа (30 мин), без естественного лечения (`healing_factor` 0), травмы мозга живут в нём и переходят с ним (`medical/traumas.rs`, ../mobs/brain-traumas.md), маннитол лечит мозг; извлечённый мозг уносит разум, вставленный — приносит (`crates/ss13_game/src/medical/brainmob.rs`, ../mobs/aliens-brains.md); нет скиллчипов
 
 ### Аппендикс
 Может воспалиться (аппендицит — болезнь), удаляется хирургией.

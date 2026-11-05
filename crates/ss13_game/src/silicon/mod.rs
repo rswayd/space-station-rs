@@ -23,8 +23,10 @@
 //! `/mob/living/silicon/robot/update_stat` and the AI's die at `-maxHealth` and are conscious
 //! until then; the binary chat (`:b`, tg `robot_talk`); a built-in radio
 //! (`crate::radio::BuiltInRadio`).
+//! - [`mmi`] (server): brain processors (the MMI, positronic brains) and cyborgs built from an
+//!   endoskeleton around one.
 // shortcut: a dead silicon stays where it died, inert, with the carbon deathgasp text; no
-// gibbing, debris or MMI. EMPs: `crate::emp::mobs`.
+// gibbing, debris or MMI ejection. EMPs: `crate::emp::mobs`.
 
 #[cfg(feature = "server")]
 pub mod ai;
@@ -56,6 +58,8 @@ pub mod law_rack;
 pub mod laws;
 #[cfg(feature = "server")]
 pub mod malf;
+#[cfg(feature = "server")]
+pub mod mmi;
 #[cfg(feature = "server")]
 pub mod robotics;
 pub mod ui;
@@ -112,6 +116,7 @@ mod server {
                     super::law_rack::LawRackPlugin,
                     super::ai_track::AiTrackPlugin,
                     super::malf::MalfPlugin,
+                    super::mmi::MmiPlugin,
                 ))
                 .add_systems(PreStartup, load_data)
                 .add_systems(
