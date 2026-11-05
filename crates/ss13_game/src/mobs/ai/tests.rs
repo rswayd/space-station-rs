@@ -535,6 +535,9 @@ fn pet_commands_take_over_the_tree() {
     let mut tree = Tree::new(built.roots);
     let mut bb = Blackboard::default();
     let mut movement = AiMovement::default();
+    // The controller keeps `active_execution_index` between ticks (`with_ctx`): the observer
+    // aborts of a changed command need it.
+    let mut active = 0;
     let mut tick = |w: &mut World, bb: &mut Blackboard, movement: &mut AiMovement, i: u32| {
         let mut ctx = AiCtx {
             world: &mut *w,
@@ -545,10 +548,11 @@ fn pet_commands_take_over_the_tree() {
             spt: 0.25,
             // A new roll every tick (`play_dead` ends on `SPT_PROB`).
             rng: CombatRng(7 + u64::from(i)),
-            active: 0,
+            active,
             cancelled: false,
         };
         tree.tick(&mut ctx);
+        active = ctx.active;
     };
     bb.set(Key::ActivePetCommand, Value::Pet(PetCommand::Follow));
     bb.set(Key::PetTarget, Value::Entity(owner));
