@@ -613,6 +613,7 @@ type BodyItem<'a> = (
         Option<&'a crate::janitor::Walking>,
         Option<&'a crate::taser::TaseSlowdown>,
         Option<&'a crate::mood::SanitySlowdown>,
+        Option<&'a crate::hallucination::ScrewyHud>,
     ),
 );
 
@@ -661,7 +662,7 @@ fn body_state(
         name,
         drag,
         traits,
-        (zone, fat, limits, pilot, speed, walking, tased, sanity),
+        (zone, fat, limits, pilot, speed, walking, tased, sanity, screwy),
     ) in &mut mobs
     {
         let traits = traits.copied().unwrap_or_default();
@@ -732,17 +733,22 @@ fn body_state(
         {
             mover.delay = delay;
         }
+        let mut readout = HealthReadout {
+            health: health.health(),
+            max: health.max,
+            brute: health.brute,
+            burn: health.burn,
+            tox: health.tox,
+            oxy: health.oxy,
+            dead: *stat == Stat::Dead,
+            limbs: doll_limbs(health),
+        };
+        // Hallucinated health HUDs (`crate::hallucination`); a change touches `Health`.
+        if let Some(screwy) = screwy {
+            screwy.apply(&mut readout, *stat);
+        }
         hud.set_if_neq(HealthHudData {
-            health: Some(HealthReadout {
-                health: health.health(),
-                max: health.max,
-                brute: health.brute,
-                burn: health.burn,
-                tox: health.tox,
-                oxy: health.oxy,
-                dead: *stat == Stat::Dead,
-                limbs: doll_limbs(health),
-            }),
+            health: Some(readout),
             combat_mode: combat.0,
             move_delay: delay,
             immobile: !health.can_move(*stat) || traits.immobilized,

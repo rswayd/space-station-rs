@@ -745,7 +745,7 @@ pub fn add_heretic(world: &mut World, mob: Entity) -> bool {
     world.resource_mut::<RealityTracker>().tracked.push(mob);
     generate_influences(world);
     if let Some(client) = client {
-        world.entity_mut(client).insert(SeeGroups(HERETIC_SIGHT));
+        crate::hallucination::see_groups(world, client, HERETIC_SIGHT, true);
         world.write_message(OpenUi::new::<AntagHudUi>(client, mob, mob, ""));
     }
     greet(world, mob);
@@ -1156,17 +1156,25 @@ fn sync_sight(world: &mut World) {
     let mut heretics = world.query_filtered::<&PlayerMob, With<Heretic>>();
     let clients: Vec<Entity> = heretics.iter(world).map(|p| p.client).collect();
     for client in clients {
-        if world.get_entity(client).is_ok() && world.get::<SeeGroups>(client).is_none() {
-            world.entity_mut(client).insert(SeeGroups(HERETIC_SIGHT));
+        if world
+            .get::<SeeGroups>(client)
+            .is_none_or(|g| g.0 & HERETIC_SIGHT == 0)
+        {
+            crate::hallucination::see_groups(world, client, HERETIC_SIGHT, true);
         }
     }
-    let mut seeing = world.query_filtered::<Entity, With<SeeGroups>>();
-    let seeing: Vec<Entity> = seeing.iter(world).collect();
+    // Other bits are hallucination images (`crate::hallucination`): only this one is ours.
+    let mut seeing = world.query::<(Entity, &SeeGroups)>();
+    let seeing: Vec<Entity> = seeing
+        .iter(world)
+        .filter(|(_, g)| g.0 & HERETIC_SIGHT != 0)
+        .map(|(e, _)| e)
+        .collect();
     for client in seeing {
         let mob = world.get_resource::<Players>().and_then(|p| p.mob(client));
         let keep = mob.is_some_and(|m| is_heretic(world, m) || world.get::<Ghost>(m).is_some());
         if !keep {
-            world.entity_mut(client).remove::<SeeGroups>();
+            crate::hallucination::see_groups(world, client, HERETIC_SIGHT, false);
         }
     }
 }
