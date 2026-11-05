@@ -263,7 +263,6 @@ impl Plugin for EventsServerPlugin {
                     meteors::move_meteors,
                     immovable_rod::move_rods,
                     anomalies::process_anomalies,
-                    radiation_storm::process_storm,
                 )
                     .chain(),
             )

@@ -23,6 +23,7 @@ mod diseases;
 mod disposals;
 mod doors;
 mod drag;
+mod effects;
 mod emag;
 mod emp;
 mod engine;

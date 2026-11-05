@@ -95,6 +95,9 @@ pub const REACTION_OPPRESSION_MIN_TEMP: f64 = 20.0;
 pub const HALON_COMBUSTION_ENERGY: f64 = 2500.0;
 pub const HALON_COMBUSTION_MIN_TEMPERATURE: f64 = T0C + 70.0;
 pub const HALON_COMBUSTION_TEMPERATURE_SCALE: f64 = FIRE_MINIMUM_TEMPERATURE_TO_EXIST * 10.0;
+/// `HALON_COMBUSTION_MINIMUM_RESIN_MOLES`.
+pub const HALON_COMBUSTION_MINIMUM_RESIN_MOLES: f64 =
+    0.99 * HALON_COMBUSTION_MIN_TEMPERATURE / HALON_COMBUSTION_TEMPERATURE_SCALE;
 pub const HEALIUM_FORMATION_MIN_TEMP: f64 = 25.0;
 pub const HEALIUM_FORMATION_MAX_TEMP: f64 = 300.0;
 pub const HEALIUM_FORMATION_ENERGY: f64 = 9000.0;
@@ -188,6 +191,8 @@ pub struct Exposures {
     /// `radiation_pulse(location, ...)` of the tritium fire, the proto-nitrate tritium and BZ
     /// responses (in that slot order), on a turf's air or a hotspot's sample.
     pub radiation: [Option<RadiationRelease>; 3],
+    /// The halon combustion asked for resin foam on the turf (`do_foam(resin/halon)`).
+    pub resin: bool,
 }
 
 /// A `radiation_pulse(location, max_range, threshold)` a reaction asked for, for the game to
@@ -1051,8 +1056,9 @@ fn noblium_formation(air: &mut GasMixture, _: &mut Ctx) -> u8 {
     REACTING | VOLATILE_REACTION
 }
 
-// shortcut: no resin foam (`do_foam`, which also made the group volatile); add with foam.
-fn halon_o2removal(air: &mut GasMixture, _: &mut Ctx) -> u8 {
+/// The resin foam (on a turf's air, not a hotspot's sample) is the game's: see
+/// [`Exposures::resin`]; the game skips tiles that already have foam or resin.
+fn halon_o2removal(air: &mut GasMixture, ctx: &mut Ctx) -> u8 {
     let halon_moles = air.get(G::HALON);
     let oxygen_moles = air.get(G::O2);
     let temperature = air.temperature;
@@ -1075,6 +1081,10 @@ fn halon_o2removal(air: &mut GasMixture, _: &mut Ctx) -> u8 {
         -heat_efficiency * HALON_COMBUSTION_ENERGY,
         true,
     );
+    if heat_efficiency > HALON_COMBUSTION_MINIMUM_RESIN_MOLES && matches!(ctx.holder, Holder::Turf)
+    {
+        ctx.exposures.resin = true;
+    }
     REACTING
 }
 

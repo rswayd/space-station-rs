@@ -152,6 +152,8 @@ pub struct LevelAir {
     condensed: Vec<(u32, crate::reactions::Condensation)>,
     /// Radiation pulses reactions on turfs and in hotspots asked for since the last drain.
     radiation: Vec<(u32, crate::reactions::RadiationRelease)>,
+    /// Turfs the halon combustion asked resin foam for this fire.
+    resin: Vec<u32>,
     /// Per tile, empty until the first [`Self::watch`]: the game listens to it (tg
     /// `COMSIG_TURF_EXPOSE` at any temperature and `COMSIG_TURF_CALCULATED_ADJACENT_ATMOS`,
     /// which firelocks register).
@@ -195,6 +197,7 @@ impl LevelAir {
             exposed: Vec::new(),
             condensed: Vec::new(),
             radiation: Vec::new(),
+            resin: Vec::new(),
             watched: Vec::new(),
             watch_reports: Vec::new(),
         }
@@ -589,6 +592,7 @@ impl LevelAir {
         self.exposed.clear();
         self.condensed.clear();
         self.radiation.clear();
+        self.resin.clear();
         self.hotspots.clear_burns();
         self.in_fire = true;
         let fc = self.fire_count;
@@ -801,6 +805,9 @@ impl LevelAir {
         }
         self.radiation
             .extend(exposures.radiation.iter().flatten().map(|&r| (tile, r)));
+        if exposures.resin {
+            self.resin.push(tile);
+        }
 
         let conducting = self.consider_superconductivity(tile, true);
         self.update_visuals(c);
@@ -827,6 +834,13 @@ impl LevelAir {
     pub fn drain_condensed(&mut self, mut f: impl FnMut(u32, crate::reactions::Condensation)) {
         for (tile, kind) in self.condensed.drain(..) {
             f(tile, kind);
+        }
+    }
+
+    /// Turfs the halon combustion asked resin foam for since the last call.
+    pub fn drain_resin(&mut self, mut f: impl FnMut(u32)) {
+        for tile in self.resin.drain(..) {
+            f(tile);
         }
     }
 

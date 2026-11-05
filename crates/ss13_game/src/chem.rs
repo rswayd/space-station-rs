@@ -1853,6 +1853,13 @@ pub(crate) fn refresh_container(world: &mut World, chem: &Chemistry, e: Entity) 
         {
             reagent_emps(world, chem, e, &reacted);
         }
+        // Smoke and foam reactions (`crate::effects::reactions`).
+        if crate::effects::reactions::any(chem, &reacted) {
+            crate::effects::reactions::on_reactions(world, chem, e, &reacted);
+            if world.get_entity(e).is_err() {
+                return;
+            }
+        }
         let reacting = holder(world, e).is_some_and(|h| h.is_reacting);
         match (reacting, world.get::<Reacting>(e).is_some()) {
             (true, false) => {

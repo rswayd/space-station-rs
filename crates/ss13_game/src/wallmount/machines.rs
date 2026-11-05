@@ -7,9 +7,9 @@
 //! - An igniter toggles on a button or a hand; while on, every `SSmachines` tick (2 s) it uses
 //!   its active power and exposes its tile to 1000 K (`hotspot_expose(1000, 500, TRUE)`), so
 //!   gas there burns; no power or no open turf turns it off.
-//! - A sparker, powered and 5 s after its last spark, uses its active power, sparks (sound) and
+//! - A sparker, powered and 5 s after its last spark, uses its active power, sparks and
 //!   exposes its tile to 1000 K (`hotspot_expose(1000, 2500, TRUE)`).
-// shortcut: no spark particles (their own `hotspot_expose` and light), no wires,
+// shortcut: no wires,
 // panel, deconstruction, direction wrench, multitool id, sparker screwdriver disable; a
 // thrown mob flies without impact damage (`crate::throw` hits with items only); the mass
 // driver's parts are the tier 1 servo of a mapped one (`RefreshParts`: `drive_range + 10`).
@@ -241,11 +241,8 @@ pub fn ignite(world: &mut World, sparker: Entity) -> bool {
         return false;
     }
     flick(world, sparker, "-spark");
-    crate::sound::playsound(
-        world,
-        crate::sound::PlaySound::new(pos, "sparks", 100.0, true)
-            .extrarange(crate::sound::SHORT_RANGE_SOUND_EXTRARANGE),
-    );
+    // `spark_system.start()`: two cardinal sparks (with their sound).
+    crate::effects::particles::do_sparks(world, 2, true, pos);
     if let Some(mut s) = world.get_mut::<Sparker>(sparker) {
         s.last_spark = t;
     }

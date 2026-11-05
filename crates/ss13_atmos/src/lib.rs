@@ -489,6 +489,22 @@ impl Atmos {
         out
     }
 
+    /// Turfs the halon combustion asked resin foam for since the last call (tg `do_foam` of
+    /// `/datum/effect_system/fluid_spread/foam/metal/resin/halon`), for the game to make.
+    pub fn drain_resin(&mut self) -> Vec<TilePos> {
+        let mut out = Vec::new();
+        for (z, level) in self.levels.iter_mut().enumerate() {
+            let Some(level) = level else { continue };
+            let mut tiles = Vec::new();
+            level.drain_resin(|t| tiles.push(t));
+            out.extend(tiles.into_iter().map(|t| {
+                let (x, y) = level.pos(t);
+                TilePos::new(x, y, z as u16)
+            }));
+        }
+        out
+    }
+
     /// Radiation pulses gas reactions asked for since the last call (tg `radiation_pulse` in
     /// the tritium fire and proto-nitrate responses), for the game to send.
     pub fn drain_radiation(&mut self) -> Vec<(TilePos, reactions::RadiationRelease)> {

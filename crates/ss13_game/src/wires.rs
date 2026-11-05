@@ -1017,7 +1017,10 @@ pub fn shock(world: &mut World, holder: Entity, mob: Entity, chance: f32) -> boo
     if world.get::<Stat>(mob).is_none() || !world.resource_mut::<CombatRng>().chance(chance) {
         return false;
     }
-    // shortcut: no sparks (`do_sparks`).
+    // `do_sparks(5, TRUE, src)`.
+    if let Some(pos) = crate::explosions::turf_of(world, holder) {
+        crate::effects::particles::do_sparks(world, 5, true, pos);
+    }
     let delivered = electrocute_mob(world, mob, source, holder, siemens);
     if delivered
         && kind == WireHolder::Airlock
