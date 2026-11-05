@@ -1728,6 +1728,11 @@ fn template(world: &World, cache: &mut BuildTemplates, path: &str) -> bool {
     if let Some(t) = cache.0.get(path) {
         return t.is_some();
     }
+    // While the map loader holds `Prototypes` (map objects initialize inside its resource scope)
+    // the resource is absent: a miss then is not "no such prototype", so it is not cached.
+    if !world.contains_resource::<Prototypes>() {
+        return false;
+    }
     let built = world
         .get_resource::<Prototypes>()
         .and_then(|p| p.get(path).cloned())
