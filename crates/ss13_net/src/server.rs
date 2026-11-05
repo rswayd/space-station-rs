@@ -39,9 +39,9 @@ use tokio::sync::{mpsc, oneshot};
 
 pub use crate::light_server::LIGHT_MARGIN;
 pub use crate::replication_server::{
-    ClientTraffic, ControlledEntity, DEFAULT_VIEW_RADIUS, Interest, Invisibility, KEEP_MARGIN,
-    Networked, ReplicationServerPlugin, ReplicationStats, SeeGroups, SeeInvisible, Sight, Viewer,
-    VisibleToGroups, los_mask,
+    AltAppearance, AltAppearances, ClientTraffic, ControlledEntity, DEFAULT_VIEW_RADIUS, Interest,
+    Invisibility, KEEP_MARGIN, Networked, ReplicationServerPlugin, ReplicationStats, SeeGroups,
+    SeeInvisible, Seers, Sight, Viewer, VisibleToGroups, VisibleToMobs, los_mask,
 };
 pub use crate::view_mask::{MASK_CHUNK, MaskChunk, MaskId, ViewMask, ViewMasks, mask_chunk};
 pub use ss13_shared::line_of_sight::ViewGrid;

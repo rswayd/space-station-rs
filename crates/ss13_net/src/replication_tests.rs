@@ -15,9 +15,10 @@ use crate::client::{
     NetEntityMap,
 };
 use crate::server::{
-    ClientConnected, ControlledEntity, Interest, KEEP_MARGIN, LIGHT_MARGIN, NetServerConfig,
-    NetServerPlugin, Networked, ReplicationServerPlugin, ReplicationStats, ServerCertificateDigest,
-    ViewMask, ViewMasks, Viewer,
+    AltAppearance, AltAppearances, ClientConnected, ControlledEntity, Interest, Invisibility,
+    KEEP_MARGIN, LIGHT_MARGIN, NetServerConfig, NetServerPlugin, Networked,
+    ReplicationServerPlugin, ReplicationStats, SeeGroups, Seers, ServerCertificateDigest, ViewMask,
+    ViewMasks, Viewer, VisibleToMobs,
 };
 use crate::view_mask::MaskId;
 
@@ -1067,5 +1068,161 @@ fn line_of_sight_hides_what_walls_hide() {
     assert!(
         !server.world().resource::<Interest>().sees(links[0], entity),
         "standing still sees from its own tile"
+    );
+}
+
+/// The icon `client` draws `entity` with, through the id the server gave it on `link`.
+fn icon_of(server: &App, client: &App, link: Entity, entity: Entity) -> Option<u32> {
+    let id = server.world().resource::<Interest>().net_id(link, entity)?;
+    let local = client.world().resource::<NetEntityMap>().get(id)?;
+    client
+        .world()
+        .get::<Appearance>(local)
+        .map(|a| a.icon_state.0)
+}
+
+fn alt(key: &str, seers: Seers, icon: u32) -> AltAppearance {
+    AltAppearance {
+        key: key.into(),
+        seers,
+        appearance: appearance(icon),
+    }
+}
+
+#[test]
+fn alternate_appearances_and_mob_images_reach_only_their_seers() {
+    let server_addr = SocketAddr::from((Ipv4Addr::LOCALHOST, 0));
+    let mut server = server_app(server_addr);
+    server.update();
+    let server_addr = server.world().resource::<NetServerConfig>().bind_addr;
+    let digest = server
+        .world()
+        .resource::<ServerCertificateDigest>()
+        .0
+        .clone();
+    let config = |t: &str| NetClientConfig {
+        server_addr,
+        certificate_digest: digest.clone(),
+        token: t.into(),
+    };
+    let mut a = client_app(config("a"));
+    run_until(&mut [&mut server, &mut a], "client a connects", |apps| {
+        !apps[0].world().resource::<Connected>().0.is_empty()
+            && *apps[1].world().resource::<NetClientState>() == NetClientState::Connected
+    });
+    let mut b = client_app(config("b"));
+    run_until(
+        &mut [&mut server, &mut a, &mut b],
+        "client b connects",
+        |apps| {
+            apps[0].world().resource::<Connected>().0.len() == 2
+                && *apps[2].world().resource::<NetClientState>() == NetClientState::Connected
+        },
+    );
+    let [link_a, link_b] = server.world().resource::<Connected>().0[..] else {
+        unreachable!()
+    };
+    let view = Viewer {
+        center: TilePos::new(10, 10, 1),
+        radius: 4,
+    };
+    let mob_a = on_tile(&mut server, TilePos::new(9, 9, 1));
+    let mob_b = on_tile(&mut server, TilePos::new(11, 11, 1));
+    let target = on_tile(&mut server, TilePos::new(13, 13, 1));
+    server
+        .world_mut()
+        .entity_mut(link_a)
+        .insert((view, ControlledEntity(mob_a)));
+    server
+        .world_mut()
+        .entity_mut(link_b)
+        .insert((view, ControlledEntity(mob_b)));
+    // An image only mob a's client has, and an alternate look of the target for it.
+    let image = server
+        .world_mut()
+        .spawn((
+            Networked,
+            TilePos::new(10, 10, 1),
+            appearance(42),
+            Invisibility(u8::MAX),
+            VisibleToMobs(vec![mob_a]),
+        ))
+        .id();
+    server
+        .world_mut()
+        .entity_mut(target)
+        .insert(AltAppearances(vec![alt("x", Seers::mob(mob_a), 7777)]));
+    run_until(
+        &mut [&mut server, &mut a, &mut b],
+        "the seer gets the alternate look and the image",
+        |apps| {
+            icon_of(&*apps[0], &*apps[1], link_a, target) == Some(7777)
+                && icon_of(&*apps[0], &*apps[2], link_b, target) == Some(1313)
+                && icon_of(&*apps[0], &*apps[1], link_a, image) == Some(42)
+        },
+    );
+    let interest = server.world().resource::<Interest>();
+    assert!(!interest.sees(link_b, image), "only the mob's client");
+    assert_eq!(
+        interest.appearance(link_b, target).map(|a| a.icon_state.0),
+        Some(1313),
+        "the other client never gets the alternate value"
+    );
+
+    // The own appearance changes under it: the seer keeps the alternate one.
+    server.world_mut().entity_mut(target).insert(appearance(1));
+    run_until(
+        &mut [&mut server, &mut a, &mut b],
+        "own appearance changes",
+        |apps| {
+            icon_of(&*apps[0], &*apps[1], link_a, target) == Some(7777)
+                && icon_of(&*apps[0], &*apps[2], link_b, target) == Some(1)
+        },
+    );
+
+    // A group entry: b's client gets it once its groups share the bit; a keeps its own entry.
+    server
+        .world_mut()
+        .entity_mut(target)
+        .insert(AltAppearances(vec![
+            alt("x", Seers::mob(mob_a), 7777),
+            alt(
+                "y",
+                Seers {
+                    mobs: vec![],
+                    groups: 2,
+                },
+                8888,
+            ),
+        ]));
+    server.world_mut().entity_mut(link_b).insert(SeeGroups(2));
+    run_until(&mut [&mut server, &mut a, &mut b], "group seers", |apps| {
+        icon_of(&*apps[0], &*apps[1], link_a, target) == Some(7777)
+            && icon_of(&*apps[0], &*apps[2], link_b, target) == Some(8888)
+    });
+
+    // a's client takes another mob: the alternate look and the image stay with mob a.
+    server
+        .world_mut()
+        .entity_mut(link_a)
+        .insert(ControlledEntity(mob_b));
+    run_until(
+        &mut [&mut server, &mut a, &mut b],
+        "control moves",
+        |apps| {
+            icon_of(&*apps[0], &*apps[1], link_a, target) == Some(1)
+                && !apps[0].world().resource::<Interest>().sees(link_a, image)
+        },
+    );
+
+    // Removed: everyone gets the own appearance.
+    server
+        .world_mut()
+        .entity_mut(target)
+        .remove::<AltAppearances>();
+    run_until(
+        &mut [&mut server, &mut a, &mut b],
+        "alternates removed",
+        |apps| icon_of(&*apps[0], &*apps[2], link_b, target) == Some(1),
     );
 }

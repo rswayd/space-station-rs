@@ -14,7 +14,9 @@
 //!   (crazy) or 2-4 (insane) minutes.
 //! - [`cause_hallucination`] starts one [`Kind`] (`kinds`): only the hallucinator sees and hears
 //!   it. Sounds are `playsound_local`, messages go to its own chat, fake alerts and HUD states
-//!   are its own HUD, images are [`HallucinationImage`] entities only its client replicates.
+//!   are its own HUD, images are [`HallucinationImage`] entities only its client replicates
+//!   (`VisibleToMobs`), delusions are alternate appearances of other mobs only it gets
+//!   ([`delusion`]).
 //! - Reagents: mindbreaker, bath salts, viper spider toxin and BZ metabolites add duration;
 //!   synaptizine, diphen-synaptizine and haloperidol take it away ([`reagents`]).
 //! - The Mass Hallucination event is `crate::events::mass_hallucination`.
@@ -23,11 +25,9 @@
 // no advanced health scanner line (scanners are `SCANPOWER_BASIC`), no airlock-bump shocks
 // (no `COMSIG_CARBON_BUMPED_AIRLOCK_OPEN`), no limb self-check damage, no perceptomatrix
 // variant, no admin give-hallucination verbs and no investigate log (a debug log instead).
-// Images follow their mob tile by tile (no glide) and are seen only while their client holds
-// one of the 31 `VisibleToGroups` bits ([`ImageSlots`]); an image hallucination that finds no
-// free bit does not start. Move to per-client visibility in `ss13_net` when more clients need
-// images at once.
+// Images follow their mob tile by tile (no glide).
 
+pub mod delusion;
 pub mod kinds;
 mod strings;
 
@@ -36,7 +36,7 @@ use std::collections::HashSet;
 use bevy::prelude::*;
 use ss13_mapload::{IconIndex, Opaque};
 use ss13_net::chat::server::SendChat;
-use ss13_net::server::{Invisibility, Networked, SeeGroups, VisibleToGroups};
+use ss13_net::server::{Invisibility, Networked, SeeGroups, VisibleToMobs};
 use ss13_net::sound::server::SendSound;
 use ss13_shared::chat::{ChatChannel, ChatMessage, ChatSegment, Span};
 use ss13_shared::protocol::SoundEvent;
@@ -50,7 +50,7 @@ use crate::hud::{DOLL_LIMBS, HealthReadout};
 use crate::mood::{Mood, SANITY_LEVEL_CRAZY, SANITY_LEVEL_INSANE};
 use crate::server::PlayerMob;
 
-pub use kinds::{Kind, Tier};
+pub use kinds::{Delusion, Kind, Tier};
 
 /// The status effect's `tick_interval`, seconds.
 pub const TICK_SECS: f64 = 2.0;
@@ -60,9 +60,7 @@ const UPPER_INTERVAL: f64 = 80.0;
 /// `ABOVE_MOB_LAYER` and `GAME_PLANE`.
 pub const ABOVE_MOB_LAYER: f32 = 4.1;
 pub const GAME_PLANE: i16 = -4;
-/// The [`VisibleToGroups`] bits hallucination images use: all but bit 0 (heretic sight).
-const IMAGE_BITS: usize = 31;
-/// An invisibility nobody's `see_invisible` reaches: only the group bit shows the image.
+/// An invisibility nobody's `see_invisible` reaches: only [`VisibleToMobs`] shows the image.
 const IMAGE_INVISIBILITY: u8 = u8::MAX;
 
 /// `/datum/status_effect/hallucination` on a mob.
@@ -129,19 +127,6 @@ pub struct HallucinationImage {
     pub follow: Option<Entity>,
 }
 
-/// Which mob's client holds each image bit (bit `i + 1`), with its live images.
-#[derive(Resource, Debug, Default)]
-pub struct ImageSlots {
-    slots: [Option<Slot>; IMAGE_BITS],
-}
-
-#[derive(Clone, Copy, Debug)]
-struct Slot {
-    seer: Entity,
-    client: Entity,
-    images: u32,
-}
-
 /// tg `addtimer` of hallucinations: closures run at their game time.
 #[derive(Resource, Default)]
 pub struct HallucinationTimers(Vec<(f64, Timed)>);
@@ -152,12 +137,10 @@ pub struct HallucinationPlugin;
 
 impl Plugin for HallucinationPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<HallucinationTimers>()
-            .init_resource::<ImageSlots>()
-            .add_systems(
-                Update,
-                (sync_sanity, process, run_timers, follow_images).chain(),
-            );
+        app.init_resource::<HallucinationTimers>().add_systems(
+            Update,
+            (sync_sanity, process, run_timers, follow_images).chain(),
+        );
     }
 }
 
@@ -758,7 +741,7 @@ impl ImageLook {
 }
 
 /// Shows `look` to `seer` on `pos` (following `follow`, if any); `None` when the state is
-/// missing, the seer has no client or no image bit is free.
+/// missing or the seer has no client.
 pub fn show_image(
     world: &mut World,
     seer: Entity,
@@ -766,34 +749,10 @@ pub fn show_image(
     look: ImageLook,
     follow: Option<Entity>,
 ) -> Option<Entity> {
-    let client = client_of(world, seer)?;
+    client_of(world, seer)?;
     let state = world
         .get_resource::<IconIndex>()
         .and_then(|i| i.get(look.icon.0, look.icon.1))?;
-    let bit = {
-        let mut slots = world.get_resource_or_init::<ImageSlots>();
-        let i = match slots
-            .slots
-            .iter()
-            .position(|s| s.is_some_and(|s| s.seer == seer && s.client == client))
-        {
-            Some(i) => i,
-            None => {
-                let i = slots.slots.iter().position(Option::is_none)?;
-                slots.slots[i] = Some(Slot {
-                    seer,
-                    client,
-                    images: 0,
-                });
-                i
-            }
-        };
-        if let Some(slot) = slots.slots[i].as_mut() {
-            slot.images += 1;
-        }
-        1u32 << (i + 1)
-    };
-    see_groups(world, client, bit, true);
     let image = world
         .spawn((
             Name::new("hallucination"),
@@ -810,7 +769,7 @@ pub fn show_image(
             },
             Networked,
             Invisibility(IMAGE_INVISIBILITY),
-            VisibleToGroups(bit),
+            VisibleToMobs(vec![seer]),
             HallucinationImage { seer, follow },
         ))
         .id();
@@ -823,33 +782,11 @@ pub fn show_on(world: &mut World, seer: Entity, target: Entity, look: ImageLook)
     show_image(world, seer, pos, look, Some(target))
 }
 
-/// Removes an image (`client.images -= image`); the seer's bit is freed with its last image.
+/// Removes an image (`client.images -= image`).
 pub fn hide_image(world: &mut World, image: Entity) {
-    let Some(bit) = world
-        .get::<HallucinationImage>(image)
-        .and(world.get::<VisibleToGroups>(image))
-        .map(|g| g.0)
-    else {
-        return;
-    };
-    world.entity_mut(image).despawn();
-    let Some(index) = (bit.trailing_zeros() as usize).checked_sub(1) else {
-        return;
-    };
-    let freed = {
-        let mut slots = world.get_resource_or_init::<ImageSlots>();
-        let Some(slot) = slots.slots.get_mut(index).and_then(Option::as_mut) else {
-            return;
-        };
-        slot.images = slot.images.saturating_sub(1);
-        if slot.images > 0 {
-            return;
-        }
-        let client = slot.client;
-        slots.slots[index] = None;
-        client
-    };
-    see_groups(world, freed, bit, false);
+    if world.get::<HallucinationImage>(image).is_some() {
+        world.entity_mut(image).despawn();
+    }
 }
 
 /// Hides `image` after `secs` (tg `QDEL_IN` of the hallucination owning it).
@@ -1025,40 +962,50 @@ mod tests {
     }
 
     #[test]
-    fn images_share_one_bit_per_seer_and_keep_other_bits() {
+    fn images_are_seen_by_their_seer_only() {
         let mut world = World::new();
         let mut icons = IconIndex::default();
         icons
             .0
             .insert(("a.dmi".into(), "s".into()), ss13_shared::IconStateId(1));
         world.insert_resource(icons);
-        // Bit 0 is heretic sight.
-        let client = world.spawn(SeeGroups(1)).id();
+        let client = world.spawn_empty().id();
         let seer = world.spawn(PlayerMob { client }).id();
         let other_client = world.spawn_empty().id();
-        let other = world.spawn(PlayerMob {
-            client: other_client,
-        });
-        let other = other.id();
+        let other = world
+            .spawn(PlayerMob {
+                client: other_client,
+            })
+            .id();
         let look = ImageLook::new("a.dmi", "s", ABOVE_MOB_LAYER);
         let pos = TilePos::new(1, 1, 1);
-        let a = show_image(&mut world, seer, pos, look, None).unwrap();
-        let b = show_image(&mut world, seer, pos, look, Some(seer)).unwrap();
+        // No limit on how many clients have images at once.
+        let many: Vec<Entity> = (0..40)
+            .map(|_| show_image(&mut world, seer, pos, look, None).unwrap())
+            .collect();
         let c = show_image(&mut world, other, pos, look, None).unwrap();
-        assert_eq!(world.get::<VisibleToGroups>(a), Some(&VisibleToGroups(2)));
-        assert_eq!(world.get::<VisibleToGroups>(b), Some(&VisibleToGroups(2)));
-        assert_eq!(world.get::<VisibleToGroups>(c), Some(&VisibleToGroups(4)));
-        assert_eq!(world.get::<SeeGroups>(client), Some(&SeeGroups(3)));
-        assert_eq!(world.get::<Invisibility>(a), Some(&Invisibility(u8::MAX)));
-        hide_image(&mut world, a);
-        assert_eq!(world.get::<SeeGroups>(client), Some(&SeeGroups(3)));
-        hide_image(&mut world, b);
-        assert_eq!(world.get::<SeeGroups>(client), Some(&SeeGroups(1)));
-        hide_image(&mut world, c);
-        assert_eq!(world.get::<SeeGroups>(other_client), None);
-        // A missing icon state shows nothing.
+        assert_eq!(
+            world.get::<VisibleToMobs>(many[0]),
+            Some(&VisibleToMobs(vec![seer]))
+        );
+        assert_eq!(
+            world.get::<VisibleToMobs>(c),
+            Some(&VisibleToMobs(vec![other]))
+        );
+        assert_eq!(
+            world.get::<Invisibility>(many[0]),
+            Some(&Invisibility(u8::MAX))
+        );
+        hide_image(&mut world, many[0]);
+        assert!(world.get_entity(many[0]).is_err());
+        // Not an image: left alone.
+        hide_image(&mut world, seer);
+        assert!(world.get_entity(seer).is_ok());
+        // A missing icon state or a clientless seer shows nothing.
         let missing = ImageLook::new("a.dmi", "nope", ABOVE_MOB_LAYER);
         assert!(show_image(&mut world, seer, pos, missing, None).is_none());
+        let clientless = world.spawn_empty().id();
+        assert!(show_image(&mut world, clientless, pos, look, None).is_none());
     }
 
     #[test]

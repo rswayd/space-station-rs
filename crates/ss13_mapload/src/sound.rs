@@ -286,8 +286,8 @@ pub mod files {
         "sound/effects/explosion/explosion1.ogg",
         "sound/items/weapons/punch1.ogg",
     ];
-    /// The hallucinations (`ss13_game::hallucination`): fake sounds, battles, announcements
-    /// and the bleeding and freezing ones.
+    /// The hallucinations (`ss13_game::hallucination`): fake sounds, battles, announcements,
+    /// the bleeding and freezing ones and the delusions.
     /// Syndicate gear (`ss13_game::antag::syndie_items`): the energy blades' `saberon`,
     /// `saberoff` and active `hitsound`, the sleepy pen's stab (none).
     pub const SYNDIE_ITEMS: [&str; 3] = [
@@ -295,7 +295,7 @@ pub mod files {
         "sound/items/weapons/saberoff.ogg",
         "sound/items/weapons/blade1.ogg",
     ];
-    pub const HALLUCINATION: [&str; 94] = [
+    pub const HALLUCINATION: [&str; 96] = [
         "modular_bandastation/cult_overhaul/sound/announcements/cult_summon.ogg",
         "sound/announcer/alarm/nuke_alarm.ogg",
         "sound/effects/explosion/explosion1.ogg",
@@ -338,6 +338,7 @@ pub mod files {
         "sound/effects/magic/fireball.ogg",
         "sound/effects/magic/forcewall.ogg",
         "sound/effects/magic/lightningbolt.ogg",
+        "sound/effects/magic/staff_change.ogg",
         "sound/effects/magic/teleport_app.ogg",
         "sound/effects/magic/teleport_diss.ogg",
         "sound/effects/pray_chaplain.ogg",
@@ -375,6 +376,7 @@ pub mod files {
         "sound/mobs/humanoids/human/laugh/manlaugh2.ogg",
         "sound/mobs/humanoids/human/laugh/womanlaugh.ogg",
         "sound/mobs/non-humanoids/beepsky/freeze.ogg",
+        "sound/mobs/non-humanoids/cyborg/liveagain.ogg",
         "sound/mobs/non-humanoids/hiss/hiss1.ogg",
         "sound/mobs/non-humanoids/hiss/hiss2.ogg",
         "sound/mobs/non-humanoids/hiss/hiss3.ogg",
