@@ -113,6 +113,8 @@ pub enum Kind {
         payload: String,
         segment: bool,
     },
+    /// The chemical grenade casing (`crate::assemblies::chem_grenade`): its beakers mix.
+    Chem,
 }
 
 /// A grenade's state (tg vars of `/obj/item/grenade`).
@@ -169,7 +171,7 @@ impl Plugin for GrenadesServerPlugin {
 }
 
 /// The ported grenade types by `path` (most specific first); `None` for anything else (C-4,
-/// chemical grenades and the other families are not ported here).
+/// the premade chemical grenades and the other families are not ported here).
 pub fn kind_of(path: &str) -> Option<(Kind, &'static [f64])> {
     if !is_under(path, GRENADE) || is_under(path, C4) {
         return None;
@@ -179,7 +181,9 @@ pub fn kind_of(path: &str) -> Option<(Kind, &'static [f64])> {
         shrapnel,
         mega,
     };
-    let kind = if is_under(path, FLASHBANG) {
+    let kind = if crate::assemblies::chem_grenade::is_casing(path) {
+        Kind::Chem
+    } else if is_under(path, FLASHBANG) {
         return Some((Kind::Flashbang, FLASHBANG_FUSES));
     } else if is_under(path, EMP) {
         Kind::Emp
@@ -339,6 +343,10 @@ pub fn detonate(world: &mut World, item: Entity) -> bool {
         return false;
     };
     world.entity_mut(item).remove::<Armed>();
+    // `chem_grenade/detonate`: nothing before the casing is locked (not even used up).
+    if g.kind == Kind::Chem && !crate::assemblies::chem_grenade::ready(world, item) {
+        return false;
+    }
     if g.used {
         if let Some(state) = world.get::<DmAtom>(item).map(|a| a.icon_state.clone()) {
             set_icon_state(world, item, &state);
@@ -390,6 +398,11 @@ pub fn detonate(world: &mut World, item: Entity) -> bool {
             }
         }
         Kind::Cluster { payload, segment } => cluster(world, item, &payload, segment),
+        // The casing stays (a screwdriver resets its trigger).
+        Kind::Chem => {
+            crate::assemblies::chem_grenade::splash(world, item);
+            return true;
+        }
     }
     if world.get_entity(item).is_ok() {
         world.despawn(item);
@@ -934,6 +947,10 @@ fn within_reach(world: &World, mob: Entity, item: Entity) -> bool {
 
 /// `/obj/item/grenade/examine`: the timer.
 pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<crate::examine::Line>) {
+    // `display_timer = (stage == GRENADE_READY)` of the chemical grenade.
+    if crate::assemblies::chem_grenade::hides_timer(world, target) {
+        return;
+    }
     let det_time = match world.get::<Grenade>(target) {
         Some(g) => g.det_time,
         None => match world.get::<DmItem>(target).and_then(|d| kind_of(&d.path)) {
@@ -985,7 +1002,11 @@ mod tests {
         );
         assert_eq!(kind_of("/obj/item/grenade/clusterbuster/inferno"), None);
         assert_eq!(kind_of("/obj/item/grenade/c4/x4"), None);
-        assert_eq!(kind_of("/obj/item/grenade/chem_grenade"), None);
+        assert_eq!(
+            kind_of("/obj/item/grenade/chem_grenade").map(|k| k.0),
+            Some(Kind::Chem)
+        );
+        assert_eq!(kind_of("/obj/item/grenade/chem_grenade/metalfoam"), None);
         assert_eq!(kind_of("/obj/item/toy"), None);
     }
 

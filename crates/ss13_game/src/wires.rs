@@ -20,8 +20,7 @@
 //! Per tick only holders with something pending are touched: power outages ([`PowerOutage`]),
 //! electrification countdowns, timed resets ([`WireResets`]), shooting vendors
 //! ([`ShootsInventory`]) and mobs waiting for their second shock ([`SecondaryShock`]).
-// shortcut: no assemblies (signalers) on wires: `attach` does nothing and nothing is ever
-// attached; add them with assemblies. No wire revealing (blueprints, abductor multitool,
+// shortcut: no wire revealing (blueprints, abductor multitool,
 // `TRAIT_KNOW_ENGI_WIRES`), no colorblindness, no silicon access (the AI wire
 // only changes the stub state and its status light), no airlock security plating.
 
@@ -149,6 +148,18 @@ pub enum WireHolder {
     Autolathe,
     /// `/datum/wires/mulebot` (`crate::bots::mule`).
     Mulebot,
+    /// `/datum/wires/explosive/chem_grenade` (`crate::assemblies::chem_grenade`).
+    ChemGrenade,
+}
+
+/// tg `assemblies` of a [`Wires`] holder: color -> the attached assembly (inside the holder).
+#[derive(Component, Clone, Debug, Default, PartialEq, Eq)]
+pub struct WireAssemblies(pub Vec<(&'static str, Entity)>);
+
+impl WireAssemblies {
+    pub fn at(&self, color: &str) -> Option<Entity> {
+        self.0.iter().find(|(c, _)| *c == color).map(|(_, e)| *e)
+    }
 }
 
 /// tg `/datum/wires` of one holder.
@@ -367,6 +378,16 @@ pub fn autolathe_set() -> WireSet {
     }
 }
 
+/// `/datum/wires/explosive/chem_grenade`: one dud wire (`duds_number = 1`), every instance
+/// random (`randomize`).
+pub fn chem_grenade_set() -> WireSet {
+    WireSet {
+        key: "/obj/item/grenade/chem_grenade",
+        proper_name: "Explosive Device",
+        wires: with_duds(&[], 1),
+    }
+}
+
 /// [`Wires`] on an autolathe (map load replaces them with the round's colors in
 /// [`init_wires`]).
 pub fn add_autolathe_wires(world: &mut World, e: Entity) {
@@ -515,6 +536,7 @@ pub struct WiresSource {
     hack: Option<&'static VendorHack>,
     electrified: Has<Electrified>,
     autolathe: Option<&'static crate::science::autolathe::Autolathe>,
+    assemblies: Option<&'static WireAssemblies>,
 }
 
 impl ServerUi for WiresWindow {
@@ -537,7 +559,7 @@ impl ServerUi for WiresWindow {
                     // `can_reveal_wires` is always false here (see the module shortcut).
                     wire: None,
                     cut: wires.is_cut(wire),
-                    attached: false,
+                    attached: source.assemblies.is_some_and(|a| a.at(color).is_some()),
                 })
                 .collect(),
             status: status(&source),
@@ -670,8 +692,8 @@ fn status(s: &WiresSourceItem<'_, '_>) -> Vec<String> {
                 ),
             ]
         }
-        // `/datum/wires/mulebot` has no `get_status`.
-        WireHolder::Mulebot => Vec::new(),
+        // `/datum/wires/mulebot` and `/datum/wires/explosive` have no `get_status`.
+        WireHolder::Mulebot | WireHolder::ChemGrenade => Vec::new(),
         WireHolder::Autolathe => {
             let Some(a) = s.autolathe else {
                 return Vec::new();
@@ -845,7 +867,10 @@ pub fn screwdriver_act(world: &mut World, actor: Actor, kind: ToolKind, target: 
         // `crate::construction` handles the vending panel, `crate::machine_frame` the
         // autolathe's.
         // `crate::bots` handles the bot's panel.
-        WireHolder::Vending | WireHolder::Autolathe | WireHolder::Mulebot => return false,
+        WireHolder::Vending
+        | WireHolder::Autolathe
+        | WireHolder::Mulebot
+        | WireHolder::ChemGrenade => return false,
     };
     crate::tools::tell(world, actor.client, Span::Notice, text);
     true
@@ -930,6 +955,9 @@ pub fn interactable(world: &World, holder: Entity, user: Entity) -> bool {
         }
         WireHolder::Apc | WireHolder::Autolathe => panel_open(world, holder),
         WireHolder::Mulebot => crate::bots::mule::interactable(world, holder),
+        WireHolder::ChemGrenade => {
+            crate::assemblies::chem_grenade::wires_interactable(world, holder, user)
+        }
         WireHolder::Vending => {
             if electrified && should_electrocute(world, holder, user) {
                 return false;
@@ -975,8 +1003,8 @@ pub fn shock(world: &mut World, holder: Entity, mob: Entity, chance: f32) -> boo
             }
             (area_power_source(world, holder), VENDING_SIEMENS)
         }
-        // MULEbots never shock (no `shock` override, no electrified state).
-        WireHolder::Mulebot => return false,
+        // MULEbots and grenades never shock (no `shock` override, no electrified state).
+        WireHolder::Mulebot | WireHolder::ChemGrenade => return false,
         // `get_cell()`: the APC's own cell.
         WireHolder::Apc => (
             world
@@ -1221,7 +1249,10 @@ fn touches(
                     title,
                 ));
             }
-            WireHolder::Apc | WireHolder::Autolathe | WireHolder::Mulebot => {}
+            WireHolder::Apc
+            | WireHolder::Autolathe
+            | WireHolder::Mulebot
+            | WireHolder::ChemGrenade => {}
         }
     }
 }
@@ -1273,8 +1304,11 @@ fn apply_act(
     holder: Entity,
     act: &WireAct,
 ) -> Result<(), &'static str> {
-    let (Some(&apos), Some(&hpos)) = (world.get::<TilePos>(actor), world.get::<TilePos>(holder))
-    else {
+    // A held holder (a grenade) is where its carrier is.
+    let (Some(&apos), Some(hpos)) = (
+        world.get::<TilePos>(actor),
+        crate::explosions::turf_of(world, holder),
+    ) else {
         return Err("gone");
     };
     if world.get::<Stat>(actor) != Some(&Stat::Conscious)
@@ -1308,10 +1342,98 @@ fn apply_act(
             }
             pulse(world, holder, &wire, Some(actor));
         }
-        // Nothing is attached and no assemblies exist (module shortcut).
-        WireAct::Attach(_) => {}
+        WireAct::Attach(_) => attach_act(world, actor, holder, color)?,
     }
     Ok(())
+}
+
+/// `ui_act("attach")`: the attached assembly to the user's hands, else the assembly in the
+/// active hand onto the wire (`assembly_behavior & wire_behavior`).
+fn attach_act(
+    world: &mut World,
+    actor: Entity,
+    holder: Entity,
+    color: &str,
+) -> Result<(), &'static str> {
+    let color = world
+        .get::<Wires>(holder)
+        .and_then(|w| w.colors.iter().find(|(c, _)| *c == color).map(|(c, _)| *c))
+        .ok_or("no such color")?;
+    if let Some(a) = world
+        .get::<WireAssemblies>(holder)
+        .and_then(|w| w.at(color))
+    {
+        detach_assembly(world, holder, color);
+        crate::assemblies::server::to_hands(world, actor, a);
+        return Ok(());
+    }
+    let held = world
+        .get::<Inventory>(actor)
+        .and_then(Inventory::active_item)
+        .filter(|&h| {
+            world
+                .get::<crate::assemblies::server::Assembly>(h)
+                .is_some()
+        })
+        .ok_or("no assembly held")?;
+    if !crate::assemblies::server::attachable_to_wires(world, held) {
+        tell_mob(
+            world,
+            actor,
+            Span::Warning,
+            "You cannot attach this assembly to these wires!",
+        );
+        return Err("not an input assembly");
+    }
+    attach_assembly(world, holder, color, held);
+    Ok(())
+}
+
+/// tg `attach_assembly(color, assembly)` (the chemical grenade's override first).
+pub fn attach_assembly(world: &mut World, holder: Entity, color: &'static str, a: Entity) {
+    if world
+        .get::<WireAssemblies>(holder)
+        .is_some_and(|w| w.at(color).is_some())
+    {
+        return;
+    }
+    if world.get::<Wires>(holder).map(|w| w.holder) == Some(WireHolder::ChemGrenade) {
+        crate::assemblies::chem_grenade::on_wire_attach(world, holder, a);
+    }
+    crate::assemblies::server::attach_to_wires(world, holder, a);
+    let mut entity = world.entity_mut(holder);
+    match entity.get_mut::<WireAssemblies>() {
+        Some(mut w) => w.0.push((color, a)),
+        None => {
+            entity.insert(WireAssemblies(vec![(color, a)]));
+        }
+    }
+}
+
+/// tg `detach_assembly(color)`: off the wire, out onto the holder's tile (`on_detach`).
+pub fn detach_assembly(world: &mut World, holder: Entity, color: &str) -> Option<Entity> {
+    let a = world.get::<WireAssemblies>(holder)?.at(color)?;
+    if let Some(mut w) = world.get_mut::<WireAssemblies>(holder) {
+        w.0.retain(|(c, _)| *c != color);
+    }
+    if world.get::<Wires>(holder).map(|w| w.holder) == Some(WireHolder::ChemGrenade) {
+        crate::assemblies::chem_grenade::on_wire_detach(world, holder, a);
+    }
+    crate::assemblies::server::detach(world, a, holder);
+    Some(a)
+}
+
+/// tg `pulse_assembly(assembly)`: the wire the assembly is on is pulsed, cut or not.
+pub fn pulse_assembly(world: &mut World, holder: Entity, a: Entity) {
+    let Some(wire) = world
+        .get::<WireAssemblies>(holder)
+        .and_then(|w| w.0.iter().find(|(_, e)| *e == a).map(|(c, _)| *c))
+        .and_then(|color| world.get::<Wires>(holder)?.get_wire(color))
+        .map(str::to_owned)
+    else {
+        return;
+    };
+    on_pulse(world, holder, &wire, None);
 }
 
 /// tg `cut(wire, source)`: cuts it, or mends a cut one, then `on_cut`.
@@ -1332,6 +1454,7 @@ pub fn cut(world: &mut World, holder: Entity, wire: &str, source: Option<Entity>
         WireHolder::Vending => vending_on_cut(world, holder, wire, mend, source),
         WireHolder::Autolathe => autolathe_on_cut(world, holder, wire, mend, source),
         WireHolder::Mulebot => crate::bots::mule::on_cut(world, holder, wire, source),
+        WireHolder::ChemGrenade => crate::assemblies::chem_grenade::wire_explode(world, holder),
     }
 }
 
@@ -1343,12 +1466,21 @@ pub fn pulse(world: &mut World, holder: Entity, wire: &str, user: Option<Entity>
     if wires.is_cut(wire) {
         return;
     }
-    match wires.holder {
+    on_pulse(world, holder, wire, user);
+}
+
+/// The holder's `on_pulse(wire, user)`.
+fn on_pulse(world: &mut World, holder: Entity, wire: &str, user: Option<Entity>) {
+    let Some(kind) = world.get::<Wires>(holder).map(|w| w.holder) else {
+        return;
+    };
+    match kind {
         WireHolder::Airlock => airlock_on_pulse(world, holder, wire, user),
         WireHolder::Apc => apc_on_pulse(world, holder, wire, user),
         WireHolder::Vending => vending_on_pulse(world, holder, wire, user),
         WireHolder::Autolathe => autolathe_on_pulse(world, holder, wire),
         WireHolder::Mulebot => crate::bots::mule::on_pulse(world, holder, wire),
+        WireHolder::ChemGrenade => crate::assemblies::chem_grenade::wire_explode(world, holder),
     }
 }
 

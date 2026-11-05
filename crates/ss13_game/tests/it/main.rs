@@ -2,6 +2,7 @@
 //! one per file (build time and target/ size). Run one area with `cargo nextest run -p ss13_game
 //! --all-features -E 'test(/^cult::/)'`.
 
+mod assemblies;
 mod atmos_machinery;
 mod border;
 mod botany;
