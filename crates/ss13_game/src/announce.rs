@@ -14,8 +14,8 @@
 //!   `ss13-mapload convert` (`sfx.ron`).
 //! - [`CommsController`]: cooldowns shared by every console, [`send_message`] to the consoles
 //!   (`crate::comms_server`), the round-start report ([`queue_roundstart_report`]).
-// shortcut: no announcement colors or TTS (chat has no alert divider spans, no TTS service),
-// no newscaster articles (no newscaster); the announcer is always the default one until station
+// shortcut: no announcement colors or TTS (chat has no alert divider spans, no TTS service);
+// the announcer is always the default one until station
 // traits pick another (the intern's sounds and message are converted and selectable by
 // [`Announcer::path`]).
 // shortcut: the report has no station goals, station traits or footnotes (none are ported); it
@@ -183,7 +183,25 @@ impl Priority {
             channel: ChatChannel::System,
             segments,
         };
+        let to_everyone = self.players.is_none();
         dispatch(world, message, self.players, sound);
+        // The station's news feed (`GLOB.news_network.submit_article`). tg also posts a
+        // captain's announcement a second time as a plain one; it is posted once here.
+        use crate::newscaster_server::{STATION_ANNOUNCEMENTS, submit_article};
+        if self.kind == AnnounceKind::Captain {
+            let author = "Оповещение от капитана";
+            submit_article(world, STATION_ANNOUNCEMENTS, &self.text, author, true, true);
+        } else if self.sender.is_none() && to_everyone {
+            let (body, author) = if self.title.is_empty() {
+                (self.text.clone(), format!("{COMMAND_NAME}: Сообщение"))
+            } else {
+                (
+                    format!("{}\n\n{}", self.title, self.text),
+                    COMMAND_NAME.to_owned(),
+                )
+            };
+            submit_article(world, STATION_ANNOUNCEMENTS, &body, &author, true, true);
+        }
     }
 }
 

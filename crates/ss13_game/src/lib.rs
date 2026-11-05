@@ -282,6 +282,11 @@ pub mod mood;
 pub mod mood_client;
 #[cfg(feature = "server")]
 pub mod multiz;
+pub mod newscaster;
+#[cfg(feature = "client")]
+pub mod newscaster_client;
+#[cfg(feature = "server")]
+pub mod newscaster_server;
 #[cfg(feature = "server")]
 pub mod obj_damage;
 pub mod operating;
