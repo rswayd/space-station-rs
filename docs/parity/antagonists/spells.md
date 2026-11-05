@@ -5,44 +5,44 @@
 Базовое заклинание: перезарядка, требования (роба, речь, руки), инвокация (крик/шёпот/эмоут), антимагия, уровни улучшения, иконка-кнопка.
 
 - **Код:** [`/datum/action/cooldown/spell`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/spells/spell.dm#L43), [`spell.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/spells/spell.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/spells/mod.rs`: `Spells` на мобе (уровень, перезарядка, `level_spell` с `cooldown_reduction_per_rank` и названиями уровней), кнопки в ряду действий, `can_cast_spell` (сознание, не в джаунте, `SPELL_REQUIRES_STATION`, антимагия `can_cast_magic`, роба и шляпа `TRAIT_CASTING_CLOTHING` для человека, любой кастующий предмет для прочих), `before_cast` без языка (2 с перезарядки), инвокация крик/шёпот с искажением 50%, звук, наведение (на себя, `pointed` с `cast_range` и `aim_assist`, `touch` с рукой), `can_block_magic` (нулевой жезл, библии, святая вода); эмоут-инвокации, обет мима, `SPELL_REQUIRES_MIND`, немота и антимагия с зарядами — не перенесены
 
 ### Заклинания по площади (AoE)
 Knock (открыть двери), магическая ракета, отталкивание, священное пламя, обращение зоны.
 
 - **Код:** [`code/modules/spells/spell_types/aoe_spell`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/spells/spell_types/aoe_spell)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/spells/effects.rs`: Knock (двери разболчиваются и открываются, шкафы отпираются), Magic Missile (снаряды только по своей цели, паралич 6 с), Repulse (броски 3-5 тайлов, паралич); священное пламя и обращение зоны — культ/капеллан, не перенесены
 
 ### Направленные заклинания
 Огненный шар, молния, карты, слепота, обмен разумом, обмен местами, завязать шнурки, проклятие скотного двора, бездонный взгляд, доминирование, пальцы-пистолеты, террор.
 
 - **Код:** [`code/modules/spells/spell_types/pointed`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/spells/spell_types/pointed)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/spells/effects.rs`: Fireball (дальность `6 + 2 × уровень`, 10 + 10 ожога, взрыв), Lightning Bolt (`tesla_zap` по живым с 20 000 мощности), Blind, Swap (со второй целью по ПКМ); карты, обмен разумом, шнурки, скотный двор, бездонный взгляд, доминирование, пальцы-пистолеты, террор — нет
 
 ### Касания
 Smite (разрыв тела), плоть в камень, проклятая сумка, «Scream For Me».
 
 - **Код:** [`code/modules/spells/spell_types/touch`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/spells/spell_types/touch)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/spells/effects.rs`: механизм касаний (рука в свободную руку, удар по живому в досягаемости, антимагия, перезарядка после удара) и Smite (гиб, вспышка вокруг); плоть в камень, проклятая сумка, «Scream For Me» — нет
 
 ### Заклинания на себя
 Лечение, перезарядка, отключение техники, силовая стена, лич, обет мима, мутация, форма жезла, кровавый удар, дым, Soul Tap, искажение пространства, остановка времени, призыв предмета, Голос Бога, призрачность.
 
 - **Код:** [`code/modules/spells/spell_types/self`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/spells/spell_types/self)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/spells/effects.rs`: дым (плохой дым, радиус 4), перезарядка (заклинания тянутого мага, посохи, палочки, энергооружие), отключение техники (ЭМИ 6/10), силовая стена (30 с), призыв предмета (метка, возврат с сумкой, снятие метки); лечение, лич, обет мима, мутация (нет мутаций Халка и лазерных глаз — genetics), форма жезла, кровавый удар, Soul Tap, искажение пространства, остановка времени, Голос Бога, призрачность — нет
 
 ### Джаунты
 Эфирный джаунт, кровавое ползание (демоны), теневой шаг (кошмар).
 
 - **Код:** [`code/modules/spells/spell_types/jaunt`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/spells/spell_types/jaunt)
 - **BandaStation:** [`ethereal_jaunt.dm#L102`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/spells/spell_types/jaunt/ethereal_jaunt.dm#L102) — настраиваемое время выхода из джаунта
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/spells/effects.rs`, `crates/ss13_game/src/server.rs` (шаги джаунта): эфирный джаунт — 5 с невидимости и неуязвимости для кликов и снарядов, движение сквозь стены раз в 0,2 с, не в ЦК, выход на последний свободный тайл (или старт) через 2,5 с; кровавое ползание и теневой шаг — демоны/кошмар, нет
 
 ### Телепортация
 Blink (короткий прыжок), телепорт в выбранную зону.
 
 - **Код:** [`code/modules/spells/spell_types/teleport`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/spells/spell_types/teleport)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/spells/effects.rs`, `crates/ss13_game/src/spells/mod.rs`: Blink (случайный тайл в радиусе 6, не в ЦК), Teleport (выбор зоны станции в списке, принудительный перенос на свободный тайл, зона в инвокации), свиток телепортации (без инвокации и робы, 4 заряда); безвредный дым после телепорта не перенесён
 
 ### Призыв существ и объектов
 Пчёлы, карпы, сыр, конструкты, существа, культовые полы, рой, невидимые стул и стена, связь миров, подарки, обезьяны, камни душ, ловушки, слуга.

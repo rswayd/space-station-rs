@@ -76,3 +76,4 @@ mod vampire;
 mod vending;
 mod wallmount;
 mod wires;
+mod wizard;

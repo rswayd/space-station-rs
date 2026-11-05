@@ -555,7 +555,7 @@ pub fn diamond_area(range: u32) -> u32 {
 
 /// `do_smoke(range, location, smoke_type = bad)`: a cloud over up to `diamond_area(range)`
 /// tiles, spreading through atmos-adjacent tiles, never onto a tile that already has smoke.
-fn do_smoke(world: &mut World, origin: TilePos, range: u32) {
+pub(crate) fn do_smoke(world: &mut World, origin: TilePos, range: u32) {
     let target = diamond_area(range) as usize;
     let mut placed: Vec<TilePos> = Vec::new();
     let mut seen = std::collections::HashSet::from([origin]);

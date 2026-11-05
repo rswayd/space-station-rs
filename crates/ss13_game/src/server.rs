@@ -290,6 +290,8 @@ impl Plugin for GameServerPlugin {
             crate::antag::nukeop::server::NukeopPlugin,
             crate::antag::cult::server::CultPlugin,
             crate::antag::heretic::server::HereticPlugin,
+            crate::spells::SpellsPlugin,
+            crate::antag::wizard::server::WizardPlugin,
         ))
         .insert_resource(MobProto(self.mob_proto.clone()))
         .init_resource::<SpawnPoints>()
@@ -768,6 +770,7 @@ pub(crate) fn forward_moves(
     mut resists: MessageWriter<MoveResist>,
     mut relays: MessageWriter<crate::closets::ClosetRelayMove>,
     mut mech_steps: MessageWriter<crate::mecha::core::MechRelayMove>,
+    mut jaunt_steps: MessageWriter<crate::spells::JauntStep>,
     mechs: Query<&crate::mecha::Mech>,
     mut waiting: Local<EntityHashSet>,
     mut rng: ResMut<crate::combat::CombatRng>,
@@ -808,6 +811,7 @@ pub(crate) fn forward_moves(
             eye,
             pilot,
             coma,
+            jaunting,
         )) = mobs.get_mut(mob)
         else {
             return false;
@@ -832,6 +836,10 @@ pub(crate) fn forward_moves(
             // The AI's eye (`crate::silicon::ai`), tg `/mob/eye/camera/ai` `relaymove`.
             _ if eye => {
                 eye_steps.write(crate::silicon::ai::EyeStep { eye: mob, dir });
+            }
+            // tg `phased_mob/relaymove` of an ethereal jaunt (`crate::spells`).
+            _ if jaunting => {
+                jaunt_steps.write(crate::spells::JauntStep { mob, dir });
             }
             // A mob in a death coma (a changeling's stasis) is not dead: it stays.
             (_, Some(&Stat::Dead)) if !coma => {
@@ -878,6 +886,7 @@ type MoveItem<'a> = (
     Has<crate::silicon::ai::AiEye>,
     Option<&'a crate::mecha::Pilot>,
     Has<crate::health::DeathComa>,
+    Has<crate::spells::Jaunting>,
 );
 
 /// The mob's authoritative state to its client after a step was applied (moved or blocked) or

@@ -16,7 +16,7 @@
 //! Admins can queue rulesets instead of the roll ([`DynamicConfig::forced_rulesets`]); tests use
 //! that to get deterministic antagonists.
 // shortcut: only the traitor, blood brothers, the vampire, the changeling, the nuclear
-// operatives, the blood cult, the heretics and the revolution are implemented; other picked
+// operatives, the blood cult, the heretics, the revolution and the wizard are implemented; other picked
 // rulesets spawn nobody (logged). Midround and latejoin rulesets: [`super::midround`]. BandaStation's weighted
 // selection by antag history (`ANTAG_WEIGHTED_SELECTION`) is off in its config and needs a
 // database.
@@ -66,7 +66,7 @@ impl AntagPreferences {
 /// Traitor"); `unlocked` also unlocks and opens its uplink (screenshots); `brother` makes it a
 /// blood brother with a team of its own instead, `vampire` a vampire, `changeling` a changeling,
 /// `nukeop` a nuclear operative aboard the infiltrator (the first one leads), `rev` a
-/// revolutionary (the first one a head revolutionary).
+/// revolutionary (the first one a head revolutionary), `wizard` a wizard in its den.
 #[derive(Resource, Clone, Debug, PartialEq)]
 pub struct DynamicConfig {
     /// Rulesets admins queued (config tags): replaces the tier roll and the ruleset picks.
@@ -91,6 +91,7 @@ pub enum DevTraitor {
     Cult,
     Heretic,
     Revolution,
+    Wizard,
 }
 
 impl Default for DynamicConfig {
@@ -105,6 +106,7 @@ impl Default for DynamicConfig {
             Ok("cult") => DevTraitor::Cult,
             Ok("heretic") => DevTraitor::Heretic,
             Ok("rev") => DevTraitor::Revolution,
+            Ok("wizard") => DevTraitor::Wizard,
             _ => DevTraitor::Off,
         };
         if dev != DevTraitor::Off && !cfg!(debug_assertions) {
@@ -283,6 +285,8 @@ pub const CULT_CAP_DENOMINATOR: u32 = 20;
 pub const CULT_CAP_OFFSET: u32 = 1;
 
 pub const HERETIC_RULESET: &str = "Roundstart Heretics";
+/// `/datum/dynamic_ruleset/roundstart/wizard`: `max_antag_cap = 1`, an invader (no station job).
+pub const WIZARD_RULESET: &str = "Roundstart Wizard";
 pub const REVOLUTION_RULESET: &str = "Roundstart Revolution";
 /// `/datum/dynamic_ruleset/roundstart/revolution` `min_antag_cap = 1`, `max_antag_cap = 3`.
 pub const REVOLUTION_CAPS: (u32, u32) = (3, 1);
@@ -374,7 +378,7 @@ pub const ROUNDSTART_RULESETS: [Ruleset; 12] = [
         high_impact: false,
     },
     Ruleset {
-        config_tag: "Roundstart Wizard",
+        config_tag: WIZARD_RULESET,
         weight: [0, 0, 1, 2],
         min_pop: 30,
         repeatable: false,
@@ -577,6 +581,8 @@ pub fn prepare_roundstart(
         let (role, caps) = if ruleset == NUKEOPS_RULESET {
             let cap = nukeops_cap(population);
             (super::nukeop::ROLE_OPERATIVE, (cap, cap))
+        } else if ruleset == WIZARD_RULESET {
+            (super::wizard::ROLE_WIZARD, (1, 1))
         } else {
             let Some((role, denominator)) = implemented(ruleset) else {
                 info!("dynamic: {ruleset} is not implemented here, nobody spawns for it");
@@ -623,8 +629,9 @@ pub fn prepare_roundstart(
 pub fn execute_roundstart(world: &mut World, selected: &[(Entity, &'static str)]) {
     let mut cultists = Vec::new();
     for &(client, ruleset) in selected {
-        // Spawned aboard the infiltrator by the round setup (`RULESET_INVADER`, no job).
-        if ruleset == NUKEOPS_RULESET {
+        // Spawned aboard the infiltrator or in the wizard's den by the round setup
+        // (`RULESET_INVADER`, no job).
+        if ruleset == NUKEOPS_RULESET || ruleset == WIZARD_RULESET {
             continue;
         }
         let mob = world.resource::<Players>().mob(client);

@@ -115,6 +115,52 @@ pub const NUKEOP_RUNTIME_TYPES: [&str; 5] = [
     "/obj/item/disk/nuclear",
 ];
 
+/// What the wizard and its spells make at runtime (`ss13_game::antag::wizard`,
+/// `ss13_game::spells`): `/datum/outfit/wizard` (+ `/apprentice`), the spellbook's items, the
+/// touch hands, the forcefield, the magic bolts and the door bolt's airlock and plating.
+pub const WIZARD_RUNTIME_TYPES: [&str; 40] = [
+    "/obj/item/spellbook",
+    "/obj/item/teleportation_scroll",
+    "/obj/item/teleportation_scroll/apprentice",
+    "/obj/item/antag_spawner/contract",
+    "/obj/item/clothing/suit/wizrobe",
+    "/obj/item/clothing/head/wizard",
+    "/obj/item/clothing/shoes/sandal/magic",
+    "/obj/item/clothing/under/color/lightpurple",
+    "/obj/item/radio/headset",
+    "/obj/item/staff",
+    "/obj/item/storage/backpack",
+    "/obj/item/storage/box/survival",
+    "/obj/item/gun/magic/staff/chaos",
+    "/obj/item/gun/magic/staff/healing",
+    "/obj/item/gun/magic/staff/door",
+    "/obj/item/storage/belt/wands/full",
+    "/obj/item/gun/magic/wand/death",
+    "/obj/item/gun/magic/wand/resurrection",
+    "/obj/item/gun/magic/wand/polymorph",
+    "/obj/item/gun/magic/wand/teleport",
+    "/obj/item/gun/magic/wand/door",
+    "/obj/item/gun/magic/wand/fireball",
+    "/obj/item/gun/magic/wand/shrink",
+    "/obj/item/melee/touch_attack/smite",
+    "/obj/effect/forcefield/wizard",
+    "/obj/effect/particle_effect/fluid/smoke/bad",
+    "/obj/projectile/magic/nothing",
+    "/obj/projectile/magic/aoe/magic_missile",
+    "/obj/projectile/magic/fireball",
+    "/obj/projectile/magic/aoe/lightning",
+    "/obj/projectile/magic/death",
+    "/obj/projectile/magic/resurrection",
+    "/obj/projectile/magic/teleport",
+    "/obj/projectile/magic/safety",
+    "/obj/projectile/magic/door",
+    "/obj/machinery/door/airlock/wood",
+    "/turf/open/floor/plating",
+    "/obj/effect/landmark/start/wizard",
+    "/area/centcom/wizard_station",
+    "/obj/item/clothing/suit/wizrobe/red",
+];
+
 /// The uplink items sold here: the ones whose item exists in this codebase. The rest of tg's
 /// catalog needs mechanics that are not modelled yet (explosions, implants, chameleon).
 // shortcut: a curated list; grow it as the items' mechanics land (an energy sword once

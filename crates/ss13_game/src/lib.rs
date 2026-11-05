@@ -336,6 +336,8 @@ pub mod species;
 #[cfg(feature = "server")]
 pub mod speech;
 #[cfg(feature = "server")]
+pub mod spells;
+#[cfg(feature = "server")]
 pub mod status_effects;
 #[cfg(feature = "server")]
 pub mod stock_parts;

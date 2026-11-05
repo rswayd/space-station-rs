@@ -474,6 +474,11 @@ impl ClientUi for JobPrefsUi {
             ),
             (crate::antag::revolution::ROLE_PROVOCATEUR, "Провокатор"),
             (crate::antag::ROLE_OPERATIVE_MIDROUND, "Ядерный штурмовик"),
+            (crate::antag::wizard::ROLE_WIZARD, "Волшебник"),
+            (
+                crate::antag::wizard::ROLE_WIZARD_MIDROUND,
+                "Волшебник (мидраунд)",
+            ),
         ]
         .into_iter()
         .map(|(role, label)| {

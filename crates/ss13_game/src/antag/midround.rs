@@ -117,6 +117,7 @@ pub struct Ruleset {
 pub const MIDROUND_TRAITOR: &str = "Midround Traitor";
 pub const MASS_TRAITORS: &str = "Mass Traitors";
 pub const MIDROUND_NUKEOPS: &str = "Midround Nukeops";
+pub const MIDROUND_WIZARD: &str = "Midround Wizard";
 pub const LATEJOIN_TRAITOR: &str = "Latejoin Traitor";
 pub const LATEJOIN_CHANGELING: &str = "Latejoin Changeling";
 pub const LATEJOIN_REVOLUTION: &str = "Latejoin Revolution";
@@ -203,7 +204,10 @@ pub const RULESETS: [Ruleset; 30] = {
         // Heavy midrounds.
         other("Spiders", Heavy, [0, 0, 1, 2], 30),
         child(other("Heavy Pirates", Heavy, flat(3), 25), "Light Pirates"),
-        high_impact(other("Midround Wizard", Heavy, [0, 0, 1, 2], 30)),
+        Ruleset {
+            role: Some(super::wizard::ROLE_WIZARD_MIDROUND),
+            ..high_impact(other(MIDROUND_WIZARD, Heavy, [0, 0, 1, 2], 30))
+        },
         Ruleset {
             role: Some(ROLE_OPERATIVE_MIDROUND),
             caps: (NUKIE_CAP, NUKIE_CAP),
@@ -721,6 +725,13 @@ fn execute(
                 .filter_map(|&g| world.get::<PlayerMob>(g).map(|p| p.client))
                 .collect();
             super::nukeop::server::spawn_operatives(world, &clients);
+        }
+        MIDROUND_WIZARD => {
+            let clients: Vec<Entity> = chosen
+                .iter()
+                .filter_map(|&g| world.get::<PlayerMob>(g).map(|p| p.client))
+                .collect();
+            super::wizard::server::spawn_wizards(world, &clients);
         }
         LATEJOIN_CHANGELING => {
             for &m in &chosen {

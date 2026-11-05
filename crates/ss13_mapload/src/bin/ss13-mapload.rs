@@ -112,6 +112,12 @@ fn convert_cmd(config: &MapLoadPlugin, mut map_dirs: Vec<PathBuf>) -> anyhow::Re
         map_dirs.push(config.source.join("_maps/map_files"));
         // Shuttle templates load with the station (`ss13_mapload::ShuttleTemplates`).
         map_dirs.push(config.source.join("_maps/shuttles"));
+        // So does the wizard's den (`ss13_game::antag::wizard`).
+        map_dirs.push(
+            config
+                .source
+                .join("_maps/templates/lazy_templates/wizard_den.dmm"),
+        );
         // The functional test bots' case maps (`ss13_bots`) load on the same assets.
         let cases = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/cases");
         if cases.is_dir() {
@@ -135,6 +141,7 @@ fn convert_cmd(config: &MapLoadPlugin, mut map_dirs: Vec<PathBuf>) -> anyhow::Re
     used.extend(ss13_mapload::mobs::MOB_RUNTIME_TYPES.map(str::to_owned));
     used.extend(ss13_mapload::antag::CULT_RUNTIME_TYPES.map(str::to_owned));
     used.extend(ss13_mapload::antag::HERETIC_RUNTIME_TYPES.map(str::to_owned));
+    used.extend(ss13_mapload::antag::WIZARD_RUNTIME_TYPES.map(str::to_owned));
     for map in &maps {
         let parsed =
             DmmMap::from_file(map).with_context(|| format!("parsing {}", map.display()))?;

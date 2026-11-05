@@ -54,6 +54,7 @@ impl Plugin for GameClientPlugin {
         .add_plugins(crate::antag::cult::client::CultClientPlugin)
         .add_plugins(crate::antag::revolution::client::RevolutionClientPlugin)
         .add_plugins(crate::antag::heretic::client::HereticClientPlugin)
+        .add_plugins(crate::antag::wizard::client::WizardClientPlugin)
         .add_systems(PreStartup, dev_cert_fallback)
         .add_systems(Startup, spawn_ui_camera)
         .add_observer(follow_controlled)
