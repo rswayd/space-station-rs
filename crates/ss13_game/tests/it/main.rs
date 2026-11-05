@@ -66,6 +66,7 @@ mod radio;
 mod records;
 mod religion;
 mod revolution;
+mod runtime_types;
 mod science;
 mod security;
 mod security_level;

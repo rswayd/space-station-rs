@@ -115,6 +115,9 @@ pub const NUKEOP_RUNTIME_TYPES: [&str; 5] = [
     "/obj/item/disk/nuclear",
 ];
 
+/// The healing school's staff (`ss13_game::antag::wizard`).
+pub const HEALING_STAFF: &str = "/obj/item/gun/magic/staff/healing";
+
 /// What the wizard and its spells make at runtime (`ss13_game::antag::wizard`,
 /// `ss13_game::spells`): `/datum/outfit/wizard` (+ `/apprentice`), the spellbook's items, the
 /// touch hands, the forcefield, the magic bolts and the door bolt's airlock and plating.
@@ -132,7 +135,7 @@ pub const WIZARD_RUNTIME_TYPES: [&str; 40] = [
     "/obj/item/storage/backpack",
     "/obj/item/storage/box/survival",
     "/obj/item/gun/magic/staff/chaos",
-    "/obj/item/gun/magic/staff/healing",
+    HEALING_STAFF,
     "/obj/item/gun/magic/staff/door",
     "/obj/item/storage/belt/wands/full",
     "/obj/item/gun/magic/wand/death",

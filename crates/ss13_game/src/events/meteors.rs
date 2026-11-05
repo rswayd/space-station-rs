@@ -829,9 +829,8 @@ fn get_hit(world: &mut World, e: Entity) {
     meteor_effect(world, kind, pos);
 }
 
-/// `make_debris()`: `dropamt` picks from `meteordrop`.
-// shortcut: drops without a prototype (plasma, uranium, bananium and bluespace ores; meat and
-// organs) are skipped.
+/// `make_debris()`: `dropamt` picks from `meteordrop` (every drop is in
+/// `ss13_mapload::runtime::EVENT_RUNTIME_TYPES`, so the real assets have its prototype).
 fn make_debris(world: &mut World, kind: &MeteorKind, pos: TilePos) {
     for _ in 0..kind.dropamt {
         let Some(&path) = world.resource_mut::<EventRng>().pick(kind.drops) else {
@@ -907,5 +906,19 @@ mod tests {
         assert_eq!(total(METEORS_NORMAL), 21);
         assert_eq!(total(METEORS_CATASTROPHIC), 127);
         assert_eq!(total(METEORS_STRAY), 229);
+    }
+
+    #[test]
+    fn drops_are_runtime_types() {
+        let registry = ss13_mapload::runtime::runtime_types();
+        let missing: Vec<&str> = KINDS
+            .iter()
+            .flat_map(|k| k.drops.iter().copied())
+            .filter(|p| !registry.contains(p))
+            .collect();
+        assert!(
+            missing.is_empty(),
+            "not in ss13_mapload::runtime: {missing:?}"
+        );
     }
 }

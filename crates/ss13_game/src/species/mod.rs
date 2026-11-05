@@ -1509,6 +1509,16 @@ pub fn regenerate_organs(world: &mut World, mob: Entity, replace_current: bool) 
     }
 }
 
+/// `/datum/outfit/plasmaman`'s uniform, gloves, head and tank, in [`equip_species_outfit`]'s
+/// slot order.
+const PLASMAMAN_ITEMS: [&str; 4] = [
+    "/obj/item/clothing/under/plasmaman",
+    "/obj/item/clothing/gloves/color/plasmaman",
+    "/obj/item/clothing/head/helmet/space/plasmaman",
+    // BandaStation: the tank goes to the right pocket (`internals_slot = ITEM_SLOT_RPOCKET`).
+    "/obj/item/tank/internals/plasmaman/belt/full",
+];
+
 /// tg `pre_equip_species_outfit` of a species with `outfit_important_for_life`: the plasmaman
 /// envirosuit, helmet, gloves and plasma tank, which take the job outfit's slots; the tank is
 /// opened (`internals_slot`).
@@ -1526,15 +1536,8 @@ pub fn equip_species_outfit(
     if outfit != "/datum/outfit/plasmaman" {
         return;
     }
-    const ITEMS: [&str; 4] = [
-        "/obj/item/clothing/under/plasmaman",
-        "/obj/item/clothing/gloves/color/plasmaman",
-        "/obj/item/clothing/head/helmet/space/plasmaman",
-        // BandaStation: the tank goes to the right pocket (`internals_slot = ITEM_SLOT_RPOCKET`).
-        "/obj/item/tank/internals/plasmaman/belt/full",
-    ];
     let mut tank = None;
-    for (i, path) in ITEMS.into_iter().enumerate() {
+    for (i, path) in PLASMAMAN_ITEMS.into_iter().enumerate() {
         let Some(item) = crate::construction::spawn_detached(world, path) else {
             warn!("species outfit: no prototype for {path}");
             continue;
@@ -1616,6 +1619,31 @@ pub fn plasma_ignition(
             client,
             Span::Danger,
             "Ваше тело вступает в реакцию с атмосферой и вспыхивает!",
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn organs_meat_and_envirosuit_are_runtime_types() {
+        let registry = ss13_mapload::runtime::runtime_types();
+        let missing: Vec<&str> = SPECIES
+            .iter()
+            .flat_map(|s| {
+                Slot::ALL
+                    .into_iter()
+                    .filter_map(move |slot| s.organs.get(slot))
+                    .chain(s.meat)
+            })
+            .chain(PLASMAMAN_ITEMS)
+            .filter(|p| !registry.contains(p))
+            .collect();
+        assert!(
+            missing.is_empty(),
+            "not in ss13_mapload::runtime: {missing:?}"
         );
     }
 }

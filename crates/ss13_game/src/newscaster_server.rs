@@ -47,7 +47,7 @@ use crate::silicon::interact::{SiliconUsers, has_silicon_access};
 
 pub const NEWSCASTER_ROOT: &str = "/obj/machinery/newscaster";
 const PAPER: &str = "/obj/item/paper";
-const NEWSPAPER: &str = "/obj/item/newspaper";
+const NEWSPAPER: &str = ss13_mapload::runtime::NEWSPAPER;
 /// `NEWSCASTER_STATION_ANNOUNCEMENTS`, `NEWSCASTER_SPACE_BETTING`.
 pub const STATION_ANNOUNCEMENTS: &str = "Станционные оповещения";
 pub const SPACE_BETTING: &str = "SpaceBet";

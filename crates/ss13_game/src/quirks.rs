@@ -867,4 +867,17 @@ mod tests {
         assert!(!change_prefs(&mut prefs, "Jolly", false));
         assert_eq!(prefs.0, names(&["Mute"]));
     }
+
+    #[test]
+    fn quirk_items_are_runtime_types() {
+        let registry = ss13_mapload::runtime::runtime_types();
+        let missing: Vec<&str> = ITEM_PATHS
+            .into_iter()
+            .filter(|p| !registry.contains(p))
+            .collect();
+        assert!(
+            missing.is_empty(),
+            "not in ss13_mapload::runtime: {missing:?}"
+        );
+    }
 }

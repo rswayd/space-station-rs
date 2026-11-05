@@ -56,7 +56,7 @@ use crate::storage::{Stored, StoredIn, put_inside, take_out};
 use crate::tools::{ToolKind, tool_of};
 
 pub const ASSEMBLY_ROOT: &str = "/obj/item/assembly";
-pub const HOLDER_PATH: &str = "/obj/item/assembly_holder";
+pub const HOLDER_PATH: &str = ss13_mapload::runtime::ASSEMBLY_HOLDER;
 const SIGNALER: &str = "/obj/item/assembly/signaler";
 const SIGNALER_LOW_RANGE: &str = "/obj/item/assembly/signaler/low_range";
 const SIGNALER_INTERNAL: &str = "/obj/item/assembly/signaler/internal";

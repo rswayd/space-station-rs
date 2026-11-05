@@ -1085,7 +1085,7 @@ fn bite_cable(ctx: &mut AiCtx, cable: Entity) {
         grid.remove_cable(cable);
     }
     world.despawn(cable);
-    crate::construction::spawn_stack(world, "/obj/item/stack/cable_coil", pos, 1);
+    crate::construction::spawn_stack(world, ss13_mapload::circuit::CABLE_COIL, pos, 1);
     if shocked {
         // `electrocute_act(maxHealth * 2)`: burn.
         let max = world.get::<Health>(ctx.pawn).map_or(0.0, |h| h.max);

@@ -18,7 +18,7 @@ use super::export::{Exports, export_value, path_of};
 use crate::obj_damage::is_under;
 
 /// `/obj/item/universal_scanner`.
-pub const UNIVERSAL_SCANNER: &str = "/obj/item/universal_scanner";
+pub const UNIVERSAL_SCANNER: &str = ss13_mapload::runtime::UNIVERSAL_SCANNER;
 const SCAN_SOUND: &str = "sound/machines/terminal/terminal_select.ogg";
 
 pub fn is_scanner(world: &World, item: Entity) -> bool {

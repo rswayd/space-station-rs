@@ -2093,4 +2093,20 @@ mod tests {
         let state = world.get::<Implant>(reviver).unwrap();
         assert!(!state.active && state.cooldown_until == 8.0);
     }
+
+    #[test]
+    fn toolkit_tools_and_autosurgeon_organs_are_runtime_types() {
+        let registry = ss13_mapload::runtime::runtime_types();
+        let missing: Vec<&str> = TOOLKITS
+            .iter()
+            .flat_map(|(_, items)| items.iter().copied())
+            .chain(AUTOSURGEONS.iter().map(|&(_, organ, _)| organ))
+            .chain([CONTRABAND_SECHUD.1])
+            .filter(|p| !registry.contains(p))
+            .collect();
+        assert!(
+            missing.is_empty(),
+            "not in ss13_mapload::runtime: {missing:?}"
+        );
+    }
 }
