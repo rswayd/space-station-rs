@@ -224,6 +224,8 @@ pub fn damage_item(world: &mut World, item: Entity, damage: f32) {
 /// fragmentation), then it is gone.
 pub fn destroy_item(world: &mut World, item: Entity) {
     super::sources::item_destruction(world, item);
+    // `/obj/item/grenade/atom_deconstruct(disassembled = FALSE)`: it goes off.
+    crate::grenades::on_destroyed(world, item);
     if world.get_entity(item).is_ok() {
         world.despawn(item);
     }
@@ -473,7 +475,14 @@ fn ex_act_human(world: &mut World, mob: Entity, severity: Severity) {
     if knockdown > 0.0 {
         crate::status_effects::knockdown(world, mob, knockdown, 0.0);
     }
-    soundbang_act(world, mob, blast.soundbang, blast.ear_damage, blast.deafen);
+    soundbang_act(
+        world,
+        mob,
+        blast.soundbang,
+        0.0,
+        blast.ear_damage,
+        blast.deafen,
+    );
 }
 
 /// `cause_wound_of_type_and_severity(pick_weight(slash 1, blunt 2, burn 2), part, moderate,
@@ -529,29 +538,49 @@ fn ear_protection(world: &World, mob: Entity) -> f32 {
     protection
 }
 
-/// `soundbang_act(intensity, stun_pwr = 0, damage_pwr, deafen_pwr, ignore_deafness = TRUE,
-/// send_sound = FALSE)`: the ears take damage and ring for `deafen` seconds, scaled by how
-/// little the protection covers.
-pub fn soundbang_act(world: &mut World, mob: Entity, intensity: f32, damage: f32, deafen: f32) {
+/// `soundbang_act(intensity, stun_pwr, damage_pwr, deafen_pwr, ignore_deafness = TRUE,
+/// send_sound = FALSE)`: `stun` seconds (tg `stun_pwr`) of knockdown and a tenth of it of
+/// paralysis, then the ears take damage and ring for `deafen` seconds, all scaled by how little
+/// the protection covers. Returns that scale (tg's return value), 0 when fully protected.
+pub fn soundbang_act(
+    world: &mut World,
+    mob: Entity,
+    intensity: f32,
+    stun: f32,
+    damage: f32,
+    deafen: f32,
+) -> f32 {
     let protection = ear_protection(world, mob);
     if protection >= intensity {
-        return;
+        return 0.0;
     }
     let effect = if protection > 0.0 {
         1.0 - protection / intensity
     } else {
         1.0 - protection
     };
+    if stun > 0.0 {
+        crate::status_effects::apply(
+            world,
+            mob,
+            crate::status_effects::Incap::Paralyze,
+            stun * effect * 0.1,
+        );
+        crate::status_effects::knockdown(world, mob, stun * effect, 0.0);
+    }
     let Some(ears) = organs::organ(world, mob, Slot::Ears) else {
-        return;
+        return effect;
     };
+    if damage <= 0.0 && deafen <= 0.0 {
+        return effect;
+    }
     // `sound_damage`: organ damage, then `adjust_temporary_deafness`.
     organs::damage_organ(world, ears, damage * effect, f32::INFINITY);
     if let Some(mut organ) = world.get_mut::<organs::Organ>(ears) {
         organ.deafness = (organ.deafness + deafen * effect).max(0.0);
     }
     let Some(state) = organs::state(world, mob, Slot::Ears).cloned() else {
-        return;
+        return effect;
     };
     let tell = |world: &mut World, span, text: &str| {
         if let Some(client) = world.get::<crate::server::PlayerMob>(mob).map(|p| p.client) {
@@ -571,6 +600,7 @@ pub fn soundbang_act(world: &mut World, mob: Entity, intensity: f32, damage: f32
         };
         tell(world, Span::Warning, text);
     }
+    effect
 }
 
 /// tg `ex_act` of the turf of `pos`.

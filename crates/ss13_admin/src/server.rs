@@ -554,7 +554,7 @@ pub fn required_rights(request: &AdminRequest) -> Option<u32> {
         | SetSecurityLevel(_) => R_ADMIN,
         Ban { .. } | Unban(_) => R_BAN,
         FindPrototypes(_) | Spawn(_) => R_SPAWN,
-        Smite { .. } => R_ADMIN | R_FUN,
+        Smite { .. } | Emp { .. } => R_ADMIN | R_FUN,
         Events | ForceEvent { .. } | DropBomb(_) => R_FUN,
         StartNow | EndRound | Restart => R_SERVER,
         TimeScale(_) => R_DEBUG,
@@ -1049,6 +1049,29 @@ fn answer(world: &mut World, client: Entity, request: AdminRequest) -> AnswerRes
             );
             done(format!("explosion ({dev}, {heavy}, {light}, {flash})"))
         }
+        AdminRequest::Emp { heavy, light } => {
+            if heavy == 0 && light == 0 {
+                return Err("Пустой импульс.".into());
+            }
+            if heavy > MAX_ADMIN_BOMB || light > MAX_ADMIN_BOMB {
+                return Err(format!("Радиус больше {MAX_ADMIN_BOMB} не разрешён."));
+            }
+            let own = own_mob(world, client)?;
+            let pos = mob_pos(world, own)?;
+            world.write_message(ss13_game::emp::Empulse {
+                epicenter: pos,
+                heavy: i32::from(heavy),
+                light: i32::from(light),
+            });
+            admin_action(
+                world,
+                &format!(
+                    "{key} created an EM Pulse ({heavy},{light}) at {}.",
+                    coords(pos)
+                ),
+            );
+            done(format!("EM pulse ({heavy}, {light})"))
+        }
         AdminRequest::SetSecurityLevel(name) => {
             let level = ss13_game::security_level::SecLevel::from_name(&name)
                 .ok_or_else(|| format!("Нет уровня угрозы {name:?}."))?;
@@ -1401,6 +1424,10 @@ mod tests {
                 ckey: "a".into(),
                 smite: ss13_shared::admin::Smite::Lightning
             }),
+            Some(R_ADMIN | R_FUN)
+        );
+        assert_eq!(
+            required_rights(&Emp { heavy: 1, light: 2 }),
             Some(R_ADMIN | R_FUN)
         );
         assert_eq!(required_rights(&TimeScale(1.0)), Some(R_DEBUG));

@@ -68,6 +68,8 @@ pub struct AdminUi {
     announce_text: String,
     time_scale: f32,
     confirm_end: bool,
+    emp_heavy: u8,
+    emp_light: u8,
 }
 
 impl Default for AdminUi {
@@ -97,6 +99,8 @@ impl Default for AdminUi {
             announce_text: String::new(),
             time_scale: 1.0,
             confirm_end: false,
+            emp_heavy: 1,
+            emp_light: 3,
         }
     }
 }
@@ -756,6 +760,23 @@ fn game_tab(ui: &mut egui::Ui, state: &mut AdminUi, out: &mut Vec<AdminRequest>)
                     if ui.small_button(label).clicked() {
                         out.push(AdminRequest::DropBomb(size));
                     }
+                }
+            });
+        });
+        ui.separator();
+        ui.add_enabled_ui(state.can(R_ADMIN | R_FUN), |ui| {
+            // tg "EM Pulse": on the own tile.
+            ui.horizontal_wrapped(|ui| {
+                ui.strong("ЭМИ под собой");
+                ui.label("сильный");
+                ui.add(egui::DragValue::new(&mut state.emp_heavy).range(0..=40));
+                ui.label("слабый");
+                ui.add(egui::DragValue::new(&mut state.emp_light).range(0..=40));
+                if ui.small_button("Импульс").clicked() {
+                    out.push(AdminRequest::Emp {
+                        heavy: state.emp_heavy,
+                        light: state.emp_light,
+                    });
                 }
             });
         });

@@ -106,7 +106,8 @@
 //!   spawns, their environment, fighting them, and their AI controllers (behavior trees).
 //!
 //! - `emp` (feature `server`): tg `empulse()` and `emp_act`: pulses, protection, contents, and
-//!   each ported family's EMP effect.
+//!   each ported family's EMP effect. `grenades` (feature `server`): arming, fuses and the
+//!   flashbang, EMP, smoke, explosive, frag and cluster grenades.
 //!
 //! - `events` (feature `server`): tg `SSevents`, the random event scheduler, and the round
 //!   events that act on ported systems (grid check, electrical storm, communications blackout,
@@ -207,6 +208,8 @@ pub mod genetics;
 pub mod ghost;
 #[cfg(feature = "server")]
 pub mod gibber;
+#[cfg(feature = "server")]
+pub mod grenades;
 #[cfg(feature = "server")]
 pub mod guns;
 #[cfg(feature = "server")]
