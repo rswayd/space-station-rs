@@ -774,6 +774,19 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 // click), knocking a climber down, kicking a rack.
                 None if crate::tables::attack_hand(world, client, mob, target, modifiers) => {}
                 None => pick_up(world, mob, target, inventory.active),
+                // tg `/obj/item/card/emag/interact_with_atom` on the families with an
+                // `emag_act` (`crate::emag`).
+                Some(held)
+                    if !modifiers.right
+                        && crate::emag::interact_with_atom(
+                            world,
+                            crate::tools::Actor {
+                                client,
+                                mob,
+                                item: Some(held),
+                            },
+                            target,
+                        ) => {}
                 // A C-4 charge is planted on what it touches; a welder refills from a fuel tank
                 // (or blows it up, lit).
                 Some(held)

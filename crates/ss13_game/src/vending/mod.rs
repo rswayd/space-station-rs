@@ -80,8 +80,6 @@ const REPLY_COOLDOWN: f64 = 5.0;
 const CAPTAIN: &str = "Captain";
 const VEND_SOUND: &str = "sound/machines/machine_vend.ogg";
 const CASH_SOUND: &str = "sound/effects/cashregister.ogg";
-/// `/obj/item/card/emag`.
-const EMAG: &str = "/obj/item/card/emag";
 const STORAGE_BAG: &str = "/obj/item/storage/bag";
 
 /// The server side of the `Vending` interface (same name and data as [`VendingUi`]).
@@ -1330,8 +1328,8 @@ pub fn load_item(world: &mut World, vendor: Entity, item: Entity) -> Result<(), 
     Ok(())
 }
 
-/// tg `/obj/machinery/vending/item_interaction` (after the tool acts and the wires): a refill
-/// canister restocks, an emag unlocks, a custom vendor takes IDs; with access and out of
+/// tg `/obj/machinery/vending/item_interaction` (after the tool acts and the wires; emags are
+/// `crate::emag`'s): a refill canister restocks, a custom vendor takes IDs; with access and out of
 /// combat mode, items of its types go back in (a storage bag empties its fitting items).
 /// True when the click was handled (tg `ITEM_INTERACT_SUCCESS`/`FAILURE`); false lets it
 /// become an attack.
@@ -1344,10 +1342,6 @@ pub fn item_interaction(world: &mut World, actor: Actor, held: Entity, vendor: E
         .get::<ss13_mapload::DmItem>(held)
         .map(|i| i.path.clone())
         .unwrap_or_default();
-    if is_under(&path, EMAG) {
-        emag_act(world, client, vendor);
-        return true;
-    }
     if custom::item_interaction(world, actor, held, vendor) {
         return true;
     }
@@ -1425,16 +1419,18 @@ pub fn item_interaction(world: &mut World, actor: Actor, held: Entity, vendor: E
     true
 }
 
-/// tg `emag_act`: the product lock is off (anyone may load items back).
-fn emag_act(world: &mut World, client: Entity, vendor: Entity) {
+/// tg `emag_act` (from `crate::emag`): the product lock is off (anyone may load items back).
+/// True when it took.
+pub(crate) fn emag_act(world: &mut World, client: Entity, vendor: Entity) -> bool {
     let Some(mut machine) = world.get_mut::<Vendor>(vendor) else {
-        return;
+        return false;
     };
     if machine.emagged {
-        return;
+        return false;
     }
     machine.emagged = true;
     tell(world, client, Span::Notice, "блокировка товаров отключена");
+    true
 }
 
 /// The end of a [`VendJob`].

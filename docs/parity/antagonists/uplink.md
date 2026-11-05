@@ -65,7 +65,7 @@ TGUI `Uplink`: категории, поиск, компактный режим, 
 Ящик инструментов Синдиката, подозрительная сумка, боевая аптечка, ключ шифрования, емаг, термальные очки, телепортер, доступ к ИИ-аплоаду, CRAB-17, FRAME-диск, ложный диск, стимпак и др.
 
 - **Код:** [`/datum/uplink_item/device_tools`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/uplink/uplink_items/device_tools.dm#L5)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload/src/antag.rs`: продаются toolbox, duffelbag, military_belt, tactical_medkit, encryptionkey (не вставляется), emag (ничего не взламывает); остального нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload/src/antag.rs`: продаются toolbox, duffelbag, military_belt, tactical_medkit, encryptionkey (не вставляется), emag и doorjack (`crates/ss13_game/src/emag.rs`); остального нет
 
 ### Категория «Скрытные инструменты»
 Агентская ID-карта, детектор ИИ, хамелеон-кит, нескользящие ботинки, хамелеон-проектор, кодспик, EMP-фонарик, смена внешности (Mulligan), глушилка, сумка контрабандиста, отключение телекомов, блэкаут.

@@ -5,7 +5,7 @@
 Основная консоль карго: каталог наборов по группам, корзина, отправка/вызов шаттла, одобрение и отклонение запросов, приватные заказы за личный счёт, займ шаттла ЦК (shuttle loan). Цена заказа списывается с карго-бюджета или с личного счёта заказчика.
 
 - **Код:** [`/obj/machinery/computer/cargo`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/orderconsole.dm#L1), [`ui_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/orderconsole.dm#L375), [`add_item()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/orderconsole.dm#L219); tgui: [`Cargo/`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/Cargo)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/cargo/console.rs`, `crates/ss13_game/src/cargo/client.rs` (tgui `Cargo`: статус, каталог по группам, корзина, запросы с одобрением/отказом, «Купить лично», отправка шаттла): проверки в момент действия; `// shortcut:` нет поиска и ввода количества, емага и взломанных плат
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/cargo/console.rs`, `crates/ss13_game/src/cargo/client.rs` (tgui `Cargo`: статус, каталог по группам, корзина, запросы с одобрением/отказом, «Купить лично», отправка шаттла): проверки в момент действия; `// shortcut:` нет поиска и ввода количества и взломанных плат; емаг — см. «Контрабанда и взлом консоли снабжения»
 
 ### Консоль запросов снабжения (Request console)
 Упрощённая консоль `/obj/machinery/computer/cargo/request`: любой член экипажа может только запросить набор, оплату и отправку делает карго. Запросы видны в основной консоли.
@@ -33,7 +33,7 @@ _«Заказы через ПДА/компьютеры (NTOS Cargo, Budget order
 Емаг (или мультитул на плате) открывает в консоли контрабандные и особые наборы (`contraband = TRUE`).
 
 - **Код:** [`/obj/machinery/computer/cargo/emag_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/orderconsole.dm#L55)
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/cargo/console.rs`: `// shortcut:` нет емага и взломанных плат
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/cargo/console.rs` (`emag_act`, из `crates/ss13_game/src/emag.rs`): емаг включает контрабанду навсегда, открытые окна получают новый каталог; `// shortcut:` плата не запоминает взлом, нет мультитула на плате, наборы `ORDER_EMAG_ONLY` фильтр каталога (`orderable`) пока не пропускает
 
 ### Шаттл снабжения: покупка и продажа
 `/obj/docking_port/mobile/supply`: при прибытии на станцию привозит оплаченные заказы в ящиках с манифестами, при отлёте к ЦК продаёт всё в своей зоне (см. [exports-bounties.md](exports-bounties.md)) и почту везёт обратно. Живых существ, ядерный диск и прочее из чёрного списка шаттл не берёт.

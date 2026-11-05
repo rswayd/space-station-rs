@@ -64,6 +64,9 @@ pub enum AlarmType {
     Generic,
 }
 
+/// The hazard lights of an emagged firelock.
+const EMAG_LIGHTS: &str = "firelock_alarm_type_emag";
+
 impl AlarmType {
     pub const ALL: [Self; 3] = [Self::Hot, Self::Cold, Self::Generic];
 
@@ -512,15 +515,20 @@ fn remove_as_source(world: &mut World, firelock: Entity) {
     }
 }
 
-/// tg `correct_state()`: schedules the move to `active` ([`run_firelocks`]).
+/// tg `correct_state()`: schedules the move to `active` ([`run_firelocks`]); an emagged
+/// firelock (`crate::emag`) stays as it is.
 fn correct_state(world: &mut World, firelock: Entity) {
+    if world.get::<Door>(firelock).is_some_and(|d| d.emagged) {
+        return;
+    }
     set(world, firelock, |l| l.settle = true);
     world.entity_mut(firelock).insert(FirelockPending);
 }
 
-/// tg `update_overlays`: the hazard lights of an alarm, powered and not ignoring alarms; a
-/// border firelock's lights sit 2 px towards its edge (`adjust_lights_starting_offset`).
-pub(super) fn refresh_firelock(world: &mut World, firelock: Entity) {
+/// tg `update_overlays`: the hazard lights of an alarm (`firelock_alarm_type_emag` once
+/// emagged), powered and not ignoring alarms; a border firelock's lights sit 2 px towards its
+/// edge (`adjust_lights_starting_offset`).
+pub(crate) fn refresh_firelock(world: &mut World, firelock: Entity) {
     let Some(lock) = world.get::<Firelock>(firelock) else {
         return;
     };
@@ -543,12 +551,15 @@ pub(super) fn refresh_firelock(world: &mut World, firelock: Entity) {
     let Some(index) = world.get_resource::<ss13_mapload::IconIndex>() else {
         return;
     };
+    let emagged = world.get::<Door>(firelock).is_some_and(|d| d.emagged);
     let ids: Vec<_> = AlarmType::ALL
         .iter()
-        .filter_map(|t| index.get(&icon, t.icon_state()))
+        .map(|t| t.icon_state())
+        .chain([EMAG_LIGHTS])
+        .filter_map(|state| index.get(&icon, state))
         .collect();
     let want: Vec<Overlay> = lit
-        .and_then(|t| index.get(&icon, t.icon_state()))
+        .and_then(|t| index.get(&icon, if emagged { EMAG_LIGHTS } else { t.icon_state() }))
         .map(|id| {
             let lights = Overlay {
                 pixel_offset: offset,
@@ -616,6 +627,9 @@ pub(super) fn run_firelocks(world: &mut World) {
         if settle && lock.held_by.is_none() {
             let active = lock.active;
             let done = with_door(world, e, |door, appearance, ctx| {
+                if door.emagged {
+                    return (true, false);
+                }
                 if door.is_operating() {
                     return (false, false);
                 }

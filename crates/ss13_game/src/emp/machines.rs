@@ -253,12 +253,15 @@ fn telecomms(world: &mut World, mut cursor: Local<MessageCursor<EmpAct>>) {
     }
 }
 
-/// `/obj/structure/closet/emp_act` of a secure closet: the lock flips at `50 / severity`
-/// percent; at `20 / severity` a closed one opens if unlocked, else its lock takes one random
-/// station access.
+/// `/obj/structure/closet/emp_act` of a secure closet whose lock is not broken: the lock flips
+/// at `50 / severity` percent; at `20 / severity` a closed one opens if unlocked, else its lock
+/// takes one random station access.
 fn closets(world: &mut World, mut cursor: Local<MessageCursor<EmpAct>>) {
     for ev in emp_acts(world, &mut cursor) {
-        if !ev.hits_self() || !world.get::<Closet>(ev.target).is_some_and(|c| c.secure) {
+        let working_lock = world
+            .get::<Closet>(ev.target)
+            .is_some_and(|c| c.secure && !c.broken);
+        if !ev.hits_self() || !working_lock {
             continue;
         }
         let sev = f64::from(ev.severity);

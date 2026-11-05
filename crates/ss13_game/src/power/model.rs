@@ -155,6 +155,8 @@ pub struct Apc {
     pub chargemode: bool,
     pub shorted: bool,
     pub locked: bool,
+    /// tg `obj_flags & EMAGGED` (`crate::emag`): the interface stays unlocked, the panel shut.
+    pub emagged: bool,
     /// tg `aidisabled` (the AI wire); there is no AI yet.
     pub aidisabled: bool,
     pub charging: u8,
@@ -186,6 +188,7 @@ impl Apc {
             chargemode: true,
             shorted: false,
             locked: true,
+            emagged: false,
             aidisabled: false,
             charging: NOT_CHARGING,
             last_charging: NOT_CHARGING,

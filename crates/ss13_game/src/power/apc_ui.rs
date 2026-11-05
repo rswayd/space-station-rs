@@ -217,11 +217,20 @@ pub fn apply_act(world: &mut World, client: Entity, actor: Entity, apc: Entity, 
         return;
     }
     match act {
-        ApcAct::Lock => {
-            if silicon && let Some(mut a) = world.get_mut::<Apc>(apc) {
+        // `HAS_SILICON_ACCESS`; an emagged APC refuses.
+        ApcAct::Lock if silicon => {
+            if world.get::<Apc>(apc).is_some_and(|a| a.emagged) {
+                crate::tools::tell(
+                    world,
+                    client,
+                    ss13_shared::chat::Span::Warning,
+                    "ЛКП не отвечает на команду!",
+                );
+            } else if let Some(mut a) = world.get_mut::<Apc>(apc) {
                 a.locked = !a.locked;
             }
         }
+        ApcAct::Lock => {}
         ApcAct::Cover => {
             if let Some(mut a) = world.get_mut::<Apc>(apc) {
                 a.coverlocked = !a.coverlocked;

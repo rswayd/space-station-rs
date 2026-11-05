@@ -9,7 +9,8 @@
 //! refuses `send`, `approve`, `deny`, `denyall`, `clear`, `remove` and `modify` from a console
 //! without `can_send` / `can_approve_requests`, and from an unpowered one. The main console has
 //! no `req_access` in tg (the cargo office's doors guard it), so it has none here either.
-// shortcut: no emagging or hacked boards (contraband), departmental request budgets (requests
+// shortcut: no hacked boards (contraband), no emag-only packs for an emagged console (the
+// catalogue filter does not know it yet), departmental request budgets (requests
 // are for the cargo budget), coupons, loans or the supply channel announcement of requests.
 
 use std::sync::Arc;
@@ -60,6 +61,8 @@ pub struct CargoConsole {
     pub can_send: bool,
     pub can_approve_requests: bool,
     pub contraband: bool,
+    /// tg `obj_flags & EMAGGED` ([`emag_act`]).
+    pub emagged: bool,
     pub self_paid: bool,
     catalogue: Arc<CargoStatic>,
 }
@@ -187,9 +190,73 @@ pub(crate) fn setup_console(world: &mut World, e: Entity, shared: Option<Arc<Car
         can_send: !request_only,
         can_approve_requests: !request_only,
         contraband: false,
+        emagged: false,
         self_paid: false,
         catalogue,
     });
+}
+
+/// tg `/obj/machinery/computer/cargo/emag_act` (from `crate::emag`): contraband for good, the
+/// open windows get the new catalogue. True when it took.
+// shortcut: the circuit board does not keep it (a rebuilt console is clean).
+pub fn emag_act(world: &mut World, mob: Entity, card: Entity, console: Entity) -> bool {
+    if world.get::<CargoConsole>(console).is_none_or(|c| c.emagged) {
+        return false;
+    }
+    let catalogue = Arc::new(
+        world
+            .get_resource::<SupplyPacks>()
+            .map(|p| catalogue(p, true))
+            .unwrap_or_default(),
+    );
+    if let Some(mut state) = world.get_mut::<CargoConsole>(console) {
+        state.emagged = true;
+        state.contraband = true;
+        state.catalogue = catalogue;
+    }
+    let w: &World = world;
+    let name = |e: Entity| {
+        w.get::<DmName>(e)
+            .map(|n| plain(&n.name).to_owned())
+            .unwrap_or_default()
+    };
+    let user = w
+        .get::<Name>(mob)
+        .map_or_else(|| name(mob), |n| n.as_str().to_owned());
+    let (card_name, console_name) = (name(card), name(console));
+    if let Some(&pos) = world.get::<TilePos>(console) {
+        let chat = crate::pull::visible_message(
+            world,
+            pos,
+            ss13_shared::chat::ChatChannel::Local,
+            (
+                ss13_shared::chat::Span::Warning,
+                format!("{user} swipes {card_name} through {console_name}!"),
+            ),
+            &[],
+        );
+        for message in chat {
+            world.write_message(message);
+        }
+    }
+    if let Some(client) = world.get::<crate::server::PlayerMob>(mob).map(|p| p.client) {
+        crate::tools::tell(
+            world,
+            client,
+            ss13_shared::chat::Span::Notice,
+            format!(
+                "You adjust {console_name}'s routing and receiver spectrum, unlocking special \
+                 supplies and contraband."
+            ),
+        );
+    }
+    let mut windows = world.query::<&mut UiWindow>();
+    for mut window in windows.iter_mut(world) {
+        if window.interface == CargoUi::NAME && window.source == console {
+            window.refresh_static();
+        }
+    }
+    true
 }
 
 fn plain(name: &str) -> &str {
@@ -757,6 +824,7 @@ mod tests {
             can_send: true,
             can_approve_requests: true,
             contraband: false,
+            emagged: false,
             self_paid: false,
             catalogue: Arc::default(),
         };

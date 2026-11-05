@@ -60,7 +60,7 @@
 Емаг вскрывает шлюз: искры, дверь открывается и ломается (больше не закрывается и не реагирует на доступ).
 
 - **Код:** [`emag_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/doors/airlock.dm#L1531), [`proc/finish_emag_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/doors/airlock.dm#L1544)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/emag.rs`, `crates/ss13_game/src/doors.rs` (`Door::emagged`, `emagging`): как в tg только доорджек (обычный емаг отказывает); закрытый запитанный шлюз 0,6 с искрит (оверлей `sparks`, без огней), затем открывается, если может, болтируется, гасит огни и теряет основное и резервное питание; дальше не открывается и не закрывается ни рукой, ни толчком, ни автозакрытием, ИИ получает «Unable to interface»; осмотр — «access panel is smoking»; `// shortcut:` лом с `BYPASS_DOOR_CHECKS` тоже отказывает (важно лишь для разболтированного проводами)
 
 ### Аварийный доступ и красная тревога
 Режим аварийного доступа открывает шлюз всем; при красной тревоге шлюзы с `red_alert_access` пускают людей без доступа.

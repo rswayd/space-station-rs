@@ -81,8 +81,6 @@ enum DispenserPrompt {
     Overwrite(Entity, String),
 }
 
-/// `/obj/item/card/emag`.
-const EMAG: &str = "/obj/item/card/emag";
 /// `MAX_NAME_LEN`.
 const MAX_NAME_LEN: u32 = 42;
 const DRINKS: &str = "/obj/machinery/chem_dispenser/drinks";
@@ -226,13 +224,6 @@ pub fn item_interaction(
     if world.get::<ChemDispenser>(target).is_none() {
         return false;
     }
-    if world
-        .get::<ss13_mapload::DmItem>(held)
-        .is_some_and(|i| crate::obj_damage::is_under(&i.path, EMAG))
-    {
-        emag_act(world, client, target);
-        return true;
-    }
     if !chem_container(world, held) {
         return false;
     }
@@ -241,7 +232,7 @@ pub fn item_interaction(
     true
 }
 
-/// tg `emag_act`: the emagged reagents join the dispensable ones, once.
+/// tg `emag_act` (from `crate::emag`): the emagged reagents join the dispensable ones, once.
 pub fn emag_act(world: &mut World, client: Entity, e: Entity) {
     let Some(d) = world.get::<ChemDispenser>(e) else {
         return;

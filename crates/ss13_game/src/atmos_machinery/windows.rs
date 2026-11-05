@@ -1320,7 +1320,7 @@ impl ServerUi for AirAlarmWindow {
                 selected_mode_path: alarm.mode.path().to_owned(),
                 modes: AlarmMode::ALL
                     .into_iter()
-                    .filter(|m| !m.info().4)
+                    .filter(|m| alarm.emagged || !m.info().4)
                     .map(|m| {
                         let (path, name, desc, danger, _) = m.info();
                         ModeEntry {
@@ -1338,7 +1338,7 @@ impl ServerUi for AirAlarmWindow {
         AirAlarmData {
             locked: alarm.locked,
             silicon_user: silicon,
-            emagged: false,
+            emagged: alarm.emagged,
             danger_level: alarm.danger_level,
             atmos_alarm: alarm.area_danger,
             fire_alarm: false,

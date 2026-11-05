@@ -10,8 +10,8 @@
 //! multitool carrying the sensor) moves the alarm to the sensor: it rates the sensor's tile
 //! (nothing while the sensor is off) and controls the sensor's area. A mapped link cannot be
 //! undone from the alarm (`allow_link_change`) until the sensor is reset.
-// shortcut: no wires, no emag (flood and vent siphon modes stay hidden), no construction
-// stages, no fire alarm / fault status; add with wires.
+// shortcut: no wires, no construction stages, no fire alarm / fault status; add with wires.
+// The flood and vent siphon modes need an emag (`crate::emag`).
 
 use std::collections::HashSet;
 
@@ -369,6 +369,8 @@ pub struct AirAlarm {
     /// `area_danger`: an atmos alarm is active in the area.
     pub area_danger: bool,
     pub locked: bool,
+    /// tg `obj_flags & EMAGGED`: the emag modes are offered.
+    pub emagged: bool,
     pub req_access: Vec<String>,
     pub req_one_access: Vec<String>,
     pub pressure: Tlv,
@@ -395,6 +397,7 @@ impl AirAlarm {
             danger_level: ALERT_NONE,
             area_danger: false,
             locked: dm.locked,
+            emagged: false,
             req_access: dm.req_access.clone(),
             req_one_access: dm.req_one_access.clone(),
             pressure: Tlv::PRESSURE,
@@ -747,7 +750,7 @@ pub fn select_mode(world: &mut World, alarm: Entity, mode: AlarmMode) {
         return;
     };
     let (_, _, _, _, emag) = mode.info();
-    if emag {
+    if emag && !a.emagged {
         return;
     }
     a.mode = mode;
