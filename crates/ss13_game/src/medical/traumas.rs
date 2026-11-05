@@ -870,9 +870,11 @@ pub fn refresh(world: &mut World, mob: Entity) {
             _ => {}
         }
     }
-    // The Mute (`TRAIT_MUTE`) and Pacifist (`TRAIT_PACIFISM`) quirks (`crate::quirks`).
+    // The Mute (`TRAIT_MUTE`), Soft-Spoken (`TRAIT_FORCE_WHISPER`) and Pacifist
+    // (`TRAIT_PACIFISM`) quirks (`crate::quirks`).
     if let Some(quirks) = world.get::<crate::quirks::Quirks>(mob) {
         speech.mute |= quirks.has(crate::quirks::Quirk::Mute);
+        speech.force_whisper |= quirks.has(crate::quirks::Quirk::SoftSpoken);
         pacifist |= quirks.has(crate::quirks::Quirk::Pacifist);
     }
     // `/datum/status_effect/pacify` (`crate::status_effects` calls this when it starts or ends).

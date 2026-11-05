@@ -375,6 +375,8 @@ pub mod service;
 pub mod shuttle;
 pub mod silicon;
 #[cfg(feature = "server")]
+pub mod skills;
+#[cfg(feature = "server")]
 pub mod smartfridge;
 #[cfg(feature = "server")]
 pub mod sound;

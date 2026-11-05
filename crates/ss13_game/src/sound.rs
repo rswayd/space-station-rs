@@ -256,11 +256,19 @@ pub fn hitsound(item: &DmItem) -> &str {
     }
 }
 
-/// tg `TRAIT_DEAF` sources ported: the deafness mutation and earmuffs (the ears' own in
-/// `crate::medical::organs::ear_deaf`).
-// shortcut: no deafness quirk or disease.
-fn is_deaf(dna: Option<&Dna>, inventory: Option<&Inventory>, items: &Query<&DmItem>) -> bool {
-    dna.is_some_and(|d| mutation_id(DEAF_MUTATION).is_some_and(|id| d.get_mutation(id).is_some()))
+/// tg `TRAIT_DEAF` sources ported: the deafness mutation, the Deaf quirk and earmuffs (the
+/// ears' own in `crate::medical::organs::ear_deaf`).
+// shortcut: no deafness disease.
+fn is_deaf(
+    dna: Option<&Dna>,
+    inventory: Option<&Inventory>,
+    quirks: Option<&crate::quirks::Quirks>,
+    items: &Query<&DmItem>,
+) -> bool {
+    quirks.is_some_and(|q| q.has(crate::quirks::Quirk::Deaf))
+        || dna.is_some_and(|d| {
+            mutation_id(DEAF_MUTATION).is_some_and(|id| d.get_mutation(id).is_some())
+        })
         || inventory
             .and_then(|i| i.ears)
             .and_then(|e| items.get(e).ok())
@@ -270,7 +278,10 @@ fn is_deaf(dna: Option<&Dna>, inventory: Option<&Inventory>, items: &Query<&DmIt
 /// [`is_deaf`] of a mob, from an exclusive system.
 pub fn mob_is_deaf(world: &World, mob: Entity) -> bool {
     let dna = world.get::<Dna>(mob);
-    dna.is_some_and(|d| mutation_id(DEAF_MUTATION).is_some_and(|id| d.get_mutation(id).is_some()))
+    crate::quirks::has(world, mob, crate::quirks::Quirk::Deaf)
+        || dna.is_some_and(|d| {
+            mutation_id(DEAF_MUTATION).is_some_and(|id| d.get_mutation(id).is_some())
+        })
         || world
             .get::<Inventory>(mob)
             .and_then(|i| i.ears)
@@ -316,6 +327,7 @@ type Listener<'a> = (
     (
         Option<&'a crate::medical::organs::Organs>,
         Has<crate::medical::organs::OrganHost>,
+        Option<&'a crate::quirks::Quirks>,
     ),
 );
 
@@ -388,8 +400,8 @@ fn deliver(
             )),
             _ => None,
         };
-        for (player, mob, dna, inventory, ghost, (owned, host)) in &listeners {
-            if is_deaf(dna, inventory, &items)
+        for (player, mob, dna, inventory, ghost, (owned, host, quirks)) in &listeners {
+            if is_deaf(dna, inventory, quirks, &items)
                 || crate::medical::organs::ear_deaf(owned, host, |e| organs.get(e).ok())
             {
                 continue;

@@ -563,9 +563,13 @@ pub fn mousedropped_onto(world: &mut World, actor: Actor, over: Entity, dropped:
     let what = name_of(world, over);
     let user = name_of(world, actor.mob);
     let at = world.get::<TilePos>(actor.mob).copied().unwrap_or_default();
-    // Climbing takes twice as long without help from the hands.
+    // The athletics fitness shaves a decisecond per level; climbing takes twice as long without
+    // help from the hands; freerunners are faster.
+    let fitness = crate::skills::fitness_level(world, actor.mob);
     let hands_blocked = crate::status_effects::incapacitation(world, actor.mob).hands_blocked;
-    let delay = CLIMB_TIME_DS * if hands_blocked { 2.0 } else { 1.0 };
+    let delay = (CLIMB_TIME_DS - fitness).clamp(1.0, CLIMB_TIME_DS)
+        * if hands_blocked { 2.0 } else { 1.0 }
+        * freerunning(world, actor.mob);
     if do_after(world, actor, over, delay, 0, Job::Table(TableJob::Climb)) {
         say(
             world,
@@ -603,7 +607,12 @@ fn climb(world: &mut World, action: &DoAfter, mob: Entity) {
         format!("{user} взбирается на {what}."),
         &[(mob, format!("Вы взобрались на {what}."))],
     );
-    crate::status_effects::apply(world, mob, Incap::Stun, CLIMB_STUN);
+    crate::status_effects::apply(
+        world,
+        mob,
+        Incap::Stun,
+        CLIMB_STUN * freerunning(world, mob),
+    );
     let path = path_of(world, target).unwrap_or_default();
     if crate::medical::surgery::buckles_lying(&path) {
         let actor = Actor {
@@ -613,7 +622,20 @@ fn climb(world: &mut World, action: &DoAfter, mob: Entity) {
         };
         crate::medical::surgery::buckle(world, actor, mob, target);
     }
+    // A bit fitter with every climb, with diminishing returns: `round(5 / (fitness || 1), 1)`.
+    let fitness = crate::skills::fitness_level(world, mob).max(1.0);
+    let xp = (crate::skills::ATHLETICS_MISC_EXP / fitness).round();
+    crate::skills::adjust_experience(world, mob, crate::skills::Skill::Athletics, xp, false);
     after_landing(world, mob, target);
+}
+
+/// `TRAIT_FREERUNNING` (the quirk): climbing time and stun ×0.8.
+fn freerunning(world: &World, mob: Entity) -> f32 {
+    if crate::quirks::has(world, mob, crate::quirks::Quirk::Freerunning) {
+        0.8
+    } else {
+        1.0
+    }
 }
 
 /// `mob` onto `to` (the tile of `surface`), past every table there but nothing else dense:

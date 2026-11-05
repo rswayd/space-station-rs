@@ -778,7 +778,7 @@ fn handle_say(
         }
         // `TRAIT_FORCE_WHISPER` in soft crit; anything that went to the radio shrinks to a
         // whisper (`REDUCE_RANGE`), even without a headset.
-        let whisper = mods.whisper || stat == SpeakerStat::SoftCrit;
+        let whisper = mods.whisper || stat == SpeakerStat::SoftCrit || impediments.force_whisper;
         let target = match mods.radio_target(ears_worn) {
             // tg: without `binarycheck()` the binary saymode is not used: plain speech.
             Some(RadioTarget::Binary) if !binary => None,
