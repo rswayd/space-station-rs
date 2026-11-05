@@ -113,7 +113,7 @@ pub fn attack_ai(world: &mut World, client: Entity, user: Entity, target: Entity
         return true;
     }
     // `/mob/living/basic/bot/attack_ai`.
-    if e.contains::<crate::bots::Bot>() {
+    if world.get::<crate::bots::Bot>(target).is_some() {
         crate::bots::ui::open(world, client, user, target);
         return true;
     }

@@ -1452,12 +1452,12 @@ fn law_rack_modules_change_the_ai_laws() {
     s.run_until("the rack window opens", |s| {
         s.window::<LawRackUi>().is_some()
     });
-    let (window, (), data) = s.window::<LawRackUi>().unwrap();
+    let (_, (), data) = s.window::<LawRackUi>().unwrap();
     assert!(data.holding_module);
     let ai_name = s.get::<Name>(core).as_str().to_owned();
     assert_eq!(data.linked_mobs, Some(vec![ai_name]));
     assert_eq!(data.slots[0].name, "unidentified welded module");
-    s.act(0, window, "insert_module", &[("slot", "2")]);
+    s.act::<LawRackUi>("insert_module", &[("slot", "2")]);
     s.run_until("the AI gets the supplied law", |s| {
         s.get::<Laws>(core)
             .law_list(true)
@@ -1466,12 +1466,12 @@ fn law_rack_modules_change_the_ai_laws() {
             == Some("4: Obey Bob")
     });
     assert_eq!(s.get::<StoredIn>(module).0, rack);
-    s.act(0, window, "remove_module", &[("slot", "2")]);
+    s.act::<LawRackUi>("remove_module", &[("slot", "2")]);
     s.run_until("the module is back in hand", |s| {
         s.get::<Inventory>(human).hands.contains(&Some(module))
     });
     assert_eq!(s.get::<Laws>(core).law_list(true).len(), 3);
-    s.act(0, window, "unlink_silicon", &[("silicon_index", "0")]);
+    s.act::<LawRackUi>("unlink_silicon", &[("silicon_index", "0")]);
     s.run_until("the AI is unlinked", |s| {
         s.try_get::<LinkedRack>(core).is_none()
     });

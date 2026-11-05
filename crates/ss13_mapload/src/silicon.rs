@@ -313,6 +313,7 @@ pub fn resolve(types: &DmTypes) -> SiliconData {
         models,
         upgrades,
         modules,
+        malf_flavor: Vec::new(),
     }
 }
 

@@ -401,7 +401,7 @@ impl LawRack {
     pub fn parent_rack(&self, me: Entity) -> Option<Entity> {
         match self.kind {
             RackKind::Base => Some(me),
-            RackKind::Broadcaster => self.parent.map(|(p, _)| p),
+            RackKind::Broadcaster => self.parent.as_ref().map(|(p, _)| *p),
             RackKind::Plain => None,
         }
     }
@@ -1006,7 +1006,7 @@ fn parse_ref(params: &UiParams, key: &str) -> Result<Entity, UiReject> {
 
 fn parse_index(params: &UiParams, key: &str) -> Result<usize, UiReject> {
     let n = params.number(key)?;
-    if n < 0.0 || n > 1000.0 {
+    if !(0.0..=1000.0).contains(&n) {
         return Err(UiReject::BadParams(format!("{key}: out of range")));
     }
     Ok(n as usize)
