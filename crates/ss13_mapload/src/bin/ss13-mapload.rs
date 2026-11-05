@@ -359,6 +359,18 @@ fn convert_cmd(config: &MapLoadPlugin, mut map_dirs: Vec<PathBuf>) -> anyhow::Re
         mobs.mobs.len(),
         mobs_out.display()
     );
+    let restaurant = ss13_mapload::restaurant::resolve(&types, &config.source);
+    let restaurant_out = config
+        .assets
+        .join(ss13_mapload::restaurant::RESTAURANT_FILE);
+    std::fs::write(&restaurant_out, restaurant.to_ron())
+        .with_context(|| format!("writing {}", restaurant_out.display()))?;
+    println!(
+        "{} venues, {} customer types -> {}",
+        restaurant.venues.len(),
+        restaurant.customers.len(),
+        restaurant_out.display()
+    );
     let plants = ss13_mapload::plants::resolve(&types);
     let plants_out = config.assets.join(ss13_mapload::plants::PLANTS_FILE);
     std::fs::write(&plants_out, plants.to_ron())

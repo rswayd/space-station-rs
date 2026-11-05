@@ -82,6 +82,7 @@
 //! | 300 | `antag::cult::server::interact` |
 //! | 400 | `antag::heretic::server::interact` |
 //! | 500 | `kitchen::interact` |
+//! | 550 | `restaurant::attack_hand` |
 //! | 600 | `cooking::interact` |
 //! | 700 | `smartfridge::interact` |
 //! | 800 | `gibber::interact` |
@@ -138,6 +139,7 @@
 //! | 1700 | `service::server::item_interaction` |
 //! | 1750 | `medical::bodyparts::item_interaction` |
 //! | 1800 | `kitchen::item_interaction` |
+//! | 1850 | `restaurant::item_interaction` |
 //! | 1900 | `cooking::item_interaction` |
 //! | 2000 | `smartfridge::item_interaction` |
 //! | 2100 | `coffee::item_interaction` |

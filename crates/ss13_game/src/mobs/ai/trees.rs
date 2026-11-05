@@ -69,6 +69,9 @@ pub fn build(path: &str, def: &MobDef) -> Option<Built> {
     if under(path, "/datum/ai_controller/basic_controller/bot") {
         return Some(crate::bots::ai::tree(path));
     }
+    if under(path, crate::restaurant::CUSTOMER_CONTROLLER) {
+        return Some(crate::restaurant::tree());
+    }
     if under(path, CARP) {
         let passive =
             path != CARP && path != format!("{CARP}/mega") && path != format!("{CARP}/ranged");

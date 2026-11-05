@@ -91,6 +91,9 @@ pub enum Key {
     /// `BB_TARGET_FOOD`, `BB_NEXT_FOOD_EAT` (`find_food`, `move_to_and_eat`).
     TargetFood,
     NextFoodEat,
+    /// Robot customers (`crate::restaurant`): `BB_CUSTOMER_MY_SEAT`, `BB_CUSTOMER_EXIT_PORTAL`.
+    CustomerSeat,
+    CustomerExit,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -252,6 +255,7 @@ pub struct Retaliates;
 /// tg `ai_retaliate` `on_attacked`: the attacker goes into `BB_BASIC_MOB_RETALIATE_LIST`.
 /// Also tg `ai_flee_while_injured` (carp): `BB_BASIC_MOB_STOP_FLEEING` follows the health.
 pub fn record_attacker(world: &mut World, victim: Entity, attacker: Entity) {
+    crate::restaurant::on_attacked(world, victim, attacker);
     let now = world.resource::<Time>().elapsed_secs_f64();
     let health = world.get::<crate::health::Health>(victim).cloned();
     let retaliates = world.get::<Retaliates>(victim).is_some();

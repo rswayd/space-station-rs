@@ -286,6 +286,12 @@ pub mod files {
         "sound/effects/explosion/explosion1.ogg",
         "sound/items/weapons/punch1.ogg",
     ];
+    /// Robot customers (`ss13_game::restaurant`): eating, drinking and paying.
+    pub const RESTAURANT: [&str; 3] = [
+        "sound/items/eatfood.ogg",
+        "sound/items/drink.ogg",
+        "sound/effects/cashregister.ogg",
+    ];
     /// The hallucinations (`ss13_game::hallucination`): fake sounds, battles, announcements,
     /// the bleeding and freezing ones and the delusions.
     /// Syndicate gear (`ss13_game::antag::syndie_items`): the energy blades' `saberon`,
@@ -711,6 +717,7 @@ pub fn referenced<'a>(
     out.extend(files::RELIGION.map(str::to_owned));
     out.extend(files::HALLUCINATION.map(str::to_owned));
     out.extend(files::SYNDIE_ITEMS.map(str::to_owned));
+    out.extend(files::RESTAURANT.map(str::to_owned));
     for path in converted {
         for var in SOUND_VARS {
             let s = sound_var(types, path, var);

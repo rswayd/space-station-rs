@@ -50,6 +50,7 @@ pub mod power;
 pub mod radio;
 pub mod reagents;
 pub mod research;
+pub mod restaurant;
 pub mod runtime;
 pub mod security;
 pub mod service;
