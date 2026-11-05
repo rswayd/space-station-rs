@@ -26,6 +26,7 @@ pub mod immovable_rod;
 pub mod market_crash;
 pub mod meteors;
 pub mod mice_migration;
+pub mod processor_overload;
 pub mod radiation_storm;
 pub mod vent_clog;
 pub mod wormholes;
@@ -131,6 +132,14 @@ pub fn controls() -> Vec<EventControl> {
             electrical_storm::make,
         ),
         c(comms_blackout::NAME, 30, 20.0, 0, 20, comms_blackout::make),
+        c(
+            processor_overload::NAME,
+            15,
+            20.0,
+            20,
+            20,
+            processor_overload::make,
+        ),
         c(radiation_storm::NAME, 10, 20.0, 0, 1, radiation_storm::make),
         c(
             brand_intelligence::NAME,

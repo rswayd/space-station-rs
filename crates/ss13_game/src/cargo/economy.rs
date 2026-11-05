@@ -11,8 +11,10 @@
 //!   (`payday(1, skippable = TRUE)`: clamped to `PAYCHECK_CREW`), with tg's bank card messages.
 //! - The round-end economy report (`market_report`): the crew's total, the average, the richest.
 //! - Each tick also picks the boosted exports (`update_boosted_exports`,
-//!   [`super::export::Exports::update_boosted`]), clears the stock market's news and counts the
-//!   waiting mail ([`super::mail::economy_tick`]). Civilian bounties: [`super::bounty`].
+//!   [`super::export::Exports::update_boosted`]), posts the earnings report with the stock
+//!   market's news on the newscasters (`crate::newscaster_server::earnings_report`), clears that
+//!   news and counts the waiting mail ([`super::mail::economy_tick`]). Civilian bounties:
+//!   [`super::bounty`].
 // shortcut: no inflation, debts, departmental cards, audit log or species payday modifiers.
 
 use std::collections::HashMap;
@@ -337,6 +339,13 @@ fn fire(world: &mut World) {
     }
     if let Some(mut exports) = world.get_resource_mut::<super::export::Exports>() {
         exports.update_boosted(&mut rng);
+    }
+    // `price_update` (skipped while the market crashes): the earnings report on the news.
+    if !world
+        .get_resource::<super::stock_market::StockMarket>()
+        .is_some_and(|m| m.crashing)
+    {
+        crate::newscaster_server::earnings_report(world);
     }
     if let Some(mut market) = world.get_resource_mut::<super::stock_market::StockMarket>() {
         market.news.clear();

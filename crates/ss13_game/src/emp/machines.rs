@@ -4,11 +4,10 @@
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
-use ss13_mapload::fidelity::is_under;
 use ss13_shared::TilePos;
 use ss13_shared::chat::Span;
 
-use super::{EmpAct, EmpRng, EmpSystems, Emped, emp_acts, emped_expired, path_of, set_emped};
+use super::{EmpAct, EmpRng, EmpSystems, Emped, emp_acts, emped_expired, set_emped};
 use crate::atmos_machinery::devices::ThermoMachine;
 use crate::atmos_machinery::portable::{PortablePump, PortableScrubber};
 use crate::barsign::Barsign;
@@ -37,9 +36,6 @@ const BARSIGN_EMP_SECS: f64 = 60.0;
 const EMP_SIGN: &str = "EMP'd";
 /// `/obj/machinery/telecomms/emp_act`: `(300 SECONDS) / severity`, ±2 s.
 const TELECOMMS_EMP_SECS: f64 = 300.0;
-const TELECOMMS: &str = "/obj/machinery/telecomms";
-/// Relays only serve their own level (tg `relay`), not the station's network.
-const TELECOMMS_RELAY: &str = "/obj/machinery/telecomms/relay";
 /// `ONE_ATMOSPHERE`, kPa.
 const ONE_ATMOSPHERE: f64 = 101.325;
 
@@ -223,10 +219,17 @@ fn restore_barsigns(world: &mut World) {
     }
 }
 
-/// `/obj/machinery/telecomms/emp_act` of the station's network: at `100 / severity` percent,
-/// unless already `EMPED`, the telecomms are down for `300 s / severity` ±2 s
-/// ([`TelecommsOutage`] stands in for the machines).
+/// `/obj/machinery/telecomms/emp_act` on every telecomms machine (the Communications Blackout
+/// event): each one at `100 / severity` percent ([`crate::telecomms::emp_machine`]). A map
+/// without machines takes the [`TelecommsOutage`] stand-in: down for `300 s / severity` ±2 s.
 pub fn telecomms_emp(world: &mut World, severity: u8) {
+    let machines = crate::telecomms::machines_of(world, None);
+    if !machines.is_empty() {
+        for machine in machines {
+            crate::telecomms::emp_machine(world, machine, severity);
+        }
+        return;
+    }
     let now = world.resource::<Time>().elapsed_secs_f64();
     if world.resource::<TelecommsOutage>().until > now {
         return;
@@ -240,15 +243,15 @@ pub fn telecomms_emp(world: &mut World, severity: u8) {
     world.resource_mut::<TelecommsOutage>().until = now + secs as f64;
 }
 
+/// A pulse hitting one telecomms machine EMPs that machine.
 fn telecomms(world: &mut World, mut cursor: Local<MessageCursor<EmpAct>>) {
     for ev in emp_acts(world, &mut cursor) {
-        if !ev.hits_self() {
-            continue;
-        }
-        let is_telecomms = path_of(world, ev.target)
-            .is_some_and(|p| is_under(&p, TELECOMMS) && !is_under(&p, TELECOMMS_RELAY));
-        if is_telecomms {
-            telecomms_emp(world, ev.severity);
+        if ev.hits_self()
+            && world
+                .get::<crate::telecomms::Telecomms>(ev.target)
+                .is_some()
+        {
+            crate::telecomms::emp_machine(world, ev.target, ev.severity);
         }
     }
 }

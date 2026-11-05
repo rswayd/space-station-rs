@@ -159,7 +159,8 @@ pub struct CommsServerPlugin;
 
 impl Plugin for CommsServerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_message::<CommsRequest>()
+        app.add_plugins(crate::newscaster_server::NewscasterPlugin)
+            .add_message::<CommsRequest>()
             .register_ui::<CommsConsoleUi>()
             .add_systems(Startup, setup_consoles)
             .add_systems(

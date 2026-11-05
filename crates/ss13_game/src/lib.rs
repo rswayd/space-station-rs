@@ -293,6 +293,11 @@ pub mod mood;
 pub mod mood_client;
 #[cfg(feature = "server")]
 pub mod multiz;
+pub mod newscaster;
+#[cfg(feature = "client")]
+pub mod newscaster_client;
+#[cfg(feature = "server")]
+pub mod newscaster_server;
 #[cfg(feature = "server")]
 pub mod obj_damage;
 pub mod operating;
@@ -317,6 +322,7 @@ pub mod pull;
 pub mod quirks;
 #[cfg(feature = "server")]
 pub mod radio;
+pub mod radio_ui;
 #[cfg(feature = "server")]
 pub mod recoil;
 pub mod records;
@@ -365,6 +371,8 @@ pub mod strip;
 pub mod tables;
 #[cfg(feature = "server")]
 pub mod taser;
+#[cfg(feature = "server")]
+pub mod telecomms;
 #[cfg(feature = "testing")]
 pub mod testing;
 #[cfg(feature = "server")]

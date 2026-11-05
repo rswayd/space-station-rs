@@ -5,7 +5,7 @@
 Предмет-радио: включено/выключено, частота, приём и передача, `canhear_range`, специальные каналы (Синдикат, ЦК, бинарный); речь в радио идёт через телекоммуникации или напрямую (`subspace_transmission = FALSE`), сообщение раскрашивается по каналу.
 
 - **Код:** [`/obj/item/radio`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/devices/radio/radio.dm#L3), [`proc/talk_into_impl()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/devices/radio/radio.dm#L310), [`/datum/signal/subspace/vocal/broadcast()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/telecomms/broadcasting.dm#L119)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/radio.rs`, `crates/ss13_chat/src/radio.rs`: приём и передача на всех радио, цвета каналов, шёпот, призраки слышат всё; нет телекомов (всё доходит в пределах z-уровня), сжатия сигнала, проверки видимости
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/radio.rs`, `crates/ss13_chat/src/radio.rs`: приём и передача на всех радио, цвета каналов, шёпот, призраки слышат всё; передача через телекомы (`crate::telecomms`: уровни вещания, сжатие и искажение, `backup_transmission` не-subspace радио, `TRANSMISSION_SUPERSPACE` радио ЦК); нет проверки видимости (`get_hearers_in_LOS`), задержки резервной передачи 2 с
 
 ### Гарнитуры (headset)
 Гарнитуры отделов и глав (две ячейки под ключи у глав), бинарная и синдикатовская, «громкий режим» командных гарнитур (`use_command`), защита ушей у bowman-гарнитур.
@@ -24,19 +24,19 @@
 Настенные радио: работают при питании оборудования зоны, слушают и транслируют речь рядом, `:i`; варианты (тюремный, часовня, допросная, командный, ИИ-приватный, свободный диапазон, отдельские и глав), рамка для монтажа, отвёрткой снимается.
 
 - **Код:** [`/obj/item/radio/intercom`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/devices/radio/intercom.dm#L1), [`/obj/item/radio/intercom/departmental`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/devices/radio/intercom.dm#L347), [`/obj/item/radio/intercom/ai_private`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/devices/radio/intercom.dm#L315), [`/obj/item/wallframe/intercom`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/devices/radio/intercom.dm#L229)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/radio.rs`: интеркомы из карты с их переменными, питание зоны, ретрансляция, `:i`; нет окна настройки, монтажа/демонтажа
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/radio.rs`: интеркомы из карты с их переменными, питание зоны, ретрансляция, `:i`, окно настройки по клику пустой рукой (`crate::radio_ui`; частота заперта у исповедальни и допросной, свободный диапазон у командного); нет монтажа/демонтажа и рамки, открытия силиконами
 
 ### Окно радио (tgui Radio)
 Включение, смена частоты, микрофон/динамик, громкий режим, выбор каналов гарнитуры.
 
 - **Код:** [`/obj/item/radio/ui_interact()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/devices/radio/radio.dm#L477), [`ui_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/devices/radio/radio.dm#L505); tgui: [`Radio.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/Radio.tsx)
-- **Статус в ss13-rs:** ❌ нет — частота и режимы только из переменных карты
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/radio_ui.rs` (окно `Radio`), `crates/ss13_game/src/radio.rs` (`apply_act`): частота шагами и вводом (`sanitize_frequency`, свой диапазон, `freqlock`), настройка на канал ключа, микрофон, динамик, каналы ключей; рация в руке открывает окно (`attack_self`), интерком — кликом; окно держится, пока рация у пользователя (`inventory_state`); нет громкого режима (`use_command`) и переключателя subspace (радио боргов нет); tg не читает параметр `tune` — перенесено задуманное
 
 ### Ручные рации и прочие радио
 Станционная ручная рация, радио киборга, развлекательное радио (канал ТВ), игрушечное; переключение частоты, занятые частоты.
 
 - **Код:** [`/obj/item/radio`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/devices/radio/radio.dm#L3), [`/obj/item/radio/borg`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/devices/radio/radio.dm#L688), [`/obj/item/radio/entertainment`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/devices/radio/radio.dm#L719), [`proc/set_frequency()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/devices/radio/radio.dm#L151)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/radio.rs`: ручные рации и `:r`/`:l` из руки; нет смены частоты, радио боргов
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/radio.rs`: ручные рации и `:r`/`:l` из руки, смена частоты в окне радио (`crate::radio_ui`), развлекательное радио с запертой частотой; нет радио боргов и занятых частот
 
 ### Глушилки и EMP радио
 EMP временно выключает радио; глушилка радиосвязи блокирует передачу (форк: белый список каналов).

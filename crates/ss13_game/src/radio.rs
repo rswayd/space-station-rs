@@ -7,9 +7,15 @@
 //!   (`talk_into`): `;`, `:h` and the channel keys the ears slot, `:r`/`:l` the held item, `:i`
 //!   every intercom within 1 tile. Broadcasting radios within their `canhear_range` of the
 //!   speaker relay the spoken words (`/obj/item/radio/Hear`).
-//! - A transmission reaches every radio that is on, listens and can receive the frequency on the
-//!   source's z-level; its hearers are the mobs within `canhear_range` of each such radio (0 for
-//!   a headset: its wearer), plus every ghost (`CHAT_GHOSTRADIO`), each once.
+//! - A transmission goes through the telecomms machines ([`crate::telecomms::Net::route`]): a
+//!   broadcast reaches every radio that is on, listens and can receive the frequency on the
+//!   broadcast's levels, its words garbled while still compressed (no working processor). A
+//!   signal no broadcaster sent falls back, for radios that are not subspace-only (everything but
+//!   headsets), to a mundane broadcast on the source's levels that only such radios hear
+//!   (`backup_transmission`). CentCom radios on the CentCom frequency reach every CentCom radio
+//!   (`TRANSMISSION_SUPERSPACE`). A map without telecomms machines keeps one ideal network per
+//!   level. Hearers are the mobs within `canhear_range` of each radio (0 for a headset: its
+//!   wearer), plus every ghost (`CHAT_GHOSTRADIO`), each once.
 //!
 //! Cost per transmission: one pass over the radios (MetaStation: ~230 mapped plus one headset
 //! per player) and one spatial query of `(2r+1)^2` tiles per receiving radio; Common reaches the
@@ -17,8 +23,10 @@
 
 use bevy::prelude::*;
 use ss13_chat::radio::{
-    FREQ_AI_PRIVATE, FREQ_CONFESSIONAL, FREQ_ENTERTAINMENT, FREQ_INTERROGATION, FREQ_SYNDICATE,
-    RADIO_SPECIAL_SYNDIE, channel_freq, is_channel_freq, radio_message, sanitize_frequency,
+    FREQ_AI_PRIVATE, FREQ_CENTCOM, FREQ_CONFESSIONAL, FREQ_ENTERTAINMENT, FREQ_INTERROGATION,
+    FREQ_STATUS_DISPLAYS, FREQ_SYNDICATE, MAX_FREE_FREQ, MAX_FREQ, MIN_FREE_FREQ, MIN_FREQ,
+    RADIO_SPECIAL_CENTCOM, RADIO_SPECIAL_SYNDIE, channel_freq, is_channel_freq, radio_message,
+    sanitize_frequency,
 };
 use ss13_chat::server::{Listeners, SaySystems, Spoke};
 use ss13_chat::speech::{EarsWorn, RadioTarget};
@@ -27,11 +35,21 @@ use ss13_mapload::radio::{HEADSET_ROOT, INTERCOM_ROOT};
 use ss13_mapload::{Areas, DmRadio};
 use ss13_net::chat::server::SendChat;
 use ss13_shared::TilePos;
+use ss13_tgui::server::{
+    AlwaysState, AppTguiExt, OpenUi, ServerUi, UiActed, UiParams, UiReject, UiSystems, UiWindow,
+};
+use ss13_tgui::{UiInterface as _, UiStatus};
 use ss13_world::SpatialIndex;
 
+use crate::combat::CombatRng;
 use crate::ghost::Ghost;
 use crate::inventory::{CarriedBy, Inventory};
 use crate::power::{AreaPower, Channel};
+use crate::radio_ui::{self, RadioData, RadioUi};
+use crate::telecomms::{
+    Levels, Net, Signal, Telecomms, TelecommsLevels, TelecommsSystems, broadcast_text,
+    vocal_compression,
+};
 
 /// tg `MODE_RANGE_INTERCOM`: `:i` talks into intercoms this close.
 pub const INTERCOM_RANGE: u32 = 1;
@@ -116,6 +134,12 @@ impl Radio {
         };
         initialize(path, &mut radio);
         radio
+    }
+
+    /// `subspace_transmission`: headsets (and silicons' built-in radios) talk and listen only
+    /// through the telecomms.
+    pub fn subspace(&self) -> bool {
+        self.kind == RadioKind::Headset
     }
 
     /// tg `can_receive` of a radio in `GLOB.all_radios[freq]` (on and listening), the z-level
@@ -216,13 +240,13 @@ fn initialize(path: &str, radio: &mut Radio) {
     }
 }
 
-/// The station's telecomms machines are down (tg `EMPED` on every `/obj/machinery/telecomms`,
-/// e.g. the Communications Blackout event) until `until` (server seconds). Subspace radios
-/// (headsets) neither send nor receive; the others fall back to a mundane broadcast on their
-/// level that only other non-subspace radios hear (tg `backup_transmission`,
-/// `TRANSMISSION_RADIO`).
-// shortcut: the backup broadcast goes out at once instead of 2 s later; telecomms machines are
-// not modelled, so this stands in for all of them.
+/// On a map without telecomms machines: the stand-in network is down (tg `EMPED` on every
+/// `/obj/machinery/telecomms`, e.g. the Communications Blackout event) until `until` (server
+/// seconds). Subspace radios (headsets) neither send nor receive; the others fall back to a
+/// mundane broadcast on their level that only other non-subspace radios hear (tg
+/// `backup_transmission`, `TRANSMISSION_RADIO`). Maps with machines EMP the machines instead
+/// (`crate::emp::machines::telecomms_emp`).
+// shortcut: the backup broadcast goes out at once instead of 2 s later.
 #[derive(Resource, Clone, Copy, Debug, Default)]
 pub struct TelecommsOutage {
     pub until: f64,
@@ -232,19 +256,241 @@ pub struct RadioServerPlugin;
 
 impl Plugin for RadioServerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_message::<Spoke>()
+        app.add_plugins(crate::telecomms::TelecommsPlugin)
+            .add_message::<Spoke>()
             .add_message::<SendChat>()
             .add_message::<MachineRadio>()
             .init_resource::<Listeners>()
             .init_resource::<TelecommsOutage>()
+            .register_ui::<RadioUi>()
             .add_observer(make_radio)
-            .add_systems(Update, (mark_ears, transmit_speech.after(SaySystems)));
+            .add_systems(
+                Update,
+                (
+                    mark_ears,
+                    transmit_speech.after(SaySystems).after(TelecommsSystems),
+                    open_intercoms
+                        .after(ss13_world::WorldSystems::Movement)
+                        .after(crate::click::ResolveClicks)
+                        .before(UiSystems::Open),
+                    radio_window_status.in_set(UiSystems::StatusHook),
+                    radio_acts.in_set(UiSystems::Handle),
+                ),
+            );
     }
 }
 
 fn make_radio(add: On<Add<DmRadio>>, radios: Query<&DmRadio>, mut commands: Commands) {
     if let Ok(dm) = radios.get(add.entity) {
-        commands.entity(add.entity).try_insert(Radio::new(dm));
+        let radio = Radio::new(dm);
+        let tuning = RadioTuning::new(dm);
+        let mut entity = commands.entity(add.entity);
+        // A carried radio's window follows its holder (`inventory_state`), an intercom's the
+        // distance (`default_state`).
+        if radio.kind != RadioKind::Intercom {
+            entity.try_insert(AlwaysState);
+        }
+        entity.try_insert((radio, tuning));
+    }
+}
+
+/// The tuning limits of a radio: `freerange` (the free band) and `freqlock`.
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RadioTuning {
+    pub freerange: bool,
+    pub freqlock: bool,
+}
+
+impl RadioTuning {
+    pub fn new(dm: &DmRadio) -> Self {
+        let path = dm.path.as_str();
+        let freqlock = [
+            "/obj/item/radio/intercom/chapel",
+            "/obj/item/radio/intercom/interrogation",
+            "/obj/item/radio/entertainment",
+        ]
+        .iter()
+        .any(|root| is_under(path, root));
+        Self {
+            freerange: dm.freerange,
+            freqlock,
+        }
+    }
+
+    /// `minFrequency`, `maxFrequency`.
+    pub fn band(self) -> (u16, u16) {
+        if self.freerange {
+            (MIN_FREE_FREQ, MAX_FREE_FREQ)
+        } else {
+            (MIN_FREQ, MAX_FREQ)
+        }
+    }
+}
+
+impl ServerUi for RadioUi {
+    type Source = (&'static Radio, Option<&'static RadioTuning>);
+    type UserParam = ();
+    type Act = RadioAct;
+
+    fn static_data(_: (&Radio, Option<&RadioTuning>)) {}
+
+    fn data((radio, tuning): (&Radio, Option<&RadioTuning>), _: Entity, _: &()) -> RadioData {
+        let tuning = tuning.copied().unwrap_or_default();
+        let (min_frequency, max_frequency) = tuning.band();
+        RadioData {
+            broadcasting: radio.broadcasting,
+            listening: radio.listening,
+            frequency: radio.frequency,
+            min_frequency,
+            max_frequency,
+            freqlock: tuning.freqlock,
+            channels: radio.channels.clone(),
+            headset: radio.kind == RadioKind::Headset,
+        }
+    }
+
+    fn parse_act(action: &str, params: &UiParams) -> Result<RadioAct, UiReject> {
+        let channel = || {
+            params
+                .get(radio_ui::CHANNEL)
+                .map(str::to_owned)
+                .ok_or_else(|| UiReject::BadParams("channel: missing".into()))
+        };
+        Ok(match action {
+            radio_ui::FREQUENCY => {
+                if let Ok(adjust) = params.number(radio_ui::ADJUST) {
+                    RadioAct::Adjust(adjust)
+                } else {
+                    RadioAct::Tune(params.number(radio_ui::TUNE)?)
+                }
+            }
+            radio_ui::TUNE_TO_CHANNEL => RadioAct::TuneToChannel(channel()?),
+            radio_ui::LISTEN => RadioAct::Listen,
+            radio_ui::BROADCAST => RadioAct::Broadcast,
+            radio_ui::CHANNEL => RadioAct::Channel(channel()?),
+            // shortcut: no loud mode (`command`) or subspace switch (no radio has them).
+            _ => return Err(UiReject::UnknownAction),
+        })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum RadioAct {
+    /// kHz to add.
+    Adjust(f64),
+    /// kHz.
+    Tune(f64),
+    TuneToChannel(String),
+    Listen,
+    Broadcast,
+    Channel(String),
+}
+
+/// `/obj/item/radio/attack_self` -> `interact`: the window of a radio used in hand.
+pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity) -> bool {
+    let Some(radio) = world.get::<Radio>(item) else {
+        return false;
+    };
+    if radio.kind == RadioKind::Intercom || world.get::<BuiltInRadio>(item).is_some() {
+        return false;
+    }
+    let title = crate::chem::name_of(world, item);
+    world.write_message(OpenUi::new::<RadioUi>(client, mob, item, title));
+    true
+}
+
+/// `/obj/item/radio/intercom/attack_hand`: an empty-hand click opens the intercom's window.
+fn open_intercoms(
+    mut clicks: MessageReader<crate::click::ClickResolved>,
+    radios: Query<(&Radio, Option<&ss13_mapload::DmName>)>,
+    inventories: Query<&Inventory>,
+    mut open: MessageWriter<OpenUi>,
+) {
+    for click in clicks.read() {
+        let Ok((radio, name)) = radios.get(click.target) else {
+            continue;
+        };
+        let empty = inventories
+            .get(click.mob)
+            .is_ok_and(|i| i.active_item().is_none());
+        if radio.kind != RadioKind::Intercom || !empty {
+            continue;
+        }
+        let title = name
+            .map(|n| crate::vending::plain_name(&n.name).to_owned())
+            .unwrap_or_default();
+        open.write(OpenUi::new::<RadioUi>(
+            click.client,
+            click.mob,
+            click.target,
+            title,
+        ));
+    }
+}
+
+/// `inventory_state` of a carried radio: only while its user carries it.
+fn radio_window_status(
+    mut windows: Query<&mut UiWindow>,
+    radios: Query<&Radio>,
+    carried: Query<&CarriedBy>,
+) {
+    for mut window in &mut windows {
+        if window.interface != RadioUi::NAME {
+            continue;
+        }
+        let held = radios
+            .get(window.source)
+            .is_ok_and(|r| r.kind == RadioKind::Intercom)
+            || carried
+                .get(window.source)
+                .is_ok_and(|c| c.0 == window.actor);
+        if !held {
+            window.cap_status(UiStatus::Close);
+        }
+    }
+}
+
+/// `/obj/item/radio/ui_act`, checked against the radio's state now.
+fn radio_acts(
+    mut acts: MessageReader<UiActed<RadioUi>>,
+    mut radios: Query<(&mut Radio, Option<&RadioTuning>)>,
+) {
+    for acted in acts.read() {
+        if let Ok((mut radio, tuning)) = radios.get_mut(acted.source) {
+            apply_act(&mut radio, tuning.copied().unwrap_or_default(), &acted.act);
+        }
+    }
+}
+
+/// One act on `radio`: a locked frequency stays, a channel must be one of the keys'.
+pub fn apply_act(radio: &mut Radio, tuning: RadioTuning, act: &RadioAct) {
+    let syndie = radio.special_channels & RADIO_SPECIAL_SYNDIE != 0;
+    match act {
+        RadioAct::Adjust(_) | RadioAct::Tune(_) | RadioAct::TuneToChannel(_) if tuning.freqlock => {
+        }
+        RadioAct::Adjust(adjust) => {
+            let tune = f64::from(radio.frequency) + (adjust * 10.0).round();
+            radio.frequency = sanitize_frequency(tune, tuning.freerange, syndie);
+        }
+        // tg reads no `tune` param (`else if(tune)` on a zero); the intended tuning is ported.
+        RadioAct::Tune(khz) => {
+            radio.frequency = sanitize_frequency(khz * 10.0, tuning.freerange, syndie);
+        }
+        RadioAct::TuneToChannel(name) => {
+            // Bypasses the band: tunes to the key's encrypted channel.
+            if radio.channels.iter().any(|(c, _)| c == name)
+                && let Some(freq) = channel_freq(name)
+            {
+                radio.frequency = freq;
+            }
+        }
+        RadioAct::Listen => radio.listening = !radio.listening,
+        RadioAct::Broadcast => radio.broadcasting = !radio.broadcasting,
+        RadioAct::Channel(name) => {
+            if let Some(entry) = radio.channels.iter_mut().find(|(c, _)| c == name) {
+                entry.1 = !entry.1;
+            }
+        }
     }
 }
 
@@ -276,6 +522,71 @@ struct Transmission {
     italics: bool,
     /// From a subspace radio (a headset: tg `subspace_transmission`).
     subspace: bool,
+    /// A CentCom radio on the CentCom frequency (`TRANSMISSION_SUPERSPACE`).
+    superspace: bool,
+}
+
+/// Which radios a transmission reaches, and its words.
+struct Reach {
+    levels: Levels,
+    /// `TRANSMISSION_RADIO`: only radios that are not subspace-only.
+    mundane: bool,
+    /// `TRANSMISSION_SUPERSPACE`: only CentCom radios, on every level.
+    superspace: bool,
+    text: String,
+}
+
+impl Reach {
+    fn hears(&self, radio: &Radio) -> bool {
+        if self.superspace {
+            return radio.special_channels & RADIO_SPECIAL_CENTCOM != 0;
+        }
+        !(self.mundane && radio.subspace())
+    }
+}
+
+/// `talk_into_impl` from the signal on: superspace, then the telecomms (`send_to_receivers`),
+/// then `backup_transmission` for radios that are not subspace-only.
+fn reach(
+    tx: &Transmission,
+    net: Option<&Net>,
+    telecomms_down: bool,
+    rng: &mut CombatRng,
+) -> Option<Reach> {
+    let reach = |levels, mundane, text| Reach {
+        levels,
+        mundane,
+        superspace: false,
+        text,
+    };
+    if tx.superspace {
+        return Some(Reach {
+            levels: Levels {
+                all: true,
+                z: Vec::new(),
+            },
+            mundane: false,
+            superspace: true,
+            text: tx.text.clone(),
+        });
+    }
+    let Some(net) = net.filter(|n| !n.is_empty()) else {
+        // No machines: the ideal network of the source's level, or the mundane fallback while
+        // it is down.
+        if telecomms_down && tx.subspace {
+            return None;
+        }
+        return Some(reach(Levels::of([tx.z]), telecomms_down, tx.text.clone()));
+    };
+    let signal = Signal::vocal(tx.freq, net.connected(tx.z), vocal_compression(rng));
+    match net.route(&signal) {
+        Some(b) => {
+            let text = broadcast_text(&tx.text, b.compression, rng);
+            Some(reach(b.levels, false, text))
+        }
+        None if !tx.subspace => Some(reach(net.connected(tx.z), true, tx.text.clone())),
+        None => None,
+    }
 }
 
 type RadioItem<'a> = (
@@ -322,10 +633,16 @@ fn transmit_speech(
     senses: ss13_chat::server::Senses,
     mut chat: MessageWriter<SendChat>,
     mut machine: MessageReader<MachineRadio>,
-    outage: Res<TelecommsOutage>,
-    time: Res<Time>,
+    (outage, time, machines, telecomms_levels, mut rng): (
+        Res<TelecommsOutage>,
+        Res<Time>,
+        Query<(Entity, &Telecomms, &TilePos)>,
+        Res<TelecommsLevels>,
+        ResMut<CombatRng>,
+    ),
 ) {
-    let telecomms_down = outage.until > time.elapsed_secs_f64();
+    let now = time.elapsed_secs_f64();
+    let telecomms_down = outage.until > now;
     let powered = |pos: TilePos| {
         let area = areas.as_deref().and_then(|a| a.area_at(pos));
         // No power model for the area (or no area): tg `requires_power = FALSE` is powered.
@@ -397,7 +714,9 @@ fn transmit_speech(
                     spoke.text.clone()
                 },
                 italics: spoke.whisper,
-                subspace: radio.kind == RadioKind::Headset,
+                subspace: radio.subspace(),
+                superspace: radio.special_channels & RADIO_SPECIAL_CENTCOM != 0
+                    && (freq == FREQ_CENTCOM || freq == FREQ_STATUS_DISPLAYS),
             });
         }
         // Broadcasting radios that heard the words relay them (`/obj/item/radio/Hear`); the
@@ -452,6 +771,8 @@ fn transmit_speech(
                 },
                 italics: spoke.heard_whisper,
                 subspace: false,
+                superspace: radio.special_channels & RADIO_SPECIAL_CENTCOM != 0
+                    && (radio.frequency == FREQ_CENTCOM || radio.frequency == FREQ_STATUS_DISPLAYS),
             });
         }
         sent.extend(transmissions.into_iter().map(|tx| (spoke.name.clone(), tx)));
@@ -467,27 +788,26 @@ fn transmit_speech(
                 text: m.text.clone(),
                 italics: false,
                 subspace: false,
+                superspace: false,
             },
         )
     }));
+    let net = (!sent.is_empty()).then(|| Net::new(machines.iter(), &telecomms_levels, now));
     for (name, tx) in sent {
-        if telecomms_down && tx.subspace {
+        let Some(reach) = reach(&tx, net.as_ref(), telecomms_down, &mut rng) else {
             continue;
-        }
+        };
         let mut clients: Vec<Entity> = Vec::new();
-        // shortcut: no telecomms machines are modelled: every transmission is processed as if
-        // the station's telecomms worked (subspace, no compression) and reaches every radio on
-        // the source's z-level (tg `get_connected_levels`); add relays, servers and
-        // `backup_transmission` with telecomms.
         for (e, radio, pos, carried, builtin) in &radios {
-            if !radio.receives(tx.freq) {
+            if !radio.receives(tx.freq) || !reach.hears(radio) {
                 continue;
             }
             if let Some(b) = builtin {
-                // Like a worn headset: switched on, and only while the telecomms work.
+                // Like a worn headset: switched on, on a level the signal reaches.
                 let heard = radio.on
-                    && !(radio.kind == RadioKind::Headset && telecomms_down)
-                    && positions.get(b.listener).is_ok_and(|p| p.z == tx.z);
+                    && positions
+                        .get(b.listener)
+                        .is_ok_and(|p| reach.levels.contains(p.z));
                 if let Some(client) = listeners.client_of(b.listener).filter(|_| heard)
                     && !clients.contains(&client)
                 {
@@ -498,9 +818,9 @@ fn transmit_speech(
             let Some((pos, carried)) = radio_pos((e, pos, carried, None), &mobs, &positions) else {
                 continue;
             };
-            if pos.z != tx.z
+            if !reach.levels.contains(pos.z)
                 || !live(radio, pos)
-                || (radio.kind == RadioKind::Headset && (!carried || telecomms_down))
+                || (radio.kind == RadioKind::Headset && !carried)
             {
                 continue;
             }
@@ -524,10 +844,10 @@ fn transmit_speech(
         if clients.is_empty() {
             continue;
         }
-        info!(target: "say", "radio {} from {}: {}", tx.freq, name, tx.text);
+        info!(target: "say", "radio {} from {}: {}", tx.freq, name, reach.text);
         chat.write(SendChat {
             clients,
-            message: radio_message(tx.freq, &name, tx.verb, &tx.text, tx.italics),
+            message: radio_message(tx.freq, &name, tx.verb, &reach.text, tx.italics),
         });
     }
 }
@@ -610,6 +930,47 @@ mod tests {
         off.listening = true;
         off.on = false;
         assert!(!off.receives(FREQ_COMMON));
+    }
+
+    #[test]
+    fn the_window_tunes_and_switches() {
+        let mut radio = Radio::new(&dm(
+            "/obj/item/radio/headset/headset_eng",
+            &[(RADIO_CHANNEL_ENGINEERING, true)],
+        ));
+        let open = RadioTuning::default();
+        apply_act(&mut radio, open, &RadioAct::Adjust(0.2));
+        assert_eq!(radio.frequency, FREQ_COMMON + 2);
+        apply_act(&mut radio, open, &RadioAct::Adjust(-10.0));
+        assert_eq!(radio.frequency, MIN_FREQ, "kept in the band");
+        apply_act(&mut radio, open, &RadioAct::Tune(145.9));
+        assert_eq!(radio.frequency, FREQ_COMMON);
+        apply_act(
+            &mut radio,
+            open,
+            &RadioAct::TuneToChannel(RADIO_CHANNEL_ENGINEERING.into()),
+        );
+        assert_eq!(radio.frequency, FREQ_ENGINEERING);
+        apply_act(
+            &mut radio,
+            open,
+            &RadioAct::TuneToChannel(RADIO_CHANNEL_SECURITY.into()),
+        );
+        assert_eq!(radio.frequency, FREQ_ENGINEERING, "not a key channel");
+        apply_act(
+            &mut radio,
+            open,
+            &RadioAct::Channel(RADIO_CHANNEL_ENGINEERING.into()),
+        );
+        assert!(!radio.channels[0].1, "the channel is switched off");
+        apply_act(&mut radio, open, &RadioAct::Listen);
+        assert!(!radio.listening);
+        // A locked intercom keeps its frequency.
+        let mut chapel = Radio::new(&dm("/obj/item/radio/intercom/chapel/directional/west", &[]));
+        let lock = RadioTuning::new(&dm("/obj/item/radio/intercom/chapel/directional/west", &[]));
+        assert!(lock.freqlock);
+        apply_act(&mut chapel, lock, &RadioAct::Adjust(1.0));
+        assert_eq!(chapel.frequency, FREQ_CONFESSIONAL);
     }
 
     #[test]

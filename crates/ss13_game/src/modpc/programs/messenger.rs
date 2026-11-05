@@ -1,9 +1,12 @@
 //! `/datum/computer_file/program/messenger` (server): chats, sending and receiving.
 //!
 //! tg routes a message as a subspace signal through the telecomms message server to every
-//! messenger in `GLOB.pda_messengers`; the messenger list is the PDAs with an imprint.
-// shortcut: no telecomms, like the radio: every message reaches the station at once. No photos,
-// viruses, rigged messages, send-to-all (`spam_mode`), ghost relay or radio jammers.
+//! messenger in `GLOB.pda_messengers`; the messenger list is the PDAs with an imprint. Here the
+//! signal goes through [`crate::telecomms::deliver_message`]: without a working receiver, hub,
+//! bus, message server and broadcaster on the sender's levels the message is not sent ("Server
+//! is not responding"); a map without telecomms machines always delivers.
+// shortcut: no photos, viruses, rigged messages, send-to-all (`spam_mode`), ghost relay or radio
+// jammers.
 
 use bevy::prelude::*;
 use ss13_net::chat::server::SendChat;
@@ -234,6 +237,8 @@ pub enum SendReject {
     CannotReply,
     RecipientDisabled,
     Cooldown,
+    /// No broadcaster sent the signal (`!signal.data["done"]`).
+    ServerDown,
 }
 
 /// A messenger in the list (`GLOB.pda_messengers`): an imprinted computer with a messenger.
@@ -306,6 +311,11 @@ pub fn send_message(
         .is_some_and(|m| m.off_cooldown(now))
     {
         return Err(SendReject::Cooldown);
+    }
+    let from = turf_of(world, pda);
+    if crate::telecomms::deliver_message(world, from) == Some(false) {
+        notify(world, client, "ERROR: Server is not responding.");
+        return Err(SendReject::ServerDown);
     }
     let ts = timestamp(world);
     let mut own = world.get_mut::<Messenger>(pda).expect("checked above");

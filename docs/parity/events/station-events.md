@@ -18,13 +18,13 @@
 ЭМИ по всем машинам телекоммуникаций: радио глохнет до перезапуска, ИИ получает искажённое сообщение.
 
 - **Код:** [`/datum/round_event_control/communications_blackout`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/communications_blackout.dm#L1)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/events/comms_blackout.rs` + `crates/ss13_game/src/radio.rs` `TelecommsOutage` через общий ЭМИ телекомов (`crate::emp::machines::telecomms_emp`, `EMP_HEAVY`): на 298–302 с гарнитуры не передают и не принимают, интеркомы и прочие не-subspace радио вещают только друг другу на уровне (tg `backup_transmission`), объявление в 30% случаев с искажённым текстом; телекомы как машины не моделируются, резервная передача без задержки 2 с, нет ИИ и трамвая
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/events/comms_blackout.rs`: `EMP_HEAVY` каждой машине телекомов (`crate::emp::machines::telecomms_emp` → `crate::telecomms::emp_machine`: 50% на машину, 148–152 с), сигнал не проходит цепочку — гарнитуры молчат, интеркомы и прочие не-subspace радио вещают друг другу (tg `backup_transmission`); на карте без телекомов — заглушка `TelecommsOutage`; объявление в 30% случаев с искажённым текстом; резервная передача без задержки 2 с, нет ИИ и трамвая
 
 ### Processor Overload
 ЭМИ процессоров телекомов: речь по радио искажается, часть процессоров может взорваться.
 
 - **Код:** [`/datum/round_event_control/processor_overload`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/processor_overload.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — телекомы одной заглушкой (`crates/ss13_game/src/radio.rs` `TelecommsOutage`), нет процессоров и сжатия (искажения) радиосообщений; ЭМИ всех телекомов дало бы полный блэкаут вместо искажения
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/events/processor_overload.rs`: вес 15, от 20 игроков; объявление в 80% случаев (искажённый текст), каждый процессор `EMP_HEAVY` (`crate::telecomms::emp_machine`), с шансом 10% — лёгкий взрыв радиуса 2 и разрушительный удар по самому процессору; выключенный процессор оставляет речь сжатой — `Gibberish` (`crate::telecomms::broadcast_text`); нет оповещения ИИ и призраков (нет ИИ-списка и орбит-алертов)
 
 ### Camera Failure
 Отключает одну или несколько случайных камер наблюдения (частое событие, вес 100).

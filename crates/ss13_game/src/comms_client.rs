@@ -31,6 +31,8 @@ pub struct CommsClientPlugin;
 impl Plugin for CommsClientPlugin {
     fn build(&self, app: &mut App) {
         app.register_ui_view::<CommsConsoleUi>()
+            .register_ui_view::<crate::newscaster::NewscasterUi>()
+            .register_ui_view::<crate::radio_ui::RadioUi>()
             .add_observer(submit_local);
     }
 }
