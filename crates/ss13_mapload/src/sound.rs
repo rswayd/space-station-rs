@@ -248,6 +248,15 @@ pub mod files {
         "sound/items/handling/paper_pickup.ogg",
         "sound/items/handling/component_pickup.ogg",
     ];
+    /// Religion (`ss13_game::service`): rites, the armaments beacon, the greedy god.
+    pub const RELIGION: [&str; 6] = [
+        "sound/effects/pray.ogg",
+        "sound/effects/pray_chaplain.ogg",
+        "sound/effects/supermatter.ogg",
+        "sound/effects/magic/fireball.ogg",
+        "sound/effects/cashregister.ogg",
+        "sound/machines/buzz/buzz-sigh.ogg",
+    ];
     /// The martial arts' moves, manuals and scrolls (`ss13_game::martial`).
     pub const MARTIAL: [&str; 17] = [
         "sound/items/weapons/slam.ogg",
@@ -680,6 +689,7 @@ pub fn referenced<'a>(
     out.extend(files::EXPLOSION.map(str::to_owned));
     out.extend(files::MARTIAL.map(str::to_owned));
     out.extend(files::SERVICE.map(str::to_owned));
+    out.extend(files::RELIGION.map(str::to_owned));
     out.extend(files::HALLUCINATION.map(str::to_owned));
     for path in converted {
         for var in SOUND_VARS {

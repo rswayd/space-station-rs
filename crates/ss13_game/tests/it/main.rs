@@ -57,6 +57,7 @@ mod power;
 mod prediction;
 mod radio;
 mod records;
+mod religion;
 mod revolution;
 mod science;
 mod security;

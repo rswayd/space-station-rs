@@ -16,6 +16,86 @@ pub const PAPER_ROOT: &str = "/obj/item/paper";
 pub const BOOK_ROOT: &str = "/obj/item/book";
 pub const DICE_ROOT: &str = "/obj/item/dice";
 
+/// The null rod's forms the chaplain picks from (`init_nullrod_variants`: the
+/// `chaplain_spawnable` `/obj/item/nullrod` types, in `typesof` order).
+// shortcut: the non-rod forms (carp plushie, divine bow, vorpal scythe shard, holy skateboard,
+// Hanzo katana sheath, energy swords) are left out until their mechanics are ported.
+pub const NULLROD_VARIANTS: [&str; 31] = [
+    "/obj/item/nullrod",
+    "/obj/item/nullrod/armblade",
+    "/obj/item/nullrod/armblade/tentacle",
+    "/obj/item/nullrod/bostaff",
+    "/obj/item/nullrod/chainsaw",
+    "/obj/item/nullrod/claymore",
+    "/obj/item/nullrod/claymore/chainsaw_sword",
+    "/obj/item/nullrod/claymore/darkblade",
+    "/obj/item/nullrod/claymore/glowing",
+    "/obj/item/nullrod/claymore/heretic",
+    "/obj/item/nullrod/claymore/multiverse",
+    "/obj/item/nullrod/claymore/spellblade",
+    "/obj/item/nullrod/claymore/talking",
+    "/obj/item/nullrod/clown",
+    "/obj/item/nullrod/egyptian",
+    "/obj/item/nullrod/fedora",
+    "/obj/item/nullrod/godhand",
+    "/obj/item/nullrod/hammer",
+    "/obj/item/nullrod/hypertool",
+    "/obj/item/nullrod/nullblade",
+    "/obj/item/nullrod/pitchfork",
+    "/obj/item/nullrod/pride_hammer",
+    "/obj/item/nullrod/scythe",
+    "/obj/item/nullrod/scythe/talking",
+    "/obj/item/nullrod/sord",
+    "/obj/item/nullrod/spear",
+    "/obj/item/nullrod/staff",
+    "/obj/item/nullrod/staff/blue",
+    "/obj/item/nullrod/tribal_knife",
+    "/obj/item/nullrod/vibro",
+    "/obj/item/nullrod/whip",
+];
+
+/// The armaments beacon's kits (`typesof(/obj/item/storage/box/holy)`).
+pub const HOLY_ARMOR_KITS: [&str; 9] = [
+    "/obj/item/storage/box/holy",
+    "/obj/item/storage/box/holy/adept",
+    "/obj/item/storage/box/holy/clock",
+    "/obj/item/storage/box/holy/divine_archer",
+    "/obj/item/storage/box/holy/follower",
+    "/obj/item/storage/box/holy/heretic",
+    "/obj/item/storage/box/holy/sentinel",
+    "/obj/item/storage/box/holy/student",
+    "/obj/item/storage/box/holy/witchhunter",
+];
+
+/// The machine god's blessings (`/datum/religion_rites/machine_blessing`).
+pub const MACHINE_BLESSINGS: [&str; 13] = [
+    "/obj/item/organ/cyberimp/arm/toolkit/combat",
+    "/obj/item/organ/cyberimp/arm/toolkit/surgery",
+    "/obj/item/organ/cyberimp/arm/toolkit/toolset",
+    "/obj/item/organ/cyberimp/eyes/hud/diagnostic",
+    "/obj/item/organ/cyberimp/eyes/hud/medical",
+    "/obj/item/organ/eyes/robotic/glow",
+    "/obj/item/organ/eyes/robotic/shield",
+    "/obj/item/organ/cyberimp/chest/reviver",
+    "/obj/item/organ/cyberimp/chest/thrusters",
+    "/obj/item/organ/cyberimp/brain/anti_drop",
+    "/obj/item/organ/cyberimp/brain/connector",
+    "/obj/item/organ/cyberimp/brain/anti_stun",
+    "/obj/item/organ/cyberimp/mouth/breathing_tube",
+];
+
+/// What religion makes at runtime (`ss13_game::service` religion): the chaplain's bible, the
+/// altar a bible unpacks into, the armaments beacon, the immortal candles and the greedy
+/// god's vendor.
+pub const RELIGION_RUNTIME_TYPES: [&str; 6] = [
+    "/obj/item/book/bible/booze",
+    "/obj/structure/altar/of_gods",
+    "/obj/item/choice_beacon/holy",
+    "/obj/item/flashlight/flare/candle/infinite",
+    "/obj/machinery/vending/custom/greed",
+    "/obj/item/nullrod",
+];
+
 /// One paper, book or die type (prototype data).
 #[derive(Component, Reflect, Default, Clone, Debug, PartialEq)]
 pub struct DmService {

@@ -29,6 +29,7 @@ impl Plugin for ServiceServerPlugin {
     fn build(&self, app: &mut App) {
         app.register_ui::<PaperSheetUi>()
             .register_ui::<MarkdownViewerUi>()
+            .init_resource::<super::religion::Religion>()
             .add_systems(Startup, super::library::shelve_mapped_books)
             .add_systems(
                 Update,
@@ -56,6 +57,8 @@ pub(super) enum PendingAsk {
     Label { labeler: Entity },
     /// A book off a bookcase; the list as it was asked.
     TakeBook { case: Entity, books: Vec<Entity> },
+    /// The chaplain's names, the null rod, the beacon, the bible's skin, the altar.
+    Religion(super::religion::ReligionAsk),
 }
 
 /// `Initialize` of the ported items, once all their prototype components are in.
@@ -106,6 +109,7 @@ fn add_obj_parts(add: On<Add<DmObj>>, mut commands: Commands) {
 /// tg `attack_self` of the held service item. True when it was one.
 pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity) -> bool {
     super::paper::attack_self(world, client, mob, item)
+        || super::religion::attack_self(world, client, mob, item)
         || super::library::attack_self(world, client, mob, item)
         || super::games::attack_self(world, client, mob, item)
         || super::clown::attack_self(world, mob, item)
@@ -131,6 +135,7 @@ pub fn item_interaction(
     // click goes on.
     super::clown::used_on(world, mob, held, target);
     super::paper::item_interaction(world, client, mob, held, target)
+        || super::religion::item_interaction(world, client, mob, held, target)
         || super::library::item_interaction(world, client, mob, held, target)
 }
 
@@ -163,6 +168,9 @@ fn prompt_answers(world: &mut World, mut cursor: Local<MessageCursor<PromptAnswe
                 if let Some(&book) = books.get(i) {
                     super::library::take_book(world, actor, case, book);
                 }
+            }
+            (PendingAsk::Religion(ask), answer) => {
+                super::religion::answer(world, actor, ask, answer);
             }
             _ => {}
         }

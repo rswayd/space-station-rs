@@ -143,6 +143,11 @@ fn convert_cmd(config: &MapLoadPlugin, mut map_dirs: Vec<PathBuf>) -> anyhow::Re
     used.extend(ss13_mapload::antag::HERETIC_RUNTIME_TYPES.map(str::to_owned));
     used.extend(ss13_mapload::silicon::CAMERA_RUNTIME_TYPES.map(str::to_owned));
     used.extend(ss13_mapload::antag::WIZARD_RUNTIME_TYPES.map(str::to_owned));
+    // The chaplain's gear, the null rod's forms and what rites make (`ss13_game::service`).
+    used.extend(ss13_mapload::service::RELIGION_RUNTIME_TYPES.map(str::to_owned));
+    used.extend(ss13_mapload::service::NULLROD_VARIANTS.map(str::to_owned));
+    used.extend(ss13_mapload::service::HOLY_ARMOR_KITS.map(str::to_owned));
+    used.extend(ss13_mapload::service::MACHINE_BLESSINGS.map(str::to_owned));
     for map in &maps {
         let parsed =
             DmmMap::from_file(map).with_context(|| format!("parsing {}", map.display()))?;
