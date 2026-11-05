@@ -466,8 +466,6 @@ pub fn sparks(world: &mut World, e: Entity) {
     }
 }
 
-/// `/obj/effect/particle_effect/sparks` lifetime (`decay_in(2 SECONDS)`).
-const PARTICLE_SPARKS_SECS: f64 = 2.0;
 
 /// tg `do_sparks(3, TRUE, source)`: the spark system of `crate::effects::particles`.
 pub fn do_sparks(world: &mut World, pos: TilePos) {
