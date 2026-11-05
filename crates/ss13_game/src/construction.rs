@@ -266,6 +266,10 @@ pub enum Job {
     Satellite,
     /// A stage of the emergency shuttle console's hijack ([`crate::shuttle_console_server`]).
     Hijack,
+    /// Welding an airlock shut ([`crate::doors`]).
+    Door(crate::doors::DoorJob),
+    /// Wrenching or welding a field generator ([`crate::power::field_generator`]).
+    FieldGenerator(crate::power::field_generator::FieldGenJob),
 }
 
 /// A turf's baseturf stack, bottom first (tg `baseturfs`). Absent: assembled from the type's
@@ -479,7 +483,9 @@ fn tool_act(world: &mut World, actor: Actor, kind: ToolKind, target: Entity) -> 
         }
         return Interact::Done;
     }
-    if crate::power::emitter::tool_act(world, actor, kind, target) {
+    if crate::power::emitter::tool_act(world, actor, kind, target)
+        || crate::power::field_generator::tool_act(world, actor, kind, target)
+    {
         return Interact::Done;
     }
     // Airlock and APC `screwdriver_act`: the wire panel.
@@ -515,6 +521,10 @@ fn tool_act_secondary(world: &mut World, actor: Actor, kind: ToolKind, target: E
     if kind == ToolKind::Crowbar
         && crate::wallmount::firelock::crowbar_act(world, actor, target, true)
     {
+        return Interact::Done;
+    }
+    // Airlock `welder_act_secondary`: welding it shut.
+    if kind == ToolKind::Welder && crate::doors::welder_act_secondary(world, actor, target) {
         return Interact::Done;
     }
     if crate::reinforced::window_secondary(world, actor, kind, target) {
@@ -1254,7 +1264,11 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::AiCard(job) => crate::silicon::aicard::complete(world, mob, action, job),
         &Job::Mining(job) => crate::mining::complete(world, mob, action, job),
         Job::Hijack => crate::shuttle_console_server::complete_hijack(world, mob, action),
+        &Job::Door(job) => crate::doors::complete(world, client, mob, target, job),
         &Job::Emitter(job) => crate::power::emitter::complete(world, client, target, job, consume),
+        &Job::FieldGenerator(job) => {
+            crate::power::field_generator::complete(world, client, target, job, consume)
+        }
         Job::GirderBolts { from } => {
             if !is_under(&path, GIRDER) || obj_state(world, target) != *from || !consume(world) {
                 return;

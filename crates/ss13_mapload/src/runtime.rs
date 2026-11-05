@@ -77,6 +77,8 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/reagent_containers/cup/beaker/large",
     "/obj/item/reagent_containers/cup/coffeepot",
     "/obj/item/reagent_containers/cup/soup_pot",
+    // A uranium P.A.C.M.A.N.'s ejected fuel (`ss13_game::power::pacman`).
+    "/obj/item/stack/sheet/mineral/uranium",
     "/obj/item/stack/sheet/mineral/wood",
     "/obj/item/stack/telecrystal",
     "/obj/item/stock_parts/water_recycler",
@@ -90,6 +92,8 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/organ/stomach/cybernetic/surplus",
     "/obj/item/trash/can",
     "/obj/machinery/atmospherics/components/tank",
+    // `field/generator/setup_field` (`ss13_game::power::field_generator`).
+    "/obj/machinery/field/containment",
     "/obj/machinery/meter",
     "/obj/structure/closet/crate",
     "/obj/structure/rack",

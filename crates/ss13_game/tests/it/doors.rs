@@ -777,3 +777,70 @@ fn dir_between(a: TilePos, b: TilePos) -> Dir {
         .find(|&d| a.step(d) == b)
         .expect("adjacent")
 }
+
+/// An unsafe airlock (`safe = 0`) closes on the mob in its doorway and crushes it (tg
+/// `crush()`: 20 brute to the chest, 10 s paralysis for a human); a bare right click on a
+/// closed door knocks (BandaStation `knock_on`: the click cooldown, the door stays shut).
+#[test]
+fn unsafe_airlock_crushes_and_a_right_click_knocks() {
+    use ss13_game::combat::NextMove;
+    use ss13_game::health::Health;
+    use ss13_game::status_effects::{Incap, StatusEffects};
+    use ss13_game::zone::BodyZone;
+    let assets = fixture_assets("crush");
+    let mut s = Session::start(MapLoadPlugin {
+        source: assets.clone(),
+        maps: vec!["map.dmm".into()],
+        assets,
+    });
+    let (d, b) = (s.door(D), s.door(B));
+    s.server.world_mut().get_mut::<Door>(d).unwrap().safe = false;
+    s.walk(Dir::East);
+    s.walk_to(Dir::East, D);
+    let chest = |s: &Session| {
+        s.server
+            .world()
+            .get::<Health>(s.mob)
+            .unwrap()
+            .part(BodyZone::Chest)
+            .brute
+    };
+    assert_eq!(chest(&s), 0.0);
+    s.run_until("D closes on the mob", |s| s.state(d) == DoorState::Closed);
+    assert!(chest(&s) >= 20.0, "crushed: {} brute", chest(&s));
+    let paralyzed = s
+        .server
+        .world()
+        .get::<StatusEffects>(s.mob)
+        .map_or(0.0, |e| e.remaining(Incap::Paralyze));
+    assert!(paralyzed > 5.0, "paralyzed for {paralyzed}");
+    assert_eq!(s.pos(), D, "the crushed mob stays in the doorway");
+
+    // Knock on the bolted B from beside it, once the paralysis is over.
+    s.run_until("the paralysis wears off", |s| {
+        s.server
+            .world()
+            .get::<StatusEffects>(s.mob)
+            .is_none_or(|e| e.remaining(Incap::Paralyze) <= 0.0)
+    });
+    s.server.world_mut().get_mut::<Door>(d).unwrap().safe = true;
+    s.walk(Dir::West);
+    s.walk(Dir::North);
+    s.walk(Dir::North);
+    let target = s.net_id(b);
+    let before = s.now();
+    s.send(ClientIntent::Click {
+        target,
+        modifiers: ClickModifiers {
+            right: true,
+            ..default()
+        },
+    });
+    s.run_until("the knock sets the click cooldown", |s| {
+        s.server
+            .world()
+            .get::<NextMove>(s.mob)
+            .is_some_and(|n| n.0 > before)
+    });
+    assert_eq!(s.state(b), DoorState::Closed);
+}

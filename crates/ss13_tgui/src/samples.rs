@@ -55,6 +55,7 @@ use crate::interfaces::pipe_dispenser::{
     InitDirections, PipeCategory, PipeDispenserData, PipeDispenserStatic, PipeDispenserUi,
     PipeRecipeEntry,
 };
+use crate::interfaces::portable_generator::{PortableGeneratorData, PortableGeneratorUi};
 use crate::interfaces::rapid_pipe_dispenser::{
     RapidPipeDispenserUi, RpdCategory, RpdData, RpdPreview, RpdRecipe, RpdStatic,
 };
@@ -571,6 +572,23 @@ pub fn sample(name: &str) -> Option<Sample> {
                 acidic_buffer_vol: 20.0,
                 basic_buffer_vol: 0.0,
                 dispense_volume: 1.0,
+            },
+        ),
+        PortableGeneratorUi::NAME => of::<PortableGeneratorUi>(
+            "P.A.C.M.A.N.-type portable generator",
+            &(),
+            &PortableGeneratorData {
+                active: true,
+                sheet_name: "Plasma".into(),
+                sheets: 15,
+                stack_percent: 42.5,
+                anchored: true,
+                connected: true,
+                ready_to_boot: true,
+                power_generated: 10_000.0,
+                power_output: 20_000.0,
+                power_available: 150_000.0,
+                current_heat: 76.0,
             },
         ),
         ElectrolyzerUi::NAME => of::<ElectrolyzerUi>(

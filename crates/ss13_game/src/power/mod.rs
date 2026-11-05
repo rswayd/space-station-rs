@@ -19,8 +19,10 @@ pub mod accumulator;
 pub mod apc_ui;
 pub mod chargers;
 pub mod emitter;
+pub mod field_generator;
 pub mod grid;
 pub mod model;
+pub mod pacman;
 pub mod solar;
 pub mod supermatter;
 pub mod teg;
@@ -202,6 +204,15 @@ pub struct Generation<'w, 's> {
     accumulators: Query<'w, 's, (Entity, &'static mut accumulator::Accumulator)>,
     solars: solar::Solars<'w, 's>,
     tegs: Query<'w, 's, (Entity, &'static mut teg::Teg)>,
+    pacmans: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static mut pacman::Pacman,
+            Option<&'static crate::obj_damage::Anchored>,
+        ),
+    >,
 }
 
 impl Generation<'_, '_> {
@@ -222,6 +233,15 @@ impl Generation<'_, '_> {
         self.solars.process(grid);
         for (e, mut teg) in &mut self.tegs {
             teg::machine_tick(grid, e, &mut teg);
+        }
+        // `port_gen/process`: `if(powernet) add_avail(...)`, the fuel burnt either way.
+        for (e, mut pac, anchored) in &mut self.pacmans {
+            let joules = pac.process(anchored.is_some_and(|a| a.0), dt, &mut self.rng.0);
+            if joules > 0.0
+                && let Some(net) = grid.node_net(e).and_then(|n| grid.net_mut(n))
+            {
+                net.newavail += joules;
+            }
         }
         for (e, mut acc) in &mut self.accumulators {
             let joules = acc.process(dt);
@@ -273,6 +293,8 @@ impl Plugin for PowerServerPlugin {
             .add_plugins((
                 solar::SolarServerPlugin,
                 emitter::EmitterServerPlugin,
+                field_generator::FieldGeneratorPlugin,
+                pacman::PacmanPlugin,
                 supermatter::SupermatterServerPlugin,
                 chargers::ChargersPlugin,
                 apc_ui::ApcUiPlugin,

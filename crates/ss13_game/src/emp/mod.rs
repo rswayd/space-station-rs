@@ -466,6 +466,25 @@ pub fn sparks(world: &mut World, e: Entity) {
     }
 }
 
+/// `/obj/effect/particle_effect/sparks` lifetime (`decay_in(2 SECONDS)`).
+const PARTICLE_SPARKS_SECS: f64 = 2.0;
+
+/// tg `do_sparks(number, cardinal_only, source)`: one spark on the source's turf (its flick,
+/// `SFX_SPARKS` at 100 and `hotspot_expose(1000, 100)` of `affect_location`).
+// shortcut: one spark instead of `number` spreading ones, no light, no `sparks_touched` on the
+// things in the tile.
+pub fn do_sparks(world: &mut World, pos: TilePos) {
+    spawn_visual(world, pos, "sparks", PARTICLE_SPARKS_SECS);
+    crate::sound::playsound(
+        world,
+        crate::sound::PlaySound::new(pos, "sparks", 100.0, true)
+            .extrarange(crate::sound::SHORT_RANGE_SOUND_EXTRARANGE),
+    );
+    if let Some(mut atmos) = world.get_resource_mut::<ss13_atmos::Atmos>() {
+        atmos.hotspot_expose(pos, 1000.0, 100.0, false);
+    }
+}
+
 fn spawn_visual(world: &mut World, pos: TilePos, state: &str, secs: f64) {
     let Some(icon) = world
         .get_resource::<IconIndex>()

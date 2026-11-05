@@ -12,13 +12,13 @@
 
 - **Код:** [`door.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/doors/door.dm#L320)
 - **BandaStation:** [`door.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/doors/door.dm#L93), [`airlock.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/doors/airlock.dm#L169) — механика стука целиком добавлена форком
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/doors.rs` (`knock`, из `door_clicks`): ПКМ пустой рукой по двери любого вида, кроме пожарных шлюзов (у них свой `attack_hand`), — звук `door_metal_knock_1.ogg` (стеклянные шлюзы и шлюзы-окна — `glassknock.ogg`) на 100, сообщение себе и окружающим, `CLICK_CD_MELEE`; открытая панель шлюза забирает руку раньше (провода), стук идёт раньше удара током электрифицированного шлюза (`crates/ss13_game/src/wires.rs`). Проверено: `crates/ss13_game/tests/it/doors.rs` (`unsafe_airlock_crushes_and_a_right_click_knocks`)
 
 ### Защита проёма и раздавливание
 Безопасный шлюз не закрывается на объект в проёме; с перерезанным проводом безопасности закрывается и давит мобов (`crush`).
 
 - **Код:** [`proc/CheckForMobs()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/doors/door.dm#L666), [`proc/crush()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/doors/door.dm#L671)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/doors.rs`: безопасная дверь ждёт свободного проёма; небезопасная закрывается, но не наносит урон
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/doors.rs` (`crush`, `Door::crush`): безопасная дверь ждёт свободного проёма, мобы в проёме после закрытия открывают её снова (`CheckForMobs`); небезопасная (`safe = 0`, провод безопасности) закрывается на мобов и давит каждого живого в обоих тайлах проёма — шлюз перед непрозрачностью, прочие двери в конце анимации: 20 brute в грудь, человек кричит и парализован на 10 с, мех получает 20 урона, сообщения tg; пограничные пожарные шлюзы (`can_crush = FALSE`) и шлюзы-окна не давят. `// shortcut:` нет брызг крови, ранений (`wound_bonus`) и ×1,5 ксеноморфам. Проверено: `crates/ss13_game/tests/it/doors.rs` (`unsafe_airlock_crushes_and_a_right_click_knocks`), юнит-тест в `doors.rs`
 
 ### Неограниченная сторона (unres)
 С одной стороны шлюз открывается без доступа (выход из отдела); вариант с задержкой 2–4 с, которую сбивает перепад давления.
@@ -42,13 +42,13 @@
 Шлюз под током бьёт касающегося (урон от заряда APC и сети, оглушение), временно (30 с) или постоянно; изолирующие перчатки защищают.
 
 - **Код:** [`proc/set_electrified()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/doors/airlock.dm#L1623), [`proc/isElectrified()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/doors/airlock.dm#L345)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/wires.rs` (`Electrified`, `shock_user`): удар током с оглушением и параличом; нет искр, тряски, передачи через тягу
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/wires.rs` (`Electrified`, `shock_user`, `shock`, `electrocute_act`): удар током с оглушением и параличом, искры `do_sparks` при каждом ударе (`crates/ss13_game/src/emp/mod.rs` `do_sparks`: вспышка `sparks`, звук, `hotspot_expose(1000, 100)`), тряска `do_jitter_animation(300)` (`crates/ss13_game/src/animation.rs`); нет передачи удара через тягу и вспышки скелета (`electrocution_animation`) → ../mobs/
 
 ### Заварка шлюза
 Сварка заваривает/разваривает закрытую дверь; ПКМ сваркой чинит повреждённую.
 
 - **Код:** [`try_to_weld()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/doors/airlock.dm#L1169), [`try_to_weld_secondary()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/doors/airlock.dm#L1190), [`proc/weld_checks()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/doors/airlock.dm#L1204)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/doors.rs`: заваренные с карты шлюзы не открываются и рисуются; сваркой заварить нельзя
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/doors.rs` (`welder_act_secondary`, `DoorJob::Weld`, `complete`): ПКМ зажжённой сваркой (`tool_start_check` на 1 топливо) по закрытому неподвижному шлюзу — 4 с, затем шлюз заварен или разварен с перепроверкой (`weld_checks`, то же состояние сварки), оверлей `welded`, сообщения; ЛКМ сваркой больше не открывает шлюз (`welder_act` всегда забирает клик); заваренные с карты не открываются. Ремонт ЛКМ (`try_to_weld`) ждёт прочности шлюзов → «Повреждение и ЭМИ шлюза»; уплотнители → «Укрепление шлюза и уплотнитель двери». Проверено: юнит-тест `welding_needs_a_still_closed_door_in_the_state_the_job_saw`
 
 ### Взлом ломом и силовыми инструментами
 Ломом открывается обесточенный незаболченный шлюз; челюсти жизни и руки ксеноморфа вскрывают запитанный с задержкой; лом вынимает электронику из разобранного.
