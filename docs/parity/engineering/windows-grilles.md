@@ -43,7 +43,7 @@
 
 - **Код:** [`/obj/structure/railing`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/railings.dm#L1), [`/obj/structure/railing/wooden_fence`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/railings.dm#L174)
 - **BandaStation:** [`aesthetics/railings`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/aesthetics/railings/code/railings.dm) — спрайты перил
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload/src/border.rs`: блокируют край тайла; перелезания и разборки нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload/src/border.rs`: блокируют край тайла; `crates/ss13_game/src/tables.rs` (`vault`): перелезание перетаскиванием себя на перила (2 с, оглушение 2 с) — со своего тайла и с неогороженной стороны через край, с огороженной — на тайл перил; диагональные — по вертикальному краю (без выбора по точке отпускания); нет разборки
 
 ### Платформы
 Приподнятые платформы разных материалов: на них забираются с задержкой, они блокируют проход сбоку.

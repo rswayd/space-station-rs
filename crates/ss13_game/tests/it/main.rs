@@ -76,6 +76,7 @@ mod service;
 mod shuttle;
 mod silicon;
 mod sound;
+mod spacemove;
 mod species;
 mod stock_parts;
 mod storage;

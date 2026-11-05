@@ -247,6 +247,10 @@ impl Plugin for GameServerPlugin {
             crate::point::PointServerPlugin,
         ))
         .add_plugins(crate::janitor::JanitorServerPlugin)
+        .add_plugins((
+            crate::spacemove::SpaceMovePlugin,
+            crate::stumble::StumblePlugin,
+        ))
         .add_plugins(crate::mining::MiningServerPlugin)
         .add_plugins(crate::forensics::server::ForensicsServerPlugin)
         .add_plugins(crate::service::server::ServiceServerPlugin)
@@ -792,6 +796,11 @@ pub(crate) fn forward_moves(
     mechs: Query<&crate::mecha::Mech>,
     mut waiting: Local<EntityHashSet>,
     mut rng: ResMut<crate::combat::CombatRng>,
+    // Weightless mobs step through `crate::spacemove`.
+    (weightless, mut space_steps): (
+        Query<(), With<crate::spacemove::Weightless>>,
+        MessageWriter<crate::spacemove::SpaceStep>,
+    ),
 ) {
     for intent in intents.read() {
         let ClientIntent::Move { dir, seq } = intent.intent else {
@@ -882,7 +891,11 @@ pub(crate) fn forward_moves(
             _ if traits.is_some_and(|t| t.immobilized) => {}
             _ if mover.is_some() => {
                 let dir = crate::status_effects::confused_step(effects, &mut rng, dir);
-                requests.write(MoveRequest { entity: mob, dir });
+                if weightless.contains(mob) {
+                    space_steps.write(crate::spacemove::SpaceStep { mob, dir });
+                } else {
+                    requests.write(MoveRequest { entity: mob, dir });
+                }
             }
             _ => {}
         }
