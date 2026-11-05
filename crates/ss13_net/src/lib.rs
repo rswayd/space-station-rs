@@ -11,6 +11,7 @@
 //! modules).
 
 pub mod admin;
+pub mod animation;
 pub mod camera;
 pub mod chat;
 pub mod debug;

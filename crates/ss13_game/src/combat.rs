@@ -341,6 +341,12 @@ fn melee(
         let mut wound_hit: Option<(BodyZone, crate::medical::wounds::Hit)> = None;
         // Written back only on a change: `Changed<Stat>` readers act on stat transitions.
         let mut new_stat = *target_stat;
+        // tg item `attack` and unarmed `harm` lunge at the target, hit or miss.
+        if weapon.is_some() || combat.0 {
+            commands.queue(move |world: &mut World| {
+                crate::animation::do_attack_animation(world, attacker, target);
+            });
+        }
         let seen = match weapon {
             // tg `attack` -> `attacked_by`: no message and no damage for a forceless item
             // without attack verbs.

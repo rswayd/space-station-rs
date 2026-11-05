@@ -365,6 +365,7 @@ impl Plugin for NetServerPlugin {
             crate::move_ack::server::plugin,
             crate::camera::server::plugin,
             crate::sound::server::plugin,
+            crate::animation::server::plugin,
             crate::sim_latency::plugin,
         ))
         .init_resource::<NetServerConfig>()

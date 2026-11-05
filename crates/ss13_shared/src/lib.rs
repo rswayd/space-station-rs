@@ -2,6 +2,7 @@
 //! they go through the coordinator, never through a feature agent.
 
 pub mod admin;
+pub mod animation;
 pub mod appearance;
 pub mod chat;
 pub mod debug;

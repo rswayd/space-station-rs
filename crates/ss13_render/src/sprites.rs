@@ -231,6 +231,7 @@ type AppearanceItem<'a> = (
     Option<&'a Animated>,
     Option<&'a mut Transform>,
     Option<&'a Overlays>,
+    Option<&'a crate::animate::Flick>,
 );
 
 /// Rebuilds the sprite and overlays of every entity whose `Appearance` or `Facing` changed (or
@@ -265,7 +266,7 @@ pub fn sync_appearance(
         return;
     }
     let now = time.elapsed_secs_f64();
-    for (entity, appearance, pos, facing, icon, anim, transform, overlays) in &mut entities {
+    for (entity, appearance, pos, facing, icon, anim, transform, overlays, flick) in &mut entities {
         let dirty = appearance.is_changed()
             || pos.is_added()
             || facing.as_ref().is_some_and(Ref::is_changed)
@@ -306,7 +307,9 @@ pub fn sync_appearance(
         let dir = facing.map_or(Dir::South, |f| f.0);
         // Overlays are children: they inherit the rotation, their offsets are in its frame.
         let base = IconSprite {
-            state: appearance.icon_state,
+            state: flick
+                .and_then(|f| f.state_at(now))
+                .unwrap_or(appearance.icon_state),
             dir,
         };
         let built = make_sprite(

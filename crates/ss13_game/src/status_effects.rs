@@ -39,9 +39,8 @@
 // (`crate::medical::bioware`, in [`apply`], [`knockdown`], [`adjust_stamina`]), no force_say,
 // no status alerts. Knocked out by a status effect, a mob keeps its `Stat` (tg `UNCONSCIOUS`):
 // code that checks `IS_UNCONSCIOUS` through `Health::knocked_out` sees only crit; use
-// [`knocked_out`] for both. The jitter's sprite shake (`do_jitter_animation`) needs a pixel
-// animation message the protocol does not have; jitter is its duration, examine text and
-// mood here. No sleep immunity, dreams, snoring, organ or fitness healing while asleep,
+// [`knocked_out`] for both. Jitter given to a dead mob does not do `on_apply`'s one shake. No
+// sleep immunity, dreams, snoring, organ or fitness healing while asleep,
 // darkness or blindfold sleep bonus, drunk gun spread, drunken brawler or Ballmer peak lines,
 // no TTS filters of the speech effects.
 
@@ -901,9 +900,15 @@ fn pulse(world: &mut World, mob: Entity) {
     let resting = world
         .get::<crate::rest::Rest>(mob)
         .is_some_and(|r| r.resting);
-    // `jitter/tick`: resting takes 4 more ticks off (the sprite shake is not ported).
-    if effects.jitter > 0.0 && resting {
-        adjust_timed(world, mob, Timed::Jitter, -4.0 * PULSE_SECS, None);
+    // `jitter/tick`: resting takes 4 more ticks off, then the sprite shakes by the time left.
+    if effects.jitter > 0.0 {
+        if resting {
+            adjust_timed(world, mob, Timed::Jitter, -4.0 * PULSE_SECS, None);
+        }
+        let left = timed(world, mob, Timed::Jitter);
+        if left > 0.0 {
+            crate::animation::do_jitter_animation(world, mob, left);
+        }
     }
     if effects.dizziness > 0.0 {
         dizzy_pulse(world, mob, effects.dizziness, resting);

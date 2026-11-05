@@ -1069,3 +1069,108 @@ fn line_of_sight_hides_what_walls_hide() {
         "standing still sees from its own tile"
     );
 }
+
+#[derive(Resource, Default)]
+struct Animations(Vec<ss13_shared::animation::AnimationEvent>);
+
+fn record_animations(
+    mut received: MessageReader<crate::animation::client::AnimationReceived>,
+    mut out: ResMut<Animations>,
+) {
+    out.0.extend(received.read().map(|a| a.0.clone()));
+}
+
+#[test]
+fn animations_reach_only_the_clients_that_see_the_entity() {
+    use crate::animation::server::PlayAnimation;
+    use ss13_shared::animation::Animation;
+
+    let server_addr = SocketAddr::from((Ipv4Addr::LOCALHOST, 0));
+    let mut server = server_app(server_addr);
+    server.update();
+    let server_addr = server.world().resource::<NetServerConfig>().bind_addr;
+    let digest = server
+        .world()
+        .resource::<ServerCertificateDigest>()
+        .0
+        .clone();
+    let config = |t: &str| NetClientConfig {
+        server_addr,
+        certificate_digest: digest.clone(),
+        token: t.into(),
+    };
+    let client = |t: &str| {
+        let mut app = client_app(config(t));
+        app.init_resource::<Animations>()
+            .add_systems(Update, record_animations);
+        app
+    };
+    let mut a = client("a");
+    run_until(&mut [&mut server, &mut a], "client a connects", |apps| {
+        !apps[0].world().resource::<Connected>().0.is_empty()
+            && *apps[1].world().resource::<NetClientState>() == NetClientState::Connected
+    });
+    let mut b = client("b");
+    run_until(
+        &mut [&mut server, &mut a, &mut b],
+        "client b connects",
+        |apps| {
+            apps[0].world().resource::<Connected>().0.len() == 2
+                && *apps[2].world().resource::<NetClientState>() == NetClientState::Connected
+        },
+    );
+    let [link_a, link_b] = server.world().resource::<Connected>().0[..] else {
+        unreachable!()
+    };
+    let va = Viewer {
+        center: TilePos::new(10, 10, 1),
+        radius: 4,
+    };
+    let vb = Viewer {
+        center: TilePos::new(40, 40, 1),
+        radius: 4,
+    };
+    server.world_mut().entity_mut(link_a).insert(va);
+    server.world_mut().entity_mut(link_b).insert(vb);
+    converge(
+        &mut server,
+        &mut a,
+        &mut b,
+        [link_a, link_b],
+        [va, vb],
+        "views",
+    );
+
+    let target = on_tile(&mut server, TilePos::new(9, 9, 1));
+    let flick = Animation::Flick {
+        state: IconStateId(42),
+        duration_ds: Some(5),
+    };
+    server.world_mut().write_message(PlayAnimation {
+        entity: target,
+        animation: flick.clone(),
+    });
+    run_until(
+        &mut [&mut server, &mut a, &mut b],
+        "a gets the flick",
+        |apps| !apps[1].world().resource::<Animations>().0.is_empty(),
+    );
+    let id = server
+        .world()
+        .resource::<Interest>()
+        .net_id(link_a, target)
+        .unwrap();
+    let got = &a.world().resource::<Animations>().0;
+    assert_eq!(got.len(), 1);
+    assert_eq!((got[0].target, &got[0].animation), (id, &flick));
+    assert!(a.world().resource::<NetEntityMap>().get(id).is_some());
+    // b's view is far away: nothing for it, even after a few more frames.
+    for _ in 0..20 {
+        for app in [&mut server, &mut a, &mut b] {
+            app.update();
+        }
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    assert!(b.world().resource::<Animations>().0.is_empty());
+    assert_eq!(a.world().resource::<Animations>().0.len(), 1, "sent once");
+}

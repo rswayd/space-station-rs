@@ -21,6 +21,13 @@ fn cycle(n: usize, rewind: bool) -> impl Iterator<Item = usize> + Clone {
     (0..n).chain((1..=back).rev())
 }
 
+/// Seconds of one cycle of the state's frames: how long BYOND's `flick` of it shows. A single
+/// frame shows for its own delay.
+pub fn cycle_secs(info: &IconStateInfo) -> f32 {
+    let n = frame_count(info).max(1);
+    cycle(n, info.rewind).map(|f| delay(info, f)).sum::<f32>() / 10.0
+}
+
 /// Frame shown `elapsed` seconds after the animation started, and seconds until it changes
 /// (`None` = never: single frame or finished). A finite `loop_count` stops on the last frame,
 /// or on frame 0 with rewind, like BYOND.
@@ -111,6 +118,14 @@ mod tests {
             frames(&once, &[0.5, 1.5, 2.5, 3.5, 4.5, 50.0]),
             vec![0, 1, 2, 1, 0, 0]
         );
+    }
+
+    #[test]
+    fn a_flick_lasts_one_cycle() {
+        assert!((cycle_secs(&anim(&[1.0, 3.0, 2.0], 0, false)) - 0.6).abs() < 1e-5);
+        // 0 1 2 1.
+        assert!((cycle_secs(&anim(&[1.0, 1.0, 1.0], 0, true)) - 0.4).abs() < 1e-5);
+        assert!((cycle_secs(&anim(&[5.0], 0, false)) - 0.5).abs() < 1e-5);
     }
 
     #[test]

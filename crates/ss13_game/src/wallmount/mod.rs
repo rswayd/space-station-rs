@@ -82,7 +82,6 @@ impl Plugin for WallMountPlugin {
                     fire_alarm::ring_alarms,
                     controls::run_timers,
                     machines::process_igniters,
-                    machines::end_flicks,
                     power_looks,
                 )
                     .chain()

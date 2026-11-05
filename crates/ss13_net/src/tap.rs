@@ -72,6 +72,7 @@ impl NetPacket {
             ServerMessage::Admin(r) => (format!("Admin::{}", variant(r)), bounded(r)),
             ServerMessage::Camera(c) => ("Camera".into(), bounded(c)),
             ServerMessage::Sound(s) => ("Sound".into(), bounded(s)),
+            ServerMessage::Animation(a) => ("Animation".into(), bounded(a)),
         };
         Self {
             outgoing: false,

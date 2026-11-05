@@ -149,6 +149,10 @@ pub mod actions;
 #[cfg(feature = "client")]
 pub mod actions_client;
 #[cfg(feature = "server")]
+pub mod animation;
+#[cfg(feature = "client")]
+pub mod animation_client;
+#[cfg(feature = "server")]
 pub mod announce;
 pub mod antag;
 #[cfg(feature = "server")]

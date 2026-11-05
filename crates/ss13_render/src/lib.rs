@@ -4,6 +4,7 @@
 //! positioned at its tile, ordered by plane/layer (see [`order`]), animated by `.dmi` delays.
 
 pub mod anim;
+pub mod animate;
 pub mod atlas;
 pub mod camera;
 pub mod filter;
@@ -75,9 +76,11 @@ impl Plugin for RenderPlugin {
                 PostUpdate,
                 RenderSystems.before(bevy::transform::TransformSystems::Propagate),
             )
+            .add_systems(First, animate::unpose)
             .add_systems(
                 PostUpdate,
                 (
+                    animate::end_flicks,
                     sprites::strip_removed,
                     sprites::sync_appearance,
                     sprites::sync_tile_pos,
@@ -85,6 +88,7 @@ impl Plugin for RenderPlugin {
                     atlas_pages,
                     camera::apply_map_viewport,
                     camera::follow_target,
+                    animate::pose,
                 )
                     .chain()
                     .in_set(RenderSystems),
