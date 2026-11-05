@@ -732,15 +732,17 @@ pub(crate) fn pick_spawn(world: &mut World) -> TilePos {
     pos
 }
 
-/// tg `get_latejoin_spawn_point`: the next free latejoin landmark, else [`pick_spawn`] (tg
+/// tg `get_latejoin_spawn_point`: the next free chair of the arrivals shuttle
+/// (`crate::arrivals`), else latejoin landmark, else [`pick_spawn`] (tg
 /// `get_last_resort_spawn_points`).
-// shortcut: no arrivals shuttle, whose chairs replace the latejoin landmarks in tg.
 pub(crate) fn pick_latejoin(world: &mut World) -> TilePos {
+    let chairs = crate::arrivals::latejoin_tiles(world);
     let spawns = world.resource::<SpawnPoints>();
-    if spawns.latejoin.is_empty() {
+    let tiles = chairs.unwrap_or_else(|| spawns.latejoin.clone());
+    if tiles.is_empty() {
         return pick_spawn(world);
     }
-    let (tiles, next) = (spawns.latejoin.clone(), spawns.next_latejoin);
+    let next = spawns.next_latejoin;
     let (i, pos) = pick_free(world, &tiles, next);
     world.resource_mut::<SpawnPoints>().next_latejoin = i + 1;
     pos

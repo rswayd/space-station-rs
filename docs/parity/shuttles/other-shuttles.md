@@ -18,7 +18,7 @@
 Привозит опоздавших игроков на станцию, сам летает между ЦК и станцией, не улетает, пока на борту есть люди или открыта дверь; латеджойн-места — кресла на нём.
 
 - **Код:** [`/obj/docking_port/mobile/arrivals`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/mobile_port/variants/arrivals.dm#L1), [`/datum/map_template/shuttle/arrival`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/shuttles/arrival.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/server.rs` ставит опоздавших на `/obj/effect/landmark/latejoin`
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/arrivals.rs`: шаблон из `roundstart_template` дока `arrival_stationary` (MetaStation: `arrival_box`) стыкуется на старте; кресла — точки латеджойна (`server::pick_latejoin`); улетает пустым (5 с), ждёт в транзите, привозит людей за 5.5 с, отмена запуска при живых на борту или диске, `force_depart` для латеджойна, пробоина (давление у кресел) держит его у станции; сообщения консоли запросов. Упрощения: латеджойнер появляется сразу (без ожидания отстыковки), не пристёгнут; объявление о прибытии (`announce_arrival`) — ../silicon или ../comms, AAS-анонс пробоины — ../comms
 
 _«Грузовой шаттл (перемещение)» описано в [../cargo/supply-orders.md](../cargo/supply-orders.md)._
 

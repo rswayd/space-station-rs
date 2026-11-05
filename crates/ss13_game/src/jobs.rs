@@ -510,6 +510,9 @@ pub fn join(world: &mut World, client: Entity, job: usize, latejoin: bool) -> En
     // `get_roundstart_spawn_point`: `STATION_TRAIT_LATE_ARRIVALS` sends everyone to latejoin.
     let at_job_spawn =
         !latejoin && !crate::station_traits::has(world, crate::station_traits::LATE_ARRIVALS);
+    if latejoin && forced.is_none() {
+        crate::arrivals::require_undocked(world);
+    }
     let pos = forced
         .or_else(|| at_job_spawn.then(|| job_spawn(world, &def.title)).flatten())
         .unwrap_or_else(|| crate::server::pick_latejoin(world));

@@ -58,6 +58,7 @@ impl Plugin for GameClientPlugin {
             crate::antag::changeling::client::ChangelingClientPlugin,
         ))
         .add_plugins(crate::antag::nukeop::client::NukeopClientPlugin)
+        .add_plugins(crate::shuttle_console_client::ShuttleConsoleClientPlugin)
         .add_plugins(crate::bots::client::BotsClientPlugin)
         .add_plugins(crate::antag::cult::client::CultClientPlugin)
         .add_plugins(crate::antag::revolution::client::RevolutionClientPlugin)

@@ -161,6 +161,8 @@ pub mod announce;
 pub mod antag;
 #[cfg(feature = "server")]
 pub mod armor;
+#[cfg(feature = "server")]
+pub mod arrivals;
 /// Shared window data; `assemblies::server` with `server`, `assemblies::client` with `client`.
 pub mod assemblies;
 #[cfg(feature = "server")]
@@ -228,6 +230,8 @@ pub mod drag;
 pub mod emag;
 #[cfg(feature = "server")]
 pub mod emp;
+#[cfg(feature = "server")]
+pub mod escape_pods;
 #[cfg(feature = "server")]
 pub mod events;
 #[cfg(feature = "server")]
@@ -380,6 +384,11 @@ pub mod server;
 pub mod service;
 #[cfg(feature = "server")]
 pub mod shuttle;
+pub mod shuttle_console;
+#[cfg(feature = "client")]
+pub mod shuttle_console_client;
+#[cfg(feature = "server")]
+pub mod shuttle_console_server;
 pub mod silicon;
 #[cfg(feature = "server")]
 pub mod smartfridge;
