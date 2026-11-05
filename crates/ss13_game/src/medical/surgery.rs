@@ -36,8 +36,8 @@
 // trait, manual cauterizing of yourself, ring accessories on gloves, wound scanning; no external
 // organs or dummy organs from food (cybernetic implants go in and out like organs,
 // [`super::cyberimps`]); no arbitrary items as prosthetics or Frankenstein (other species')
-// rejection damage; no abductor, robotic shell, thick-skin or skull operations; no
-// brainwashing. Amputation takes the head too (with its organs); robotic limbs come apart with a
+// rejection damage; no abductor, robotic shell, thick-skin or skull operations; brainwashing
+// only on organic brains (`crate::antag::brainwashed`; no `mechanic` reprogramming). Amputation takes the head too (with its organs); robotic limbs come apart with a
 // wrench instead (`amputate/mechanic`). Lobotomy, pacification and brain surgery work on the brain's traumas
 // ([`super::traumas`]).
 
@@ -319,6 +319,10 @@ pub enum Op {
     BrainSurgery,
     Lobotomy,
     Pacify,
+    /// `organ/brainwash`: the surgeon's directive (asked before the operation starts).
+    Brainwash,
+    /// `organ/brainwash/sleeper`: a random sleeper agent directive.
+    BrainwashSleeper,
     Lobectomy,
     Hepatectomy,
     Gastrectomy,
@@ -394,6 +398,13 @@ const ORGAN_REMOVE: &[(Implement, f32)] = &[
     (Tool("crowbar"), 1.8),
     (Path("/obj/item/kitchen/fork"), 2.85),
 ];
+/// `organ/brainwash` `implements`.
+const BRAINWASH: &[(Implement, f32)] = &[
+    (Tool("hemostat"), 1.15),
+    (Tool("cutters"), 2.0),
+    (Path("/obj/item/stack/package_wrap"), 2.85),
+    (Path("/obj/item/stack/cable_coil"), 6.67),
+];
 const SENSE_REPAIR: &[(Implement, f32)] = &[
     (Tool("hemostat"), 1.05),
     (Tool("screwdriver"), 2.25),
@@ -449,6 +460,8 @@ impl Op {
             Self::BrainSurgery,
             Self::Lobotomy,
             Self::Pacify,
+            Self::Brainwash,
+            Self::BrainwashSleeper,
             Self::Lobectomy,
             Self::Hepatectomy,
             Self::Gastrectomy,
@@ -970,6 +983,26 @@ impl Op {
                 tool_rec: "hemostat",
                 blocked: &["орган не должен быть кибернетическим"],
                 ..base
+            },
+            Self::Brainwash => OpDef {
+                path: "/datum/surgery_operation/organ/brainwash",
+                name: "Промывание мозгов",
+                catalog_name: "Нейронное промывание мозгов (Промывание мозгов)",
+                desc: "Внедрение директивы в мозг пациента, сделав её его абсолютным приоритетом.",
+                time: 200.0,
+                flags: flags::LOCKED,
+                target: Target::Organ(Slot::Brain),
+                all_required: SKIN_OPEN | ORGANS_CUT | BONE_SAWED,
+                implements: BRAINWASH,
+                tool_rec: "hemostat",
+                blocked: &["орган не должен быть кибернетическим"],
+                ..base
+            },
+            Self::BrainwashSleeper => OpDef {
+                path: "/datum/surgery_operation/organ/brainwash/sleeper",
+                name: "Установить директивы спящего агента",
+                catalog_name: "Имплантация спящего агента (Промывание мозгов)",
+                ..Self::Brainwash.def()
             },
             Self::Lobectomy => OpDef {
                 path: "/datum/surgery_operation/organ/repair/lobectomy",
@@ -2153,7 +2186,7 @@ fn offered(
 }
 
 /// tg `try_perform` up to its `do_after`.
-fn try_perform(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: TargetZone) {
+pub(crate) fn try_perform(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: TargetZone) {
     let tool = ToolInfo::read(world, actor.item);
     if !offered(world, op, mob, actor.mob, zone, &tool) {
         return;
@@ -2243,6 +2276,11 @@ fn preop(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: TargetZone)
             format!("Вы начинаете проводить лоботомию мозга {target}..."),
             format!("{user} начинает проводить лоботомию мозга {target}."),
             "Ваша голова пульсирует от невообразимой боли!".into(),
+        ),
+        Op::Brainwash | Op::BrainwashSleeper => (
+            format!("Вы начинаете промывание мозгов у {target}..."),
+            format!("{user} начинает лечить мозг {target}."),
+            "Твоя голова раскалывается от невообразимой боли!".into(),
         ),
         Op::Pacify => (
             format!("Вы начинаете пацификацию {target}..."),
@@ -2437,6 +2475,11 @@ fn pick_operation(world: &mut World, mut acts: Local<MessageCursor<UiActed<Surge
             mob: surgeon,
             item: held,
         };
+        // `brainwash/pre_preop`: the directive is asked first (`crate::antag::brainwashed`).
+        if op == Op::Brainwash {
+            crate::antag::brainwashed::ask_directive(world, actor, choice.patient, choice.zone);
+            continue;
+        }
         try_perform(world, actor, choice.patient, op, choice.zone);
     }
 }
@@ -3006,6 +3049,7 @@ fn success(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: TargetZon
             if let Some(brain) = organs::organ(world, mob, Slot::Brain) {
                 super::traumas::cure_all(world, brain, super::traumas::Resilience::Surgery);
             }
+            crate::antag::brainwashed::remove_brainwashed(world, mob);
             let brain = organs::state(world, mob, Slot::Brain).map_or(0.0, |o| o.damage);
             if brain > organs::BRAIN_DAMAGE_DEATH * 0.1 {
                 tell(
@@ -3037,12 +3081,24 @@ fn success(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: TargetZon
                 mob,
                 "Ваша голова на мгновение полностью немеет, боль просто невыносима!",
             );
+            crate::antag::brainwashed::remove_brainwashed(world, mob);
             if let Some(brain) = organs::organ(world, mob, Slot::Brain) {
                 super::traumas::cure_all(world, brain, super::traumas::Resilience::Lobotomy);
                 let mut rng = super::fork_rng(world);
                 if rng.chance(75.0) {
                     lobotomy_trauma(world, brain, &mut rng);
                 }
+            }
+        }
+        Op::Brainwash | Op::BrainwashSleeper => {
+            if crate::antag::brainwashed::surgical_brainwash(
+                world,
+                actor.mob,
+                mob,
+                op == Op::BrainwashSleeper,
+            ) {
+                own = format!("Вы успешно промыли мозги {target}!");
+                others = format!("{user} успешно промыл мозги {target}!");
             }
         }
         Op::Pacify => {
@@ -3354,6 +3410,21 @@ fn failure(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: TargetZon
                 format!("{user} ошибается, оставляя синяк на груди у {target}!"),
             );
             damage_limb(world, mob, BodyZone::Chest, DamageType::Brute, 5.0);
+            return;
+        }
+        Op::Brainwash | Op::BrainwashSleeper => {
+            world
+                .entity_mut(actor.mob)
+                .remove::<crate::antag::brainwashed::BrainwashDirective>();
+            say(
+                world,
+                "Вы облажались, повредив мозговую ткань!".into(),
+                format!("{user} облажался, что привело к повреждению мозга!"),
+            );
+            pain(world, mob, "Ваша голова пульсирует от ужасной боли!");
+            if let Some(brain) = organs::organ(world, mob, Slot::Brain) {
+                organs::damage_organ(world, brain, 40.0, organs::BRAIN_DAMAGE_DEATH);
+            }
             return;
         }
         Op::Lobotomy => {
@@ -4020,9 +4091,15 @@ mod tests {
         assert_eq!(tends, [&Op::TendWounds(Tend::ComboMaster, Heal::Combo)]);
         // A disk path the port has no operation for is ignored.
         assert_eq!(
-            operation_pool(&["/datum/surgery_operation/organ/brainwash"]).len(),
+            operation_pool(&["/datum/surgery_operation/organ/brainwash/mechanic"]).len(),
             unlocked.len()
         );
+        // The brainwashing disk unlocks the brainwash (locked without it).
+        assert!(!unlocked.contains(&Op::Brainwash));
+        assert!(
+            operation_pool(&["/datum/surgery_operation/organ/brainwash"]).contains(&Op::Brainwash)
+        );
+        assert_eq!(Op::BrainwashSleeper.def().time, Op::Brainwash.def().time);
         // Every type maps back to itself.
         for op in Op::types() {
             assert_eq!(Op::of_path(op.def().path), Some(op));

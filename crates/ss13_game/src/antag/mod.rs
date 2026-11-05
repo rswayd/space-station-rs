@@ -10,6 +10,7 @@
 //!   (tg `antag_memory`).
 //! - `Uplink`: tg's `Uplink` interface (`GenericUplink`, `PrimaryObjectiveMenu`).
 //! - `AntagInfoBrother`: the blood brother's info panel (name and the team's objectives).
+//! - `AntagInfoBrainwashed`: the brainwashed victim's directives (`brainwashed`).
 //! - `AntagHud` (headless): the antag info action button and the antag HUD icon the client draws
 //!   over its own mob and its team mates (tg `antag_hud` and the team's `has_antagonist` HUD).
 
@@ -19,6 +20,8 @@ use ss13_shared::protocol::NetId;
 use ss13_tgui::UiInterface;
 use ss13_tgui::interfaces::vending::ProductIcon;
 
+#[cfg(feature = "server")]
+pub mod brainwashed;
 #[cfg(feature = "server")]
 pub mod brother;
 pub mod changeling;
@@ -35,6 +38,8 @@ pub mod midround;
 pub mod nukeop;
 #[cfg(feature = "server")]
 pub mod objectives;
+#[cfg(feature = "server")]
+pub mod paradox_clone;
 pub mod revolution;
 #[cfg(feature = "server")]
 pub mod syndie_items;
@@ -63,6 +68,8 @@ impl bevy::prelude::Plugin for AntagServerPlugin {
             traitor::TraitorPlugin,
             brother::BrotherPlugin,
             revolution::server::RevolutionPlugin,
+            paradox_clone::ParadoxClonePlugin,
+            brainwashed::BrainwashedPlugin,
         ))
         .add_systems(Startup, dynamic::init)
         .add_plugins(midround::MidroundPlugin);
@@ -83,6 +90,8 @@ pub const ROLE_STOWAWAY_CHANGELING: &str = "Stowaway Changeling";
 pub const ROLE_OPERATIVE_MIDROUND: &str = "Operative (Midround)";
 /// tg `ROLE_MALF`: the malfunctioning AI's `be_special` key (`crate::silicon::malf`).
 pub const ROLE_MALF: &str = "Malf AI";
+/// tg `ROLE_PARADOX_CLONE`: the paradox clone's `be_special` key (`paradox_clone`).
+pub const ROLE_PARADOX_CLONE: &str = "Paradox Clone";
 
 /// The blood brother's info panel.
 pub struct AntagInfoBrotherUi;
@@ -98,6 +107,16 @@ impl UiInterface for AntagInfoBrotherUi {
 pub struct BrotherInfo {
     pub antag_name: String,
     pub objectives: Vec<ObjectiveInfo>,
+}
+
+/// The brainwashed victim's info panel (`AntagInfoBrainwashed`): its directives.
+pub struct AntagInfoBrainwashedUi;
+
+impl UiInterface for AntagInfoBrainwashedUi {
+    const NAME: &'static str = "AntagInfoBrainwashed";
+    type Data = ();
+    /// `objectives`; `antag_name` is the datum's name.
+    type StaticData = BrotherInfo;
 }
 
 /// The traitor's info panel.

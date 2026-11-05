@@ -480,6 +480,7 @@ impl ClientUi for JobPrefsUi {
                 crate::antag::wizard::ROLE_WIZARD_MIDROUND,
                 "Волшебник (мидраунд)",
             ),
+            (crate::antag::ROLE_PARADOX_CLONE, "Парадокс-клон"),
         ]
         .into_iter()
         .map(|(role, label)| {

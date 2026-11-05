@@ -6,13 +6,13 @@
 
 - **Код:** [`/datum/antagonist/paradox_clone`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/paradox_clone/paradox_clone.dm#L1), [`/datum/antagonist/evil_clone`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/evil_clone/evil_clone.dm#L2)
 - **BandaStation:** [`dynamic_ruleset_midround.dm#L774`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/dynamic/dynamic_ruleset_midround.dm#L774) — сообщение админам при выборе клона
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — парадокс-клон готов: `crates/ss13_game/src/antag/paradox_clone.rs` + рулсет `Paradox Clone` в `antag/midround.rs` (призраки с `be_special` «Paradox Clone», 20% второй клон того же оригинала; оригинал — случайный член экипажа в сознании с клиентом; спавн на `generic_maintenance_landmark`, `SpawnPoints::maintenance`): копия имени, вида и тела оригинала, его рабочий аутфит (ID, PDA со скрытым мессенджером, рюкзак), механический ящик в руке, без станционной работы; цели `accept_no_substitutes` и `paradox_clone_replace`, приветствие, HUD `paradox_clone`, панель `AntagInfoGeneric`, отчёт конца раунда, переключатель в лобби; админ может форсировать рулсет. Нет опроса призраков, выбора оригинала админом, проверки безопасности тайла, звука, копии квирков/памяти, сенсоров костюма. Злой клон ❌ — нужен экспериментальный клонер (группа медицины/руин)
 
 ### Промытые мозги и гипноз
 Brainwashed — цели, вложенные хирургией/нанитами/вещами; hypnotized — фраза гипноза от гипнофлеша/травмы.
 
 - **Код:** [`/datum/antagonist/brainwashed`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/brainwashing/brainwashing.dm#L30), [`/datum/antagonist/hypnotized`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/hypnotized/hypnotized.dm#L2); tgui: [`AntagInfoBrainwashed.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/AntagInfoBrainwashed.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — промытые мозги готовы: `crates/ss13_game/src/antag/brainwashed.rs` (`brainwash()`: директивы как цели, повтор добавляет их; HUD `brainwashed`, панель `AntagInfoBrainwashed` (рисуется как общая, без темы), снятие операцией на мозге и лоботомией, отчёт конца раунда), источники — операции промывки и «спящего агента» с дисков (`medical/surgery.rs`). Нет deadchat-оповещения, звука, админ-команды промывки. Гипноз ❌ — нужны гипнофлеш, транс и перехват услышанной фразы (группы устройств и речи)
 
 ### Валентинки
 Событие Дня святого Валентина: пары валентинок защищают друг друга, третий лишний и разбиватель сердец.

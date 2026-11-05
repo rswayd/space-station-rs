@@ -18,7 +18,8 @@
 //! one ([`Midround::queued_latejoin`]).
 // shortcut: of the rulesets only the midround traitor (sleeper agent), mass traitors, the midround
 // nuclear operatives (opted-in ghosts are taken without a poll), the latejoin traitor
-// (infiltrator), the stowaway changeling and the latejoin revolution (provocateur) spawn anyone;
+// (infiltrator), the stowaway changeling, the latejoin revolution (provocateur), the midround
+// wizard and the paradox clone (`super::paradox_clone`) spawn anyone;
 // the others keep their weights, are logged and fail preparation, as tg's do without candidates.
 // There is no admin cancel or reroll window before a midround, no false alarms, no AFK checks,
 // no account age or job bans, and `EMERGENCY_PAST_POINT_OF_NO_RETURN` ignores the call's
@@ -121,6 +122,7 @@ pub const MIDROUND_WIZARD: &str = "Midround Wizard";
 pub const LATEJOIN_TRAITOR: &str = "Latejoin Traitor";
 pub const LATEJOIN_CHANGELING: &str = "Latejoin Changeling";
 pub const LATEJOIN_REVOLUTION: &str = "Latejoin Revolution";
+pub const PARADOX_CLONE: &str = "Paradox Clone";
 
 const HOP: &[&str] = &["Head of Personnel"];
 const ONE: (Cap, Cap) = (Cap::Fixed(1), Cap::Fixed(1));
@@ -190,7 +192,10 @@ pub const RULESETS: [Ruleset; 30] = {
         decrease(other("Abductors", Light, flat(5), 20), 3),
         non_repeatable(other("Revenant", Light, flat(5), 10)),
         other("Midround Changeling", Light, flat(5), 15),
-        other("Paradox Clone", Light, flat(5), 10),
+        Ruleset {
+            role: Some(super::paradox_clone::ROLE_PARADOX_CLONE),
+            ..other(PARADOX_CLONE, Light, flat(5), 10)
+        },
         other("Voidwalker", Light, flat(5), 30),
         non_repeatable(other("Fugitives", Light, flat(3), 20)),
         other("Morph", Light, flat(0), 0),
@@ -522,6 +527,8 @@ fn can_be_selected(world: &mut World, r: &Ruleset) -> bool {
                 && super::revolution::server::active_heads(world)
                     >= super::revolution::server::LATEJOIN_HEADS_NECESSARY
         }
+        // Someone to clone and a maintenance spawn.
+        PARADOX_CLONE => super::paradox_clone::can_spawn(world),
         _ => true,
     }
 }
@@ -709,7 +716,15 @@ fn execute(
     latejoiner: Option<Entity>,
 ) -> Vec<Entity> {
     let pool = candidates(world, r, latejoiner);
-    let caps = (r.caps.1.get(population), r.caps.0.get(population));
+    let mut caps = (r.caps.1.get(population), r.caps.0.get(population));
+    // The paradox clone's `max_antag_cap += prob(bonus_clone_chance)`.
+    if r.config_tag == PARADOX_CLONE
+        && with_rng(world, |rng| {
+            rng.prob(super::paradox_clone::BONUS_CLONE_CHANCE)
+        })
+    {
+        caps.0 += 1;
+    }
     let picked = with_rng(world, |rng| {
         let mut indices: Vec<usize> = (0..pool.len()).collect();
         super::dynamic::select_up_to(&mut indices, |_| true, caps, rng)
@@ -732,6 +747,15 @@ fn execute(
                 .filter_map(|&g| world.get::<PlayerMob>(g).map(|p| p.client))
                 .collect();
             super::wizard::server::spawn_wizards(world, &clients);
+        }
+        PARADOX_CLONE => {
+            let clients: Vec<Entity> = chosen
+                .iter()
+                .filter_map(|&g| world.get::<PlayerMob>(g).map(|p| p.client))
+                .collect();
+            if super::paradox_clone::spawn_clones(world, &clients).is_empty() {
+                return Vec::new();
+            }
         }
         LATEJOIN_CHANGELING => {
             for &m in &chosen {
