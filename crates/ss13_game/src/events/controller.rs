@@ -185,6 +185,12 @@ pub struct EventControl {
     /// tg `/datum/round_event::fakeable`: false alarms may announce it.
     pub fakeable: bool,
     pub admin_disabled: bool,
+    /// `/datum/round_event_control/wizard` (`wizardevent`): only in the pool in Summon Events'
+    /// wizard mode ([`Events::wizardmode`]), which keeps the other events out.
+    pub wizard: bool,
+    /// The control's own `can_spawn_event` check over the world (candidates to infect, ...);
+    /// [`refresh_availability`] runs it before each roll.
+    pub available: Option<fn(&mut World) -> bool>,
     /// tg `new typepath()` (with `New()`'s own rolls).
     pub make: fn(&mut World) -> Box<dyn RoundEvent>,
 }
@@ -213,6 +219,11 @@ pub struct Events {
     pub scheduled: f64,
     /// Picked events in the admin intervention window: control and when it ends.
     pub pending: Vec<(usize, f64)>,
+    /// tg `SSevents.wizardmode` (Summon Events): only wizard events roll.
+    pub wizardmode: bool,
+    /// Controls whose own check ([`EventControl::available`]) failed at the last
+    /// [`refresh_availability`].
+    pub unavailable: Vec<usize>,
     running: Vec<Running>,
     clock: f64,
     forced_done: bool,
@@ -261,6 +272,8 @@ impl Events {
     pub fn can_spawn(&self, i: usize, players: u32, round_secs: f64, evacuated: bool) -> bool {
         let control = &self.controls[i];
         control.can_spawn(players, round_secs, evacuated)
+            && control.wizard == self.wizardmode
+            && !self.unavailable.contains(&i)
             && (control.name != super::false_alarm::NAME || !self.false_alarm_pool().is_empty())
     }
 
@@ -273,6 +286,24 @@ impl Events {
             .map(|(i, _)| i)
             .collect()
     }
+}
+
+/// Runs every control's own spawn check ([`EventControl::available`]) for the next
+/// [`Events::can_spawn`] calls.
+pub fn refresh_availability(world: &mut World) {
+    let checks: Vec<(usize, fn(&mut World) -> bool)> = world
+        .resource::<Events>()
+        .controls
+        .iter()
+        .enumerate()
+        .filter_map(|(i, c)| c.available.map(|f| (i, f)))
+        .collect();
+    let unavailable = checks
+        .into_iter()
+        .filter(|&(_, check)| !check(world))
+        .map(|(i, _)| i)
+        .collect();
+    world.resource_mut::<Events>().unavailable = unavailable;
 }
 
 /// tg `get_active_player_count(alive_check = TRUE, afk_check = TRUE, human_check = TRUE)`.
@@ -390,6 +421,7 @@ pub fn spawn_event(world: &mut World, excluded: Option<usize>) {
     let players = active_players(world);
     let round = round_secs(world, now);
     let evacuated = crate::shuttle::evacuated(world);
+    refresh_availability(world);
     let roster = world
         .resource::<Events>()
         .roster(players, round, evacuated, excluded);
@@ -413,6 +445,7 @@ fn pre_run_done(world: &mut World, control: usize) {
     let players = active_players(world);
     let round = round_secs(world, now);
     let evacuated = crate::shuttle::evacuated(world);
+    refresh_availability(world);
     if !world
         .resource::<Events>()
         .can_spawn(control, players, round, evacuated)
@@ -509,6 +542,8 @@ mod tests {
             occurrences: 0,
             fakeable: true,
             admin_disabled: false,
+            wizard: false,
+            available: None,
             make: noop,
         }
     }
@@ -579,6 +614,29 @@ mod tests {
         assert!(ev.can_spawn(0, 0, 10.0, false));
         ev.controls[1].fakeable = false;
         assert!(!ev.can_spawn(0, 0, 10.0, false));
+    }
+
+    #[test]
+    fn wizard_events_roll_only_in_wizard_mode() {
+        let mut ev = events(vec![control("normal", 10), control("wizard", 10)]);
+        ev.controls[1].wizard = true;
+        assert_eq!(ev.roster(0, 1.0, false, None), vec![(0, 10)]);
+        ev.wizardmode = true;
+        assert_eq!(ev.roster(0, 1.0, false, None), vec![(1, 10)]);
+    }
+
+    #[test]
+    fn own_checks_gate_the_roster() {
+        fn never(_: &mut World) -> bool {
+            false
+        }
+        let mut c = control("picky", 10);
+        c.available = Some(never);
+        let mut world = world(vec![c, control("easy", 10)]);
+        refresh_availability(&mut world);
+        let ev = world.resource::<Events>();
+        assert_eq!(ev.unavailable, vec![0]);
+        assert_eq!(ev.roster(0, 1.0, false, None), vec![(1, 10)]);
     }
 
     #[test]

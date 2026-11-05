@@ -27,6 +27,7 @@ mod emag;
 mod emp;
 mod engine;
 mod events2;
+mod events3;
 mod explosions;
 mod fire;
 mod firelocks;

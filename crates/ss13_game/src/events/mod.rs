@@ -8,21 +8,29 @@
 //! - [`anomalies`], [`immovable_rod`], [`wormholes`]: their own objects, moved and processed
 //!   by this plugin's systems.
 //! - [`mass_hallucination`]: the same hallucination for every human (`crate::hallucination`).
+//! - Health: [`disease_outbreak`] (`crate::medical::diseases`), [`fake_virus`],
+//!   [`heart_attack`] (`crate::medical::organs`), [`brain_trauma`]
+//!   (`crate::medical::traumas`).
+//! - [`wizard`]: Summon Events' wizard events, only in wizard mode or forced.
 //!
 //! Announcements are tg `priority_announce` from Central Command (`crate::announce`), with the
 //! announcer's `ANNOUNCER_*` sound where tg names one, else its random alert sound.
 
 pub mod anomalies;
+pub mod brain_trauma;
 pub mod brand_intelligence;
 pub mod bureaucratic_error;
 pub mod camera_failure;
 pub mod carp_migration;
 pub mod comms_blackout;
 pub mod controller;
+pub mod disease_outbreak;
 pub mod electrical_storm;
+pub mod fake_virus;
 pub mod false_alarm;
 pub mod grey_tide;
 pub mod grid_check;
+pub mod heart_attack;
 pub mod immovable_rod;
 pub mod market_crash;
 pub mod mass_hallucination;
@@ -31,6 +39,7 @@ pub mod mice_migration;
 pub mod processor_overload;
 pub mod radiation_storm;
 pub mod vent_clog;
+pub mod wizard;
 pub mod wormholes;
 
 use bevy::prelude::*;
@@ -105,8 +114,9 @@ pub fn station_tiles(world: &World) -> Vec<(Entity, TilePos)> {
 
 const MINUTE: f64 = 60.0;
 
-/// The ported controls with tg's vars (`code/modules/events/*.dm`); BandaStation changes none
-/// of them in code (only `/datum/round_event_control/operative`, not ported).
+/// The ported controls with tg's vars (`code/modules/events/*.dm`; defaults: `earliest_start`
+/// 20 minutes, `max_occurrences` 20); BandaStation changes none of them in code (only
+/// `/datum/round_event_control/operative`, not ported).
 pub fn controls() -> Vec<EventControl> {
     let c = |name, weight, earliest_min: f64, min_players, max_occurrences, make| EventControl {
         name,
@@ -117,10 +127,20 @@ pub fn controls() -> Vec<EventControl> {
         occurrences: 0,
         fakeable: true,
         admin_disabled: false,
+        wizard: false,
+        available: None,
         make,
     };
     let unfakeable = |control: EventControl| EventControl {
         fakeable: false,
+        ..control
+    };
+    let needs = |check: fn(&mut World) -> bool, control: EventControl| EventControl {
+        available: Some(check),
+        ..control
+    };
+    let summon = |control: EventControl| EventControl {
+        wizard: true,
         ..control
     };
     vec![
@@ -246,6 +266,52 @@ pub fn controls() -> Vec<EventControl> {
             2,
             mass_hallucination::make,
         )),
+        needs(
+            disease_outbreak::has_candidates,
+            c(
+                disease_outbreak::CLASSIC,
+                5,
+                20.0,
+                10,
+                1,
+                disease_outbreak::make_classic,
+            ),
+        ),
+        needs(
+            disease_outbreak::has_candidates,
+            c(
+                disease_outbreak::ADVANCED,
+                15,
+                15.0,
+                35,
+                1,
+                disease_outbreak::make_advanced,
+            ),
+        ),
+        c(fake_virus::NAME, 20, 20.0, 0, 20, fake_virus::make),
+        needs(
+            heart_attack::has_candidates,
+            c(heart_attack::NAME, 20, 20.0, 40, 2, heart_attack::make),
+        ),
+        unfakeable(c(brain_trauma::NAME, 25, 20.0, 13, 20, brain_trauma::make)),
+        summon(c(wizard::ROBELESS, 2, 0.0, 0, 1, wizard::make_robeless)),
+        summon(c(wizard::IMPROVED, 3, 0.0, 0, 4, wizard::make_improved)),
+        summon(c(
+            wizard::SHUFFLE_PLACES,
+            2,
+            0.0,
+            0,
+            5,
+            wizard::make_shuffle_places,
+        )),
+        summon(c(
+            wizard::SHUFFLE_NAMES,
+            4,
+            0.0,
+            0,
+            5,
+            wizard::make_shuffle_names,
+        )),
     ]
 }
 
@@ -264,6 +330,8 @@ impl Plugin for EventsServerPlugin {
                     immovable_rod::move_rods,
                     anomalies::process_anomalies,
                     radiation_storm::process_storm,
+                    fake_virus::process_fake_viruses,
+                    heart_attack::process_heart_attacks,
                 )
                     .chain(),
             )

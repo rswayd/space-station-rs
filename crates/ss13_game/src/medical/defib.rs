@@ -526,6 +526,12 @@ fn do_help(
             } else {
                 format!("{unit_name} buzzes: Resuscitation failed, heart damage detected.")
             }
+        } else if crate::events::heart_attack::defib_shock(world, target, unit_name) {
+            success(world, unit);
+            format!(
+                "{unit_name} pings: Patient's heart has stabilized, further applications may be \
+                 necessary."
+            )
         } else {
             format!("{unit_name} buzzes: Patient is not in a valid state. Operation aborted.")
         };

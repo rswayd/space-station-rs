@@ -477,6 +477,9 @@ pub struct KnownSpell {
     pub marked: Option<Entity>,
     /// A touch spell's `attached_hand`.
     pub hand: Option<Entity>,
+    /// `spell_requirements &= ~SPELL_REQUIRES_WIZARD_GARB` (Robeless Casting,
+    /// `crate::events::wizard`).
+    pub robeless: bool,
 }
 
 impl KnownSpell {
@@ -582,6 +585,7 @@ pub fn learn(world: &mut World, mob: Entity, spell: Spell) -> Learned {
                 ready_at: 0.0,
                 marked: None,
                 hand: None,
+                robeless: false,
             });
             Learned::New
         }
@@ -811,6 +815,11 @@ fn area_path(world: &World, pos: TilePos) -> Option<String> {
 /// `IsAvailable` + `can_cast_spell`: `Err(Some(text))` with tg's feedback, `Err(None)` silent.
 pub fn can_cast(world: &World, mob: Entity, spell: Spell) -> Result<(), Option<String>> {
     let def = spell.def();
+    let garb = def.requirements & SPELL_REQUIRES_WIZARD_GARB != 0
+        && !world
+            .get::<Spells>(mob)
+            .and_then(|s| s.get(spell))
+            .is_some_and(|k| k.robeless);
     // `AB_CHECK_CONSCIOUS`, `AB_CHECK_PHASED`.
     if world.get::<Stat>(mob) != Some(&Stat::Conscious) || world.get::<Jaunting>(mob).is_some() {
         return Err(None);
@@ -838,7 +847,7 @@ pub fn can_cast(world: &World, mob: Entity, spell: Spell) -> Result<(), Option<S
         )));
     }
     if world.get::<HumanLook>(mob).is_some() {
-        if def.requirements & SPELL_REQUIRES_WIZARD_GARB != 0 {
+        if garb {
             let (robe, hat) = wizard_garb(world, mob);
             if !robe {
                 return Err(Some(
@@ -855,7 +864,7 @@ pub fn can_cast(world: &World, mob: Entity, spell: Spell) -> Result<(), Option<S
         if def.requirements & SPELL_REQUIRES_HUMAN != 0 {
             return Err(Some(format!("{} can only be cast by humans!", def.name)));
         }
-        if def.requirements & SPELL_REQUIRES_WIZARD_GARB != 0
+        if garb
             && !carried(world, mob)
                 .into_iter()
                 .filter_map(|e| path_of(world, e))

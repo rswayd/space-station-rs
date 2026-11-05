@@ -2,13 +2,15 @@
 
 События пула мага (Summon Events, `EVENT_CATEGORY_WIZARD`, обычным планировщиком не выпадают) и события, привязанные к праздникам.
 
+В ss13-rs у контроля есть флаг `wizard`, а у планировщика — `Events::wizardmode` (`crates/ss13_game/src/events/controller.rs`): события мага катятся только в режиме мага и тогда вытесняют остальные, как в tg; сам Summon Events (запись книги заклинаний) не портирован, поэтому сейчас они запускаются только принудительно (Force Event).
+
 ## События мага
 
 ### Усиление мага: Robeless / Improved Casting
 Robeless: маг (и все, у кого есть заклинания) колдует без робы и шляпы; Improved: заклинания всех получают уровень.
 
 - **Код:** [`/datum/round_event_control/wizard/robelesscasting`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/wizard/aid.dm#L4), [`/datum/round_event_control/wizard/improvedcasting`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/wizard/aid.dm#L32)
-- **Статус в ss13-rs:** ❌ нет — нет мага и заклинаний
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/events/wizard.rs`: Robeless — флаг `KnownSpell::robeless` снимает требование робы и шляпы у всех известных заклинаний (`crates/ss13_game/src/spells/mod.rs` `can_cast`), Improved — каждое заклинание +1 уровень, максимум на один выше предела; веса и лимиты tg; запуск только в режиме мага или принудительно (Summon Events — в wizard.md)
 
 ### Призывы: Summon Guns / Summon Magic
 Каждый член экипажа получает случайное оружие (или магический предмет); часть получивших становится выжившими-антагонистами.
@@ -20,7 +22,7 @@ Robeless: маг (и все, у кого есть заклинания) колд
 Все люди меняются местами, внешностью и именами или разумами (массовый обмен телами).
 
 - **Код:** [`/datum/round_event_control/wizard/shuffleloc`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/wizard/shuffle.dm#L4), [`/datum/round_event_control/wizard/shufflenames`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/wizard/shuffle.dm#L41), [`/datum/round_event_control/wizard/shuffleminds`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/wizard/shuffle.dm#L74)
-- **Статус в ss13-rs:** ❌ нет — нет события
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/events/wizard.rs`: Change Places (живые люди на станционных уровнях меняются местами, дым у каждого) и Change Faces (имена живых людей перемешиваются, дым); нет Change Minds (нет переноса разума), телепорт без проверки антимагии и запретных зон, люди в шкафах не участвуют
 
 ### Подмена личности: Mass Identity Spoof / Imposter Wizard / Race Swap
 Всех одевают магами; появляется двойник мага от призрака; все гуманоиды меняют расу на одну случайную.

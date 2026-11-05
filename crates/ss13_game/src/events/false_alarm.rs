@@ -30,6 +30,7 @@ impl RoundEvent for FalseAlarm {
             .get_resource::<crate::round::Ticker>()
             .map_or(0.0, |t| t.round_duration(now));
         let evacuated = crate::shuttle::evacuated(world);
+        super::controller::refresh_availability(world);
         let mut pool = world.resource::<Events>().false_alarm_pool();
         // `pick_n_take` until one can spawn.
         while !pool.is_empty() {
