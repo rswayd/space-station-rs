@@ -23,7 +23,7 @@
 Полная немота, неспособность понимать язык, корковая слепота, паралич конечностей (параплегия, гемиплегия слева/справа).
 
 - **Код:** [`/datum/brain_trauma/severe/mute`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/brain_damage/severe.dm#L9), [`/datum/brain_trauma/severe/aphasia`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/brain_damage/severe.dm#L25), [`/datum/brain_trauma/severe/blindness`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/brain_damage/severe.dm#L45), [`/datum/brain_trauma/severe/paralysis`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/brain_damage/severe.dm#L61)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/medical/traumas.rs`: немота (речь, шёпот и радио отклоняются), паралич любой из 9 разновидностей (ноги — как отключённые, рука роняет предмет и не держит); корковая слепота (слепота через `crates/ss13_game/src/vision.rs`); нет афазии (языки — группа речи), пара-/гемиплегии квирков
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/medical/traumas.rs`: немота (речь, шёпот и радио отклоняются), паралич любой из 9 разновидностей (ноги — как отключённые, рука роняет предмет и не держит); корковая слепота (слепота через `crates/ss13_game/src/vision.rs`); афазия (все языки, кроме «Gibbering», заблокированы — `set_aphasia`); нет пара-/гемиплегии квирков
 
 ### Тяжёлые травмы: поведение
 Нарколепсия, монофобия, дискоординация (нельзя пользоваться сложными предметами), пацифизм, гипнотический ступор и триггер, дислексия, клептомания.

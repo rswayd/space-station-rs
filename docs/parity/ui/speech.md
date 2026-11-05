@@ -6,7 +6,7 @@
 
 - **Код:** [`/atom/movable/proc/say()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/say.dm#L45), [`/atom/movable/proc/send_speech()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/say.dm#L132), [`/atom/movable/proc/Hear()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/say.dm#L71), [`/atom/movable/proc/compose_message()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/say.dm#L159), [`/atom/movable/proc/say_mod()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/say.dm#L202)
 - **BandaStation:** [`say.dm#L61`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/say.dm#L61) — IC-фильтр при санитизации
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_chat/src/server.rs`, `crates/ss13_game/src/speech.rs`: дальность по радиусу через пространственный индекс, без линии видимости (`view`), без языков
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_chat/src/server.rs`, `crates/ss13_game/src/speech.rs`: дальность по радиусу через пространственный индекс, без линии видимости (`view`); языки — `crates/ss13_chat/src/language.rs` (перевод для каждого слушателя, ярлык языка)
 
 ### Речь живых мобов
 `/mob/living/say`: проверки (немота, крит), префиксы, режимы, шёпот в софт-крите, последние слова при уходе в смерть, вывод в радио.

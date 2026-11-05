@@ -28,7 +28,7 @@
 // construction (plasteel into runed metal only: no construct shells, constructs or soulstones
 // until basic mobs exist), EMP and summon dagger; no equipment, horror,
 // veiling or blood rites. No cult master abilities (marks, final reckoning, pulse), no
-// structures, no Nar'Sie language or TTS. A sacrifice destroys the
+// structures, no TTS. A sacrifice destroys the
 // body (its items fall) without a soulstone. Nar'Sie is a sprite that does not move or consume:
 // no singularity component. No cinematic, sounds or shuttle lockdown.
 
@@ -946,6 +946,13 @@ fn gain(world: &mut World, mob: Entity, equipment: bool, converted: bool) -> boo
     if equipment {
         equip_cultist(world, mob);
     }
+    ss13_chat::language::edit_holder(world, mob, |h| {
+        h.grant(
+            ss13_chat::language::LanguageId::Narsie,
+            ss13_chat::language::ALL,
+            ss13_chat::language::LanguageSource::Cultist,
+        );
+    });
     if risen {
         set_eyes(world, mob, true);
     }
@@ -1164,6 +1171,13 @@ pub fn remove_cultist(world: &mut World, mob: Entity, silent: bool) {
         );
     }
     drop_auras(world, mob);
+    if let Some(mut holder) = world.get_mut::<ss13_chat::language::LanguageHolder>(mob) {
+        holder.remove(
+            ss13_chat::language::LanguageId::Narsie,
+            ss13_chat::language::ALL,
+            Some(ss13_chat::language::LanguageSource::Cultist),
+        );
+    }
     if cultist.own_eyes.is_some() {
         set_eyes(world, mob, false);
     }

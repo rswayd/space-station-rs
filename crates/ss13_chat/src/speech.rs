@@ -453,6 +453,8 @@ pub struct SayMods {
     /// `MODE_HEADSET` (`;`).
     pub headset: bool,
     pub radio: Option<RadioExtension>,
+    /// `LANGUAGE_EXTENSION` (`,x`): the language spoken instead of the selected one.
+    pub language: Option<crate::language::LanguageId>,
 }
 
 impl SayMods {
@@ -508,10 +510,20 @@ fn radio_key(key: char) -> Option<RadioExtension> {
     }
 }
 
+/// [`parse_mods_speaking`] of a speaker that can speak every language.
+pub fn parse_mods(message: &str, stat: SpeakerStat) -> (SayMods, String) {
+    parse_mods_speaking(message, stat, |_| true)
+}
+
 /// tg `get_message_mods`: up to 7 prefixes are stripped; a doubled first character ("...",
 /// ";;") is never a prefix. `;` counts only above crit, but is stripped anyway; a second
-/// department key after a known one is text.
-pub fn parse_mods(message: &str, stat: SpeakerStat) -> (SayMods, String) {
+/// department key after a known one is text. `,x` speaks the language of key `x` when
+/// `can_speak` allows it; an unknown or unspeakable key ends the prefixes, left in the text.
+pub fn parse_mods_speaking(
+    message: &str,
+    stat: SpeakerStat,
+    can_speak: impl Fn(crate::language::LanguageId) -> bool,
+) -> (SayMods, String) {
     let mut mods = SayMods::default();
     let mut message = message.to_owned();
     for _ in 0..7 {
@@ -539,6 +551,17 @@ pub fn parse_mods(message: &str, stat: SpeakerStat) -> (SayMods, String) {
             }
             ':' | '.' if message.chars().count() > 2 && mods.radio.is_none() => {
                 mods.radio = radio_key(second.expect("more than two characters"));
+                2
+            }
+            ',' if mods.language.is_none() => {
+                // "No, you cannot speak in xenocommon just because you know the key".
+                let Some(language) = second
+                    .and_then(crate::language::LanguageId::from_key)
+                    .filter(|&l| can_speak(l))
+                else {
+                    break;
+                };
+                mods.language = Some(language);
                 2
             }
             _ => break,
@@ -712,6 +735,33 @@ mod tests {
             parse_mods(":i x", SpeakerStat::SoftCrit).0.radio,
             Some(RadioExtension::Intercom)
         );
+    }
+
+    #[test]
+    fn language_key_follows_get_message_mods() {
+        use crate::language::LanguageId;
+        let c = SpeakerStat::Conscious;
+        let draconic = |l: LanguageId| l == LanguageId::Draconic;
+        let (mods, text) = parse_mods_speaking(",o шшш", c, draconic);
+        assert_eq!(mods.language, Some(LanguageId::Draconic));
+        assert_eq!(text, "шшш");
+        // With a radio key, in any order.
+        let (mods, text) = parse_mods_speaking(";,o привет", c, draconic);
+        assert!(mods.headset);
+        assert_eq!(
+            (mods.language, text.as_str()),
+            (Some(LanguageId::Draconic), "привет")
+        );
+        // A language the speaker cannot speak, or no such key: the text stays as typed.
+        assert_eq!(
+            parse_mods_speaking(",m ну", c, draconic),
+            (SayMods::default(), ",m ну".into())
+        );
+        assert_eq!(
+            parse_mods_speaking(",q ну", c, draconic),
+            (SayMods::default(), ",q ну".into())
+        );
+        assert_eq!(parse_mods_speaking(",,", c, draconic).1, ",,");
     }
 
     #[test]

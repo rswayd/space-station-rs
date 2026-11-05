@@ -18,11 +18,12 @@
 //!
 //! Ported traumas: mild — stuttering, dumbness, speech impediment, concussion, anosognosia
 //! (`healthy`), muscle weakness, nervous cough, possessiveness, achromatopsia; severe — mute,
-//! paralysis, pacifism, kleptomania, cortical blindness (both read by `crate::vision`). Random
+//! paralysis, pacifism, kleptomania, aphasia (`ss13_chat::language`), cortical blindness (both
+//! read by `crate::vision`). Random
 //! gains pick among all of tg's types ([`TG_POOL`]): an unported pick gives nothing, so each
 //! ported trauma comes as often as in tg.
 // shortcut: no hallucinations, muscle spasms, expressive aphasia (needs the common words list),
-// mind echo (needs hearing hooks), aphasia (no languages), narcolepsy and hypnotic stupor (no
+// mind echo (needs hearing hooks), narcolepsy and hypnotic stupor (no
 // sleep or trance), achromatopsia's `TRAIT_COLORBLIND` (wire colours),
 // monophobia, discoordination, dyslexia, hypnotic triggers, split personality, imaginary friend,
 // obsession, special and magic traumas, phobias; no forced brain damage lines of dumbness
@@ -168,6 +169,7 @@ pub enum Kind {
     Kleptomaniac,
     ColorBlindness,
     Blindness,
+    Aphasia,
 }
 
 /// The static part of a trauma type (tg vars).
@@ -303,6 +305,13 @@ impl Kind {
                 (Warning, "Вы не можете видеть!"),
                 (Notice, "Ваше зрение возвращается."),
             ),
+            Self::Aphasia => severe(
+                "/datum/brain_trauma/severe/aphasia",
+                "Афазия",
+                "обширное повреждение языкового центра мозга",
+                (Warning, "У вас проблемы с формированием слов в голове..."),
+                (Notice, "Вы вдруг вспоминаете, как работают языки."),
+            ),
             Self::Kleptomaniac => severe(
                 "/datum/brain_trauma/severe/kleptomaniac",
                 "Клептомания",
@@ -415,7 +424,12 @@ pub const TG_POOL: [(&str, Option<Kind>, Category, Resilience); 37] = {
             Mild,
             Basic,
         ),
-        ("/datum/brain_trauma/severe/aphasia", None, Severe, Surgery),
+        (
+            "/datum/brain_trauma/severe/aphasia",
+            Some(Kind::Aphasia),
+            Severe,
+            Surgery,
+        ),
         (
             "/datum/brain_trauma/severe/blindness",
             Some(Kind::Blindness),
@@ -793,6 +807,43 @@ pub fn scan_line(world: &World, mob: Entity) -> Option<String> {
     Some(format!("Mental trauma: {text}."))
 }
 
+/// `/datum/brain_trauma/severe/aphasia` `on_gain`/`on_lose`: every other language blocked and
+/// Gibbering granted, from `LANGUAGE_APHASIA`.
+fn set_aphasia(world: &mut World, mob: Entity, aphasia: bool) {
+    use ss13_chat::language::{ALL, LanguageHolder, LanguageId, LanguageSource, Preset};
+    let had = world
+        .get::<LanguageHolder>(mob)
+        .is_some_and(|h| h.has_source(LanguageSource::Aphasia));
+    if had == aphasia {
+        return;
+    }
+    let mut holder = world
+        .get::<LanguageHolder>(mob)
+        .cloned()
+        .unwrap_or_else(|| {
+            LanguageHolder::from_preset(
+                &Preset::of_path("/datum/language_holder/atom_basic").unwrap_or_default(),
+                LanguageSource::Atom,
+            )
+        });
+    for language in LanguageId::ALL {
+        if language == LanguageId::Aphasia {
+            continue;
+        }
+        if aphasia {
+            holder.block(language, ALL, LanguageSource::Aphasia);
+        } else {
+            holder.unblock(language, ALL, Some(LanguageSource::Aphasia));
+        }
+    }
+    if aphasia {
+        holder.grant(LanguageId::Aphasia, ALL, LanguageSource::Aphasia);
+    } else {
+        holder.remove(LanguageId::Aphasia, ALL, Some(LanguageSource::Aphasia));
+    }
+    world.entity_mut(mob).insert(holder);
+}
+
 /// Applies the traumas of `mob`'s brain to `mob` (the traits of their `on_gain`/`on_lose`), with
 /// the quirks that give the same traits.
 pub fn refresh(world: &mut World, mob: Entity) {
@@ -802,8 +853,10 @@ pub fn refresh(world: &mut World, mob: Entity) {
     let mut speech = ss13_chat::speech::Impediments::default();
     let mut pacifist = false;
     let mut paralyzed = [false; 6];
+    let mut aphasia = false;
     for trauma in of_mob(world, mob) {
         match trauma.kind {
+            Kind::Aphasia => aphasia = true,
             Kind::Stuttering => speech.stutter = true,
             Kind::Dumbness => speech.derp = true,
             Kind::SpeechImpediment => speech.unintelligible = true,
@@ -828,6 +881,7 @@ pub fn refresh(world: &mut World, mob: Entity) {
         .is_some_and(crate::status_effects::StatusEffects::pacified);
     // The mime's vow (`TRAIT_MIMING`, `can_speak(allow_mimes = FALSE)`).
     speech.mute |= world.get::<crate::service::MimeVow>(mob).is_some();
+    set_aphasia(world, mob, aphasia);
     let mut entity = world.entity_mut(mob);
     if speech == ss13_chat::speech::Impediments::default() {
         entity.remove::<ss13_chat::speech::Impediments>();

@@ -611,9 +611,35 @@ fn on_insert(world: &mut World, organ: Entity, mob: Entity, slot: Slot) {
         Slot::Stomach => crate::chem::stomach_inserted(world, organ, mob),
         Slot::Eyes => refresh_look(world, mob),
         Slot::Tongue => {
+            use ss13_chat::language::{LanguageHolder, LanguageId, LanguageSource, Tongue};
+            let tongue = world
+                .get::<Organ>(organ)
+                .map_or(Tongue::Organic(&[]), |o| Tongue::of_path(&o.path));
             world
                 .entity_mut(mob)
-                .remove::<ss13_chat::speech::Tongueless>();
+                .remove::<ss13_chat::speech::Tongueless>()
+                .insert(tongue);
+            // `/obj/item/organ/tongue/robot/on_mob_insert`: Encoded Audio Language.
+            if tongue == Tongue::Robot {
+                let mut holder = world
+                    .get::<LanguageHolder>(mob)
+                    .cloned()
+                    .unwrap_or_else(|| {
+                        LanguageHolder::from_preset(
+                            &ss13_chat::language::Preset::of_path(
+                                "/datum/language_holder/atom_basic",
+                            )
+                            .unwrap_or_default(),
+                            LanguageSource::Atom,
+                        )
+                    });
+                holder.grant(
+                    LanguageId::Machine,
+                    ss13_chat::language::ALL,
+                    LanguageSource::Tongue,
+                );
+                world.entity_mut(mob).insert(holder);
+            }
         }
         _ => {}
     }
@@ -642,7 +668,19 @@ pub fn remove(world: &mut World, organ: Entity, special: bool) {
         Slot::Stomach => crate::chem::stomach_removed(world, organ, mob),
         Slot::Eyes => refresh_look(world, mob),
         Slot::Tongue => {
-            world.entity_mut(mob).insert(ss13_chat::speech::Tongueless);
+            use ss13_chat::language::{LanguageHolder, LanguageId, LanguageSource, Tongue};
+            world
+                .entity_mut(mob)
+                .remove::<Tongue>()
+                .insert(ss13_chat::speech::Tongueless);
+            // `/obj/item/organ/tongue/robot/on_mob_remove`.
+            if let Some(mut holder) = world.get_mut::<LanguageHolder>(mob) {
+                holder.remove(
+                    LanguageId::Machine,
+                    ss13_chat::language::ALL,
+                    Some(LanguageSource::Tongue),
+                );
+            }
         }
         Slot::Brain => super::traumas::refresh(world, mob),
         _ => {}

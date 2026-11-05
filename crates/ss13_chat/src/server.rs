@@ -33,10 +33,11 @@ use ss13_shared::protocol::ClientIntent;
 use ss13_world::{SpatialIndex, WorldSystems};
 
 use crate::emote::{EMOTE_COOLDOWN_SECS, EmoteOutcome};
+use crate::language::{self, LanguageHolder, LanguageId, ScrambleSeed, Tongue};
 use crate::speech::{
     BinaryCapable, ChangelingHivemind, EarsWorn, Impediments, RadioExtension, RadioTarget,
     SpeakerStat, SpeechEffects, Tongueless, VoiceSpan, WhisperHeard, capitalize, derpspeech,
-    parse_mods, slur, stars, stutter, unintelligize, whisper_heard,
+    parse_mods_speaking, slur, stars, stutter, unintelligize, whisper_heard,
 };
 
 /// tg `get_hearers_in_view(world.view)`: 7 tiles, Chebyshev, like BYOND `view()`.
@@ -148,6 +149,8 @@ pub struct Spoke {
     /// `stars(text)`: what a radio transmits of a whisper (radios don't pick up whispers well);
     /// empty when nothing is whispered.
     pub starred: String,
+    /// The language spoken; `None` when the speaker can speak none ([`language::STRANGE_SOUND`]).
+    pub language: Option<LanguageId>,
 }
 
 impl Spoke {
@@ -158,6 +161,106 @@ impl Spoke {
         } else {
             self.verb
         }
+    }
+}
+
+/// What one group of listeners hears of a message (tg `translate_language` per hearer): the
+/// clients, the text, and the language tag before the speaker's name.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Heard {
+    pub clients: Vec<Entity>,
+    pub text: String,
+    pub tag: Option<String>,
+}
+
+/// Groups listeners `(client, understanding)` by what they hear of `text` in `spoken`: one
+/// scramble per level of understanding.
+pub fn split_heard(
+    seed: u64,
+    spoken: Option<LanguageId>,
+    text: &str,
+    listeners: impl IntoIterator<Item = (Entity, u8)>,
+) -> Vec<Heard> {
+    let mut groups: Vec<(u8, Heard)> = Vec::new();
+    for (client, level) in listeners {
+        // Without a language everyone hears the same strange sound.
+        let level = if spoken.is_some() {
+            level
+        } else {
+            language::FULL
+        };
+        if let Some((_, heard)) = groups.iter_mut().find(|(l, _)| *l == level) {
+            if !heard.clients.contains(&client) {
+                heard.clients.push(client);
+            }
+            continue;
+        }
+        groups.push((
+            level,
+            Heard {
+                clients: vec![client],
+                text: language::translate(seed, spoken, level, text),
+                tag: spoken.and_then(|l| language::tag_text(l, language::tag(l, level))),
+            },
+        ));
+    }
+    groups.into_iter().map(|(_, heard)| heard).collect()
+}
+
+/// A chat line with the language tag in front (where tg draws the language icon).
+pub fn tagged(mut message: ChatMessage, tag: Option<String>) -> ChatMessage {
+    if let Some(tag) = tag {
+        message
+            .segments
+            .insert(0, ChatSegment::new(Span::Plain, tag));
+    }
+    message
+}
+
+/// How listening clients understand a language: the [`LanguageHolder`] of the body each
+/// controls (none: Galactic Common only; dead bodies and ghosts: everything).
+#[derive(SystemParam)]
+pub struct Understanding<'w, 's> {
+    controls: Query<'w, 's, &'static ControlledEntity>,
+    bodies: Query<
+        'w,
+        's,
+        (
+            Option<&'static LanguageHolder>,
+            Option<&'static SpeakerStat>,
+        ),
+    >,
+    seed: Option<Res<'w, ScrambleSeed>>,
+}
+
+impl Understanding<'_, '_> {
+    pub fn seed(&self) -> u64 {
+        self.seed.as_deref().map_or(0, |s| s.0)
+    }
+
+    pub fn of_body(&self, body: Entity, spoken: LanguageId) -> u8 {
+        let (holder, stat) = self.bodies.get(body).unwrap_or((None, None));
+        language::understanding(holder, stat == Some(&SpeakerStat::Dead), spoken)
+    }
+
+    pub fn of_client(&self, client: Entity, spoken: LanguageId) -> u8 {
+        self.controls
+            .get(client)
+            .map_or(language::FULL, |c| self.of_body(c.0, spoken))
+    }
+
+    /// [`split_heard`] of these clients.
+    pub fn split(
+        &self,
+        clients: impl IntoIterator<Item = Entity>,
+        spoken: Option<LanguageId>,
+        text: &str,
+    ) -> Vec<Heard> {
+        let levels = clients.into_iter().map(|c| {
+            let level = spoken.map_or(language::FULL, |l| self.of_client(c, l));
+            (c, level)
+        });
+        split_heard(self.seed(), spoken, text, levels)
     }
 }
 
@@ -223,6 +326,7 @@ impl Plugin for ChatServerPlugin {
         app.init_resource::<Listeners>()
             .init_resource::<SayRates>()
             .init_resource::<SpeechRng>()
+            .insert_resource(ScrambleSeed(SpeechRng::default().0))
             .add_message::<SayRejected>()
             .add_message::<Spoke>()
             .add_observer(on_control_inserted)
@@ -413,6 +517,8 @@ type Body<'a> = (
     Has<Tongueless>,
     Option<&'a Impediments>,
     Option<&'a SpeechEffects>,
+    Option<&'a LanguageHolder>,
+    Option<&'a Tongue>,
 );
 
 fn handle_say(
@@ -422,7 +528,12 @@ fn handle_say(
     bodies: Query<Body>,
     stats: Query<(Entity, &SpeakerStat)>,
     mut emotes_used: Query<&mut EmotesUsed>,
-    (sight, senses, voices): (Query<&SeeInvisible>, Senses, Query<&VoiceSpan>),
+    (sight, senses, voices, seed): (
+        Query<&SeeInvisible>,
+        Senses,
+        Query<&VoiceSpan>,
+        Option<Res<ScrambleSeed>>,
+    ),
     index: Res<SpatialIndex>,
     listeners: Res<Listeners>,
     mut rates: ResMut<SayRates>,
@@ -434,6 +545,7 @@ fn handle_say(
     mut commands: Commands,
 ) {
     let now = time.elapsed_secs_f64();
+    let seed = seed.as_deref().map_or(0, |s| s.0);
     for IntentReceived { client, intent } in intents.read() {
         let ClientIntent::Say(raw) = intent else {
             continue;
@@ -477,6 +589,8 @@ fn handle_say(
                 tongueless,
                 impediments,
                 speech_effects,
+                holder,
+                tongue,
             ),
             text,
         ) = match checked {
@@ -535,8 +649,9 @@ fn handle_say(
         // An invisible speaker is heard only by those who see it; an AI eye hears only what its
         // cameras see.
         let invisibility = invisibility.map_or(0, |i| i.0);
-        let hearers_within = |range: u32| -> Vec<(Entity, u32)> {
-            let mut hearers: Vec<(Entity, u32)> = index
+        // (client, distance, body).
+        let hearers_within = |range: u32| -> Vec<(Entity, u32, Entity)> {
+            let mut hearers: Vec<(Entity, u32, Entity)> = index
                 .in_radius(*pos, range)
                 .filter(|&e| senses.perceives(e, *pos))
                 .filter_map(|e| {
@@ -546,15 +661,15 @@ fn handle_say(
                         .ok()
                         .and_then(|b| b.1.chebyshev(*pos))
                         .unwrap_or(0);
-                    Some((client, distance))
+                    Some((client, distance, e))
                 })
-                .filter(|&(c, _)| {
+                .filter(|&(c, ..)| {
                     invisibility == 0 || sight.get(c).is_ok_and(|s| s.0 >= invisibility)
                 })
                 .collect();
             // The speaker always hears itself, even standing off the indexed map.
-            if !hearers.iter().any(|&(c, _)| c == client) {
-                hearers.push((client, 0));
+            if !hearers.iter().any(|&(c, ..)| c == client) {
+                hearers.push((client, 0, speaker));
             }
             hearers
         };
@@ -580,7 +695,7 @@ fn handle_say(
                     info!(target: "say", "{client} {name} emote: {text}");
                     let clients = hearers_within(HEARING_RANGE)
                         .into_iter()
-                        .map(|(c, _)| c)
+                        .map(|(c, ..)| c)
                         .collect();
                     chat.write(SendChat {
                         clients,
@@ -594,7 +709,23 @@ fn handle_say(
             }
             continue;
         }
-        let (mods, message) = parse_mods(&text, stat);
+        let (mods, message) = parse_mods_speaking(&text, stat, |l| {
+            language::can_speak(holder, tongue, tongueless, l)
+        });
+        // tg `language ||= message_mods[LANGUAGE_EXTENSION] || get_selected_language()`.
+        let spoken_in = mods
+            .language
+            .or_else(|| language::speaking(holder, tongue, tongueless));
+        // What each hearer makes of the words (`translate_language`), by their body.
+        let understand = |body: Entity| -> u8 {
+            let Some(l) = spoken_in else {
+                return language::FULL;
+            };
+            match bodies.get(body) {
+                Ok(b) => language::understanding(b.11, b.4 == Some(&SpeakerStat::Dead), l),
+                Err(_) => language::basic_understanding(l),
+            }
+        };
         // tg: an admin verb; anyone else's message goes nowhere.
         if mods.radio == Some(RadioExtension::Deadmin) {
             continue;
@@ -668,6 +799,7 @@ fn handle_say(
                 radio: target,
                 heard_whisper: false,
                 starred: String::new(),
+                language: spoken_in,
             });
             continue;
         }
@@ -691,38 +823,44 @@ fn handle_say(
             } else {
                 String::new()
             },
+            language: spoken_in,
         });
         let whisper = whisper || target.is_some();
         info!(target: "say", "{client} {name} at {pos:?}: {message}");
         if !whisper {
-            let clients = hearers_within(HEARING_RANGE)
+            let hearers = hearers_within(HEARING_RANGE)
                 .into_iter()
-                .map(|(c, _)| c)
-                .collect();
+                .map(|(c, _, body)| (c, understand(body)));
             let span = voices.get(speaker).map_or(Span::Say, |v| v.0);
-            chat.write(SendChat {
-                clients,
-                message: quote_message(&name, say_verb(&message), &message, span),
-            });
+            let verb = say_verb(&message);
+            for heard in split_heard(seed, spoken_in, &message, hearers) {
+                chat.write(SendChat {
+                    clients: heard.clients,
+                    message: tagged(quote_message(&name, verb, &heard.text, span), heard.tag),
+                });
+            }
             continue;
         }
         let (mut full, mut starred, mut far) = (Vec::new(), Vec::new(), Vec::new());
-        for (hearer, distance) in hearers_within(HEARING_RANGE) {
+        for (hearer, distance, body) in hearers_within(HEARING_RANGE) {
             match whisper_heard(distance) {
-                WhisperHeard::Full => full.push(hearer),
-                WhisperHeard::Starred => starred.push(hearer),
+                WhisperHeard::Full => full.push((hearer, understand(body))),
+                WhisperHeard::Starred => starred.push((hearer, understand(body))),
                 WhisperHeard::TooFar => far.push(hearer),
             }
         }
-        chat.write(SendChat {
-            clients: full,
-            message: whisper_message(&name, &message),
-        });
-        if !starred.is_empty() {
-            let text = stars(&message, 25.0, || rng.percent());
+        for heard in split_heard(seed, spoken_in, &message, full) {
             chat.write(SendChat {
-                clients: starred,
-                message: whisper_message(&name, &text),
+                clients: heard.clients,
+                message: tagged(whisper_message(&name, &heard.text), heard.tag),
+            });
+        }
+        // Eavesdroppers hear the translated words starred (`/mob/living/Hear`).
+        for heard in split_heard(seed, spoken_in, &message, starred) {
+            let text = stars(&heard.text, 25.0, || rng.percent());
+            chat.write(SendChat {
+                clients: heard.clients,
+                message: tagged(whisper_message(&name, &text), heard.tag),
             });
         }
         if !far.is_empty() {

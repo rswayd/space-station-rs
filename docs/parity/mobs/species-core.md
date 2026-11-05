@@ -35,4 +35,4 @@ _«Видовые атаки без оружия» описано в [../combat/
 
 - **Код:** [`modular_bandastation/species/code/language/`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/species/code/language)
 - **BandaStation:** [`modular_bandastation/species/code/language/canilunzt.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/species/code/language/canilunzt.dm#L1) — языки форка
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_chat/src/language/defs.rs` (канилунц `,7`, сик'таир `,8`, курволиус `,9`, Неорусский `,s` — имена и описания форка), пресеты `/datum/language_holder/{vulpkanin,tajaran,skrell}` и родные языки их органов-языков (`ss13_chat::language::Tongue`), выдача видом — `crates/ss13_game/src/species/mod.rs` (`update_languages`)

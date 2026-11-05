@@ -17,7 +17,7 @@
 //! immunity, no soft crit), `crate::hunger`, `crate::medical::blood` (no blood, exotic blood),
 //! `crate::wires` (`siemens_coeff`), `crate::inventory` (`no_equip_flags`), `crate::genetics`
 //! (geneless), `crate::human` (limb sprites).
-// shortcut: no species languages (no language system), no sprite accessories of species (tails,
+// shortcut: no sprite accessories of species (tails,
 // ears, horns, snouts, wings, antennae, frills, markings: their mutant organs are not spawned),
 // no species perks or descriptions in the preferences menu, no species-specific procs beyond the
 // ones named above (jelly limb regrowth and body swapping, ethereal charge, pod light healing,
@@ -1417,6 +1417,7 @@ pub fn set_species(world: &mut World, mob: Entity, id: SpeciesId) {
     let old_def = old.unwrap_or_default().def();
     let def = id.def();
     world.entity_mut(mob).insert(Species(id));
+    update_languages(world, mob, old.map(|o| o.def().languages), def.languages);
     regenerate_organs(world, mob, true);
     if let Some(mut health) = world.get_mut::<Health>(mob) {
         let mods = def.body_mods();
@@ -1474,6 +1475,39 @@ pub fn set_species(world: &mut World, mob: Entity, id: SpeciesId) {
         }
     }
     info!("{mob} is now {:?}", id);
+}
+
+/// `on_species_loss` / `on_species_gain`: the old species' language holder is taken back and
+/// the new one's granted, both from `LANGUAGE_SPECIES` (a human starts with the empty holder).
+fn update_languages(world: &mut World, mob: Entity, old: Option<&str>, new: &str) {
+    use ss13_chat::language::{LanguageHolder, LanguageSource, Preset};
+    let mut holder = world
+        .get::<LanguageHolder>(mob)
+        .cloned()
+        .unwrap_or_default();
+    if let Some(preset) = old.and_then(Preset::of_path) {
+        holder.unapply(&preset, LanguageSource::Species);
+    }
+    if let Some(preset) = Preset::of_path(new) {
+        holder.apply(&preset, LanguageSource::Species);
+    }
+    world.entity_mut(mob).insert(holder);
+}
+
+/// `GLOB.uncommon_roundstart_languages`: what the roundstart species understand, Galactic
+/// Common out.
+pub fn uncommon_roundstart_languages() -> Vec<ss13_chat::language::LanguageId> {
+    use ss13_chat::language::{LanguageId, Preset};
+    let mut out: Vec<LanguageId> = Vec::new();
+    for id in SpeciesId::roundstart() {
+        let preset = Preset::of_path(id.def().languages).unwrap_or_default();
+        for &l in preset.understood {
+            if l != LanguageId::Common && !out.contains(&l) {
+                out.push(l);
+            }
+        }
+    }
+    out
 }
 
 /// tg `regenerate_organs(replace_current)`: every slot gets the species' organ type; an organ

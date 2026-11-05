@@ -7,6 +7,8 @@
 pub mod client;
 #[cfg(feature = "server")]
 pub mod emote;
+#[cfg(feature = "server")]
+pub mod language;
 pub mod radio;
 #[cfg(feature = "server")]
 pub mod server;
