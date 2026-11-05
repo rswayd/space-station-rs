@@ -76,6 +76,12 @@ pub struct GibberServerPlugin;
 
 impl Plugin for GibberServerPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // tg `attack_hand` of the gibber (a pulled human in, or start), its eject verb.
+        app.add_click_handler(ClickPhase::EmptyHand, 800, |w, c| {
+            crate::gibber::interact(w, c.client, c.mob, c.target, c.modifiers.right)
+        });
         app.add_systems(Startup, setup_gibbers)
             .add_systems(
                 Update,

@@ -188,6 +188,35 @@ pub struct ModpcServerPlugin;
 
 impl Plugin for ModpcServerPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // A PDA turns on and opens its NtOS window.
+        app.add_click_handler(ClickPhase::AttackSelf, 2600, |w, c| {
+            crate::modpc::pda::attack_self(w, c.client, c.mob, c.target)
+        });
+        // An ID card in the active hand goes into the PDA in the other.
+        app.add_click_handler(ClickPhase::OtherHand, 1200, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::modpc::pda::item_interaction(w, c.client, c.mob, h, c.target)
+            })
+        });
+        // tg `attack_hand` of a stationary modular computer (the ID console).
+        app.add_click_handler(ClickPhase::EmptyHand, 2400, |w, c| {
+            crate::modpc::pda::console_interact(w, c.client, c.mob, c.target)
+        });
+        // tg `item_interaction_secondary` of the ID console: an ID into the second slot.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 4100, |w, c| {
+            c.modifiers.right
+                && c.held.is_some_and(|h| {
+                    crate::modpc::pda::item_interaction_secondary(w, c.client, c.mob, h, c.target)
+                })
+        });
+        // tg `item_interaction` of a PDA with an ID card.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 5200, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::modpc::pda::item_interaction(w, c.client, c.mob, h, c.target)
+            })
+        });
         app.register_ui::<NtosUi>()
             .add_observer(attach)
             .add_observer(attach_console)

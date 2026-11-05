@@ -38,6 +38,25 @@ pub struct AtmosGluePlugin;
 
 impl Plugin for AtmosGluePlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // An analyzer scans the user's turf.
+        app.add_click_handler(ClickPhase::AttackSelf, 100, |w, c| {
+            crate::atmos::is_analyzer(w, c.target) && {
+                crate::atmos::analyze_self(w, c.client, c.target, c.mob_pos);
+                true
+            }
+        });
+        // tg `interact_with_atom` of an analyzer: scans the clicked atom when it holds gas, else
+        // its turf.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 5100, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::atmos::is_analyzer(w, h) && {
+                    crate::atmos::scan_target(w, c.client, h, c.target);
+                    true
+                }
+            })
+        });
         app.add_observer(network_gas_overlay)
             .register_ui::<AnalyzerWindow>()
             .add_systems(Startup, load_handbook)

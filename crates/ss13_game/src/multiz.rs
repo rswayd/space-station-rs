@@ -877,6 +877,18 @@ pub struct MultiZPlugin;
 
 impl Plugin for MultiZPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // tg `attack_hand` / `attack_hand_secondary` of a ladder: climb up or down.
+        app.add_click_handler(ClickPhase::EmptyHand, 1700, |w, c| {
+            crate::multiz::interact(w, c.client, c.mob, None, c.target, c.modifiers.right)
+        });
+        // tg `ladder/item_interaction(_secondary)`: out of combat mode, a climb.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 3900, |w, c| {
+            !w.get::<crate::combat::CombatMode>(c.mob)
+                .is_some_and(|m| m.0)
+                && crate::multiz::interact(w, c.client, c.mob, c.held, c.target, c.modifiers.right)
+        });
         app.init_resource::<ZLevels>()
             .add_message::<GhostClick>()
             // Air links need the levels' air (`init_atmos`).

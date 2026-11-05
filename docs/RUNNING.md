@@ -321,6 +321,12 @@ Windows open with sample data (`crates/ss13_tgui/src/samples.rs`); their buttons
 the list shows the last action and logs it. A new interface needs a sample there:
 `cargo test -p ss13_tgui --features client --test samples` fails for a view without one.
 
+Every view the client registers (the tgui crate's and the game's client plugins) is also opened
+headless by `cargo nextest run -p ss13_game --all-features -E 'test(/^ui_smoke::/)'`: with its
+sample, all-zero data and all-`0x01` data (postcard streams that decode as most types, so a new
+view needs no sample there); it fails on a panic, a window that never shows a render, or a render
+without child nodes.
+
 ## Debug UI
 
 An egui overlay in the client (`crates/ss13_debug`): built into debug builds and the browser

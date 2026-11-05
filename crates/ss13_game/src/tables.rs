@@ -97,6 +97,23 @@ pub struct TablesPlugin;
 
 impl Plugin for TablesPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // Rack parts build a rack.
+        app.add_click_handler(ClickPhase::AttackSelf, 2100, |w, c| {
+            crate::tables::attack_self(w, c.client, c.mob, c.target)
+        });
+        // tg `attack_hand` of tables and racks: a pulled mob onto it, flipping (right click),
+        // knocking a climber down, kicking a rack.
+        app.add_click_handler(ClickPhase::EmptyHand, 2700, |w, c| {
+            crate::tables::attack_hand(w, c.client, c.mob, c.target, c.modifiers)
+        });
+        // Tools on tables, frames and racks; a stack builds a table on a frame.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 4300, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::tables::item_interaction(w, c.client, c.mob, h, c.target, c.modifiers)
+            })
+        });
         app.add_observer(add_table)
             .add_observer(add_rack)
             .add_systems(Update, elevate_moved.after(WorldSystems::Movement));

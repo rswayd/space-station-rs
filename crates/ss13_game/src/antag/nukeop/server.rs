@@ -217,6 +217,12 @@ pub struct NukeopPlugin;
 
 impl Plugin for NukeopPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // The nuclear uplink opens, a pinpointer toggles.
+        app.add_click_handler(ClickPhase::AttackSelf, 1500, |w, c| {
+            crate::antag::nukeop::server::attack_self(w, c.client, c.mob, c.target)
+        });
         if !app.world().contains_resource::<NukeopConfig>() {
             app.init_resource::<NukeopConfig>();
         }

@@ -132,6 +132,33 @@ pub struct AtmosMachineryPlugin;
 
 impl Plugin for AtmosMachineryPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // The RPD opens its window.
+        app.add_click_handler(ClickPhase::AttackSelf, 2300, |w, c| {
+            crate::atmos_machinery::rpd::attack_self(w, c.client, c.mob, c.target)
+        });
+        // A pipe fitting turns clockwise.
+        app.add_click_handler(ClickPhase::AttackSelf, 2500, |w, c| {
+            crate::atmos_machinery::fitting::attack_self(w, c.target)
+        });
+        // tg `attack_hand`/`click_alt` of atmos machines (windows, valves, tanks out).
+        app.add_click_handler(ClickPhase::EmptyHand, 1800, |w, c| {
+            crate::atmos_machinery::windows::interact(w, c.client, c.mob, c.target, c.modifiers)
+        });
+        // tg `item_interaction`/`wrench_act` of atmos machines (ports, tanks, IDs).
+        app.add_click_handler(ClickPhase::HeldOnTarget, 4000, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::atmos_machinery::windows::item_interaction(
+                    w,
+                    c.client,
+                    c.mob,
+                    h,
+                    c.target,
+                    c.modifiers,
+                )
+            })
+        });
         if !app.world().contains_resource::<Pipenet>() {
             app.init_resource::<Pipenet>();
         }

@@ -88,6 +88,16 @@ pub struct SmartFridgePlugin;
 
 impl Plugin for SmartFridgePlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        app.add_click_handler(ClickPhase::EmptyHand, 700, |w, c| {
+            crate::smartfridge::interact(w, c.client, c.mob, c.target)
+        });
+        app.add_click_handler(ClickPhase::HeldOnTarget, 2000, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::smartfridge::item_interaction(w, c.client, c.mob, h, c.target)
+            })
+        });
         app.register_ui::<FridgeWindow>()
             .add_systems(
                 Startup,

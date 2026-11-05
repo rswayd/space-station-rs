@@ -93,6 +93,24 @@ pub struct SyndieItemsPlugin;
 
 impl Plugin for SyndieItemsPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // An energy blade toggles, an agent card is shown or forged.
+        app.add_click_handler(ClickPhase::AttackSelf, 1600, |w, c| {
+            crate::antag::syndie_items::attack_self(w, c.client, c.mob, c.target)
+        });
+        // The agent card on the ID card in the other hand.
+        app.add_click_handler(ClickPhase::OtherHand, 1100, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::antag::syndie_items::item_interaction(w, c.client, c.mob, h, c.target)
+            })
+        });
+        // The sleepy pen on a mob, the agent card on an ID card.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 200, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::antag::syndie_items::item_interaction(w, c.client, c.mob, h, c.target)
+            })
+        });
         app.add_systems(
             Update,
             agent_card_answers

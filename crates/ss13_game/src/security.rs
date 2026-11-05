@@ -119,6 +119,12 @@ pub struct SecurityServerPlugin;
 
 impl Plugin for SecurityServerPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // A baton toggles, a flash flashes around.
+        app.add_click_handler(ClickPhase::AttackSelf, 900, |w, c| {
+            crate::security::attack_self(w, c.client, c.mob, c.target)
+        });
         app.init_resource::<MeleeHandled>()
             .add_systems(
                 Update,

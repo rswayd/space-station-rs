@@ -185,6 +185,40 @@ pub struct ExplosionsServerPlugin;
 
 impl Plugin for ExplosionsServerPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // A C-4 charge asks for its timer.
+        app.add_click_handler(ClickPhase::AttackSelf, 1800, |w, c| {
+            crate::explosions::sources::c4_attack_self(w, c.client, c.mob, c.target)
+        });
+        // A C-4 charge is planted on what it touches.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 1100, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::explosions::sources::c4_interact(
+                    w,
+                    crate::tools::Actor {
+                        client: c.client,
+                        mob: c.mob,
+                        item: Some(h),
+                    },
+                    c.target,
+                )
+            })
+        });
+        // A welder refills from a fuel tank (or blows it up, lit).
+        app.add_click_handler(ClickPhase::HeldOnTarget, 1200, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::explosions::sources::fueltank_welder_act(
+                    w,
+                    crate::tools::Actor {
+                        client: c.client,
+                        mob: c.mob,
+                        item: Some(h),
+                    },
+                    c.target,
+                )
+            })
+        });
         app.init_resource::<ExplosionConfig>()
             .init_resource::<ExplosionQueue>()
             .add_systems(

@@ -89,6 +89,16 @@ pub struct HolosignServerPlugin;
 
 impl Plugin for HolosignServerPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // A holosign projector clears its signs.
+        app.add_click_handler(ClickPhase::AttackSelf, 300, |w, c| {
+            crate::holosign::attack_self(w, c.client, c.target)
+        });
+        // tg `attack_holosign`: a swat.
+        app.add_click_handler(ClickPhase::EmptyHand, 3000, |w, c| {
+            crate::holosign::attack_hand(w, c.mob, c.target)
+        });
         app.add_observer(projector_gone);
     }
 }

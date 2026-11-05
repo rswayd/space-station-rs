@@ -684,6 +684,12 @@ pub struct WizardPlugin;
 
 impl Plugin for WizardPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // The spellbook opens, the scroll of teleportation and the contract ask.
+        app.add_click_handler(ClickPhase::AttackSelf, 700, |w, c| {
+            crate::antag::wizard::server::attack_self(w, c.client, c.mob, c.target)
+        });
         if !app.world().contains_resource::<WizardConfig>() {
             app.init_resource::<WizardConfig>();
         }

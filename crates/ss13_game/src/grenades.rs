@@ -157,6 +157,22 @@ pub struct GrenadesServerPlugin;
 
 impl Plugin for GrenadesServerPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // A grenade is armed.
+        app.add_click_handler(ClickPhase::AttackSelf, 2000, |w, c| {
+            crate::grenades::attack_self(w, c.client, c.mob, c.target)
+        });
+        // A screwdriver or multitool sets the fuse of the grenade in the other hand.
+        app.add_click_handler(ClickPhase::OtherHand, 800, |w, c| {
+            c.held
+                .is_some_and(|h| crate::grenades::item_interaction(w, c.client, c.mob, h, c.target))
+        });
+        // A screwdriver or multitool sets a grenade's fuse.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 600, |w, c| {
+            c.held
+                .is_some_and(|h| crate::grenades::item_interaction(w, c.client, c.mob, h, c.target))
+        });
         app.add_systems(
             Update,
             (

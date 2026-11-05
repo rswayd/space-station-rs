@@ -167,6 +167,21 @@ pub struct GunSystems;
 
 impl Plugin for GunsServerPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // A gun racks, ejects, unloads or switches its fire mode.
+        app.add_click_handler(ClickPhase::AttackSelf, 1000, |w, c| {
+            crate::guns::attack_self(w, c.client, c.mob, c.target)
+        });
+        // A magazine or rounds into the other hand's gun.
+        app.add_click_handler(ClickPhase::OtherHand, 1500, |w, c| {
+            c.held
+                .is_some_and(|h| crate::guns::item_interaction(w, c.client, c.mob, h, c.target))
+        });
+        // tg `/obj/item/gun/ballistic/attack_hand`: the other hand's magazine comes out.
+        app.add_click_handler(ClickPhase::OtherHand, 1600, |w, c| {
+            c.held.is_none() && crate::guns::attack_hand(w, c.client, c.mob, c.target)
+        });
         crate::taser::plugin(app);
         app.init_resource::<Bursts>()
             .add_observer(add_gun_state)
