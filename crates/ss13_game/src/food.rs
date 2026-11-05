@@ -604,7 +604,6 @@ fn tongue_of(world: &World, mob: Entity) -> Option<(u32, u32, u32)> {
 }
 
 /// tg `checkLiked` (every 5 s of a food's bites): what the eater thinks of it.
-// shortcut: no mood events, disgust or allergies (not ported); only the messages.
 fn check_liked(world: &mut World, eater: Entity, food: Entity, dm: &DmFood) {
     let now = world.resource::<Time>().elapsed_secs_f64();
     if world
@@ -617,14 +616,26 @@ fn check_liked(world: &mut World, eater: Entity, food: Entity, dm: &DmFood) {
     world.entity_mut(food).insert(LikedChecked(now));
     let handmade = world.get::<Handmade>(food).is_some();
     let quality = perceived_quality(dm, handmade, tongue_of(world, eater));
+    // The moodlets of `checkLiked` (`crate::mood`).
+    // shortcut: no disgust (`adjust_disgust`), allergies, breakfast or good food memories.
+    use crate::mood::events::{DISGUSTING_FOOD, GROSS_FOOD};
     let (span, text) = if quality <= TOXIC_QUALITY {
+        crate::mood::add_event(world, eater, "toxic_food", &DISGUSTING_FOOD);
         (Span::Warning, "Что это, черт побери, было?!".to_owned())
     } else if quality < 0 {
+        crate::mood::add_event(world, eater, "gross_food", &GROSS_FOOD);
         (Span::Notice, "Эта пища была ужасна...".to_owned())
     } else if quality == 0 {
         return;
     } else {
         let label = QUALITY_LABELS[(quality - 1) as usize];
+        // `get_average_purity(/datum/reagent/consumable) * 2`: 100% at a purity of 50% (over
+        // all of the food's reagents: food holds consumables).
+        let purity = world
+            .get::<Reagents>(food)
+            .filter(|r| r.0.total_volume > 0.0)
+            .map_or(0.5, |r| r.0.average_purity());
+        crate::mood::add_food_event(world, eater, quality, label, purity * 2.0);
         (Span::Notice, format!("Это {label} пища."))
     };
     tell_mob(world, eater, span, &text);
