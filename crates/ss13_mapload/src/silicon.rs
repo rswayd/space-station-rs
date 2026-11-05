@@ -6,8 +6,9 @@
 //! - [`DmCameraConsole`] on `/obj/machinery/computer/security` types: their `network`.
 //! - [`SILICON_FILE`]: every `/datum/ai_laws` lawset (`code/datums/ai_laws/`, BandaStation's
 //!   `modular_bandastation/ai_laws`) and the cyborg models `pick_model()` offers
-//!   (`/obj/item/robot_model/*`: name, sprite, `basic_modules`, `radio_channels`). The game
-//!   (`ss13_game::silicon`) reads it at startup.
+//!   (`/obj/item/robot_model/*`: name, sprite, `basic_modules`, `emag_modules`,
+//!   `radio_channels`) and the cyborg upgrade boards (`/obj/item/borg/upgrade/*`, their item
+//!   lists and mounting rules). The game (`ss13_game::silicon`) reads it at startup.
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -38,6 +39,9 @@ const CONSOLE: &str = "dm_camera_console";
 
 /// Spawned at runtime by the silicon jobs: the mobs and the borg's cell.
 pub const SILICON_TYPES: [&str; 4] = [AI_TYPE, ROBOT_TYPE, AI_EYE_TYPE, ROBOT_CELL];
+
+/// `/obj/item/borg/upgrade`.
+pub const UPGRADE_ROOT: &str = "/obj/item/borg/upgrade";
 
 /// tg `/mob/living/silicon/robot/proc/pick_model()`: the models offered, in its order, with
 /// BandaStation's `DISABLE_SECBORG` (on in `config/game_options.txt`) leaving security out.
@@ -83,7 +87,28 @@ pub struct RobotModel {
     pub cyborg_base_icon: String,
     /// Module item types, in `basic_modules` order (repeats kept: two omnitools).
     pub basic_modules: Vec<String>,
+    /// tg `emag_modules`: added while the cyborg is emagged.
+    #[serde(default)]
+    pub emag_modules: Vec<String>,
     pub radio_channels: Vec<String>,
+}
+
+/// A cyborg upgrade board (tg `/obj/item/borg/upgrade` vars).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct BorgUpgrade {
+    pub path: String,
+    /// tg `locked`: refused until unlocked (the syndicate boards).
+    pub locked: bool,
+    pub require_model: bool,
+    /// tg `model_type`: the models with a mounting point; empty: any.
+    pub model_type: Vec<String>,
+    pub one_use: bool,
+    pub allow_duplicates: bool,
+    /// tg `items_to_add`, `items_to_remove`: module types.
+    pub items_to_add: Vec<String>,
+    pub items_to_remove: Vec<String>,
+    /// `/obj/item/borg/upgrade/transform` `new_model`.
+    pub new_model: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -91,6 +116,9 @@ pub struct SiliconData {
     pub lawsets: Vec<Lawset>,
     /// [`PICK_MODELS`] that exist.
     pub models: Vec<RobotModel>,
+    /// Every `/obj/item/borg/upgrade` subtype, by path.
+    #[serde(default)]
+    pub upgrades: Vec<BorgUpgrade>,
 }
 
 impl SiliconData {
@@ -110,14 +138,23 @@ impl SiliconData {
         out
     }
 
-    /// Spawned at runtime: the models and their modules.
+    /// Spawned at runtime: the models and their modules, the upgrades' modules.
     pub fn spawned_types(&self) -> BTreeSet<&str> {
-        self.models
+        let models = self.models.iter().flat_map(|m| {
+            std::iter::once(m.path.as_str())
+                .chain(m.basic_modules.iter().map(String::as_str))
+                .chain(m.emag_modules.iter().map(String::as_str))
+        });
+        let upgrades = self
+            .upgrades
             .iter()
-            .flat_map(|m| {
-                std::iter::once(m.path.as_str()).chain(m.basic_modules.iter().map(String::as_str))
-            })
-            .collect()
+            .flat_map(|u| &u.items_to_add)
+            .map(String::as_str);
+        models.chain(upgrades).collect()
+    }
+
+    pub fn upgrade(&self, path: &str) -> Option<&BorgUpgrade> {
+        self.upgrades.iter().find(|u| u.path == path)
     }
 
     pub fn lawset(&self, id: &str) -> Option<&Lawset> {
@@ -170,14 +207,45 @@ pub fn resolve(types: &DmTypes) -> SiliconData {
             path: path.to_owned(),
             name: text(types.resolved(path, "name")).unwrap_or_default(),
             cyborg_base_icon: text(types.resolved(path, "cyborg_base_icon")).unwrap_or_default(),
-            basic_modules: list(types.resolved(path, "basic_modules"))
-                .into_iter()
-                .filter(|m| types.types.contains_key(m))
-                .collect(),
+            basic_modules: existing(types, list(types.resolved(path, "basic_modules"))),
+            emag_modules: existing(types, list(types.resolved(path, "emag_modules"))),
             radio_channels: list(types.resolved(path, "radio_channels")),
         })
         .collect();
-    SiliconData { lawsets, models }
+    let mut upgrades: Vec<BorgUpgrade> = types
+        .types
+        .keys()
+        .filter(|p| is_under(p, UPGRADE_ROOT))
+        .map(|path| BorgUpgrade {
+            path: path.clone(),
+            locked: truthy(types.resolved(path, "locked")),
+            require_model: truthy(types.resolved(path, "require_model")),
+            model_type: list(types.resolved(path, "model_type")),
+            one_use: truthy(types.resolved(path, "one_use")),
+            allow_duplicates: truthy(types.resolved(path, "allow_duplicates")),
+            items_to_add: existing(types, list(types.resolved(path, "items_to_add"))),
+            items_to_remove: list(types.resolved(path, "items_to_remove")),
+            new_model: match types.resolved(path, "new_model") {
+                Some(Value::String(s)) => Some(s.clone()),
+                Some(Value::Object(o)) => o.get("path").and_then(Value::as_str).map(str::to_owned),
+                _ => None,
+            },
+        })
+        .collect();
+    upgrades.sort_by(|a, b| a.path.cmp(&b.path));
+    SiliconData {
+        lawsets,
+        models,
+        upgrades,
+    }
+}
+
+/// The types of `paths` the dump has.
+fn existing(types: &DmTypes, paths: Vec<String>) -> Vec<String> {
+    paths
+        .into_iter()
+        .filter(|m| types.types.contains_key(m))
+        .collect()
 }
 
 fn str_ron(s: &str) -> String {
@@ -278,6 +346,14 @@ mod tests {
             "name": "Service", "cyborg_base_icon": "service_m",
             "basic_modules": { "list": [{ "path": "/obj/item/pen" }, { "path": "/obj/item/nope" }] },
             "radio_channels": { "list": ["Сервис"] } } },
+        "/obj/item/borg": { "parent": "/obj/item" },
+        "/obj/item/borg/upgrade": { "parent": "/obj/item/borg", "declared_vars": {
+            "locked": 0, "require_model": 0, "model_type": null, "one_use": 0,
+            "items_to_add": null, "items_to_remove": null } },
+        "/obj/item/borg/upgrade/amop": { "parent": "/obj/item/borg/upgrade", "declared_vars": {
+            "require_model": 1, "model_type": { "list": [{ "path": "/obj/item/robot_model/service" }] },
+            "items_to_add": { "list": [{ "path": "/obj/item/pen" }] },
+            "items_to_remove": { "list": [{ "path": "/obj/item/mop" }] } } },
         "/obj/machinery": { "parent": "/obj" },
         "/obj/machinery/camera": { "parent": "/obj/machinery", "declared_vars": {
             "c_tag": null, "network": { "list": ["ss13"] }, "view_range": 7, "camera_enabled": 1 } },
@@ -304,6 +380,13 @@ mod tests {
         assert_eq!(data.models.len(), 1);
         assert_eq!(data.models[0].basic_modules, ["/obj/item/pen"]);
         assert_eq!(data.models[0].radio_channels, ["Сервис"]);
+        assert_eq!(data.upgrades.len(), 2);
+        let amop = data.upgrade("/obj/item/borg/upgrade/amop").unwrap();
+        assert!(amop.require_model && !amop.one_use && !amop.locked);
+        assert_eq!(amop.model_type, ["/obj/item/robot_model/service"]);
+        assert_eq!(amop.items_to_add, ["/obj/item/pen"]);
+        assert_eq!(amop.items_to_remove, ["/obj/item/mop"]);
+        assert!(data.spawned_types().contains("/obj/item/pen"));
         let cam = type_fields(&types, "/obj/machinery/camera/preset/ordnance");
         assert_eq!(get(&cam, "network"), Some(r#"["rd","ordnance"]"#));
         assert_eq!(get(&cam, "c_tag"), Some(r#""Bomb Testing Site""#));

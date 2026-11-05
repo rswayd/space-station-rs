@@ -11,7 +11,7 @@
 Модули и движение тратят заряд ячейки; на нуле киборг беспомощен; HUD показывает заряд.
 
 - **Код:** [`proc/handle_robot_cell()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/silicon/robot/life.dm#L9), [`proc/use_energy()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/silicon/robot/life.dm#L19)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/silicon/cyborg.rs`: ячейка высокой ёмкости (100 кДж), расход `BORG_MINIMUM_POWER_CONSUMPTION` в секунду в сознании, при 1% модули возвращаются в модель, при 0 — режим низкого питания без модулей; нет фонаря и тревог заряда на HUD
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/silicon/cyborg.rs`: ячейка высокой ёмкости (100 кДж), расход `BORG_MINIMUM_POWER_CONSUMPTION` в секунду в сознании, при 1% модули возвращаются в модель, при 0 — режим низкого питания без модулей; ячейка — предмет внутри шасси, вынимается из открытого и вставляется (`crates/ss13_game/src/silicon/chassis.rs`), без неё — низкое питание; нет фонаря и тревог заряда на HUD
 
 ### Модули и слоты инвентаря
 Три активных слота, выбор и смена модулей, поломка слотов при уроне, HUD модулей.
@@ -23,7 +23,7 @@
 Выбор модели при первой активации: стандарт, инженерный, медицинский, шахтёр, уборщик, сервис, охранный, миротворец, клоун; каждая даёт свой набор модулей, иконки и черты.
 
 - **Код:** [`/obj/item/robot_model`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/silicon/robot/robot_model.dm#L9), [`proc/pick_model()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/silicon/robot/robot.dm#L161), [`/obj/item/robot_model/engineering`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/silicon/robot/robot_model.dm#L395), [`/obj/item/robot_model/medical`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/silicon/robot/robot_model.dm#L738), [`/obj/item/robot_model/security`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/silicon/robot/robot_model.dm#L840), [`/obj/item/robot_model/service`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/silicon/robot/robot_model.dm#L876)
-- **Статус в ss13-rs:** 🟡 частично — выбор модели (`pick_model`) окном `tgui_input_list` из моделей tg с конфигом BandaStation (без охранной): инженерная, медицинская, шахтёрская, уборщик, сервисная, миротворец; спрайт, каналы радио и `basic_modules` из дампа (`ss13_mapload::silicon`); нет анимации трансформации, скинов, трейтов моделей и сброса модели
+- **Статус в ss13-rs:** 🟡 частично — выбор модели (`pick_model`) окном `tgui_input_list` из моделей tg с конфигом BandaStation (без охранной): инженерная, медицинская, шахтёрская, уборщик, сервисная, миротворец; спрайт, каналы радио, `basic_modules` и `emag_modules` (у взломанного) из дампа (`ss13_mapload::silicon`); смена модели платой `transform` (`crates/ss13_game/src/silicon/borg_upgrades.rs`); нет анимации трансформации, скинов, трейтов моделей и сброса модели
 
 ### Модели Синдиката
 Штурмовой, медицинский и диверсант-борги Синдиката (ядерные оперативники).
@@ -49,7 +49,7 @@
 38 плат: переименование, сброс/смена модели, самовосстановление, ионные двигатели, расширение, лавоупорность, бур с алмазом, RPED, индуктор, дефибриллятор, хирургический омнитул, гипоспреи, приложения для сервиса, чертежи шаттла и т. д.
 
 - **Код:** [`/obj/item/borg/upgrade`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/robot/robot_upgrades.dm#L4), [`proc/apply_upgrade()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/silicon/robot/robot.dm#L758), [`/obj/item/borg/upgrade/transform`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/robot/robot_upgrades.dm#L729), [`/obj/item/borg/upgrade/selfrepair`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/robot/robot_upgrades.dm#L294)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/silicon/borg_upgrades.rs`: плата в открытое шасси, проверки `require_model`, `locked`, смерти, `model_type`, дублей; `items_to_add`/`items_to_remove` в модели (бур с алмазом, сумки, мопы, RPED, индуктор, приложения сервиса и др.), `one_use`, `transform` (на модели из списка выбора), `syndicate` (взлом); платы с собственным `action` (переименование, двигатели, самовосстановление, расширение, гипоспреи, омнитулы, лавоупорность, B.O.R.I.S., модкиты КА) отказывают «Upgrade error.»; нет `deactivate` (сброса модели)
 
 ### Сборка киборга (эндоскелет)
 Эндоскелет из частей тела роботов (мехфаб), проводка, ячейка, флеш-глаза, MMI/позитронный мозг → киборг; без мозга — оболочка ИИ. Разборка через крышку.
@@ -61,19 +61,19 @@
 Крышку открывает ID с доступом, ломом снимается ячейка, внутри провода (`/datum/wires/robot`: связь с ИИ, камера, блокировка, лоусинк, сброс модели).
 
 - **Код:** [`proc/toggle_cover()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/silicon/robot/robot.dm#L299), [`/datum/wires/robot`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/wires/robot.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — набора проводов робота в `crates/ss13_game/src/wires.rs` нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/silicon/chassis.rs`: ID (карта или PDA) с доступом робототехники запирает/отпирает закрытую крышку, лом открывает незапертую и закрывает открытую, из открытой пустой рукой вынимается ячейка (не синтетиком), ячейка вставляется, открытое шасси не бьют; нет проводов (`/datum/wires/robot`), отвёртки (провода, ключи радио), разборки ключом, оверлея открытой крышки
 
 ### Емаг, блокировка и самоуничтожение
 Емаг снимает законы и привязку к ИИ (законы Синдиката), блокировка (lockdown) парализует, детонация убивает; управляется с консоли робототехники или ИИ.
 
 - **Код:** [`proc/set_lockcharge()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/silicon/robot/robot.dm#L447), [`proc/self_destruct()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/silicon/robot/robot.dm#L381), [`robot_defense.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/silicon/robot/robot_defense.dm#L392)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/silicon/chassis.rs`: емаг ломает замок закрытой крышки, на открытой (кулдаун 10 с) — `SetEmagged` (`emag_modules`), паралич и стан 10 с, отвязка от ИИ без lawsync, текст `borg_emag_end` 6,5 с и законы SyndOS с нулевым законом про емагнувшего; блокировка (`SetLockdown`/`set_lockcharge`): обездвиживание и блок кликов, самоснятие через 10 минут, если блокировал не ИИ; нет детонации (`self_destruct` — только у малф-ИИ, его нет), контратаки малф-ИИ, оболочек ИИ
 
 ### Консоль робототехники
 Список киборгов и дронов: блокировка, детонация, ручное управление ботами.
 
 - **Код:** [`/obj/machinery/computer/robotics`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/computer/robot.dm#L1); tgui: [`RoboticsControlConsole.jsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/RoboticsControlConsole.jsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/silicon/robotics.rs` (окно — `crates/ss13_game/src/silicon/client.rs`): список киборгов на z-уровне по `can_control` (статус, заряд, модель, мастер-ИИ), `stopbot` с доступом робототехники: ИИ блокирует своих (`ai_lockdown`), консоль — одного за раз с сообщением о месте, снятие своей или ИИ-блокировки, обесточенная или удалённая консоль отпускает; открывается рукой, ИИ и киборгом. Детонация и взлом (`killbot`, `magbot`) — только у малф-ИИ (не портирован); вкладка дронов — к `drones.md`; кнопка без подтверждения
 
 ### Станция зарядки киборгов
 Киборг заходит внутрь: заряжается, чинится (с апгрейдами), пополняет расходники модулей.

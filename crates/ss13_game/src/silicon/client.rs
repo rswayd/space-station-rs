@@ -9,9 +9,12 @@
 //! - `ListInputModal` (tg `tgui_input_list`): one button per choice;
 //! - `StationAlertConsole`: a section per alarm type, the alarmed areas, and for the AI each
 //!   area's camera button.
+//! - `RoboticsControlConsole`: a section per cyborg (status, charge, model, master AI) with
+//!   its Lockdown / Release button.
 // shortcut: the static is plain dark tiles, not tg's animated `cameravis.dmi` static.
 // shortcut: the console's camera list has no search field and no nanomap tab; its map pane is
 // the main map view.
+// shortcut: the robotics console has no drones tab and its Lockdown button no confirmation.
 
 use bevy::app::Propagate;
 use bevy::asset::RenderAssetUsages;
@@ -48,6 +51,7 @@ impl Plugin for SiliconClientPlugin {
             .register_ui_view::<CameraConsoleUi>()
             .register_ui_view::<ListInputUi>()
             .register_ui_view::<StationAlertUi>()
+            .register_ui_view::<RoboticsConsoleUi>()
             .init_resource::<CameraView>()
             .add_systems(Startup, spawn_static)
             .add_systems(Update, receive_view)
@@ -456,9 +460,106 @@ impl ClientUi for StationAlertUi {
     }
 }
 
+impl ClientUi for RoboticsConsoleUi {
+    const WIDTH: f32 = 500.0;
+    const HEIGHT: f32 = 460.0;
+
+    fn content(_: &(), data: &RoboticsConsoleData) -> impl Scene {
+        let sections: Vec<Box<dyn SceneList>> = if data.cyborgs.is_empty() {
+            vec![Box::new(EntityScene(bsn! {
+                @NoticeBox
+                Children [ Text("No cyborg units detected within access parameters") ]
+            }))]
+        } else {
+            data.cyborgs.iter().map(cyborg_section).collect()
+        };
+        bsn! {
+            @WindowContent
+            Children [
+                @Section { @fill: true, @scrollable: true } Children [ {sections} ]
+            ]
+        }
+    }
+}
+
+/// tgui `RoboticsControlConsole`'s status text and color.
+pub fn cyborg_status(borg: &RoboticsCyborg) -> (UiColor, &'static str) {
+    if borg.status != 0 {
+        (UiColor::Bad, "Not Responding")
+    } else if borg.locked_down {
+        (UiColor::Average, "Locked Down")
+    } else {
+        (UiColor::Good, "Nominal")
+    }
+}
+
+/// The charge text and color (`<= 30` bad, `<= 70` average).
+pub fn cyborg_charge(charge: Option<u32>) -> (UiColor, String) {
+    match charge {
+        None => (UiColor::Bad, "Not Found".to_owned()),
+        Some(c) if c <= 30 => (UiColor::Bad, format!("{c}%")),
+        Some(c) if c <= 70 => (UiColor::Average, format!("{c}%")),
+        Some(c) => (UiColor::Good, format!("{c}%")),
+    }
+}
+
+fn cyborg_section(borg: &RoboticsCyborg) -> Box<dyn SceneList> {
+    let (icon, label, color) = if borg.locked_down {
+        ("unlock", "Release", UiColor::Good)
+    } else {
+        ("lock", "Lockdown", UiColor::Default)
+    };
+    let params = ActParams(vec![("ref".to_owned(), borg.borg_ref.clone())]);
+    let buttons: Box<dyn SceneList> = Box::new(EntityScene(bsn! {
+        @ss13_ui_kit::Button { @icon: icon, @content: label }
+        ss13_ui_kit::Button { color: color }
+        Act({STOPBOT.to_owned()})
+        params
+    }));
+    let (status_color, status) = cyborg_status(borg);
+    let (charge_color, charge) = cyborg_charge(borg.charge);
+    let module = borg.module.clone();
+    let (master_color, master) = match &borg.synchronization {
+        Some(ai) => (UiColor::Default, ai.clone()),
+        None => (UiColor::Average, "None".to_owned()),
+    };
+    let title = borg.name.clone();
+    Box::new(EntityScene(bsn! {
+        @Section { @title: title, @buttons: buttons }
+        Children [
+            @LabeledList
+            Children [
+                @LabeledListItem { @label: "Status", @color: status_color, @content: status }
+                --
+                @LabeledListItem { @label: "Charge", @color: charge_color, @content: charge }
+                --
+                @LabeledListItem { @label: "Model", @content: module }
+                --
+                @LabeledListItem { @label: "Master AI", @color: master_color, @content: master }
+            ]
+        ]
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn robotics_console_texts_follow_tgui() {
+        let borg = |status, locked_down| RoboticsCyborg {
+            status,
+            locked_down,
+            ..default()
+        };
+        assert_eq!(cyborg_status(&borg(4, true)).1, "Not Responding");
+        assert_eq!(cyborg_status(&borg(0, true)).1, "Locked Down");
+        assert_eq!(cyborg_status(&borg(0, false)).1, "Nominal");
+        assert_eq!(cyborg_charge(None).1, "Not Found");
+        assert_eq!(cyborg_charge(Some(30)).0, UiColor::Bad);
+        assert_eq!(cyborg_charge(Some(70)).0, UiColor::Average);
+        assert_eq!(cyborg_charge(Some(71)), (UiColor::Good, "71%".to_owned()));
+    }
 
     fn cams(n: usize) -> Vec<CameraEntry> {
         (0..n)

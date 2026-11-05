@@ -15,10 +15,11 @@
 //!   - an APC (panel shut): its interface unlocks and cannot be locked again;
 //!   - an air alarm: the flood and vent siphon modes are offered;
 //!   - a supply console: contraband is offered (`crate::cargo::console`);
-//!   - a communications console, a vending machine, a chem dispenser: their own `emag_act`.
+//!   - a communications console, a vending machine, a chem dispenser, a cyborg
+//!     (`crate::silicon::chassis`): their own `emag_act`.
 //! - Bots take emags through their own clicks (`crate::bots`), after [`can_emag`].
 // shortcut: no bluespace emag reach (`prox_check`), no emags stuck together, no Donk Co. fake
-// emag, no `emag_act` of cyborgs, pAIs, the emergency shuttle console, the holodeck or other
+// emag, no `emag_act` of pAIs, the emergency shuttle console, the holodeck or other
 // unported families; no spark flicks of the windoor and the APC (only the airlock's `sparks`
 // overlay), no hacked-APC flicker; no blackbox or combat log of the attempt.
 
@@ -128,6 +129,7 @@ fn takes_emag(world: &World, target: Entity) -> bool {
         || e.contains::<crate::comms_server::CommsConsole>()
         || e.contains::<crate::vending::Vendor>()
         || e.contains::<crate::chem_dispenser::ChemDispenser>()
+        || e.contains::<crate::silicon::chassis::Chassis>()
 }
 
 fn name(world: &World, e: Entity) -> String {
@@ -262,6 +264,12 @@ pub fn emag_act(world: &mut World, actor: Actor, card: Entity, target: Entity) -
     {
         crate::chem_dispenser::emag_act(world, client, target);
         return true;
+    }
+    if world
+        .get::<crate::silicon::chassis::Chassis>(target)
+        .is_some()
+    {
+        return crate::silicon::chassis::emag_act(world, actor, target);
     }
     false
 }

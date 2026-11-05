@@ -17,7 +17,7 @@ Asimov, Asimov++, Corporate, Paladin, Robocop, Hippocratic, Peacekeeper, Ten Com
 Antimov, Tyrant, Thermodynamic/Thermurderdynamic, Syndicate override, Ninja override, Balance, Overlord и прочие.
 
 - **Код:** [`laws_antagonistic.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/ai_laws/laws_antagonistic.dm#L5)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — все переносятся в `silicon.ron`; Syndicate override (`syndie`) получает емагнутый киборг (`crates/ss13_game/src/silicon/chassis.rs`); остальные нечем загрузить (плат нет)
 
 ### Лоусеты BandaStation
 Форк добавляет 26 русскоязычных наборов (НТ Стандарт, Крюзимов, Крюзимов++, ЕРТ, Детектив, Петрович, Мать, Друид, Клоун, Эпсилон, Коллектив синтетиков и др.) с модулями ядра и чертежами в техвебе.
@@ -54,7 +54,7 @@ Safeguard, Protect Station, Quarantine, Oxygen is toxic, Freeform (свой те
 Привязанные к ИИ киборги получают его законы (lawsync), отвязка — через провод или консоль.
 
 - **Код:** [`proc/lawsync()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/silicon/robot/laws.dm#L57), [`proc/lawset_updated_sync_borgs()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/silicon/ai/ai.dm#L1304)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/silicon/cyborg.rs`: связь с ИИ (`connected_ai`, `connected_robots`), `lawsync` по `ai_to_cyborg` при связи и при смене законов ИИ; нет отвязки, консоли робототехники, `lawupdate`-провода
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/silicon/cyborg.rs`: связь с ИИ (`connected_ai`, `connected_robots`), `lawsync` по `ai_to_cyborg` при связи и при смене законов ИИ, после чего борг видит законы (`show_laws` робота: «Laws synced with AI», кто мастер — `crates/ss13_game/src/silicon/chassis.rs`); без ИИ при спавне `lawupdate` выключен, емаг отвязывает; нет `lawupdate`-провода
 
 ### Запрос смены законов у ЦК (BandaStation)
 Верб ИИ «Request Law Change»: ИИ составляет новый набор, админы получают fax-подобное уведомление, одобряют или отклоняют; при одобрении законы ядра заменяются и экипаж получает объявление.

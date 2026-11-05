@@ -339,14 +339,18 @@ impl Incapacitation {
         cuffed: bool,
         limbs: Option<&crate::medical::LimbLimits>,
         rest: Option<&crate::rest::Rest>,
+        locked: bool,
     ) -> Self {
         let e = |f: fn(&StatusEffects) -> bool| effects.is_some_and(f);
         Self {
             incapacitated: e(StatusEffects::incapacitated),
-            // Buckled lying, no usable legs (`crate::medical`).
-            immobilized: e(StatusEffects::immobilized) || limbs.is_some_and(|l| l.immobilized),
+            // Buckled lying, no usable legs (`crate::medical`); a locked down cyborg
+            // (`crate::silicon::chassis::LockedDown`).
+            immobilized: e(StatusEffects::immobilized)
+                || limbs.is_some_and(|l| l.immobilized)
+                || locked,
             floored: e(StatusEffects::floored) || limbs.is_some_and(|l| l.floored),
-            hands_blocked: e(StatusEffects::hands_blocked) || cuffed,
+            hands_blocked: e(StatusEffects::hands_blocked) || cuffed || locked,
             restrained: cuffed,
             staggered: effects.is_some_and(|e| e.staggered > 0.0),
             resting: rest.is_some_and(|r| r.down),
@@ -465,22 +469,29 @@ fn refresh_incapacitation(
             Changed<Handcuffed>,
             Changed<crate::medical::LimbLimits>,
             Changed<crate::rest::Rest>,
+            Added<crate::silicon::chassis::LockedDown>,
         )>,
     >,
     mut removed_effects: RemovedComponents<StatusEffects>,
     mut removed_cuffs: RemovedComponents<Handcuffed>,
+    mut removed_locks: RemovedComponents<crate::silicon::chassis::LockedDown>,
     mut mobs: Query<(
         Option<&StatusEffects>,
         Has<Handcuffed>,
         Option<&crate::medical::LimbLimits>,
         Option<&crate::rest::Rest>,
+        Has<crate::silicon::chassis::LockedDown>,
         &mut Incapacitation,
     )>,
 ) {
-    let removed: Vec<Entity> = removed_effects.read().chain(removed_cuffs.read()).collect();
+    let removed: Vec<Entity> = removed_effects
+        .read()
+        .chain(removed_cuffs.read())
+        .chain(removed_locks.read())
+        .collect();
     for mob in changed.iter().chain(removed) {
-        if let Ok((effects, cuffed, limbs, rest, mut traits)) = mobs.get_mut(mob) {
-            traits.set_if_neq(Incapacitation::of(effects, cuffed, limbs, rest));
+        if let Ok((effects, cuffed, limbs, rest, locked, mut traits)) = mobs.get_mut(mob) {
+            traits.set_if_neq(Incapacitation::of(effects, cuffed, limbs, rest, locked));
         }
     }
 }

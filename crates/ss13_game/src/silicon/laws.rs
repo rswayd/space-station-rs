@@ -121,7 +121,7 @@ mod tests {
                     ..default()
                 },
             ],
-            models: vec![],
+            ..default()
         }
     }
 
