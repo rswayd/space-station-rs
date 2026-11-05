@@ -534,8 +534,18 @@ pub struct SpawnerStats {
     pub missing_loot: BTreeMap<String, usize>,
 }
 
+/// The station traits' scale of maintenance loot (tg `get_effective_lootcount`:
+/// `STATION_TRAIT_FILLED_MAINT` 1.5, `STATION_TRAIT_EMPTY_MAINT` 0.5, floored). The game inserts
+/// it before the map loads; absent: 1.
+#[derive(Resource, Clone, Copy, Debug, PartialEq)]
+pub struct MaintLootScale(pub f64);
+
+/// `/obj/effect/spawner/random/maintenance`.
+pub const MAINT_SPAWNER: &str = "/obj/effect/spawner/random/maintenance";
+
 struct Resolver<'a> {
     protos: &'a Prototypes,
+    maint_scale: f64,
     index: HashMap<(&'a str, &'a str), IconStateId>,
     templates: HashMap<String, Option<Template>>,
     stats: SpawnerStats,
@@ -554,9 +564,11 @@ pub fn resolve_all(world: &mut World, manifest: &AssetManifest, rng: &mut Rng) -
     if spawners.is_empty() {
         return SpawnerStats::default();
     }
+    let maint_scale = world.get_resource::<MaintLootScale>().map_or(1.0, |s| s.0);
     world.resource_scope(|world, protos: Mut<Prototypes>| {
         let mut r = Resolver {
             protos: &protos,
+            maint_scale,
             index: manifest.index(),
             templates: HashMap::new(),
             stats: SpawnerStats::default(),
@@ -606,6 +618,11 @@ impl Resolver<'_> {
         }
         let (count, double) = if s.all {
             (usize::MAX, false)
+        } else if is_under(&s.type_path, MAINT_SPAWNER) {
+            (
+                (f64::from(s.count) * self.maint_scale).floor() as usize,
+                s.double,
+            )
         } else {
             (s.count as usize, s.double)
         };

@@ -111,6 +111,7 @@
 //! | 3200 | `service::server::interact` |
 //! | 3300 | `defenses::server::interact` |
 //! | 3400 | `silicon::law_rack::interact` |
+//! | 3470 | `station_goals::interact` (satellites) |
 //!
 //! [`ClickPhase::HeldOnTarget`] (a world click with the active hand's item; tg
 //! `item_interaction`, `interact_with_atom`, `pre_attack`, `attackby`):

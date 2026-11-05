@@ -280,6 +280,10 @@ impl Plugin for GameServerPlugin {
         .add_plugins(crate::security_level::SecurityLevelPlugin)
         .add_plugins(crate::announce::AnnouncePlugin)
         .add_plugins((
+            crate::station_traits::StationTraitsPlugin,
+            crate::station_goals::StationGoalsPlugin,
+        ))
+        .add_plugins((
             crate::implants::ImplantsPlugin,
             crate::defenses::server::DefensesPlugin,
         ))

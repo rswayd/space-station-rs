@@ -15,11 +15,10 @@
 //! - [`CommsController`]: cooldowns shared by every console, [`send_message`] to the consoles
 //!   (`crate::comms_server`), the round-start report ([`queue_roundstart_report`]).
 // shortcut: no announcement colors or TTS (chat has no alert divider spans, no TTS service);
-// the announcer is always the default one until station
-// traits pick another (the intern's sounds and message are converted and selectable by
-// [`Announcer::path`]).
-// shortcut: the report has no station goals, station traits or footnotes (none are ported); it
-// is printed as the paper's description (no paper text yet).
+// the announcer is the default one unless a station trait picks another
+// (`crate::station_traits`).
+// shortcut: the report has no footnotes (none are ported); it is printed as the paper's
+// description (no paper text yet).
 
 use bevy::prelude::*;
 use ss13_mapload::sound::AnnouncerSounds;
@@ -421,6 +420,13 @@ fn send_roundstart_report(world: &mut World) {
         return;
     }
     controller.report_at = None;
+    // BandaStation: the goals are generated with the report.
+    if world
+        .get_resource::<crate::station_goals::StationGoals>()
+        .is_some_and(|g| g.goals.is_empty())
+    {
+        crate::station_goals::generate(world);
+    }
     let report = station_report(world);
     print_command_report(
         world,
@@ -440,8 +446,9 @@ fn send_roundstart_report(world: &mut World) {
     .send(world);
 }
 
-/// `station_report.md` with its keys filled: no goals, traits or footnotes (none ported), a
-/// random human signing officer; the paper's `[blank_header]`/`[blank_footer]` as plain lines.
+/// `station_report.md` with its keys filled: the goals (`%STATION_GOALS`), the reported station
+/// traits (`%TRAIT_REPORTS`), no footnotes (none ported), a random human signing officer; the
+/// paper's `[blank_header]`/`[blank_footer]` as plain lines.
 // shortcut: `[datetime]` has no station clock here; the line is left out.
 pub fn station_report(world: &mut World) -> String {
     let officer = world
@@ -449,13 +456,25 @@ pub fn station_report(world: &mut World) -> String {
         .and_then(|mut jobs| jobs.random_name(&Default::default()))
         .unwrap_or_else(|| "Неизвестный".to_owned());
     let station = crate::round::station_name(world);
+    let goals = crate::station_goals::report_section(world);
+    let traits = crate::station_traits::report_section(world);
+    let mut sections = goals;
+    if !traits.is_empty() {
+        if !sections.is_empty() {
+            sections.push_str("\n\n---\n\n");
+        }
+        sections.push_str(&traits);
+    }
+    if !sections.is_empty() {
+        sections.push_str("\n\n");
+    }
     format!(
         "NT-INTEL-01 (КОНФИДЕНЦИАЛЬНО)\n\
          Отчет департамента разведки и оценки угроз Нанотрейзен\n\
          Станция: {station}\n\
          Категория: Центральное командование\n\
          Перед заполнением прочтите от начала до конца | Высокий приоритет\n\n\
-         ---\n\n\
+         {sections}---\n\n\
          === Подписи и штампы ===\n\n\
          Должность уполномоченного лица: Младший офицер разведки Нанотрейзен\n\
          Подпись уполномоченного лица: {officer}\n\n\

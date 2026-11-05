@@ -507,8 +507,11 @@ pub fn join(world: &mut World, client: Entity, job: usize, latejoin: bool) -> En
     }
     let forced =
         crate::server::dev_spawn(world, client).or_else(|| world.resource::<SpawnPoints>().forced);
+    // `get_roundstart_spawn_point`: `STATION_TRAIT_LATE_ARRIVALS` sends everyone to latejoin.
+    let at_job_spawn =
+        !latejoin && !crate::station_traits::has(world, crate::station_traits::LATE_ARRIVALS);
     let pos = forced
-        .or_else(|| (!latejoin).then(|| job_spawn(world, &def.title)).flatten())
+        .or_else(|| at_job_spawn.then(|| job_spawn(world, &def.title)).flatten())
         .unwrap_or_else(|| crate::server::pick_latejoin(world));
     let mob = crate::server::spawn_mob(world, client, pos, name.clone());
     world.resource_mut::<Jobs>().add_position(job);

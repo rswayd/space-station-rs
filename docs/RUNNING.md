@@ -1057,6 +1057,33 @@ SS13_FORCE_EVENT="Meteor Wave: Catastrophic" SS13_LIGHTING=0 \
     scripts/visual-check.sh scripts/visual/meteors.txt   # meteors hitting a room in space
 ```
 
+### Station traits and goals
+
+`crates/ss13_game/src/station_traits.rs`: tg's `SSstation` traits. When the server starts, a budget
+per sign is picked from BandaStation's `POSITIVE/NEUTRAL/NEGATIVE_STATION_TRAITS` and spent on
+ported traits by weight (blacklists honoured); the round-start CentCom report lists them. Ported:
+galactic grant, strong/distant supply lines (pack prices x0.8/x1.2), quick/slow supply shuttle,
+filled/empty maintenance (loot x1.5/x0.5), intern and medbot announcers, carp infestation, mail
+strike, late arrivals (everyone starts at latejoin), blackout, radiation and dust storms, spiked
+cola, vending shortage. `crates/ss13_game/src/station_goals.rs`: the station goal (the meteor
+shield: order satellites from cargo, switch them on in space; 500 covered tiles at round end).
+
+- `SS13_STATION_TRAITS="/datum/station_trait/blackout,/datum/station_trait/quick_shuttle"`: exactly
+  these traits (tg's future station traits); `SS13_FORBID_STATION_TRAITS=1`: none. Integration
+  test servers roll none (`StationTraitsConfig::none()`).
+- `SS13_STATION_GOAL_BUDGET` (default 1): the goals' weight budget; 0 gives none.
+
+```sh
+cargo test -p ss13_game --all-features --lib station_   # roll budgets, blacklists, round start,
+                                                        # goal generation and report
+```
+
+Manual check: `SS13_STATION_TRAITS=/datum/station_trait/blackout`, start a round from the lobby:
+the CentCom report paper lists "Блэкаут" and about a third of the station's areas are dark. Order
+"Спутники метеоритного щита", put one on a space tile, click it with an empty hand: after 2 s it
+anchors and shows `sat_active`; `SS13_FORCE_EVENT="Meteor Wave: Normal"` meteors that pass within
+14 tiles over open space vanish.
+
 ### EMP
 
 `crates/ss13_game/src/emp/`, after tg `empulse()` and `emp_act`: a pulse (`Empulse`) hits every

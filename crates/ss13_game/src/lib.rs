@@ -387,6 +387,10 @@ pub mod speech;
 #[cfg(feature = "server")]
 pub mod spells;
 #[cfg(feature = "server")]
+pub mod station_goals;
+#[cfg(feature = "server")]
+pub mod station_traits;
+#[cfg(feature = "server")]
 pub mod status_effects;
 #[cfg(feature = "server")]
 pub mod stock_parts;

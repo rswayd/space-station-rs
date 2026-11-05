@@ -510,6 +510,8 @@ fn setup(world: &mut World, now: f64) {
             crate::sound::PlaySound::to_playing_players(welcome, 100.0, false),
         );
     }
+    // `COMSIG_TICKER_ROUND_STARTING`, after the characters: the station traits' round start.
+    crate::station_traits::on_round_start(world);
     // `PostSetup`: `queue_roundstart_report`.
     crate::announce::queue_roundstart_report(world);
     info!(
@@ -631,6 +633,8 @@ fn declare_completion(world: &mut World, now: f64) {
     antags.extend(crate::antag::revolution::server::roundend_report(
         world, end,
     ));
+    // `goal_report`, then `market_report`.
+    antags.extend(crate::station_goals::goal_report(world));
     antags.extend(crate::cargo::economy::market_report(world));
     let clients = all_clients(world);
     for message in antags {
