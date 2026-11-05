@@ -7,14 +7,15 @@
 //!   `book_nerd` mood event.
 //! - A mapped bookcase takes the books on its tile; an empty hand picks one from the list into
 //!   the empty active hand, a book goes onto the shelf; the sprite shows up to five books.
-//! - The bible in a chaplain's hand heals another living human (10 brute and 10 burn on each
-//!   hurt bodypart, a `blessing` mood event) 40% of the time, else beats them over the head (5
-//!   brain damage without a helmet); others get burnt. It blesses the water (and unholy water)
-//!   in a container into holy water.
+//! - The bible in a holy hand (`super::religion::holy_role`) heals another living human (10
+//!   brute and 10 burn on each hurt bodypart, a `blessing` mood event, in the name of its deity)
+//!   40% of the time, or as the station's sect blesses, else beats them over the head (5 brain
+//!   damage without a helmet); others get burnt. It blesses the water (and unholy water) in a
+//!   container into holy water. Its skins, the altar it unpacks into and the sects are
+//!   `super::religion`.
 // shortcut: no library database (random bookcases stay empty, no library computers, scanner or
 // binder), no carving, vandalizing or wiki manuals; bookcases cannot be built, wrenched or
-// pried; the bible has no skins, sects, altar making, rune revealing, dead blessings, clumsy
-// fumbles or bullet blocking.
+// pried; the bible has no rune revealing, dead blessings, clumsy fumbles or bullet blocking.
 
 use std::collections::HashSet;
 
@@ -26,17 +27,17 @@ use ss13_tgui::prompt::{Ask, PromptKind, ask_world};
 use ss13_tgui::server::{AlwaysState, OpenUi};
 use ss13_world::SpatialIndex;
 
+use super::religion::{Blessing, deity, holy_role};
 use super::server::{
-    PendingAsk, client_of, item_path, job_title, say_around, service_data, set_icon_state, sound_at,
+    PendingAsk, client_of, item_path, say_around, service_data, set_icon_state, sound_at,
 };
 use crate::chem::{Chem, Reagents, name_of};
-use crate::health::{DamageType, Health, Stat, apply_damage, update_stat};
+use crate::health::{DamageType, Health, Stat, apply_damage};
 use crate::inventory::Inventory;
 use crate::mood::MoodEvent;
 use crate::obj_damage::is_under;
 use crate::storage::{Stored, StoredIn};
 use crate::tools::tell;
-use crate::zone::BodyZone;
 
 pub const BOOK: &str = ss13_mapload::service::BOOK_ROOT;
 const BIBLE: &str = "/obj/item/book/bible";
@@ -51,12 +52,6 @@ const UNHOLY_WATER: &str = "/datum/reagent/fuel/unholywater";
 const PAGE_SOUND: &str = "sound/items/handling/paper_pickup.ogg";
 /// `SFX_PUNCH`.
 const PUNCH: &str = "punch";
-/// `DEFAULT_SMACK_CHANCE`.
-const SMACK_CHANCE: f32 = 60.0;
-/// The bible's `deity_name` without a religion.
-const DEITY: &str = "Christ";
-/// The chaplain is tg's `HOLY_ROLE_HIGHPRIEST`.
-const CHAPLAIN: &str = "Chaplain";
 
 /// `/datum/mood_event/book_nerd`, `/datum/mood_event/blessing`.
 const BOOK_NERD: MoodEvent = MoodEvent {
@@ -66,7 +61,7 @@ const BOOK_NERD: MoodEvent = MoodEvent {
     timeout: 300.0,
     hidden: false,
 };
-const BLESSING: MoodEvent = MoodEvent {
+pub(super) const BLESSING: MoodEvent = MoodEvent {
     id: "blessing",
     description: "Меня благословили.",
     mood_change: 1.0,
@@ -291,7 +286,13 @@ pub(super) fn item_interaction(
         bible_attack(world, client, mob, held, target);
         return true;
     }
-    bless_container(world, client, mob, target)
+    // `interact_with_atom` is for holy hands only.
+    if holy_role(world, mob).is_none() {
+        return false;
+    }
+    super::religion::bible_on_floor(world, client, mob, held, target)
+        || bless_container(world, client, target)
+        || super::religion::bible_on_bible(world, client, held, target)
 }
 
 fn hurt(world: &mut World, mob: Entity, kind: DamageType, amount: f32) {
@@ -309,7 +310,7 @@ fn hurt(world: &mut World, mob: Entity, kind: DamageType, amount: f32) {
 
 /// `bible/attack` in heal mode.
 fn bible_attack(world: &mut World, client: Entity, user: Entity, bible: Entity, target: Entity) {
-    if job_title(world, user).as_deref() != Some(CHAPLAIN) {
+    if holy_role(world, user).is_none() {
         tell(
             world,
             client,
@@ -336,11 +337,16 @@ fn bible_attack(world: &mut World, client: Entity, user: Entity, bible: Entity, 
         tell(world, client, Span::Warning, "can't heal yourself!");
         return;
     }
+    let chance = super::religion::smack_chance(world);
     let smack = world
         .resource_mut::<crate::combat::CombatRng>()
-        .chance(SMACK_CHANCE);
-    if !smack && bless(world, user, target) {
-        return;
+        .chance(chance);
+    if !smack {
+        let result = super::religion::sect_bless(world, user, target)
+            .unwrap_or_else(|| bless(world, user, bible, target));
+        if result != Blessing::Failed {
+            return;
+        }
     }
     let helmet = world
         .get::<Inventory>(target)
@@ -372,38 +378,25 @@ fn bible_attack(world: &mut World, client: Entity, user: Entity, bible: Entity, 
     sound_at(world, target, PUNCH, 25.0, true);
 }
 
-/// `bible/bless` without a sect: true unless the blessing failed (not a human). A human without
-/// hurt bodyparts is "ignored": no heal, no smack either.
-fn bless(world: &mut World, user: Entity, target: Entity) -> bool {
-    let Some(mut health) = world.get::<Health>(target).cloned() else {
-        return false;
-    };
-    if health.basic.is_some() {
-        return false;
+/// `bible/bless` without a sect (and the puritan and pyre gods' `standard_bless_healing`): a
+/// human without hurt bodyparts is "ignored" (no heal, no smack either); a non-human fails.
+fn bless(world: &mut World, user: Entity, bible: Entity, target: Entity) -> Blessing {
+    if world
+        .get::<Health>(target)
+        .is_none_or(|h| h.basic.is_some())
+    {
+        return Blessing::Failed;
     }
-    let hurt: Vec<BodyZone> = BodyZone::ALL
-        .into_iter()
-        .filter(|z| health.parts[z.index()].damage() > 0.0)
-        .collect();
-    if hurt.is_empty() {
-        return true;
+    if !super::religion::heal_hurt_parts(world, target, 10.0) {
+        return Blessing::Ignored;
     }
-    for zone in hurt {
-        health.heal_zone(zone, 10.0, 10.0);
-    }
-    let mut stat = world.get::<Stat>(target).copied().unwrap_or_default();
-    let before = stat;
-    update_stat(&health, &mut stat);
-    world.entity_mut(target).insert(health);
-    if stat != before {
-        world.entity_mut(target).insert(stat);
-    }
+    let deity = deity(world, Some(bible));
     let (name, user_name) = (name_of(world, target), name_of(world, user));
     say_around(
         world,
         target,
         Span::Notice,
-        format!("{user_name} heals {name} with the power of {DEITY}!"),
+        format!("{user_name} heals {name} with the power of {deity}!"),
         &[],
     );
     if let Some(client) = client_of(world, target) {
@@ -411,19 +404,16 @@ fn bless(world: &mut World, user: Entity, target: Entity) -> bool {
             world,
             client,
             Span::BoldNotice,
-            format!("May the power of {DEITY} compel you to be healed!"),
+            format!("May the power of {deity} compel you to be healed!"),
         );
     }
     sound_at(world, target, PUNCH, 25.0, true);
     crate::mood::add_event(world, target, "blessing", &BLESSING);
-    true
+    Blessing::Success
 }
 
 /// `bible/interact_with_atom` on a reagent holder: water and unholy water become holy water.
-fn bless_container(world: &mut World, client: Entity, user: Entity, target: Entity) -> bool {
-    if job_title(world, user).as_deref() != Some(CHAPLAIN) {
-        return false;
-    }
+fn bless_container(world: &mut World, client: Entity, target: Entity) -> bool {
     let Some(chem) = world.get_resource::<Chem>().map(|c| c.0.clone()) else {
         return false;
     };

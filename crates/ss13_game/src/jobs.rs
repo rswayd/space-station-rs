@@ -527,6 +527,8 @@ pub fn join(world: &mut World, client: Entity, job: usize, latejoin: bool) -> En
     crate::modpc::pda::post_equip(world, mob, &name, &def.assignment);
     // tg `equip_characters` / `AttemptLateSpawn`: `SSquirks.AssignQuirks` after the outfit.
     crate::quirks::assign(world, client, mob);
+    // `/datum/job/chaplain/after_spawn`: the bible, the religion's names.
+    crate::service::chaplain_spawned(world, client, mob);
     crate::records::manifest::inject_joiner(world, mob, job);
     world.entity_mut(client).remove::<(NewPlayer, JobBoard)>();
     info!(

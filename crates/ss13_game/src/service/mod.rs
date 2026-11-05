@@ -1,7 +1,7 @@
 //! Service jobs' items (tg `code/modules/paperwork`, `code/modules/library`,
 //! `code/game/objects/items/dice.dm`, `clown_items.dm`, `datums/components/squeak.dm`):
 //! paper with text and stamps, pens, paper bins, the hand labeler, the desk bell, books and
-//! bookcases, the bible, dice, squeaky things and the mime's vow.
+//! bookcases, the bible, dice, squeaky things, the mime's vow and the chaplain's religion.
 //!
 //! This module holds what both halves share: the tgui `PaperSheet` and `MarkdownViewer` window
 //! data. [`server`] runs the items, [`client`] draws the windows.
@@ -22,6 +22,8 @@ mod games;
 mod library;
 #[cfg(feature = "server")]
 mod paper;
+#[cfg(feature = "server")]
+mod religion;
 
 #[cfg(feature = "server")]
 pub use clown::MimeVow;
@@ -29,6 +31,11 @@ pub use clown::MimeVow;
 pub use games::Die;
 #[cfg(feature = "server")]
 pub use paper::{Paper, write_printed};
+#[cfg(feature = "server")]
+pub use religion::{
+    BIBLE_SKINS, BibleDeity, HolyRole, PerformingRite, Religion, ReligionJob, Rite, Sect,
+    chaplain_spawned, complete as religion_complete, holy_role,
+};
 
 /// tgui `PaperSheet` (`/obj/item/paper/ui_interact`), read-only here: writing goes through a
 /// text prompt (see [`server`]).

@@ -3542,7 +3542,9 @@ pub struct Buckled(pub Entity);
 
 /// The furniture a mob can be buckled to lying down (`can_buckle` with `buckle_lying`).
 pub fn buckles_lying(path: &str) -> bool {
-    is_under(path, "/obj/structure/table/optable") || is_under(path, "/obj/structure/bed")
+    is_under(path, "/obj/structure/table/optable")
+        || is_under(path, "/obj/structure/bed")
+        || is_under(path, "/obj/structure/altar")
 }
 
 /// tg `mouse_drop_receive` -> `mouse_buckle_handling` -> `user_buckle_mob` of a table or bed.
