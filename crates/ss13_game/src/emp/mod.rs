@@ -466,7 +466,6 @@ pub fn sparks(world: &mut World, e: Entity) {
     }
 }
 
-
 /// tg `do_sparks(3, TRUE, source)`: the spark system of `crate::effects::particles`.
 pub fn do_sparks(world: &mut World, pos: TilePos) {
     crate::effects::particles::do_sparks(world, 3, true, pos);
