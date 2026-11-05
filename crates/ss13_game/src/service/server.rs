@@ -4,7 +4,10 @@
 
 use bevy::ecs::message::{MessageCursor, Messages};
 use bevy::prelude::*;
+use ss13_mapload::service::{BOOK_ROOT, DICE_ROOT, PAPER_ROOT};
 use ss13_mapload::{DmItem, DmName, DmObj, DmService};
+
+use crate::obj_damage::is_under;
 use ss13_net::chat::server::SendChat;
 use ss13_shared::chat::{ChatChannel, Span};
 use ss13_shared::{Appearance, TilePos};
@@ -38,6 +41,7 @@ impl Plugin for ServiceServerPlugin {
                 ),
             )
             .add_observer(add_item_parts)
+            .add_observer(add_service_parts)
             .add_observer(add_obj_parts)
             .add_observer(super::clown::mime_takes_the_vow);
     }
@@ -61,11 +65,31 @@ fn add_item_parts(add: On<Add<DmItem>>, mut commands: Commands) {
         let Some(path) = world.get::<DmItem>(e).map(|i| i.path.clone()) else {
             return;
         };
-        super::paper::add_parts(world, e, &path);
-        super::library::add_parts(world, e, &path);
-        super::games::add_parts(world, e, &path);
         super::clown::add_parts(world, e, &path);
+        add_data_parts(world, e);
     });
+}
+
+/// Prototype components arrive one insert at a time, so `DmItem` may come before or after
+/// `DmService`: the parts that read `DmService` wait for both (whichever is added second).
+fn add_service_parts(add: On<Add<DmService>>, mut commands: Commands) {
+    let e = add.entity;
+    commands.queue(move |world: &mut World| add_data_parts(world, e));
+}
+
+fn add_data_parts(world: &mut World, e: Entity) {
+    let Some(path) = world.get::<DmItem>(e).map(|i| i.path.clone()) else {
+        return;
+    };
+    let reads_data = [PAPER_ROOT, BOOK_ROOT, DICE_ROOT]
+        .iter()
+        .any(|root| is_under(&path, root));
+    if reads_data && world.get::<DmService>(e).is_none() {
+        return;
+    }
+    super::paper::add_parts(world, e, &path);
+    super::library::add_parts(world, e, &path);
+    super::games::add_parts(world, e, &path);
 }
 
 fn add_obj_parts(add: On<Add<DmObj>>, mut commands: Commands) {

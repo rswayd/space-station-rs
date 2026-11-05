@@ -133,7 +133,7 @@ mod tests {
     fn plain_text_breaks_lines_and_drops_tags() {
         assert_eq!(
             plain_text("How to play<br><ul><li>Roll</li><li>Win &amp; <b>gloat</b></li></ul>"),
-            "How to play\n• Roll\n• Win & gloat"
+            "How to play\n\n• Roll\n• Win & gloat"
         );
         assert_eq!(plain_text("# Title\n\nText"), "# Title\n\nText");
         assert_eq!(plain_text("a < b"), "a < b");

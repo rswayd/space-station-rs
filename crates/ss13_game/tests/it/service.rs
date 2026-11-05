@@ -179,7 +179,7 @@ impl Station {
     }
 
     /// `item` into the mob's active hand, whatever was there dropped out of the inventory.
-    fn into_hand(&mut self, item: Entity) {
+    fn put_in_hand(&mut self, item: Entity) {
         let mob = self.players[0].mob;
         let world = self.server.world_mut();
         let hand = world.get::<Inventory>(mob).unwrap().active;
@@ -240,7 +240,7 @@ fn a_pen_writes_and_a_stamp_stamps() {
     assert_eq!(texts(&s), ["Rule one"]);
 
     let pen = s.item(PEN);
-    s.into_hand(pen);
+    s.put_in_hand(pen);
     s.click(0, paper);
     let prompt = s.wait_window(TextInputUi::NAME);
     s.act(0, prompt, "submit", &[("entry", "Hello")]);
@@ -249,7 +249,7 @@ fn a_pen_writes_and_a_stamp_stamps() {
     assert_eq!(s.get::<Paper>(paper).inputs[1].color, "#000000");
 
     let stamp = s.item(STAMP);
-    s.into_hand(stamp);
+    s.put_in_hand(stamp);
     s.click(0, paper);
     s.run_until("the paper is stamped", |s| {
         !s.get::<Paper>(paper).stamps.is_empty()
@@ -274,7 +274,7 @@ fn a_bin_hands_out_paper_and_a_die_rolls() {
     );
 
     let die = s.item(D20);
-    s.into_hand(die);
+    s.put_in_hand(die);
     let slot = s.active_slot();
     s.send(0, ClientIntent::ClickSlot(slot));
     for _ in 0..5 {
