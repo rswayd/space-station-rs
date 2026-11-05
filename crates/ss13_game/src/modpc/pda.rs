@@ -1247,7 +1247,8 @@ mod tests {
     #[test]
     fn programs_open_minimize_and_close_like_ntos() {
         let mut pc = ModularComputer::pda("/obj/item/modular_computer/pda/crew/atmos", "pda");
-        assert_eq!(pc.programs.len(), 4);
+        // The role table (tg `starting_programs`) adds apps on top of the PDA defaults.
+        assert!(pc.programs.len() >= 4);
         assert!(pc.open_program(ProgramKind::Messenger));
         assert!(!pc.open_program(ProgramKind::Messenger));
         // Another program pushes the messenger to the background.
