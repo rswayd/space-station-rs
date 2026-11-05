@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
 use ss13_mapload::fidelity::is_under;
-use ss13_mapload::{DmItem, DmName, DmNavBeacon};
+use ss13_mapload::{DmName, DmNavBeacon};
 use ss13_net::chat::server::SendChat;
 use ss13_shared::TilePos;
 use ss13_shared::chat::{ChatChannel, Span};
@@ -65,7 +65,6 @@ pub const BOT_GO_HOME: &str = "Returning";
 pub const BOT_BLOCKED: &str = "Blocked";
 
 pub const BOT_ROOT: &str = "/mob/living/basic/bot";
-const EMAG: &str = "/obj/item/card/emag";
 /// tg `robot_arm`: dropped in half the deaths.
 pub const ROBOT_ARM: &str = "/obj/item/bodypart/arm/right/robot";
 const PROX_SENSOR: &str = "/obj/item/assembly/prox_sensor";
@@ -1064,11 +1063,11 @@ fn item_interaction(
     {
         return true;
     }
-    if world
-        .get::<DmItem>(item)
-        .is_some_and(|i| is_under(&i.path, EMAG))
-    {
-        emag(world, mob, user);
+    // `/obj/item/card/emag/interact_with_atom`: `can_emag` (a doorjack refuses), `emag_act`.
+    if crate::emag::is_emag(world, item) {
+        if crate::emag::can_emag(world, user, item, mob) {
+            emag(world, mob, user);
+        }
         return true;
     }
     match crate::tools::tool_of(world, item).map(|t| t.0) {

@@ -12,7 +12,7 @@
 Наборы настроек вентиляций и скрубберов зоны: фильтрация, загрязнение, сквозняк, обновление, откачка, паническая откачка, цикл, наполнение (flood), выключено.
 
 - **Код:** [`/datum/air_alarm_mode`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/air_alarm/air_alarm_modes.dm#L12), [`panic_siphon`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/air_alarm/air_alarm_modes.dm#L162), [`flood`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/air_alarm/air_alarm_modes.dm#L191), [`proc/select_mode()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/air_alarm/_air_alarm.dm#L646)
-- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/atmos_machinery/alarm.rs`: все режимы tg (flood и vent siphon только с emag, которого нет), cycle с возвратом
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/atmos_machinery/alarm.rs`: все режимы tg (flood и vent siphon — только после емага, `crates/ss13_game/src/emag.rs`, `AirAlarm::emagged`, флаг `emagged` окна), cycle с возвратом
 
 ### Пороги (TLV)
 Безопасные и опасные границы давления, температуры и газов (кислород, CO2, плазма и т. д.); варианты для холодильников, кухни, без проверок.

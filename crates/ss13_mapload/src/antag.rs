@@ -119,7 +119,7 @@ pub const NUKEOP_RUNTIME_TYPES: [&str; 5] = [
 /// catalog needs mechanics that are not modelled yet (explosions, implants, chameleon).
 // shortcut: a curated list; grow it as the items' mechanics land (an energy sword once
 // transforming weapons work).
-pub const UPLINK_ITEMS: [&str; 17] = [
+pub const UPLINK_ITEMS: [&str; 18] = [
     // Guns that fire (`ss13_game::guns`): the traitors' Makarov case and .357 revolver, the
     // operatives' C-20r case, and their ammunition.
     "/datum/uplink_item/dangerous/pistol",
@@ -134,8 +134,10 @@ pub const UPLINK_ITEMS: [&str; 17] = [
     "/datum/uplink_item/device_tools/tactical_medkit",
     // shortcut: the key cannot be put into a headset yet (no `keyslot` changes).
     "/datum/uplink_item/device_tools/encryptionkey",
-    // shortcut: nothing can be emagged yet (tg's emag does not open airlocks either).
+    // The emag and the doorjack (`ss13_game::emag`): the emag does not open airlocks, the
+    // doorjack only does.
     "/datum/uplink_item/device_tools/emag",
+    "/datum/uplink_item/device_tools/doorjack",
     // shortcut: an ID card without the agent card's forging and access copying.
     "/datum/uplink_item/stealthy_tools/agent_card",
     "/datum/uplink_item/stealthy_tools/syndigaloshes",

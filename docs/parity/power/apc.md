@@ -25,7 +25,7 @@ tgui-окно: заряд ячейки, включение главного ру
 Замок открывается ID-картой с доступом инженеров; емаг ломает замок; ИИ управляет APC удалённо (провод ИИ).
 
 - **Код:** [`proc/togglelock()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/apc/apc_tool_act.dm#L476), [`emag_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/apc/apc_tool_act.dm#L436), [`proc/can_use()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/apc/apc_attack.dm#L143), [`proc/connect_remote_access()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/apc/apc_main.dm#L442)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/wires.rs`: провод разблокировки и замок как состояние; нет ID-карты, емага и ИИ
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/wires.rs`: провод разблокировки и замок как состояние; емаг (`crates/ss13_game/src/emag.rs`, `Apc::emagged`): с закрытой панелью интерфейс разблокируется навсегда, отвёртка панель не открывает, ИИ не может заблокировать; нет ID-карты, мигания взломанного вида и малф-взлома
 
 ### Крышка, ячейка и монтаж APC
 Ломом снимается крышка, из-под неё вынимается и вставляется ячейка; отвёртка открывает панель; разборка: ячейка → электроника → терминал → сварка рамки. Сборка из рамки (`wallframe`), электроники и кабеля.

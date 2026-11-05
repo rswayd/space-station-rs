@@ -106,7 +106,8 @@
 //!   spawns, their environment, fighting them, and their AI controllers (behavior trees).
 //!
 //! - `emp` (feature `server`): tg `empulse()` and `emp_act`: pulses, protection, contents, and
-//!   each ported family's EMP effect.
+//!   each ported family's EMP effect. `emag` (feature `server`): the emag and the doorjack,
+//!   `can_emag` and the ported families' `emag_act`.
 //!
 //! - `events` (feature `server`): tg `SSevents`, the random event scheduler, and the round
 //!   events that act on ported systems (grid check, electrical storm, communications blackout,
@@ -185,6 +186,8 @@ pub mod disposals;
 pub mod doors;
 #[cfg(feature = "server")]
 pub mod drag;
+#[cfg(feature = "server")]
+pub mod emag;
 #[cfg(feature = "server")]
 pub mod emp;
 #[cfg(feature = "server")]

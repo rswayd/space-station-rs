@@ -8,7 +8,8 @@
 //! main/backup power, electrify (restore, 30 s, permanent) unless the shock wire is cut, the ID
 //! scanner, emergency access, bolts (raising them needs power), feedback lights, force sensors
 //! (`safe`), timing safety (`normalspeed`), open/close (not while bolted or welded).
-// shortcut: no AI hacking of a firewalled airlock (`canAIHack`/`hack`), no emag check.
+//! An emagged airlock (`crate::emag`) does not answer: no window.
+// shortcut: no AI hacking of a firewalled airlock (`canAIHack`/`hack`).
 
 use bevy::ecs::message::MessageCursor;
 use bevy::ecs::system::SystemParamItem;
@@ -142,6 +143,14 @@ pub fn attack_ai(world: &mut World, client: Entity, user: Entity, door: Entity) 
             client,
             "Airlock AI control has been blocked with a firewall. Unable to hack.",
         );
+    }
+    if world.get::<Door>(door).is_some_and(|d| d.emagged) {
+        warn(
+            world,
+            client,
+            "Unable to interface: Airlock is unresponsive.",
+        );
+        return;
     }
     let title = world.get::<DmName>(door).map_or_else(String::new, |n| {
         crate::vending::plain_name(&n.name).to_owned()

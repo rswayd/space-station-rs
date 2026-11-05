@@ -828,6 +828,11 @@ pub fn screwdriver_act(world: &mut World, actor: Actor, kind: ToolKind, target: 
         }
         // shortcut: APC covers (crowbar, `opened`) are not ported, so the cover is always shut
         // and the screwdriver always reaches the wire panel.
+        // `apc/screwdriver_act`: an emagged APC's panel stays shut.
+        WireHolder::Apc if world.get::<Apc>(target).is_some_and(|a| a.emagged) => {
+            crate::tools::tell(world, actor.client, Span::Warning, "интерфейс сломан!");
+            return true;
+        }
         WireHolder::Apc => {
             let open = !panel_open(world, target);
             world.entity_mut(target).insert(PanelOpen(open));

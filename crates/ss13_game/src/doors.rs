@@ -127,6 +127,8 @@ struct DoorSprites {
     deny: Option<IconStateId>,
     /// Airlock maintenance panel per frame (`panel_<frame>`).
     panel: [Option<IconStateId>; 4],
+    /// Airlock `sparks` while being emagged.
+    sparks: Option<IconStateId>,
 }
 
 #[derive(Component, Debug)]
@@ -188,6 +190,12 @@ pub struct Door {
     pub cycle_pump: Option<Entity>,
     /// An opening was turned into a cycle request this tick (tg `airlock_act`).
     pub cycle_requested: bool,
+    /// tg `obj_flags & EMAGGED` (`crate::emag`): nothing opens or closes an airlock or windoor
+    /// any more, no hand or bump works it.
+    pub emagged: bool,
+    /// tg `operating` (and an airlock's `MAINT` sparks) between `emag_act` and
+    /// `finish_emag_act`.
+    pub emagging: bool,
 }
 
 /// An airlock's sound vars (empty: silent).
@@ -214,10 +222,11 @@ enum DoorSound {
 
 impl Door {
     pub fn is_operating(&self) -> bool {
-        matches!(
-            self.state,
-            DoorState::Opening { .. } | DoorState::Closing { .. }
-        )
+        self.emagging
+            || matches!(
+                self.state,
+                DoorState::Opening { .. } | DoorState::Closing { .. }
+            )
     }
 
     pub fn close_at(&self) -> Option<f64> {
@@ -336,13 +345,14 @@ impl Door {
             DoorState::Closing { .. } => s.closing_lights,
             _ => None,
         };
-        // tg `feedback && hasPower() && light_state`.
+        // tg `feedback && hasPower() && light_state`; no lights while being emagged (`MAINT`).
         // shortcut: the area's power is not checked (the look has no access to it); an airlock
         // in an unpowered area keeps its lights.
-        let lights = lights.filter(|_| self.feedback && self.wire_power());
+        let lights = lights.filter(|_| self.feedback && self.wire_power() && !self.emagging);
         let panel = s.panel[frame].filter(|_| self.panel_open);
         let welded = s.welded.filter(|_| self.welded);
-        appearance.overlays = [s.fills[frame], lights, panel, welded]
+        let sparks = s.sparks.filter(|_| self.emagging);
+        appearance.overlays = [s.fills[frame], lights, panel, welded, sparks]
             .into_iter()
             .flatten()
             .map(Overlay::new)
@@ -498,6 +508,8 @@ fn init_doors(world: &mut World) {
                 sound: None,
                 cycle_pump: None,
                 cycle_requested: false,
+                emagged: false,
+                emagging: false,
             };
             (entity, door)
         })
@@ -664,6 +676,7 @@ fn resolve_sprites(
         welded: get(overlays, "welded"),
         deny: get(overlays, "lights_denied"),
         panel: FRAMES.map(|f| get(overlays, &format!("panel_{f}"))),
+        sparks: get(overlays, "sparks"),
     }
 }
 
@@ -691,7 +704,12 @@ fn activate(
     opener: (TilePos, Option<&[String]>),
     env: DoorEnv,
 ) -> bool {
-    if !door.can_open_with_hands || door.is_operating() || !door.has_power(env.powered) {
+    // `try_to_activate_door` and `Bumped`: nothing works an emagged door.
+    if door.emagged
+        || !door.can_open_with_hands
+        || door.is_operating()
+        || !door.has_power(env.powered)
+    {
         return false;
     }
     let (opener_pos, access) = opener;
@@ -737,7 +755,7 @@ fn open(
         door.cycle_requested = true;
         return false;
     }
-    if door.state != DoorState::Closed || door.locked || door.welded {
+    if door.state != DoorState::Closed || door.locked || door.welded || emag_stuck(door) {
         return false;
     }
     if door.kind == DoorKind::Airlock
@@ -746,6 +764,21 @@ fn open(
     {
         return false;
     }
+    start_opening(door, appearance, now, bumped);
+    true
+}
+
+/// tg `try_to_force_door_open`/`try_to_force_door_shut` of airlocks and windoors refuse an
+/// emagged door unless `BYPASS_DOOR_CHECKS`.
+// shortcut: the crowbar's `BYPASS_DOOR_CHECKS` (`forced` here, as the open wire's
+// `FORCING_DOOR_CHECKS`) is refused too; it only matters for an emagged airlock its wires
+// unbolted.
+fn emag_stuck(door: &Door) -> bool {
+    door.emagged && matches!(door.kind, DoorKind::Airlock | DoorKind::Windoor)
+}
+
+/// The opening animation starts; `bumped` schedules a windoor's close.
+fn start_opening(door: &mut Door, appearance: &mut Appearance, now: f64, bumped: bool) {
     door.denied_until = None;
     let t = door.timings();
     door.close_at = match door.kind {
@@ -761,7 +794,6 @@ fn open(
     door.state = DoorState::Opening { since: now };
     door.sound = Some(DoorSound::Open);
     door.apply_look(appearance);
-    true
 }
 
 /// tg `close()`: a safe door refuses while anything else dense is in the doorway (both tiles of
@@ -777,7 +809,7 @@ fn close(
     env: DoorEnv,
     forced: bool,
 ) -> bool {
-    if door.state != DoorState::Open || door.locked || door.welded {
+    if door.state != DoorState::Open || door.locked || door.welded || emag_stuck(door) {
         return false;
     }
     if door.kind == DoorKind::Airlock
@@ -891,6 +923,7 @@ fn door_clicks(
     inventories: Query<&Inventory>,
     cards: IdCards,
     tools: Query<&ss13_mapload::DmTool>,
+    items: Query<&ss13_mapload::DmItem>,
     electrified: Query<(), With<Electrified>>,
     mut doors: Query<DoorItem>,
     mut commands: Commands,
@@ -904,6 +937,13 @@ fn door_clicks(
         };
         let inventory = inventories.get(click.mob).ok();
         let held = inventory.and_then(Inventory::active_item);
+        // An emag is used on the door (`crate::emag`), it does not work it.
+        if held
+            .and_then(|h| items.get(h).ok())
+            .is_some_and(|i| ss13_mapload::fidelity::is_under(&i.path, crate::emag::EMAG))
+        {
+            continue;
+        }
         let tool = held
             .and_then(|h| tools.get(h).ok())
             .and_then(|t| crate::tools::ToolKind::from_dm(&t.behaviour));
@@ -1157,6 +1197,15 @@ impl DoorCtx<'_> {
         open(door, appearance, self.now, false, self.env, forced)
     }
 
+    /// tg windoor `open(BYPASS_DOOR_CHECKS)`: a closed door opens whatever else holds it.
+    pub fn open_bypass(&self, door: &mut Door, appearance: &mut Appearance) -> bool {
+        if door.state != DoorState::Closed {
+            return false;
+        }
+        start_opening(door, appearance, self.now, false);
+        true
+    }
+
     /// tg `close(forced)`.
     pub fn close(&self, door: &mut Door, appearance: &mut Appearance, forced: bool) -> bool {
         close(
@@ -1256,6 +1305,8 @@ pub(crate) fn test_airlock(req_access: &[&str]) -> Door {
         sound: None,
         cycle_pump: None,
         cycle_requested: false,
+        emagged: false,
+        emagging: false,
     }
 }
 

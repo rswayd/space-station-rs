@@ -65,7 +65,6 @@ pub const MAX_STATUS_LINE_LENGTH: usize = 40;
 pub const ACCESS_SYNDICATE_LEADER: &str = "syndicate_leader";
 const COMMS_CONSOLE: &str = "/obj/machinery/computer/communications";
 const COMMS_SYNDICATE: &str = "/obj/machinery/computer/communications/syndicate";
-const EMAG: &str = "/obj/item/card/emag";
 const PROMPT_DENY: &str = "sound/machines/terminal/terminal_prompt_deny.ogg";
 const PROMPT_CONFIRM: &str = "sound/machines/terminal/terminal_prompt_confirm.ogg";
 const PROMPT: &str = "sound/machines/terminal/terminal_prompt.ogg";
@@ -795,7 +794,7 @@ fn all_station_access() -> Vec<String> {
         .collect()
 }
 
-/// tg `emag_act`: the routing circuits scrambled (messages go to the Syndicate, announcements
+/// tg `emag_act` (from `crate::emag`): the routing circuits scrambled (messages go to the Syndicate, announcements
 /// are the Syndicate's); a logged-in console gets all station access. True when it took.
 pub fn emag_act(world: &mut World, client: Entity, console: Entity) -> bool {
     let Some(mut state) = world.get_mut::<CommsConsole>(console) else {
@@ -811,20 +810,6 @@ pub fn emag_act(world: &mut World, client: Entity, console: Entity) -> bool {
     tell(world, client, Span::Notice, "routing circuits scrambled");
     beep(world, console, TERMINAL_ALERT, 50.0);
     true
-}
-
-/// `item_interaction` with an emag (`crate::construction`). True when handled.
-pub fn item_interaction(world: &mut World, client: Entity, held: Entity, console: Entity) -> bool {
-    if world.get::<CommsConsole>(console).is_none() {
-        return false;
-    }
-    let emag = world
-        .get::<ss13_mapload::DmItem>(held)
-        .is_some_and(|i| is_under(&i.path, EMAG));
-    if emag {
-        emag_act(world, client, console);
-    }
-    emag
 }
 
 /// `emergency_access_cooldown(user)`: true while it refuses. Three toggles are free, the

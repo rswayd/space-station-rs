@@ -45,6 +45,8 @@ pub struct Closet {
     pub locked: bool,
     pub welded: bool,
     pub secure: bool,
+    /// tg `broken`: the lock was emagged open (`crate::emag`) and no longer locks.
+    pub broken: bool,
     pub req_access: Vec<String>,
     pub req_one_access: Vec<String>,
     /// `PopulateContents()` already ran.
@@ -64,6 +66,7 @@ impl Closet {
             locked: dm.locked,
             welded: dm.welded,
             secure: dm.secure,
+            broken: false,
             req_access: dm.req_access.clone(),
             req_one_access: dm.req_one_access.clone(),
             contents_initialized: false,
@@ -84,9 +87,11 @@ impl Closet {
         !self.opened && !self.welded && !self.locked
     }
 
-    /// tg `togglelock` access check: only unlocking needs access.
+    /// tg `togglelock` access check: a broken lock does not toggle, only unlocking needs
+    /// access.
     pub fn may_toggle_lock(&self, access: Option<&[String]>) -> bool {
         self.secure
+            && !self.broken
             && (!self.locked
                 || check_access(
                     &self.req_access,
@@ -108,7 +113,9 @@ impl Closet {
         let mut overlays = Vec::new();
         if s.is_crate {
             if !self.opened {
-                overlays.push(if self.locked {
+                overlays.push(if self.broken {
+                    s.crate_broken
+                } else if self.locked {
                     s.crate_locked
                 } else if self.secure {
                     s.crate_unlocked
@@ -126,7 +133,13 @@ impl Closet {
             if !self.opened {
                 overlays.push(s.welded.filter(|_| self.welded));
                 if self.secure {
-                    overlays.push(if self.locked { s.locked } else { s.unlocked });
+                    overlays.push(if self.broken {
+                        s.broken
+                    } else if self.locked {
+                        s.locked
+                    } else {
+                        s.unlocked
+                    });
                 }
             }
         }
@@ -149,6 +162,9 @@ struct ClosetSprites {
     unlocked: Option<IconStateId>,
     crate_locked: Option<IconStateId>,
     crate_unlocked: Option<IconStateId>,
+    /// `icon_broken` ("sparking"), crates' `securecrateemag`.
+    broken: Option<IconStateId>,
+    crate_broken: Option<IconStateId>,
 }
 
 impl ClosetSprites {
@@ -168,6 +184,7 @@ impl ClosetSprites {
                 welded: get(&dm.icon_welded),
                 crate_locked: get("securecrater"),
                 crate_unlocked: get("securecrateg"),
+                crate_broken: get("securecrateemag"),
                 ..default()
             };
         }
@@ -192,6 +209,7 @@ impl ClosetSprites {
             welded: get(&dm.icon_welded),
             locked: get("locked"),
             unlocked: get("unlocked"),
+            broken: get("sparking"),
             ..default()
         }
     }
