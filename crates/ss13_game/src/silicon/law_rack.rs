@@ -772,7 +772,7 @@ fn refresh_linkable(world: &mut World, rack: Entity) {
                             .count() as u32
                     })
                 })
-                .sum();
+                .sum::<u32>();
             if let Some(mut r) = world.get_mut::<LawRack>(rack) {
                 r.linkable = linkable;
                 r.linked_module_count = count;
