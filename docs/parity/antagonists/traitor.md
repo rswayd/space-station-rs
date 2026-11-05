@@ -37,7 +37,7 @@ TGUI `AntagInfoTraitor`: вступление, работодатель, цел�
 Предатель (или админ) может заменить цели своими (`submit_player_objective`), если это разрешено.
 
 - **Код:** [`/datum/antagonist/traitor/submit_player_objective()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/traitor/datum_traitor.dm#L217), [`/datum/antagonist/traitor/proc/can_change_objectives()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/traitor/datum_traitor.dm#L98)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/antag/traitor.rs` (`ask_custom_objective`, `submit_custom_objective`): кнопка в аплинке (`renegotiate_objectives`), один раз; цели побега остаются, своя — первой, в отчёте без вердикта; выдача целей админом — в группе админки
 
 ### Отчёт предателя в конце раунда
 Секция отчёта: цели с отметками выполнения, список покупок и потраченные ТК, «лучший предатель» без аплинка, итоги контрактов, кодовые слова в подвале.

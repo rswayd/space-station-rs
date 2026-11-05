@@ -436,7 +436,13 @@ fn transfer(world: &mut World, from: Entity, to: Entity, amount: f32) -> f32 {
 }
 
 /// tg `trans_to(mob, methods = INGEST)` (into the stomach) or `INJECT` (into the blood).
-fn transfer_to_mob(world: &mut World, from: Entity, mob: Entity, amount: f32, ingest: bool) -> f32 {
+pub(crate) fn transfer_to_mob(
+    world: &mut World,
+    from: Entity,
+    mob: Entity,
+    amount: f32,
+    ingest: bool,
+) -> f32 {
     let chem = chem(world);
     let Some(mut a) = take(world, from) else {
         return 0.0;

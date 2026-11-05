@@ -570,6 +570,10 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 Some(item)
                     if hand == inventory.active
                         && crate::antag::nukeop::server::attack_self(world, client, mob, item) => {}
+                // An energy blade toggles, an agent card is shown or forged.
+                Some(item)
+                    if hand == inventory.active
+                        && crate::antag::syndie_items::attack_self(world, client, mob, item) => {}
                 // A C-4 charge asks for its timer.
                 Some(item)
                     if hand == inventory.active
@@ -630,6 +634,16 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                     if hand != inventory.active
                         && inventory.active_item().is_some_and(|held| {
                             crate::service::server::item_interaction(world, client, mob, held, item)
+                        }) => {}
+                // Telecrystals into the uplink, the agent card on the ID card, in the other
+                // hand.
+                Some(item)
+                    if hand != inventory.active
+                        && inventory.active_item().is_some_and(|held| {
+                            crate::antag::uplink::item_interaction(world, client, mob, held, item)
+                                || crate::antag::syndie_items::item_interaction(
+                                    world, client, mob, held, item,
+                                )
                         }) => {}
                 // An ID card in the active hand goes into the PDA in the other.
                 Some(item)
@@ -864,6 +878,15 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 // tg `attack_hand` of turrets and the turret control panel: their windows.
                 None if crate::defenses::server::interact(world, client, mob, target) => {}
                 None => pick_up(world, mob, target, inventory.active),
+                // Telecrystals into an active uplink (`load_tc`).
+                Some(held)
+                    if crate::antag::uplink::item_interaction(world, client, mob, held, target) => {
+                }
+                // The sleepy pen on a mob, the agent card on an ID card.
+                Some(held)
+                    if crate::antag::syndie_items::item_interaction(
+                        world, client, mob, held, target,
+                    ) => {}
                 // tg `/obj/item/card/emag/interact_with_atom` on the families with an
                 // `emag_act` (`crate::emag`).
                 Some(held)

@@ -23,7 +23,7 @@
 TGUI `Uplink`: категории, поиск, компактный режим, цены и остатки, баланс ТК, блокировка.
 
 - **Код:** [`/datum/component/uplink/proc/interact()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/uplink.dm#L138); tgui: [`Uplink.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/Uplink/index.tsx)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/antag/client.rs`: нет поиска, компактного режима и тем
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/antag/client.rs`: категории, цены, остатки, баланс (клик — вывод сырых ТК), блокировка, «Заменить задачи»; нет поиска, компактного режима и тем
 
 ### Ограниченный запас и эксклюзивные покупки
 У части товаров лимит штук (`limited_stock`); некоторые покупки блокируют весь остальной магазин (`lock_other_purchases`).
@@ -35,19 +35,19 @@ TGUI `Uplink`: категории, поиск, компактный режим, 
 При создании аплинка несколько случайных предметов получают скидку с ограниченным запасом (категория «Discounts»).
 
 - **Код:** [`create_uplink_sales()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/uplink/uplink_items.dm#L3), [`/datum/uplink_item/discounts`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/uplink/uplink_items.dm#L236)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/antag/uplink.rs` (`create_sales`, `add_sales`): 4–6 копий со скидкой 25/50/75% (вдвое меньше от 20 ТК), по одной на категорию, id `<path>?sale`, свой запас; командные скидки нюков (`discount_team_gear`) — в [nuclear-operatives.md](nuclear-operatives.md)
 
 ### Телекристаллы как предмет
 Вывод сырых ТК из аплинка (`purchase_raw_tc`), пополнение аплинка ТК-стаком, перенос ТК между аплинками.
 
 - **Код:** [`/datum/uplink_handler/proc/purchase_raw_tc()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/traitor/uplink_handler.dm#L109), [`/datum/component/uplink/proc/load_tc()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/uplink.dm#L106), [`/obj/item/stack/telecrystal`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/stacks/telecrystal.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/antag/uplink.rs` (`purchase_raw_tc`, `item_interaction`): `buy_raw_tc` с запросом числа, стак ТК в руки; стак на активный аплинк заряжает его целиком; нет зарядки аплинк-импланта прижатием к себе (импланта-аплинка нет)
 
 ### Failsafe-код
 Покупаемый код самоуничтожения: ввод его в аплинк взрывает устройство.
 
 - **Код:** [`/datum/component/uplink/proc/failsafe()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/uplink.dm#L413)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/antag/uplink.rs` (`buy_failsafe`, `failsafe`): код (не равный коду разблокировки) рингтоном КПК или на `:z` — взрыв 1/2/3 и удаление устройства; код в панели предателя («Запасной код»); вариант с частотой и ручкой — вместе с этими способами разблокировки
 
 ### Лог покупок
 Журнал покупок по владельцу (для отчёта конца раунда и админов).
@@ -65,32 +65,32 @@ TGUI `Uplink`: категории, поиск, компактный режим, 
 Ящик инструментов Синдиката, подозрительная сумка, боевая аптечка, ключ шифрования, емаг, термальные очки, телепортер, доступ к ИИ-аплоаду, CRAB-17, FRAME-диск, ложный диск, стимпак и др.
 
 - **Код:** [`/datum/uplink_item/device_tools`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/uplink/uplink_items/device_tools.dm#L5)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload/src/antag.rs`: продаются toolbox, duffelbag, military_belt, tactical_medkit, encryptionkey (не вставляется), emag и doorjack (`crates/ss13_game/src/emag.rs`); остального нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload/src/antag.rs`: продаются toolbox, duffelbag, military_belt, tactical_medkit, encryptionkey (не вставляется), emag и doorjack (`crates/ss13_game/src/emag.rs`), стимпак (медипен, `crates/ss13_game/src/chem.rs`), failsafe-код; нет термальных очков (нужен `SEE_MOBS` отдельно от x-ray в `ss13_net`), бинарного ключа (нет смены ключей в гарнитуре), гипновспышки (нет гипноза), телепортера, CRAB-17, FRAME/камеры, ложного диска
 
 ### Категория «Скрытные инструменты»
 Агентская ID-карта, детектор ИИ, хамелеон-кит, нескользящие ботинки, хамелеон-проектор, кодспик, EMP-фонарик, смена внешности (Mulligan), глушилка, сумка контрабандиста, отключение телекомов, блэкаут.
 
 - **Код:** [`/datum/uplink_item/stealthy_tools`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/uplink/uplink_items/stealthy_tools.dm#L5)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload/src/antag.rs`: agent_card (без подделки и копирования доступа), syndigaloshes; остального нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/antag/syndie_items.rs`: агентская карта (показ, подделка имени и должности, сброс; копирование доступа с другой ID-карты — сразу всё, что влезает в слоты, без окна `ChameleonCard`), syndigaloshes; нет детектора ИИ, хамелеон-кита и проектора, глушилки, кодспика, EMP-фонарика, Mulligan, блэкаутов
 
 ### Категория «Скрытное оружие»
 Дротиковый пистолет, сухой карп, энергокинжал, помада, набор ядов, глушитель, сонная ручка, оригами, свиток боевых искусств, мини-арбалет, дубинка контрактора.
 
 - **Код:** [`/datum/uplink_item/stealthy_weapons`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/uplink/uplink_items/stealthy.dm#L5)
 - **BandaStation:** [`stealthy.dm#L63`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/uplink/uplink_items/stealthy.dm#L63), [`holster_uniform`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/uplink_items/code/stealthy.dm#L1) — скрытая кобура-аксессуар
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/antag/syndie_items.rs`: энергокинжал (ручка ↔ клинок 18 урона), сонная ручка (укол вводит 20 хлоралгидрата, 15 мутотоксина, 10 тиризена), свиток спящего карпа (`crates/ss13_game/src/martial/`); нет дротикового пистолета, карпа, помады, ядов, глушителя, оригами, мини-арбалета, дубинки контрактора, кобуры
 
 ### Категория «Опасное оружие»
 Пистолеты (Donksoft, Макаров, револьвер), метательное оружие, энергомеч и двойной энергомеч, силовой кулак, перчатки Северной звезды, голопаразиты.
 
 - **Код:** [`/datum/uplink_item/dangerous`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/uplink/uplink_items/dangerous.dm#L6)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — Макаров и револьвер (`crates/ss13_game/src/guns.rs`), энергомеч (`crates/ss13_game/src/antag/syndie_items.rs`: 30 урона, режущий, `WEIGHT_CLASS_HUGE`, цвет сабли; без блока, встраивания и света); нет Donksoft, метательного оружия, двойного меча, силового кулака, перчаток Северной звезды, голопаразитов
 
 ### Категория «Взрывчатка»
 C-4, X-4, мешок C-4, гранаты (осколочная, EMP, дымовая), бомба-пицца, минибомба, бомба Синдиката, Earthcracker, Detomatix, слипокалипсис.
 
 - **Код:** [`/datum/uplink_item/explosives`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/uplink/uplink_items/explosive.dm#L5)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload/src/antag.rs`: продаются C-4 и мешок C-4, заряды работают (`crates/ss13_game/src/explosions/sources.rs`, см. ../items/grenades.md); нет X-4 в списке аплинка, гранат, минибомбы, бомбы Синдиката, Detomatix
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload/src/antag.rs`: продаются C-4, X-4, мешок C-4, осколочная граната, минибомба, EMP-кит (`crates/ss13_game/src/grenades.rs`, `crates/ss13_game/src/implants/`); нет бомбы Синдиката (маяк, ядро, провода), дымового кита (имплант дыма), бомбы-пиццы, Earthcracker, Detomatix, слипокалипсиса
 
 ### Категория «Боеприпасы»
 Магазины 9 мм (обычные, бронебойные, экспансивные, зажигательные), спидлоадер .357, патроны Donksoft.
@@ -102,7 +102,7 @@ C-4, X-4, мешок C-4, гранаты (осколочная, EMP, дымов�
 Импланты свободы, радио Синдиката, скрытности, хранилища, аплинк-имплант.
 
 - **Код:** [`/datum/uplink_item/implants`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/uplink/uplink_items/implant.dm#L6)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — имплант свободы (`crates/ss13_game/src/implants/mod.rs`); нет радио-, стелс-, хранилища и аплинк-импланта
 
 ### Категория «Костюмы»
 Инфильтраторский и обычный MODsuit Синдиката, скафандр, модули MOD (термальный визор, хамелеон, компрессия брони, антислип, амортизация, маскировка wraith).

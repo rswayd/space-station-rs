@@ -6,8 +6,13 @@
 //! button and the antag HUD icon ([`AntagHudData`]). The info panel ([`AntagInfoTraitorUi`]) is
 //! also the traitor's notes: objectives, the uplink code and how to unlock it. At round end
 //! [`roundend_report`] is tg's `antag_report` section for traitors.
-// shortcut: no codewords (`should_give_codewords`), custom objectives, moodlets or stinger sound;
-// the clown keeps his clumsiness (no mutations here).
+//!
+//! The uplink also gets the traitor's sales (`create_uplink_sales`) and, once, lets the owner
+//! replace the objectives with one they write (`renegotiate_objectives` ->
+//! `submit_player_objective`): the escape-type objectives stay, the custom one goes first and
+//! is reported without a verdict.
+// shortcut: no codewords (`should_give_codewords`), moodlets or stinger sound; the clown keeps
+// his clumsiness (no mutations here).
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
@@ -18,11 +23,12 @@ use ss13_net::chat::server::SendChat;
 use ss13_net::server::ClientToken;
 use ss13_shared::chat::{ChatChannel, ChatMessage, ChatSegment, Span};
 use ss13_tgui::interfaces::ru_jobs::job_ru;
+use ss13_tgui::prompt::{Ask, PromptAnswer, PromptAnswered, PromptKind, PromptSystems, ask_world};
 use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiActed, UiParams, UiReject, UiSystems};
 
 use super::dynamic::DynamicRng;
 use super::objectives::{Objective, ObjectiveKind, RoundEnd, forge_traitor_objectives};
-use super::uplink::{PurchaseLog, UplinkCatalog, give_uplink, open_uplink};
+use super::uplink::{PurchaseLog, UplinkCatalog, add_sales, give_uplink, open_uplink};
 use super::{AntagHudData, AntagHudUi, AntagInfoTraitorUi, ObjectiveInfo, TraitorInfo};
 use crate::health::Stat;
 use crate::jobs::{Jobs, PlayerJob};
@@ -36,6 +42,11 @@ pub const ROUNDEND_CATEGORY: &str = "Предатели";
 const OBJECTIVE_NAME: &str = "Задача";
 /// `antag_hud_name` in `hud_icon`.
 const ANTAG_HUD: (&str, &str) = ("icons/mob/huds/antag_hud.dmi", "traitor");
+/// `default_custom_objective`.
+const DEFAULT_CUSTOM_OBJECTIVE: &str =
+    "Perform an overcomplicated heist on valuable Nanotrasen assets.";
+/// `CUSTOM_OBJECTIVE_MAX_LENGTH`.
+const CUSTOM_OBJECTIVE_MAX_LENGTH: u32 = 300;
 
 /// tg `GLOB.syndicate_employers`, `GLOB.nanotrasen_employers`, `GLOB.hijack_employers`,
 /// `GLOB.normal_employers` (`code/__DEFINES/antagonists.dm`, BandaStation's edits).
@@ -80,14 +91,25 @@ pub struct Traitor {
     pub unlock_text: String,
     /// tg `antag_memory`: the uplink's `unlock_note`.
     pub memory: String,
+    /// The uplink's bought `failsafe_code`, for the info panel.
+    pub failsafe_code: Option<String>,
+    /// `can_assign_self_objectives`: a custom objective may still be chosen.
+    pub can_assign_self_objectives: bool,
 }
 
 pub struct TraitorPlugin;
 
 impl Plugin for TraitorPlugin {
     fn build(&self, app: &mut App) {
-        app.register_ui::<AntagInfoTraitorUi>()
-            .add_systems(Update, open_info.in_set(UiSystems::Handle));
+        app.register_ui::<AntagInfoTraitorUi>().add_systems(
+            Update,
+            (
+                open_info.in_set(UiSystems::Handle),
+                custom_objective_answers
+                    .in_set(UiSystems::Handle)
+                    .after(PromptSystems::Answer),
+            ),
+        );
     }
 }
 
@@ -151,6 +173,9 @@ fn gain(world: &mut World, mob: Entity, show_panel: bool) -> bool {
     let given = give_uplink(world, mob, &phonetic, &mut rng);
     let (objectives, ending) = forge_traitor_objectives(world, mob, &steal_targets, &mut rng);
     let employer = pick_employer(ending == ObjectiveKind::Hijack, &mut rng);
+    if let Some(given) = &given {
+        add_sales(world, given.device, &mut rng);
+    }
     world.insert_resource(DynamicRng(rng));
     let flavor = world
         .get_resource::<UplinkCatalog>()
@@ -166,6 +191,7 @@ fn gain(world: &mut World, mob: Entity, show_panel: bool) -> bool {
         && let Some(mut uplink) = world.get_mut::<super::uplink::Uplink>(given.device)
     {
         uplink.primary_objectives = primary_objectives(&objectives, &phonetic);
+        uplink.can_renegotiate = true;
     }
     let client = world.get::<PlayerMob>(mob).map(|p| p.client);
     let key = client
@@ -192,6 +218,8 @@ fn gain(world: &mut World, mob: Entity, show_panel: bool) -> bool {
                 .as_ref()
                 .map(|g| g.unlock_note.clone())
                 .unwrap_or_default(),
+            failsafe_code: None,
+            can_assign_self_objectives: true,
         },
         AntagHudData {
             hud_icon,
@@ -245,6 +273,114 @@ fn primary_objectives(objectives: &[Objective], phonetic: &[String]) -> Vec<(Str
             (name, o.explanation.clone())
         })
         .collect()
+}
+
+/// On a `submit_player_objective` prompt.
+#[derive(Component, Clone, Copy, Debug)]
+struct CustomObjectivePrompt;
+
+/// `submit_player_objective`: asks the traitor `mob` for its objective.
+pub fn ask_custom_objective(world: &mut World, client: Entity, mob: Entity) {
+    if !world
+        .get::<Traitor>(mob)
+        .is_some_and(|t| t.can_assign_self_objectives)
+    {
+        return;
+    }
+    let prompt = ask_world(
+        world,
+        Ask::new(
+            client,
+            mob,
+            "Custom Objective",
+            "Specify your new objective.",
+            PromptKind::Text {
+                default: DEFAULT_CUSTOM_OBJECTIVE.to_owned(),
+                max_length: CUSTOM_OBJECTIVE_MAX_LENGTH,
+                multiline: false,
+            },
+        ),
+    );
+    world.entity_mut(prompt).insert(CustomObjectivePrompt);
+}
+
+/// The objective written: checked again (still a traitor that may choose), then
+/// `submit_player_objective(retain_existing = FALSE, retain_escape = TRUE)`.
+fn custom_objective_answers(world: &mut World, mut cursor: Local<MessageCursor<PromptAnswered>>) {
+    let answers: Vec<(Entity, Entity, Entity, Option<PromptAnswer>)> = cursor
+        .read(world.resource::<Messages<PromptAnswered>>())
+        .map(|a| (a.prompt, a.client, a.actor, a.answer.clone()))
+        .collect();
+    for (prompt, client, mob, answer) in answers {
+        if world.get::<CustomObjectivePrompt>(prompt).is_none() {
+            continue;
+        }
+        let Some(PromptAnswer::Text(text)) = answer else {
+            continue;
+        };
+        submit_custom_objective(world, mob, &text);
+        announce_objectives(world, Some(client), mob);
+    }
+}
+
+/// The custom objective first, the escape-type ones after it; the choice is used up. `false`
+/// when `mob` cannot choose (not a traitor, or it already did).
+pub fn submit_custom_objective(world: &mut World, mob: Entity, text: &str) -> bool {
+    let Some(mut traitor) = world.get_mut::<Traitor>(mob) else {
+        return false;
+    };
+    if !traitor.can_assign_self_objectives {
+        return false;
+    }
+    let mut objectives = vec![Objective {
+        kind: ObjectiveKind::Custom,
+        explanation: text.to_owned(),
+    }];
+    // `escape_objectives`: escape, survive, martyr, exile (only escape and martyr exist here).
+    objectives.extend(
+        traitor
+            .objectives
+            .iter()
+            .filter(|o| matches!(o.kind, ObjectiveKind::Escape | ObjectiveKind::Martyr))
+            .cloned(),
+    );
+    traitor.objectives = objectives.clone();
+    traitor.can_assign_self_objectives = false;
+    let device = traitor.uplink;
+    info!("{mob} chose a custom objective: {text}");
+    let phonetic = world
+        .get_resource::<UplinkCatalog>()
+        .map(|c| c.data.phonetic_alphabet.clone())
+        .unwrap_or_default();
+    if let Some(device) = device
+        && let Some(mut uplink) = world.get_mut::<super::uplink::Uplink>(device)
+    {
+        uplink.primary_objectives = primary_objectives(&objectives, &phonetic);
+        uplink.can_renegotiate = false;
+    }
+    true
+}
+
+/// `/datum/mind/announce_objectives`.
+fn announce_objectives(world: &mut World, client: Option<Entity>, mob: Entity) {
+    let Some(objectives) = world.get::<Traitor>(mob).map(|t| t.objectives.clone()) else {
+        return;
+    };
+    chat(world, client, Span::Notice, "Ваши текущие задачи:");
+    for (i, objective) in objectives.iter().enumerate() {
+        if let Some(client) = client {
+            world.write_message(SendChat {
+                clients: vec![client],
+                message: ChatMessage {
+                    channel: ChatChannel::System,
+                    segments: vec![
+                        ChatSegment::new(Span::Bold, format!("{OBJECTIVE_NAME} #{}", i + 1)),
+                        ChatSegment::new(Span::Plain, format!(": {}", objective.explanation)),
+                    ],
+                },
+            });
+        }
+    }
 }
 
 /// Dev and admins: `SS13_DEV_TRAITOR` makes a joining body a traitor; `unlocked` also unlocks
@@ -309,6 +445,7 @@ impl ServerUi for AntagInfoTraitorUi {
     fn static_data(traitor: &Traitor) -> TraitorInfo {
         TraitorInfo {
             has_codewords: false,
+            failsafe_code: traitor.failsafe_code.clone(),
             theme: traitor.flavor.ui_theme.clone(),
             intro: traitor.flavor.introduction.clone(),
             allies: traitor.flavor.allies.clone(),
@@ -432,15 +569,19 @@ pub fn roundend_report(world: &mut World, end: RoundEnd) -> Vec<ChatMessage> {
         for (i, objective) in traitor.objectives.iter().enumerate() {
             let done = objective.check_completion(world, &[mob], end);
             won &= done;
-            objective_lines.push(line(vec![
+            let mut segments = vec![
                 ChatSegment::new(Span::Bold, format!("{OBJECTIVE_NAME} #{}", i + 1)),
                 ChatSegment::new(Span::Plain, format!(": {} ", objective.explanation)),
-                if done {
+            ];
+            // `get_roundend_success_suffix`: nothing for a `no_failure` objective.
+            if objective.kind != ObjectiveKind::Custom {
+                segments.push(if done {
                     ChatSegment::new(Span::GreenText, "Успех!")
                 } else {
                     ChatSegment::new(Span::RedText, "Неудача.")
-                },
-            ]));
+                });
+            }
+            objective_lines.push(line(segments));
         }
         if traitor.uplink.is_some() {
             // `generate_render(FALSE)`: one `[name]` per entry, `x<n>` for repeats.
@@ -532,6 +673,8 @@ mod tests {
             code: None,
             unlock_text: String::new(),
             memory: String::new(),
+            failsafe_code: None,
+            can_assign_self_objectives: true,
         });
         world
             .get_mut::<PurchaseLog>(mob)
@@ -551,5 +694,23 @@ mod tests {
         world.entity_mut(victim).insert(Stat::Dead);
         let report = roundend_report(&mut world, RoundEnd { force_ending: true });
         assert_eq!(report[6].plain_text(), "предатель был успешен!");
+        // A custom objective replaces the kill one, keeps the escape, and has no verdict.
+        assert!(submit_custom_objective(
+            &mut world,
+            mob,
+            "Украсть все тосты."
+        ));
+        assert!(!submit_custom_objective(&mut world, mob, "Ещё раз."));
+        let kinds: Vec<ObjectiveKind> = world
+            .get::<Traitor>(mob)
+            .unwrap()
+            .objectives
+            .iter()
+            .map(|o| o.kind.clone())
+            .collect();
+        assert_eq!(kinds, [ObjectiveKind::Custom, ObjectiveKind::Escape]);
+        let report = roundend_report(&mut world, RoundEnd { force_ending: true });
+        assert_eq!(report[4].plain_text(), "Задача #1: Украсть все тосты. ");
+        assert_eq!(report[4].segments.len(), 2);
     }
 }

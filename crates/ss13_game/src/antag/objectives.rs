@@ -49,6 +49,9 @@ pub enum ObjectiveKind {
     Hijack,
     /// `/datum/objective/convert_brother`: the team has more than one member.
     ConvertBrother,
+    /// `/datum/objective/custom` a player wrote (`submit_player_objective`): `completed`, and
+    /// `no_failure` (the report prints no verdict).
+    Custom,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -109,6 +112,7 @@ impl Objective {
             ObjectiveKind::Martyr => owners.iter().all(|&owner| !considered_alive(world, owner)),
             ObjectiveKind::Hijack => false,
             ObjectiveKind::ConvertBrother => owners.len() > 1,
+            ObjectiveKind::Custom => true,
         }
     }
 }
@@ -203,6 +207,8 @@ impl ObjectiveKind {
                  непосредственно на цели. Любая портативная вспышка сработает, если вы потеряете или \
                  сломаете стартовую."
                 .to_owned(),
+            // The player's own text is the explanation.
+            Self::Custom => String::new(),
             Self::Hijack => "Угоните эвакуационный шаттл, взломав его навигационные протоколы через \
                  консоль управления (Alt-Клик по консоли эвакуационного шаттла)."
                 .to_owned(),
