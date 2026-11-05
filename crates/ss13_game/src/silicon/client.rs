@@ -433,6 +433,19 @@ impl ClientUi for StationAlertUi {
     const HEIGHT: f32 = 587.0;
 
     fn content(_: &(), data: &StationAlertData) -> impl Scene {
+        let sections = alert_sections(data);
+        bsn! {
+            @WindowContent
+            Children [
+                @Section { @fill: true, @scrollable: true } Children [ {sections} ]
+            ]
+        }
+    }
+}
+
+/// `StationAlertContent`: a section per alarm type (also the PDA's Canary, `crate::modpc`).
+pub fn alert_sections(data: &StationAlertData) -> Vec<Box<dyn SceneList>> {
+    {
         let good = UiColor::Good.base();
         let sections: Vec<Box<dyn SceneList>> = data
             .alarms
@@ -456,12 +469,7 @@ impl ClientUi for StationAlertUi {
                 }))
             })
             .collect();
-        bsn! {
-            @WindowContent
-            Children [
-                @Section { @fill: true, @scrollable: true } Children [ {sections} ]
-            ]
-        }
+        sections
     }
 }
 

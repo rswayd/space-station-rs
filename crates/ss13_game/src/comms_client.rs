@@ -639,6 +639,27 @@ fn messages_page(data: &CommsConsoleData) -> impl Scene + use<> {
 
 /// `ChangingStatus.tsx` with `StatusDisplayControls`.
 fn status_page(data: &CommsConsoleData, local: &UiLocalState) -> impl Scene + use<> {
+    let controls = EntityScene(status_display_controls(
+        &data.upper_text,
+        &data.lower_text,
+        data.max_status_line_length as usize,
+        local,
+    ));
+    let back = EntityScene(back_section());
+    bsn! {
+        Node { flex_direction: FlexDirection::Column }
+        Children [ {back} -- {controls} ]
+    }
+}
+
+/// `StatusDisplayControls` (also the PDA's Status Display, `crate::modpc`): the off and shuttle
+/// buttons, the pictures, two lines and Send.
+pub fn status_display_controls(
+    upper_text: &str,
+    lower_text: &str,
+    max: usize,
+    local: &UiLocalState,
+) -> impl Scene + use<> {
     let picture = |icon: &'static str, content: &'static str, picture: &str| {
         let params = ActParams(vec![(PICTURE.to_owned(), picture.to_owned())]);
         bsn! {
@@ -647,7 +668,6 @@ fn status_page(data: &CommsConsoleData, local: &UiLocalState) -> impl Scene + us
             params
         }
     };
-    let max = data.max_status_line_length as usize;
     let line = |key: &str, initial: &str| {
         let value = local.value(key).unwrap_or(initial).to_owned();
         let key = key.to_owned();
@@ -658,8 +678,8 @@ fn status_page(data: &CommsConsoleData, local: &UiLocalState) -> impl Scene + us
         })
     };
     let (upper, lower) = (
-        line(STATUS_UPPER, &data.upper_text),
-        line(STATUS_LOWER, &data.lower_text),
+        line(STATUS_UPPER, upper_text),
+        line(STATUS_LOWER, lower_text),
     );
     let send = SubmitLocal {
         action: SET_STATUS_MESSAGE.to_owned(),
@@ -667,12 +687,12 @@ fn status_page(data: &CommsConsoleData, local: &UiLocalState) -> impl Scene + us
             (
                 UPPER_TEXT.to_owned(),
                 STATUS_UPPER.to_owned(),
-                data.upper_text.clone(),
+                upper_text.to_owned(),
             ),
             (
                 LOWER_TEXT.to_owned(),
                 STATUS_LOWER.to_owned(),
-                data.lower_text.clone(),
+                lower_text.to_owned(),
             ),
         ],
         min_length: 0,
@@ -689,12 +709,9 @@ fn status_page(data: &CommsConsoleData, local: &UiLocalState) -> impl Scene + us
         picture("biohazard", "Biohazard", "biohazard"),
         picture("radiation", "Radiation", "radiation"),
     ];
-    let back = EntityScene(back_section());
     bsn! {
         Node { flex_direction: FlexDirection::Column }
         Children [
-            {back}
-            --
             @Section
             Children [ {off} -- {shuttle} ]
             --

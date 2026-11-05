@@ -627,19 +627,25 @@ fn ntos_status(
     users: Query<(&Inventory, Option<&Stat>, Option<&TilePos>)>,
     unpowered: Query<(), With<crate::power::Unpowered>>,
 ) {
+    use ss13_tgui::UiInterface as _;
     for mut window in &mut windows {
-        if window.interface != <NtosUi as ss13_tgui::UiInterface>::NAME {
+        let ntos = window.interface == NtosUi::NAME;
+        // The newscaster app's window on a computer (`super::programs::apps`).
+        if !ntos && window.interface != crate::newscaster::NewscasterUi::NAME {
             continue;
         }
         let Ok((computer, at)) = computers.get(window.source) else {
-            window.cap_status(UiStatus::Close);
+            if ntos {
+                window.cap_status(UiStatus::Close);
+            }
             continue;
         };
         let Ok((inventory, stat, user_at)) = users.get(window.actor) else {
             window.cap_status(UiStatus::Close);
             continue;
         };
-        if !computer.enabled || unpowered.contains(window.source) {
+        let app_gone = !ntos && !computer.programs.contains(&ProgramKind::Newscaster);
+        if !computer.enabled || app_gone || unpowered.contains(window.source) {
             window.cap_status(UiStatus::Close);
             continue;
         }
@@ -669,6 +675,8 @@ pub struct NtosParams<'w, 's> {
     items: Query<'w, 's, &'static DmItem>,
     jobs: Option<Res<'w, Jobs>>,
     atmos: Option<Res<'w, Atmos>>,
+    alarms: Option<Res<'w, crate::silicon::alarms::StationAlarms>>,
+    app_states: Query<'w, 's, &'static super::programs::apps::AppState>,
     ticker: Option<Res<'w, crate::round::Ticker>>,
     time: Res<'w, Time>,
 }
@@ -704,6 +712,7 @@ pub enum NtosAct {
     ClearUnreads(u32),
     UpdateNote(String),
     Card(super::programs::card_mod::CardAct),
+    App(super::programs::apps::AppAct),
 }
 
 fn program_param(params: &UiParams) -> Result<ProgramKind, UiReject> {
@@ -759,7 +768,14 @@ impl ServerUi for NtosUi {
             program_headers: computer
                 .idle
                 .iter()
-                .filter_map(|p| p.ui_header())
+                .filter_map(|&p| match p {
+                    ProgramKind::AlarmMonitor
+                        if super::programs::apps::has_alert(params.alarms.as_deref()) =>
+                    {
+                        Some("alarm_red.gif")
+                    }
+                    p => p.ui_header(),
+                })
                 .map(str::to_owned)
                 .collect(),
             show_exit: computer.active.is_some(),
@@ -817,6 +833,32 @@ impl ServerUi for NtosUi {
                     params.jobs.as_deref(),
                 )))
             }
+            Some(ProgramKind::AlarmMonitor) => {
+                use super::programs::apps::alarm_listener;
+                NtosScreen::Alarms(match params.alarms.as_deref() {
+                    Some(alarms) => crate::silicon::alarms::alert_data(alarms, &alarm_listener()),
+                    None => Default::default(),
+                })
+            }
+            Some(ProgramKind::SecRecords) => NtosScreen::SecRecords(
+                super::programs::apps::security_rows(params.records.as_deref()),
+            ),
+            Some(ProgramKind::MedRecords) => NtosScreen::MedRecords(
+                super::programs::apps::medical_rows(params.records.as_deref()),
+            ),
+            Some(ProgramKind::Signaler) => NtosScreen::Signaler(
+                super::programs::apps::signaler_data(params.app_states.get(entity).ok()),
+            ),
+            Some(ProgramKind::StatusDisplay) => NtosScreen::Status(
+                super::programs::apps::status_data(params.app_states.get(entity).ok()),
+            ),
+            // A launcher never comes to the front.
+            Some(ProgramKind::Newscaster) => NtosScreen::Main(main_data(
+                computer,
+                computer
+                    .stored_id
+                    .and_then(|c| params.registrations.get(c).ok()),
+            )),
         };
         NtosData { header, screen }
     }
@@ -853,6 +895,9 @@ impl ServerUi for NtosUi {
             PDA_CLEAR_UNREADS => NtosAct::ClearUnreads(chat_param(params)?),
             UPDATE_NOTE => NtosAct::UpdateNote(params.text("newnote")?),
             other => {
+                if let Some(act) = super::programs::apps::parse(other, params) {
+                    return act.map(NtosAct::App);
+                }
                 match super::programs::card_mod::parse(other, |k| params.get(k).map(str::to_owned))
                 {
                     Some(Ok(act)) => NtosAct::Card(act),
@@ -982,6 +1027,15 @@ fn apply_act(
                 return Err("ID writer not in front");
             }
             return super::programs::card_mod::apply(world, client, actor, pda, act);
+        }
+        NtosAct::App(act) => {
+            return super::programs::apps::apply(world, client, actor, pda, computer, act);
+        }
+        NtosAct::Run(program) if program.launcher() => {
+            if !computer.programs.contains(&program) {
+                return Err("not installed");
+            }
+            super::programs::apps::open_newscaster(world, client, actor, pda);
         }
         NtosAct::Run(program) => {
             if !pc!().open_program(program) {

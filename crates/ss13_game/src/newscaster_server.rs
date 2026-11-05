@@ -18,7 +18,7 @@
 //! - Every act is checked here at the moment of effect, and again when a prompt is answered:
 //!   power, the actor's reach, the ID's access, the channel's lock and censorship.
 // shortcut: no photos (no cameras), bounty board, cross-sector channels, screen overlays and
-// light, soft/IC chat filters, wall frames or repairs, NTOS newscaster app; the newspaper's
+// light, soft/IC chat filters, wall frames or repairs; the newspaper's
 // contents are its description (no newspaper reading window, scribbles or peepholes); a
 // silicon cannot open newscasters (no `attack_ai` routing).
 
@@ -332,7 +332,12 @@ fn clicks(world: &mut World, mut cursor: Local<MessageCursor<ClickResolved>>) {
         .copied()
         .collect();
     for click in clicks {
-        if world.get::<Newscaster>(click.target).is_none() {
+        // A computer's hidden newscaster (the NTOS app) is not clicked.
+        if world.get::<Newscaster>(click.target).is_none()
+            || world
+                .get::<crate::modpc::pda::ModularComputer>(click.target)
+                .is_some()
+        {
             continue;
         }
         let held = world
@@ -667,7 +672,9 @@ fn can_use(world: &World, actor: Entity, caster: Entity) -> bool {
     }
     let conscious =
         world.get::<Health>(actor).is_none() || world.get::<Stat>(actor) == Some(&Stat::Conscious);
-    conscious && crate::storage::in_reach(world, actor, caster)
+    // The NTOS app's newscaster is the computer in the actor's hands.
+    let held = crate::modpc::pda::holder_mob(world, caster) == Some(actor);
+    conscious && (held || crate::storage::in_reach(world, actor, caster))
 }
 
 fn text_prompt(
@@ -1114,7 +1121,12 @@ pub fn submit_wanted(world: &mut World, criminal: &str, body: &str, scanned_user
 /// `GLOB.allCasters` that can talk (`say` of an unpowered machine is still heard in tg, but
 /// its alert is meant for working screens).
 fn powered_casters(world: &mut World) -> Vec<Entity> {
-    let mut q = world.query_filtered::<Entity, (With<Newscaster>, Without<Unpowered>)>();
+    // A computer's hidden newscaster (the NTOS app) does not announce (tg: it is nowhere).
+    let mut q = world.query_filtered::<Entity, (
+        With<Newscaster>,
+        Without<Unpowered>,
+        Without<crate::modpc::pda::ModularComputer>,
+    )>();
     let mut casters: Vec<Entity> = q.iter(world).collect();
     casters.sort();
     casters

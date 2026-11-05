@@ -24,7 +24,7 @@
 TGUI-окно: известные языки, выбор языка по умолчанию; админ может выдавать/забирать языки.
 
 - **Код:** [`/datum/language_menu`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/language/_language_menu.dm#L1); tgui: [`LanguageMenu.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/LanguageMenu.tsx)
-- **Статус в ss13-rs:** ❌ нет — выбор языка только ключом `,x` и приоритетом; окну нужен канал вербов/статпанели (изменение протокола)
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/language_menu.rs`, клиент `language_menu_client.rs`: кнопка `talk_wheel` на HUD каждого игрока (headless tgui, без изменения протокола) открывает окно: языки, которые моб говорит/понимает/понимает частично, может ли говорить физически, ключ, язык по умолчанию (`select_default` с проверкой `can_speak_language` в момент действия); админ-режим (выдать/забрать язык, omnitongue) — 🟡 в группе админки
 
 ### Учебники языков и билингвизм
 Книги-учебники (кодспик, языки рас, пиратский, дронский) учат языку; квирк «Билингв» даёт второй язык.

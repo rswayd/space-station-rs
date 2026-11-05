@@ -1,20 +1,27 @@
 //! Languages over real WebTransport on 127.0.0.1: a lizard's `,o` Draconic reaches a human
 //! scrambled (with the language tag) and itself as said, a human cannot use the key of a
 //! language it does not speak, aphasia scrambles everything the patient hears, and the species
-//! holders all parse.
+//! holders all parse. The HUD button opens the language menu, whose default language is what
+//! the mob then speaks without a key.
 
 use std::path::{Path, PathBuf};
 
 use bevy::prelude::*;
 use ss13_chat::language::{LanguageHolder, LanguageId, LanguageSource, Preset};
+use ss13_game::language_menu::{
+    LANGUAGE_NAME, LanguageButtonUi, LanguageMenuUi, OPEN, SELECT_DEFAULT,
+};
 use ss13_game::medical::organs::{self, Slot};
 use ss13_game::medical::traumas::{self, Kind};
 use ss13_game::species::SpeciesId;
 use ss13_game::testing::{self, Drive, fixture_map, write_fixture};
 use ss13_mapload::convert::DmTypes;
 use ss13_net::chat::client::ChatReceived;
+use ss13_net::ui::client::UiMessageReceived;
 use ss13_shared::TilePos;
 use ss13_shared::protocol::ClientIntent;
+use ss13_shared::ui::UiServerMessage;
+use ss13_tgui::UiInterface;
 
 const TYPES: &str = r##"{
   "schema": 3,
@@ -125,12 +132,25 @@ fn fixture_assets(test: &str) -> PathBuf {
     dir
 }
 
+/// Chat lines and the windows opened (id, interface).
 #[derive(Resource, Default)]
-struct Received(Vec<String>);
+struct Received(Vec<String>, Vec<(u32, String)>);
 
-fn record(mut chat: MessageReader<ChatReceived>, mut received: ResMut<Received>) {
+fn record(
+    mut chat: MessageReader<ChatReceived>,
+    mut ui: MessageReader<UiMessageReceived>,
+    mut received: ResMut<Received>,
+) {
     for ChatReceived(message) in chat.read() {
         received.0.push(message.plain_text());
+    }
+    for UiMessageReceived(message) in ui.read() {
+        if let UiServerMessage::Open {
+            window, interface, ..
+        } = message
+        {
+            received.1.push((*window, interface.clone()));
+        }
     }
 }
 
@@ -159,6 +179,19 @@ impl Station {
 
     fn lines(&self, p: usize) -> Vec<String> {
         self.players[p].app.world().resource::<Received>().0.clone()
+    }
+
+    /// The last window of `interface` opened for player `p`.
+    fn window(&self, p: usize, interface: &str) -> Option<u32> {
+        self.players[p]
+            .app
+            .world()
+            .resource::<Received>()
+            .1
+            .iter()
+            .rev()
+            .find(|(_, i)| i == interface)
+            .map(|(w, _)| *w)
     }
 }
 
@@ -230,4 +263,44 @@ fn species_holders_parse() {
     let uncommon = ss13_game::species::uncommon_roundstart_languages();
     assert!(uncommon.contains(&LanguageId::Draconic));
     assert!(!uncommon.contains(&LanguageId::Common));
+}
+
+#[test]
+fn the_language_menu_sets_the_default_language() {
+    let mut s = Station::start("the_language_menu_sets_the_default_language");
+    let a = s.players[0].mob;
+    let lizard = Preset::of_path("/datum/language_holder/lizard").unwrap();
+    s.server
+        .world_mut()
+        .entity_mut(a)
+        .insert(LanguageHolder::from_preset(
+            &lizard,
+            LanguageSource::Species,
+        ));
+    s.run_until("A gets the button", |s| {
+        s.window(0, LanguageButtonUi::NAME).is_some()
+    });
+    let button = s.window(0, LanguageButtonUi::NAME).unwrap();
+    s.act(0, button, OPEN, &[]);
+    s.run_until("A's menu opens", |s| {
+        s.window(0, LanguageMenuUi::NAME).is_some()
+    });
+    let menu = s.window(0, LanguageMenuUi::NAME).unwrap();
+
+    // A language A does not speak is not taken.
+    let narsie = LanguageId::Narsie.def().name;
+    s.act(0, menu, SELECT_DEFAULT, &[(LANGUAGE_NAME, narsie)]);
+    s.hold(0.5, "Nar'Sian is refused", |s| {
+        s.get::<LanguageHolder>(a).selected != Some(LanguageId::Narsie)
+    });
+    let draconic = LanguageId::Draconic.def().name;
+    s.act(0, menu, SELECT_DEFAULT, &[(LANGUAGE_NAME, draconic)]);
+    s.run_until("Draconic is the default", |s| {
+        s.get::<LanguageHolder>(a).selected == Some(LanguageId::Draconic)
+    });
+
+    // Without a key, A now speaks Draconic.
+    s.send(0, ClientIntent::Say("шипим без ключа".into()));
+    s.run_until("B hears the tag", |s| s.heard(1, "(Draconic) "));
+    assert!(!s.heard(1, "без ключа"), "{:?}", s.lines(1));
 }
