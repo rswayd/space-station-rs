@@ -90,7 +90,7 @@ pub fn check(
     {
         return Err(Refusal::NoMountingPoint);
     }
-    if !def.allow_duplicates && installed.iter().any(|p| *p == def.path) {
+    if !def.allow_duplicates && installed.contains(&def.path) {
         return Err(Refusal::Occupied);
     }
     if UNPORTED.iter().any(|root| is_under(&def.path, root)) {
@@ -326,14 +326,14 @@ mod tests {
         assert_eq!(check(&drill, Some(MINER), true, &[]), Err(Refusal::Dead));
         assert_eq!(check(&drill, Some(MINER), false, &[]), Ok(()));
         assert_eq!(
-            check(&drill, Some(MINER), false, &[drill.path.clone()]),
+            check(&drill, Some(MINER), false, std::slice::from_ref(&drill.path)),
             Err(Refusal::Occupied)
         );
         let dup = BorgUpgrade {
             allow_duplicates: true,
             ..drill.clone()
         };
-        assert_eq!(check(&dup, Some(MINER), false, &[dup.path.clone()]), Ok(()));
+        assert_eq!(check(&dup, Some(MINER), false, std::slice::from_ref(&dup.path)), Ok(()));
         let locked = BorgUpgrade {
             locked: true,
             ..board("/obj/item/borg/upgrade/amop")
