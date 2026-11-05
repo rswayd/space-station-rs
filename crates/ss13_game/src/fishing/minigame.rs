@@ -472,7 +472,7 @@ impl Sim {
         if self.p.movement == Movement::Choppy {
             self.faux_position = next(self.faux_position, self.fish_velocity);
             // Twice a second (every tenth tick).
-            if self.times_fired % 10 == 0 {
+            if self.times_fired.is_multiple_of(10) {
                 self.fish_position = self.faux_position;
             }
         } else {

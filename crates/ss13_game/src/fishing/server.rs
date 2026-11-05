@@ -877,9 +877,7 @@ fn complete(world: &mut World, mob: Entity, win: bool) {
 
 /// `dispense_reward`: into the hands, or the dud's line.
 fn dispense(world: &mut World, mob: Entity, fishing: &Fishing) -> Option<Entity> {
-    let Some(at) = world.get::<TilePos>(mob).copied() else {
-        return None;
-    };
+    let at = world.get::<TilePos>(mob).copied()?;
     let now = now(world);
     let reward = match fishing.reward {
         Reward::Dud => None,

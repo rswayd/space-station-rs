@@ -329,7 +329,7 @@ fn optimal_settings(world: &mut World, aquarium: Entity) {
     if by_type.is_empty() {
         return;
     }
-    by_type.sort_by(|a, b| b.1.cmp(&a.1));
+    by_type.sort_by_key(|b| std::cmp::Reverse(b.1));
     let mut fluids: Vec<&str> = FLUID_TYPES.to_vec();
     let (mut min, mut max) = (T0C, T0C + 100.0);
     for (_, _, def) in &by_type {
