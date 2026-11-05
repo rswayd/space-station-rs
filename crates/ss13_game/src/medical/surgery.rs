@@ -3536,7 +3536,8 @@ fn drapes_fall_off(
     }
 }
 
-/// A mob lying buckled to an operating table or a bed (tg `buckled`).
+/// A mob buckled to an operating table, a bed (lying) or a chair (sitting, with
+/// [`crate::furniture::Seated`]): tg `buckled`.
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Buckled(pub Entity);
 
@@ -3553,7 +3554,7 @@ pub fn mouse_drop_receive(
     dropped: Entity,
 ) -> bool {
     let path = crate::construction::path_of(world, furniture).unwrap_or_default();
-    if !buckles_lying(&path) || world.get::<Health>(dropped).is_none() {
+    if !crate::furniture::can_buckle(&path) || world.get::<Health>(dropped).is_none() {
         return false;
     }
     if furniture_taken(world, furniture) || world.get::<Buckled>(dropped).is_some() {
@@ -3593,7 +3594,8 @@ fn furniture_taken(world: &mut World, furniture: Entity) -> bool {
         .any(|b| b.0 == furniture)
 }
 
-/// tg `buckle_mob` + `buckle_feedback` of the operating table.
+/// tg `buckle_mob` + `buckle_feedback` of the operating table, a bed or a chair
+/// ([`crate::furniture::post_buckle`]).
 pub fn buckle(world: &mut World, actor: Actor, mob: Entity, furniture: Entity) {
     let Some(&pos) = world.get::<TilePos>(furniture) else {
         return;
@@ -3606,6 +3608,9 @@ pub fn buckle(world: &mut World, actor: Actor, mob: Entity, furniture: Entity) {
         return;
     }
     world.entity_mut(mob).insert((pos, Buckled(furniture)));
+    if crate::furniture::post_buckle(world, actor, mob, furniture) {
+        return;
+    }
     let (user, target, what) = (
         name_of(world, actor.mob),
         name_of(world, mob),
@@ -3637,6 +3642,9 @@ pub fn unbuckle(world: &mut World, actor: Actor, mob: Entity) {
         return;
     };
     world.entity_mut(mob).remove::<Buckled>();
+    if crate::furniture::post_unbuckle(world, actor, mob, furniture) {
+        return;
+    }
     let (user, target, what) = (
         name_of(world, actor.mob),
         name_of(world, mob),

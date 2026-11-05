@@ -153,6 +153,7 @@ fn convert_cmd(config: &MapLoadPlugin, mut map_dirs: Vec<PathBuf>) -> anyhow::Re
     }
     let types = DmTypes::read(&config.assets.join("dm_types.json"))?;
     used.extend(ss13_mapload::construct::table_runtime_types(&types));
+    used.extend(ss13_mapload::construct::furniture_runtime_types(&types));
     let mut jobs = ss13_mapload::jobs::resolve(&types);
     jobs.names = ss13_mapload::jobs::read_names(&config.source);
     // Outfit items are spawned at runtime, not placed on maps.

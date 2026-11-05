@@ -245,6 +245,8 @@ pub enum Job {
     Martial(crate::martial::ReadJob),
     /// Welding a camera frame or a camera off the wall ([`crate::defenses::cameras`]).
     Camera(crate::defenses::cameras::CameraJob),
+    /// Washing at a sink ([`crate::plumbing`]).
+    Sink(crate::plumbing::SinkJob),
 }
 
 /// A turf's baseturf stack, bottom first (tg `baseturfs`). Absent: assembled from the type's
@@ -472,6 +474,10 @@ fn tool_act_secondary(world: &mut World, actor: Actor, kind: ToolKind, target: E
         return Interact::Done;
     }
     if crate::reinforced::window_secondary(world, actor, kind, target) {
+        return Interact::Done;
+    }
+    // `wrench_act_secondary` of chairs and beds.
+    if kind == ToolKind::Wrench && crate::furniture::wrench_secondary(world, target) {
         return Interact::Done;
     }
     Interact::None
@@ -1195,6 +1201,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         Job::Experiment => crate::science::experi_scanner::complete(world, mob, action),
         &Job::Martial(job) => crate::martial::complete_reading(world, mob, action, job),
         &Job::Camera(job) => crate::defenses::cameras::complete(world, mob, action, job),
+        &Job::Sink(job) => crate::plumbing::complete(world, mob, action, job),
         &Job::Emitter(job) => crate::power::emitter::complete(world, client, target, job, consume),
         Job::GirderBolts { from } => {
             if !is_under(&path, GIRDER) || obj_state(world, target) != *from || !consume(world) {

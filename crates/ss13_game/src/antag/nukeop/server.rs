@@ -1412,7 +1412,11 @@ fn watch_disk(world: &mut World, mut next: Local<f64>, mut known: Local<Option<E
 
 // --- Pinpointers ----------------------------------------------------------------------------
 
-fn set_pinpointer_overlay(world: &mut World, item: Entity, state: Option<(String, Option<Dir>)>) {
+pub(crate) fn set_pinpointer_overlay(
+    world: &mut World,
+    item: Entity,
+    state: Option<(String, Option<Dir>)>,
+) {
     let icon = world
         .get::<DmAtom>(item)
         .map(|a| a.icon.clone())

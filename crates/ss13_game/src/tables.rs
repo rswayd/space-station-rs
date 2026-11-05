@@ -169,15 +169,21 @@ fn add_rack(add: On<Add<DmObj>>, objs: Query<&DmObj>, mut commands: Commands) {
 /// tg `elevation`: mobs that moved are drawn up on a table or rack, down off it.
 fn elevate_moved(
     mut mobs: Query<
-        (Entity, &TilePos, Option<&mut Elevated>),
+        (
+            Entity,
+            &TilePos,
+            Option<&mut Elevated>,
+            Option<&crate::furniture::Seated>,
+        ),
         (With<BodyPosition>, Changed<TilePos>),
     >,
     lifts: Query<&Elevating>,
     index: Res<SpatialIndex>,
     mut commands: Commands,
 ) {
-    for (mob, &pos, elevated) in &mut mobs {
-        let up = lift_at(&index, &lifts, pos);
+    for (mob, &pos, elevated, seat) in &mut mobs {
+        // A stool's `add_offsets` adds to the elevation.
+        let up = lift_at(&index, &lifts, pos) + seat.map_or(0, |s| s.up);
         match elevated {
             Some(mut e) => {
                 e.set_if_neq(Elevated(up));
@@ -200,8 +206,8 @@ fn lift_at(index: &SpatialIndex, lifts: &Query<&Elevating>, pos: TilePos) -> i16
         .unwrap_or(0)
 }
 
-/// Re-elevates the mobs on `pos` after a table there changed.
-fn reelevate(world: &mut World, pos: TilePos) {
+/// Re-elevates the mobs on `pos` after a table there changed (or a mob sat down or got up).
+pub(crate) fn reelevate(world: &mut World, pos: TilePos) {
     let mut lifts = world.query::<&Elevating>();
     let up = (world.resource::<SpatialIndex>().on_tile(pos).iter())
         .filter_map(|&e| lifts.get(world, e).ok())
@@ -216,6 +222,10 @@ fn reelevate(world: &mut World, pos: TilePos) {
     .filter(|&e| world.get::<BodyPosition>(e).is_some())
     .collect();
     for mob in mobs {
+        let up = up
+            + world
+                .get::<crate::furniture::Seated>(mob)
+                .map_or(0, |s| s.up);
         if world.get::<Elevated>(mob) != Some(&Elevated(up)) {
             world.entity_mut(mob).insert(Elevated(up));
         }

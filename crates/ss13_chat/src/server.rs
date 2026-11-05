@@ -35,8 +35,8 @@ use ss13_world::{SpatialIndex, WorldSystems};
 use crate::emote::{EMOTE_COOLDOWN_SECS, EmoteOutcome};
 use crate::speech::{
     BinaryCapable, ChangelingHivemind, EarsWorn, Impediments, RadioExtension, RadioTarget,
-    SpeakerStat, Tongueless, WhisperHeard, capitalize, derpspeech, parse_mods, stars, stutter,
-    unintelligize, whisper_heard,
+    SpeakerStat, Tongueless, VoiceSpan, WhisperHeard, capitalize, derpspeech, parse_mods, stars,
+    stutter, unintelligize, whisper_heard,
 };
 
 /// tg `get_hearers_in_view(world.view)`: 7 tiles, Chebyshev, like BYOND `view()`.
@@ -421,7 +421,7 @@ fn handle_say(
     bodies: Query<Body>,
     stats: Query<(Entity, &SpeakerStat)>,
     mut emotes_used: Query<&mut EmotesUsed>,
-    (sight, senses): (Query<&SeeInvisible>, Senses),
+    (sight, senses, voices): (Query<&SeeInvisible>, Senses, Query<&VoiceSpan>),
     index: Res<SpatialIndex>,
     listeners: Res<Listeners>,
     mut rates: ResMut<SayRates>,
@@ -692,9 +692,10 @@ fn handle_say(
                 .into_iter()
                 .map(|(c, _)| c)
                 .collect();
+            let span = voices.get(speaker).map_or(Span::Say, |v| v.0);
             chat.write(SendChat {
                 clients,
-                message: quote_message(&name, say_verb(&message), &message, Span::Say),
+                message: quote_message(&name, say_verb(&message), &message, span),
             });
             continue;
         }

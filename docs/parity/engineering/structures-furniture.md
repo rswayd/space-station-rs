@@ -25,13 +25,13 @@
 
 - **Код:** [`/obj/structure/chair`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/beds_chairs/chair.dm#L3), [`sofa.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/beds_chairs/sofa.dm), [`pew.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/beds_chairs/pew.dm)
 - **BandaStation:** [`chair.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/beds_chairs/chair.dm#L1) — русские склонения в сообщениях; [`modular_bandastation/objects/code/structures/chairs.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/structures/chairs.dm)
-- **Статус в ss13-rs:** ❌ нет — пристёгивания нет (`crates/ss13_game/src/server.rs`, shortcut); когда появится, к нему же относятся HE-трубы (`can_buckle`: `heat_exchanging/process_atmos` выравнивает температуру тела с трубой, `process` жжёт выше 1000 K)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/furniture.rs` поверх пристёгивания `crates/ss13_game/src/medical/surgery.rs` (`Buckled`): сесть перетаскиванием себя (другого — за 2 с), встать пустой рукой или сопротивлением; сидящий (`Seated`) не лежит, не ходит и смотрит, куда стул; стул лицом на север рисуется поверх сидящего, табурет поднимает на 4 px, барный — на 7; Alt-клик поворачивает стул вместе с сидящим (скамья — только с ключом в руке); гаечный ключ (ПКМ) разбирает на `buildstacktype`; стул с `item_chair` перетаскиванием на себя берётся в руки, из руки ставится лицом по взгляду; звуки `buckle_sound`/`unbuckle_sound`. Нет: подлокотников поверх сидящего, удара/разбивания стулом, катания офисных кресел, материальных (greyscale) стульев, бронзового кресла, поворота призраками; HE-трубы (`can_buckle`: выравнивание температуры тела с трубой, ожог выше 1000 K) — к атмосу
 
 ### Кровати и роллеры
 Кровати и медицинские роллеры: лечь/пристегнуть, роллер складывается и катается; собачья лежанка.
 
 - **Код:** [`/obj/structure/bed`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/beds_chairs/bed.dm#L10), [`/obj/structure/bed/medical`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/beds_chairs/bed.dm#L116)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — лечь/уложить (`crates/ss13_game/src/medical/surgery.rs`, `Buckled`); `crates/ss13_game/src/furniture.rs`: стоящие и лежащие на кровати рисуются на `elevation` (8 px) выше, гаечный ключ (ПКМ) разбирает на `build_stack_type` при `can_deconstruct`, звуки ремней медицинской кровати. Нет: складывания и катания роллера с пациентом, сторон изголовья (`buckle_lying` 90/270), собачьей лежанки, мягкого приземления (`soft_landing`)
 
 ### Электрический стул
 Стул с собранной сборкой (сигналер) убивает током пристёгнутого при активации, если в области есть питание.
