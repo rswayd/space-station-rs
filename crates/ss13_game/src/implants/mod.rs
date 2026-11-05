@@ -517,8 +517,10 @@ pub fn implant(
     if imp.kind == ImplantKind::Freedom && world.get::<crate::mobs::BasicMob>(target).is_some() {
         return Err((imp, Some("Это было бы пустой тратой!".to_owned())));
     }
+    // tg counts the security implants already there for any new implant, so two of them block
+    // every other implant too; the cap is meant for security implants (deviation).
     let security = implants.0.iter().filter(|i| i.kind.security()).count();
-    if security >= SECURITY_IMPLANT_CAP {
+    if imp.kind.security() && security >= SECURITY_IMPLANT_CAP {
         return Err((imp, Some("Слишком много имплантов охраны!".to_owned())));
     }
     // A duplicate (`!allow_multiple`): its uses top up the old one's, up to twice the initial.
