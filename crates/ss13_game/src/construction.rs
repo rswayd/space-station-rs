@@ -50,6 +50,7 @@ use ss13_shared::{Optics, TilePos};
 use ss13_world::{Density, Mover, SpatialIndex};
 
 use crate::combat::{CombatMode, NextMove};
+use crate::explosions::ex_act::{CATWALK, LATTICE};
 use crate::health::Health;
 use crate::obj_damage::{
     Anchored, GIRDER, GIRDER_DISPLACED, GIRDER_NORMAL, GIRDER_REINF, GIRDER_REINF_STRUTS, GRILLE,
@@ -78,6 +79,11 @@ const VENDING: &str = "/obj/machinery/vending";
 const FANS: &str = "/obj/structure/fans";
 const TINY_FAN: &str = "/obj/structure/fans/tiny";
 const FAN_SHIELD: &str = "/obj/structure/fans/tiny/shield";
+const SPACE: &str = "/turf/open/space";
+const OPENSPACE: &str = "/turf/open/openspace";
+const PLATING: &str = "/turf/open/floor/plating";
+/// `ismetaltile`.
+const IRON_TILE: &str = "/obj/item/stack/tile/iron";
 
 /// A `GLOB.main_girder_wall_recipes` entry (`create_girder_wall_recipes`): `wall` (a turf or
 /// a false wall) from `amount` of `stack` on a `girder` (or subtype) in `state`.
@@ -377,6 +383,23 @@ fn tool_act(world: &mut World, actor: Actor, kind: ToolKind, target: Entity) -> 
     }
     if is_under(&path, WINDOW) {
         return window_tool(world, actor, kind, target);
+    }
+    if is_under(&path, LATTICE) && kind == ToolKind::Wirecutters {
+        // `/obj/structure/lattice/wirecutter_act`.
+        let indestructible = world
+            .get::<DmObj>(target)
+            .is_some_and(|o| o.resistance_flags & crate::obj_damage::INDESTRUCTIBLE != 0);
+        if indestructible {
+            return Interact::None;
+        }
+        tell(
+            world,
+            client,
+            Span::Notice,
+            "Вы разрезаете соединения решётки...",
+        );
+        crate::obj_damage::deconstruct(world, target, true);
+        return Interact::Done;
     }
     if is_under(&path, GRILLE) && kind == ToolKind::Screwdriver {
         // `/obj/structure/grille/screwdriver_act`: `use_tool` without delay.
@@ -715,7 +738,19 @@ fn target_interaction(world: &mut World, actor: Actor, target: Entity) -> Intera
         };
     }
     let client = actor.client;
+    // `/obj/structure/lattice/item_interaction`: handed to the turf under it.
+    if is_under(&path, LATTICE)
+        && let Some(turf) = world
+            .get::<TilePos>(target)
+            .and_then(|&p| turf_at(world, p))
+        && build_over_space(world, actor, held, turf)
+    {
+        return Interact::Done;
+    }
     if world.get::<Turf>(target).is_some() {
+        if build_over_space(world, actor, held, target) {
+            return Interact::Done;
+        }
         if is_under(&path, crate::reinforced::R_WALL) && tool_of(world, held).is_some() {
             crate::reinforced::wall_tool(world, actor, target);
             return Interact::Done;
@@ -849,6 +884,71 @@ fn interact_secondary(world: &mut World, actor: Actor, target: Entity) -> Intera
         return Interact::Done;
     }
     Interact::None
+}
+
+/// `/turf/open/space/item_interaction` and the openspace one: rods build a lattice, or a
+/// catwalk over a lattice (`build_with_rods`, one rod each); an iron tile over a lattice or
+/// next to a floor builds plating (`build_with_floor_tiles`). True when handled.
+// shortcut: `CanBuildHere` (shuttle areas) and openspace's `CanCoverUp` are not checked.
+fn build_over_space(world: &mut World, actor: Actor, held: Entity, turf: Entity) -> bool {
+    let (Some(path), Some(&pos)) = (path_of(world, turf), world.get::<TilePos>(turf)) else {
+        return false;
+    };
+    if !is_under(&path, SPACE) && !is_under(&path, OPENSPACE) {
+        return false;
+    }
+    let client = actor.client;
+    let lattice = world
+        .resource::<SpatialIndex>()
+        .on_tile(pos)
+        .iter()
+        .copied()
+        .filter_map(|e| Some((e, world.get::<DmObj>(e)?.path.clone())))
+        .find(|(_, p)| is_under(p, LATTICE));
+    if stack_of(world, held, RODS) {
+        match lattice {
+            Some((_, p)) if is_under(&p, CATWALK) => {
+                tell(world, client, Span::Warning, "Здесь уже есть мостик!");
+            }
+            Some((old, _)) => {
+                if has_template(world, CATWALK) && crate::tools::use_stack(world, held, 1) {
+                    world.despawn(old);
+                    spawn_obj(world, CATWALK, pos);
+                    tell(world, client, Span::Notice, "Вы собираете мостик.");
+                }
+            }
+            None => {
+                if has_template(world, LATTICE) && crate::tools::use_stack(world, held, 1) {
+                    spawn_obj(world, LATTICE, pos);
+                    tell(world, client, Span::Notice, "Вы собираете решётку.");
+                }
+            }
+        }
+        return true;
+    }
+    if stack_of(world, held, IRON_TILE) {
+        // `has_valid_support`: a floor turf on a cardinal side.
+        let supported = ss13_shared::Dir::CARDINALS.iter().any(|&d| {
+            turf_at(world, pos.step(d))
+                .and_then(|t| path_of(world, t))
+                .is_some_and(|p| is_under(&p, FLOOR))
+        });
+        if lattice.is_none() && !supported {
+            tell(
+                world,
+                client,
+                Span::Warning,
+                "Нужна опора, проложите прутья!",
+            );
+        } else if has_template(world, PLATING) && crate::tools::use_stack(world, held, 1) {
+            if let Some((old, _)) = lattice {
+                world.despawn(old);
+            }
+            place_on_top(world, pos, PLATING, true);
+        }
+        return true;
+    }
+    false
 }
 
 /// `/turf/closed/wall/try_decon`.

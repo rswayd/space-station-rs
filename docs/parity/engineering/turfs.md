@@ -36,7 +36,7 @@
 Космос (`/turf/open/space`) — вакуум и свет звёзд; прутья на космосе дают решётку (`lattice`), плитка на решётке — обшивку, прутья на решётке — мостик (`catwalk`).
 
 - **Код:** [`/turf/open/space`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/open/space/space.dm#L45), [`space/item_interaction()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/open/space/space.dm#L130), [`proc/update_starlight()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/open/space/space.dm#L106)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_atmos`, `crates/ss13_shared/src/light.rs`: космос как вакуум и звёздный свет; постройки решёток и обшивки нет
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_atmos`, `crates/ss13_shared/src/light.rs`: вакуум и звёздный свет; `crates/ss13_game/src/construction.rs` (`build_over_space`): прутья — решётка, на решётке — мостик, плитка на решётке или рядом с полом — обшивка (воздух тайла наследуется); `CanBuildHere` (зоны шаттлов) не проверяется (shortcut)
 
 ### Открытое пространство и падение между уровнями
 `openspace` показывает уровень ниже; всё, что на нём не держится, падает (`zFall`) с уроном; решётка или мостик закрывают его.

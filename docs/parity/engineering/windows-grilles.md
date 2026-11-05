@@ -36,7 +36,7 @@
 Решётка (`lattice`) из прутьев держит над космосом и служит основой для обшивки; мостик (`catwalk`) — проходимый настил, под которым видны кабели и трубы; лавовый мостик для лаваленда.
 
 - **Код:** [`/obj/structure/lattice`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/lattice.dm#L1), [`/obj/structure/lattice/catwalk`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/lattice.dm#L116), [`/obj/structure/lattice/catwalk/lava`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/lattice.dm#L165)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/construction.rs` (`build_over_space`): прут на космосе/открытом пространстве — решётка, прут на решётке — мостик, плитка на решётке — обшивка, кусачки разбирают в прутья (решётка 1, мостик 2); держат над открытым пространством — `crates/ss13_game/src/multiz.rs`; разрушаются взрывами — `crates/ss13_game/src/explosions/ex_act.rs`; нет уничтожения кабелей при сдвиге мостика, лавового мостика, решёток шаттловой постройки (`shuttle_construction_lattice`)
 
 ### Перила и деревянный забор
 Перила блокируют проход через свой край (угловые — через два), перелезаются с задержкой, разбираются гаечным ключом/кусачками.
