@@ -450,6 +450,9 @@ pub mod vending;
 pub mod vision;
 #[cfg(feature = "server")]
 pub mod wallmount;
+/// Shared window data; `wiremod::circuit` and `wiremod::server` with `server`, `wiremod::client`
+/// with `client`.
+pub mod wiremod;
 #[cfg(feature = "server")]
 pub mod wires;
 pub mod zone;

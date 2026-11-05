@@ -280,6 +280,7 @@ impl Plugin for GameServerPlugin {
         .add_plugins(crate::emag::EmagPlugin)
         .add_plugins(crate::grenades::GrenadesServerPlugin)
         .add_plugins(crate::assemblies::server::AssembliesServerPlugin)
+        .add_plugins(crate::wiremod::server::WiremodServerPlugin)
         .add_plugins(crate::mobs::MobsServerPlugin)
         .add_plugins(crate::bots::BotsServerPlugin)
         .add_plugins(crate::mecha::MechaServerPlugin)

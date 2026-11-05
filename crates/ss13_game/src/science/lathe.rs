@@ -32,7 +32,9 @@ use std::sync::Arc;
 use bevy::ecs::message::MessageCursor;
 use bevy::ecs::system::SystemParamItem;
 use bevy::prelude::*;
-use ss13_mapload::research::{LatheDef, MAX_STACK_SIZE, PRODUCTION_ROOT, SHEET_MATERIAL_AMOUNT};
+use ss13_mapload::research::{
+    ALL_FLAGS, LatheDef, MAX_STACK_SIZE, PRODUCTION_ROOT, SHEET_MATERIAL_AMOUNT, build_type,
+};
 use ss13_mapload::{DmName, DmObj, DmPower, DmStack};
 use ss13_proto::Prototypes;
 use ss13_shared::TilePos;
@@ -56,6 +58,29 @@ use crate::power::{PowerMachine, Unpowered};
 use crate::tools::{Stack, tell};
 
 pub const SILO_ROOT: &str = "/obj/machinery/ore_silo";
+/// tg `/obj/machinery/component_printer` (`wiremod/core/component_printer.dm`): a lathe of
+/// `COMPONENT_PRINTER` designs that prints at once and draws no energy per print, its
+/// efficiency `1 - 0.875 * (servo tiers - servos) / 6`.
+// shortcut: the `Fabricator` window instead of tgui's `ComponentPrinter`; no recycling of
+// components, no circuit linking for remote printing.
+pub const COMPONENT_PRINTER: &str = "/obj/machinery/component_printer";
+
+/// The component printer's lathe def: its board has 2 matter bins and 2 servos.
+fn component_printer_def() -> LatheDef {
+    LatheDef {
+        path: COMPONENT_PRINTER.to_owned(),
+        build_types: build_type::COMPONENT_PRINTER,
+        department_flags: ALL_FLAGS,
+        imprinter: false,
+        servos: 2,
+        matter_bins: 2,
+        payment_department: String::new(),
+    }
+}
+
+fn is_component_printer(def: &LatheDef) -> bool {
+    def.path == COMPONENT_PRINTER
+}
 /// `ACCESS_QM`: the silo's ID requirement does not apply.
 const ACCESS_QM: &str = "qm";
 /// `37.5 * SHEET_MATERIAL_AMOUNT` per matter bin tier.
@@ -176,6 +201,9 @@ impl Lathe {
 
 /// tg `compute_efficiency()` with tier 1 parts.
 pub fn efficiency(def: &LatheDef) -> f64 {
+    if is_component_printer(def) {
+        return 1.0;
+    }
     efficiency_for(def.imprinter, def.servos)
 }
 
@@ -198,7 +226,11 @@ pub(crate) fn refresh_parts(world: &mut World, e: Entity) {
     let r = crate::stock_parts::ratings(world, e);
     let bins = r.sum(crate::stock_parts::PartKind::MatterBin);
     let servos = r.sum(crate::stock_parts::PartKind::Servo);
-    let efficiency = efficiency_for(lathe.def.imprinter, servos);
+    let efficiency = if is_component_printer(&lathe.def) {
+        1.0 + (0.125 - 1.0) * (f64::from(servos.saturating_sub(lathe.def.servos)) / 6.0)
+    } else {
+        efficiency_for(lathe.def.imprinter, servos)
+    };
     let local_size = (f64::from(bins) * UNITS_PER_BIN) as u32;
     let catalogue = world.get_resource::<ResearchDb>().map(|db| {
         let mut c = (*lathe.catalogue).clone();
@@ -368,7 +400,11 @@ fn setup_lathes(world: &mut World) {
     let mut query = world.query::<(Entity, &DmObj, Option<&TilePos>, Option<&DmName>)>();
     let found: Vec<(Entity, DmObj, Option<TilePos>, Option<DmName>)> = query
         .iter(world)
-        .filter(|(_, o, _, _)| is_under(&o.path, SILO_ROOT) || is_under(&o.path, PRODUCTION_ROOT))
+        .filter(|(_, o, _, _)| {
+            is_under(&o.path, SILO_ROOT)
+                || is_under(&o.path, PRODUCTION_ROOT)
+                || o.path == COMPONENT_PRINTER
+        })
         .map(|(e, o, p, n)| (e, o.clone(), p.copied(), n.cloned()))
         .collect();
     let Some(db) = world.get_resource::<ResearchDb>() else {
@@ -382,9 +418,14 @@ fn setup_lathes(world: &mut World) {
             if let Some(pos) = pos {
                 silos.entry(pos.z).or_insert(e);
             }
-        } else if let Some(def) = db.lathes.get(&obj.path) {
+        } else if let Some(def) = db
+            .lathes
+            .get(&obj.path)
+            .cloned()
+            .or_else(|| (obj.path == COMPONENT_PRINTER).then(component_printer_def))
+        {
             let name = name.map_or_else(|| obj.path.clone(), |n| plain(&n.name).to_owned());
-            lathes.push((e, def.clone(), pos.map(|p| p.z), name));
+            lathes.push((e, def, pos.map(|p| p.z), name));
         }
     }
     let icons = world.get_resource::<ResearchIcons>();
@@ -700,10 +741,19 @@ fn start_build(world: &mut World, lathe: Entity, user: Entity, path: &str, amoun
     let coefficient = state.build_efficiency(db, design);
     let cost = design_cost(db, design);
     let total_units: f64 = d.materials.iter().map(|(_, n)| n).sum();
-    let per_item_secs = build_secs(d.construction_time, d.lathe_time_factor, state.efficiency);
-    let active = world
-        .get::<DmPower>(lathe)
-        .map_or(0.0, |p| p.active_power_usage);
+    let printer = is_component_printer(&state.def);
+    let per_item_secs = if printer {
+        0.0
+    } else {
+        build_secs(d.construction_time, d.lathe_time_factor, state.efficiency)
+    };
+    let active = if printer {
+        0.0
+    } else {
+        world
+            .get::<DmPower>(lathe)
+            .map_or(0.0, |p| p.active_power_usage)
+    };
     let charge =
         (total_units / (f64::from(MAX_STACK_SIZE) * SHEET_MATERIAL_AMOUNT) * coefficient * active)
             .ceil();

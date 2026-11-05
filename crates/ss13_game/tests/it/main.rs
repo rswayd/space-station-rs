@@ -94,6 +94,7 @@ mod vampire;
 mod vehicles;
 mod vending;
 mod wallmount;
+mod wiremod;
 mod wires;
 mod wizard;
 mod xenobio;

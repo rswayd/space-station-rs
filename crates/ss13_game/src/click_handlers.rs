@@ -37,6 +37,7 @@
 //! | 1750 | `radiation::geiger_attack_self` |
 //! | 1800 | `explosions::sources::c4_attack_self` |
 //! | 1900 | `assemblies::server::attack_self` |
+//! | 1960 | `wiremod::server::attack_self` |
 //! | 2000 | `grenades::attack_self` |
 //! | 2100 | `tables::attack_self` |
 //! | 2200 | `furniture::attack_self` |
@@ -63,6 +64,7 @@
 //! | 500 | core: a storage opens or takes the held item |
 //! | 600 | `implants::item_interaction` |
 //! | 700 | `assemblies::server::item_interaction` |
+//! | 760 | `wiremod::server::item_interaction` |
 //! | 800 | `grenades::item_interaction` |
 //! | 900 | `service::server::item_interaction` |
 //! | 1000 | `antag::uplink::item_interaction` |
@@ -117,6 +119,7 @@
 //! | 3400 | `silicon::law_rack::interact` |
 //! | 3470 | `station_goals::interact` (satellites) |
 //! | 3450 | `vehicles::attack_hand` |
+//! | 3460 | `wiremod::server::attack_hand` |
 //!
 //! [`ClickPhase::HeldOnTarget`] (a world click with the active hand's item; tg
 //! `item_interaction`, `interact_with_atom`, `pre_attack`, `attackby`):
@@ -128,6 +131,7 @@
 //! | 300 | `emag::interact_with_atom` (left click) |
 //! | 400 | `modsuit::server::item_interaction` |
 //! | 500 | `assemblies::server::item_interaction` |
+//! | 560 | `wiremod::server::item_interaction` |
 //! | 600 | `grenades::item_interaction` |
 //! | 700 | `implants::item_interaction` |
 //! | 800 | `defenses::server::item_interaction` |
