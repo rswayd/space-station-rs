@@ -417,7 +417,7 @@ fn generate_code(world: &World, device: Entity, phonetic: &[String], rng: &mut R
         .get::<Uplink>(device)
         .map(|u| u.unlock_code.clone())
         .unwrap_or_default();
-    let mut word = |rng: &mut Rng| {
+    let word = |rng: &mut Rng| {
         phonetic
             .get(rng.range(0, phonetic.len() as i64 - 1) as usize)
             .cloned()
