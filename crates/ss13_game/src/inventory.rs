@@ -621,6 +621,10 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 Some(item)
                     if hand == inventory.active
                         && crate::martial::attack_self(world, client, mob, item) => {}
+                // A plant with liquid contents is squeezed (BandaStation).
+                Some(item)
+                    if hand == inventory.active
+                        && crate::botany::attack_self(world, client, mob, item) => {}
                 // Paper and books are read, dice rolled, horns honked (`crate::service`).
                 Some(item)
                     if hand == inventory.active

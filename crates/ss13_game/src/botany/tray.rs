@@ -6,8 +6,8 @@
 //!
 //! The cycle is a pure function of the tray, its nutrient holder, the light and the dice, so it
 //! is tested without a world.
-// shortcut: no autogrow (`self_sustaining`, ctrl+click), snails, soil sacks, grafts, gene
-// shears, somatoray, bees, plumbing or circuits; `mutatepest` warns without spawning
+// shortcut: no autogrow (`self_sustaining`, ctrl+click), snails, soil sacks, gene shears,
+// somatoray, bees, plumbing or circuits; `mutatepest` warns without spawning
 // spiderlings, strange reagent spawns no living plant.
 
 use ss13_reagents::{Chemistry, Holder, is_under};

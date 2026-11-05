@@ -5,13 +5,13 @@
 `/obj/item/food/grown` наследует статы семени: реагенты по потенции, размер укуса от потенции и объёма, трейты-гены; сохнет в сушилке, бродит в бочке (`ferment`), перемалывается/выжимается в блендере, оставляет мусор (кожура, огрызок).
 
 - **Код:** [`/obj/item/food/grown`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/grown.dm#L13), [`Initialize()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/grown.dm#L50), [`ferment()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/grown.dm#L115), [`grind_atom()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/grown.dm#L143), [`generate_trash()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/grown.dm#L100)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/botany/plants.rs`, `crates/ss13_game/src/food.rs`: плоды из урожая несут своё семя (реагенты по потенции), едятся, режутся, превращаются в семена в экстракторе, компостируются; нет сушки, брожения, трейтов продукта
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/botany/plants.rs`, `crates/ss13_game/src/botany/produce.rs`, `crates/ss13_game/src/food.rs`: плоды из урожая несут своё семя (реагенты по потенции), едятся, режутся, превращаются в семена в экстракторе, компостируются; трейты продукта действуют (см. ./seeds-genetics.md), мусор-кожура получает семя плода; нет сушки и бочки (`ferment` — только трейтом автодистилляции), блендера (см. ../kitchen/)
 
 ### Несъедобные выращенные предметы
 `/obj/item/grown` — продукты-не-еда со статами семени: бревна, хлопок, кочерыжки, новацвет, угольная роза, кустарник; часть служит оружием или материалом.
 
 - **Код:** [`/obj/item/grown`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/growninedible.dm#L5)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/botany/mod.rs`, `crates/ss13_game/src/botany/produce.rs`: несъедобные плоды собираются, несут семя и его трейты (скользкость, свечение, раздавливание, батарейка); собственных свойств видов (оружие, материалы) нет — см. записи семейств ниже
 
 ### Овощи, фрукты, ягоды и злаки
 Основная масса семейств для кухни: яблоки, бананы, бобы/соя, ягоды/виноград, злаки (пшеница, овёс, рис, мясная пшеница), вишни, цитрусы, какао/ваниль, кукуруза, огурцы, баклажаны, чеснок, дыни/арбузы, оливки, лук, арахис, горох, ананас, сливы, картофель, тыквы, корнеплоды (морковь, пастернак, свёкла), сахарный тростник, чай/кофе, томаты, корта-орех. У большинства есть мутации в родственные виды.
@@ -23,7 +23,7 @@
 Банан оставляет кожуру, на которой поскальзываются; варианты — мимана (тихая), блюспейс-кожура (телепортирует), гро-мишель.
 
 - **Код:** [`/obj/item/seeds/banana`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/grown/banana.dm#L2), [`/obj/item/grown/bananapeel`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/grown/banana.dm#L62), [`bananapeel/bluespace`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/grown/banana.dm#L145)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/botany/produce.rs`, `crates/ss13_game/src/food.rs`: съеденный банан оставляет кожуру с его семенем; кожура скользкая (`potency × 1.6` дс, до 14 с), блюспейс-кожура телепортирует поскользнувшегося, мимана и гро-мишель — как обычная кожура; нет бумеранга изогнутого банана, связки бананов (созревание, обезьянья бомба), гниения гро-мишель
 
 ### Грибы
 Рейши, мухомор, ангел смерти, грибы свободы (псилоцибин), пухлый шлемник, ходячий гриб (становится мобом), лисички, светящиеся грибы (сажаются на пол, светят), теневые и т.п.; растут под `fungal_metabolism`.

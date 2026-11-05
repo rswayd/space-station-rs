@@ -729,6 +729,8 @@ fn on_consume(world: &mut World, eater: Entity, feeder: Entity, food: Entity, dm
         inventory.hands.iter().position(|&i| i == Some(food))
     });
     let pos = crate::chem::map_pos(world, food).or_else(|| world.get::<TilePos>(eater).copied());
+    // Grown trash (a banana peel) gets the plant's seed (`generate_trash`).
+    let seed = world.get::<crate::botany::Seed>(food).cloned();
     world.despawn(food);
     if dm.trash_type.is_empty() {
         return;
@@ -739,6 +741,9 @@ fn on_consume(world: &mut World, eater: Entity, feeder: Entity, food: Entity, dm
     let Some(trash) = crate::construction::spawn_obj(world, &dm.trash_type, pos) else {
         return;
     };
+    if let Some(seed) = seed.filter(|_| crate::botany::produce::is_grown(&dm.trash_type)) {
+        world.entity_mut(trash).insert(seed);
+    }
     if let (Some(holder), Some(hand)) = (holder, hand) {
         crate::inventory::pick_up(world, holder, trash, hand);
     }

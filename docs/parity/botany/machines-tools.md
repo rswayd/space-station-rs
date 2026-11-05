@@ -36,7 +36,7 @@
 Топорик рубит бревна и метается; коса срезает растения и сорняки по дуге; секатор снимает прививки; генные ножницы удаляют трейт с растения в лотке.
 
 - **Код:** [`/obj/item/hatchet`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics_items.dm#L118), [`/obj/item/scythe`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics_items.dm#L171), [`/obj/item/secateurs`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics_items.dm#L233), [`/obj/item/geneshears`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics_items.dm#L272)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/botany/grafts.rs`: секатор снимает прививки с растения в лотке; нет топорика (рубка бревен), косы, стрижки секатором (ПКМ, причёски), генных ножниц (нужен выбор из списка)
 
 ### Удобрения, гербициды и пестициды
 Бутылки E-Z-Nutrient, Left 4 Zed, Robust Harvest, гербицид и пестицид, распылители от сорняков и вредителей — их реагенты действуют через лоток (`on_hydroponics_apply`).
