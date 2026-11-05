@@ -28,8 +28,7 @@
 // construction (plasteel into runed metal only: no construct shells, constructs or soulstones
 // until basic mobs exist), EMP and summon dagger; no equipment, horror,
 // veiling or blood rites. No cult master abilities (marks, final reckoning, pulse), no
-// structures, no Nar'Sie language or TTS, no silence/stutter/slur effects (no speech status
-// effects yet: tg's `Unconscious` and silence are a paralyze here). A sacrifice destroys the
+// structures, no Nar'Sie language or TTS. A sacrifice destroys the
 // body (its items fall) without a soulstone. Nar'Sie is a sprite that does not move or consume:
 // no singularity component. No cinematic, sounds or shuttle lockdown.
 
@@ -2218,7 +2217,7 @@ fn do_convert(world: &mut World, rune: Entity, target: Entity, invokers: &[Entit
         crate::restraints::uncuff(world, target, pos);
     }
     // `Unconscious(10 SECONDS)`.
-    crate::status_effects::apply(world, target, Incap::Paralyze, 10.0);
+    crate::status_effects::apply(world, target, Incap::Unconscious, 10.0);
     if let Some(&pos) = world.get::<TilePos>(rune) {
         crate::construction::spawn_obj(world, DAGGER, pos);
     }
@@ -3385,6 +3384,23 @@ fn cast_stun(world: &mut World, mob: Entity, aura: Entity, target: Entity) {
             format!("In a brilliant flash of red, {victim} falls to the ground!"),
         );
         crate::status_effects::apply(world, target, Incap::Paralyze, 16.0 * coef);
+        // A carbon is silenced, stutters, slurs and jitters.
+        if world
+            .get::<crate::medical::organs::OrganHost>(target)
+            .is_some()
+        {
+            use crate::status_effects::{SlurKind, Timed, adjust_timed, set_timed};
+            adjust_timed(world, target, Timed::Silence, 12.0 * coef, None);
+            adjust_timed(world, target, Timed::Stutter, 30.0 * coef, None);
+            adjust_timed(
+                world,
+                target,
+                Timed::Slurring(SlurKind::Cult),
+                30.0 * coef,
+                None,
+            );
+            set_timed(world, target, Timed::Jitter, 30.0 * coef, true);
+        }
     }
     let t = now(world);
     world.entity_mut(mob).insert(NextMove(t + CLICK_CD_MELEE));
@@ -3451,6 +3467,13 @@ fn finish_shackle(world: &mut World, mob: Entity, action: &DoAfter) {
         return;
     };
     crate::restraints::apply_cuffs(world, cuffs, target);
+    crate::status_effects::adjust_timed(
+        world,
+        target,
+        crate::status_effects::Timed::Silence,
+        10.0,
+        None,
+    );
     chat_to(world, mob, Span::Notice, format!("You shackle {victim}."));
     spend_aura(world, mob, aura);
 }
@@ -3661,9 +3684,17 @@ fn holy_water_tick(world: &mut World, mob: Entity, secs: f32) {
         c.holy_secs
     };
     let (babbling, deconverted) = holy_water_stage(total);
+    {
+        use crate::status_effects::{Timed, adjust_timed, set_timed};
+        adjust_timed(world, mob, Timed::Jitter, 2.0 * secs, Some(20.0));
+        if babbling {
+            adjust_timed(world, mob, Timed::Stutter, 2.0 * secs, Some(20.0));
+            set_timed(world, mob, Timed::Dizziness, 10.0, true);
+        }
+    }
     if deconverted {
         remove_cultist(world, mob, false);
-        crate::status_effects::apply(world, mob, Incap::Paralyze, 10.0);
+        crate::status_effects::apply(world, mob, Incap::Unconscious, 10.0);
         if let (Some(chem), Some(mut reagents)) = (
             world
                 .get_resource::<crate::chem::Chem>()
@@ -3696,6 +3727,21 @@ fn holy_water_tick(world: &mut World, mob: Entity, secs: f32) {
             .get_resource_mut::<crate::combat::CombatRng>()
             .map_or(0, |mut r| r.range(0, 7) as usize);
         say(world, mob, WORDS[i]);
+        let seizure = world
+            .get_resource_mut::<crate::combat::CombatRng>()
+            .is_some_and(|mut r| r.chance(10.0));
+        if seizure {
+            let name = name_of(world, mob);
+            crate::chem::visible(
+                world,
+                mob,
+                "You have a seizure!",
+                &format!("{name} starts having a seizure!"),
+                Span::Danger,
+            );
+            crate::status_effects::apply(world, mob, Incap::Unconscious, 12.0);
+            chat_to(world, mob, Span::CultLarge, "Do not forget your place.");
+        }
     }
 }
 

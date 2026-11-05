@@ -95,7 +95,7 @@ pub fn sight(world: &World, mob: Entity) -> Option<Sight> {
     let knocked_out = match (world.get::<Health>(mob), world.get::<Stat>(mob)) {
         (Some(health), Some(&stat)) => stat != Stat::Dead && health.knocked_out(stat),
         _ => false,
-    };
+    } || crate::status_effects::incapacitation(world, mob).knocked_out;
     let temp = world.get::<Vision>(mob).is_some_and(|v| v.temp_blind > 0.0);
     let trauma_kinds: Vec<Kind> = traumas::of_mob(world, mob).iter().map(|t| t.kind).collect();
     let quirks = world.get::<Quirks>(mob);

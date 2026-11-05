@@ -15,7 +15,7 @@ use ss13_shared::chat::Span;
 
 use super::{
     AttackKind, COMBAT, Outcome, Style, active_arm, active_style, add_to_streak, adjacent,
-    capitalize, chance, check_block, dir_to, effects, fling, hurt, incapacitated, knock_out, lying,
+    capitalize, chance, check_block, dir_to, effects, fling, hurt, incapacitated, lying,
     melee_armor, message, name, play, reset_streak, roll, stamina_loss, streak, throw_mode,
     unconscious, zone_selected,
 };
@@ -364,7 +364,7 @@ fn crit(world: &mut World, style: Style, a: Entity, d: Entity, armor: f32, damag
             Some((Span::Danger, format!("Вы вырубаете {dn} хеймейкером!"))),
         );
         incap(world, d, Incap::Knockdown, super::armored(20.0, armor));
-        knock_out(world, d, 10.0);
+        super::put_to_sleep(world, d, 10.0);
     } else {
         message(
             world,

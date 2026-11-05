@@ -118,8 +118,7 @@ fn silicons(world: &mut World, mut cursor: Local<MessageCursor<EmpAct>>) {
         crate::vision::flash_act(world, mob, 1, false, false, crate::vision::FLASH_LENGTH);
         if let Some(cyborg) = world.get::<Cyborg>(mob).cloned() {
             if let Some(i) = severity_index(ev.severity) {
-                // shortcut: no unconsciousness status yet: `Unconscious()` paralyzes as long.
-                crate::status_effects::apply(world, mob, Incap::Paralyze, BORG_KNOCKOUT_SECS[i]);
+                crate::status_effects::apply(world, mob, Incap::Unconscious, BORG_KNOCKOUT_SECS[i]);
             }
             // The cell is in the cyborg's contents (`/mob/living/emp_act`).
             if ev.hits_contents() {

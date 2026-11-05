@@ -11,7 +11,7 @@
 //! `do_after` on yourself).
 //!
 //! Messages are written in Russian here (the checkout has them in English).
-// shortcut: no electrode beams, sparks, mood, alert, jitter, stutter, hulk shouts, wet-victim
+// shortcut: no electrode beams, sparks, mood, alert, hulk shouts, wet-victim
 // burns or clumsy head bumps; silicons and bots are not exempt; a helper cannot pull the
 // electrodes out of someone else; add them with those systems.
 
@@ -151,7 +151,18 @@ fn end_tase(world: &mut World, owner: Entity, index: usize) {
         return;
     }
     let tase = tased.0.remove(index);
+    let last = tased.0.is_empty();
     world.entity_mut(owner).insert(tased);
+    // `tased/on_remove`: the last electrodes leave the victim jittering.
+    if last {
+        crate::status_effects::adjust_timed(
+            world,
+            owner,
+            crate::status_effects::Timed::Jitter,
+            10.0,
+            Some(60.0),
+        );
+    }
     if let Some(&at) = world.get::<TilePos>(owner) {
         let victim = name_of(world, owner);
         show(
@@ -231,6 +242,11 @@ fn tick(world: &mut World) {
             if world.get::<Health>(owner).is_some() {
                 crate::status_effects::adjust_stamina(world, owner, tase.stamina_per_second * secs);
             }
+            // `adjust_stutter_up_to(10 SECONDS, 20 SECONDS)`, `adjust_jitter_up_to(20 SECONDS,
+            // 30 SECONDS)` every 0.25 s tick, per frame by its share.
+            use crate::status_effects::{Timed, adjust_timed};
+            adjust_timed(world, owner, Timed::Stutter, 40.0 * secs, Some(20.0));
+            adjust_timed(world, owner, Timed::Jitter, 80.0 * secs, Some(30.0));
         }
     }
 }

@@ -494,19 +494,26 @@ fn melee(
                 });
                 None
             }
-            None if lying => Some(Seen {
-                range: DEFAULT_MESSAGE_RANGE,
-                channel: ChatChannel::Info,
-                span: Span::Notice,
-                actor: format!("Вы трясете {victim}, пытаясь его поднять!"),
-                target: format!("{user} трясет вас, чтобы вас поднять!"),
-                others: format!("{user} трясет {victim}, пытаясь его поднять!"),
-            }),
+            None if lying => {
+                // `help_shake_act`: `adjust_status_effects_on_shake_up`.
+                commands.queue(move |world: &mut World| {
+                    crate::status_effects::shake_up(world, target);
+                });
+                Some(Seen {
+                    range: DEFAULT_MESSAGE_RANGE,
+                    channel: ChatChannel::Info,
+                    span: Span::Notice,
+                    actor: format!("Вы трясете {victim}, пытаясь его поднять!"),
+                    target: format!("{user} трясет вас, чтобы вас поднять!"),
+                    others: format!("{user} трясет {victim}, пытаясь его поднять!"),
+                })
+            }
             // tg default `zone_selected` is the chest: a hug. `ru_p_them` of the male body.
             None => {
                 let helper = attacker;
                 commands.queue(move |world: &mut World| {
                     crate::mood::on_hug(world, helper, target);
+                    crate::status_effects::shake_up(world, target);
                 });
                 Some(Seen {
                     range: DEFAULT_MESSAGE_RANGE,

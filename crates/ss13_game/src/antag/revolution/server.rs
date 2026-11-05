@@ -20,8 +20,7 @@
 //!   station wins, every revolutionary is deconverted.
 // shortcut: no mood, memories, codewords, conversion objective, clumsiness, holiday memes, AFK
 // grace for mutiny targets, hostile environment for the shuttle, syndicate security HUD implant
-// for heads, exiled heads (`enemy_of_the_state`), borging, silence or unconsciousness (the
-// deconversion's 10 s unconsciousness is a 10 s paralysis). tg `update_rev_heads` never promotes anyone (its
+// for heads, exiled heads (`enemy_of_the_state`) or borging. tg `update_rev_heads` never promotes anyone (its
 // `can_be_headrev` refuses antagonists and every candidate is a revolutionary), so it is left out.
 
 use bevy::ecs::message::MessageCursor;
@@ -65,6 +64,8 @@ pub const LATEJOIN_HEADS_NECESSARY: usize = 3;
 /// `add_revolutionary(stun = TRUE)`: `Stun(10 SECONDS)`; `remove_revolutionary`:
 /// `Unconscious(10 SECONDS)`.
 const CONVERT_STUN_SECS: f32 = 10.0;
+/// `add_revolutionary(mute = TRUE)`: `set_silence_if_lower(10 SECONDS)`.
+const CONVERT_SILENCE_SECS: f32 = 10.0;
 const DECONVERT_SECS: f32 = 10.0;
 /// BandaStation `REV_HIGHPOP_THRESHOLD`, `REV_ASCENDENT_LOWPOP`, `REV_ASCENDENT_HIGHPOP`.
 const REV_HIGHPOP_THRESHOLD: u32 = 70;
@@ -486,7 +487,7 @@ pub fn remove_revolutionary(world: &mut World, mob: Entity, deconverter: Deconve
     }
     let alive = world.get::<Stat>(mob).is_some_and(|s| *s != Stat::Dead);
     if let Deconverter::Mob(_) = deconverter {
-        crate::status_effects::apply(world, mob, Incap::Paralyze, DECONVERT_SECS);
+        crate::status_effects::apply(world, mob, Incap::Unconscious, DECONVERT_SECS);
     }
     let name = name_of(world, mob);
     if !rev.head {
@@ -565,7 +566,15 @@ pub fn on_successful_flash(world: &mut World, user: Entity, flashed: Entity) -> 
         );
         return false;
     }
-    // `add_revolutionary(stun = TRUE)`: `flash_act(1, 1)` and a 10 s stun.
+    // `add_revolutionary(stun = TRUE, mute = TRUE)`: 10 s of silence, `flash_act(1, 1)` and a
+    // 10 s stun (no holiday memes: always muted).
+    crate::status_effects::set_timed(
+        world,
+        flashed,
+        crate::status_effects::Timed::Silence,
+        CONVERT_SILENCE_SECS,
+        true,
+    );
     crate::status_effects::apply(world, flashed, Incap::Stun, CONVERT_STUN_SECS);
     add_revolutionary(world, flashed, false)
 }

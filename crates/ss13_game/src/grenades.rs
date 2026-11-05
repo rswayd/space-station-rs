@@ -23,8 +23,8 @@
 //! Cost: one pass over armed grenades and smoke clouds per tick, only while any exist.
 // shortcut: no clumsy fumbles or sticky tape (`botch_check`: no clumsiness in the port), no
 // projectile hit setting a held grenade off (`hit_reaction`), no ranged click throwing an armed
-// grenade, no fantasy bonuses, no cosmic fields, no flashbang light or sparks, no dizziness
-// from a flashbang (no dizziness status), no pellet cloud martyrs or aggregate hit messages, no
+// grenade, no fantasy bonuses, no cosmic fields, no flashbang light or sparks, no pellet cloud
+// martyrs or aggregate hit messages, no
 // gradual smoke spread or fade, no smoke protection from masks (only internals), no blob damage
 // from smoke; arming is logged to the server log, not to admins (`log_bomber`).
 
@@ -500,6 +500,15 @@ fn bang(world: &mut World, at: TilePos, mob: Entity, soundbang: bool) {
             // `Paralyze(max(20 / distance, 5))`, `Knockdown(max(200 / distance, 60))` (ds).
             crate::status_effects::apply(world, mob, Incap::Paralyze, (20.0 / d).max(5.0) / 10.0);
             crate::status_effects::knockdown(world, mob, (200.0 / d).max(60.0) / 10.0, 0.0);
+        } else {
+            // `adjust_dizzy_up_to(max(200 / distance, 5), 20 SECONDS)` (ds).
+            crate::status_effects::adjust_timed(
+                world,
+                mob,
+                crate::status_effects::Timed::Dizziness,
+                (200.0 / d).max(5.0) / 10.0,
+                Some(20.0),
+            );
         }
         drop_hands(world, mob);
     }

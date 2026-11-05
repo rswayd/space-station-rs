@@ -1215,7 +1215,7 @@ pub fn stun(world: &mut World, secbot: Entity, target: Entity, now: f64) {
     match bot.kind {
         BotKind::Ed209 => return,
         BotKind::Honk => {
-            super::sec::honk_post_stun(world, secbot);
+            super::sec::honk_post_stun(world, secbot, target);
             return;
         }
         _ => {}

@@ -3,7 +3,7 @@
 //! deflected and (in martial or carp clothing, lightly armed) blows dodged in combat mode; no
 //! guns (`TRAIT_NOGUNS`, `crate::guns`), punches never miss (`TRAIT_PERFECT_ATTACKER`,
 //! `crate::combat`) and grabs harder to resist (`grab_state_modifier`, `crate::pull`).
-// shortcut: no neck snap (no kill grab), no dizziness or silence, no carp faction or language,
+// shortcut: no neck snap (no kill grab), no carp faction or language,
 // no `TRAIT_HARDLY_WOUNDED`/`TRAIT_NODISMEMBER`/`TRAIT_HEAVY_SLEEPER`, no carp organ set bonus,
 // no `TRAIT_WIELDED` or `block_chance` of held items, no hulk check, no touch spell dodge; add
 // them with those statuses, factions, languages and two-handed items.
@@ -225,6 +225,13 @@ fn drop_kick(world: &mut World, a: Entity, d: Entity) -> bool {
         );
     }
     hurt(world, d, None, DamageType::Stamina, 40.0, None);
+    crate::status_effects::adjust_timed(
+        world,
+        d,
+        crate::status_effects::Timed::Dizziness,
+        10.0,
+        Some(10.0),
+    );
     // `adjust_temp_blindness_up_to(2 SECONDS, 10 SECONDS)`.
     let blind = world
         .get::<crate::vision::Vision>(d)
@@ -253,6 +260,13 @@ fn knee_stomach(world: &mut World, a: Entity, d: Entity) -> bool {
     );
     hurt(world, d, None, DamageType::Stamina, 20.0, None);
     incap(world, d, Incap::Paralyze, 1.0);
+    crate::status_effects::adjust_timed(
+        world,
+        d,
+        crate::status_effects::Timed::Silence,
+        5.0,
+        Some(5.0),
+    );
     if let Some(mut breath) = world.get_mut::<crate::breath::Respiration>(d)
         && breath.losebreath <= 10.0
     {

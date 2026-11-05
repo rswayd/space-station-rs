@@ -247,3 +247,40 @@ fn speech_pacifism_and_brain_medicine() {
             == 0.0
     });
 }
+
+/// Speech status effects (`crate::status_effects`): silence refuses the say like a mute, a
+/// sleeping A is knocked out (floored, blind) and says nothing until woken.
+#[test]
+fn silence_and_sleep_stop_speech() {
+    use ss13_game::status_effects::{self, Incap, Incapacitation, Timed};
+    let mut s = Station::start("silence_and_sleep_stop_speech");
+    let a = s.players[0].mob;
+
+    status_effects::set_timed(s.server.world_mut(), a, Timed::Silence, 30.0, true);
+    s.run_until("the chat sees the silence", |s| {
+        s.server
+            .world()
+            .get::<ss13_chat::speech::SpeechEffects>(a)
+            .is_some_and(|e| e.silenced)
+    });
+    s.send(0, ClientIntent::Say("тишина вокруг".into()));
+    s.run_until("the say is refused", |s| {
+        s.heard(0, "Вы осознаете, что не можете говорить!")
+    });
+    s.hold(1.0, "B hears nothing", |s| !s.heard(1, "тишина"));
+    status_effects::set_timed(s.server.world_mut(), a, Timed::Silence, 0.0, false);
+
+    status_effects::apply(s.server.world_mut(), a, Incap::Sleeping, 60.0);
+    s.run_until("A falls asleep", |s| {
+        let traits = s.get::<Incapacitation>(a);
+        traits.knocked_out && traits.floored && traits.hands_blocked
+    });
+    assert!(ss13_game::vision::is_blind(s.server.world(), a));
+    s.send(0, ClientIntent::Say("храп храп".into()));
+    s.hold(1.0, "B hears no sleep talk", |s| !s.heard(1, "храп"));
+
+    status_effects::set(s.server.world_mut(), a, Incap::Sleeping, 0.0);
+    s.run_until("A wakes", |s| !s.get::<Incapacitation>(a).knocked_out);
+    s.send(0, ClientIntent::Say("доброе утро".into()));
+    s.run_until("B hears A", |s| s.heard(1, "доброе утро"));
+}

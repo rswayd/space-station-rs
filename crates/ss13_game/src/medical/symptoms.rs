@@ -12,11 +12,12 @@
 //! (`symptom_delay`) and grow stronger past stat thresholds.
 //!
 //! Ported effects: coughing and sneezing (spreading the virus), headache, itching, fever,
-//! chills, confusion, dizziness (its messages), vomiting, weight loss, choking, respiratory
+//! chills, confusion, dizziness, narcolepsy, vomiting, weight loss, choking, respiratory
 //! distress, necrotizing fasciitis, autophagocytosis, spontaneous combustion, toxolysis,
 //! aggressive healing, self-respiration, mind and sensory restoration. Every other symptom
 //! counts for the stats only.
-// shortcut: no hallucinations, deafness, blindness, narcolepsy, voice change, DNA activation,
+// shortcut: no hallucinations, deafness, blindness, drugginess (dizziness's transmission 6),
+// voice change, DNA activation,
 // hair, skin or face changes, bleeding, hypertension, alkali, the light, water, plasma,
 // radiation, coma, genetic and metabolism healing, thermoregulation, eternal youth; no
 // `TRAIT_NOBREATH` of self-respiration, no fever/chills set point (they push the body
@@ -1243,6 +1244,13 @@ fn start(s: &mut Symptom, p: Props, resisted: bool, now: f64, rng: &mut CombatRn
             s.suppress = p.stealth >= 4;
         }
         K::Dizzy => s.suppress = p.stealth >= 4,
+        K::Narcolepsy => {
+            // Yawning.
+            s.flag = p.transmittable >= 4;
+            if p.stage_rate >= 10 {
+                s.delay = 32.5;
+            }
+        }
         K::Vomit | K::VomitNebula => {
             s.suppress = p.stealth >= 4;
             s.flag = p.resistance >= 9;
@@ -1564,6 +1572,50 @@ fn activate(
                 Span::BoldWarning,
                 "A wave of dizziness washes over you!",
             );
+            crate::status_effects::adjust_timed(
+                world,
+                mob,
+                crate::status_effects::Timed::Dizziness,
+                40.0,
+                Some(80.0),
+            );
+        }
+        K::Narcolepsy => {
+            let (line, drowsy) = match stage {
+                1 => ("You feel tired.", 0.0),
+                2 => ("You feel very tired.", 0.0),
+                3 => ("You try to focus on staying awake.", 10.0),
+                4 if s.flag => ("You try and fail to suppress a yawn.", 20.0),
+                4 => ("You nod off for a moment.", 20.0),
+                _ => (
+                    pick(
+                        rng,
+                        &[
+                            "So tired...",
+                            "You feel very sleepy.",
+                            "You have a hard time keeping your eyes open.",
+                            "You try to stay awake.",
+                        ],
+                    ),
+                    80.0,
+                ),
+            };
+            if rng.chance(50.0) {
+                tell(world, Span::Warning, line);
+            }
+            if drowsy > 0.0 {
+                crate::status_effects::adjust_timed(
+                    world,
+                    mob,
+                    crate::status_effects::Timed::Drowsiness,
+                    drowsy,
+                    Some(140.0),
+                );
+            }
+            if stage >= 4 && s.flag {
+                emote(world, mob, "yawn");
+                airborne_spread(world, mob, disease, 6, true, false, rng);
+            }
         }
         K::Vomit | K::VomitNebula => {
             if stage <= 4 {
@@ -1798,8 +1850,20 @@ fn activate(
         }
         K::MindRestoration => {
             if stage >= 3 {
-                if let Some(mut effects) = crate::status_effects::effects_mut(world, mob) {
+                if let Some(mut effects) =
+                    world.get_mut::<crate::status_effects::StatusEffects>(mob)
+                {
+                    use crate::status_effects::Timed;
+                    effects.adjust_timed(Timed::Dizziness, -4.0, None);
+                    effects.adjust_timed(Timed::Drowsiness, -4.0, None);
+                    // Every slurring effect loses a second.
+                    for slur in &mut effects.slurring {
+                        *slur = (*slur - 1.0).max(0.0);
+                    }
                     effects.confusion = (effects.confusion - 2.0).max(0.0);
+                    if stage >= 4 {
+                        effects.adjust_timed(Timed::Drowsiness, -4.0, None);
+                    }
                 }
                 if s.suppress {
                     diseases::remove_blood(

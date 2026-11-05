@@ -49,6 +49,234 @@ pub struct Impediments {
     pub unintelligible: bool,
 }
 
+/// Timed speech status effects (tg `/datum/status_effect/speech/*`, `silenced`), kept by the
+/// game (`ss13_game::status_effects`); they add to [`Impediments`].
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq)]
+pub struct SpeechEffects {
+    pub stutter: bool,
+    /// `/datum/status_effect/silenced`: `TRAIT_MUTE`.
+    pub silenced: bool,
+    /// The slurring effects that run (generic, drunk, cult, heretic), applied in this order.
+    pub slurs: [Option<Slur>; 4],
+}
+
+/// The text file of a slurring effect (`strings/slurring_*_text.json`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SlurTable {
+    Drunk,
+    Cult,
+    Heretic,
+}
+
+struct SlurText {
+    /// `characters.common`: looked up by the lower-case character.
+    common: &'static [(&'static str, &'static str)],
+    /// `characters.uncommon`: by the character as written.
+    uncommon: &'static [(&'static str, &'static str)],
+    string_replacements: &'static [&'static str],
+    string_additions: &'static [&'static str],
+}
+
+impl SlurTable {
+    fn text(self) -> &'static SlurText {
+        const DRUNK: SlurText = SlurText {
+            common: &[
+                ("o", "u"),
+                ("s", "ch"),
+                ("a", "ah"),
+                ("u", "oo"),
+                ("c", "k"),
+                ("о", "у"),
+                ("с", "сш"),
+                ("г", "х"),
+                ("а", "ах"),
+                ("э", "и"),
+                ("ц", "сц"),
+            ],
+            uncommon: &[(" ", "...ммм-м-м..."), (".", "...эээ..."), (",", ", *ик*")],
+            string_replacements: &[],
+            string_additions: &[],
+        };
+        const CULT: SlurText = SlurText {
+            common: &[
+                ("o", "u"),
+                ("t", "ch"),
+                ("a", "ah"),
+                ("u", "oo"),
+                ("c", " NAR "),
+                ("s", " SIE "),
+                ("о", "у"),
+                ("т", "чх"),
+                ("а", "ах"),
+                ("у", "оо"),
+                ("ц", " НАР "),
+                ("с", " СИ "),
+            ],
+            uncommon: &[
+                ("N", "ОН ИДЁТ"),
+                (" ", " нет надежды... "),
+                ("Н", " ОН ИДЁТ... "),
+            ],
+            string_replacements: &["'", "фтх", "нхлу", "чр"],
+            string_additions: &["агн"],
+        };
+        const HERETIC: SlurText = SlurText {
+            common: &[
+                ("o", "u"),
+                ("t", "ch"),
+                ("a", "ah"),
+                ("c", "th"),
+                ("i", "ks"),
+                ("m", "nth"),
+                ("о", "у"),
+                ("т", "ч"),
+                ("а", "ах"),
+                ("с", "тч"),
+                ("и", "кс"),
+                ("м", "нтх"),
+            ],
+            uncommon: &[
+                (" ", " нескончаемый... "),
+                ("H", " РУКИ... "),
+                ("h", " ЯРКИЙ "),
+                ("s", " УТЕКАЕТ "),
+                ("r", " РАЗЛОМ "),
+                ("Р", " РУКИ... "),
+                ("я", " ЯРКИЙ "),
+                ("с", " УТЕКАЕТ "),
+                ("п", " РАЗЛОМ "),
+            ],
+            string_replacements: &["'", "бр", "тх", "увидь", "етч"],
+            string_additions: &["ах", "утх"],
+        };
+        match self {
+            Self::Drunk => &DRUNK,
+            Self::Cult => &CULT,
+            Self::Heretic => &HERETIC,
+        }
+    }
+}
+
+/// One slurring effect: its table and chances, percent.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Slur {
+    pub table: SlurTable,
+    pub common: f32,
+    pub uncommon: f32,
+    pub replacement: f32,
+    pub doubletext: f32,
+}
+
+impl Slur {
+    /// `/datum/status_effect/speech/slurring/generic`.
+    pub const GENERIC: Self = Self {
+        table: SlurTable::Drunk,
+        common: 33.0,
+        uncommon: 0.0,
+        replacement: 24.0,
+        doubletext: 40.0,
+    };
+    /// `/datum/status_effect/speech/slurring/cult`.
+    pub const CULT: Self = Self {
+        table: SlurTable::Cult,
+        common: 50.0,
+        uncommon: 25.0,
+        replacement: 33.0,
+        doubletext: 0.0,
+    };
+    /// `/datum/status_effect/speech/slurring/heretic`.
+    pub const HERETIC: Self = Self {
+        table: SlurTable::Heretic,
+        common: 50.0,
+        uncommon: 20.0,
+        replacement: 30.0,
+        doubletext: 5.0,
+    };
+
+    /// `/datum/status_effect/speech/slurring/drunk/handle_message` at `drunk` drunkenness.
+    pub fn drunk(drunk: f32) -> Self {
+        Self {
+            table: SlurTable::Drunk,
+            common: (drunk * 0.8 - 16.0).clamp(4.0, 50.0),
+            uncommon: (drunk * 0.3 - 10.0).clamp(0.0, 12.0),
+            replacement: (drunk * 0.6 - 8.0).clamp(0.0, 12.0),
+            doubletext: (drunk * 0.8 - 8.0).clamp(2.0, 50.0),
+        }
+    }
+}
+
+/// tg `/datum/status_effect/speech/slurring/apply_speech` on every word of `text` (`roll`
+/// gives 0..100 per call).
+pub fn slur(text: &str, slur: &Slur, mut roll: impl FnMut() -> f32) -> String {
+    const NO_SLUR: &str = " \"'()[]{}.!?,:;_`~-";
+    let table = slur.table.text();
+    fn pick(list: &[&'static str], roll: &mut dyn FnMut() -> f32) -> &'static str {
+        list[((roll() / 100.0 * list.len() as f32) as usize).min(list.len() - 1)]
+    }
+    // `replacement_dupe_check`: no replacement right after a replacement.
+    let mut dupe = false;
+    let mut words = Vec::new();
+    for word in text.split(' ') {
+        let mut out = String::with_capacity(word.len());
+        for (index, c) in word.chars().enumerate() {
+            let mut buf = [0u8; 4];
+            let original: &str = c.encode_utf8(&mut buf);
+            let lower: String = c.to_lowercase().collect();
+            let allow = index != 0 && !NO_SLUR.contains(c);
+            if roll() < slur.common
+                && let Some((_, to)) = table.common.iter().find(|(from, _)| *from == lower)
+            {
+                out.push_str(to);
+                dupe = false;
+            } else if roll() < slur.uncommon
+                && let Some((_, to)) = table.uncommon.iter().find(|(from, _)| *from == original)
+            {
+                out.push_str(to);
+                dupe = false;
+            } else if allow {
+                if !dupe && roll() < slur.replacement {
+                    let (replacements, additions) =
+                        (table.string_replacements, table.string_additions);
+                    // tg weighs `(replacements + additions) / replacements * 100`, at least 100,
+                    // so a table with both never appends; the intent is the replacements' share.
+                    let replace = match (replacements.is_empty(), additions.is_empty()) {
+                        (false, false) => {
+                            let share = replacements.len() as f32
+                                / (replacements.len() + additions.len()) as f32;
+                            roll() < share * 100.0
+                        }
+                        (false, true) => true,
+                        _ => false,
+                    };
+                    if replace {
+                        out.push_str(pick(replacements, &mut roll));
+                    } else if !additions.is_empty() {
+                        out.push_str(original);
+                        out.push_str(pick(additions, &mut roll));
+                    } else {
+                        out.push_str(original);
+                    }
+                    dupe = true;
+                } else if roll() < slur.doubletext {
+                    let times = if roll() < 50.0 { 2 } else { 3 };
+                    for _ in 0..times {
+                        out.push_str(original);
+                    }
+                    dupe = false;
+                } else {
+                    out.push_str(original);
+                }
+            } else {
+                out.push_str(original);
+                // "Y'''e": no replacement after the first character or punctuation either.
+                dupe = true;
+            }
+        }
+        words.push(out);
+    }
+    words.join(" ")
+}
+
 /// tg `/datum/status_effect/speech/stutter/stutter_char` (`roll` gives 0..100 per call).
 fn stutter_char(c: &str, roll: &mut impl FnMut() -> f32) -> String {
     let times = if roll() < 10.0 {
@@ -509,5 +737,25 @@ mod tests {
         assert_eq!(whisper_heard(7), WhisperHeard::TooFar);
         assert_eq!(stars("аб в", 100.0, || 0.0), "** *");
         assert_eq!(stars("аб в", 25.0, || 50.0), "аб в");
+    }
+
+    #[test]
+    fn slurring_follows_tg_tables() {
+        // Every roll 0: the common replacement of a known character wins.
+        assert_eq!(slur("со", &Slur::CULT, || 0.0), " СИ у");
+        // Every roll 99: nothing happens.
+        assert_eq!(slur("привет всем", &Slur::CULT, || 99.0), "привет всем");
+        // The first character is never replaced by a string or doubled, and blocks a string
+        // replacement after it (`replacement_dupe_check`). Rolls: "в" common (no entry) 99,
+        // uncommon 99; "ы" common 99, uncommon 99, doubletext 0, two copies 0.
+        let mut rolls = [99.0, 99.0, 99.0, 99.0, 0.0, 0.0].into_iter();
+        assert_eq!(slur("вы", &Slur::GENERIC, || rolls.next().unwrap()), "выы");
+        // Drunk text has no string replacements: a replacement roll changes nothing. Rolls:
+        // "а" common 0 ("ах"); "о" common 99, uncommon 99, replacement 0.
+        let mut rolls = [0.0, 99.0, 99.0, 0.0].into_iter();
+        assert_eq!(
+            slur("ао", &Slur::drunk(60.0), || rolls.next().unwrap()),
+            "ахо"
+        );
     }
 }

@@ -1061,14 +1061,14 @@ pub(crate) fn stat(world: &World, mob: Entity) -> Stat {
     world.get::<Stat>(mob).copied().unwrap_or(Stat::Dead)
 }
 
-/// tg `IS_UNCONSCIOUS`: knocked out (hard crit and worse here).
+/// tg `IS_UNCONSCIOUS`: hard crit and worse, or knocked out (`crate::status_effects`).
 pub(crate) fn unconscious(world: &World, mob: Entity) -> bool {
-    stat(world, mob) >= Stat::HardCrit
+    stat(world, mob) >= Stat::HardCrit || crate::status_effects::knocked_out(world, mob)
 }
 
 /// tg `IS_UNCONSCIOUS_OR_CRIT`.
 pub(crate) fn unconscious_or_crit(world: &World, mob: Entity) -> bool {
-    stat(world, mob) >= Stat::SoftCrit
+    stat(world, mob) >= Stat::SoftCrit || crate::status_effects::knocked_out(world, mob)
 }
 
 pub(crate) fn stamina_loss(world: &World, mob: Entity) -> f32 {
@@ -1236,10 +1236,14 @@ pub(crate) fn incap(world: &mut World, mob: Entity, kind: Incap, secs: f32) {
     crate::status_effects::apply(world, mob, kind, secs);
 }
 
-/// tg `Unconscious(secs)` / `SetSleeping(secs)`.
-// shortcut: no unconsciousness or sleep status yet: paralyzed as long (as `crate::explosions`).
+/// tg `Unconscious(secs)`.
 pub(crate) fn knock_out(world: &mut World, mob: Entity, secs: f32) {
-    incap(world, mob, Incap::Paralyze, secs);
+    incap(world, mob, Incap::Unconscious, secs);
+}
+
+/// tg `SetSleeping(secs)`.
+pub(crate) fn put_to_sleep(world: &mut World, mob: Entity, secs: f32) {
+    crate::status_effects::set(world, mob, Incap::Sleeping, secs);
 }
 
 /// tg `drop_all_held_items`.

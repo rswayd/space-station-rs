@@ -26,8 +26,8 @@
 // sleep or trance), achromatopsia's `TRAIT_COLORBLIND` (wire colours),
 // monophobia, discoordination, dyslexia, hypnotic triggers, split personality, imaginary friend,
 // obsession, special and magic traumas, phobias; no forced brain damage lines of dumbness
-// (`traumas.json` is not converted), no concussion vomiting, dizziness, slurring or
-// fainting, no fake health HUD, mood events or `TRAIT_DUMB`; kleptomania ignores the damage
+// (`traumas.json` is not converted), no fake health HUD, mood events or `TRAIT_DUMB`;
+// kleptomania ignores the damage
 // cooldown; an inserted brain applies its traumas without their gain messages; no head-wound
 // (`TRAUMA_RESILIENCE_WOUND`) traumas, no `TRAIT_SPECIAL_TRAUMA_BOOST`. Add each with the
 // system it needs.
@@ -822,6 +822,10 @@ pub fn refresh(world: &mut World, mob: Entity) {
         speech.mute |= quirks.has(crate::quirks::Quirk::Mute);
         pacifist |= quirks.has(crate::quirks::Quirk::Pacifist);
     }
+    // `/datum/status_effect/pacify` (`crate::status_effects` calls this when it starts or ends).
+    pacifist |= world
+        .get::<crate::status_effects::StatusEffects>(mob)
+        .is_some_and(crate::status_effects::StatusEffects::pacified);
     // The mime's vow (`TRAIT_MIMING`, `can_speak(allow_mimes = FALSE)`).
     speech.mute |= world.get::<crate::service::MimeVow>(mob).is_some();
     let mut entity = world.entity_mut(mob);
@@ -964,6 +968,27 @@ fn on_life(world: &mut World, mob: Entity, trauma: &mut Trauma, secs: f32, rng: 
                 return;
             }
             match rng.range(1, 11) {
+                1 => crate::medical::diseases::vomit(world, mob, 10.0, true, false, 1),
+                2 | 3 => crate::status_effects::adjust_timed(
+                    world,
+                    mob,
+                    crate::status_effects::Timed::Dizziness,
+                    20.0,
+                    None,
+                ),
+                6..=9 => crate::status_effects::adjust_timed(
+                    world,
+                    mob,
+                    crate::status_effects::Timed::Slurring(
+                        crate::status_effects::SlurKind::Generic,
+                    ),
+                    60.0,
+                    None,
+                ),
+                11 => {
+                    say_to(world, mob, Span::Warning, "Вы теряете сознание.");
+                    crate::status_effects::apply(world, mob, Incap::Unconscious, 8.0);
+                }
                 4 | 5 => {
                     if let Some(mut effects) = crate::status_effects::effects_mut(world, mob) {
                         effects.confusion += 10.0;

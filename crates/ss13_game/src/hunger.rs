@@ -14,7 +14,7 @@
 //!   below 200 ("sluggish"); it scales how fast non-food reagents metabolize.
 //! - [`HungerHudData`] reaches the owner as the headless tgui interface [`HungerHudUi`]: the
 //!   hunger state and the bar's fullness (`get_fullness(only_consumable = TRUE)`).
-// shortcut: no jitter from negative satiety, no glutton species, no stomach lining reagent.
+// shortcut: no glutton species, no stomach lining reagent.
 // The nutrition moodlets are `crate::mood`'s.
 
 use bevy::prelude::*;
@@ -256,6 +256,7 @@ fn hunger_life(
     clock: Res<MobsClock>,
     mut last_fired: Local<u64>,
     mut mobs: Query<(
+        Entity,
         &mut Hunger,
         &mut Fat,
         &Stat,
@@ -267,11 +268,12 @@ fn hunger_life(
     )>,
     organs: Query<&Organ>,
     mut chat: MessageWriter<SendChat>,
+    mut commands: Commands,
 ) {
     let fires = clock.times_fired - *last_fired;
     *last_fired = clock.times_fired;
     for _ in 0..fires {
-        for (mut hunger, mut fat, stat, player, owned, host, mood, species) in &mut mobs {
+        for (mob, mut hunger, mut fat, stat, player, owned, host, mood, species) in &mut mobs {
             // `TRAIT_NOHUNGER` from the species or an organ (plasmaman lungs).
             use crate::species::{Trait, organ_traits};
             let no_hunger = species.is_some_and(|s| s.0.def().has(Trait::NoHunger))
@@ -301,6 +303,29 @@ fn hunger_life(
                 metabolism::SSMOBS_DT,
                 sanity,
             );
+            // Negative satiety: `SPT_PROB(round(-satiety / 77))` of `set_jitter_if_lower(10 SECONDS)`.
+            let junk = hunger.nutrition > 0.0
+                && *stat != Stat::Dead
+                && hunger.satiety < 0.0
+                && hunger.satiety >= -MAX_SATIETY;
+            if junk {
+                let chance = (-h.satiety / 77.0).round();
+                commands.queue(move |world: &mut World| {
+                    let jitter = {
+                        let mut rng = world.get_resource_or_init::<crate::combat::CombatRng>();
+                        crate::medical::wounds::spt_prob(&mut rng, chance, metabolism::SSMOBS_DT)
+                    };
+                    if jitter {
+                        crate::status_effects::set_timed(
+                            world,
+                            mob,
+                            crate::status_effects::Timed::Jitter,
+                            10.0,
+                            true,
+                        );
+                    }
+                });
+            }
             hunger.set_if_neq(h);
             fat.set_if_neq(Fat(f));
             let Some(player) = player else {

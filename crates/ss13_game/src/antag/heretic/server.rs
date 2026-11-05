@@ -1555,8 +1555,14 @@ fn grasp_hit(world: &mut World, mob: Entity, hand: Entity, target: Entity) {
                 ),
             );
         } else {
-            // shortcut: no heretic slurring (no speech status effects yet).
             crate::status_effects::knockdown(world, target, 5.0, 3.0);
+            crate::status_effects::adjust_timed(
+                world,
+                target,
+                crate::status_effects::Timed::Slurring(crate::status_effects::SlurKind::Heretic),
+                4.0,
+                None,
+            );
             crate::status_effects::adjust_stamina(world, target, 80.0);
         }
     }

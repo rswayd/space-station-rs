@@ -792,7 +792,8 @@ pub fn cough(world: &mut World, mob: Entity) {
 }
 
 /// `epilepsy/trigger_seizure`.
-// shortcut: `Unconscious` is a paralysis (no unconscious status yet), no jitter or mood.
+// shortcut: no mood event; the 2000 s jitter that only amplifies tg's shake animation (not
+// ported) is the 20 s that `jitter_less` leaves after 9 s.
 pub fn seizure(world: &mut World, mob: Entity) {
     let name = world
         .get::<Name>(mob)
@@ -805,7 +806,14 @@ pub fn seizure(world: &mut World, mob: Entity) {
         &format!("У {name} начинается припадок!"),
         Span::Danger,
     );
-    crate::status_effects::apply(world, mob, Incap::Paralyze, 20.0);
+    crate::status_effects::apply(world, mob, Incap::Unconscious, 20.0);
+    crate::status_effects::set_timed(
+        world,
+        mob,
+        crate::status_effects::Timed::Jitter,
+        20.0,
+        false,
+    );
 }
 
 /// `dna_melt/on_remove` -> `something_horrible`: still at or below 0 stability, the mutations go

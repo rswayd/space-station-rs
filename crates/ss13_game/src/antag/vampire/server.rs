@@ -27,7 +27,7 @@
 // systems (projectiles, beams, illusions, physiology multipliers) exist. Vision passives are
 // granted without the client's lighting cutoff or thermal/x-ray sight; no coffin regeneration
 // (no sleeping yet), no holy weapons (no null rods), no holy water splashes (only in the blood),
-// no stinger sound, moodlet, silence or flash overlay of the glare, no bodyguard or thralls.
+// no stinger sound, moodlet or flash overlay of the glare, no bodyguard or thralls.
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
@@ -1922,6 +1922,10 @@ fn glare(world: &mut World, mob: Entity) {
             effects.confusion += confusion;
             if knockdown > 0.0 {
                 effects.adjust(Incap::Knockdown, knockdown);
+            }
+            // A full glare also silences (`adjust_silence(8 SECONDS)`).
+            if deviation == 0 {
+                effects.adjust_timed(crate::status_effects::Timed::Silence, 8.0, None);
             }
         }
         crate::status_effects::adjust_stamina(world, target, stamina);

@@ -1,36 +1,61 @@
 //! Status effects and stamina (server), after tg `code/datums/status_effects/debuffs/debuffs.dm`
 //! (`/datum/status_effect/incapacitating/*`), `stamcrit.dm`, `confusion.dm`, `staggered.dm`,
+//! `jitteriness.dm`, `dizziness.dm`, `drowsiness.dm`, `speech_debuffs.dm`, `silenced.dm`,
+//! `pacifism.dm`, `drunk.dm` (the drunk stage's side effects),
 //! `code/modules/mob/living/status_procs.dm` and `damage_procs.dm` (stamina).
 //!
 //! - [`StatusEffects`] holds the remaining seconds of tg's `Stun`, `Knockdown`, `Paralyze`,
-//!   `Immobilize` (and confusion, dazed, staggered, no side kick), the mob's `staminaloss` and
-//!   whether it is in stamina crit. `Stun(amount)` never shortens what is left
-//!   (`max(amount, duration)`), `Set*` replaces it, `Adjust*` adds to it.
+//!   `Immobilize`, `incapacitate`, `Unconscious` and `Sleeping` ([`Incap`]), of the timed
+//!   effects ([`Timed`]: confusion, jitter, dizziness, drowsiness, stutter, slurring, silence,
+//!   pacifism; dazed, staggered, no side kick), the mob's `staminaloss` and whether it is in
+//!   stamina crit. `Stun(amount)` never shortens what is left (`max(amount, duration)`), `Set*`
+//!   replaces it, `Adjust*` adds to it.
 //! - Stamina: damage is clamped to `max_stamina` (120); any positive change restarts tg's
 //!   `timed_stamina_reset`: `stamina_regen_time` (10 s) after the last stamina damage it is set
 //!   back to 0 at once (there is no gradual regeneration in current tg). At `maxHealth -
 //!   staminaloss <= crit_threshold` (100 stamina) a living mob enters stamcrit
 //!   (incapacitated, immobilized, floored; +30 stamina below 120); further hits there have
 //!   diminishing returns; it leaves stamcrit when stamina drops below 100.
+//! - Unconsciousness and sleep are tg's `TRAIT_KNOCKEDOUT` (`/datum/status_effect/knocked_out`):
+//!   incapacitated, immobilized, floored, hands blocked, blind (`crate::vision`), speechless
+//!   (`crate::speech` reports hard crit to the chat), 3 stamina a second back. Sleep heals
+//!   minor damage by its quality (mood, bed, table, bedsheet, pillow) and sobers.
+//! - Every 2 s (tg `tick_interval`) the pulse: jitter and dizziness wear off 5 times faster
+//!   while resting, dizziness sways the player's view ([`CameraEffect::Recoil`]), drowsiness
+//!   blurs and may put to sleep, sleep heals, the drunk stage slurs, confuses, dizzies, blurs,
+//!   makes vomit, damages the brain and blacks out.
+//! - Speech effects reach the chat as [`SpeechEffects`] (stutter, slurring, silence);
+//!   pacifism as `crate::medical::traumas::Pacifist` (`traumas::refresh`).
 //! - [`Incapacitation`] is tg's traits that follow: `TRAIT_INCAPACITATED` (stun, paralyze,
-//!   stamcrit), `TRAIT_IMMOBILIZED` (+ immobilize), `TRAIT_FLOORED` (knockdown, paralyze,
-//!   stamcrit), `TRAIT_HANDS_BLOCKED` (stun, paralyze, restraints), `TRAIT_RESTRAINED`
-//!   (handcuffs, `crate::restraints`). Moves, clicks, hands, lying and resisting read it.
+//!   incapacitate, knocked out, stamcrit), `TRAIT_IMMOBILIZED` (+ immobilize), `TRAIT_FLOORED`
+//!   (knockdown, paralyze, knocked out, stamcrit), `TRAIT_HANDS_BLOCKED` (stun, paralyze,
+//!   knocked out, restraints), `TRAIT_RESTRAINED` (handcuffs, `crate::restraints`). Moves,
+//!   clicks, hands, lying and resisting read it.
 //!
 //! The component exists only while something is active, so the per-tick countdown touches only
 //! affected mobs.
 // shortcut: no stun immunity (`check_stun_immunity`, `TRAIT_STUNIMMUNE`, godmode; the CNS
 // rebooter implant clears stuns itself), physiology multipliers only from bioware
-// (`crate::medical::bioware`, in [`apply`], [`knockdown`], [`adjust_stamina`]), no unconsciousness (`Unconscious`, sleeping), no force_say, jitter or
-// stutter; add them with the effects that grant them.
+// (`crate::medical::bioware`, in [`apply`], [`knockdown`], [`adjust_stamina`]), no force_say,
+// no status alerts. Knocked out by a status effect, a mob keeps its `Stat` (tg `UNCONSCIOUS`):
+// code that checks `IS_UNCONSCIOUS` through `Health::knocked_out` sees only crit; use
+// [`knocked_out`] for both. The jitter's sprite shake (`do_jitter_animation`) needs a pixel
+// animation message the protocol does not have; jitter is its duration, examine text and
+// mood here. No sleep immunity, dreams, snoring, organ or fitness healing while asleep,
+// darkness or blindfold sleep bonus, drunk gun spread, drunken brawler or Ballmer peak lines,
+// no TTS filters of the speech effects.
 
 use bevy::prelude::*;
 use ss13_net::chat::server::SendChat;
 use ss13_shared::Dir;
 use ss13_shared::chat::{ChatChannel, ChatMessage, ChatSegment, Span};
 
+use ss13_chat::speech::{Slur, SpeechEffects};
+use ss13_net::camera::server::SendCameraEffect;
+use ss13_shared::protocol::CameraEffect;
+
 use crate::combat::CombatRng;
-use crate::health::{BodyPosition, HealthSystems, MAX_HEALTH, Stat};
+use crate::health::{BodyPosition, DamageType, Health, HealthSystems, MAX_HEALTH, Stat};
 use crate::restraints::Handcuffed;
 use crate::server::PlayerMob;
 
@@ -60,6 +85,49 @@ pub enum Incap {
     Knockdown,
     Paralyze,
     Immobilize,
+    /// `/datum/status_effect/incapacitating/incapacitated` (`incapacitate()`): only
+    /// `TRAIT_INCAPACITATED`.
+    Incapacitated,
+    /// `/datum/status_effect/incapacitating/unconscious` (`Unconscious()`).
+    Unconscious,
+    /// `/datum/status_effect/incapacitating/sleeping` (`Sleeping()`).
+    Sleeping,
+}
+
+/// The slurring status effects (`/datum/status_effect/speech/slurring/*`); each runs on its own.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SlurKind {
+    Generic,
+    Drunk,
+    Cult,
+    Heretic,
+}
+
+impl SlurKind {
+    const ALL: [Self; 4] = [Self::Generic, Self::Drunk, Self::Cult, Self::Heretic];
+
+    fn index(self) -> usize {
+        self as usize
+    }
+}
+
+/// tg's timed status effects that do not incapacitate (`adjust_timed_status_effect`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Timed {
+    Confusion,
+    /// `/datum/status_effect/jitter`.
+    Jitter,
+    /// `/datum/status_effect/dizziness`.
+    Dizziness,
+    /// `/datum/status_effect/drowsiness`.
+    Drowsiness,
+    /// `/datum/status_effect/speech/stutter`.
+    Stutter,
+    Slurring(SlurKind),
+    /// `/datum/status_effect/silenced` (`TRAIT_MUTE`).
+    Silence,
+    /// `/datum/status_effect/pacify` (`TRAIT_PACIFISM`).
+    Pacify,
 }
 
 /// What stamina damage did (for the messages tg prints).
@@ -72,6 +140,11 @@ pub enum StaminaEvent {
     Ignored,
 }
 
+/// tg `tick_interval` of jitter, dizziness, drowsiness, sleeping and drunkenness, seconds.
+pub const PULSE_SECS: f32 = 2.0;
+/// `/datum/status_effect/knocked_out/tick`: stamina healed per second.
+const KNOCKED_OUT_STAMINA_PER_SECOND: f32 = 3.0;
+
 /// Remaining seconds of each effect (0 = none) and the stamina state.
 #[derive(Component, Clone, Debug, Default, PartialEq)]
 pub struct StatusEffects {
@@ -79,10 +152,21 @@ pub struct StatusEffects {
     pub knockdown: f32,
     pub paralyze: f32,
     pub immobilize: f32,
+    pub incapacitate: f32,
+    pub unconscious: f32,
+    pub sleeping: f32,
     pub confusion: f32,
     pub dazed: f32,
     pub staggered: f32,
     pub no_side_kick: f32,
+    pub jitter: f32,
+    pub dizziness: f32,
+    pub drowsiness: f32,
+    pub stutter: f32,
+    /// By [`SlurKind`].
+    pub slurring: [f32; 4],
+    pub silence: f32,
+    pub pacify: f32,
     /// `staminaloss`.
     pub stamina: f32,
     /// `/datum/status_effect/incapacitating/stamcrit`.
@@ -91,6 +175,12 @@ pub struct StatusEffects {
     stamina_reset_at: Option<f64>,
     /// stamcrit's `diminishing_return_counter`.
     diminishing: f32,
+    /// Seconds towards the next 2 s pulse.
+    pulse_timer: f32,
+    /// A pulse is due ([`pulse_effects`]).
+    pub(crate) pulse_due: bool,
+    /// The pacifism `crate::medical::traumas::refresh` last saw.
+    pacified_seen: bool,
 }
 
 impl StatusEffects {
@@ -100,6 +190,9 @@ impl StatusEffects {
             Incap::Knockdown => &mut self.knockdown,
             Incap::Paralyze => &mut self.paralyze,
             Incap::Immobilize => &mut self.immobilize,
+            Incap::Incapacitated => &mut self.incapacitate,
+            Incap::Unconscious => &mut self.unconscious,
+            Incap::Sleeping => &mut self.sleeping,
         }
     }
 
@@ -109,12 +202,62 @@ impl StatusEffects {
             Incap::Knockdown => self.knockdown,
             Incap::Paralyze => self.paralyze,
             Incap::Immobilize => self.immobilize,
+            Incap::Incapacitated => self.incapacitate,
+            Incap::Unconscious => self.unconscious,
+            Incap::Sleeping => self.sleeping,
         }
+    }
+
+    fn timed_slot(&mut self, kind: Timed) -> &mut f32 {
+        match kind {
+            Timed::Confusion => &mut self.confusion,
+            Timed::Jitter => &mut self.jitter,
+            Timed::Dizziness => &mut self.dizziness,
+            Timed::Drowsiness => &mut self.drowsiness,
+            Timed::Stutter => &mut self.stutter,
+            Timed::Slurring(kind) => &mut self.slurring[kind.index()],
+            Timed::Silence => &mut self.silence,
+            Timed::Pacify => &mut self.pacify,
+        }
+    }
+
+    /// Seconds left of a timed effect (tg `has_status_effect(...)?.duration`).
+    pub fn timed(&self, kind: Timed) -> f32 {
+        match kind {
+            Timed::Confusion => self.confusion,
+            Timed::Jitter => self.jitter,
+            Timed::Dizziness => self.dizziness,
+            Timed::Drowsiness => self.drowsiness,
+            Timed::Stutter => self.stutter,
+            Timed::Slurring(kind) => self.slurring[kind.index()],
+            Timed::Silence => self.silence,
+            Timed::Pacify => self.pacify,
+        }
+    }
+
+    /// tg `adjust_timed_status_effect(secs, effect, max)`: adds (up to `max` for a positive
+    /// amount), removes at 0.
+    pub fn adjust_timed(&mut self, kind: Timed, secs: f32, max: Option<f32>) {
+        let slot = self.timed_slot(kind);
+        *slot = match max {
+            Some(max) => adjust_up_to(*slot, secs.min(max), max),
+            None => (*slot + secs).max(0.0),
+        };
+    }
+
+    /// tg `set_timed_status_effect(secs, effect, only_if_higher)`.
+    pub fn set_timed(&mut self, kind: Timed, secs: f32, only_if_higher: bool) {
+        let slot = self.timed_slot(kind);
+        *slot = if only_if_higher {
+            slot.max(secs)
+        } else {
+            secs.max(0.0)
+        };
     }
 
     /// `dazed/clear_daze`: stuns, paralysis and immobilization above 0 end the daze.
     fn on_status(&mut self, kind: Incap, secs: f32) {
-        if secs > 0.0 && kind != Incap::Knockdown {
+        if secs > 0.0 && matches!(kind, Incap::Stun | Incap::Paralyze | Incap::Immobilize) {
             self.dazed = 0.0;
         }
     }
@@ -141,6 +284,59 @@ impl StatusEffects {
         *slot = (*slot + secs).max(0.0);
     }
 
+    /// tg `AllImmobility(secs)`: stun, knockdown, paralysis, immobilization and unconsciousness.
+    pub fn all_immobility(&mut self, secs: f32) {
+        for kind in [
+            Incap::Paralyze,
+            Incap::Knockdown,
+            Incap::Stun,
+            Incap::Immobilize,
+            Incap::Unconscious,
+        ] {
+            self.apply(kind, secs);
+        }
+    }
+
+    /// tg `SetAllImmobility(secs)`.
+    pub fn set_all_immobility(&mut self, secs: f32) {
+        for kind in [
+            Incap::Paralyze,
+            Incap::Knockdown,
+            Incap::Stun,
+            Incap::Immobilize,
+            Incap::Unconscious,
+        ] {
+            self.set(kind, secs);
+        }
+    }
+
+    /// tg `AdjustAllImmobility(secs)`.
+    pub fn adjust_all_immobility(&mut self, secs: f32) {
+        for kind in [
+            Incap::Paralyze,
+            Incap::Knockdown,
+            Incap::Stun,
+            Incap::Immobilize,
+            Incap::Unconscious,
+        ] {
+            self.adjust(kind, secs);
+        }
+    }
+
+    /// tg `adjust_status_effects_on_shake_up` (a help-shake or hug).
+    pub fn shake_up(&mut self) {
+        for kind in [
+            Incap::Stun,
+            Incap::Knockdown,
+            Incap::Unconscious,
+            Incap::Paralyze,
+            Incap::Immobilize,
+        ] {
+            self.adjust(kind, -6.0);
+        }
+        self.adjust(Incap::Sleeping, -10.0);
+    }
+
     /// tg `Knockdown(amount, daze_amount)`: the knockdown, then `/datum/status_effect/dazed`
     /// (unique: an existing daze is kept; refused for the dead, under `no_side_kick` or while
     /// immobilized).
@@ -156,20 +352,38 @@ impl StatusEffects {
         }
     }
 
+    /// tg `TRAIT_KNOCKEDOUT` from `Unconscious` or `Sleeping`.
+    pub fn knocked_out(&self) -> bool {
+        self.unconscious > 0.0 || self.sleeping > 0.0
+    }
+
     pub fn incapacitated(&self) -> bool {
-        self.stun > 0.0 || self.paralyze > 0.0 || self.stamcrit
+        self.stun > 0.0
+            || self.paralyze > 0.0
+            || self.incapacitate > 0.0
+            || self.knocked_out()
+            || self.stamcrit
     }
 
     pub fn immobilized(&self) -> bool {
-        self.incapacitated() || self.immobilize > 0.0
+        self.stun > 0.0
+            || self.paralyze > 0.0
+            || self.knocked_out()
+            || self.stamcrit
+            || self.immobilize > 0.0
     }
 
     pub fn floored(&self) -> bool {
-        self.knockdown > 0.0 || self.paralyze > 0.0 || self.stamcrit
+        self.knockdown > 0.0 || self.paralyze > 0.0 || self.knocked_out() || self.stamcrit
     }
 
     pub fn hands_blocked(&self) -> bool {
-        self.stun > 0.0 || self.paralyze > 0.0
+        self.stun > 0.0 || self.paralyze > 0.0 || self.knocked_out()
+    }
+
+    /// tg `TRAIT_PACIFISM` from `/datum/status_effect/pacify`.
+    pub fn pacified(&self) -> bool {
+        self.pacify > 0.0
     }
 
     /// tg `adjust_stamina_loss(amount)` on a carbon (`forced`: skips the stamcrit diminishing
@@ -238,20 +452,47 @@ impl StatusEffects {
         }
     }
 
+    /// Whether anything that acts on the 2 s pulse runs.
+    fn pulsing(&self) -> bool {
+        self.jitter > 0.0 || self.dizziness > 0.0 || self.drowsiness > 0.0 || self.sleeping > 0.0
+    }
+
     /// One countdown step of `secs` at `now` (tg `process` of each effect, the stamina reset
-    /// timer). `lying`: the body lies (a standing mob loses its daze). True while anything is
-    /// left.
-    pub fn tick(&mut self, secs: f32, now: f64, lying: bool) -> bool {
+    /// timer). `lying`: the body lies (a standing mob loses its daze); `dead`: tg's
+    /// `COMSIG_LIVING_DEATH` ends jitter, dizziness and silence. True while anything is left.
+    pub fn tick(&mut self, secs: f32, now: f64, lying: bool, dead: bool) -> bool {
+        if dead {
+            self.jitter = 0.0;
+            self.dizziness = 0.0;
+            self.silence = 0.0;
+        }
+        // `/datum/status_effect/knocked_out/tick` (it stops ticking for the dead).
+        if self.knocked_out() && !dead && self.stamina > 0.0 {
+            self.stamina = (self.stamina - KNOCKED_OUT_STAMINA_PER_SECOND * secs).max(0.0);
+            self.check_stamcrit();
+        }
         for value in [
             &mut self.stun,
             &mut self.knockdown,
             &mut self.paralyze,
             &mut self.immobilize,
+            &mut self.incapacitate,
+            &mut self.unconscious,
+            &mut self.sleeping,
             &mut self.confusion,
             &mut self.dazed,
             &mut self.staggered,
             &mut self.no_side_kick,
+            &mut self.jitter,
+            &mut self.dizziness,
+            &mut self.drowsiness,
+            &mut self.stutter,
+            &mut self.silence,
+            &mut self.pacify,
         ] {
+            *value = (*value - secs).max(0.0);
+        }
+        for value in &mut self.slurring {
             *value = (*value - secs).max(0.0);
         }
         if self.stamina_reset_at.is_some_and(|at| now >= at) {
@@ -264,6 +505,15 @@ impl StatusEffects {
         if !lying && !self.floored() {
             self.dazed = 0.0;
         }
+        if self.pulsing() {
+            self.pulse_timer += secs;
+            if self.pulse_timer >= PULSE_SECS {
+                self.pulse_timer -= PULSE_SECS;
+                self.pulse_due = true;
+            }
+        } else {
+            self.pulse_timer = 0.0;
+        }
         !self.idle()
     }
 
@@ -272,12 +522,56 @@ impl StatusEffects {
             && self.knockdown <= 0.0
             && self.paralyze <= 0.0
             && self.immobilize <= 0.0
+            && self.incapacitate <= 0.0
+            && !self.knocked_out()
             && self.confusion <= 0.0
             && self.dazed <= 0.0
             && self.staggered <= 0.0
             && self.no_side_kick <= 0.0
+            && self.jitter <= 0.0
+            && self.dizziness <= 0.0
+            && self.drowsiness <= 0.0
+            && self.stutter <= 0.0
+            && self.slurring.iter().all(|s| *s <= 0.0)
+            && self.silence <= 0.0
+            && self.pacify <= 0.0
+            // Kept until the pacifism's end reached `traumas::refresh`.
+            && !self.pacified_seen
             && self.stamina <= 0.0
             && !self.stamcrit
+    }
+
+    /// The speech effects the chat applies.
+    pub fn speech(&self, drunk: f32) -> SpeechEffects {
+        let mut slurs = [None; 4];
+        for kind in SlurKind::ALL {
+            if self.slurring[kind.index()] > 0.0 {
+                slurs[kind.index()] = Some(match kind {
+                    SlurKind::Generic => Slur::GENERIC,
+                    SlurKind::Drunk => Slur::drunk(drunk),
+                    SlurKind::Cult => Slur::CULT,
+                    SlurKind::Heretic => Slur::HERETIC,
+                });
+            }
+        }
+        SpeechEffects {
+            stutter: self.stutter > 0.0,
+            silenced: self.silence > 0.0,
+            slurs,
+        }
+    }
+
+    /// `/datum/status_effect/jitter/get_examine_text`.
+    pub fn jitter_examine(&self) -> Option<(Span, &'static str)> {
+        if self.jitter >= 300.0 {
+            Some((Span::BoldWarning, "сильно бьётся в конвульсиях!"))
+        } else if self.jitter >= 180.0 {
+            Some((Span::Warning, "крайне взвинчен."))
+        } else if self.jitter >= 60.0 {
+            Some((Span::Warning, "слегка подёргивается."))
+        } else {
+            None
+        }
     }
 }
 
@@ -332,6 +626,9 @@ pub struct Incapacitation {
     pub staggered: bool,
     /// Lying by choice (tg `resting`, [`crate::rest`]): drawn lying and crawling, not floored.
     pub resting: bool,
+    /// tg `TRAIT_KNOCKEDOUT` from `Unconscious` or `Sleeping` (not from crit: see
+    /// [`knocked_out`]).
+    pub knocked_out: bool,
 }
 
 impl Incapacitation {
@@ -355,6 +652,7 @@ impl Incapacitation {
             restrained: cuffed,
             staggered: effects.is_some_and(|e| e.staggered > 0.0),
             resting: rest.is_some_and(|r| r.down),
+            knocked_out: e(StatusEffects::knocked_out),
         }
     }
 }
@@ -383,11 +681,102 @@ fn is_dead(world: &World, mob: Entity) -> bool {
     world.get::<Stat>(mob) == Some(&Stat::Dead)
 }
 
-/// tg `Stun`/`Paralyze`/`Immobilize`/`Knockdown(amount)` on a living mob.
+/// tg `Stun`/`Paralyze`/`Immobilize`/`Knockdown`/`incapacitate`/`Unconscious`/`Sleeping(amount)`
+/// on a living mob.
 pub fn apply(world: &mut World, mob: Entity, kind: Incap, secs: f32) -> bool {
-    // `PHYS_COEFF_STUN` (spliced nerves).
-    let secs = secs * crate::medical::bioware::stun_mod(world, mob);
+    // `PHYS_COEFF_STUN` (spliced nerves); `Sleeping` does not use it.
+    let secs = if kind == Incap::Sleeping {
+        secs
+    } else {
+        secs * crate::medical::bioware::stun_mod(world, mob)
+    };
     effects_mut(world, mob).is_some_and(|mut e| e.apply(kind, secs))
+}
+
+/// tg `Set*(amount)` on a living mob (0 removes the effect).
+pub fn set(world: &mut World, mob: Entity, kind: Incap, secs: f32) {
+    if secs <= 0.0 && world.get::<StatusEffects>(mob).is_none() {
+        return;
+    }
+    if let Some(mut e) = effects_mut(world, mob) {
+        e.set(kind, secs);
+    }
+}
+
+/// tg `Adjust*(amount)` on a living mob.
+pub fn adjust(world: &mut World, mob: Entity, kind: Incap, secs: f32) {
+    if secs <= 0.0 && world.get::<StatusEffects>(mob).is_none() {
+        return;
+    }
+    if let Some(mut e) = effects_mut(world, mob) {
+        e.adjust(kind, secs);
+    }
+}
+
+/// tg `adjust_timed_status_effect(secs, effect, max)` on a living mob: `adjust_jitter`,
+/// `adjust_dizzy`, `adjust_drowsiness`, `adjust_stutter`, `adjust_slurring`, `adjust_silence`,
+/// `adjust_confusion`, `adjust_pacifism` and their `_up_to` forms. A dead mob gets no new
+/// jitter, dizziness or silence (their `on_apply` and death signal).
+pub fn adjust_timed(world: &mut World, mob: Entity, kind: Timed, secs: f32, max: Option<f32>) {
+    if secs <= 0.0 && world.get::<StatusEffects>(mob).is_none() {
+        return;
+    }
+    if secs > 0.0
+        && is_dead(world, mob)
+        && matches!(kind, Timed::Jitter | Timed::Dizziness | Timed::Silence)
+    {
+        return;
+    }
+    if let Some(mut e) = effects_mut(world, mob) {
+        e.adjust_timed(kind, secs, max);
+    }
+}
+
+/// tg `set_timed_status_effect(secs, effect, only_if_higher)` on a living mob: `set_jitter`,
+/// `set_dizzy_if_lower`, `set_stutter_if_lower`, `set_silence_if_lower` and the like.
+pub fn set_timed(world: &mut World, mob: Entity, kind: Timed, secs: f32, only_if_higher: bool) {
+    if secs <= 0.0 && world.get::<StatusEffects>(mob).is_none() {
+        return;
+    }
+    if secs > 0.0
+        && is_dead(world, mob)
+        && matches!(kind, Timed::Jitter | Timed::Dizziness | Timed::Silence)
+    {
+        return;
+    }
+    if let Some(mut e) = effects_mut(world, mob) {
+        e.set_timed(kind, secs, only_if_higher);
+    }
+}
+
+/// Seconds left of a timed effect on `mob` (0 without it).
+pub fn timed(world: &World, mob: Entity, kind: Timed) -> f32 {
+    world
+        .get::<StatusEffects>(mob)
+        .map_or(0.0, |e| e.timed(kind))
+}
+
+/// tg `IS_UNCONSCIOUS`: hard crit, death, passout oxyloss, or knocked out by `Unconscious` or
+/// `Sleeping`.
+pub fn knocked_out(world: &World, mob: Entity) -> bool {
+    let by_status = world
+        .get::<StatusEffects>(mob)
+        .is_some_and(StatusEffects::knocked_out);
+    let by_health = match (
+        world.get::<crate::health::Health>(mob),
+        world.get::<Stat>(mob),
+    ) {
+        (Some(health), Some(&stat)) => health.knocked_out(stat),
+        _ => false,
+    };
+    by_status || by_health
+}
+
+/// tg `adjust_status_effects_on_shake_up` of `mob` (a help-shake or hug).
+pub fn shake_up(world: &mut World, mob: Entity) {
+    if let Some(mut e) = world.get_mut::<StatusEffects>(mob) {
+        e.shake_up();
+    }
 }
 
 /// tg `Knockdown(amount, daze_amount)`.
@@ -448,7 +837,7 @@ impl Plugin for StatusEffectsPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            (tick_effects, refresh_incapacitation)
+            (tick_effects, pulse_effects, refresh_incapacitation)
                 .chain()
                 .in_set(StatusSystems)
                 .before(HealthSystems),
@@ -459,15 +848,350 @@ impl Plugin for StatusEffectsPlugin {
 /// Cost: per tick, one pass over mobs with active effects only.
 fn tick_effects(
     time: Res<Time>,
-    mut mobs: Query<(Entity, &mut StatusEffects, Option<&BodyPosition>)>,
+    mut mobs: Query<(
+        Entity,
+        &mut StatusEffects,
+        Option<&BodyPosition>,
+        Option<&Stat>,
+    )>,
     mut commands: Commands,
 ) {
     let (secs, now) = (time.delta_secs(), time.elapsed_secs_f64());
-    for (mob, mut effects, body) in &mut mobs {
+    for (mob, mut effects, body, stat) in &mut mobs {
         let lying = body.is_some_and(|b| b.lying());
-        if !effects.tick(secs, now, lying) {
+        let dead = stat == Some(&Stat::Dead);
+        if !effects.tick(secs, now, lying, dead) {
             commands.entity(mob).remove::<StatusEffects>();
         }
+    }
+}
+
+/// `getviewsize(client.view)[1]` of the default 15x15 view: dizziness's offset bound (tg clamps
+/// pixels by the view's width in tiles).
+const DIZZY_VIEW_RANGE: f32 = 15.0;
+/// `HEALING_SLEEP_DEFAULT`.
+const HEALING_SLEEP_DEFAULT: f32 = 0.2;
+/// `TIPSY_THRESHOLD`: the drunk stage from here.
+const TIPSY_THRESHOLD: f32 = 6.0;
+
+/// The 2 s pulse of the mobs whose pulse is due, then the speech effects and pacifism follow
+/// the effects. Cost: per tick one pass over mobs with active effects; the pulse work only
+/// every 2 s for each.
+fn pulse_effects(world: &mut World) {
+    let mut query = world.query::<(Entity, &StatusEffects)>();
+    let due: Vec<Entity> = query
+        .iter(world)
+        .filter(|(_, e)| e.pulse_due)
+        .map(|(e, _)| e)
+        .collect();
+    for mob in due {
+        if let Some(mut e) = world.get_mut::<StatusEffects>(mob) {
+            e.pulse_due = false;
+        }
+        pulse(world, mob);
+    }
+    sync_status_traits(world);
+}
+
+fn pulse(world: &mut World, mob: Entity) {
+    let Some(effects) = world.get::<StatusEffects>(mob).cloned() else {
+        return;
+    };
+    let dead = is_dead(world, mob);
+    let resting = world
+        .get::<crate::rest::Rest>(mob)
+        .is_some_and(|r| r.resting);
+    // `jitter/tick`: resting takes 4 more ticks off (the sprite shake is not ported).
+    if effects.jitter > 0.0 && resting {
+        adjust_timed(world, mob, Timed::Jitter, -4.0 * PULSE_SECS, None);
+    }
+    if effects.dizziness > 0.0 {
+        dizzy_pulse(world, mob, effects.dizziness, resting);
+    }
+    // `drowsiness/tick`.
+    if effects.drowsiness > 0.0 && !knocked_out(world, mob) {
+        let mut drowsy = true;
+        if resting {
+            adjust_timed(world, mob, Timed::Drowsiness, -2.0 * PULSE_SECS, None);
+            drowsy = timed(world, mob, Timed::Drowsiness) > 0.0;
+        }
+        if drowsy {
+            crate::vision::set_eye_blur_if_lower(world, mob, 4.0);
+            if world.get_resource_or_init::<CombatRng>().chance(5.0) {
+                adjust(world, mob, Incap::Sleeping, 10.0);
+            }
+        }
+    }
+    if effects.sleeping > 0.0 && !dead {
+        sleep_pulse(world, mob);
+    }
+}
+
+/// `dizziness/tick`'s first view offset, pixels: `amount` seconds left, `time_ds` `world.time`.
+/// DM's `sin`/`cos` take degrees.
+pub fn dizzy_offset(amount: f32, time_ds: f64) -> [i16; 2] {
+    let angle = (f64::from(amount) * time_ds).rem_euclid(360.0).to_radians();
+    let amplitude = f64::from(amount) * (angle.sin() + 1.0);
+    let range = f64::from(DIZZY_VIEW_RANGE);
+    let x = (amplitude * angle.sin()).clamp(-range, range);
+    let y = (amplitude * angle.cos()).clamp(-range, range);
+    [x.round() as i16, y.round() as i16]
+}
+
+/// `dizziness/tick`: resting makes it 5 times as strong and 5 times as short; the player's
+/// view jumps away and back.
+// shortcut: tg jumps twice (0.3 s each, the second by the next tick's offset) and back; here one
+// `CameraEffect::Recoil` out over 0.3 s and back over 0.6 s.
+fn dizzy_pulse(world: &mut World, mob: Entity, left: f32, resting: bool) {
+    let strength = if resting { 5.0 } else { 1.0 };
+    if strength > 1.0 {
+        adjust_timed(
+            world,
+            mob,
+            Timed::Dizziness,
+            -(strength - 1.0) * PULSE_SECS,
+            None,
+        );
+        if timed(world, mob, Timed::Dizziness) <= 0.0 {
+            return;
+        }
+    }
+    let Some(client) = world.get::<PlayerMob>(mob).map(|p| p.client) else {
+        return;
+    };
+    let time_ds = world.resource::<Time>().elapsed_secs_f64() * 10.0;
+    let offset = dizzy_offset(left, time_ds);
+    if offset == [0, 0] {
+        return;
+    }
+    world.write_message(SendCameraEffect {
+        client,
+        effect: CameraEffect::Recoil {
+            offset,
+            out_ds: 3.0,
+            back_ds: 6.0,
+        },
+    });
+}
+
+/// `sleeping/tick`'s sleep quality: the mood's sanity level (`None`: no mood), then +0.2 on a
+/// bed or +0.1 on a table, +0.1 each for a bedsheet, a pillow and deafness.
+pub fn sleep_quality(sanity_level: Option<u8>, tile: &[String], deaf: bool) -> f32 {
+    use crate::mood::{
+        SANITY_LEVEL_CRAZY, SANITY_LEVEL_DISTURBED, SANITY_LEVEL_GREAT, SANITY_LEVEL_INSANE,
+        SANITY_LEVEL_NEUTRAL, SANITY_LEVEL_UNSTABLE,
+    };
+    use crate::obj_damage::is_under;
+    let mut quality = match sanity_level {
+        Some(SANITY_LEVEL_GREAT) => 0.2,
+        Some(SANITY_LEVEL_NEUTRAL) => 0.1,
+        Some(SANITY_LEVEL_DISTURBED | SANITY_LEVEL_UNSTABLE) => 0.0,
+        Some(SANITY_LEVEL_CRAZY) => -0.1,
+        Some(SANITY_LEVEL_INSANE) => -0.2,
+        _ => HEALING_SLEEP_DEFAULT,
+    };
+    if deaf {
+        quality += 0.1;
+    }
+    let on = |root: &str| tile.iter().any(|p| is_under(p, root));
+    if on("/obj/structure/bed") {
+        quality += 0.2;
+    } else if on("/obj/structure/table") {
+        quality += 0.1;
+    }
+    if on("/obj/item/bedsheet") {
+        quality += 0.1;
+    }
+    if on("/obj/item/pillow") {
+        quality += 0.1;
+    }
+    quality
+}
+
+/// The type paths on `mob`'s tile (`locate(/obj/structure/bed) in loc` and the like).
+pub fn tile_paths(world: &World, mob: Entity) -> Vec<String> {
+    world
+        .get::<ss13_shared::TilePos>(mob)
+        .map_or_else(Vec::new, |&pos| {
+            world
+                .resource::<ss13_world::SpatialIndex>()
+                .on_tile(pos)
+                .iter()
+                .filter_map(|&e| crate::construction::path_of(world, e))
+                .collect()
+        })
+}
+
+/// `sleeping/tick`: minor damage heals by the sleep quality (above 80% health), stamina comes
+/// back, drunkenness drops by 0.3%.
+fn sleep_pulse(world: &mut World, mob: Entity) {
+    let secs = PULSE_SECS;
+    let tile = tile_paths(world, mob);
+    let sanity = world.get::<crate::mood::Mood>(mob).map(|m| m.sanity_level);
+    let quality = sleep_quality(sanity, &tile, !crate::sound::can_hear(world, mob));
+    let ratio = world
+        .get::<Health>(mob)
+        .filter(|h| h.max > 0.0)
+        .map(|h| h.health() / h.max);
+    if let Some(ratio) = ratio {
+        if quality > 0.0 && ratio > 0.8 {
+            use crate::medical::diseases::damage;
+            damage(world, mob, DamageType::Brute, -0.4 * quality * secs);
+            damage(world, mob, DamageType::Burn, -0.4 * quality * secs);
+            damage(world, mob, DamageType::Tox, -0.2 * quality * secs);
+        }
+        let stamina = (-0.4 * quality * secs).min(-0.4 * HEALING_SLEEP_DEFAULT * secs);
+        let now = world.resource::<Time>().elapsed_secs_f64();
+        if let Some(mut e) = world.get_mut::<StatusEffects>(mob) {
+            e.adjust_stamina(stamina, now, false, true);
+        }
+    }
+    if let Some(mut reagents) = world.get_mut::<crate::chem::MobReagents>(mob)
+        && reagents.drunk > 0.0
+    {
+        reagents.drunk *= 0.997;
+    }
+}
+
+/// `/datum/status_effect/inebriated/drunk/on_tick_effects` after the drunkenness decayed to
+/// `drunk` (the toxin damage is `ss13_reagents::metabolism::inebriation_tick`).
+// shortcut: no blackout split personality (the trauma is not ported): a blackout is always the
+// 90 s sleep, also with the shuttle docked.
+pub fn drunk_pulse(world: &mut World, mob: Entity, drunk: f32) {
+    if drunk < TIPSY_THRESHOLD || is_dead(world, mob) {
+        return;
+    }
+    if drunk >= 16.0 {
+        adjust_timed(
+            world,
+            mob,
+            Timed::Slurring(SlurKind::Drunk),
+            4.0,
+            Some(20.0),
+        );
+    }
+    adjust_timed(world, mob, Timed::Jitter, -6.0, None);
+    let roll = |world: &mut World, p: f32| world.get_resource_or_init::<CombatRng>().chance(p);
+    if drunk >= 41.0 {
+        if roll(world, 30.0) {
+            adjust_timed(world, mob, Timed::Confusion, 2.0, None);
+        }
+        set_timed(world, mob, Timed::Dizziness, 20.0, true);
+    }
+    if drunk >= 51.0 {
+        set_timed(world, mob, Timed::Dizziness, 50.0, true);
+        if roll(world, 3.0) {
+            adjust_timed(world, mob, Timed::Confusion, 15.0, None);
+            crate::medical::diseases::vomit(world, mob, 10.0, true, false, 1);
+        }
+    }
+    if drunk >= 71.0 {
+        crate::vision::set_eye_blur_if_lower(world, mob, drunk * 2.0 - 140.0);
+    }
+    let awake = |world: &World| {
+        world.get::<Stat>(mob) == Some(&Stat::Conscious) && !knocked_out(world, mob)
+    };
+    if drunk >= 81.0 && awake(&*world) && roll(world, 5.0) {
+        tell_mob(
+            world,
+            mob,
+            Span::Warning,
+            "Может, вам стоит немного полежать...",
+        );
+    }
+    if drunk >= 91.0 {
+        crate::medical::organs::adjust_organ_loss(
+            world,
+            mob,
+            crate::medical::organs::Slot::Brain,
+            0.4,
+        );
+        if awake(&*world) {
+            apply(world, mob, Incap::Sleeping, 90.0);
+        }
+    }
+}
+
+/// The examine lines of `mob`'s status effects (`get_examine_text`): jitter and drunkenness.
+// shortcut: a covered face does not hide the drunkenness (no `obscured_slots`).
+pub fn examine_lines(world: &World, mob: Entity, lines: &mut Vec<(Span, String)>) {
+    // Death ends the jitter; the dead do not look drunk (`IS_DEAD_OR_FAKING`).
+    if world.get::<Stat>(mob) == Some(&Stat::Dead) {
+        return;
+    }
+    if let Some((span, text)) = world
+        .get::<StatusEffects>(mob)
+        .and_then(StatusEffects::jitter_examine)
+    {
+        lines.push((span, format!("Он {text}")));
+    }
+    let drunk = world
+        .get::<crate::chem::MobReagents>(mob)
+        .map_or(0.0, |r| r.drunk);
+    if let Some(text) = drunk_examine(drunk) {
+        lines.push((Span::Warning, format!("Он {text}")));
+    }
+}
+
+/// `/datum/status_effect/inebriated/get_examine_text`.
+pub fn drunk_examine(drunk: f32) -> Option<&'static str> {
+    Some(if drunk > 91.0 {
+        "— пьяная в стельку слюнявая развалина."
+    } else if drunk > 61.0 {
+        "выглядит как пьяное месиво."
+    } else if drunk > 51.0 {
+        "сильно раскраснелся, его движения резкие, а дыхание разит алкоголем."
+    } else if drunk > 41.0 {
+        "довольно раскраснелся, и от него пахнет алкоголем."
+    } else if drunk > 21.0 {
+        "раскраснелся."
+    } else if drunk >= 11.0 {
+        "слегка раскраснелся."
+    } else {
+        return None;
+    })
+}
+
+/// The chat's [`SpeechEffects`] and the pacifism follow the effects.
+fn sync_status_traits(world: &mut World) {
+    let mut query = world.query::<(
+        Entity,
+        &StatusEffects,
+        Option<&crate::chem::MobReagents>,
+        Option<&SpeechEffects>,
+    )>();
+    let mut speech = Vec::new();
+    let mut pacify = Vec::new();
+    for (mob, effects, reagents, current) in query.iter(world) {
+        let wanted = effects.speech(reagents.map_or(0.0, |r| r.drunk));
+        let wanted = (wanted != SpeechEffects::default()).then_some(wanted);
+        if current.copied() != wanted {
+            speech.push((mob, wanted));
+        }
+        if effects.pacified() != effects.pacified_seen {
+            pacify.push((mob, effects.pacified()));
+        }
+    }
+    let mut stale = world.query_filtered::<Entity, (With<SpeechEffects>, Without<StatusEffects>)>();
+    let stale: Vec<Entity> = stale.iter(world).collect();
+    for mob in stale {
+        world.entity_mut(mob).remove::<SpeechEffects>();
+    }
+    for (mob, wanted) in speech {
+        match wanted {
+            Some(s) => {
+                world.entity_mut(mob).insert(s);
+            }
+            None => {
+                world.entity_mut(mob).remove::<SpeechEffects>();
+            }
+        }
+    }
+    for (mob, pacified) in pacify {
+        if let Some(mut e) = world.get_mut::<StatusEffects>(mob) {
+            e.pacified_seen = pacified;
+        }
+        crate::medical::traumas::refresh(world, mob);
     }
 }
 
@@ -546,12 +1270,12 @@ mod tests {
         assert!(e.incapacitated() && e.hands_blocked() && e.immobilized());
         e.apply(Incap::Paralyze, 0.2);
         assert!(e.floored() && e.hands_blocked());
-        assert!(e.tick(0.25, 0.25, true));
+        assert!(e.tick(0.25, 0.25, true, false));
         assert_eq!(e.paralyze, 0.0);
         assert!(e.stun > 0.0);
-        assert!(e.tick(0.25, 0.5, true));
+        assert!(e.tick(0.25, 0.5, true, false));
         assert!(!e.incapacitated() && !e.immobilized() && e.floored());
-        assert!(!e.tick(0.5, 1.0, true), "everything ran out");
+        assert!(!e.tick(0.5, 1.0, true, false), "everything ran out");
         assert!(!e.floored());
     }
 
@@ -571,29 +1295,29 @@ mod tests {
         assert!(!e.hands_blocked(), "stamcrit does not block hands");
         assert_eq!(e.stamina, 120.0, "100 + 30, capped at max_stamina");
         // The reset timer restarts on every hit: 10 s after the last one.
-        e.tick(9.0, 10.0, true);
+        e.tick(9.0, 10.0, true, false);
         assert!(e.stamcrit);
-        e.tick(1.0, 11.0, true);
+        e.tick(1.0, 11.0, true, false);
         assert_eq!(e.stamina, 0.0);
         assert!(!e.stamcrit);
-        assert!(!e.tick(0.0, 11.0, false), "nothing left");
+        assert!(!e.tick(0.0, 11.0, false, false), "nothing left");
     }
 
     #[test]
     fn stamina_reset_timer_restarts_on_damage() {
         let mut e = StatusEffects::default();
         e.adjust_stamina(60.0, 0.0, false, false);
-        e.tick(8.0, 8.0, false);
+        e.tick(8.0, 8.0, false, false);
         assert_eq!(e.stamina, 60.0);
         e.adjust_stamina(10.0, 8.0, false, false);
-        e.tick(3.0, 11.0, false);
+        e.tick(3.0, 11.0, false, false);
         assert_eq!(e.stamina, 70.0, "the 10 s count from the newest damage");
-        e.tick(7.0, 18.0, false);
+        e.tick(7.0, 18.0, false, false);
         assert_eq!(e.stamina, 0.0);
         // Healing does not restart it.
         e.adjust_stamina(50.0, 20.0, false, false);
         e.adjust_stamina(-10.0, 25.0, false, false);
-        e.tick(5.0, 30.0, false);
+        e.tick(5.0, 30.0, false, false);
         assert_eq!(e.stamina, 0.0);
     }
 
@@ -633,7 +1357,7 @@ mod tests {
         assert_eq!(e.dazed, 0.0);
         let mut e = StatusEffects::default();
         e.knockdown(1.0, DAZED_SECS, false);
-        e.tick(1.0, 1.0, false);
+        e.tick(1.0, 1.0, false, false);
         assert_eq!(e.dazed, 0.0, "standing up ends it");
         let mut e = StatusEffects {
             no_side_kick: 1.0,
@@ -690,5 +1414,142 @@ mod tests {
             confused_dir(41.0, Dir::West, rolls(vec![3])),
             Dir::SouthEast
         );
+    }
+
+    #[test]
+    fn unconsciousness_and_sleep_knock_out_and_shaking_shortens_them() {
+        let mut e = StatusEffects::default();
+        e.apply(Incap::Incapacitated, 3.0);
+        assert!(e.incapacitated() && !e.immobilized() && !e.floored() && !e.hands_blocked());
+        e.apply(Incap::Sleeping, 20.0);
+        assert!(e.knocked_out() && e.immobilized() && e.floored() && e.hands_blocked());
+        e.apply(Incap::Unconscious, 4.0);
+        e.shake_up();
+        assert_eq!(e.sleeping, 10.0, "a shake takes 10 s of sleep");
+        assert_eq!(e.unconscious, 0.0, "and 6 s of unconsciousness");
+        // Knocked out: 3 stamina a second back.
+        e.adjust_stamina(50.0, 0.0, false, false);
+        e.tick(2.0, 2.0, true, false);
+        assert_eq!(e.stamina, 44.0);
+        e.tick(8.0, 10.0, true, false);
+        assert!(!e.knocked_out());
+    }
+
+    #[test]
+    fn timed_effects_cap_and_death_ends_jitter_dizziness_and_silence() {
+        let mut e = StatusEffects::default();
+        e.adjust_timed(Timed::Slurring(SlurKind::Drunk), 4.0, Some(20.0));
+        for _ in 0..10 {
+            e.adjust_timed(Timed::Slurring(SlurKind::Drunk), 4.0, Some(20.0));
+        }
+        assert_eq!(e.timed(Timed::Slurring(SlurKind::Drunk)), 20.0);
+        assert_eq!(e.timed(Timed::Slurring(SlurKind::Cult)), 0.0);
+        e.set_timed(Timed::Dizziness, 20.0, true);
+        e.set_timed(Timed::Dizziness, 10.0, true);
+        assert_eq!(e.dizziness, 20.0, "if lower: kept");
+        e.adjust_timed(Timed::Jitter, 30.0, None);
+        e.adjust_timed(Timed::Jitter, -6.0, None);
+        assert_eq!(e.jitter, 24.0);
+        e.adjust_timed(Timed::Silence, 5.0, None);
+        e.adjust_timed(Timed::Stutter, 5.0, None);
+        e.tick(0.0, 0.0, false, true);
+        assert_eq!((e.jitter, e.dizziness, e.silence), (0.0, 0.0, 0.0));
+        assert_eq!(e.stutter, 5.0, "the stutter outlives its owner");
+    }
+
+    #[test]
+    fn speech_effects_follow_the_timers() {
+        let mut e = StatusEffects::default();
+        assert_eq!(e.speech(0.0), SpeechEffects::default());
+        e.adjust_timed(Timed::Stutter, 5.0, None);
+        e.adjust_timed(Timed::Slurring(SlurKind::Drunk), 4.0, None);
+        e.adjust_timed(Timed::Silence, 1.0, None);
+        let speech = e.speech(60.0);
+        assert!(speech.stutter && speech.silenced);
+        assert_eq!(speech.slurs[1], Some(Slur::drunk(60.0)));
+        assert_eq!(speech.slurs[0], None);
+        // At 60 drunkenness: common 32, uncommon 8, replacement 12 (capped), double 40.
+        let drunk = Slur::drunk(60.0);
+        assert_eq!(
+            (
+                drunk.common,
+                drunk.uncommon,
+                drunk.replacement,
+                drunk.doubletext
+            ),
+            (32.0, 8.0, 12.0, 40.0)
+        );
+    }
+
+    #[test]
+    fn the_pulse_comes_every_two_seconds_while_something_pulses() {
+        let mut e = StatusEffects::default();
+        e.adjust_timed(Timed::Stutter, 10.0, None);
+        e.tick(3.0, 3.0, false, false);
+        assert!(!e.pulse_due, "a stutter has no tick");
+        e.adjust_timed(Timed::Jitter, 10.0, None);
+        e.tick(1.5, 4.5, false, false);
+        assert!(!e.pulse_due);
+        e.tick(0.5, 5.0, false, false);
+        assert!(e.pulse_due);
+    }
+
+    #[test]
+    fn dizziness_offset_and_sleep_quality_follow_tg() {
+        // amount 10 at world.time 9: angle 90 degrees, amplitude 20, clamped to 15.
+        assert_eq!(dizzy_offset(10.0, 9.0), [15, 0]);
+        // Angle 270: amplitude 0.
+        assert_eq!(dizzy_offset(10.0, 27.0), [0, 0]);
+        let bed = vec!["/obj/structure/bed/medical".to_owned()];
+        let pillow = vec![
+            "/obj/structure/table".to_owned(),
+            "/obj/item/pillow".to_owned(),
+        ];
+        use crate::mood::{SANITY_LEVEL_GREAT, SANITY_LEVEL_INSANE};
+        assert!((sleep_quality(Some(SANITY_LEVEL_GREAT), &bed, false) - 0.4).abs() < 1e-6);
+        assert!((sleep_quality(None, &pillow, true) - 0.5).abs() < 1e-6);
+        assert!(sleep_quality(Some(SANITY_LEVEL_INSANE), &[], false) < 0.0);
+    }
+
+    #[test]
+    fn jitter_and_drunk_examine_thresholds() {
+        let e = StatusEffects {
+            jitter: 59.0,
+            ..default()
+        };
+        assert_eq!(e.jitter_examine(), None);
+        let e = StatusEffects {
+            jitter: 200.0,
+            ..default()
+        };
+        assert_eq!(e.jitter_examine().map(|(s, _)| s), Some(Span::Warning));
+        assert_eq!(drunk_examine(10.0), None);
+        assert_eq!(drunk_examine(11.0), Some("слегка раскраснелся."));
+        assert_eq!(
+            drunk_examine(95.0),
+            Some("— пьяная в стельку слюнявая развалина.")
+        );
+    }
+
+    #[test]
+    fn speech_effects_reach_the_chat_component_and_leave_with_the_effects() {
+        let mut world = World::new();
+        world.init_resource::<Time>();
+        let mob = world.spawn(Stat::Conscious).id();
+        set_timed(&mut world, mob, Timed::Silence, 5.0, true);
+        adjust_timed(&mut world, mob, Timed::Slurring(SlurKind::Cult), 5.0, None);
+        sync_status_traits(&mut world);
+        let speech = *world.get::<SpeechEffects>(mob).unwrap();
+        assert!(speech.silenced && !speech.stutter);
+        assert_eq!(speech.slurs[2], Some(Slur::CULT));
+        world.entity_mut(mob).remove::<StatusEffects>();
+        sync_status_traits(&mut world);
+        assert!(world.get::<SpeechEffects>(mob).is_none());
+        // The dead get no new jitter.
+        let corpse = world.spawn(Stat::Dead).id();
+        adjust_timed(&mut world, corpse, Timed::Jitter, 10.0, None);
+        assert_eq!(timed(&world, corpse, Timed::Jitter), 0.0);
+        adjust_timed(&mut world, corpse, Timed::Stutter, 10.0, None);
+        assert_eq!(timed(&world, corpse, Timed::Stutter), 10.0);
     }
 }

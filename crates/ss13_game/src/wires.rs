@@ -1081,7 +1081,8 @@ fn electrocute_mob(
 /// tg `/mob/living/carbon/human/electrocute_act` (the gloves are already in `siemens`): burn
 /// over the body, stun (paralysis when already incapacitated), paralysis 2 s later. Returns the
 /// damage dealt (0: blocked or too weak).
-// shortcut: no jitter, stutter, `force_say`, heart restarts or shocks passed on through pulls.
+// shortcut: no `force_say`, heart restarts or shocks passed on through pulls; the jitter has no
+// sprite shake (`crate::status_effects`).
 pub(crate) fn electrocute_act(
     world: &mut World,
     mob: Entity,
@@ -1118,6 +1119,12 @@ pub(crate) fn electrocute_act(
         Incap::Stun
     };
     crate::status_effects::apply(world, mob, kind, SHOCK_STUN_SECS);
+    // `adjust_jitter(jitter_time)`, `adjust_stutter(stutter_time)` (20 s, 4 s by default).
+    {
+        use crate::status_effects::{Timed, adjust_timed};
+        adjust_timed(world, mob, Timed::Jitter, 20.0, None);
+        adjust_timed(world, mob, Timed::Stutter, 4.0, None);
+    }
     world.entity_mut(mob).insert(SecondaryShock {
         at: now + SECONDARY_SHOCK_DELAY,
         secs: SHOCK_STUN_SECS * SECONDARY_SHOCK_FACTOR,

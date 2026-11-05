@@ -2,9 +2,8 @@
 //! pressure and consecutive combos, a sweep from the floor, an instant aggressive grab, a
 //! disarming jab, the chokehold of a restrained mob, and blocking in throw mode.
 // shortcut: no neck snap (needs a kill grab; `crate::pull` stops at aggressive), no chokehold neck
-// grab, no jitter, no touch spell redirection (`on_attackby`), and no chef's "close quarters
-// cooking" (`under_siege`, its skillchip and kitchen areas); add them with neck grabs, jitter and
-// skillchips.
+// grab, no touch spell redirection (`on_attackby`), and no chef's "close quarters cooking"
+// (`under_siege`, its skillchip and kitchen areas); add them with neck grabs and skillchips.
 
 use bevy::prelude::*;
 use ss13_shared::chat::Span;
@@ -372,7 +371,7 @@ pub(super) fn disarm(world: &mut World, a: Entity, d: Entity) -> Outcome {
             Some((Span::Danger, format!("Вы берёте {dn} в удушающий захват!"))),
         );
         // `SetSleeping(40 SECONDS)`.
-        knock_out(world, d, 40.0);
+        super::put_to_sleep(world, d, 40.0);
         with_art(world, a, |art| art.restraining = None);
         return Outcome::Success;
     }
@@ -412,6 +411,7 @@ pub(super) fn disarm(world: &mut World, a: Entity, d: Entity) -> Outcome {
             Some((Span::Danger, to_attacker)),
         );
         play(world, d, HIT1, 50.0);
+        crate::status_effects::set_timed(world, d, crate::status_effects::Timed::Jitter, 4.0, true);
         hurt(world, d, None, DamageType::Brute, 5.0, Some(0.0));
         return Outcome::Success;
     }

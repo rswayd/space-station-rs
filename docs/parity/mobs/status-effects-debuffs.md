@@ -5,38 +5,38 @@
 Спрайт моба трясётся; от стимуляторов, электрошока, ломки.
 
 - **Код:** [`/datum/status_effect/jitter`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/jitteriness.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/status_effects.rs` (`Timed::Jitter`): длительность, распад в 5 раз быстрее лёжа, конец со смертью, строки осмотра (1/3/5 минут); источники — электрошок (`wires.rs`), дубинки (`security.rs`), тазер (`taser.rs`), дефибриллятор, хонкбот, голод с отрицательной сытостью, эпилепсия, святая вода, болезни, галлюцинации; нет тряски спрайта (`do_jitter_animation`: нужен пиксельный анимационный message в протоколе — группа render/протокол) и муд-события `jittery`
 
 ### Головокружение (dizziness)
 Экран клиента раскачивается, сила зависит от остатка эффекта.
 
 - **Код:** [`/datum/status_effect/dizziness`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/dizziness.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/status_effects.rs` (`Timed::Dizziness`, `dizzy_pulse`, `dizzy_offset`): раз в 2 с вид игрока отъезжает по формуле tg (`CameraEffect::Recoil`, одно смещение вместо двух прыжков), лёжа в 5 раз сильнее и короче, конец со смертью; источники — опьянение, кровопотеря, флешбанг вне свитспота, спящий карп, болезни, сотрясение, святая вода
 
 ### Сонливость (drowsiness)
 Размытие зрения и шанс заснуть на ходу.
 
 - **Код:** [`/datum/status_effect/drowsiness`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/drowsiness.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/status_effects.rs` (`Timed::Drowsiness`, `pulse`): раз в 2 с размытие ≥4 с и 5% уснуть на 10 с, не во сне; лёжа −4 с; источники — анафилаксия, нарколепсия (симптом); нет умывания лица (`COMSIG_COMPONENT_CLEAN_FACE_ACT`) и иммунитета ко сну
 
 ### Опьянение (inebriated)
 `drunk_value` растёт от алкоголя и убывает со временем; стадии «навеселе» и «пьян»: невнятная речь, конфузия, головокружение, размытие, рвота, отравление и отключка на высоких значениях.
 
 - **Код:** [`/datum/status_effect/inebriated`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/drunk.dm#L8), [`/datum/status_effect/inebriated/drunk`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/drunk.dm#L99), [`proc/adjust_drunk_effect()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/status_procs.dm#L768)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_reagents/src/metabolism.rs` (`inebriation_tick`): только значение, распад и токсин-урон; нет невнятной речи, конфузии, головокружения, размытия, рвоты, отключек
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_reagents/src/metabolism.rs` (`inebriation_tick`: значение, распад, токсин-урон), `crates/ss13_game/src/status_effects.rs` (`drunk_pulse`, `drunk_examine`): невнятная речь с 16, −6 с дрожи, конфузия и головокружение с 41/51, рвота 3% с 51, размытие с 71, предупреждение с 81, урон мозгу и отключка (сон 90 с) с 91, отрезвление во сне, строки осмотра; муд — `mood.rs`. Чужое: травма раздвоения личности при отключке (травмы мозга), разброс стрельбы и пьяный боец (оружие/боевые), линии пика Балмера, сокрытие лицом (`obscured_slots`)
 
 ### Речевые дебаффы (заикание, невнятная речь)
 Эффекты `speech/*` искажают сообщения: заикание (тревога, одержимость, «дерп»), невнятная речь (пьяная, культистская, еретическая).
 
 - **Код:** [`/datum/status_effect/speech`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/speech_debuffs.dm#L1), [`/datum/status_effect/speech/stutter`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/speech_debuffs.dm#L62), [`/datum/status_effect/speech/slurring`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/speech_debuffs.dm#L211)
 - **BandaStation:** [`speech_debuffs.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/speech_debuffs.dm#L81) — заикание для кириллицы (социальная тревожность), санитизация эмоутов
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_chat/src/speech.rs` (`Impediments`, `stutter`, `derpspeech`, `unintelligize`): заикание (с кириллицей BandaStation) и «дерп» от травм мозга, пока травма есть; нет временного статус-эффекта с длительностью, невнятной речи, тревожного и одержимого заикания, TTS-фильтров
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_chat/src/speech.rs` (`Impediments`, `SpeechEffects`, `stutter`, `slur`, `derpspeech`, `unintelligize`), `crates/ss13_game/src/status_effects.rs` (`Timed::Stutter`, `Timed::Slurring`): заикание от травм и как временный эффект; невнятная речь generic/drunk (вероятности от опьянения)/cult/heretic по таблицам `slurring_*_text.json`; «дерп» от травм. Чужое: тревожное заикание (квирк social anxiety), одержимое (травма obsessed), TTS-фильтры (TTS)
 
 ### Немота (silenced)
 Временный запрет речи.
 
 - **Код:** [`/datum/status_effect/silenced`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/silenced.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/status_effects.rs` (`Timed::Silence`) → `SpeechEffects::silenced` (`TRAIT_MUTE`: say/шёпот/радио отклоняются), конец со смертью; источники — колено спящего карпа, взгляд вампира, оглушение и оковы культа, конверсия революции, отравление сэндвичем, фальшивая смерть (галлюцинация)
 
 ### Размытие зрения и наркотические искажения
 `eye_blur` размывает экран; `drugginess` — радужный фильтр; `static_vision` — помехи; ложный HUD здоровья (`screwy_hud`: «мёртв», «крит», «здоров»).
@@ -48,7 +48,7 @@
 Запрещает причинять вред (`TRAIT_PACIFISM`); временный от реагентов и гонболы.
 
 - **Код:** [`/datum/status_effect/pacify`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/pacifism.dm#L1), [`/datum/status_effect/gonbola_pacify`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/debuffs.dm#L667)
-- **Статус в ss13-rs:** ❌ нет — временного эффекта нет; сам запрет (`TRAIT_PACIFISM`) есть от травмы мозга (`medical/traumas.rs` `Pacifist`: ближний бой, летальные выстрелы)
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/status_effects.rs` (`Timed::Pacify`, `StatusEffects::pacified`) → `medical/traumas.rs` `Pacifist` (`refresh` при начале и конце): ближний бой, летальные выстрелы; вместе с травмой и квирком
 
 ### Горение и мокрота (fire/wet stacks)
 `fire_stacks` поджигают моба, распадаются, нагревают тело и тайл, требуют кислорода; `wet_stacks` гасят огонь и повышают проводимость.

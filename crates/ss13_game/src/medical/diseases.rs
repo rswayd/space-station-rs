@@ -20,12 +20,11 @@
 //! - Infecting from elsewhere (events, admins, reagents): [`force_contract`] with a
 //!   [`Disease::new`] or [`Disease::random_advance`].
 //! - The health analyzer lists the diseases the scanner sees (`crate::health_scan`).
-// shortcut: no mood or sleep recovery bonuses (no sleeping yet), no immunodeficiency/virus
+// shortcut: no darkness or blindfold sleep bonus, no immunodeficiency/virus
 // immunity traits, no stasis; no chronic or incremental-cure
 // diseases (chronic illness, asthma), no transformation, magic or floor diseases, no bites or
 // bumps spreading contact diseases, no infective items, food or blood decals, no disease
-// archive, HUD icons or logging. Unported effects: jitter, dizziness, slurring, stuttering,
-// drowsiness, silence, butterflies, the decloning status effect.
+// archive, HUD icons or logging. Unported effects: butterflies, the decloning status effect.
 
 use bevy::prelude::*;
 use ss13_mapload::{DmArmor, DmClothing, DmWeight};
@@ -40,7 +39,7 @@ use crate::combat::CombatRng;
 use crate::health::{BodyPosition, DamageType, Health, Stat};
 use crate::inventory::Inventory;
 use crate::server::PlayerMob;
-use crate::status_effects::Incap;
+use crate::status_effects::{Incap, SlurKind, Timed, adjust_timed, set_timed};
 use crate::tools::tell;
 use crate::zone::BodyZone;
 
@@ -1124,10 +1123,55 @@ pub struct StageCtx {
     pub has_required_organ: bool,
     /// `get_immunity_recovery`.
     pub immunity_recovery: f32,
+    /// The mood's recovery bonus (`sanity_level`: +0.4 great ... -0.4 insane).
+    pub mood_recovery: f32,
+    /// Asleep and not malnourished: the sleeping bonuses (bed, bedsheet, pillow, deafness),
+    /// then everything ×`DISEASE_SLEEPING_RECOVERY_MULTIPLIER`.
+    pub sleep_bonus: Option<f32>,
+}
+
+/// `DISEASE_GOOD_SLEEPING_RECOVERY_BONUS`, `DISEASE_SLEEPING_RECOVERY_MULTIPLIER`.
+const GOOD_SLEEPING_RECOVERY_BONUS: f32 = 0.6;
+const SLEEPING_RECOVERY_MULTIPLIER: f32 = 6.0;
+
+/// `stage_act`'s mood recovery bonus.
+fn mood_recovery(sanity_level: Option<u8>) -> f32 {
+    use crate::mood::{
+        SANITY_LEVEL_CRAZY, SANITY_LEVEL_GREAT, SANITY_LEVEL_INSANE, SANITY_LEVEL_NEUTRAL,
+    };
+    match sanity_level {
+        Some(SANITY_LEVEL_GREAT) => 0.4,
+        Some(SANITY_LEVEL_NEUTRAL) => 0.2,
+        Some(SANITY_LEVEL_CRAZY) => -0.2,
+        Some(SANITY_LEVEL_INSANE) => -0.4,
+        _ => 0.0,
+    }
+}
+
+/// `stage_act`'s sleeping bonuses for the paths on the sleeper's tile.
+fn sleep_recovery_bonus(tile: &[String], deaf: bool) -> f32 {
+    use crate::obj_damage::is_under;
+    let on = |root: &str| tile.iter().any(|p| is_under(p, root));
+    let mut bonus = 0.0;
+    if deaf {
+        bonus += GOOD_SLEEPING_RECOVERY_BONUS;
+    }
+    if on("/obj/structure/bed") {
+        bonus += GOOD_SLEEPING_RECOVERY_BONUS;
+    } else if on("/obj/structure/table") {
+        bonus += GOOD_SLEEPING_RECOVERY_BONUS / 2.0;
+    }
+    if on("/obj/item/bedsheet") {
+        bonus += GOOD_SLEEPING_RECOVERY_BONUS;
+    }
+    if on("/obj/item/pillow") {
+        bonus += GOOD_SLEEPING_RECOVERY_BONUS;
+    }
+    bonus
 }
 
 /// The base `stage_act`: `Keep` with `true` when the symptoms act this tick.
-// shortcut: `bad_immune` is always 1 (no immunodeficiency), no sleeping or mood bonuses.
+// shortcut: `bad_immune` is always 1 (no immunodeficiency).
 pub fn stage_act(disease: &mut Disease, ctx: &StageCtx, rng: &mut CombatRng) -> (Outcome, bool) {
     let def = disease.def();
     let slowdown = if ctx.virus_resistant { 0.5 } else { 1.0 };
@@ -1180,7 +1224,12 @@ pub fn stage_act(disease: &mut Disease, ctx: &StageCtx, rng: &mut CombatRng) -> 
         if ctx.malnourished {
             recovery -= MALNUTRITION_RECOVERY_PENALTY;
         }
+        recovery += ctx.mood_recovery;
         recovery += ctx.immunity_recovery;
+        if let Some(bonus) = ctx.sleep_bonus {
+            recovery += bonus;
+            recovery *= SLEEPING_RECOVERY_MULTIPLIER;
+        }
         let recovery = recovery.clamp(0.0, 100.0);
         if recovery > 0.0 {
             let failure = 1.0 - disease.recovery_failure_chance() / 100.0;
@@ -1266,13 +1315,27 @@ pub fn life(world: &mut World, mob: Entity, secs: f32) {
         if dead && !disease.def().process_dead {
             continue;
         }
+        let malnourished = world
+            .get::<crate::hunger::Hunger>(mob)
+            .is_some_and(|h| h.nutrition <= crate::hunger::NUTRITION_LEVEL_STARVING);
+        let sleeping = world
+            .get::<crate::status_effects::StatusEffects>(mob)
+            .is_some_and(|e| e.sleeping > 0.0);
+        let sleep_bonus = (sleeping && !malnourished).then(|| {
+            sleep_recovery_bonus(
+                &crate::status_effects::tile_paths(world, mob),
+                !crate::sound::can_hear(world, mob),
+            )
+        });
         let ctx = StageCtx {
             secs,
             cure_status: has_cure(world, mob, &disease),
             virus_resistant: virus_resistant(world, mob),
-            malnourished: world
-                .get::<crate::hunger::Hunger>(mob)
-                .is_some_and(|h| h.nutrition <= crate::hunger::NUTRITION_LEVEL_STARVING),
+            malnourished,
+            mood_recovery: mood_recovery(
+                world.get::<crate::mood::Mood>(mob).map(|m| m.sanity_level),
+            ),
+            sleep_bonus,
             has_required_organ: disease
                 .def()
                 .required_organ
@@ -1651,7 +1714,13 @@ fn kind_act(
             }
             2 => {
                 if p(5.0) {
-                    crate::status_effects::apply(world, mob, Incap::Paralyze, 4.0);
+                    crate::status_effects::apply(world, mob, Incap::Unconscious, 4.0);
+                }
+                if p(10.0) {
+                    adjust_timed(world, mob, Timed::Slurring(SlurKind::Generic), 14.0, None);
+                }
+                if p(7.0) {
+                    set_timed(world, mob, Timed::Dizziness, 20.0, true);
                 }
                 if spt_prob(rng, 2.5, secs) {
                     let line = pick(
@@ -1688,6 +1757,9 @@ fn kind_act(
                 4 => {
                     if p(2.5) {
                         organs::adjust_organ_loss_up_to(world, mob, Slot::Brain, 1.0, 170.0);
+                    }
+                    if p(7.5) {
+                        adjust_timed(world, mob, Timed::Stutter, 6.0, None);
                     }
                 }
                 5 => {
@@ -1758,8 +1830,11 @@ fn brainrot(world: &mut World, mob: Entity, stage: u8, secs: f32, rng: &mut Comb
                     &format!("{name} suddenly collapses!"),
                     Span::Warning,
                 );
-                let secs = rng.range(10, 20) as f32;
-                crate::status_effects::apply(world, mob, Incap::Paralyze, secs);
+                let knocked = rng.range(10, 20) as f32;
+                crate::status_effects::apply(world, mob, Incap::Unconscious, knocked);
+            }
+            if stage == 4 && spt_prob(rng, 7.5, secs) {
+                adjust_timed(world, mob, Timed::Stutter, 6.0, None);
             }
         }
         _ => {}
@@ -1783,6 +1858,7 @@ fn tuberculosis(world: &mut World, mob: Entity, stage: u8, secs: f32, rng: &mut 
         4 => {
             if spt_prob(rng, 1.0, secs) {
                 say_to(world, mob, Span::BoldWarning, "You see four of everything!");
+                set_timed(world, mob, Timed::Dizziness, 10.0, true);
             }
             if spt_prob(rng, 1.0, secs) {
                 say_to(
@@ -1827,8 +1903,7 @@ fn tuberculosis(world: &mut World, mob: Entity, stage: u8, secs: f32, rng: &mut 
                     &format!("{name} faints!"),
                     Span::Warning,
                 );
-                // shortcut: no sleeping; a paralysis of the same length.
-                crate::status_effects::apply(world, mob, Incap::Paralyze, 10.0);
+                crate::status_effects::adjust(world, mob, Incap::Sleeping, 10.0);
             }
             if spt_prob(rng, 1.0, secs) {
                 say_to(
@@ -1918,6 +1993,8 @@ fn anxiety(world: &mut World, mob: Entity, stage: u8, secs: f32, rng: &mut Comba
                 );
                 let secs = rng.range(6, 8) as f32;
                 confusion_up_to(world, mob, secs, f32::MAX);
+                let jitter = rng.range(12, 16) as f32;
+                adjust_timed(world, mob, Timed::Jitter, jitter, None);
             }
             if spt_prob(rng, 1.0, secs) {
                 super::visible(
@@ -1989,6 +2066,7 @@ fn death_sandwich(world: &mut World, mob: Entity, stage: u8, secs: f32, rng: &mu
                     Span::Danger,
                     "You try to scream, but nothing comes out!",
                 );
+                set_timed(world, mob, Timed::Silence, 5.0, true);
             }
         }
         _ => {}
@@ -2011,6 +2089,7 @@ fn anaphylaxis(world: &mut World, mob: Entity, stage: u8, secs: f32, rng: &mut C
                     Span::Warning,
                     "You feel your hands start to shake.",
                 );
+                adjust_timed(world, mob, Timed::Jitter, 4.0 * secs, Some(60.0));
             }
             if spt_prob(rng, 5.0, secs) {
                 say_to(
@@ -2019,6 +2098,10 @@ fn anaphylaxis(world: &mut World, mob: Entity, stage: u8, secs: f32, rng: &mut C
                     Span::Warning,
                     "You feel your legs start to shake.",
                 );
+                adjust_timed(world, mob, Timed::Jitter, 4.0 * secs, Some(60.0));
+            }
+            if spt_prob(rng, 2.0, secs) {
+                adjust_timed(world, mob, Timed::Dizziness, 5.0 * secs, Some(60.0));
             }
             if spt_prob(rng, 1.0, secs) {
                 say_to(world, mob, Span::Danger, "Your throat itches.");
@@ -2033,6 +2116,7 @@ fn anaphylaxis(world: &mut World, mob: Entity, stage: u8, secs: f32, rng: &mut C
                     Span::Warning,
                     "You feel your hands shake violently.",
                 );
+                adjust_timed(world, mob, Timed::Jitter, 8.0 * secs, Some(60.0));
                 if rng.chance(20.0) {
                     drop_held(world, mob, true, false);
                 }
@@ -2044,6 +2128,7 @@ fn anaphylaxis(world: &mut World, mob: Entity, stage: u8, secs: f32, rng: &mut C
                     Span::Warning,
                     "You feel your legs shake violently.",
                 );
+                adjust_timed(world, mob, Timed::Jitter, 8.0 * secs, Some(60.0));
                 let stamina = world
                     .get::<crate::status_effects::StatusEffects>(mob)
                     .map_or(0.0, |e| e.stamina);
@@ -2068,6 +2153,10 @@ fn anaphylaxis(world: &mut World, mob: Entity, stage: u8, secs: f32, rng: &mut C
                 say_to(world, mob, Span::Warning, "It's getting harder to breathe.");
             }
             if spt_prob(rng, 2.0, secs) {
+                adjust_timed(world, mob, Timed::Drowsiness, 3.0 * secs, Some(30.0));
+            }
+            if spt_prob(rng, 2.0, secs) {
+                adjust_timed(world, mob, Timed::Dizziness, 5.0 * secs, Some(60.0));
                 confusion_up_to(world, mob, secs, 10.0);
             }
             if spt_prob(rng, 2.0, secs) {
@@ -2084,7 +2173,7 @@ fn anaphylaxis(world: &mut World, mob: Entity, stage: u8, secs: f32, rng: &mut C
         3 => {
             damage(world, mob, DamageType::Tox, 3.0 * secs);
             damage(world, mob, DamageType::Oxy, secs);
-            crate::status_effects::apply(world, mob, Incap::Paralyze, 3.0 * secs);
+            crate::status_effects::apply(world, mob, Incap::Unconscious, 3.0 * secs);
         }
         _ => {}
     }
@@ -2239,6 +2328,8 @@ mod tests {
             malnourished: false,
             has_required_organ: true,
             immunity_recovery: 0.0,
+            mood_recovery: 0.0,
+            sleep_bonus: None,
         }
     }
 
