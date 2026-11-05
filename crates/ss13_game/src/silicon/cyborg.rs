@@ -20,8 +20,10 @@
 //!   by tg's `recharge_speed` (`5e-3 * capacitor tiers * cell maxcharge`; a mapped one has two
 //!   tier 1 capacitors and a high-capacity cell: 1 kW). Walking out
 //!   opens it (tg `relaymove`).
+//! - A cyborg built around an MMI or a posibrain (`super::mmi`) starts the same way
+//!   ([`spawn_borg`], [`activate`]).
 // shortcut: no cyborg HUD (the human slots are shown; only the hands and the back slot work),
-// no lamp, ion thrusters, model transform animation, skins, tipping or MMI (the cover, cell
+// no lamp, ion thrusters, model transform animation, skins or tipping (the cover, cell
 // slot, emag, lockdown and upgrades: `super::chassis`, `super::borg_upgrades`); consumables
 // are not respawned at the station (nor their 0.5% of the charge drawn, which tg takes only
 // when something was restocked).
@@ -236,17 +238,32 @@ pub(crate) fn join(
     let pos = forced
         .or_else(|| crate::jobs::job_spawn(world, "Cyborg"))
         .unwrap_or_else(|| crate::server::pick_latejoin(world));
+    let borg = spawn_borg(world, pos, "Cyborg")?;
+    world.entity_mut(borg).insert(PlayerJob(job));
+    world.resource_mut::<Jobs>().add_position(job);
+    activate(world, borg, client, pos);
+    info!(
+        "{} ({client}) joined as Cyborg at {pos:?}{}",
+        super::chassis::name_of(world, borg),
+        if latejoin { " (latejoin)" } else { "" }
+    );
+    Some(borg)
+}
+
+/// tg `/mob/living/silicon/robot/Initialize` on `pos`, without a player: the default model,
+/// the round's laws, a high-capacity cell. `braintype` names it (tg `get_standard_name`:
+/// "[designation] [braintype]-[identifier]"). `None` without the cyborg's prototype.
+pub(crate) fn spawn_borg(world: &mut World, pos: TilePos, braintype: &str) -> Option<Entity> {
     let borg = crate::construction::spawn_obj(world, ROBOT_TYPE, pos)?;
-    // tg `get_standard_name`: "[designation] [braintype]-[identifier]".
     let id = world
         .resource_mut::<crate::combat::CombatRng>()
         .range(1, 999);
-    let name = format!("Default Cyborg-{id}");
+    let name = format!("Default {braintype}-{id}");
     let card = all_access_card(world, borg);
     let laws = round_default(&world.resource::<Silicons>().0);
     let choices = model_choices(world);
     world.entity_mut(borg).insert((
-        Name::new(name.clone()),
+        Name::new(name),
         Silicon,
         ss13_tgui::server::RemoteActor,
         Cyborg {
@@ -266,7 +283,6 @@ pub(crate) fn join(
             id: Some(card),
             ..default()
         },
-        PlayerJob(job),
         ListInput(choices),
     ));
     world.entity_mut(borg).insert((
@@ -274,18 +290,22 @@ pub(crate) fn join(
         super::alarms::AlarmQueue::default(),
     ));
     super::chassis::setup(world, borg);
-    world.resource_mut::<Jobs>().add_position(job);
+    Some(borg)
+}
+
+/// `client` takes a new cyborg (the job's, or one built around its MMI): its radio and buttons,
+/// the AI with the fewest cyborgs (tg `Initialize` without an AI: no lawsync, the first law
+/// rack), the model choice and the laws.
+pub(crate) fn activate(world: &mut World, borg: Entity, client: Entity, pos: TilePos) {
     attach_client(world, client, borg, pos);
     give_radio(world, borg, &[]);
     super::ai_hud::give_borg_buttons(world, borg);
-    // tg `Initialize`: no AI to link to, no lawsync.
     match fewest_borgs_ai(world) {
         Some(ai) => connect(world, borg, ai),
         None => {
             if let Some(mut cyborg) = world.get_mut::<Cyborg>(borg) {
                 cyborg.lawupdate = false;
             }
-            // tg: no AI, the first law rack's lawset.
             super::law_rack::link_to_first_rack(world, borg);
         }
     }
@@ -297,11 +317,6 @@ pub(crate) fn join(
     ));
     super::chassis::show_laws(world, borg);
     notice(world, client, Span::BoldNotice, RADIO_INFO);
-    info!(
-        "{name} ({client}) joined as Cyborg at {pos:?}{}",
-        if latejoin { " (latejoin)" } else { "" }
-    );
-    Some(borg)
 }
 
 /// tg silicons pass `allowed()`: an internal card with every job's access.

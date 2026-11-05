@@ -23,7 +23,8 @@
 //! Submodules: [`blood`] (blood volume, bleeding, transfusions, IV drips), [`wounds`], [`surgery`]
 //! (operations, drapes, operating tables), [`defib`] (defibrillators, revival), [`organs`],
 //! [`cyberimps`] (cybernetic implants, autosurgeons),
-//! [`traumas`] (brain traumas), [`diseases`] and [`symptoms`] (viruses and virology).
+//! [`traumas`] (brain traumas), [`brainmob`] (the mind in a removed brain), [`diseases`] and
+//! [`symptoms`] (viruses and virology).
 //! Clicks on living mobs that these take (wound treatments, drapes, surgery, paddles, IV drips,
 //! tables) are claimed in [`MedicalClicks`] before melee and the inventory see them.
 // shortcut: no `try_inject` check (thick clothing blocks treatment in tg), no sounds, balloon
@@ -32,6 +33,7 @@
 pub mod bioware;
 pub mod blood;
 pub mod bodyparts;
+pub mod brainmob;
 pub mod cyberimps;
 pub mod defib;
 pub mod diseases;
@@ -223,6 +225,7 @@ impl Plugin for MedicalServerPlugin {
         operating::build(app);
         defib::build(app);
         organs::build(app);
+        brainmob::build(app);
         cyberimps::build(app);
     }
 }

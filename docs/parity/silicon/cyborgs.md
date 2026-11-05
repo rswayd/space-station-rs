@@ -55,7 +55,7 @@
 Эндоскелет из частей тела роботов (мехфаб), проводка, ячейка, флеш-глаза, MMI/позитронный мозг → киборг; без мозга — оболочка ИИ. Разборка через крышку.
 
 - **Код:** [`/obj/item/robot_suit`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/robot/robot_parts.dm#L3), [`robot_parts.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/robot/robot_parts.dm), [`proc/cyborg_deconstruct()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/silicon/robot/robot.dm#L538), [`/obj/item/brain_processor/positronic`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/brain/processor/positronic.dm#L3)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/silicon/mmi.rs`: руки, ноги, грудь (кабель и ячейка) и голова (две целые вспышки) ставятся на эндоскелет, железо на собранный не идёт (на пустой — ED-209, bots.md); MMI или позитронный мозг с живым присутствующим разумом на полностью собранный эндоскелет на полу — киборг «Default Cyborg/Android-NNN» с ячейкой груди, разум переходит в него, MMI и эндоскелет внутри, старт как у работы (`cyborg::activate`); нет оболочек ИИ (B.O.R.I.S.), окна отладки мультитулом, разборки ключом, замены ячейки отвёрткой, снятия вспышек ломом, извлечения MMI из киборга (разборка, гиб), законов синдикатского MMI
 
 ### Крышка, замок, провода киборга
 Крышку открывает ID с доступом, ломом снимается ячейка, внутри провода (`/datum/wires/robot`: связь с ИИ, камера, блокировка, лоусинк, сброс модели).

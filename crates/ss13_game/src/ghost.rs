@@ -224,7 +224,7 @@ fn close_foreign_windows(mut windows: Query<&mut UiWindow>, players: Res<Players
 /// The body's HUD windows that closed with the ghostize and do not reopen by themselves (opened
 /// once, or only when their data changes); the inventory is marked changed above and the health
 /// HUD follows its data.
-fn reopen_body_huds(world: &mut World, client: Entity, body: Entity) {
+pub(crate) fn reopen_body_huds(world: &mut World, client: Entity, body: Entity) {
     let Ok(e) = world.get_entity(body) else {
         return;
     };
