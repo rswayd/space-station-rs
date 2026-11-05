@@ -350,10 +350,8 @@ fn apply(
     match act {
         PrisonerAct::Login => {
             let ok = check_access(&[ACCESS_BRIG.to_owned()], &[], &access_of(world, user));
-            if ok {
-                if let Some(mut c) = world.get_mut::<PrisonerConsole>(console) {
-                    c.authenticated = true;
-                }
+            if ok && let Some(mut c) = world.get_mut::<PrisonerConsole>(console) {
+                c.authenticated = true;
             }
             sound(world, console, if ok { ON_SOUND } else { ERROR_SOUND });
         }
