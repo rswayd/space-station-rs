@@ -1416,7 +1416,8 @@ fn law_rack_modules_change_the_ai_laws() {
         assert_eq!(r.slots[0].as_ref().unwrap().security, Security::Welded);
         assert_eq!(r.combined.law_list(true), ["1: L1", "2: L2", "3: L3"]);
     }
-    assert_eq!(s.get::<Name>(rack).as_str(), "core module rack 'alpha'");
+    // The fixture type is named after its path ("core"); the designation is appended.
+    assert_eq!(s.get::<Name>(rack).as_str(), "core 'alpha'");
     // p1 becomes the AI.
     let job = s.server.world().resource::<Jobs>().data.job("AI").unwrap();
     let link = s.players[1].link;
@@ -1488,8 +1489,10 @@ fn ai_tracks_a_mob_with_the_cameras() {
     use ss13_tgui::interfaces::list_input::{ListInputData, ListInputUi as PromptList};
     let mut s = Station::start_on("ai_tracks_a_mob_with_the_cameras", MAP, 2, false);
     s.join("AI");
+    // The second player's body does not share the first one's start tile: where it stands.
     let human = s.players[1].mob;
-    assert_eq!(s.get::<TilePos>(human), &SPAWN);
+    let start = *s.get::<TilePos>(human);
+    assert!(s.server.world().resource::<CameraNet>().visible(start));
     s.run_until("the HUD buttons arrive", |s| {
         s.window::<ActionButtonsUi>().is_some()
     });
@@ -1499,9 +1502,12 @@ fn ai_tracks_a_mob_with_the_cameras() {
     assert_eq!(data.items.len(), 1);
     let entry = data.items[0].clone();
     s.act::<PromptList>("submit", &[("entry", &entry)]);
-    s.run_until("the eye is on the human", |s| s.pos() == SPAWN);
-    // The human steps east, still in the camera's room: the eye follows.
-    let east = TilePos::new(3, 3, 1);
+    s.run_until("the eye is on the human", |s| s.pos() == start);
+    // The human moves within the camera's room: the eye follows.
+    let east = [TilePos::new(3, 3, 1), TilePos::new(2, 2, 1)]
+        .into_iter()
+        .find(|&p| p != start)
+        .unwrap();
     s.server.world_mut().entity_mut(human).insert(east);
     s.run_until("the eye follows", |s| s.pos() == east);
     s.step_dir(Dir::South);
