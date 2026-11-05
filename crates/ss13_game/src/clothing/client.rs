@@ -107,7 +107,7 @@ fn row(sensor: &CrewSensor) -> impl Scene + use<> {
         Some(a) => format!("{} ({a})", sensor.name),
         None => sensor.name.clone(),
     };
-    let head = sensor.ijob % 10 == 0;
+    let head = sensor.ijob.is_multiple_of(10);
     let name_color = UiColor::Css(job_color(sensor.ijob));
     let (icon, icon_color) = match &sensor.vitals {
         Some(v) => (stat_icon(sensor.life_status), health_color(v)),
