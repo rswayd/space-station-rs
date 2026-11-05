@@ -25,7 +25,7 @@ HUD-визоры: медицинский, диагностический, СБ, 
 Сварочная защита, T-ray сканер, магнитные ботинки, трос (tether), радиационная защита, конструктор (сканер чертежей), защита головы, распылитель.
 
 - **Код:** [`welding`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_engineering.dm#L4), [`magboot`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_engineering.dm#L80), [`tether`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_engineering.dm#L126), [`constructor`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_engineering.dm#L415)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/modsuit/modules.rs`: сварочная защита (`flash_protect` шлема = 4 при герметизации), магнитные ботинки (не скользят на воде и льду, `slowdown_active`); нет `TRAIT_NEGATES_GRAVITY` (гравитация — группа движения), T-ray, троса, радиационной защиты (нет радиации), конструктора, распылителя
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/modsuit/modules.rs`: сварочная защита (`flash_protect` шлема = 4 при герметизации), магнитные ботинки (не скользят на воде и льду, `slowdown_active`); нет `TRAIT_NEGATES_GRAVITY` (гравитация — группа движения), T-ray, троса, счётчика радиации модуля (радзащита частей есть, `crates/ss13_game/src/radiation.rs`), конструктора, распылителя
 
 ### Медицинские модули
 Анализатор здоровья, быстрый перенос, инжектор, органайзер (выстрел органами), дефибриллятор, thread ripper, хирургический процессор.

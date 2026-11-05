@@ -76,7 +76,9 @@ pub use bots::{BOT_RUNTIME_TYPES, DmNavBeacon};
 pub use cable::DmCable;
 pub use circuit::{CircuitPart, DmCircuit, DmMachine, FRAME_RUNTIME_TYPES};
 pub use clothing::{DmClothing, DmTank};
-pub use construct::{CONSTRUCTION_TYPES, DmObj, DmStack, DmTable, DmTool, DmTurfBuild};
+pub use construct::{
+    CONSTRUCTION_TYPES, DmObj, DmRadInsulation, DmStack, DmTable, DmTool, DmTurfBuild,
+};
 pub use contents::{DmCloset, DmContents, DmStorage, DmWeight, Fill, PickArm};
 pub use dispenser::DmChemDispenser;
 pub use disposal::{DISPOSAL_RUNTIME_TYPES, DmMailSort};
@@ -274,6 +276,7 @@ impl Plugin for DmProtoPlugin {
             .register_proto_component::<DmAirlockHelper>("dm_airlock_helper")
             .register_proto_component::<DmSmooth>("dm_smooth")
             .register_proto_component::<DmTurf>("dm_turf")
+            .register_proto_component::<DmRadInsulation>(construct::RAD_COMPONENT)
             .register_proto_component::<DmUndertile>("dm_undertile")
             .register_proto_component::<DmSpawner>("dm_spawner")
             .register_proto_component::<DmItem>("dm_item")

@@ -117,6 +117,8 @@ pub enum AlertCategory {
     Charge,
     /// `ALERT_MECH_DAMAGE`.
     MechDamage,
+    /// `ALERT_IRRADIATED` (`crate::radiation`).
+    Irradiated,
     /// A hallucination's fake alert (`crate::hallucination`), by its tg category: beside the
     /// real one, which never clears it.
     Hallucination(u8),
@@ -240,6 +242,11 @@ impl Alert {
                  Робототехника может оказать помощь.",
             ),
             "low_mech_integrity" => ("Мех повреждён", "Низкая целостность меха."),
+            "irradiated" => (
+                "Облучение",
+                "Вы облучены! Быстрее лечите токсины и встаньте под душ, чтобы остановить \
+                 поступающий урон.",
+            ),
             _ => ("Alert", ""),
         }
     }

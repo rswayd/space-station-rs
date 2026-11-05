@@ -489,6 +489,22 @@ impl Atmos {
         out
     }
 
+    /// Radiation pulses gas reactions asked for since the last call (tg `radiation_pulse` in
+    /// the tritium fire and proto-nitrate responses), for the game to send.
+    pub fn drain_radiation(&mut self) -> Vec<(TilePos, reactions::RadiationRelease)> {
+        let mut out = Vec::new();
+        for (z, level) in self.levels.iter_mut().enumerate() {
+            let Some(level) = level else { continue };
+            let mut tiles = Vec::new();
+            level.drain_radiation(|t, pulse| tiles.push((t, pulse)));
+            out.extend(tiles.into_iter().map(|(t, pulse)| {
+                let (x, y) = level.pos(t);
+                (TilePos::new(x, y, z as u16), pulse)
+            }));
+        }
+        out
+    }
+
     pub fn excited_groups(&self) -> usize {
         self.levels
             .iter()

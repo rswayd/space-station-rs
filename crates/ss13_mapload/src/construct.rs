@@ -17,6 +17,7 @@ pub const STACK_COMPONENT: &str = "dm_stack";
 pub const TURF_COMPONENT: &str = "dm_turf_build";
 pub const OBJ_COMPONENT: &str = "dm_obj";
 pub const TABLE_COMPONENT: &str = "dm_table";
+pub const RAD_COMPONENT: &str = "dm_rad_insulation";
 
 /// Types the construction code spawns or turns turfs into, so `ss13-mapload convert` emits them
 /// even when no converted map uses them. Fixtures convert without them; the game then skips
@@ -122,6 +123,14 @@ pub struct DmTurfBuild {
     /// `explosive_resistance`: how much the turf weakens a blast passing it (walls 1,
     /// reinforced 2; `INFINITY` is dumped as 1e31).
     pub explosive_resistance: f32,
+}
+
+/// `rad_insulation` of a turf or object whose value is not `RAD_NO_INSULATION` (1): what a
+/// radiation pulse passing its tile is multiplied by (`code/controllers/subsystem/radiation.dm`).
+/// Absent means 1.
+#[derive(Component, Reflect, Default, Clone, Debug, PartialEq)]
+pub struct DmRadInsulation {
+    pub value: f32,
 }
 
 /// Integrity, anchoring and construction vars of `/obj/structure`, `/obj/machinery` and
@@ -447,6 +456,17 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
     if !types.types.contains_key(path) {
         return out;
     }
+    if is_under(path, "/turf") || is_under(path, "/obj") {
+        // `null` (platforms) is read as no insulation: DM's `insulation *= null` zeroes the
+        // pulse, a full block nobody meant for a half wall.
+        let value = match types.resolved(path, "rad_insulation") {
+            None | Some(serde_json::Value::Null) => None,
+            v => number(v),
+        };
+        if let Some(v) = value.filter(|&v| v != 1.0) {
+            out.push(ext(RAD_COMPONENT, "value", format!("{:?}", v as f32)));
+        }
+    }
     if is_under(path, "/obj/item") {
         let behaviour = types.resolved(path, "tool_behaviour");
         if behaviour.is_some_and(|b| b.is_string()) {
@@ -565,6 +585,35 @@ mod tests {
             ext_field("/obj/structure/window", "amount", Val::Num(20.0)),
             Err(Skip::UnknownVar)
         );
+    }
+
+    #[test]
+    fn rad_insulation_is_emitted_only_when_it_insulates() {
+        let types = DmTypes::parse(
+            br##"{ "schema": 3, "types": {
+              "/datum": { "parent": null },
+              "/atom": { "parent": "/datum", "declared_vars": { "rad_insulation": 1 } },
+              "/turf": { "parent": "/atom" },
+              "/turf/closed": { "parent": "/turf", "declared_vars": { "rad_insulation": 0.7 } },
+              "/turf/open": { "parent": "/turf" },
+              "/obj": { "parent": "/atom" },
+              "/obj/structure": { "parent": "/obj" },
+              "/obj/structure/platform": { "parent": "/obj/structure", "declared_vars": {
+                  "rad_insulation": null } }
+            } }"##,
+        )
+        .unwrap();
+        let rad = |path| {
+            type_fields(&types, path)
+                .into_iter()
+                .find(|f| matches!(f, Field::Ext { component, .. } if *component == RAD_COMPONENT))
+        };
+        assert_eq!(
+            rad("/turf/closed"),
+            Some(ext(RAD_COMPONENT, "value", "0.7"))
+        );
+        assert_eq!(rad("/turf/open"), None);
+        assert_eq!(rad("/obj/structure/platform"), None);
     }
 
     #[test]

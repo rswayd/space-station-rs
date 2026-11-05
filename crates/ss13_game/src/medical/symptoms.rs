@@ -14,12 +14,12 @@
 //! Ported effects: coughing and sneezing (spreading the virus), headache, itching, fever,
 //! chills, confusion, dizziness, narcolepsy, vomiting, weight loss, choking, respiratory
 //! distress, necrotizing fasciitis, autophagocytosis, spontaneous combustion, toxolysis,
-//! aggressive healing, self-respiration, mind and sensory restoration. Every other symptom
-//! counts for the stats only.
+//! aggressive healing, radioactive resonance, self-respiration, mind and sensory restoration.
+//! Every other symptom counts for the stats only.
 // shortcut: no hallucinations, deafness, blindness, drugginess (dizziness's transmission 6),
 // voice change, DNA activation,
 // hair, skin or face changes, bleeding, hypertension, alkali, the light, water, plasma,
-// radiation, coma, genetic and metabolism healing, thermoregulation, eternal youth; no
+// coma, genetic and metabolism healing, thermoregulation, eternal youth; no
 // `TRAIT_NOBREATH` of self-respiration, no fever/chills set point (they push the body
 // temperature directly), no reagents synthesized by thresholds, no evolve/devolve/neuter
 // (virus food, mutagen), no disease archive names.
@@ -1291,6 +1291,11 @@ fn start(s: &mut Symptom, p: Props, resisted: bool, now: f64, rng: &mut CombatRn
             }
         }
         K::HealAggressive => s.power = 2.0,
+        K::HealRadiation => {
+            if p.resistance >= 7 {
+                s.power = 2.0;
+            }
+        }
         K::Oxygen => s.flag = p.resistance >= 8,
         K::MindRestoration => {
             s.flag = p.resistance >= 6;
@@ -1802,6 +1807,19 @@ fn activate(
             _ => {}
         },
         K::Fire => fire(world, mob, disease, s, stage, rng),
+        // `/datum/symptom/heal/radiation`: heals the irradiated at stages 4 and 5.
+        K::HealRadiation => {
+            if stage < 4 {
+                return;
+            }
+            if crate::radiation::is_irradiated(world, mob) {
+                damage(world, mob, DamageType::Tox, -2.0 * s.power);
+                damage(world, mob, DamageType::Brute, -s.power);
+                damage(world, mob, DamageType::Burn, -s.power);
+            } else if rng.chance(2.0) {
+                tell(world, Span::Notice, "Your skin glows faintly for a moment.");
+            }
+        }
         K::HealChem | K::HealAggressive => {
             if stage < 4 {
                 return;

@@ -6,7 +6,8 @@
 //! (the reinforced one: wirecutters) takes it apart into a displaced girder and its
 //! `mineral_amount` of `mineral`. Built from 2 sheets on a displaced girder
 //! (`crate::construction`, `uses_girder_wall_recipes`).
-// shortcut: no leaning on it (`leanable`), no examine disguise text, no uranium radiation.
+// shortcut: no leaning on it (`leanable`), no examine disguise text. The uranium one's pulses
+// are `crate::radiation::uranium_radiate`.
 
 use bevy::prelude::*;
 use ss13_mapload::smooth::DmSmooth;

@@ -467,6 +467,35 @@ impl Crystal {
         (100.0 - self.damage / self.explosion_point * 100.0).max(0.0)
     }
 
+    /// `emit_radiation`'s pulse (range 8): (threshold, chance percent). Power raises it,
+    /// integrity loss raises the power floor, the chance and the reach through walls.
+    pub fn radiation(&self) -> (f64, f64) {
+        // `MAX_ACCEPTED_POWER_OUTPUT`, `THRESHOLD_EQUATION_SLOPE`, `INTEGRITY_EXPONENTIAL_DEGREE`,
+        // `INTEGRITY_MAX_POWER_NUDGE`, `INTEGRITY_MIN_NUDGABLE_AMOUNT`,
+        // `RADIATION_CHANCE_AT_FULL_INTEGRITY`, `RADIATION_CHANCE_AT_ZERO_INTEGRITY`.
+        const MAX_POWER: f64 = 5000.0;
+        const SLOPE: f64 = -1.0 / MAX_POWER;
+        const DEGREE: i32 = 2;
+        const MAX_NUDGE: f64 = 1500.0;
+        const MIN_NUDGABLE: f64 = 0.7;
+        const CHANCE_FULL: f64 = 0.03;
+        const CHANCE_ZERO: f64 = 0.4;
+        let integrity = 1.0 - (self.damage / self.explosion_point).clamp(0.0, 1.0);
+        let nudge_t = ((integrity - MIN_NUDGABLE) / (1.0 - MIN_NUDGABLE)).clamp(0.0, 1.0);
+        // `LERP(INTEGRITY_MAX_POWER_NUDGE, 0, t)`.
+        let nudge = MAX_NUDGE + (0.0 - MAX_NUDGE) * nudge_t;
+        let power = self.internal_energy.min(MAX_POWER).max(nudge);
+        let threshold = if integrity == 0.0 {
+            if power != 0.0 { 0.0 } else { 1.0 }
+        } else if integrity == 1.0 {
+            SLOPE * power + 1.0
+        } else {
+            (SLOPE * power + 1.0).powf((1.0 / integrity).powi(DEGREE))
+        };
+        let chance = (CHANCE_ZERO - CHANCE_FULL) * (1.0 - integrity) + CHANCE_FULL;
+        (threshold, chance * 100.0)
+    }
+
     /// One `process_atmos` on the air already taken from the tile (`ratio` of it).
     pub fn process_atmos(
         &mut self,
@@ -806,6 +835,13 @@ fn breathe(world: &mut World, e: Entity, pos: TilePos, now: f64) {
         );
     }
     world.resource_mut::<EngineRng>().0 = rng;
+    // PART 6: `emit_radiation()`.
+    let (threshold, chance) = world
+        .get::<Supermatter>(e)
+        .expect("listed")
+        .crystal
+        .radiation();
+    crate::radiation::radiation_pulse(world, e, 8.0, threshold as f32, chance as f32, 0.0);
     delam_progress(world, e, pos, now);
     if breath.start_countdown {
         start_countdown(world, e, pos, now);
@@ -1156,8 +1192,8 @@ fn count_down(world: &mut World, e: Entity, pos: TilePos, now: f64) {
 }
 
 /// `delaminate`.
-// shortcut: no explosions, singularity, tesla ball, radiation, hallucinations or anomalies
-// exist yet: the crystal is announced as gone to everyone on its level and deleted
+// shortcut: no explosions, singularity, tesla ball, delamination radiation, hallucinations or
+// anomalies exist yet: the crystal is announced as gone to everyone on its level and deleted
 // (tg `qdel(sm)` ends every strategy).
 fn delaminate(world: &mut World, e: Entity, pos: TilePos) {
     let kind = world
@@ -1251,6 +1287,28 @@ mod tests {
         }
         m.temperature = temperature;
         m
+    }
+
+    #[test]
+    fn radiation_follows_power_and_integrity() {
+        // A standard N2 crystal (~1500 MeV) at full integrity: threshold 0.7, stopped by walls.
+        let mut c = Crystal {
+            internal_energy: 1500.0,
+            ..Crystal::default()
+        };
+        let (threshold, chance) = c.radiation();
+        assert!(
+            close(threshold, 0.7) && close(chance, 3.0),
+            "{threshold} {chance}"
+        );
+        // Unpowered and broken down to nothing: the nudge keeps it radiating at 0.
+        c.internal_energy = 0.0;
+        c.damage = c.explosion_point;
+        let (threshold, chance) = c.radiation();
+        assert!(
+            close(threshold, 0.0) && close(chance, 40.0),
+            "{threshold} {chance}"
+        );
     }
 
     #[test]

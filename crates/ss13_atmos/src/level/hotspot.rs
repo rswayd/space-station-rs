@@ -332,7 +332,11 @@ impl LevelAir {
                 .mix
                 .remove_ratio(volume / CELL_VOLUME);
             affected.temperature = temperature;
-            affected.react(Holder::Hotspot, CELL_VOLUME, &mut Exposures::default());
+            let mut exposures = Exposures::default();
+            affected.react(Holder::Hotspot, CELL_VOLUME, &mut exposures);
+            let tile = self.cells[c as usize].tile;
+            self.radiation
+                .extend(exposures.radiation.iter().flatten().map(|&r| (tile, r)));
             let reference = (affected.hotspot_growth(), affected.temperature);
             // `location.assume_air(affected)`.
             self.cells[c as usize].mix.merge(&affected);

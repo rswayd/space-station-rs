@@ -123,6 +123,10 @@ pub fn healthscan(world: &World, target: Entity) -> Option<ChatMessage> {
         ChatSegment::new(Span::Info, "Общее состояние: "),
         status,
     ]);
+    // `COMSIG_LIVING_HEALTHSCAN` of the irradiated component.
+    if let Some(text) = crate::radiation::scan_line(world, target) {
+        lines.text(Span::Warning, text);
+    }
     let (brute, burn, tox, oxy) = (health.brute, health.burn, health.tox, health.oxy);
     let limbs = world.get::<crate::medical::wounds::Limbs>(target);
     let wounded = limbs.is_some_and(crate::medical::wounds::Limbs::any_wounds);

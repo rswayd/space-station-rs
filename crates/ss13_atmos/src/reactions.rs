@@ -118,6 +118,24 @@ pub const PN_BZASE_MIN_TEMP: f64 = 260.0;
 pub const PN_BZASE_MAX_TEMP: f64 = 280.0;
 pub const PN_BZASE_ENERGY: f64 = 60000.0;
 pub const PN_BZASE_RAD_RELEASE_THRESHOLD: f64 = 60000.0;
+/// `GAS_REACTION_MAXIMUM_RADIATION_PULSE_RANGE`.
+pub const GAS_REACTION_MAXIMUM_RADIATION_PULSE_RANGE: f64 = 20.0;
+/// `TRITIUM_RADIATION_MINIMUM_MOLES`, `TRITIUM_RADIATION_RELEASE_THRESHOLD`,
+/// `TRITIUM_RADIATION_RANGE_DIVISOR`, `TRITIUM_RADIATION_THRESHOLD`.
+pub const TRITIUM_RADIATION_MINIMUM_MOLES: f64 = 0.1;
+pub const TRITIUM_RADIATION_RELEASE_THRESHOLD: f64 = FIRE_TRITIUM_ENERGY_RELEASED;
+pub const TRITIUM_RADIATION_RANGE_DIVISOR: f64 = 0.5;
+pub const TRITIUM_RADIATION_THRESHOLD: f64 = 0.3;
+/// `PN_TRITIUM_RAD_RANGE_DIVISOR`, `PN_TRITIUM_RAD_THRESHOLD`.
+pub const PN_TRITIUM_RAD_RANGE_DIVISOR: f64 = 0.5;
+pub const PN_TRITIUM_RAD_THRESHOLD: f64 = 0.3;
+/// `PN_BZASE_RAD_RANGE_DIVISOR`, `PN_BZASE_RAD_THRESHOLD`, `PN_BZASE_NUCLEAR_PARTICLE_DIVISOR`,
+/// `PN_BZASE_NUCLEAR_PARTICLE_MAXIMUM`, `PN_BZASE_NUCLEAR_PARTICLE_RADIATION_ENERGY_CONVERSION`.
+pub const PN_BZASE_RAD_RANGE_DIVISOR: f64 = 1.5;
+pub const PN_BZASE_RAD_THRESHOLD: f64 = 0.3;
+pub const PN_BZASE_NUCLEAR_PARTICLE_DIVISOR: f64 = 5.0;
+pub const PN_BZASE_NUCLEAR_PARTICLE_MAXIMUM: f64 = 6.0;
+pub const PN_BZASE_NUCLEAR_PARTICLE_RADIATION_ENERGY_CONVERSION: f64 = 2.5;
 pub const ANTINOBLIUM_CONVERSION_DIVISOR: f64 = 90.0;
 pub const ATMOS_RADIATION_VOLUME_EXP: i32 = 3;
 
@@ -167,6 +185,19 @@ pub struct Exposures {
     len: usize,
     /// Vapor condensed on the turf: `water_vapor_gas_act` or `freeze_turf`.
     pub condensed: Option<Condensation>,
+    /// `radiation_pulse(location, ...)` of the tritium fire, the proto-nitrate tritium and BZ
+    /// responses (in that slot order), on a turf's air or a hotspot's sample.
+    pub radiation: [Option<RadiationRelease>; 3],
+}
+
+/// A `radiation_pulse(location, max_range, threshold)` a reaction asked for, for the game to
+/// send (`ss13_game::radiation`) with the default chance.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RadiationRelease {
+    pub max_range: f64,
+    pub threshold: f64,
+    /// `prob()` the game rolls before the pulse (the tritium fire's 10%), percent.
+    pub prob: f64,
 }
 
 /// What water vapor did to the turf it condensed on.
@@ -730,10 +761,10 @@ fn h2fire(air: &mut GasMixture, ctx: &mut Ctx) -> u8 {
     )
 }
 
-// shortcut: no radiation pulse (`TRITIUM_RADIATION_*`, 10% chance over the energy threshold);
-// add with radiation.
+// shortcut: a pipenet's fire does not radiate (tg picks a random member turf); add when
+// pipelines know their turfs here.
 fn tritfire(air: &mut GasMixture, ctx: &mut Ctx) -> u8 {
-    hydrogen_like_fire(
+    let flags = hydrogen_like_fire(
         air,
         ctx,
         G::TRITIUM,
@@ -741,7 +772,22 @@ fn tritfire(air: &mut GasMixture, ctx: &mut Ctx) -> u8 {
         TRITIUM_OXYGEN_FULLBURN,
         FIRE_TRITIUM_ENERGY_RELEASED,
         TRIT_FIRE,
-    )
+    );
+    let burned_fuel = air.reaction_results[TRIT_FIRE];
+    if flags != NO_REACTION
+        && ctx.holder != Holder::Other
+        && burned_fuel > TRITIUM_RADIATION_MINIMUM_MOLES
+        && FIRE_TRITIUM_ENERGY_RELEASED * burned_fuel
+            > TRITIUM_RADIATION_RELEASE_THRESHOLD * radiation_volume_scale(ctx.volume)
+    {
+        ctx.exposures.radiation[0] = Some(RadiationRelease {
+            max_range: (burned_fuel.sqrt() / TRITIUM_RADIATION_RANGE_DIVISOR)
+                .min(GAS_REACTION_MAXIMUM_RADIATION_PULSE_RANGE),
+            threshold: TRITIUM_RADIATION_THRESHOLD,
+            prob: 10.0,
+        });
+    }
+    flags
 }
 
 // shortcut: no hot ice sheets (2% between 120 and 160 K); add with the hot ice item.
@@ -1160,7 +1206,8 @@ fn radiation_volume_scale(volume: f64) -> f64 {
     (volume / CELL_VOLUME).powi(ATMOS_RADIATION_VOLUME_EXP)
 }
 
-// shortcut: no radiation pulses here and in the BZ response; their volatile flag is kept.
+// shortcut: a pipenet's response does not radiate (see `tritfire`); the BZ response fires no
+// nuclear particles (projectiles), only their share comes off the pulse range.
 fn proto_nitrate_tritium_response(air: &mut GasMixture, ctx: &mut Ctx) -> u8 {
     let proto_nitrate_moles = air.get(G::PROTO_NITRATE);
     let tritium_moles = air.get(G::TRITIUM);
@@ -1183,6 +1230,12 @@ fn proto_nitrate_tritium_response(air: &mut GasMixture, ctx: &mut Ctx) -> u8 {
             > PN_TRITIUM_CONVERSION_RAD_RELEASE_THRESHOLD * radiation_volume_scale(ctx.volume)
     {
         flags |= VOLATILE_REACTION;
+        ctx.exposures.radiation[1] = Some(RadiationRelease {
+            max_range: (produced_amount.sqrt() / PN_TRITIUM_RAD_RANGE_DIVISOR)
+                .min(GAS_REACTION_MAXIMUM_RADIATION_PULSE_RANGE),
+            threshold: PN_TRITIUM_RAD_THRESHOLD,
+            prob: 100.0,
+        });
     }
     if energy_released != 0.0 {
         air.release(temperature, old_heat_capacity, energy_released, true);
@@ -1213,6 +1266,19 @@ fn proto_nitrate_bz_response(air: &mut GasMixture, ctx: &mut Ctx) -> u8 {
         && energy_released > PN_BZASE_RAD_RELEASE_THRESHOLD * radiation_volume_scale(ctx.volume)
     {
         flags |= VOLATILE_REACTION;
+        // DM `round()` rounds halves up.
+        let particles = (consumed_amount / PN_BZASE_NUCLEAR_PARTICLE_DIVISOR + 0.5)
+            .floor()
+            .min(PN_BZASE_NUCLEAR_PARTICLE_MAXIMUM);
+        let left = (consumed_amount
+            - particles * PN_BZASE_NUCLEAR_PARTICLE_RADIATION_ENERGY_CONVERSION)
+            .max(0.0);
+        ctx.exposures.radiation[2] = Some(RadiationRelease {
+            max_range: (left.sqrt() / PN_BZASE_RAD_RANGE_DIVISOR)
+                .min(GAS_REACTION_MAXIMUM_RADIATION_PULSE_RANGE),
+            threshold: PN_BZASE_RAD_THRESHOLD,
+            prob: 100.0,
+        });
     }
     air.release(temperature, old_heat_capacity, energy_released, true);
     flags
@@ -1355,6 +1421,26 @@ mod tests {
         assert!(close(air.get(G::TRITIUM), 9.5));
         assert!(close(air.temperature, 5000.0), "{}", air.temperature);
         assert!(close(air.reaction_results[TRIT_FIRE], 0.5));
+    }
+
+    #[test]
+    fn big_tritium_fire_asks_for_a_radiation_pulse() {
+        // 100 T + 100 O2 at 500 K burn 5 mol: 1.4e7 J over the 2.8e6 threshold, range
+        // sqrt(5) / 0.5; the 10% roll is the game's. A tank (`Holder::Other`) has no location.
+        let mut air = mix("tritium=100;o2=100;TEMP=500");
+        let (_, exposures) = react(&mut air, Holder::Hotspot);
+        let pulse = exposures.radiation[0].expect("pulse");
+        assert!(
+            close(pulse.max_range, 5f64.sqrt() / 0.5),
+            "{}",
+            pulse.max_range
+        );
+        assert_eq!((pulse.threshold, pulse.prob), (0.3, 10.0));
+        let mut tank = mix("tritium=100;o2=100;TEMP=500");
+        assert_eq!(react(&mut tank, Holder::Other).1.radiation, [None; 3]);
+        // A small fire (0.5 mol) does not radiate.
+        let mut small = mix("tritium=10;o2=10;TEMP=500");
+        assert_eq!(react(&mut small, Holder::Turf).1.radiation[0], None);
     }
 
     #[test]

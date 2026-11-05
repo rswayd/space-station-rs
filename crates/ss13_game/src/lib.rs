@@ -340,6 +340,8 @@ pub mod pull;
 #[cfg(feature = "server")]
 pub mod quirks;
 #[cfg(feature = "server")]
+pub mod radiation;
+#[cfg(feature = "server")]
 pub mod radio;
 pub mod radio_ui;
 #[cfg(feature = "server")]

@@ -48,7 +48,7 @@
 Машина в случайной зоне начинает излучать радиацию и газ (часто плазму/трития), пока её не починят инструментами.
 
 - **Код:** [`/datum/round_event_control/radiation_leak`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/radiation_leak.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — нет радиации
+- **Статус в ss13-rs:** ❌ нет — радиация есть (`crates/ss13_game/src/radiation.rs`), самого события нет: нет `radioactive_emitter`, починки инструментами, химического дыма
 
 ### Supermatter Surge
 Суперматерия на время получает прибавку к мощности и нагреву; объявление в инженерию. Вариант «Poly's Revenge» — при жертве попугая Поли.
@@ -84,7 +84,7 @@
 Погода `rad_storm` на станции: тревога, экипаж прячется в техтоннелях, открытые зоны облучаются (мутации, ожоги).
 
 - **Код:** [`/datum/round_event_control/radiation_storm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/radiation_storm.dm#L1), [`/datum/weather/rad_storm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/weather/weather_types/radiation_storm.dm#L2)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/events/radiation_storm.rs`: объявление, погода `rad_storm` (40 с предупреждения, 1–2,5 мин шторма, 10 с затихания, отбой), незащищённые зоны (кроме техтоннелей и убежищ из `protected_areas`) на уровнях станции; `// shortcut:` без генетики бросок мутации (40%/с) даёт 1 токсин и половина из них 1 ожог; нет оверлея зоны, статус-дисплеев и звуков
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/events/radiation_storm.rs`: объявление, погода `rad_storm` (40 с предупреждения, 1–2,5 мин шторма, 10 с затихания, отбой), незащищённые зоны (кроме техтоннелей и убежищ из `protected_areas`) на уровнях станции; мутации незащищённых (иммунитет вида и радзащитная одежда, `crates/ss13_game/src/radiation.rs`); нет оверлея зоны, статус-дисплеев и звуков
 
 ### Ventilation Clog (Minor / Major / Critical / Strange)
 Вентиляция засоряется: из вентов вылезают мобы (тараканы, мыши, слаймы; на «Strange» — редкие твари) или идёт грязь, пока вент не прочистят вантузом. Тяжесть определяет типы и число мобов.
