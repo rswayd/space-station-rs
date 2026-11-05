@@ -108,6 +108,7 @@
 //! | 2900 | `mining::interact` |
 //! | 3000 | `holosign::attack_hand` |
 //! | 3100 | `plumbing::interact` |
+//! | 3150 | `decor::interact` |
 //! | 3200 | `service::server::interact` |
 //! | 3300 | `defenses::server::interact` |
 //! | 3400 | `silicon::law_rack::interact` |
@@ -155,6 +156,7 @@
 //! | 3200 | `botany::item_interaction` |
 //! | 3300 | `food::item_interaction` |
 //! | 3400 | `plumbing::item_interaction` |
+//! | 3450 | `decor::item_interaction` |
 //! | 3500 | `janitor::item_interaction` |
 //! | 3600 | `genetics::console::item_interaction` |
 //! | 3700 | `chem::item_interaction` |

@@ -192,7 +192,8 @@ pub struct DmObj {
     pub buckle_sound: String,
     pub unbuckle_sound: String,
     /// Sinks: `capacity`, `dispensedreagent`, `has_water_reclaimer`, `reclaim_rate` (units per
-    /// second); their stack is `build_stack`.
+    /// second); their stack is `build_stack`. Showers and toilets: `reagent_capacity`,
+    /// `reagent_id`, `has_water_reclaimer` and `refill_rate` / `reclaim_rate` in the same fields.
     pub capacity: f32,
     pub dispensed_reagent: String,
     pub water_reclaimer: bool,
@@ -338,6 +339,49 @@ const SINK_VARS: [(&str, &str, Kind); 6] = [
     ("reclaim_rate", "reclaim_rate", Kind::Num),
 ];
 
+const SHOWER_VARS: [(&str, &str, Kind); 4] = [
+    ("reagent_capacity", "capacity", Kind::Num),
+    ("reagent_id", "dispensed_reagent", Kind::Path),
+    ("has_water_reclaimer", "water_reclaimer", Kind::Bool),
+    ("refill_rate", "reclaim_rate", Kind::Num),
+];
+
+const TOILET_VARS: [(&str, &str, Kind); 4] = [
+    ("reagent_capacity", "capacity", Kind::Num),
+    ("reagent_id", "dispensed_reagent", Kind::Path),
+    ("has_water_reclaimer", "water_reclaimer", Kind::Bool),
+    ("reclaim_rate", "reclaim_rate", Kind::Num),
+];
+
+/// What bathrooms, curtains, mirrors, signs, plaques and statues leave behind or hold
+/// (`crate::plumbing`, `crate::decor` of `ss13_game`).
+const DECOR_RUNTIME_TYPES: [&str; 24] = [
+    "/obj/item/stock_parts/water_recycler",
+    "/obj/item/stack/sheet/iron",
+    "/obj/item/food/urinalcake",
+    "/obj/item/wallframe/urinal",
+    "/obj/item/wallframe/mirror",
+    "/obj/item/wallframe/mirror/broken",
+    "/obj/item/shard",
+    "/obj/item/sign",
+    "/obj/item/plaque",
+    "/obj/item/stack/sheet/cloth",
+    "/obj/item/stack/sheet/plastic",
+    "/obj/item/stack/rods",
+    "/obj/item/stack/sheet/mineral/uranium",
+    "/obj/item/stack/sheet/mineral/plasma",
+    "/obj/item/stack/sheet/mineral/gold",
+    "/obj/item/stack/sheet/mineral/silver",
+    "/obj/item/stack/sheet/mineral/diamond",
+    "/obj/item/stack/sheet/mineral/bananium",
+    "/obj/item/stack/sheet/mineral/sandstone",
+    "/obj/item/stack/sheet/mineral/snow",
+    "/obj/item/stack/sheet/bronze",
+    "/obj/item/stack/sheet/mineral/metal_hydrogen",
+    "/obj/item/stack/sheet/mineral/zaukerite",
+    "/obj/item/stack/sheet/mineral/wood",
+];
+
 /// Every chair and bed type, the chairs' items and what taking them apart leaves, so
 /// `ss13-mapload convert` emits them even when no map uses them (a chair is picked up as its
 /// `item_chair`, which is set down as the chair again).
@@ -356,9 +400,10 @@ pub fn furniture_runtime_types(types: &DmTypes) -> Vec<String> {
         })
         .cloned()
         .collect();
-    // A sink taken apart or pried leaves its water recycler.
+    // A sink, shower or toilet taken apart or pried leaves its water recycler; the rest of the
+    // bathroom and decor debris.
     out.extend(
-        ["/obj/item/stock_parts/water_recycler"]
+        DECOR_RUNTIME_TYPES
             .into_iter()
             .filter(|p| types.types.contains_key(*p))
             .map(str::to_owned),
@@ -497,6 +542,12 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
         }
         if is_under(path, "/obj/structure/sink") {
             fields(types, path, OBJ_COMPONENT, &SINK_VARS, &mut out);
+        }
+        if is_under(path, "/obj/machinery/shower") {
+            fields(types, path, OBJ_COMPONENT, &SHOWER_VARS, &mut out);
+        }
+        if is_under(path, "/obj/structure/toilet") {
+            fields(types, path, OBJ_COMPONENT, &TOILET_VARS, &mut out);
         }
     }
     out
@@ -715,5 +766,46 @@ mod tests {
             bed.contains(r#"build_stack: "/obj/item/stack/sheet/mineral/wood""#),
             "{bed}"
         );
+    }
+
+    #[test]
+    fn showers_and_toilets_read_their_water_vars() {
+        let types = DmTypes::parse(
+            br##"{ "schema": 3, "types": {
+              "/datum": { "parent": null },
+              "/atom": { "parent": "/datum" },
+              "/obj": { "parent": "/atom" },
+              "/obj/item": { "parent": "/obj" },
+              "/obj/item/stock_parts/water_recycler": { "parent": "/obj/item" },
+              "/obj/item/sign": { "parent": "/obj/item" },
+              "/obj/machinery": { "parent": "/obj" },
+              "/obj/machinery/shower": { "parent": "/obj/machinery", "declared_vars": {
+                  "reagent_capacity": 200, "refill_rate": 0.5, "has_water_reclaimer": 1,
+                  "reagent_id": { "path": "/datum/reagent/water" } } },
+              "/obj/structure": { "parent": "/obj" },
+              "/obj/structure/toilet": { "parent": "/obj/structure", "declared_vars": {
+                  "reagent_capacity": 200, "reclaim_rate": 0.5, "has_water_reclaimer": 1,
+                  "reagent_id": { "path": "/datum/reagent/water" } } },
+              "/obj/structure/toilet/greyscale": { "parent": "/obj/structure/toilet",
+                  "declared_vars": { "has_water_reclaimer": 0 } }
+            } }"##,
+        )
+        .unwrap();
+        let ron = |path| crate::value::patch_ron(&type_fields(&types, path));
+        let shower = ron("/obj/machinery/shower");
+        assert!(shower.contains("capacity: 200.0"), "{shower}");
+        assert!(shower.contains("reclaim_rate: 0.5"), "{shower}");
+        assert!(shower.contains("water_reclaimer: true"), "{shower}");
+        assert!(
+            shower.contains(r#"dispensed_reagent: "/datum/reagent/water""#),
+            "{shower}"
+        );
+        let greyscale = ron("/obj/structure/toilet/greyscale");
+        assert!(greyscale.contains("water_reclaimer: false"), "{greyscale}");
+        assert!(greyscale.contains("reclaim_rate: 0.5"), "{greyscale}");
+        let got = furniture_runtime_types(&types);
+        for want in ["/obj/item/stock_parts/water_recycler", "/obj/item/sign"] {
+            assert!(got.iter().any(|p| p == want), "{want} missing from {got:?}");
+        }
     }
 }

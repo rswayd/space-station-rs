@@ -247,8 +247,11 @@ pub enum Job {
     Camera(crate::defenses::cameras::CameraJob),
     /// A rite's step at the altar, unpacking a bible into an altar ([`crate::service`]).
     Religion(crate::service::ReligionJob),
-    /// Washing at a sink ([`crate::plumbing`]).
+    /// Washing at a sink, a shower's valve, a toilet's cistern, a urinal's cap
+    /// ([`crate::plumbing`]).
     Sink(crate::plumbing::SinkJob),
+    /// Curtains, mirrors, signs, plaques and statues ([`crate::decor`]).
+    Decor(crate::decor::DecorJob),
     /// Screwing, welding or repairing a law rack's module ([`crate::silicon::law_rack`]).
     LawRack(crate::silicon::law_rack::LawRackJob),
     /// Digging rock, prying an ore box apart ([`crate::mining`]).
@@ -1236,6 +1239,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Religion(job) => crate::service::religion_complete(world, mob, action, job),
         &Job::Camera(job) => crate::defenses::cameras::complete(world, mob, action, job),
         &Job::Sink(job) => crate::plumbing::complete(world, mob, action, job),
+        &Job::Decor(job) => crate::decor::complete(world, mob, action, job),
         &Job::LawRack(job) => crate::silicon::law_rack::complete(world, mob, action, job),
         &Job::Mining(job) => crate::mining::complete(world, mob, action, job),
         &Job::Emitter(job) => crate::power::emitter::complete(world, client, target, job, consume),
