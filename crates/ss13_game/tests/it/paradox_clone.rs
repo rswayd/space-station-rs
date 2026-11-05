@@ -85,7 +85,7 @@ const TYPES: &str = r##"{
   }
 }"##;
 
-/// Assistant starts `s`, latejoin `L`, the maintenance landmark `m` (8,4).
+/// Assistant starts `s`, latejoin `L`, the maintenance landmark `m` (8,2): dmm rows run top down.
 const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 "f" = (/turf/open/floor,/area/space)
 "s" = (/obj/effect/landmark/start/assistant,/turf/open/floor,/area/space)
@@ -101,7 +101,7 @@ wwwwwwwwww
 "}
 "##;
 
-const MAINT: TilePos = TilePos::new(8, 4, 1);
+const MAINT: TilePos = TilePos::new(8, 2, 1);
 
 const STATES: [(&str, &str); 6] = [
     ("t.dmi", "floor"),
