@@ -60,6 +60,7 @@ mod mood;
 mod multiz;
 mod nukeops;
 mod paradox_clone;
+mod paperwork;
 mod pda;
 mod play;
 mod plumbing;

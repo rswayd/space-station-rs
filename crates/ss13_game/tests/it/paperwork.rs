@@ -1,0 +1,504 @@
+//! Office and library machines over a loopback server: a pen fills a paper's input field, a
+//! clipboard takes a paper, a paper folds into a plane and back; the photocopier copies a
+//! paper; a fax reaches another fax; the binder binds a paper, the scanner caches the book, the
+//! librarian's console uploads and prints it; a canvas is painted, finished and put on an easel.
+
+use std::path::{Path, PathBuf};
+
+use bevy::prelude::*;
+use ss13_game::inventory::{CarriedBy, Inventory};
+use ss13_game::service::{Book, Canvas, Clipboard, LibraryArchive, Paper, Photocopier};
+use ss13_game::storage::StoredIn;
+use ss13_game::testing::{self, Drive, fixture_map, write_fixture};
+use ss13_mapload::{DmItem, DmObj};
+use ss13_shared::TilePos;
+use ss13_shared::protocol::{ClientIntent, InventorySlot};
+use ss13_tgui::UiInterface;
+use ss13_tgui::interfaces::alert::AlertUi;
+use ss13_tgui::interfaces::list_input::ListInputUi;
+use ss13_tgui::interfaces::text_input::TextInputUi;
+use ss13_tgui::server::UiWindow;
+
+const TYPES: &str = r##"{
+  "schema": 3,
+  "types": {
+    "/datum": { "parent": null },
+    "/atom": { "parent": "/datum", "vars": {
+        "name": null, "desc": null, "icon": null, "icon_state": null, "layer": 2, "plane": -4,
+        "alpha": 255, "color": null, "dir": 2, "density": 0, "opacity": 0, "pixel_x": 0,
+        "pixel_y": 0, "invisibility": 0 } },
+    "/atom/movable": { "parent": "/atom", "declared_vars": { "layer": 3, "anchored": 0 } },
+    "/obj": { "parent": "/atom/movable", "declared_vars": { "force": 0, "damtype": "brute" } },
+    "/obj/effect": { "parent": "/obj" },
+    "/obj/effect/landmark": { "parent": "/obj/effect", "declared_vars": {
+        "icon": { "resource": "l.dmi" }, "icon_state": "x2", "invisibility": 101 } },
+    "/obj/effect/landmark/start": { "parent": "/obj/effect/landmark" },
+    "/obj/effect/landmark/start/assistant": { "parent": "/obj/effect/landmark/start" },
+    "/obj/item": { "parent": "/obj", "declared_vars": {
+        "icon": { "resource": "i.dmi" }, "icon_state": "card_grey", "interaction_flags_item": 1,
+        "slot_flags": 0, "inhand_icon_state": null, "w_class": 1,
+        "lefthand_file": { "resource": "l.dmi" }, "righthand_file": { "resource": "r.dmi" },
+        "worn_icon": null, "worn_icon_state": null, "attack_speed": 8 } },
+    "/obj/item/paper": { "parent": "/obj/item", "declared_vars": { "default_raw_text": null } },
+    "/obj/item/paper/form": { "parent": "/obj/item/paper", "declared_vars": {
+        "default_raw_text": "Name: [input_field]" } },
+    "/obj/item/paper/fluff": { "parent": "/obj/item/paper", "declared_vars": {
+        "default_raw_text": "Rule one" } },
+    "/obj/item/paperplane": { "parent": "/obj/item" },
+    "/obj/item/pen": { "parent": "/obj/item" },
+    "/obj/item/clipboard": { "parent": "/obj/item" },
+    "/obj/item/toner": { "parent": "/obj/item" },
+    "/obj/item/toy": { "parent": "/obj/item" },
+    "/obj/item/toy/crayon": { "parent": "/obj/item/toy" },
+    "/obj/item/toy/crayon/red": { "parent": "/obj/item/toy/crayon" },
+    "/obj/item/canvas": { "parent": "/obj/item" },
+    "/obj/item/book": { "parent": "/obj/item", "declared_vars": {
+        "starting_title": null, "starting_author": null, "starting_content": null } },
+    "/obj/item/card": { "parent": "/obj/item" },
+    "/obj/item/card/id": { "parent": "/obj/item/card", "declared_vars": {
+        "access": { "list": [] }, "icon_state": "card_grey", "slot_flags": 256 } },
+    "/obj/item/card/id/advanced": { "parent": "/obj/item/card/id" },
+    "/obj/item/clothing": { "parent": "/obj/item" },
+    "/obj/item/clothing/under": { "parent": "/obj/item/clothing", "declared_vars": { "slot_flags": 2 } },
+    "/obj/item/clothing/under/color": { "parent": "/obj/item/clothing/under" },
+    "/obj/item/clothing/under/color/grey": { "parent": "/obj/item/clothing/under/color" },
+    "/obj/item/clothing/shoes": { "parent": "/obj/item/clothing", "declared_vars": { "slot_flags": 128 } },
+    "/obj/item/clothing/shoes/sneakers": { "parent": "/obj/item/clothing/shoes" },
+    "/obj/item/clothing/shoes/sneakers/black": { "parent": "/obj/item/clothing/shoes/sneakers" },
+    "/obj/structure": { "parent": "/obj", "declared_vars": { "density": 1, "anchored": 1,
+        "icon": { "resource": "i.dmi" }, "icon_state": "card_grey" } },
+    "/obj/structure/easel": { "parent": "/obj/structure" },
+    "/obj/machinery": { "parent": "/obj", "declared_vars": { "density": 1, "anchored": 1,
+        "icon": { "resource": "i.dmi" }, "icon_state": "card_grey" } },
+    "/obj/machinery/photocopier": { "parent": "/obj/machinery" },
+    "/obj/machinery/photocopier/prebuilt": { "parent": "/obj/machinery/photocopier" },
+    "/obj/machinery/fax": { "parent": "/obj/machinery", "declared_vars": { "fax_name": null } },
+    "/obj/machinery/fax/bridge": { "parent": "/obj/machinery/fax", "declared_vars": {
+        "fax_name": "Bridge" } },
+    "/obj/machinery/fax/captain": { "parent": "/obj/machinery/fax", "declared_vars": {
+        "fax_name": "Captain's Office" } },
+    "/obj/machinery/libraryscanner": { "parent": "/obj/machinery" },
+    "/obj/machinery/bookbinder": { "parent": "/obj/machinery" },
+    "/obj/machinery/computer": { "parent": "/obj/machinery" },
+    "/obj/machinery/computer/libraryconsole": { "parent": "/obj/machinery/computer" },
+    "/obj/machinery/computer/libraryconsole/bookmanagement": {
+        "parent": "/obj/machinery/computer/libraryconsole" },
+    "/mob": { "parent": "/atom/movable", "declared_vars": { "layer": 4, "density": 1 } },
+    "/mob/living": { "parent": "/mob" },
+    "/mob/living/carbon": { "parent": "/mob/living" },
+    "/mob/living/carbon/human": { "parent": "/mob/living/carbon", "declared_vars": {
+        "icon": { "resource": "h.dmi" }, "icon_state": "human_basic" } },
+    "/turf": { "parent": "/atom", "declared_vars": { "icon": { "resource": "t.dmi" } } },
+    "/turf/open": { "parent": "/turf" },
+    "/turf/open/floor": { "parent": "/turf/open", "declared_vars": { "icon_state": "floor" } },
+    "/turf/open/space": { "parent": "/turf/open" },
+    "/turf/open/space/basic": { "parent": "/turf/open/space" },
+    "/turf/closed": { "parent": "/turf", "declared_vars": { "density": 1, "opacity": 1 } },
+    "/turf/closed/wall": { "parent": "/turf/closed", "declared_vars": { "icon_state": "wall" } },
+    "/area": { "parent": "/atom", "declared_vars": { "requires_power": 0 } },
+    "/area/space": { "parent": "/area" }
+  }
+}"##;
+
+/// The player starts at (2,3); the loose items lie east of it on (3,3). The machines stand on
+/// the top row (y 4) and the bottom row (y 2), each reached from the floor row (y 3) below or
+/// above it.
+const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
+"f" = (/turf/open/floor,/area/space)
+"s" = (/obj/effect/landmark/start/assistant,/turf/open/floor,/area/space)
+"o" = (/obj/item/paper/form,/obj/item/paper/fluff,/obj/item/paper,/obj/item/pen,/obj/item/clipboard,/obj/item/canvas,/obj/item/toy/crayon/red,/turf/open/floor,/area/space)
+"Q" = (/obj/machinery/photocopier/prebuilt,/turf/open/floor,/area/space)
+"Y" = (/obj/machinery/fax/bridge,/turf/open/floor,/area/space)
+"Z" = (/obj/machinery/fax/captain,/turf/open/floor,/area/space)
+"S" = (/obj/machinery/libraryscanner,/turf/open/floor,/area/space)
+"C" = (/obj/machinery/computer/libraryconsole/bookmanagement,/turf/open/floor,/area/space)
+"B" = (/obj/machinery/bookbinder,/turf/open/floor,/area/space)
+"E" = (/obj/structure/easel,/turf/open/floor,/area/space)
+
+(1,1,1) = {"
+wwwwwwwwww
+wQfYfSfCfw
+wsoffffffw
+wfffBfZfEw
+wwwwwwwwww
+"}
+"##;
+
+const STATES: [(&str, &str); 5] = [
+    ("t.dmi", "floor"),
+    ("t.dmi", "wall"),
+    ("l.dmi", "x2"),
+    ("h.dmi", "human_basic"),
+    ("i.dmi", "card_grey"),
+];
+
+const FORM: &str = "/obj/item/paper/form";
+const FLUFF: &str = "/obj/item/paper/fluff";
+const PAPER: &str = "/obj/item/paper";
+const PLANE: &str = "/obj/item/paperplane";
+const PEN: &str = "/obj/item/pen";
+const CLIPBOARD: &str = "/obj/item/clipboard";
+const CANVAS: &str = "/obj/item/canvas";
+const CRAYON: &str = "/obj/item/toy/crayon/red";
+const COPIER: &str = "/obj/machinery/photocopier/prebuilt";
+const BRIDGE_FAX: &str = "/obj/machinery/fax/bridge";
+const CAPTAIN_FAX: &str = "/obj/machinery/fax/captain";
+const SCANNER: &str = "/obj/machinery/libraryscanner";
+const CONSOLE: &str = "/obj/machinery/computer/libraryconsole/bookmanagement";
+const BINDER: &str = "/obj/machinery/bookbinder";
+const EASEL: &str = "/obj/structure/easel";
+
+fn fixture_assets(test: &str) -> PathBuf {
+    let dir = Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join("paperwork_fixture")
+        .join(test);
+    let used = [
+        "/obj/effect/landmark/start/assistant",
+        FORM,
+        FLUFF,
+        PAPER,
+        PLANE,
+        PEN,
+        CLIPBOARD,
+        CANVAS,
+        CRAYON,
+        "/obj/item/toner",
+        "/obj/item/book",
+        COPIER,
+        BRIDGE_FAX,
+        CAPTAIN_FAX,
+        SCANNER,
+        CONSOLE,
+        BINDER,
+        EASEL,
+        "/turf/open/floor",
+        "/turf/closed/wall",
+        "/turf/open/space/basic",
+        "/area/space",
+    ];
+    write_fixture(&dir, TYPES, &used, &STATES, &[("map.dmm", MAP)])
+}
+
+/// The station and the id of the last prompt window answered.
+struct Station(testing::Station, u32);
+ss13_game::drive_station!(Station, 0);
+
+impl Station {
+    fn start(test: &str) -> Self {
+        let assets = fixture_assets(test);
+        let mut s = testing::Station::start(fixture_map(&assets, &["map.dmm"]), |app| {
+            app.add_plugins(ss13_chat::server::ChatServerPlugin);
+        });
+        s.join_all(1, |_| {});
+        let mut s = Self(s, 0);
+        s.stand(TilePos::new(2, 3, 1));
+        s
+    }
+
+    /// Moves the player to `pos` and lets the view follow.
+    fn stand(&mut self, pos: TilePos) {
+        let mob = self.players[0].mob;
+        self.server.world_mut().entity_mut(mob).insert(pos);
+        for _ in 0..5 {
+            self.tick();
+        }
+    }
+
+    fn item(&mut self, path: &str) -> Entity {
+        let world = self.server.world_mut();
+        let mut q = world.query::<(Entity, &DmItem)>();
+        q.iter(world)
+            .find(|(_, i)| i.path == path)
+            .map(|(e, _)| e)
+            .unwrap_or_else(|| panic!("{path} on the map"))
+    }
+
+    fn obj(&mut self, path: &str) -> Entity {
+        let world = self.server.world_mut();
+        let mut q = world.query::<(Entity, &DmObj)>();
+        q.iter(world)
+            .find(|(_, o)| o.path == path)
+            .map(|(e, _)| e)
+            .unwrap_or_else(|| panic!("{path} on the map"))
+    }
+
+    /// `item` into the mob's active hand, whatever was there dropped out of the inventory.
+    fn put_in_hand(&mut self, item: Entity) {
+        let mob = self.players[0].mob;
+        let world = self.server.world_mut();
+        let hand = world.get::<Inventory>(mob).unwrap().active;
+        if let Some(old) = world.get::<Inventory>(mob).unwrap().hands[hand] {
+            world
+                .entity_mut(old)
+                .remove::<CarriedBy>()
+                .insert(TilePos::new(3, 3, 1));
+        }
+        world
+            .entity_mut(item)
+            .remove::<(TilePos, StoredIn)>()
+            .insert(CarriedBy(mob));
+        world.get_mut::<Inventory>(mob).unwrap().hands[hand] = Some(item);
+    }
+
+    fn empty_hand(&mut self) {
+        let mob = self.players[0].mob;
+        let world = self.server.world_mut();
+        let hand = world.get::<Inventory>(mob).unwrap().active;
+        if let Some(old) = world.get::<Inventory>(mob).unwrap().hands[hand] {
+            world
+                .entity_mut(old)
+                .remove::<CarriedBy>()
+                .insert(TilePos::new(3, 3, 1));
+        }
+        world.get_mut::<Inventory>(mob).unwrap().hands[hand] = None;
+    }
+
+    fn active(&self) -> Option<Entity> {
+        self.get::<Inventory>(self.players[0].mob).active_item()
+    }
+
+    fn active_slot(&self) -> InventorySlot {
+        if self.get::<Inventory>(self.players[0].mob).active == 0 {
+            InventorySlot::LeftHand
+        } else {
+            InventorySlot::RightHand
+        }
+    }
+
+    /// The newest open window of `interface` for the player.
+    fn window(&mut self, interface: &str) -> Option<u32> {
+        let link = self.players[0].link;
+        let world = self.server.world_mut();
+        let mut q = world.query::<&UiWindow>();
+        q.iter(world)
+            .filter(|w| w.client == link && w.interface == interface)
+            .map(|w| w.id)
+            .max()
+    }
+
+    /// Waits for a window of `interface` newer than the last one answered and answers it.
+    fn answer(&mut self, interface: &str, action: &str, key: &str, value: &str) {
+        let last = self.1;
+        self.run_until(&format!("{interface} opens for {value}"), |s| {
+            s.window(interface).is_some_and(|id| id > last)
+        });
+        let id = self.window(interface).unwrap();
+        self.1 = id;
+        self.act(0, id, action, &[(key, value)]);
+    }
+
+    fn pick(&mut self, entry: &str) {
+        self.answer(ListInputUi::NAME, "submit", "entry", entry);
+    }
+
+    fn type_in(&mut self, text: &str) {
+        self.answer(TextInputUi::NAME, "submit", "entry", text);
+    }
+
+    fn books_titled(&mut self, title: &str) -> usize {
+        let world = self.server.world_mut();
+        let mut q = world.query::<&Book>();
+        q.iter(world).filter(|b| b.title == title).count()
+    }
+}
+
+#[test]
+fn a_pen_fills_a_field_and_a_paper_clips_and_folds() {
+    let mut s = Station::start("a_pen_fills_a_field_and_a_paper_clips_and_folds");
+    let form = s.item(FORM);
+    s.run_until("the form has its text", |s| {
+        s.try_get::<Paper>(form)
+            .is_some_and(|p| !p.inputs.is_empty())
+    });
+    let pen = s.item(PEN);
+    s.put_in_hand(pen);
+    s.click(0, form);
+    s.pick("Field 1: Name:");
+    s.type_in("Bob");
+    s.run_until("the field is filled", |s| {
+        s.get::<Paper>(form).inputs[0].full_text() == "Name: Bob"
+    });
+    assert!(s.get::<Paper>(form).open_fields().is_empty());
+
+    let board = s.item(CLIPBOARD);
+    s.put_in_hand(form);
+    s.click(0, board);
+    s.run_until("the form is clipped", |s| {
+        s.try_get::<StoredIn>(form).is_some_and(|i| i.0 == board)
+    });
+    assert_eq!(s.get::<Clipboard>(board).top, Some(form));
+
+    let sheet = s.item(PAPER);
+    s.put_in_hand(sheet);
+    let slot = s.active_slot();
+    s.send(0, ClientIntent::AltClickSlot(slot));
+    s.run_until("a plane is in hand", |s| {
+        s.active()
+            .is_some_and(|i| s.try_get::<DmItem>(i).is_some_and(|d| d.path == PLANE))
+    });
+    assert!(
+        s.try_get::<StoredIn>(sheet).is_some(),
+        "the paper is inside"
+    );
+    s.send(0, ClientIntent::ClickSlot(slot));
+    s.run_until("the paper is unfolded into the hand", |s| {
+        s.active() == Some(sheet)
+    });
+}
+
+#[test]
+fn the_photocopier_copies_and_the_fax_sends() {
+    let mut s = Station::start("the_photocopier_copies_and_the_fax_sends");
+    let fluff = s.item(FLUFF);
+    let copier = s.obj(COPIER);
+    s.run_until("the copier is set up with paper and toner", |s| {
+        s.try_get::<Photocopier>(copier)
+            .is_some_and(|c| c.paper == 30 && c.toner.is_some())
+    });
+    s.run_until("the fluff paper has its text", |s| {
+        s.try_get::<Paper>(fluff)
+            .is_some_and(|p| !p.inputs.is_empty())
+    });
+    s.put_in_hand(fluff);
+    s.click(0, copier);
+    s.run_until("the original is in the tray", |s| {
+        s.get::<Photocopier>(copier).object == Some(fluff)
+    });
+    s.click(0, copier);
+    s.pick("Copy (1)");
+    let original = s.get::<Paper>(fluff).inputs.clone();
+    s.run_until("a copy comes out", |s| {
+        let world = s.server.world_mut();
+        let mut q = world.query::<(Entity, &Paper, &TilePos)>();
+        q.iter(world)
+            .any(|(e, p, at)| e != fluff && *at == TilePos::new(2, 4, 1) && p.inputs == original)
+    });
+    assert_eq!(s.get::<Photocopier>(copier).paper, 29);
+
+    // The original back out, then into the bridge fax and to the captain's.
+    s.click(0, copier);
+    s.pick("Take out: fluff");
+    s.run_until("the original is in hand", |s| s.active() == Some(fluff));
+    let bridge = s.obj(BRIDGE_FAX);
+    s.stand(TilePos::new(4, 3, 1));
+    s.click(0, bridge);
+    s.run_until("the paper is loaded", |s| {
+        s.try_get::<StoredIn>(fluff).is_some_and(|i| i.0 == bridge)
+    });
+    s.click(0, bridge);
+    s.pick("Send to Captain's Office");
+    s.run_until("the paper comes out of the captain's fax", |s| {
+        s.try_get::<TilePos>(fluff) == Some(&TilePos::new(7, 2, 1))
+    });
+    assert!(s.try_get::<StoredIn>(fluff).is_none());
+}
+
+#[test]
+fn a_bound_book_is_scanned_uploaded_and_printed() {
+    let mut s = Station::start("a_bound_book_is_scanned_uploaded_and_printed");
+    let fluff = s.item(FLUFF);
+    s.run_until("the fluff paper has its text", |s| {
+        s.try_get::<Paper>(fluff)
+            .is_some_and(|p| !p.inputs.is_empty())
+    });
+    let (binder, scanner, console) = (s.obj(BINDER), s.obj(SCANNER), s.obj(CONSOLE));
+    s.stand(TilePos::new(5, 3, 1));
+    // No ID scanned: the first paper only sets "unknown author".
+    s.put_in_hand(fluff);
+    s.click(0, binder);
+    s.run_until("the binder takes the author", |s| {
+        s.get::<ss13_game::service::BookBinder>(binder)
+            .scanned_name
+            .is_some()
+    });
+    s.click(0, binder);
+    s.run_until("the paper is bound", |s| {
+        s.world_books_by("unknown author") == 1
+    });
+    let book = s.book_by("unknown author");
+    assert!(s.get::<Book>(book).content.contains("Rule one"));
+    assert!(s.try_get::<Paper>(fluff).is_none(), "the paper is gone");
+
+    s.put_in_hand(book);
+    s.click(0, scanner);
+    s.run_until("the book is in the scanner", |s| {
+        s.try_get::<StoredIn>(book).is_some_and(|i| i.0 == scanner)
+    });
+    s.empty_hand();
+    s.click(0, scanner);
+    s.pick("Scan");
+    s.run_until("the book is cached", |s| {
+        s.get::<ss13_game::service::BookScanner>(scanner)
+            .cache
+            .is_some()
+    });
+
+    s.stand(TilePos::new(8, 3, 1));
+    s.click(0, console);
+    s.pick("Set the scanned book's title");
+    s.type_in("Rules");
+    s.run_until("the cache has a title", |s| {
+        s.get::<ss13_game::service::BookScanner>(scanner)
+            .cache
+            .as_ref()
+            .is_some_and(|c| c.title == "Rules")
+    });
+    s.click(0, console);
+    s.pick("Upload the scanned book");
+    s.pick("Fiction");
+    s.run_until("the book is archived", |s| {
+        s.server.world().resource::<LibraryArchive>().books.len() == 1
+    });
+    s.click(0, console);
+    s.pick("Print a book from the archive");
+    s.pick("\"Rules\" by unknown author");
+    s.run_until("the printed book is out", |s| s.books_titled("Rules") == 1);
+}
+
+impl Station {
+    fn world_books_by(&mut self, author: &str) -> usize {
+        let world = self.server.world_mut();
+        let mut q = world.query::<&Book>();
+        q.iter(world).filter(|b| b.author == author).count()
+    }
+
+    fn book_by(&mut self, author: &str) -> Entity {
+        let world = self.server.world_mut();
+        let mut q = world.query::<(Entity, &Book)>();
+        q.iter(world)
+            .find(|(_, b)| b.author == author)
+            .map(|(e, _)| e)
+            .expect("the book")
+    }
+}
+
+#[test]
+fn a_canvas_is_painted_finished_and_put_up() {
+    let mut s = Station::start("a_canvas_is_painted_finished_and_put_up");
+    let (canvas, crayon) = (s.item(CANVAS), s.item(CRAYON));
+    s.run_until("the canvas is set up", |s| {
+        s.try_get::<Canvas>(canvas).is_some()
+    });
+    s.put_in_hand(crayon);
+    s.click(0, canvas);
+    s.run_until("the canvas is painted", |s| s.get::<Canvas>(canvas).used);
+    assert_eq!(s.get::<Canvas>(canvas).medium, "Crayon on canvas");
+
+    s.put_in_hand(canvas);
+    let slot = s.active_slot();
+    s.send(0, ClientIntent::ClickSlot(slot));
+    s.type_in("Sunset");
+    s.answer(AlertUi::NAME, "choose", "choice", "No");
+    s.run_until("the painting is finished", |s| {
+        s.get::<Canvas>(canvas).finalized
+    });
+    assert_eq!(s.get::<Canvas>(canvas).title, "Sunset");
+    assert_eq!(s.get::<Canvas>(canvas).author, "Anonymous");
+
+    let easel = s.obj(EASEL);
+    s.stand(TilePos::new(9, 3, 1));
+    s.click(0, easel);
+    s.run_until("the canvas is on the easel", |s| {
+        s.try_get::<TilePos>(canvas) == Some(&TilePos::new(9, 2, 1))
+    });
+}

@@ -13,9 +13,10 @@
 //!   damage without a helmet); others get burnt. It blesses the water (and unholy water) in a
 //!   container into holy water. Its skins, the altar it unpacks into and the sects are
 //!   `super::religion`.
-// shortcut: no library database (random bookcases stay empty, no library computers, scanner or
-// binder), no carving, vandalizing or wiki manuals; bookcases cannot be built, wrenched or
-// pried; the bible has no rune revealing, dead blessings, clumsy fumbles or bullet blocking.
+//! - Pens on books, the archive and the library machines are `super::archive`.
+// shortcut: random bookcases stay empty (the archive is in memory, `super::archive`); no
+// carving or wiki manuals; bookcases cannot be built, wrenched or pried; the bible has no rune
+// revealing, dead blessings, clumsy fumbles or bullet blocking.
 
 use std::collections::HashSet;
 

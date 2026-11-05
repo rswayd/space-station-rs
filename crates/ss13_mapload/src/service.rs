@@ -1,8 +1,9 @@
 //! Service items as prototype data: a paper's starting text (`/obj/item/paper`
 //! `default_raw_text`, `code/modules/paperwork/paper.dm`), a book's contents (`/obj/item/book`
 //! `starting_title`/`starting_author`/`starting_content`, `code/modules/library/book.dm`) and a
-//! die's sides (`/obj/item/dice` `sides`, `code/game/objects/items/dice.dm`), as the
-//! [`DmService`] component. Map var edits of those vars apply too.
+//! die's sides (`/obj/item/dice` `sides`, `code/game/objects/items/dice.dm`) and a fax
+//! machine's network name (`/obj/machinery/fax` `fax_name`, `code/modules/paperwork/fax.dm`),
+//! as the [`DmService`] component. Map var edits of those vars apply too.
 
 use bevy::prelude::*;
 use serde_json::Value;
@@ -15,6 +16,8 @@ pub const SERVICE_COMPONENT: &str = "dm_service";
 pub const PAPER_ROOT: &str = "/obj/item/paper";
 pub const BOOK_ROOT: &str = "/obj/item/book";
 pub const DICE_ROOT: &str = "/obj/item/dice";
+/// `/obj/machinery/fax`: its `fax_name` is [`DmService::title`].
+pub const FAX_ROOT: &str = "/obj/machinery/fax";
 
 /// The null rod's forms the chaplain picks from (`init_nullrod_variants`: the
 /// `chaplain_spawnable` `/obj/item/nullrod` types, in `typesof` order).
@@ -101,7 +104,7 @@ pub const RELIGION_RUNTIME_TYPES: [&str; 6] = [
 pub struct DmService {
     /// `default_raw_text` of a paper, `starting_content` of a book (raw markdown/HTML).
     pub text: String,
-    /// `starting_title` of a book.
+    /// `starting_title` of a book, `fax_name` of a fax machine.
     pub title: String,
     /// `starting_author` of a book.
     pub author: String,
@@ -110,12 +113,13 @@ pub struct DmService {
 }
 
 /// (root type, var, [`DmService`] field).
-const VARS: [(&str, &str, &str); 5] = [
+const VARS: [(&str, &str, &str); 6] = [
     (PAPER_ROOT, "default_raw_text", "text"),
     (BOOK_ROOT, "starting_content", "text"),
     (BOOK_ROOT, "starting_title", "title"),
     (BOOK_ROOT, "starting_author", "author"),
     (DICE_ROOT, "sides", "sides"),
+    (FAX_ROOT, "fax_name", "title"),
 ];
 
 fn str_ron(s: &str) -> String {
@@ -214,5 +218,7 @@ mod tests {
         let f = ext_field("/obj/item/dice/d20", "sides", Val::Num(4.0)).unwrap();
         assert_eq!(ron_of(&[f], "sides").as_deref(), Some("4"));
         assert!(ext_field("/obj/item/book", "sides", Val::Num(4.0)).is_err());
+        let f = ext_field("/obj/machinery/fax", "fax_name", Val::Str("Bridge")).unwrap();
+        assert_eq!(ron_of(&[f], "title").as_deref(), Some("\"Bridge\""));
     }
 }

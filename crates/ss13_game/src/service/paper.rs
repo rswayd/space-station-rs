@@ -6,14 +6,16 @@
 //!   asks for the text (tgui's edit area is a multiline prompt here) up to `MAX_PAPER_LENGTH`
 //!   in total, written in the tool's font and colour; a stamp stamps it (at most
 //!   `MAX_PAPER_STAMPS`, the first five as overlays). A written paper shows `paper_words`.
+//! - A paper with empty `[input_field]` keys first asks where to write (tgui's field buttons):
+//!   the end, or a field, which then holds the text as a child input
+//!   (`add_raw_text_to_input_field`).
 //! - A paper bin holds 30 sheets: an empty hand takes the top one (a sheet put in first, else a
 //!   new one); a paper goes in.
 //! - The hand labeler toggles in hand (asking for the label when it turns on) and, on,
 //!   appends ` (label)` to what it is used on, 30 times per roll; a refill restores the roll.
-// shortcut: no input fields (`[input_field]`), signatures or BandaStation `[name]` keys, no
-// stamp placement (stamps land at once), no paper planes, burning, renaming, clipboards,
-// folders, carbon copies, bin pens or noticeboards; labels are not separate items that peel
-// off.
+// shortcut: no field autofill, signatures or BandaStation `[name]` keys, no stamp placement
+// (stamps land at once), no burning, renaming, carbon copies, bin pens or noticeboards; labels
+// are not separate items that peel off.
 
 use bevy::prelude::*;
 use ss13_mapload::{DmAtom, DmName};
@@ -70,8 +72,54 @@ pub struct Paper {
 impl Paper {
     /// `get_total_length`.
     pub fn total_length(&self) -> usize {
-        self.inputs.iter().map(|i| i.raw_text.chars().count()).sum()
+        self.inputs.iter().map(PaperInput::text_length).sum()
     }
+
+    /// `is_empty`: no text and no stamps.
+    pub fn is_empty(&self) -> bool {
+        self.inputs.is_empty() && self.stamps.is_empty()
+    }
+
+    /// The empty input fields, as `(input index, field id)` (tgui's write buttons).
+    pub fn open_fields(&self) -> Vec<(usize, usize)> {
+        self.inputs
+            .iter()
+            .enumerate()
+            .flat_map(|(i, input)| (1..=input.fields().len()).map(move |id| (i, id)))
+            .collect()
+    }
+
+    /// `set_content_using_paper`: every input as raw HTML (`to_raw_html`), a blank line between.
+    pub fn raw_html(&self) -> String {
+        let mut out = String::new();
+        for input in &self.inputs {
+            out.push_str(&input_html(input));
+            out.push_str(if input.raw_text.ends_with('\n') {
+                "\n"
+            } else {
+                "\n\n"
+            });
+        }
+        out
+    }
+}
+
+/// `/datum/paper_input/to_raw_html`.
+fn input_html(input: &PaperInput) -> String {
+    let mut text = input.raw_text.clone();
+    for (i, child) in input.children.iter().enumerate() {
+        text = text.replacen(&format!("[child_{}]", i + 1), &input_html(child), 1);
+    }
+    if !input.font.is_empty() || !input.color.is_empty() {
+        text = format!(
+            "<font color='{}' face='{}'>{text}</font>",
+            input.color, input.font
+        );
+    }
+    if input.bold {
+        text = format!("<b>{text}</b>");
+    }
+    text
 }
 
 /// `/obj/item/pen/fourcolor` `colour` after its `attack_self` cycles.
@@ -140,7 +188,35 @@ fn input(text: String, font: &str, color: &str, bold: bool) -> PaperInput {
         font: font.to_owned(),
         color: color.to_owned(),
         bold,
+        children: Vec::new(),
     }
+}
+
+/// `paper/copy` onto `copy` (a fresh sheet): the text, the stamps and their overlays, the name.
+pub(super) fn copy_paper(world: &mut World, original: Entity, copy: Entity) {
+    let Some(source) = world.get::<Paper>(original).cloned() else {
+        return;
+    };
+    if world.get::<Paper>(copy).is_none() {
+        add_parts(world, copy, PAPER);
+    }
+    world.entity_mut(copy).insert(source);
+    let overlays = world
+        .get::<ss13_shared::Appearance>(original)
+        .map(|a| a.overlays.clone());
+    if let Some(overlays) = overlays
+        && let Some(mut look) = world.get_mut::<ss13_shared::Appearance>(copy)
+    {
+        look.overlays = overlays;
+    }
+    let name = crate::chem::name_of(world, original);
+    if let Some(mut dm) = world.get_mut::<DmName>(copy) {
+        dm.name.clone_from(&name);
+    }
+    if world.get::<Name>(copy).is_some() || world.get::<DmName>(copy).is_none() {
+        world.entity_mut(copy).insert(Name::new(name));
+    }
+    refresh_paper_look(world, copy);
 }
 
 /// `add_raw_text(text)` of printed papers (reports, manifests): the default font, black. The
@@ -223,7 +299,7 @@ fn refresh_paper_look(world: &mut World, paper: Entity) {
 
 /// `update_overlays`: the top sheet and the bin's lip while it has paper.
 // shortcut: one sheet overlay, not one per `PAPERS_PER_OVERLAY`; no written or coloured sheets.
-fn refresh_bin_look(world: &mut World, bin: Entity) {
+pub(super) fn refresh_bin_look(world: &mut World, bin: Entity) {
     let Some(total) = world.get::<PaperBin>(bin).map(|b| b.total) else {
         return;
     };
@@ -357,30 +433,7 @@ pub(super) fn item_interaction(
                 );
                 return true;
             }
-            let used = world.get::<Paper>(target).map_or(0, Paper::total_length);
-            if used >= MAX_PAPER_LENGTH {
-                tell(world, client, Span::Warning, "This sheet of paper is full!");
-                return true;
-            }
-            let title = crate::chem::name_of(world, target);
-            let prompt = ask_world(
-                world,
-                Ask::new(
-                    client,
-                    mob,
-                    title,
-                    "What would you like to write?",
-                    PromptKind::Text {
-                        default: String::new(),
-                        max_length: (MAX_PAPER_LENGTH - used) as u32,
-                        multiline: true,
-                    },
-                ),
-            );
-            world.entity_mut(prompt).insert(PendingAsk::Write {
-                paper: target,
-                pen: held,
-            });
+            start_writing(world, client, mob, target, held);
             true
         }
         Some(Writing::Stamp { state, icon }) => {
@@ -391,22 +444,157 @@ pub(super) fn item_interaction(
     }
 }
 
-/// The prompt's text onto the paper (`ui_act("add_text")`), checked again: the pen still in the
-/// active hand, the paper in reach, the length.
+/// A pen on a paper: where to write when it has empty fields, else what.
+pub(super) fn start_writing(
+    world: &mut World,
+    client: Entity,
+    mob: Entity,
+    paper: Entity,
+    pen: Entity,
+) {
+    let Some(sheet) = world.get::<Paper>(paper).cloned() else {
+        return;
+    };
+    if sheet.total_length() >= MAX_PAPER_LENGTH {
+        tell(world, client, Span::Warning, "This sheet of paper is full!");
+        return;
+    }
+    let fields = sheet.open_fields();
+    if fields.is_empty() {
+        ask_text(world, client, mob, paper, pen, None);
+        return;
+    }
+    // tgui's write buttons: the end of the document, then each field after the text before it.
+    let mut items = vec!["Write at the end".to_owned()];
+    for &(input, id) in &fields {
+        let text = &sheet.inputs[input];
+        let before = text
+            .fields()
+            .get(id - 1)
+            .map(|r| super::plain_text(&text.raw_text[..r.start]))
+            .unwrap_or_default();
+        let context: String = {
+            let chars: Vec<char> = before.trim_end().chars().collect();
+            chars[chars.len().saturating_sub(24)..].iter().collect()
+        };
+        items.push(format!("Field {}: {}", items.len(), context.trim()));
+    }
+    let title = crate::chem::name_of(world, paper);
+    let prompt = ask_world(
+        world,
+        Ask::new(
+            client,
+            mob,
+            title,
+            "Where would you like to write?",
+            PromptKind::List {
+                items,
+                default: None,
+            },
+        ),
+    );
+    world
+        .entity_mut(prompt)
+        .insert(PendingAsk::WriteWhere { paper, pen, fields });
+}
+
+/// The text prompt for the end of `paper` or one of its fields (`(input, id, fields then)`).
+fn ask_text(
+    world: &mut World,
+    client: Entity,
+    mob: Entity,
+    paper: Entity,
+    pen: Entity,
+    field: Option<(usize, usize, usize)>,
+) {
+    let used = world.get::<Paper>(paper).map_or(0, Paper::total_length);
+    if used >= MAX_PAPER_LENGTH {
+        return;
+    }
+    let title = crate::chem::name_of(world, paper);
+    let prompt = ask_world(
+        world,
+        Ask::new(
+            client,
+            mob,
+            title,
+            "What would you like to write?",
+            PromptKind::Text {
+                default: String::new(),
+                max_length: (MAX_PAPER_LENGTH - used) as u32,
+                multiline: field.is_none(),
+            },
+        ),
+    );
+    world
+        .entity_mut(prompt)
+        .insert(PendingAsk::Write { paper, pen, field });
+}
+
+/// The chosen place (0 = the end), checked again: the pen and paper still at hand.
+pub(super) fn where_answer(
+    world: &mut World,
+    actor: Entity,
+    paper: Entity,
+    pen: Entity,
+    fields: &[(usize, usize)],
+    choice: usize,
+) {
+    let Some(client) = client_of(world, actor) else {
+        return;
+    };
+    if !pen_at_hand(world, actor, pen) || !reachable(world, actor, paper) {
+        return;
+    }
+    let field = match choice.checked_sub(1) {
+        None => None,
+        Some(i) => {
+            let Some(&(input, id)) = fields.get(i) else {
+                return;
+            };
+            let count = world
+                .get::<Paper>(paper)
+                .and_then(|p| p.inputs.get(input))
+                .map_or(0, |t| t.fields().len());
+            Some((input, id, count))
+        }
+    };
+    ask_text(world, client, actor, paper, pen, field);
+}
+
+/// The pen in the active hand, or the pen of a clipboard held or in reach (tg `ui_act` writes
+/// with `clipboard.pen` unless a stamp is held).
+pub(super) fn pen_at_hand(world: &World, actor: Entity, pen: Entity) -> bool {
+    let Some(inventory) = world.get::<Inventory>(actor) else {
+        return false;
+    };
+    if inventory.active_item() == Some(pen) {
+        return true;
+    }
+    let Some(board) = world.get::<crate::storage::StoredIn>(pen).map(|s| s.0) else {
+        return false;
+    };
+    world
+        .get::<super::office::Clipboard>(board)
+        .is_some_and(|c| c.pen == Some(pen))
+        && reachable(world, actor, board)
+}
+
+/// The prompt's text onto the paper (`ui_act("add_text")`) or into one of its fields, checked
+/// again: the pen still at hand, the paper in reach, the length, the field still there (filling
+/// another one renumbers them, so a changed count refuses).
 pub(super) fn write_answer(
     world: &mut World,
     actor: Entity,
     paper: Entity,
     pen: Entity,
+    field: Option<(usize, usize, usize)>,
     text: &str,
 ) {
     let Some(client) = client_of(world, actor) else {
         return;
     };
-    let holding = world
-        .get::<Inventory>(actor)
-        .is_some_and(|i| i.active_item() == Some(pen));
-    if !holding || !reachable(world, actor, paper) {
+    if !pen_at_hand(world, actor, pen) || !reachable(world, actor, paper) {
         return;
     }
     if text.trim().is_empty() {
@@ -426,9 +614,20 @@ pub(super) fn write_answer(
         return;
     }
     line.raw_text = text.to_owned();
-    match world.get_mut::<Paper>(paper) {
-        Some(mut state) => state.inputs.push(line),
-        None => return,
+    let written = match (world.get_mut::<Paper>(paper), field) {
+        (Some(mut state), None) => {
+            state.inputs.push(line);
+            true
+        }
+        (Some(mut state), Some((input, id, count))) => state
+            .inputs
+            .get_mut(input)
+            .filter(|t| t.fields().len() == count)
+            .is_some_and(|t| t.fill_field(id, line)),
+        (None, _) => false,
+    };
+    if !written {
+        return;
     }
     if let Some(pos) = crate::chem::map_pos(world, paper) {
         let sound = crate::sound::PlaySound::new(pos, "writing_pen", 50.0, true)
@@ -447,14 +646,24 @@ pub(super) fn write_answer(
     refresh_windows(world, paper);
 }
 
-/// Held by `mob` or adjacent to it.
+/// Held by `mob` or adjacent to it, or inside a clipboard or folder that is (tg
+/// `IsContainedAtomAccessible`).
 pub(super) fn reachable(world: &World, mob: Entity, item: Entity) -> bool {
-    world.get::<Inventory>(mob).is_some_and(|i| i.holds(item))
-        || crate::storage::in_reach(world, mob, item)
+    let near = |e: Entity| {
+        world.get::<Inventory>(mob).is_some_and(|i| i.holds(e))
+            || crate::storage::in_reach(world, mob, e)
+    };
+    if near(item) {
+        return true;
+    }
+    world
+        .get::<crate::storage::StoredIn>(item)
+        .map(|s| s.0)
+        .is_some_and(|holder| super::office::is_paper_holder(world, holder) && near(holder))
 }
 
 /// `ui_act("add_stamp")` / the blind stamp of `item_interaction`.
-fn stamp(
+pub(super) fn stamp(
     world: &mut World,
     client: Entity,
     mob: Entity,

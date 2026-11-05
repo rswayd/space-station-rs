@@ -5,7 +5,7 @@
 Холст (несколько размеров) ставится на мольберт или держится в руке и рисуется попиксельно в tgui инструментом в руке (мелок, ручка, кисть с палитрой, баллончик); после «завершения» картину можно назвать и подписать.
 
 - **Код:** [`/obj/structure/easel`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/art/paintings.dm#L14), [`/obj/item/canvas`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/art/paintings.dm#L65), [`ui_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/art/paintings.dm#L199), [`finalize()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/art/paintings.dm#L255); tgui: [`Canvas.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/Canvas.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/service/art.rs`: холст ставится на мольберт (на его тайл); мелок, ручка, баллончик, палитра на незаконченном холсте «рисуют» — оверлей `<размер>wip` и техника (`get_paint_tool_medium`, «Mixed medium»); холст в руке завершается: название, затем подпись или «Anonymous» (`try_rename`/`finalize`), законченный сообщает название, автора и технику; нет попиксельного рисования (tgui `Canvas`, спрайт-редактор) и сгенерированной картинки — нужен клиентский редактор; нет очистки мылом, меценатов
 
 ### Палитра художника
 Кисть-палитра с набором цветов, переключаемых при рисовании на холсте.
