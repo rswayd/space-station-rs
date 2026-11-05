@@ -66,7 +66,7 @@ pub struct Mail {
 pub struct MailGoodies(pub Vec<(String, u32)>);
 
 /// `SSeconomy.mail_waiting` and the economy ticks counted for it.
-#[derive(Resource, Debug)]
+#[derive(Resource)]
 pub struct MailState {
     pub waiting: u32,
     fires: u64,

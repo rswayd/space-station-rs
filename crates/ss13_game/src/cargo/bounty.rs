@@ -53,7 +53,6 @@ use crate::outfit::IdRegistration;
 use crate::power::Unpowered;
 use crate::radio::MachineRadio;
 use crate::storage::StoredIn;
-use ss13_tgui::UiInterface as _;
 
 pub const CIV_CONSOLE: &str = "/obj/machinery/computer/piratepad_control/civilian";
 pub const CIV_PAD: &str = "/obj/machinery/piratepad/civilian";
