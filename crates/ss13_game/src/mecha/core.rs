@@ -299,6 +299,12 @@ pub struct MechCorePlugin;
 
 impl Plugin for MechCorePlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // tg `attack_hand` of a mech: in combat mode "Nothing happens".
+        app.add_click_handler(ClickPhase::EmptyHand, 2300, |w, c| {
+            crate::mecha::core::attack_hand(w, c.client, c.mob, c.target)
+        });
         app.add_message::<MechRelayMove>()
             .add_message::<MechClick>()
             .add_systems(

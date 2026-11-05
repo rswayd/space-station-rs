@@ -46,6 +46,14 @@ pub struct ScienceServerPlugin;
 #[cfg(feature = "server")]
 impl bevy::prelude::Plugin for ScienceServerPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // tg `item_interaction` of R&D machines: stacks into lathes, items into the destructive
+        // analyzer.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 3100, |w, c| {
+            c.held
+                .is_some_and(|h| crate::science::item_interaction(w, c.client, c.mob, h, c.target))
+        });
         app.add_plugins((
             points::PointsPlugin,
             console::ConsolePlugin,

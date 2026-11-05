@@ -7,3 +7,4 @@ mod gags_real;
 mod light_real;
 mod real_maps;
 mod recipes_real;
+mod runtime_types_real;

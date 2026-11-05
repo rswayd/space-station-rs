@@ -184,6 +184,8 @@ pub mod chem_heater;
 pub mod chem_master;
 #[cfg(feature = "server")]
 pub mod click;
+#[cfg(feature = "server")]
+pub mod click_handlers;
 #[cfg(feature = "client")]
 pub mod client;
 #[cfg(feature = "server")]
@@ -288,6 +290,8 @@ pub mod kitchen;
 pub mod lobby;
 #[cfg(feature = "client")]
 pub mod lobby_client;
+#[cfg(feature = "server")]
+pub mod lockbox;
 #[cfg(feature = "server")]
 pub mod loot;
 #[cfg(feature = "server")]

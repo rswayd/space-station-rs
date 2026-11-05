@@ -456,6 +456,27 @@ pub struct GeneticsServerPlugin;
 
 impl Plugin for GeneticsServerPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // tg `attack_hand` of the DNA console (its window) and scanner (open/close).
+        app.add_click_handler(ClickPhase::EmptyHand, 2600, |w, c| {
+            crate::genetics::console::interact(w, c.client, c.mob, c.target)
+        });
+        // tg `dnainjector/attack`.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 3600, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::genetics::console::item_interaction(
+                    w,
+                    crate::tools::Actor {
+                        client: c.client,
+                        mob: c.mob,
+                        item: Some(h),
+                    },
+                    h,
+                    c.target,
+                )
+            })
+        });
         app.init_resource::<DiscoveredMutations>()
             .add_observer(attach_dna)
             .add_systems(Update, mutations_life);

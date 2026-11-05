@@ -234,9 +234,15 @@ pub const JUNK_MAIL: [(&str, &str); 5] = [
         "with INCREDIBLY IMPORTANT ARTIFACT- DELIVER TO SCIENCE DIVISION. HANDLE WITH CARE.",
     ),
 ];
-/// Fixed types the game spawns for bounties and mail (the converter keeps the ones the
+/// A buyer's goodies, up to `GOODY_FREE_SHIPPING_MAX` orders (`/obj/item/storage/lockbox/order`).
+pub const GOODY_CASE: &str = "/obj/item/storage/lockbox/order";
+/// A buyer's goodies past the free shipping limit, account-locked.
+pub const GOODY_CRATE: &str = "/obj/structure/closet/crate/secure";
+/// Fixed types the game spawns for bounties, mail and goodies (the converter keeps the ones the
 /// dump has; [`CargoData::spawned_types`] are the data-driven ones).
-pub const RUNTIME_TYPES: [&str; 10] = [
+pub const RUNTIME_TYPES: [&str; 12] = [
+    GOODY_CASE,
+    GOODY_CRATE,
     BOUNTY_CUBE,
     MAIL,
     MAIL_ENVELOPE,

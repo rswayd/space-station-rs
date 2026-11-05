@@ -17,11 +17,16 @@
 //!   report to `centcom_message`.
 //! - The shuttle refuses to leave the station with living mobs aboard (tg `check_blacklist`).
 //! - A request approved with a department's budget is paid by that department at purchase.
+//! - A private or department order's crate is named "<crate> - Purchased by <holder>" and is
+//!   account-locked to the payer ([`AccountLock`], tg `locked_to_account`).
+//! - Goodies (`ORDER_GOODY`, private purchases only) come per buyer: up to
+//!   `GOODY_FREE_SHIPPING_MAX` orders in a goody case (`lockbox/order`, unlocked by the buyer's
+//!   card), more in an account-locked secure crate, the first order past the limit charged the
+//!   `CRATE_TAX`; one manifest lists all the buyer's orders.
 //! - Leaving CentCom it also loads the waiting mail ([`super::mail::create_mail`]).
-// shortcut: goodies (lockboxes per buyer), departmental order consoles, coupons, chef groceries,
-// the materials market, shuttle loans, requisition papers, manifest errors and
-// `locked_to_account` crates are not ported; private orders are paid on delivery as in tg but
-// their crates open with the pack's access only. Packs with their own `fill()` are not offered.
+// shortcut: departmental order consoles, coupons, chef groceries, the materials market, shuttle
+// loans, requisition papers and manifest errors are not ported. Packs with their own `fill()`
+// are not offered.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -41,7 +46,7 @@ use ss13_world::{Density, SpatialIndex};
 
 use super::economy::{ACCOUNT_CAR, Economy};
 use super::export::{ExportReport, Exports, export_item_and_contents};
-use crate::closets::Closet;
+use crate::closets::{AccountLock, Closet};
 use crate::construction::path_of;
 use crate::obj_damage::{Anchored, is_under};
 use crate::shuttle::{
@@ -58,6 +63,10 @@ pub const IGNITION_SECS: f64 = 5.5;
 pub const CARGO_MAX_ORDER: u32 = 50;
 /// `CARGO_CRATE_VALUE`.
 pub const CARGO_CRATE_VALUE: f64 = 200.0;
+/// `GOODY_FREE_SHIPPING_MAX`: goody orders per buyer that fit in a free goody case.
+pub const GOODY_FREE_SHIPPING_MAX: usize = 5;
+/// `CRATE_TAX`: the charge on the first goody order past the free shipping limit.
+pub const CRATE_TAX: i64 = 700;
 const SUPPLY_PORT: &str = "/obj/docking_port/mobile/supply";
 const HOME_DOCK: &str = "cargo_home";
 const AWAY_DOCK: &str = "cargo_away";
@@ -126,8 +135,8 @@ impl SupplyPacks {
 
 /// Whether a console may order `pack` (tg `add_item`'s flag checks and the catalogue filter):
 /// not invisible, emag-only on a console that is not emagged, a disabled special, contraband
-/// (no hacked boards yet) or pod-only. Packs needing what is not ported (goodies, their own
-/// `fill()`, live animals, nothing to spawn) are hidden too.
+/// (no hacked boards yet) or pod-only. Packs needing what is not ported (their own `fill()`,
+/// live animals, nothing to spawn) are hidden too.
 pub fn orderable(pack: &SupplyPackDef, contraband: bool, emagged: bool) -> bool {
     use order_flags::*;
     !(pack.has(INVISIBLE)
@@ -135,9 +144,9 @@ pub fn orderable(pack: &SupplyPackDef, contraband: bool, emagged: bool) -> bool 
         || (pack.has(CONTRABAND) && !contraband)
         || pack.has(POD_ONLY)
         || (pack.has(SPECIAL) && !pack.has(SPECIAL_ENABLED))
-        || pack.has(GOODY)
         || pack.custom_fill
-        || pack.crate_type.is_none()
+        // Goodies come in the buyer's goody case instead.
+        || (pack.crate_type.is_none() && !pack.has(GOODY))
         || pack.contains.is_empty()
         // shortcut: no mobs inside containers yet (critter crates).
         || pack.contains.iter().any(|(t, _)| is_under(t, "/mob")))
@@ -593,18 +602,43 @@ pub fn buy(world: &mut World) {
     let orders = std::mem::take(&mut world.resource_mut::<SupplyOrders>().shopping_list);
     let mut kept = Vec::new();
     let (mut value, mut purchases) = (0i64, 0u32);
+    // `goodies_by_buyer`, each with the tile its box will take.
+    let mut goodies: Vec<(u32, TilePos, Vec<SupplyOrder>)> = Vec::new();
     for order in orders {
         if turfs.is_empty() {
             kept.push(order);
             continue;
         }
-        let (price, pack_cost) = {
+        let (mut price, pack_cost, goody) = {
             let packs = world.resource::<SupplyPacks>();
+            let pack = &packs.packs[order.pack];
             (
                 order.final_cost(packs),
-                packs.packs[order.pack].cost.round() as i64,
+                pack.cost.round() as i64,
+                pack.has(order_flags::GOODY),
             )
         };
+        // Goodies are private purchases only (the console refuses others).
+        let goody_buyer = order.paying_account.filter(|_| goody);
+        if goody && goody_buyer.is_none() {
+            warn!(
+                "cargo: goody order #{} without a paying account dropped",
+                order.id
+            );
+            continue;
+        }
+        let buyer_orders = goody_buyer
+            .and_then(|b| goodies.iter().find(|(a, ..)| *a == b))
+            .map_or(0, |(.., o)| o.len());
+        if let Some(buyer) = goody_buyer
+            && buyer_orders == GOODY_FREE_SHIPPING_MAX
+        {
+            price += CRATE_TAX;
+            let text = format!(
+                "Goody order size exceeds free shipping limit: Assessing {CRATE_TAX}¢ S&H fee."
+            );
+            super::economy::bank_card_talk(world, buyer, &text);
+        }
         let paid = {
             let mut economy = world.resource_mut::<Economy>();
             let payer = match (&order.paying_department, order.paying_account) {
@@ -641,8 +675,6 @@ pub fn buy(world: &mut World) {
             let mut shuttle = world.resource_mut::<SupplyShuttle>();
             (shuttle.rng.next_u64() % turfs.len() as u64) as usize
         };
-        let pos = turfs.swap_remove(i);
-        generate(world, &order, pos);
         purchases += 1;
         info!(
             "cargo: order #{} ({}) by {} has shipped",
@@ -650,6 +682,20 @@ pub fn buy(world: &mut World) {
             world.resource::<SupplyPacks>().packs[order.pack].name,
             order.orderer
         );
+        if let Some(buyer) = goody_buyer {
+            match goodies.iter().position(|(a, ..)| *a == buyer) {
+                Some(at) => goodies[at].2.push(order),
+                None => goodies.push((buyer, turfs.swap_remove(i), vec![order])),
+            }
+            continue;
+        }
+        let pos = turfs.swap_remove(i);
+        if let Some(crate_entity) = generate(world, &order, pos) {
+            lock_to_payer(world, crate_entity, &order);
+        }
+    }
+    for (buyer, pos, orders) in goodies {
+        pack_goodies(world, buyer, pos, &orders);
     }
     world.resource_mut::<SupplyOrders>().shopping_list = kept;
     // The mining console's paid orders (`/datum/supply_order/disposable`).
@@ -681,8 +727,12 @@ pub fn generate(world: &mut World, order: &SupplyOrder, pos: TilePos) -> Option<
         .get::<DmName>(crate_entity)
         .map(|n| n.desc.clone())
         .unwrap_or_default();
+    // `supply_pack/generate`: " - Purchased by <holder>" for a paying account.
+    let purchased = payer_holder(world, order)
+        .map(|holder| format!(" - Purchased by {holder}"))
+        .unwrap_or_default();
     world.entity_mut(crate_entity).insert(DmName {
-        name: format!("{name} - #{}", order.id),
+        name: format!("{name}{purchased} - #{}", order.id),
         desc,
     });
     let closet = {
@@ -728,14 +778,7 @@ pub fn generate(world: &mut World, order: &SupplyOrder, pos: TilePos) -> Option<
              Item: {}\nContents:",
             order.id, pack.name
         );
-        let mut counted: Vec<(String, u32)> = Vec::new();
-        for name in contents {
-            match counted.iter_mut().find(|(n, _)| *n == name) {
-                Some((_, n)) => *n += 1,
-                None => counted.push((name, 1)),
-            }
-        }
-        for (name, n) in counted {
+        for (name, n) in count_names(contents) {
             text.push_str(&format!("\n- {n} {name}"));
         }
         text.push_str("\nStamp below to confirm receipt of goods:");
@@ -750,6 +793,142 @@ pub fn generate(world: &mut World, order: &SupplyOrder, pos: TilePos) -> Option<
         ));
     }
     Some(crate_entity)
+}
+
+/// The holder of the account paying `order` (a person or a department), if not cargo's budget.
+fn payer_holder(world: &World, order: &SupplyOrder) -> Option<String> {
+    let economy = world.resource::<Economy>();
+    match (&order.paying_department, order.paying_account) {
+        (Some(department), _) => economy.department(department),
+        (None, Some(id)) => economy.account(id),
+        (None, None) => None,
+    }
+    .map(|a| a.holder.clone())
+}
+
+/// `locked_to_account` of a private or department order's crate.
+fn lock_to_payer(world: &mut World, crate_entity: Entity, order: &SupplyOrder) {
+    let lock = match (&order.paying_department, order.paying_account) {
+        (Some(department), _) => AccountLock::Department(department.clone()),
+        (None, Some(id)) => AccountLock::Personal(id),
+        (None, None) => return,
+    };
+    if world.get::<Closet>(crate_entity).is_some() {
+        world.entity_mut(crate_entity).insert(lock);
+    }
+}
+
+/// The goodies of one buyer (tg `buy()`'s `miscboxes` + `generateCombo`): a goody case for up
+/// to `GOODY_FREE_SHIPPING_MAX` orders, else an account-locked secure crate, with every
+/// order's contents and one manifest of all of them.
+fn pack_goodies(world: &mut World, buyer: u32, pos: TilePos, orders: &[SupplyOrder]) {
+    let holder = world
+        .resource::<Economy>()
+        .account(buyer)
+        .map(|a| a.holder.clone())
+        .unwrap_or_default();
+    let (path, name) = if orders.len() > GOODY_FREE_SHIPPING_MAX {
+        (
+            ss13_mapload::cargo::GOODY_CRATE,
+            format!("goody crate - purchased by {holder}"),
+        )
+    } else {
+        (
+            ss13_mapload::cargo::GOODY_CASE,
+            format!("goody case - purchased by {holder}"),
+        )
+    };
+    let Some(container) = spawn_template(world, path, Some(pos)) else {
+        warn!("cargo: no prototype of {path}; {holder}'s goodies are lost");
+        return;
+    };
+    world.entity_mut(container).insert(Networked);
+    let desc = world
+        .get::<DmName>(container)
+        .map(|n| n.desc.clone())
+        .unwrap_or_default();
+    world.entity_mut(container).insert(DmName { name, desc });
+    if orders.len() > GOODY_FREE_SHIPPING_MAX {
+        let closet = {
+            let icons = world.get_resource::<IconIndex>();
+            let entity = world.entity(container);
+            match (entity.get::<DmCloset>(), entity.get::<DmAtom>()) {
+                (Some(dm), Some(atom)) => Some(Closet::from_dm(dm, atom, icons)),
+                _ => None,
+            }
+        };
+        if let Some(mut closet) = closet {
+            closet.opened = false;
+            world.entity_mut(container).insert(closet);
+            crate::closets::refresh_look(world, container);
+        }
+        world
+            .entity_mut(container)
+            .insert(AccountLock::Personal(buyer));
+    } else {
+        // A new storage item: its limits and lock, then the buyer's account on the lock.
+        crate::storage::finish_item(world, container, 0);
+        if let Some(mut lock) = world.get_mut::<crate::lockbox::Lockbox>(container) {
+            lock.buyer_account = Some(buyer);
+        }
+    }
+    let mut ids = String::new();
+    let mut cost = 0.0;
+    let mut contents: Vec<String> = Vec::new();
+    for order in orders {
+        let pack = world.resource::<SupplyPacks>().packs[order.pack].clone();
+        ids.push_str(&format!("#{} ", order.id));
+        cost += pack.cost;
+        for (path, amount) in &pack.contains {
+            for _ in 0..*amount {
+                let Some(item) = spawn_template(world, path, None) else {
+                    continue;
+                };
+                world
+                    .entity_mut(item)
+                    .insert((Networked, StoredIn(container)));
+                crate::storage::finish_item(world, item, 1);
+                contents.push(
+                    world
+                        .get::<DmName>(item)
+                        .map(|n| n.name.clone())
+                        .unwrap_or_else(|| path.clone()),
+                );
+            }
+        }
+    }
+    if let Some(paper) = spawn_template(world, MANIFEST_PAPER, None) {
+        let station = crate::round::station_name(world);
+        let mut text = format!(
+            "Центральное Командование Shipping Manifest\nOrder: {ids}\nDestination: {station}\n\
+             Requested by: {holder}\nCost: {}\nContents:",
+            cost.round() as i64
+        );
+        for (name, n) in count_names(contents) {
+            text.push_str(&format!("\n- {n} {name}"));
+        }
+        text.push_str("\nStamp below to confirm receipt of goods:");
+        world.entity_mut(paper).insert((
+            Networked,
+            StoredIn(container),
+            DmName {
+                name: format!("shipping manifest - {ids}"),
+                desc: text,
+            },
+        ));
+    }
+}
+
+/// `"<n> <name>"` lines of a manifest: each name once, in first-seen order.
+fn count_names(names: Vec<String>) -> Vec<(String, u32)> {
+    let mut counted: Vec<(String, u32)> = Vec::new();
+    for name in names {
+        match counted.iter_mut().find(|(n, _)| *n == name) {
+            Some((_, n)) => *n += 1,
+            None => counted.push((name, 1)),
+        }
+    }
+    counted
 }
 
 pub(crate) fn spawn_template(
@@ -873,7 +1052,13 @@ mod tests {
             false
         ));
         assert!(!orderable(&pack(1.0, POD_ONLY), false, false));
-        assert!(!orderable(&pack(1.0, GOODY), false, false));
+        assert!(orderable(&pack(1.0, GOODY), false, false));
+        let crateless = |flags| SupplyPackDef {
+            crate_type: None,
+            ..pack(1.0, flags)
+        };
+        assert!(orderable(&crateless(GOODY), false, false), "a goody case");
+        assert!(!orderable(&crateless(0), false, false));
         assert!(!orderable(
             &SupplyPackDef {
                 custom_fill: true,
@@ -882,6 +1067,15 @@ mod tests {
             false,
             false
         ));
+    }
+
+    #[test]
+    fn manifest_lines_count_names() {
+        let names = ["a", "b", "a"].map(str::to_owned).to_vec();
+        assert_eq!(
+            count_names(names),
+            [("a".to_owned(), 2), ("b".to_owned(), 1)]
+        );
     }
 
     #[test]

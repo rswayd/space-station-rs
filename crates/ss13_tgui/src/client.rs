@@ -341,6 +341,17 @@ pub fn view_names(world: &World) -> Vec<&'static str> {
     names
 }
 
+/// Adds the views registered in `from` to `to`: an app that draws views registered by plugins it
+/// does not run (the view smoke test of `ss13_game` builds the game's client plugins only to read
+/// their views).
+pub fn copy_views(from: &World, to: &mut World) {
+    let Some(views) = from.get_resource::<UiViews>() else {
+        return;
+    };
+    let views: Vec<(&'static str, View)> = views.0.iter().map(|(k, v)| (*k, *v)).collect();
+    to.get_resource_or_init::<UiViews>().0.extend(views);
+}
+
 /// Whether `static_data` and `data` decode as the view `name` expects.
 pub fn view_decodes(world: &World, name: &str, static_data: &[u8], data: &[u8]) -> bool {
     world
@@ -368,6 +379,7 @@ fn render<T: ClientUi>(
     Ok(Box::new(T::content_local(&static_data, &data, local)))
 }
 
+#[derive(Clone, Copy)]
 struct View {
     width: f32,
     height: f32,
@@ -411,6 +423,12 @@ impl ClientWindow {
     /// The shown render's root node (the view's `WindowContent`).
     pub fn content_root(&self, children: &Query<&Children>) -> Option<Entity> {
         children.get(self.content?).ok()?.first().copied()
+    }
+
+    /// The shown render's holder (its child is [`Self::content_root`]); `None` until the first
+    /// render settles.
+    pub fn shown(&self) -> Option<Entity> {
+        self.content
     }
 
     /// Re-render with the current data and local state.

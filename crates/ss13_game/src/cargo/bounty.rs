@@ -442,6 +442,14 @@ pub struct BountyPlugin;
 
 impl Plugin for BountyPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // tg `item_interaction` of the civilian bounty console: an ID card goes in.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 4800, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::cargo::bounty::item_interaction(w, c.client, c.mob, h, c.target)
+            })
+        });
         app.register_ui::<CivBountyUi>()
             .add_systems(
                 Startup,

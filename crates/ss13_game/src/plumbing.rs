@@ -64,6 +64,18 @@ pub struct PlumbingPlugin;
 
 impl Plugin for PlumbingPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // tg `attack_hand` of a sink: washing the hands or face.
+        app.add_click_handler(ClickPhase::EmptyHand, 3100, |w, c| {
+            crate::plumbing::interact(w, c.client, c.mob, c.target)
+        });
+        // tg `sink/item_interaction(_secondary)`: washing, emptying, a mop wetted.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 3400, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::plumbing::item_interaction(w, c.client, c.mob, h, c.target, c.modifiers)
+            })
+        });
         app.add_observer(add_sink)
             .add_systems(Update, reclaim_water);
     }

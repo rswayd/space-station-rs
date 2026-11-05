@@ -34,7 +34,7 @@ use crate::tools::{Actor, tell as tell_client};
 pub const CONSOLE_PATH: &str = "/obj/machinery/computer/dna_console";
 pub const SCANNER_PATH: &str = "/obj/machinery/dna_scannernew";
 pub const INJECTOR_ROOT: &str = "/obj/item/dnainjector";
-const ACTIVATOR_PATH: &str = "/obj/item/dnainjector/activator";
+const ACTIVATOR_PATH: &str = ss13_mapload::runtime::DNA_ACTIVATOR;
 /// `MIN_ACTIVATOR_TIMEOUT`, `MIN_INJECTOR_TIMEOUT`.
 const MIN_ACTIVATOR_SECS: f64 = 5.0;
 const MIN_INJECTOR_SECS: f64 = 10.0;

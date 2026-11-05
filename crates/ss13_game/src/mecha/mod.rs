@@ -38,6 +38,15 @@ pub struct MechaServerPlugin;
 #[cfg(feature = "server")]
 impl bevy::prelude::Plugin for MechaServerPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // tg `item_interaction`/`attackby` of exosuit things: the fabricator, mechs, chassis,
+        // wreckages.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 2900, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::mecha::item_interaction(w, c.client, c.mob, h, c.target, c.modifiers)
+            })
+        });
         app.add_plugins((core::MechCorePlugin, fab::FabPlugin, bay::MechBayPlugin));
     }
 }

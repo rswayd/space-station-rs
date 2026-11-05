@@ -64,6 +64,12 @@ pub struct FurniturePlugin;
 
 impl Plugin for FurniturePlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // An item chair is set down.
+        app.add_click_handler(ClickPhase::AttackSelf, 2200, |w, c| {
+            crate::furniture::attack_self(w, c.client, c.mob, c.target)
+        });
         app.add_observer(add_bed).add_systems(
             Update,
             (seated_facing, unseat_orphans).after(crate::click::ResolveClicks),

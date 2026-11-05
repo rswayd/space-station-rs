@@ -9,8 +9,17 @@
 //! - At startup a closed closet takes the items mapped on its tile (tg `LateInitialize` ->
 //!   `take_contents`); a closet mapped open (`opened = TRUE`) opens instead and fills at once.
 //! - Clicks (tg `attack_hand` -> `toggle`, else `togglelock`; `item_interaction` with an ID ->
-//!   `togglelock`; with any other item on an open closet -> onto its tile): secure closets unlock
-//!   with the clicker's ID access, through the doors' [`check_access`].
+//!   `togglelock`; with any other item on an open closet -> onto its tile; a right click with an
+//!   empty hand -> `togglelock`): secure closets unlock with the clicker's ID access, through the
+//!   doors' [`check_access`]; anyone may lock them. A broken (emagged) lock does not toggle.
+//! - Personal closets (`card_reader_installed`): an ID swiped on the closed, unlocked closet makes
+//!   it that card's ("<name>'s locker"); then only that card, or an ID with the closet's access
+//!   (`ACCESS_ALL_PERSONAL_LOCKERS`), unlocks it; an unowned one unlocks for anyone. The owner's
+//!   card gone, the closet is public again.
+//! - Brig lockers carry the `id` of their cell: the door timer locks and unlocks them
+//!   ([`timer_lock`], [`timer_unlock`], from `crate::brig::timer`).
+//! - [`AccountLock`] (tg `locked_to_account`): a bought crate opens only for an ID of the buyer's
+//!   bank account (or of the buying department's staff); that first opening removes it.
 //! - Mobs: closing takes the living mobs on the tile inside ([`InCloset`]: tg `insert`, up to
 //!   `mob_storage_capacity`; a crate does not close over a standing mob), opening lets them out,
 //!   a step of a mob inside opens an unlocked closet (tg `relaymove` -> `container_resist_act`).
@@ -24,12 +33,14 @@
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
-use ss13_mapload::{DmAtom, DmCloset, DmContents, DmItem, IconIndex};
+use ss13_mapload::{DmAtom, DmCloset, DmContents, DmItem, DmName, IconIndex};
 use ss13_shared::appearance::Overlay;
+use ss13_shared::chat::Span;
 use ss13_shared::{Appearance, IconStateId, Layer, TilePos};
 use ss13_world::{Density, Mover, SpatialIndex, WorldSystems};
 
 use crate::click::{ClickResolved, ResolveClicks};
+use crate::click_handlers::{AddClickHandler, ClickPhase};
 use crate::inventory::{CarriedBy, IdCard, Inventory, check_access};
 use crate::storage::{Stored, StoredIn, put_inside, spawn_contents, take_out};
 
@@ -51,6 +62,12 @@ pub struct Closet {
     pub req_one_access: Vec<String>,
     /// `PopulateContents()` already ran.
     pub contents_initialized: bool,
+    /// `secure_closet/brig::id`: the door timer with this `id` locks it.
+    pub id: Option<String>,
+    /// `card_reader_installed`: a personal closet (its one `access_choices` entry "Personal").
+    pub card_reader: bool,
+    /// `id_card`: the registered card, and the closet's name from before.
+    owner: Option<(Entity, DmName)>,
     dense_when_open: bool,
     wall_mounted: bool,
     /// Crates: no closing over a standing mob.
@@ -70,6 +87,9 @@ impl Closet {
             req_access: dm.req_access.clone(),
             req_one_access: dm.req_one_access.clone(),
             contents_initialized: false,
+            id: (!dm.id.is_empty()).then(|| dm.id.clone()),
+            card_reader: dm.card_reader_installed,
+            owner: None,
             dense_when_open: dm.dense_when_open,
             wall_mounted: dm.wall_mounted,
             horizontal: dm.horizontal,
@@ -85,6 +105,11 @@ impl Closet {
     // closet) and no strong-pull check; add with buckling and pulling.
     pub fn can_open(&self) -> bool {
         !self.opened && !self.welded && !self.locked
+    }
+
+    /// The card the closet is registered to (tg `id_card`).
+    pub fn owner(&self) -> Option<Entity> {
+        self.owner.as_ref().map(|(card, _)| *card)
     }
 
     /// tg `togglelock` access check: a broken lock does not toggle, only unlocking needs
@@ -215,6 +240,17 @@ impl ClosetSprites {
     }
 }
 
+/// tg `/datum/component/locked_to_account`: the buyer of a cargo order. The closet opens only
+/// for a user whose ID card (`get_idcard(TRUE)`) has this bank account, or for a department
+/// order an account paid by that department; that opening removes the lock. An emag removes it
+/// too (`crate::emag`); forced opens ([`open`]) ignore it.
+#[derive(Component, Clone, Debug, PartialEq, Eq)]
+pub enum AccountLock {
+    Personal(u32),
+    /// A department budget's id (`ACCOUNT_*`).
+    Department(String),
+}
+
 /// Closets recognized at startup.
 #[derive(Resource, Debug, Default, Clone)]
 pub struct ClosetReport {
@@ -269,6 +305,11 @@ impl Plugin for ClosetServerPlugin {
                 ),
             )
             .add_observer(release_on_despawn);
+        // tg `lockbox/tool_act`: an ID toggles a lockbox's lock (before a storage takes it).
+        app.add_click_handler(ClickPhase::HeldOnTarget, 4650, |w, c| {
+            c.held
+                .is_some_and(|held| crate::lockbox::item_interaction(w, c.client, held, c.target))
+        });
     }
 }
 
@@ -442,7 +483,7 @@ fn relay_moves(world: &mut World, mut moves: Local<MessageCursor<ClosetRelayMove
             continue;
         }
         if let Some(c) = world.get::<InCloset>(mob).copied() {
-            open_if_allowed(world, c.closet);
+            open_if_allowed(world, c.closet, Some(mob));
         }
     }
 }
@@ -647,20 +688,181 @@ pub(crate) fn put_mob_inside(world: &mut World, mob: Entity, closet: Entity) {
     world.entity_mut(mob).insert(InCloset { closet, look });
 }
 
-/// tg `togglelock`; `true` when the click was handled (even when access was denied).
-fn toggle_lock(world: &mut World, closet: Entity, access: Option<&[String]>) -> bool {
-    let Some(state) = world.get::<Closet>(closet) else {
+fn tell_mob(world: &mut World, mob: Option<Entity>, span: Span, text: impl Into<String>) {
+    if let Some(client) = mob
+        .and_then(|m| world.get::<crate::server::PlayerMob>(m))
+        .map(|p| p.client)
+    {
+        crate::tools::tell(world, client, span, text);
+    }
+}
+
+fn card_access(world: &World, card: Option<Entity>) -> Vec<String> {
+    card.and_then(|c| world.get::<IdCard>(c))
+        .map(|c| c.access.clone())
+        .unwrap_or_default()
+}
+
+/// tg `togglelock` by `user` showing `card` (the swiped ID, or the one held or worn); `true`
+/// when the click was handled (even when access was denied). Unlocking needs `can_unlock`:
+/// the registered card (or, on a personal closet, the closet's access), else the closet's
+/// access (anyone for an unowned personal closet).
+fn toggle_lock(
+    world: &mut World,
+    user: Option<Entity>,
+    closet: Entity,
+    card: Option<Entity>,
+) -> bool {
+    let Some(state) = world.get::<Closet>(closet).cloned() else {
         return false;
     };
     if !state.secure {
         return false;
     }
-    if state.may_toggle_lock(access) {
+    if state.broken {
+        return true;
+    }
+    if state.locked {
+        let access = card_access(world, card);
+        let refusal = match state.owner() {
+            // `id_card.resolve()` failed: the card is gone, the closet is public again.
+            Some(owner) if world.get::<IdCard>(owner).is_none() => {
+                clear_owner(world, closet);
+                return toggle_lock(world, user, closet, card);
+            }
+            Some(owner) => {
+                let override_access = state.card_reader
+                    && check_access(&state.req_access, &state.req_one_access, &access);
+                (card != Some(owner) && !override_access).then_some("not your locker!")
+            }
+            None => (!state.card_reader && !state.may_toggle_lock(Some(access.as_slice())))
+                .then_some("в доступе отказано!"),
+        };
+        if let Some(why) = refusal {
+            tell_mob(world, user, Span::Warning, why);
+            return true;
+        }
+    }
+    let locked = {
         let mut state = world.get_mut::<Closet>(closet).expect("checked above");
         state.locked = !state.locked;
-        refresh_look(world, closet);
-    }
+        state.locked
+    };
+    refresh_look(world, closet);
+    let what = crate::security::name_of(world, closet);
+    let text = if locked {
+        format!("Вы запираете {what}.")
+    } else {
+        format!("Вы отпираете {what}.")
+    };
+    tell_mob(world, user, Span::Notice, text);
     true
+}
+
+/// tg `item_interaction` with a card reader (personal closets, "Personal"): `card` on the
+/// closed, unlocked closet becomes its owner. False when the closet takes no registration.
+// shortcut: no "Job"/"None" access choices, no card readers or airlock electronics installed by
+// hand, no access panel lock (multitool), no renaming with a pen, no lock sounds or deny buzz.
+fn register_owner(world: &mut World, user: Entity, closet: Entity, card: Entity) -> bool {
+    let Some(state) = world.get::<Closet>(closet) else {
+        return false;
+    };
+    if !state.secure || state.broken || !state.card_reader || state.locked || state.opened {
+        return false;
+    }
+    let initial = match &state.owner {
+        Some((_, name)) => name.clone(),
+        None => world.get::<DmName>(closet).cloned().unwrap_or_default(),
+    };
+    let holder = world
+        .get::<crate::outfit::IdRegistration>(card)
+        .map(|r| r.registered_name.clone())
+        .unwrap_or_default();
+    world.entity_mut(closet).insert(DmName {
+        name: format!("{holder}'s locker"),
+        desc: format!("{} It has been ID locked to {holder}.", initial.desc),
+    });
+    world
+        .get_mut::<Closet>(closet)
+        .expect("checked above")
+        .owner = Some((card, initial));
+    tell_mob(
+        world,
+        Some(user),
+        Span::Notice,
+        format!("now owned by {holder}"),
+    );
+    true
+}
+
+/// The registered card is gone (tg `togglelock`): the name back, no owner, no access needed.
+fn clear_owner(world: &mut World, closet: Entity) {
+    let Some(mut state) = world.get_mut::<Closet>(closet) else {
+        return;
+    };
+    let Some((_, name)) = state.owner.take() else {
+        return;
+    };
+    state.req_access.clear();
+    state.req_one_access.clear();
+    world.entity_mut(closet).insert(name);
+}
+
+/// `door_timer/timer_start` on a linked brig closet: an unbroken one closes (when it can) and
+/// locks.
+pub fn timer_lock(world: &mut World, closet: Entity) {
+    let Some((broken, opened)) = world.get::<Closet>(closet).map(|c| (c.broken, c.opened)) else {
+        return;
+    };
+    if broken || (opened && !close(world, closet)) {
+        return;
+    }
+    world
+        .get_mut::<Closet>(closet)
+        .expect("checked above")
+        .locked = true;
+    refresh_look(world, closet);
+}
+
+/// `door_timer/timer_end` on a linked brig closet: an unbroken closed one unlocks.
+pub fn timer_unlock(world: &mut World, closet: Entity) {
+    let Some(state) = world.get::<Closet>(closet) else {
+        return;
+    };
+    if state.broken || state.opened {
+        return;
+    }
+    world
+        .get_mut::<Closet>(closet)
+        .expect("checked above")
+        .locked = false;
+    refresh_look(world, closet);
+}
+
+/// `locked_to_account/on_pre_open` for `user`: `None` lets it open, else the refusal (empty
+/// without a user: nothing to tell).
+fn account_refusal(
+    world: &World,
+    lock: &AccountLock,
+    user: Option<Entity>,
+) -> Option<&'static str> {
+    let Some(user) = user else {
+        return Some("");
+    };
+    let Some(card) = world.get::<Inventory>(user).and_then(|i| i.id_card(world)) else {
+        return Some("No ID detected!");
+    };
+    let Some(account) = crate::cargo::economy::account_of(world, card) else {
+        return Some("No linked bank account detected!");
+    };
+    let matches = match lock {
+        AccountLock::Personal(buyer) => *buyer == account,
+        AccountLock::Department(department) => world
+            .get_resource::<crate::cargo::economy::Economy>()
+            .and_then(|e| e.account(account))
+            .is_some_and(|a| a.paycheck_department == *department),
+    };
+    (!matches).then_some("Bank account does not match with buyer!")
 }
 
 /// Resolved clicks on closets, before `crate::inventory` sees them (so an item put on an open
@@ -681,20 +883,24 @@ fn closet_clicks(world: &mut World, mut clicks: Local<MessageCursor<ClickResolve
         if world.get::<TilePos>(click.target) != Some(&click.target_pos) {
             continue;
         }
-        let access = |world: &mut World| -> Option<Vec<String>> {
-            let card = inventory.id_card(world)?;
-            world.get::<IdCard>(card).map(|card| card.access.clone())
-        };
+        let user = Some(click.mob);
         match inventory.active_item() {
+            // tg `attack_hand_secondary`.
+            None if click.modifiers.right => {
+                if !state.opened {
+                    let card = inventory.id_card(world);
+                    toggle_lock(world, user, click.target, card);
+                }
+            }
             None => {
                 let toggled = if state.opened {
                     close(world, click.target)
                 } else {
-                    open_if_allowed(world, click.target)
+                    open_if_allowed(world, click.target, user)
                 };
                 if !toggled && !state.opened {
-                    let access = access(world);
-                    toggle_lock(world, click.target, access.as_deref());
+                    let card = inventory.id_card(world);
+                    toggle_lock(world, user, click.target, card);
                 }
             }
             Some(held) => {
@@ -709,17 +915,46 @@ fn closet_clicks(world: &mut World, mut clicks: Local<MessageCursor<ClickResolve
                             .remove::<CarriedBy>()
                             .insert(click.target_pos);
                     }
-                } else if let Some(card) = crate::inventory::get_id(world, held) {
-                    let card = world.get::<IdCard>(card).map(|c| c.access.clone());
-                    toggle_lock(world, click.target, card.as_deref());
+                } else if let Some(card) = crate::inventory::get_id(world, held)
+                    && !register_owner(world, click.mob, click.target, card)
+                {
+                    toggle_lock(world, user, click.target, Some(card));
                 }
             }
         }
     }
 }
 
-fn open_if_allowed(world: &mut World, closet: Entity) -> bool {
-    world.get::<Closet>(closet).is_some_and(Closet::can_open) && open(world, closet)
+/// tg `open(user)`: not welded or locked, and an [`AccountLock`] lets `user` through (and is
+/// gone after).
+fn open_if_allowed(world: &mut World, closet: Entity, user: Option<Entity>) -> bool {
+    if !world.get::<Closet>(closet).is_some_and(Closet::can_open) {
+        return false;
+    }
+    if let Some(lock) = world.get::<AccountLock>(closet).cloned() {
+        if let Some(why) = account_refusal(world, &lock, user) {
+            if !why.is_empty() {
+                tell_mob(world, user, Span::Warning, why);
+            }
+            return false;
+        }
+        world.entity_mut(closet).remove::<AccountLock>();
+        let what = crate::security::name_of(world, closet);
+        if let Some(&pos) = world.get::<TilePos>(closet) {
+            crate::security::show(
+                world,
+                pos,
+                crate::health::DEFAULT_MESSAGE_RANGE,
+                ss13_shared::chat::ChatChannel::Local,
+                (
+                    Span::Notice,
+                    format!("{what}'s account lock disengages with a soft click."),
+                ),
+                &[],
+            );
+        }
+    }
+    open(world, closet)
 }
 
 /// Whether `item` is inside `closet`.
@@ -836,20 +1071,118 @@ mod tests {
             ..default()
         };
         let c = closet(&mut world, dm);
-        assert!(!open_if_allowed(&mut world, c));
-        let assistant = vec!["maint_tunnels".to_owned()];
-        assert!(toggle_lock(&mut world, c, Some(&assistant)), "handled");
+        assert!(!open_if_allowed(&mut world, c, None));
+        let assistant = card(&mut world, &["maint_tunnels"]);
+        assert!(toggle_lock(&mut world, None, c, Some(assistant)), "handled");
         assert!(world.get::<Closet>(c).unwrap().locked, "denied");
-        assert!(toggle_lock(&mut world, c, None));
+        assert!(toggle_lock(&mut world, None, c, None));
         assert!(world.get::<Closet>(c).unwrap().locked, "no ID");
-        let captain = vec!["captain".to_owned()];
-        assert!(toggle_lock(&mut world, c, Some(&captain)));
+        let captain = card(&mut world, &["captain"]);
+        assert!(toggle_lock(&mut world, None, c, Some(captain)));
         assert!(!world.get::<Closet>(c).unwrap().locked);
-        assert!(open_if_allowed(&mut world, c));
+        assert!(open_if_allowed(&mut world, c, None));
         // Locking needs no access.
         close(&mut world, c);
-        toggle_lock(&mut world, c, None);
+        toggle_lock(&mut world, None, c, None);
         assert!(world.get::<Closet>(c).unwrap().locked);
+        // A broken lock does not toggle.
+        world.get_mut::<Closet>(c).unwrap().broken = true;
+        world.get_mut::<Closet>(c).unwrap().locked = false;
+        toggle_lock(&mut world, None, c, Some(captain));
+        assert!(!world.get::<Closet>(c).unwrap().locked);
+    }
+
+    fn card(world: &mut World, access: &[&str]) -> Entity {
+        let access = access.iter().map(|a| (*a).to_owned()).collect();
+        world.spawn(IdCard { access }).id()
+    }
+
+    #[test]
+    fn personal_closets_belong_to_the_first_card() {
+        let mut world = world();
+        let dm = DmCloset {
+            secure: true,
+            locked: true,
+            card_reader_installed: true,
+            req_access: vec!["all_personal_lockers".into()],
+            ..default()
+        };
+        let c = closet(&mut world, dm);
+        world.entity_mut(c).insert(DmName {
+            name: "personal closet".into(),
+            desc: "A locker.".into(),
+        });
+        let user = world.spawn_empty().id();
+        let (alice, bob) = (card(&mut world, &[]), card(&mut world, &[]));
+        world
+            .entity_mut(alice)
+            .insert(crate::outfit::IdRegistration {
+                registered_name: "Alice".into(),
+                assignment: String::new(),
+                job: String::new(),
+            });
+        assert!(!register_owner(&mut world, user, c, alice), "locked");
+        // Unowned: anyone unlocks it.
+        toggle_lock(&mut world, None, c, Some(bob));
+        assert!(!world.get::<Closet>(c).unwrap().locked);
+        assert!(register_owner(&mut world, user, c, alice));
+        assert_eq!(world.get::<Closet>(c).unwrap().owner(), Some(alice));
+        assert_eq!(world.get::<DmName>(c).unwrap().name, "Alice's locker");
+        toggle_lock(&mut world, None, c, Some(bob));
+        assert!(world.get::<Closet>(c).unwrap().locked, "anyone locks it");
+        toggle_lock(&mut world, None, c, Some(bob));
+        assert!(world.get::<Closet>(c).unwrap().locked, "not your locker");
+        let hop = card(&mut world, &["all_personal_lockers"]);
+        toggle_lock(&mut world, None, c, Some(hop));
+        assert!(
+            !world.get::<Closet>(c).unwrap().locked,
+            "the override access"
+        );
+        toggle_lock(&mut world, None, c, Some(alice));
+        assert!(world.get::<Closet>(c).unwrap().locked);
+        toggle_lock(&mut world, None, c, Some(alice));
+        assert!(!world.get::<Closet>(c).unwrap().locked, "the owner");
+        toggle_lock(&mut world, None, c, None);
+        // The owner's card gone: public again, with its old name.
+        world.despawn(alice);
+        toggle_lock(&mut world, None, c, Some(bob));
+        let state = world.get::<Closet>(c).unwrap();
+        assert!(!state.locked && state.owner().is_none() && state.req_access.is_empty());
+        assert_eq!(world.get::<DmName>(c).unwrap().name, "personal closet");
+    }
+
+    #[test]
+    fn timers_lock_brig_closets_and_account_locks_hold() {
+        let mut world = world();
+        let dm = DmCloset {
+            secure: true,
+            id: "Cell 1".into(),
+            ..default()
+        };
+        let c = closet(&mut world, dm);
+        assert_eq!(
+            world.get::<Closet>(c).unwrap().id.as_deref(),
+            Some("Cell 1")
+        );
+        assert!(open(&mut world, c));
+        timer_lock(&mut world, c);
+        let state = world.get::<Closet>(c).unwrap();
+        assert!(!state.opened && state.locked, "closed and locked");
+        timer_unlock(&mut world, c);
+        assert!(!world.get::<Closet>(c).unwrap().locked);
+        world.get_mut::<Closet>(c).unwrap().broken = true;
+        timer_lock(&mut world, c);
+        assert!(
+            !world.get::<Closet>(c).unwrap().locked,
+            "broken locks stay open"
+        );
+
+        let bought = closet(&mut world, DmCloset::default());
+        world.entity_mut(bought).insert(AccountLock::Personal(7));
+        assert!(!open_if_allowed(&mut world, bought, None), "nobody's ID");
+        assert!(world.entity(bought).contains::<AccountLock>());
+        world.entity_mut(bought).remove::<AccountLock>();
+        assert!(open_if_allowed(&mut world, bought, None));
     }
 
     #[test]

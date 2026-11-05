@@ -252,6 +252,18 @@ pub struct ImplantsPlugin;
 
 impl Plugin for ImplantsPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // An implanter and an implant case in the hands swap the implant.
+        app.add_click_handler(ClickPhase::OtherHand, 600, |w, c| {
+            c.held
+                .is_some_and(|h| crate::implants::item_interaction(w, c.client, c.mob, h, c.target))
+        });
+        // An implanter on an implant case, a case on the implant pad.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 700, |w, c| {
+            c.held
+                .is_some_and(|h| crate::implants::item_interaction(w, c.client, c.mob, h, c.target))
+        });
         app.init_resource::<NextImplantId>()
             .add_observer(add_holder_state)
             .add_systems(

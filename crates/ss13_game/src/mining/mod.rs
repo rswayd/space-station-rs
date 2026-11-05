@@ -31,6 +31,17 @@ pub struct MiningServerPlugin;
 #[cfg(feature = "server")]
 impl bevy::prelude::Plugin for MiningServerPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // Weak rock by hand; the ore box, ORM and mining console windows.
+        app.add_click_handler(ClickPhase::EmptyHand, 2900, |w, c| {
+            crate::mining::interact(w, c.client, c.mob, c.target)
+        });
+        // Mining tools on rock, ore into the ORM or an ore box, a welder on ore.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 3000, |w, c| {
+            c.held
+                .is_some_and(|h| crate::mining::item_interaction(w, c.client, c.mob, h, c.target))
+        });
         app.add_plugins((
             rocks::RocksPlugin,
             orm::OrmPlugin,

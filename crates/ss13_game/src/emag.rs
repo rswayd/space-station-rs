@@ -11,7 +11,9 @@
 //!     bolted with its lights off, both powers lost, for good unoperable (`crate::doors`);
 //!   - a windoor (closed, not moving) opens 0.6 s later and stays open;
 //!   - a firelock opens and stops following alarms (`crate::wallmount::firelock`);
-//!   - a secure closet or crate: its lock breaks open (`broken`, no locking any more);
+//!   - a secure closet or crate: its lock breaks open (`broken`, no locking any more), an
+//!     account lock (`crate::closets::AccountLock`) is bypassed;
+//!   - a lockbox: its lock breaks open (`crate::lockbox`);
 //!   - an APC (panel shut): its interface unlocks and cannot be locked again;
 //!   - an air alarm: the flood and vent siphon modes are offered;
 //!   - a supply console: contraband is offered (`crate::cargo::console`);
@@ -75,6 +77,23 @@ pub struct EmagPlugin;
 
 impl Plugin for EmagPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // tg `/obj/item/card/emag/interact_with_atom` on the families with an `emag_act`.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 300, |w, c| {
+            !c.modifiers.right
+                && c.held.is_some_and(|h| {
+                    crate::emag::interact_with_atom(
+                        w,
+                        crate::tools::Actor {
+                            client: c.client,
+                            mob: c.mob,
+                            item: Some(h),
+                        },
+                        c.target,
+                    )
+                })
+        });
         app.add_systems(
             Update,
             (
@@ -123,6 +142,7 @@ fn takes_emag(world: &World, target: Entity) -> bool {
             DoorKind::Airlock | DoorKind::Windoor | DoorKind::Firedoor
         )
     }) || e.contains::<Closet>()
+        || e.contains::<crate::lockbox::Lockbox>()
         || e.contains::<Apc>()
         || e.contains::<AirAlarm>()
         || e.contains::<crate::cargo::console::CargoConsole>()
@@ -236,6 +256,9 @@ pub fn emag_act(world: &mut World, actor: Actor, card: Entity, target: Entity) -
     }
     if world.get::<Closet>(target).is_some() {
         return closet(world, mob, target);
+    }
+    if world.get::<crate::lockbox::Lockbox>(target).is_some() {
+        return crate::lockbox::emag_act(world, client, target);
     }
     if world.get::<Apc>(target).is_some() {
         return apc(world, mob, target);
@@ -429,13 +452,21 @@ fn recharge_doorjacks(world: &mut World) {
 }
 
 /// `/obj/structure/closet/emag_act`: a secure closet's lock breaks open.
+/// An account lock (`locked_to_account/on_emag`) is bypassed first.
 fn closet(world: &mut World, mob: Entity, target: Entity) -> bool {
+    let account_lock = world
+        .entity_mut(target)
+        .take::<crate::closets::AccountLock>()
+        .is_some();
+    if account_lock {
+        tell_mob(world, mob, Span::Notice, "account lock bypassed");
+    }
     {
         let Some(mut c) = world.get_mut::<Closet>(target) else {
-            return false;
+            return account_lock;
         };
         if !c.secure || c.broken {
-            return false;
+            return account_lock;
         }
         c.broken = true;
         c.locked = false;

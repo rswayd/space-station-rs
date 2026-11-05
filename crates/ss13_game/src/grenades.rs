@@ -55,10 +55,10 @@ const CONCUSSION: &str = "/obj/item/grenade/syndieminibomb/concussion";
 const FRAG: &str = "/obj/item/grenade/frag";
 const FRAG_MEGA: &str = "/obj/item/grenade/frag/mega";
 const CLUSTER: &str = "/obj/item/grenade/clusterbuster";
-const CLUSTER_SEGMENT: &str = "/obj/item/grenade/clusterbuster/segment";
-const SMOKE_EFFECT: &str = "/obj/effect/particle_effect/fluid/smoke/bad";
-const SHRAPNEL: &str = "/obj/projectile/bullet/shrapnel";
-const SHRAPNEL_MEGA: &str = "/obj/projectile/bullet/shrapnel/mega";
+const CLUSTER_SEGMENT: &str = ss13_mapload::runtime::CLUSTERBUSTER_SEGMENT;
+const SMOKE_EFFECT: &str = ss13_mapload::runtime::SMOKE_BAD;
+const SHRAPNEL: &str = ss13_mapload::runtime::SHRAPNEL;
+const SHRAPNEL_MEGA: &str = ss13_mapload::runtime::SHRAPNEL_MEGA;
 
 const ARM_SOUND: &str = "sound/items/weapons/armbomb.ogg";
 const FLASHBANG_SOUND: &str = "sound/items/weapons/flashbang.ogg";
@@ -157,6 +157,22 @@ pub struct GrenadesServerPlugin;
 
 impl Plugin for GrenadesServerPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // A grenade is armed.
+        app.add_click_handler(ClickPhase::AttackSelf, 2000, |w, c| {
+            crate::grenades::attack_self(w, c.client, c.mob, c.target)
+        });
+        // A screwdriver or multitool sets the fuse of the grenade in the other hand.
+        app.add_click_handler(ClickPhase::OtherHand, 800, |w, c| {
+            c.held
+                .is_some_and(|h| crate::grenades::item_interaction(w, c.client, c.mob, h, c.target))
+        });
+        // A screwdriver or multitool sets a grenade's fuse.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 600, |w, c| {
+            c.held
+                .is_some_and(|h| crate::grenades::item_interaction(w, c.client, c.mob, h, c.target))
+        });
         app.add_systems(
             Update,
             (

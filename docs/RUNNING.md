@@ -36,6 +36,14 @@ match tg's own previews (`icons/map_icons/`) pixel for pixel:
 Screenshots of GAGS clothes, PDAs, hats and canisters, worn and held:
 `SS13_LIGHTING=0 SS13_MAP=$PWD/scripts/visual/maps/gags.dmm SS13_ASSETS=$ASSETS scripts/visual-check.sh scripts/visual/gags_1.txt scripts/visual/gags_2.txt scripts/visual/gags_3.txt`.
 
+`convert` emits a prototype only for types a map places or something asks for. What the game
+spawns by a constant path (`construction::spawn_obj(world, NEWSPAPER, pos)`, spawn tables) is
+listed in `ss13_mapload::runtime::runtime_types`, which `convert` always emits; without it the
+spawn silently returns `None` in the real game while fixture tests pass. A new constant spawn
+goes there (the `runtime_types::` test of `ss13_game` fails on one that is missing); after
+regenerating, check the assets with
+`SS13_ASSETS=$ASSETS cargo test -p ss13_mapload --test it runtime_types_real:: -- --ignored --nocapture`.
+
 The BYOND source defaults to `../BandaStation` next to the workspace (`.cargo/config.toml` `[env]`);
 set `SS13_SOURCE` (or `--source`)
 for another checkout.
@@ -320,6 +328,12 @@ cargo run -p ss13_client --bin ui_gallery -- Canister --screenshot out.png   # P
 Windows open with sample data (`crates/ss13_tgui/src/samples.rs`); their buttons change nothing,
 the list shows the last action and logs it. A new interface needs a sample there:
 `cargo test -p ss13_tgui --features client --test samples` fails for a view without one.
+
+Every view the client registers (the tgui crate's and the game's client plugins) is also opened
+headless by `cargo nextest run -p ss13_game --all-features -E 'test(/^ui_smoke::/)'`: with its
+sample, all-zero data and all-`0x01` data (postcard streams that decode as most types, so a new
+view needs no sample there); it fails on a panic, a window that never shows a render, or a render
+without child nodes.
 
 ## Debug UI
 

@@ -40,6 +40,13 @@ pub struct CargoServerPlugin;
 #[cfg(feature = "server")]
 impl bevy::prelude::Plugin for CargoServerPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // tg `interact_with_atom` of the universal scanner: an export scan.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 5000, |w, c| {
+            c.held
+                .is_some_and(|h| crate::cargo::scanner::item_interaction(w, c.client, h, c.target))
+        });
         app.add_plugins((
             economy::EconomyPlugin,
             stock_market::StockMarketPlugin,

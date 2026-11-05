@@ -4,6 +4,7 @@
 //! by `ss13_dm_extract` into `dm_types.json` `populate` and resolved per type here.
 //!
 //! - [`DmCloset`]: the closet vars `update_icon`, `open`, `close` and `togglelock` read.
+//! - [`DmLockbox`]: the access and lock sprites of `/obj/item/storage/lockbox` types.
 //! - [`DmContents`]: the contents program of a type, `..()` inlined and `if(var)` decided by the
 //!   type's own vars, so every type carries its complete program.
 //! - [`DmStorage`]: `max_slots`, `max_specific_storage`, `max_total_storage` of the item's
@@ -23,6 +24,7 @@ use crate::value::{Field, Skip, Val};
 pub const CLOSET_ROOT: &str = "/obj/structure/closet";
 pub const CRATE_ROOT: &str = "/obj/structure/closet/crate";
 pub const STORAGE_ROOT: &str = "/obj/item/storage";
+pub const LOCKBOX_ROOT: &str = "/obj/item/storage/lockbox";
 const ITEM_ROOT: &str = crate::item::ITEM_ROOT;
 /// `WEIGHT_CLASS_NORMAL`, `/obj/item::w_class`.
 pub const WEIGHT_CLASS_NORMAL: u8 = 3;
@@ -128,7 +130,30 @@ pub struct DmCloset {
     pub wall_mounted: bool,
     pub horizontal: bool,
     pub storage_capacity: u32,
+    /// `secure_closet/brig::id`: the door timer that locks it.
+    pub id: String,
+    /// `card_reader_installed`: personal closets (an ID swipe makes it the card's).
+    pub card_reader_installed: bool,
 }
+
+/// The lock of a `/obj/item/storage/lockbox` type (`req_access`, the `icon_*` states);
+/// empty strings are DM `null`.
+#[derive(Component, Reflect, Default, Clone, Debug, PartialEq)]
+pub struct DmLockbox {
+    pub req_access: Vec<String>,
+    pub req_one_access: Vec<String>,
+    pub icon_locked: String,
+    pub icon_closed: String,
+    pub icon_broken: String,
+}
+
+const LOCKBOX_VARS: [&str; 5] = [
+    "req_access",
+    "req_one_access",
+    "icon_locked",
+    "icon_closed",
+    "icon_broken",
+];
 
 /// `atom_storage` limits of a storage item (`/datum/storage` vars of its `storage_type`).
 #[derive(Component, Reflect, Clone, Debug, PartialEq)]
@@ -166,7 +191,7 @@ impl Default for DmWeight {
 }
 
 /// Closet vars and their [`DmCloset`] field names.
-const CLOSET_VARS: [(&str, &str); 15] = [
+const CLOSET_VARS: [(&str, &str); 17] = [
     ("opened", "opened"),
     ("locked", "locked"),
     ("welded", "welded"),
@@ -182,12 +207,23 @@ const CLOSET_VARS: [(&str, &str); 15] = [
     ("dense_when_open", "dense_when_open"),
     ("wall_mounted", "wall_mounted"),
     ("horizontal", "horizontal"),
+    ("id", "id"),
+    ("card_reader_installed", "card_reader_installed"),
 ];
 
 const STORAGE_VARS: [&str; 3] = ["max_slots", "max_specific_storage", "max_total_storage"];
 
 fn is_text_var(var: &str) -> bool {
-    matches!(var, "base_icon_state" | "icon_door" | "icon_welded")
+    matches!(
+        var,
+        "base_icon_state"
+            | "icon_door"
+            | "icon_welded"
+            | "id"
+            | "icon_locked"
+            | "icon_closed"
+            | "icon_broken"
+    )
 }
 
 fn is_list_var(var: &str) -> bool {
@@ -227,6 +263,13 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
                 "storage_capacity",
                 (n.max(0.0) as u32).to_string(),
             ));
+        }
+    }
+    if is_under(path, LOCKBOX_ROOT) {
+        for var in LOCKBOX_VARS {
+            if let Some(Some(ron)) = value(LOCKBOX_ROOT, var).map(|v| json_ron(var, v)) {
+                out.push(ext("dm_lockbox", var, ron));
+            }
         }
     }
     if is_under(path, ITEM_ROOT)
@@ -735,6 +778,13 @@ mod tests {
             "storage_type": { "path": "/datum/storage" } } },
         "/obj/item/storage/backpack": { "parent": "/obj/item/storage", "declared_vars": {
             "storage_type": { "path": "/datum/storage/backpack" }, "w_class": 4 } },
+        "/obj/item/storage/lockbox": { "parent": "/obj/item/storage", "declared_vars": {
+            "req_access": { "list": ["armory"] }, "icon_locked": "lockbox+l",
+            "icon_closed": "lockbox", "icon_broken": "lockbox+b" } },
+        "/obj/item/storage/lockbox/medal": { "parent": "/obj/item/storage/lockbox",
+            "declared_vars": { "req_access": { "list": ["captain"] }, "icon_locked": "medalbox+l" } },
+        "/obj/structure/closet/secure_closet/brig": {
+            "parent": "/obj/structure/closet/secure_closet", "declared_vars": { "id": null } },
         "/datum": { "parent": null },
         "/datum/storage": { "parent": "/datum", "declared_vars": {
             "max_slots": 7, "max_specific_storage": 3, "max_total_storage": 14 } },
@@ -875,6 +925,36 @@ mod tests {
         assert_eq!(
             ext_field("/obj/item/a", "opened", Val::Num(1.0)),
             Err(Skip::UnknownVar)
+        );
+    }
+
+    #[test]
+    fn lockbox_and_brig_closet_fields() {
+        let types = types();
+        let ron = |path| crate::value::patch_ron(&type_fields(&types, path));
+        let root = ron("/obj/item/storage/lockbox");
+        assert!(
+            root.contains(
+                r#""dm_lockbox": (req_access: ["armory"], icon_locked: "lockbox+l", icon_closed: "lockbox", icon_broken: "lockbox+b")"#
+            ),
+            "{root}"
+        );
+        let medal = ron("/obj/item/storage/lockbox/medal");
+        assert!(
+            medal.contains(r#""dm_lockbox": (req_access: ["captain"], icon_locked: "medalbox+l")"#),
+            "{medal}"
+        );
+        assert!(!ron("/obj/item/storage/backpack").contains("dm_lockbox"));
+        let brig = ron("/obj/structure/closet/secure_closet/brig");
+        assert!(brig.contains(r#"id: """#), "{brig}");
+        // The map names the cell: `id = "Cell 1"`.
+        assert_eq!(
+            ext_field(
+                "/obj/structure/closet/secure_closet/brig",
+                "id",
+                Val::Str("Cell 1")
+            ),
+            Ok(ext("dm_closet", "id", r#""Cell 1""#))
         );
     }
 }
