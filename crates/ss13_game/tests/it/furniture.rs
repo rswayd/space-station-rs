@@ -7,6 +7,7 @@
 use std::path::{Path, PathBuf};
 
 use bevy::prelude::*;
+use ss13_game::combat::NextMove;
 use ss13_game::furniture::Seated;
 use ss13_game::health::BodyPosition;
 use ss13_game::inventory::{CarriedBy, Inventory};
@@ -335,6 +336,11 @@ fn sit_turn_stand_stools_wrench_fold_and_beds() {
     )
     .unwrap();
     s.give(wrench);
+    // Resisting started the click cooldown (tg `CLICK_CD_RESIST`): a click now is dropped.
+    s.run_until("the click cooldown is over", |s| {
+        let now = s.now();
+        s.try_get::<NextMove>(s.mob()).is_none_or(|n| now >= n.0)
+    });
     s.click_with(
         0,
         stool,
