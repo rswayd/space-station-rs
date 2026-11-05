@@ -6,28 +6,28 @@
 
 - **Код:** [`/obj/item/paper`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/paperwork/paper.dm#L15), [`ui_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/paperwork/paper.dm#L594), [`add_raw_text()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/paperwork/paper.dm#L176), [`/datum/paper_input`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/paperwork/paper.dm#L738); tgui: [`PaperSheet`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/PaperSheet)
 - **BandaStation:** [`modular_bandastation/paperwork/code/paperwork.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/paperwork/code/paperwork.dm#L10) — `replace_text_keys()`: ключи `[name]`, `[age]`, `[sign]`, `[time]`, `[date]`, `[station_name]`, `[bank_id]`, `[job]`, `[department]`, `[species]`, `[gender]` в шаблонах бумаги подставляются данными игрока
-- **Статус в ss13-rs:** ❌ нет — бумага на карте только предмет, письма нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/service/paper.rs`: `Paper` (входы с шрифтом/цветом/жирностью, печати), чтение в руке — окно `PaperSheet` (`crates/ss13_game/src/service/client.rs`, текст без рендера markdown/HTML), ручка/мелок на бумаге — многострочный prompt вместо поля tgui, лимит `MAX_PAPER_LENGTH` 5000, иконка `paper_words`, звук `writing_pen`; `write_printed` для распечаток (отчёт криминалиста, коды ядерных оперативников); нет полей `[input_field]`, подписей, ключей BandaStation `[name]`…, самолётика, сжигания, переименования, чтения при осмотре
 
 ### Готовые бумаги и инструкции
 Предзаполненные листы на карте: SOP, инструкции по работе, записки, мятая и окровавленная бумага.
 
 - **Код:** [`/obj/item/paper/fluff/sop`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/paperwork/paper_premade.dm#L5), [`/obj/item/paper/crumpled`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/paperwork/paper.dm#L903)
 - **BandaStation:** [`modular_bandastation/objects/code/items/papers.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/items/papers.dm#L2) — бумаги ЦК на русском
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload/src/service.rs` (`DmService.text` из `default_raw_text`, и правки карты) → первый вход `Paper`; строки-выражения (`[station_name()]`) пусты, ключи `replace_text_keys` не подставляются
 
 ### Ручки
 Ручки разных цветов, четырёхцветная, перьевая, невидимые чернила, угольный стилус; клик в руке щёлкает колпачком. Ручки можно метнуть/воткнуть (embedding).
 
 - **Код:** [`/obj/item/pen`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/paperwork/pen.dm#L13), [`/obj/item/pen/fourcolor`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/paperwork/pen.dm#L125), [`/obj/item/pen/fountain`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/paperwork/pen.dm#L154)
 - **BandaStation:** [`code/modules/paperwork/pen.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/paperwork/pen.dm#L158) — читаемый шрифт перьевой ручки; [`modular_bandastation/objects/code/items/pen.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/items/pen.dm#L1) — капитанская ручка
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/inventory.rs`: ручка только помещается в слот хранения костюма, писать ею нельзя
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/service/paper.rs`: ручки пишут своим цветом и шрифтом (синяя, красная, невидимая, угольная, survival), четырёхцветная переключается в руке, мелки пишут жирно цветом мелка; нет щелчка ручкой, сонной ручки, энергокинжала, ручек в дротиках
 
 ### Печати
 Штампы глав, «Одобрено»/«Отказано», юриста и др. ставятся на бумагу в tgui-окне листа в выбранное место с поворотом.
 
 - **Код:** [`/obj/item/stamp`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/paperwork/stamps.dm#L1), [`/obj/item/paper/proc/add_stamp()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/paperwork/paper.dm#L205), [`/datum/paper_stamp`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/paperwork/paper.dm#L862)
 - **BandaStation:** [`modular_bandastation/objects/code/items/stamp.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/items/stamp.dm#L1) — печати представителя NT, магистрата, ТСФ, СССП
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/service/paper.rs`: печать на бумаге ставится сразу (без выбора места в окне), до `MAX_PAPER_STAMPS` 30, первые 5 — оверлеи `paper_<icon_state>`, звук; в окне печати перечислены по имени
 
 ### Планшет (clipboard)
 Держит стопку бумаг и ручку; бумагу на верху можно писать и подписывать, не вынимая (tgui `Clipboard`).
@@ -51,7 +51,7 @@
 Выдаёт новые листы (и ручку, если вложена); варианты из натуральной бумаги и с копиркой.
 
 - **Код:** [`/obj/item/paper_bin`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/paperwork/paperbin.dm#L3), [`/obj/item/paper_bin/carbon`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/paperwork/paperbin.dm#L272)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/service/paper.rs`: 30 листов, пустая рука берёт верхний (вложенный или новый лист типа лотка), бумага кладётся внутрь, оверлей листа и края; нет ручки в лотке, обвала стопки, поднятия лотка перетаскиванием, горения
 
 ### Копировальная бумага
 Лист с копиркой: написанное отрывается как копия.
@@ -87,7 +87,7 @@
 Наклеивает на предмет ярлык (переименование в «name (label)»), заправляется рулоном.
 
 - **Код:** [`/obj/item/hand_labeler`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/paperwork/handlabeler.dm#L2), [`/obj/item/hand_labeler_refill`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/paperwork/handlabeler.dm#L147)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/service/paper.rs`: включение в руке спрашивает текст (до 42 символов), включённый дописывает ` (метка)` к имени цели (лимит 64, 30 меток, рулон-заправка), мобов не метит; метка не отдельный предмет и не отклеивается
 
 ### Отдельские документы для карго
 Документы отделов, которые нужно заверить печатью соответствующего главы; проданные с верной печатью дают деньги карго, без неё — штраф.

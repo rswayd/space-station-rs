@@ -5,7 +5,7 @@
 Шкаф хранит книги, библии, свитки и тетради; книги кладутся и достаются рукой, пустой шкаф разбирается ломом, отвинчивается ключом. Шкафы в библиотеке регистрируют содержимое для библиотечных машин.
 
 - **Код:** [`/obj/structure/bookcase`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/library/bookcase.dm#L5), [`item_interaction()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/library/bookcase.dm#L123)
-- **Статус в ss13-rs:** ❌ нет — шкаф только виден на карте, хранения книг нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/service/library.rs`: шкаф с карты забирает книги со своего тайла, пустая рука выбирает книгу из списка (в пустую активную руку), книга ставится на полку, спрайт `book-N`; нет сборки/разборки, ломом/ключом, высыпания из сумки
 
 ### Случайные книжные шкафы
 Подтипы `/obj/structure/bookcase/random/*` (fiction, nonfiction, religion, adult, reference, wizard) при старте раунда заполняются случайными книгами из базы библиотеки по категории.
@@ -17,7 +17,7 @@
 Книгу открывают в руке и читают (tgui `MarkdownViewer`); ручкой можно переписать название, автора и текст, острым предметом вырезать тайник внутри. Чтение даёт настроение «прочитал книгу».
 
 - **Код:** [`/obj/item/book`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/library/book.dm#L1), [`attack_self()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/library/book.dm#L122), [`carving_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/library/book.dm#L236), [`/datum/book_info`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/library/book_info.dm#L7); tgui: [`MarkdownViewer.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/MarkdownViewer.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/service/library.rs`: `starting_title/author/content` (`DmService`), чтение в руке — окно `MarkdownViewer` (текст без рендера markdown), «book is blank!», сообщение окружающим, mood `book_nerd` за первое прочтение названия; нет вырезания тайника, порчи ручкой, падения на голову, базы книг
 
 ### Руководства с tgui (DSM, IDC)
 Справочники-книги со своим tgui-окном: руководство по психиатрии (DSM) и по ID-картам (IDC).

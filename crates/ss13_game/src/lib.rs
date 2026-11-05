@@ -109,6 +109,10 @@
 //!   `client`): exosuits (entering, driving, equipment, damage, wreckage), building them from a
 //!   chassis and the exosuit fabricator (tgui `ExosuitFabricator`).
 //!
+//! - `service` (server half with `server`, the paper and book windows with `client`): paper,
+//!   pens, stamps, paper bins, the hand labeler, books, bookcases, the bible, dice, squeaky
+//!   things, desk bells and the mime's vow.
+//!
 //! - `forensics` (server half with `server`, the scanner window with `client`): fingerprints,
 //!   fibers, blood DNA and hidden prints on atoms, the detective's forensic scanner and its
 //!   report, evidence bags.
@@ -328,6 +332,7 @@ pub mod security;
 pub mod security_level;
 #[cfg(feature = "server")]
 pub mod server;
+pub mod service;
 #[cfg(feature = "server")]
 pub mod shuttle;
 pub mod silicon;

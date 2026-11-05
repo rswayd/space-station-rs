@@ -767,7 +767,7 @@ pub fn scanner_timers(
 }
 
 /// `print_report`: the log on paper at the scanner, into its holder's hands; the log clears.
-// shortcut: no paper text yet; the report is the paper's description.
+// The report is also the paper's description, as before the paper had text.
 pub fn print_report(world: &mut World, scanner: Entity) {
     let Some(mut state) = world.get_mut::<DetectiveScanner>(scanner) else {
         return;
@@ -788,8 +788,9 @@ pub fn print_report(world: &mut World, scanner: Entity) {
     };
     world.entity_mut(paper).insert(DmName {
         name: format!("FR-{number} 'Forensic Record'"),
-        desc: text,
+        desc: text.clone(),
     });
+    crate::service::write_printed(world, paper, text);
     if let Some(&CarriedBy(mob)) = world.get::<CarriedBy>(scanner)
         && let Some(inventory) = world.get::<Inventory>(mob).cloned()
     {

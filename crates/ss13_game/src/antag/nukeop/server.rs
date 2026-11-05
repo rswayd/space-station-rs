@@ -748,6 +748,11 @@ pub fn add_nukeop(world: &mut World, mob: Entity, leader: bool, joined: u32, rng
                     n.name = "коды ядерной аутентификации".into();
                     n.desc = format!("Код активации ядерной боеголовки: {code}");
                 }
+                crate::service::write_printed(
+                    world,
+                    paper,
+                    format!("Код активации ядерной боеголовки: {code}"),
+                );
             });
         }
     }

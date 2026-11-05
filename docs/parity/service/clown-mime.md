@@ -5,13 +5,13 @@
 Клик или удар гудком издаёт «хонк» (компонент писка, тоже срабатывает при наступании); воздушный гудок громче и крафтится, золотой заставляет всех вокруг сделать сальто.
 
 - **Код:** [`/obj/item/bikehorn`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/clown_items.dm#L196), [`/obj/item/bikehorn/airhorn`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/clown_items.dm#L235), [`/obj/item/bikehorn/golden/proc/flip_mobs()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/clown_items.dm#L270), [`/datum/component/squeak`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/squeak.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — гудок есть только как цель кражи в `crates/ss13_mapload/src/antag.rs`
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/service/clown.rs`: компонент писка — в руке (раз в 2 с), удар по живому мобу, наступание стоящего человека на тайл; воздушный гудок со своим звуком; клоун, хонкнувший другого, даёт ему mood `honk`; клоунские ботинки пищат каждый третий шаг, костюм клоуна — тоже писклявый; нет сальто от золотого гудка, писка при броске/столкновении, крафта
 
 ### Резиновые уточки
 Пищащие утята (резиновый, пластиковый) — вариант гудка.
 
 - **Код:** [`/obj/item/bikehorn/rubberducky`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/clown_items.dm#L284)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/service/clown.rs`: писк `quack.ogg` у резиновой и пластиковой уточки (те же триггеры, что у гудка)
 
 ### Консервированный смех и надувной молот
 Банка «смеха» (напиток, вызывающий смех), надувной молот без урона с забавными звуками.
@@ -23,7 +23,7 @@
 Печать клоуна «HONK» для бумаг (механика печатей — paperwork.md).
 
 - **Код:** [`/obj/item/stamp/clown`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/paperwork/stamps.dm#L93)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/service/paper.rs`: печать клоуна ставится как любая печать (`paper_stamp-clown`)
 
 ### Клоунская машина
 Машина клоуна вмещает экипаж, похищает людей при наезде, имеет кнопки с гэгами; угнанная emag — хаос-режимы. Транспорт как система вне этой папки.
@@ -35,7 +35,7 @@
 Мим начинает с обетом молчания (`TRAIT_MIMING`): не может говорить; кнопка «Break Vow» навсегда нарушает обет, даёт плохое настроение и открывает ещё один слот мима.
 
 - **Код:** [`/datum/action/cooldown/spell/vow_of_silence`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/spells/spell_types/self/mime_vow.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/service/clown.rs`: мим со спавна под обетом (`MimeVow`), `crates/ss13_game/src/medical/traumas.rs` складывает его в немоту чата (нельзя говорить, шептать, в рацию); нет кнопки «Break Vow» (система спеллов — wizard/spells), mood за нарушение, немых эмоций мима
 
 ### Пантомима: невидимая стена, ящик, стул
 Способности мима (пока соблюдён обет): невидимый ящик-предмет, невидимый стул; книги «Guide to Advanced Mimery» дают невидимую стену и «пальцевые пистолеты».

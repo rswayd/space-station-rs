@@ -33,7 +33,7 @@
 Звонок на стойке: клик звонит (с кулдауном), можно разобрать ключом; ручная версия.
 
 - **Код:** [`/obj/structure/desk_bell`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/paperwork/desk_bell.dm#L3), [`/obj/item/inhand_desk_bell`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/paperwork/desk_bell.dm#L130)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/service/clown.rs`: звонит на клик пустой рукой (кулдаун 0,3 с, у speed_demon нет) и при ударе (+сила к `times_rang`), ломается с шансом `times_rang/100` (с 10000 — всегда), сломанный молчит; нет починки отвёрткой, разборки ключом, ручной версии
 
 ### Автомат электронной очереди
 Настенный автомат выдаёт пронумерованные талоны; кнопка у HoP вызывает следующий номер с объявлением. Emag выдаёт горящие талоны и путает счётчик.

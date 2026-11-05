@@ -36,7 +36,7 @@
 Кубики d4–d100 (бросок в руке или броском), проклятые и фальшивые; шар восьмёрка отвечает на вопрос (одержимый — голосованием призраков через tgui).
 
 - **Код:** [`/obj/item/dice`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/dice.dm#L48), [`diceroll()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/dice.dm#L77), [`/obj/item/toy/eightball`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/eightball.dm#L1), [`/obj/item/toy/eightball/haunted`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/eightball.dm#L113); tgui: [`EightBallVote.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/EightBallVote.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/service/games.rs`: кость хранит `result` (бросок при спавне, `sides` из `DmService`), бросок в руке — звук, сообщение с комментариями «Ouch, bad luck.»/«NAT 20!», d00 ×10, грани fudge, оверлей `<icon_state>-<result>`; нет броска при падении после броска, подкрутки в микроволновке, восьмёрки и голосования шара
 
 ### Прочие игрушки
 Заводной тулбокс, юла, кошачья игрушка, пенопластовый палец, «Интенто» (игра на память), сломанная рация, ракушки, мозг-игрушка, удлинитель-рука, бан-молот, горячая картошка (бомба, которую надо передать), подушки (бои подушками), скейтборды, скаб, бюсты и фигурки, картонные фигуры в рост (раскрашиваются мелками), песочные часы, копилка (разбивается), переноска для питомцев.
