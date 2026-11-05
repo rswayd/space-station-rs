@@ -130,6 +130,7 @@
 //! | 1500 | `bots::construction::item_interaction` |
 //! | 1600 | `machine_frame::item_interaction` |
 //! | 1700 | `service::server::item_interaction` |
+//! | 1750 | `medical::bodyparts::item_interaction` |
 //! | 1800 | `kitchen::item_interaction` |
 //! | 1900 | `cooking::item_interaction` |
 //! | 2000 | `smartfridge::item_interaction` |

@@ -1224,14 +1224,41 @@ pub fn interact(
                 "Вам лучше не искушать неподвластные вам силы!",
             );
         } else {
-            // shortcut: no dismemberment yet (25% in tg).
-            tell(
-                world,
-                client,
-                Span::Danger,
-                "Вы отдёргиваете руку от отверстия, когда мистическая энергия бьется, пытаясь \
-                 зацепиться за этот мир!",
-            );
+            // 25%: the active hand's arm is torn off and kept by the influence (tg "stored for
+            // later fishage"; no fishing here, so it is gone).
+            let zone = if world.get::<Inventory>(mob).map_or(0, |i| i.active) == 0 {
+                crate::zone::BodyZone::LArm
+            } else {
+                crate::zone::BodyZone::RArm
+            };
+            let has_arm = world
+                .get::<crate::medical::wounds::Limbs>(mob)
+                .is_some_and(|l| !l.limb(zone).missing);
+            if has_arm && world.resource_mut::<CombatRng>().chance(25.0) {
+                tell(
+                    world,
+                    client,
+                    Span::Danger,
+                    &format!(
+                        "Потустороннее присутствие разрывает и распыляет вашу {}, когда вы \
+                         пытаетесь коснуться дыры в самой ткани реальности!",
+                        zone.ru().1
+                    ),
+                );
+                if let Some(Some(arm)) =
+                    crate::medical::bodyparts::dismember_limb(world, mob, zone, false)
+                {
+                    world.entity_mut(arm).despawn();
+                }
+            } else {
+                tell(
+                    world,
+                    client,
+                    Span::Danger,
+                    "Вы отдёргиваете руку от отверстия, когда мистическая энергия бьется, \
+                     пытаясь зацепиться за этот мир!",
+                );
+            }
         }
         return true;
     }

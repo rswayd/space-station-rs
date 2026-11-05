@@ -59,6 +59,8 @@ const EYES_DMI: &str = "icons/mob/human/human_eyes.dmi";
 const HAIR_DMI: &str = "icons/mob/human/human_face.dmi";
 /// `/obj/item/bodypart::icon_husk`: the husk's blood over each limb (`[husk_type]_husk_[zone]`).
 const HUSK_DMI: &str = "icons/mob/human/bodyparts.dmi";
+/// tg `/obj/item/bodypart/*/robot` `icon_static` (also in `crate::species::LIMB_DMIS`).
+pub const ROBOTIC_LIMB_DMI: &str = "icons/mob/augmentation/augments.dmi";
 /// A husked limb: tg `ColorTone(HUSK_COLOR_TONE)` (96, 88, 80) of the greyscale sprite, then
 /// `husk_color` `#A6A6A6`; the greyscale skin is near white, so the product of the two.
 const HUSK_SKIN: [u8; 3] = [62, 57, 52];
@@ -211,6 +213,9 @@ pub struct HumanLook {
     pub husk: bool,
     /// Amputated bodyparts, bits by [`crate::zone::BodyZone::index`] (tg draws no limb there).
     pub missing: u8,
+    /// Robotic prosthetics, bits by [`crate::zone::BodyZone::index`]: drawn from
+    /// [`ROBOTIC_LIMB_DMI`] (tg `/obj/item/bodypart/*/robot`, `limb_id = "robotic"`).
+    pub robotic: u8,
     /// No eyes organ (tg `update_body_parts` draws eyes only from the organ).
     pub eyeless: bool,
 }
@@ -296,6 +301,7 @@ impl AppearancePrefs {
             shoes: None,
             husk: false,
             missing: 0,
+            robotic: 0,
             eyeless: false,
         }
     }
@@ -426,10 +432,33 @@ pub fn parts(look: &HumanLook) -> Result<Vec<Part>, LookError> {
         let leg = matches!(zone, BodyZone::LLeg | BodyZone::RLeg);
         (!hand || limbs.hands) && (!leg || limbs.legs)
     });
+    let robotic = |zone: BodyZone| look.robotic & (1 << zone.index()) != 0;
     let mut parts: Vec<Part> = limb_parts
         .into_iter()
         .filter(|(zone, _)| has(*zone))
-        .map(|(_, part)| part)
+        .map(|(zone, part)| {
+            if !robotic(zone) {
+                return part;
+            }
+            // `robotic_l_arm`, `robotic_l_hand`, `robotic_head`, `robotic_l_leg`: not
+            // greyscale, not dimorphic.
+            let name = match zone {
+                BodyZone::LArm if part.state.ends_with("_hand") => "l_hand",
+                BodyZone::LArm => "l_arm",
+                BodyZone::RArm if part.state.ends_with("_hand") => "r_hand",
+                BodyZone::RArm => "r_arm",
+                BodyZone::Head => "head",
+                BodyZone::LLeg => "l_leg",
+                BodyZone::RLeg => "r_leg",
+                BodyZone::Chest => "chest",
+            };
+            Part {
+                dmi: ROBOTIC_LIMB_DMI,
+                state: format!("robotic_{name}"),
+                color: None,
+                ..part
+            }
+        })
         .collect();
     if look.husk {
         // Blend-inset in tg (masked by the limb); these sprites stay inside their limbs.
@@ -441,7 +470,11 @@ pub fn parts(look: &HumanLook) -> Result<Vec<Part>, LookError> {
             (BodyZone::RLeg, "r_leg"),
             (BodyZone::Chest, "chest"),
         ] {
-            if !has(zone) || (!limbs.legs && matches!(zone, BodyZone::LLeg | BodyZone::RLeg)) {
+            // `BODYPART_UNHUSKABLE` robotic limbs.
+            if !has(zone)
+                || robotic(zone)
+                || (!limbs.legs && matches!(zone, BodyZone::LLeg | BodyZone::RLeg))
+            {
                 continue;
             }
             parts.push(Part {
@@ -453,6 +486,7 @@ pub fn parts(look: &HumanLook) -> Result<Vec<Part>, LookError> {
             });
         }
     } else if !look.eyeless
+        && has(BodyZone::Head)
         && let Some(eyes) = limbs.eyes
     {
         for side in ["l", "r"] {
@@ -481,7 +515,7 @@ pub fn parts(look: &HumanLook) -> Result<Vec<Part>, LookError> {
     if let Some(style) = look
         .hair_style
         .as_ref()
-        .filter(|_| !look.husk && limbs.hair)
+        .filter(|_| !look.husk && limbs.hair && has(BodyZone::Head))
     {
         parts.push(Part {
             layer: HAIR_LAYER,

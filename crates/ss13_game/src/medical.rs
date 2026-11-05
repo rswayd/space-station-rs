@@ -189,6 +189,11 @@ impl Plugin for MedicalServerPlugin {
         app.add_click_handler(ClickPhase::AttackSelf, 1200, |w, c| {
             crate::medical::attack_self(w, c.client, c.target)
         });
+        // A sharp item empties a severed head of its organs.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 1750, |w, c| {
+            c.held
+                .is_some_and(|h| bodyparts::item_interaction(w, c.mob, h, c.target))
+        });
         // An organ loads the autosurgeon in the other hand, a screwdriver unloads it.
         app.add_click_handler(ClickPhase::OtherHand, 400, |w, c| {
             c.held.is_some_and(|h| {

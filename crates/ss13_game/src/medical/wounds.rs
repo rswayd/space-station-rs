@@ -18,7 +18,12 @@
 //!   infected without sanitization (toxins, a limb that goes limp, sepsis).
 //! - Effects on the body ([`Limbs::limits`]): limping legs slow every step on average, disabled
 //!   legs slow by 3 deciseconds each and none left floors the mob.
-// shortcut: no dismemberment or `/datum/wound/loss`, no cranial fissure, no eye puncture, no
+//! - Dismemberment (`dismemberment.dm` `try_dismember`, `check_wounding`'s outright roll): a hit
+//!   on a limb whose skin and bone are both mangled rolls its damage plus half the limb's damage
+//!   share (+15 with a critical blunt wound) to come off instead of wounding; a roll over
+//!   `WOUND_DISMEMBER_OUTRIGHT_THRESH` takes it off outright by the limb's damage share
+//!   (`super::bodyparts::apply_dismember`, tg `/datum/wound/loss`).
+// shortcut: no cranial fissure, no eye puncture, no
 // bruises, scars, brain traumas from skull fractures, wound status effects, actionspeed
 // penalties, grasping wounds, embedded objects, blood sprays or splatters; clothing has no
 // `wound` armor (the exposed bonus always applies off the head and chest); `determination` from
@@ -40,6 +45,11 @@ pub const WOUND_MAX_CONSIDERED_DAMAGE: f32 = 25.0;
 pub const WOUND_MINIMUM_DAMAGE: f32 = 5.0;
 /// `CANT_WOUND`: a `wound_bonus` that never wounds.
 pub const CANT_WOUND: f32 = -100.0;
+/// `DISMEMBER_MINIMUM_DAMAGE`, `WOUND_DISMEMBER_OUTRIGHT_THRESH`,
+/// `WOUND_CRITICAL_BLUNT_DISMEMBER_BONUS`.
+pub const DISMEMBER_MINIMUM_DAMAGE: f32 = 10.0;
+pub const WOUND_DISMEMBER_OUTRIGHT_THRESH: f32 = 150.0;
+const CRITICAL_BLUNT_DISMEMBER_BONUS: f32 = 15.0;
 /// `WOUND_MAX_BLOODFLOW`, `WOUND_SLASH_DAMAGE_FLOW_COEFF`, `WOUND_BURN_SANITIZATION_RATE`.
 pub const WOUND_MAX_BLOODFLOW: f32 = 4.5;
 pub const WOUND_SLASH_DAMAGE_FLOW_COEFF: f32 = 0.025;
@@ -547,6 +557,10 @@ pub struct Limb {
     pub missing: bool,
     /// tg `TRAIT_PARALYSIS_*` of this limb (brain traumas, `super::traumas`): disabled.
     pub paralyzed: bool,
+    /// A robotic prosthetic (`/obj/item/bodypart/*/robot`, `BIO_ROBOTIC`) is attached here.
+    // shortcut: robotic limbs get no wounds (tg has metal/wired wounds) and keep the body's
+    // damage modifiers (tg `brute_modifier`/`burn_modifier` 0.8 per limb).
+    pub robotic: bool,
 }
 
 impl Limb {
@@ -794,10 +808,40 @@ pub fn check_wounding(
     damage: f32,
     hit: Hit,
 ) -> Option<WoundKind> {
+    match roll_wounding(rng, limb, zone, wounding, damage, hit, false)? {
+        Rolled::Wound(kind) => Some(kind),
+        Rolled::Dismember => None,
+    }
+}
+
+/// What [`roll_wounding`] decided.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Rolled {
+    Wound(WoundKind),
+    /// The roll beat `WOUND_DISMEMBER_OUTRIGHT_THRESH`: the limb comes off outright.
+    Dismember,
+}
+
+/// tg `check_wounding` with the outright dismemberment of a limb that `can_dismember`.
+pub fn roll_wounding(
+    rng: &mut CombatRng,
+    limb: &Limb,
+    zone: BodyZone,
+    wounding: WoundType,
+    damage: f32,
+    hit: Hit,
+    can_dismember: bool,
+) -> Option<Rolled> {
     let damage = damage.min(WOUND_MAX_CONSIDERED_DAMAGE);
     let top = (damage.powf(WOUND_DAMAGE_EXPONENT)).round().max(1.0) as u32;
     let base_roll = rng.range(1, top) as f32;
     let injury_roll = woundings_mods(limb, zone, base_roll, hit);
+    if can_dismember
+        && injury_roll > WOUND_DISMEMBER_OUTRIGHT_THRESH
+        && rng.chance(hit.part_damage_before / zone.max_damage() * 100.0)
+    {
+        return Some(Rolled::Dismember);
+    }
     let mut series_mods = [0.0f32; 4];
     for wound in &limb.wounds {
         series_mods[wound.def().series as usize] += wound.def().series_threshold_penalty;
@@ -815,7 +859,23 @@ pub fn check_wounding(
     possible.retain(|k| k.def().severity == worst);
     // Every candidate weighs `WOUND_DEFAULT_WEIGHT`; one per series and severity remains.
     let pick = rng.range(0, possible.len() as u32 - 1) as usize;
-    Some(possible[pick])
+    Some(Rolled::Wound(possible[pick]))
+}
+
+/// tg `try_dismember` of a limb with mangled skin and bone: the hit's wounding damage plus half
+/// the limb's damage share, +15 per critical blunt wound.
+fn try_dismember(rng: &mut CombatRng, limb: &Limb, zone: BodyZone, damage: f32, hit: Hit) -> bool {
+    if damage < DISMEMBER_MINIMUM_DAMAGE {
+        return false;
+    }
+    let mut chance = damage + hit.part_damage_before / zone.max_damage() * 50.0;
+    for wound in &limb.wounds {
+        let def = wound.def();
+        if def.wounding == WoundType::Blunt && def.severity >= 3 {
+            chance += CRITICAL_BLUNT_DISMEMBER_BONUS;
+        }
+    }
+    rng.chance(chance)
 }
 
 /// tg `check_woundings_mods` without clothing armor.
@@ -865,6 +925,9 @@ pub struct HitOutcome {
     pub bled: Vec<(f32, &'static str)>,
     /// A bone wound wants the item in this hand dropped.
     pub drop_hand: Option<usize>,
+    /// The limb comes off (tg `/datum/wound/loss/apply_dismember`): the wounding type and
+    /// whether outright; nothing else happened to it.
+    pub dismember: Option<(WoundType, bool)>,
 }
 
 /// tg `apply_wound` (or `replace_wound` of a milder wound of the series) on `limb`.
@@ -945,8 +1008,9 @@ pub fn remove_wound(limb: &mut Limb, index: usize) -> Wound {
     wound
 }
 
-/// The wound part of tg `receive_damage` on a human bodypart: the roll, then every wound's
-/// `receive_damage` (the new one included).
+/// The wound part of tg `receive_damage` on a human bodypart: the dismemberment roll of a
+/// mangled limb that `can_dismember`, the wound roll, then every wound's `receive_damage` (the
+/// new one included).
 pub fn receive_damage(
     rng: &mut CombatRng,
     limb: &mut Limb,
@@ -954,15 +1018,30 @@ pub fn receive_damage(
     hit: Hit,
     dead: bool,
     has_blood: bool,
+    can_dismember: bool,
 ) -> HitOutcome {
     let mut out = HitOutcome::default();
+    if limb.robotic {
+        return out;
+    }
     let Some((wounding, damage)) = wounding_of(hit, limb) else {
         return out;
     };
-    if damage >= WOUND_MINIMUM_DAMAGE
-        && hit.wound_bonus != CANT_WOUND
-        && let Some(kind) = check_wounding(rng, limb, zone, wounding, damage, hit)
-    {
+    let (exterior, interior) = limb.mangled();
+    if can_dismember && exterior && interior && try_dismember(rng, limb, zone, damage, hit) {
+        out.dismember = Some((wounding, false));
+        return out;
+    }
+    let rolled = if damage >= WOUND_MINIMUM_DAMAGE && hit.wound_bonus != CANT_WOUND {
+        roll_wounding(rng, limb, zone, wounding, damage, hit, can_dismember)
+    } else {
+        None
+    };
+    if rolled == Some(Rolled::Dismember) {
+        out.dismember = Some((wounding, true));
+        return out;
+    }
+    if let Some(Rolled::Wound(kind)) = rolled {
         let def = kind.def();
         apply_wound(limb, kind);
         out.gained = Some(kind);
@@ -1392,6 +1471,106 @@ mod tests {
             .wounds;
         assert_eq!(wounds.len(), 1);
         assert_eq!(wounds[0].kind, WoundKind::Compound);
+    }
+
+    #[test]
+    fn mangled_limbs_come_off_only_when_dismemberable() {
+        // Skin (avulsion) and bone (hairline fracture) mangled: a 30 slash at an arm at half
+        // damage rolls 30 + 25 = 55% (no critical blunt bonus); some seeds take it off.
+        let mut mangled = Limb::default();
+        apply_wound(&mut mangled, WoundKind::SlashCritical);
+        apply_wound(&mut mangled, WoundKind::Hairline);
+        let h = Hit {
+            part_damage_before: 25.0,
+            ..hit(DamageType::Brute, 30.0, SHARP_EDGED)
+        };
+        let mut off = 0;
+        for seed in 0..200 {
+            let mut rng = CombatRng(seed);
+            let mut limb = mangled.clone();
+            let out = receive_damage(&mut rng, &mut limb, BodyZone::LArm, h, false, true, true);
+            if let Some((wounding, outright)) = out.dismember {
+                assert_eq!(wounding, WoundType::Slash);
+                assert!(!outright);
+                assert_eq!(out.gained, None, "a limb that comes off takes no new wound");
+                off += 1;
+            }
+            let mut rng = CombatRng(seed);
+            let mut limb = mangled.clone();
+            let out = receive_damage(&mut rng, &mut limb, BodyZone::LArm, h, false, true, false);
+            assert_eq!(out.dismember, None, "not dismemberable");
+        }
+        assert!((60..160).contains(&off), "about 55% of 200: {off}");
+        // Below `DISMEMBER_MINIMUM_DAMAGE` nothing comes off; an intact limb never does.
+        for seed in 0..50 {
+            let small = Hit { damage: 9.0, ..h };
+            let out = receive_damage(
+                &mut CombatRng(seed),
+                &mut mangled.clone(),
+                BodyZone::LArm,
+                small,
+                false,
+                true,
+                true,
+            );
+            assert_eq!(out.dismember, None);
+            let out = receive_damage(
+                &mut CombatRng(seed),
+                &mut Limb::default(),
+                BodyZone::LArm,
+                h,
+                false,
+                true,
+                true,
+            );
+            assert_eq!(out.dismember, None);
+        }
+        // A robotic limb gets no flesh wounds at all.
+        let robotic = Limb {
+            robotic: true,
+            ..Limb::default()
+        };
+        let out = receive_damage(
+            &mut CombatRng(3),
+            &mut robotic.clone(),
+            BodyZone::LArm,
+            hit(DamageType::Brute, 25.0, SHARP_EDGED),
+            false,
+            true,
+            true,
+        );
+        assert_eq!(out, HitOutcome::default());
+    }
+
+    #[test]
+    fn a_huge_wound_roll_takes_a_damaged_limb_off_outright() {
+        // `wound_bonus` 200 beats the 150 threshold; a limb at full damage always goes.
+        let h = Hit {
+            wound_bonus: 200.0,
+            part_damage_before: BodyZone::RLeg.max_damage(),
+            ..hit(DamageType::Brute, 20.0, 0)
+        };
+        let limb = Limb::default();
+        let rolled = roll_wounding(
+            &mut CombatRng(5),
+            &limb,
+            BodyZone::RLeg,
+            WoundType::Blunt,
+            20.0,
+            h,
+            true,
+        );
+        assert_eq!(rolled, Some(Rolled::Dismember));
+        let rolled = roll_wounding(
+            &mut CombatRng(5),
+            &limb,
+            BodyZone::RLeg,
+            WoundType::Blunt,
+            20.0,
+            h,
+            false,
+        );
+        assert!(matches!(rolled, Some(Rolled::Wound(_))));
     }
 
     #[test]
@@ -1907,9 +2086,22 @@ pub fn after_hit(world: &mut World, victim: Entity, zone: BodyZone, hit: Hit) {
     let has_blood = world
         .get::<super::blood::Blood>(victim)
         .is_some_and(|b| b.volume > 0.0);
+    let can_dismember = super::bodyparts::can_dismember(world, victim, zone);
     let mut rng = super::fork_rng(world);
-    let out = receive_damage(&mut rng, limbs.limb_mut(zone), zone, hit, dead, has_blood);
+    let out = receive_damage(
+        &mut rng,
+        limbs.limb_mut(zone),
+        zone,
+        hit,
+        dead,
+        has_blood,
+        can_dismember,
+    );
     world.entity_mut(victim).insert(limbs);
+    if let Some((wounding, outright)) = out.dismember {
+        super::bodyparts::apply_dismember(world, victim, zone, wounding, outright);
+        return;
+    }
     if let Some(kind) = out.gained {
         let def = kind.def();
         let name = super::name_of(world, victim);
