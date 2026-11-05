@@ -11,6 +11,8 @@ modular_bandastation/aesthetics_sounds/sound/epsilon_laws.ogg	dj-34 (github.com/
 # Third-party sources without a stated license, or site licenses that limit redistribution.
 sound/announcer/alarm/airraid.ogg	Jwade722, freesound.org/people/Jwade722/sounds/534550 (shortened and cut); no license stated	medium	sound/announcer/alarm/attribution.txt
 sound/items/weapons/bulletflyby*.ogg	kMoon, freesound.org (90782, 90783, 90784); no license stated	medium	sound/attributions.txt
+sound/effects/hit_kick.ogg	Taira Komori, taira-komori.jpn.org/freesounden.html; no license stated in the attribution file (the site's terms allow free use but not redistributing the sounds on their own)	medium	sound/effects/license.txt
+sound/effects/hit_punch.ogg	Taira Komori, taira-komori.jpn.org/freesounden.html; no license stated in the attribution file (the site's terms allow free use but not redistributing the sounds on their own)	medium	sound/effects/license.txt
 sound/items/reel/reel*.ogg	pixabay.com/sound-effects/reel-78063: Pixabay Content License (no redistribution of the file on its own)	medium	sound/attributions.txt
 sound/items/rattle/rattle*.ogg	pixabay.com/sound-effects/chain-6073: Pixabay Content License (no redistribution of the file on its own)	medium	sound/attributions.txt
 sound/mobs/non-humanoids/dog/growl*.ogg	Glitchedtones, freesound.org (shih-tzu uploads); no license stated	medium	sound/attributions.txt
