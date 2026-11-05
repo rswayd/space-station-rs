@@ -32,7 +32,7 @@ use ss13_shared::chat::Span;
 use ss13_tgui::UiInterface as _;
 use ss13_tgui::UiStatus;
 use ss13_tgui::server::{
-    AppTguiExt, OpenUi, ServerUi, UiActed, UiParams, UiReject, UiSystems, UiWindow,
+    AlwaysState, AppTguiExt, OpenUi, ServerUi, UiActed, UiParams, UiReject, UiSystems, UiWindow,
 };
 use ss13_world::{SpatialIndex, WorldSystems};
 
@@ -166,12 +166,16 @@ pub fn ensure_handheld(world: &mut World, item: Entity) -> bool {
     if !is_under(&path, SCANNER) {
         return false;
     }
-    world.entity_mut(item).insert(ExperimentHandler {
-        kind: HandlerKind::Handheld,
-        parent_path: path,
-        linked: true,
-        selected: None,
-    });
+    // Its window follows the scanner, not a tile: open while its user holds it.
+    world.entity_mut(item).insert((
+        ExperimentHandler {
+            kind: HandlerKind::Handheld,
+            parent_path: path,
+            linked: true,
+            selected: None,
+        },
+        AlwaysState,
+    ));
     true
 }
 
@@ -560,13 +564,25 @@ fn open_destructive_scanner(
     }
 }
 
+/// An unpowered destructive scanner's window is update-only; an experi-scanner's closes when it
+/// leaves its user's hands (`default_state`).
 fn unpowered_windows(
     mut windows: Query<&mut UiWindow>,
     unpowered: Query<(), (With<DestructiveScanner>, With<Unpowered>)>,
+    handlers: Query<(&ExperimentHandler, Option<&CarriedBy>)>,
 ) {
     for mut window in &mut windows {
-        if window.interface == ExperimentConfigureUi::NAME && unpowered.contains(window.source) {
+        if window.interface != ExperimentConfigureUi::NAME {
+            continue;
+        }
+        if unpowered.contains(window.source) {
             window.cap_status(UiStatus::Update);
+        }
+        if let Ok((h, carried)) = handlers.get(window.source)
+            && h.kind == HandlerKind::Handheld
+            && carried.is_none_or(|c| c.0 != window.actor)
+        {
+            window.cap_status(UiStatus::Close);
         }
     }
 }
