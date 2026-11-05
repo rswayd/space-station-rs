@@ -29,9 +29,9 @@ use ss13_mapload::convert::DmTypes;
 use ss13_mapload::{DmItem, MapLoadPlugin};
 use ss13_net::chat::client::ChatReceived;
 use ss13_net::ui::client::UiMessageReceived;
-use ss13_shared::TilePos;
 use ss13_shared::protocol::{ClientIntent, InventorySlot};
 use ss13_shared::ui::UiServerMessage;
+use ss13_shared::{Dir, TilePos};
 use ss13_tgui::{UiInterface, decode};
 use ss13_world::SpatialIndex;
 
@@ -217,8 +217,9 @@ const TYPES: &str = r##"{
 }"##;
 
 /// Rows top-down, the last line is y = 1. The player spawns at `s` (4,4) next to the console
-/// `C` (3,3), the protolathe `L` (4,3), the destructive analyzer `A` (5,3) and the destructive
-/// scanner `D` (3,4); the server `R` and the ore silo `O` are further away.
+/// `C` (3,3), the protolathe `L` (4,3) and the destructive analyzer `A` (5,3); the destructive
+/// scanner `D` (6,4), the server `R` and the ore silo `O` are further away. Dense machines on
+/// both sides of a diagonal block reaching across it, so `D` stays off (3,4) and (5,4).
 const MAP: &str = r##""w" = (/turf/closed/wall,/area/station)
 "f" = (/turf/open/floor,/area/station)
 "s" = (/obj/effect/landmark/start/assistant,/turf/open/floor,/area/station)
@@ -231,7 +232,7 @@ const MAP: &str = r##""w" = (/turf/closed/wall,/area/station)
 
 (1,1,1) = {"
 wwwwwwwww
-wfDsfffOw
+wffsfDfOw
 wfCLAffRw
 wfffffffw
 wwwwwwwww
@@ -245,7 +246,7 @@ const ANALYZER: TilePos = TilePos::new(5, 3, 1);
 const TOOLS: &str = "/datum/techweb_node/tools";
 const SECRET: &str = "/datum/techweb_node/secret";
 const GATED: &str = "/datum/techweb_node/gated";
-const DESTRUCTIVE_SCANNER: TilePos = TilePos::new(3, 4, 1);
+const DESTRUCTIVE_SCANNER: TilePos = TilePos::new(6, 4, 1);
 const WRENCH_SCAN: &str = "/datum/experiment/scanning/wrenches";
 const SHRED: &str = "/datum/experiment/scanning/shred";
 
@@ -752,6 +753,15 @@ fn experiments_scan_and_unlock() {
     );
 
     // The destructive scanner: a screwdriver under the tube, the shredding experiment selected.
+    // One step east to stand next to it.
+    let mob = s.mob();
+    s.run_until_for(5.0, "next to the scanner", |s| {
+        if *s.server.world().get::<TilePos>(mob).unwrap() == TilePos::new(5, 4, 1) {
+            return true;
+        }
+        s.try_step(0, Dir::East);
+        false
+    });
     let scanner = s.machine::<DestructiveScanner>(DESTRUCTIVE_SCANNER);
     let screwdriver = ss13_game::construction::spawn_obj(
         s.server.world_mut(),
@@ -809,7 +819,6 @@ fn experiments_scan_and_unlock() {
 
     // The experi-scanner: its window lists only the non-destructive experiment.
     let handheld = s.give("/obj/item/experi_scanner", 1);
-    let mob = s.mob();
     let slot = if s.server.world().get::<Inventory>(mob).unwrap().active == 0 {
         InventorySlot::LeftHand
     } else {
@@ -835,7 +844,7 @@ fn experiments_scan_and_unlock() {
     });
 
     // Unrelated things are refused; each wrench counts once, after a second.
-    let next_to = TilePos::new(5, 4, 1);
+    let next_to = TilePos::new(4, 4, 1);
     let spawn = |s: &mut Lab, path: &str| {
         ss13_game::construction::spawn_obj(s.server.world_mut(), path, next_to).unwrap()
     };
