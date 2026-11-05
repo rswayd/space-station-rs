@@ -18,7 +18,7 @@
 
 - **Код:** [`/obj/item/book/granter`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/granters/_granters.dm#L6), [`on_reading_finished()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/granters/_granters.dm#L67), [`code/game/objects/items/granters`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/granters)
 - **BandaStation:** [`_martial_arts.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/granters/martial_arts/_martial_arts.dm#L14) — ограничение для вампиров
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/martial/mod.rs`: чтение в руке (страницы с замечаниями, `uses`, отдача пустой книги), книги CQC и свиток карпа с ограничением для вампиров; нет книг рецептов, заклинаний, языка жестов, оригами
 
 ### Флэтпаки
 Плоские упаковки машин: раскладываются мультитулом в готовую машину; тележка для флэтпаков, флэтпак двигателя шаттла.

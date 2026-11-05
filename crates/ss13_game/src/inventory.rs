@@ -559,6 +559,10 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 Some(item)
                     if hand == inventory.active
                         && crate::modpc::pda::attack_self(world, client, mob, item) => {}
+                // A martial arts manual or scroll is read.
+                Some(item)
+                    if hand == inventory.active
+                        && crate::martial::attack_self(world, client, mob, item) => {}
                 // An ID card in the active hand goes into the PDA in the other.
                 Some(item)
                     if hand != inventory.active

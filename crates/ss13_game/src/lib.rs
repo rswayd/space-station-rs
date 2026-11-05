@@ -29,6 +29,8 @@
 //!   internals tank, pressure and body temperature damage, the screen alerts; gas tanks.
 //!   `breath_client` (feature `client`): the alert column.
 //! - `combat` (feature `server`): combat mode, punches, hugs, attacks with held items.
+//!   `martial` (feature `server`): martial arts (CQC, sleeping carp, boxing, wrestling, judo),
+//!   their manuals, gloves and belts.
 //! - `status_effects` (feature `server`): tg stuns, knockdowns, paralysis, immobilization,
 //!   stamina and stamcrit, confusion; the traits moves, clicks and hands read. `restraints`
 //!   (feature `server`): handcuffs, resisting out, taking them off. `security` (feature
@@ -251,6 +253,8 @@ pub mod loot;
 #[cfg(feature = "server")]
 pub mod machine_frame;
 pub mod mecha;
+#[cfg(feature = "server")]
+pub mod martial;
 #[cfg(feature = "server")]
 pub mod medical;
 #[cfg(feature = "server")]

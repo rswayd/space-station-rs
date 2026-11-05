@@ -503,6 +503,12 @@ fn ctrl_clicks(world: &mut World, mut clicks: Local<MessageCursor<CtrlClick>>) {
             continue;
         }
         let living = world.get::<Health>(target).is_some();
+        // tg `grab`: the puller's martial art (`COMSIG_LIVING_GRAB`), then the target's
+        // `check_block` (`crate::martial`); either ends the click with `CLICK_CD_MELEE`.
+        if living && crate::martial::grab(world, mob, target) {
+            world.entity_mut(mob).insert(NextMove(now + CLICK_CD_MELEE));
+            continue;
+        }
         let pulling = world.get::<Pulling>(mob).map(|p| p.0);
         let (user, victim) = (name_of(world, mob), name_of(world, target));
         let mut chat = Vec::new();
@@ -602,7 +608,13 @@ fn ctrl_clicks(world: &mut World, mut clicks: Local<MessageCursor<CtrlClick>>) {
 /// The odds of tg `resist_grab` against `grab` for a mob that is `lying` or not:
 /// `None` = free at once (effective state below aggressive), else the escape chance in percent.
 pub fn resist_chance(grab: GrabState, lying: bool) -> Option<f32> {
-    let effective = grab.level() + u32::from(lying);
+    resist_chance_with(grab, lying, 0)
+}
+
+/// [`resist_chance`] with the puller's martial art `modifier` (tg `grab_state_modifier`) added
+/// to the effective grab state.
+pub fn resist_chance_with(grab: GrabState, lying: bool, modifier: u32) -> Option<f32> {
+    let effective = grab.level() + u32::from(lying) + modifier;
     (effective >= 1).then(|| (BASE_GRAB_RESIST_CHANCE / effective as f32).clamp(0.0, 100.0))
 }
 
@@ -618,7 +630,8 @@ fn resist_grab(world: &mut World, mob: Entity, moving: bool, now: f64) -> bool {
     }
     let grab = world.get::<GrabState>(puller).copied().unwrap_or_default();
     let lying = world.get::<BodyPosition>(mob).is_some_and(|b| b.lying());
-    let Some(chance) = resist_chance(grab, lying) else {
+    let modifier = crate::martial::grab_state_modifier(world, puller);
+    let Some(chance) = resist_chance_with(grab, lying, modifier) else {
         world.entity_mut(puller).remove::<Pulling>();
         return true;
     };

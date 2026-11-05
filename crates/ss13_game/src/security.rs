@@ -258,7 +258,41 @@ pub(crate) fn security_clicks(world: &mut World, mut clicks: Local<MessageCursor
             Some(item) if world.get::<crate::guns::Gun>(item).is_some() => {
                 crate::guns::interact_with_mob(world, &click, item)
             }
+            // tg `check_block` of the defender against a melee hit (`crate::martial`).
+            Some(item) if target != mob && blocks_melee(world, mob, item, target) => {
+                let speed = world.get::<DmItem>(item).map_or(8.0, |i| i.attack_speed);
+                world
+                    .entity_mut(mob)
+                    .insert(NextMove(now + f64::from(speed) / 10.0));
+                true
+            }
             Some(_) => false,
+            // The attacker's martial art takes the empty hand first (`crate::martial`).
+            None if crate::martial::unarmed_attack(world, &click, now) => true,
+            // tg `check_block` of the defender against a punch or a shove.
+            None if target != mob
+                && (click.modifiers.right
+                    || world.get::<CombatMode>(mob).is_some_and(|c| c.0))
+                && {
+                    let user = name_of(world, mob);
+                    let text = if click.modifiers.right {
+                        format!("толчок {user}")
+                    } else {
+                        format!("удар {user}")
+                    };
+                    crate::martial::check_block(
+                        world,
+                        target,
+                        Some(mob),
+                        crate::martial::AttackKind::Unarmed,
+                        0.0,
+                        &text,
+                    )
+                } =>
+            {
+                world.entity_mut(mob).insert(NextMove(now + CLICK_CD_MELEE));
+                true
+            }
             None if click.modifiers.right => {
                 if target != mob {
                     world.entity_mut(mob).insert(NextMove(now + CLICK_CD_MELEE));
@@ -272,6 +306,32 @@ pub(crate) fn security_clicks(world: &mut World, mut clicks: Local<MessageCursor
             world.resource_mut::<MeleeHandled>().0.insert(mob);
         }
     }
+}
+
+/// Whether a hit of `item` (one `crate::combat` would swing) is blocked by the defender's
+/// martial art.
+fn blocks_melee(world: &mut World, user: Entity, item: Entity, target: Entity) -> bool {
+    let Some(dm) = world.get::<DmItem>(item) else {
+        return false;
+    };
+    let combat = world.get::<CombatMode>(user).is_some_and(|c| c.0);
+    if dm.force <= 0.0
+        || crate::medical::interacts_with_mobs(&dm.path)
+        || crate::chem::interacts_with_mobs(&dm.path)
+        || (crate::food::is_food(&dm.path) && !combat)
+    {
+        return false;
+    }
+    let force = dm.force;
+    let text = format!("{} {}", name_of(world, item), name_of(world, user));
+    crate::martial::check_block(
+        world,
+        target,
+        Some(user),
+        crate::martial::AttackKind::Melee,
+        force,
+        &text,
+    )
 }
 
 /// tg `/obj/item/melee/baton/pre_attack` + `afterattack`. True when melee must not hit.

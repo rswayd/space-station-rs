@@ -230,9 +230,10 @@ fn melee(
     handled: Res<crate::security::MeleeHandled>,
     medical: Res<crate::medical::MedicalHandled>,
     clothing: Query<(&ss13_mapload::DmClothing, &ss13_mapload::DmArmor)>,
-    (mut sounds, pacifists): (
+    (mut sounds, pacifists, artists): (
         MessageWriter<PlaySound>,
         Query<(), With<crate::medical::traumas::Pacifist>>,
+        Query<&crate::martial::MartialArts>,
     ),
     mut commands: Commands,
 ) {
@@ -405,7 +406,12 @@ fn melee(
                 // tg `harm`: `get_random_valid_zone(user.zone_selected)`.
                 // shortcut: punching yourself can hit the punching arm (tg blacklists it).
                 let hit = random_valid_zone(&mut rng, zone, 80.0);
-                let strike = unarmed_strike(&mut rng, limb, own_brute_burn, lying);
+                // tg `TRAIT_PERFECT_ATTACKER` (the sleeping carp): never a miss.
+                let strike = if crate::martial::perfect_attacker(artists.get(attacker).ok()) {
+                    Some(rng.range(limb.damage_low, limb.damage_high))
+                } else {
+                    unarmed_strike(&mut rng, limb, own_brute_burn, lying)
+                };
                 // tg `harm`: the limb's `unarmed_attack_sound` / `unarmed_miss_sound`.
                 let file = if strike.is_some() {
                     files::PUNCH

@@ -234,6 +234,13 @@ fn step(world: &mut World, e: Entity, dt: f32) {
             return;
         }
         if let Some(target) = select_target(world, &p, e, tile) {
+            // The sleeping carp's deflection (`COMSIG_ATOM_PRE_BULLET_ACT`, `crate::martial`):
+            // it flies on from here, the carp's own now.
+            if world.get::<Health>(target).is_some()
+                && crate::martial::deflect_projectile(world, target, e, &mut p)
+            {
+                continue;
+            }
             if try_ricochet(world, &mut p, target, tile, prev) {
                 // It stays where it was, turned (tg: the bump happens from the turf before).
                 p.x = old_x;
