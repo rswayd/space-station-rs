@@ -375,6 +375,15 @@ pub fn ignite_mob(world: &mut World, mob: Entity) -> bool {
     true
 }
 
+/// tg `extinguish_mob()`: a burning mob goes out; its stacks stay.
+pub fn extinguish_mob(world: &mut World, mob: Entity) {
+    match world.get_mut::<FireStacks>(mob) {
+        Some(mut fire) if fire.on_fire => fire.on_fire = false,
+        _ => return,
+    }
+    cache_stacks(world, mob);
+}
+
 /// The fire status effect ends (`on_remove` -> `extinguish`).
 fn remove_fire(world: &mut World, mob: Entity) {
     if let Some(fire) = world.entity_mut(mob).take::<FireStacks>() {

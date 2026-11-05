@@ -11,11 +11,13 @@
 //!   off at once).
 //! - Going off (`crate::grenades::detonate`) pours every beaker into the casing's holder at
 //!   `threatscale`, heats it by `ignition_temp` and reacts it now: explosions and EMPs of the
-//!   reactions happen on the grenade's tile (`crate::chem::refresh_container`). The casing
-//!   stays, used up until a screwdriver resets its trigger.
+//!   reactions, and the smoke and foam of its smoke powder and foam reactions
+//!   (`crate::effects::reactions`), happen on the grenade's tile
+//!   (`crate::chem::refresh_container`). The casing stays, used up until a screwdriver resets
+//!   its trigger.
 // shortcut: what is left after the reactions vanishes (`spread_reagents` exposes nothing: the
-// reagents' `expose_*` procs are not ported, see `crate::chem`); no smoke or foam reactions
-// (not converted); no premade grenades (metal foam, incendiary...), no slime extracts in the
+// reagents' `expose_*` procs are not ported, see `crate::chem`); no premade grenades (metal
+// foam, incendiary...), no slime extracts in the
 // large casing, no 2 s `do_after` when resetting the trigger; logging is the server log.
 
 use bevy::prelude::*;

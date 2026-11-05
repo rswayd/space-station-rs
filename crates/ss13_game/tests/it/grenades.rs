@@ -1,7 +1,7 @@
 //! Grenades (`ss13_game::grenades`) on a fixture floor 25x11 with a wall column at x = 20, no
 //! clients: a minibomb's fuse, an EMP grenade's `empulse(4, 10)`, a flashbang flooring the mob
-//! next to it and staggering one further out (not one behind the wall), a smoke cloud of
-//! `DIAMOND_AREA(4)` tiles that chokes a mob and clears after 16 s, a clusterbang scattering
+//! next to it and staggering one further out (not one behind the wall), a smoke cloud spreading
+//! over `DIAMOND_AREA(4)` tiles that chokes a mob and clears after 16 s, a clusterbang scattering
 //! armed payloads that all go off, and a grenade destroyed by a blast going off.
 
 use std::path::{Path, PathBuf};
@@ -304,8 +304,8 @@ fn smoke_fills_a_diamond_chokes_and_clears() {
         .id();
     let smoke = grenade(&mut app, SMOKE, center);
     grenades::arm(app.world_mut(), smoke, None, Some(0.0));
-    app.update();
-    app.update();
+    // A generation of spreading every 0.1 s.
+    run(&mut app, 1.0);
     let tiles: Vec<TilePos> = {
         let world = app.world_mut();
         world

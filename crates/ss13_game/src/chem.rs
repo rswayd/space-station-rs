@@ -1858,6 +1858,10 @@ pub(crate) fn refresh_container(world: &mut World, chem: &Chemistry, e: Entity) 
                 .is_some()
         {
             crate::science::xenobio::extract_reacted(world, chem, e, &reacted);
+        }
+        // Smoke and foam reactions (`crate::effects::reactions`).
+        if crate::effects::reactions::any(chem, &reacted) {
+            crate::effects::reactions::on_reactions(world, chem, e, &reacted);
             if world.get_entity(e).is_err() {
                 return;
             }

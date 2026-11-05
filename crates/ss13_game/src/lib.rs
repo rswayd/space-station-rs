@@ -132,6 +132,9 @@
 //!   each ported family's EMP effect. `emag` (feature `server`): the emag and the doorjack,
 //!   `can_emag` and the ported families' `emag_act`. `grenades` (feature `server`): arming,
 //!   fuses and the flashbang, EMP, smoke, explosive, frag and cluster grenades.
+//!   `effects` (feature `server`): effect systems: sparks, steam, smoke and chemical smoke,
+//!   foam and foamed metal, trails. `weather` (feature `server`): `SSweather` and the station
+//!   weathers (radiation storm, the floor is lava, void storm).
 //!
 //! - `events` (feature `server`): tg `SSevents`, the random event scheduler, and the round
 //!   events that act on ported systems (grid check, electrical storm, communications blackout,
@@ -229,6 +232,8 @@ pub mod disposals;
 pub mod doors;
 #[cfg(feature = "server")]
 pub mod drag;
+#[cfg(feature = "server")]
+pub mod effects;
 #[cfg(feature = "server")]
 pub mod emag;
 #[cfg(feature = "server")]
@@ -456,6 +461,8 @@ pub mod wallmount;
 /// Shared window data; `wiremod::circuit` and `wiremod::server` with `server`, `wiremod::client`
 /// with `client`.
 pub mod wiremod;
+#[cfg(feature = "server")]
+pub mod weather;
 #[cfg(feature = "server")]
 pub mod wires;
 pub mod zone;

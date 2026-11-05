@@ -345,7 +345,6 @@ impl Plugin for EventsServerPlugin {
                     meteors::move_meteors,
                     immovable_rod::move_rods,
                     anomalies::process_anomalies,
-                    radiation_storm::process_storm,
                     fake_virus::process_fake_viruses,
                     heart_attack::process_heart_attacks,
                 )

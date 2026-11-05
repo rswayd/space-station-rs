@@ -11,22 +11,20 @@
 //! - [`detonate`]: a used grenade (`GRENADE_USED`) is a dud. Then by kind: the flashbang flashes
 //!   and bangs the living mobs that hear it (`bang`: paralysis and knockdown in the sweet spot,
 //!   `soundbang_act` by distance, staggering and dropped items further out); the EMP grenade
-//!   pulses `empulse(4, 10)`; the smoke grenade fills up to `DIAMOND_AREA(4)` atmos-connected
-//!   tiles with bad smoke for 16 s (opaque; a mob in it without internals drops what it holds,
-//!   takes 1 oxygen damage and coughs, once a second); explosive grenades call `explosion()`
+//!   pulses `empulse(4, 10)`; the smoke grenade lets out `DIAMOND_AREA(4)` nodes of bad smoke
+//!   (`crate::effects::smoke`); explosive grenades call `explosion()`
 //!   with their `ex_*` ranges and the frag ones fire shrapnel at every tile of the ring at
 //!   `shrapnel_radius` (`pellet_cloud`); a clusterbang throws 4-8 payload grenades (35% each
 //!   turn into a segment that throws 4-8 more), each armed for 1.5-6 s.
 //! - A grenade destroyed by a blast goes off (`atom_deconstruct(disassembled = FALSE)`,
 //!   [`on_destroyed`]).
 //!
-//! Cost: one pass over armed grenades and smoke clouds per tick, only while any exist.
+//! Cost: one pass over armed grenades per tick, only while any exist.
 // shortcut: no clumsy fumbles or sticky tape (`botch_check`: no clumsiness in the port), no
 // projectile hit setting a held grenade off (`hit_reaction`), no ranged click throwing an armed
 // grenade, no fantasy bonuses, no cosmic fields, no flashbang light or sparks, no pellet cloud
-// martyrs or aggregate hit messages, no
-// gradual smoke spread or fade, no smoke protection from masks (only internals), no blob damage
-// from smoke; arming is logged to the server log, not to admins (`log_bomber`).
+// martyrs or aggregate hit messages, no blob damage from smoke; arming is logged to the server
+// log, not to admins (`log_bomber`).
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
@@ -38,7 +36,7 @@ use ss13_tgui::prompt::{Ask, PromptAnswer, PromptAnswered, PromptKind, ask_world
 use ss13_world::SpatialIndex;
 
 use crate::combat::CombatRng;
-use crate::health::{DamageType, Health, Stat};
+use crate::health::{Health, Stat};
 use crate::inventory::{CarriedBy, Inventory};
 use crate::server::PlayerMob;
 use crate::status_effects::Incap;
@@ -56,7 +54,6 @@ const FRAG: &str = "/obj/item/grenade/frag";
 const FRAG_MEGA: &str = "/obj/item/grenade/frag/mega";
 const CLUSTER: &str = "/obj/item/grenade/clusterbuster";
 const CLUSTER_SEGMENT: &str = ss13_mapload::runtime::CLUSTERBUSTER_SEGMENT;
-const SMOKE_EFFECT: &str = ss13_mapload::runtime::SMOKE_BAD;
 const SHRAPNEL: &str = ss13_mapload::runtime::SHRAPNEL;
 const SHRAPNEL_MEGA: &str = ss13_mapload::runtime::SHRAPNEL_MEGA;
 
@@ -83,11 +80,8 @@ const DEAFEN: f32 = 1.5;
 /// `empulse(src, 4, 10)`.
 const EMP_HEAVY: i32 = 4;
 const EMP_LIGHT: i32 = 10;
-/// `do_smoke(4, ...)` and `/obj/effect/particle_effect/fluid/smoke/bad` `lifetime`.
+/// `do_smoke(4, ...)`.
 const SMOKE_RANGE: u32 = 4;
-const SMOKE_LIFETIME: f64 = 16.0;
-/// `smoke_delay`: one smoke effect per mob per second.
-const SMOKE_DELAY: f64 = 1.0;
 /// Clusterbang `min_spawned`, `max_spawned`, `segment_chance`, `RANDOM_DETONATE_MIN_TIME` and
 /// `RANDOM_DETONATE_MAX_TIME` (deciseconds).
 const CLUSTER_MIN: u32 = 4;
@@ -137,15 +131,7 @@ pub struct Armed {
     pub at: f64,
 }
 
-/// A cloud tile of bad smoke, gone at `until`.
-#[derive(Component, Clone, Copy, Debug, PartialEq)]
-pub struct Smoke {
-    pub until: f64,
-}
-
-/// `smoke_delay` of a mob: no smoke effect before this game time.
-#[derive(Component, Clone, Copy, Debug, PartialEq)]
-pub struct SmokeDelay(pub f64);
+pub use crate::effects::smoke::{Smoke, diamond_area};
 
 /// The multitool's fuse prompt of a grenade.
 #[derive(Component, Clone, Copy, Debug)]
@@ -177,7 +163,6 @@ impl Plugin for GrenadesServerPlugin {
             Update,
             (
                 detonate_due.run_if(any_with_component::<Armed>),
-                smoke_tick.run_if(any_with_component::<Smoke>),
                 fuse_prompt_answers
                     .in_set(ss13_tgui::server::UiSystems::Handle)
                     .after(ss13_tgui::prompt::PromptSystems::Answer),
@@ -586,112 +571,15 @@ fn bang(world: &mut World, at: TilePos, mob: Entity, soundbang: bool) {
 
 // --- Smoke --------------------------------------------------------------------------------
 
-/// `DIAMOND_AREA(range)`: the smoke's `amount`.
-pub fn diamond_area(range: u32) -> u32 {
-    1 + 2 * range * (range + 1)
-}
-
-/// `do_smoke(range, location, smoke_type = bad)`: a cloud over up to `diamond_area(range)`
-/// tiles, spreading through atmos-adjacent tiles, never onto a tile that already has smoke.
+/// `do_smoke(range, location)` of the bad smoke (smoke grenades, the smoke spell).
 pub(crate) fn do_smoke(world: &mut World, origin: TilePos, range: u32) {
-    let target = diamond_area(range) as usize;
-    let mut placed: Vec<TilePos> = Vec::new();
-    let mut seen = std::collections::HashSet::from([origin]);
-    let mut queue = std::collections::VecDeque::from([origin]);
-    while let Some(pos) = queue.pop_front() {
-        if placed.len() >= target {
-            break;
-        }
-        if pos != origin && has_smoke(world, pos) {
-            continue;
-        }
-        placed.push(pos);
-        for next in spread_from(world, pos) {
-            if seen.insert(next) {
-                queue.push_back(next);
-            }
-        }
-    }
-    let until = world.resource::<Time>().elapsed_secs_f64() + SMOKE_LIFETIME;
-    for pos in placed {
-        if let Some(smoke) = crate::construction::spawn_obj(world, SMOKE_EFFECT, pos) {
-            world.entity_mut(smoke).insert((Smoke { until }, Opaque));
-        }
-    }
-}
-
-fn has_smoke(world: &World, pos: TilePos) -> bool {
-    world
-        .resource::<SpatialIndex>()
-        .on_tile(pos)
-        .iter()
-        .any(|&e| world.get::<Smoke>(e).is_some())
-}
-
-/// `get_atmos_adjacent_turfs()`; without the air model, the cardinal tiles whose turf is open.
-fn spread_from(world: &World, pos: TilePos) -> Vec<TilePos> {
-    if let Some(atmos) = world.get_resource::<ss13_atmos::Atmos>() {
-        return atmos.adjacent_turfs(pos, false);
-    }
-    let index = world.resource::<SpatialIndex>();
-    Dir::CARDINALS
-        .into_iter()
-        .map(|d| pos.step(d))
-        .filter(|&p| {
-            index.in_bounds(p)
-                && crate::construction::turf_at(world, p)
-                    .is_some_and(|t| world.get::<ss13_world::Density>(t).is_none())
-        })
-        .collect()
-}
-
-/// Smoke `process`: gone after its lifetime; `smoke_mob` of the bad smoke on the mobs in it.
-// Cost: per tick, the smoke tiles (at most 41 per grenade) and what stands on them.
-fn smoke_tick(world: &mut World) {
-    let now = world.resource::<Time>().elapsed_secs_f64();
-    let clouds: Vec<(Entity, TilePos, f64)> = world
-        .query::<(Entity, &Smoke, &TilePos)>()
-        .iter(world)
-        .map(|(e, s, p)| (e, *p, s.until))
-        .collect();
-    for (smoke, pos, until) in clouds {
-        if now >= until {
-            world.despawn(smoke);
-            crate::construction::tile_changed(world, pos);
-            continue;
-        }
-        let mobs: Vec<Entity> = world
-            .resource::<SpatialIndex>()
-            .on_tile(pos)
-            .iter()
-            .copied()
-            .filter(|&e| world.get::<Inventory>(e).is_some() && world.get::<Health>(e).is_some())
-            .collect();
-        for mob in mobs {
-            smoke_mob(world, mob, now);
-        }
-    }
-}
-
-/// `/obj/effect/particle_effect/fluid/smoke/bad/smoke_mob` on a carbon.
-fn smoke_mob(world: &mut World, mob: Entity, now: f64) {
-    let internals = world
-        .get::<crate::internals::Internals>(mob)
-        .is_some_and(|i| i.0.is_some());
-    let delayed = world.get::<SmokeDelay>(mob).is_some_and(|d| now < d.0);
-    if internals || delayed || world.get::<Stat>(mob) == Some(&Stat::Dead) {
-        return;
-    }
-    world.entity_mut(mob).insert(SmokeDelay(now + SMOKE_DELAY));
-    drop_hands(world, mob);
-    if let Ok(mut entity) = world.get_entity_mut(mob)
-        && let Ok((mut health, mut stat)) = entity.get_components_mut::<(&mut Health, &mut Stat)>()
-    {
-        crate::health::apply_damage(&mut health, &mut stat, DamageType::Oxy, 1.0);
-    }
-    if let Some(emote) = ss13_chat::emote::find("cough") {
-        crate::mobs::defense::emote(world, mob, emote.message);
-    }
+    crate::effects::smoke::do_smoke(
+        world,
+        range,
+        origin,
+        None,
+        crate::effects::smoke::SmokeKind::Bad,
+    );
 }
 
 // --- Shrapnel -----------------------------------------------------------------------------
