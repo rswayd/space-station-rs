@@ -161,7 +161,8 @@ fn add_obj_state(add: On<Add<DmObj>>, objs: Query<&DmObj>, mut commands: Command
         crate::holosign::HOLOSIGN,
     ]
     .iter()
-    .any(|root| is_under(&obj.path, root));
+    .any(|root| is_under(&obj.path, root))
+        || crate::decor::breakable(&obj.path);
     if !breakable {
         return;
     }
@@ -334,6 +335,9 @@ fn atom_break(world: &mut World, target: Entity, obj: &DmObj) {
         crate::vending::atom_break(world, target);
         return;
     }
+    if crate::decor::atom_break(world, target) {
+        return;
+    }
     if !is_under(&obj.path, GRILLE) {
         return;
     }
@@ -448,8 +452,9 @@ pub fn deconstruct(world: &mut World, target: Entity, disassembled: bool) {
         crate::explosions::ex_act::lattice_debris(world, &obj.path, pos);
     } else if crate::furniture::deconstruct(world, &obj, pos)
         || crate::plumbing::deconstruct(world, target, &obj, pos)
+        || crate::decor::deconstruct(world, target, &obj, pos, disassembled)
     {
-        // A chair's, bed's or sink's build stack is out.
+        // A chair's, bed's, bathroom fixture's or decor's debris is out.
     }
     // A vendor's stock into its canister and its returned items out, before its parts leave.
     crate::vending::on_deconstruction(world, target, pos, disassembled);

@@ -211,6 +211,8 @@ pub mod construction;
 pub mod cooking;
 #[cfg(feature = "server")]
 pub mod decay;
+#[cfg(feature = "server")]
+pub mod decor;
 pub mod defenses;
 #[cfg(feature = "server")]
 pub mod devices;
