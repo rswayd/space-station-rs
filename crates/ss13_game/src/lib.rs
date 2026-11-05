@@ -150,6 +150,8 @@ pub mod announce;
 pub mod antag;
 #[cfg(feature = "server")]
 pub mod armor;
+/// Shared window data; `assemblies::server` with `server`, `assemblies::client` with `client`.
+pub mod assemblies;
 #[cfg(feature = "server")]
 pub mod atmos;
 #[cfg(feature = "server")]

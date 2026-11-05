@@ -123,6 +123,7 @@ pub fn examine_lines(world: &World, examiner: Entity, target: Entity) -> (String
     crate::security_level::examine_lines(world, target, &mut lines);
     crate::emag::examine_lines(world, target, &mut lines);
     crate::grenades::examine_lines(world, target, &mut lines);
+    crate::assemblies::server::examine_lines(world, target, &mut lines);
     crate::forensics::server::examine_lines(world, target, &mut lines);
     (name, lines)
 }

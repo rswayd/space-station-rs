@@ -11,7 +11,7 @@
 К проводу крепится сборка (сигналер, таймер, датчик), которая пульсирует его по сигналу — удалённый взлом.
 
 - **Код:** [`proc/attach_assembly()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/wires/_wires.dm#L214), [`proc/pulse_assembly()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/wires/_wires.dm#L208)
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/wires.rs` (shortcut: no assemblies)
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/wires.rs` (`attach_act`, `attach_assembly`, `detach_assembly`, `pulse_assembly`, `WireAssemblies`): кнопка «attach» в окне `Wires` вешает сборку из активной руки на провод (только сборки с `ASSEMBLY_INPUT`: сигналер, таймер, датчики, голосовой анализатор; иначе «You cannot attach this assembly to these wires!») или снимает висящую в руки; окно показывает подключённые; импульс сборки (`crate::assemblies::server::pulse`) пульсирует свой провод, даже перерезанный (`force`). Сами сборки — [../science/assemblies.md](../science/assemblies.md)
 
 ### Раскрытие проводов и ЭМИ
 Чертежи, абдукторский мультитул, черта инженера (`TRAIT_KNOW_ENGI_WIRES`) и фото проводки показывают назначение проводов; дальтонизм путает цвета; ЭМИ пульсирует случайные провода.
@@ -61,7 +61,7 @@ _«Провода торгового автомата» описано в [../ca
 Бомба Синдиката (обезвредить, ускорить, взорвать), гранаты и самодельная взрывчатка, бомба-ошейник.
 
 - **Код:** [`/datum/wires/syndicatebomb`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/wires/syndicatebomb.dm#L1), [`/datum/wires/explosive`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/wires/explosive.dm#L1), [`/datum/wires/explosive/chem_grenade`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/wires/explosive.dm#L21), [`/datum/wires/collar_bomb`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/wires/collar_bomb.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `/datum/wires/explosive/chem_grenade` (`WireHolder::ChemGrenade`, `chem_grenade_set`: один провод-пустышка, окно открывается только у собранного корпуса в досягаемости; пульс/резка у запертой гранаты взводит её, у мины — подрывает; `attach_assembly` таймера ставит взрыватель на его время, датчика движения — режим мины, датчика здоровья — включает скан; `crate::assemblies::chem_grenade`). Нет: бомбы Синдиката, C4 и пиццы-бомбы, бомбы-ошейника
 
 ### Провода компонента «пучок проводов»
 Провода, добавляемые к предметам компонентом (самодельные устройства).

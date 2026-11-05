@@ -575,6 +575,11 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                     if hand == inventory.active
                         && crate::explosions::sources::c4_attack_self(world, client, mob, item) => {
                 }
+                // Assemblies open their windows or act, holders use their parts; a chemical
+                // grenade casing primes or opens its wires, a transfer valve its window.
+                Some(item)
+                    if hand == inventory.active
+                        && crate::assemblies::server::attack_self(world, client, mob, item) => {}
                 // A grenade is armed.
                 Some(item)
                     if hand == inventory.active
@@ -611,6 +616,15 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 Some(item)
                     if hand == inventory.active
                         && crate::radio::attack_self(world, client, mob, item) => {}
+                // Assemblies, holders, casings, valves and tanks in the other hand
+                // (`crate::assemblies`).
+                Some(item)
+                    if hand != inventory.active
+                        && inventory.active_item().is_some_and(|held| {
+                            crate::assemblies::server::item_interaction(
+                                world, client, mob, held, item,
+                            )
+                        }) => {}
                 // A screwdriver or multitool sets the fuse of the grenade in the other hand.
                 Some(item)
                     if hand != inventory.active
@@ -877,6 +891,11 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                             },
                             target,
                         ) => {}
+                // Assemblies, holders, casings, valves and tanks (`crate::assemblies`).
+                Some(held)
+                    if crate::assemblies::server::item_interaction(
+                        world, client, mob, held, target,
+                    ) => {}
                 // A screwdriver or multitool sets a grenade's fuse.
                 Some(held)
                     if crate::grenades::item_interaction(world, client, mob, held, target) => {}

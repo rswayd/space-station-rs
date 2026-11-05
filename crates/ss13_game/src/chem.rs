@@ -331,11 +331,9 @@ pub fn dm_num(n: f32) -> String {
 }
 
 /// Where `e` is on the map: its tile, or the tile of whoever carries it.
+/// The container's turf: its own, its carrier's or its container's (tg `get_turf`).
 pub(crate) fn map_pos(world: &World, e: Entity) -> Option<TilePos> {
-    world.get::<TilePos>(e).copied().or_else(|| {
-        let carrier = world.get::<CarriedBy>(e)?.0;
-        world.get::<TilePos>(carrier).copied()
-    })
+    crate::explosions::turf_of(world, e)
 }
 
 pub(crate) fn clients_near(world: &World, pos: TilePos, except: Option<Entity>) -> Vec<Entity> {
@@ -1783,8 +1781,16 @@ fn refresh_containers(world: &mut World) {
         return;
     };
     for e in changed {
+        refresh_container(world, &chem, e);
+    }
+}
+
+/// One container after its holder changed (see [`refresh_containers`]); the chemical grenade
+/// calls it at once for its mixed payload (`crate::assemblies::chem_grenade`).
+pub(crate) fn refresh_container(world: &mut World, chem: &Chemistry, e: Entity) {
+    {
         let Some(mut r) = world.get_mut::<Reagents>(e) else {
-            continue; // blown up by an earlier container's explosion
+            return; // blown up by an earlier container's explosion
         };
         let holder_mut = &mut r.bypass_change_detection().0;
         let messages = std::mem::take(&mut holder_mut.messages);
@@ -1806,16 +1812,16 @@ fn refresh_containers(world: &mut World) {
             .iter()
             .any(|&(i, _)| chem.reactions[i as usize].def.explosion.is_some())
         {
-            reagent_explosions(world, &chem, e, &reacted);
+            reagent_explosions(world, chem, e, &reacted);
             if world.get_entity(e).is_err() {
-                continue;
+                return;
             }
         }
         if reacted
             .iter()
             .any(|&(i, _)| chem.reactions[i as usize].def.path == EMP_REACTION)
         {
-            reagent_emps(world, &chem, e, &reacted);
+            reagent_emps(world, chem, e, &reacted);
         }
         let reacting = holder(world, e).is_some_and(|h| h.is_reacting);
         match (reacting, world.get::<Reacting>(e).is_some()) {
@@ -1827,8 +1833,8 @@ fn refresh_containers(world: &mut World) {
             }
             _ => {}
         }
-        refresh_look(world, &chem, e);
     }
+    refresh_look(world, chem, e);
 }
 
 /// tg `reagent_explosion/on_reaction` -> `reagent_explode` of each explosive instant reaction a
