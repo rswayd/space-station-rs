@@ -273,6 +273,7 @@ fn melee(
             crate::medical::interacts_with_mobs(&item.path)
                 || crate::chem::interacts_with_mobs(&item.path)
                 || crate::forensics::server::interacts_with_mobs(&item.path)
+                || crate::antag::syndie_items::interacts_with_mobs(&item.path)
                 // Food is eaten out of combat mode (`crate::food`), hits in it.
                 || (crate::food::is_food(&item.path) && !combat.0)
         }) {

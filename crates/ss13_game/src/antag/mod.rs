@@ -37,6 +37,8 @@ pub mod nukeop;
 pub mod objectives;
 pub mod revolution;
 #[cfg(feature = "server")]
+pub mod syndie_items;
+#[cfg(feature = "server")]
 pub mod traitor;
 #[cfg(feature = "server")]
 pub mod uplink;
@@ -57,6 +59,7 @@ impl bevy::prelude::Plugin for AntagServerPlugin {
         app.add_plugins((
             hud::AntagHudPlugin,
             uplink::UplinkPlugin,
+            syndie_items::SyndieItemsPlugin,
             traitor::TraitorPlugin,
             brother::BrotherPlugin,
             revolution::server::RevolutionPlugin,
@@ -123,6 +126,9 @@ pub struct TraitorInfo {
     pub goal: String,
     /// The uplink's unlock code.
     pub code: Option<String>,
+    /// The uplink's bought failsafe code.
+    #[serde(default)]
+    pub failsafe_code: Option<String>,
     pub has_uplink: bool,
     pub given_uplink: bool,
     pub uplink_intro: String,
@@ -176,6 +182,9 @@ pub struct UplinkData {
     pub shop_locked: bool,
     /// `current_stock`: stock left of limited items, by item id.
     pub current_stock: Vec<(String, i32)>,
+    /// `can_renegotiate`: the owner may replace the objectives with a custom one.
+    #[serde(default)]
+    pub can_renegotiate: bool,
 }
 
 impl UplinkData {
@@ -199,6 +208,10 @@ impl UplinkData {
 pub const BUY: &str = "buy";
 /// `act('lock')`.
 pub const LOCK: &str = "lock";
+/// `act('buy_raw_tc')`: withdraw raw telecrystals (the amount is asked).
+pub const BUY_RAW_TC: &str = "buy_raw_tc";
+/// `act('renegotiate_objectives')`: pick a custom objective.
+pub const RENEGOTIATE_OBJECTIVES: &str = "renegotiate_objectives";
 
 /// The antag HUD of one antagonist mob (no window).
 pub struct AntagHudUi;

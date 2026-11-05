@@ -163,9 +163,8 @@ pub const WIZARD_RUNTIME_TYPES: [&str; 40] = [
 
 /// The uplink items sold here: the ones whose item exists in this codebase. The rest of tg's
 /// catalog needs mechanics that are not modelled yet (explosions, implants, chameleon).
-// shortcut: a curated list; grow it as the items' mechanics land (an energy sword once
-// transforming weapons work).
-pub const UPLINK_ITEMS: [&str; 18] = [
+// shortcut: a curated list; grow it as the items' mechanics land.
+pub const UPLINK_ITEMS: [&str; 30] = [
     // Guns that fire (`ss13_game::guns`): the traitors' Makarov case and .357 revolver, the
     // operatives' C-20r case, and their ammunition.
     "/datum/uplink_item/dangerous/pistol",
@@ -192,8 +191,31 @@ pub const UPLINK_ITEMS: [&str; 18] = [
     "/datum/uplink_item/explosives/c4",
     // The nuclear operatives' bag of C-4.
     "/datum/uplink_item/explosives/military_grade/c4bag",
+    // X-4, the frag grenade, the minibomb and the EMP kit (`ss13_game::grenades`, the EMP
+    // implanter of `ss13_game::implants`).
+    "/datum/uplink_item/explosives/x4",
+    "/datum/uplink_item/explosives/frag",
+    "/datum/uplink_item/explosives/syndicate_minibomb",
+    "/datum/uplink_item/explosives/emp",
+    "/datum/uplink_item/implants/freedom",
+    // The sleeping carp scroll (`ss13_game::martial`).
+    "/datum/uplink_item/stealthy_weapons/martialarts",
+    "/datum/uplink_item/device_tools/stimpack",
+    // The energy sword, the energy dagger and the sleepy pen
+    // (`ss13_game::antag::syndie_items`).
+    "/datum/uplink_item/dangerous/sword",
+    "/datum/uplink_item/stealthy_weapons/edagger",
+    "/datum/uplink_item/stealthy_weapons/sleepy_pen",
+    // The failsafe code (`ss13_game::antag::uplink`; its item is abstract).
+    "/datum/uplink_item/device_tools/failsafe",
+    // Not sold (`purchasable_from = NONE`): brings the raw telecrystal's prototype for
+    // `buy_raw_tc`.
+    "/datum/uplink_item/bundles_tc/telecrystal",
     "/datum/uplink_item/badass/balloon",
 ];
+
+/// tg `/datum/uplink_category/discounts`: the category of an uplink's sales.
+pub const DISCOUNT_CATEGORY: &str = "/datum/uplink_category/discounts";
 
 /// A `/datum/uplink_item` (the fields `/datum/asset/json/uplink` sends).
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
@@ -212,6 +234,9 @@ pub struct UplinkItemDef {
     pub limited_stock: i32,
     pub lock_other_purchases: bool,
     pub cant_discount: bool,
+    /// `limited_discount_stock`: the stock of this item on sale (`-1`: as `limited_stock`).
+    #[serde(default = "no_limit")]
+    pub limited_discount_stock: i32,
     pub population_minimum: u32,
     pub restricted_roles: Vec<String>,
 }
@@ -250,10 +275,17 @@ pub struct TraitorFlavor {
     pub uplink: String,
 }
 
+fn no_limit() -> i32 {
+    -1
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct AntagData {
     /// Category names by `weight`, highest first (`cmp_uplink_category_desc`).
     pub uplink_categories: Vec<String>,
+    /// [`DISCOUNT_CATEGORY`]'s name.
+    #[serde(default)]
+    pub discount_category: String,
     pub uplink_items: Vec<UplinkItemDef>,
     pub steal_items: Vec<StealItemDef>,
     /// `TRAITOR_FLAVOR_FILE` by employer name, sorted.
@@ -404,6 +436,9 @@ pub fn resolve(types: &DmTypes) -> AntagData {
                 limited_stock: int(types.resolved(p, "limited_stock")) as i32,
                 lock_other_purchases: int(types.resolved(p, "lock_other_purchases")) != 0,
                 cant_discount: int(types.resolved(p, "cant_discount")) != 0,
+                limited_discount_stock: types
+                    .resolved(p, "limited_discount_stock")
+                    .map_or(-1, |v| int(Some(v)) as i32),
                 population_minimum: int(types.resolved(p, "population_minimum")).max(0) as u32,
                 restricted_roles: strings(types.resolved(p, "restricted_roles")),
             })
@@ -436,6 +471,7 @@ pub fn resolve(types: &DmTypes) -> AntagData {
         .collect();
     AntagData {
         uplink_categories: categories.into_iter().map(|(_, n)| n).collect(),
+        discount_category: text(types.resolved(DISCOUNT_CATEGORY, "name")),
         uplink_items,
         steal_items,
         nukeop_outfits,
@@ -458,6 +494,8 @@ mod tests {
             "declared_vars": { "name": "(Pointless) Badassery", "weight": 0 } },
         "/datum/uplink_category/explosives": { "parent": "/datum/uplink_category",
             "declared_vars": { "name": "Explosives", "weight": 6 } },
+        "/datum/uplink_category/discounts": { "parent": "/datum/uplink_category",
+            "declared_vars": { "name": "Discounted Gear", "weight": -1 } },
         "/datum/uplink_item": { "parent": "/datum", "declared_vars": { "cost": 0,
             "item": null, "category": null, "purchasable_from": 16777215, "limited_stock": -1,
             "lock_other_purchases": 0, "cant_discount": 0, "population_minimum": 0,
@@ -497,8 +535,14 @@ mod tests {
         let data = resolve(&DmTypes::parse(TYPES.as_bytes()).unwrap());
         assert_eq!(
             data.uplink_categories,
-            ["Explosives", "Misc. Gadgets", "(Pointless) Badassery"]
+            [
+                "Explosives",
+                "Misc. Gadgets",
+                "(Pointless) Badassery",
+                "Discounted Gear"
+            ]
         );
+        assert_eq!(data.discount_category, "Discounted Gear");
         let paths: Vec<&str> = data.uplink_items.iter().map(|i| i.path.as_str()).collect();
         assert_eq!(
             paths,
@@ -516,6 +560,7 @@ mod tests {
             ),
             (1, "Misc. Gadgets", -1)
         );
+        assert_eq!(toolbox.limited_discount_stock, -1);
         assert_eq!(toolbox.purchasable_from & UPLINK_TRAITORS, UPLINK_TRAITORS);
         assert!(data.uplink_items[1].lock_other_purchases);
         let steal: Vec<(&str, bool, bool)> = data

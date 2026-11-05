@@ -279,6 +279,13 @@ pub mod files {
     ];
     /// The hallucinations (`ss13_game::hallucination`): fake sounds, battles, announcements
     /// and the bleeding and freezing ones.
+    /// Syndicate gear (`ss13_game::antag::syndie_items`): the energy blades' `saberon`,
+    /// `saberoff` and active `hitsound`, the sleepy pen's stab (none).
+    pub const SYNDIE_ITEMS: [&str; 3] = [
+        "sound/items/weapons/saberon.ogg",
+        "sound/items/weapons/saberoff.ogg",
+        "sound/items/weapons/blade1.ogg",
+    ];
     pub const HALLUCINATION: [&str; 94] = [
         "modular_bandastation/cult_overhaul/sound/announcements/cult_summon.ogg",
         "sound/announcer/alarm/nuke_alarm.ogg",
@@ -691,6 +698,7 @@ pub fn referenced<'a>(
     out.extend(files::MARTIAL.map(str::to_owned));
     out.extend(files::SERVICE.map(str::to_owned));
     out.extend(files::HALLUCINATION.map(str::to_owned));
+    out.extend(files::SYNDIE_ITEMS.map(str::to_owned));
     for path in converted {
         for var in SOUND_VARS {
             let s = sound_var(types, path, var);

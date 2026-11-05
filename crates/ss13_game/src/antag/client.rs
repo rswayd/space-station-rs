@@ -24,8 +24,9 @@ use ss13_ui_kit::prelude::*;
 use ss13_ui_kit::theme::{Bold, FontPx};
 
 use super::{
-    AntagHudData, AntagHudUi, AntagInfoBrotherUi, AntagInfoTraitorUi, BUY, BrotherInfo, LOCK,
-    OPEN_INFO, TraitorInfo, UplinkData, UplinkItemRecord, UplinkStatic, UplinkUi,
+    AntagHudData, AntagHudUi, AntagInfoBrotherUi, AntagInfoTraitorUi, BUY, BUY_RAW_TC, BrotherInfo,
+    LOCK, OPEN_INFO, RENEGOTIATE_OBJECTIVES, TraitorInfo, UplinkData, UplinkItemRecord,
+    UplinkStatic, UplinkUi,
 };
 
 /// One 32 px HUD tile at the map's zoom 2.
@@ -354,6 +355,17 @@ fn objectives_view(data: &UplinkData) -> impl Scene + use<> {
         })
         .collect();
     let green = UiColor::Green.text().unwrap_or_default();
+    // `can_renegotiate`: "Replace objectives with a custom one".
+    let renegotiate = data.can_renegotiate.then(|| {
+        EntityScene(bsn! {
+            @ss13_ui_kit::Button {
+                @content: "Заменить задачи на собственную",
+                @icon: "pen",
+            }
+            Name("uplink: renegotiate")
+            Act({RENEGOTIATE_OBJECTIVES.to_owned()})
+        })
+    });
     bsn! {
         @Section { @fill: true, @scrollable: true }
         Children [
@@ -372,6 +384,8 @@ fn objectives_view(data: &UplinkData) -> impl Scene + use<> {
                 --
                 Node { flex_direction: FlexDirection::Column, width: percent(100) }
                 Children [ {objectives} ]
+                --
+                Node Children [ {renegotiate} ]
                 --
                 Node { margin: UiRect::top(px(24)) }
                 Propagate::<FontPx>(FontPx(9.6))
@@ -428,6 +442,7 @@ fn market_view(st: &UplinkStatic, data: &UplinkData, local: &UiLocalState) -> im
                         @ss13_ui_kit::Button { @content: currency, @fluid: true }
                         Propagate::<Bold>(Bold(true))
                         Name("uplink: telecrystals")
+                        Act({BUY_RAW_TC.to_owned()})
                     ]
                     --
                     @StackItem { @grow: 1.0 }
@@ -520,6 +535,16 @@ impl ClientUi for AntagInfoTraitorUi {
                 .map(|c| format!("Код: {c}"))
                 .unwrap_or_default();
             let unlock = info.uplink_unlock_info.clone();
+            // `failsafe_code` in `badstyle` (red).
+            let failsafe = info.failsafe_code.as_ref().map(|f| {
+                let text = format!("Запасной код: {f}");
+                EntityScene(bsn! {
+                    Node
+                    Propagate::<TextColor>(TextColor(Color::srgb(1.0, 0.3, 0.3)))
+                    Name("traitor info: failsafe")
+                    Children [ Text(text) ]
+                })
+            });
             EntityScene(bsn! {
                 @StackItem
                 Children [
@@ -534,6 +559,8 @@ impl ClientUi for AntagInfoTraitorUi {
                             Propagate::<TextColor>(TextColor(lightblue))
                             Name("traitor info: code")
                             Children [ Text(code) ]
+                            --
+                            Node Children [ {failsafe} ]
                             --
                             Node { margin: UiRect::top(px(6)) }
                             Children [ Text(unlock) ]
