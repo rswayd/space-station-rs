@@ -17,8 +17,9 @@
 //!   report to `centcom_message`.
 //! - The shuttle refuses to leave the station with living mobs aboard (tg `check_blacklist`).
 //! - A request approved with a department's budget is paid by that department at purchase.
+//! - Leaving CentCom it also loads the waiting mail ([`super::mail::create_mail`]).
 // shortcut: goodies (lockboxes per buyer), departmental order consoles, coupons, chef groceries,
-// mail, the materials market, shuttle loans, requisition papers, manifest errors and
+// the materials market, shuttle loans, requisition papers, manifest errors and
 // `locked_to_account` crates are not ported; private orders are paid on delivery as in tg but
 // their crates open with the pack's access only. Packs with their own `fill()` are not offered.
 
@@ -124,13 +125,13 @@ impl SupplyPacks {
 }
 
 /// Whether a console may order `pack` (tg `add_item`'s flag checks and the catalogue filter):
-/// not invisible, emag-only, a disabled special, contraband (no hacked boards yet) or pod-only.
-/// Packs needing what is not ported (goodies, their own `fill()`, live animals, nothing to spawn)
-/// are hidden too.
-pub fn orderable(pack: &SupplyPackDef, contraband: bool) -> bool {
+/// not invisible, emag-only on a console that is not emagged, a disabled special, contraband
+/// (no hacked boards yet) or pod-only. Packs needing what is not ported (goodies, their own
+/// `fill()`, live animals, nothing to spawn) are hidden too.
+pub fn orderable(pack: &SupplyPackDef, contraband: bool, emagged: bool) -> bool {
     use order_flags::*;
     !(pack.has(INVISIBLE)
-        || pack.has(EMAG_ONLY)
+        || (pack.has(EMAG_ONLY) && !emagged)
         || (pack.has(CONTRABAND) && !contraband)
         || pack.has(POD_ONLY)
         || (pack.has(SPECIAL) && !pack.has(SPECIAL_ENABLED))
@@ -355,12 +356,19 @@ pub(crate) fn load_packs(world: &mut World) {
         }
         None => PackData::default(),
     };
-    let mut packs = SupplyPacks::new(data.packs);
-    let mut paths: Vec<String> = vec![MANIFEST_PAPER.to_owned()];
-    for pack in &packs.packs {
-        paths.extend(pack.contains.iter().map(|(t, _)| t.clone()));
-        paths.extend(pack.crate_type.clone());
+    // Crates and their contents, bounty cubes, mail and its goodies.
+    let mut paths: Vec<String> = data
+        .spawned_types()
+        .into_iter()
+        .chain(ss13_mapload::cargo::RUNTIME_TYPES)
+        .map(str::to_owned)
+        .collect();
+    let seed_bounties = !world.contains_resource::<super::bounty::Bounties>();
+    if seed_bounties {
+        world.insert_resource(super::bounty::Bounties::new(data.bounties, data.jobs, seed));
     }
+    world.insert_resource(super::mail::MailGoodies(data.mail_generic_goodies));
+    let mut packs = SupplyPacks::new(data.packs);
     if let Some(protos) = world.get_resource::<Prototypes>() {
         let index: HashMap<(&str, &str), ss13_shared::IconStateId> = world
             .get_resource::<IconIndex>()
@@ -370,11 +378,21 @@ pub(crate) fn load_packs(world: &mut World) {
                     .collect()
             })
             .unwrap_or_default();
-        for path in paths {
+        while let Some(path) = paths.pop() {
             if packs.templates.contains_key(&path) {
                 continue;
             }
             if let Some(proto) = protos.get(&path).cloned() {
+                // A mail goodie may be a spawner: its loot is spawned at runtime.
+                if let Some(spawner) = proto.get::<ss13_mapload::spawner::DmSpawner>() {
+                    paths.extend(
+                        spawner
+                            .loot
+                            .iter()
+                            .filter(|e| !e.path.is_empty())
+                            .map(|e| e.path.clone()),
+                    );
+                }
                 packs.templates.insert(path, Template::new(proto, &index));
             }
         }
@@ -447,16 +465,17 @@ fn on_tile(world: &World, pos: TilePos) -> Vec<Entity> {
     world.resource::<SpatialIndex>().on_tile(pos).to_vec()
 }
 
-/// tg `check_blacklist` for what exists here: no living mob may ride the supply shuttle.
-// shortcut: of tg's blacklist only `/mob/living` can be on a shuttle here.
+/// tg `check_blacklist` for what exists here: no living mob and no mail (also inside
+/// containers) may ride the supply shuttle away from the station.
+// shortcut: of tg's blacklist only `/mob/living` and `/obj/item/mail` exist here.
 pub fn can_move(world: &World, shuttle: &SupplyShuttle) -> bool {
     if !shuttle.at_station() {
         return true;
     }
     !shuttle_tiles(world, shuttle.port).into_iter().any(|p| {
-        on_tile(world, p)
-            .into_iter()
-            .any(|e| world.get::<crate::health::Health>(e).is_some())
+        on_tile(world, p).into_iter().any(|e| {
+            world.get::<crate::health::Health>(e).is_some() || super::mail::holds_mail(world, e)
+        })
     })
 }
 
@@ -494,9 +513,11 @@ fn tick(world: &mut World) {
     let call = world.resource::<SupplyConfig>().call_secs;
     match mode {
         SupplyMode::Igniting => {
-            // `initiate_docking` override: buy when leaving CentCom.
+            // `initiate_docking` override: buy and load the mail when leaving CentCom.
             if world.resource::<SupplyShuttle>().at_centcom() {
                 buy(world);
+                let mut turfs = empty_turfs(world, port);
+                super::mail::create_mail(world, &mut turfs);
             }
             let result = initiate_docking(world, port, transit);
             log_move("enter transit", &result);
@@ -729,7 +750,11 @@ pub fn generate(world: &mut World, order: &SupplyOrder, pos: TilePos) -> Option<
     Some(crate_entity)
 }
 
-fn spawn_template(world: &mut World, path: &str, pos: Option<TilePos>) -> Option<Entity> {
+pub(crate) fn spawn_template(
+    world: &mut World,
+    path: &str,
+    pos: Option<TilePos>,
+) -> Option<Entity> {
     world
         .try_resource_scope(|world, packs: Mut<SupplyPacks>| {
             Some(packs.templates.get(path)?.spawn(world, pos))
@@ -828,20 +853,31 @@ mod tests {
     #[test]
     fn visibility_flags() {
         use order_flags::*;
-        assert!(orderable(&pack(1.0, 0), false));
-        assert!(!orderable(&pack(1.0, INVISIBLE), false));
-        assert!(!orderable(&pack(1.0, EMAG_ONLY), false));
-        assert!(!orderable(&pack(1.0, CONTRABAND), false));
-        assert!(orderable(&pack(1.0, CONTRABAND), true));
-        assert!(!orderable(&pack(1.0, SPECIAL), false));
-        assert!(orderable(&pack(1.0, SPECIAL | SPECIAL_ENABLED), false));
-        assert!(!orderable(&pack(1.0, POD_ONLY), false));
-        assert!(!orderable(&pack(1.0, GOODY), false));
+        assert!(orderable(&pack(1.0, 0), false, false));
+        assert!(!orderable(&pack(1.0, INVISIBLE), false, false));
+        assert!(!orderable(&pack(1.0, EMAG_ONLY), false, false));
+        assert!(
+            !orderable(&pack(1.0, EMAG_ONLY), true, false),
+            "contraband is not emag"
+        );
+        assert!(orderable(&pack(1.0, EMAG_ONLY), true, true));
+        assert!(!orderable(&pack(1.0, INVISIBLE | EMAG_ONLY), true, true));
+        assert!(!orderable(&pack(1.0, CONTRABAND), false, false));
+        assert!(orderable(&pack(1.0, CONTRABAND), true, false));
+        assert!(!orderable(&pack(1.0, SPECIAL), false, false));
+        assert!(orderable(
+            &pack(1.0, SPECIAL | SPECIAL_ENABLED),
+            false,
+            false
+        ));
+        assert!(!orderable(&pack(1.0, POD_ONLY), false, false));
+        assert!(!orderable(&pack(1.0, GOODY), false, false));
         assert!(!orderable(
             &SupplyPackDef {
                 custom_fill: true,
                 ..pack(1.0, 0)
             },
+            false,
             false
         ));
     }

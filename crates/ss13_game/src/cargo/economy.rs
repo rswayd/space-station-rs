@@ -11,9 +11,9 @@
 //!   (`payday(1, skippable = TRUE)`: clamped to `PAYCHECK_CREW`), with tg's bank card messages.
 //! - The round-end economy report (`market_report`): the crew's total, the average, the richest.
 //! - Each tick also picks the boosted exports (`update_boosted_exports`,
-//!   [`super::export::Exports::update_boosted`]) and clears the stock market's news.
-// shortcut: no inflation, mail, civilian bounties, debts, departmental cards, audit log or
-// species payday modifiers.
+//!   [`super::export::Exports::update_boosted`]), clears the stock market's news and counts the
+//!   waiting mail ([`super::mail::economy_tick`]). Civilian bounties: [`super::bounty`].
+// shortcut: no inflation, debts, departmental cards, audit log or species payday modifiers.
 
 use std::collections::HashMap;
 
@@ -341,6 +341,7 @@ fn fire(world: &mut World) {
     if let Some(mut market) = world.get_resource_mut::<super::stock_market::StockMarket>() {
         market.news.clear();
     }
+    super::mail::economy_tick(world);
 }
 
 /// The mob holding `item`, through containers (tg `recursive_loc_check(card, /mob)`).
@@ -439,7 +440,7 @@ pub fn market_report(world: &World) -> Vec<ChatMessage> {
 }
 
 /// BYOND's number text: up to 6 significant digits, no trailing zeros.
-fn dm_number(n: f64) -> String {
+pub(crate) fn dm_number(n: f64) -> String {
     let s = format!(
         "{:.*}",
         6usize.saturating_sub(n.abs().max(1.0).log10() as usize + 1),

@@ -9,8 +9,10 @@
 //! - Market exports (`/datum/export/material/market/*`) are worth the live
 //!   [`StockMarket`] price per sheet, and each sale moves the market.
 //! - [`export_value`] is the dry run the export scanner shows.
-// shortcut: no `COMSIG_ITEM_EXPORTED` handlers (bounties, sales tags), no hologram check, no
-// stock blocks.
+//! - A bounty cube sells through `crate::cargo::bounty::sell_cube` (its pricetag pays the
+//!   holders first).
+// shortcut: no other `COMSIG_ITEM_EXPORTED` handlers (sales tags), no hologram check, no stock
+// blocks.
 
 use bevy::prelude::*;
 use ss13_mapload::cargo::{ExportAmount, ExportDef};
@@ -90,8 +92,31 @@ fn round_up(x: f64) -> i64 {
     (x - 1e-9).ceil() as i64
 }
 
+/// `/datum/export/bounty_box`: its value is the cube's (`crate::cargo::bounty::sell_cube`), so
+/// it is a report line here and never found by type.
+pub const BOUNTY_EXPORT: &str = "/datum/export/bounty_box";
+
+fn bounty_export() -> ExportDef {
+    ExportDef {
+        id: BOUNTY_EXPORT.into(),
+        unit_name: "completed bounty cube".into(),
+        message: String::new(),
+        cost: 1.0,
+        k_elasticity: 0.0,
+        k_hit_percentile: 0.0,
+        k_recovery_secs: 0.0,
+        amount_report_multiplier: 1.0,
+        include_subtypes: true,
+        export_types: Vec::new(),
+        exclude_types: Vec::new(),
+        amount: ExportAmount::One,
+    }
+}
+
 impl Exports {
-    pub fn new(defs: Vec<ExportDef>) -> Self {
+    pub fn new(mut defs: Vec<ExportDef>) -> Self {
+        defs.retain(|d| d.id != BOUNTY_EXPORT);
+        defs.push(bounty_export());
         let elasticity = defs.iter().map(|d| (d.k_elasticity, 0.0)).collect();
         // The converter priced market exports at the material's starting price (`cost * price`);
         // the multiplier is what is left of that.
@@ -115,7 +140,9 @@ impl Exports {
     /// `SSeconomy.update_boosted_exports`: 2-4 random exports pay triple until the next call.
     pub fn update_boosted(&mut self, rng: &mut Rng) {
         self.boosted.clear();
-        let mut valid: Vec<usize> = (0..self.defs.len()).collect();
+        let mut valid: Vec<usize> = (0..self.defs.len())
+            .filter(|&i| self.defs[i].id != BOUNTY_EXPORT)
+            .collect();
         let n = rng.range(EXPORT_BOOST_AMOUNT.0, EXPORT_BOOST_AMOUNT.1);
         for _ in 0..n {
             if valid.is_empty() {
@@ -208,6 +235,20 @@ impl Exports {
             self.elasticity[index] = (k, now);
         }
         true
+    }
+
+    /// A bounty cube sold for `value` after its holders' cuts (`COMSIG_ITEM_EXPORTED` of the
+    /// pricetag: one unit, the rest of the value).
+    pub fn report_bounty(&self, value: i64, name: &str, report: &mut ExportReport) {
+        let Some(index) = self.defs.iter().position(|d| d.id == BOUNTY_EXPORT) else {
+            return;
+        };
+        let n = self.defs.len();
+        report.total_value.resize(n, 0);
+        report.total_amount.resize(n, 0.0);
+        report.total_value[index] += value;
+        report.total_amount[index] += 1.0;
+        report.exported_atoms.push(name.to_owned());
     }
 
     /// tg `total_printout` of every export that sold something, in export order.
@@ -314,6 +355,9 @@ pub fn export_item_and_contents(
         let Some(path) = path_of(world, e) else {
             continue;
         };
+        if super::bounty::sell_cube(world, exports, e, report) {
+            continue;
+        }
         let stack = stack_of(world, e);
         let Some(index) = exports.find(&path, stack, now) else {
             continue;
@@ -350,6 +394,9 @@ pub fn export_value(world: &World, exports: &Exports, thing: Entity, now: f64) -
     let value = all
         .iter()
         .filter_map(|&e| {
+            if let Some(cube) = world.get::<super::bounty::BountyCube>(e) {
+                return Some(cube.sale_value());
+            }
             let path = path_of(world, e)?;
             let stack = stack_of(world, e);
             let index = exports.find(&path, stack, now)?;
