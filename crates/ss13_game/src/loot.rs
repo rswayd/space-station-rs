@@ -194,6 +194,13 @@ fn alt_clicks(world: &mut World, mut clicks: Local<MessageCursor<AltClick>>) {
         if world.get::<TilePos>(click.target) != Some(&click.target_pos) {
             continue;
         }
+        // tg `base_click_alt_secondary`: only what defines `click_alt_secondary`.
+        if click.secondary {
+            if click.reach && can_act(world, click.mob) {
+                crate::clothing::click_alt_secondary(world, click.client, click.mob, click.target);
+            }
+            continue;
+        }
         if !click.loot_only
             && click.reach
             && can_act(world, click.mob)
@@ -220,6 +227,7 @@ fn click_alt(world: &mut World, client: Entity, mob: Entity, target: Entity) -> 
         || crate::radiation::geiger_alt_click(world, client, target)
         || crate::shuttle_console_server::click_alt(world, client, mob, target)
         || crate::service::server::click_alt(world, client, mob, target)
+        || crate::clothing::click_alt(world, client, mob, target)
 }
 
 /// `try_open_loot_panel_on` -> `/datum/lootpanel/open(get_turf(target))`.

@@ -14,8 +14,7 @@
 //!   dough) works on it for the element's time (`use_tool`) and replaces it with `amount`
 //!   results that split its reagents (`table_required`: on a table or a tray).
 // shortcut: no foodtypes, likes/dislikes, food buffs, decomposition, `check_liked`, golem
-// materials, eating sounds, voracious/glutton traits or hologram food; the mouth counts as
-// covered by anything in the mask slot (as `crate::chem`'s drinking); the radial menu between
+// materials, eating sounds, voracious/glutton traits or hologram food; the radial menu between
 // several processing results picks the first.
 
 use bevy::prelude::*;
@@ -24,7 +23,6 @@ use ss13_reagents::metabolism;
 use ss13_reagents::{Chemistry, Holder, Owner, flags, is_under};
 use ss13_shared::TilePos;
 use ss13_shared::chat::Span;
-use ss13_shared::protocol::InventorySlot;
 use ss13_world::SpatialIndex;
 
 use crate::chem::{Chem, MobReagents, Reagents, name_of, tell_mob, visible};
@@ -257,11 +255,7 @@ fn can_consume(world: &mut World, actor: Actor, eater: Entity) -> bool {
     if world.get::<MobReagents>(eater).is_none() {
         return false;
     }
-    let masked = world
-        .get::<Inventory>(eater)
-        .and_then(|i| i.slot(InventorySlot::Mask))
-        .is_some();
-    if masked {
+    if crate::clothing::cover::mouth_covered(world, eater).is_some() {
         tell(world, actor.client, Span::Warning, "рот закрыт!");
         return false;
     }

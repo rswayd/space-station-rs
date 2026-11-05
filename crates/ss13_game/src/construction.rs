@@ -272,6 +272,8 @@ pub enum Job {
     FieldGenerator(crate::power::field_generator::FieldGenJob),
     /// Finishing a circuit shell assembly ([`crate::wiremod::server`]).
     Wiremod(Entity),
+    /// Mending shredded clothing ([`crate::clothing::damage`]).
+    Clothing(crate::clothing::ClothingJob),
 }
 
 /// A turf's baseturf stack, bottom first (tg `baseturfs`). Absent: assembled from the type's
@@ -1268,6 +1270,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         Job::Hijack => crate::shuttle_console_server::complete_hijack(world, mob, action),
         &Job::Door(job) => crate::doors::complete(world, client, mob, target, job),
         &Job::Wiremod(shell) => crate::wiremod::server::complete(world, mob, action, shell),
+        &Job::Clothing(job) => crate::clothing::damage::complete(world, mob, action, job),
         &Job::Emitter(job) => crate::power::emitter::complete(world, client, target, job, consume),
         &Job::FieldGenerator(job) => {
             crate::power::field_generator::complete(world, client, target, job, consume)

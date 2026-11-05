@@ -51,6 +51,7 @@
 //! | 3000 | `service::server::attack_self` |
 //! | 3100 | `silicon::law_rack::attack_self` |
 //! | 3150 | `vehicles::attack_self` |
+//! | 3155 | `clothing::toggles::attack_self` (adjustable masks) |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):
 //!
@@ -71,6 +72,7 @@
 //! | 1100 | `antag::syndie_items::item_interaction` |
 //! | 1200 | `modpc::pda::item_interaction` |
 //! | 1250 | `radiation::geiger_interact` |
+//! | 1255 | `clothing::item_interaction` |
 //! | 1300 | `disposals::mail_interaction` |
 //! | 1400 | `chem::item_interaction` |
 //! | 1500 | `guns::item_interaction` |
@@ -120,6 +122,7 @@
 //! | 3470 | `station_goals::interact` (satellites) |
 //! | 3450 | `vehicles::attack_hand` |
 //! | 3460 | `wiremod::server::attack_hand` |
+//! | 3455 | `clothing::sensors::interact` (crew console) |
 //!
 //! [`ClickPhase::HeldOnTarget`] (a world click with the active hand's item; tg
 //! `item_interaction`, `interact_with_atom`, `pre_attack`, `attackby`):
@@ -170,6 +173,7 @@
 //! | 3300 | `food::item_interaction` |
 //! | 3400 | `plumbing::item_interaction` |
 //! | 3450 | `decor::item_interaction` |
+//! | 3455 | `clothing::item_interaction` |
 //! | 3500 | `janitor::item_interaction` |
 //! | 3600 | `genetics::console::item_interaction` |
 //! | 3700 | `chem::item_interaction` |

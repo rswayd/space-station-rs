@@ -272,6 +272,7 @@ impl Plugin for GameServerPlugin {
         .add_plugins(crate::atmos_machinery::AtmosMachineryPlugin)
         .add_plugins(crate::silicon::SiliconServerPlugin)
         .add_plugins(crate::records::RecordsServerPlugin)
+        .add_plugins(crate::clothing::ClothingPlugin)
         .add_plugins(crate::brig::BrigServerPlugin)
         .add_plugins(crate::events::EventsServerPlugin)
         .add_plugins(crate::explosions::ExplosionsServerPlugin)

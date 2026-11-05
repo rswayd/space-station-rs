@@ -2082,6 +2082,8 @@ pub fn after_hit(world: &mut World, victim: Entity, zone: BodyZone, hit: Hit) {
     } else {
         zone
     };
+    // `check_woundings_mods` with `wound_clothing`: the clothing there takes zone damage.
+    crate::clothing::damage::after_hit(world, victim, zone, hit);
     let dead = world.get::<Stat>(victim) == Some(&Stat::Dead);
     let has_blood = world
         .get::<super::blood::Blood>(victim)

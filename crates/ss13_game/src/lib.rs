@@ -21,6 +21,8 @@
 //!   stay shut, lights go to emergency light or dark.
 //! - `closets` (feature `server`): closets, lockers and crates open, close, lock and hold their
 //!   contents (mapped and from `PopulateContents`).
+//! - `clothing`: what worn clothing hides, masks, jumpsuit styles, hoods, clothing damage, suit
+//!   sensors and the crew monitor, accessories (server); the crew monitor window (client).
 //! - `storage` (feature `server`): storage items (backpacks, boxes) with tg weight and slot
 //!   limits, contents programs, the open storage view; `storage_client` (feature `client`)
 //!   draws it as a slot grid.
@@ -200,6 +202,7 @@ pub mod click_handlers;
 pub mod client;
 #[cfg(feature = "server")]
 pub mod closets;
+pub mod clothing;
 #[cfg(feature = "server")]
 pub mod coffee;
 #[cfg(feature = "server")]

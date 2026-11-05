@@ -73,6 +73,10 @@ pub fn examine_lines(world: &World, examiner: Entity, target: Entity) -> (String
         return (name, lines);
     }
     if world.get::<Health>(target).is_some() {
+        // `get_visible_name`: a hidden face shows the worn ID's name or "Неизвестный".
+        if let Some(visible) = crate::clothing::cover::hidden_face_name(world, target) {
+            name = visible;
+        }
         carbon_lines(world, examiner, target, &mut lines);
         return (name, lines);
     }
@@ -133,6 +137,7 @@ pub fn examine_lines(world: &World, examiner: Entity, target: Entity) -> (String
     crate::wiremod::server::examine_lines(world, target, &mut lines);
     crate::forensics::server::examine_lines(world, target, &mut lines);
     crate::radiation::examine_lines(world, target, &mut lines);
+    crate::clothing::examine_lines(world, target, &mut lines);
     (name, lines)
 }
 
@@ -142,14 +147,21 @@ fn carbon_lines(world: &World, examiner: Entity, mob: Entity, lines: &mut Vec<Li
     let (he, his, them) = ("Он", "его", "него");
     let thing = |e: Option<Entity>| e.map(|e| name_of(world, e)).filter(|n| !n.is_empty());
     if let Some(inventory) = world.get::<Inventory>(mob) {
-        // `get_clothing_examine_info`, in its order.
-        // shortcut: no `obscured_slots` (a helmet does not hide the mask), no blood or cuffs.
+        // `get_clothing_examine_info`, in its order; what the clothing hides is left out
+        // (`obscured_slots`).
+        // shortcut: no blood or cuffs.
+        let hidden = crate::clothing::cover::obscured(world, mob);
+        let inventory = &crate::clothing::cover::shown(inventory, hidden);
         let worn = |slot: Option<Entity>, where_: &str, lines: &mut Vec<Line>| {
             if let Some(item) = thing(slot) {
                 lines.push((Span::Plain, format!("{he} носит {item}{where_}.")));
             }
         };
-        worn(inventory.uniform, "", lines);
+        let accessories = inventory
+            .uniform
+            .map(|u| crate::clothing::accessories::examine_suffix(world, u))
+            .unwrap_or_default();
+        worn(inventory.uniform, &accessories, lines);
         worn(inventory.head, " на голове", lines);
         worn(inventory.mask, " на лице", lines);
         worn(inventory.neck, " на шее", lines);

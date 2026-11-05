@@ -110,6 +110,8 @@ pub struct AltClick {
     pub target_pos: TilePos,
     pub reach: bool,
     pub loot_only: bool,
+    /// Alt+right click (tg `click_alt_secondary`).
+    pub secondary: bool,
 }
 
 /// A plain or right click of a mob with a [`ClickIntercept`] on an entity its client sees, at any
@@ -344,6 +346,7 @@ fn resolve_clicks(
                 target_pos,
                 reach: !in_closet && reach_of(target_pos),
                 loot_only: true,
+                secondary: false,
             });
             continue;
         }
@@ -385,17 +388,16 @@ fn resolve_clicks(
             continue;
         }
         if modifiers.alt && !modifiers.shift {
-            // shortcut: alt+right (`click_alt_secondary`) is defined by no type here.
-            if !modifiers.right {
-                out.alt.write(AltClick {
-                    client,
-                    mob,
-                    target,
-                    target_pos,
-                    reach: !in_closet && reach_of(target_pos),
-                    loot_only: false,
-                });
-            }
+            // Alt+right is tg `click_alt_secondary` (a jumpsuit's accessory).
+            out.alt.write(AltClick {
+                client,
+                mob,
+                target,
+                target_pos,
+                reach: !in_closet && reach_of(target_pos),
+                loot_only: false,
+                secondary: modifiers.right,
+            });
             continue;
         }
         // shortcut: from inside a closet tg reaches only the closet itself (`CanReach` through
