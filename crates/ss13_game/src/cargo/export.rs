@@ -3,17 +3,30 @@
 //! each one into an [`ExportReport`], and everything walked is deleted, sold or not
 //! (`delete_unsold`). Elasticity: a sale lowers the export's `k_elasticity` by
 //! `amount * k_hit_percentile`; it recovers linearly over `k_recovery_time`.
-// shortcut: no boosted exports (`SSeconomy.boosted_exports`), no stock market moves after market
-// sales (prices stay at their start), no `COMSIG_ITEM_EXPORTED` handlers (bounties, sales tags),
-// no hologram check.
+//!
+//! - Boosted exports (`SSeconomy.boosted_exports`): every economy tick picks 2-4 exports that pay
+//!   `EXPORT_BOOST_MULT` times their value until the next tick.
+//! - Market exports (`/datum/export/material/market/*`) are worth the live
+//!   [`StockMarket`] price per sheet, and each sale moves the market.
+//! - [`export_value`] is the dry run the export scanner shows.
+// shortcut: no `COMSIG_ITEM_EXPORTED` handlers (bounties, sales tags), no hologram check, no
+// stock blocks.
 
 use bevy::prelude::*;
 use ss13_mapload::cargo::{ExportAmount, ExportDef};
 use ss13_mapload::{DmItem, DmName, DmObj};
 
+use ss13_mapload::spawner::Rng;
+
 use super::MONEY_SYMBOL;
+use super::stock_market::{MATERIALS, StockMarket, material_of_export};
 use crate::obj_damage::is_under;
 use crate::storage::Stored;
+
+/// `EXPORT_BOOST_MIN_AMOUNT`, `EXPORT_BOOST_MAX_AMOUNT`.
+pub const EXPORT_BOOST_AMOUNT: (i64, i64) = (2, 4);
+/// `EXPORT_BOOST_MULT`.
+pub const EXPORT_BOOST_MULT: f64 = 3.0;
 
 /// The exports and their live elasticity (tg `GLOB.exports_list`).
 #[derive(Resource, Debug, Default)]
@@ -21,6 +34,13 @@ pub struct Exports {
     pub defs: Vec<ExportDef>,
     /// `(k_elasticity, at)`: the value at server time `at`.
     elasticity: Vec<(f64, f64)>,
+    /// `SSeconomy.boosted_exports`, indices into `defs`.
+    boosted: Vec<usize>,
+    /// For market exports: the material (index into [`MATERIALS`]) and the export's own `cost`
+    /// multiplier of its price.
+    market: Vec<Option<(usize, f64)>>,
+    /// `SSstock_market.materials_prices`, kept in step by [`Exports::sync_market`].
+    market_prices: Vec<f64>,
 }
 
 /// tg `/datum/export_report`, indexed like [`Exports::defs`].
@@ -73,7 +93,58 @@ fn round_up(x: f64) -> i64 {
 impl Exports {
     pub fn new(defs: Vec<ExportDef>) -> Self {
         let elasticity = defs.iter().map(|d| (d.k_elasticity, 0.0)).collect();
-        Self { defs, elasticity }
+        // The converter priced market exports at the material's starting price (`cost * price`);
+        // the multiplier is what is left of that.
+        let market = defs
+            .iter()
+            .map(|d| {
+                let material = material_of_export(&d.id)?;
+                let value = MATERIALS[material].sheet_value;
+                Some((material, if value > 0.0 { d.cost / value } else { 1.0 }))
+            })
+            .collect();
+        Self {
+            defs,
+            elasticity,
+            boosted: Vec::new(),
+            market,
+            market_prices: MATERIALS.iter().map(|m| m.sheet_value).collect(),
+        }
+    }
+
+    /// `SSeconomy.update_boosted_exports`: 2-4 random exports pay triple until the next call.
+    pub fn update_boosted(&mut self, rng: &mut Rng) {
+        self.boosted.clear();
+        let mut valid: Vec<usize> = (0..self.defs.len()).collect();
+        let n = rng.range(EXPORT_BOOST_AMOUNT.0, EXPORT_BOOST_AMOUNT.1);
+        for _ in 0..n {
+            if valid.is_empty() {
+                break;
+            }
+            let i = rng.range(0, valid.len() as i64 - 1) as usize;
+            self.boosted.push(valid.swap_remove(i));
+        }
+    }
+
+    /// No boosted exports (tg skips them under `UNIT_TESTS`).
+    pub fn clear_boosted(&mut self) {
+        self.boosted.clear();
+    }
+
+    pub fn boosted(&self) -> &[usize] {
+        &self.boosted
+    }
+
+    /// The material a market export sells.
+    pub fn market_material(&self, index: usize) -> Option<usize> {
+        self.market.get(index).copied().flatten().map(|(m, _)| m)
+    }
+
+    /// Takes the stock market's current prices.
+    pub fn sync_market(&mut self, market: &StockMarket) {
+        for (i, price) in self.market_prices.iter_mut().enumerate() {
+            *price = market.price(i);
+        }
     }
 
     /// `k_elasticity` at `now`, recovered since the last sale (tg `process`).
@@ -86,12 +157,20 @@ impl Exports {
         (k + (now - at).max(0.0) / def.k_recovery_secs).min(1.0)
     }
 
-    /// tg `get_cost`: `ROUND_UP(base * amount * k_elasticity)`.
+    /// tg `get_cost`: `ROUND_UP(base * amount * k_elasticity)`, tripled while boosted; a
+    /// market export's base is its multiplier of the live price.
     pub fn cost(&self, index: usize, path: &str, stack: Option<u32>, now: f64) -> i64 {
         let def = &self.defs[index];
-        let mut total = def.cost * amount(def, path, stack);
+        let base = match self.market.get(index).copied().flatten() {
+            Some((material, multiplier)) => multiplier * self.market_prices[material],
+            None => def.cost,
+        };
+        let mut total = base * amount(def, path, stack);
         if def.k_elasticity > 0.0 {
             total *= self.elasticity(index, now);
+        }
+        if self.boosted.contains(&index) {
+            total *= EXPORT_BOOST_MULT;
         }
         round_up(total)
     }
@@ -228,19 +307,56 @@ pub fn export_item_and_contents(
         }
         i += 1;
     }
+    if let Some(market) = world.get_resource::<StockMarket>() {
+        exports.sync_market(market);
+    }
     for &e in all.iter().rev() {
         let Some(path) = path_of(world, e) else {
             continue;
         };
         let stack = stack_of(world, e);
-        if let Some(index) = exports.find(&path, stack, now) {
-            let name = name_of(world, e);
-            exports.sell(index, &path, stack, &name, now, report);
+        let Some(index) = exports.find(&path, stack, now) else {
+            continue;
+        };
+        let name = name_of(world, e);
+        if !exports.sell(index, &path, stack, &name, now, report) {
+            continue;
+        }
+        // `/datum/export/material/market/sell_object`: the sale moves the market.
+        if let Some(material) = exports.market_material(index) {
+            let sheets = amount(&exports.defs[index], &path, stack);
+            if let Some(mut market) = world.get_resource_mut::<StockMarket>() {
+                market.sold(material, sheets);
+                exports.sync_market(&market);
+            }
         }
     }
     if let Ok(entity) = world.get_entity_mut(thing) {
         entity.despawn();
     }
+}
+
+/// tg `export_item_and_contents(dry_run = TRUE)` summed: what `thing` and its contents would
+/// sell for now, and whether it holds anything. Nothing changes.
+pub fn export_value(world: &World, exports: &Exports, thing: Entity, now: f64) -> (i64, bool) {
+    let mut all = vec![thing];
+    let mut i = 0;
+    while i < all.len() {
+        if let Some(stored) = world.get::<Stored>(all[i]) {
+            all.extend_from_slice(stored.items());
+        }
+        i += 1;
+    }
+    let value = all
+        .iter()
+        .filter_map(|&e| {
+            let path = path_of(world, e)?;
+            let stack = stack_of(world, e);
+            let index = exports.find(&path, stack, now)?;
+            Some(exports.cost(index, &path, stack, now))
+        })
+        .sum();
+    (value, all.len() > 1)
 }
 
 #[cfg(test)]
@@ -375,5 +491,55 @@ mod tests {
             exports.printout(&report),
             ["+400¢: Received 500 cm3 of plasma."]
         );
+    }
+
+    #[test]
+    fn boosted_exports_pay_triple() {
+        let wrench = ExportDef {
+            k_elasticity: 0.0,
+            export_types: vec!["/obj/item/wrench".into()],
+            ..def("/datum/export/wrench", 2.0, ExportAmount::One)
+        };
+        let defs: Vec<ExportDef> = (0..6).map(|_| wrench.clone()).collect();
+        let mut exports = Exports::new(defs);
+        let mut rng = Rng::new(9);
+        for _ in 0..20 {
+            exports.update_boosted(&mut rng);
+            let boosted = exports.boosted().to_vec();
+            assert!((2..=4).contains(&boosted.len()), "{boosted:?}");
+            let mut unique = boosted.clone();
+            unique.sort_unstable();
+            unique.dedup();
+            assert_eq!(unique.len(), boosted.len());
+        }
+        let first = exports.boosted()[0];
+        assert_eq!(exports.cost(first, "/obj/item/wrench", None, 0.0), 6);
+        exports.clear_boosted();
+        assert_eq!(exports.cost(first, "/obj/item/wrench", None, 0.0), 2);
+    }
+
+    #[test]
+    fn market_exports_follow_the_stock_market() {
+        // The converter's price: `cost` 1 times gold's 125 per sheet.
+        let gold = ExportDef {
+            message: "cm3 of gold".into(),
+            amount_report_multiplier: 100.0,
+            k_elasticity: 0.0,
+            export_types: vec!["/obj/item/stack/sheet/mineral/gold".into()],
+            ..def(
+                "/datum/export/material/market/gold",
+                125.0,
+                ExportAmount::Material(vec![("/obj/item/stack/sheet/mineral/gold".into(), 1.0)]),
+            )
+        };
+        let mut exports = Exports::new(vec![gold]);
+        let path = "/obj/item/stack/sheet/mineral/gold";
+        assert_eq!(exports.market_material(0), Some(3));
+        assert_eq!(exports.cost(0, path, Some(2), 0.0), 250);
+        let mut market = StockMarket::new(3);
+        market.entries[3].quantity = 200.0;
+        market.sold(3, 50.0);
+        exports.sync_market(&market);
+        assert_eq!(exports.cost(0, path, Some(2), 0.0), 200, "100 per sheet now");
     }
 }

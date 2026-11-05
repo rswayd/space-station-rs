@@ -18,7 +18,7 @@
 
 - **Код:** [`SUBSYSTEM_DEF(stock_market)`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/stock_market.dm#L2), [`handle_trends_and_price()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/stock_market.dm#L69), [`handle_market_event()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/stock_market.dm#L130)
 - **BandaStation:** [`stock_market.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/stock_market.dm#L4) — тик 180 с вместо 60, коридор цен 0.8–2× вместо 0.5–3×
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ — `crates/ss13_game/src/cargo/stock_market.rs` (`StockMarket`): восемь торгуемых материалов с ценой, трендом и количеством, тик раз в 180 с с коридором BandaStation, пять рыночных событий с шансом 8%, обвал рынка (`crashing`), продажа листов через биржевой экспорт снижает цену и пополняет запас; очевидные ошибки tg не перенесены (порог разворота вниз, чтение `value_per_unit` с типа, обнуление запаса после локдауна). Новости биржи только в логе — ньюскастер в ../comms/; событие «обвал рынка», ставящее флаг, — в ../events/
 
 ### Чёрный рынок: подсистема и товары
 `SSmarket` держит рынки и случайный ассортимент `market_item` (оружие, снаряжение, расходники, другое), обновляет его и доставляет покупки (телепадом LTSRBT, «запуском» или капсулой).

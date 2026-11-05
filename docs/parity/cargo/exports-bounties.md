@@ -5,7 +5,7 @@
 `export_item_and_contents()` перебирает проданный предмет и его содержимое, для каждого находит `/datum/export` и начисляет кредиты в карго-бюджет; отчёт о продаже приходит в консоль. Цена у части экспортов «эластична»: падает с каждой проданной единицей и восстанавливается со временем.
 
 - **Код:** [`/datum/export`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/exports.dm#L95), [`export_item_and_contents()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/exports.dm#L43), [`sell_object()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/exports.dm#L204), [`/datum/export_report`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/exports.dm#L23)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/cargo/export.rs` (`export_item_and_contents`, эластичность `k_elasticity`): продажа предмета со всем содержимым, отчёт ЦК в консоли; `// shortcut:` нет обработчиков `COMSIG_ITEM_EXPORTED` (баунти, ценники), проверки голограмм, движения биржи
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/cargo/export.rs` (`export_item_and_contents`, эластичность `k_elasticity`, `export_value` — пробный прогон): продажа предмета со всем содержимым, отчёт ЦК в консоли, повышенный спрос, биржевые экспорты по живой цене `StockMarket` и сдвиг биржи после продажи; `// shortcut:` нет обработчиков `COMSIG_ITEM_EXPORTED` (баунти, ценники), проверки голограмм, биржевых блоков
 
 ### Категории экспорта
 Что покупает ЦК: материалы и листы, руду, оборудование и скафандры, инструменты, оружие, органы, еду и напитки, рыбу, семена, аномальные ядра, мехов и детали, крупные объекты (канистры, генераторы), образцы ксенобиологии, антиквариат, лаваленд-лут, проштампованные документы и манифесты.
@@ -17,13 +17,13 @@
 `SSeconomy` периодически выбирает несколько категорий экспорта с повышенной ценой.
 
 - **Код:** [`update_boosted_exports()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/economy.dm#L135)
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/cargo/export.rs`: `// shortcut:` `boosted_exports` нет
+- **Статус в ss13-rs:** ✅ — `crates/ss13_game/src/cargo/export.rs` (`Exports::update_boosted`), `crates/ss13_game/src/cargo/economy.rs` (`fire`): каждый тик экономики 2–4 случайных экспорта платят ×3 до следующего тика; выбор идёт из экспортов, которые порт умеет оценивать
 
 ### Универсальный сканер (export scanner / price tagger)
 Ручной сканер карго: режим оценки показывает экспортную стоимость предмета, режим ценника вешает на предмет цену для продажи, режим штрихкода печатает наклейки `barcode`, которыми помечают товар в пользу владельца.
 
 - **Код:** [`/obj/item/universal_scanner`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/universal_scanner.dm#L3), [`export_scan()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/universal_scanner.dm#L177), [`/obj/item/barcode`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/universal_scanner.dm#L272)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/cargo/scanner.rs` (`item_interaction`): режим оценки — сканер на объекте сообщает стоимость его и содержимого с учётом эластичности, спроса и биржи, звук при ненулевой цене; `// shortcut:` нет переключения режимов, ценника, штрихкодов, бумаги и чаевых за куб заказа
 
 _«Упаковка посылок, теггер назначения и теггер продаж» описано в [../engineering/recycling.md](../engineering/recycling.md)._
 

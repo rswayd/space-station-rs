@@ -16,8 +16,9 @@
 //!   aboard goes through [`export_item_and_contents`], the money into the cargo budget, the
 //!   report to `centcom_message`.
 //! - The shuttle refuses to leave the station with living mobs aboard (tg `check_blacklist`).
-// shortcut: goodies (lockboxes per buyer), departmental orders, coupons, chef groceries, mail,
-// the materials market, shuttle loans, requisition papers, manifest errors and
+//! - A request approved with a department's budget is paid by that department at purchase.
+// shortcut: goodies (lockboxes per buyer), departmental order consoles, coupons, chef groceries,
+// mail, the materials market, shuttle loans, requisition papers, manifest errors and
 // `locked_to_account` crates are not ported; private orders are paid on delivery as in tg but
 // their crates open with the pack's access only. Packs with their own `fill()` are not offered.
 
@@ -152,6 +153,9 @@ pub struct SupplyOrder {
     pub reason: String,
     /// A private purchase (`paying_account`), else the cargo budget pays.
     pub paying_account: Option<u32>,
+    /// A request paid by a department budget (tg `paying_account` set to a
+    /// `/datum/bank_account/department`): no private surcharge, no handling fee.
+    pub paying_department: Option<String>,
     pub can_be_cancelled: bool,
 }
 
@@ -582,9 +586,10 @@ pub fn buy(world: &mut World) {
         };
         let paid = {
             let mut economy = world.resource_mut::<Economy>();
-            let payer = match order.paying_account {
-                Some(id) => economy.account_mut(id),
-                None => economy.department_mut(ACCOUNT_CAR),
+            let payer = match (&order.paying_department, order.paying_account) {
+                (Some(department), _) => economy.department_mut(department),
+                (None, Some(id)) => economy.account_mut(id),
+                (None, None) => economy.department_mut(ACCOUNT_CAR),
             };
             payer.is_some_and(|p| p.adjust_money(-price))
         };
@@ -804,6 +809,7 @@ mod tests {
             orderer_rank: String::new(),
             reason: String::new(),
             paying_account,
+            paying_department: None,
             can_be_cancelled: true,
         }
     }

@@ -21,6 +21,10 @@ pub mod economy;
 #[cfg(feature = "server")]
 pub mod export;
 #[cfg(feature = "server")]
+pub mod scanner;
+#[cfg(feature = "server")]
+pub mod stock_market;
+#[cfg(feature = "server")]
 pub mod supply;
 
 /// Cargo on the server: the economy, the supply shuttle, the consoles.
@@ -32,6 +36,7 @@ impl bevy::prelude::Plugin for CargoServerPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
         app.add_plugins((
             economy::EconomyPlugin,
+            stock_market::StockMarketPlugin,
             supply::SupplyPlugin,
             console::ConsolePlugin,
         ));
@@ -164,3 +169,6 @@ pub const ORDER_NAME: &str = "order_name";
 pub const AMOUNT: &str = "amount";
 /// The request console's reason (tg asks it with `tgui_input_text` before adding).
 pub const REASON: &str = "reason";
+/// The request console's budget: present and not `"0"`, the requester's department pays (tg asks
+/// "Which department are you requesting this for?" with `tgui_alert`).
+pub const DEPARTMENT: &str = "department";

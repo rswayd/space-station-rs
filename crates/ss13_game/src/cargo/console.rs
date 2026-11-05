@@ -9,8 +9,12 @@
 //! refuses `send`, `approve`, `deny`, `denyall`, `clear`, `remove` and `modify` from a console
 //! without `can_send` / `can_approve_requests`, and from an unpowered one. The main console has
 //! no `req_access` in tg (the cargo office's doors guard it), so it has none here either.
-// shortcut: no emagging or hacked boards (contraband), departmental request budgets (requests
-// are for the cargo budget), coupons, loans or the supply channel announcement of requests.
+//!
+//! A request may be for the requester's department budget (the `department` param stands in
+//! for tg's `tgui_alert`): that department pays when the order ships, and a pack with an
+//! `access_view` the requester's ID lacks is refused. The request console announces new
+//! requests on the supply channel, at most every 30 s.
+// shortcut: no emagging or hacked boards (contraband), coupons or loans.
 
 use std::sync::Arc;
 
@@ -40,6 +44,7 @@ use crate::inventory::{IdCard, Inventory};
 use crate::obj_damage::is_under;
 use crate::outfit::IdRegistration;
 use crate::power::Unpowered;
+use crate::radio::MachineRadio;
 
 const CARGO_CONSOLE: &str = "/obj/machinery/computer/cargo";
 const REQUEST_CONSOLE: &str = "/obj/machinery/computer/cargo/request";
@@ -51,6 +56,8 @@ const SAFETY_WARNING: &str = "For safety and ethical reasons, the automated supp
      machines, or machinery housing any form of artificial intelligence.";
 /// Tiles a machine's `say` reaches (`world.view`).
 const SAY_RANGE: u32 = 7;
+/// The request console's `message_cooldown` between supply channel announcements.
+const ANNOUNCE_COOLDOWN_SECS: f64 = 30.0;
 
 /// A supply console's flags (tg `can_send`, `requestonly`, `can_approve_requests`,
 /// `contraband`, `self_paid`) and its catalogue.
@@ -62,6 +69,8 @@ pub struct CargoConsole {
     pub contraband: bool,
     pub self_paid: bool,
     catalogue: Arc<CargoStatic>,
+    /// `message_cooldown`: server time of the next allowed announcement.
+    next_announcement: f64,
 }
 
 pub struct ConsolePlugin;
@@ -189,6 +198,7 @@ pub(crate) fn setup_console(world: &mut World, e: Entity, shared: Option<Arc<Car
         contraband: false,
         self_paid: false,
         catalogue,
+        next_announcement: 0.0,
     });
 }
 
@@ -249,8 +259,9 @@ type ConsoleParams = (
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CargoAct {
     Send,
-    /// `add` by pack id, with the request console's reason.
-    Add(String, Option<String>),
+    /// `add` by pack id, with the request console's reason and whether the requester's
+    /// department pays.
+    Add(String, Option<String>, bool),
     AddByName(String),
     Remove(String),
     Modify(String, i64),
@@ -323,10 +334,15 @@ pub fn console_data(
                 orderer: order.orderer.clone(),
                 reason: order.reason.clone(),
                 id: order.id,
-                account: order
-                    .paying_account
-                    .and_then(|id| economy?.account(id))
-                    .map_or_else(|| "Cargo Department".into(), |a| a.holder.clone()),
+                account: match &order.paying_department {
+                    Some(department) => economy
+                        .and_then(|e| e.department(department))
+                        .map_or_else(|| department.clone(), |a| a.holder.clone()),
+                    None => order
+                        .paying_account
+                        .and_then(|id| economy?.account(id))
+                        .map_or_else(|| "Cargo Department".into(), |a| a.holder.clone()),
+                },
             }
         })
         .collect();
@@ -377,6 +393,9 @@ impl ServerUi for CargoUi {
             ADD => Ok(CargoAct::Add(
                 text(ID)?,
                 params.get(REASON).map(str::to_owned),
+                params
+                    .get(DEPARTMENT)
+                    .is_some_and(|v| !matches!(v, "" | "0" | "false")),
             )),
             ADD_BY_NAME => Ok(CargoAct::AddByName(text(ORDER_NAME)?)),
             REMOVE => Ok(CargoAct::Remove(text(ORDER_NAME)?)),
@@ -454,7 +473,8 @@ fn actor_id(world: &World, mob: Entity) -> Option<ActorId> {
 }
 
 /// tg `add_item`: `amount` orders of `pack` into the shopping list, or the request list from a
-/// request console. `false` when nothing was added.
+/// request console (for the requester's department budget with `department`). `false` when
+/// nothing was added.
 fn add_item(
     world: &mut World,
     console: Entity,
@@ -462,6 +482,7 @@ fn add_item(
     pack: usize,
     amount: i64,
     reason: Option<String>,
+    department: bool,
 ) -> bool {
     let Some(state) = world.get::<CargoConsole>(console).cloned() else {
         return false;
@@ -502,6 +523,7 @@ fn add_item(
     }
     let to_requests = state.request_only && !state.self_paid;
     let mut reason_text = String::new();
+    let mut personal_department = None;
     if to_requests {
         // tg asks with `tgui_input_text`; no answer (cancel) adds nothing.
         let Some(reason) = reason else {
@@ -512,10 +534,25 @@ fn add_item(
             .chars()
             .take(ss13_shared::chat::MAX_MESSAGE_LEN)
             .collect();
-        name = account
-            .and_then(|a| world.resource::<Economy>().account(a))
-            .map(|a| a.holder.clone())
-            .unwrap_or_default();
+        let economy = world.resource::<Economy>();
+        let requester = account.and_then(|a| economy.account(a));
+        name = requester.map(|a| a.holder.clone()).unwrap_or_default();
+        // tg offers the job's department unless it is cargo's own budget.
+        if department {
+            personal_department = requester
+                .map(|a| a.paycheck_department.clone())
+                .filter(|d| d != ACCOUNT_CAR && economy.department(d).is_some());
+        }
+        let has_view = def.access_view.is_empty()
+            || id.as_ref().is_some_and(|i| i.access.contains(&def.access_view));
+        if personal_department.is_some() && !has_view {
+            machine_say(
+                world,
+                console,
+                "ERROR: User lacks the requisite access for this purchase request.",
+            );
+            return false;
+        }
     }
     let Some(similar) = world.resource::<SupplyOrders>().order_count(pack) else {
         let text =
@@ -524,6 +561,11 @@ fn add_item(
         return false;
     };
     let paying_account = if state.self_paid { account } else { None };
+    let paying_department = if state.self_paid {
+        None
+    } else {
+        personal_department
+    };
     let amount = amount.clamp(1, i64::from(CARGO_MAX_ORDER - similar)) as u32;
     let mut orders = world.resource_mut::<SupplyOrders>();
     for _ in 0..amount {
@@ -534,6 +576,7 @@ fn add_item(
             orderer_rank: rank.clone(),
             reason: reason_text.clone(),
             paying_account,
+            paying_department: paying_department.clone(),
             can_be_cancelled: true,
         };
         if to_requests {
@@ -553,7 +596,41 @@ fn add_item(
         );
         machine_say(world, console, &text);
     }
+    if state.request_only {
+        announce_requests(world, console, amount);
+    }
     true
+}
+
+/// tg `aas_config_announce(/datum/aas_config_entry/cargo_orders_announcement)` on the supply
+/// channel, once per `message_cooldown`.
+fn announce_requests(world: &mut World, console: Entity, amount: u32) {
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    let Some(mut state) = world.get_mut::<CargoConsole>(console) else {
+        return;
+    };
+    if now < state.next_announcement {
+        return;
+    }
+    state.next_announcement = now + ANNOUNCE_COOLDOWN_SECS;
+    let Some(&pos) = world.get::<TilePos>(console) else {
+        return;
+    };
+    let name = world
+        .get::<DmName>(console)
+        .map(|n| plain(&n.name).to_owned())
+        .unwrap_or_default();
+    let text = if amount == 1 {
+        "A new order has been requested.".to_owned()
+    } else {
+        format!("{amount} orders have been requested.")
+    };
+    world.write_message(MachineRadio {
+        freq: ss13_chat::radio::FREQ_SUPPLY,
+        z: pos.z,
+        name,
+        text,
+    });
 }
 
 /// tg `remove_item` of the first cart order of the pack named `name`.
@@ -622,12 +699,12 @@ fn console_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed<CargoUi
         let manage = state.can_send && state.can_approve_requests && !state.request_only;
         match act {
             CargoAct::Send if state.can_send => send(world, console),
-            CargoAct::Add(id, reason) => {
+            CargoAct::Add(id, reason, department) => {
                 if let Some(pack) = world
                     .get_resource::<SupplyPacks>()
                     .and_then(|p| p.by_id(&id))
                 {
-                    add_item(world, console, actor, pack, 1, reason);
+                    add_item(world, console, actor, pack, 1, reason, department);
                 }
             }
             CargoAct::AddByName(name) if !state.request_only => {
@@ -635,7 +712,7 @@ fn console_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed<CargoUi
                     .get_resource::<SupplyPacks>()
                     .and_then(|p| p.by_name(&name))
                 {
-                    add_item(world, console, actor, pack, 1, None);
+                    add_item(world, console, actor, pack, 1, None, false);
                 }
             }
             CargoAct::Remove(name) if manage => {
@@ -648,7 +725,7 @@ fn console_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed<CargoUi
                         .get_resource::<SupplyPacks>()
                         .and_then(|p| p.by_name(&name));
                     if let Some(pack) = pack {
-                        add_item(world, console, actor, pack, amount, None);
+                        add_item(world, console, actor, pack, amount, None, false);
                     }
                 }
             }
@@ -739,6 +816,7 @@ mod tests {
                 orderer_rank: "Quartermaster".into(),
                 reason: String::new(),
                 paying_account,
+                paying_department: None,
                 can_be_cancelled: true,
             });
         }
@@ -750,6 +828,7 @@ mod tests {
             orderer_rank: String::new(),
             reason: "need tools".into(),
             paying_account: None,
+            paying_department: Some(crate::cargo::economy::ACCOUNT_SCI.into()),
             can_be_cancelled: true,
         });
         let console = CargoConsole {
@@ -759,6 +838,7 @@ mod tests {
             contraband: false,
             self_paid: false,
             catalogue: Arc::default(),
+            next_announcement: 0.0,
         };
         let economy = Economy::new(1);
         let data = console_data(
@@ -778,7 +858,7 @@ mod tests {
         assert_eq!(data.cart[0].paid, 1);
         assert_eq!(data.cart_totals(), (2, 2100));
         assert_eq!(data.requests.len(), 1);
-        assert_eq!(data.requests[0].account, "Cargo Department");
+        assert_eq!(data.requests[0].account, "Научный бюджет");
         assert_eq!(data.requests[0].reason, "need tools");
     }
 }

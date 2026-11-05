@@ -10,8 +10,10 @@
 //!   `MAX_GRANT_DPT`, then each account is paid one paycheck from its department
 //!   (`payday(1, skippable = TRUE)`: clamped to `PAYCHECK_CREW`), with tg's bank card messages.
 //! - The round-end economy report (`market_report`): the crew's total, the average, the richest.
+//! - Each tick also picks the boosted exports (`update_boosted_exports`,
+//!   [`super::export::Exports::update_boosted`]) and clears the stock market's news.
 // shortcut: no inflation, mail, civilian bounties, debts, departmental cards, audit log or
-// species payday modifiers; vending machines still sell for free.
+// species payday modifiers.
 
 use std::collections::HashMap;
 
@@ -328,8 +330,16 @@ fn fire(world: &mut World) {
         };
         talk.push((id, text));
     }
+    // `ECON_PRICE_UPDATE_STEP`.
+    let mut rng = Rng::new(economy.rng.next_u64());
     for (id, text) in talk {
         bank_card_talk(world, id, &text);
+    }
+    if let Some(mut exports) = world.get_resource_mut::<super::export::Exports>() {
+        exports.update_boosted(&mut rng);
+    }
+    if let Some(mut market) = world.get_resource_mut::<super::stock_market::StockMarket>() {
+        market.news.clear();
     }
 }
 

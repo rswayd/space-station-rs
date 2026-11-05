@@ -5,7 +5,8 @@
 //! Client-only state (`useSharedState`/`useState`): the tab, the catalogue group, the pack whose
 //! contents are shown and the pack a request is being written for ([`UiLocalState`] keys).
 // shortcut: no search bar and no amount input in the cart (the -/+ buttons stay); the request
-// reason is asked in a modal here instead of tg's server-side `tgui_input_text`.
+// reason is asked in a modal here instead of tg's server-side `tgui_input_text`, and the budget
+// (tg's `tgui_alert` "Cargo Budget" or the department) is the button that sends it.
 
 use bevy::app::Propagate;
 use bevy::scene::EntityScene;
@@ -49,14 +50,18 @@ impl Plugin for CargoClientPlugin {
 #[derive(Component, Clone, Debug, Default, PartialEq)]
 pub struct SubmitRequest(pub String);
 
+/// With [`SubmitRequest`]: the requester's department pays (`department: 1`).
+#[derive(Component, Clone, Debug, Default, PartialEq)]
+pub struct FromDepartment;
+
 fn submit_request(
     activate: On<Activate>,
-    submits: Query<&SubmitRequest>,
+    submits: Query<(&SubmitRequest, Has<FromDepartment>)>,
     parents: Query<&ChildOf>,
     mut windows: Query<(&ClientWindow, &mut UiLocalState)>,
     mut intents: MessageWriter<SendIntent>,
 ) {
-    let Ok(submit) = submits.get(activate.entity) else {
+    let Ok((submit, department)) = submits.get(activate.entity) else {
         return;
     };
     let Some(root) = parents
@@ -69,10 +74,15 @@ fn submit_request(
         return;
     };
     let reason = local.get(INPUT).to_owned();
+    let mut params: Vec<(String, String)> =
+        vec![(ID.into(), submit.0.clone()), (REASON.into(), reason)];
+    if department {
+        params.push((DEPARTMENT.into(), "1".into()));
+    }
     intents.write(SendIntent(ClientIntent::UiAct {
         window: window.id,
         action: ADD.into(),
-        params: vec![(ID.into(), submit.0.clone()), (REASON.into(), reason)],
+        params,
     }));
     local.set(INPUT, "");
 }
@@ -503,9 +513,15 @@ fn modal(
                 --
                 Node
                 Children [
-                    @ss13_ui_kit::Button { @icon: "envelope", @content: "Request" }
+                    @ss13_ui_kit::Button { @icon: "envelope", @content: "Cargo Budget" }
                     ss13_ui_kit::Button { color: UiColor::Good }
                     SubmitRequest({pack.id.clone()})
+                    SetLocal { key: {REQUESTING.to_owned()}, value: {String::new()}, rerender: true }
+                    --
+                    @ss13_ui_kit::Button { @icon: "building", @content: "Department Budget" }
+                    ss13_ui_kit::Button { color: UiColor::Good }
+                    SubmitRequest({pack.id.clone()})
+                    FromDepartment
                     SetLocal { key: {REQUESTING.to_owned()}, value: {String::new()}, rerender: true }
                     --
                     @ss13_ui_kit::Button { @icon: "times", @content: "Cancel" }

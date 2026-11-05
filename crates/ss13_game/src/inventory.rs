@@ -966,6 +966,9 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 Some(held) if world.get::<crate::storage::Storage>(target).is_some() => {
                     crate::storage::insert_from_hand(world, held, target);
                 }
+                // tg `interact_with_atom` of the universal scanner: an export scan.
+                Some(held)
+                    if crate::cargo::scanner::item_interaction(world, client, held, target) => {}
                 // tg `interact_with_atom` of an analyzer: scans the clicked atom when it holds
                 // gas, else its turf.
                 Some(held) if crate::atmos::is_analyzer(world, held) => {

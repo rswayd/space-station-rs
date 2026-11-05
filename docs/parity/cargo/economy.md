@@ -24,7 +24,7 @@
 `/datum/bank_account/department` для гражданских, инженерии, науки, медицины, сервиса, карго, СБ; бюджетная карта отдела у главы даёт платить с его счёта.
 
 - **Код:** [`/datum/bank_account/department`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/economy/account.dm#L326), [`departmental_payouts()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/economy.dm#L148), [`/obj/item/card/id/departmental_budget`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/cards_ids.dm#L994)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/cargo/economy.rs` (`DEPARTMENTS`): семь бюджетов отделов, карго получает выручку от продаж и платит за заказы; бюджетных карт отделов нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/cargo/economy.rs` (`DEPARTMENTS`): семь бюджетов отделов, карго получает выручку от продаж и платит за заказы, отдел платит за одобренные запросы со своего бюджета (`crates/ss13_game/src/cargo/supply.rs`, `buy`); бюджетных карт отделов нет
 
 ### Деньги на ID-карте
 ID привязана к счёту: наличные, голочипы и монеты, вложенные в карту, зачисляются на счёт; Alt-клик снимает голочип нужного номинала; карта показывает баланс при осмотре.

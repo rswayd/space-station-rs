@@ -13,7 +13,9 @@ use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 
 use bevy::prelude::*;
+use ss13_game::cargo::console::CargoConsole;
 use ss13_game::cargo::economy::{ACCOUNT_CAR, ACCOUNT_CIV, BankAccountId, Economy, EconomyConfig};
+use ss13_game::cargo::export::{Exports, export_value};
 use ss13_game::cargo::supply::{
     LastSale, SupplyConfig, SupplyLocation, SupplyMode, SupplyOrders, SupplyShuttle,
 };
@@ -511,11 +513,16 @@ fn order_deliver_open_sell_and_payday() {
     s.run_until_for(5.0, "the bank card message", |s| {
         s.said("Выплата зарплаты успешна. На аккаунте теперь 150¢.")
     });
-    // No more paydays during the rest of the test.
+    // No more paydays during the rest of the test, and no boosted exports (tg skips them under
+    // `UNIT_TESTS`).
     s.server
         .world_mut()
         .resource_mut::<EconomyConfig>()
         .payday_secs = 1e9;
+    s.server
+        .world_mut()
+        .resource_mut::<Exports>()
+        .clear_boosted();
 
     // The quartermaster opens the supply console: catalogue and status.
     s.set_access(&["qm", "cargo"]);
@@ -596,6 +603,12 @@ fn order_deliver_open_sell_and_payday() {
         contents[2],
         format!("shipping manifest - #{order_id} (Tool Crate)")
     );
+    // The export scanner's dry run: crate, wrench and iron, nothing sold.
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    assert_eq!(
+        export_value(world, world.resource::<Exports>(), crate_entity, now),
+        (227, true)
+    );
     s.run_until_for(10.0, "the window shows the docked shuttle", |s| {
         s.data().location == "Test Cargo Bay" && !s.data().away
     });
@@ -665,6 +678,73 @@ fn order_deliver_open_sell_and_payday() {
     assert_eq!(s.data().points, 427);
 }
 
+/// The supply console as a request console: a request for the requester's department budget
+/// is listed with that budget, only a console that approves can approve it, and the department
+/// pays when the shuttle buys it while the cargo budget stays as it was.
+#[test]
+fn department_request_is_paid_by_the_department() {
+    let mut s = Station::fixture("department_request_is_paid_by_the_department");
+    s.server
+        .world_mut()
+        .resource_mut::<EconomyConfig>()
+        .payday_secs = 1e9;
+    let console = s.console();
+    let set_request_only = |s: &mut Station, request_only: bool| {
+        let world = s.server.world_mut();
+        let mut state = world.get_mut::<CargoConsole>(console).unwrap();
+        state.request_only = request_only;
+        state.can_send = !request_only;
+        state.can_approve_requests = !request_only;
+    };
+    set_request_only(&mut s, true);
+    s.click(console);
+    s.run_until_for(10.0, "the console window opens", |s| {
+        s.client().world().resource::<ConsoleWindow>().id.is_some()
+    });
+    s.run_until_for(10.0, "request-only data", |s| s.data().requestonly);
+
+    s.act(
+        "add",
+        &[("id", PACK), ("reason", "for the clinic"), ("department", "1")],
+    );
+    s.run_until_for(10.0, "the request is listed", |s| {
+        !s.data().requests.is_empty()
+    });
+    let request = s.data().requests[0].clone();
+    assert_eq!(request.account, "Гражданский бюджет");
+    assert_eq!(request.reason, "for the clinic");
+    assert_eq!(
+        s.server.world().resource::<SupplyOrders>().request_list[0]
+            .paying_department
+            .as_deref(),
+        Some(ACCOUNT_CIV)
+    );
+    let id = request.id.to_string();
+    s.act("approve", &[("id", id.as_str())]);
+    s.steps(20);
+    assert_eq!(
+        s.server.world().resource::<SupplyOrders>().request_list.len(),
+        1,
+        "a request console cannot approve"
+    );
+
+    set_request_only(&mut s, false);
+    s.act("approve", &[("id", id.as_str())]);
+    s.run_until_for(10.0, "approved into the cart", |s| !s.data().cart.is_empty());
+    let civ = s.economy().department(ACCOUNT_CIV).unwrap().balance;
+    let cargo = s.cargo_budget();
+    s.act("send", &[]);
+    s.run_until_for(10.0, "docked at the station", |s| {
+        s.shuttle().location == SupplyLocation::Station && s.shuttle().mode == SupplyMode::Idle
+    });
+    assert!(s.crate_on(DOCK).is_some(), "the order was delivered");
+    assert_eq!(
+        s.economy().department(ACCOUNT_CIV).unwrap().balance,
+        civ - 300
+    );
+    assert_eq!(s.cargo_budget(), cargo, "a department order earns cargo nothing");
+}
+
 /// Registers MetaStation's supply shuttle from its map json and delivers one order to the
 /// cargo bay.
 #[test]
@@ -718,6 +798,7 @@ fn metastation_supply() {
                 orderer_rank: "Quartermaster".into(),
                 reason: String::new(),
                 paying_account: None,
+                paying_department: None,
                 can_be_cancelled: true,
             },
         );
