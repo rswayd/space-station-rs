@@ -244,9 +244,11 @@ fn say_aloud(world: &mut World, mob: Entity, text: &str) {
         .map(|b| b.def.speak_emote.clone())
         .unwrap_or_default();
     let mut rng = CombatRng(world.resource::<CombatRng>().0);
-    let verb = (!verbs.is_empty())
-        .then(|| verbs[rng.range(0, verbs.len() as u32 - 1) as usize].clone())
-        .unwrap_or_else(|| "говорит".to_owned());
+    let verb = if verbs.is_empty() {
+        "говорит".to_owned()
+    } else {
+        verbs[rng.range(0, verbs.len() as u32 - 1) as usize].clone()
+    };
     world.resource_mut::<CombatRng>().0 = rng.0;
     let message = ss13_shared::chat::ChatMessage {
         channel: ss13_shared::chat::ChatChannel::Local,
