@@ -254,7 +254,7 @@ pub(crate) fn equip_conspicuous_item(
         .into_iter()
         .enumerate()
     {
-        if can_equip(world, &inventory, item, slot) {
+        if can_equip(world, mob, &inventory, item, slot) {
             world
                 .entity_mut(item)
                 .remove::<TilePos>()

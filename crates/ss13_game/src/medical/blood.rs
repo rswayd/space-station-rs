@@ -65,7 +65,8 @@ const CUP_ROOT: &str = "/obj/item/reagent_containers/cup";
 pub const IV_TRANSFER_RATE: f32 = 5.0;
 pub const MACHINES_WAIT_SECS: f64 = 2.0;
 
-/// The human blood types (`/datum/blood_type/human/*`) and the universal one.
+/// The human blood types (`/datum/blood_type/human/*`), the universal one and the species'
+/// exotic ones (`exotic_bloodtype`, `crate::species`), each compatible only with itself.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum BloodType {
     APlus,
@@ -77,6 +78,16 @@ pub enum BloodType {
     OPlus,
     OMinus,
     Universal,
+    Vampire,
+    Lizard,
+    Ethereal,
+    Oil,
+    Slime,
+    Water,
+    Snail,
+    /// BandaStation `/datum/blood_type/skrell`, `/datum/blood_type/moth`.
+    Skrell,
+    Moth,
 }
 
 impl BloodType {
@@ -102,6 +113,15 @@ impl BloodType {
             Self::OPlus => "O+",
             Self::OMinus => "O-",
             Self::Universal => "U",
+            Self::Vampire => "V",
+            Self::Lizard => "L",
+            Self::Ethereal => "LE",
+            Self::Oil => "Oil",
+            Self::Slime => "TOX",
+            Self::Water => "H2O",
+            Self::Snail => "S",
+            Self::Skrell => "SK",
+            Self::Moth => "M",
         }
     }
 
@@ -116,14 +136,42 @@ impl BloodType {
             Self::OPlus => "/datum/blood_type/human/o_plus",
             Self::OMinus => "/datum/blood_type/human/o_minus",
             Self::Universal => "/datum/blood_type/universal",
+            Self::Vampire => "/datum/blood_type/universal/vampire",
+            Self::Lizard => "/datum/blood_type/lizard",
+            Self::Ethereal => "/datum/blood_type/ethereal",
+            Self::Oil => "/datum/blood_type/oil",
+            Self::Slime => "/datum/blood_type/slime",
+            Self::Water => "/datum/blood_type/water",
+            Self::Snail => "/datum/blood_type/snail",
+            Self::Skrell => "/datum/blood_type/skrell",
+            Self::Moth => "/datum/blood_type/moth",
         }
     }
 
+    /// Every type.
+    pub const ALL: [Self; 18] = [
+        Self::OMinus,
+        Self::OPlus,
+        Self::AMinus,
+        Self::APlus,
+        Self::BMinus,
+        Self::BPlus,
+        Self::AbMinus,
+        Self::AbPlus,
+        Self::Universal,
+        Self::Vampire,
+        Self::Lizard,
+        Self::Ethereal,
+        Self::Oil,
+        Self::Slime,
+        Self::Water,
+        Self::Snail,
+        Self::Skrell,
+        Self::Moth,
+    ];
+
     pub fn from_path(path: &str) -> Option<Self> {
-        Self::HUMAN
-            .into_iter()
-            .chain([Self::Universal])
-            .find(|t| t.path() == path)
+        Self::ALL.into_iter().find(|t| t.path() == path)
     }
 
     /// `compatible_types` of this (recipient) type.
@@ -138,9 +186,16 @@ impl BloodType {
             AbPlus => &[AMinus, APlus, BMinus, BPlus, OMinus, OPlus, AbMinus, AbPlus],
             OMinus => &[OMinus],
             OPlus => &[OMinus, OPlus],
-            Universal => &[
-                AMinus, APlus, BMinus, BPlus, OMinus, OPlus, AbMinus, AbPlus, Universal,
-            ],
+            // `compatible_types = subtypesof(/datum/blood_type)`.
+            Universal | Vampire => &Self::ALL,
+            Lizard => &[Lizard],
+            Ethereal => &[Ethereal],
+            Oil => &[Oil],
+            Slime => &[Slime],
+            Water => &[Water],
+            Snail => &[Snail],
+            Skrell => &[Skrell],
+            Moth => &[Moth],
         }
     }
 
@@ -318,6 +373,9 @@ fn tell_mob(world: &mut World, mob: Entity, span: Span, text: impl Into<String>)
 /// tg `bleed(amount)`: blood volume lost, sometimes a splatter on the floor
 /// ([`crate::janitor::bleed_splatter`]).
 pub fn bleed(world: &mut World, mob: Entity, amount: f32) {
+    if crate::species::has_trait(world, mob, crate::species::Trait::NoBlood) {
+        return;
+    }
     let Some(mut blood) = world.get_mut::<Blood>(mob) else {
         return;
     };
@@ -330,7 +388,9 @@ pub fn handle_blood(world: &mut World, mob: Entity, secs: f32, now: f64) {
     let Some(mut blood) = world.get::<Blood>(mob).cloned() else {
         return;
     };
-    if world.get::<Stat>(mob) == Some(&Stat::Dead) {
+    if world.get::<Stat>(mob) == Some(&Stat::Dead)
+        || crate::species::has_trait(world, mob, crate::species::Trait::NoBlood)
+    {
         return;
     }
     let bodytemp = world

@@ -637,6 +637,7 @@ pub(crate) fn spawn_mob(world: &mut World, client: Entity, pos: TilePos, name: S
         })
         .unwrap_or_default();
     let body = player_body(client, world.get::<crate::human::AppearancePrefs>(client));
+    let species = body.species;
     world.entity_mut(mob).insert((
         Mover::new(RUN_DELAY_SECS),
         Networked,
@@ -647,6 +648,9 @@ pub(crate) fn spawn_mob(world: &mut World, client: Entity, pos: TilePos, name: S
         HudData::default(),
         living_bundle(),
     ));
+    // `set_species(pref_load = TRUE)`: organs, damage modifiers, blood of the character's
+    // species.
+    crate::species::set_species(world, mob, species);
     world
         .entity_mut(client)
         // A ghost's sight does not come along into a body.

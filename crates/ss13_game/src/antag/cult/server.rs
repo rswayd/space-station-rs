@@ -2561,10 +2561,13 @@ fn invoke_revive(world: &mut World, rune: Entity, invokers: &[Entity]) {
 /// `revive(ADMIN_HEAL_ALL)`.
 fn revive_fully(world: &mut World, mob: Entity) {
     crate::medical::heal_all(world, mob);
-    let max = world.get::<Health>(mob).map_or(100.0, |h| h.max);
+    let (max, mods) = world
+        .get::<Health>(mob)
+        .map_or((100.0, Default::default()), |h| (h.max, h.mods));
     world.entity_mut(mob).insert((
         Health {
             max,
+            mods,
             ..Health::default()
         },
         Stat::Conscious,

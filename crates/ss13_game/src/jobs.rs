@@ -512,6 +512,8 @@ pub fn join(world: &mut World, client: Entity, job: usize, latejoin: bool) -> En
     world.resource_mut::<Jobs>().add_position(job);
     world.entity_mut(mob).insert(PlayerJob(job));
     let mut inventory = equip(world, mob, &def, &name);
+    // `pre_equip_species_outfit`: what the species needs to live (plasmamen).
+    crate::species::equip_species_outfit(world, mob, &mut inventory);
     crate::cargo::economy::open_job_account(world, &def, &name, inventory.id);
     // shortcut: every job gets storage's grey backpack, not the outfit's department `back`
     // (`pre_equip` by backpack preference); spawn that once storage builds templates for it.

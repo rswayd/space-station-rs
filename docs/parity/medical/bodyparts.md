@@ -31,7 +31,7 @@
 
 - **Код:** [`code/modules/surgery/bodyparts/species_parts/`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/bodyparts/species_parts)
 - **BandaStation:** [`modular_bandastation/species/code/surgery/bodyparts/skrell_bodyparts.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/species/code/surgery/bodyparts/skrell_bodyparts.dm#L1) — части тела видов форка
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/species/mod.rs`, `crates/ss13_game/src/human.rs`, `crates/ss13_game/src/health.rs`: спрайты частей вида, `brute_modifier`/`burn_modifier`, цифровые ноги таяр, вульпканинов и эшвалкеров; части тела не отдельные предметы вида, нет выбора цифровых ног у ящеров
 
 ### Эффекты частей тела и обрубки
 Эффекты частей (`bodypart_effects`: светящиеся, фотосинтез и т.п.), обрубки вместо утраченных частей, голова с волосами и губами.

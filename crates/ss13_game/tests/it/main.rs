@@ -56,6 +56,7 @@ mod security_level;
 mod shuttle;
 mod silicon;
 mod sound;
+mod species;
 mod stock_parts;
 mod storage;
 mod surfaces;

@@ -41,10 +41,10 @@ use crate::human::{
 use crate::jobs::{CharacterName, Jobs, JobsStartup, PlayerJob, character_name, display_time_text};
 use crate::lobby::{
     APPEARANCE_EYE_COLOR, APPEARANCE_FEMALE, APPEARANCE_HAIR_COLOR, APPEARANCE_HAIR_STYLE,
-    APPEARANCE_SKIN_TONE, AppearanceData, CHARACTER_SETUP, GameState, JOBLESS_ROLE, JobPrefsData,
-    JobPrefsStatic, JobPrefsUi, JobPriority, JoblessRole, LobbyData, LobbyUi, OBSERVE,
-    RANDOMIZE_APPEARANCE, SET_ANTAGS, SET_APPEARANCE, SET_JOB_PREFERENCE, SET_PREFERENCE,
-    TOGGLE_ANTAG_ROLL, TOGGLE_READY,
+    APPEARANCE_MUTANT_COLOR, APPEARANCE_SKIN_TONE, APPEARANCE_SPECIES, AppearanceData,
+    CHARACTER_SETUP, GameState, JOBLESS_ROLE, JobPrefsData, JobPrefsStatic, JobPrefsUi,
+    JobPriority, JoblessRole, LobbyData, LobbyUi, OBSERVE, RANDOMIZE_APPEARANCE, SET_ANTAGS,
+    SET_APPEARANCE, SET_JOB_PREFERENCE, SET_PREFERENCE, TOGGLE_ANTAG_ROLL, TOGGLE_READY,
 };
 use crate::server::{MoveQueue, Players, SpawnPoints};
 
@@ -280,6 +280,14 @@ fn build_prefs_static(world: &mut World) {
         hair_styles: HAIR_STYLE_NAMES.iter().map(|n| (*n).to_owned()).collect(),
         hair_colors: HAIR_COLORS.iter().map(|&c| hex_rgb(c)).collect(),
         eye_colors: EYE_COLORS.iter().map(|&c| hex_rgb(c)).collect(),
+        species: crate::human::roundstart_species()
+            .into_iter()
+            .map(|s| s.def().name.to_owned())
+            .collect(),
+        mutant_colors: crate::human::MUTANT_COLORS
+            .iter()
+            .map(|&c| hex_rgb(c))
+            .collect(),
     };
     world.insert_resource(PrefsStatic(Arc::new(prefs)));
 }
@@ -831,6 +839,8 @@ pub enum PrefAct {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AppearanceField {
+    Species(usize),
+    MutantColor(usize),
     Female(bool),
     SkinTone(usize),
     HairStyle(Option<usize>),
@@ -890,6 +900,8 @@ impl ServerUi for JobPrefsUi {
             jobless_role: prefs.jobless,
             be_special: antag.be_special.iter().cloned().collect(),
             appearance: AppearanceData {
+                species: look.species as u8,
+                mutant_color: look.mutant_color as u8,
                 female: look.female,
                 skin_tone: look.skin_tone as u8,
                 hair_style: look.hair_style.map(|h| h as u8),
@@ -931,6 +943,8 @@ impl ServerUi for JobPrefsUi {
                 };
                 let field = match params.get("key") {
                     Some(APPEARANCE_FEMALE) => AppearanceField::Female(value == "1"),
+                    Some(APPEARANCE_SPECIES) => AppearanceField::Species(index()?),
+                    Some(APPEARANCE_MUTANT_COLOR) => AppearanceField::MutantColor(index()?),
                     Some(APPEARANCE_SKIN_TONE) => AppearanceField::SkinTone(index()?),
                     Some(APPEARANCE_HAIR_STYLE) if value.is_empty() => {
                         AppearanceField::HairStyle(None)
@@ -1056,6 +1070,8 @@ fn preference_acts(
                 let mut new = *look;
                 match *field {
                     AppearanceField::Female(female) => new.female = female,
+                    AppearanceField::Species(i) => new.species = i,
+                    AppearanceField::MutantColor(i) => new.mutant_color = i,
                     AppearanceField::SkinTone(i) => new.skin_tone = i,
                     AppearanceField::HairStyle(i) => new.hair_style = i,
                     AppearanceField::HairColor(i) => new.hair_color = i,

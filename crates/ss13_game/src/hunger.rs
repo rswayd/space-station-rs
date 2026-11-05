@@ -15,7 +15,7 @@
 //! - [`HungerHudData`] reaches the owner as the headless tgui interface [`HungerHudUi`]: the
 //!   hunger state and the bar's fullness (`get_fullness(only_consumable = TRUE)`).
 // shortcut: no mood (sanity is tg's neutral 100, so the hunger rate is 0.04/s), no jitter from
-// negative satiety, no TRAIT_NOHUNGER/glutton/voracious species or quirks, no stomach lining
+// negative satiety, no glutton/voracious quirks, no stomach lining
 // reagent, no starvation moodlets (current tg has no other starvation effect on humans).
 
 use bevy::prelude::*;
@@ -255,6 +255,7 @@ fn hunger_life(
         Option<&PlayerMob>,
         Option<&Organs>,
         Has<OrganHost>,
+        Option<&crate::species::Species>,
     )>,
     organs: Query<&Organ>,
     mut chat: MessageWriter<SendChat>,
@@ -262,7 +263,18 @@ fn hunger_life(
     let fires = clock.times_fired - *last_fired;
     *last_fired = clock.times_fired;
     for _ in 0..fires {
-        for (mut hunger, mut fat, stat, player, owned, host) in &mut mobs {
+        for (mut hunger, mut fat, stat, player, owned, host, species) in &mut mobs {
+            // `TRAIT_NOHUNGER` from the species or an organ (plasmaman lungs).
+            use crate::species::{Trait, organ_traits};
+            let no_hunger = species.is_some_and(|s| s.0.def().has(Trait::NoHunger))
+                || owned.is_some_and(|o| {
+                    o.iter()
+                        .filter_map(|e| organs.get(e).ok())
+                        .any(|organ| organ_traits(&organ.path).contains(&Trait::NoHunger))
+                });
+            if no_hunger {
+                continue;
+            }
             // The stomach's `on_life` runs `handle_hunger` unless it is missing or failing.
             let stomach = owned.and_then(|o| {
                 o.iter()

@@ -278,6 +278,7 @@ pub fn inject_joiner(world: &mut World, mob: Entity, job: usize) {
         .and_then(|card| world.get::<crate::id_access::CardAccess>(card))
         .and_then(|c| c.trim.as_ref())
         .map_or(job_assignment, |t| t.assignment.clone());
+    let species = crate::species::def_of(world, mob).name.to_owned();
     let mut manifest = world.resource_mut::<Manifest>();
     let id = manifest.inject(Joiner {
         name: &name,
@@ -285,6 +286,16 @@ pub fn inject_joiner(world: &mut World, mob: Entity, job: usize) {
         job: Some(job),
         mob,
     });
+    // `dna.species.name` of the records.
+    let lock = manifest.general.iter_mut().find(|r| r.id == id).map(|r| {
+        r.species = species.clone();
+        r.lock_ref
+    });
+    if let Some(lock) = lock
+        && let Some(locked) = manifest.locked.iter_mut().find(|l| l.id == lock)
+    {
+        locked.species = species;
+    }
     // The record's DNA is the body's unique enzymes (`dna.unique_enzymes`).
     let dna_string = manifest
         .general

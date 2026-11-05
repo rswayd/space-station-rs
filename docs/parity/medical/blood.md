@@ -18,7 +18,7 @@
 
 - **Код:** [`/datum/blood_type`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/blood_types.dm#L1), [`proc/get_bloodtype()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/blood.dm#L509), [`proc/get_blood_compatibility()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/blood.dm#L619), [`proc/set_blood_type()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/carbon.dm#L1212)
 - **BandaStation:** [`modular_bandastation/species/code/human/blood_types.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/species/code/human/blood_types.dm#L1) — группы крови скреллов и молей
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/medical/blood.rs`: человеческие группы A/B/AB/O ± с весами tg и универсальная, `compatible_types`, токсин при несовместимом переливании; нет видовых групп (ящеры, эфириалы, слаймы, масло, форк)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/medical/blood.rs`: человеческие группы A/B/AB/O ± с весами tg и универсальная, `compatible_types`, токсин при несовместимом переливании; видовые группы (ящеры, эфириалы, слаймы, улитки, масло, вода, вампиры, скреллы и моли форка), задаваемые видом (`crates/ss13_game/src/species/mod.rs`); нет клоунской и ксено, реагент видовой крови — обычная кровь
 
 ### Переливание и пакеты крови
 Кровь переносится шприцами и капельницей (`transfer_blood_to`), хранится в пакетах крови (по группам), содержит ДНК, болезни и данные.

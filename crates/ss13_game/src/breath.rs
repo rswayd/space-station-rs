@@ -96,11 +96,15 @@ const THERMAL_PROTECTION: [f64; 11] = [
 /// Body part bits (`code/__DEFINES/inventory.dm`).
 const CHEST: u32 = 1 << 0;
 const HEAD: u32 = 1 << 2;
+/// `HANDS` (`HAND_LEFT | HAND_RIGHT`).
+const HANDS: u32 = (1 << 9) | (1 << 10);
 
 /// tg alert categories this module throws (`code/__DEFINES/alerts.dm`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum AlertCategory {
     NotEnoughOxygen,
+    /// `ALERT_NOT_ENOUGH_PLASMA` (plasmaman lungs).
+    NotEnoughPlasma,
     TooMuchCo2,
     TooMuchPlasma,
     TooMuchN2o,
@@ -138,6 +142,11 @@ impl Alert {
                 "Удушье (Нехватка O2)",
                 "Недостаток кислорода. Используйте средства защиты дыхания или найдите источник \
                  O2.",
+            ),
+            "not_enough_plas" => (
+                "Удушье (Нехватка плазмы)",
+                "Недостаток плазмы. Используйте средства защиты дыхания или найдите источник \
+                 плазмы.",
             ),
             "too_much_co2" => (
                 "Удушье (CO2)",
@@ -273,6 +282,93 @@ pub struct Respiration {
     pub old_bodytemperature: f64,
     /// tg `seconds_in_low_pressure`.
     pub seconds_in_low_pressure: f64,
+    /// What the body's species and lungs make of breathing and temperature, refreshed every
+    /// `Life()` ([`BodyLife::of`]).
+    pub body: BodyLife,
+}
+
+/// The species vars and traits `Life()` reads (`crate::species`) and the lungs' gas thresholds;
+/// the default is a human with human lungs.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BodyLife {
+    /// `bodytemp_normal`, `bodytemp_heat_damage_limit`, `bodytemp_cold_damage_limit`.
+    pub normal: f64,
+    pub heat_limit: f64,
+    pub cold_limit: f64,
+    /// `heatmod`, `coldmod` (`PHYS_COEFF_HEAT`, `PHYS_COEFF_COLD`).
+    pub heatmod: f64,
+    pub coldmod: f64,
+    pub resist_heat: bool,
+    pub resist_cold: bool,
+    pub resist_low_pressure: bool,
+    pub resist_high_pressure: bool,
+    /// `TRAIT_COLD_BLOODED`: no core stabilisation.
+    pub cold_blooded: bool,
+    pub no_crit_damage: bool,
+    /// The lungs' `safe_oxygen_min`, `safe_plasma_min`, `safe_plasma_max` (0: that reaction is
+    /// not added, as tg's `add_gas_reaction` guards).
+    pub safe_oxygen_min: f64,
+    pub safe_plasma_min: f64,
+    pub safe_plasma_max: f64,
+}
+
+impl Default for BodyLife {
+    fn default() -> Self {
+        Self {
+            normal: BODYTEMP_NORMAL,
+            heat_limit: BODYTEMP_HEAT_DAMAGE_LIMIT,
+            cold_limit: BODYTEMP_COLD_DAMAGE_LIMIT,
+            heatmod: 1.0,
+            coldmod: 1.0,
+            resist_heat: false,
+            resist_cold: false,
+            resist_low_pressure: false,
+            resist_high_pressure: false,
+            cold_blooded: false,
+            no_crit_damage: false,
+            safe_oxygen_min: SAFE_OXYGEN_MIN,
+            safe_plasma_min: 0.0,
+            safe_plasma_max: SAFE_PLASMA_MAX,
+        }
+    }
+}
+
+impl BodyLife {
+    /// The species of `mob` and its lungs' type (`/obj/item/organ/lungs/plasmaman` breathes
+    /// plasma, `slime` is not hurt by it).
+    // shortcut: the other lungs subtypes (lavaland, ethereal, fish, ...) breathe as human lungs.
+    pub fn of(world: &World, mob: Entity) -> Self {
+        use crate::species::{Trait, def_of, has_trait};
+        let def = def_of(world, mob);
+        let has = |t| has_trait(world, mob, t);
+        let lungs = crate::medical::organs::state(world, mob, crate::medical::organs::Slot::Lungs)
+            .map(|l| l.path.as_str())
+            .unwrap_or("");
+        let (safe_oxygen_min, safe_plasma_min, safe_plasma_max) =
+            if is_under(lungs, "/obj/item/organ/lungs/plasmaman") {
+                (0.0, 4.0, 0.0)
+            } else if is_under(lungs, "/obj/item/organ/lungs/slime") {
+                (SAFE_OXYGEN_MIN, 0.0, 0.0)
+            } else {
+                (SAFE_OXYGEN_MIN, 0.0, SAFE_PLASMA_MAX)
+            };
+        Self {
+            normal: def.bodytemp_normal,
+            heat_limit: def.bodytemp_heat_damage_limit,
+            cold_limit: def.bodytemp_cold_damage_limit,
+            heatmod: def.heatmod,
+            coldmod: def.coldmod,
+            resist_heat: has(Trait::ResistHeat),
+            resist_cold: has(Trait::ResistCold),
+            resist_low_pressure: has(Trait::ResistLowPressure),
+            resist_high_pressure: has(Trait::ResistHighPressure),
+            cold_blooded: has(Trait::ColdBlooded),
+            no_crit_damage: has(Trait::NoCritDamage),
+            safe_oxygen_min,
+            safe_plasma_min,
+            safe_plasma_max,
+        }
+    }
 }
 
 impl Default for Respiration {
@@ -286,6 +382,7 @@ impl Default for Respiration {
             coretemperature: BODYTEMP_NORMAL,
             old_bodytemperature: BODYTEMP_NORMAL,
             seconds_in_low_pressure: 0.0,
+            body: BodyLife::default(),
         }
     }
 }
@@ -331,7 +428,7 @@ impl Respiration {
     pub fn no_lungs(&mut self, ctx: &mut LifeCtx) {
         let mut damage = f64::from(SUFFOCATION_OXYLOSS + 1.0);
         if matches!(ctx.stat, Stat::SoftCrit | Stat::HardCrit) {
-            damage *= f64::from(SUFFOCATION_OXYLOSS_CRIT_MODIFIER);
+            damage *= self.crit_modifier();
         }
         ctx.damage(DamageType::Oxy, damage);
         self.failed_last_breath = true;
@@ -369,17 +466,24 @@ impl Respiration {
         let mut out = GasMixture::vacuum();
         out.temperature = temperature;
 
-        self.breathe_oxygen(breath, &mut out, pp[o2], last[o2], ctx);
+        if self.body.safe_oxygen_min > 0.0 {
+            self.breathe_oxygen(breath, &mut out, pp[o2], last[o2], ctx);
+        }
+        let plasma = gas(GasId::PLASMA);
+        if self.body.safe_plasma_min > 0.0 {
+            self.breathe_plasma(breath, &mut out, pp[plasma], last[plasma], ctx);
+        }
         if present[pluoxium] {
             breath.moles[pluoxium] = 0.0;
         }
         let co2 = gas(GasId::CO2);
-        let plasma = gas(GasId::PLASMA);
         let n2o = gas(GasId::N2O);
+        let plasma_toxic = self.body.safe_plasma_max > 0.0;
         if present[co2] && self.too_much_co2(pp[co2], last[co2], ctx) {
             self.safe_co2(ctx);
         }
-        if present[plasma]
+        if plasma_toxic
+            && present[plasma]
             && self.too_much_plasma(breath.moles[plasma], pp[plasma], last[plasma], ctx)
         {
             ctx.alerts.clear(AlertCategory::TooMuchPlasma);
@@ -391,7 +495,7 @@ impl Respiration {
         if last[co2] > 0.0 && breath.moles[co2] == 0.0 {
             self.safe_co2(ctx);
         }
-        if last[plasma] > 0.0 && breath.moles[plasma] == 0.0 {
+        if plasma_toxic && last[plasma] > 0.0 && breath.moles[plasma] == 0.0 {
             ctx.alerts.clear(AlertCategory::TooMuchPlasma);
         }
         if last[n2o] > 0.0 && breath.moles[n2o] == 0.0 {
@@ -418,22 +522,32 @@ impl Respiration {
         ctx: &mut LifeCtx,
     ) {
         let o2 = gas(GasId::O2);
-        if o2_pp < SAFE_OXYGEN_MIN {
+        let safe_min = self.body.safe_oxygen_min;
+        if o2_pp < safe_min {
             ctx.alerts
                 .throw(AlertCategory::NotEnoughOxygen, "not_enough_oxy", 0);
-            let breathed = self.handle_suffocation(o2_pp, SAFE_OXYGEN_MIN, breath.moles[o2], ctx);
+            let breathed = self.handle_suffocation(o2_pp, safe_min, breath.moles[o2], ctx);
             if o2_pp > 0.0 {
                 exchange(breath, out, GasId::O2, GasId::CO2, breathed);
             }
             return;
         }
-        if old_o2_pp < SAFE_OXYGEN_MIN {
+        if old_o2_pp < safe_min {
             self.failed_last_breath = false;
             ctx.alerts.clear(AlertCategory::NotEnoughOxygen);
         }
         exchange(breath, out, GasId::O2, GasId::CO2, f64::INFINITY);
         if ctx.stat == Stat::Conscious && ctx.health.oxy > 0.0 {
             ctx.damage(DamageType::Oxy, -5.0);
+        }
+    }
+
+    /// `SUFFOCATION_OXYLOSS_CRIT_MODIFIER`, 0 with `TRAIT_NOCRITDAMAGE`.
+    fn crit_modifier(&self) -> f64 {
+        if self.body.no_crit_damage {
+            0.0
+        } else {
+            f64::from(SUFFOCATION_OXYLOSS_CRIT_MODIFIER)
         }
     }
 
@@ -457,12 +571,43 @@ impl Respiration {
             breathed = moles;
         }
         if matches!(ctx.stat, Stat::SoftCrit | Stat::HardCrit) {
-            damage *= f64::from(SUFFOCATION_OXYLOSS_CRIT_MODIFIER);
+            damage *= self.crit_modifier();
         }
         if damage > 0.0 {
             ctx.damage(DamageType::Oxy, damage);
         }
         breathed
+    }
+
+    /// Lungs `breathe_plasma` (plasmaman lungs: `safe_plasma_min`): plasma becomes CO2.
+    fn breathe_plasma(
+        &mut self,
+        breath: &mut GasMixture,
+        out: &mut GasMixture,
+        plasma_pp: f64,
+        old_plasma_pp: f64,
+        ctx: &mut LifeCtx,
+    ) {
+        let plasma = gas(GasId::PLASMA);
+        let safe_min = self.body.safe_plasma_min;
+        if plasma_pp < safe_min {
+            ctx.alerts
+                .throw(AlertCategory::NotEnoughPlasma, "not_enough_plas", 0);
+            let breathed = self.handle_suffocation(plasma_pp, safe_min, breath.moles[plasma], ctx);
+            if plasma_pp > 0.0 {
+                exchange(breath, out, GasId::PLASMA, GasId::CO2, breathed);
+            }
+            return;
+        }
+        if old_plasma_pp < safe_min {
+            self.failed_last_breath = false;
+            ctx.alerts.clear(AlertCategory::NotEnoughPlasma);
+        }
+        exchange(breath, out, GasId::PLASMA, GasId::CO2, f64::INFINITY);
+        // `breather.health >= breather.crit_threshold`.
+        if ctx.health.health() >= crate::health::HEALTH_THRESHOLD_CRIT && ctx.health.oxy > 0.0 {
+            ctx.damage(DamageType::Oxy, -5.0);
+        }
     }
 
     /// Lungs `too_much_co2`; `true`: the CO2 is gone (`BREATH_LOST`).
@@ -524,7 +669,9 @@ impl Respiration {
 
     /// tg `handle_environment_pressure` with the pressure the body feels; `spt` seconds.
     pub fn environment_pressure(&mut self, adjusted: f64, spt: f64, ctx: &mut LifeCtx) {
-        if adjusted >= HAZARD_HIGH_PRESSURE {
+        if adjusted >= HAZARD_HIGH_PRESSURE && self.body.resist_high_pressure {
+            ctx.alerts.clear(AlertCategory::Pressure);
+        } else if adjusted >= HAZARD_HIGH_PRESSURE {
             let damage = ((adjusted / HAZARD_HIGH_PRESSURE - 1.0) * PRESSURE_DAMAGE_COEFFICIENT)
                 .min(MAX_HIGH_PRESSURE_DAMAGE)
                 * spt;
@@ -536,8 +683,15 @@ impl Respiration {
             ctx.alerts.clear(AlertCategory::Pressure);
             self.seconds_in_low_pressure = 0.0;
         } else if adjusted >= HAZARD_LOW_PRESSURE {
-            ctx.alerts.throw(AlertCategory::Pressure, "lowpressure", 1);
+            if self.body.resist_low_pressure {
+                ctx.alerts.clear(AlertCategory::Pressure);
+            } else {
+                ctx.alerts.throw(AlertCategory::Pressure, "lowpressure", 1);
+            }
             self.seconds_in_low_pressure = 0.0;
+        } else if self.body.resist_low_pressure {
+            ctx.alerts.clear(AlertCategory::Pressure);
+            self.seconds_in_low_pressure += spt;
         } else {
             // `80 SECONDS` is 800 deciseconds against a count of seconds, as in tg.
             let ramp = byond_round(1.0 + self.seconds_in_low_pressure / 800.0, 0.05);
@@ -570,9 +724,10 @@ impl Respiration {
         spt: f64,
         ctx: &mut LifeCtx,
     ) {
-        if alive {
+        // `body_temperature_core`: not for the cold-blooded.
+        if alive && !self.body.cold_blooded {
             let change = temp_change_amount(
-                BODYTEMP_NORMAL - self.coretemperature,
+                self.body.normal - self.coretemperature,
                 BODYTEMP_CORE_CHANGE_RATE * spt,
             );
             self.coretemperature += change;
@@ -589,7 +744,7 @@ impl Respiration {
         if on_fire.is_none() || area_skin_diff > 0.0 {
             let mut area_skin =
                 temp_change_amount(area_skin_diff, BODYTEMP_AREA_SKIN_CHANGE_RATE * spt);
-            area_skin *= if BODYTEMP_NORMAL + 10.0 < self.coretemperature {
+            area_skin *= if self.body.normal + 10.0 < self.coretemperature {
                 1.0 - protection * 0.7
             } else {
                 1.0 - protection
@@ -620,7 +775,8 @@ impl Respiration {
     /// `body_temperature_alerts`.
     fn temperature_alerts(&mut self, ctx: &mut LifeCtx) {
         let body = self.bodytemperature;
-        if body > BODYTEMP_HEAT_DAMAGE_LIMIT {
+        let (heat_limit, cold_limit) = (self.body.heat_limit, self.body.cold_limit);
+        if body > heat_limit && !self.body.resist_heat {
             let severity = if body <= BODYTEMP_HEAT_WARNING_2 {
                 1
             } else if body <= BODYTEMP_HEAT_WARNING_3 {
@@ -630,7 +786,7 @@ impl Respiration {
             };
             ctx.alerts
                 .throw(AlertCategory::Temperature, "hot", severity);
-        } else if body < BODYTEMP_COLD_DAMAGE_LIMIT {
+        } else if body < cold_limit && !self.body.resist_cold {
             let severity = if body >= BODYTEMP_COLD_WARNING_2 {
                 1
             } else if body >= BODYTEMP_COLD_WARNING_3 {
@@ -640,9 +796,7 @@ impl Respiration {
             };
             ctx.alerts
                 .throw(AlertCategory::Temperature, "cold", severity);
-        } else if self.old_bodytemperature > BODYTEMP_HEAT_DAMAGE_LIMIT
-            || self.old_bodytemperature < BODYTEMP_COLD_DAMAGE_LIMIT
-        {
+        } else if self.old_bodytemperature > heat_limit || self.old_bodytemperature < cold_limit {
             ctx.alerts.clear(AlertCategory::Temperature);
         }
         self.old_bodytemperature = body;
@@ -651,12 +805,15 @@ impl Respiration {
     /// `body_temperature_damage` of a human (not hulk); `on_fire`: its fire stacks.
     fn temperature_damage(&mut self, on_fire: Option<f64>, spt: f64, ctx: &mut LifeCtx) {
         let core = self.coretemperature;
-        if core > BODYTEMP_HEAT_DAMAGE_LIMIT {
+        let body = self.body;
+        if core > body.heat_limit && !body.resist_heat {
             // `log(2 - firemodifier, core - normal) - 5`, `firemodifier = fire_stacks / 50`
             // while burning (without wet stacks it is 0 otherwise).
             let firemodifier = on_fire.map_or(0.0, |stacks| stacks / 50.0);
-            let burn =
-                ((core - BODYTEMP_NORMAL).log(2.0 - firemodifier) - 5.0).max(0.0) * 0.5 * spt;
+            let burn = ((core - body.normal).log(2.0 - firemodifier) - 5.0).max(0.0)
+                * body.heatmod
+                * 0.5
+                * spt;
             if ctx.stat == Stat::Conscious && ctx.chance(burn) {
                 ctx.events.push(LifeEvent::Emote("scream"));
             }
@@ -666,16 +823,19 @@ impl Respiration {
         if f64::from(ctx.health.burn) >= 100.0 && ctx.stat == Stat::Dead {
             return;
         }
-        if core < BODYTEMP_COLD_DAMAGE_LIMIT {
+        if core < body.cold_limit && !body.resist_cold {
             // tg `in 201 to limit`, `in 120 to 200`, else: 200..201 is level 3.
-            let level = if (201.0..=BODYTEMP_COLD_DAMAGE_LIMIT).contains(&core) {
+            let level = if (201.0..=body.cold_limit).contains(&core) {
                 0
             } else if (120.0..=200.0).contains(&core) {
                 1
             } else {
                 2
             };
-            ctx.damage(DamageType::Burn, COLD_DAMAGE_LEVEL[level] * spt);
+            ctx.damage(
+                DamageType::Burn,
+                COLD_DAMAGE_LEVEL[level] * body.coldmod * spt,
+            );
         }
     }
 }
@@ -809,6 +969,24 @@ impl Worn {
         } else {
             pressure
         }
+    }
+
+    /// tg `is_atmos_sealed(additional_flags, check_hands)`: pressure-proof (or
+    /// `additional`-flagged) clothing over the chest and the head, and the hands covered.
+    pub fn atmos_sealed(&self, additional: u32, check_hands: bool) -> bool {
+        let seals = |c: &&WornClothing| c.flags & (STOPSPRESSUREDAMAGE | additional) != 0;
+        let chest = self
+            .equipped
+            .iter()
+            .filter(seals)
+            .any(|c| c.covered & CHEST != 0);
+        let head = self
+            .equipped
+            .iter()
+            .filter(seals)
+            .any(|c| c.covered & HEAD != 0);
+        let hands = self.equipped.iter().any(|c| c.covered & HANDS != 0);
+        chest && head && (hands || !check_hands)
     }
 
     /// tg `get_heat_protection`.
@@ -950,6 +1128,8 @@ fn live(world: &mut World, mob: Entity, fired: u64, now: f64) {
     };
     let (old_health, mut resp) = (health.clone(), resp.clone());
     let mut health = old_health.clone();
+    resp.body = BodyLife::of(world, mob);
+    let no_breath = crate::species::has_trait(world, mob, crate::species::Trait::NoBreath);
     let mut alerts = entity.get::<Alerts>().cloned().unwrap_or_default();
     let inventory = entity.get::<Inventory>().cloned().unwrap_or_default();
     let internal = entity.get::<Internals>().and_then(|i| i.0);
@@ -988,7 +1168,11 @@ fn live(world: &mut World, mob: Entity, fired: u64, now: f64) {
         - u64::from(strained(organs::state(world, mob, Slot::Heart)));
     // `handle_breathing`: every 4th fire (3rd or 2nd with badly damaged lungs or heart), or every
     // fire after a failed breath.
-    if stat != Stat::Dead && (fired.is_multiple_of(next_breath) || resp.failed_last_breath) {
+    // human `breathe()`: nothing with `TRAIT_NOBREATH`.
+    if stat != Stat::Dead
+        && !no_breath
+        && (fired.is_multiple_of(next_breath) || resp.failed_last_breath)
+    {
         let mut breath = None;
         if !resp.misses_breath(stat, lungs_failing) {
             // `get_breath_from_internal`; `Some(None)` is an open but empty tank.
@@ -1025,6 +1209,15 @@ fn live(world: &mut World, mob: Entity, fired: u64, now: f64) {
         }
         update_stat(ctx.health, &mut ctx.stat);
     }
+    // Human `Life()`: crit damage for those who do not suffocate in crit.
+    if no_breath
+        && ctx.stat != Stat::Dead
+        && ctx.health.health() < crate::health::HEALTH_THRESHOLD_CRIT
+        && !resp.body.no_crit_damage
+    {
+        ctx.damage(DamageType::Brute, 0.5 * SSMOBS_WAIT_SECS);
+        update_stat(ctx.health, &mut ctx.stat);
+    }
 
     // `handle_environment` -> species `handle_environment_pressure`.
     // `TRAIT_RESISTLOWPRESSURE` + `TRAIT_RESISTHIGHPRESSURE`: neither damage nor alert.
@@ -1055,6 +1248,7 @@ fn live(world: &mut World, mob: Entity, fired: u64, now: f64) {
         &mut ctx,
     );
     update_stat(ctx.health, &mut ctx.stat);
+    crate::species::plasma_ignition(world, mob, &worn, &environment, SSMOBS_WAIT_SECS);
 
     let LifeCtx {
         stat: new_stat,

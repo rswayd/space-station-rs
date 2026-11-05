@@ -211,11 +211,20 @@ fn give_body(
         return;
     }
     let blood_type = blood::BloodType::random_human(&mut rng);
-    commands.entity(add.entity).insert((
-        blood::Blood::new(blood_type),
-        wounds::Limbs::default(),
-        LimbLimits::default(),
-    ));
+    let mob = add.entity;
+    commands.queue(move |world: &mut World| {
+        // The species' `exotic_bloodtype` (`crate::species`), read once the body is complete.
+        let exotic = crate::species::def_of(world, mob)
+            .blood
+            .and_then(blood::BloodType::from_path);
+        if let Ok(mut entity) = world.get_entity_mut(mob) {
+            entity.insert((
+                blood::Blood::new(exotic.unwrap_or(blood_type)),
+                wounds::Limbs::default(),
+                LimbLimits::default(),
+            ));
+        }
+    });
 }
 
 /// An IV drip's state (`/obj/machinery/iv_drip`).

@@ -1568,6 +1568,12 @@ pub fn transform(world: &mut World, mob: Entity, profile: &Profile) {
             ..look.clone()
         };
     }
+    // `transform` copies the profile's species too (`hardset_dna(..., mrace)`).
+    if let Some(look) = &profile.look
+        && look.species != crate::species::species_of(world, mob)
+    {
+        crate::species::set_species(world, mob, look.species);
+    }
     if let Some(mut inventory) = world.get_mut::<Inventory>(mob) {
         inventory.set_changed();
     }
