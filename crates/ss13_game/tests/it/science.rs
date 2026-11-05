@@ -908,7 +908,7 @@ fn server_control_toggles_servers() {
     );
     assert_eq!(data.consoles.len(), 1);
     assert!(data.consoles[0].console_locked);
-    assert_eq!(data.consoles[0].console_location, "Лаборатория");
+    assert_eq!(data.consoles[0].console_location, "station");
 
     s.act::<ServerControlUi>("lockdown_server", &[("selected_server", "0")]);
     s.run_until_for(5.0, "access refusal", |s| s.said("в доступе отказано!"));
