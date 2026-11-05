@@ -99,6 +99,26 @@ pub struct Photocopier {
     pub queue: u32,
 }
 
+/// A prebuilt photocopier's `starting_toner`, made after map load: map objects initialize
+/// while the map loader holds `Prototypes`, and a spawn then would find no prototype (and
+/// cache that).
+#[derive(Component, Clone, Copy, Debug, Default)]
+pub(super) struct StartingToner;
+
+/// Gives each prebuilt photocopier its cartridge.
+pub(super) fn load_starting_toner(world: &mut World) {
+    let mut copiers = world.query_filtered::<Entity, With<StartingToner>>();
+    let copiers: Vec<Entity> = copiers.iter(world).collect();
+    for copier in copiers {
+        world.entity_mut(copier).remove::<StartingToner>();
+        let Some(cartridge) = crate::construction::spawn_detached(world, TONER) else {
+            continue;
+        };
+        put_inside(world, cartridge, copier);
+        set_copier(world, copier, |c| c.toner = Some(cartridge));
+    }
+}
+
 /// `/obj/machinery/fax`: `fax_id`, the loaded item, `visible_to_network`.
 #[derive(Component, Clone, Debug, PartialEq)]
 pub struct Fax {
@@ -176,21 +196,16 @@ pub(super) fn add_obj_parts(world: &mut World, e: Entity, path: &str) {
     if is_under(path, COPIER) {
         // `/prebuilt`: `starting_toner`, `starting_paper = 30`.
         let prebuilt = path.ends_with("/prebuilt");
-        let toner = if prebuilt {
-            crate::construction::spawn_detached(world, TONER)
-        } else {
-            None
-        };
-        if let Some(cartridge) = toner {
-            put_inside(world, cartridge, e);
-        }
         world.entity_mut(e).insert(Photocopier {
             paper: if prebuilt { PAPER_CAPACITY } else { 0 },
-            toner,
+            toner: None,
             object: None,
             copies: 1,
             queue: 0,
         });
+        if prebuilt {
+            world.entity_mut(e).insert(StartingToner);
+        }
     } else if is_under(path, FAX) {
         world.entity_mut(e).insert(Fax {
             id: if is_under(path, FAX_SYNDICATE) {

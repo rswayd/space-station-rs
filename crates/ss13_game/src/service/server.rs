@@ -62,6 +62,8 @@ impl Plugin for ServiceServerPlugin {
                         .after(PromptSystems::Answer),
                     window_status.in_set(UiSystems::StatusHook),
                     run_timers.run_if(any_with_component::<ServiceTimer>),
+                    super::office::load_starting_toner
+                        .run_if(any_with_component::<super::office::StartingToner>),
                     super::clown::squeak_on_moves.after(ss13_world::WorldSystems::Movement),
                 ),
             )
