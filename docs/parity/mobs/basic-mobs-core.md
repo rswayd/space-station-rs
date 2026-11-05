@@ -31,7 +31,7 @@
 `basic_eating` позволяет мобу есть подходящие предметы (лечит/ранит), `death_drops` выбрасывает лут при смерти (мясо, шкуры, трофеи).
 
 - **Код:** [`/datum/element/basic_eating`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/elements/basic_eating.dm#L6), [`/datum/element/death_drops`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/elements/death_drops.dm#L6)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/mobs/eating.rs`: `basic_eating` (корова, коза, ящерицы и крупные ящеры форка, моль-таракан, пингвин, змея, черепаха, улитка; списки еды из их `Initialize`, `// shortcut:`): съедают кормёжку из рук вне боевого режима и то, к чему подходит ИИ, лечатся на `heal_amt`, сообщение с глаголами `[eat_verbs]` форка; поедание мобов (бабочки, тараканы, мыши) удаляет их, кроме мобов игроков; нет `damage_amount`/`drinking`/`add_to_contents`, `death_drops`
 
 ### Приручение
 Компонент `tameable`: скармливание любимой еды с шансом приручает моба (становится дружелюбным владельцу, иногда даёт езду или команды). Пример: лавовые ящеры, козы, гаты.

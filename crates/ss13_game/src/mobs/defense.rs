@@ -174,6 +174,14 @@ fn attacked_by_humans(
         let mob_stat = world.get::<Stat>(mob).copied().unwrap_or_default();
         match held {
             Some((item, dm)) => {
+                // tg `basic_eating/try_feed` (`COMSIG_ATOM_ITEM_INTERACTION`, before the item's
+                // own use): out of combat mode the mob eats what it likes.
+                if !combat.0 && super::eating::try_feed(world, mob, item) {
+                    world
+                        .entity_mut(user)
+                        .insert(NextMove(now + CLICK_CD_MELEE));
+                    continue;
+                }
                 // Items that interact with mobs (medicine, syringes, food out of combat) take
                 // the click elsewhere.
                 if crate::medical::interacts_with_mobs(&dm.path)

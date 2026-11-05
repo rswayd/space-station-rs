@@ -15,7 +15,7 @@ _«Гигантские пауки» описано в [../antagonists/xenomorph
 
 - **Код:** [`/mob/living/basic/bear`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/space_fauna/bear/_bear.dm#L2)
 - **BandaStation:** [`modular_bandastation/mobs/code/simple_animal/hostile/bear.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/mobs/code/simple_animal/hostile/bear.dm#L1) — переводы, масляный медведь
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/mobs/ai/trees.rs`: нападают на чужих фракции и обидчиков, рычат (`random_speech/bear`); нет езды, ульев и сот, лазанья по деревьям, масляного медведя
 
 ### Король крыс
 Антагонист-гост-роль (событие): Король крыс призывает крыс, ведёт их в «бунт», заражает еду, носит корону.
@@ -57,7 +57,7 @@ _«Ревенант» описано в [../antagonists/midround-creatures.md](.
 
 - **Код:** [`/mob/living/basic/snake`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/space_fauna/snake/snake.dm#L2), [`/mob/living/basic/snake/banded`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/space_fauna/snake/banded_snake.dm#L1)
 - **BandaStation:** [`modular_bandastation/mobs/code/simple_animal/hostile/snake.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/mobs/code/simple_animal/hostile/snake.dm#L1) — переводы; [`modular_bandastation/mobs/code/simple_animal/pets/snake_syndicate.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/mobs/code/simple_animal/pets/snake_syndicate.dm#L2) — синдизмей и трёхголовая Руж
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/mobs/ai/trees.rs`, `crates/ss13_game/src/mobs/eating.rs`: нападают на чужих фракции, выслеживают и едят мышей и мёртвых мышей (+2 здоровья); нет яда укуса, приручения
 
 ### Призраки, безликие и обитатели Нижнего мира
 Враждебные призраки (рой), безверные (faithless), существа Нижнего мира: тварь, Ми-Го, пустое тело.

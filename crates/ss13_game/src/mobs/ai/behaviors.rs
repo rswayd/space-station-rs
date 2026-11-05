@@ -1,7 +1,10 @@
 //! Behavior leaves (tg `/datum/bt_node/ai_behavior/*`) and targeting strategies (tg
 //! `/datum/targeting_strategy/*`) of the ported trees.
 
+use std::sync::Arc;
+
 use bevy::prelude::*;
+use ss13_mapload::mobs::{MobDef, MobSpeech};
 use ss13_mapload::{DmItem, DmPower, HiddenUnderTile};
 use ss13_shared::{Dir, TilePos};
 use ss13_world::{MoveRequest, SpatialIndex};
@@ -18,7 +21,7 @@ pub const FIND_TARGET_RATE: f64 = 1.0;
 /// `DEFAULT_ATTACK_DELAY`: the first swing waits this long.
 const DEFAULT_ATTACK_DELAY: f64 = 0.4;
 /// `DEFAULT_BASIC_FLEE_DISTANCE`.
-const DEFAULT_FLEE_DISTANCE: u32 = 5;
+const DEFAULT_FLEE_DISTANCE: u32 = 9;
 const CABLE_ROOT: &str = "/obj/structure/cable";
 const MOUSE_ROOT: &str = "/mob/living/basic/mouse";
 const TOM: &str = "/mob/living/basic/mouse/brown/tom";
@@ -59,14 +62,17 @@ impl Strategy {
         if world.get::<Health>(target).is_none() {
             return false;
         }
+        let ignore_faction = ctx.truthy(super::Key::IgnoreFaction);
         let ok = match self {
             Self::Basic => {
                 // `BB_TARGET_MINIMUM_STAT` defaults to `HARD_CRIT`: not dead.
-                !crate::mobs::same_faction(world, ctx.pawn, target) && stat != Stat::Dead
+                // `TARGETING_FACTION_CHECK` with `BB_TEMPORARILY_IGNORE_FACTION`.
+                (ignore_faction || !crate::mobs::same_faction(world, ctx.pawn, target))
+                    && stat != Stat::Dead
             }
             Self::IgnoreFaction => stat != Stat::Dead,
             Self::HoldingTongs => {
-                !crate::mobs::same_faction(world, ctx.pawn, target)
+                (ignore_faction || !crate::mobs::same_faction(world, ctx.pawn, target))
                     && stat != Stat::Dead
                     && world
                         .get::<crate::inventory::Inventory>(target)
@@ -263,6 +269,17 @@ pub enum Behavior {
     ClearArrivedMigration,
     ClearKey(Key),
     SetBool(Key, bool),
+    /// `random_speech` of a speech type (`Some(path)`, from `MobsData::speech`) or
+    /// `random_speech_blackboard` (`None`: the mob's `speech_lines`), with their sounds.
+    Speak(Option<&'static str>),
+    /// `capricious_retaliate` with `ignore_faction` (`BB_RANDOM_AGGRO_CHANCE` 0.5,
+    /// `BB_RANDOM_DEAGGRO_CHANCE` 10, `BB_AGGRO_RANGE` 9: tg's defaults, no ported mob sets them).
+    CapriciousRetaliate,
+    /// `find_food`: `acquire_target` (`TARGET_REVALIDATE`, `pickup_item`) of the closest thing of
+    /// the mob's `BB_BASIC_FOODS` in view.
+    AcquireFood,
+    /// `ai_interact` on `BB_TARGET_FOOD` (`move_to_and_eat`): `basic_eating`.
+    EatFood,
     /// A bot leaf (`crate::bots::ai`).
     Bot(crate::bots::ai::BotLeaf),
 }
@@ -271,7 +288,7 @@ impl Behavior {
     /// tg `time_between_perform`.
     pub fn cooldown(&self) -> f64 {
         match self {
-            Self::RandomSpeech(_) => 1.0,
+            Self::RandomSpeech(_) | Self::Speak(_) | Self::CapriciousRetaliate => 1.0,
             Self::PlayWithMouse { .. } => 10.0,
             Self::Bot(leaf) => leaf.cooldown(),
             _ => 0.0,
@@ -349,39 +366,17 @@ impl Behavior {
                 }
             },
             Self::TargetFromRetaliateList { key, strategy } => {
-                let list = match ctx.bb.get(Key::RetaliateList) {
-                    Some(Value::Attackers(list)) => list.clone(),
-                    _ => return DELAY_FAIL,
-                };
-                let alive: Vec<(Entity, f64)> = list
-                    .into_iter()
-                    .filter(|&(e, _)| ctx.world.get_entity(e).is_ok())
-                    .collect();
-                ctx.bb
-                    .set(Key::RetaliateList, Value::Attackers(alive.clone()));
-                // tg picks the closest valid one.
-                let from = ctx.pawn_pos();
-                let best = alive
-                    .iter()
-                    .map(|&(e, _)| e)
-                    .filter(|&e| strategy.valid(ctx, e, 9))
-                    .min_by_key(|&e| {
-                        let p = ctx.world.get::<TilePos>(e).copied();
-                        from.zip(p)
-                            .and_then(|(a, b)| a.chebyshev(b))
-                            .unwrap_or(u32::MAX)
-                    });
-                match best {
-                    Some(t) => {
-                        ctx.bb.set(key, Value::Entity(t));
-                        DELAY_SUCCEED
-                    }
-                    None => {
-                        ctx.bb.clear(key);
-                        DELAY_FAIL
-                    }
-                }
+                // `check_faction` FALSE (every ported tree): factions are ignored while picking.
+                ctx.bb.set(Key::IgnoreFaction, Value::Bool(true));
+                let result = target_from_retaliate_list(ctx, key, strategy);
+                // `BB_ALWAYS_IGNORE_FACTION` is not used by the ported trees.
+                ctx.bb.set(Key::IgnoreFaction, Value::Bool(false));
+                result
             }
+            Self::Speak(datum) => speak(ctx, datum),
+            Self::CapriciousRetaliate => capricious_retaliate(ctx),
+            Self::AcquireFood => acquire_food(ctx),
+            Self::EatFood => eat_food(ctx),
             Self::MeleeAttack { key, strategy } => melee(ctx, key, strategy),
             Self::MoveToTarget {
                 key,
@@ -479,6 +474,10 @@ impl Behavior {
                 ctx.movement.failed = false;
                 ctx.movement.stop();
             }
+            // tg resets `BB_TEMPORARILY_IGNORE_FACTION` only when nobody was picked.
+            Self::CapriciousRetaliate if !succeeded => {
+                ctx.bb.set(Key::IgnoreFaction, Value::Bool(false));
+            }
             Self::PlayWithMouse { key } => {
                 let target = ctx.bb.entity(key);
                 ctx.bb.clear(key);
@@ -499,6 +498,256 @@ impl Behavior {
             }
             _ => {}
         }
+    }
+}
+
+/// tg `acquire_target/target_from_retaliate_list` (the nearest valid attacker).
+fn target_from_retaliate_list(ctx: &mut AiCtx, key: Key, strategy: Strategy) -> Perform {
+    let list = match ctx.bb.get(Key::RetaliateList) {
+        Some(Value::Attackers(list)) => list.clone(),
+        _ => return DELAY_FAIL,
+    };
+    let alive: Vec<(Entity, f64)> = list
+        .into_iter()
+        .filter(|&(e, _)| ctx.world.get_entity(e).is_ok())
+        .collect();
+    ctx.bb
+        .set(Key::RetaliateList, Value::Attackers(alive.clone()));
+    // tg picks the closest valid one.
+    let from = ctx.pawn_pos();
+    let best = alive
+        .iter()
+        .map(|&(e, _)| e)
+        .filter(|&e| strategy.valid(ctx, e, 9))
+        .min_by_key(|&e| {
+            let p = ctx.world.get::<TilePos>(e).copied();
+            from.zip(p)
+                .and_then(|(a, b)| a.chebyshev(b))
+                .unwrap_or(u32::MAX)
+        });
+    match best {
+        Some(t) => {
+            ctx.bb.set(key, Value::Entity(t));
+            DELAY_SUCCEED
+        }
+        None => {
+            ctx.bb.clear(key);
+            DELAY_FAIL
+        }
+    }
+}
+
+/// What a [`Behavior::Speak`] reads: a speech type or the mob's definition.
+enum SpeechRef {
+    Def(Arc<MobDef>),
+    Table(Arc<MobSpeech>),
+}
+
+impl SpeechRef {
+    fn get(&self) -> Option<&MobSpeech> {
+        match self {
+            Self::Def(def) => def.speech_lines.as_ref(),
+            Self::Table(speech) => Some(speech),
+        }
+    }
+}
+
+/// tg `random_speech` / `random_speech_blackboard` `perform`.
+fn speak(ctx: &mut AiCtx, datum: Option<&'static str>) -> Perform {
+    let source = match datum {
+        Some(path) => ctx
+            .world
+            .get_resource::<crate::mobs::MobSpeeches>()
+            .and_then(|s| s.0.get(path).cloned())
+            .map(SpeechRef::Table),
+        None => ctx
+            .world
+            .get::<BasicMob>(ctx.pawn)
+            .map(|b| SpeechRef::Def(b.def.clone())),
+    };
+    let Some(speech) = source.as_ref().and_then(SpeechRef::get) else {
+        return DELAY_FAIL;
+    };
+    if !ctx.prob(speech.chance) {
+        return DELAY_FAIL;
+    }
+    let (hear, see, spoken) = (
+        speech.emote_hear.len(),
+        speech.emote_see.len(),
+        speech.speak.len(),
+    );
+    let total = hear + see + spoken;
+    if total == 0 {
+        return DELAY_FAIL;
+    }
+    fn pick(rng: &mut crate::combat::CombatRng, lines: &[String]) -> String {
+        lines[rng.range(0, lines.len() as u32 - 1) as usize].clone()
+    }
+    let roll = ctx.rng.range(1, total as u32) as usize;
+    let sound = (!speech.sound.is_empty()).then(|| pick(&mut ctx.rng, &speech.sound));
+    let audible = if roll <= hear {
+        let text = pick(&mut ctx.rng, &speech.emote_hear);
+        crate::mobs::defense::emote(ctx.world, ctx.pawn, &text);
+        // `pressure_affected = TRUE, ignore_walls = FALSE`.
+        Some(false)
+    } else if roll <= hear + see {
+        let text = pick(&mut ctx.rng, &speech.emote_see);
+        crate::mobs::defense::emote(ctx.world, ctx.pawn, &text);
+        None
+    } else {
+        let line = pick(&mut ctx.rng, &speech.speak);
+        say(ctx, &line);
+        Some(true)
+    };
+    if let (Some(ignore_walls), Some(sound), Some(pos)) = (audible, sound, ctx.pawn_pos()) {
+        crate::sound::playsound(
+            ctx.world,
+            crate::sound::PlaySound::new(pos, sound, 80.0, true).ignore_walls(ignore_walls),
+        );
+    }
+    DELAY_SUCCEED
+}
+
+/// tg `capricious_retaliate` `perform`: now and then calms down (forgets its grudges), else
+/// sometimes takes a random dislike to someone it hears.
+fn capricious_retaliate(ctx: &mut AiCtx) -> Perform {
+    const DEAGGRO_CHANCE: f32 = 10.0;
+    const AGGRO_CHANCE: f32 = 0.5;
+    const AGGRO_RANGE: u32 = 9;
+    if ctx.truthy(Key::RetaliateList) && ctx.prob(DEAGGRO_CHANCE) {
+        crate::mobs::defense::emote(ctx.world, ctx.pawn, "успокаивается.");
+        ctx.bb.clear(Key::RetaliateList);
+        ctx.bb.clear(Key::CurrentTarget);
+        return DELAY_FAIL;
+    }
+    if !ctx.prob(AGGRO_CHANCE) {
+        return DELAY_FAIL;
+    }
+    // `hearers(aggro_range)`: living mobs around, picked at random until one is valid.
+    let mut pool = candidates(ctx, AGGRO_RANGE);
+    if pool.is_empty() {
+        crate::mobs::defense::emote(ctx.world, ctx.pawn, "ворчит.");
+        return DELAY_FAIL;
+    }
+    ctx.bb.set(Key::IgnoreFaction, Value::Bool(true));
+    let mut picked = None;
+    while !pool.is_empty() {
+        let i = ctx.rng.range(0, pool.len() as u32 - 1) as usize;
+        let test = pool.swap_remove(i);
+        if Strategy::Basic.valid(ctx, test, AGGRO_RANGE) {
+            picked = Some(test);
+            break;
+        }
+    }
+    let Some(target) = picked else {
+        crate::mobs::defense::emote(ctx.world, ctx.pawn, "ворчит.");
+        return DELAY_FAIL;
+    };
+    let mut list = match ctx.bb.get(Key::RetaliateList) {
+        Some(Value::Attackers(list)) => list.clone(),
+        _ => Vec::new(),
+    };
+    list.retain(|(e, _)| *e != target);
+    list.push((target, ctx.now));
+    ctx.bb.set(Key::RetaliateList, Value::Attackers(list));
+    let name = ctx
+        .world
+        .get::<Name>(target)
+        .map_or_else(String::new, |n| n.as_str().to_owned());
+    crate::mobs::defense::emote(ctx.world, ctx.pawn, &format!("сердито смотрит на {name}!"));
+    DELAY_SUCCEED
+}
+
+/// `acquire_target` `vision_range`.
+const FOOD_VISION: u32 = 9;
+
+/// tg `find_food`'s `acquire_target`: keeps a still valid food, else the closest one in view.
+fn acquire_food(ctx: &mut AiCtx) -> Perform {
+    let Some(eating) = crate::mobs::eating::eating(ctx.world, ctx.pawn) else {
+        ctx.bb.clear(Key::TargetFood);
+        return DELAY_FAIL;
+    };
+    let Some(from) = ctx.pawn_pos() else {
+        return DELAY_FAIL;
+    };
+    let (world, pawn) = (&*ctx.world, ctx.pawn);
+    if ctx
+        .bb
+        .entity(Key::TargetFood)
+        .is_some_and(|t| food_in_view(world, pawn, from, t, eating))
+    {
+        return DELAY_SUCCEED;
+    }
+    // Cheapest checks first: the type, then the line of sight of the closest.
+    let mut found: Vec<(u32, Entity)> = world
+        .resource::<SpatialIndex>()
+        .in_radius(from, FOOD_VISION)
+        .filter(|&e| crate::mobs::eating::is_food(world, e, eating))
+        .filter_map(|e| Some((from.chebyshev(*world.get::<TilePos>(e)?)?, e)))
+        .collect();
+    found.sort_by_key(|&(d, e)| (d, e.to_bits()));
+    let best = found
+        .into_iter()
+        .map(|(_, e)| e)
+        .find(|&e| food_in_view(world, pawn, from, e, eating));
+    match best {
+        Some(food) => {
+            ctx.bb.set(Key::TargetFood, Value::Entity(food));
+            DELAY_SUCCEED
+        }
+        None => {
+            ctx.bb.clear(Key::TargetFood);
+            DELAY_FAIL
+        }
+    }
+}
+
+/// `pickup_item` on a food the mob sees.
+fn food_in_view(
+    world: &World,
+    eater: Entity,
+    from: TilePos,
+    food: Entity,
+    eating: &crate::mobs::eating::Eating,
+) -> bool {
+    crate::mobs::eating::edible_now(world, eater, food, eating)
+        && world
+            .get::<TilePos>(food)
+            .is_some_and(|&p| can_see(world, from, p, FOOD_VISION))
+}
+
+/// tg `ai_interact` on the food next to the mob -> `basic_eating/on_unarm_attack`.
+fn eat_food(ctx: &mut AiCtx) -> Perform {
+    let Some(food) = ctx
+        .bb
+        .entity(Key::TargetFood)
+        .filter(|&f| ctx.world.get_entity(f).is_ok())
+    else {
+        return FAIL;
+    };
+    let reachable = ctx
+        .pawn_pos()
+        .zip(ctx.world.get::<TilePos>(food).copied())
+        .is_some_and(|(a, b)| {
+            a == b
+                || ctx
+                    .world
+                    .resource::<SpatialIndex>()
+                    .adjacent(a, b, |e| e == food)
+        });
+    let edible = crate::mobs::eating::eating(ctx.world, ctx.pawn)
+        .is_some_and(|e| crate::mobs::eating::edible_now(ctx.world, ctx.pawn, food, e));
+    if !reachable || !edible {
+        ctx.bb.clear(Key::TargetFood);
+        return FAIL;
+    }
+    match crate::mobs::eating::eat(ctx.world, ctx.pawn, food) {
+        Some(next) => {
+            ctx.bb.clear(Key::TargetFood);
+            ctx.bb.set(Key::NextFoodEat, Value::Time(next));
+            SUCCEED
+        }
+        None => FAIL,
     }
 }
 

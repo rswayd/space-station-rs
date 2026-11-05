@@ -119,7 +119,30 @@ pub struct MobDef {
     /// `/mob/living/basic/bot` vars, for bots only.
     #[serde(default)]
     pub bot: Option<BotDef>,
+    /// `BB_BASIC_MOB_SPEAK_LINES` of its controller's `blackboard` (what
+    /// `random_speech_blackboard` says).
+    #[serde(default)]
+    pub speech_lines: Option<MobSpeech>,
+    /// Its controller's `ai_traits` (DM bits: `STOP_MOVING_WHEN_PULLED` 1, ...).
+    #[serde(default)]
+    pub ai_traits: u32,
 }
+
+/// What a mob says at random: a `/datum/bt_node/ai_behavior/random_speech` type's vars, or a
+/// controller's `BB_BASIC_MOB_SPEAK_LINES` (`emote_say`, `emote_hear`, ...).
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct MobSpeech {
+    /// `speech_chance` / `emote_chance`, percent per perform (one a second).
+    pub chance: f32,
+    pub emote_hear: Vec<String>,
+    pub emote_see: Vec<String>,
+    pub speak: Vec<String>,
+    /// Sound files (`sound/...ogg`) or SFX keys, played with `emote_hear` and `speak` lines.
+    pub sound: Vec<String>,
+}
+
+/// `/datum/bt_node/ai_behavior/random_speech`.
+pub const RANDOM_SPEECH_ROOT: &str = "/datum/bt_node/ai_behavior/random_speech";
 
 /// The vars of a `/mob/living/basic/bot` type (`_bots.dm` and the bot subtypes).
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
@@ -156,6 +179,9 @@ pub const BOT_ROOT: &str = "/mob/living/basic/bot";
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct MobsData {
     pub mobs: BTreeMap<String, MobDef>,
+    /// Every [`RANDOM_SPEECH_ROOT`] type (the root too) by path.
+    #[serde(default)]
+    pub speech: BTreeMap<String, MobSpeech>,
 }
 
 impl MobsData {
@@ -262,7 +288,66 @@ pub fn resolve(types: &DmTypes, verbs: &RuVerbs, factions: &HashMap<String, Stri
         .filter(|p| is_under(p, BASIC_ROOT))
         .map(|p| (p.clone(), mob_def(types, p, verbs, factions)))
         .collect();
-    MobsData { mobs }
+    let speech = types
+        .types
+        .keys()
+        .filter(|p| is_under(p, RANDOM_SPEECH_ROOT))
+        .map(|p| (p.clone(), speech_datum(types, p)))
+        .collect();
+    MobsData { mobs, speech }
+}
+
+/// The strings of a dumped list (sounds: `'file'` resources or SFX keys).
+fn strings(value: Option<&Value>) -> Vec<String> {
+    list(value)
+        .into_iter()
+        .filter_map(|(k, _)| {
+            k.as_str()
+                .or_else(|| k.get("resource").and_then(Value::as_str))
+                .map(str::to_owned)
+        })
+        .collect()
+}
+
+/// The vars of a `random_speech` type.
+fn speech_datum(types: &DmTypes, path: &str) -> MobSpeech {
+    let v = |var: &str| types.resolved(path, var);
+    MobSpeech {
+        chance: v("speech_chance").and_then(Value::as_f64).unwrap_or(1.0) as f32,
+        emote_hear: strings(v("emote_hear")),
+        emote_see: strings(v("emote_see")),
+        speak: strings(v("speak")),
+        sound: strings(v("sound")),
+    }
+}
+
+/// `BB_BASIC_MOB_SPEAK_LINES` in the `blackboard` of controller type `controller`
+/// (`random_speech_blackboard` defaults the chance to 1).
+fn speech_lines(types: &DmTypes, controller: &str) -> Option<MobSpeech> {
+    if controller.is_empty() {
+        return None;
+    }
+    let blackboard = types.resolved(controller, "blackboard");
+    let (_, lines) = list(blackboard)
+        .into_iter()
+        .find(|(k, _)| k.as_str() == Some("BB_speech_lines"))?;
+    let entries = list(lines);
+    let get = |key: &str| {
+        entries
+            .iter()
+            .find(|(k, _)| k.as_str() == Some(key))
+            .and_then(|(_, v)| *v)
+    };
+    Some(MobSpeech {
+        chance: get("emote_chance")
+            .and_then(Value::as_f64)
+            .filter(|c| *c != 0.0)
+            .unwrap_or(1.0) as f32,
+        emote_hear: strings(get("emote_hear")),
+        emote_see: strings(get("emote_see")),
+        speak: strings(get("emote_say")),
+        sound: strings(get("emote_sound")),
+    })
 }
 
 /// The element that makes basic mobs fly.
@@ -350,6 +435,7 @@ fn mob_def(
         .filter_map(|(k, _)| k.as_str().map(str::to_owned))
         .collect();
     let max_health = num("maxHealth", 20.0);
+    let ai_controller = dm_path(v("ai_controller")).unwrap_or_default();
     MobDef {
         path: path.to_owned(),
         name: plain(&s("name")),
@@ -392,7 +478,13 @@ fn mob_def(
             .is_none_or(|d| d != 0.0),
         mob_size: num("mob_size", 2.0) as u8,
         faction,
-        ai_controller: dm_path(v("ai_controller")).unwrap_or_default(),
+        speech_lines: speech_lines(types, &ai_controller),
+        ai_traits: (!ai_controller.is_empty())
+            .then(|| types.resolved(&ai_controller, "ai_traits"))
+            .flatten()
+            .and_then(Value::as_f64)
+            .unwrap_or(0.0) as u32,
+        ai_controller,
         speak_emote,
         body_icon_state: s("body_icon_state"),
         body_color: s("body_color"),
@@ -477,7 +569,17 @@ mod tests {
                 "icon_living": "base", "icon_dead": "base_dead", "minimum_survivable_temperature": 0,
                 "speak_emote": { "list": ["squeaks"] },
                 "physiology": { "list": [ { "assoc": ["brute", 3] } ] } } },
-            "/mob/living/basic/carp/lia": { "parent": "/mob/living/basic/carp", "declared_vars": { "name": "\\improper Lia" } }
+            "/mob/living/basic/carp/lia": { "parent": "/mob/living/basic/carp", "declared_vars": { "name": "\\improper Lia" } },
+            "/datum/ai_controller/basic_controller/carp": { "parent": null, "declared_vars": {
+                "blackboard": { "list": [ { "assoc": ["targeting_strategy", { "path": "/datum/targeting_strategy/basic" }] },
+                    { "assoc": ["BB_speech_lines", { "list": [
+                        { "assoc": ["emote_say", { "list": ["moo"] }] },
+                        { "assoc": ["emote_sound", { "list": [{ "resource": "sound/cow.ogg" }] }] },
+                        { "assoc": ["emote_chance", 3] } ] }] } ] }, "ai_traits": 21 } },
+            "/datum/bt_node/ai_behavior/random_speech": { "parent": null, "declared_vars": { "speech_chance": 1 } },
+            "/datum/bt_node/ai_behavior/random_speech/cats": { "parent": "/datum/bt_node/ai_behavior/random_speech",
+                "declared_vars": { "emote_hear": { "list": ["meows."] }, "sound": { "list": ["cat_meow"] }, "speech_chance": 10 } },
+            "/datum/bt_node/ai_behavior/random_speech_blackboard": { "parent": null }
         }
     }"#;
 
@@ -522,6 +624,32 @@ mod tests {
         assert_eq!(
             (atmos.min_oxy, atmos.max_co2, atmos.max_oxy),
             (5.0, 5.0, 0.0)
+        );
+    }
+
+    #[test]
+    fn speech_from_speech_types_and_controller_blackboards() {
+        let data = data();
+        let carp = &data.mobs["/mob/living/basic/carp"];
+        let lines = carp.speech_lines.as_ref().unwrap();
+        assert_eq!(lines.speak, ["moo"]);
+        assert_eq!(lines.sound, ["sound/cow.ogg"]);
+        assert_eq!(lines.chance, 3.0);
+        assert_eq!(carp.ai_traits, 21);
+        assert!(lines.emote_hear.is_empty());
+        assert_eq!(data.mobs["/mob/living/basic"].speech_lines, None);
+        let cats = &data.speech["/datum/bt_node/ai_behavior/random_speech/cats"];
+        assert_eq!(cats.chance, 10.0);
+        assert_eq!(cats.emote_hear, ["meows."]);
+        assert_eq!(cats.sound, ["cat_meow"]);
+        assert_eq!(
+            data.speech["/datum/bt_node/ai_behavior/random_speech"].chance,
+            1.0
+        );
+        assert!(
+            !data
+                .speech
+                .contains_key("/datum/bt_node/ai_behavior/random_speech_blackboard")
         );
     }
 
