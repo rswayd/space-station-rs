@@ -150,7 +150,10 @@ ss13_game::drive_station!(Station, 0);
 impl Station {
     fn start() -> Self {
         let assets = fixture_assets();
-        let mut s = testing::Station::start(fixture_map(&assets, &["map.dmm"]), |_| {});
+        // The say intents are `ss13_chat`'s; the test server has no chat by default.
+        let mut s = testing::Station::start(fixture_map(&assets, &["map.dmm"]), |app| {
+            app.add_plugins(ss13_chat::server::ChatServerPlugin);
+        });
         s.join_all(1, |app| {
             app.init_resource::<Heard>().add_systems(Update, record);
         });
