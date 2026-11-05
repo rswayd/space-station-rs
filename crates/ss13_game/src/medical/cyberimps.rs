@@ -1586,7 +1586,7 @@ fn reviver_emp(world: &mut World, implant: Entity, mob: Entity, severity: f64, n
     tell_owner(
         world,
         mob,
-        Span::UserDanger,
+        Span::BoldWarning,
         "Вы чувствуете ужасную боль в груди!",
     );
     if let Some(heart) = organs::organ(world, mob, Slot::Heart) {
