@@ -19,7 +19,8 @@
 //!   posibrain) with the chest's cell: the mind goes into it, the processor and the
 //!   endoskeleton go inside (tg `mmi`, `robot_suit`), and it starts as the Cyborg job's does
 //!   (`crate::silicon::cyborg::activate`).
-// shortcut: no AI core construction, AI shells (B.O.R.I.S.), multitool debug window
+// AI cores built around a processor: `crate::silicon::ai_core`.
+// shortcut: no AI shells (B.O.R.I.S.), multitool debug window
 // (`CyborgBootDebug`: name, locomotion, panel, forced AI, lawsync), wrench disassembly,
 // screwdriver cell swap, crowbar flash removal or wirecutters; no syndicate MMI laws, MMI
 // EMPs, sphere posibrains, personality seeds, posibrain bans or the ghost's confirmation

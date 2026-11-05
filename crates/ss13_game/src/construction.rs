@@ -251,6 +251,10 @@ pub enum Job {
     Sink(crate::plumbing::SinkJob),
     /// Screwing, welding or repairing a law rack's module ([`crate::silicon::law_rack`]).
     LawRack(crate::silicon::law_rack::LawRackJob),
+    /// AI core construction steps ([`crate::silicon::ai_core`]).
+    AiCore(crate::silicon::ai_core::CoreJob),
+    /// Taking a shunted AI out of an APC into an intelliCard ([`crate::silicon::aicard`]).
+    AiCard(crate::silicon::aicard::CardJob),
     /// Digging rock, prying an ore box apart ([`crate::mining`]).
     Mining(crate::mining::MiningJob),
 }
@@ -1235,6 +1239,8 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Camera(job) => crate::defenses::cameras::complete(world, mob, action, job),
         &Job::Sink(job) => crate::plumbing::complete(world, mob, action, job),
         &Job::LawRack(job) => crate::silicon::law_rack::complete(world, mob, action, job),
+        &Job::AiCore(job) => crate::silicon::ai_core::complete(world, mob, action, job),
+        &Job::AiCard(job) => crate::silicon::aicard::complete(world, mob, action, job),
         &Job::Mining(job) => crate::mining::complete(world, mob, action, job),
         &Job::Emitter(job) => crate::power::emitter::complete(world, client, target, job, consume),
         Job::GirderBolts { from } => {

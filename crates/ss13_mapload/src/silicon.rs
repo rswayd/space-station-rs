@@ -46,8 +46,19 @@ pub const CAMERA_RUNTIME_TYPES: [&str; 3] = [
     "/obj/item/stack/cable_coil",
 ];
 
-/// Spawned at runtime by the silicon jobs: the mobs and the borg's cell.
-pub const SILICON_TYPES: [&str; 4] = [AI_TYPE, ROBOT_TYPE, AI_EYE_TYPE, ROBOT_CELL];
+/// Spawned at runtime by the silicon jobs: the mobs and the borg's cell; by carding, shunting
+/// and AI core construction (`ss13_game::silicon::ai_core`): the core, its board and what it
+/// comes apart into.
+pub const SILICON_TYPES: [&str; 8] = [
+    AI_TYPE,
+    ROBOT_TYPE,
+    AI_EYE_TYPE,
+    ROBOT_CELL,
+    "/obj/structure/ai_core",
+    "/obj/item/circuitboard/aicore",
+    "/obj/item/stack/sheet/rglass",
+    "/obj/item/stack/sheet/plasteel",
+];
 
 /// `/obj/item/borg/upgrade`.
 pub const UPGRADE_ROOT: &str = "/obj/item/borg/upgrade";

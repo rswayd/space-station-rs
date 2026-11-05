@@ -138,6 +138,10 @@ const TYPES: &str = r##"{
         "cell_type": {"path": "/obj/item/stock_parts/power_store/battery/upgraded"},
         "start_charge": 90, "lighting": 3, "equipment": 3, "environ": 3, "operating": 1,
         "chargemode": 1, "areastring": null } },
+    "/obj/structure": { "parent": "/obj" },
+    "/obj/structure/ai_core": { "parent": "/obj/structure", "declared_vars": {
+        "name": "AI core", "icon": { "resource": "ai.dmi" }, "icon_state": "build_0",
+        "density": 1 } },
     "/mob": { "parent": "/atom/movable", "declared_vars": { "layer": 4, "density": 1 } },
     "/mob/living": { "parent": "/mob" },
     "/mob/living/carbon": { "parent": "/mob/living" },
@@ -238,8 +242,9 @@ const AI_START: TilePos = TilePos::new(6, 3, 1);
 const ITEM_BEHIND_DOOR: TilePos = TilePos::new(5, 3, 1);
 const STATION: TilePos = TilePos::new(6, 2, 1);
 
-const STATES: [(&str, &str); 21] = [
+const STATES: [(&str, &str); 22] = [
     ("apc.dmi", "apc0"),
+    ("ai.dmi", "build_0"),
     ("t.dmi", "floor"),
     ("t.dmi", "wall"),
     ("l.dmi", "x2"),
@@ -283,6 +288,7 @@ fn fixture_assets_on(test: &str, map: &str) -> PathBuf {
         "/obj/item/ai_module/law/supplied/freeform",
         "/mob/living/silicon/ai",
         "/mob/living/silicon/robot",
+        "/obj/structure/ai_core",
         "/turf/open/floor",
         "/turf/closed/wall",
         "/turf/open/space/basic",
@@ -1562,8 +1568,46 @@ fn malf_ai_hacks_an_apc() {
     let malf = world.get::<MalfAi>(core).unwrap();
     assert_eq!(malf.hacked_apcs, [apc]);
     assert!(malf.processing_time >= START_PROCESSING_TIME + 9);
-    s.run_until("the window offers no second hack", |s| {
+    s.run_until("the window offers the shunt", |s| {
         s.window::<ApcUi>()
-            .is_some_and(|(_, (), d)| d.malf_status == 0)
+            .is_some_and(|(_, (), d)| d.malf_status == 2)
     });
+
+    // Shunting: confirmed, the AI is in the APC, an empty core linked to it on its tile.
+    use ss13_game::silicon::ai::{AiInside, LinkedCore};
+    use ss13_game::silicon::ai_core::{CoreFrame, CoreState};
+    use ss13_game::silicon::malf::{ShuntOccupier, vacate};
+    use ss13_tgui::interfaces::alert::AlertUi;
+    s.act::<ApcUi>("occupy", &[]);
+    s.run_until("the confirmation", |s| s.window::<AlertUi>().is_some());
+    s.act::<AlertUi>("choose", &[("choice", "Да")]);
+    s.run_until("the AI is in the APC", |s| {
+        s.try_get::<AiInside>(core) == Some(&AiInside::Apc(apc))
+    });
+    let linked = s.get::<LinkedCore>(core).0;
+    {
+        let world = s.server.world();
+        assert!(world.get::<TilePos>(core).is_none());
+        assert_eq!(world.get::<ShuntOccupier>(apc), Some(&ShuntOccupier(core)));
+        assert_eq!(world.get::<TilePos>(linked), Some(&AI_START));
+        let frame = world.get::<CoreFrame>(linked).unwrap();
+        assert_eq!(
+            (frame.state, frame.linked_ai),
+            (CoreState::Finished, Some(core))
+        );
+        assert!(
+            world
+                .get::<Name>(core)
+                .unwrap()
+                .as_str()
+                .starts_with("Копия ЛКП")
+        );
+    }
+    // Back: on the core's tile, the core gone, the APC empty.
+    assert!(vacate(s.server.world_mut(), core));
+    let world = s.server.world();
+    assert_eq!(world.get::<TilePos>(core), Some(&AI_START));
+    assert!(world.get::<AiInside>(core).is_none());
+    assert!(world.get_entity(linked).is_err());
+    assert!(world.get::<ShuntOccupier>(apc).is_none());
 }

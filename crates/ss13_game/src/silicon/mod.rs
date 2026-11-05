@@ -12,7 +12,10 @@
 //!   the robotics control console;
 //! - [`laws`] (server): lawsets, the round default, lawsync; [`law_rack`] (server): law racks,
 //!   their modules and the silicons linked to them;
-//! - [`malf`] (server): the malfunctioning AI and its APC hacks;
+//! - [`malf`] (server): the malfunctioning AI, its APC hacks and shunting; [`malf_modules`]
+//!   (server): its module picker and modules;
+//! - [`ai_core`] (server): the AI core structure, its construction around a brain processor;
+//!   [`aicard`] (server): the intelliCard;
 //! - [`interact`] (server): silicons opening machine windows (`attack_ai`), their window
 //!   status; [`airlock`] (server): the airlock's `AiAirlock` window;
 //! - [`ui`]: the windows' data both halves share; [`client`] (client) draws the camera view's
@@ -31,11 +34,15 @@
 #[cfg(feature = "server")]
 pub mod ai;
 #[cfg(feature = "server")]
+pub mod ai_core;
+#[cfg(feature = "server")]
 pub mod ai_hud;
 #[cfg(feature = "server")]
 pub mod ai_power;
 #[cfg(feature = "server")]
 pub mod ai_track;
+#[cfg(feature = "server")]
+pub mod aicard;
 #[cfg(feature = "server")]
 pub mod airlock;
 #[cfg(feature = "server")]
@@ -58,6 +65,8 @@ pub mod law_rack;
 pub mod laws;
 #[cfg(feature = "server")]
 pub mod malf;
+#[cfg(feature = "server")]
+pub mod malf_modules;
 #[cfg(feature = "server")]
 pub mod mmi;
 #[cfg(feature = "server")]
@@ -117,6 +126,8 @@ mod server {
                     super::ai_track::AiTrackPlugin,
                     super::malf::MalfPlugin,
                     super::mmi::MmiPlugin,
+                    super::ai_core::AiCorePlugin,
+                    super::aicard::AiCardPlugin,
                 ))
                 .add_systems(PreStartup, load_data)
                 .add_systems(

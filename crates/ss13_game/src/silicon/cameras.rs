@@ -834,16 +834,18 @@ fn assign_view_masks(
         With<Viewer>,
     >,
     eyes: Query<&super::ai::AiEye>,
+    inside: Query<&super::ai::AiInside>,
     mut commands: Commands,
 ) {
     for (client, console, controlled, mask) in &clients {
         let want = match console.and_then(|c| c.camera) {
             Some(camera) => Some(camera_mask(camera)),
-            None => controlled.and_then(|c| eyes.get(c.0).ok()).map(|eye| {
-                if eye.blind {
-                    super::ai::AI_BLIND_MASK
-                } else {
-                    CAMERANET_MASK
+            None => controlled.and_then(|c| eyes.get(c.0).ok()).and_then(|eye| {
+                match inside.get(eye.ai) {
+                    // A carded AI sees around the card without cameras.
+                    Ok(super::ai::AiInside::Card(_)) if !eye.blind => None,
+                    _ if eye.blind => Some(super::ai::AI_BLIND_MASK),
+                    _ => Some(CAMERANET_MASK),
                 }
             }),
         };
