@@ -14,8 +14,7 @@
 //! for tg's `tgui_alert`): that department pays when the order ships, and a pack with an
 //! `access_view` the requester's ID lacks is refused. The request console announces new
 //! requests on the supply channel, at most every 30 s.
-// shortcut: no hacked boards (contraband), no emag-only packs for an emagged console (the
-// catalogue filter does not know it yet), coupons or loans.
+// shortcut: no hacked boards (contraband), coupons or loans.
 
 use std::sync::Arc;
 
@@ -96,9 +95,9 @@ impl Plugin for ConsolePlugin {
     }
 }
 
-/// The catalogue a console with `contraband` shows (tg `get_packs_data_by_group` with the
-/// catalogue asset's pack data).
-pub fn catalogue(packs: &SupplyPacks, contraband: bool) -> CargoStatic {
+/// The catalogue a console with `contraband` (and `emagged`: the `ORDER_EMAG_ONLY` packs) shows
+/// (tg `get_packs_data_by_group` with the catalogue asset's pack data).
+pub fn catalogue(packs: &SupplyPacks, contraband: bool, emagged: bool) -> CargoStatic {
     let icon = |path: &str| {
         packs
             .templates
@@ -110,7 +109,11 @@ pub fn catalogue(packs: &SupplyPacks, contraband: bool) -> CargoStatic {
             })
     };
     let mut groups: Vec<SupplyGroup> = Vec::new();
-    for pack in packs.packs.iter().filter(|p| orderable(p, contraband)) {
+    for pack in packs
+        .packs
+        .iter()
+        .filter(|p| orderable(p, contraband, emagged))
+    {
         let record = SupplyRecord {
             id: pack.id.clone(),
             name: pack.name.clone(),
@@ -118,7 +121,7 @@ pub fn catalogue(packs: &SupplyPacks, contraband: bool) -> CargoStatic {
             cost: pack.cost.round().max(0.0) as u32,
             access: !pack.access.is_empty(),
             goody: pack.has(ss13_mapload::cargo::order_flags::GOODY),
-            contraband: contraband && pack.has(ss13_mapload::cargo::order_flags::CONTRABAND),
+            contraband: pack.has(ss13_mapload::cargo::order_flags::CONTRABAND),
             icon: pack.contains.first().and_then(|(t, _)| icon(t)),
             contains: pack
                 .contains
@@ -163,7 +166,7 @@ fn setup_consoles(world: &mut World) {
     let catalogue = Arc::new(
         world
             .get_resource::<SupplyPacks>()
-            .map(|p| catalogue(p, false))
+            .map(|p| catalogue(p, false, false))
             .unwrap_or_default(),
     );
     let packs: usize = catalogue.groups.iter().map(|g| g.packs.len()).sum();
@@ -190,7 +193,7 @@ pub(crate) fn setup_console(world: &mut World, e: Entity, shared: Option<Arc<Car
         Arc::new(
             world
                 .get_resource::<SupplyPacks>()
-                .map(|p| catalogue(p, false))
+                .map(|p| catalogue(p, false, false))
                 .unwrap_or_default(),
         )
     });
@@ -206,8 +209,8 @@ pub(crate) fn setup_console(world: &mut World, e: Entity, shared: Option<Arc<Car
     });
 }
 
-/// tg `/obj/machinery/computer/cargo/emag_act` (from `crate::emag`): contraband for good, the
-/// open windows get the new catalogue. True when it took.
+/// tg `/obj/machinery/computer/cargo/emag_act` (from `crate::emag`): contraband and the
+/// emag-only packs for good, the open windows get the new catalogue. True when it took.
 // shortcut: the circuit board does not keep it (a rebuilt console is clean).
 pub fn emag_act(world: &mut World, mob: Entity, card: Entity, console: Entity) -> bool {
     if world.get::<CargoConsole>(console).is_none_or(|c| c.emagged) {
@@ -216,7 +219,7 @@ pub fn emag_act(world: &mut World, mob: Entity, card: Entity, console: Entity) -
     let catalogue = Arc::new(
         world
             .get_resource::<SupplyPacks>()
-            .map(|p| catalogue(p, true))
+            .map(|p| catalogue(p, true, true))
             .unwrap_or_default(),
     );
     if let Some(mut state) = world.get_mut::<CargoConsole>(console) {
@@ -560,7 +563,9 @@ fn add_item(
     else {
         return false;
     };
-    if !(1..=i64::from(CARGO_MAX_ORDER)).contains(&amount) || !orderable(&def, state.contraband) {
+    if !(1..=i64::from(CARGO_MAX_ORDER)).contains(&amount)
+        || !orderable(&def, state.contraband, state.emagged)
+    {
         return false;
     }
     let id = actor_id(world, actor);
@@ -858,7 +863,7 @@ mod tests {
             pack("/p/d", "Service", "Brooms", 300.0),
             hidden,
         ]);
-        let st = catalogue(&packs, false);
+        let st = catalogue(&packs, false, false);
         let names: Vec<&str> = st.groups.iter().map(|g| g.name.as_str()).collect();
         assert_eq!(names, ["Engineering", "Service"]);
         let service: Vec<&str> = st.groups[1].packs.iter().map(|p| p.name.as_str()).collect();
@@ -867,9 +872,19 @@ mod tests {
         assert_eq!(st.groups[0].packs[0].contains[0].amount, 2);
         assert_eq!(st.groups[0].packs[0].contains[0].name, "/obj/item/wrench");
         assert_eq!(st.displayed_currency_name, " ¢");
-        let with_contraband = catalogue(&packs, true);
+        let with_contraband = catalogue(&packs, true, false);
         assert_eq!(with_contraband.groups.len(), 3);
         assert!(with_contraband.groups[0].packs[0].contraband);
+        let mut emag = pack("/p/e", "Security", "Emag Stuff", 100.0);
+        emag.order_flags = ss13_mapload::cargo::order_flags::EMAG_ONLY;
+        let packs = SupplyPacks::new(vec![emag]);
+        assert!(catalogue(&packs, true, false).groups.is_empty());
+        let emagged = catalogue(&packs, true, true);
+        assert_eq!(emagged.groups[0].packs[0].name, "Emag Stuff");
+        assert!(
+            !emagged.groups[0].packs[0].contraband,
+            "only ORDER_CONTRABAND is marked"
+        );
     }
 
     #[test]

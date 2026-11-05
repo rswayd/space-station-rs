@@ -50,13 +50,13 @@
 Шаттл снабжения регулярно привозит почту для живого экипажа (`SSeconomy` копит её, `create_mail()`): письмо адресовано конкретному игроку, открыть может только он (иначе — долго и с шансом ловушки); внутри предметы по должности, деньги, купоны или спам. Письма можно сортировать дисполсалами.
 
 - **Код:** [`/obj/item/mail`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/mail.dm#L2), [`initialize_for_recipient()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/mail.dm#L174), [`unwrap()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/mail.dm#L129), [`junk_mail()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/mail.dm#L217), [`create_mail()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/mobile_port/variants/supply.dm#L344)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/cargo/mail.rs` (`economy_tick`, `create_mail`, `populate`, `attack_self`): почта копится каждый второй тик экономики, грузится в ящик на шаттл при вылете с ЦК (не на красном и дельта-коде), 70% писем/30% конвертов, адресат — живой член экипажа (имя, цвет отдела, общие и должностные `mail_goodies`, спавнеры разворачиваются), остальное — спам; вскрывает только адресат (1.5 с), с письмами шаттл не улетает; `// shortcut:` нет сортировки дисполсалами (тег назначения на письме), подарков квирков и праздников, марок, выходного в воскресенье, прилагательных в именах спама
 
 ### Почтовый ящик, сумка почтальона и почтовая забастовка
 Ящик `crate/mail` с письмами, сумка `bag/mail`; событие «почтовая забастовка» — особые письма.
 
 - **Код:** [`/obj/structure/closet/crate/mail`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/mail.dm#L255), [`/obj/item/storage/bag/mail`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/mail.dm#L349), [`/obj/structure/closet/crate/mail/full/mail_strike`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/mail.dm#L330)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/cargo/mail.rs` (`create_mail`, `populate`): ящик `crate/mail/economy` с почтой (не больше вместимости); `// shortcut:` нет иконок ящика по содержимому, сумки почтальона; забастовка — событие займа шаттла, в ../events/
 
 ### Поддельные письма (mail counterfeit device)
 Устройство предателя/контрабанды: упаковать предмет в письмо на любое имя; при вскрытии не адресатом срабатывает ловушка.

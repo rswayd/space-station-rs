@@ -115,12 +115,55 @@ pub struct ExportDef {
     pub amount: ExportAmount,
 }
 
+/// A `/datum/bounty/item` whose procs are the base ones (`applies_to`, `ship`, ...), with the
+/// `New()` of the botany and slime groups (applied by the game).
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct BountyDef {
+    /// The type path.
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    /// `reward` in credits.
+    pub reward: f64,
+    pub required_count: u32,
+    /// `wanted_types`: (type, accepted) as the zebra typecache reads them.
+    pub wanted: Vec<(String, bool)>,
+    pub include_subtypes: bool,
+    pub allow_duplicate: bool,
+    pub global_exempt: bool,
+    pub unique: bool,
+    /// Botany: `multiplier`, `bonus_desc`, `foodtype`.
+    pub multiplier: f64,
+    pub bonus_desc: String,
+    pub foodtype: String,
+}
+
+/// What cargo needs of a `/datum/job`: the civilian bounty category and the mail goodies.
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct JobCargoDef {
+    pub title: String,
+    /// `bounty_types` (`CIV_JOB_*`).
+    pub bounty_types: u32,
+    /// `mail_goodies`: (type, weight).
+    pub mail_goodies: Vec<(String, u32)>,
+    pub exclusive_mail_goodies: bool,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct CargoData {
     /// By type path.
     pub packs: Vec<SupplyPackDef>,
     /// In type path order (the first that applies sells an item).
     pub exports: Vec<ExportDef>,
+    /// Item bounties the game can run, by type path.
+    #[serde(default)]
+    pub bounties: Vec<BountyDef>,
+    /// By job title.
+    #[serde(default)]
+    pub jobs: Vec<JobCargoDef>,
+    /// `/obj/item/mail` `generic_goodies`: (type, weight).
+    #[serde(default)]
+    pub mail_generic_goodies: Vec<(String, u32)>,
 }
 
 impl CargoData {
@@ -154,9 +197,57 @@ impl CargoData {
             })
             .collect();
         out.insert(MANIFEST_PAPER);
+        out.extend(self.mail_generic_goodies.iter().map(|(t, _)| t.as_str()));
+        out.extend(
+            self.jobs
+                .iter()
+                .flat_map(|j| j.mail_goodies.iter().map(|(t, _)| t.as_str())),
+        );
         out
     }
 }
+
+/// `/obj/item/bounty_cube`.
+pub const BOUNTY_CUBE: &str = "/obj/item/bounty_cube";
+/// `/obj/item/mail` and the envelope (`goodie_count = 2`).
+pub const MAIL: &str = "/obj/item/mail";
+pub const MAIL_ENVELOPE: &str = "/obj/item/mail/envelope";
+/// The supply shuttle's mail crate (`/obj/structure/closet/crate/mail/economy`).
+pub const MAIL_CRATE: &str = "/obj/structure/closet/crate/mail/economy";
+/// The bounty sheet the civilian console prints.
+pub const PAPER: &str = "/obj/item/paper";
+/// Junk mail contents (`junk_mail()`): the plain one, then the `prob(25)` specials with their
+/// letter names (`%A`: a random adjective).
+pub const JUNK_MAIL: [(&str, &str); 5] = [
+    ("/obj/item/paper/fluff/junkmail_generic", ""),
+    ("/obj/item/paper/pamphlet/gateway", "for %A adventurers"),
+    (
+        "/obj/item/paper/pamphlet/violent_video_games",
+        "for the truth about the arcade centcom doesn't want to hear",
+    ),
+    (
+        "/obj/item/paper/fluff/junkmail_redpill",
+        "for those feeling %A working at Nanotrasen",
+    ),
+    (
+        "/obj/effect/decal/cleanable/ash",
+        "with INCREDIBLY IMPORTANT ARTIFACT- DELIVER TO SCIENCE DIVISION. HANDLE WITH CARE.",
+    ),
+];
+/// Fixed types the game spawns for bounties and mail (the converter keeps the ones the
+/// dump has; [`CargoData::spawned_types`] are the data-driven ones).
+pub const RUNTIME_TYPES: [&str; 10] = [
+    BOUNTY_CUBE,
+    MAIL,
+    MAIL_ENVELOPE,
+    MAIL_CRATE,
+    PAPER,
+    JUNK_MAIL[0].0,
+    JUNK_MAIL[1].0,
+    JUNK_MAIL[2].0,
+    JUNK_MAIL[3].0,
+    JUNK_MAIL[4].0,
+];
 
 fn text(v: Option<&Value>) -> String {
     v.and_then(Value::as_str).unwrap_or_default().to_owned()
@@ -226,7 +317,109 @@ pub fn resolve(types: &DmTypes) -> CargoData {
         .into_iter()
         .filter_map(|p| export(types, p))
         .collect();
-    CargoData { packs, exports }
+    let mut bounty_paths: Vec<&str> = types
+        .types
+        .keys()
+        .map(String::as_str)
+        .filter(|p| is_under(p, BOUNTY_ITEM) && *p != BOUNTY_ITEM)
+        .collect();
+    bounty_paths.sort_unstable();
+    let bounties = bounty_paths
+        .into_iter()
+        .filter_map(|p| bounty(types, p))
+        .collect();
+    let mut job_paths: Vec<&str> = types
+        .types
+        .keys()
+        .map(String::as_str)
+        .filter(|p| is_under(p, JOB_ROOT) && *p != JOB_ROOT)
+        .collect();
+    job_paths.sort_unstable();
+    let jobs = job_paths
+        .into_iter()
+        .filter_map(|p| job(types, p))
+        .collect();
+    CargoData {
+        packs,
+        exports,
+        bounties,
+        jobs,
+        mail_generic_goodies: weighted(types, types.resolved(MAIL, "generic_goodies")),
+    }
+}
+
+const BOUNTY_ITEM: &str = "/datum/bounty/item";
+/// Groups whose own `New()` the game applies (`description`, `reward`, `required_count`).
+pub const BOUNTY_NEW_ROOTS: [&str; 2] = ["/datum/bounty/item/botany", "/datum/bounty/item/slime"];
+const JOB_ROOT: &str = "/datum/job";
+
+/// An assoc list of known types to weights (`|| 1` for a missing weight, as `pick_weight`).
+fn weighted(types: &DmTypes, v: Option<&Value>) -> Vec<(String, u32)> {
+    list(v)
+        .into_iter()
+        .filter_map(|(k, w)| {
+            let t = path(Some(k)).filter(|t| types.types.contains_key(t))?;
+            let w = w.and_then(Value::as_f64).unwrap_or(1.0);
+            (w > 0.0).then_some((t, w as u32))
+        })
+        .collect()
+}
+
+/// A bounty with only the base procs; others compute what they want in code.
+fn bounty(types: &DmTypes, p: &str) -> Option<BountyDef> {
+    let custom = types.chain(p).take_while(|t| *t != BOUNTY_ITEM).any(|t| {
+        types.types[t]
+            .procs
+            .iter()
+            .any(|proc| !(proc == "New" && BOUNTY_NEW_ROOTS.contains(&t)))
+    });
+    if custom {
+        return None;
+    }
+    // `zebra_typecacheof`: the value decides; a plain entry counts as wanted.
+    let wanted: Vec<(String, bool)> = list(types.resolved(p, "wanted_types"))
+        .into_iter()
+        .filter_map(|(k, v)| {
+            let t = path(Some(k)).filter(|t| types.types.contains_key(t))?;
+            Some((t, v.and_then(Value::as_f64).is_none_or(|n| n != 0.0)))
+        })
+        .collect();
+    if !wanted.iter().any(|(_, w)| *w) {
+        return None;
+    }
+    let flag = |var: &str| num(types.resolved(p, var)) != 0.0;
+    let count = num(types.resolved(p, "required_count"));
+    Some(BountyDef {
+        id: p.to_owned(),
+        name: text(types.resolved(p, "name")),
+        description: text(types.resolved(p, "description")),
+        reward: num(types.resolved(p, "reward")),
+        required_count: if count >= 1.0 { count as u32 } else { 1 },
+        wanted,
+        include_subtypes: types
+            .resolved(p, "include_subtypes")
+            .and_then(Value::as_f64)
+            .is_none_or(|n| n != 0.0),
+        allow_duplicate: flag("allow_duplicate"),
+        global_exempt: flag("global_exempt"),
+        unique: flag("unique"),
+        multiplier: num(types.resolved(p, "multiplier")),
+        bonus_desc: text(types.resolved(p, "bonus_desc")),
+        foodtype: text(types.resolved(p, "foodtype")),
+    })
+}
+
+fn job(types: &DmTypes, p: &str) -> Option<JobCargoDef> {
+    let title = text(types.resolved(p, "title"));
+    if title.is_empty() {
+        return None;
+    }
+    Some(JobCargoDef {
+        title,
+        bounty_types: num(types.resolved(p, "bounty_types")) as u32,
+        mail_goodies: weighted(types, types.resolved(p, "mail_goodies")),
+        exclusive_mail_goodies: num(types.resolved(p, "exclusive_mail_goodies")) != 0.0,
+    })
 }
 
 fn pack(types: &DmTypes, p: &str) -> Option<SupplyPackDef> {
@@ -532,6 +725,79 @@ mod tests {
         let spawned = data.spawned_types();
         assert!(spawned.contains("/obj/structure/closet/crate/engineering"));
         assert!(spawned.contains(MANIFEST_PAPER));
+    }
+
+    const BOUNTY_TYPES: &str = r##"{ "schema": 3, "types": {
+        "/datum": { "parent": null },
+        "/datum/bounty": { "parent": "/datum", "declared_vars": { "name": null,
+            "description": null, "reward": 1000, "allow_duplicate": 0, "global_exempt": 0,
+            "unique": 0 }, "procs": ["can_claim", "applies_to", "ship"] },
+        "/datum/bounty/item": { "parent": "/datum/bounty", "declared_vars": {
+            "required_count": 1, "wanted_types": null, "include_subtypes": 1 },
+            "procs": ["New", "applies_to", "ship"] },
+        "/datum/bounty/item/assistant": { "parent": "/datum/bounty/item" },
+        "/datum/bounty/item/assistant/soap": { "parent": "/datum/bounty/item/assistant",
+            "declared_vars": { "name": "Soap", "description": "Send soap.", "reward": 800,
+                "required_count": 3, "wanted_types": { "list": [
+                    { "assoc": [ { "path": "/obj/item/soap" }, 1 ] },
+                    { "assoc": [ { "path": "/obj/item/soap/fake" }, 0 ] } ] } } },
+        "/datum/bounty/item/assistant/toolbox": { "parent": "/datum/bounty/item/assistant",
+            "declared_vars": { "name": "Toolbox", "wanted_types": { "list": [
+                { "assoc": [ { "path": "/obj/item/soap" }, 1 ] } ] } },
+            "procs": ["applies_to"] },
+        "/datum/bounty/item/botany": { "parent": "/datum/bounty/item", "declared_vars": {
+            "multiplier": 0, "bonus_desc": null, "foodtype": "meal" }, "procs": ["New"] },
+        "/datum/bounty/item/botany/apple": { "parent": "/datum/bounty/item/botany",
+            "declared_vars": { "name": "Apples", "multiplier": 2, "include_subtypes": 0,
+                "wanted_types": { "list": [ { "assoc": [ { "path": "/obj/item/soap" }, 1 ] } ] } } },
+        "/datum/job": { "parent": "/datum", "declared_vars": { "title": "NOPE",
+            "bounty_types": 1, "mail_goodies": { "list": [] }, "exclusive_mail_goodies": 0 } },
+        "/datum/job/cook": { "parent": "/datum/job", "declared_vars": { "title": "Cook",
+            "bounty_types": 3, "mail_goodies": { "list": [
+                { "assoc": [ { "path": "/obj/item/soap" }, 15 ] },
+                { "assoc": [ { "path": "/obj/item/missing" }, 5 ] } ] } } },
+        "/obj/item/soap": { "parent": "/datum" },
+        "/obj/item/soap/fake": { "parent": "/obj/item/soap" },
+        "/obj/item/mail": { "parent": "/datum", "declared_vars": { "generic_goodies": {
+            "list": [ { "assoc": [ { "path": "/obj/item/soap" }, 25 ] } ] } } }
+    } }"##;
+
+    #[test]
+    fn bounties_and_job_mail_from_the_dump() {
+        let types = DmTypes::parse(BOUNTY_TYPES.as_bytes()).unwrap();
+        let data = resolve(&types);
+        let ids: Vec<&str> = data.bounties.iter().map(|b| b.id.as_str()).collect();
+        assert_eq!(
+            ids,
+            [
+                "/datum/bounty/item/assistant/soap",
+                "/datum/bounty/item/botany/apple"
+            ],
+            "own procs and empty wanted lists are left out; botany's New() is the game's"
+        );
+        let soap = &data.bounties[0];
+        assert_eq!(soap.reward, 800.0);
+        assert_eq!(soap.required_count, 3);
+        assert!(soap.include_subtypes);
+        assert_eq!(
+            soap.wanted,
+            vec![
+                ("/obj/item/soap".into(), true),
+                ("/obj/item/soap/fake".into(), false)
+            ]
+        );
+        let apple = &data.bounties[1];
+        assert!(!apple.include_subtypes);
+        assert_eq!((apple.multiplier, apple.foodtype.as_str()), (2.0, "meal"));
+        assert_eq!(data.jobs.len(), 1, "the root is not a job");
+        let cook = data.jobs.iter().find(|j| j.title == "Cook").unwrap();
+        assert_eq!(cook.bounty_types, 3);
+        assert_eq!(cook.mail_goodies, vec![("/obj/item/soap".into(), 15)]);
+        assert_eq!(
+            data.mail_generic_goodies,
+            vec![("/obj/item/soap".into(), 25)]
+        );
+        assert!(data.spawned_types().contains("/obj/item/soap"));
     }
 
     #[test]

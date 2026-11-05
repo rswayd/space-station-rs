@@ -12,6 +12,10 @@ use serde::{Deserialize, Serialize};
 use ss13_tgui::UiInterface;
 use ss13_tgui::interfaces::vending::ProductIcon;
 
+#[cfg(feature = "server")]
+pub mod bounty;
+#[cfg(feature = "client")]
+pub mod bounty_client;
 #[cfg(feature = "client")]
 pub mod client;
 #[cfg(feature = "server")]
@@ -20,6 +24,8 @@ pub mod console;
 pub mod economy;
 #[cfg(feature = "server")]
 pub mod export;
+#[cfg(feature = "server")]
+pub mod mail;
 #[cfg(feature = "server")]
 pub mod scanner;
 #[cfg(feature = "server")]
@@ -39,6 +45,8 @@ impl bevy::prelude::Plugin for CargoServerPlugin {
             stock_market::StockMarketPlugin,
             supply::SupplyPlugin,
             console::ConsolePlugin,
+            bounty::BountyPlugin,
+            mail::MailPlugin,
         ));
     }
 }
@@ -172,3 +180,64 @@ pub const REASON: &str = "reason";
 /// The request console's budget: present and not `"0"`, the requester's department pays (tg asks
 /// "Which department are you requesting this for?" with `tgui_alert`).
 pub const DEPARTMENT: &str = "department";
+
+/// tgui `CivCargoHoldTerminal`: the civilian bounty console (`bounty` on the server,
+/// `bounty_client` draws it).
+pub struct CivBountyUi;
+
+impl UiInterface for CivBountyUi {
+    const NAME: &'static str = "CivCargoHoldTerminal";
+    type Data = CivBountyData;
+    type StaticData = ();
+}
+
+/// A `listBounty` entry: a station-wide bounty.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct SharedBounty {
+    pub name: String,
+    pub description: String,
+    pub reward: f64,
+    pub shipped: u32,
+    pub maximum: u32,
+    pub claimed: bool,
+    pub priority: bool,
+    pub unique: bool,
+}
+
+/// A bounty to pick (`id_bounty_names`, `id_bounty_infos`, `id_bounty_values`).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct BountyChoice {
+    pub name: String,
+    pub info: String,
+    /// The holder's cut.
+    pub value: f64,
+}
+
+/// `/obj/machinery/computer/piratepad_control/civilian/ui_data`.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct CivBountyData {
+    pub pad: bool,
+    pub sending: bool,
+    pub status_report: String,
+    pub id_inserted: bool,
+    /// The inserted account's bounty: description, `print_required()`, the holder's cut.
+    pub id_bounty_info: Option<String>,
+    pub id_bounty_num: String,
+    pub id_bounty_value: f64,
+    pub picking: bool,
+    pub choices: Vec<BountyChoice>,
+    pub list_bounty: Vec<SharedBounty>,
+    pub claimed_bounties: u32,
+}
+
+pub const RECALC: &str = "recalc";
+pub const STOP: &str = "stop";
+pub const PICK: &str = "pick";
+pub const BOUNTY: &str = "bounty";
+pub const EJECT: &str = "eject";
+pub const UPDATE_LIST: &str = "update_list";
+pub const PRINT: &str = "print";
+/// `send`'s param: the station bounties instead of the personal one.
+pub const GLOBAL: &str = "global";
+/// `pick`'s param: 1-based.
+pub const VALUE: &str = "value";

@@ -550,6 +550,10 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 Some(item)
                     if hand == inventory.active
                         && crate::disposals::attack_self(world, client, mob, item) => {}
+                // A letter is opened by its recipient.
+                Some(item)
+                    if hand == inventory.active
+                        && crate::cargo::mail::attack_self(world, client, mob, item) => {}
                 // The nuclear uplink opens, a pinpointer toggles.
                 Some(item)
                     if hand == inventory.active
@@ -1043,6 +1047,10 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 // tg `attackby` of a storage item: the held item goes in.
                 Some(held) if world.get::<crate::storage::Storage>(target).is_some() => {
                     crate::storage::insert_from_hand(world, held, target);
+                }
+                // tg `item_interaction` of the civilian bounty console: an ID card goes in.
+                Some(held)
+                    if crate::cargo::bounty::item_interaction(world, client, mob, held, target) => {
                 }
                 // tg `interact_with_atom` of the universal scanner: an export scan.
                 Some(held)

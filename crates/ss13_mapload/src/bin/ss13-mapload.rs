@@ -170,11 +170,12 @@ fn convert_cmd(config: &MapLoadPlugin, mut map_dirs: Vec<PathBuf>) -> anyhow::Re
             .map(str::to_owned),
     );
     let cargo = ss13_mapload::cargo::resolve(&types);
-    // Supply crates, their contents and manifests are spawned at runtime.
+    // Supply crates, their contents and manifests, bounty cubes and mail are spawned at runtime.
     used.extend(
         cargo
             .spawned_types()
             .into_iter()
+            .chain(ss13_mapload::cargo::RUNTIME_TYPES)
             .filter(|p| types.types.contains_key(*p))
             .map(str::to_owned),
     );

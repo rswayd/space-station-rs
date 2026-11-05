@@ -793,7 +793,7 @@ fn metastation_supply() {
             packs
                 .packs
                 .iter()
-                .position(|p| ss13_game::cargo::supply::orderable(p, false))
+                .position(|p| ss13_game::cargo::supply::orderable(p, false, false))
         })
         .unwrap();
     {
