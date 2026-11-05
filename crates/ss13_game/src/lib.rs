@@ -351,6 +351,8 @@ pub mod strip;
 pub mod tables;
 #[cfg(feature = "server")]
 pub mod taser;
+#[cfg(feature = "server")]
+pub mod telecomms;
 #[cfg(feature = "testing")]
 pub mod testing;
 #[cfg(feature = "server")]

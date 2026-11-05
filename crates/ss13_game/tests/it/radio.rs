@@ -449,3 +449,82 @@ fn communications_blackout_silences_headsets() {
     s.say(a, "; снова в эфире");
     s.run_until("headsets work again", |s| s.radio(b, "Снова в эфире"));
 }
+
+/// The telecomms machines (`ss13_game::telecomms`), spawned as a map would: a complete chain
+/// passes headset speech; with the processor off the words come out garbled; with the hub off
+/// headsets are silent.
+#[test]
+fn telecomms_route_and_garble_speech() {
+    use ss13_game::telecomms::Telecomms;
+    use ss13_mapload::DmObj;
+    let mut s = Station::start("telecomms_route_and_garble_speech", 2);
+    s.run_until("bodies settle", |s| {
+        (0..2).all(|p| s.server.world().get::<EarsWorn>(s.mob(p)).is_some())
+    });
+    let root = "/obj/machinery/telecomms";
+    let mut machines = Vec::new();
+    for (i, path) in [
+        "receiver/preset_right",
+        "bus/preset_four",
+        "processor/preset_four",
+        "server/presets/common",
+        "hub/preset",
+        "broadcaster/preset_left",
+        "message_server/preset",
+    ]
+    .iter()
+    .enumerate()
+    {
+        let obj = DmObj {
+            path: format!("{root}/{path}"),
+            ..default()
+        };
+        let pos = TilePos::new(2 + i as i32, 1, 1);
+        machines.push(s.server.world_mut().spawn((obj, pos)).id());
+    }
+    s.run_until("the machines autolink", |s| {
+        let world = s.server.world();
+        machines.iter().all(|&m| {
+            world
+                .get::<Telecomms>(m)
+                .is_some_and(|t| !t.links.is_empty())
+        })
+    });
+    let names: Vec<String> = (0..2).map(|p| s.name(p)).collect();
+    s.say(0, "; через телекомы");
+    s.run_until("the chain passes it", |s| {
+        s.radio(
+            1,
+            &format!("[Общий] {} говорит, \"Через телекомы\"", names[0]),
+        )
+    });
+
+    // The processor is switched off: the bus sends the compressed voice on.
+    s.server
+        .world_mut()
+        .get_mut::<Telecomms>(machines[2])
+        .unwrap()
+        .toggled = false;
+    s.tick();
+    s.say(0, "; шифровка сломана совсем");
+    let head = format!("[Общий] {} говорит, \"", names[0]);
+    s.run_until("a garbled line arrives", |s| {
+        let received = &s.players[1].app.world().resource::<Received>().0;
+        received.iter().any(|(channel, line)| {
+            *channel == ChatChannel::Radio
+                && line.contains(&head)
+                && !line.contains("Через телекомы")
+        })
+    });
+    assert!(!s.radio(1, "Шифровка сломана совсем"), "garbled");
+
+    // The hub is off: nothing reaches the headsets.
+    s.server
+        .world_mut()
+        .get_mut::<Telecomms>(machines[4])
+        .unwrap()
+        .toggled = false;
+    s.tick();
+    s.say(0, "; эфир молчит");
+    s.hold(1.0, "headsets stay silent", |s| !s.radio(1, "Эфир молчит"));
+}

@@ -5,7 +5,7 @@
 Предмет-радио: включено/выключено, частота, приём и передача, `canhear_range`, специальные каналы (Синдикат, ЦК, бинарный); речь в радио идёт через телекоммуникации или напрямую (`subspace_transmission = FALSE`), сообщение раскрашивается по каналу.
 
 - **Код:** [`/obj/item/radio`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/devices/radio/radio.dm#L3), [`proc/talk_into_impl()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/devices/radio/radio.dm#L310), [`/datum/signal/subspace/vocal/broadcast()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/telecomms/broadcasting.dm#L119)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/radio.rs`, `crates/ss13_chat/src/radio.rs`: приём и передача на всех радио, цвета каналов, шёпот, призраки слышат всё; нет телекомов (всё доходит в пределах z-уровня), сжатия сигнала, проверки видимости
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/radio.rs`, `crates/ss13_chat/src/radio.rs`: приём и передача на всех радио, цвета каналов, шёпот, призраки слышат всё; передача через телекомы (`crate::telecomms`: уровни вещания, сжатие и искажение, `backup_transmission` не-subspace радио, `TRANSMISSION_SUPERSPACE` радио ЦК); нет проверки видимости (`get_hearers_in_LOS`), задержки резервной передачи 2 с
 
 ### Гарнитуры (headset)
 Гарнитуры отделов и глав (две ячейки под ключи у глав), бинарная и синдикатовская, «громкий режим» командных гарнитур (`use_command`), защита ушей у bowman-гарнитур.
