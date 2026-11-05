@@ -167,6 +167,30 @@ pub struct ChemServerPlugin;
 
 impl Plugin for ChemServerPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        app.add_click_handler(ClickPhase::AttackSelf, 1100, |w, c| {
+            crate::chem::attack_self(w, c.client, c.target)
+        });
+        // tg `interact_with_atom` of the active hand's container on the other hand's.
+        app.add_click_handler(ClickPhase::OtherHand, 1400, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::chem::item_interaction(
+                    w,
+                    c.client,
+                    c.mob,
+                    h,
+                    c.target,
+                    ss13_shared::protocol::ClickModifiers::default(),
+                )
+            })
+        });
+        // tg `interact_with_atom` of reagent containers (pour, drink, inject, splash).
+        app.add_click_handler(ClickPhase::HeldOnTarget, 3700, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::chem::item_interaction(w, c.client, c.mob, h, c.target, c.modifiers)
+            })
+        });
         app.init_resource::<ReagentsClock>()
             .add_observer(create_container_reagents)
             .add_observer(create_mob_reagents)

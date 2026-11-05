@@ -39,6 +39,12 @@ pub struct BarsignPlugin;
 
 impl Plugin for BarsignPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // tg `attack_hand` of a bar sign: pick the sign.
+        app.add_click_handler(ClickPhase::EmptyHand, 1100, |w, c| {
+            crate::barsign::interact(w, c.client, c.mob, c.target)
+        });
         app.add_systems(Startup, setup_mapped)
             .add_systems(
                 Update,

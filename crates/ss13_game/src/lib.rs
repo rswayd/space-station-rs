@@ -186,6 +186,8 @@ pub mod chem_heater;
 pub mod chem_master;
 #[cfg(feature = "server")]
 pub mod click;
+#[cfg(feature = "server")]
+pub mod click_handlers;
 #[cfg(feature = "client")]
 pub mod client;
 #[cfg(feature = "server")]

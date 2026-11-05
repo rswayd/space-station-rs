@@ -556,6 +556,12 @@ pub struct VisionServerPlugin;
 
 impl Plugin for VisionServerPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // A welding visor flips up or down.
+        app.add_click_handler(ClickPhase::AttackSelf, 800, |w, c| {
+            crate::vision::visor_attack_self(w, c.client, c.mob, c.target)
+        });
         app.register_ui::<FullscreenHudUi>().add_systems(
             Update,
             (tick_vision, sync_fullscreens)

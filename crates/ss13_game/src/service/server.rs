@@ -27,6 +27,28 @@ pub struct ServiceServerPlugin;
 
 impl Plugin for ServiceServerPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // Paper and books are read, dice rolled, horns honked.
+        app.add_click_handler(ClickPhase::AttackSelf, 3000, |w, c| {
+            crate::service::server::attack_self(w, c.client, c.mob, c.target)
+        });
+        // A pen or stamp on the paper in the other hand.
+        app.add_click_handler(ClickPhase::OtherHand, 900, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::service::server::item_interaction(w, c.client, c.mob, h, c.target)
+            })
+        });
+        // tg `attack_hand` of paper bins, bookcases and desk bells.
+        app.add_click_handler(ClickPhase::EmptyHand, 3200, |w, c| {
+            crate::service::server::interact(w, c.client, c.mob, c.target)
+        });
+        // Pens, stamps, the labeler, books, the bible, horns.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 1700, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::service::server::item_interaction(w, c.client, c.mob, h, c.target)
+            })
+        });
         app.register_ui::<PaperSheetUi>()
             .register_ui::<MarkdownViewerUi>()
             .init_resource::<super::religion::Religion>()

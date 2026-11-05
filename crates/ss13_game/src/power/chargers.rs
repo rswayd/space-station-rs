@@ -78,6 +78,18 @@ pub struct ChargersPlugin;
 
 impl Plugin for ChargersPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // tg `attack_hand` of cell chargers and rechargers: the cell or device out.
+        app.add_click_handler(ClickPhase::EmptyHand, 1900, |w, c| {
+            crate::power::chargers::interact(w, c.client, c.mob, c.target)
+        });
+        // tg `item_interaction` of cell chargers (cells) and rechargers (batons).
+        app.add_click_handler(ClickPhase::HeldOnTarget, 2800, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::power::chargers::item_interaction(w, c.client, c.mob, h, c.target)
+            })
+        });
         app.add_systems(Startup, init_chargers.after(super::init_power))
             .add_systems(
                 Update,

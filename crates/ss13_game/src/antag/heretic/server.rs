@@ -477,6 +477,22 @@ pub struct HereticPlugin;
 
 impl Plugin for HereticPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // A sickly blade breaks to teleport its heretic.
+        app.add_click_handler(ClickPhase::AttackSelf, 600, |w, c| {
+            crate::antag::heretic::server::attack_self(w, c.client, c.mob, c.target)
+        });
+        // A heretic's rune (the rituals), an influence (drained by a right click).
+        app.add_click_handler(ClickPhase::EmptyHand, 400, |w, c| {
+            crate::antag::heretic::server::interact(w, c.client, c.mob, c.target, c.modifiers.right)
+        });
+        // A pen draws a heretic's rune, the codex drains, the grasp erases a rune.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 1400, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::antag::heretic::server::item_interaction(w, c.client, c.mob, h, c.target)
+            })
+        });
         app.register_ui::<AntagInfoHereticUi>()
             .register_ui::<HereticListWindow>()
             .init_resource::<RealityTracker>()

@@ -92,6 +92,17 @@ pub struct StovePlugin;
 
 impl Plugin for StovePlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // A stove's burner, a soup pot's first ingredient out (right clicks).
+        app.add_click_handler(ClickPhase::EmptyHand, 1000, |w, c| {
+            crate::stove::interact(w, c.client, c.mob, c.target, c.modifiers.right)
+        });
+        app.add_click_handler(ClickPhase::HeldOnTarget, 2200, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::stove::item_interaction(w, c.client, c.mob, h, c.target, c.modifiers.right)
+            })
+        });
         app.init_resource::<SoupClock>()
             .add_systems(Startup, setup_mapped.after(crate::power::init_power))
             .add_systems(

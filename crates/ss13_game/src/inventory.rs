@@ -19,6 +19,9 @@
 //!   (tg `can_equip` rules) or takes the worn item into the empty hand (tg `attack_ui`);
 //!   `AltClickSlot` alt-clicks the item in a slot (a gas tank toggles internals).
 //!
+//! Every module's part of the click chain (tg `attack_self`, `attack_hand`, `item_interaction`)
+//! is a handler it registers in [`crate::click_handlers`]; the core steps stay here.
+//!
 //! The mob's look and HUD ([`HudData`], sent through tgui as [`InventoryHudUi`]) are recomputed
 //! only when its [`Inventory`] changes.
 
@@ -33,6 +36,7 @@ use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiParams, UiReject, UiSyst
 use ss13_world::{Density, Mover, SpatialIndex, WorldSystems};
 
 use crate::click::{ClickResolved, ResolveClicks};
+use crate::click_handlers::{self, AddClickHandler, ClickCtx, ClickPhase};
 use crate::doors::Door;
 use crate::health::Stat;
 use crate::hud::{HudData, HudIcon, InventoryHudUi};
@@ -345,6 +349,30 @@ pub struct InventoryServerPlugin;
 
 impl Plugin for InventoryServerPlugin {
     fn build(&self, app: &mut App) {
+        // The core steps of the click chain between the modules' hooks (priorities in
+        // `crate::click_handlers`).
+        // The other hand's storage opens or takes the active hand's item.
+        app.add_click_handler(ClickPhase::OtherHand, 500, |w, c| {
+            w.get::<crate::storage::Storage>(c.target).is_some() && {
+                crate::storage::click_storage(w, c.client, c.mob, c.target);
+                true
+            }
+        })
+        // A cyborg's module never leaves it (`TRAIT_NODROP`), nor does a `NoDrop` item.
+        .add_click_handler(ClickPhase::HeldOnTarget, 4600, |w, c| {
+            c.held.is_some_and(|held| {
+                w.get::<crate::silicon::cyborg::RobotModule>(held).is_some() || no_drop(w, held)
+            })
+        })
+        // tg `attackby` of a storage item: the held item goes in.
+        .add_click_handler(ClickPhase::HeldOnTarget, 4700, |w, c| {
+            c.held.is_some_and(|held| {
+                w.get::<crate::storage::Storage>(c.target).is_some() && {
+                    crate::storage::insert_from_hand(w, held, c.target);
+                    true
+                }
+            })
+        });
         app.register_ui::<InventoryHudUi>()
             .add_systems(
                 Update,
@@ -475,266 +503,29 @@ fn apply(world: &mut World, client: Entity, action: Action) {
         Action::Slot(slot @ (InventorySlot::LeftHand | InventorySlot::RightHand)) => {
             let hand = usize::from(slot == InventorySlot::RightHand);
             // The item in the other hand is clicked, not the slot (tg draws held items over
-            // their slots): a storage opens or takes the active hand's item.
-            match inventory.hands[hand] {
-                // A MODsuit control unit in the other hand: modules, cores, cells, tools and IDs
-                // with the active hand, its cell with an empty one (before its storage).
-                Some(item)
-                    if hand != inventory.active
-                        && crate::modsuit::server::hand_interaction(
-                            world,
-                            client,
-                            mob,
-                            inventory.active_item(),
-                            item,
-                        ) => {}
-                // A bot part on a bot assembly (or what starts one) in the other hand: before
-                // storage, as tg `medkit/tool_act` takes a robot arm before its storage.
-                Some(item)
-                    if hand != inventory.active
-                        && inventory.active_item().is_some_and(|held| {
-                            crate::bots::construction::item_interaction(
-                                world, client, mob, held, item,
-                            )
-                        }) => {}
-                // The forensic scanner scans the item in the other hand.
-                Some(item)
-                    if hand != inventory.active
-                        && inventory.active_item().is_some_and(|held| {
-                            crate::forensics::server::item_interaction(
-                                world, client, mob, held, item,
-                            )
-                        }) => {}
-                // An organ loads the autosurgeon in the other hand, a screwdriver unloads it.
-                Some(item)
-                    if hand != inventory.active
-                        && inventory.active_item().is_some_and(|held| {
-                            crate::medical::cyberimps::item_interaction(
-                                world, client, mob, held, item,
-                            )
-                        }) => {}
-                Some(item)
-                    if hand != inventory.active
-                        && world.get::<crate::storage::Storage>(item).is_some() =>
-                {
-                    crate::storage::click_storage(world, client, mob, item);
+            // their slots): the active hand's item is used (tg `attack_self`), the other hand's
+            // takes the active hand's item or opens (a storage); else the hand is selected.
+            if let Some(item) = inventory.hands[hand] {
+                let ctx = ClickCtx {
+                    client,
+                    mob,
+                    mob_pos,
+                    held: inventory.active_item(),
+                    target: item,
+                    pos: mob_pos,
+                    modifiers: ClickModifiers::default(),
+                    active_hand: inventory.active,
+                };
+                let phase = if hand == inventory.active {
+                    ClickPhase::AttackSelf
+                } else {
+                    ClickPhase::OtherHand
+                };
+                if click_handlers::run(world, phase, &ctx) {
+                    return;
                 }
-                // tg `attack_self` of the held item: an analyzer scans the user's turf, a welder
-                // lights or goes out.
-                Some(item)
-                    if hand == inventory.active && crate::atmos::is_analyzer(world, item) =>
-                {
-                    crate::atmos::analyze_self(world, client, item, mob_pos);
-                }
-                Some(item)
-                    if hand == inventory.active
-                        && crate::tools::attack_self(world, client, mob, item) => {}
-                // A holosign projector clears its signs.
-                Some(item)
-                    if hand == inventory.active
-                        && crate::holosign::attack_self(world, client, item) => {}
-                // The forensic scanner's window, an evidence bag empties.
-                Some(item)
-                    if hand == inventory.active
-                        && crate::forensics::server::attack_self(world, client, mob, item) => {}
-                // The ritual dagger's rune list, a blood magic aura cast on the user.
-                Some(item)
-                    if hand == inventory.active
-                        && crate::antag::cult::server::attack_self(world, client, mob, item) => {}
-                // A sickly blade breaks to teleport its heretic.
-                Some(item)
-                    if hand == inventory.active
-                        && crate::antag::heretic::server::attack_self(world, client, mob, item) => {
-                }
-                // The spellbook opens, the scroll of teleportation and the contract ask.
-                Some(item)
-                    if hand == inventory.active
-                        && crate::antag::wizard::server::attack_self(world, client, mob, item) => {}
-                // A welding visor flips up or down.
-                Some(item)
-                    if hand == inventory.active
-                        && crate::vision::visor_attack_self(world, client, mob, item) => {}
-                // A baton toggles, a flash flashes around.
-                Some(item)
-                    if hand == inventory.active
-                        && crate::security::attack_self(world, client, mob, item) => {}
-                // A gun racks, ejects, unloads or switches its fire mode.
-                Some(item)
-                    if hand == inventory.active
-                        && crate::guns::attack_self(world, client, mob, item) => {}
-                Some(item)
-                    if hand == inventory.active
-                        && crate::chem::attack_self(world, client, item) => {}
-                // A health analyzer switches between health and wound scans.
-                Some(item)
-                    if hand == inventory.active
-                        && crate::medical::attack_self(world, client, item) => {}
-                // A destination tagger opens its window, a parcel is unwrapped.
-                Some(item)
-                    if hand == inventory.active
-                        && crate::disposals::attack_self(world, client, mob, item) => {}
-                // A letter is opened by its recipient.
-                Some(item)
-                    if hand == inventory.active
-                        && crate::cargo::mail::attack_self(world, client, mob, item) => {}
-                // The nuclear uplink opens, a pinpointer toggles.
-                Some(item)
-                    if hand == inventory.active
-                        && crate::antag::nukeop::server::attack_self(world, client, mob, item) => {}
-                // An energy blade toggles, an agent card is shown or forged.
-                Some(item)
-                    if hand == inventory.active
-                        && crate::antag::syndie_items::attack_self(world, client, mob, item) => {}
-                // A pair pinpointer toggles.
-                Some(item)
-                    if hand == inventory.active
-                        && crate::devices::attack_self(world, client, mob, item) => {}
-                // A C-4 charge asks for its timer.
-                Some(item)
-                    if hand == inventory.active
-                        && crate::explosions::sources::c4_attack_self(world, client, mob, item) => {
-                }
-                // Assemblies open their windows or act, holders use their parts; a chemical
-                // grenade casing primes or opens its wires, a transfer valve its window.
-                Some(item)
-                    if hand == inventory.active
-                        && crate::assemblies::server::attack_self(world, client, mob, item) => {}
-                // A grenade is armed.
-                Some(item)
-                    if hand == inventory.active
-                        && crate::grenades::attack_self(world, client, mob, item) => {}
-                // Rack parts build a rack.
-                Some(item)
-                    if hand == inventory.active
-                        && crate::tables::attack_self(world, client, mob, item) => {}
-                // An item chair is set down.
-                Some(item)
-                    if hand == inventory.active
-                        && crate::furniture::attack_self(world, client, mob, item) => {}
-                // The RPD opens its window.
-                Some(item)
-                    if hand == inventory.active
-                        && crate::atmos_machinery::rpd::attack_self(world, client, mob, item) => {}
-                // The experi-scanner opens its experiment configuration.
-                Some(item)
-                    if hand == inventory.active
-                        && crate::science::experi_scanner::attack_self(
-                            world, client, mob, item,
-                        ) => {}
-                // A pipe fitting turns clockwise.
-                Some(item)
-                    if hand == inventory.active
-                        && crate::atmos_machinery::fitting::attack_self(world, item) => {}
-                // A PDA turns on and opens its NtOS window.
-                Some(item)
-                    if hand == inventory.active
-                        && crate::modpc::pda::attack_self(world, client, mob, item) => {}
-                // An implanter and an implant case in the hands swap the implant.
-                Some(item)
-                    if hand != inventory.active
-                        && inventory.active_item().is_some_and(|held| {
-                            crate::implants::item_interaction(world, client, mob, held, item)
-                        }) => {}
-                // A radio opens its window.
-                Some(item)
-                    if hand == inventory.active
-                        && crate::radio::attack_self(world, client, mob, item) => {}
-                // Assemblies, holders, casings, valves and tanks in the other hand
-                // (`crate::assemblies`).
-                Some(item)
-                    if hand != inventory.active
-                        && inventory.active_item().is_some_and(|held| {
-                            crate::assemblies::server::item_interaction(
-                                world, client, mob, held, item,
-                            )
-                        }) => {}
-                // A screwdriver or multitool sets the fuse of the grenade in the other hand.
-                Some(item)
-                    if hand != inventory.active
-                        && inventory.active_item().is_some_and(|held| {
-                            crate::grenades::item_interaction(world, client, mob, held, item)
-                        }) => {}
-                // A martial arts manual or scroll is read.
-                Some(item)
-                    if hand == inventory.active
-                        && crate::martial::attack_self(world, client, mob, item) => {}
-                // A plant with liquid contents is squeezed (BandaStation).
-                Some(item)
-                    if hand == inventory.active
-                        && crate::botany::attack_self(world, client, mob, item) => {}
-                // Paper and books are read, dice rolled, horns honked (`crate::service`).
-                Some(item)
-                    if hand == inventory.active
-                        && crate::service::server::attack_self(world, client, mob, item) => {}
-                // A law module shows its laws and asks for its configurable text.
-                Some(item)
-                    if hand == inventory.active
-                        && crate::silicon::law_rack::attack_self(world, client, mob, item) => {}
-                // A pen or stamp on the paper in the other hand.
-                Some(item)
-                    if hand != inventory.active
-                        && inventory.active_item().is_some_and(|held| {
-                            crate::service::server::item_interaction(world, client, mob, held, item)
-                        }) => {}
-                // Telecrystals into the uplink, the agent card on the ID card, in the other
-                // hand.
-                Some(item)
-                    if hand != inventory.active
-                        && inventory.active_item().is_some_and(|held| {
-                            crate::antag::uplink::item_interaction(world, client, mob, held, item)
-                                || crate::antag::syndie_items::item_interaction(
-                                    world, client, mob, held, item,
-                                )
-                        }) => {}
-                // An ID card in the active hand goes into the PDA in the other.
-                Some(item)
-                    if hand != inventory.active
-                        && inventory.active_item().is_some_and(|held| {
-                            crate::modpc::pda::item_interaction(world, client, mob, held, item)
-                        }) => {}
-                // A tagger on a parcel, the package wrapper on an item, in the other hand.
-                Some(item)
-                    if hand != inventory.active
-                        && inventory.active_item().is_some_and(|held| {
-                            crate::disposals::mail_interaction(world, client, mob, held, item)
-                        }) => {}
-                // tg `interact_with_atom` of the active hand's container on the other hand's.
-                Some(item)
-                    if hand != inventory.active
-                        && inventory.active_item().is_some_and(|held| {
-                            crate::chem::item_interaction(
-                                world,
-                                client,
-                                mob,
-                                held,
-                                item,
-                                ClickModifiers::default(),
-                            )
-                        }) => {}
-                // A magazine or rounds into the other hand's gun.
-                Some(item)
-                    if hand != inventory.active
-                        && inventory.active_item().is_some_and(|held| {
-                            crate::guns::item_interaction(world, client, mob, held, item)
-                        }) => {}
-                // tg `/obj/item/gun/ballistic/attack_hand`: the other hand's magazine comes out.
-                Some(item)
-                    if hand != inventory.active
-                        && inventory.active_item().is_none()
-                        && crate::guns::attack_hand(world, client, mob, item) => {}
-                // tg `/obj/item/stack/attack_hand` from the other hand: one unit into the
-                // empty active hand.
-                Some(item)
-                    if hand != inventory.active
-                        && inventory.active_item().is_none()
-                        && crate::construction::split_into_hand(
-                            world,
-                            mob,
-                            item,
-                            inventory.active,
-                        ) => {}
-                _ => set_active(world, mob, hand),
             }
+            set_active(world, mob, hand);
         }
         // A cyborg's back slot is its model's module storage; it has no other slots.
         Action::Slot(slot)
@@ -819,398 +610,28 @@ fn apply(world: &mut World, client: Entity, action: Action) {
             {
                 crate::forensics::server::add_fingerprint(world, target, mob, false);
             }
+            let ctx = ClickCtx {
+                client,
+                mob,
+                mob_pos,
+                held: inventory.active_item(),
+                target,
+                pos,
+                modifiers,
+                active_hand: inventory.active,
+            };
+            // Module hooks first (`crate::click_handlers`), then picking up or placing.
             match inventory.active_item() {
-                // tg `attack_robot` -> `attack_ai`: a cyborg's empty hand opens machines.
-                None if crate::silicon::interact::attack_robot(world, client, mob, target) => {}
-                // tg `attack_robot`: a cyborg's empty hand picks nothing up.
-                None if crate::silicon::cyborg::inventory_action(
-                    world,
-                    client,
-                    mob,
-                    crate::silicon::cyborg::CyborgAction::EmptyHandClick,
-                ) => {}
-                // tg `attack_hand` of a cult rune: invoked.
-                None if crate::antag::cult::server::interact(world, client, mob, target) => {}
-                // A heretic's rune (the rituals), an influence (drained by a right click).
-                None if crate::antag::heretic::server::interact(
-                    world,
-                    client,
-                    mob,
-                    target,
-                    modifiers.right,
-                ) => {}
-                // tg `interact` / `attack_hand_secondary` of kitchen machines.
-                None if crate::kitchen::interact(world, client, mob, target, modifiers.right) => {}
-                // tg `attack_hand` of ovens, griddles and fryers; the soda and booze dispensers.
-                None if crate::cooking::interact(world, client, mob, target, modifiers.right) => {}
-                None if crate::smartfridge::interact(world, client, mob, target) => {}
-                // tg `attack_hand` of the gibber (a pulled human in, or start), its eject verb.
-                None if crate::gibber::interact(world, client, mob, target, modifiers.right) => {}
-                // tg `ui_interact` (the radial menu) and `attack_hand_secondary` of coffeemakers.
-                None if crate::coffee::interact(world, client, mob, target, modifiers.right) => {}
-                // A stove's burner, a soup pot's first ingredient out (right clicks).
-                None if crate::stove::interact(world, client, mob, target, modifiers.right) => {}
-                // tg `attack_hand` of a bar sign: pick the sign.
-                None if crate::barsign::interact(world, client, mob, target) => {}
-                // tg `interact` and `attack_hand_secondary` of the ice cream vat.
-                None if crate::icecream::interact(world, client, mob, target, modifiers.right) => {}
-                None if crate::chem_dispenser::interact(
-                    world,
-                    client,
-                    mob,
-                    target,
-                    modifiers.right,
-                ) => {}
-                None if crate::chem_master::interact(
-                    world,
-                    client,
-                    mob,
-                    target,
-                    modifiers.right,
-                ) => {}
-                None if crate::chem_heater::interact(
-                    world,
-                    client,
-                    mob,
-                    target,
-                    modifiers.right,
-                ) => {}
-                // tg `attack_hand` of hydroponics trays (harvest, dead plant, examine).
-                None if crate::botany::interact(world, client, mob, target, modifiers.right) => {}
-                // tg `attack_hand` / `attack_hand_secondary` of a ladder: climb up or down.
-                None if crate::multiz::interact(
-                    world,
-                    client,
-                    mob,
-                    None,
-                    target,
-                    modifiers.right,
-                ) => {}
-                // tg `attack_hand`/`click_alt` of atmos machines (windows, valves, tanks out).
-                None if crate::atmos_machinery::windows::interact(
-                    world, client, mob, target, modifiers,
-                ) => {}
-                // tg `attack_hand` of cell chargers and rechargers: the cell or device out.
-                None if crate::power::chargers::interact(world, client, mob, target) => {}
-                // tg `attack_hand(_secondary)` of wall mounts: fire alarms, light switches,
-                // buttons, cabinets.
-                None if crate::wallmount::interact(world, client, mob, target, modifiers) => {}
-                // tg `attack_hand` of an APC with its cover closed: its window.
-                None if crate::power::apc_ui::interact(world, client, mob, target) => {}
-                // tg `attack_hand` of the mech bay console: its window.
-                None if crate::mecha::bay::interact(world, client, mob, target) => {}
-                // tg `attack_hand` of a mech: in combat mode "Nothing happens".
-                None if crate::mecha::core::attack_hand(world, client, mob, target) => {}
-                // tg `attack_hand` of a stationary modular computer (the ID console).
-                None if crate::modpc::pda::console_interact(world, client, mob, target) => {}
-                // tg `attack_hand` of disposal bins (the `DisposalUnit` window).
-                None if crate::disposals::interact(world, client, mob, target, modifiers) => {}
-                // tg `attack_hand` of the DNA console (its window) and scanner (open/close).
-                None if crate::genetics::console::interact(world, client, mob, target) => {}
-                // tg `attack_hand` of tables and racks: a pulled mob onto it, flipping (right
-                // click), knocking a climber down, kicking a rack.
-                None if crate::tables::attack_hand(world, client, mob, target, modifiers) => {}
-                // tg `attack_hand` of a false wall: open or close it.
-                None if crate::falsewall::attack_hand(world, target) => {}
-                // Weak rock by hand; the ore box, ORM and mining console windows.
-                None if crate::mining::interact(world, client, mob, target) => {}
-                // tg `attack_holosign`: a swat.
-                None if crate::holosign::attack_hand(world, mob, target) => {}
-                // tg `attack_hand` of a sink: washing the hands or face.
-                None if crate::plumbing::interact(world, client, mob, target) => {}
-                // tg `attack_hand` of paper bins, bookcases and desk bells.
-                None if crate::service::server::interact(world, client, mob, target) => {}
-                // tg `attack_hand` of turrets and the turret control panel: their windows.
-                None if crate::defenses::server::interact(world, client, mob, target) => {}
-                // tg `ui_interact` of law racks.
-                None if crate::silicon::law_rack::interact(world, client, mob, target) => {}
-                None => pick_up(world, mob, target, inventory.active),
-                // Telecrystals into an active uplink (`load_tc`).
-                Some(held)
-                    if crate::antag::uplink::item_interaction(world, client, mob, held, target) => {
+                None => {
+                    if !click_handlers::run(world, ClickPhase::EmptyHand, &ctx) {
+                        pick_up(world, mob, target, inventory.active);
+                    }
                 }
-                // The sleepy pen on a mob, the agent card on an ID card.
-                Some(held)
-                    if crate::antag::syndie_items::item_interaction(
-                        world, client, mob, held, target,
-                    ) => {}
-                // tg `/obj/item/card/emag/interact_with_atom` on the families with an
-                // `emag_act` (`crate::emag`).
-                Some(held)
-                    if !modifiers.right
-                        && crate::emag::interact_with_atom(
-                            world,
-                            crate::tools::Actor {
-                                client,
-                                mob,
-                                item: Some(held),
-                            },
-                            target,
-                        ) => {}
-                // A MODsuit control unit: emags, modules, cores, cells, tools, IDs.
-                Some(held)
-                    if crate::modsuit::server::item_interaction(
-                        world, client, mob, held, target,
-                    ) => {}
-                // Assemblies, holders, casings, valves and tanks (`crate::assemblies`).
-                Some(held)
-                    if crate::assemblies::server::item_interaction(
-                        world, client, mob, held, target,
-                    ) => {}
-                // A screwdriver or multitool sets a grenade's fuse.
-                Some(held)
-                    if crate::grenades::item_interaction(world, client, mob, held, target) => {}
-                // An implanter on an implant case, a case on the implant pad.
-                Some(held)
-                    if crate::implants::item_interaction(world, client, mob, held, target) => {}
-                // Turrets, the turret control panel and cameras: IDs, tools, assemblies.
-                Some(held)
-                    if crate::defenses::server::item_interaction(
-                        world, client, mob, held, target, modifiers,
-                    ) => {}
-                // A module, screwdriver, welder or multitool on a law rack: its window.
-                Some(held)
-                    if crate::silicon::law_rack::item_interaction(
-                        world, client, mob, held, target,
-                    ) => {}
-                // The forensic scanner scans, an evidence bag takes the item.
-                Some(held)
-                    if crate::forensics::server::item_interaction(
-                        world, client, mob, held, target,
-                    ) => {}
-                // A C-4 charge is planted on what it touches; a welder refills from a fuel tank
-                // (or blows it up, lit).
-                Some(held)
-                    if crate::explosions::sources::c4_interact(
-                        world,
-                        crate::tools::Actor {
-                            client,
-                            mob,
-                            item: Some(held),
-                        },
-                        target,
-                    ) => {}
-                Some(held)
-                    if crate::explosions::sources::fueltank_welder_act(
-                        world,
-                        crate::tools::Actor {
-                            client,
-                            mob,
-                            item: Some(held),
-                        },
-                        target,
-                    ) => {}
-                // The ritual dagger scrapes a rune away; a blood magic aura on an object.
-                Some(held)
-                    if crate::antag::cult::server::item_interaction(
-                        world, client, mob, held, target,
-                    ) => {}
-                // A pen draws a heretic's rune, the codex drains, the grasp erases a rune.
-                Some(held)
-                    if crate::antag::heretic::server::item_interaction(
-                        world, client, mob, held, target,
-                    ) => {}
-                // Bot parts on bot assemblies and what starts them (`crate::bots`).
-                Some(held)
-                    if crate::bots::construction::item_interaction(
-                        world, client, mob, held, target,
-                    ) => {}
-                // Frames, and screwdrivers and crowbars on machines that come apart
-                // (`crate::machine_frame`): tool acts come before the machines' own handlers.
-                Some(held)
-                    if crate::machine_frame::item_interaction(world, client, mob, held, target) => {
+                Some(held) => {
+                    if !click_handlers::run(world, ClickPhase::HeldOnTarget, &ctx) {
+                        place(world, mob, held, target, pos, modifiers);
+                    }
                 }
-                // Pens, stamps, the labeler, books, the bible, horns (`crate::service`).
-                Some(held)
-                    if crate::service::server::item_interaction(
-                        world, client, mob, held, target,
-                    ) => {}
-                // tg `item_interaction` of kitchen machines (inserting), then food on a mob
-                // (eating) and tools on food (slicing); food has reagents, so before chem.
-                Some(held)
-                    if crate::kitchen::item_interaction(world, client, mob, held, target) => {}
-                Some(held)
-                    if crate::cooking::item_interaction(
-                        world,
-                        client,
-                        mob,
-                        held,
-                        target,
-                        modifiers.pixel,
-                    ) => {}
-                Some(held)
-                    if crate::smartfridge::item_interaction(world, client, mob, held, target) => {}
-                Some(held) if crate::coffee::item_interaction(world, client, mob, held, target) => {
-                }
-                Some(held)
-                    if crate::stove::item_interaction(
-                        world,
-                        client,
-                        mob,
-                        held,
-                        target,
-                        modifiers.right,
-                    ) => {}
-                Some(held)
-                    if crate::icecream::item_interaction(
-                        world,
-                        client,
-                        mob,
-                        held,
-                        target,
-                        modifiers.right,
-                    ) => {}
-                // A container into a chem dispenser (before pouring into it).
-                Some(held)
-                    if crate::chem_dispenser::item_interaction(
-                        world, client, mob, held, target,
-                    ) => {}
-                Some(held)
-                    if crate::chem_master::item_interaction(world, client, mob, held, target) => {}
-                Some(held)
-                    if crate::chem_heater::item_interaction(
-                        world, client, mob, held, target, modifiers,
-                    ) => {}
-                // tg `item_interaction` of wall mounts: a button pressed with an item, cabinets.
-                Some(held)
-                    if crate::wallmount::item_interaction(
-                        world, client, mob, held, target, modifiers,
-                    ) => {}
-                // tg `item_interaction` of cell chargers (cells) and rechargers (batons).
-                Some(held)
-                    if crate::power::chargers::item_interaction(
-                        world, client, mob, held, target,
-                    ) => {}
-                // tg `item_interaction`/`attackby` of exosuit things: the fabricator, mechs,
-                // chassis, wreckages.
-                Some(held)
-                    if crate::mecha::item_interaction(
-                        world, client, mob, held, target, modifiers,
-                    ) => {}
-                // Mining tools on rock, ore into the ORM or an ore box, a welder on ore.
-                Some(held) if crate::mining::item_interaction(world, client, mob, held, target) => {
-                }
-                // tg `item_interaction` of R&D machines: stacks into lathes, items into the
-                // destructive analyzer.
-                Some(held)
-                    if crate::science::item_interaction(world, client, mob, held, target) => {}
-                // tg `item_interaction` of trays, the seed extractor and the plant analyzer:
-                // before food (composting) and chem (pouring into a tray).
-                Some(held)
-                    if crate::botany::item_interaction(
-                        world, client, mob, held, target, modifiers,
-                    ) => {}
-                Some(held) if crate::food::item_interaction(world, client, mob, held, target) => {}
-                // tg `sink/item_interaction(_secondary)`: washing, emptying, a mop wetted.
-                Some(held)
-                    if crate::plumbing::item_interaction(
-                        world, client, mob, held, target, modifiers,
-                    ) => {}
-                // tg cleaner component of mops and soap, mop buckets, spray bottles.
-                Some(held)
-                    if crate::janitor::item_interaction(
-                        world, client, mob, held, target, modifiers,
-                    ) => {}
-                // tg `dnainjector/attack`.
-                Some(held)
-                    if crate::genetics::console::item_interaction(
-                        world,
-                        crate::tools::Actor {
-                            client,
-                            mob,
-                            item: Some(held),
-                        },
-                        held,
-                        target,
-                    ) => {}
-                // tg `interact_with_atom` of reagent containers (pour, drink, inject, splash).
-                Some(held)
-                    if crate::chem::item_interaction(
-                        world, client, mob, held, target, modifiers,
-                    ) => {}
-                // tg `interact_with_atom` of medical items on living mobs.
-                Some(held)
-                    if crate::medical::item_interaction(
-                        world, client, mob, held, target, modifiers,
-                    ) => {}
-                // tg `ladder/item_interaction(_secondary)`: out of combat mode, a climb.
-                Some(held)
-                    if !world
-                        .get::<crate::combat::CombatMode>(mob)
-                        .is_some_and(|c| c.0)
-                        && crate::multiz::interact(
-                            world,
-                            client,
-                            mob,
-                            Some(held),
-                            target,
-                            modifiers.right,
-                        ) => {}
-                // tg `item_interaction`/`wrench_act` of atmos machines (ports, tanks, IDs).
-                Some(held)
-                    if crate::atmos_machinery::windows::item_interaction(
-                        world, client, mob, held, target, modifiers,
-                    ) => {}
-                // tg `item_interaction_secondary` of the ID console: an ID into the second slot.
-                Some(held)
-                    if modifiers.right
-                        && crate::modpc::pda::item_interaction_secondary(
-                            world, client, mob, held, target,
-                        ) => {}
-                // tg `item_interaction` of disposal bins (items go in), parcels (tagging) and
-                // `interact_with_atom` of the package wrapper.
-                Some(held)
-                    if crate::disposals::item_interaction(
-                        world, client, mob, held, target, modifiers,
-                    ) => {}
-                // Tools on tables, frames and racks; a stack builds a table on a frame.
-                Some(held)
-                    if crate::tables::item_interaction(
-                        world, client, mob, held, target, modifiers,
-                    ) => {}
-                // tg `pre_attack` of the experi-scanner: a scan instead of the attack (living mobs
-                // are taken before melee, `crate::science::experi_scanner`).
-                Some(held)
-                    if world.get::<crate::health::Health>(target).is_none()
-                        && crate::science::experi_scanner::pre_attack(
-                            world, client, mob, held, target,
-                        ) => {}
-                // tg `base_item_interaction` and `attackby` come before storage and dropping.
-                Some(held)
-                    if crate::construction::item_interaction(
-                        world, client, mob, held, target, modifiers,
-                    ) => {}
-                // A cyborg's module never leaves it (`TRAIT_NODROP`), nor does a `NoDrop` item.
-                Some(held)
-                    if world
-                        .get::<crate::silicon::cyborg::RobotModule>(held)
-                        .is_some()
-                        || no_drop(world, held) => {}
-                // tg `attackby` of a storage item: the held item goes in.
-                Some(held) if world.get::<crate::storage::Storage>(target).is_some() => {
-                    crate::storage::insert_from_hand(world, held, target);
-                }
-                // tg `item_interaction` of the civilian bounty console: an ID card goes in.
-                Some(held)
-                    if crate::cargo::bounty::item_interaction(world, client, mob, held, target) => {
-                }
-                // tg `item_interaction` of the prisoner console: a prisoner ID goes in.
-                Some(held)
-                    if crate::brig::prisoner::item_interaction(
-                        world, client, mob, held, target,
-                    ) => {}
-                // tg `interact_with_atom` of the universal scanner: an export scan.
-                Some(held)
-                    if crate::cargo::scanner::item_interaction(world, client, held, target) => {}
-                // tg `interact_with_atom` of an analyzer: scans the clicked atom when it holds
-                // gas, else its turf.
-                Some(held) if crate::atmos::is_analyzer(world, held) => {
-                    crate::atmos::scan_target(world, client, held, target);
-                }
-                // tg `item_interaction` of a PDA with an ID card.
-                Some(held)
-                    if crate::modpc::pda::item_interaction(world, client, mob, held, target) => {}
-                Some(held) => place(world, mob, held, target, pos, modifiers),
             }
         }
     }

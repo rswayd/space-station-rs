@@ -256,6 +256,12 @@ pub struct RadioServerPlugin;
 
 impl Plugin for RadioServerPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // A radio opens its window.
+        app.add_click_handler(ClickPhase::AttackSelf, 2700, |w, c| {
+            crate::radio::attack_self(w, c.client, c.mob, c.target)
+        });
         app.add_plugins(crate::telecomms::TelecommsPlugin)
             .add_message::<Spoke>()
             .add_message::<SendChat>()

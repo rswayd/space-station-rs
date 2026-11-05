@@ -82,6 +82,7 @@ mod tables;
 mod teg;
 mod traitor;
 mod traumas;
+mod ui_smoke;
 mod vampire;
 mod vending;
 mod wallmount;

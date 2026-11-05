@@ -77,6 +77,12 @@ pub struct MailPlugin;
 
 impl Plugin for MailPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // A letter is opened by its recipient.
+        app.add_click_handler(ClickPhase::AttackSelf, 1400, |w, c| {
+            crate::cargo::mail::attack_self(w, c.client, c.mob, c.target)
+        });
         app.init_resource::<MailGoodies>()
             .add_systems(Startup, init);
     }

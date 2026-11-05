@@ -165,6 +165,12 @@ pub struct ApcUiPlugin;
 
 impl Plugin for ApcUiPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // tg `attack_hand` of an APC with its cover closed: its window.
+        app.add_click_handler(ClickPhase::EmptyHand, 2100, |w, c| {
+            crate::power::apc_ui::interact(w, c.client, c.mob, c.target)
+        });
         app.register_ui::<ApcWindow>()
             .add_systems(Update, apply_acts.in_set(UiSystems::Handle));
     }
