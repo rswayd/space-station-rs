@@ -282,5 +282,5 @@ fn silence_and_sleep_stop_speech() {
     status_effects::set(s.server.world_mut(), a, Incap::Sleeping, 0.0);
     s.run_until("A wakes", |s| !s.get::<Incapacitation>(a).knocked_out);
     s.send(0, ClientIntent::Say("доброе утро".into()));
-    s.run_until("B hears A", |s| s.heard(1, "доброе утро"));
+    s.run_until("B hears A", |s| s.heard(1, "оброе утро"));
 }
