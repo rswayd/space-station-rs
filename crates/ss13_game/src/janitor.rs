@@ -28,9 +28,9 @@
 //! - `ClientIntent::ToggleMoveIntent` switches the mob between running and walking
 //!   (`WALK_DELAY` 4 deciseconds per tile).
 // shortcut: no cleaning skill (every mob has the `None` level's modifier 1), no bubbles overlay,
-// no `TRAIT_CURRENTLY_CLEANING` (two mobs may scrub one tile at once), mobs and items are not
-// washed (no blood or fingerprints on them); no footprints, blood trails, hit splatters or
-// bloody shoes; blood bloodiness does not decay while drying and dried blood keeps its name;
+// no `TRAIT_CURRENTLY_CLEANING` (two mobs may scrub one tile at once), mobs are not washed
+// (soap and mops skip them; items lose their traces, `crate::forensics`); no footprints, blood
+// trails, flying hit splatters or bloody shoes; blood bloodiness does not decay while drying and dried blood keeps its name;
 // no ice (wet floors below 0 °C just do not dry), lube, galoshes or noslip shoes, no sliding
 // and no gravity check; the advanced mop does not self-wet; the cart holds no tools; sprays
 // reach adjacent tiles only (`crate::click` resolves no ranged clicks) and have no puff; no
@@ -66,8 +66,11 @@ pub const CLEAN_TYPE_LIGHT_DECAL: u32 = 1 << 6;
 pub const CLEAN_TYPE_HARD_DECAL: u32 = 1 << 7;
 pub const CLEAN_WASH: u32 =
     CLEAN_TYPE_BLOOD | CLEAN_TYPE_DISEASE | CLEAN_TYPE_ACID | CLEAN_TYPE_LIGHT_DECAL;
-/// `CLEAN_SCRUB` (fingerprints and fibers are not tracked here).
-pub const CLEAN_SCRUB: u32 = CLEAN_WASH | (1 << 1) | (1 << 2) | CLEAN_TYPE_HARD_DECAL;
+/// `CLEAN_SCRUB`: also fingerprints and fibers (`crate::forensics::server`).
+pub const CLEAN_SCRUB: u32 = CLEAN_WASH
+    | crate::forensics::server::CLEAN_TYPE_FINGERPRINTS
+    | crate::forensics::server::CLEAN_TYPE_FIBERS
+    | CLEAN_TYPE_HARD_DECAL;
 
 /// `TURF_WET_*` (`code/__DEFINES/turfs.dm`), in tg's strength order.
 pub const TURF_WET_WATER: u8 = 1 << 0;
@@ -329,20 +332,21 @@ fn toggle_move_intent(
 // ---------------------------------------------------------------------------------------------
 // Washing.
 
-/// tg `wash(clean_types)` of one atom: a cleanable it applies to is deleted. True when
-/// something was cleaned.
+/// tg `wash(clean_types)` of one atom: its forensic traces are wiped
+/// (`COMSIG_COMPONENT_CLEAN_ACT`), a cleanable it applies to is deleted. True when something was cleaned.
 pub fn wash(world: &mut World, target: Entity, clean_types: u32) -> bool {
     if world.get::<Turf>(target).is_some()
         && let Some(&pos) = world.get::<TilePos>(target)
     {
         return wash_turf(world, pos, clean_types, false);
     }
+    let wiped = crate::forensics::server::clean_act(world, target, clean_types);
     match world.get::<Cleanable>(target) {
         Some(c) if c.clean_type & clean_types != 0 => {
             world.despawn(target);
             true
         }
-        _ => false,
+        _ => wiped,
     }
 }
 
@@ -578,7 +582,9 @@ pub fn bleed_splatter(world: &mut World, mob: Entity, amount: f32) {
     {
         return;
     }
-    add_splatter_floor(world, pos, amount <= 10.0);
+    if let Some(splat) = add_splatter_floor(world, pos, amount <= 10.0) {
+        crate::forensics::server::bloody_splatter(world, mob, splat);
+    }
 }
 
 /// tg `/datum/blood_type/make_blood_splatter` (red human blood) on `pos`.

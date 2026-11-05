@@ -7,7 +7,7 @@ _«Грязь и пятна (cleanables)» описано в [../effects/decals.
 Компонент очистки (швабра, мыло, тряпка, клинбот) по `do_after` смывает декали, кровь и отпечатки с тайла/предмета/моба; уборка даёт опыт навыка, ускоряющего её.
 
 - **Код:** [`/datum/component/cleaner`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/cleaner.dm#L7), [`clean()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/cleaner.dm#L94), [`/datum/element/cleaning`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/elements/cleaning.dm#L1), [`/datum/skill/cleaning`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/skills/cleaning.dm#L1)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/janitor.rs`: `do_after` швабры и мыла, `wash()` с `clean_type` (тайл смывает свои cleanables, космоочиститель — всё на тайле); нет навыка уборки (модификатор всегда 1), пузырей, клинбота, мытья мобов и предметов
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/janitor.rs`: `do_after` швабры и мыла, `wash()` с `clean_type` (тайл смывает свои cleanables, космоочиститель — всё на тайле); нет навыка уборки (модификатор всегда 1), пузырей, клинбота, мытья мобов (предметы теряют кровь, отпечатки и волокна — `crates/ss13_game/src/forensics/server.rs`)
 
 ### Швабра и ведро
 Швабру мочат в ведре/тележке (вода из реагентов) и моют пол — очищает и делает пол мокрым; продвинутая швабра сама набирает воду. Ведро для швабры с водой.

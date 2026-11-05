@@ -31,6 +31,7 @@ impl Plugin for GameClientPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(crate::keycard_client::KeycardClientPlugin);
         app.add_plugins(crate::operating_client::OperatingClientPlugin);
+        app.add_plugins(crate::forensics::client::ForensicsClientPlugin);
         app.add_plugins((
             PredictionPlugin,
             crate::ui_sprites::UiSpritesPlugin,

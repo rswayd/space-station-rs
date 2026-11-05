@@ -297,6 +297,31 @@ pub fn inject_joiner(world: &mut World, mob: Entity, job: usize) {
     {
         dna.unique_enzymes = dna_string;
     }
+    // tg `inject` reads `md5(dna.unique_identity)` and `dna.blood_type` of the body: the prints
+    // and blood the forensic scanner finds match the records.
+    let print = crate::forensics::server::mob_fingerprint(world, mob);
+    let blood = world
+        .get::<crate::medical::blood::Blood>(mob)
+        .map(|b| b.blood_type.name());
+    let mut manifest = world.resource_mut::<Manifest>();
+    let mut lock_ref = None;
+    if let Some(record) = manifest.general.iter_mut().find(|r| r.id == id) {
+        if let Some(print) = &print {
+            record.fingerprint.clone_from(print);
+        }
+        if let Some(blood) = blood {
+            record.blood_type = blood.to_owned();
+        }
+        lock_ref = Some(record.lock_ref);
+    }
+    if let Some(record) = manifest.locked.iter_mut().find(|r| Some(r.id) == lock_ref) {
+        if let Some(print) = print {
+            record.fingerprint = print;
+        }
+        if let Some(blood) = blood {
+            record.blood_type = blood.to_owned();
+        }
+    }
 }
 
 #[cfg(test)]

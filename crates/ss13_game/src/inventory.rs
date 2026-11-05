@@ -486,6 +486,14 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                                 world, client, mob, held, item,
                             )
                         }) => {}
+                // The forensic scanner scans the item in the other hand.
+                Some(item)
+                    if hand != inventory.active
+                        && inventory.active_item().is_some_and(|held| {
+                            crate::forensics::server::item_interaction(
+                                world, client, mob, held, item,
+                            )
+                        }) => {}
                 Some(item)
                     if hand != inventory.active
                         && world.get::<crate::storage::Storage>(item).is_some() =>
@@ -502,6 +510,10 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 Some(item)
                     if hand == inventory.active
                         && crate::tools::attack_self(world, client, mob, item) => {}
+                // The forensic scanner's window, an evidence bag empties.
+                Some(item)
+                    if hand == inventory.active
+                        && crate::forensics::server::attack_self(world, client, mob, item) => {}
                 // The ritual dagger's rune list, a blood magic aura cast on the user.
                 Some(item)
                     if hand == inventory.active
@@ -656,6 +668,10 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 && crate::atmos::is_analyzer(world, item)
             {
                 crate::atmos::barometer(world, client, mob, item);
+            } else if let Some(item) = inventory.slot(slot)
+                && crate::forensics::server::clear_logs(world, client, item)
+            {
+                // The forensic scanner's log is cleared.
             } else if let Some(item) = inventory.slot(slot) {
                 // A PDA gives back its ID.
                 crate::modpc::pda::alt_click(world, mob, item);
@@ -691,6 +707,12 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 .contains(&mob)
             {
                 return;
+            }
+            // tg `/atom/attack_hand`: what an empty hand touches takes its prints.
+            if inventory.active_item().is_none()
+                && world.get::<crate::health::Health>(target).is_none()
+            {
+                crate::forensics::server::add_fingerprint(world, target, mob, false);
             }
             match inventory.active_item() {
                 // tg `attack_robot` -> `attack_ai`: a cyborg's empty hand opens machines.
@@ -800,6 +822,11 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 // A screwdriver or multitool sets a grenade's fuse.
                 Some(held)
                     if crate::grenades::item_interaction(world, client, mob, held, target) => {}
+                // The forensic scanner scans, an evidence bag takes the item.
+                Some(held)
+                    if crate::forensics::server::item_interaction(
+                        world, client, mob, held, target,
+                    ) => {}
                 // A C-4 charge is planted on what it touches; a welder refills from a fuel tank
                 // (or blows it up, lit).
                 Some(held)
@@ -1034,6 +1061,8 @@ pub(crate) fn pick_up(world: &mut World, mob: Entity, target: Entity, hand: usiz
         .get_mut::<Inventory>(mob)
         .expect("checked by actor")
         .hands[hand] = Some(target);
+    // tg `attempt_pickup`: `add_fingerprint(user)`.
+    crate::forensics::server::add_fingerprint(world, target, mob, false);
 }
 
 /// tg `LETPASSTHROW` (`pass_flags_self`): thrown things fly over it (tables, racks, trays).

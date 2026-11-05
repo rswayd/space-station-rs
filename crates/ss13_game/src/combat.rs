@@ -271,6 +271,7 @@ fn melee(
         if held.is_some_and(|(item, _, _)| {
             crate::medical::interacts_with_mobs(&item.path)
                 || crate::chem::interacts_with_mobs(&item.path)
+                || crate::forensics::server::interacts_with_mobs(&item.path)
                 // Food is eaten out of combat mode (`crate::food`), hits in it.
                 || (crate::food::is_food(&item.path) && !combat.0)
         }) {
@@ -337,7 +338,10 @@ fn melee(
             // without attack verbs.
             Some(weapon) if weapon.force <= 0.0 => {
                 let (item, pos) = (weapon.entity, click.mob_pos);
-                commands.queue(move |world: &mut World| item_hit_sound(world, item, pos));
+                commands.queue(move |world: &mut World| {
+                    item_hit_sound(world, item, pos);
+                    crate::forensics::server::add_fingerprint(world, item, attacker, false);
+                });
                 None
             }
             Some(Weapon {
@@ -369,6 +373,18 @@ fn melee(
                 );
                 let force = crate::armor::blocked_damage(force * multiplier(hit), armor);
                 apply_damage_zone(&mut health, &mut new_stat, hit, kind, force);
+                // tg `attack_effects` and the attack's `add_fingerprint(user)`.
+                let brute = kind == DamageType::Brute;
+                commands.queue(move |world: &mut World| {
+                    crate::forensics::server::item_attack(
+                        world,
+                        attacker,
+                        target,
+                        weapon_entity,
+                        force,
+                        brute,
+                    );
+                });
                 // tg `attacked_by`, `BODY_ZONE_HEAD`: blunt brute force may deconvert a rev.
                 if hit == BodyZone::Head && kind == DamageType::Brute && wounding.sharpness == 0 {
                     commands.queue(move |world: &mut World| {
