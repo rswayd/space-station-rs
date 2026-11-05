@@ -463,6 +463,7 @@ impl ClientUi for JobPrefsUi {
             (crate::antag::cult::ROLE_CULTIST, "Культист"),
             (crate::antag::heretic::ROLE_HERETIC, "Еретик"),
             (crate::antag::revolution::ROLE_REV_HEAD, "Глава революции"),
+            (crate::antag::ROLE_MALF, "Сбойный ИИ"),
             (
                 crate::antag::ROLE_SYNDICATE_INFILTRATOR,
                 "Диверсант Синдиката",

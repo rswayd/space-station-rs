@@ -132,6 +132,19 @@ pub struct AiModuleDef {
     pub law_id: Option<String>,
 }
 
+/// One employer of `strings/antagonist_flavor/malfunction_flavor.json`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MalfFlavor {
+    #[serde(default)]
+    pub allies: String,
+    #[serde(default)]
+    pub goal: String,
+    #[serde(default)]
+    pub introduction: String,
+    #[serde(default)]
+    pub zeroth_law: String,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct SiliconData {
     pub lawsets: Vec<Lawset>,
@@ -143,6 +156,9 @@ pub struct SiliconData {
     /// Every `/obj/item/ai_module` subtype, by path.
     #[serde(default)]
     pub modules: Vec<AiModuleDef>,
+    /// `MALFUNCTION_FLAVOR_FILE` by employer, sorted.
+    #[serde(default)]
+    pub malf_flavor: Vec<(String, MalfFlavor)>,
 }
 
 impl SiliconData {
@@ -188,6 +204,25 @@ impl SiliconData {
 
     pub fn lawset(&self, id: &str) -> Option<&Lawset> {
         self.lawsets.iter().find(|l| l.id == id)
+    }
+}
+
+/// Reads the malfunctioning AI's flavor from the BYOND checkout's `strings/`; the problem, if
+/// the file is missing or broken.
+pub fn read_malf_flavor(source: &Path, data: &mut SiliconData) -> Option<String> {
+    let path = source.join("strings/antagonist_flavor/malfunction_flavor.json");
+    match std::fs::read(&path)
+        .map_err(anyhow::Error::from)
+        .and_then(|b| {
+            Ok(serde_json::from_slice::<
+                std::collections::BTreeMap<String, MalfFlavor>,
+            >(&b)?)
+        }) {
+        Ok(map) => {
+            data.malf_flavor = map.into_iter().collect();
+            None
+        }
+        Err(e) => Some(format!("{}: {e}", path.display())),
     }
 }
 

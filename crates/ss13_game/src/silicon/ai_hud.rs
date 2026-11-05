@@ -56,6 +56,7 @@ const AI_NETWORK: &str = "ss13";
 
 const CORE: &str = "ai_core";
 const CAMERA_LIST: &str = "camera";
+const CAMERA_TRACK: &str = "camera_track";
 const ALERTS: &str = "alerts";
 const ANNOUNCEMENT: &str = "announcement";
 const CALL_SHUTTLE: &str = "call_shuttle";
@@ -176,6 +177,7 @@ pub(crate) fn give_ai_buttons(world: &mut World, eye: Entity) {
     let buttons = vec![
         button(world, CORE, "AI core", SCREEN_AI, "ai_core"),
         button(world, CAMERA_LIST, "Show Camera List", SCREEN_AI, "camera"),
+        button(world, CAMERA_TRACK, "Track With Camera", SCREEN_AI, "track"),
         button(world, ALERTS, "Show Alerts", SCREEN_AI, "alerts"),
         button(
             world,
@@ -246,6 +248,7 @@ fn trigger(world: &mut World, mut acts: Local<MessageCursor<UiActed<ActionButton
                     .collect();
                 ask_camera(world, client, actor, list, true);
             }
+            CAMERA_TRACK => super::ai_track::ask(world, client, actor),
             ALERTS => super::alarms::open(world, client, actor, actor),
             ANNOUNCEMENT => ask_announcement(world, client, actor),
             CALL_SHUTTLE => ask_shuttle(world, client, actor, core),

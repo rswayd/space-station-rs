@@ -78,6 +78,8 @@ pub const ROLE_SLEEPER_AGENT: &str = "Syndicate Sleeper Agent";
 pub const ROLE_STOWAWAY_CHANGELING: &str = "Stowaway Changeling";
 /// tg `ROLE_OPERATIVE_MIDROUND`: the midround nuclear operative's `be_special` key.
 pub const ROLE_OPERATIVE_MIDROUND: &str = "Operative (Midround)";
+/// tg `ROLE_MALF`: the malfunctioning AI's `be_special` key (`crate::silicon::malf`).
+pub const ROLE_MALF: &str = "Malf AI";
 
 /// The blood brother's info panel.
 pub struct AntagInfoBrotherUi;

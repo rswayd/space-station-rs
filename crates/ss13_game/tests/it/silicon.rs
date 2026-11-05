@@ -1278,6 +1278,7 @@ fn ai_hud_alerts_and_announcement() {
         [
             "ai_core",
             "camera",
+            "camera_track",
             "alerts",
             "announcement",
             "call_shuttle",
@@ -1476,4 +1477,87 @@ fn law_rack_modules_change_the_ai_laws() {
     });
     assert!(s.get::<Laws>(core).law_list(true).is_empty());
     assert!(s.get::<LawRack>(rack).linked_mobs.is_empty());
+}
+
+/// "Track With Camera" lists the human the room's camera sees; the eye follows it while the
+/// camera sees it, and a step of the eye ends the tracking.
+#[test]
+fn ai_tracks_a_mob_with_the_cameras() {
+    use ss13_game::actions::ActionButtonsUi;
+    use ss13_game::silicon::ai_track::AiTracking;
+    use ss13_tgui::interfaces::list_input::{ListInputData, ListInputUi as PromptList};
+    let mut s = Station::start_on("ai_tracks_a_mob_with_the_cameras", MAP, 2, false);
+    s.join("AI");
+    let human = s.players[1].mob;
+    assert_eq!(s.get::<TilePos>(human), &SPAWN);
+    s.run_until("the HUD buttons arrive", |s| {
+        s.window::<ActionButtonsUi>().is_some()
+    });
+    s.act::<ActionButtonsUi>("trigger", &[("id", "camera_track")]);
+    s.run_until("the target list", |s| s.window::<PromptList>().is_some());
+    let (_, (), data): (u32, (), ListInputData) = s.window::<PromptList>().unwrap();
+    assert_eq!(data.items.len(), 1);
+    let entry = data.items[0].clone();
+    s.act::<PromptList>("submit", &[("entry", &entry)]);
+    s.run_until("the eye is on the human", |s| s.pos() == SPAWN);
+    // The human steps east, still in the camera's room: the eye follows.
+    let east = TilePos::new(3, 3, 1);
+    s.server.world_mut().entity_mut(human).insert(east);
+    s.run_until("the eye follows", |s| s.pos() == east);
+    s.step_dir(Dir::South);
+    s.run_until("a manual step ends the tracking", |s| {
+        s.try_get::<AiTracking>(s.mob()).is_none()
+    });
+}
+
+/// A malfunctioning AI gets its protected law 0 and 50 processing time; the APC window offers it
+/// "Override Programming", and the finished hack locks the APC and adds 9 points (the first
+/// point of the hacked APC follows).
+#[test]
+fn malf_ai_hacks_an_apc() {
+    use ss13_game::silicon::malf::{MalfAi, MalfHacked, START_PROCESSING_TIME, add_malf};
+    let mut s = Station::start_on("malf_ai_hacks_an_apc", MAP_APC, 1, false);
+    let core = s.join("AI");
+    assert!(add_malf(s.server.world_mut(), core));
+    {
+        let laws = s.get::<Laws>(core);
+        assert!(laws.protected_zeroth && laws.zeroth.is_some());
+        assert_eq!(s.get::<MalfAi>(core).processing_time, START_PROCESSING_TIME);
+        assert_eq!(s.get::<MalfAi>(core).objectives.len(), 3);
+    }
+    let apc = s.find::<Apc>(APC_POS);
+    s.run_until("the camera view arrives", |s| {
+        s.window::<CameraViewUi>().is_some()
+    });
+    for _ in 0..3 {
+        s.step_dir(Dir::West);
+    }
+    s.run_until("the eye is in room 1", |s| s.pos().x == 3);
+    s.click(apc, PLAIN);
+    s.run_until("the Apc window opens", |s| s.window::<ApcUi>().is_some());
+    let (_, (), data): (u32, (), ApcData) = s.window::<ApcUi>().unwrap();
+    assert_eq!(data.malf_status, 1);
+    s.act::<ApcUi>("hack", &[]);
+    s.run_until("the hack starts", |s| {
+        s.get::<MalfAi>(core).hacking.is_some_and(|(a, _)| a == apc)
+    });
+    // Skip the 30 s.
+    let now = s.now();
+    s.server
+        .world_mut()
+        .get_mut::<MalfAi>(core)
+        .unwrap()
+        .hacking = Some((apc, now));
+    s.run_until("the APC is hacked", |s| {
+        s.try_get::<MalfHacked>(apc).is_some()
+    });
+    let world = s.server.world();
+    assert!(world.get::<Apc>(apc).unwrap().locked);
+    let malf = world.get::<MalfAi>(core).unwrap();
+    assert_eq!(malf.hacked_apcs, [apc]);
+    assert!(malf.processing_time >= START_PROCESSING_TIME + 9);
+    s.run_until("the window offers no second hack", |s| {
+        s.window::<ApcUi>()
+            .is_some_and(|(_, (), d)| d.malf_status == 0)
+    });
 }

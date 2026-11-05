@@ -1158,6 +1158,7 @@ fn preference_acts(
                     crate::antag::wizard::ROLE_WIZARD_MIDROUND,
                     crate::antag::revolution::ROLE_REV_HEAD,
                     crate::antag::revolution::ROLE_PROVOCATEUR,
+                    crate::antag::ROLE_MALF,
                 ]
                 .contains(&role.as_str()) =>
             {
