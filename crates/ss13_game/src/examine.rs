@@ -61,7 +61,11 @@ fn name_of(world: &World, entity: Entity) -> String {
 
 /// tg `examine()` of `target` as `examiner` sees it: the title, then the entries.
 pub fn examine_lines(world: &World, examiner: Entity, target: Entity) -> (String, Vec<Line>) {
-    let name = name_of(world, target);
+    let mut name = name_of(world, target);
+    // The blood decal's `get_examine_name`.
+    if crate::forensics::server::blood_stained(world, target) {
+        name = format!("blood-stained {name}");
+    }
     let mut lines = Vec::new();
     if world.get::<crate::mobs::BasicMob>(target).is_some() {
         crate::mobs::examine_lines(world, target, &mut lines);
@@ -116,6 +120,7 @@ pub fn examine_lines(world: &World, examiner: Entity, target: Entity) -> (String
     crate::vending::examine_lines(world, target, &mut lines);
     crate::wallmount::examine_lines(world, target, &mut lines);
     crate::security_level::examine_lines(world, target, &mut lines);
+    crate::forensics::server::examine_lines(world, target, &mut lines);
     (name, lines)
 }
 

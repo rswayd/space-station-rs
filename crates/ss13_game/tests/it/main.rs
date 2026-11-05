@@ -25,6 +25,7 @@ mod explosions;
 mod fire;
 mod firelocks;
 mod food;
+mod forensics;
 mod genetics;
 mod guns;
 mod heretic;

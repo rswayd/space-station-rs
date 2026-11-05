@@ -30,4 +30,4 @@
 Удары и кровотечение оставляют брызги и лужи крови; наступивший разносит следы (`bloodysoles`); кровь на одежде и руках, криминалистика по ДНК.
 
 - **Код:** [`proc/add_splatter_floor()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/blood.dm#L641), [`proc/spray_blood()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/blood.dm#L666), [`/datum/component/bloodysoles`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/bloodysoles.dm#L4)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/janitor.rs` (`bleed_splatter`, `add_splatter_floor`): капли и лужи кровотечения; `crates/ss13_game/src/forensics/server.rs` (`attack_effects`): удар предметом оставляет лужу под жертвой, кровь на оружии и одежде нападающего, ДНК крови в следах; нет разлёта брызг (`spray_blood`), `bloodysoles` и следов ног

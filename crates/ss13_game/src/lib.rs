@@ -102,6 +102,10 @@
 //!   `client`): exosuits (entering, driving, equipment, damage, wreckage), building them from a
 //!   chassis and the exosuit fabricator (tgui `ExosuitFabricator`).
 //!
+//! - `forensics` (server half with `server`, the scanner window with `client`): fingerprints,
+//!   fibers, blood DNA and hidden prints on atoms, the detective's forensic scanner and its
+//!   report, evidence bags.
+//!
 //! - `mobs` (feature `server`): tg basic mobs (`/mob/living/basic`) from map placements and
 //!   spawns, their environment, fighting them, and their AI controllers (behavior trees).
 //!
@@ -199,6 +203,7 @@ pub mod fire;
 pub mod food;
 #[cfg(feature = "server")]
 pub mod footsteps;
+pub mod forensics;
 #[cfg(feature = "client")]
 pub mod fullscreen_client;
 #[cfg(feature = "server")]

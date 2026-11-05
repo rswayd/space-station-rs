@@ -241,6 +241,7 @@ impl Plugin for GameServerPlugin {
             crate::point::PointServerPlugin,
         ))
         .add_plugins(crate::janitor::JanitorServerPlugin)
+        .add_plugins(crate::forensics::server::ForensicsServerPlugin)
         .add_plugins(crate::vision::VisionServerPlugin)
         .add_plugins(crate::stock_parts::StockPartsPlugin)
         .add_plugins(crate::sound::SoundServerPlugin)
