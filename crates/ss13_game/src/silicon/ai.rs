@@ -20,7 +20,11 @@
 //! - It talks with an integrated radio (`:h`/department keys, `:o` its private channel) and in
 //!   binary (`:b`). It hears speech and sees messages around its eye only where the cameras see
 //!   (tg `/mob/eye/camera/ai/Hear`: `checkCameraVis`). Dead (its core), it speaks in deadchat.
-// shortcut: no camera tracking, holopads, multicam, camera acceleration or malfunction.
+//! - Carded (`super::aicard`), the AI mob is inside the card: its eye stays on the card's
+//!   turf, it sees everything around it (no camera mask) and clicks within 7 tiles while its
+//!   wireless is on (tg `can_see` of a carded AI: `get_dist` within the view). Shunted into an
+//!   APC (`super::malf`), it is inside the APC and its eye moves as usual.
+// shortcut: no holopads, multicam or camera acceleration.
 // shortcut: the AI's speech is heard around its eye (the client's controlled entity), not
 // around the core; the core's own surroundings (tg `viewers()` of the core) are not perceived.
 // shortcut: the AI eye's marker sprite is drawn for the AI's own client too.
@@ -86,6 +90,38 @@ pub struct AiCore {
     pub connected_robots: Vec<Entity>,
 }
 
+/// The AI mob off its own tile (tg `loc` a card or an APC): it has no `TilePos` meanwhile.
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AiInside {
+    Card(Entity),
+    Apc(Entity),
+}
+
+/// tg `linked_core`: the emptied core a shunted AI returns to (`resolve_core_link`).
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LinkedCore(pub Entity);
+
+/// tg `can_see` range of a carded AI (half the 15-tile view).
+pub const CARDED_VIEW: u32 = 7;
+
+/// The AI mob leaves its tile into a card or an APC (tg `forceMove`). Not `StoredIn`: deleting
+/// the container must not delete the AI with it (its client is on the eye).
+pub fn house(world: &mut World, ai: Entity, inside: AiInside) {
+    world.entity_mut(ai).remove::<TilePos>().insert(inside);
+}
+
+/// The AI mob back on `pos` out of its card or APC.
+pub fn unhouse(world: &mut World, ai: Entity, pos: TilePos) {
+    world.entity_mut(ai).remove::<AiInside>();
+    crate::storage::take_out(world, ai, pos);
+    crate::construction::tile_changed(world, pos);
+}
+
+/// Whether the AI mob `core` is in an intelliCard.
+pub fn carded(world: &World, core: Entity) -> bool {
+    matches!(world.get::<AiInside>(core), Some(AiInside::Card(_)))
+}
+
 /// On the AI's eye, the entity its client controls.
 #[derive(Component, Clone, Copy, Debug)]
 pub struct AiEye {
@@ -121,6 +157,12 @@ impl Plugin for AiPlugin {
         app.add_message::<EyeStep>()
             .add_message::<AiClick>()
             .add_systems(Update, move_eyes.in_set(WorldSystems::Movement))
+            .add_systems(
+                Update,
+                pin_carded_eyes
+                    .run_if(any_with_component::<AiInside>)
+                    .after(WorldSystems::Movement),
+            )
             .add_systems(Update, eye_speaker_stat.after(HealthSystems))
             .add_systems(
                 Update,
@@ -162,6 +204,24 @@ pub(crate) fn join(
     latejoin: bool,
 ) -> Option<Entity> {
     let pos = spawn_point(world, client).unwrap_or_else(|| crate::server::pick_latejoin(world));
+    let core = spawn_ai(world, client, pos, name, Some(job))?;
+    info!(
+        "{name} ({client}) joined as AI at {pos:?}{}",
+        if latejoin { " (latejoin)" } else { "" }
+    );
+    Some(core)
+}
+
+/// A new AI mob on `pos` controlled by `client` (tg `new /mob/living/silicon/ai(loc)` with the
+/// mind moved in): the core, the eye, laws, radio, HUD. `job`: the AI job's position it takes.
+/// `None` without the AI's prototype.
+pub(crate) fn spawn_ai(
+    world: &mut World,
+    client: Entity,
+    pos: TilePos,
+    name: &str,
+    job: Option<usize>,
+) -> Option<Entity> {
     let core = crate::construction::spawn_obj(world, AI_TYPE, pos)?;
     let icon = |dmi: &str, state: &str, world: &World| {
         world
@@ -225,11 +285,13 @@ pub(crate) fn join(
         },
         laws.clone(),
         living_bundle(),
-        PlayerJob(job),
         super::ai_power::AiPower::default(),
         super::ai_hud::CoreDisplay::default(),
     ));
-    world.resource_mut::<Jobs>().add_position(job);
+    if let Some(job) = job {
+        world.entity_mut(core).insert(PlayerJob(job));
+        world.resource_mut::<Jobs>().add_position(job);
+    }
     // tg `make_laws` + `link_to_first_rack`: the core rack's lawset. Without a core rack (test
     // maps) the round's default lawset stays, where tg would leave the AI lawless.
     super::law_rack::link_to_first_rack(world, core);
@@ -252,10 +314,6 @@ pub(crate) fn join(
         client,
         Span::BoldNotice,
         "Для коммуникации с киборгами и другими ИИ используйте префикс :b.",
-    );
-    info!(
-        "{name} ({client}) joined as AI at {pos:?}{}",
-        if latejoin { " (latejoin)" } else { "" }
     );
     Some(core)
 }
@@ -285,13 +343,16 @@ fn move_eyes(
     index: Res<SpatialIndex>,
     mut eyes: Query<(&AiEye, &TilePos, &mut Facing)>,
     stats: Query<&Stat>,
+    inside: Query<&AiInside>,
     mut commands: Commands,
 ) {
     for &EyeStep { eye, dir } in steps.read() {
         let Ok((ai, &pos, mut facing)) = eyes.get_mut(eye) else {
             continue;
         };
-        if stats.get(ai.ai).is_ok_and(|s| *s == Stat::Dead) {
+        if stats.get(ai.ai).is_ok_and(|s| *s == Stat::Dead)
+            || matches!(inside.get(ai.ai), Ok(AiInside::Card(_)))
+        {
             continue;
         }
         facing.set_if_neq(Facing(dir));
@@ -302,10 +363,32 @@ fn move_eyes(
     }
 }
 
-/// The eye's CameraView follows the eye and the network; a blind eye sees no tile.
+/// A carded AI's eye stays on the card's turf (tg `eyeobj.setLoc(loc)` of a carded AI).
+fn pin_carded_eyes(world: &mut World) {
+    let mut q = world.query::<(&AiCore, &AiInside)>();
+    let cards: Vec<(Entity, Entity)> = q
+        .iter(world)
+        .filter_map(|(core, inside)| match *inside {
+            AiInside::Card(card) => Some((core.eye, card)),
+            AiInside::Apc(_) => None,
+        })
+        .collect();
+    for (eye, card) in cards {
+        let Some(at) = crate::explosions::turf_of(world, card) else {
+            continue;
+        };
+        if world.get::<TilePos>(eye) != Some(&at) {
+            world.entity_mut(eye).insert(at);
+        }
+    }
+}
+
+/// The eye's CameraView follows the eye and the network; a blind eye sees no tile, a carded
+/// AI's every tile.
 fn refresh_eye_views(
     net: Res<CameraNet>,
     mut eyes: Query<(Ref<TilePos>, Ref<AiEye>, &mut CameraViewSource)>,
+    inside: Query<&AiInside>,
     mut seen: Local<u64>,
 ) {
     let changed = std::mem::replace(&mut *seen, net.version) != net.version;
@@ -315,6 +398,8 @@ fn refresh_eye_views(
         }
         let visible = if eye.blind {
             super::cameras::box_bits(*pos, VIEW_RADIUS, |_| false)
+        } else if matches!(inside.get(eye.ai), Ok(AiInside::Card(_))) {
+            super::cameras::box_bits(*pos, VIEW_RADIUS, |_| true)
         } else {
             net.view_bits(*pos, VIEW_RADIUS)
         };
@@ -347,8 +432,17 @@ fn ai_clicks(world: &mut World, mut clicks: Local<MessageCursor<AiClick>>) {
         {
             continue;
         }
-        // tg `can_see(A)`: `GLOB.cameranet.checkTurfVis(get_turf_pixel(A))`.
-        if !world.resource::<CameraNet>().visible(click.target_pos) {
+        // tg `can_see(A)`: `GLOB.cameranet.checkTurfVis(get_turf_pixel(A))`; carded, the
+        // distance from the card.
+        let sees = if carded(world, ai) {
+            world
+                .get::<TilePos>(click.eye)
+                .and_then(|p| p.chebyshev(click.target_pos))
+                .is_some_and(|d| d <= CARDED_VIEW)
+        } else {
+            world.resource::<CameraNet>().visible(click.target_pos)
+        };
+        if !sees {
             continue;
         }
         let m = click.modifiers;

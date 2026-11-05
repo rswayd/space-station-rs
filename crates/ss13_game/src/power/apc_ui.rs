@@ -6,8 +6,8 @@
 //! for anyone else while the interface is locked, except "toggle_nightshift" and during a power
 //! failure (tg). Acts: the breaker, the charge mode, the three channels (`setsubsystem`), the
 //! silicon interface lock, the cover bolts, emergency lighting, night shift, reboot.
-// The malfunctioning AI's "hack" act: `crate::silicon::malf`.
-// shortcut: no ID swipe to unlock the interface, no malfunction shunt (occupy), no remote
+// The malfunctioning AI's "hack", "occupy" and "deoccupy" acts: `crate::silicon::malf`.
+// shortcut: no ID swipe to unlock the interface, no remote
 // control console; "overload" (silicons) does nothing; the cover bolts, emergency-lighting
 // and night-shift switches are kept and shown but do not change the cover, the lights' backup
 // cells or their brightness yet.
@@ -46,6 +46,9 @@ pub enum ApcAct {
     EmergencyLighting,
     /// A malfunctioning AI's `malfhack`.
     Hack,
+    /// A malfunctioning AI's `malfoccupy` and `malfvacate`.
+    Occupy,
+    Deoccupy,
 }
 
 /// tg `siunit(value, unit, maxdecimals)`: an SI prefix and up to `maxdecimals` decimals, DM
@@ -83,22 +86,38 @@ impl ServerUi for ApcWindow {
     type Source = (
         &'static Apc,
         Option<&'static crate::silicon::malf::MalfHacked>,
+        Option<&'static crate::silicon::malf::ShuntOccupier>,
     );
     type UserParam = (
         SiliconUsers<'static, 'static>,
         Query<'static, 'static, &'static crate::silicon::ai::AiEye>,
         Query<'static, 'static, (), With<crate::silicon::malf::MalfAi>>,
+        Query<'static, 'static, &'static crate::silicon::ai::AiInside>,
     );
     type Act = ApcAct;
 
-    fn static_data(_: (&Apc, Option<&crate::silicon::malf::MalfHacked>)) {}
+    fn static_data(
+        _: (
+            &Apc,
+            Option<&crate::silicon::malf::MalfHacked>,
+            Option<&crate::silicon::malf::ShuntOccupier>,
+        ),
+    ) {
+    }
 
     fn data(
-        (apc, hacked): (&Apc, Option<&crate::silicon::malf::MalfHacked>),
+        (apc, hacked, occupier): (
+            &Apc,
+            Option<&crate::silicon::malf::MalfHacked>,
+            Option<&crate::silicon::malf::ShuntOccupier>,
+        ),
         user: Entity,
-        (silicons, eyes, malfs): &SystemParamItem<'_, '_, Self::UserParam>,
+        (silicons, eyes, malfs, inside): &SystemParamItem<'_, '_, Self::UserParam>,
     ) -> ApcData {
         let user_ai = eyes.get(user).ok().map(|e| (e.ai, malfs.contains(e.ai)));
+        let in_apc = user_ai.is_some_and(|(ai, _)| {
+            matches!(inside.get(ai), Ok(crate::silicon::ai::AiInside::Apc(_)))
+        });
         let channel = |title: &str, ch: Channel, key: &str| PowerChannel {
             title: title.to_owned(),
             power_load: display_power(apc.lastused[ch as usize]),
@@ -118,7 +137,12 @@ impl ServerUi for ApcWindow {
             cover_locked: apc.coverlocked,
             remote_access: false,
             silicon_user: silicons.contains(user),
-            malf_status: crate::silicon::malf::malf_status(user_ai, hacked.map(|h| h.ai)),
+            malf_status: crate::silicon::malf::malf_status(
+                user_ai,
+                hacked.map(|h| h.ai),
+                occupier.map(|o| o.0),
+                in_apc,
+            ),
             emergency_lights: !apc.emergency_lights,
             nightshift_lights: apc.nightshift_lights,
             disable_nightshift_toggle: false,
@@ -156,6 +180,8 @@ impl ServerUi for ApcWindow {
             "reboot" => ApcAct::Reboot,
             "emergency_lighting" => ApcAct::EmergencyLighting,
             "hack" => ApcAct::Hack,
+            "occupy" => ApcAct::Occupy,
+            "deoccupy" => ApcAct::Deoccupy,
             _ => return Err(UiReject::UnknownAction),
         })
     }
@@ -286,7 +312,9 @@ pub fn apply_act(world: &mut World, client: Entity, actor: Entity, apc: Entity, 
             }
         }
         ApcAct::Hack if silicon => crate::silicon::malf::start_hack(world, client, actor, apc),
-        ApcAct::Hack => {}
+        ApcAct::Occupy if silicon => crate::silicon::malf::occupy(world, client, actor, apc),
+        ApcAct::Deoccupy if silicon => crate::silicon::malf::deoccupy(world, client, actor, apc),
+        ApcAct::Hack | ApcAct::Occupy | ApcAct::Deoccupy => {}
     }
 }
 

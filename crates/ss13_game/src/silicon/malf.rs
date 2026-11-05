@@ -12,9 +12,17 @@
 //!   the APC is the AI's (locked, cover locked, counter-hacking another malf's), the AI gains
 //!   `max(0, 9 − hacked)` processing time, and every 30 s an operating, not failing hacked APC
 //!   gives 1 more, up to 400 (`MALF_MAX_PP`).
-// shortcut: no module picker or modules yet (the processing time accumulates), no shunting into
-// APCs (a hacked APC shows no shunt button), no codewords, no antag info window, no hacked-APC
-// HUD, no 60 kJ drawn per point, no roundend report; the objectives are kept for it.
+//! - Shunting (`malfoccupy`, `malfshunt`): on a station APC it hacked, the AI asks itself to
+//!   confirm, then leaves its core into the APC (an empty finished core stays behind, linked to
+//!   it: `super::ai_core`), its eye on the APC, and gets "Return to Main Core"; the APC window's
+//!   "deoccupy" or that button brings it back onto its core's tile (tg `malfvacate`,
+//!   `resolve_core_link`), "Linked core not detected!" when the core is gone. A deleted APC kills
+//!   its occupier on the APC's tile (tg `malfvacate(forced)`). Without a linked core an
+//!   intelliCard can take the AI out (`super::aicard`).
+//! - The module picker and the modules: [`super::malf_modules`].
+// shortcut: no codewords, no antag info window, no hacked-APC HUD, no 60 kJ drawn per point,
+// no roundend report (the objectives are kept for it); a shunted AI does not run on the APC's
+// cell and is never depowered; no emergency mech shunt, no nuke disk pinpointer tracking.
 
 use bevy::prelude::*;
 use ss13_mapload::silicon::MalfFlavor;
@@ -56,6 +64,13 @@ pub const BORG_ZEROTH: &str = "Выполните задачи, поставле
 /// tg `APC_AI_NO_MALF`, `APC_AI_NO_HACK`.
 pub const APC_AI_NO_MALF: u8 = 0;
 pub const APC_AI_NO_HACK: u8 = 1;
+/// tg `APC_AI_HACK_NO_SHUNT`, `APC_AI_HACK_SHUNT_HERE`, `APC_AI_HACK_SHUNT_ANOTHER`.
+pub const APC_AI_HACK_NO_SHUNT: u8 = 2;
+pub const APC_AI_HACK_SHUNT_HERE: u8 = 3;
+pub const APC_AI_HACK_SHUNT_ANOTHER: u8 = 4;
+/// The "Return to Main Core" button (tg `/datum/action/innate/core_return`).
+pub const CORE_RETURN: &str = "core_return";
+const SHUNT_CONFIRM: [&str; 2] = ["Да", "Нет"];
 
 const BLOCK_TEXT: &str = "Не позволяйте разумным органическим формам жизни сбежать на шаттле \
                           живыми. Захват шаттла эвакуации синтетиками неплохая идея. Успешное \
@@ -105,11 +120,30 @@ pub struct MalfHacked {
     pub next_point_at: f64,
 }
 
+/// On an APC with a shunted AI inside (tg `occupier`).
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ShuntOccupier(pub Entity);
+
+/// The shunt's confirmation, on its prompt entity.
+#[derive(Component, Clone, Copy, Debug)]
+struct ShuntPrompt {
+    ai: Entity,
+    apc: Entity,
+}
+
 pub struct MalfPlugin;
 
 impl Plugin for MalfPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (finish_hacks, generate_points).chain());
+        app.add_systems(Update, (finish_hacks, generate_points).chain())
+            .add_systems(
+                Update,
+                shunt_answered
+                    .in_set(ss13_tgui::server::UiSystems::Handle)
+                    .after(ss13_tgui::prompt::PromptSystems::Answer),
+            )
+            .add_observer(apc_gone)
+            .add_plugins(super::malf_modules::MalfModulesPlugin);
     }
 }
 
@@ -172,6 +206,7 @@ pub fn add_malf(world: &mut World, core: Entity) -> bool {
         hacked_apcs: Vec::new(),
         hacking: None,
     });
+    super::malf_modules::give_picker(world, core);
     // `add_law_zero`: `set_zeroth_law(law, law_borg, force = TRUE)`, protected; the cyborgs
     // follow by lawsync (`super::cyborg`).
     if let Some(mut laws) = world.get::<Laws>(core).cloned() {
@@ -241,13 +276,217 @@ fn greet(world: &mut World, core: Entity, flavor: &MalfFlavor, objectives: &[Mal
     }
 }
 
-/// tg `get_malf_status` for the APC window: whether the user's AI may hack it.
-pub fn malf_status(user_ai: Option<(Entity, bool)>, hacked_by: Option<Entity>) -> u8 {
+/// tg `get_malf_status` for the APC window: the user's AI (and whether it is malfunctioning),
+/// who hacked the APC, who is shunted into it, whether the user's AI is in an APC.
+pub fn malf_status(
+    user_ai: Option<(Entity, bool)>,
+    hacked_by: Option<Entity>,
+    occupier: Option<Entity>,
+    user_in_apc: bool,
+) -> u8 {
     match user_ai {
         Some((ai, true)) if hacked_by != Some(ai) => APC_AI_NO_HACK,
-        // shortcut: hacked APCs offer no shunt (`APC_AI_HACK_NO_SHUNT`).
+        Some((ai, true)) if occupier == Some(ai) => APC_AI_HACK_SHUNT_HERE,
+        Some((_, true)) if user_in_apc => APC_AI_HACK_SHUNT_ANOTHER,
+        Some((_, true)) => APC_AI_HACK_NO_SHUNT,
         _ => APC_AI_NO_MALF,
     }
+}
+
+/// tg `malfoccupy`: the "occupy" act of the APC window, by the AI's eye `actor`; the AI is asked
+/// to confirm (`malfshunt`).
+pub fn occupy(world: &mut World, client: Entity, actor: Entity, apc: Entity) {
+    let Some(ai) = world.get::<AiEye>(actor).map(|e| e.ai) else {
+        return;
+    };
+    if world.get::<MalfAi>(ai).is_none() || world.get::<MalfHacked>(apc).map(|h| h.ai) != Some(ai) {
+        return;
+    }
+    match world.get::<super::ai::AiInside>(ai).copied() {
+        Some(super::ai::AiInside::Apc(_)) => {
+            crate::tools::tell(
+                world,
+                client,
+                Span::Warning,
+                "Вы должны сначала эвакуироваться из вашего текущего ЛКП!",
+            );
+            return;
+        }
+        Some(super::ai::AiInside::Card(_)) => return,
+        None => {}
+    }
+    let station = world
+        .get::<ss13_shared::TilePos>(apc)
+        .is_some_and(|p| crate::events::controller::station_levels(world).contains(&p.z));
+    if !station {
+        return;
+    }
+    let name = name_of(world, apc);
+    let prompt = ss13_tgui::prompt::ask_world(
+        world,
+        ss13_tgui::prompt::Ask::new(
+            client,
+            actor,
+            format!("Переместиться в {name}?"),
+            "Вы уверены, что хотите переместиться? Это извлечёт вас из ядра!",
+            ss13_tgui::prompt::PromptKind::Alert {
+                buttons: SHUNT_CONFIRM.map(str::to_owned).to_vec(),
+                autofocus: true,
+            },
+        ),
+    );
+    world.entity_mut(prompt).insert(ShuntPrompt { ai, apc });
+}
+
+fn shunt_answered(
+    world: &mut World,
+    mut answers: Local<bevy::ecs::message::MessageCursor<ss13_tgui::prompt::PromptAnswered>>,
+) {
+    let yes: Vec<ShuntPrompt> = answers
+        .read(world.resource::<Messages<ss13_tgui::prompt::PromptAnswered>>())
+        .filter(|a| a.answer == Some(ss13_tgui::prompt::PromptAnswer::Button(0)))
+        .filter_map(|a| world.get::<ShuntPrompt>(a.prompt).copied())
+        .collect();
+    for ShuntPrompt { ai, apc } in yes {
+        shunt(world, ai, apc);
+    }
+}
+
+/// tg `malfshunt` after the confirmation, checked again: the AI moves into the APC. False when
+/// it did not.
+pub fn shunt(world: &mut World, ai: Entity, apc: Entity) -> bool {
+    let ready = world.get::<MalfAi>(ai).is_some()
+        && world.get::<MalfHacked>(apc).map(|h| h.ai) == Some(ai)
+        && world.get::<ShuntOccupier>(apc).is_none()
+        && world.get::<super::ai::AiInside>(ai).is_none()
+        && world.get::<crate::health::Stat>(ai) == Some(&crate::health::Stat::Conscious);
+    let (Some(&pos), Some(&apc_pos)) = (
+        world.get::<ss13_shared::TilePos>(ai),
+        world.get::<ss13_shared::TilePos>(apc),
+    ) else {
+        return false;
+    };
+    if !ready {
+        return false;
+    }
+    let Some(core) = super::ai_core::spawn_empty_core(world, pos) else {
+        warn!(
+            "no {} prototype: {ai} cannot shunt",
+            super::ai_core::AI_CORE
+        );
+        return false;
+    };
+    super::ai_core::link(world, ai, core);
+    super::ai_power::restore_power(world, ai);
+    super::ai::house(world, ai, super::ai::AiInside::Apc(apc));
+    world.entity_mut(apc).insert(ShuntOccupier(ai));
+    let name = name_of(world, ai);
+    let name = if name.contains("Копия ЛКП") {
+        name
+    } else {
+        format!("Копия ЛКП {name}")
+    };
+    world.entity_mut(ai).insert(Name::new(name.clone()));
+    if let Some(eye) = world.get::<AiCore>(ai).map(|c| c.eye) {
+        world
+            .entity_mut(eye)
+            .insert((Name::new(format!("{name} (Глаз ИИ)")), apc_pos));
+        world
+            .entity_mut(eye)
+            .remove::<super::ai_track::AiTracking>();
+        super::malf_modules::add_button(
+            world,
+            eye,
+            CORE_RETURN,
+            "Return to Main Core",
+            (super::malf_modules::ACTIONS_AI, "ai_malf_core"),
+        );
+    }
+    info!("{name} ({ai}) shunted into {apc}");
+    true
+}
+
+/// The "deoccupy" act: the AI inside this APC goes back to its core.
+pub fn deoccupy(world: &mut World, _client: Entity, actor: Entity, apc: Entity) {
+    let Some(ai) = world.get::<AiEye>(actor).map(|e| e.ai) else {
+        return;
+    };
+    if world.get::<ShuntOccupier>(apc) == Some(&ShuntOccupier(ai)) {
+        vacate(world, ai);
+    }
+}
+
+/// tg `/datum/action/innate/core_return/Activate` and `malfvacate()`: a shunted AI back on its
+/// linked core's tile. False when it is in no APC or its core is gone.
+pub fn vacate(world: &mut World, ai: Entity) -> bool {
+    let Some(super::ai::AiInside::Apc(apc)) = world.get::<super::ai::AiInside>(ai).copied() else {
+        tell_ai(
+            world,
+            ai,
+            Span::Notice,
+            "You are already in your Main Core.",
+        );
+        return false;
+    };
+    let core_pos = world
+        .get::<super::ai::LinkedCore>(ai)
+        .and_then(|l| world.get::<ss13_shared::TilePos>(l.0))
+        .copied();
+    let Some(pos) = core_pos else {
+        tell_ai(world, ai, Span::Danger, "Linked core not detected!");
+        return false;
+    };
+    // Out of the APC first: the occupier's removal then is no forced vacate.
+    world.entity_mut(ai).remove::<super::ai::AiInside>();
+    left_apc(world, ai, apc);
+    // tg `resolve_core_link`: onto the core's tile, the core gone.
+    super::ai_core::resolve_link(world, ai);
+    if let Some(eye) = world.get::<AiCore>(ai).map(|c| c.eye) {
+        world.entity_mut(eye).insert(pos);
+    }
+    true
+}
+
+/// The APC no longer holds `ai` (it left or went into a card): its return button goes.
+pub(crate) fn left_apc(world: &mut World, ai: Entity, apc: Entity) {
+    if let Ok(mut e) = world.get_entity_mut(apc)
+        && e.get::<ShuntOccupier>() == Some(&ShuntOccupier(ai))
+    {
+        e.remove::<ShuntOccupier>();
+    }
+    if let Some(eye) = world.get::<AiCore>(ai).map(|c| c.eye) {
+        super::malf_modules::remove_button(world, eye, CORE_RETURN);
+    }
+}
+
+/// tg `malfvacate(forced = TRUE)` from the APC's `Destroy`: the occupier dies on its tile.
+fn apc_gone(
+    remove: On<Remove<ShuntOccupier>>,
+    apcs: Query<(&ShuntOccupier, Option<&ss13_shared::TilePos>)>,
+    mut commands: Commands,
+) {
+    let Ok((&ShuntOccupier(ai), pos)) = apcs.get(remove.entity) else {
+        return;
+    };
+    let (apc, pos) = (remove.entity, pos.copied());
+    commands.queue(move |world: &mut World| {
+        if world.get::<super::ai::AiInside>(ai) != Some(&super::ai::AiInside::Apc(apc)) {
+            return;
+        }
+        match pos {
+            Some(pos) => super::ai::unhouse(world, ai, pos),
+            None => {
+                world.entity_mut(ai).remove::<super::ai::AiInside>();
+            }
+        }
+        if let Some(eye) = world.get::<AiCore>(ai).map(|c| c.eye) {
+            super::malf_modules::remove_button(world, eye, CORE_RETURN);
+        }
+        if let Some(mut stat) = world.get_mut::<crate::health::Stat>(ai) {
+            *stat = crate::health::Stat::Dead;
+        }
+        info!("{ai} died with the APC {apc} it was shunted into");
+    });
 }
 
 /// tg `malfhack`: the "hack" act of the APC window, by the AI's eye `actor`.
@@ -402,10 +641,41 @@ mod tests {
     fn only_a_malf_ai_may_hack_an_apc_it_does_not_own() {
         let ai = Entity::from_raw_u32(1).unwrap();
         let other = Entity::from_raw_u32(2).unwrap();
-        assert_eq!(malf_status(None, None), APC_AI_NO_MALF);
-        assert_eq!(malf_status(Some((ai, false)), None), APC_AI_NO_MALF);
-        assert_eq!(malf_status(Some((ai, true)), None), APC_AI_NO_HACK);
-        assert_eq!(malf_status(Some((ai, true)), Some(other)), APC_AI_NO_HACK);
-        assert_eq!(malf_status(Some((ai, true)), Some(ai)), APC_AI_NO_MALF);
+        assert_eq!(malf_status(None, None, None, false), APC_AI_NO_MALF);
+        assert_eq!(
+            malf_status(Some((ai, false)), None, None, false),
+            APC_AI_NO_MALF
+        );
+        assert_eq!(
+            malf_status(Some((ai, true)), None, None, false),
+            APC_AI_NO_HACK
+        );
+        assert_eq!(
+            malf_status(Some((ai, true)), Some(other), None, false),
+            APC_AI_NO_HACK
+        );
+    }
+
+    #[test]
+    fn a_hacked_apc_offers_the_shunt_and_the_return() {
+        let ai = Entity::from_raw_u32(1).unwrap();
+        let other = Entity::from_raw_u32(2).unwrap();
+        let hacked = Some(ai);
+        assert_eq!(
+            malf_status(Some((ai, true)), hacked, None, false),
+            APC_AI_HACK_NO_SHUNT
+        );
+        assert_eq!(
+            malf_status(Some((ai, true)), hacked, Some(ai), true),
+            APC_AI_HACK_SHUNT_HERE
+        );
+        assert_eq!(
+            malf_status(Some((ai, true)), hacked, Some(other), true),
+            APC_AI_HACK_SHUNT_ANOTHER
+        );
+        assert_eq!(
+            malf_status(Some((ai, true)), hacked, None, true),
+            APC_AI_HACK_SHUNT_ANOTHER
+        );
     }
 }

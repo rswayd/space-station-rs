@@ -17,6 +17,7 @@
 //! | ---- | ------- |
 //! | 100 | `atmos` analyzer scans the user's turf |
 //! | 150 | `silicon::mmi::attack_self` |
+//! | 160 | `silicon::aicard::attack_self` |
 //! | 200 | `tools::attack_self` |
 //! | 300 | `holosign::attack_self` |
 //! | 400 | `forensics::server::attack_self` |
@@ -133,7 +134,9 @@
 //! | 1200 | `explosions::sources::fueltank_welder_act` |
 //! | 1300 | `antag::cult::server::item_interaction` |
 //! | 1400 | `antag::heretic::server::item_interaction` |
+//! | 1420 | `silicon::aicard::interact_with_atom` |
 //! | 1450 | `silicon::mmi::item_interaction` |
+//! | 1460 | `silicon::ai_core::item_interaction` |
 //! | 1500 | `bots::construction::item_interaction` |
 //! | 1600 | `machine_frame::item_interaction` |
 //! | 1650 | `radiation::geiger_interact` |

@@ -166,6 +166,7 @@ fn silicon_status(
     positions: Query<&TilePos>,
     remote: Query<(), With<RemoteActor>>,
     always: Query<(), With<AlwaysState>>,
+    inside: Query<&super::ai::AiInside>,
     net: Option<Res<CameraNet>>,
 ) {
     for mut window in &mut windows {
@@ -189,9 +190,19 @@ fn silicon_status(
                 continue;
             }
             let controls = !core.control_disabled && *stat == Stat::Conscious;
+            // tg `can_see`: a carded AI by the distance from its card (its eye is on it).
+            let sees = if matches!(inside.get(eye.ai), Ok(super::ai::AiInside::Card(_))) {
+                positions
+                    .get(actor)
+                    .ok()
+                    .and_then(|p| p.chebyshev(source_pos))
+                    .is_some_and(|d| d <= super::ai::CARDED_VIEW)
+            } else {
+                net.as_ref().is_some_and(|n| n.visible(source_pos))
+            };
             if power.is_some_and(|p| p.incapacitated()) {
                 UiStatus::Disabled
-            } else if controls && net.as_ref().is_some_and(|n| n.visible(source_pos)) {
+            } else if controls && sees {
                 UiStatus::Interactive
             } else {
                 UiStatus::Close
