@@ -68,6 +68,8 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/stack/telecrystal",
     "/obj/item/stock_parts/water_recycler",
     "/obj/item/storage/pill_bottle/mannitol/braintumor",
+    "/obj/item/clothing/glasses/blindfold/white",
+    "/obj/item/clothing/glasses/regular",
     "/obj/item/trash/can",
     "/obj/machinery/atmospherics/components/tank",
     "/obj/machinery/meter",
