@@ -64,6 +64,12 @@ pub struct SiliconInteractPlugin;
 
 impl Plugin for SiliconInteractPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // tg `attack_robot` -> `attack_ai`: a cyborg's empty hand opens machines.
+        app.add_click_handler(ClickPhase::EmptyHand, 100, |w, c| {
+            crate::silicon::interact::attack_robot(w, c.client, c.mob, c.target)
+        });
         app.add_message::<RobotClick>().add_systems(
             Update,
             (

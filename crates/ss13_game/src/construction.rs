@@ -272,6 +272,31 @@ pub struct ConstructionServerPlugin;
 
 impl Plugin for ConstructionServerPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // tg `/obj/item/stack/attack_hand` from the other hand: one unit into the empty active
+        // hand.
+        app.add_click_handler(ClickPhase::OtherHand, 1700, |w, c| {
+            c.held.is_none()
+                && crate::construction::split_into_hand(w, c.mob, c.target, c.active_hand)
+        });
+        // tg `attack_hand` of a false wall: open or close it.
+        app.add_click_handler(ClickPhase::EmptyHand, 2800, |w, c| {
+            crate::falsewall::attack_hand(w, c.target)
+        });
+        // Frames, and screwdrivers and crowbars on machines that come apart
+        // (`crate::machine_frame`): tool acts come before the machines' own handlers.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 1600, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::machine_frame::item_interaction(w, c.client, c.mob, h, c.target)
+            })
+        });
+        // tg `base_item_interaction` and `attackby` come before storage and dropping.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 4500, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::construction::item_interaction(w, c.client, c.mob, h, c.target, c.modifiers)
+            })
+        });
         app.init_resource::<BuildTemplates>()
             .add_plugins(crate::holosign::HolosignServerPlugin)
             .add_systems(

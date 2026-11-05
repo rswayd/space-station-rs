@@ -92,6 +92,14 @@ pub struct PrisonerConsolePlugin;
 
 impl Plugin for PrisonerConsolePlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // tg `item_interaction` of the prisoner console: a prisoner ID goes in.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 4900, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::brig::prisoner::item_interaction(w, c.client, c.mob, h, c.target)
+            })
+        });
         app.register_ui::<PrisonerManagementUi>()
             .add_observer(attach_console)
             .add_observer(attach_card)

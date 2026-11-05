@@ -178,6 +178,29 @@ pub struct DisposalsServerPlugin;
 
 impl Plugin for DisposalsServerPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // A destination tagger opens its window, a parcel is unwrapped.
+        app.add_click_handler(ClickPhase::AttackSelf, 1300, |w, c| {
+            crate::disposals::attack_self(w, c.client, c.mob, c.target)
+        });
+        // A tagger on a parcel, the package wrapper on an item, in the other hand.
+        app.add_click_handler(ClickPhase::OtherHand, 1300, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::disposals::mail_interaction(w, c.client, c.mob, h, c.target)
+            })
+        });
+        // tg `attack_hand` of disposal bins (the `DisposalUnit` window).
+        app.add_click_handler(ClickPhase::EmptyHand, 2500, |w, c| {
+            crate::disposals::interact(w, c.client, c.mob, c.target, c.modifiers)
+        });
+        // tg `item_interaction` of disposal bins (items go in), parcels (tagging) and
+        // `interact_with_atom` of the package wrapper.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 4200, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::disposals::item_interaction(w, c.client, c.mob, h, c.target, c.modifiers)
+            })
+        });
         app.init_resource::<DisposalReport>()
             .init_resource::<DisposalStats>()
             .init_resource::<DisposalClock>()

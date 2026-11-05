@@ -89,6 +89,17 @@ pub struct ChemDispenserPlugin;
 
 impl Plugin for ChemDispenserPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        app.add_click_handler(ClickPhase::EmptyHand, 1300, |w, c| {
+            crate::chem_dispenser::interact(w, c.client, c.mob, c.target, c.modifiers.right)
+        });
+        // A container into a chem dispenser (before pouring into it).
+        app.add_click_handler(ClickPhase::HeldOnTarget, 2400, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::chem_dispenser::item_interaction(w, c.client, c.mob, h, c.target)
+            })
+        });
         app.register_ui::<DispenserWindow>()
             .add_systems(
                 Startup,

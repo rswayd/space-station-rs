@@ -163,6 +163,16 @@ pub struct ChemMasterPlugin;
 
 impl Plugin for ChemMasterPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        app.add_click_handler(ClickPhase::EmptyHand, 1400, |w, c| {
+            crate::chem_master::interact(w, c.client, c.mob, c.target, c.modifiers.right)
+        });
+        app.add_click_handler(ClickPhase::HeldOnTarget, 2500, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::chem_master::item_interaction(w, c.client, c.mob, h, c.target)
+            })
+        });
         app.init_resource::<Printables>()
             .register_ui::<MasterWindow>()
             .add_systems(

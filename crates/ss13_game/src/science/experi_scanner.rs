@@ -109,6 +109,20 @@ pub struct ExperiScannerPlugin;
 
 impl Plugin for ExperiScannerPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // The experi-scanner opens its experiment configuration.
+        app.add_click_handler(ClickPhase::AttackSelf, 2400, |w, c| {
+            crate::science::experi_scanner::attack_self(w, c.client, c.mob, c.target)
+        });
+        // tg `pre_attack` of the experi-scanner: a scan instead of the attack (living mobs are
+        // taken before melee).
+        app.add_click_handler(ClickPhase::HeldOnTarget, 4400, |w, c| {
+            w.get::<crate::health::Health>(c.target).is_none()
+                && c.held.is_some_and(|h| {
+                    crate::science::experi_scanner::pre_attack(w, c.client, c.mob, h, c.target)
+                })
+        });
         app.register_ui::<ExperimentConfigureUi>()
             .add_systems(Startup, setup_destructive_scanners)
             .add_systems(

@@ -143,6 +143,17 @@ pub struct KitchenServerPlugin;
 
 impl Plugin for KitchenServerPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // tg `interact` / `attack_hand_secondary` of kitchen machines.
+        app.add_click_handler(ClickPhase::EmptyHand, 500, |w, c| {
+            crate::kitchen::interact(w, c.client, c.mob, c.target, c.modifiers.right)
+        });
+        // tg `item_interaction` of kitchen machines (inserting); food has reagents, so before chem.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 1800, |w, c| {
+            c.held
+                .is_some_and(|h| crate::kitchen::item_interaction(w, c.client, c.mob, h, c.target))
+        });
         app.add_systems(Startup, setup_machines)
             .add_systems(Update, kitchen_tick.run_if(any_running));
     }

@@ -135,6 +135,24 @@ pub struct ForensicsServerPlugin;
 
 impl Plugin for ForensicsServerPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // The forensic scanner's window, an evidence bag empties.
+        app.add_click_handler(ClickPhase::AttackSelf, 400, |w, c| {
+            crate::forensics::server::attack_self(w, c.client, c.mob, c.target)
+        });
+        // The forensic scanner scans the item in the other hand.
+        app.add_click_handler(ClickPhase::OtherHand, 300, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::forensics::server::item_interaction(w, c.client, c.mob, h, c.target)
+            })
+        });
+        // The forensic scanner scans, an evidence bag takes the item.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 1000, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::forensics::server::item_interaction(w, c.client, c.mob, h, c.target)
+            })
+        });
         app.register_ui::<ForensicScannerUi>()
             .add_observer(add_item_parts)
             .add_systems(

@@ -59,6 +59,12 @@ pub struct DevicesPlugin;
 
 impl Plugin for DevicesPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // A pair pinpointer toggles.
+        app.add_click_handler(ClickPhase::AttackSelf, 1700, |w, c| {
+            crate::devices::attack_self(w, c.client, c.mob, c.target)
+        });
         app.add_message::<Spoke>()
             .add_message::<SendChat>()
             .add_observer(add_megaphone)

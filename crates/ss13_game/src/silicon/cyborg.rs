@@ -94,6 +94,17 @@ pub struct CyborgPlugin;
 
 impl Plugin for CyborgPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // tg `attack_robot`: a cyborg's empty hand picks nothing up.
+        app.add_click_handler(ClickPhase::EmptyHand, 200, |w, c| {
+            crate::silicon::cyborg::inventory_action(
+                w,
+                c.client,
+                c.mob,
+                crate::silicon::cyborg::CyborgAction::EmptyHandClick,
+            )
+        });
         app.add_systems(Startup, init_stations)
             .add_systems(
                 Update,

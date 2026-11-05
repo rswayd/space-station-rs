@@ -75,6 +75,23 @@ pub struct EmagPlugin;
 
 impl Plugin for EmagPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // tg `/obj/item/card/emag/interact_with_atom` on the families with an `emag_act`.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 300, |w, c| {
+            !c.modifiers.right
+                && c.held.is_some_and(|h| {
+                    crate::emag::interact_with_atom(
+                        w,
+                        crate::tools::Actor {
+                            client: c.client,
+                            mob: c.mob,
+                            item: Some(h),
+                        },
+                        c.target,
+                    )
+                })
+        });
         app.add_systems(
             Update,
             (

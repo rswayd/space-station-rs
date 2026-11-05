@@ -327,6 +327,21 @@ pub struct BotsServerPlugin;
 
 impl Plugin for BotsServerPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // A bot part on a bot assembly (or what starts one) in the other hand: before storage, as
+        // tg `medkit/tool_act` takes a robot arm before its storage.
+        app.add_click_handler(ClickPhase::OtherHand, 200, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::bots::construction::item_interaction(w, c.client, c.mob, h, c.target)
+            })
+        });
+        // Bot parts on bot assemblies and what starts them.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 1500, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::bots::construction::item_interaction(w, c.client, c.mob, h, c.target)
+            })
+        });
         app.init_resource::<NavBeacons>()
             .add_observer(on_basic_mob)
             .add_observer(on_beacon)

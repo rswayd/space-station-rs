@@ -183,6 +183,24 @@ pub struct MedicalServerPlugin;
 
 impl Plugin for MedicalServerPlugin {
     fn build(&self, app: &mut App) {
+        // Click chain hooks (`crate::click_handlers`).
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // A health analyzer switches between health and wound scans.
+        app.add_click_handler(ClickPhase::AttackSelf, 1200, |w, c| {
+            crate::medical::attack_self(w, c.client, c.target)
+        });
+        // An organ loads the autosurgeon in the other hand, a screwdriver unloads it.
+        app.add_click_handler(ClickPhase::OtherHand, 400, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::medical::cyberimps::item_interaction(w, c.client, c.mob, h, c.target)
+            })
+        });
+        // tg `interact_with_atom` of medical items on living mobs.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 3800, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::medical::item_interaction(w, c.client, c.mob, h, c.target, c.modifiers)
+            })
+        });
         app.init_resource::<MedicalHandled>()
             .add_observer(give_body)
             .add_observer(give_drip)
