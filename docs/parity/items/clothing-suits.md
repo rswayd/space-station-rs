@@ -17,13 +17,13 @@
 Лабораторные халаты (расстёгиваются), куртки, фартуки, сигнальные жилеты, плащи детектива, костюмы адвоката, куртки СБ, пальто моли и эфириалов, рубашки.
 
 - **Код:** [`/obj/item/clothing/suit/toggle/labcoat`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/suits/labcoat.dm#L1), [`/obj/item/clothing/suit/jacket`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/suits/jacket.dm#L1), [`/obj/item/clothing/suit/apron`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/suits/jobs.dm#L6), [`/obj/item/clothing/suit/hazardvest`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/suits/jobs.dm#L183), [`/obj/item/clothing/suit/toggle/jacket/det_trench`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/suits/jobs.dm#L129), [`/obj/item/clothing/suit/costume/wellworn_shirt`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/suits/shirt.dm#L1)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/inventory.rs`: надеваются, хранилище костюма по `allowed`; нет расстёгивания (`toggle`)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/inventory.rs`: надеваются, хранилище костюма по `allowed`; расстёгиваются alt-кликом (`crates/ss13_game/src/clothing/toggles.rs`)
 
 ### Зимние куртки с капюшоном
 Зимние куртки всех отделов с капюшоном и защитой от холода; EVA-вариант, капитанская, ЦК.
 
 - **Код:** [`/obj/item/clothing/suit/hooded/wintercoat`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/suits/wintercoats.dm#L2), [`/obj/item/clothing/head/hooded/winterhood`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/suits/wintercoats.dm#L67)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/breath.rs`: теплоизоляция куртки учитывается; капюшона нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/breath.rs`: теплоизоляция куртки учитывается; капюшон кнопкой (`crates/ss13_game/src/clothing/toggles.rs`); нет EVA-особенностей
 
 ### Защитные костюмы (био, огнеупорный, сапёрный, радиационный)
 Биокостюмы с капюшоном (общий, вирусолог, СБ, уборщик), огнеупорные костюмы пожарных и атмосферщиков, сапёрный костюм, радиационный костюм.

@@ -5,7 +5,7 @@
 use bevy::prelude::*;
 
 use crate::convert::DmTypes;
-use crate::fidelity::{ext, is_under, num};
+use crate::fidelity::{ext, is_under, num, truthy};
 use crate::value::Field;
 
 pub const CLOTHING_ROOT: &str = "/obj/item/clothing";
@@ -35,6 +35,35 @@ pub struct DmClothing {
     pub vision_correction: bool,
     /// `clothing_traits` has `TRAIT_REAGENT_SCANNER` (science and chemical glasses).
     pub reagent_scanner: bool,
+    /// `flags_inv` (`HIDE*`, `code/__DEFINES/inventory.dm`): what the item hides on its wearer.
+    pub flags_inv: u32,
+    /// `flags_cover` (`*COVERSEYES`, `*COVERSMOUTH`, `PEPPERPROOF`).
+    pub flags_cover: u32,
+    /// `visor_flags`, `visor_flags_inv`, `visor_flags_cover`: what `adjust_visor` toggles.
+    pub visor_flags: u32,
+    pub visor_flags_inv: u32,
+    pub visor_flags_cover: u32,
+    /// `limb_integrity`: zone damage before a covered zone shreds (0: never).
+    pub limb_integrity: f32,
+    /// `actions_types` (item action buttons, e.g. `/datum/action/item_action/adjust`).
+    pub actions: Vec<String>,
+    /// Masks: BandaStation `can_be_adjusted`, breath masks `adjustable`.
+    pub adjustable: bool,
+    /// Jumpsuits: `has_sensor` (`BROKEN_SENSORS` -1 .. `LOCKED_SENSORS` 2), `random_sensor`,
+    /// `sensor_mode` (`SENSOR_OFF` .. `SENSOR_COORDS`), `can_adjust`, `alt_covers_chest`.
+    pub has_sensor: i32,
+    pub random_sensor: bool,
+    pub sensor_mode: i32,
+    pub can_adjust: bool,
+    pub alt_covers_chest: bool,
+    /// Hooded suits: `hoodtype` (empty: none) and `hood_up_affix`.
+    pub hood_type: String,
+    pub hood_up_affix: String,
+    /// `/obj/item/clothing/suit/toggle`: `toggle_noun` (empty: not a toggle suit).
+    pub toggle_noun: String,
+    /// Accessories: `attachment_slot` (body part bits, 0: any) and `above_suit`.
+    pub attachment_slot: u32,
+    pub above_suit: bool,
 }
 
 impl Default for DmClothing {
@@ -53,6 +82,24 @@ impl Default for DmClothing {
             tint: 0.0,
             vision_correction: false,
             reagent_scanner: false,
+            flags_inv: 0,
+            flags_cover: 0,
+            visor_flags: 0,
+            visor_flags_inv: 0,
+            visor_flags_cover: 0,
+            limb_integrity: 0.0,
+            actions: Vec::new(),
+            adjustable: true,
+            has_sensor: 0,
+            random_sensor: false,
+            sensor_mode: 0,
+            can_adjust: false,
+            alt_covers_chest: false,
+            hood_type: String::new(),
+            hood_up_affix: String::new(),
+            toggle_noun: String::new(),
+            attachment_slot: 0,
+            above_suit: false,
         }
     }
 }
@@ -75,7 +122,7 @@ impl Default for DmTank {
     }
 }
 
-const CLOTHING_VARS: [&str; 9] = [
+const CLOTHING_VARS: [&str; 15] = [
     "flash_protect",
     "tint",
     "siemens_coefficient",
@@ -85,6 +132,99 @@ const CLOTHING_VARS: [&str; 9] = [
     "cold_protection",
     "min_cold_protection_temperature",
     "max_heat_protection_temperature",
+    "flags_inv",
+    "flags_cover",
+    "visor_flags",
+    "visor_flags_inv",
+    "visor_flags_cover",
+    "limb_integrity",
+];
+
+/// How a var of a clothing subfamily converts.
+#[derive(Clone, Copy)]
+enum Kind {
+    Int,
+    Bits,
+    Bool,
+    Text,
+    Path,
+}
+
+/// Vars declared on a subfamily root: (root, var, field, kind). The root carries the resolved
+/// value, its subtypes what they declare.
+const FAMILY_VARS: [(&str, &str, &str, Kind); 12] = [
+    (
+        "/obj/item/clothing/mask",
+        "can_be_adjusted",
+        "adjustable",
+        Kind::Bool,
+    ),
+    (
+        "/obj/item/clothing/mask/breath",
+        "adjustable",
+        "adjustable",
+        Kind::Bool,
+    ),
+    (
+        "/obj/item/clothing/under",
+        "has_sensor",
+        "has_sensor",
+        Kind::Int,
+    ),
+    (
+        "/obj/item/clothing/under",
+        "random_sensor",
+        "random_sensor",
+        Kind::Bool,
+    ),
+    (
+        "/obj/item/clothing/under",
+        "sensor_mode",
+        "sensor_mode",
+        Kind::Int,
+    ),
+    (
+        "/obj/item/clothing/under",
+        "can_adjust",
+        "can_adjust",
+        Kind::Bool,
+    ),
+    (
+        "/obj/item/clothing/under",
+        "alt_covers_chest",
+        "alt_covers_chest",
+        Kind::Bool,
+    ),
+    (
+        "/obj/item/clothing/suit/hooded",
+        "hoodtype",
+        "hood_type",
+        Kind::Path,
+    ),
+    (
+        "/obj/item/clothing/suit/hooded",
+        "hood_up_affix",
+        "hood_up_affix",
+        Kind::Text,
+    ),
+    (
+        "/obj/item/clothing/suit/toggle",
+        "toggle_noun",
+        "toggle_noun",
+        Kind::Text,
+    ),
+    (
+        "/obj/item/clothing/accessory",
+        "attachment_slot",
+        "attachment_slot",
+        Kind::Bits,
+    ),
+    (
+        "/obj/item/clothing/accessory",
+        "above_suit",
+        "above_suit",
+        Kind::Bool,
+    ),
 ];
 
 /// `TRAIT_NEARSIGHTED_CORRECTED`.
@@ -112,15 +252,51 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
             let Some(n) = value(CLOTHING_ROOT, var).and_then(|v| num(Some(v))) else {
                 continue;
             };
-            let ron =
-                if var.ends_with("temperature") || var == "siemens_coefficient" || var == "tint" {
-                    format!("{:?}", n as f32)
-                } else if var == "flash_protect" {
-                    (n as i32).to_string()
-                } else {
-                    (n.max(0.0) as u32).to_string()
-                };
+            let ron = if var.ends_with("temperature")
+                || matches!(var, "siemens_coefficient" | "tint" | "limb_integrity")
+            {
+                format!("{:?}", n as f32)
+            } else if var == "flash_protect" {
+                (n as i32).to_string()
+            } else {
+                (n.max(0.0) as u32).to_string()
+            };
             out.push(ext("dm_clothing", var, ron));
+        }
+        if let Some(actions) = value(CLOTHING_ROOT, "actions_types").and_then(path_list) {
+            out.push(ext(
+                "dm_clothing",
+                "actions",
+                ron::to_string(&actions).expect("string lists always serialize"),
+            ));
+        }
+        for (root, var, field, kind) in FAMILY_VARS {
+            if !is_under(path, root) {
+                continue;
+            }
+            let Some(v) = (if path == root {
+                types.resolved(path, var)
+            } else {
+                ty.declared_vars.get(var)
+            }) else {
+                continue;
+            };
+            let ron = match kind {
+                Kind::Int => num(Some(v)).map(|n| (n as i32).to_string()),
+                Kind::Bits => num(Some(v)).map(|n| (n.max(0.0) as u32).to_string()),
+                Kind::Bool => Some(truthy(Some(v)).to_string()),
+                Kind::Text => Some(
+                    ron::to_string(v.as_str().unwrap_or_default())
+                        .expect("strings always serialize"),
+                ),
+                Kind::Path => Some(
+                    ron::to_string(v.get("path").and_then(|p| p.as_str()).unwrap_or_default())
+                        .expect("strings always serialize"),
+                ),
+            };
+            if let Some(ron) = ron {
+                out.push(ext("dm_clothing", field, ron));
+            }
         }
         if let Some(traits) = value(CLOTHING_ROOT, "clothing_traits") {
             let has = |name: &str| {
@@ -197,6 +373,17 @@ mod tests {
             "allowed": { "list": [{ "path": "/obj/item/tank/internals" }] } } },
         "/obj/item/clothing/gloves/color/yellow": { "parent": "/obj/item/clothing",
             "declared_vars": { "siemens_coefficient": 0 } },
+        "/obj/item/clothing/under": { "parent": "/obj/item/clothing", "declared_vars": {
+            "has_sensor": 1, "random_sensor": 1, "sensor_mode": 0, "can_adjust": 1,
+            "limb_integrity": 30 } },
+        "/obj/item/clothing/under/rank/prisoner": { "parent": "/obj/item/clothing/under",
+            "declared_vars": { "has_sensor": 2, "random_sensor": 0, "sensor_mode": 3 } },
+        "/obj/item/clothing/suit/hooded": { "parent": "/obj/item/clothing", "declared_vars": {
+            "hoodtype": { "path": "/obj/item/clothing/head/hooded/winterhood" },
+            "hood_up_affix": "_t" } },
+        "/obj/item/clothing/mask/gas": { "parent": "/obj/item/clothing", "declared_vars": {
+            "flags_inv": 1248, "actions_types": { "list": [
+                { "path": "/datum/action/item_action/adjust" }] } } },
         "/obj/item/tank": { "parent": "/obj/item", "declared_vars": { "volume": 70,
             "distribute_pressure": 101.325 } },
         "/obj/item/tank/internals/emergency_oxygen": { "parent": "/obj/item/tank",
@@ -242,6 +429,37 @@ mod tests {
         assert!(suit.contains(&("clothing_flags".into(), "18".into())));
         assert!(suit.contains(&("min_cold_protection_temperature".into(), "72.0".into())));
         assert!(suit.contains(&("allowed".into(), "[\"/obj/item/tank/internals\"]".into())));
+        let under = fields(&types, "/obj/item/clothing/under");
+        assert!(under.contains(&("limb_integrity".into(), "30.0".into())));
+        assert!(under.contains(&("has_sensor".into(), "1".into())));
+        assert!(under.contains(&("random_sensor".into(), "true".into())));
+        assert!(under.contains(&("can_adjust".into(), "true".into())));
+        let prisoner = fields(&types, "/obj/item/clothing/under/rank/prisoner");
+        assert_eq!(
+            prisoner,
+            [
+                ("has_sensor".into(), "2".into()),
+                ("random_sensor".into(), "false".into()),
+                ("sensor_mode".into(), "3".into())
+            ]
+        );
+        let hooded = fields(&types, "/obj/item/clothing/suit/hooded");
+        assert!(hooded.contains(&(
+            "hood_type".into(),
+            "\"/obj/item/clothing/head/hooded/winterhood\"".into()
+        )));
+        assert!(hooded.contains(&("hood_up_affix".into(), "\"_t\"".into())));
+        let gas = fields(&types, "/obj/item/clothing/mask/gas");
+        assert_eq!(
+            gas,
+            [
+                ("flags_inv".into(), "1248".into()),
+                (
+                    "actions".into(),
+                    "[\"/datum/action/item_action/adjust\"]".into()
+                )
+            ]
+        );
         let tank = fields(&types, "/obj/item/tank/internals/emergency_oxygen");
         assert_eq!(
             tank,

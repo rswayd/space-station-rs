@@ -204,8 +204,7 @@ pub(crate) fn cutoff_message(client: Entity, tank: String) -> SendChat {
 
 /// tg `can_breathe_internals` of a human: a breathing tube implant
 /// (`crate::medical::cyberimps`), a worn mask with `MASKINTERNALS` or a helmet with
-/// `HEADINTERNALS`.
-// shortcut: masks and visors are never pulled down (`up`), so `visor_flags` never apply.
+/// `HEADINTERNALS` (live: a mask pushed up loses it, `crate::clothing::toggles`).
 pub fn can_breathe_internals(world: &World, mob: Entity, inventory: &Inventory) -> bool {
     if crate::medical::cyberimps::breathing_tube(world, mob) {
         return true;

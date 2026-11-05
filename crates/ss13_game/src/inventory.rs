@@ -553,6 +553,9 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 && crate::atmos::is_analyzer(world, item)
             {
                 crate::atmos::open_analyzer(world, client, mob, item);
+            } else if let Some(item) = inventory.slot(slot) {
+                // A jumpsuit's sensors (`attack_self_secondary`, `attack_hand_secondary`).
+                crate::clothing::right_click_slot(world, client, mob, item);
             }
         }
         Action::AltSlot(slot) => {
@@ -572,6 +575,10 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 && crate::radiation::geiger_alt_click(world, client, item)
             {
                 // The Geiger counter's level is cleared.
+            } else if let Some(item) = inventory.slot(slot)
+                && crate::clothing::click_alt(world, client, mob, item)
+            {
+                // A jumpsuit's style, a toggle suit, a breath mask.
             } else if let Some(item) = inventory.slot(slot) {
                 // A PDA gives back its ID.
                 crate::modpc::pda::alt_click(world, mob, item);
@@ -762,6 +769,9 @@ fn click_equip_slot(
         // tg `attackby` of the worn item: an ID card into a worn PDA.
         (Some(held), Some(worn))
             if crate::modpc::pda::item_interaction(world, client, mob, held, worn) => {}
+        // An accessory, cable or cloth on worn clothing (`crate::clothing`).
+        (Some(held), Some(worn))
+            if crate::clothing::item_interaction(world, client, mob, held, worn) => {}
         (_, Some(worn)) if world.get::<crate::storage::Storage>(worn).is_some() => {
             crate::storage::click_storage(world, client, mob, worn);
         }
@@ -892,6 +902,7 @@ fn refresh_mobs(
     icons: Option<Res<IconIndex>>,
     mut humans: Option<ResMut<HumanAppearances>>,
     mut open: MessageWriter<OpenUi>,
+    worn: crate::clothing::WornLook,
 ) {
     for (mob, (inventory, body, mut hud, appearance, player, cuffed, halo)) in &mut mobs {
         let icon = |slot: Option<Entity>| {
@@ -928,18 +939,25 @@ fn refresh_mobs(
         else {
             continue;
         };
+        // What the clothing hides is not drawn (tg `obscured_slots`, `crate::clothing::cover`).
+        let hidden = worn.obscured(&inventory);
+        let shown = crate::clothing::cover::shown(&inventory, hidden);
         // Items without hand-resolved sprites are drawn by `item_sprites`.
         let path = |slot: Option<Entity>| {
             Some(items.get(slot?).ok()?.0.path.clone()).filter(|p| has_worn_sprites(p))
         };
         let look = HumanLook {
-            uniform: path(inventory.uniform),
-            shoes: path(inventory.shoes),
-            ..body.clone()
+            uniform: path(shown.uniform),
+            shoes: path(shown.shoes),
+            ..crate::clothing::cover::hide_body(body.clone(), hidden)
         };
         let mut sprites = icons
             .as_deref()
-            .map(|icons| item_sprites(&inventory, &items, icons))
+            .map(|icons| {
+                let mut sprites = item_sprites(&shown, &items, icons);
+                sprites.extend(worn.overlays(&shown, icons));
+                sprites
+            })
             .unwrap_or_default();
         // tg `update_worn_handcuffs`.
         if cuffed && let Some(cuffs) = icons.as_deref().and_then(crate::restraints::overlay) {

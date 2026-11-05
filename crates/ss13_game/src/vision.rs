@@ -451,7 +451,7 @@ pub struct VisorUp {
 /// `up` flips, `flash_protect` and `tint` go to 0 or back, the icon gets its "up" state). False for
 /// other items.
 // shortcut: only from the hand (tg also toggles worn ones through their action button); no
-// `visor_flags_inv`/`visor_flags_cover` (what the visor hides or covers), sounds or fishing.
+// sounds or fishing.
 pub fn visor_attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity) -> bool {
     let Some(path) = world
         .get::<ss13_mapload::DmItem>(item)
@@ -506,6 +506,11 @@ pub fn visor_attack_self(world: &mut World, client: Entity, mob: Entity, item: E
     if let Some(mut c) = world.get_mut::<DmClothing>(item) {
         c.flash_protect = flash_protect;
         c.tint = tint;
+        // What the visor hides and covers (`crate::clothing::cover`).
+        let c = &mut *c;
+        c.clothing_flags ^= c.visor_flags;
+        c.flags_inv ^= c.visor_flags_inv;
+        c.flags_cover ^= c.visor_flags_cover;
     }
     if let Some(mut i) = world.get_mut::<ss13_mapload::DmItem>(item) {
         i.worn_icon_state = worn;

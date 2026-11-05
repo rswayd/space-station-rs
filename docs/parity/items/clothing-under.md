@@ -23,29 +23,29 @@
 Alt-клик сворачивает комбинезон (`can_adjust`, меняет спрайт и открывает торс), правый alt-клик — альтернативный стиль.
 
 - **Код:** [`click_alt()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/under/_under.dm#L529), [`click_alt_secondary()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/under/_under.dm#L538)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/clothing/toggles.rs`: alt-клик сворачивает комбинезон с `can_adjust` (`_d`, грудь и руки открыты без `alt_covers_chest`, отключённые повреждением зоны не возвращаются; баг tg `&=` вместо `&= ~` не перенесён); серый комбинезон (спрайты тела `crate::human::WORN`) свёрнутым не рисуется; правый alt-клик в tg — снятие аксессуара, не стиль
 
 ### Датчики костюма
 Режимы датчиков (выкл., жив/мёртв, жизненные показатели, координаты) задаются на униформе и видны на консоли наблюдения за экипажем; ЭМИ ломает датчики, кабель с кусачками чинит; у заключённых датчики заблокированы. Отдельный модуль датчика переносится между униформами.
 
 - **Код:** [`set_sensor_mode()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/under/_under.dm#L281), [`break_sensors()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/under/_under.dm#L241), [`repair_sensors()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/under/_under.dm#L253), [`/obj/item/suit_sensor`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/under/_suit_sensor.dm#L2)
-- **Статус в ss13-rs:** ❌ нет — нет датчиков и консоли экипажа (консоль экипажа — вне этого раздела)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/clothing/sensors.rs`: `has_sensor`/`sensor_mode`/`random_sensor` из DM, ПКМ по комбинезону (в руке или надетому) — выбор режима (заблокированные, сломанные, отсутствующие отказывают); сильный ЭМИ ломает, слабый сбивает режим; кабель чинит; осмотр. Консоль `/obj/machinery/computer/crew` (tgui `CrewConsole`, `crates/ss13_game/src/clothing/client.rs`): имя и должность с ID, состояние, урон, зона, раз в 10 с, по уровню или всем станционным. API `sensors::trackable`/`reporting` для пинпоинтера экипажа (сам пинпоинтер — `devices.md`). Нет: модуля датчика (`/obj/item/suit_sensor`, кусачки), действия в меню раздевания, ctrl-клика, ссылки ИИ, сортировки/поиска в окне, NanoMap BandaStation
 
 ### Прикрепление аксессуаров
 На униформу крепится один аксессуар (повязка, медаль, жилет, кобура): клик аксессуаром по униформе, снятие alt-кликом; аксессуар рисуется поверх формы и может давать броню или хранилище.
 
 - **Код:** [`/obj/item/clothing/accessory`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/under/accessories/_accessories.dm#L11), [`attach_accessory()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/under/_under.dm#L354), [`remove_accessory()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/under/_under.dm#L388)
 - **BandaStation:** [`_under.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/under/_under.dm#L452) — аксессуары прячутся под верхней одеждой; [`_under.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/under/_under.dm#L462) — кобуры-аксессуары меняют вес формы
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/outfit.rs` не крепит `accessory` наряда
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/clothing/accessories.rs`: аксессуар крепится к униформе (в руке, в другой руке, надетой, на полу) по `attachment_slot`, до пяти; alt+ПКМ снимает первый в руку; рисуется поверх надетой формы, прячется под верхней одеждой с `HIDEBELT` без `above_suit` (BandaStation); осмотр формы и человека; удаляется с формой, высыпается при её разрушении. Нет: хранилища аксессуаров (кобуры), эффектов/трейтов при ношении, `accessory` наряда (данные наряда его не несут), утяжеления формы BandaStation
 
 ### Повязки, значки и жилеты
 Нарукавные повязки отделов, значок адвоката (хлопок по столу), значки фанатов клоуна/мима, карманный протектор, жетоны (аллергии), жилеты, фартук горничной, трибальные талисманы.
 
 - **Код:** [`/obj/item/clothing/accessory/armband`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/under/accessories/armbands.dm#L2), [`/obj/item/clothing/accessory/lawyers_badge`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/under/accessories/badges.dm#L2), [`/obj/item/clothing/accessory/dogtag`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/under/accessories/badges.dm#L120), [`/obj/item/clothing/accessory/waistcoat`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/under/accessories/vests.dm#L2), [`/obj/item/clothing/accessory/talisman`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/under/accessories/tribal.dm#L2)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — крепятся и рисуются как любой аксессуар (`crates/ss13_game/src/clothing/accessories.rs`); своих действий (хлопок значком, жетоны, талисманы) нет
 
 ### Медали
 Медали и ленты, которые капитан вручает с указанием причины (записывается в журнал наград).
 
 - **Код:** [`/obj/item/clothing/accessory/medal`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/under/accessories/medals.dm#L1), [`provide_reason()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/under/accessories/medals.dm#L21)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — медаль крепится к форме как аксессуар (`crates/ss13_game/src/clothing/accessories.rs`); вручения с причиной и журнала наград нет

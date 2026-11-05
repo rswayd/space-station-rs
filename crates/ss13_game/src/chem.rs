@@ -675,9 +675,7 @@ fn try_drain(world: &mut World, actor: Actor, target: Entity) {
     );
 }
 
-/// tg `canconsume`.
-// shortcut: anything in the mask slot covers the mouth (tg: `MASKCOVERSMOUTH`/`HEADCOVERSMOUTH`),
-// as `crate::medical`'s CPR.
+/// tg `canconsume`: headgear or a mask covering the mouth (`is_mouth_covered`) is in the way.
 fn can_consume(world: &mut World, actor: Actor, eater: Entity) -> bool {
     let held = actor.item.expect("a held container");
     if world.get::<MobReagents>(eater).is_none() {
@@ -688,21 +686,21 @@ fn can_consume(world: &mut World, actor: Actor, eater: Entity) -> bool {
         tell(world, actor.client, Span::Warning, format!("{src} пуст!"));
         return false;
     }
-    let masked = world
-        .get::<Inventory>(eater)
-        .and_then(|i| i.slot(InventorySlot::Mask))
-        .is_some();
-    if masked {
-        let who = if eater == actor.mob {
-            "свою"
-        } else {
-            "его"
+    let covered = crate::clothing::cover::mouth_covered(world, eater);
+    if let Some(covered) = covered {
+        let own = eater == actor.mob;
+        let headgear = world.get::<Inventory>(eater).and_then(|i| i.head) == Some(covered);
+        let what = match (headgear, own) {
+            (true, true) => "свой головной убор",
+            (true, false) => "его головной убор",
+            (false, true) => "свою маску",
+            (false, false) => "его маску",
         };
         tell(
             world,
             actor.client,
             Span::Warning,
-            format!("Сначала снимите {who} маску!"),
+            format!("Сначала снимите {what}!"),
         );
         return false;
     }

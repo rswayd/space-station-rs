@@ -41,7 +41,7 @@
 Дыхательная и медицинская маска для баллона; сдвигается с лица.
 
 - **Код:** [`/obj/item/clothing/mask/breath`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/masks/breath.dm#L1), [`/obj/item/clothing/mask`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/masks/_masks.dm#L1)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/internals.rs`: `MASKINTERNALS`, баллон закрывается при снятии маски; маска не сдвигается
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/internals.rs`: `MASKINTERNALS`, баллон закрывается при снятии маски; `crates/ss13_game/src/clothing/toggles.rs`: маска сдвигается (в руке, кнопкой, alt-клик) и тогда не подаёт баллон
 
 ### Маска СБ с громкоговорителем
 Маска-хейлер СБ: кнопка проигрывает фразу «Стоять!» и т.п. (злоупотребление ломает), SWAT-вариант; свисток, дудка для вечеринок.
