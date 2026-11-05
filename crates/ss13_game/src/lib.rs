@@ -150,6 +150,7 @@ pub mod actions;
 pub mod actions_client;
 #[cfg(feature = "server")]
 pub mod alt_appearance;
+#[cfg(feature = "server")]
 pub mod animation;
 #[cfg(feature = "client")]
 pub mod animation_client;
