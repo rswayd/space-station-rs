@@ -47,6 +47,7 @@
 //! | 2800 | `martial::attack_self` |
 //! | 2900 | `botany::attack_self` |
 //! | 3000 | `service::server::attack_self` |
+//! | 3050 | `fishing::server::attack_self` (rods), `fishing::aquarium::attack_self` (fish tanks) |
 //! | 3100 | `silicon::law_rack::attack_self` |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):
@@ -58,6 +59,7 @@
 //! | 200 | `bots::construction::item_interaction` |
 //! | 300 | `forensics::server::item_interaction` |
 //! | 400 | `medical::cyberimps::item_interaction` |
+//! | 450 | `fishing::server::insert_bait`, `fishing::aquarium::item_interaction` |
 //! | 500 | core: a storage opens or takes the held item |
 //! | 600 | `implants::item_interaction` |
 //! | 700 | `assemblies::server::item_interaction` |
@@ -109,6 +111,7 @@
 //! | 3000 | `holosign::attack_hand` |
 //! | 3100 | `plumbing::interact` |
 //! | 3200 | `service::server::interact` |
+//! | 3250 | `fishing::aquarium::interact` (aquariums, the fish-porter) |
 //! | 3300 | `defenses::server::interact` |
 //! | 3400 | `silicon::law_rack::interact` |
 //!
@@ -117,6 +120,7 @@
 //!
 //! | prio | handler |
 //! | ---- | ------- |
+//! | 50 | `fishing::server::held_on_target` (casts, a fisher's clicks), `fishing::aquarium::item_interaction` |
 //! | 100 | `antag::uplink::item_interaction` |
 //! | 200 | `antag::syndie_items::item_interaction` |
 //! | 300 | `emag::interact_with_atom` (left click) |

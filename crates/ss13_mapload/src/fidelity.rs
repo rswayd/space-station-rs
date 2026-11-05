@@ -292,6 +292,7 @@ impl<'a> ConvertContext<'a> {
         fields.extend(crate::drinks::type_fields(self.types, path));
         fields.extend(crate::barsign::type_fields(self.types, path));
         fields.extend(crate::service::type_fields(self.types, path));
+        fields.extend(crate::fishing::type_fields(self.types, path));
         fields.extend(crate::disposal::type_fields(self.types, path));
         fields.extend(crate::bots::type_fields(self.types, path));
         fields.extend(crate::mobs::type_fields(self.types, path));

@@ -30,6 +30,7 @@ mod events2;
 mod explosions;
 mod fire;
 mod firelocks;
+mod fishing;
 mod food;
 mod forensics;
 mod furniture;

@@ -130,6 +130,7 @@ pub fn examine_lines(world: &World, examiner: Entity, target: Entity) -> (String
     crate::assemblies::server::examine_lines(world, target, &mut lines);
     crate::forensics::server::examine_lines(world, target, &mut lines);
     crate::radiation::examine_lines(world, target, &mut lines);
+    crate::fishing::fish::examine_lines(world, target, &mut lines);
     (name, lines)
 }
 

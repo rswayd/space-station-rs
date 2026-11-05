@@ -328,6 +328,8 @@ pub fn runtime_types() -> BTreeSet<&'static str> {
         EVENT_RUNTIME_TYPES,
     ];
     out.extend(tables.into_iter().flatten().copied());
+    // Catches and the prefilled aquarium's fish (`ss13_game::fishing`).
+    out.extend(crate::fishing::runtime_types());
     // A canister's `relabel` copies another canister type's name and look.
     out.extend(atmos_machine::CANISTER_LABELS.iter().map(|&(_, path)| path));
     // Cutting a stationary tank open leaves its frame; wrenching pipes, devices and meters off
