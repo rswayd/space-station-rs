@@ -4,8 +4,11 @@
 //! R&D console (`/obj/machinery/computer/rdconsole`, tgui `Techweb`) in [`console`], the
 //! protolathe, circuit imprinter and departmental techfabs (`/obj/machinery/rnd/production`,
 //! tgui `Fabricator`) with their material storage (`/datum/remote_materials` and the ore silo) in
-//! [`lathe`], and the destructive analyzer (tgui `DestructiveAnalyzer`) in [`analyzer`].
-//! [`client`] draws the three windows. This module holds the windows' data, which both halves
+//! [`lathe`], the destructive analyzer (tgui `DestructiveAnalyzer`) in [`analyzer`], experiments
+//! (`code/modules/experisci/`) in [`experiments`] with their handlers (the experi-scanner, the
+//! destructive scanner, tgui `ExperimentConfigure`) in [`experi_scanner`], and the server control
+//! console (tgui `ServerControl`) in [`server_control`].
+//! [`client`] draws the windows. This module holds the windows' data, which both halves
 //! share.
 //!
 //! The node, design, material and machine data come from `ss13-mapload convert`
@@ -24,9 +27,15 @@ pub mod client;
 #[cfg(feature = "server")]
 pub mod console;
 #[cfg(feature = "server")]
+pub mod experi_scanner;
+#[cfg(feature = "server")]
+pub mod experiments;
+#[cfg(feature = "server")]
 pub mod lathe;
 #[cfg(feature = "server")]
 pub mod points;
+#[cfg(feature = "server")]
+pub mod server_control;
 #[cfg(feature = "server")]
 pub mod techweb;
 
@@ -43,6 +52,8 @@ impl bevy::prelude::Plugin for ScienceServerPlugin {
             lathe::LathePlugin,
             analyzer::AnalyzerPlugin,
             autolathe::AutolathePlugin,
+            experi_scanner::ExperiScannerPlugin,
+            server_control::ServerControlPlugin,
         ));
     }
 }
@@ -333,3 +344,137 @@ pub struct AnalyzerData {
 pub const EJECT_ITEM: &str = "eject_item";
 pub const DECONSTRUCT: &str = "deconstruct";
 pub const DECONSTRUCT_PATH: &str = "deconstruct_path";
+
+/// tgui `ExperimentConfigure`: an experiment handler's settings (the experi-scanner, the
+/// destructive scanner).
+pub struct ExperimentConfigureUi;
+
+impl UiInterface for ExperimentConfigureUi {
+    const NAME: &'static str = "ExperimentConfigure";
+    type Data = ExperimentConfigureData;
+    type StaticData = ();
+}
+
+/// One stage of an experiment's progress (`EXPERIMENT_PROG_*`).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum ProgressStage {
+    Bool {
+        text: String,
+        done: bool,
+    },
+    Integer {
+        text: String,
+        value: u32,
+        total: u32,
+    },
+    /// A sub-line of the stage above it (`⤷`).
+    Detail {
+        text: String,
+        done: bool,
+    },
+}
+
+impl ProgressStage {
+    /// `ExperimentStageRow`'s `completion`.
+    pub fn complete(&self) -> bool {
+        match self {
+            Self::Bool { done, .. } | Self::Detail { done, .. } => *done,
+            Self::Integer { value, total, .. } => value == total,
+        }
+    }
+
+    pub fn text(&self) -> &str {
+        match self {
+            Self::Bool { text, .. } | Self::Integer { text, .. } | Self::Detail { text, .. } => {
+                text
+            }
+        }
+    }
+}
+
+/// A techweb the handler can connect to (`techwebs` entry); its `ref` is `web_id`.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct ExperimentWeb {
+    pub web_id: String,
+    pub web_org: String,
+    pub selected: bool,
+    pub all_servers: Vec<String>,
+}
+
+/// An experiment the handler can select (`experiments` entry, `to_ui_data`); its `ref` is the
+/// experiment's type path.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct ExperimentInfo {
+    pub path: String,
+    pub name: String,
+    pub description: String,
+    pub tag: String,
+    pub performance_hint: String,
+    pub progress: Vec<ProgressStage>,
+    pub completed: bool,
+    pub selected: bool,
+}
+
+/// `ui_data`.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct ExperimentConfigureData {
+    pub always_active: bool,
+    pub has_start_callback: bool,
+    pub techwebs: Vec<ExperimentWeb>,
+    pub experiments: Vec<ExperimentInfo>,
+}
+
+pub const SELECT_SERVER: &str = "select_server";
+pub const CLEAR_SERVER: &str = "clear_server";
+pub const SELECT_EXPERIMENT: &str = "select_experiment";
+pub const CLEAR_EXPERIMENT: &str = "clear_experiment";
+pub const START_EXPERIMENT: &str = "start_experiment_callback";
+pub const EXPERIMENT_REF: &str = "ref";
+
+/// tgui `ServerControl`: the R&D server control console.
+pub struct ServerControlUi;
+
+impl UiInterface for ServerControlUi {
+    const NAME: &'static str = "ServerControl";
+    type Data = ServerControlData;
+    type StaticData = ();
+}
+
+/// A server of the techweb (`servers` entry); its `server_ref` is its index in the list.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct ServerInfo {
+    pub server_name: String,
+    pub server_details: String,
+    pub server_disabled: bool,
+}
+
+/// An R&D console of the techweb (`consoles` entry); its `console_ref` is its index.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct ConsoleInfo {
+    pub console_name: String,
+    pub console_location: String,
+    pub console_locked: bool,
+}
+
+/// A `research_logs` entry.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct LogInfo {
+    pub node_name: String,
+    pub node_cost: f64,
+    pub node_researcher: String,
+    pub node_research_location: String,
+}
+
+/// `ui_data`.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct ServerControlData {
+    pub server_connected: bool,
+    pub servers: Vec<ServerInfo>,
+    pub consoles: Vec<ConsoleInfo>,
+    pub logs: Vec<LogInfo>,
+}
+
+pub const LOCKDOWN_SERVER: &str = "lockdown_server";
+pub const SELECTED_SERVER: &str = "selected_server";
+pub const LOCK_CONSOLE: &str = "lock_console";
+pub const SELECTED_CONSOLE: &str = "selected_console";

@@ -5,8 +5,8 @@
 //! the science budget `SSeconomy.techweb_bounty`.
 //!
 //! Cost: one pass over the servers per second (MetaStation has two).
-// shortcut: no server control console (`rdservercontrol`), the master server's HDD theft
-// (`income_modifier` stays 1) or the servers' random name suffix.
+// shortcut: no master server HDD theft (`income_modifier` stays 1); the server control console is
+// `super::server_control`.
 
 use std::collections::HashMap;
 
@@ -67,8 +67,11 @@ pub fn load_research(world: &mut World) {
         };
         world.insert_resource(ResearchDb::new(data));
     }
+    let seed = world
+        .get_resource::<crate::combat::CombatRng>()
+        .map_or(0, |r| r.0);
     let db = world.resource::<ResearchDb>();
-    let web = Techweb::science(db);
+    let web = Techweb::science_seeded(db, super::experiments::ExperimentRng::new(seed));
     info!(
         "research: {} nodes ({} researched at start), {} designs ({} researched)",
         db.nodes.len(),
@@ -130,6 +133,13 @@ fn setup_servers(world: &mut World) {
     info!("research: {} R&D servers", servers.len());
     for e in servers {
         world.entity_mut(e).insert(ResearchServer::default());
+        // `name += " [num2hex(rand(1,65535), -1)]"`, for fluff.
+        let suffix = world
+            .get_resource_mut::<crate::combat::CombatRng>()
+            .map_or(1, |mut rng| rng.range(1, 65535));
+        if let Some(mut name) = world.get_mut::<ss13_mapload::DmName>(e) {
+            name.name = format!("{} {suffix:X}", name.name);
+        }
     }
 }
 

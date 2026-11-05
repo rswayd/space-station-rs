@@ -1,6 +1,7 @@
 //! The research windows (client): tgui `Techweb` (`Techweb/Start.tsx`, `Content.tsx`,
 //! `Overview.tsx`, `nodes/TechNode.tsx`, `nodes/detail.tsx`), `Fabricator` (`Fabricator.tsx`
-//! with `Fabrication/DesignBrowser.tsx` and `MaterialAccessBar.tsx`) and `DestructiveAnalyzer`.
+//! with `Fabrication/DesignBrowser.tsx` and `MaterialAccessBar.tsx`), `DestructiveAnalyzer`,
+//! `ExperimentConfigure` and `ServerControl`.
 //! The data is in [`super`], the server halves in [`super::console`], [`super::lathe`] and
 //! [`super::analyzer`].
 //!
@@ -33,7 +34,9 @@ impl Plugin for ScienceClientPlugin {
         app.register_ui_view::<TechwebUi>()
             .register_ui_view::<FabricatorUi>()
             .register_ui_view::<AutolatheUi>()
-            .register_ui_view::<DestructiveAnalyzerUi>();
+            .register_ui_view::<DestructiveAnalyzerUi>()
+            .register_ui_view::<ExperimentConfigureUi>()
+            .register_ui_view::<ServerControlUi>();
     }
 }
 
@@ -997,6 +1000,295 @@ fn analyzer_item(data: &AnalyzerData, item: String) -> impl Scene + use<> {
             --
             @Section { @title: "Deconstruction Methods" }
             Children [ {methods} -- {nodes} ]
+        ]
+    }
+}
+
+// --- Experiment configuration --------------------------------------------------------------
+
+impl ClientUi for ExperimentConfigureUi {
+    const WIDTH: f32 = 600.0;
+    const HEIGHT: f32 = 735.0;
+
+    fn content(_: &(), data: &ExperimentConfigureData) -> impl Scene {
+        experiment_configure_view(data)
+    }
+}
+
+/// `ExperimentConfigure`.
+fn experiment_configure_view(data: &ExperimentConfigureData) -> impl Scene + use<> {
+    let webs: Vec<_> = data
+        .techwebs
+        .iter()
+        .map(|w| {
+            let header = format!("{} / {}", w.web_id, w.web_org);
+            let button: Box<dyn SceneList> = if w.selected {
+                Box::new(EntityScene(bsn! {
+                    @ss13_ui_kit::Button { @content: "Отключиться" }
+                    ss13_ui_kit::Button { color: UiColor::Good }
+                    Act({CLEAR_SERVER.to_owned()})
+                    Name("experiments: disconnect")
+                }))
+            } else {
+                let params = ActParams(vec![(EXPERIMENT_REF.to_owned(), w.web_id.clone())]);
+                Box::new(EntityScene(bsn! {
+                    @ss13_ui_kit::Button { @content: "Подключиться" }
+                    Act({SELECT_SERVER.to_owned()})
+                    params
+                    Name("experiments: connect")
+                }))
+            };
+            let servers: Vec<_> = w.all_servers.iter().map(|n| text_row(n.clone())).collect();
+            let intro = "Соединение к этой сети поддерживают следующие сервера...".to_owned();
+            bsn! {
+                @Section { @title: header, @buttons: button }
+                Children [
+                    {EntityScene(text_row(intro))}
+                    --
+                    {servers}
+                ]
+            }
+        })
+        .collect();
+    let servers_label = if data.techwebs.is_empty() {
+        "Не найдены сервера, подключенные к техсети!"
+    } else {
+        "Пожалуйста, выберите техсеть для подключения..."
+    };
+    let experiments = data.techwebs.iter().any(|w| w.selected).then(|| {
+        let mut list = data.experiments.clone();
+        list.sort_by(|a, b| a.name.cmp(&b.name));
+        let hint = if list.is_empty() {
+            "Не найдены эксперименты в этой сети"
+        } else if data.always_active {
+            "Это устройство настроено для выполнения всех доступных экспериментов. Дальнейшие \
+             настройки не нужны."
+        } else {
+            "Выберите один из следующих экспериментов..."
+        };
+        let cards: Vec<_> = list.iter().map(experiment_card).collect();
+        EntityScene(bsn! {
+            @Section { @title: "Эксперименты" }
+            Children [
+                {EntityScene(text_row(hint.to_owned()))}
+                --
+                {cards}
+            ]
+        })
+    });
+    let start = data.has_start_callback.then(|| {
+        let disabled = !data.experiments.iter().any(|e| e.selected);
+        EntityScene(bsn! {
+            @ss13_ui_kit::Button { @icon: "flask", @content: "Выполнить эксперимент", @fluid: true }
+            ss13_ui_kit::Button { disabled: disabled }
+            Act({START_EXPERIMENT.to_owned()})
+            Name("experiments: start")
+        })
+    });
+    bsn! {
+        @WindowContent
+        Children [
+            @Section { @title: "Сервера", @fill: true, @scrollable: true }
+            Children [
+                {EntityScene(text_row(servers_label.to_owned()))}
+                --
+                {webs}
+                --
+                {experiments}
+                --
+                {start}
+            ]
+        ]
+    }
+}
+
+/// `Experiment` with its `ExperimentStageRow`s.
+fn experiment_card(exp: &ExperimentInfo) -> impl Scene + use<> {
+    let title = format!("{} — {}", exp.name, exp.tag);
+    let (act, params) = if exp.selected {
+        (CLEAR_EXPERIMENT, ActParams(vec![]))
+    } else {
+        (
+            SELECT_EXPERIMENT,
+            ActParams(vec![(EXPERIMENT_REF.to_owned(), exp.path.clone())]),
+        )
+    };
+    let selected = exp.selected;
+    let tooltip = exp.performance_hint.clone();
+    let name = Name::new(format!("experiment: {}", exp.path));
+    let stages: Vec<_> = exp
+        .progress
+        .iter()
+        .map(|stage| {
+            let marker = match stage {
+                ProgressStage::Bool { done: true, .. } => "✓".to_owned(),
+                ProgressStage::Bool { done: false, .. } => "✗".to_owned(),
+                ProgressStage::Integer { value, total, .. } => format!("{value}/{total}"),
+                ProgressStage::Detail { .. } => "⤷".to_owned(),
+            };
+            let color = if stage.complete() {
+                UiColor::Good
+            } else {
+                UiColor::Bad
+            };
+            let color = color.text().unwrap_or_default();
+            let text = stage.text().to_owned();
+            bsn! {
+                Node { flex_direction: FlexDirection::Row, margin: UiRect::left(px(12)) }
+                Children [
+                    Node { margin: UiRect::right(px(6)) }
+                    Children [ Text(marker) TextColor(color) ]
+                    --
+                    Text(text)
+                ]
+            }
+        })
+        .collect();
+    let description = exp.description.clone();
+    bsn! {
+        Node { flex_direction: FlexDirection::Column, margin: UiRect::bottom(px(8)) }
+        Children [
+            @ss13_ui_kit::Button { @content: title, @fluid: true, @tooltip: tooltip }
+            ss13_ui_kit::Button { selected: selected }
+            Act({act.to_owned()})
+            params
+            name
+            --
+            {EntityScene(text_row(description))}
+            --
+            {stages}
+        ]
+    }
+}
+
+// --- Server control ------------------------------------------------------------------------
+
+impl ClientUi for ServerControlUi {
+    const WIDTH: f32 = 575.0;
+    const HEIGHT: f32 = 400.0;
+
+    fn content(_: &(), data: &ServerControlData) -> impl Scene {
+        server_control_view(data)
+    }
+}
+
+/// `ServerControl`.
+fn server_control_view(data: &ServerControlData) -> impl Scene + use<> {
+    let body: Box<dyn SceneList> = if data.server_connected {
+        Box::new(EntityScene(server_control_content(data)))
+    } else {
+        Box::new(EntityScene(bsn! {
+            @NoticeBox { @danger: true }
+            Children [ Text("Not connected to a Server. Please sync one using a multitool.") ]
+        }))
+    };
+    bsn! { @WindowContent Children [ {body} ] }
+}
+
+fn server_control_content(data: &ServerControlData) -> impl Scene + use<> {
+    let servers: Box<dyn SceneList> = if data.servers.is_empty() {
+        Box::new(EntityScene(bsn! {
+            @NoticeBox { @info: true } Children [ Text("No servers found.") ]
+        }))
+    } else {
+        let rows: Vec<_> = data
+            .servers
+            .iter()
+            .enumerate()
+            .map(|(i, server)| {
+                let (content, color) = if server.server_disabled {
+                    ("Offline", UiColor::Bad)
+                } else {
+                    ("Online", UiColor::Good)
+                };
+                let params = ActParams(vec![(SELECTED_SERVER.to_owned(), i.to_string())]);
+                let label = server.server_name.clone();
+                let tooltip = server.server_details.clone();
+                bsn! {
+                    Node { flex_direction: FlexDirection::Column, margin: UiRect::bottom(px(4)) }
+                    Children [
+                        Text(label)
+                        --
+                        @ss13_ui_kit::Button { @content: content, @fluid: true, @tooltip: tooltip }
+                        ss13_ui_kit::Button { color: color }
+                        Act({LOCKDOWN_SERVER.to_owned()})
+                        params
+                    ]
+                }
+            })
+            .collect();
+        Box::new(EntityScene(bsn! {
+            @Section { @title: "Research Servers" } Children [ {rows} ]
+        }))
+    };
+    let consoles: Box<dyn SceneList> = if data.consoles.is_empty() {
+        Box::new(EntityScene(bsn! {
+            @NoticeBox { @info: true } Children [ Text("No consoles found.") ]
+        }))
+    } else {
+        let rows: Vec<_> = data
+            .consoles
+            .iter()
+            .enumerate()
+            .map(|(i, console)| {
+                let (content, color) = if console.console_locked {
+                    ("LOCKED", UiColor::Bad)
+                } else {
+                    ("UNLOCKED", UiColor::Good)
+                };
+                let params = ActParams(vec![(SELECTED_CONSOLE.to_owned(), i.to_string())]);
+                let label = format!(
+                    "{} - Location: {}",
+                    console.console_name, console.console_location
+                );
+                bsn! {
+                    Node { flex_direction: FlexDirection::Column, margin: UiRect::bottom(px(4)) }
+                    Children [
+                        Text(label)
+                        --
+                        @ss13_ui_kit::Button { @content: content, @fluid: true }
+                        ss13_ui_kit::Button { color: color }
+                        Act({LOCK_CONSOLE.to_owned()})
+                        params
+                    ]
+                }
+            })
+            .collect();
+        Box::new(EntityScene(bsn! {
+            @Section { @title: "Research Consoles" } Children [ {rows} ]
+        }))
+    };
+    let logs: Box<dyn SceneList> = if data.logs.is_empty() {
+        Box::new(EntityScene(bsn! {
+            @NoticeBox { @info: true } Children [ Text("No history found.") ]
+        }))
+    } else {
+        let rows: Vec<_> = data
+            .logs
+            .iter()
+            .map(|l| {
+                text_row(format!(
+                    "{} — {} — {} — {}",
+                    l.node_name,
+                    points_text(l.node_cost),
+                    l.node_researcher,
+                    l.node_research_location
+                ))
+            })
+            .collect();
+        Box::new(EntityScene(
+            bsn! { Node { flex_direction: FlexDirection::Column } Children [ {rows} ] },
+        ))
+    };
+    bsn! {
+        @Section { @fill: true, @scrollable: true }
+        Children [
+            {servers}
+            --
+            {consoles}
+            --
+            @Section { @title: "Research History" }
+            Children [ {logs} ]
         ]
     }
 }

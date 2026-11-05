@@ -648,6 +648,8 @@ ui_decoders!(
     ss13_game::science::TechwebUi,
     ss13_game::science::FabricatorUi,
     ss13_game::science::DestructiveAnalyzerUi,
+    ss13_game::science::ExperimentConfigureUi,
+    ss13_game::science::ServerControlUi,
     ss13_game::silicon::ui::CameraConsoleUi,
     ss13_game::silicon::ui::CameraViewUi,
     ss13_game::silicon::ui::ListInputUi,

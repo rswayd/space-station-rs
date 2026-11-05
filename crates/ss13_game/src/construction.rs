@@ -163,6 +163,8 @@ pub enum Job {
     Gibber(crate::gibber::StuffJob),
     /// Planting a C-4 charge ([`crate::explosions::sources`]).
     Explosive(crate::explosions::sources::ExplosiveJob),
+    /// An experi-scanner's scan ([`crate::science::experi_scanner`]).
+    Experiment,
 }
 
 /// A turf's baseturf stack, bottom first (tg `baseturfs`). Absent: assembled from the type's
@@ -939,6 +941,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Bot(job) => crate::bots::complete_job(world, mob, action, job),
         &Job::Gibber(job) => crate::gibber::complete(world, mob, action, job),
         &Job::Explosive(job) => crate::explosions::sources::complete(world, mob, action, job),
+        Job::Experiment => crate::science::experi_scanner::complete(world, mob, action),
         &Job::Emitter(job) => crate::power::emitter::complete(world, client, target, job, consume),
         Job::GirderBolts { from } => {
             if !is_under(&path, GIRDER) || obj_state(world, target) != *from || !consume(world) {
