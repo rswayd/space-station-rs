@@ -52,6 +52,7 @@ mod medical;
 mod medicine;
 mod mining;
 mod mobs;
+mod modsuit;
 mod mood;
 mod multiz;
 mod nukeops;

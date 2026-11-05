@@ -1976,6 +1976,26 @@ SS13_LIGHTING=0 SS13_MAP=$PWD/scripts/visual/maps/mecha.dmm SS13_ASSETS=$ASSETS 
     scripts/visual-check.sh scripts/visual/mecha.txt     # a Ripley with its pilot, driven
 ```
 
+### MODsuits
+
+`crates/ss13_game/src/modsuit/`, after tg `code/modules/mod/`. `ss13-mapload convert` writes
+`<assets>/modsuits.ron` (themes with skins and armor, control unit types with core, cell and
+modules, module types) and emits the control units, their parts, modules, cores and cells: rerun
+it after updating.
+
+- Wear a control unit on the back. Its action buttons: deploy (a list: every part or one), activate
+  (click twice within 3 s), panel (tgui `MODsuit`), module (a list of the toggleable modules).
+- Activation seals the deployed parts one second apart, then the unit; the suit then drains its
+  core's cell (`charge_drain`, 50 W for most themes) and shuts down when empty. While active or
+  with parts out the unit does not come off.
+- Maintenance with the unit in the other hand or on the floor: a screwdriver opens the cover
+  (1 s, not while active); then modules, a core, a cell and an ID (the access lock) go in, a
+  crowbar removes a module, a wrench the core (3 s), an empty hand the cell (1.5 s). An emag flips
+  the lock.
+- A selected health analyzer module scans the mob you middle-click.
+- Tests: `cargo nt -E 'test(/^modsuit::/)'` (integration) and the `modsuit` unit tests of
+  `ss13_game` and `ss13_mapload`.
+
 ### Silicons and cameras
 
 `crates/ss13_game/src/silicon/`, after tg `/obj/machinery/camera` with `SScameras`, the AI

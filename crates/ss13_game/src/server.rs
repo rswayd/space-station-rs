@@ -271,6 +271,7 @@ impl Plugin for GameServerPlugin {
         .add_plugins(crate::mobs::MobsServerPlugin)
         .add_plugins(crate::bots::BotsServerPlugin)
         .add_plugins(crate::mecha::MechaServerPlugin)
+        .add_plugins(crate::modsuit::server::ModSuitPlugin)
         .add_plugins(crate::disposals::DisposalsServerPlugin)
         .add_plugins(crate::genetics::GeneticsServerPlugin)
         .add_plugins(crate::wallmount::WallMountPlugin)

@@ -169,6 +169,7 @@ impl Plugin for ClickServerPlugin {
             .add_message::<ClickOn>()
             .add_message::<InterceptedClick>()
             .add_message::<RangedClick>()
+            .add_message::<crate::modsuit::server::ModuleClick>()
             .add_message::<crate::silicon::ai::AiClick>()
             .add_message::<crate::silicon::interact::RobotClick>()
             .add_systems(
@@ -230,6 +231,7 @@ fn resolve_clicks(
     objs: Query<&ss13_mapload::DmObj>,
     inside: Query<(), Or<(With<crate::mecha::Pilot>, With<InCloset>)>>,
     positions: Query<&TilePos>,
+    module_users: Query<(), With<crate::modsuit::server::ModuleSelected>>,
     mut out: ClickWriters,
 ) {
     let now = time.elapsed_secs_f64();
@@ -368,8 +370,16 @@ fn resolve_clicks(
             continue;
         }
         if modifiers.middle {
-            // tg `CtrlMiddleClickOn` is an admin tag: nothing for players.
-            if !modifiers.ctrl {
+            // tg `CtrlMiddleClickOn` is an admin tag: nothing for players. A selected MOD
+            // module takes the click instead (`COMSIG_MOB_MIDDLECLICKON`, `crate::modsuit`).
+            if !modifiers.ctrl && module_users.contains(mob) {
+                out.module.write(crate::modsuit::server::ModuleClick {
+                    client,
+                    mob,
+                    target,
+                    target_pos,
+                });
+            } else if !modifiers.ctrl {
                 out.middle.write(MiddleClick { client, mob });
             }
             continue;
@@ -503,4 +513,5 @@ struct ClickWriters<'w> {
     robot: MessageWriter<'w, crate::silicon::interact::RobotClick>,
     ranged: MessageWriter<'w, RangedClick>,
     ghost: MessageWriter<'w, crate::multiz::GhostClick>,
+    module: MessageWriter<'w, crate::modsuit::server::ModuleClick>,
 }

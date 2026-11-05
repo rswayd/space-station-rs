@@ -7,13 +7,13 @@
 
 - **Код:** [`/obj/item/mod/module`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/_module.dm#L2), [`activate()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/_module.dm#L149), [`on_select()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/_module.dm#L116)
 - **BandaStation:** [`_module.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/_module.dm#L417) — учёт видов (species) для модулей
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/modsuit/modules.rs` (`ModModule`), `crates/ss13_game/src/modsuit/server.rs`: типы (пассивный, используемый, переключаемый, выбираемый с использованием средней кнопкой), сложность, простой/работа/использование заряда, кулдаун, требуемые части (`on_part_activation` при герметизации), `MODULE_ALLOW_*`, закрепление на панели действий (и `default_pins` один раз на носителя); нет оверлеев модулей на спрайте (и BandaStation-вариантов по видам)
 
 ### Общие модули
 Хранилище (и блюспейс-хранилище), джетпак, джамп-джет, статус-ридаут, отверстие для рта, ЭМИ-щит, фонарь, диспенсер, longfall, терморегулятор, ДНК-замок, плазменный стабилизатор, стабилизатор шляпы, радио жестового языка, joint torsion, переработчик, рыболовная перчатка, амортизатор.
 
 - **Код:** [`storage`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_general.dm#L4), [`jetpack`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_general.dm#L93), [`dna_lock`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_general.dm#L608), [`recycler`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_general.dm#L814), [`storage/holding`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/module_holding.dm#L4)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/modsuit/modules.rs`: хранилища (все с `storage_type`: блок становится хранилищем, извлечение высыпает содержимое), ЭМИ-щит (`EMP_PROTECT_ALL` блока; продвинутый — носителю при герметизации), фонарь (свет на носителе, дальность 2–5 в настройке, `5 Вт × дальность`); джетпак и остальные переключаются и тратят заряд без эффекта — нет невесомого дрейфа (группа движения), longfall, терморегулятора, ДНК-замка и т.д.
 
 ### Визоры
 HUD-визоры: медицинский, диагностический, СБ, мезонный, тепловизор, ночного видения.
@@ -25,13 +25,13 @@ HUD-визоры: медицинский, диагностический, СБ, 
 Сварочная защита, T-ray сканер, магнитные ботинки, трос (tether), радиационная защита, конструктор (сканер чертежей), защита головы, распылитель.
 
 - **Код:** [`welding`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_engineering.dm#L4), [`magboot`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_engineering.dm#L80), [`tether`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_engineering.dm#L126), [`constructor`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_engineering.dm#L415)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/modsuit/modules.rs`: сварочная защита (`flash_protect` шлема = 4 при герметизации), магнитные ботинки (не скользят на воде и льду, `slowdown_active`); нет `TRAIT_NEGATES_GRAVITY` (гравитация — группа движения), T-ray, троса, радиационной защиты (нет радиации), конструктора, распылителя
 
 ### Медицинские модули
 Анализатор здоровья, быстрый перенос, инжектор, органайзер (выстрел органами), дефибриллятор, thread ripper, хирургический процессор.
 
 - **Код:** [`health_analyzer`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_medical.dm#L8), [`defibrillator`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_medical.dm#L236), [`surgical_processor`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_medical.dm#L380)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/modsuit/modules.rs`: анализатор здоровья (выбран — средний клик по мобу: здоровье или раны по режиму в настройке, `use_energy_cost`, кулдаун 0,5 с; химический режим не портирован); остальные медицинские модули не портированы
 
 ### Модули СБ
 Магнитная сбруя, перцовые наплечники, кобура, мегафон, захват преступника, гаситель снарядов, активный сонар, помощник стрельбы, блок толчков, быстрые наручники.

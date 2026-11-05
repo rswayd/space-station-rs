@@ -44,6 +44,7 @@ pub mod mecha;
 pub mod medical;
 pub mod mining;
 pub mod mobs;
+pub mod modsuit;
 pub mod plants;
 pub mod power;
 pub mod radio;

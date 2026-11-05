@@ -614,6 +614,7 @@ type BodyItem<'a> = (
         Option<&'a crate::taser::TaseSlowdown>,
         Option<&'a crate::mood::SanitySlowdown>,
         Option<&'a crate::hallucination::ScrewyHud>,
+        Option<&'a crate::modsuit::server::SuitSlowdown>,
     ),
 );
 
@@ -637,6 +638,7 @@ fn body_state(
             Changed<crate::janitor::Walking>,
             Changed<crate::taser::TaseSlowdown>,
             Changed<crate::mood::SanitySlowdown>,
+            Changed<crate::modsuit::server::SuitSlowdown>,
         )>,
     >,
     index: Res<SpatialIndex>,
@@ -662,7 +664,7 @@ fn body_state(
         name,
         drag,
         traits,
-        (zone, fat, limits, pilot, speed, walking, tased, sanity, screwy),
+        (zone, fat, limits, pilot, speed, walking, tased, sanity, screwy, suit),
     ) in &mut mobs
     {
         let traits = traits.copied().unwrap_or_default();
@@ -686,6 +688,10 @@ fn body_state(
         // `/datum/movespeed_modifier/sanity` (`crate::mood`).
         if let Some(sanity) = sanity {
             delay += sanity.0 / 10.0;
+        }
+        // MOD parts (`/datum/movespeed_modifier/equipment_speedmod`, `crate::modsuit`).
+        if let Some(suit) = suit {
+            delay += suit.0 / 10.0;
         }
         // Limping and disabled legs (`crate::medical::wounds`).
         if let Some(limits) = limits {
