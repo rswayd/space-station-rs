@@ -220,12 +220,7 @@ fn input_tiles(world: &mut World) {
             continue;
         }
         let tile = pos.step(dirs(world, orm).0);
-        let here: Vec<Entity> = world
-            .resource::<SpatialIndex>()
-            .on_tile(tile)
-            .iter()
-            .copied()
-            .collect();
+        let here: Vec<Entity> = world.resource::<SpatialIndex>().on_tile(tile).to_vec();
         let mut ores = Vec::new();
         for e in here {
             if is_ore(world, e) {
