@@ -47,6 +47,7 @@ mod martial;
 mod mecha;
 mod medical;
 mod medicine;
+mod mining;
 mod mobs;
 mod mood;
 mod multiz;

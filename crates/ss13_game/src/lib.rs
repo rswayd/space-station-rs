@@ -287,6 +287,7 @@ pub mod martial;
 pub mod mecha;
 #[cfg(feature = "server")]
 pub mod medical;
+pub mod mining;
 #[cfg(feature = "server")]
 pub mod mobs;
 pub mod modpc;

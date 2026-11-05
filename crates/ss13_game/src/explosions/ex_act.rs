@@ -629,6 +629,8 @@ pub fn ex_act_turf(world: &mut World, pos: TilePos, severity: Severity) {
         }
     } else if is_under(&path, FLOOR) {
         ex_act_floor(world, pos, severity);
+    } else {
+        crate::mining::rocks::ex_act(world, pos, severity);
     }
 }
 

@@ -6,19 +6,19 @@
 
 - **Код:** [`/turf/closed/mineral`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/closed/minerals.dm#L6), [`gets_drilled()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/closed/minerals.dm#L278), [`manual_mine()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/closed/minerals.dm#L232), [`/turf/closed/mineral/random`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/closed/minerals.dm#L390), [`spread_vein()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/closed/minerals.dm#L74)
 - **BandaStation:** [`minerals.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/closed/minerals.dm#L684) — вырезана смена иконки для снежных стен с рудой
-- **Статус в ss13-rs:** ❌ нет — стены грузятся с карты как непроходимые турфы, копать их нельзя
+- **Статус в ss13-rs:** 🟡 `ss13_game::mining::rocks`: копаются инструментом (`use_tool`), слабые — руками, шагом в стену с киркой; `gets_drilled` роняет `mineral_amt` руды и счищает стену до пола; случайные стены бросают руду при старте раунда по базовой таблице `mineral_chances()`; взрывы и ПКА бурят по твёрдости; нет распространения жил, глубинных шансов, таблиц подтипов (вулкан/снег/high_chance), подсветки сканером
 
 ### Гибтонит
 Взрывоопасная порода: при копании начинает отсчёт, его можно обезвредить анализатором и вынести гибтонит как взрывчатку (сила зависит от момента остановки).
 
 - **Код:** [`/turf/closed/mineral/gibtonite`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/closed/minerals.dm#L1074), [`explosive_reaction()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/closed/minerals.dm#L1105), [`/obj/item/gibtonite`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/ores_coins.dm#L332)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 `ss13_game::mining::rocks`: удар запускает отсчёт (`det_time` 8–10 импульсов по 0,5 с, затем взрыв 1/3/5; повторный удар — сразу 1/2/5), сканер обезвреживает, стабильный выкапывается рудой с качеством по оставшимся импульсам; руда гибтонита как взрывчатка (удар киркой, сборки) не перенесена
 
 ### Руды
 Стопки руды: железо, песок (стекло, базальт), плазма, серебро, золото, алмазы, уран, бананиум, титан, блюспейс-кристаллы, шлак. Руда тяжёлая, ломается при броске, на ORM даёт очки.
 
 - **Код:** [`/obj/item/stack/ore`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/ores_coins.dm#L5), [`/obj/item/stack/ore/iron`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/ores_coins.dm#L109), [`/obj/item/stack/ore/plasma`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/ores_coins.dm#L222), [`/obj/item/stack/ore/bluespace_crystal`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/stacks/bscrystal.dm#L2)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 стопки руды с очками и `refined_type` (`ss13_mapload::mining::DmOre`), сварка в листы (`welder_act`), ORM даёт очки; нет поломки при броске, плавки в огне, оверлеев стопки
 
 ### Рудные вентили и волны защиты (ore vents)
 На лаваленде/ледяной луне вентили с набором минералов: шахтёр сканирует вентиль, отбивается от волн фауны, затем вентиль (подключённый дроном) производит валуны; босс-вентили. Подсистема `SSore_generation` распределяет минералы и производит валуны.
@@ -42,13 +42,13 @@ BRM телепортирует валуны с вентилей на станц�
 Принимает руду (с конвейера или руками), плавит в материалы прямо в силос, начисляет шахтёрские очки на ID; печать сплавов; объявления о новых материалах.
 
 - **Код:** [`/obj/machinery/mineral/ore_redemption`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/machine_redemption.dm#L4), [`ui_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/machine_redemption.dm#L306), [`local_redeem_points()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/machine_redemption.dm#L87); tgui: [`OreRedemptionMachine.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/OreRedemptionMachine.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 `ss13_game::mining::orm` (окно `OreRedemptionMachine`): руда руками, из сумки и с входного тайла (лежащая или в рудном ящике) плавится в силос с `ore_multiplier`, очки `points × point_upgrade`; `Claim` на счёт ID, `Release` листов и `Smelt` сплавов (дизайны `SMELTER`) с доступом mineral storeroom; нет уведомлений консолям запросов, поворота входа/выхода, апгрейдов и разборки
 
 ### Рудный силос (ore silo)
 Общее хранилище материалов станции: к нему подключены лата, ORM и прочие машины; журнал операций, блокировка отдельных машин, взлом емагом.
 
 - **Код:** [`/obj/machinery/ore_silo`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/machine_silo.dm#L26), [`connect_receptacle()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/machine_silo.dm#L195), [`/datum/ore_silo_log`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/machine_silo.dm#L561); tgui: [`OreSilo.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/OreSilo.tsx)
-- **Статус в ss13-rs:** 🟡 `ss13_game::science::lathe` (`OreSilo`): общее хранилище R&D-лат своего уровня, требование ID с банковским счётом (или доступа QM); нет окна силоса, журнала, удержаний, банов, ORM
+- **Статус в ss13-rs:** 🟡 `ss13_game::science::lathe` (`OreSilo`): общее хранилище R&D-лат и ORM (`ss13_game::mining::orm`) своего уровня, требование ID с банковским счётом (или доступа QM); нет окна силоса, журнала, удержаний, банов
 
 ### Плавильный блок, укладчик и разгрузчик
 Классическая цепочка на конвейере: плавильный блок с консолью (выбор материала/сплава), укладчик листов в стопки с консолью, разгрузчик ящиков.
@@ -60,6 +60,6 @@ BRM телепортирует валуны с вентилей на станц�
 Тачка-ящик для руды (выгрузка содержимого), рудные контейнеры, сумка для руды, автоматически собирающая руду под ногами.
 
 - **Код:** [`/obj/structure/ore_box`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/satchel_ore_box.dm#L4), [`/obj/structure/ore_container`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/ore_containers.dm#L2), [`/obj/item/storage/bag/ore`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/storage/bags.dm#L97); tgui: [`OreBox.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/OreBox.tsx), [`OreContainer.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/OreContainer.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 `ss13_game::mining::rocks`: рудный ящик принимает руду руками и из сумки, окно `OreBox` высыпает содержимое, лом (5 с) разбирает на 4 доски; сумка собирает руду под носителем после каждого шага (в тянущийся рудный ящик, если он есть); нет `/obj/structure/ore_container`, ограничения сумки только рудой (`can_hold`)
 
 Трудовой лагерь (гулаг: консоль сдачи руды, укладчик заключённых, шаттл) — см. ../security/.

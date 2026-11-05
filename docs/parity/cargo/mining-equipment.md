@@ -5,13 +5,13 @@
 Кирки (ржавая, мини, серебряная, алмазная, самодельная), дрели и алмазная дрель, отбойный молоток (звуковой); лопата и садовая лопатка копают песок/снег. Скорость копания по `toolspeed`.
 
 - **Код:** [`/obj/item/pickaxe`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/equipment/mining_tools.dm#L2), [`/obj/item/pickaxe/drill`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/equipment/mining_tools.dm#L65), [`/obj/item/pickaxe/drill/jackhammer`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/equipment/mining_tools.dm#L89), [`/obj/item/shovel`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/equipment/mining_tools.dm#L112)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 `ss13_game::mining::rocks`: кирки, дрели и отбойный молоток (`TOOL_MINING`) копают минеральные стены кликом или шагом в стену за `tool_mine_speed × toolspeed`; нет копания песка/снега лопатами, звуков инструментов, навыка шахтёра
 
 ### Шахтёрские сканеры
 Ручной и автоматический (продвинутый) сканеры подсвечивают руду в стенах вокруг на несколько секунд.
 
 - **Код:** [`/obj/item/mining_scanner`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/equipment/mineral_scanner.dm#L2), [`/obj/item/t_scanner/adv_mining_scanner`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/equipment/mineral_scanner.dm#L36)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 `ss13_game::mining::rocks`: сканер только обезвреживает активный гибтонит; подсветки руды в стенах нет
 
 ### Резонатор
 Ставит резонансные поля, которые через паузу взрываются, ломая породу и раня фауну; улучшенная версия.
@@ -20,7 +20,7 @@
 - **Статус в ss13-rs:** ❌ нет
 
 ### Кинетический крушитель и трофеи
-Двуручное оружие шахтёра: выстрел дестабилизатором метит цель, удар по метке наносит бонусный урон в спину; трофеи с фауны и мегафауны дают особые эффекты; скины (меч, гарпун, кинжал, глефа). Кинетический акселератор (ПКА) — см. боевое оружие (не этот каталог).
+Двуручное оружие шахтёра: выстрел дестабилизатором метит цель, удар по метке наносит бонусный урон в спину; трофеи с фауны и мегафауны дают особые эффекты; скины (меч, гарпун, кинжал, глефа). Кинетический акселератор (ПКА) — см. боевое оружие (не этот каталог); его перезарядка и бурение стен — `ss13_game::mining::rocks`.
 
 - **Код:** [`/obj/item/kinetic_crusher`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/equipment/kinetic_crusher/kinetic_crusher.dm#L8), [`/obj/item/crusher_trophy`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/equipment/kinetic_crusher/kinetic_crusher_trophies.dm#L5), [`trophies_fauna.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/equipment/kinetic_crusher/trophies_fauna.dm#L6), [`trophies_megafauna.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/equipment/kinetic_crusher/trophies_megafauna.dm#L6)
 - **Статус в ss13-rs:** ❌ нет
@@ -65,13 +65,13 @@
 Консоль заказа за шахтёрские очки с ID (ORM начисляет очки), карта очков для передачи, ваучер на набор (крушитель, фултон, резонатор, капсула, минибот, набор новобранца, перчатки). Консоль корабля големов.
 
 - **Код:** [`/obj/machinery/computer/order_console/mining`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/computer/orders/order_computer/mining_order.dm#L3), [`/obj/item/mining_voucher`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/computer/orders/order_computer/mining_order.dm#L83), [`/obj/item/card/mining_point_card`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/computer/orders/order_computer/mining_order.dm#L95), [`/datum/voucher_set/mining`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/voucher_sets.dm#L38), [`/obj/machinery/computer/order_console/mining/golem`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/computer/orders/order_computer/golem_order.dm#L1); tgui: [`ProduceConsole.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/ProduceConsole.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 `ss13_game::mining::console` (окно `ProduceConsole`): корзина товаров консоли (каталог `/datum/orderable_item` по её категориям), оплата шахтёрскими очками счёта ID; экспресс — сразу на тайл покупателя (без пода), обычная доставка — ящиком на ближайшем шаттле снабжения; ORM начисляет очки (`ss13_game::mining::orm`); нет ваучеров, карты очков, консоли големов, объявления в канал снабжения
 
 ### Шахтёрский шаттл и шкафы шахтёров
 Консоль шаттла между станцией и аванпостом на лаваленде/ледяной луне; гардероб и шкаф шахтёра со снаряжением.
 
 - **Код:** [`/obj/machinery/computer/shuttle/mining`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/mine_items.dm#L92), [`/obj/docking_port/stationary/mining_home`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/mine_items.dm#L126), [`/obj/structure/closet/secure_closet/miner`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/mine_items.dm#L57)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ❌ нет — уровня шахты (лаваленд/ледяная луна) не загружается, шаттлу некуда лететь
 
 ### Вспомогательная база (aux base)
 Строительная база шахтёров: консоль с дронами-строителями, выбор места посадки маяком, запуск базы на планету.

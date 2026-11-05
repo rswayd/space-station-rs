@@ -259,7 +259,9 @@ fn step(world: &mut World, e: Entity, dt: f32) {
                 continue;
             }
             let name = crate::obj_damage::strip(&crate::security::name_of(world, e)).to_owned();
+            crate::mining::rocks::kinetic_prehit(world, &mut p.data, target);
             hit(world, e, &p, &name, target);
+            crate::mining::rocks::kinetic_strike(world, &p.data, p.firer, target);
             if let Ok(entity) = world.get_entity_mut(e) {
                 entity.despawn();
             }
