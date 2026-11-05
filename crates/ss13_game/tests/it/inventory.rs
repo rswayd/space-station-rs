@@ -161,15 +161,28 @@ fn fixture_assets() -> PathBuf {
 #[derive(Resource, Default)]
 struct LastHud(Option<HudData>);
 
-fn record_hud(mut received: MessageReader<UiMessageReceived>, mut last: ResMut<LastHud>) {
+fn record_hud(
+    mut received: MessageReader<UiMessageReceived>,
+    mut last: ResMut<LastHud>,
+    mut hud_window: Local<Option<u32>>,
+) {
     for UiMessageReceived(message) in received.read() {
+        // Other windowless HUDs (mood) update too: only the inventory HUD's window counts.
         let data = match message {
             UiServerMessage::Open {
-                interface, data, ..
-            } if interface == InventoryHudUi::NAME => data,
+                window,
+                interface,
+                data,
+                ..
+            } if interface == InventoryHudUi::NAME => {
+                *hud_window = Some(*window);
+                data
+            }
             UiServerMessage::Update {
-                data: Some(data), ..
-            } => data,
+                window,
+                data: Some(data),
+                ..
+            } if *hud_window == Some(*window) => data,
             _ => continue,
         };
         last.0 = Some(ss13_tgui::decode(data).unwrap());

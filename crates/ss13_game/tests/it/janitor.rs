@@ -305,6 +305,7 @@ impl Station {
 #[test]
 fn bleed_mop_slip_spray_soap() {
     let mut s = Station::start("bleed_mop_slip_spray_soap");
+    s.0.without_mood();
     let a = s.mob();
     assert_eq!(*s.get::<TilePos>(a), SPAWN);
 

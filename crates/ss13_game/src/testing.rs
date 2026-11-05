@@ -216,6 +216,19 @@ pub struct Station {
 }
 
 impl Station {
+    /// Removes every mob's mood, for tests of exact tg delays: a content mob's sanity speeds
+    /// its actions up (tg `high_sanity`, see `crate::mood`).
+    pub fn without_mood(&mut self) {
+        let world = self.server.world_mut();
+        let mobs: Vec<Entity> = world
+            .query_filtered::<Entity, With<crate::mood::Mood>>()
+            .iter(world)
+            .collect();
+        for mob in mobs {
+            world.entity_mut(mob).remove::<crate::mood::Mood>();
+        }
+    }
+
     /// [`server_app`] without clients.
     pub fn start(map: MapLoadPlugin, setup: impl FnOnce(&mut App)) -> Self {
         Self::new(server_app(map, setup))

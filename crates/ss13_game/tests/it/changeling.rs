@@ -540,6 +540,7 @@ fn roundstart_changeling_absorbs_transforms_and_evolves() {
         .world_mut()
         .resource_mut::<Time<Virtual>>()
         .set_relative_speed(10.0);
+    s.0.without_mood();
     let started = s.server.world().resource::<Time>().elapsed_secs_f64();
     s.trigger(a, "absorb_dna");
     s.wait_chat(a, "Это существо совместимо. Мы должны стоять неподвижно...");

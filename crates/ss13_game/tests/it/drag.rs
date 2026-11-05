@@ -339,6 +339,7 @@ impl Station {
 fn strip_menu_uncuffs_and_puts_an_item_on() {
     let mut s = Station::start("strip_menu_uncuffs_and_puts_an_item_on", 2);
     let (a, b) = (s.players[0].mob, s.players[1].mob);
+    s.0.without_mood();
     assert_eq!(s.get::<TilePos>(a), Some(&A_SPAWN));
     assert_eq!(s.get::<TilePos>(b), Some(&B_SPAWN));
     let cuffs = s.on(CUFFS, |e| e.contains::<DmItem>()).unwrap();
@@ -413,6 +414,7 @@ fn strip_menu_uncuffs_and_puts_an_item_on() {
 #[test]
 fn backpack_dumps_and_mob_goes_into_closet() {
     let mut s = Station::start("backpack_dumps_and_mob_goes_into_closet", 2);
+    s.0.without_mood();
     let (a, b) = (s.players[0].mob, s.players[1].mob);
     let pack = s.inventory(a).back.expect("players spawn with a backpack");
     let stored = s

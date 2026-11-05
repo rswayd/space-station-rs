@@ -265,6 +265,7 @@ impl Station {
 #[test]
 fn bruise_pack_scan_and_cpr() {
     let mut s = Station::start("bruise_pack_scan_and_cpr", 2);
+    s.0.without_mood();
     let (a, b) = (s.players[0].mob, s.players[1].mob);
     assert_eq!((s.pos_of(a), s.pos_of(b)), (SPAWN_A, SPAWN_B));
     s.run_until("A's health HUD arrives", |s| {

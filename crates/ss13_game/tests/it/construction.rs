@@ -453,6 +453,7 @@ fn pry_a_floor_tile_and_put_it_back() {
 #[test]
 fn build_a_girder_and_a_wall_then_slice_it() {
     let mut s = Station::start("build_a_girder_and_a_wall_then_slice_it");
+    s.0.without_mood();
     let iron = s.item_at(IRON_AT, "/obj/item/stack/sheet/iron").unwrap();
     assert_eq!(s.amount(iron), 10, "the map's `amount` edit");
     s.pick_up(iron);
