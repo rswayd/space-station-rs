@@ -13,6 +13,7 @@ sound/announcer/alarm/airraid.ogg	Jwade722, freesound.org/people/Jwade722/sounds
 sound/items/weapons/bulletflyby*.ogg	kMoon, freesound.org (90782, 90783, 90784); no license stated	medium	sound/attributions.txt
 sound/effects/hit_kick.ogg	Taira Komori, taira-komori.jpn.org/freesounden.html; no license stated in the attribution file (the site's terms allow free use but not redistributing the sounds on their own)	medium	sound/effects/license.txt
 sound/effects/hit_punch.ogg	Taira Komori, taira-komori.jpn.org/freesounden.html; no license stated in the attribution file (the site's terms allow free use but not redistributing the sounds on their own)	medium	sound/effects/license.txt
+sound/items/handling/standard_stamp.ogg	tom_woysky "Stamp.wav", freesound.org/people/tom_woysky/sounds/348316 (adapted); no license stated	medium	sound/attributions.txt
 sound/items/reel/reel*.ogg	pixabay.com/sound-effects/reel-78063: Pixabay Content License (no redistribution of the file on its own)	medium	sound/attributions.txt
 sound/items/rattle/rattle*.ogg	pixabay.com/sound-effects/chain-6073: Pixabay Content License (no redistribution of the file on its own)	medium	sound/attributions.txt
 sound/mobs/non-humanoids/dog/growl*.ogg	Glitchedtones, freesound.org (shih-tzu uploads); no license stated	medium	sound/attributions.txt
@@ -56,3 +57,7 @@ sound/mobs/non-humanoids/cat/cat_*	sadboysuss, CC-BY-SA	-	sound/mobs/non-humanoi
 modular_bandastation/aesthetics/*	"Works below licensed with Creative Commons 3.0 BY-SA"	-	modular_bandastation/aesthetics/attributions.txt
 sound/machines/shutter.ogg	adapted from Joseph Sardin on BigSoundBank (bigsoundbank.com/detail-2475); site license, not verified	medium	sound/machines/license.txt
 sound/announcer/vox_fem/*	the AI's VOX words: no entry of their own, only their common names (fire, door, all, ...) appear in other files' lines (repository CC BY-SA 3.0)	-	sound/attributions.txt
+# Reviewed: nothing to report.
+sound/effects/hallucinations/growl*.ogg	The attribution names growl1/2.ogg of sound/mobs/non-humanoids/dog, not these: BandaStation default (CC BY-SA 3.0)	-	sound/attributions.txt
+sound/effects/magic/curse.ogg	sadboysuss: CC BY-SA	-	sound/effects/magic/attribution.txt
+sound/items/dice_roll.ogg	Crovic, freesound.org/people/Crovic/sounds/661935: CC0	-	sound/attributions.txt
