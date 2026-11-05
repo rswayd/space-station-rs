@@ -383,10 +383,15 @@ fn a_light_blast_hurts_deafens_shakes_and_throws() {
         s.get::<Health>(mob).health() < 100.0
     });
     // `/mob/living/carbon/human/ex_act` light: 30 brute over the six bodyparts; a limb blown
-    // off (no bomb armor: dismemberment may roll even at light) takes its share with it.
+    // off (no bomb armor: dismemberment may roll even at light) takes its share with it and
+    // hurts the chest by 15 (`dismember`: half its 5 damage, at least 15).
     let health = s.get::<Health>(mob).clone();
-    let present = 6.0 - health.missing.count_ones() as f32;
-    assert!((health.brute - 5.0 * present).abs() < 0.05, "{health:?}");
+    let lost = health.missing.count_ones() as f32;
+    let present = 6.0 - lost;
+    assert!(
+        (health.brute - 5.0 * present - 15.0 * lost).abs() < 0.05,
+        "{health:?}"
+    );
     assert_eq!(health.burn, 0.0);
     let ears = organs::state(s.world(), mob, Slot::Ears).expect("ears");
     assert!(

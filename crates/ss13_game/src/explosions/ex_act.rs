@@ -455,8 +455,13 @@ fn ex_act_human(world: &mut World, mob: Entity, severity: Severity) {
             let saved = world
                 .resource_mut::<CombatRng>()
                 .chance((bomb_armor - 50.0) * 2.0);
-            if !saved {
-                crate::medical::bodyparts::drop_limb(world, mob, zone);
+            // `BP.receive_damage(INFINITY)` of the removed limb: it leaves wrecked.
+            if !saved
+                && let Some(Some(item)) =
+                    crate::medical::bodyparts::dismember_limb(world, mob, zone, false)
+                && let Some(mut limb) = world.get_mut::<crate::medical::bodyparts::Limb>(item)
+            {
+                limb.brute = (zone.max_damage() - limb.burn).max(limb.brute);
             }
         } else {
             let wound_armor = crate::armor::getarmor(world, mob, zone, "wound");

@@ -121,7 +121,7 @@ impl Bodypart {
 
 /// Damage of a carbon mob: brute and burn per bodypart (tg `/obj/item/bodypart`), toxin and
 /// oxygen on the mob.
-// shortcut: no prosthetics; amputated limbs are `missing` (`crate::medical::bodyparts`).
+// Amputated limbs are `missing` (`crate::medical::bodyparts`).
 #[derive(Component, Clone, Debug, PartialEq)]
 pub struct Health {
     pub max: f32,
@@ -525,8 +525,9 @@ impl ServerUi for HealthHudUi {
 
 /// What a living carbon mob gets at spawn.
 /// tg `gib(DROP_ALL_REMAINS)`: the body is gone, its items fall (a `NoDrop` one goes with
-/// it), its player becomes a ghost.
-// shortcut: no gibs, organs or bodyparts left behind.
+/// it), its chest organs and limbs fly off (`crate::medical::bodyparts::spill_remains`), its
+/// player becomes a ghost.
+// shortcut: no gib decals.
 pub fn gib(world: &mut World, mob: Entity) {
     use crate::inventory::{ALL_SLOTS, Inventory, NoDrop};
     let Some(&pos) = world.get::<TilePos>(mob) else {
@@ -555,6 +556,7 @@ pub fn gib(world: &mut World, mob: Entity) {
     if let Some(cuffs) = world.get::<crate::restraints::Handcuffed>(mob).map(|h| h.0) {
         crate::inventory::put_down(world, cuffs, pos);
     }
+    crate::medical::bodyparts::spill_remains(world, mob, pos);
     world.despawn(mob);
     crate::construction::tile_changed(world, pos);
 }

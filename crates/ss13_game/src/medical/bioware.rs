@@ -9,7 +9,8 @@
 //! (`PHYS_COEFF_STUN`, `STAMINA`, read by `crate::status_effects`); grounded nerves are immune
 //! to shocks (`TRAIT_SHOCKIMMUNE`, `crate::wires`); an imprinted cortex cures and blocks basic
 //! brain traumas ([`super::traumas`]).
-// shortcut: no ligament hook or reinforcement (no dismemberment yet), no cortex folding (no
+// shortcut: no ligament hook or reinforcement (dismemberment reads only the species'
+// `TRAIT_NODISMEMBER`), no cortex folding (no
 // special trauma boost), no mechanical variants (robotic bodyparts); the stun multiplier
 // covers `crate::status_effects::apply`/`knockdown`, not effects set on the component directly.
 

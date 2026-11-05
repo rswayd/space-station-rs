@@ -24,7 +24,7 @@
 
 - **Код:** [`robot_bodyparts.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/bodyparts/robot_bodyparts.dm#L1), [`ghetto_parts.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/bodyparts/ghetto_parts.dm#L1)
 - **BandaStation:** [`modular_bandastation/augmentation_preferences/code/body_modifications/body_part/robotic_limbs/`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/augmentation_preferences/code/body_modifications/body_part/robotic_limbs) — бренды протезов
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/medical/bodyparts.rs`, `crates/ss13_game/src/human.rs`, `crates/ss13_game/src/medical/surgery.rs`: кибер-конечность (`/obj/item/bodypart/*/robot`) прикрепляется операцией без токсина отторжения, рисуется из `augments.dmi` (`HumanLook::robotic`), не получает ран плоти и не кровоточит, снимается гаечным ключом/ломом (`amputate/mechanic`), падает своим типом; `// shortcut:` нет модификаторов урона 0.8 по части, ЭМИ, починки сваркой/кабелем, металлических ран, «surplus»/самодельных, брендов форка
 
 ### Видовые части тела
 Каждый вид подставляет свои части (`bodypart_overrides`): спрайты, модификаторы урона, особенности (цифровые ноги, слабые конечности скелетов); форк — части скреллов, таяр, вульпканинов.
@@ -37,4 +37,4 @@
 Эффекты частей (`bodypart_effects`: светящиеся, фотосинтез и т.п.), обрубки вместо утраченных частей, голова с волосами и губами.
 
 - **Код:** [`code/modules/surgery/bodyparts/bodypart_effects/`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/bodyparts/bodypart_effects), [`stumps.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/bodyparts/stumps.dm#L1), [`head.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/bodyparts/head.dm#L1)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/medical/bodyparts.rs`, `crates/ss13_game/src/human.rs`: обрубок вместо ампутированной руки или ноги (без кожи: `SURGERY_SKIN_OPEN` врождённый), тело рисуется без неё; нет эффектов частей тела, головы как предмета (волосы, губы), обрубка шеи
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/medical/bodyparts.rs`, `crates/ss13_game/src/human.rs`: обрубок вместо отделённой руки, ноги или головы (без кожи: `SURGERY_SKIN_OPEN` врождённый), тело рисуется без неё (без головы — без волос и глаз); голова — предмет с органами (`InLimb`, острым предметом вынимаются), имя «голова <владелец>», падают надетое на голову, обувь с ногой, наручники с рукой, перчатки без рук; нет эффектов частей тела, вида/внешности головы-предмета, блокировки слотов без головы

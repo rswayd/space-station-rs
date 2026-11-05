@@ -27,8 +27,8 @@
 //! - Bolts on an antimagic mob fizzle (`prehit_pierce`). Death kills, resurrection heals all
 //!   and revives (the ghost returns), teleport scatters what stands there within 10 tiles,
 //!   safety sends to a random station floor, door turns a wall into an airlock or opens a door.
-// shortcut: magic missile's homing and trails, the lightning chain's beams, Smite's dismembering
-// feedback, blink's and teleport's harmless smoke, the jaunt's steam and visuals are not ported;
+// shortcut: magic missile's homing and trails, the lightning chain's beams, blink's and
+// teleport's harmless smoke, the jaunt's steam and visuals are not ported;
 // targets are in range, not in `view()`. The jaunter stays dense (others bump into it) and
 // explosions still reach it. The forcefield blocks its caster too (no `CanAllowThrough`). The
 // door bolt's door is a wooden airlock (no mineral doors). Unmarking summon item is instant
@@ -1317,13 +1317,31 @@ fn hand_hit(world: &mut World, mob: Entity, hand: Entity, spell: Spell, victim: 
         return;
     };
     if can_block_magic(world, victim, spell.def().antimagic) {
-        // `smite/on_antimagic_triggered`.
+        // `smite/on_antimagic_triggered`: off goes the arm holding the hand.
         let target = name_of(world, victim);
+        let caster = name_of(world, mob);
+        let arm = world
+            .get::<Inventory>(mob)
+            .and_then(|i| i.hands.iter().position(|&h| h == Some(hand)))
+            .map(|i| {
+                if i == 0 {
+                    BodyZone::LArm
+                } else {
+                    BodyZone::RArm
+                }
+            });
+        let blown =
+            arm.is_some_and(|zone| crate::medical::bodyparts::dismember(world, mob, zone, false));
+        let others = if blown {
+            format!("The feedback blows {caster}'s arm off!")
+        } else {
+            "The feedback releases a bright flash of light!".to_owned()
+        };
         crate::medical::visible(
             world,
             mob,
             &format!("The spell bounces from {target}'s skin back into your arm!"),
-            "The feedback releases a bright flash of light!",
+            &others,
             Span::Warning,
         );
         crate::vision::flash_act(world, mob, 1, false, false, 2.5);

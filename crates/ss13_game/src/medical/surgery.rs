@@ -35,9 +35,10 @@
 // shortcut: no mood events, sounds, surgical memory, blood on the surgeon's gloves, self-surgery
 // trait, manual cauterizing of yourself, ring accessories on gloves, wound scanning; no external
 // organs or dummy organs from food (cybernetic implants go in and out like organs,
-// [`super::cyberimps`]); no decapitation, robotic limb
-// replacement or arbitrary prosthetics; no abductor, robotic, thick-skin or skull operations; no
-// brainwashing. Lobotomy, pacification and brain surgery work on the brain's traumas
+// [`super::cyberimps`]); no arbitrary items as prosthetics or Frankenstein (other species')
+// rejection damage; no abductor, robotic shell, thick-skin or skull operations; no
+// brainwashing. Amputation takes the head too (with its organs); robotic limbs come apart with a
+// wrench instead (`amputate/mechanic`). Lobotomy, pacification and brain surgery work on the brain's traumas
 // ([`super::traumas`]).
 
 use bevy::ecs::message::MessageCursor;
@@ -309,6 +310,8 @@ pub enum Op {
     /// A bioware operation ([`super::bioware`]).
     Bioware(Bioware),
     Amputate,
+    /// `amputate/mechanic`: a robotic limb comes apart.
+    AmputateMechanic,
     /// `prosthetic_replacement` with a limb item on a stump.
     AttachLimb,
     Revival,
@@ -439,6 +442,7 @@ impl Op {
         ops.push(Self::InsertImplant);
         ops.extend([
             Self::Amputate,
+            Self::AmputateMechanic,
             Self::AttachLimb,
             Self::Revival,
             Self::CoronaryBypass,
@@ -828,6 +832,25 @@ impl Op {
                 ],
                 verb: "ампутировать",
                 tool_rec: "amputation shears",
+                ..base
+            },
+            Self::AmputateMechanic => OpDef {
+                path: "/datum/surgery_operation/limb/amputate/mechanic",
+                name: "Разбор конечности",
+                catalog_name: "Разборка (Ампутация)",
+                desc: "Отделение конечности от тела пациента.",
+                time: 20.0,
+                all_required: SKIN_OPEN,
+                any_blocked: VESSELS_UNCLAMPED,
+                implements: &[
+                    (Path("/obj/item/shovel/giant_wrench"), 0.33),
+                    (Tool("wrench"), 1.0),
+                    (Tool("crowbar"), 1.0),
+                    (Tool("scalpel"), 2.0),
+                    (Tool("saw"), 2.0),
+                ],
+                verb: "разбирать",
+                tool_rec: "wrench",
                 ..base
             },
             Self::AttachLimb => OpDef {
@@ -1814,8 +1837,13 @@ pub(crate) fn is_available(world: &World, op: Op, mob: Entity, zone: TargetZone)
         Op::RepairCompound => limb
             .wound(Series::Bone)
             .is_some_and(|w| w.kind == WoundKind::Compound && w.reset),
-        // shortcut: no decapitation (heads with their organs are not items).
-        Op::Amputate => !matches!(body, BodyZone::Head | BodyZone::Chest),
+        // `amputate/state_check` and `required_bodytype`: not the chest, not
+        // `TRAIT_NODISMEMBER`; flesh limbs are cut off, robotic ones taken apart.
+        Op::Amputate | Op::AmputateMechanic => {
+            body != BodyZone::Chest
+                && !crate::species::has_trait(world, mob, crate::species::Trait::NoDismember)
+                && limb.robotic == (op == Op::AmputateMechanic)
+        }
         Op::RemoveOrgan(slot) => {
             zone == slot.spec().zone
                 && organs::organ(world, mob, slot).is_some()
@@ -2164,7 +2192,7 @@ fn speed(world: &World, op: Op, mob: Entity, surgeon: Entity, tool: &ToolInfo) -
 
 fn zone_words(op: Op, zone: TargetZone) -> String {
     match op {
-        Op::Amputate => zone.check_zone().ru().1.into(),
+        Op::Amputate | Op::AmputateMechanic => zone.check_zone().ru().1.into(),
         _ => super::wounds::zone_prepositional(zone.check_zone()).into(),
     }
 }
@@ -2902,7 +2930,7 @@ fn success(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: TargetZon
                 ),
             );
         }
-        Op::Amputate => {
+        Op::Amputate | Op::AmputateMechanic => {
             let part = body.ru().1;
             own = format!("Вы успешно ампутировали {part} у {target}!");
             others = format!("{user} успешно ампутировал {part} у {target}!");
@@ -2913,8 +2941,14 @@ fn success(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: TargetZon
             let Some(limb) = actor.item else {
                 return;
             };
-            // `OPERATION_REJECTION_DAMAGE` of a flesh limb of the same species.
-            super::hurt_limb(world, mob, BodyZone::Chest, DamageType::Tox, 10.0);
+            // `OPERATION_REJECTION_DAMAGE`: 10 for a flesh limb of the same species, none for
+            // a robotic one.
+            let robotic = world
+                .get::<DmItem>(limb)
+                .is_some_and(|i| super::bodyparts::is_robotic_path(&i.path));
+            if !robotic {
+                super::hurt_limb(world, mob, BodyZone::Chest, DamageType::Tox, 10.0);
+            }
             if !super::bodyparts::attach_limb(world, mob, limb) {
                 return;
             }

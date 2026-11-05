@@ -747,6 +747,7 @@ fn dna_of(world: &World, mob: Entity) -> (String, Option<HumanLook>) {
         shoes: None,
         husk: false,
         missing: 0,
+        robotic: 0,
         eyeless: false,
         ..l.clone()
     });
@@ -1564,6 +1565,7 @@ pub fn transform(world: &mut World, mob: Entity, profile: &Profile) {
             shoes: body.shoes.clone(),
             husk: false,
             missing: body.missing,
+            robotic: body.robotic,
             eyeless: body.eyeless,
             ..look.clone()
         };

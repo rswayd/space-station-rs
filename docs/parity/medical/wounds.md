@@ -35,7 +35,7 @@
 Рана «потеря» сопровождает расчленение; трещина черепа при большом уроне по голове позволяет вынуть мозг без операции.
 
 - **Код:** [`/datum/wound/loss`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/wounds/loss.dm#L14), [`/datum/wound/cranial_fissure`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/wounds/cranial_fissure.dm#L29)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/medical/wounds.rs`, `crates/ss13_game/src/medical/bodyparts.rs`: рана «потеря» — `HitOutcome::dismember` и `apply_dismember` с сообщениями tg по типу ранения (обычное/«outright»); трещины черепа нет (серия ран, операции подготовки и восстановления черепа, выпадение мозга при поскальзывании, вырывание глаз)
 
 ### Шрамы
 Зажившие раны оставляют шрамы, видимые при осмотре; могут сохраняться между раундами (persistent scars).
