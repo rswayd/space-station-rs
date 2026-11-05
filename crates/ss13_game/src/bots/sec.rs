@@ -17,7 +17,7 @@
 //! - Dedbot (`dedbot.bt.json`): hunts the living within 2 tiles that are not of its faction and
 //!   slashes everything around it (18 brute each, 0.5 s).
 // shortcut: no ED-209 tackle (an emagged sentient one's ability), hats or sheriff lines; no
-// honkbot slip-dragging (`honkbot_slip`), stutter, jitter or deafness; General Beepsky blocks
+// honkbot slip-dragging (`honkbot_slip`) or deafness; General Beepsky blocks
 // nothing; hygienebots wash from the next tile (bots do not pass mobs here) and only an emagged
 // one finds targets (mobs and clothing carry no blood here); no dedbot gibs.
 
@@ -487,8 +487,18 @@ fn attacking_state(world: &mut World, mob: Entity) {
     crate::mobs::set_icon_state(world, mob, &icon, &format!("{base}-c"));
 }
 
-/// The honkbot's `post_stun`: the "-c" look (stutter, jitter and deafness are not ported).
-pub fn honk_post_stun(world: &mut World, mob: Entity) {
+/// The honkbot's `post_stun`: a carbon target stutters 40 s and jitters (at least 100 s), the
+/// "-c" look (the deafening is not ported).
+pub fn honk_post_stun(world: &mut World, mob: Entity, target: Entity) {
+    if world
+        .get::<crate::medical::organs::OrganHost>(target)
+        .is_none()
+    {
+        return;
+    }
+    use crate::status_effects::{Timed, set_timed};
+    set_timed(world, target, Timed::Stutter, 40.0, false);
+    set_timed(world, target, Timed::Jitter, 100.0, true);
     attacking_state(world, mob);
 }
 

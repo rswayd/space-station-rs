@@ -406,11 +406,10 @@ fn ex_act_human(world: &mut World, mob: Entity, severity: Severity) {
     let blast = HumanBlast::of(severity);
     // "Do this first, before wounds, so we DONT get wound text".
     if blast.unconscious > 0.0 {
-        // shortcut: no unconsciousness status: `Unconscious()` paralyzes as long.
         crate::status_effects::apply(
             world,
             mob,
-            crate::status_effects::Incap::Paralyze,
+            crate::status_effects::Incap::Unconscious,
             blast.unconscious,
         );
     }

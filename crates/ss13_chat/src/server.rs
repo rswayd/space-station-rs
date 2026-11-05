@@ -35,8 +35,8 @@ use ss13_world::{SpatialIndex, WorldSystems};
 use crate::emote::{EMOTE_COOLDOWN_SECS, EmoteOutcome};
 use crate::speech::{
     BinaryCapable, ChangelingHivemind, EarsWorn, Impediments, RadioExtension, RadioTarget,
-    SpeakerStat, Tongueless, VoiceSpan, WhisperHeard, capitalize, derpspeech, parse_mods, stars,
-    stutter, unintelligize, whisper_heard,
+    SpeakerStat, SpeechEffects, Tongueless, VoiceSpan, WhisperHeard, capitalize, derpspeech,
+    parse_mods, slur, stars, stutter, unintelligize, whisper_heard,
 };
 
 /// tg `get_hearers_in_view(world.view)`: 7 tiles, Chebyshev, like BYOND `view()`.
@@ -412,6 +412,7 @@ type Body<'a> = (
     Has<ChangelingHivemind>,
     Has<Tongueless>,
     Option<&'a Impediments>,
+    Option<&'a SpeechEffects>,
 );
 
 fn handle_say(
@@ -475,6 +476,7 @@ fn handle_say(
                 hivemind,
                 tongueless,
                 impediments,
+                speech_effects,
             ),
             text,
         ) = match checked {
@@ -603,8 +605,9 @@ fn handle_say(
             continue;
         }
         let impediments = impediments.copied().unwrap_or_default();
-        // tg `try_speak` -> `can_speak()`.
-        if impediments.mute {
+        let speech_effects = speech_effects.copied().unwrap_or_default();
+        // tg `try_speak` -> `can_speak()` (`TRAIT_MUTE`, also from `silenced`).
+        if impediments.mute || speech_effects.silenced {
             chat.write(SendChat {
                 clients: vec![client],
                 message: warning("Вы осознаете, что не можете говорить!"),
@@ -616,11 +619,15 @@ fn handle_say(
         if impediments.unintelligible {
             message = unintelligize(&message, || rng.percent());
         }
-        if impediments.stutter {
+        let stuttering = impediments.stutter || speech_effects.stutter;
+        if stuttering {
             message = stutter(&message, || rng.percent());
         }
+        for effect in speech_effects.slurs.iter().flatten() {
+            message = slur(&message, effect, || rng.percent());
+        }
         if impediments.derp {
-            message = derpspeech(&message, impediments.stutter, || rng.percent());
+            message = derpspeech(&message, stuttering, || rng.percent());
         }
         let mut message = capitalize(&message);
         if tongueless {

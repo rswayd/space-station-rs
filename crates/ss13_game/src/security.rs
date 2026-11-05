@@ -27,7 +27,7 @@
 //! Using a baton or a flash in hand (`attack_self`) toggles the baton or flashes everyone
 //! around (`AOE_flash`: confusion only).
 // shortcut: no armor (the stun's `run_armor_check`), no clumsiness, no cyborg branches, no
-// sounds, sparks or baton light, no jitter or stutter, no cell removal or replacement (the cell
+// sounds, sparks or baton light, no `TRAIT_BATON_RESISTANCE`, no cell removal or replacement (the cell
 // is the baton's charge), no shoves into tables, lockers or disposal bins and no directional
 // (border) shove checks.
 
@@ -465,6 +465,22 @@ fn finalize_baton_attack(
         }
     }
     adjust_stamina(world, target, dm.stamina_damage);
+    // `additional_effects_non_cyborg`: the security baton jitters (40 s), confuses and stutters
+    // (16 s); the contractor baton jitters and stutters 40 s.
+    let contractor = dm
+        .path
+        .starts_with("/obj/item/melee/baton/telescopic/contractor_baton");
+    if dm.uses_cell || contractor {
+        use crate::status_effects::{Timed, set_timed};
+        set_timed(world, target, Timed::Jitter, 40.0, true);
+        set_timed(
+            world,
+            target,
+            Timed::Stutter,
+            if contractor { 40.0 } else { 16.0 },
+            true,
+        );
+    }
     if dm.uses_cell {
         if let Some(mut e) = effects_mut(world, target) {
             e.set_confusion_if_lower(BATON_CONFUSION);

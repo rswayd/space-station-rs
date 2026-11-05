@@ -4,7 +4,8 @@
 // in-hand and nearby fake items, stray bullets, xeno and Bubblegum attacks, bolted airlocks,
 // hazards, plasma floods, eyes in the dark (no server-side light levels), the hacked APC,
 // "your mother", the dusting death and the freezer body; the shock's black body override, the
-// fire's stop-drop-roll, the fake death's muting, jitter and stutter. Their weight is missing
+// fire's stop-drop-roll; the fake death's `TRAIT_MUTE` is a silence until it wakes (no
+// `TRAIT_EMOTEMUTE`). Their weight is missing
 // from the pool, so the ported ones come a bit more often than in tg.
 
 use bevy::prelude::*;
@@ -718,12 +719,12 @@ fn prob(world: &mut World, percent: f32) -> bool {
     rng(world).chance(percent)
 }
 
-/// `IS_UNCONSCIOUS`: hard crit or dead.
+/// `IS_UNCONSCIOUS`: hard crit, dead, or knocked out (`crate::status_effects`).
 fn unconscious(world: &World, mob: Entity) -> bool {
     matches!(
         world.get::<Stat>(mob),
         Some(Stat::HardCrit | Stat::Dead) | None
-    )
+    ) || crate::status_effects::knocked_out(world, mob)
 }
 
 fn name_of(world: &World, e: Entity) -> String {
@@ -1912,6 +1913,13 @@ fn shock(world: &mut World, mob: Entity) -> bool {
     play_local(world, mob, at, "sparks", 100.0, true);
     crate::status_effects::adjust_stamina(world, mob, 50.0);
     crate::status_effects::apply(world, mob, Incap::Stun, 4.0);
+    crate::status_effects::adjust_timed(
+        world,
+        mob,
+        crate::status_effects::Timed::Jitter,
+        20.0,
+        None,
+    );
     later(world, 2.0, move |world| {
         if exists(world, mob) {
             crate::status_effects::apply(world, mob, Incap::Paralyze, 6.0);
@@ -2034,6 +2042,11 @@ pub fn ice(world: &mut World, mob: Entity, secs: f64, play_sound: bool) -> bool 
         "You become frozen in a cube!",
     );
     fake_alert(world, mob, FakeAlert::Cold, secs + 6.0);
+    {
+        use crate::status_effects::{Timed, set_timed};
+        set_timed(world, mob, Timed::Jitter, secs as f32 + 6.0, true);
+        set_timed(world, mob, Timed::Stutter, secs as f32 + 6.0, true);
+    }
     if play_sound {
         super::cause_hallucination(world, mob, Kind::Sound(Snd::IceCrack), "ice hallucination");
     }
@@ -2297,6 +2310,13 @@ fn death(world: &mut World, mob: Entity) -> bool {
         }
     }
     let wake = delay + rand_secs(world, 7.0, 9.0);
+    crate::status_effects::set_timed(
+        world,
+        mob,
+        crate::status_effects::Timed::Silence,
+        wake as f32,
+        true,
+    );
     later(world, wake, move |world| {
         if !exists(world, mob) {
             return;

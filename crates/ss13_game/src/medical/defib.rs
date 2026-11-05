@@ -16,7 +16,7 @@
 //! - In combat mode, with a combat defibrillator (or one with its safety off): `do_harm`
 //!   (1.5 s + 1.5 s) stops an organic heart, burns the chest for 50 and paralyzes for 10 s;
 //!   right click knocks down.
-// shortcut: no `/datum/status_effect/heart_attack`, jitter, convulsions, mood, sounds, shocking
+// shortcut: no `/datum/status_effect/heart_attack`, convulsions, mood, sounds, shocking
 // whoever pulls the patient, suicide/DNR/husk checks, emag, EMP, cell swapping, wall mounts;
 // paddles count as wielded while the other hand is empty (no two-handed component).
 
@@ -486,6 +486,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter, unit: Entity, 
                 crate::status_effects::Incap::Paralyze,
                 10.0,
             );
+            jitter(world, target, 200.0);
             success(world, unit);
         }
     }
@@ -554,7 +555,13 @@ fn do_help(
     revive(world, target);
     let text = format!("{victim} задыхается!");
     visible(world, target, &text, &text, Span::Emote);
+    jitter(world, target, 200.0);
     success(world, unit);
+}
+
+/// `set_jitter_if_lower(secs)`.
+fn jitter(world: &mut World, mob: Entity, secs: f32) {
+    crate::status_effects::set_timed(world, mob, crate::status_effects::Timed::Jitter, secs, true);
 }
 
 /// tg `/mob/living/revive` without healing: a dead mob whose health is above
@@ -592,6 +599,7 @@ fn do_disarm(world: &mut World, actor: Actor, unit: Entity, target: Entity) {
     );
     crate::status_effects::adjust_stamina(world, target, 60.0);
     crate::status_effects::knockdown(world, target, 7.5, 0.0);
+    jitter(world, target, 100.0);
     success(world, unit);
 }
 

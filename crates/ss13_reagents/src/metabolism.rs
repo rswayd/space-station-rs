@@ -467,8 +467,8 @@ fn on_mob_life(
                 body.adjust(Damage::Tox, amount);
             }
         }
-        // shortcut: drunkenness is only its value and toxin damage (`inebriated` stages); no
-        // slurring, confusion, dizziness, blur, vomiting or blackouts, and no liver damage.
+        // shortcut: no liver damage from drinking; the drunk stage's slurring, confusion,
+        // dizziness, blur, vomiting and blackouts are `ss13_game::status_effects::drunk_pulse`.
         Effect::Ethanol => {
             let volume = holder.reagents[i].volume;
             let drunk = *body.drunk();

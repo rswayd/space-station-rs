@@ -17,7 +17,7 @@
 //!   `SSmachines` tick (2 s), and tears out (3 brute and a puncture on an arm) when the mob moves
 //!   away. An empty-hand right click detaches it, ejects the container or switches the mode.
 // shortcut: no blood sprays or hit splatters (drips and pools: `crate::janitor`), no dragging
-// bleed, no DNA data (viruses: `super::diseases::BloodDiseases`), dizziness is only its message, `Unconscious` is a paralysis,
+// bleed, no DNA data (viruses: `super::diseases::BloodDiseases`),
 // no saline/salglu dilution or synthetic blood content; iron in the blood also metabolizes at its
 // own rate besides refilling blood (tg skips the normal tick). The IV drip has no tgui window
 // (`IVDrip`: rate, mode, eject) and no beam; its rate stays at 5 u/s.
@@ -538,6 +538,13 @@ fn blood_loss_effects(world: &mut World, mob: Entity, volume: f32, secs: f32) {
             let bad = BloodBand::of(volume) == BloodBand::Bad;
             if spt(&mut rng, 5.0) {
                 crate::vision::set_eye_blur_if_lower(world, mob, if bad { 4.0 } else { 2.0 });
+                crate::status_effects::set_timed(
+                    world,
+                    mob,
+                    crate::status_effects::Timed::Dizziness,
+                    if bad { 4.0 } else { 2.0 },
+                    true,
+                );
                 if rng.chance(50.0) {
                     let text = if bad {
                         format!(
@@ -569,7 +576,7 @@ fn blood_loss_effects(world: &mut World, mob: Entity, volume: f32, secs: f32) {
                 crate::status_effects::apply(
                     world,
                     mob,
-                    crate::status_effects::Incap::Paralyze,
+                    crate::status_effects::Incap::Unconscious,
                     secs,
                 );
                 tell_mob(
@@ -592,10 +599,7 @@ fn blood_loss_effects(world: &mut World, mob: Entity, volume: f32, secs: f32) {
         return;
     };
     let mut stat = world.get::<Stat>(mob).copied().unwrap_or_default();
-    let unconscious = health.knocked_out(stat)
-        || world
-            .get::<crate::status_effects::StatusEffects>(mob)
-            .is_some_and(|e| e.paralyze > 0.0);
+    let unconscious = crate::status_effects::knocked_out(world, mob);
     let oxy = blood_oxyloss(volume, health.oxy, unconscious, secs);
     if oxy > 0.0 {
         health.adjust(DamageType::Oxy, oxy);

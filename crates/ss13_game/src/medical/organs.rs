@@ -971,15 +971,14 @@ fn random_failure_target(world: &mut World) -> Slot {
     TARGETS[rng.range(0, 4) as usize]
 }
 
-/// `handle_heart`: without a beating heart, 4 oxygen damage a second (the human breathes) and
-/// 1 brute.
-// shortcut: no `Unconscious(80)` (no unconsciousness status yet); the oxygen damage knocks out
-// at 50.
+/// `handle_heart`: without a beating heart, 4 oxygen damage a second and 8 s unconscious (the
+/// human breathes) and 1 brute.
 fn handle_heart(world: &mut World, mob: Entity, secs: f32) {
     if !cardiac_arrest(world, mob) {
         return;
     }
     super::hurt_limb(world, mob, BodyZone::Chest, DamageType::Oxy, 4.0 * secs);
+    crate::status_effects::apply(world, mob, crate::status_effects::Incap::Unconscious, 8.0);
     super::hurt_limb(world, mob, BodyZone::Chest, DamageType::Brute, 1.0 * secs);
 }
 

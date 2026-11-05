@@ -5,7 +5,7 @@
 Общий тип `/datum/status_effect`: длительность, интервал `tick()`, `on_apply`/`on_remove`, обновление при повторном наложении (`status_type`: unique/replace/refresh/multiple), иконка-алерт на экране и строка в осмотре. Обрабатывается подсистемой `SSprocessing`/`SSfastprocess`; хелперы `apply_status_effect`, `remove_status_effect`, `has_status_effect`, сгруппированные (`/datum/status_effect/grouped`), стековые (`/datum/status_effect/stacking`) и ограниченные эффекты.
 
 - **Код:** [`/datum/status_effect`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/_status_effect.dm#L3), [`proc/process()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/_status_effect.dm#L100), [`_status_effect_helpers.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/_status_effect_helpers.dm#L1), [`/datum/status_effect/grouped`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/grouped_effect.dm#L2), [`/datum/status_effect/stacking`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/stacking_effect.dm#L3)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/status_effects.rs`: один компонент `StatusEffects` с фиксированным набором таймеров вместо общего каркаса; нет произвольных эффектов, алертов эффектов, строк осмотра, стековых и сгруппированных эффектов
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/status_effects.rs`: один компонент `StatusEffects` с фиксированным набором таймеров (`Incap`, `Timed`, пульс раз в 2 с) вместо общего каркаса; строки осмотра дрожи и опьянения; нет произвольных эффектов, алертов эффектов, стековых и сгруппированных эффектов
 
 ### Стан (Stun)
 Моб не может действовать и двигаться (`TRAIT_INCAPACITATED`, `TRAIT_IMMOBILIZED`, `TRAIT_HANDS_BLOCKED`), но стоит. `Stun()` не укорачивает оставшееся время, `SetStun`/`AdjustStun` задают/добавляют.
@@ -35,13 +35,13 @@
 Отдельный эффект `incapacitate()`: моб не может действовать, но может двигаться (используется, например, некоторыми оружиями и способностями).
 
 - **Код:** [`/datum/status_effect/incapacitating/incapacitated`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/debuffs.dm#L116), [`proc/incapacitate()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/status_procs.dm#L256)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/status_effects.rs` (`Incap::Incapacitated`): только `TRAIT_INCAPACITATED`
 
 ### Групповые хелперы обездвиживания и встряхивание
 `AllImmobility`/`SetAllImmobility`/`AdjustAllImmobility` меняют сразу стан, нокдаун, паралич и обездвиживание; встряхивание лежащего (`help`-клик) укорачивает эффекты (`adjust_status_effects_on_shake_up`).
 
 - **Код:** [`proc/AllImmobility()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/status_procs.dm#L309), [`proc/adjust_status_effects_on_shake_up()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/status_procs.dm#L435)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/status_effects.rs`, `crates/ss13_game/src/combat.rs`: встряхивание есть как сообщение, групповых хелперов и сокращения эффектов при встряхивании нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/status_effects.rs` (`all_immobility`, `set_all_immobility`, `adjust_all_immobility`, `shake_up`), `crates/ss13_game/src/combat.rs`: встряхивание лежащего и объятия сокращают стан/нокдаун/паралич/обездвиживание/бессознательность на 6 с и сон на 10 с; нет анимации встряхивания и вставания (`set_resting(FALSE)`)
 
 ### Иммунитет к стану и поглощение стана
 `check_stun_immunity` (`TRAIT_STUNIMMUNE`, `CANSTUN`, godmode) и эффект `stun_absorption` (поглощает станы с сообщением, у генокрадов, адреналина и т.п.).
@@ -53,13 +53,13 @@
 Моб без сознания: `IS_UNCONSCIOUS`, экран темнеет, не слышит речь; эффект `knocked_out` для потери сознания от урона.
 
 - **Код:** [`/datum/status_effect/incapacitating/unconscious`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/debuffs.dm#L134), [`/datum/status_effect/knocked_out`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/debuffs.dm#L149), [`proc/Unconscious()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/status_procs.dm#L343)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/status_effects.rs` (`Incap::Unconscious`, `knocked_out`): `TRAIT_KNOCKEDOUT` — недееспособен, обездвижен, на полу, руки заняты, слепота (`vision.rs`), не говорит (`speech.rs`: чат видит hard crit), +3 стамины/с; источники — взрывы, ЭМИ боргов, эпилепсия, деконверсия революции/культа, руны, N2O/CO2, остановка сердца, кровопотеря, боевые искусства, болезни. Моб сохраняет свой `Stat` (tg `UNCONSCIOUS`): проверки через `Health::knocked_out` видят только крит, `status_effects::knocked_out` — оба; нет картинки `unconscious_appearance` и `see_no_names`
 
 ### Сон (Sleeping)
 Моб спит: без сознания, во сне медленно лечится (кровать и подушка ускоряют), видит сны, просыпается от урона или встряхивания.
 
 - **Код:** [`/datum/status_effect/incapacitating/sleeping`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/debuffs.dm#L204), [`proc/Sleeping()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/status_procs.dm#L394)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/status_effects.rs` (`Incap::Sleeping`, `sleep_pulse`, `sleep_quality`): как бессознательность; раз в 2 с лечит мелкий урон по качеству сна (настроение, кровать/стол, простыня, подушка, глухота), стамина, отрезвление на 0,3%; будят встряхивание и объятия; болезни выздоравливают быстрее во сне (`diseases.rs`); источники — N2O, сонливость, CQC, бокс, болезни, опьянение. Нет снов, храпа, иммунитета ко сну, бонуса темноты/повязки, лечения органов и опыта атлетики
 
 ### Урон по выносливости (стамина)
 `staminaloss` до `max_stamina` (120); через `stamina_regen_time` (10 с) после последнего урона сбрасывается в 0 целиком.

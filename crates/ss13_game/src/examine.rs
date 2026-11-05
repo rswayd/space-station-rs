@@ -218,9 +218,7 @@ fn carbon_lines(world: &World, examiner: Entity, mob: Entity, lines: &mut Vec<Li
         lines.push((Span::Warning, format!("Его держит в захвате {by}.")));
     }
     if stat != Stat::Dead {
-        let unconscious = world
-            .get::<Health>(mob)
-            .is_some_and(|h| h.knocked_out(stat));
+        let unconscious = crate::status_effects::knocked_out(world, mob);
         if unconscious {
             lines.push((
                 Span::Notice,
@@ -229,6 +227,7 @@ fn carbon_lines(world: &World, examiner: Entity, mob: Entity, lines: &mut Vec<Li
         } else if stat == Stat::SoftCrit {
             lines.push((Span::Notice, format!("{he} едва находится в сознании.")));
         }
+        crate::status_effects::examine_lines(world, mob, lines);
         // A body without its player (tg: no `client`) stares blankly.
         if !has_client && examiner != mob {
             lines.push((

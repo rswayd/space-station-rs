@@ -2372,6 +2372,7 @@ fn life(world: &mut World, chem: &Chemistry, mob: Entity, seconds: f32) {
     {
         r.losebreath = losebreath;
     }
+    let drunk = reagents.drunk;
     if e.get::<MobReagents>() != Some(&reagents) {
         e.insert(reagents);
     }
@@ -2382,6 +2383,10 @@ fn life(world: &mut World, chem: &Chemistry, mob: Entity, seconds: f32) {
     }
     for text in told {
         tell_mob(world, mob, Span::BoldWarning, &text);
+    }
+    // The drunk stage's side effects on the same 2 s tick.
+    if !dead {
+        crate::status_effects::drunk_pulse(world, mob, drunk);
     }
     if let Some(liver) = liver_organ {
         if liver_damage > 0.0 {

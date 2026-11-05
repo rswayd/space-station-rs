@@ -52,6 +52,8 @@ pub const SAFE_CO2_MAX: f64 = 10.0;
 pub const SAFE_PLASMA_MAX: f64 = 0.05;
 pub const N2O_DETECT_MIN: f64 = 0.08;
 pub const N2O_PARA_MIN: f64 = 1.0;
+/// Lungs `n2o_sleep_min`.
+pub const N2O_SLEEP_MIN: f64 = 5.0;
 /// `MIN_TOXIC_GAS_DAMAGE`, `MAX_TOXIC_GAS_DAMAGE`.
 pub const MIN_TOXIC_GAS_DAMAGE: f64 = 1.0;
 pub const MAX_TOXIC_GAS_DAMAGE: f64 = 10.0;
@@ -275,12 +277,16 @@ impl Alerts {
 }
 
 /// What a `Life()` tick makes the mob do or read, besides damage.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum LifeEvent {
     /// An involuntary emote seen around (`ss13_chat::emote` key).
     Emote(&'static str),
     /// `to_chat` to the mob's own player.
     Chat(Span, &'static str),
+    /// `Unconscious(secs)`.
+    Unconscious(f32),
+    /// `Sleeping(min(AmountSleeping() + add, max))`.
+    SleepUpTo { add: f32, max: f32 },
 }
 
 /// What one `Life()` reads and writes besides the mob's [`Respiration`].
@@ -481,8 +487,7 @@ impl Respiration {
     /// place: O2 becomes CO2, pluoxium is consumed, it takes the body temperature. Returns
     /// whether the breath succeeded.
     // shortcut: BZ, freon, healium, helium, hypernoblium, miasma, nitrium, tritium, zauker and
-    // antinoblium have no effect yet; N2O throws its alert but does not knock out or sleep, CO2
-    // does not knock out (no unconsciousness status yet); breath temperature does not damage the
+    // antinoblium have no effect yet; breath temperature does not damage the
     // lungs (tg's early return, see below).
     pub fn check_breath(&mut self, breath: Option<&mut GasMixture>, ctx: &mut LifeCtx) -> bool {
         let mut empty = GasMixture::vacuum();
@@ -666,6 +671,7 @@ impl Respiration {
         if overloaded > 12.0 {
             ctx.alerts
                 .throw(AlertCategory::TooMuchCo2, "too_much_co2", 0);
+            ctx.events.push(LifeEvent::Unconscious(6.0));
             ctx.damage(DamageType::Oxy, 3.0);
             if overloaded > 30.0 {
                 ctx.damage(DamageType::Oxy, 8.0);
@@ -896,7 +902,8 @@ fn exchange(
 }
 
 /// Lungs `too_much_n2o`; `true`: the N2O is gone (`BREATH_LOST`).
-// shortcut: no euphoria, giggles, unconsciousness or sleep; only the alert.
+// shortcut: no euphoria mood or drugginess (the giggles are there), no sleep immunity or
+// anosmia.
 fn too_much_n2o(n2o_pp: f64, old_n2o_pp: f64, ctx: &mut LifeCtx) -> bool {
     if n2o_pp < N2O_PARA_MIN {
         if n2o_pp <= N2O_DETECT_MIN {
@@ -905,11 +912,23 @@ fn too_much_n2o(n2o_pp: f64, old_n2o_pp: f64, ctx: &mut LifeCtx) -> bool {
         if old_n2o_pp >= N2O_PARA_MIN || old_n2o_pp <= N2O_DETECT_MIN {
             ctx.alerts.clear(AlertCategory::TooMuchN2o);
         }
+        if ctx.chance(20.0) {
+            let key = if ctx.chance(50.0) { "giggle" } else { "laugh" };
+            ctx.events.push(LifeEvent::Emote(key));
+        }
         return false;
     }
     if old_n2o_pp < N2O_PARA_MIN {
         ctx.alerts
             .throw(AlertCategory::TooMuchN2o, "too_much_n2o", 0);
+    }
+    // "give them one second of grace to wake up and run away a bit!"
+    ctx.events.push(LifeEvent::Unconscious(6.0));
+    if n2o_pp > N2O_SLEEP_MIN {
+        ctx.events.push(LifeEvent::SleepUpTo {
+            add: 10.0,
+            max: 20.0,
+        });
     }
     false
 }
@@ -1341,6 +1360,28 @@ fn live(world: &mut World, mob: Entity, fired: u64, now: f64) {
                 channel: ChatChannel::Warning,
                 segments: vec![ChatSegment::new(span, text)],
             },
+            LifeEvent::Unconscious(secs) => {
+                crate::status_effects::apply(
+                    world,
+                    mob,
+                    crate::status_effects::Incap::Unconscious,
+                    secs,
+                );
+                continue;
+            }
+            LifeEvent::SleepUpTo { add, max } => {
+                let asleep = crate::status_effects::StatusEffects::remaining;
+                let now = world
+                    .get::<crate::status_effects::StatusEffects>(mob)
+                    .map_or(0.0, |e| asleep(e, crate::status_effects::Incap::Sleeping));
+                crate::status_effects::apply(
+                    world,
+                    mob,
+                    crate::status_effects::Incap::Sleeping,
+                    (now + add).min(max),
+                );
+                continue;
+            }
         };
         if let Some(client) = client {
             world.write_message(SendChat {
