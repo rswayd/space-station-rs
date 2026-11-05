@@ -12,7 +12,7 @@
 Разборка укреплённого окна дольше и с нагревом болтов: сварка нагревает, лом и отвёртка поэтапно снимают (`RWINDOW_*`), при остывании болтов шаг сбрасывается.
 
 - **Код:** [`/obj/structure/window/reinforced`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/window.dm#L494), [`reinforced/crowbar_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/window.dm#L555), [`proc/cool_bolts()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/window.dm#L638)
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/construction.rs` отказывает с сообщением
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/reinforced.rs` (`window_secondary`, `window_crowbar`, `cool_bolts`), `crates/ss13_game/src/construction.rs` (`window_tool`): ПКМ сваркой 15 с нагревает винты (остывают через 30 с), отвёртка 5 с, лом 4 с, кусачки 2 с, ключ 4 с — окно вне рамы и откреплено; дальше обычные шаги (отвёртка крепит к полу, ключ разбирает в укреплённое стекло), лом на закреплённом возвращает в раму за 10 с; подсказки неверного инструмента и осмотра по шагу; шаг применяется, только если состояние не сменилось (у tg проверки нет)
 
 ### Виды окон
 Плазменные (жаропрочные), укреплённые плазменные, тонированные и матовые (непрозрачные), титановые и пластитановые шаттловые, ледяные, бумажные (сёдзи, чинятся бумагой), бронзовые, культистские, неразрушимые.

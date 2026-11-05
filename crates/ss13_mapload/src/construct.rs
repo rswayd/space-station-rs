@@ -21,16 +21,21 @@ pub const TABLE_COMPONENT: &str = "dm_table";
 /// Types the construction code spawns or turns turfs into, so `ss13-mapload convert` emits them
 /// even when no converted map uses them. Fixtures convert without them; the game then skips
 /// what has no prototype.
-pub const CONSTRUCTION_TYPES: [&str; 12] = [
+pub const CONSTRUCTION_TYPES: [&str; 17] = [
     "/turf/open/floor/plating",
     "/turf/open/floor/iron",
     "/turf/closed/wall",
+    "/turf/closed/wall/r_wall",
     "/obj/structure/girder",
     "/obj/structure/girder/displaced",
+    "/obj/structure/girder/reinforced",
+    "/obj/structure/falsewall",
+    "/obj/structure/falsewall/reinforced",
     "/obj/structure/grille",
     "/obj/structure/window/fulltile",
     "/obj/item/stack/sheet/iron",
     "/obj/item/stack/sheet/glass",
+    "/obj/item/stack/sheet/plasteel",
     "/obj/item/stack/rods",
     "/obj/item/stack/tile/iron/base",
     "/obj/item/shard",
@@ -149,6 +154,11 @@ pub struct DmObj {
     pub armor_bomb: f32,
     /// `explosion_block` (`blocks_explosives`): how much it weakens a blast passing its tile.
     pub explosion_block: f32,
+    /// False walls: `mineral`, `mineral_amount` (what taking it apart leaves) and `walltype`
+    /// (the wall a screwdriver turns it into).
+    pub mineral: String,
+    pub mineral_amount: u32,
+    pub wall_type: String,
 }
 
 #[derive(Clone, Copy)]
@@ -235,7 +245,7 @@ const TURF_VARS: [(&str, &str, Kind); 8] = [
     ("explosive_resistance", "explosive_resistance", Kind::Num),
 ];
 
-const OBJ_VARS: [(&str, &str, Kind); 23] = [
+const OBJ_VARS: [(&str, &str, Kind); 26] = [
     ("anchored", "anchored", Kind::Bool),
     ("max_integrity", "max_integrity", Kind::Num),
     ("integrity_failure", "integrity_failure", Kind::Num),
@@ -259,6 +269,9 @@ const OBJ_VARS: [(&str, &str, Kind); 23] = [
     ("armor_type", "armor_bomb", Kind::Num),
     ("heat_resistance", "heat_resistance", Kind::Num),
     ("explosion_block", "explosion_block", Kind::Num),
+    ("mineral", "mineral", Kind::Path),
+    ("mineral_amount", "mineral_amount", Kind::Count),
+    ("walltype", "wall_type", Kind::Path),
 ];
 
 /// A dumped value as a number: plain numbers and constant expressions the extractor kept as

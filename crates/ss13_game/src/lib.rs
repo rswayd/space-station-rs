@@ -209,6 +209,8 @@ pub mod examine;
 #[cfg(feature = "server")]
 pub mod explosions;
 #[cfg(feature = "server")]
+pub mod falsewall;
+#[cfg(feature = "server")]
 pub mod fire;
 #[cfg(feature = "server")]
 pub mod food;
@@ -309,6 +311,8 @@ pub mod radio;
 #[cfg(feature = "server")]
 pub mod recoil;
 pub mod records;
+#[cfg(feature = "server")]
+pub mod reinforced;
 #[cfg(feature = "server")]
 pub mod rest;
 #[cfg(feature = "server")]

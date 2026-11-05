@@ -16,8 +16,13 @@
 //! - iron sheets, right click on an open turf: 4 s, 2 sheets -> displaced girder (with a circuit
 //!   board in the other hand: 2.5 s, 5 sheets -> a frame, [`crate::machine_frame`]); wrench 4 s
 //!   secures it (girder) or loosens it again; screwdriver on a displaced girder 4 s -> 2 sheets;
-//! - 2 iron sheets on a girder on a floor: 4 s -> wall (`place_on_top`); a lit welder with 2
-//!   fuel on a wall: 10 s -> 2 sheets + girder, the tile scraped to plating;
+//!   a plasteel sheet on a secured girder 5 s -> reinforced girder; screwdriver 4 s toggles its
+//!   struts, wirecutters on loose struts 4 s -> the plasteel back and a plain girder;
+//! - wall recipes on a girder on a floor ([`GIRDER_RECIPES`]): 2 iron on a girder 4 s -> wall
+//!   (`place_on_top`), 1 plasteel on a reinforced girder 5 s -> reinforced wall, 2 iron or 2
+//!   plasteel on a displaced girder 2 s -> a false wall ([`crate::falsewall`]); a lit welder
+//!   with 2 fuel on a wall: 10 s -> 2 sheets + girder, the tile scraped to plating; reinforced
+//!   walls and windows come apart step by step ([`crate::reinforced`]);
 //! - grilles: right click with wirecutters cuts one into its rods; screwdriver toggles its
 //!   anchoring; rods rebuild a broken one (1 s); 2 glass sheets on an anchored grille (2 s)
 //!   place an unanchored full-tile window;
@@ -26,9 +31,9 @@
 //!   a lit welder repairs it (4 s);
 //! - vending machines: screwdriver toggles the panel, wrench with the panel open (6 s)
 //!   unanchors or anchors (`default_unfasten_wrench`).
-// shortcut: reinforced walls and windows, plasteel girders and false walls refuse with a
-// message (their multi-step sequences are not ported); a tile on a tiled floor needs a crowbar
-// in the other hand in tg (`try_replace_tile`) and does nothing here.
+// shortcut: mineral and material wall recipes are not ported (only iron and plasteel); a tile on
+// a tiled floor needs a crowbar in the other hand in tg (`try_replace_tile`) and does nothing
+// here.
 
 use std::collections::HashMap;
 
@@ -59,7 +64,6 @@ const BASETURF_BOTTOM: &str = "/turf/baseturf_bottom";
 const LEVEL_BASETURF: &str = "/turf/open/space/basic";
 const FLOOR: &str = "/turf/open/floor";
 const WALL: &str = "/turf/closed/wall";
-const R_WALL: &str = "/turf/closed/wall/r_wall";
 const OPEN: &str = "/turf/open";
 const IRON: &str = "/obj/item/stack/sheet/iron";
 const PLASTEEL: &str = "/obj/item/stack/sheet/plasteel";
@@ -67,8 +71,58 @@ const GLASS: &str = "/obj/item/stack/sheet/glass";
 const RODS: &str = "/obj/item/stack/rods";
 const TILE: &str = "/obj/item/stack/tile";
 const DISPLACED_GIRDER: &str = "/obj/structure/girder/displaced";
+const REINFORCED_GIRDER: &str = "/obj/structure/girder/reinforced";
 const FULLTILE_WINDOW: &str = "/obj/structure/window/fulltile";
 const VENDING: &str = "/obj/machinery/vending";
+
+/// A `GLOB.main_girder_wall_recipes` entry (`create_girder_wall_recipes`): `wall` (a turf or
+/// a false wall) from `amount` of `stack` on a `girder` (or subtype) in `state`.
+#[derive(Clone, Copy, Debug)]
+pub struct GirderRecipe {
+    pub wall: &'static str,
+    pub stack: &'static str,
+    pub amount: u32,
+    pub girder: &'static str,
+    pub state: i32,
+    /// `make_delay`, deciseconds.
+    pub delay: f32,
+}
+
+/// The iron and plasteel recipes, in tg's order (the first match wins).
+pub const GIRDER_RECIPES: [GirderRecipe; 4] = [
+    GirderRecipe {
+        wall: WALL,
+        stack: IRON,
+        amount: 2,
+        girder: GIRDER,
+        state: GIRDER_NORMAL,
+        delay: 40.0,
+    },
+    GirderRecipe {
+        wall: crate::reinforced::R_WALL,
+        stack: PLASTEEL,
+        amount: 1,
+        girder: REINFORCED_GIRDER,
+        state: GIRDER_REINF,
+        delay: 50.0,
+    },
+    GirderRecipe {
+        wall: crate::falsewall::FALSEWALL,
+        stack: IRON,
+        amount: 2,
+        girder: DISPLACED_GIRDER,
+        state: GIRDER_DISPLACED,
+        delay: 20.0,
+    },
+    GirderRecipe {
+        wall: crate::falsewall::R_FALSEWALL,
+        stack: PLASTEEL,
+        amount: 2,
+        girder: DISPLACED_GIRDER,
+        state: GIRDER_DISPLACED,
+        delay: 20.0,
+    },
+];
 
 /// A timed construction step (see the module docs), with the state it started from: the
 /// effect applies only if that state still holds (tg `extra_checks`).
@@ -78,8 +132,16 @@ pub enum Job {
     GirderBolts { from: i32 },
     /// Screwdriver on a displaced girder.
     GirderDisassemble,
-    /// Sheets on a girder.
-    Wall { wall: String },
+    /// Sheets on a girder: the index of its [`GIRDER_RECIPES`] entry.
+    Wall { recipe: usize },
+    /// Plasteel on a secured girder.
+    GirderReinforce,
+    /// Screwdriver on a reinforced girder: its struts from `from`.
+    GirderStruts { from: i32 },
+    /// Wirecutters on a reinforced girder with loose struts.
+    GirderGrille,
+    /// Reinforced wall and window steps ([`crate::reinforced`]).
+    Reinforced(crate::reinforced::ReinforcedJob),
     /// Welder on a wall.
     SliceWall,
     /// Iron sheets on an open turf (right click).
@@ -186,7 +248,15 @@ pub struct ConstructionServerPlugin;
 
 impl Plugin for ConstructionServerPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<BuildTemplates>();
+        app.init_resource::<BuildTemplates>().add_systems(
+            Update,
+            (
+                crate::falsewall::finish_moving
+                    .run_if(any_with_component::<crate::falsewall::FalseWallMoving>),
+                crate::reinforced::cool_bolts
+                    .run_if(any_with_component::<crate::reinforced::BoltsCooling>),
+            ),
+        );
     }
 }
 
@@ -313,6 +383,9 @@ fn tool_act(world: &mut World, actor: Actor, kind: ToolKind, target: Entity) -> 
     if is_under(&path, VENDING) {
         return vending_tool(world, actor, kind, target);
     }
+    if crate::falsewall::tool_act(world, actor, kind, target) {
+        return Interact::Done;
+    }
     if crate::power::emitter::tool_act(world, actor, kind, target) {
         return Interact::Done;
     }
@@ -349,6 +422,9 @@ fn tool_act_secondary(world: &mut World, actor: Actor, kind: ToolKind, target: E
     if kind == ToolKind::Crowbar
         && crate::wallmount::firelock::crowbar_act(world, actor, target, true)
     {
+        return Interact::Done;
+    }
+    if crate::reinforced::window_secondary(world, actor, kind, target) {
         return Interact::Done;
     }
     Interact::None
@@ -407,15 +483,32 @@ fn girder_tool(world: &mut World, actor: Actor, kind: ToolKind, girder: Entity) 
                 );
             }
         }
-        ToolKind::Screwdriver | ToolKind::Wirecutters
-            if matches!(state, GIRDER_REINF | GIRDER_REINF_STRUTS) =>
-        {
-            tell(
+        ToolKind::Screwdriver if matches!(state, GIRDER_REINF | GIRDER_REINF_STRUTS) => {
+            let text = if state == GIRDER_REINF {
+                "Вы начинаете откручивать опорные стойки..."
+            } else {
+                "Вы начинаете закреплять опорные стойки..."
+            };
+            if use_tool(
                 world,
-                client,
-                Span::Warning,
-                "Укреплённый каркас так не разобрать.",
-            );
+                actor,
+                girder,
+                40.0,
+                0,
+                Job::GirderStruts { from: state },
+            ) {
+                tell(world, client, Span::Notice, text);
+            }
+        }
+        ToolKind::Wirecutters if state == GIRDER_REINF_STRUTS => {
+            if use_tool(world, actor, girder, 40.0, 0, Job::GirderGrille) {
+                tell(
+                    world,
+                    client,
+                    Span::Notice,
+                    "Вы начинаете вынимать внутреннюю решётку...",
+                );
+            }
         }
         ToolKind::Welder => {
             tell(world, client, Span::Warning, "Это не разварить!");
@@ -433,22 +526,26 @@ fn window_tool(world: &mut World, actor: Actor, kind: ToolKind, window: Entity) 
     };
     let client = actor.client;
     // shortcut: `can_be_reached` (a directional window behind another blocker) is not checked.
-    if obj.reinf
-        && matches!(
-            kind,
-            ToolKind::Screwdriver | ToolKind::Crowbar | ToolKind::Wrench
-        )
-    {
-        tell(
-            world,
-            client,
-            Span::Warning,
-            "Укреплённое окно так не разобрать.",
-        );
-        return Interact::Done;
-    }
     let state = obj_state(world, window);
     let anchored = anchored(world, window);
+    if obj.reinf {
+        match kind {
+            // `/obj/structure/window/reinforced/crowbar_act` replaces the plain one.
+            ToolKind::Crowbar => {
+                return if crate::reinforced::window_crowbar(world, actor, window) {
+                    Interact::Done
+                } else {
+                    Interact::None
+                };
+            }
+            // The plain `screwdriver_act` has no case for the `RWINDOW_*` states.
+            ToolKind::Screwdriver if state != WINDOW_OUT_OF_FRAME => return Interact::Done,
+            ToolKind::Wrench if state >= crate::reinforced::RWINDOW_FRAME_BOLTED => {
+                return Interact::None;
+            }
+            _ => {}
+        }
+    }
     let speed = obj.decon_speed;
     match kind {
         ToolKind::Welder => {
@@ -594,8 +691,12 @@ fn target_interaction(world: &mut World, actor: Actor, target: Entity) -> Intera
     }
     let client = actor.client;
     if world.get::<Turf>(target).is_some() {
+        if is_under(&path, crate::reinforced::R_WALL) && tool_of(world, held).is_some() {
+            crate::reinforced::wall_tool(world, actor, target);
+            return Interact::Done;
+        }
         if is_under(&path, WALL) && tool_of(world, held).map(|t| t.0) == Some(ToolKind::Welder) {
-            return slice_wall(world, actor, target, &path);
+            return slice_wall(world, actor, target);
         }
         if is_under(&path, FLOOR) && stack_of(world, held, TILE) {
             let overfloor = world
@@ -726,18 +827,8 @@ fn interact_secondary(world: &mut World, actor: Actor, target: Entity) -> Intera
 }
 
 /// `/turf/closed/wall/try_decon`.
-fn slice_wall(world: &mut World, actor: Actor, wall: Entity, path: &str) -> Interact {
+fn slice_wall(world: &mut World, actor: Actor, wall: Entity) -> Interact {
     let client = actor.client;
-    if is_under(path, R_WALL) {
-        // shortcut: the reinforced wall's 7-step `deconstruction_state` chain is not ported.
-        tell(
-            world,
-            client,
-            Span::Warning,
-            "Укреплённую стену так не разобрать.",
-        );
-        return Interact::Done;
-    }
     let item = actor.item.expect("checked by the caller");
     let slicing = world
         .get::<DmTurfBuild>(wall)
@@ -778,57 +869,88 @@ fn place_tile(world: &mut World, tile: Entity, plating: Entity) {
     place_on_top(world, pos, &turf, true);
 }
 
-/// `uses_girder_wall_recipes` for a stack on a girder.
+/// `uses_girder_wall_recipes` for a stack on a girder, then the girder's own
+/// `item_interaction` (plasteel reinforces a secured girder).
 fn girder_stack(world: &mut World, actor: Actor, stack: Entity, girder: Entity) -> Interact {
     let client = actor.client;
-    if stack_of(world, stack, PLASTEEL) {
-        // shortcut: reinforcing girders with plasteel (and reinforced walls) is not ported.
-        tell(
-            world,
-            client,
-            Span::Warning,
-            "Укреплённые каркасы пока не строятся.",
-        );
-        return Interact::Done;
-    }
-    if !stack_of(world, stack, IRON) {
-        tell(world, client, Span::Warning, "Неподходящий материал!");
-        return Interact::Done;
-    }
-    if obj_state(world, girder) != GIRDER_NORMAL {
-        // shortcut: iron on a displaced girder is a false wall in tg.
-        tell(world, client, Span::Warning, "Нужен закреплённый каркас!");
-        return Interact::Done;
-    }
-    if !wall_recipe_ok(world, actor, girder) {
-        return Interact::Done;
-    }
-    // The main recipe of `/turf/closed/wall`: its `sheet_amount` 2 sheets, 4 s.
-    let job = Job::Wall {
-        wall: WALL.to_owned(),
+    let Some(girder_path) = path_of(world, girder) else {
+        return Interact::None;
     };
-    if use_tool(world, actor, girder, 40.0, 2, job) {
-        tell(
-            world,
-            client,
-            Span::Notice,
-            "Вы начинаете строить стену на каркасе.",
-        );
+    let state = obj_state(world, girder);
+    let stack_path = world
+        .get::<DmItem>(stack)
+        .map(|i| i.path.clone())
+        .unwrap_or_default();
+    if let Some(index) = girder_recipe(&stack_path, &girder_path, state) {
+        let recipe = GIRDER_RECIPES[index];
+        if !wall_recipe_ok(world, actor, girder, &recipe) {
+            return Interact::Done;
+        }
+        let job = Job::Wall { recipe: index };
+        if use_tool(world, actor, girder, recipe.delay, recipe.amount, job) {
+            tell(
+                world,
+                client,
+                Span::Notice,
+                "Вы начинаете строить стену на каркасе.",
+            );
+        }
+        return Interact::Done;
     }
+    if stack_of(world, stack, PLASTEEL) {
+        // `/obj/structure/girder/item_interaction`: not in combat mode, a secured girder only.
+        let combat = world.get::<CombatMode>(actor.mob).is_some_and(|c| c.0);
+        if combat {
+            return Interact::None;
+        }
+        if state == GIRDER_NORMAL && use_tool(world, actor, girder, 50.0, 1, Job::GirderReinforce) {
+            tell(
+                world,
+                client,
+                Span::Notice,
+                "Вы начинаете укреплять каркас...",
+            );
+        }
+        return Interact::Done;
+    }
+    if stack_of(world, stack, IRON) {
+        tell(world, client, Span::Warning, "Нужен другой каркас!");
+        return Interact::Done;
+    }
+    // shortcut: material and mineral recipes are not ported.
+    tell(world, client, Span::Warning, "Неподходящий материал!");
     Interact::Done
 }
 
-/// `check_recipe`: no wall yet, a floor under the girder, the girder still in its state.
-fn wall_recipe_ok(world: &mut World, actor: Actor, girder: Entity) -> bool {
+/// `get_main_recipe`: the first recipe for this stack on this girder in its state.
+fn girder_recipe(stack: &str, girder: &str, state: i32) -> Option<usize> {
+    GIRDER_RECIPES
+        .iter()
+        .position(|r| is_under(stack, r.stack) && is_under(girder, r.girder) && r.state == state)
+}
+
+/// `check_recipe`: no wall (or false wall) yet, a floor under the girder, the girder still in
+/// the recipe's state.
+fn wall_recipe_ok(world: &mut World, actor: Actor, girder: Entity, recipe: &GirderRecipe) -> bool {
     let Some(&pos) = world.get::<TilePos>(girder) else {
         return false;
     };
     let turf = turf_at(world, pos).and_then(|t| path_of(world, t));
+    let falsewall = world
+        .resource::<SpatialIndex>()
+        .on_tile(pos)
+        .iter()
+        .any(|&e| {
+            world
+                .get::<DmObj>(e)
+                .is_some_and(|o| is_under(&o.path, crate::falsewall::FALSEWALL))
+        });
     let text = match turf {
         Some(t) if is_under(&t, WALL) => "Здесь уже есть стена!",
+        Some(_) if falsewall => "Здесь уже есть стена!",
         Some(t) if !is_under(&t, FLOOR) => "Нужен пол!",
         None => "Нужен пол!",
-        Some(_) if obj_state(world, girder) != GIRDER_NORMAL => "Нужен закреплённый каркас!",
+        Some(_) if obj_state(world, girder) != recipe.state => return false,
         Some(_) => return true,
     };
     tell(world, actor.client, Span::Warning, text);
@@ -965,16 +1087,26 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
             crate::obj_damage::deconstruct(world, target, true);
             tell(world, client, Span::Notice, "Вы разбираете каркас.");
         }
-        Job::Wall { wall } => {
+        &Job::Wall { recipe } => {
+            let Some(recipe) = GIRDER_RECIPES.get(recipe).copied() else {
+                return;
+            };
             let actor = Actor { client, mob, item };
-            if !wall_recipe_ok(world, actor, target) || !has_template(world, wall) {
+            if !is_under(&path, recipe.girder)
+                || !wall_recipe_ok(world, actor, target, &recipe)
+                || !has_template(world, recipe.wall)
+            {
                 return;
             }
             if !consume(world) {
                 return;
             }
             world.despawn(target);
-            place_on_top(world, pos, wall, false);
+            if is_under(recipe.wall, "/turf") {
+                place_on_top(world, pos, recipe.wall, false);
+            } else {
+                spawn_obj(world, recipe.wall, pos);
+            }
             tell(
                 world,
                 client,
@@ -982,6 +1114,44 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
                 "Вы заканчиваете строить стену на каркасе.",
             );
         }
+        Job::GirderReinforce => {
+            let normal = obj_state(world, target) == GIRDER_NORMAL;
+            if !is_under(&path, GIRDER) || !normal || !has_template(world, REINFORCED_GIRDER) {
+                return;
+            }
+            if !consume(world) {
+                return;
+            }
+            replace_girder(world, target, REINFORCED_GIRDER);
+            tell(world, client, Span::Notice, "Вы укрепляете каркас.");
+        }
+        &Job::GirderStruts { from } => {
+            if !is_under(&path, GIRDER) || obj_state(world, target) != from {
+                return;
+            }
+            let (to, text) = if from == GIRDER_REINF {
+                (GIRDER_REINF_STRUTS, "Вы откручиваете опорные стойки.")
+            } else {
+                (GIRDER_REINF, "Вы закрепляете опорные стойки.")
+            };
+            world.entity_mut(target).insert(ObjState(to));
+            tell(world, client, Span::Notice, text);
+        }
+        Job::GirderGrille => {
+            let struts = obj_state(world, target) == GIRDER_REINF_STRUTS;
+            if !is_under(&path, GIRDER) || !struts || !has_template(world, GIRDER) {
+                return;
+            }
+            spawn_stack(world, PLASTEEL, pos, 1);
+            replace_girder(world, target, GIRDER);
+            tell(
+                world,
+                client,
+                Span::Notice,
+                "Вы вынимаете внутреннюю решётку.",
+            );
+        }
+        &Job::Reinforced(job) => crate::reinforced::complete(world, client, target, job),
         Job::SliceWall => {
             if !is_under(&path, WALL) || !consume(world) {
                 return;
@@ -1160,7 +1330,7 @@ fn replace_girder(world: &mut World, girder: Entity, to: &str) {
 }
 
 /// `dismantle_wall` -> `break_wall`: its sheets and girder on the tile, then `ScrapeAway`.
-fn dismantle_wall(world: &mut World, wall: Entity, pos: TilePos) {
+pub(crate) fn dismantle_wall(world: &mut World, wall: Entity, pos: TilePos) {
     let Some(build) = world.get::<DmTurfBuild>(wall).cloned() else {
         return;
     };
@@ -1607,6 +1777,62 @@ mod tests {
         );
         assert!(world.get_entity(girder).is_ok());
         assert_eq!(obj_state(world, girder), GIRDER_NORMAL);
+    }
+
+    /// `main_girder_wall_recipes`: iron walls a secured girder, plasteel a reinforced one, both
+    /// make false walls on a displaced girder; plasteel on a secured girder is no recipe (it
+    /// reinforces the girder instead).
+    #[test]
+    fn girder_recipes_follow_stack_girder_and_state() {
+        let wall = |stack, girder, state| {
+            girder_recipe(stack, girder, state).map(|i| GIRDER_RECIPES[i].wall)
+        };
+        assert_eq!(wall(IRON, GIRDER, GIRDER_NORMAL), Some(WALL));
+        assert_eq!(
+            wall(PLASTEEL, REINFORCED_GIRDER, GIRDER_REINF),
+            Some(crate::reinforced::R_WALL)
+        );
+        assert_eq!(wall(PLASTEEL, REINFORCED_GIRDER, GIRDER_REINF_STRUTS), None);
+        assert_eq!(
+            wall(IRON, DISPLACED_GIRDER, GIRDER_DISPLACED),
+            Some(crate::falsewall::FALSEWALL)
+        );
+        assert_eq!(
+            wall(PLASTEEL, DISPLACED_GIRDER, GIRDER_DISPLACED),
+            Some(crate::falsewall::R_FALSEWALL)
+        );
+        assert_eq!(wall(PLASTEEL, GIRDER, GIRDER_NORMAL), None);
+        assert_eq!(wall(IRON, REINFORCED_GIRDER, GIRDER_REINF), None);
+    }
+
+    #[test]
+    fn reinforced_girder_struts_toggle_from_their_state() {
+        let mut app = world();
+        let world = app.world_mut();
+        let girder = world
+            .spawn((
+                DmObj {
+                    path: REINFORCED_GIRDER.into(),
+                    max_integrity: 350.0,
+                    ..default()
+                },
+                ObjState(GIRDER_REINF),
+                TilePos::new(2, 2, 1),
+            ))
+            .id();
+        let unscrew = Job::GirderStruts { from: GIRDER_REINF };
+        job(world, girder, unscrew.clone());
+        assert_eq!(obj_state(world, girder), GIRDER_REINF_STRUTS);
+        job(world, girder, unscrew);
+        assert_eq!(obj_state(world, girder), GIRDER_REINF_STRUTS, "stale");
+        job(
+            world,
+            girder,
+            Job::GirderStruts {
+                from: GIRDER_REINF_STRUTS,
+            },
+        );
+        assert_eq!(obj_state(world, girder), GIRDER_REINF);
     }
 
     #[test]

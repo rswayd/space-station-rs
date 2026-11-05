@@ -815,6 +815,8 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 // tg `attack_hand` of tables and racks: a pulled mob onto it, flipping (right
                 // click), knocking a climber down, kicking a rack.
                 None if crate::tables::attack_hand(world, client, mob, target, modifiers) => {}
+                // tg `attack_hand` of a false wall: open or close it.
+                None if crate::falsewall::attack_hand(world, target) => {}
                 None => pick_up(world, mob, target, inventory.active),
                 // tg `/obj/item/card/emag/interact_with_atom` on the families with an
                 // `emag_act` (`crate::emag`).
