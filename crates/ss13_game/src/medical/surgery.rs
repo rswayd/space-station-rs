@@ -3785,9 +3785,10 @@ pub fn buckled_to(world: &mut World, furniture: Entity) -> Option<Entity> {
         .map(|(e, _)| e)
 }
 
-/// A buckled mob that left the furniture's tile (teleported, the furniture gone) is free.
+/// A buckled mob that left the furniture's tile (teleported, the furniture gone) is free; a
+/// vehicle's rider is `crate::vehicles`' (it moves with the vehicle).
 fn check_buckles(
-    mobs: Query<(Entity, &Buckled, &TilePos)>,
+    mobs: Query<(Entity, &Buckled, &TilePos), Without<crate::vehicles::Rider>>,
     furniture: Query<&TilePos>,
     mut commands: Commands,
 ) {

@@ -617,6 +617,7 @@ type BodyItem<'a> = (
         Option<&'a crate::mood::SanitySlowdown>,
         Option<&'a crate::hallucination::ScrewyHud>,
         Option<&'a crate::modsuit::server::SuitSlowdown>,
+        Option<&'a crate::vehicles::Rider>,
     ),
 );
 
@@ -640,7 +641,11 @@ fn body_state(
             Changed<crate::janitor::Walking>,
             Changed<crate::taser::TaseSlowdown>,
             Changed<crate::mood::SanitySlowdown>,
-            Changed<crate::modsuit::server::SuitSlowdown>,
+            // `Or` takes at most 15 filters.
+            Or<(
+                Changed<crate::modsuit::server::SuitSlowdown>,
+                Changed<crate::vehicles::Rider>,
+            )>,
         )>,
     >,
     index: Res<SpatialIndex>,
@@ -666,7 +671,7 @@ fn body_state(
         name,
         drag,
         traits,
-        (zone, fat, limits, pilot, speed, walking, tased, sanity, screwy, suit),
+        (zone, fat, limits, pilot, speed, walking, tased, sanity, screwy, suit, rider),
     ) in &mut mobs
     {
         let traits = traits.copied().unwrap_or_default();
@@ -710,6 +715,10 @@ fn body_state(
         // A pilot walks at its mech's pace (`crate::mecha`).
         if let Some(pilot) = pilot {
             delay = pilot.move_delay;
+        }
+        // A driver at its vehicle's (`crate::vehicles`).
+        if let Some(rider) = rider {
+            delay = rider.move_delay;
         }
         let floored = health.floored(*stat) || traits.floored || traits.resting;
         if floored != posture.lying() {
@@ -759,7 +768,8 @@ fn body_state(
             health: Some(readout),
             combat_mode: combat.0,
             move_delay: delay,
-            immobile: !health.can_move(*stat) || traits.immobilized,
+            // A driver's steps drive its vehicle (`crate::vehicles`).
+            immobile: (!health.can_move(*stat) || traits.immobilized) && rider.is_none(),
             phasing: false,
             zone_selected: zone.copied().unwrap_or_default().0,
         });

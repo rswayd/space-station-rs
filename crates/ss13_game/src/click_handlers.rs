@@ -49,6 +49,7 @@
 //! | 2900 | `botany::attack_self` |
 //! | 3000 | `service::server::attack_self` |
 //! | 3100 | `silicon::law_rack::attack_self` |
+//! | 3150 | `vehicles::attack_self` |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):
 //!
@@ -114,6 +115,7 @@
 //! | 3300 | `defenses::server::interact` |
 //! | 3400 | `silicon::law_rack::interact` |
 //! | 3470 | `station_goals::interact` (satellites) |
+//! | 3450 | `vehicles::attack_hand` |
 //!
 //! [`ClickPhase::HeldOnTarget`] (a world click with the active hand's item; tg
 //! `item_interaction`, `interact_with_atom`, `pre_attack`, `attackby`):
@@ -155,6 +157,7 @@
 //! | 2700 | `wallmount::item_interaction` |
 //! | 2800 | `power::chargers::item_interaction` |
 //! | 2900 | `mecha::item_interaction` |
+//! | 2950 | `vehicles::item_interaction` |
 //! | 3000 | `mining::item_interaction` |
 //! | 3100 | `science::item_interaction` |
 //! | 3200 | `botany::item_interaction` |

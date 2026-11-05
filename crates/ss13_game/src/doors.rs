@@ -858,7 +858,8 @@ type DoorItem<'a> = (
 /// tg `Bumped`: a mob walking into a closed door tries to open it.
 /// Windoors are border objects (`ss13_world::Border`), so movement bumps them only across their
 /// edge: from the front, or leaving their own tile through it. A bumped filler bumps its door.
-/// A mech opens doors with its pilot's access (`/obj/vehicle/sealed/Bump`), a bot with its own.
+/// A mech opens doors with its pilot's access (`/obj/vehicle/sealed/Bump`), a ridden vehicle with
+/// its driver's, a bot with its own.
 // shortcut: "mob" = has `Mover`; tg also lets thrown items with access bump doors.
 #[allow(clippy::too_many_arguments)]
 fn door_bumps(
@@ -872,6 +873,7 @@ fn door_bumps(
             Option<&Inventory>,
             Option<&crate::mecha::Mech>,
             Option<&crate::bots::Bot>,
+            Option<&crate::vehicles::Vehicle>,
         ),
         With<Mover>,
     >,
@@ -883,12 +885,14 @@ fn door_bumps(
 ) {
     let now = time.elapsed_secs_f64();
     for bump in bumps.read() {
-        let Ok((&mover_pos, inventory, mech, bot)) = movers.get(bump.entity) else {
+        let Ok((&mover_pos, inventory, mech, bot, vehicle)) = movers.get(bump.entity) else {
             continue;
         };
-        let inventory = match mech {
-            Some(mech) => mech.occupant.and_then(|p| pilots.get(p).ok()),
-            None => inventory,
+        // A ridden vehicle opens with its driver's (`/datum/component/riding/vehicle_bump`).
+        let inventory = match (mech, vehicle) {
+            (Some(mech), _) => mech.occupant.and_then(|p| pilots.get(p).ok()),
+            (None, Some(vehicle)) => vehicle.rider.and_then(|p| pilots.get(p).ok()),
+            (None, None) => inventory,
         };
         let obstacle = fillers.get(bump.obstacle).map_or(bump.obstacle, |f| f.0);
         let Ok((entity, mut door, mut appearance, pos, unpowered, wires)) = doors.get_mut(obstacle)

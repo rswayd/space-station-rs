@@ -91,6 +91,7 @@ mod traitor;
 mod traumas;
 mod ui_smoke;
 mod vampire;
+mod vehicles;
 mod vending;
 mod wallmount;
 mod wires;

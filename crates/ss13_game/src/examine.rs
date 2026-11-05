@@ -122,6 +122,7 @@ pub fn examine_lines(world: &World, examiner: Entity, target: Entity) -> (String
     crate::wallmount::examine_lines(world, target, &mut lines);
     crate::brig::timer::examine_lines(world, target, &mut lines);
     crate::furniture::examine_lines(world, target, &mut lines);
+    crate::vehicles::examine_lines(world, target, &mut lines);
     crate::devices::examine_lines(world, target, &mut lines);
     crate::plumbing::examine_lines(world, target, &mut lines);
     crate::security_level::examine_lines(world, target, &mut lines);
