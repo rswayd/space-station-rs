@@ -13,10 +13,11 @@
 //!   moodlets`), drunkenness (`/datum/status_effect/inebriated/drunk`), handcuffs, burning,
 //!   suffocation and body temperature. Seeing a human die (`send_death_moodlets`) and hugs
 //!   (`help_shake_act`) add theirs when they happen.
+//! - Crazy and insane sanity bring hallucinations (`crate::hallucination::SanityHallucinations`).
 //! - The face on the owner's HUD ([`MoodHudData`], headless tgui [`MoodHudUi`]) shows the level
 //!   tinted by sanity; clicking it prints the mood (`print_mood`).
 // shortcut: no crit threshold change from insanity (crit thresholds are constants in
-// `crate::health`), no sanity hallucinations (no hallucination system), no area beauty or area
+// `crate::health`), no area beauty or area
 // mood bonuses, no special screen icons, no personalities (their mood multipliers), no full-heal
 // reset (no aheal yet), gibbed/dusted deaths count as plain ones, conditional death moodlets other
 // than the base one (cult, revolution, pets) are not ported. The food, drug, morbid and most

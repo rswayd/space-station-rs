@@ -7,6 +7,7 @@
 //! - [`carp_migration`], [`mice_migration`], [`vent_clog`]: spawn basic mobs (`crate::mobs`).
 //! - [`anomalies`], [`immovable_rod`], [`wormholes`]: their own objects, moved and processed
 //!   by this plugin's systems.
+//! - [`mass_hallucination`]: the same hallucination for every human (`crate::hallucination`).
 //!
 //! Announcements are tg `priority_announce` from Central Command (`crate::announce`), with the
 //! announcer's `ANNOUNCER_*` sound where tg names one, else its random alert sound.
@@ -24,6 +25,7 @@ pub mod grey_tide;
 pub mod grid_check;
 pub mod immovable_rod;
 pub mod market_crash;
+pub mod mass_hallucination;
 pub mod meteors;
 pub mod mice_migration;
 pub mod radiation_storm;
@@ -227,6 +229,14 @@ pub fn controls() -> Vec<EventControl> {
         ),
         c(anomalies::GRAV, 25, 20.0, 1, 5, anomalies::make_grav),
         c(anomalies::PYRO, 20, 20.0, 1, 5, anomalies::make_pyro),
+        unfakeable(c(
+            mass_hallucination::NAME,
+            10,
+            20.0,
+            1,
+            2,
+            mass_hallucination::make,
+        )),
     ]
 }
 

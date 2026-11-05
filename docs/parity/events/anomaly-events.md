@@ -61,7 +61,7 @@
 Вызывает галлюцинации у всех вокруг, в конце — сильная волна галлюцинаций.
 
 - **Код:** [`/datum/round_event_control/anomaly/anomaly_hallucination`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/anomaly/anomaly_hallucination.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — нет аномалий и галлюцинаций
+- **Статус в ss13-rs:** ❌ нет — нет аномалии галлюцинаций (импульс есть: `crate::hallucination::hallucination_pulse`)
 
 ### Anomaly: Weather / Thundering Weather
 Погодная аномалия: локальный дождь (или гроза с молниями) в зоне вокруг себя.

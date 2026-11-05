@@ -32,7 +32,7 @@
 Весь экипаж одновременно видит одну и ту же галлюцинацию.
 
 - **Код:** [`/datum/round_event_control/mass_hallucination`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/mass_hallucination.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — нет галлюцинаций
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/events/mass_hallucination.rs`: вес 10, максимум 2, всем живым людям один тип (обычный/странный звук, объявление, общая галлюцинация); категории бреда берут общую (бред — в hallucinations.md), без админской настройки
 
 ## Бюрократия
 
