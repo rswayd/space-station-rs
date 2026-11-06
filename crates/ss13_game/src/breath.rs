@@ -1288,12 +1288,17 @@ fn live(world: &mut World, mob: Entity, fired: u64, now: f64) {
     let simulated = world
         .get_resource::<Atmos>()
         .is_some_and(|a| a.level(pos.z).is_some());
-    let environment = if simulated {
-        let atmos = world.resource::<Atmos>();
-        atmos.air(pos).cloned().unwrap_or_default()
-    } else {
-        station_air()
-    };
+    // A sealed closet's occupant breathes its own air (`crate::closets::air`).
+    let sealed = crate::closets::air::holder(world, mob);
+    let environment =
+        if let Some(air) = sealed.and_then(|c| world.get::<crate::closets::air::ClosetAir>(c)) {
+            air.air.clone()
+        } else if simulated {
+            let atmos = world.resource::<Atmos>();
+            atmos.air(pos).cloned().unwrap_or_default()
+        } else {
+            station_air()
+        };
     // A cryo cell's occupant breathes its gas and takes its temperature
     // (`handle_internal_lifeform`, `assume_air`, `return_temperature`).
     let cryo = crate::medical::cryo::holder(world, mob);
@@ -1349,6 +1354,10 @@ fn live(world: &mut World, mob: Entity, fired: u64, now: f64) {
                 None if cryo.is_some() => cryo.and_then(|cell| {
                     crate::medical::cryo::handle_internal_lifeform(world, cell, BREATH_VOLUME)
                 }),
+                None if sealed.is_some() => sealed.and_then(|closet| {
+                    let moles = environment.total_moles() * BREATH_PERCENTAGE;
+                    crate::closets::air::remove_air(world, closet, moles)
+                }),
                 None => {
                     let moles = environment.total_moles() * BREATH_PERCENTAGE;
                     if simulated {
@@ -1368,6 +1377,8 @@ fn live(world: &mut World, mob: Entity, fired: u64, now: f64) {
         if let Some(breath) = breath {
             if let Some(cell) = cryo {
                 crate::medical::cryo::assume_air(world, cell, &breath);
+            } else if let Some(closet) = sealed {
+                crate::closets::air::assume_air(world, closet, &breath);
             } else if simulated {
                 world.resource_mut::<Atmos>().merge_air(pos, &breath);
             }

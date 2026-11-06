@@ -29,7 +29,7 @@
 Закрытый шкаф хранит свою газовую смесь и температуру (морозильники холодные), из которой дышит моб внутри.
 
 - **Код:** [`return_air()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/crates_lockers/closets.dm#L201), [`process_internal_air()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/crates_lockers/closets.dm#L229), [`/obj/structure/closet/secure_closet/freezer`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/crates_lockers/closets/secure/freezer.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ готово — `crates/ss13_game/src/closets/air.rs`: герметичные шкафы (морозильные шкаф и ящики, `sealed`) держат свою смесь (`ClosetAir`: копия воздуха тайла при загрузке карты, иначе пустая); моб внутри дышит ею, чувствует её давление и температуру и выдыхает в неё (`crate::breath`); раз в 2 с (SSobj) открытый шкаф выравнивается с тайлом (`equalize`, морозильник сперва не холоднее комнаты), закрытый морозильник остывает на 4 К/с до `T0C - 60`; воздух экологических мешков (50 л) и баллоны ящиков для криттеров — не здесь (см. «Мешки для тел», «Ящики»)
 
 ### Ящики (crates)
 Ящики открываются крышкой, на них можно залезть, закрыты/открыты отдельными спрайтами; накладная (манифест) срывается; защищённые ящики с индикатором замка; синдикатовские, ящики для криттеров, мусорные контейнеры, пластиковые, картонные, деревянные.
@@ -42,13 +42,13 @@
 Большой деревянный ящик не открывается руками — только ломом, после чего разваливается на доски.
 
 - **Код:** [`/obj/structure/closet/crate/large`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/crates_lockers/crates/large.dm#L1), [`crowbar_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/crates_lockers/crates/large.dm#L40)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ готово — `crates/ss13_game/src/closets/kinds.rs`: рука или предмет вне боевого режима — «нужен лом», лом вскрывает ящик (`crowbar_act`): содержимое на тайл, 4 доски, ящик удаляется, звук `slashmiss`; в боевом режиме предмет бьёт ящик
 
 ### Заброшенные ящики с кодом
 Запертый ящик с кодовым замком: игра «быки и коровы» (подсказки после неверных попыток), неудача взрывает ящик, внутри случайный лут.
 
 - **Код:** [`/obj/structure/closet/crate/secure/loot`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/crates_lockers/crates/abandoned_crates/abandoned_crates.dm#L3), [`bulls_and_cows()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/crates_lockers/crates/abandoned_crates/abandoned_crates.dm#L198), [`abandoned_crates_loot.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/crates_lockers/crates/abandoned_crates/abandoned_crates_loot.dm)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ готово — `crates/ss13_game/src/closets/kinds.rs` (`CodeLock`): код из 4 разных цифр, рука спрашивает код (`tgui_input_text`, ответ перепроверяется: тело, сознание, рядом, ящик ещё заперт); верный код — лут один раз и отпирание, неверный корректный — минус попытка из 10 с записью быков и коров, последняя — `boom` (содержимое наружу, взрыв 0/1/5, вспышка 5); ID не отпирает при взведённой защите, повторное запирание её взводит и сбрасывает попытки; мультитул показывает попытки (shortcut: в чате вместо окна `AbandonedCrate`), правый клик мультитулом — ввод кода; емаг на запертом — взрыв (намерение tg, у tg родитель сначала отпирает); лут — таблица `possible_loot` с раскрытыми спавнерами (shortcut: игрушечный мех — всегда Рипли, трава — 3+3 базового сорта, гибтонит не взведён, без мин bwoink и «ящика в ящике», мобы появляются, только если строится их прототип)
 
 ### Шкафы должностей и отделов
 Шкафы с наборами снаряжения (СБ, глав отделов, инженеров, медиков, учёных, бара, гидропоники, карго), гардеробы по цветам и отделам, аварийные (кислород) и пожарные шкафы, шкафы радиационной и биозащиты, спортивные, синдикатовские, шкафы-бесконечности.
@@ -61,14 +61,14 @@
 Коробка, в которой можно спрятаться и ползать (медленно); при обнаружении «!»-эффект.
 
 - **Код:** [`/obj/structure/closet/cardboard`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/crates_lockers/closets/cardboardbox.dm#L1), [`relaymove()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/crates_lockers/closets/cardboardbox.dm#L44)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ готово — `crates/ss13_game/src/closets/kinds.rs` (`CardboardBox`): вмещает одного моба (металлическая — 5), шаг моба внутри двигает закрытую коробку раз в `walk_delay` (0,4 с, металлическая ×2), не в бессознательном/недееспособном состоянии и не без гравитации; открытие коробки с мобом — «!» над мобами в сознании в 7 тайлах и звук `chime`, не чаще раза в минуту (shortcut: без проверки видимости и слепоты, без поворота к коробке, «!» — временный визуал на тайле)
 
 ### Мешки для тел
 Мешок раскладывается из предмета, вмещает одно тело, складывается обратно; на нём пишут маркером; стазисный и блюспейс-мешки.
 
 - **Код:** [`/obj/structure/closet/body_bag`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/crates_lockers/closets/bodybag.dm#L1), [`attempt_fold()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/crates_lockers/closets/bodybag.dm#L83), [`/obj/item/bodybag`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/tools/medical/bodybag.dm#L2)
 - **BandaStation:** [`bodybag.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/crates_lockers/closets/bodybag.dm#L462) — свои спрайты стазисного мешка
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/closets/kinds.rs`: сложенный мешок в руке раскладывается на тайл открытым (`deploy_bodybag`, предмет тратится), закрытый мешок не плотный, вмещает двух мобов (блюспейс — 15, экологические — 1), правый клик складывает пустой закрытый мешок в руки (`attempt_fold`, звук молнии); нет надписей маркером/ручкой, прикреплённой бумаги, стазисного и экологических мешков (свой воздух, стазис, замок заключённого), складывания блюспейс-мешка с содержимым, раскладывания кликом по полу
 
 ### Шкафчики-кабинеты и прочие
 Деревянные кабинеты, костюмные шкафы-ловушки и т.п.

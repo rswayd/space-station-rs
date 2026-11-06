@@ -44,6 +44,11 @@ use crate::click_handlers::{AddClickHandler, ClickPhase};
 use crate::inventory::{CarriedBy, IdCard, Inventory, check_access};
 use crate::storage::{Stored, StoredIn, put_inside, spawn_contents, take_out};
 
+pub mod air;
+pub mod kinds;
+
+pub use kinds::ClosetKind;
+
 /// BYOND `OBJ_LAYER`.
 const OBJ_LAYER: f32 = 3.0;
 /// `BELOW_OBJ_LAYER` (`code/__DEFINES/layers.dm`).
@@ -74,6 +79,12 @@ pub struct Closet {
     horizontal: bool,
     storage_capacity: usize,
     sprites: ClosetSprites,
+    /// What the closet's type adds ([`kinds`]), set by [`kinds::attach`].
+    pub kind: ClosetKind,
+    /// `mob_storage_capacity`.
+    pub mob_capacity: usize,
+    /// Dense once closed (body bags are not).
+    pub dense_when_closed: bool,
 }
 
 impl Closet {
@@ -97,6 +108,9 @@ impl Closet {
             sprites: icons.map_or_else(ClosetSprites::default, |icons| {
                 ClosetSprites::resolve(dm, atom, icons)
             }),
+            kind: ClosetKind::Plain,
+            mob_capacity: MOB_STORAGE_CAPACITY,
+            dense_when_closed: true,
         }
     }
 
@@ -285,6 +299,8 @@ pub struct InCloset {
 #[derive(Message, Clone, Copy, Debug)]
 pub struct ClosetRelayMove {
     pub mob: Entity,
+    /// The step's direction (a cardboard box moves with it).
+    pub dir: ss13_shared::Dir,
 }
 
 pub struct ClosetServerPlugin;
@@ -302,9 +318,23 @@ impl Plugin for ClosetServerPlugin {
                         .before(crate::inventory::inventory_intents),
                     relay_moves.after(WorldSystems::Movement),
                     hide_closeted.after(crate::inventory::inventory_intents),
+                    kinds::attach_new.before(ResolveClicks),
+                    air::process_closet_air,
                 ),
             )
+            .add_systems(
+                Update,
+                kinds::code_answers
+                    .after(ss13_tgui::prompt::PromptSystems::Answer)
+                    .in_set(ss13_tgui::server::UiSystems::Handle),
+            )
             .add_observer(release_on_despawn);
+        // Large crates: items and crowbars; abandoned crates: multitools.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 4460, kinds::held_on_target);
+        // A folded body bag unfolds.
+        app.add_click_handler(ClickPhase::AttackSelf, 3190, |w, c| {
+            kinds::bodybag_attack_self(w, c.mob, c.target)
+        });
         // tg `lockbox/tool_act`: an ID toggles a lockbox's lock (before a storage takes it).
         app.add_click_handler(ClickPhase::HeldOnTarget, 4650, |w, c| {
             c.held
@@ -338,6 +368,7 @@ fn init_closets(world: &mut World) {
             opened: false,
             ..closet
         });
+        kinds::attach(world, entity);
         if let Some(contents) = &contents {
             report.partial += usize::from(contents.unsupported > 0);
             spawn_contents(world, entity, &contents.immediate, 0);
@@ -410,10 +441,12 @@ pub fn open(world: &mut World, closet: Entity) -> bool {
         .filter(|(_, c)| c.closet == closet)
         .map(|(e, _)| e)
         .collect();
+    let had_mob = !mobs.is_empty();
     for mob in mobs {
         let_out(world, mob);
     }
     refresh_look(world, closet);
+    kinds::cardboard_opened(world, closet, had_mob);
     true
 }
 
@@ -474,16 +507,18 @@ fn hide_closeted(
 // shortcut: no breaking out of a locked or welded closet (tg's 2 minute resist); someone has to
 // open it from outside.
 fn relay_moves(world: &mut World, mut moves: Local<MessageCursor<ClosetRelayMove>>) {
-    let mobs: Vec<Entity> = moves
+    let mobs: Vec<(Entity, ss13_shared::Dir)> = moves
         .read(world.resource::<Messages<ClosetRelayMove>>())
-        .map(|m| m.mob)
+        .map(|m| (m.mob, m.dir))
         .collect();
-    for mob in mobs {
+    for (mob, dir) in mobs {
         // `IS_UNCONSCIOUS_OR_CRIT(user)`: nothing.
         if world.get::<crate::health::Stat>(mob) != Some(&crate::health::Stat::Conscious) {
             continue;
         }
-        if let Some(c) = world.get::<InCloset>(mob).copied() {
+        if let Some(c) = world.get::<InCloset>(mob).copied()
+            && !kinds::cardboard_step(world, mob, c.closet, dir)
+        {
             open_if_allowed(world, c.closet, Some(mob));
         }
     }
@@ -626,7 +661,12 @@ pub fn close(world: &mut World, closet: Entity) -> bool {
         .get_mut::<Closet>(closet)
         .expect("checked above")
         .opened = false;
-    world.entity_mut(closet).insert(Density);
+    if world
+        .get::<Closet>(closet)
+        .is_some_and(|c| c.dense_when_closed)
+    {
+        world.entity_mut(closet).insert(Density);
+    }
     refresh_look(world, closet);
     true
 }
@@ -667,7 +707,7 @@ fn take_contents(world: &mut World, closet: Entity) -> usize {
         .iter()
         .copied()
         .filter(|&e| insertable(world, &state, e))
-        .take(MOB_STORAGE_CAPACITY)
+        .take(state.mob_capacity)
         .collect();
     for mob in mobs {
         put_mob_inside(world, mob, closet);
@@ -720,7 +760,7 @@ fn toggle_lock(
     if !state.secure {
         return false;
     }
-    if state.broken {
+    if state.broken || kinds::lock_blocked(world, closet) {
         return true;
     }
     if state.locked {
@@ -749,6 +789,9 @@ fn toggle_lock(
         state.locked = !state.locked;
         state.locked
     };
+    if locked {
+        kinds::relocked(world, closet);
+    }
     refresh_look(world, closet);
     let what = crate::security::name_of(world, closet);
     let text = if locked {
@@ -885,6 +928,9 @@ fn closet_clicks(world: &mut World, mut clicks: Local<MessageCursor<ClickResolve
             continue;
         }
         let user = Some(click.mob);
+        if kinds::intercept_click(world, &click, &state, inventory.active_item()) {
+            continue;
+        }
         match inventory.active_item() {
             // tg `attack_hand_secondary`.
             None if click.modifiers.right => {
@@ -1184,6 +1230,50 @@ mod tests {
         assert!(world.entity(bought).contains::<AccountLock>());
         world.entity_mut(bought).remove::<AccountLock>();
         assert!(open_if_allowed(&mut world, bought, None));
+    }
+
+    #[test]
+    fn cardboard_boxes_move_with_their_mob_and_body_bags_stay_flat() {
+        let mut world = world();
+        world.insert_resource(Time::<()>::default());
+        let c = closet(&mut world, DmCloset::default());
+        world.entity_mut(c).insert(ss13_mapload::DmObj {
+            path: kinds::CARDBOARD.into(),
+            ..default()
+        });
+        kinds::attach(&mut world, c);
+        let state = world.get::<Closet>(c).unwrap();
+        assert_eq!((state.kind, state.mob_capacity), (ClosetKind::Cardboard, 1));
+        let mob = world.spawn((POS, crate::health::Stat::Conscious)).id();
+        put_mob_inside(&mut world, mob, c);
+        assert!(kinds::cardboard_step(
+            &mut world,
+            mob,
+            c,
+            ss13_shared::Dir::East
+        ));
+        let to = TilePos::new(3, 2, 1);
+        assert_eq!(world.get::<TilePos>(c), Some(&to), "the box moved");
+        assert_eq!(world.get::<TilePos>(mob), Some(&to), "with its mob");
+        // `move_delay`: the next step waits for the walk delay.
+        assert!(kinds::cardboard_step(
+            &mut world,
+            mob,
+            c,
+            ss13_shared::Dir::West
+        ));
+        assert_eq!(world.get::<TilePos>(c), Some(&to));
+
+        let bag = closet(&mut world, DmCloset::default());
+        world.entity_mut(bag).insert(ss13_mapload::DmObj {
+            path: kinds::BODY_BAG.into(),
+            ..default()
+        });
+        kinds::attach(&mut world, bag);
+        assert_eq!(world.get::<Closet>(bag).unwrap().mob_capacity, 2);
+        assert!(open(&mut world, bag));
+        assert!(close(&mut world, bag));
+        assert!(!world.entity(bag).contains::<Density>(), "not dense closed");
     }
 
     #[test]

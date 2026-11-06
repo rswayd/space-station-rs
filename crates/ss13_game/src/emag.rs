@@ -496,6 +496,10 @@ fn recharge_doorjacks(world: &mut World) {
 /// `/obj/structure/closet/emag_act`: a secure closet's lock breaks open.
 /// An account lock (`locked_to_account/on_emag`) is bypassed first.
 fn closet(world: &mut World, mob: Entity, target: Entity) -> bool {
+    // An abandoned crate's anti-tamper blows the locked crate up.
+    if crate::closets::kinds::emag(world, mob, target) {
+        return true;
+    }
     let account_lock = world
         .entity_mut(target)
         .take::<crate::closets::AccountLock>()

@@ -971,7 +971,7 @@ pub(crate) fn forward_moves(
             _ if pilot.is_some() => {}
             // tg `relaymove` of the closet the mob is in (`crate::closets`).
             _ if closeted => {
-                relays.write(crate::closets::ClosetRelayMove { mob });
+                relays.write(crate::closets::ClosetRelayMove { mob, dir });
             }
             // tg `Process_Grab`: the grab is resisted first (`crate::pull`).
             _ if held => {
