@@ -271,3 +271,39 @@ fn constant_spawn_paths_are_runtime_types() {
         checked.len()
     );
 }
+
+/// Every `"…/….ogg"` literal in the game and admin code that BandaStation ships is in the
+/// converted assets (`assets/generated/sound/<path>`): a sound only the code names is converted
+/// when `ss13_mapload::sound::referenced` lists it (`files::GAME_CODE` and its neighbours).
+#[test]
+#[ignore = "needs generated assets and SS13_SOURCE; run with --ignored"]
+fn game_sound_literals_are_converted() {
+    let crates = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    let source = PathBuf::from(env!("SS13_SOURCE"));
+    let assets =
+        PathBuf::from(std::env::var("SS13_ASSETS").unwrap_or_else(|_| "assets/generated".into()));
+    let mut sources = Vec::new();
+    read_sources(&crates.join("ss13_game/src"), &mut sources);
+    read_sources(&crates.join("ss13_admin/src"), &mut sources);
+    let mut missing = BTreeSet::new();
+    for s in &sources {
+        for (start, _) in s.text.match_indices('"') {
+            let rest = &s.text[start + 1..];
+            let Some(end) = rest.find('"') else { continue };
+            let lit = &rest[..end];
+            let rooted = lit.starts_with("sound/") || lit.starts_with("modular_bandastation/");
+            if rooted
+                && lit.ends_with(".ogg")
+                && !lit.contains(' ')
+                && source.join(lit).is_file()
+                && !assets.join("sound").join(lit).is_file()
+            {
+                missing.insert(lit.to_owned());
+            }
+        }
+    }
+    assert!(
+        missing.is_empty(),
+        "played by the code but not converted (add them to ss13_mapload::sound::files): {missing:#?}"
+    );
+}
