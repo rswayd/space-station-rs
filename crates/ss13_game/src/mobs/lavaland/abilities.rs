@@ -230,7 +230,7 @@ pub(super) fn build(app: &mut App) {
     .add_observer(release_corpse);
 }
 
-fn now(world: &World) -> f64 {
+pub(super) fn now(world: &World) -> f64 {
     world.resource::<Time>().elapsed_secs_f64()
 }
 
@@ -308,7 +308,7 @@ pub(super) fn channeling(world: &World, mob: Entity) -> bool {
             .is_some_and(|r| r.phase != RushPhase::Idle)
 }
 
-fn alive(world: &World, mob: Entity) -> bool {
+pub(super) fn alive(world: &World, mob: Entity) -> bool {
     world.get::<Stat>(mob) == Some(&Stat::Conscious)
 }
 
@@ -356,7 +356,7 @@ fn set_state(world: &mut World, e: Entity, icon: &str, state: &str) {
     }
 }
 
-fn fleeting_visual(world: &mut World, pos: TilePos, icon: &str, state: &str, secs: f64) {
+pub(super) fn fleeting_visual(world: &mut World, pos: TilePos, icon: &str, state: &str, secs: f64) {
     let until = now(world) + secs;
     spawn_visual(world, pos, icon, state, BELOW_MOB_LAYER, Fleeting { until });
 }
@@ -374,7 +374,7 @@ fn fleeting(world: &mut World) {
     }
 }
 
-fn visible(world: &mut World, at: TilePos, span: Span, text: String) {
+pub(super) fn visible(world: &mut World, at: TilePos, span: Span, text: String) {
     crate::security::show(
         world,
         at,
@@ -385,17 +385,17 @@ fn visible(world: &mut World, at: TilePos, span: Span, text: String) {
     );
 }
 
-fn tell(world: &mut World, mob: Entity, span: Span, text: String) {
+pub(super) fn tell(world: &mut World, mob: Entity, span: Span, text: String) {
     if let Some(client) = world.get::<crate::server::PlayerMob>(mob).map(|p| p.client) {
         crate::tools::tell(world, client, span, text);
     }
 }
 
-fn name(world: &World, e: Entity) -> String {
+pub(super) fn name(world: &World, e: Entity) -> String {
     crate::security::name_of(world, e)
 }
 
-fn capitalize(s: &str) -> String {
+pub(super) fn capitalize(s: &str) -> String {
     let mut chars = s.chars();
     chars
         .next()
@@ -404,7 +404,7 @@ fn capitalize(s: &str) -> String {
 }
 
 /// Living mobs on `pos` other than `except`.
-fn living_on(world: &World, pos: TilePos, except: Option<Entity>) -> Vec<Entity> {
+pub(super) fn living_on(world: &World, pos: TilePos, except: Option<Entity>) -> Vec<Entity> {
     world
         .resource::<SpatialIndex>()
         .on_tile(pos)
@@ -435,7 +435,7 @@ fn armoured_hit(
 }
 
 /// `isopenturf` and not groundless (no tentacle over space or a chasm).
-fn open_ground(world: &World, pos: TilePos) -> bool {
+pub(super) fn open_ground(world: &World, pos: TilePos) -> bool {
     // A turf type without the vars has no `DmTurf`: an open floor.
     crate::construction::turf_at(world, pos).is_some_and(|t| {
         world
@@ -706,7 +706,7 @@ pub fn clamp_range(from: TilePos, to: TilePos, range: u32) -> TilePos {
     )
 }
 
-fn blocked(world: &World, pos: TilePos) -> bool {
+pub(super) fn blocked(world: &World, pos: TilePos) -> bool {
     let index = world.resource::<SpatialIndex>();
     !index.in_bounds(pos) || !index.dense_on_tile(pos).is_empty() || !open_ground(world, pos)
 }

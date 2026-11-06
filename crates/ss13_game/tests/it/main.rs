@@ -46,6 +46,7 @@ mod genetics;
 mod grenades;
 mod guns;
 mod heretic;
+mod icemoon_fauna;
 mod implants;
 mod interact;
 mod inventory;

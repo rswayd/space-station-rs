@@ -15,6 +15,7 @@
 //! - Death drops: the legion's and the hivelord's regenerative cores (`death_drops`), the
 //!   goldgrub's ore (`generate_loot` + `barf_contents`), the legion's corpse (`content_barfer`);
 //!   a dead brimdemon bursts (`brim_burst`).
+//! - Icemoon's polar bears, wolves, whelps and demonic watchers ([`icemoon`]).
 // shortcut: no crusher trophies, kill tally, lava/ash storm immunity traits (the weather and
 // lava are not dangerous to mobs here yet), butchering (`butcher_results`: goliath hide plates
 // and the rest come with tg's butchering component), taming or riding; thrown items are not
@@ -22,6 +23,7 @@
 
 pub mod abilities;
 pub mod ai;
+pub mod icemoon;
 pub mod spawn;
 
 use bevy::prelude::*;
@@ -71,6 +73,7 @@ pub struct Swallowed(pub Vec<&'static str>);
 
 pub(super) fn build(app: &mut App) {
     abilities::build(app);
+    icemoon::build(app);
     app.add_systems(PostStartup, spawn::populate);
 }
 
@@ -106,6 +109,7 @@ pub(super) fn attach(world: &mut World, mob: Entity, def: &MobDef) {
         world.entity_mut(mob).insert(Swallowed(loot));
     }
     abilities::attach(world, mob, path);
+    icemoon::attach(world, mob, path);
 }
 
 /// What a dying lavaland mob leaves (before a `DEL_ON_DEATH` mob is gone): `death_drops`, the
@@ -123,6 +127,7 @@ pub(super) fn on_death(world: &mut World, mob: Entity, def: &MobDef, pos: TilePo
         }
     }
     abilities::on_death(world, mob, path);
+    icemoon::on_death(world, path, pos);
 }
 
 /// tg `ranged_armour` `pre_bullet_impact` of a mining mob: the damage a projectile does to it.
@@ -181,7 +186,7 @@ pub fn on_attacked(world: &mut World, victim: Entity, attacker: Entity) {
 /// An ability holds the mob still (tg `do_after` on itself with `PAUSE_DURING_DO_AFTER`): its
 /// AI waits.
 pub fn busy(world: &World, mob: Entity) -> bool {
-    abilities::channeling(world, mob)
+    abilities::channeling(world, mob) || icemoon::channeling(world, mob)
 }
 
 /// Applies `amount` of `kind` to a living mob on `zone` (a carbon's) through
