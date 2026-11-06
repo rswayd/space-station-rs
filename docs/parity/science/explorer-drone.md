@@ -6,40 +6,40 @@
 Антенны (`exoscanner`) и консоль сканирования: широкое сканирование ищет места исследования, точечное и глубокое раскрывают их свойства; число и качество антенн ускоряют сканы.
 
 - **Код:** [`/obj/machinery/computer/exoscanner_control`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/explorer_drone/scanner_array.dm#L78), [`/obj/machinery/exoscanner`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/explorer_drone/scanner_array.dm#L193), [`/datum/exoscan`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/explorer_drone/scanner_array.dm#L22); tgui: [`ExoscannerConsole.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/ExoscannerConsole.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/science/exodrone/server.rs` (`dishes`, `scan_power`, `start_scan`, `tick`), `crates/ss13_game/src/science/exodrone/client.rs`: антенна готова, если закреплена, запитана и с закрытой панелью; мощность 1 + (tier сканмодуля − 1)/12; условия места (туманность, пульсар, пояс астероидов, чёрная дыра, лёгкое) обнуляют/удваивают отдельные антенны; один скан на станцию: широкий (`WIDE_SCAN_COST`, новые места следующей полосы, до 10), точечный и глубокий (раскрытие места и описаний событий); падение мощности ниже скана прерывает его (окно ошибки), иконки `scanner_open/on/ready/off`. Не как в tg: широкий скан сравнивает мощность массива, а не число антенн. Кнопка `open_experiments` — эксперименты `exploration_scan` из группы экспериментов (`ExperimentKind::Unsupported`)
 
 ### Дрон, пусковая установка и топливо
 Дрон с грузовым отсеком и инструментами (сканер, лазер, взломщик и др.) запускается с пусковой установки, расходуя топливные пеллеты; возвращается с добычей.
 
 - **Код:** [`/obj/item/exodrone`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/explorer_drone/exodrone.dm#L22), [`/obj/machinery/exodrone_launcher`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/explorer_drone/exodrone.dm#L352), [`/obj/item/fuel_pellet`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/explorer_drone/exodrone.dm#L464)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/science/exodrone/server.rs` (`Exodrone`, `Launcher`, `FuelPellet`, `launch_for`, `finish_travel`): имя из `probe_names` с римским номером, 6 слотов на инструменты и груз (хранилище на станции), пеллета (5 использований; базовая/улучшенная/экзотическая = 25/20/10 с на единицу дистанции) заряжается в пусковую, ломом вынимается, дрон кладётся на неё; запуск расходует топливо (звук, дым), полёт `коэф. × дистанция` (между местами — разность, минимум 1), возврат на свою/любую пусковую или на случайный тайл станции; журнал 15 строк; проверка запрещённого груза (предметы `blacklisted_cargo_types`) при запуске; урон через прочность предмета, разрушение при 0. `// shortcut:` нет оверлеев топлива, посадка без капсулы снабжения
 
 ### Консоль управления дронами
 Пульт выбора дрона, места назначения, инструментов, запуска событий на месте и возврата.
 
 - **Код:** [`/obj/machinery/computer/exodrone_control_console`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/explorer_drone/control_console.dm#L1); tgui: [`ExodroneConsole.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/ExodroneConsole.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/science/exodrone/server.rs` (`console_acts`, `console_view`), `crates/ss13_game/src/science/exodrone/client.rs`: список дронов и захват (один пульт — один дрон), «связь потеряна» при уничтожении, мастер-панель (прочность, отключение, самоуничтожение), выбор/снятие инструментов (модальное окно), груз со сбросом, экраны ожидания, полёта, выбора цели (ETA), исследования (случайно/повторно), события и приключения, журнал; все акты перепроверяют пульт, дрон, его состояние и принадлежность ref. Не как в tg: самоуничтожение удаляет дрон (в tg вне станции только «взрывается» в нуль-пространстве), летящий/занятый дрон нельзя запустить повторно. `// shortcut:` нет картинок событий, подтверждения кнопок, экрана тревоги консоли
 
 ### Места исследования
 Генерируемые сайты (заброшенная заправка, торговый пост, астероиды и т. п.) с набором событий и требованиями к инструментам.
 
 - **Код:** [`/datum/exploration_site`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/explorer_drone/exploration_site.dm#L16)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/science/exodrone/sites.rs` (`Exploration`, `SiteKind`, `new_site`): 9 видов мест (неизвестная планета из `planet_types`, торговая станция с именем), дистанция полоса + (−1…2), координаты, приключение и `ceil(0,4·d+0,2)…+2` событий по весам (торговцы/ресурсы растут с дистанцией), 0–2 условия скана, полосы спектра мест и событий, раскрытие по скану/прибытию. Не как в tg: чёрный список признаков событий сверяется с признаками места
 
 ### События на местах
 Флафф-события, ресурсы (тайники, остатки), опасности (карпы и др., повреждают дрон), торговцы (обмен предметами).
 
 - **Код:** [`/datum/exploration_event`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/explorer_drone/exploration_events/_exploration_event.dm#L2), [`resource`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/explorer_drone/exploration_events/resource.dm#L2), [`danger`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/explorer_drone/exploration_events/danger.dm#L2), [`trader`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/explorer_drone/exploration_events/trader.dm#L2), [`fluff`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/explorer_drone/exploration_events/fluff.dm#L2)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/science/exodrone/sites.rs` (`event_defs`), `crates/ss13_game/src/science/exodrone/server.rs` (`encounter`, `event_screen`, `fire_event`): флафф из `fluff_*`, 15 ресурсов (инструмент, 30 с работы, запас, повторное посещение), 9 опасностей (инструмент спасает, иначе 30 урона, не пропускаются), 6 торговцев (переводчик, обмен из груза, мастер ID-карт меняет вид карты); действие перепроверяется в момент выполнения. Пары с лутом-питомцем дают «ничего» — см. генераторы
 
 ### Текстовые приключения и генераторы добычи
 JSON-приключения с узлами выбора и проверками инструментов; генераторы добычи (техника, карго, деньги и т. д.).
 
 - **Код:** [`/datum/adventure`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/explorer_drone/adventure.dm#L160), [`/datum/exploration_event/adventure`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/explorer_drone/exploration_events/adventure.dm#L2), [`/datum/adventure_loot_generator`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/explorer_drone/loot.dm#L13)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/science/exodrone/adventure.rs`, `crates/ss13_game/src/science/exodrone/sites.rs` (`generate_loot`): движок приключений целиком (загрузка и валидация JSON из `strings/exoadventures/`, качества и инструменты, эффекты Add/Set/Remove и random, группы требований AND/OR, триггеры с защитой от петель, `WIN`/`FAIL`/`FAIL_DEATH`/`GO BACK`, задержки выбора, `$$SITE_NAME`/`$$качество`), награда по `loot_categories`. Не как в tg: `GO BACK` ведёт на предыдущий узел (в tg — на текущий). Генераторы `unique`, `cash`, `drugs`, `materials`, `weapons`, `syndicate_fish`, `trade_contract` (чип с паком; разблокировка пака в карго — группа cargo). `// shortcut:` `maint` — короткий список вместо `GLOB.maintenance_loot`, `pets` (питомцы в биокапсуле) не дают ничего; огненное копьё — только предмет (без плавки стен)
 
 ### Админ-браузер приключений
 Админ-инструмент просмотра, загрузки и правки приключений в БД.
 
 - **Код:** [`/datum/adventure_browser`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/explorer_drone/manager.dm#L2), [`/datum/adventure_db_entry`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/explorer_drone/adventure.dm#L65); tgui: [`AdventureBrowser.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/AdventureBrowser.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ❌ нет — приключения грузятся из `strings/exoadventures/` при старте; админ-браузер/загрузка в БД не портированы

@@ -192,6 +192,7 @@
 //! | 2960 | `flora::item_interaction` |
 //! | 3000 | `mining::item_interaction` |
 //! | 3100 | `science::item_interaction` |
+//! | 3110 | `science::exodrone::server::item_interaction` (the drone launcher) |
 //! | 3200 | `botany::item_interaction` |
 //! | 3300 | `food::item_interaction` |
 //! | 3400 | `plumbing::item_interaction` |

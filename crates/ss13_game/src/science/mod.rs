@@ -8,7 +8,7 @@
 //! (`code/modules/experisci/`) in [`experiments`] with their handlers (the experi-scanner, the
 //! destructive scanner, tgui `ExperimentConfigure`) in [`experi_scanner`], and the server control
 //! console (tgui `ServerControl`) in [`server_control`]. Xenobiology's slimes, extracts and
-//! potions are in [`xenobio`].
+//! potions are in [`xenobio`]; exploration drones and the scanner array in [`exodrone`].
 //! [`client`] draws the windows. This module holds the windows' data, which both halves
 //! share.
 //!
@@ -27,6 +27,7 @@ pub mod autolathe;
 pub mod client;
 #[cfg(feature = "server")]
 pub mod console;
+pub mod exodrone;
 #[cfg(feature = "server")]
 pub mod experi_scanner;
 #[cfg(feature = "server")]
@@ -66,6 +67,7 @@ impl bevy::prelude::Plugin for ScienceServerPlugin {
             experi_scanner::ExperiScannerPlugin,
             server_control::ServerControlPlugin,
             xenobio::XenobioPlugin,
+            exodrone::server::ExodronePlugin,
         ));
     }
 }
