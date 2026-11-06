@@ -857,7 +857,8 @@ pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<(ss13_chat::
 
 /// A machine's `say(text)`: its name and the text to every player within hearing.
 pub fn machine_say(world: &mut World, speaker: Entity, text: &str) {
-    let Some(&pos) = world.get::<TilePos>(speaker) else {
+    // `get_turf`: a carried speaker (the janitor's key) talks from its holder's tile.
+    let Some(pos) = crate::explosions::turf_of(world, speaker) else {
         return;
     };
     let name = world

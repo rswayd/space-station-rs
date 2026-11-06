@@ -189,6 +189,7 @@
 //! | 100 | `antag::uplink::item_interaction` |
 //! | 200 | `antag::syndie_items::item_interaction` |
 //! | 300 | `emag::interact_with_atom` (left click) |
+//! | 320 | `janitor::key_on_door` (the janitor's key on a door) |
 //! | 330 | `shuttle_console_server` (a held item on a shuttle console) |
 //! | 340 | `shuttle_nav` (a held item on a navigation console) |
 //! | 345 | `shuttle_remote::link` (a shuttle remote on a shuttle console) |

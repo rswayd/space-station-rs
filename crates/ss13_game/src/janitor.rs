@@ -203,8 +203,12 @@ pub struct Soap {
 /// What a finished cleaning do_after does.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CleanJob {
-    Mop { wash: bool },
+    Mop {
+        wash: bool,
+    },
     Soap,
+    /// The janitor's key finding the right key for a door (`attempt_open_door`).
+    AccessKey,
 }
 
 #[derive(Resource, Default)]
@@ -239,10 +243,20 @@ impl Plugin for JanitorServerPlugin {
                 crate::janitor::washer_item_interaction(w, c.client, c.mob, h, c.target)
             })
         });
-        app.add_observer(add_washer).add_systems(
-            Update,
-            finish_washing.run_if(any_with_component::<WashingMachine>),
-        );
+        // tg `door/item_interaction` with the janitor's key.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 320, |w, c| {
+            c.held
+                .is_some_and(|h| crate::janitor::key_on_door(w, c.client, c.mob, h, c.target))
+        });
+        app.add_observer(add_washer)
+            .add_observer(add_access_key)
+            .add_systems(
+                Update,
+                (
+                    finish_washing.run_if(any_with_component::<WashingMachine>),
+                    expire_key_access.run_if(any_with_component::<AccessKey>),
+                ),
+            );
         app.init_resource::<JanitorClocks>()
             .add_observer(add_cleanable)
             .add_observer(add_item_parts)
@@ -1044,6 +1058,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter, job: CleanJob)
         return;
     };
     match job {
+        CleanJob::AccessKey => key_opens_door(world, action.client, mob, item, target),
         CleanJob::Mop { wash: do_wash } => {
             if do_wash {
                 clean_and_learn(world, mob, target);
@@ -1365,6 +1380,135 @@ fn finish_washing(world: &mut World) {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Janitor's key.
+
+const ACCESS_KEY: &str = "/obj/item/access_key";
+/// `ACCESS_TIMER_LIMIT`.
+pub const ACCESS_TIMER_SECS: f64 = 600.0;
+/// `key_speed`, deciseconds.
+const KEY_SPEED: f32 = 30.0;
+const RATTLING_KEYS: &str = "sound/items/rattling_keys.ogg";
+const DING: &str = "sound/machines/ding.ogg";
+const SCANBUZZ: &str = "sound/machines/scanner/scanbuzz.ogg";
+
+/// `/obj/item/access_key`: `department_access` and when it clears itself.
+#[derive(Component, Clone, Debug, Default, PartialEq)]
+pub struct AccessKey {
+    pub region: Option<(&'static str, f64)>,
+}
+
+fn add_access_key(add: On<Add<DmItem>>, items: Query<&DmItem>, mut commands: Commands) {
+    if items
+        .get(add.entity)
+        .is_ok_and(|i| is_under(&i.path, ACCESS_KEY))
+    {
+        commands.entity(add.entity).insert(AccessKey::default());
+    }
+}
+
+fn key_sound(world: &mut World, key: Entity, sound: &str) {
+    if let Some(pos) = crate::explosions::turf_of(world, key) {
+        crate::sound::playsound(world, crate::sound::PlaySound::new(pos, sound, 25.0, true));
+    }
+}
+
+/// `COMSIG_ON_DEPARTMENT_ACCESS` -> `department_access_given` of every key: the region for 10
+/// minutes (`TIMER_OVERRIDE`: a new grant restarts the timer).
+pub fn grant_department_access(world: &mut World, region: &'static str) {
+    let until = world.resource::<Time>().elapsed_secs_f64() + ACCESS_TIMER_SECS;
+    let mut q = world.query_filtered::<Entity, With<AccessKey>>();
+    let keys: Vec<Entity> = q.iter(world).collect();
+    for key in keys {
+        world.entity_mut(key).insert(AccessKey {
+            region: Some((region, until)),
+        });
+        crate::atmos_machinery::machine_say(
+            world,
+            key,
+            &format!("Доступ к зоне {region} предоставлен."),
+        );
+        key_sound(world, key, DING);
+        info!("Access to the {region} department was given to the janitor key {key}");
+    }
+}
+
+/// `clear_access` when the timer runs out.
+fn expire_key_access(world: &mut World) {
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    let mut q = world.query::<(Entity, &AccessKey)>();
+    let due: Vec<Entity> = q
+        .iter(world)
+        .filter(|(_, k)| k.region.is_some_and(|(_, at)| now >= at))
+        .map(|(e, _)| e)
+        .collect();
+    for key in due {
+        world.entity_mut(key).insert(AccessKey { region: None });
+        crate::atmos_machinery::machine_say(world, key, "Доступ отозван, время вышло.");
+        key_sound(world, key, SCANBUZZ);
+    }
+}
+
+/// `door/item_interaction` with the key -> `attempt_open_door`: 3 s fumbling for the key.
+/// True when `held` is the janitor's key and `target` a door.
+pub fn key_on_door(
+    world: &mut World,
+    client: Entity,
+    mob: Entity,
+    held: Entity,
+    target: Entity,
+) -> bool {
+    if world.get::<AccessKey>(held).is_none() || world.get::<crate::doors::Door>(target).is_none() {
+        return false;
+    }
+    let actor = Actor {
+        client,
+        mob,
+        item: Some(held),
+    };
+    // `DOING_INTERACTION_WITH_TARGET`: a do_after already running refuses the new one.
+    if do_after(
+        world,
+        actor,
+        target,
+        KEY_SPEED,
+        0,
+        Job::Clean(CleanJob::AccessKey),
+    ) {
+        tell(world, client, Span::Notice, "Вы ищете нужный ключ...");
+        key_sound(world, held, RATTLING_KEYS);
+    }
+    true
+}
+
+/// The region's accesses `key` opens with now (`accesses_by_region[department_access]`).
+fn key_access(world: &World, key: Entity) -> Option<Vec<String>> {
+    let (region, _) = world.get::<AccessKey>(key)?.region?;
+    Some(crate::id_access::region_access_list(&[region]))
+}
+
+/// The end of `attempt_open_door`: the door's access checked against the key's region, then
+/// `try_to_activate_door(access_bypass = TRUE)`.
+fn key_opens_door(world: &mut World, client: Entity, mob: Entity, key: Entity, door: Entity) {
+    let Some(&mob_pos) = world.get::<TilePos>(mob) else {
+        return;
+    };
+    let access = key_access(world, key);
+    let allowed = world
+        .get::<crate::doors::Door>(door)
+        .is_some_and(|d| access.as_deref().is_some_and(|a| d.allows(Some(a))));
+    if !allowed {
+        tell(world, client, Span::Warning, "Нет доступа!");
+        return;
+    }
+    crate::doors::with_door(world, door, |door, appearance, ctx| {
+        (
+            (),
+            ctx.activate(door, appearance, false, (mob_pos, access.as_deref())),
+        )
+    });
+}
+
+// ---------------------------------------------------------------------------------------------
 // Push broom.
 
 const PUSHBROOM: &str = "/obj/item/pushbroom";
@@ -1524,6 +1668,64 @@ mod tests {
         assert_eq!(wet.highest(), TURF_WET_WATER);
         wet.process(T0C + 150.0, 1.0);
         assert_eq!(wet.highest(), 0);
+    }
+
+    /// A grant puts the region on the key for 10 minutes; the key opens a door of that region
+    /// only.
+    #[test]
+    fn janitor_key_holds_a_region_for_ten_minutes() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .add_systems(Update, expire_key_access);
+        let world = app.world_mut();
+        let key = world.spawn(AccessKey::default()).id();
+        assert_eq!(key_access(world, key), None);
+        grant_department_access(world, "Engineering");
+        let access = key_access(world, key).unwrap();
+        assert!(access.iter().any(|a| a == "engineering"), "{access:?}");
+        assert!(crate::doors::test_airlock(&["engineering"]).allows(Some(&access)));
+        assert!(!crate::doors::test_airlock(&["brig"]).allows(Some(&access)));
+        let (_, until) = world.get::<AccessKey>(key).unwrap().region.unwrap();
+        assert!(until >= ACCESS_TIMER_SECS);
+        world.get_mut::<AccessKey>(key).unwrap().region = Some(("Engineering", 0.0));
+        app.update();
+        assert_eq!(app.world().get::<AccessKey>(key).unwrap().region, None);
+    }
+
+    /// Only a head's trim names a region to grant.
+    #[test]
+    fn heads_grant_their_region() {
+        use crate::id_access::{CardAccess, Trim};
+        use crate::security_level::keycard::head_region;
+        let mut world = World::new();
+        let card = world
+            .spawn((
+                crate::inventory::IdCard { access: Vec::new() },
+                CardAccess {
+                    trim: Some(Trim {
+                        job: "Chief Engineer".into(),
+                        ..default()
+                    }),
+                    wildcard_slots: Vec::new(),
+                    registered_age: 30,
+                },
+            ))
+            .id();
+        let mob = world
+            .spawn(crate::inventory::Inventory {
+                id: Some(card),
+                ..default()
+            })
+            .id();
+        assert_eq!(head_region(&world, mob), Some("Engineering"));
+        world
+            .get_mut::<CardAccess>(card)
+            .unwrap()
+            .trim
+            .as_mut()
+            .unwrap()
+            .job = "Janitor".into();
+        assert_eq!(head_region(&world, mob), None);
     }
 
     /// A closed washing machine runs its cycle and washes the blood off its load; opening it

@@ -32,3 +32,4 @@ pub const RED_ALERT: &str = "red_alert";
 pub const EMERGENCY_MAINT: &str = "emergency_maint";
 pub const BSA_UNLOCK: &str = "bsa_unlock";
 pub const AUTH_SWIPE: &str = "auth_swipe";
+pub const GIVE_JANITOR_ACCESS: &str = "give_janitor_access";

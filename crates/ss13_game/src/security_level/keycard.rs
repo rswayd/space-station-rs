@@ -3,11 +3,12 @@
 //! picks an event on one device; every device then asks for a confirmation for 2 s, and another
 //! head with the same access confirms it on another device (`auth_swipe`): red alert, emergency
 //! maintenance access, or the bluespace artillery lock. The window is tgui `KeycardAuth`
-//! ([`crate::keycard`]).
+//! ([`crate::keycard`]). "Grant Janitor Access" (30 s cooldown per device): a head whose ID (in
+//! hand first) carries a head's trim sends its department's region to every janitor key
+//! (`crate::janitor::grant_department_access`).
 // The confirmer must be another mob than the one who sent the event: the device exists for two
 // people (tg only relies on the sender's own device being busy for those 2 s).
-// shortcut: no "Grant Janitor Access" (needs the janitor's key, `COMSIG_ON_DEPARTMENT_ACCESS`),
-// no blue light while asking (overlays only), no silicon or animal users, no construction.
+// shortcut: no blue light while asking (overlays only), no silicon or animal users, no construction.
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
@@ -23,7 +24,8 @@ use super::{SecLevel, SecurityLevel, StationAccess};
 use crate::click::{ClickResolved, ResolveClicks};
 use crate::inventory::{IdCard, Inventory, check_access};
 use crate::keycard::{
-    AUTH_SWIPE, BSA_UNLOCK, EMERGENCY_MAINT, KeycardAuthData, KeycardAuthUi, RED_ALERT,
+    AUTH_SWIPE, BSA_UNLOCK, EMERGENCY_MAINT, GIVE_JANITOR_ACCESS, KeycardAuthData, KeycardAuthUi,
+    RED_ALERT,
 };
 use crate::power::Unpowered;
 
@@ -32,6 +34,21 @@ const KEYCARD_AUTH: &str = "/obj/machinery/keycard_auth";
 pub const ACCESS_KEYCARD_AUTH: &str = "keycard_auth";
 /// `addtimer(..., 2 SECONDS)` of `sendEvent` and `triggerEvent`.
 pub const EVENT_SECS: f64 = 2.0;
+/// `ACCESS_GRANTING_COOLDOWN`.
+pub const ACCESS_GRANTING_SECS: f64 = 30.0;
+
+/// `sub_department_managers_tgui`: a region and the head job (`"head"`) that may grant it.
+pub const REGION_HEADS: [(&str, &str); 9] = [
+    ("Command", "Captain"),
+    ("General", "Head of Personnel"),
+    ("Security", "Head of Security"),
+    ("Medbay", "Chief Medical Officer"),
+    ("Research", "Research Director"),
+    ("Engineering", "Chief Engineer"),
+    ("Supply", "Quartermaster"),
+    ("Justice", "Magistrate"),
+    ("NT Representation", "Nanotrasen Representative"),
+];
 
 /// tg `KEYCARD_*` events.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -59,6 +76,8 @@ pub struct KeycardAuth {
     pub sent: Option<(KeycardEvent, Entity, f64)>,
     /// The device asking for a confirmation, its event and until when (`event_source`).
     pub asked_by: Option<(Entity, KeycardEvent, f64)>,
+    /// `access_grant_cooldown`: game seconds the next janitor access grant is allowed at.
+    pub grant_ready_at: f64,
 }
 
 pub(super) struct KeycardPlugin;
@@ -166,6 +185,7 @@ impl ServerUi for KeycardAuthUi {
             EMERGENCY_MAINT => KeycardEventAct::Send(KeycardEvent::EmergencyMaintenanceAccess),
             BSA_UNLOCK => KeycardEventAct::Send(KeycardEvent::BsaUnlock),
             AUTH_SWIPE => KeycardEventAct::Confirm,
+            GIVE_JANITOR_ACCESS => KeycardEventAct::GrantJanitorAccess,
             _ => return Err(UiReject::UnknownAction),
         })
     }
@@ -175,6 +195,7 @@ impl ServerUi for KeycardAuthUi {
 pub enum KeycardEventAct {
     Send(KeycardEvent),
     Confirm,
+    GrantJanitorAccess,
 }
 
 /// tg `allowed(user)` against `ACCESS_KEYCARD_AUTH`: the ID in hand or worn.
@@ -189,11 +210,11 @@ fn allowed(world: &World, user: Entity) -> bool {
 
 /// tg `ui_act`, at the moment of effect: powered, not waiting, the user allowed.
 fn device_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed<KeycardAuthUi>>>) {
-    let pending: Vec<(Entity, Entity, KeycardEventAct)> = acts
+    let pending: Vec<(Entity, Entity, Entity, KeycardEventAct)> = acts
         .read(world.resource::<Messages<UiActed<KeycardAuthUi>>>())
-        .map(|a| (a.actor, a.source, a.act))
+        .map(|a| (a.client, a.actor, a.source, a.act))
         .collect();
-    for (actor, device, act) in pending {
+    for (client, actor, device, act) in pending {
         let Some(state) = world.get::<KeycardAuth>(device).copied() else {
             continue;
         };
@@ -208,6 +229,9 @@ fn device_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed<KeycardA
                 send_event(world, device, event, actor);
             }
             KeycardEventAct::Send(_) => {}
+            KeycardEventAct::GrantJanitorAccess => {
+                grant_janitor_access(world, client, actor, device);
+            }
             KeycardEventAct::Confirm => {
                 let Some((source, ..)) = state.asked_by else {
                     continue;
@@ -216,6 +240,53 @@ fn device_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed<KeycardA
             }
         }
     }
+}
+
+/// The region `user`'s ID (`get_idcard(hand_first = TRUE)`) may grant: its trim's job is the
+/// region's head.
+// BandaStation compares the trim's (Russian) assignment with the head's Russian title; the
+// trim's job title is the same check without the translation.
+pub fn head_region(world: &World, user: Entity) -> Option<&'static str> {
+    let card = world.get::<Inventory>(user)?.id_card(world)?;
+    let job = &world
+        .get::<crate::id_access::CardAccess>(card)?
+        .trim
+        .as_ref()?
+        .job;
+    REGION_HEADS
+        .iter()
+        .find(|(_, head)| head == job)
+        .map(|&(region, _)| region)
+}
+
+/// `ui_act "give_janitor_access"`: on cooldown, or a head's ID sends its region to the keys.
+fn grant_janitor_access(world: &mut World, client: Entity, user: Entity, device: Entity) {
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    if world
+        .get::<KeycardAuth>(device)
+        .is_some_and(|d| now < d.grant_ready_at)
+    {
+        crate::tools::tell(
+            world,
+            client,
+            ss13_shared::chat::Span::Warning,
+            "Перезарядка!",
+        );
+        return;
+    }
+    let Some(region) = head_region(world, user) else {
+        return;
+    };
+    if let Some(mut d) = world.get_mut::<KeycardAuth>(device) {
+        d.grant_ready_at = now + ACCESS_GRANTING_SECS;
+    }
+    crate::janitor::grant_department_access(world, region);
+    crate::tools::tell(
+        world,
+        client,
+        ss13_shared::chat::Span::Notice,
+        "Доступ отправлен на ключи.",
+    );
 }
 
 /// tg `sendEvent` -> `GLOB.keycard_events.fireEvent("triggerEvent", src)`: every device (this
