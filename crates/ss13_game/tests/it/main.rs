@@ -82,6 +82,7 @@ mod plumbing;
 mod power;
 mod power_machines;
 mod prediction;
+mod quantum_pad;
 mod radiation;
 mod radio;
 mod records;
