@@ -153,6 +153,12 @@ pub struct RangedClick {
 #[derive(Component, Clone, Copy, Debug, Default)]
 pub struct ClickIntercept;
 
+/// On a machine whose occupant works its controls from inside (tg `controls_inside` sleepers:
+/// `CanReach` from inside reaches `loc`): a plain click of the mob inside on it is resolved as
+/// an adjacent click. Every other click from inside a closet or machine is dropped.
+#[derive(Component, Clone, Copy, Debug, Default)]
+pub struct ControlsFromInside;
+
 /// A click the server makes for `client` on `target` (tg `user.ClickOn(thing, modifiers)`),
 /// queued and checked like one the client sent.
 #[derive(Message, Clone, Copy, Debug)]
@@ -232,7 +238,7 @@ fn resolve_clicks(
         Option<&ThrowMode>,
         Option<&Incapacitation>,
         Option<&NextMove>,
-        Has<InCloset>,
+        Option<&InCloset>,
         Has<crate::silicon::ai::AiEye>,
         Has<crate::mecha::Pilot>,
         Has<ClickIntercept>,
@@ -242,7 +248,7 @@ fn resolve_clicks(
     movers: Query<(), With<Mover>>,
     objs: Query<&ss13_mapload::DmObj>,
     inside: Query<(), Or<(With<crate::mecha::Pilot>, With<InCloset>)>>,
-    positions: Query<&TilePos>,
+    positions: Query<(&TilePos, Has<ControlsFromInside>)>,
     module_users: Query<(), With<crate::modsuit::server::ModuleSelected>>,
     jaunters: Query<(), With<crate::spells::Jaunting>>,
     mut out: ClickWriters,
@@ -286,7 +292,7 @@ fn resolve_clicks(
             throw_mode,
             traits,
             next_move,
-            in_closet,
+            closet,
             ai_eye,
             piloting,
             intercept,
@@ -312,9 +318,12 @@ fn resolve_clicks(
         if target != mob && inside.contains(target) {
             continue;
         }
-        let Ok(&target_pos) = positions.get(target) else {
+        let Ok((&target_pos, controls_inside)) = positions.get(target) else {
             continue;
         };
+        let in_closet = closet.is_some();
+        // The machine the mob is in, when its controls are inside.
+        let from_inside = controls_inside && closet.is_some_and(|c| c.closet == target);
         // tg `/mob/living/silicon/ai/ClickOn` has its own rules (`crate::silicon::ai`).
         if ai_eye {
             out.ai.write(crate::silicon::ai::AiClick {
@@ -412,9 +421,9 @@ fn resolve_clicks(
             continue;
         }
         // shortcut: from inside a closet tg reaches only the closet itself (`CanReach` through
-        // `loc`); here a mob inside clicks nothing.
+        // `loc`); here a mob inside clicks nothing but a machine with [`ControlsFromInside`].
         // A jaunter is inside its `phased_mob` holder: it reaches nothing (tg `CanReach`).
-        if in_closet || jaunters.contains(mob) {
+        if (in_closet && !from_inside) || jaunters.contains(mob) {
             continue;
         }
         if intercept && !modifiers.ctrl {
@@ -455,7 +464,7 @@ fn resolve_clicks(
             continue;
         }
         // tg `ClickCross` skips the target itself and checks objects only, not mobs.
-        let reach = reach_of(target_pos);
+        let reach = from_inside || reach_of(target_pos);
         if modifiers.ctrl {
             if reach {
                 out.ctrl.write(CtrlClick {
@@ -476,7 +485,7 @@ fn resolve_clicks(
         if traits.hands_blocked {
             continue;
         }
-        if throw_mode.is_some_and(|t| t.0) {
+        if throw_mode.is_some_and(|t| t.0) && !from_inside {
             out.throw.write(ThrowClick {
                 client,
                 mob,

@@ -59,6 +59,7 @@ mod machine_frame;
 mod martial;
 mod mecha;
 mod medical;
+mod medical_machines;
 mod medicine;
 mod mining;
 mod misc_ui;

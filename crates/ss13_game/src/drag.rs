@@ -280,7 +280,7 @@ fn drag(world: &mut World, client: Entity, from: DragEnd, to: DragEnd) {
     }
     // `sleeper/mouse_drop_receive`.
     if let (End::World(over), End::World(_)) = (to, from)
-        && crate::medical::pods::mouse_drop_receive(world, over, dragged)
+        && crate::medical::pods::mouse_drop_receive(world, actor.mob, over, dragged)
     {
         return;
     }

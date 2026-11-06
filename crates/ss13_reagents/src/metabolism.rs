@@ -35,6 +35,10 @@ pub const ALCOHOL_THRESHOLD_MODIFIER: f32 = 1.0;
 pub const TIPSY_THRESHOLD: f32 = 6.0;
 /// tg `HEALTH_THRESHOLD_CRIT` (`crit_threshold` of a carbon).
 pub const CRIT_THRESHOLD: f32 = 0.0;
+/// tg `T0C`.
+pub const T0C: f32 = 273.15;
+/// tg `BODYTEMP_HEAT_DAMAGE_LIMIT` (`BODYTEMP_NORMAL + 30`).
+pub const BODYTEMP_HEAT_DAMAGE_LIMIT: f32 = 310.15 + 30.0;
 
 /// Damage types the effects use.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -72,6 +76,14 @@ pub trait Body {
     /// `TRAIT_LIGHT_DRINKER` ×2).
     fn booze_power_multiplier(&self) -> f32 {
         1.0
+    }
+    /// tg `IS_UNCONSCIOUS` (`stat >= UNCONSCIOUS`).
+    fn unconscious(&self) -> bool {
+        false
+    }
+    /// tg `on_fire`.
+    fn on_fire(&self) -> bool {
+        false
     }
 }
 
@@ -128,6 +140,8 @@ enum Effect {
     Epinephrine,
     Salbutamol,
     Convermol,
+    Cryoxadone,
+    Pyroxadone,
     Toxin,
     Ethanol,
 }
@@ -141,6 +155,8 @@ fn effect_of(path: &str) -> Option<Effect> {
         "/datum/reagent/medicine/epinephrine" => Effect::Epinephrine,
         "/datum/reagent/medicine/salbutamol" => Effect::Salbutamol,
         "/datum/reagent/medicine/c2/convermol" => Effect::Convermol,
+        "/datum/reagent/medicine/cryoxadone" => Effect::Cryoxadone,
+        "/datum/reagent/medicine/pyroxadone" => Effect::Pyroxadone,
         // Subtypes that keep the parent's `on_mob_life` (most call `..()` first).
         p if is_under(p, "/datum/reagent/toxin") => Effect::Toxin,
         p if is_under(p, "/datum/reagent/consumable/ethanol") => Effect::Ethanol,
@@ -269,7 +285,7 @@ pub fn metabolize_with(
         if liverless && !self_consuming {
             continue;
         }
-        metabolize_reagent(chem, holder, i, body, seconds, dead);
+        metabolize_reagent(chem, holder, i, body, body_temperature, seconds, dead);
         if is_toxin && !liverless && !dead {
             // "a 15u syringe is a nice baseline to scale lethality by".
             liver_damage += (amount / 15.0) * def.toxpwr;
@@ -285,6 +301,7 @@ fn metabolize_reagent(
     holder: &mut Holder,
     i: usize,
     body: &mut dyn Body,
+    body_temperature: f32,
     seconds: f32,
     dead: bool,
 ) {
@@ -321,7 +338,16 @@ fn metabolize_reagent(
         overdose_process(chem, holder, i, effect, body, seconds, ratio);
     }
     holder.reagents[i].current_cycle += 1;
-    on_mob_life(chem, holder, i, effect, body, seconds, ratio);
+    on_mob_life(
+        chem,
+        holder,
+        i,
+        effect,
+        body,
+        body_temperature,
+        seconds,
+        ratio,
+    );
     // The effect may have removed this or other reagents.
     if holder.has(id).is_none() {
         return;
@@ -359,6 +385,7 @@ fn on_mob_life(
     i: usize,
     effect: Option<Effect>,
     body: &mut dyn Body,
+    body_temperature: f32,
     seconds: f32,
     ratio: f32,
 ) {
@@ -460,6 +487,29 @@ fn on_mob_life(
                 }
             }
         }
+        // shortcut: no `on_xadone` of wounds, no disfigurement removal.
+        Effect::Cryoxadone => {
+            let t = body_temperature;
+            // The next tick's rate: slower the colder the body.
+            holder.reagents[i].metabolization_rate = REAGENTS_METABOLISM * (0.00001 * t * t + 0.5);
+            if t >= T0C {
+                return;
+            }
+            let power = cryoxadone_power(t, body.unconscious());
+            body.adjust(Damage::Oxy, -1.5 * power * ratio * seconds);
+            for kind in [Damage::Brute, Damage::Burn, Damage::Tox] {
+                body.adjust(kind, -0.5 * power * ratio * seconds);
+            }
+        }
+        Effect::Pyroxadone => {
+            let Some(power) = pyroxadone_power(body_temperature, body.on_fire()) else {
+                return;
+            };
+            body.adjust(Damage::Oxy, -power * ratio * seconds);
+            body.adjust(Damage::Brute, -0.5 * power * ratio * seconds);
+            body.adjust(Damage::Burn, -0.75 * power * ratio * seconds);
+            body.adjust(Damage::Tox, -0.5 * power * ratio * seconds);
+        }
         Effect::Toxin => {
             if def.toxpwr != 0.0 && body.health() > def.health_required {
                 let amount =
@@ -491,6 +541,29 @@ fn on_mob_life(
             }
         }
     }
+}
+
+/// `cryoxadone/on_mob_life`: the healing power below `T0C` (`-0.00003 T² + 3`), doubled for an
+/// unconscious body.
+pub fn cryoxadone_power(body_temperature: f32, unconscious: bool) -> f32 {
+    let power = -0.00003 * body_temperature * body_temperature + 3.0;
+    if unconscious { power * 2.0 } else { power }
+}
+
+/// `pyroxadone/on_mob_life`: the healing power over `BODYTEMP_HEAT_DAMAGE_LIMIT` (2 up to 400 K,
+/// 3 up to 460 K, else 5), doubled on fire; `None` when the body is not hot enough.
+pub fn pyroxadone_power(body_temperature: f32, on_fire: bool) -> Option<f32> {
+    if body_temperature <= BODYTEMP_HEAT_DAMAGE_LIMIT {
+        return None;
+    }
+    let power = if body_temperature <= 400.0 {
+        2.0
+    } else if body_temperature <= 460.0 {
+        3.0
+    } else {
+        5.0
+    };
+    Some(if on_fire { power * 2.0 } else { power })
 }
 
 #[allow(clippy::too_many_arguments)]

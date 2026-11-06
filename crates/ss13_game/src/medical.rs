@@ -24,7 +24,8 @@
 //! (operations, drapes, operating tables), [`defib`] (defibrillators, revival), [`organs`],
 //! [`cyberimps`] (cybernetic implants, autosurgeons),
 //! [`traumas`] (brain traumas), [`brainmob`] (the mind in a removed brain), [`diseases`] and
-//! [`symptoms`] (viruses and virology).
+//! [`symptoms`] (viruses and virology), [`pods`], [`sleeper`], [`cryo`], [`stasis`] (enclosed
+//! machines), [`kiosk`] (the medical kiosk) and [`limbgrower`].
 //! Clicks on living mobs that these take (wound treatments, drapes, surgery, paddles, IV drips,
 //! tables) are claimed in [`MedicalClicks`] before melee and the inventory see them.
 // shortcut: no `try_inject` check (thick clothing blocks treatment in tg), no sounds, balloon
@@ -34,11 +35,14 @@ pub mod bioware;
 pub mod blood;
 pub mod bodyparts;
 pub mod brainmob;
+pub mod cryo;
 pub mod cyberimps;
 pub mod defib;
 pub mod diseases;
 pub mod fear;
 pub mod iv_drip;
+pub mod kiosk;
+pub mod limbgrower;
 pub mod operating;
 pub mod organs;
 pub mod phobia_data;
@@ -244,6 +248,9 @@ impl Plugin for MedicalServerPlugin {
         stasis::build(app);
         pods::build(app);
         sleeper::build(app);
+        cryo::build(app);
+        kiosk::build(app);
+        limbgrower::build(app);
         iv_drip::build(app);
     }
 }

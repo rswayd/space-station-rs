@@ -1263,6 +1263,12 @@ fn live(world: &mut World, mob: Entity, fired: u64, now: f64) {
     } else {
         station_air()
     };
+    // A cryo cell's occupant breathes its gas and takes its temperature
+    // (`handle_internal_lifeform`, `assume_air`, `return_temperature`).
+    let cryo = crate::medical::cryo::holder(world, mob);
+    let loc_temperature = cryo
+        .and_then(|cell| crate::medical::cryo::return_temperature(world, cell))
+        .unwrap_or(environment.temperature);
     let mut rng = CombatRng(world.get_resource_or_init::<CombatRng>().0);
     let mut cutoff = false;
     let mut ctx = LifeCtx {
@@ -1309,6 +1315,9 @@ fn live(world: &mut World, mob: Entity, fired: u64, now: f64) {
             }
             breath = match from_tank {
                 Some(tank_breath) => tank_breath,
+                None if cryo.is_some() => cryo.and_then(|cell| {
+                    crate::medical::cryo::handle_internal_lifeform(world, cell, BREATH_VOLUME)
+                }),
                 None => {
                     let moles = environment.total_moles() * BREATH_PERCENTAGE;
                     if simulated {
@@ -1325,10 +1334,12 @@ fn live(world: &mut World, mob: Entity, fired: u64, now: f64) {
             resp.no_lungs(&mut ctx);
         }
         // `loc.assume_air(breath)`: the exhaled breath goes to the tile, also from internals.
-        if let Some(breath) = breath
-            && simulated
-        {
-            world.resource_mut::<Atmos>().merge_air(pos, &breath);
+        if let Some(breath) = breath {
+            if let Some(cell) = cryo {
+                crate::medical::cryo::assume_air(world, cell, &breath);
+            } else if simulated {
+                world.resource_mut::<Atmos>().merge_air(pos, &breath);
+            }
         }
         update_stat(ctx.health, &mut ctx.stat);
     }
@@ -1366,7 +1377,7 @@ fn live(world: &mut World, mob: Entity, fired: u64, now: f64) {
         .filter(|f| f.on_fire)
         .map(|f| f64::from(f.stacks));
     resp.body_temperature(
-        environment.temperature,
+        loc_temperature,
         &worn,
         alive,
         on_fire,

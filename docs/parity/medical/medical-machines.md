@@ -5,7 +5,7 @@
 Пациента помещают внутрь: машина показывает состояние и вводит выбранные химикаты (набор зависит от деталей), синдикатская версия управляется изнутри.
 
 - **Код:** [`/obj/machinery/sleeper`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/sleepers.dm#L1), [`/obj/machinery/sleeper/syndie`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/sleepers.dm#L296); tgui: [`Sleeper.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/Sleeper.jsx)
-- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/medical/sleeper.rs`, `medical/pods.rs`, окно `crates/ss13_tgui/src/interfaces/sleeper.rs`: дверь (alt-клик, кнопка окна, шаг изнутри), перетаскивание карбона в открытый слипер, окно с состоянием, здоровьем, уроном и мозгом, инъекция 10 ед. с проверками `chem_allowed` (матбины — эффективность и `min_health`, сервоприводы — группы препаратов), подтипы (синдикатский, NT, self-control, old, party с ацетатом свинца), емаг перемешивает кнопки; `// shortcut:` изнутри нельзя кликнуть (общее ограничение `crate::click`), спрей-реагенты party-пода вводятся инъекцией, нет звуков и анимаций
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/medical/sleeper.rs`, `medical/pods.rs`, окно `crates/ss13_tgui/src/interfaces/sleeper.rs`: дверь (alt-клик, кнопка окна, шаг изнутри), перетаскивание карбона в открытый слипер, окно с состоянием, здоровьем, уроном и мозгом, инъекция 10 ед. с проверками `chem_allowed` (матбины — эффективность и `min_health`, сервоприводы — группы препаратов), подтипы (синдикатский, NT, self-control, old, party с ацетатом свинца), емаг перемешивает кнопки, пациент синдикатского/self-control/party слипера кликает его изнутри (`crate::click::ControlsFromInside`); `// shortcut:` спрей-реагенты party-пода вводятся инъекцией, нет звуков и анимаций
 
 ### Стазис-кровать
 Замораживает процессы лежащего пациента (статус-эффект стазиса): раны и яды не прогрессируют, операции идут на ней.
@@ -17,7 +17,7 @@
 Атмосферная машина: охлаждает пациента холодным газом, криоксадон и пирокс лечат; автоматическое извлечение по выздоровлении.
 
 - **Код:** [`/obj/machinery/cryo_cell`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/machinery/components/unary_devices/cryo.dm#L68); tgui: [`Cryo.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/Cryo.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/medical/cryo.rs`, окно `crates/ss13_tgui/src/interfaces/cryo.rs`: порт 1250 л в трубной сети (unary по `dir`), дверь (alt-клик не со своего тайла, окно), запуск при закрытии на пациенте, ctrl-клик вкл/выкл, перетаскивание карбона (сразу без сознания, иначе толчок 2,5 с), стакан внутрь/извлечение; SSair: без трубы или с ≤5 моль выключается (автоизвлечение), ожог корпуса выше 2000 K, теплообмен газа и тела (`CALCULATE_CONDUCTION_ENERGY`, матбины, защита от холода), ядро тела следует за кожей; пациент дышит газом капсулы и берёт её температуру (`crate::breath`); машинный тик: тушение, остановка при смерти/выздоровлении (с ранами — продолжение лечения) с отчётом в мед. канал, перенос из стакана `0,5/(eff·25)` ед/с ×25·eff в кровь; криоксадон и пироксадон лечат по температуре тела (`ss13_reagents::metabolism`); побег изнутри 30 с; `// shortcut:` нет звуков, анимаций и пациента в колбе, нет эффектов VAPOR-экспозиции, правил отвёртки/лома/ключа, осмотра и переключения idle/active питания
 
 ### Капельница
 Подключается к пациенту и вводит или забирает кровь/реагенты из пакета или ёмкости с выбранной скоростью; физраствор встроенный.
@@ -29,14 +29,14 @@
 Платное самообслуживание: скан состояния, ран, химии и болезней за кредиты.
 
 - **Код:** [`/obj/machinery/medical_kiosk`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/medical_kiosk.dm#L13); tgui: [`MedicalKiosk.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/MedicalKiosk.jsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/medical/kiosk.rs`, окно `crates/ss13_tgui/src/interfaces/medical_kiosk.rs`: окно для людей, пациент — пользователь (сброс дальше 5 тайлов, `clearTarget`), четыре скана оплачиваются по разу (медицинский аккаунт бесплатно, иначе 10 кредитов с ID-карты в мед. бюджет, емаг +10–30), здоровье и урон, болезни, кровь и кровотечение, мозг и травмы, химия желудка и крови с передозировками, алкоголь, галлюцинации; емаг и галлюцинации пользователя искажают данные; нет сканер-палочки (скан другого пациента), зависимостей, мультитул-цены платы
 
 ### Лимбгроуэр
 Выращивает конечности и органы разных видов из синтплоти; рецепты с дисков.
 
 - **Код:** [`/obj/machinery/limbgrower`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/limbgrower.dm#L3); tgui: [`Limbgrower.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/Limbgrower.jsx)
 - **BandaStation:** [`modular_bandastation/species/code/surgery/organs/limbgrower_designs.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/species/code/surgery/organs/limbgrower_designs.dm#L1) — рецепты органов видов форка
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/medical/limbgrower.rs`, окно `crates/ss13_tgui/src/interfaces/limbgrower.rs`, данные `reagents_list`, видовые подтипы и диски в `ss13_mapload::research`: открытый резервуар (объём стаканов-деталей) заполняется переливанием, удаление реагента, вкладки видов, рецепты `initial`, с дисков (загрузка 2 с) и `hacked` под емагом, `fullupgrade` со всеми; печать `3 с × коэффициент` (сервоприводы) с энергией, конечность вида вкладки (`<build_path>/<вид>`) с синтетическим именем или орган; `// shortcut:` нет звуков, анимаций, зелёного цвета конечностей, plumbing и поворота; вид без прототипа печатается человеческим
 
 ### Липосактор (fat sucker)
 Высасывает жир из пациента, превращая его в кусочки жира, снижает ожирение.
