@@ -3,15 +3,16 @@
 //! paper; a fax reaches another fax; the binder binds a paper, the scanner caches the book, the
 //! librarian's console uploads and prints it; a canvas is painted, finished and put on an easel;
 //! a carbon sheet tears off its copy, the paper cutter cuts a paper into slips, a filing cabinet
-//! files and returns a paper, a biscuit card cracks open.
+//! files and returns a paper, a biscuit card cracks open; the barcode scanner connects to the
+//! librarian's console and adds, sets for check-out and checks in a book.
 
 use std::path::{Path, PathBuf};
 
 use bevy::prelude::*;
 use ss13_game::inventory::{CarriedBy, Inventory};
 use ss13_game::service::{
-    Biscuit, Book, Canvas, CarbonPaper, Clipboard, FilingCabinet, LibraryArchive, Paper,
-    PaperCutter, Photocopier,
+    BarcodeScanner, Biscuit, Book, Canvas, CarbonPaper, Clipboard, FilingCabinet, Ledger,
+    LibraryArchive, Paper, PaperCutter, Photocopier, ScanMode,
 };
 use ss13_game::storage::StoredIn;
 use ss13_game::testing::{self, Drive, fixture_map, write_fixture};
@@ -61,6 +62,7 @@ const TYPES: &str = r##"{
     "/obj/item/pen": { "parent": "/obj/item" },
     "/obj/item/clipboard": { "parent": "/obj/item" },
     "/obj/item/toner": { "parent": "/obj/item" },
+    "/obj/item/barcodescanner": { "parent": "/obj/item" },
     "/obj/item/toy": { "parent": "/obj/item" },
     "/obj/item/toy/crayon": { "parent": "/obj/item/toy" },
     "/obj/item/toy/crayon/red": { "parent": "/obj/item/toy/crayon" },
@@ -120,7 +122,7 @@ const TYPES: &str = r##"{
 const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 "f" = (/turf/open/floor,/area/space)
 "s" = (/obj/effect/landmark/start/assistant,/turf/open/floor,/area/space)
-"o" = (/obj/item/paper/form,/obj/item/paper/fluff,/obj/item/paper,/obj/item/pen,/obj/item/clipboard,/obj/item/canvas,/obj/item/toy/crayon/red,/obj/item/paper/carbon,/obj/item/papercutter,/obj/item/folder/biscuit,/turf/open/floor,/area/space)
+"o" = (/obj/item/paper/form,/obj/item/paper/fluff,/obj/item/paper,/obj/item/pen,/obj/item/clipboard,/obj/item/canvas,/obj/item/toy/crayon/red,/obj/item/paper/carbon,/obj/item/papercutter,/obj/item/folder/biscuit,/obj/item/barcodescanner,/obj/item/book,/turf/open/floor,/area/space)
 "K" = (/obj/item/paper/paperslip,/obj/structure/filingcabinet,/turf/open/floor,/area/space)
 "Q" = (/obj/machinery/photocopier/prebuilt,/turf/open/floor,/area/space)
 "Y" = (/obj/machinery/fax/bridge,/turf/open/floor,/area/space)
@@ -168,6 +170,7 @@ const SLIP: &str = "/obj/item/paper/paperslip";
 const CUTTER: &str = "/obj/item/papercutter";
 const BISCUIT: &str = "/obj/item/folder/biscuit";
 const CABINET: &str = "/obj/structure/filingcabinet";
+const BARCODE: &str = "/obj/item/barcodescanner";
 
 fn fixture_assets(test: &str) -> PathBuf {
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR"))
@@ -185,6 +188,7 @@ fn fixture_assets(test: &str) -> PathBuf {
         CRAYON,
         "/obj/item/toner",
         "/obj/item/book",
+        BARCODE,
         COPIER,
         BRIDGE_FAX,
         CAPTAIN_FAX,
@@ -624,4 +628,67 @@ fn carbon_cutter_cabinet_and_biscuit() {
     s.click(0, cabinet);
     s.pick("fluff");
     s.run_until("the paper is back in hand", |s| s.active() == Some(fluff));
+}
+
+impl Station {
+    /// The barcode scanner in the active hand used in hand, until it is in `mode`.
+    fn scan_mode(&mut self, scanner: Entity, mode: ScanMode) {
+        let slot = self.active_slot();
+        self.send(0, ClientIntent::ClickSlot(slot));
+        self.run_until(&format!("the scanner is in {mode:?}"), |s| {
+            s.get::<BarcodeScanner>(scanner).mode == mode
+        });
+    }
+}
+
+#[test]
+fn the_barcode_scanner_keeps_the_console_ledger() {
+    let mut s = Station::start("the_barcode_scanner_keeps_the_console_ledger");
+    let (scanner, console, book) = (s.item(BARCODE), s.obj(CONSOLE), s.item("/obj/item/book"));
+    s.run_until("the book has its data", |s| {
+        s.try_get::<Book>(book).is_some()
+    });
+    s.put_in_hand(scanner);
+    // Not connected: the mode does not change.
+    let slot = s.active_slot();
+    s.send(0, ClientIntent::ClickSlot(slot));
+    for _ in 0..5 {
+        s.tick();
+    }
+    assert_eq!(s.get::<BarcodeScanner>(scanner).mode, ScanMode::CheckIn);
+
+    s.stand(TilePos::new(8, 3, 1));
+    s.click(0, console);
+    s.run_until("the scanner connects", |s| {
+        s.get::<BarcodeScanner>(scanner).computer == Some(console)
+    });
+    s.scan_mode(scanner, ScanMode::CheckOut);
+    s.scan_mode(scanner, ScanMode::Inventory);
+    s.stand(TilePos::new(2, 3, 1));
+    s.click(0, book);
+    s.run_until("the book is in the inventory", |s| {
+        s.get::<Ledger>(console).inventory.len() == 1
+    });
+
+    s.scan_mode(scanner, ScanMode::CheckIn);
+    s.scan_mode(scanner, ScanMode::CheckOut);
+    s.click(0, book);
+    s.run_until("the book is set for check-out", |s| {
+        s.get::<Ledger>(console).checking_out.is_some()
+    });
+    let lent = s
+        .server
+        .world_mut()
+        .get_mut::<Ledger>(console)
+        .unwrap()
+        .lend("Bob", 600.0);
+    assert!(lent);
+
+    s.scan_mode(scanner, ScanMode::Inventory);
+    s.scan_mode(scanner, ScanMode::CheckIn);
+    s.click(0, book);
+    s.run_until("the book is checked in", |s| {
+        s.get::<Ledger>(console).checkouts.is_empty()
+    });
+    assert_eq!(s.get::<Ledger>(console).inventory.len(), 1);
 }

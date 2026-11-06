@@ -1,7 +1,8 @@
 //! Service items over a loopback server: a pen writes on a mapped paper (after its
 //! `default_raw_text`) through the text prompt and a stamp stamps it; an empty hand takes a
 //! sheet out of a paper bin; a die rolls within its sides; a mapped bookcase shelves the book on
-//! its tile and hands it out from the list; the DSM and IDC manuals open their windows.
+//! its tile and hands it out from the list; the DSM and IDC manuals open their windows; the Codex Gigas
+//! keeps its title against a pen.
 
 use std::path::{Path, PathBuf};
 
@@ -51,6 +52,9 @@ const TYPES: &str = r##"{
         "starting_title": null, "starting_author": null, "starting_content": null } },
     "/obj/item/book/law": { "parent": "/obj/item/book", "declared_vars": {
         "starting_title": "Space Law", "starting_content": "Do not." } },
+    "/obj/item/book/codex_gigas": { "parent": "/obj/item/book", "declared_vars": {
+        "starting_title": "the Codex Gigas",
+        "starting_author": "Forces beyond your comprehension" } },
     "/obj/item/tgui_book": { "parent": "/obj/item" },
     "/obj/item/tgui_book/manual": { "parent": "/obj/item/tgui_book" },
     "/obj/item/tgui_book/manual/dsm": { "parent": "/obj/item/tgui_book/manual" },
@@ -98,7 +102,7 @@ const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 "m" = (/obj/item/stamp/denied,/turf/open/floor,/area/space)
 "d" = (/obj/item/dice/d20,/turf/open/floor,/area/space)
 "q" = (/obj/item/tgui_book/manual/dsm,/turf/open/floor,/area/space)
-"r" = (/obj/item/tgui_book/manual/idc,/turf/open/floor,/area/space)
+"r" = (/obj/item/tgui_book/manual/idc,/obj/item/book/codex_gigas,/turf/open/floor,/area/space)
 
 (1,1,1) = {"
 wwwwww
@@ -127,6 +131,7 @@ const BOOK: &str = "/obj/item/book/law";
 const BOOKCASE: &str = "/obj/structure/bookcase";
 const DSM: &str = "/obj/item/tgui_book/manual/dsm";
 const IDC: &str = "/obj/item/tgui_book/manual/idc";
+const CODEX: &str = "/obj/item/book/codex_gigas";
 
 fn fixture_assets(test: &str) -> PathBuf {
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR"))
@@ -144,6 +149,7 @@ fn fixture_assets(test: &str) -> PathBuf {
         BOOKCASE,
         DSM,
         IDC,
+        CODEX,
         "/turf/open/floor",
         "/turf/closed/wall",
         "/turf/open/space/basic",
@@ -329,4 +335,32 @@ fn the_manuals_open_their_windows() {
         }
         assert_eq!(s.window(interface), Some(window));
     }
+}
+
+#[test]
+fn the_codex_gigas_does_not_take_ink() {
+    let mut s = Station::start("the_codex_gigas_does_not_take_ink");
+    let codex = s.item(CODEX);
+    s.run_until("the codex has its data", |s| {
+        s.try_get::<ss13_game::service::Book>(codex).is_some()
+    });
+    let book = s.get::<ss13_game::service::Book>(codex).clone();
+    assert_eq!(book.title, "the Codex Gigas");
+    assert_eq!(book.author, "Forces beyond your comprehension");
+    // The codex lies at (5,4); the player stands next to it with a pen.
+    let mob = s.players[0].mob;
+    s.server
+        .world_mut()
+        .entity_mut(mob)
+        .insert(TilePos::new(4, 3, 1));
+    let pen = s.item(PEN);
+    s.put_in_hand(pen);
+    s.click(0, codex);
+    for _ in 0..10 {
+        s.tick();
+    }
+    assert!(
+        s.window(ListInputUi::NAME).is_none(),
+        "`unique` books refuse the pen"
+    );
 }

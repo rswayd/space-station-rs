@@ -23,6 +23,8 @@ mod art;
 #[cfg(feature = "server")]
 pub mod barber;
 #[cfg(feature = "server")]
+mod barcode;
+#[cfg(feature = "server")]
 pub mod cards;
 #[cfg(feature = "server")]
 mod clown;
@@ -53,6 +55,8 @@ pub use archive::{ArchivedBook, BookBinder, BookScanner, LibraryArchive};
 pub use art::Canvas;
 #[cfg(feature = "server")]
 pub use barber::{BarberJob, complete as barber_complete};
+#[cfg(feature = "server")]
+pub use barcode::{BarcodeScanner, Ledger, Loan, ScanMode};
 #[cfg(feature = "server")]
 pub use clown::MimeVow;
 #[cfg(feature = "server")]

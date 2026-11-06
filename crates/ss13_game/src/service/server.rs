@@ -162,6 +162,7 @@ fn add_item_parts(add: On<Add<DmItem>>, mut commands: Commands) {
         super::stationery::add_parts(world, e, &path);
         super::cards::add_parts(world, e, &path);
         super::manuals::add_parts(world, e, &path);
+        super::barcode::add_parts(world, e, &path);
         add_data_parts(world, e);
     });
 }
@@ -198,6 +199,7 @@ fn add_obj_parts(add: On<Add<DmObj>>, mut commands: Commands) {
         super::library::add_obj_parts(world, e, &path);
         super::office::add_obj_parts(world, e, &path);
         super::archive::add_obj_parts(world, e, &path);
+        super::barcode::add_obj_parts(world, e, &path);
         super::statues::add_obj_parts(world, e, &path);
         super::stationery::add_obj_parts(world, e, &path);
         super::slots::add_obj_parts(world, e, &path);
@@ -214,6 +216,7 @@ pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity)
         || super::religion::attack_self(world, client, mob, item)
         || super::library::attack_self(world, client, mob, item)
         || super::manuals::attack_self(world, client, mob, item)
+        || super::barcode::attack_self(world, client, item)
         || super::games::attack_self(world, client, mob, item)
         || super::cards::attack_self(world, client, mob, item)
         || super::clown::attack_self(world, mob, item)
@@ -251,7 +254,8 @@ pub fn item_interaction(
     // `COMSIG_ITEM_ATTACK` of squeaky things and `attackby` of desk bells: a sound, then the
     // click goes on.
     super::clown::used_on(world, mob, held, target);
-    super::paper::item_interaction(world, client, mob, held, target)
+    super::barcode::item_interaction(world, client, held, target)
+        || super::paper::item_interaction(world, client, mob, held, target)
         || super::stationery::item_interaction(world, client, mob, held, target)
         || super::office::item_interaction(world, client, mob, held, target)
         || super::religion::item_interaction(world, client, mob, held, target)
