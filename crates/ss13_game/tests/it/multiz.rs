@@ -177,6 +177,10 @@ fn cyberiad_decks() {
         .expect("a ladder going up");
     let top = *world.get::<TilePos>(link.up.unwrap()).unwrap();
     let climber = ss13_game::mobs::spawn::spawn_mob(app.world_mut(), DOG, at).unwrap();
+    // A wandering dog would walk off the ladder mid-climb.
+    app.world_mut()
+        .entity_mut(climber)
+        .remove::<ss13_game::mobs::ai::AiController>();
     run(&mut app, 0.2);
     assert!(multiz::interact(
         app.world_mut(),
