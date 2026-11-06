@@ -24,7 +24,7 @@
 Плоды (руками или из мешка) бродят в бочке в вино/дистиллят по их `distill_reagent`; бочка — открываемая ёмкость, из которой наливают. Варианты с порохом и термитом.
 
 - **Код:** [`/obj/structure/fermenting_barrel`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/fermenting_barrel.dm#L1), [`insert_fruit()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/fermenting_barrel.dm#L154), [`process_fermentation()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/fermenting_barrel.dm#L185)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/botany/barrel.rs`: бочка на 600 ед. с крышкой: пустая рука открывает/закрывает (открытая — доливается, закрытая — сливается из крана), в открытую кладутся плоды, ПКМ высыпает их; закрытая бродит по плоду раз в 2 с (`ferment`, `distill_reagent` или фруктовое вино), реагенты плода — в бочку; пороховая и термитная бочки не открываются и полны на 500 ед.; `// shortcut:` загрузка из мешка для растений — с мешками (../items/), без закрепления ключом и звука кипения
 
 ### Культиватор, грабли и вилы
 Культиватор (и ПКМ-вариант грабли) убирает сорняки из лотка; грабли — ловушка, на которую наступают; вилы — оружие на двуручном хвате.
@@ -36,7 +36,7 @@
 Топорик рубит бревна и метается; коса срезает растения и сорняки по дуге; секатор снимает прививки; генные ножницы удаляют трейт с растения в лотке.
 
 - **Код:** [`/obj/item/hatchet`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics_items.dm#L118), [`/obj/item/scythe`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics_items.dm#L171), [`/obj/item/secateurs`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics_items.dm#L233), [`/obj/item/geneshears`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics_items.dm#L272)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/botany/grafts.rs`: секатор снимает прививки с растения в лотке; нет топорика (рубка бревен), косы, стрижки секатором (ПКМ, причёски), генных ножниц (нужен выбор из списка)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/botany/grafts.rs`: секатор снимает прививки с растения в лотке; генные ножницы (`crates/ss13_game/src/botany/shears.rs`) на растении здоровее 15 открывают список удаляемых генов (`ListInputWindow`), выбранный ген срезается за 15 здоровья (с перепроверкой здоровья, расстояния и ножниц в руке); топорик (как любой острый предмет) режет бревна (`crates/ss13_game/src/botany/produce.rs`); `// shortcut:` нет косы (срез по дуге), метания топорика, стрижки секатором (ПКМ, причёски)
 
 ### Удобрения, гербициды и пестициды
 Бутылки E-Z-Nutrient, Left 4 Zed, Robust Harvest, гербицид и пестицид, распылители от сорняков и вредителей — их реагенты действуют через лоток (`on_hydroponics_apply`).

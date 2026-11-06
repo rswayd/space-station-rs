@@ -13,8 +13,10 @@
 //! - At harvest ([`on_harvest`], `COMSIG_PLANT_ON_HARVEST`): auto-distilling ferments the
 //!   nutriments, exo/endothermic activity heats or cools the reagents with them.
 //! - Cable on a plant with capacitive cell production makes a potato battery.
-// shortcut: gaseous decomposition makes no reagent smoke (no chem smoke here): the reagents
-// are exposed like any squash; electrical activity recharges no cells when eaten; prickly
+//! - Gaseous decomposition turns a squashed plant's reagents into chemical smoke; electrical
+//!   activity recharges the eater's cells on every bite ([`on_eaten`]).
+//! - Anything sharp cuts a log into planks, rods or bamboo ([`log_interaction`]).
+// shortcut: prickly
 // adhesion does not embed (no embedding); auto-juicing does nothing (`juice_typepath()` is a
 // proc); fire resistance changes nothing (no item burning); teleports have no sparks or
 // teleport channels.
@@ -65,6 +67,13 @@ const MOLTEN_OBJECT: &str = "/obj/effect/decal/cleanable/molten_object";
 const POTATO_CELL: &str = "/obj/item/stock_parts/power_store/cell/potato";
 const CABLE_COIL: &str = "/obj/item/stack/cable_coil";
 const LUBE: &str = "/datum/reagent/lube";
+const LOG: &str = "/obj/item/grown/log";
+const LOG_TREE: &str = "/obj/item/grown/log/tree";
+const LOG_STEEL: &str = "/obj/item/grown/log/steel";
+const LOG_BAMBOO: &str = "/obj/item/grown/log/bamboo";
+pub const WOOD_PLANKS: &str = "/obj/item/stack/sheet/mineral/wood";
+pub const RODS: &str = "/obj/item/stack/rods";
+pub const BAMBOO: &str = "/obj/item/stack/sheet/mineral/bamboo";
 const NUTRIMENT: &str = "/datum/reagent/consumable/nutriment";
 const VITAMIN: &str = "/datum/reagent/consumable/nutriment/vitamin";
 const FRUIT_WINE: &str = "/datum/reagent/consumable/ethanol/fruit_wine";
@@ -475,6 +484,11 @@ pub fn squash(world: &mut World, plant: Entity, target: Option<Entity>) {
     );
     // `COMSIG_PLANT_ON_SQUASH`.
     if let Some(seed) = world.get::<Seed>(plant).cloned()
+        && seed.has_gene(SMOKE)
+    {
+        make_smoke(world, plant, pos, &seed);
+    }
+    if let Some(seed) = world.get::<Seed>(plant).cloned()
         && let Some(target) = target
     {
         if seed.has_gene(TELEPORT) && world.get::<Health>(target).is_some() {
@@ -504,6 +518,31 @@ pub fn squash(world: &mut World, plant: Entity, target: Option<Entity>) {
     if world.get_entity(plant).is_ok() {
         world.despawn(plant);
     }
+}
+
+/// `smoke/make_smoke`: the reagents become chemical smoke of `round(sqrt(potency * 0.1))` tiles
+/// on the squash tile, and the plant is emptied.
+fn make_smoke(world: &mut World, plant: Entity, pos: TilePos, seed: &Seed) {
+    let Some(holder) = world.get::<Reagents>(plant).map(|r| r.0.clone()) else {
+        return;
+    };
+    let range = smoke_range(seed.potency);
+    crate::effects::smoke::do_chem_smoke(
+        world,
+        range,
+        pos,
+        None,
+        &holder,
+        crate::effects::smoke::SmokeKind::Chem,
+    );
+    if let Some(mut r) = world.get_mut::<Reagents>(plant) {
+        r.0.clear();
+    }
+}
+
+/// `round(sqrt(potency * 0.1))`.
+pub fn smoke_range(potency: f32) -> u32 {
+    dm_round((potency.max(0.0) * 0.1).sqrt()) as u32
 }
 
 /// BandaStation `squash_plant_in_hands`: squeezing a plant with liquid contents in hand
@@ -824,6 +863,118 @@ pub fn battery_interaction(
     true
 }
 
+/// `/obj/item/grown/log`: `(plank_type, plank_name, plank_count)` of a log type; the count
+/// grows by `round(potency / 25)` when the log has a seed (tree logs have none and give 10).
+pub fn log_planks(path: &str, potency: Option<f32>) -> Option<(&'static str, &'static str, u32)> {
+    if !is_under(path, LOG) {
+        return None;
+    }
+    let (plank, name) = if is_under(path, LOG_STEEL) {
+        (RODS, "rods")
+    } else if is_under(path, LOG_BAMBOO) {
+        (BAMBOO, "bamboo sticks")
+    } else {
+        (WOOD_PLANKS, "wooden planks")
+    };
+    let base = if is_under(path, LOG_TREE) { 10 } else { 1 };
+    let bonus = potency.map_or(0, |p| dm_round(p / 25.0).max(0.0) as u32);
+    Some((plank, name, base + bonus))
+}
+
+/// `log/item_interaction`: anything sharp cuts a log into its planks at the user's feet. True
+/// when the click was this.
+// shortcut: no torches from dried leaves (no drying rack here).
+pub fn log_interaction(
+    world: &mut World,
+    client: Entity,
+    mob: Entity,
+    held: Entity,
+    log: Entity,
+) -> bool {
+    let sharp = world
+        .get::<ss13_mapload::DmWounding>(held)
+        .is_some_and(|w| w.sharpness != 0);
+    let Some(path) = world.get::<DmItem>(log).map(|i| i.path.clone()) else {
+        return false;
+    };
+    let potency = world.get::<Seed>(log).map(|s| s.potency);
+    let Some((plank, name, count)) = log_planks(&path, potency).filter(|_| sharp) else {
+        return false;
+    };
+    let Some(pos) = map_pos(world, mob) else {
+        return true;
+    };
+    tell(world, client, Span::Notice, format!("made {count} {name}"));
+    world.despawn(log);
+    crate::construction::spawn_stack(world, plank, pos, count);
+    true
+}
+
+/// `cell_charge/recharge_cells` on `COMSIG_FOOD_EATEN`: every cell the eater carries is
+/// charged up to `potency`% of its capacity.
+// shortcut: cells are the eater's carried power cells and energy guns (tg `get_all_cells`
+// also finds cells in other devices and cyborg cells).
+pub fn on_eaten(world: &mut World, eater: Entity, food: Entity) {
+    let Some(seed) = world
+        .get::<Seed>(food)
+        .filter(|s| s.has_gene(CELL_CHARGE))
+        .cloned()
+    else {
+        return;
+    };
+    let name = name_of(world, food);
+    crate::chem::tell_mob(
+        world,
+        eater,
+        Span::Notice,
+        &format!("You feel energized as you bite into {name}."),
+    );
+    let mut items: Vec<Entity> = world
+        .get::<Inventory>(eater)
+        .map(|inv| {
+            inv.hands
+                .iter()
+                .flatten()
+                .copied()
+                .chain(inv.equipped())
+                .collect()
+        })
+        .unwrap_or_default();
+    let mut recharged = false;
+    let mut i = 0;
+    while i < items.len() {
+        let item = items[i];
+        i += 1;
+        if let Some(stored) = world.get::<crate::storage::Stored>(item) {
+            items.extend_from_slice(stored.items());
+        }
+        if let Some(mut cell) = world.get_mut::<crate::mecha::core::ItemCell>(item) {
+            let newcharge = recharge_to(seed.potency, cell.0.maxcharge);
+            if cell.0.charge < newcharge {
+                cell.0.charge = newcharge;
+                recharged = true;
+            }
+        }
+        if let Some((charge, maxcharge, _)) = crate::guns::energy_cell(world, item) {
+            let newcharge = recharge_to(seed.potency, maxcharge);
+            if charge < newcharge
+                && let Some(mut gun) = world.get_mut::<crate::guns::Gun>(item)
+            {
+                gun.charge = newcharge;
+                recharged = true;
+            }
+        }
+    }
+    if recharged {
+        crate::chem::tell_mob(world, eater, Span::Notice, "Your batteries are recharged!");
+    }
+}
+
+/// `min(potency * 0.01 * maxcharge, maxcharge)`.
+pub fn recharge_to(potency: f32, maxcharge: f64) -> f64 {
+    (f64::from(potency) * 0.01 * maxcharge).min(maxcharge)
+}
+
 /// Examine lines of a grown item's traits with `TRAIT_SHOW_EXAMINE`.
 pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<(Span, String)>) {
     let is_plant = world
@@ -871,6 +1022,36 @@ mod tests {
         assert_eq!(glow_light(10.0, 0.04, true, [0; 3]).power, -0.2);
         assert_eq!(parse_color("#C3E381"), Some([0xc3, 0xe3, 0x81]));
         assert_eq!(parse_color("red"), None);
+    }
+
+    #[test]
+    fn logs_give_planks_by_potency() {
+        assert_eq!(
+            log_planks("/obj/item/grown/log", Some(50.0)),
+            Some((WOOD_PLANKS, "wooden planks", 3))
+        );
+        assert_eq!(
+            log_planks("/obj/item/grown/log/steel", Some(24.0)),
+            Some((RODS, "rods", 1))
+        );
+        assert_eq!(
+            log_planks("/obj/item/grown/log/bamboo", Some(100.0)),
+            Some((BAMBOO, "bamboo sticks", 5))
+        );
+        assert_eq!(
+            log_planks("/obj/item/grown/log/tree", None),
+            Some((WOOD_PLANKS, "wooden planks", 10))
+        );
+        assert_eq!(log_planks("/obj/item/grown/cotton", Some(50.0)), None);
+    }
+
+    #[test]
+    fn smoke_and_recharge_follow_potency() {
+        assert_eq!(smoke_range(10.0), 1);
+        assert_eq!(smoke_range(89.0), 2);
+        assert_eq!(smoke_range(100.0), 3);
+        assert_eq!(recharge_to(50.0, 1000.0), 500.0);
+        assert_eq!(recharge_to(150.0, 1000.0), 1000.0);
     }
 
     #[test]

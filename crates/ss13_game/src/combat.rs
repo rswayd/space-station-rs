@@ -356,6 +356,7 @@ fn melee(
                 commands.queue(move |world: &mut World| {
                     item_hit_sound(world, item, pos);
                     crate::forensics::server::add_fingerprint(world, item, attacker, false);
+                    crate::botany::unique::on_item_attack(world, attacker, target, item);
                 });
                 None
             }
@@ -399,6 +400,7 @@ fn melee(
                         force,
                         brute,
                     );
+                    crate::botany::unique::on_item_attack(world, attacker, target, weapon_entity);
                 });
                 // tg `attacked_by`, `BODY_ZONE_HEAD`: blunt brute force may deconvert a rev.
                 if hit == BodyZone::Head && kind == DamageType::Brute && wounding.sharpness == 0 {

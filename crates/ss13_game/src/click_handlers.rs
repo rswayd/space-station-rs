@@ -80,6 +80,7 @@
 //! | 1250 | `radiation::geiger_interact` |
 //! | 1255 | `clothing::item_interaction` |
 //! | 1300 | `disposals::mail_interaction` |
+//! | 1350 | `botany::grown_interaction` (log cutting, potato batteries) |
 //! | 1400 | `chem::item_interaction` |
 //! | 1500 | `guns::item_interaction` |
 //! | 1600 | `guns::attack_hand` (empty active hand) |
@@ -126,6 +127,7 @@
 //! | 3100 | `plumbing::interact` |
 //! | 3150 | `decor::interact` |
 //! | 3160 | `flora::attack_hand` |
+//! | 3170 | `botany::unique::pickup_backfire` (never handles) |
 //! | 3200 | `service::server::interact` |
 //! | 3250 | `fishing::aquarium::interact` (aquariums, the fish-porter) |
 //! | 3300 | `defenses::server::interact` |
