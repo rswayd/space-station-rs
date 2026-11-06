@@ -17,7 +17,7 @@
 Ставит резонансные поля, которые через паузу взрываются, ломая породу и раня фауну; улучшенная версия.
 
 - **Код:** [`/obj/item/resonator`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/equipment/resonator.dm#L3), [`/obj/effect/temp_visual/resonance`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/equipment/resonator.dm#L58)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 `ss13_game::mining::resonator`: режимы в руке (авто 2 с, ручной до 60 с, у улучшенного — матрица, лопающаяся от шага), поле на тайле по удару, повторный удар лопает его с `quick_burst_mod`, лимит полей (4/6); взрыв бурит минеральную стену, 20 brute живым на тайле (×3 при низком давлении), цепная детонация соседних полей и распространение в соседние стены с растущим шансом отказа (`adding_failure` резонатора, у tg потомки берут 50); нет замедления `resonance` на 10 с, визуала разрыва и анимации роста
 
 ### Кинетический крушитель и трофеи
 Двуручное оружие шахтёра: выстрел дестабилизатором метит цель, удар по метке наносит бонусный урон в спину; трофеи с фауны и мегафауны дают особые эффекты; скины (меч, гарпун, кинжал, глефа). Кинетический акселератор (ПКА) — см. боевое оружие (не этот каталог); его перезарядка и бурение стен — `ss13_game::mining::rocks`.
@@ -59,7 +59,7 @@
 Регенеративное ядро легиона (полное лечение, портится без стабилизатора), железа ускорения, мешок бримпыли; можно вживить как орган с активной способностью.
 
 - **Код:** [`/obj/item/organ/monster_core`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/equipment/monster_organs/monster_organ.dm#L32), [`/obj/item/organ/monster_core/regenerative_core`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/equipment/monster_organs/regenerative_core.dm#L5), [`/obj/item/organ/monster_core/rush_gland`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/equipment/monster_organs/rush_gland.dm#L8), [`/obj/item/organ/monster_core/brimdust_sac`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/equipment/monster_organs/brimdust_sac.dm#L16), [`/obj/item/mining_stabilizer`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/equipment/monster_organs/monster_organ.dm#L4)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 `ss13_game::mining::cores`: ядро портится через 4 минуты (имя «decayed», спрайт и описание), осмотр показывает свежесть; стабилизатор сохраняет свежее ядро и расходуется; ядро в руке или на живом (не мёртвом) применяется и исчезает — регенеративное: −25 brute и −25 burn, снятие стана/нокдауна/паралича/обездвиживания/сна (`HEAL_CC_STATUS`), нормальная температура тела, мудлет `healsbadman`; нет вживления (слот органа, действие «Regenerate», авто-оживление в крите), иммунитета к замедлению от урона на минуту, железы ускорения и мешка бримпыли (ни одна фауна их не роняет)
 
 ### Вендор шахтёрского снаряжения, очки и ваучеры
 Консоль заказа за шахтёрские очки с ID (ORM начисляет очки), карта очков для передачи, ваучер на набор (крушитель, фултон, резонатор, капсула, минибот, набор новобранца, перчатки). Консоль корабля големов.

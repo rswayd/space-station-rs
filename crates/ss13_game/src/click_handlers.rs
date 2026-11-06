@@ -58,6 +58,8 @@
 //! | 3160 | `airlock_construction::attack_self` (airlock electronics) |
 //! | 3165 | `cargo::mail::counterfeit_attack_self` |
 //! | 3166 | `cargo::coupon::cigarettes_attack_self` |
+//! | 3183 | `mining::cores::attack_self` (monster cores) |
+//! | 3184 | `mining::resonator::attack_self` |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):
 //!
