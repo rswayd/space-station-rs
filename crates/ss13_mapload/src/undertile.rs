@@ -230,7 +230,8 @@ pub struct UndertileStats {
 
 /// Applies the element to every undertile atom on a tile.
 pub fn update_all(world: &mut World) -> UndertileStats {
-    let mut query = world.query::<(Entity, &TilePos, &DmUndertile)>();
+    let mut query =
+        world.query_filtered::<(Entity, &TilePos, &DmUndertile), With<ss13_world::Mapped>>();
     let targets: Vec<(Entity, TilePos)> = query
         .iter(world)
         .filter(|(_, _, u)| u.enabled)

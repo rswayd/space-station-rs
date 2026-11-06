@@ -82,7 +82,7 @@ impl Plugin for GibberServerPlugin {
         app.add_click_handler(ClickPhase::EmptyHand, 800, |w, c| {
             crate::gibber::interact(w, c.client, c.mob, c.target, c.modifiers.right)
         });
-        app.add_systems(Startup, setup_gibbers)
+        app.add_systems(ss13_world::MapInit, setup_gibbers)
             .add_systems(
                 Update,
                 (
@@ -95,7 +95,7 @@ impl Plugin for GibberServerPlugin {
 }
 
 fn setup_gibbers(world: &mut World) {
-    let mut q = world.query::<(Entity, &DmPower)>();
+    let mut q = world.query_filtered::<(Entity, &DmPower), With<ss13_world::Mapped>>();
     let found: Vec<Entity> = q
         .iter(world)
         .filter(|(_, p)| is_under(&p.path, GIBBER_ROOT))

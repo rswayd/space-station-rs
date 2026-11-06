@@ -688,7 +688,10 @@ impl Plugin for SupermatterServerPlugin {
             .add_message::<Delaminated>()
             .add_message::<MachineRadio>()
             .add_message::<SendChat>()
-            .add_systems(Startup, init_supermatter.after(super::init_power))
+            .add_systems(
+                ss13_world::MapInit,
+                init_supermatter.after(super::init_power),
+            )
             .add_systems(
                 Update,
                 supermatter_tick
@@ -700,7 +703,7 @@ impl Plugin for SupermatterServerPlugin {
 
 fn init_supermatter(world: &mut World) {
     let index = world.remove_resource::<IconIndex>();
-    let mut query = world.query::<(Entity, &super::DmPower, Option<&DmAtom>, Option<&DmName>)>();
+    let mut query = world.query_filtered::<(Entity, &super::DmPower, Option<&DmAtom>, Option<&DmName>), With<ss13_world::Mapped>>();
     let found: Vec<(Entity, Supermatter)> = query
         .iter(world)
         .filter(|(_, dm, ..)| is_under(&dm.path, SM_ROOT))

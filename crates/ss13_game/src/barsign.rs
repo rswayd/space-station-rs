@@ -45,7 +45,7 @@ impl Plugin for BarsignPlugin {
         app.add_click_handler(ClickPhase::EmptyHand, 1100, |w, c| {
             crate::barsign::interact(w, c.client, c.mob, c.target)
         });
-        app.add_systems(Startup, setup_mapped)
+        app.add_systems(ss13_world::MapInit, setup_mapped)
             .add_systems(
                 Update,
                 pick_answers
@@ -58,7 +58,7 @@ impl Plugin for BarsignPlugin {
 }
 
 fn setup_mapped(world: &mut World) {
-    let mut q = world.query_filtered::<Entity, With<DmBarsign>>();
+    let mut q = world.query_filtered::<Entity, (With<DmBarsign>, With<ss13_world::Mapped>)>();
     let signs: Vec<Entity> = q.iter(world).collect();
     for e in signs {
         set_sign(world, e, SIGN_OFF);

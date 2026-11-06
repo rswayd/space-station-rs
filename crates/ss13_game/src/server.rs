@@ -20,7 +20,7 @@ use ss13_net::server::{
 };
 use ss13_shared::protocol::{ClientIntent, MoveAck};
 use ss13_shared::{Appearance, Dir, Facing, TilePos};
-use ss13_world::{MoveRequest, Mover, SpatialIndex, WorldSystems};
+use ss13_world::{MapInit, Mapped, MoveRequest, Mover, SpatialIndex, WorldSystems};
 
 use crate::ghost::{Ghost, GhostStep, Ghostize};
 use crate::health::{Health, Stat, living_bundle};
@@ -352,10 +352,12 @@ impl Plugin for GameServerPlugin {
         // The map is loaded in `PreStartup`.
         .add_systems(
             Startup,
-            (mark_networked, find_spawn_points, build_mob_template)
+            (find_spawn_points, build_mob_template)
                 .chain()
                 .before(crate::jobs::JobsStartup),
         )
+        // Before the storage fill (after `JobsStartup`), which moves items into containers.
+        .add_systems(MapInit, mark_networked.before(crate::jobs::JobsStartup))
         .add_systems(
             PostStartup,
             // None on a loopback (in-memory) server.
@@ -423,6 +425,7 @@ fn mark_networked(world: &mut World) {
     let mut query = world.query_filtered::<(Entity, Option<&DmAtom>), (
         With<Appearance>,
         With<TilePos>,
+        With<Mapped>,
         Without<Networked>,
         Without<HiddenUnderTile>,
     )>();

@@ -58,7 +58,7 @@ impl Plugin for OrderConsolePlugin {
     fn build(&self, app: &mut App) {
         app.register_ui::<ProduceConsoleUi>()
             .init_resource::<MiningShipments>()
-            .add_systems(Startup, setup_consoles)
+            .add_systems(ss13_world::MapInit, setup_consoles)
             .add_systems(
                 Update,
                 (
@@ -113,7 +113,8 @@ fn window(world: &World, dm: &DmOrderConsole) -> ProduceStatic {
 }
 
 fn setup_consoles(world: &mut World) {
-    let mut query = world.query::<(Entity, &DmObj, &DmOrderConsole)>();
+    let mut query =
+        world.query_filtered::<(Entity, &DmObj, &DmOrderConsole), With<ss13_world::Mapped>>();
     let found: Vec<(Entity, DmOrderConsole)> = query
         .iter(world)
         .filter(|(_, obj, _)| is_under(&obj.path, MINING_CONSOLE))

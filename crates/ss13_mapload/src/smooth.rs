@@ -178,7 +178,8 @@ pub struct SmoothStats {
 
 /// Smooths every smoothing atom on a tile.
 pub fn smooth_all(world: &mut World, icons: &IconIndex) -> SmoothStats {
-    let mut query = world.query::<(Entity, &TilePos, &DmSmooth)>();
+    let mut query =
+        world.query_filtered::<(Entity, &TilePos, &DmSmooth), With<ss13_world::Mapped>>();
     let targets: Vec<(Entity, TilePos)> = query
         .iter(world)
         .filter(|(_, _, s)| s.smooths())

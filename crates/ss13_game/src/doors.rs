@@ -17,7 +17,7 @@ use ss13_mapload::{
 };
 use ss13_shared::appearance::Overlay;
 use ss13_shared::{Appearance, Dir, IconStateId, Layer, TilePos};
-use ss13_world::{Bumped, Density, Mover, SpatialIndex, WorldSystems};
+use ss13_world::{Bumped, Density, MapInit, Mapped, Mover, SpatialIndex, WorldSystems};
 
 use crate::click::{ClickResolved, ResolveClicks};
 use crate::inventory::{IdCard, IdCards, Inventory, check_access};
@@ -402,9 +402,8 @@ pub struct DoorServerPlugin;
 
 impl Plugin for DoorServerPlugin {
     fn build(&self, app: &mut App) {
-        // Maps load in `PreStartup`.
         app.init_resource::<DoorReport>()
-            .add_systems(Startup, init_doors)
+            .add_systems(MapInit, init_doors)
             .add_systems(
                 Update,
                 (door_bumps, door_clicks, run_doors)
@@ -432,8 +431,9 @@ fn init_doors(world: &mut World) {
     let index = manifest.index();
     let mut looks: HashMap<(String, String, String, String, DoorKind), Arc<DoorSprites>> =
         HashMap::new();
-    let mut query =
-        world.query_filtered::<(Entity, &DmDoor, &DmAtom, Has<Density>), Without<Door>>();
+    let mut query = world
+        .query_filtered::<(Entity, &DmDoor, &DmAtom, Has<Density>), (With<Mapped>, Without<Door>)>(
+        );
     let mut report = DoorReport::default();
     let mut sounds: HashMap<DoorSounds, Arc<DoorSounds>> = HashMap::new();
     let doors: Vec<(Entity, Door)> = query
@@ -495,7 +495,7 @@ fn init_doors(world: &mut World) {
         world.despawn(helper);
     }
 
-    let mut looks = world.query::<(&Door, &mut Appearance)>();
+    let mut looks = world.query_filtered::<(&Door, &mut Appearance), With<Mapped>>();
     for (door, mut appearance) in looks.iter_mut(world) {
         report.open += usize::from(door.state == DoorState::Open);
         report.sealed +=

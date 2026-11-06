@@ -346,7 +346,7 @@ impl Plugin for BotsServerPlugin {
             .add_observer(on_basic_mob)
             .add_observer(on_beacon)
             .add_observer(forget_beacon)
-            .add_systems(Startup, register_mapped_beacons)
+            .add_systems(ss13_world::MapInit, register_mapped_beacons)
             .add_systems(
                 Update,
                 (
@@ -373,7 +373,7 @@ fn on_beacon(add: On<Add<DmNavBeacon>>, mut commands: Commands) {
 /// The map's beacons (the load spawns them before the observers run on their final tiles).
 fn register_mapped_beacons(world: &mut World) {
     let beacons: Vec<Entity> = world
-        .query_filtered::<Entity, With<DmNavBeacon>>()
+        .query_filtered::<Entity, (With<DmNavBeacon>, With<ss13_world::Mapped>)>()
         .iter(world)
         .collect();
     for beacon in beacons {

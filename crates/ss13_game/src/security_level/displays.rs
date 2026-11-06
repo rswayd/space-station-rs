@@ -68,13 +68,13 @@ pub(super) struct DisplaysPlugin;
 impl Plugin for DisplaysPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<AlertDisplay>()
-            .add_systems(Startup, setup_displays)
+            .add_systems(ss13_world::MapInit, setup_displays)
             .add_systems(Update, revert_displays);
     }
 }
 
 fn setup_displays(world: &mut World) {
-    let mut query = world.query::<(Entity, &DmObj)>();
+    let mut query = world.query_filtered::<(Entity, &DmObj), With<ss13_world::Mapped>>();
     let displays: Vec<Entity> = query
         .iter(world)
         .filter(|(_, o)| is_under(&o.path, EVAC_DISPLAY))

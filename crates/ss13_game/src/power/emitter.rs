@@ -240,7 +240,7 @@ impl Plugin for EmitterServerPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<PendingBeams>()
             .add_message::<BeamHit>()
-            .add_systems(Startup, init_emitters.after(super::init_power))
+            .add_systems(ss13_world::MapInit, init_emitters.after(super::init_power))
             .add_systems(
                 Update,
                 (
@@ -256,7 +256,7 @@ impl Plugin for EmitterServerPlugin {
 
 fn init_emitters(world: &mut World) {
     let index = world.remove_resource::<IconIndex>();
-    let mut query = world.query::<(Entity, &super::DmPower, &TilePos, Option<&DmAtom>)>();
+    let mut query = world.query_filtered::<(Entity, &super::DmPower, &TilePos, Option<&DmAtom>), With<ss13_world::Mapped>>();
     let found: Vec<(Entity, String, TilePos, u8, Option<String>)> = query
         .iter(world)
         .filter(|(_, dm, ..)| is_under(&dm.path, EMITTER_ROOT))
@@ -284,7 +284,8 @@ fn init_emitters(world: &mut World) {
         }
         world.entity_mut(e).insert(emitter);
     }
-    let mut reflectors = world.query::<(Entity, &DmObj, Option<&DmAtom>)>();
+    let mut reflectors =
+        world.query_filtered::<(Entity, &DmObj, Option<&DmAtom>), With<ss13_world::Mapped>>();
     let found: Vec<(Entity, Reflector)> = reflectors
         .iter(world)
         .filter_map(|(e, obj, atom)| {

@@ -554,7 +554,10 @@ struct Resolver<'a> {
 /// Replaces every spawner on the map with its loot. Loot is spawned through the same templates
 /// as map atoms, so it is indistinguishable from mapped atoms.
 pub fn resolve_all(world: &mut World, manifest: &AssetManifest, rng: &mut Rng) -> SpawnerStats {
-    let mut query = world.query::<(Entity, &TilePos, &DmSpawner, Option<&DmAtom>)>();
+    let mut query = world.query_filtered::<
+        (Entity, &TilePos, &DmSpawner, Option<&DmAtom>),
+        With<ss13_world::Mapped>,
+    >();
     let mut spawners: Vec<(TilePos, Entity, DmSpawner, DmAtom)> = query
         .iter(world)
         .map(|(e, p, s, a)| (*p, e, s.clone(), a.cloned().unwrap_or_default()))

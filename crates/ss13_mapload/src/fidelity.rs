@@ -144,7 +144,8 @@ fn top(counts: &BTreeMap<String, usize>, n: usize) -> Vec<(&str, usize)> {
     v
 }
 
-/// Runs the passes over everything [`crate::load_maps`] spawned, in tg's order: spawners first
+/// Runs the passes over everything the open map pass spawned (`ss13_world::Mapped`: what
+/// [`crate::load_maps`] spawned since the last `run_map_init`), in tg's order: spawners first
 /// (their loot can be windows and cables), then undertile, then smoothing. Inserts
 /// [`IconIndex`] for later recomputes.
 pub fn apply(world: &mut World, manifest: &AssetManifest, seed: u64) -> FidelityReport {

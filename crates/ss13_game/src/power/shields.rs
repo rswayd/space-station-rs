@@ -170,7 +170,7 @@ impl Plugin for ShieldsPlugin {
                 )
             })
         });
-        app.add_systems(Startup, init_shields.after(super::init_power))
+        app.add_systems(ss13_world::MapInit, init_shields.after(super::init_power))
             .add_systems(
                 Update,
                 (
@@ -182,7 +182,8 @@ impl Plugin for ShieldsPlugin {
 }
 
 fn init_shields(world: &mut World) {
-    let mut q = world.query::<(Entity, &DmObj, Option<&DmPower>)>();
+    let mut q =
+        world.query_filtered::<(Entity, &DmObj, Option<&DmPower>), With<ss13_world::Mapped>>();
     let found: Vec<(Entity, String, u8)> = q
         .iter(world)
         .filter(|(_, o, _)| {

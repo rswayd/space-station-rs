@@ -131,7 +131,7 @@ pub(crate) const TYPES: &str = r##"{
 /// Rows top-down, y = 1 at the bottom. Row 5: an RTG and the SMES terminal (`T`, facing east)
 /// on the input cable, the SMES (`S`) and the output cable to the APC (`A`). `l` and `n`
 /// (`no_low_power`: no emergency cell) are lights, `D` an airlock that autocloses in 1.5 s.
-const MAP: &str = r##""w" = (/turf/closed/wall,/area/station)
+pub(crate) const MAP: &str = r##""w" = (/turf/closed/wall,/area/station)
 "f" = (/turf/open/floor,/area/station)
 "s" = (/obj/effect/landmark/start/assistant,/turf/open/floor,/area/station)
 "R" = (/obj/structure/cable,/obj/machinery/power/rtg,/turf/open/floor,/area/station)

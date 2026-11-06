@@ -259,7 +259,7 @@ impl Plugin for AlarmsPlugin {
         app.init_resource::<StationAlarms>()
             .add_message::<AlarmChanged>()
             .register_ui::<StationAlertWindow>()
-            .add_systems(PostStartup, init_consoles)
+            .add_systems(ss13_world::MapInitLate, init_consoles)
             .add_systems(
                 Update,
                 (
@@ -481,7 +481,7 @@ fn show_alarms(
 /// tg `station_alert/Initialize`: station levels list station and mining areas; elsewhere a
 /// "local alert console" lists its own level.
 fn init_consoles(world: &mut World) {
-    let mut q = world.query::<(Entity, &DmPower, &TilePos)>();
+    let mut q = world.query_filtered::<(Entity, &DmPower, &TilePos), With<ss13_world::Mapped>>();
     let found: Vec<(Entity, u16)> = q
         .iter(world)
         .filter(|(_, dm, _)| is_under(&dm.path, STATION_ALERT_CONSOLE))

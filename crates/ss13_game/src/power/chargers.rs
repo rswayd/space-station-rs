@@ -90,7 +90,7 @@ impl Plugin for ChargersPlugin {
                 crate::power::chargers::item_interaction(w, c.client, c.mob, h, c.target)
             })
         });
-        app.add_systems(Startup, init_chargers.after(super::init_power))
+        app.add_systems(ss13_world::MapInit, init_chargers.after(super::init_power))
             .add_systems(
                 Update,
                 (process_chargers, (cell_charger_looks, recharger_looks))
@@ -101,7 +101,7 @@ impl Plugin for ChargersPlugin {
 }
 
 fn init_chargers(world: &mut World) {
-    let mut query = world.query::<(Entity, &super::DmPower)>();
+    let mut query = world.query_filtered::<(Entity, &super::DmPower), With<ss13_world::Mapped>>();
     let found: Vec<Entity> = query
         .iter(world)
         .filter(|(_, dm)| is_under(&dm.path, CELL_CHARGER) || is_under(&dm.path, RECHARGER))

@@ -507,7 +507,8 @@ pub fn init_multiz(world: &mut World) {
         }
     }
     world.insert_resource(levels);
-    let mut turfs = world.query_filtered::<(&TilePos, &DmTurfBuild), With<Turf>>();
+    let mut turfs =
+        world.query_filtered::<(&TilePos, &DmTurfBuild), (With<Turf>, With<ss13_world::Mapped>)>();
     let transparent: Vec<TilePos> = turfs
         .iter(world)
         .filter(|(_, t)| transparent_turf(&t.path))
@@ -524,7 +525,8 @@ pub fn init_multiz(world: &mut World) {
     let air_links = world
         .get_resource::<ss13_atmos::Atmos>()
         .map_or(0, |a| a.vertical_links());
-    let mut q = world.query::<(Entity, &DmObj, &TilePos, Option<&Facing>)>();
+    let mut q = world
+        .query_filtered::<(Entity, &DmObj, &TilePos, Option<&Facing>), With<ss13_world::Mapped>>();
     let found: Vec<(Entity, String, TilePos, Dir)> = q
         .iter(world)
         .filter(|(_, o, ..)| is_under(&o.path, STAIRS) || is_under(&o.path, LADDER))
@@ -925,7 +927,10 @@ impl Plugin for MultiZPlugin {
         app.init_resource::<ZLevels>()
             .add_message::<GhostClick>()
             // Air links need the levels' air (`init_atmos`).
-            .add_systems(PostStartup, init_multiz.after(ss13_atmos::init_atmos))
+            .add_systems(
+                ss13_world::MapInitLate,
+                init_multiz.after(ss13_atmos::init_atmos),
+            )
             .add_systems(
                 Update,
                 (

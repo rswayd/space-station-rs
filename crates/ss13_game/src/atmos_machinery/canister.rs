@@ -33,7 +33,7 @@ const FUSION_TEST: &str = "/obj/machinery/portable_atmospherics/canister/fusion_
 
 /// `Initialize(mapload)`: `internal_cell = new /obj/item/stock_parts/power_store/cell/high`.
 pub fn init_canister_cells(world: &mut World) {
-    let mut q = world.query::<(Entity, &Canister)>();
+    let mut q = world.query_filtered::<(Entity, &Canister), With<ss13_world::Mapped>>();
     let canisters: Vec<Entity> = q
         .iter(world)
         .filter(|(_, c)| c.cell.is_none())

@@ -54,7 +54,7 @@ pub struct AnalyzerPlugin;
 impl Plugin for AnalyzerPlugin {
     fn build(&self, app: &mut App) {
         app.register_ui::<DestructiveAnalyzerUi>()
-            .add_systems(Startup, setup_analyzers)
+            .add_systems(ss13_world::MapInit, setup_analyzers)
             .add_systems(
                 Update,
                 (
@@ -70,7 +70,7 @@ impl Plugin for AnalyzerPlugin {
 }
 
 fn setup_analyzers(world: &mut World) {
-    let mut query = world.query::<(Entity, &DmObj)>();
+    let mut query = world.query_filtered::<(Entity, &DmObj), With<ss13_world::Mapped>>();
     let found: Vec<Entity> = query
         .iter(world)
         .filter(|(_, o)| is_under(&o.path, ANALYZER_ROOT))

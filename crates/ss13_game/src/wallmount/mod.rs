@@ -4,7 +4,7 @@
 //! `aesthetics/lightswitch`), mounted flashers (`flasher.dm`), extinguisher cabinets
 //! (`code/game/objects/structures/extinguisher.dm`) and fire axe cabinets (`fireaxe.dm`).
 //!
-//! Live state is built once at `PostStartup` (after doors and power) from the prototype data
+//! Live state is built in `MapInitLate` (after doors and power) from the prototype data
 //! [`DmWallMount`]. They hang on the floor tile in front of their wall (pixel offset), so a click
 //! needs the usual adjacency to that tile. Unpowered machines (tg `NOPOWER`) do nothing on a
 //! click (`can_interact`); their looks follow [`Unpowered`].
@@ -86,7 +86,10 @@ impl Plugin for WallMountPlugin {
         });
         app.init_resource::<controls::Links>()
             // After doors (`Door`) and power (`AreaPower`, `PowerMachine`) are built.
-            .add_systems(PostStartup, init_wallmounts.after(ss13_atmos::init_atmos))
+            .add_systems(
+                ss13_world::MapInitLate,
+                init_wallmounts.after(ss13_atmos::init_atmos),
+            )
             .add_systems(
                 Update,
                 (
@@ -107,7 +110,8 @@ impl Plugin for WallMountPlugin {
 
 /// Live state for every [`DmWallMount`] on the map.
 fn init_wallmounts(world: &mut World) {
-    let mut query = world.query::<(Entity, &DmWallMount, &TilePos)>();
+    let mut query =
+        world.query_filtered::<(Entity, &DmWallMount, &TilePos), With<ss13_world::Mapped>>();
     let mounts: Vec<(Entity, DmWallMount, TilePos)> = query
         .iter(world)
         .map(|(e, dm, &pos)| (e, dm.clone(), pos))

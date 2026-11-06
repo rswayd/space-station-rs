@@ -339,7 +339,7 @@ pub struct NuclearBombPlugin;
 impl Plugin for NuclearBombPlugin {
     fn build(&self, app: &mut App) {
         app.register_ui::<NuclearBombUi>()
-            .add_systems(Startup, setup_bombs)
+            .add_systems(ss13_world::MapInit, setup_bombs)
             .add_systems(
                 Update,
                 (
@@ -352,7 +352,7 @@ impl Plugin for NuclearBombPlugin {
 }
 
 fn setup_bombs(world: &mut World) {
-    let mut query = world.query::<(Entity, &DmObj)>();
+    let mut query = world.query_filtered::<(Entity, &DmObj), With<ss13_world::Mapped>>();
     let bombs: Vec<(Entity, bool)> = query
         .iter(world)
         .filter(|(_, o)| {

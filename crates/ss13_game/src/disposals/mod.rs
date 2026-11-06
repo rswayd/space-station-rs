@@ -206,7 +206,7 @@ impl Plugin for DisposalsServerPlugin {
             .init_resource::<DisposalClock>()
             .register_ui::<DisposalUnitWindow>()
             .register_ui::<DestTaggerWindow>()
-            .add_systems(Startup, init_disposals)
+            .add_systems(ss13_world::MapInit, init_disposals)
             .add_systems(
                 Update,
                 (
@@ -229,12 +229,12 @@ fn init_disposals(world: &mut World) {
     let start = Instant::now();
     let mut report = DisposalReport::default();
     let mut helpers: Vec<(Entity, TilePos, Vec<u8>)> = Vec::new();
-    let mut q = world.query_filtered::<(Entity, &TilePos, &DmMailSort), Without<DmObj>>();
+    let mut q = world.query_filtered::<(Entity, &TilePos, &DmMailSort), (Without<DmObj>, With<ss13_world::Mapped>)>();
     for (e, &pos, sort) in q.iter(world) {
         helpers.push((e, pos, sort.sort_types.clone()));
     }
     let mut found = Vec::new();
-    let mut q = world.query::<(Entity, &DmObj, &DmAtom, &TilePos, Option<&DmMailSort>)>();
+    let mut q = world.query_filtered::<(Entity, &DmObj, &DmAtom, &TilePos, Option<&DmMailSort>), With<ss13_world::Mapped>>();
     for (e, obj, atom, &pos, sort) in q.iter(world) {
         found.push((
             e,

@@ -35,6 +35,7 @@ use ss13_tgui::UiInterface;
 use ss13_tgui::server::{
     AppTguiExt, OpenUi, ServerUi, UiActed, UiParams, UiReject, UiSystems, UiWindow,
 };
+use ss13_world::{MapInit, Mapped};
 
 use crate::hud::{HudIcon, StorageData, StorageUi, StoredItem};
 use crate::inventory::{CarriedBy, IdCard, Inventory};
@@ -210,7 +211,8 @@ pub fn take_out(world: &mut World, item: Entity, pos: TilePos) {
     entity.insert(pos);
 }
 
-/// Templates of every type a contents program can spawn, built once at startup.
+/// Templates of every type a contents program can spawn, built at startup and extended by a
+/// later map load.
 #[derive(Resource, Default)]
 pub struct ContentTemplates {
     by_path: HashMap<String, Template>,
@@ -292,6 +294,12 @@ impl Plugin for StorageServerPlugin {
             // After the jobs: the outfits' storage items fill from the same templates.
             .add_systems(
                 Startup,
+                build_content_templates
+                    .in_set(StorageStartup)
+                    .after(crate::jobs::JobsStartup),
+            )
+            .add_systems(
+                MapInit,
                 init_storage
                     .in_set(StorageStartup)
                     .after(crate::jobs::JobsStartup),
@@ -310,9 +318,8 @@ impl Plugin for StorageServerPlugin {
     }
 }
 
-/// Templates for every type a container on the map or in the kit can spawn, then every
-/// map-placed storage item gets its live limits and fills itself.
-fn init_storage(world: &mut World) {
+/// Templates for every type a container on the map or in the kit can spawn.
+fn build_content_templates(world: &mut World) {
     let seed = world.get_resource::<MapSeed>().map_or(0, |s| s.0);
     world.insert_resource(ContentsRng(Rng::new(seed ^ 0x5707_a6e5)));
     let mut paths: Vec<String> = ss13_mapload::RUNTIME_CONTAINER_TYPES
@@ -337,13 +344,40 @@ fn init_storage(world: &mut World) {
         paths.extend(products.chain(&vending.premium).map(|p| p.path.clone()));
     }
     let templates = build_templates(world, paths);
-    let count = templates.by_path.len();
+    info!("storage: {} content templates", templates.by_path.len());
     world.insert_resource(templates);
+}
+
+/// Every storage item and ID card of the map pass gets its live limits and fills itself; types
+/// a later load brings that the templates lack are added first.
+fn init_storage(world: &mut World) {
+    let mut paths = Vec::new();
+    let mut query = world.query_filtered::<&DmContents, With<Mapped>>();
+    for contents in query.iter(world) {
+        collect_paths(&contents.populate, &mut paths);
+        collect_paths(&contents.immediate, &mut paths);
+    }
+    let mut query = world.query_filtered::<&DmVending, With<Mapped>>();
+    for vending in query.iter(world) {
+        let products = vending.products.iter().chain(&vending.contraband);
+        paths.extend(products.chain(&vending.premium).map(|p| p.path.clone()));
+    }
+    if let Some(known) = world.get_resource::<ContentTemplates>() {
+        paths.retain(|p| !known.by_path.contains_key(p));
+        if !paths.is_empty() {
+            let more = build_templates(world, paths).by_path;
+            world
+                .resource_mut::<ContentTemplates>()
+                .by_path
+                .extend(more);
+        }
+    }
 
     // Every map-placed item gets what tg's `Initialize` gives it, before closets (which run
     // after this set) take items in or fill themselves.
-    let mut query =
-        world.query_filtered::<(Entity, Option<&DmItem>, Has<DmStorage>), With<TilePos>>();
+    let mut query = world
+        .query_filtered::<(Entity, Option<&DmItem>, Has<DmStorage>), (With<TilePos>, With<Mapped>)>(
+        );
     let mut items: Vec<Entity> = query
         .iter(world)
         .filter(|(_, dm, storage)| {
@@ -360,9 +394,7 @@ fn init_storage(world: &mut World) {
     for item in items {
         finish_item(world, item, 0);
     }
-    info!(
-        "storage: {count} content templates, {filled} map ID cards and storage items initialized"
-    );
+    info!("storage: {filled} map ID cards and storage items initialized");
 }
 
 /// Templates for `paths` and everything their own programs spawn.

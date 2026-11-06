@@ -262,17 +262,20 @@ pub struct FieldGeneratorPlugin;
 
 impl Plugin for FieldGeneratorPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, init_generators.after(super::init_power))
-            .add_systems(
-                Update,
-                (
-                    toggle_on_click
-                        .after(ss13_world::WorldSystems::Movement)
-                        .after(crate::click::ResolveClicks),
-                    run_generators.after(super::PowerSystems),
-                    field_bumps.after(ss13_world::WorldSystems::Movement),
-                ),
-            );
+        app.add_systems(
+            ss13_world::MapInit,
+            init_generators.after(super::init_power),
+        )
+        .add_systems(
+            Update,
+            (
+                toggle_on_click
+                    .after(ss13_world::WorldSystems::Movement)
+                    .after(crate::click::ResolveClicks),
+                run_generators.after(super::PowerSystems),
+                field_bumps.after(ss13_world::WorldSystems::Movement),
+            ),
+        );
     }
 }
 
@@ -281,7 +284,8 @@ fn now(world: &World) -> f64 {
 }
 
 fn init_generators(world: &mut World) {
-    let mut query = world.query::<(Entity, &DmObj, Option<&DmAtom>)>();
+    let mut query =
+        world.query_filtered::<(Entity, &DmObj, Option<&DmAtom>), With<ss13_world::Mapped>>();
     let found: Vec<(Entity, String, Option<String>)> = query
         .iter(world)
         .filter(|(_, obj, _)| is_under(&obj.path, FIELD_GENERATOR))

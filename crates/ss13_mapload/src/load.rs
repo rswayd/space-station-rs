@@ -170,7 +170,11 @@ impl Template {
     /// Prototype components first, then the derived ones, `TilePos` last so the spatial index
     /// hook sees a complete entity.
     pub fn spawn(&self, world: &mut World, pos: Option<TilePos>) -> Entity {
+        let mapped = ss13_world::map_init_open(world);
         let mut e = world.spawn_empty();
+        if mapped {
+            e.insert(ss13_world::Mapped);
+        }
         self.proto.insert_into(&mut e);
         let id = self.proto.id();
         if id
@@ -597,6 +601,8 @@ pub fn load_maps_with(
 ) -> anyhow::Result<MapLoadReport> {
     let start = Instant::now();
     world.init_resource::<Areas>();
+    // What this load spawns is initialized by the pass (`ss13_world::run_map_init`).
+    ss13_world::begin_map_init(world, None::<u16>);
     world.resource_scope(|world, protos: Mut<Prototypes>| {
         let mut loader = Loader {
             protos: &protos,
@@ -646,6 +652,7 @@ pub fn load_maps_with(
             .iter()
             .flat_map(|m| (0..m.size.2).map(move |i| m.first_z + i as u16))
             .collect();
+        ss13_world::begin_map_init(world, levels.iter().copied());
         light_tiles(world, levels);
         report.elapsed = start.elapsed();
         Ok(report)

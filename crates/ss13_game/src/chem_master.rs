@@ -176,7 +176,7 @@ impl Plugin for ChemMasterPlugin {
         app.init_resource::<Printables>()
             .register_ui::<MasterWindow>()
             .add_systems(
-                Startup,
+                ss13_world::MapInit,
                 setup_mapped
                     .after(crate::power::init_power)
                     .after(crate::mecha::core::MechaLoaded),
@@ -204,7 +204,7 @@ pub fn is_master(path: &str) -> bool {
 }
 
 fn setup_mapped(world: &mut World) {
-    let mut query = world.query::<(Entity, &DmObj)>();
+    let mut query = world.query_filtered::<(Entity, &DmObj), With<ss13_world::Mapped>>();
     let found: Vec<Entity> = query
         .iter(world)
         .filter(|(_, o)| is_master(&o.path))

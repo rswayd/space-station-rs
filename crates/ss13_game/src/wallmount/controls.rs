@@ -170,8 +170,8 @@ fn linked(
 }
 
 pub(super) fn init_links(world: &mut World) {
-    let mut query = world.query::<(Entity, &Door, &DmDoor)>();
-    let mut links = Links::default();
+    let mut query = world.query_filtered::<(Entity, &Door, &DmDoor), With<ss13_world::Mapped>>();
+    let mut links = world.remove_resource::<Links>().unwrap_or_default();
     for (e, door, dm) in query.iter(world) {
         match door.kind {
             DoorKind::Poddoor if !dm.id.is_empty() => {

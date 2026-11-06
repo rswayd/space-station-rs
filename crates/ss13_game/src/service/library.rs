@@ -109,7 +109,7 @@ pub(super) fn add_obj_parts(world: &mut World, e: Entity, path: &str) {
 
 /// `bookcase/Initialize(mapload)`: the books on its tile go onto the shelf.
 pub(super) fn shelve_mapped_books(world: &mut World) {
-    let mut cases = world.query::<(Entity, &TilePos, &DmObj)>();
+    let mut cases = world.query_filtered::<(Entity, &TilePos, &DmObj), With<ss13_world::Mapped>>();
     let cases: Vec<(Entity, TilePos)> = cases
         .iter(world)
         .filter(|(_, _, o)| is_under(&o.path, BOOKCASE))

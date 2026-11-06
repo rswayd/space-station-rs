@@ -481,7 +481,8 @@ impl AirAlarm {
 
 /// Air alarms from the map, with their mapping helpers applied.
 pub fn init_alarms(world: &mut World) {
-    let mut query = world.query::<(Entity, &DmAtmosDevice, &TilePos)>();
+    let mut query =
+        world.query_filtered::<(Entity, &DmAtmosDevice, &TilePos), With<ss13_world::Mapped>>();
     let mut alarms = Vec::new();
     let mut helpers = Vec::new();
     for (e, dm, &pos) in query.iter(world) {

@@ -121,7 +121,7 @@ impl Plugin for CoffeeServerPlugin {
             c.held
                 .is_some_and(|h| crate::coffee::item_interaction(w, c.client, c.mob, h, c.target))
         });
-        app.add_systems(Startup, setup_mapped)
+        app.add_systems(ss13_world::MapInit, setup_mapped)
             .add_systems(
                 Update,
                 (
@@ -147,7 +147,7 @@ fn cartridge_charges(add: On<Add<DmItem>>, items: Query<&DmItem>, mut commands: 
 }
 
 fn setup_mapped(world: &mut World) {
-    let mut q = world.query::<(Entity, &DmPower)>();
+    let mut q = world.query_filtered::<(Entity, &DmPower), With<ss13_world::Mapped>>();
     let found: Vec<Entity> = q
         .iter(world)
         .filter(|(_, p)| is_under(&p.path, COFFEEMAKER_ROOT))

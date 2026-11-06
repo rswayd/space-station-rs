@@ -68,8 +68,9 @@ pub mod value;
 pub mod vending;
 pub mod wallmount;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
+use anyhow::Context as _;
 use bevy::prelude::*;
 use ss13_proto::ProtoAppExt;
 
@@ -458,4 +459,33 @@ fn load_on_startup(world: &mut World) {
     world.insert_resource(atmos::hotspot_icons(world.resource::<IconIndex>()));
     world.insert_resource(report);
     world.insert_resource(fidelity);
+}
+
+/// tg `/datum/map_template/load` mid-round: loads `path` onto a new z-level, runs the
+/// fidelity passes over it and files it in [`MapLoadReport`]. The map pass stays open: the
+/// caller registers what it needs (a shuttle's docks) and then calls
+/// [`ss13_world::run_map_init`], which brings the new entities up as at round start.
+/// Returns the first new z-level. Needs [`MapLoadPlugin`] (the assets) and the atmos icon
+/// resources of the startup load.
+// shortcut: reads the manifest again (and doors read it once more in their init), a one-off
+// hitch per load; keep the manifest's index in a resource if loads become frequent.
+pub fn load_template(world: &mut World, path: &Path) -> anyhow::Result<u16> {
+    let assets = world
+        .get_resource::<MapLoadPlugin>()
+        .context("no MapLoadPlugin")?
+        .assets
+        .clone();
+    let manifest = read_manifest(&assets)?;
+    let report = load_maps(world, &[path.to_owned()], &manifest)?;
+    let first_z = report.maps.first().context("nothing loaded")?.first_z;
+    let seed = world.get_resource::<MapSeed>().map_or(0, |s| s.0) ^ u64::from(first_z);
+    let fidelity = fidelity::apply(world, &manifest, seed);
+    info!("{report}");
+    info!("{fidelity}");
+    let mut total = world.get_resource_or_insert_with(MapLoadReport::default);
+    for (category, n) in report.counts {
+        *total.counts.entry(category).or_default() += n;
+    }
+    total.maps.extend(report.maps);
+    Ok(first_z)
 }

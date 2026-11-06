@@ -177,7 +177,8 @@ pub(super) fn machine_tick(grid: &mut Grid, e: Entity, teg: &mut Teg) {
 /// Generators from map load: wired where anchored (`connect_to_network`), then
 /// `find_circulators`. After the pipe graph, whose circulators they look for.
 fn init_tegs(world: &mut World) {
-    let mut q = world.query::<(Entity, &super::DmPower, &TilePos)>();
+    let mut q =
+        world.query_filtered::<(Entity, &super::DmPower, &TilePos), With<ss13_world::Mapped>>();
     let found: Vec<(Entity, TilePos, u8)> = q
         .iter(world)
         .filter(|(_, dm, _)| is_under(&dm.path, TEG))
@@ -658,7 +659,7 @@ pub(super) struct TegPlugin;
 impl Plugin for TegPlugin {
     fn build(&self, app: &mut App) {
         app.register_ui::<TegWindow>()
-            .add_systems(PostStartup, init_tegs)
+            .add_systems(ss13_world::MapInitLate, init_tegs)
             .add_systems(
                 Update,
                 (

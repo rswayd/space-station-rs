@@ -66,7 +66,7 @@ pub(super) struct KeycardPlugin;
 impl Plugin for KeycardPlugin {
     fn build(&self, app: &mut App) {
         app.register_ui::<KeycardAuthUi>()
-            .add_systems(Startup, setup_devices)
+            .add_systems(ss13_world::MapInit, setup_devices)
             .add_systems(
                 Update,
                 (
@@ -80,7 +80,7 @@ impl Plugin for KeycardPlugin {
 }
 
 fn setup_devices(world: &mut World) {
-    let mut query = world.query::<(Entity, &DmObj)>();
+    let mut query = world.query_filtered::<(Entity, &DmObj), With<ss13_world::Mapped>>();
     let devices: Vec<Entity> = query
         .iter(world)
         .filter(|(_, o)| is_under(&o.path, KEYCARD_AUTH))

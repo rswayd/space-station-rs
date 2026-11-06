@@ -220,7 +220,7 @@ impl Plugin for ShuttleNavPlugin {
         });
         app.register_ui::<ShuttleConsoleUi>()
             // After every Startup system has registered its shuttles.
-            .add_systems(PostStartup, setup_consoles)
+            .add_systems(ss13_world::MapInitLate, setup_consoles)
             .add_systems(
                 Update,
                 (
@@ -234,7 +234,7 @@ impl Plugin for ShuttleNavPlugin {
 
 /// The console types on the maps, connected to the shuttles they stand on.
 fn setup_consoles(world: &mut World) {
-    let mut objs = world.query::<(Entity, &DmObj)>();
+    let mut objs = world.query_filtered::<(Entity, &DmObj), With<ss13_world::Mapped>>();
     let found: Vec<(Entity, String)> = objs
         .iter(world)
         .filter(|(_, o)| is_under(&o.path, SHUTTLE_CONSOLE))

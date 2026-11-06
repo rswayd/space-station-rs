@@ -56,6 +56,7 @@ mod lavaland;
 mod loopback;
 mod los;
 mod machine_frame;
+mod map_init;
 mod martial;
 mod mecha;
 mod medical;

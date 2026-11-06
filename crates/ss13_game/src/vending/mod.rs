@@ -361,7 +361,7 @@ impl Plugin for VendingServerPlugin {
             .init_resource::<VendingInflation>()
             .add_message::<Vended>()
             .add_message::<VendRejected>()
-            .add_systems(Startup, init_vendors)
+            .add_systems(ss13_world::MapInit, init_vendors)
             .add_systems(
                 Update,
                 (
@@ -522,7 +522,7 @@ pub(crate) fn add_templates<'a>(world: &mut World, paths: impl IntoIterator<Item
 
 /// [`Vendor`] for every map-loaded vendor, and the product templates they need.
 fn init_vendors(world: &mut World) {
-    let mut query = world.query::<(Entity, &DmVending)>();
+    let mut query = world.query_filtered::<(Entity, &DmVending), With<ss13_world::Mapped>>();
     let found: Vec<(Entity, DmVending)> = query.iter(world).map(|(e, v)| (e, v.clone())).collect();
     if found.is_empty() {
         return;

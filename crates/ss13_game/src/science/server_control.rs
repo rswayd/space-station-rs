@@ -49,7 +49,7 @@ pub struct ServerControlPlugin;
 impl Plugin for ServerControlPlugin {
     fn build(&self, app: &mut App) {
         app.register_ui::<ServerControlUi>()
-            .add_systems(Startup, setup_server_controls)
+            .add_systems(ss13_world::MapInit, setup_server_controls)
             .add_systems(
                 Update,
                 (
@@ -65,7 +65,7 @@ impl Plugin for ServerControlPlugin {
 }
 
 fn setup_server_controls(world: &mut World) {
-    let mut query = world.query::<(Entity, &DmObj)>();
+    let mut query = world.query_filtered::<(Entity, &DmObj), With<ss13_world::Mapped>>();
     let found: Vec<Entity> = query
         .iter(world)
         .filter(|(_, o)| is_under(&o.path, SERVER_CONTROL_ROOT))

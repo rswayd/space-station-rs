@@ -101,7 +101,7 @@ impl Plugin for SmartFridgePlugin {
         });
         app.register_ui::<FridgeWindow>()
             .add_systems(
-                Startup,
+                ss13_world::MapInit,
                 setup_mapped
                     .after(crate::power::init_power)
                     .after(crate::storage::StorageStartup),
@@ -125,7 +125,8 @@ fn path_of(world: &World, e: Entity) -> String {
 }
 
 fn setup_mapped(world: &mut World) {
-    let mut query = world.query_filtered::<Entity, With<DmSmartFridge>>();
+    let mut query =
+        world.query_filtered::<Entity, (With<DmSmartFridge>, With<ss13_world::Mapped>)>();
     let found: Vec<Entity> = query.iter(world).collect();
     for e in found {
         setup(world, e);

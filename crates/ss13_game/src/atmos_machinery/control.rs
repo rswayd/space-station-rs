@@ -86,7 +86,7 @@ struct ReconnectFor(Entity);
 pub fn plugin(app: &mut App) {
     app.register_ui::<ControlWindow>()
         .add_systems(
-            Startup,
+            ss13_world::MapInit,
             init_control
                 .after(super::init_atmos_machinery)
                 .after(crate::atmos::load_handbook),
@@ -103,7 +103,8 @@ pub fn plugin(app: &mut App) {
 }
 
 fn init_control(world: &mut World) {
-    let mut q = world.query::<(Entity, &DmAtmosDevice, &TilePos)>();
+    let mut q =
+        world.query_filtered::<(Entity, &DmAtmosDevice, &TilePos), With<ss13_world::Mapped>>();
     let found: Vec<(Entity, DmAtmosDevice, TilePos)> = q
         .iter(world)
         .filter(|(_, dm, _)| {

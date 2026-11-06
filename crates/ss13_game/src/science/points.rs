@@ -42,10 +42,9 @@ impl Plugin for PointsPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Startup,
-            (load_research, build_icons, setup_servers)
-                .chain()
-                .in_set(ResearchLoaded),
+            (load_research, build_icons).chain().in_set(ResearchLoaded),
         )
+        .add_systems(ss13_world::MapInit, setup_servers.in_set(ResearchLoaded))
         .add_systems(Update, research_tick);
     }
 }
@@ -124,7 +123,7 @@ fn build_icons(world: &mut World) {
 }
 
 fn setup_servers(world: &mut World) {
-    let mut query = world.query::<(Entity, &DmObj)>();
+    let mut query = world.query_filtered::<(Entity, &DmObj), With<ss13_world::Mapped>>();
     let servers: Vec<Entity> = query
         .iter(world)
         .filter(|(_, o)| is_under(&o.path, SERVER_ROOT))

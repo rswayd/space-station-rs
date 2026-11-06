@@ -110,7 +110,7 @@ impl Plugin for MaterialsMarketPlugin {
             })
         });
         app.register_ui::<MatMarketUi>()
-            .add_systems(Startup, setup_mapped)
+            .add_systems(ss13_world::MapInit, setup_mapped)
             .add_systems(
                 Update,
                 (
@@ -126,7 +126,7 @@ impl Plugin for MaterialsMarketPlugin {
 }
 
 fn setup_mapped(world: &mut World) {
-    let mut q = world.query::<(Entity, &DmObj)>();
+    let mut q = world.query_filtered::<(Entity, &DmObj), With<ss13_world::Mapped>>();
     let found: Vec<Entity> = q
         .iter(world)
         .filter(|(_, o)| is_under(&o.path, MATERIALS_MARKET))

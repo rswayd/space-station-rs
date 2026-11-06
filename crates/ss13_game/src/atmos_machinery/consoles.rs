@@ -38,7 +38,10 @@ struct ConsoleClock(f64);
 pub fn plugin(app: &mut App) {
     app.init_resource::<ConsoleClock>()
         .register_ui::<AlertWindow>()
-        .add_systems(Startup, init_consoles.after(super::init_atmos_machinery))
+        .add_systems(
+            ss13_world::MapInit,
+            init_consoles.after(super::init_atmos_machinery),
+        )
         .add_systems(
             Update,
             (
@@ -49,7 +52,7 @@ pub fn plugin(app: &mut App) {
 }
 
 fn init_consoles(world: &mut World) {
-    let mut q = world.query::<(Entity, &DmPower)>();
+    let mut q = world.query_filtered::<(Entity, &DmPower), With<ss13_world::Mapped>>();
     let found: Vec<Entity> = q
         .iter(world)
         .filter(|(_, dm)| is_under(&dm.path, ALERT_CONSOLE))

@@ -38,7 +38,7 @@ use ss13_shared::{
     Appearance, Dir, Facing, IconStateId, Layer, LightSource, MouseOpacity, Optics, Overlay,
     TilePos,
 };
-use ss13_world::{Border, Density, SpatialIndex, WorldSystems};
+use ss13_world::{Border, Density, MapInitLate, Mapped, SpatialIndex, WorldSystems};
 
 pub use gas::{GAS_COUNT, GASES, GasId, GasInfo, GasMixture, ParseError};
 pub use level::{
@@ -683,8 +683,8 @@ impl Plugin for AtmosPlugin {
             .init_resource::<HotspotEntities>()
             .add_message::<PressureDifference>()
             .add_message::<FireAct>()
-            // Maps load in `PreStartup`, door fillers and other derived blockers in `Startup`.
-            .add_systems(PostStartup, init_atmos)
+            // After door fillers and other derived blockers (`MapInit`).
+            .add_systems(MapInitLate, init_atmos)
             .configure_sets(
                 Update,
                 (
@@ -753,10 +753,11 @@ fn density_removed(
     }
 }
 
-/// Builds every level from the turfs and blockers on the map (tg `SSair.Initialize`).
+/// Builds every level of the map pass from its turfs and blockers (tg `SSair.Initialize`,
+/// and `setup_template` for a template loaded later).
 pub fn init_atmos(world: &mut World) {
     let start = Instant::now();
-    let mut turfs = world.query::<(&TurfAir, &TilePos)>();
+    let mut turfs = world.query_filtered::<(&TurfAir, &TilePos), With<Mapped>>();
     let mut by_z: HashMap<u16, Vec<(TilePos, TurfAir)>> = HashMap::new();
     for (air, &pos) in turfs.iter(world) {
         by_z.entry(pos.z).or_default().push((pos, air.clone()));
@@ -770,6 +771,9 @@ pub fn init_atmos(world: &mut World) {
     )>();
     let mut edges: HashMap<TilePos, (u8, u8)> = HashMap::new();
     for (blocker, &pos, dense, border, heat) in blockers.iter(world) {
+        if !by_z.contains_key(&pos.z) {
+            continue;
+        }
         let mask = blocker.edges(dense, border.copied());
         let entry = edges.entry(pos).or_default();
         entry.0 |= mask;
@@ -777,17 +781,21 @@ pub fn init_atmos(world: &mut World) {
             entry.1 |= mask;
         }
     }
+    let first = !world.resource::<Atmos>().initialized;
+    let mut atmos_gen = world.resource::<Atmos>().atmos_gen.clone();
+    if atmos_gen.is_empty() {
+        // `generate_atmos`: once a round, from the clock.
+        let seed = web_time::SystemTime::now()
+            .duration_since(web_time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_nanos() as u64);
+        atmos_gen = planetary::generate_atmos(seed);
+        for (id, text) in &atmos_gen {
+            info!("planetary atmosphere {id}: {text}");
+        }
+    }
     let index = world.resource::<SpatialIndex>();
     let mut built = Vec::new();
     let mut mixes: HashMap<(Arc<str>, Option<u64>), GasMixture> = HashMap::new();
-    // `generate_atmos`: once a round, from the clock.
-    let seed = web_time::SystemTime::now()
-        .duration_since(web_time::UNIX_EPOCH)
-        .map_or(0, |d| d.as_nanos() as u64);
-    let atmos_gen = planetary::generate_atmos(seed);
-    for (id, text) in &atmos_gen {
-        info!("planetary atmosphere {id}: {text}");
-    }
     for (z, tiles) in by_z {
         let Some((width, height)) = index.level_size(z) else {
             continue;
@@ -830,8 +838,10 @@ pub fn init_atmos(world: &mut World) {
     }
     atmos.atmos_gen = atmos_gen;
     atmos.initialized = true;
-    world.add_observer(density_inserted);
-    world.add_observer(density_removed);
+    if first {
+        world.add_observer(density_inserted);
+        world.add_observer(density_removed);
+    }
     info!("atmos ready in {:.2?}", start.elapsed());
 }
 

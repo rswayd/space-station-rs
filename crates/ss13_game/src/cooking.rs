@@ -141,8 +141,11 @@ impl Plugin for CookingServerPlugin {
                 crate::cooking::item_interaction(w, c.client, c.mob, h, c.target, c.modifiers.pixel)
             })
         });
-        app.add_systems(Startup, setup_machines.after(crate::power::init_power))
-            .add_systems(Update, cooking_tick.after(crate::power::PowerSystems));
+        app.add_systems(
+            ss13_world::MapInit,
+            setup_machines.after(crate::power::init_power),
+        )
+        .add_systems(Update, cooking_tick.after(crate::power::PowerSystems));
     }
 }
 
@@ -154,7 +157,7 @@ fn path_of(world: &World, e: Entity) -> Option<String> {
 }
 
 fn setup_machines(world: &mut World) {
-    let mut query = world.query::<(Entity, &DmPower)>();
+    let mut query = world.query_filtered::<(Entity, &DmPower), With<ss13_world::Mapped>>();
     let machines: Vec<Entity> = query
         .iter(world)
         .filter(|(_, p)| {

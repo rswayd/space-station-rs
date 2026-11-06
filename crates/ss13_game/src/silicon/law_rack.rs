@@ -452,7 +452,7 @@ impl Plugin for LawRackPlugin {
             })
         });
         app.register_ui::<LawRackUi>()
-            .add_systems(PostStartup, init_racks)
+            .add_systems(ss13_world::MapInitLate, init_racks)
             .add_systems(
                 Update,
                 (
@@ -494,7 +494,8 @@ fn round_default_id(data: &SiliconData) -> &str {
 /// Mapped racks get their state; core racks their designation and the round's default module,
 /// welded in (tg `/obj/machinery/ai_law_rack/base/core/Initialize(mapload)`).
 fn init_racks(world: &mut World) {
-    let mut query = world.query_filtered::<(Entity, &DmObj), Without<LawRack>>();
+    let mut query =
+        world.query_filtered::<(Entity, &DmObj), (Without<LawRack>, With<ss13_world::Mapped>)>();
     let racks: Vec<(Entity, String)> = query
         .iter(world)
         .filter(|(_, o)| is_under(&o.path, RACK_ROOT))

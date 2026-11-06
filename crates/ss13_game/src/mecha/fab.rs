@@ -82,7 +82,7 @@ impl Plugin for FabPlugin {
     fn build(&self, app: &mut App) {
         app.register_ui::<ExosuitFabricatorUi>()
             .add_systems(
-                Startup,
+                ss13_world::MapInit,
                 setup_fabs
                     .after(ResearchLoaded)
                     .after(super::core::MechaLoaded)
@@ -177,12 +177,12 @@ pub fn catalogue(
 }
 
 fn setup_fabs(world: &mut World) {
-    let mut query = world.query::<(
+    let mut query = world.query_filtered::<(
         Entity,
         &DmObj,
         Option<&TilePos>,
         Option<&ss13_mapload::DmName>,
-    )>();
+    ), With<ss13_world::Mapped>>();
     let found: Vec<(Entity, String, Option<u16>, String)> = query
         .iter(world)
         .filter(|(_, o, _, _)| is_under(&o.path, FAB_ROOT))

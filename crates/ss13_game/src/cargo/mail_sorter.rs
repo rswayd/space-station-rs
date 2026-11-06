@@ -105,20 +105,21 @@ impl Plugin for MailSorterPlugin {
                 crate::cargo::mail_sorter::item_interaction(w, c.client, c.mob, h, c.target)
             })
         });
-        app.add_systems(Startup, setup_mapped).add_systems(
-            Update,
-            (
-                work.run_if(any_with_component::<MailSorter>),
-                prompt_answers
-                    .in_set(ss13_tgui::server::UiSystems::Handle)
-                    .after(ss13_tgui::prompt::PromptSystems::Answer),
-            ),
-        );
+        app.add_systems(ss13_world::MapInit, setup_mapped)
+            .add_systems(
+                Update,
+                (
+                    work.run_if(any_with_component::<MailSorter>),
+                    prompt_answers
+                        .in_set(ss13_tgui::server::UiSystems::Handle)
+                        .after(ss13_tgui::prompt::PromptSystems::Answer),
+                ),
+            );
     }
 }
 
 fn setup_mapped(world: &mut World) {
-    let mut q = world.query::<(Entity, &DmObj)>();
+    let mut q = world.query_filtered::<(Entity, &DmObj), With<ss13_world::Mapped>>();
     let found: Vec<Entity> = q
         .iter(world)
         .filter(|(_, o)| is_under(&o.path, MAIL_SORTER))

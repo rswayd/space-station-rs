@@ -154,7 +154,7 @@ impl Plugin for KitchenServerPlugin {
             c.held
                 .is_some_and(|h| crate::kitchen::item_interaction(w, c.client, c.mob, h, c.target))
         });
-        app.add_systems(Startup, setup_machines)
+        app.add_systems(ss13_world::MapInit, setup_machines)
             .add_systems(Update, kitchen_tick.run_if(any_running));
     }
 }
@@ -174,7 +174,7 @@ fn any_running(
 
 /// The machines on the map get their state; grinders their beaker (`Initialize(mapload)`).
 fn setup_machines(world: &mut World) {
-    let mut query = world.query::<(Entity, &DmPower)>();
+    let mut query = world.query_filtered::<(Entity, &DmPower), With<ss13_world::Mapped>>();
     let machines: Vec<Entity> = query
         .iter(world)
         .filter(|(_, p)| {

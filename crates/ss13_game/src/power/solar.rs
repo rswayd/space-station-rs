@@ -408,7 +408,7 @@ impl Plugin for SolarServerPlugin {
         let mut rng = CombatRng::default();
         app.insert_resource(Sun::random(&mut rng))
             .register_ui::<SolarControlWindow>()
-            .add_systems(Startup, init_solars.after(super::init_power))
+            .add_systems(ss13_world::MapInit, init_solars.after(super::init_power))
             .add_systems(
                 Update,
                 (
@@ -427,7 +427,7 @@ impl Plugin for SolarServerPlugin {
 /// Panels, trackers and controls from map load (`Initialize`: `connect_to_network`, the
 /// controller's `set_panels(azimuth_target)` with no panels yet).
 fn init_solars(world: &mut World) {
-    let mut query = world.query::<(Entity, &super::DmPower)>();
+    let mut query = world.query_filtered::<(Entity, &super::DmPower), With<ss13_world::Mapped>>();
     let found: Vec<(Entity, String, u8)> = query
         .iter(world)
         .map(|(e, dm)| (e, dm.path.clone(), super::layer(dm)))

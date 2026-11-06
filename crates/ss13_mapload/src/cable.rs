@@ -82,7 +82,8 @@ pub fn state(layer: u8, links: u8, node: bool) -> String {
 /// Links every cable and sets its sprite. Returns how many were changed and how many states
 /// the manifest lacks.
 pub fn connect_all(world: &mut World, icons: &IconIndex) -> (usize, usize) {
-    let mut query = world.query::<(Entity, &TilePos, &DmCable)>();
+    let mut query =
+        world.query_filtered::<(Entity, &TilePos, &DmCable), With<ss13_world::Mapped>>();
     let mut cables: HashMap<TilePos, Vec<(Entity, u8, u8)>> = HashMap::new();
     let mut nodes = HashSet::new();
     for (e, &pos, c) in query.iter(world) {

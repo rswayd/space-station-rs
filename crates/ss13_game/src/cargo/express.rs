@@ -110,7 +110,10 @@ impl Plugin for ExpressPlugin {
             })
         });
         app.register_ui::<CargoExpressUi>()
-            .add_systems(Startup, setup_mapped.after(super::supply::load_packs))
+            .add_systems(
+                ss13_world::MapInit,
+                setup_mapped.after(super::supply::load_packs),
+            )
             .add_systems(
                 Update,
                 (
@@ -123,11 +126,13 @@ impl Plugin for ExpressPlugin {
 
 fn setup_mapped(world: &mut World) {
     let seed = world.get_resource::<MapSeed>().map_or(0, |s| s.0);
-    world.insert_resource(ExpressState {
-        printed: 0,
-        rng: Rng::new(seed ^ 0x6578_7072),
-    });
-    let mut q = world.query::<(Entity, &DmObj)>();
+    if !world.contains_resource::<ExpressState>() {
+        world.insert_resource(ExpressState {
+            printed: 0,
+            rng: Rng::new(seed ^ 0x6578_7072),
+        });
+    }
+    let mut q = world.query_filtered::<(Entity, &DmObj), With<ss13_world::Mapped>>();
     let found: Vec<Entity> = q
         .iter(world)
         .filter(|(_, o)| is_under(&o.path, EXPRESS_CONSOLE))

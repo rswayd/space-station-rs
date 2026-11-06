@@ -136,7 +136,7 @@ pub(super) struct RocksPlugin;
 impl Plugin for RocksPlugin {
     fn build(&self, app: &mut App) {
         app.register_ui::<OreBoxUi>()
-            .add_systems(Startup, roll_random_ores)
+            .add_systems(ss13_world::MapInit, roll_random_ores)
             .add_systems(
                 Update,
                 (
@@ -169,7 +169,8 @@ fn obj_path(world: &World, e: Entity) -> Option<String> {
 fn roll_random_ores(world: &mut World) {
     let seed = world.get_resource::<MapSeed>().map_or(0, |s| s.0);
     let mut rng = ss13_mapload::spawner::Rng::new(seed ^ 0x6d69_6e65);
-    let mut query = world.query::<(Entity, &DmMineral, &TilePos)>();
+    let mut query =
+        world.query_filtered::<(Entity, &DmMineral, &TilePos), With<ss13_world::Mapped>>();
     let rocks: Vec<(Entity, DmMineral, TilePos)> = query
         .iter(world)
         .map(|(e, m, p)| (e, m.clone(), *p))

@@ -44,6 +44,7 @@ use ss13_mapload::power::{
 use ss13_mapload::{Area, Areas, DmAtom, DmPower};
 use ss13_shared::appearance::Overlay;
 use ss13_shared::{Appearance, Dir, IconStateId, LightSource, Optics, TilePos};
+use ss13_world::{MapInit, Mapped};
 
 pub use grid::{Grid, NetId, NodeKind, Powernet};
 pub use model::{
@@ -311,7 +312,7 @@ impl Plugin for PowerServerPlugin {
                 teg::TegPlugin,
             ))
             .add_systems(
-                Startup,
+                MapInit,
                 (init_power, accumulator::init_accumulators).chain(),
             )
             .add_systems(
@@ -327,13 +328,13 @@ fn layer(dm: &DmPower) -> u8 {
     dm.cable_layer.clamp(0.0, 255.0) as u8
 }
 
-/// Live power state from [`DmPower`], once after map load.
+/// Live power state from [`DmPower`] of the map pass; a later load's cables join the grid.
 // Machines built later get the same through `register_machine` (`crate::machine_frame`).
 pub(crate) fn init_power(world: &mut World) {
     let start = Instant::now();
     let mut report = PowerReport::default();
 
-    let mut area_query = world.query_filtered::<(Entity, &DmPower), With<Area>>();
+    let mut area_query = world.query_filtered::<(Entity, &DmPower), (With<Area>, With<Mapped>)>();
     let mut area_of_path: HashMap<String, Entity> = HashMap::new();
     let mut new_areas = Vec::new();
     for (e, dm) in area_query.iter(world) {
@@ -355,14 +356,14 @@ pub(crate) fn init_power(world: &mut World) {
     }
     world.insert_batch(new_areas);
 
-    let mut query = world.query::<(
+    let mut query = world.query_filtered::<(
         Entity,
         &DmPower,
         &TilePos,
         Option<&DmAtom>,
         Option<&DmLight>,
         Option<&Optics>,
-    )>();
+    ), With<Mapped>>();
     let mut cables = Vec::new();
     let mut apcs = Vec::new();
     let mut apc_helpers = Vec::new();
@@ -418,7 +419,7 @@ pub(crate) fn init_power(world: &mut World) {
         world.despawn(helper);
     }
 
-    let mut grid = Grid::default();
+    let mut grid = world.remove_resource::<Grid>().unwrap_or_default();
     for &(e, pos, ref dm) in &smes {
         grid.add_node(e, pos, layer(dm), NodeKind::Smes);
     }
@@ -616,7 +617,7 @@ pub(crate) fn init_power(world: &mut World) {
         apc.update(&mut world.get_mut::<AreaPower>(area).expect("area"));
         world.entity_mut(e).insert((apc, look));
     }
-    let mut areas = world.query::<(Entity, &AreaPower, &AreaMembers)>();
+    let mut areas = world.query_filtered::<(Entity, &AreaPower, &AreaMembers), With<Mapped>>();
     let mut changed = Vec::new();
     for (e, area, members) in areas.iter(world) {
         let needs = area.requires_power && !area.always_unpowered;

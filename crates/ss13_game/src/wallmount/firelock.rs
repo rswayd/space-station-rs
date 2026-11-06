@@ -147,7 +147,7 @@ fn is_open_turf(world: &World, pos: TilePos) -> bool {
 /// `my_area`, the rows, the watched tiles; a firelock mapped with an alarm (`/closed`) starts
 /// its row's activation.
 pub(super) fn init_firelocks(world: &mut World) {
-    let mut query = world.query::<(Entity, &Door, &TilePos)>();
+    let mut query = world.query_filtered::<(Entity, &Door, &TilePos), With<ss13_world::Mapped>>();
     let firelocks: Vec<(Entity, TilePos)> = query
         .iter(world)
         .filter(|(_, d, _)| d.kind == DoorKind::Firedoor)
@@ -180,6 +180,10 @@ pub(super) fn init_firelocks(world: &mut World) {
         }
         groups.push(group);
     }
+    // A later load's rows come after the station's.
+    let base = world
+        .get_resource::<Firelocks>()
+        .map_or(0, |f| f.groups.len());
     let mut watch: HashMap<TilePos, Vec<Entity>> = HashMap::new();
     let mut preset = Vec::new();
     for &(e, pos) in &firelocks {
@@ -214,7 +218,7 @@ pub(super) fn init_firelocks(world: &mut World) {
             my_area,
             alarm_type: None,
             ignore_alarms: false,
-            group: group_of[&pos],
+            group: base + group_of[&pos],
             ringing: None,
             cooldown_until: 0.0,
             activate_at: None,
@@ -229,7 +233,12 @@ pub(super) fn init_firelocks(world: &mut World) {
             atmos.watch(pos, true);
         }
     }
-    world.insert_resource(Firelocks { groups, watch });
+    let mut all = world.remove_resource::<Firelocks>().unwrap_or_default();
+    all.groups.extend(groups);
+    for (pos, list) in watch {
+        all.watch.entry(pos).or_default().extend(list);
+    }
+    world.insert_resource(all);
     for e in preset {
         if let Some(mut lock) = world.get_mut::<Firelock>(e) {
             lock.alarm_type = Some(AlarmType::Generic);
