@@ -104,7 +104,11 @@ impl Default for NetServerConfig {
         Self {
             bind_addr,
             max_clients: 1024,
-            max_clients_per_ip: 8,
+            // `SS13_MAX_CLIENTS_PER_IP`: load tests run every bot from one address.
+            max_clients_per_ip: std::env::var("SS13_MAX_CLIENTS_PER_IP")
+                .ok()
+                .and_then(|n| n.parse().ok())
+                .unwrap_or(8),
             tls: env("SS13_TLS_CERT")
                 .zip(env("SS13_TLS_KEY"))
                 .map(|(cert_chain, private_key)| TlsFiles {

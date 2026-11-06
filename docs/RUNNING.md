@@ -307,13 +307,30 @@ system spans, which cost too: the absolute numbers run high, the ranking holds. 
 systems run in parallel with `Main` on the client, so their shares can pass 100%. Bevy's
 `trace_chrome` writes every span to a file instead: gigabytes a minute for the client.
 
-Under load: the bot runner takes the same switch, its server and bots share the report (read the
-average run, `Main` counts every app's frames). A case with N bots walking on a station map:
+Under load: `crates/ss13_bots/examples/swarm.rs` joins N headless bots (network client only,
+no rendering) to an external server and walks them at random, in stages. The server's per-IP
+session cap (8) is raised with `SS13_MAX_CLIENTS_PER_IP`, since every bot comes from 127.0.0.1:
 
 ```sh
-SS13_PROFILE=1 SS13_ASSETS=$ASSETS cargo run -p ss13_bots --features ss13_bots/profile \
-    --bin ss13-bots -- --jobs 1 load30.case
+cargo build --release -p ss13_server -p ss13_bots --example swarm
+SS13_MAP=MetaStation SS13_SKIP_LOBBY=1 SS13_MAX_CLIENTS_PER_IP=200 SS13_METRICS_ADDR=127.0.0.1:9100 \
+    SS13_ASSETS=$ASSETS target/release/ss13_server
+SWARM_HOLD_SECS=60 target/release/examples/swarm 127.0.0.1:7777 <certificate digest> 0 10 50 100
 ```
+
+Server RSS from `/proc/<pid>/status`, tick time from the metrics (`ss13_tick_seconds`). Measured
+2026-11-06 (MetaStation, ~110k entities, release, bots step about every 0.5 s, 60 s per stage):
+
+| bots | server RSS | tick p50 | tick p99 | bytes/s per client |
+|---|---|---|---|---|
+| 0 | 656 MiB | 11.0 ms | 17.2 ms | — |
+| 10 | 673 MiB | 11.4 ms | 17.8 ms | — |
+| 50 | 687 MiB | 12.5 ms | 19.5 ms | — |
+| 100 | 705 MiB | 14.0 ms | 21.5 ms | 2.3–3.3 k (max 10.5 k) |
+
+About 0.5 MiB of server memory per client; the station itself is the rest. Walking bots are
+lighter than players (no clicks, fights, windows or speech), and 60 s stages do not rule out
+slow growth. The swarm process itself takes ~6 MiB per bot.
 
 ## UI gallery
 
