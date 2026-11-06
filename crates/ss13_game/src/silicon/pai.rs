@@ -1810,10 +1810,8 @@ fn answered(world: &mut World, mut answers: Local<MessageCursor<PromptAnswered>>
                     );
                 }
             }
-            (PaiPrompt::DnaConsent { pai, holder }, answer) => {
-                if actor == holder {
-                    dna_consent(world, pai, holder, answer == Some(PromptAnswer::Button(0)));
-                }
+            (PaiPrompt::DnaConsent { pai, holder }, answer) if actor == holder => {
+                dna_consent(world, pai, holder, answer == Some(PromptAnswer::Button(0)));
             }
             _ => {}
         }

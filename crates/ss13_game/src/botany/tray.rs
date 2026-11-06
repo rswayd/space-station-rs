@@ -408,9 +408,7 @@ pub fn somatoray_hit(
             // `/obj/item/seeds/bullet_act`: diminishing returns, 100% at 1 yield, 25% at 2...
             let rating = tray.rating;
             if let Some(seed) = &mut tray.myseed {
-                if seed.yield_ == 0.0 {
-                    seed.adjust_yield(rating);
-                } else if dice.prob(100.0 / (seed.yield_ * seed.yield_)) {
+                if seed.yield_ == 0.0 || dice.prob(100.0 / (seed.yield_ * seed.yield_)) {
                     seed.adjust_yield(rating);
                 }
             }

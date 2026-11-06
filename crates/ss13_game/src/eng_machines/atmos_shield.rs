@@ -413,6 +413,9 @@ pub fn process_early(world: &mut World, e: Entity) {
     }
     if let Some(master) = g.master {
         if state_of(world, master).is_none_or(|m| m.on != GenState::Active) {
+            // Detached first: a slave dropped by its master must not turn that master from
+            // waiting-for-power to off on the way out, or power coming back never re-forms the pair.
+            change_master(world, e, None);
             turn_off(world, e, false);
         }
         return;
