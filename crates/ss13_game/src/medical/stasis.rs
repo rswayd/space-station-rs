@@ -130,6 +130,10 @@ pub fn sync(world: &mut World, mob: Entity) {
     }
     let want = bed.filter(|&b| running(world, b));
     let have = world.get::<InStasis>(mob).map(|s| s.0);
+    // Stasis from something else (a netpod's `embryonic`) is that machine's to end.
+    if have.is_some_and(|s| world.get::<StasisBed>(s).is_none()) {
+        return;
+    }
     if want == have {
         return;
     }
