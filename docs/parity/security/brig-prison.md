@@ -48,7 +48,7 @@
 Шаттл между станцией и лагерем; консоль на шаттле в лагере работает в одну сторону и требует выполненной цели.
 
 - **Код:** [`/obj/machinery/computer/shuttle/labor`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/laborcamp/laborshuttle.dm#L1), [`/obj/machinery/computer/shuttle/labor/one_way`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/laborcamp/laborshuttle.dm#L9), [`/obj/docking_port/stationary/laborcamp_home`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/laborcamp/laborshuttle.dm#L30)
-- **Статус в ss13-rs:** ❌ нет — из шаттлов есть только эвакуационный (`crates/ss13_game/src/shuttle.rs`)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/mining_shuttles.rs`: шаблон `labour_delta` грузится на `laborcamp_home`, консоль `labor` (доступ `brig`) возит шаттл между станцией и `laborcamp_away` на лаваленде, `labor/one_way` — только в лагерь (у лагеря вариантов нет — консоль заперта); нет требования выполненной цели (стакер очков и его вызов шаттла `moveShuttle` → «Консоль трудового лагеря»)
 
 ### Тюремные ворота (prison gate)
 Голографические ворота пропускают только заключённых с тюремной ID, выполнившей цель (трудовой вариант), и не пропускают ящики с людьми внутри.

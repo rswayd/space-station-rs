@@ -18,9 +18,8 @@
 // shortcut: no admin-controlled consoles (authorization request, `admin_controlled`), no
 // illiterate random launch, no head revolutionary warning, no remote control, no `check_dock`
 // (docks here never overlap), no recharge time, no `no_destination_swap` mid-flight changes (a
-// flying shuttle refuses new requests). Consoles of other shuttles (mining, labour, white ship)
-// are not claimed here: their shuttles are not loaded; [`ShuttleConsole::new`] and
-// [`NavShuttle::new`] are the way in.
+// flying shuttle refuses new requests). Consoles of shuttles not loaded (white ship, ferry) are
+// not claimed here; [`ShuttleConsole::new`] and [`NavShuttle::new`] are the way in.
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
@@ -57,9 +56,46 @@ type ConsoleKind = (
 );
 
 /// The console types claimed here, most specific first.
-pub const CONSOLES: [ConsoleKind; 2] = [
+pub const CONSOLES: [ConsoleKind; 6] = [
     // `/obj/machinery/computer/shuttle/pod`; `_lavaland` is added when it connects.
     (POD_CONSOLE, None, &["pod_asteroid"], &[]),
+    // `code/modules/mining/mine_items.dm` (`crate::mining_shuttles`).
+    (
+        "/obj/machinery/computer/shuttle/mining/common",
+        Some("mining_common"),
+        &[
+            "commonmining_home",
+            "lavaland_common_away",
+            "landing_zone_dock",
+            "mining_public",
+        ],
+        &[],
+    ),
+    (
+        "/obj/machinery/computer/shuttle/mining",
+        Some("mining"),
+        &[
+            "mining_home",
+            "mining_away",
+            "landing_zone_dock",
+            "mining_public",
+        ],
+        &[],
+    ),
+    // `code/modules/mining/laborcamp/laborshuttle.dm`; the one-way console's
+    // "already at the outpost" check is its only destination being the dock it is on.
+    (
+        "/obj/machinery/computer/shuttle/labor/one_way",
+        Some("laborcamp"),
+        &["laborcamp_away"],
+        &[],
+    ),
+    (
+        "/obj/machinery/computer/shuttle/labor",
+        Some("laborcamp"),
+        &["laborcamp_home", "laborcamp_away"],
+        &["brig"],
+    ),
     // `/obj/machinery/computer/shuttle/syndicate`.
     (
         "/obj/machinery/computer/shuttle/syndicate",

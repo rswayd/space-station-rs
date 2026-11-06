@@ -114,6 +114,16 @@ pub struct ShuttleTemplates(pub Vec<PathBuf>);
 /// template id (`emergency_meta`) of the map named `map` (its `map_name` or `map_file` stem).
 /// `None` when no json describes the map or it names no such shuttle.
 pub fn map_shuttle(source: &Path, map: &str, key: &str) -> Option<String> {
+    map_json(source, map)?
+        .get("shuttles")?
+        .get(key)?
+        .as_str()
+        .map(str::to_owned)
+}
+
+/// The map json (`_maps/map_jsons/*.json`, tg `/datum/map_config`) whose `map_name` or
+/// `map_file` stem is `map`.
+pub fn map_json(source: &Path, map: &str) -> Option<serde_json::Value> {
     let dir = source.join("_maps/map_jsons");
     let mut entries: Vec<PathBuf> = ss13_data::read_dir(&dir)
         .ok()?
@@ -128,22 +138,20 @@ pub fn map_shuttle(source: &Path, map: &str, key: &str) -> Option<String> {
                 .get("map_file")
                 .and_then(|v| v.as_str())
                 .is_some_and(|f| f.trim_end_matches(".dmm") == map);
-        if !named {
-            return None;
-        }
-        json.get("shuttles")?.get(key)?.as_str().map(str::to_owned)
+        named.then_some(json)
     })
 }
 
-/// tg `/datum/map_template/shuttle` `mappath`: `[prefix][port_id]_[suffix].dmm`; emergency
-/// shuttles override the prefix with `_maps/shuttles/emergency/`.
+/// tg `/datum/map_template/shuttle` `mappath`: `[prefix][port_id]_[suffix].dmm`; the prefix is
+/// `_maps/shuttles/<port_id>/` (emergency, labour), or the folder of the port id's first word
+/// (`mining_common` templates live in `_maps/shuttles/mining/`).
 pub fn shuttle_template_path(source: &Path, key: &str, id: &str) -> PathBuf {
-    let nested = source.join(format!("_maps/shuttles/{key}/{id}.dmm"));
-    if ss13_data::exists(&nested) {
-        nested
-    } else {
-        source.join(format!("_maps/shuttles/{id}.dmm"))
-    }
+    let first = key.split('_').next().unwrap_or(key);
+    [key, first]
+        .into_iter()
+        .map(|dir| source.join(format!("_maps/shuttles/{dir}/{id}.dmm")))
+        .find(|p| ss13_data::exists(p))
+        .unwrap_or_else(|| source.join(format!("_maps/shuttles/{id}.dmm")))
 }
 
 #[cfg(test)]
@@ -194,5 +202,10 @@ mod tests {
         assert_eq!(id, "emergency_meta");
         assert!(shuttle_template_path(source, "emergency", &id).exists());
         assert_eq!(map_shuttle(source, "NoSuchStation", "emergency"), None);
+        assert!(
+            shuttle_template_path(source, "mining_common", "mining_common_meta")
+                .ends_with("_maps/shuttles/mining/mining_common_meta.dmm")
+        );
+        assert!(shuttle_template_path(source, "labour", "labour_delta").exists());
     }
 }

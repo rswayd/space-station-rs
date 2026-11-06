@@ -51,6 +51,7 @@ mod jobs;
 mod kitchen;
 mod kitchen_machines;
 mod languages;
+mod lavaland;
 mod loopback;
 mod los;
 mod machine_frame;

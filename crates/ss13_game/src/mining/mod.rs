@@ -7,9 +7,9 @@
 //! This module holds the windows' data, which both halves share; the client views are in
 //! [`client`].
 //!
-//! The mining shuttle, lavaland, ore vents, boulders and their machines (BRM, refinery,
-//! smelter), the processing unit and the unloading machine are not ported (no mining level is
-//! loaded: the station's map is the only one, and none of them is mapped on it).
+//! The mining level loads with the station (`ss13_mapload::MiningLevel`) and the mining
+//! shuttles fly there (`crate::mining_shuttles`). Ore vents, boulders and their machines (BRM,
+//! refinery, smelter), the processing unit and the unloading machine are not ported.
 
 use serde::{Deserialize, Serialize};
 use ss13_tgui::UiInterface;

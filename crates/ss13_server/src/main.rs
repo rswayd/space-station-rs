@@ -54,6 +54,10 @@ fn server(first: bool) -> App {
     app.add_plugins(ss13_debug::metrics::MetricsPlugin);
     // SS13_MAP=MetaStation (see `MapLoadPlugin::from_env`); unset = empty world.
     if let Some(map) = ss13_mapload::MapLoadPlugin::from_env() {
+        // The station's mining level (lavaland); `SS13_MINING_LEVEL=0` loads none.
+        if let Some(mining) = ss13_mapload::MiningLevel::from_env(&map) {
+            app.insert_resource(mining);
+        }
         app.add_plugins((
             ss13_proto::ProtoPlugin {
                 dir: map.prototypes_dir(),

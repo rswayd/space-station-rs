@@ -21,6 +21,7 @@ pub mod border;
 pub mod bots;
 pub mod cable;
 pub mod cargo;
+pub mod cave;
 pub mod circuit;
 pub mod clothing;
 pub mod construct;
@@ -100,7 +101,7 @@ pub use item::DmItem;
 pub use light::{DmLight, OpticsPlugin};
 pub use load::{
     Areas, Category, DEFAULT_AREA, DEFAULT_TURF, IconResolution, MapLoadReport, Template,
-    fold_color, load_maps, read_manifest,
+    fold_color, load_maps, load_maps_with, read_manifest,
 };
 pub use look::{DmLook, DmSprite};
 pub use medical::{DmDefib, DmMedical, DmWounding, MEDICAL_RUNTIME_TYPES};
@@ -270,6 +271,51 @@ impl MapLoadPlugin {
     }
 }
 
+/// tg's lavaland map (`LoadGroup(FailedZs, "Lavaland", "map_files/Mining", "Lavaland.dmm")`).
+pub const LAVALAND_MAP: &str = "_maps/map_files/Mining/Lavaland.dmm";
+
+/// The mining level (tg `SSmapping.loadWorld` for `minetype = lavaland`): loaded onto its own
+/// z-level right after the station maps and before the shuttle templates, so the station's
+/// levels stay the first maps' and the mining level is no station level. Its `genturf` caves
+/// are generated at load ([`cave`]). Insert before the map loads (`PreStartup`); the server
+/// binary inserts [`MiningLevel::from_env`], tests opt in.
+#[derive(Resource, Clone, Debug, PartialEq)]
+pub struct MiningLevel(pub PathBuf);
+
+impl MiningLevel {
+    /// `SS13_MINING_LEVEL`: `0` (or `off`, `none`) loads none, a `.dmm` path (relative to the
+    /// source) that map; unset, the station map json's `minetype` (tg default `lavaland`) picks
+    /// [`LAVALAND_MAP`]. Only for a real station map (fixture maps name `.dmm` files).
+    // shortcut: `minetype = ice` (Icebox's moon is part of its station levels) loads nothing.
+    pub fn from_env(map: &MapLoadPlugin) -> Option<Self> {
+        let var = std::env::var("SS13_MINING_LEVEL").unwrap_or_default();
+        let var = var.trim();
+        if matches!(var, "0" | "off" | "none") {
+            return None;
+        }
+        if var.ends_with(".dmm") {
+            return Some(Self(map.source.join(var)));
+        }
+        let station = map.maps.first().filter(|m| !m.ends_with(".dmm"))?;
+        let minetype = dock::map_json(&map.source, station)
+            .and_then(|j| j.get("minetype")?.as_str().map(str::to_owned))
+            .unwrap_or_else(|| "lavaland".to_owned());
+        let path = map.source.join(LAVALAND_MAP);
+        (minetype == "lavaland" && ss13_data::exists(&path)).then_some(Self(path))
+    }
+}
+
+/// The z-level the [`MiningLevel`] loaded onto, if one did.
+pub fn mining_z(world: &World) -> Option<u16> {
+    let path = &world.get_resource::<MiningLevel>()?.0;
+    world
+        .get_resource::<MapLoadReport>()?
+        .maps
+        .iter()
+        .find(|m| &m.path == path)
+        .map(|m| m.first_z)
+}
+
 /// Registers the prototype components the converter emits. [`MapLoadPlugin`] adds it; add it
 /// alone to load the generated prototypes without loading a map (tests, tools).
 pub struct DmProtoPlugin;
@@ -366,11 +412,19 @@ fn load_on_startup(world: &mut World) {
     let config = world.resource::<MapLoadPlugin>().clone();
     let seed = world.resource::<MapSeed>().0;
     let mut paths = config.map_paths();
+    let mining = world.get_resource::<MiningLevel>().map(|m| m.0.clone());
+    paths.extend(mining.clone());
     if let Some(templates) = world.get_resource::<ShuttleTemplates>() {
         paths.extend(templates.0.iter().cloned());
     }
+    let caves = |path: &std::path::Path, map: &mut ss13_assets::dmm::DmmMap| {
+        if mining.as_deref() == Some(path) {
+            let n = cave::generate(map, seed, cave::LAVALAND_OPEN, cave::LAVALAND_CLOSED);
+            info!("mining level {}: {n} cave tiles generated", path.display());
+        }
+    };
     let result = read_manifest(&config.assets).and_then(|manifest| {
-        let report = load_maps(world, &paths, &manifest)?;
+        let report = load_maps_with(world, &paths, &manifest, &caves)?;
         Ok((report, fidelity::apply(world, &manifest, seed)))
     });
     // The server has nothing to simulate without its station: fail at startup, loudly.

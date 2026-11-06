@@ -584,6 +584,17 @@ pub fn load_maps(
     maps: &[PathBuf],
     manifest: &AssetManifest,
 ) -> anyhow::Result<MapLoadReport> {
+    load_maps_with(world, maps, manifest, &|_, _| {})
+}
+
+/// [`load_maps`] with `prepare` run on each parsed map before it spawns (terrain generation,
+/// [`crate::cave`]).
+pub fn load_maps_with(
+    world: &mut World,
+    maps: &[PathBuf],
+    manifest: &AssetManifest,
+    prepare: &dyn Fn(&Path, &mut DmmMap),
+) -> anyhow::Result<MapLoadReport> {
     let start = Instant::now();
     world.init_resource::<Areas>();
     world.resource_scope(|world, protos: Mut<Prototypes>| {
@@ -600,7 +611,7 @@ pub fn load_maps(
             report: MapLoadReport::default(),
         };
         for path in maps {
-            load_one(world, &mut loader, path)?;
+            load_one(world, &mut loader, path, prepare)?;
         }
         let mut report = std::mem::take(&mut loader.report);
         for (t, &n) in loader.templates.iter().zip(&loader.spawned) {
@@ -641,8 +652,14 @@ pub fn load_maps(
     })
 }
 
-fn load_one(world: &mut World, loader: &mut Loader, path: &Path) -> anyhow::Result<()> {
-    let map = DmmMap::from_file(path).with_context(|| format!("reading {}", path.display()))?;
+fn load_one(
+    world: &mut World,
+    loader: &mut Loader,
+    path: &Path,
+    prepare: &dyn Fn(&Path, &mut DmmMap),
+) -> anyhow::Result<()> {
+    let mut map = DmmMap::from_file(path).with_context(|| format!("reading {}", path.display()))?;
+    prepare(path, &mut map);
     let (sx, sy, sz) = map.size;
     let mut index = world.resource_mut::<SpatialIndex>();
     let first_z = (1..=u16::MAX)
