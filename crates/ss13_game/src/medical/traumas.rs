@@ -1042,6 +1042,8 @@ pub fn refresh(world: &mut World, mob: Entity) {
     pacifist |= world
         .get::<crate::status_effects::StatusEffects>(mob)
         .is_some_and(crate::status_effects::StatusEffects::pacified);
+    // The Hippocrates bust's oath (`crate::service`).
+    pacifist |= crate::service::hippocratic_sworn(world, mob);
     // The mime's vow (`TRAIT_MIMING`, `can_speak(allow_mimes = FALSE)`).
     speech.mute |= world.get::<crate::service::MimeVow>(mob).is_some();
     set_aphasia(world, mob, aphasia, gibbering);

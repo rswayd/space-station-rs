@@ -636,6 +636,9 @@ fn run_do_afters(world: &mut World) {
             if let Job::Heretic(job) = action.job {
                 crate::antag::heretic::server::interrupted(world, mob, &action, job);
             }
+            if let Job::Art(job) = action.job {
+                crate::service::art_interrupted(world, mob, &action, job);
+            }
             continue;
         }
         if now >= action.ends_at {

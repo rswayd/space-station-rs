@@ -65,6 +65,8 @@ impl Plugin for ServiceServerPlugin {
                     super::office::load_starting_toner
                         .run_if(any_with_component::<super::office::StartingToner>),
                     super::clown::squeak_on_moves.after(ss13_world::WorldSystems::Movement),
+                    super::statues::pulse_radioactive
+                        .run_if(any_with_component::<super::statues::Radioactive>),
                 ),
             )
             .add_observer(add_item_parts)
@@ -113,6 +115,7 @@ fn add_item_parts(add: On<Add<DmItem>>, mut commands: Commands) {
         super::clown::add_parts(world, e, &path);
         super::office::add_parts(world, e, &path);
         super::art::add_parts(world, e, &path);
+        super::statues::add_parts(world, e, &path);
         add_data_parts(world, e);
     });
 }
@@ -149,6 +152,7 @@ fn add_obj_parts(add: On<Add<DmObj>>, mut commands: Commands) {
         super::library::add_obj_parts(world, e, &path);
         super::office::add_obj_parts(world, e, &path);
         super::archive::add_obj_parts(world, e, &path);
+        super::statues::add_obj_parts(world, e, &path);
     });
 }
 
@@ -157,6 +161,7 @@ pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity)
     super::paper::attack_self(world, client, mob, item)
         || super::office::attack_self(world, client, mob, item)
         || super::art::attack_self(world, client, mob, item)
+        || super::statues::attack_self(world, client, mob, item)
         || super::religion::attack_self(world, client, mob, item)
         || super::library::attack_self(world, client, mob, item)
         || super::games::attack_self(world, client, mob, item)
@@ -196,6 +201,7 @@ pub fn item_interaction(
         || super::library::item_interaction(world, client, mob, held, target)
         || super::archive::item_interaction(world, client, mob, held, target)
         || super::art::item_interaction(world, client, mob, held, target)
+        || super::statues::item_interaction(world, client, mob, held, target)
 }
 
 fn prompt_answers(world: &mut World, mut cursor: Local<MessageCursor<PromptAnswered>>) {

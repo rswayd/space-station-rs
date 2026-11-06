@@ -309,6 +309,8 @@ pub fn fire_act(world: &mut World, thing: Entity, temperature: f64) {
     } else if crate::explosions::sources::is_fueltank(world, thing) {
         // `fueltank/fire_act`: it blows up.
         crate::explosions::sources::boom(world, thing);
+    } else if crate::service::flooder_fire_act(world, thing, temperature) {
+        // `combustible_flooder/flame_react`: plasma statues flood and are gone.
     } else if world.get::<DmObj>(thing).is_some() {
         obj_fire_act(world, thing, temperature);
     }
