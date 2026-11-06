@@ -286,6 +286,17 @@ pub mod files {
         "sound/effects/explosion/explosion1.ogg",
         "sound/items/weapons/punch1.ogg",
     ];
+    /// Flora (`ss13_game::flora`): a falling tree, a shovel; posters and showcases
+    /// (`ss13_game::decor`): ripping, hanging, the tools.
+    pub const DECOR: [&str; 7] = [
+        "sound/effects/meteorimpact.ogg",
+        "sound/effects/shovel_dig.ogg",
+        "sound/items/poster/poster_ripped.ogg",
+        "sound/items/poster/poster_being_created.ogg",
+        "sound/items/tools/wirecutter.ogg",
+        "sound/items/tools/screwdriver.ogg",
+        "sound/items/tools/crowbar.ogg",
+    ];
     /// Robot customers (`ss13_game::restaurant`): eating, drinking and paying.
     pub const RESTAURANT: [&str; 3] = [
         "sound/items/eatfood.ogg",
@@ -726,6 +737,7 @@ pub fn referenced<'a>(
     out.extend(files::SYNDIE_ITEMS.map(str::to_owned));
     out.extend(files::DOORS.map(str::to_owned));
     out.extend(files::RESTAURANT.map(str::to_owned));
+    out.extend(files::DECOR.map(str::to_owned));
     for path in converted {
         for var in SOUND_VARS {
             let s = sound_var(types, path, var);

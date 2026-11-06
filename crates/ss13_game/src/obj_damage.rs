@@ -159,6 +159,7 @@ fn add_obj_state(add: On<Add<DmObj>>, objs: Query<&DmObj>, mut commands: Command
         FRAME,
         VENDING,
         crate::holosign::HOLOSIGN,
+        crate::flora::FLORA,
     ]
     .iter()
     .any(|root| is_under(&obj.path, root))
@@ -453,8 +454,9 @@ pub fn deconstruct(world: &mut World, target: Entity, disassembled: bool) {
     } else if crate::furniture::deconstruct(world, &obj, pos)
         || crate::plumbing::deconstruct(world, target, &obj, pos)
         || crate::decor::deconstruct(world, target, &obj, pos, disassembled)
+        || crate::flora::deconstruct(world, target, &obj)
     {
-        // A chair's, bed's, bathroom fixture's or decor's debris is out.
+        // A chair's, bed's, bathroom fixture's, decor's or flora's debris is out.
     }
     // A vendor's stock into its canister and its returned items out, before its parts leave.
     crate::vending::on_deconstruction(world, target, pos, disassembled);

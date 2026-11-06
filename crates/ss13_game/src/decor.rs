@@ -18,22 +18,31 @@
 //! - Statues: a wrench (2 s) fastens or unfastens them, a lit welder (4 s) slices one into its
 //!   material's sheets (5, two fewer when destroyed); a station map statue takes the rest of the
 //!   map with it and cannot be unfastened.
+//! - Posters (`effects/posters/poster.dm`): an empty hand rips one (a ripped poster stays in its
+//!   place); wirecutters take a whole one off as a rolled poster ([`RolledPoster`]) or clear a
+//!   ripped one away; a rolled poster clicked on a wall in line with its user (3.7 s) hangs on
+//!   that wall's face of the user's tile, one poster per face.
+//! - Showcases (`showcase.dm`): a screwdriver loosens or tightens an unanchored one's screws, a
+//!   wrench fastens or unfastens a screwed one (2 s), a crowbar (2 s) pries one into 4 iron.
 // shortcut: no crayon recolouring of curtains, no mechanical (shuttle button) curtains; mirrors
 // offer hair only (no beards: the body has no facial hair; magic mirrors' race, sex, eyes and
 // name changes are not offered), no reflections, no revenant prisons, no bald trait; sign items
 // are not hung back on walls (no wallframes) and keep no integrity, no pen redesign of blank
 // signs, no fountain pen engraving of plaques (no text prompt for items here); statues: no
 // carving from material blocks, no custom material statues, no beauty or art elements, no
-// rotation, no emissive eyes. Add each with its mechanic.
+// rotation, no emissive eyes. Posters: no glass shard traps, no random rolled posters from loot
+// (only posters taken off a wall), no diagonal-wall check, no hanging animation (the poster
+// appears when the 3.7 s are over). Showcases: no examine line of the screws' state. Add each with
+// its mechanic.
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
 use ss13_mapload::fidelity::is_under;
-use ss13_mapload::{DmAtom, DmName, DmObj, Opaque};
+use ss13_mapload::{DmAtom, DmName, DmObj, DmTurfBuild, IconIndex, Opaque};
 use ss13_net::chat::server::SendChat;
 use ss13_shared::chat::Span;
 use ss13_shared::protocol::ClickModifiers;
-use ss13_shared::{Appearance, Layer, TilePos};
+use ss13_shared::{Appearance, Dir, IconStateId, Layer, TilePos};
 use ss13_tgui::interfaces::list_input::{ListInputData, ListInputUi};
 use ss13_tgui::server::{
     AppTguiExt, OpenUi, ServerUi, UiActed, UiParams, UiReject, UiSystems, UiWindow,
@@ -72,6 +81,22 @@ const FIXED_SIGNS: [&str; 5] = [
     "/obj/structure/sign/picture_frame",
 ];
 const POSTER: &str = "/obj/structure/sign/poster";
+const POSTER_RIPPED: &str = "/obj/structure/sign/poster/ripped";
+const POSTER_OFFICIAL: &str = "/obj/structure/sign/poster/official";
+const POSTER_ITEM: &str = "/obj/item/poster";
+const POSTER_RIP_SOUND: &str = "sound/items/poster/poster_ripped.ogg";
+const POSTER_HANG_SOUND: &str = "sound/items/poster/poster_being_created.ogg";
+const WIRECUTTER_SOUND: &str = "sound/items/tools/wirecutter.ogg";
+const SCREWDRIVER_SOUND: &str = "sound/items/tools/screwdriver.ogg";
+const CROWBAR_SOUND: &str = "sound/items/tools/crowbar.ogg";
+const CLOSED_TURF: &str = "/turf/closed";
+/// `PLACE_SPEED`: the poster hanging `do_after`, deciseconds.
+const POSTER_PLACE_DS: f32 = 37.0;
+const SHOWCASE: &str = "/obj/structure/showcase";
+const IRON: &str = "/obj/item/stack/sheet/iron";
+/// `showcase/crowbar_act`: `use_tool(src, user, 2 SECONDS)`; its iron.
+const SHOWCASE_PRY_DS: f32 = 20.0;
+const SHOWCASE_IRON: u32 = 4;
 const PLAQUE: &str = "/obj/structure/plaque";
 const PLAQUE_ITEM: &str = "/obj/item/plaque";
 const STATUE: &str = "/obj/structure/statue";
@@ -163,9 +188,26 @@ pub struct Mirror {
     pub broken: bool,
 }
 
+/// A poster rolled up off a wall: tg `/obj/item/poster` holding its `poster_structure` (the
+/// structure's type, its rolled look and its name).
+#[derive(Component, Clone, Debug, PartialEq)]
+pub struct RolledPoster {
+    pub structure: String,
+    pub icon_state: IconStateId,
+    pub name: DmName,
+}
+
+/// `/obj/structure/showcase` at `SHOWCASE_SCREWDRIVERED` (absent: `SHOWCASE_CONSTRUCTED`).
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ShowcaseUnscrewed;
+
 /// The timed actions of decor.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DecorJob {
+    /// `showcase/crowbar_act`.
+    PryShowcase,
+    /// `poster/interact_with_atom`: hanging a rolled poster on a wall.
+    HangPoster,
     /// `curtain/wrench_act`, `statue/wrench_act` (`default_unfasten_wrench`).
     Unfasten,
     /// `curtain/wirecutter_act`.
@@ -375,8 +417,12 @@ pub fn interact(world: &mut World, client: Entity, mob: Entity, target: Entity) 
         }
         return true;
     }
-    if path(world, target).is_some_and(|p| is_sign(p) && !is_under(p, POSTER)) {
-        // `user.examinate(src)`; posters are torn down instead (their own group).
+    if path(world, target).is_some_and(|p| is_under(p, POSTER)) {
+        tear_poster(world, client, mob, target);
+        return true;
+    }
+    if path(world, target).is_some_and(is_sign) {
+        // `user.examinate(src)`.
         let (name, lines) = crate::examine::examine_lines(world, mob, target);
         for message in crate::examine::examine_messages(&name, lines) {
             world.write_message(SendChat {
@@ -398,10 +444,14 @@ pub fn item_interaction(
     target: Entity,
     modifiers: ClickModifiers,
 ) -> bool {
+    if world.get::<RolledPoster>(held).is_some() && closed_turf(world, target) {
+        start_hanging(world, client, mob, held, target);
+        return true;
+    }
     let Some(path) = path(world, target).map(str::to_owned) else {
         return false;
     };
-    if !breakable(&path) {
+    if !breakable(&path) && !is_under(&path, SHOWCASE) {
         return false;
     }
     // Tool acts run only out of combat mode.
@@ -424,6 +474,62 @@ pub fn item_interaction(
     let start = |world: &mut World, ds: f32, amount: u32, job: DecorJob| {
         use_tool(world, actor, target, ds, amount, Job::Decor(job));
     };
+    if is_under(&path, SHOWCASE) {
+        if modifiers.right {
+            return false;
+        }
+        let unscrewed = world.get::<ShowcaseUnscrewed>(target).is_some();
+        return match tool {
+            ToolKind::Screwdriver => {
+                if anchored(world, target) {
+                    return false;
+                }
+                sound(world, target, SCREWDRIVER_SOUND, 100.0);
+                if unscrewed {
+                    world.entity_mut(target).remove::<ShowcaseUnscrewed>();
+                    tell(
+                        world,
+                        client,
+                        Span::Notice,
+                        "Вы закручиваете винты витрины.",
+                    );
+                } else {
+                    world.entity_mut(target).insert(ShowcaseUnscrewed);
+                    tell(world, client, Span::Notice, "Вы откручиваете винты.");
+                }
+                true
+            }
+            ToolKind::Crowbar => {
+                // tg pries a showcase apart in any state.
+                sound(world, target, CROWBAR_SOUND, 100.0);
+                start(world, SHOWCASE_PRY_DS, 0, DecorJob::PryShowcase);
+                true
+            }
+            ToolKind::Wrench if !unscrewed => {
+                sound(world, target, RATCHET, 50.0);
+                start(world, STATUE_WRENCH_DS, 0, DecorJob::Unfasten);
+                true
+            }
+            _ => false,
+        };
+    }
+    if is_under(&path, POSTER) && tool == ToolKind::Wirecutters && !modifiers.right {
+        // `poster/wirecutter_act`.
+        sound(world, target, WIRECUTTER_SOUND, 100.0);
+        if poster_ruined(world, target, &path) {
+            tell(world, client, Span::Notice, "Вы убираете остатки плаката.");
+            remove(world, target);
+        } else {
+            tell(
+                world,
+                client,
+                Span::Notice,
+                "Вы аккуратно снимаете плакат со стены.",
+            );
+            roll_up(world, mob, target, &path);
+        }
+        return true;
+    }
     if is_under(&path, CURTAIN) {
         return match tool {
             ToolKind::Wrench if !modifiers.right => {
@@ -552,6 +658,11 @@ fn damaged(world: &World, e: Entity) -> bool {
 
 /// End of a [`DecorJob`] (`crate::tools` checked nobody moved).
 pub fn complete(world: &mut World, mob: Entity, action: &DoAfter, job: DecorJob) {
+    // Its target is the wall, not a decor object.
+    if job == DecorJob::HangPoster {
+        finish_hanging(world, mob, action);
+        return;
+    }
     let target = action.target;
     let client = action.client;
     let Some(path) = path(world, target).map(str::to_owned) else {
@@ -566,6 +677,10 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter, job: DecorJob)
     let user = name_of(world, mob);
     match job {
         DecorJob::Unfasten => {
+            // `showcase/wrench_act` only while its screws are in.
+            if world.get::<ShowcaseUnscrewed>(target).is_some() {
+                return;
+            }
             // `default_unfasten_wrench`.
             let to = !anchored(world, target);
             set_anchored(world, target, to);
@@ -648,7 +763,210 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter, job: DecorJob)
             }
             crate::obj_damage::deconstruct(world, target, true);
         }
+        DecorJob::PryShowcase => {
+            if !is_under(&path, SHOWCASE) {
+                return;
+            }
+            tell(world, client, Span::Notice, "Вы разбираете витрину ломом.");
+            if let Some(&pos) = world.get::<TilePos>(target) {
+                crate::construction::spawn_stack(world, IRON, pos, SHOWCASE_IRON);
+            }
+            remove(world, target);
+        }
+        DecorJob::HangPoster => {}
     }
+}
+
+/// `qdel(src)` of a structure: gone, its tile updated.
+fn remove(world: &mut World, target: Entity) {
+    let Some(&pos) = world.get::<TilePos>(target) else {
+        return;
+    };
+    world.despawn(target);
+    crate::construction::tile_changed(world, pos);
+}
+
+/// `ruined`: a ripped poster, mapped or rolled from the random pool.
+fn poster_ruined(world: &World, poster: Entity, path: &str) -> bool {
+    if is_under(path, POSTER_RIPPED) {
+        return true;
+    }
+    let (Some(atom), Some(appearance)) =
+        (world.get::<DmAtom>(poster), world.get::<Appearance>(poster))
+    else {
+        return false;
+    };
+    world
+        .get_resource::<IconIndex>()
+        .and_then(|i| i.get(&atom.icon, "poster_ripped"))
+        == Some(appearance.icon_state)
+}
+
+/// `poster/attack_hand` -> `tear_poster`: a ripped poster in its place.
+fn tear_poster(world: &mut World, client: Entity, mob: Entity, poster: Entity) {
+    let Some(path) = path(world, poster).map(str::to_owned) else {
+        return;
+    };
+    if poster_ruined(world, poster, &path) {
+        tell(world, client, Span::Warning, "уже порван!");
+        return;
+    }
+    let (Some(&pos), Some(offset)) = (
+        world.get::<TilePos>(poster),
+        world.get::<Appearance>(poster).map(|a| a.pixel_offset),
+    ) else {
+        return;
+    };
+    let text = format!(
+        "{} срывает {} одним решительным движением!",
+        name_of(world, mob),
+        name_of(world, poster)
+    );
+    visible(world, mob, &text, &text, Span::Notice);
+    sound(world, poster, POSTER_RIP_SOUND, 100.0);
+    remove(world, poster);
+    if let Some(torn) = crate::construction::spawn_obj(world, POSTER_RIPPED, pos)
+        && let Some(mut appearance) = world.get_mut::<Appearance>(torn)
+    {
+        appearance.pixel_offset = offset;
+    }
+}
+
+/// `poster/roll_and_drop`: the rolled poster into the user's hands (or at their feet), the
+/// structure gone.
+fn roll_up(world: &mut World, mob: Entity, poster: Entity, path: &str) {
+    let (Some(&at), Some(icon_state)) = (
+        world.get::<TilePos>(mob),
+        world.get::<Appearance>(poster).map(|a| a.icon_state),
+    ) else {
+        return;
+    };
+    let name = world.get::<DmName>(poster).cloned().unwrap_or(DmName {
+        name: name_of(world, poster),
+        desc: String::new(),
+    });
+    let rolled_state = if is_under(path, POSTER_OFFICIAL) {
+        "rolled_legit"
+    } else {
+        "rolled_poster"
+    };
+    remove(world, poster);
+    let Some(item) = crate::construction::spawn_obj(world, POSTER_ITEM, at) else {
+        return;
+    };
+    let item_name = format!("плакат - {}", crate::obj_damage::strip(&name.name));
+    if let Some(mut n) = world.get_mut::<Name>(item) {
+        *n = Name::new(item_name.clone());
+    }
+    world.entity_mut(item).insert((
+        DmName {
+            name: item_name,
+            desc: "Свёрнутый плакат. Его можно повесить на стену.".to_owned(),
+        },
+        RolledPoster {
+            structure: path.to_owned(),
+            icon_state,
+            name,
+        },
+    ));
+    crate::obj_damage::set_icon_state(world, item, rolled_state);
+    if let Some(inventory) = world.get::<crate::inventory::Inventory>(mob).cloned() {
+        crate::storage::put_in_hands(world, mob, &inventory, item);
+    }
+}
+
+fn closed_turf(world: &World, e: Entity) -> bool {
+    world
+        .get::<DmTurfBuild>(e)
+        .is_some_and(|t| is_under(&t.path, CLOSED_TURF))
+}
+
+/// The pixel offset of a poster hung on the `dir` wall of its tile.
+fn poster_offset(dir: Dir) -> [i16; 2] {
+    let (dx, dy) = dir.offset();
+    [(dx * 32) as i16, (dy * 32) as i16]
+}
+
+/// The direction from `mob` to the wall it may hang a poster on: cardinal, the face free (tg's
+/// "no room!" check of the wall's posters, here the posters drawn on that face of the user's
+/// tile). `Err` is the refusal.
+fn hanging_dir(world: &World, mob: Entity, wall: Entity) -> Result<(Dir, TilePos), &'static str> {
+    let (Some(&from), Some(&to)) = (world.get::<TilePos>(mob), world.get::<TilePos>(wall)) else {
+        return Err("встаньте на одной линии со стеной!");
+    };
+    let dir = crate::pull::dir_between(from, to)
+        .filter(|d| Dir::CARDINALS.contains(d) && from.chebyshev(to) == Some(1))
+        .ok_or("встаньте на одной линии со стеной!")?;
+    let offset = poster_offset(dir);
+    let taken = world
+        .resource::<ss13_world::SpatialIndex>()
+        .on_tile(from)
+        .iter()
+        .any(|&e| {
+            path(world, e).is_some_and(|p| is_under(p, POSTER))
+                && world
+                    .get::<Appearance>(e)
+                    .is_some_and(|a| a.pixel_offset == offset)
+        });
+    if taken {
+        return Err("нет места!");
+    }
+    Ok((dir, from))
+}
+
+/// `poster/interact_with_atom` on a wall: the checks, then the 3.7 s `do_after`.
+fn start_hanging(world: &mut World, client: Entity, mob: Entity, held: Entity, wall: Entity) {
+    if let Err(refusal) = hanging_dir(world, mob, wall) {
+        tell(world, client, Span::Warning, refusal);
+        return;
+    }
+    tell(world, client, Span::Notice, "вешаем плакат...");
+    if let Some(&pos) = world.get::<TilePos>(mob) {
+        playsound(world, PlaySound::new(pos, POSTER_HANG_SOUND, 100.0, true));
+    }
+    crate::tools::do_after(
+        world,
+        Actor {
+            client,
+            mob,
+            item: Some(held),
+        },
+        wall,
+        POSTER_PLACE_DS,
+        0,
+        Job::Decor(DecorJob::HangPoster),
+    );
+}
+
+/// The end of the hanging `do_after`: the wall still a wall, the face still free, the rolled
+/// poster still in hand; the poster's structure on the user's tile, on that wall.
+fn finish_hanging(world: &mut World, mob: Entity, action: &DoAfter) {
+    let wall = action.target;
+    let Some(item) = action.item else {
+        return;
+    };
+    let Some(rolled) = world.get::<RolledPoster>(item).cloned() else {
+        return;
+    };
+    if !closed_turf(world, wall) {
+        return;
+    }
+    let Ok((dir, pos)) = hanging_dir(world, mob, wall) else {
+        return;
+    };
+    let Some(poster) = crate::construction::spawn_obj(world, &rolled.structure, pos) else {
+        return;
+    };
+    if let Some(mut appearance) = world.get_mut::<Appearance>(poster) {
+        appearance.icon_state = rolled.icon_state;
+        appearance.pixel_offset = poster_offset(dir);
+    }
+    if let Some(mut n) = world.get_mut::<Name>(poster) {
+        *n = Name::new(crate::obj_damage::strip(&rolled.name.name).to_owned());
+    }
+    world.entity_mut(poster).insert(rolled.name);
+    world.despawn(item);
+    tell(world, action.client, Span::Notice, "Вы вешаете плакат!");
 }
 
 /// `sign/wrench_act` (`deconstruct(TRUE)`) and `plaque/wrench_act`: the item version, the

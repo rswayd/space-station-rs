@@ -59,7 +59,7 @@
 Постеры (официальные, контрабандные, «разыскивается», «пропал без вести») вешаются на стены из свёрнутого постера, срываются руками (остаётся рваный); случайный постер выбирается при загрузке.
 
 - **Код:** [`/obj/item/poster`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/posters/poster.dm#L14), [`/obj/structure/sign/poster`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/posters/poster.dm#L139), [`/obj/structure/sign/poster/random`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/posters/poster.dm#L309), [`/obj/item/poster/wanted`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/wanted_poster.dm#L10)
-- **Статус в ss13-rs:** 🟡 частично — постеры карты рисуются (`crates/ss13_mapload`); повесить и сорвать нельзя
+- **Статус в ss13-rs:** 🟡 частично — постеры карты рисуются (`crates/ss13_mapload`); `crates/ss13_game/src/decor.rs`: пустая рука срывает постер (на его месте рваный, с тем же смещением), кусачки снимают целый в свёрнутый постер (`RolledPoster`: тип, вид, имя) в руку или убирают рваный; свёрнутый постер на стену по прямой от игрока (3,7 с) вешается на эту грань тайла игрока, один постер на грань. Нет: ловушек из осколка стекла, «разыскивается»/«пропал без вести», случайных свёрнутых постеров из лута, запрета диагональных стен, анимации вешания
 
 ## Ловушки и порталы
 

@@ -118,6 +118,7 @@
 //! | 3000 | `holosign::attack_hand` |
 //! | 3100 | `plumbing::interact` |
 //! | 3150 | `decor::interact` |
+//! | 3160 | `flora::attack_hand` |
 //! | 3200 | `service::server::interact` |
 //! | 3250 | `fishing::aquarium::interact` (aquariums, the fish-porter) |
 //! | 3300 | `defenses::server::interact` |
@@ -171,6 +172,7 @@
 //! | 2800 | `power::chargers::item_interaction` |
 //! | 2900 | `mecha::item_interaction` |
 //! | 2950 | `vehicles::item_interaction` |
+//! | 2960 | `flora::item_interaction` |
 //! | 3000 | `mining::item_interaction` |
 //! | 3100 | `science::item_interaction` |
 //! | 3200 | `botany::item_interaction` |
