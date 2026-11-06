@@ -645,6 +645,10 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/structure/mirror",
     "/obj/structure/mirror/broken",
     "/obj/structure/mirror/magic/lesser/heretic",
+    // The sheetifier, its board and its output (`ss13_game::eng_machines::sheetifier`).
+    "/obj/machinery/sheetifier",
+    "/obj/item/circuitboard/machine/sheetifier",
+    "/obj/item/stack/sheet/meat",
 ];
 
 /// `ss13_game::species`: every species' organs (`mutant*`), meat (`meat`) and the plasmaman

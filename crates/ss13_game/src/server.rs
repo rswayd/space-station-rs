@@ -339,6 +339,7 @@ impl Plugin for GameServerPlugin {
             crate::teapot::TeapotPlugin,
             crate::papershredder::PaperShredderPlugin,
             crate::fireplace::FireplacePlugin,
+            crate::eng_machines::EngMachinesPlugin,
         ))
         .add_plugins((
             crate::projectile::ProjectileServerPlugin,

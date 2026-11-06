@@ -240,6 +240,7 @@
 //! | 1591 | `service::slots` (coins, holochips, multitool and emag on a slot machine) |
 //! | 1595 | `science::bitrunning::avatar::crowbar_act` (prying a netpod open) |
 //! | 1597 | `science::quantum_pad::item_interaction` (multitool links, keycards) |
+//! | 1599 | `eng_machines::sheetifier::item_interaction` (meat in, wrench) |
 //! | 1600 | `machine_frame::item_interaction` |
 //! | 1650 | `radiation::geiger_interact` |
 //! | 1680 | `service::barber::item_interaction` (razor, lipstick, paper on lips, dye spray, mirror frames) |

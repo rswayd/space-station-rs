@@ -78,6 +78,6 @@
 Перерабатывает органику (мясо, кости и т. п.) в листы материалов.
 
 - **Код:** [`/obj/machinery/sheetifier`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/sheetifier.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/eng_machines/sheetifier.rs` (`Sheetifier`), мясо предмета — `DmFood::meat_sheets` (`/datum/material/meat` из `custom_materials`, `crates/ss13_mapload/src/food.rs`): правый клик мясом (`/obj/item/food/meat`, вне боевого режима, с питанием и закрытой панелью; стаки — любым кликом) кладёт его в контейнер на 100 листов (не мясо — «rejected», мясо без материала — «no materials», переполнение — «not enough space»), каждая вставка — 6,4 с обработки (спрайт `base_machine_processing`, вставка заблокирована), затем все целые листы мяса выпадают на тайл (остаток дробью остаётся) и тратится `active_power_usage`; ключ (2 с) крепит, отвёртка/лом разбирают, сборка из платы (семейство `Sheetifier`). Проверено: `crates/ss13_game/tests/it/eng_machines.rs`. Нет: хонтиума (фото с призраками не портированы), мясного материала по мобу (листы — обычное `sheet/meat`), цветной вспышки `processing`
 
 _«Раздатчики труб» описано в [../atmos/pipes.md](../atmos/pipes.md)._

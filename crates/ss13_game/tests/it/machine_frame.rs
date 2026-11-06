@@ -705,6 +705,7 @@ fn metastation_families() {
                 e.contains::<ss13_game::cargo::materials_market::MaterialsMarket>()
             }
             Family::Teapot => e.contains::<ss13_game::teapot::Teapot>(),
+            Family::Sheetifier => e.contains::<ss13_game::eng_machines::sheetifier::Sheetifier>(),
         };
         assert!(live, "{fam:?}: {} has its live state", def.build_path);
         println!("{fam:?}: {path} -> {board} -> {}", def.build_path);

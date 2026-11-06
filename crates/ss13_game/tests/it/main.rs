@@ -36,6 +36,7 @@ mod drag;
 mod effects;
 mod emag;
 mod emp;
+mod eng_machines;
 mod eng_tools;
 mod engine;
 mod events2;
