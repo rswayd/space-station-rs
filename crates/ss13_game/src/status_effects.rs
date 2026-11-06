@@ -1,15 +1,16 @@
 //! Status effects and stamina (server), after tg `code/datums/status_effects/debuffs/debuffs.dm`
 //! (`/datum/status_effect/incapacitating/*`), `stamcrit.dm`, `confusion.dm`, `staggered.dm`,
 //! `jitteriness.dm`, `dizziness.dm`, `drowsiness.dm`, `speech_debuffs.dm`, `silenced.dm`,
-//! `pacifism.dm`, `drunk.dm` (the drunk stage's side effects),
-//! `code/modules/mob/living/status_procs.dm` and `damage_procs.dm` (stamina).
+//! `pacifism.dm`, `drunk.dm` (the drunk stage's side effects), `drugginess.dm` (its timer),
+//! `buffs/stun_absorption.dm`, `code/modules/mob/living/status_procs.dm` and `damage_procs.dm`
+//! (stamina).
 //!
 //! - [`StatusEffects`] holds the remaining seconds of tg's `Stun`, `Knockdown`, `Paralyze`,
 //!   `Immobilize`, `incapacitate`, `Unconscious` and `Sleeping` ([`Incap`]), of the timed
 //!   effects ([`Timed`]: confusion, jitter, dizziness, drowsiness, stutter, slurring, silence,
-//!   pacifism; dazed, staggered, no side kick), the mob's `staminaloss` and whether it is in
-//!   stamina crit. `Stun(amount)` never shortens what is left (`max(amount, duration)`), `Set*`
-//!   replaces it, `Adjust*` adds to it.
+//!   pacifism, drugginess; dazed, staggered, no side kick), the mob's `staminaloss` and whether
+//!   it is in stamina crit. `Stun(amount)` never shortens what is left (`max(amount,
+//!   duration)`), `Set*` replaces it, `Adjust*` adds to it.
 //! - Stamina: damage is clamped to `max_stamina` (120); any positive change restarts tg's
 //!   `timed_stamina_reset`: `stamina_regen_time` (10 s) after the last stamina damage it is set
 //!   back to 0 at once (there is no gradual regeneration in current tg). At `maxHealth -
@@ -31,11 +32,15 @@
 //!   (knockdown, paralyze, knocked out, stamcrit), `TRAIT_HANDS_BLOCKED` (stun, paralyze,
 //!   knocked out, restraints), `TRAIT_RESTRAINED` (handcuffs, `crate::restraints`). Moves,
 //!   clicks, hands, lying and resisting read it.
+//! - `check_stun_immunity`: [`StunImmunity`] (`TRAIT_STUNIMMUNE` by source) and
+//!   [`StunAbsorption`] (`/datum/status_effect/stun_absorption`: by priority, with messages, a
+//!   cap and recharge) keep new stuns, knockdowns, paralysis, immobilization, incapacitation and
+//!   unconsciousness from holding.
 //!
 //! The component exists only while something is active, so the per-tick countdown touches only
 //! affected mobs.
-// shortcut: no stun immunity (`check_stun_immunity`, `TRAIT_STUNIMMUNE`, godmode; the CNS
-// rebooter implant clears stuns itself), physiology multipliers only from bioware
+// shortcut: no godmode or `status_flags` in the stun immunity (the CNS rebooter implant clears
+// stuns itself), physiology multipliers only from bioware
 // (`crate::medical::bioware`, in [`apply`], [`knockdown`], [`adjust_stamina`]), no force_say,
 // no status alerts. Knocked out by a status effect, a mob keeps its `Stat` (tg `UNCONSCIOUS`):
 // code that checks `IS_UNCONSCIOUS` through `Health::knocked_out` sees only crit; use
@@ -127,6 +132,8 @@ pub enum Timed {
     Silence,
     /// `/datum/status_effect/pacify` (`TRAIT_PACIFISM`).
     Pacify,
+    /// `/datum/status_effect/drugginess` (the "high" alert and moodlet, `crate::buffs`).
+    Drugginess,
 }
 
 /// What stamina damage did (for the messages tg prints).
@@ -166,6 +173,7 @@ pub struct StatusEffects {
     pub slurring: [f32; 4],
     pub silence: f32,
     pub pacify: f32,
+    pub drugginess: f32,
     /// `staminaloss`.
     pub stamina: f32,
     /// `/datum/status_effect/incapacitating/stamcrit`.
@@ -217,6 +225,7 @@ impl StatusEffects {
             Timed::Slurring(kind) => &mut self.slurring[kind.index()],
             Timed::Silence => &mut self.silence,
             Timed::Pacify => &mut self.pacify,
+            Timed::Drugginess => &mut self.drugginess,
         }
     }
 
@@ -231,6 +240,7 @@ impl StatusEffects {
             Timed::Slurring(kind) => self.slurring[kind.index()],
             Timed::Silence => self.silence,
             Timed::Pacify => self.pacify,
+            Timed::Drugginess => self.drugginess,
         }
     }
 
@@ -464,6 +474,8 @@ impl StatusEffects {
             self.jitter = 0.0;
             self.dizziness = 0.0;
             self.silence = 0.0;
+            // `drugginess/remove_drugginess` on `COMSIG_LIVING_DEATH`.
+            self.drugginess = 0.0;
         }
         // `/datum/status_effect/knocked_out/tick` (it stops ticking for the dead).
         if self.knocked_out() && !dead && self.stamina > 0.0 {
@@ -488,6 +500,7 @@ impl StatusEffects {
             &mut self.stutter,
             &mut self.silence,
             &mut self.pacify,
+            &mut self.drugginess,
         ] {
             *value = (*value - secs).max(0.0);
         }
@@ -534,6 +547,7 @@ impl StatusEffects {
             && self.slurring.iter().all(|s| *s <= 0.0)
             && self.silence <= 0.0
             && self.pacify <= 0.0
+            && self.drugginess <= 0.0
             // Kept until the pacifism's end reached `traumas::refresh`.
             && !self.pacified_seen
             && self.stamina <= 0.0
@@ -680,6 +694,258 @@ fn is_dead(world: &World, mob: Entity) -> bool {
     world.get::<Stat>(mob) == Some(&Stat::Dead)
 }
 
+/// tg `TRAIT_STUNIMMUNE` by source (`ADD_TRAIT(mob, TRAIT_STUNIMMUNE, source)`): no new stun,
+/// knockdown, paralysis, immobilization, incapacitation or unconsciousness holds.
+#[derive(Component, Clone, Debug, Default, PartialEq, Eq)]
+pub struct StunImmunity(pub Vec<&'static str>);
+
+/// tg `ADD_TRAIT(mob, TRAIT_STUNIMMUNE, source)`.
+pub fn add_stun_immunity(world: &mut World, mob: Entity, source: &'static str) {
+    if world.get::<StunImmunity>(mob).is_none() {
+        if let Ok(mut entity) = world.get_entity_mut(mob) {
+            entity.insert(StunImmunity(vec![source]));
+        }
+        return;
+    }
+    if let Some(mut immunity) = world.get_mut::<StunImmunity>(mob)
+        && !immunity.0.contains(&source)
+    {
+        immunity.0.push(source);
+    }
+}
+
+/// tg `REMOVE_TRAIT(mob, TRAIT_STUNIMMUNE, source)`.
+pub fn remove_stun_immunity(world: &mut World, mob: Entity, source: &'static str) {
+    let Some(mut immunity) = world.get_mut::<StunImmunity>(mob) else {
+        return;
+    };
+    immunity.0.retain(|s| *s != source);
+    if immunity.0.is_empty() {
+        world.entity_mut(mob).remove::<StunImmunity>();
+    }
+}
+
+/// One `/datum/status_effect/stun_absorption` (`add_stun_absorption`'s arguments).
+#[derive(Clone, Debug, PartialEq)]
+pub struct StunAbsorber {
+    pub source: &'static str,
+    pub priority: i32,
+    /// `visible_message` to the others around on a trigger, `%EFFECT_OWNER` the owner's name.
+    pub message: Option<String>,
+    /// `to_chat` of the owner on a trigger.
+    pub self_message: Option<String>,
+    /// The examine line while it can absorb, `%EFFECT_OWNER_THEYRE` the owner's pronoun.
+    pub examine_message: Option<String>,
+    /// `max_seconds_of_stuns_blocked` (`f32::INFINITY`: no limit).
+    pub max_secs: f32,
+    /// `delete_after_passing_max`; else it recharges each absorbed stun after `recharge_secs`.
+    pub delete_after_max: bool,
+    pub recharge_secs: f32,
+    /// Game time it ends at (`duration`; `None`: until removed).
+    pub until: Option<f64>,
+    /// `seconds_of_stuns_absorbed`.
+    pub absorbed: f32,
+    /// The pending `recharge_absorption` timers: (game time, seconds given back).
+    recharges: Vec<(f64, f32)>,
+}
+
+impl StunAbsorber {
+    /// `add_stun_absorption(source, priority = -1)` with tg's other defaults.
+    pub fn new(source: &'static str) -> Self {
+        Self {
+            source,
+            priority: -1,
+            message: None,
+            self_message: None,
+            examine_message: None,
+            max_secs: f32::INFINITY,
+            delete_after_max: true,
+            recharge_secs: 60.0,
+            until: None,
+            absorbed: 0.0,
+            recharges: Vec::new(),
+        }
+    }
+
+    pub fn priority(mut self, priority: i32) -> Self {
+        self.priority = priority;
+        self
+    }
+
+    pub fn messages(mut self, message: &str, self_message: &str) -> Self {
+        self.message = (!message.is_empty()).then(|| message.to_owned());
+        self.self_message = (!self_message.is_empty()).then(|| self_message.to_owned());
+        self
+    }
+
+    /// The amount `absorb_stun` still takes (`seconds_of_stuns_absorbed > max`: none).
+    fn charged(&self) -> bool {
+        self.absorbed <= self.max_secs
+    }
+}
+
+/// The mob's stun absorptions, in the order they were added.
+#[derive(Component, Clone, Debug, Default, PartialEq)]
+pub struct StunAbsorption(pub Vec<StunAbsorber>);
+
+/// tg `add_stun_absorption`: a source already absorbing at the same or a higher priority is
+/// kept; a lower one is replaced. `duration_secs` is from now.
+pub fn add_stun_absorption(
+    world: &mut World,
+    mob: Entity,
+    mut absorber: StunAbsorber,
+    duration_secs: Option<f32>,
+) {
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    absorber.until = duration_secs.map(|d| now + f64::from(d));
+    if world.get::<StunAbsorption>(mob).is_none() {
+        let Ok(mut entity) = world.get_entity_mut(mob) else {
+            return;
+        };
+        entity.insert(StunAbsorption::default());
+    }
+    let mut all = world
+        .get_mut::<StunAbsorption>(mob)
+        .expect("inserted above");
+    if let Some(i) = all.0.iter().position(|a| a.source == absorber.source) {
+        if all.0[i].priority >= absorber.priority {
+            return;
+        }
+        all.0.remove(i);
+    }
+    all.0.push(absorber);
+}
+
+/// tg `remove_stun_absorption(source)`.
+pub fn remove_stun_absorption(world: &mut World, mob: Entity, source: &'static str) {
+    let Some(mut all) = world.get_mut::<StunAbsorption>(mob) else {
+        return;
+    };
+    all.0.retain(|a| a.source != source);
+    if all.0.is_empty() {
+        world.entity_mut(mob).remove::<StunAbsorption>();
+    }
+}
+
+/// `stun_absorption/can_absorb_stun`'s state part: not unconscious or in crit.
+fn can_absorb(world: &World, mob: Entity) -> bool {
+    world.get::<Stat>(mob) == Some(&Stat::Conscious) && !knocked_out(world, mob)
+}
+
+/// `stun_absorption/absorb_stun(amount)` of the absorber that takes it: the first of the highest
+/// priority (tg lets a higher priority one decide, absorbing or not). Messages and the count
+/// only for an amount above 0 (a generic check absorbs "0 seconds" silently).
+// shortcut: two absorbers of the same top priority both absorb in tg (two messages, both
+// counted); here only the first does.
+fn absorb_stun(world: &mut World, mob: Entity, secs: f32) -> bool {
+    if !can_absorb(world, mob) {
+        return false;
+    }
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    let (message, self_message) = {
+        let Some(mut all) = world.get_mut::<StunAbsorption>(mob) else {
+            return false;
+        };
+        let Some(top) = all.0.iter().map(|a| a.priority).max() else {
+            return false;
+        };
+        let Some(index) = all.0.iter().position(|a| a.priority == top) else {
+            return false;
+        };
+        if !all.0[index].charged() {
+            return false;
+        }
+        if secs <= 0.0 {
+            return true;
+        }
+        let absorber = &mut all.0[index];
+        absorber.absorbed += secs;
+        let texts = (absorber.message.clone(), absorber.self_message.clone());
+        let spent = absorber.absorbed >= absorber.max_secs;
+        if !absorber.delete_after_max && absorber.recharge_secs > 0.0 {
+            let at = now + f64::from(absorber.recharge_secs);
+            absorber.recharges.push((at, secs));
+        }
+        if absorber.delete_after_max && spent {
+            all.0.remove(index);
+        }
+        texts
+    };
+    if let Some(message) = message {
+        let text = message.replace("%EFFECT_OWNER", &crate::chem::name_of(world, mob));
+        if let Some(pos) = crate::chem::map_pos(world, mob) {
+            let clients = crate::chem::clients_near(world, pos, Some(mob));
+            if !clients.is_empty() {
+                world.write_message(SendChat {
+                    clients,
+                    message: ChatMessage {
+                        channel: ChatChannel::Info,
+                        segments: vec![ChatSegment::new(Span::Warning, text)],
+                    },
+                });
+            }
+        }
+    }
+    if let Some(text) = self_message {
+        tell_mob(world, mob, Span::BoldWarning, &text);
+    }
+    true
+}
+
+/// tg `check_stun_immunity` (`COMSIG_LIVING_GENERIC_STUN_CHECK`, `TRAIT_STUNIMMUNE`) and the
+/// `COMSIG_LIVING_STATUS_*` signal a stun absorption blocks, for `kind` of `secs` (after the
+/// physiology). Sleep only checks godmode in tg, which is not here.
+// shortcut: no godmode (the dev toggle lives in `ss13_debug`) and no `status_flags`
+// (`CANSTUN`, `CANKNOCKDOWN`, `CANUNCONSCIOUS`): every living mob can be stunned. Deviation: tg
+// also refuses `Set*(0)`/`Adjust*(-x)` to an immune mob (the check runs before the amount);
+// here removing an effect always works.
+fn stun_blocked(world: &mut World, mob: Entity, kind: Incap, secs: f32) -> bool {
+    if secs <= 0.0 || kind == Incap::Sleeping {
+        return false;
+    }
+    let absorbing = world.get::<StunAbsorption>(mob).is_some();
+    // The status signal: every incapacitating effect but unconsciousness.
+    if absorbing && kind != Incap::Unconscious && absorb_stun(world, mob, secs) {
+        return true;
+    }
+    // `COMSIG_LIVING_GENERIC_STUN_CHECK`: absorbed as 0 seconds.
+    if absorbing && absorb_stun(world, mob, 0.0) {
+        return true;
+    }
+    world.get::<StunImmunity>(mob).is_some()
+}
+
+/// The absorptions' `duration` and `recharge_absorption` timers. Cost: per tick, one pass over
+/// the few mobs with an absorption.
+fn stun_absorption_upkeep(
+    time: Res<Time>,
+    mut mobs: Query<(Entity, &mut StunAbsorption)>,
+    mut commands: Commands,
+) {
+    let now = time.elapsed_secs_f64();
+    for (mob, mut all) in &mut mobs {
+        let expired = all.0.iter().any(|a| a.until.is_some_and(|t| now >= t))
+            || all.0.iter().any(|a| a.recharges.iter().any(|r| now >= r.0));
+        if !expired && !all.0.is_empty() {
+            continue;
+        }
+        all.0.retain(|a| a.until.is_none_or(|t| now < t));
+        for absorber in &mut all.0 {
+            let given: f32 = absorber
+                .recharges
+                .iter()
+                .filter(|r| now >= r.0)
+                .map(|r| r.1)
+                .sum();
+            absorber.recharges.retain(|r| now < r.0);
+            absorber.absorbed = (absorber.absorbed - given).max(0.0);
+        }
+        if all.0.is_empty() {
+            commands.entity(mob).remove::<StunAbsorption>();
+        }
+    }
+}
+
 /// tg `Stun`/`Paralyze`/`Immobilize`/`Knockdown`/`incapacitate`/`Unconscious`/`Sleeping(amount)`
 /// on a living mob.
 pub fn apply(world: &mut World, mob: Entity, kind: Incap, secs: f32) -> bool {
@@ -689,12 +955,20 @@ pub fn apply(world: &mut World, mob: Entity, kind: Incap, secs: f32) -> bool {
     } else {
         secs * crate::medical::bioware::stun_mod(world, mob)
     };
+    if stun_blocked(world, mob, kind, secs) {
+        return world
+            .get::<StatusEffects>(mob)
+            .is_some_and(|e| e.remaining(kind) > 0.0);
+    }
     effects_mut(world, mob).is_some_and(|mut e| e.apply(kind, secs))
 }
 
 /// tg `Set*(amount)` on a living mob (0 removes the effect).
 pub fn set(world: &mut World, mob: Entity, kind: Incap, secs: f32) {
     if secs <= 0.0 && world.get::<StatusEffects>(mob).is_none() {
+        return;
+    }
+    if stun_blocked(world, mob, kind, secs) {
         return;
     }
     if let Some(mut e) = effects_mut(world, mob) {
@@ -705,6 +979,9 @@ pub fn set(world: &mut World, mob: Entity, kind: Incap, secs: f32) {
 /// tg `Adjust*(amount)` on a living mob.
 pub fn adjust(world: &mut World, mob: Entity, kind: Incap, secs: f32) {
     if secs <= 0.0 && world.get::<StatusEffects>(mob).is_none() {
+        return;
+    }
+    if stun_blocked(world, mob, kind, secs) {
         return;
     }
     if let Some(mut e) = effects_mut(world, mob) {
@@ -781,6 +1058,10 @@ pub fn shake_up(world: &mut World, mob: Entity) {
 /// tg `Knockdown(amount, daze_amount)`.
 pub fn knockdown(world: &mut World, mob: Entity, secs: f32, daze: f32) {
     let secs = secs * crate::medical::bioware::stun_mod(world, mob);
+    // tg returns before the daze too.
+    if stun_blocked(world, mob, Incap::Knockdown, secs) {
+        return;
+    }
     let dead = is_dead(world, mob);
     if let Some(mut e) = effects_mut(world, mob) {
         e.knockdown(secs, daze, dead);
@@ -836,7 +1117,12 @@ impl Plugin for StatusEffectsPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            (tick_effects, pulse_effects, refresh_incapacitation)
+            (
+                stun_absorption_upkeep,
+                tick_effects,
+                pulse_effects,
+                refresh_incapacitation,
+            )
                 .chain()
                 .in_set(StatusSystems)
                 .before(HealthSystems),
@@ -1135,6 +1421,16 @@ pub fn examine_lines(world: &World, mob: Entity, lines: &mut Vec<(Span, String)>
         .map_or(0.0, |r| r.drunk);
     if let Some(text) = drunk_examine(drunk) {
         lines.push((Span::Warning, format!("Он {text}")));
+    }
+    // `stun_absorption/get_examine_text`: while it can absorb.
+    if let Some(all) = world.get::<StunAbsorption>(mob)
+        && can_absorb(world, mob)
+    {
+        for absorber in all.0.iter().filter(|a| a.charged()) {
+            if let Some(text) = &absorber.examine_message {
+                lines.push((Span::Warning, text.replace("%EFFECT_OWNER_THEYRE", "Он")));
+            }
+        }
     }
 }
 
@@ -1534,6 +1830,64 @@ mod tests {
             drunk_examine(95.0),
             Some("— пьяная в стельку слюнявая развалина.")
         );
+    }
+
+    #[test]
+    fn stun_immunity_and_absorption_keep_new_stuns_from_holding() {
+        let mut world = World::new();
+        world.init_resource::<Time>();
+        let mob = world.spawn(Stat::Conscious).id();
+        add_stun_immunity(&mut world, mob, "bath_salts");
+        add_stun_immunity(&mut world, mob, "bath_salts");
+        assert!(!apply(&mut world, mob, Incap::Stun, 5.0));
+        knockdown(&mut world, mob, 5.0, 2.0);
+        adjust(&mut world, mob, Incap::Paralyze, 5.0);
+        set(&mut world, mob, Incap::Unconscious, 5.0);
+        assert!(world.get::<StatusEffects>(mob).is_none_or(|e| e.idle()));
+        // Sleep is not a stun.
+        assert!(apply(&mut world, mob, Incap::Sleeping, 5.0));
+        remove_stun_immunity(&mut world, mob, "bath_salts");
+        assert!(world.get::<StunImmunity>(mob).is_none());
+        assert!(apply(&mut world, mob, Incap::Stun, 5.0));
+
+        // An absorption of 4 s: the stun that passes the cap is still absorbed, then it is gone.
+        let other = world.spawn(Stat::Conscious).id();
+        let capped = StunAbsorber {
+            max_secs: 4.0,
+            ..StunAbsorber::new("grace")
+        };
+        add_stun_absorption(&mut world, other, capped, None);
+        assert!(!apply(&mut world, other, Incap::Knockdown, 3.0));
+        assert_eq!(
+            world.get::<StunAbsorption>(other).unwrap().0[0].absorbed,
+            3.0
+        );
+        // Unconsciousness is blocked by the generic check, uncounted.
+        set(&mut world, other, Incap::Unconscious, 10.0);
+        assert_eq!(
+            world.get::<StunAbsorption>(other).unwrap().0[0].absorbed,
+            3.0
+        );
+        assert!(!apply(&mut world, other, Incap::Stun, 3.0));
+        assert!(world.get::<StunAbsorption>(other).unwrap().0.is_empty());
+        assert!(apply(&mut world, other, Incap::Stun, 3.0));
+        // Removing stuns is never blocked.
+        add_stun_absorption(&mut world, other, StunAbsorber::new("grace"), None);
+        set(&mut world, other, Incap::Stun, 0.0);
+        assert_eq!(world.get::<StatusEffects>(other).unwrap().stun, 0.0);
+
+        // A higher priority decides; a lower one of the same source does not replace it.
+        let third = world.spawn(Stat::Conscious).id();
+        add_stun_absorption(&mut world, third, StunAbsorber::new("a").priority(3), None);
+        add_stun_absorption(&mut world, third, StunAbsorber::new("a").priority(1), None);
+        add_stun_absorption(&mut world, third, StunAbsorber::new("b").priority(2), None);
+        assert!(!apply(&mut world, third, Incap::Stun, 2.0));
+        let all = &world.get::<StunAbsorption>(third).unwrap().0;
+        assert_eq!((all[0].priority, all[0].absorbed), (3, 2.0));
+        assert_eq!(all[1].absorbed, 0.0);
+        // The unconscious absorb nothing.
+        world.entity_mut(third).insert(Stat::HardCrit);
+        assert!(apply(&mut world, third, Incap::Stun, 2.0));
     }
 
     #[test]

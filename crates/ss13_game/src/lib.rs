@@ -188,6 +188,8 @@ pub mod breath;
 #[cfg(feature = "client")]
 pub mod breath_client;
 pub mod brig;
+#[cfg(feature = "server")]
+pub mod buffs;
 pub mod cargo;
 #[cfg(feature = "server")]
 pub mod chem;

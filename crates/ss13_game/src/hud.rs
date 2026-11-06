@@ -177,8 +177,23 @@ pub struct InteractHudData {
 }
 
 /// The owner's screen alerts (tg `throw_alert`, `icons/hud/screen_alert.dmi`), a headless tgui
-/// interface like [`HealthHudUi`], in the order tg's `alerts` list keeps them.
+/// interface like [`HealthHudUi`], in the order tg's `alerts` list keeps them. Its one act,
+/// [`ALERT_CLICK`], is a click on the alert at `index` (0-based) named `name` (tg
+/// `/atom/movable/screen/alert/Click`): the server ignores it when that alert is not there.
 pub struct AlertHudUi;
+
+/// [`AlertHudUi`]'s act.
+pub const ALERT_CLICK: &str = "click";
+
+/// The part of an alert's name an [`ALERT_CLICK`] carries: at most 128 bytes, cut at a
+/// character (a tgui param is capped at 256).
+pub fn alert_click_name(name: &str) -> &str {
+    let mut end = name.len().min(128);
+    while !name.is_char_boundary(end) {
+        end -= 1;
+    }
+    &name[..end]
+}
 
 impl UiInterface for AlertHudUi {
     const NAME: &'static str = "AlertHud";

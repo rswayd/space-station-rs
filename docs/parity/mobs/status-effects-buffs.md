@@ -17,7 +17,7 @@
 Блюда с высоким качеством дают эффекты: ускорение (`haste`), охлаждение (`chilling`), черты (иммунитет к шоку, немота, иммунитет к пепельной буре, «вразвалку»), акцент речи (итальянский, французский).
 
 - **Код:** [`/datum/status_effect/food`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/buffs/food/_food_effect.dm#L2), [`/datum/status_effect/food/haste`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/buffs/food/haste.dm#L2), [`/datum/status_effect/food/trait`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/buffs/food/grant_trait.dm#L2), [`/datum/status_effect/food/speech`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/buffs/food/speech.dm#L2)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/buffs.rs` (`apply_food_buff`, `FoodBuff`): первый укус блюда `Handmade` со сложностью 1–5 даёт `haste` силы = сложности (−0,04 дс/тайл к ходьбе — `health.rs`, −0,06 к множителю `do_after` — `tools.rs`) на 5 мин × 2 × среднюю чистоту, алерт `food_buff_N`, новый заменяет старый; нет переопределений `crafted_food_buff` отдельных блюд (охлаждение мороженого, черты, акценты: переменная не импортируется в `DmFood`)
 
 ### Биоварь (хирургические улучшения)
 Постоянные эффекты от операций: укреплённые вены, связки, нервы, кора мозга. Сами операции — см. ../medical/.
@@ -42,13 +42,13 @@
 Предложение предмета (`offering`): получатель видит алерт и берёт предмет; варианты без предмета — «дай пять», помочь подняться.
 
 - **Код:** [`/datum/status_effect/offering`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/neutral.dm#L207), [`/datum/status_effect/offering/no_item_received/high_five`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/neutral.dm#L363)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/buffs.rs` (`give`, `take`, `Offering`), `click.rs` (`GiveClick`), кликабельные алерты (`hud.rs` `ALERT_CLICK`, `breath.rs` `clicked_alert`, `breath_client.rs`): Ctrl+Shift по соседнему мобу предлагает предмет активной руки (проверки tg: уже передаёт, недееспособность, рядом, может держать), получатель видит алерт и кликом берёт предмет в свободную руку (`take`: дистанция, предмет всё ещё в активной руке, свободная рука, `NODROP`), предложение кончается, когда предмет ушёл из рук или получатель отошёл/недееспособен; Ctrl+Shift по себе — в другую руку; нет клавиши G (нужен новый интент клиента) и предложения всем вокруг, «дай пять» и «помочь подняться» (нет `hand_item`), осмотра предмета Shift-кликом по алерту и картинки предмета на алерте
 
 ### «Руки вверх» и сдача
 Взятие на мушку (`holdup`/`heldup`) и сдача (`surrender`): моб поднимает руки и ложится.
 
 - **Код:** [`/datum/status_effect/holdup`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/neutral.dm#L185), [`/datum/status_effect/grouped/surrender`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/neutral.dm#L371), [`/datum/status_effect/surrender_timed`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/neutral.dm#L393)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/buffs.rs` (`surrendered`, `surrender_timed`, `SurrenderPrompt`): эмоут `*surrender` (`ss13_chat::emote`, сообщение `ss13_chat::server::Emoted`) и клик по алерту сдачи — паралич 20 с и снятие алерта; ручка СБ (`/obj/item/pen/red/security`, клик дальше досягаемости) даёт мобу на тайле алерт на 30 с, перезарядка 30 с. Чужое: взятие на мушку (`holdup`/`heldup`) — часть `gunpoint` (оружие, `guns.rs`), голографический знак ручки (эффекты)
 
 ### Прочие нейтральные эффекты
 Влюблённость, успокоенное горло/голова, награда за голову, калтропы, эйгенстазиум, свечение (тинлюкс, черенков), выпотрошенность, регенерация от мытья и горячего источника, прожектор, муд-зоны, ESP админа, «heads up».

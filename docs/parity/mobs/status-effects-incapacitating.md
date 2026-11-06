@@ -47,7 +47,7 @@
 `check_stun_immunity` (`TRAIT_STUNIMMUNE`, `CANSTUN`, godmode) и эффект `stun_absorption` (поглощает станы с сообщением, у генокрадов, адреналина и т.п.).
 
 - **Код:** [`proc/check_stun_immunity()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/status_procs.dm#L10), [`/datum/status_effect/stun_absorption`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/buffs/stun_absorption.dm#L10)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/status_effects.rs` (`StunImmunity`, `add_stun_immunity`, `StunAbsorption`, `StunAbsorber`, `add_stun_absorption`, `stun_blocked`): `TRAIT_STUNIMMUNE` по источникам и поглощение по приоритету (сообщения окружающим и себе с `%EFFECT_OWNER`, лимит секунд с удалением или перезарядкой, длительность, строка осмотра, не в крите и без сознания) блокируют новые стан, нокдаун (и дейз), паралич, обездвиживание, `incapacitate`, бессознательность; сон — нет; источник — соли для ванн в крови (`crate::buffs`); снятие эффектов не блокируется (в tg иммунный не может и снять стан — баг не переносится). Чужое: godmode (отладочный, `ss13_debug`), `status_flags` `CANSTUN`/`CANKNOCKDOWN` (мобы-боссы), источники-антаги (Милость Его, кровавое опьянение, клинки еретика, клеймор горца, халк)
 
 ### Бессознательное состояние (Unconscious)
 Моб без сознания: `IS_UNCONSCIOUS`, экран темнеет, не слышит речь; эффект `knocked_out` для потери сознания от урона.

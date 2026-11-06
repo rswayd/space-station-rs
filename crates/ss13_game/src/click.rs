@@ -75,6 +75,15 @@ pub struct CtrlClick {
     pub target_pos: TilePos,
 }
 
+/// A ctrl+shift click of a conscious mob on an entity it sees: tg `click_ctrl_shift`, which
+/// offers the held item to a living target (`crate::buffs`).
+#[derive(Message, Clone, Copy, Debug)]
+pub struct GiveClick {
+    pub client: Entity,
+    pub mob: Entity,
+    pub target: Entity,
+}
+
 /// A click of a conscious mob in throw mode on an entity it sees, at any distance.
 #[derive(Message, Clone, Copy, Debug)]
 pub struct ThrowClick {
@@ -164,6 +173,7 @@ impl Plugin for ClickServerPlugin {
         app.add_message::<ClickResolved>()
             .add_message::<ExamineClick>()
             .add_message::<CtrlClick>()
+            .add_message::<GiveClick>()
             .add_message::<ThrowClick>()
             .add_message::<MiddleClick>()
             .add_message::<PointClick>()
@@ -433,7 +443,13 @@ fn resolve_clicks(
             continue;
         }
         if modifiers.shift {
-            // shortcut: ctrl+shift (tg's give) does nothing yet.
+            // Ctrl+shift: tg `CtrlShiftClickOn` -> `/mob/living/click_ctrl_shift` -> `give`
+            // (`crate::buffs`).
+            out.give.write(GiveClick {
+                client,
+                mob,
+                target,
+            });
             continue;
         }
         // tg `ClickCross` skips the target itself and checks objects only, not mobs.
@@ -516,4 +532,5 @@ struct ClickWriters<'w> {
     ranged: MessageWriter<'w, RangedClick>,
     ghost: MessageWriter<'w, crate::multiz::GhostClick>,
     module: MessageWriter<'w, crate::modsuit::server::ModuleClick>,
+    give: MessageWriter<'w, GiveClick>,
 }

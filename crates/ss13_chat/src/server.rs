@@ -164,6 +164,14 @@ impl Spoke {
     }
 }
 
+/// An intentional emote a body ran (`*key`), for the game's emote effects (tg `run_emote`
+/// overrides, e.g. `surrender`).
+#[derive(Message, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Emoted {
+    pub speaker: Entity,
+    pub key: &'static str,
+}
+
 /// What one group of listeners hears of a message (tg `translate_language` per hearer): the
 /// clients, the text, and the language tag before the speaker's name.
 #[derive(Clone, Debug, PartialEq)]
@@ -329,6 +337,7 @@ impl Plugin for ChatServerPlugin {
             .insert_resource(ScrambleSeed(SpeechRng::default().0))
             .add_message::<SayRejected>()
             .add_message::<Spoke>()
+            .add_message::<Emoted>()
             .add_observer(on_control_inserted)
             .add_observer(on_control_discarded)
             .add_systems(
@@ -540,7 +549,7 @@ fn handle_say(
     mut rng: ResMut<SpeechRng>,
     time: Res<Time<Real>>,
     mut chat: MessageWriter<SendChat>,
-    mut rejected: MessageWriter<SayRejected>,
+    (mut rejected, mut emoted): (MessageWriter<SayRejected>, MessageWriter<Emoted>),
     mut spoke: MessageWriter<Spoke>,
     mut commands: Commands,
 ) {
@@ -701,6 +710,7 @@ fn handle_say(
                         clients,
                         message: emote_message(&name, &text),
                     });
+                    emoted.write(Emoted { speaker, key });
                 }
                 EmoteOutcome::Refused(text) | EmoteOutcome::Help(text) => {
                     chat.write(notice(text));

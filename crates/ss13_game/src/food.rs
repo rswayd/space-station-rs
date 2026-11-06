@@ -474,6 +474,15 @@ fn take_bite(world: &mut World, eater: Entity, feeder: Entity, food: Entity) {
         world.entity_mut(food).insert(Reagents(holder));
         return;
     }
+    // `if(bitecount == 0) apply_buff(eater)`: a hand-crafted dish, unbitten (`crate::buffs`).
+    if world.get::<Food>(food).is_some_and(|f| f.bitecount == 0) {
+        let complexity = if world.get::<Handmade>(food).is_some() {
+            dm.crafting_complexity
+        } else {
+            0
+        };
+        crate::buffs::apply_food_buff(world, eater, complexity, holder.average_purity());
+    }
     let part = (dm.bite_consumption / holder.total_volume).min(1.0);
     let bite: Vec<(u16, f32)> = holder
         .reagents
