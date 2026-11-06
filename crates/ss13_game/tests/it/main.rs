@@ -104,6 +104,7 @@ mod species;
 mod stock_parts;
 mod storage;
 mod succumb;
+mod suits;
 mod surfaces;
 mod surgery;
 mod tables;

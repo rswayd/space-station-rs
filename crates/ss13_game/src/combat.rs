@@ -230,10 +230,11 @@ fn melee(
     handled: Res<crate::security::MeleeHandled>,
     medical: Res<crate::medical::MedicalHandled>,
     clothing: Query<(&ss13_mapload::DmClothing, &ss13_mapload::DmArmor)>,
-    (mut sounds, pacifists, artists): (
+    (mut sounds, pacifists, artists, mut reactive): (
         MessageWriter<PlaySound>,
         Query<(), With<crate::medical::traumas::Pacifist>>,
         Query<&crate::martial::MartialArts>,
+        Query<&mut crate::clothing::reactive::ReactiveArmor>,
     ),
     mut commands: Commands,
 ) {
@@ -381,6 +382,19 @@ fn melee(
                 commands.queue(move |world: &mut World| {
                     item_hit_sound(world, weapon_entity, pos);
                 });
+                // `attacked_by` -> `check_block`: a worn reactive armor.
+                if reactive_block(
+                    &mut reactive,
+                    worn,
+                    now,
+                    &mut rng,
+                    &mut commands,
+                    (attacker, target),
+                    name.clone(),
+                ) {
+                    target_stat.set_if_neq(new_stat);
+                    continue;
+                }
                 let armor = armor_check(
                     hit,
                     Some(format!("Ваша броня защитила вашу {zone_text}!")),
@@ -453,6 +467,20 @@ fn melee(
                 };
                 sounds.write(PlaySound::new(click.target_pos, file, 25.0, true).extrarange(-1.0));
                 match strike {
+                    // `check_block` of the punched human: a worn reactive armor.
+                    Some(_)
+                        if reactive_block(
+                            &mut reactive,
+                            worn,
+                            now,
+                            &mut rng,
+                            &mut commands,
+                            (attacker, target),
+                            format!("удар {user}"),
+                        ) =>
+                    {
+                        None
+                    }
                     Some(damage) => {
                         let before = health.part(hit).damage();
                         let armor = armor_check(hit, None, None);
@@ -590,6 +618,34 @@ fn melee(
             });
         }
     }
+}
+
+/// tg human `check_block` -> `hit_reaction` of the suit `worn` has on: rolls the reactive
+/// armor and queues its effect; true when it blocks the hit.
+fn reactive_block(
+    reactive: &mut Query<&mut crate::clothing::reactive::ReactiveArmor>,
+    worn: Option<&Inventory>,
+    now: f64,
+    rng: &mut CombatRng,
+    commands: &mut Commands,
+    (attacker, target): (Entity, Entity),
+    attack_text: String,
+) -> bool {
+    use crate::clothing::reactive;
+    let Some(suit) = worn.and_then(|i| i.suit) else {
+        return false;
+    };
+    let Ok(armor) = reactive.get_mut(suit) else {
+        return false;
+    };
+    let Some(reaction) = armor.roll(now, rng) else {
+        return false;
+    };
+    let kind = armor.kind;
+    commands.queue(move |world: &mut World| {
+        reactive::react(world, target, suit, reaction, Some(attacker), &attack_text);
+    });
+    reactive::blocks(kind, reaction)
 }
 
 /// The direction from `from` to an adjacent (or same) tile.

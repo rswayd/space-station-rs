@@ -204,8 +204,10 @@ fn refresh(world: &mut World, mut next: Local<f64>) {
         let (implant_sec, implant_med) = crate::medical::cyberimps::implant_huds(world, mob);
         // MOD security and medical visors (`crate::modsuit::modules::VisorHud`).
         let (visor_sec, visor_med) = crate::modsuit::modules::visor_huds(world, mob);
+        // The ablative hood's `TRAIT_SECURITY_HUD` (`crate::clothing::ablative`).
+        let hood_sec = crate::clothing::ablative::hood_hud(world, inventory.head);
         let (sec, med) = (
-            sec || implant_sec || visor_sec,
+            sec || implant_sec || visor_sec || hood_sec,
             med || implant_med || visor_med,
         );
         if !sec && !med && old.is_none_or(|d| d.entries.is_empty()) {

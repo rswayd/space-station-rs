@@ -15,6 +15,12 @@
 //! - Someone else takes the cuffs off through the strip menu's handcuffs entry (`crate::strip`,
 //!   `/datum/strippable_item/mob_item_slot/handcuffs`): they drop at the victim's feet
 //!   ([`uncuff`], `doStrip`).
+//! - A straight jacket worn as the suit restrains too ([`SuitRestrained`], tg `wear_suit.
+//!   breakouttime` -> `TRAIT_RESTRAINED`): hands blocked, pulling stops. Resisting is a 5 minute
+//!   `do_after`, after which it drops at the wearer's feet (`cuff_resist(wear_suit)`); taking it
+//!   off by any path drops what the wearer holds (`doUnEquip`: "suit is restraining").
+// shortcut: the straight jacket's `equip_delay_self` (5 s) and `strip_delay` (6 s) are not
+// ported: the inventory has no self-equip delays and the strip menu uses tg's defaults.
 // shortcut: no legcuffs, no clumsy self-cuffing, no `canBeHandcuffed` arm count (humans always have two arms here), no wirecutters
 // on weak cuffs, no cyborg dispensing.
 
@@ -42,6 +48,16 @@ const ZIPTIES: &str = "/obj/item/restraints/handcuffs/cable/zipties";
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Handcuffed(pub Entity);
 
+/// `/obj/item/clothing/suit/jacket/straight_jacket`, the only suit with a `breakouttime`.
+pub const STRAIGHT_JACKET: &str = "/obj/item/clothing/suit/jacket/straight_jacket";
+/// Its `breakouttime` (5 minutes), deciseconds.
+pub const STRAIGHT_JACKET_BREAKOUT: f32 = 3000.0;
+
+/// The restraining suit (a straight jacket) the mob wears (tg `TRAIT_RESTRAINED` from
+/// `SUIT_TRAIT`).
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SuitRestrained(pub Entity);
+
 /// The timed steps of this module (`crate::construction::Job::Restraints`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RestraintJob {
@@ -49,13 +65,16 @@ pub enum RestraintJob {
     Cuff,
     /// The actor breaks out of `cuffs`.
     Resist { cuffs: Entity },
+    /// The actor gets out of the restraining `suit`.
+    ResistSuit { suit: Entity },
 }
 
 pub struct RestraintsPlugin;
 
 impl Plugin for RestraintsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_observer(forget_cuffs);
+        app.add_observer(forget_cuffs)
+            .add_systems(Update, sync_suit_restraint);
     }
 }
 
@@ -71,6 +90,56 @@ fn forget_cuffs(
         && cuffed.get(mob).is_ok_and(|c| c.0 == item)
     {
         commands.entity(mob).try_remove::<Handcuffed>();
+    }
+}
+
+/// tg human `equip_to_slot`/`doUnEquip` of a suit with a `breakouttime`: wearing one
+/// restrains and stops pulling; losing it drops the held items.
+fn sync_suit_restraint(
+    mobs: Query<(Entity, &Inventory, Option<&SuitRestrained>), Changed<Inventory>>,
+    items: Query<&ss13_mapload::DmItem>,
+    mut commands: Commands,
+) {
+    for (mob, inventory, current) in &mobs {
+        let jacket = inventory.suit.filter(|&s| {
+            items
+                .get(s)
+                .is_ok_and(|i| ss13_mapload::fidelity::is_under(&i.path, STRAIGHT_JACKET))
+        });
+        match (jacket, current) {
+            (Some(suit), Some(&SuitRestrained(now))) if suit == now => {}
+            (Some(suit), _) => {
+                commands
+                    .entity(mob)
+                    .insert(SuitRestrained(suit))
+                    .remove::<Pulling>();
+            }
+            (None, Some(_)) => {
+                let held: Vec<Entity> = inventory.hands.iter().flatten().copied().collect();
+                commands.entity(mob).remove::<SuitRestrained>();
+                commands.queue(move |world: &mut World| {
+                    let Some(&pos) = world.get::<TilePos>(mob) else {
+                        return;
+                    };
+                    for item in held {
+                        let still = world
+                            .get::<Inventory>(mob)
+                            .is_some_and(|i| i.hands.contains(&Some(item)));
+                        if still {
+                            if let Some(mut inv) = world.get_mut::<Inventory>(mob) {
+                                for hand in inv.hands.iter_mut() {
+                                    if *hand == Some(item) {
+                                        *hand = None;
+                                    }
+                                }
+                            }
+                            crate::inventory::put_down(world, item, pos);
+                        }
+                    }
+                });
+            }
+            (None, None) => {}
+        }
     }
 }
 
@@ -190,6 +259,25 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter, job: Restraint
                 )],
             );
         }
+        RestraintJob::ResistSuit { suit } => {
+            let worn = world.get::<Inventory>(mob).and_then(|i| i.suit);
+            if world.get::<SuitRestrained>(mob) != Some(&SuitRestrained(suit)) || worn != Some(suit)
+            {
+                return;
+            }
+            let (user, item) = (name_of(world, mob), cuffs_name(world, suit));
+            let pos = action.user_pos;
+            crate::inventory::unequip(world, mob, pos, ss13_shared::protocol::InventorySlot::Suit);
+            crate::inventory::put_down(world, suit, pos);
+            show(
+                world,
+                pos,
+                DEFAULT_MESSAGE_RANGE,
+                ChatChannel::Combat,
+                (Span::Danger, format!("{user} снимает {item}!")),
+                &[(mob, Span::Notice, format!("Вы успешно снимаете {item}."))],
+            );
+        }
         RestraintJob::Resist { cuffs } => {
             if world.get::<Handcuffed>(mob) != Some(&Handcuffed(cuffs)) {
                 return;
@@ -276,9 +364,22 @@ fn used_zipties(world: &mut World, cuffs: Entity) {
 /// tg `resist_restraints` -> `cuff_resist`: a `do_after` of the cuffs' `breakouttime` on the
 /// mob itself.
 pub fn resist_restraints(world: &mut World, client: Entity, mob: Entity) {
-    let Some(Handcuffed(cuffs)) = world.get::<Handcuffed>(mob).copied() else {
-        return;
-    };
+    // `get_all_attached_restraints`: the cuffs first, then a restraining suit.
+    let (cuffs, breakout, job) =
+        if let Some(Handcuffed(cuffs)) = world.get::<Handcuffed>(mob).copied() {
+            let breakout = world
+                .get::<DmHandcuffs>(cuffs)
+                .map_or(600.0, |c| c.breakouttime);
+            (cuffs, breakout, RestraintJob::Resist { cuffs })
+        } else if let Some(SuitRestrained(suit)) = world.get::<SuitRestrained>(mob).copied() {
+            (
+                suit,
+                STRAIGHT_JACKET_BREAKOUT,
+                RestraintJob::ResistSuit { suit },
+            )
+        } else {
+            return;
+        };
     let item = cuffs_name(world, cuffs);
     if world.get::<DoAfter>(mob).is_some() {
         // `DOING_INTERACTION(src, REF(cuffs))`.
@@ -290,15 +391,12 @@ pub fn resist_restraints(world: &mut World, client: Entity, mob: Entity) {
         );
         return;
     }
-    let breakout = world
-        .get::<DmHandcuffs>(cuffs)
-        .map_or(600.0, |c| c.breakouttime);
     let actor = Actor {
         client,
         mob,
         item: None,
     };
-    let job = crate::construction::Job::Restraints(RestraintJob::Resist { cuffs });
+    let job = crate::construction::Job::Restraints(job);
     if !do_after(world, actor, mob, breakout, 0, job) {
         return;
     }

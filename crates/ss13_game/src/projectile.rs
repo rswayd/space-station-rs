@@ -25,7 +25,7 @@
 //! ([`Shot::pixel`], tg `ICON_X`/`ICON_Y`), turned by the spread ([`Shot::deviation`]). Hard
 //! surfaces (walls, windows) can bounce bullets (`handle_ricochet`), and hits on mobs roll
 //! wounds with the projectile's `wound_bonus`/`sharpness` (`crate::medical::wounds`).
-// shortcut: no reflection, ricochet auto-aim, embedding, dismemberment, impact visuals, hitscan
+// shortcut: no reflection by held items (worn ablative armor reflects: `crate::clothing::ablative`), ricochet auto-aim, embedding, dismemberment, impact visuals, hitscan
 // beams, homing or projectile sounds; add them with the guns that need them.
 
 use bevy::prelude::*;
@@ -256,6 +256,12 @@ fn step(world: &mut World, e: Entity, dt: f32) {
             // it flies on from here, the carp's own now.
             if world.get::<Health>(target).is_some()
                 && crate::martial::deflect_projectile(world, target, e, &mut p)
+            {
+                continue;
+            }
+            // Reflective armor (`crate::clothing::ablative`): it flies on, the wearer's now.
+            if world.get::<Health>(target).is_some()
+                && crate::clothing::ablative::reflect_projectile(world, target, e, &mut p)
             {
                 continue;
             }
@@ -563,6 +569,18 @@ fn hit_living(world: &mut World, p: &Projectile, name: &str, target: Entity) {
     let Some(&at) = world.get::<TilePos>(target) else {
         return;
     };
+    // Human `bullet_act` -> `check_block`: a worn reactive armor may stop it (not one's own
+    // shot at oneself, `projectile_hit`).
+    let own_shot = p.firer == target && p.original == Some(target);
+    let blocked =
+        !own_shot && crate::clothing::reactive::hit_reaction(world, target, Some(p.firer), name);
+    // `COMSIG_ATOM_BULLET_ACT` of a laser tag team member (`crate::clothing::lasertag`).
+    if let Some(stamina) = crate::clothing::lasertag::hit_stamina(world, &p.data.path, target) {
+        crate::status_effects::adjust_stamina(world, target, stamina);
+    }
+    if blocked {
+        return;
+    }
     let distance = p.start.chebyshev(at).unwrap_or(0) as f32;
     let accuracy = (p.data.accurate_range - p.data.accuracy_falloff * distance).clamp(5.0, 100.0);
     let zone =

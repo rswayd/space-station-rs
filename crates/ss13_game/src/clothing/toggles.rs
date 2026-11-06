@@ -115,7 +115,7 @@ fn can_use(world: &World, mob: Entity) -> bool {
 
 /// The item's sprite: `icon_state` on the map and in hands, `worn` (empty: the icon state) on
 /// the mob; its wearer is drawn again.
-fn set_states(world: &mut World, item: Entity, icon_state: &str, worn: String) {
+pub(crate) fn set_states(world: &mut World, item: Entity, icon_state: &str, worn: String) {
     let id = world
         .get::<DmAtom>(item)
         .zip(world.get_resource::<IconIndex>())

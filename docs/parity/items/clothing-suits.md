@@ -11,7 +11,7 @@
 Аномальная броня с ядром: при попадании срабатывает эффект (телепорт, огонь, невидимость, тесла, отталкивание, стол, галлюцинации), ЭМИ вызывает сбой.
 
 - **Код:** [`/obj/item/clothing/suit/armor/reactive`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/suits/reactive_armour.dm#L34), [`/obj/item/reactive_armor_shell`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/suits/reactive_armour.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/clothing/reactive.rs`: ядро аномалии в оболочку, включение в руке, 50% реакции на удар в ближнем бою и снаряд с блоком, перезарядка 10 с, ЭМИ на 30 с; эффекты телепорта, огня, невидимости, теслы, отталкивания, стола, галлюцинаций; биоскрамблер, баррикада, эктоплазма и погода создаются, но не срабатывают (их механики не портированы)
 
 ### Халаты, куртки и рабочая одежда
 Лабораторные халаты (расстёгиваются), куртки, фартуки, сигнальные жилеты, плащи детектива, костюмы адвоката, куртки СБ, пальто моли и эфириалов, рубашки.
@@ -41,19 +41,19 @@
 Связывает руки носителя, как наручники; снимается долго.
 
 - **Код:** [`/obj/item/clothing/suit/jacket/straight_jacket`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/suits/straightjacket.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — блокировка рук есть только для наручников (`crates/ss13_game/src/restraints.rs`)
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/restraints.rs`: надетая рубашка связывает руки и прекращает тягу, сопротивление 5 минут снимает её; при снятии выпадает то, что в руках; задержки надевания (5 с) и снятия (6 с) общие для инвентаря и не портированы (см. [clothing-core.md](clothing-core.md))
 
 ### Лазертаг
 Синие и красные жилеты для лазертага: попадание вражеским лазертаг-оружием «выбивает» носителя.
 
 - **Код:** [`/obj/item/clothing/suit/bluetag`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/suits/lasertag.dm#L1), [`/datum/component/lasertag`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/suits/_lasertag_components.dm#L2)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/clothing/lasertag.rs`: команда по жилету, лазертаг-ударник стреляет только для своей команды (`crates/ss13_game/src/guns.rs`), чужой лазертаг-луч снимает 34 выносливости (`crates/ss13_game/src/projectile.rs`)
 
 ### Аблятивный плащ
 Плащ с капюшоном, отражающий лазеры; в капюшоне — HUD СБ.
 
 - **Код:** [`/obj/item/clothing/suit/hooded/ablative`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/suits/ablativecoat.dm#L27)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/clothing/ablative.rs`: отражение `reflectable` снарядов с шансом 50% по закрытым зонам (плащ — тело, капюшон — голова); HUD СБ в капюшоне (`crates/ss13_game/src/records/hud.rs`); отражение предметами в руках — у оружия
 
 ### Космические скафандры (базовые и EVA)
 Скафандр и шлем защищают от вакуума и холода; терморегулятор на батарее держит температуру тела, батарея меняется; надевание чужому занимает 5 с; в шлем нельзя надеть шапку сверху (стабилизатор).
@@ -73,6 +73,6 @@
 EVA-костюм плазмамена с самотушением и шлемы с фонарём по должностям.
 
 - **Код:** [`/obj/item/clothing/suit/space/eva/plasmaman`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/spacesuits/plasmamen.dm#L3), [`/obj/item/clothing/head/helmet/space/plasmaman`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/spacesuits/plasmamen.dm#L74)
-- **Статус в ss13-rs:** ❌ нет — нет вида плазменов; шлем работает только как `HEADINTERNALS` (`crates/ss13_game/src/internals.rs`)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/clothing/envirosuit.rs`: самотушение EVA-костюма (10 зарядов) и комбинезона плазмамена (5), перезарядка 10 с, заряды при осмотре, картридж-перезаправка; нет шлемов с фонарём, сварочным визором и рисунком мелком; шлем работает как `HEADINTERNALS` (`crates/ss13_game/src/internals.rs`)
 
 MODsuit-ы (модульные скафандры) — см. ../science/.

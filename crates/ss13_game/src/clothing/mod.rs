@@ -12,6 +12,8 @@ use serde::{Deserialize, Serialize};
 use ss13_tgui::UiInterface;
 
 #[cfg(feature = "server")]
+pub mod ablative;
+#[cfg(feature = "server")]
 pub mod accessories;
 #[cfg(feature = "client")]
 pub mod client;
@@ -20,7 +22,13 @@ pub mod cover;
 #[cfg(feature = "server")]
 pub mod damage;
 #[cfg(feature = "server")]
+pub mod envirosuit;
+#[cfg(feature = "server")]
 pub mod holsters;
+#[cfg(feature = "server")]
+pub mod lasertag;
+#[cfg(feature = "server")]
+pub mod reactive;
 #[cfg(feature = "server")]
 pub mod sensors;
 #[cfg(feature = "server")]
@@ -81,7 +89,7 @@ mod server {
     use ss13_shared::IconStateId;
 
     use super::accessories::{self, Accessories};
-    use super::{cover, damage, sensors, toggles};
+    use super::{cover, damage, envirosuit, reactive, sensors, toggles};
     use crate::click_handlers::{AddClickHandler, ClickPhase};
     use crate::human::layers::{FACEMASK_LAYER, UNIFORM_LAYER};
     use crate::inventory::Inventory;
@@ -114,7 +122,22 @@ mod server {
             })
             .add_click_handler(ClickPhase::EmptyHand, 3455, |w, c| {
                 sensors::interact(w, c.client, c.mob, c.target)
+            })
+            .add_click_handler(ClickPhase::AttackSelf, 3159, |w, c| {
+                reactive::attack_self(w, c.client, c.mob, c.target)
+            })
+            .add_click_handler(ClickPhase::OtherHand, 1259, |w, c| {
+                c.held.is_some_and(|held| {
+                    reactive::shell_interaction(w, c.client, c.mob, held, c.target)
+                })
+            })
+            .add_click_handler(ClickPhase::HeldOnTarget, 1579, |w, c| {
+                c.held.is_some_and(|held| {
+                    reactive::shell_interaction(w, c.client, c.mob, held, c.target)
+                })
             });
+            reactive::build(app);
+            envirosuit::build(app);
             sensors::build(app);
             toggles::build(app);
         }
@@ -132,6 +155,7 @@ mod server {
         accessories::attach(world, client, mob, held, target)
             || sensors::item_interaction(world, client, mob, held, target)
             || damage::item_interaction(world, client, mob, held, target)
+            || envirosuit::item_interaction(world, client, mob, held, target)
     }
 
     /// tg `click_alt` of clothing: a jumpsuit's style, a toggle suit, a breath mask.
@@ -172,6 +196,7 @@ mod server {
             sensors::examine_lines(world, item, lines);
         }
         accessories::examine_lines(world, item, lines);
+        envirosuit::examine_lines(world, item, lines);
     }
 
     /// What the worn look needs from the clothing (`crate::inventory`'s `refresh_mobs`).

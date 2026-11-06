@@ -279,6 +279,10 @@ fn pin_auth(world: &World, dm: &DmGun, gun: &Gun, user: Entity) -> Result<(), St
     if gun.pin.is_empty() {
         return Err("спуск не работает, нужен ударник!".to_owned());
     }
+    // Laser tag pins: the wearer's vest team (`crate::clothing::lasertag`).
+    if let Some(check) = crate::clothing::lasertag::pin_check(world, &gun.pin, user) {
+        return check.map_err(|line| format!("{} {line}", dm.pin_fail_message));
+    }
     let ok = if is_under(&gun.pin, MINDSHIELD_PIN) {
         crate::antag::revolution::server::mindshielded(world, user)
     } else if is_under(&gun.pin, SYNDICATE_PIN) {
