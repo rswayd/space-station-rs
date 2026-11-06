@@ -77,7 +77,7 @@
 ЦК просит одолжить шаттл карго; при согласии через консоль он возвращается с грузом и/или врагами (пираты, пчёлы, бомба и др.).
 
 - **Код:** [`/datum/round_event_control/shuttle_loan`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/shuttle_loan/shuttle_loan_event.dm#L2), [`/datum/shuttle_loan_situation`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/shuttle_loan/shuttle_loan_datum.dm#L2)
-- **Статус в ss13-rs:** ❌ нет — нет шаттла карго
+- **Статус в ss13-rs:** ❌ нет — шаттл карго и уникальные сообщения консолей связи теперь есть (`crates/ss13_game/src/cargo/supply.rs`, `announce::send_unique_message`), но нет самих ситуаций займа (`/datum/shuttle_loan_situation`: спавн груза и врагов на шаттле, блокировка шаттла на время займа, выплата бюджету) — следующий кандидат на порт
 
 ## Мирные
 
@@ -97,7 +97,7 @@
 Случайное животное или бот обретает разум и отдаётся призраку-добровольцу; станционный вариант (только админы) — все сразу.
 
 - **Код:** [`/datum/round_event_control/sentience`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/ghost_role/sentience.dm#L25), [`/datum/round_event_control/sentience/all`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/ghost_role/sentience.dm#L125), [`/datum/round_event/ghost_role`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/ghost_role/_ghost_role.dm#L4)
-- **Статус в ss13-rs:** ❌ нет — нет животных и опроса призраков
+- **Статус в ss13-rs:** ❌ нет — базовые мобы и боты теперь есть (`crates/ss13_game/src/mobs/`, `crates/ss13_bots`), но нет опроса призраков (`SSpolling`: мидраунд-роли берут подписавшихся призраков без опроса) и вселения призрака в моба с выдачей разума
 
 ## Вторжения
 
@@ -106,12 +106,12 @@
 
 - **Код:** [`/datum/round_event_control/operative`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/ghost_role/operative.dm#L1)
 - **BandaStation:** [`code/modules/events/ghost_role/operative.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/ghost_role/operative.dm#L18), [`modular_bandastation/balance/code/events.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/balance/code/events.dm#L1) — взвешенный выбор кандидата; минимум 30 игроков
-- **Статус в ss13-rs:** ❌ нет — нет ядерного диска и оперативников
+- **Статус в ss13-rs:** ❌ нет — ядерный диск и оперативники теперь есть (`crates/ss13_game/src/antag/nukeop/`), но нет веса от заброшенности диска (`/obj/item/disk/nuclear/process` наращивает `weight` события), антагониста `nukeop/lone` с его снаряжением, работы `lone_operative` и опроса призраков с взвешенным выбором BandaStation
 
 ### Dynamic Tweak
 Позволяет Dynamic запустить ещё один мидраунд- или латджойн-антагонист (оживляет «зелёные» смены).
 
 - **Код:** [`/datum/round_event_control/dynamic_tweak`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/dynamic_tweak.dm#L3)
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/antag/dynamic.rs` выбирает только раундстартового предателя, событий нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/events/dynamic_tweak.rs`: вес 10, с 20 минут, один раз, не фальсифицируется; только когда динамик начал раунд и шаттл не прошёл точку невозврата; добавляет в `Midround::to_spawn` (`crates/ss13_game/src/antag/midround.rs`) 0–1 лёгкий, 0–1 тяжёлый мидраунд и 0–1 латджойн (как минимум тяжёлый или латджойн); `// shortcut:` `max_occurrences` без `rand(-1, 1)`, нет админского выключателя `antag_events_enabled`
 
 _«Spawn Bitrunning Glitch» описано в [../science/bitrunning.md](../science/bitrunning.md)._

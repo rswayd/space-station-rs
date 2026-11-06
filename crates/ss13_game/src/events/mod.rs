@@ -17,7 +17,8 @@
 //! - [`shuttle`]: Shuttle Catastrophe and Shuttle Insurance (`crate::shuttle_catalog`).
 //! - [`wisdom_cow`]: a wisdom cow (`crate::mobs::farm`); [`nightshift`]: the station's APCs'
 //!   night shift (`crate::power::set_nightshift`).
-//! - [`wizard`]: Summon Events' wizard events, only in wizard mode or forced.
+//! - [`dynamic_tweak`]: one more midround or latejoin ruleset (`crate::antag::midround`).
+//! - [`wizard`], [`object_rain`]: Summon Events' wizard events, only in wizard mode or forced.
 //! - [`holidays`]: the holiday calendar (`check_holidays`) and the round start greetings;
 //!   [`holiday_events`] spawn only on their holiday.
 //!
@@ -33,6 +34,7 @@ pub mod carp_migration;
 pub mod comms_blackout;
 pub mod controller;
 pub mod disease_outbreak;
+pub mod dynamic_tweak;
 pub mod electrical_storm;
 pub mod fake_virus;
 pub mod false_alarm;
@@ -47,6 +49,7 @@ pub mod mass_hallucination;
 pub mod meteors;
 pub mod mice_migration;
 pub mod nightshift;
+pub mod object_rain;
 pub mod processor_overload;
 pub mod radiation_leak;
 pub mod radiation_storm;
@@ -355,6 +358,10 @@ pub fn controls() -> Vec<EventControl> {
             c(heart_attack::NAME, 20, 20.0, 40, 2, heart_attack::make),
         ),
         unfakeable(c(brain_trauma::NAME, 25, 20.0, 13, 20, brain_trauma::make)),
+        needs(
+            dynamic_tweak::can_run,
+            unfakeable(c(dynamic_tweak::NAME, 10, 20.0, 0, 1, dynamic_tweak::make)),
+        ),
         summon(c(wizard::ROBELESS, 2, 0.0, 0, 1, wizard::make_robeless)),
         summon(c(wizard::IMPROVED, 3, 0.0, 0, 4, wizard::make_improved)),
         summon(c(
@@ -391,6 +398,40 @@ pub fn controls() -> Vec<EventControl> {
             1,
             wizard::make_summon_guns,
         )),
+        summon(c(wizard::LAVA, 2, 0.0, 0, 3, wizard::make_lava)),
+        summon(c(wizard::RACE_SWAP, 2, 0.0, 0, 5, wizard::make_race_swap)),
+        summon(c(wizard::MADNESS, 1, 0.0, 0, 20, wizard::make_madness)),
+        // Weight 0: badmin exclusive.
+        summon(c(
+            wizard::FAKE_EXPLOSION,
+            0,
+            0.0,
+            0,
+            1,
+            wizard::make_fake_explosion,
+        )),
+        needs(
+            wizard::petsplosion_can_run,
+            summon(c(
+                wizard::PETSPLOSION,
+                2,
+                0.0,
+                0,
+                1,
+                wizard::make_petsplosion,
+            )),
+        ),
+        summon(c(
+            object_rain::ANIMALS,
+            2,
+            0.0,
+            0,
+            2,
+            object_rain::make_animals,
+        )),
+        summon(c(object_rain::FOOD, 2, 0.0, 0, 2, object_rain::make_food)),
+        summon(c(object_rain::CASH, 2, 0.0, 0, 2, object_rain::make_cash)),
+        summon(c(object_rain::FISH, 2, 0.0, 0, 2, object_rain::make_fish)),
         on(
             holidays::HALLOWEEN,
             c(
@@ -487,6 +528,7 @@ impl Plugin for EventsServerPlugin {
                     fake_virus::process_fake_viruses,
                     heart_attack::process_heart_attacks,
                     wizard::curse_joiners,
+                    wizard::madden_joiners,
                 )
                     .chain(),
             )

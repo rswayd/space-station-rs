@@ -476,7 +476,7 @@ fn shuttle_idle_or_recalled(world: &World) -> bool {
 }
 
 /// `EMERGENCY_AT_LEAST_DOCKED` (see the shortcut above).
-fn shuttle_past_no_return(world: &World) -> bool {
+pub fn shuttle_past_no_return(world: &World) -> bool {
     use crate::shuttle::{EmergencyShuttle, ShuttleMode};
     world.get_resource::<EmergencyShuttle>().is_some_and(|s| {
         matches!(
