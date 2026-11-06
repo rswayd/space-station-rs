@@ -536,8 +536,8 @@ impl ServerUi for HealthHudUi {
 /// What a living carbon mob gets at spawn.
 /// tg `gib(DROP_ALL_REMAINS)`: the body is gone, its items fall (a `NoDrop` one goes with
 /// it), its chest organs and limbs fly off (`crate::medical::bodyparts::spill_remains`), its
-/// player becomes a ghost.
-// shortcut: no gib decals.
+/// player becomes a ghost; its gibs splash about (`spawn_gibs`: `gibspawner/human` for a body
+/// with limbs, `generic` for the rest, `crate::effects::gibs`).
 pub fn gib(world: &mut World, mob: Entity) {
     use crate::inventory::{ALL_SLOTS, Inventory, NoDrop};
     let Some(&pos) = world.get::<TilePos>(mob) else {
@@ -566,8 +566,14 @@ pub fn gib(world: &mut World, mob: Entity) {
     if let Some(cuffs) = world.get::<crate::restraints::Handcuffed>(mob).map(|h| h.0) {
         crate::inventory::put_down(world, cuffs, pos);
     }
+    let gibs = if world.get::<crate::medical::wounds::Limbs>(mob).is_some() {
+        crate::effects::gibs::Gibspawner::Human
+    } else {
+        crate::effects::gibs::Gibspawner::Generic
+    };
     crate::medical::bodyparts::spill_remains(world, mob, pos);
     world.despawn(mob);
+    crate::effects::gibs::spawn_gibs(world, gibs, pos);
     crate::construction::tile_changed(world, pos);
 }
 

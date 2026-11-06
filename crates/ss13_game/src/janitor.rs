@@ -456,9 +456,10 @@ const NO_SLIP_WATER_TURFS: [&str; 8] = [
 
 /// Water vapor condensing on turfs (tg `/datum/gas_reaction/standard/water_vapor`):
 /// `water_vapor_gas_act` wets (10 s, +5 s) and washes a grounded, slippable turf;
-/// `freeze_turf` makes it permafrost for 10 s.
-// shortcut: freezing does not freeze the objects (`/datum/element/frozen`) or give cold mobs
-// the freon status, and slimes are not watered; add with those mechanics.
+/// `freeze_turf` makes it permafrost for 10 s and freezes its objects
+/// (`crate::effects::frozen`).
+// shortcut: cold mobs do not get the freon status and slimes are not watered; add with those
+// mechanics.
 fn condensation(world: &mut World) {
     let Some(tiles) = world
         .get_resource_mut::<ss13_atmos::Atmos>()
@@ -469,6 +470,7 @@ fn condensation(world: &mut World) {
     for (pos, kind) in tiles {
         match kind {
             ss13_atmos::reactions::Condensation::Freeze => {
+                crate::effects::frozen::freeze_turf(world, pos);
                 make_slippery(world, pos, TURF_WET_PERMAFROST, 10.0, 0.0);
             }
             ss13_atmos::reactions::Condensation::Wet => {

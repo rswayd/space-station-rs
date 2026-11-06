@@ -39,7 +39,7 @@
 Гиб-спавнеры разбрасывают ошмётки и кровь (при гибе), бомбоспавнеры собирают готовые ТТВ-бомбы, праздничные спавнеры, послание в бутылке, доставка ксено-яйца.
 
 - **Код:** [`/obj/effect/gibspawner`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/spawners/gibspawner.dm#L1), [`/obj/effect/spawner/newbomb`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/spawners/bombspawner.dm#L5), [`code/game/objects/effects/spawners/holiday.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/spawners/holiday.dm), [`code/game/objects/effects/spawners/message_in_a_bottle.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/spawners/message_in_a_bottle.dm), [`code/game/objects/effects/spawners/xeno_egg_delivery.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/spawners/xeno_egg_delivery.dm)
-- **Статус в ss13-rs:** ❌ нет — не портированы
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/effects/gibs.rs`: гиб-спавнеры `generic`, `human`, `robot` (типы ошмётков с дедупликацией ассоциативного списка, направления, звук `blobattack`, искры у робота); каждый ошмёток «размазывается» (`streak`: 0/1/2/3/50 шагов с весами 200/150/50/17/1, брызги крови на каждом тайле, стоп у препятствия); `health::gib` — человеческие для тела с конечностями, иначе generic. Нет: анимации полёта, ДНК крови и болезней на ошмётках, ксено/личинок; бомбоспавнеров ТТВ (группа ТТВ), праздничных спавнеров (группа праздников), послания в бутылке (персистентность), доставки ксено-яйца (ксеноморфы)
 
 ## Визуальные эффекты
 
@@ -47,7 +47,7 @@
 Кратковременные анимации, удаляющиеся сами: попадания и трассеры снарядов, вспышки дульного пламени, эффекты ударов, телепортации, исцеления, культа, взрывов, «мигание» блинка и сотни других.
 
 - **Код:** [`/obj/effect/temp_visual`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/temporary_visuals/temporary_visual.dm#L2), [`code/game/objects/effects/temporary_visuals/miscellaneous.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/temporary_visuals/miscellaneous.dm), [`temporary_visuals/projectiles/`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/temporary_visuals/projectiles), [`code/game/objects/effects/temporary_visuals/cult.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/temporary_visuals/cult.dm)
-- **Статус в ss13-rs:** ❌ нет — нет временных визуалов
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/effects/temp_visual.rs`: базовый `temp_visual` (некликабельный спрайт над мобами, исчезает через `duration`, `randomdir` или `dir_setting`), `spawn` для кода механик; брызги крови `bloodsplatter` при brute-попадании снаряда в кровоточащего моба (`splatter1-6` по направлению, слой над мобом при полёте на юг, `angle2dir`). Конкретные визуалы — у своих механик (указатель `point.rs`, ЭМИ, мегафауна, резонатор уже свои). Нет: скольжения и затухания брызг (`animate`), цвета крови по типу
 
 ### Обратные отсчёты
 Плавающие цифры над объектом: таймер бомбы Синдиката, ядерной бомбы, целостности суперматерии, аномалий, песочных часов.
@@ -86,7 +86,7 @@
 Непроходимые временные поля: стена мага, культа, мима (невидимая стена), психическое, космическое поле еретика (замедляет); `/obj/effect/shield` — неразрушимый барьер.
 
 - **Код:** [`/obj/effect/forcefield`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/forcefields.dm#L1), [`/obj/effect/forcefield/wizard`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/forcefields.dm#L21), [`/obj/effect/forcefield/mime`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/forcefields.dm#L59), [`/obj/effect/forcefield/cosmic_field`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/forcefields.dm#L101), [`/obj/effect/shield`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/shield.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — нет силовых полей
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/effects/forcefields.rs`: `spawn_forcefield` — поле любого подтипа с его `initial_duration` (визард/мим 30 с, мим advanced 60 с, культ 20 с, культ permanent навсегда, психическое 10 с, космическое 30/5/2,5 с), плотное (кроме космического), воздух по `can_atmos_pass` прототипа, само исчезает; Forcewall мага (`spells/effects.rs`) ставит его. Нет: прохода заклинателя и антимагии (`CanAllowThrough` — нужен хук движения в `ss13_world`), рикошета от психического, замедления снарядов и бонуса скорости космического, опоры о стену мима; заклинания культа, мима, псайкера и еретика — их группы
 
 ## Растительность и мелочи
 
@@ -112,7 +112,7 @@
 Конденсация пара при очень низкой температуре (`freeze_turf`) замораживает предметы на тайле: элемент `frozen` (синий оттенок, ломкость). Перенесено из ../atmos/reactions.md.
 
 - **Код:** [`/datum/element/frozen`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/elements/frozen.dm#L4), [`proc/freeze_turf()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/open/_open.dm#L540)
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/janitor.rs` (`condensation`): тайл становится вечной мерзлотой, предметы не замерзают
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/effects/frozen.rs`: `freeze_turf` из конденсации (`janitor.rs`) замораживает все объекты тайла без `FREEZE_PROOF`: имя «замороженный …», ледяной оттенок, −25 альфы; брошенный разбивается при приземлении или ударе, если не пойман (`throw.rs`); перемещённый на открытый тайл ≥ 0 °C оттаивает. Упрощения: матрица цвета — умножающий оттенок, разбитый объект удаляется без `deconstruct`, органы не перестают гнить. Статус `freon` замёрзших мобов — группа статус-эффектов
 
 ### Бонусы (powerup) и прочие эффекты
 Подбираемые бонусы (здоровье, патроны, скорость, «безумие» — CTF и арены), фазовый моб (бестелесное перемещение заклинаний и демонов), информационный значок (`abstract/info`), трещины-«слабые точки» (`weakpoint`, от Earthcracker из аплинка или при генерации карты): от взрыва проламывают пол цепочкой трещин.

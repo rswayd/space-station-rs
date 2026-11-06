@@ -59,9 +59,6 @@ use crate::zone::BodyZone;
 pub const JAUNT_SECS: f64 = 5.0;
 pub const JAUNT_REAPPEAR_SECS: f64 = 2.5;
 pub const JAUNT_STEP_SECS: f64 = 0.2;
-/// `/obj/effect/forcefield` `initial_duration`.
-pub const FORCEFIELD_SECS: f64 = 30.0;
-const FORCEFIELD: &str = "/obj/effect/forcefield/wizard";
 /// Lightning bolt's `bolt_range`, `bolt_power`; `tesla_zap`'s cutoff.
 const BOLT_RANGE: u32 = 15;
 const BOLT_POWER: f64 = 2e4;
@@ -126,12 +123,6 @@ pub struct MagicBolt {
     pub antimagic: u32,
     /// `can_only_hit_target`: it passes through everything but what it was fired at.
     pub only_target: bool,
-}
-
-/// A wizard's forcefield, gone at `until`.
-#[derive(Component, Clone, Copy, Debug)]
-pub struct Forcefield {
-    pub until: f64,
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -778,7 +769,6 @@ fn forcewall(world: &mut World, mob: Entity, pos: TilePos) {
         .get::<Facing>(mob)
         .map_or(Dir::South, |f| f.0)
         .offset();
-    let until = now(world) + FORCEFIELD_SECS;
     for tile in [
         pos,
         TilePos::new(pos.x - dy, pos.y + dx, pos.z),
@@ -787,11 +777,11 @@ fn forcewall(world: &mut World, mob: Entity, pos: TilePos) {
         if !world.resource::<SpatialIndex>().in_bounds(tile) {
             continue;
         }
-        if let Some(wall) = crate::construction::spawn_obj(world, FORCEFIELD, tile) {
-            world
-                .entity_mut(wall)
-                .insert((Forcefield { until }, Density));
-        }
+        crate::effects::forcefields::spawn_forcefield(
+            world,
+            crate::effects::forcefields::WIZARD,
+            tile,
+        );
     }
 }
 
@@ -1471,22 +1461,10 @@ pub(super) fn jaunt_steps(world: &mut World, mut steps: Local<MessageCursor<Jaun
     }
 }
 
-/// Per tick: the jaunts' end and the forcefields' timeout.
-// Cost: one pass over the jaunting mobs and the forcefields (a handful per round).
+/// Per tick: the jaunts' end (the forcefields expire in `crate::effects::forcefields`).
+// Cost: one pass over the jaunting mobs (a handful per round).
 pub(super) fn tick_spells(world: &mut World) {
     let t = now(world);
-    let walls: Vec<(Entity, Option<TilePos>)> = world
-        .query::<(Entity, &Forcefield, Option<&TilePos>)>()
-        .iter(world)
-        .filter(|(_, f, _)| t >= f.until)
-        .map(|(e, _, p)| (e, p.copied()))
-        .collect();
-    for (wall, pos) in walls {
-        world.despawn(wall);
-        if let Some(pos) = pos {
-            crate::construction::tile_changed(world, pos);
-        }
-    }
     let jaunts: Vec<(Entity, Jaunting)> = world
         .query::<(Entity, &Jaunting)>()
         .iter(world)
