@@ -178,7 +178,10 @@ pub fn sack_interaction(
         mob,
         item: Some(held),
     };
-    if let Some(state) = world.get::<Tray>(target) {
+    let tray = world
+        .get::<Tray>(target)
+        .map(|t| (t.plant_status, t.current_soil.is_some()));
+    if let Some((status, has_soil)) = tray {
         // A plot is a tray too in tg (a sack would fill it with a second soil); here it is the
         // bed already on that floor.
         if is_soil_plot(world, target) {
@@ -190,11 +193,11 @@ pub fn sack_interaction(
             );
             return true;
         }
-        if state.plant_status != PlantStatus::Missing {
+        if status != PlantStatus::Missing {
             tell(world, client, Span::Warning, "remove the plants first!");
             return true;
         }
-        if state.current_soil.is_some() {
+        if has_soil {
             tell(world, client, Span::Warning, "tray is full!");
             return true;
         }
