@@ -18,19 +18,19 @@
 Лампы бьются ударами и взрывами (искры, осколки), перегорают при включении, случайная поломка на старте раунда, мерцание (ЭМИ, события, призраки), удар током при вынимании голой рукой горячей лампы.
 
 - **Код:** [`proc/break_light_tube()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light.dm#L690), [`proc/burn_out()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light.dm#L343), [`proc/flicker()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light.dm#L542), [`attack_hand_secondary()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light.dm#L584), [`emp_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light.dm#L721)
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_mapload/src/light.rs`: shortcut, нет поломки на старте; лампы без лампочки с карты не светят
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/power/lighting.rs` (`LightStatus`, `break_tube`, `burn_out`, `take_damage`, `flicker`, `remove_by_hand`): поломка на старте 2%/5% (трубка/лампочка), от ударов в боевом режиме (`prob(урон × 5)`, прочность 100, при 0 — каркас), взрывов (`ex_act`), жара, пожирателя света, бури; искры и звук стекла; перегорание при включении `prob(min(60, switchcount²/100))`; мерцание (`flicker`, серый прилив каждые 12 тиков); горячая лампа обжигает руку (5 burn) без перчаток >360 K. Нет: мерцания от призраков (их «boo» — ../ghosts), заряженных реагентами ламп, ethereal-подзарядки
 
 ### Лампочки и трубки (/obj/item/light)
 Предметы-лампы: трубка и лампочка, состояния целая/перегоревшая/разбитая, разбиваются о пол с осколками.
 
 - **Код:** [`/obj/item/light`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light_items.dm#L5), [`/obj/item/light/tube`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light_items.dm#L53), [`/obj/item/light/bulb`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light_items.dm#L76)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/power/lighting.rs` (`LightBulb`, `bulb_of`, `shatter`): статус, яркость и `switchcount` переходят между лампой и светильником, иконки `-burned`/`-broken`; разбиваются при броске (`crate::throw`), когда на них наступают, и об моба в боевом режиме. Нет: реагентов внутри, калтропа (урон ногам от разбитой), inhand-состояний
 
 ### Замена лампы и монтаж светильника
 Вставка и вынимание лампы, отвёртка разбирает светильник в каркас; каркас (`light_construct`) собирается из рамки, кабеля и отвёртки.
 
 - **Код:** [`item_interaction()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light.dm#L385), [`proc/drop_light_tube()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light.dm#L656), [`screwdriver_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light.dm#L433), [`/obj/structure/light_construct`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light_construct.dm#L1), [`/obj/item/wallframe/light_fixture`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light_wallframes.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/power/lighting.rs` (`fixture_interaction`, `drop_light_tube`, `deconstruct`, `frame_interaction`, `place_frame`, `build_fixture`): ПКМ пустой рукой вынимает лампу, лампа своего типа вставляется или заменяет старую, отвёртка разбирает пустой светильник в провод. каркас; каркас: кабель → отвёртка (новый пустой светильник, ночной режим от АПЦ, в зоне), кусачки, гаечный ключ (3 с, листы железа); рамка на стену с соседней клетки. Нет: батареи в каркасе, напольной рамки (`light_fixture/small` attack_self), засовывания предметов в пустой патрон (удар током)
 
 ### Варианты ламп и маппинг-хелперы
 Маленькие, напольные, тёплые, холодные, красные, приглушённые, ультрафиолетовые, перегоревшие лампы.
@@ -49,10 +49,10 @@
 Инструмент уборщика: меняет лампы на расстоянии, перерабатывает осколки стекла в новые лампы.
 
 - **Код:** [`/obj/item/lightreplacer`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/devices/lightreplacer.dm#L34), [`proc/do_action()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/devices/lightreplacer.dm#L223)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/power/lighting.rs` (`LightReplacer`, `refill`, `replace_light`): 10/20 зарядов (продвинутый 50), заправка лампами, листом стекла (+5) и чистыми осколками (4 → лампа, «ding»), замена лампы в светильнике, во всех светильниках клетки и на своей клетке (`attack_self`), разбитая уходит в осколки. Нет: дальнего действия блюспейс-версии, emag (плазменные лампы), заправки из коробок, зарядки боргов, достройки прожектора
 
 ### Прожектор (floodlight)
 Собираемый прожектор на кабеле с уровнями яркости и потреблением из сети.
 
 - **Код:** [`/obj/machinery/power/floodlight`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/floodlight.dm#L135), [`/obj/structure/floodlight_frame`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/floodlight.dm#L7)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/power/lighting.rs` (`Floodlight`, `FloodFrame`, `change_setting`, `floodlight_tick`): каркас — 5 кабеля, отвёртка, целая трубка (или лампозаменитель), кусачки и ключ (3 с, 5 листов железа) обратно; рукой — уровни выкл/5/10/15 тайлов (1/2/3 кВт из сети кабеля под ним, без оплаты понижается или гаснет); отвёртка — панель (с открытой рука вынимает трубку, остаётся каркас), ключ — закрепить и подключить к сети; с карты закреплён; ЭМИ `prob(150/severity)` ломает в каркас с разбитой трубкой. Нет: 2 с у ключа, покраски, смены слоя кабеля, поломки от урона
