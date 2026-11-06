@@ -3,7 +3,8 @@
 //! sparks flying off and fading, metal foam spreading over the diamond, stopping at the wall
 //! and leaving foamed metal, a foam reaction in a container making foam, sleeping smoke putting
 //! a mob to sleep, the floor is lava burning a player on the floor but not one on a table (two
-//! clients), and the radiation storm sparing maintenance.
+//! clients), the radiation storm sparing maintenance, a wizard's forcefield standing 30 s and
+//! a frozen table thawing on a warm tile.
 
 use std::path::{Path, PathBuf};
 
@@ -63,6 +64,9 @@ const TYPES: &str = r##"{
     "/obj": { "parent": "/atom/movable", "declared_vars": { "force": 0, "damtype": "brute",
         "obj_flags": 2 } },
     "/obj/effect": { "parent": "/obj" },
+    "/obj/effect/forcefield": { "parent": "/obj/effect", "declared_vars": { "anchored": 1,
+        "density": 1 } },
+    "/obj/effect/forcefield/wizard": { "parent": "/obj/effect/forcefield" },
     "/obj/effect/landmark": { "parent": "/obj/effect", "declared_vars": {
         "icon": { "resource": "l.dmi" }, "icon_state": "x2", "invisibility": 101 } },
     "/obj/effect/landmark/start": { "parent": "/obj/effect/landmark" },
@@ -195,6 +199,7 @@ fn fixture_assets(test: &str) -> PathBuf {
     let used = [
         "/obj/effect/landmark/start/assistant",
         "/obj/effect/particle_effect/sparks",
+        "/obj/effect/forcefield/wizard",
         "/obj/effect/particle_effect/fluid/smoke/sleeping",
         "/obj/effect/particle_effect/fluid/foam",
         "/obj/effect/particle_effect/fluid/foam/metal",
@@ -438,4 +443,48 @@ fn the_radiation_storm_spares_maintenance() {
     // 40 s telegraph, 60-150 s storm, 10 s wind-down.
     run(&mut app, 201.0);
     assert!(!weather::running(app.world(), WeatherKind::RadStorm));
+}
+
+#[test]
+fn a_forcefield_blocks_for_thirty_seconds() {
+    use ss13_game::effects::forcefields::{Forcefield, WIZARD, spawn_forcefield};
+    let mut app = server("a_forcefield_blocks_for_thirty_seconds");
+    let field = spawn_forcefield(app.world_mut(), WIZARD, at(5, 6)).expect("forcefield");
+    assert!(app.world().get::<ss13_world::Density>(field).is_some());
+    assert!(
+        app.world()
+            .get::<Forcefield>(field)
+            .unwrap()
+            .until
+            .is_some()
+    );
+    run(&mut app, 29.0);
+    assert!(
+        app.world().get_entity(field).is_ok(),
+        "still up before 30 s"
+    );
+    run(&mut app, 1.5);
+    assert!(app.world().get_entity(field).is_err(), "gone after 30 s");
+}
+
+#[test]
+fn a_frozen_table_thaws_on_a_warm_tile() {
+    use ss13_game::effects::frozen::{Frozen, freeze, freeze_turf};
+    let mut app = server("a_frozen_table_thaws_on_a_warm_tile");
+    let table =
+        ss13_game::construction::spawn_obj(app.world_mut(), "/obj/structure/table", at(12, 6))
+            .expect("table");
+    freeze_turf(app.world_mut(), at(12, 6));
+    assert!(app.world().get::<Frozen>(table).is_some());
+    let alpha = app
+        .world()
+        .get::<ss13_shared::Appearance>(table)
+        .and_then(|a| a.color)
+        .map(|c| c[3]);
+    assert_eq!(alpha, Some(230), "25 alpha fainter");
+    assert!(!freeze(app.world_mut(), table), "frozen once");
+    // Moved onto a 20 °C floor: it thaws.
+    app.world_mut().entity_mut(table).insert(at(13, 6));
+    app.update();
+    assert!(app.world().get::<Frozen>(table).is_none());
 }

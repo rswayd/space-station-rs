@@ -13,6 +13,10 @@
 //! - [`mines`]: `/obj/effect/mine`, set off by stepping off the pressure plate; [`webs`]:
 //!   sticky spider webs catching walkers; [`teleporters`]: step triggers, bump teleporters and
 //!   permanent portals placed by maps.
+//! - [`temp_visual`]: `/obj/effect/temp_visual`, sprites gone after their duration (the blood
+//!   splatter of a brute shot); [`forcefields`]: `/obj/effect/forcefield`, timed walls;
+//!   [`gibs`]: `/obj/effect/gibspawner`, gibs streaking off a gibbed body; [`frozen`]:
+//!   `/datum/element/frozen`, objects frozen by condensing vapor.
 //!
 //! Cost: each system runs only while its effects exist (`run_if(any_with_component)`), one
 //! pass over its live particles per tick.
@@ -23,11 +27,15 @@ use ss13_shared::{Dir, TilePos};
 use ss13_world::SpatialIndex;
 
 pub mod foam;
+pub mod forcefields;
+pub mod frozen;
+pub mod gibs;
 pub mod mines;
 pub mod particles;
 pub(crate) mod reactions;
 pub mod smoke;
 pub mod teleporters;
+pub mod temp_visual;
 pub mod trail;
 pub mod webs;
 
@@ -45,6 +53,10 @@ impl Plugin for EffectsPlugin {
                     foam::halon_resin,
                     trail::tick_trails.run_if(any_with_component::<trail::Trail>),
                     trail::fade_trail_particles.run_if(any_with_component::<trail::TrailParticle>),
+                    temp_visual::expire_visuals
+                        .run_if(any_with_component::<temp_visual::TempVisual>),
+                    forcefields::expire_forcefields
+                        .run_if(any_with_component::<forcefields::Forcefield>),
                 ),
             )
             .add_systems(
@@ -54,6 +66,7 @@ impl Plugin for EffectsPlugin {
                     webs::walk_into_webs,
                     teleporters::step_on_triggers,
                     teleporters::bump_teleporters,
+                    frozen::thaw_moved.run_if(any_with_component::<frozen::Frozen>),
                 )
                     .after(ss13_world::WorldSystems::Movement),
             );

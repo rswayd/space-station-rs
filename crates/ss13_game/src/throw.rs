@@ -447,6 +447,10 @@ fn pick_hit(world: &World, blockers: &[Entity], target: Option<Entity>) -> Optio
 fn finish(world: &mut World, item: Entity, thrown: &Thrown, hit: Option<Entity>) {
     world.entity_mut(item).remove::<Thrown>();
     let Some(hit) = hit else {
+        // `frozen/shatter_on_landed`.
+        if crate::effects::frozen::shatter(world, item) {
+            return;
+        }
         // Plants with liquid contents squash where they land.
         if crate::botany::produce::thrown(world, item, None) {
             return;
@@ -459,6 +463,10 @@ fn finish(world: &mut World, item: Entity, thrown: &Thrown, hit: Option<Entity>)
     };
     if world.get::<Health>(hit).is_some() {
         hit_living(world, item, thrown, hit);
+        // `frozen/shatter_on_throw`: not caught.
+        if world.get_entity(item).is_ok() && crate::effects::frozen::shatter(world, item) {
+            return;
+        }
         // `COMSIG_MOVABLE_IMPACT` of a plant: prickles, squashing when not caught.
         if world.get_entity(item).is_ok() && crate::botany::produce::thrown(world, item, Some(hit))
         {
@@ -471,6 +479,9 @@ fn finish(world: &mut World, item: Entity, thrown: &Thrown, hit: Option<Entity>)
                 crate::bar::glass_thrown(world, item, Some(hit));
             }
         }
+    } else if crate::effects::frozen::shatter(world, item) {
+        // `COMSIG_MOVABLE_IMPACT` comes before the hit thing's `hitby`.
+        return;
     } else if crate::disposals::hitby(world, item, hit) {
     } else if world.get::<DmCloset>(hit).is_some_and(|c| !c.wall_mounted) {
         push(world, hit, thrown);

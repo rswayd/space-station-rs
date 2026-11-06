@@ -642,6 +642,11 @@ fn hit_living(world: &mut World, p: &Projectile, name: &str, target: Entity) {
         }
         _ => {}
     }
+    // `create_projectile_hit_effects`: a brute hit splatters blood.
+    if DamageType::from_dm(&p.data.damage_type) == Some(DamageType::Brute) {
+        let dir = crate::effects::temp_visual::angle_dir(p.angle);
+        crate::effects::temp_visual::blood_splatter(world, target, dir);
+    }
     // `/obj/projectile/energy/electrode/on_hit`: the electrodes catch on.
     if p.data.tase_stamina > 0.0 && armor < 100.0 {
         crate::taser::tase(world, p, target);
