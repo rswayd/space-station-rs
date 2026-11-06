@@ -53,7 +53,7 @@
 Костюм исследователя с капюшоном, противогаз исследователя, плащ и броня из шкур голиафа и костей.
 
 - **Код:** [`/obj/item/clothing/suit/hooded/explorer`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/equipment/explorer_gear.dm#L2), [`/obj/item/clothing/mask/gas/explorer`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/equipment/explorer_gear.dm#L58), [`/obj/item/clothing/suit/hooded/cloak/goliath`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/equipment/explorer_gear.dm#L113), [`/obj/item/clothing/suit/armor/bone`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/equipment/explorer_gear.dm#L186)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ костюм и капюшон исследователя, противогаз, плащ голиафа с капюшоном, костяная броня и шлем-череп — обычная одежда (`crate::clothing`: броня, капюшоны, поднятие маски); `ss13_game::mining::explorer`: шкура голиафа (по единице стопки) усиливает костюм и капюшон исследователя, талисман — костяную броню и шлем-череп (+10 melee, до 3, приставка «reinforced», счёт в осмотре); плащ голиафа в руке alt-кликом переключается между защитным (слот костюма, броня, термозащита) и церемониальным (шея, без защиты) режимом; поднятый противогаз исследователя помещается в коробки (`WEIGHT_CLASS_SMALL`); усиление берсерка останками дракона — лут мегафауны (ниже), плиты меха Рипли — меха
 
 ### Органы фауны (monster cores)
 Регенеративное ядро легиона (полное лечение, портится без стабилизатора), железа ускорения, мешок бримпыли; можно вживить как орган с активной способностью.

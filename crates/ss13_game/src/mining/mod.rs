@@ -5,7 +5,8 @@
 //! them ([`console`]), mining vouchers and the point transfer card ([`equipment`]), kinetic
 //! accelerator modkits ([`modkits`]), the stacking machine with its console ([`stacking`]) and
 //! the fauna's monster cores with the stabilizing serum ([`cores`]), the resonator
-//! ([`resonator`]), bluespace shelter capsules ([`capsule`]) and marker beacons ([`beacons`]).
+//! ([`resonator`]), bluespace shelter capsules ([`capsule`]), marker beacons ([`beacons`]) and the explorer gear's
+//! armour plates ([`explorer`]).
 //! This module holds the windows' data, which both halves share; the client views are in
 //! [`client`].
 //!
@@ -29,6 +30,8 @@ pub mod console;
 pub mod cores;
 #[cfg(feature = "server")]
 pub mod equipment;
+#[cfg(feature = "server")]
+pub mod explorer;
 #[cfg(feature = "server")]
 pub mod modkits;
 #[cfg(feature = "server")]
@@ -93,6 +96,7 @@ impl bevy::prelude::Plugin for MiningServerPlugin {
             resonator::ResonatorPlugin,
             capsule::CapsulePlugin,
             beacons::BeaconsPlugin,
+            explorer::ExplorerPlugin,
         ));
     }
 }
@@ -127,6 +131,7 @@ pub fn item_interaction(
         || cores::item_interaction(world, client, mob, held, target)
         || resonator::item_interaction(world, mob, held, target)
         || beacons::item_interaction(world, client, mob, held, target)
+        || explorer::item_interaction(world, client, held, target)
         || modkits::item_interaction(world, client, mob, held, target)
         || equipment::item_interaction(world, client, mob, held, target)
         || stacking::item_interaction(world, client, mob, held, target)
@@ -145,6 +150,7 @@ pub fn hand_interaction(
 ) -> bool {
     modkits::item_interaction(world, client, mob, held, target)
         || equipment::item_interaction(world, client, mob, held, target)
+        || explorer::item_interaction(world, client, held, target)
         || rocks::hand_interaction(world, client, mob, held, target)
 }
 
@@ -159,6 +165,7 @@ pub fn examine_lines(
     cores::examine_lines(world, target, lines);
     capsule::examine_lines(world, target, lines);
     beacons::examine_lines(world, target, lines);
+    explorer::examine_lines(world, target, lines);
     equipment::examine_lines(world, target, lines);
     rocks::examine_lines(world, target, lines);
 }
@@ -171,7 +178,9 @@ pub fn click_alt(
     mob: bevy::prelude::Entity,
     target: bevy::prelude::Entity,
 ) -> bool {
-    orm::click_alt(world, client, target) || beacons::click_alt(world, client, mob, target)
+    orm::click_alt(world, client, target)
+        || beacons::click_alt(world, client, mob, target)
+        || explorer::click_alt(world, client, mob, target)
 }
 
 /// tgui `OreBox`.
