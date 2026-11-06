@@ -499,6 +499,9 @@ fn hit(world: &mut World, e: Entity, p: &Projectile, name: &str, target: Entity)
     {
         return;
     }
+    if crate::mobs::megafauna::deflects_projectile(world, target) {
+        return;
+    }
     impact(world, p, name, target);
     crate::mobs::megafauna::on_projectile_hit(world, p, target);
     if let Some(bolt) = bolt {
