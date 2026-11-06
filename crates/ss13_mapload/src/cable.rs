@@ -202,7 +202,7 @@ mod tests {
                 node,
             };
             world
-                .spawn((atom, c, appearance(), TilePos::new(x, 1, 1)))
+                .spawn((atom, c, appearance(), TilePos::new(x, 1, 1), ss13_world::Mapped))
                 .id()
         };
         // Layer-2 run x = 1..=3, a node maker on x = 2, a layer-1 cable on x = 4.
@@ -213,7 +213,7 @@ mod tests {
             banned_links: 0,
             node: true,
         };
-        world.spawn((grille, TilePos::new(2, 1, 1)));
+        world.spawn((grille, TilePos::new(2, 1, 1), ss13_world::Mapped));
         assert_eq!(connect_all(&mut world, &icons), (4, 0));
         let state_of = |e| names[world.get::<Appearance>(e).unwrap().icon_state.0 as usize];
         assert_eq!(run.map(state_of), ["l2-4", "l2-4-8-node", "l2-8"]);

@@ -70,7 +70,6 @@ pub mod wallmount;
 
 use std::path::{Path, PathBuf};
 
-use anyhow::Context as _;
 use bevy::prelude::*;
 use ss13_proto::ProtoAppExt;
 
@@ -472,12 +471,16 @@ fn load_on_startup(world: &mut World) {
 pub fn load_template(world: &mut World, path: &Path) -> anyhow::Result<u16> {
     let assets = world
         .get_resource::<MapLoadPlugin>()
-        .context("no MapLoadPlugin")?
+        .ok_or_else(|| anyhow::anyhow!("no MapLoadPlugin"))?
         .assets
         .clone();
     let manifest = read_manifest(&assets)?;
     let report = load_maps(world, &[path.to_owned()], &manifest)?;
-    let first_z = report.maps.first().context("nothing loaded")?.first_z;
+    let first_z = report
+        .maps
+        .first()
+        .ok_or_else(|| anyhow::anyhow!("nothing loaded"))?
+        .first_z;
     let seed = world.get_resource::<MapSeed>().map_or(0, |s| s.0) ^ u64::from(first_z);
     let fidelity = fidelity::apply(world, &manifest, seed);
     info!("{report}");
