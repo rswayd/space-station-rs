@@ -1423,6 +1423,7 @@ impl SpeciesDef {
             tox_lover: self.has(Trait::ToxinLover),
             tox_immune: self.has(Trait::ToxImmune),
             no_softcrit: self.has(Trait::NoSoftcrit),
+            no_hardcrit: false,
         }
     }
 }
@@ -1475,7 +1476,10 @@ pub fn set_species(world: &mut World, mob: Entity, id: SpeciesId) {
     crate::quirks::reremove_common(world, mob);
     regenerate_organs(world, mob, true);
     if let Some(mut health) = world.get_mut::<Health>(mob) {
-        let mods = def.body_mods();
+        let mut mods = def.body_mods();
+        // The tenacity trauma's traits stay (`crate::medical::traumas::refresh`).
+        mods.no_softcrit |= health.mods.no_hardcrit;
+        mods.no_hardcrit = health.mods.no_hardcrit;
         if health.mods != mods {
             health.mods = mods;
         }

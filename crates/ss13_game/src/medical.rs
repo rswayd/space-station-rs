@@ -50,6 +50,7 @@ pub mod organs;
 pub mod phobia_data;
 pub mod pods;
 pub mod sleeper;
+pub mod special_traumas;
 pub mod split_personality;
 pub mod stasis;
 pub mod surgery;
@@ -249,6 +250,7 @@ impl Plugin for MedicalServerPlugin {
         cyberimps::build(app);
         split_personality::build(app);
         imaginary_friend::build(app);
+        special_traumas::build(app);
         app.add_systems(Update, fear::hear_words);
         stasis::build(app);
         pods::build(app);

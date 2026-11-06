@@ -90,6 +90,10 @@ pub struct SayRejected {
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MaskedSenses(pub MaskId);
 
+/// tg `TRAIT_SIXTHSENSE` on a living body (the death whispers trauma): it reads deadchat.
+#[derive(Component, Clone, Copy, Debug, Default)]
+pub struct SixthSense;
+
 /// Whether a listening body perceives what happens on a tile ([`MaskedSenses`]).
 #[derive(SystemParam)]
 pub struct Senses<'w, 's> {
@@ -537,12 +541,13 @@ fn handle_say(
     bodies: Query<Body>,
     stats: Query<(Entity, &SpeakerStat)>,
     mut emotes_used: Query<&mut EmotesUsed>,
-    (sight, senses, voices, seed, seen_by): (
+    (sight, senses, voices, seed, seen_by, sixth_sense): (
         Query<&SeeInvisible>,
         Senses,
         Query<&VoiceSpan>,
         Option<Res<ScrambleSeed>>,
         Query<&VisibleToMobs>,
+        Query<Entity, With<SixthSense>>,
     ),
     index: Res<SpatialIndex>,
     listeners: Res<Listeners>,
@@ -642,8 +647,12 @@ fn handle_say(
             let mut clients: Vec<Entity> = stats
                 .iter()
                 .filter(|(_, s)| **s == SpeakerStat::Dead)
-                .filter_map(|(e, _)| listeners.client_of(e))
+                .map(|(e, _)| e)
+                .chain(sixth_sense.iter())
+                .filter_map(|e| listeners.client_of(e))
                 .collect();
+            clients.sort_unstable();
+            clients.dedup();
             if !clients.contains(&client) {
                 clients.push(client);
             }

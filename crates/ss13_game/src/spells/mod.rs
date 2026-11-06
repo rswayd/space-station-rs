@@ -740,6 +740,8 @@ fn antimagic_of(world: &World, mob: Entity) -> u32 {
     if crate::chem::blood_amount(world, mob, "/datum/reagent/water/holywater") > 0.0 {
         flags |= MAGIC_RESISTANCE_HOLY;
     }
+    // The antimagic and godwoken traumas (`TRAIT_ANTIMAGIC`, `TRAIT_HOLY`).
+    flags |= crate::medical::special_traumas::antimagic_flags(world, mob);
     flags
 }
 

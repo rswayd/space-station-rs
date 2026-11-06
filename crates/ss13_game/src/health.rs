@@ -160,6 +160,8 @@ pub struct BodyMods {
     pub tox_lover: bool,
     pub tox_immune: bool,
     pub no_softcrit: bool,
+    /// `TRAIT_NOHARDCRIT` (the tenacity trauma, `crate::medical::traumas`).
+    pub no_hardcrit: bool,
 }
 
 impl Default for BodyMods {
@@ -170,6 +172,7 @@ impl Default for BodyMods {
             tox_lover: false,
             tox_immune: false,
             no_softcrit: false,
+            no_hardcrit: false,
         }
     }
 }
@@ -474,8 +477,11 @@ pub fn update_stat(health: &Health, stat: &mut Stat) -> Option<Stat> {
         Some(_) if health.health() <= 0.0 => Stat::Dead,
         Some(_) => Stat::Conscious,
         // `TRAIT_NOSOFTCRIT`: conscious until hard crit.
+        // `TRAIT_NOHARDCRIT`: no hard crit, the soft crit check instead.
         None => match Stat::for_health(health.health()) {
-            Stat::SoftCrit if health.mods.no_softcrit => Stat::Conscious,
+            Stat::HardCrit if !health.mods.no_hardcrit => Stat::HardCrit,
+            Stat::HardCrit | Stat::SoftCrit if !health.mods.no_softcrit => Stat::SoftCrit,
+            Stat::HardCrit | Stat::SoftCrit => Stat::Conscious,
             stat => stat,
         },
     };
