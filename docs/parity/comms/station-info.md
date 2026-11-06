@@ -25,7 +25,7 @@
 Машина, объявляющая по радио о прибытии экипажа, новых главах, исследованных узлах, экстренных запросах и пр.; настраиваемые шаблоны, емаг/EMP портит объявления.
 
 - **Код:** [`/obj/machinery/announcement_system`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/announcement_system.dm#L3), [`/datum/aas_config_entry`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/announcement_system.dm#L239), [`proc/announce()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/announcement_system.dm#L213); tgui: [`AutomatedAnnouncement.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/AutomatedAnnouncement.tsx)
-- **Статус в ss13-rs:** ❌ нет (оповещение СБ о несовершеннолетнем покупателе торгового автомата, `vendomat_age_control`, ждёт AAS: автомат уже отказывает, `crates/ss13_game/src/vending/mod.rs`)
+- **Статус в ss13-rs:** 🟡 частично — только запись «прибытие» (`crates/ss13_game/src/arrivals.rs`, `aas_announce`): первая запитанная AAS базового типа говорит по общему каналу «X прибывает на станцию в должности Y»; нет окна `AutomatedAnnouncement`, остальных записей (главы, узлы, запросы), шаблонов, емага и ЭМИ (оповещение СБ о несовершеннолетнем покупателе торгового автомата, `vendomat_age_control`, ждёт AAS: автомат уже отказывает, `crates/ss13_game/src/vending/mod.rs`)
 
 ### Голопады и голозвонки
 Голопад вызывает другой голопад (голограмма звонящего, разговор), ИИ проецирует голограмму; защищённые голопады; запись и воспроизведение голодисков.

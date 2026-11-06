@@ -536,6 +536,10 @@ pub fn join(world: &mut World, client: Entity, job: usize, latejoin: bool) -> En
     // `/datum/job/chaplain/after_spawn`: the bible, the religion's names.
     crate::service::chaplain_spawned(world, client, mob);
     crate::records::manifest::inject_joiner(world, mob, job);
+    // `AttemptLateSpawn`: `SSshuttle.arrivals.QueueAnnounce(humanc, rank)`.
+    if latejoin {
+        crate::arrivals::queue_announce(world, mob, &def.title);
+    }
     world.entity_mut(client).remove::<(NewPlayer, JobBoard)>();
     info!(
         "{name} ({client}) joined as {} at {pos:?}{}",

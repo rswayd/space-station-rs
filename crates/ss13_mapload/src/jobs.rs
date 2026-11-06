@@ -31,6 +31,7 @@ pub const OVERFLOW_JOB: &str = "/datum/job/assistant";
 /// Where `SSjob` files jobs without `departments_list`.
 const UNDEFINED_DEPARTMENT: &str = "/datum/job_department/undefined";
 /// `JOB_NEW_PLAYER_JOINABLE`.
+const JOB_ANNOUNCE_ARRIVAL: i64 = 1;
 const JOB_NEW_PLAYER_JOINABLE: i64 = 1 << 4;
 const JOB_ANTAG_BLACKLISTED: i64 = 1 << 13;
 const JOB_ANTAG_PROTECTED: i64 = 1 << 14;
@@ -185,6 +186,9 @@ pub struct Job {
     /// The trim's `sechud_icon_state` (`icons/mob/huds/hud.dmi`).
     #[serde(default)]
     pub sechud_icon_state: String,
+    /// Without `JOB_ANNOUNCE_ARRIVAL`: the AAS does not announce a latejoiner of this job.
+    #[serde(default)]
+    pub quiet_arrival: bool,
 }
 
 /// `STAFFING_PRIORITY_NEGLIGIBLE`, the `/datum/job` default.
@@ -520,6 +524,7 @@ pub fn resolve(types: &DmTypes) -> JobsData {
             wildcard_access,
             template_access,
             sechud_icon_state,
+            quiet_arrival: job_flags & JOB_ANNOUNCE_ARRIVAL == 0,
         });
     }
 

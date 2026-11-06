@@ -1,7 +1,9 @@
-//! The emergency shuttle console window's data, shared by both halves: tgui
-//! `EmergencyShuttleConsole.tsx` of `/obj/machinery/computer/emergency_shuttle`
-//! (`code/modules/shuttle/mobile_port/variants/emergency/emergency_console.dm`). The server half
-//! is `crate::shuttle_console_server`, the client view `crate::shuttle_console_client`.
+//! The shuttle console windows' data, shared by both halves: tgui `EmergencyShuttleConsole.tsx`
+//! of `/obj/machinery/computer/emergency_shuttle`
+//! (`code/modules/shuttle/mobile_port/variants/emergency/emergency_console.dm`), server half
+//! `crate::shuttle_console_server`; and `ShuttleConsole.jsx` of every
+//! `/obj/machinery/computer/shuttle` (`code/modules/shuttle/shuttle_consoles/shuttle_console.dm`),
+//! server half `crate::shuttle_nav`. Both views are in `crate::shuttle_console_client`.
 
 use serde::{Deserialize, Serialize};
 use ss13_tgui::UiInterface;
@@ -32,3 +34,32 @@ pub struct EmergencyConsoleData {
 pub const AUTHORIZE: &str = "authorize";
 pub const REPEAL: &str = "repeal";
 pub const ABORT: &str = "abort";
+
+/// A shuttle console.
+pub struct ShuttleConsoleUi;
+
+impl UiInterface for ShuttleConsoleUi {
+    const NAME: &'static str = "ShuttleConsole";
+    type Data = ShuttleConsoleData;
+    type StaticData = ();
+}
+
+/// `/obj/machinery/computer/shuttle/ui_data`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ShuttleConsoleData {
+    pub docked_location: String,
+    /// `(id, name)` of the valid destinations.
+    pub locations: Vec<(String, String)>,
+    pub locked: bool,
+    pub authorization_required: bool,
+    pub timer_str: String,
+    pub destination: Option<String>,
+    pub status: String,
+}
+
+/// `act('move', { shuttle_id })`.
+pub const MOVE: &str = "move";
+pub const SHUTTLE_ID: &str = "shuttle_id";
+/// `act('set_destination', { destination })`.
+pub const SET_DESTINATION: &str = "set_destination";
+pub const DESTINATION: &str = "destination";

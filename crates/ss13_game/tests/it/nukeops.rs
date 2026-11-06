@@ -520,10 +520,12 @@ impl Station {
         });
         self.act(p, window, MOVE, &[(SHUTTLE_ID, dock)]);
         self.run_until("the infiltrator leaves", |s| {
-            s.server.world().resource::<Infiltrator>().flight != Flight::Idle
+            let world = s.server.world();
+            world.resource::<Infiltrator>().flight(world) != Flight::Idle
         });
         self.run_until_for(30.0, "the infiltrator docks", |s| {
-            s.server.world().resource::<Infiltrator>().flight == Flight::Idle
+            let world = s.server.world();
+            world.resource::<Infiltrator>().flight(world) == Flight::Idle
         });
     }
 }

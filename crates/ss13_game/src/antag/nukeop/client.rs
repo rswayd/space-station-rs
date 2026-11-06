@@ -1,7 +1,6 @@
-//! The nuclear operatives' windows (client): `NuclearBomb.tsx` (the keypad) and
-//! `ShuttleConsole.jsx` (the infiltrator's console).
-// shortcut: the `retro` theme and the NT logo are approximated with plain colours; the console's
-// authorization modal is not ported (nothing here needs admin authorization).
+//! The nuclear operatives' window (client): `NuclearBomb.tsx` (the keypad). The infiltrator's
+//! console is the shared `ShuttleConsole.jsx` (`crate::shuttle_console_client`).
+// shortcut: the `retro` theme and the NT logo are approximated with plain colours.
 
 use bevy::app::Propagate;
 use bevy::scene::EntityScene;
@@ -9,17 +8,13 @@ use ss13_tgui::client::{AppTguiClientExt, ClientUi};
 use ss13_ui_kit::prelude::*;
 use ss13_ui_kit::theme::{Bold, FontPx};
 
-use super::{
-    ANCHOR, ARM, DESTINATION, DIGIT, EJECT_DISK, KEYPAD, MOVE, NuclearBombData, NuclearBombUi,
-    SET_DESTINATION, SHUTTLE_ID, ShuttleConsoleData, ShuttleConsoleUi,
-};
+use super::{ANCHOR, ARM, DIGIT, EJECT_DISK, KEYPAD, NuclearBombData, NuclearBombUi};
 
 pub struct NukeopClientPlugin;
 
 impl Plugin for NukeopClientPlugin {
     fn build(&self, app: &mut App) {
-        app.register_ui_view::<NuclearBombUi>()
-            .register_ui_view::<ShuttleConsoleUi>();
+        app.register_ui_view::<NuclearBombUi>();
     }
 }
 
@@ -143,116 +138,6 @@ impl ClientUi for NuclearBombUi {
                             Propagate::<TextColor>(TextColor(Color::srgb(0.61, 0.6, 0.53)))
                             Children [ @Icon { @name: "radiation" } ]
                         ]
-                    ]
-                ]
-            ]
-        }
-    }
-}
-
-/// `STATUS_COLOR_KEYS`.
-fn status_color(status: &str) -> UiColor {
-    match status {
-        "In Transit" => UiColor::Good,
-        "Idle" | "Igniting" | "Recharging" => UiColor::Average,
-        _ => UiColor::Bad,
-    }
-}
-
-impl ClientUi for ShuttleConsoleUi {
-    const WIDTH: f32 = 350.0;
-    const HEIGHT: f32 = 230.0;
-
-    fn content(_: &(), data: &ShuttleConsoleData) -> impl Scene {
-        let name_of = |id: &Option<String>| {
-            id.as_ref().and_then(|id| {
-                data.locations
-                    .iter()
-                    .find(|(i, _)| i == id)
-                    .map(|(_, n)| n.clone())
-            })
-        };
-        let selected = name_of(&data.destination);
-        let timer = if data.timer_str.is_empty() {
-            "00:00".to_owned()
-        } else {
-            data.timer_str.clone()
-        };
-        let status = if data.status.is_empty() {
-            "Not Available".to_owned()
-        } else {
-            data.status.clone()
-        };
-        let status_text = status_color(&status).text().unwrap_or_default();
-        let location = if data.docked_location.is_empty() {
-            "Not Available".to_owned()
-        } else {
-            data.docked_location.clone()
-        };
-        let bad = UiColor::Bad.text().unwrap_or_default();
-        let average = UiColor::Average.text().unwrap_or_default();
-        let none = data.locations.is_empty().then(|| {
-            EntityScene(bsn! {
-                Node Propagate::<TextColor>(TextColor(bad))
-                Children [ Text("Not Available") ]
-            })
-        });
-        let one = (data.locations.len() == 1).then(|| {
-            let name = data.locations[0].1.clone();
-            EntityScene(bsn! {
-                Node Propagate::<TextColor>(TextColor(average))
-                Children [ Text(name) ]
-            })
-        });
-        let many = (data.locations.len() > 1).then(|| {
-            let options: Vec<String> = data.locations.iter().map(|(_, n)| n.clone()).collect();
-            let shown = selected
-                .clone()
-                .unwrap_or_else(|| "Select a Destination".to_owned());
-            let disabled = data.locked || data.authorization_required;
-            EntityScene(bsn! {
-                @Dropdown { @value_param: DESTINATION, @width: 15.0, @over: true }
-                Dropdown { options: options, selected: shown, disabled: disabled }
-                Act({SET_DESTINATION.to_owned()})
-            })
-        });
-        let depart_disabled = selected.is_none() || data.locked || data.authorization_required;
-        let dest_id = data.destination.clone().unwrap_or_default();
-        let depart = params(&[(SHUTTLE_ID, &dest_id)]);
-        bsn! {
-            @WindowContent
-            Children [
-                @Section
-                Children [
-                    Node { justify_content: JustifyContent::Center }
-                    Propagate::<Bold>(Bold(true))
-                    Propagate::<FontPx>(FontPx(26.0))
-                    Children [ Text(timer) ]
-                    --
-                    Node { justify_content: JustifyContent::Center, margin: UiRect::bottom(px(6)) }
-                    Propagate::<FontPx>(FontPx(14.0))
-                    Children [
-                        Node Propagate::<Bold>(Bold(true)) Children [ Text("STATUS:") ]
-                        --
-                        Node { margin: UiRect::left(px(6)) }
-                        Propagate::<TextColor>(TextColor(status_text))
-                        Children [ Text(status) ]
-                    ]
-                    --
-                    @Section { @title: "Shuttle Controls" }
-                    Children [
-                        @LabeledList
-                        Children [
-                            @LabeledListItem { @label: "Location", @content: location }
-                            --
-                            @LabeledListItem { @label: "Destination" }
-                            Children [ {none} -- {one} -- {many} ]
-                        ]
-                        --
-                        @ss13_ui_kit::Button { @content: "Depart", @icon: "arrow-up", @fluid: true }
-                        ss13_ui_kit::Button { disabled: depart_disabled }
-                        Act({MOVE.to_owned()})
-                        depart
                     ]
                 ]
             ]

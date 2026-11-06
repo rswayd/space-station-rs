@@ -407,11 +407,15 @@ pub mod server;
 pub mod service;
 #[cfg(feature = "server")]
 pub mod shuttle;
+#[cfg(feature = "server")]
+pub mod shuttle_catalog;
 pub mod shuttle_console;
 #[cfg(feature = "client")]
 pub mod shuttle_console_client;
 #[cfg(feature = "server")]
 pub mod shuttle_console_server;
+#[cfg(feature = "server")]
+pub mod shuttle_nav;
 pub mod silicon;
 #[cfg(feature = "server")]
 pub mod skills;
