@@ -519,6 +519,8 @@ impl Plugin for ShuttleServerPlugin {
                 crate::shuttle_nav::ShuttleNavPlugin,
                 crate::shuttle_catalog::ShuttleCatalogPlugin,
                 crate::mining_shuttles::MiningShuttlesPlugin,
+                crate::away_shuttles::AwayShuttlesPlugin,
+                crate::shuttle_remote::ShuttleRemotePlugin,
             ));
     }
 }

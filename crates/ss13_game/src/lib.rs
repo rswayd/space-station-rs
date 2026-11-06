@@ -180,6 +180,8 @@ pub mod atmos_exposure;
 #[cfg(feature = "server")]
 pub mod atmos_machinery;
 #[cfg(feature = "server")]
+pub mod away_shuttles;
+#[cfg(feature = "server")]
 pub mod bar;
 #[cfg(feature = "server")]
 pub mod barsign;
@@ -429,6 +431,8 @@ pub mod shuttle_console_client;
 pub mod shuttle_console_server;
 #[cfg(feature = "server")]
 pub mod shuttle_nav;
+#[cfg(feature = "server")]
+pub mod shuttle_remote;
 pub mod silicon;
 #[cfg(feature = "server")]
 pub mod skills;
