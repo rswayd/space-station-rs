@@ -474,8 +474,9 @@ cargo run -p ss13_mapload --example map_shot -- --assets $ASSETS --seed 1 \
 
 The full gate is `scripts/gate.sh` (`--no-bots` skips the seed suite): `cargo fmt --check`,
 `cargo deny check licenses sources bans` (dependency licenses must be AGPL-compatible, `deny.toml`),
-`cargo lint`, `cargo nextest run --workspace --all-features --no-fail-fast`, `cargo bins` and the
-bot seed suite, each step timed. It needs `cargo-nextest` and `cargo-deny` (`cargo install
+`cargo lint`, `cargo nextest run --workspace --all-features --no-fail-fast`, the ignored tests on
+real assets (`--run-ignored only`, without the benchmarks and the seed suite; only when
+`SS13_SOURCE` is set, about 4 min), `cargo bins` and the bot seed suite, each step timed. It needs `cargo-nextest` and `cargo-deny` (`cargo install
 --locked cargo-nextest cargo-deny`) and assets converted from the same tree (`SS13_ASSETS`, default
 `assets/generated`).
 

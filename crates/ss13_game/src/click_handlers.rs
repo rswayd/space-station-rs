@@ -60,6 +60,7 @@
 //! | 3166 | `cargo::coupon::cigarettes_attack_self` |
 //! | 3183 | `mining::cores::attack_self` (monster cores) |
 //! | 3184 | `mining::resonator::attack_self` |
+//! | 3187 | `cargo::money::coin_attack_self` (coin flip) |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):
 //!
@@ -71,6 +72,7 @@
 //! | 300 | `forensics::server::item_interaction` |
 //! | 400 | `medical::cyberimps::item_interaction` |
 //! | 450 | `fishing::server::insert_bait`, `fishing::aquarium::item_interaction` |
+//! | 473 | `cargo::money::item_interaction` (cash onto the ID in the other hand) |
 //! | 480 | `clothing::accessories::attach` (before a jumpsuit's holster takes the item) |
 //! | 500 | core: a storage opens or takes the held item |
 //! | 600 | `implants::item_interaction` |
@@ -166,6 +168,8 @@
 //! | 100 | `antag::uplink::item_interaction` |
 //! | 200 | `antag::syndie_items::item_interaction` |
 //! | 300 | `emag::interact_with_atom` (left click) |
+//! | 330 | `shuttle_console_server` (a held item on a shuttle console) |
+//! | 340 | `shuttle_nav` (a held item on a navigation console) |
 //! | 400 | `modsuit::server::item_interaction` |
 //! | 500 | `assemblies::server::item_interaction` |
 //! | 560 | `wiremod::server::item_interaction` |
@@ -216,12 +220,14 @@
 //! | 2960 | `flora::item_interaction` |
 //! | 2970 | `cargo::mail_sorter::item_interaction` |
 //! | 2975 | `cargo::coupon::attack_atom` (supply consoles) |
+//! | 2977 | `cargo::money::item_interaction` (cash and ID cards, holochips) |
 //! | 2980 | `cargo::express::item_interaction` |
 //! | 2985 | `cargo::materials_market::item_interaction` |
 //! | 3000 | `mining::item_interaction` |
 //! | 3100 | `science::item_interaction` |
 //! | 3110 | `science::exodrone::server::item_interaction` (the drone launcher) |
 //! | 3200 | `botany::item_interaction` |
+//! | 3260 | `mobs::farm::feed_egg_layer` |
 //! | 3300 | `food::item_interaction` |
 //! | 3400 | `plumbing::item_interaction` |
 //! | 3440 | `tank_storage::item_interaction` |
@@ -230,6 +236,7 @@
 //! | 3465 | `effects::teleporters::portal_click` (permanent portals) |
 //! | 3500 | `janitor::item_interaction` |
 //! | 3600 | `genetics::console::item_interaction` |
+//! | 3660 | `mobs::farm` milking, `mobs::critters::turtle_drink` (before `chem::item_interaction`) |
 //! | 3700 | `chem::item_interaction` |
 //! | 3800 | `medical::item_interaction` |
 //! | 3900 | `multiz::interact` (out of combat mode) |
@@ -427,5 +434,80 @@ mod tests {
         let mut app = App::new();
         app.add_click_handler(ClickPhase::EmptyHand, 100, |_, _| false)
             .add_click_handler(ClickPhase::EmptyHand, 100, |_, _| true);
+    }
+
+    /// Every `add_click_handler(ClickPhase::X, N, ...)` in `src` (outside this file's tests) has
+    /// its `| N |` row in the module table under phase X, and every row is registered somewhere:
+    /// the table is how a new hook finds a free priority.
+    #[test]
+    fn the_priority_table_lists_every_registration() {
+        use std::collections::BTreeSet;
+        const PHASES: [&str; 4] = ["AttackSelf", "OtherHand", "EmptyHand", "HeldOnTarget"];
+        fn sources(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+            for entry in std::fs::read_dir(dir).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    sources(&path, out);
+                } else if path.extension().is_some_and(|e| e == "rs") {
+                    out.push(path);
+                }
+            }
+        }
+        let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut files = Vec::new();
+        sources(&src, &mut files);
+        let needle = "add_click_handler(ClickPhase::";
+        let mut registered = BTreeSet::new();
+        for file in &files {
+            let text = std::fs::read_to_string(file).unwrap();
+            // This module's own tests register made-up priorities.
+            let text = if file.ends_with("click_handlers.rs") {
+                text.split("#[cfg(test)]")
+                    .next()
+                    .unwrap_or_default()
+                    .to_owned()
+            } else {
+                text
+            };
+            for (at, _) in text.match_indices(needle) {
+                let rest = &text[at + needle.len()..];
+                let phase: String = rest.chars().take_while(|c| c.is_alphanumeric()).collect();
+                let prio: String = rest[phase.len()..]
+                    .trim_start_matches([',', ' '])
+                    .chars()
+                    .take_while(char::is_ascii_digit)
+                    .collect();
+                assert!(
+                    PHASES.contains(&phase.as_str()),
+                    "{}: {phase}",
+                    file.display()
+                );
+                registered.insert((phase, prio.parse::<u32>().unwrap()));
+            }
+        }
+        let doc = include_str!("click_handlers.rs");
+        let mut listed = BTreeSet::new();
+        let mut phase = None;
+        for line in doc.lines().take_while(|l| l.starts_with("//!")) {
+            if let Some(p) = PHASES
+                .iter()
+                .find(|p| line.starts_with(&format!("//! [`ClickPhase::{p}`]")))
+            {
+                phase = Some(*p);
+            }
+            let prio = line
+                .strip_prefix("//! | ")
+                .and_then(|r| r.split(' ').next())
+                .and_then(|n| n.parse::<u32>().ok());
+            if let (Some(phase), Some(prio)) = (phase, prio) {
+                listed.insert((phase.to_owned(), prio));
+            }
+        }
+        let missing: Vec<_> = registered.difference(&listed).collect();
+        let stale: Vec<_> = listed.difference(&registered).collect();
+        assert!(
+            missing.is_empty() && stale.is_empty(),
+            "registered but not in the table: {missing:?}; in the table but not registered: {stale:?}"
+        );
     }
 }

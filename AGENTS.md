@@ -58,7 +58,8 @@ Goal: many concurrent players per round — every hot-path decision states frequ
 
 While working: `cargo check` and the tests of your area (`cargo nt -E 'test(/^<module>::/)'`;
 docs/RUNNING.md "Tests"). Once, at the end, after `git merge master`: `scripts/gate.sh` (fmt,
-`cargo lint`, `cargo nt --no-fail-fast`, `cargo bins`, the bot seed suite). The coordinator
+`cargo lint`, `cargo nt --no-fail-fast`, the ignored real-asset tests when `SS13_SOURCE` is set,
+`cargo bins`, the bot seed suite). The coordinator
 re-runs it after merging. New integration tests are modules of `crates/<crate>/tests/it/`, not new
 `tests/*.rs` files.
 Plus the task's own acceptance criterion is demonstrated by a test or an exact command with its
