@@ -49,6 +49,8 @@ pub enum DragJob {
     StuffCloset { closet: Entity, at: TilePos },
     /// The food in `storage` into the target microwave (`handle_dumping`).
     LoadMicrowave { storage: Entity },
+    /// The target mob picked up into a hand (`mob_try_pickup`, `crate::mob_holder`).
+    PickupMob,
 }
 
 /// One end of a drag, resolved for the dragging mob.
@@ -222,6 +224,16 @@ fn drag(world: &mut World, client: Entity, from: DragEnd, to: DragEnd) {
             return;
         }
     }
+    // `can_be_held`: an aggressively grabbed small mob dropped onto its grabber is picked up
+    // (and blocks the strip menu).
+    if to == End::World(mob)
+        && matches!(from, End::World(_))
+        && !traits.hands_blocked
+        && adjacent(world, dragged)
+        && crate::mob_holder::mousedrop_onto(world, actor, dragged)
+    {
+        return;
+    }
     if to == End::World(mob)
         && matches!(from, End::World(_))
         && adjacent(world, dragged)
@@ -334,6 +346,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter, job: DragJob) 
         DragJob::StuffCloset { closet, at } => {
             crate::closets::complete_stuff(world, mob, action.target, closet, at);
         }
+        DragJob::PickupMob => crate::mob_holder::complete_pickup(world, mob, action),
         DragJob::LoadMicrowave { storage } => {
             let held = world.get::<Inventory>(mob).and_then(Inventory::active_item);
             if held == Some(storage) {

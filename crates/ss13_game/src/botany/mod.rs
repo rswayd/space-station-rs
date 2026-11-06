@@ -68,6 +68,8 @@ const EQUIPMENT_DMI: &str = "icons/obj/service/hydroponics/equipment.dmi";
 const EZ_NUTRIENT: &str = "/datum/reagent/plantnutriment/eznutriment";
 /// `self_sustaining_overlay_icon_state` (equipment.dmi).
 const SELF_SUSTAINING_OVERLAY: &str = "gaia_blessing";
+/// `/obj/effect/overlay/vis_effect/snail` `icon_state`.
+const SNAIL_OVERLAY: &str = "snail_hydrotray";
 
 /// `plants.ron` with lookups by type.
 #[derive(Debug, Default)]
@@ -159,6 +161,8 @@ pub enum BotanyJob {
     FillTray,
     /// A shovel bagging a soil plot.
     BagSoil,
+    /// A held snail put into a tray.
+    InsertSnail,
 }
 
 pub struct BotanyServerPlugin;
@@ -339,6 +343,7 @@ fn process_trays(world: &mut World, mut next: Local<f64>) {
     let speed = f64::from(world.get_resource::<HydroSpeed>().map_or(1.0, |s| s.0));
     *next = t + MACHINES_WAIT / speed;
     let delay = tray::HYDROTRAY_CYCLE_DELAY / speed;
+    handle_snails(world);
     self_sustain(world);
     let mut query = world.query::<(Entity, &Tray)>();
     let due: Vec<Entity> = query
@@ -379,6 +384,113 @@ fn self_sustain(world: &mut World) {
             crate::chem::visible(world, e, "", &text, Span::Warning);
         }
         refresh_tray(world, e);
+    }
+}
+
+/// On a tray with a snail in it: the snail's holder (`our_snail`, the holder in its contents).
+#[derive(Component, Clone, Copy, Debug)]
+pub struct TraySnail(pub Entity);
+
+/// `/obj/item/mob_holder/snail/interact_with_atom` on a tray: 2 s, then the snail goes in.
+fn snail_interaction(
+    world: &mut World,
+    client: Entity,
+    mob: Entity,
+    held: Entity,
+    target: Entity,
+) -> bool {
+    let Some(snail) = world
+        .get::<crate::mob_holder::MobHolder>(held)
+        .map(|h| h.mob)
+        .filter(|_| {
+            world
+                .get::<DmItem>(held)
+                .is_some_and(|i| is_under(&i.path, crate::mob_holder::SNAIL_HOLDER))
+        })
+    else {
+        return false;
+    };
+    if world.get::<Tray>(target).is_none() {
+        return false;
+    }
+    if world.get::<crate::health::Stat>(snail) == Some(&crate::health::Stat::Dead) {
+        crate::tools::tell(world, client, Span::Warning, "it's dead!");
+        return true;
+    }
+    if world.get::<TraySnail>(target).is_some() {
+        crate::tools::tell(world, client, Span::Warning, "already has snail!");
+        return true;
+    }
+    let actor = crate::tools::Actor {
+        client,
+        mob,
+        item: Some(held),
+    };
+    crate::tools::do_after(
+        world,
+        actor,
+        target,
+        20.0,
+        0,
+        crate::construction::Job::Botany(BotanyJob::InsertSnail),
+    );
+    true
+}
+
+/// The end of putting a snail in: `forceMove(tray)` (`hydroponics/Entered`: the overlay).
+fn complete_snail(world: &mut World, _mob: Entity, action: &crate::tools::DoAfter) {
+    let (Some(holder), tray) = (action.item, action.target) else {
+        return;
+    };
+    let alive = world
+        .get::<crate::mob_holder::MobHolder>(holder)
+        .is_some_and(|h| {
+            world.get::<crate::health::Stat>(h.mob) != Some(&crate::health::Stat::Dead)
+        });
+    if !alive || world.get::<Tray>(tray).is_none() || world.get::<TraySnail>(tray).is_some() {
+        return;
+    }
+    crate::storage::put_inside(world, holder, tray);
+    world.entity_mut(tray).insert(TraySnail(holder));
+    refresh_tray(world, tray);
+}
+
+/// `hydroponics/Exited` of the snail's holder: the overlay goes.
+pub fn snail_left(world: &mut World, tray: Entity, holder: Entity) {
+    if world.get::<TraySnail>(tray).is_some_and(|s| s.0 == holder) {
+        world.entity_mut(tray).remove::<TraySnail>();
+        refresh_tray(world, tray);
+    }
+}
+
+/// `handle_snail()` of `process()`: 5% to eat 2 weeds; a dead snail climbs out
+/// (`COMSIG_LIVING_DEATH` -> `remove_snail`).
+// shortcut: the snail overlay does not waddle (`handle_animation`).
+fn handle_snails(world: &mut World) {
+    let mut query = world.query::<(Entity, &TraySnail)>();
+    let trays: Vec<(Entity, Entity)> = query.iter(world).map(|(e, s)| (e, s.0)).collect();
+    for (tray, holder) in trays {
+        let inside = world
+            .get::<crate::storage::StoredIn>(holder)
+            .is_some_and(|s| s.0 == tray);
+        let Some(snail) = world
+            .get::<crate::mob_holder::MobHolder>(holder)
+            .map(|h| h.mob)
+            .filter(|_| inside)
+        else {
+            world.entity_mut(tray).remove::<TraySnail>();
+            refresh_tray(world, tray);
+            continue;
+        };
+        if world.get::<crate::health::Stat>(snail) == Some(&crate::health::Stat::Dead) {
+            crate::mob_holder::release(world, holder, false);
+            continue;
+        }
+        if roll_prob(world, 5.0)
+            && let Some(mut state) = world.get_mut::<Tray>(tray)
+        {
+            state.adjust_weedlevel(-2.0);
+        }
     }
 }
 
@@ -831,6 +943,12 @@ pub fn refresh_tray(world: &mut World, e: Entity) {
             });
         }
     }
+    // `our_snail` (`layer + 0.01`).
+    if world.get::<TraySnail>(e).is_some()
+        && let Some(id) = icons.get(EQUIPMENT_DMI, SNAIL_OVERLAY)
+    {
+        overlays.push(ss13_shared::Overlay::new(id));
+    }
     if state.self_sustaining
         && let Some(id) = icons.get(EQUIPMENT_DMI, SELF_SUSTAINING_OVERLAY)
     {
@@ -868,6 +986,9 @@ pub fn item_interaction(
         return plants::analyze(world, client, target);
     }
     if !modifiers.right && soil::sack_interaction(world, client, mob, held, target) {
+        return true;
+    }
+    if !modifiers.right && snail_interaction(world, client, mob, held, target) {
         return true;
     }
     if grown_interaction(world, client, mob, held, target)
@@ -972,6 +1093,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &crate::tools::DoAfter, 
         BotanyJob::PlaceSoil => soil::complete_place(world, mob, action),
         BotanyJob::FillTray => soil::complete_fill(world, mob, action),
         BotanyJob::BagSoil => soil::complete_bag(world, mob, action),
+        BotanyJob::InsertSnail => complete_snail(world, mob, action),
     }
 }
 
@@ -1138,4 +1260,27 @@ pub(crate) fn test_plants() -> Plants {
         random_reagents: vec!["/datum/reagent/consumable/sugar".into()],
         tox_damage: vec![],
     })
+}
+
+#[cfg(test)]
+mod snail_tests {
+    use super::*;
+
+    #[test]
+    fn a_snail_out_of_its_tray_leaves_no_snail_behind() {
+        let mut world = World::new();
+        let tray = world.spawn(Tray::default()).id();
+        // A holder that is not in the tray (taken out by any path): the tray forgets it.
+        let stray = world.spawn_empty().id();
+        world.entity_mut(tray).insert(TraySnail(stray));
+        handle_snails(&mut world);
+        assert!(world.get::<TraySnail>(tray).is_none());
+        // `Exited` of the snail's own holder clears it; another holder leaving does not.
+        let holder = world.spawn_empty().id();
+        world.entity_mut(tray).insert(TraySnail(holder));
+        snail_left(&mut world, tray, stray);
+        assert!(world.get::<TraySnail>(tray).is_some());
+        snail_left(&mut world, tray, holder);
+        assert!(world.get::<TraySnail>(tray).is_none());
+    }
 }

@@ -26,7 +26,7 @@
 //!   floor) makes the emagger its master, "The Syndicate", with a Syndicate directive.
 // shortcut: windows are list prompts (no `PaiCard`, `PaiSubmit`, `PaiInterface` windows); the
 // candidacy lives for the round (no `pai.sav` savefile: persistence comes with the SQL wave);
-// no screen images, card overlays or light; a pAI cannot be picked up (no mob holders); the
+// no screen images, card overlays or light (pickups: `crate::mob_holder`); the
 // medical/security HUD, atmos sensor, GPS, music synthesizer, newscaster, signaler, camera,
 // messenger, crew manifest and crew monitor programs can be bought but tell their device is
 // missing (their devices' groups); no EMP or explosion effects, no encryption keys in the

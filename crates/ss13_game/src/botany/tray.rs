@@ -6,7 +6,7 @@
 //!
 //! The cycle is a pure function of the tray, its nutrient holder, the light and the dice, so it
 //! is tested without a world.
-// shortcut: no snails, bees, plumbing or circuits; `mutatepest` warns without spawning
+// shortcut: no bees, plumbing or circuits; `mutatepest` warns without spawning
 // spiderlings, strange reagent spawns no living plant.
 
 use ss13_reagents::{Chemistry, Holder, is_under};

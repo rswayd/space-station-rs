@@ -365,6 +365,8 @@ pub mod mining;
 #[cfg(feature = "server")]
 pub mod mining_shuttles;
 #[cfg(feature = "server")]
+pub mod mob_holder;
+#[cfg(feature = "server")]
 pub mod mobs;
 pub mod modpc;
 pub mod modsuit;
