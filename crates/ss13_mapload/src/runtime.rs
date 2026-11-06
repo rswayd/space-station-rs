@@ -45,6 +45,8 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/structure/marker_beacon",
     "/obj/effect/constructing_effect",
     "/obj/effect/temp_visual/resonance",
+    // `ss13_game::crayons`: what crayons and spray cans draw.
+    "/obj/effect/decal/cleanable/crayon",
     // `ss13_game::effects::gibs`: the gib spawners' decals and their streaks' splatters.
     "/obj/effect/decal/cleanable/blood/gibs",
     "/obj/effect/decal/cleanable/blood/gibs/up",

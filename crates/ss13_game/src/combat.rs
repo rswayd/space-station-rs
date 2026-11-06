@@ -278,6 +278,7 @@ fn melee(
                 || crate::service::barber::interacts_with_mobs(&item.path)
                 // Food is eaten out of combat mode (`crate::food`), hits in it.
                 || (crate::food::is_food(&item.path) && !combat.0)
+                || crate::crayons::interacts_with_mobs(&item.path, combat.0)
         }) {
             continue;
         }

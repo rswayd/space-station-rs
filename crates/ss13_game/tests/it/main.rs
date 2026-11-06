@@ -22,6 +22,7 @@ mod chem_machines;
 mod combat;
 mod comms;
 mod construction;
+mod crayons;
 mod cult;
 mod decor;
 mod devices;

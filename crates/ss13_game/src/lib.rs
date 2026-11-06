@@ -227,6 +227,8 @@ pub mod construction;
 #[cfg(feature = "server")]
 pub mod cooking;
 #[cfg(feature = "server")]
+pub mod crayons;
+#[cfg(feature = "server")]
 pub mod death;
 #[cfg(feature = "server")]
 pub mod debuffs;

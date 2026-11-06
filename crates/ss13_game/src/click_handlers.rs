@@ -74,6 +74,7 @@
 //! | 3190 | `janitor::broom_attack_self` (push broom wield) |
 //! | 3192 | `power::lighting::replacer_attack_self` (the fixtures on the user's tile) |
 //! | 3194 | `closets::kinds::bodybag_attack_self` (a folded body bag unfolds) |
+//! | 3203 | `crayons::attack_self` (the stencil menu, a spray can's cap and colour) |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):
 //!
@@ -286,6 +287,7 @@
 //! | 4000 | `atmos_machinery::windows::item_interaction` |
 //! | 4100 | `modpc::pda::item_interaction_secondary` (right click) |
 //! | 4200 | `disposals::item_interaction` |
+//! | 4253 | `crayons::interact` (drawing, spray painting, chalk outlines, eating a crayon) |
 //! | 4300 | `tables::item_interaction` |
 //! | 4400 | `science::experi_scanner::pre_attack` (not on living mobs) |
 //! | 4460 | `closets::kinds::held_on_target` (large crates, multitools on abandoned crates) |
