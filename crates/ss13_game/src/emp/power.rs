@@ -22,9 +22,6 @@ use crate::power::{Apc, LightFixture, LightProcessing, PowerMachine, Smes, Unpow
 const MACHINE_EMP_ENERGY: f64 = 7_500.0;
 /// `addtimer(CALLBACK(src, PROC_REF(reset), APC_RESET_EMP), 60 SECONDS)`.
 const APC_RESET_SECS: f64 = 60.0;
-/// `input_level_max`, `output_level_max` (200 kW with stock parts).
-// shortcut: the SMES's `power_coefficient` from its capacitors is not modelled; stock levels.
-const SMES_LEVEL_MAX: f64 = 200_000.0;
 /// `MECH_EMP_DAMAGE_LOWER`, `MECH_EMP_DAMAGE_UPPER`.
 const MECH_EMP_DAMAGE: (i64, i64) = (100, 180);
 /// `addtimer(restore_equipment, 3 SECONDS)`.
@@ -136,16 +133,20 @@ fn restore_apcs(world: &mut World) {
 /// `STANDARD_BATTERY_CHARGE / severity` drain.
 fn smes(world: &mut World, mut cursor: Local<MessageCursor<EmpAct>>) {
     for ev in emp_acts(world, &mut cursor) {
-        if !ev.hits_self() || world.get::<Smes>(ev.target).is_none() {
+        let Some((in_max, out_max)) = world
+            .get::<Smes>(ev.target)
+            .filter(|_| ev.hits_self())
+            .map(|s| (s.input_level_max, s.output_level_max))
+        else {
             continue;
-        }
+        };
         let (input, output, out_level, in_level) = {
             let mut rng = world.resource_mut::<EmpRng>();
             (
                 rng.range(0, 1) == 1,
                 rng.range(0, 1) == 1,
-                rng.range(0, SMES_LEVEL_MAX as i64) as f64,
-                rng.range(0, SMES_LEVEL_MAX as i64) as f64,
+                rng.range(0, out_max as i64) as f64,
+                rng.range(0, in_max as i64) as f64,
             )
         };
         let mut s = world.get_mut::<Smes>(ev.target).expect("checked above");

@@ -53,6 +53,7 @@
 //! | 3100 | `silicon::law_rack::attack_self` |
 //! | 3150 | `vehicles::attack_self` |
 //! | 3155 | `clothing::toggles::attack_self` (adjustable masks) |
+//! | 3160 | `airlock_construction::attack_self` (airlock electronics) |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):
 //!
@@ -105,6 +106,9 @@
 //! | 1700 | `multiz::interact` |
 //! | 1800 | `atmos_machinery::windows::interact` |
 //! | 1900 | `power::chargers::interact` |
+//! | 1950 | `power::pacman::interact` |
+//! | 1960 | `power::smes::interact` |
+//! | 1970 | `power::shields::interact` |
 //! | 2000 | `wallmount::interact` |
 //! | 2100 | `power::apc_ui::interact` |
 //! | 2200 | `mecha::bay::interact` |
@@ -169,6 +173,10 @@
 //! | 2600 | `chem_heater::item_interaction` |
 //! | 2700 | `wallmount::item_interaction` |
 //! | 2800 | `power::chargers::item_interaction` |
+//! | 2850 | `power::pacman::item_interaction` (also PACMAN boards) |
+//! | 2860 | `power::smes::item_interaction` (also SMES terminals) |
+//! | 2870 | `power::shields::item_interaction` |
+//! | 2880 | `airlock_construction::item_interaction` (door assemblies, the airlock painter) |
 //! | 2900 | `mecha::item_interaction` |
 //! | 2950 | `vehicles::item_interaction` |
 //! | 3000 | `mining::item_interaction` |

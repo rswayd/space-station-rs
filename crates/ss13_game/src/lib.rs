@@ -156,6 +156,8 @@ pub mod actions;
 #[cfg(feature = "client")]
 pub mod actions_client;
 #[cfg(feature = "server")]
+pub mod airlock_construction;
+#[cfg(feature = "server")]
 pub mod alt_appearance;
 #[cfg(feature = "server")]
 pub mod animation;

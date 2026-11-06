@@ -20,6 +20,10 @@ pub const TABLE_COMPONENT: &str = "dm_table";
 /// `/obj/item/stack/sheet/iron`.
 pub const IRON_SHEET: &str = "/obj/item/stack/sheet/iron";
 pub const RAD_COMPONENT: &str = "dm_rad_insulation";
+pub const DOOR_ASSEMBLY_COMPONENT: &str = "dm_door_assembly";
+/// `/obj/structure/door_assembly`.
+pub const DOOR_ASSEMBLY: &str = "/obj/structure/door_assembly";
+const AIRLOCK: &str = "/obj/machinery/door/airlock";
 
 /// Types the construction code spawns or turns turfs into, so `ss13-mapload convert` emits them
 /// even when no converted map uses them. Fixtures convert without them; the game then skips
@@ -135,6 +139,29 @@ pub struct DmRadInsulation {
     pub value: f32,
 }
 
+/// Airlock assembly vars (`code/game/objects/structures/door_assembly.dm`,
+/// `door_assembly_types.dm`), on `/obj/structure/door_assembly` and its subtypes.
+#[derive(Component, Reflect, Default, Clone, Debug, PartialEq)]
+pub struct DmDoorAssembly {
+    /// The finished airlock (solid, glass).
+    pub airlock_type: String,
+    pub glass_type: String,
+    pub base_name: String,
+    /// Glass is already in.
+    pub glass: bool,
+    /// No glass version; `nomineral`: no mineral plating.
+    pub noglass: bool,
+    pub nomineral: bool,
+    /// The mineral plating's sheet name (`"gold"`: `/obj/item/stack/sheet/mineral/gold`).
+    pub mineral: String,
+    pub multi_tile: bool,
+    /// What taking it apart leaves.
+    pub material_type: String,
+    pub material_amt: u32,
+    pub previous_assembly: String,
+    pub overlays_file: String,
+}
+
 /// Integrity, anchoring and construction vars of `/obj/structure`, `/obj/machinery` and
 /// `/obj/vehicle`.
 #[derive(Component, Reflect, Default, Clone, Debug, PartialEq)]
@@ -198,6 +225,8 @@ pub struct DmObj {
     pub dispensed_reagent: String,
     pub water_reclaimer: bool,
     pub reclaim_rate: f32,
+    /// Airlocks: `assemblytype`, the assembly they are built from and leave.
+    pub assembly_type: String,
 }
 
 #[derive(Clone, Copy)]
@@ -313,6 +342,23 @@ const OBJ_VARS: [(&str, &str, Kind); 26] = [
     ("walltype", "wall_type", Kind::Path),
 ];
 
+const DOOR_ASSEMBLY_VARS: [(&str, &str, Kind); 12] = [
+    ("airlock_type", "airlock_type", Kind::Path),
+    ("glass_type", "glass_type", Kind::Path),
+    ("base_name", "base_name", Kind::Text),
+    ("glass", "glass", Kind::Bool),
+    ("noglass", "noglass", Kind::Bool),
+    ("nomineral", "nomineral", Kind::Bool),
+    ("mineral", "mineral", Kind::Text),
+    ("multi_tile", "multi_tile", Kind::Bool),
+    ("material_type", "material_type", Kind::Path),
+    ("material_amt", "material_amt", Kind::Count),
+    ("previous_assembly", "previous_assembly", Kind::Path),
+    ("overlays_file", "overlays_file", Kind::Icon),
+];
+
+const AIRLOCK_VARS: [(&str, &str, Kind); 1] = [("assemblytype", "assembly_type", Kind::Path)];
+
 const CHAIR_VARS: [(&str, &str, Kind); 5] = [
     ("buildstacktype", "build_stack", Kind::Path),
     ("buildstackamount", "build_stack_amount", Kind::Count),
@@ -427,6 +473,74 @@ pub fn furniture_runtime_types(types: &DmTypes) -> Vec<String> {
     out
 }
 
+/// The airlock types an airlock painter paints with (`available_paint_jobs`), in tg's order.
+pub const PAINT_JOBS: [(&str, &str); 16] = [
+    ("Public", "/obj/machinery/door/airlock/public"),
+    ("Engineering", "/obj/machinery/door/airlock/engineering"),
+    ("Atmospherics", "/obj/machinery/door/airlock/atmos"),
+    ("Security", "/obj/machinery/door/airlock/security"),
+    ("Command", "/obj/machinery/door/airlock/command"),
+    ("Medical", "/obj/machinery/door/airlock/medical"),
+    ("Virology", "/obj/machinery/door/airlock/virology"),
+    ("Research", "/obj/machinery/door/airlock/research"),
+    ("Hydroponics", "/obj/machinery/door/airlock/hydroponics"),
+    ("Freezer", "/obj/machinery/door/airlock/freezer"),
+    ("Science", "/obj/machinery/door/airlock/science"),
+    ("Mining", "/obj/machinery/door/airlock/mining"),
+    ("Maintenance", "/obj/machinery/door/airlock/maintenance"),
+    ("External", "/obj/machinery/door/airlock/external"),
+    (
+        "External Maintenance",
+        "/obj/machinery/door/airlock/maintenance/external",
+    ),
+    ("Standard", "/obj/machinery/door/airlock"),
+];
+
+/// Every airlock assembly type, the airlocks they build and leave, the painter's airlock types
+/// and their assemblies, and what building and taking them apart uses
+/// (`ss13_game::airlock_construction`), so `ss13-mapload convert` emits them even when no map
+/// uses them.
+pub fn door_assembly_runtime_types(types: &DmTypes) -> Vec<String> {
+    let mut out: Vec<String> = types
+        .types
+        .keys()
+        .filter(|p| is_under(p, DOOR_ASSEMBLY))
+        .cloned()
+        .collect();
+    out.extend(PAINT_JOBS.iter().map(|(_, p)| (*p).to_owned()));
+    let made: Vec<String> = out
+        .iter()
+        .flat_map(|p| {
+            [
+                "airlock_type",
+                "glass_type",
+                "material_type",
+                "previous_assembly",
+                "assemblytype",
+            ]
+            .map(|v| (p, v))
+        })
+        .filter_map(|(p, var)| type_path(types.resolved(p, var)))
+        .chain(
+            [
+                "/obj/item/electronics/airlock",
+                "/obj/item/airlock_painter",
+                "/obj/item/stack/cable_coil",
+                "/obj/item/stack/sheet/iron",
+                "/obj/item/stack/sheet/glass",
+                "/obj/item/stack/sheet/rglass",
+                "/obj/item/shard",
+            ]
+            .map(str::to_owned),
+        )
+        .collect();
+    out.extend(made);
+    out.retain(|p| types.types.contains_key(p));
+    out.sort();
+    out.dedup();
+    out
+}
+
 /// A dumped value as a number: plain numbers and constant expressions the extractor kept as
 /// text (`{"expr": "50"}`); null is 0.
 fn number(v: Option<&serde_json::Value>) -> Option<f64> {
@@ -533,6 +647,18 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
         fields(types, path, OBJ_COMPONENT, &OBJ_VARS, &mut out);
         if is_under(path, "/obj/structure/table") || is_under(path, "/obj/structure/table_frame") {
             fields(types, path, TABLE_COMPONENT, &TABLE_VARS, &mut out);
+        }
+        if is_under(path, DOOR_ASSEMBLY) {
+            fields(
+                types,
+                path,
+                DOOR_ASSEMBLY_COMPONENT,
+                &DOOR_ASSEMBLY_VARS,
+                &mut out,
+            );
+        }
+        if is_under(path, AIRLOCK) {
+            fields(types, path, OBJ_COMPONENT, &AIRLOCK_VARS, &mut out);
         }
         if is_under(path, "/obj/structure/chair") {
             fields(types, path, OBJ_COMPONENT, &CHAIR_VARS, &mut out);

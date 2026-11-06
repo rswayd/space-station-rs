@@ -126,14 +126,29 @@ impl Grid {
         self.resolve_tile(pos);
     }
 
-    /// tg `disconnect_from_network` of a machine node (an emitter cut loose).
-    // shortcut: SMES and terminals are never removed (no construction for them yet).
+    /// tg `disconnect_from_network` of a machine node (an emitter cut loose, a SMES or terminal
+    /// taken apart).
+    // shortcut: cables a removed SMES or terminal kept apart stay unlinked until re-laid.
     pub fn remove_node(&mut self, entity: Entity) {
         let Some(node) = self.nodes.remove(&entity) else {
             return;
         };
         if let Some(list) = self.nodes_by_tile.get_mut(&node.pos) {
             list.retain(|&e| e != entity);
+        }
+        let kind_left = |kind: NodeKind| {
+            self.nodes_by_tile
+                .get(&node.pos)
+                .is_some_and(|l| l.iter().any(|e| self.nodes[e].kind == kind))
+        };
+        match node.kind {
+            NodeKind::Smes if !kind_left(NodeKind::Smes) => {
+                self.smes_tiles.remove(&node.pos);
+            }
+            NodeKind::Terminal if !kind_left(NodeKind::Terminal) => {
+                self.terminal_tiles.remove(&node.pos);
+            }
+            _ => {}
         }
     }
 

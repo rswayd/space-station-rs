@@ -402,6 +402,9 @@ fn autoset(val: u8, mode: Autoset) -> u8 {
     }
 }
 
+/// `initial(input_level_max)`, `initial(output_level_max)`: per capacitor tier, watts.
+pub const SMES_LEVEL_MAX: f64 = 200_000.0;
+
 /// tg `/obj/machinery/power/smes` state; `charge` is the sum of its batteries.
 #[derive(Component, Clone, Debug, Reflect)]
 pub struct Smes {
@@ -409,6 +412,9 @@ pub struct Smes {
     pub capacity: f64,
     pub input_level: f64,
     pub output_level: f64,
+    /// Caps of the levels: `200 kW × capacitor tiers` (`RefreshParts`).
+    pub input_level_max: f64,
+    pub output_level_max: f64,
     pub input_attempt: bool,
     pub output_attempt: bool,
     pub inputting: bool,
@@ -673,6 +679,8 @@ mod tests {
             capacity: 5.0e7,
             input_level: 50_000.0,
             output_level: 90_000.0,
+            input_level_max: SMES_LEVEL_MAX,
+            output_level_max: SMES_LEVEL_MAX,
             input_attempt: true,
             output_attempt: true,
             inputting: false,

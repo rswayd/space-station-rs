@@ -216,6 +216,7 @@ impl Plugin for GameServerPlugin {
             crate::devices::DevicesPlugin,
             crate::plumbing::PlumbingPlugin,
             crate::decor::DecorPlugin,
+            crate::airlock_construction::AirlockConstructionPlugin,
         ))
         .add_plugins((
             crate::pull::PullServerPlugin,

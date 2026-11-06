@@ -11,14 +11,14 @@
 tgui-окно: заряд, режимы ввода и вывода (вкл/авто), уставки мощности входа и выхода.
 
 - **Код:** [`ui_interact()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/smes.dm#L430), [`ui_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/smes.dm#L456); tgui: [`Smes.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/Smes.tsx)
-- **Статус в ss13-rs:** ❌ нет — уставки берутся из карты, менять их нельзя
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/power/smes.rs` (`SmesWindow`, `smes_acts`), `crates/ss13_tgui/src/interfaces/smes.rs` (`Smes`): окно открывает пустая рука по SMES с терминалом; ввод авто/выкл, вывод вкл/выкл, уставки `min`/`max`/±10 кВт/значение в порядке tg, ограничены `0..=*_level_max` (`200 кВт × уровни конденсаторов`, `RefreshParts`); заряд, доступный ввод и текущий вывод из тика машин. `// shortcut:` ползунки — `NumberInput` в ваттах (в ss13_ui_kit нет `Slider`)
 
 ### Вид и монтаж SMES
 Индикатор заряда и режимов; отвёртка — панель, лом — разборка, кабель — установка терминала, кусачки — снятие, ЭМИ сбивает уставки. BandaStation меняет иконку SMES.
 
 - **Код:** [`update_overlays()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/smes.dm#L140), [`item_interaction()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/smes.dm#L245), [`crowbar_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/smes.dm#L305), [`emp_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/smes.dm#L519)
 - **BandaStation:** [`modular_bandastation/aesthetics/smes/code/smes.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/aesthetics/smes/code/smes.dm#L1) — иконка
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/power/mod.rs` не обновляет вид SMES по заряду; монтажа нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/power/smes.rs` (`smes_looks`, `item_interaction`, `complete`, `setup`, `on_deconstruction`), `crates/ss13_game/src/machine_frame.rs` (семейство `Smes`), `crates/ss13_game/src/power/grid.rs` (`remove_node`): `smes`/`smes-o`, с закрытой панелью и терминалом — `smes-op`, `smes-oc`, `smes-og1..5`, эмиссив; отвёртка — панель; 10 кабеля с кардинального тайла с поднятым полом (2 с) — терминал на тайле игрока лицом к SMES, 50% удара током из сети вместо этого; кусачки по SMES или терминалу (5 с, пол поднят) — 10 кабеля, SMES сломан до нового терминала; лом только без терминала разбирает, заряд уходит в батареи; из платы — ёмкость по батареям, их заряд, первый свободный терминал рядом; ЭМИ — `crates/ss13_game/src/emp/power.rs` (по `*_level_max`). Проверено: `crates/ss13_game/tests/it/power_machines.rs`. Нет: поворота ключом (`default_change_direction_wrench`), выбора слоя кабеля ПКМ и мультитулом, расщепления кабелей, уже связанных с тайлом SMES, при новом терминале
 
 ### Варианты SMES
 Супер-SMES, корабельный, инженерный, магический (бесконечный).

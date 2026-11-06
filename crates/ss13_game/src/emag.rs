@@ -149,6 +149,8 @@ fn takes_emag(world: &World, target: Entity) -> bool {
         || e.contains::<crate::vending::Vendor>()
         || e.contains::<crate::chem_dispenser::ChemDispenser>()
         || e.contains::<crate::silicon::chassis::Chassis>()
+        || e.contains::<crate::power::pacman::Pacman>()
+        || crate::power::shields::takes_emag(world, target)
 }
 
 fn name(world: &World, e: Entity) -> String {
@@ -292,6 +294,12 @@ pub fn emag_act(world: &mut World, actor: Actor, card: Entity, target: Entity) -
         .is_some()
     {
         return crate::silicon::chassis::emag_act(world, actor, target);
+    }
+    if world.get::<crate::power::pacman::Pacman>(target).is_some() {
+        return crate::power::pacman::emag_act(world, client, target);
+    }
+    if crate::power::shields::takes_emag(world, target) {
+        return crate::power::shields::emag_act(world, client, target);
     }
     false
 }

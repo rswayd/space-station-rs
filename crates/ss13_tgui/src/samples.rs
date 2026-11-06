@@ -7,6 +7,10 @@ use crate::interfaces::air_alarm::{
     AirAlarmData, AirAlarmUi, AlarmControls, EnvEntry, ModeEntry, ScrubberEntry, TlvEntry,
     VentEntry,
 };
+use crate::interfaces::airlock_electronics::{
+    AccessRegion, AirlockElectronicsData, AirlockElectronicsStatic, AirlockElectronicsUi,
+    RegionAccess,
+};
 use crate::interfaces::alert::{AlertStatic, AlertUi, PromptTimer};
 use crate::interfaces::apc::{ApcData, ApcUi, PowerChannel};
 use crate::interfaces::atmos::{
@@ -60,6 +64,7 @@ use crate::interfaces::rapid_pipe_dispenser::{
     RapidPipeDispenserUi, RpdCategory, RpdData, RpdPreview, RpdRecipe, RpdStatic,
 };
 use crate::interfaces::smart_vend::{FridgeItem, SmartVendData, SmartVendUi};
+use crate::interfaces::smes::{SmesData, SmesStatic, SmesUi};
 use crate::interfaces::solar_control::{SolarControlData, SolarControlUi};
 use crate::interfaces::teg::{
     CirculatorData, ThermoElectricGeneratorData, ThermoElectricGeneratorUi,
@@ -434,6 +439,30 @@ pub fn sample(name: &str) -> Option<Sample> {
                 }),
             },
         ),
+        AirlockElectronicsUi::NAME => of::<AirlockElectronicsUi>(
+            "airlock electronics",
+            &AirlockElectronicsStatic {
+                regions: vec![AccessRegion {
+                    name: "Engineering".into(),
+                    accesses: [
+                        ("Engineering", "engineering"),
+                        ("Maintenance", "maint_tunnels"),
+                    ]
+                    .into_iter()
+                    .map(|(desc, access)| RegionAccess {
+                        desc: desc.into(),
+                        access: access.into(),
+                    })
+                    .collect(),
+                }],
+            },
+            &AirlockElectronicsData {
+                accesses: vec!["engineering".into()],
+                one_access: false,
+                unres_direction: 2,
+                passed_name: "Engine Room".into(),
+            },
+        ),
         AiAirlockUi::NAME => of::<AiAirlockUi>(
             "Airlock control",
             &(),
@@ -572,6 +601,25 @@ pub fn sample(name: &str) -> Option<Sample> {
                 acidic_buffer_vol: 20.0,
                 basic_buffer_vol: 0.0,
                 dispense_volume: 1.0,
+            },
+        ),
+        SmesUi::NAME => of::<SmesUi>(
+            "power storage unit",
+            &SmesStatic {
+                capacity: 5.0e7,
+                input_level_max: 200_000.0,
+                output_level_max: 200_000.0,
+            },
+            &SmesData {
+                charge: 2.5e7,
+                input_attempt: true,
+                inputting: true,
+                input_level: 50_000.0,
+                input_available: 120_000.0,
+                output_attempt: true,
+                output_level: 90_000.0,
+                output_used: 60_000.0,
+                outputting: true,
             },
         ),
         PortableGeneratorUi::NAME => of::<PortableGeneratorUi>(
