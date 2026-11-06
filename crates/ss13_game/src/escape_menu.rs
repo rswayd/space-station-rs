@@ -156,7 +156,9 @@ mod server {
             let mut hosts = world.resource_mut::<MenuHosts>();
             hosts.hosts.insert(client, host);
             hosts.fresh = true;
-            world.write_message(OpenUi::new::<EscapeButtonUi>(client, host, host, ""));
+            // Actor = the client, as lobby windows: `crate::ghost::close_foreign_windows` closes a
+            // window whose actor is neither the client nor its mob.
+            world.write_message(OpenUi::new::<EscapeButtonUi>(client, client, host, ""));
         }
     }
 
@@ -269,7 +271,7 @@ mod server {
         for act in opens.read() {
             if own(act.client, act.source) {
                 open.write(OpenUi::new::<EscapeMenuUi>(
-                    act.client, act.source, act.source, "Меню",
+                    act.client, act.client, act.source, "Меню",
                 ));
             }
         }
@@ -277,7 +279,7 @@ mod server {
             if own(act.client, act.source) {
                 open.write(OpenUi::new::<WhoUi>(
                     act.client,
-                    act.source,
+                    act.client,
                     act.source,
                     "Who's there?",
                 ));
