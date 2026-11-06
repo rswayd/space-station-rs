@@ -95,11 +95,14 @@ fn main() -> ExitCode {
         }
     };
     for f in &report.failures {
+        eprintln!("failed {}: {}", f.dmi, f.error);
+    }
+    for f in &report.oversized {
         eprintln!("skipped {}: {}", f.dmi, f.error);
     }
     println!(
         "{} files ({} GAGS icons), {} states, {} icons -> {} stored frames in {} atlases at {} \
-         ({:.2?}), {} failures; {} and {} attribution files",
+         ({:.2?}), {} failures, {} oversized states skipped; {} and {} attribution files",
         report.files,
         report.gags,
         report.states,
@@ -109,6 +112,7 @@ fn main() -> ExitCode {
         out.display(),
         start.elapsed(),
         report.failures.len(),
+        report.oversized.len(),
         ss13_assets::import::ICON_SOURCES_FILE,
         report.attributions,
     );

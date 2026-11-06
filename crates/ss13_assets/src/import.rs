@@ -75,7 +75,11 @@ pub struct Report {
     pub gags: usize,
     /// Attribution/license files copied to [`LICENSES_DIR`].
     pub attributions: usize,
+    /// `.dmi` files that could not be read: the import is incomplete.
     pub failures: Vec<Failure>,
+    /// States too big for one double-size atlas page (fullscreen animations): left out, the
+    /// rest of their file is packed. A known limit, not a failed import.
+    pub oversized: Vec<Failure>,
 }
 
 pub struct AtlasImage {
@@ -425,7 +429,7 @@ where
                     frames.dedup();
                     let oversized = packer.page_capacity(w, h) < frames.len() as u64;
                     if oversized && capacity(2 * max, w, h) < frames.len() as u64 {
-                        report.failures.push(Failure {
+                        report.oversized.push(Failure {
                             dmi: name.clone(),
                             error: format!(
                                 "state {:?}: {} frames of {w}x{h} do not fit one {big}x{big} atlas",
@@ -628,10 +632,12 @@ mod tests {
                 .all(|(i, &(w, h))| i == 2 || (w <= 64 && h <= 64))
         );
 
-        // A 32x32 page holds 2 icons, a 64x64 one 8: the movement state cannot be placed.
+        // A 32x32 page holds 2 icons, a 64x64 one 8: the movement state cannot be placed. It is
+        // skipped, not a failed import (the import exits with success).
         let (_, r, _) = run(&[("a.dmi", a)], 32);
-        assert_eq!(r.failures.len(), 1, "{:?}", r.failures);
-        assert!(r.failures[0].error.contains("state \"walk\": 12 frames"));
+        assert!(r.failures.is_empty(), "{:?}", r.failures);
+        assert_eq!(r.oversized.len(), 1, "{:?}", r.oversized);
+        assert!(r.oversized[0].error.contains("state \"walk\": 12 frames"));
     }
 
     #[test]
