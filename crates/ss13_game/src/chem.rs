@@ -295,7 +295,7 @@ fn create_container_reagents(
     }
 }
 
-fn mob_holder() -> Holder {
+pub(crate) fn mob_holder() -> Holder {
     Holder::new(
         MOB_REAGENT_VOLUME,
         flags::REAGENT_HOLDER_ALIVE,

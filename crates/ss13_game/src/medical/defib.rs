@@ -15,8 +15,8 @@
 //!   failed. The unit then recharges for `cooldown_duration` (5 s).
 //! - In combat mode, with a combat defibrillator (or one with its safety off): `do_harm`
 //!   (1.5 s + 1.5 s) stops an organic heart, burns the chest for 50 and paralyzes for 10 s;
-//!   right click knocks down.
-// shortcut: no `/datum/status_effect/heart_attack`, convulsions, mood, sounds, shocking
+//!   right click knocks down and makes the hands shake (`crate::debuffs::Convulsing`).
+// shortcut: no mood, sounds, shocking
 // whoever pulls the patient, suicide/DNR/husk checks, emag, EMP, cell swapping, wall mounts;
 // paddles count as wielded while the other hand is empty (no two-handed component).
 
@@ -606,6 +606,7 @@ fn do_disarm(world: &mut World, actor: Actor, unit: Entity, target: Entity) {
     crate::status_effects::adjust_stamina(world, target, 60.0);
     crate::status_effects::knockdown(world, target, 7.5, 0.0);
     jitter(world, target, 100.0);
+    crate::debuffs::apply_convulsing(world, target);
     success(world, unit);
 }
 

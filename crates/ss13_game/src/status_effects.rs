@@ -44,7 +44,7 @@
 // (`crate::medical::bioware`, in [`apply`], [`knockdown`], [`adjust_stamina`]), no force_say,
 // no status alerts. Knocked out by a status effect, a mob keeps its `Stat` (tg `UNCONSCIOUS`):
 // code that checks `IS_UNCONSCIOUS` through `Health::knocked_out` sees only crit; use
-// [`knocked_out`] for both. Jitter given to a dead mob does not do `on_apply`'s one shake. No
+// [`knocked_out`] for both. No
 // sleep immunity, dreams, snoring, organ or fitness healing while asleep,
 // darkness or blindfold sleep bonus, drunk gun spread, drunken brawler or Ballmer peak lines,
 // no TTS filters of the speech effects.
@@ -1001,6 +1001,7 @@ pub fn adjust_timed(world: &mut World, mob: Entity, kind: Timed, secs: f32, max:
         && is_dead(world, mob)
         && matches!(kind, Timed::Jitter | Timed::Dizziness | Timed::Silence)
     {
+        dead_jitter(world, mob, kind, max.map_or(secs, |m| secs.min(m)));
         return;
     }
     if let Some(mut e) = effects_mut(world, mob) {
@@ -1018,10 +1019,18 @@ pub fn set_timed(world: &mut World, mob: Entity, kind: Timed, secs: f32, only_if
         && is_dead(world, mob)
         && matches!(kind, Timed::Jitter | Timed::Dizziness | Timed::Silence)
     {
+        dead_jitter(world, mob, kind, secs);
         return;
     }
     if let Some(mut e) = effects_mut(world, mob) {
         e.set_timed(kind, secs, only_if_higher);
+    }
+}
+
+/// `jitter/on_apply` on a dead mob: no effect, one shake of `secs`.
+fn dead_jitter(world: &mut World, mob: Entity, kind: Timed, secs: f32) {
+    if kind == Timed::Jitter {
+        crate::animation::do_jitter_animation(world, mob, secs);
     }
 }
 
@@ -1406,6 +1415,10 @@ pub fn drunk_pulse(world: &mut World, mob: Entity, drunk: f32) {
 /// The examine lines of `mob`'s status effects (`get_examine_text`): jitter and drunkenness.
 // shortcut: a covered face does not hide the drunkenness (no `obscured_slots`).
 pub fn examine_lines(world: &World, mob: Entity, lines: &mut Vec<(Span, String)>) {
+    // `fire_handler/get_examine_text` (fire and wet stacks, `crate::fire`).
+    if let Some(text) = crate::fire::examine_text(world, mob) {
+        lines.push((Span::Notice, text.to_owned()));
+    }
     // Death ends the jitter; the dead do not look drunk (`IS_DEAD_OR_FAKING`).
     if world.get::<Stat>(mob) == Some(&Stat::Dead) {
         return;

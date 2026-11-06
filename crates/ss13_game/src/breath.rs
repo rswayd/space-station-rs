@@ -132,6 +132,12 @@ pub enum AlertCategory {
     Drugged,
     /// `/datum/status_effect/food`'s alert (`crate::buffs`).
     FoodBuff,
+    /// The alerts of `crate::debuffs`: `convulsing`, `seizure`, `woozy`,
+    /// `high_blood_pressure`.
+    Convulsing,
+    Seizure,
+    Woozy,
+    HighBloodPressure,
 }
 
 /// One thrown alert: its type's base `icon_state` and `severity` (0: none).
@@ -268,6 +274,25 @@ impl Alert {
                 "Ого, чувак, да тебя накрыло! Осторожнее, не подсядь... если ещё не подсел.",
             ),
             "food_buff_" => ("Блюдо ручной работы", "Съев это, я ощущаю себя лучше."),
+            "convulsing" => (
+                "Трясущиеся руки",
+                "Вас чем-то ударило током, и руки не перестают трястись! Кажется, вы ничего не \
+                 можете удержать.",
+            ),
+            "paralysis" => (
+                "Припадок",
+                "ФЫВАПРОЛДЖЭЙЦУКЕНГШЩЗХЪ <--- это вы прямо сейчас",
+            ),
+            "woozy" => (
+                "Вялость",
+                "Вы чувствуете себя медленнее обычного, кажется, всё руками выходит дольше, чем \
+                 обычно.",
+            ),
+            "highbloodpressure" => (
+                "Высокое давление",
+                "У вас сейчас очень высокое давление... Кровь, наверное, хлынет как из резаной \
+                 свиньи.",
+            ),
             // An offer's name and text come from the offer (`crate::buffs::Offering`).
             "template" => ("Предложение", ""),
             _ => ("Alert", ""),

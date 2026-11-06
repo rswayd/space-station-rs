@@ -5,7 +5,7 @@
 Спрайт моба трясётся; от стимуляторов, электрошока, ломки.
 
 - **Код:** [`/datum/status_effect/jitter`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/jitteriness.dm#L1)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/status_effects.rs` (`Timed::Jitter`): длительность, распад в 5 раз быстрее лёжа, конец со смертью, строки осмотра (1/3/5 минут); источники — электрошок (`wires.rs`), дубинки (`security.rs`), тазер (`taser.rs`), дефибриллятор, хонкбот, голод с отрицательной сытостью, эпилепсия, святая вода, болезни, галлюцинации; тряска спрайта каждые 2 с (`do_jitter_animation`, `crates/ss13_game/src/animation.rs`, анимация `ss13_shared::animation`); нет муд-события `jittery` и разовой тряски при выдаче дрожи мёртвому
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/status_effects.rs` (`Timed::Jitter`): длительность, распад в 5 раз быстрее лёжа, конец со смертью, строки осмотра (1/3/5 минут); источники — электрошок (`wires.rs`), дубинки (`security.rs`), тазер (`taser.rs`), дефибриллятор, хонкбот, голод с отрицательной сытостью, эпилепсия, святая вода, болезни, галлюцинации; тряска спрайта каждые 2 с (`do_jitter_animation`, `crates/ss13_game/src/animation.rs`, анимация `ss13_shared::animation`); муд-событие `jittery` (−2) пока длится дрожь (`crates/ss13_game/src/debuffs.rs`, `Jittery`), разовая тряска при выдаче дрожи мёртвому. Чужое: личность «параноик» (−1, личности)
 
 ### Головокружение (dizziness)
 Экран клиента раскачивается, сила зависит от остатка эффекта.
@@ -54,13 +54,13 @@
 `fire_stacks` поджигают моба, распадаются, нагревают тело и тайл, требуют кислорода; `wet_stacks` гасят огонь и повышают проводимость.
 
 - **Код:** [`/datum/status_effect/fire_handler`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/fire_stacks.dm#L1), [`/datum/status_effect/fire_handler/fire_stacks`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/fire_stacks.dm#L127), [`/datum/status_effect/fire_handler/wet_stacks`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/fire_stacks.dm#L306)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/fire.rs` (`FireStacks`): горение есть; нет `wet_stacks`, горения одежды
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/fire.rs` (`FireStacks`, `WetStacks`, `adjust_wet_stacks`, `set_wet_stacks`, `examine_text`): горение есть; мокрота высыхает на 0,5 стака в секунду (раз в 2 с), новые мокрые и огненные стаки взаимно гасят друг друга (`enemy_types`), строки осмотра («покрыт чем-то легковоспламеняющимся», «немного влажным» / «промокшим до нитки» / «насквозь промокшим»); источники — вода на коже (`/datum/reagent/water/expose_mob` в `crates/ss13_game/src/janitor.rs`: тушит, 0,5 стака на единицу, будит и трезвит; душ, раздавленные плоды), пожарная пена. Нет горения одежды (`burn_clothing`), заморозки во фреон, скользкости и `TRAIT_WET_FOR_LONGER`. Чужое: распыление воды (VAPOR) огнетушителем, мокрая одежда, бассейны
 
 ### Сердечный приступ
 Остановка сердца по стадиям (от болезни, реагентов): боль, оксиурон, смерть без дефибрилляции; `heart_desperation` — рывок при умирании.
 
 - **Код:** [`/datum/status_effect/heart_attack`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/heart_attack.dm#L12), [`/datum/status_effect/heart_desperation`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/heart_attack.dm#L163)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/events/heart_attack.rs` (`HeartAttack`, `HeartDesperation`, `apply`, `defib_shock`): отсчёт 150 с по стадиям (удары сердца и стамина, кашель, боль в груди, рвота, слабость, конфузия, отключки, размытие, слепота, падения, оксиурон), остановка сердца, 4 с рывка, дефибрилляция живого отодвигает на 50 с, выше 160 приступ проходит; источники — событие «Random Heart Attack», страх (`medical/fear.rs`). Чужое: алкоголь и лекарства-источники (реагенты), желудок эфириала (органы), атлетика (навыки)
 
 ### Удушье предметом
 Застрявший в горле предмет: нельзя дышать, нужен приём Геймлиха.
@@ -72,13 +72,13 @@
 `spasms` (случайные движения и удары), `convulsing` (роняет предметы), `seizure` (от передоза).
 
 - **Код:** [`/datum/status_effect/spasms`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/debuffs.dm#L744), [`/datum/status_effect/convulsing`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/debuffs.dm#L797), [`/datum/status_effect/seizure`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/drug_effects.dm#L35)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/debuffs.rs`: `convulsing` (`Convulsing`, `apply_convulsing`: 15 с, обновляется, алерт «Трясущиеся руки», раз в секунду 40% уронить предмет из активной руки и +10 с дрожи; источник — дефибриллятор в режиме обезоруживания, `medical/defib.rs`), `seizure` (`seizure`: только карбоны, один за раз, паралич 1–3 с, дрожь 100 с, алерт, сообщения). Нет `spasms` (случайные шаги, `attack_self`, удары и броски — нужен общий вызов клика от лица моба). Чужое: источник припадка — ломка (зависимости), источники спазмов — травма мозга, мутация, реагенты
 
 ### Эффекты наркотиков
 `woozy`, `high_blood_pressure`, `stoned` (каннабис: голод, замедление), разбавление физраствором (`saline_glucose_dilution`).
 
 - **Код:** [`/datum/status_effect/woozy`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/drug_effects.dm#L1), [`/datum/status_effect/high_blood_pressure`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/drug_effects.dm#L16), [`/datum/status_effect/stoned`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/drug_effects.dm#L58), [`/datum/status_effect/stacking/saline_glucose_dilution`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/drug_effects.dm#L94)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/debuffs.rs`: `woozy` (`Woozy`, `set_woozy`: каждая новая задержка клика `NextMove` ×1,5, алерт), `high_blood_pressure` (`HighBloodPressure`, `set_high_blood_pressure`: кровотечение ×1,25 через `medical/bioware.rs` `bleed_mod`, алерт). Нет `stoned` (каннабис), `saline_glucose_dilution` (физраствор, `medical/blood.rs`). Чужое: источник `woozy` и давления — ломка (зависимости не портированы)
 
 ### Ужас (terrified)
 Нарастающий страх в темноте от теневых существ: дрожь, замедление, потеря сознания при максимуме.
@@ -90,7 +90,7 @@
 `tox_vomit` (рвота от токсинов), `temperature_over_time` (постепенный нагрев/охлаждение тела, перегрев чипа).
 
 - **Код:** [`/datum/status_effect/tox_vomit`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/tox_vomit.dm#L2), [`/datum/status_effect/temperature_over_time`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/temperature_over_time.dm#L10)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `tox_vomit` (`crates/ss13_game/src/debuffs.rs`, `ToxVomit`): человек с токсин-уроном выше 45 и сытостью выше 20 раз в 2 с с шансом `SPT_PROB(30)` копит счётчик и при 50 рвёт (−20 сытости, оглушение), снимается ниже порога, не тикает мёртвым и в стазисе; нет `temperature_over_time` (единственный источник — перегрев скилчипа акробатики, не портирован)
 
 ### Гравитационная болезнь космонавта
 Квирк «Космонавт»: недомогание в гравитации и бонусы в невесомости.

@@ -397,6 +397,8 @@ pub fn expose(world: &mut World, target: Entity, holder: &Holder, modifier: f32)
                 if volume >= 5.0 {
                     make_slippery(world, pos, TURF_WET_WATER, 10.0, (volume * 1.5).min(60.0));
                 }
+            } else if living {
+                water_expose_mob(world, target, volume);
             }
         } else if chem.is_type(r.id, SPACE_CLEANER) {
             match turf {
@@ -412,6 +414,28 @@ pub fn expose(world: &mut World, target: Entity, holder: &Holder, modifier: f32)
                 None => {}
             }
         }
+    }
+}
+
+/// `WATER_TO_WET_STACKS_FACTOR_TOUCH`.
+const WATER_TO_WET_STACKS_FACTOR_TOUCH: f32 = 0.5;
+
+/// `/datum/reagent/water/expose_mob` by touch (every caller of [`expose`] on a mob splashes):
+/// the fire goes out, the mob gets wet and wakes up a little.
+// shortcut: no vapor exposure (no caller sprays mobs), no felinid water hate.
+fn water_expose_mob(world: &mut World, mob: Entity, volume: f32) {
+    use crate::status_effects::{self, Incap, Timed};
+    crate::fire::extinguish_mob(world, mob);
+    crate::fire::adjust_wet_stacks(world, mob, volume * WATER_TO_WET_STACKS_FACTOR_TOUCH);
+    status_effects::adjust_timed(world, mob, Timed::Dizziness, -2.0, None);
+    status_effects::adjust_timed(world, mob, Timed::Confusion, -2.0, None);
+    status_effects::adjust_timed(world, mob, Timed::Drowsiness, -4.0, None);
+    status_effects::adjust_timed(world, mob, Timed::Jitter, -4.0, None);
+    status_effects::adjust(world, mob, Incap::Sleeping, -15.0);
+    status_effects::adjust(world, mob, Incap::Unconscious, -8.0);
+    // `adjust_drunk_effect(-0.25)`.
+    if let Some(mut reagents) = world.get_mut::<crate::chem::MobReagents>(mob) {
+        reagents.drunk = (reagents.drunk - 0.25).max(0.0);
     }
 }
 

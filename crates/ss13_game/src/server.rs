@@ -255,6 +255,7 @@ impl Plugin for GameServerPlugin {
         ))
         .add_plugins(crate::janitor::JanitorServerPlugin)
         .add_plugins(crate::buffs::BuffsPlugin)
+        .add_plugins(crate::debuffs::DebuffsPlugin)
         .add_plugins(crate::language_menu::LanguageMenuServerPlugin)
         .add_plugins((
             crate::ssd::SsdPlugin,

@@ -11,13 +11,21 @@
 //!   from body temperature in `crate::breath`) and the turf (`hotspot_expose(700, 50, TRUE)`);
 //!   the mob glows, has tg's fire overlay and the fire alert; resisting rolls on the floor
 //!   (`/datum/status_effect/stop_drop_roll`);
+//! - wet mobs ([`WetStacks`], tg `/datum/status_effect/fire_handler/wet_stacks`): water on the
+//!   skin (`/datum/reagent/water/expose_mob`, `crate::janitor::expose`), firefighting foam;
+//!   the stacks dry off by 0.5 a second (checked every 2 s). Wet and fire stacks are each
+//!   other's `enemy_types`: the one newly applied cancels the other stack for stack, so a wet
+//!   mob cannot be set alight until it dried;
 //! - gas tanks react their contents (`/obj/item/tank/process`);
 //! - space wind (tg `high_pressure_movements`): every [`PressureDifference`] pushes the
 //!   unanchored, unpulled movables on its tile one step with tg's `move_prob`.
 // shortcut: no lighters, matches or cigarettes as flame sources (no lit state for them yet; igniters
 // and sparkers are `crate::wallmount::machines`, firelocks closing on hot air
 // `crate::wallmount::firelock`), no burning items or clothing (`burn_clothing`, ash): add with
-// their items.
+// their items. Wet stacks: no `TRAIT_WET_FOR_LONGER`, `TRAIT_SLIPPERY_WHEN_WET`, droplet
+// particles or freezing into the freon status (`WATER_VAPOR_DEPOSITION_POINT`); a negative
+// `adjust_wet_stacks` on a dry mob does nothing (tg's `max(fire_stacks, stacks)` turns it into
+// positive wet stacks that douse a burning mob, an obvious accident).
 
 use bevy::ecs::message::{MessageCursor, Messages};
 use bevy::prelude::*;
@@ -48,6 +56,11 @@ pub const MOB_BIG_FIRE_STACK_THRESHOLD: f32 = 5.0;
 pub const FIRE_STACK_DECAY_RATE: f32 = -0.05;
 /// `tick_interval` of the fire stacks status effect.
 pub const FIRE_TICK_SECS: f64 = 2.0;
+/// `wet_stacks/tick`: stacks per second.
+pub const WET_STACK_DECAY_RATE: f32 = -0.5;
+/// `WET_STACKS_DAMP`, `WET_STACKS_SOAKED`.
+const WET_STACKS_DAMP: f32 = 3.0;
+const WET_STACKS_SOAKED: f32 = 15.0;
 /// `/mob/living/fire_act`: stacks added.
 pub const FIRE_ACT_STACKS: f32 = 3.0;
 /// `BODYTEMP_HEATING_MAX`, `BODYTEMP_FIRE_TEMP_SOFTCAP`.
@@ -102,6 +115,14 @@ pub struct FireStacks {
     lit_by_fire: bool,
 }
 
+/// tg `/datum/status_effect/fire_handler/wet_stacks` on a living mob (`stack_limit`
+/// [`MAX_FIRE_STACKS`]).
+#[derive(Component, Clone, Debug, PartialEq)]
+pub struct WetStacks {
+    pub stacks: f32,
+    next_tick: f64,
+}
+
 /// `/datum/status_effect/stop_drop_roll`: the mob rolls, kept knocked down
 /// (`crate::status_effects`) between rolls.
 #[derive(Component, Clone, Debug, PartialEq)]
@@ -145,6 +166,7 @@ impl Plugin for FireServerPlugin {
                     fire_acts,
                     entered_fire,
                     fire_stacks_tick,
+                    wet_stacks_tick,
                     rolling_tick,
                     burning_objects,
                     space_wind,
@@ -339,9 +361,127 @@ pub fn adjust_fire_stacks(world: &mut World, mob: Entity, stacks: f32) {
                 next_tick: now + FIRE_TICK_SECS,
                 lit_by_fire: false,
             });
+            // `fire_handler/on_creation`: the wet stacks (`enemy_types`) cancel stack for stack.
+            if let Some(wet) = world.get::<WetStacks>(mob).map(|w| w.stacks) {
+                let fire = stacks.clamp(0.0, MAX_FIRE_STACKS);
+                set_wet(world, mob, wet - fire);
+                if let Some(mut f) = world.get_mut::<FireStacks>(mob) {
+                    f.stacks = (fire - wet).max(0.0);
+                }
+            }
         }
     }
     cache_stacks(world, mob);
+}
+
+/// The wet stacks become `stacks` (removed at 0).
+fn set_wet(world: &mut World, mob: Entity, stacks: f32) {
+    if stacks <= 0.0 {
+        world.entity_mut(mob).remove::<WetStacks>();
+    } else if let Some(mut wet) = world.get_mut::<WetStacks>(mob) {
+        wet.stacks = stacks.min(MAX_FIRE_STACKS);
+    }
+}
+
+/// tg `adjust_wet_stacks` -> `apply_status_effect(wet_stacks, stacks)`: refreshes the effect
+/// (clamped to 0..[`MAX_FIRE_STACKS`]) or creates it, a new one cancelling the fire stacks
+/// stack for stack (and putting the fire out when none are left).
+pub fn adjust_wet_stacks(world: &mut World, mob: Entity, stacks: f32) {
+    if world.get::<Health>(mob).is_none() {
+        return;
+    }
+    if let Some(current) = world.get::<WetStacks>(mob).map(|w| w.stacks) {
+        set_wet(world, mob, (current + stacks).clamp(0.0, MAX_FIRE_STACKS));
+        return;
+    }
+    if stacks <= 0.0 {
+        return;
+    }
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    let wet = stacks.min(MAX_FIRE_STACKS);
+    let fire = world.get::<FireStacks>(mob).map_or(0.0, |f| f.stacks);
+    if fire > 0.0 {
+        let left = fire - wet;
+        if left <= 0.0 {
+            remove_fire(world, mob);
+        } else {
+            world.get_mut::<FireStacks>(mob).expect("read above").stacks = left;
+            cache_stacks(world, mob);
+        }
+    }
+    if wet - fire > 0.0 {
+        world.entity_mut(mob).insert(WetStacks {
+            stacks: wet - fire,
+            next_tick: now + FIRE_TICK_SECS,
+        });
+    }
+}
+
+/// tg `set_wet_stacks(stacks, remove_fire_stacks = TRUE)`: the fire stacks go, the wet stacks
+/// become `stacks` (forced: nothing cancels).
+pub fn set_wet_stacks(world: &mut World, mob: Entity, stacks: f32) {
+    if world.get::<Health>(mob).is_none() {
+        return;
+    }
+    remove_fire(world, mob);
+    if stacks <= 0.0 {
+        world.entity_mut(mob).remove::<WetStacks>();
+        return;
+    }
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    let next_tick = world
+        .get::<WetStacks>(mob)
+        .map_or(now + FIRE_TICK_SECS, |w| w.next_tick);
+    world.entity_mut(mob).insert(WetStacks {
+        stacks: stacks.min(MAX_FIRE_STACKS),
+        next_tick,
+    });
+}
+
+/// The mob's wet stacks (0 when dry).
+pub fn wet_stacks(world: &World, mob: Entity) -> f32 {
+    world.get::<WetStacks>(mob).map_or(0.0, |w| w.stacks)
+}
+
+/// `wet_stacks/tick` of every wet mob, every [`FIRE_TICK_SECS`] of its own: the stacks dry off.
+/// Cost: per tick, one pass over wet mobs only.
+fn wet_stacks_tick(world: &mut World) {
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    let due: Vec<(Entity, f32)> = world
+        .query::<(Entity, &WetStacks)>()
+        .iter(world)
+        .filter(|(_, w)| now >= w.next_tick)
+        .map(|(e, w)| (e, w.stacks))
+        .collect();
+    for (mob, stacks) in due {
+        world
+            .get_mut::<WetStacks>(mob)
+            .expect("queried above")
+            .next_tick += FIRE_TICK_SECS;
+        set_wet(
+            world,
+            mob,
+            stacks + WET_STACK_DECAY_RATE * FIRE_TICK_SECS as f32,
+        );
+    }
+}
+
+/// `fire_stacks/get_examine_text` (not burning) and `wet_stacks/get_examine_text`.
+pub fn examine_text(world: &World, mob: Entity) -> Option<&'static str> {
+    if let Some(fire) = world.get::<FireStacks>(mob)
+        && !fire.on_fire
+        && fire.stacks > 0.0
+    {
+        return Some("Он покрыт чем-то легковоспламеняющимся.");
+    }
+    let wet = world.get::<WetStacks>(mob)?.stacks;
+    Some(if wet <= WET_STACKS_DAMP {
+        "Он выглядит немного влажным."
+    } else if wet >= WET_STACKS_SOAKED {
+        "Он выглядит насквозь промокшим."
+    } else {
+        "Он выглядит промокшим до нитки."
+    })
 }
 
 /// tg `ignite_mob` -> `ignite()`: with stacks and not burning yet.
@@ -921,5 +1061,45 @@ mod tests {
         assert!(!experience_pressure_difference(
             &mut world, 25.0, 25.0, -30.0
         ));
+    }
+
+    #[test]
+    fn wet_and_fire_stacks_cancel_and_wetness_dries() {
+        let mut world = World::new();
+        world.init_resource::<Time>();
+        let mob = world.spawn(Health::default()).id();
+        adjust_fire_stacks(&mut world, mob, 5.0);
+        assert!(ignite_mob(&mut world, mob));
+        // 3 wet stacks on 5 burning ones: 2 fire stacks left, still burning, not wet.
+        adjust_wet_stacks(&mut world, mob, 3.0);
+        assert_eq!(world.get::<FireStacks>(mob).unwrap().stacks, 2.0);
+        assert!(on_fire(&world, mob));
+        assert_eq!(wet_stacks(&world, mob), 0.0);
+        // 6 more: the fire is out and gone, 4 wet stacks remain.
+        adjust_wet_stacks(&mut world, mob, 6.0);
+        assert!(world.get::<FireStacks>(mob).is_none());
+        assert_eq!(wet_stacks(&world, mob), 4.0);
+        assert_eq!(
+            examine_text(&world, mob),
+            Some("Он выглядит промокшим до нитки.")
+        );
+        // New fire stacks on a wet mob are soaked up first.
+        adjust_fire_stacks(&mut world, mob, 3.0);
+        assert_eq!(wet_stacks(&world, mob), 1.0);
+        assert_eq!(world.get::<FireStacks>(mob).unwrap().stacks, 0.0);
+        assert!(!ignite_mob(&mut world, mob), "nothing to burn");
+        // Drying: -0.5 a second, checked every 2 s.
+        world
+            .resource_mut::<Time>()
+            .advance_by(std::time::Duration::from_secs(2));
+        wet_stacks_tick(&mut world);
+        assert!(world.get::<WetStacks>(mob).is_none(), "1 - 1 = dry");
+        adjust_wet_stacks(&mut world, mob, -5.0);
+        assert!(
+            world.get::<WetStacks>(mob).is_none(),
+            "drying a dry mob does nothing"
+        );
+        set_wet_stacks(&mut world, mob, 30.0);
+        assert_eq!(wet_stacks(&world, mob), MAX_FIRE_STACKS);
     }
 }

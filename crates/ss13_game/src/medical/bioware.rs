@@ -95,11 +95,12 @@ pub fn gain(world: &mut World, mob: Entity, kind: Bioware) {
 
 /// `GET_PHYSIOLOGY(mob, PHYS_COEFF_BLEED)`.
 pub fn bleed_mod(world: &World, mob: Entity) -> f32 {
-    if has(world, mob, Bioware::VeinThreading) {
+    let veins = if has(world, mob, Bioware::VeinThreading) {
         0.25
     } else {
         1.0
-    }
+    };
+    veins * crate::debuffs::bleed_mod(world, mob)
 }
 
 /// `GET_PHYSIOLOGY(mob, PHYS_COEFF_STUN)`.

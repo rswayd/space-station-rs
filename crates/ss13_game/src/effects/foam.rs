@@ -335,10 +335,8 @@ fn blacklisted(world: &World, pos: TilePos) -> bool {
 /// True when it counted as a hit.
 fn foam_mob(world: &mut World, mob: Entity, foam: &mut Foam, secs: f64) -> bool {
     if foam.kind == FoamKind::Firefighting {
-        // Wet stacks cancel fire stacks (`fire_handler` `enemy_types`).
-        if world.get::<crate::fire::FireStacks>(mob).is_some() {
-            crate::fire::adjust_fire_stacks(world, mob, -WET_STACKS);
-        }
+        // `firefighting/foam_mob`: `adjust_wet_stacks(2)` (they cancel fire stacks).
+        crate::fire::adjust_wet_stacks(world, mob, WET_STACKS);
         return false;
     }
     if foam.lifetime <= 0.0 {
