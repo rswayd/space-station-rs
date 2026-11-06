@@ -500,9 +500,8 @@ fn edible_item(world: &World, item: Entity) -> bool {
 fn start_eating(world: &mut World, actor: Actor, target: Entity, delay_ds: f32, corpse: bool) {
     tell(world, actor.client, Span::Notice, "eating...");
     do_after(world, actor, target, delay_ds, 0, Job::Morph { corpse });
-    world
-        .entity_mut(actor.mob)
-        .insert(NextMove(now(world) + CLICK_CD_MELEE));
+    let until = now(world) + CLICK_CD_MELEE;
+    world.entity_mut(actor.mob).insert(NextMove(until));
 }
 
 /// The end of `eat`'s `do_after`: still undisguised, the corpse still dead or the item still
