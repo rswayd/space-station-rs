@@ -599,7 +599,10 @@ fn hit_living(world: &mut World, p: &Projectile, name: &str, target: Entity) {
             crate::tools::tell(world, client, span, text);
         }
     }
-    let damage = crate::armor::blocked_damage(p.data.damage, armor);
+    // Mining mobs' `ranged_armour` (`COMSIG_PROJECTILE_PREHIT`).
+    let raw =
+        crate::mobs::lavaland::ranged_armour(world, target, p.data.damage, &p.data.damage_type);
+    let damage = crate::armor::blocked_damage(raw, armor);
     match DamageType::from_dm(&p.data.damage_type).unwrap_or(DamageType::Brute) {
         DamageType::Stamina => crate::status_effects::adjust_stamina(world, target, damage),
         kind if damage > 0.0 => {

@@ -942,7 +942,7 @@ fn acquire_combat_target(ctx: &mut AiCtx, key: Key, strategy: Strategy) -> Perfo
 }
 
 /// tg `basic_melee_attack` `perform`.
-fn melee(ctx: &mut AiCtx, key: Key, strategy: Strategy) -> Perform {
+pub(crate) fn melee(ctx: &mut AiCtx, key: Key, strategy: Strategy) -> Perform {
     let Some(target) = ctx
         .bb
         .entity(key)

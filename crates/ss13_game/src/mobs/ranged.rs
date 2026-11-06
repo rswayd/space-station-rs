@@ -3,8 +3,9 @@
 //! `basic_ranged_attack` leaf (`basic_attacking.dm`): in sight within `max_range`, and, with
 //! `avoid_friendly_fire`, never through a friend in the way (the shooter steps aside instead).
 //!
-//! The ported shooters are the hivebots (`/obj/item/ammo_casing/hivebot`: 10 brute) and the
-//! stick gunman (`/obj/item/ammo_casing/c9mm`, 5 s).
+//! The ported shooters are the hivebots (`/obj/item/ammo_casing/hivebot`: 10 brute), the
+//! stick gunman (`/obj/item/ammo_casing/c9mm`, 5 s), and lavaland's watchers and basilisks
+//! (`/obj/projectile/temp/watcher`: 10 burn, the wings' 5; 3 s).
 // shortcut: one projectile per shot (no `burst_shots`, no casings left behind, no firing sound);
 // add them with the ranged troopers.
 
@@ -64,9 +65,48 @@ pub fn c9mm_bullet() -> ProjectileData {
     }
 }
 
-/// The `ranged_attacks` of mob type `path`: hivebots with `ranged_attacker`, the stick gunman.
+/// `/obj/projectile/temp/watcher` (and its wings) with the `/obj/projectile` defaults: burn,
+/// checked against energy armour.
+// shortcut: no body cooling (`temperature`), freezing blast slowdown, ignition (magmawing) or
+// freon (icewing) on hit; only the damage.
+pub fn watcher_blast(path: &str, damage: f32) -> ProjectileData {
+    ProjectileData {
+        path: path.to_owned(),
+        damage,
+        damage_type: "burn".to_owned(),
+        armor_flag: "energy".to_owned(),
+        speed: 1.25,
+        range: 50.0,
+        pass_flags: crate::projectile::PASSTABLE,
+        accurate_range: 100.0,
+        accuracy_falloff: 7.0,
+        ..default()
+    }
+}
+
+/// The `ranged_attacks` of mob type `path`: hivebots with `ranged_attacker`, the stick gunman,
+/// watchers and basilisks (`ranged_cooldown` 3 s, the component's default).
 fn ranged_of(path: &str) -> Option<RangedAttacks> {
     let under = |root: &str| is_under(path, root);
+    let watcher = |projectile: ProjectileData| {
+        Some(RangedAttacks {
+            projectile,
+            cooldown: 3.0,
+            next: 0.0,
+        })
+    };
+    if under("/mob/living/basic/mining/watcher/magmawing") {
+        return watcher(watcher_blast(
+            "/obj/projectile/temp/watcher/magma_wing",
+            5.0,
+        ));
+    }
+    if under("/mob/living/basic/mining/watcher/icewing") {
+        return watcher(watcher_blast("/obj/projectile/temp/watcher/ice_wing", 5.0));
+    }
+    if under("/mob/living/basic/mining/watcher") || under("/mob/living/basic/mining/basilisk") {
+        return watcher(watcher_blast("/obj/projectile/temp/watcher", 10.0));
+    }
     if under("/mob/living/basic/stickman/ranged") {
         return Some(RangedAttacks {
             projectile: c9mm_bullet(),
@@ -238,5 +278,19 @@ mod tests {
             Some(1.5)
         );
         assert_eq!(hivebot_bullet().damage, 10.0);
+    }
+
+    #[test]
+    fn watchers_and_basilisks_shoot_freezing_blasts() {
+        let watcher = ranged_of("/mob/living/basic/mining/watcher").unwrap();
+        assert_eq!(watcher.projectile.damage, 10.0);
+        assert_eq!(watcher.cooldown, 3.0);
+        let magma = ranged_of("/mob/living/basic/mining/watcher/magmawing").unwrap();
+        assert_eq!(
+            magma.projectile.path,
+            "/obj/projectile/temp/watcher/magma_wing"
+        );
+        assert!(ranged_of("/mob/living/basic/mining/basilisk").is_some());
+        assert!(ranged_of("/mob/living/basic/mining/goliath").is_none());
     }
 }

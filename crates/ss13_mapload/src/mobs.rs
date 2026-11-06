@@ -32,6 +32,36 @@ pub const MOB_RUNTIME_TYPES: [&str; 5] = [
     "/obj/item/food/deadmouse",
 ];
 
+/// Lavaland fauna the game spawns by itself (`ss13_game::mobs::lavaland`): the cave population
+/// (tg `/datum/biome/lavaland/basalt` `fauna_types`), the legion's skulls and the legions they
+/// make of corpses, the hivelord's brood, the watchers' projectiles and the death drops.
+pub const LAVALAND_RUNTIME_TYPES: [&str; 24] = [
+    "/mob/living/basic/mining/goliath",
+    "/mob/living/basic/mining/goliath/ancient/immortal",
+    "/mob/living/basic/mining/legion",
+    "/mob/living/basic/mining/legion/dwarf",
+    "/mob/living/basic/mining/legion_brood",
+    "/mob/living/basic/mining/watcher",
+    "/mob/living/basic/mining/watcher/magmawing",
+    "/mob/living/basic/mining/watcher/icewing",
+    "/mob/living/basic/mining/bileworm",
+    "/mob/living/basic/mining/lobstrosity/lava",
+    "/mob/living/basic/mining/goldgrub",
+    "/mob/living/basic/mining/brimdemon",
+    "/mob/living/basic/mining/hivelord",
+    "/mob/living/basic/hivelord_brood",
+    "/mob/living/basic/mining/basilisk",
+    "/obj/projectile/temp/watcher",
+    "/obj/projectile/temp/watcher/magma_wing",
+    "/obj/projectile/temp/watcher/ice_wing",
+    "/obj/item/organ/monster_core/regenerative_core",
+    "/obj/item/organ/monster_core/regenerative_core/legion",
+    "/obj/item/stack/ore/silver",
+    "/obj/item/stack/ore/gold",
+    "/obj/item/stack/ore/uranium",
+    "/obj/item/stack/ore/diamond",
+];
+
 /// The DM type of a basic mob (prototype data): the key into [`MobsData::mobs`].
 #[derive(Component, Reflect, Default, Clone, Debug, PartialEq)]
 pub struct DmMob {

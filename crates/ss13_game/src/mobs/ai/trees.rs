@@ -48,6 +48,8 @@ macro_rules! speech {
     };
 }
 
+mod lavaland;
+
 pub struct Built {
     pub roots: Vec<Node>,
     pub blackboard: Vec<(Key, Value)>,
@@ -101,6 +103,8 @@ pub fn build(path: &str, def: &MobDef) -> Option<Built> {
     } else if under(path, FOX) {
         built.roots = vec![fox()];
         built.retaliates = true;
+    } else if let Some(lava) = lavaland::build(path) {
+        built = lava;
     } else if let Some(generic) = generic(path) {
         built = generic;
         // DM `STOP_MOVING_WHEN_PULLED` of the controller's `ai_traits`.

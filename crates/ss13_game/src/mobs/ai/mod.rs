@@ -115,6 +115,10 @@ pub enum Key {
     FloraCooldown,
     /// `BB_HIVE_PARTNER`.
     HivePartner,
+    /// `ai_target_timer`'s `BB_BASIC_MOB_HAS_TARGET_TIME`: since when ([`Value::Time`]) the
+    /// target in `TargetTimerOf` has been the current one (`crate::mobs::lavaland::ai`).
+    TargetTimer,
+    TargetTimerOf,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -280,6 +284,7 @@ pub struct Retaliates;
 pub fn record_attacker(world: &mut World, victim: Entity, attacker: Entity) {
     crate::restaurant::on_attacked(world, victim, attacker);
     crate::mobs::pets::on_attacked(world, victim, attacker);
+    crate::mobs::lavaland::on_attacked(world, victim, attacker);
     let now = world.resource::<Time>().elapsed_secs_f64();
     let health = world.get::<crate::health::Health>(victim).cloned();
     let retaliates = world.get::<Retaliates>(victim).is_some();
@@ -421,7 +426,11 @@ fn plan(world: &mut World) {
             });
         }
         // tg pauses a controller while its pawn is in a `do_after` (a bot's task).
-        if controller.status != AiStatus::Off && !crate::bots::busy(world, mob) {
+        // Lavaland mobs' abilities hold them still the same way (`PAUSE_DURING_DO_AFTER`).
+        if controller.status != AiStatus::Off
+            && !crate::bots::busy(world, mob)
+            && !crate::mobs::lavaland::busy(world, mob)
+        {
             stats.on += 1;
             stats.ticked += 1;
             let spt = if controller.last_tick > 0.0 {
