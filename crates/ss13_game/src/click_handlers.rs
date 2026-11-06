@@ -56,6 +56,7 @@
 //! | 2800 | `martial::attack_self` |
 //! | 2900 | `botany::attack_self` |
 //! | 3000 | `service::server::attack_self` |
+//! | 3010 | `service::barber::attack_self` (lipstick twist, the dye spray on oneself) |
 //! | 3050 | `fishing::server::attack_self` (rods), `fishing::aquarium::attack_self` (fish tanks) |
 //! | 3100 | `silicon::law_rack::attack_self` |
 //! | 3150 | `vehicles::attack_self` |
@@ -218,6 +219,7 @@
 //! | 1597 | `science::quantum_pad::item_interaction` (multitool links, keycards) |
 //! | 1600 | `machine_frame::item_interaction` |
 //! | 1650 | `radiation::geiger_interact` |
+//! | 1680 | `service::barber::item_interaction` (razor, lipstick, paper on lips, dye spray, mirror frames) |
 //! | 1690 | `service::stationery::cabinet_wrench` (right click) |
 //! | 1700 | `service::server::item_interaction` |
 //! | 1750 | `medical::bodyparts::item_interaction` |

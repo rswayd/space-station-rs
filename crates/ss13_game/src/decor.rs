@@ -7,9 +7,9 @@
 //!   see-through, cloth and bounty curtains block sight when closed; closed ones hang above
 //!   mobs); a wrench (5 s) fastens or unfastens them, wirecutters (5 s) cut an unfastened one into
 //!   cloth, plastic and a rod.
-//! - Mirrors ([`Mirror`]): a human's empty hand opens the hairstyle list (tg's radial "Change
-//!   Hair"), the pick is applied at the moment of effect if the mirror is still whole and in
-//!   reach; a mirror breaks at half integrity ("mirror_broke", the shatter), a lit welder (1 s)
+//! - Mirrors ([`Mirror`]): a human's empty hand opens the mirror's options
+//!   (`crate::service::barber::open_mirror`: hair and beard, a magic mirror's race, sex, eyes
+//!   and name); a mirror breaks at half integrity ("mirror_broke", the shatter), a lit welder (1 s)
 //!   mends a broken one, a wrench (right click, 3 s) takes it off the wall as its frame
 //!   (broken or not), destroyed it leaves a shard.
 //! - Signs and plaques: an empty hand examines them; a wrench (4 s) takes one off the wall as an
@@ -24,9 +24,8 @@
 //!   that wall's face of the user's tile, one poster per face.
 //! - Showcases (`showcase.dm`): a screwdriver loosens or tightens an unanchored one's screws, a
 //!   wrench fastens or unfastens a screwed one (2 s), a crowbar (2 s) pries one into 4 iron.
-// shortcut: no crayon recolouring of curtains, no mechanical (shuttle button) curtains; mirrors
-// offer hair only (no beards: the body has no facial hair; magic mirrors' race, sex, eyes and
-// name changes are not offered), no reflections, no revenant prisons, no bald trait; sign items
+// shortcut: no crayon recolouring of curtains, no mechanical (shuttle button) curtains; mirrors:
+// no reflections, no revenant prisons, no omen for whoever breaks one; sign items
 // are not hung back on walls (no wallframes) and keep no integrity, no pen redesign of blank
 // signs, no fountain pen engraving of plaques (no text prompt for items here); statues: no
 // carving from material blocks, no custom material statues, no beauty or art elements, no
@@ -35,7 +34,6 @@
 // appears when the 3.7 s are over). Showcases: no examine line of the screws' state. Add each with
 // its mechanic.
 
-use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
 use ss13_mapload::fidelity::is_under;
 use ss13_mapload::{DmAtom, DmName, DmObj, DmTurfBuild, IconIndex, Opaque};
@@ -43,16 +41,8 @@ use ss13_net::chat::server::SendChat;
 use ss13_shared::chat::Span;
 use ss13_shared::protocol::ClickModifiers;
 use ss13_shared::{Appearance, Dir, IconStateId, Layer, TilePos};
-use ss13_tgui::interfaces::list_input::{ListInputData, ListInputUi};
-use ss13_tgui::server::{
-    AppTguiExt, OpenUi, ServerUi, UiActed, UiParams, UiReject, UiSystems, UiWindow,
-};
-use ss13_tgui::{UiInterface, UiStatus};
 
 use crate::construction::Job;
-use crate::health::Stat;
-use crate::human::{HAIR_STYLE_NAMES, HAIR_STYLES, HumanLook};
-use crate::medical::surgery::ListAct;
 use crate::medical::{name_of, visible};
 use crate::obj_damage::{Integrity, set_anchored};
 use crate::sound::{PlaySound, playsound};
@@ -175,9 +165,6 @@ const STATUE_MATERIALS: [(&str, &[(&str, u32)]); 10] = [
         ],
     ),
 ];
-/// The hairstyle list's "Bald" (`SSaccessories.hairstyles_list`), then [`HAIR_STYLE_NAMES`].
-const BALD: &str = "Без волос";
-
 /// `/obj/structure/curtain`: `open`, `opaque_closed` (`icon_type` is its map sprite's prefix).
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Curtain {
@@ -227,67 +214,6 @@ pub enum DecorJob {
     SliceStatue,
 }
 
-/// A hairstyle list waiting for a mirror user's pick (tg `tgui_input_list` of `change_hair`).
-#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
-pub struct MirrorChoice {
-    pub mirror: Entity,
-}
-
-/// The server side of `ListInputWindow` for a mirror's hairstyles.
-pub struct MirrorListWindow;
-
-impl UiInterface for MirrorListWindow {
-    const NAME: &'static str = ListInputUi::NAME;
-    type Data = ListInputData;
-    type StaticData = ();
-}
-
-impl ServerUi for MirrorListWindow {
-    type Source = &'static MirrorChoice;
-    type UserParam = ();
-    type Act = ListAct;
-
-    fn static_data(_: &MirrorChoice) {}
-
-    fn data(_: &MirrorChoice, _: Entity, _: &()) -> ListInputData {
-        let items = hair_names();
-        ListInputData {
-            title: "Уход за собой".into(),
-            message: "Выберите причёску".into(),
-            init_value: items.first().cloned().unwrap_or_default(),
-            items,
-            timeout: None,
-        }
-    }
-
-    fn parse_act(action: &str, params: &UiParams) -> Result<ListAct, UiReject> {
-        match action {
-            "submit" => params
-                .get("entry")
-                .map(|e| ListAct::Submit(e.to_owned()))
-                .ok_or_else(|| UiReject::BadParams("entry: expected an item".into())),
-            "cancel" => Ok(ListAct::Cancel),
-            _ => Err(UiReject::UnknownAction),
-        }
-    }
-}
-
-fn hair_names() -> Vec<String> {
-    std::iter::once(BALD)
-        .chain(HAIR_STYLE_NAMES)
-        .map(str::to_owned)
-        .collect()
-}
-
-/// The hairstyle a list entry names: `Some(None)` bald, `None` not an entry.
-fn hair_of(entry: &str) -> Option<Option<&'static str>> {
-    if entry == BALD {
-        return Some(None);
-    }
-    let i = HAIR_STYLE_NAMES.iter().position(|n| *n == entry)?;
-    Some(Some(HAIR_STYLES[i]))
-}
-
 pub struct DecorPlugin;
 
 impl Plugin for DecorPlugin {
@@ -305,15 +231,7 @@ impl Plugin for DecorPlugin {
                 crate::decor::item_interaction(w, c.client, c.mob, h, c.target, c.modifiers)
             })
         });
-        app.register_ui::<MirrorListWindow>()
-            .add_observer(add_decor)
-            .add_systems(
-                Update,
-                (
-                    pick_hair.in_set(UiSystems::Handle),
-                    close_stale_lists.in_set(UiSystems::StatusHook),
-                ),
-            );
+        app.add_observer(add_decor);
     }
 }
 
@@ -407,17 +325,10 @@ pub fn interact(world: &mut World, client: Entity, mob: Entity, target: Entity) 
         return true;
     }
     if let Some(mirror) = world.get::<Mirror>(target).copied() {
-        // `if(. || !ishuman(user) || broken) return TRUE`.
-        if !mirror.broken && world.get::<HumanLook>(mob).is_some() {
-            world
-                .entity_mut(mob)
-                .insert(MirrorChoice { mirror: target });
-            world.write_message(OpenUi::new::<MirrorListWindow>(
-                client,
-                mob,
-                mob,
-                "Уход за собой",
-            ));
+        // `if(. || !ishuman(user) || broken) return TRUE`, then the options
+        // (`crate::service::barber`).
+        if !mirror.broken {
+            crate::service::barber::open_mirror(world, client, mob, target);
         }
         return true;
     }
@@ -1172,77 +1083,9 @@ pub(crate) fn deconstruct(
     false
 }
 
-/// A mirror user picked a hairstyle (or closed the list): tg `change_hair` after
-/// `can_use_mirror` at the moment of effect.
-fn pick_hair(world: &mut World, mut acts: Local<MessageCursor<UiActed<MirrorListWindow>>>) {
-    let picked: Vec<(Entity, ListAct)> = acts
-        .read(world.resource::<Messages<UiActed<MirrorListWindow>>>())
-        .filter(|a| a.actor == a.source)
-        .map(|a| (a.actor, a.act.clone()))
-        .collect();
-    for (mob, act) in picked {
-        let Some(choice) = world.get::<MirrorChoice>(mob).copied() else {
-            continue;
-        };
-        world.entity_mut(mob).remove::<MirrorChoice>();
-        let ListAct::Submit(entry) = act else {
-            continue;
-        };
-        let Some(style) = hair_of(&entry) else {
-            continue;
-        };
-        if !can_use_mirror(world, mob, choice.mirror) {
-            continue;
-        }
-        let Some(mut look) = world.get_mut::<HumanLook>(mob) else {
-            continue;
-        };
-        let style = style.map(str::to_owned);
-        if look.hair_style == style {
-            continue;
-        }
-        look.hair_style = style;
-        crate::inventory::refresh_look(world, mob);
-    }
-}
-
-/// `can_use_mirror`: the mirror whole and in reach, the user conscious and able to act.
-fn can_use_mirror(world: &World, mob: Entity, mirror: Entity) -> bool {
-    let whole = world.get::<Mirror>(mirror).is_some_and(|m| !m.broken);
-    let near = match (world.get::<TilePos>(mob), world.get::<TilePos>(mirror)) {
-        (Some(a), Some(b)) => a.chebyshev(*b).is_some_and(|d| d <= 1),
-        _ => false,
-    };
-    whole
-        && near
-        && world.get::<Stat>(mob) == Some(&Stat::Conscious)
-        && !crate::status_effects::incapacitation(world, mob).incapacitated
-}
-
-fn close_stale_lists(
-    mut windows: Query<&mut UiWindow, With<ss13_tgui::server::UiKind<MirrorListWindow>>>,
-    choices: Query<(), With<MirrorChoice>>,
-) {
-    for mut window in &mut windows {
-        if !choices.contains(window.source) {
-            window.cap_status(UiStatus::Close);
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn hair_entries_map_back_to_styles() {
-        let names = hair_names();
-        assert_eq!(names[0], BALD);
-        assert_eq!(names.len(), HAIR_STYLES.len() + 1);
-        assert_eq!(hair_of(BALD), Some(None));
-        assert_eq!(hair_of(HAIR_STYLE_NAMES[2]), Some(Some(HAIR_STYLES[2])));
-        assert_eq!(hair_of("Ирокез из космоса"), None);
-    }
 
     #[test]
     fn fixed_signs_stay_on_the_wall() {

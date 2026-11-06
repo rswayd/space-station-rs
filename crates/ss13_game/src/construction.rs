@@ -261,6 +261,8 @@ pub enum Job {
     Sink(crate::plumbing::SinkJob),
     /// Curtains, mirrors, signs, plaques, statues, posters and showcases ([`crate::decor`]).
     Decor(crate::decor::DecorJob),
+    /// Razors, lipstick, wiping lips, the dye spray ([`crate::service::barber`]).
+    Barber(crate::service::BarberJob),
     /// Harvesting, uprooting and replanting flora ([`crate::flora`]).
     Flora(crate::flora::FloraJob),
     /// Taking an unlit bonfire apart ([`crate::fireplace`]).
@@ -1306,6 +1308,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Martial(job) => crate::martial::complete_reading(world, mob, action, job),
         &Job::Religion(job) => crate::service::religion_complete(world, mob, action, job),
         &Job::Art(job) => crate::service::art_complete(world, mob, action, job),
+        &Job::Barber(job) => crate::service::barber_complete(world, mob, action, job),
         &Job::Camera(job) => crate::defenses::cameras::complete(world, mob, action, job),
         &Job::Sink(job) => crate::plumbing::complete(world, mob, action, job),
         &Job::Decor(job) => crate::decor::complete(world, mob, action, job),

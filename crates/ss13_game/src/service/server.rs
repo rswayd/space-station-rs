@@ -60,6 +60,8 @@ impl Plugin for ServiceServerPlugin {
                 crate::service::server::item_interaction(w, c.client, c.mob, h, c.target)
             })
         });
+        // Razors, lipstick, the dye spray and mirrors (`super::barber`).
+        super::barber::build(app);
         app.register_ui::<PaperSheetUi>()
             .register_ui::<MarkdownViewerUi>()
             .init_resource::<super::religion::Religion>()
@@ -203,6 +205,7 @@ pub fn interact(world: &mut World, client: Entity, mob: Entity, target: Entity) 
 pub fn click_alt(world: &mut World, client: Entity, mob: Entity, target: Entity) -> bool {
     super::stationery::click_alt(world, client, mob, target)
         || super::office::fold_plane(world, client, mob, target)
+        || super::barber::click_alt(world, client, mob, target)
 }
 
 /// tg `item_interaction` / `attack` of the service items in hand (and of what they are used

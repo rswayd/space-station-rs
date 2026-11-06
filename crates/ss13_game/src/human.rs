@@ -27,6 +27,8 @@ pub mod layers {
     /// The far leg when facing east or west (`handle_masking`).
     pub const BODYPARTS_LOW_LAYER: f32 = 23.1;
     pub const BODYPARTS_LAYER: f32 = 23.0;
+    /// Lipstick (`get_lips_overlays`).
+    pub const BODY_LAYER: f32 = 22.0;
     pub const EYES_LAYER: f32 = 21.0;
     pub const UNIFORM_LAYER: f32 = 19.0;
     pub const ID_LAYER: f32 = 18.0;
@@ -128,6 +130,35 @@ pub const MUTANT_COLORS: [u32; 12] = [
     0x886644, 0x9966cc, 0xdddddd,
 ];
 
+/// The names of [`FACIAL_HAIR_STYLES`] in the grooming lists.
+pub const FACIAL_HAIR_STYLE_NAMES: [&str; 8] = [
+    "Борода (Авраам Линкольн)",
+    "Борода (шкиперская)",
+    "Борода (полная)",
+    "Борода (козлиная)",
+    "Борода (хипстерская)",
+    "Борода (очень длинная)",
+    "Борода (самогонщик)",
+    "Щетина",
+];
+
+/// `icon_state`s of a few `/datum/sprite_accessory/facial_hair` styles (abe, chinstrap,
+/// fullbeard, goatee, hipster, very long, moonshiner, three o'clock shadow), all in
+/// `human_face.dmi`.
+pub const FACIAL_HAIR_STYLES: [&str; 8] = [
+    "facial_abe",
+    "facial_chin",
+    "facial_fullbeard",
+    "facial_gt",
+    "facial_hip",
+    "facial_wise",
+    "facial_moonshiner",
+    "facial_3oclock",
+];
+
+/// `/datum/sprite_accessory/hair/skinhead`: what a razor leaves of the hair.
+pub const SKINHEAD: &str = "hair_skinhead";
+
 /// The fixed colors of `/proc/random_eye_color` (brown, hazel, a grey, blue, green, amber).
 pub const EYE_COLORS: [u32; 6] = [0x663300, 0x554422, 0x888888, 0x3366cc, 0x006600, 0xffcc00];
 
@@ -202,6 +233,12 @@ pub struct HumanLook {
     /// A hair `icon_state` in `human_face.dmi`; `None` = bald.
     pub hair_style: Option<String>,
     pub hair_color: [u8; 3],
+    /// A facial hair `icon_state` in `human_face.dmi`; `None` = tg "Shaved".
+    pub facial_hair_style: Option<String>,
+    pub facial_hair_color: [u8; 3],
+    /// tg `lip_style` (`lipstick`, `lipstick_upper`, `lipstick_lower`); `None` = no lipstick.
+    pub lip_style: Option<String>,
+    pub lip_color: [u8; 3],
     pub eye_color: [u8; 3],
     /// `features["mcolor"]`: the limbs' color for `LimbColor::Mutant` species.
     pub mutant_color: [u8; 3],
@@ -295,6 +332,12 @@ impl AppearancePrefs {
             skin_tone: SKIN_TONES[self.skin_tone].0.into(),
             hair_style: self.hair_style.map(|h| HAIR_STYLES[h].into()),
             hair_color: hex_rgb(HAIR_COLORS[self.hair_color]),
+            // shortcut: no facial hair preference (the lobby has none); clean-shaven, the beard
+            // grows only from a mirror or a razor.
+            facial_hair_style: None,
+            facial_hair_color: hex_rgb(HAIR_COLORS[self.hair_color]),
+            lip_style: None,
+            lip_color: [0, 0, 0],
             eye_color: hex_rgb(EYE_COLORS[self.eye_color]),
             mutant_color: hex_rgb(MUTANT_COLORS[self.mutant_color]),
             uniform: None,
@@ -512,11 +555,28 @@ pub fn parts(look: &HumanLook) -> Result<Vec<Part>, LookError> {
             only_dirs: 0,
         }));
     }
-    if let Some(style) = look
-        .hair_style
-        .as_ref()
-        .filter(|_| !look.husk && limbs.hair && has(BodyZone::Head))
-    {
+    let head_hair = !look.husk && limbs.hair && has(BodyZone::Head);
+    // `get_lips_overlays`: not on a husk (`HEAD_LIPS` follows the species' hair here).
+    if let Some(style) = look.lip_style.as_ref().filter(|_| head_hair) {
+        parts.push(Part {
+            layer: BODY_LAYER,
+            dmi: HAIR_DMI,
+            state: format!("lips_{style}"),
+            color: Some(look.lip_color),
+            only_dirs: 0,
+        });
+    }
+    // `get_hair_overlays`: facial hair first, then the hair, both on `HAIR_LAYER`.
+    if let Some(style) = look.facial_hair_style.as_ref().filter(|_| head_hair) {
+        parts.push(Part {
+            layer: HAIR_LAYER,
+            dmi: HAIR_DMI,
+            state: style.clone(),
+            color: Some(look.facial_hair_color),
+            only_dirs: 0,
+        });
+    }
+    if let Some(style) = look.hair_style.as_ref().filter(|_| head_hair) {
         parts.push(Part {
             layer: HAIR_LAYER,
             dmi: HAIR_DMI,
@@ -805,6 +865,30 @@ mod tests {
     }
 
     #[test]
+    fn beard_and_lips_are_drawn_under_the_hair() {
+        let mut l = look(6);
+        l.facial_hair_style = Some(FACIAL_HAIR_STYLES[2].into());
+        l.facial_hair_color = [1, 2, 3];
+        l.lip_style = Some("lipstick_upper".into());
+        l.lip_color = [0xff, 0, 0];
+        let parts = parts(&l).unwrap();
+        let at = |state: &str| parts.iter().position(|p| p.state == state).unwrap();
+        assert_eq!(parts[at("facial_fullbeard")].color, Some([1, 2, 3]));
+        assert_eq!(parts[at("lips_lipstick_upper")].layer, BODY_LAYER);
+        assert!(at("human_chest_m") < at("lips_lipstick_upper"));
+        assert!(at("lips_lipstick_upper") < at("eyes_l"));
+        assert!(at("facial_fullbeard") < at(l.hair_style.as_deref().unwrap()));
+        // A husk shows neither.
+        l.husk = true;
+        let husk = super::parts(&l).unwrap();
+        assert!(
+            !husk
+                .iter()
+                .any(|p| p.state.starts_with("lips_") || p.state.starts_with("facial_"))
+        );
+    }
+
+    #[test]
     fn unknown_inputs_are_errors() {
         let mut l = look(3);
         l.skin_tone = "green-ish".into();
@@ -884,6 +968,7 @@ mod tests {
         };
         for (name, value) in [
             ("BODYPARTS_LAYER", BODYPARTS_LAYER),
+            ("BODY_LAYER", BODY_LAYER),
             ("EYES_LAYER", EYES_LAYER),
             ("UNIFORM_LAYER", UNIFORM_LAYER),
             ("BODYPARTS_HIGH_LAYER", BODYPARTS_HIGH_LAYER),

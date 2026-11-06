@@ -108,13 +108,19 @@ pub fn shown(inventory: &Inventory, hidden: u32) -> Inventory {
     shown
 }
 
-/// The body as drawn under `hidden`: no hair (`HIDEHAIR`), no eyes (`HIDEEYES`).
+/// The body as drawn under `hidden`: no hair (`HIDEHAIR`), no eyes (`HIDEEYES`), no beard or
+/// lipstick (`HIDEFACIALHAIR`).
 pub fn hide_body(mut look: HumanLook, hidden: u32) -> HumanLook {
     if hidden & HIDEHAIR != 0 {
         look.hair_style = None;
     }
     if hidden & HIDEEYES != 0 {
         look.eyeless = true;
+    }
+    // `get_hair_overlays` / `get_lips_overlays`: `HIDEFACIALHAIR` hides the beard and the lips.
+    if hidden & HIDEFACIALHAIR != 0 {
+        look.facial_hair_style = None;
+        look.lip_style = None;
     }
     look
 }
