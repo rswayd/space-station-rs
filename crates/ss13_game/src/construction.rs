@@ -319,6 +319,8 @@ pub enum Job {
     DisplayCase(crate::displaycase::CaseJob),
     /// Linking or unlinking a quantum keycard ([`crate::science::quantum_pad`]).
     QuantumPad(crate::science::quantum_pad::PadJob),
+    /// Deploying a flatpack ([`crate::eng_machines`]).
+    EngMachine(crate::eng_machines::EngJob),
     /// Wrenching a light fixture frame apart ([`crate::power::lighting`]).
     Light(crate::power::lighting::LightJob),
     /// Drawing, outlining or eating with a crayon ([`crate::crayons`]).
@@ -1349,6 +1351,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Light(job) => crate::power::lighting::complete(world, action, job),
         Job::Crayon(job) => crate::crayons::complete(world, mob, action, job.clone()),
         &Job::QuantumPad(job) => crate::science::quantum_pad::complete(world, client, target, job),
+        &Job::EngMachine(job) => crate::eng_machines::complete(world, client, target, job),
         &Job::Flora(job) => crate::flora::complete(world, mob, action, job),
         Job::Bonfire => crate::fireplace::complete_dismantle(world, action),
         &Job::LawRack(job) => crate::silicon::law_rack::complete(world, mob, action, job),

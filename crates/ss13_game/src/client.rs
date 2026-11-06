@@ -30,6 +30,7 @@ pub struct GameClientPlugin;
 impl Plugin for GameClientPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(crate::keycard_client::KeycardClientPlugin);
+        app.add_plugins(crate::flatpacker_client::FlatpackerClientPlugin);
         app.add_plugins(crate::slot_machine_client::SlotMachineClientPlugin);
         app.add_plugins(crate::cargo::bounty_client::BountyClientPlugin);
         app.add_plugins(crate::defenses::client::DefensesClientPlugin);

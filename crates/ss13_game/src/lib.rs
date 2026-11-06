@@ -275,6 +275,9 @@ pub mod fire;
 #[cfg(feature = "server")]
 pub mod fireplace;
 pub mod fishing;
+#[cfg(feature = "client")]
+pub mod flatpacker_client;
+pub mod flatpacker_ui;
 #[cfg(feature = "server")]
 pub mod flora;
 #[cfg(feature = "server")]
