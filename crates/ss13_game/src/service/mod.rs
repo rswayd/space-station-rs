@@ -33,6 +33,8 @@ mod games;
 #[cfg(feature = "server")]
 mod library;
 #[cfg(feature = "server")]
+mod library_console;
+#[cfg(feature = "server")]
 mod manual_data;
 #[cfg(feature = "server")]
 mod manuals;
@@ -63,6 +65,8 @@ pub use clown::MimeVow;
 pub use games::Die;
 #[cfg(feature = "server")]
 pub use library::Book;
+#[cfg(feature = "server")]
+pub use library_console::{ConsoleAct as LibraryConsoleAct, emag_act as library_emag_act};
 #[cfg(feature = "server")]
 pub use office::{Clipboard, Fax, Photocopier, Toner};
 #[cfg(feature = "server")]
@@ -289,6 +293,70 @@ pub struct IdcDisease {
     pub cured_by: String,
     pub id: String,
     pub level: String,
+}
+
+/// tgui `LibraryConsole` (`/obj/machinery/computer/libraryconsole/bookmanagement`). Every
+/// list is sent whole (tg pages them).
+pub struct LibraryConsoleUi;
+
+impl UiInterface for LibraryConsoleUi {
+    const NAME: &'static str = "LibraryConsole";
+    type Data = LibraryConsoleData;
+    type StaticData = ();
+}
+
+/// The console's screens (`LIBRARY_INVENTORY`..`LIBRARY_TOP_SNEAKY`).
+pub const LIBRARY_INVENTORY: u8 = 1;
+pub const LIBRARY_CHECKOUT: u8 = 2;
+pub const LIBRARY_ARCHIVE: u8 = 3;
+pub const LIBRARY_UPLOAD: u8 = 4;
+pub const LIBRARY_PRINT: u8 = 5;
+pub const LIBRARY_TOP_SNEAKY: u8 = 6;
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct LibraryConsoleData {
+    pub screen_state: u8,
+    /// Emagged and the forbidden lore not taken yet.
+    pub display_lore: bool,
+    pub inventory: Vec<LibraryBookRow>,
+    pub checkouts: Vec<LibraryLoanRow>,
+    pub checkout_title: Option<String>,
+    /// The archive (tg's search results).
+    pub pages: Vec<LibraryArchiveRow>,
+    pub upload_categories: Vec<String>,
+    pub has_scanner: bool,
+    pub has_cache: bool,
+    pub cache_title: String,
+    pub cache_author: String,
+    pub deity: String,
+    pub religion: String,
+    pub bible_name: String,
+}
+
+/// An inventory row; `id` is its 1-based place in the list.
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+pub struct LibraryBookRow {
+    pub id: u32,
+    pub title: String,
+    pub author: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct LibraryLoanRow {
+    pub id: u32,
+    pub borrower: String,
+    pub overdue: bool,
+    pub due_in_minutes: f32,
+    pub title: String,
+    pub author: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+pub struct LibraryArchiveRow {
+    pub id: u32,
+    pub title: String,
+    pub author: String,
+    pub category: String,
 }
 
 /// The text of raw paper/book HTML as plain lines: `<br>`, `<p>` and list items break lines,

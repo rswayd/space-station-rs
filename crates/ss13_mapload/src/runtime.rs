@@ -515,6 +515,8 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     // Copies, printed and bound books, folded planes, the prebuilt copier's cartridge
     // (`ss13_game::service`).
     "/obj/item/book",
+    // The librarian console's printed bible.
+    "/obj/item/book/bible",
     "/obj/item/paper",
     "/obj/item/paperplane",
     "/obj/item/toner",

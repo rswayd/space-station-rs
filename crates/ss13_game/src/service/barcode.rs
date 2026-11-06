@@ -48,12 +48,21 @@ pub struct Loan {
     pub due: f64,
 }
 
-/// The librarian console's `inventory`, `checkouts` and `checking_out_book`.
+/// The librarian console's `inventory`, `checkouts` and `checking_out_book`, and its window's
+/// state (`super::library_console`).
 #[derive(Component, Clone, Debug, Default, PartialEq)]
 pub struct Ledger {
     pub inventory: Vec<Book>,
     pub checkouts: Vec<Loan>,
     pub checking_out: Option<Book>,
+    /// `screen_state` (0 before the first open: the inventory).
+    pub screen: u8,
+    /// `obj_flags & EMAGGED`.
+    pub emagged: bool,
+    /// `!can_spawn_lore`.
+    pub lore_taken: bool,
+    /// `!dynamic_inv_load`: the area's bookcases were read into the inventory.
+    pub loaded: bool,
 }
 
 impl Ledger {

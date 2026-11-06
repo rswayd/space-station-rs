@@ -9,14 +9,14 @@
 //! - The binder takes an ID card (the author) and then a paper: 4.1 s later the paper is a book
 //!   "Print Job #NNN" with the paper's text. Without a scanned ID the first paper only sets the
 //!   author to "unknown author".
-//! - The librarian's console (`bookmanagement`) lists: upload the nearest scanner's cache (in
-//!   view, a category chosen), set the cache's title and author, print an archived book (6 s
-//!   printer cooldown, the book 4.1 s later) and browse the archive; the public console only
+//! - The librarian's console (`bookmanagement`) is the `LibraryConsole` window
+//!   (`super::library_console`); its upload of the nearest scanner's cache (in view) and its
+//!   printing (6 s printer cooldown, the book 4.1 s later) are here. The public console only
 //!   browses.
 // shortcut: the archive lives as long as the server process (tg keeps it in SQL across rounds),
-// so random bookcases stay empty; no search filters or pages, checkouts, inventory, bible or
-// poster printing, newscaster book club, forbidden lore or admin deletion (the barcode
-// scanner and the ledger it fills are `super::barcode`).
+// so random bookcases stay empty; no search filters or pages, poster printing, newscaster book
+// club or admin deletion (the console's ledger and window are `super::library_console` and
+// `super::barcode`).
 
 use bevy::prelude::*;
 use ss13_mapload::DmAtom;
@@ -47,10 +47,11 @@ const UNIQUE_BOOKS: [&str; 3] = [
     "/obj/item/book/codex_gigas",
 ];
 /// `SSlibrary.upload_categories`.
-const CATEGORIES: [&str; 5] = ["Fiction", "Non-fiction", "Adult", "Reference", "Religion"];
+pub(super) const CATEGORIES: [&str; 5] =
+    ["Fiction", "Non-fiction", "Adult", "Reference", "Religion"];
 /// `set_title`'s trim, `MAX_NAME_LEN`, `MAX_BOOK_LENGTH`.
-const MAX_TITLE: usize = 30;
-const MAX_NAME_LEN: usize = 42;
+pub(super) const MAX_TITLE: usize = 30;
+pub(super) const MAX_NAME_LEN: usize = 42;
 const MAX_BOOK_LENGTH: usize = MAX_PAPER_LENGTH * 2;
 /// `PRINTER_COOLDOWN`, `attempt_print`'s timer, `bind_book`'s timer.
 const PRINTER_COOLDOWN: f64 = 6.0;
@@ -116,23 +117,11 @@ pub enum ScannerAct {
     Eject,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum ConsoleAct {
-    Upload,
-    SetTitle,
-    SetAuthor,
-    Print,
-    Browse,
-}
-
 /// A question of a book or a library machine.
 #[derive(Clone, Debug)]
 pub enum ArchiveAsk {
     /// "What would you like to change?"
-    Alter {
-        book: Entity,
-        pen: Entity,
-    },
+    Alter { book: Entity, pen: Entity },
     AlterText {
         book: Entity,
         pen: Entity,
@@ -141,21 +130,6 @@ pub enum ArchiveAsk {
     Scanner {
         scanner: Entity,
         acts: Vec<ScannerAct>,
-    },
-    Console {
-        console: Entity,
-        acts: Vec<ConsoleAct>,
-    },
-    Category {
-        console: Entity,
-    },
-    CacheText {
-        console: Entity,
-        field: BookField,
-    },
-    Print {
-        console: Entity,
-        ids: Vec<u32>,
     },
 }
 
@@ -172,7 +146,7 @@ pub(super) fn add_obj_parts(world: &mut World, e: Entity, path: &str) {
     }
 }
 
-fn powered(world: &World, machine: Entity) -> bool {
+pub(super) fn powered(world: &World, machine: Entity) -> bool {
     world.get::<crate::power::Unpowered>(machine).is_none()
 }
 
@@ -223,13 +197,13 @@ fn text(max_length: usize, multiline: bool) -> PromptKind {
 }
 
 /// `reject_bad_text`: no control characters (line breaks too unless `multiline`), trimmed.
-fn clean(text: &str, multiline: bool) -> Option<String> {
+pub(super) fn clean(text: &str, multiline: bool) -> Option<String> {
     let text = text.trim();
     let bad = |c: char| c.is_control() && !(multiline && (c == '\n' || c == '\t'));
     (!text.is_empty() && !text.chars().any(bad)).then(|| text.to_owned())
 }
 
-fn truncate(text: &str, max: usize) -> String {
+pub(super) fn truncate(text: &str, max: usize) -> String {
     text.chars().take(max).collect()
 }
 
@@ -330,35 +304,7 @@ pub(super) fn interact(world: &mut World, client: Entity, mob: Entity, target: E
             browse(world, client);
             return true;
         }
-        let acts = vec![
-            ConsoleAct::Upload,
-            ConsoleAct::SetTitle,
-            ConsoleAct::SetAuthor,
-            ConsoleAct::Print,
-            ConsoleAct::Browse,
-        ];
-        let items = [
-            "Upload the scanned book",
-            "Set the scanned book's title",
-            "Set the scanned book's author",
-            "Print a book from the archive",
-            "Browse the archive",
-        ]
-        .map(str::to_owned)
-        .to_vec();
-        let name = name_of(world, target);
-        ask(
-            world,
-            client,
-            mob,
-            &name,
-            "",
-            list(items),
-            ArchiveAsk::Console {
-                console: target,
-                acts,
-            },
-        );
+        super::library_console::open(world, client, mob, target);
         return true;
     }
     let Some(scanner) = world.get::<BookScanner>(target).cloned() else {
@@ -487,49 +433,6 @@ pub(super) fn answer(world: &mut World, actor: Entity, q: ArchiveAsk, answer: Pr
                 scanner_act(world, actor, scanner, act);
             }
         }
-        (ArchiveAsk::Console { console, acts }, PromptAnswer::Item(i)) => {
-            if let Some(&act) = acts.get(i)
-                && in_reach(world, actor, console)
-                && powered(world, console)
-            {
-                console_act(world, client, actor, console, act);
-            }
-        }
-        (ArchiveAsk::Category { console }, PromptAnswer::Item(i)) => {
-            if in_reach(world, actor, console) && powered(world, console) {
-                let category = CATEGORIES.get(i).copied().unwrap_or(CATEGORIES[0]);
-                upload(world, console, category);
-            }
-        }
-        (ArchiveAsk::CacheText { console, field }, PromptAnswer::Text(entry)) => {
-            if !in_reach(world, actor, console) || !powered(world, console) {
-                return;
-            }
-            let Some(scanner) = scanner_near(world, console) else {
-                return;
-            };
-            if let Some(mut state) = world.get_mut::<BookScanner>(scanner)
-                && let Some(cache) = state.cache.as_mut()
-            {
-                match field {
-                    BookField::Title => {
-                        if let Some(t) = clean(&entry, false) {
-                            cache.title = truncate(&t, MAX_TITLE);
-                        }
-                    }
-                    BookField::Author => cache.author = truncate(entry.trim(), MAX_NAME_LEN),
-                    BookField::Contents => {}
-                }
-            }
-        }
-        (ArchiveAsk::Print { console, ids }, PromptAnswer::Item(i)) => {
-            if let Some(&id) = ids.get(i)
-                && in_reach(world, actor, console)
-                && powered(world, console)
-            {
-                attempt_print(world, console, id);
-            }
-        }
         _ => {}
     }
 }
@@ -612,7 +515,7 @@ fn scanner_act(world: &mut World, actor: Entity, scanner: Entity, act: ScannerAc
 }
 
 /// `get_scanner()`: the nearest scanner in view of the console.
-fn scanner_near(world: &mut World, console: Entity) -> Option<Entity> {
+pub(super) fn scanner_near(world: &mut World, console: Entity) -> Option<Entity> {
     let at = *world.get::<TilePos>(console)?;
     let mut scanners = world.query_filtered::<(Entity, &TilePos), With<BookScanner>>();
     scanners
@@ -623,71 +526,8 @@ fn scanner_near(world: &mut World, console: Entity) -> Option<Entity> {
         .map(|(_, e)| e)
 }
 
-fn console_act(world: &mut World, client: Entity, actor: Entity, console: Entity, act: ConsoleAct) {
-    let name = name_of(world, console);
-    match act {
-        ConsoleAct::Browse => browse(world, client),
-        ConsoleAct::Upload => {
-            let items = CATEGORIES.map(str::to_owned).to_vec();
-            ask(
-                world,
-                client,
-                actor,
-                &name,
-                "Category",
-                list(items),
-                ArchiveAsk::Category { console },
-            );
-        }
-        ConsoleAct::SetTitle | ConsoleAct::SetAuthor => {
-            let (field, max) = if act == ConsoleAct::SetTitle {
-                (BookField::Title, MAX_TITLE)
-            } else {
-                (BookField::Author, MAX_NAME_LEN)
-            };
-            let has_cache = scanner_near(world, console)
-                .and_then(|s| world.get::<BookScanner>(s))
-                .is_some_and(|s| s.cache.is_some());
-            if !has_cache {
-                say(world, console, "No cached book found.");
-                return;
-            }
-            ask(
-                world,
-                client,
-                actor,
-                &name,
-                "",
-                text(max, false),
-                ArchiveAsk::CacheText { console, field },
-            );
-        }
-        ConsoleAct::Print => {
-            let (ids, items): (Vec<u32>, Vec<String>) = world
-                .resource::<LibraryArchive>()
-                .books
-                .iter()
-                .map(|b| (b.id, format!("\"{}\" by {}", b.title, b.author)))
-                .unzip();
-            if ids.is_empty() {
-                tell(world, client, Span::Notice, "The archive is empty.");
-                return;
-            }
-            ask(
-                world,
-                client,
-                actor,
-                &name,
-                "Print which book?",
-                list(items),
-                ArchiveAsk::Print { console, ids },
-            );
-        }
-    }
-}
-
 /// `upload_from_scanner`.
-fn upload(world: &mut World, console: Entity, category: &str) {
+pub(super) fn upload(world: &mut World, console: Entity, category: &str) {
     let Some(scanner) = scanner_near(world, console) else {
         say(world, console, "No nearby scanner detected.");
         return;
@@ -725,8 +565,8 @@ fn upload(world: &mut World, console: Entity, category: &str) {
     );
 }
 
-/// `attempt_print`: the printer cooldown, then the book after the timer.
-fn attempt_print(world: &mut World, console: Entity, id: u32) {
+/// `attempt_print(call_after)`: the printer cooldown, then `job` after the timer.
+pub(super) fn attempt_print_with(world: &mut World, console: Entity, job: TimerJob) {
     let t = now(world);
     let ready = world
         .get::<LibraryConsole>(console)
@@ -743,7 +583,7 @@ fn attempt_print(world: &mut World, console: Entity, id: u32) {
         state.printer_ready = t + PRINTER_COOLDOWN;
     }
     sound_at(world, console, PRINTER_SOUND, 50.0, false);
-    after(world, PRINT_SECS, TimerJob::PrintBook { console, id });
+    after(world, PRINT_SECS, job);
 }
 
 /// A new book at `pos` with `data`, named `name`, a random cover (`gen_random_icon_state`).

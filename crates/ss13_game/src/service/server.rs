@@ -83,6 +83,7 @@ impl Plugin for ServiceServerPlugin {
             .register_ui::<MarkdownViewerUi>()
             .register_ui::<super::DsmBookUi>()
             .register_ui::<super::IdcBookUi>()
+            .register_ui::<super::LibraryConsoleUi>()
             .init_resource::<super::religion::Religion>()
             .init_resource::<super::archive::LibraryArchive>()
             .init_resource::<super::stationery::RapsheetCount>()
@@ -98,6 +99,7 @@ impl Plugin for ServiceServerPlugin {
                     window_status.in_set(UiSystems::StatusHook),
                     super::manuals::window_status.in_set(UiSystems::StatusHook),
                     super::manuals::flip_sounds.in_set(UiSystems::Handle),
+                    super::library_console::console_acts.in_set(UiSystems::Handle),
                     run_timers.run_if(any_with_component::<ServiceTimer>),
                     super::office::load_starting_toner
                         .run_if(any_with_component::<super::office::StartingToner>),
@@ -492,6 +494,8 @@ pub(super) enum TimerJob {
     Bind { binder: Entity, paper: Entity },
     /// The library console's printed book.
     PrintBook { console: Entity, id: u32 },
+    /// The library console's printed bible.
+    PrintBible { console: Entity },
     /// A filing cabinet's drawer closes.
     CabinetClose { cabinet: Entity },
 }
@@ -521,6 +525,7 @@ fn run_timers(world: &mut World) {
             TimerJob::FaxVend { fax, item } => super::office::vend(world, fax, item),
             TimerJob::Bind { binder, paper } => super::archive::bind(world, binder, paper),
             TimerJob::PrintBook { console, id } => super::archive::print(world, console, id),
+            TimerJob::PrintBible { console } => super::library_console::print_bible(world, console),
             TimerJob::CabinetClose { cabinet } => super::stationery::close_cabinet(world, cabinet),
         }
     }
