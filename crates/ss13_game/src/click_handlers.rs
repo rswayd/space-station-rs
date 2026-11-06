@@ -67,6 +67,7 @@
 //! | 300 | `forensics::server::item_interaction` |
 //! | 400 | `medical::cyberimps::item_interaction` |
 //! | 450 | `fishing::server::insert_bait`, `fishing::aquarium::item_interaction` |
+//! | 480 | `clothing::accessories::attach` (before a jumpsuit's holster takes the item) |
 //! | 500 | core: a storage opens or takes the held item |
 //! | 600 | `implants::item_interaction` |
 //! | 700 | `assemblies::server::item_interaction` |

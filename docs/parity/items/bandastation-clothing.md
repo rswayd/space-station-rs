@@ -30,7 +30,7 @@
 
 - **Код:** [`/obj/item/clothing/accessory/holster`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/items/clothing/accessories/holsters.dm#L8), [`can_access_holster()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/items/clothing/accessories/holsters.dm#L46), [`is_accessory_covered()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/items/clothing/accessories/holsters.dm#L1)
 - **BandaStation:** [`_under.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/under/_under.dm#L462) — вес униформы с кобурой
-- **Статус в ss13-rs:** ❌ нет — аксессуары крепятся (`crates/ss13_game/src/clothing/accessories.rs`), но без хранилища: кобура не хранит пистолет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/clothing/holsters.rs`: лимиты и `set_holdable` всех кобур, разгрузки и кармашка (`create_storage` в `Initialize` — таблицей), содержимое `PopulateContents`/`Initialize`; на форме кобура открывается кликом по форме и принимает предмет из руки (`crate::storage::storage_of`), одна кобура на форму («isn't compatible!»), детективная держит один ствол; вес формы — по самому тяжёлому аксессуару; `accessory` нарядов (ОБР, ТСФ, СССП, ветеран) крепится к форме (`crate::outfit`). Нет: быстрого выхватывания по хоткею (`quick_accessory_draw` — хоткеев нет, ui), `TRAIT_GUNFLIP`, звуков кобуры
 
 ### Нательная камера
 Аксессуар-камера: видна в сети камер станции, только пока её смотрят; включается кнопкой, ломается ЭМИ и чинится кабелем.
@@ -42,7 +42,7 @@
 На перчатки надеваются кольца (бриллиантовое, серебряное и др.) — рисуются поверх перчаток, снимаются alt-кликом.
 
 - **Код:** [`/obj/item/clothing/gloves`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/items/clothing/gloves/gloves.dm#L1), [`/obj/item/clothing/accessory/gloves_accessory`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/items/clothing/accessories/gloves_accessories.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/clothing/accessories.rs`: кольцо крепится к перчаткам (одно, по `attachment_slot`), рисуется поверх надетых перчаток, alt+ПКМ снимает, осмотр «Имеет прикрепленное», высыпается при разрушении; на форму кольца не крепятся. `TRAIT_FINGERPRINT_PASSTHROUGH` кольца — к криминалистике (forensics)
 
 ### Перчатки форка
 Боевые перчатки ЦК и дипломата, криминалистические перчатки и др.
@@ -54,7 +54,7 @@
 Аксессуар-разгрузка с карманами для патронов (своё хранилище).
 
 - **Код:** [`/obj/item/clothing/accessory/ammo_vest`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/items/clothing/accessories/accessories.dm#L8)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/clothing/holsters.rs`: 4 слота, 9 веса, только магазины и спидлоадеры; на форме — как кобура, несовместима с другим хранилищем на форме
 
 ### HEV-костюм
 Скафандр в стиле Half-Life: голосовые оповещения о состоянии носителя (урон, смерть, огонь, речь).

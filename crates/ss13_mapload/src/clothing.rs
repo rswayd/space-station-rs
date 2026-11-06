@@ -39,6 +39,12 @@ pub struct DmClothing {
     pub flags_inv: u32,
     /// `flags_cover` (`*COVERSEYES`, `*COVERSMOUTH`, `PEPPERPROOF`).
     pub flags_cover: u32,
+    /// `transparent_protection` (`HIDE*` bits): slots covered without being hidden (the strip
+    /// menu cannot reach them).
+    pub transparent_protection: u32,
+    /// `toggle_message`, `alt_toggle_message`: `adjust_visor`'s messages (empty: the defaults).
+    pub toggle_message: String,
+    pub alt_toggle_message: String,
     /// `visor_flags`, `visor_flags_inv`, `visor_flags_cover`: what `adjust_visor` toggles.
     pub visor_flags: u32,
     pub visor_flags_inv: u32,
@@ -84,6 +90,9 @@ impl Default for DmClothing {
             reagent_scanner: false,
             flags_inv: 0,
             flags_cover: 0,
+            transparent_protection: 0,
+            toggle_message: String::new(),
+            alt_toggle_message: String::new(),
             visor_flags: 0,
             visor_flags_inv: 0,
             visor_flags_cover: 0,
@@ -122,7 +131,7 @@ impl Default for DmTank {
     }
 }
 
-const CLOTHING_VARS: [&str; 15] = [
+const CLOTHING_VARS: [&str; 16] = [
     "flash_protect",
     "tint",
     "siemens_coefficient",
@@ -134,6 +143,7 @@ const CLOTHING_VARS: [&str; 15] = [
     "max_heat_protection_temperature",
     "flags_inv",
     "flags_cover",
+    "transparent_protection",
     "visor_flags",
     "visor_flags_inv",
     "visor_flags_cover",
@@ -152,7 +162,19 @@ enum Kind {
 
 /// Vars declared on a subfamily root: (root, var, field, kind). The root carries the resolved
 /// value, its subtypes what they declare.
-const FAMILY_VARS: [(&str, &str, &str, Kind); 12] = [
+const FAMILY_VARS: [(&str, &str, &str, Kind); 14] = [
+    (
+        CLOTHING_ROOT,
+        "toggle_message",
+        "toggle_message",
+        Kind::Text,
+    ),
+    (
+        CLOTHING_ROOT,
+        "alt_toggle_message",
+        "alt_toggle_message",
+        Kind::Text,
+    ),
     (
         "/obj/item/clothing/mask",
         "can_be_adjusted",

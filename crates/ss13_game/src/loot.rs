@@ -214,8 +214,8 @@ fn alt_clicks(world: &mut World, mut clicks: Local<MessageCursor<AltClick>>) {
 
 /// tg `click_alt` of the types that define it here. True when it handled the click.
 fn click_alt(world: &mut World, client: Entity, mob: Entity, target: Entity) -> bool {
-    if world.get::<crate::storage::Storage>(target).is_some() {
-        crate::storage::open_view(world, client, mob, target);
+    if let Some(storage) = crate::storage::storage_of(world, target) {
+        crate::storage::open_view(world, client, mob, storage);
         return true;
     }
     crate::bots::click_alt(world, mob, target)

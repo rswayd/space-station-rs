@@ -353,10 +353,10 @@ impl Plugin for InventoryServerPlugin {
         // `crate::click_handlers`).
         // The other hand's storage opens or takes the active hand's item.
         app.add_click_handler(ClickPhase::OtherHand, 500, |w, c| {
-            w.get::<crate::storage::Storage>(c.target).is_some() && {
-                crate::storage::click_storage(w, c.client, c.mob, c.target);
+            crate::storage::storage_of(w, c.target).is_some_and(|storage| {
+                crate::storage::click_storage(w, c.client, c.mob, storage);
                 true
-            }
+            })
         })
         // A cyborg's module never leaves it (`TRAIT_NODROP`), nor does a `NoDrop` item.
         .add_click_handler(ClickPhase::HeldOnTarget, 4600, |w, c| {
@@ -367,10 +367,10 @@ impl Plugin for InventoryServerPlugin {
         // tg `attackby` of a storage item: the held item goes in.
         .add_click_handler(ClickPhase::HeldOnTarget, 4700, |w, c| {
             c.held.is_some_and(|held| {
-                w.get::<crate::storage::Storage>(c.target).is_some() && {
-                    crate::storage::insert_from_hand(w, held, c.target);
+                crate::storage::storage_of(w, c.target).is_some_and(|storage| {
+                    crate::storage::insert_from_hand(w, held, storage);
                     true
-                }
+                })
             })
         });
         app.register_ui::<InventoryHudUi>()
@@ -776,8 +776,10 @@ fn click_equip_slot(
         // An accessory, cable or cloth on worn clothing (`crate::clothing`).
         (Some(held), Some(worn))
             if crate::clothing::item_interaction(world, client, mob, held, worn) => {}
-        (_, Some(worn)) if world.get::<crate::storage::Storage>(worn).is_some() => {
-            crate::storage::click_storage(world, client, mob, worn);
+        // A storage, or a jumpsuit with a holster (`crate::storage::storage_of`).
+        (_, Some(worn)) if crate::storage::storage_of(world, worn).is_some() => {
+            let storage = crate::storage::storage_of(world, worn).expect("checked by the guard");
+            crate::storage::click_storage(world, client, mob, storage);
         }
         // tg `defibrillator/attack_hand` from its slot: the paddles come out or go back.
         (None, Some(worn)) if crate::medical::defib::attack_hand_worn(world, client, mob, worn) => {

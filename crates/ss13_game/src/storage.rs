@@ -170,6 +170,10 @@ pub fn can_insert(world: &World, storage: Entity, item: Entity) -> Result<(), Re
     if crate::mining::rocks::satchel_refuses(world, storage, item) {
         return Err(Refusal::CantHold);
     }
+    // A holster's `set_holdable` (`crate::clothing::holsters`).
+    if crate::clothing::holsters::refuses(world, storage, item) {
+        return Err(Refusal::CantHold);
+    }
     let contents: Vec<u8> = world
         .get::<Stored>(storage)
         .map(|s| s.items().iter().map(|&e| w_class(world, e)).collect())
@@ -282,7 +286,13 @@ pub struct StorageStartup;
 impl Plugin for StorageServerPlugin {
     fn build(&self, app: &mut App) {
         app.register_ui::<StorageUi>()
-            .add_systems(Startup, init_storage.in_set(StorageStartup))
+            // After the jobs: the outfits' storage items fill from the same templates.
+            .add_systems(
+                Startup,
+                init_storage
+                    .in_set(StorageStartup)
+                    .after(crate::jobs::JobsStartup),
+            )
             .add_systems(
                 Update,
                 (
@@ -303,8 +313,15 @@ fn init_storage(world: &mut World) {
     let seed = world.get_resource::<MapSeed>().map_or(0, |s| s.0);
     world.insert_resource(ContentsRng(Rng::new(seed ^ 0x5707_a6e5)));
     let mut paths: Vec<String> = ss13_mapload::RUNTIME_CONTAINER_TYPES
+        .iter()
+        .copied()
+        .chain(crate::clothing::holsters::content_paths())
         .map(str::to_owned)
-        .to_vec();
+        .collect();
+    // What job outfits spawn fills itself too (a holster with its gun).
+    if let Some(jobs) = world.get_resource::<crate::jobs::Jobs>() {
+        paths.extend(jobs.data.outfit_items().into_iter().map(str::to_owned));
+    }
     let mut query = world.query::<&DmContents>();
     for contents in query.iter(world) {
         collect_paths(&contents.populate, &mut paths);
@@ -326,7 +343,12 @@ fn init_storage(world: &mut World) {
         world.query_filtered::<(Entity, Option<&DmItem>, Has<DmStorage>), With<TilePos>>();
     let mut items: Vec<Entity> = query
         .iter(world)
-        .filter(|(_, dm, storage)| *storage || dm.is_some_and(DmItem::is_id_card))
+        .filter(|(_, dm, storage)| {
+            *storage
+                || dm.is_some_and(|dm| {
+                    dm.is_id_card() || crate::clothing::holsters::spec(&dm.path).is_some()
+                })
+        })
         .map(|(e, ..)| e)
         .collect();
     // Same order for the same map, so the seed gives the same contents.
@@ -418,10 +440,16 @@ pub fn finish_item(world: &mut World, item: Entity, depth: u32) {
             );
             (card, data)
         });
+    // Accessory holsters make theirs in `Initialize` (`crate::clothing::holsters`).
+    let path = entity.get::<DmItem>().map(|dm| dm.path.clone());
     let storage = entity
         .get::<DmStorage>()
-        .filter(|_| !entity.contains::<Storage>())
-        .map(Storage::from);
+        .map(Storage::from)
+        .or_else(|| {
+            let spec = crate::clothing::holsters::spec(path.as_deref()?)?;
+            Some(spec.storage)
+        })
+        .filter(|_| !entity.contains::<Storage>());
     if let Some(card) = card {
         world.entity_mut(item).insert(card);
     }
@@ -429,6 +457,12 @@ pub fn finish_item(world: &mut World, item: Entity, depth: u32) {
     if let Some(storage) = storage {
         world.entity_mut(item).insert(storage);
         populate_storage(world, item, depth);
+        let extra = path.map_or(&[][..], |p| {
+            crate::clothing::holsters::initialize_contents(&p)
+        });
+        for path in extra {
+            spawn_inside(world, path, item, depth);
+        }
     }
     crate::lockbox::init(world, item);
 }
@@ -528,15 +562,26 @@ pub fn open_view(world: &mut World, client: Entity, mob: Entity, storage: Entity
 /// Whether `mob` can reach into `storage` right now: it holds or wears it, or it lies on a tile
 /// next to the mob (tg `CanReach`), and it is not a locked lockbox (tg `locked` storage shows,
 /// gives and dumps nothing; locking it closes the views).
+/// A holster pinned to a jumpsuit is reached where the jumpsuit is.
 // shortcut: storages inside other storages are not opened (tg reaches into nested ones).
 pub fn reachable(world: &World, mob: Entity, storage: Entity) -> bool {
     if world.get::<Storage>(storage).is_none() || crate::lockbox::is_locked(world, storage) {
         return false;
     }
-    if world.get::<CarriedBy>(storage).is_some_and(|c| c.0 == mob) {
+    let holder = crate::clothing::holsters::jumpsuit_of(world, storage).unwrap_or(storage);
+    if world.get::<CarriedBy>(holder).is_some_and(|c| c.0 == mob) {
         return true;
     }
-    in_reach(world, mob, storage)
+    in_reach(world, mob, holder)
+}
+
+/// The storage a click on `item` reaches: its own, or the one of a storage accessory pinned to
+/// it (tg's jumpsuit `clone_storage`).
+pub fn storage_of(world: &World, item: Entity) -> Option<Entity> {
+    if world.get::<Storage>(item).is_some() {
+        return Some(item);
+    }
+    crate::clothing::holsters::storage_accessory(world, item)
 }
 
 /// On the map and adjacent to `mob` (tg `Adjacent` for clicks).

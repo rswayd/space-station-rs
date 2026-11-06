@@ -5,7 +5,7 @@
 Шлемы СБ (с креплением фонарика), противоударные, морпеховские, старые; дают броню головы. Переключаемые шлемы опускают визор.
 
 - **Код:** [`/obj/item/clothing/head/helmet`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/head/helmet.dm#L1), [`/obj/item/clothing/head/helmet/sec`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/head/helmet.dm#L35), [`/obj/item/clothing/head/helmet/toggleable`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/head/helmet.dm#L221)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/inventory.rs`: надевается; нет брони, крепления фонарика, визора
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/inventory.rs`: надевается; визор `helmet/toggleable` поднимается (`crates/ss13_game/src/clothing/toggles.rs`); нет брони, крепления фонарика
 
 ### Каски с фонарём
 Строительные каски и сварочные каски: включаемый фонарь на голове, у сварочных — щиток от вспышек; торт-шляпа как каска-светильник.

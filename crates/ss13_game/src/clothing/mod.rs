@@ -1,7 +1,7 @@
 //! Clothing mechanics after tg `code/modules/clothing/`: what worn clothing hides ([`cover`]),
 //! clothing that changes while worn ([`toggles`]: masks, jumpsuit styles, toggle suits, hoods),
-//! clothing damage ([`damage`]), suit sensors and the crew monitoring console ([`sensors`]) and
-//! accessories on jumpsuits ([`accessories`]).
+//! clothing damage ([`damage`]), suit sensors and the crew monitoring console ([`sensors`]),
+//! accessories on jumpsuits ([`accessories`]) and the ones with storage, holsters ([`holsters`]).
 //!
 //! This module holds what both halves share (the crew console window's data, tgui
 //! `CrewConsole`), the server plugin and the entry points other modules call: the click chain
@@ -19,6 +19,8 @@ pub mod client;
 pub mod cover;
 #[cfg(feature = "server")]
 pub mod damage;
+#[cfg(feature = "server")]
+pub mod holsters;
 #[cfg(feature = "server")]
 pub mod sensors;
 #[cfg(feature = "server")]
@@ -81,7 +83,7 @@ mod server {
     use super::accessories::{self, Accessories};
     use super::{cover, damage, sensors, toggles};
     use crate::click_handlers::{AddClickHandler, ClickPhase};
-    use crate::human::layers::{FACEMASK_LAYER, UNIFORM_LAYER};
+    use crate::human::layers::{FACEMASK_LAYER, GLOVES_LAYER, UNIFORM_LAYER};
     use crate::inventory::Inventory;
 
     pub use super::damage::ClothingJob;
@@ -96,6 +98,11 @@ mod server {
             // Click chain hooks (`crate::click_handlers`).
             app.add_click_handler(ClickPhase::AttackSelf, 3155, |w, c| {
                 toggles::attack_self(w, c.client, c.mob, c.target)
+            })
+            // Before the core storage step: a jumpsuit with a holster takes accessories too.
+            .add_click_handler(ClickPhase::OtherHand, 480, |w, c| {
+                c.held
+                    .is_some_and(|held| accessories::attach(w, c.client, c.mob, held, c.target))
             })
             .add_click_handler(ClickPhase::OtherHand, 1255, |w, c| {
                 c.held
@@ -163,8 +170,8 @@ mod server {
         toggles::examine_lines(world, item, lines);
         if accessories::is_jumpsuit(world, item) {
             sensors::examine_lines(world, item, lines);
-            accessories::examine_lines(world, item, lines);
         }
+        accessories::examine_lines(world, item, lines);
     }
 
     /// What the worn look needs from the clothing (`crate::inventory`'s `refresh_mobs`).
@@ -186,7 +193,7 @@ mod server {
         }
 
         /// Overlays on top of the worn items of `shown` (the inventory as drawn): the
-        /// jumpsuit's accessories and damage, a damaged mask.
+        /// jumpsuit's accessories and damage, rings on the gloves, a damaged mask.
         pub fn overlays(&self, shown: &Inventory, icons: &IconIndex) -> Vec<(f32, IconStateId)> {
             let mut out = Vec::new();
             let damaged = |e: Entity| {
@@ -216,6 +223,23 @@ mod server {
                 for (dmi, state) in states {
                     if let Some(id) = icons.get(&dmi, &state) {
                         out.push((UNIFORM_LAYER - 0.5, id));
+                    }
+                }
+            }
+            // BandaStation `gloves/worn_overlays`: the accessory overlay.
+            if let Some(gloves) = shown.gloves {
+                let pinned = self
+                    .accessories
+                    .get(gloves)
+                    .map(|a| a.items().to_vec())
+                    .unwrap_or_default();
+                let states = accessories::worn_states(&pinned, 0, |a| {
+                    let (dm, atom) = self.items.get(a).ok()?;
+                    Some((dm, atom, self.clothing.get(a).ok()))
+                });
+                for (dmi, state) in states {
+                    if let Some(id) = icons.get(&dmi, &state) {
+                        out.push((GLOVES_LAYER - 0.5, id));
                     }
                 }
             }

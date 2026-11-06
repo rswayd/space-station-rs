@@ -115,6 +115,9 @@ pub struct Outfit {
     pub items: Vec<(OutfitSlot, String)>,
     /// `box` first, then `backpack_contents` (type, count).
     pub backpack_contents: Vec<(String, u32)>,
+    /// `accessory`: pinned to the uniform.
+    #[serde(default)]
+    pub accessory: Option<String>,
 }
 
 impl Outfit {
@@ -235,14 +238,16 @@ impl JobsData {
     }
 
     /// Item types the outfits put into slots: the converter emits prototypes for them.
-    /// Every item an outfit spawns: its slots, `box` and `backpack_contents`.
+    /// Every item an outfit spawns: its slots, `box`, `backpack_contents` and `accessory`.
     pub fn outfit_items(&self) -> BTreeSet<&str> {
         self.jobs
             .iter()
             .filter_map(|j| j.outfit.as_ref())
             .flat_map(|o| {
                 let slots = o.items.iter().map(|(_, p)| p.as_str());
-                slots.chain(o.backpack_contents.iter().map(|(p, _)| p.as_str()))
+                slots
+                    .chain(o.backpack_contents.iter().map(|(p, _)| p.as_str()))
+                    .chain(o.accessory.as_deref())
             })
             .collect()
     }
@@ -317,6 +322,7 @@ pub fn outfit(types: &DmTypes, path: &str) -> Outfit {
         path: path.to_owned(),
         items,
         backpack_contents,
+        accessory: slot("accessory"),
     }
 }
 

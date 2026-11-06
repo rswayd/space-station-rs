@@ -313,8 +313,9 @@ fn shred(world: &mut World, item: Entity, _burn: bool) {
     }
     if is_under(&path_of(world, item), "/obj/item/clothing/under") {
         super::sensors::break_sensors(world, item);
-        super::accessories::dump(world, item);
     }
+    // Jumpsuits and (BandaStation) gloves drop what is pinned to them.
+    super::accessories::dump(world, item);
     if let Some(mob) = wearer(world, item) {
         let worn = world
             .get::<Inventory>(mob)

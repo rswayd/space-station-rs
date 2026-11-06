@@ -9,6 +9,10 @@
 //!   `visor_flags`, `visor_flags_inv`, `visor_flags_cover` toggle: a breath mask pushed up stops
 //!   feeding internals (`MASKINTERNALS`: the next breath closes the tank) and uncovers the mouth;
 //!   a sterile mask stops hiding the face. Its sprite takes the `_up` state.
+//! - A toggleable helmet (`/obj/item/clothing/head/helmet/toggleable`: riot, justice, NVG) flips
+//!   its visor the same way in the hand or by its "Toggle" button while worn: the riot helmet
+//!   stops hiding the face and covering eyes and mouth; its sprite takes the `up` state. The
+//!   item's `toggle_message` / `alt_toggle_message` are said when it has them.
 //! - Alt-click on a jumpsuit that `can_adjust` rolls it down (`_d` worn state; chest and arms
 //!   uncovered unless `alt_covers_chest`) or back up.
 //! - Alt-click on a toggle suit opens or closes it (`_t` state).
@@ -16,10 +20,11 @@
 //!   head slot (a new item) and the suit takes its `hood_up_affix` state; taking the hood or the
 //!   suit off, or the button again, puts the hood away (the item is deleted, as tg's
 //!   `alternative_mode`, and made again next time).
-// shortcut: no `adjusted_flags` (a bandana's slot change), no visor sounds, per-type
-// `toggle_message`s or voice boxes; a jumpsuit drawn from the body's hand-resolved sprites
-// (`crate::human::WORN`, the grey jumpsuit) does not show its rolled-down state; hoods are not
-// deployed by outfits (`auto_deploy_on_outfit_equip`); buttons only show for worn items.
+// shortcut: no `adjusted_flags` (a bandana's slot change), no visor sounds or voice boxes, no
+// NVG night vision or justice siren and its toggle cooldown; a jumpsuit drawn from the body's
+// hand-resolved sprites (`crate::human::WORN`, the grey jumpsuit) does not show its rolled-down
+// state; hoods are not deployed by outfits (`auto_deploy_on_outfit_equip`); buttons only show
+// for worn items.
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
@@ -41,12 +46,13 @@ use crate::tools::tell;
 pub const MASK_ROOT: &str = "/obj/item/clothing/mask";
 pub const BREATH_MASK: &str = "/obj/item/clothing/mask/breath";
 pub const ADJUST_ACTION: &str = "/datum/action/item_action/adjust";
+pub const TOGGLEABLE_HELMET: &str = "/obj/item/clothing/head/helmet/toggleable";
 const BUTTON: &str = "clothing:";
 const BUTTON_BACKGROUNDS: &str = "icons/mob/actions/backgrounds.dmi";
 
-/// tg `up` of a mask pushed up, with the worn state it had down.
+/// tg `up` of a mask pushed up or a helmet visor flipped, with the worn state it had down.
 #[derive(Component, Clone, Debug, PartialEq)]
-pub struct MaskUp {
+pub struct AdjustedUp {
     worn_icon_state: String,
 }
 
@@ -146,15 +152,36 @@ pub fn adjustable_mask(world: &World, item: Entity) -> bool {
     })
 }
 
-/// tg `adjust_visor` of a mask: `visor_toggling` (flags and the `_up` state), the message.
-pub fn adjust_mask(world: &mut World, client: Entity, mob: Entity, item: Entity) -> bool {
-    if !adjustable_mask(world, item) {
-        return false;
+/// A toggleable helmet (`helmet/toggleable/attack_self` -> `adjust_visor`).
+pub fn toggleable_helmet(world: &World, item: Entity) -> bool {
+    world
+        .get::<DmItem>(item)
+        .is_some_and(|dm| is_under(&dm.path, TOGGLEABLE_HELMET))
+}
+
+/// What `update_icon_state` appends to the icon state of a visor that is up: masks `_up`,
+/// toggleable helmets `up` (`base_icon_state += "up"`). None for items without a visor here.
+fn visor_suffix(world: &World, item: Entity) -> Option<&'static str> {
+    if adjustable_mask(world, item) {
+        Some("_up")
+    } else if toggleable_helmet(world, item) {
+        Some("up")
+    } else {
+        None
     }
+}
+
+/// tg `adjust_visor`: `visor_toggling` (flags and the up state), the message. A toggleable
+/// helmet's `visor_vars_to_toggle` is `NONE` and a mask's flash protection and tint are 0, so
+/// neither changes here (welding visors: `crate::vision`).
+pub fn adjust_visor(world: &mut World, client: Entity, mob: Entity, item: Entity) -> bool {
+    let Some(suffix) = visor_suffix(world, item) else {
+        return false;
+    };
     if !can_use(world, mob) {
         return true;
     }
-    let up = world.get::<MaskUp>(item).cloned();
+    let up = world.get::<AdjustedUp>(item).cloned();
     if let Some(mut c) = world.get_mut::<DmClothing>(item) {
         let c = &mut *c;
         c.clothing_flags ^= c.visor_flags;
@@ -163,41 +190,45 @@ pub fn adjust_mask(world: &mut World, client: Entity, mob: Entity, item: Entity)
     }
     let base = base_state(world, item);
     let name = crate::security::name_of(world, item);
+    let (down_text, up_text) = world.get::<DmClothing>(item).map_or_else(
+        || (String::new(), String::new()),
+        |c| (c.toggle_message.clone(), c.alt_toggle_message.clone()),
+    );
+    let said = |own: String, default: String| if own.is_empty() { default } else { own };
     match up {
         // Down again.
-        Some(MaskUp { worn_icon_state }) => {
-            world.entity_mut(item).remove::<MaskUp>();
+        Some(AdjustedUp { worn_icon_state }) => {
+            world.entity_mut(item).remove::<AdjustedUp>();
             set_states(world, item, &base, worn_icon_state);
-            tell(
-                world,
-                client,
-                Span::Notice,
-                format!("Вы ставите обратно {name}."),
-            );
+            let text = said(down_text, format!("Вы ставите обратно {name}."));
+            tell(world, client, Span::Notice, text);
         }
         None => {
             let worn_icon_state = world
                 .get::<DmItem>(item)
                 .map(|i| i.worn_icon_state.clone())
                 .unwrap_or_default();
-            // `update_icon_state`: the icon gets `_up`; an explicit worn state stays.
-            let up_state = format!("{base}_up");
+            // `update_icon_state`: the icon gets the suffix; an explicit worn state stays.
+            let up_state = format!("{base}{suffix}");
             let worn = if worn_icon_state.is_empty() {
                 up_state.clone()
             } else {
                 worn_icon_state.clone()
             };
-            world.entity_mut(item).insert(MaskUp { worn_icon_state });
+            world
+                .entity_mut(item)
+                .insert(AdjustedUp { worn_icon_state });
             set_states(world, item, &up_state, worn);
-            tell(world, client, Span::Notice, format!("Вы убираете {name}."));
+            let text = said(up_text, format!("Вы убираете {name}."));
+            tell(world, client, Span::Notice, text);
         }
     }
     true
 }
 
-/// tg `attack_self` of the clothing that has one here: an adjustable mask.
+/// tg `attack_self` of the clothing that has one here: an adjustable mask, a toggleable helmet.
 pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity) -> bool {
-    adjust_mask(world, client, mob, item)
+    adjust_visor(world, client, mob, item)
 }
 
 // --- Jumpsuits and toggle suits --------------------------------------------------------------
@@ -321,7 +352,7 @@ pub fn breath_alt(world: &mut World, client: Entity, mob: Entity, item: Entity) 
     let breath = world
         .get::<DmItem>(item)
         .is_some_and(|i| is_under(&i.path, BREATH_MASK));
-    breath && adjust_mask(world, client, mob, item)
+    breath && adjust_visor(world, client, mob, item)
 }
 
 // --- Hoods -----------------------------------------------------------------------------------
@@ -426,13 +457,20 @@ fn watch_hoods(world: &mut World) {
 // --- Item action buttons ---------------------------------------------------------------------
 
 /// The button a worn item gives (tg `actions_types` and `toggle_attached_clothing`'s action):
-/// "Toggle Hood" for a hooded suit in the suit slot, "Adjust" for an adjustable mask worn.
+/// "Toggle Hood" for a hooded suit in the suit slot, "Adjust" for an adjustable mask worn,
+/// "Toggle" for a worn toggleable helmet with an action.
 fn button_name(world: &World, slot: InventorySlot, item: Entity) -> Option<&'static str> {
     if slot == InventorySlot::Suit && hood_type(world, item).is_some() {
         return Some("Toggle Hood");
     }
     if slot == InventorySlot::Mask && adjustable_mask(world, item) {
         return Some("Adjust");
+    }
+    let has_action = world
+        .get::<DmClothing>(item)
+        .is_some_and(|c| !c.actions.is_empty());
+    if slot == InventorySlot::Head && toggleable_helmet(world, item) && has_action {
+        return Some("Toggle");
     }
     None
 }
@@ -517,7 +555,7 @@ fn trigger_buttons(world: &mut World, mut acts: Local<MessageCursor<UiActed<Acti
                 toggle_hood(world, client, actor, item);
             }
             Some(_) => {
-                adjust_mask(world, client, actor, item);
+                adjust_visor(world, client, actor, item);
             }
             None => {}
         }
@@ -595,7 +633,7 @@ mod tests {
             .id();
         world.entity_mut(mask).insert(CarriedBy(mob));
         let client = world.spawn_empty().id();
-        assert!(adjust_mask(&mut world, client, mob, mask));
+        assert!(adjust_visor(&mut world, client, mob, mask));
         let c = world.get::<DmClothing>(mask).unwrap();
         assert_eq!(c.clothing_flags & MASKINTERNALS, 0);
         assert_eq!(c.flags_cover, 0);
@@ -609,7 +647,7 @@ mod tests {
             &world.get::<Inventory>(mob).unwrap().clone()
         ));
         // Down again: all back.
-        assert!(adjust_mask(&mut world, client, mob, mask));
+        assert!(adjust_visor(&mut world, client, mob, mask));
         let c = world.get::<DmClothing>(mask).unwrap();
         assert_eq!(c.clothing_flags, MASKINTERNALS);
         assert_eq!(c.flags_cover, MASKCOVERSMOUTH);
@@ -645,10 +683,65 @@ mod tests {
             .id();
         let client = world.spawn_empty().id();
         assert!(crate::clothing::cover::face_obscured(&world, mob));
-        adjust_mask(&mut world, client, mob, mask);
+        adjust_visor(&mut world, client, mob, mask);
         assert!(!crate::clothing::cover::face_obscured(&world, mob));
         // Not adjustable without the action (a gas mask).
         world.get_mut::<DmClothing>(mask).unwrap().actions.clear();
-        assert!(!adjust_mask(&mut world, client, mob, mask));
+        assert!(!adjust_visor(&mut world, client, mob, mask));
+    }
+
+    #[test]
+    fn a_riot_helmet_visor_flips_up_and_down() {
+        use crate::clothing::cover::{HEADCOVERSEYES, HEADCOVERSMOUTH};
+        let mut world = World::new();
+        world.init_resource::<Messages<ss13_net::chat::server::SendChat>>();
+        let cover = HEADCOVERSEYES | HEADCOVERSMOUTH;
+        let helmet = world
+            .spawn((
+                DmItem {
+                    path: "/obj/item/clothing/head/helmet/toggleable/riot".into(),
+                    ..default()
+                },
+                DmAtom {
+                    icon_state: "riot".into(),
+                    ..default()
+                },
+                DmClothing {
+                    flags_inv: HIDEFACE,
+                    visor_flags_inv: HIDEFACE,
+                    flags_cover: cover,
+                    visor_flags_cover: cover,
+                    toggle_message: "You pull the visor down.".into(),
+                    actions: vec!["/datum/action/item_action/toggle".into()],
+                    ..default()
+                },
+            ))
+            .id();
+        let mob = world
+            .spawn((
+                Stat::Conscious,
+                Inventory {
+                    head: Some(helmet),
+                    ..default()
+                },
+            ))
+            .id();
+        world.entity_mut(helmet).insert(CarriedBy(mob));
+        let client = world.spawn_empty().id();
+        assert_eq!(
+            button_name(&world, InventorySlot::Head, helmet),
+            Some("Toggle")
+        );
+        assert!(crate::clothing::cover::face_obscured(&world, mob));
+        assert!(attack_self(&mut world, client, mob, helmet));
+        assert!(!crate::clothing::cover::face_obscured(&world, mob));
+        assert_eq!(world.get::<DmClothing>(helmet).unwrap().flags_cover, 0);
+        assert_eq!(
+            world.get::<DmItem>(helmet).unwrap().worn_icon_state,
+            "riotup"
+        );
+        assert!(attack_self(&mut world, client, mob, helmet));
+        assert_eq!(world.get::<DmClothing>(helmet).unwrap().flags_cover, cover);
+        assert!(world.get::<AdjustedUp>(helmet).is_none());
     }
 }
