@@ -65,6 +65,8 @@ const BREATH_COOLDOWN: f64 = 3.0;
 const METEORS_COOLDOWN: f64 = 3.0;
 const MASS_FIRE_COOLDOWN: f64 = 10.5;
 const SWOOP_COOLDOWN: f64 = 4.0;
+/// `dragon/lesser/Initialize`: `lava_swoop.cooldown_time`.
+const LESSER_SWOOP_COOLDOWN: f64 = 20.0;
 /// `mass_fire`: `sectors`, `breath_delay`, `total_spins`.
 const SECTORS: u32 = 12;
 const SPIN_DELAY: f64 = 2.5;
@@ -101,6 +103,8 @@ const ESCAPE_MASS_FIRE_COOLDOWN: f64 = 8.0;
 
 #[derive(Debug, Default)]
 pub struct State {
+    /// `dragon/lesser`: no meteors, no mass fire, never the arena, a 20 s swoop cooldown.
+    pub lesser: bool,
     /// `swooping`: in the air (no AI, no melee, no damage).
     pub swooping: bool,
     saved: Option<Saved>,
@@ -267,7 +271,9 @@ pub(super) fn open_fire(world: &mut World, mob: Entity, target: Entity, now: f64
     };
     let (hp, max) = (health.health(), health.max);
     let anger = ((max - hp) / 60.0).clamp(0.0, 20.0);
-    let enraged = hp < max * 0.5;
+    // The lesser drake has neither meteors nor mass fire, and its swoop is never `enraged`.
+    let lesser = world.get::<Megafauna>(mob).is_some_and(|m| m.drake.lesser);
+    let enraged = hp < max * 0.5 && !lesser;
     let available = world
         .get::<Megafauna>(mob)
         .is_some_and(|m| m.ability_available(now));
@@ -299,7 +305,7 @@ pub(super) fn open_fire(world: &mut World, mob: Entity, target: Entity, now: f64
     }
     if available {
         fire_cone(world, mob, target, now);
-        if then_meteors {
+        if then_meteors && !lesser {
             meteors(world, mob, target, now);
         }
     }
@@ -931,8 +937,10 @@ fn impact(world: &mut World, mob: Entity, at: f64, target: Entity, arena: bool, 
 /// The swoop is over: the ability's cooldown; after the pools the fire cone and meteors at
 /// once (their cooldowns reset), after a failed arena the escape enrage.
 fn swoop_end(world: &mut World, mob: Entity, at: f64, target: Entity, arena: bool, failed: bool) {
+    let mut lesser = false;
     if let Some(mut m) = world.get_mut::<Megafauna>(mob) {
         m.drake.swooping = false;
+        lesser = m.drake.lesser;
         m.cooldown(at, SWOOP_COOLDOWN);
     }
     crate::mobs::set_look(world, mob, false);
@@ -941,7 +949,14 @@ fn swoop_end(world: &mut World, mob: Entity, at: f64, target: Entity, arena: boo
     }
     if !arena && world.get::<TilePos>(target).is_some() {
         fire_cone(world, mob, target, at);
-        meteors(world, mob, target, at);
+        if !lesser {
+            meteors(world, mob, target, at);
+        }
+    }
+    // tg's fire cone right after the landing restarts the shared cooldown at its own 3 s, which
+    // cancels the lesser drake's 20 s swoop cooldown; the port keeps the 20 s it sets.
+    if lesser && let Some(mut m) = world.get_mut::<Megafauna>(mob) {
+        m.cooldown(at, LESSER_SWOOP_COOLDOWN);
     }
 }
 

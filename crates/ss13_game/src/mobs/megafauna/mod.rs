@@ -55,8 +55,8 @@ const BUBBLEGUM_HALLUCINATION: &str =
     "/mob/living/simple_animal/hostile/megafauna/bubblegum/hallucination";
 pub const COLOSSUS: &str = "/mob/living/simple_animal/hostile/megafauna/colossus";
 pub const DRAKE: &str = "/mob/living/simple_animal/hostile/megafauna/dragon";
-/// Not ported: an admin spawn with its own numbers.
-const LESSER_DRAKE: &str = "/mob/living/simple_animal/hostile/megafauna/dragon/lesser";
+/// The admin-spawned lesser drake (`dragon/lesser`): a [`Kind::Drake`] with fewer abilities.
+pub const LESSER_DRAKE: &str = "/mob/living/simple_animal/hostile/megafauna/dragon/lesser";
 
 /// `SSnpcpool` `wait`.
 pub const NPC_TICK_SECS: f64 = 2.0;
@@ -91,7 +91,7 @@ impl Kind {
             Some(Self::Bubblegum)
         } else if is_under(path, COLOSSUS) {
             Some(Self::Colossus)
-        } else if is_under(path, DRAKE) && !is_under(path, LESSER_DRAKE) {
+        } else if is_under(path, DRAKE) {
             Some(Self::Drake)
         } else {
             None
@@ -240,10 +240,9 @@ pub(super) fn attach(world: &mut World, mob: Entity, def: &MobDef) {
     let mut controller = AiController::default();
     controller.kind = def.path.clone();
     controller.traits = RUN_WHILE_UNWATCHED | ALWAYS_HIGH_PRIORITY;
-    world.entity_mut(mob).insert((
-        Megafauna::new(kind, now + offset, def.max_health),
-        controller,
-    ));
+    let mut brain = Megafauna::new(kind, now + offset, def.max_health);
+    brain.drake.lesser = is_under(&def.path, LESSER_DRAKE);
+    world.entity_mut(mob).insert((brain, controller));
 }
 
 /// The ported megafauna kind of `mob`.
@@ -694,6 +693,10 @@ pub(super) fn on_death(world: &mut World, mob: Entity, pos: TilePos) {
     if kind == Kind::Bubblegum {
         bubblegum::on_death(world, mob);
     }
+    // `dragon/lesser`: `loot = list()`.
+    if world.get::<Megafauna>(mob).is_some_and(|m| m.drake.lesser) {
+        return;
+    }
     let (chest, loot) = match kind {
         Kind::Bubblegum => (bubblegum::CHEST, bubblegum::loot(world)),
         Kind::Colossus => (colossus::CHEST, colossus::loot(world)),
@@ -717,7 +720,7 @@ mod tests {
     fn kinds_by_path() {
         assert_eq!(Kind::of(COLOSSUS), Some(Kind::Colossus));
         assert_eq!(Kind::of(DRAKE), Some(Kind::Drake));
-        assert_eq!(Kind::of(LESSER_DRAKE), None);
+        assert_eq!(Kind::of(LESSER_DRAKE), Some(Kind::Drake));
         assert_eq!(Kind::of(BUBBLEGUM), Some(Kind::Bubblegum));
         assert_eq!(Kind::of(BUBBLEGUM_HALLUCINATION), None);
         assert_eq!(
