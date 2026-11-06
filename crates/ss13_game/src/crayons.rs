@@ -326,6 +326,9 @@ pub enum CrayonJob {
     Outline,
     /// A bite of the crayon.
     Eat,
+    /// A step of the seditious spray can's rune: the outline (`None`) or the next stage
+    /// ([`crate::syndie_spraycan`]).
+    Rune(Option<Entity>),
 }
 
 /// A drawing decided at the start of `use_on`.
@@ -354,6 +357,11 @@ impl Plugin for CrayonsPlugin {
     fn build(&self, app: &mut App) {
         use crate::click_handlers::{AddClickHandler, ClickPhase};
         app.add_observer(add_crayon);
+        app.add_plugins((
+            crate::syndie_spraycan::SyndieSpraycanPlugin,
+            crate::stickers::StickersPlugin,
+            crate::gifts::GiftsPlugin,
+        ));
         // The stencil menu (tg `ui_interact`).
         app.add_click_handler(ClickPhase::AttackSelf, 3203, |w, c| {
             attack_self(w, c.client, c.mob, c.target)
@@ -1021,6 +1029,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter, job: CrayonJob
         CrayonJob::Draw(d) => finish_draw(world, actor, action.target_pos, d),
         CrayonJob::Outline => outline(world, actor, action.target),
         CrayonJob::Eat => eat(world, actor),
+        CrayonJob::Rune(rune) => crate::syndie_spraycan::complete(world, mob, action, rune),
     }
 }
 

@@ -446,9 +446,13 @@ pub fn wash(world: &mut World, target: Entity, clean_types: u32) -> bool {
     let wiped = crate::forensics::server::clean_act(world, target, clean_types)
         | crate::radiation::clean_act(world, target, clean_types)
         // `/mob/living/carbon/human/wash`: an uncovered mouth loses its lipstick.
-        | crate::service::barber::clean_lips(world, target);
+        | crate::service::barber::clean_lips(world, target)
+        | crate::stickers::clean_act(world, target);
     match world.get::<Cleanable>(target) {
-        Some(c) if c.clean_type & clean_types != 0 => {
+        Some(c)
+            if c.clean_type & clean_types != 0
+                && !crate::syndie_spraycan::clean_proof(world, target) =>
+        {
             world.despawn(target);
             true
         }
@@ -467,7 +471,8 @@ pub fn wash_turf(world: &mut World, pos: TilePos, clean_types: u32, all_contents
         .filter(|&e| world.get::<Turf>(e).is_none())
         .filter(|&e| all_contents || world.get::<Cleanable>(e).is_some())
         .collect();
-    let mut cleaned = false;
+    // The turf's own stickers (`COMSIG_COMPONENT_CLEAN_ACT`).
+    let mut cleaned = turf_at(world, pos).is_some_and(|t| crate::stickers::clean_act(world, t));
     for e in on_tile {
         cleaned |= wash(world, e, clean_types);
     }

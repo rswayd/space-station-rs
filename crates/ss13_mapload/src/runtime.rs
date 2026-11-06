@@ -30,6 +30,47 @@ pub const LOOT_TABLE_MAKER: &str = "/obj/item/loot_table_maker";
 /// The cargo export scanner (`ss13_game::cargo::scanner`).
 pub const UNIVERSAL_SCANNER: &str = "/obj/item/universal_scanner";
 
+/// `ss13_game::gifts`: the named types of `/obj/item/gift/get_gift_type()` (its toy and
+/// collectable hat subtypes come from whatever else is converted).
+pub const GIFT_TYPES: &[&str] = &[
+    "/obj/item/banhammer",
+    "/obj/item/bikehorn",
+    "/obj/item/book/manual/chef_recipes",
+    "/obj/item/book/manual/wiki/barman_recipes",
+    "/obj/item/clothing/head/costume/snowman",
+    "/obj/item/clothing/neck/tie/horrible",
+    "/obj/item/clothing/suit/costume/poncho",
+    "/obj/item/clothing/suit/costume/poncho/green",
+    "/obj/item/clothing/suit/costume/poncho/red",
+    "/obj/item/clothing/suit/costume/snowman",
+    "/obj/item/clothing/suit/jacket/leather",
+    "/obj/item/clothing/suit/jacket/leather/biker",
+    "/obj/item/food/grown/ambrosia/deus",
+    "/obj/item/food/grown/ambrosia/vulgaris",
+    "/obj/item/grenade/smokebomb",
+    "/obj/item/grown/corncob",
+    "/obj/item/instrument/guitar",
+    "/obj/item/instrument/violin",
+    "/obj/item/lipstick/random",
+    "/obj/item/pai_card",
+    "/obj/item/pen/invisible",
+    "/obj/item/pickaxe/diamond",
+    "/obj/item/poster/random_contraband",
+    "/obj/item/poster/random_official",
+    "/obj/item/soap/deluxe",
+    "/obj/item/sord",
+    "/obj/item/stack/sheet/mineral/coal",
+    "/obj/item/storage/backpack/holding",
+    "/obj/item/storage/belt/champion",
+    "/obj/item/storage/belt/utility/full",
+    "/obj/item/storage/box/snappops",
+    "/obj/item/storage/crayons",
+    "/obj/item/storage/photo_album",
+    "/obj/item/storage/wallet",
+    "/obj/item/toy/basketball",
+    "/obj/item/toy/beach_ball",
+];
+
 /// Constant paths `ss13_game` spawns that no other table of this crate lists: leftovers,
 /// products and printouts of machines, decals, grenade payloads, quirk items, paper kinds.
 pub const GAME_RUNTIME_TYPES: &[&str] = &[
@@ -47,6 +88,9 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/effect/temp_visual/resonance",
     // `ss13_game::crayons`: what crayons and spray cans draw.
     "/obj/effect/decal/cleanable/crayon",
+    // `ss13_game::syndie_spraycan`, `ss13_game::gifts`.
+    "/obj/effect/decal/cleanable/traitor_rune",
+    "/obj/item/c_tube",
     // `ss13_game::effects::gibs`: the gib spawners' decals and their streaks' splatters.
     "/obj/effect/decal/cleanable/blood/gibs",
     "/obj/effect/decal/cleanable/blood/gibs/up",
@@ -623,7 +667,7 @@ pub const BITRUNNING_RUNTIME_TYPES: &[&str] = &[
 pub fn runtime_types() -> BTreeSet<&'static str> {
     use crate::{antag, atmos_machine, cargo, mobs, service, silicon};
     let mut out = BTreeSet::new();
-    let tables: [&[&'static str]; 27] = [
+    let tables: [&[&'static str]; 28] = [
         &crate::RUNTIME_TYPES,
         &crate::RUNTIME_CONTAINER_TYPES,
         &crate::CONSTRUCTION_TYPES,
@@ -653,6 +697,7 @@ pub fn runtime_types() -> BTreeSet<&'static str> {
         EVENT_RUNTIME_TYPES,
         EXPLORATION_RUNTIME_TYPES,
         BITRUNNING_RUNTIME_TYPES,
+        GIFT_TYPES,
     ];
     out.extend(tables.into_iter().flatten().copied());
     // Lavaland fauna, their spawns and drops (`ss13_game::mobs::lavaland`).

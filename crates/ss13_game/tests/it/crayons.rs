@@ -7,10 +7,14 @@ use std::path::{Path, PathBuf};
 
 use bevy::prelude::*;
 use ss13_game::crayons::{Crayon, CrayonArt};
+use ss13_game::gifts::Gift;
 use ss13_game::inventory::{CarriedBy, Inventory};
 use ss13_game::janitor::{CLEAN_TYPE_HARD_DECAL, Cleanable};
+use ss13_game::stickers::Stickers;
+use ss13_game::syndie_spraycan::{RuneStage, TraitorCan, TraitorRune};
 use ss13_game::testing::{self, Drive, fixture_map, write_fixture};
 use ss13_mapload::{DmItem, Turf};
+use ss13_shared::protocol::{ClickModifiers, ClientIntent, InventorySlot};
 use ss13_shared::{Appearance, TilePos};
 use ss13_world::SpatialIndex;
 
@@ -45,6 +49,19 @@ const TYPES: &str = r##"{
     "/obj/item/toy/crayon/red": { "parent": "/obj/item/toy/crayon" },
     "/obj/item/toy/crayon/spraycan": { "parent": "/obj/item/toy/crayon" },
     "/obj/item/soap": { "parent": "/obj/item", "declared_vars": { "name": "soap" } },
+    "/obj/item/sticker": { "parent": "/obj/item", "declared_vars": { "name": "sticker",
+        "icon": { "resource": "icons/obj/toys/stickers.dmi" }, "icon_state": "smile" } },
+    "/obj/item/sticker/skub": { "parent": "/obj/item/sticker", "declared_vars": {
+        "icon_state": "skub" } },
+    "/obj/item/gift": { "parent": "/obj/item", "declared_vars": { "name": "gift",
+        "icon": { "resource": "icons/obj/storage/wrapping.dmi" },
+        "icon_state": "giftdeliverypackage3" } },
+    "/obj/item/traitor_spraycan": { "parent": "/obj/item", "declared_vars": {
+        "name": "seditious spraycan" } },
+    "/obj/effect/decal/cleanable/traitor_rune": { "parent": "/obj/effect/decal/cleanable",
+        "declared_vars": { "name": "syndicate graffiti",
+        "icon": { "resource": "icons/effects/96x96.dmi" }, "icon_state": "traitor_rune_outline",
+        "pixel_x": -32, "pixel_y": -32 } },
     "/obj/item/card": { "parent": "/obj/item" },
     "/obj/item/card/id": { "parent": "/obj/item/card", "declared_vars": {
         "access": { "list": [] }, "slot_flags": 256 } },
@@ -90,9 +107,31 @@ const SPAWN: TilePos = TilePos::new(3, 2, 1);
 const WEST: TilePos = TilePos::new(2, 2, 1);
 const TOY: TilePos = TilePos::new(4, 2, 1);
 const NORTH_WALL: TilePos = TilePos::new(3, 3, 1);
+/// `BIG`: the spawn (3,3) in a 5x3 room; the tile east of it has a clear 3x3 around it.
+const BIG: &str = r##""w" = (/turf/closed/wall,/area/space)
+"f" = (/turf/open/floor,/area/space)
+"s" = (/obj/effect/landmark/start/assistant,/turf/open/floor,/area/space)
+
+(1,1,1) = {"
+wwwwwww
+wfffffw
+wfsfffw
+wfffffw
+wwwwwww
+"}
+"##;
+const BIG_EAST: TilePos = TilePos::new(4, 3, 1);
+const RUNE_DMI: &str = "icons/effects/96x96.dmi";
 const DMI: &str = "icons/effects/crayondecal.dmi";
 
-const STATES: [(&str, &str); 9] = [
+const STATES: [(&str, &str); 16] = [
+    ("icons/obj/toys/stickers.dmi", "smile"),
+    ("icons/obj/toys/stickers.dmi", "skub"),
+    ("icons/obj/storage/wrapping.dmi", "giftdeliverypackage1"),
+    ("icons/obj/storage/wrapping.dmi", "giftdeliverypackage3"),
+    (RUNE_DMI, "traitor_rune_outline"),
+    (RUNE_DMI, "traitor_rune_done"),
+    (RUNE_DMI, "traitor_rune_sheen"),
     ("t.dmi", "floor"),
     ("t.dmi", "wall"),
     ("l.dmi", "x2"),
@@ -113,13 +152,23 @@ fn fixture_assets() -> PathBuf {
         "/obj/item/toy/crayon/red",
         "/obj/item/toy/crayon/spraycan",
         "/obj/item/soap",
+        "/obj/item/sticker/skub",
+        "/obj/item/gift",
+        "/obj/item/traitor_spraycan",
+        "/obj/effect/decal/cleanable/traitor_rune",
         "/obj/item/card/id",
         "/turf/open/floor",
         "/turf/closed/wall",
         "/turf/open/space/basic",
         "/area/space",
     ];
-    write_fixture(&dir, TYPES, &used, &STATES, &[("map.dmm", MAP)])
+    write_fixture(
+        &dir,
+        TYPES,
+        &used,
+        &STATES,
+        &[("map.dmm", MAP), ("big.dmm", BIG)],
+    )
 }
 
 struct Station(testing::Station);
@@ -128,8 +177,12 @@ ss13_game::drive_station!(Station, 0);
 
 impl Station {
     fn start() -> Self {
+        Self::start_on("map.dmm")
+    }
+
+    fn start_on(map: &str) -> Self {
         let assets = fixture_assets();
-        let mut s = testing::Station::start(fixture_map(&assets, &["map.dmm"]), |_| {});
+        let mut s = testing::Station::start(fixture_map(&assets, &[map]), |_| {});
         s.join_all(1, |_| {});
         s.without_mood();
         Self(s)
@@ -303,4 +356,112 @@ fn a_spray_can_sprays_walls_at_once_and_paints_items() {
         s.try_get::<CarriedBy>(toy).is_none(),
         "painted, not picked up"
     );
+}
+
+#[test]
+fn the_seditious_can_draws_a_rune_that_resists_cleaning_for_a_while() {
+    let mut s = Station::start_on("big.dmm");
+    let can = s.give_new("/obj/item/traitor_spraycan");
+    s.run_for(1.0);
+    let floor = s.turf(BIG_EAST);
+    s.click(0, floor);
+    let started = s.now();
+    let rune_on = |s: &Station| {
+        let world = s.server.world();
+        world
+            .resource::<SpatialIndex>()
+            .on_tile(BIG_EAST)
+            .iter()
+            .copied()
+            .find(|&e| world.get::<TraitorRune>(e).is_some())
+    };
+    s.run_until("the rune finished", |s| {
+        rune_on(s).is_some_and(|r| s.get::<TraitorRune>(r).stage == RuneStage::Complete)
+    });
+    assert!(s.now() - started >= 8.9, "three steps of 3 s");
+    let rune = rune_on(&s).unwrap();
+    assert_eq!(
+        s.get::<Appearance>(rune).icon_state,
+        s.state(RUNE_DMI, "traitor_rune_sheen")
+    );
+    assert!(s.get::<TraitorCan>(can).expended);
+    let world = s.server.world_mut();
+    assert!(
+        !ss13_game::janitor::wash(world, rune, ss13_game::janitor::CLEAN_SCRUB),
+        "clean-proof"
+    );
+    // Five minutes later it is an ordinary hard decal.
+    let now = s.now();
+    s.server
+        .world_mut()
+        .get_mut::<TraitorRune>(rune)
+        .unwrap()
+        .removable_at = now;
+    s.run_for(0.2);
+    assert_eq!(s.get::<TraitorRune>(rune).stage, RuneStage::Removable);
+    assert!(ss13_game::janitor::wash(
+        s.server.world_mut(),
+        rune,
+        ss13_game::janitor::CLEAN_SCRUB
+    ));
+}
+
+#[test]
+fn a_sticker_sticks_where_clicked_and_washes_off() {
+    let mut s = Station::start_on("big.dmm");
+    let sticker = s.give_new("/obj/item/sticker/skub");
+    s.run_for(1.0);
+    let floor = s.turf(BIG_EAST);
+    let at = ClickModifiers {
+        pixel: Some([5, -3]),
+        ..Default::default()
+    };
+    s.click_with(0, floor, at);
+    s.run_until("stuck", |s| s.try_get::<Stickers>(floor).is_some());
+    assert!(s.try_get::<TilePos>(sticker).is_none(), "out of the world");
+    let inventory = s.get::<Inventory>(s.mob());
+    assert!(inventory.hands[inventory.active].is_none());
+    let overlay = &s.get::<Stickers>(floor).0[0].overlay;
+    assert_eq!(overlay.pixel_offset, [5, -3]);
+    assert_eq!(
+        overlay.icon_state,
+        s.state("icons/obj/toys/stickers.dmi", "skub")
+    );
+    assert!(s.get::<Appearance>(floor).overlays.contains(overlay));
+    let mut lines = Vec::new();
+    ss13_game::stickers::examine_lines(s.server.world(), floor, &mut lines);
+    assert_eq!(lines.len(), 1, "skub's examine text");
+    // Mopping the floor peels it off onto the tile.
+    let world = s.server.world_mut();
+    assert!(ss13_game::janitor::wash_turf(
+        world,
+        BIG_EAST,
+        ss13_game::janitor::CLEAN_WASH,
+        false
+    ));
+    assert_eq!(s.try_get::<TilePos>(sticker), Some(&BIG_EAST));
+    assert!(s.try_get::<Stickers>(floor).is_none());
+    assert!(s.get::<Appearance>(floor).overlays.is_empty());
+}
+
+#[test]
+fn a_gift_opens_into_a_present_in_hand() {
+    let mut s = Station::start_on("big.dmm");
+    let gift = s.give_new("/obj/item/gift");
+    s.run_for(0.2);
+    s.server.world_mut().get_mut::<Gift>(gift).unwrap().contains =
+        Some("/obj/item/toy/crayon/red".into());
+    let offset = s.get::<Appearance>(gift).pixel_offset;
+    assert!(offset.iter().all(|o| (-10..=10).contains(o)));
+    s.run_for(1.0);
+    let hand = if s.get::<Inventory>(s.mob()).active == 0 {
+        InventorySlot::LeftHand
+    } else {
+        InventorySlot::RightHand
+    };
+    s.send(0, ClientIntent::ClickSlot(hand));
+    s.run_until("opened", |s| s.server.world().get_entity(gift).is_err());
+    let inventory = s.get::<Inventory>(s.mob());
+    let present = inventory.hands[inventory.active].expect("the present in hand");
+    assert_eq!(s.get::<DmItem>(present).path, "/obj/item/toy/crayon/red");
 }

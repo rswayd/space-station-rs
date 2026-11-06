@@ -18,7 +18,7 @@
 Шпионский баллон для рисования рун-граффити (цель-объектив), вызывающих эффекты у смотрящих.
 
 - **Код:** [`/obj/item/traitor_spraycan`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/syndie_spraycan.dm#L4)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ — `crates/ss13_game/src/syndie_spraycan.rs`: руна Синдиката на свободной площадке 3x3 в три шага по 3 с (контур, цвет, покрытие), продолжение недорисованной, баллон расходуется; готовая руна 5 минут не смывается, подскальзывает подошедших вплотную (6 с, не при ходьбе) и деморализует видящих в 7 тайлах (антагонист +2, командование и СБ −3, экипаж −2 на 2 минуты, один раз); тест `tests/it/crayons.rs`. Цель-объектив предателя (`COMSIG_TRAITOR_GRAFFITI_*`) — группа целей предателя; нет «теггера», деморализации осмотром, проверки чтения и света
 
 _«Банки краски» описано в [../service/art.md](../service/art.md)._
 
@@ -27,11 +27,11 @@ _«Банки краски» описано в [../service/art.md](../service/ar
 
 - **Код:** [`/obj/item/sticker`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/stickers.dm#L14), [`attempt_attach()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/stickers.dm#L42), [`/datum/component/sticker`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/sticker.dm#L7)
 - **BandaStation:** [`stickers.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/stickers.dm#L43) — наклейки не клеятся на мобов
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ — `crates/ss13_game/src/stickers.rs`: наклейка в руке клеится на предмет, объект, пол или стену в точку клика (оверлей цели, до 15), на мобов не клеится (BandaStation); отклеивается мытьём (падает на место цели, у стены — со стороны наклеившего), сгорает от огня на тайле; текст осмотра наклейки; случайный спрайт у гугли-глаз и бота; тест `tests/it/crayons.rs`. Нет: прилипания брошенной наклейки, анимации, горения на горящих предметах
 
 ### Подарки
 Подарок открывается в руке и даёт случайный предмет (на Рождество — из всего списка предметов, именной подарок — для конкретного игрока); упаковка предметов в подарочную бумагу.
 
 - **Код:** [`/obj/item/gift`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/gift.dm#L7), [`get_gift_type()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/gift.dm#L56), [`/obj/item/gift/anything`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/gift.dm#L107), [`/obj/item/stack/wrapping_paper`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/stacks/wrap.dm#L7)
 - **BandaStation:** [`gift.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/gift.dm#L118) — подарки не выдают отладочные и ЦК-предметы
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ — `crates/ss13_game/src/gifts.rs`: подарок со случайным спрайтом и смещением, открывается в руке — предмет из списка tg (названные типы `GIFT_TYPES`, игрушки без абстрактных и синдикатовских карт, коллекционные шляпы) в руки; рождественский — любой предмет без отладочных и ЦК (BandaStation), именной (`assign_recipient`) открывает только адресат; оберточная бумага (3 листа) на посылку — подарочная упаковка, пустой рулон оставляет тубу; тест `tests/it/crayons.rs`. `// shortcut:` списки — среди сконвертированных прототипов; нет цветов бумаги и ленты (GAGS), обёртки больших ящиков, «видения подарков»
