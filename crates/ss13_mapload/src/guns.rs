@@ -73,6 +73,8 @@ pub struct ProjectileData {
     pub stamina_falloff_tile: f32,
     /// `/obj/projectile/energy/electrode` `tase_stamina`: 0 for anything else.
     pub tase_stamina: f32,
+    /// `reflectable`: reflective armor can bounce it (lasers and disablers).
+    pub reflectable: bool,
 }
 
 /// `/obj/item/ammo_casing` vars, with its projectile resolved.
@@ -379,6 +381,7 @@ pub fn projectile(types: &DmTypes, path: &str) -> ProjectileData {
         } else {
             0.0
         },
+        reflectable: truthy(types.resolved(path, "reflectable")),
     }
 }
 

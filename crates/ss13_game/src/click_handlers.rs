@@ -62,6 +62,7 @@
 //! | 3100 | `silicon::law_rack::attack_self` |
 //! | 3150 | `vehicles::attack_self` |
 //! | 3155 | `clothing::toggles::attack_self` (adjustable masks) |
+//! | 3159 | `clothing::reactive::attack_self` (reactive armor on and off) |
 //! | 3160 | `airlock_construction::attack_self` (airlock electronics) |
 //! | 3165 | `cargo::mail::counterfeit_attack_self` |
 //! | 3166 | `cargo::coupon::cigarettes_attack_self` |
@@ -105,6 +106,7 @@
 //! | 1200 | `modpc::pda::item_interaction` |
 //! | 1250 | `radiation::geiger_interact` |
 //! | 1255 | `clothing::item_interaction` |
+//! | 1259 | `clothing::reactive::shell_interaction` (an anomaly core into a reactive armor shell) |
 //! | 1300 | `disposals::mail_interaction` |
 //! | 1350 | `botany::grown_interaction` (log cutting, potato batteries) |
 //! | 1400 | `chem::item_interaction` |
@@ -223,6 +225,7 @@
 //! | 1565 | `devices::taperecorder::item_interaction` (a tape into a recorder, respooling) |
 //! | 1567 | `devices::laser_pointer::item_interaction` (diode, crystal lens, their removal) |
 //! | 1577 | `devices::rhd::item_interaction` (the RCD family's clicks and loading) |
+//! | 1579 | `clothing::reactive::shell_interaction` (an anomaly core into a reactive armor shell) |
 //! | 1580 | `events::anomalies::neutralizer_act`, `releaser_act` (anomalies, anomaly cores) |
 //! | 1585 | `events::radiation_leak::tool_act` (a leaking machine's fixing tools) |
 //! | 1590 | `teapot::item_interaction` (before `machine_frame` takes it apart) |

@@ -33,6 +33,17 @@ pub const UNIVERSAL_SCANNER: &str = "/obj/item/universal_scanner";
 /// Constant paths `ss13_game` spawns that no other table of this crate lists: leftovers,
 /// products and printouts of machines, decals, grenade payloads, quirk items, paper kinds.
 pub const GAME_RUNTIME_TYPES: &[&str] = &[
+    // `crate::clothing::reactive`: the shell's armors and the table armor's table.
+    "/obj/item/clothing/suit/armor/reactive/repulse",
+    "/obj/item/clothing/suit/armor/reactive/tesla",
+    "/obj/item/clothing/suit/armor/reactive/teleport",
+    "/obj/item/clothing/suit/armor/reactive/bioscrambling",
+    "/obj/item/clothing/suit/armor/reactive/hallucinating",
+    "/obj/item/clothing/suit/armor/reactive/barricade",
+    "/obj/item/clothing/suit/armor/reactive/ectoplasm",
+    "/obj/item/clothing/suit/armor/reactive/weather",
+    "/obj/item/clothing/suit/armor/reactive/stealth",
+    "/obj/structure/table",
     "/mob/living/basic/mining/demon_afterimage",
     "/obj/item/raw_anomaly_core/bluespace",
     "/obj/item/hatchet/cutterblade",
