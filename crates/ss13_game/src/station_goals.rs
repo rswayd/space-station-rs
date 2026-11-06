@@ -15,6 +15,7 @@
 // satellites (meteor chance, the dark matt-eor), no beam visual, no admin goals panel (the
 // toggle is [`set_completed`]).
 
+use crate::construction::is_space;
 use std::collections::HashSet;
 
 use bevy::prelude::*;
@@ -24,7 +25,7 @@ use ss13_shared::chat::{ChatChannel, ChatMessage, ChatSegment, Span};
 use ss13_shared::{Appearance, TilePos};
 use ss13_world::SpatialIndex;
 
-use crate::construction::{Job, path_of, turf_at};
+use crate::construction::Job;
 use crate::obj_damage::{Anchored, is_under};
 use crate::tools::{Actor, do_after, tell};
 
@@ -37,7 +38,6 @@ pub const KILL_RANGE: i32 = 14;
 pub const COVERAGE_GOAL: usize = 500;
 /// `toggle`'s `do_after(user, 2 SECONDS)`, deciseconds.
 const TOGGLE_DELAY_DS: f32 = 20.0;
-const SPACE: &str = "/turf/open/space";
 
 /// A `/datum/station_goal` type's vars.
 #[derive(Debug, PartialEq)]
@@ -226,12 +226,6 @@ pub fn goal_report(world: &mut World) -> Vec<ChatMessage> {
             }
         })
         .collect()
-}
-
-fn is_space(world: &World, pos: TilePos) -> bool {
-    turf_at(world, pos)
-        .and_then(|t| path_of(world, t))
-        .is_some_and(|p| is_under(&p, SPACE))
 }
 
 fn is_satellite(world: &World, e: Entity) -> bool {

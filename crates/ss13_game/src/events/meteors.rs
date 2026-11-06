@@ -12,6 +12,7 @@
 //! Cost: a wave keeps up to ~100 meteors in flight, 10 steps per second each, every step one
 //! tile lookup; far below a millisecond per tick.
 
+use crate::construction::is_space;
 use bevy::prelude::*;
 use ss13_mapload::{DmName, IconIndex};
 use ss13_net::server::Networked;
@@ -604,14 +605,6 @@ fn debris_finish(
         ),
     };
     (x >= 1 && y >= 1 && x <= w && y <= h).then(|| TilePos::new(x, y, z))
-}
-
-fn turf_path(world: &World, pos: TilePos) -> Option<String> {
-    turf_at(world, pos).and_then(|t| path_of(world, t))
-}
-
-fn is_space(world: &World, pos: TilePos) -> bool {
-    turf_path(world, pos).is_some_and(|p| is_under(&p, "/turf/open/space"))
 }
 
 /// `new kind(start, goal)`: a meteor on `start` flying at `goal`.

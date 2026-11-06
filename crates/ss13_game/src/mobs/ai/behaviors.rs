@@ -800,12 +800,7 @@ fn safe_to_cross(world: &World, mob: Entity, pos: TilePos) -> bool {
 }
 
 pub fn is_space(world: &World, pos: TilePos) -> bool {
-    world
-        .resource::<SpatialIndex>()
-        .on_tile(pos)
-        .iter()
-        .filter_map(|&e| world.get::<ss13_atmos::TurfAir>(e))
-        .any(|a| a.kind == ss13_atmos::TileKind::Space)
+    crate::construction::is_space(world, pos)
 }
 
 /// `idle_random_walk/try_random_step` (`idle_dog` skips the safety check, as tg does).

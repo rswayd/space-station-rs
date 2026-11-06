@@ -1616,6 +1616,14 @@ pub fn turf_at(world: &World, pos: TilePos) -> Option<Entity> {
         .find(|&e| world.get::<Turf>(e).is_some())
 }
 
+/// tg `isspaceturf`: the turf on `pos` is a `/turf/open/space` type (by type, not by its air:
+/// test fixtures and odd maps can leave a space turf's air blocked).
+pub fn is_space(world: &World, pos: TilePos) -> bool {
+    turf_at(world, pos)
+        .and_then(|t| path_of(world, t))
+        .is_some_and(|p| crate::obj_damage::is_under(&p, "/turf/open/space"))
+}
+
 /// tg `assemble_baseturfs` of a type: its `baseturfs` chain down to the bottom, bottom first.
 fn assemble_baseturfs(world: &World, path: &str) -> Vec<String> {
     let mut out = Vec::new();

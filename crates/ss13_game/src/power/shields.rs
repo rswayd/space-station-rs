@@ -26,6 +26,7 @@
 // (tg lets 10% / `PASSGLASS` 20% through) and take no damage (tg drains the generators by it),
 // a map's `active` projector does not come up on load, no shield attack sounds or ion impacts.
 
+use crate::construction::is_space;
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
 use ss13_mapload::fidelity::{IconIndex, is_under};
@@ -256,12 +257,6 @@ fn broken(world: &World, e: Entity) -> bool {
 }
 
 /// tg `isspaceturf`: a type check on the turf, not its air.
-fn is_space(world: &World, pos: TilePos) -> bool {
-    crate::construction::turf_at(world, pos)
-        .and_then(|t| crate::construction::path_of(world, t))
-        .is_some_and(|p| is_under(&p, "/turf/open/space"))
-}
-
 fn say_around(world: &mut World, e: Entity, mob: Entity, others: String, own: String) {
     let Some(&pos) = world.get::<TilePos>(e) else {
         return;
