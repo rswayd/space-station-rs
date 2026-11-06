@@ -117,6 +117,7 @@
 //! | 1510 | `teapot::interact` |
 //! | 1600 | `botany::interact` |
 //! | 1700 | `multiz::interact` |
+//! | 1790 | `atmos_machinery::space_heater::interact` |
 //! | 1800 | `atmos_machinery::windows::interact` |
 //! | 1900 | `power::chargers::interact` |
 //! | 1950 | `power::pacman::interact` |
@@ -139,6 +140,7 @@
 //! | 3100 | `plumbing::interact` |
 //! | 3150 | `decor::fold_flag` (right click), `decor::interact` |
 //! | 3155 | `tank_storage::attack_hand` (tank dispensers, tank holders) |
+//! | 3156 | `displaycase::attack_hand` |
 //! | 3160 | `flora::attack_hand` |
 //! | 3170 | `botany::unique::pickup_backfire` (never handles) |
 //! | 3200 | `service::server::interact` |
@@ -231,6 +233,7 @@
 //! | 3300 | `food::item_interaction` |
 //! | 3400 | `plumbing::item_interaction` |
 //! | 3440 | `tank_storage::item_interaction` |
+//! | 3441 | `displaycase::item_interaction` (display cases, their chassis) |
 //! | 3450 | `decor::item_interaction` |
 //! | 3455 | `clothing::item_interaction` |
 //! | 3465 | `effects::teleporters::portal_click` (permanent portals) |
@@ -240,6 +243,7 @@
 //! | 3700 | `chem::item_interaction` |
 //! | 3800 | `medical::item_interaction` |
 //! | 3900 | `multiz::interact` (out of combat mode) |
+//! | 3985 | `atmos_machinery::space_heater::item_interaction` |
 //! | 4000 | `atmos_machinery::windows::item_interaction` |
 //! | 4100 | `modpc::pda::item_interaction_secondary` (right click) |
 //! | 4200 | `disposals::item_interaction` |

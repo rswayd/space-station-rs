@@ -260,7 +260,12 @@ impl Plugin for AtmosMachineryPlugin {
                     .chain()
                     .after(AtmosSystems::Machinery),
             )
-            .add_plugins((windows::plugin, consoles::plugin, control::plugin));
+            .add_plugins((
+                windows::plugin,
+                consoles::plugin,
+                control::plugin,
+                space_heater::plugin,
+            ));
     }
 }
 
@@ -799,6 +804,7 @@ pub mod miner;
 pub mod overclock;
 pub mod pipe_scrubber;
 pub mod rpd;
+pub mod space_heater;
 pub mod tank;
 pub mod tank_frame;
 #[cfg(test)]
@@ -819,6 +825,7 @@ pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<(ss13_chat::
     overclock::examine_lines(world, target, lines);
     canister::examine_lines(world, target, lines);
     electrolyzer::examine_lines(world, target, lines);
+    space_heater::examine_lines(world, target, lines);
     thermo::examine_lines(world, target, lines);
     tank_frame::examine_lines(world, target, lines);
     fitting::examine_lines(world, target, lines);

@@ -236,6 +236,8 @@ pub mod defenses;
 #[cfg(feature = "server")]
 pub mod devices;
 #[cfg(feature = "server")]
+pub mod displaycase;
+#[cfg(feature = "server")]
 pub mod disposals;
 #[cfg(feature = "server")]
 pub mod doors;

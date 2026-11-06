@@ -75,6 +75,7 @@ use crate::interfaces::sleeper::{SleeperChem, SleeperData, SleeperOccupant, Slee
 use crate::interfaces::smart_vend::{FridgeItem, SmartVendData, SmartVendUi};
 use crate::interfaces::smes::{SmesData, SmesStatic, SmesUi};
 use crate::interfaces::solar_control::{SolarControlData, SolarControlUi};
+use crate::interfaces::space_heater::{SpaceHeaterData, SpaceHeaterUi};
 use crate::interfaces::teg::{
     CirculatorData, ThermoElectricGeneratorData, ThermoElectricGeneratorUi,
 };
@@ -657,6 +658,21 @@ pub fn sample(name: &str) -> Option<Sample> {
                 has_powercell: true,
                 anchored: false,
                 power_level: Some(47.0),
+            },
+        ),
+        SpaceHeaterUi::NAME => of::<SpaceHeaterUi>(
+            "space heater",
+            &(),
+            &SpaceHeaterData {
+                open: true,
+                on: true,
+                mode: "auto".into(),
+                has_powercell: true,
+                power_level: Some(73.0),
+                target_temp: 20.0,
+                min_temp: 0.0,
+                max_temp: 60.0,
+                current_temp: Some(14.0),
             },
         ),
         DestinationTaggerUi::NAME => of::<DestinationTaggerUi>(

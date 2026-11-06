@@ -295,6 +295,8 @@ pub enum Job {
     AnomalyRelease,
     /// Netpods, hololadders, the quantum console ([`crate::science::bitrunning`]).
     Bitrunning(crate::science::bitrunning::server::BitrunJob),
+    /// Fixing, prying, building display cases ([`crate::displaycase`]).
+    DisplayCase(crate::displaycase::CaseJob),
 }
 
 /// A turf's baseturf stack, bottom first (tg `baseturfs`). Absent: assembled from the type's
@@ -1294,6 +1296,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Camera(job) => crate::defenses::cameras::complete(world, mob, action, job),
         &Job::Sink(job) => crate::plumbing::complete(world, mob, action, job),
         &Job::Decor(job) => crate::decor::complete(world, mob, action, job),
+        &Job::DisplayCase(job) => crate::displaycase::complete(world, mob, action, job),
         &Job::Flora(job) => crate::flora::complete(world, mob, action, job),
         &Job::LawRack(job) => crate::silicon::law_rack::complete(world, mob, action, job),
         &Job::AiCore(job) => crate::silicon::ai_core::complete(world, mob, action, job),

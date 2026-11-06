@@ -835,6 +835,46 @@ fn metastation() {
         println!("electrolyzer: {hydrogen:.2} mol of hydrogen for {used:.0} J of the cell");
         server.update();
 
+        // A mapped space heater has its high-capacity cell; set to heat towards 60 °C with the
+        // hatch open and turned on by right click, it warms its tile, draws on the cell and
+        // shows the heating state.
+        use ss13_game::atmos_machinery::space_heater::{self as heater, Mode, SpaceHeater};
+        let world = server.world_mut();
+        let mut q = world.query::<(Entity, &SpaceHeater, &TilePos)>();
+        let heaters: Vec<(Entity, TilePos)> = q
+            .iter(world)
+            .filter(|(_, h, _)| h.cell.is_some())
+            .map(|(e, _, &p)| (e, p))
+            .collect();
+        let (machine, at) = heaters
+            .into_iter()
+            .find(|&(_, p)| {
+                world
+                    .resource::<Atmos>()
+                    .temperature(p)
+                    .is_some_and(|t| t < 320.0)
+            })
+            .expect("MetaStation has a space heater with its cell");
+        let cell = heater::cell_of(world, machine).expect("the cell is inside");
+        world
+            .get_mut::<SpaceHeater>(machine)
+            .unwrap()
+            .target_temperature = 333.15;
+        heater::interact(world, nobody, nobody, machine, true);
+        assert!(world.get::<SpaceHeater>(machine).unwrap().on);
+        let before_t = world.resource::<Atmos>().temperature(at).unwrap();
+        let charge = |world: &World| world.get::<ItemCell>(cell).unwrap().0.charge;
+        let before_charge = charge(world);
+        run(&mut server, 2.0);
+        let world = server.world_mut();
+        let after_t = world.resource::<Atmos>().temperature(at).unwrap();
+        let h = world.get::<SpaceHeater>(machine).unwrap();
+        assert!(h.on && h.mode == Mode::Heat, "{h:?}");
+        assert!(after_t > before_t + 1.0, "{before_t} K -> {after_t} K");
+        assert!(charge(world) < before_charge, "the cell pays");
+        println!("space heater: {before_t:.1} K -> {after_t:.1} K");
+        server.update();
+
         // The mapped crystallizer set to a standard fuel pellet (any temperature) with its
         // input port holding twice the recipe: it draws the gases in, and a pellet drops south
         // named after its quality.
