@@ -1433,6 +1433,14 @@ pub(super) fn jaunt_steps(world: &mut World, mut steps: Local<MessageCursor<Jaun
             facing.set_if_neq(Facing(dir));
         }
         let mut exit_points = jaunt.exit_points.clone();
+        // A nightmare's shadow walk refuses space and warns before light
+        // (`crate::antag::nightmare`).
+        if !crate::antag::nightmare::shadow_step_allowed(world, mob, to) {
+            if let Some(mut j) = world.get_mut::<Jaunting>(mob) {
+                j.next_step = t + JAUNT_STEP_SECS;
+            }
+            continue;
+        }
         if world.resource::<SpatialIndex>().in_bounds(to) {
             if no_teleport(world, to) && !no_teleport(world, pos) {
                 chat_to(
@@ -1558,6 +1566,14 @@ fn end_jaunt(world: &mut World, mob: Entity, jaunt: &Jaunting) {
         }
     }
     super::refresh(world, mob);
+}
+
+/// `exit_jaunt` at once, without the ethereal jaunt's reappearing (a shadow walk's
+/// `eject_jaunter`, `crate::antag::nightmare`).
+pub fn exit_jaunt(world: &mut World, mob: Entity) {
+    if let Some(jaunt) = world.get::<Jaunting>(mob).cloned() {
+        end_jaunt(world, mob, &jaunt);
+    }
 }
 
 /// The jaunting mob's own client keeps it: true when `mob` is jaunting (`crate::server`).

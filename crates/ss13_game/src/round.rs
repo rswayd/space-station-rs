@@ -631,6 +631,8 @@ fn declare_completion(world: &mut World, now: f64) {
     antags.extend(crate::antag::heretic::server::roundend_report(world, end));
     antags.extend(crate::antag::wizard::server::roundend_report(world, end));
     antags.extend(crate::antag::paradox_clone::roundend_report(world, end));
+    antags.extend(crate::antag::nightmare::roundend_report(world, end));
+    antags.extend(crate::antag::morph::roundend_report(world, end));
     antags.extend(crate::antag::brainwashed::roundend_report(world, end));
     antags.extend(crate::antag::revolution::server::roundend_report(
         world, end,
@@ -1166,6 +1168,8 @@ fn preference_acts(
                     crate::antag::revolution::ROLE_PROVOCATEUR,
                     crate::antag::ROLE_MALF,
                     crate::antag::ROLE_PARADOX_CLONE,
+                    crate::antag::ROLE_NIGHTMARE,
+                    crate::antag::ROLE_MORPH,
                 ]
                 .contains(&role.as_str()) =>
             {

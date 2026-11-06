@@ -19,7 +19,8 @@
 // shortcut: of the rulesets only the midround traitor (sleeper agent), mass traitors, the midround
 // nuclear operatives (opted-in ghosts are taken without a poll), the latejoin traitor
 // (infiltrator), the stowaway changeling, the latejoin revolution (provocateur), the midround
-// wizard and the paradox clone (`super::paradox_clone`) spawn anyone;
+// wizard, the paradox clone (`super::paradox_clone`), the nightmare (`super::nightmare`) and the
+// morph (`super::morph`) spawn anyone;
 // the others keep their weights, are logged and fail preparation, as tg's do without candidates.
 // There is no admin cancel or reroll window before a midround, no false alarms, no AFK checks,
 // no account age or job bans, and `EMERGENCY_PAST_POINT_OF_NO_RETURN` ignores the call's
@@ -123,6 +124,8 @@ pub const LATEJOIN_TRAITOR: &str = "Latejoin Traitor";
 pub const LATEJOIN_CHANGELING: &str = "Latejoin Changeling";
 pub const LATEJOIN_REVOLUTION: &str = "Latejoin Revolution";
 pub const PARADOX_CLONE: &str = "Paradox Clone";
+pub const NIGHTMARE: &str = "Nightmare";
+pub const MORPH: &str = "Morph";
 
 const HOP: &[&str] = &["Head of Personnel"];
 const ONE: (Cap, Cap) = (Cap::Fixed(1), Cap::Fixed(1));
@@ -188,7 +191,10 @@ pub const RULESETS: [Ruleset; 30] = {
         // Light midrounds.
         other("Light Pirates", Light, flat(3), 15),
         other("Midround Blood Worm", Light, flat(2), 20),
-        other("Nightmare", Light, flat(5), 15),
+        Ruleset {
+            role: Some(super::ROLE_NIGHTMARE),
+            ..other(NIGHTMARE, Light, flat(5), 15)
+        },
         decrease(other("Abductors", Light, flat(5), 20), 3),
         non_repeatable(other("Revenant", Light, flat(5), 10)),
         other("Midround Changeling", Light, flat(5), 15),
@@ -198,7 +204,10 @@ pub const RULESETS: [Ruleset; 30] = {
         },
         other("Voidwalker", Light, flat(5), 30),
         non_repeatable(other("Fugitives", Light, flat(3), 20)),
-        other("Morph", Light, flat(0), 0),
+        Ruleset {
+            role: Some(super::ROLE_MORPH),
+            ..other(MORPH, Light, flat(0), 0)
+        },
         Ruleset {
             role: Some(ROLE_SLEEPER_AGENT),
             candidates: Candidates::Living,
@@ -529,6 +538,9 @@ fn can_be_selected(world: &mut World, r: &Ruleset) -> bool {
         }
         // Someone to clone and a maintenance spawn.
         PARADOX_CLONE => super::paradox_clone::can_spawn(world),
+        // A dark maintenance spawn; any maintenance spawn.
+        NIGHTMARE => super::nightmare::can_spawn(world),
+        MORPH => super::morph::can_spawn(world),
         _ => true,
     }
 }
@@ -754,6 +766,24 @@ fn execute(
                 .filter_map(|&g| world.get::<PlayerMob>(g).map(|p| p.client))
                 .collect();
             if super::paradox_clone::spawn_clones(world, &clients).is_empty() {
+                return Vec::new();
+            }
+        }
+        NIGHTMARE => {
+            let clients: Vec<Entity> = chosen
+                .iter()
+                .filter_map(|&g| world.get::<PlayerMob>(g).map(|p| p.client))
+                .collect();
+            if super::nightmare::spawn_nightmares(world, &clients).is_empty() {
+                return Vec::new();
+            }
+        }
+        MORPH => {
+            let ghosts: Vec<(Entity, Entity)> = chosen
+                .iter()
+                .filter_map(|&g| world.get::<PlayerMob>(g).map(|p| (p.client, g)))
+                .collect();
+            if super::morph::spawn_morphs(world, &ghosts).is_empty() {
                 return Vec::new();
             }
         }

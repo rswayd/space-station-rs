@@ -35,6 +35,10 @@ pub mod heretic;
 pub mod hud;
 #[cfg(feature = "server")]
 pub mod midround;
+#[cfg(feature = "server")]
+pub mod morph;
+#[cfg(feature = "server")]
+pub mod nightmare;
 pub mod nukeop;
 #[cfg(feature = "server")]
 pub mod objectives;
@@ -70,6 +74,8 @@ impl bevy::prelude::Plugin for AntagServerPlugin {
             revolution::server::RevolutionPlugin,
             paradox_clone::ParadoxClonePlugin,
             brainwashed::BrainwashedPlugin,
+            nightmare::NightmarePlugin,
+            morph::MorphPlugin,
         ))
         .add_systems(Startup, dynamic::init)
         .add_plugins(midround::MidroundPlugin);
@@ -92,6 +98,11 @@ pub const ROLE_OPERATIVE_MIDROUND: &str = "Operative (Midround)";
 pub const ROLE_MALF: &str = "Malf AI";
 /// tg `ROLE_PARADOX_CLONE`: the paradox clone's `be_special` key (`paradox_clone`).
 pub const ROLE_PARADOX_CLONE: &str = "Paradox Clone";
+/// tg `ROLE_NIGHTMARE`: the nightmare's `be_special` key (`nightmare`).
+pub const ROLE_NIGHTMARE: &str = "Nightmare";
+/// tg `ROLE_MORPH` (`morph`). tg polls every ghost for the morph; here it is a `be_special`
+/// key, as willing ghosts are taken without a poll.
+pub const ROLE_MORPH: &str = "Morph";
 
 /// The blood brother's info panel.
 pub struct AntagInfoBrotherUi;

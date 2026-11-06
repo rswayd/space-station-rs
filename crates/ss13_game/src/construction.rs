@@ -286,6 +286,8 @@ pub enum Job {
     Clothing(crate::clothing::ClothingJob),
     /// Tipping or righting a cow, a turtle drinking ([`crate::mobs::farm`]).
     Fauna(crate::mobs::farm::FarmJob),
+    /// A morph eating a corpse or an item ([`crate::antag::morph`]).
+    Morph { corpse: bool },
 }
 
 /// A turf's baseturf stack, bottom first (tg `baseturfs`). Absent: assembled from the type's
@@ -1291,6 +1293,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Wiremod(shell) => crate::wiremod::server::complete(world, mob, action, shell),
         &Job::Clothing(job) => crate::clothing::damage::complete(world, mob, action, job),
         &Job::Fauna(job) => crate::mobs::farm::complete(world, mob, action, job),
+        &Job::Morph { corpse } => crate::antag::morph::complete_eat(world, mob, action, corpse),
         &Job::Emitter(job) => crate::power::emitter::complete(world, client, target, job, consume),
         &Job::FieldGenerator(job) => {
             crate::power::field_generator::complete(world, client, target, job, consume)
