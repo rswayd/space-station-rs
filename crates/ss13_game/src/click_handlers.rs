@@ -70,6 +70,7 @@
 //! | 3187 | `cargo::money::coin_attack_self` (coin flip) |
 //! | 3188 | `mining::fulton::attack_self` (packs link, beacon kits unfold) |
 //! | 3189 | `shuttle_remote::use_remote` |
+//! | 3190 | `janitor::broom_attack_self` (push broom wield) |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):
 //!

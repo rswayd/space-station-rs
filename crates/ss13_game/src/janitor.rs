@@ -225,6 +225,10 @@ impl Plugin for JanitorServerPlugin {
                 crate::janitor::item_interaction(w, c.client, c.mob, h, c.target, c.modifiers)
             })
         });
+        // The push broom is braced (wielded) in hand.
+        app.add_click_handler(ClickPhase::AttackSelf, 3190, |w, c| {
+            crate::janitor::broom_attack_self(w, c.client, c.mob, c.target)
+        });
         app.init_resource::<JanitorClocks>()
             .add_observer(add_cleanable)
             .add_observer(add_item_parts)
@@ -239,6 +243,7 @@ impl Plugin for JanitorServerPlugin {
                     (
                         condensation,
                         slip_on_entered,
+                        sweep_on_moved,
                         wet_floors,
                         dry_blood,
                         bucket_overlays,
@@ -905,6 +910,20 @@ pub fn item_interaction(
         do_after(world, actor, target, speed, 0, Job::Clean(CleanJob::Soap));
         return true;
     }
+    if is_under(&path, PUSHBROOM) {
+        // `interact_with_atom`: sweeps the clicked tile the way the user faces.
+        if living {
+            return false;
+        }
+        let (Some(&pos), Some(dir)) = (
+            world.get::<TilePos>(target),
+            world.get::<ss13_shared::Facing>(mob).map(|f| f.0),
+        ) else {
+            return false;
+        };
+        do_sweep(world, pos, dir);
+        return true;
+    }
     if is_under(&path, SPRAY) && !modifiers.right {
         return spray(world, actor, target);
     }
@@ -1138,6 +1157,121 @@ fn spray(world: &mut World, actor: Actor, target: Entity) -> bool {
     true
 }
 
+// ---------------------------------------------------------------------------------------------
+// Push broom.
+
+const PUSHBROOM: &str = "/obj/item/pushbroom";
+/// `BROOM_PUSH_LIMIT`.
+const BROOM_PUSH_LIMIT: usize = 20;
+const THUDSWOOSH: &str = "sound/items/weapons/thudswoosh.ogg";
+
+/// A push broom braced in both hands (tg `two_handed` wielded, `on_wield`).
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct BroomWielded;
+
+/// tg `two_handed` `attack_self` of a push broom: wields it (the other hand must be free) or
+/// lets go. True when `item` is a push broom.
+// shortcut: no wielded force (12) or icon, no jousting or walking aid; add with two_handed.
+pub fn broom_attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity) -> bool {
+    if !is_under(&item_path(world, item), PUSHBROOM) {
+        return false;
+    }
+    if world.get::<BroomWielded>(item).is_some() {
+        world.entity_mut(item).remove::<BroomWielded>();
+        tell(
+            world,
+            client,
+            Span::Notice,
+            "Вы перестаёте держать метлу обеими руками.",
+        );
+        return true;
+    }
+    if !other_hand_free(world, mob, item) {
+        tell(
+            world,
+            client,
+            Span::Warning,
+            "Вторая рука должна быть свободна!",
+        );
+        return true;
+    }
+    world.entity_mut(item).insert(BroomWielded);
+    tell(
+        world,
+        client,
+        Span::Notice,
+        "Вы упираете метлу в пол, приняв уверенную подметающую стойку.",
+    );
+    true
+}
+
+/// `item` is in one of `mob`'s hands and the other hand is empty.
+fn other_hand_free(world: &World, mob: Entity, item: Entity) -> bool {
+    world
+        .get::<crate::inventory::Inventory>(mob)
+        .is_some_and(|inv| inv.hands.contains(&Some(item)) && inv.hands.contains(&None))
+}
+
+/// The mob's wielded push broom, still held in both hands.
+fn wielded_broom(world: &World, mob: Entity) -> Option<Entity> {
+    let inv = world.get::<crate::inventory::Inventory>(mob)?;
+    inv.hands
+        .iter()
+        .flatten()
+        .copied()
+        .find(|&h| world.get::<BroomWielded>(h).is_some())
+        .filter(|&h| other_hand_free(world, mob, h))
+}
+
+/// `sweep` on `COMSIG_MOVABLE_PRE_MOVE` of a mob with a wielded broom: the items on the tile it
+/// steps onto are pushed one tile further. Run after the step, so they leave the mob's new tile.
+fn sweep_on_moved(world: &mut World, mut cursor: Local<MessageCursor<Moved>>) {
+    let moved: Vec<Moved> = cursor
+        .read(world.resource::<Messages<Moved>>())
+        .copied()
+        .collect();
+    // Cost: one inventory lookup per mob step.
+    for m in moved {
+        if world.get::<crate::inventory::Inventory>(m.entity).is_none() {
+            continue;
+        }
+        if wielded_broom(world, m.entity).is_some() {
+            do_sweep(world, m.to, m.dir);
+        }
+    }
+}
+
+/// `/proc/do_sweep`: up to `BROOM_PUSH_LIMIT` loose items of `pos` step `dir` (each `Move`
+/// refused by what blocks it), with a swoosh when there was anything.
+pub fn do_sweep(world: &mut World, pos: TilePos, dir: ss13_shared::Dir) -> usize {
+    let items: Vec<Entity> = world
+        .resource::<SpatialIndex>()
+        .on_tile(pos)
+        .iter()
+        .copied()
+        .filter(|&e| world.get::<DmItem>(e).is_some_and(|i| !i.anchored))
+        .filter(|&e| {
+            world
+                .get::<crate::obj_damage::Anchored>(e)
+                .is_none_or(|a| !a.0)
+        })
+        .take(BROOM_PUSH_LIMIT)
+        .collect();
+    if items.is_empty() {
+        return 0;
+    }
+    let mut swept = 0;
+    for item in items {
+        if crate::pull::step_once(world, item, dir, None).is_ok() {
+            swept += 1;
+        }
+    }
+    let mut sound = crate::sound::PlaySound::new(pos, THUDSWOOSH, 30.0, true);
+    sound.extrarange = -1.0;
+    crate::sound::playsound(world, sound);
+    swept
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1183,6 +1317,59 @@ mod tests {
         assert_eq!(wet.highest(), TURF_WET_WATER);
         wet.process(T0C + 150.0, 1.0);
         assert_eq!(wet.highest(), 0);
+    }
+
+    /// The broom pushes loose items one tile on, not through walls and not anchored ones; it
+    /// sweeps only braced with the other hand free.
+    #[test]
+    fn broom_sweeps_loose_items() {
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, ss13_world::WorldPlugin));
+        let world = app.world_mut();
+        world
+            .resource_mut::<SpatialIndex>()
+            .create_level(1, 6, 6)
+            .unwrap();
+        let item = |world: &mut World, anchored: bool| {
+            world
+                .spawn((
+                    DmItem {
+                        path: "/obj/item/trash/candy".into(),
+                        anchored,
+                        ..default()
+                    },
+                    TilePos::new(2, 2, 1),
+                ))
+                .id()
+        };
+        let (loose, fixed) = (item(world, false), item(world, true));
+        world.spawn((TilePos::new(2, 4, 1), Density));
+        assert_eq!(
+            do_sweep(world, TilePos::new(2, 2, 1), ss13_shared::Dir::North),
+            1
+        );
+        assert_eq!(world.get::<TilePos>(loose), Some(&TilePos::new(2, 3, 1)));
+        assert_eq!(world.get::<TilePos>(fixed), Some(&TilePos::new(2, 2, 1)));
+        assert_eq!(
+            do_sweep(world, TilePos::new(2, 3, 1), ss13_shared::Dir::North),
+            0
+        );
+        assert_eq!(world.get::<TilePos>(loose), Some(&TilePos::new(2, 3, 1)));
+
+        let broom = world.spawn(BroomWielded).id();
+        let other = world.spawn_empty().id();
+        let mob = world
+            .spawn(crate::inventory::Inventory {
+                hands: [Some(broom), None],
+                ..default()
+            })
+            .id();
+        assert_eq!(wielded_broom(world, mob), Some(broom));
+        world
+            .get_mut::<crate::inventory::Inventory>(mob)
+            .unwrap()
+            .hands[1] = Some(other);
+        assert_eq!(wielded_broom(world, mob), None);
     }
 
     /// Walking or critical carbons pass holobarriers; running conscious ones do not.
