@@ -6,7 +6,7 @@
 //!
 //! The cycle is a pure function of the tray, its nutrient holder, the light and the dice, so it
 //! is tested without a world.
-// shortcut: no snails, soil sacks, somatoray, bees, plumbing or circuits; `mutatepest` warns without spawning
+// shortcut: no snails, soil sacks, bees, plumbing or circuits; `mutatepest` warns without spawning
 // spiderlings, strange reagent spawns no living plant.
 
 use ss13_reagents::{Chemistry, Holder, is_under};
@@ -358,6 +358,69 @@ impl Tray {
             .map(|s| s.plantname.clone())
             .unwrap_or_default()
     }
+}
+
+/// The floral somatoray's shots (`/obj/projectile/energy/flora/*`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Somatoray {
+    /// `flora/mut` (alpha): `mutate()`.
+    Mutation,
+    /// `flora/yield` (beta): the seed's `bullet_act`, a yield point by chance.
+    Yield,
+    /// `flora/evolution` (gamma): instability halved, `mutatespecie()`.
+    Evolution,
+}
+
+impl Somatoray {
+    pub fn of(projectile: &str) -> Option<Self> {
+        if is_under(projectile, "/obj/projectile/energy/flora/mut") {
+            Some(Self::Mutation)
+        } else if is_under(projectile, "/obj/projectile/energy/flora/yield") {
+            Some(Self::Yield)
+        } else if is_under(projectile, "/obj/projectile/energy/flora/evolution") {
+            Some(Self::Evolution)
+        } else {
+            None
+        }
+    }
+}
+
+/// `/obj/machinery/hydroponics/bullet_act` of a somatoray shot. False without a plant (the
+/// shot acts as on any object).
+pub fn somatoray_hit(
+    tray: &mut Tray,
+    ray: Somatoray,
+    env: &CycleEnv,
+    dice: &mut impl Dice,
+    out: &mut CycleOutcome,
+) -> bool {
+    if tray.myseed.is_none() {
+        return false;
+    }
+    match ray {
+        Somatoray::Mutation => tray.seed_mutate(Mutation::MUTATE, env.plants, dice),
+        Somatoray::Yield => {
+            // `/obj/item/seeds/bullet_act`: diminishing returns, 100% at 1 yield, 25% at 2...
+            let rating = tray.rating;
+            if let Some(seed) = &mut tray.myseed {
+                if seed.yield_ == 0.0 {
+                    seed.adjust_yield(rating);
+                } else if dice.prob(100.0 / (seed.yield_ * seed.yield_)) {
+                    seed.adjust_yield(rating);
+                }
+            }
+        }
+        Somatoray::Evolution => {
+            if let Some(seed) = &mut tray.myseed
+                && !seed.mutatelist.is_empty()
+            {
+                seed.set_instability(seed.instability / 2.0);
+            }
+            tray.mutatespecie(env, dice, out);
+        }
+    }
+    out.update = true;
+    true
 }
 
 /// `apply_chemicals()`: every nutrient of at least 1 unit acts on the tray.
@@ -1341,6 +1404,78 @@ mod tests {
         tray.self_sustaining = true;
         tray.remove_plant();
         assert!(!tray.self_sustaining);
+    }
+
+    #[test]
+    fn somatoray_shots_on_a_tray() {
+        let (plants, chem) = (test_plants(), chem());
+        let env = CycleEnv {
+            chem: &chem,
+            plants: &plants,
+            lumcount: None,
+        };
+        assert_eq!(
+            Somatoray::of("/obj/projectile/energy/flora/yield"),
+            Some(Somatoray::Yield)
+        );
+        assert_eq!(Somatoray::of("/obj/projectile/beam/laser"), None);
+        let mut out = CycleOutcome::default();
+        // An empty tray takes the shot like any object.
+        let mut empty = Tray::new(&plants.data.trays[0]);
+        assert!(!somatoray_hit(
+            &mut empty,
+            Somatoray::Mutation,
+            &env,
+            &mut Script::default(),
+            &mut out
+        ));
+
+        // Beta: yield 3 -> prob(100 / 9) succeeds -> +rating.
+        let mut tray = planted(&plants);
+        let mut dice = Script {
+            rolls: vec![],
+            probs: vec![true],
+        };
+        assert!(somatoray_hit(
+            &mut tray,
+            Somatoray::Yield,
+            &env,
+            &mut dice,
+            &mut out
+        ));
+        assert_eq!(seed(&tray).yield_, 4.0);
+        // The roll fails: nothing.
+        somatoray_hit(
+            &mut tray,
+            Somatoray::Yield,
+            &env,
+            &mut Script::default(),
+            &mut out,
+        );
+        assert_eq!(seed(&tray).yield_, 4.0);
+
+        // Alpha: `mutate()` with its ±2 lifespan; rand(-2, 2) rolls the highest first.
+        let mut tray = planted(&plants);
+        let mut dice = Script {
+            rolls: vec![2],
+            probs: vec![],
+        };
+        somatoray_hit(&mut tray, Somatoray::Mutation, &env, &mut dice, &mut out);
+        assert_eq!(seed(&tray).lifespan, 27.0);
+
+        // Gamma: into the mutatelist, the instability halved first (25 -> 12.5, then the
+        // fresh blue tomato's own 25).
+        let mut tray = planted(&plants);
+        let mut out = CycleOutcome::default();
+        somatoray_hit(
+            &mut tray,
+            Somatoray::Evolution,
+            &env,
+            &mut Script::default(),
+            &mut out,
+        );
+        assert_eq!(seed(&tray).path, "/obj/item/seeds/tomato/blue");
+        assert!(out.messages[0].contains("suddenly mutates into Blue-Tomato Plants"));
     }
 
     #[test]

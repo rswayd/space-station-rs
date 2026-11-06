@@ -42,7 +42,7 @@ Ctrl+клик по закреплённому и запитанному лотк
 Снаряд флора-гана при попадании в лоток мутирует растение или меняет урожай/потенцию в зависимости от режима.
 
 - **Код:** [`bullet_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L267)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ готово — `crates/ss13_game/src/botany/tray.rs` (`somatoray_hit`), `crates/ss13_game/src/botany/mod.rs` (`bullet_act`, вызывается из `crates/ss13_game/src/projectile.rs`): альфа-луч — `mutate()`, бета — +`rating` урожая с шансом `100 / yield²` (`/obj/item/seeds/bullet_act`), гамма — нестабильность пополам и `mutatespecie()`; пустой лоток принимает выстрел как обычный объект; фиксация мутации флора-ганом (клик ружьём по лотку) — в «Посадка, полив и взаимодействие с предметами»
 
 ### Опыление
 Соседние лотки в радиусе 1 обмениваются реагентными генами растений (`perform_reagent_pollination`); пчёлы из улья опыляют лотки, повышая урожай и потенцию.

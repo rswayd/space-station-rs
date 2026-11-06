@@ -865,6 +865,42 @@ pub fn grown_interaction(
             || produce::log_interaction(world, client, mob, held, target))
 }
 
+/// `/obj/machinery/hydroponics/bullet_act` of a floral somatoray shot on a planted tray. True
+/// when the shot was the tray's (`BULLET_ACT_HIT`).
+pub fn bullet_act(world: &mut World, projectile: &str, target: Entity) -> bool {
+    let Some(ray) = tray::Somatoray::of(projectile) else {
+        return false;
+    };
+    let (Some(botany), Some(chem)) = (
+        world.get_resource::<Botany>().cloned(),
+        world.get_resource::<Chem>().map(|c| c.0.clone()),
+    ) else {
+        return false;
+    };
+    let Some(mut state) = world
+        .get::<Tray>(target)
+        .filter(|t| t.myseed.is_some())
+        .cloned()
+    else {
+        return false;
+    };
+    let env = tray::CycleEnv {
+        chem: &chem,
+        plants: &botany.0,
+        lumcount: None,
+    };
+    let mut out = tray::CycleOutcome::default();
+    world.resource_scope(|_, mut rng: Mut<CombatRng>| {
+        tray::somatoray_hit(&mut state, ray, &env, &mut *rng, &mut out);
+    });
+    world.entity_mut(target).insert(state);
+    for message in &out.messages {
+        crate::chem::visible(world, target, "", message, Span::Warning);
+    }
+    refresh_tray(world, target);
+    true
+}
+
 /// An empty-hand click on a tray (`attack_hand`): harvest, remove the dead plant, or examine
 /// it. True when the click was a tray's.
 pub fn interact(
