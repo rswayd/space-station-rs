@@ -90,8 +90,8 @@ pub fn dsm_data() -> DsmBookData {
             .map(|[full_name, scan_name, desc, symptoms, id]| DsmTrauma {
                 full_name: (*full_name).to_owned(),
                 scan_name: (*scan_name).to_owned(),
-                desc: or(*desc, NO_DESC),
-                symptoms: or(*symptoms, NO_SYMPTOMS),
+                desc: or(desc, NO_DESC),
+                symptoms: or(symptoms, NO_SYMPTOMS),
                 id: (*id).to_owned(),
             })
             .collect(),
