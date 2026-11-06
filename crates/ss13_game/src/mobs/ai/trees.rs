@@ -214,6 +214,18 @@ fn generic(path: &str) -> Option<Built> {
             ],
             1.0,
         )
+    } else if is("cow/wisdom") {
+        // `farm_animals/cow/cow_wisdom.bt.json`: no food, `GLOB.wisdoms` lines.
+        selector(vec![
+            tip_reaction(),
+            par(
+                vec![
+                    random_walk(25.0),
+                    speech_loop(&crate::mobs::wisdoms::WISDOM_SPEECH),
+                ],
+                1.0,
+            ),
+        ])
     } else if is("cow") {
         // `farm_animals/cow/cow.bt.json`.
         selector(vec![

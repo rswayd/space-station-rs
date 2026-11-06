@@ -148,6 +148,10 @@ pub struct ShuttleCatalog {
     pub shuttles: Vec<(usize, PathBuf)>,
     /// `SHUTTLEPURCHASE_PURCHASED`.
     pub purchased: bool,
+    /// `SHUTTLEPURCHASE_FORCED`: an event replaced the shuttle (`crate::events::shuttle`).
+    pub forced: bool,
+    /// `SSshuttle.shuttle_insurance`, bought from the Shuttle Insurance event.
+    pub insurance: bool,
 }
 
 impl ShuttleCatalog {
@@ -193,7 +197,7 @@ impl Plugin for ShuttleCatalogPlugin {
         info!("emergency shuttle catalog: {} templates", shuttles.len());
         app.insert_resource(ShuttleCatalog {
             shuttles,
-            purchased: false,
+            ..default()
         });
     }
 }
@@ -216,6 +220,24 @@ fn load_shuttle(world: &mut World, id: &str, path: &Path) -> Option<TemplateShut
     );
     ss13_world::run_map_init(world);
     shuttle
+}
+
+/// tg `SSshuttle.action_load(template, replace = TRUE)`: the catalog shuttle `id` loaded from
+/// `path` becomes the emergency shuttle, keeping the old one's call state (mode and timer);
+/// the old one stays parked on its own level. False when the template fails to load.
+pub fn replace_emergency(world: &mut World, id: &str, path: &Path) -> bool {
+    let Some(shuttle) = load_shuttle(world, id, path) else {
+        return false;
+    };
+    let mut emergency = world.resource_mut::<EmergencyShuttle>();
+    emergency.port = shuttle.port;
+    emergency.name = shuttle.name.clone();
+    emergency.away = shuttle.away;
+    emergency.transit = shuttle.transit;
+    emergency.centcom_z = shuttle.level_z;
+    emergency.transit_z = shuttle.transit_z;
+    emergency.sound_played = false;
+    true
 }
 
 /// tg `can_buy_shuttles(user)`: `TRUE`, `FALSE` or the reason it is refused.
@@ -250,6 +272,11 @@ pub fn can_buy_shuttles(
     }
     if catalog.purchased {
         return BuyStatus::Refused("A replacement shuttle has already been purchased.");
+    }
+    if catalog.forced {
+        return BuyStatus::Refused(
+            "Due to unforseen circumstances, shuttle purchasing is no longer available.",
+        );
     }
     BuyStatus::Yes
 }
@@ -333,7 +360,7 @@ pub fn purchase(
         return;
     }
     world.resource_mut::<ShuttleCatalog>().purchased = true;
-    let Some(shuttle) = load_shuttle(world, entry.id, &path) else {
+    if !replace_emergency(world, entry.id, &path) {
         // tg `action_load` failing: the purchase did not happen.
         if let Some(mut economy) = world.get_resource_mut::<Economy>()
             && let Some(account) = economy.department_mut(ACCOUNT_CAR)
@@ -343,16 +370,6 @@ pub fn purchase(
         world.resource_mut::<ShuttleCatalog>().purchased = false;
         tell(world, client, Span::Warning, "Shuttle purchase failed.");
         return;
-    };
-    {
-        let mut emergency = world.resource_mut::<EmergencyShuttle>();
-        emergency.port = shuttle.port;
-        emergency.name = shuttle.name.clone();
-        emergency.away = shuttle.away;
-        emergency.transit = shuttle.transit;
-        emergency.centcom_z = shuttle.level_z;
-        emergency.transit_z = shuttle.transit_z;
-        emergency.sound_played = false;
     }
     let real_name = world
         .get::<Name>(actor)
@@ -398,7 +415,7 @@ mod tests {
     fn catalog() -> ShuttleCatalog {
         ShuttleCatalog {
             shuttles: vec![(4, PathBuf::from("emergency_box.dmm"))],
-            purchased: false,
+            ..default()
         }
     }
 
@@ -435,6 +452,14 @@ mod tests {
         };
         assert!(matches!(
             can_buy_shuttles(Some(&bought), idle, &captain, false),
+            BuyStatus::Refused(_)
+        ));
+        let forced = ShuttleCatalog {
+            forced: true,
+            ..catalog()
+        };
+        assert!(matches!(
+            can_buy_shuttles(Some(&forced), idle, &captain, false),
             BuyStatus::Refused(_)
         ));
         let offers = offers(&c, &captain);

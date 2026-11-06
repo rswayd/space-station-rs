@@ -227,6 +227,9 @@ fn attacked_by_humans(
                 if mob_stat == Stat::Dead {
                     continue;
                 }
+                if mob_stat == Stat::Conscious && super::farm::wisdom_touch(world, user, mob) {
+                    continue;
+                }
                 let (cont, simple) = (&def.response_help_continuous, &def.response_help_simple);
                 send_seen(
                     world,

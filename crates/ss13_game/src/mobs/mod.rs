@@ -33,6 +33,7 @@ pub mod parrot;
 pub mod pets;
 pub mod ranged;
 pub mod spawn;
+pub mod wisdoms;
 
 use std::collections::HashMap;
 use std::sync::Arc;

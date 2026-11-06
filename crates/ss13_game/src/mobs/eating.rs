@@ -94,6 +94,10 @@ static SNAIL: Eating = Eating {
 /// The `basic_eating` of mob type `path` (cows and snakes through `tameable`).
 pub fn eating_of(path: &str) -> Option<&'static Eating> {
     let under = |root: &str| ss13_mapload::fidelity::is_under(path, root);
+    // The wisdom cow's `setup_eating` does nothing.
+    if under(super::farm::WISDOM_COW) {
+        return None;
+    }
     let table: [(&str, &'static Eating); 9] = [
         ("/mob/living/basic/lizard/big", &BIG_LIZARD),
         ("/mob/living/basic/lizard", &LIZARD),

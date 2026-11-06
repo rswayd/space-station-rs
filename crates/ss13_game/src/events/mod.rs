@@ -14,6 +14,9 @@
 //! - Health: [`disease_outbreak`] (`crate::medical::diseases`), [`fake_virus`],
 //!   [`heart_attack`] (`crate::medical::organs`), [`brain_trauma`]
 //!   (`crate::medical::traumas`).
+//! - [`shuttle`]: Shuttle Catastrophe and Shuttle Insurance (`crate::shuttle_catalog`).
+//! - [`wisdom_cow`]: a wisdom cow (`crate::mobs::farm`); [`nightshift`]: the station's APCs'
+//!   night shift (`crate::power::set_nightshift`).
 //! - [`wizard`]: Summon Events' wizard events, only in wizard mode or forced.
 //! - [`holidays`]: the holiday calendar (`check_holidays`) and the round start greetings;
 //!   [`holiday_events`] spawn only on their holiday.
@@ -43,12 +46,15 @@ pub mod market_crash;
 pub mod mass_hallucination;
 pub mod meteors;
 pub mod mice_migration;
+pub mod nightshift;
 pub mod processor_overload;
 pub mod radiation_leak;
 pub mod radiation_storm;
+pub mod shuttle;
 pub mod stray_cargo;
 pub mod supermatter_surge;
 pub mod vent_clog;
+pub mod wisdom_cow;
 pub mod wizard;
 pub mod wormholes;
 
@@ -200,6 +206,21 @@ pub fn controls() -> Vec<EventControl> {
             brand_intelligence::make,
         ),
         c(market_crash::NAME, 10, 20.0, 0, 20, market_crash::make),
+        needs(
+            shuttle::catastrophe_available,
+            c(
+                shuttle::CATASTROPHE,
+                10,
+                20.0,
+                0,
+                1,
+                shuttle::make_catastrophe,
+            ),
+        ),
+        needs(
+            shuttle::insurance_available,
+            c(shuttle::INSURANCE, 10, 20.0, 0, 1, shuttle::make_insurance),
+        ),
         c(carp_migration::NAME, 15, 10.0, 12, 6, carp_migration::make),
         unfakeable(c(false_alarm::NAME, 20, 20.0, 0, 5, false_alarm::make)),
         c(meteors::WAVE_NORMAL, 4, 25.0, 15, 3, meteors::make_normal),
@@ -326,6 +347,9 @@ pub fn controls() -> Vec<EventControl> {
             ),
         ),
         c(fake_virus::NAME, 20, 20.0, 0, 20, fake_virus::make),
+        c(wisdom_cow::NAME, 20, 20.0, 0, 1, wisdom_cow::make),
+        // `max_occurrences = 0` without `ENABLE_NIGHT_SHIFTS` (off in BandaStation's config).
+        unfakeable(c(nightshift::NAME, 2, 0.5, 0, 0, nightshift::make)),
         needs(
             heart_attack::has_candidates,
             c(heart_attack::NAME, 20, 20.0, 40, 2, heart_attack::make),

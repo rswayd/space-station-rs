@@ -749,12 +749,21 @@ fn console_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed<CommsCo
                 if !state.authenticated(silicon) {
                     continue;
                 }
-                let mut console = world.get_mut::<CommsConsole>(console).expect("read");
-                if let Some(m) = console.messages.get_mut(message - 1)
-                    && m.answered == 0
-                    && (answer as usize) <= m.possible_answers.len()
-                {
-                    m.answered = answer;
+                let answered = {
+                    let mut console = world.get_mut::<CommsConsole>(console).expect("read");
+                    match console.messages.get_mut(message - 1) {
+                        Some(m)
+                            if m.answered == 0 && (answer as usize) <= m.possible_answers.len() =>
+                        {
+                            m.answered = answer;
+                            Some((m.title.clone(), m.content.clone()))
+                        }
+                        _ => None,
+                    }
+                };
+                // tg `answer_callback.InvokeAsync()`.
+                if let Some((title, content)) = answered {
+                    crate::announce::message_answered(world, &title, &content, answer);
                 }
             }
             CommsAct::DeleteMessage(message) => {
