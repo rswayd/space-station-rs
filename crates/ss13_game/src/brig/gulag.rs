@@ -30,6 +30,7 @@ use ss13_mapload::fidelity::is_under;
 use ss13_mapload::{DmItem, DmName};
 use ss13_net::server::Networked;
 use ss13_shared::chat::Span;
+use ss13_shared::protocol::InventorySlot;
 use ss13_shared::{Dir, TilePos};
 use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiActed, UiParams, UiReject, UiSystems};
 
@@ -37,7 +38,7 @@ use super::prisoner::{PrisonerCard, PrisonerConsole, id_eject, id_insert};
 use super::*;
 use crate::closets::{ClosetRelayMove, InCloset};
 use crate::health::{Health, Stat};
-use crate::inventory::{ALL_SLOTS, CarriedBy, IdCard, IdCards, Inventory, InventorySlot};
+use crate::inventory::{ALL_SLOTS, CarriedBy, IdCard, IdCards, Inventory};
 use crate::medical::pods::{Pod, close_pod, occupant, open_pod, operational, panel_open};
 use crate::sound::{PlaySound, playsound};
 use crate::storage::StoredIn;
