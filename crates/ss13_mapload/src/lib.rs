@@ -115,7 +115,7 @@ pub use radio::DmRadio;
 pub use reagents::DmReagents;
 pub use security::{DmBaton, DmHandcuffs};
 pub use service::DmService;
-pub use silicon::{DmCamera, DmCameraConsole};
+pub use silicon::{DmAiSlipper, DmCamera, DmCameraConsole};
 pub use smartfridge::DmSmartFridge;
 pub use smooth::DmSmooth;
 pub use spawner::{DmSpawner, LootEntry};
@@ -352,6 +352,7 @@ impl Plugin for DmProtoPlugin {
             .register_proto_component::<DmRadio>("dm_radio")
             .register_proto_component::<DmCamera>("dm_camera")
             .register_proto_component::<DmCameraConsole>("dm_camera_console")
+            .register_proto_component::<DmAiSlipper>("dm_ai_slipper")
             .register_proto_component::<DmLook>("dm_look")
             .register_proto_component::<DmCable>("dm_cable")
             .register_proto_component::<DmClothing>("dm_clothing")

@@ -111,6 +111,11 @@ const TYPES: &str = r##"{
     "/obj/machinery/ai_law_rack/base": { "parent": "/obj/machinery/ai_law_rack" },
     "/obj/machinery/ai_law_rack/base/core": { "parent": "/obj/machinery/ai_law_rack/base",
         "declared_vars": { "name": "core module rack" } },
+    "/obj/machinery/holopad": { "parent": "/obj/machinery", "declared_vars": {
+        "name": "holopad", "icon": { "resource": "floor.dmi" }, "icon_state": "holopad0" } },
+    "/obj/machinery/ai_slipper": { "parent": "/obj/machinery", "declared_vars": {
+        "name": "foam dispenser", "icon": { "resource": "tool.dmi" },
+        "icon_state": "ai-slipper0", "uses": 20 } },
     "/obj/machinery/recharge_station": { "parent": "/obj/machinery", "declared_vars": {
         "name": "recharging station", "icon": { "resource": "borg_charger.dmi" },
         "icon_state": "borgcharger0" } },
@@ -231,6 +236,31 @@ wwwwwwwwwww
 "}
 "##;
 const RACK_POS: TilePos = TilePos::new(2, 2, 1);
+
+/// [`MAP`] with a foam dispenser `F` (2,2) of 3 uses and a holopad `H` (3,2) in room 1, which
+/// the camera sees.
+const MAP_HOLO: &str = r##""w" = (/turf/closed/wall,/area/station)
+"f" = (/turf/open/floor,/area/station)
+"s" = (/obj/effect/landmark/start/assistant,/turf/open/floor,/area/station)
+"1" = (/obj/machinery/camera{c_tag = "Room One"},/turf/open/floor,/area/station)
+"c" = (/obj/machinery/computer/security,/turf/open/floor,/area/station)
+"D" = (/obj/machinery/door/airlock,/turf/open/floor,/area/station)
+"E" = (/obj/machinery/door/airlock,/turf/open/floor,/area/station)
+"A" = (/obj/effect/landmark/start/ai,/turf/open/floor,/area/station)
+"R" = (/obj/machinery/recharge_station,/turf/open/floor,/area/station)
+"F" = (/obj/machinery/ai_slipper{uses = 3},/turf/open/floor,/area/station)
+"H" = (/obj/machinery/holopad,/turf/open/floor,/area/station)
+
+(1,1,1) = {"
+wwwwwwwwwww
+w1cwfffwffw
+wsfDfAfEffw
+wFHwfRfwffw
+wwwwwwwwwww
+"}
+"##;
+const SLIPPER_POS: TilePos = TilePos::new(2, 2, 1);
+const PAD_POS: TilePos = TilePos::new(3, 2, 1);
 
 const SPAWN: TilePos = TilePos::new(2, 3, 1);
 const CAMERA: TilePos = TilePos::new(2, 4, 1);
@@ -378,6 +408,65 @@ fn record_chat(mut chat: MessageReader<ChatReceived>, mut heard: ResMut<Heard>) 
     }
 }
 
+/// The AI's right click on a holopad the camera sees projects its hologram there and moves the
+/// eye onto the pad; the hologram follows the eye within the pad's range and goes, with the
+/// eye's camera-only senses back, once the eye leaves it. The foam dispenser keeps its map's
+/// `uses`, spends one per activation and refuses during its 10 s cooldown.
+#[test]
+fn ai_hologram_and_foam_dispenser() {
+    use ss13_chat::server::MaskedSenses;
+    use ss13_game::silicon::ai_slipper::{AiSlipper, interact};
+    use ss13_game::silicon::holopad::{HoloProjection, Hologram, Holopad};
+    let mut s = Station::start_on("ai_hologram_and_foam_dispenser", MAP_HOLO, 1, false);
+    let core = s.join("AI");
+    let slipper = s.find::<AiSlipper>(SLIPPER_POS);
+    assert_eq!(s.get::<AiSlipper>(slipper).uses, 3);
+    let (link, eye) = (s.link(), s.mob());
+    assert!(interact(s.server.world_mut(), link, eye, slipper));
+    let used = *s.get::<AiSlipper>(slipper);
+    assert_eq!(used.uses, 2);
+    assert!(used.ready_at > s.now());
+    // Cooling down: refused, nothing spent.
+    assert!(interact(s.server.world_mut(), link, eye, slipper));
+    assert_eq!(s.get::<AiSlipper>(slipper).uses, 2);
+
+    let pad = s.find::<Holopad>(PAD_POS);
+    s.run_until("the camera view arrives", |s| {
+        s.window::<CameraViewUi>().is_some()
+    });
+    for _ in 0..3 {
+        s.step_dir(Dir::West);
+    }
+    s.run_until("the eye is in room 1", |s| s.pos().x == 3);
+    s.click(pad, RIGHT);
+    s.run_until("the hologram is projected", |s| {
+        s.try_get::<HoloProjection>(core).is_some()
+    });
+    let hologram = s.get::<HoloProjection>(core).hologram;
+    assert_eq!(s.get::<HoloProjection>(core).pad, pad);
+    assert_eq!(s.get::<Hologram>(hologram).ai, core);
+    assert_eq!(*s.get::<TilePos>(hologram), PAD_POS);
+    assert!(s.get::<Name>(hologram).as_str().ends_with(" (Hologram)"));
+    assert_eq!(s.pos(), PAD_POS);
+    assert!(s.try_get::<MaskedSenses>(eye).is_none());
+    // Within range: the hologram follows the eye.
+    let north = TilePos::new(3, 3, 1);
+    s.server.world_mut().entity_mut(eye).insert(north);
+    s.run_until("the hologram follows", |s| {
+        s.try_get::<TilePos>(hologram) == Some(&north)
+    });
+    // Out of range of every pad: gone.
+    s.server
+        .world_mut()
+        .entity_mut(eye)
+        .insert(TilePos::new(9, 3, 1));
+    s.run_until("the hologram is removed", |s| {
+        s.try_get::<HoloProjection>(core).is_none()
+    });
+    assert!(s.server.world().get_entity(hologram).is_err());
+    assert!(s.try_get::<MaskedSenses>(eye).is_some());
+}
+
 struct Station(testing::Station);
 
 ss13_game::drive_station!(Station, 0);
@@ -501,6 +590,14 @@ const PLAIN: ClickModifiers = ClickModifiers {
     alt: false,
     middle: false,
     right: false,
+    pixel: None,
+};
+const RIGHT: ClickModifiers = ClickModifiers {
+    shift: false,
+    ctrl: false,
+    alt: false,
+    middle: false,
+    right: true,
     pixel: None,
 };
 const CTRL: ClickModifiers = ClickModifiers {

@@ -37,6 +37,9 @@ pub const AI_EYE_TYPE: &str = "/mob/eye/camera/ai";
 pub const ROBOT_CELL: &str = "/obj/item/stock_parts/power_store/cell/high";
 const CAMERA: &str = "dm_camera";
 const CONSOLE: &str = "dm_camera_console";
+/// `/obj/machinery/ai_slipper`: the AI's foam dispenser.
+pub const AI_SLIPPER_ROOT: &str = "/obj/machinery/ai_slipper";
+const SLIPPER: &str = "dm_ai_slipper";
 
 /// Spawned at runtime by camera construction (`ss13_game::defenses::cameras`): the frame a
 /// camera assembly puts on a wall, the assembly a camera comes apart into, its cable.
@@ -84,6 +87,12 @@ pub struct DmCamera {
     pub network: Vec<String>,
     pub view_range: f64,
     pub camera_enabled: bool,
+}
+
+/// `uses` of a foam dispenser (`code/game/machinery/ai_slipper.dm`), with map edits.
+#[derive(Component, Reflect, Default, Clone, Debug, PartialEq)]
+pub struct DmAiSlipper {
+    pub uses: f64,
 }
 
 /// `network` of a camera console.
@@ -372,12 +381,23 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
             "network",
             list_ron(&list(types.resolved(path, "network"))),
         ));
+    } else if is_under(path, AI_SLIPPER_ROOT) {
+        let uses = num(types.resolved(path, "uses")).unwrap_or(20.0);
+        out.push(ext(SLIPPER, "uses", format!("{uses:?}")));
     }
     out
 }
 
-/// `.dmm` edits of `c_tag`, `network` and `view_range` on cameras, `network` on consoles.
+/// `.dmm` edits of `c_tag`, `network` and `view_range` on cameras, `network` on consoles,
+/// `uses` on foam dispensers.
 pub fn field_dmm(path: &str, var: &str, value: &DmValue) -> Option<Result<Field, Skip>> {
+    if is_under(path, AI_SLIPPER_ROOT) {
+        return match (var, value) {
+            ("uses", DmValue::Number(n)) => Some(Ok(ext(SLIPPER, "uses", format!("{n:?}")))),
+            ("uses", _) => Some(Err(Skip::Unsupported)),
+            _ => None,
+        };
+    }
     let camera = is_under(path, CAMERA_ROOT);
     let component = if camera {
         CAMERA
@@ -523,5 +543,13 @@ mod tests {
         );
         assert_eq!(field_dmm("/obj/item/pen", "c_tag", &DmValue::Null), None);
         assert_eq!(field_dmm(p, "dir", &DmValue::Number(1.0)), None);
+        assert_eq!(
+            field_dmm(AI_SLIPPER_ROOT, "uses", &DmValue::Number(10.0)),
+            Some(Ok(ext(SLIPPER, "uses", "10.0")))
+        );
+        assert_eq!(
+            field_dmm(AI_SLIPPER_ROOT, "dir", &DmValue::Number(1.0)),
+            None
+        );
     }
 }

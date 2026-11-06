@@ -15,7 +15,8 @@
 //! - [`malf`] (server): the malfunctioning AI, its APC hacks and shunting; [`malf_modules`]
 //!   (server): its module picker and modules;
 //! - [`ai_core`] (server): the AI core structure, its construction around a brain processor;
-//!   [`aicard`] (server): the intelliCard;
+//!   [`aicard`] (server): the intelliCard; [`ai_slipper`] (server): the foam dispenser;
+//!   [`holopad`] (server): holopads, the AI's hologram;
 //! - [`interact`] (server): silicons opening machine windows (`attack_ai`), their window
 //!   status; [`airlock`] (server): the airlock's `AiAirlock` window;
 //! - [`ui`]: the windows' data both halves share; [`client`] (client) draws the camera view's
@@ -40,6 +41,8 @@ pub mod ai_hud;
 #[cfg(feature = "server")]
 pub mod ai_power;
 #[cfg(feature = "server")]
+pub mod ai_slipper;
+#[cfg(feature = "server")]
 pub mod ai_track;
 #[cfg(feature = "server")]
 pub mod aicard;
@@ -57,6 +60,8 @@ pub mod chassis;
 pub mod client;
 #[cfg(feature = "server")]
 pub mod cyborg;
+#[cfg(feature = "server")]
+pub mod holopad;
 #[cfg(feature = "server")]
 pub mod interact;
 #[cfg(feature = "server")]
@@ -127,7 +132,12 @@ mod server {
                     super::malf::MalfPlugin,
                     super::mmi::MmiPlugin,
                 ))
-                .add_plugins((super::ai_core::AiCorePlugin, super::aicard::AiCardPlugin))
+                .add_plugins((
+                    super::ai_core::AiCorePlugin,
+                    super::aicard::AiCardPlugin,
+                    super::ai_slipper::AiSlipperPlugin,
+                    super::holopad::HolopadPlugin,
+                ))
                 .add_systems(PreStartup, load_data)
                 .add_systems(
                     Update,

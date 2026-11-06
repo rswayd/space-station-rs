@@ -150,6 +150,7 @@
 //! | 3459 | `cargo::express::interact` |
 //! | 3461 | `cargo::materials_market::interact` |
 //! | 3462 | `papershredder::empty_hand` (right click) |
+//! | 3463 | `silicon::ai_slipper::interact` |
 //!
 //! [`ClickPhase::HeldOnTarget`] (a world click with the active hand's item; tg
 //! `item_interaction`, `interact_with_atom`, `pre_attack`, `attackby`):

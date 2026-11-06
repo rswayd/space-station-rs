@@ -14,14 +14,14 @@
 //!   (5 oxygen damage every 0.5 s until it dies, after a "Yes"; again stops it), switch its
 //!   wireless and its radio. The card shows the AI's face and an on/off light.
 // shortcut: the menu is a list prompt instead of the `Intellicard` window (laws are not shown);
-// no intelliTater or intelliLantern looks, no card name with the AI's, no light; a destroyed card
+// no intelliTater or intelliLantern looks, no light; a destroyed card
 // kills its AI and ghosts its player (tg deletes it); no transfers into mechs, MODsuits or the AI fixer;
 // no `can_be_carded` (doomsday); messages are chat lines (tg balloon alerts).
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
 use ss13_chat::server::MaskedSenses;
-use ss13_mapload::{DmItem, IconIndex};
+use ss13_mapload::{DmItem, DmName, IconIndex};
 use ss13_shared::chat::Span;
 use ss13_shared::{Appearance, Overlay, TilePos};
 use ss13_tgui::prompt::{Ask, PromptAnswer, PromptAnswered, PromptKind, PromptSystems};
@@ -723,9 +723,28 @@ fn card_removed(
     });
 }
 
-/// tg `update_overlays`: the AI's face (`ai`, dead `ai_dead`) and the wireless light.
+/// tg `update_name` ("<initial name> - <AI>") and `update_overlays`: the AI's face (`ai`, dead
+/// `ai_dead`) and the wireless light.
 fn refresh_look(world: &mut World, card: Entity) {
     let ai = world.get::<IntelliCard>(card).and_then(|c| c.ai);
+    let initial = world.get::<DmItem>(card).and_then(|i| {
+        world
+            .get_resource::<ss13_proto::Prototypes>()?
+            .get(&i.path)?
+            .get::<DmName>()
+            .map(|n| n.name.clone())
+    });
+    if let Some(initial) = initial {
+        let name = match ai.and_then(|a| world.get::<Name>(a)) {
+            Some(ai_name) => format!("{initial} - {}", ai_name.as_str()),
+            None => initial,
+        };
+        if let Some(mut n) = world.get_mut::<DmName>(card)
+            && n.name != name
+        {
+            n.name = name;
+        }
+    }
     let states: Vec<&str> = match ai {
         None => Vec::new(),
         Some(ai) => {
