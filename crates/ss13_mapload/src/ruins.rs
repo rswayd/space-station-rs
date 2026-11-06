@@ -210,7 +210,7 @@ pub fn read_lavaland(source: &Path, seed: u64, known: impl Fn(&str) -> bool) -> 
                 .flat_map(|p| &p.objects)
                 .map(|o| o.path.as_str())
                 .filter(|p| *p != TURF_NOOP && *p != AREA_NOOP)
-                .find(|p| !known(*p));
+                .find(|p| !known(p));
             if let Some(path) = unknown {
                 bevy::log::warn!("ruin {}: no prototype for {path}, not placed", def.suffix);
                 return None;

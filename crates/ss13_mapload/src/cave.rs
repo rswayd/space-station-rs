@@ -232,7 +232,7 @@ fn dir_to(from: (i64, i64), to: (i64, i64)) -> usize {
 /// while), skipping over tiles outside the whitelist, every step spreading (`Spread(25, 11)`).
 /// The mapped waypoint landmarks are removed. Returns the number of river tiles.
 pub fn spawn_rivers(map: &mut DmmMap, seed: u64, nodes: usize, turf: &str, area: &str) -> usize {
-    let mut rng = Rng::new(seed ^ 0x5249_5645_52);
+    let mut rng = Rng::new(seed ^ 0x0052_4956_4552);
     let (sx, sy, sz) = map.size;
     let mut changed = 0;
     // The mapped waypoints, then the landmarks come off their prefabs.
