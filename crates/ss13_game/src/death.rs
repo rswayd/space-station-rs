@@ -105,9 +105,9 @@ fn track_death(
     for (mob, stat, dated, alerts) in &mut mobs {
         let dead = *stat == Stat::Dead;
         if dead && !dated {
-            commands.entity(mob).insert(TimeOfDeath(now));
+            commands.entity(mob).try_insert(TimeOfDeath(now));
         } else if !dead && dated {
-            commands.entity(mob).remove::<TimeOfDeath>();
+            commands.entity(mob).try_remove::<TimeOfDeath>();
         }
         if let Some(mut alerts) = alerts {
             let shown = alerts.get(AlertCategory::Succumb).is_some();
@@ -348,13 +348,22 @@ mod tests {
 
         let mut world = World::new();
         let dead = world
-            .spawn((burnt(200.0), Stat::Dead, HumanLook::random(1)))
+            .spawn((burnt(200.0), Stat::Dead, HumanLook::random_assistant(1)))
             .id();
         let alive = world
-            .spawn((burnt(200.0), Stat::Conscious, HumanLook::random(2)))
+            .spawn((
+                burnt(200.0),
+                Stat::Conscious,
+                HumanLook::random_assistant(2),
+            ))
             .id();
         let faking = world
-            .spawn((burnt(200.0), Stat::Dead, DeathComa, HumanLook::random(3)))
+            .spawn((
+                burnt(200.0),
+                Stat::Dead,
+                DeathComa,
+                HumanLook::random_assistant(3),
+            ))
             .id();
         world.run_system_once(burn_husk).unwrap();
         assert!(world.get::<Husk>(dead).is_some());
@@ -366,7 +375,7 @@ mod tests {
     #[test]
     fn cure_takes_only_its_own_source() {
         let mut world = World::new();
-        let burnt = world.spawn(HumanLook::random(1)).id();
+        let burnt = world.spawn(HumanLook::random_assistant(1)).id();
         assert!(become_husk(&mut world, burnt));
         assert_eq!(world.get::<BurnHusk>(burnt), Some(&BurnHusk { only: true }));
         assert!(cure_husk(&mut world, burnt, true));
@@ -374,7 +383,7 @@ mod tests {
         assert!(!world.get::<HumanLook>(burnt).unwrap().husk);
 
         // A drained husk (changeling) stays one when its burns are cured.
-        let mut look = HumanLook::random(2);
+        let mut look = HumanLook::random_assistant(2);
         look.husk = true;
         let drained = world.spawn((look, Husk)).id();
         assert!(become_husk(&mut world, drained));

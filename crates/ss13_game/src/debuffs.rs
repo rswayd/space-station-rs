@@ -511,8 +511,10 @@ mod tests {
     fn tox_vomit_needs_both_toxins_and_food() {
         let hungry = crate::hunger::Hunger::new(10.0);
         let fed = crate::hunger::Hunger::new(300.0);
-        let mut health = Health::default();
-        health.tox = 46.0;
+        let mut health = Health {
+            tox: 46.0,
+            ..Health::default()
+        };
         assert!(at_tox_vomit_threshold(&health, &fed));
         assert!(!at_tox_vomit_threshold(&health, &hungry));
         health.tox = 45.0;

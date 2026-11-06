@@ -590,7 +590,16 @@ mod tests {
         };
         let report = text(&roundend_report(&mut world, RoundEnd::default()));
         assert_eq!(report.len(), 3);
-        assert_eq!(report[1], "Аня and Боря had a successful date!");
+        // Query order decides which of the pair is named first.
+        assert!(
+            [
+                "Аня and Боря had a successful date!",
+                "Боря and Аня had a successful date!"
+            ]
+            .contains(&report[1].as_str()),
+            "{}",
+            report[1]
+        );
         assert_eq!(report[2], "Вася was a third wheel, but protected Аня!");
         world.entity_mut(b).insert(Stat::Dead);
         let report = text(&roundend_report(&mut world, RoundEnd::default()));

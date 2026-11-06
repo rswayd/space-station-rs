@@ -272,8 +272,12 @@ const AI_START: TilePos = TilePos::new(6, 3, 1);
 const ITEM_BEHIND_DOOR: TilePos = TilePos::new(5, 3, 1);
 const STATION: TilePos = TilePos::new(6, 2, 1);
 
-const STATES: [(&str, &str); 22] = [
+const STATES: [(&str, &str); 26] = [
     ("apc.dmi", "apc0"),
+    ("floor.dmi", "holopad0"),
+    ("floor.dmi", "holopad1"),
+    ("tool.dmi", "ai-slipper0"),
+    ("tool.dmi", "ai-slipper1"),
     ("ai.dmi", "build_0"),
     ("t.dmi", "floor"),
     ("t.dmi", "wall"),
@@ -305,6 +309,8 @@ fn fixture_assets_on(test: &str, map: &str) -> PathBuf {
         "/obj/effect/landmark/start/assistant",
         "/obj/effect/landmark/start/ai",
         "/obj/machinery/camera",
+        "/obj/machinery/holopad",
+        "/obj/machinery/ai_slipper",
         "/obj/machinery/computer/security",
         "/obj/machinery/computer/station_alert",
         "/obj/machinery/recharge_station",

@@ -213,7 +213,7 @@ const fn item(
 }
 
 /// The book's entries (`subtypesof(/datum/spellbook_entry)` that are ported), tg's order.
-pub const ENTRIES: [EntryDef; 22] = [
+pub const ENTRIES: [EntryDef; 23] = [
     spell(
         "/datum/spellbook_entry/fireball",
         "Fireball",
