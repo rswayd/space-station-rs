@@ -7,7 +7,7 @@
 
 - **Код:** [`SUBSYSTEM_DEF(events)`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/events.dm#L1), [`proc/spawnEvent()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/events.dm#L105), [`proc/reschedule()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/events.dm#L96)
 - **BandaStation:** [`code/controllers/subsystem/events.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/events.dm#L214) — праздничное переименование станции пропускается, если у карты задан `fluff_name` (Station Fluff)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/events/controller.rs`: раз в 2 с (раунд идёт) по `scheduled` выбор по весам (`pick_weight`) среди событий, прошедших `can_spawn_event` (`earliest_start`, `min_players`, `max_occurrences`, эвакуация), перенос на `rand(1500, 4200)` дс (конфиг BandaStation), 20 с админского окна с повторной проверкой и перевыбором; в пуле только портированные события (`crates/ss13_game/src/events/mod.rs` `controls()`). Нет: учёта AFK, праздников и мага, `events.json` (у BandaStation `EVENTS_CONFIG_ENABLED` выключен), админской отмены/перевыбора в окне
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/events/controller.rs`: раз в 2 с (раунд идёт) по `scheduled` выбор по весам (`pick_weight`) среди событий, прошедших `can_spawn_event` (`earliest_start`, `min_players`, `max_occurrences`, эвакуация), перенос на `rand(1500, 4200)` дс (конфиг BandaStation), 20 с админского окна с повторной проверкой и перевыбором; в пуле только портированные события (`crates/ss13_game/src/events/mod.rs` `controls()`). Нет: учёта AFK, `events.json` (у BandaStation `EVENTS_CONFIG_ENABLED` выключен), админской отмены/перевыбора в окне
 
 ### Контроллер и жизненный цикл события
 `/datum/round_event_control` описывает событие (вес, категория, ограничения, описание для админов), `/datum/round_event` — запущенный экземпляр: `setup()`, `announce()`, `start()`, `tick()` каждую секунду до `end_when`, `end()`. Объявление может приходить с задержкой `announce_when` и с шансом `announce_chance`, призраки получают уведомление с точкой интереса.
@@ -31,11 +31,11 @@
 Заклинание мага переключает SSevents на пул волшебных событий (`EVENT_CATEGORY_WIZARD`) с повышенной частотой; повторный вызов увеличивает частоту.
 
 - **Код:** [`proc/toggleWizardmode()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/events.dm#L143), [`/datum/round_event_control/wizard`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/_event.dm#L67)
-- **Статус в ss13-rs:** ❌ нет — нет событий и мага
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/events/controller.rs` `summon_events` (ритуал Summon Events в книге мага, `crates/ss13_game/src/antag/wizard/server.rs`): первый вызов — частота 1–5 минут и `wizardmode`, повторный — верхняя граница −1 минута (не ниже нижней), перенос следующего события; `can_spawn` пропускает только события своего режима
 
 ### Праздничные события
 События с `holidayID` выпадают только в соответствующий праздник (`check_holidays`, включается конфигом `ALLOW_HOLIDAYS`); праздники заданы датумами `/datum/holiday`.
 
 - **Код:** [`proc/check_holidays()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/events.dm#L175), [`/datum/holiday`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/holiday/holidays.dm#L4)
 - **BandaStation:** [`modular_bandastation/balance/code/events.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/balance/code/events.dm#L18) — Pride Week никогда не наступает
-- **Статус в ss13-rs:** ❌ нет — нет календаря праздников и событий
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/events/holidays.rs` (календарь, `check_holidays`, `HolidaysConfig`: `SS13_HOLIDAYS=0`, `SS13_HOLIDAY_DATE` в debug), `crates/ss13_game/src/events/controller.rs`: `EventControl::holiday` исключает событие вне праздника (`refresh_availability`), отрицательный вес запускает событие при выборе в обход ростера (`spawn_event`), в День Чернобыля вес Radiation Storm ×2 и +2 к лимиту; Pride Week не наступает (BandaStation)

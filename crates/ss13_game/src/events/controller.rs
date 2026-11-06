@@ -188,6 +188,8 @@ pub struct EventControl {
     /// `/datum/round_event_control/wizard` (`wizardevent`): only in the pool in Summon Events'
     /// wizard mode ([`Events::wizardmode`]), which keeps the other events out.
     pub wizard: bool,
+    /// tg `holidayID`: only spawns on that holiday ([`super::holidays::check_holidays`]).
+    pub holiday: Option<&'static str>,
     /// The control's own `can_spawn_event` check over the world (candidates to infect, ...);
     /// [`refresh_availability`] runs it before each roll.
     pub available: Option<fn(&mut World) -> bool>,
@@ -196,7 +198,8 @@ pub struct EventControl {
 }
 
 impl EventControl {
-    /// tg `can_spawn_event(players_amt)` (no wizard mode, holidays or ghost roles here).
+    /// tg `can_spawn_event(players_amt)` without the wizard mode, holiday and own checks
+    /// ([`Events::can_spawn`], [`refresh_availability`]; no ghost roles here).
     pub fn can_spawn(&self, players: u32, round_secs: f64, evacuated: bool) -> bool {
         self.occurrences < self.max_occurrences
             && self.earliest_start < round_secs
@@ -247,8 +250,8 @@ impl Events {
         self.scheduled = now + rng.range(config.frequency_lower, upper) as f64 / 10.0;
     }
 
-    /// The weighted roster of `spawnEvent` (weights >= 0; negative weights are round-start
-    /// holiday events, which are not ported).
+    /// The weighted roster of `spawnEvent` (weights >= 0; negative weights are the holiday
+    /// events [`spawn_event`] triggers outright).
     pub fn roster(
         &self,
         players: u32,
@@ -288,20 +291,24 @@ impl Events {
     }
 }
 
-/// Runs every control's own spawn check ([`EventControl::available`]) for the next
-/// [`Events::can_spawn`] calls.
+/// Runs every control's own spawn check ([`EventControl::available`]) and its holiday
+/// (`holidayID && !check_holidays(holidayID)`) for the next [`Events::can_spawn`] calls.
 pub fn refresh_availability(world: &mut World) {
-    let checks: Vec<(usize, fn(&mut World) -> bool)> = world
+    let checks: Vec<(usize, Option<fn(&mut World) -> bool>, Option<&'static str>)> = world
         .resource::<Events>()
         .controls
         .iter()
         .enumerate()
-        .filter_map(|(i, c)| c.available.map(|f| (i, f)))
+        .filter(|(_, c)| c.available.is_some() || c.holiday.is_some())
+        .map(|(i, c)| (i, c.available, c.holiday))
         .collect();
     let unavailable = checks
         .into_iter()
-        .filter(|&(_, check)| !check(world))
-        .map(|(i, _)| i)
+        .filter(|&(_, check, holiday)| {
+            holiday.is_some_and(|h| !super::holidays::check_holidays(world, h))
+                || check.is_some_and(|check| !check(world))
+        })
+        .map(|(i, _, _)| i)
         .collect();
     world.resource_mut::<Events>().unavailable = unavailable;
 }
@@ -338,6 +345,12 @@ pub(super) fn init_events(world: &mut World) {
     };
     events.reschedule(now, &config, &mut rng);
     world.insert_resource(EventRng(rng));
+    // tg fills the holidays before the controls are made (`radiation_storm/New`).
+    super::holidays::fill(world);
+    super::holidays::adjust_controls(
+        &mut events.controls,
+        world.resource::<super::holidays::Holidays>(),
+    );
     world.insert_resource(events);
 }
 
@@ -422,12 +435,20 @@ pub fn spawn_event(world: &mut World, excluded: Option<usize>) {
     let round = round_secs(world, now);
     let evacuated = crate::shuttle::evacuated(world);
     refresh_availability(world);
-    let roster = world
-        .resource::<Events>()
-        .roster(players, round, evacuated, excluded);
+    let events = world.resource::<Events>();
+    // `weight < 0`: the round-start holiday events, triggered whenever they can spawn.
+    let forced: Vec<usize> = (0..events.controls.len())
+        .filter(|&i| {
+            Some(i) != excluded
+                && events.controls[i].weight < 0
+                && !events.pending.iter().any(|&(c, _)| c == i)
+                && events.can_spawn(i, players, round, evacuated)
+        })
+        .collect();
+    let roster = events.roster(players, round, evacuated, excluded);
     let picked = pick_weight(&roster, &mut world.resource_mut::<EventRng>().0);
-    if let Some(control) = picked {
-        let mut events = world.resource_mut::<Events>();
+    let mut events = world.resource_mut::<Events>();
+    for control in forced.into_iter().chain(picked) {
         info!(
             "random event triggering in {ADMIN_INTERVENTION_SECS} s: {}",
             events.controls[control].name
@@ -436,6 +457,37 @@ pub fn spawn_event(world: &mut World, excluded: Option<usize>) {
             .pending
             .push((control, now + ADMIN_INTERVENTION_SECS));
     }
+}
+
+/// tg `summon_events()` (the wizard's Summon Events ritual): the first cast turns wizard mode
+/// on with events every 1 to 5 minutes, each later one takes a minute off the upper bound (not
+/// below the lower). Changes the running [`EventsConfig`], as tg changes `SSevents`' bounds.
+/// True when it intensified an active wizard mode.
+pub fn summon_events(world: &mut World) -> bool {
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    let intensify = world.resource::<Events>().wizardmode;
+    let config = {
+        let mut config = world.resource_mut::<EventsConfig>();
+        if intensify {
+            config.frequency_upper = (config.frequency_upper - 600).max(config.frequency_lower);
+        } else {
+            config.frequency_lower = 600;
+            config.frequency_upper = 3000;
+        }
+        config.clone()
+    };
+    world.resource_scope(|world, mut events: Mut<Events>| {
+        // `toggleWizardmode()`.
+        events.wizardmode = true;
+        events.reschedule(now, &config, &mut world.resource_mut::<EventRng>().0);
+    });
+    info!(
+        "Summon Events {}: events every {} to {} minutes",
+        if intensify { "intensified" } else { "enabled" },
+        config.frequency_lower as f64 / 600.0,
+        config.frequency_upper as f64 / 600.0
+    );
+    intensify
 }
 
 /// The end of `preRunEvent()`'s sleep: still allowed, it runs; otherwise another is rolled.
@@ -543,6 +595,7 @@ mod tests {
             fakeable: true,
             admin_disabled: false,
             wizard: false,
+            holiday: None,
             available: None,
             make: noop,
         }
@@ -637,6 +690,75 @@ mod tests {
         let ev = world.resource::<Events>();
         assert_eq!(ev.unavailable, vec![0]);
         assert_eq!(ev.roster(0, 1.0, false, None), vec![(1, 10)]);
+    }
+
+    #[test]
+    fn holiday_events_need_their_holiday_and_negative_weights_trigger() {
+        let mut spooky = control("spooky", -1);
+        spooky.holiday = Some(crate::events::holidays::HALLOWEEN);
+        let mut world = world(vec![spooky, control("a", 10)]);
+        world.insert_resource(crate::events::holidays::Holidays::default());
+        world.resource_mut::<Events>().scheduled = 0.0;
+        fire(&mut world);
+        let pending: Vec<usize> = world
+            .resource::<Events>()
+            .pending
+            .iter()
+            .map(|p| p.0)
+            .collect();
+        assert_eq!(pending, vec![1], "no Halloween: only the roster's pick");
+
+        let halloween = crate::events::holidays::HOLIDAYS
+            .iter()
+            .find(|h| h.name == crate::events::holidays::HALLOWEEN)
+            .unwrap();
+        world.insert_resource(crate::events::holidays::Holidays {
+            active: vec![halloween],
+            year: 2026,
+        });
+        world.resource_mut::<Events>().pending.clear();
+        world.resource_mut::<Events>().scheduled = 0.0;
+        fire(&mut world);
+        let pending: Vec<usize> = world
+            .resource::<Events>()
+            .pending
+            .iter()
+            .map(|p| p.0)
+            .collect();
+        assert_eq!(
+            pending,
+            vec![0, 1],
+            "the holiday event is triggered, never rolled"
+        );
+        assert!(
+            !world
+                .resource::<Events>()
+                .roster(0, 1.0, false, None)
+                .iter()
+                .any(|r| r.0 == 0)
+        );
+    }
+
+    #[test]
+    fn summon_events_enables_then_intensifies() {
+        let mut world = world(vec![control("a", 10)]);
+        assert!(!summon_events(&mut world));
+        assert!(world.resource::<Events>().wizardmode);
+        let c = world.resource::<EventsConfig>();
+        assert_eq!((c.frequency_lower, c.frequency_upper), (600, 3000));
+        let wait = world.resource::<Events>().scheduled;
+        assert!((60.0..=300.0).contains(&wait), "{wait}");
+        assert!(summon_events(&mut world));
+        assert_eq!(world.resource::<EventsConfig>().frequency_upper, 2400);
+        for _ in 0..5 {
+            summon_events(&mut world);
+        }
+        assert_eq!(
+            world.resource::<EventsConfig>().frequency_upper,
+            600,
+            "not below the lower bound"
+        );
+        assert!(world.resource::<Events>().wizardmode);
     }
 
     #[test]

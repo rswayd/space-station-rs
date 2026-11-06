@@ -2,7 +2,7 @@
 
 События пула мага (Summon Events, `EVENT_CATEGORY_WIZARD`, обычным планировщиком не выпадают) и события, привязанные к праздникам.
 
-В ss13-rs у контроля есть флаг `wizard`, а у планировщика — `Events::wizardmode` (`crates/ss13_game/src/events/controller.rs`): события мага катятся только в режиме мага и тогда вытесняют остальные, как в tg; сам Summon Events (запись книги заклинаний) не портирован, поэтому сейчас они запускаются только принудительно (Force Event).
+В ss13-rs у контроля есть флаг `wizard`, а у планировщика — `Events::wizardmode` (`crates/ss13_game/src/events/controller.rs`): события мага катятся только в режиме мага и тогда вытесняют остальные, как в tg; режим включает ритуал Summon Events из книги заклинаний (`summon_events`: события раз в 1–5 минут, каждое повторение снимает минуту с верхней границы). Праздничные события (`EventControl::holiday`, `crates/ss13_game/src/events/holidays.rs`) выпадают только в свой праздник; отрицательный вес запускает их при первом случайном выборе раунда.
 
 ## События мага
 
@@ -22,7 +22,7 @@ Robeless: маг (и все, у кого есть заклинания) колд
 Все люди меняются местами, внешностью и именами или разумами (массовый обмен телами).
 
 - **Код:** [`/datum/round_event_control/wizard/shuffleloc`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/wizard/shuffle.dm#L4), [`/datum/round_event_control/wizard/shufflenames`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/wizard/shuffle.dm#L41), [`/datum/round_event_control/wizard/shuffleminds`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/wizard/shuffle.dm#L74)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/events/wizard.rs`: Change Places (живые люди на станционных уровнях меняются местами, дым у каждого) и Change Faces (имена живых людей перемешиваются, дым); нет Change Minds (нет переноса разума), телепорт без проверки антимагии и запретных зон, люди в шкафах не участвуют
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/events/wizard.rs`: Change Places (живые люди на станционных уровнях меняются местами, дым у каждого), Change Faces (имена живых людей перемешиваются, дым), Change Minds (люди в сознании с разумом, кроме магов, попарно меняются разумами через `crate::medical::brainmob::possess`, дым; вес 1, до 3 раз); `// shortcut:` телепорт без проверки антимагии и запретных зон, люди в шкафах не участвуют, роли антагонистов и языки разума остаются с телом (в ss13-rs они на теле), нет `TRAIT_NO_MINDSWAP`
 
 ### Подмена личности: Mass Identity Spoof / Imposter Wizard / Race Swap
 Всех одевают магами; появляется двойник мага от призрака; все гуманоиды меняют расу на одну случайную.
@@ -58,7 +58,7 @@ Robeless: маг (и все, у кого есть заклинания) колд
 Проклятие безумия с травмами мозга по введённому магом тексту; все забывают свои языки и получают один случайный; отделы объявляют независимость (революция по отделам); все на время неуязвимы; над людьми висят RPG-титулы; фальшивая синематика ядерного взрыва.
 
 - **Код:** [`/datum/round_event_control/wizard/madness`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/wizard/madness.dm#L1), [`/datum/round_event_control/wizard/tower_of_babel`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/wizard/tower_of_babel.dm#L1), [`/datum/round_event_control/wizard/deprevolt`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/wizard/departmentrevolt.dm#L4), [`/datum/round_event_control/wizard/invincible`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/wizard/invincible.dm#L1), [`/datum/round_event_control/wizard/rpgtitles`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/wizard/rpgtitles.dm#L1), [`/datum/round_event_control/wizard/fake_explosion`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/wizard/fakeexplosion.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — нет события
+- **Статус в ss13-rs:** 🟡 частично — Tower of Babel: `crates/ss13_game/src/events/wizard.rs` (вес 3, один раз): каждый игрок-гуманоид на станционных уровнях получает один случайный язык, остальные блокируются (`LanguageSource::Babel` в `crates/ss13_chat/src/language.rs`), язык тела не ограничивает речь (`LanguageHolder::babel`, tg `TRAIT_TOWER_OF_BABEL`), антимагия разума защищает, проклятые не проклинаются повторно, настроение −1 на 15 с, бормотание и шёпот; маги получают все языки; новые члены экипажа проклинаются при входе (`TowerOfBabel`); `// shortcut:` без оповещения мёртвых, админской отмены и значка статуса, проклятие остаётся с телом. Curse of Madness, Departmental Uprising, Invincibility, RPG Titles, Fake Nuclear Explosion — нет
 
 ## Праздничные события
 
@@ -66,22 +66,22 @@ Robeless: маг (и все, у кого есть заклинания) колд
 В Рождество призрак может стать Сантой, который раздаёт подарки; станция украшается.
 
 - **Код:** [`/datum/round_event_control/santa`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/holiday/xmas.dm#L70)
-- **Статус в ss13-rs:** ❌ нет — нет праздников
+- **Статус в ss13-rs:** ❌ нет — нет опроса призраков и антагониста Санты (праздник Christmas есть: `crates/ss13_game/src/events/holidays.rs`)
 
 ### 2 SPOOKY! (Хэллоуин)
 На Хэллоуин станция украшается, появляются тыквы-метеоры и хэллоуинские мелочи.
 
 - **Код:** [`/datum/round_event_control/spooky`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/holiday/halloween.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — нет праздников
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/events/holiday_events.rs`: только на Хэллоуин (29.10–2.11), вес −1 (запускается при первом случайном выборе), объявление tg; каждому человеку с рюкзаком — сумка `trick-o-treat` с шестью случайными сладостями (или мозгом); нет Иана в простыне и призрачного Поли, тыквенных метеоров
 
 ### Valentines!
 В День святого Валентина экипаж разбивают на пары «валентинок» с открытками и задачами защищать пару.
 
 - **Код:** [`/datum/round_event_control/valentines`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/holiday/vday.dm#L8)
-- **Статус в ss13-rs:** ❌ нет — нет праздников
+- **Статус в ss13-rs:** ❌ нет — нет опроса кандидатов и антагонистов-валентинок (праздник Valentine's Day есть: `crates/ss13_game/src/events/holidays.rs`)
 
 ### Easter Eggselence / Release the Rabbits!
 На Пасху по станции прячут пасхальные яйца; отдельное событие выпускает кроликов.
 
 - **Код:** [`/datum/round_event_control/easter`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/holiday/easter.dm#L1), [`/datum/round_event_control/rabbitrelease`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/holiday/easter.dm#L15)
-- **Статус в ss13-rs:** ❌ нет — нет праздников
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/events/holiday_events.rs`: только на Пасху (с субботы по понедельник); Easter Eggselence — объявление tg (вес −1); Release the Rabbits! (вес 5, до 10 раз) — объявление «Пушистая тревога» и пасхальные кролики на 15% точек техтоннелей, космические на 15% точек карпов; нет яиц-сюрпризов в луте техтоннелей и 35% кроликов на `event_spawn` (эти точки не отслеживаются)

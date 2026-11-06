@@ -27,8 +27,11 @@
 //!   bluespace, healing, robeless); a ghost who wants `ROLE_WIZARD_MIDROUND` becomes the
 //!   apprentice next to the wizard ([`add_apprentice`]): the apprentice outfit (no book, no staff,
 //!   a one-use scroll), the school's spells, "protect the wizard".
+//! - **Summon Events** (`spellbook_entries/summons.dm`): the one ritual, only in books prepared
+//!   in a high chaos round (dynamic tier 4); each cast turns on or intensifies wizard mode
+//!   (`crate::events::controller::summon_events`).
 //! - [`roundend_report`]: each wizard, its objectives and what it bought.
-// shortcut: no Grand Ritual, perks, summons, challenges, loadouts or randomized books, no team
+// shortcut: no Grand Ritual, perks, other summons, challenges, loadouts or randomized books, no team
 // HUD between a wizard and its apprentices, no imposters or academy wizards; the book refunds
 // no contract or bottles; the apprentice is the first willing ghost (tg polls them for 15 s);
 // the robeless school's mindswap is not ported (only Knock). Entries whose mechanics are missing
@@ -113,6 +116,9 @@ const OFFENSIVE: &str = "Наступление";
 const DEFENSIVE: &str = "Защита";
 const MOBILITY: &str = "Мобильность";
 const ASSISTANCE: &str = "Поддержка";
+const RITUALS: &str = "Ритуалы";
+/// `DYNAMIC_TIER_HIGH`: Summon Events needs a high chaos round.
+const DYNAMIC_TIER_HIGH: u8 = 4;
 
 /// What an entry gives.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -120,6 +126,14 @@ pub enum EntryKind {
     Spell(Spell),
     /// `/datum/spellbook_entry/item`: summoned into the hands.
     Item(&'static str),
+    /// `/datum/spellbook_entry/summon`: a station-wide ritual.
+    Ritual(Ritual),
+}
+
+/// The ported `/datum/spellbook_entry/summon` rituals.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Ritual {
+    SummonEvents,
 }
 
 /// A `/datum/spellbook_entry`.
@@ -134,11 +148,13 @@ pub struct EntryDef {
 }
 
 impl EntryDef {
-    /// `limit`: a spell's `spell_max_level`, items none.
+    /// `limit`: a spell's `spell_max_level`, items none, Summon Events 5 (each cast
+    /// intensifies it).
     pub fn limit(&self) -> Option<u32> {
         match self.kind {
             EntryKind::Spell(spell) => Some(u32::from(spell.def().max_level)),
             EntryKind::Item(_) => None,
+            EntryKind::Ritual(Ritual::SummonEvents) => Some(5),
         }
     }
 
@@ -151,6 +167,7 @@ impl EntryDef {
         match self.kind {
             EntryKind::Spell(_) => "Выучить",
             EntryKind::Item(_) => "Призвать",
+            EntryKind::Ritual(_) => "Провести",
         }
     }
 }
@@ -192,7 +209,7 @@ const fn item(
 }
 
 /// The book's entries (`subtypesof(/datum/spellbook_entry)` that are ported), tg's order.
-pub const ENTRIES: [EntryDef; 21] = [
+pub const ENTRIES: [EntryDef; 22] = [
     spell(
         "/datum/spellbook_entry/fireball",
         "Fireball",
@@ -372,6 +389,16 @@ pub const ENTRIES: [EntryDef; 21] = [
         "Магический контракт, привязывающий ученика волшебника к вашей службе, при \
          использовании вызовет его на вашу сторону.",
     ),
+    EntryDef {
+        id: "/datum/spellbook_entry/summon/events",
+        name: "Summon Events",
+        desc: "Подтолкните закон Мерфи и замените все события на специальные магические, которые \
+               запутают и собьют с толку всех. Многократное использование увеличивает частоту \
+               этих событий.",
+        category: RITUALS,
+        cost: 2,
+        kind: EntryKind::Ritual(Ritual::SummonEvents),
+    },
 ];
 
 pub fn entry(id: &str) -> Option<(usize, &'static EntryDef)> {
@@ -521,6 +548,23 @@ pub struct Spellbook {
     pub refunds_allowed: bool,
     /// Each entry's `times`, in [`ENTRIES`] order.
     pub times: Vec<u32>,
+    /// `prepare_spells`' `can_be_purchased()` of the rituals: the round was high chaos when the
+    /// book was made (and `NO_SUMMON_EVENTS` is off, as in BandaStation's config).
+    pub rituals: bool,
+}
+
+impl Spellbook {
+    /// `entries`: what the book offers, with each one's index in [`ENTRIES`].
+    pub fn entries(&self) -> impl Iterator<Item = (usize, &'static EntryDef)> + '_ {
+        ENTRIES
+            .iter()
+            .enumerate()
+            .filter(|(_, e)| self.rituals || !matches!(e.kind, EntryKind::Ritual(_)))
+    }
+
+    pub fn offers(&self, i: usize) -> bool {
+        self.entries().any(|(j, _)| j == i)
+    }
 }
 
 impl Default for Spellbook {
@@ -531,6 +575,7 @@ impl Default for Spellbook {
             uses: SPELLBOOK_USES,
             refunds_allowed: true,
             times: vec![0; ENTRIES.len()],
+            rituals: false,
         }
     }
 }
@@ -621,17 +666,17 @@ impl ServerUi for SpellbookUi {
     type UserParam = ();
     type Act = SpellbookAct;
 
-    fn static_data(_: &Spellbook) -> SpellbookStatic {
+    fn static_data(book: &Spellbook) -> SpellbookStatic {
         let mut categories: Vec<String> = Vec::new();
-        for e in &ENTRIES {
+        for (_, e) in book.entries() {
             if !categories.iter().any(|c| c == e.category) {
                 categories.push(e.category.to_owned());
             }
         }
         SpellbookStatic {
-            entries: ENTRIES
-                .iter()
-                .map(|e| SpellbookEntry {
+            entries: book
+                .entries()
+                .map(|(_, e)| SpellbookEntry {
                     id: e.id.to_owned(),
                     name: e.name.to_owned(),
                     desc: e.desc.to_owned(),
@@ -652,13 +697,16 @@ impl ServerUi for SpellbookUi {
         SpellbookData {
             owner: book.owner_name.clone(),
             points: book.uses,
-            times: book.times.clone(),
+            times: book
+                .entries()
+                .map(|(i, _)| book.times.get(i).copied().unwrap_or(0))
+                .collect(),
             // `set_spell_info`: the spell's initial cooldown.
-            cooldowns: ENTRIES
-                .iter()
-                .map(|e| match e.kind {
+            cooldowns: book
+                .entries()
+                .map(|(_, e)| match e.kind {
                     EntryKind::Spell(s) => Some(s.def().cooldown as f32),
-                    EntryKind::Item(_) => None,
+                    EntryKind::Item(_) | EntryKind::Ritual(_) => None,
                 })
                 .collect(),
         }
@@ -1033,9 +1081,13 @@ fn equip(world: &mut World, mob: Entity, apprentice: bool) {
         if !apprentice && let Some(book) = into_pack(world, pack, SPELLBOOK) {
             // `post_equip`: `new_spellbook.owner = wizard.mind`.
             let owner_name = name_of(world, mob);
+            let rituals = world
+                .get_resource::<crate::antag::midround::Midround>()
+                .is_some_and(|m| m.tier == DYNAMIC_TIER_HIGH);
             world.entity_mut(book).insert(Spellbook {
                 owner: Some(mob),
                 owner_name,
+                rituals,
                 ..default()
             });
         }
@@ -1320,7 +1372,7 @@ pub fn purchase(world: &mut World, mob: Entity, book: Entity, id: &str) -> bool 
         return false;
     };
     let times = state.times.get(i).copied().unwrap_or(0);
-    if state.uses < def.cost || def.limit().is_some_and(|l| times >= l) {
+    if !state.offers(i) || state.uses < def.cost || def.limit().is_some_and(|l| times >= l) {
         return false;
     }
     let bought = match def.kind {
@@ -1368,6 +1420,31 @@ pub fn purchase(world: &mut World, mob: Entity, book: Entity, id: &str) -> bool 
             }
         }
         EntryKind::Item(path) => summon_item(world, mob, path),
+        EntryKind::Ritual(Ritual::SummonEvents) => {
+            let intensified = crate::events::controller::summon_events(world);
+            chat_to(
+                world,
+                mob,
+                Span::Warning,
+                if intensified {
+                    "You have intensified summon events, causing them to occur more often!"
+                } else {
+                    "You have cast summon events!"
+                },
+            );
+            if let Some(pos) = crate::explosions::turf_of(world, mob) {
+                crate::sound::playsound(
+                    world,
+                    crate::sound::PlaySound::new(
+                        pos,
+                        "sound/effects/magic/castsummon.ogg",
+                        50.0,
+                        true,
+                    ),
+                );
+            }
+            true
+        }
     };
     if !bought {
         return false;
@@ -1810,10 +1887,32 @@ mod tests {
     }
 
     #[test]
+    fn rituals_need_a_high_chaos_book() {
+        let book = Spellbook::default();
+        let (i, events) = entry("/datum/spellbook_entry/summon/events").unwrap();
+        assert!(!book.offers(i));
+        assert_eq!((events.limit(), events.refundable()), (Some(5), false));
+        assert_eq!(events.buy_word(), "Провести");
+        let chaos = Spellbook {
+            rituals: true,
+            ..default()
+        };
+        assert!(chaos.offers(i));
+        let st = SpellbookUi::static_data(&chaos);
+        assert_eq!(st.entries.len(), ENTRIES.len());
+        assert_eq!(st.categories.last().map(String::as_str), Some(RITUALS));
+        let data = SpellbookUi::data(&chaos, Entity::PLACEHOLDER, &());
+        assert_eq!(data.times.len(), st.entries.len());
+        assert_eq!(data.cooldowns.len(), st.entries.len());
+    }
+
+    #[test]
     fn static_data_lists_categories_in_book_order() {
         let st = SpellbookUi::static_data(&Spellbook::default());
         assert_eq!(st.categories, [OFFENSIVE, DEFENSIVE, MOBILITY, ASSISTANCE]);
-        assert_eq!(st.entries.len(), ENTRIES.len());
+        assert_eq!(st.entries.len(), ENTRIES.len() - 1, "no rituals");
+        let data = SpellbookUi::data(&Spellbook::default(), Entity::PLACEHOLDER, &());
+        assert_eq!(data.times.len(), st.entries.len());
         let smoke = st.entries.iter().find(|e| e.name == "Smoke").unwrap();
         assert!(!smoke.requires_wizard_garb);
         let fireball = st.entries.iter().find(|e| e.name == "Fireball").unwrap();

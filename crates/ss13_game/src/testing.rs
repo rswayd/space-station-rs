@@ -68,11 +68,12 @@ pub fn steps(secs: f64) -> u32 {
 
 /// Makes a server app deterministic; call before adding the game plugins. `seed` becomes the
 /// [`MapSeed`] every game RNG derives from; `Time` advances [`TICK`] per update; random events
-/// run only when forced; no station traits unless forced.
+/// run only when forced; no station traits unless forced; no holidays.
 pub fn deterministic(app: &mut App, seed: u64) {
     app.insert_resource(MapSeed(seed))
         .insert_resource(TimeUpdateStrategy::ManualDuration(TICK))
         .insert_resource(crate::events::EventsConfig::forced_only())
+        .insert_resource(crate::events::holidays::HolidaysConfig::none())
         .insert_resource(crate::station_traits::StationTraitsConfig::none());
 }
 

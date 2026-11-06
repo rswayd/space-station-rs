@@ -267,6 +267,8 @@ pub enum LanguageSource {
     Quirk,
     /// A martial art's type (the sleeping carp's Carptongue).
     MartialArt,
+    /// `LANGUAGE_BABEL`: the Tower of Babel's curse (and the wizards' gift).
+    Babel,
 }
 
 /// `/datum/language_holder`.
@@ -280,6 +282,9 @@ pub struct LanguageHolder {
     partial: Vec<(LanguageId, LanguageSource, u8)>,
     /// `omnitongue`: the tongue does not limit speech.
     pub omnitongue: bool,
+    /// tg `TRAIT_TOWER_OF_BABEL` on the mind: a tongue does not limit speech (no tongue still
+    /// does), and the Tower of Babel does not curse again.
+    pub babel: bool,
     /// `selected_language`.
     pub selected: Option<LanguageId>,
 }
@@ -618,7 +623,10 @@ impl LanguageHolder {
         tongue: Option<&Tongue>,
         tongueless: bool,
     ) -> bool {
-        (self.omnitongue || could_speak(tongue, tongueless, language)) && self.has(language, SPOKEN)
+        (self.omnitongue
+            || (self.babel && !tongueless)
+            || could_speak(tongue, tongueless, language))
+            && self.has(language, SPOKEN)
     }
 
     /// `get_selected_language`: the selected language while it can be spoken, otherwise the
@@ -1114,6 +1122,31 @@ mod tests {
         assert!(!holder.has(Draconic, UNDERSTOOD) && holder.has(Draconic, SPOKEN));
         holder.unblock(Draconic, ALL, Some(LanguageSource::Aphasia));
         assert!(holder.has(Draconic, UNDERSTOOD));
+    }
+
+    #[test]
+    fn babel_curse_keeps_one_language_and_ignores_the_tongue() {
+        let human = Preset::of_path("/datum/language_holder/human_basic").unwrap();
+        let mut holder = LanguageHolder::from_preset(&human, LanguageSource::Species);
+        holder.grant(Voltaic, ALL, LanguageSource::Babel);
+        for l in LanguageId::ALL.into_iter().filter(|&l| l != Voltaic) {
+            holder.block(l, ALL, LanguageSource::Babel);
+        }
+        let tongue = Tongue::of_path("/obj/item/organ/tongue");
+        assert!(
+            !holder.can_speak(Voltaic, Some(&tongue), false),
+            "a human tongue"
+        );
+        holder.babel = true;
+        assert_eq!(holder.understood_languages(), vec![Voltaic]);
+        assert!(holder.can_speak(Voltaic, Some(&tongue), false));
+        assert!(!holder.can_speak(Common, Some(&tongue), false));
+        assert_eq!(
+            holder.selected_language(Some(&tongue), false),
+            Some(Voltaic)
+        );
+        // No tongue: still only the tongueless languages (Voltaic is not one).
+        assert!(!holder.can_speak(Voltaic, None, true));
     }
 
     #[test]
