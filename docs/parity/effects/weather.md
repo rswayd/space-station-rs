@@ -6,7 +6,7 @@
 Для каждого z-уровня с погодным трейтом (`ZTRAIT_ASHSTORM`, `ZTRAIT_SNOWSTORM` и т.д.) по таймеру выбирает погоду по `probability` и запускает её; админы и события запускают погоду вручную (`run_weather`).
 
 - **Код:** [`SUBSYSTEM_DEF(weather)`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/weather.dm#L2), [`proc/run_weather()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/weather.dm#L132)
-- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/weather.rs`: `run_weather` (по типу или имени, уровни по умолчанию — станционные), обработка запущенных погод, раз в секунду `weather_act_mob`; планировщик: уровень, получивший погоды (`make_eligible`, tg — уровни с погодным трейтом), получает погоду по весу `probability` и снова доступен через 5–10 минут после верхней длительности; у станционных погод `probability` 0, как в tg; уровней с трейтами планетарных погод в порте нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/weather.rs`: `run_weather` (по типу или имени, уровни по умолчанию — станционные), обработка запущенных погод, раз в секунду `weather_act_mob`; планировщик: уровень, получивший погоды (`make_eligible`, tg — уровни с погодным трейтом), получает погоду по весу `probability` и снова доступен через 5–10 минут после верхней длительности; у станционных погод `probability` 0, как в tg; уровень шахты (`ZTRAIT_ASHSTORM`, `ss13_mapload::mining_z`) получает пепельную бурю (90) и emberfall (10); снежных и песчаных уровней нет
 
 ### Жизненный цикл погоды
 `/datum/weather`: предупреждение (`telegraph`, сообщение и звук), начало (`start`, оверлеи на зоны), затухание (`wind_down`), конец (`end`); каждый тик действует на мобов и турфы в затронутых зонах, кроме защищённых (`protected_areas`, укрытия, иммунитеты). Поддерживаются грозы (`thunder_act_turf`) и частицы.
@@ -18,7 +18,7 @@
 Пепельная буря обжигает всех снаружи без защиты (шахтёрские костюмы, укрытия); Emberfall — безвредный пепел. Звук бури слышен в укрытиях.
 
 - **Код:** [`/datum/weather/particle/ash_storm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/weather/weather_types/ash_storm.dm#L2), [`/datum/weather/particle/ash_storm/emberfall`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/weather/weather_types/ash_storm.dm#L128)
-- **Статус в ss13-rs:** ❌ нет — каркас погоды есть (`crates/ss13_game/src/weather.rs`), но нет Лаваленда и уровней с `ZTRAIT_ASHSTORM`
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/weather.rs` (`WeatherKind::AshStorm`, `Emberfall`): по умолчанию на уровне шахты, планировщик 90/10; 30 с предупреждения, 1–2 минуты, 30 с затухания, сообщения tg; только открытые (`outdoors`) зоны — база, капсулы-укрытия и руины защищают; раз в секунду 4 ожога всем, кроме иммунных к пепельной буре (силиконы, шахтёрская фауна и мегафауна, рапторы, пилоты мехов) и людей с термозащитой костюма и шлема ≥ `FIRE_IMMUNITY_MAX_TEMP_PROTECT`; emberfall безвреден. Оверлеи, частицы, гроза, звуки бури в зонах (`ash_storm_sounds`) — в «Жизненном цикле погоды» и записи о мониторах погоды; засыпание раскопанного базальта (`refill_dug`) — у группы шахты; `required_bodytype` урона не учитывается
 
 ### Снежная буря (Ледяная Луна)
 Метель охлаждает тела снаружи; вариант `forever_storm` не прекращается.

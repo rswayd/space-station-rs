@@ -19,7 +19,7 @@ usage:
   ss13-mapload convert [--source <repo>] [--assets <dir>] [--maps <dir or .dmm>]...
       reads <assets>/dm_types.json, writes <assets>/prototypes/dm_types.ron with every type the
       maps use (default maps: everything under <repo>/_maps/map_files and <repo>/_maps/shuttles,
-      and this checkout's tests/cases)
+      the lavaland ruins and this checkout's tests/cases)
       plus job outfit items,
       and <assets>/jobs.ron (joinable jobs, outfits, trim access, name lists)
       and <assets>/reagents.ron (tg reagents and reactions)
@@ -112,6 +112,8 @@ fn convert_cmd(config: &MapLoadPlugin, mut map_dirs: Vec<PathBuf>) -> anyhow::Re
         map_dirs.push(config.source.join("_maps/map_files"));
         // Shuttle templates load with the station (`ss13_mapload::ShuttleTemplates`).
         map_dirs.push(config.source.join("_maps/shuttles"));
+        // Lavaland ruins are pasted onto the mining level (`ss13_mapload::ruins`).
+        map_dirs.push(config.source.join(ss13_mapload::ruins::LAVA_RUINS_DIR));
         // So does the wizard's den (`ss13_game::antag::wizard`).
         map_dirs.push(
             config

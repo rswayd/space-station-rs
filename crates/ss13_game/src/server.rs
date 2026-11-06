@@ -289,7 +289,11 @@ impl Plugin for GameServerPlugin {
         .add_plugins(crate::emp::EmpPlugin)
         .add_plugins(crate::emag::EmagPlugin)
         .add_plugins(crate::grenades::GrenadesServerPlugin)
-        .add_plugins((crate::effects::EffectsPlugin, crate::weather::WeatherPlugin))
+        .add_plugins((
+            crate::effects::EffectsPlugin,
+            crate::weather::WeatherPlugin,
+            crate::lava::LavaPlugin,
+        ))
         .add_plugins(crate::assemblies::server::AssembliesServerPlugin)
         .add_plugins(crate::wiremod::server::WiremodServerPlugin)
         .add_plugins(crate::mobs::MobsServerPlugin)

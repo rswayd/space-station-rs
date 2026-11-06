@@ -63,8 +63,9 @@ use crate::tools::{Actor, DoAfter, Stack, ToolKind, do_after, tell, tool_of, use
 
 /// `/turf/baseturf_bottom`: the bottom of every baseturf stack, the level's baseturf.
 const BASETURF_BOTTOM: &str = "/turf/baseturf_bottom";
-// shortcut: tg reads the level's `ZTRAIT_BASETURF`; every level here bottoms out in space.
+/// The level's `ZTRAIT_BASETURF`: space, lava on the mining level (`ZTRAITS_LAVALAND`).
 const LEVEL_BASETURF: &str = "/turf/open/space/basic";
+const LAVALAND_BASETURF: &str = "/turf/open/lava/smooth/lava_land_surface";
 const FLOOR: &str = "/turf/open/floor";
 const WALL: &str = "/turf/closed/wall";
 const OPEN: &str = "/turf/open";
@@ -1714,7 +1715,11 @@ pub fn change_turf(
     inherit_air: bool,
 ) -> Option<Entity> {
     let path = if path == BASETURF_BOTTOM {
-        LEVEL_BASETURF
+        if ss13_mapload::mining_z(world) == Some(pos.z) {
+            LAVALAND_BASETURF
+        } else {
+            LEVEL_BASETURF
+        }
     } else {
         path
     };

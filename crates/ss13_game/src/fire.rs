@@ -501,7 +501,7 @@ fn fire_tick(world: &mut World, mob: Entity, spt: f64) {
 }
 
 /// tg `get_thermal_protection`: fire suits and helmets.
-fn thermal_protection(world: &World, mob: Entity) -> f32 {
+pub fn thermal_protection(world: &World, mob: Entity) -> f32 {
     let Some(inventory) = world.get::<Inventory>(mob) else {
         return 0.0;
     };
@@ -648,6 +648,12 @@ fn obj_fire_act(world: &mut World, thing: Entity, temperature: f64) {
     if temperature > 0.0 && potential > obj.damage_deflection {
         fire_damage(world, thing, potential.clamp(0.0, 20.0));
     }
+    set_burning(world, thing);
+}
+
+/// `AddComponent(/datum/component/burning)`: the thing burns with tg's fire overlay until it is
+/// destroyed ([`burning_objects`]).
+pub fn set_burning(world: &mut World, thing: Entity) {
     if world.get_entity(thing).is_err() || world.get::<Burning>(thing).is_some() {
         return;
     }
@@ -662,8 +668,19 @@ fn obj_fire_act(world: &mut World, thing: Entity, temperature: f64) {
 
 /// `take_damage(amount, BURN, FIRE)` on a structure or machine: destroyed at 0
 /// (`atom_destruction(FIRE)` -> `burn()` -> `deconstruct(FALSE)`).
-fn fire_damage(world: &mut World, thing: Entity, amount: f32) {
+pub fn fire_damage(world: &mut World, thing: Entity, amount: f32) {
     let Some(obj) = world.get::<DmObj>(thing).cloned() else {
+        // An item (set alight by lava, `crate::lava`): through its fire armor.
+        if world
+            .get::<DmItem>(thing)
+            .is_some_and(|i| i.resistance_flags & INDESTRUCTIBLE == 0)
+        {
+            let armor = world
+                .get::<ss13_mapload::DmArmor>(thing)
+                .map_or(0.0, |a| a.fire);
+            let amount = amount * (1.0 - armor / 100.0).clamp(0.0, 1.0);
+            crate::explosions::ex_act::damage_item(world, thing, amount);
+        }
         return;
     };
     if obj.resistance_flags & INDESTRUCTIBLE != 0 || obj.max_integrity <= 0.0 {

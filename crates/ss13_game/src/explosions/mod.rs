@@ -344,11 +344,17 @@ pub fn explosion(world: &mut World, epicenter: TilePos, ex: Explosion) {
     let orig_max = dev.max(heavy).max(light).max(flame).max(flash);
     if !ex.ignorecap {
         let cap = BombCap::new(config.bombcap);
-        dev = dev.min(cap.devastation);
-        heavy = heavy.min(cap.heavy);
-        light = light.min(cap.light);
-        flash = flash.min(cap.flash);
-        flame = flame.min(cap.flame);
+        // `ZTRAIT_BOMBCAP_MULTIPLIER`: 2 on lavaland.
+        let k = if ss13_mapload::mining_z(world) == Some(epicenter.z) {
+            2.0
+        } else {
+            1.0
+        };
+        dev = dev.min(cap.devastation * k);
+        heavy = heavy.min(cap.heavy * k);
+        light = light.min(cap.light * k);
+        flash = flash.min(cap.flash * k);
+        flame = flame.min(cap.flame * k);
     }
     let max_range = dev.max(heavy).max(light).max(flame);
     info!(

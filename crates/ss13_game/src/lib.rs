@@ -134,7 +134,8 @@
 //!   fuses and the flashbang, EMP, smoke, explosive, frag and cluster grenades.
 //!   `effects` (feature `server`): effect systems: sparks, steam, smoke and chemical smoke,
 //!   foam and foamed metal, trails. `weather` (feature `server`): `SSweather` and the station
-//!   weathers (radiation storm, the floor is lava, void storm).
+//!   weathers (radiation storm, the floor is lava, void storm) and lavaland's ash storms. `lava`
+//!   (feature `server`): lava turfs burn what touches them.
 //!
 //! - `events` (feature `server`): tg `SSevents`, the random event scheduler, and the round
 //!   events that act on ported systems (grid check, electrical storm, communications blackout,
@@ -322,6 +323,8 @@ pub mod kitchen;
 pub mod language_menu;
 #[cfg(feature = "client")]
 pub mod language_menu_client;
+#[cfg(feature = "server")]
+pub mod lava;
 pub mod lobby;
 #[cfg(feature = "client")]
 pub mod lobby_client;

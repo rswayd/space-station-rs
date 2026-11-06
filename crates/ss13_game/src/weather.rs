@@ -1,7 +1,7 @@
 //! Weather (server), after tg `SSweather` (`code/controllers/subsystem/weather.dm`),
 //! `/datum/weather` (`code/datums/weather/weather.dm`) and the station weathers of
-//! `weather_types/`: the radiation storm (and its endless nebula kind), the floor is lava and
-//! the void storm.
+//! `weather_types/`: the radiation storm (and its endless nebula kind), the floor is lava, the
+//! void storm, and lavaland's ash storm and emberfall.
 //!
 //! - [`run_weather`] (`SSweather.run_weather`) starts a weather on z-levels (by default the
 //!   levels of its target trait: the station's): it picks its impacted areas once (every area
@@ -13,16 +13,20 @@
 //! - Every `SSweather` fire (1 s) a weather in its main stage acts on each living mob it can
 //!   (`can_weather_act_mob`: on an impacted level, in an impacted area, not inside something
 //!   weather-proof, not immune): a radiation storm mutates humans, the nebula's also irradiates
-//!   (5%), the lava floor burns those standing on the floor.
+//!   (5%), the lava floor burns those standing on the floor, an ash storm burns everyone outdoors
+//!   on lavaland (4 burn) but the ash-storm immune (silicons, the mining fauna, mech pilots) and
+//!   humans in full fire gear (`get_thermal_protection() >= FIRE_IMMUNITY_MAX_TEMP_PROTECT`).
 //! - The scheduler (`SSweather.fire`, `make_eligible`): a level made eligible for weathers
 //!   ([`make_eligible`], tg levels with a weather trait) gets one by `probability`, and is
-//!   eligible again 5-10 minutes after that weather's longest duration.
+//!   eligible again 5-10 minutes after that weather's longest duration. The mining level
+//!   (`ZTRAIT_ASHSTORM`, [`ss13_mapload::mining_z`]) gets the ash storm (90) and emberfall (10).
 // shortcut: no area overlays (needs a client contract: tg draws the stage's icon state over
 // every impacted area), no particles, no turf or thunder effects (no rain on the station), no
 // barometers, weather radios or storm sound managers (`area_sound_manager`); the base
 // `weather_act_mob` pull of body temperature towards 20 °C is not ported; no status display
-// radiation alert (the displays have no emergency override); no planetary weathers (no
-// lavaland, icemoon or rain levels).
+// radiation alert (the displays have no emergency override); no icemoon, sand or rain weathers;
+// the ash storm has no area sound loops (`GLOB.ash_storm_sounds`), thunder, barometer, and does
+// not refill dug basalt (`refill_dug`), and its damage ignores `required_bodytype`.
 
 use std::collections::HashSet;
 
@@ -74,6 +78,14 @@ const WEATHERPROOF: &[&str] = &[
     "/obj/structure/closet/body_bag/environmental/prisoner/syndicate",
 ];
 const BED: &str = "/obj/structure/bed";
+/// Mobs with `TRAIT_ASHSTORM_IMMUNE` from their type: the lava-immune ones
+/// ([`crate::lava::LAVA_IMMUNE_MOBS`]) and raptors, node drones, guardians, star gazers.
+const ASH_IMMUNE_MOBS: [&str; 4] = [
+    "/mob/living/basic/raptor",
+    "/mob/living/basic/node_drone",
+    "/mob/living/basic/guardian",
+    "/mob/living/basic/heretic_summon/star_gazer",
+];
 const STRUCTURE: &str = "/obj/structure";
 
 /// The ported `/datum/weather` subtypes.
@@ -87,6 +99,19 @@ pub enum WeatherKind {
     FloorIsLava,
     /// `/datum/weather/void_storm`.
     VoidStorm,
+    /// `/datum/weather/particle/ash_storm`.
+    AshStorm,
+    /// `/datum/weather/particle/ash_storm/emberfall`.
+    Emberfall,
+}
+
+/// `target_trait`: the levels a weather runs on by default and is scheduled for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Target {
+    /// `ZTRAIT_STATION`.
+    Station,
+    /// `ZTRAIT_ASHSTORM`: the mining level.
+    AshStorm,
 }
 
 /// The static vars of a weather type.
@@ -105,17 +130,20 @@ struct Def {
     flags: u8,
     /// `probability` on the levels of its trait (0: never by itself).
     probability: u32,
+    target: Target,
 }
 
 const WIND_UP: (Span, &str) = (Span::Warning, "The wind begins to pick up.");
 const WIND_DOWN: (Span, &str) = (Span::Danger, "The wind relents its assault.");
 
 impl WeatherKind {
-    pub const ALL: [Self; 4] = [
+    pub const ALL: [Self; 6] = [
         Self::RadStorm,
         Self::RadStormNebula,
         Self::FloorIsLava,
         Self::VoidStorm,
+        Self::AshStorm,
+        Self::Emberfall,
     ];
 
     fn def(self) -> Def {
@@ -139,6 +167,34 @@ impl WeatherKind {
             protected_areas: RAD_PROTECTED,
             flags: WEATHER_MOBS | WEATHER_INDOORS,
             probability: 0,
+            target: Target::Station,
+        };
+        let ash = Def {
+            name: "ash storm",
+            telegraph_message: Some((
+                Span::BoldWarning,
+                "Далёкий ветер разносит жуткий стон. Горизонт застилают тучи пепла и чёрного \
+                 дыма. Поскорее найдите укрытие.",
+            )),
+            telegraph_duration: 30.0,
+            telegraph_sound: None,
+            weather_message: Some((
+                Span::Danger,
+                "Вокруг вас сгущаются облака жгучего пепла! Немедленно прячьтесь внутрь!",
+            )),
+            duration: (60, 120),
+            weather_sound: None,
+            end_message: Some((
+                Span::Danger,
+                "Ветер уносит от вас остатки пепла и возвращается к своему привычному тихому \
+                 гулу. Теперь можно безопасно выходить наружу.",
+            )),
+            end_duration: 30.0,
+            area_type: "/area",
+            protected_areas: &[],
+            flags: WEATHER_MOBS,
+            probability: 90,
+            target: Target::AshStorm,
         };
         match self {
             Self::RadStorm => rad,
@@ -169,6 +225,7 @@ impl WeatherKind {
                 protected_areas: &["/area/space"],
                 flags: WEATHER_MOBS | WEATHER_INDOORS,
                 probability: 0,
+                target: Target::Station,
             },
             Self::VoidStorm => Def {
                 name: "void storm",
@@ -188,6 +245,24 @@ impl WeatherKind {
                 protected_areas: &[],
                 flags: WEATHER_INDOORS | WEATHER_ENDLESS,
                 probability: 0,
+                target: Target::Station,
+            },
+            Self::AshStorm => ash,
+            Self::Emberfall => Def {
+                name: "emberfall",
+                weather_message: Some((
+                    Span::Notice,
+                    "Тлеющие угольки медленно осыпаются вокруг вас, словно странный снег. \
+                     Кажется, в этот раз шторм обошёл вас стороной...",
+                )),
+                end_message: Some((
+                    Span::Notice,
+                    "Пеплопад постепенно замедляется и угасает. Очередной слой сажи оседает на \
+                     землю под вами...",
+                )),
+                flags: ash.flags & !WEATHER_MOBS,
+                probability: 10,
+                ..ash
             },
         }
     }
@@ -257,15 +332,22 @@ impl Plugin for WeatherPlugin {
 
 /// `SSweather.Initialize`: every weather with a `probability` on the levels of its trait.
 fn init_schedule(world: &mut World) {
-    let station: Vec<u16> = crate::events::controller::station_levels(world).collect();
     for kind in WeatherKind::ALL {
-        let probability = kind.def().probability;
-        if probability == 0 {
+        let def = kind.def();
+        if def.probability == 0 {
             continue;
         }
-        for &z in &station {
-            make_eligible(world, z, kind, probability);
+        for z in target_levels(world, def.target) {
+            make_eligible(world, z, kind, def.probability);
         }
+    }
+}
+
+/// `SSmapping.levels_by_trait(target_trait)`.
+fn target_levels(world: &World, target: Target) -> Vec<u16> {
+    match target {
+        Target::Station => crate::events::controller::station_levels(world).collect(),
+        Target::AshStorm => ss13_mapload::mining_z(world).into_iter().collect(),
     }
 }
 
@@ -293,11 +375,10 @@ fn pick_weight(kinds: &[(WeatherKind, u32)], mut roll: u32) -> Option<WeatherKin
 }
 
 /// tg `SSweather.run_weather(type, z_levels)`: a new weather of `kind` on `levels` (default:
-/// the station's), telegraphing at once.
+/// the levels of its trait, the station's or the mining level), telegraphing at once.
 pub fn run_weather(world: &mut World, kind: WeatherKind, levels: Option<Vec<u16>>) {
-    let levels =
-        levels.unwrap_or_else(|| crate::events::controller::station_levels(world).collect());
     let def = kind.def();
+    let levels = levels.unwrap_or_else(|| target_levels(world, def.target));
     let areas = impacted_areas(world, &def);
     let (lo, hi) = def.duration;
     let duration = f64::from(world.resource_mut::<CombatRng>().range(lo, hi));
@@ -478,8 +559,25 @@ pub fn can_weather_act_mob(world: &World, weather: &Weather, mob: Entity, pos: T
     }
     match weather.kind {
         WeatherKind::FloorIsLava => floor_is_lava_reaches(world, mob, pos),
+        WeatherKind::AshStorm | WeatherKind::Emberfall => !ash_storm_immune(world, mob),
         _ => true,
     }
+}
+
+/// `TRAIT_ASHSTORM_IMMUNE` of the mob or what holds it (a mech), and
+/// `/datum/weather/particle/ash_storm/recursive_weather_protection_check`: a human whose suit and
+/// helmet reach `FIRE_IMMUNITY_MAX_TEMP_PROTECT`.
+pub fn ash_storm_immune(world: &World, mob: Entity) -> bool {
+    world.get::<crate::silicon::Silicon>(mob).is_some()
+        || world.get::<crate::mecha::core::Pilot>(mob).is_some()
+        || world.get::<crate::mobs::BasicMob>(mob).is_some_and(|m| {
+            crate::lava::LAVA_IMMUNE_MOBS
+                .iter()
+                .chain(&ASH_IMMUNE_MOBS)
+                .any(|root| is_under(&m.def.path, root))
+        })
+        || crate::fire::thermal_protection(world, mob)
+            >= crate::fire::FIRE_IMMUNITY_MAX_TEMP_PROTECT
 }
 
 /// `/datum/weather/floor_is_lava/can_weather_act_mob`: sentient, not a silicon, not in a bed,
@@ -543,7 +641,21 @@ fn weather_act_mob(world: &mut World, kind: WeatherKind, mob: Entity) {
                 );
             }
         }
-        WeatherKind::VoidStorm => {}
+        WeatherKind::AshStorm => {
+            // `adjust_fire_loss(4, required_bodytype = BODYTYPE_ORGANIC)`.
+            if let Ok(mut entity) = world.get_entity_mut(mob)
+                && let Ok((mut health, mut stat)) =
+                    entity.get_components_mut::<(&mut Health, &mut Stat)>()
+            {
+                crate::health::apply_damage(
+                    &mut health,
+                    &mut stat,
+                    crate::health::DamageType::Burn,
+                    4.0,
+                );
+            }
+        }
+        WeatherKind::VoidStorm | WeatherKind::Emberfall => {}
     }
 }
 
@@ -683,6 +795,25 @@ mod tests {
         assert_eq!(
             WeatherKind::by_name("void storm"),
             Some(WeatherKind::VoidStorm)
+        );
+    }
+
+    #[test]
+    fn ash_storms_hit_the_outdoors_of_the_mining_level() {
+        let ash = WeatherKind::AshStorm.def();
+        assert_eq!(ash.telegraph_duration, 30.0);
+        assert_eq!(ash.duration, (60, 120));
+        assert_eq!(ash.end_duration, 30.0);
+        assert_eq!(ash.probability, 90);
+        assert_eq!(ash.target, Target::AshStorm);
+        assert!(ash.flags & WEATHER_MOBS != 0 && ash.flags & WEATHER_INDOORS == 0);
+        let ember = WeatherKind::Emberfall.def();
+        assert_eq!(ember.probability, 10);
+        assert!(ember.flags & WEATHER_MOBS == 0);
+        assert_eq!(ember.duration, ash.duration);
+        assert_eq!(
+            WeatherKind::by_name("emberfall"),
+            Some(WeatherKind::Emberfall)
         );
     }
 }

@@ -53,6 +53,7 @@ pub mod radio;
 pub mod reagents;
 pub mod research;
 pub mod restaurant;
+pub mod ruins;
 pub mod runtime;
 pub mod security;
 pub mod service;
@@ -276,9 +277,9 @@ pub const LAVALAND_MAP: &str = "_maps/map_files/Mining/Lavaland.dmm";
 
 /// The mining level (tg `SSmapping.loadWorld` for `minetype = lavaland`): loaded onto its own
 /// z-level right after the station maps and before the shuttle templates, so the station's
-/// levels stay the first maps' and the mining level is no station level. Its `genturf` caves
-/// are generated at load ([`cave`]). Insert before the map loads (`PreStartup`); the server
-/// binary inserts [`MiningLevel::from_env`], tests opt in.
+/// levels stay the first maps' and the mining level is no station level. Its `genturf` caves,
+/// lava rivers ([`cave`]) and ruins ([`ruins`]) are generated at load. Insert before the map
+/// loads (`PreStartup`); the server binary inserts [`MiningLevel::from_env`], tests opt in.
 #[derive(Resource, Clone, Debug, PartialEq)]
 pub struct MiningLevel(pub PathBuf);
 
@@ -417,10 +418,32 @@ fn load_on_startup(world: &mut World) {
     if let Some(templates) = world.get_resource::<ShuttleTemplates>() {
         paths.extend(templates.0.iter().cloned());
     }
+    // `setup_ruins` picks only templates whose types were converted.
+    let templates = mining.as_ref().map_or_else(Vec::new, |_| {
+        let protos = world.get_resource::<ss13_proto::Prototypes>();
+        ruins::read_lavaland(&config.source, seed, |p| {
+            protos.is_some_and(|protos| protos.get(p).is_some())
+        })
+    });
     let caves = |path: &std::path::Path, map: &mut ss13_assets::dmm::DmmMap| {
         if mining.as_deref() == Some(path) {
             let n = cave::generate(map, seed, cave::LAVALAND_OPEN, cave::LAVALAND_CLOSED);
             info!("mining level {}: {n} cave tiles generated", path.display());
+            let n = cave::spawn_rivers(
+                map,
+                seed,
+                cave::LAVALAND_RIVER_NODES,
+                cave::LAVALAND_RIVER,
+                cave::RIVER_AREA,
+            );
+            info!("mining level: {n} lava river tiles");
+            let mut rng = spawner::Rng::new(seed ^ 0x5345_4544);
+            let placed = ruins::seed(map, &templates, ruins::LAVALAND_BUDGET, &mut rng);
+            info!(
+                "mining level: {} ruins placed: {:?}",
+                placed.len(),
+                placed.iter().map(|r| r.suffix).collect::<Vec<_>>()
+            );
         }
     };
     let result = read_manifest(&config.assets).and_then(|manifest| {
