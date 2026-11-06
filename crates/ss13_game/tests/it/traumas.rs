@@ -284,3 +284,29 @@ fn silence_and_sleep_stop_speech() {
     s.send(0, ClientIntent::Say("доброе утро".into()));
     s.run_until("B hears A", |s| s.heard(1, "оброе утро"));
 }
+
+/// A phobia (`ss13_game::medical::fear`): A, afraid of spiders, hears B say the word and freaks
+/// out; terror builds up.
+#[test]
+fn a_phobia_hears_its_word() {
+    use ss13_game::medical::fear::{self, Fearful};
+    let mut s = Station::start("a_phobia_hears_its_word");
+    let a = s.players[0].mob;
+    let spiders = fear::phobia_index("spiders").unwrap();
+    s.gain(0, Kind::Phobia(spiders));
+    s.run_until("A learns it", |s| {
+        s.heard(0, "Вы начинаете находить пауков очень нервирующим")
+    });
+    assert!(s.server.world().get::<Fearful>(a).is_some());
+    s.send(1, ClientIntent::Say("look out, a spider".into()));
+    s.run_until("B's words reach A", |s| s.heard(0, "spider"));
+    s.run_until("A freaks out", |s| s.heard(0, "Hearing spider"));
+    assert!(s.server.world().get::<Fearful>(a).unwrap().buildup > 0.0);
+    // The cure takes the fear away.
+    {
+        let world = s.server.world_mut();
+        let brain = organs::organ(world, a, Slot::Brain).unwrap();
+        traumas::cure_all(world, brain, traumas::Resilience::Basic);
+    }
+    assert!(s.server.world().get::<Fearful>(a).is_none());
+}

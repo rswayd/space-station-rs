@@ -490,6 +490,12 @@ pub fn reagents(world: &mut World, mob: Entity, secs: f32) {
         return;
     }
     let has = |world: &World, path: &str| blood_amount(world, mob, path) > 0.0;
+    // Mindbreaker soothes the hallucinations brain trauma instead of causing hallucinations.
+    let soothed = crate::medical::traumas::rds_suppressed(world, mob)
+        && crate::medical::traumas::has(world, mob, crate::medical::traumas::Kind::Hallucinations);
+    if soothed {
+        set_hallucinations(world, mob, 0.0, false);
+    }
     // Mindbreaker (and its jellyfish variant), viper spider toxin, BZ metabolites, bath salts.
     let gain: f32 = [
         (MINDBREAKER, 5.0),
@@ -499,7 +505,7 @@ pub fn reagents(world: &mut World, mob: Entity, secs: f32) {
         ("/datum/reagent/drug/bath_salts", 10.0),
     ]
     .iter()
-    .filter(|(path, _)| has(world, path))
+    .filter(|(path, _)| has(world, path) && !(soothed && path.starts_with(MINDBREAKER)))
     .map(|(_, rate)| rate * secs)
     .sum();
     if gain > 0.0 {
