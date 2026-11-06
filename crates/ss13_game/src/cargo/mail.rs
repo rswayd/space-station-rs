@@ -12,13 +12,20 @@
 //! - Only the recipient opens a letter (`unwrap`, 1.5 s); a letter whose recipient is gone opens
 //!   for anyone. The contents go to the hands.
 //! - Mail aboard keeps the supply shuttle at the station (`check_blacklist`, [`holds_mail`]).
-// shortcut: no mail sorter, mail bag, counterfeit or traitor mail, mail strike, quirk or holiday
-// goodies, stamps and postmark overlays, Sunday mail holiday, destination tags on letters, round
-// end "mail opened" count; junk mail names have no random adjective (no `GLOB.adjectives` here)
-// and the ash letter is empty (letters hold items only).
+//! - The mail bag holds only letters, small parcels, papers and bounty cubes ([`bag_refuses`]);
+//!   the mail sorter is [`super::mail_sorter`].
+//! - The GLA-2 counterfeit device (`/obj/item/storage/mail_counterfeit_device`, from the uplink):
+//!   in hand it asks mail or envelope, armed or not, and a recipient (a crew member, or "Anyone"
+//!   with a free title); the device becomes a letter holding what was put in it. Opening armed
+//!   counterfeit mail puts its contents in the hands and uses them (`attack_self`: a grenade
+//!   primes).
+// shortcut: no mail strike letters (the event is ../events), quirk or holiday goodies, stamps and
+// postmark overlays, Sunday mail holiday, destination tags on letters, round end "mail opened"
+// count, multitool disarming of counterfeit mail; junk mail names have no random adjective (no
+// `GLOB.adjectives` here) and the ash letter is empty (letters hold items only).
 
 use bevy::prelude::*;
-use ss13_mapload::cargo::{JUNK_MAIL, MAIL, MAIL_CRATE, MAIL_ENVELOPE};
+use ss13_mapload::cargo::{JUNK_MAIL, MAIL, MAIL_BAG, MAIL_CRATE, MAIL_ENVELOPE};
 use ss13_mapload::spawner::{DmSpawner, Rng, pick};
 use ss13_mapload::{DmCloset, DmItem, DmName, MapSeed};
 use ss13_net::server::Networked;
@@ -28,6 +35,7 @@ use ss13_shared::chat::Span;
 use super::supply::SupplyPacks;
 use crate::health::Stat;
 use crate::jobs::{Jobs, PlayerJob};
+use crate::obj_damage::is_under;
 use crate::security_level::SecLevel;
 use crate::server::PlayerMob;
 use crate::storage::{Stored, StoredIn};
@@ -83,8 +91,18 @@ impl Plugin for MailPlugin {
         app.add_click_handler(ClickPhase::AttackSelf, 1400, |w, c| {
             crate::cargo::mail::attack_self(w, c.client, c.mob, c.target)
         });
+        // The counterfeit device asks how to dress its contents.
+        app.add_click_handler(ClickPhase::AttackSelf, 3165, |w, c| {
+            crate::cargo::mail::counterfeit_attack_self(w, c.client, c.mob, c.target)
+        });
         app.init_resource::<MailGoodies>()
-            .add_systems(Startup, init);
+            .add_systems(Startup, init)
+            .add_systems(
+                Update,
+                counterfeit_answers
+                    .in_set(ss13_tgui::server::UiSystems::Handle)
+                    .after(ss13_tgui::prompt::PromptSystems::Answer),
+            );
     }
 }
 
@@ -192,7 +210,9 @@ pub fn populate(world: &mut World, container: Entity, amount: u32) {
             .insert((Networked, StoredIn(container)));
         crate::storage::finish_item(world, mail, 1);
         match pick_index.map(|i| recipients.swap_remove(i)) {
-            Some((mob, job)) => initialize_for_recipient(world, mail, mob, job, !letter),
+            Some((mob, job)) => {
+                initialize_for_recipient(world, mail, mob, job, if letter { 1 } else { 2 })
+            }
             None => junk_mail(world, mail),
         }
     }
@@ -210,7 +230,7 @@ fn initialize_for_recipient(
     mail: Entity,
     mob: Entity,
     job: usize,
-    envelope: bool,
+    goodie_count: u32,
 ) {
     let job_def = world
         .get_resource::<Jobs>()
@@ -259,8 +279,7 @@ fn initialize_for_recipient(
     if let Some(j) = job_goodies {
         goodies.extend(j.mail_goodies);
     }
-    let count = if envelope { 2 } else { 1 };
-    for _ in 0..count {
+    for _ in 0..goodie_count {
         let Some(path) = pick_weight(world, &goodies) else {
             break;
         };
@@ -444,6 +463,282 @@ pub fn holds_mail(world: &World, thing: Entity) -> bool {
         }
     }
     false
+}
+
+/// `/datum/storage/bag/mail` `set_holdable`: what a mail bag refuses.
+pub fn bag_refuses(world: &World, storage: Entity, item: Entity) -> bool {
+    const HOLDS: [&str; 4] = [
+        "/obj/item/mail",
+        "/obj/item/delivery/small",
+        "/obj/item/paper",
+        ss13_mapload::cargo::BOUNTY_CUBE,
+    ];
+    let is_bag = world
+        .get::<DmItem>(storage)
+        .is_some_and(|i| is_under(&i.path, MAIL_BAG));
+    is_bag
+        && !world
+            .get::<DmItem>(item)
+            .is_some_and(|i| HOLDS.iter().any(|root| is_under(&i.path, root)))
+}
+
+/// On counterfeit mail (`/obj/item/mail/traitor`): `armed` makes its contents go off on opening.
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TraitorMail {
+    pub armed: bool,
+}
+
+/// From `crate::disposals` after a letter is unwrapped into `mob`'s hands: armed counterfeit
+/// mail uses each item (`after_unwrap`: `attack_self`).
+pub(crate) fn after_unwrap(world: &mut World, mob: Entity, armed: bool, items: &[Entity]) {
+    if !armed {
+        return;
+    }
+    let Some(client) = world.get::<PlayerMob>(mob).map(|p| p.client) else {
+        return;
+    };
+    let Some(&mob_pos) = world.get::<TilePos>(mob) else {
+        return;
+    };
+    for &item in items {
+        let Some(inventory) = world.get::<crate::inventory::Inventory>(mob) else {
+            return;
+        };
+        let Some(hand) = inventory.hands.iter().position(|h| *h == Some(item)) else {
+            continue;
+        };
+        info!("cargo: armed counterfeit mail opened by {mob}, activating {item}");
+        let ctx = crate::click_handlers::ClickCtx {
+            client,
+            mob,
+            mob_pos,
+            held: Some(item),
+            target: item,
+            pos: mob_pos,
+            modifiers: ss13_shared::protocol::ClickModifiers::default(),
+            active_hand: hand,
+        };
+        crate::click_handlers::run(world, crate::click_handlers::ClickPhase::AttackSelf, &ctx);
+    }
+}
+
+/// `/obj/item/mail/traitor` `armed` of `parcel`.
+pub(crate) fn is_armed(world: &World, parcel: Entity) -> bool {
+    world.get::<TraitorMail>(parcel).is_some_and(|t| t.armed)
+}
+
+const COUNTERFEIT_DEVICE: &str = "/obj/item/storage/mail_counterfeit_device";
+/// `MAX_LABEL_LEN`.
+const MAX_LABEL_LEN: u32 = 64;
+
+/// The counterfeit device's questions, on their prompt.
+#[derive(Component, Clone, Debug)]
+enum Counterfeit {
+    Kind(Entity),
+    Armed(Entity, bool),
+    /// The recipients offered after "Anyone".
+    Recipient(Entity, bool, bool, Vec<(Entity, usize)>),
+    Title(Entity, bool, bool),
+}
+
+impl Counterfeit {
+    fn device(&self) -> Entity {
+        match self {
+            Self::Kind(d) | Self::Armed(d, _) | Self::Recipient(d, ..) | Self::Title(d, ..) => *d,
+        }
+    }
+}
+
+fn mob_name(world: &World, mob: Entity) -> String {
+    world
+        .get::<Name>(mob)
+        .map(|n| n.as_str().to_owned())
+        .or_else(|| world.get::<DmName>(mob).map(|n| n.name.clone()))
+        .unwrap_or_default()
+}
+
+/// `mail_counterfeit_device/attack_self`: the first question.
+pub fn counterfeit_attack_self(
+    world: &mut World,
+    client: Entity,
+    mob: Entity,
+    item: Entity,
+) -> bool {
+    if !world
+        .get::<DmItem>(item)
+        .is_some_and(|i| is_under(&i.path, COUNTERFEIT_DEVICE))
+    {
+        return false;
+    }
+    let buttons = vec!["Mail".to_owned(), "Envelope".to_owned()];
+    let prompt = ss13_tgui::prompt::ask_world(
+        world,
+        ss13_tgui::prompt::Ask::new(
+            client,
+            mob,
+            "Mail Counterfeiting",
+            "Make it look like an envelope or like normal mail?",
+            ss13_tgui::prompt::PromptKind::Alert {
+                buttons,
+                autofocus: true,
+            },
+        ),
+    );
+    world.entity_mut(prompt).insert(Counterfeit::Kind(item));
+    true
+}
+
+fn counterfeit_ask(
+    world: &mut World,
+    client: Entity,
+    mob: Entity,
+    message: &str,
+    kind: ss13_tgui::prompt::PromptKind,
+    next: Counterfeit,
+) {
+    let prompt = ss13_tgui::prompt::ask_world(
+        world,
+        ss13_tgui::prompt::Ask::new(client, mob, "Mail Counterfeiting", message, kind),
+    );
+    world.entity_mut(prompt).insert(next);
+}
+
+/// The device's answers, each checked against the device still being in the asker's hands
+/// (tg `loc != user`).
+fn counterfeit_answers(
+    world: &mut World,
+    mut cursor: Local<bevy::ecs::message::MessageCursor<ss13_tgui::prompt::PromptAnswered>>,
+) {
+    use ss13_tgui::prompt::{PromptAnswer, PromptAnswered, PromptKind};
+    let answers: Vec<(Entity, Entity, Entity, Option<PromptAnswer>)> = cursor
+        .read(world.resource::<bevy::ecs::message::Messages<PromptAnswered>>())
+        .map(|a| (a.prompt, a.client, a.actor, a.answer.clone()))
+        .collect();
+    for (prompt, client, actor, answer) in answers {
+        let Some(stage) = world.get::<Counterfeit>(prompt).cloned() else {
+            continue;
+        };
+        let device = stage.device();
+        let held = world
+            .get::<crate::inventory::CarriedBy>(device)
+            .is_some_and(|c| c.0 == actor);
+        let Some(answer) = answer.filter(|_| held) else {
+            continue;
+        };
+        match (stage, answer) {
+            (Counterfeit::Kind(_), PromptAnswer::Button(i)) => counterfeit_ask(
+                world,
+                client,
+                actor,
+                "Arm it?",
+                PromptKind::Alert {
+                    buttons: vec!["Yes".to_owned(), "No".to_owned()],
+                    autofocus: true,
+                },
+                Counterfeit::Armed(device, i == 1),
+            ),
+            (Counterfeit::Armed(_, envelope), PromptAnswer::Button(i)) => {
+                let crew = living_crew(world);
+                let mut items = vec!["Anyone".to_owned()];
+                items.extend(crew.iter().map(|&(mob, _)| mob_name(world, mob)));
+                counterfeit_ask(
+                    world,
+                    client,
+                    actor,
+                    "Choose a recipient",
+                    PromptKind::List {
+                        items,
+                        default: None,
+                    },
+                    Counterfeit::Recipient(device, envelope, i == 0, crew),
+                );
+            }
+            (Counterfeit::Recipient(_, envelope, armed, crew), PromptAnswer::Item(i)) => {
+                if i == 0 {
+                    counterfeit_ask(
+                        world,
+                        client,
+                        actor,
+                        "Enter mail title, or leave it blank",
+                        PromptKind::Text {
+                            default: String::new(),
+                            max_length: MAX_LABEL_LEN,
+                            multiline: false,
+                        },
+                        Counterfeit::Title(device, envelope, armed),
+                    );
+                } else if let Some(&(mob, job)) = crew.get(i - 1)
+                    && world.get_entity(mob).is_ok()
+                {
+                    counterfeit(world, actor, device, envelope, armed, Ok((mob, job)));
+                }
+            }
+            (Counterfeit::Title(_, envelope, armed), PromptAnswer::Text(title)) => {
+                counterfeit(world, actor, device, envelope, armed, Err(title));
+            }
+            _ => {}
+        }
+    }
+}
+
+/// The end of `attack_self`: the device becomes a counterfeit letter in the hands, for a
+/// recipient (`Ok`) or anyone under a title (`Err`, blank: "mail"/"envelope").
+fn counterfeit(
+    world: &mut World,
+    user: Entity,
+    device: Entity,
+    envelope: bool,
+    armed: bool,
+    recipient: Result<(Entity, usize), String>,
+) {
+    use ss13_mapload::cargo::{TRAITOR_ENVELOPE, TRAITOR_MAIL};
+    let path = if envelope {
+        TRAITOR_ENVELOPE
+    } else {
+        TRAITOR_MAIL
+    };
+    let Some(mail) = crate::construction::spawn_detached(world, path) else {
+        warn!("no {path} prototype (rerun `ss13-mapload convert`)");
+        return;
+    };
+    world
+        .entity_mut(mail)
+        .insert((Networked, TraitorMail { armed }));
+    match recipient {
+        Ok((mob, job)) => initialize_for_recipient(world, mail, mob, job, 0),
+        Err(title) => {
+            let title = title.trim();
+            let name = if title.is_empty() {
+                if envelope { "envelope" } else { "mail" }.to_owned()
+            } else {
+                title.to_owned()
+            };
+            let desc = world
+                .get::<DmName>(mail)
+                .map(|n| n.desc.clone())
+                .unwrap_or_default();
+            world
+                .entity_mut(mail)
+                .insert((DmName { name, desc }, Mail { recipient: None }));
+        }
+    }
+    let inside: Vec<Entity> = world
+        .get::<Stored>(device)
+        .map(|s| s.items().to_vec())
+        .unwrap_or_default();
+    for item in inside {
+        crate::storage::put_inside(world, item, mail);
+    }
+    if let Some(mut inventory) = world.get_mut::<crate::inventory::Inventory>(user)
+        && let Some(slot) = inventory.hands.iter_mut().find(|h| **h == Some(device))
+    {
+        *slot = None;
+    }
+    world.despawn(device);
+    if let Some(inventory) = world.get::<crate::inventory::Inventory>(user).cloned() {
+        crate::storage::put_in_hands(world, user, &inventory, mail);
+    }
+    info!("cargo: {user} made counterfeit mail (armed: {armed})");
 }
 
 #[cfg(test)]

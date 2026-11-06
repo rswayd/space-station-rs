@@ -56,6 +56,8 @@
 //! | 3150 | `vehicles::attack_self` |
 //! | 3155 | `clothing::toggles::attack_self` (adjustable masks) |
 //! | 3160 | `airlock_construction::attack_self` (airlock electronics) |
+//! | 3165 | `cargo::mail::counterfeit_attack_self` |
+//! | 3166 | `cargo::coupon::cigarettes_attack_self` |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):
 //!
@@ -140,6 +142,9 @@
 //! | 3455 | `clothing::sensors::interact` (crew console) |
 //! | 3456 | `devices::flashlight::toggle_light` (right click) |
 //! | 3457 | `devices::gps::interact` (survival pod computer) |
+//! | 3458 | `cargo::mail_sorter::interact` |
+//! | 3459 | `cargo::express::interact` |
+//! | 3461 | `cargo::materials_market::interact` |
 //!
 //! [`ClickPhase::HeldOnTarget`] (a world click with the active hand's item; tg
 //! `item_interaction`, `interact_with_atom`, `pre_attack`, `attackby`):
@@ -191,6 +196,10 @@
 //! | 2900 | `mecha::item_interaction` |
 //! | 2950 | `vehicles::item_interaction` |
 //! | 2960 | `flora::item_interaction` |
+//! | 2970 | `cargo::mail_sorter::item_interaction` |
+//! | 2975 | `cargo::coupon::attack_atom` (supply consoles) |
+//! | 2980 | `cargo::express::item_interaction` |
+//! | 2985 | `cargo::materials_market::item_interaction` |
 //! | 3000 | `mining::item_interaction` |
 //! | 3100 | `science::item_interaction` |
 //! | 3110 | `science::exodrone::server::item_interaction` (the drone launcher) |

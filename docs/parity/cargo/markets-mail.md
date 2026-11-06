@@ -5,13 +5,13 @@
 Машина в карго: покупка листов материалов по текущему биржевому курсу (за карго-бюджет или частным заказом с доставкой шаттлом/экспрессом) и продажа своих листов в обмен на «акции» `stock_block`.
 
 - **Код:** [`/obj/machinery/materials_market`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/materials_market.dm#L6), [`find_order()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/materials_market.dm#L88); tgui: [`MatMarket.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/MatMarket.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ — `crates/ss13_game/src/cargo/materials_market.rs` (`MaterialsMarket`, `buy`, `adjust_market`), `crates/ss13_game/src/cargo/materials_market_client.rs` (tgui `MatMarket`): листы одного торгуемого материала на машине становятся биржевым блоком по текущей цене; окно покупает листы к следующему шаттлу со счёта ID или (с доступом карго, `toggle_budget`) с бюджета карго — один заказ на покупателя/бюджет (`find_order`) с ящиком `crate/cargo/mining`, цена листов + `CARGO_CRATE_VALUE`, ×1.1 лично, не больше 10 полных стопок листа, рынка и средств плательщика, `clear`; при отправке шаттла заказ урезается до запаса рынка, цена растёт, запас снижается (`adjust_market`), листы приходят стопками по 50; строится из платы (`crate::machine_frame`, семья `MaterialsMarket`); `// shortcut:` нет закрепления ключом, подсветки и иконок состояния, всплывающих диапазонов цен и модала обвала (вместо него — уведомление)
 
 ### Биржевые блоки (stock block)
 Блок акций за проданные материалы: его стоимость фиксируется в момент продажи и через некоторое время «ликвидируется» по текущему курсу, о чём предупреждает осмотр.
 
 - **Код:** [`/obj/item/stock_block`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/materials_market.dm#L345), [`become_liquid()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/materials_market.dm#L381)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ — `crates/ss13_game/src/cargo/materials_market.rs` (`StockBlock`, `stock_blocks`, `sell_block`, `block_value`), `crates/ss13_game/src/cargo/export.rs` (`block_cost`, `sell_block`): блок хранит материал, число листов и цену продажи; через 90 с предупреждает, через 180 с «жидкий» — стоит по живой цене биржи; осмотр показывает состояние и стоимость; продаётся шаттлом через рыночный экспорт материала с эластичностью и двигает биржу, сканер оценивает его (пробный прогон)
 
 ### Биржа материалов (SSstock_market)
 Подсистема, двигающая цену и количество каждого материала по тренду, с редкими рыночными событиями (обвал, бум).
@@ -25,13 +25,13 @@
 
 - **Код:** [`SUBSYSTEM_DEF(market)`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/market.dm#L1), [`/datum/market`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/markets/_market.dm#L1), [`/datum/market/blackmarket`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/markets/_market.dm#L91), [`/datum/market_item`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/markets/market_item.dm#L1), [`market_items/`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/markets/market_items)
 - **BandaStation:** [`market.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/market.dm#L123) — доставка телепорт-капсулой; [`market_items/misc.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/markets/market_items/misc.dm#L38) — кобура-аксессуар
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ❌ нет — не перенесено в этой волне (нужны данные `market_item` из конвертера и LTSRBT)
 
 ### Аплинк чёрного рынка
 Самодельное устройство (крафт из радио): каталог по категориям, покупка за кредиты с привязанной ID, выбор способа доставки.
 
 - **Код:** [`/obj/item/market_uplink`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/markets/market_uplink.dm#L1), [`/datum/crafting_recipe/radio_containing/blackmarket_uplink`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/markets/market_uplink.dm#L165); tgui: [`BlackMarketUplink.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/BlackMarketUplink.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ❌ нет — не перенесено в этой волне (зависит от подсистемы чёрного рынка)
 
 ### LTSRBT (телепад чёрного рынка)
 Машина, принимающая покупки чёрного рынка, и позволяющая выставить свой предмет на продажу.
@@ -50,22 +50,22 @@
 Шаттл снабжения регулярно привозит почту для живого экипажа (`SSeconomy` копит её, `create_mail()`): письмо адресовано конкретному игроку, открыть может только он (иначе — долго и с шансом ловушки); внутри предметы по должности, деньги, купоны или спам. Письма можно сортировать дисполсалами.
 
 - **Код:** [`/obj/item/mail`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/mail.dm#L2), [`initialize_for_recipient()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/mail.dm#L174), [`unwrap()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/mail.dm#L129), [`junk_mail()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/mail.dm#L217), [`create_mail()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/mobile_port/variants/supply.dm#L344)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/cargo/mail.rs` (`economy_tick`, `create_mail`, `populate`, `attack_self`): почта копится каждый второй тик экономики, грузится в ящик на шаттл при вылете с ЦК (не на красном и дельта-коде), 70% писем/30% конвертов, адресат — живой член экипажа (имя, цвет отдела, общие и должностные `mail_goodies`, спавнеры разворачиваются), остальное — спам; вскрывает только адресат (1.5 с), с письмами шаттл не улетает; `// shortcut:` нет сортировки дисполсалами (тег назначения на письме), подарков квирков и праздников, марок, выходного в воскресенье, прилагательных в именах спама
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/cargo/mail.rs` (`economy_tick`, `create_mail`, `populate`, `attack_self`): почта копится каждый второй тик экономики, грузится в ящик на шаттл при вылете с ЦК (не на красном и дельта-коде), 70% писем/30% конвертов, адресат — живой член экипажа (имя, цвет отдела, общие и должностные `mail_goodies`, спавнеры разворачиваются), остальное — спам; вскрывает только адресат (1.5 с), с письмами шаттл не улетает; сортировка — [сортировщиком почты](#сортировщик-почты); `// shortcut:` нет тега назначения на письме, подарков квирков и праздников, марок, выходного в воскресенье, прилагательных в именах спама (нет `GLOB.adjectives`)
 
 ### Почтовый ящик, сумка почтальона и почтовая забастовка
 Ящик `crate/mail` с письмами, сумка `bag/mail`; событие «почтовая забастовка» — особые письма.
 
 - **Код:** [`/obj/structure/closet/crate/mail`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/mail.dm#L255), [`/obj/item/storage/bag/mail`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/mail.dm#L349), [`/obj/structure/closet/crate/mail/full/mail_strike`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/mail.dm#L330)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/cargo/mail.rs` (`create_mail`, `populate`): ящик `crate/mail/economy` с почтой (не больше вместимости); `// shortcut:` нет иконок ящика по содержимому, сумки почтальона; забастовка — событие займа шаттла, в ../events/
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/cargo/mail.rs` (`create_mail`, `populate`, `bag_refuses`): ящик `crate/mail/economy` с почтой (не больше вместимости); сумка почтальона (`/datum/storage/bag/mail`: 21 предмет, только письма, мелкие посылки, бумага и кубы заказов, `crate::storage::can_insert`), её содержимое высыпается в сортировщик; `// shortcut:` нет иконок ящика по содержимому, сбора сумкой с пола; забастовка и её «мёртвые» письма — событие займа шаттла, в ../events/
 
 ### Поддельные письма (mail counterfeit device)
 Устройство предателя/контрабанды: упаковать предмет в письмо на любое имя; при вскрытии не адресатом срабатывает ловушка.
 
 - **Код:** [`/obj/item/storage/mail_counterfeit_device`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/mail.dm#L496), [`/obj/item/mail/traitor`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/mail.dm#L389)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ — `crates/ss13_game/src/cargo/mail.rs` (`counterfeit_attack_self`, `counterfeit_answers`, `TraitorMail`, `after_unwrap`), `crates/ss13_game/src/disposals/mail.rs` (`complete_unwrap`): GLA-2 в руке спрашивает письмо/конверт, взвести ли, адресата (член экипажа или «Anyone» с заголовком до 64 символов) — каждый ответ проверяет, что устройство всё ещё в руке; устройство превращается в письмо со своим содержимым (адресное — как обычная почта, без подарков); взведённое при вскрытии кладёт содержимое в руки и использует его (`attack_self`: граната взводится); `// shortcut:` нет обезвреживания мультитулом и логов `log_bomber`
 
 ### Сортировщик почты
 Машина в карго: принимает письма и раскладывает их по отделам получателей.
 
 - **Код:** [`/obj/machinery/mailsorter`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/vending/mail.dm#L7)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ — `crates/ss13_game/src/cargo/mail_sorter.rs` (`MailSorter`, `item_interaction`, `interact`, `work`): принимает письма и содержимое сумки почтальона (письма и бумагу, до 100), пустая рука — меню «Eject» (выбранное письмо через 5 с), «Dump» (всё сразу на выходной тайл), «Sort» (отдел из девяти: через 5 с письма адресатов, чей основной отдел совпадает, выходят на выходной тайл, через 1 с отчёт о несортированных, ещё через 1 с — снова свободен); ответы перепроверяются (досягаемость, занятость); строится из платы и разбирается (`crate::machine_frame`, семья `MailSorter`, почта высыпается), осмотр — свободное место и число писем; `// shortcut:` выход только на юг (нет поворота Alt-кликом), нет звуков, оверлеев состояния и броска писем

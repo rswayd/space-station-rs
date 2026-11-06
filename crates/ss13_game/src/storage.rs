@@ -174,6 +174,9 @@ pub fn can_insert(world: &World, storage: Entity, item: Entity) -> Result<(), Re
     if crate::clothing::holsters::refuses(world, storage, item) {
         return Err(Refusal::CantHold);
     }
+    if crate::cargo::mail::bag_refuses(world, storage, item) {
+        return Err(Refusal::CantHold);
+    }
     let contents: Vec<u8> = world
         .get::<Stored>(storage)
         .map(|s| s.items().iter().map(|&e| w_class(world, e)).collect())

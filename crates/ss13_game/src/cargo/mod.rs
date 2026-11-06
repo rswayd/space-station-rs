@@ -21,17 +21,31 @@ pub mod client;
 #[cfg(feature = "server")]
 pub mod console;
 #[cfg(feature = "server")]
+pub mod coupon;
+#[cfg(feature = "server")]
 pub mod economy;
 #[cfg(feature = "server")]
 pub mod export;
 #[cfg(feature = "server")]
+pub mod express;
+#[cfg(feature = "client")]
+pub mod express_client;
+#[cfg(feature = "server")]
 pub mod mail;
+#[cfg(feature = "server")]
+pub mod mail_sorter;
+#[cfg(feature = "server")]
+pub mod materials_market;
+#[cfg(feature = "client")]
+pub mod materials_market_client;
 #[cfg(feature = "server")]
 pub mod scanner;
 #[cfg(feature = "server")]
 pub mod stock_market;
 #[cfg(feature = "server")]
 pub mod supply;
+#[cfg(feature = "server")]
+pub mod supplypod;
 
 /// Cargo on the server: the economy, the supply shuttle, the consoles.
 #[cfg(feature = "server")]
@@ -54,8 +68,24 @@ impl bevy::prelude::Plugin for CargoServerPlugin {
             console::ConsolePlugin,
             bounty::BountyPlugin,
             mail::MailPlugin,
+            mail_sorter::MailSorterPlugin,
+            coupon::CouponPlugin,
+            supplypod::SupplyPodPlugin,
+            express::ExpressPlugin,
+            materials_market::MaterialsMarketPlugin,
         ));
     }
+}
+
+/// Examine lines of the cargo machines and items (from `crate::examine`).
+#[cfg(feature = "server")]
+pub fn examine_lines(
+    world: &bevy::prelude::World,
+    target: bevy::prelude::Entity,
+    lines: &mut Vec<(ss13_shared::chat::Span, String)>,
+) {
+    mail_sorter::examine_lines(world, target, lines);
+    materials_market::examine_lines(world, target, lines);
 }
 
 /// tg `MONEY_SYMBOL` / `MONEY_NAME`.
@@ -187,6 +217,88 @@ pub const REASON: &str = "reason";
 /// The request console's budget: present and not `"0"`, the requester's department pays (tg asks
 /// "Which department are you requesting this for?" with `tgui_alert`).
 pub const DEPARTMENT: &str = "department";
+
+/// tgui `CargoExpress`: the express supply console (`express` on the server, `express_client`
+/// draws it). The catalogue is [`CargoStatic`].
+pub struct CargoExpressUi;
+
+impl UiInterface for CargoExpressUi {
+    const NAME: &'static str = "CargoExpress";
+    type Data = CargoExpressData;
+    type StaticData = CargoStatic;
+}
+
+/// `/obj/machinery/computer/cargo/express/ui_data`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CargoExpressData {
+    pub locked: bool,
+    pub points: i64,
+    pub using_beacon: bool,
+    /// The beacon's area name.
+    pub beaconzone: String,
+    pub beacon_name: String,
+    pub beacon_error: bool,
+    pub can_buy_beacon: bool,
+    pub has_beacon: bool,
+    pub can_beacon: bool,
+    pub print_msg: String,
+    pub message: String,
+}
+
+pub const LZ_CARGO: &str = "LZCargo";
+pub const LZ_BEACON: &str = "LZBeacon";
+pub const PRINT_BEACON: &str = "printBeacon";
+
+/// tgui `MatMarket`: the materials market (`materials_market` on the server,
+/// `materials_market_client` draws it).
+pub struct MatMarketUi;
+
+impl UiInterface for MatMarketUi {
+    const NAME: &'static str = "MatMarket";
+    type Data = MatMarketData;
+    type StaticData = ();
+}
+
+/// A `materials` entry.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct MarketMaterial {
+    /// The `buy` act's `material`.
+    pub name: String,
+    pub price: f64,
+    /// `value_per_unit`: the list is sorted by it.
+    pub rarity: f64,
+    pub min_threshold: f64,
+    pub max_threshold: f64,
+    pub quantity: f64,
+    /// `trend`: "up", "down" or "neutral".
+    pub trend: String,
+    pub color: [u8; 3],
+    /// Sheets of it in the user's current order.
+    pub requested: u32,
+    /// `k_elasticity * 100`.
+    pub elastic: f64,
+}
+
+/// `/obj/machinery/materials_market/ui_data`.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct MatMarketData {
+    pub ordering_private: bool,
+    pub can_order_cargo: bool,
+    pub credit_balance: i64,
+    pub order_balance: i64,
+    /// Sorted by rarity.
+    pub materials: Vec<MarketMaterial>,
+    pub catastrophe: bool,
+    /// Deciseconds until the next market tick (`updateTime`).
+    pub update_time: f64,
+}
+
+pub const MARKET_BUY: &str = "buy";
+pub const MARKET_TOGGLE_BUDGET: &str = "toggle_budget";
+pub const MARKET_CLEAR: &str = "clear";
+/// `buy`'s params.
+pub const MARKET_MATERIAL: &str = "material";
+pub const MARKET_QUANTITY: &str = "quantity";
 
 /// tgui `CivCargoHoldTerminal`: the civilian bounty console (`bounty` on the server,
 /// `bounty_client` draws it).

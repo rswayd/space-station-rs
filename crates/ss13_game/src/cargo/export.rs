@@ -10,9 +10,9 @@
 //!   [`StockMarket`] price per sheet, and each sale moves the market.
 //! - [`export_value`] is the dry run the export scanner shows.
 //! - A bounty cube sells through `crate::cargo::bounty::sell_cube` (its pricetag pays the
-//!   holders first).
-// shortcut: no other `COMSIG_ITEM_EXPORTED` handlers (sales tags), no hologram check, no stock
-// blocks.
+//!   holders first); a stock block through its material's market export
+//!   (`crate::cargo::materials_market::sell_block`).
+// shortcut: no other `COMSIG_ITEM_EXPORTED` handlers (sales tags), no hologram check.
 
 use bevy::prelude::*;
 use ss13_mapload::cargo::{ExportAmount, ExportDef};
@@ -165,6 +165,56 @@ impl Exports {
     /// The material a market export sells.
     pub fn market_material(&self, index: usize) -> Option<usize> {
         self.market.get(index).copied().flatten().map(|(m, _)| m)
+    }
+
+    /// The market export selling `MATERIALS[material]`.
+    pub fn market_export(&self, material: usize) -> Option<usize> {
+        self.market
+            .iter()
+            .position(|m| m.is_some_and(|(mat, _)| mat == material))
+    }
+
+    /// A stock block's `get_cost` through market export `index`: `sheets` at `unit` (the
+    /// block's locked or live price) times the export's own `cost`, with elasticity and boost.
+    pub fn block_cost(&self, index: usize, sheets: f64, unit: f64, now: f64) -> i64 {
+        let def = &self.defs[index];
+        let multiplier = self.market[index].map_or(def.cost, |(_, m)| m);
+        let mut total = multiplier * unit * sheets;
+        if def.k_elasticity > 0.0 {
+            total *= self.elasticity(index, now);
+        }
+        if self.boosted.contains(&index) {
+            total *= EXPORT_BOOST_MULT;
+        }
+        round_up(total)
+    }
+
+    /// [`Exports::sell`] of a stock block. `false`: worth nothing, not sold.
+    pub fn sell_block(
+        &mut self,
+        index: usize,
+        sheets: f64,
+        unit: f64,
+        name: &str,
+        now: f64,
+        report: &mut ExportReport,
+    ) -> bool {
+        let value = self.block_cost(index, sheets, unit, now);
+        if sheets <= 0.0 || value <= 0 {
+            return false;
+        }
+        let def = &self.defs[index];
+        let n = self.defs.len();
+        report.total_value.resize(n, 0);
+        report.total_amount.resize(n, 0.0);
+        report.total_value[index] += value;
+        report.total_amount[index] += sheets * def.amount_report_multiplier;
+        report.exported_atoms.push(name.to_owned());
+        if def.k_elasticity > 0.0 {
+            let k = (self.elasticity(index, now) - sheets * def.k_hit_percentile).max(0.0);
+            self.elasticity[index] = (k, now);
+        }
+        true
     }
 
     /// Takes the stock market's current prices.
@@ -358,6 +408,9 @@ pub fn export_item_and_contents(
         if super::bounty::sell_cube(world, exports, e, report) {
             continue;
         }
+        if super::materials_market::sell_block(world, exports, e, now, report) {
+            continue;
+        }
         let stack = stack_of(world, e);
         let Some(index) = exports.find(&path, stack, now) else {
             continue;
@@ -396,6 +449,9 @@ pub fn export_value(world: &World, exports: &Exports, thing: Entity, now: f64) -
         .filter_map(|&e| {
             if let Some(cube) = world.get::<super::bounty::BountyCube>(e) {
                 return Some(cube.sale_value());
+            }
+            if let Some(value) = super::materials_market::block_value(world, exports, e, now) {
+                return Some(value);
             }
             let path = path_of(world, e)?;
             let stack = stack_of(world, e);

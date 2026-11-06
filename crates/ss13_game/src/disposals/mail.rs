@@ -138,13 +138,15 @@ pub(super) fn complete_unwrap(world: &mut World, mob: Entity, parcel: Entity) {
         .get::<crate::storage::Stored>(parcel)
         .map(|s| s.items().to_vec())
         .unwrap_or_default();
-    for item in contents {
+    let armed = crate::cargo::mail::is_armed(world, parcel);
+    for &item in &contents {
         let Some(inventory) = world.get::<Inventory>(mob).cloned() else {
             break;
         };
         crate::storage::put_in_hands(world, mob, &inventory, item);
     }
     world.despawn(parcel);
+    crate::cargo::mail::after_unwrap(world, mob, armed, &contents);
 }
 
 /// `delivery/item_interaction` with a tagger (sets `sort_tag`) and

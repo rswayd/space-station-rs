@@ -814,6 +814,7 @@ fn metastation_supply() {
                 paying_account: None,
                 paying_department: None,
                 can_be_cancelled: true,
+                coupon: None,
             },
         );
         assert!(ss13_game::cargo::supply::request(world, true));
