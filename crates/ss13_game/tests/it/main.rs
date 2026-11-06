@@ -56,6 +56,7 @@ mod mecha;
 mod medical;
 mod medicine;
 mod mining;
+mod misc_ui;
 mod mobs;
 mod modsuit;
 mod mood;

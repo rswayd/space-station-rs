@@ -43,6 +43,10 @@ impl Plugin for GameClientPlugin {
         app.add_plugins(crate::animation_client::AnimationClientPlugin);
         app.add_plugins(crate::language_menu_client::LanguageMenuClientPlugin);
         app.add_plugins((
+            crate::screentips_client::ScreentipsClientPlugin,
+            crate::escape_menu_client::EscapeMenuClientPlugin,
+        ));
+        app.add_plugins((
             PredictionPlugin,
             crate::ui_sprites::UiSpritesPlugin,
             crate::lobby_client::LobbyClientPlugin,
@@ -302,6 +306,18 @@ pub struct Press {
     pub time: f64,
 }
 
+/// The hover sent for screentips: the last cursor position not looked at yet, when the next
+/// look may happen, and the last atom sent (`Some(None)`: nothing).
+#[derive(Default)]
+struct Hovering {
+    cursor: Option<Vec2>,
+    next: f64,
+    sent: Option<Option<NetId>>,
+}
+
+/// At most this often the atom under a moving cursor is looked up for the screentip.
+const HOVER_SECS: f64 = 0.1;
+
 /// What a primary release does, BYOND `Click` / `MouseDrop` and tg `check_drag_proximity`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Release {
@@ -347,7 +363,8 @@ pub fn on_release(
 /// (`ss13_devtools` scripts) clicks the world too.
 // Cost: one pass over the drawn sprites (base icons and overlays in view, a few thousand), one
 // affine inverse and at most one mask bit each, per press and release, i.e. per human click
-// rate; nothing per frame without one.
+// rate; nothing per frame without one. A moving cursor adds one such pass per 0.1 s at most
+// (the screentip hover).
 #[allow(clippy::too_many_arguments)]
 fn send_clicks(
     mut pointer: MessageReader<PointerInput>,
@@ -363,7 +380,7 @@ fn send_clicks(
     atlas: Option<Res<IconAtlas>>,
     sprites: Query<SpriteItem>,
     owners: Query<(&NetEntity, &TilePos, Option<&Appearance>)>,
-    mut pressed: Local<Option<Press>>,
+    (mut pressed, mut hovering): (Local<Option<Press>>, Local<Hovering>),
     mut intents: MessageWriter<SendIntent>,
 ) {
     let inputs: Vec<(Vec2, PointerAction)> = pointer
@@ -371,7 +388,14 @@ fn send_clicks(
         .filter(|input| input.pointer_id == PointerId::Mouse)
         .map(|input| (input.location.position, input.action))
         .collect();
-    if inputs.is_empty() {
+    if let Some(&(cursor, _)) = inputs
+        .iter()
+        .rev()
+        .find(|(_, action)| matches!(action, PointerAction::Move { .. }))
+    {
+        hovering.cursor = Some(cursor);
+    }
+    if inputs.is_empty() && hovering.cursor.is_none() {
         return;
     }
     let Some(own) = map.controlled() else {
@@ -474,6 +498,21 @@ fn send_clicks(
         m
     };
     let now = time.elapsed_secs_f64();
+    // The screentip (`crate::screentips`): what the cursor is over, sent when it changes.
+    if let Some(cursor) = hovering.cursor
+        && now >= hovering.next
+    {
+        hovering.cursor = None;
+        hovering.next = now + HOVER_SECS;
+        let over = match target_at(cursor).0 {
+            Some(MouseTarget::Atom(id)) => Some(id),
+            _ => None,
+        };
+        if hovering.sent != Some(over) {
+            hovering.sent = Some(over);
+            intents.write(SendIntent(ClientIntent::Hover(over)));
+        }
+    }
     for (cursor, action) in inputs {
         match action {
             PointerAction::Press(PointerButton::Primary) => {
