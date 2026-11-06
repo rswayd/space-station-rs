@@ -51,6 +51,11 @@ jobs:
     name: wasm build and site
     needs: data
     runs-on: ubuntu-latest
+    # Same as the Windows demo job: `codegen-units = 1` in `[profile.release]` makes a cold CI
+    # build of ss13_game single-threaded.
+    timeout-minutes: 75
+    env:
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
     steps:
       - uses: actions/checkout@v5
       # Host-side build scripts and proc macros still link with clang + mold.

@@ -44,6 +44,12 @@ jobs:
   windows:
     name: client and server (windows)
     runs-on: windows-latest
+    # `[profile.release]` has `codegen-units = 1`: ss13_game alone took 17 min on the 4-core
+    # runner and the LTO links of both binaries ran past an hour. 16 units build in parallel;
+    # rust-cache only saves after a successful run, so a run that never finishes never warms it.
+    timeout-minutes: 75
+    env:
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
     steps:
       - uses: actions/checkout@v5
       - uses: Swatinem/rust-cache@v2
