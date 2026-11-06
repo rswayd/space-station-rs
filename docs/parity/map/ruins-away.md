@@ -12,7 +12,7 @@
 Вулканическая планета под станцией при `minetype = lavaland`: база шахтёров, лавовые реки, пепельные бури, мегафауна; поверхность генерируется клеточным автоматом и биомами.
 
 - **Код:** [`Lavaland.dmm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/_maps/map_files/Mining/Lavaland.dmm), [`LoadGroup(... "Lavaland" ...)`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/mapping.dm#L493), [`/datum/map_generator/cave_generator/lavaland`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/mapgen/Cavegens/LavalandGenerator.dm#L1), [`/datum/biome/lavaland`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/mapgen/biomes/lavaland.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload/src/lib.rs` (`MiningLevel`, `mining_z`): `Lavaland.dmm` грузится на свой z сразу после станции (не станционный уровень) при `minetype = lavaland` в json карты (по умолчанию в tg), `SS13_MINING_LEVEL=0` отключает; планетарная атмосфера `LAVALAND_ATMOS` — `ss13_atmos::planetary`; пещеры — `crates/ss13_mapload/src/cave.rs` (см. «Генераторы карт»); доки шахтёрского, общего и трудового шаттлов и случайные доки капсул работают. Нет лавовых рек, пепельных бурь (→ ../round/weather), мегафауны и фауны (→ ../mobs/), руин (→ «Руины Лаваленда»), урона лавы
 
 ### Ледяная луна и дикая местность (IceBox)
 Планетарные уровни IceBox: подземные слои с плазменной лавой, поверхность из случайно выбранных кусков `IceWilderness` (скальные равнины, лес, горы), генерация пещер (поверхность, лес, скалы, глубины).
@@ -24,7 +24,7 @@
 Генератор пещер (клеточный автомат + биомы + флора/фауна/руда), генератор джунглей, старая система процедурного маппинга (`mapGenerator` с модулями), запуск генерации рельефа после загрузки.
 
 - **Код:** [`/datum/map_generator/cave_generator`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/mapgen/CaveGenerator.dm#L9), [`jungle_generator`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/mapgen/JungleGenerator.dm#L4), [`/datum/map_generator` (procedural)](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/procedural_mapping/mapGenerator.dm#L3), [`/datum/map_generator_module`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/procedural_mapping/mapGeneratorModule.dm#L2), [`run_map_terrain_generation()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/mapping.dm#L532)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload/src/cave.rs`: тайлы `/turf/open/genturf` уровня шахты до спавна заменяются клеточным автоматом (`noise_percent` 51, `ca_steps` 8, `birth_limit` 6, `survival_limit` 4, края — скала) на базальт или вулканическую породу (`cave_generator/lavaland`); нет BSP-комнат и коридоров rust-g `cave_system_generator`, биомов, флоры, фич (гейзеры, рудные жерла), мобов, генератора джунглей и процедурного `mapGenerator`
 
 ### Размещение руин
 Руины ставятся случайно по бюджету (конфиг `space_budget`, `lavaland_budget`, `icemoon_budget`) в разрешённые зоны, с учётом `always_place`, `unpickable`, тематических руин и рудного бюджета.

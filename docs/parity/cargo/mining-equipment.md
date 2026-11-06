@@ -71,7 +71,7 @@
 Консоль шаттла между станцией и аванпостом на лаваленде/ледяной луне; гардероб и шкаф шахтёра со снаряжением.
 
 - **Код:** [`/obj/machinery/computer/shuttle/mining`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/mine_items.dm#L92), [`/obj/docking_port/stationary/mining_home`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/mine_items.dm#L126), [`/obj/structure/closet/secure_closet/miner`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/mine_items.dm#L57)
-- **Статус в ss13-rs:** ❌ нет — уровня шахты (лаваленд/ледяная луна) не загружается, шаттлу некуда лететь
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/mining_shuttles.rs`: шахтёрский (`mining_delta`) и общий лавалендский (`mining_common_meta`) шаттлы грузятся на свои доки станции (`roundstart_template` типа дока), консоли `mining` и `mining/common` (`crates/ss13_game/src/shuttle_nav.rs`) возят их к `mining_away` / `lavaland_common_away` на лаваленде (`ss13_mapload::MiningLevel`); нет отказа консоли при импланте изгнания и главе революции, нет `landing_zone_dock`/`mining_public` (вспомогательной базы); шкафы шахтёров здесь не проверялись
 
 ### Вспомогательная база (aux base)
 Строительная база шахтёров: консоль с дронами-строителями, выбор места посадки маяком, запуск базы на планету.

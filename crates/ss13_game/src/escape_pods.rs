@@ -13,10 +13,12 @@
 //!   sends it to its `<pod>_lavaland` dock (`/obj/docking_port/stationary/random`) on red alert
 //!   or above, or once emagged ([`request`]); a pod launches once (`EARLY_LAUNCHED`) and no
 //!   longer follows the emergency shuttle, so its riders did not escape.
-// shortcut: no lavaland level is loaded, so the random dock does not move to lavaland
-// (`target_area`): at the launch it moves to a random open space spot of its own (the station's)
-// level, away from the edges (`edge_distance`), where the pod's whole footprint is space.
-// No pod storage lock (`/datum/storage/pod`), no station traits for cramped or luxury pods.
+//! - The random dock moves to a random tile of `target_area` (`/area/lavaland/surface/outdoors`)
+//!   on the mining level ([`ss13_mapload::mining_z`]) at least `edge_distance` from the edges,
+//!   with no fit check (`override_can_dock_checks`): the pod crushes what it lands on.
+// shortcut: the random dock is placed at the launch, not at map load. Without a mining level it
+// moves to a random open space spot of its own (the station's) level instead, away from the
+// edges, where the pod's whole footprint is space. No pod storage lock (`/datum/storage/pod`), no station traits for cramped or luxury pods.
 
 use std::path::PathBuf;
 
@@ -37,6 +39,8 @@ use crate::shuttle_nav::NavShuttle;
 
 const POD_PORT: &str = "/obj/docking_port/mobile/pod";
 const RANDOM_DOCK: &str = "/obj/docking_port/stationary/random";
+/// `/obj/docking_port/stationary/random` `target_area`.
+const TARGET_AREA: &str = "/area/lavaland/surface/outdoors";
 const SPACE_TURF: &str = "/turf/open/space";
 /// `/obj/docking_port/stationary/random` `edge_distance`.
 const EDGE_DISTANCE: i32 = 16;
@@ -222,10 +226,14 @@ pub fn request(
     Ok(())
 }
 
-/// `/obj/docking_port/stationary/random/Initialize` without a lavaland level: moves `dock` to a
-/// random spot of its level where the pod at `port` would cover only space, at least
-/// `edge_distance` from the edges. False when no try fits.
+/// `/obj/docking_port/stationary/random/Initialize`: moves `dock` to the mining level
+/// ([`place_on_mining_level`]); without one, to a random spot of its level where the pod at
+/// `port` would cover only space, at least `edge_distance` from the edges. False when no spot
+/// fits.
 pub fn place_random_dock(world: &mut World, port: Entity, dock: Entity) -> bool {
+    if let Some(z) = ss13_mapload::mining_z(world) {
+        return place_on_mining_level(world, dock, z);
+    }
     let (Some(mobile), Some(stationary), Some(&at)) = (
         world.get::<MobileDock>(port).cloned(),
         world.get::<StationaryDock>(dock).cloned(),
@@ -273,4 +281,35 @@ fn open_space(world: &World, tile: TilePos, space: Option<Entity>) -> bool {
     crate::construction::turf_at(world, tile)
         .and_then(|t| crate::construction::path_of(world, t))
         .is_some_and(|p| is_under(&p, SPACE_TURF))
+}
+
+/// `/obj/docking_port/stationary/random/Initialize` with the mining level at `z`: a random tile
+/// of exactly `target_area` (`get_area_turfs` without subtypes), at least `edge_distance` from
+/// the edges. False (tg `INITIALIZE_HINT_QDEL`) when the level has none.
+pub fn place_on_mining_level(world: &mut World, dock: Entity, z: u16) -> bool {
+    let Some(area) = crate::shuttle::area_named(world, TARGET_AREA) else {
+        return false;
+    };
+    let Some((w, h)) = world.resource::<SpatialIndex>().level_size(z) else {
+        return false;
+    };
+    let (w, h) = (w as i32, h as i32);
+    let areas = world.resource::<ss13_mapload::Areas>();
+    let turfs: Vec<TilePos> = (EDGE_DISTANCE..=h + 1 - EDGE_DISTANCE)
+        .flat_map(|y| (EDGE_DISTANCE..=w + 1 - EDGE_DISTANCE).map(move |x| TilePos::new(x, y, z)))
+        .filter(|&p| areas.area_at(p) == Some(area))
+        .collect();
+    if turfs.is_empty() {
+        warn!("random dock {dock}: no {TARGET_AREA} tile on z{z}");
+        return false;
+    }
+    let seed = world.get_resource::<MapSeed>().map_or(0, |s| s.0);
+    let mut rng = Rng::new(seed ^ 0x504f_445f ^ dock.to_bits());
+    let pos = turfs[rng.range(0, turfs.len() as i64 - 1) as usize];
+    world.entity_mut(dock).insert(pos);
+    if let Some(mut stationary) = world.get_mut::<StationaryDock>(dock) {
+        stationary.area = Some(area);
+    }
+    info!("random dock {dock} placed on the mining level at {pos:?}");
+    true
 }

@@ -518,6 +518,7 @@ impl Plugin for ShuttleServerPlugin {
                 crate::arrivals::ArrivalsPlugin,
                 crate::shuttle_nav::ShuttleNavPlugin,
                 crate::shuttle_catalog::ShuttleCatalogPlugin,
+                crate::mining_shuttles::MiningShuttlesPlugin,
             ));
     }
 }
@@ -575,6 +576,50 @@ impl RoundstartPorts {
 
 const ESCAPE_POD_LOADER: &str = "/obj/docking_port/stationary/escape_pod";
 const TEMPLATE_ROOT: &str = "/datum/map_template/shuttle/";
+/// Stationary port types whose `roundstart_template` is a type default, not a map edit
+/// (`code/modules/mining/mine_items.dm`, `laborcamp/laborshuttle.dm`).
+const TYPE_TEMPLATES: [(&str, &str); 10] = [
+    (
+        "/obj/docking_port/stationary/mining_home",
+        "/datum/map_template/shuttle/mining/delta",
+    ),
+    (
+        "/obj/docking_port/stationary/mining_home/kilo",
+        "/datum/map_template/shuttle/mining/kilo",
+    ),
+    (
+        "/obj/docking_port/stationary/mining_home/northstar",
+        "/datum/map_template/shuttle/mining/northstar",
+    ),
+    (
+        "/obj/docking_port/stationary/mining_home/nebula",
+        "/datum/map_template/shuttle/mining/nebula",
+    ),
+    (
+        "/obj/docking_port/stationary/mining_home/common",
+        "/datum/map_template/shuttle/mining_common/meta",
+    ),
+    (
+        "/obj/docking_port/stationary/mining_home/common/kilo",
+        "/datum/map_template/shuttle/mining_common/kilo",
+    ),
+    (
+        "/obj/docking_port/stationary/mining_home/common/northstar",
+        "/datum/map_template/shuttle/mining_common/northstar",
+    ),
+    (
+        "/obj/docking_port/stationary/laborcamp_home",
+        "/datum/map_template/shuttle/labour/delta",
+    ),
+    (
+        "/obj/docking_port/stationary/laborcamp_home/kilo",
+        "/datum/map_template/shuttle/labour/kilo",
+    ),
+    (
+        "/obj/docking_port/stationary/laborcamp_home/nebula",
+        "/datum/map_template/shuttle/labour/nebula",
+    ),
+];
 
 /// `/datum/map_template/shuttle/<port_id>/<suffix>` -> `(port_id, "<port_id>_<suffix>")`.
 pub fn template_id(path: &str) -> Option<(String, String)> {
@@ -593,9 +638,14 @@ fn port_template(obj: &DmmObject) -> Option<(String, String)> {
     match obj.var("roundstart_template") {
         Some(DmValue::Path(path)) => template_id(path),
         Some(_) => None,
-        // shortcut: no station traits, so never the cramped or luxury pods.
-        None => is_under(&obj.path, ESCAPE_POD_LOADER)
-            .then(|| ("escape_pod".to_owned(), "escape_pod_default".to_owned())),
+        None => {
+            if let Some((_, template)) = TYPE_TEMPLATES.iter().find(|(t, _)| *t == obj.path) {
+                return template_id(template);
+            }
+            // shortcut: no station traits, so never the cramped or luxury pods.
+            is_under(&obj.path, ESCAPE_POD_LOADER)
+                .then(|| ("escape_pod".to_owned(), "escape_pod_default".to_owned()))
+        }
     }
 }
 
@@ -1922,6 +1972,33 @@ cdb
                 (3, 1, "escape_pod_default"),
                 (1, 2, "escape_pod_default"),
                 (3, 2, "escape_pod_default"),
+            ]
+        );
+    }
+
+    #[test]
+    fn mining_and_labour_docks_load_their_type_templates() {
+        let map = DmmMap::parse(
+            r#""a" = (/obj/docking_port/stationary/mining_home{dir = 8},/turf/open/space,/area/space)
+"b" = (/obj/docking_port/stationary/mining_home/common,/turf/open/space,/area/space)
+"c" = (/obj/docking_port/stationary/laborcamp_home/kilo,/turf/open/space,/area/space)
+
+(1,1,1) = {"
+abc
+"}
+"#,
+        )
+        .unwrap();
+        let found: Vec<(String, String)> = roundstart_ports(&map)
+            .into_iter()
+            .map(|p| (p.port_id, p.id))
+            .collect();
+        assert_eq!(
+            found,
+            vec![
+                ("mining".into(), "mining_delta".into()),
+                ("mining_common".into(), "mining_common_meta".into()),
+                ("labour".into(), "labour_kilo".into()),
             ]
         );
     }

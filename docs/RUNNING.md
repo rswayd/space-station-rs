@@ -72,6 +72,11 @@ SS13_MAP=MetaStation SS13_ASSETS=$ASSETS cargo run -p ss13_server
   server logs a warning at startup and the lobby shows no source line. Set it on every public
   server.
 - `SS13_MAP_SEED=<u64>` fixes the random spawner rolls of the map load (default: new each start).
+- `SS13_MINING_LEVEL`: the `ss13_server` binary loads the station's mining level (Lavaland,
+  from the map json's `minetype`, tg default `lavaland`) onto its own z after the station, with
+  its caves generated from `SS13_MAP_SEED`; `0` loads none, a `.dmm` path (relative to
+  `SS13_SOURCE`) loads that map instead. 255x255: ~65k turfs and ~5k objects more, one more
+  atmos level. Tests and fixture maps load none unless they insert `ss13_mapload::MiningLevel`.
 - `SS13_SPAWN_AT=x,y[,z]` (dev): every player spawns on that tile, for screenshots of a spot.
 - Clients start in the lobby; `SS13_LOBBY_SECONDS`, `SS13_SKIP_LOBBY=1` and the round end: see
   "Lobby and rounds" below.
