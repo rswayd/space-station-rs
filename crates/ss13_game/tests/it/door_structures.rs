@@ -3,7 +3,8 @@
 //! firelock taken back apart into its frame and the frame cut into its sheets; a windoor
 //! assembly anchored, made secure, wired, given electronics and pried into a brig windoor with
 //! their access; a loose assembly flipped and welded apart; a mineral door opened and dug into
-//! its sheets; the hostile lockdown of an airlock and its end.
+//! its sheets; the hostile lockdown of an airlock and its end; a password door typed and a
+//! voice door spoken open.
 
 use std::path::{Path, PathBuf};
 
@@ -17,6 +18,7 @@ use ss13_game::door_structures::{
 };
 use ss13_game::doors::{Door, DoorState, disable_lockdown, hostile_lockdown};
 use ss13_game::obj_damage::Anchored;
+use ss13_game::password_door::{hear_line, try_password};
 use ss13_game::testing::{self, write_fixture};
 use ss13_game::tools::DoAfter;
 use ss13_game::wallmount::firelock::Firelock;
@@ -105,6 +107,11 @@ const TYPES: &str = r##"{
         "name": "firelock", "icon": { "resource": "f.dmi" }, "icon_state": "door_open",
         "density": 0, "opacity": 0, "base_icon_state": "door", "can_open_with_hands": 0 } },
     "/obj/machinery/door/firedoor/heavy": { "parent": "/obj/machinery/door/firedoor" },
+    "/obj/machinery/door/password": { "parent": "/obj/machinery/door", "declared_vars": {
+        "name": "door", "icon": { "resource": "b.dmi" }, "icon_state": "closed",
+        "password": "Swordfish", "interaction_activated": 1, "voice_activated": 0 } },
+    "/obj/machinery/door/password/voice": { "parent": "/obj/machinery/door/password",
+        "declared_vars": { "voice_activated": 1 } },
     "/obj/machinery/door/window": { "parent": "/obj/machinery/door", "declared_vars": {
         "name": "interior door", "icon": { "resource": "w.dmi" }, "icon_state": "left",
         "base_state": "left", "opacity": 0, "visible": 0, "dir": 1 } },
@@ -145,7 +152,7 @@ const LOOSE_AT: TilePos = TilePos::new(3, 3, 1);
 const AIRLOCK_AT: TilePos = TilePos::new(6, 3, 1);
 
 /// Manifest order = `IconStateId`.
-const STATES: [(&str, &str); 22] = [
+const STATES: [(&str, &str); 24] = [
     ("t.dmi", "floor"),
     ("t.dmi", "wall"),
     ("l.dmi", "x2"),
@@ -168,6 +175,8 @@ const STATES: [(&str, &str); 22] = [
     ("a.dmi", "closed"),
     ("a.dmi", "opening"),
     ("a.dmi", "open"),
+    ("b.dmi", "closed"),
+    ("b.dmi", "opening"),
 ];
 
 fn fixture(test: &str) -> MapLoadPlugin {
@@ -193,6 +202,8 @@ fn fixture(test: &str) -> MapLoadPlugin {
         "/obj/machinery/door/firedoor/heavy",
         "/obj/machinery/door/window",
         "/obj/machinery/door/window/brigdoor",
+        "/obj/machinery/door/password",
+        "/obj/machinery/door/password/voice",
         "/turf/open/floor",
         "/turf/closed/wall",
         "/area/space",
@@ -491,4 +502,50 @@ fn hostile_lockdown_bolts_and_shocks_an_airlock_until_it_ends() {
         .insert(ss13_game::power::Unpowered);
     assert!(!hostile_lockdown(world, airlock));
     assert!(!world.get::<Door>(airlock).unwrap().locked);
+}
+
+#[test]
+fn a_password_door_opens_only_on_its_password() {
+    let mut app = testing::server_app(fixture("password"), |_| {});
+    let world = app.world_mut();
+    let door = spawn_obj(world, "/obj/machinery/door/password", MINERAL_AT).unwrap();
+    assert!(ss13_game::doors::setup_built(world, door));
+    let dm = world.get::<DmDoor>(door).unwrap();
+    assert_eq!(dm.password, "Swordfish");
+    assert!(dm.interaction_activated && !dm.voice_activated);
+    assert!(world.get::<Door>(door).unwrap().password_lock);
+
+    let user = world.spawn(WINDOOR_AT).id();
+    let far = world.spawn(LOOSE_AT).id();
+    assert!(
+        !try_password(world, user, door, "swordfish"),
+        "typed exactly"
+    );
+    assert_eq!(world.get::<Door>(door).unwrap().state, DoorState::Closed);
+    assert!(
+        !try_password(world, far, door, "Swordfish"),
+        "from out of reach"
+    );
+    assert!(try_password(world, user, door, "Swordfish"));
+    assert!(matches!(
+        world.get::<Door>(door).unwrap().state,
+        DoorState::Opening { .. }
+    ));
+
+    // A voice door hears the password in a line, ignoring case; the typed one does not.
+    let voice = spawn_obj(world, "/obj/machinery/door/password/voice", FRAME_AT).unwrap();
+    assert!(ss13_game::doors::setup_built(world, voice));
+    hear_line(world, AIRLOCK_AT, "the word is not here", false);
+    assert_eq!(world.get::<Door>(voice).unwrap().state, DoorState::Closed);
+    hear_line(world, AIRLOCK_AT, "Open up, SWORDFISH!", true);
+    assert_eq!(
+        world.get::<Door>(voice).unwrap().state,
+        DoorState::Closed,
+        "a whisper carries one tile"
+    );
+    hear_line(world, AIRLOCK_AT, "Open up, SWORDFISH!", false);
+    assert!(matches!(
+        world.get::<Door>(voice).unwrap().state,
+        DoorState::Opening { .. }
+    ));
 }

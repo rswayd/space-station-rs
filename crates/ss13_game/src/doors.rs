@@ -198,6 +198,9 @@ pub struct Door {
     pub emagging: bool,
     /// tg `dangerous_close`: the closing door crushes what is in its doorway ([`crush`]).
     crush: bool,
+    /// tg `/obj/machinery/door/password` (`crate::password_door`): no hand, ID or bump opens it,
+    /// only its password; blast door frames and timings.
+    pub password_lock: bool,
 }
 
 /// An airlock's sound vars (empty: silent).
@@ -246,6 +249,10 @@ impl Door {
     }
 
     fn timings(&self) -> Timings {
+        // `password/animation_segment_delay`: the blast door's.
+        if self.password_lock {
+            return Timings::of(DoorKind::Poddoor);
+        }
         Timings::of(self.kind)
     }
 
@@ -445,7 +452,7 @@ fn init_doors(world: &mut World) {
                 dm.base_icon_state.clone(),
                 material,
                 dm.overlays_file.clone(),
-                dm.kind,
+                sprite_kind(dm),
             );
             let sprites = looks
                 .entry(key)
@@ -575,6 +582,17 @@ fn door_from(
         emagged: false,
         emagging: false,
         crush: false,
+        password_lock: !dm.password.is_empty(),
+    }
+}
+
+/// The family whose frame names a door draws: password doors draw the bare `closed`,
+/// `opening`, ... of blast doors (`password/update_icon_state`).
+fn sprite_kind(dm: &DmDoor) -> DoorKind {
+    if dm.password.is_empty() {
+        dm.kind
+    } else {
+        DoorKind::Poddoor
     }
 }
 
@@ -601,7 +619,7 @@ pub fn setup_built(world: &mut World, entity: Entity) -> bool {
     let dense = world.get::<Density>(entity).is_some();
     let sprites = Arc::new(sprites_from_index(
         world,
-        dm.kind,
+        sprite_kind(&dm),
         &atom.icon,
         &dm.base_icon_state,
         &fill_material(&dm),
@@ -813,6 +831,7 @@ fn activate(
 ) -> bool {
     // `try_to_activate_door` and `Bumped`: nothing works an emagged door.
     if door.emagged
+        || door.password_lock
         || !door.can_open_with_hands
         || door.is_operating()
         || !door.has_power(env.powered)
@@ -1058,6 +1077,16 @@ fn door_clicks(
         }) {
             continue;
         }
+        // `password/try_to_activate_door`: a closed one asks for its password.
+        if door.password_lock {
+            if door.state == DoorState::Closed && !door.is_operating() {
+                let (client, mob) = (click.client, click.mob);
+                commands.queue(move |world: &mut World| {
+                    crate::password_door::ask_for_pass(world, client, mob, entity);
+                });
+            }
+            continue;
+        }
         // BandaStation knock: a bare right click, unless an open panel takes the hand first
         // (`machinery/attack_hand` -> the wires); firelocks keep their own `attack_hand`.
         if click.modifiers.right
@@ -1228,6 +1257,12 @@ fn door_sounds(
         door.bypass_change_detection().sound = None;
         let s = &door.sounds;
         let play = match (door.kind, sound) {
+            // `password/animation_effects`.
+            (_, DoorSound::Open) if door.password_lock => PlaySound::new(pos, &*s.open, 50.0, true),
+            (_, DoorSound::Close) if door.password_lock => {
+                PlaySound::new(pos, &*s.close, 50.0, true)
+            }
+            (_, DoorSound::Deny) if door.password_lock => PlaySound::new(pos, &*s.deny, 30.0, true),
             (DoorKind::Airlock, DoorSound::Forced) => {
                 PlaySound::new(pos, files::AIRLOCK_FORCED, 30.0, true)
             }
@@ -1940,6 +1975,7 @@ pub(crate) fn test_airlock(req_access: &[&str]) -> Door {
         emagged: false,
         emagging: false,
         crush: false,
+        password_lock: false,
     }
 }
 

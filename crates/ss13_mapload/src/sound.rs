@@ -29,7 +29,7 @@ pub const SOUND_DIR: &str = "sound";
 const SFX_ROOT: &str = "/datum/sound_effect";
 
 /// Vars holding a sound file (or an SFX key) on the types the game ports.
-pub const SOUND_VARS: [&str; 19] = [
+pub const SOUND_VARS: [&str; 22] = [
     "fire_sound",
     "dry_fire_sound",
     "load_sound",
@@ -46,6 +46,10 @@ pub const SOUND_VARS: [&str; 19] = [
     "boltUp",
     "boltDown",
     "animation_sound",
+    // Password doors.
+    "door_open",
+    "door_close",
+    "door_deny",
     "empty_alarm_sound",
     "stun_projectile_sound",
     "lethal_projectile_sound",
