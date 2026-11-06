@@ -192,12 +192,6 @@ fn now(world: &World) -> f64 {
     world.resource::<Time>().elapsed_secs_f64()
 }
 
-fn tell_mob(world: &mut World, mob: Entity, span: Span, text: impl Into<String>) {
-    if let Some(client) = world.get::<crate::server::PlayerMob>(mob).map(|p| p.client) {
-        tell(world, client, span, text);
-    }
-}
-
 /// The cryo cell `mob` is in.
 pub fn holder(world: &World, mob: Entity) -> Option<Entity> {
     let cell = world.get::<InCloset>(mob)?.closet;
