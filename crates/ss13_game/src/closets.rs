@@ -332,7 +332,7 @@ impl Plugin for ClosetServerPlugin {
         // Large crates: items and crowbars; abandoned crates: multitools.
         app.add_click_handler(ClickPhase::HeldOnTarget, 4460, kinds::held_on_target);
         // A folded body bag unfolds.
-        app.add_click_handler(ClickPhase::AttackSelf, 3190, |w, c| {
+        app.add_click_handler(ClickPhase::AttackSelf, 3194, |w, c| {
             kinds::bodybag_attack_self(w, c.mob, c.target)
         });
         // tg `lockbox/tool_act`: an ID toggles a lockbox's lock (before a storage takes it).
