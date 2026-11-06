@@ -123,7 +123,7 @@ pub fn attack_force(potency: f32, multiplier: f32) -> f32 {
 /// `after_attack_effect` degradation: the force left after a hit with `roll` =
 /// `rand(1, force / 3 + 1)`, `None` when the plant falls apart (it hit with no force left).
 pub fn degrade(force: f32, roll: f32) -> Option<f32> {
-    (force > 0.0).then(|| force - roll)
+    (force > 0.0).then_some(force - roll)
 }
 
 /// `bomb_plant/potency_based/detonate`: `clamp(round(potency / 20), 1, 5)`.
