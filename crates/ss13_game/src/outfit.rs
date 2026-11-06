@@ -4,6 +4,7 @@
 //! Every outfit slot but `back` is equipped directly (tg `equip_to_slot_or_del`); the job's
 //! backpack comes from `crate::jobs::join` and gets `box` and `backpack_contents`
 //! ([`fill_backpack`]).
+// The outfit's `accessory` is pinned to its uniform (`crate::clothing::accessories::pin`).
 // shortcut: no `can_equip` check (tg deletes an item that does not fit), no `belt_contents`,
 // no `internals_slot` (tg opens that tank at spawn).
 
@@ -134,6 +135,25 @@ pub fn equip_outfit(
         world.entity_mut(item).insert((Networked, CarriedBy(mob)));
         crate::storage::finish_item(world, item, 0);
         *target = Some(item);
+    }
+    // `if(accessory)`: pinned to the uniform; without one (or where it cannot go) it is deleted
+    // (tg warns "No uniform present!").
+    if let Some(path) = &outfit.accessory {
+        let accessory = templates.get(path).map(|t| t.spawn(world, None));
+        match (accessory, inventory.uniform) {
+            (Some(accessory), Some(uniform)) => {
+                world.entity_mut(accessory).insert(Networked);
+                crate::storage::finish_item(world, accessory, 0);
+                if !crate::clothing::accessories::pin(world, accessory, uniform) {
+                    world.despawn(accessory);
+                }
+            }
+            (Some(accessory), None) => {
+                warn!("{}: accessory {path} without a uniform", outfit.path);
+                world.despawn(accessory);
+            }
+            (None, _) => warn!("{}: no prototype for {path}; no accessory", outfit.path),
+        }
     }
     inventory
 }

@@ -385,6 +385,7 @@ pub fn fallback_jobs() -> JobsData {
                 ],
                 // `/datum/outfit/job::box`.
                 backpack_contents: vec![(ss13_mapload::RUNTIME_CONTAINER_TYPES[1].into(), 1)],
+                accessory: None,
             }),
             trim: Some("/datum/id_trim/job/assistant".into()),
             assignment: "Assistant".into(),

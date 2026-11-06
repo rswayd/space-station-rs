@@ -8,10 +8,14 @@
 //! the jumpsuit ([`AccessoryOf`], deleted with it). Alt+right click on the jumpsuit takes the
 //! first one off into a hand. Worn, each is drawn over the jumpsuit from the accessories' worn
 //! icon; BandaStation hides the ones that are not `above_suit` under a suit that hides the belt.
-// shortcut: no accessory storage (holsters, webbing), no `above_suit` toggle, no accessory
-// effects or traits while worn (`accessory_equipped`), no minimized icon on the jumpsuit's own
-// sprite, no outfit `accessory` (the outfit data does not carry it); BandaStation's accessory
-// weight is not applied.
+//!
+//! BandaStation's gloves accessories (rings, `gloves/gloves.dm`, `gloves_accessories.dm`) go on
+//! gloves the same way, one per pair, drawn over the worn gloves; other accessories do not, nor
+//! do rings go on jumpsuits.
+// Accessories with storage (holsters, the ammo vest) and the jumpsuit's weight: `super::holsters`.
+// An outfit's `accessory` is pinned by `crate::outfit` ([`pin`]).
+// shortcut: no `above_suit` toggle, no accessory effects or traits while worn
+// (`accessory_equipped`), no minimized icon on the jumpsuit's own sprite.
 
 use bevy::prelude::*;
 use ss13_mapload::fidelity::is_under;
@@ -25,8 +29,46 @@ use crate::tools::tell;
 
 pub const ACCESSORY_ROOT: &str = "/obj/item/clothing/accessory";
 pub const UNDER_ROOT: &str = "/obj/item/clothing/under";
-/// `max_number_of_accessories`.
+pub const GLOVES_ROOT: &str = "/obj/item/clothing/gloves";
+pub const GLOVES_ACCESSORY_ROOT: &str = "/obj/item/clothing/accessory/gloves_accessory";
+/// `max_number_of_accessories` of a jumpsuit (gloves: 1).
 pub const MAX_ACCESSORIES: usize = 5;
+
+/// What an accessory is pinned to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Host {
+    Jumpsuit,
+    /// BandaStation: gloves take gloves accessories (rings).
+    Gloves,
+}
+
+impl Host {
+    fn max(self) -> usize {
+        match self {
+            Self::Jumpsuit => MAX_ACCESSORIES,
+            Self::Gloves => 1,
+        }
+    }
+}
+
+/// What `target` is as an accessory host.
+pub fn host(world: &World, target: Entity) -> Option<Host> {
+    let path = path_of(world, target)?;
+    if is_under(path, UNDER_ROOT) {
+        Some(Host::Jumpsuit)
+    } else if is_under(path, GLOVES_ROOT) {
+        Some(Host::Gloves)
+    } else {
+        None
+    }
+}
+
+/// Whether `accessory` goes on a host of that kind (rings only on gloves, the rest only on
+/// jumpsuits).
+fn goes_on(world: &World, accessory: Entity, host: Host) -> bool {
+    let ring = path_of(world, accessory).is_some_and(|p| is_under(p, GLOVES_ACCESSORY_ROOT));
+    ring == (host == Host::Gloves)
+}
 /// `/obj/item/clothing/accessory` `worn_icon`.
 pub const ACCESSORIES_WORN_DMI: &str = "icons/mob/clothing/accessories.dmi";
 
@@ -72,8 +114,39 @@ fn holder(world: &World, item: Entity) -> Option<(Entity, TilePos)> {
     Some((mob, *world.get::<TilePos>(mob)?))
 }
 
-/// tg `attach_accessory` from a held accessory on `uniform`. False when `held` is no accessory
-/// or `uniform` no jumpsuit.
+/// tg `can_attach_accessory`: one storage accessory per jumpsuit, the `attachment_slot` covered,
+/// at most [`Host::max`]; the refusal is the balloon alert (BandaStation's for gloves).
+fn can_attach(
+    world: &World,
+    accessory: Entity,
+    uniform: Entity,
+    host: Host,
+) -> Result<(), &'static str> {
+    let text = |jumpsuit: &'static str, gloves: &'static str| match host {
+        Host::Jumpsuit => jumpsuit,
+        Host::Gloves => gloves,
+    };
+    let slot = world
+        .get::<DmClothing>(accessory)
+        .map_or(0, |c| c.attachment_slot);
+    let covered = world
+        .get::<DmClothing>(uniform)
+        .map_or(0, |c| c.body_parts_covered);
+    if world.get::<crate::storage::Storage>(accessory).is_some()
+        && super::holsters::storage_accessory(world, uniform).is_some()
+    {
+        Err(text("isn't compatible!", "несовместимо с этим!"))
+    } else if slot != 0 && covered & slot == 0 {
+        Err(text("can't attach there!", "нельзя надеть сюда!"))
+    } else if attached(world, uniform).len() >= host.max() {
+        Err(text("too many accessories!", "слишком много аксессуаров!"))
+    } else {
+        Ok(())
+    }
+}
+
+/// tg `attach_accessory` from a held accessory on `uniform` (a jumpsuit, or gloves for a ring).
+/// False when `held` is no accessory for it.
 pub fn attach(
     world: &mut World,
     client: Entity,
@@ -81,24 +154,13 @@ pub fn attach(
     held: Entity,
     uniform: Entity,
 ) -> bool {
-    if held == uniform || !is_accessory(world, held) || !is_jumpsuit(world, uniform) {
+    if held == uniform || !is_accessory(world, held) {
         return false;
     }
-    // `can_attach_accessory`.
-    let slot = world
-        .get::<DmClothing>(held)
-        .map_or(0, |c| c.attachment_slot);
-    let covered = world
-        .get::<DmClothing>(uniform)
-        .map_or(0, |c| c.body_parts_covered);
-    let refusal = if slot != 0 && covered & slot == 0 {
-        Some("can't attach there!")
-    } else if attached(world, uniform).len() >= MAX_ACCESSORIES {
-        Some("too many accessories!")
-    } else {
-        None
+    let Some(host) = host(world, uniform).filter(|&h| goes_on(world, held, h)) else {
+        return false;
     };
-    if let Some(text) = refusal {
+    if let Err(text) = can_attach(world, held, uniform, host) {
         tell(world, client, Span::Warning, text);
         return true;
     }
@@ -113,20 +175,49 @@ pub fn attach(
         .entity_mut(held)
         .remove::<(CarriedBy, TilePos)>()
         .insert(AccessoryOf(uniform));
-    tell(world, client, Span::Notice, "accessory attached");
+    let done = match host {
+        Host::Jumpsuit => "accessory attached",
+        Host::Gloves => "аксессуар прикреплён",
+    };
+    tell(world, client, Span::Notice, done);
+    super::holsters::update_weight(world, uniform);
     refresh_wearer(world, uniform);
     crate::inventory::refresh_look(world, mob);
     true
 }
 
-/// tg `click_alt_secondary` -> `pop_accessory`: the first accessory into the user's hands.
-/// False when `uniform` is no jumpsuit.
-pub fn pop(world: &mut World, client: Entity, mob: Entity, uniform: Entity) -> bool {
-    if !is_jumpsuit(world, uniform) {
+/// tg `/datum/outfit/equip` -> `attach_accessory` without a user: `accessory` (out of the world)
+/// onto `uniform` if it can go there, else false and nothing changes.
+pub fn pin(world: &mut World, accessory: Entity, uniform: Entity) -> bool {
+    if !is_accessory(world, accessory) {
         return false;
     }
+    let Some(host) = host(world, uniform).filter(|&h| goes_on(world, accessory, h)) else {
+        return false;
+    };
+    if can_attach(world, accessory, uniform, host).is_err() {
+        return false;
+    }
+    world
+        .entity_mut(accessory)
+        .remove::<(CarriedBy, TilePos)>()
+        .insert(AccessoryOf(uniform));
+    super::holsters::update_weight(world, uniform);
+    true
+}
+
+/// tg `click_alt_secondary` -> `pop_accessory`: the first accessory into the user's hands.
+/// False when `uniform` is no jumpsuit or gloves.
+pub fn pop(world: &mut World, client: Entity, mob: Entity, uniform: Entity) -> bool {
+    let Some(host) = host(world, uniform) else {
+        return false;
+    };
     let Some(&first) = attached(world, uniform).first() else {
-        tell(world, client, Span::Warning, "нет аксессуаров для снятия!");
+        let text = match host {
+            Host::Jumpsuit => "нет аксессуаров для снятия!",
+            Host::Gloves => "нет аксессуара чтобы снять!",
+        };
+        tell(world, client, Span::Warning, text);
         return true;
     };
     world.entity_mut(first).remove::<AccessoryOf>();
@@ -134,6 +225,7 @@ pub fn pop(world: &mut World, client: Entity, mob: Entity, uniform: Entity) -> b
         crate::storage::put_in_hands(world, mob, &inventory, first);
     }
     tell(world, client, Span::Notice, "аксессуар снят");
+    super::holsters::update_weight(world, uniform);
     refresh_wearer(world, uniform);
     true
 }
@@ -191,10 +283,18 @@ pub fn english_list(names: &[String]) -> String {
     }
 }
 
-/// tg `/obj/item/clothing/under/examine`: the attached accessories.
+/// tg `/obj/item/clothing/under/examine` (BandaStation `gloves/examine`): the attached
+/// accessories.
 pub fn examine_lines(world: &World, uniform: Entity, lines: &mut Vec<crate::examine::Line>) {
     let names = listed(world, uniform);
     if names.is_empty() {
+        return;
+    }
+    if host(world, uniform) == Some(Host::Gloves) {
+        lines.push((
+            Span::Plain,
+            format!("Имеет прикрепленное: {}.", english_list(&names)),
+        ));
         return;
     }
     lines.push((
@@ -321,5 +421,64 @@ mod tests {
         // The jumpsuit goes, its accessories with it.
         world.despawn(uniform);
         assert!(world.get_entity(medal).is_err());
+    }
+
+    #[test]
+    fn rings_go_on_gloves_one_at_a_time() {
+        const HANDS: u32 = 1 << 9;
+        let mut world = World::new();
+        world.init_resource::<Messages<ss13_net::chat::server::SendChat>>();
+        let gloves = item(
+            &mut world,
+            "/obj/item/clothing/gloves/color/black",
+            DmClothing {
+                body_parts_covered: HANDS,
+                ..default()
+            },
+        );
+        let uniform = item(
+            &mut world,
+            "/obj/item/clothing/under/color/grey",
+            DmClothing::default(),
+        );
+        let ring = item(
+            &mut world,
+            "/obj/item/clothing/accessory/gloves_accessory/ring",
+            DmClothing {
+                attachment_slot: HANDS,
+                ..default()
+            },
+        );
+        let diamond = item(
+            &mut world,
+            "/obj/item/clothing/accessory/gloves_accessory/ring/diamond",
+            DmClothing {
+                attachment_slot: HANDS,
+                ..default()
+            },
+        );
+        let medal = item(
+            &mut world,
+            "/obj/item/clothing/accessory/medal",
+            DmClothing::default(),
+        );
+        let mob = world
+            .spawn(Inventory {
+                hands: [Some(ring), Some(diamond)],
+                ..default()
+            })
+            .id();
+        world.entity_mut(ring).insert(CarriedBy(mob));
+        world.entity_mut(diamond).insert(CarriedBy(mob));
+        let client = world.spawn_empty().id();
+        // A ring is no jumpsuit accessory, a medal no gloves accessory.
+        assert!(!attach(&mut world, client, mob, ring, uniform));
+        assert!(!attach(&mut world, client, mob, medal, gloves));
+        assert!(attach(&mut world, client, mob, ring, gloves));
+        assert_eq!(attached(&world, gloves), [ring]);
+        // One per pair: the diamond ring stays in the hand.
+        assert!(attach(&mut world, client, mob, diamond, gloves));
+        assert_eq!(attached(&world, gloves), [ring]);
+        assert!(world.get::<CarriedBy>(diamond).is_some());
     }
 }

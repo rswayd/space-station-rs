@@ -4,8 +4,10 @@
 //! Dragging another human onto yourself (`crate::drag`, tg `COMSIG_MOUSEDROP_ONTO` of the
 //! element) opens the tgui `StripMenu` window on them: their slots in tg's
 //! `strippable_human_items` order, the items' names and icons, pockets with something in them
-//! hidden (`STRIPPABLE_OBSCURING_HIDDEN`), the handcuffs entry while they are cuffed. Its `use`
-//! act on a slot:
+//! hidden (`STRIPPABLE_OBSCURING_HIDDEN`), slots their clothing hides (`obscured_slots`: a helmet
+//! hiding the glasses) shown as obscured without the item, slots it only covers
+//! (`covered_slots`, `transparent_protection`) shown but out of reach, the handcuffs entry while
+//! they are cuffed. Its `use` act on a slot that is neither (tg `ui_act` refuses those):
 //! - with an item there: tg `start_unequip` (a `do_after` of the item's `strip_delay`, 4 s in
 //!   pockets, `POCKET_STRIP_DELAY`), then `finish_unequip` (`doStrip` drops it at their feet,
 //!   handcuffs come off) if it is still the same item and the user still next to them;
@@ -16,15 +18,14 @@
 //! The window's `ui_status` is tg's: closed beyond reach, update-only with blocked hands,
 //! disabled when the user is incapacitated or unconscious. The slot the user works on is
 //! highlighted (`interacting`).
-// shortcut: no alternate actions (internals valves, suit sensors, shoelaces, item cuffs), no
-// obscuring by clothing (`obscured_slots`: a helmet hiding the glasses), per-item `strip_delay`
-// and `equip_delay_other` are tg's defaults (4 s and 2 s: not converted per type yet), no
-// legcuffs, no AFK theft log, no fireman carry exception (`should_strip`).
+// shortcut: no alternate actions (internals valves, suit sensors, shoelaces, item cuffs),
+// per-item `strip_delay` and `equip_delay_other` are tg's defaults (4 s and 2 s: not converted
+// per type yet), no legcuffs, no AFK theft log, no fireman carry exception (`should_strip`).
 
 use bevy::ecs::message::MessageCursor;
 use bevy::ecs::system::SystemParamItem;
 use bevy::prelude::*;
-use ss13_mapload::DmName;
+use ss13_mapload::{DmClothing, DmName};
 use ss13_shared::chat::{ChatChannel, Span};
 use ss13_shared::protocol::InventorySlot;
 use ss13_shared::ui::UiStatus;
@@ -38,7 +39,8 @@ use crate::health::{DEFAULT_MESSAGE_RANGE, Stat};
 use crate::hud::HudIcon;
 use crate::inventory::{CarriedBy, Inventory, can_equip, unequip};
 use crate::panels::{
-    OBSCURING_HIDDEN, OBSCURING_NONE, STRIP_USE, StripItem, StripMenuData, StripMenuUi, StripSlot,
+    OBSCURING_COMPLETELY, OBSCURING_HIDDEN, OBSCURING_INACCESSIBLE, OBSCURING_NONE, STRIP_USE,
+    StripItem, StripMenuData, StripMenuUi, StripSlot,
 };
 use crate::restraints::Handcuffed;
 use crate::security::{name_of, show};
@@ -114,9 +116,48 @@ fn item_in(inventory: &Inventory, cuffs: Option<&Handcuffed>, reach: Reach) -> O
     }
 }
 
+/// tg `get_obscuring` of an entry: a pocket with something in it is hidden
+/// (`pocket/get_obscuring`); a slot the worn clothing's `flags_inv` hides is obscured completely,
+/// one only its `transparent_protection` covers is inaccessible (`mob_item_slot/get_obscuring`).
+/// `clothing` gives an item's (`flags_inv`, `transparent_protection`).
+fn obscuring(
+    inventory: &Inventory,
+    reach: Reach,
+    item: Option<Entity>,
+    clothing: impl Fn(Entity) -> (u32, u32),
+) -> u8 {
+    if is_pocket(reach) {
+        return if item.is_some() {
+            OBSCURING_HIDDEN
+        } else {
+            OBSCURING_NONE
+        };
+    }
+    let Reach::Slot(slot) = reach else {
+        return OBSCURING_NONE;
+    };
+    let obscured = crate::clothing::cover::obscured_by(inventory, |e| clothing(e).0);
+    let covered = crate::clothing::cover::obscured_by(inventory, |e| {
+        let (inv, transparent) = clothing(e);
+        inv | transparent
+    });
+    if crate::clothing::cover::slot_hidden(obscured, slot) {
+        OBSCURING_COMPLETELY
+    } else if crate::clothing::cover::slot_hidden(covered, slot) {
+        OBSCURING_INACCESSIBLE
+    } else {
+        OBSCURING_NONE
+    }
+}
+
+fn clothing_flags(c: Option<&DmClothing>) -> (u32, u32) {
+    c.map_or((0, 0), |c| (c.flags_inv, c.transparent_protection))
+}
+
 type UserQueries = (
     Query<'static, 'static, (Option<&'static Appearance>, Option<&'static DmName>)>,
     Query<'static, 'static, &'static DoAfter>,
+    Query<'static, 'static, &'static DmClothing>,
 );
 
 impl ServerUi for StripMenuUi {
@@ -134,7 +175,7 @@ impl ServerUi for StripMenuUi {
     fn data(
         (owner, inventory, cuffs, name): (Entity, &Inventory, Option<&Handcuffed>, Option<&Name>),
         user: Entity,
-        (items, actions): &SystemParamItem<'_, '_, UserQueries>,
+        (items, actions, clothing): &SystemParamItem<'_, '_, UserQueries>,
     ) -> StripMenuData {
         let working = actions
             .get(user)
@@ -151,13 +192,12 @@ impl ServerUi for StripMenuUi {
             .filter(|(_, (_, reach))| *reach != Reach::Handcuffs || cuffs.is_some())
             .map(|(i, &(key, reach))| {
                 let item = item_in(inventory, cuffs, reach);
-                // `pocket/get_obscuring`: a pocket with something in it is hidden.
-                let obscured = if is_pocket(reach) && item.is_some() {
-                    OBSCURING_HIDDEN
-                } else {
-                    OBSCURING_NONE
-                };
-                let item = item.filter(|_| obscured == OBSCURING_NONE).map(|e| {
+                let obscured = obscuring(inventory, reach, item, |e| {
+                    clothing_flags(clothing.get(e).ok())
+                });
+                // An inaccessible slot still shows its item.
+                let shown = matches!(obscured, OBSCURING_NONE | OBSCURING_INACCESSIBLE);
+                let item = item.filter(|_| shown).map(|e| {
                     let (appearance, dm) = items.get(e).unwrap_or((None, None));
                     StripItem {
                         name: dm.map(|n| n.name.clone()).unwrap_or_default(),
@@ -280,6 +320,14 @@ fn use_slot(world: &mut World, client: Entity, user: Entity, owner: Entity, entr
         return;
     }
     if world.get::<DoAfter>(user).is_some() {
+        return;
+    }
+    // `ui_act` `use`: nothing on a slot the clothing hides or covers.
+    let current = item_in(&inventory, cuffs.as_ref(), reach);
+    let obscured = obscuring(&inventory, reach, current, |e| {
+        clothing_flags(world.get::<DmClothing>(e))
+    });
+    if matches!(obscured, OBSCURING_COMPLETELY | OBSCURING_INACCESSIBLE) {
         return;
     }
     let held = world
@@ -496,6 +544,59 @@ pub fn complete(world: &mut World, user: Entity, action: &DoAfter, job: StripJob
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn worn_clothing_obscures_and_covers_slots() {
+        use crate::clothing::cover::{HIDEEYES, HIDEGLOVES};
+        let mut world = World::new();
+        let helmet = world.spawn_empty().id();
+        let suit = world.spawn_empty().id();
+        let glasses = world.spawn_empty().id();
+        let wallet = world.spawn_empty().id();
+        let inventory = Inventory {
+            head: Some(helmet),
+            suit: Some(suit),
+            eyes: Some(glasses),
+            pockets: [Some(wallet), None],
+            ..default()
+        };
+        // The helmet hides the eyes; the suit only covers the gloves.
+        let flags = |e: Entity| {
+            if e == helmet {
+                (HIDEEYES, 0)
+            } else if e == suit {
+                (0, HIDEGLOVES)
+            } else {
+                (0, 0)
+            }
+        };
+        let at = |slot| Reach::Slot(slot);
+        assert_eq!(
+            obscuring(&inventory, at(InventorySlot::Eyes), Some(glasses), flags),
+            OBSCURING_COMPLETELY
+        );
+        assert_eq!(
+            obscuring(&inventory, at(InventorySlot::Gloves), None, flags),
+            OBSCURING_INACCESSIBLE
+        );
+        assert_eq!(
+            obscuring(&inventory, at(InventorySlot::Head), Some(helmet), flags),
+            OBSCURING_NONE
+        );
+        assert_eq!(
+            obscuring(
+                &inventory,
+                at(InventorySlot::LeftPocket),
+                Some(wallet),
+                flags
+            ),
+            OBSCURING_HIDDEN
+        );
+        assert_eq!(
+            obscuring(&inventory, Reach::Handcuffs, None, flags),
+            OBSCURING_NONE
+        );
+    }
 
     #[test]
     fn entries_follow_tg_keys() {
