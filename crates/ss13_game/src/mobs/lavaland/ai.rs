@@ -7,9 +7,11 @@
 use bevy::prelude::*;
 use ss13_shared::TilePos;
 
-use super::abilities;
+use super::{abilities, icemoon};
 use crate::health::Stat;
-use crate::mobs::ai::behaviors::{DELAY_FAIL, DELAY_SUCCEED, FAIL, Perform, RUNNING, Strategy};
+use crate::mobs::ai::behaviors::{
+    DELAY_FAIL, DELAY_SUCCEED, FAIL, Perform, RUNNING, SUCCEED, Strategy,
+};
 use crate::mobs::ai::movement::Target;
 use crate::mobs::ai::{AiCtx, Key, Value};
 
@@ -89,6 +91,19 @@ pub enum LavaLeaf {
     MaintainDistance { key: Key, min: u32, max: u32 },
     /// `acquire_target/update_combat_targets` with `BB_AGGRO_RANGE`.
     AcquireWithin { key: Key, range: u32 },
+    /// The polar bear's `enrage`.
+    Enrage,
+    /// The wolf's `call_reinforcements` behind its 30 s `cooldown` decorator.
+    CallReinforcements { key: Key },
+    /// `targeted_mob_ability` with the whelp's eruption (`wide`) or line breath, within `max`.
+    WhelpBreath { key: Key, wide: bool, max: u32 },
+    /// `ability_available(BB_DEMON_TELEPORT_ABILITY)` + `find_furthest_turf_from_target`
+    /// (`escape`, only next to the target) or `find_valid_teleport_location`, then
+    /// `targeted_mob_ability/and_clear_target`.
+    DemonTeleport { key: Key, escape: bool },
+    /// `pawn_health_below(75)` + `ability_available` + `targeted_mob_ability` with
+    /// `create_afterimages`.
+    DemonClone,
 }
 
 impl LavaLeaf {
@@ -207,6 +222,68 @@ impl LavaLeaf {
                 crate::mobs::ai::fauna::maintain_distance(ctx, key, min, max)
             }
             Self::AcquireWithin { key, range } => acquire_within(ctx, key, range),
+            Self::Enrage => {
+                let target = ctx.bb.entity(Key::CurrentTarget);
+                if icemoon::enrage(ctx.world, ctx.pawn, target) {
+                    SUCCEED
+                } else {
+                    FAIL
+                }
+            }
+            Self::CallReinforcements { key } => {
+                // tg's `cooldown` decorator fails the branch while it cools down, which fails
+                // the wolf's `BT_PARALLEL_FAILURE_ANY` fight; a howl on cooldown is skipped
+                // instead.
+                if let Some(target) = living_target(ctx, key) {
+                    icemoon::call_reinforcements(ctx.world, ctx.pawn, target, ctx.now);
+                }
+                DELAY_SUCCEED
+            }
+            Self::WhelpBreath { key, wide, max } => {
+                let Some(target) = living_target(ctx, key) else {
+                    return FAIL;
+                };
+                let near = ctx
+                    .pawn_pos()
+                    .zip(ctx.target_pos(key))
+                    .and_then(|(a, b)| a.chebyshev(b))
+                    .is_some_and(|d| d <= max);
+                if !near || !icemoon::breath_ready(ctx.world, ctx.pawn, wide, ctx.now) {
+                    return FAIL;
+                }
+                if icemoon::start_breath(ctx.world, ctx.pawn, target, wide) {
+                    ctx.movement.stop();
+                    DELAY_SUCCEED
+                } else {
+                    FAIL
+                }
+            }
+            Self::DemonTeleport { key, escape } => {
+                if !icemoon::teleport_ready(ctx.world, ctx.pawn, ctx.now) {
+                    return FAIL;
+                }
+                let (Some(from), Some(at)) = (ctx.pawn_pos(), ctx.target_pos(key)) else {
+                    return FAIL;
+                };
+                if escape && from.chebyshev(at).is_none_or(|d| d > 1) {
+                    return FAIL;
+                }
+                let Some(to) = icemoon::teleport_spot(ctx.world, at, escape, &mut ctx.rng) else {
+                    return DELAY_FAIL;
+                };
+                if icemoon::start_teleport(ctx.world, ctx.pawn, to) {
+                    DELAY_SUCCEED
+                } else {
+                    FAIL
+                }
+            }
+            Self::DemonClone => {
+                if icemoon::conjure_afterimages(ctx.world, ctx.pawn) {
+                    DELAY_SUCCEED
+                } else {
+                    FAIL
+                }
+            }
         }
     }
 

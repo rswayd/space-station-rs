@@ -3,15 +3,15 @@
 //! obstructions, calling mining reinforcements (`call_reinforcements/mining`), the mining
 //! target priority strategy (the nearest valid target is taken).
 
-use super::super::Key;
 use super::super::behaviors::{Behavior, FIND_TARGET_RATE, Strategy};
 use super::super::bt::{
     Abort, Cond, Node, ParallelOpts, decorator, leaf, parallel, selector, subplan,
 };
 use super::super::fauna::{FaunaCond, FaunaLeaf};
+use super::super::{Key, Value};
 use super::{
-    BASIC, Built, fearful_combat, par, random_walk, ranged_attack, retaliate_combat,
-    retaliate_target, run_away, speech_loop_of, under, while_closing_in,
+    BASIC, Built, fearful_combat, hostile_combat, melee_combat, par, random_walk, ranged_attack,
+    retaliate_combat, retaliate_target, run_away, speech_loop_of, under, while_closing_in,
 };
 use crate::mobs::lavaland::ai::{LavaCond, LavaLeaf};
 
@@ -86,6 +86,7 @@ fn retaliate_then_acquire() -> Node {
 /// The tree of lavaland controller `path`, `None` when it is not one of them.
 pub(super) fn build(path: &str) -> Option<Built> {
     let is = |sub: &str| under(path, &format!("{BASIC}/{sub}"));
+    let mut flees_injured = false;
     let roots = if is("goliath") {
         // `goliath.bt.json`; left out: eating ash flora, digging holes.
         combat_or_walk(
@@ -282,13 +283,117 @@ pub(super) fn build(path: &str) -> Option<Built> {
     } else if is("gutlunch/gutlunch_warrior") {
         // `gutlunch_warrior.bt.json`: fights back; left out: breeding, befriending ash walkers.
         retaliate_combat()
+    } else if is("polar") {
+        // `polar.bt.json`: `simple_hostile_combat` (`BB_AGGRO_RANGE` 2) with the retaliate
+        // list and `enrage` alongside; left out: its `bear` combat lines.
+        par(
+            vec![
+                selector(vec![
+                    decorator(
+                        Cond::KeySet(Key::CurrentTarget),
+                        false,
+                        Abort::Both,
+                        melee_combat(Strategy::Basic),
+                    ),
+                    random_walk(25.0),
+                ]),
+                lava(LavaLeaf::AcquireWithin {
+                    key: Key::CurrentTarget,
+                    range: 2,
+                }),
+                retaliate_target(Key::CurrentTarget),
+                lava(LavaLeaf::Enrage),
+            ],
+            FIND_TARGET_RATE,
+        )
+    } else if is("wolf") {
+        // `wolf.bt.json`: runs while hurt (`ai_flee_while_injured`), else bites closing in and
+        // howls for the pack; left out: pet commands (taming), attacking obstructions.
+        flees_injured = true;
+        combat_or_walk(
+            selector(vec![
+                run_away(Key::CurrentTarget),
+                parallel(
+                    vec![
+                        subplan(melee(), true, true, 0.0),
+                        lava(LavaLeaf::CallReinforcements {
+                            key: Key::CurrentTarget,
+                        }),
+                        move_to_target(),
+                    ],
+                    ParallelOpts {
+                        failure_any: true,
+                        repeat_secondary: true,
+                        finish_on_primary: true,
+                        ..ParallelOpts::default()
+                    },
+                ),
+            ]),
+            acquire(),
+        )
+    } else if is("ice_whelp") {
+        // `ice_whelp.bt.json`: the eruption within 3, the line within 7, else a bite; left
+        // out: attacking obstructions, eating dead whelps, sculpting rocks, burning trees.
+        combat_or_walk(
+            fight(
+                selector(vec![
+                    lava(LavaLeaf::WhelpBreath {
+                        key: Key::CurrentTarget,
+                        wide: true,
+                        max: 3,
+                    }),
+                    lava(LavaLeaf::WhelpBreath {
+                        key: Key::CurrentTarget,
+                        wide: false,
+                        max: 7,
+                    }),
+                    melee(),
+                ]),
+                move_to_target(),
+            ),
+            acquire(),
+        )
+    } else if is("ice_demon/afterimage") {
+        // `ice_demon_afterimage.bt.json`: `simple_hostile_combat`; left out: fleeing fire.
+        hostile_combat(25.0)
+    } else if is("ice_demon") {
+        // `ice_demon.bt.json` with `ice_demon_combat` (`BB_RANGED_SKIRMISH_MAX_DISTANCE` 7):
+        // jumps away from a target next to it, conjures afterimages under 75 health, jumps
+        // around its target, shoots; left out: fleeing a lit welder or flare (and its iced
+        // floors).
+        combat_or_walk(
+            fight(
+                selector(vec![
+                    lava(LavaLeaf::DemonTeleport {
+                        key: Key::CurrentTarget,
+                        escape: true,
+                    }),
+                    lava(LavaLeaf::DemonClone),
+                    lava(LavaLeaf::DemonTeleport {
+                        key: Key::CurrentTarget,
+                        escape: false,
+                    }),
+                    ranged_attack(0.6, false),
+                ]),
+                lava(LavaLeaf::MaintainDistance {
+                    key: Key::CurrentTarget,
+                    min: 4,
+                    max: 7,
+                }),
+            ),
+            acquire(),
+        )
     } else {
         return None;
     };
     // `ai_retaliate` on every mining mob.
     Some(Built {
         roots: vec![roots],
-        blackboard: Vec::new(),
+        blackboard: if flees_injured {
+            vec![(Key::StopFleeing, Value::Bool(true))]
+        } else {
+            Vec::new()
+        },
         traits: 0,
         retaliates: true,
     })
@@ -314,10 +419,18 @@ mod tests {
             "hivelord",
             "basilisk",
             "gutlunch/gutlunch_warrior",
+            "polar",
+            "wolf",
+            "ice_whelp",
+            "ice_demon",
+            "ice_demon/afterimage",
         ] {
             let built = build(&format!("{BASIC}/{sub}"));
             assert!(built.is_some_and(|b| b.retaliates), "{sub}");
         }
         assert!(build(&format!("{BASIC}/carp")).is_none());
+        // The wolf starts not fleeing (`ai_flee_while_injured`).
+        let wolf = build(&format!("{BASIC}/wolf")).unwrap();
+        assert_eq!(wolf.blackboard, vec![(Key::StopFleeing, Value::Bool(true))]);
     }
 }

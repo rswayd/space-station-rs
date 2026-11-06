@@ -107,6 +107,13 @@ fn ranged_of(path: &str) -> Option<RangedAttacks> {
     if under("/mob/living/basic/mining/watcher") || under("/mob/living/basic/mining/basilisk") {
         return watcher(watcher_blast("/obj/projectile/temp/watcher", 10.0));
     }
+    if under("/mob/living/basic/mining/ice_demon") {
+        // `/obj/projectile/temp/ice_demon`: 5 burn, `speed` 0.25.
+        return watcher(ProjectileData {
+            speed: 0.25,
+            ..watcher_blast("/obj/projectile/temp/ice_demon", 5.0)
+        });
+    }
     if under("/mob/living/basic/stickman/ranged") {
         return Some(RangedAttacks {
             projectile: c9mm_bullet(),
@@ -285,6 +292,9 @@ mod tests {
         let watcher = ranged_of("/mob/living/basic/mining/watcher").unwrap();
         assert_eq!(watcher.projectile.damage, 10.0);
         assert_eq!(watcher.cooldown, 3.0);
+        let demon = ranged_of("/mob/living/basic/mining/ice_demon").unwrap();
+        assert_eq!(demon.projectile.damage, 5.0);
+        assert_eq!(demon.projectile.speed, 0.25);
         let magma = ranged_of("/mob/living/basic/mining/watcher/magmawing").unwrap();
         assert_eq!(
             magma.projectile.path,
