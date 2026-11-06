@@ -659,6 +659,9 @@ fn metastation_families() {
                     || e.contains::<ss13_game::cooking::Oven>()
                     || e.contains::<ss13_game::cooking::Griddle>()
                     || e.contains::<ss13_game::cooking::DeepFryer>()
+                    || e.contains::<ss13_game::coffee::CoffeeMaker>()
+                    || e.contains::<ss13_game::gibber::Gibber>()
+                    || e.contains::<ss13_game::stove::Stove>()
             }
             Family::Tray => e.contains::<ss13_game::botany::tray::Tray>(),
             Family::Station => e.contains::<ss13_game::silicon::cyborg::RechargeStation>(),
