@@ -2,7 +2,7 @@
 //! spawn: pry a floor tile with a crowbar and put it back; build a girder from iron sheets
 //! (right click), secure it with a wrench, plate it into a wall and slice the wall back to a
 //! girder with a lit welder; smash the window between the room and space with a toolbox and
-//! watch the room's air leave.
+//! watch the room's air leave; a loaded RCD builds a wall on a floor and takes it down again.
 
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
@@ -55,6 +55,10 @@ const TYPES: &str = r##"{
     "/obj/item/weldingtool": { "parent": "/obj/item", "declared_vars": {
         "icon_state": "welder", "inhand_icon_state": "welder", "tool_behaviour": "welder",
         "max_fuel": 20, "heat": 3800, "force": 3 } },
+    "/obj/item/construction": { "parent": "/obj/item" },
+    "/obj/item/construction/rcd": { "parent": "/obj/item/construction", "declared_vars": {
+        "name": "RCD", "icon_state": "rcd" } },
+    "/obj/item/construction/rcd/loaded": { "parent": "/obj/item/construction/rcd" },
     "/obj/item/storage": { "parent": "/obj/item" },
     "/obj/item/storage/toolbox": { "parent": "/obj/item/storage", "declared_vars": {
         "name": "toolbox", "icon_state": "toolbox", "force": 13 } },
@@ -206,6 +210,7 @@ fn fixture_assets(test: &str) -> PathBuf {
         "/obj/item/crowbar",
         "/obj/item/wrench",
         "/obj/item/shard",
+        "/obj/item/construction/rcd/loaded",
         "/obj/item/stack/sheet/iron",
         "/obj/item/stack/rods",
         "/obj/item/stack/tile/iron/base",
@@ -646,4 +651,35 @@ fn a_meteor_breaks_the_wall() {
         ),
         "{now:?}"
     );
+}
+
+#[test]
+fn an_rcd_builds_a_wall_and_takes_it_down() {
+    use ss13_game::devices::rcd::Matter;
+    let mut s = Station::start("an_rcd_builds_a_wall_and_takes_it_down");
+    s.0.without_mood();
+    let rcd = ss13_game::construction::spawn_obj(
+        s.server.world_mut(),
+        "/obj/item/construction/rcd/loaded",
+        SPAWN,
+    )
+    .unwrap();
+    s.pick_up(rcd);
+    assert_eq!(s.world().get::<Matter>(rcd).unwrap().matter, 160);
+
+    // The default design: a wall on the floor, 2 s and 16 matter.
+    let floor = s.turf(BUILD_AT);
+    s.click(floor);
+    let started = s.now();
+    s.wait_do_after(10.0, "the wall");
+    assert!(s.now() - started >= 1.9, "2 s");
+    assert_eq!(s.turf_path(BUILD_AT), "/turf/closed/wall");
+    assert_eq!(s.world().get::<Matter>(rcd).unwrap().matter, 144);
+
+    // A right click deconstructs it: 4 s, 26 matter, the floor back.
+    let wall = s.turf(BUILD_AT);
+    s.click_with(wall, true);
+    s.wait_do_after(10.0, "the deconstruction");
+    assert_eq!(s.turf_path(BUILD_AT), "/turf/open/floor/iron");
+    assert_eq!(s.world().get::<Matter>(rcd).unwrap().matter, 118);
 }

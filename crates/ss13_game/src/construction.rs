@@ -295,6 +295,8 @@ pub enum Job {
     AnomalyRelease,
     /// Netpods, hololadders, the quantum console ([`crate::science::bitrunning`]).
     Bitrunning(crate::science::bitrunning::server::BitrunJob),
+    /// An RCD build or deconstruction ([`crate::devices::rcd`]).
+    Rcd(crate::devices::rcd::RcdJob),
 }
 
 /// A turf's baseturf stack, bottom first (tg `baseturfs`). Absent: assembled from the type's
@@ -1313,6 +1315,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Shield(job) => crate::power::shields::complete(world, action, job, consume),
         Job::RadiationLeak => crate::events::radiation_leak::complete(world, action, consume),
         Job::AnomalyRelease => crate::events::anomalies::complete_release(world, action),
+        &Job::Rcd(job) => crate::devices::rcd::complete(world, mob, action, job),
         Job::GirderBolts { from } => {
             if !is_under(&path, GIRDER) || obj_state(world, target) != *from || !consume(world) {
                 return;
