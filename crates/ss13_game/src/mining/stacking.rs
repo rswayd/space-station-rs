@@ -417,7 +417,7 @@ pub fn apply(world: &mut World, machine: Entity, act: StackingAct) {
         }
         StackingAct::Rotate(input) => {
             if let Some(mut m) = world.get_mut::<StackingMachine>(machine) {
-                rotate(&mut *m, input);
+                rotate(&mut m, input);
             }
         }
     }
