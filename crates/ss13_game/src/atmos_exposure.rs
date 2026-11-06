@@ -4,9 +4,10 @@
 //! A processed turf whose air is hot ([`Atmos::drain_exposed_turfs`], tg `COMSIG_TURF_EXPOSE`)
 //! starts every sensitive atom on it whose `should_atmos_process` holds; each fire every
 //! started atom checks again against its turf's air and, while it holds, takes its
-//! `atmos_expose`, else stops. Ported: windows, grilles, windoors, canisters, APCs, lights and
-//! turfs themselves (they burn and melt from their `heat_capacity` in K up; a solid turf heated
-//! through superconduction is exposed at once, as tg's `/turf/temperature_expose`).
+//! `atmos_expose`, else stops. Ported: windows, grilles, windoors, canisters, APCs, lights,
+//! spider webs and turfs themselves (they burn and melt from their `heat_capacity` in K up; a
+//! solid turf heated through superconduction is exposed at once, as tg's
+//! `/turf/temperature_expose`).
 // shortcut: an atom moved onto a hot turf starts on that turf's next processing, not at once
 // (tg `react_to_move`), and only these kinds are sensitive; add the rest with their objects.
 
@@ -44,6 +45,8 @@ pub enum Sensitive {
     Apc,
     /// `/obj/machinery/light`: over 673 K, breaks with `prob(T - 673)`.
     Light,
+    /// `/obj/structure/spider` (webs): over 350 K, 5 burn.
+    SpiderWeb,
     /// A turf (`/turf/should_atmos_process`): from its `heat_capacity` in K, or while it is
     /// `to_be_destroyed`.
     Turf { heat_capacity: f64 },
@@ -83,6 +86,8 @@ impl Sensitive {
             Self::Canister
         } else if is_under(path, "/obj/machinery/power/apc") {
             Self::Apc
+        } else if is_under(path, crate::effects::webs::SPIDER_STRUCTURE) {
+            Self::SpiderWeb
         } else {
             return None;
         })
@@ -106,6 +111,7 @@ impl Sensitive {
             }
             Self::Apc => temperature > 2000.0,
             Self::Light => temperature > 673.0,
+            Self::SpiderWeb => temperature > 350.0,
             Self::Turf { heat_capacity } => {
                 temperature >= heat_capacity
                     || world
@@ -125,6 +131,10 @@ impl Sensitive {
             Self::Grille => burn(world, 1.0),
             Self::Windoor { .. } => burn(world, (temperature / 200.0).floor()),
             Self::Canister => burn(world, 5.0),
+            // `take_damage(5, BURN, 0, 0)`: no damage flag, so no melee armor.
+            Self::SpiderWeb => {
+                crate::obj_damage::take_damage_flagless(world, e, 5.0);
+            }
             Self::Apc => burn(world, (temperature / 100.0).min(10.0)),
             Self::Light => {
                 let chance = (temperature - 673.0).max(0.0) as f32;

@@ -264,6 +264,12 @@ pub fn take_damage(world: &mut World, target: Entity, amount: f32, damtype: Dama
             destroyed: false,
         };
     };
+    // `/obj/structure/spider/run_atom_armor` for `MELEE`.
+    let amount = if is_under(&obj.path, crate::effects::webs::SPIDER_STRUCTURE) {
+        amount * crate::effects::webs::melee_damage_mult(damtype == DamageType::Burn)
+    } else {
+        amount
+    };
     apply_damage(world, target, &obj, amount, damtype)
 }
 

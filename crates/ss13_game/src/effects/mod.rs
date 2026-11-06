@@ -10,6 +10,8 @@
 //!   smoke and foam.
 //! - [`trail`]: `/datum/effect_system/trail_follow`: ion, steam and smoke trails left behind a
 //!   moving holder.
+//! - [`mines`]: `/obj/effect/mine`, set off by stepping off the pressure plate; [`webs`]:
+//!   sticky spider webs catching walkers.
 //!
 //! Cost: each system runs only while its effects exist (`run_if(any_with_component)`), one
 //! pass over its live particles per tick.
@@ -20,26 +22,34 @@ use ss13_shared::{Dir, TilePos};
 use ss13_world::SpatialIndex;
 
 pub mod foam;
+pub mod mines;
 pub mod particles;
 pub(crate) mod reactions;
 pub mod smoke;
 pub mod trail;
+pub mod webs;
 
 pub struct EffectsPlugin;
 
 impl Plugin for EffectsPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<FluidGroups>().add_systems(
-            Update,
-            (
-                particles::tick_particles.run_if(any_with_component::<particles::Particle>),
-                smoke::tick_smoke.run_if(any_with_component::<smoke::Smoke>),
-                foam::tick_foam.run_if(any_with_component::<foam::Foam>),
-                foam::halon_resin,
-                trail::tick_trails.run_if(any_with_component::<trail::Trail>),
-                trail::fade_trail_particles.run_if(any_with_component::<trail::TrailParticle>),
-            ),
-        );
+        app.init_resource::<FluidGroups>()
+            .add_systems(
+                Update,
+                (
+                    particles::tick_particles.run_if(any_with_component::<particles::Particle>),
+                    smoke::tick_smoke.run_if(any_with_component::<smoke::Smoke>),
+                    foam::tick_foam.run_if(any_with_component::<foam::Foam>),
+                    foam::halon_resin,
+                    trail::tick_trails.run_if(any_with_component::<trail::Trail>),
+                    trail::fade_trail_particles.run_if(any_with_component::<trail::TrailParticle>),
+                ),
+            )
+            .add_systems(
+                Update,
+                (mines::step_on_mines, webs::walk_into_webs)
+                    .after(ss13_world::WorldSystems::Movement),
+            );
     }
 }
 
