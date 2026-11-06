@@ -661,7 +661,8 @@ fn metastation() {
     // The escape pods sit at their loaders; the arrivals shuttle has its latejoin chairs and has
     // left the station with nobody aboard.
     let pods = world.resource::<EscapePods>().0.clone();
-    assert_eq!(pods.len(), 2, "MetaStation has two escape pod loaders");
+    // Four loaders; the two var-edited ones and two plain ones (type default `escape_pod/default`).
+    assert_eq!(pods.len(), 4, "MetaStation has four escape pod loaders");
     for pod in &pods {
         assert_eq!(
             world.get::<MobileDock>(pod.port).unwrap().docked,

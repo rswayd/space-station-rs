@@ -999,7 +999,8 @@ fn metastation_research() {
         "MetaStation maps the unlocked consoles"
     );
     assert_eq!(silos, 1);
-    assert_eq!(lathes.len(), 9);
+    // Nine R&D lathes and the two wiremod component printers.
+    assert_eq!(lathes.len(), 11);
     assert!(lathes.iter().all(|(_, linked)| *linked));
     assert!(db.nodes.len() > 100 && web.researched.len() >= 10);
     s.run_until_for(30.0, "points from the servers", |s| {

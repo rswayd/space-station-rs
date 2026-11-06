@@ -241,10 +241,11 @@ fn lavaland_environment() {
     let started = world.resource::<ActiveWeather>().0.last().unwrap();
     assert_eq!(started.kind, WeatherKind::AshStorm);
     assert_eq!(started.levels, vec![z]);
-    run(&mut app, 25.0);
+    // A corgi has 20 health and the ash does 4 a second: measure from the spawn, since a storm
+    // the scheduler started at round start may already be burning.
     let hp = |app: &App, e| app.world().get::<Health>(e).unwrap().health();
     let (a, b) = (hp(&app, exposed), hp(&app, sheltered));
-    run(&mut app, 10.0);
+    run(&mut app, 35.0);
     assert!(hp(&app, exposed) < a - 10.0, "the ash burns outdoors");
     assert_eq!(hp(&app, sheltered), b, "the base shelters");
 }
