@@ -518,6 +518,8 @@ fn take_bite(world: &mut World, eater: Entity, feeder: Entity, food: Entity) {
     if let Some(mut f) = world.get_mut::<Food>(food) {
         f.bitecount += 1;
     }
+    // `COMSIG_FOOD_EATEN`.
+    crate::botany::produce::on_eaten(world, eater, food);
     let text = taste_message(&chem, &bite, &dm.tastes, TASTE_SENSITIVITY);
     taste(world, eater, text);
     check_liked(world, eater, food, &dm);

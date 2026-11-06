@@ -16,20 +16,27 @@
 //!   `rand(1, 4) + 1` seeds with its stats. Secateurs cut grafts, grafts go onto plants
 //!   ([`grafts`]).
 //! - Grown items act on their genes' product traits ([`produce`]): slipping, squashing,
-//!   glowing, teleporting, stinging, batteries, harvest-time chemistry; invasive plants spread
-//!   to the trays around.
+//!   glowing, teleporting, stinging, batteries, chemical smoke, charging cells when eaten,
+//!   harvest-time chemistry; invasive plants spread to the trays around; sharp things cut logs
+//!   into planks. Unique genes ([`unique`]) make weapons, backfire on bare hands, explode or
+//!   wake up as mobs.
+//! - Gene shears cut a removable gene off a tray's plant, picked from a list ([`shears`]).
+//! - Fermenting barrels turn grown food into wine ([`barrel`]).
 //! - `SS13_HYDRO_SPEED` (dev): every hydroponics timer runs this many times faster (tests use
 //!   [`HydroSpeed`]), so a cycle keeps tg's ratios.
-// shortcut: no plant bags, seed storage in the extractor (its tgui), biogenerator, sprays,
-// gene shears or right click nutrient emptying; the analyzer prints to chat instead of its
+// shortcut: no plant bags, seed storage in the extractor (its tgui), biogenerator, sprays
+// or right click nutrient emptying; the analyzer prints to chat instead of its
 // tgui; invasive spreading ignores windows between trays (tg `Adjacent`).
 
+pub mod barrel;
 pub mod genes;
 pub mod grafts;
 pub mod plants;
 pub mod produce;
 pub mod seeds;
+pub mod shears;
 pub mod tray;
+pub mod unique;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -154,6 +161,15 @@ impl Plugin for BotanyServerPlugin {
         app.add_click_handler(ClickPhase::AttackSelf, 2900, |w, c| {
             crate::botany::attack_self(w, c.client, c.mob, c.target)
         });
+        // `COMSIG_ITEM_PICKUP` of plants that backfire on bare hands (the pickup goes on).
+        app.add_click_handler(ClickPhase::EmptyHand, 3170, |w, c| {
+            crate::botany::unique::pickup_backfire(w, c.mob, c.target)
+        });
+        // A log cut or a plant wired into a battery in the other hand.
+        app.add_click_handler(ClickPhase::OtherHand, 1350, |w, c| {
+            c.held
+                .is_some_and(|h| crate::botany::grown_interaction(w, c.client, c.mob, h, c.target))
+        });
         // tg `attack_hand` of hydroponics trays (harvest, dead plant, examine).
         app.add_click_handler(ClickPhase::EmptyHand, 1600, |w, c| {
             crate::botany::interact(w, c.client, c.mob, c.target, c.modifiers.right)
@@ -177,6 +193,9 @@ impl Plugin for BotanyServerPlugin {
             .add_systems(Startup, setup_trays)
             .add_systems(Update, process_trays);
         produce::build(app);
+        unique::build(app);
+        shears::build(app);
+        barrel::build(app);
     }
 
     /// After every plugin's `build`: the map plugin's assets dir is known by now.
@@ -655,11 +674,14 @@ pub fn item_interaction(
     if is_under(&held_path, plants::ANALYZER_ROOT) {
         return plants::analyze(world, client, target);
     }
-    if produce::battery_interaction(world, client, mob, held, target) {
+    if grown_interaction(world, client, mob, held, target)
+        || barrel::item_interaction(world, client, held, target)
+    {
         return true;
     }
     if world.get::<Tray>(target).is_some() {
-        return plants::tray_item_interaction(world, client, mob, held, target, modifiers);
+        return shears::shears_interaction(world, client, mob, held, target)
+            || plants::tray_item_interaction(world, client, mob, held, target, modifiers);
     }
     if world
         .get::<DmObj>(target)
@@ -668,6 +690,20 @@ pub fn item_interaction(
         return plants::extractor_interaction(world, client, mob, held, target);
     }
     false
+}
+
+/// `item_interaction` of grown items wherever they are: a cable makes a potato battery, a sharp
+/// thing cuts a log.
+pub fn grown_interaction(
+    world: &mut World,
+    client: Entity,
+    mob: Entity,
+    held: Entity,
+    target: Entity,
+) -> bool {
+    world.contains_resource::<Botany>()
+        && (produce::battery_interaction(world, client, mob, held, target)
+            || produce::log_interaction(world, client, mob, held, target))
 }
 
 /// An empty-hand click on a tray (`attack_hand`): harvest, remove the dead plant, or examine
@@ -679,6 +715,9 @@ pub fn interact(
     target: Entity,
     right: bool,
 ) -> bool {
+    if barrel::attack_hand(world, client, target, right) {
+        return true;
+    }
     if right || world.get::<Tray>(target).is_none() {
         return false;
     }
@@ -688,7 +727,9 @@ pub fn interact(
 
 /// tg `attack_self` of a held plant (squeezing liquid contents). False for other items.
 pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity) -> bool {
-    world.contains_resource::<Botany>() && produce::attack_self(world, client, mob, item)
+    world.contains_resource::<Botany>()
+        && (unique::attack_self(world, client, mob, item)
+            || produce::attack_self(world, client, mob, item))
 }
 
 /// The end of a [`BotanyJob`].
@@ -702,6 +743,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &crate::tools::DoAfter, 
 /// tg `/obj/machinery/hydroponics/examine`.
 pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<(Span, String)>) {
     produce::examine_lines(world, target, lines);
+    barrel::examine_lines(world, target, lines);
     let Some(state) = world.get::<Tray>(target) else {
         return;
     };

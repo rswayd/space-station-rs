@@ -35,6 +35,15 @@ pub const PRODUCE_RUNTIME_TYPES: [&str; 2] = [
     "/obj/effect/decal/cleanable/molten_object",
     "/obj/item/stock_parts/power_store/cell/potato",
 ];
+/// What unique genes and logs make (`ss13_game::botany`): planks, rods and bamboo cut from logs,
+/// the mobs of dormant ferocity.
+pub const BOTANY_RUNTIME_TYPES: [&str; 5] = [
+    "/obj/item/stack/sheet/mineral/wood",
+    "/obj/item/stack/rods",
+    "/obj/item/stack/sheet/mineral/bamboo",
+    "/mob/living/basic/killer_tomato",
+    "/mob/living/basic/mushroom",
+];
 const REAGENT_ROOT: &str = "/datum/reagent";
 const URANIUM: &str = "/datum/reagent/uranium";
 /// `REAGENT_SPAWN_RANDOM_PRODUCERS`.

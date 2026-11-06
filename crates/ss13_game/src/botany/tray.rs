@@ -6,8 +6,7 @@
 //!
 //! The cycle is a pure function of the tray, its nutrient holder, the light and the dice, so it
 //! is tested without a world.
-// shortcut: no autogrow (`self_sustaining`, ctrl+click), snails, soil sacks, gene shears,
-// somatoray, bees, plumbing or circuits; `mutatepest` warns without spawning
+// shortcut: no autogrow (`self_sustaining`, ctrl+click), snails, soil sacks, somatoray, bees, plumbing or circuits; `mutatepest` warns without spawning
 // spiderlings, strange reagent spawns no living plant.
 
 use ss13_reagents::{Chemistry, Holder, is_under};
@@ -35,6 +34,11 @@ pub const SLOW_RELEASE: u32 = 1 << 7;
 pub const HYDROTRAY_CYCLE_DELAY: f64 = 20.0;
 const NITROGEN: &str = "/datum/reagent/nitrogen";
 const WATER: &str = "/datum/reagent/water";
+const KUDZU: &str = "/obj/item/seeds/kudzu";
+const BLOOD: &str = "/datum/reagent/blood";
+const AMATOXIN: &str = "/datum/reagent/toxin/amatoxin";
+const PLASMA: &str = "/datum/reagent/toxin/plasma";
+const HOLY_WATER: &str = "/datum/reagent/water/holywater";
 
 /// `plant_status` (`HYDROTRAY_NO_PLANT`, `_PLANT_GROWING`, `_PLANT_DEAD`, `_PLANT_HARVESTABLE`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -347,6 +351,9 @@ pub fn apply_chemicals(
     dice: &mut impl Dice,
     out: &mut CycleOutcome,
 ) {
+    if let Some(seed) = tray.myseed.as_mut() {
+        on_chem_reaction(seed, nutrients, env.chem, dice);
+    }
     let list: Vec<(u16, f32, f32)> = nutrients
         .reagents
         .iter()
@@ -364,6 +371,36 @@ pub fn apply_chemicals(
         on_hydroponics_apply(
             tray, nutrients, id, &path, volume, normalised, env, dice, out,
         );
+    }
+}
+
+/// `/obj/item/seeds/kudzu/on_chem_reaction` (the only seed with one) on the tray's
+/// nutrients: blood and amatoxin shift its production, plasma and holy water its potency.
+// shortcut: sterilizine, welding fuel and phenol remove no vine mutations (no space vines yet).
+pub fn on_chem_reaction(
+    seed: &mut Seed,
+    nutrients: &Holder,
+    chem: &Chemistry,
+    dice: &mut impl Dice,
+) {
+    if !is_under(&seed.path, KUDZU) {
+        return;
+    }
+    let has = |path: &str, amount: f32| {
+        chem.id(path)
+            .is_some_and(|id| nutrients.amount(id) >= amount)
+    };
+    if has(BLOOD, 15.0) {
+        seed.adjust_production(dice.rand(15, -5) as f32);
+    }
+    if has(AMATOXIN, 5.0) {
+        seed.adjust_production(dice.rand(5, -15) as f32);
+    }
+    if has(PLASMA, 5.0) {
+        seed.adjust_potency(dice.rand(5, -15) as f32);
+    }
+    if has(HOLY_WATER, 10.0) {
+        seed.adjust_potency(dice.rand(15, -5) as f32);
     }
 }
 
@@ -945,6 +982,30 @@ mod tests {
             .collect();
         h.add_reagent_list(chem, &list, None, true);
         h
+    }
+
+    #[test]
+    fn kudzu_reacts_to_blood_and_plasma_in_the_tray() {
+        let plants = test_plants();
+        let chem = Chemistry::new(ChemData {
+            glass_styles: Vec::new(),
+            reagents: [WATER, BLOOD, PLASMA].into_iter().map(reagent).collect(),
+            reactions: vec![],
+        });
+        let nutrients = holder(&chem, &[(BLOOD, 15.0), (PLASMA, 4.0)]);
+        let mut seed = Seed::new(plants.seed_def("/obj/item/seeds/tomato").unwrap(), &plants);
+        let mut dice = Script {
+            rolls: vec![-3, 5],
+            ..Default::default()
+        };
+        // Not kudzu: nothing.
+        on_chem_reaction(&mut seed, &nutrients, &chem, &mut dice);
+        assert_eq!(seed.production, 6.0);
+        seed.path = KUDZU.into();
+        on_chem_reaction(&mut seed, &nutrients, &chem, &mut dice);
+        assert_eq!(seed.production, 3.0);
+        // 4 u of plasma is below its 5 u threshold.
+        assert_eq!(seed.potency, 10.0);
     }
 
     fn planted(plants: &Plants) -> Tray {
