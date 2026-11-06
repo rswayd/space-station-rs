@@ -202,7 +202,13 @@ mod tests {
                 node,
             };
             world
-                .spawn((atom, c, appearance(), TilePos::new(x, 1, 1), ss13_world::Mapped))
+                .spawn((
+                    atom,
+                    c,
+                    appearance(),
+                    TilePos::new(x, 1, 1),
+                    ss13_world::Mapped,
+                ))
                 .id()
         };
         // Layer-2 run x = 1..=3, a node maker on x = 2, a layer-1 cable on x = 4.
