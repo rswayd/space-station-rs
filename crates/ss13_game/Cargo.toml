@@ -8,6 +8,8 @@ license.workspace = true
 
 [dependencies]
 ss13_data = { path = "../ss13_data" }
+# Exodrone adventures (`strings/exoadventures/*.json`), server only.
+serde_json = { version = "1.0.154", optional = true }
 # `SystemTime` that also works on wasm32 (std's panics there); std's own type natively.
 web-time = "1.1"
 ss13_shared.workspace = true
@@ -30,7 +32,7 @@ ss13_reagents = { workspace = true, optional = true }
 postcard = { workspace = true, optional = true }
 
 [features]
-server = ["ss13_net/server", "dep:ss13_world", "dep:ss13_mapload", "dep:ss13_assets", "dep:ss13_proto", "dep:ss13_atmos", "ss13_tgui/server", "dep:ss13_chat", "ss13_chat/server", "dep:ss13_reagents"]
+server = ["ss13_net/server", "dep:ss13_world", "dep:ss13_mapload", "dep:ss13_assets", "dep:ss13_proto", "dep:ss13_atmos", "ss13_tgui/server", "dep:ss13_chat", "ss13_chat/server", "dep:ss13_reagents", "dep:serde_json"]
 # The deterministic integration-test harness (`ss13_game::testing`).
 testing = ["server", "ss13_net/client", "dep:postcard"]
 client = [

@@ -1196,7 +1196,7 @@ fn with_adventure<R>(
     let EventKind::Adventure(adventure) = &mut site.event_mut(event)?.kind else {
         return None;
     };
-    Some(f(&mut **adventure, &mut ex.rng))
+    Some(f(adventure, &mut ex.rng))
 }
 
 /// `start_adventure`.
@@ -2184,7 +2184,9 @@ fn console_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed<Exodron
                     Some(pos) if status == Some(DroneStatus::Idle) => {
                         crate::storage::take_out(world, item, pos);
                     }
-                    _ => world.despawn(item),
+                    _ => {
+                        world.despawn(item);
+                    }
                 }
             }
         }
