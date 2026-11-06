@@ -370,7 +370,7 @@ pub(super) fn catalog_view(
             ]
         })
     });
-    let grow = if express { 2.0 } else { 3.0 };
+    let grow: f32 = if express { 2.0 } else { 3.0 };
     let packs: Vec<_> = st
         .groups
         .iter()

@@ -696,6 +696,10 @@ fn metastation_families() {
             Family::Smes => e.contains::<ss13_game::power::Smes>(),
             Family::ShieldWallGen => e.contains::<ss13_game::power::shields::ShieldWallGen>(),
             Family::Orm => e.contains::<ss13_game::mining::orm::OreRedemption>(),
+            Family::MailSorter => e.contains::<ss13_game::cargo::mail_sorter::MailSorter>(),
+            Family::MaterialsMarket => {
+                e.contains::<ss13_game::cargo::materials_market::MaterialsMarket>()
+            }
         };
         assert!(live, "{fam:?}: {} has its live state", def.build_path);
         println!("{fam:?}: {path} -> {board} -> {}", def.build_path);

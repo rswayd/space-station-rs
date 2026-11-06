@@ -214,11 +214,12 @@ pub fn item_interaction(
         warn!("no {STOCK_BLOCK} prototype (rerun `ss13-mapload convert`)");
         return true;
     };
+    let created = now(world);
     world.entity_mut(block).insert(StockBlock {
         material,
         sheets,
         export_value: price,
-        created: now(world),
+        created,
         warned: false,
         fluid: false,
     });
