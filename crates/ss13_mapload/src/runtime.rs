@@ -645,6 +645,9 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/structure/mirror",
     "/obj/structure/mirror/broken",
     "/obj/structure/mirror/magic/lesser/heretic",
+    // The pAI's mob and its door jack cable (`ss13_game::silicon::pai`).
+    "/mob/living/silicon/pai",
+    "/obj/item/pai_cable",
 ];
 
 /// `ss13_game::species`: every species' organs (`mutant*`), meat (`meat`) and the plasmaman

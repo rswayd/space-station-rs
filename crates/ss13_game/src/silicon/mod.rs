@@ -29,6 +29,7 @@
 //! (`crate::radio::BuiltInRadio`).
 //! - [`mmi`] (server): brain processors (the MMI, positronic brains) and cyborgs built from an
 //!   endoskeleton around one.
+//! - [`pai`] (server): personal AIs, their cards, holochassis, software and door jack.
 // shortcut: a dead silicon stays where it died, inert, with the carbon deathgasp text; no
 // gibbing, debris or MMI ejection. EMPs: `crate::emp::mobs`.
 
@@ -74,6 +75,8 @@ pub mod malf;
 pub mod malf_modules;
 #[cfg(feature = "server")]
 pub mod mmi;
+#[cfg(feature = "server")]
+pub mod pai;
 #[cfg(feature = "server")]
 pub mod robotics;
 pub mod ui;
@@ -137,6 +140,7 @@ mod server {
                     super::aicard::AiCardPlugin,
                     super::ai_slipper::AiSlipperPlugin,
                     super::holopad::HolopadPlugin,
+                    super::pai::PaiPlugin,
                 ))
                 .add_systems(PreStartup, load_data)
                 .add_systems(
