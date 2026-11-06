@@ -146,6 +146,7 @@ fn takes_emag(world: &World, target: Entity) -> bool {
         || e.contains::<Apc>()
         || e.contains::<AirAlarm>()
         || e.contains::<crate::cargo::console::CargoConsole>()
+        || e.contains::<crate::cargo::express::ExpressConsole>()
         || e.contains::<crate::comms_server::CommsConsole>()
         || e.contains::<crate::vending::Vendor>()
         || e.contains::<crate::chem_dispenser::ChemDispenser>()
@@ -274,6 +275,12 @@ pub fn emag_act(world: &mut World, actor: Actor, card: Entity, target: Entity) -
         .is_some()
     {
         return crate::cargo::console::emag_act(world, mob, card, target);
+    }
+    if world
+        .get::<crate::cargo::express::ExpressConsole>(target)
+        .is_some()
+    {
+        return crate::cargo::express::emag_act(world, mob, target);
     }
     if world
         .get::<crate::comms_server::CommsConsole>(target)

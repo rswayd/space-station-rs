@@ -14,7 +14,10 @@
 //! for tg's `tgui_alert`): that department pays when the order ships, and a pack with an
 //! `access_view` the requester's ID lacks is refused. The request console announces new
 //! requests on the supply channel, at most every 30 s.
-// shortcut: no hacked boards (contraband), coupons or loans.
+//!
+//! A coupon used on a console goes inside ([`super::coupon`]); an order of its pack takes it
+//! (the discount off its cost), cancelling the order drops it back on the console's tile.
+// shortcut: no hacked boards (contraband) or loans.
 
 use std::sync::Arc;
 
@@ -73,6 +76,8 @@ pub struct CargoConsole {
     catalogue: Arc<CargoStatic>,
     /// `message_cooldown`: server time of the next allowed announcement.
     next_announcement: f64,
+    /// `loaded_coupons`: coupons inside, used up by matching orders ([`super::coupon`]).
+    pub loaded_coupons: Vec<Entity>,
 }
 
 pub struct ConsolePlugin;
@@ -98,6 +103,16 @@ impl Plugin for ConsolePlugin {
 /// The catalogue a console with `contraband` (and `emagged`: the `ORDER_EMAG_ONLY` packs) shows
 /// (tg `get_packs_data_by_group` with the catalogue asset's pack data).
 pub fn catalogue(packs: &SupplyPacks, contraband: bool, emagged: bool) -> CargoStatic {
+    catalogue_with(packs, contraband, emagged, false)
+}
+
+/// [`catalogue`] of the express console (`express`: pod-only packs too).
+pub fn catalogue_with(
+    packs: &SupplyPacks,
+    contraband: bool,
+    emagged: bool,
+    express: bool,
+) -> CargoStatic {
     let icon = |path: &str| {
         packs
             .templates
@@ -112,7 +127,7 @@ pub fn catalogue(packs: &SupplyPacks, contraband: bool, emagged: bool) -> CargoS
     for pack in packs
         .packs
         .iter()
-        .filter(|p| orderable(p, contraband, emagged))
+        .filter(|p| super::supply::orderable_with(p, contraband, emagged, express))
     {
         let record = SupplyRecord {
             id: pack.id.clone(),
@@ -185,7 +200,11 @@ pub(crate) fn setup_console(world: &mut World, e: Entity, shared: Option<Arc<Car
     let Some(path) = world.get::<DmObj>(e).map(|o| o.path.clone()) else {
         return;
     };
-    if !is_under(&path, CARGO_CONSOLE) || is_under(&path, EXPRESS_CONSOLE) {
+    if is_under(&path, EXPRESS_CONSOLE) {
+        super::express::setup(world, e);
+        return;
+    }
+    if !is_under(&path, CARGO_CONSOLE) {
         return;
     }
     let request_only = is_under(&path, REQUEST_CONSOLE);
@@ -206,6 +225,7 @@ pub(crate) fn setup_console(world: &mut World, e: Entity, shared: Option<Arc<Car
         self_paid: false,
         catalogue,
         next_announcement: 0.0,
+        loaded_coupons: Vec::new(),
     });
 }
 
@@ -649,8 +669,9 @@ fn add_item(
         personal_department
     };
     let amount = amount.clamp(1, i64::from(CARGO_MAX_ORDER - similar)) as u32;
-    let mut orders = world.resource_mut::<SupplyOrders>();
     for _ in 0..amount {
+        let coupon = super::coupon::take_for(world, console, pack);
+        let mut orders = world.resource_mut::<SupplyOrders>();
         let order = SupplyOrder {
             id: orders.next_id(),
             pack,
@@ -660,6 +681,7 @@ fn add_item(
             paying_account,
             paying_department: paying_department.clone(),
             can_be_cancelled: true,
+            coupon,
         };
         if to_requests {
             orders.request_list.push(order);
@@ -715,8 +737,9 @@ fn announce_requests(world: &mut World, console: Entity, amount: u32) {
     });
 }
 
-/// tg `remove_item` of the first cart order of the pack named `name`.
-fn remove_by_name(world: &mut World, name: &str) -> bool {
+/// tg `remove_item` of the first cart order of the pack named `name`: its coupon comes back
+/// onto the console's tile.
+fn remove_by_name(world: &mut World, console: Entity, name: &str) -> bool {
     let Some(pack) = world
         .get_resource::<SupplyPacks>()
         .and_then(|p| p.by_name(name))
@@ -724,16 +747,29 @@ fn remove_by_name(world: &mut World, name: &str) -> bool {
         return false;
     };
     let mut orders = world.resource_mut::<SupplyOrders>();
-    match orders
+    let Some(i) = orders
         .shopping_list
         .iter()
         .position(|o| o.pack == pack && o.can_be_cancelled)
-    {
-        Some(i) => {
-            orders.shopping_list.remove(i);
-            true
-        }
-        None => false,
+    else {
+        return false;
+    };
+    let order = orders.shopping_list.remove(i);
+    refund_coupon(world, console, &order);
+    true
+}
+
+/// A cancelled order's coupon onto the console's tile.
+fn refund_coupon(world: &mut World, console: Entity, order: &SupplyOrder) {
+    let Some((coupon, _)) = order.coupon else {
+        return;
+    };
+    if world.get_entity(coupon).is_err() {
+        return;
+    }
+    if let Some(&pos) = world.get::<TilePos>(console) {
+        machine_say(world, console, "Coupon refunded.");
+        crate::storage::take_out(world, coupon, pos);
     }
 }
 
@@ -798,10 +834,10 @@ fn console_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed<CargoUi
                 }
             }
             CargoAct::Remove(name) if manage => {
-                remove_by_name(world, &name);
+                remove_by_name(world, console, &name);
             }
             CargoAct::Modify(name, amount) if manage => {
-                while remove_by_name(world, &name) {}
+                while remove_by_name(world, console, &name) {}
                 if amount > 0 && amount <= i64::from(CARGO_MAX_ORDER) {
                     let pack = world
                         .get_resource::<SupplyPacks>()
@@ -812,10 +848,14 @@ fn console_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed<CargoUi
                 }
             }
             CargoAct::Clear if manage => {
-                world
-                    .resource_mut::<SupplyOrders>()
-                    .shopping_list
-                    .retain(|o| !o.can_be_cancelled);
+                let (kept, cleared): (Vec<SupplyOrder>, Vec<SupplyOrder>) =
+                    std::mem::take(&mut world.resource_mut::<SupplyOrders>().shopping_list)
+                        .into_iter()
+                        .partition(|o| !o.can_be_cancelled);
+                world.resource_mut::<SupplyOrders>().shopping_list = kept;
+                for order in &cleared {
+                    refund_coupon(world, console, order);
+                }
             }
             CargoAct::Approve(id) if state.can_approve_requests => {
                 let mut orders = world.resource_mut::<SupplyOrders>();
@@ -910,6 +950,7 @@ mod tests {
                 paying_account,
                 paying_department: None,
                 can_be_cancelled: true,
+                coupon: None,
             });
         }
         let id = orders.next_id();
@@ -922,6 +963,7 @@ mod tests {
             paying_account: None,
             paying_department: Some(crate::cargo::economy::ACCOUNT_SCI.into()),
             can_be_cancelled: true,
+            coupon: None,
         });
         let console = CargoConsole {
             request_only: false,
@@ -932,6 +974,7 @@ mod tests {
             self_paid: false,
             catalogue: Arc::default(),
             next_announcement: 0.0,
+            loaded_coupons: Vec::new(),
         };
         let economy = Economy::new(1);
         let data = console_data(

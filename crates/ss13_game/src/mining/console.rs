@@ -6,10 +6,9 @@
 //!
 //! - `purchase`: at least `CARGO_CRATE_VALUE` (200) worth, at `cargo_cost_multiplier` (0.65);
 //!   the items ship in a crate on the next supply shuttle from CentCom ([`ship_orders`]).
-//! - `express`: at `express_cost_multiplier`, straight to the buyer's tile; the console then
-//!   rests `cooldown_time × express_cost_multiplier`.
-// shortcut: express orders appear on the buyer's tile without the teleporter supply pod, no
-// supply radio announcement, no golem or cook
+//! - `express`: at `express_cost_multiplier`, a supply pod onto the buyer's tile
+//!   (`crate::cargo::supplypod`); the console then rests `cooldown_time × express_cost_multiplier`.
+// shortcut: no supply radio announcement, no golem or cook
 // consoles (only the mining console has this server half).
 
 use bevy::ecs::message::MessageCursor;
@@ -376,9 +375,12 @@ fn order(
         let Some(&at) = world.get::<TilePos>(user) else {
             return true;
         };
-        for path in &paths {
-            crate::construction::spawn_obj(world, path, at);
-        }
+        // BandaStation `order_computer.dm`: the teleporter supply pod.
+        crate::cargo::supplypod::launch(
+            world,
+            at,
+            crate::cargo::supplypod::PodCargo::Items(paths.clone()),
+        );
         let mut text = "Thank you for your purchase!".to_owned();
         if dm.express_cost_multiplier > 1.0 {
             text.push_str(&format!(

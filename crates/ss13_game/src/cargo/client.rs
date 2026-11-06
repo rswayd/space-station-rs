@@ -42,6 +42,8 @@ pub struct CargoClientPlugin;
 impl Plugin for CargoClientPlugin {
     fn build(&self, app: &mut App) {
         app.register_ui_view::<CargoUi>()
+            .register_ui_view::<CargoExpressUi>()
+            .register_ui_view::<MatMarketUi>()
             .add_observer(submit_request);
     }
 }
@@ -184,7 +186,7 @@ fn view(st: &CargoStatic, data: &CargoData, local: &UiLocalState) -> impl Scene 
         TAB_REQUESTS => Box::new(EntityScene(requests_view(data, st))),
         TAB_CART => Box::new(EntityScene(cart_view(data, st))),
         TAB_HELP => Box::new(EntityScene(help_view())),
-        _ => Box::new(EntityScene(catalog_view(st, data, local))),
+        _ => Box::new(EntityScene(catalog_view(st, data, local, false))),
     };
     let modal = modal(st, data, local);
     let title = title_case(tab);
@@ -304,8 +306,14 @@ fn icon_scene(icon: Option<ProductIcon>) -> Box<dyn SceneList> {
     }
 }
 
-/// `CargoCatalog`: the group tabs and the selected group's packs.
-fn catalog_view(st: &CargoStatic, data: &CargoData, local: &UiLocalState) -> impl Scene + use<> {
+/// `CargoCatalog`: the group tabs and the selected group's packs; `express` (the express
+/// console's) without "Buy Privately".
+pub(super) fn catalog_view(
+    st: &CargoStatic,
+    data: &CargoData,
+    local: &UiLocalState,
+    express: bool,
+) -> impl Scene + use<> {
     let selected = match local.get(GROUP) {
         "" => st
             .groups
@@ -346,6 +354,23 @@ fn catalog_view(st: &CargoStatic, data: &CargoData, local: &UiLocalState) -> imp
     } else {
         (UiColor::Transparent, "square-o")
     };
+    let private = (!express).then(|| {
+        EntityScene(bsn! {
+            @StackItem
+            Children [
+                @ss13_ui_kit::Button {
+                    @icon: private_icon,
+                    @content: "Buy Privately",
+                    @fluid: true,
+                    @tooltip: "Use your own funds to purchase items.",
+                    @tooltip_position: Placement::Top,
+                }
+                ss13_ui_kit::Button { color: private_color }
+                Act({TOGGLE_PRIVATE.to_owned()})
+            ]
+        })
+    });
+    let grow = if express { 2.0 } else { 3.0 };
     let packs: Vec<_> = st
         .groups
         .iter()
@@ -369,23 +394,12 @@ fn catalog_view(st: &CargoStatic, data: &CargoData, local: &UiLocalState) -> imp
                             Children [ {groups} ]
                         ]
                         --
-                        @StackItem
-                        Children [
-                            @ss13_ui_kit::Button {
-                                @icon: private_icon,
-                                @content: "Buy Privately",
-                                @fluid: true,
-                                @tooltip: "Use your own funds to purchase items.",
-                                @tooltip_position: Placement::Top,
-                            }
-                            ss13_ui_kit::Button { color: private_color }
-                            Act({TOGGLE_PRIVATE.to_owned()})
-                        ]
+                        {private}
                     ]
                 ]
             ]
             --
-            @StackItem { @grow: 3.0 }
+            @StackItem { @grow: grow }
             Node { min_width: px(0) }
             Children [
                 @Section { @fill: true, @scrollable: true }
@@ -479,7 +493,7 @@ fn pack_row(pack: &SupplyRecord, data: &CargoData, st: &CargoStatic) -> impl Sce
 }
 
 /// `CatalogPackInfo` or the request reason modal.
-fn modal(
+pub(super) fn modal(
     st: &CargoStatic,
     data: &CargoData,
     local: &UiLocalState,

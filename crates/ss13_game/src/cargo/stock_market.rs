@@ -17,8 +17,8 @@
 //! `subtypesof(/datum/material)` with `tradable = TRUE` (`code/datums/materials/basemats.dm`).
 //! - While [`StockMarket::crashing`] (tg `TRAIT_MARKET_CRASHING` on `SSeconomy`, set by the
 //!   market crash event) every tick drops each price to its minimum and doubles the quantity.
-// shortcut: no materials market machine or stock blocks. The news lines go out with the
-// economy's earnings report (`crate::newscaster_server::earnings_report`).
+//! - The materials market machine and its stock blocks are [`super::materials_market`].
+// The news lines go out with the economy's earnings report (`crate::newscaster_server::earnings_report`).
 
 use bevy::prelude::*;
 use ss13_mapload::MapSeed;
@@ -300,6 +300,12 @@ impl StockMarket {
             rng,
             last_fire: None,
         }
+    }
+
+    /// Seconds until the next tick (`next_fire - world.time`).
+    pub fn next_fire_in(&self, now: f64) -> f64 {
+        self.last_fire
+            .map_or(MARKET_SECS, |last| (last + MARKET_SECS - now).max(0.0))
     }
 
     /// The price of a sheet of `MATERIALS[material]`.

@@ -75,6 +75,9 @@ pub struct SupplyPackDef {
     /// The pack's own `fill()`, `generate()` or `generate_supply_packs()` decides the real
     /// contents.
     pub custom_fill: bool,
+    /// `discountable`: the coupon category (`SUPPLY_PACK_*_DISCOUNTABLE`), empty: none.
+    #[serde(default)]
+    pub discountable: String,
 }
 
 impl SupplyPackDef {
@@ -238,9 +241,50 @@ pub const JUNK_MAIL: [(&str, &str); 5] = [
 pub const GOODY_CASE: &str = "/obj/item/storage/lockbox/order";
 /// A buyer's goodies past the free shipping limit, account-locked.
 pub const GOODY_CRATE: &str = "/obj/structure/closet/crate/secure";
+/// `/obj/item/coupon` (`ss13_game::cargo::coupon`).
+pub const COUPON: &str = "/obj/item/coupon";
+/// The mail bag and the mail sorter with its board (`ss13_game::cargo::mail_sorter`).
+pub const MAIL_BAG: &str = "/obj/item/storage/bag/mail";
+pub const MAIL_SORTER: &str = "/obj/machinery/mailsorter";
+pub const MAIL_SORTER_BOARD: &str = "/obj/item/circuitboard/machine/mailsorter";
+/// Counterfeit mail (`ss13_game::cargo::mail`).
+pub const TRAITOR_MAIL: &str = "/obj/item/mail/traitor";
+pub const TRAITOR_ENVELOPE: &str = "/obj/item/mail/traitor/envelope";
+/// BandaStation's supply pod (`ss13_game::cargo::supplypod`) and the express console's beacon.
+pub const SUPPLY_POD: &str = "/obj/structure/closet/supplypod/teleporter";
+pub const SUPPLYPOD_BEACON: &str = "/obj/item/supplypod_beacon";
+pub const EXPRESS_CONSOLE: &str = "/obj/machinery/computer/cargo/express";
+/// The materials market and its stock blocks (`ss13_game::cargo::materials_market`).
+pub const MATERIALS_MARKET: &str = "/obj/machinery/materials_market";
+pub const MATERIALS_MARKET_BOARD: &str = "/obj/item/circuitboard/machine/materials_market";
+pub const STOCK_BLOCK: &str = "/obj/item/stock_block";
 /// Fixed types the game spawns for bounties, mail and goodies (the converter keeps the ones the
 /// dump has; [`CargoData::spawned_types`] are the data-driven ones).
-pub const RUNTIME_TYPES: [&str; 12] = [
+pub const RUNTIME_TYPES: [&str; 35] = [
+    // The materials market's crate and the sheets it sells.
+    "/obj/structure/closet/crate/cargo/mining",
+    "/obj/item/stack/sheet/iron",
+    "/obj/item/stack/sheet/glass",
+    "/obj/item/stack/sheet/mineral/silver",
+    "/obj/item/stack/sheet/mineral/gold",
+    "/obj/item/stack/sheet/mineral/diamond",
+    "/obj/item/stack/sheet/mineral/uranium",
+    "/obj/item/stack/sheet/bluespace_crystal",
+    "/obj/item/stack/sheet/mineral/titanium",
+    COUPON,
+    MAIL_BAG,
+    MAIL_SORTER,
+    MAIL_SORTER_BOARD,
+    TRAITOR_MAIL,
+    TRAITOR_ENVELOPE,
+    SUPPLY_POD,
+    SUPPLYPOD_BEACON,
+    EXPRESS_CONSOLE,
+    MATERIALS_MARKET,
+    MATERIALS_MARKET_BOARD,
+    STOCK_BLOCK,
+    "/obj/item/circuitboard/computer/cargo/express",
+    "/obj/item/storage/mail_counterfeit_device",
     GOODY_CASE,
     GOODY_CRATE,
     BOUNTY_CUBE,
@@ -477,6 +521,7 @@ fn pack(types: &DmTypes, p: &str) -> Option<SupplyPackDef> {
         crate_type: path(types.resolved(p, "crate_type")).filter(|t| types.types.contains_key(t)),
         order_flags: num(types.resolved(p, "order_flags")) as u32,
         custom_fill,
+        discountable: text(types.resolved(p, "discountable")),
     })
 }
 

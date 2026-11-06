@@ -110,9 +110,13 @@ pub enum Family {
     ShieldWallGen,
     /// Ore redemption machines (`crate::mining::orm`).
     Orm,
+    /// Mail sorters (`crate::cargo::mail_sorter`).
+    MailSorter,
+    /// Materials markets (`crate::cargo::materials_market`).
+    MaterialsMarket,
 }
 
-const FAMILIES: [(&str, Family); 30] = [
+const FAMILIES: [(&str, Family); 32] = [
     (CELL_CHARGER, Family::Charger),
     (RECHARGER, Family::Charger),
     (crate::kitchen::MICROWAVE_ROOT, Family::Kitchen),
@@ -155,6 +159,11 @@ const FAMILIES: [(&str, Family); 30] = [
         Family::ShieldWallGen,
     ),
     (ss13_mapload::mining::ORM_ROOT, Family::Orm),
+    (ss13_mapload::cargo::MAIL_SORTER, Family::MailSorter),
+    (
+        ss13_mapload::cargo::MATERIALS_MARKET,
+        Family::MaterialsMarket,
+    ),
 ];
 
 /// The covered family of a machine type (`None`: not built or taken apart here).
@@ -1107,6 +1116,8 @@ pub fn setup_built(world: &mut World, machine: Entity) {
         Family::Smes => crate::power::smes::setup(world, machine),
         Family::ShieldWallGen => crate::power::shields::setup_wall_gen(world, machine),
         Family::Orm => crate::mining::orm::setup(world, machine),
+        Family::MailSorter => crate::cargo::mail_sorter::setup(world, machine),
+        Family::MaterialsMarket => crate::cargo::materials_market::setup(world, machine),
     }
 }
 

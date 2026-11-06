@@ -1,7 +1,7 @@
 //! Mining over real WebTransport on 127.0.0.1: a pickaxe digs an iron rock (4 s) into floor
 //! and 3 iron ore, which lands on the ore redemption machine's input tile and is smelted into
 //! the ore silo (3 points); ore by hand goes in too; the points are claimed onto the ID's
-//! account and spent at the mining order console (express to the buyer's tile, cargo
+//! account and spent at the mining order console (express by pod to the buyer's tile, cargo
 //! shipments wait for the supply shuttle); a gibtonite rock starts its chain reaction when
 //! dug, a mining scanner stops it and digging again gives the gibtonite ore; ore goes into an
 //! ore box and is emptied out of it. A second test: modkits in a kinetic accelerator, the
@@ -447,6 +447,12 @@ fn dig_smelt_claim_buy_gibtonite_and_ore_box() {
         .unwrap()
         .mining_points = 1000;
     apply(s.server.world_mut(), console, mob, ConsoleAct::Express);
+    assert!(
+        s.item(PLAYER, "/obj/item/pickaxe").is_none(),
+        "the supply pod is on its way"
+    );
+    // The teleporter pod lands after 3.4 s and opens 3 s later.
+    s.run_for(6.6);
     assert!(s.item(PLAYER, "/obj/item/pickaxe").is_some(), "delivered");
     assert_eq!(s.mining_points(), 700);
     assert!(

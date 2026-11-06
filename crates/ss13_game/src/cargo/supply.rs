@@ -24,7 +24,7 @@
 //!   card), more in an account-locked secure crate, the first order past the limit charged the
 //!   `CRATE_TAX`; one manifest lists all the buyer's orders.
 //! - Leaving CentCom it also loads the waiting mail ([`super::mail::create_mail`]).
-// shortcut: departmental order consoles, coupons, chef groceries, the materials market, shuttle
+// shortcut: departmental order consoles, chef groceries, the materials market, shuttle
 // loans, requisition papers and manifest errors are not ported. Packs with their own `fill()`
 // are not offered.
 
@@ -138,11 +138,21 @@ impl SupplyPacks {
 /// (no hacked boards yet) or pod-only. Packs needing what is not ported (their own `fill()`,
 /// live animals, nothing to spawn) are hidden too.
 pub fn orderable(pack: &SupplyPackDef, contraband: bool, emagged: bool) -> bool {
+    orderable_with(pack, contraband, emagged, false)
+}
+
+/// [`orderable`] for a console, `express` (the express console) also offering pod-only packs.
+pub fn orderable_with(
+    pack: &SupplyPackDef,
+    contraband: bool,
+    emagged: bool,
+    express: bool,
+) -> bool {
     use order_flags::*;
     !(pack.has(INVISIBLE)
         || (pack.has(EMAG_ONLY) && !emagged)
         || (pack.has(CONTRABAND) && !contraband)
-        || pack.has(POD_ONLY)
+        || (pack.has(POD_ONLY) && !express)
         || (pack.has(SPECIAL) && !pack.has(SPECIAL_ENABLED))
         || pack.custom_fill
         // Goodies come in the buyer's goody case instead.
@@ -167,17 +177,24 @@ pub struct SupplyOrder {
     /// `/datum/bank_account/department`): no private surcharge, no handling fee.
     pub paying_department: Option<String>,
     pub can_be_cancelled: bool,
+    /// `applied_coupon`: the coupon (held out of the world until shipped or refunded) and its
+    /// discount on a 0..1 range.
+    pub coupon: Option<(Entity, f64)>,
 }
 
 impl SupplyOrder {
-    /// tg `get_final_cost`: private purchases of non-goodies cost 1.1x.
+    /// tg `get_final_cost`: private purchases of non-goodies cost 1.1x, a coupon takes its
+    /// discount off.
     pub fn final_cost(&self, packs: &SupplyPacks) -> i64 {
         let pack = &packs.packs[self.pack];
         let mut cost = pack.cost;
         if self.paying_account.is_some() && !pack.has(order_flags::GOODY) {
             cost *= 1.1;
         }
-        cost.round() as i64
+        if let Some((_, discount)) = self.coupon {
+            cost *= 1.0 - discount;
+        }
+        cost.round() as i64 + super::materials_market::crate_charge(pack)
     }
 }
 
@@ -609,6 +626,10 @@ pub fn buy(world: &mut World) {
             kept.push(order);
             continue;
         }
+        // The galactic materials market's order takes its sheets off the market.
+        if !super::materials_market::adjust_market(world, &order) {
+            continue;
+        }
         let (mut price, pack_cost, goody) = {
             let packs = world.resource::<SupplyPacks>();
             let pack = &packs.packs[order.pack];
@@ -658,6 +679,12 @@ pub fn buy(world: &mut World) {
             }
             kept.push(order);
             continue;
+        }
+        // `supply_order/Destroy`: `QDEL_NULL(applied_coupon)`.
+        if let Some((coupon, _)) = order.coupon
+            && world.get_entity(coupon).is_ok()
+        {
+            world.despawn(coupon);
         }
         if let Some(id) = order.paying_account {
             let text = format!(
@@ -755,8 +782,18 @@ pub fn generate(world: &mut World, order: &SupplyOrder, pos: TilePos) -> Option<
         crate::closets::refresh_look(world, crate_entity);
     }
     let mut contents: Vec<String> = Vec::new();
+    // A materials market order holds full stacks of its sheets (`custom/minerals/fill`).
+    let sheets = pack.id == super::materials_market::MATERIALS_ORDER;
     for (path, amount) in &pack.contains {
-        for _ in 0..*amount {
+        let stacks: Vec<Option<u32>> = if sheets {
+            super::materials_market::stack_sizes(*amount)
+                .into_iter()
+                .map(Some)
+                .collect()
+        } else {
+            vec![None; *amount as usize]
+        };
+        for stack in stacks {
             let Some(item) = spawn_template(world, path, None) else {
                 continue;
             };
@@ -764,6 +801,11 @@ pub fn generate(world: &mut World, order: &SupplyOrder, pos: TilePos) -> Option<
                 .entity_mut(item)
                 .insert((Networked, StoredIn(crate_entity)));
             crate::storage::finish_item(world, item, 1);
+            if let Some(amount) = stack {
+                world
+                    .entity_mut(item)
+                    .insert(crate::tools::Stack { amount });
+            }
             let name = world
                 .get::<DmName>(item)
                 .map(|n| n.name.clone())
@@ -1017,6 +1059,7 @@ mod tests {
             paying_account,
             paying_department: None,
             can_be_cancelled: true,
+            coupon: None,
         }
     }
 
