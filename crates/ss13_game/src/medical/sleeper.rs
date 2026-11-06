@@ -6,15 +6,15 @@
 //!   its tile, a carbon dragged onto an open sleeper is shut in, a step from inside opens it.
 //! - An empty hand on a working sleeper opens the window: the occupant's state, health, damage,
 //!   brain and the medicines. The occupant cannot use it (`notcontained_state`) except in the
-//!   syndicate, self-control and party sleepers (`controls_inside`).
+//!   syndicate, self-control and party sleepers (`controls_inside`), whose occupant clicks it
+//!   from inside ([`crate::click::ControlsFromInside`]).
 //! - `inject` puts 10 u of a medicine into the occupant's blood when the sleeper works, the chem
 //!   is offered and allowed: the occupant has at most `20 * efficiency - 10` u of it and more
 //!   health than `min_health` (epinephrine always). `efficiency` is the matter bins' tiers,
 //!   `min_health` -25 per tier; each servo of tier N offers the first N medicine groups.
 //! - An emag scrambles which medicine each button injects; the party pod also doses lead
 //!   acetate (4 u emagged, else 1-3 u one time in five).
-// shortcut: no sounds or flick animations; the occupant cannot click from inside (see
-// `crate::click`), so `controls_inside` only keeps an open window; the party pod's spray chems
+// shortcut: no sounds or flick animations; the party pod's spray chems
 // are injected instead of a vapor exposure; no combat log; no screwdriver/crowbar/wrench acts
 // (the machine frame ones apply).
 

@@ -33,6 +33,7 @@ use crate::interfaces::chem_master::{
     ContainerCategory, PrintableContainer,
 };
 use crate::interfaces::color_picker::{ColorPickerStatic, ColorPickerUi};
+use crate::interfaces::cryo::{CryoBeaker, CryoData, CryoOccupant, CryoUi};
 use crate::interfaces::crystallizer::{
     CrystallizerData, CrystallizerStatic, CrystallizerUi, InternalGas, RecipeEntry,
 };
@@ -52,10 +53,15 @@ use crate::interfaces::job_selection::{
     JobSlots, JobStatic,
 };
 use crate::interfaces::key_combo::{KeyComboStatic, KeyComboUi};
+use crate::interfaces::limbgrower::{
+    LimbgrowerCategory, LimbgrowerData, LimbgrowerDesign, LimbgrowerReagent, LimbgrowerStatic,
+    LimbgrowerUi,
+};
 use crate::interfaces::list_input::{ListInputData, ListInputUi};
 use crate::interfaces::mech_bay::{
     BayCell, BayMech, MechBayData, MechBayPowerConsoleUi, RechargePort,
 };
+use crate::interfaces::medical_kiosk::{MedicalKioskData, MedicalKioskUi};
 use crate::interfaces::number_input::{NumberInputStatic, NumberInputUi};
 use crate::interfaces::pipe_dispenser::{
     InitDirections, PipeCategory, PipeDispenserData, PipeDispenserStatic, PipeDispenserUi,
@@ -837,6 +843,88 @@ pub fn sample(name: &str) -> Option<Sample> {
                     brain_loss: 0.0,
                     reagents: vec![("Epinephrine".into(), 10.0)],
                 }),
+            },
+        ),
+        CryoUi::NAME => of::<CryoUi>(
+            "криокапсула",
+            &(),
+            &CryoData {
+                is_operating: true,
+                is_open: false,
+                auto_eject: true,
+                occupant: Some(CryoOccupant {
+                    name: "Иван Петров".into(),
+                    stat: "Unconscious".into(),
+                    body_temperature: 182.0,
+                    health: 12.0,
+                    max_health: 100.0,
+                    brute_loss: 55.0,
+                    oxy_loss: 20.0,
+                    tox_loss: 3.0,
+                    fire_loss: 10.0,
+                }),
+                cell_temperature: 73.0,
+                beaker: Some(CryoBeaker {
+                    max_volume: 50.0,
+                    current_volume: 48.5,
+                    contents: vec![("Cryoxadone".into(), 48.5)],
+                }),
+            },
+        ),
+        MedicalKioskUi::NAME => of::<MedicalKioskUi>(
+            "медицинский киоск",
+            &(),
+            &MedicalKioskData {
+                kiosk_cost: 10.0,
+                patient_name: "Иван Петров".into(),
+                patient_health: 62.0,
+                brute_health: 25.0,
+                burn_health: 8.0,
+                toxin_health: 5.0,
+                suffocation_health: 0.0,
+                brain_health: "Brain patterns normal.".into(),
+                patient_status: "Injured".into(),
+                trauma_status: "Patient is free of unique brain trauma.".into(),
+                patient_illness: "Patient does not show signs of disease.".into(),
+                illness_info: "Not Applicable.".into(),
+                bleed_status: "Patient is not currently bleeding.".into(),
+                blood_name: "Blood".into(),
+                blood_levels: 96.0,
+                blood_status: "Patient blood levels are currently reading 96%.".into(),
+                chemical_list: vec![("Libital".into(), 4.5)],
+                hallucinating_status: "Patient is not hallucinating.".into(),
+                active: [true, true, false, false],
+                ..Default::default()
+            },
+        ),
+        LimbgrowerUi::NAME => of::<LimbgrowerUi>(
+            "Limb Grower",
+            &LimbgrowerStatic {
+                categories: ["human", "lizard", "moth"]
+                    .iter()
+                    .map(|&c| LimbgrowerCategory {
+                        name: c.into(),
+                        designs: ["Left Arm", "Right Arm", "Heart"]
+                            .iter()
+                            .map(|&n| LimbgrowerDesign {
+                                parent_category: c.into(),
+                                name: n.into(),
+                                path: format!("/datum/design/{}", n.to_lowercase()),
+                                needed_reagents: vec![("Synthflesh".into(), 25.0)],
+                            })
+                            .collect(),
+                    })
+                    .collect(),
+            },
+            &LimbgrowerData {
+                reagents: vec![LimbgrowerReagent {
+                    reagent_name: "Synthflesh".into(),
+                    reagent_amount: 60.0,
+                    reagent_type: "/datum/reagent/medicine/c2/synthflesh".into(),
+                }],
+                total_reagents: 60.0,
+                max_reagents: 100.0,
+                busy: false,
             },
         ),
         _ => return None,

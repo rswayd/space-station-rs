@@ -1,7 +1,8 @@
 //! Holder math, reaction matching and metabolism amounts against tg's formulas.
 
 use ss13_reagents::metabolism::{
-    Body, Damage, Liver, digest, inebriation_tick, metabolize, metabolize_with,
+    Body, Damage, Liver, cryoxadone_power, digest, inebriation_tick, metabolize, metabolize_with,
+    pyroxadone_power,
 };
 use ss13_reagents::{
     ChemData, Chemistry, DEFAULT_REAGENT_TEMPERATURE, Holder, Owner, ReactionDef, ReagentDef,
@@ -78,6 +79,7 @@ const E: &str = "/datum/reagent/e";
 const F: &str = "/datum/reagent/f";
 const LIBITAL: &str = "/datum/reagent/medicine/c2/libital";
 const TOXIN: &str = "/datum/reagent/toxin";
+const CRYOXADONE: &str = "/datum/reagent/medicine/cryoxadone";
 
 fn chem() -> Chemistry {
     let mut libital = reagent(LIBITAL, "Libital");
@@ -123,6 +125,7 @@ fn chem() -> Chemistry {
             reagent(F, "F"),
             libital,
             toxin,
+            reagent(CRYOXADONE, "Cryoxadone"),
         ],
         reactions: vec![
             reaction(
@@ -501,4 +504,39 @@ fn stomach_drips_into_the_blood() {
     digest(&chem, &mut stomach, &mut blood, 2.0);
     assert_eq!(amount(&blood, &chem, WATER), 1.5);
     assert_eq!(amount(&stomach, &chem, WATER), 8.5);
+}
+
+#[test]
+fn cryoxadone_heals_only_a_cold_body() {
+    let chem = chem();
+    let stomach = mob();
+    let mut body = TestBody {
+        brute: 20.0,
+        oxy: 20.0,
+        ..Default::default()
+    };
+    let mut blood = mob();
+    add(&mut blood, &chem, CRYOXADONE, 5.0);
+    // A warm body: nothing healed, the rate becomes 0.2 × (0.00001 × 310.15² + 0.5).
+    metabolize(&chem, &mut blood, &stomach, &mut body, 310.15, 2.0);
+    assert_eq!((body.brute, body.oxy), (20.0, 20.0));
+    let rate = blood.reagents[0].metabolization_rate;
+    assert!((rate - 0.2 * (0.00001 * 310.15_f32.powi(2) + 0.5)).abs() < 1e-5);
+    // At 100 K: power 2.7; the previous rate (0.292 u/s) gives ratio 1.46 over 2 s.
+    let ratio = rate * 2.0 / (0.2 * 2.0);
+    let power = cryoxadone_power(100.0, false);
+    assert!((power - 2.7).abs() < 1e-5);
+    metabolize(&chem, &mut blood, &stomach, &mut body, 100.0, 2.0);
+    assert!((body.brute - (20.0 - 0.5 * power * ratio * 2.0)).abs() < 1e-3);
+    assert!((body.oxy - (20.0 - 1.5 * power * ratio * 2.0)).abs() < 1e-3);
+    assert_eq!(cryoxadone_power(100.0, true), power * 2.0);
+}
+
+#[test]
+fn pyroxadone_needs_a_hot_body() {
+    assert_eq!(pyroxadone_power(310.15, false), None);
+    assert_eq!(pyroxadone_power(350.0, false), Some(2.0));
+    assert_eq!(pyroxadone_power(400.0, true), Some(4.0));
+    assert_eq!(pyroxadone_power(450.0, false), Some(3.0));
+    assert_eq!(pyroxadone_power(500.0, false), Some(5.0));
 }

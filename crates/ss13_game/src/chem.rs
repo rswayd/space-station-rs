@@ -2242,6 +2242,9 @@ struct MobBody<'a> {
     hunger: Option<&'a mut crate::hunger::Hunger>,
     /// [`crate::quirks::booze_multiplier`].
     booze: f32,
+    /// tg `IS_UNCONSCIOUS`, `on_fire`.
+    unconscious: bool,
+    on_fire: bool,
 }
 
 impl Body for MobBody<'_> {
@@ -2292,6 +2295,12 @@ impl Body for MobBody<'_> {
     }
     fn booze_power_multiplier(&self) -> f32 {
         self.booze
+    }
+    fn unconscious(&self) -> bool {
+        self.unconscious
+    }
+    fn on_fire(&self) -> bool {
+        self.on_fire
     }
 }
 
@@ -2369,6 +2378,11 @@ fn life(world: &mut World, chem: &Chemistry, mob: Entity, seconds: f32) {
         None => metabolism::Liver::Working { health: 1.0 },
     };
     let booze = crate::quirks::booze_multiplier(world, mob);
+    let unconscious = matches!(stat, Stat::HardCrit | Stat::Dead)
+        || crate::status_effects::incapacitation(world, mob).knocked_out;
+    let on_fire = world
+        .get::<crate::fire::FireStacks>(mob)
+        .is_some_and(|f| f.on_fire);
     let liver_damage;
     let told = {
         let mut body = MobBody {
@@ -2380,6 +2394,8 @@ fn life(world: &mut World, chem: &Chemistry, mob: Entity, seconds: f32) {
             told: Vec::new(),
             hunger: hunger.as_mut(),
             booze,
+            unconscious,
+            on_fire,
         };
         if !dead && has_stomach {
             metabolism::digest(chem, &mut reagents.stomach, &mut reagents.blood, seconds);

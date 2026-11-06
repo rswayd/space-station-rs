@@ -125,7 +125,9 @@
 //! | 2400 | `modpc::pda::console_interact` |
 //! | 2500 | `disposals::interact` |
 //! | 2600 | `genetics::console::interact` |
-//! | 2650 | `medical::pods::interact` (sleepers, lipid extractors, organ harvesters) |
+//! | 2650 | `medical::pods::interact` (sleepers, cryo cells, lipid extractors, organ harvesters) |
+//! | 2660 | `medical::kiosk::interact` |
+//! | 2670 | `medical::limbgrower::interact` |
 //! | 2700 | `tables::attack_hand` |
 //! | 2800 | `falsewall::attack_hand` |
 //! | 2900 | `mining::interact` |
@@ -193,6 +195,8 @@
 //! | 2400 | `chem_dispenser::item_interaction` |
 //! | 2500 | `chem_master::item_interaction` |
 //! | 2600 | `chem_heater::item_interaction` |
+//! | 2610 | `medical::cryo::item_interaction` (a cup into the cell) |
+//! | 2630 | `medical::limbgrower::item_interaction` (limb design disks) |
 //! | 2700 | `wallmount::item_interaction` |
 //! | 2800 | `power::chargers::item_interaction` |
 //! | 2850 | `power::pacman::item_interaction` (also PACMAN boards) |

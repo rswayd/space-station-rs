@@ -56,6 +56,8 @@ pub struct ResearchDb {
     pub departments: Vec<(u32, String)>,
     pub experiments: Vec<ExperimentDef>,
     pub experiment_index: HashMap<String, usize>,
+    /// Limb design disk type -> its design types (`blueprints`).
+    pub limb_disks: HashMap<String, Vec<String>>,
 }
 
 impl ResearchDb {
@@ -147,6 +149,7 @@ impl ResearchDb {
             .map(|(i, e)| (e.id.clone(), i))
             .collect();
         db.experiments = data.experiments;
+        db.limb_disks = data.limb_disks.into_iter().collect();
         db
     }
 

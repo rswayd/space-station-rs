@@ -61,6 +61,7 @@ mod map_init;
 mod martial;
 mod mecha;
 mod medical;
+mod medical_machines;
 mod medicine;
 mod megafauna;
 mod mining;

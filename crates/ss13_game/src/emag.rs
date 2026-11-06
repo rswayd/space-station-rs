@@ -156,6 +156,8 @@ fn takes_emag(world: &World, target: Entity) -> bool {
         || e.contains::<crate::power::pacman::Pacman>()
         || crate::power::shields::takes_emag(world, target)
         || e.contains::<crate::medical::pods::Pod>()
+        || e.contains::<crate::medical::kiosk::MedicalKiosk>()
+        || e.contains::<crate::medical::limbgrower::Limbgrower>()
 }
 
 fn name(world: &World, e: Entity) -> String {
@@ -294,6 +296,12 @@ pub fn emag_act(world: &mut World, actor: Actor, card: Entity, target: Entity) -
         return crate::vending::emag_act(world, client, target);
     }
     if let Some(done) = crate::medical::pods::emag_act(world, client, target) {
+        return done;
+    }
+    if let Some(done) = crate::medical::kiosk::emag_act(world, client, target) {
+        return done;
+    }
+    if let Some(done) = crate::medical::limbgrower::emag_act(world, client, target) {
         return done;
     }
     if world

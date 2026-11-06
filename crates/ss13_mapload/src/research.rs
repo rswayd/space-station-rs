@@ -33,6 +33,8 @@ const DEPARTMENT_ROOT: &str = "/datum/job_department";
 const SERVO: &str = "/datum/stock_part/servo";
 const MATTER_BIN: &str = "/datum/stock_part/matter_bin";
 const EXPERIMENT_ROOT: &str = "/datum/experiment";
+const LIMB_DISK_ROOT: &str = "/obj/item/disk/design_disk/limbs";
+const BODYPART_ROOT: &str = "/obj/item/bodypart";
 /// `MATERIAL_SILO_STORED` (`code/__DEFINES/materials.dm`).
 const MATERIAL_SILO_STORED: u32 = 1 << 0;
 /// `SHEET_MATERIAL_AMOUNT`.
@@ -109,6 +111,13 @@ pub struct DesignDef {
     pub fixed_cost_efficiency: bool,
     /// `ispath(build_path, /obj/item/stack)`.
     pub stack: bool,
+    /// Reagent type -> units (`reagents_list`: limb grower and biogenerator designs).
+    #[serde(default)]
+    pub reagents: Vec<(String, f64)>,
+    /// Limb grower bodyparts: the `build_path/<category>` subtypes that exist (the limb grower's
+    /// `create_buildpath`).
+    #[serde(default)]
+    pub variants: Vec<String>,
 }
 
 /// A `/datum/techweb_node`.
@@ -233,6 +242,9 @@ pub struct ResearchData {
     pub consoles: Vec<ConsoleDef>,
     #[serde(default)]
     pub experiments: Vec<ExperimentDef>,
+    /// `/obj/item/disk/design_disk/limbs` subtypes -> their `blueprints` (design types).
+    #[serde(default)]
+    pub limb_disks: Vec<(String, Vec<String>)>,
 }
 
 impl ResearchData {
@@ -259,6 +271,11 @@ impl ResearchData {
         self.designs
             .iter()
             .filter_map(|d| d.build_path.as_deref())
+            .chain(
+                self.designs
+                    .iter()
+                    .flat_map(|d| d.variants.iter().map(String::as_str)),
+            )
             .chain(
                 self.materials
                     .iter()
@@ -470,6 +487,10 @@ pub fn resolve(types: &DmTypes) -> ResearchData {
             .into_iter()
             .map(|p| experiment(types, p))
             .collect(),
+        limb_disks: subtypes(types, LIMB_DISK_ROOT)
+            .into_iter()
+            .map(|p| (p.to_owned(), paths(types.resolved(p, "blueprints"))))
+            .collect(),
     }
 }
 
@@ -591,18 +612,32 @@ fn design(types: &DmTypes, p: &str) -> DesignDef {
         d if d.is_empty() => built_name("desc"),
         d => d,
     };
+    let build_type = num(types.resolved(p, "build_type")) as u32;
+    let category = texts(types.resolved(p, "category"));
+    let variants = match build_path.as_deref() {
+        Some(b) if build_type & build_type::LIMBGROWER != 0 && is_under(b, BODYPART_ROOT) => {
+            category
+                .iter()
+                .map(|c| format!("{b}/{c}"))
+                .filter(|t| types.types.contains_key(t))
+                .collect()
+        }
+        _ => Vec::new(),
+    };
     DesignDef {
         id: p.to_owned(),
         name,
         desc,
-        build_type: num(types.resolved(p, "build_type")) as u32,
+        build_type,
+        reagents: amounts(types.resolved(p, "reagents_list")),
+        variants,
         stack: build_path
             .as_deref()
             .is_some_and(|b| is_under(b, STACK_ROOT)),
         build_path,
         materials,
         material_requirements,
-        category: texts(types.resolved(p, "category")),
+        category,
         departmental_flags: types
             .resolved(p, "departmental_flags")
             .and_then(Value::as_f64)
@@ -829,5 +864,56 @@ mod tests {
         );
         let back: ResearchData = ron::from_str(&data.to_ron()).unwrap();
         assert_eq!(back, data);
+    }
+
+    #[test]
+    fn limb_grower_designs_keep_reagents_variants_and_disks() {
+        let types = DmTypes::parse(
+            br##"{ "schema": 3, "types": {
+            "/datum": { "parent": null },
+            "/datum/design": { "parent": "/datum", "declared_vars": { "name": null,
+                "build_type": null, "build_path": null, "materials": { "list": [] },
+                "reagents_list": { "list": [] }, "category": { "list": [] } } },
+            "/datum/design/leftarm": { "parent": "/datum/design", "declared_vars": {
+                "name": "Left Arm", "build_type": 32,
+                "build_path": { "path": "/obj/item/bodypart/arm/left" },
+                "reagents_list": { "list": [
+                    { "assoc": [ { "path": "/datum/reagent/medicine/c2/synthflesh" }, 25 ] } ] },
+                "category": { "list": [ "initial", "human", "lizard", "moth" ] } } },
+            "/obj": { "parent": null },
+            "/obj/item": { "parent": "/obj" },
+            "/obj/item/bodypart": { "parent": "/obj/item" },
+            "/obj/item/bodypart/arm": { "parent": "/obj/item/bodypart" },
+            "/obj/item/bodypart/arm/left": { "parent": "/obj/item/bodypart/arm" },
+            "/obj/item/bodypart/arm/left/lizard": { "parent": "/obj/item/bodypart/arm/left" },
+            "/obj/item/disk": { "parent": "/obj/item" },
+            "/obj/item/disk/design_disk": { "parent": "/obj/item/disk" },
+            "/obj/item/disk/design_disk/limbs": { "parent": "/obj/item/disk/design_disk",
+                "declared_vars": { "abstract_type": { "path": "/obj/item/disk/design_disk/limbs" },
+                "blueprints": { "list": [] } } },
+            "/obj/item/disk/design_disk/limbs/lizard": {
+                "parent": "/obj/item/disk/design_disk/limbs", "declared_vars": {
+                "blueprints": { "list": [ { "path": "/datum/design/leftarm" } ] } } }
+        } }"##,
+        )
+        .unwrap();
+        let data = resolve(&types);
+        let arm = &data.designs[0];
+        assert_eq!(
+            arm.reagents,
+            vec![("/datum/reagent/medicine/c2/synthflesh".to_owned(), 25.0)]
+        );
+        assert_eq!(arm.variants, vec!["/obj/item/bodypart/arm/left/lizard"]);
+        assert!(
+            data.prototype_types()
+                .contains("/obj/item/bodypart/arm/left/lizard")
+        );
+        assert_eq!(
+            data.limb_disks,
+            vec![(
+                "/obj/item/disk/design_disk/limbs/lizard".to_owned(),
+                vec!["/datum/design/leftarm".to_owned()]
+            )]
+        );
     }
 }

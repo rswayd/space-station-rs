@@ -21,7 +21,7 @@
 //!   the head (with its organs) and the chest's organs; then it opens. Power loss or opening
 //!   aborts.
 //! - A step from inside opens the sleeper, an extractor with its hatch unlocked or a harvester
-//!   that is not running.
+//!   that is not running; in a cryo cell ([`super::cryo`]) it starts a breakout.
 // shortcut: no sounds, sound loops, lights or flick animations; no breaking out of a locked
 // extractor (tg's 60 s `do_after`: the step only tells it is locked); the extractor's cookie
 // lands on its tile instead of in the occupant's hands, meat is always human meat with no
@@ -157,9 +157,20 @@ fn attach(add: On<Add<DmObj>>, objs: Query<&DmObj>, mut commands: Commands) {
     };
     let e = add.entity;
     if is_under(&o.path, super::sleeper::SLEEPER_ROOT) {
+        let sleeper = super::sleeper::Sleeper::of_path(&o.path);
+        if sleeper.controls_inside {
+            commands
+                .entity(e)
+                .insert_if_new(crate::click::ControlsFromInside);
+        }
+        commands
+            .entity(e)
+            .insert_if_new((Pod { open: true }, sleeper));
+    } else if is_under(&o.path, super::cryo::CRYO_ROOT) {
         commands.entity(e).insert_if_new((
-            Pod { open: true },
-            super::sleeper::Sleeper::of_path(&o.path),
+            Pod { open: false },
+            super::cryo::CryoCell::default(),
+            Density,
         ));
     } else if is_under(&o.path, FAT_SUCKER_ROOT) {
         commands
@@ -275,6 +286,8 @@ pub fn close_pod(world: &mut World, pod: Entity, target: Option<Entity>) -> Opti
 pub fn refresh_look(world: &mut World, pod: Entity) {
     if world.get::<super::sleeper::Sleeper>(pod).is_some() {
         super::sleeper::refresh_look(world, pod);
+    } else if world.get::<super::cryo::CryoCell>(pod).is_some() {
+        super::cryo::refresh_look(world, pod);
     } else if world.get::<FatSucker>(pod).is_some() {
         fat_look(world, pod);
     } else if let Some(h) = world.get::<Harvester>(pod).cloned() {
@@ -293,10 +306,14 @@ pub fn refresh_look(world: &mut World, pod: Entity) {
     }
 }
 
-/// `attack_hand`/`interact` of the three machines. True when `target` is one of them.
+/// `attack_hand`/`interact` of the pod machines. True when `target` is one of them.
 pub fn interact(world: &mut World, client: Entity, mob: Entity, target: Entity) -> bool {
     if world.get::<super::sleeper::Sleeper>(target).is_some() {
         super::sleeper::interact(world, client, mob, target);
+        return true;
+    }
+    if world.get::<super::cryo::CryoCell>(target).is_some() {
+        super::cryo::interact(world, client, mob, target);
         return true;
     }
     if world.get::<FatSucker>(target).is_some() {
@@ -315,8 +332,19 @@ pub fn interact(world: &mut World, client: Entity, mob: Entity, target: Entity) 
 }
 
 /// `mouse_drop_receive` (from `crate::drag`): a carbon dragged onto an open, empty sleeper is
-/// shut in.
-pub fn mouse_drop_receive(world: &mut World, target: Entity, dragged: Entity) -> bool {
+/// shut in; a cryo cell's is [`super::cryo::mouse_drop_receive`].
+pub fn mouse_drop_receive(
+    world: &mut World,
+    user: Entity,
+    target: Entity,
+    dragged: Entity,
+) -> bool {
+    if world.get::<super::cryo::CryoCell>(target).is_some() {
+        if is_open(world, target) && occupant(world, target).is_none() {
+            super::cryo::mouse_drop_receive(world, user, target, dragged);
+        }
+        return true;
+    }
     if world.get::<super::sleeper::Sleeper>(target).is_none() {
         return false;
     }
@@ -331,8 +359,12 @@ pub fn mouse_drop_receive(world: &mut World, target: Entity, dragged: Entity) ->
     true
 }
 
-/// `click_alt` of the three machines. True when `target` is one of them.
+/// `click_alt` of the pod machines. True when `target` is one of them.
 pub fn click_alt(world: &mut World, client: Entity, mob: Entity, target: Entity) -> bool {
+    if world.get::<super::cryo::CryoCell>(target).is_some() {
+        super::cryo::click_alt(world, client, mob, target);
+        return true;
+    }
     if world.get::<super::sleeper::Sleeper>(target).is_some() {
         if is_open(world, target) {
             super::sleeper::close(world, target, None);
@@ -467,6 +499,8 @@ fn relay_moves(world: &mut World, mut moves: Local<MessageCursor<ClosetRelayMove
         if world.get::<super::sleeper::Sleeper>(pod).is_some() {
             emerges(world, mob, pod);
             super::sleeper::open(world, pod);
+        } else if world.get::<super::cryo::CryoCell>(pod).is_some() {
+            super::cryo::container_resist(world, mob, pod);
         } else if let Some(fat) = world.get::<FatSucker>(pod).cloned() {
             if fat.free_exit {
                 fat_open(world, pod);
