@@ -43,6 +43,17 @@ impl Plugin for ServiceServerPlugin {
         app.add_click_handler(ClickPhase::EmptyHand, 3200, |w, c| {
             crate::service::server::interact(w, c.client, c.mob, c.target)
         });
+        // `papercutter/attack_hand_secondary`: a right click cuts its paper.
+        app.add_click_handler(ClickPhase::EmptyHand, 3201, |w, c| {
+            c.modifiers.right && super::stationery::cutter_right_click(w, c.client, c.mob, c.target)
+        });
+        // `filingcabinet/wrench_act_secondary` (a left click files the wrench).
+        app.add_click_handler(ClickPhase::HeldOnTarget, 1690, |w, c| {
+            c.modifiers.right
+                && c.held.is_some_and(|h| {
+                    super::stationery::cabinet_wrench(w, c.client, c.mob, h, c.target)
+                })
+        });
         // Pens, stamps, the labeler, books, the bible, horns.
         app.add_click_handler(ClickPhase::HeldOnTarget, 1700, |w, c| {
             c.held.is_some_and(|h| {
@@ -53,7 +64,9 @@ impl Plugin for ServiceServerPlugin {
             .register_ui::<MarkdownViewerUi>()
             .init_resource::<super::religion::Religion>()
             .init_resource::<super::archive::LibraryArchive>()
+            .init_resource::<super::stationery::RapsheetCount>()
             .add_systems(ss13_world::MapInit, super::library::shelve_mapped_books)
+            .add_systems(ss13_world::MapInit, super::stationery::file_mapped_items)
             .add_systems(
                 Update,
                 (
@@ -101,6 +114,8 @@ pub(super) enum PendingAsk {
     TakeBook { case: Entity, books: Vec<Entity> },
     /// The chaplain's names, the null rod, the beacon, the bible's skin, the altar.
     Religion(super::religion::ReligionAsk),
+    /// Biscuit cards and filing cabinets.
+    Stationery(super::stationery::StationeryAsk),
 }
 
 /// `Initialize` of the ported items, once all their prototype components are in.
@@ -113,6 +128,7 @@ fn add_item_parts(add: On<Add<DmItem>>, mut commands: Commands) {
         super::clown::add_parts(world, e, &path);
         super::office::add_parts(world, e, &path);
         super::art::add_parts(world, e, &path);
+        super::stationery::add_parts(world, e, &path);
         add_data_parts(world, e);
     });
 }
@@ -149,12 +165,14 @@ fn add_obj_parts(add: On<Add<DmObj>>, mut commands: Commands) {
         super::library::add_obj_parts(world, e, &path);
         super::office::add_obj_parts(world, e, &path);
         super::archive::add_obj_parts(world, e, &path);
+        super::stationery::add_obj_parts(world, e, &path);
     });
 }
 
 /// tg `attack_self` of the held service item. True when it was one.
 pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity) -> bool {
     super::paper::attack_self(world, client, mob, item)
+        || super::stationery::attack_self(world, client, mob, item)
         || super::office::attack_self(world, client, mob, item)
         || super::art::attack_self(world, client, mob, item)
         || super::religion::attack_self(world, client, mob, item)
@@ -171,11 +189,14 @@ pub fn interact(world: &mut World, client: Entity, mob: Entity, target: Entity) 
         || super::clown::ring_hand(world, client, mob, target)
         || super::office::interact(world, client, mob, target)
         || super::archive::interact(world, client, mob, target)
+        || super::stationery::interact(world, client, mob, target)
 }
 
-/// tg `click_alt` of papers: folded into a plane. True when `target` was a paper.
+/// tg `click_alt` of papers (folded into a plane; a carbon sheet tears its copy off first) and
+/// of the paper cutter. True when it was theirs.
 pub fn click_alt(world: &mut World, client: Entity, mob: Entity, target: Entity) -> bool {
-    super::office::fold_plane(world, client, mob, target)
+    super::stationery::click_alt(world, client, mob, target)
+        || super::office::fold_plane(world, client, mob, target)
 }
 
 /// tg `item_interaction` / `attack` of the service items in hand (and of what they are used
@@ -191,6 +212,7 @@ pub fn item_interaction(
     // click goes on.
     super::clown::used_on(world, mob, held, target);
     super::paper::item_interaction(world, client, mob, held, target)
+        || super::stationery::item_interaction(world, client, mob, held, target)
         || super::office::item_interaction(world, client, mob, held, target)
         || super::religion::item_interaction(world, client, mob, held, target)
         || super::library::item_interaction(world, client, mob, held, target)
@@ -242,6 +264,9 @@ fn prompt_answers(world: &mut World, mut cursor: Local<MessageCursor<PromptAnswe
             }
             (PendingAsk::Religion(ask), answer) => {
                 super::religion::answer(world, actor, ask, answer);
+            }
+            (PendingAsk::Stationery(ask), answer) => {
+                super::stationery::answer(world, actor, ask, answer);
             }
             _ => {}
         }
@@ -419,6 +444,8 @@ pub(super) enum TimerJob {
     Bind { binder: Entity, paper: Entity },
     /// The library console's printed book.
     PrintBook { console: Entity, id: u32 },
+    /// A filing cabinet's drawer closes.
+    CabinetClose { cabinet: Entity },
 }
 
 pub(super) fn now(world: &World) -> f64 {
@@ -446,6 +473,7 @@ fn run_timers(world: &mut World) {
             TimerJob::FaxVend { fax, item } => super::office::vend(world, fax, item),
             TimerJob::Bind { binder, paper } => super::archive::bind(world, binder, paper),
             TimerJob::PrintBook { console, id } => super::archive::print(world, console, id),
+            TimerJob::CabinetClose { cabinet } => super::stationery::close_cabinet(world, cabinet),
         }
     }
 }

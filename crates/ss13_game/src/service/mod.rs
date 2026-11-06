@@ -32,6 +32,8 @@ mod office;
 mod paper;
 #[cfg(feature = "server")]
 mod religion;
+#[cfg(feature = "server")]
+mod stationery;
 
 #[cfg(feature = "server")]
 pub use archive::{ArchivedBook, BookBinder, BookScanner, LibraryArchive};
@@ -52,6 +54,8 @@ pub use religion::{
     BIBLE_SKINS, BibleDeity, HolyRole, PerformingRite, Religion, ReligionJob, Rite, Sect,
     chaplain_spawned, complete as religion_complete, holy_role,
 };
+#[cfg(feature = "server")]
+pub use stationery::{Biscuit, CabinetKind, CarbonPaper, FilingCabinet, PaperCutter, Paperwork};
 
 /// tgui `PaperSheet` (`/obj/item/paper/ui_interact`), read-only here: writing goes through a
 /// text prompt (see [`server`]).
