@@ -1236,6 +1236,17 @@ mod tests {
     fn cardboard_boxes_move_with_their_mob_and_body_bags_stay_flat() {
         let mut world = world();
         world.insert_resource(Time::<()>::default());
+        // A station area under the box: space has no gravity to walk it with.
+        world.init_resource::<ss13_mapload::load::Areas>();
+        let area = world
+            .spawn(ss13_mapload::DmPower {
+                path: "/area/station".into(),
+                ..default()
+            })
+            .id();
+        let mut areas = world.resource_mut::<ss13_mapload::load::Areas>();
+        areas.add_area(area);
+        assert!(areas.add_level(1, 4, 4, area));
         let c = closet(&mut world, DmCloset::default());
         world.entity_mut(c).insert(ss13_mapload::DmObj {
             path: kinds::CARDBOARD.into(),

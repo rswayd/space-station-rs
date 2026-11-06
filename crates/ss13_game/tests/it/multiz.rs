@@ -143,6 +143,10 @@ fn cyberiad_decks() {
         .expect("open space over a floor");
     let below = levels.step(drop, false).unwrap();
     let faller = ss13_game::mobs::spawn::spawn_mob(app.world_mut(), DOG, drop).unwrap();
+    // A wandering dog can step off the landing tile before it is checked.
+    app.world_mut()
+        .entity_mut(faller)
+        .remove::<ss13_game::mobs::ai::AiController>();
     run(&mut app, 0.5);
     let fell = health(&app, faller);
     println!(

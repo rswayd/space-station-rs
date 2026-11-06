@@ -1783,6 +1783,9 @@ mod tests {
         w.init_resource::<Time>();
         w.init_resource::<EngineRng>();
         w.init_resource::<Messages<PlaySound>>();
+        // `get_components_mut` with an `Option<&mut Appearance>` fails on a world that never
+        // registered the component; a server world always has.
+        w.register_component::<Appearance>();
         let area = w
             .spawn(AreaPower {
                 requires_power: true,

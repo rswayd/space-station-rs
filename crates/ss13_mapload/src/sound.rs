@@ -327,7 +327,8 @@ pub mod files {
     ];
     /// Sounds the game code plays by a constant path (checked by the real-asset test
     /// `runtime_types::game_sound_literals_are_converted` in ss13_game).
-    pub const GAME_CODE: [&str; 104] = [
+    pub const GAME_CODE: [&str; 105] = [
+        "sound/items/hair-clippers.ogg",
         "sound/items/weapons/thudswoosh.ogg",
         "sound/items/rattling_keys.ogg",
         "sound/machines/scanner/scanbuzz.ogg",

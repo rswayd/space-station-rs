@@ -325,6 +325,13 @@ impl Areas {
 
     /// A level created after load (a shuttle transit level): every tile in `area`, which must
     /// be an existing area entity. False for an unknown area.
+    /// Registers an area entity so [`Self::set_area`] / [`Self::add_level`] can point at it.
+    pub fn add_area(&mut self, area: Entity) {
+        if !self.entities.contains(&area) {
+            self.entities.push(area);
+        }
+    }
+
     pub fn add_level(&mut self, z: u16, width: u32, height: u32, area: Entity) -> bool {
         let Some(index) = self.entities.iter().position(|&a| a == area) else {
             return false;
