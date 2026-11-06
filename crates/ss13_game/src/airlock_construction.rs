@@ -196,7 +196,7 @@ fn assembly(world: &mut World, e: Entity) -> Option<DoorAssembly> {
 }
 
 /// The electronics on an item, made on first use.
-fn electronics_of(world: &mut World, item: Entity) -> AirlockElectronics {
+pub(crate) fn electronics_of(world: &mut World, item: Entity) -> AirlockElectronics {
     if let Some(e) = world.get::<AirlockElectronics>(item) {
         return e.clone();
     }
@@ -857,7 +857,7 @@ pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity)
     true
 }
 
-fn close_windows(world: &mut World, item: Entity) {
+pub(crate) fn close_windows(world: &mut World, item: Entity) {
     let mut q = world.query::<&mut UiWindow>();
     for mut w in q.iter_mut(world) {
         if w.source == item {

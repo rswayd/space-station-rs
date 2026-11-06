@@ -149,6 +149,7 @@
 //! | 2670 | `medical::limbgrower::interact` |
 //! | 2700 | `tables::attack_hand` |
 //! | 2800 | `falsewall::attack_hand` |
+//! | 2810 | `door_structures::mineral_attack_hand` (mineral doors) |
 //! | 2900 | `mining::interact` |
 //! | 3000 | `holosign::attack_hand` |
 //! | 3100 | `plumbing::interact` |
@@ -242,6 +243,7 @@
 //! | 2860 | `power::smes::item_interaction` (also SMES terminals) |
 //! | 2870 | `power::shields::item_interaction` |
 //! | 2880 | `airlock_construction::item_interaction` (door assemblies, the airlock painter) |
+//! | 2885 | `door_structures::item_interaction` (firelock frames and bolts, windoor assemblies, mineral doors) |
 //! | 2900 | `mecha::item_interaction` |
 //! | 2950 | `vehicles::item_interaction` |
 //! | 2960 | `flora::item_interaction` |

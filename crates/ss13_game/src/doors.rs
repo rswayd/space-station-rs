@@ -1592,7 +1592,9 @@ pub fn welder_act_secondary(world: &mut World, actor: crate::tools::Actor, targe
     let Some(door) = world.get::<Door>(target) else {
         return false;
     };
-    if door.kind != DoorKind::Airlock {
+    // `firedoor/try_to_weld_secondary`: the same 4 s weld (the first step of taking it apart,
+    // `crate::door_structures`).
+    if !matches!(door.kind, DoorKind::Airlock | DoorKind::Firedoor) {
         return false;
     }
     let welded = door.welded;
@@ -1818,6 +1820,65 @@ impl DoorCtx<'_> {
             self.env,
         )
     }
+}
+
+/// tg `door/hostile_lockdown(origin)` (the malfunctioning AI's lockdown): a powered door
+/// closes. An airlock also needs the AI to control it (`canAIControl`); it is unbolted ("for
+/// airlocks that were bolted open"), made unsafe (it crushes), closed, bolted and electrified
+/// for good. True when the door took part.
+// shortcut: `shockedby` is not logged (no airlock shock log yet).
+pub fn hostile_lockdown(world: &mut World, door: Entity) -> bool {
+    let Some(kind) = world.get::<Door>(door).map(|d| d.kind) else {
+        return false;
+    };
+    // `if(!machine_stat)`.
+    if world.get::<Unpowered>(door).is_some() {
+        return false;
+    }
+    let airlock = kind == DoorKind::Airlock;
+    if airlock && !crate::silicon::ai::can_ai_control(world, door) {
+        return false;
+    }
+    with_door(world, door, |d, appearance, ctx| {
+        if airlock {
+            d.locked = false;
+            d.safe = false;
+        }
+        let moved = d.state == DoorState::Open && ctx.close(d, appearance, false);
+        ((), moved)
+    });
+    if airlock {
+        crate::wires::set_bolts(world, door, true);
+        crate::wires::set_electrified(world, door, Some(crate::wires::Electrified::Permanent));
+    }
+    true
+}
+
+/// tg `door/disable_lockdown()`: a powered door opens; an airlock the AI controls is unbolted,
+/// no longer electrified, opened and safe again. True when the door took part.
+pub fn disable_lockdown(world: &mut World, door: Entity) -> bool {
+    let Some(kind) = world.get::<Door>(door).map(|d| d.kind) else {
+        return false;
+    };
+    if world.get::<Unpowered>(door).is_some() {
+        return false;
+    }
+    let airlock = kind == DoorKind::Airlock;
+    if airlock {
+        if !crate::silicon::ai::can_ai_control(world, door) {
+            return false;
+        }
+        crate::wires::set_bolts(world, door, false);
+        crate::wires::set_electrified(world, door, None);
+    }
+    with_door(world, door, |d, appearance, ctx| {
+        let moved = d.state == DoorState::Closed && ctx.open(d, appearance, false);
+        if airlock {
+            d.safe = true;
+        }
+        ((), moved)
+    });
+    true
 }
 
 /// tg `try_to_activate_door(user)` from outside the door systems (a shock that did not happen

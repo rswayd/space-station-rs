@@ -506,7 +506,7 @@ pub(super) fn warn(world: &mut World, client: Entity, text: &str) {
 }
 
 /// tg airlock `user_allowed` for an AI: `canAIControl()`.
-pub(super) fn can_ai_control(world: &World, door: Entity) -> bool {
+pub(crate) fn can_ai_control(world: &World, door: Entity) -> bool {
     let Some(d) = world.get::<Door>(door) else {
         return false;
     };

@@ -36,10 +36,9 @@ use super::ai::AiEye;
 use super::chassis::tell_ai;
 use super::malf::{CORE_RETURN, MalfAi};
 use crate::actions::{ActionButton, ActionButtons, ActionButtonsUi, set_buttons};
-use crate::doors::{Door, DoorState, with_door};
+use crate::doors::Door;
 use crate::health::Stat;
 use crate::server::PlayerMob;
-use crate::wires::Electrified;
 
 /// The picker's button (tg `/datum/action/innate/choose_modules`).
 pub const PICKER: &str = "malf_picker";
@@ -491,29 +490,8 @@ pub fn blackout(world: &mut World) {
 /// `/datum/action/innate/ai/lockdown/Activate` (`hostile_lockdown` of every station door).
 // Cost: once, every door of the station (~1000 on MetaStation).
 pub fn lockdown(world: &mut World) {
-    for (door, airlock) in station_doors(world) {
-        if world.get::<crate::power::Unpowered>(door).is_some() {
-            continue;
-        }
-        if airlock {
-            if !super::ai::can_ai_control(world, door) {
-                continue;
-            }
-            with_door(world, door, |d, appearance, ctx| {
-                // "For airlocks that were bolted open"; `safe = FALSE`: DOOR CRUSH.
-                d.locked = false;
-                d.safe = false;
-                let moved = d.state == DoorState::Open && ctx.close(d, appearance, false);
-                ((), moved)
-            });
-            crate::wires::set_bolts(world, door, true);
-            crate::wires::set_electrified(world, door, Some(Electrified::Permanent));
-        } else {
-            with_door(world, door, |d, appearance, ctx| {
-                let moved = d.state == DoorState::Open && ctx.close(d, appearance, false);
-                ((), moved)
-            });
-        }
+    for (door, _) in station_doors(world) {
+        crate::doors::hostile_lockdown(world, door);
     }
     let at = now(world) + LOCKDOWN_SECS;
     world.resource_mut::<Lockdowns>().0.push(at);
@@ -554,24 +532,8 @@ fn end_lockdowns(world: &mut World) {
 
 /// `disable_lockdown` of every station door.
 pub fn undo_lockdown(world: &mut World) {
-    for (door, airlock) in station_doors(world) {
-        if world.get::<crate::power::Unpowered>(door).is_some() {
-            continue;
-        }
-        if airlock {
-            if !super::ai::can_ai_control(world, door) {
-                continue;
-            }
-            crate::wires::set_bolts(world, door, false);
-            crate::wires::set_electrified(world, door, None);
-        }
-        with_door(world, door, |d, appearance, ctx| {
-            let moved = d.state == DoorState::Closed && ctx.open(d, appearance, false);
-            if airlock {
-                d.safe = true;
-            }
-            ((), moved)
-        });
+    for (door, _) in station_doors(world) {
+        crate::doors::disable_lockdown(world, door);
     }
 }
 
