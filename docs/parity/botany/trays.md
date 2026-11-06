@@ -67,7 +67,7 @@ Ctrl+клик по закреплённому и запитанному лотк
 USB-компонент wiremod для лотка: выдаёт уровни воды/удобрений/сорняков/вредителей/здоровья, событие сбора и смерти, управляет автополивом.
 
 - **Код:** [`/obj/item/circuit_component/hydroponics`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L1284)
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/botany/tray.rs`: `// shortcut:` схем нет
+- **Статус в ss13-rs:** ❌ нет — компоненты wiremod есть (`crates/ss13_game/src/wiremod/`), но USB-порта и USB-кабеля нет (❌ в [wiremod.md](../science/wiremod.md), «Инструменты схем»); компонент лотка ждёт их. Состояние для него уже есть: `Tray::self_sustaining` и `botany::set_self_sustaining` (вход «Auto-Grow Setting»)
 
 ### Почва и мешки с грунтом
 Грядка почвы — беспитательный лоток без энергии (`maxnutri` 15), выкапывается лопатой обратно в мешок. Виды грунта дают бонусы: вермикулит, гель (не нужна вода), кокосовое волокно, червячная почва (медленное выделение азота), богатая почва (быстрые грибы).
