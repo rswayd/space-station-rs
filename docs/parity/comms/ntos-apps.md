@@ -17,7 +17,7 @@
 Групповые чат-комнаты с паролями и администратором канала.
 
 - **Код:** [`/datum/computer_file/program/chatclient`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/modular_computers/file_system/programs/chatroom/ntnrc_client.dm#L11); tgui: [`NtosNetChat.jsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/NtosNetChat.jsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/modpc/programs/chat.rs`: Chat Client на консоли идентификации и в NT Software Hub; каналы станции (до 50 сообщений, `MAX_CHANNELS`), создатель — оператор (переименование, удаление, пароль, мут), вход в запароленный канал паролем в чате, передача оператора при уходе, пинг с кулдауном 3 с и уведомление `alert_call` на компьютере, ник `DefaultUser###` и смена ника, онлайн/отошёл/оффлайн по состоянию программы, значки `ntnrc_idle/new` в шапке, режим админа по `ACCESS_NETWORK`, очистка участников при удалении компьютера; `// shortcut:` нет сохранения логов (нет текстовых файлов), лога чата для админов и консолей отдельных отделов (`cargochat`); не портирован баг tg — не-участник не может писать в запароленный канал после неверного пароля
 
 ### Новости, статус-дисплеи, факс
 Приложения новостного терминала, управления статус-дисплеями, уведомлений о факсах.

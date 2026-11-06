@@ -9,6 +9,8 @@ pub mod apps;
 #[cfg(feature = "server")]
 pub mod card_mod;
 #[cfg(feature = "server")]
+pub mod chat;
+#[cfg(feature = "server")]
 pub mod downloader;
 #[cfg(feature = "server")]
 pub mod messenger;
@@ -45,6 +47,8 @@ pub enum ProgramKind {
     Minesweeper,
     /// `/datum/computer_file/program/ntnetdownload` (NT Software Hub).
     Downloader,
+    /// `/datum/computer_file/program/chatclient` (NTNet Relay Chat).
+    ChatClient,
 }
 
 /// `PROGRAM_CATEGORY_*`, the downloader's tabs in `show_categories` order.
@@ -68,7 +72,7 @@ pub const CATEGORIES: [&str; 8] = [
 ];
 
 impl ProgramKind {
-    pub const ALL: [Self; 13] = [
+    pub const ALL: [Self; 14] = [
         Self::Messenger,
         Self::Notepad,
         Self::CrewManifest,
@@ -82,6 +86,7 @@ impl ProgramKind {
         Self::Newscaster,
         Self::Minesweeper,
         Self::Downloader,
+        Self::ChatClient,
     ];
 
     /// `filename`.
@@ -100,6 +105,7 @@ impl ProgramKind {
             Self::Newscaster => "newscasterapp",
             Self::Minesweeper => "minesweeper",
             Self::Downloader => "ntsoftwarehub",
+            Self::ChatClient => "ntnrc_client",
         }
     }
 
@@ -123,6 +129,7 @@ impl ProgramKind {
             Self::Newscaster => "Newscaster",
             Self::Minesweeper => "Сапёр",
             Self::Downloader => "NT Software Hub",
+            Self::ChatClient => "Chat Client",
         }
     }
 
@@ -142,6 +149,7 @@ impl ProgramKind {
             Self::Newscaster => "newspaper",
             Self::Minesweeper => "bomb",
             Self::Downloader => "download",
+            Self::ChatClient => "comment-alt",
         }
     }
 
@@ -188,6 +196,9 @@ impl ProgramKind {
             Self::Downloader => {
                 "This program allows downloads of software from official NT repositories"
             }
+            Self::ChatClient => {
+                "Эта программа позволяет осуществлять коммуникацию через сеть NTNRC."
+            }
         }
     }
 
@@ -203,7 +214,7 @@ impl ProgramKind {
             | Self::MedRecords
             | Self::Downloader => 4,
             Self::Minesweeper => 6,
-            Self::CardMod => 8,
+            Self::CardMod | Self::ChatClient => 8,
         }
     }
 
@@ -298,13 +309,13 @@ pub const ENGINEERING_CONSOLE: &str = "/obj/machinery/modular_computer/preset/en
 
 /// `default_programs` + `starting_programs` of the stationary consoles this port has
 /// (`console_presets.dm`), by type: every one has the software hub, the identification console
-/// runs the ID writer and the crew list, the engineering one the alarm monitor.
-// shortcut: no chat client or job management program on the ID console, no power or
+/// runs the chat client, the ID writer and the crew list, the engineering one the alarm monitor.
+// shortcut: no job management program on the ID console, no power or
 // supermatter monitor on the engineering one, and no other console presets.
 pub fn console_programs(path: &str) -> Option<Vec<ProgramKind>> {
     use ProgramKind::*;
     if is_under_path(path, ID_CONSOLE) {
-        return Some(vec![Downloader, CardMod, CrewManifest]);
+        return Some(vec![Downloader, ChatClient, CardMod, CrewManifest]);
     }
     is_under_path(path, ENGINEERING_CONSOLE).then(|| vec![Downloader, AlarmMonitor])
 }

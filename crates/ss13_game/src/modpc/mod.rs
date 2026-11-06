@@ -70,6 +70,8 @@ pub enum NtosScreen {
     Minesweeper(Box<MinesweeperData>),
     /// `NtosNetDownloader`.
     Downloader(Box<DownloaderData>),
+    /// `NtosNetChat`.
+    Chat(Box<ChatClientData>),
 }
 
 impl Default for NtosScreen {
@@ -363,6 +365,63 @@ pub struct DownloadableProgram {
     /// `access`: the computer's ID may download it.
     pub access: bool,
 }
+
+/// `/datum/computer_file/program/chatclient/ui_data`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChatClientData {
+    pub username: String,
+    /// `adminmode`, `can_admin` (network access on the ID).
+    pub adminmode: bool,
+    pub can_admin: bool,
+    pub all_channels: Vec<ChatRoom>,
+    pub active_channel: Option<u32>,
+    /// The active channel's `title`.
+    pub title: String,
+    /// `authed`: the channel's members and messages are shown.
+    pub authed: bool,
+    pub strong: bool,
+    pub is_operator: bool,
+    pub clients: Vec<ChatMember>,
+    /// Newest first.
+    pub messages: Vec<ChatMessageUi>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChatRoom {
+    pub chan: String,
+    pub id: u32,
+}
+
+/// A channel member (`clients`); `is_self` replaces tg's `selfref` comparison.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChatMember {
+    pub name: String,
+    pub online: bool,
+    pub away: bool,
+    pub muted: bool,
+    pub operator: bool,
+    pub is_self: bool,
+    pub member_ref: String,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChatMessageUi {
+    pub key: u32,
+    pub msg: String,
+}
+
+// `NtosNetChat` acts.
+pub const PRG_SPEAK: &str = "PRG_speak";
+pub const PRG_JOIN_CHANNEL: &str = "PRG_joinchannel";
+pub const PRG_LEAVE_CHANNEL: &str = "PRG_leavechannel";
+pub const PRG_NEW_CHANNEL: &str = "PRG_newchannel";
+pub const PRG_TOGGLE_ADMIN: &str = "PRG_toggleadmin";
+pub const PRG_CHANGE_NAME: &str = "PRG_changename";
+pub const PRG_RENAME_CHANNEL: &str = "PRG_renamechannel";
+pub const PRG_DELETE_CHANNEL: &str = "PRG_deletechannel";
+pub const PRG_SET_PASSWORD: &str = "PRG_setpassword";
+pub const PRG_MUTE_USER: &str = "PRG_mute_user";
+pub const PRG_PING_USER: &str = "PRG_ping_user";
 
 // `NtosNetDownloader` acts.
 pub const PRG_DOWNLOAD_FILE: &str = "PRG_downloadfile";
