@@ -8,6 +8,9 @@
 //! - [`anomalies`], [`immovable_rod`], [`wormholes`]: their own objects, moved and processed
 //!   by this plugin's systems.
 //! - [`mass_hallucination`]: the same hallucination for every human (`crate::hallucination`).
+//! - [`radiation_leak`] (a machine pulses radiation until fixed with tools,
+//!   `crate::radiation::RadioactiveEmitter`), [`supermatter_surge`]
+//!   (`crate::power::supermatter`), [`stray_cargo`] (`crate::cargo::supplypod`).
 //! - Health: [`disease_outbreak`] (`crate::medical::diseases`), [`fake_virus`],
 //!   [`heart_attack`] (`crate::medical::organs`), [`brain_trauma`]
 //!   (`crate::medical::traumas`).
@@ -41,7 +44,10 @@ pub mod mass_hallucination;
 pub mod meteors;
 pub mod mice_migration;
 pub mod processor_overload;
+pub mod radiation_leak;
 pub mod radiation_storm;
+pub mod stray_cargo;
+pub mod supermatter_surge;
 pub mod vent_clog;
 pub mod wizard;
 pub mod wormholes;
@@ -172,6 +178,19 @@ pub fn controls() -> Vec<EventControl> {
             processor_overload::make,
         ),
         c(radiation_storm::NAME, 10, 20.0, 0, 1, radiation_storm::make),
+        c(radiation_leak::NAME, 15, 20.0, 0, 3, radiation_leak::make),
+        needs(
+            supermatter_surge::has_engineers,
+            c(
+                supermatter_surge::NAME,
+                15,
+                20.0,
+                0,
+                1,
+                supermatter_surge::make,
+            ),
+        ),
+        c(stray_cargo::NAME, 20, 10.0, 0, 4, stray_cargo::make),
         c(
             brand_intelligence::NAME,
             5,
@@ -384,6 +403,20 @@ impl Plugin for EventsServerPlugin {
         app.add_click_handler(ClickPhase::HeldOnTarget, 5090, |w, c| {
             c.held
                 .is_some_and(|h| anomalies::analyzer_act(w, c.client, h, c.target))
+        });
+        // tg `COMSIG_ATOM_TOOL_ACT` of a Radiation Leak's machine: before the machine's own
+        // tool acts.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 1585, |w, c| {
+            !c.modifiers.right
+                && radiation_leak::tool_act(
+                    w,
+                    crate::tools::Actor {
+                        client: c.client,
+                        mob: c.mob,
+                        item: c.held,
+                    },
+                    c.target,
+                )
         });
         app.init_resource::<EventsConfig>()
             .init_resource::<holidays::HolidaysConfig>()

@@ -174,6 +174,7 @@
 //! | 1450 | `silicon::mmi::item_interaction` |
 //! | 1460 | `silicon::ai_core::item_interaction` |
 //! | 1500 | `bots::construction::item_interaction` |
+//! | 1585 | `events::radiation_leak::tool_act` (a leaking machine's fixing tools) |
 //! | 1590 | `teapot::item_interaction` (before `machine_frame` takes it apart) |
 //! | 1600 | `machine_frame::item_interaction` |
 //! | 1650 | `radiation::geiger_interact` |

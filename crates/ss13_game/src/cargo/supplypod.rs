@@ -7,6 +7,9 @@
 //!   after `POD_OPENING` (3 s; the cargo appears on its tile: an order's crate via
 //!   `supply::generate`, or loose items) and leaves after `POD_LEAVING` (3 s; `bluespace`: it is
 //!   deleted).
+//! - [`launch_stray`]: the Stray Cargo Pod event's plain pod (`/obj/structure/closet/supplypod`,
+//!   not bluespace): it explodes on landing (BandaStation `explosionSize = list(1,2,3,3)`,
+//!   before the cargo is out, as tg's `PREVENT_CONTENTS_EXPLOSION_1`) and stays on its tile.
 // shortcut: the landing zone marker, the falling animation, sounds and pod styles are not shown
 // (the pod is the portal sprite when the assets have it, else the prototype's look); no reverse
 // pods, admin pod launcher or mobs in pods.
@@ -32,6 +35,8 @@ pub enum PodCargo {
     Order(SupplyOrder),
     /// Items by type (the order consoles' express orders).
     Items(Vec<String>),
+    /// A pack's crate without an order (no manifest), unlocked (`stray_cargo/get_contents`).
+    Pack(usize),
 }
 
 #[derive(Clone, Debug)]
@@ -40,7 +45,12 @@ struct Pod {
     land_at: f64,
     pod: Option<Entity>,
     cargo: Option<PodCargo>,
+    /// [`launch_stray`]'s pod.
+    stray: bool,
 }
+
+/// BandaStation's stray pod `explosionSize` (devastation, heavy, light, flame).
+pub const STRAY_EXPLOSION: [i32; 4] = [1, 2, 3, 3];
 
 /// The pods on their way.
 #[derive(Resource, Default)]
@@ -73,6 +83,19 @@ pub fn launch(world: &mut World, pos: TilePos, cargo: PodCargo) {
         land_at: now + TRANSIT_SECS,
         pod: None,
         cargo: Some(cargo),
+        stray: false,
+    });
+}
+
+/// The Stray Cargo Pod's `new /obj/effect/pod_landingzone(turf, pod, container)`.
+pub fn launch_stray(world: &mut World, pos: TilePos, cargo: PodCargo) {
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    world.resource_mut::<SupplyPods>().0.push(Pod {
+        pos,
+        land_at: now + TRANSIT_SECS,
+        pod: None,
+        cargo: Some(cargo),
+        stray: true,
     });
 }
 
@@ -87,7 +110,17 @@ fn tick(world: &mut World) {
             continue;
         }
         if pod.pod.is_none() && pod.cargo.is_some() {
-            pod.pod = land(world, pod.pos);
+            if pod.stray {
+                let [dev, heavy, light, flame] = STRAY_EXPLOSION;
+                crate::explosions::explosion(
+                    world,
+                    pod.pos,
+                    crate::explosions::Explosion::new(dev, heavy, light)
+                        .flame(flame)
+                        .cause("stray cargo pod"),
+                );
+            }
+            pod.pod = land(world, pod.pos, !pod.stray);
         }
         if since >= OPENING_SECS
             && let Some(cargo) = pod.cargo.take()
@@ -95,7 +128,8 @@ fn tick(world: &mut World) {
             open(world, pod.pos, cargo);
         }
         if since >= OPENING_SECS + LEAVING_SECS {
-            if let Some(e) = pod.pod.take()
+            // Not bluespace: the stray pod stays.
+            if let Some(e) = pod.pod.take().filter(|_| !pod.stray)
                 && world.get_entity(e).is_ok()
             {
                 world.despawn(e);
@@ -110,8 +144,11 @@ fn tick(world: &mut World) {
 }
 
 /// `pre_open`: the pod on its tile.
-fn land(world: &mut World, pos: TilePos) -> Option<Entity> {
+fn land(world: &mut World, pos: TilePos, portal: bool) -> Option<Entity> {
     let pod = crate::construction::spawn_obj(world, SUPPLY_POD, pos)?;
+    if !portal {
+        return Some(pod);
+    }
     let portal = world.get_resource::<IconIndex>().and_then(|i| {
         i.0.get(&(PORTAL.0.to_owned(), PORTAL.1.to_owned()))
             .copied()
@@ -137,6 +174,17 @@ fn open(world: &mut World, pos: TilePos, cargo: PodCargo) {
             for path in paths {
                 crate::construction::spawn_obj(world, &path, pos);
             }
+        }
+        PodCargo::Pack(pack) => {
+            // `crate.locked = FALSE`: secure crates come unlocked.
+            let Some((crate_entity, _)) = super::supply::generate_pack(world, pack, pos) else {
+                warn!("cargo: stray pod pack {pack} had no crate to deliver");
+                return;
+            };
+            if let Some(mut closet) = world.get_mut::<crate::closets::Closet>(crate_entity) {
+                closet.locked = false;
+            }
+            crate::closets::refresh_look(world, crate_entity);
         }
     }
     crate::construction::tile_changed(world, pos);

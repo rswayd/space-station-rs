@@ -189,6 +189,33 @@ pub struct GoingBald(pub f64);
 #[derive(Component, Clone, Copy, Debug, PartialEq)]
 pub struct UraniumLastPulse(pub f64);
 
+/// `MIN_PULSE_COOLDOWN` of the radioactive emitter, seconds.
+const MIN_PULSE_COOLDOWN: f64 = 0.5;
+
+/// tg `/datum/component/radioactive_emitter`: a [`radiation_pulse`] every `cooldown` seconds
+/// (at least [`MIN_PULSE_COOLDOWN`]), with an optional examine line.
+#[derive(Component, Clone, Debug, PartialEq)]
+pub struct RadioactiveEmitter {
+    pub cooldown: f64,
+    pub range: f32,
+    pub threshold: f32,
+    pub examine_text: Option<String>,
+    /// `rad_pulse_cooldown`: the next pulse at or after this time (0: at once).
+    pub next_at: f64,
+}
+
+impl RadioactiveEmitter {
+    pub fn new(cooldown: f64, range: f32, threshold: f32, examine_text: Option<String>) -> Self {
+        Self {
+            cooldown: cooldown.max(MIN_PULSE_COOLDOWN),
+            range,
+            threshold,
+            examine_text,
+            next_at: 0.0,
+        }
+    }
+}
+
 /// `/obj/item/geiger_counter` state (added on first use).
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq)]
 pub struct Geiger {
@@ -223,6 +250,7 @@ impl Plugin for RadiationPlugin {
                 Update,
                 (
                     uranium_touches,
+                    process_emitters.run_if(any_with_component::<RadioactiveEmitter>),
                     geiger_ranged,
                     atmos_pulses,
                     fire_pulses,
@@ -731,8 +759,40 @@ pub fn geiger_alt_click(world: &mut World, client: Entity, item: Entity) -> bool
     true
 }
 
-/// The counter's and the protected clothing's examine lines.
+/// `/datum/component/radioactive_emitter/process`: emitters off cooldown pulse with the
+/// default chance and no exposure time.
+fn process_emitters(world: &mut World) {
+    let now = now(world);
+    let mut q = world.query::<(Entity, &mut RadioactiveEmitter)>();
+    let due: Vec<(Entity, f32, f32)> = q
+        .iter_mut(world)
+        .filter(|(_, e)| now >= e.next_at)
+        .map(|(entity, mut e)| {
+            e.next_at = now + e.cooldown;
+            (entity, e.range, e.threshold)
+        })
+        .collect();
+    for (source, range, threshold) in due {
+        radiation_pulse(
+            world,
+            source,
+            range,
+            threshold,
+            DEFAULT_RADIATION_CHANCE,
+            0.0,
+        );
+    }
+}
+
+/// The counter's, the protected clothing's and a radioactive emitter's examine lines.
 pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<crate::examine::Line>) {
+    if let Some(text) = world
+        .get::<RadioactiveEmitter>(target)
+        .and_then(|e| e.examine_text.clone())
+    {
+        // shortcut: `span_green` italics shown as a notice (no green span class).
+        lines.push((Span::Notice, text));
+    }
     if rad_protected_type(world, target) {
         lines.push((
             Span::Notice,

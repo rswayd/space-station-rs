@@ -288,6 +288,8 @@ pub enum Job {
     Fauna(crate::mobs::farm::FarmJob),
     /// A morph eating a corpse or an item ([`crate::antag::morph`]).
     Morph { corpse: bool },
+    /// Fixing a Radiation Leak's machine ([`crate::events::radiation_leak`]).
+    RadiationLeak,
 }
 
 /// A turf's baseturf stack, bottom first (tg `baseturfs`). Absent: assembled from the type's
@@ -1300,6 +1302,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         }
         &Job::Smes(job) => crate::power::smes::complete(world, mob, action, job, consume),
         &Job::Shield(job) => crate::power::shields::complete(world, action, job, consume),
+        Job::RadiationLeak => crate::events::radiation_leak::complete(world, action, consume),
         Job::GirderBolts { from } => {
             if !is_under(&path, GIRDER) || obj_state(world, target) != *from || !consume(world) {
                 return;

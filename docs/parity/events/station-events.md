@@ -48,13 +48,13 @@
 Машина в случайной зоне начинает излучать радиацию и газ (часто плазму/трития), пока её не починят инструментами.
 
 - **Код:** [`/datum/round_event_control/radiation_leak`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/radiation_leak.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — радиация есть (`crates/ss13_game/src/radiation.rs`), самого события нет: нет `radioactive_emitter`, починки инструментами, химического дыма
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/events/radiation_leak.rs`: вес 15, максимум 3; плотная машина станции с `use_power` (или вент/скруббер), видимая, не под полом и пропускающая воздух; `radioactive_emitter` (`crate::radiation::RadioactiveEmitter`: импульс раз в 2 с, радиус 5, порог `RAD_MEDIUM_INSULATION`, строка осмотра), дым полония и мутагена (радиус 2, по 10 u) со звуком три раза за 5 минут, объявление с зоной; 1–3 способа из восьми — `use_tool` 30 с (сварка тратит 2 топлива) нужным инструментом останавливает утечку и событие; машина берётся из всех подходящих на станции, а не у ландмарок `generic_event_spawns` (не загружаются), нет оповещения призраков
 
 ### Supermatter Surge
 Суперматерия на время получает прибавку к мощности и нагреву; объявление в инженерию. Вариант «Poly's Revenge» — при жертве попугая Поли.
 
 - **Код:** [`/datum/round_event_control/supermatter_surge`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/supermatter_surge.dm#L26), [`/datum/round_event_control/supermatter_surge/poly`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/supermatter_surge.dm#L112)
-- **Статус в ss13-rs:** ❌ нет — событий нет (сама суперматерия — `crates/ss13_game/src/power/supermatter.rs`)
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/events/supermatter_surge.rs`: вес 15, максимум 1, только при СИ или больше трёх инженеров/атмосферников в манифесте; главный кристалл, класс 1–4 (14/20/35/31%), 120–135 тиков событий; `bullet_energy` = класс + 5 (лучи эмиттера), азот кристаллов — `powerloss_inhibition`/`heat_power_generation`/`heat_modifier` tg (`Crystal::nitrogen`), в конце — исходные значения и объявление; нет админской настройки класса и «Poly's Revenge» (нет Поли)
 
 ### Tram Malfunction
 Трамвай (на картах с трамваем) идёт с ошибками: пропускает станции, сигналы переходов сбоят, шанс аварий растёт.
