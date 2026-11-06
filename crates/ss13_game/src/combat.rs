@@ -78,7 +78,7 @@ impl CombatRng {
 
     /// DM `rand(low, high)` on integers, both ends included.
     pub fn range(&mut self, low: u32, high: u32) -> u32 {
-        low + (self.next() % u64::from(high - low + 1)) as u32
+        low + (self.next() % (u64::from(high - low) + 1)) as u32
     }
 
     /// DM `rand()`: uniform in [0, 1).
