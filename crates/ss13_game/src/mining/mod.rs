@@ -3,7 +3,9 @@
 //! the mining satchel and the ore box, the ore redemption machine that smelts ore into the ore
 //! silo and pays mining points ([`orm`]), and the mining equipment order console that spends
 //! them ([`console`]), mining vouchers and the point transfer card ([`equipment`]), kinetic
-//! accelerator modkits ([`modkits`]) and the stacking machine with its console ([`stacking`]).
+//! accelerator modkits ([`modkits`]), the stacking machine with its console ([`stacking`]) and
+//! the fauna's monster cores with the stabilizing serum ([`cores`]) and the resonator
+//! ([`resonator`]).
 //! This module holds the windows' data, which both halves share; the client views are in
 //! [`client`].
 //!
@@ -20,11 +22,15 @@ pub mod client;
 #[cfg(feature = "server")]
 pub mod console;
 #[cfg(feature = "server")]
+pub mod cores;
+#[cfg(feature = "server")]
 pub mod equipment;
 #[cfg(feature = "server")]
 pub mod modkits;
 #[cfg(feature = "server")]
 pub mod orm;
+#[cfg(feature = "server")]
+pub mod resonator;
 #[cfg(feature = "server")]
 pub mod rocks;
 #[cfg(feature = "server")]
@@ -43,6 +49,14 @@ impl bevy::prelude::Plugin for MiningServerPlugin {
         // Click chain hooks (`crate::click_handlers`).
         use crate::click_handlers::{AddClickHandler, ClickPhase};
         // Weak rock by hand; the ore box, ORM and mining console windows.
+        // Monster cores used in hand.
+        app.add_click_handler(ClickPhase::AttackSelf, 3183, |w, c| {
+            crate::mining::cores::attack_self(w, c.client, c.mob, c.target)
+        });
+        // Resonator modes.
+        app.add_click_handler(ClickPhase::AttackSelf, 3184, |w, c| {
+            crate::mining::resonator::attack_self(w, c.client, c.target)
+        });
         app.add_click_handler(ClickPhase::EmptyHand, 2900, |w, c| {
             crate::mining::interact(w, c.client, c.mob, c.target)
         });
@@ -63,6 +77,8 @@ impl bevy::prelude::Plugin for MiningServerPlugin {
             console::OrderConsolePlugin,
             equipment::EquipmentPlugin,
             stacking::StackingPlugin,
+            cores::CoresPlugin,
+            resonator::ResonatorPlugin,
         ));
     }
 }
@@ -93,6 +109,8 @@ pub fn item_interaction(
     target: bevy::prelude::Entity,
 ) -> bool {
     orm::item_interaction(world, held, target)
+        || cores::item_interaction(world, client, mob, held, target)
+        || resonator::item_interaction(world, mob, held, target)
         || modkits::item_interaction(world, client, mob, held, target)
         || equipment::item_interaction(world, client, mob, held, target)
         || stacking::item_interaction(world, client, mob, held, target)
@@ -122,6 +140,7 @@ pub fn examine_lines(
     lines: &mut Vec<crate::examine::Line>,
 ) {
     modkits::examine_lines(world, target, lines);
+    cores::examine_lines(world, target, lines);
     equipment::examine_lines(world, target, lines);
     rocks::examine_lines(world, target, lines);
 }
