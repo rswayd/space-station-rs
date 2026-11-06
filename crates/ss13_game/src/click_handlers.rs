@@ -152,6 +152,7 @@
 //! | 2650 | `medical::pods::interact` (sleepers, cryo cells, lipid extractors, organ harvesters) |
 //! | 2660 | `medical::kiosk::interact` |
 //! | 2670 | `medical::limbgrower::interact` |
+//! | 2685 | `brig::gulag::interact` (labor camp teleporter, its console, the item reclaimer) |
 //! | 2700 | `tables::attack_hand` |
 //! | 2800 | `falsewall::attack_hand` |
 //! | 2810 | `door_structures::mineral_attack_hand` (mineral doors) |

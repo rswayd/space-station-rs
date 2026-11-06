@@ -3,13 +3,16 @@
 //!
 //! [`timer`] holds the cell timers' server half, [`prisoner`] the prisoner management console
 //! and the prisoner ID card's points, [`client`] draws both windows. This module holds what both
-//! halves share: the windows' data and act names.
+//! halves share: the windows' data and act names. [`gulag`] holds the labor camp teleporter,
+//! its console and the item reclaimer.
 
 use serde::{Deserialize, Serialize};
 use ss13_tgui::UiInterface;
 
 #[cfg(feature = "client")]
 pub mod client;
+#[cfg(feature = "server")]
+pub mod gulag;
 #[cfg(feature = "server")]
 pub mod prisoner;
 #[cfg(feature = "server")]
@@ -22,7 +25,11 @@ pub struct BrigServerPlugin;
 #[cfg(feature = "server")]
 impl bevy::prelude::Plugin for BrigServerPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
-        app.add_plugins((timer::DoorTimerPlugin, prisoner::PrisonerConsolePlugin));
+        app.add_plugins((
+            timer::DoorTimerPlugin,
+            prisoner::PrisonerConsolePlugin,
+            gulag::GulagPlugin,
+        ));
     }
 }
 
@@ -118,3 +125,57 @@ pub const HANDLE_IMPLANT: &str = "handle_implant";
 pub const SELF_DESTRUCT: &str = "self_destruct";
 pub const WARN: &str = "warn";
 pub const INJECT: &str = "inject";
+
+/// tgui `GulagTeleporterConsole`.
+pub struct GulagTeleporterUi;
+
+impl UiInterface for GulagTeleporterUi {
+    const NAME: &'static str = "GulagTeleporterConsole";
+    type Data = GulagTeleporterData;
+    type StaticData = ();
+}
+
+/// `gulag_teleporter_computer/ui_data`; `None` locations are tg's `null` teleporter/beacon.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GulagTeleporterData {
+    /// `prisoner["name"]`, `prisoner["crimstat"]`.
+    pub prisoner_name: Option<String>,
+    pub prisoner_crimstat: Option<String>,
+    pub teleporter_location: Option<String>,
+    pub teleporter_lock: bool,
+    pub teleporter_state_open: bool,
+    pub beacon_location: Option<String>,
+    /// `id_name` of the inserted prisoner ID; `None` without one.
+    pub id_name: Option<String>,
+    pub goal: u32,
+    pub can_teleport: bool,
+}
+
+// `GulagTeleporterConsole` acts.
+pub const SCAN_TELEPORTER: &str = "scan_teleporter";
+pub const SCAN_BEACON: &str = "scan_beacon";
+pub const HANDLE_ID: &str = "handle_id";
+pub const SET_GOAL: &str = "set_goal";
+pub const TOGGLE_OPEN: &str = "toggle_open";
+pub const TELEPORTER_LOCK: &str = "teleporter_lock";
+pub const TELEPORT: &str = "teleport";
+
+/// tgui `GulagItemReclaimer`.
+pub struct GulagItemReclaimerUi;
+
+impl UiInterface for GulagItemReclaimerUi {
+    const NAME: &'static str = "GulagItemReclaimer";
+    type Data = GulagItemReclaimerData;
+    type StaticData = ();
+}
+
+/// `gulag_item_reclaimer/ui_data`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GulagItemReclaimerData {
+    pub can_reclaim: bool,
+    /// `mobs`: (`mob` ref, `name`).
+    pub mobs: Vec<(String, String)>,
+}
+
+/// `GulagItemReclaimer` act, with the `mobref` param.
+pub const RELEASE_ITEMS: &str = "release_items";

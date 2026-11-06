@@ -163,7 +163,14 @@ fn record_deaths(
 /// `attack_hand` -> `ui_interact` of a powered console, with an empty hand.
 fn open_console(
     mut clicks: MessageReader<ClickResolved>,
-    consoles: Query<&DmName, (With<PrisonerConsole>, Without<Unpowered>)>,
+    consoles: Query<
+        &DmName,
+        (
+            With<PrisonerConsole>,
+            Without<Unpowered>,
+            Without<super::gulag::GulagConsole>,
+        ),
+    >,
     inventories: Query<&Inventory>,
     mut open: MessageWriter<OpenUi>,
 ) {
@@ -457,7 +464,13 @@ fn apply(
 }
 
 /// `id_insert(user, new_id)`: a prisoner ID from the active hand into the empty slot.
-fn id_insert(world: &mut World, client: Entity, user: Entity, console: Entity, card: Entity) {
+pub(super) fn id_insert(
+    world: &mut World,
+    client: Entity,
+    user: Entity,
+    console: Entity,
+    card: Entity,
+) {
     if world.get::<PrisonerCard>(card).is_none() {
         return;
     }
@@ -487,7 +500,7 @@ fn id_insert(world: &mut World, client: Entity, user: Entity, console: Entity, c
 }
 
 /// `id_eject(user)`: the card into a free hand of an adjacent user, else onto the tile.
-fn id_eject(world: &mut World, client: Entity, user: Entity, console: Entity) {
+pub(super) fn id_eject(world: &mut World, client: Entity, user: Entity, console: Entity) {
     let Some(card) = world
         .get::<PrisonerConsole>(console)
         .and_then(|c| c.contained_id)

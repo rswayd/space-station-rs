@@ -1,10 +1,12 @@
 //! Client half of the brig: the `BrigTimer` window (`BrigTimer.tsx`, BandaStation's labelled
-//! presets) and the `PrisonerManagement` window (`PrisonerManagement.tsx`).
+//! presets), the `PrisonerManagement` window (`PrisonerManagement.tsx`), the labor camp
+//! teleporter console (`GulagTeleporterConsole.jsx`) and the item reclaimer
+//! (`GulagItemReclaimer.tsx`).
 // shortcut: implant categories are sections instead of tabs (tg `useSharedState` tabs); the
 // tooltips of the implant buttons are shown, the dividers between implants are not.
 
 use bevy::scene::EntityScene;
-use ss13_tgui::client::{AppTguiClientExt, ClientUi};
+use ss13_tgui::client::{ActOnChange, AppTguiClientExt, ClientUi};
 use ss13_ui_kit::prelude::*;
 use ss13_ui_kit::{ActParams, UiColor};
 
@@ -15,7 +17,9 @@ pub struct BrigClientPlugin;
 impl Plugin for BrigClientPlugin {
     fn build(&self, app: &mut App) {
         app.register_ui_view::<BrigTimerUi>()
-            .register_ui_view::<PrisonerManagementUi>();
+            .register_ui_view::<PrisonerManagementUi>()
+            .register_ui_view::<GulagTeleporterUi>()
+            .register_ui_view::<GulagItemReclaimerUi>();
     }
 }
 
@@ -342,6 +346,181 @@ fn console_body(data: &PrisonerManagementData) -> Vec<Box<dyn SceneList>> {
             ]
         ]
     }))]
+}
+
+/// A `LabeledList.Item` with a text value.
+fn text_item(label: &'static str, value: String, color: UiColor) -> Box<dyn SceneList> {
+    let label = label.to_owned();
+    Box::new(EntityScene(bsn! {
+        @LabeledListItem { @label: label, @color: color, @content: value }
+    }))
+}
+
+/// "Teleporter Unit"/"Receiver Beacon": the location, or "Not Connected" and "Reconnect".
+fn link_item(
+    label: &'static str,
+    location: Option<&String>,
+    rescan: &'static str,
+) -> Box<dyn SceneList> {
+    match location {
+        Some(at) => text_item(label, at.clone(), UiColor::Good),
+        None => {
+            let (bad, label) = (UiColor::Bad, label.to_owned());
+            Box::new(EntityScene(bsn! {
+                @LabeledListItem { @label: label, @color: bad }
+                Children [
+                    Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center }
+                    Children [
+                        Text("Not Connected")
+                        --
+                        @Button { @content: "Reconnect" }
+                        Act(rescan)
+                    ]
+                ]
+            }))
+        }
+    }
+}
+
+impl ClientUi for GulagTeleporterUi {
+    const WIDTH: f32 = 350.0;
+    const HEIGHT: f32 = 295.0;
+
+    fn content(_: &(), data: &GulagTeleporterData) -> impl Scene {
+        let (open, lock) = (data.teleporter_state_open, data.teleporter_lock);
+        let open_text = if open { "Open" } else { "Closed" };
+        let (lock_icon, lock_text) = if lock {
+            ("lock", "Locked")
+        } else {
+            ("unlock", "Unlocked")
+        };
+        let buttons: Box<dyn SceneList> = Box::new(EntityScene(bsn! {
+            Node { flex_direction: FlexDirection::Row }
+            Children [
+                @Button { @content: open_text }
+                Button { selected: open, disabled: lock }
+                Act(TOGGLE_OPEN)
+                --
+                @Button { @icon: lock_icon, @content: lock_text }
+                Button { selected: lock, disabled: open }
+                Act(TELEPORTER_LOCK)
+            ]
+        }));
+        let links = vec![
+            link_item(
+                "Teleporter Unit",
+                data.teleporter_location.as_ref(),
+                SCAN_TELEPORTER,
+            ),
+            link_item(
+                "Receiver Beacon",
+                data.beacon_location.as_ref(),
+                SCAN_BEACON,
+            ),
+        ];
+        let id_text = data.id_name.clone().unwrap_or_else(|| "No ID".to_owned());
+        let goal = NumberInput {
+            value: f64::from(data.goal),
+            min_value: 1.0,
+            max_value: 1000.0,
+            step: 1.0,
+            ..Default::default()
+        };
+        let on_goal = ActOnChange {
+            action: SET_GOAL.into(),
+            param: "value".into(),
+        };
+        let details = vec![
+            text_item(
+                "Occupant",
+                data.prisoner_name
+                    .clone()
+                    .unwrap_or_else(|| "No Occupant".to_owned()),
+                UiColor::Default,
+            ),
+            text_item(
+                "Criminal Status",
+                data.prisoner_crimstat
+                    .clone()
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or_else(|| "No Status".to_owned()),
+                UiColor::Default,
+            ),
+        ];
+        let blocked = !data.can_teleport;
+        let bad = UiColor::Bad;
+        bsn! {
+            @WindowContent
+            Children [
+                @Section { @title: "Teleporter Console", @buttons: buttons }
+                Children [ @LabeledList Children [ {links} ] ]
+                --
+                @Section { @title: "Prisoner Details" }
+                Children [
+                    @LabeledList
+                    Children [
+                        @LabeledListItem { @label: "Prisoner ID" }
+                        Children [ @Button { @content: id_text, @fluid: true } Act(HANDLE_ID) ]
+                        --
+                        @LabeledListItem { @label: "Point Goal" }
+                        Children [ Node { width: px(48) } goal on_goal ]
+                        --
+                        {details}
+                    ]
+                ]
+                --
+                @Button { @content: "Process Prisoner", @fluid: true }
+                Button { color: bad, disabled: blocked }
+                Act(TELEPORT)
+            ]
+        }
+    }
+}
+
+impl ClientUi for GulagItemReclaimerUi {
+    const WIDTH: f32 = 325.0;
+    const HEIGHT: f32 = 400.0;
+
+    fn content(_: &(), data: &GulagItemReclaimerData) -> impl Scene {
+        let body: Vec<Box<dyn SceneList>> = if data.mobs.is_empty() {
+            vec![Box::new(EntityScene(bsn! {
+                @NoticeBox Children [ Text("No stored items") ]
+            }))]
+        } else {
+            let blocked = !data.can_reclaim;
+            let rows: Vec<Box<dyn SceneList>> = data
+                .mobs
+                .iter()
+                .map(|(mob, name)| -> Box<dyn SceneList> {
+                    let name = name.clone();
+                    let params = ActParams(vec![("mobref".to_owned(), mob.clone())]);
+                    Box::new(EntityScene(bsn! {
+                        Node {
+                            flex_direction: FlexDirection::Row,
+                            justify_content: JustifyContent::SpaceBetween,
+                            align_items: AlignItems::Center,
+                        }
+                        Children [
+                            Text(name)
+                            --
+                            @Button { @content: "Retrieve Items" }
+                            Button { disabled: blocked }
+                            Act(RELEASE_ITEMS)
+                            params
+                        ]
+                    }))
+                })
+                .collect();
+            vec![Box::new(EntityScene(bsn! {
+                @Section { @title: "Stored Items" }
+                Children [ {rows} ]
+            }))]
+        };
+        bsn! {
+            @WindowContent
+            Children [ {body} ]
+        }
+    }
 }
 
 #[cfg(test)]

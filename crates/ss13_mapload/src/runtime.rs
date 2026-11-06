@@ -33,6 +33,9 @@ pub const UNIVERSAL_SCANNER: &str = "/obj/item/universal_scanner";
 /// Constant paths `ss13_game` spawns that no other table of this crate lists: leftovers,
 /// products and printouts of machines, decals, grenade payloads, quirk items, paper kinds.
 pub const GAME_RUNTIME_TYPES: &[&str] = &[
+    // `brig::gulag`: the labor camp teleporter dresses its prisoner.
+    "/obj/item/clothing/under/rank/prisoner",
+    "/obj/item/clothing/shoes/sneakers/orange",
     "/mob/living/basic/mining/demon_afterimage",
     "/obj/item/raw_anomaly_core/bluespace",
     "/obj/item/hatchet/cutterblade",

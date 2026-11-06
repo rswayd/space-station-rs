@@ -47,6 +47,7 @@ mod forensics;
 mod furniture;
 mod genetics;
 mod grenades;
+mod gulag;
 mod guns;
 mod heretic;
 mod icemoon_fauna;
