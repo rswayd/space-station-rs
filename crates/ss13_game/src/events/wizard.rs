@@ -14,6 +14,8 @@
 //!   speaks and understands one random language only ([`curse_of_babel`]), its tongue no limit;
 //!   antimagic of the mind protects; latejoiners are cursed too ([`TowerOfBabel`]). Wizards
 //!   learn every language instead.
+//! - Summon Guns (`summons.dm`): `summon_guns` with a 10% survivalist chance
+//!   (`crate::antag::survivalist`).
 //!
 //! Summon Events itself is the spellbook ritual (`crate::antag::wizard::server`), calling
 //! [`super::controller::summon_events`].
@@ -39,6 +41,7 @@ pub const SHUFFLE_PLACES: &str = "Change Places!";
 pub const SHUFFLE_NAMES: &str = "Change Faces!";
 pub const SHUFFLE_MINDS: &str = "Change Minds!";
 pub const BABEL: &str = "Tower of Babel";
+pub const SUMMON_GUNS: &str = "Summon Guns";
 
 pub fn make_robeless(_: &mut World) -> Box<dyn RoundEvent> {
     Box::new(Robeless)
@@ -62,6 +65,18 @@ pub fn make_shuffle_minds(_: &mut World) -> Box<dyn RoundEvent> {
 
 pub fn make_babel(_: &mut World) -> Box<dyn RoundEvent> {
     Box::new(Babel)
+}
+
+pub fn make_summon_guns(_: &mut World) -> Box<dyn RoundEvent> {
+    Box::new(SummonGuns)
+}
+
+struct SummonGuns;
+
+impl RoundEvent for SummonGuns {
+    fn start(&mut self, world: &mut World, _: &mut EventState) {
+        crate::antag::survivalist::summon_guns(world, None, 10.0);
+    }
 }
 
 /// tg `IS_WIZARD` (apprentices too).

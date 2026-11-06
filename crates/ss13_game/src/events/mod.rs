@@ -358,6 +358,15 @@ pub fn controls() -> Vec<EventControl> {
             wizard::make_shuffle_minds,
         )),
         summon(c(wizard::BABEL, 3, 0.0, 0, 1, wizard::make_babel)),
+        // `NO_SUMMON_GUNS` is off in BandaStation's config.
+        summon(c(
+            wizard::SUMMON_GUNS,
+            1,
+            0.0,
+            0,
+            1,
+            wizard::make_summon_guns,
+        )),
         on(
             holidays::HALLOWEEN,
             c(
@@ -378,6 +387,17 @@ pub fn controls() -> Vec<EventControl> {
                 0,
                 1,
                 holiday_events::make_easter,
+            ),
+        ),
+        on(
+            holidays::VALENTINES,
+            c(
+                holiday_events::VALENTINES,
+                -1,
+                0.0,
+                0,
+                1,
+                holiday_events::make_valentines,
             ),
         ),
         on(
