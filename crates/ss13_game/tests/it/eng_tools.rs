@@ -54,7 +54,20 @@ fn human(world: &mut World, pos: TilePos) -> Entity {
 
 fn hidden_cable(world: &mut World, pos: TilePos) -> Entity {
     world
-        .spawn((pos, Appearance::new(IconStateId(1)), HiddenUnderTile))
+        .spawn((
+            pos,
+            Appearance {
+                icon_state: IconStateId(1),
+                layer: ss13_shared::Layer::default(),
+                plane: 0,
+                color: None,
+                pixel_offset: [0, 0],
+                rotation: 0,
+                overlays: Vec::new(),
+                mouse_opacity: ss13_shared::MouseOpacity::default(),
+            },
+            HiddenUnderTile,
+        ))
         .id()
 }
 
