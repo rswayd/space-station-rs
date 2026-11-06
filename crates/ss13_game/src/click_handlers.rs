@@ -178,6 +178,7 @@
 //! | 3465 | `effects::teleporters::portal_click` (permanent portals) |
 //! | 3466 | `fireplace::attack_hand` (taking a bonfire apart) |
 //! | 3467 | `science::quantum_pad::attack_hand` |
+//! | 3468 | `janitor::washer_attack_hand` (washing machine door; right click starts it) |
 //!
 //! [`ClickPhase::HeldOnTarget`] (a world click with the active hand's item; tg
 //! `item_interaction`, `interact_with_atom`, `pre_attack`, `attackby`):
@@ -264,6 +265,7 @@
 //! | 3455 | `clothing::item_interaction` |
 //! | 3465 | `effects::teleporters::portal_click` (permanent portals) |
 //! | 3500 | `janitor::item_interaction` |
+//! | 3510 | `janitor::washer_item_interaction` (a load into a washing machine) |
 //! | 3600 | `genetics::console::item_interaction` |
 //! | 3660 | `mobs::farm` milking, `mobs::critters::turtle_drink` (before `chem::item_interaction`) |
 //! | 3700 | `chem::item_interaction` |

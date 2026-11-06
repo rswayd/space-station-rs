@@ -229,6 +229,20 @@ impl Plugin for JanitorServerPlugin {
         app.add_click_handler(ClickPhase::AttackSelf, 3190, |w, c| {
             crate::janitor::broom_attack_self(w, c.client, c.mob, c.target)
         });
+        // tg washing machine `attack_hand` (door), `attack_hand_secondary` (start).
+        app.add_click_handler(ClickPhase::EmptyHand, 3468, |w, c| {
+            crate::janitor::washer_attack_hand(w, c.client, c.target, c.modifiers.right)
+        });
+        // tg washing machine `item_interaction`: a load goes in.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 3510, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::janitor::washer_item_interaction(w, c.client, c.mob, h, c.target)
+            })
+        });
+        app.add_observer(add_washer).add_systems(
+            Update,
+            finish_washing.run_if(any_with_component::<WashingMachine>),
+        );
         app.init_resource::<JanitorClocks>()
             .add_observer(add_cleanable)
             .add_observer(add_item_parts)
@@ -1158,6 +1172,199 @@ fn spray(world: &mut World, actor: Actor, target: Entity) -> bool {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Washing machine.
+
+const WASHING_MACHINE: &str = "/obj/machinery/washing_machine";
+/// `max_wash_capacity` of the stock machine: two 50 u beakers, `floor(100 / 20)`.
+const WASH_CAPACITY: usize = 5;
+/// `time_to_wash = 20 SECONDS / servo.tier`.
+const WASH_SECS: f64 = 20.0;
+
+/// `/obj/machinery/washing_machine` state.
+#[derive(Component, Clone, Copy, Debug, PartialEq)]
+pub struct WashingMachine {
+    /// `state_open`.
+    pub open: bool,
+    /// `busy`: when the running cycle ends (game seconds).
+    pub done_at: Option<f64>,
+    /// `bloody_mess`.
+    pub bloody: bool,
+}
+
+fn add_washer(
+    add: On<Add<ss13_mapload::DmPower>>,
+    machines: Query<&ss13_mapload::DmPower>,
+    mut commands: Commands,
+) {
+    if machines
+        .get(add.entity)
+        .is_ok_and(|m| is_under(&m.path, WASHING_MACHINE))
+    {
+        commands.entity(add.entity).insert(WashingMachine {
+            open: true,
+            done_at: None,
+            bloody: false,
+        });
+        commands.queue(move |world: &mut World| washer_look(world, add.entity));
+    }
+}
+
+fn washer_load(world: &World, e: Entity) -> Vec<Entity> {
+    world
+        .get::<crate::storage::Stored>(e)
+        .map(|s| s.items().to_vec())
+        .unwrap_or_default()
+}
+
+/// `update_icon_state`: `wm_running_<blood>`, `wm_<open>_blood`, `wm_<open>_<full>`.
+fn washer_look(world: &mut World, e: Entity) {
+    let Some(m) = world.get::<WashingMachine>(e).copied() else {
+        return;
+    };
+    let open = u8::from(m.open);
+    let state = if m.done_at.is_some() {
+        format!("wm_running_{}", u8::from(m.bloody))
+    } else if m.bloody {
+        format!("wm_{open}_blood")
+    } else {
+        format!("wm_{open}_{}", u8::from(!washer_load(world, e).is_empty()))
+    };
+    let Some(id) = world
+        .get::<ss13_mapload::DmAtom>(e)
+        .zip(world.get_resource::<IconIndex>())
+        .and_then(|(atom, icons)| icons.get(&atom.icon, &state))
+    else {
+        return;
+    };
+    if let Some(mut look) = world.get_mut::<Appearance>(e)
+        && look.icon_state != id
+    {
+        look.icon_state = id;
+    }
+}
+
+/// `attack_hand` (the door; `open_machine` drops the load) and `attack_hand_secondary` (a
+/// closed, clean machine starts its cycle). True when `target` is a washing machine.
+// shortcut: no pets or aggressively grabbed humans stuffed in, so no gibbed pets or washed
+// humans; add with mobs inside machines.
+pub fn washer_attack_hand(world: &mut World, client: Entity, target: Entity, right: bool) -> bool {
+    let Some(mut m) = world.get::<WashingMachine>(target).copied() else {
+        return false;
+    };
+    let name = crate::chem::name_of(world, target);
+    if m.done_at.is_some() {
+        tell(world, client, Span::Warning, format!("{name} занята!"));
+        return true;
+    }
+    if right {
+        if m.open {
+            tell(world, client, Span::Warning, "Сначала закройте дверцу!");
+            return true;
+        }
+        if m.bloody {
+            tell(
+                world,
+                client,
+                Span::Warning,
+                format!("{name} нужно сначала отмыть!"),
+            );
+            return true;
+        }
+        let tier = crate::stock_parts::ratings(world, target)
+            .tiers(crate::stock_parts::PartKind::Servo)
+            .max()
+            .unwrap_or(1)
+            .max(1);
+        let now = world.resource::<Time>().elapsed_secs_f64();
+        m.done_at = Some(now + WASH_SECS / f64::from(tier));
+    } else if m.open {
+        m.open = false;
+    } else {
+        open_washer(world, target);
+        m.open = true;
+    }
+    world.entity_mut(target).insert(m);
+    washer_look(world, target);
+    true
+}
+
+/// `open_machine`: the load drops onto the machine's tile.
+fn open_washer(world: &mut World, e: Entity) {
+    let Some(&pos) = world.get::<TilePos>(e) else {
+        return;
+    };
+    for item in washer_load(world, e) {
+        crate::storage::take_out(world, item, pos);
+    }
+}
+
+/// `item_interaction` out of combat mode: into the open, clean, not full machine.
+pub fn washer_item_interaction(
+    world: &mut World,
+    client: Entity,
+    mob: Entity,
+    held: Entity,
+    target: Entity,
+) -> bool {
+    let Some(m) = world.get::<WashingMachine>(target).copied() else {
+        return false;
+    };
+    if world
+        .get::<crate::combat::CombatMode>(mob)
+        .is_some_and(|c| c.0)
+    {
+        return false;
+    }
+    let name = crate::chem::name_of(world, target);
+    if !m.open {
+        tell(world, client, Span::Warning, "Сначала откройте дверцу!");
+    } else if m.bloody {
+        tell(
+            world,
+            client,
+            Span::Warning,
+            format!("{name} нужно сначала отмыть!"),
+        );
+    } else if washer_load(world, target).len() >= WASH_CAPACITY {
+        tell(world, client, Span::Warning, "Стиральная машина полна!");
+    } else if crate::inventory::no_drop(world, held) {
+        tell(
+            world,
+            client,
+            Span::Warning,
+            "Предмет прилип к руке, его не положить в стиральную машину!",
+        );
+    } else {
+        crate::storage::put_inside(world, held, target);
+        washer_look(world, target);
+    }
+    true
+}
+
+/// `wash_cycle` when the timer runs out: every load item is washed (`wash(CLEAN_WASH)`).
+// shortcut: no dyeing by a crayon or other `dye_color` item inside (`dye_registry` and the items'
+// `dying_key` are not converted), no `machine_wash` specials (hides, the Ian costume), no
+// shaking or walking around while running; add with the dye registry in the prototypes.
+fn finish_washing(world: &mut World) {
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    let mut q = world.query::<(Entity, &WashingMachine)>();
+    let done: Vec<Entity> = q
+        .iter(world)
+        .filter(|(_, m)| m.done_at.is_some_and(|t| now >= t))
+        .map(|(e, _)| e)
+        .collect();
+    for e in done {
+        for item in washer_load(world, e) {
+            wash(world, item, CLEAN_WASH);
+        }
+        if let Some(mut m) = world.get_mut::<WashingMachine>(e) {
+            m.done_at = None;
+        }
+        washer_look(world, e);
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
 // Push broom.
 
 const PUSHBROOM: &str = "/obj/item/pushbroom";
@@ -1317,6 +1524,57 @@ mod tests {
         assert_eq!(wet.highest(), TURF_WET_WATER);
         wet.process(T0C + 150.0, 1.0);
         assert_eq!(wet.highest(), 0);
+    }
+
+    /// A closed washing machine runs its cycle and washes the blood off its load; opening it
+    /// drops the load.
+    #[test]
+    fn washing_machine_washes_its_load() {
+        use crate::forensics::server::Forensics;
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, ss13_world::WorldPlugin));
+        app.add_systems(Update, finish_washing);
+        let world = app.world_mut();
+        world
+            .resource_mut::<SpatialIndex>()
+            .create_level(1, 4, 4)
+            .unwrap();
+        let machine = world
+            .spawn((
+                WashingMachine {
+                    open: true,
+                    done_at: None,
+                    bloody: false,
+                },
+                TilePos::new(1, 1, 1),
+            ))
+            .id();
+        let shirt = world
+            .spawn(Forensics {
+                blood_dna: vec![("abc".into(), crate::medical::blood::BloodType::APlus)],
+                ..default()
+            })
+            .id();
+        crate::storage::put_inside(world, shirt, machine);
+        let client = world.spawn_empty().id();
+        // Shut the door, start the cycle.
+        assert!(washer_attack_hand(world, client, machine, false));
+        assert!(washer_attack_hand(world, client, machine, true));
+        assert!(
+            world
+                .get::<WashingMachine>(machine)
+                .unwrap()
+                .done_at
+                .is_some()
+        );
+        world.get_mut::<WashingMachine>(machine).unwrap().done_at = Some(0.0);
+        app.update();
+        let world = app.world_mut();
+        assert_eq!(world.get::<WashingMachine>(machine).unwrap().done_at, None);
+        assert!(world.get::<Forensics>(shirt).unwrap().blood_dna.is_empty());
+        assert!(washer_attack_hand(world, client, machine, false));
+        assert_eq!(world.get::<TilePos>(shirt), Some(&TilePos::new(1, 1, 1)));
+        assert!(washer_load(world, machine).is_empty());
     }
 
     /// The broom pushes loose items one tile on, not through walls and not anchored ones; it
