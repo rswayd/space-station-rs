@@ -539,7 +539,11 @@ pub fn replace_keywords(
     while let Some(at) = rest.find("$$") {
         out.push_str(&rest[..at]);
         let after = &rest[at + 2..];
-        let end = after.find(char::is_whitespace).unwrap_or(after.len());
+        // Not tg: tg's `\$\$(\S*)` takes trailing punctuation into the key ("$$SITE_NAME."
+        // matches nothing); the key is meant to be the name only.
+        let end = after
+            .find(|c: char| !(c.is_alphanumeric() || c == '_'))
+            .unwrap_or(after.len());
         let key = &after[..end];
         if key == "SITE_NAME" {
             out.push_str(site_name);
@@ -648,7 +652,7 @@ mod tests {
         q.insert("Love".to_owned(), Value::from(3));
         assert_eq!(
             replace_keywords("At $$SITE_NAME with $$Love love, $$None.", "Mars", &q),
-            "At Mars with 3 love, "
+            "At Mars with 3 love, ."
         );
     }
 
