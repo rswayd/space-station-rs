@@ -23,7 +23,7 @@ use bevy::prelude::*;
 use ss13_net::chat::server::SendChat;
 use ss13_net::server::{
     ClientDisconnected, ControlledEntity, IntentReceived, Invisibility, MaskId, SeeInvisible,
-    ViewMasks,
+    ViewMasks, VisibleToMobs,
 };
 use ss13_shared::TilePos;
 use ss13_shared::chat::{
@@ -537,11 +537,12 @@ fn handle_say(
     bodies: Query<Body>,
     stats: Query<(Entity, &SpeakerStat)>,
     mut emotes_used: Query<&mut EmotesUsed>,
-    (sight, senses, voices, seed): (
+    (sight, senses, voices, seed, seen_by): (
         Query<&SeeInvisible>,
         Senses,
         Query<&VoiceSpan>,
         Option<Res<ScrambleSeed>>,
+        Query<&VisibleToMobs>,
     ),
     index: Res<SpatialIndex>,
     listeners: Res<Listeners>,
@@ -672,8 +673,11 @@ fn handle_say(
                         .unwrap_or(0);
                     Some((client, distance, e))
                 })
-                .filter(|&(c, ..)| {
-                    invisibility == 0 || sight.get(c).is_ok_and(|s| s.0 >= invisibility)
+                .filter(|&(c, _, body)| {
+                    invisibility == 0
+                        || sight.get(c).is_ok_and(|s| s.0 >= invisibility)
+                        // The mobs it shows itself to (an imaginary friend's owner).
+                        || seen_by.get(speaker).is_ok_and(|v| v.0.contains(&body))
                 })
                 .collect();
             // The speaker always hears itself, even standing off the indexed map.
