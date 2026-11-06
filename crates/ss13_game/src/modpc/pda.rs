@@ -236,6 +236,8 @@ impl Plugin for ModpcServerPlugin {
             })
         });
         super::programs::minesweeper::build(app);
+        super::programs::downloader::build(app);
+        super::programs::chat::build(app);
         app.register_ui::<NtosUi>()
             .add_observer(attach)
             .add_observer(attach_console)
@@ -739,6 +741,11 @@ pub struct NtosParams<'w, 's> {
     app_states: Query<'w, 's, &'static super::programs::apps::AppState>,
     minesweepers: Query<'w, 's, &'static super::programs::minesweeper::Minesweeper>,
     minesweeper_board: Option<Res<'w, super::programs::minesweeper::MinesweeperLeaderboard>>,
+    downloads: Query<'w, 's, &'static super::programs::downloader::Download>,
+    id_cards: Query<'w, 's, &'static crate::inventory::IdCard>,
+    computers: Query<'w, 's, &'static ModularComputer>,
+    chat_clients: Query<'w, 's, &'static super::programs::chat::ChatClient>,
+    chat_channels: Option<Res<'w, super::programs::chat::ChatChannels>>,
     ticker: Option<Res<'w, crate::round::Ticker>>,
     time: Res<'w, Time>,
 }
@@ -776,6 +783,8 @@ pub enum NtosAct {
     Card(super::programs::card_mod::CardAct),
     App(super::programs::apps::AppAct),
     Minesweeper(super::programs::minesweeper::MinesweeperAct),
+    Downloader(super::programs::downloader::DownloaderAct),
+    Chat(super::programs::chat::ChatAct),
 }
 
 fn program_param(params: &UiParams) -> Result<ProgramKind, UiReject> {
@@ -837,6 +846,17 @@ impl ServerUi for NtosUi {
                     {
                         Some("alarm_red.gif")
                     }
+                    ProgramKind::Downloader => params.downloads.get(entity).ok().and_then(|d| {
+                        if d.file.is_some() {
+                            Some("downloader_running.gif")
+                        } else {
+                            d.finished.then_some("downloader_finished.gif")
+                        }
+                    }),
+                    ProgramKind::ChatClient => super::programs::chat::header(
+                        params.chat_clients.get(entity).ok(),
+                        params.chat_channels.as_deref(),
+                    ),
                     p => p.ui_header(),
                 })
                 .map(str::to_owned)
@@ -921,6 +941,46 @@ impl ServerUi for NtosUi {
                     params.minesweeper_board.as_deref(),
                 )))
             }
+            Some(ProgramKind::Downloader) => {
+                let access = computer
+                    .stored_id
+                    .and_then(|c| params.id_cards.get(c).ok())
+                    .map(|c| c.access.as_slice());
+                NtosScreen::Downloader(Box::new(super::programs::downloader::ui_data(
+                    computer,
+                    params.downloads.get(entity).ok(),
+                    access,
+                )))
+            }
+            Some(ProgramKind::ChatClient) => {
+                let can_admin = computer
+                    .stored_id
+                    .and_then(|c| params.id_cards.get(c).ok())
+                    .is_some_and(|c| c.access.iter().any(|a| a == "network"));
+                let status = |pc: Entity| {
+                    params.computers.get(pc).map_or((false, false), |c| {
+                        (
+                            c.active == Some(ProgramKind::ChatClient),
+                            c.idle.contains(&ProgramKind::ChatClient),
+                        )
+                    })
+                };
+                let names = |pc: Entity| {
+                    params
+                        .chat_clients
+                        .get(pc)
+                        .map(|c| c.username.clone())
+                        .unwrap_or_default()
+                };
+                NtosScreen::Chat(Box::new(super::programs::chat::ui_data(
+                    entity,
+                    params.chat_clients.get(entity).ok(),
+                    params.chat_channels.as_deref(),
+                    can_admin,
+                    &status,
+                    &names,
+                )))
+            }
             // A launcher never comes to the front.
             Some(ProgramKind::Newscaster) => NtosScreen::Main(main_data(
                 computer,
@@ -969,6 +1029,12 @@ impl ServerUi for NtosUi {
                 }
                 if let Some(act) = super::programs::minesweeper::parse(other, params) {
                     return act.map(NtosAct::Minesweeper);
+                }
+                if let Some(act) = super::programs::downloader::parse(other, params) {
+                    return act.map(NtosAct::Downloader);
+                }
+                if let Some(act) = super::programs::chat::parse(other, params) {
+                    return act.map(NtosAct::Chat);
                 }
                 match super::programs::card_mod::parse(other, |k| params.get(k).map(str::to_owned))
                 {
@@ -1105,6 +1171,12 @@ fn apply_act(
         }
         NtosAct::Minesweeper(act) => {
             return super::programs::minesweeper::apply(world, client, actor, pda, computer, act);
+        }
+        NtosAct::Downloader(act) => {
+            return super::programs::downloader::apply(world, pda, computer, act);
+        }
+        NtosAct::Chat(act) => {
+            return super::programs::chat::apply(world, actor, pda, computer, act);
         }
         NtosAct::Run(program) if program.launcher() => {
             if !computer.programs.contains(&program) {

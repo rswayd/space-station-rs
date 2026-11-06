@@ -1,10 +1,12 @@
 //! Client half of the PDA: the NtOS window (tg `NtosWindow` with `NtosMain`, `NtosMessenger`,
 //! `NtosNotepad`, `NtosCrewManifest`, `NtosGasAnalyzer`, `NtosCard`, `NtosStationAlertConsole`,
-//! `NtosRecords`, `NtosSignaler`, `NtosStatus`, BandaStation `NtosMinesweeperPanel`).
+//! `NtosRecords`, `NtosSignaler`, `NtosStatus`, `NtosNetDownloader`, `NtosNetChat`, BandaStation
+//! `NtosMinesweeperPanel`).
 // shortcut: one window size for every screen (tg sizes each interface), no device themes, no
 // search field in the records (local input state does not re-render the view), no
 // photos or search field in the messenger, Enter sends (no send button: buttons carry fixed
-// params, the text is the input's), no "beginning of chat" divider or auto-scroll to the bottom.
+// params, the text is the input's), no "beginning of chat" divider or auto-scroll to the bottom,
+// no search field in the software hub, no confirmation on leaving or deleting a chat channel.
 
 use bevy::app::Propagate;
 use bevy::scene::{EntityScene, SceneList};
@@ -63,6 +65,8 @@ fn view(data: &NtosData, local: &UiLocalState) -> impl Scene + use<> {
                 )))
             }
             NtosScreen::Minesweeper(m) => Box::new(EntityScene(minesweeper_screen(m, local))),
+            NtosScreen::Downloader(d) => Box::new(EntityScene(downloader_screen(d, local))),
+            NtosScreen::Chat(c) => Box::new(EntityScene(chat_screen(c))),
         };
         bsn! {
             @WindowContent
@@ -1267,6 +1271,370 @@ fn minesweeper_leaderboard(d: &MinesweeperData) -> impl Scene + use<> {
                 @TableRow Children [ {header} ]
                 --
                 {rows}
+            ]
+        ]
+    }
+}
+
+/// The software hub's local state: the category tab (`selectedCategory`).
+const DOWNLOADER_CATEGORY: &str = "downloaderCategory";
+
+/// `NtosNetDownloader`: the error, the disk bar, the category tabs and their programs.
+fn downloader_screen(d: &DownloaderData, local: &UiLocalState) -> impl Scene + use<> {
+    use super::programs::CATEGORIES;
+    let selected = match local.get(DOWNLOADER_CATEGORY) {
+        "" => CATEGORIES[0].to_owned(),
+        s => s.to_owned(),
+    };
+    let error = d.error.clone().map(|e| {
+        EntityScene(bsn! {
+            @NoticeBox
+            Children [
+                Node Children [ Text(e) ]
+                --
+                @ss13_ui_kit::Button { @content: "Reset" }
+                Act({PRG_RESET_ERROR.to_owned()})
+            ]
+        })
+    });
+    let completion = d.downloading.as_ref().map_or(0.0, |p| p.completion);
+    let used = d.disk_used as f32 + completion;
+    let disk_label = format!(
+        "{} GQ free of {} GQ",
+        (d.disk_size as f32 - used).max(0.0),
+        d.disk_size
+    );
+    let disk_size = d.disk_size as f32;
+    let status = d.downloading.as_ref().map(|p| {
+        let pct = if p.size == 0 {
+            100.0
+        } else {
+            p.completion / p.size as f32 * 100.0
+        };
+        let line = format!("Download: {}.prg ({pct:.0}%)", p.name);
+        EntityScene(bsn! { Node Children [ Text(line) ] })
+    });
+    let tabs: Vec<_> = CATEGORIES
+        .iter()
+        .map(|&category| {
+            let is_selected = category == selected;
+            bsn! {
+                @TabsTab { @content: {category.to_owned()} }
+                TabsTab { selected: is_selected }
+                SetLocal { key: {DOWNLOADER_CATEGORY.to_owned()}, value: {category.to_owned()}, rerender: true }
+            }
+        })
+        .collect();
+    let mut items: Vec<&DownloadableProgram> = d
+        .programs
+        .iter()
+        .filter(|p| p.category == selected)
+        .collect();
+    items.sort_by(|a, b| (!a.compatible, &a.filedesc).cmp(&(!b.compatible, &b.filedesc)));
+    let free = d.disk_size.saturating_sub(d.disk_used);
+    let downloading = d.downloading.as_ref();
+    let rows: Vec<_> = items
+        .into_iter()
+        .map(|p| {
+            let title = p.filedesc.clone();
+            let size = format!("{} GQ", p.size);
+            let info = p.fileinfo.clone();
+            let control: Box<dyn SceneList> = match downloading {
+                Some(dl) if dl.name == p.filename => {
+                    let (value, max) = (dl.completion, p.size.max(1) as f32);
+                    Box::new(EntityScene(bsn! {
+                        Node { width: px(110) }
+                        Children [
+                            @ProgressBar
+                            ProgressBar { value: value, max_value: max, color: UiColor::Good }
+                        ]
+                    }))
+                }
+                _ if !p.installed && p.compatible && p.access && p.size <= free => {
+                    let busy = downloading.is_some();
+                    let params = ActParams(vec![("filename".to_owned(), p.filename.clone())]);
+                    Box::new(EntityScene(bsn! {
+                        @ss13_ui_kit::Button { @content: "Загрузить", @icon: "download" }
+                        ss13_ui_kit::Button { disabled: busy }
+                        Act({PRG_DOWNLOAD_FILE.to_owned()})
+                        params
+                    }))
+                }
+                _ => {
+                    let (text, icon, color) = if p.installed {
+                        ("Установлено", "check", UiColor::Good)
+                    } else if !p.compatible {
+                        ("Несовместимо", "times", UiColor::Bad)
+                    } else if !p.access {
+                        ("Нет доступа", "times", UiColor::Grey)
+                    } else {
+                        ("Нет места", "times", UiColor::Grey)
+                    };
+                    Box::new(EntityScene(bsn! {
+                        @ss13_ui_kit::Button { @content: text, @icon: icon }
+                        ss13_ui_kit::Button { color: color }
+                    }))
+                }
+            };
+            bsn! {
+                @Section { @title: title }
+                Children [
+                    Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, column_gap: px(6) }
+                    Children [
+                        Node { flex_grow: 1.0 }
+                        Propagate::<Italic>(Italic(true))
+                        Propagate::<TextColor>(TextColor(Color::srgba(1.0, 1.0, 1.0, 0.5)))
+                        Children [ Text(info) ]
+                        --
+                        Node Children [ Text(size) ]
+                        --
+                        {control}
+                    ]
+                ]
+            }
+        })
+        .collect();
+    bsn! {
+        Node { flex_direction: FlexDirection::Column, flex_grow: 1.0, min_height: px(0) }
+        Children [
+            {error}
+            --
+            @Section
+            Children [
+                @ProgressBar { @empty: true }
+                ProgressBar { value: used, max_value: disk_size }
+                Children [ Text(disk_label) ]
+                --
+                {status}
+            ]
+            --
+            @Stack { @fill: true }
+            Children [
+                @StackItem
+                Node { width: px(150) }
+                Children [
+                    @Tabs { @vertical: true, @fill: true }
+                    Children [ {tabs} ]
+                ]
+                --
+                @StackItem { @grow: 1.0 }
+                Node { min_width: px(0) }
+                Children [
+                    @Section { @fill: true, @scrollable: true }
+                    Children [ {rows} ]
+                ]
+            ]
+        ]
+    }
+}
+
+/// A text field that sends `action` with its text as `param` on Enter.
+fn submit_input(placeholder: String, max: usize, action: &str, param: &str) -> impl Scene + use<> {
+    let (action, param) = (action.to_owned(), param.to_owned());
+    bsn! {
+        Input { placeholder: placeholder, max_length: {Some(max)}, self_clear: true, fluid: true }
+        ActOnSubmit { action: action, param: param }
+    }
+}
+
+/// `NtosNetChat`: channels and the user on the left; the channel, its input and members on the
+/// right.
+fn chat_screen(d: &ChatClientData) -> impl Scene + use<> {
+    let channels: Vec<_> = d
+        .all_channels
+        .iter()
+        .map(|c| {
+            let (title, selected) = (c.chan.clone(), Some(c.id) == d.active_channel);
+            let params = ActParams(vec![("id".to_owned(), c.id.to_string())]);
+            bsn! {
+                @ss13_ui_kit::Button { @content: title, @fluid: true }
+                ss13_ui_kit::Button { color: UiColor::Transparent, selected: selected }
+                Act({PRG_JOIN_CHANNEL.to_owned()})
+                params
+            }
+        })
+        .collect();
+    let admin = d.can_admin.then(|| {
+        let (text, color) = if d.adminmode {
+            ("АДМИНКА: ВКЛ", UiColor::Bad)
+        } else {
+            ("АДМИНКА: ВЫКЛ", UiColor::Good)
+        };
+        EntityScene(bsn! {
+            @ss13_ui_kit::Button { @content: text, @fluid: true }
+            ss13_ui_kit::Button { color: color }
+            Act({PRG_TOGGLE_ADMIN.to_owned()})
+        })
+    });
+    let nickname = format!("Никнейм: {}", d.username);
+    let new_channel = EntityScene(submit_input(
+        "Новый канал...".to_owned(),
+        18,
+        PRG_NEW_CHANNEL,
+        "new_channel_name",
+    ));
+    let rename_self = EntityScene(submit_input(
+        format!("{}...", d.username),
+        32,
+        PRG_CHANGE_NAME,
+        "new_name",
+    ));
+    let left = bsn! {
+        @Section { @fill: true, @scrollable: true }
+        Node { width: px(170) }
+        Children [
+            {new_channel}
+            --
+            {channels}
+            --
+            Node Children [ Text(nickname) ]
+            --
+            {rename_self}
+            --
+            {admin}
+        ]
+    };
+    let me = d.clients.iter().find(|c| c.is_self);
+    let muted = me.is_some_and(|c| c.muted);
+    let body: Box<dyn SceneList> = if d.active_channel.is_none() {
+        Box::new(EntityScene(
+            bsn! { @NoticeBox Children [ Text("Выберите или создайте канал.") ] },
+        ))
+    } else if !d.authed {
+        Box::new(EntityScene(
+            bsn! { @NoticeBox Children [ Text("ВВЕДИТЕ ПАРОЛЬ ДЛЯ ДОСТУПА") ] },
+        ))
+    } else {
+        let lines: Vec<_> = d
+            .messages
+            .iter()
+            .rev()
+            .map(|m| {
+                let msg = m.msg.clone();
+                bsn! { Node Children [ Text(msg) ] }
+            })
+            .collect();
+        let title = d.title.clone();
+        Box::new(EntityScene(bsn! {
+            @Section { @title: title, @fill: true, @scrollable: true }
+            Children [ {lines} ]
+        }))
+    };
+    let placeholder = if muted {
+        "You are muted!".to_owned()
+    } else if d.active_channel.is_some() && !d.authed {
+        "Пароль...".to_owned()
+    } else {
+        format!("Сообщение в {}...", d.title)
+    };
+    let speak = d
+        .active_channel
+        .is_some()
+        .then(|| EntityScene(submit_input(placeholder, 2048, PRG_SPEAK, "message")));
+    let is_operator = d.is_operator;
+    let members: Vec<_> = d
+        .clients
+        .iter()
+        .map(|c| {
+            let name = format!(
+                "{}{}{}",
+                if c.operator { "@" } else { "" },
+                c.name,
+                if c.online {
+                    ""
+                } else if c.away {
+                    " (away)"
+                } else {
+                    " (offline)"
+                }
+            );
+            let ping_params = ActParams(vec![("ref".to_owned(), c.member_ref.clone())]);
+            let ping = (!c.is_self).then(|| {
+                EntityScene(bsn! {
+                    @ss13_ui_kit::Button { @icon: "bullhorn", @tooltip: "Пингануть", @compact: true }
+                    ss13_ui_kit::Button { disabled: muted }
+                    Act({PRG_PING_USER.to_owned()})
+                    ping_params
+                })
+            });
+            let mute_params = ActParams(vec![("ref".to_owned(), c.member_ref.clone())]);
+            let (mute_icon, mute_color, mute_tip) = if c.muted {
+                ("volume-mute", UiColor::Red, "Размутить")
+            } else {
+                ("volume-up", UiColor::Green, "Замутить")
+            };
+            let mute = (is_operator && !c.is_self).then(|| {
+                EntityScene(bsn! {
+                    @ss13_ui_kit::Button { @icon: mute_icon, @tooltip: mute_tip, @compact: true }
+                    ss13_ui_kit::Button { color: mute_color }
+                    Act({PRG_MUTE_USER.to_owned()})
+                    mute_params
+                })
+            });
+            bsn! {
+                Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center }
+                Children [
+                    Node { flex_grow: 1.0 } Children [ Text(name) ]
+                    --
+                    {ping}
+                    --
+                    {mute}
+                ]
+            }
+        })
+        .collect();
+    let operator_tools = (d.is_operator && !d.strong).then(|| {
+        let rename = EntityScene(submit_input(
+            "Переименовать канал...".to_owned(),
+            18,
+            PRG_RENAME_CHANNEL,
+            "new_name",
+        ));
+        let password = EntityScene(submit_input(
+            "Задать пароль...".to_owned(),
+            2048,
+            PRG_SET_PASSWORD,
+            "new_password",
+        ));
+        EntityScene(bsn! {
+            Node { flex_direction: FlexDirection::Column }
+            Children [
+                @ss13_ui_kit::Button { @content: "Удалить канал", @fluid: true }
+                ss13_ui_kit::Button { color: UiColor::Red }
+                Act({PRG_DELETE_CHANNEL.to_owned()})
+                --
+                {rename}
+                --
+                {password}
+            ]
+        })
+    });
+    let leave = d.active_channel.is_some().then(|| {
+        EntityScene(bsn! {
+            @ss13_ui_kit::Button { @content: "Покинуть канал", @fluid: true }
+            Act({PRG_LEAVE_CHANNEL.to_owned()})
+        })
+    });
+    bsn! {
+        @Stack { @fill: true }
+        Children [
+            @StackItem
+            Children [ {EntityScene(left)} ]
+            --
+            @StackItem { @grow: 1.0 }
+            Node { min_width: px(0), flex_direction: FlexDirection::Column }
+            Children [
+                Node { flex_grow: 1.0, min_height: px(0), flex_direction: FlexDirection::Column }
+                Children [ {body} ]
+                --
+                {speak}
+            ]
+            --
+            @StackItem
+            Children [
+                @Section { @fill: true, @scrollable: true }
+                Node { width: px(150) }
+                Children [ {members} -- {leave} -- {operator_tools} ]
             ]
         ]
     }
