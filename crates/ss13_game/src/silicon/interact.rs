@@ -107,6 +107,9 @@ pub fn attack_ai(world: &mut World, client: Entity, user: Entity, target: Entity
     if e.contains::<crate::power::chargers::CellCharger>() {
         return true;
     }
+    if super::ai_slipper::interact(world, client, user, target) {
+        return true;
+    }
     if e.contains::<crate::comms_server::CommsConsole>() {
         crate::comms_server::open(world, client, user, target);
         return true;

@@ -24,7 +24,8 @@
 //!   turf, it sees everything around it (no camera mask) and clicks within 7 tiles while its
 //!   wireless is on (tg `can_see` of a carded AI: `get_dist` within the view). Shunted into an
 //!   APC (`super::malf`), it is inside the APC and its eye moves as usual.
-// shortcut: no holopads, multicam or camera acceleration.
+//! - A right click on a holopad projects the AI's hologram (`super::holopad`).
+// shortcut: no multicam or camera acceleration.
 // shortcut: the AI's speech is heard around its eye (the client's controlled entity), not
 // around the core; the core's own surroundings (tg `viewers()` of the core) are not perceived.
 // shortcut: the AI eye's marker sprite is drawn for the AI's own client too.
@@ -482,6 +483,8 @@ fn ai_clicks(world: &mut World, mut clicks: Local<MessageCursor<AiClick>>) {
                 toggle_bolt(world, click.client, click.target);
             } else if apc {
                 toggle_breaker(world, click.client, click.target);
+            } else {
+                super::holopad::ai_ctrl_click(world, click.eye, click.target);
             }
         } else if !m.middle && !m.right && click.target == ai {
             // shortcut: the AI HUD's "Show Laws" button.
@@ -491,6 +494,9 @@ fn ai_clicks(world: &mut World, mut clicks: Local<MessageCursor<AiClick>>) {
         } else if !m.middle && !m.right {
             // tg `/mob/living/silicon/ai/ClickOn` -> `A.attack_ai(src)`.
             super::interact::attack_ai(world, click.client, click.eye, click.target);
+        } else if m.right && !m.middle {
+            // tg `A.attack_ai_secondary(src)`.
+            super::holopad::attack_ai_secondary(world, click.client, click.eye, click.target);
         }
     }
 }
