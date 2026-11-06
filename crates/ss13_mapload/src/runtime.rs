@@ -353,7 +353,7 @@ pub const CYBERIMP_RUNTIME_TYPES: &[&str] = &[
 ];
 
 /// `ss13_game::events`: the vent clog's mobs and filth (`get_mob()`, `filth_spawn_types`) and
-/// what meteors drop (`meteordrop`).
+/// what meteors drop (`meteordrop`), the Wisdom Cow.
 pub const EVENT_RUNTIME_TYPES: &[&str] = &[
     "/mob/living/basic/bear",
     "/mob/living/basic/bee",
@@ -363,6 +363,7 @@ pub const EVENT_RUNTIME_TYPES: &[&str] = &[
     "/mob/living/basic/cockroach/glockroach",
     "/mob/living/basic/cockroach/glockroach/mobroach",
     "/mob/living/basic/cockroach/hauberoach",
+    "/mob/living/basic/cow/wisdom",
     "/mob/living/basic/goose",
     "/mob/living/basic/lightgeist",
     "/mob/living/basic/mothroach",

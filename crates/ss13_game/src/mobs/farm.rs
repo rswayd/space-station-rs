@@ -14,8 +14,13 @@
 //!   `MAX_CHICKENS` chickens ([`FertileEgg`]): an egg lying on a floor hatches a chick after
 //!   200 growth (1-2 per second), one picked up spoils. A chick ([`Growth`]) grows up into a
 //!   chicken (`growth_and_differentiation`, 0.5-1% a second) unless a player has it.
-// shortcut: the moonicorn's and the cow of wisdom's own milk is plain milk; no riding a tamed
-// cow; eggs are not heated or incubated (tg only needs a turf).
+//! - The wisdom cow ([`WisdomCow`]) is not tameable and eats nothing; its udder makes a random
+//!   reagent (`get_random_reagent_id`); a hand out of combat mode on it while it is conscious
+//!   gives that hand's owner 500 experience of a random skill, and it vanishes in smoke
+//!   ([`wisdom_touch`]).
+// shortcut: the moonicorn's own milk is plain milk; the wisdom cow's skill is one of the ported
+// skills (`crate::skills::Skill::ALL`); no riding a tamed cow; eggs are not heated or incubated
+// (tg only needs a turf).
 
 use bevy::prelude::*;
 use ss13_mapload::fidelity::is_under;
@@ -45,6 +50,10 @@ const SSDCS_WAIT: f64 = 1.0;
 /// The cow's `tip_time`, `untip_time` (deciseconds).
 const TIP_DS: f32 = 5.0;
 const COW: &str = "/mob/living/basic/cow";
+/// `/mob/living/basic/cow/wisdom` (spawned by `crate::events::wisdom_cow`).
+pub const WISDOM_COW: &str = "/mob/living/basic/cow/wisdom";
+/// `granted_experience` default.
+const WISDOM_EXPERIENCE: f32 = 500.0;
 const GOAT: &str = "/mob/living/basic/goat";
 const CHICKEN: &str = "/mob/living/basic/chicken";
 const CHICK: &str = "/mob/living/basic/chick";
@@ -65,7 +74,7 @@ const EGG_GROWTH_REQUIRED: f32 = 200.0;
 /// `/obj/item/udder` with its reagents (one reagent: what the animal makes).
 #[derive(Component, Clone, Debug, PartialEq)]
 pub struct Udder {
-    pub reagent: &'static str,
+    pub reagent: String,
     pub volume: f32,
 }
 
@@ -135,9 +144,24 @@ pub(super) fn attach(world: &mut World, mob: Entity, def: &MobDef) {
     let path = def.path.as_str();
     let female = world.get::<super::pets::Gender>(mob) == Some(&super::pets::Gender::Female);
     if is_under(path, COW) || (is_under(path, GOAT) && female) {
+        let reagent = if is_under(path, WISDOM_COW) {
+            random_reagent(world).unwrap_or_else(|| MILK.to_owned())
+        } else {
+            MILK.to_owned()
+        };
         world.entity_mut(mob).insert(Udder {
-            reagent: MILK,
+            reagent,
             volume: UDDER_START,
+        });
+    }
+    if is_under(path, WISDOM_COW) {
+        let mut rng = CombatRng(world.resource::<CombatRng>().0);
+        let skill = crate::skills::Skill::ALL
+            [rng.range(0, crate::skills::Skill::ALL.len() as u32 - 1) as usize];
+        world.resource_mut::<CombatRng>().0 = rng.0;
+        world.entity_mut(mob).insert(WisdomCow {
+            skill,
+            experience: WISDOM_EXPERIENCE,
         });
     }
     if is_under(path, COW) {
@@ -172,6 +196,58 @@ pub(super) fn attach(world: &mut World, mob: Entity, def: &MobDef) {
             into: CHICKEN,
         });
     }
+}
+
+/// `/mob/living/basic/cow/wisdom` `granted_wisdom`, `granted_experience`.
+#[derive(Component, Clone, Copy, Debug, PartialEq)]
+pub struct WisdomCow {
+    pub skill: crate::skills::Skill,
+    pub experience: f32,
+}
+
+/// `get_random_reagent_id()`: a reagent with `REAGENT_SPAWN_RANDOM_PRODUCERS`.
+fn random_reagent(world: &mut World) -> Option<String> {
+    let pool = world
+        .get_resource::<crate::botany::Botany>()
+        .map(|b| b.0.data.random_reagents.clone())
+        .filter(|p| !p.is_empty())?;
+    let mut rng = CombatRng(world.resource::<CombatRng>().0);
+    let pick = pool[rng.range(0, pool.len() as u32 - 1) as usize].clone();
+    world.resource_mut::<CombatRng>().0 = rng.0;
+    Some(pick)
+}
+
+/// The wisdom cow's `attack_hand` out of combat mode (the caller checked both are conscious):
+/// the user gains its experience, the cow vanishes in smoke. True when `cow` is one.
+pub fn wisdom_touch(world: &mut World, user: Entity, cow: Entity) -> bool {
+    let Some(wisdom) = world.get::<WisdomCow>(cow).copied() else {
+        return false;
+    };
+    let name = super::defense::name_of(world, cow);
+    if let Some(client) = world
+        .get::<crate::server::PlayerMob>(user)
+        .map(|p| p.client)
+    {
+        crate::tools::tell(
+            world,
+            client,
+            Span::GreenText,
+            format!("{name} шепчет вам глубокую мудрость и исчезает!"),
+        );
+    }
+    // `user.mind?.adjust_experience`: skills live on the mob here.
+    crate::skills::adjust_experience(world, user, wisdom.skill, wisdom.experience, false);
+    if let Some(&pos) = world.get::<TilePos>(cow) {
+        crate::effects::smoke::do_smoke(
+            world,
+            1,
+            pos,
+            None,
+            crate::effects::smoke::SmokeKind::Basic,
+        );
+    }
+    world.despawn(cow);
+    true
 }
 
 /// Tipped over (tg `TRAIT_IMMOBILIZED` from `TIPPED_OVER`): no steps.
@@ -245,7 +321,7 @@ fn milk(world: &mut World, ctx: &ClickCtx) -> bool {
     let amount = want
         .min(udder.volume)
         .min(holder.maximum_volume - holder.total_volume);
-    let id = chem.id(udder.reagent);
+    let id = chem.id(&udder.reagent);
     if amount <= 0.0 || id.is_none() {
         crate::tools::tell(
             world,
@@ -697,6 +773,28 @@ mod tests {
         world.init_resource::<Time>();
         world.insert_resource(CombatRng(11));
         world
+    }
+
+    #[test]
+    fn the_wisdom_cow_grants_its_skill_and_vanishes() {
+        use crate::skills::{Skill, Skills};
+        let mut w = world();
+        let user = w.spawn(Stat::Conscious).id();
+        let plain_cow = w.spawn(Stat::Conscious).id();
+        assert!(!wisdom_touch(&mut w, user, plain_cow));
+        // No tile: no smoke (the fixture world has no fluid groups).
+        let cow = w
+            .spawn((
+                Stat::Conscious,
+                WisdomCow {
+                    skill: Skill::Mining,
+                    experience: WISDOM_EXPERIENCE,
+                },
+            ))
+            .id();
+        assert!(wisdom_touch(&mut w, user, cow));
+        assert!(w.get_entity(cow).is_err(), "it disappears");
+        assert_eq!(w.get::<Skills>(user).unwrap().exp(Skill::Mining), 500.0);
     }
 
     #[test]

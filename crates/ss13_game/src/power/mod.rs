@@ -117,6 +117,11 @@ pub struct LightFixture {
     /// `fire_colour`), and whether the area has one now (tg `local_area.fire`).
     pub fire_light: Option<LightSource>,
     pub fire: bool,
+    /// The light while on with its APC's night shift on (`nightshift_brightness`,
+    /// `nightshift_light_power`, `nightshift_light_color`), and whether it is on now (tg
+    /// `nightshift_enabled`, [`set_nightshift`]).
+    pub night_light: Option<LightSource>,
+    pub nightshift: bool,
 }
 
 impl LightFixture {
@@ -138,6 +143,7 @@ impl LightFixture {
     fn light(&self) -> Option<LightSource> {
         match self.mode {
             LightMode::On if self.fire => self.fire_light,
+            LightMode::On if self.nightshift => self.night_light,
             LightMode::On => self.on_light,
             LightMode::Emergency => self.emergency_light(),
             LightMode::Off => None,
@@ -593,6 +599,15 @@ pub(crate) fn init_power(world: &mut World) {
                 ..on
             }),
             fire: false,
+            night_light: on_light.map(|on| LightSource {
+                range: light.nightshift_brightness,
+                power: light.nightshift_light_power,
+                color: light
+                    .nightshift_light_color
+                    .map_or([255; 3], |[r, g, b, _]| [r, g, b]),
+                ..on
+            }),
+            nightshift: false,
         };
         world.entity_mut(e).insert(fixture);
         world
@@ -1113,6 +1128,36 @@ pub fn set_area_fire(world: &mut World, area: Entity, fire: bool) -> bool {
     true
 }
 
+/// tg `/obj/machinery/power/apc/proc/set_nightshift(on)`: the APC's `nightshift_lights` and its
+/// area's fixtures' `nightshift_enabled` (dimmer and warmer while on).
+// shortcut: the lighting load stays the full bulb's (tg draws `nightshift_brightness *
+// nightshift_light_power`); a fixture's own `color` does not override the night colour; no
+// `nightshift_allowed` (no ported fixture turns it off) and no `_nightshift` overlay.
+pub fn set_nightshift(world: &mut World, apc: Entity, on: bool) {
+    let Some(mut state) = world.get_mut::<model::Apc>(apc) else {
+        return;
+    };
+    state.nightshift_lights = on;
+    let area = state.area;
+    let lights = world
+        .get::<AreaMembers>(area)
+        .map(|m| m.lights.clone())
+        .unwrap_or_default();
+    let mut query = world.query::<(
+        &mut LightFixture,
+        Option<&mut Optics>,
+        Option<&mut Appearance>,
+    )>();
+    for light in lights {
+        if let Ok((mut fixture, optics, appearance)) = query.get_mut(world, light)
+            && fixture.nightshift != on
+        {
+            fixture.nightshift = on;
+            refresh_light(&fixture, optics, appearance);
+        }
+    }
+}
+
 /// tg `/obj/machinery/light/proc/break_light_tube()`: the bulb breaks (`LIGHT_BROKEN`,
 /// `"[base_state]-broken"`), the fixture goes dark and never lights again. False when it had
 /// no working bulb.
@@ -1235,5 +1280,64 @@ fn update_apc_looks(
                 commands.entity(e).insert(Optics { light, ..default() });
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod nightshift_tests {
+    use super::*;
+
+    fn source(range: f32, power: f32) -> LightSource {
+        LightSource {
+            range,
+            power,
+            color: [255; 3],
+            height: 1.0,
+            angle: 360,
+            dir: Dir::South,
+            offset: [0, 0],
+        }
+    }
+
+    #[test]
+    fn night_shift_dims_the_areas_lit_fixtures() {
+        let mut w = World::new();
+        let area = w.spawn_empty().id();
+        let fixture = LightFixture {
+            area,
+            mode: LightMode::On,
+            on_light: Some(source(8.0, 1.0)),
+            brightness: 8.0,
+            emergency: None,
+            watts: 0.0,
+            states: [None, None],
+            fire_light: Some(source(9.0, 0.5)),
+            fire: false,
+            night_light: Some(source(8.0, 0.45)),
+            nightshift: false,
+        };
+        let light = w.spawn((fixture, Optics::default())).id();
+        w.entity_mut(area).insert(AreaMembers {
+            machines: Vec::new(),
+            lights: vec![light],
+        });
+        let apc = w.spawn(Apc::new(area, None)).id();
+        set_nightshift(&mut w, apc, true);
+        assert!(w.get::<Apc>(apc).unwrap().nightshift_lights);
+        let lit = |w: &World| w.get::<Optics>(light).unwrap().light.map(|l| l.power);
+        assert_eq!(lit(&w), Some(0.45));
+        // A fire alarm's light comes first.
+        w.get_mut::<LightFixture>(light).unwrap().fire = true;
+        assert_eq!(
+            w.get::<LightFixture>(light)
+                .unwrap()
+                .light()
+                .map(|l| l.power),
+            Some(0.5)
+        );
+        w.get_mut::<LightFixture>(light).unwrap().fire = false;
+        set_nightshift(&mut w, apc, false);
+        assert!(!w.get::<Apc>(apc).unwrap().nightshift_lights);
+        assert_eq!(lit(&w), Some(1.0));
     }
 }

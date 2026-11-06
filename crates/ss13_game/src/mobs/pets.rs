@@ -333,6 +333,8 @@ pub(super) fn attach(world: &mut World, mob: Entity, def: &MobDef) {
         // Space rats never take to anyone; Tom is tame from the start (`TRAIT_TAMED`).
         && !is_under(&def.path, "/mob/living/basic/mouse/rat")
         && !is_under(&def.path, "/mob/living/basic/mouse/brown/tom")
+        // The wisdom cow's `setup_eating` (where cows become tameable) does nothing.
+        && !is_under(&def.path, super::farm::WISDOM_COW)
     {
         e.insert(Tameable {
             foods: tame.foods,

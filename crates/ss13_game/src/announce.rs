@@ -376,6 +376,49 @@ pub fn send_message(world: &mut World, message: CommsMessage) {
     }
 }
 
+/// The `answer_callback`s of messages sent with `unique = TRUE`, by title and content.
+#[derive(Resource, Default)]
+pub struct MessageCallbacks(Vec<(String, String, fn(&mut World, u32))>);
+
+/// tg `send_message(message, unique = TRUE)` with an `answer_callback`: one message on every
+/// console, so the first answer answers it everywhere and calls `on_answer` with it (1-based).
+pub fn send_unique_message(
+    world: &mut World,
+    message: CommsMessage,
+    on_answer: fn(&mut World, u32),
+) {
+    world
+        .get_resource_or_insert_with(MessageCallbacks::default)
+        .0
+        .push((message.title.clone(), message.content.clone(), on_answer));
+    send_message(world, message);
+}
+
+/// A console's message got its answer (`answerMessage`): a unique message is answered on
+/// every console, then its callback runs (once).
+pub fn message_answered(world: &mut World, title: &str, content: &str, answer: u32) {
+    let Some(mut callbacks) = world.get_resource_mut::<MessageCallbacks>() else {
+        return;
+    };
+    let Some(i) = callbacks
+        .0
+        .iter()
+        .position(|(t, c, _)| t == title && c == content)
+    else {
+        return;
+    };
+    let (.., on_answer) = callbacks.0.remove(i);
+    let mut consoles = world.query::<&mut crate::comms_server::CommsConsole>();
+    for mut console in consoles.iter_mut(world) {
+        for m in &mut console.messages {
+            if m.answered == 0 && m.title == title && m.content == content {
+                m.answered = answer;
+            }
+        }
+    }
+    on_answer(world, answer);
+}
+
 /// tg `print_command_report(text, title, announce)`.
 pub fn print_command_report(world: &mut World, text: &str, title: Option<&str>, announce: bool) {
     let title = title.map_or_else(

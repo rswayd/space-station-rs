@@ -8,9 +8,9 @@
 //! silicon interface lock, the cover bolts, emergency lighting, night shift, reboot.
 // The malfunctioning AI's "hack", "occupy" and "deoccupy" acts: `crate::silicon::malf`.
 // shortcut: no ID swipe to unlock the interface, no remote
-// control console; "overload" (silicons) does nothing; the cover bolts, emergency-lighting
-// and night-shift switches are kept and shown but do not change the cover, the lights' backup
-// cells or their brightness yet.
+// control console; "overload" (silicons) does nothing; the cover bolts and emergency-lighting
+// switches are kept and shown but do not change the cover or the lights' backup cells yet
+// (night shift dims the area's lights, `super::set_nightshift`).
 
 use bevy::ecs::message::MessageCursor;
 use bevy::ecs::system::SystemParamItem;
@@ -282,8 +282,9 @@ pub fn apply_act(world: &mut World, client: Entity, actor: Entity, apc: Entity, 
         }
         ApcAct::Breaker => crate::silicon::ai::toggle_breaker(world, client, apc),
         ApcAct::Nightshift => {
-            if let Some(mut a) = world.get_mut::<Apc>(apc) {
-                a.nightshift_lights = !a.nightshift_lights;
+            // shortcut: no 10 s toggle cooldown or low-power refusal.
+            if let Some(on) = world.get::<Apc>(apc).map(|a| !a.nightshift_lights) {
+                super::set_nightshift(world, apc, on);
             }
         }
         ApcAct::Charge => {

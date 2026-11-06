@@ -8,7 +8,7 @@
 //!   the light points away from the wall (`light_dir = REVERSE_DIR(dir)`, `light_angle = 170`) and
 //!   sits half a tile towards the wall (`get_light_offset`). Floor lights: no offset, 360°.
 //!   Bulbs are on: `status == LIGHT_OK` and the area is taken as powered.
-//!   shortcut: no APC/area power, no nightshift, no 2%/5% roundstart breakage, no fire alarm
+//!   shortcut: no APC/area power, no 2%/5% roundstart breakage, no fire alarm
 //!   colours; add them when power and alarms exist.
 //! - `/obj/machinery/computer`: `power_change()` sets `set_light(brightness_on)` when powered.
 //! - `/obj/item/flashlight`: `light_on` follows `start_on` (desk lamps start on).
@@ -44,6 +44,8 @@ const LIGHT_IGNORE_OFFSET: u16 = 1 << 2;
 const WHITE: [u8; 4] = [255, 255, 255, 255];
 /// tg `COLOR_FIRE_LIGHT_RED`, a fixture's `fire_colour`.
 const COLOR_FIRE_LIGHT_RED: [u8; 4] = [0xB6, 0x1C, 0x1C, 255];
+/// `/obj/machinery/light` `nightshift_light_color`.
+const NIGHTSHIFT_LIGHT_COLOR: [u8; 4] = [0xFF, 0xDD, 0xCC, 255];
 /// tg `LIGHT_COLOR_BLUEGREEN`, the green security level's fire alarm light.
 const LIGHT_COLOR_BLUEGREEN: [u8; 4] = [0x7d, 0xe1, 0xaf, 255];
 
@@ -71,6 +73,11 @@ pub struct DmLight {
     pub fire_brightness: f32,
     pub fire_power: f32,
     pub fire_colour: Option<[u8; 4]>,
+    /// Fixtures while their APC's night shift is on: `nightshift_brightness`,
+    /// `nightshift_light_power`, `nightshift_light_color`.
+    pub nightshift_brightness: f32,
+    pub nightshift_light_power: f32,
+    pub nightshift_light_color: Option<[u8; 4]>,
     /// `/obj/machinery/computer`.
     pub brightness_on: f32,
     /// `/obj/item/flashlight`.
@@ -102,6 +109,9 @@ impl Default for DmLight {
             fire_brightness: 9.0,
             fire_power: 0.5,
             fire_colour: Some(COLOR_FIRE_LIGHT_RED),
+            nightshift_brightness: 8.0,
+            nightshift_light_power: 0.45,
+            nightshift_light_color: Some(NIGHTSHIFT_LIGHT_COLOR),
             brightness_on: 0.0,
             start_on: false,
             static_lighting: true,
@@ -113,7 +123,7 @@ impl Default for DmLight {
 }
 
 /// The var names [`field`] understands.
-pub const LIGHT_VARS: [&str; 21] = [
+pub const LIGHT_VARS: [&str; 24] = [
     "light_range",
     "light_power",
     "light_color",
@@ -129,6 +139,9 @@ pub const LIGHT_VARS: [&str; 21] = [
     "fire_brightness",
     "fire_power",
     "fire_colour",
+    "nightshift_brightness",
+    "nightshift_light_power",
+    "nightshift_light_color",
     "brightness_on",
     "start_on",
     "static_lighting",
@@ -149,7 +162,11 @@ pub fn field(var: &str, value: Val) -> Result<Field, Skip> {
     };
     let byte = |n: f64| n.round().clamp(0.0, 255.0) as u8;
     let ron = match var {
-        "light_color" | "bulb_colour" | "fire_colour" | "base_lighting_color" => match value {
+        "light_color"
+        | "bulb_colour"
+        | "fire_colour"
+        | "nightshift_light_color"
+        | "base_lighting_color" => match value {
             Val::Null => "None".to_owned(),
             Val::Str(s) => {
                 let [r, g, b, a] = parse_color(s).ok_or(Skip::Unsupported)?;
