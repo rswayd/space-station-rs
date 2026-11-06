@@ -83,7 +83,7 @@ mod server {
     use super::accessories::{self, Accessories};
     use super::{cover, damage, sensors, toggles};
     use crate::click_handlers::{AddClickHandler, ClickPhase};
-    use crate::human::layers::{FACEMASK_LAYER, GLOVES_LAYER, UNIFORM_LAYER};
+    use crate::human::layers::{FACEMASK_LAYER, UNIFORM_LAYER};
     use crate::inventory::Inventory;
 
     pub use super::damage::ClothingJob;
