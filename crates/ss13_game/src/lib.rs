@@ -467,6 +467,8 @@ pub mod stumble;
 #[cfg(feature = "server")]
 pub mod tables;
 #[cfg(feature = "server")]
+pub mod tank_storage;
+#[cfg(feature = "server")]
 pub mod taser;
 #[cfg(feature = "server")]
 pub mod teapot;

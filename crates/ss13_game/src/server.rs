@@ -216,6 +216,7 @@ impl Plugin for GameServerPlugin {
             crate::devices::DevicesPlugin,
             crate::plumbing::PlumbingPlugin,
             crate::decor::DecorPlugin,
+            crate::tank_storage::TankStoragePlugin,
             crate::flora::FloraPlugin,
             crate::airlock_construction::AirlockConstructionPlugin,
         ))

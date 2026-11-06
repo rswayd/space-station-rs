@@ -134,6 +134,7 @@
 //! | 3000 | `holosign::attack_hand` |
 //! | 3100 | `plumbing::interact` |
 //! | 3150 | `decor::fold_flag` (right click), `decor::interact` |
+//! | 3155 | `tank_storage::attack_hand` (tank dispensers, tank holders) |
 //! | 3160 | `flora::attack_hand` |
 //! | 3170 | `botany::unique::pickup_backfire` (never handles) |
 //! | 3200 | `service::server::interact` |
@@ -219,6 +220,7 @@
 //! | 3200 | `botany::item_interaction` |
 //! | 3300 | `food::item_interaction` |
 //! | 3400 | `plumbing::item_interaction` |
+//! | 3440 | `tank_storage::item_interaction` |
 //! | 3450 | `decor::item_interaction` |
 //! | 3455 | `clothing::item_interaction` |
 //! | 3500 | `janitor::item_interaction` |
