@@ -1,7 +1,7 @@
 //! Service items over a loopback server: a pen writes on a mapped paper (after its
 //! `default_raw_text`) through the text prompt and a stamp stamps it; an empty hand takes a
 //! sheet out of a paper bin; a die rolls within its sides; a mapped bookcase shelves the book on
-//! its tile and hands it out from the list.
+//! its tile and hands it out from the list; the DSM and IDC manuals open their windows.
 
 use std::path::{Path, PathBuf};
 
@@ -51,6 +51,10 @@ const TYPES: &str = r##"{
         "starting_title": null, "starting_author": null, "starting_content": null } },
     "/obj/item/book/law": { "parent": "/obj/item/book", "declared_vars": {
         "starting_title": "Space Law", "starting_content": "Do not." } },
+    "/obj/item/tgui_book": { "parent": "/obj/item" },
+    "/obj/item/tgui_book/manual": { "parent": "/obj/item/tgui_book" },
+    "/obj/item/tgui_book/manual/dsm": { "parent": "/obj/item/tgui_book/manual" },
+    "/obj/item/tgui_book/manual/idc": { "parent": "/obj/item/tgui_book/manual" },
     "/obj/item/card": { "parent": "/obj/item" },
     "/obj/item/card/id": { "parent": "/obj/item/card", "declared_vars": {
         "access": { "list": [] }, "icon_state": "card_grey", "slot_flags": 256 } },
@@ -93,12 +97,14 @@ const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 "n" = (/obj/item/pen,/turf/open/floor,/area/space)
 "m" = (/obj/item/stamp/denied,/turf/open/floor,/area/space)
 "d" = (/obj/item/dice/d20,/turf/open/floor,/area/space)
+"q" = (/obj/item/tgui_book/manual/dsm,/turf/open/floor,/area/space)
+"r" = (/obj/item/tgui_book/manual/idc,/turf/open/floor,/area/space)
 
 (1,1,1) = {"
 wwwwww
-wbfmfw
+wbfmrw
 wsonfw
-wkfdfw
+wkfdqw
 wwwwww
 "}
 "##;
@@ -119,6 +125,8 @@ const BIN: &str = "/obj/item/paper_bin";
 const D20: &str = "/obj/item/dice/d20";
 const BOOK: &str = "/obj/item/book/law";
 const BOOKCASE: &str = "/obj/structure/bookcase";
+const DSM: &str = "/obj/item/tgui_book/manual/dsm";
+const IDC: &str = "/obj/item/tgui_book/manual/idc";
 
 fn fixture_assets(test: &str) -> PathBuf {
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR"))
@@ -134,6 +142,8 @@ fn fixture_assets(test: &str) -> PathBuf {
         D20,
         BOOK,
         BOOKCASE,
+        DSM,
+        IDC,
         "/turf/open/floor",
         "/turf/closed/wall",
         "/turf/open/space/basic",
@@ -301,4 +311,22 @@ fn a_bookcase_shelves_and_hands_out_its_book() {
     s.run_until("the book is in hand", |s| {
         s.get::<Inventory>(mob).active_item() == Some(book)
     });
+}
+
+#[test]
+fn the_manuals_open_their_windows() {
+    let mut s = Station::start("the_manuals_open_their_windows");
+    for (path, interface) in [(DSM, "DSMBook"), (IDC, "IDCBook")] {
+        let manual = s.item(path);
+        s.put_in_hand(manual);
+        let slot = s.active_slot();
+        s.send(0, ClientIntent::ClickSlot(slot));
+        let window = s.wait_window(interface);
+        // The page-flip act is accepted and keeps the window open.
+        s.act(0, window, "play_flip_sound", &[]);
+        for _ in 0..3 {
+            s.tick();
+        }
+        assert_eq!(s.window(interface), Some(window));
+    }
 }

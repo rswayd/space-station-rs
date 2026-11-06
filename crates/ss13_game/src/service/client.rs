@@ -8,14 +8,19 @@ use ss13_tgui::client::{AppTguiClientExt, ClientUi};
 use ss13_ui_kit::prelude::*;
 use ss13_ui_kit::theme::Bold;
 
-use super::{MarkdownViewerData, MarkdownViewerUi, PaperSheetData, PaperSheetUi, plain_text};
+use super::{
+    DsmBookData, DsmBookUi, IdcBookData, IdcBookUi, MarkdownViewerData, MarkdownViewerUi,
+    PaperSheetData, PaperSheetUi, plain_text,
+};
 
 pub struct ServiceClientPlugin;
 
 impl Plugin for ServiceClientPlugin {
     fn build(&self, app: &mut App) {
         app.register_ui_view::<PaperSheetUi>()
-            .register_ui_view::<MarkdownViewerUi>();
+            .register_ui_view::<MarkdownViewerUi>()
+            .register_ui_view::<DsmBookUi>()
+            .register_ui_view::<IdcBookUi>();
     }
 }
 
@@ -111,6 +116,94 @@ fn book_view(data: &MarkdownViewerData) -> impl Scene + use<> {
         Children [
             @Section { @title: title, @fill: true, @scrollable: true }
             Children [ Node Children [ Text(content) ] ]
+        ]
+    }
+}
+
+// shortcut: the manuals are one scrolling list sorted by name, not tgui's paginated
+// `BookUI` with a table of contents and page-flip acts; upgrade with a paginated book widget.
+impl ClientUi for DsmBookUi {
+    const WIDTH: f32 = 600.0;
+    const HEIGHT: f32 = 800.0;
+
+    fn content(data: &DsmBookData, _: &()) -> impl Scene {
+        let mut traumas = data.traumas.clone();
+        traumas.sort_by(|a, b| a.full_name.cmp(&b.full_name));
+        let entries: Vec<_> = traumas
+            .into_iter()
+            .map(|t| {
+                // `checkIdenticalTraumaNames`.
+                let title = if t.full_name.to_lowercase() == t.scan_name.to_lowercase() {
+                    t.full_name
+                } else {
+                    format!("{} (aka \"{}\")", t.full_name, t.scan_name)
+                };
+                let lines = vec![
+                    format!("Description: {}", t.desc),
+                    format!("Diagnosis: {}", t.symptoms),
+                ];
+                manual_entry(title, lines)
+            })
+            .collect();
+        let title = "SDSM-35".to_owned();
+        bsn! {
+            @WindowContent
+            Children [
+                @Section { @title: title, @fill: true, @scrollable: true }
+                Children [
+                    Node { flex_direction: FlexDirection::Column }
+                    Children [ {entries} ]
+                ]
+            ]
+        }
+    }
+}
+
+impl ClientUi for IdcBookUi {
+    const WIDTH: f32 = 600.0;
+    const HEIGHT: f32 = 800.0;
+
+    fn content(data: &IdcBookData, _: &()) -> impl Scene {
+        let mut diseases = data.diseases.clone();
+        diseases.sort_by(|a, b| a.name.cmp(&b.name));
+        let entries: Vec<_> = diseases
+            .into_iter()
+            .map(|d| {
+                let mut lines = vec![format!("{} — {}", d.form, d.agent)];
+                if d.form == "Symptom" {
+                    lines.push(format!("Illness: {} (level {})", d.illness, d.level));
+                } else {
+                    lines.push(format!("Spread by: {}", d.spread_by));
+                }
+                lines.push(format!("Description: {}", d.desc));
+                lines.push(format!("Cured by: {}", d.cured_by));
+                manual_entry(d.name, lines)
+            })
+            .collect();
+        let title = "IDC-27".to_owned();
+        bsn! {
+            @WindowContent
+            Children [
+                @Section { @title: title, @fill: true, @scrollable: true }
+                Children [
+                    Node { flex_direction: FlexDirection::Column }
+                    Children [ {entries} ]
+                ]
+            ]
+        }
+    }
+}
+
+fn manual_entry(title: String, lines: Vec<String>) -> impl Scene + use<> {
+    let lines: Vec<_> = lines
+        .into_iter()
+        .map(|line| bsn! { Node { margin: UiRect::bottom(px(4)) } Children [ Text(line) ] })
+        .collect();
+    bsn! {
+        @Section { @title: title }
+        Children [
+            Node { flex_direction: FlexDirection::Column, padding: UiRect::all(px(4)) }
+            Children [ {lines} ]
         ]
     }
 }

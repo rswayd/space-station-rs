@@ -31,6 +31,10 @@ mod games;
 #[cfg(feature = "server")]
 mod library;
 #[cfg(feature = "server")]
+mod manual_data;
+#[cfg(feature = "server")]
+mod manuals;
+#[cfg(feature = "server")]
 mod office;
 #[cfg(feature = "server")]
 mod paper;
@@ -231,6 +235,56 @@ pub struct MarkdownViewerData {
     pub title: String,
     pub author: String,
     pub content: String,
+}
+
+/// tgui `DSMBook` (`/obj/item/tgui_book/manual/dsm/ui_static_data`).
+pub struct DsmBookUi;
+
+impl UiInterface for DsmBookUi {
+    const NAME: &'static str = "DSMBook";
+    type Data = ();
+    type StaticData = DsmBookData;
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+pub struct DsmBookData {
+    pub traumas: Vec<DsmTrauma>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+pub struct DsmTrauma {
+    pub full_name: String,
+    pub scan_name: String,
+    pub desc: String,
+    pub symptoms: String,
+    pub id: String,
+}
+
+/// tgui `IDCBook` (`/obj/item/tgui_book/manual/idc/ui_static_data`).
+pub struct IdcBookUi;
+
+impl UiInterface for IdcBookUi {
+    const NAME: &'static str = "IDCBook";
+    type Data = ();
+    type StaticData = IdcBookData;
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+pub struct IdcBookData {
+    pub diseases: Vec<IdcDisease>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+pub struct IdcDisease {
+    pub form: String,
+    pub agent: String,
+    pub name: String,
+    pub desc: String,
+    pub illness: String,
+    pub spread_by: String,
+    pub cured_by: String,
+    pub id: String,
+    pub level: String,
 }
 
 /// The text of raw paper/book HTML as plain lines: `<br>`, `<p>` and list items break lines,

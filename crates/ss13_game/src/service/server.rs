@@ -81,6 +81,8 @@ impl Plugin for ServiceServerPlugin {
         super::slots::build(app);
         app.register_ui::<PaperSheetUi>()
             .register_ui::<MarkdownViewerUi>()
+            .register_ui::<super::DsmBookUi>()
+            .register_ui::<super::IdcBookUi>()
             .init_resource::<super::religion::Religion>()
             .init_resource::<super::archive::LibraryArchive>()
             .init_resource::<super::stationery::RapsheetCount>()
@@ -94,6 +96,8 @@ impl Plugin for ServiceServerPlugin {
                         .in_set(UiSystems::Handle)
                         .after(PromptSystems::Answer),
                     window_status.in_set(UiSystems::StatusHook),
+                    super::manuals::window_status.in_set(UiSystems::StatusHook),
+                    super::manuals::flip_sounds.in_set(UiSystems::Handle),
                     run_timers.run_if(any_with_component::<ServiceTimer>),
                     super::office::load_starting_toner
                         .run_if(any_with_component::<super::office::StartingToner>),
@@ -157,6 +161,7 @@ fn add_item_parts(add: On<Add<DmItem>>, mut commands: Commands) {
         super::statues::add_parts(world, e, &path);
         super::stationery::add_parts(world, e, &path);
         super::cards::add_parts(world, e, &path);
+        super::manuals::add_parts(world, e, &path);
         add_data_parts(world, e);
     });
 }
@@ -208,6 +213,7 @@ pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity)
         || super::statues::attack_self(world, client, mob, item)
         || super::religion::attack_self(world, client, mob, item)
         || super::library::attack_self(world, client, mob, item)
+        || super::manuals::attack_self(world, client, mob, item)
         || super::games::attack_self(world, client, mob, item)
         || super::cards::attack_self(world, client, mob, item)
         || super::clown::attack_self(world, mob, item)

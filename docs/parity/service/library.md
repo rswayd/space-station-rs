@@ -23,7 +23,7 @@
 Справочники-книги со своим tgui-окном: руководство по психиатрии (DSM) и по ID-картам (IDC).
 
 - **Код:** [`/obj/item/tgui_book`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/library/book.dm#L263), [`/obj/item/tgui_book/manual/dsm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/library/book.dm#L305), [`/obj/item/tgui_book/manual/idc`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/library/book.dm#L383); tgui: [`DSMBook.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/DSMBook.tsx), [`IDCBook.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/IDCBook.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ готово — `crates/ss13_game/src/service/manuals.rs`: в руке открывают окна `DSMBook` (травмы с `known_trauma`, травмоподобные квирки, зависимости, фобии из `phobia_types`) и `IDCBook` (болезни без `HIDDEN_BOOK`, симптомы, «Advanced Disease») со звуком перелистывания, акт `play_flip_sound`, `book_state` (в досягаемости — интерактивно, 2 тайла — только обновление, слепым закрыто); данные сгенерированы из DM-типов в `service/manual_data.rs`; клиент — один прокручиваемый список вместо постраничного `BookUI` с оглавлением
 
 ### Библиотечный терминал посетителя
 Публичная консоль поиска по базе книг (название, автор, категория, постранично) с ограничением частоты SQL-запросов.
