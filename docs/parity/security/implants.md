@@ -60,7 +60,7 @@
 Радио-имплант (шахтёрский, синдиката, слаймов), авторизация оружия, «предсмертный хрип» (deathrattle: сообщает группе о смерти), тактическая карта, грустный тромбон клоуна.
 
 - **Код:** [`/obj/item/implant/radio`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/implants/implant_misc.dm#L67), [`/obj/item/implant/weapons_auth`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/implants/implant_misc.dm#L1), [`/obj/item/implant/deathrattle`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/implants/implant_deathrattle.dm#L112), [`/obj/item/implant/tacmap`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/implants/implant_tacmap.dm#L1), [`/obj/item/implant/sad_trombone`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/implants/implant_clown.dm#L2)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/implants/mod.rs`: авторизация оружия (`ImplantKind::WeaponsAuth`, футляр `implantcase/weapons_auth`; синдикатский ударник `pindicate` в `crate::guns::pin_auth` принимает носителя) и грустный тромбон (`sound/misc/sadtrombone.ogg` при смерти, имплантер и футляр). Нет радио-импланта, deathrattle (группы), тактической карты
 
 ### Импланты боевых искусств и заклинаний
 Kaza Ruk (обучает тизирианскому боевому искусству), имплант заклинания, имплант абдуктора; аплинк-имплант — см. ../antagonists/.
@@ -73,11 +73,11 @@ Kaza Ruk (обучает тизирианскому боевому искусс�
 
 - **Код:** [`/obj/item/implant/cqc`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/implants/code/implant_cqc.dm#L1)
 - **BandaStation:** [`modular_bandastation/implants/code/implant_cqc.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/implants/code/implant_cqc.dm#L1) — новый имплант, имплантер и футляр
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/implants/mod.rs`: `ImplantKind::Cqc`, имплантер и футляр `cqc`; кнопка действия (иконка `scroll2`) учит CQC (`crate::martial::teach`, `Origin::Implant`) или, если стиль уже есть, забывает его; извлечение импланта забывает стиль (у форка стиль живёт до уничтожения импланта — в порте извлечённый имплант исчезает сразу)
 
 ### Сигнализация смерти и ЭМИ-поглотитель (BandaStation)
 Сигнализация смерти сообщает по радио о смерти носителя и месте; ЭМИ-поглотитель защищает носителя от ЭМИ.
 
 - **Код:** [`/obj/item/implant/death_alarm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/items/implants/death_alarm.dm#L1), [`/obj/item/implant/empprotection`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/items/implants/empprotection.dm#L1)
 - **BandaStation:** [`modular_bandastation/objects/code/items/implants/death_alarm.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/items/implants/death_alarm.dm#L1) — новые импланты форка
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/implants/mod.rs`: оповещение о смерти (`ImplantKind::DeathAlarm`) при смерти шлёт «<имя> умер в <зона>.» (на станционных и шахтёрском уровнях, иначе «за пределами действия сенсоров») в каналы командования, медицины и охраны (`crate::radio::MachineRadio`, без `SPAN_YELL`); поглотитель ЭМИ (`ImplantKind::EmpProtection`) ставит носителю `EmpProtection(PROTECT_ALL)` и снимает при извлечении; имплантеры и футляры обоих

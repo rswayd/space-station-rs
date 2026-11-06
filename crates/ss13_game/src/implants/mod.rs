@@ -1,8 +1,9 @@
 //! Subdermal implants (server), after tg `code/game/objects/items/implants/`: the implant
 //! framework (`implant.dm`: `implant()`, `removed()`, `activate()`), the implanter
 //! (`implanter.dm`), the implant case (`implantcase.dm`), the implant pad (`implantpad.dm`) and
-//! the implants the port has: mindshield, tracking, chem, microbomb and macrobomb, EMP and
-//! freedom.
+//! the implants the port has: mindshield, tracking, chem, microbomb and macrobomb, EMP,
+//! freedom, firearms authentication, sad trombone and BandaStation's CQC, death alarm and EMP
+//! absorber.
 //!
 //! - An implant is data ([`Implant`]), not an entity: it lives in an implanter or a case
 //!   ([`ImplantHolder`], filled from the container's type, tg `imp_type`) or in a mob
@@ -17,7 +18,10 @@
 //!   the EMP implant pulses (3 uses), freedom takes off cuffs that take at most 3 minutes to break
 //!   (4 uses), the microbomb asks for a confirmation and explodes. A microbomb or macrobomb also
 //!   arms on death; a chem implant injects everything on death ([`chem_inject`] is the
-//!   management console's injection).
+//!   management console's injection). The CQC implant's button teaches or forgets CQC.
+//! - Passive implants: firearms authentication (the syndicate firing pin, `crate::guns`), the
+//!   sad trombone (a sound on death), the death alarm (the host's death and area on the
+//!   command, medical and security channels) and the EMP absorber (`EMP_PROTECT_ALL`).
 //! - [`remove_implant`] is tg `removed()` (surgery and the console use it); the mindshield's
 //!   removal tells the mob unless dead.
 // shortcut: no implant entities (no implant item to drop, no `ABSTRACT` item in contents); an
@@ -57,6 +61,22 @@ pub const MICROBOMB: &str = "/obj/item/implant/explosive";
 pub const MACROBOMB: &str = "/obj/item/implant/explosive/macro";
 pub const EMP: &str = "/obj/item/implant/emp";
 pub const FREEDOM: &str = "/obj/item/implant/freedom";
+pub const WEAPONS_AUTH: &str = "/obj/item/implant/weapons_auth";
+pub const SAD_TROMBONE: &str = "/obj/item/implant/sad_trombone";
+/// BandaStation `modular_bandastation/implants/code/implant_cqc.dm`.
+pub const CQC: &str = "/obj/item/implant/cqc";
+/// BandaStation `modular_bandastation/objects/code/items/implants/death_alarm.dm`.
+pub const DEATH_ALARM: &str = "/obj/item/implant/death_alarm";
+/// BandaStation `modular_bandastation/objects/code/items/implants/empprotection.dm`.
+pub const EMP_PROTECTION: &str = "/obj/item/implant/empprotection";
+/// The sad trombone's `death_noise`.
+const SAD_TROMBONE_SOUND: &str = "sound/misc/sadtrombone.ogg";
+/// The death alarm's `channels_for_alert`.
+const DEATH_ALARM_FREQS: [u16; 3] = [
+    ss13_chat::radio::FREQ_COMMAND,
+    ss13_chat::radio::FREQ_MEDICAL,
+    ss13_chat::radio::FREQ_SECURITY,
+];
 /// `implanter/attack`: `do_after(user, 5 SECONDS, target)` on someone else, deciseconds.
 const IMPLANT_DELAY_DS: f32 = 50.0;
 /// `SECURITY_IMPLANT_CAP`.
@@ -91,6 +111,17 @@ pub enum ImplantKind {
     Explosive,
     Emp,
     Freedom,
+    /// `weapons_auth`: the syndicate firing pin's `req_implant`.
+    WeaponsAuth,
+    /// `sad_trombone`: a sad trombone on the deathgasp.
+    SadTrombone,
+    /// BandaStation `cqc`: its button teaches or forgets CQC.
+    Cqc,
+    /// BandaStation `death_alarm`: the host's death on the command, medical and security
+    /// channels.
+    DeathAlarm,
+    /// BandaStation `empprotection`: `EMP_PROTECT_ALL` on the host.
+    EmpProtection,
 }
 
 impl ImplantKind {
@@ -102,6 +133,11 @@ impl ImplantKind {
             (CHEM, Self::Chem),
             (EMP, Self::Emp),
             (FREEDOM, Self::Freedom),
+            (WEAPONS_AUTH, Self::WeaponsAuth),
+            (SAD_TROMBONE, Self::SadTrombone),
+            (CQC, Self::Cqc),
+            (DEATH_ALARM, Self::DeathAlarm),
+            (EMP_PROTECTION, Self::EmpProtection),
         ]
         .into_iter()
         .find(|(root, _)| is_under(path, root))
@@ -116,7 +152,10 @@ impl ImplantKind {
 
     /// Has the activation button (`actions_types`).
     fn activated(self) -> bool {
-        matches!(self, Self::Explosive | Self::Emp | Self::Freedom)
+        matches!(
+            self,
+            Self::Explosive | Self::Emp | Self::Freedom | Self::Cqc
+        )
     }
 
     /// `implant_color` of its case.
@@ -147,6 +186,24 @@ impl ImplantKind {
             Self::Emp => "Активируется вручную. Создаёт электромагнитный импульс средней силы.",
             Self::Freedom => {
                 "Активируется вручную. Снимает оковы с рук и ног, но не смирительные рубашки."
+            }
+            Self::WeaponsAuth => {
+                "Срабатывает при имплантации. Подтверждает личность для оружия с подходящей \
+                 системой защиты, обычно в ударнике."
+            }
+            Self::SadTrombone => "Срабатывает при смерти. Играет грустный тромбон.",
+            Self::Cqc => {
+                "Обучает даже самого безнадёжного носителя навыкам боевого искусства Close \
+                 Quarters Combat."
+            }
+            Self::DeathAlarm => {
+                "Автоматически отправляет сигнал тревоги в случае фатального состояния \
+                 пользователя. Сигнал будет содержать информацию о возможном местоположении \
+                 пользователя."
+            }
+            Self::EmpProtection => {
+                "Обеспечивает защиту нейроинтерфейсов и встроенных компонентов пользователя от \
+                 электромагнитных импульсов высокой мощности."
             }
         }
     }
@@ -187,6 +244,11 @@ impl Implant {
             ImplantKind::Explosive => ("имплант-микробомба", -1),
             ImplantKind::Emp => ("ЭМИ-имплант", EMP_USES),
             ImplantKind::Freedom => ("имплант свободы", FREEDOM_CHARGES),
+            ImplantKind::WeaponsAuth => ("имплант авторизации оружия", -1),
+            ImplantKind::SadTrombone => ("имплант грустного тромбона", -1),
+            ImplantKind::Cqc => ("CQC имплант", -1),
+            ImplantKind::DeathAlarm => ("имплант оповещения о смерти", -1),
+            ImplantKind::EmpProtection => ("поглотитель ЭМИ", -1),
         };
         let scale = if path == MACROBOMB { 10.0 } else { 1.0 };
         Some(Self {
@@ -291,7 +353,7 @@ fn next_id(world: &mut World) -> u32 {
 
 /// The implant type an implanter or case of `path` starts with (tg `imp_type`).
 pub fn imp_type(path: &str) -> Option<&'static str> {
-    const TYPES: [(&str, &str); 11] = [
+    const TYPES: &[(&str, &str)] = &[
         ("/obj/item/implanter/mindshield", MINDSHIELD),
         ("/obj/item/implanter/tracking", TRACKING),
         ("/obj/item/implanter/explosive", MICROBOMB),
@@ -303,6 +365,15 @@ pub fn imp_type(path: &str) -> Option<&'static str> {
         ("/obj/item/implantcase/chem", CHEM),
         ("/obj/item/implantcase/explosive", MICROBOMB),
         ("/obj/item/implantcase/freedom", FREEDOM),
+        ("/obj/item/implantcase/weapons_auth", WEAPONS_AUTH),
+        ("/obj/item/implanter/sad_trombone", SAD_TROMBONE),
+        ("/obj/item/implantcase/sad_trombone", SAD_TROMBONE),
+        ("/obj/item/implanter/cqc", CQC),
+        ("/obj/item/implantcase/cqc", CQC),
+        ("/obj/item/implanter/death_alarm", DEATH_ALARM),
+        ("/obj/item/implantcase/death_alarm", DEATH_ALARM),
+        ("/obj/item/implanter/empprotection", EMP_PROTECTION),
+        ("/obj/item/implantcase/empprotection", EMP_PROTECTION),
     ];
     // Exact types: `/obj/item/implanter/tracking/gps` holds a GPS, `explosive_macro/fake` a
     // clown bomb.
@@ -572,6 +643,10 @@ pub fn implant(
             "Вы чувствуете умиротворение и безопасность. Теперь вы защищены от промывки мозгов.",
         );
     }
+    // `empprotection/implant`: `AddElement(/datum/element/empprotection, EMP_PROTECT_ALL)`.
+    if kind == ImplantKind::EmpProtection {
+        crate::modsuit::server::set_emp_protection(world, target, crate::emp::PROTECT_ALL, true);
+    }
     refresh_buttons(world, target);
     Ok(())
 }
@@ -595,6 +670,14 @@ pub fn remove_implant(world: &mut World, mob: Entity, id: u32, silent: bool) -> 
                  промывки мозгов.",
             );
         }
+    }
+    if imp.kind == ImplantKind::EmpProtection {
+        crate::modsuit::server::set_emp_protection(world, mob, crate::emp::PROTECT_ALL, false);
+    }
+    // The CQC implant's style goes with it (BandaStation keeps it until the removed implant is
+    // destroyed; here the removed implant is gone at once).
+    if imp.kind == ImplantKind::Cqc {
+        crate::martial::unlearn(world, mob, crate::martial::Origin::Implant(imp.id));
     }
     refresh_buttons(world, mob);
     Some(imp)
@@ -711,17 +794,19 @@ fn button(world: &World, imp: &Implant) -> (ActionButton, f64) {
             .get_resource::<IconIndex>()
             .and_then(|index| index.get(dmi, state))
     };
-    let state = match imp.kind {
-        ImplantKind::Explosive => "explosive",
-        ImplantKind::Emp => "emp",
-        ImplantKind::Freedom => "freedom",
-        _ => "generic",
+    let (dmi, state) = match imp.kind {
+        ImplantKind::Explosive => (IMPLANTS_DMI, "explosive"),
+        ImplantKind::Emp => (IMPLANTS_DMI, "emp"),
+        ImplantKind::Freedom => (IMPLANTS_DMI, "freedom"),
+        // The CQC implant's own `icon`/`icon_state`.
+        ImplantKind::Cqc => ("icons/obj/scrolls.dmi", "scroll2"),
+        _ => (IMPLANTS_DMI, "generic"),
     };
     (
         ActionButton {
             id: format!("{BUTTON}{}", imp.id),
             name: format!("Активировать {}", imp.name),
-            icon: icon(IMPLANTS_DMI, state),
+            icon: icon(dmi, state),
             background: icon("icons/mob/actions/backgrounds.dmi", "bg_default"),
             border: None,
             available: true,
@@ -789,6 +874,7 @@ fn trigger_buttons(world: &mut World, mut acts: Local<MessageCursor<UiActed<Acti
             ImplantKind::Explosive => ask_bomb(world, client, actor, &imp),
             ImplantKind::Emp => activate_emp(world, actor, id),
             ImplantKind::Freedom => activate_freedom(world, actor, id),
+            ImplantKind::Cqc => activate_cqc(world, actor, id),
             _ => {}
         }
     }
@@ -847,6 +933,15 @@ fn activate_freedom(world: &mut World, mob: Entity, id: u32) {
         tell_mob(world, mob, Span::Warning, "Имплант деградировал!");
         remove_implant(world, mob, id, true);
     }
+}
+
+/// BandaStation `cqc/activate`: forgets the implant's CQC if the host knows it, else teaches it.
+fn activate_cqc(world: &mut World, mob: Entity, id: u32) {
+    let origin = crate::martial::Origin::Implant(id);
+    if crate::martial::unlearn(world, mob, origin) {
+        return;
+    }
+    crate::martial::teach(world, mob, crate::martial::Style::Cqc, origin);
 }
 
 /// `explosive/activate("action_button")`: asks first (one prompt at a time, tg `popup`).
@@ -1015,7 +1110,32 @@ pub fn chem_inject(world: &mut World, mob: Entity, id: u32, amount: f32) -> f32 
     moved
 }
 
-/// `COMSIG_LIVING_DEATH`: bombs arm (`activate("death")`), chem implants inject everything.
+/// BandaStation `death_alarm/activate`: the host and its area (on the station or mining levels)
+/// on the command, medical and security channels, from the implant's internal radio.
+fn death_alarm(world: &mut World, mob: Entity) {
+    let Some(pos) = crate::explosions::turf_of(world, mob) else {
+        return;
+    };
+    let name = name_of(world, mob);
+    let sensed = crate::events::controller::station_levels(world).contains(&pos.z)
+        || ss13_mapload::mining_z(world) == Some(pos.z);
+    let text = if sensed {
+        format!("{name} умер в {}.", crate::bots::area_name(world, pos))
+    } else {
+        format!("{name} умер за пределами действия сенсоров.")
+    };
+    for freq in DEATH_ALARM_FREQS {
+        world.write_message(crate::radio::MachineRadio {
+            freq,
+            z: pos.z,
+            name: "имплант оповещения о смерти".to_owned(),
+            text: text.clone(),
+        });
+    }
+}
+
+/// `COMSIG_LIVING_DEATH`: bombs arm (`activate("death")`), chem implants inject everything, the
+/// death alarm reports and the sad trombone plays.
 fn on_death(dead: Query<(Entity, &Stat, &Implants), Changed<Stat>>, mut commands: Commands) {
     for (mob, stat, implants) in &dead {
         if *stat != Stat::Dead {
@@ -1038,6 +1158,17 @@ fn on_death(dead: Query<(Entity, &Stat, &Implants), Changed<Stat>>, mut commands
                     ImplantKind::Explosive => activate_bomb(world, mob, id, true),
                     ImplantKind::Chem => {
                         chem_inject(world, mob, id, volume);
+                    }
+                    ImplantKind::DeathAlarm => death_alarm(world, mob),
+                    // `COMSIG_MOB_EMOTED("deathgasp")`: the port's deathgasp comes with death
+                    // (`crate::health`).
+                    ImplantKind::SadTrombone => {
+                        if let Some(pos) = crate::explosions::turf_of(world, mob) {
+                            crate::sound::playsound(
+                                world,
+                                crate::sound::PlaySound::new(pos, SAD_TROMBONE_SOUND, 50.0, false),
+                            );
+                        }
                     }
                     _ => {}
                 }
@@ -1156,5 +1287,58 @@ mod tests {
         // Armed once: a second activation does nothing.
         activate_bomb(&mut world, target, 3, false);
         assert_eq!(*world.get::<Detonation>(target).unwrap(), d);
+    }
+
+    #[test]
+    fn fork_and_passive_implants_come_from_their_holders() {
+        assert_eq!(imp_type("/obj/item/implanter/cqc"), Some(CQC));
+        assert_eq!(
+            imp_type("/obj/item/implantcase/death_alarm"),
+            Some(DEATH_ALARM)
+        );
+        assert_eq!(
+            imp_type("/obj/item/implanter/empprotection"),
+            Some(EMP_PROTECTION)
+        );
+        assert_eq!(
+            imp_type("/obj/item/implantcase/weapons_auth"),
+            Some(WEAPONS_AUTH)
+        );
+        assert_eq!(
+            ImplantKind::of(SAD_TROMBONE),
+            Some(ImplantKind::SadTrombone)
+        );
+    }
+
+    /// BandaStation `empprotection`: `EMP_PROTECT_ALL` while implanted, gone on removal.
+    #[test]
+    fn emp_absorber_protects_its_host_while_implanted() {
+        let mut world = world();
+        let target = mob(&mut world);
+        let imp = Implant::new(EMP_PROTECTION, 4).unwrap();
+        implant(&mut world, target, None, imp).unwrap();
+        assert_eq!(
+            world.get::<crate::emp::EmpProtection>(target).map(|p| p.0),
+            Some(crate::emp::PROTECT_ALL)
+        );
+        remove_implant(&mut world, target, 4, true).unwrap();
+        assert!(world.get::<crate::emp::EmpProtection>(target).is_none());
+    }
+
+    /// BandaStation `cqc/activate`: the button teaches CQC, again forgets it; removal forgets.
+    #[test]
+    fn cqc_implant_toggles_the_style() {
+        let mut world = world();
+        let target = mob(&mut world);
+        implant(&mut world, target, None, Implant::new(CQC, 5).unwrap()).unwrap();
+        let cqc = |w: &World| crate::martial::active_style(w, target);
+        assert_eq!(cqc(&world), None);
+        activate_cqc(&mut world, target, 5);
+        assert_eq!(cqc(&world), Some(crate::martial::Style::Cqc));
+        activate_cqc(&mut world, target, 5);
+        assert_eq!(cqc(&world), None);
+        activate_cqc(&mut world, target, 5);
+        remove_implant(&mut world, target, 5, true).unwrap();
+        assert_eq!(cqc(&world), None);
     }
 }

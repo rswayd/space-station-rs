@@ -282,10 +282,14 @@ fn pin_auth(world: &World, dm: &DmGun, gun: &Gun, user: Entity) -> Result<(), St
     let ok = if is_under(&gun.pin, MINDSHIELD_PIN) {
         crate::antag::revolution::server::mindshielded(world, user)
     } else if is_under(&gun.pin, SYNDICATE_PIN) {
-        // shortcut: the operatives' weapons authorization implant is the operative datum.
+        // `req_implant = /obj/item/implant/weapons_auth`; the operatives' outfit implant is
+        // their datum here.
         world
             .get::<crate::antag::nukeop::server::Nukeop>(user)
             .is_some()
+            || crate::implants::implants_of(world, user)
+                .iter()
+                .any(|i| i.kind == crate::implants::ImplantKind::WeaponsAuth)
     } else {
         // shortcut: other special pins (test range, DNA, clown, explorer, paywall) answer with
         // their `default_pin_auth` (a standard pin: anyone).

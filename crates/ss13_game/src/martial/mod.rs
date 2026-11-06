@@ -159,6 +159,9 @@ pub enum Origin {
     Learned,
     /// Worn gloves or a belt (tg `martial_art_giver`): forgotten when taken off.
     Item(Entity),
+    /// An implant of the mob (BandaStation's CQC implant, its [`crate::implants::Implant::id`]):
+    /// toggled by the implant's button, forgotten when it is removed.
+    Implant(u32),
 }
 
 /// One known style with its own streak (each tg datum keeps its own).
@@ -573,7 +576,7 @@ fn sync_worn(world: &mut World, mob: Entity) {
             m.0.iter()
                 .filter_map(|a| match a.origin {
                     Origin::Item(e) => Some(e),
-                    Origin::Learned => None,
+                    Origin::Learned | Origin::Implant(_) => None,
                 })
                 .collect()
         })
