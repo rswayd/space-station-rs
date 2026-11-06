@@ -522,6 +522,7 @@ fn melee(
             None => {
                 let helper = attacker;
                 commands.queue(move |world: &mut World| {
+                    crate::medical::fear::on_hug(world, helper, target);
                     crate::mood::on_hug(world, helper, target);
                     crate::status_effects::shake_up(world, target);
                 });

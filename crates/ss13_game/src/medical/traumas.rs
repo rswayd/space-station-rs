@@ -17,21 +17,22 @@
 //! item and holds nothing). The rest acts every `Life()` ([`life`]).
 //!
 //! Ported traumas: mild — stuttering, dumbness, speech impediment, concussion, anosognosia
-//! (`healthy`), muscle weakness, nervous cough, possessiveness, achromatopsia; severe — mute,
-//! paralysis, pacifism, kleptomania, aphasia (`ss13_chat::language`), cortical blindness (both
-//! read by `crate::vision`). Random
-//! gains pick among all of tg's types ([`TG_POOL`]): an unported pick gives nothing, so each
-//! ported trauma comes as often as in tg.
-// shortcut: no hallucinations, muscle spasms, expressive aphasia (needs the common words list),
-// mind echo (needs hearing hooks), narcolepsy and hypnotic stupor (no
-// sleep or trance), achromatopsia's `TRAIT_COLORBLIND` (wire colours),
-// monophobia, discoordination, dyslexia, hypnotic triggers, split personality, imaginary friend,
-// obsession, special and magic traumas, phobias; no forced brain damage lines of dumbness
-// (`traumas.json` is not converted), no fake health HUD, mood events or `TRAIT_DUMB`;
-// kleptomania ignores the damage
-// cooldown; an inserted brain applies its traumas without their gain messages; no head-wound
-// (`TRAUMA_RESILIENCE_WOUND`) traumas, no `TRAIT_SPECIAL_TRAUMA_BOOST`. Add each with the
-// system it needs.
+//! (`healthy`), muscle weakness, nervous cough, possessiveness, achromatopsia, hallucinations
+//! (`crate::hallucination`, Gibbering; mindbreaker holds them off), phobias
+//! ([`super::fear`]); severe — mute, paralysis, pacifism, kleptomania, aphasia
+//! (`ss13_chat::language`), cortical blindness (both read by `crate::vision`), narcolepsy (and
+//! its permanent kind), monophobia ([`super::fear`]), dyslexia ([`illiterate`], papers), split
+//! personality ([`super::split_personality`]). Random gains pick among all of tg's types
+//! ([`TG_POOL`]): an unported pick gives nothing, so each ported trauma comes as often as in tg.
+// shortcut: no muscle spasms (no `/datum/status_effect/spasms`), expressive aphasia (needs the
+// common words list), mind echo (needs per-hearer speech rewriting), hypnotic stupor and
+// triggers (no trance), discoordination (no `TRAIT_DISCOORDINATED_TOOL_USER` gates),
+// achromatopsia's `TRAIT_COLORBLIND` (wire colours), imaginary friend, obsession, special and
+// magic traumas; no forced brain damage lines of dumbness (`traumas.json` is not converted), no
+// fake health HUD, mood events or `TRAIT_DUMB`; kleptomania ignores the damage cooldown; an
+// inserted brain applies its traumas without their gain messages; no head-wound
+// (`TRAUMA_RESILIENCE_WOUND`) traumas, no `TRAIT_SPECIAL_TRAUMA_BOOST`; no admin-only phobia
+// subtypes or uncapped hallucinations. Add each with the system it needs.
 
 use bevy::prelude::*;
 use ss13_mapload::{DmItem, DmWeight};
@@ -170,6 +171,19 @@ pub enum Kind {
     ColorBlindness,
     Blindness,
     Aphasia,
+    /// `/datum/brain_trauma/mild/hallucinations`.
+    Hallucinations,
+    /// `/datum/brain_trauma/mild/phobia` of a phobia (an index into
+    /// [`super::phobia_data::PHOBIAS`]).
+    Phobia(usize),
+    /// `/datum/brain_trauma/severe/narcolepsy` (`permanent`: its `/permanent` subtype).
+    Narcolepsy {
+        permanent: bool,
+    },
+    Monophobia,
+    Dyslexia,
+    /// `/datum/brain_trauma/severe/split_personality` ([`super::split_personality`]).
+    SplitPersonality,
 }
 
 /// The static part of a trauma type (tg vars).
@@ -312,6 +326,70 @@ impl Kind {
                 (Warning, "У вас проблемы с формированием слов в голове..."),
                 (Notice, "Вы вдруг вспоминаете, как работают языки."),
             ),
+            Self::Hallucinations => mild(
+                "/datum/brain_trauma/mild/hallucinations",
+                "Галлюцинации",
+                "шизофрения",
+                (
+                    Warning,
+                    "Вы чувствуете, что ваша связь с реальностью ослабевает...",
+                ),
+                (Notice, "Вы чувствуете себя более приземленным."),
+            ),
+            // The lines name the phobia ([`gain_text`]).
+            Self::Phobia(_) => mild(
+                "/datum/brain_trauma/mild/phobia",
+                "Фобия",
+                "фобия",
+                (Warning, ""),
+                (Notice, ""),
+            ),
+            Self::Narcolepsy { permanent } => Def {
+                path: if permanent {
+                    "/datum/brain_trauma/severe/narcolepsy/permanent"
+                } else {
+                    "/datum/brain_trauma/severe/narcolepsy"
+                },
+                scan_desc: if permanent {
+                    "хроническая нарколепсия"
+                } else {
+                    "травматическая нарколепсия"
+                },
+                ..severe(
+                    "",
+                    "Нарколепсия",
+                    "",
+                    (Warning, "У вас постоянное чувство сонливости..."),
+                    (
+                        Notice,
+                        "Вы снова чувствуете себя бодрым и осознающим происходящее.",
+                    ),
+                )
+            },
+            Self::Monophobia => severe(
+                "/datum/brain_trauma/severe/monophobia",
+                "Монофобия",
+                "монофобия",
+                (Warning, "Вы чувствуете себя по-настоящему одиноким..."),
+                (
+                    Notice,
+                    "Вам кажется, что вы могли бы чувствовать себя в безопасности в одиночестве.",
+                ),
+            ),
+            Self::Dyslexia => severe(
+                "/datum/brain_trauma/severe/dyslexia",
+                "Дислексия",
+                "дислексия",
+                (Warning, "У вас проблемы с чтением или письмом..."),
+                (Notice, "Вы вдруг вспоминаете, как читать и писать."),
+            ),
+            Self::SplitPersonality => severe(
+                "/datum/brain_trauma/severe/split_personality",
+                "Split Personality",
+                "complete lobe separation",
+                (Warning, "You feel like your mind was split in two."),
+                (Notice, "You feel alone again."),
+            ),
             Self::Kleptomaniac => severe(
                 "/datum/brain_trauma/severe/kleptomaniac",
                 "Клептомания",
@@ -330,11 +408,26 @@ impl Kind {
         std::mem::discriminant(&self) == std::mem::discriminant(&other)
     }
 
+    /// `scan_desc` (a phobia names what it fears).
+    fn scan_desc(self) -> String {
+        match self {
+            Self::Phobia(i) => format!("фобия {}", phobia_label(i)),
+            _ => self.def().scan_desc.to_owned(),
+        }
+    }
+
     fn gain_text(self) -> (Span, String) {
         match self {
             Self::Paralysis(p) => (
                 Span::Warning,
                 format!("Вы больше не чувствуете {}!", p.subject()),
+            ),
+            Self::Phobia(i) => (
+                Span::Warning,
+                format!(
+                    "Вы начинаете находить {} очень нервирующим...",
+                    phobia_label(i)
+                ),
             ),
             _ => (self.def().gain.0, self.def().gain.1.to_owned()),
         }
@@ -346,9 +439,18 @@ impl Kind {
                 Span::Notice,
                 format!("Вы снова чувствуете {}!", p.subject()),
             ),
+            Self::Phobia(i) => (
+                Span::Notice,
+                format!("Вы больше не боитесь {}.", phobia_label(i)),
+            ),
             _ => (self.def().lose.0, self.def().lose.1.to_owned()),
         }
     }
+}
+
+/// The Russian `phobia_type` of phobia `i`.
+fn phobia_label(i: usize) -> &'static str {
+    super::phobia_data::PHOBIAS.get(i).map_or("", |p| p.label)
 }
 
 /// tg's randomly gainable trauma types (`subtypesof(category)` with `random_gain` and
@@ -384,7 +486,12 @@ pub const TG_POOL: [(&str, Option<Kind>, Category, Resilience); 37] = {
             Mild,
             Basic,
         ),
-        ("/datum/brain_trauma/mild/hallucinations", None, Mild, Basic),
+        (
+            "/datum/brain_trauma/mild/hallucinations",
+            Some(Kind::Hallucinations),
+            Mild,
+            Basic,
+        ),
         (
             "/datum/brain_trauma/mild/healthy",
             Some(Kind::Healthy),
@@ -405,7 +512,12 @@ pub const TG_POOL: [(&str, Option<Kind>, Category, Resilience); 37] = {
             Mild,
             Basic,
         ),
-        ("/datum/brain_trauma/mild/phobia", None, Mild, Basic),
+        (
+            "/datum/brain_trauma/mild/phobia",
+            Some(Kind::Phobia(0)),
+            Mild,
+            Basic,
+        ),
         (
             "/datum/brain_trauma/mild/possessive",
             Some(Kind::Possessive),
@@ -442,7 +554,12 @@ pub const TG_POOL: [(&str, Option<Kind>, Category, Resilience); 37] = {
             Severe,
             Surgery,
         ),
-        ("/datum/brain_trauma/severe/dyslexia", None, Severe, Surgery),
+        (
+            "/datum/brain_trauma/severe/dyslexia",
+            Some(Kind::Dyslexia),
+            Severe,
+            Surgery,
+        ),
         (
             "/datum/brain_trauma/severe/hypnotic_stupor",
             None,
@@ -457,7 +574,7 @@ pub const TG_POOL: [(&str, Option<Kind>, Category, Resilience); 37] = {
         ),
         (
             "/datum/brain_trauma/severe/monophobia",
-            None,
+            Some(Kind::Monophobia),
             Severe,
             Surgery,
         ),
@@ -469,13 +586,13 @@ pub const TG_POOL: [(&str, Option<Kind>, Category, Resilience); 37] = {
         ),
         (
             "/datum/brain_trauma/severe/narcolepsy",
-            None,
+            Some(Kind::Narcolepsy { permanent: false }),
             Severe,
             Surgery,
         ),
         (
             "/datum/brain_trauma/severe/narcolepsy/permanent",
-            None,
+            Some(Kind::Narcolepsy { permanent: true }),
             Severe,
             Surgery,
         ),
@@ -493,7 +610,7 @@ pub const TG_POOL: [(&str, Option<Kind>, Category, Resilience); 37] = {
         ),
         (
             "/datum/brain_trauma/severe/split_personality",
-            None,
+            Some(Kind::SplitPersonality),
             Severe,
             Surgery,
         ),
@@ -559,6 +676,8 @@ pub struct Trauma {
     possessed: Vec<(Entity, f64)>,
     /// Kleptomania's `steal_cd` (game time).
     steal_at: f64,
+    /// Hallucinations: held off by mindbreaker (`TRAIT_RDS_SUPPRESSED`), Gibbering taken away.
+    suppressed: bool,
 }
 
 /// A brain's traumas (tg `traumas`), on the brain organ.
@@ -632,11 +751,18 @@ pub fn gain(world: &mut World, brain: Entity, kind: Kind, resilience: Option<Res
     {
         return false;
     }
+    // `on_gain` returning FALSE: a split personality needs a living body with a player.
+    if kind == Kind::SplitPersonality
+        && owner(world, brain).is_some_and(|mob| !super::split_personality::can_take(world, mob))
+    {
+        return false;
+    }
     let trauma = Trauma {
         kind,
         resilience,
         possessed: Vec::new(),
         steal_at: 0.0,
+        suppressed: false,
     };
     let mut all = world.get::<Traumas>(brain).cloned().unwrap_or_default();
     all.0.push(trauma);
@@ -681,8 +807,15 @@ pub fn gain_type(
         return None;
     }
     let mut kind = pool[rng.range(0, pool.len() as u32 - 1) as usize]?;
-    if let Kind::Paralysis(_) = kind {
-        kind = Kind::Paralysis(Paralysis::ALL[rng.range(0, 8) as usize]);
+    match kind {
+        Kind::Paralysis(_) => kind = Kind::Paralysis(Paralysis::ALL[rng.range(0, 8) as usize]),
+        // `pick(GLOB.phobia_types)`.
+        Kind::Phobia(_) => {
+            let random = &super::phobia_data::RANDOM;
+            let key = random[rng.range(0, random.len() as u32 - 1) as usize];
+            kind = Kind::Phobia(super::fear::phobia_index(key).unwrap_or(0));
+        }
+        _ => {}
     }
     gain(world, brain, kind, resilience).then_some(kind)
 }
@@ -697,11 +830,33 @@ fn lose(world: &mut World, brain: Entity, index: usize) {
     for (item, _) in &trauma.possessed {
         release(world, *item);
     }
+    // `/datum/brain_trauma/mild/hallucinations/on_lose`.
+    if trauma.kind == Kind::Hallucinations
+        && let Some(mob) = owner(world, brain)
+    {
+        crate::hallucination::set_hallucinations(world, mob, 0.0, false);
+    }
     if let Some(mob) = owner(world, brain) {
         info!("{mob} lost the brain trauma {}", trauma.kind.def().path);
         tell_owner(world, brain, trauma.kind.lose_text());
         refresh(world, mob);
     }
+}
+
+/// `qdel` of `brain`'s trauma of `kind`'s type (whatever its resilience), if any.
+pub fn remove_kind(world: &mut World, brain: Entity, kind: Kind) {
+    if let Some(index) = traumas(world, brain)
+        .iter()
+        .position(|t| t.kind.same_type(kind))
+    {
+        lose(world, brain, index);
+    }
+}
+
+/// tg `TRAIT_ILLITERATE`: the Illiterate quirk or dyslexia.
+pub fn illiterate(world: &World, mob: Entity) -> bool {
+    crate::quirks::has(world, mob, crate::quirks::Quirk::Illiterate)
+        || has(world, mob, Kind::Dyslexia)
 }
 
 /// tg `cure_trauma_type(resilience)`: one random trauma of at most `resilience`.
@@ -794,7 +949,7 @@ pub fn scan_line(world: &World, mob: Entity) -> Option<String> {
             format!(
                 "{} {}",
                 t.resilience.scan_word(),
-                ss13_chat::speech::capitalize(t.kind.def().scan_desc)
+                ss13_chat::speech::capitalize(&t.kind.scan_desc())
             )
         })
         .collect();
@@ -807,41 +962,39 @@ pub fn scan_line(world: &World, mob: Entity) -> Option<String> {
     Some(format!("Mental trauma: {text}."))
 }
 
-/// `/datum/brain_trauma/severe/aphasia` `on_gain`/`on_lose`: every other language blocked and
-/// Gibbering granted, from `LANGUAGE_APHASIA`.
-fn set_aphasia(world: &mut World, mob: Entity, aphasia: bool) {
+/// `/datum/brain_trauma/severe/aphasia` `on_gain`/`on_lose` (`block`: every other language
+/// blocked) and the hallucinations trauma's Gibbering (`gibbering`), from `LANGUAGE_APHASIA`.
+fn set_aphasia(world: &mut World, mob: Entity, block: bool, gibbering: bool) {
     use ss13_chat::language::{ALL, LanguageHolder, LanguageId, LanguageSource, Preset};
     let had = world
         .get::<LanguageHolder>(mob)
         .is_some_and(|h| h.has_source(LanguageSource::Aphasia));
-    if had == aphasia {
+    if !had && !block && !gibbering {
         return;
     }
-    let mut holder = world
-        .get::<LanguageHolder>(mob)
-        .cloned()
-        .unwrap_or_else(|| {
-            LanguageHolder::from_preset(
-                &Preset::of_path("/datum/language_holder/atom_basic").unwrap_or_default(),
-                LanguageSource::Atom,
-            )
-        });
+    let before = world.get::<LanguageHolder>(mob).cloned();
+    let mut holder = before.clone().unwrap_or_else(|| {
+        LanguageHolder::from_preset(
+            &Preset::of_path("/datum/language_holder/atom_basic").unwrap_or_default(),
+            LanguageSource::Atom,
+        )
+    });
     for language in LanguageId::ALL {
         if language == LanguageId::Aphasia {
             continue;
         }
-        if aphasia {
+        holder.unblock(language, ALL, Some(LanguageSource::Aphasia));
+        if block {
             holder.block(language, ALL, LanguageSource::Aphasia);
-        } else {
-            holder.unblock(language, ALL, Some(LanguageSource::Aphasia));
         }
     }
-    if aphasia {
+    holder.remove(LanguageId::Aphasia, ALL, Some(LanguageSource::Aphasia));
+    if block || gibbering {
         holder.grant(LanguageId::Aphasia, ALL, LanguageSource::Aphasia);
-    } else {
-        holder.remove(LanguageId::Aphasia, ALL, Some(LanguageSource::Aphasia));
     }
-    world.entity_mut(mob).insert(holder);
+    if before.as_ref() != Some(&holder) {
+        world.entity_mut(mob).insert(holder);
+    }
 }
 
 /// Applies the traumas of `mob`'s brain to `mob` (the traits of their `on_gain`/`on_lose`), with
@@ -854,9 +1007,17 @@ pub fn refresh(world: &mut World, mob: Entity) {
     let mut pacifist = false;
     let mut paralyzed = [false; 6];
     let mut aphasia = false;
+    let mut gibbering = false;
+    let mut phobias = Vec::new();
+    let mut monophobia = false;
+    let mut split = false;
     for trauma in of_mob(world, mob) {
         match trauma.kind {
             Kind::Aphasia => aphasia = true,
+            Kind::Hallucinations => gibbering |= !trauma.suppressed,
+            Kind::Phobia(i) => phobias.push(i),
+            Kind::Monophobia => monophobia = true,
+            Kind::SplitPersonality => split = true,
             Kind::Stuttering => speech.stutter = true,
             Kind::Dumbness => speech.derp = true,
             Kind::SpeechImpediment => speech.unintelligible = true,
@@ -883,7 +1044,9 @@ pub fn refresh(world: &mut World, mob: Entity) {
         .is_some_and(crate::status_effects::StatusEffects::pacified);
     // The mime's vow (`TRAIT_MIMING`, `can_speak(allow_mimes = FALSE)`).
     speech.mute |= world.get::<crate::service::MimeVow>(mob).is_some();
-    set_aphasia(world, mob, aphasia);
+    set_aphasia(world, mob, aphasia, gibbering);
+    super::fear::set_sources(world, mob, &phobias, monophobia);
+    super::split_personality::sync(world, mob, split);
     let mut entity = world.entity_mut(mob);
     if speech == ss13_chat::speech::Impediments::default() {
         entity.remove::<ss13_chat::speech::Impediments>();
@@ -980,7 +1143,9 @@ pub fn life(world: &mut World, mob: Entity, secs: f32) {
         if owner(world, brain) != Some(mob) || world.get::<Stat>(mob) == Some(&Stat::Dead) {
             return;
         }
+        let suppressed = trauma.suppressed;
         on_life(world, mob, &mut trauma, secs, &mut rng);
+        let changed = trauma.suppressed != suppressed;
         if let Some(mut all) = world.get_mut::<Traumas>(brain)
             && let Some(slot) = all.0.get_mut(index)
             && slot.kind == trauma.kind
@@ -988,6 +1153,12 @@ pub fn life(world: &mut World, mob: Entity, secs: f32) {
         {
             *slot = trauma;
         }
+        if changed {
+            refresh(world, mob);
+        }
+    }
+    if owner(world, brain) == Some(mob) {
+        super::fear::tick(world, mob, secs, &mut rng);
     }
 }
 
@@ -1112,8 +1283,97 @@ fn on_life(world: &mut World, mob: Entity, trauma: &mut Trauma, secs: f32, rng: 
             emote(world, mob, "cough");
         }
         Kind::Possessive => possessive(world, mob, trauma, now, rng, secs),
+        Kind::Hallucinations => hallucinations(world, mob, trauma, secs),
+        Kind::Narcolepsy { permanent } => narcolepsy(world, mob, permanent, rng, secs),
+        Kind::SplitPersonality => super::split_personality::on_life(world, mob, secs, rng),
         Kind::Kleptomaniac => kleptomania(world, mob, trauma, now, rng, secs),
         _ => {}
+    }
+}
+
+/// `/datum/brain_trauma/mild/hallucinations/on_life`: hallucinations up to a minute and
+/// Gibbering, unless mindbreaker holds them off (`TRAIT_RDS_SUPPRESSED`).
+fn hallucinations(world: &mut World, mob: Entity, trauma: &mut Trauma, secs: f32) {
+    if crate::status_effects::knocked_out(world, mob) {
+        return;
+    }
+    trauma.suppressed = rds_suppressed(world, mob);
+    if trauma.suppressed {
+        crate::hallucination::adjust_hallucinations(world, mob, -10.0 * secs);
+        return;
+    }
+    crate::hallucination::adjust_hallucinations_up_to(world, mob, 5.0 * secs, 60.0);
+}
+
+/// `TRAIT_RDS_SUPPRESSED`: mindbreaker (or its jellyfish variant) in the blood.
+pub fn rds_suppressed(world: &World, mob: Entity) -> bool {
+    [
+        "/datum/reagent/toxin/mindbreaker",
+        "/datum/reagent/toxin/mindbreaker/fish",
+    ]
+    .iter()
+    .any(|path| crate::chem::blood_amount(world, mob, path) > 0.0)
+}
+
+/// `/datum/brain_trauma/severe/narcolepsy/on_life`: drowsy first, then asleep; more often while
+/// running, while drowsy; never with modafinil or synaptizine in the blood.
+// shortcut: no `TRAIT_STIMULATED` (caffeine's halving), no source of it yet.
+fn narcolepsy(world: &mut World, mob: Entity, permanent: bool, rng: &mut CombatRng, secs: f32) {
+    let asleep = world
+        .get::<crate::status_effects::StatusEffects>(mob)
+        .is_some_and(|e| e.sleeping > 0.0);
+    if asleep {
+        return;
+    }
+    let immune = [
+        "/datum/reagent/medicine/modafinil",
+        "/datum/reagent/medicine/synaptizine",
+    ]
+    .iter()
+    .any(|path| crate::chem::blood_amount(world, mob, path) > 0.0);
+    if immune {
+        return;
+    }
+    // `sleep_chance`, `sleep_chance_running`, `sleep_chance_drowsy`, the sleep times.
+    let (base, running_add, drowsy_add, sleep_min, sleep_max) = if permanent {
+        (0.333, 0.333, 1.0, 20, 30)
+    } else {
+        (1.0, 2.0, 3.0, 6, 6)
+    };
+    use crate::status_effects::Timed;
+    let drowsy = crate::status_effects::timed(world, mob, Timed::Drowsiness) > 0.0;
+    let running = world
+        .get::<crate::janitor::Walking>(mob)
+        .is_none_or(|w| !w.0);
+    let mut chance = base;
+    if running {
+        chance += running_add;
+    }
+    if drowsy {
+        chance += drowsy_add;
+    }
+    if !spt_prob(rng, chance, secs) {
+        return;
+    }
+    if !drowsy {
+        say_to(world, mob, Span::Warning, "Вы чувствуете усталость...");
+        let secs = rng.range(20, 30) as f32;
+        crate::status_effects::adjust_timed(world, mob, Timed::Drowsiness, secs, None);
+        if rng.chance(50.0) {
+            emote(world, mob, "yawn");
+        } else if rng.chance(33.0) {
+            crate::mobs::defense::emote(world, mob, "трёт свои глаза.");
+        }
+    } else {
+        say_to(world, mob, Span::Warning, "Вы засыпаете.");
+        let secs = rng.range(sleep_min, sleep_max) as f32;
+        crate::status_effects::apply(world, mob, Incap::Sleeping, secs);
+        let asleep = world
+            .get::<crate::status_effects::StatusEffects>(mob)
+            .is_some_and(|e| e.sleeping > 0.0);
+        if rng.chance(50.0) && asleep {
+            crate::mobs::defense::emote(world, mob, "храпит.");
+        }
     }
 }
 
@@ -1233,6 +1493,7 @@ mod tests {
             resilience,
             possessed: Vec::new(),
             steal_at: 0.0,
+            suppressed: false,
         }
     }
 
@@ -1283,9 +1544,11 @@ mod tests {
             }
             world.entity_mut(brain).remove::<Traumas>();
         }
-        // 1/13 each (1000 expected); 7 of 13 unported give nothing (aphasia is ported).
+        // 1/13 each (1000 expected); nothing from the 2 of 13 unported (discoordination,
+        // hypnotic stupor). A bare brain takes a split personality (it needs a player only in a
+        // body).
         assert!((850..1150).contains(&paralysis), "{paralysis}");
-        assert!((6_500..7_500).contains(&none), "{none}");
+        assert!((1_700..2_300).contains(&none), "{none}");
     }
 
     #[test]

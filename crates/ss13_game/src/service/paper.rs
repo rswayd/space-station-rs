@@ -369,8 +369,8 @@ pub(super) fn read(world: &mut World, client: Entity, mob: Entity, paper: Entity
         return;
     }
     let title = crate::chem::name_of(world, paper);
-    // `can_read`'s `READING_CHECK_LITERACY`: `TRAIT_ILLITERATE` (the Illiterate quirk).
-    if crate::quirks::has(world, mob, crate::quirks::Quirk::Illiterate) {
+    // `can_read`'s `READING_CHECK_LITERACY`: `TRAIT_ILLITERATE` (the Illiterate quirk, dyslexia).
+    if crate::medical::traumas::illiterate(world, mob) {
         tell(
             world,
             client,
@@ -424,7 +424,7 @@ pub(super) fn item_interaction(
                 return true;
             }
             // `can_write` -> `is_literate()`.
-            if crate::quirks::has(world, mob, crate::quirks::Quirk::Illiterate) {
+            if crate::medical::traumas::illiterate(world, mob) {
                 tell(
                     world,
                     client,

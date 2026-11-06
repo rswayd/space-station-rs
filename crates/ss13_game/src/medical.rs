@@ -37,8 +37,11 @@ pub mod brainmob;
 pub mod cyberimps;
 pub mod defib;
 pub mod diseases;
+pub mod fear;
 pub mod operating;
 pub mod organs;
+pub mod phobia_data;
+pub mod split_personality;
 pub mod surgery;
 pub mod symptoms;
 pub mod traumas;
@@ -232,6 +235,8 @@ impl Plugin for MedicalServerPlugin {
         organs::build(app);
         brainmob::build(app);
         cyberimps::build(app);
+        split_personality::build(app);
+        app.add_systems(Update, fear::hear_words);
     }
 }
 
