@@ -308,10 +308,13 @@ fn expand(world: &mut World, capsule: Entity, user: Entity) {
         .resource::<SpatialIndex>()
         .level_size(deploy.z)
         .unwrap_or((0, 0));
-    let checked = origin(deploy, size, max).and_then(|o| {
-        let tiles: Vec<TilePos> = footprint(o, size).collect();
-        check_tiles(world, &tiles).map(|()| (o, tiles))
-    });
+    let checked = match origin(deploy, size, max) {
+        Ok(o) => {
+            let tiles: Vec<TilePos> = footprint(o, size).collect();
+            check_tiles(world, &tiles).map(|()| (o, tiles))
+        }
+        Err(e) => Err(e),
+    };
     let (origin, tiles) = match checked {
         Ok(ok) => ok,
         Err(DeployError::BadArea) => {
