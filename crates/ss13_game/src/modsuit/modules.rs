@@ -665,10 +665,11 @@ fn strip_wearer(world: &mut World, module: Entity, kind: Kind, wearer: Entity) {
         Kind::Visor { .. } => {
             world.entity_mut(wearer).remove::<VisorHud>();
         }
-        Kind::Megaphone => {
+        Kind::Megaphone
             if world
                 .get::<ModMegaphone>(wearer)
-                .is_some_and(|m| m.module == module)
+                .is_some_and(|m| m.module == module) =>
+        {
             {
                 world.entity_mut(wearer).remove::<ModMegaphone>();
                 // A handheld megaphone in the active hand keeps its voice.
