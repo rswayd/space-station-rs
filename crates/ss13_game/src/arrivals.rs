@@ -12,10 +12,18 @@
 //!   latejoin forced it (`force_depart`).
 //! - Hull breach: when a chair's tile is outside the hazard pressures it stays (or comes back)
 //!   docked for repairs, and leaves again once the pressure is back.
+//! - Hyperspace sounds (`crate::shuttle::hyperspace_sound`): the warm-up when it ignites, the
+//!   launch when it heads for the station with someone aboard, the arrival before it docks.
+//! - Arrival announcements ([`queue_announce`], tg `QueueAnnounce` -> `announce_arrival`): the
+//!   ghosts hear where a latejoiner arrived; the automated announcement system (the first powered
+//!   `/obj/machinery/announcement_system`) announces them on the common channel, unless their job
+//!   lacks `JOB_ANNOUNCE_ARRIVAL`. While the shuttle is away from the station the announcements
+//!   wait for its (undamaged) docking.
 // shortcut: a latejoin while it is docked forces the departure and spawns the player aboard at
-// once (tg `RequireUndocked` holds the player until the shuttle is in transit), unbuckled; no
-// hyperspace sounds, no AAS breach announcement, no queued arrival announcements, no admin
-// `perma_docked`.
+// once (tg `RequireUndocked` holds the player until the shuttle is in transit), unbuckled; no AAS
+// breach announcement, no admin `perma_docked`. The AAS here is only its arrival entry: no
+// window, templates, emag or EMP (`docs/parity/comms/station-info.md`); the rank is the job
+// title untranslated (tg `job_title_ru` only in the ghosts' line, here the title too).
 
 use bevy::prelude::*;
 use ss13_mapload::fidelity::is_under;
@@ -27,8 +35,8 @@ use crate::breath::{HAZARD_HIGH_PRESSURE, HAZARD_LOW_PRESSURE};
 use crate::health::Stat;
 use crate::server::PlayerMob;
 use crate::shuttle::{
-    MobileDock, RoundstartPorts, ShuttleMode, ShuttleTimer, dock_at_map_pos, initiate_docking,
-    push_template, setup_template_shuttle,
+    HYPERSPACE_END_SECS, Hyperspace, MobileDock, RoundstartPorts, ShuttleMode, ShuttleTimer,
+    dock_at_map_pos, hyperspace_sound, initiate_docking, push_template, setup_template_shuttle,
 };
 
 /// The arrivals port's `ignitionTime`.
@@ -44,6 +52,9 @@ const CHAIR: &str = "/obj/structure/chair";
 const REQUESTS_CONSOLE: &str = "/obj/machinery/requests_console";
 const PERSON_ABOARD: &str = "обнаружена форма жизни на борту";
 const DISK_ABOARD: &str = "на борту обнаружено критически важное устройство станции";
+const ANNOUNCEMENT_SYSTEM: &str = "/obj/machinery/announcement_system";
+/// `/obj/machinery/announcement_system` `name`.
+const AAS_NAME: &str = "Автоматическая система оповещений";
 
 /// What the shuttle's requests console says (`console.say`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -235,6 +246,10 @@ pub struct ArrivalsShuttle {
     pub chairs: Vec<Entity>,
     /// Its requests console, which talks.
     pub console: Option<Entity>,
+    /// tg `sound_played`.
+    pub sound_played: bool,
+    /// tg `queued_announces`: `(mob, rank)` announced when it docks at the station.
+    pub queued: Vec<(Entity, String)>,
 }
 
 #[derive(Resource)]
@@ -317,6 +332,8 @@ fn setup_arrivals(world: &mut World) {
         transit: shuttle.transit,
         chairs,
         console,
+        sound_played: false,
+        queued: Vec::new(),
     });
 }
 
@@ -399,22 +416,152 @@ fn tick(world: &mut World, mut next: Local<f64>) {
     let breached = breach(world, &chairs);
     let mut said = Vec::new();
     let mut state = world.resource::<ArrivalsShuttle>().state.clone();
+    let mut sound_played = world.resource::<ArrivalsShuttle>().sound_played;
+    // `check_effects`, before the docking of this same check.
+    if state.mode == ShuttleMode::Call
+        && !sound_played
+        && state
+            .timer
+            .left(now)
+            .is_some_and(|left| left <= HYPERSPACE_END_SECS)
+    {
+        sound_played = true;
+        hyperspace_sound(world, port, Hyperspace::End);
+    }
+    let mut welcomed = false;
     match state.check(now, reason.is_some(), breached, &mut said) {
         Some(ArrivalsStep::EnterTransit) => {
+            sound_played = false;
             if state.entered_transit(reason, &mut said) {
                 let moved = initiate_docking(world, port, transit);
                 debug!("arrivals shuttle into transit: {moved:?}");
             }
         }
         Some(ArrivalsStep::DockStation) => {
+            sound_played = false;
             let moved = initiate_docking(world, port, station);
             debug!("arrivals shuttle at the station: {moved:?}");
             state.docked(now, moved.is_ok(), &mut said);
+            welcomed = said.contains(&Say::Welcome);
         }
         None => {}
     }
-    world.resource_mut::<ArrivalsShuttle>().state = state;
+    // `SendToStation`: "for the new guy".
+    if said
+        .iter()
+        .any(|s| matches!(s, Say::Arriving | Say::EmergencyDock))
+    {
+        hyperspace_sound(world, port, Hyperspace::Launch);
+    }
+    match state.mode {
+        ShuttleMode::Igniting if !sound_played => {
+            sound_played = true;
+            hyperspace_sound(world, port, Hyperspace::Warmup);
+        }
+        ShuttleMode::Idle => sound_played = false,
+        _ => {}
+    }
+    let queued = {
+        let mut shuttle = world.resource_mut::<ArrivalsShuttle>();
+        shuttle.state = state;
+        shuttle.sound_played = sound_played;
+        if welcomed {
+            std::mem::take(&mut shuttle.queued)
+        } else {
+            Vec::new()
+        }
+    };
     say_all(world, said);
+    for (mob, rank) in queued {
+        announce_arrival(world, mob, &rank, true);
+    }
+}
+
+/// tg `SSshuttle.arrivals.QueueAnnounce(mob, rank)`: announced now while the shuttle is docked
+/// at the station (or without one), else when it docks there.
+pub fn queue_announce(world: &mut World, mob: Entity, rank: &str) {
+    let away = world
+        .get_resource::<ArrivalsShuttle>()
+        .is_some_and(|shuttle| shuttle.state.mode != ShuttleMode::Idle);
+    if away {
+        world
+            .resource_mut::<ArrivalsShuttle>()
+            .queued
+            .push((mob, rank.to_owned()));
+    } else {
+        announce_arrival(world, mob, rank, true);
+    }
+}
+
+/// tg `announce_arrival(character, rank, announce_to_ghosts)`.
+pub fn announce_arrival(world: &mut World, mob: Entity, rank: &str, announce_to_ghosts: bool) {
+    if world.resource::<crate::round::Ticker>().state() != crate::lobby::GameState::Playing
+        || world.get_entity(mob).is_err()
+    {
+        return;
+    }
+    let name = world
+        .get::<Name>(mob)
+        .map(|n| n.to_string())
+        .unwrap_or_default();
+    if announce_to_ghosts {
+        let area = world
+            .get::<TilePos>(mob)
+            .and_then(|&p| world.resource::<Areas>().area_at(p))
+            .map(|a| crate::shuttle::area_name(world, a))
+            .unwrap_or_default();
+        let mut ghosts = world.query_filtered::<&PlayerMob, With<crate::ghost::Ghost>>();
+        let clients: Vec<Entity> = ghosts.iter(world).map(|p| p.client).collect();
+        if !clients.is_empty() {
+            world.write_message(ss13_net::chat::server::SendChat {
+                clients,
+                message: ss13_shared::chat::ChatMessage::simple(
+                    ss13_shared::chat::ChatChannel::Info,
+                    ss13_shared::chat::Span::Info,
+                    format!("{name} ({rank}) прибыл на станцию у {area}."),
+                ),
+            });
+        }
+    }
+    let quiet = world
+        .get::<crate::jobs::PlayerJob>(mob)
+        .and_then(|j| {
+            world
+                .resource::<crate::jobs::Jobs>()
+                .data
+                .jobs
+                .get(j.0)
+                .map(|d| d.quiet_arrival)
+        })
+        .unwrap_or(false);
+    if !quiet {
+        aas_announce(
+            world,
+            &format!("{name} прибывает на станцию в должности {rank}"),
+        );
+    }
+}
+
+/// `aas_config_announce` without channels: a powered `/obj/machinery/announcement_system` of
+/// the base type (`has_supported_channels`) says `text` on the common channel.
+fn aas_announce(world: &mut World, text: &str) {
+    let mut objs = world.query::<(Entity, &DmObj, &TilePos)>();
+    let found = objs
+        .iter(world)
+        .filter(|(e, o, _)| {
+            o.path == ANNOUNCEMENT_SYSTEM && world.get::<crate::power::Unpowered>(*e).is_none()
+        })
+        .map(|(_, _, p)| p.z)
+        .next();
+    let Some(z) = found else {
+        return;
+    };
+    world.write_message(crate::radio::MachineRadio {
+        freq: ss13_chat::radio::FREQ_COMMON,
+        z,
+        name: AAS_NAME.to_owned(),
+        text: text.to_owned(),
+    });
 }
 
 /// Where latejoiners spawn: the arrivals shuttle's chairs (tg `latejoin_trackers`), when it has

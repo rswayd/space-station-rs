@@ -26,7 +26,7 @@
 
 - **Код:** [`proc/request()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/mobile_port/mobile_port.dm#L292), [`proc/check()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/mobile_port/mobile_port.dm#L440)
 - **BandaStation:** [`mobile_port.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/mobile_port/mobile_port.dm#L704) — шаттлы могут переопределять звуки взлёта и посадки
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/shuttle.rs`: режимы только у аварийного шаттла; нет звуков гиперпространства
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/shuttle.rs`: полный цикл режимов у аварийного шаттла и звуки гиперпространства (`hyperspace_sound`: от ближайшего двигателя, дальняя версия в 2.5 раза дальше, без двигателей — от двери; разогрев за 5 с, взлёт, посадка за 0.5 с; также у шаттла прибытия); `crates/ss13_game/src/shuttle_nav.rs` (`NavShuttle`): idle → igniting (5.5 с) → транзит (10 с) → стыковка у шаттлов с консолями; нет recharging/prearrival, предупреждения перед отлётом и переопределения звуков BandaStation (`get_custom_sound`, нужны шаттлы форка)
 
 ### Транзитное пространство
 На время полёта шаттлу резервируется участок с тайлами гиперпространства нужного направления (`generate_transit_dock`); после прилёта резерв очищается, а выпавшие в транзит предметы и мобы выбрасываются.
@@ -45,7 +45,7 @@
 `/datum/map_template/shuttle` описывает `.dmm` шаттла из `_maps/shuttles`, его цену и доступность; `action_load`/`load_template` загружают шаблон в резерв и подменяют действующий шаттл.
 
 - **Код:** [`/datum/map_template/shuttle`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/shuttles/_shuttle.dm#L1), [`proc/action_load()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/shuttle.dm#L918)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload/src/dock.rs`, `crates/ss13_game/src/shuttle.rs` (`ShuttleTemplates`): грузится только шаблон аварийного шаттла из json карты на старте; замены шаблона в раунде нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload/src/dock.rs`, `crates/ss13_game/src/shuttle.rs` (`ShuttleTemplates`): шаблоны грузятся вместе со станцией (аварийный из json карты, капсулы, прибытие, инфильтратор, каталог покупки `crates/ss13_game/src/shuttle_catalog.rs`); замена аварийного шаттла в раунде — подмена на заранее загруженный шаблон каталога. Загрузки шаблона посреди раунда нет: стартовые системы (двери, воздух, питание, хранилища, консоли) инициализируют объекты карты один раз, поздно загруженный шаблон остался бы неработающим — нужен проход инициализации после загрузки карты
 
 ### Манипулятор шаттлов (админ)
 Админская tgui-панель: список шаблонов, предпросмотр, загрузка/замена шаттла, перемещение шаттлов по докам; `Move Shuttle`/`Lock` из запросов консолей.

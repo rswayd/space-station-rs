@@ -2,9 +2,9 @@
 //! authentication section and its pages: `Main.tsx` (emergency shuttle, alert level with the
 //! "Swipe ID" modal, functions, the `MessageModal`s), `Messages.tsx` and `ChangingStatus.tsx`
 //! (`common/StatusDisplayControls.tsx`). The data is `crate::comms`, the server half
-//! `crate::comms_server`.
-// shortcut: no shuttle purchase page and no allied sectors (the server has neither), no
-// `syndicate` theme. `Button.Confirm`s (recall, emergency access, delete) send at once, and a
+//! `crate::comms_server`. `BuyingShuttle.tsx` lists the emergency shuttle catalog.
+// shortcut: no allied sectors (the server has none), no `syndicate` theme, no coin icon or
+// colours on the shuttle cards, no emag-only or department-locked cards (the catalog has none). `Button.Confirm`s (recall, emergency access, delete) send at once, and a
 // modal's "longer reason" check runs on submit (the window does not re-render on typing).
 
 use bevy::scene::{EntityScene, SceneList};
@@ -154,6 +154,7 @@ fn view(data: &CommsConsoleData, local: &UiLocalState) -> impl Scene + use<> {
     let messages = (page == Some(PAGE_MESSAGES)).then(|| EntityScene(messages_page(data)));
     let status =
         (page == Some(PAGE_CHANGING_STATUS)).then(|| EntityScene(status_page(data, local)));
+    let buying = (page == Some(PAGE_BUYING_SHUTTLE)).then(|| EntityScene(buying_page(data)));
     bsn! {
         @WindowContent
         Children [
@@ -164,6 +165,72 @@ fn view(data: &CommsConsoleData, local: &UiLocalState) -> impl Scene + use<> {
             {messages}
             --
             {status}
+            --
+            {buying}
+        ]
+    }
+}
+
+/// `BuyingShuttle.tsx`: the budget, then a card per shuttle (cheapest first, as the server sends
+/// them) whose button buys it.
+fn buying_page(data: &CommsConsoleData) -> impl Scene + use<> {
+    let budget = data.budget;
+    let cards: Vec<_> = data
+        .shuttles
+        .iter()
+        .map(|shuttle| {
+            let short = budget < shuttle.credit_cost;
+            let tooltip = if short {
+                format!(
+                    "You need {} more {}.",
+                    shuttle.credit_cost - budget,
+                    crate::cargo::MONEY_SYMBOL
+                )
+            } else {
+                String::new()
+            };
+            let content = format!("{} {}", shuttle.credit_cost, crate::cargo::MONEY_SYMBOL);
+            let params = ActParams(vec![(SHUTTLE.to_owned(), shuttle.id.clone())]);
+            let buy: Box<dyn SceneList> = Box::new(EntityScene(bsn! {
+                @ss13_ui_kit::Button {
+                    @content: content,
+                    @tooltip: tooltip,
+                    @tooltip_position: Placement::Left,
+                }
+                ss13_ui_kit::Button { disabled: short }
+                Act({PURCHASE_SHUTTLE.to_owned()})
+                params
+            }));
+            let (title, description) = (shuttle.name.clone(), shuttle.description.clone());
+            let occupancy = format!("Occupancy Limit: {}", shuttle.occupancy_limit);
+            bsn! {
+                @Section { @title: title, @buttons: buy }
+                Children [
+                    Node Children [ Text(description) ]
+                    --
+                    Node Children [ Text(occupancy) ]
+                ]
+            }
+        })
+        .collect();
+    let back = set_state(PAGE_MAIN);
+    let funds = format!("{budget} {}", crate::cargo::MONEY_SYMBOL);
+    bsn! {
+        Node { flex_direction: FlexDirection::Column }
+        Children [
+            @Section
+            Children [
+                Node { justify_content: JustifyContent::SpaceBetween }
+                Children [
+                    @ss13_ui_kit::Button { @icon: "chevron-left", @content: "Back" }
+                    Act({SET_STATE.to_owned()})
+                    back
+                    --
+                    Node Children [ Text(funds) ]
+                ]
+            ]
+            --
+            {cards}
         ]
     }
 }
@@ -288,6 +355,23 @@ fn functions_section(data: &CommsConsoleData) -> impl Scene + use<> {
         })
     });
     let list = set_state(PAGE_MESSAGES);
+    // `canBuyShuttles !== 0`, disabled with the reason as its tooltip unless it is `1`.
+    let purchase = data.can_buy_shuttles.then(|| {
+        let reason = data.buy_shuttles_fail_reason.clone();
+        let disabled = reason.is_some();
+        let params = set_state(PAGE_BUYING_SHUTTLE);
+        EntityScene(bsn! {
+            @ss13_ui_kit::Button {
+                @icon: "shopping-cart",
+                @content: "Purchase Shuttle",
+                @tooltip: {reason.unwrap_or_default()},
+                @tooltip_position: Placement::Top,
+            }
+            ss13_ui_kit::Button { disabled: disabled }
+            Act({SET_STATE.to_owned()})
+            params
+        })
+    });
     let not_ready = !data.important_action_ready;
     let associates = data.can_message_associates.then(|| {
         let to = if data.emagged { "[UNKNOWN]" } else { "CentCom" };
@@ -335,6 +419,8 @@ fn functions_section(data: &CommsConsoleData) -> impl Scene + use<> {
                 @ss13_ui_kit::Button { @icon: "envelope-o", @content: "Message List" }
                 Act({SET_STATE.to_owned()})
                 list
+                --
+                {purchase}
                 --
                 {associates}
                 --

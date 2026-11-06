@@ -4,7 +4,8 @@
 //! infiltrator; [`client`] draws the windows; this module holds what both share.
 //!
 //! - `NuclearBomb`: the bomb's keypad (`NuclearBomb.tsx`).
-//! - `ShuttleConsole`: tg's shuttle console (`ShuttleConsole.jsx`), here on the infiltrator's
+//! - `ShuttleConsole`: tg's shuttle console (`ShuttleConsole.jsx`), shared with every shuttle
+//!   console (`crate::shuttle_console`, server half `crate::shuttle_nav`); the infiltrator's is
 //!   `/obj/machinery/computer/shuttle/syndicate`.
 
 use serde::{Deserialize, Serialize};
@@ -48,31 +49,8 @@ pub const ARM: &str = "arm";
 /// `act('anchor')`.
 pub const ANCHOR: &str = "anchor";
 
-/// A shuttle console.
-pub struct ShuttleConsoleUi;
-
-impl UiInterface for ShuttleConsoleUi {
-    const NAME: &'static str = "ShuttleConsole";
-    type Data = ShuttleConsoleData;
-    type StaticData = ();
-}
-
-/// `/obj/machinery/computer/shuttle/ui_data`.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ShuttleConsoleData {
-    pub docked_location: String,
-    /// `(id, name)` of the valid destinations.
-    pub locations: Vec<(String, String)>,
-    pub locked: bool,
-    pub authorization_required: bool,
-    pub timer_str: String,
-    pub destination: Option<String>,
-    pub status: String,
-}
-
-/// `act('move', { shuttle_id })`.
-pub const MOVE: &str = "move";
-pub const SHUTTLE_ID: &str = "shuttle_id";
-/// `act('set_destination', { destination })`.
-pub const SET_DESTINATION: &str = "set_destination";
-pub const DESTINATION: &str = "destination";
+/// The shuttle console window, shared with every `/obj/machinery/computer/shuttle`
+/// (`crate::shuttle_console`).
+pub use crate::shuttle_console::{
+    DESTINATION, MOVE, SET_DESTINATION, SHUTTLE_ID, ShuttleConsoleData, ShuttleConsoleUi,
+};

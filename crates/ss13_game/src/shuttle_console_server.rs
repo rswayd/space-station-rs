@@ -395,7 +395,7 @@ impl ServerUi for EmergencyConsoleUi {
             })
             .collect();
         EmergencyConsoleData {
-            timer_str: crate::antag::nukeop::server::timer_str(left),
+            timer_str: crate::shuttle_nav::timer_str(left),
             engines_started,
             authorizations_remaining: console.remaining() as u32,
             authorizations,

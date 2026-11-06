@@ -19,8 +19,8 @@
 //!
 //! Every act is checked here at the moment of effect: the console's power and connection, the
 //! login, the actor's silicon access, the cooldowns, the text limits.
-// shortcut: no shuttle purchases (no catalog of emergency shuttle templates or mid-round
-// template swap), no messages to other sectors (no cross-server link), no spare ID safe codes
+//! - Shuttle purchase page: the emergency shuttle catalog (`crate::shuttle_catalog`).
+// shortcut: no messages to other sectors (no cross-server link), no spare ID safe codes
 // (no spare ID safe), no `treat_message` speech modifiers or mute check on announcements, no
 // console hacking by antagonists (no ninja or other caller), no battlecruiser emag.
 
@@ -294,6 +294,8 @@ pub enum CommsAct {
     /// 1-based message and answer.
     AnswerMessage(usize, u32),
     DeleteMessage(usize),
+    /// A catalog id (`crate::shuttle_catalog::CATALOG`).
+    PurchaseShuttle(String),
 }
 
 type ConsoleParams = (
@@ -305,6 +307,8 @@ type ConsoleParams = (
     Res<'static, CommsController>,
     Res<'static, StationAccess>,
     SiliconUsers<'static, 'static>,
+    Option<Res<'static, crate::shuttle_catalog::ShuttleCatalog>>,
+    Option<Res<'static, crate::cargo::economy::Economy>>,
 );
 
 impl ServerUi for CommsConsoleUi {
@@ -317,7 +321,7 @@ impl ServerUi for CommsConsoleUi {
     fn data(
         console: &CommsConsole,
         user: Entity,
-        (shuttle, time, ticker, config, level, controller, access, silicons): &bevy::ecs::system::SystemParamItem<
+        (shuttle, time, ticker, config, level, controller, access, silicons, catalog, economy): &bevy::ecs::system::SystemParamItem<
             '_,
             '_,
             ConsoleParams,
@@ -382,6 +386,27 @@ impl ServerUi for CommsConsoleUi {
             data.shuttle_can_evac_or_fail_reason =
                 Some("You cannot summon the shuttle from this console!".into());
         }
+        if authenticated {
+            use crate::shuttle_catalog::{BuyStatus, can_buy_shuttles};
+            let mode = shuttle.as_deref().map(|s| s.state.mode);
+            match can_buy_shuttles(catalog.as_deref(), mode, console, silicon) {
+                BuyStatus::No => {}
+                BuyStatus::Refused(why) => {
+                    data.can_buy_shuttles = true;
+                    data.buy_shuttles_fail_reason = Some(why.to_owned());
+                }
+                BuyStatus::Yes => data.can_buy_shuttles = true,
+            }
+            if data.page == PAGE_BUYING_SHUTTLE
+                && let Some(catalog) = catalog.as_deref()
+            {
+                data.shuttles = crate::shuttle_catalog::offers(catalog, console);
+                data.budget = economy
+                    .as_deref()
+                    .and_then(|e| e.department(crate::cargo::economy::ACCOUNT_CAR))
+                    .map_or(0, |a| a.balance);
+            }
+        }
         data
     }
 
@@ -433,7 +458,10 @@ impl ServerUi for CommsConsoleUi {
                 Ok(CommsAct::AnswerMessage(index(MESSAGE)?, answer as u32))
             }
             DELETE_MESSAGE => Ok(CommsAct::DeleteMessage(index(MESSAGE)?)),
-            // shortcut: purchaseShuttle, sendToOtherSector and requestSafeCodes (see the module).
+            PURCHASE_SHUTTLE => Ok(CommsAct::PurchaseShuttle(
+                text(SHUTTLE)?.chars().take(64).collect(),
+            )),
+            // shortcut: sendToOtherSector and requestSafeCodes (see the module).
             _ => Err(UiReject::UnknownAction),
         }
     }
@@ -668,8 +696,16 @@ fn console_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed<CommsCo
                 info!("{actor} toggled emergency maintenance access: {}", !on);
             }
             CommsAct::SetState(page) => {
-                // `can_buy_shuttles` is never TRUE here (no purchases).
-                if !state.authenticated(silicon) || page == PAGE_BUYING_SHUTTLE {
+                let mode = world
+                    .get_resource::<EmergencyShuttle>()
+                    .map(|s| s.state.mode);
+                let can_buy = crate::shuttle_catalog::can_buy_shuttles(
+                    world.get_resource::<crate::shuttle_catalog::ShuttleCatalog>(),
+                    mode,
+                    &state,
+                    silicon,
+                ) == crate::shuttle_catalog::BuyStatus::Yes;
+                if !state.authenticated(silicon) || (page == PAGE_BUYING_SHUTTLE && !can_buy) {
                     continue;
                 }
                 let mut console = world.get_mut::<CommsConsole>(console).expect("read");
@@ -729,6 +765,12 @@ fn console_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed<CommsCo
                 if message <= console.messages.len() {
                     console.messages.remove(message - 1);
                 }
+            }
+            CommsAct::PurchaseShuttle(id) => {
+                if !state.authenticated(silicon) {
+                    continue;
+                }
+                crate::shuttle_catalog::purchase(world, client, actor, console, silicon, &id);
             }
         }
     }

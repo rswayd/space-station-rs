@@ -8,8 +8,9 @@
 //!   round start. Here the infiltrator template (`_maps/shuttles/infiltrator/infiltrator_basic.dmm`)
 //!   loads with the station onto its own level, like the emergency shuttle, and that level is the
 //!   syndicate base: the operatives spawn aboard, its `syndicate_away` dock is "home"
-//!   (`is_infiltrator_docked_at_syndiebase`). Its console flies it (ignition 5.5 s, transit 10 s,
-//!   tg's mobile port defaults) to the station's `syndicate_*` docks and back.
+//!   (`is_infiltrator_docked_at_syndiebase`). Its console (`crate::shuttle_nav`) flies it
+//!   (ignition 5.5 s, transit 10 s, tg's mobile port defaults) to the station's `syndicate_*`
+//!   docks and back.
 //! - **Roundstart** ([`spawn_operatives`]): the ruleset's players get no station job (tg
 //!   `forced_occupations` = nuclear operative); the first is the leader (tg: the most
 //!   experienced). Each gets a body aboard, the alias "<alias> <team name>" (the leader with a
@@ -31,36 +32,32 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
 use ss13_mapload::antag::{AntagData, UPLINK_NUKE_OPS};
 use ss13_mapload::jobs::Outfit;
 use ss13_mapload::spawner::Rng;
 use ss13_mapload::{
-    Areas, DmAtom, DmItem, DmName, DmObj, IconIndex, MapLoadPlugin, ShuttleTemplates, Template,
+    Areas, DmAtom, DmItem, DmName, IconIndex, MapLoadPlugin, ShuttleTemplates, Template,
     read_manifest,
 };
 use ss13_net::chat::server::SendChat;
 use ss13_net::server::{ClientToken, Networked};
 use ss13_shared::chat::{ChatChannel, ChatMessage, ChatSegment, Span};
 use ss13_shared::{Appearance, Dir, Overlay, TilePos};
-use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiActed, UiParams, UiReject, UiSystems};
+use ss13_tgui::server::OpenUi;
 use ss13_world::SpatialIndex;
 
 use super::bomb::{Detonation, NuclearBomb, NuclearBombPlugin, classify, is_space_area};
-use super::{DESTINATION, MOVE, SET_DESTINATION, SHUTTLE_ID, ShuttleConsoleData, ShuttleConsoleUi};
 use crate::antag::objectives::RoundEnd;
 use crate::antag::uplink::PurchaseLog;
 use crate::antag::{AntagHudData, AntagHudUi};
-use crate::click::{ClickResolved, ResolveClicks};
 use crate::construction::{path_of, turf_at};
 use crate::health::{DamageType, Health, Stat, apply_damage};
-use crate::inventory::{CarriedBy, IdCard, Inventory, check_access};
+use crate::inventory::{CarriedBy, IdCard, Inventory};
 use crate::outfit::IdRegistration;
 use crate::server::PlayerMob;
 use crate::shuttle::{
-    EmergencyShuttle, MobileDock, ShuttleMode, StationaryDock, initiate_docking, ordered_turfs,
-    setup_template_shuttle,
+    EmergencyShuttle, MobileDock, ShuttleMode, ordered_turfs, setup_template_shuttle,
 };
 
 /// tg `/datum/antagonist/nukeop` `name`.
@@ -76,28 +73,12 @@ const ANTAG_HUD: (&str, &str) = ("icons/mob/huds/antag_hud.dmi", "synd");
 const INFILTRATOR_PORT: &str = "/obj/docking_port/mobile/infiltrator";
 const INFILTRATOR_ID: &str = "syndicate";
 const AWAY_DOCK: &str = "syndicate_away";
-/// `/obj/machinery/computer/shuttle/syndicate` `possible_destinations`.
-const SYNDICATE_DESTINATIONS: [&str; 9] = [
-    "syndicate_away",
-    "syndicate_z5",
-    "syndicate_ne",
-    "syndicate_nw",
-    "syndicate_n",
-    "syndicate_se",
-    "syndicate_sw",
-    "syndicate_s",
-    "syndicate_custom",
-];
-const SHUTTLE_CONSOLE: &str = "/obj/machinery/computer/shuttle/syndicate";
 const DISK_PATH: &str = "/obj/item/disk/nuclear";
 const PAPER: &str = "/obj/item/paper";
 const CHALLENGE: &str = "/obj/item/nuclear_challenge";
 const NUCLEAR_UPLINK: &str = "/obj/item/uplink/nuclear";
 const PINPOINTER: &str = "/obj/item/pinpointer/nuke";
 const SYNDICATE_PINPOINTER: &str = "/obj/item/pinpointer/nuke/syndicate";
-/// tg `/obj/docking_port/mobile` `ignitionTime`, `callTime`.
-pub const IGNITION_SECS: f64 = 5.5;
-pub const CALL_SECS: f64 = 10.0;
 /// `/datum/antagonist/nukeop/leader/give_alias` titles.
 const LEADER_TITLES: [&str; 7] = [
     "Царь",
@@ -153,20 +134,8 @@ pub struct NukeOutcome {
     pub station_nuke_source: Option<Detonation>,
 }
 
-/// The infiltrator's flight (tg mobile port `mode` and `timer`).
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub enum Flight {
-    #[default]
-    Idle,
-    Igniting {
-        dest: Entity,
-        until: f64,
-    },
-    Transit {
-        dest: Entity,
-        until: f64,
-    },
-}
+/// The infiltrator's flight lives on its port (`crate::shuttle_nav::NavShuttle`).
+pub use crate::shuttle_nav::Flight;
 
 /// The syndicate infiltrator (`SSshuttle.getShuttle("syndicate")`).
 #[derive(Resource, Clone, Debug)]
@@ -177,15 +146,13 @@ pub struct Infiltrator {
     /// The level standing in for the syndicate base.
     pub level_z: u16,
     pub transit_z: u16,
-    pub flight: Flight,
 }
 
-/// A shuttle console (`/obj/machinery/computer/shuttle`).
-#[derive(Component, Clone, Debug, Default)]
-pub struct ShuttleConsole {
-    pub possible_destinations: Vec<String>,
-    pub destination: Option<String>,
-    pub req_access: Vec<String>,
+impl Infiltrator {
+    /// Its flight (`crate::shuttle_nav::NavShuttle`).
+    pub fn flight(&self, world: &World) -> Flight {
+        crate::shuttle_nav::flight(world, self.port)
+    }
 }
 
 /// A pinpointer (`/obj/item/pinpointer/nuke`).
@@ -249,7 +216,6 @@ impl Plugin for NukeopPlugin {
         }
         app.add_plugins(NuclearBombPlugin)
             .init_resource::<NukeOutcome>()
-            .register_ui::<ShuttleConsoleUi>()
             .add_systems(
                 Startup,
                 (
@@ -258,16 +224,7 @@ impl Plugin for NukeopPlugin {
                     setup_world,
                 ),
             )
-            .add_systems(
-                Update,
-                (
-                    console_clicks.after(ResolveClicks).before(UiSystems::Open),
-                    console_acts.in_set(UiSystems::Handle),
-                    tick_flight,
-                    watch_disk,
-                    tick_pinpointers,
-                ),
-            );
+            .add_systems(Update, (watch_disk, tick_pinpointers));
     }
 }
 
@@ -308,7 +265,7 @@ fn load_data(world: &mut World) {
     });
 }
 
-/// Disks, consoles and pinpointers on the maps.
+/// Disks and pinpointers on the maps (the console: `crate::shuttle_nav`).
 fn setup_world(world: &mut World) {
     let mut items = world.query::<(Entity, &DmItem)>();
     let found: Vec<(Entity, String)> = items
@@ -325,19 +282,6 @@ fn setup_world(world: &mut World) {
                 ..default()
             });
         }
-    }
-    let mut objs = world.query::<(Entity, &DmObj)>();
-    let consoles: Vec<Entity> = objs
-        .iter(world)
-        .filter(|(_, o)| ss13_mapload::fidelity::is_under(&o.path, SHUTTLE_CONSOLE))
-        .map(|(e, _)| e)
-        .collect();
-    for e in consoles {
-        world.entity_mut(e).insert(ShuttleConsole {
-            possible_destinations: SYNDICATE_DESTINATIONS.map(str::to_owned).to_vec(),
-            destination: None,
-            req_access: vec!["syndicate".into()],
-        });
     }
 }
 
@@ -369,8 +313,10 @@ fn setup_infiltrator(world: &mut World) {
         transit: shuttle.transit,
         level_z: shuttle.level_z,
         transit_z: shuttle.transit_z,
-        flight: Flight::Idle,
     });
+    world
+        .entity_mut(shuttle.port)
+        .insert(crate::shuttle_nav::NavShuttle::new(shuttle.transit));
 }
 
 pub(crate) fn client_of(world: &World, mob: Entity) -> Option<Entity> {
@@ -1540,249 +1486,6 @@ fn tick_pinpointers(world: &mut World, mut next: Local<f64>) {
     }
 }
 
-// --- The infiltrator's console --------------------------------------------------------------
-
-fn console_clicks(
-    mut clicks: MessageReader<ClickResolved>,
-    consoles: Query<&DmName, With<ShuttleConsole>>,
-    inventories: Query<&Inventory>,
-    mut open: MessageWriter<OpenUi>,
-) {
-    for click in clicks.read() {
-        let Ok(name) = consoles.get(click.target) else {
-            continue;
-        };
-        if inventories
-            .get(click.mob)
-            .is_ok_and(|inv| inv.active_item().is_none())
-        {
-            open.write(OpenUi::new::<ShuttleConsoleUi>(
-                click.client,
-                click.mob,
-                click.target,
-                crate::vending::plain_name(&name.name),
-            ));
-        }
-    }
-}
-
-/// tg `getTimerStr`.
-pub fn timer_str(left: f64) -> String {
-    if left > 3600.0 {
-        return "--:--".into();
-    }
-    let left = left.max(0.0).round() as u64;
-    format!("{:02}:{:02}", left / 60, left % 60)
-}
-
-/// `get_valid_destinations`: docks named by the console, not the one the shuttle is on.
-fn valid_destinations(
-    world: &mut World,
-    console: &ShuttleConsole,
-) -> Vec<(Entity, String, String)> {
-    let docked = world
-        .get_resource::<Infiltrator>()
-        .and_then(|i| world.get::<MobileDock>(i.port))
-        .and_then(|m| m.docked);
-    let mut q = world.query::<(Entity, &StationaryDock)>();
-    let mut out: Vec<(Entity, String, String)> = q
-        .iter(world)
-        .filter(|(e, d)| console.possible_destinations.contains(&d.id) && Some(*e) != docked)
-        .map(|(e, d)| (e, d.id.clone(), d.name.clone()))
-        .collect();
-    out.sort_by(|a, b| a.1.cmp(&b.1));
-    out
-}
-
-impl ServerUi for ShuttleConsoleUi {
-    type Source = &'static ShuttleConsole;
-    type UserParam = (
-        Option<Res<'static, Infiltrator>>,
-        Query<'static, 'static, (Entity, &'static StationaryDock)>,
-        Query<'static, 'static, &'static MobileDock>,
-        Res<'static, Time>,
-    );
-    type Act = ConsoleAct;
-
-    fn static_data(_: &ShuttleConsole) {}
-
-    fn data(
-        console: &ShuttleConsole,
-        _: Entity,
-        (infiltrator, docks, mobiles, time): &bevy::ecs::system::SystemParamItem<
-            '_,
-            '_,
-            Self::UserParam,
-        >,
-    ) -> ShuttleConsoleData {
-        let Some(infiltrator) = infiltrator.as_deref() else {
-            return ShuttleConsoleData {
-                docked_location: "Unknown".into(),
-                timer_str: "00:00".into(),
-                status: "Missing".into(),
-                ..default()
-            };
-        };
-        let now = time.elapsed_secs_f64();
-        let docked = mobiles.get(infiltrator.port).ok().and_then(|m| m.docked);
-        let docked_location = docked
-            .and_then(|d| docks.get(d).ok())
-            .map_or("In transit".to_owned(), |(_, d)| d.name.clone());
-        let (status, left) = match infiltrator.flight {
-            Flight::Idle => ("Idle", 0.0),
-            Flight::Igniting { until, .. } => ("Igniting", until - now),
-            Flight::Transit { until, .. } => ("In Transit", until - now),
-        };
-        let mut locations: Vec<(String, String)> = docks
-            .iter()
-            .filter(|(e, d)| console.possible_destinations.contains(&d.id) && Some(*e) != docked)
-            .map(|(_, d)| (d.id.clone(), d.name.clone()))
-            .collect();
-        locations.sort();
-        let mut data = ShuttleConsoleData {
-            docked_location,
-            locked: false,
-            authorization_required: false,
-            timer_str: timer_str(left),
-            destination: console.destination.clone(),
-            status: status.into(),
-            locations,
-        };
-        if data.locations.len() == 1 {
-            data.destination = Some(data.locations[0].0.clone());
-        }
-        if data.locations.is_empty() {
-            data.locked = true;
-            data.status = "Locked".into();
-        }
-        data
-    }
-
-    fn parse_act(action: &str, params: &UiParams) -> Result<ConsoleAct, UiReject> {
-        let id = |key: &str| {
-            params
-                .get(key)
-                .filter(|v| !v.is_empty() && v.len() <= 64)
-                .map(str::to_owned)
-                .ok_or_else(|| UiReject::BadParams(format!("{key}: missing")))
-        };
-        match action {
-            MOVE => Ok(ConsoleAct::Move(id(SHUTTLE_ID)?)),
-            SET_DESTINATION => Ok(ConsoleAct::SetDestination(id(DESTINATION)?)),
-            _ => Err(UiReject::UnknownAction),
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ConsoleAct {
-    Move(String),
-    SetDestination(String),
-}
-
-/// `/obj/machinery/computer/shuttle/ui_act`: access, then a destination the console offers now.
-fn console_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed<ShuttleConsoleUi>>>) {
-    let pending: Vec<(Entity, Entity, Entity, ConsoleAct)> = acts
-        .read(world.resource::<Messages<UiActed<ShuttleConsoleUi>>>())
-        .map(|a| (a.client, a.actor, a.source, a.act.clone()))
-        .collect();
-    for (client, actor, console_e, act) in pending {
-        let Some(console) = world.get::<ShuttleConsole>(console_e).cloned() else {
-            continue;
-        };
-        let access = world
-            .get::<Inventory>(actor)
-            .and_then(|inv| {
-                [inv.hands[inv.active], inv.hands[1 - inv.active], inv.id]
-                    .into_iter()
-                    .flatten()
-                    .find_map(|i| {
-                        let card = crate::inventory::get_id(world, i)?;
-                        world.get::<IdCard>(card).map(|c| c.access.clone())
-                    })
-            })
-            .unwrap_or_default();
-        if !check_access(&console.req_access, &[], &access) {
-            chat_to(world, Some(client), Span::Danger, "Access denied.");
-            continue;
-        }
-        let valid = valid_destinations(world, &console);
-        match act {
-            // The window's dropdown sends the dock's name (tgui maps it back to the id).
-            ConsoleAct::SetDestination(value) => {
-                if let Some((_, id, _)) = valid.iter().find(|(_, d, n)| *d == value || *n == value)
-                    && let Some(mut c) = world.get_mut::<ShuttleConsole>(console_e)
-                {
-                    c.destination = Some(id.clone());
-                }
-            }
-            ConsoleAct::Move(id) => {
-                let Some(&(dest, ..)) = valid.iter().find(|(_, d, _)| *d == id) else {
-                    warn!("{actor} tried to send the infiltrator to an invalid dock {id:?}");
-                    chat_to(world, Some(client), Span::Warning, "Invalid destination.");
-                    continue;
-                };
-                let now = world.resource::<Time>().elapsed_secs_f64();
-                let Some(mut infiltrator) = world.get_resource_mut::<Infiltrator>() else {
-                    continue;
-                };
-                if infiltrator.flight != Flight::Idle {
-                    chat_to(
-                        world,
-                        Some(client),
-                        Span::Warning,
-                        "Shuttle already in transit.",
-                    );
-                    continue;
-                }
-                infiltrator.flight = Flight::Igniting {
-                    dest,
-                    until: now + IGNITION_SECS,
-                };
-                chat_to(
-                    world,
-                    Some(client),
-                    Span::Plain,
-                    "Терминал говорит: \"Shuttle departing. Please stand away from the doors.\"",
-                );
-                info!("{actor} sent the infiltrator towards {id}");
-            }
-        }
-    }
-}
-
-/// The infiltrator's mobile port timer: ignition, transit, arrival.
-fn tick_flight(world: &mut World) {
-    let Some(infiltrator) = world.get_resource::<Infiltrator>().cloned() else {
-        return;
-    };
-    let now = world.resource::<Time>().elapsed_secs_f64();
-    match infiltrator.flight {
-        Flight::Igniting { dest, until } if now >= until => {
-            let moved = initiate_docking(world, infiltrator.port, infiltrator.transit);
-            info!("infiltrator into transit: {moved:?}");
-            world.resource_mut::<Infiltrator>().flight = if moved.is_ok() {
-                Flight::Transit {
-                    dest,
-                    until: now + CALL_SECS,
-                }
-            } else {
-                Flight::Idle
-            };
-        }
-        Flight::Transit { dest, until } if now >= until => {
-            let moved = initiate_docking(world, infiltrator.port, dest);
-            info!("infiltrator docked: {moved:?}");
-            if moved.is_err() {
-                // tg would keep it in transit; back home rather than stranded.
-                let _ = initiate_docking(world, infiltrator.port, infiltrator.away);
-            }
-            world.resource_mut::<Infiltrator>().flight = Flight::Idle;
-        }
-        _ => {}
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1876,9 +1579,6 @@ mod tests {
             assert!(code.bytes().all(|b| b.is_ascii_digit()));
             assert!(!syndicate_name(&mut rng).is_empty());
         }
-        assert_eq!(timer_str(65.2), "01:05");
-        assert_eq!(timer_str(-3.0), "00:00");
-        assert_eq!(timer_str(4000.0), "--:--");
         let here = TilePos::new(10, 10, 1);
         assert_eq!(
             pinpointer_state(here, Some(TilePos::new(10, 15, 1)), false),

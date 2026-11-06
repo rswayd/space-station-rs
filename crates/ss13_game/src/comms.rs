@@ -59,6 +59,24 @@ pub struct CommsConsoleData {
     pub lower_text: String,
     /// tg `MAX_STATUS_LINE_LENGTH`.
     pub max_status_line_length: u32,
+    /// tg `canBuyShuttles` is not `FALSE`: the "Purchase Shuttle" button shows.
+    pub can_buy_shuttles: bool,
+    /// tg `canBuyShuttles` as a string: why the button is disabled.
+    pub buy_shuttles_fail_reason: Option<String>,
+    /// `STATE_BUYING_SHUTTLE`: the cargo budget and what this login may buy.
+    pub budget: i64,
+    pub shuttles: Vec<ShuttleOffer>,
+}
+
+/// A purchasable emergency shuttle in `shuttles` (tg `name`, `description`, `occupancy_limit`,
+/// `creditCost`; `id` stands for its `ref`).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ShuttleOffer {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub occupancy_limit: String,
+    pub credit_cost: i64,
 }
 
 /// A `/datum/comm_message` in `messages`.
@@ -132,3 +150,6 @@ pub const PICTURE: &str = "picture";
 pub const ANSWER_MESSAGE: &str = "answerMessage";
 pub const ANSWER: &str = "answer";
 pub const DELETE_MESSAGE: &str = "deleteMessage";
+/// `act('purchaseShuttle', { shuttle })`.
+pub const PURCHASE_SHUTTLE: &str = "purchaseShuttle";
+pub const SHUTTLE: &str = "shuttle";

@@ -29,8 +29,9 @@
 // space level made at round start (tg reserves one per flight with hyperspace turfs). Both have
 // the shuttle's own direction, so the emergency shuttle never rotates there (tg turns it at
 // CentCom and in transit); a dock of another direction turns `Facing` only.
-// shortcut: no hostile environments, ripples, hyperspace sounds, shuttle events or airlock
-// cycling on docking. A hijacked shuttle (`crate::shuttle_console_server`) docks at the CentCom
+//! - Hyperspace sounds ([`hyperspace_sound`]): the engines rev up 5 s before the launch, the
+//!   launch, and the arrival half a second before the shuttle docks at CentCom.
+// shortcut: no hostile environments, ripples, shuttle events or airlock cycling on docking. A hijacked shuttle (`crate::shuttle_console_server`) docks at the CentCom
 // stand-in too (no Syndicate base level, `emergency_syndicate`); `syndicate_landing` records it.
 
 use std::collections::{HashMap, HashSet};
@@ -46,8 +47,8 @@ use ss13_mapload::dock::{
 };
 use ss13_mapload::spawner::Rng;
 use ss13_mapload::{
-    Areas, DEFAULT_AREA, DEFAULT_TURF, DmAtom, DmDockingPort, DmName, DmPower, MapLoadPlugin,
-    MapLoadReport, MapSeed, ShuttleTemplates, Turf,
+    Areas, DEFAULT_AREA, DEFAULT_TURF, DmAtom, DmDockingPort, DmName, DmObj, DmPower,
+    MapLoadPlugin, MapLoadReport, MapSeed, ShuttleTemplates, Turf,
 };
 use ss13_shared::{Dir, Facing, TilePos};
 use ss13_world::SpatialIndex;
@@ -76,7 +77,7 @@ pub const ACCESS_COMMAND: &str = "command";
 pub const ACCESS_CAPTAIN: &str = "captain";
 /// tg `setTimer(20)` after a failed docking.
 const RETRY_SECS: f64 = 2.0;
-const EMERGENCY_PORT: &str = "/obj/docking_port/mobile/emergency";
+pub(crate) const EMERGENCY_PORT: &str = "/obj/docking_port/mobile/emergency";
 /// tg `SHUTTLE_DEFAULT_SHUTTLE_AREA_TYPE`.
 const SHUTTLE_AREA: &str = "/area/shuttle";
 const SPACE_TURF: &str = "/turf/open/space";
@@ -443,6 +444,8 @@ pub struct EmergencyShuttle {
     pub last_move: Option<MoveReport>,
     /// It flew to the Syndicate instead of CentCom (hijacked, or the revolution won).
     pub syndicate_landing: bool,
+    /// tg `sound_played`: the warm-up sound of this launch played.
+    pub sound_played: bool,
 }
 
 #[derive(Resource)]
@@ -513,12 +516,15 @@ impl Plugin for ShuttleServerPlugin {
                 crate::shuttle_console_server::ShuttleConsoleServerPlugin,
                 crate::escape_pods::EscapePodsPlugin,
                 crate::arrivals::ArrivalsPlugin,
+                crate::shuttle_nav::ShuttleNavPlugin,
+                crate::shuttle_catalog::ShuttleCatalogPlugin,
             ));
     }
 }
 
+/// The map's emergency shuttle template.
 #[derive(Resource)]
-struct EmergencyTemplate(PathBuf);
+pub(crate) struct EmergencyTemplate(pub(crate) PathBuf);
 
 /// Adds `template` to the [`ShuttleTemplates`] the station loads with (plugin build time).
 pub fn push_template(app: &mut App, template: PathBuf) {
@@ -637,7 +643,7 @@ fn area_path(world: &World, area: Entity) -> Option<&str> {
     world.get::<DmPower>(area).map(|p| p.path.as_str())
 }
 
-fn area_named(world: &World, path: &str) -> Option<Entity> {
+pub(crate) fn area_named(world: &World, path: &str) -> Option<Entity> {
     let areas = world.resource::<Areas>();
     areas
         .entities()
@@ -831,6 +837,7 @@ pub(crate) fn setup_shuttle(world: &mut World) {
         transit_z: shuttle.transit_z,
         last_move: None,
         syndicate_landing: false,
+        sound_played: false,
     });
 }
 
@@ -1395,6 +1402,7 @@ fn tick(world: &mut World) {
     let config = world.resource::<ShuttleConfig>().clone();
     check_auto_evac(world, &config, now);
     let step = world.resource_mut::<EmergencyShuttle>().state.check(now);
+    emergency_sounds(world, now);
     let Some(step) = step else {
         return;
     };
@@ -1432,6 +1440,7 @@ fn tick(world: &mut World) {
         ShuttleStep::Launch => {
             // Every escape pod still at the station follows it (`on_emergency_launch`).
             crate::escape_pods::on_emergency_launch(world);
+            hyperspace_sound(world, port, Hyperspace::Launch);
             let result = initiate_docking(world, port, transit);
             log_move(world, "enter transit", Some(result));
             let mut shuttle = world.resource_mut::<EmergencyShuttle>();
@@ -1473,6 +1482,139 @@ fn tick(world: &mut World) {
             shuttle.syndicate_landing = redirect;
             shuttle.state.arrived();
         }
+    }
+}
+
+/// The emergency shuttle's `check` sounds: the warm-up 5 s before the launch, the arrival half a
+/// second before it docks at CentCom (tg checks once a second; this plays each once per flight).
+fn emergency_sounds(world: &mut World, now: f64) {
+    let shuttle = world.resource::<EmergencyShuttle>();
+    let left = shuttle.state.timer.left(now);
+    let phase = match (shuttle.state.mode, left) {
+        (ShuttleMode::Igniting, Some(left))
+            if left <= HYPERSPACE_WARMUP_SECS && !shuttle.sound_played =>
+        {
+            Hyperspace::Warmup
+        }
+        (ShuttleMode::Escape, Some(left))
+            if left <= HYPERSPACE_END_SECS && shuttle.sound_played =>
+        {
+            Hyperspace::End
+        }
+        _ => return,
+    };
+    let port = shuttle.port;
+    world.resource_mut::<EmergencyShuttle>().sound_played = phase == Hyperspace::Warmup;
+    hyperspace_sound(world, port, phase);
+}
+
+/// tg `HYPERSPACE_WARMUP`, `HYPERSPACE_LAUNCH`, `HYPERSPACE_END`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Hyperspace {
+    Warmup,
+    Launch,
+    End,
+}
+
+impl Hyperspace {
+    fn sound(self) -> &'static str {
+        match self {
+            Hyperspace::Warmup => "hyperspace_begin",
+            Hyperspace::Launch => "hyperspace_progress",
+            Hyperspace::End => "hyperspace_end",
+        }
+    }
+}
+
+/// The emergency shuttle revs its engines this long before the launch (tg `time_left <= 50`).
+pub const HYPERSPACE_WARMUP_SECS: f64 = 5.0;
+/// tg `HYPERSPACE_END_TIME` (5 deciseconds).
+pub const HYPERSPACE_END_SECS: f64 = 0.5;
+const SHUTTLE_ENGINE: &str = "/obj/machinery/power/shuttle_engine";
+const HYPERSPACE_DIR: &str = "sound/runtime/hyperspace/";
+
+/// tg `/obj/docking_port/mobile/hyperspace_sound(phase)`: players on the shuttle's level within
+/// `max(width, height)` tiles of its first engine hear the sound from their nearest engine,
+/// within 2.5 times that its distant version from the first engine; a shuttle without engines
+/// plays it from one of its doors, one without either plays nothing.
+pub fn hyperspace_sound(world: &mut World, port: Entity, phase: Hyperspace) {
+    let (Some(mobile), Some(&origin)) = (
+        world.get::<MobileDock>(port).cloned(),
+        world.get::<TilePos>(port),
+    ) else {
+        return;
+    };
+    let (mut engines, mut doors) = (Vec::new(), Vec::new());
+    {
+        let index = world.resource::<SpatialIndex>();
+        for tile in ordered_turfs(origin, mobile.dir, mobile.size) {
+            for &e in index.on_tile(tile) {
+                if world
+                    .get::<DmObj>(e)
+                    .is_some_and(|o| is_under(&o.path, SHUTTLE_ENGINE))
+                {
+                    engines.push(tile);
+                } else if world.get::<crate::doors::Door>(e).is_some() {
+                    doors.push(tile);
+                }
+            }
+        }
+    }
+    let Some(&distant) = engines.first().or(doors.first()) else {
+        return;
+    };
+    let range = mobile.size.width.max(mobile.size.height).max(0) as u32;
+    let long_range = range as f32 * 2.5;
+    let mut players = world.query::<(Entity, &crate::server::PlayerMob, &TilePos)>();
+    let listeners: Vec<(Entity, Entity, TilePos)> = players
+        .iter(world)
+        .filter(|(_, _, p)| p.z == origin.z)
+        .map(|(e, p, pos)| (e, p.client, *pos))
+        .collect();
+    for (mob, client, at) in listeners {
+        let Some(far) = at.chebyshev(distant) else {
+            continue;
+        };
+        let (source, file) = if (far as f32) <= long_range && far > range {
+            (
+                distant,
+                format!("{HYPERSPACE_DIR}{}_distance.ogg", phase.sound()),
+            )
+        } else if far <= range {
+            let nearest = engines
+                .iter()
+                .copied()
+                .min_by_key(|e| at.chebyshev(*e).unwrap_or(u32::MAX))
+                .unwrap_or(distant);
+            (nearest, format!("{HYPERSPACE_DIR}{}.ogg", phase.sound()))
+        } else {
+            continue;
+        };
+        if !crate::sound::can_hear(world, mob) {
+            continue;
+        }
+        let (dx, dy) = (source.x - at.x, source.y - at.y);
+        let distance = ((dx * dx + dy * dy) as f32).sqrt();
+        let volume = world.get_resource::<Atmos>().map_or(100.0, |atmos| {
+            100.0
+                * crate::sound::pressure_factor(
+                    atmos.pressure(at),
+                    atmos.pressure(source),
+                    distance,
+                )
+        });
+        if volume <= 0.0 {
+            continue;
+        }
+        world.write_message(ss13_net::sound::server::SendSound {
+            client,
+            sound: ss13_shared::protocol::SoundEvent {
+                file,
+                volume,
+                speed: 1.0,
+                offset: Some([dx as i16, dy as i16]),
+            },
+        });
     }
 }
 
