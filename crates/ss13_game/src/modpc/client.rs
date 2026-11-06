@@ -1,10 +1,12 @@
 //! Client half of the PDA: the NtOS window (tg `NtosWindow` with `NtosMain`, `NtosMessenger`,
 //! `NtosNotepad`, `NtosCrewManifest`, `NtosGasAnalyzer`, `NtosCard`, `NtosStationAlertConsole`,
-//! `NtosRecords`, `NtosSignaler`, `NtosStatus`, BandaStation `NtosMinesweeperPanel`).
+//! `NtosRecords`, `NtosSignaler`, `NtosStatus`, `NtosNetDownloader`, BandaStation
+//! `NtosMinesweeperPanel`).
 // shortcut: one window size for every screen (tg sizes each interface), no device themes, no
 // search field in the records (local input state does not re-render the view), no
 // photos or search field in the messenger, Enter sends (no send button: buttons carry fixed
-// params, the text is the input's), no "beginning of chat" divider or auto-scroll to the bottom.
+// params, the text is the input's), no "beginning of chat" divider or auto-scroll to the bottom,
+// no search field in the software hub.
 
 use bevy::app::Propagate;
 use bevy::scene::{EntityScene, SceneList};
@@ -63,6 +65,7 @@ fn view(data: &NtosData, local: &UiLocalState) -> impl Scene + use<> {
                 )))
             }
             NtosScreen::Minesweeper(m) => Box::new(EntityScene(minesweeper_screen(m, local))),
+            NtosScreen::Downloader(d) => Box::new(EntityScene(downloader_screen(d, local))),
         };
         bsn! {
             @WindowContent
@@ -1267,6 +1270,158 @@ fn minesweeper_leaderboard(d: &MinesweeperData) -> impl Scene + use<> {
                 @TableRow Children [ {header} ]
                 --
                 {rows}
+            ]
+        ]
+    }
+}
+
+/// The software hub's local state: the category tab (`selectedCategory`).
+const DOWNLOADER_CATEGORY: &str = "downloaderCategory";
+
+/// `NtosNetDownloader`: the error, the disk bar, the category tabs and their programs.
+fn downloader_screen(d: &DownloaderData, local: &UiLocalState) -> impl Scene + use<> {
+    use super::programs::CATEGORIES;
+    let selected = match local.get(DOWNLOADER_CATEGORY) {
+        "" => CATEGORIES[0].to_owned(),
+        s => s.to_owned(),
+    };
+    let error = d.error.clone().map(|e| {
+        EntityScene(bsn! {
+            @NoticeBox
+            Children [
+                Node Children [ Text(e) ]
+                --
+                @ss13_ui_kit::Button { @content: "Reset" }
+                Act({PRG_RESET_ERROR.to_owned()})
+            ]
+        })
+    });
+    let completion = d.downloading.as_ref().map_or(0.0, |p| p.completion);
+    let used = d.disk_used as f32 + completion;
+    let disk_label = format!(
+        "{} GQ free of {} GQ",
+        (d.disk_size as f32 - used).max(0.0),
+        d.disk_size
+    );
+    let disk_size = d.disk_size as f32;
+    let status = d.downloading.as_ref().map(|p| {
+        let pct = if p.size == 0 {
+            100.0
+        } else {
+            p.completion / p.size as f32 * 100.0
+        };
+        let line = format!("Download: {}.prg ({pct:.0}%)", p.name);
+        EntityScene(bsn! { Node Children [ Text(line) ] })
+    });
+    let tabs: Vec<_> = CATEGORIES
+        .iter()
+        .map(|&category| {
+            let is_selected = category == selected;
+            bsn! {
+                @TabsTab { @content: {category.to_owned()} }
+                TabsTab { selected: is_selected }
+                SetLocal { key: {DOWNLOADER_CATEGORY.to_owned()}, value: {category.to_owned()}, rerender: true }
+            }
+        })
+        .collect();
+    let mut items: Vec<&DownloadableProgram> = d
+        .programs
+        .iter()
+        .filter(|p| p.category == selected)
+        .collect();
+    items.sort_by(|a, b| (!a.compatible, &a.filedesc).cmp(&(!b.compatible, &b.filedesc)));
+    let free = d.disk_size.saturating_sub(d.disk_used);
+    let downloading = d.downloading.as_ref();
+    let rows: Vec<_> = items
+        .into_iter()
+        .map(|p| {
+            let title = p.filedesc.clone();
+            let size = format!("{} GQ", p.size);
+            let info = p.fileinfo.clone();
+            let control: Box<dyn SceneList> = match downloading {
+                Some(dl) if dl.name == p.filename => {
+                    let (value, max) = (dl.completion, p.size.max(1) as f32);
+                    Box::new(EntityScene(bsn! {
+                        Node { width: px(110) }
+                        Children [
+                            @ProgressBar
+                            ProgressBar { value: value, max_value: max, color: UiColor::Good }
+                        ]
+                    }))
+                }
+                _ if !p.installed && p.compatible && p.access && p.size <= free => {
+                    let busy = downloading.is_some();
+                    let params = ActParams(vec![("filename".to_owned(), p.filename.clone())]);
+                    Box::new(EntityScene(bsn! {
+                        @ss13_ui_kit::Button { @content: "Загрузить", @icon: "download" }
+                        ss13_ui_kit::Button { disabled: busy }
+                        Act({PRG_DOWNLOAD_FILE.to_owned()})
+                        params
+                    }))
+                }
+                _ => {
+                    let (text, icon, color) = if p.installed {
+                        ("Установлено", "check", UiColor::Good)
+                    } else if !p.compatible {
+                        ("Несовместимо", "times", UiColor::Bad)
+                    } else if !p.access {
+                        ("Нет доступа", "times", UiColor::Grey)
+                    } else {
+                        ("Нет места", "times", UiColor::Grey)
+                    };
+                    Box::new(EntityScene(bsn! {
+                        @ss13_ui_kit::Button { @content: text, @icon: icon }
+                        ss13_ui_kit::Button { color: color }
+                    }))
+                }
+            };
+            bsn! {
+                @Section { @title: title }
+                Children [
+                    Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, column_gap: px(6) }
+                    Children [
+                        Node { flex_grow: 1.0 }
+                        Propagate::<Italic>(Italic(true))
+                        Propagate::<TextColor>(TextColor(Color::srgba(1.0, 1.0, 1.0, 0.5)))
+                        Children [ Text(info) ]
+                        --
+                        Node Children [ Text(size) ]
+                        --
+                        {control}
+                    ]
+                ]
+            }
+        })
+        .collect();
+    bsn! {
+        Node { flex_direction: FlexDirection::Column, flex_grow: 1.0, min_height: px(0) }
+        Children [
+            {error}
+            --
+            @Section
+            Children [
+                @ProgressBar { @empty: true }
+                ProgressBar { value: used, max_value: disk_size }
+                Children [ Text(disk_label) ]
+                --
+                {status}
+            ]
+            --
+            @Stack { @fill: true }
+            Children [
+                @StackItem
+                Node { width: px(150) }
+                Children [
+                    @Tabs { @vertical: true, @fill: true }
+                    Children [ {tabs} ]
+                ]
+                --
+                @StackItem { @grow: 1.0 }
+                Node { min_width: px(0) }
+                Children [
+                    @Section { @fill: true, @scrollable: true }
+                    Children [ {rows} ]
+                ]
             ]
         ]
     }
