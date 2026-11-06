@@ -1044,7 +1044,7 @@ pub fn gain(world: &mut World, brain: Entity, kind: Kind, resilience: Option<Res
     }
     if kind == Kind::Obsessed {
         let mut rng = super::fork_rng(world);
-        return gain_obsessed(world, brain, None, resilience, &mut rng);
+        return gain_obsessed(world, brain, None, Some(resilience), &mut rng);
     }
     let mut trauma = Trauma {
         kind,
