@@ -23,7 +23,7 @@
 Бустеры TCG из карго; хранилище колоды TCG показывает карты.
 
 - **Код:** [`/datum/storage/tcg`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/storage/subtypes/others/cards.dm#L4), [`/datum/supply_pack/costumes_toys/randomised/tcg`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/cargo/packs/costumes_toys.dm#L232)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ❌ нет — нужен конвертер `strings/tcg/*.json` (шаблоны, ключевые слова), иконки `icons/runtime/tcg`, стопка TCG как хранилище, бустеры
 
 _«Игральные кости» описано в [../items/toys.md](../items/toys.md)._
 
@@ -31,4 +31,4 @@ _«Игральные кости» описано в [../items/toys.md](../items
 Однорукий бандит: ставка монетами или голочипами (мультитул переключает способ оплаты), 5 барабанов, выигрыш по линиям, джекпот из банка автомата; emag «подкручивает» автомат.
 
 - **Код:** [`/obj/machinery/computer/slot_machine`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/slotmachine.dm#L22), [`spin()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/slotmachine.dm#L321), [`give_prizes()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/slotmachine.dm#L415); tgui: [`SlotMachine.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/SlotMachine.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ — `crates/ss13_game/src/service/slots.rs` (сервер), окно `SlotMachine` — `crates/ss13_game/src/slot_machine.rs`, `slot_machine_client.rs`: случайное имя автомата, монеты/голочипы на баланс (монета изредка вылетает обратно), мультитул меняет оплату только при пустом балансе, спин 5 кр. на 4 с, 5 барабанов по 3 символа, линии 3/4/5 — фриспины/400/1000 из банка (недостающее — на баланс), джекпот — банк + 10000 с объявлением, ловушка (флешбенг, наручники, телефон обнуляет баланс), выплата голочипом или монетами, emag — железные монеты летят в ближайшего; все 11 видов автоматов со своими символами. Отклонения: free spins списываются из банка (у tg `max()` — баг), сдача монет остаётся на балансе (у tg удваивается); нет: привязки банковского счёта по ID, EMP, настроения, анимации барабанов, иллюзорного удара током (только сообщение)

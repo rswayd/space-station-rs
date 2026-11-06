@@ -167,6 +167,7 @@
 //! | 3200 | `service::server::interact` |
 //! | 3201 | `service::stationery::cutter_right_click` (right click) |
 //! | 3211 | `service::cards::attack_hand` (draw from a deck; right click: face up, flip a card) |
+//! | 3221 | `service::slots` (the slot machine window) |
 //! | 3250 | `fishing::aquarium::interact` (aquariums, the fish-porter) |
 //! | 3300 | `defenses::server::interact` |
 //! | 3400 | `silicon::law_rack::interact` |
@@ -225,6 +226,7 @@
 //! | 1580 | `events::anomalies::neutralizer_act`, `releaser_act` (anomalies, anomaly cores) |
 //! | 1585 | `events::radiation_leak::tool_act` (a leaking machine's fixing tools) |
 //! | 1590 | `teapot::item_interaction` (before `machine_frame` takes it apart) |
+//! | 1591 | `service::slots` (coins, holochips, multitool and emag on a slot machine) |
 //! | 1595 | `science::bitrunning::avatar::crowbar_act` (prying a netpod open) |
 //! | 1597 | `science::quantum_pad::item_interaction` (multitool links, keycards) |
 //! | 1600 | `machine_frame::item_interaction` |

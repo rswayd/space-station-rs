@@ -77,6 +77,8 @@ impl Plugin for ServiceServerPlugin {
         });
         // Razors, lipstick, the dye spray and mirrors (`super::barber`).
         super::barber::build(app);
+        // The slot machine (`super::slots`).
+        super::slots::build(app);
         app.register_ui::<PaperSheetUi>()
             .register_ui::<MarkdownViewerUi>()
             .init_resource::<super::religion::Religion>()
@@ -193,6 +195,7 @@ fn add_obj_parts(add: On<Add<DmObj>>, mut commands: Commands) {
         super::archive::add_obj_parts(world, e, &path);
         super::statues::add_obj_parts(world, e, &path);
         super::stationery::add_obj_parts(world, e, &path);
+        super::slots::add_obj_parts(world, e, &path);
     });
 }
 

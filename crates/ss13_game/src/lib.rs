@@ -446,6 +446,9 @@ pub mod shuttle_remote;
 pub mod silicon;
 #[cfg(feature = "server")]
 pub mod skills;
+pub mod slot_machine;
+#[cfg(feature = "client")]
+pub mod slot_machine_client;
 #[cfg(feature = "server")]
 pub mod smartfridge;
 #[cfg(feature = "server")]

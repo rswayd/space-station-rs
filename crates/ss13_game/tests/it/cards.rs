@@ -6,6 +6,8 @@ use std::path::{Path, PathBuf};
 use bevy::prelude::*;
 use ss13_game::inventory::Inventory;
 use ss13_game::service::cards::{CardHand, Deck, SingleCard};
+use ss13_game::service::slots::SlotMachine;
+use ss13_game::slot_machine::SlotMachineUi;
 use ss13_game::testing::{self, Drive, fixture_map, write_fixture};
 use ss13_mapload::DmItem;
 use ss13_shared::TilePos;
@@ -40,6 +42,11 @@ const TYPES: &str = r##"{
     "/obj/item/toy/cards/cardhand": { "parent": "/obj/item/toy/cards" },
     "/obj/item/toy/singlecard": { "parent": "/obj/item/toy" },
     "/obj/item/toy/singlecard/wizoff_ruleset": { "parent": "/obj/item/toy/singlecard" },
+    "/obj/item/holochip": { "parent": "/obj/item" },
+    "/obj/machinery": { "parent": "/obj", "declared_vars": {
+        "icon": { "resource": "i.dmi" }, "icon_state": "card_grey", "density": 1, "anchored": 1 } },
+    "/obj/machinery/computer": { "parent": "/obj/machinery" },
+    "/obj/machinery/computer/slot_machine": { "parent": "/obj/machinery/computer" },
     "/obj/item/card": { "parent": "/obj/item" },
     "/obj/item/card/id": { "parent": "/obj/item/card", "declared_vars": {
         "access": { "list": [] }, "icon_state": "card_grey", "slot_flags": 256 } },
@@ -68,17 +75,18 @@ const TYPES: &str = r##"{
   }
 }"##;
 
-/// The player starts at (2,3), the deck lies east (3,3).
+/// The player starts at (2,3), the deck lies east (3,3), the slot machine stands south (2,2).
 const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 "f" = (/turf/open/floor,/area/space)
 "s" = (/obj/effect/landmark/start/assistant,/turf/open/floor,/area/space)
 "d" = (/obj/item/toy/cards/deck,/turf/open/floor,/area/space)
+"m" = (/obj/machinery/computer/slot_machine,/turf/open/floor,/area/space)
 
 (1,1,1) = {"
 wwwww
 wfffw
 wsdfw
-wfffw
+wmffw
 wwwww
 "}
 "##;
@@ -103,6 +111,8 @@ fn fixture_assets(test: &str) -> PathBuf {
         "/obj/item/toy/cards/cardhand",
         "/obj/item/toy/singlecard",
         "/obj/item/toy/singlecard/wizoff_ruleset",
+        "/obj/item/holochip",
+        "/obj/machinery/computer/slot_machine",
         "/turf/open/floor",
         "/turf/closed/wall",
         "/turf/open/space/basic",
@@ -264,4 +274,53 @@ fn a_deck_deals_takes_back_and_cards_make_a_hand() {
         .collect();
     held.sort();
     assert_eq!(held, ["Ace of Hearts", "Joker Mime"]);
+}
+
+#[test]
+fn a_slot_machine_spins_for_its_price() {
+    let mut s = Station::start("a_slot_machine_spins_for_its_price");
+    let machine = {
+        let world = s.server.world_mut();
+        let mut q = world.query::<(Entity, &ss13_mapload::DmObj)>();
+        q.iter(world)
+            .find(|(_, o)| o.path == "/obj/machinery/computer/slot_machine")
+            .map(|(e, _)| e)
+            .expect("the slot machine on the map")
+    };
+    s.run_until("the machine is set up", |s| {
+        s.try_get::<SlotMachine>(machine).is_some()
+    });
+    {
+        let world = s.server.world_mut();
+        world
+            .entity_mut(machine)
+            .remove::<ss13_game::power::Unpowered>();
+        world.get_mut::<SlotMachine>(machine).unwrap().balance = 7;
+    }
+    let (plays, money) = {
+        let m = s.get::<SlotMachine>(machine);
+        (m.plays, m.money)
+    };
+    s.click(0, machine);
+    s.run_until("the window opens", |s| {
+        s.window(SlotMachineUi::NAME).is_some()
+    });
+    let window = s.window(SlotMachineUi::NAME).unwrap();
+    s.act(0, window, "spin", &[]);
+    s.run_until("the reels spin", |s| s.get::<SlotMachine>(machine).working);
+    {
+        let m = s.get::<SlotMachine>(machine);
+        assert_eq!(m.plays, plays + 1);
+        assert_eq!(m.balance, 2, "a spin costs 5");
+        assert!(m.money >= money + 5);
+    }
+    // A second pull while spinning does nothing.
+    s.act(0, window, "spin", &[]);
+    s.run_until_for(6.0, "the spin ends", |s| {
+        !s.get::<SlotMachine>(machine).working
+    });
+    let m = s.get::<SlotMachine>(machine);
+    assert_eq!(m.plays, plays + 1);
+    // Nothing (2 left), free spins (+20) or a prize beyond the bank (none here): never below.
+    assert!(m.balance == 2 || m.balance == 22, "{}", m.balance);
 }

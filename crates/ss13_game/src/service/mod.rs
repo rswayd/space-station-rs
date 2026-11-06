@@ -37,6 +37,8 @@ mod paper;
 #[cfg(feature = "server")]
 mod religion;
 #[cfg(feature = "server")]
+pub mod slots;
+#[cfg(feature = "server")]
 mod stationery;
 #[cfg(feature = "server")]
 mod statues;
