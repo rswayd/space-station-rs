@@ -35,6 +35,7 @@ pub mod plants;
 pub mod produce;
 pub mod seeds;
 pub mod shears;
+pub mod soil;
 pub mod tray;
 pub mod unique;
 
@@ -152,6 +153,12 @@ pub enum BotanyJob {
     Dig,
     /// Squeezing a plant with liquid contents in hand (BandaStation).
     Squash,
+    /// A soil sack putting its plot down on the floor.
+    PlaceSoil,
+    /// A soil sack filling an empty tray.
+    FillTray,
+    /// A shovel bagging a soil plot.
+    BagSoil,
 }
 
 pub struct BotanyServerPlugin;
@@ -414,6 +421,10 @@ fn ctrl_clicks(world: &mut World, mut clicks: Local<MessageCursor<crate::click::
         let Some(on) = world.get::<Tray>(e).map(|t| t.self_sustaining) else {
             continue;
         };
+        // Soil has no electricity (`CLICK_ACTION_BLOCKING`).
+        if soil::is_soil_plot(world, e) {
+            continue;
+        }
         // Unanchored: `NONE`, the click goes on to pulling.
         if world
             .get::<crate::obj_damage::Anchored>(e)
@@ -734,7 +745,7 @@ fn line_clear(a: TilePos, b: TilePos, opaque: &impl Fn(TilePos) -> bool) -> bool
     }
 }
 
-/// tg `hydroponics/constructable/RefreshParts` (no soils here): `maxwater = bins * 50`,
+/// tg `hydroponics/constructable/RefreshParts`: `maxwater = bins * 50`,
 /// `maxnutri = bins * 5 + STATIC_NUTRIENT_CAPACITY`, `rating` the servo tier, `nutridrain =
 /// 1 / rating`.
 pub(crate) fn refresh_parts(world: &mut World, e: Entity) {
@@ -747,11 +758,28 @@ pub(crate) fn refresh_parts(world: &mut World, e: Entity) {
     let r = crate::stock_parts::ratings(world, e);
     let bins = r.sum(crate::stock_parts::PartKind::MatterBin) as f32;
     let servo = r.last(crate::stock_parts::PartKind::Servo);
+    // `current_soil`: its capacity plus 50 water and 5 nutrients per bin tier over two.
+    let soil = world
+        .get::<Tray>(e)
+        .and_then(|t| t.current_soil.clone())
+        .and_then(|p| {
+            world
+                .get_resource::<Botany>()
+                .and_then(|b| b.0.tray_def(&p).map(|d| (d.maxwater, d.maxnutri)))
+        });
     let Some(mut tray) = world.get_mut::<Tray>(e) else {
         return;
     };
-    tray.maxwater = bins * 50.0;
-    tray.maxnutri = bins * 5.0 + 10.0;
+    match soil {
+        Some((water, nutri)) => {
+            tray.maxwater = water + (bins - 2.0) * 50.0;
+            tray.maxnutri = nutri + (bins - 2.0) * 5.0;
+        }
+        None => {
+            tray.maxwater = bins * 50.0;
+            tray.maxnutri = bins * 5.0 + 10.0;
+        }
+    }
     if let Some(servo) = servo {
         tray.rating = servo as f32;
     }
@@ -777,6 +805,12 @@ pub fn refresh_tray(world: &mut World, e: Entity) {
         return;
     };
     let mut overlays = Vec::new();
+    // Under the plant (tg: `OBJ_LAYER + 0.001`, the plant `+ 0.01`).
+    if let Some(kind) = soil::tray_soil(&state)
+        && let Some(id) = icons.get(EQUIPMENT_DMI, &format!("{}_tray", kind.icon_state))
+    {
+        overlays.push(ss13_shared::Overlay::new(id));
+    }
     if let Some(seed) = &state.myseed
         && let Some(def) = botany.0.seed_def(&seed.path)
     {
@@ -832,6 +866,9 @@ pub fn item_interaction(
         .unwrap_or_default();
     if is_under(&held_path, plants::ANALYZER_ROOT) {
         return plants::analyze(world, client, target);
+    }
+    if !modifiers.right && soil::sack_interaction(world, client, mob, held, target) {
+        return true;
     }
     if grown_interaction(world, client, mob, held, target)
         || barrel::item_interaction(world, client, held, target)
@@ -932,6 +969,9 @@ pub fn complete(world: &mut World, mob: Entity, action: &crate::tools::DoAfter, 
     match job {
         BotanyJob::Dig => plants::complete_dig(world, mob, action),
         BotanyJob::Squash => produce::complete_squash(world, mob, action),
+        BotanyJob::PlaceSoil => soil::complete_place(world, mob, action),
+        BotanyJob::FillTray => soil::complete_fill(world, mob, action),
+        BotanyJob::BagSoil => soil::complete_bag(world, mob, action),
     }
 }
 
@@ -939,6 +979,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &crate::tools::DoAfter, 
 pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<(Span, String)>) {
     produce::examine_lines(world, target, lines);
     barrel::examine_lines(world, target, lines);
+    soil::examine_lines(world, target, lines);
     let Some(state) = world.get::<Tray>(target) else {
         return;
     };

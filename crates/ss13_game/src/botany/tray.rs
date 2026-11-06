@@ -6,7 +6,7 @@
 //!
 //! The cycle is a pure function of the tray, its nutrient holder, the light and the dice, so it
 //! is tested without a world.
-// shortcut: no snails, soil sacks, bees, plumbing or circuits; `mutatepest` warns without spawning
+// shortcut: no snails, bees, plumbing or circuits; `mutatepest` warns without spawning
 // spiderlings, strange reagent spawns no living plant.
 
 use ss13_reagents::{Chemistry, Holder, is_under};
@@ -30,6 +30,9 @@ pub const SUPER_WATER_MODIFIER: f32 = 0.5;
 /// Tray flags: `SUPERWATER`, `SLOW_RELEASE`.
 pub const SUPERWATER: u32 = 1 << 6;
 pub const SLOW_RELEASE: u32 = 1 << 7;
+/// Tray flag `FAST_MUSHROOMS` (coir) and `FAST_MUSH_MODIFIER`.
+pub const FAST_MUSHROOMS: u32 = 1 << 4;
+pub const FAST_MUSH_MODIFIER: f32 = 1.4;
 /// `HYDROTRAY_CYCLE_DELAY`, seconds.
 pub const HYDROTRAY_CYCLE_DELAY: f64 = 20.0;
 const NITROGEN: &str = "/datum/reagent/nitrogen";
@@ -79,6 +82,8 @@ pub struct Tray {
     /// and pests while powered, drains less nutrients and never mutates species or gets
     /// overtaken by weeds. Set through [`super::set_self_sustaining`].
     pub self_sustaining: bool,
+    /// tg `current_soil`: the soil type a sack filled the tray with ([`super::soil`]).
+    pub current_soil: Option<String>,
 }
 
 /// What a cycle asks the world to do next.
@@ -717,8 +722,11 @@ pub fn cycle(
         let is_fungus = tray.has(FUNGAL);
         // tg's `1 * (is_fungus && FAST_MUSHROOMS) ? FAST_MUSH_MODIFIER : 1` is `(1 * x) ? ...`:
         // a fungus in coir soil gets 1.4, anything else 1.
-        // shortcut: the coir bonus is not read (no soil sacks to make coir trays).
-        tray.age += 1.0;
+        tray.age += if is_fungus && tray.tray_flags & FAST_MUSHROOMS != 0 {
+            FAST_MUSH_MODIFIER
+        } else {
+            1.0
+        };
         let maturation = tray.myseed.as_ref().map_or(0.0, |s| s.maturation);
         if tray.age < maturation {
             tray.lastproduce = tray.age;
@@ -1476,6 +1484,43 @@ mod tests {
         );
         assert_eq!(seed(&tray).path, "/obj/item/seeds/tomato/blue");
         assert!(out.messages[0].contains("suddenly mutates into Blue-Tomato Plants"));
+    }
+
+    #[test]
+    fn coir_soil_ages_mushrooms_faster() {
+        let (plants, chem) = (test_plants(), chem());
+        let env = CycleEnv {
+            chem: &chem,
+            plants: &plants,
+            lumcount: None,
+        };
+        let fungal = super::super::genes::Gene::new_trait(plants.trait_def(FUNGAL).unwrap());
+        let mut tray = planted(&plants);
+        tray.myseed.as_mut().unwrap().genes.push(fungal.clone());
+        cycle(
+            &mut tray,
+            &mut holder(&chem, &[]),
+            &env,
+            &mut Script::default(),
+        );
+        assert_eq!(tray.age, 1.0, "no coir: one a cycle");
+        let mut tray = planted(&plants);
+        tray.tray_flags |= FAST_MUSHROOMS;
+        cycle(
+            &mut tray,
+            &mut holder(&chem, &[]),
+            &env,
+            &mut Script::default(),
+        );
+        assert_eq!(tray.age, 1.0, "not a mushroom");
+        tray.myseed.as_mut().unwrap().genes.push(fungal);
+        cycle(
+            &mut tray,
+            &mut holder(&chem, &[]),
+            &env,
+            &mut Script::default(),
+        );
+        assert!((tray.age - 2.4).abs() < 1e-5, "a mushroom in coir: 1.4");
     }
 
     #[test]
