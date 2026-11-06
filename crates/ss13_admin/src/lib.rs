@@ -8,6 +8,8 @@ pub mod rights;
 #[cfg(feature = "client")]
 pub mod client;
 #[cfg(feature = "server")]
+pub mod logout_report;
+#[cfg(feature = "server")]
 pub mod server;
 #[cfg(feature = "server")]
 pub mod tickets;

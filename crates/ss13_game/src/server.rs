@@ -261,6 +261,7 @@ impl Plugin for GameServerPlugin {
         .add_plugins(crate::language_menu::LanguageMenuServerPlugin)
         .add_plugins((
             crate::ssd::SsdPlugin,
+            crate::locked_pickup::LockedPickupPlugin,
             crate::screentips::ScreentipsServerPlugin,
             crate::escape_menu::EscapeMenuServerPlugin,
         ))

@@ -24,19 +24,19 @@
 Компонент тяжёлого оружия (кувалда, легендарные мечи): серия ударов по стене разрушает её, с затратой выносливости и требованием держать двумя руками; укреплённые стены — дольше.
 
 - **Код:** [`/datum/component/rip_and_tear`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/~components/code/rip_and_tear_item.dm#L15)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ❌ нет — единственные носители, кувалды форка, требуют двуручного хвата (`TRAIT_WIELDED`, `two_handed`) и самих кувалд, которых нет ([../combat/melee-weapons.md](../combat/melee-weapons.md), «Двуручное оружие»); стадий разрушения стены (`torn_wall`) тоже нет
 
 ### Затраты выносливости за удар
 Компонент: атака предметом тратит выносливость, по-разному для живых целей и объектов, в одной или двух руках.
 
 - **Код:** [`/datum/component/stamina_cost_per_hit`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/~components/code/stamina_cost_per_hit.dm#L10)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ❌ нет — носители (кувалды) и двуручный хват отсутствуют ([../combat/melee-weapons.md](../combat/melee-weapons.md)); без них стоимость «в одной/двух руках» не воспроизводится
 
 ### Привязка предмета к ckey/роли
 Компонент: предмет может поднять только владелец из белого списка ckey или не-станционная роль; остальные получают урон и отказ.
 
 - **Код:** [`/datum/component/ckey_and_role_locked_pickup`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/~components/code/ckey_and_role_locked_pickup.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ — `crates/ss13_game/src/locked_pickup.rs` (`CkeyLockedPickup`, `LockedPickupPlugin`): компонент вешается на все `/obj/item/dualsaber/legendary_saber*` с белым списком `mooniverse`, уроном 10 и строкой отказа своего меча; срабатывает при любом попадании в инвентарь (`Added<CarriedBy>`, как `COMSIG_ITEM_EQUIPPED`), с перепроверкой владельца; первое взятие привязывает (`binded`, как в форке), дальше чужой ckey — сбивание с ног на 10 с, предмет на пол мимо `NoDrop`, строка отказа, человеку 10–20 brute в случайную руку. `// shortcut:` нет исключения для роли `CENTCOM_ROLE_OFFICER` — ролей ЦК у разумов нет; сами легендарные мечи как оружие (двойной энергомеч) — [../combat/melee-weapons.md](../combat/melee-weapons.md)
 
 ### Нательная камера с паузой
 Компонент бодикамеры, которая обновляется только пока за ней кто-то наблюдает; носитель видит алерт «за вами наблюдают».
@@ -49,7 +49,7 @@
 
 - **Код:** [`/datum/roundstart_logout_report_builder`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/_helpers220/code/roundstart_logout_report.dm#L15)
 - **BandaStation:** [`_helpers220.dme`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/_helpers220/_helpers220.dme#L1)
-- **Статус в ss13-rs:** ❌ нет — админов нет
+- **Статус в ss13-rs:** ✅ — `crates/ss13_admin/src/logout_report.rs`: тело, которым управлял игрок, помнит его ckey (`PlayedBy`); через 10 ± 3 мин после старта раунда (`roundstart_logout_report_time_average/variance`, значения по умолчанию) админы с `R_ADMIN` получают в чат и в админ-лог «Roundstart logout report»: «Disconnected» (игрок вышел с сервера), «Dying» (в теле, hard crit), «Dead» (в теле или призраком у мёртвого тела); тело, из которого игрок перешёл в другое, пропускается. `// shortcut:` нет строк «Connected, Inactive» (у клиентов нет времени бездействия), «Suicide» (нет суицида), «Ghosted» (все призраки могут вернуться в тело); запись в blackbox — SQL, отложено ([../persistence-sql/database.md](../persistence-sql/database.md)); время и разброс не читаются из конфига
 
 ### Чейнджлог BandaStation
 Окно чейнджлога читает собственный архив `html/changelogs/bandastation/archive/` и открывает интерфейс `ChangelogBandaStation`.
@@ -62,7 +62,7 @@
 Генерация шаблона вики со списком эмодзи сервера.
 
 - **Код:** [`/datum/autowiki/emoji`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/autowiki/code/autowiki_emoji.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — инструмент сборки, игроку не виден
+- **Статус в ss13-rs:** ✅ не портируется — генератор шаблона вики (запускается при сборке вики, не в раунде), игроку не виден; списка эмодзи сервера в ss13-rs нет
 
 ### Женские варианты униформы
 Датум, задающий, как обрезается спрайт униформы для женского телосложения у отдельных вещей форка.
@@ -74,4 +74,4 @@
 Дефайны (`_defines220`), сигналы (`_signals220`) и синглтоны (`_singletons`) форка; пример модпака (`example`). Видимого игроку эффекта нет — нужны только как опора для других модпаков.
 
 - **Код:** [`_defines220.dme`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/_defines220/_defines220.dme#L1), [`_signals220.dme`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/_signals220/_signals220.dme#L1), [`/datum/singleton`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/_singletons/code/singletons.dm#L1), [`_example.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/example/_example.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — прямого аналога нет (в Rust используются свои механизмы)
+- **Статус в ss13-rs:** ✅ не портируется — своего поведения нет: дефайны и сигналы переносятся вместе с модпаками, которые их используют (в Rust — константы модулей, observers и сообщения Bevy), синглтоны — ресурсы Bevy, пример модпака — шаблон для разработчиков DM

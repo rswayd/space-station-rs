@@ -445,3 +445,48 @@ fn pickup_drop_swap_equip_and_access() {
         s.state(d) == DoorState::Open
     });
 }
+
+/// BandaStation `ckey_and_role_locked_pickup` (the legendary swords): the first pickup binds it,
+/// a later one by a ckey off the whitelist throws it to the floor and knocks the holder down.
+#[test]
+fn a_ckey_locked_item_refuses_everyone_after_it_is_bound() {
+    use ss13_game::locked_pickup::CkeyLockedPickup;
+    use ss13_game::status_effects::{Incap, StatusEffects};
+
+    let mut s = Station::start(1);
+    let toy = s.item(TOY);
+    s.server
+        .world_mut()
+        .entity_mut(toy)
+        .insert(CkeyLockedPickup {
+            ckeys: vec!["somebodyelse".into()],
+            pickup_damage: 10.0,
+            refusal_text: "Не твоё.".into(),
+            binded: false,
+        });
+    let toy_id = s.net_id(0, toy).expect("the toy is seen");
+    // Not bound yet: the pickup goes through and binds it.
+    s.click_id(0, toy_id);
+    s.run_until("the toy is picked up and bound", |s| {
+        s.inventory(0).hands.contains(&Some(toy))
+            && s.server
+                .world()
+                .get::<CkeyLockedPickup>(toy)
+                .unwrap()
+                .binded
+    });
+    // Back on the floor, picked up again: refused.
+    s.send(0, ClientIntent::DropActive);
+    s.run_until("the toy is dropped", |s| s.on_floor(toy).is_some());
+    let toy_id = s.net_id(0, toy).expect("the toy is seen");
+    s.click_id(0, toy_id);
+    let mob = s.players[0].mob;
+    s.run_until("the toy is thrown down and the holder knocked down", |s| {
+        s.on_floor(toy).is_some()
+            && s.server
+                .world()
+                .get::<StatusEffects>(mob)
+                .is_some_and(|e| e.remaining(Incap::Knockdown) > 0.0)
+    });
+    assert!(!s.inventory(0).hands.contains(&Some(toy)));
+}

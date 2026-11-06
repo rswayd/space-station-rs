@@ -666,3 +666,42 @@ fn man_up_and_admin_sounds_reach_the_players() {
     // Bob is no admin: no sounds, no man up.
     assert!(refused(s.ask(PLAYER, AdminRequest::GlobalManUp)).contains("не администратор"));
 }
+
+#[test]
+fn the_roundstart_logout_report_lists_the_dead_and_the_disconnected() {
+    use ss13_admin::logout_report::{LogoutReport, PlayedBy};
+    use ss13_game::health::{DamageType, Health, Stat, apply_damage};
+
+    let mut s = Session::start("logout_report");
+    // Bob dies in his body; a body whose player left the server stays behind.
+    let bob = s.mob("bob");
+    let world = s.server.world_mut();
+    assert_eq!(
+        world.get::<PlayedBy>(bob),
+        Some(&PlayedBy("bob".into())),
+        "a played body remembers its ckey"
+    );
+    let mut health = world.get::<Health>(bob).unwrap().clone();
+    let mut stat = *world.get::<Stat>(bob).unwrap();
+    apply_damage(&mut health, &mut stat, DamageType::Brute, 500.0);
+    assert_eq!(stat, Stat::Dead);
+    world.entity_mut(bob).insert((health, stat));
+    world.spawn((
+        Health::default(),
+        Stat::Conscious,
+        Name::new("Gus"),
+        PlayedBy("gone".into()),
+    ));
+    world.resource_mut::<LogoutReport>().delay_secs = Some(0.0);
+    s.run_until("the admins get the report", |s| {
+        s.chat_has(ADMIN, "Roundstart logout report")
+    });
+    assert!(s.chat_has(ADMIN, "(bob), the "), "{:?}", s.seen(ADMIN).chat);
+    assert!(s.chat_has(ADMIN, "(Dead)"));
+    assert!(s.chat_has(ADMIN, "Gus (gone), the  (Disconnected)"));
+    // The admin is alive and connected; players never see the report.
+    assert!(!s.chat_has(ADMIN, "(theadmin)"));
+    assert!(!s.chat_has(PLAYER, "Roundstart logout report"));
+    assert!(s.admin_log().contains("Roundstart logout report"));
+    assert!(s.server.world().resource::<LogoutReport>().sent);
+}
