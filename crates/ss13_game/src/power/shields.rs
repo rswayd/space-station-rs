@@ -255,13 +255,11 @@ fn broken(world: &World, e: Entity) -> bool {
     world.get::<Integrity>(e).is_some_and(|i| i.broken)
 }
 
+/// tg `isspaceturf`: a type check on the turf, not its air.
 fn is_space(world: &World, pos: TilePos) -> bool {
-    world
-        .resource::<SpatialIndex>()
-        .on_tile(pos)
-        .iter()
-        .filter_map(|&e| world.get::<ss13_atmos::TurfAir>(e))
-        .any(|a| a.kind == ss13_atmos::TileKind::Space)
+    crate::construction::turf_at(world, pos)
+        .and_then(|t| crate::construction::path_of(world, t))
+        .is_some_and(|p| is_under(&p, "/turf/open/space"))
 }
 
 fn say_around(world: &mut World, e: Entity, mob: Entity, others: String, own: String) {
