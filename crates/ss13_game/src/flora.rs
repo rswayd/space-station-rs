@@ -562,8 +562,10 @@ pub fn harvest_message(kind: &FloraKind, created: u32) -> Option<&'static str> {
     {
         message = low;
     }
+    // tg compares `products - low` with `(high - middle) / 2`, a threshold measured from
+    // `middle`: a middling harvest got the high message. Measured from `low` here (deviation).
     if let Some(high) = high
-        && comparison > (hi - middle) / 2.0
+        && comparison > (middle - lo) + (hi - middle) / 2.0
     {
         message = high;
     }
