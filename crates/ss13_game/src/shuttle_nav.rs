@@ -18,8 +18,9 @@
 // shortcut: no admin-controlled consoles (authorization request, `admin_controlled`), no
 // illiterate random launch, no head revolutionary warning, no remote control, no `check_dock`
 // (docks here never overlap), no recharge time, no `no_destination_swap` mid-flight changes (a
-// flying shuttle refuses new requests). Consoles of shuttles not loaded (white ship, ferry) are
-// not claimed here; [`ShuttleConsole::new`] and [`NavShuttle::new`] are the way in.
+// flying shuttle refuses new requests), no silicon refusal of the ferry console (`attack_ai`).
+// Consoles of shuttles not loaded (monastery) are not claimed here; [`ShuttleConsole::new`] and
+// [`NavShuttle::new`] are the way in.
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
@@ -44,6 +45,9 @@ pub const IGNITION_SECS: f64 = 5.5;
 pub const CALL_SECS: f64 = 10.0;
 const SHUTTLE_CONSOLE: &str = "/obj/machinery/computer/shuttle";
 const POD_CONSOLE: &str = "/obj/machinery/computer/shuttle/pod";
+/// `/obj/machinery/computer/shuttle/ferry` (and `ferry/request`): `allow_emag = FALSE`.
+const FERRY_CONSOLE: &str = "/obj/machinery/computer/shuttle/ferry";
+const WHITE_SHIP_CONSOLE: &str = "/obj/machinery/computer/shuttle/white_ship";
 const DEPARTING: &str = "Shuttle departing. Please stand away from the doors.";
 
 /// A console type: `(path and subtypes, shuttleId, possible_destinations, req_access)`;
@@ -56,7 +60,7 @@ type ConsoleKind = (
 );
 
 /// The console types claimed here, most specific first.
-pub const CONSOLES: [ConsoleKind; 6] = [
+pub const CONSOLES: [ConsoleKind; 8] = [
     // `/obj/machinery/computer/shuttle/pod`; `_lavaland` is added when it connects.
     (POD_CONSOLE, None, &["pod_asteroid"], &[]),
     // `code/modules/mining/mine_items.dm` (`crate::mining_shuttles`).
@@ -112,6 +116,27 @@ pub const CONSOLES: [ConsoleKind; 6] = [
             "syndicate_custom",
         ],
         &["syndicate"],
+    ),
+    // `shuttle_consoles/white_ship.dm` (and its bridge console); `crate::away_shuttles`.
+    (
+        WHITE_SHIP_CONSOLE,
+        Some("whiteship"),
+        &[
+            "whiteship_away",
+            "whiteship_home",
+            "whiteship_z4",
+            "whiteship_waystation",
+            "whiteship_lavaland",
+            "whiteship_custom",
+        ],
+        &[],
+    ),
+    // `mobile_port/variants/ferry.dm`; `crate::away_shuttles`.
+    (
+        FERRY_CONSOLE,
+        Some("ferry"),
+        &["ferry_home", "ferry_away"],
+        &["cent_general"],
     ),
 ];
 
@@ -169,6 +194,12 @@ pub struct ShuttleConsole {
     pub emagged: bool,
     /// `/obj/machinery/computer/shuttle/pod`.
     pub pod: bool,
+    /// The ferry's `allow_emag = FALSE`: an emag does nothing.
+    pub firewall: bool,
+    /// tg `may_be_remote_controlled` (the white ship's).
+    pub may_be_remote_controlled: bool,
+    /// tg `remote_ref`: its shuttle remote (`crate::shuttle_remote`).
+    pub remote: Option<Entity>,
 }
 
 impl ShuttleConsole {
@@ -233,7 +264,7 @@ impl Plugin for ShuttleNavPlugin {
 }
 
 /// The console types on the maps, connected to the shuttles they stand on.
-fn setup_consoles(world: &mut World) {
+pub(crate) fn setup_consoles(world: &mut World) {
     let mut objs = world.query_filtered::<(Entity, &DmObj), With<ss13_world::Mapped>>();
     let found: Vec<(Entity, String)> = objs
         .iter(world)
@@ -249,6 +280,8 @@ fn setup_consoles(world: &mut World) {
         let mut console = ShuttleConsole::new(id, destinations, access);
         console.pod = root == POD_CONSOLE;
         console.locked = console.pod;
+        console.firewall = root == FERRY_CONSOLE;
+        console.may_be_remote_controlled = root == WHITE_SHIP_CONSOLE;
         if console.shuttle_id.is_none()
             && let Some(port) = world
                 .get::<TilePos>(e)
@@ -573,6 +606,11 @@ fn emag_interaction(world: &mut World, client: Entity, held: Entity, target: Ent
         return false;
     }
     let mut console = world.get_mut::<ShuttleConsole>(target).expect("checked");
+    if console.firewall {
+        // `/obj/machinery/computer/shuttle/ferry/emag_act`.
+        tell(world, client, Span::Warning, "firewall too powerful!");
+        return true;
+    }
     if console.emagged {
         return false;
     }

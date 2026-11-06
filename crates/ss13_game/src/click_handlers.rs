@@ -65,6 +65,7 @@
 //! | 3186 | `mining::beacons::attack_self` (marker beacon stacks) |
 //! | 3187 | `cargo::money::coin_attack_self` (coin flip) |
 //! | 3188 | `mining::fulton::attack_self` (packs link, beacon kits unfold) |
+//! | 3189 | `shuttle_remote::use_remote` |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):
 //!
@@ -177,6 +178,7 @@
 //! | 300 | `emag::interact_with_atom` (left click) |
 //! | 330 | `shuttle_console_server` (a held item on a shuttle console) |
 //! | 340 | `shuttle_nav` (a held item on a navigation console) |
+//! | 345 | `shuttle_remote::link` (a shuttle remote on a shuttle console) |
 //! | 400 | `modsuit::server::item_interaction` |
 //! | 500 | `assemblies::server::item_interaction` |
 //! | 560 | `wiremod::server::item_interaction` |

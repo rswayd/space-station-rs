@@ -36,7 +36,7 @@
 ~67 шаблонов (`_maps/RandomRuins/SpaceRuins`, 87 файлов): заброшенные станции и корабли (TheDerelict, oldstation, forgottenship, whiteship), отель Хилберта, DJ-станция, листенинг-пост синдиката, Interdyne, космические закусочные и т. д.; у многих свой код (`mapfluff/ruins/spaceruin_code`).
 
 - **Код:** [`/datum/map_template/ruin/space`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/ruins/space.dm#L3), [`SpaceRuins`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/_maps/RandomRuins/SpaceRuins), [`spaceruin_code`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mapfluff/ruins/spaceruin_code)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ❌ нет. Из ../shuttles/other-shuttles.md сюда: руина `whiteshipdock` (сейчас белый корабль стоит на своём уровне, `crates/ss13_game/src/away_shuttles.rs`), доки `whiteship_z4`/`whiteship_waystation`, монастырь и его консоль `monastery_shuttle`
 
 ### Руины Лаваленда
 ~34 шаблона: логово пепельных ящеров, шахтёрская база, храмы, колизей, руины с портальными комнатами, ловушки, «звёздные врата»; свой код в `lavalandruin_code`.

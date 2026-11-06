@@ -197,7 +197,17 @@ fn alt_clicks(world: &mut World, mut clicks: Local<MessageCursor<AltClick>>) {
         // tg `base_click_alt_secondary`: only what defines `click_alt_secondary`.
         if click.secondary {
             if click.reach && can_act(world, click.mob) {
-                crate::clothing::click_alt_secondary(world, click.client, click.mob, click.target);
+                let _ = crate::clothing::click_alt_secondary(
+                    world,
+                    click.client,
+                    click.mob,
+                    click.target,
+                ) || crate::shuttle_remote::click_alt_secondary(
+                    world,
+                    click.client,
+                    click.mob,
+                    click.target,
+                );
             }
             continue;
         }

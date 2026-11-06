@@ -52,7 +52,7 @@
 
 - **Код:** [`/obj/machinery/shuttle_manipulator`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/misc/manipulator.dm#L1); tgui: [`ShuttleManipulator.jsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/ShuttleManipulator.jsx)
 - **BandaStation:** [`shuttle_console.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/shuttle_consoles/shuttle_console.dm#L228) — запрос на перемещение шаттла уходит только админам с `R_ADMIN`
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ❌ нет. Сюда же — загрузка шаттлов ОБР (`/datum/map_template/shuttle/ert`) и руин-шаттлов (`/datum/map_template/shuttle/ruin`) из other-shuttles.md
 
 ### Враждебное окружение и блокировки отзыва
 Антагонисты (культ, блоб, нюка) регистрируют «враждебное окружение» — аварийный шаттл не улетает, пока оно есть; `block_recall` запрещает отзыв, торговая блокада останавливает карго-шаттл.
