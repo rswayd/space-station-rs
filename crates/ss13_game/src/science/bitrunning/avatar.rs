@@ -40,6 +40,7 @@ use crate::construction::Job;
 use crate::health::{DamageType, Health, Stat};
 use crate::inventory::Inventory;
 use crate::medical::brainmob;
+use crate::medical::stasis::InStasis;
 use crate::server::PlayerMob;
 use crate::tools::{Actor, ToolKind, tell};
 use crate::zone::BodyZone;
@@ -232,6 +233,9 @@ fn pod_server(world: &World, pod: Entity) -> Option<Entity> {
 /// `open_machine`: the occupant out, undense, its healing over.
 pub fn open_netpod(world: &mut World, pod: Entity) {
     if let Some(mob) = occupant(world, pod) {
+        if world.get::<InStasis>(mob) == Some(&InStasis(pod)) {
+            world.entity_mut(mob).remove::<InStasis>();
+        }
         crate::closets::let_out(world, mob);
     }
     if let Some(mut p) = world.get_mut::<Netpod>(pod) {
@@ -371,6 +375,9 @@ pub(super) fn complete_connect(world: &mut World, neo: Entity, pod: Entity) {
         p.healing = true;
         p.avatar = Some(avatar);
     }
+    // `add_healing`: `/datum/status_effect/embryonic` (`TRAIT_STASIS`): no `Life()`, so the
+    // body left behind does not fall asleep as SSD (`crate::ssd`).
+    world.entity_mut(neo).insert(InStasis(pod));
     if !valid(world) || world.get::<Stat>(avatar).is_none_or(|&s| s == Stat::Dead) {
         open_netpod(world, pod);
         return;
