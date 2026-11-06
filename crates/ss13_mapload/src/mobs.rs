@@ -68,7 +68,7 @@ pub const LAVALAND_RUNTIME_TYPES: [&str; 24] = [
 /// What `ss13_game::mobs::megafauna` spawns: the ported bosses (placed on the mining level),
 /// the colossus' death bolt, the necropolis chests and what their `PopulateContents` makes
 /// (tg `necropolis_chests.dm`).
-pub const MEGAFAUNA_RUNTIME_TYPES: [&str; 23] = [
+pub const MEGAFAUNA_RUNTIME_TYPES: [&str; 34] = [
     "/mob/living/simple_animal/hostile/megafauna/bubblegum",
     "/obj/structure/closet/crate/necropolis/bubblegum",
     "/obj/item/clothing/suit/hooded/hostile_environment",
@@ -92,6 +92,18 @@ pub const MEGAFAUNA_RUNTIME_TYPES: [&str; 23] = [
     "/obj/item/lava_staff",
     "/obj/item/book/granter/action/spell/sacredflame",
     "/obj/item/dragons_blood",
+    // Legion: its splits, sentinels and drops; the icemoon clockwork defender and its alloy.
+    "/mob/living/simple_animal/hostile/megafauna/legion",
+    "/mob/living/simple_animal/hostile/megafauna/legion/medium/left",
+    "/mob/living/simple_animal/hostile/megafauna/legion/medium/right",
+    "/mob/living/simple_animal/hostile/megafauna/legion/medium/eye",
+    "/mob/living/simple_animal/hostile/megafauna/legion/small",
+    "/obj/structure/legionturret",
+    "/obj/item/storm_staff",
+    "/obj/structure/closet/crate/necropolis/tendril",
+    "/obj/item/stack/sheet/bone",
+    "/mob/living/simple_animal/hostile/megafauna/clockwork_defender",
+    "/obj/item/clockwork_alloy",
 ];
 
 /// The DM type of a basic mob (prototype data): the key into [`MobsData::mobs`].

@@ -135,6 +135,32 @@ const TYPES: &str = r##"{
         "melee_damage_upper": 40, "speed": 5, "del_on_death": 1, "attack_verb_continuous": "rends",
         "attack_verb_simple": "rend", "speak_emote": { "list": ["gurgles"] },
         "icon_state": "bubblegum", "icon_living": "bubblegum", "icon_dead": "" } },
+    "/mob/living/simple_animal/hostile/megafauna/legion": {
+        "parent": "/mob/living/simple_animal/hostile/megafauna", "declared_vars": {
+        "name": "Legion", "maxHealth": 700, "health": 700, "melee_damage_lower": 25,
+        "melee_damage_upper": 25, "speed": 5, "del_on_death": 1, "icon_state": "mega_legion",
+        "icon_living": "mega_legion", "icon_dead": "" } },
+    "/mob/living/simple_animal/hostile/megafauna/legion/medium": {
+        "parent": "/mob/living/simple_animal/hostile/megafauna/legion",
+        "declared_vars": { "maxHealth": 350 } },
+    "/mob/living/simple_animal/hostile/megafauna/legion/medium/left": {
+        "parent": "/mob/living/simple_animal/hostile/megafauna/legion/medium" },
+    "/mob/living/simple_animal/hostile/megafauna/legion/medium/right": {
+        "parent": "/mob/living/simple_animal/hostile/megafauna/legion/medium" },
+    "/mob/living/simple_animal/hostile/megafauna/legion/medium/eye": {
+        "parent": "/mob/living/simple_animal/hostile/megafauna/legion/medium" },
+    "/mob/living/simple_animal/hostile/megafauna/legion/small": {
+        "parent": "/mob/living/simple_animal/hostile/megafauna/legion",
+        "declared_vars": { "maxHealth": 200 } },
+    "/mob/living/simple_animal/hostile/megafauna/clockwork_defender": {
+        "parent": "/mob/living/simple_animal/hostile/megafauna", "declared_vars": {
+        "name": "clockwork defender", "maxHealth": 300, "health": 300, "melee_damage_lower": 20,
+        "melee_damage_upper": 20, "speed": 5, "del_on_death": 1,
+        "icon_state": "clockwork_defender", "icon_living": "clockwork_defender", "icon_dead": "" } },
+    "/obj/item/storm_staff": { "parent": "/obj/item", "declared_vars": { "name": "staff of storms" } },
+    "/obj/item/clockwork_alloy": { "parent": "/obj/item", "declared_vars": { "name": "clockwork alloy" } },
+    "/obj/structure/closet/crate/necropolis/tendril": {
+        "parent": "/obj/structure/closet/crate/necropolis" },
     "/turf": { "parent": "/atom", "declared_vars": { "icon": { "resource": "t.dmi" } } },
     "/turf/open": { "parent": "/turf" },
     "/turf/open/floor": { "parent": "/turf/open", "declared_vars": { "icon_state": "floor" } },
@@ -204,7 +230,24 @@ wwwwwwwwwwwwwwww
 "}
 "##;
 
-const STATES: [(&str, &str); 11] = [
+/// `L` Legion (8,4), `K` the clockwork defender (12,2); no player.
+const LEGION_MAP: &str = r##""w" = (/turf/closed/wall,/area/lavaland_test)
+"f" = (/turf/open/floor,/area/lavaland_test)
+"L" = (/mob/living/simple_animal/hostile/megafauna/legion,/turf/open/floor,/area/lavaland_test)
+"K" = (/mob/living/simple_animal/hostile/megafauna/clockwork_defender,/turf/open/floor,/area/lavaland_test)
+
+(1,1,1) = {"
+wwwwwwwwwwwwwwww
+wffffffffffffffw
+wffffffffffffffw
+wffffffLfffffffw
+wffffffffffffffw
+wfffffffffffKffw
+wwwwwwwwwwwwwwww
+"}
+"##;
+
+const STATES: [(&str, &str); 13] = [
     ("t.dmi", "floor"),
     ("t.dmi", "wall"),
     ("l.dmi", "x2"),
@@ -213,12 +256,14 @@ const STATES: [(&str, &str); 11] = [
     ("m.dmi", "dragon"),
     ("m.dmi", "dragon_dead"),
     ("m.dmi", "bubblegum"),
+    ("m.dmi", "mega_legion"),
+    ("m.dmi", "clockwork_defender"),
     ("i.dmi", "toy"),
     ("cr.dmi", "necrocrate"),
     ("cr.dmi", "necrocrateopen"),
 ];
 
-const USED: [&str; 32] = [
+const USED: [&str; 41] = [
     "/obj/effect/landmark/start/assistant",
     "/turf/open/floor",
     "/turf/closed/wall",
@@ -247,6 +292,15 @@ const USED: [&str; 32] = [
     "/obj/item/mayhem",
     "/obj/item/soulscythe",
     "/obj/item/food/bubblegum/bubblegum",
+    "/mob/living/simple_animal/hostile/megafauna/legion",
+    "/mob/living/simple_animal/hostile/megafauna/legion/medium/left",
+    "/mob/living/simple_animal/hostile/megafauna/legion/medium/right",
+    "/mob/living/simple_animal/hostile/megafauna/legion/medium/eye",
+    "/mob/living/simple_animal/hostile/megafauna/legion/small",
+    "/mob/living/simple_animal/hostile/megafauna/clockwork_defender",
+    "/obj/item/storm_staff",
+    "/obj/item/clockwork_alloy",
+    "/obj/structure/closet/crate/necropolis/tendril",
     "/mob/living/carbon/human",
     "/obj/item/card/id/advanced",
     "/obj/item/clothing/under/color/grey",
@@ -412,6 +466,62 @@ fn bubblegum_charges_its_target_and_leaves_its_sarcophagus() {
     );
     assert_eq!(inside.len(), 2, "{inside:?}");
     assert!(inside.contains(&"/obj/item/clothing/suit/hooded/hostile_environment".to_owned()));
+}
+
+#[test]
+fn legion_splits_twice_and_the_last_skull_drops_the_storm_staff() {
+    use ss13_game::mobs::megafauna::{Kind, legion};
+    let mut s = Station::start("legion", LEGION_MAP);
+    let big = s.mob_of(legion::LEGION);
+    assert_eq!(s.get::<Megafauna>(big).kind, Kind::Legion);
+    assert_eq!(s.get::<Megafauna>(big).legion.size, 3);
+    let living = |s: &mut Station| -> Vec<(Entity, u8)> {
+        let world = s.0.server.world_mut();
+        world
+            .query::<(Entity, &Megafauna, &Stat)>()
+            .iter(world)
+            .filter(|(_, m, st)| m.kind == Kind::Legion && **st != Stat::Dead)
+            .map(|(e, m, _)| (e, m.legion.size))
+            .collect()
+    };
+    s.kill(big);
+    let medium = living(&mut s);
+    assert_eq!(medium.len(), 3, "{medium:?}");
+    assert!(medium.iter().all(|&(_, size)| size == 2));
+    assert_eq!(s.get::<Health>(medium[0].0).max, 350.0);
+    for (e, _) in medium {
+        s.kill(e);
+    }
+    let small = living(&mut s);
+    assert_eq!(small.len(), 9, "{small:?}");
+    assert!(small.iter().all(|&(_, size)| size == 1));
+    let objs = |s: &mut Station, path: &str| -> usize {
+        let world = s.0.server.world_mut();
+        world
+            .query::<(Option<&DmItem>, Option<&DmObj>)>()
+            .iter(world)
+            .filter(|(i, o)| i.is_some_and(|i| i.path == path) || o.is_some_and(|o| o.path == path))
+            .count()
+    };
+    assert_eq!(objs(&mut s, legion::STORM_STAFF), 0, "not the last one yet");
+    for (e, _) in small {
+        s.kill(e);
+    }
+    assert!(living(&mut s).is_empty());
+    assert_eq!(
+        objs(&mut s, legion::STORM_STAFF),
+        1,
+        "the last skull's staff"
+    );
+    // The clockwork defender crumbles into its alloy.
+    let knight = s.mob_of("/mob/living/simple_animal/hostile/megafauna/clockwork_defender");
+    assert_eq!(s.get::<Megafauna>(knight).kind, Kind::ClockworkDefender);
+    s.kill(knight);
+    assert!(
+        s.0.server.world().get_entity(knight).is_err(),
+        "del_on_death"
+    );
+    assert_eq!(objs(&mut s, "/obj/item/clockwork_alloy"), 1);
 }
 
 #[test]

@@ -15,8 +15,9 @@
 //!   station).
 //! - Abilities share one cooldown (`MOB_SHARED_COOLDOWN_1`) and block melee for their cooldown
 //!   (`next_melee_use_time`); their sleeps and timers are timed steps of the mob's queue,
-//!   dropped when it dies (`SLEEP_CHECK_DEATH`). [`bubblegum`], [`colossus`] and [`drake`]
-//!   hold them.
+//!   dropped when it dies (`SLEEP_CHECK_DEATH`). [`bubblegum`], [`colossus`], [`drake`] and
+//!   [`legion`] hold them; the icemoon clockwork defender has none (melee twice a tick, its
+//!   alloy on death).
 //! - Explosions deal 250/100/50 brute and never gib (`ex_act`); death drops the necropolis
 //!   chest with its loot (`loot`, `necropolis_chests.dm` `PopulateContents`).
 //! - [`placement`]: the bosses on the mining level (tg biome population, `SPAWN_MEGAFAUNA`).
@@ -26,6 +27,7 @@
 pub mod bubblegum;
 pub mod colossus;
 pub mod drake;
+pub mod legion;
 pub mod placement;
 
 use bevy::ecs::message::Messages;
@@ -57,6 +59,11 @@ pub const COLOSSUS: &str = "/mob/living/simple_animal/hostile/megafauna/colossus
 pub const DRAKE: &str = "/mob/living/simple_animal/hostile/megafauna/dragon";
 /// The admin-spawned lesser drake (`dragon/lesser`): a [`Kind::Drake`] with fewer abilities.
 pub const LESSER_DRAKE: &str = "/mob/living/simple_animal/hostile/megafauna/dragon/lesser";
+/// The icemoon clockwork ruin's guard (`clockwork_knight.dm`): melee only.
+pub const CLOCKWORK_DEFENDER: &str =
+    "/mob/living/simple_animal/hostile/megafauna/clockwork_defender";
+/// `clockwork_defender` `loot`.
+const CLOCKWORK_ALLOY: &str = "/obj/item/clockwork_alloy";
 
 /// `SSnpcpool` `wait`.
 pub const NPC_TICK_SECS: f64 = 2.0;
@@ -83,6 +90,8 @@ pub enum Kind {
     Bubblegum,
     Colossus,
     Drake,
+    Legion,
+    ClockworkDefender,
 }
 
 impl Kind {
@@ -93,6 +102,10 @@ impl Kind {
             Some(Self::Colossus)
         } else if is_under(path, DRAKE) {
             Some(Self::Drake)
+        } else if is_under(path, legion::LEGION) {
+            Some(Self::Legion)
+        } else if is_under(path, CLOCKWORK_DEFENDER) {
+            Some(Self::ClockworkDefender)
         } else {
             None
         }
@@ -123,6 +136,7 @@ pub struct Megafauna {
     pub bubblegum: bubblegum::State,
     pub colossus: colossus::State,
     pub drake: drake::State,
+    pub legion: legion::State,
 }
 
 impl Megafauna {
@@ -141,6 +155,7 @@ impl Megafauna {
             bubblegum: bubblegum::State::default(),
             colossus: colossus::State::default(),
             drake: drake::State::default(),
+            legion: legion::State::default(),
         }
     }
 
@@ -174,6 +189,7 @@ pub enum Step {
     Bubblegum(bubblegum::Step),
     Colossus(colossus::Step),
     Drake(drake::Step),
+    Legion(legion::Step),
 }
 
 /// tg `/datum/status_effect/gutted`: devoured; while dead, never a target again.
@@ -220,6 +236,7 @@ pub(super) fn build(app: &mut App) {
             run_queues,
             drake::land_strikes,
             bubblegum::bleed,
+            legion::sentinels,
             expire_visuals,
         )
             .chain()
@@ -242,6 +259,7 @@ pub(super) fn attach(world: &mut World, mob: Entity, def: &MobDef) {
     controller.traits = RUN_WHILE_UNWATCHED | ALWAYS_HIGH_PRIORITY;
     let mut brain = Megafauna::new(kind, now + offset, def.max_health);
     brain.drake.lesser = is_under(&def.path, LESSER_DRAKE);
+    brain.legion.size = legion::size_of(&def.path);
     world.entity_mut(mob).insert((brain, controller));
 }
 
@@ -296,17 +314,14 @@ fn think_one(world: &mut World, mob: Entity, now: f64) {
         return;
     };
     let (current, aggro, hurt) = (m.target, m.aggro, health < m.last_health);
+    let (vision_range, aggro_range) = vision(m.kind);
     if let Some(mut m) = world.get_mut::<Megafauna>(mob) {
         m.last_health = health;
     }
     if moving_itself(world, mob) {
         return;
     }
-    let vision = if aggro {
-        AGGRO_VISION_RANGE
-    } else {
-        VISION_RANGE
-    };
+    let vision = if aggro { aggro_range } else { vision_range };
     // `MoveToTarget`: a target out of sight is still chased within the vision range
     // (`environment_smash`), shot at too (`ranged_ignores_vision`).
     let kept = current.filter(|&t| {
@@ -316,7 +331,7 @@ fn think_one(world: &mut World, mob: Entity, now: f64) {
                 .and_then(|&p| p.chebyshev(pos))
                 .is_some_and(|d| d <= vision)
     });
-    let range = if hurt { AGGRO_VISION_RANGE } else { vision };
+    let range = if hurt { aggro_range } else { vision };
     let Some(target) = kept.or_else(|| find_target(world, mob, pos, range)) else {
         lose_target(world, mob);
         return;
@@ -338,6 +353,7 @@ fn think_one(world: &mut World, mob: Entity, now: f64) {
         // `Goto(target, move_to_delay, minimum_distance)`.
         let min_dist = match world.get::<Megafauna>(mob).map(|m| m.kind) {
             Some(Kind::Bubblegum) => bubblegum::minimum_distance(world, mob, target, now),
+            Some(Kind::Legion) => legion::minimum_distance(world, mob, now),
             _ => 1,
         };
         if let Some(mut c) = world.get_mut::<AiController>(mob) {
@@ -349,10 +365,19 @@ fn think_one(world: &mut World, mob: Entity, now: f64) {
     }
 }
 
+/// `vision_range` and `aggro_vision_range` of `kind`.
+fn vision(kind: Kind) -> (u32, u32) {
+    match kind {
+        Kind::Legion => (13, AGGRO_VISION_RANGE),
+        Kind::ClockworkDefender => (9, 9),
+        _ => (VISION_RANGE, AGGRO_VISION_RANGE),
+    }
+}
+
 /// An ability moves the boss (the drake's swoop, Bubblegum's charges): its AI neither walks
 /// nor strikes.
 fn moving_itself(world: &World, mob: Entity) -> bool {
-    drake::swooping(world, mob) || bubblegum::charging(world, mob)
+    drake::swooping(world, mob) || bubblegum::charging(world, mob) || legion::flying(world, mob)
 }
 
 /// `CanAttack` of a megafauna: a living mob (dead too) not of its faction, not gutted.
@@ -415,6 +440,9 @@ fn open_fire(world: &mut World, mob: Entity, target: Entity) {
         Kind::Bubblegum => bubblegum::open_fire(world, mob, target, now),
         Kind::Colossus => colossus::open_fire(world, mob, target, now),
         Kind::Drake => drake::open_fire(world, mob, target, now),
+        Kind::Legion => legion::open_fire(world, mob, target, now),
+        // `clockwork_defender/OpenFire`: nothing.
+        Kind::ClockworkDefender => {}
     }
 }
 
@@ -429,6 +457,15 @@ fn melee_action(world: &mut World, mob: Entity, target: Entity, now: f64) {
         return;
     }
     schedule(world, mob, now + ATTACK_DELAY_SECS, Step::Melee(target));
+    // `rapid_melee = 2`: two strikes per AI tick, a second apart.
+    if kind_of(world, mob) == Some(Kind::ClockworkDefender) {
+        schedule(
+            world,
+            mob,
+            now + ATTACK_DELAY_SECS + NPC_TICK_SECS / 2.0,
+            Step::Melee(target),
+        );
+    }
 }
 
 /// `/mob/living/simple_animal/hostile/megafauna/AttackingTarget`.
@@ -451,6 +488,9 @@ fn attacking_target(world: &mut World, mob: Entity, target: Entity) {
         return;
     }
     super::defense::melee_attack(world, mob, target);
+    if kind_of(world, mob) == Some(Kind::Legion) {
+        legion::after_attack(world, mob, target);
+    }
     open_fire(world, mob, target);
 }
 
@@ -517,6 +557,7 @@ fn run_queues(world: &mut World) {
                 Step::Bubblegum(step) => bubblegum::run(world, mob, at, step),
                 Step::Colossus(step) => colossus::run(world, mob, at, step),
                 Step::Drake(step) => drake::run(world, mob, at, step),
+                Step::Legion(step) => legion::run(world, mob, at, step),
             }
         }
     }
@@ -693,6 +734,14 @@ pub(super) fn on_death(world: &mut World, mob: Entity, pos: TilePos) {
     if kind == Kind::Bubblegum {
         bubblegum::on_death(world, mob);
     }
+    match kind {
+        Kind::Legion => return legion::on_death(world, mob, pos),
+        Kind::ClockworkDefender => {
+            crate::construction::spawn_obj(world, CLOCKWORK_ALLOY, pos);
+            return;
+        }
+        _ => {}
+    }
     // `dragon/lesser`: `loot = list()`.
     if world.get::<Megafauna>(mob).is_some_and(|m| m.drake.lesser) {
         return;
@@ -701,6 +750,7 @@ pub(super) fn on_death(world: &mut World, mob: Entity, pos: TilePos) {
         Kind::Bubblegum => (bubblegum::CHEST, bubblegum::loot(world)),
         Kind::Colossus => (colossus::CHEST, colossus::loot(world)),
         Kind::Drake => (drake::CHEST, drake::loot(world)),
+        Kind::Legion | Kind::ClockworkDefender => return,
     };
     let Some(chest) = crate::construction::spawn_obj(world, chest, pos) else {
         return;
@@ -723,6 +773,9 @@ mod tests {
         assert_eq!(Kind::of(LESSER_DRAKE), Some(Kind::Drake));
         assert_eq!(Kind::of(BUBBLEGUM), Some(Kind::Bubblegum));
         assert_eq!(Kind::of(BUBBLEGUM_HALLUCINATION), None);
+        assert_eq!(Kind::of(legion::LEGION), Some(Kind::Legion));
+        assert_eq!(Kind::of(legion::SMALL), Some(Kind::Legion));
+        assert_eq!(Kind::of(CLOCKWORK_DEFENDER), Some(Kind::ClockworkDefender));
         assert_eq!(
             Kind::of("/mob/living/simple_animal/hostile/megafauna/hierophant"),
             None
