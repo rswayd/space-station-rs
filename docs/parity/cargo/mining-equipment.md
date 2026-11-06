@@ -29,19 +29,19 @@
 Цветные светящиеся маркеры для разметки пути; сеть маяков Candela (освещение/связь маршрута).
 
 - **Код:** [`/obj/item/stack/marker_beacon`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/equipment/marker_beacons.dm#L17), [`/obj/structure/marker_beacon`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/equipment/marker_beacons.dm#L69), [`/obj/item/stack/candela_beacon`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/equipment/candela_network/candela_beacons.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 `ss13_game::mining::beacons`: стопка ставит маяк на тайл пользователя (один на тайл), alt-клик по стопке или маяку — выбор цвета списком ("Random" у маяка выбирает цвет), маяк светит своим цветом и меняет спрайт, пустая рука забирает его в новую стопку за 1,5 с, стопка — в себя (до 100), картовые пресеты цвета по типу; нет сети маяков Candela, выпадения стопки при разрушении маяка
 
 ### Фултон-эвакуация
 Фултон-пакет с привязкой к точке эвакуации поднимает предмет/моба на воздушном шаре и переносит к маяку.
 
 - **Код:** [`/obj/item/extraction_pack`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/fulton.dm#L3), [`/obj/structure/extraction_point`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/fulton.dm#L301), [`/obj/item/fulton_core`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/fulton.dm#L271)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ `ss13_game::mining::fulton`: набор маяка в руке за 1,5 с ставит маяк `fulton recovery beacon (NNN) (<зона>)` (не в зоне `NOTELEPORT`) и спрашивает имя, пустая рука складывает маяк обратно за 1,5 с; пакет в руке привязывается к маяку своих сетей (`station`, у синдикатского ещё `syndicate`) списком; пакет на незакреплённой вещи или существе на тайле — снаружи (синдикатский и внутри), без `NOTELEPORT`/`LOCAL_TELEPORT` — 5 с прикрепления, трата заряда (из 3; последний улетает с грузом), паралич 32 с (сетевой 18 с) живому или закрепление предмета, через 9,4 с посадка на свободный тайл у маяка и ещё через 7,9 с освобождение; осмотр — заряды и привязка; без шара и анимации подъёма (груз ждёт на своём тайле); сеть Candela сетевого пакета — у маяков Candela (выше)
 
 ### Капсулы-убежища (survival capsules)
 Капсула разворачивает готовое убежище по шаблону (стандартное, люкс, элитное, туалет, рыболовные); внутри свои шлюзы, столы, слипер, стазис.
 
 - **Код:** [`/obj/item/survivalcapsule`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/equipment/survival_pod.dm#L12), [`/datum/map_template/shelter`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/shelters.dm#L2)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ `ss13_game::mining::capsule`: капсула в руке трясётся и через 5 с разворачивает шаблон (`shelter_1/2/3/t.dmm`: альфа, бета-люкс, чарли-элит, туалет) по центру своего тайла — шаблон грузится на временный уровень (`ss13_mapload::load_template`), турфы (поверх старых), содержимое и зоны переносятся на место до `run_map_init`; проверка `check_deploy` (зоны шаттла/голодека, закрытые турфы кроме минеральных, плотные закреплённые объекты, каменные плитки, край карты) с сообщениями отказа и повторным использованием; живые в зоне — паралич 3 с, нокдаун 6 с и отброс тем дальше, чем ближе; осмотр показывает шаблон и описание; рыболовные капсулы — ../service/fishing.md; лог вместо `message_admins` вне лаваленда
 
 ### Прочие шахтёрские устройства
 Червоточный прыжок (wormhole jaunter, спасает от падения в пропасть), инъектор Лазаря (оживляет фауну как питомца), крюк-кошка, кейральные наручники (GPS вне станции), указатель вентилей, радио погоды (штормы).
@@ -53,7 +53,7 @@
 Костюм исследователя с капюшоном, противогаз исследователя, плащ и броня из шкур голиафа и костей.
 
 - **Код:** [`/obj/item/clothing/suit/hooded/explorer`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/equipment/explorer_gear.dm#L2), [`/obj/item/clothing/mask/gas/explorer`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/equipment/explorer_gear.dm#L58), [`/obj/item/clothing/suit/hooded/cloak/goliath`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/equipment/explorer_gear.dm#L113), [`/obj/item/clothing/suit/armor/bone`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/equipment/explorer_gear.dm#L186)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ костюм и капюшон исследователя, противогаз, плащ голиафа с капюшоном, костяная броня и шлем-череп — обычная одежда (`crate::clothing`: броня, капюшоны, поднятие маски); `ss13_game::mining::explorer`: шкура голиафа (по единице стопки) усиливает костюм и капюшон исследователя, талисман — костяную броню и шлем-череп (+10 melee, до 3, приставка «reinforced», счёт в осмотре); плащ голиафа в руке alt-кликом переключается между защитным (слот костюма, броня, термозащита) и церемониальным (шея, без защиты) режимом; поднятый противогаз исследователя помещается в коробки (`WEIGHT_CLASS_SMALL`); усиление берсерка останками дракона — лут мегафауны (ниже), плиты меха Рипли — меха
 
 ### Органы фауны (monster cores)
 Регенеративное ядро легиона (полное лечение, портится без стабилизатора), железа ускорения, мешок бримпыли; можно вживить как орган с активной способностью.

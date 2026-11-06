@@ -61,7 +61,10 @@
 //! | 3166 | `cargo::coupon::cigarettes_attack_self` |
 //! | 3183 | `mining::cores::attack_self` (monster cores) |
 //! | 3184 | `mining::resonator::attack_self` |
+//! | 3185 | `mining::capsule::attack_self` (shelter capsules) |
+//! | 3186 | `mining::beacons::attack_self` (marker beacon stacks) |
 //! | 3187 | `cargo::money::coin_attack_self` (coin flip) |
+//! | 3188 | `mining::fulton::attack_self` (packs link, beacon kits unfold) |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):
 //!
