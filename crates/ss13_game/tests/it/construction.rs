@@ -173,7 +173,7 @@ const BUILD_AT: TilePos = TilePos::new(4, 3, 1);
 const WINDOW_AT: TilePos = TilePos::new(4, 2, 1);
 
 /// Manifest order = `IconStateId`.
-const STATES: [(&str, &str); 19] = [
+const STATES: [(&str, &str); 20] = [
     ("t.dmi", "floor"),
     ("t.dmi", "plating"),
     ("t.dmi", "wall"),
@@ -193,6 +193,7 @@ const STATES: [(&str, &str); 19] = [
     ("s.dmi", "displaced"),
     ("s.dmi", "window"),
     ("l.dmi", "card-id"),
+    ("i.dmi", "rcd"),
 ];
 const FLOOR_ICON: IconStateId = IconStateId(0);
 const PLATING_ICON: IconStateId = IconStateId(1);

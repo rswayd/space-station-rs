@@ -407,8 +407,7 @@ pub(super) fn bleed(world: &mut World) {
         }
         let Some((last_pos, last_health)) = world.get_mut::<Megafauna>(mob).map(|mut m| {
             let s = &mut m.bubblegum;
-            let out = (s.last_pos.replace(pos), s.last_health.replace(health));
-            out
+            (s.last_pos.replace(pos), s.last_health.replace(health))
         }) else {
             continue;
         };

@@ -982,10 +982,10 @@ pub fn item_interaction(
         cost,
         effect,
     };
-    if !do_after(world, actor, target, delay, 0, Job::Rcd(job)) {
-        if let Some(e) = effect {
-            world.despawn(e);
-        }
+    if !do_after(world, actor, target, delay, 0, Job::Rcd(job))
+        && let Some(e) = effect
+    {
+        world.despawn(e);
     }
     true
 }
