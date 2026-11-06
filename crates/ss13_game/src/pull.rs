@@ -310,6 +310,7 @@ pub(crate) fn step_passing(
         .collect();
     if blockers.is_empty() {
         blockers.extend(index.enter_blockers(to, dir, entity).filter(keep));
+        blockers.extend(ss13_world::gate_refuses(world, entity, to).filter(keep));
     }
     if let Some(mut facing) = world.get_mut::<Facing>(entity) {
         facing.set_if_neq(Facing(dir));

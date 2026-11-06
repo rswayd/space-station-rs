@@ -58,6 +58,7 @@ mod janitor;
 mod jobs;
 mod kitchen;
 mod kitchen_machines;
+mod labor;
 mod languages;
 mod lava_fauna;
 mod lavaland;

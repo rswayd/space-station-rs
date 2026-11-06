@@ -1,7 +1,7 @@
 //! Client half of the brig: the `BrigTimer` window (`BrigTimer.tsx`, BandaStation's labelled
 //! presets), the `PrisonerManagement` window (`PrisonerManagement.tsx`), the labor camp
 //! teleporter console (`GulagTeleporterConsole.jsx`) and the item reclaimer
-//! (`GulagItemReclaimer.tsx`).
+//! (`GulagItemReclaimer.tsx`), the labor camp claim console (`LaborClaimConsole.jsx`).
 // shortcut: implant categories are sections instead of tabs (tg `useSharedState` tabs); the
 // tooltips of the implant buttons are shown, the dividers between implants are not.
 
@@ -19,7 +19,8 @@ impl Plugin for BrigClientPlugin {
         app.register_ui_view::<BrigTimerUi>()
             .register_ui_view::<PrisonerManagementUi>()
             .register_ui_view::<GulagTeleporterUi>()
-            .register_ui_view::<GulagItemReclaimerUi>();
+            .register_ui_view::<GulagItemReclaimerUi>()
+            .register_ui_view::<LaborClaimUi>();
     }
 }
 
@@ -519,6 +520,62 @@ impl ClientUi for GulagItemReclaimerUi {
         bsn! {
             @WindowContent
             Children [ {body} ]
+        }
+    }
+}
+
+impl ClientUi for LaborClaimUi {
+    const WIDTH: f32 = 315.0;
+    const HEIGHT: f32 = 440.0;
+
+    fn content(_: &(), data: &LaborClaimData) -> impl Scene {
+        let mut rows = vec![text_item(
+            "Status",
+            data.status_info.clone(),
+            UiColor::Default,
+        )];
+        if data.shuttle_exists {
+            let blocked = !data.can_go_home;
+            rows.push(Box::new(EntityScene(bsn! {
+                @LabeledListItem { @label: "Shuttle controls" }
+                Children [
+                    @Button { @content: "Move shuttle" }
+                    Button { disabled: blocked }
+                    Act(MOVE_SHUTTLE)
+                ]
+            })));
+        }
+        rows.push(text_item(
+            "Points",
+            data.id_points.to_string(),
+            UiColor::Default,
+        ));
+        let unclaimed = data.unclaimed_points.to_string();
+        let none = data.unclaimed_points == 0;
+        rows.push(Box::new(EntityScene(bsn! {
+            @LabeledListItem { @label: "Unclaimed points" }
+            Children [
+                Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center }
+                Children [
+                    Text(unclaimed)
+                    --
+                    @Button { @content: "Claim points" }
+                    Button { disabled: none }
+                    Act(CLAIM_POINTS)
+                ]
+            ]
+        })));
+        bsn! {
+            @WindowContent
+            Children [
+                @Section
+                Children [ @LabeledList Children [ {rows} ] ]
+                --
+                @Section { @title: "Directions" }
+                Children [
+                    Text("Collect boulders and ores from the mining area and bring them to the unloading machine. Then, pull the lever to smelt them into sheets. Use the production console to dispense the sheets, and then bring bring them to the claim console to earn points.\n\nBoulders cannot be smelted directly, and will require additional manual processing - strike them with a pickaxe to break them down further.\n\nSheets smelted from the labor camp's furnace will be stamped with an official seal of quality. Only stamped sheets can be claimed for points - so don't bother trying to strip down tables and chairs for bonus metal.")
+                ]
+            ]
         }
     }
 }

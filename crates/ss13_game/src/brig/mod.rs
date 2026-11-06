@@ -4,7 +4,8 @@
 //! [`timer`] holds the cell timers' server half, [`prisoner`] the prisoner management console
 //! and the prisoner ID card's points, [`client`] draws both windows. This module holds what both
 //! halves share: the windows' data and act names. [`gulag`] holds the labor camp teleporter,
-//! its console and the item reclaimer.
+//! its console and the item reclaimer, [`labor`] the labor camp's point consoles, the
+//! license plate press and the produceporter.
 
 use serde::{Deserialize, Serialize};
 use ss13_tgui::UiInterface;
@@ -13,6 +14,8 @@ use ss13_tgui::UiInterface;
 pub mod client;
 #[cfg(feature = "server")]
 pub mod gulag;
+#[cfg(feature = "server")]
+pub mod labor;
 #[cfg(feature = "server")]
 pub mod prisoner;
 #[cfg(feature = "server")]
@@ -29,6 +32,7 @@ impl bevy::prelude::Plugin for BrigServerPlugin {
             timer::DoorTimerPlugin,
             prisoner::PrisonerConsolePlugin,
             gulag::GulagPlugin,
+            labor::LaborPlugin,
         ));
     }
 }
@@ -179,3 +183,26 @@ pub struct GulagItemReclaimerData {
 
 /// `GulagItemReclaimer` act, with the `mobref` param.
 pub const RELEASE_ITEMS: &str = "release_items";
+
+/// tgui `LaborClaimConsole`.
+pub struct LaborClaimUi;
+
+impl UiInterface for LaborClaimUi {
+    const NAME: &'static str = "LaborClaimConsole";
+    type Data = LaborClaimData;
+    type StaticData = ();
+}
+
+/// `labor_claim_console/ui_data` with `ui_static_data`'s `shuttle_exists`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LaborClaimData {
+    pub can_go_home: bool,
+    pub id_points: u32,
+    pub status_info: String,
+    pub unclaimed_points: i64,
+    pub shuttle_exists: bool,
+}
+
+// `LaborClaimConsole` acts.
+pub const CLAIM_POINTS: &str = "claim_points";
+pub const MOVE_SHUTTLE: &str = "move_shuttle";

@@ -630,7 +630,7 @@ pub fn release(world: &mut World, orm: Entity, user: Entity, material: usize, sh
         *n -= count * SHEET_MATERIAL_AMOUNT as u32;
     }
     let out = pos.step(dirs(world, orm).1);
-    crate::construction::spawn_stack(world, &sheet_type, out, count);
+    crate::construction::spawn_manufactured(world, &sheet_type, out, count);
 }
 
 /// `ui_act("Smelt")`: up to 50 of an alloy from the store's materials, onto the output tile.
@@ -678,7 +678,7 @@ pub fn smelt_alloy(world: &mut World, orm: Entity, user: Entity, design: usize, 
     };
     let out = pos.step(dirs(world, orm).1);
     if stack {
-        crate::construction::spawn_stack(world, &build_path, out, amount);
+        crate::construction::spawn_manufactured(world, &build_path, out, amount);
     } else {
         crate::construction::spawn_obj(world, &build_path, out);
     }

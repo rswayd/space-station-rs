@@ -305,6 +305,8 @@ pub enum Job {
     AnomalyRelease,
     /// Netpods, hololadders, the quantum console ([`crate::science::bitrunning`]).
     Bitrunning(crate::science::bitrunning::server::BitrunJob),
+    /// Pressing a license plate ([`crate::brig::labor`]).
+    PlatePress,
     /// An RCD build or deconstruction ([`crate::devices::rcd`]).
     Rcd(crate::devices::rcd::RcdJob),
     /// A screwdriver respooling an unwound tape ([`crate::devices::taperecorder`]).
@@ -1255,6 +1257,11 @@ pub fn can_merge(world: &World, a: Entity, b: Entity) -> bool {
     a != b && merge_type(a).is_some() && merge_type(a) == merge_type(b)
 }
 
+/// tg `/obj/item/stack/sheet` `manufactured`: sheets a material container made (the ORM, a
+/// lathe's ejected sheets); only these earn labor camp points.
+#[derive(Component, Clone, Copy, Debug, Default)]
+pub struct Manufactured;
+
 /// tg `merge`: as much of `from` as fits moves into `into`; an emptied `from` is deleted.
 pub fn merge_into(world: &mut World, from: Entity, into: Entity) {
     let max = world.get::<DmStack>(into).map_or(50, |s| s.max_amount);
@@ -1262,6 +1269,10 @@ pub fn merge_into(world: &mut World, from: Entity, into: Entity) {
     let moved = crate::tools::stack_amount(world, from).min(max.saturating_sub(have));
     if moved == 0 {
         return;
+    }
+    // `sheet/merge`: the stack stays manufactured only when both were.
+    if world.get::<Manufactured>(from).is_none() {
+        world.entity_mut(into).remove::<Manufactured>();
     }
     crate::tools::use_stack(world, from, moved);
     if let Some(mut stack) = world.get_mut::<Stack>(into) {
@@ -1299,6 +1310,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Bitrunning(job) => {
             crate::science::bitrunning::server::complete(world, mob, action, job)
         }
+        Job::PlatePress => crate::brig::labor::complete_press(world, mob, target),
         &Job::Table(job) => crate::tables::complete(world, mob, action, job),
         Job::Strip(job) => crate::strip::complete(world, mob, action, *job),
         Job::Medical(job) => crate::medical::complete_med(world, mob, action, *job),
@@ -1904,6 +1916,26 @@ pub fn spawn_detached(world: &mut World, path: &str) -> Option<Entity> {
 /// (`/obj/item/stack/Initialize(merge = TRUE)`), the rest is a new stack (split at
 /// `max_amount`).
 pub fn spawn_stack(world: &mut World, path: &str, pos: TilePos, amount: u32) -> Option<Entity> {
+    spawn_stack_as(world, path, pos, amount, false)
+}
+
+/// [`spawn_stack`] of [`Manufactured`] sheets (tg `retrieve_stack`: `manufactured = TRUE`).
+pub fn spawn_manufactured(
+    world: &mut World,
+    path: &str,
+    pos: TilePos,
+    amount: u32,
+) -> Option<Entity> {
+    spawn_stack_as(world, path, pos, amount, true)
+}
+
+fn spawn_stack_as(
+    world: &mut World,
+    path: &str,
+    pos: TilePos,
+    amount: u32,
+    manufactured: bool,
+) -> Option<Entity> {
     if path.is_empty() || amount == 0 {
         return None;
     }
@@ -1917,6 +1949,9 @@ pub fn spawn_stack(world: &mut World, path: &str, pos: TilePos, amount: u32) -> 
             .map_or(50, |s| s.max_amount.max(1));
         let here = left.min(max);
         world.entity_mut(stack).insert(Stack { amount: here });
+        if manufactured {
+            world.entity_mut(stack).insert(Manufactured);
+        }
         left -= here;
         let others: Vec<Entity> = world
             .resource::<SpatialIndex>()
@@ -1959,6 +1994,10 @@ pub fn split_into_hand(world: &mut World, mob: Entity, stack: Entity, hand: usiz
         return false;
     };
     crate::storage::finish_item(world, new, 0);
+    // `copy_evidences`: the split keeps the seal.
+    if world.get::<Manufactured>(stack).is_some() {
+        world.entity_mut(new).insert(Manufactured);
+    }
     crate::tools::use_stack(world, stack, 1);
     world.entity_mut(new).insert(Stack { amount: 1 });
     crate::inventory::pick_up(world, mob, new, hand);

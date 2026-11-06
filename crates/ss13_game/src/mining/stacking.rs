@@ -128,7 +128,7 @@ fn setup_stackers(world: &mut World) {
     }
 }
 
-fn accepted(world: &World, item: Entity) -> bool {
+pub(crate) fn accepted(world: &World, item: Entity) -> bool {
     world
         .get::<DmItem>(item)
         .is_some_and(|i| ACCEPTED.iter().any(|root| is_under(&i.path, root)))
@@ -165,6 +165,8 @@ pub fn process_stack(world: &mut World, machine: Entity, item: Entity) {
         return;
     };
     let amount = crate::tools::stack_amount(world, item);
+    // `laborstacker/process_stack`: points for the sealed sheets.
+    crate::brig::labor::stacker_points(world, machine, item, &item_path, amount);
     // `materials.insert_item(input)` when the silo takes its materials.
     if let Some(silo) = state
         .silo

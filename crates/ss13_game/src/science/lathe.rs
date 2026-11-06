@@ -961,7 +961,7 @@ pub(crate) fn eject_sheets(
         return;
     };
     *have -= sheets * SHEET_MATERIAL_AMOUNT as u32;
-    crate::construction::spawn_stack(world, &sheet_type, pos, sheets);
+    crate::construction::spawn_manufactured(world, &sheet_type, pos, sheets);
 }
 
 /// tg `remote_materials.on_item_insert` / `attempt_insert` of a held stack. True when the click
