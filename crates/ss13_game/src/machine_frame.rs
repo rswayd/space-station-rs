@@ -120,9 +120,11 @@ pub enum Family {
     QuantumPad,
     /// Sheetifiers (`crate::eng_machines::sheetifier`).
     Sheetifier,
+    /// Atmospheric shield generators (`crate::eng_machines::atmos_shield`).
+    AtmosShieldGen,
 }
 
-const FAMILIES: [(&str, Family); 35] = [
+const FAMILIES: [(&str, Family); 36] = [
     (CELL_CHARGER, Family::Charger),
     (RECHARGER, Family::Charger),
     (crate::kitchen::MICROWAVE_ROOT, Family::Kitchen),
@@ -175,6 +177,10 @@ const FAMILIES: [(&str, Family); 35] = [
     (
         crate::eng_machines::sheetifier::SHEETIFIER,
         Family::Sheetifier,
+    ),
+    (
+        crate::eng_machines::atmos_shield::GENERATOR,
+        Family::AtmosShieldGen,
     ),
 ];
 
@@ -1133,6 +1139,7 @@ pub fn setup_built(world: &mut World, machine: Entity) {
         Family::Teapot => crate::teapot::setup(world, machine, false),
         Family::QuantumPad => {}
         Family::Sheetifier => crate::eng_machines::sheetifier::setup(world, machine),
+        Family::AtmosShieldGen => crate::eng_machines::atmos_shield::setup(world, machine),
     }
 }
 

@@ -4,6 +4,7 @@
 use std::path::Path;
 
 use bevy::prelude::*;
+use ss13_game::eng_machines::atmos_shield::{self, AtmosShield, AtmosShieldGen, GenState};
 use ss13_game::eng_machines::sheetifier::{self, MEAT_SHEET, PROCESS_SECS, Sheetifier};
 use ss13_game::testing::{fixture_map, server_app, steps, write_fixture};
 use ss13_game::tools::Stack;
@@ -188,4 +189,122 @@ fn sheetifier_turns_meat_into_sheets_after_processing() {
     assert_eq!(meat_sheets_on(&mut app, t(3, 2)), 5);
     let left = app.world().get::<Sheetifier>(machine).unwrap().meat;
     assert!((left - 1.0 / 3.0).abs() < 1e-3, "{left}");
+}
+
+fn generator(app: &mut App, path: &str, pos: TilePos, dir: ss13_shared::Dir) -> Entity {
+    let e = obj(app, path, pos);
+    app.world_mut().entity_mut(e).insert((
+        ss13_shared::Facing(dir),
+        ss13_game::obj_damage::Anchored(true),
+    ));
+    atmos_shield::setup(app.world_mut(), e);
+    e
+}
+
+fn gen_state(app: &App, e: Entity) -> AtmosShieldGen {
+    app.world().get::<AtmosShieldGen>(e).unwrap().clone()
+}
+
+#[test]
+fn atmos_shield_generators_span_an_airtight_field_between_them() {
+    use ss13_shared::Dir;
+    let mut app = fixture("atmos_shield");
+    let a = generator(&mut app, atmos_shield::GENERATOR, t(1, 2), Dir::East);
+    let b = generator(&mut app, atmos_shield::GENERATOR, t(3, 2), Dir::West);
+    let mapped = generator(
+        &mut app,
+        "/obj/machinery/atmos_shield_gen/active",
+        t(6, 1),
+        Dir::North,
+    );
+    let client = app.world_mut().spawn_empty().id();
+    // `/active` maps in waiting for power, locked.
+    let m = gen_state(&app, mapped);
+    assert_eq!((m.on, m.locked), (GenState::WantPower, true));
+    // No parts: tier 1 laser and capacitor.
+    assert_eq!(atmos_shield::ratings(app.world(), a), (3, 1000.0));
+
+    // No access: the lock stays.
+    assert!(atmos_shield::interact(
+        app.world_mut(),
+        client,
+        client,
+        b,
+        true
+    ));
+    assert!(!gen_state(&app, b).locked);
+
+    assert!(atmos_shield::interact(
+        app.world_mut(),
+        client,
+        client,
+        a,
+        false
+    ));
+    assert_eq!(gen_state(&app, a).on, GenState::WantPower);
+    atmos_shield::process_early(app.world_mut(), a);
+    let (sa, sb) = (gen_state(&app, a), gen_state(&app, b));
+    assert_eq!((sa.on, sb.on), (GenState::Active, GenState::Active));
+    assert_eq!(sb.master, Some(a));
+    // Both ends and the tile between.
+    assert_eq!(sa.fields.len(), 3);
+    let mut tiles: Vec<TilePos> = sa
+        .fields
+        .iter()
+        .map(|&f| *app.world().get::<TilePos>(f).unwrap())
+        .collect();
+    tiles.sort_by_key(|p| p.x);
+    assert_eq!(tiles, vec![t(1, 2), t(2, 2), t(3, 2)]);
+    for &f in &sa.fields {
+        assert_eq!(
+            app.world().get::<ss13_atmos::AtmosBlocker>(f).map(|b| b.0),
+            Some(ss13_atmos::AtmosPass::No)
+        );
+        assert!(
+            app.world()
+                .get::<AtmosShield>(f)
+                .is_some_and(|s| s.owner == a)
+        );
+    }
+    // Active with fields: no new search, the fields stay.
+    atmos_shield::process_early(app.world_mut(), a);
+    assert_eq!(gen_state(&app, a).fields, sa.fields);
+
+    // Power lost: waiting again, the fields go on the next tick.
+    app.world_mut()
+        .entity_mut(a)
+        .insert(ss13_game::power::Unpowered);
+    atmos_shield::process_early(app.world_mut(), a);
+    assert_eq!(gen_state(&app, a).on, GenState::WantPower);
+    atmos_shield::process_early(app.world_mut(), a);
+    assert!(gen_state(&app, a).fields.is_empty());
+    assert!(
+        sa.fields
+            .iter()
+            .all(|&f| app.world().get_entity(f).is_err())
+    );
+    // The slave follows its inactive master off.
+    atmos_shield::process_early(app.world_mut(), b);
+    let sb = gen_state(&app, b);
+    assert_eq!((sb.on, sb.master), (GenState::Off, None));
+
+    // Power back: the pair forms again; turned off by hand, the fields go at once.
+    app.world_mut()
+        .entity_mut(a)
+        .remove::<ss13_game::power::Unpowered>();
+    atmos_shield::process_early(app.world_mut(), a);
+    assert_eq!(gen_state(&app, a).fields.len(), 3);
+    atmos_shield::toggle(app.world_mut(), a);
+    assert_eq!(gen_state(&app, a).on, GenState::Off);
+    assert!(gen_state(&app, a).fields.is_empty());
+
+    // Facing away: no partner, it keeps waiting.
+    app.world_mut()
+        .entity_mut(b)
+        .insert(ss13_shared::Facing(Dir::North));
+    atmos_shield::process_early(app.world_mut(), b);
+    atmos_shield::toggle(app.world_mut(), a);
+    atmos_shield::process_early(app.world_mut(), a);
+    let sa = gen_state(&app, a);
+    assert_eq!((sa.on, sa.fields.len()), (GenState::WantPower, 0));
 }

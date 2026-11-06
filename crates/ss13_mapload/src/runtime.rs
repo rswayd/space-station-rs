@@ -649,6 +649,11 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/machinery/sheetifier",
     "/obj/item/circuitboard/machine/sheetifier",
     "/obj/item/stack/sheet/meat",
+    // Atmospheric shield generators, their board and fields
+    // (`ss13_game::eng_machines::atmos_shield`).
+    "/obj/machinery/atmos_shield_gen",
+    "/obj/item/circuitboard/machine/atmos_shield_gen",
+    "/obj/effect/atmos_shield",
 ];
 
 /// `ss13_game::species`: every species' organs (`mutant*`), meat (`meat`) and the plasmaman
