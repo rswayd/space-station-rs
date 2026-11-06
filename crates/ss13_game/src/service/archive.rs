@@ -15,7 +15,8 @@
 //!   browses.
 // shortcut: the archive lives as long as the server process (tg keeps it in SQL across rounds),
 // so random bookcases stay empty; no search filters or pages, checkouts, inventory, bible or
-// poster printing, newscaster book club, forbidden lore, barcode scanner or admin deletion.
+// poster printing, newscaster book club, forbidden lore or admin deletion (the barcode
+// scanner and the ledger it fills are `super::barcode`).
 
 use bevy::prelude::*;
 use ss13_mapload::DmAtom;
