@@ -1,19 +1,21 @@
 //! Handheld devices over real WebTransport on 127.0.0.1: a megaphone in the active hand makes
 //! the holder's words bold, then needs 5 s to recharge; two pair pinpointers from one box are
-//! linked, and one turned on points at the other.
+//! linked, and one turned on points at the other; a flashlight used in hand lights its holder
+//! and goes out again.
 
 use std::path::{Path, PathBuf};
 
 use bevy::prelude::*;
+use ss13_game::devices::flashlight::Flashlight;
 use ss13_game::devices::{Megaphone, PairPinpointer};
 use ss13_game::inventory::{CarriedBy, Inventory};
 use ss13_game::storage::StoredIn;
 use ss13_game::testing::{self, Drive, fixture_map, write_fixture};
-use ss13_mapload::DmItem;
+use ss13_mapload::{DmItem, IconIndex};
 use ss13_net::chat::client::ChatReceived;
 use ss13_shared::chat::Span;
 use ss13_shared::protocol::{ClientIntent, InventorySlot};
-use ss13_shared::{Appearance, Dir, TilePos};
+use ss13_shared::{Appearance, Dir, Optics, TilePos};
 
 const TYPES: &str = r##"{
   "schema": 3,
@@ -39,6 +41,10 @@ const TYPES: &str = r##"{
         "worn_icon": null, "worn_icon_state": null } },
     "/obj/item/megaphone": { "parent": "/obj/item", "declared_vars": {
         "name": "мегафон", "icon_state": "megaphone" } },
+    "/obj/item/flashlight": { "parent": "/obj/item", "declared_vars": {
+        "name": "фонарик", "icon": { "resource": "f.dmi" }, "icon_state": "flashlight",
+        "inhand_icon_state": "flashlight", "light_range": 4, "light_power": 1,
+        "light_color": "#FFD8A8", "light_on": 0, "start_on": 0 } },
     "/obj/item/pinpointer": { "parent": "/obj/item", "declared_vars": {
         "icon": { "resource": "p.dmi" }, "icon_state": "pinpointer" } },
     "/obj/item/pinpointer/pair": { "parent": "/obj/item/pinpointer" },
@@ -80,22 +86,25 @@ const TYPES: &str = r##"{
 }"##;
 
 /// Rows top-down, the last line is y = 1. The spawn `s` (2,2), a megaphone `M` (3,3), a box of
-/// pair pinpointers `P` (5,2).
+/// pair pinpointers `P` (5,2), a flashlight `F` (5,3).
 const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 "f" = (/turf/open/floor,/area/space)
 "s" = (/obj/effect/landmark/start/assistant,/turf/open/floor,/area/space)
 "M" = (/obj/item/megaphone,/turf/open/floor,/area/space)
 "P" = (/obj/item/storage/box/pinpointer_pairs,/turf/open/floor,/area/space)
+"F" = (/obj/item/flashlight,/turf/open/floor,/area/space)
 
 (1,1,1) = {"
 wwwwwww
-wfMfffw
+wfMfFfw
 wsffPfw
 wwwwwww
 "}
 "##;
 
-const STATES: [(&str, &str); 14] = [
+const STATES: [(&str, &str); 16] = [
+    ("f.dmi", "flashlight"),
+    ("f.dmi", "flashlight-on"),
     ("t.dmi", "floor"),
     ("t.dmi", "wall"),
     ("l.dmi", "x2"),
@@ -117,6 +126,7 @@ fn fixture_assets() -> PathBuf {
     let used = [
         "/obj/effect/landmark/start/assistant",
         "/obj/item/megaphone",
+        "/obj/item/flashlight",
         "/obj/item/pinpointer/pair",
         "/obj/item/storage/box/pinpointer_pairs",
         "/turf/open/floor",
@@ -269,4 +279,39 @@ fn megaphone_and_pair_pinpointers() {
     assert_eq!(overlay.dir, Some(Dir::East), "{overlay:?}");
     let pairs_box = s.items("/obj/item/storage/box/pinpointer_pairs")[0];
     assert_eq!(s.try_get::<StoredIn>(b).map(|x| x.0), Some(pairs_box));
+}
+
+#[test]
+fn flashlight_lights_its_holder() {
+    let mut s = Station::start();
+    let mob = s.mob();
+    let flashlight = s.items("/obj/item/flashlight")[0];
+    s.run_until("set up", |s| {
+        s.try_get::<Flashlight>(flashlight)
+            .is_some_and(|f| f.light.is_some())
+    });
+    assert!(!s.get::<Flashlight>(flashlight).on);
+    s.give(flashlight);
+    let slot = s.active_slot();
+    let lit = |s: &Station| s.try_get::<Optics>(mob).and_then(|o| o.light);
+
+    s.send(0, ClientIntent::ClickSlot(slot));
+    s.run_until("switched on", |s| s.get::<Flashlight>(flashlight).on);
+    s.run_until("the holder is lit", |s| lit(s).is_some());
+    assert_eq!(lit(&s).unwrap().range, 4.0);
+    let on_state = s
+        .server
+        .world()
+        .resource::<IconIndex>()
+        .get("f.dmi", "flashlight-on");
+    assert_eq!(Some(s.get::<Appearance>(flashlight).icon_state), on_state);
+    assert_eq!(
+        s.get::<DmItem>(flashlight).inhand_icon_state,
+        "flashlight-on"
+    );
+
+    s.send(0, ClientIntent::ClickSlot(slot));
+    s.run_until("switched off", |s| !s.get::<Flashlight>(flashlight).on);
+    s.run_until("the holder is dark", |s| lit(s).is_none());
+    assert_eq!(s.get::<DmItem>(flashlight).inhand_icon_state, "flashlight");
 }

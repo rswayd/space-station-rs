@@ -497,14 +497,19 @@ pub fn update_data(world: &mut World, z: u16) -> Vec<CrewSensor> {
     out
 }
 
-/// Every console reads the sensors again every [`UPDATE_SECS`].
+/// Every console (and handheld monitor, `crate::devices`) reads the sensors again every
+/// [`UPDATE_SECS`], for the level it is on.
 fn refresh_consoles(world: &mut World) {
     let now = world.resource::<Time>().elapsed_secs_f64();
-    let mut q = world.query::<(Entity, &CrewConsole, &TilePos)>();
-    let due: Vec<(Entity, u16)> = q
+    let mut q = world.query::<(Entity, &CrewConsole)>();
+    let due: Vec<Entity> = q
         .iter(world)
-        .filter(|(_, c, _)| c.updated.is_none_or(|t| now - t >= UPDATE_SECS))
-        .map(|(e, _, p)| (e, p.z))
+        .filter(|(_, c)| c.updated.is_none_or(|t| now - t >= UPDATE_SECS))
+        .map(|(e, _)| e)
+        .collect();
+    let due: Vec<(Entity, u16)> = due
+        .into_iter()
+        .filter_map(|e| Some((e, crate::modpc::pda::turf_of(world, e)?.z)))
         .collect();
     refresh(world, due, now);
 }
@@ -532,14 +537,24 @@ fn refresh(world: &mut World, consoles: Vec<(Entity, u16)>, now: f64) {
 /// A click on a powered crew console opens the monitor (tg `ui_interact` ->
 /// `GLOB.crewmonitor.show`).
 pub fn interact(world: &mut World, client: Entity, mob: Entity, target: Entity) -> bool {
-    let Some(updated) = world.get::<CrewConsole>(target).map(|c| c.updated) else {
+    // A handheld monitor (`crate::devices`) carries a `CrewConsole` too: it is picked up.
+    if world.get::<CrewConsole>(target).is_none() || world.get::<DmPower>(target).is_none() {
         return false;
-    };
-    if world.get::<Unpowered>(target).is_some() {
-        return true;
     }
-    if updated.is_none()
-        && let Some(&pos) = world.get::<TilePos>(target)
+    if world.get::<Unpowered>(target).is_none() {
+        show(world, client, mob, target, false);
+    }
+    true
+}
+
+/// `GLOB.crewmonitor.show(user, source)` for a console or a handheld monitor: the window, with
+/// a sensor read first when `fresh` or the source never read them.
+pub fn show(world: &mut World, client: Entity, mob: Entity, target: Entity, fresh: bool) {
+    let never = world
+        .get::<CrewConsole>(target)
+        .is_some_and(|c| c.updated.is_none());
+    if (fresh || never)
+        && let Some(pos) = crate::modpc::pda::turf_of(world, target)
     {
         let now = world.resource::<Time>().elapsed_secs_f64();
         refresh(world, vec![(target, pos.z)], now);
@@ -548,7 +563,6 @@ pub fn interact(world: &mut World, client: Entity, mob: Entity, target: Entity) 
         crate::vending::plain_name(&n.name).to_owned()
     });
     world.write_message(OpenUi::new::<CrewWindow>(client, mob, target, title));
-    true
 }
 
 /// The server half of [`CrewConsoleUi`].

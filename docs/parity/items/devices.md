@@ -5,14 +5,14 @@
 GPS-маяк с меткой: в tgui показывает координаты свои и всех включённых GPS на том же уровне с направлением и расстоянием; ЭМИ отключает.
 
 - **Код:** [`/obj/item/gps`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/devices/gps.dm#L2), [`gps.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/gps.dm); tgui: [`Gps.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/Gps.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/devices/gps.rs`, окно `crates/ss13_tgui/src/interfaces/gps.rs`: метки по типу (COM0, SCI0, ENG0, MINE0, MINER, BORG0, PAI0, «Distant Signal»), имя «<имя> (<метка>)», оверлей `working`; в руке (компьютер спасательной капсулы — кликом) окно: своя зона и координаты, остальные отслеживающие GPS на всех уровнях или только своём («LOCAL»), на своём уровне — расстояние и пеленг; переименование (20 символов, проверка открытого окна после ввода), вкл/выкл отслеживания (выключенный не виден другим), ручное/автообновление; ЭМИ — 30 с от последнего импульса, оверлей `emp`, окно закрывается, «слабо шипит». Нет: alt-клика (цепочка alt-кликов инвентаря общая; то же делает кнопка питания), пеленга на связанные уровни, поиска по имени, разметки пола отладочным GPS, GPS-компонента на не-предметах (тендрилы, кейральные наручники — группа шахт)
 
 ### Мегафон
 Речь держащего мегафон становится громче (крупный шрифт); варианты СБ и командования; ЭМИ/емаг портят.
 
 - **Код:** [`/obj/item/megaphone`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/devices/megaphone.dm#L1), [`handle_speech()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/devices/megaphone.dm#L30)
 - **BandaStation:** [`add_tts_filter()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/devices/megaphone.dm#L41) — фильтр TTS для голоса через мегафон
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/devices.rs`: мегафон в активной руке даёт речи держащего свой span (`ss13_chat::speech::VoiceSpan`) и звук, затем перезаряжается 5 с (сказанное раньше — обычным текстом и предупреждение). Нет: крупного шрифта (`SPAN_COMMAND`, клоунского `SPAN_CLOWN`, `SPAN_REALLYBIG` после емага — пока жирный: в чате нет крупного span, нужен контракт `ss13_shared::chat::Span`), емага, TTS-фильтра (TTS нет), громкости речи в радио
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/devices/mod.rs`: мегафон в активной руке даёт речи держащего свой span (`ss13_chat::speech::VoiceSpan`) и звук, затем перезаряжается 5 с (сказанное раньше — обычным текстом и предупреждение). Нет: крупного шрифта (`SPAN_COMMAND`, клоунского `SPAN_CLOWN`, `SPAN_REALLYBIG` после емага — пока жирный: в чате нет крупного span, нужен контракт `ss13_shared::chat::Span`), емага, TTS-фильтра (TTS нет), громкости речи в радио
 
 ### Диктофон и кассеты
 Диктофон записывает услышанную речь на кассету с отметками времени, проигрывает её и печатает расшифровку; кассету можно вынуть, перемотать, порвать.
@@ -25,9 +25,11 @@ GPS-маяк с меткой: в tgui показывает координаты 
 Указатель направления на цель: на диск ядерной аутентификации (капитан), на члена экипажа с датчиками, парные, на шаттл; стрелка показывает направление и дальность.
 
 - **Код:** [`/obj/item/pinpointer`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/pinpointer.dm#L2), [`scan_for_target()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/pinpointer.dm#L76), [`/obj/item/pinpointer/crew`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/pinpointer.dm#L107), [`/obj/item/pinpointer/pair`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/pinpointer.dm#L190)
-- **Статус в ss13-rs:** 🟡 частично — на диск (`crates/ss13_game/src/antag/nukeop/server.rs`: все `/obj/item/pinpointer/nuke`, и капитанский, и оперативников; включение, тревога и переключение синдикатовских на инфильтратор после взвода бомбы); парные: `crates/ss13_game/src/devices.rs` (два из одной коробки связываются, включаются в руке, стрелка на вторую половину раз в 0,2 с, осмотр — кто держит пару). Нет: по датчикам костюмов (нет датчиков), на шаттл охотников за головами, нюхача материалов
+- **Статус в ss13-rs:** 🟡 частично — на диск (`crates/ss13_game/src/antag/nukeop/server.rs`: все `/obj/item/pinpointer/nuke`, и капитанский, и оперативников; включение, тревога и переключение синдикатовских на инфильтратор после взвода бомбы); парные: `crates/ss13_game/src/devices/mod.rs` (два из одной коробки связываются, включаются в руке, стрелка на вторую половину раз в 0,2 с, осмотр — кто держит пару); по датчикам костюмов: там же (`CrewPinpointer`: первый пользователь — владелец, список экипажа с датчиками на «Слежении» на том же или другом станционном уровне по имени с ID, «Имя (2)» для повторов, проверка, что пинпоинтер ещё в руке, после выбора; цель теряется, когда датчики перестают отслеживать; контрактный — любой режим датчиков и `minimum_range` 25; осмотр — кого отслеживает). Нет: на шаттл охотников за головами, нюхача материалов
 
 _«T-ray сканер» описано в [../engineering/tools.md](../engineering/tools.md)._
+
+_«Фонарики и лампы» описаны в [lights-smoking.md](lights-smoking.md)._
 
 ### Лазерная указка
 Указывает точку, ослепляет людей и камеры, отвлекает котов; заряд восстанавливается, линза меняет мощность.
@@ -54,7 +56,7 @@ _«Лампозаменитель» описано в [../power/lighting.md](../
 
 - **Код:** [`/obj/item/sensor_device`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/devices/sensor_device.dm#L1)
 - **BandaStation:** [`sensor_device.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/devices/sensor_device.dm#L18) — заменён форковым монитором с NanoMap (`CrewConsole220`)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/devices/mod.rs` (`HandheldMonitor`): в руке открывает окно консоли (`crates/ss13_game/src/clothing/sensors.rs`, `show`) по уровню, где находится монитор, обновление раз в 10 с; окно активно, пока монитор у пользователя (или рядом на полу). Как у консоли, NanoMap — обычный список tg; нет `drag_to_activate`
 
 ### Маяки и маяки выбора
 Маяк-цель для телепортов и подов; маяки выбора (музыкальный инструмент, герой, оружие ГСБ) дают выбрать предмет и присылают его подом.

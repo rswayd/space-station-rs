@@ -45,6 +45,7 @@ use crate::interfaces::electrolyzer::{ElectrolyzerData, ElectrolyzerUi};
 use crate::interfaces::gas_analyzer::{
     AtmosHandbook, GasAnalyzerData, GasAnalyzerUi, Gasmix, HandbookGas,
 };
+use crate::interfaces::gps::{GpsData, GpsSignal, GpsUi};
 use crate::interfaces::job_selection::{
     DepartmentSlots, DepartmentStatic, JobSelectionData, JobSelectionStatic, JobSelectionUi,
     JobSlots, JobStatic,
@@ -667,6 +668,32 @@ pub fn sample(name: &str) -> Option<Sample> {
                 ]),
             },
             &DestinationTaggerData { current_tag: 3 },
+        ),
+        GpsUi::NAME => of::<GpsUi>(
+            "global positioning system (COM0)",
+            &(),
+            &GpsData {
+                power: true,
+                tag: "COM0".into(),
+                updating: true,
+                globalmode: true,
+                current_area: "Bridge".into(),
+                current_coords: "128, 112, 2".into(),
+                signals: vec![
+                    GpsSignal {
+                        entrytag: "ENG0".into(),
+                        coords: "150, 98, 2".into(),
+                        dist: Some(26),
+                        degrees: Some(122.0),
+                    },
+                    GpsSignal {
+                        entrytag: "MINE0".into(),
+                        coords: "80, 140, 5".into(),
+                        dist: None,
+                        degrees: None,
+                    },
+                ],
+            },
         ),
         AlertUi::NAME => of::<AlertUi>(
             "Вопрос",

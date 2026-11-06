@@ -36,7 +36,7 @@
 Компонент `overlay_lighting`: свет фонарика, ПДА, сварки или огня следует за владельцем, направленный конус по взгляду моба, включается и выключается.
 
 - **Код:** [`/datum/component/overlay_lighting`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/overlay_lighting.dm#L17)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload/src/light.rs`: `OVERLAY_LIGHT` рисуется как обычный источник того же радиуса; свет горящего моба и горячих точек есть (`crates/ss13_game/src/fire.rs`); фонарики не включаются, конуса по взгляду нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload/src/light.rs`: `OVERLAY_LIGHT` рисуется как обычный источник того же радиуса; свет горящего моба и горячих точек есть (`crates/ss13_game/src/fire.rs`); свет фонарика и ПДА следует за носителем (`crates/ss13_game/src/devices/flashlight.rs`, `crates/ss13_game/src/modpc/pda.rs`), конуса по взгляду нет
 
 ### Свечение (emissive) и блокировщики
 Оверлеи на плоскости emissive (экраны, лампы, индикаторы) видны в темноте; `emissive_blocker` — тела и предметы перед ними закрывают свечение.
