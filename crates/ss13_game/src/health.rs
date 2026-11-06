@@ -618,6 +618,7 @@ type BodyItem<'a> = (
         Option<&'a crate::hallucination::ScrewyHud>,
         Option<&'a crate::modsuit::server::SuitSlowdown>,
         Option<&'a crate::vehicles::Rider>,
+        Option<&'a crate::buffs::FoodBuff>,
     ),
 );
 
@@ -645,6 +646,7 @@ fn body_state(
             Or<(
                 Changed<crate::modsuit::server::SuitSlowdown>,
                 Changed<crate::vehicles::Rider>,
+                Changed<crate::buffs::FoodBuff>,
             )>,
         )>,
     >,
@@ -671,7 +673,7 @@ fn body_state(
         name,
         drag,
         traits,
-        (zone, fat, limits, pilot, speed, walking, tased, sanity, screwy, suit, rider),
+        (zone, fat, limits, pilot, speed, walking, tased, sanity, screwy, suit, rider, food),
     ) in &mut mobs
     {
         let traits = traits.copied().unwrap_or_default();
@@ -703,6 +705,10 @@ fn body_state(
         // Limping and disabled legs (`crate::medical::wounds`).
         if let Some(limits) = limits {
             delay += limits.slowdown / 10.0;
+        }
+        // `/datum/movespeed_modifier/food_haste` (`crate::buffs`).
+        if let Some(food) = food {
+            delay = (delay + food.move_slowdown() / 10.0).max(0.0);
         }
         // Movespeed modifiers of abilities (negative: faster).
         if let Some(speed) = speed {

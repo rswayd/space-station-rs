@@ -11,6 +11,7 @@ mod bots;
 mod breath;
 mod brig;
 mod brothers;
+mod buffs;
 mod cargo;
 mod changeling;
 mod chem;

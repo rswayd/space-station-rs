@@ -30,7 +30,7 @@ use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiParams, UiReject, UiSyst
 
 use crate::combat::CombatRng;
 use crate::health::{DEFAULT_MESSAGE_RANGE, DamageType, Health, HealthSystems, Stat, update_stat};
-use crate::hud::{AlertHudData, AlertHudUi, HudAlert};
+use crate::hud::{ALERT_CLICK, AlertHudData, AlertHudUi, HudAlert};
 use crate::internals::{
     Internals, STOPSPRESSUREDAMAGE, TankAir, can_breathe_internals, cutoff_message,
 };
@@ -124,6 +124,14 @@ pub enum AlertCategory {
     /// A hallucination's fake alert (`crate::hallucination`), by its tg category: beside the
     /// real one, which never clears it.
     Hallucination(u8),
+    /// tg `"[offerer]"`: the offerer's `/atom/movable/screen/alert/give` (`crate::buffs`).
+    Offer(Entity),
+    /// `/datum/status_effect/grouped/surrender`'s alert (`crate::buffs`).
+    Surrender,
+    /// `/datum/status_effect/drugginess`'s alert (`high`).
+    Drugged,
+    /// `/datum/status_effect/food`'s alert (`crate::buffs`).
+    FoodBuff,
 }
 
 /// One thrown alert: its type's base `icon_state` and `severity` (0: none).
@@ -249,6 +257,19 @@ impl Alert {
                 "Вы облучены! Быстрее лечите токсины и встаньте под душ, чтобы остановить \
                  поступающий урон.",
             ),
+            // tg has these only in English.
+            "surrender" => (
+                "Сдаться",
+                "Похоже, у вас неприятности, приятель. Нажмите сюда, чтобы сдаться. (Внимание: \
+                 вы будете обездвижены.)",
+            ),
+            "high" => (
+                "Под кайфом",
+                "Ого, чувак, да тебя накрыло! Осторожнее, не подсядь... если ещё не подсел.",
+            ),
+            "food_buff_" => ("Блюдо ручной работы", "Съев это, я ощущаю себя лучше."),
+            // An offer's name and text come from the offer (`crate::buffs::Offering`).
+            "template" => ("Предложение", ""),
             _ => ("Alert", ""),
         }
     }
@@ -1102,10 +1123,18 @@ pub struct MobsClock {
     pub times_fired: u64,
 }
 
+/// [`ALERT_CLICK`]: the alert at `index` of the owner's list, which the client saw named
+/// `name` (an alert that moved or changed since is not clicked).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AlertClick {
+    pub index: usize,
+    pub name: String,
+}
+
 impl ServerUi for AlertHudUi {
     type Source = &'static AlertHudData;
     type UserParam = ();
-    type Act = ();
+    type Act = AlertClick;
 
     fn static_data(_: &AlertHudData) {}
 
@@ -1113,10 +1142,32 @@ impl ServerUi for AlertHudUi {
         source.clone()
     }
 
-    /// Alerts are not clickable yet.
-    fn parse_act(_: &str, _: &UiParams) -> Result<(), UiReject> {
-        Err(UiReject::UnknownAction)
+    fn parse_act(action: &str, params: &UiParams) -> Result<AlertClick, UiReject> {
+        if action != ALERT_CLICK {
+            return Err(UiReject::UnknownAction);
+        }
+        let index = params.number("index")?;
+        if index.fract() != 0.0 || !(0.0..64.0).contains(&index) {
+            return Err(UiReject::BadParams("index: out of range".into()));
+        }
+        Ok(AlertClick {
+            index: index as usize,
+            name: params.get("name").unwrap_or_default().to_owned(),
+        })
     }
+}
+
+/// The category of the alert `click` names on `mob`, when it is still there.
+pub fn clicked_alert(world: &World, mob: Entity, click: &AlertClick) -> Option<AlertCategory> {
+    let shown = world.get::<AlertHudData>(mob)?.alerts.get(click.index)?;
+    if crate::hud::alert_click_name(&shown.name) != click.name {
+        return None;
+    }
+    world
+        .get::<Alerts>(mob)?
+        .0
+        .get(click.index)
+        .map(|a| a.category)
 }
 
 pub struct BreathPlugin;
@@ -1409,6 +1460,7 @@ fn clients_around(world: &World, pos: TilePos) -> Vec<Entity> {
 /// The owner's alert HUD follows its [`Alerts`].
 fn sync_alert_hud(
     mut mobs: Query<(Entity, &Alerts, &mut AlertHudData, Option<&PlayerMob>), Changed<Alerts>>,
+    offers: Query<&crate::buffs::Offering>,
     icons: Option<Res<IconIndex>>,
     mut open: MessageWriter<OpenUi>,
 ) {
@@ -1418,13 +1470,23 @@ fn sync_alert_hud(
                 .0
                 .iter()
                 .map(|a| {
-                    let (name, desc) = a.text();
+                    let (name, desc) = match a.category {
+                        // `/atom/movable/screen/alert/give/setup`.
+                        AlertCategory::Offer(offerer) => offers.get(offerer).map_or_else(
+                            |_| (a.text().0.to_owned(), String::new()),
+                            |o| (o.alert_name.clone(), o.alert_desc.clone()),
+                        ),
+                        _ => {
+                            let (name, desc) = a.text();
+                            (name.to_owned(), desc.to_owned())
+                        }
+                    };
                     HudAlert {
                         icon: icons
                             .as_deref()
                             .and_then(|i| i.get("icons/hud/screen_alert.dmi", &a.icon_state())),
-                        name: name.to_owned(),
-                        desc: desc.to_owned(),
+                        name,
+                        desc,
                     }
                 })
                 .collect(),

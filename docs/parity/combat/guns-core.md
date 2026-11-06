@@ -26,6 +26,12 @@
 - **Код:** [`proc/handle_suicide()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/projectiles/gun.dm#L681)
 - **Статус в ss13-rs:** ❌ нет
 
+### Взятие на мушку (gunpoint)
+Наведение оружия на моба: цель получает `heldup` и алерт сдачи, стрелок — `holdup` с алертом отмены; движение или действие цели — выстрел.
+
+- **Код:** [`/datum/component/gunpoint`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/gunpoint.dm#L15), [`/datum/status_effect/holdup`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/neutral.dm#L185)
+- **Статус в ss13-rs:** ❌ нет — сдача и её алерт есть (`crates/ss13_game/src/buffs.rs`, см. ../mobs/status-effects-buffs.md)
+
 ### Обвесы: фонарь, глушитель, штык, прицел
 Подствольный фонарь (`seclite_attachable`), глушитель (тихие выстрелы), штык (ближний бой оружием), оптический прицел (`scope`, дальний обзор).
 

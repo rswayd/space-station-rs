@@ -84,6 +84,13 @@ pub const EMOTES: &[Emote] = &[
     emote("sigh", "вздыхает.", 0),
     emote("smile", "улыбается.", 0),
     emote("sneeze", "чихает.", 0),
+    // `/datum/emote/living/surrender`: the game paralyzes the mob for 20 s
+    // (`ss13_game::buffs`, on [`crate::server::Emoted`]).
+    emote(
+        "surrender",
+        "ложит руки за голову и падает на землю, они сдаются!",
+        0,
+    ),
     emote("thumbsdown", "опускает большой палец вниз.", REQUIRE_HANDS),
     emote("thumbsup", "поднимает большой палец.", REQUIRE_HANDS),
     emote("wave", "машет рукой.", 0),
