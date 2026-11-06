@@ -72,7 +72,24 @@ impl Plugin for TankStoragePlugin {
             c.held
                 .is_some_and(|h| item_interaction(w, c.client, c.mob, h, c.target))
         });
-        app.add_observer(add_tank_storage);
+        app.add_observer(add_tank_storage)
+            .add_systems(ss13_world::MapInit, fill_mapped_holders);
+    }
+}
+
+/// `tank_holder/Initialize(mapload)`: a mapped subtype's tank goes in. Runs in the map pass, when
+/// the holder's prototype (and its `TilePos`) is complete.
+fn fill_mapped_holders(world: &mut World) {
+    let holders: Vec<(Entity, String, TilePos)> = world
+        .query_filtered::<(Entity, &DmObj, &TilePos, &TankHolder), With<ss13_world::Mapped>>()
+        .iter(world)
+        .filter(|(.., h)| h.tank.is_none())
+        .filter_map(|(e, dm, &pos, _)| mapped_tank(&dm.path).map(|t| (e, t, pos)))
+        .collect();
+    for (holder, tank, pos) in holders {
+        if let Some(item) = crate::construction::spawn_obj(world, &tank, pos) {
+            attach(world, holder, item);
+        }
     }
 }
 
@@ -104,16 +121,6 @@ fn add_tank_storage(add: On<Add<DmObj>>, objs: Query<&DmObj>, mut commands: Comm
         commands.queue(move |world: &mut World| refresh_dispenser(world, entity));
     } else if is_under(&dm.path, TANK_HOLDER) {
         commands.entity(entity).insert(TankHolder::default());
-        if let Some(tank) = mapped_tank(&dm.path) {
-            commands.queue(move |world: &mut World| {
-                let Some(&pos) = world.get::<TilePos>(entity) else {
-                    return;
-                };
-                if let Some(item) = crate::construction::spawn_obj(world, &tank, pos) {
-                    attach(world, entity, item);
-                }
-            });
-        }
     }
 }
 

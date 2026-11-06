@@ -33,6 +33,7 @@ pub const UNIVERSAL_SCANNER: &str = "/obj/item/universal_scanner";
 /// Constant paths `ss13_game` spawns that no other table of this crate lists: leftovers,
 /// products and printouts of machines, decals, grenade payloads, quirk items, paper kinds.
 pub const GAME_RUNTIME_TYPES: &[&str] = &[
+    "/obj/effect/temp_visual/resonance",
     "/obj/item/food/cookie",
     "/obj/item/food/meat/rawcutlet/plain",
     "/obj/item/reagent_containers/cup/glass/drinkingglass",
