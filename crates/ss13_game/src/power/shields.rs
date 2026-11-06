@@ -47,7 +47,7 @@ pub const SHIELD_WALL_GEN: &str = "/obj/machinery/power/shieldwallgen";
 const XENOBIO_GEN: &str = "/obj/machinery/power/shieldwallgen/xenobiologyaccess";
 const UNLOCKED_GEN: &str = "/obj/machinery/power/shieldwallgen/unlocked";
 pub const SHIELD_WALL: &str = "/obj/machinery/shieldwall";
-const CABLE_COIL: &str = ss13_mapload::circuit::CABLE_COIL;
+use ss13_mapload::circuit::CABLE_COIL;
 const SPARKS: &str = "sparks";
 
 /// `shield_range` of the projector, of the wall generator.
@@ -402,18 +402,6 @@ fn remove_shield(world: &mut World, shield: Entity) {
     }
     world.despawn(shield);
     crate::construction::tile_changed(world, pos);
-}
-
-fn allowed(world: &World, mob: Entity, access: Option<&str>) -> bool {
-    let Some(access) = access else {
-        return true;
-    };
-    crate::silicon::interact::has_silicon_access(world, mob)
-        || world
-            .get::<crate::inventory::Inventory>(mob)
-            .and_then(|i| i.id_card(world))
-            .and_then(|c| world.get::<crate::inventory::IdCard>(c))
-            .is_some_and(|c| c.access.iter().any(|a| a == access))
 }
 
 fn card_access(world: &World, card: Entity, access: Option<&str>) -> bool {

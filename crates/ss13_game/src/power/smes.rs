@@ -40,7 +40,7 @@ use crate::mecha::core::ItemCell;
 use crate::stock_parts::{ComponentParts, PartKind};
 use crate::tools::{Actor, DoAfter, ToolKind, tell};
 
-const CABLE_COIL: &str = ss13_mapload::circuit::CABLE_COIL;
+use ss13_mapload::circuit::CABLE_COIL;
 /// Cable a terminal takes and gives back.
 pub const TERMINAL_CABLE: u32 = 10;
 /// `do_after(user, 2 SECONDS)`, `use_tool(src, user, 50)`: deciseconds.
