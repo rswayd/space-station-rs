@@ -104,7 +104,9 @@ pub use load::{
 };
 pub use look::{DmLook, DmSprite};
 pub use medical::{DmDefib, DmMedical, DmWounding, MEDICAL_RUNTIME_TYPES};
-pub use mining::{DmMineral, DmOrderConsole, DmOre, DmOreRedemption, OrderItem};
+pub use mining::{
+    DmMineral, DmModkit, DmOrderConsole, DmOre, DmOreRedemption, DmStacker, OrderItem, VoucherSet,
+};
 pub use mobs::DmMob;
 pub use power::DmPower;
 pub use radio::DmRadio;
@@ -342,7 +344,9 @@ impl Plugin for DmProtoPlugin {
             .register_proto_component::<DmMineral>(mining::MINERAL_COMPONENT)
             .register_proto_component::<DmOre>(mining::ORE_COMPONENT)
             .register_proto_component::<DmOreRedemption>(mining::ORM_COMPONENT)
-            .register_proto_component::<DmOrderConsole>(mining::ORDER_COMPONENT);
+            .register_proto_component::<DmOrderConsole>(mining::ORDER_COMPONENT)
+            .register_proto_component::<DmModkit>(mining::MODKIT_COMPONENT)
+            .register_proto_component::<DmStacker>(mining::STACKER_COMPONENT);
     }
 }
 

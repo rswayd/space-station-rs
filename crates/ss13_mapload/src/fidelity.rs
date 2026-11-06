@@ -191,6 +191,7 @@ pub fn ext_field(path: &str, var: &str, value: Val) -> Result<Field, Skip> {
         .or_else(|_| crate::disposal::ext_field(path, var, value))
         .or_else(|_| crate::bots::ext_field(path, var, value))
         .or_else(|_| crate::service::ext_field(path, var, value))
+        .or_else(|_| crate::mining::ext_field(path, var, value))
 }
 
 pub(crate) fn ext(component: &'static str, key: &'static str, ron: impl Into<String>) -> Field {

@@ -2,11 +2,14 @@
 //! walls dug with pickaxes, drills and kinetic accelerators into ore ([`rocks`]), gibtonite,
 //! the mining satchel and the ore box, the ore redemption machine that smelts ore into the ore
 //! silo and pays mining points ([`orm`]), and the mining equipment order console that spends
-//! them ([`console`]). This module holds the windows' data, which both halves share; the
-//! server halves are [`rocks`], [`orm`] and [`console`], the client views [`client`].
+//! them ([`console`]), mining vouchers and the point transfer card ([`equipment`]), kinetic
+//! accelerator modkits ([`modkits`]) and the stacking machine with its console ([`stacking`]).
+//! This module holds the windows' data, which both halves share; the client views are in
+//! [`client`].
 //!
-//! The mining shuttle, lavaland, ore vents, boulders, the processing unit and the stacking
-//! machine are not ported (no mining level is loaded: the station's map is the only one).
+//! The mining shuttle, lavaland, ore vents, boulders and their machines (BRM, refinery,
+//! smelter), the processing unit and the unloading machine are not ported (no mining level is
+//! loaded: the station's map is the only one, and none of them is mapped on it).
 
 use serde::{Deserialize, Serialize};
 use ss13_tgui::UiInterface;
@@ -17,9 +20,15 @@ pub mod client;
 #[cfg(feature = "server")]
 pub mod console;
 #[cfg(feature = "server")]
+pub mod equipment;
+#[cfg(feature = "server")]
+pub mod modkits;
+#[cfg(feature = "server")]
 pub mod orm;
 #[cfg(feature = "server")]
 pub mod rocks;
+#[cfg(feature = "server")]
+pub mod stacking;
 
 #[cfg(feature = "server")]
 pub use rocks::{MiningJob, complete};
@@ -42,10 +51,18 @@ impl bevy::prelude::Plugin for MiningServerPlugin {
             c.held
                 .is_some_and(|h| crate::mining::item_interaction(w, c.client, c.mob, h, c.target))
         });
+        // The same with the other hand's item: a modkit and an accelerator, an ID and a point
+        // card, a tool and gibtonite ore.
+        app.add_click_handler(ClickPhase::OtherHand, 1450, |w, c| {
+            c.held
+                .is_some_and(|h| crate::mining::hand_interaction(w, c.client, c.mob, h, c.target))
+        });
         app.add_plugins((
             rocks::RocksPlugin,
             orm::OrmPlugin,
             console::OrderConsolePlugin,
+            equipment::EquipmentPlugin,
+            stacking::StackingPlugin,
         ));
     }
 }
@@ -62,6 +79,7 @@ pub fn interact(
     rocks::interact(world, client, mob, target)
         || orm::interact(world, client, mob, target)
         || console::interact(world, client, mob, target)
+        || stacking::interact(world, client, mob, target)
 }
 
 /// The mining `item_interaction`s of a held item: digging, ore into the ORM or an ore box,
@@ -75,7 +93,48 @@ pub fn item_interaction(
     target: bevy::prelude::Entity,
 ) -> bool {
     orm::item_interaction(world, held, target)
+        || modkits::item_interaction(world, client, mob, held, target)
+        || equipment::item_interaction(world, client, mob, held, target)
+        || stacking::item_interaction(world, client, mob, held, target)
         || rocks::item_interaction(world, client, mob, held, target)
+}
+
+/// [`item_interaction`] of the active hand's `held` on the item in the other hand: the ones
+/// that work between two items. True when handled.
+#[cfg(feature = "server")]
+pub fn hand_interaction(
+    world: &mut bevy::prelude::World,
+    client: bevy::prelude::Entity,
+    mob: bevy::prelude::Entity,
+    held: bevy::prelude::Entity,
+    target: bevy::prelude::Entity,
+) -> bool {
+    modkits::item_interaction(world, client, mob, held, target)
+        || equipment::item_interaction(world, client, mob, held, target)
+        || rocks::hand_interaction(world, client, mob, held, target)
+}
+
+/// The mining `examine` lines: accelerators and modkits, the point card, gibtonite ore.
+#[cfg(feature = "server")]
+pub fn examine_lines(
+    world: &bevy::prelude::World,
+    target: bevy::prelude::Entity,
+    lines: &mut Vec<crate::examine::Line>,
+) {
+    modkits::examine_lines(world, target, lines);
+    equipment::examine_lines(world, target, lines);
+    rocks::examine_lines(world, target, lines);
+}
+
+/// The mining `click_alt`s: rotating an open ORM's input and output. True when handled.
+#[cfg(feature = "server")]
+pub fn click_alt(
+    world: &mut bevy::prelude::World,
+    client: bevy::prelude::Entity,
+    _mob: bevy::prelude::Entity,
+    target: bevy::prelude::Entity,
+) -> bool {
+    orm::click_alt(world, client, target)
 }
 
 /// tgui `OreBox`.
@@ -222,3 +281,36 @@ pub const PURCHASE: &str = "purchase";
 pub const EXPRESS: &str = "express";
 pub const TARGET: &str = "target";
 pub const AMT: &str = "amt";
+
+/// tgui `StackingConsole`.
+pub struct StackingConsoleUi;
+
+impl UiInterface for StackingConsoleUi {
+    const NAME: &'static str = "StackingConsole";
+    type Data = StackingData;
+    type StaticData = ();
+}
+
+/// A `contents` entry: a kind of stored sheet.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StackingSheet {
+    /// The `type` act param.
+    pub r#type: String,
+    pub name: String,
+    pub amount: u32,
+}
+
+/// `/obj/machinery/mineral/stacking_unit_console/ui_data`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StackingData {
+    pub machine: bool,
+    pub stacking_amount: Option<u32>,
+    pub input_direction: String,
+    pub output_direction: String,
+    pub contents: Vec<StackingSheet>,
+}
+
+pub const STACK_RELEASE: &str = "release";
+pub const STACK_ROTATE: &str = "rotate";
+pub const STACK_TYPE: &str = "type";
+pub const STACK_INPUT: &str = "input";

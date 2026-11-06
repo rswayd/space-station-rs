@@ -159,7 +159,7 @@ pub fn fire_with(world: &mut World, shot: Shot, extra: impl Bundle) -> Option<En
     let angle =
         (aim_angle(shot.from, shot.target_pos, shot.pixel) + shot.deviation).rem_euclid(360.0);
     let (sin, cos) = angle.to_radians().sin_cos();
-    let projectile = Projectile {
+    let mut projectile = Projectile {
         data: shot.data.clone(),
         firer: shot.firer,
         original: shot.target,
@@ -181,9 +181,13 @@ pub fn fire_with(world: &mut World, shot: Shot, extra: impl Bundle) -> Option<En
         look.rotation = angle.round() as u16 % 360;
         look.mouse_opacity = ss13_shared::MouseOpacity::Transparent;
     }
+    // `kinetic/prehit_pierce`: a modkit's ignored mob is passed through.
+    let direct = direct.filter(|&t| !crate::mining::modkits::phases(world, &projectile, t));
     if let Some(target) = direct {
         let name = crate::obj_damage::strip(&crate::security::name_of(world, entity)).to_owned();
+        crate::mining::rocks::kinetic_prehit(world, &mut projectile, target);
         hit(world, entity, &projectile, &name, target);
+        crate::mining::rocks::kinetic_strike(world, &projectile, target);
         if let Ok(entity) = world.get_entity_mut(entity) {
             entity.despawn();
         }
@@ -243,6 +247,11 @@ fn step(world: &mut World, e: Entity, dt: f32) {
             return;
         }
         if let Some(target) = select_target(world, &p, e, tile) {
+            // `kinetic/prehit_pierce`: a modkit's ignored mob is passed through
+            // (`PROJECTILE_PIERCE_PHASE`).
+            if crate::mining::modkits::phases(world, &p, target) {
+                continue;
+            }
             // The sleeping carp's deflection (`COMSIG_ATOM_PRE_BULLET_ACT`, `crate::martial`):
             // it flies on from here, the carp's own now.
             if world.get::<Health>(target).is_some()
@@ -265,15 +274,17 @@ fn step(world: &mut World, e: Entity, dt: f32) {
                 continue;
             }
             let name = crate::obj_damage::strip(&crate::security::name_of(world, e)).to_owned();
-            crate::mining::rocks::kinetic_prehit(world, &mut p.data, target);
+            crate::mining::rocks::kinetic_prehit(world, &mut p, target);
             hit(world, e, &p, &name, target);
-            crate::mining::rocks::kinetic_strike(world, &p.data, p.firer, target);
+            crate::mining::rocks::kinetic_strike(world, &p, target);
+            crate::mining::rocks::bullet_act(world, p.firer, target);
             if let Ok(entity) = world.get_entity_mut(e) {
                 entity.despawn();
             }
             return;
         }
         if p.moved >= p.data.range {
+            crate::mining::rocks::kinetic_on_range(world, &mut p, tile);
             world.despawn(e);
             return;
         }

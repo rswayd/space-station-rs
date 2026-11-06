@@ -4,7 +4,9 @@
 //! account and spent at the mining order console (express to the buyer's tile, cargo
 //! shipments wait for the supply shuttle); a gibtonite rock starts its chain reaction when
 //! dug, a mining scanner stops it and digging again gives the gibtonite ore; ore goes into an
-//! ore box and is emptied out of it.
+//! ore box and is emptied out of it. A second test: modkits in a kinetic accelerator, the
+//! point transfer card, a mining voucher, gibtonite ore primed and defused, the ORM's
+//! rotation, the satchel's ore-only rule and the stacking machine.
 
 use std::path::{Path, PathBuf};
 
@@ -36,6 +38,13 @@ const TYPES: &str = r##"{
     "/datum/orderable_item/mining/pick": { "parent": "/datum/orderable_item/mining",
         "declared_vars": { "purchase_path": { "path": "/obj/item/pickaxe" },
         "cost_per_order": 300 } },
+    "/datum/voucher_set": { "parent": "/datum", "declared_vars": { "name": null,
+        "description": null, "set_items": null } },
+    "/datum/voucher_set/mining": { "parent": "/datum/voucher_set" },
+    "/datum/voucher_set/mining/picks": { "parent": "/datum/voucher_set/mining",
+        "declared_vars": { "name": "Pick Kit", "description": "Two picks.",
+        "set_items": { "list": [ { "path": "/obj/item/pickaxe" },
+            { "path": "/obj/item/mining_scanner" } ] } } },
     "/atom": { "parent": "/datum", "vars": {
         "name": null, "desc": null, "icon": null, "icon_state": null, "layer": 2, "plane": -4,
         "alpha": 255, "color": null, "dir": 2, "density": 0, "opacity": 0, "pixel_x": 0,
@@ -60,11 +69,34 @@ const TYPES: &str = r##"{
         "name": "manual mining scanner" } },
     "/obj/item/gibtonite": { "parent": "/obj/item", "declared_vars": {
         "name": "gibtonite ore", "icon_state": "gibtonite" } },
+    "/obj/item/mining_voucher": { "parent": "/obj/item", "declared_vars": {
+        "name": "mining voucher" } },
+    "/obj/item/storage": { "parent": "/obj/item" },
+    "/obj/item/storage/bag": { "parent": "/obj/item/storage" },
+    "/obj/item/storage/bag/ore": { "parent": "/obj/item/storage/bag", "declared_vars": {
+        "name": "mining satchel" } },
+    "/obj/item/borg": { "parent": "/obj/item" },
+    "/obj/item/borg/upgrade": { "parent": "/obj/item/borg" },
+    "/obj/item/borg/upgrade/modkit": { "parent": "/obj/item/borg/upgrade", "declared_vars": {
+        "name": "modkit", "cost": 30, "modifier": 1, "denied_type": null,
+        "maximum_of_type": 0, "minebot_upgrade": 1, "minebot_exclusive": 0, "removable": 1 } },
+    "/obj/item/borg/upgrade/modkit/damage": { "parent": "/obj/item/borg/upgrade/modkit",
+        "declared_vars": { "name": "damage increase", "modifier": 10 } },
+    "/obj/item/borg/upgrade/modkit/range": { "parent": "/obj/item/borg/upgrade/modkit",
+        "declared_vars": { "name": "range increase", "modifier": 1, "cost": 25 } },
+    "/obj/item/gun": { "parent": "/obj/item" },
+    "/obj/item/gun/energy": { "parent": "/obj/item/gun" },
+    "/obj/item/gun/energy/recharge": { "parent": "/obj/item/gun/energy" },
+    "/obj/item/gun/energy/recharge/kinetic_accelerator": {
+        "parent": "/obj/item/gun/energy/recharge", "declared_vars": {
+        "name": "proto-kinetic accelerator" } },
     "/obj/item/stack": { "parent": "/obj/item", "declared_vars": { "amount": 1,
         "max_amount": 50, "merge_type": null, "singular_name": null } },
     "/obj/item/stack/sheet": { "parent": "/obj/item/stack" },
     "/obj/item/stack/sheet/iron": { "parent": "/obj/item/stack/sheet", "declared_vars": {
         "name": "iron", "merge_type": { "path": "/obj/item/stack/sheet/iron" } } },
+    "/obj/item/stack/sheet/glass": { "parent": "/obj/item/stack/sheet", "declared_vars": {
+        "name": "glass", "merge_type": { "path": "/obj/item/stack/sheet/glass" } } },
     "/obj/item/stack/ore": { "parent": "/obj/item/stack", "declared_vars": { "points": 0,
         "refined_type": null, "name": "rock" } },
     "/obj/item/stack/ore/iron": { "parent": "/obj/item/stack/ore", "declared_vars": {
@@ -74,6 +106,8 @@ const TYPES: &str = r##"{
     "/obj/item/card/id": { "parent": "/obj/item/card", "declared_vars": {
         "access": { "list": [] }, "slot_flags": 256 } },
     "/obj/item/card/id/advanced": { "parent": "/obj/item/card/id" },
+    "/obj/item/card/mining_point_card": { "parent": "/obj/item/card", "declared_vars": {
+        "name": "mining point transfer card" } },
     "/obj/item/clothing": { "parent": "/obj/item" },
     "/obj/item/clothing/under": { "parent": "/obj/item/clothing", "declared_vars": { "slot_flags": 2 } },
     "/obj/item/clothing/under/color": { "parent": "/obj/item/clothing/under" },
@@ -95,6 +129,11 @@ const TYPES: &str = r##"{
         "declared_vars": { "name": "ore redemption machine", "ore_multiplier": 1,
         "point_upgrade": 1, "req_access": { "list": [ "mineral_storeroom" ] },
         "ore_values": { "list": [ { "assoc": [ { "path": "/datum/material/iron" }, 1 ] } ] } } },
+    "/obj/machinery/mineral/stacking_machine": { "parent": "/obj/machinery/mineral",
+        "declared_vars": { "name": "stacking machine", "input_dir": 4, "output_dir": 8,
+        "stack_amt": 50 } },
+    "/obj/machinery/mineral/stacking_unit_console": { "parent": "/obj/machinery/mineral",
+        "declared_vars": { "name": "stacking machine console", "density": 0 } },
     "/obj/machinery/computer": { "parent": "/obj/machinery" },
     "/obj/machinery/computer/order_console": { "parent": "/obj/machinery/computer",
         "declared_vars": { "order_categories": { "list": [] }, "cargo_cost_multiplier": 1,
@@ -137,7 +176,8 @@ const TYPES: &str = r##"{
 
 /// Rows top-down, the last line is y = 1. The player spawns on (2,3) between the iron rock
 /// `I` (3,3), the gibtonite rock `G` (2,4) and the ore box `B` (2,2); the ORM `M` (3,2) takes
-/// ore from (3,3), north of it.
+/// ore from (3,3), north of it. The stacking machine `S` (5,4) takes from (6,4) and puts out
+/// on (4,4); its console `K` is on (5,2).
 const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 "f" = (/turf/open/floor,/area/space)
 "s" = (/obj/effect/landmark/start/assistant,/turf/open/floor,/area/space)
@@ -147,12 +187,14 @@ const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 "M" = (/obj/machinery/mineral/ore_redemption,/turf/open/floor,/area/space)
 "O" = (/obj/machinery/ore_silo,/turf/open/floor,/area/space)
 "C" = (/obj/machinery/computer/order_console/mining,/turf/open/floor,/area/space)
+"S" = (/obj/machinery/mineral/stacking_machine,/turf/open/floor,/area/space)
+"K" = (/obj/machinery/mineral/stacking_unit_console,/turf/open/floor,/area/space)
 
 (1,1,1) = {"
 wwwwwwwww
-wGffffOfw
+wGffSfOfw
 wsIffffff
-wBMfffCfw
+wBMfKfCfw
 wwwwwwwww
 "}
 "##;
@@ -189,6 +231,17 @@ fn fixture_assets() -> PathBuf {
         "/obj/machinery/ore_silo",
         "/obj/machinery/mineral/ore_redemption",
         "/obj/machinery/computer/order_console/mining",
+        "/obj/machinery/mineral/stacking_machine",
+        "/obj/machinery/mineral/stacking_unit_console",
+        "/obj/item/mining_voucher",
+        "/obj/item/card/mining_point_card",
+        "/obj/item/storage/bag/ore",
+        "/obj/item/borg/upgrade/modkit/damage",
+        "/obj/item/borg/upgrade/modkit/range",
+        "/obj/item/gun/energy/recharge/kinetic_accelerator",
+        "/obj/item/gibtonite",
+        "/obj/item/stack/sheet/glass",
+        "/obj/item/stack/sheet/iron",
         "/turf/open/floor",
         "/turf/closed/wall",
         "/turf/closed/mineral/iron",
@@ -453,4 +506,298 @@ fn dig_smelt_claim_buy_gibtonite_and_ore_box() {
     });
     ss13_game::mining::rocks::dump_box(s.server.world_mut(), ore_box);
     assert_eq!(s.item(ORE_BOX, "/obj/item/stack/ore/iron"), Some(ore));
+}
+
+const STACKER: TilePos = TilePos::new(5, 4, 1);
+const STACK_IN: TilePos = TilePos::new(6, 4, 1);
+const STACK_OUT: TilePos = TilePos::new(4, 4, 1);
+
+impl Station {
+    fn client(&self) -> Entity {
+        self.server
+            .world()
+            .get::<ss13_game::server::PlayerMob>(self.mob())
+            .unwrap()
+            .client
+    }
+
+    fn spawn(&mut self, path: &str, pos: TilePos) -> Entity {
+        ss13_game::construction::spawn_obj(self.server.world_mut(), path, pos).unwrap()
+    }
+
+    /// Glass sheets lying on `pos`.
+    fn glass_on(&self, pos: TilePos) -> u32 {
+        let world = self.server.world();
+        world
+            .resource::<SpatialIndex>()
+            .on_tile(pos)
+            .iter()
+            .filter(|&&e| {
+                world
+                    .get::<DmItem>(e)
+                    .is_some_and(|i| i.path == "/obj/item/stack/sheet/glass")
+            })
+            .map(|&e| world.get::<Stack>(e).map_or(1, |s| s.amount))
+            .sum()
+    }
+}
+
+#[test]
+fn modkits_cards_vouchers_gibtonite_ore_and_stacking() {
+    use ss13_game::mining::equipment::{PointCard, redeem, transfer};
+    use ss13_game::mining::modkits::{Modkits, install, modify_projectile, remaining_capacity};
+    use ss13_game::mining::rocks::{GibPrimed, GibtoniteQuality, item_ex_act, satchel_refuses};
+    use ss13_game::mining::stacking::{
+        StackingAct, StackingConsole, StackingMachine, apply as stack_apply,
+    };
+
+    let mut s = Station::start();
+    let (mob, client) = (s.mob(), s.client());
+
+    // Modkits: three damage kits fill 90% of the accelerator; a fourth and a range kit (25%)
+    // do not fit. The shot gets +30 damage.
+    let gun = s.spawn(
+        "/obj/item/gun/energy/recharge/kinetic_accelerator",
+        TilePos::new(4, 3, 1),
+    );
+    for n in 0..3 {
+        let kit = s.spawn(
+            "/obj/item/borg/upgrade/modkit/damage",
+            TilePos::new(4, 3, 1),
+        );
+        assert!(
+            install(s.server.world_mut(), kit, gun, None),
+            "damage kit {n}"
+        );
+    }
+    let extra = s.spawn(
+        "/obj/item/borg/upgrade/modkit/damage",
+        TilePos::new(4, 3, 1),
+    );
+    assert!(
+        !install(s.server.world_mut(), extra, gun, None),
+        "no room for a fourth"
+    );
+    let range = s.spawn("/obj/item/borg/upgrade/modkit/range", TilePos::new(4, 3, 1));
+    assert!(
+        !install(s.server.world_mut(), range, gun, None),
+        "10% left, 25% needed"
+    );
+    assert_eq!(remaining_capacity(s.server.world(), gun), 10.0);
+    assert_eq!(
+        s.server.world().get::<Modkits>(gun).unwrap().kits().len(),
+        3
+    );
+    let mut data = ss13_mapload::ProjectileData {
+        path: "/obj/projectile/kinetic".into(),
+        damage: 40.0,
+        range: 3.0,
+        ..default()
+    };
+    modify_projectile(s.server.world(), gun, &mut data);
+    assert_eq!((data.damage, data.range), (70.0, 3.0));
+    // A held kit goes in from the hand.
+    let held = s.give("/obj/item/borg/upgrade/modkit/damage");
+    assert!(ss13_game::mining::modkits::item_interaction(
+        s.server.world_mut(),
+        client,
+        mob,
+        held,
+        gun
+    ));
+    assert_eq!(
+        s.server.world().get::<Modkits>(gun).unwrap().kits().len(),
+        3,
+        "still full"
+    );
+
+    // The point card: 30 points onto the card, then everything back (only 30 move).
+    let id = s.account();
+    s.server
+        .world_mut()
+        .resource_mut::<Economy>()
+        .account_mut(id)
+        .unwrap()
+        .mining_points = 100;
+    let card = s.spawn("/obj/item/card/mining_point_card", TilePos::new(4, 3, 1));
+    let id_card = s
+        .server
+        .world()
+        .get::<Inventory>(mob)
+        .and_then(|i| i.id_card(s.server.world()))
+        .unwrap();
+    transfer(s.server.world_mut(), client, card, id_card, false, 30.0);
+    assert_eq!(s.mining_points(), 70);
+    assert_eq!(s.server.world().get::<PointCard>(card).unwrap().points, 30);
+    transfer(s.server.world_mut(), client, card, id_card, true, 500.0);
+    assert_eq!(s.mining_points(), 100);
+    assert_eq!(s.server.world().get::<PointCard>(card).unwrap().points, 0);
+
+    // A voucher on the mining console: the set appears on its tile, the voucher is gone.
+    let console = s.obj(CONSOLE, "/obj/machinery/computer/order_console/mining");
+    let voucher = s.give("/obj/item/mining_voucher");
+    assert!(ss13_game::mining::equipment::item_interaction(
+        s.server.world_mut(),
+        client,
+        mob,
+        voucher,
+        console
+    ));
+    // The console is out of reach from the spawn: nothing yet.
+    assert!(!redeem(
+        s.server.world_mut(),
+        client,
+        mob,
+        voucher,
+        console,
+        0
+    ));
+    // Next to it (7,3).
+    s.server
+        .world_mut()
+        .entity_mut(mob)
+        .insert(TilePos::new(7, 3, 1));
+    s.run_for(0.2);
+    assert!(redeem(
+        s.server.world_mut(),
+        client,
+        mob,
+        voucher,
+        console,
+        0
+    ));
+    assert!(s.server.world().get_entity(voucher).is_err());
+    assert!(s.item(CONSOLE, "/obj/item/pickaxe").is_some());
+    assert!(s.item(CONSOLE, "/obj/item/mining_scanner").is_some());
+    assert!(
+        !redeem(s.server.world_mut(), client, mob, voucher, console, 0),
+        "used up"
+    );
+    // Back, away from the gibtonite blast below.
+    s.server.world_mut().entity_mut(mob).insert(PLAYER);
+
+    // Gibtonite ore: a pickaxe primes it, a scanner stops it at the lowest quality, a blast
+    // primes it again and it blows 10 s later.
+    let ore = s.spawn("/obj/item/gibtonite", TilePos::new(8, 3, 1));
+    s.server
+        .world_mut()
+        .entity_mut(ore)
+        .insert(GibtoniteQuality(3));
+    let pick = s.give("/obj/item/pickaxe");
+    assert!(ss13_game::mining::hand_interaction(
+        s.server.world_mut(),
+        client,
+        mob,
+        pick,
+        ore
+    ));
+    assert!(s.server.world().get::<GibPrimed>(ore).is_some());
+    let scanner = s.give("/obj/item/mining_scanner");
+    assert!(ss13_game::mining::hand_interaction(
+        s.server.world_mut(),
+        client,
+        mob,
+        scanner,
+        ore
+    ));
+    assert!(s.server.world().get::<GibPrimed>(ore).is_none());
+    assert_eq!(
+        s.server.world().get::<GibtoniteQuality>(ore),
+        Some(&GibtoniteQuality(1))
+    );
+
+    // The satchel takes only ore.
+    let bag = s.spawn("/obj/item/storage/bag/ore", TilePos::new(4, 3, 1));
+    let iron_ore = s.spawn("/obj/item/stack/ore/iron", TilePos::new(4, 3, 1));
+    assert!(satchel_refuses(s.server.world(), bag, card));
+    assert!(!satchel_refuses(s.server.world(), bag, iron_ore));
+
+    // The ORM turns its input clockwise with the panel open only.
+    let orm = s.obj(ORM, "/obj/machinery/mineral/ore_redemption");
+    assert!(ss13_game::mining::orm::click_alt(
+        s.server.world_mut(),
+        client,
+        orm
+    ));
+    let input = |s: &Station| {
+        s.server
+            .world()
+            .get::<ss13_mapload::DmOreRedemption>(orm)
+            .unwrap()
+            .input_dir
+    };
+    assert_eq!(input(&s), 1, "closed: unchanged");
+    s.server
+        .world_mut()
+        .entity_mut(orm)
+        .insert(ss13_game::construction::PanelOpen(true));
+    ss13_game::mining::orm::click_alt(s.server.world_mut(), client, orm);
+    assert_eq!(input(&s), 4, "north -> east");
+
+    // The stacking machine: its console found it; iron sheets go to the silo, 60 glass make a
+    // stack of 50 on the output and 10 stay inside until released.
+    let stacker = s.obj(STACKER, "/obj/machinery/mineral/stacking_machine");
+    let stack_console = s.obj(
+        TilePos::new(5, 2, 1),
+        "/obj/machinery/mineral/stacking_unit_console",
+    );
+    assert_eq!(
+        s.server
+            .world()
+            .get::<StackingConsole>(stack_console)
+            .unwrap()
+            .machine,
+        Some(stacker)
+    );
+    let iron_before = s.silo_iron();
+    ss13_game::construction::spawn_stack(
+        s.server.world_mut(),
+        "/obj/item/stack/sheet/iron",
+        STACK_IN,
+        2,
+    );
+    s.run_until("iron in the silo", |s| s.silo_iron() == iron_before + 200);
+    ss13_game::construction::spawn_stack(
+        s.server.world_mut(),
+        "/obj/item/stack/sheet/glass",
+        STACK_IN,
+        50,
+    );
+    ss13_game::construction::spawn_stack(
+        s.server.world_mut(),
+        "/obj/item/stack/sheet/glass",
+        STACK_IN,
+        10,
+    );
+    s.run_until("a stack of glass out", |s| s.glass_on(STACK_OUT) == 50);
+    let stored = |s: &Station| {
+        s.server
+            .world()
+            .get::<StackingMachine>(stacker)
+            .unwrap()
+            .stored
+            .iter()
+            .map(|st| st.amount)
+            .sum::<u32>()
+    };
+    assert_eq!(stored(&s), 10);
+    stack_apply(
+        s.server.world_mut(),
+        stacker,
+        StackingAct::Release("/obj/item/stack/sheet/glass".into()),
+    );
+    assert_eq!(s.glass_on(STACK_OUT), 60);
+    assert_eq!(stored(&s), 0);
+
+    // The blast: a primed ore (quality 1 now) blows after 10 s.
+    item_ex_act(
+        s.server.world_mut(),
+        ore,
+        ss13_game::explosions::Severity::Light,
+    );
+    assert!(s.server.world().get::<GibPrimed>(ore).is_some());
+    s.hold(9.5, "still primed", |s| {
+        s.server.world().get_entity(ore).is_ok()
+    });
+    s.run_until("blown", |s| s.server.world().get_entity(ore).is_err());
 }

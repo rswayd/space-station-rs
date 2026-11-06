@@ -785,6 +785,8 @@ fn shoot(
     };
     data.damage *= mult;
     data.stamina *= mult;
+    // `/obj/item/ammo_casing/energy/kinetic/ready_proj`: the accelerator's modkits.
+    crate::mining::modkits::modify_projectile(world, gun_entity, &mut data);
     let spreads = pellet_spreads(&mut world.resource_mut::<CombatRng>(), &casing, sprd);
     for deviation in spreads {
         crate::projectile::fire(

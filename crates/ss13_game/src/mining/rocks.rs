@@ -17,20 +17,30 @@
 //!   for `det_time` (8-10) pulses, then `explosion(1, 3, 5)`; digging it again while active blows
 //!   it at once (`explosion(1, 2, 5)`). A mining scanner on it stops the reaction (`defuse`); a
 //!   stable deposit is dug out as a gibtonite ore of the quality its remaining pulses give.
-//! - Ore: a lit welder on a stack smelts it into its `refined_type` (`welder_act`).
-//! - The satchel scoops the ore under its carrier after every step (`handle_move`): into an ore
-//!   box the carrier pulls, else merged into its stacks or inserted.
+//! - Gibtonite ore (`/obj/item/gibtonite`): a mining tool or anything with 10 force, a
+//!   projectile, an explosion or the igniter of a rigged assembly holder primes it; 10 s later
+//!   it blows by its quality (`explosion(0, 1, 3)`, `(1, 2, 5)`, `(2, 4, 9)`). A mining scanner
+//!   or a multitool stops it at the lowest quality. An assembly holder with an igniter rigs to
+//!   it; a wrench takes the rig off.
+//! - Ore: a lit welder on a stack smelts it into its `refined_type` (`welder_act`); a
+//!   devastating blast destroys it, lighter ones leave it be.
+//! - The satchel takes only ore (`can_hold`) and scoops the ore under its carrier after every
+//!   step (`handle_move`): into an ore box the carrier pulls, else merged into its stacks or
+//!   inserted.
 //! - The ore box takes ore by hand or a satchel's ore; its `OreBox` window lists and empties it;
 //!   a crowbar (5 s) pries it apart into 4 planks and its contents.
-//! - Self-recharging guns (the PKA): empty unless carried by a mob; a carried one refills its
-//!   cell `recharge_time` (1.6 s) after it runs low. Kinetic force does a quarter of its damage
-//!   where the pressure is over 50 kPa.
+//! - Self-recharging guns (the PKA): empty unless carried by a mob (the ebow, cyborg and
+//!   minebot guns hold their charge); a carried one refills its cell `recharge_time` (1.6 s,
+//!   changed by cooldown modkits, `super::modkits`) after it runs low; a kinetic blast that
+//!   drills rock reloads it in `recharge_time` times the firer's mining speed if that is
+//!   sooner. Kinetic force does a quarter of its damage where the pressure is over 50 kPa.
 // shortcut: no ore veins (`spread_vein`), depth-based odds (`exposure_based`), scan overlays,
 // Journeyman scan pulses of the mining skill (its speed and experience are `crate::skills`'),
-// hulk/alien digging, `drill_aoe`, the armed gibtonite ore (rigs,
-// pickaxe hits), ore breaking on throw or melting in fire, PKA modkits, the satchel's
-// `can_hold` (it takes anything that fits) or the `extra` recharge time for several carried
-// PKAs.
+// hulk/alien digging, `drill_aoe`, ore breaking on throw or melting in fire, the gibtonite ore's
+// two-handed grip, throw knockdown or admin notices, or the `extra` recharge time for several
+// carried PKAs.
+// tg resets the reload timer on a drilled rock even when that delays it (and undoes the rapid
+// repeater's quick reload); here the sooner reload wins, as the comment there intends.
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
@@ -51,7 +61,7 @@ use crate::health::Stat;
 use crate::inventory::{ALL_SLOTS, CarriedBy, Inventory};
 use crate::obj_damage::is_under;
 use crate::sound::{PlaySound, playsound};
-use crate::storage::{Stored, can_insert, put_inside, take_out};
+use crate::storage::{Stored, StoredIn, can_insert, put_inside, take_out};
 use crate::tools::{Actor, DoAfter, Stack, ToolKind, do_after, tell, tool_of, use_tool};
 
 pub const ORE_BOX: &str = "/obj/structure/ore_box";
@@ -64,14 +74,16 @@ const MINING_SCANNERS: [&str; 2] = [
 const RECHARGE_GUN: &str = "/obj/item/gun/energy/recharge";
 const EBOW: &str = "/obj/item/gun/energy/recharge/ebow";
 const KINETIC: &str = "/obj/projectile/kinetic";
+/// `tool.force >= 10` primes gibtonite ore.
+const PRIMING_FORCE: f32 = 10.0;
+/// `/obj/item/gibtonite::det_time`, seconds.
+const ORE_DET_SECS: f64 = 10.0;
 /// `TOOL_MINING`.
 const TOOL_MINING: &str = "mining";
 /// `/turf/closed/mineral::tool_mine_speed`: the hardness reference.
 const BASE_MINE_SPEED: f32 = 40.0;
 /// `LAVALAND_EQUIPMENT_EFFECT_PRESSURE`, kPa.
 const EQUIPMENT_PRESSURE: f64 = 50.0;
-/// `/obj/projectile/kinetic::pressure_decrease`.
-const PRESSURE_DECREASE: f32 = 0.25;
 /// The gibtonite chain reaction's pulse.
 const PULSE_SECS: f64 = 0.5;
 const BREAK_STONE: &str = "sound/effects/break_stone.ogg";
@@ -109,6 +121,10 @@ pub struct Gibtonite {
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct GibtoniteQuality(pub u8);
 
+/// A primed gibtonite ore (`primed`, `det_timer`): it blows at this game time.
+#[derive(Component, Clone, Copy, Debug, PartialEq)]
+pub struct GibPrimed(pub f64);
+
 /// A self-recharging gun's reload timer (tg `recharge_timerid`).
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq)]
 pub struct Recharging {
@@ -128,6 +144,7 @@ impl Plugin for RocksPlugin {
                         .chain()
                         .after(WorldSystems::Movement),
                     gibtonite_pulses.run_if(any_with_component::<Gibtonite>),
+                    primed_ores.run_if(any_with_component::<GibPrimed>),
                     ore_box_acts.in_set(UiSystems::Handle),
                 ),
             );
@@ -242,6 +259,9 @@ pub fn item_interaction(
     let target_path = obj_path(world, target).unwrap_or_default();
     if is_under(&target_path, ORE_BOX) {
         return ore_box_interaction(world, actor, held, target);
+    }
+    if is_under(&target_path, GIBTONITE_ITEM) {
+        return gibtonite_ore_interaction(world, actor, held, target);
     }
     if world.get::<DmOre>(target).is_some()
         && tool_of(world, held).map(|t| t.0) == Some(ToolKind::Welder)
@@ -554,6 +574,260 @@ pub fn ex_act(world: &mut World, pos: TilePos, severity: Severity) -> bool {
     true
 }
 
+fn is_gibtonite_ore(world: &World, e: Entity) -> bool {
+    item_path(world, e).is_some_and(|p| is_under(p, GIBTONITE_ITEM))
+}
+
+/// The assembly holder rigged to a gibtonite ore (`rig`).
+fn rig_of(world: &World, ore: Entity) -> Option<Entity> {
+    world
+        .get::<Stored>(ore)?
+        .items()
+        .iter()
+        .copied()
+        .find(|&e| {
+            world
+                .get::<crate::assemblies::server::AssemblyHolder>(e)
+                .is_some()
+        })
+}
+
+/// tg `/obj/item/gibtonite/item_interaction`, `wrench_act` and `multitool_act`.
+fn gibtonite_ore_interaction(world: &mut World, actor: Actor, held: Entity, ore: Entity) -> bool {
+    use crate::assemblies::server::{Assembly, AssemblyHolder, Device, parts_of};
+    let holder = world.get::<AssemblyHolder>(held).is_some();
+    if holder && rig_of(world, ore).is_none() {
+        let igniter = parts_of(world, held).into_iter().any(|p| {
+            matches!(
+                world.get::<Assembly>(p).map(|a| &a.device),
+                Some(Device::Igniter { .. })
+            )
+        });
+        if !igniter {
+            return false;
+        }
+        put_inside(world, held, ore);
+        if let Some(mut h) = world.get_mut::<AssemblyHolder>(held) {
+            h.master = Some(ore);
+        }
+        info!("{:?} attached rig {held:?} to gibtonite {ore:?}", actor.mob);
+        tell(world, actor.client, Span::Notice, "attached rig");
+        return true;
+    }
+    match tool_of(world, held).map(|t| t.0) {
+        Some(ToolKind::Wrench) => {
+            let Some(rig) = rig_of(world, ore) else {
+                return false;
+            };
+            if let Some(mut h) = world.get_mut::<AssemblyHolder>(rig) {
+                h.master = None;
+            }
+            info!(
+                "{:?} detached rig {rig:?} from gibtonite {ore:?}",
+                actor.mob
+            );
+            crate::assemblies::server::to_hands(world, actor.mob, rig);
+            tell(world, actor.client, Span::Notice, "detached rig");
+            return true;
+        }
+        Some(ToolKind::Multitool) => {
+            defuse_ore(world, ore, Some(actor.mob));
+            return true;
+        }
+        _ => {}
+    }
+    let force = world.get::<DmItem>(held).map_or(0.0, |i| i.force);
+    if is_mining_tool(world, held) || force >= PRIMING_FORCE {
+        prime_ore(world, ore, Some(actor.mob));
+        return true;
+    }
+    if item_path(world, held).is_some_and(|p| MINING_SCANNERS.iter().any(|s| is_under(p, s))) {
+        defuse_ore(world, ore, Some(actor.mob));
+        return true;
+    }
+    false
+}
+
+/// A held tool on the gibtonite ore in the other hand. True when handled.
+pub fn hand_interaction(
+    world: &mut World,
+    client: Entity,
+    mob: Entity,
+    held: Entity,
+    target: Entity,
+) -> bool {
+    if !is_gibtonite_ore(world, target) {
+        return false;
+    }
+    let actor = Actor {
+        client,
+        mob,
+        item: Some(held),
+    };
+    gibtonite_ore_interaction(world, actor, held, target)
+}
+
+/// tg `GibtoniteReaction`: the ore primes and blows in 10 s.
+pub fn prime_ore(world: &mut World, ore: Entity, user: Option<Entity>) {
+    if !is_gibtonite_ore(world, ore) || world.get::<GibPrimed>(ore).is_some() {
+        return;
+    }
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    world.entity_mut(ore).insert(GibPrimed(now + ORE_DET_SECS));
+    set_icon_state(world, ore, "gibtonite_active");
+    let Some(pos) = crate::explosions::turf_of(world, ore) else {
+        return;
+    };
+    playsound(
+        world,
+        PlaySound::new(pos, "sound/effects/hit_on_shattered_glass.ogg", 50.0, true),
+    );
+    if let Some(user) = user {
+        let name = crate::security::name_of(world, user);
+        let what = crate::security::name_of(world, ore);
+        let at = world.get::<TilePos>(user).copied().unwrap_or(pos);
+        crate::security::show(
+            world,
+            at,
+            crate::health::DEFAULT_MESSAGE_RANGE,
+            ChatChannel::Combat,
+            (
+                Span::Warning,
+                format!("{name} strikes the {what}, causing a chain reaction!"),
+            ),
+            &[(
+                user,
+                Span::Danger,
+                format!("You strike the {what}, causing a chain reaction."),
+            )],
+        );
+    }
+    info!("gibtonite ore {ore:?} at {pos:?} primed by {user:?}");
+}
+
+/// tg `/obj/item/gibtonite/defuse`: the reaction stops, the quality drops to the lowest.
+pub fn defuse_ore(world: &mut World, ore: Entity, defuser: Option<Entity>) {
+    if world.get::<GibPrimed>(ore).is_none() {
+        return;
+    }
+    world
+        .entity_mut(ore)
+        .remove::<GibPrimed>()
+        .insert(GibtoniteQuality(1));
+    set_icon_state(world, ore, "gibtonite");
+    if let Some(defuser) = defuser
+        && let Some(&at) = world.get::<TilePos>(defuser)
+    {
+        crate::security::show(
+            world,
+            at,
+            crate::health::DEFAULT_MESSAGE_RANGE,
+            ChatChannel::Info,
+            (
+                Span::Notice,
+                "The chain reaction stopped! ...The ore's quality looks diminished.".into(),
+            ),
+            &[(
+                defuser,
+                Span::Notice,
+                "You stopped the chain reaction. ...The ore's quality looks diminished.".into(),
+            )],
+        );
+    }
+}
+
+/// tg `/obj/item/gibtonite/detonate` when the timer runs out.
+fn primed_ores(world: &mut World) {
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    let mut query = world.query::<(Entity, &GibPrimed)>();
+    let due: Vec<Entity> = query
+        .iter(world)
+        .filter(|(_, p)| now >= p.0)
+        .map(|(e, _)| e)
+        .collect();
+    for ore in due {
+        let quality = world.get::<GibtoniteQuality>(ore).map_or(1, |q| q.0);
+        let Some(pos) = crate::explosions::turf_of(world, ore) else {
+            world.despawn(ore);
+            continue;
+        };
+        let (dev, heavy, light) = match quality {
+            3 => (2, 4, 9),
+            2 => (1, 2, 5),
+            _ => (0, 1, 3),
+        };
+        // Still primed: the blast's own `ex_act` on it does nothing more.
+        let mut ex = Explosion::new(dev, heavy, light);
+        ex.flame = Some(0.0);
+        ex.flash = Some(0.0);
+        ex.cause = "gibtonite ore".into();
+        crate::explosions::explosion(world, pos, ex);
+        if world.get_entity(ore).is_ok() {
+            world.despawn(ore);
+        }
+    }
+}
+
+/// `COMSIG_IGNITER_ACTIVATE` on the holder's loc: a rigged gibtonite ore primes.
+pub fn igniter_activated(world: &mut World, igniter: Entity) {
+    use crate::assemblies::server::{Assembly, Attached};
+    let Some(Attached::Holder(holder)) = world.get::<Assembly>(igniter).map(|a| a.attached) else {
+        return;
+    };
+    let Some(ore) = world.get::<StoredIn>(holder).map(|s| s.0) else {
+        return;
+    };
+    if is_gibtonite_ore(world, ore) {
+        info!("gibtonite ore {ore:?} primed by its rig {holder:?}");
+        prime_ore(world, ore, None);
+    }
+}
+
+/// `/obj/item/gibtonite/bullet_act`: any projectile primes it.
+pub fn bullet_act(world: &mut World, firer: Entity, target: Entity) {
+    if is_gibtonite_ore(world, target) {
+        let user = world.get_entity(firer).is_ok().then_some(firer);
+        prime_ore(world, target, user);
+    }
+}
+
+/// `/obj/item/gibtonite/ex_act` (it primes, nothing else) and `/obj/item/stack/ore/ex_act`
+/// (destroyed by devastation, untouched by lighter blasts). True when `item` is one of them.
+pub fn item_ex_act(world: &mut World, item: Entity, severity: Severity) -> bool {
+    if is_gibtonite_ore(world, item) {
+        prime_ore(world, item, None);
+        return true;
+    }
+    if !is_ore(world, item) {
+        return false;
+    }
+    if severity >= Severity::Devastate {
+        world.despawn(item);
+    }
+    true
+}
+
+/// `/obj/item/gibtonite/examine`.
+pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<crate::examine::Line>) {
+    if !is_gibtonite_ore(world, target) {
+        return;
+    }
+    lines.push(if rig_of(world, target).is_some() {
+        (
+            Span::Warning,
+            "There is some kind of device rigged to it!".into(),
+        )
+    } else {
+        (Span::Notice, "You could rig something to it.".into())
+    });
+}
+
+/// `/datum/storage/bag/ore`'s `set_holdable(/obj/item/stack/ore)`: a mining satchel refuses
+/// anything else.
+pub fn satchel_refuses(world: &World, storage: Entity, item: Entity) -> bool {
+    item_path(world, storage).is_some_and(|p| is_under(p, ORE_BAG)) && !is_ore(world, item)
+}
+
 /// `/obj/item/stack/ore/welder_act`: a lit welder smelts `max(1, ceil(1 / sheets))` ore into
 /// `max(1, floor(sheets))` sheets of its `refined_type`, where `sheets` is the ore's material
 /// per unit in sheets.
@@ -806,13 +1080,46 @@ fn ore_box_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed<OreBoxU
     }
 }
 
-/// tg `/obj/item/gun/energy/recharge`: `recharge_time` (deciseconds) and `holds_charge`.
-// shortcut: the two recharge guns' values are written here, not converted per type.
-fn recharge_vars(path: &str) -> (f64, bool) {
-    if is_under(path, EBOW) {
-        (20.0, true)
-    } else {
-        (16.0, false)
+/// tg `/obj/item/gun/energy/recharge::holds_charge`.
+// shortcut: the recharge guns' values are written here, not converted per type
+// (`super::modkits::base_recharge` has their `recharge_time`).
+fn holds_charge(path: &str) -> bool {
+    is_under(path, EBOW)
+        || is_under(
+            path,
+            "/obj/item/gun/energy/recharge/kinetic_accelerator/cyborg",
+        )
+        || is_under(
+            path,
+            "/obj/item/gun/energy/recharge/kinetic_accelerator/minebot",
+        )
+}
+
+/// tg `attempt_reload(set_recharge_time)` of `gun`, deciseconds: the reload timer restarts
+/// (`restart`) or, if one runs sooner, keeps it.
+pub fn attempt_reload(world: &mut World, gun: Entity, recharge_ds: f64, restart: bool) {
+    let full = match (
+        world.get::<crate::guns::Gun>(gun),
+        world.get::<ss13_mapload::DmGun>(gun),
+    ) {
+        (Some(g), Some(dm)) => g.charge >= dm.cell_maxcharge,
+        _ => return,
+    };
+    if full {
+        return;
+    }
+    let at = world.resource::<Time>().elapsed_secs_f64() + recharge_ds / 10.0;
+    let mut entity = world.entity_mut(gun);
+    match entity.get_mut::<Recharging>() {
+        Some(mut r) => {
+            r.due = Some(match r.due {
+                Some(due) if !restart => due.min(at),
+                _ => at,
+            });
+        }
+        None => {
+            entity.insert(Recharging { due: Some(at) });
+        }
     }
 }
 
@@ -827,6 +1134,7 @@ fn recharge_guns(
         &ss13_mapload::DmGun,
         Option<&mut Recharging>,
         Option<&CarriedBy>,
+        Option<&super::modkits::RechargeTime>,
     )>,
     positions: Query<&TilePos>,
     time: Res<Time>,
@@ -834,20 +1142,22 @@ fn recharge_guns(
     mut sounds: MessageWriter<PlaySound>,
 ) {
     let now = time.elapsed_secs_f64();
-    for (e, item, mut gun, dm, recharging, carried) in &mut guns {
+    for (e, item, mut gun, dm, recharging, carried, recharge) in &mut guns {
         if !is_under(&item.path, RECHARGE_GUN) {
             continue;
         }
-        let (recharge_ds, holds_charge) = recharge_vars(&item.path);
+        let holds = holds_charge(&item.path);
+        let recharge_ds =
+            recharge.map_or_else(|| super::modkits::base_recharge(&item.path), |t| t.0);
         let Some(mut recharging) = recharging else {
             // `Initialize`: `empty()` unless it holds its charge.
-            if !holds_charge {
+            if !holds {
                 gun.charge = 0.0;
             }
             commands.entity(e).insert(Recharging::default());
             continue;
         };
-        if carried.is_none() && !holds_charge {
+        if carried.is_none() && !holds {
             if gun.charge > 0.0 {
                 gun.charge = 0.0;
             }
@@ -880,38 +1190,76 @@ fn recharge_guns(
     }
 }
 
-/// `/obj/projectile/kinetic/prehit_pierce`: kinetic force weakens to a quarter where the
-/// target's pressure is over 50 kPa (`lavaland_equipment_pressure_check`).
-pub fn kinetic_prehit(world: &World, data: &mut ss13_mapload::ProjectileData, target: Entity) {
-    if !is_under(&data.path, KINETIC) {
+/// `/obj/projectile/kinetic/prehit_pierce`: the modkits' `projectile_prehit`, then kinetic
+/// force weakens to its `pressure_decrease` (a quarter, raised by modkits) where the target's
+/// pressure is over 50 kPa (`lavaland_equipment_pressure_check`).
+pub fn kinetic_prehit(world: &mut World, p: &mut crate::projectile::Projectile, target: Entity) {
+    if !is_under(&p.data.path, KINETIC) {
+        return;
+    }
+    super::modkits::prehit(world, p, target);
+    let Some(pos) = crate::explosions::turf_of(world, target) else {
+        return;
+    };
+    if pressure_over(world, pos) {
+        p.data.damage *= super::modkits::pressure_decrease(world, p.fired_from);
+    }
+}
+
+fn pressure_over(world: &World, pos: TilePos) -> bool {
+    world
+        .get_resource::<ss13_atmos::Atmos>()
+        .and_then(|a| a.pressure(pos))
+        .unwrap_or(0.0)
+        > EQUIPMENT_PRESSURE
+}
+
+/// `/obj/projectile/kinetic/strike_thing` on what it hit: the modkits strike, a mineral wall
+/// is drilled and the gun may reload sooner.
+pub fn kinetic_strike(world: &mut World, p: &crate::projectile::Projectile, target: Entity) {
+    if !is_under(&p.data.path, KINETIC) {
         return;
     }
     let Some(pos) = crate::explosions::turf_of(world, target) else {
         return;
     };
-    let pressure = world
-        .get_resource::<ss13_atmos::Atmos>()
-        .and_then(|a| a.pressure(pos))
-        .unwrap_or(0.0);
-    if pressure > EQUIPMENT_PRESSURE {
-        data.damage *= PRESSURE_DECREASE;
-    }
+    strike_thing(world, p, Some(target), pos);
 }
 
-/// `/obj/projectile/kinetic/strike_thing`: a mineral wall it hits is drilled.
-pub fn kinetic_strike(
-    world: &mut World,
-    data: &ss13_mapload::ProjectileData,
-    firer: Entity,
-    target: Entity,
-) {
-    if !is_under(&data.path, KINETIC) || world.get::<DmMineral>(target).is_none() {
+/// `/obj/projectile/kinetic/on_range`: the blast where it stops.
+pub fn kinetic_on_range(world: &mut World, p: &mut crate::projectile::Projectile, pos: TilePos) {
+    if !is_under(&p.data.path, KINETIC) {
         return;
     }
-    if let Some(&pos) = world.get::<TilePos>(target) {
-        // `gets_drilled(firer, 1)`.
-        crate::skills::mining_experience(world, firer, target, 1.0);
-        gets_drilled(world, pos, Some(firer));
+    if pressure_over(world, pos) {
+        p.data.damage *= super::modkits::pressure_decrease(world, p.fired_from);
+    }
+    strike_thing(world, p, None, pos);
+}
+
+fn strike_thing(
+    world: &mut World,
+    p: &crate::projectile::Projectile,
+    target: Option<Entity>,
+    pos: TilePos,
+) {
+    let mineral =
+        |world: &World| turf_at(world, pos).filter(|&t| world.get::<DmMineral>(t).is_some());
+    let was_mineral = mineral(&*world).is_some();
+    super::modkits::strike(world, p, target, pos, was_mineral);
+    let Some(wall) = mineral(&*world) else {
+        return;
+    };
+    // `gets_drilled(firer, 1)`.
+    crate::skills::mining_experience(world, p.firer, wall, 1.0);
+    gets_drilled(world, pos, Some(p.firer));
+    // `if(iscarbon(firer))`: `attempt_reload(recharge_time * skill_modifier)`.
+    if let Some(gun) = p.fired_from
+        && world.get::<crate::human::HumanLook>(p.firer).is_some()
+    {
+        let time =
+            super::modkits::recharge_time(world, gun) * f64::from(mining_speed(world, p.firer));
+        attempt_reload(world, gun, time, false);
     }
 }
 
