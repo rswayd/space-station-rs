@@ -679,6 +679,22 @@ fn ask_list(
     world.entity_mut(prompt).insert(PendingAsk::Religion(ask));
 }
 
+/// The librarian console's print screen: deity, religion and bible name, tg's defaults until
+/// the chaplain chose.
+pub(super) fn print_names(station: &Religion) -> (String, String, String) {
+    let deity = if station.deity.is_empty() {
+        DEFAULT_DEITY.to_owned()
+    } else {
+        station.deity.clone()
+    };
+    let religion = station
+        .name
+        .clone()
+        .unwrap_or_else(|| DEFAULT_RELIGION.to_owned());
+    let bible = default_bible(&religion, &station.bible_name);
+    (deity, religion, bible)
+}
+
 /// tg's bible name for a religion and the chosen names: `DEFAULT_BIBLE_REPLACE` when none.
 fn default_bible(religion: &str, bible: &str) -> String {
     if bible.is_empty() {
@@ -945,6 +961,18 @@ fn consume_beacon(world: &mut World, mob: Entity, beacon: Entity, kit: &str) {
     religion_mut(world).holy_armor = Some(kit.to_owned());
     crate::construction::spawn_obj(world, kit, pos);
     world.despawn(beacon);
+}
+
+/// `bookmanagement/print_bible`: a printed bible takes the station's skin, name and deity once
+/// the chaplain chose a skin (`GLOB.bible_icon_state`).
+pub(super) fn dress_printed_bible(world: &mut World, bible: Entity) {
+    let station = religion(world);
+    let Some(skin) = station.bible_skin else {
+        return;
+    };
+    set_bible_skin(world, bible, skin);
+    rename(world, bible, &station.bible_name);
+    world.entity_mut(bible).insert(BibleDeity(station.deity));
 }
 
 fn set_bible_skin(world: &mut World, bible: Entity, skin: usize) {

@@ -159,6 +159,7 @@ fn takes_emag(world: &World, target: Entity) -> bool {
         || e.contains::<crate::medical::kiosk::MedicalKiosk>()
         || e.contains::<crate::medical::limbgrower::Limbgrower>()
         || crate::silicon::pai::takes_emag(world, target)
+        || e.contains::<crate::service::Ledger>()
 }
 
 fn name(world: &World, e: Entity) -> String {
@@ -332,6 +333,9 @@ pub fn emag_act(world: &mut World, actor: Actor, card: Entity, target: Entity) -
     }
     if crate::power::shields::takes_emag(world, target) {
         return crate::power::shields::emag_act(world, client, target);
+    }
+    if world.get::<crate::service::Ledger>(target).is_some() {
+        return crate::service::library_emag_act(world, client, target);
     }
     false
 }

@@ -4,13 +4,17 @@
 // and boldness on a white sheet); stamps are listed by name under the text, not drawn.
 
 use bevy::app::Propagate;
-use ss13_tgui::client::{AppTguiClientExt, ClientUi};
+use bevy::scene::{EntityScene, SceneList};
+use ss13_tgui::client::{ActOnSubmit, AppTguiClientExt, ClientUi};
+use ss13_ui_kit::ActParams;
 use ss13_ui_kit::prelude::*;
 use ss13_ui_kit::theme::Bold;
 
 use super::{
-    DsmBookData, DsmBookUi, IdcBookData, IdcBookUi, MarkdownViewerData, MarkdownViewerUi,
-    PaperSheetData, PaperSheetUi, plain_text,
+    DsmBookData, DsmBookUi, IdcBookData, IdcBookUi, LIBRARY_ARCHIVE, LIBRARY_CHECKOUT,
+    LIBRARY_INVENTORY, LIBRARY_PRINT, LIBRARY_TOP_SNEAKY, LIBRARY_UPLOAD, LibraryConsoleData,
+    LibraryConsoleUi, MarkdownViewerData, MarkdownViewerUi, PaperSheetData, PaperSheetUi,
+    plain_text,
 };
 
 pub struct ServiceClientPlugin;
@@ -20,7 +24,8 @@ impl Plugin for ServiceClientPlugin {
         app.register_ui_view::<PaperSheetUi>()
             .register_ui_view::<MarkdownViewerUi>()
             .register_ui_view::<DsmBookUi>()
-            .register_ui_view::<IdcBookUi>();
+            .register_ui_view::<IdcBookUi>()
+            .register_ui_view::<LibraryConsoleUi>();
     }
 }
 
@@ -204,6 +209,212 @@ fn manual_entry(title: String, lines: Vec<String>) -> impl Scene + use<> {
         Children [
             Node { flex_direction: FlexDirection::Column, padding: UiRect::all(px(4)) }
             Children [ {lines} ]
+        ]
+    }
+}
+
+type Part = Box<dyn SceneList>;
+
+/// A button sending `action` with `params`.
+fn act_button(
+    content: String,
+    action: &str,
+    params: Vec<(String, String)>,
+    selected: bool,
+) -> Part {
+    let (action, params) = (action.to_owned(), ActParams(params));
+    Box::new(EntityScene(bsn! {
+        @ss13_ui_kit::Button { @content: content }
+        ss13_ui_kit::Button { selected: selected }
+        Act(action)
+        params
+    }))
+}
+
+fn line(text: String) -> Part {
+    Box::new(EntityScene(
+        bsn! { Node { margin: UiRect::bottom(px(4)) } Children [ Text(text) ] },
+    ))
+}
+
+/// A text field: Enter sends `action` with the text as `param` (and `params`).
+fn field(action: &str, param: &str, params: Vec<(String, String)>) -> Part {
+    let (action, param) = (action.to_owned(), param.to_owned());
+    Box::new(EntityScene(bsn! {
+        Input { value: {String::new()}, max_length: {Some(256)} }
+        ActOnSubmit { action: action, param: param, params: params }
+    }))
+}
+
+/// A row: `text` and its buttons.
+fn row(text: String, buttons: Vec<Part>) -> Part {
+    let mut children: Vec<Part> = vec![Box::new(EntityScene(bsn! {
+        Node { margin: UiRect::right(px(6)) }
+        Children [ Text(text) ]
+    }))];
+    children.extend(buttons);
+    Box::new(EntityScene(bsn! {
+        Node { flex_direction: FlexDirection::Row, flex_wrap: FlexWrap::Wrap, align_items: AlignItems::Center, margin: UiRect::bottom(px(2)) }
+        Children [ {children} ]
+    }))
+}
+
+fn param(key: &str, value: impl ToString) -> Vec<(String, String)> {
+    vec![(key.to_owned(), value.to_string())]
+}
+
+// shortcut: tgui's `LibraryConsole` screens as plain rows of text, fields and buttons (no
+// pages, no bible sprite, no dropdown); the checkout time is a fixed 15 minutes field default.
+impl ClientUi for LibraryConsoleUi {
+    const WIDTH: f32 = 600.0;
+    const HEIGHT: f32 = 600.0;
+
+    fn content(_: &(), data: &LibraryConsoleData) -> impl Scene {
+        library_console_view(data)
+    }
+}
+
+fn library_console_view(data: &LibraryConsoleData) -> impl Scene + use<> {
+    let mut screens = vec![
+        (LIBRARY_INVENTORY, "Inventory"),
+        (LIBRARY_CHECKOUT, "Checkout"),
+        (LIBRARY_ARCHIVE, "Archive"),
+        (LIBRARY_UPLOAD, "Upload"),
+        (LIBRARY_PRINT, "Print"),
+    ];
+    if data.display_lore {
+        screens.push((LIBRARY_TOP_SNEAKY, "Forbidden Lore"));
+    }
+    let tabs: Vec<Part> = screens
+        .into_iter()
+        .map(|(n, label)| {
+            act_button(
+                label.to_owned(),
+                "set_screen",
+                param("screen_index", n),
+                data.screen_state == n,
+            )
+        })
+        .collect();
+    let body: Vec<Part> = match data.screen_state {
+        LIBRARY_CHECKOUT => {
+            let mut out = vec![line(format!(
+                "Checking out: {}",
+                data.checkout_title.as_deref().unwrap_or("nothing")
+            ))];
+            out.extend(data.inventory.iter().map(|b| {
+                row(
+                    format!("{} by {}", b.title, b.author),
+                    vec![act_button(
+                        "Select".into(),
+                        "set_checkout",
+                        param("book_name", &b.title),
+                        false,
+                    )],
+                )
+            }));
+            out.push(line("Lend to (Enter):".into()));
+            out.push(field("checkout", "loaned_to", param("checkout_time", 15)));
+            out.extend(data.checkouts.iter().map(|l| {
+                let due = if l.overdue {
+                    "OVERDUE".to_owned()
+                } else {
+                    format!("due in {} min", l.due_in_minutes)
+                };
+                row(
+                    format!("{} by {} — {} — {due}", l.title, l.author, l.borrower),
+                    vec![act_button(
+                        "Check in".into(),
+                        "checkin",
+                        param("checked_out_id", l.id),
+                        false,
+                    )],
+                )
+            }));
+            out
+        }
+        LIBRARY_ARCHIVE => data
+            .pages
+            .iter()
+            .map(|b| {
+                row(
+                    format!("#{} {} by {} ({})", b.id, b.title, b.author, b.category),
+                    vec![act_button(
+                        "Print".into(),
+                        "print_book",
+                        param("book_id", b.id),
+                        false,
+                    )],
+                )
+            })
+            .collect(),
+        LIBRARY_UPLOAD => {
+            if !data.has_scanner {
+                vec![line("No nearby scanner detected.".into())]
+            } else if !data.has_cache {
+                vec![line("No cached book found.".into())]
+            } else {
+                let mut out = vec![
+                    line(format!("Title: {}", data.cache_title)),
+                    field("set_cache_title", "title", Vec::new()),
+                    line(format!("Author: {}", data.cache_author)),
+                    field("set_cache_author", "author", Vec::new()),
+                ];
+                let uploads = data
+                    .upload_categories
+                    .iter()
+                    .map(|c| {
+                        act_button(
+                            format!("Upload as {c}"),
+                            "upload",
+                            param("category", c),
+                            false,
+                        )
+                    })
+                    .collect();
+                out.push(row(String::new(), uploads));
+                out
+            }
+        }
+        LIBRARY_PRINT => vec![
+            line(format!(
+                "{} — {} ({})",
+                data.bible_name, data.deity, data.religion
+            )),
+            act_button("Print the bible".into(), "print_bible", Vec::new(), false),
+        ],
+        LIBRARY_TOP_SNEAKY => vec![
+            line("The vault's browsing window is open.".into()),
+            act_button("Browse".into(), "lore_spawn", Vec::new(), false),
+            act_button("Close the tab".into(), "lore_deny", Vec::new(), false),
+        ],
+        _ => data
+            .inventory
+            .iter()
+            .map(|b| {
+                row(
+                    format!("{} by {}", b.title, b.author),
+                    vec![act_button(
+                        "Remove".into(),
+                        "inventory_remove",
+                        param("book_id", b.id),
+                        false,
+                    )],
+                )
+            })
+            .collect(),
+    };
+    bsn! {
+        @WindowContent
+        Children [
+            Node { flex_direction: FlexDirection::Row, column_gap: px(4), margin: UiRect::bottom(px(6)) }
+            Children [ {tabs} ]
+            --
+            @Section { @fill: true, @scrollable: true }
+            Children [
+                Node { flex_direction: FlexDirection::Column }
+                Children [ {body} ]
+            ]
         ]
     }
 }

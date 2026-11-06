@@ -4,7 +4,9 @@
 //! librarian's console uploads and prints it; a canvas is painted, finished and put on an easel;
 //! a carbon sheet tears off its copy, the paper cutter cuts a paper into slips, a filing cabinet
 //! files and returns a paper, a biscuit card cracks open; the barcode scanner connects to the
-//! librarian's console and adds, sets for check-out and checks in a book.
+//! librarian's console and adds, sets for check-out and checks in a book; the console's window
+//! lends a book to a name, lists it overdue, checks it in, prints a bible and, emagged, the
+//! forbidden lore.
 
 use std::path::{Path, PathBuf};
 
@@ -63,6 +65,7 @@ const TYPES: &str = r##"{
     "/obj/item/clipboard": { "parent": "/obj/item" },
     "/obj/item/toner": { "parent": "/obj/item" },
     "/obj/item/barcodescanner": { "parent": "/obj/item" },
+    "/obj/item/book/bible": { "parent": "/obj/item/book" },
     "/obj/item/toy": { "parent": "/obj/item" },
     "/obj/item/toy/crayon": { "parent": "/obj/item/toy" },
     "/obj/item/toy/crayon/red": { "parent": "/obj/item/toy/crayon" },
@@ -189,6 +192,7 @@ fn fixture_assets(test: &str) -> PathBuf {
         "/obj/item/toner",
         "/obj/item/book",
         BARCODE,
+        "/obj/item/book/bible",
         COPIER,
         BRIDGE_FAX,
         CAPTAIN_FAX,
@@ -327,6 +331,14 @@ impl Station {
 
     fn type_in(&mut self, text: &str) {
         self.answer(TextInputUi::NAME, "submit", "entry", text);
+    }
+
+    /// Waits for the librarian console's window.
+    fn console_window(&mut self) -> u32 {
+        self.run_until("the console window opens", |s| {
+            s.window("LibraryConsole").is_some()
+        });
+        self.window("LibraryConsole").unwrap()
     }
 
     fn books_titled(&mut self, title: &str) -> usize {
@@ -469,23 +481,22 @@ fn a_bound_book_is_scanned_uploaded_and_printed() {
 
     s.stand(TilePos::new(8, 3, 1));
     s.click(0, console);
-    s.pick("Set the scanned book's title");
-    s.type_in("Rules");
+    let window = s.console_window();
+    s.act(0, window, "set_cache_title", &[("title", "Rules")]);
     s.run_until("the cache has a title", |s| {
         s.get::<ss13_game::service::BookScanner>(scanner)
             .cache
             .as_ref()
             .is_some_and(|c| c.title == "Rules")
     });
-    s.click(0, console);
-    s.pick("Upload the scanned book");
-    s.pick("Fiction");
+    s.act(0, window, "upload", &[("category", "Fiction")]);
     s.run_until("the book is archived", |s| {
         s.server.world().resource::<LibraryArchive>().books.len() == 1
     });
-    s.click(0, console);
-    s.pick("Print a book from the archive");
-    s.pick("\"Rules\" by unknown author");
+    let id = s.server.world().resource::<LibraryArchive>().books[0]
+        .id
+        .to_string();
+    s.act(0, window, "print_book", &[("book_id", &id)]);
     s.run_until("the printed book is out", |s| s.books_titled("Rules") == 1);
 }
 
@@ -691,4 +702,78 @@ fn the_barcode_scanner_keeps_the_console_ledger() {
         s.get::<Ledger>(console).checkouts.is_empty()
     });
     assert_eq!(s.get::<Ledger>(console).inventory.len(), 1);
+}
+
+#[test]
+fn the_librarian_console_lends_prints_and_hides_lore() {
+    let mut s = Station::start("the_librarian_console_lends_prints_and_hides_lore");
+    let (console, book) = (s.obj(CONSOLE), s.item("/obj/item/book"));
+    s.run_until("the book has its data", |s| {
+        s.try_get::<Book>(book).is_some()
+    });
+    let data = s.get::<Book>(book).clone();
+    s.server
+        .world_mut()
+        .get_mut::<Ledger>(console)
+        .unwrap()
+        .inventory
+        .push(data.clone());
+    s.stand(TilePos::new(8, 3, 1));
+    s.click(0, console);
+    let window = s.console_window();
+    s.act(0, window, "set_screen", &[("screen_index", "2")]);
+    s.act(0, window, "set_checkout", &[("book_name", &data.title)]);
+    s.run_until("the book is set for check-out", |s| {
+        s.get::<Ledger>(console).checking_out.is_some()
+    });
+    s.act(
+        0,
+        window,
+        "checkout",
+        &[("loaned_to", "Bob"), ("checkout_time", "1")],
+    );
+    s.run_until("the book is lent", |s| {
+        s.get::<Ledger>(console).checkouts.len() == 1
+    });
+    let loan = s.get::<Ledger>(console).checkouts[0].clone();
+    assert_eq!(loan.loaned_to, "Bob");
+    assert_eq!(loan.book, data);
+    s.act(0, window, "checkin", &[("checked_out_id", "1")]);
+    s.run_until("the book is checked in", |s| {
+        s.get::<Ledger>(console).checkouts.is_empty()
+    });
+
+    let bibles = |s: &mut Station| {
+        let world = s.server.world_mut();
+        let mut q = world.query::<&DmItem>();
+        q.iter(world)
+            .filter(|i| i.path == "/obj/item/book/bible")
+            .count()
+    };
+    s.act(0, window, "print_bible", &[]);
+    s.run_until("the bible is printed", |s| bibles(s) == 1);
+
+    // Not emagged: the lore is refused.
+    s.act(0, window, "lore_spawn", &[]);
+    for _ in 0..3 {
+        s.tick();
+    }
+    assert!(!s.get::<Ledger>(console).lore_taken);
+    let card = s.server.world_mut().spawn_empty().id();
+    let actor = ss13_game::tools::Actor {
+        client: s.players[0].link,
+        mob: s.players[0].mob,
+        item: Some(card),
+    };
+    assert!(ss13_game::emag::emag_act(
+        s.server.world_mut(),
+        actor,
+        card,
+        console
+    ));
+    assert!(s.get::<Ledger>(console).emagged);
+    s.act(0, window, "lore_deny", &[]);
+    s.run_until("the lore tab is gone", |s| {
+        s.get::<Ledger>(console).lore_taken
+    });
 }
