@@ -381,6 +381,10 @@ fn line_phase(world: &World, whelp: Entity, toward: TilePos, range: i32, now: f6
 pub fn eruption_ring(center: TilePos, range: i32, ring: i32) -> Vec<TilePos> {
     // BYOND `circle_range`: dx² + dy² <= r * (r + 0.5).
     let rsq = f64::from(range) * (f64::from(range) + 0.5);
+    // tg skips the whelp's own tile (`turf_dist == 0`).
+    if ring < 1 {
+        return Vec::new();
+    }
     let mut out = Vec::new();
     for dy in -range..=range {
         for dx in -range..=range {
