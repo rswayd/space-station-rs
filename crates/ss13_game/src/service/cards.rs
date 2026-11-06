@@ -34,8 +34,6 @@ pub const DECK: &str = "/obj/item/toy/cards/deck";
 pub const CARDHAND: &str = "/obj/item/toy/cards/cardhand";
 pub const SINGLECARD: &str = "/obj/item/toy/singlecard";
 pub const RULESET: &str = "/obj/item/toy/singlecard/wizoff_ruleset";
-/// What the cards spawn at runtime (`ss13_mapload::runtime::GAME_RUNTIME_TYPES`).
-pub const CARD_RUNTIME_TYPES: [&str; 3] = [SINGLECARD, CARDHAND, RULESET];
 const SHUFFLE_SOUND: &str = "sound/items/cards/cardshuffle.ogg";
 const FLIP_SOUND: &str = "sound/items/cards/cardflip.ogg";
 /// `/obj/item/toy/cards` `card_limit`.
