@@ -417,8 +417,7 @@ impl Plugin for DoorServerPlugin {
 }
 
 /// [`Door`] for every [`DmDoor`] entity, then airlock mapping helpers applied and removed.
-// shortcut: doors exist only from map load; doors spawned later (construction) need the same
-// conversion from an observer once anything spawns them.
+// Doors spawned later (`crate::airlock_construction`) get the same through [`setup_built`].
 fn init_doors(world: &mut World) {
     let start = Instant::now();
     let Some(assets) = world
@@ -440,12 +439,7 @@ fn init_doors(world: &mut World) {
     let doors: Vec<(Entity, Door)> = query
         .iter(world)
         .map(|(entity, dm, atom, dense)| {
-            let material = if dm.airlock_material.is_empty() && dm.glass {
-                // tg airlock `Initialize`: glass airlocks draw the glass fill.
-                "glass".to_owned()
-            } else {
-                dm.airlock_material.clone()
-            };
+            let material = fill_material(dm);
             let key = (
                 atom.icon.clone(),
                 dm.base_icon_state.clone(),
@@ -456,64 +450,16 @@ fn init_doors(world: &mut World) {
             let sprites = looks
                 .entry(key)
                 .or_insert_with_key(|(icon, base, material, overlays, kind)| {
-                    Arc::new(resolve_sprites(
-                        &index, *kind, icon, base, material, overlays,
-                    ))
+                    let get = |dmi: &str, state: &str| index.get(&(dmi, state)).copied();
+                    Arc::new(resolve_sprites(&get, *kind, icon, base, material, overlays))
                 })
                 .clone();
             *report.by_kind.entry(dm.kind).or_default() += 1;
-            let door = Door {
-                kind: dm.kind,
-                state: if dense {
-                    DoorState::Closed
-                } else {
-                    DoorState::Open
-                },
-                locked: dm.locked,
-                welded: dm.welded,
-                req_access: dm.req_access.clone(),
-                req_one_access: dm.req_one_access.clone(),
-                unres_sides: 0,
-                autoclose: dm.autoclose,
-                normalspeed: dm.normalspeed,
-                safe: dm.safe,
-                can_open_with_hands: dm.can_open_with_hands,
-                opaque_when_closed: dm.visible && !dm.glass,
-                open_layer: atom.layer,
-                closing_layer: dm.closing_layer,
-                close_at: None,
-                denied_until: None,
-                sprites,
-                filler: None,
-                panel_open: false,
-                feedback: true,
-                main_outage: 0.0,
-                backup_outage: 0.0,
-                ai_control_disabled: dm.ai_control_disabled,
-                shock_ready_at: 0.0,
-                unres_latch: false,
-                emergency: false,
-                red_alert_access: false,
-                red_alert: false,
-                ai_disabled_id_scanner: false,
-                sounds: sounds
-                    .entry(DoorSounds {
-                        open: dm.door_open.clone(),
-                        close: dm.door_close.clone(),
-                        deny: dm.door_deni.clone(),
-                        bolt_up: dm.bolt_up.clone(),
-                        bolt_down: dm.bolt_down.clone(),
-                        animation: dm.animation_sound.clone(),
-                    })
-                    .or_insert_with_key(|k| Arc::new(k.clone()))
-                    .clone(),
-                sound: None,
-                cycle_pump: None,
-                cycle_requested: false,
-                emagged: false,
-                emagging: false,
-                crush: false,
-            };
+            let door_sounds = sounds
+                .entry(sounds_of(dm))
+                .or_insert_with_key(|k| Arc::new(k.clone()))
+                .clone();
+            let door = door_from(dm, atom, dense, sprites, door_sounds);
             (entity, door)
         })
         .collect();
@@ -568,11 +514,170 @@ fn init_doors(world: &mut World) {
     world.insert_resource(report);
 }
 
+/// An airlock's sound vars as [`DoorSounds`].
+fn sounds_of(dm: &DmDoor) -> DoorSounds {
+    DoorSounds {
+        open: dm.door_open.clone(),
+        close: dm.door_close.clone(),
+        deny: dm.door_deni.clone(),
+        bolt_up: dm.bolt_up.clone(),
+        bolt_down: dm.bolt_down.clone(),
+        animation: dm.animation_sound.clone(),
+    }
+}
+
+/// The live [`Door`] of a door prototype (tg `door/Initialize`).
+fn door_from(
+    dm: &DmDoor,
+    atom: &DmAtom,
+    dense: bool,
+    sprites: Arc<DoorSprites>,
+    sounds: Arc<DoorSounds>,
+) -> Door {
+    Door {
+        kind: dm.kind,
+        state: if dense {
+            DoorState::Closed
+        } else {
+            DoorState::Open
+        },
+        locked: dm.locked,
+        welded: dm.welded,
+        req_access: dm.req_access.clone(),
+        req_one_access: dm.req_one_access.clone(),
+        unres_sides: 0,
+        autoclose: dm.autoclose,
+        normalspeed: dm.normalspeed,
+        safe: dm.safe,
+        can_open_with_hands: dm.can_open_with_hands,
+        opaque_when_closed: dm.visible && !dm.glass,
+        open_layer: atom.layer,
+        closing_layer: dm.closing_layer,
+        close_at: None,
+        denied_until: None,
+        sprites,
+        filler: None,
+        panel_open: false,
+        feedback: true,
+        main_outage: 0.0,
+        backup_outage: 0.0,
+        ai_control_disabled: dm.ai_control_disabled,
+        shock_ready_at: 0.0,
+        unres_latch: false,
+        emergency: false,
+        red_alert_access: false,
+        red_alert: false,
+        ai_disabled_id_scanner: false,
+        sounds,
+        sound: None,
+        cycle_pump: None,
+        cycle_requested: false,
+        emagged: false,
+        emagging: false,
+        crush: false,
+    }
+}
+
+/// The material fill a door draws: glass airlocks draw the glass fill (tg airlock
+/// `Initialize`).
+fn fill_material(dm: &DmDoor) -> String {
+    if dm.airlock_material.is_empty() && dm.glass {
+        "glass".to_owned()
+    } else {
+        dm.airlock_material.clone()
+    }
+}
+
+/// [`Door`] for a door spawned after map load (`crate::airlock_construction`): built as
+/// [`init_doors`] builds mapped ones, its filler spawned, its look applied. False without its
+/// prototype data.
+pub fn setup_built(world: &mut World, entity: Entity) -> bool {
+    let (Some(dm), Some(atom)) = (
+        world.get::<DmDoor>(entity).cloned(),
+        world.get::<DmAtom>(entity).cloned(),
+    ) else {
+        return false;
+    };
+    let dense = world.get::<Density>(entity).is_some();
+    let sprites = Arc::new(sprites_from_index(
+        world,
+        dm.kind,
+        &atom.icon,
+        &dm.base_icon_state,
+        &fill_material(&dm),
+        &dm.overlays_file,
+    ));
+    let door = door_from(&dm, &atom, dense, sprites, Arc::new(sounds_of(&dm)));
+    world.entity_mut(entity).insert(door);
+    spawn_fillers(world);
+    with_look(world, entity);
+    true
+}
+
+/// Resolves a door's sprites from the [`ss13_mapload::IconIndex`] resource (empty without it).
+fn sprites_from_index(
+    world: &World,
+    kind: DoorKind,
+    icon: &str,
+    base: &str,
+    material: &str,
+    overlays: &str,
+) -> DoorSprites {
+    let Some(index) = world.get_resource::<ss13_mapload::IconIndex>() else {
+        return DoorSprites::default();
+    };
+    resolve_sprites(
+        &|dmi: &str, state: &str| index.get(dmi, state),
+        kind,
+        icon,
+        base,
+        material,
+        overlays,
+    )
+}
+
+/// tg airlock `change_paintjob`: another airlock type's `icon` and `overlays_file` (the
+/// material fill stays), the look redrawn.
+pub fn repaint(world: &mut World, entity: Entity, icon: &str, overlays_file: &str) {
+    let Some((kind, base, material)) = world
+        .get::<DmDoor>(entity)
+        .map(|dm| (dm.kind, dm.base_icon_state.clone(), fill_material(dm)))
+    else {
+        return;
+    };
+    let sprites = Arc::new(sprites_from_index(
+        world,
+        kind,
+        icon,
+        &base,
+        &material,
+        overlays_file,
+    ));
+    if let Some(mut door) = world.get_mut::<Door>(entity) {
+        door.sprites = sprites;
+    }
+    if let Some(mut dm) = world.get_mut::<DmDoor>(entity) {
+        dm.overlays_file = overlays_file.to_owned();
+    }
+    if let Some(mut atom) = world.get_mut::<DmAtom>(entity) {
+        atom.icon = icon.to_owned();
+    }
+    with_look(world, entity);
+}
+
+fn with_look(world: &mut World, entity: Entity) {
+    let mut q = world.query::<(&Door, &mut Appearance)>();
+    if let Ok((door, mut appearance)) = q.get_mut(world, entity) {
+        door.apply_look(&mut appearance);
+    }
+}
+
 /// tg `set_filler` at `Initialize` for every multi-tile door.
 fn spawn_fillers(world: &mut World) {
     let mut query = world.query::<(
         Entity,
         &DmDoor,
+        Option<&Door>,
         &DmAtom,
         &TilePos,
         Has<Density>,
@@ -580,8 +685,8 @@ fn spawn_fillers(world: &mut World) {
     )>();
     let multi: Vec<_> = query
         .iter(world)
-        .filter(|(_, dm, ..)| dm.multi_tile)
-        .map(|(e, _, atom, pos, dense, opaque)| {
+        .filter(|(_, dm, door, ..)| dm.multi_tile && door.is_some_and(|d| d.filler.is_none()))
+        .map(|(e, _, _, atom, pos, dense, opaque)| {
             (e, pos.step(filler_offset(atom.dir)), dense, opaque)
         })
         .collect();
@@ -633,7 +738,7 @@ fn apply_helper(door: &mut Door, h: &DmAirlockHelper, dir: u8, pos: TilePos) {
 }
 
 fn resolve_sprites(
-    index: &HashMap<(&str, &str), IconStateId>,
+    get: &dyn Fn(&str, &str) -> Option<IconStateId>,
     kind: DoorKind,
     icon: &str,
     base: &str,
@@ -641,7 +746,6 @@ fn resolve_sprites(
     overlays: &str,
 ) -> DoorSprites {
     const FRAMES: [&str; 4] = ["closed", "opening", "open", "closing"];
-    let get = |dmi: &str, state: &str| index.get(&(dmi, state)).copied();
     let frames = FRAMES.map(|f| match kind {
         // `update_icon_state` of each family.
         DoorKind::Airlock => get(icon, &format!("{base}{f}")),
@@ -946,11 +1050,12 @@ fn door_clicks(
         };
         let inventory = inventories.get(click.mob).ok();
         let held = inventory.and_then(Inventory::active_item);
-        // An emag is used on the door (`crate::emag`), it does not work it.
-        if held
-            .and_then(|h| items.get(h).ok())
-            .is_some_and(|i| ss13_mapload::fidelity::is_under(&i.path, crate::emag::EMAG))
-        {
+        // An emag is used on the door (`crate::emag`), an airlock painter paints it
+        // (`crate::airlock_construction`); neither works it.
+        if held.and_then(|h| items.get(h).ok()).is_some_and(|i| {
+            ss13_mapload::fidelity::is_under(&i.path, crate::emag::EMAG)
+                || ss13_mapload::fidelity::is_under(&i.path, crate::airlock_construction::PAINTER)
+        }) {
             continue;
         }
         // BandaStation knock: a bare right click, unless an open panel takes the hand first

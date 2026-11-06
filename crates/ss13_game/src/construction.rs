@@ -14,7 +14,9 @@
 //! - floor: crowbar pries the tile off (instant, drops `floor_tile`, `ScrapeAway` to plating);
 //!   a floor tile on plating places it (`place_on_top`);
 //! - iron sheets, right click on an open turf: 4 s, 2 sheets -> displaced girder (with a circuit
-//!   board in the other hand: 2.5 s, 5 sheets -> a frame, [`crate::machine_frame`]); wrench 4 s
+//!   board in the other hand: 2.5 s, 5 sheets -> a frame, [`crate::machine_frame`]; with
+//!   airlock electronics: 5 s, 4 sheets -> an airlock assembly,
+//!   [`crate::airlock_construction`]); wrench 4 s
 //!   secures it (girder) or loosens it again; screwdriver on a displaced girder 4 s -> 2 sheets;
 //!   a plasteel sheet on a secured girder 5 s -> reinforced girder; screwdriver 4 s toggles its
 //!   struts, wirecutters on loose struts 4 s -> the plasteel back and a plain girder;
@@ -231,6 +233,8 @@ pub enum Job {
     WallMount(crate::wallmount::WallJob),
     /// Frames and taking computers apart ([`crate::machine_frame`]).
     Frame(crate::machine_frame::FrameJob),
+    /// Airlock assembly steps ([`crate::airlock_construction`]).
+    Airlock(crate::airlock_construction::AssemblyJob),
     /// Righting a tilted vendor ([`crate::vending`]).
     Vending(crate::vending::VendJob),
     /// Taping a knife to a cleanbot, wiring and finishing an ED-209 ([`crate::bots`]).
@@ -272,6 +276,10 @@ pub enum Job {
     Door(crate::doors::DoorJob),
     /// Wrenching or welding a field generator ([`crate::power::field_generator`]).
     FieldGenerator(crate::power::field_generator::FieldGenJob),
+    /// Laying or cutting a SMES terminal ([`crate::power::smes`]).
+    Smes(crate::power::smes::SmesJob),
+    /// Repairing an emergency shield projector ([`crate::power::shields`]).
+    Shield(crate::power::shields::ShieldJob),
     /// Finishing a circuit shell assembly ([`crate::wiremod::server`]).
     Wiremod(Entity),
     /// Mending shredded clothing ([`crate::clothing::damage`]).
@@ -913,6 +921,11 @@ fn interact_secondary(world: &mut World, actor: Actor, target: Entity) -> Intera
             tell(world, client, Span::Warning, "Что-то загораживает клетку!");
         } else {
             // A board in the other hand makes it a machine or computer frame instead.
+            // Airlock electronics in the other hand: an airlock assembly.
+            if crate::airlock_construction::electronics_in_other_hand(world, actor.mob, held) {
+                crate::airlock_construction::build_assembly(world, actor, target, pos);
+                return Interact::Done;
+            }
             let frame = crate::machine_frame::held_board_frame(world, actor.mob, held);
             let (cost, delay, job) = match frame {
                 Some(computer) => (
@@ -1256,6 +1269,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         Job::Genetics(_) => crate::genetics::console::complete(world, mob, action),
         &Job::WallMount(job) => crate::wallmount::complete(world, client, mob, target, job),
         &Job::Frame(job) => crate::machine_frame::complete(world, mob, action, job),
+        &Job::Airlock(job) => crate::airlock_construction::complete(world, mob, action, job),
         &Job::Vending(job) => crate::vending::complete(world, mob, action, job),
         &Job::Bot(job) => crate::bots::complete_job(world, mob, action, job),
         &Job::Gibber(job) => crate::gibber::complete(world, mob, action, job),
@@ -1281,6 +1295,8 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::FieldGenerator(job) => {
             crate::power::field_generator::complete(world, client, target, job, consume)
         }
+        &Job::Smes(job) => crate::power::smes::complete(world, mob, action, job, consume),
+        &Job::Shield(job) => crate::power::shields::complete(world, action, job, consume),
         Job::GirderBolts { from } => {
             if !is_under(&path, GIRDER) || obj_state(world, target) != *from || !consume(world) {
                 return;

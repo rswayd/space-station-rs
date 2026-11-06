@@ -102,9 +102,15 @@ pub enum Family {
     DestructiveScanner,
     /// R&D server control consoles (`crate::science::server_control`).
     ServerControl,
+    /// P.A.C.M.A.N. generators (`crate::power::pacman`).
+    Pacman,
+    /// SMES (`crate::power::smes`).
+    Smes,
+    /// Shield wall generators (`crate::power::shields`).
+    ShieldWallGen,
 }
 
-const FAMILIES: [(&str, Family); 26] = [
+const FAMILIES: [(&str, Family); 29] = [
     (CELL_CHARGER, Family::Charger),
     (RECHARGER, Family::Charger),
     (crate::kitchen::MICROWAVE_ROOT, Family::Kitchen),
@@ -139,6 +145,12 @@ const FAMILIES: [(&str, Family); 26] = [
     (
         crate::science::server_control::SERVER_CONTROL_ROOT,
         Family::ServerControl,
+    ),
+    (crate::power::pacman::PACMAN_ROOT, Family::Pacman),
+    (ss13_mapload::power::SMES_ROOT, Family::Smes),
+    (
+        crate::power::shields::SHIELD_WALL_GEN,
+        Family::ShieldWallGen,
     ),
 ];
 
@@ -273,6 +285,9 @@ pub(crate) fn panel_open(world: &World, e: Entity) -> bool {
         || world
             .get::<crate::atmos_machinery::devices::ThermoMachine>(e)
             .is_some_and(|m| m.panel_open)
+        || world
+            .get::<crate::power::pacman::Pacman>(e)
+            .is_some_and(|p| p.panel_open)
 }
 
 /// The held item on a frame or a covered machine (tg `base_item_interaction` of frames, the
@@ -429,7 +444,32 @@ fn machine_tool(
         }
         // The thermomachine's own `screwdriver_act` (`atmos_machinery::thermo`), the vendors'
         // (`crate::construction`: only while anchored).
-        ToolKind::Screwdriver if matches!(fam, Family::Thermo | Family::Vending) => false,
+        // The generator's own (`power::pacman`: not while running).
+        ToolKind::Screwdriver
+            if matches!(
+                fam,
+                Family::Thermo | Family::Vending | Family::Pacman | Family::ShieldWallGen
+            ) =>
+        {
+            false
+        }
+        // `shieldwallgen/crowbar_act`: `if(active) return ITEM_INTERACT_BLOCKING`.
+        ToolKind::Crowbar if crate::power::shields::crowbar_blocked(world, machine) => true,
+        // `smes/crowbar_act`: not with a terminal.
+        ToolKind::Crowbar
+            if fam == Family::Smes
+                && crate::power::smes::crowbar_refused(world, client, machine) =>
+        {
+            true
+        }
+        // `port_gen/crowbar_act`: `if(active) return NONE`.
+        ToolKind::Crowbar
+            if world
+                .get::<crate::power::pacman::Pacman>(machine)
+                .is_some_and(|p| p.active) =>
+        {
+            false
+        }
         ToolKind::Screwdriver => {
             if busy {
                 tell(world, client, Span::Warning, "Машина ещё работает!");
@@ -1060,6 +1100,9 @@ pub fn setup_built(world: &mut World, machine: Entity) {
             }
         }
         Family::ServerControl => crate::science::server_control::setup(world, machine),
+        Family::Pacman => crate::power::pacman::setup(world, machine),
+        Family::Smes => crate::power::smes::setup(world, machine),
+        Family::ShieldWallGen => crate::power::shields::setup_wall_gen(world, machine),
     }
 }
 
@@ -1100,6 +1143,8 @@ pub fn on_deconstruction(world: &mut World, machine: Entity, pos: TilePos, disas
         take_out(world, item, pos);
     }
     crate::science::autolathe::drop_sheets(world, machine, pos);
+    crate::power::pacman::on_deconstruction(world, machine, pos);
+    crate::power::smes::on_deconstruction(world, machine);
     let Some(def) = board_def(world, &board) else {
         return;
     };

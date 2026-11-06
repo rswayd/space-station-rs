@@ -23,6 +23,8 @@ pub mod field_generator;
 pub mod grid;
 pub mod model;
 pub mod pacman;
+pub mod shields;
+pub mod smes;
 pub mod solar;
 pub mod supermatter;
 pub mod teg;
@@ -213,10 +215,11 @@ pub struct Generation<'w, 's> {
             Option<&'static crate::obj_damage::Anchored>,
         ),
     >,
+    shield_walls: Query<'w, 's, (Entity, &'static mut shields::ShieldWallGen)>,
 }
 
 impl Generation<'_, '_> {
-    /// tg `processing_early`: emitters draw their power and fire.
+    /// tg `processing_early`: emitters draw their power and fire, shield wall generators draw.
     fn process_early(&mut self, grid: &mut Grid, now: f64, dt: f64) {
         self.ticks.0 += 1;
         for (e, &pos, mut emitter) in &mut self.emitters {
@@ -224,6 +227,11 @@ impl Generation<'_, '_> {
             if emitter.process_early(net, now, dt, &mut self.rng.0) {
                 self.beams.0.push((e, pos, emitter::dir2angle(emitter.dir)));
             }
+        }
+        // `shieldwallgen/process_early`: an active generator's draw (its walls in `shields`).
+        for (e, mut gen_) in &mut self.shield_walls {
+            let net = grid.node_net(e).and_then(|n| grid.net_mut(n));
+            gen_.draw_power(net, dt);
         }
     }
 
@@ -295,6 +303,8 @@ impl Plugin for PowerServerPlugin {
                 emitter::EmitterServerPlugin,
                 field_generator::FieldGeneratorPlugin,
                 pacman::PacmanPlugin,
+                smes::SmesPlugin,
+                shields::ShieldsPlugin,
                 supermatter::SupermatterServerPlugin,
                 chargers::ChargersPlugin,
                 apc_ui::ApcUiPlugin,
@@ -507,6 +517,8 @@ pub(crate) fn init_power(world: &mut World) {
                 capacity: dm.capacity,
                 input_level: dm.input_level,
                 output_level: dm.output_level,
+                input_level_max: model::SMES_LEVEL_MAX,
+                output_level_max: model::SMES_LEVEL_MAX,
                 input_attempt: dm.input_attempt,
                 output_attempt: dm.output_attempt,
                 inputting: false,

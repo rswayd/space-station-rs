@@ -463,6 +463,7 @@ pub fn deconstruct(world: &mut World, target: Entity, disassembled: bool) {
     if machine {
         crate::machine_frame::on_deconstruction(world, target, pos, disassembled);
     }
+    crate::power::shields::on_destroy(world, target);
     world.despawn(target);
     crate::construction::tile_changed(world, pos);
 }

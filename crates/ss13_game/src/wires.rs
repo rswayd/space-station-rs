@@ -1032,6 +1032,17 @@ pub fn shock(world: &mut World, holder: Entity, mob: Entity, chance: f32) -> boo
     delivered
 }
 
+/// tg `electrocute_mob(victim, node.powernet, source, 1, TRUE)`: from the net of a power node
+/// (a SMES terminal).
+pub(crate) fn electrocute_from_node(
+    world: &mut World,
+    victim: Entity,
+    node: Entity,
+    source: Entity,
+) -> bool {
+    electrocute_mob(world, victim, Some((node, None, true)), source, 1.0)
+}
+
 /// tg `electrocute_mob(victim, power_source, source, siemens_coeff, dist_check = TRUE)`.
 fn electrocute_mob(
     world: &mut World,

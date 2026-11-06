@@ -35,7 +35,7 @@
 Подключение SMES и APC к сети с обратной стороны: терминал стоит на кабеле и передаёт энергию «хозяину»; ставится мотком кабеля, снимается кусачками.
 
 - **Код:** [`/obj/machinery/power/terminal`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/terminal.dm#L6), [`apc/proc/make_terminal()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/apc/apc_power_proc.dm#L10)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/power/grid.rs`: связь терминала с SMES/APC при загрузке карты; монтажа и демонтажа нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/power/grid.rs`: связь терминала с SMES/APC при загрузке карты; монтаж и демонтаж терминала SMES — `crates/ss13_game/src/power/smes.rs` (см. [smes.md](smes.md) «Вид и монтаж SMES»); терминала APC нет
 
 ### Силовая машина (/obj/machinery/power) и подключение к сети
 Машины с узлом на кабеле своего тайла (генераторы, SMES, эмиттеры): `add_avail`, `add_load`, `surplus`, переключение слоя кабеля мультитулом.

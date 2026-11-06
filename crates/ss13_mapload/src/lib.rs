@@ -80,7 +80,8 @@ pub use cable::DmCable;
 pub use circuit::{CircuitPart, DmCircuit, DmMachine, FRAME_RUNTIME_TYPES};
 pub use clothing::{DmClothing, DmTank};
 pub use construct::{
-    CONSTRUCTION_TYPES, DmObj, DmRadInsulation, DmStack, DmTable, DmTool, DmTurfBuild,
+    CONSTRUCTION_TYPES, DmDoorAssembly, DmObj, DmRadInsulation, DmStack, DmTable, DmTool,
+    DmTurfBuild,
 };
 pub use contents::{DmCloset, DmContents, DmLockbox, DmStorage, DmWeight, Fill, PickArm};
 pub use dispenser::DmChemDispenser;
@@ -321,6 +322,7 @@ impl Plugin for DmProtoPlugin {
             .register_proto_component::<DmTurfBuild>(construct::TURF_COMPONENT)
             .register_proto_component::<DmObj>(construct::OBJ_COMPONENT)
             .register_proto_component::<DmTable>(construct::TABLE_COMPONENT)
+            .register_proto_component::<DmDoorAssembly>(construct::DOOR_ASSEMBLY_COMPONENT)
             .register_proto_component::<DmMedical>(medical::MEDICAL_COMPONENT)
             .register_proto_component::<DmWounding>(medical::WOUNDING_COMPONENT)
             .register_proto_component::<DmDefib>(medical::DEFIB_COMPONENT)

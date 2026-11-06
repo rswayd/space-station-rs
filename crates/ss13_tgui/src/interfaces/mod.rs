@@ -2,6 +2,7 @@
 
 pub mod ai_airlock;
 pub mod air_alarm;
+pub mod airlock_electronics;
 pub mod alert;
 pub mod apc;
 pub mod atmos;
@@ -30,6 +31,7 @@ pub mod portable_generator;
 pub mod rapid_pipe_dispenser;
 pub mod ru_jobs;
 pub mod smart_vend;
+pub mod smes;
 pub mod solar_control;
 pub mod teg;
 pub mod text_input;

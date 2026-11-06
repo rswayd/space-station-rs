@@ -13,10 +13,15 @@
 //!   sheets and heats toward `56..76 + 10 * power_output` (up to 400 above 4); over 300 it
 //!   explodes (`explosion(src, 2, 5, 2, flash_range = -1)`). Out of fuel or unanchored it
 //!   stops; stopped, it cools 2 per tick.
-// shortcut: no generator sound loop, no deconstruction (crowbar), no emag (`emag_act`: the
-// `emagged` flag is never set yet), no `isinspace` check on anchoring, examine lines; power
-// and fuel are by kind, map var edits of `power_gen` or `sheets` beyond `pre_loaded` are not
-// read.
+//! - A crowbar on a stopped generator with its panel open takes it apart
+//!   (`default_deconstruction_crowbar`, `crate::machine_frame` family `Pacman`): the fuel drops
+//!   (`on_deconstruction` → `DropFuel`). Built from its board ([`setup`]): a PACMAN board set to
+//!   uranium by a screwdriver ([`PacmanBoard`], `high_production_profile`) builds the `super`
+//!   numbers (`on_construction`).
+//! - An emag unlocks output levels above 4 (`emag_act`).
+// shortcut: no generator sound loop, no `isinspace` check on anchoring, no `emp_act(EMP_HEAVY)`
+// of the emag (machine `emp_act` only draws power the generator does not use); power and fuel
+// are by kind, map var edits of `power_gen` or `sheets` beyond `pre_loaded` are not read.
 
 use bevy::ecs::message::MessageCursor;
 use bevy::ecs::system::SystemParamItem;
@@ -42,6 +47,8 @@ pub const PACMAN_PRE_LOADED: &str = "/obj/machinery/power/port_gen/pacman/pre_lo
 pub const PLASMA_SHEET: &str = "/obj/item/stack/sheet/mineral/plasma";
 pub const URANIUM_SHEET: &str = "/obj/item/stack/sheet/mineral/uranium";
 pub const WOOD_SHEET: &str = "/obj/item/stack/sheet/mineral/wood";
+/// `/obj/item/circuitboard/machine/pacman` (not the `plankman` board).
+pub const PACMAN_BOARD: &str = "/obj/item/circuitboard/machine/pacman";
 /// `current_heat > 300` blows it up.
 pub const OVERHEAT: f64 = 300.0;
 
@@ -71,17 +78,27 @@ pub struct Pacman {
     sprites: [Option<IconStateId>; 3],
 }
 
+/// A PACMAN board's `high_production_profile` (absent: plasma mode).
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PacmanBoard {
+    pub high: bool,
+}
+
 impl Pacman {
     /// The kind of `path`: plasma, uranium (`super`) or wood.
     pub fn of_path(path: &str, layer: u8) -> Self {
-        let (power_gen, max_sheets, time_per_sheet, sheet_path, sheet_name) =
-            if is_under(path, PACMAN_SUPER) {
-                (30_000.0, 20, 60.0, URANIUM_SHEET, "uranium")
-            } else if is_under(path, PACMAN_WOOD) {
-                (5_000.0, 75, 360.0, WOOD_SHEET, "wooden plank")
-            } else {
-                (10_000.0, 50, 180.0, PLASMA_SHEET, "solid plasma")
-            };
+        Self::of_kind(path, is_under(path, PACMAN_SUPER), layer)
+    }
+
+    /// `high`: the uranium numbers (`super`, or a board's `high_production_profile`).
+    pub fn of_kind(path: &str, high: bool, layer: u8) -> Self {
+        let (power_gen, max_sheets, time_per_sheet, sheet_path, sheet_name) = if high {
+            (30_000.0, 20, 60.0, URANIUM_SHEET, "uranium")
+        } else if is_under(path, PACMAN_WOOD) {
+            (5_000.0, 75, 360.0, WOOD_SHEET, "wooden plank")
+        } else {
+            (10_000.0, 50, 180.0, PLASMA_SHEET, "solid plasma")
+        };
         Self {
             active: false,
             power_gen,
@@ -230,34 +247,99 @@ fn init_pacmans(world: &mut World) {
         })
         .collect();
     for (e, path, pos, layer, icon) in found {
-        let mut pacman = Pacman::of_path(&path, layer);
-        let base = if is_under(&path, PACMAN_SUPER) {
-            "portgen1"
-        } else if is_under(&path, PACMAN_WOOD) {
-            "portgen3"
-        } else {
-            "portgen0"
-        };
-        let mask = if is_under(&path, PACMAN_WOOD) {
-            "portgen3-emissive"
-        } else {
-            "portgen-emissive"
-        };
-        if let (Some(index), Some(icon)) = (world.get_resource::<IconIndex>(), icon) {
-            pacman.sprites = [
-                index.get(&icon, &format!("{base}_0")),
-                index.get(&icon, &format!("{base}_1")),
-                index.get(&icon, mask),
-            ];
-        }
-        // `pacman/Initialize`: `if(anchored) connect_to_network()`.
-        if world.get::<Anchored>(e).is_some_and(|a| a.0) {
-            world
-                .resource_mut::<Grid>()
-                .add_node(e, pos, layer, NodeKind::Machine);
-        }
-        world.entity_mut(e).insert(pacman);
+        let high = is_under(&path, PACMAN_SUPER);
+        install(world, e, &path, high, pos, layer, icon);
     }
+}
+
+/// The live generator of `e`, with its sprites, on the powernet when anchored
+/// (`pacman/Initialize`: `if(anchored) connect_to_network()`).
+fn install(
+    world: &mut World,
+    e: Entity,
+    path: &str,
+    high: bool,
+    pos: TilePos,
+    layer: u8,
+    icon: Option<String>,
+) {
+    let mut pacman = Pacman::of_kind(path, high, layer);
+    let base = if high {
+        "portgen1"
+    } else if is_under(path, PACMAN_WOOD) {
+        "portgen3"
+    } else {
+        "portgen0"
+    };
+    let mask = if is_under(path, PACMAN_WOOD) {
+        "portgen3-emissive"
+    } else {
+        "portgen-emissive"
+    };
+    if let (Some(index), Some(icon)) = (world.get_resource::<IconIndex>(), icon) {
+        pacman.sprites = [
+            index.get(&icon, &format!("{base}_0")),
+            index.get(&icon, &format!("{base}_1")),
+            index.get(&icon, mask),
+        ];
+    }
+    if world.get::<Anchored>(e).is_some_and(|a| a.0) {
+        world
+            .resource_mut::<Grid>()
+            .add_node(e, pos, layer, NodeKind::Machine);
+    }
+    world.entity_mut(e).insert(pacman);
+}
+
+/// A generator built from its board (`crate::machine_frame::setup_built`): `on_construction`
+/// takes the uranium numbers from a board set to them.
+pub fn setup(world: &mut World, e: Entity) {
+    let (Some(dm), Some(&pos)) = (world.get::<DmPower>(e).cloned(), world.get::<TilePos>(e)) else {
+        return;
+    };
+    let high = world
+        .get::<crate::stock_parts::ComponentParts>(e)
+        .is_some_and(|parts| {
+            parts
+                .parts()
+                .iter()
+                .any(|&p| world.get::<PacmanBoard>(p).is_some_and(|b| b.high))
+        });
+    let icon = world.get::<DmAtom>(e).map(|a| a.icon.clone());
+    install(world, e, &dm.path, high, pos, super::layer(&dm), icon);
+}
+
+/// `pacman/on_deconstruction` (from `crate::machine_frame::on_deconstruction`): `DropFuel`, off
+/// the powernet.
+pub fn on_deconstruction(world: &mut World, e: Entity, pos: TilePos) {
+    let Some(sheets) = world.get_mut::<Pacman>(e).map(|mut p| {
+        p.active = false;
+        (p.sheet_path, std::mem::take(&mut p.sheets))
+    }) else {
+        return;
+    };
+    world.resource_mut::<Grid>().remove_node(e);
+    if sheets.1 > 0 {
+        crate::construction::spawn_stack(world, sheets.0, pos, sheets.1);
+    }
+}
+
+/// `pacman/emag_act` (from `crate::emag`): output levels above 4 unlocked. True when it took.
+pub fn emag_act(world: &mut World, client: Entity, e: Entity) -> bool {
+    let Some(mut p) = world.get_mut::<Pacman>(e) else {
+        return false;
+    };
+    if p.emagged {
+        return false;
+    }
+    p.emagged = true;
+    tell(
+        world,
+        client,
+        Span::Notice,
+        "максимальная мощность разблокирована",
+    );
+    true
 }
 
 /// `overheat`: the explosion, the generator gone.
@@ -322,6 +404,9 @@ pub fn interact(world: &mut World, client: Entity, mob: Entity, target: Entity) 
 
 /// `item_interaction` with fuel sheets, `wrench_act`, `screwdriver_act`. True when handled.
 pub fn item_interaction(world: &mut World, client: Entity, held: Entity, target: Entity) -> bool {
+    if board_screwdriver(world, client, held, target) {
+        return true;
+    }
     let Some(p) = world.get::<Pacman>(target).cloned() else {
         return false;
     };
@@ -413,6 +498,30 @@ pub fn item_interaction(world: &mut World, client: Entity, held: Entity, target:
         }
         _ => false,
     }
+}
+
+/// `circuitboard/machine/pacman/screwdriver_act`: plasma or uranium mode.
+fn board_screwdriver(world: &mut World, client: Entity, held: Entity, target: Entity) -> bool {
+    let is_board = world
+        .get::<DmItem>(target)
+        .is_some_and(|i| is_under(&i.path, PACMAN_BOARD));
+    if !is_board || crate::tools::tool_of(world, held).map(|t| t.0) != Some(ToolKind::Screwdriver) {
+        return false;
+    }
+    let high = !world.get::<PacmanBoard>(target).is_some_and(|b| b.high);
+    world.entity_mut(target).insert(PacmanBoard { high });
+    let mode = if high {
+        "мощный урановый режим"
+    } else {
+        "средний плазменный режим"
+    };
+    tell(
+        world,
+        client,
+        Span::Notice,
+        format!("Вы переключаете плату в {mode}."),
+    );
+    true
 }
 
 pub struct PacmanWindow;
@@ -578,5 +687,16 @@ mod tests {
         let mut empty = Pacman::of_path(PACMAN_ROOT, 2);
         empty.toggle_power();
         assert!(!empty.active);
+    }
+
+    #[test]
+    fn a_board_in_uranium_mode_builds_the_super_numbers() {
+        let p = Pacman::of_kind(PACMAN_ROOT, true, 2);
+        assert_eq!(
+            (p.power_gen, p.max_sheets, p.time_per_sheet, p.sheet_path),
+            (30_000.0, 20, 60.0, URANIUM_SHEET)
+        );
+        let wood = Pacman::of_kind(PACMAN_WOOD, false, 2);
+        assert_eq!((wood.sheet_path, wood.max_sheets), (WOOD_SHEET, 75));
     }
 }

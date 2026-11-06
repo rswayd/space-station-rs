@@ -26,7 +26,7 @@ use ss13_shared::protocol::{ClickModifiers, ClientIntent, NetId};
 use ss13_shared::{Appearance, Dir, IconStateId, LightSource, Optics, TilePos};
 use ss13_world::{Density, SpatialIndex};
 
-const TYPES: &str = r##"{
+pub(crate) const TYPES: &str = r##"{
   "schema": 3,
   "types": {
     "/datum": { "parent": null },
