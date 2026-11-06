@@ -74,6 +74,19 @@ pub const GIFT_TYPES: &[&str] = &[
 /// Constant paths `ss13_game` spawns that no other table of this crate lists: leftovers,
 /// products and printouts of machines, decals, grenade payloads, quirk items, paper kinds.
 pub const GAME_RUNTIME_TYPES: &[&str] = &[
+    // `botany::soil`: plots a sack puts down and the sacks a shovel bags them into.
+    "/obj/machinery/hydroponics/soil",
+    "/obj/machinery/hydroponics/soil/vermaculite",
+    "/obj/machinery/hydroponics/soil/gel",
+    "/obj/machinery/hydroponics/soil/coir",
+    "/obj/machinery/hydroponics/soil/worm",
+    "/obj/machinery/hydroponics/soil/rich",
+    "/obj/item/soil_sack",
+    "/obj/item/soil_sack/vermaculite",
+    "/obj/item/soil_sack/gel",
+    "/obj/item/soil_sack/coir",
+    "/obj/item/soil_sack/worm",
+    "/obj/item/soil_sack/rich",
     // `crate::clothing::reactive`: the shell's armors and the table armor's table.
     "/obj/item/clothing/suit/armor/reactive/repulse",
     "/obj/item/clothing/suit/armor/reactive/tesla",

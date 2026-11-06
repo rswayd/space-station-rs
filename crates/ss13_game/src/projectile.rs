@@ -523,6 +523,10 @@ fn impact(world: &mut World, p: &Projectile, name: &str, target: Entity) {
         hit_living(world, p, name, target);
         return;
     }
+    // `hydroponics/bullet_act`: a somatoray shot on a planted tray.
+    if crate::botany::bullet_act(world, &p.data.path, target) {
+        return;
+    }
     let from = world
         .get::<TilePos>(target)
         .and_then(|&t| crate::mecha::core::dir_between(t, p.start));

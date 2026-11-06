@@ -12,7 +12,7 @@
 Клик семенем сажает его; ведро/лейка/кружка с реагентами поливает и удобряет; лопатка убирает растение, культиватор — сорняки, секатор снимает прививку; мешок для растений собирает урожай. ПКМ пустой рукой (с подтверждением) сливает реагенты лотка, гаечный ключ откручивает лоток.
 
 - **Код:** [`item_interaction()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L895), [`attack_hand_secondary()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L1198), [`empty_tray()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L1211), [`set_seed()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L519)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/botany/`: посадка пакетом, полив и подкормка ёмкостью, компост из еды, культиватор, лопата (5 с), секатор и прививки (`crates/ss13_game/src/botany/grafts.rs`), осмотр; генные ножницы (`crates/ss13_game/src/botany/shears.rs`); `// shortcut:` нет опустошения правым кликом, мешков почвы, соматолуча
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/botany/`: посадка пакетом, полив и подкормка ёмкостью, компост из еды, культиватор, лопата (5 с), секатор и прививки (`crates/ss13_game/src/botany/grafts.rs`), осмотр; генные ножницы (`crates/ss13_game/src/botany/shears.rs`); `// shortcut:` нет опустошения правым кликом и фиксации мутации флора-ганом
 
 ### Сбор урожая и удаление растения
 Клик пустой рукой по готовому растению собирает урожай (`seeds/harvest()`: количество зависит от `yield` и `yieldmod`), по мёртвому — убирает его. Многоразовые растения (`repeated_harvest`) после сбора продолжают расти.
@@ -24,7 +24,7 @@
 Ctrl+клик по закреплённому и запитанному лотку включает автороста: лоток сам доливает воду, снижает сорняки и вредителей, но потребляет много энергии; при пропаже питания отключается.
 
 - **Код:** [`click_ctrl()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L1183), [`set_self_sustaining()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L543)
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/botany/tray.rs`: `// shortcut:` нет автополива (`self_sustaining`, ctrl+клик)
+- **Статус в ss13-rs:** ✅ готово — `crates/ss13_game/src/botany/mod.rs` (`ctrl_clicks`, `self_sustain`, `set_self_sustaining`): ctrl+клик по закреплённому лотку в запитанной зоне включает/выключает автополив, каждые 2 с вода `rand(1, 2) × 2 × 0.5`, сорняки и вредители −1; расход удобрений ≤ 0.5, нет мутации вида и захвата сорняками (`tray.rs`, `Tray::self_sustain`); нагрузка `active_power_usage` на зону, свет радиуса 3 и оверлей `gaia_blessing`; без питания — отключается с сообщением; сбор однократного растения и выкапывание выключают
 
 ### Сорняки, вредители и токсичность
 Уровни сорняков, вредителей и токсинов (0–10/100) растут со временем и от реагентов, снижают здоровье растения; на 10 сорняков пустой или слабый лоток захватывает сорняк (`weedinvasion`), растение может мутировать в сорняк (`mutateweed`), вредители — в мутацию (`mutatepest`).
@@ -42,7 +42,7 @@ Ctrl+клик по закреплённому и запитанному лотк
 Снаряд флора-гана при попадании в лоток мутирует растение или меняет урожай/потенцию в зависимости от режима.
 
 - **Код:** [`bullet_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L267)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ готово — `crates/ss13_game/src/botany/tray.rs` (`somatoray_hit`), `crates/ss13_game/src/botany/mod.rs` (`bullet_act`, вызывается из `crates/ss13_game/src/projectile.rs`): альфа-луч — `mutate()`, бета — +`rating` урожая с шансом `100 / yield²` (`/obj/item/seeds/bullet_act`), гамма — нестабильность пополам и `mutatespecie()`; пустой лоток принимает выстрел как обычный объект; фиксация мутации флора-ганом (клик ружьём по лотку) — в «Посадка, полив и взаимодействие с предметами»
 
 ### Опыление
 Соседние лотки в радиусе 1 обмениваются реагентными генами растений (`perform_reagent_pollination`); пчёлы из улья опыляют лотки, повышая урожай и потенцию.
@@ -55,22 +55,22 @@ Ctrl+клик по закреплённому и запитанному лотк
 
 - **Код:** [`handle_snail()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L647), [`/obj/effect/overlay/vis_effect/snail`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/snail_overlay.dm#L4)
 - **BandaStation:** [`hydroponics.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L184) — у лотка отключена рыболовная точка (`fishing_spot`)
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/botany/tray.rs`: `// shortcut:` улиток нет
+- **Статус в ss13-rs:** ❌ нет — моб-улитка есть (`/mob/living/basic/snail`), но улитку сажают в лоток из руки как `/obj/item/mob_holder/snail`, а мобов в руках нет (❌ «Мобы в руках (mob holder)» в [inventory-stripping.md](../mobs/inventory-stripping.md)); лоточная часть (`handle_snail`: 5% за тик −2 сорняка, оверлей `snail_hydrotray`, выход при движении/смерти и опустошении) ждёт его
 
 ### Собираемые лотки и улучшения
 Лоток собирается из платы (`/obj/machinery/hydroponics/constructable`), детали (матлазеры/манипуляторы) повышают `maxwater`, `maxnutri` и снижают расход; есть старый вид лотка и «делюкс»-вариант с максимальными деталями. Отвёртка/лом — разборка.
 
 - **Код:** [`/obj/machinery/hydroponics/constructable`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L165), [`fullupgrade`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L174)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload/src/plants.rs`: типы лотков и грядок с карты; отвёртка/лом разбирают лоток в раму, из рамы с платой, 2 бункерами материи, сервоприводом и стеклом собирается пустой сухой лоток (`crates/ss13_game/src/machine_frame.rs`, `botany::setup_tray`); детали — предметы внутри, `RefreshParts` (`botany::refresh_parts`: `maxwater = 50 × бункеры`, `maxnutri = 5 × бункеры + 10`, рейтинг — тир сервопривода) после сборки и замены RPED (`crates/ss13_game/src/stock_parts.rs`); нет почв (`current_soil`), лотки с карты — с деталями платы по умолчанию
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload/src/plants.rs`: типы лотков и грядок с карты; отвёртка/лом разбирают лоток в раму, из рамы с платой, 2 бункерами материи, сервоприводом и стеклом собирается пустой сухой лоток (`crates/ss13_game/src/machine_frame.rs`, `botany::setup_tray`); детали — предметы внутри, `RefreshParts` (`botany::refresh_parts`: `maxwater = 50 × бункеры`, `maxnutri = 5 × бункеры + 10`, рейтинг — тир сервопривода) после сборки и замены RPED (`crates/ss13_game/src/stock_parts.rs`); почвы — `crates/ss13_game/src/botany/soil.rs`; лотки с карты — с деталями платы по умолчанию
 
 ### Компонент схемы лотка
 USB-компонент wiremod для лотка: выдаёт уровни воды/удобрений/сорняков/вредителей/здоровья, событие сбора и смерти, управляет автополивом.
 
 - **Код:** [`/obj/item/circuit_component/hydroponics`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L1284)
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/botany/tray.rs`: `// shortcut:` схем нет
+- **Статус в ss13-rs:** ❌ нет — компоненты wiremod есть (`crates/ss13_game/src/wiremod/`), но USB-порта и USB-кабеля нет (❌ в [wiremod.md](../science/wiremod.md), «Инструменты схем»); компонент лотка ждёт их. Состояние для него уже есть: `Tray::self_sustaining` и `botany::set_self_sustaining` (вход «Auto-Grow Setting»)
 
 ### Почва и мешки с грунтом
 Грядка почвы — беспитательный лоток без энергии (`maxnutri` 15), выкапывается лопатой обратно в мешок. Виды грунта дают бонусы: вермикулит, гель (не нужна вода), кокосовое волокно, червячная почва (медленное выделение азота), богатая почва (быстрые грибы).
 
 - **Код:** [`/obj/machinery/hydroponics/soil`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/soil.dm#L3), [`/obj/item/soil_sack`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/soil.dm#L115), [`soil/worm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/soil.dm#L92), [`soil/rich`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/soil.dm#L106)
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/botany/tray.rs`: `// shortcut:` мешков с грунтом и бонуса кокосового субстрата нет
+- **Статус в ss13-rs:** ✅ готово — `crates/ss13_game/src/botany/soil.rs`: мешок по открытому полу (не космос/openspace/пропасть/лава) за 1 с ставит грядку своего вида (свежая — полная воды и `maxnutri / 2` E-Z-Nutrient, выкопанная — со своим состоянием), ПКМ лопатой по грядке за 3 с убирает её обратно в мешок (растение удаляется), мешок по пустому лотку за 2 с засыпает грунт: флаги грунта, у собираемого лотка ёмкость `soil.maxwater + (бункеры − 2) × 50`, `soil.maxnutri + (бункеры − 2) × 5`, оверлей `<icon_state>_tray`, строка осмотра; бонусы: кокос — грибы стареют ×1.4 (`tray.rs`, `FAST_MUSHROOMS`), гель — `SUPERWATER`, червячная — `SLOW_RELEASE`, вермикулит — прививки; у грядки нет автополива; `// shortcut:` мешок не двуручный, грядка не разбирается в песок, лоток не переименовывается (BandaStation), черви из компоста в червячной почве (`WORM_HABITAT`) не появляются

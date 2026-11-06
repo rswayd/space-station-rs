@@ -6,7 +6,7 @@
 //!
 //! The cycle is a pure function of the tray, its nutrient holder, the light and the dice, so it
 //! is tested without a world.
-// shortcut: no autogrow (`self_sustaining`, ctrl+click), snails, soil sacks, somatoray, bees, plumbing or circuits; `mutatepest` warns without spawning
+// shortcut: no snails, bees, plumbing or circuits; `mutatepest` warns without spawning
 // spiderlings, strange reagent spawns no living plant.
 
 use ss13_reagents::{Chemistry, Holder, is_under};
@@ -30,6 +30,9 @@ pub const SUPER_WATER_MODIFIER: f32 = 0.5;
 /// Tray flags: `SUPERWATER`, `SLOW_RELEASE`.
 pub const SUPERWATER: u32 = 1 << 6;
 pub const SLOW_RELEASE: u32 = 1 << 7;
+/// Tray flag `FAST_MUSHROOMS` (coir) and `FAST_MUSH_MODIFIER`.
+pub const FAST_MUSHROOMS: u32 = 1 << 4;
+pub const FAST_MUSH_MODIFIER: f32 = 1.4;
 /// `HYDROTRAY_CYCLE_DELAY`, seconds.
 pub const HYDROTRAY_CYCLE_DELAY: f64 = 20.0;
 const NITROGEN: &str = "/datum/reagent/nitrogen";
@@ -75,6 +78,12 @@ pub struct Tray {
     pub plant_offset_y: i16,
     pub alt_tray: bool,
     pub status_lights: bool,
+    /// tg `self_sustaining` (autogrow, ctrl+click): the tray refills its water and clears weeds
+    /// and pests while powered, drains less nutrients and never mutates species or gets
+    /// overtaken by weeds. Set through [`super::set_self_sustaining`].
+    pub self_sustaining: bool,
+    /// tg `current_soil`: the soil type a sack filled the tray with ([`super::soil`]).
+    pub current_soil: Option<String>,
 }
 
 /// What a cycle asks the world to do next.
@@ -176,14 +185,27 @@ impl Tray {
         self.lastproduce = 0.0;
     }
 
-    /// `remove_plant()`: kills it, clears the weeds, empties the tray.
+    /// `remove_plant()`: kills it, clears the weeds, empties the tray and stops autogrow ("no
+    /// reason to pay for an empty tray").
     pub fn remove_plant(&mut self) {
         if self.myseed.is_none() {
             return;
         }
         self.plantdies();
         self.weedlevel = 0.0;
+        self.self_sustaining = false;
         self.set_seed(None);
+    }
+
+    /// The self-sustaining part of `process(seconds_per_tick)` while powered: `rand(1, 2) *
+    /// seconds * 0.5` water, `0.5 * seconds` fewer weeds and pests.
+    pub fn self_sustain(&mut self, seconds: f32, dice: &mut impl Dice) {
+        if !self.self_sustaining {
+            return;
+        }
+        self.adjust_waterlevel(dice.rand(1, 2) as f32 * seconds * 0.5);
+        self.adjust_weedlevel(-0.5 * seconds);
+        self.adjust_pestlevel(-0.5 * seconds);
     }
 
     /// `propagate_plant` after its checks: the seed in, full health, a fresh cycle.
@@ -341,6 +363,69 @@ impl Tray {
             .map(|s| s.plantname.clone())
             .unwrap_or_default()
     }
+}
+
+/// The floral somatoray's shots (`/obj/projectile/energy/flora/*`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Somatoray {
+    /// `flora/mut` (alpha): `mutate()`.
+    Mutation,
+    /// `flora/yield` (beta): the seed's `bullet_act`, a yield point by chance.
+    Yield,
+    /// `flora/evolution` (gamma): instability halved, `mutatespecie()`.
+    Evolution,
+}
+
+impl Somatoray {
+    pub fn of(projectile: &str) -> Option<Self> {
+        if is_under(projectile, "/obj/projectile/energy/flora/mut") {
+            Some(Self::Mutation)
+        } else if is_under(projectile, "/obj/projectile/energy/flora/yield") {
+            Some(Self::Yield)
+        } else if is_under(projectile, "/obj/projectile/energy/flora/evolution") {
+            Some(Self::Evolution)
+        } else {
+            None
+        }
+    }
+}
+
+/// `/obj/machinery/hydroponics/bullet_act` of a somatoray shot. False without a plant (the
+/// shot acts as on any object).
+pub fn somatoray_hit(
+    tray: &mut Tray,
+    ray: Somatoray,
+    env: &CycleEnv,
+    dice: &mut impl Dice,
+    out: &mut CycleOutcome,
+) -> bool {
+    if tray.myseed.is_none() {
+        return false;
+    }
+    match ray {
+        Somatoray::Mutation => tray.seed_mutate(Mutation::MUTATE, env.plants, dice),
+        Somatoray::Yield => {
+            // `/obj/item/seeds/bullet_act`: diminishing returns, 100% at 1 yield, 25% at 2...
+            let rating = tray.rating;
+            if let Some(seed) = &mut tray.myseed {
+                if seed.yield_ == 0.0 {
+                    seed.adjust_yield(rating);
+                } else if dice.prob(100.0 / (seed.yield_ * seed.yield_)) {
+                    seed.adjust_yield(rating);
+                }
+            }
+        }
+        Somatoray::Evolution => {
+            if let Some(seed) = &mut tray.myseed
+                && !seed.mutatelist.is_empty()
+            {
+                seed.set_instability(seed.instability / 2.0);
+            }
+            tray.mutatespecie(env, dice, out);
+        }
+    }
+    out.update = true;
+    true
 }
 
 /// `apply_chemicals()`: every nutrient of at least 1 unit acts on the tray.
@@ -637,8 +722,11 @@ pub fn cycle(
         let is_fungus = tray.has(FUNGAL);
         // tg's `1 * (is_fungus && FAST_MUSHROOMS) ? FAST_MUSH_MODIFIER : 1` is `(1 * x) ? ...`:
         // a fungus in coir soil gets 1.4, anything else 1.
-        // shortcut: the coir bonus is not read (no soil sacks to make coir trays).
-        tray.age += 1.0;
+        tray.age += if is_fungus && tray.tray_flags & FAST_MUSHROOMS != 0 {
+            FAST_MUSH_MODIFIER
+        } else {
+            1.0
+        };
         let maturation = tray.myseed.as_ref().map_or(0.0, |s| s.maturation);
         if tray.age < maturation {
             tray.lastproduce = tray.age;
@@ -647,7 +735,11 @@ pub fn cycle(
 
         // Nutrients.
         apply_chemicals(tray, nutrients, env, dice, &mut out);
-        nutrients.remove_all(tray.nutridrain);
+        nutrients.remove_all(if tray.self_sustaining {
+            tray.nutridrain.min(0.5)
+        } else {
+            tray.nutridrain
+        });
         if nutrients.total_volume <= 0.0 {
             if tray.tray_flags & SLOW_RELEASE != 0 {
                 if let Some(id) = env.chem.id(NITROGEN) {
@@ -776,7 +868,7 @@ pub fn cycle(
                 .myseed
                 .as_ref()
                 .is_some_and(|s| !s.mutatelist.is_empty() && !s.has_gene(NEVER_MUTATE));
-            if dice.prob(instability / 2.0) && can {
+            if dice.prob(instability / 2.0) && !tray.self_sustaining && can {
                 tray.mutatespecie(env, dice, &mut out);
                 if let Some(s) = &mut tray.myseed {
                     s.set_instability(s.instability / 2.0);
@@ -837,7 +929,7 @@ pub fn cycle(
     }
 
     // Weeds overtaking the plant spot.
-    if tray.weedlevel >= 10.0 && dice.prob(50.0) {
+    if tray.weedlevel >= 10.0 && dice.prob(50.0) && !tray.self_sustaining {
         let loss = tray
             .myseed
             .as_ref()
@@ -1259,6 +1351,176 @@ mod tests {
         assert_eq!((tray.weedlevel, tray.plant_health), (0.0, 15.0));
         assert_eq!(tray.plant_status, PlantStatus::Growing);
         assert!(out.messages[0].contains("empty tray is overtaken by some starthistle"));
+    }
+
+    #[test]
+    fn autogrow_tends_the_tray_and_blocks_mutations_and_weed_invasions() {
+        let (plants, chem) = (test_plants(), chem());
+        let env = CycleEnv {
+            chem: &chem,
+            plants: &plants,
+            lumcount: None,
+        };
+        // `process(2)`: rand(1, 2) = 2 -> +2 water, -1 weeds, -1 pests.
+        let mut tray = planted(&plants);
+        tray.waterlevel = 50.0;
+        tray.weedlevel = 5.0;
+        tray.pestlevel = 3.0;
+        tray.self_sustain(2.0, &mut Script::default());
+        assert_eq!(tray.waterlevel, 50.0, "off: nothing");
+        tray.self_sustaining = true;
+        tray.self_sustain(
+            2.0,
+            &mut Script {
+                rolls: vec![2],
+                probs: vec![],
+            },
+        );
+        assert_eq!(
+            (tray.waterlevel, tray.weedlevel, tray.pestlevel),
+            (52.0, 4.0, 2.0)
+        );
+
+        // Nutrients drain at most 0.5 per cycle; instability 70 rolls prob(35) (after the two
+        // weed rolls) but no species mutation happens.
+        tray.myseed.as_mut().unwrap().instability = 70.0;
+        let mut nutrients = holder(
+            &chem,
+            &[("/datum/reagent/plantnutriment/eznutriment", 10.0)],
+        );
+        let mut dice = Script {
+            rolls: vec![],
+            probs: vec![false, false, true],
+        };
+        cycle(&mut tray, &mut nutrients, &env, &mut dice);
+        assert_eq!(nutrients.total_volume, 9.5);
+        assert_eq!(seed(&tray).path, "/obj/item/seeds/tomato");
+
+        // Full weeds never overtake an autogrowing empty tray.
+        let mut tray = Tray::new(&plants.data.trays[0]);
+        tray.self_sustaining = true;
+        tray.weedlevel = 10.0;
+        let mut dice = Script {
+            rolls: vec![2],
+            probs: vec![true],
+        };
+        cycle(&mut tray, &mut holder(&chem, &[]), &env, &mut dice);
+        assert!(tray.myseed.is_none());
+
+        // Digging the plant out turns it off.
+        let mut tray = planted(&plants);
+        tray.self_sustaining = true;
+        tray.remove_plant();
+        assert!(!tray.self_sustaining);
+    }
+
+    #[test]
+    fn somatoray_shots_on_a_tray() {
+        let (plants, chem) = (test_plants(), chem());
+        let env = CycleEnv {
+            chem: &chem,
+            plants: &plants,
+            lumcount: None,
+        };
+        assert_eq!(
+            Somatoray::of("/obj/projectile/energy/flora/yield"),
+            Some(Somatoray::Yield)
+        );
+        assert_eq!(Somatoray::of("/obj/projectile/beam/laser"), None);
+        let mut out = CycleOutcome::default();
+        // An empty tray takes the shot like any object.
+        let mut empty = Tray::new(&plants.data.trays[0]);
+        assert!(!somatoray_hit(
+            &mut empty,
+            Somatoray::Mutation,
+            &env,
+            &mut Script::default(),
+            &mut out
+        ));
+
+        // Beta: yield 3 -> prob(100 / 9) succeeds -> +rating.
+        let mut tray = planted(&plants);
+        let mut dice = Script {
+            rolls: vec![],
+            probs: vec![true],
+        };
+        assert!(somatoray_hit(
+            &mut tray,
+            Somatoray::Yield,
+            &env,
+            &mut dice,
+            &mut out
+        ));
+        assert_eq!(seed(&tray).yield_, 4.0);
+        // The roll fails: nothing.
+        somatoray_hit(
+            &mut tray,
+            Somatoray::Yield,
+            &env,
+            &mut Script::default(),
+            &mut out,
+        );
+        assert_eq!(seed(&tray).yield_, 4.0);
+
+        // Alpha: `mutate()` with its ±2 lifespan; rand(-2, 2) rolls the highest first.
+        let mut tray = planted(&plants);
+        let mut dice = Script {
+            rolls: vec![2],
+            probs: vec![],
+        };
+        somatoray_hit(&mut tray, Somatoray::Mutation, &env, &mut dice, &mut out);
+        assert_eq!(seed(&tray).lifespan, 27.0);
+
+        // Gamma: into the mutatelist, the instability halved first (25 -> 12.5, then the
+        // fresh blue tomato's own 25).
+        let mut tray = planted(&plants);
+        let mut out = CycleOutcome::default();
+        somatoray_hit(
+            &mut tray,
+            Somatoray::Evolution,
+            &env,
+            &mut Script::default(),
+            &mut out,
+        );
+        assert_eq!(seed(&tray).path, "/obj/item/seeds/tomato/blue");
+        assert!(out.messages[0].contains("suddenly mutates into Blue-Tomato Plants"));
+    }
+
+    #[test]
+    fn coir_soil_ages_mushrooms_faster() {
+        let (plants, chem) = (test_plants(), chem());
+        let env = CycleEnv {
+            chem: &chem,
+            plants: &plants,
+            lumcount: None,
+        };
+        let fungal = super::super::genes::Gene::new_trait(plants.trait_def(FUNGAL).unwrap());
+        let mut tray = planted(&plants);
+        tray.myseed.as_mut().unwrap().genes.push(fungal.clone());
+        cycle(
+            &mut tray,
+            &mut holder(&chem, &[]),
+            &env,
+            &mut Script::default(),
+        );
+        assert_eq!(tray.age, 1.0, "no coir: one a cycle");
+        let mut tray = planted(&plants);
+        tray.tray_flags |= FAST_MUSHROOMS;
+        cycle(
+            &mut tray,
+            &mut holder(&chem, &[]),
+            &env,
+            &mut Script::default(),
+        );
+        assert_eq!(tray.age, 1.0, "not a mushroom");
+        tray.myseed.as_mut().unwrap().genes.push(fungal);
+        cycle(
+            &mut tray,
+            &mut holder(&chem, &[]),
+            &env,
+            &mut Script::default(),
+        );
+        assert!((tray.age - 2.4).abs() < 1e-5, "a mushroom in coir: 1.4");
     }
 
     #[test]

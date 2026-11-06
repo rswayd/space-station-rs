@@ -75,6 +75,13 @@ pub fn tray_item_interaction(
 ) -> bool {
     let path = item_path(world, held);
     if modifiers.right {
+        if world
+            .get::<DmTool>(held)
+            .is_some_and(|t| t.behaviour == "shovel")
+            && super::soil::shovel_secondary(world, client, mob, held, tray)
+        {
+            return true;
+        }
         if is_under(&path, SYRINGE_ROOT) {
             tell(
                 world,
@@ -449,6 +456,8 @@ pub fn harvest(world: &mut World, client: Entity, mob: Entity, tray: Entity) {
         state.plant_status = PlantStatus::Growing;
     } else {
         state.set_seed(None);
+        // No reason to pay for an empty tray.
+        state.self_sustaining = false;
     }
     world.entity_mut(tray).insert(state);
     refresh_tray(world, tray);
