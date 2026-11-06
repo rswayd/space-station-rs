@@ -556,18 +556,18 @@ mod tests {
 
     #[test]
     fn menu_limits_follow_the_dm_steps() {
-        // 273 -> 303 -> 333 -> 363 (`< 333` still steps up), then refused.
+        // DM `if(temperature < 333) += 30`: 273 -> 303 -> 333, then refused; down to 213.
         let mut t = START_TEMPERATURE;
         let mut ups = 0;
         while t < UP_BELOW {
             t += STEP;
             ups += 1;
         }
-        assert_eq!((t, ups), (363.0, 3));
+        assert_eq!((t, ups), (333.0, 2));
         let mut t = START_TEMPERATURE;
         while t > DOWN_ABOVE {
             t -= STEP;
         }
-        assert_eq!(t, 183.0);
+        assert_eq!(t, 213.0);
     }
 }
