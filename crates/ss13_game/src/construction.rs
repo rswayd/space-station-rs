@@ -273,6 +273,8 @@ pub enum Job {
     AiCore(crate::silicon::ai_core::CoreJob),
     /// Taking a shunted AI out of an APC into an intelliCard ([`crate::silicon::aicard`]).
     AiCard(crate::silicon::aicard::CardJob),
+    /// A pAI's door jack hack ([`crate::silicon::pai`]).
+    Pai(crate::silicon::pai::PaiJob),
     /// Digging rock, prying an ore box apart ([`crate::mining`]).
     Mining(crate::mining::MiningJob),
     /// Switching a satellite on or off ([`crate::station_goals`]).
@@ -1352,6 +1354,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::LawRack(job) => crate::silicon::law_rack::complete(world, mob, action, job),
         &Job::AiCore(job) => crate::silicon::ai_core::complete(world, mob, action, job),
         &Job::AiCard(job) => crate::silicon::aicard::complete(world, mob, action, job),
+        &Job::Pai(job) => crate::silicon::pai::complete(world, mob, action, job),
         &Job::Mining(job) => crate::mining::complete(world, mob, action, job),
         Job::Hijack => crate::shuttle_console_server::complete_hijack(world, mob, action),
         &Job::Door(job) => crate::doors::complete(world, client, mob, target, job),

@@ -18,6 +18,7 @@
 //! | 100 | `atmos` analyzer scans the user's turf |
 //! | 150 | `silicon::mmi::attack_self` |
 //! | 160 | `silicon::aicard::attack_self` |
+//! | 165 | `silicon::pai::attack_self` (the pAI card's menu) |
 //! | 200 | `tools::attack_self` |
 //! | 210 | `t_scanner::toggle` |
 //! | 220 | `inducer::attack_self` (the cell out of an open hatch) |
@@ -225,6 +226,7 @@
 //! | 1400 | `antag::heretic::server::item_interaction` |
 //! | 1410 | `antag::nightmare::item_interaction` (the light eater) |
 //! | 1420 | `silicon::aicard::interact_with_atom` |
+//! | 1425 | `silicon::pai::cable_interaction` (the door jack cable into an airlock) |
 //! | 1450 | `silicon::mmi::item_interaction` |
 //! | 1460 | `silicon::ai_core::item_interaction` |
 //! | 1500 | `bots::construction::item_interaction` |
