@@ -1,21 +1,26 @@
 //! Handheld devices over real WebTransport on 127.0.0.1: a megaphone in the active hand makes
 //! the holder's words bold, then needs 5 s to recharge; two pair pinpointers from one box are
 //! linked, and one turned on points at the other; a flashlight used in hand lights its holder
-//! and goes out again.
+//! and goes out again; a tape put into a recorder records what is said and plays it back with
+//! its tape time.
 
 use std::path::{Path, PathBuf};
 
 use bevy::prelude::*;
 use ss13_game::devices::flashlight::Flashlight;
+use ss13_game::devices::taperecorder::{Tape, TapeRecorder};
 use ss13_game::devices::{Megaphone, PairPinpointer};
 use ss13_game::inventory::{CarriedBy, Inventory};
 use ss13_game::storage::StoredIn;
 use ss13_game::testing::{self, Drive, fixture_map, write_fixture};
-use ss13_mapload::{DmItem, IconIndex};
+use ss13_mapload::{DmItem, DmName, IconIndex};
 use ss13_net::chat::client::ChatReceived;
 use ss13_shared::chat::Span;
 use ss13_shared::protocol::{ClientIntent, InventorySlot};
 use ss13_shared::{Appearance, Dir, Optics, TilePos};
+use ss13_tgui::UiInterface;
+use ss13_tgui::interfaces::list_input::ListInputUi;
+use ss13_tgui::server::UiWindow;
 
 const TYPES: &str = r##"{
   "schema": 3,
@@ -48,6 +53,11 @@ const TYPES: &str = r##"{
     "/obj/item/pinpointer": { "parent": "/obj/item", "declared_vars": {
         "icon": { "resource": "p.dmi" }, "icon_state": "pinpointer" } },
     "/obj/item/pinpointer/pair": { "parent": "/obj/item/pinpointer" },
+    "/obj/item/taperecorder": { "parent": "/obj/item", "declared_vars": {
+        "icon": { "resource": "v.dmi" }, "icon_state": "taperecorder_empty" } },
+    "/obj/item/taperecorder/empty": { "parent": "/obj/item/taperecorder" },
+    "/obj/item/tape": { "parent": "/obj/item", "declared_vars": {
+        "icon": { "resource": "c.dmi" }, "icon_state": "tape_white" } },
     "/obj/item/storage": { "parent": "/obj/item", "declared_vars": {
         "storage_type": { "path": "/datum/storage" } } },
     "/obj/item/storage/box": { "parent": "/obj/item/storage", "declared_vars": {
@@ -86,23 +96,33 @@ const TYPES: &str = r##"{
 }"##;
 
 /// Rows top-down, the last line is y = 1. The spawn `s` (2,2), a megaphone `M` (3,3), a box of
-/// pair pinpointers `P` (5,2), a flashlight `F` (5,3).
+/// pair pinpointers `P` (5,2), a flashlight `F` (5,3), an empty tape recorder `R` (3,2), a tape
+/// `T` (4,2).
 const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 "f" = (/turf/open/floor,/area/space)
 "s" = (/obj/effect/landmark/start/assistant,/turf/open/floor,/area/space)
 "M" = (/obj/item/megaphone,/turf/open/floor,/area/space)
 "P" = (/obj/item/storage/box/pinpointer_pairs,/turf/open/floor,/area/space)
 "F" = (/obj/item/flashlight,/turf/open/floor,/area/space)
+"R" = (/obj/item/taperecorder/empty,/turf/open/floor,/area/space)
+"T" = (/obj/item/tape,/turf/open/floor,/area/space)
 
 (1,1,1) = {"
 wwwwwww
 wfMfFfw
-wsffPfw
+wsRTPfw
 wwwwwww
 "}
 "##;
 
-const STATES: [(&str, &str); 16] = [
+const STATES: [(&str, &str); 23] = [
+    ("v.dmi", "taperecorder_empty"),
+    ("v.dmi", "taperecorder_idle"),
+    ("v.dmi", "taperecorder_recording"),
+    ("v.dmi", "taperecorder_playing"),
+    ("c.dmi", "tape_white"),
+    ("c.dmi", "tape_white_reverse"),
+    ("c.dmi", "ribbonoverlay"),
     ("f.dmi", "flashlight"),
     ("f.dmi", "flashlight-on"),
     ("t.dmi", "floor"),
@@ -129,6 +149,8 @@ fn fixture_assets() -> PathBuf {
         "/obj/item/flashlight",
         "/obj/item/pinpointer/pair",
         "/obj/item/storage/box/pinpointer_pairs",
+        "/obj/item/taperecorder/empty",
+        "/obj/item/tape",
         "/turf/open/floor",
         "/turf/closed/wall",
         "/turf/open/space/basic",
@@ -205,6 +227,52 @@ impl Station {
         } else {
             InventorySlot::RightHand
         }
+    }
+
+    /// Puts `item` straight into hand `hand`.
+    fn give_hand(&mut self, item: Entity, hand: usize) {
+        let mob = self.mob();
+        let world = self.server.world_mut();
+        world
+            .entity_mut(item)
+            .remove::<(TilePos, StoredIn)>()
+            .insert(CarriedBy(mob));
+        world.get_mut::<Inventory>(mob).unwrap().hands[hand] = Some(item);
+    }
+
+    /// The newest list prompt of the player.
+    fn list_window(&mut self) -> Option<u32> {
+        let link = self.players[0].link;
+        let world = self.server.world_mut();
+        let mut q = world.query::<&UiWindow>();
+        q.iter(world)
+            .filter(|w| w.client == link && w.interface == ListInputUi::NAME)
+            .map(|w| w.id)
+            .max()
+    }
+
+    /// Waits for a list prompt newer than `last` and picks `entry`.
+    fn pick(&mut self, last: &mut u32, entry: &str) {
+        let seen = *last;
+        self.run_until(&format!("the menu for {entry}"), |s| {
+            s.list_window().is_some_and(|id| id > seen)
+        });
+        let id = self.list_window().unwrap();
+        *last = id;
+        self.act(0, id, "submit", &[("entry", entry)]);
+    }
+
+    /// Lines heard so far whose whole text contains every one of `parts`.
+    fn heard_all(&self, parts: &[&str]) -> usize {
+        self.players[0]
+            .app
+            .world()
+            .resource::<Heard>()
+            .0
+            .iter()
+            .map(|line| line.iter().map(|(_, t)| t.as_str()).collect::<String>())
+            .filter(|text| parts.iter().all(|p| text.contains(p)))
+            .count()
     }
 
     /// Lines heard so far with `text` in a segment of `span`.
@@ -314,4 +382,68 @@ fn flashlight_lights_its_holder() {
     s.run_until("switched off", |s| !s.get::<Flashlight>(flashlight).on);
     s.run_until("the holder is dark", |s| lit(s).is_none());
     assert_eq!(s.get::<DmItem>(flashlight).inhand_icon_state, "flashlight");
+}
+
+#[test]
+fn tape_recorder_records_and_plays_back() {
+    let mut s = Station::start();
+    let mob = s.mob();
+    let recorder = s.items("/obj/item/taperecorder/empty")[0];
+    let tape = s.items("/obj/item/tape")[0];
+    s.run_until("the tape is set up", |s| {
+        s.try_get::<DmName>(tape)
+            .is_some_and(|n| n.name.contains('('))
+            && s.try_get::<TapeRecorder>(recorder).is_some()
+    });
+    assert_eq!(s.get::<TapeRecorder>(recorder).tape, None);
+
+    // The tape in the active hand onto the recorder in the other: it goes in.
+    let active = s.get::<Inventory>(mob).active;
+    s.give_hand(tape, active);
+    s.give_hand(recorder, 1 - active);
+    let other_slot = if active == 0 {
+        InventorySlot::RightHand
+    } else {
+        InventorySlot::LeftHand
+    };
+    s.send(0, ClientIntent::ClickSlot(other_slot));
+    s.run_until("the tape is in", |s| {
+        s.get::<TapeRecorder>(recorder).tape == Some(tape)
+    });
+    assert_eq!(s.try_get::<StoredIn>(tape).map(|x| x.0), Some(recorder));
+
+    // The recorder in the active hand: record, speak, stop.
+    s.server
+        .world_mut()
+        .get_mut::<Inventory>(mob)
+        .unwrap()
+        .active = 1 - active;
+    let slot = s.active_slot();
+    let mut last = 0;
+    s.send(0, ClientIntent::ClickSlot(slot));
+    s.pick(&mut last, "Записать");
+    s.run_until("recording", |s| s.get::<TapeRecorder>(recorder).recording);
+    s.send(0, ClientIntent::Say("проверка связи".into()));
+    s.run_until("the line is on the tape", |s| {
+        s.get::<Tape>(tape).side.messages.len() == 1
+    });
+    assert!(
+        s.get::<Tape>(tape).side.messages[0]
+            .text
+            .contains("роверка связи")
+    );
+    s.send(0, ClientIntent::ClickSlot(slot));
+    s.pick(&mut last, "Стоп");
+    s.run_until("stopped", |s| !s.get::<TapeRecorder>(recorder).recording);
+    assert!(s.get::<Tape>(tape).side.used >= 1);
+
+    // Playback says the line with its tape time, then stops by itself.
+    s.send(0, ClientIntent::ClickSlot(slot));
+    s.pick(&mut last, "Воспроизвести");
+    s.run_until("the line played back", |s| {
+        s.heard_all(&["[00:0", "роверка связи"]) == 1
+    });
+    s.run_until("the playback ends", |s| {
+        !s.get::<TapeRecorder>(recorder).playing
+    });
 }
