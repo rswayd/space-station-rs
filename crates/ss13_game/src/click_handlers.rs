@@ -70,6 +70,7 @@
 //! | 3187 | `cargo::money::coin_attack_self` (coin flip) |
 //! | 3188 | `mining::fulton::attack_self` (packs link, beacon kits unfold) |
 //! | 3189 | `shuttle_remote::use_remote` |
+//! | 3190 | `closets::kinds::bodybag_attack_self` (a folded body bag unfolds) |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):
 //!
@@ -274,6 +275,7 @@
 //! | 4200 | `disposals::item_interaction` |
 //! | 4300 | `tables::item_interaction` |
 //! | 4400 | `science::experi_scanner::pre_attack` (not on living mobs) |
+//! | 4460 | `closets::kinds::held_on_target` (large crates, multitools on abandoned crates) |
 //! | 4500 | `construction::item_interaction` |
 //! | 4600 | core: a cyborg module or `NoDrop` item stops here |
 //! | 4650 | `lockbox::item_interaction` (`closets` plugin) |
