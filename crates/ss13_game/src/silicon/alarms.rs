@@ -15,8 +15,8 @@
 //!   picking an area jumps its eye to one of the area's cameras (a list when several).
 //! - The AI and cyborgs are told in chat (tg `queueAlarm`): changes are gathered for 3 seconds,
 //!   then shown one by one, or as counts per type past 4 raised / 2 cleared lines.
-// shortcut: no camera or burglar alarms: cameras never break here and display cases are not
-// ported; their types are listed (nominal) as in tg. Motion alarms come from motion cameras
+// shortcut: no camera alarms: cameras never break here; the type is listed (nominal) as in tg.
+// Burglar alarms come from display cases (`crate::displaycase`). Motion alarms come from motion cameras
 // (`crate::defenses::cameras`).
 // shortcut: listeners see every current alarm, not only those raised after they were created
 // (tg's own comment doubts that this is a feature); a broken console or a dead cyborg keeps
@@ -308,6 +308,11 @@ fn sync_sources(
     positions: Query<&TilePos>,
     mut gone_air: RemovedComponents<AirAlarm>,
     mut gone_apcs: RemovedComponents<Apc>,
+    burglars: Query<
+        (Entity, &crate::displaycase::BurglarAlarm, &TilePos),
+        Changed<crate::displaycase::BurglarAlarm>,
+    >,
+    mut gone_burglars: RemovedComponents<crate::displaycase::BurglarAlarm>,
     world_areas: Query<(Option<&DmName>, Option<&DmPower>)>,
     cameras: Query<(Entity, &TilePos), With<Camera>>,
     areas: Option<Res<Areas>>,
@@ -338,6 +343,13 @@ fn sync_sources(
     }
     for e in gone_apcs.read() {
         updates.push((AlarmKind::Power, e, None, false, 0));
+    }
+    // A display case's `alarm_manager` (`crate::displaycase`).
+    for (e, alarm, pos) in &burglars {
+        updates.push((AlarmKind::Burglar, e, alarm.area, true, pos.z));
+    }
+    for e in gone_burglars.read() {
+        updates.push((AlarmKind::Burglar, e, None, false, 0));
     }
     for (kind, source, area, on, z) in updates {
         let info = |area| area_info(&world_areas, &cameras, areas.as_deref(), area, z);

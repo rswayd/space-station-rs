@@ -25,6 +25,7 @@ mod cult;
 mod decor;
 mod devices;
 mod diseases;
+mod displaycase;
 mod disposals;
 mod doors;
 mod drag;
