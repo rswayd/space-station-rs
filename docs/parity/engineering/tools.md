@@ -77,7 +77,7 @@
 Показывает трубы и кабели под полом вокруг владельца.
 
 - **Код:** [`/obj/item/t_scanner`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/devices/scanners/t_scanner.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ❌ нет — объекты под плиткой (`ss13_mapload::HiddenUnderTile`) не реплицируются вовсе (`crates/ss13_game/src/server.rs`, `hide_under_tile`); сканеру нужна их репликация отдельным клиентам (контракт `ss13_net`)
 
 ### Инструменты для кражи ядра
 Специальная отвёртка и контейнер для извлечения плутониевого ядра из ядерной бомбы (цель предателя).

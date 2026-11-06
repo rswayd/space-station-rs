@@ -33,7 +33,9 @@
 //! | 1400 | `cargo::mail::attack_self` |
 //! | 1500 | `antag::nukeop::server::attack_self` |
 //! | 1600 | `antag::syndie_items::attack_self` |
-//! | 1700 | `devices::attack_self` |
+//! | 1700 | `devices::attack_self` (pinpointers, handheld crew monitor) |
+//! | 1710 | `devices::flashlight::toggle_light` |
+//! | 1720 | `devices::gps::interact` |
 //! | 1750 | `radiation::geiger_attack_self` |
 //! | 1800 | `explosions::sources::c4_attack_self` |
 //! | 1900 | `assemblies::server::attack_self` |
@@ -132,6 +134,8 @@
 //! | 3450 | `vehicles::attack_hand` |
 //! | 3460 | `wiremod::server::attack_hand` |
 //! | 3455 | `clothing::sensors::interact` (crew console) |
+//! | 3456 | `devices::flashlight::toggle_light` (right click) |
+//! | 3457 | `devices::gps::interact` (survival pod computer) |
 //!
 //! [`ClickPhase::HeldOnTarget`] (a world click with the active hand's item; tg
 //! `item_interaction`, `interact_with_atom`, `pre_attack`, `attackby`):

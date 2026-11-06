@@ -19,6 +19,7 @@ pub mod disposal_unit;
 pub mod dna_console;
 pub mod electrolyzer;
 pub mod gas_analyzer;
+pub mod gps;
 #[cfg(feature = "client")]
 pub(crate) mod input_buttons;
 pub mod job_selection;
