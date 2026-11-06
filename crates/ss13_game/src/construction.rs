@@ -307,6 +307,8 @@ pub enum Job {
     Bitrunning(crate::science::bitrunning::server::BitrunJob),
     /// An RCD build or deconstruction ([`crate::devices::rcd`]).
     Rcd(crate::devices::rcd::RcdJob),
+    /// The RCD family's work ([`crate::devices::rhd`]).
+    Rhd(crate::devices::rhd::RhdJob),
     /// A screwdriver respooling an unwound tape ([`crate::devices::taperecorder`]).
     TapeRespool(Entity),
     /// Fixing, prying, building display cases ([`crate::displaycase`]).
@@ -1353,6 +1355,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         Job::RadiationLeak => crate::events::radiation_leak::complete(world, action, consume),
         Job::AnomalyRelease => crate::events::anomalies::complete_release(world, action),
         &Job::Rcd(job) => crate::devices::rcd::complete(world, mob, action, job),
+        &Job::Rhd(job) => crate::devices::rhd::complete(world, action, job),
         &Job::TapeRespool(tape) => {
             crate::devices::taperecorder::respool_complete(world, mob, action.client, tape)
         }

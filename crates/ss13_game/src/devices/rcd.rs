@@ -52,6 +52,8 @@ use crate::sound::{PlaySound, playsound};
 use crate::tools::{Actor, DoAfter, Stack, do_after, tell, use_stack};
 
 pub const RCD: &str = "/obj/item/construction/rcd";
+/// `/obj/item/construction`: the RCD and its family ([`super::rhd`]) share [`Matter`].
+const CONSTRUCTION: &str = "/obj/item/construction";
 const AMMO: &str = "/obj/item/rcd_ammo";
 const AMMO_LARGE: &str = "/obj/item/rcd_ammo/large";
 const UPGRADE: &str = "/obj/item/rcd_upgrade";
@@ -132,9 +134,24 @@ const SHEET_MATTER: [(&str, u32); 7] = [
     ("/obj/item/stack/tile/iron", 1),
 ];
 
-/// RCD types: path, `max_matter`, starting `matter`, `construction_upgrades`, `canRturf`,
-/// `delay_mod`; subtypes first.
-const VARIANTS: [(&str, u32, u32, u8, bool, f32); 6] = [
+/// RCD types (and the family's, [`super::rhd`]): path, `max_matter`, starting `matter`,
+/// `construction_upgrades`, `canRturf`, `delay_mod`; subtypes first.
+const VARIANTS: [(&str, u32, u32, u8, bool, f32); 14] = [
+    ("/obj/item/construction/rld/mini", 100, 100, 0, false, 1.0),
+    ("/obj/item/construction/rld", 200, 200, 0, false, 1.0),
+    (
+        "/obj/item/construction/rtd/admin",
+        INFINITE,
+        INFINITE,
+        0,
+        false,
+        1.0,
+    ),
+    ("/obj/item/construction/rtd/loaded", 350, 350, 0, false, 1.0),
+    ("/obj/item/construction/rtd", 350, 0, 0, false, 1.0),
+    ("/obj/item/construction/rdd/loaded", 60, 60, 0, false, 1.0),
+    ("/obj/item/construction/rdd", 60, 0, 0, false, 1.0),
+    ("/obj/item/construction/plumbing", 200, 200, 0, false, 1.0),
     (
         "/obj/item/construction/rcd/combat/admin",
         INFINITE,
@@ -430,7 +447,7 @@ impl Matter {
         self.max == INFINITE || self.matter >= cost
     }
 
-    fn take(&mut self, cost: u32) {
+    pub fn take(&mut self, cost: u32) {
         if self.max != INFINITE {
             self.matter -= cost.min(self.matter);
         }
@@ -500,11 +517,20 @@ fn attach(add: On<Add<DmItem>>, items: Query<&DmItem>, mut commands: Commands) {
             AirlockElectronics::default(),
             AlwaysState,
         ));
+    } else if is_under(&item.path, CONSTRUCTION) {
+        commands
+            .entity(add.entity)
+            .insert_if_new(Matter::for_path(&item.path));
     }
 }
 
 fn item_path(world: &World, e: Entity) -> Option<&str> {
     world.get::<DmItem>(e).map(|i| i.path.as_str())
+}
+
+/// An RCD proper, not one of the family sharing [`Matter`].
+fn is_rcd(world: &World, e: Entity) -> bool {
+    item_path(world, e).is_some_and(|p| is_under(p, RCD))
 }
 
 /// `ammoamt` of a matter cartridge.
@@ -546,6 +572,16 @@ pub fn load(world: &mut World, client: Entity, rcd: Entity, used: Entity) -> boo
         };
         if m.upgrades & bit != 0 {
             tell(world, client, Span::Warning, "Уже установлено!");
+            return true;
+        }
+        // `banned_upgrades = RCD_ALL_UPGRADES & ~RCD_UPGRADE_SILO_LINK` of the family.
+        if bit != UPGRADE_SILO_LINK && !is_rcd(world, rcd) {
+            tell(
+                world,
+                client,
+                Span::Warning,
+                "Это улучшение сюда не подходит!",
+            );
             return true;
         }
         world.get_mut::<Matter>(rcd).expect("checked").upgrades |= bit;
@@ -597,6 +633,9 @@ pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity)
     let Some(m) = world.get::<Matter>(item).copied() else {
         return false;
     };
+    if !is_rcd(world, item) {
+        return false;
+    }
     if let Some(pos) = crate::modpc::pda::turf_of(world, item) {
         playsound(world, PlaySound::new(pos, POP, 50.0, false));
     }
@@ -731,7 +770,7 @@ fn on_tile_under(world: &World, pos: TilePos, root: &str) -> Option<Entity> {
 
 /// `is_blocked_turf`: something dense on the tile but the turf, `ignore` types and (with
 /// `ignore_mobs`) mobs.
-fn blocked(world: &World, pos: TilePos, ignore_mobs: bool, ignore: &[&str]) -> bool {
+pub(crate) fn blocked(world: &World, pos: TilePos, ignore_mobs: bool, ignore: &[&str]) -> bool {
     world
         .resource::<SpatialIndex>()
         .dense_on_tile(pos)
@@ -954,6 +993,10 @@ pub fn item_interaction(
     if !right && load(world, actor.client, held, target) {
         return true;
     }
+    if !is_rcd(world, held) {
+        // The family's own clicks ([`super::rhd`]).
+        return false;
+    }
     let design = if right { None } else { DESIGNS.get(m.design) };
     // Atoms without `rcd_vals` take nothing (`NOBLUDGEON`: no hit either).
     let Some((delay, cost)) = rcd_vals(world, &m, target, design) else {
@@ -991,7 +1034,12 @@ pub fn item_interaction(
 }
 
 /// `/obj/effect/constructing_effect`: its animation by delay.
-fn spawn_effect(world: &mut World, pos: TilePos, delay: f32, deconstruct: bool) -> Option<Entity> {
+pub(crate) fn spawn_effect(
+    world: &mut World,
+    pos: TilePos,
+    delay: f32,
+    deconstruct: bool,
+) -> Option<Entity> {
     let e = spawn_obj(world, EFFECT, pos)?;
     let shown = if deconstruct { delay - 11.0 } else { delay };
     let state = if shown < 10.0 {
@@ -1243,7 +1291,7 @@ pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<crate::exami
             format!("Установлены улучшения: {}.", names.join(", ")),
         ));
     }
-    if let Some(design) = DESIGNS.get(m.design) {
+    if let Some(design) = DESIGNS.get(m.design).filter(|_| is_rcd(world, target)) {
         lines.push((
             Span::Notice,
             format!("Выбрано: {}.", design_name(world, design)),

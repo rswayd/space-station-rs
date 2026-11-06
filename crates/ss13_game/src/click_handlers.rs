@@ -39,6 +39,7 @@
 //! | 1710 | `devices::flashlight::toggle_light` |
 //! | 1720 | `devices::gps::interact` |
 //! | 1730 | `devices::rcd::attack_self` (the design list) |
+//! | 1737 | `devices::rhd::attack_self` (RLD, RTD, RDD, RPLD, RWD, RSF lists) |
 //! | 1740 | `devices::taperecorder::attack_self` (recorder and tape menus) |
 //! | 1743 | `devices::beacons::attack_self` (tracking beacons toggle, choice beacons list) |
 //! | 1750 | `radiation::geiger_attack_self` |
@@ -86,6 +87,7 @@
 //! | 400 | `medical::cyberimps::item_interaction` |
 //! | 450 | `fishing::server::insert_bait`, `fishing::aquarium::item_interaction` |
 //! | 455 | `inducer::item_interaction` (screwdriver, a cell, plasma onto the inducer) |
+//! | 457 | `devices::rhd::load` (a cartridge onto the RSF, cable onto the RWD) |
 //! | 460 | `devices::rcd::load` (matter or a disk onto the RCD) |
 //! | 465 | `devices::taperecorder::item_interaction` (tape in, respool), `attack_hand` (eject) |
 //! | 467 | `devices::laser_pointer::item_interaction` (diode, crystal lens, their removal) |
@@ -220,6 +222,7 @@
 //! | 1560 | `devices::rcd::item_interaction` (builds, deconstruction, loading) |
 //! | 1565 | `devices::taperecorder::item_interaction` (a tape into a recorder, respooling) |
 //! | 1567 | `devices::laser_pointer::item_interaction` (diode, crystal lens, their removal) |
+//! | 1577 | `devices::rhd::item_interaction` (the RCD family's clicks and loading) |
 //! | 1580 | `events::anomalies::neutralizer_act`, `releaser_act` (anomalies, anomaly cores) |
 //! | 1585 | `events::radiation_leak::tool_act` (a leaking machine's fixing tools) |
 //! | 1590 | `teapot::item_interaction` (before `machine_frame` takes it apart) |

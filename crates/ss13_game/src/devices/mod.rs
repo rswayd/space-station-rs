@@ -14,7 +14,8 @@
 //!   stop tracking (`scan_for_target`); used again it turns off.
 //! - Handheld crew monitors (`/obj/item/sensor_device`): the crew console's window
 //!   (`crate::clothing::sensors`) for the level the holder is on.
-//! - Flashlights ([`flashlight`]), GPS units ([`gps`]), the RCD ([`rcd`]), tape recorders
+//! - Flashlights ([`flashlight`]), GPS units ([`gps`]), the RCD ([`rcd`]) and its family
+//!   (RLD, RTD, RDD, RPLD, RWD, RSF: [`rhd`]), tape recorders
 //!   ([`taperecorder`]), laser pointers ([`laser_pointer`]) and tracking and choice beacons
 //!   ([`beacons`]).
 // shortcut: the voice spans are bold text (tg `SPAN_COMMAND` is bold and large, the clown's
@@ -32,6 +33,7 @@ pub mod flashlight;
 pub mod gps;
 pub mod laser_pointer;
 pub mod rcd;
+pub mod rhd;
 pub mod taperecorder;
 
 use bevy::ecs::message::MessageCursor;
@@ -124,6 +126,7 @@ impl Plugin for DevicesPlugin {
         gps::build(app);
         laser_pointer::build(app);
         rcd::build(app);
+        rhd::build(app);
         taperecorder::build(app);
         app.add_message::<Spoke>()
             .add_message::<SendChat>()
@@ -621,6 +624,7 @@ fn tick_pinpointers(world: &mut World, mut next: Local<f64>) {
 /// of a crew pinpointer: whom it tracks.
 pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<crate::examine::Line>) {
     rcd::examine_lines(world, target, lines);
+    rhd::examine_lines(world, target, lines);
     laser_pointer::examine_lines(world, target, lines);
     taperecorder::examine_lines(world, target, lines);
     if let Some(&CrewPinpointer {

@@ -19,13 +19,13 @@
 
 - **Код:** [`/obj/item/construction/rld`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/rcd/RLD.dm#L18), [`/obj/item/construction/rld/mini`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/rcd/RLD.dm#L220)
 - **BandaStation:** [`modular_bandastation/balance/code/tools.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/balance/code/tools.dm#L2) — премиальная цена RLD в автоматах
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ — `crates/ss13_game/src/devices/rhd.rs` (`Rld`): материя 200 (мини 100) через общий `Matter`, из улучшений — только связь с силосом; в руке список режимов (светильник, светящаяся палочка, разборка) и выбор цвета (`tgui_color_picker`); стена — лампа (10 материи, 1 с) на открытой соседней клетке без лампы, ближайшей к RLD, повёрнутая к стене (`build_fixture`); пол — напольная лампа (15, 1 с, одна на клетку); обе цвета выбора; разборка лампы (10, 1,5 с); палочка (5) нужного цвета бросается в цель. Материя проверяется до и после задержки. Свет самой палочки — см. ../tools/ (палочки не портированы); радиальное меню — списком (shortcut)
 
 ### RTD (быстрая плитка)
 Кладёт и снимает напольную плитку любого вида и направления из меню.
 
 - **Код:** [`/obj/item/construction/rtd`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/rcd/RTD.dm#L13); tgui: [`RapidTilingDevice.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/RapidTilingDevice.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ — `crates/ss13_game/src/devices/rhd.rs` (`Rtd`): материя 350 (загруженный, админский ∞); в руке список `floor_designs` tg (72 вида) и направления; клик по покрытию кладёт плитку проекта (`tile_cost`, `cost × 0,15 с`, эффект строительства), клик по поддерживаемому полу копирует его вид и направление, правый клик снимает поддерживаемый пол (`cost × 0,7` с округлением вверх, `cost × 0,25 с`, декали с ним; над дном уровня остаётся покрытие); смена проекта отменяет кладку. Нет: окна tgui с иконками (список, shortcut), переноса оверлеев пола при копировании, борговой версии (заряд ячейки → ../silicon)
 
 ### RPD (быстрая прокладка труб)
 Создаёт атмосферные трубы и устройства, трубы утилизации и транзитные трубы нужного слоя и цвета; разбирает трубы; улучшение — откручивание. Сами атмосферные трубы — см. ../atmos/.
@@ -37,16 +37,16 @@
 Катушка-укладчик кабеля: прокладывает кабель за идущим, выбирает слой; RWD — быстрая проводка.
 
 - **Код:** [`/obj/item/rwd`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/rcd/RWD.dm#L5), [`/obj/item/rcl`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/rcd/RCL.dm#L3)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/devices/rhd.rs` (`Rwd`): RWD на 210 кусков (загруженный, админский ∞), заправка мотком кабеля (им по RWD или RWD по нему); в руке «взять обеими руками» (вторая рука свободна) и слой 1–3; при каждом шаге со взятым RWD на покрытие без кабеля этого слоя кладётся кабель слоя (входит в сеть `Grid`, спрайты соседей пересвязываются), подбираются лежащие на клетке мотки; осмотр — остаток. Нет: выдачи заданного количества правым кликом в руке, RCL (раскладчика «pipe cleaner» — самих pipe cleaner в порте нет)
 
 ### RDD (быстрая декорация)
 Ставит декоративные объекты (растения, статуи и т. п.) из меню за материю.
 
 - **Код:** [`/obj/item/construction/rdd`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/rcd/RDD.dm#L167); tgui: [`RapidDecorationDevice.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/RapidDecorationDevice.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ — `crates/ss13_game/src/devices/rhd.rs` (`Rdd`): материя 60 (загруженный); в руке список `rdd_designs` tg (143 пункта по категориям); клик ставит украшение на клетку (1 материя, 0,5 с; не на занятую, не больше трёх), правый клик убирает одно (0,5 с); осмотр — выбранное. Нет: окна tgui с иконками (список), случайного вида у «(Random)» (их `Initialize` → ../decor), борговой версии
 
 ### RSF и RPLD
 RSF создаёт посуду, бумагу, сигареты (сервис, у боргов — печенье); RPLD — сантехнические машины для химии и гидропоники (см. ../service/, ../chemistry/).
 
 - **Код:** [`/obj/item/rsf`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/rcd/RSF.dm#L8), [`/obj/item/construction/plumbing`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/rcd/RPLD.dm#L2); tgui: [`RapidPlumbingDevice.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/RapidPlumbingDevice.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ — `crates/ss13_game/src/devices/rhd.rs`: RSF (`Rsf`, 30; синтезатор печенья 10 с перезарядкой 10 с) — картридж даёт 10 (большой тоже: в tg он не даёт ничего, баг), в руке список `cost_by_item`, клик по полу или столу создаёт предмет там (1 единица), осмотр; RPLD (`Rpld`, 200; сервисный — свой набор) — список проектов и пять слоёв, клик по открытому турфу строит машину (её цена, столько же децисекунд; плотной нужна свободная клетка, одна машина на слой и клетку), клик по откручённой машине проекта забирает её с возвратом материи до свободного места. Чужое: работа самих сантехнических машин и дуктов, цвета дуктов и их копирование правым кликом (→ ../chemistry/plumbing.md), борговые версии (→ ../silicon); shortcut: слоя колесом мыши нет (клиент не шлёт прокрутку), взлома синтезатора печенья емагом нет
