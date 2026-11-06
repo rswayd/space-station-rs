@@ -4,8 +4,8 @@
 //! silo and pays mining points ([`orm`]), and the mining equipment order console that spends
 //! them ([`console`]), mining vouchers and the point transfer card ([`equipment`]), kinetic
 //! accelerator modkits ([`modkits`]), the stacking machine with its console ([`stacking`]) and
-//! the fauna's monster cores with the stabilizing serum ([`cores`]) and the resonator
-//! ([`resonator`]).
+//! the fauna's monster cores with the stabilizing serum ([`cores`]), the resonator
+//! ([`resonator`]), bluespace shelter capsules ([`capsule`]) and marker beacons ([`beacons`]).
 //! This module holds the windows' data, which both halves share; the client views are in
 //! [`client`].
 //!
@@ -17,6 +17,10 @@ use serde::{Deserialize, Serialize};
 use ss13_tgui::UiInterface;
 use ss13_tgui::interfaces::vending::ProductIcon;
 
+#[cfg(feature = "server")]
+pub mod beacons;
+#[cfg(feature = "server")]
+pub mod capsule;
 #[cfg(feature = "client")]
 pub mod client;
 #[cfg(feature = "server")]
@@ -57,6 +61,14 @@ impl bevy::prelude::Plugin for MiningServerPlugin {
         app.add_click_handler(ClickPhase::AttackSelf, 3184, |w, c| {
             crate::mining::resonator::attack_self(w, c.client, c.target)
         });
+        // Shelter capsules arm.
+        app.add_click_handler(ClickPhase::AttackSelf, 3185, |w, c| {
+            crate::mining::capsule::attack_self(w, c.mob, c.target)
+        });
+        // Marker beacon stacks anchor a beacon.
+        app.add_click_handler(ClickPhase::AttackSelf, 3186, |w, c| {
+            crate::mining::beacons::attack_self(w, c.client, c.mob, c.target)
+        });
         app.add_click_handler(ClickPhase::EmptyHand, 2900, |w, c| {
             crate::mining::interact(w, c.client, c.mob, c.target)
         });
@@ -79,6 +91,8 @@ impl bevy::prelude::Plugin for MiningServerPlugin {
             stacking::StackingPlugin,
             cores::CoresPlugin,
             resonator::ResonatorPlugin,
+            capsule::CapsulePlugin,
+            beacons::BeaconsPlugin,
         ));
     }
 }
@@ -96,6 +110,7 @@ pub fn interact(
         || orm::interact(world, client, mob, target)
         || console::interact(world, client, mob, target)
         || stacking::interact(world, client, mob, target)
+        || beacons::interact(world, client, mob, target)
 }
 
 /// The mining `item_interaction`s of a held item: digging, ore into the ORM or an ore box,
@@ -111,6 +126,7 @@ pub fn item_interaction(
     orm::item_interaction(world, held, target)
         || cores::item_interaction(world, client, mob, held, target)
         || resonator::item_interaction(world, mob, held, target)
+        || beacons::item_interaction(world, client, mob, held, target)
         || modkits::item_interaction(world, client, mob, held, target)
         || equipment::item_interaction(world, client, mob, held, target)
         || stacking::item_interaction(world, client, mob, held, target)
@@ -141,6 +157,8 @@ pub fn examine_lines(
 ) {
     modkits::examine_lines(world, target, lines);
     cores::examine_lines(world, target, lines);
+    capsule::examine_lines(world, target, lines);
+    beacons::examine_lines(world, target, lines);
     equipment::examine_lines(world, target, lines);
     rocks::examine_lines(world, target, lines);
 }
@@ -150,10 +168,10 @@ pub fn examine_lines(
 pub fn click_alt(
     world: &mut bevy::prelude::World,
     client: bevy::prelude::Entity,
-    _mob: bevy::prelude::Entity,
+    mob: bevy::prelude::Entity,
     target: bevy::prelude::Entity,
 ) -> bool {
-    orm::click_alt(world, client, target)
+    orm::click_alt(world, client, target) || beacons::click_alt(world, client, mob, target)
 }
 
 /// tgui `OreBox`.

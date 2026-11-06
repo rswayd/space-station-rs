@@ -97,6 +97,10 @@ pub enum MiningJob {
     DigByHand,
     /// A crowbar on an ore box.
     PryOreBox,
+    /// A marker beacon by hand ([`super::beacons`]).
+    PickUpBeacon,
+    /// A marker beacon into a beacon stack.
+    CollectBeacon,
 }
 
 /// tg `GIBTONITE_*` stages.
@@ -383,6 +387,9 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter, job: MiningJob
                 "You pry apart the ore box.",
             );
             deconstruct_ore_box(world, target);
+        }
+        MiningJob::PickUpBeacon | MiningJob::CollectBeacon => {
+            super::beacons::complete(world, mob, action, job);
         }
     }
 }

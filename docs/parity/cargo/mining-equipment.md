@@ -29,7 +29,7 @@
 Цветные светящиеся маркеры для разметки пути; сеть маяков Candela (освещение/связь маршрута).
 
 - **Код:** [`/obj/item/stack/marker_beacon`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/equipment/marker_beacons.dm#L17), [`/obj/structure/marker_beacon`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/equipment/marker_beacons.dm#L69), [`/obj/item/stack/candela_beacon`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/equipment/candela_network/candela_beacons.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 `ss13_game::mining::beacons`: стопка ставит маяк на тайл пользователя (один на тайл), alt-клик по стопке или маяку — выбор цвета списком ("Random" у маяка выбирает цвет), маяк светит своим цветом и меняет спрайт, пустая рука забирает его в новую стопку за 1,5 с, стопка — в себя (до 100), картовые пресеты цвета по типу; нет сети маяков Candela, выпадения стопки при разрушении маяка
 
 ### Фултон-эвакуация
 Фултон-пакет с привязкой к точке эвакуации поднимает предмет/моба на воздушном шаре и переносит к маяку.
@@ -41,7 +41,7 @@
 Капсула разворачивает готовое убежище по шаблону (стандартное, люкс, элитное, туалет, рыболовные); внутри свои шлюзы, столы, слипер, стазис.
 
 - **Код:** [`/obj/item/survivalcapsule`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/equipment/survival_pod.dm#L12), [`/datum/map_template/shelter`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/shelters.dm#L2)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ `ss13_game::mining::capsule`: капсула в руке трясётся и через 5 с разворачивает шаблон (`shelter_1/2/3/t.dmm`: альфа, бета-люкс, чарли-элит, туалет) по центру своего тайла — шаблон грузится на временный уровень (`ss13_mapload::load_template`), турфы (поверх старых), содержимое и зоны переносятся на место до `run_map_init`; проверка `check_deploy` (зоны шаттла/голодека, закрытые турфы кроме минеральных, плотные закреплённые объекты, каменные плитки, край карты) с сообщениями отказа и повторным использованием; живые в зоне — паралич 3 с, нокдаун 6 с и отброс тем дальше, чем ближе; осмотр показывает шаблон и описание; рыболовные капсулы — ../service/fishing.md; лог вместо `message_admins` вне лаваленда
 
 ### Прочие шахтёрские устройства
 Червоточный прыжок (wormhole jaunter, спасает от падения в пропасть), инъектор Лазаря (оживляет фауну как питомца), крюк-кошка, кейральные наручники (GPS вне станции), указатель вентилей, радио погоды (штормы).
