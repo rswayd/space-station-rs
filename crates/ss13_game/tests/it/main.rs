@@ -101,6 +101,7 @@ mod succumb;
 mod surfaces;
 mod surgery;
 mod tables;
+mod tank_storage;
 mod teg;
 mod traitor;
 mod traumas;
