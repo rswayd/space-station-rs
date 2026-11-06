@@ -308,6 +308,10 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/vending_refill/sovietsoda",
     "/obj/structure/closet/body_bag",
     "/obj/structure/closet/body_bag/bluespace",
+    // Mirrors hung from their frames (`ss13_game::service::barber::hang_frame`).
+    "/obj/structure/mirror",
+    "/obj/structure/mirror/broken",
+    "/obj/structure/mirror/magic/lesser/heretic",
 ];
 
 /// `ss13_game::species`: every species' organs (`mutant*`), meat (`meat`) and the plasmaman

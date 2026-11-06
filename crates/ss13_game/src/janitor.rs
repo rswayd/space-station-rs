@@ -444,7 +444,9 @@ pub fn wash(world: &mut World, target: Entity, clean_types: u32) -> bool {
         return wash_turf(world, pos, clean_types, false);
     }
     let wiped = crate::forensics::server::clean_act(world, target, clean_types)
-        | crate::radiation::clean_act(world, target, clean_types);
+        | crate::radiation::clean_act(world, target, clean_types)
+        // `/mob/living/carbon/human/wash`: an uncovered mouth loses its lipstick.
+        | crate::service::barber::clean_lips(world, target);
     match world.get::<Cleanable>(target) {
         Some(c) if c.clean_type & clean_types != 0 => {
             world.despawn(target);

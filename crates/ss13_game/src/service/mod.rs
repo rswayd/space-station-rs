@@ -21,6 +21,8 @@ mod archive;
 #[cfg(feature = "server")]
 mod art;
 #[cfg(feature = "server")]
+pub mod barber;
+#[cfg(feature = "server")]
 mod clown;
 #[cfg(feature = "server")]
 mod games;
@@ -41,6 +43,8 @@ mod statues;
 pub use archive::{ArchivedBook, BookBinder, BookScanner, LibraryArchive};
 #[cfg(feature = "server")]
 pub use art::Canvas;
+#[cfg(feature = "server")]
+pub use barber::{BarberJob, complete as barber_complete};
 #[cfg(feature = "server")]
 pub use clown::MimeVow;
 #[cfg(feature = "server")]
