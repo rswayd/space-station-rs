@@ -50,7 +50,7 @@ pub use library::Book;
 #[cfg(feature = "server")]
 pub use office::{Clipboard, Fax, Photocopier, Toner};
 #[cfg(feature = "server")]
-pub use paper::{Paper, write_printed};
+pub use paper::{Paper, PaperBin, write_printed};
 #[cfg(feature = "server")]
 pub use religion::{
     BIBLE_SKINS, BibleDeity, HolyRole, PerformingRite, Religion, ReligionJob, Rite, Sect,

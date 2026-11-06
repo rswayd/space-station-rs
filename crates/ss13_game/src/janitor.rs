@@ -399,6 +399,9 @@ pub fn expose(world: &mut World, target: Entity, holder: &Holder, modifier: f32)
                 }
             } else if living {
                 water_expose_mob(world, target, volume);
+            } else {
+                // `/datum/reagent/water/expose_obj` -> `extinguish()` (fireplaces, bonfires).
+                crate::fireplace::extinguish(world, target);
             }
         } else if chem.is_type(r.id, SPACE_CLEANER) {
             match turf {

@@ -263,6 +263,8 @@ pub enum Job {
     Decor(crate::decor::DecorJob),
     /// Harvesting, uprooting and replanting flora ([`crate::flora`]).
     Flora(crate::flora::FloraJob),
+    /// Taking an unlit bonfire apart ([`crate::fireplace`]).
+    Bonfire,
     /// Screwing, welding or repairing a law rack's module ([`crate::silicon::law_rack`]).
     LawRack(crate::silicon::law_rack::LawRackJob),
     /// AI core construction steps ([`crate::silicon::ai_core`]).
@@ -1305,6 +1307,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Decor(job) => crate::decor::complete(world, mob, action, job),
         &Job::DisplayCase(job) => crate::displaycase::complete(world, mob, action, job),
         &Job::Flora(job) => crate::flora::complete(world, mob, action, job),
+        Job::Bonfire => crate::fireplace::complete_dismantle(world, action),
         &Job::LawRack(job) => crate::silicon::law_rack::complete(world, mob, action, job),
         &Job::AiCore(job) => crate::silicon::ai_core::complete(world, mob, action, job),
         &Job::AiCard(job) => crate::silicon::aicard::complete(world, mob, action, job),
