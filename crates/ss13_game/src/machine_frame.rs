@@ -114,9 +114,11 @@ pub enum Family {
     MailSorter,
     /// Materials markets (`crate::cargo::materials_market`).
     MaterialsMarket,
+    /// BandaStation's teapot (`crate::teapot`).
+    Teapot,
 }
 
-const FAMILIES: [(&str, Family); 32] = [
+const FAMILIES: [(&str, Family); 33] = [
     (CELL_CHARGER, Family::Charger),
     (RECHARGER, Family::Charger),
     (crate::kitchen::MICROWAVE_ROOT, Family::Kitchen),
@@ -164,6 +166,7 @@ const FAMILIES: [(&str, Family); 32] = [
         ss13_mapload::cargo::MATERIALS_MARKET,
         Family::MaterialsMarket,
     ),
+    (crate::teapot::TEAPOT, Family::Teapot),
 ];
 
 /// The covered family of a machine type (`None`: not built or taken apart here).
@@ -1118,6 +1121,7 @@ pub fn setup_built(world: &mut World, machine: Entity) {
         Family::Orm => crate::mining::orm::setup(world, machine),
         Family::MailSorter => crate::cargo::mail_sorter::setup(world, machine),
         Family::MaterialsMarket => crate::cargo::materials_market::setup(world, machine),
+        Family::Teapot => crate::teapot::setup(world, machine, false),
     }
 }
 

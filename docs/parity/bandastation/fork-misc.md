@@ -12,13 +12,13 @@
 На живого моба нельзя наклеить больше одного стикера; эффект «сплющивания» (squish) ограничен тремя наложениями; обучение новичков (tutorial) отключено.
 
 - **Код:** [`/obj/item/sticker/attempt_attach()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/overrides/code/stickers.dm#L2), [`/datum/element/squish/Attach()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/overrides/code/squish.dm#L8), [`/datum/tutorial_manager/should_run()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/overrides/code/tutorial_disable.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — стикеров, squish и обучения нет
+- **Статус в ss13-rs:** 🟡 частично — обучения новичков нет, как и в форке; стикеров и squish нет (их механики — ../service/ и ../mobs/)
 
 ### Удар в спину (backstab)
 Компонент оружия: удар сзади наносит повышенный урон с перезарядкой.
 
 - **Код:** [`/datum/component/backstabs`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/~components/code/backstab.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ❌ нет — единственный носитель, выкидной нож (`knives.dm`), без трансформации (раскрытия) не наносит урона; нужен сначала `transforming` компонент (../combat/melee-weapons.md)
 
 ### Разрывание стен (rip_and_tear)
 Компонент тяжёлого оружия (кувалда, легендарные мечи): серия ударов по стене разрушает её, с затратой выносливости и требованием держать двумя руками; укреплённые стены — дольше.

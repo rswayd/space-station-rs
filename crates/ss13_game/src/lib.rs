@@ -365,6 +365,8 @@ pub mod panels;
 #[cfg(feature = "client")]
 pub mod panels_client;
 #[cfg(feature = "server")]
+pub mod papershredder;
+#[cfg(feature = "server")]
 pub mod plumbing;
 #[cfg(feature = "server")]
 pub mod point;
@@ -459,6 +461,8 @@ pub mod stumble;
 pub mod tables;
 #[cfg(feature = "server")]
 pub mod taser;
+#[cfg(feature = "server")]
+pub mod teapot;
 #[cfg(feature = "server")]
 pub mod telecomms;
 #[cfg(feature = "testing")]

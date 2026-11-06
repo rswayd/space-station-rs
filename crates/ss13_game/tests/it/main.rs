@@ -11,6 +11,7 @@ mod bots;
 mod breath;
 mod brig;
 mod brothers;
+mod bs_objects;
 mod buffs;
 mod cargo;
 mod changeling;
