@@ -1330,8 +1330,8 @@ fn crush(world: &mut World, door: Entity, tiles: &[TilePos]) {
 /// it; an unpowered airlock that is not moving opens or closes at once with
 /// `BYPASS_DOOR_CHECKS` (`airlockforced`), a powered one resists. True when `target` is an
 /// airlock (the click is handled).
-// shortcut: no electronics removal (open panel, `security_level` 0), door seals, or prying a
-// powered airlock with a forcing tool (jaws of life, wielded fireaxe); add with those items.
+// shortcut: no electronics removal (open panel, `security_level` 0) or door seals. A forcing
+// tool on a powered airlock is [`force_open_act`].
 pub fn crowbar_act(world: &mut World, client: Entity, target: Entity) -> bool {
     let warning = with_door(world, target, |door, appearance, ctx| {
         if door.kind != DoorKind::Airlock {
@@ -1372,6 +1372,199 @@ pub fn crowbar_act(world: &mut World, client: Entity, target: Entity) -> bool {
 pub enum DoorJob {
     /// `try_to_weld_secondary`: weld shut (`welded: false`) or unweld.
     Weld { welded: bool },
+    /// `try_to_crowbar(forced)`: a forcing tool prying a powered airlock open.
+    Pry { tool: Entity },
+}
+
+/// Items with `force_opens` that pry powered airlocks: the jaws of life and their subtypes.
+// shortcut: no wielded fireaxe or other forcing items; add them with their own modules.
+const FORCING_TOOLS: [&str; 1] = ["/obj/item/crowbar/power"];
+/// `/obj/item/crowbar/power/paramedic`: `limit_jaws_access`, `radio_alert`.
+const PARAMEDIC_JAWS: &str = "/obj/item/crowbar/power/paramedic";
+/// The paramedic jaws' `blacklisted_access`.
+const PARAMEDIC_BLACKLIST: [&str; 15] = [
+    "command",
+    "ai_upload",
+    "captain",
+    "hop",
+    "security",
+    "brig",
+    "armory",
+    "hos",
+    "detective",
+    "ce",
+    "cmo",
+    "qm",
+    "vault",
+    "rd",
+    "syndicate",
+];
+/// The jaws' `ignored_access`: doors with these never raise the radio alert.
+const JAWS_IGNORED_ACCESS: [&str; 3] = ["maint_tunnels", "aux_base", "external airlocks"];
+/// `try_to_crowbar`'s `time_to_open`, deciseconds.
+const PRY_DS: f32 = 50.0;
+/// The jaws' `alert_cooldown_time`, seconds.
+const JAWS_ALERT_COOLDOWN: f64 = 60.0;
+
+/// The paramedic jaws' `alert_cooldown`: the next radio alert is allowed from this time on.
+#[derive(Component, Clone, Copy, Debug)]
+pub struct JawsAlertReadyAt(pub f64);
+
+/// `/obj/item/crowbar/power/on_force_open`'s `limit_jaws_access`: false when the door needs a
+/// blacklisted access.
+pub fn jaws_may_force(tool_path: &str, door: &Door) -> bool {
+    !crate::obj_damage::is_under(tool_path, PARAMEDIC_JAWS)
+        || !door
+            .req_access
+            .iter()
+            .chain(&door.req_one_access)
+            .any(|a| PARAMEDIC_BLACKLIST.contains(&a.as_str()))
+}
+
+/// `on_force_open`'s radio alert check: the door has some access and none of it is ignored.
+/// tg's `!collective_access` never holds for a list, so a door without access alerts there; here
+/// it does not (the intended "no access at all" early return).
+pub fn jaws_alert_needed(door: &Door) -> bool {
+    let mut access = door
+        .req_access
+        .iter()
+        .chain(&door.req_one_access)
+        .peekable();
+    access.peek().is_some() && !access.any(|a| JAWS_IGNORED_ACCESS.contains(&a.as_str()))
+}
+
+/// tg `/obj/machinery/door/airlock/try_to_crowbar(tool, user, forced = TRUE)` with a forcing
+/// tool on a powered airlock: an electrified door shocks first, then 5 s of prying
+/// (`airlock_alien_prying.ogg`). True when the click is handled; false leaves the bolted,
+/// welded or unpowered airlock to [`crowbar_act`].
+// shortcut: the paramedic jaws refuse a blacklisted door before the 5 s, not after (tg checks
+// on `COMSIG_TOOL_FORCE_OPEN_AIRLOCK` at the end); no `AIRLOCK_PRY_DAMAGE` (doors have no
+// integrity yet).
+pub fn force_open_act(world: &mut World, actor: crate::tools::Actor, target: Entity) -> bool {
+    use ss13_shared::chat::Span;
+    let Some(item) = actor.item else {
+        return false;
+    };
+    let Some(path) = world
+        .get::<ss13_mapload::DmItem>(item)
+        .map(|i| i.path.clone())
+    else {
+        return false;
+    };
+    if !FORCING_TOOLS
+        .iter()
+        .any(|root| crate::obj_damage::is_under(&path, root))
+    {
+        return false;
+    }
+    let powered = world.get::<Unpowered>(target).is_none();
+    let Some(door) = world.get::<Door>(target) else {
+        return false;
+    };
+    if door.kind != DoorKind::Airlock || door.locked || door.welded || !door.has_power(powered) {
+        return false;
+    }
+    let (closed, allowed) = (door.state == DoorState::Closed, jaws_may_force(&path, door));
+    if world.get::<Electrified>(target).is_some()
+        && crate::wires::shock(world, target, actor.mob, 100.0)
+    {
+        return true;
+    }
+    if !closed {
+        return true;
+    }
+    let Some(&pos) = world.get::<TilePos>(target) else {
+        return true;
+    };
+    if !allowed {
+        crate::sound::playsound(
+            world,
+            crate::sound::PlaySound::new(pos, "sound/machines/buzz/buzz-sigh.ogg", 50.0, false),
+        );
+        crate::tools::tell(world, actor.client, Span::Warning, "не удаётся вскрыть!");
+        return true;
+    }
+    if crate::tools::use_tool(
+        world,
+        actor,
+        target,
+        PRY_DS,
+        0,
+        crate::construction::Job::Door(DoorJob::Pry { tool: item }),
+    ) {
+        crate::sound::playsound(
+            world,
+            crate::sound::PlaySound::new(
+                pos,
+                ss13_mapload::sound::files::POWER_TOOLS[2],
+                100.0,
+                true,
+            ),
+        );
+    }
+    true
+}
+
+/// The end of [`DoorJob::Pry`]: still a closed, unbolted, unwelded airlock (re-checked after the
+/// 5 s); an electrified one shocks again; then it opens with `BYPASS_DOOR_CHECKS` and the
+/// paramedic jaws alert the radio.
+fn complete_pry(world: &mut World, mob: Entity, target: Entity, tool: Entity) {
+    if world.get::<Electrified>(target).is_some() && crate::wires::shock(world, target, mob, 100.0)
+    {
+        return;
+    }
+    // `Some(alert needed)` once it opened.
+    let Some(alert) = with_door(world, target, |door, appearance, ctx| {
+        if door.kind != DoorKind::Airlock || door.locked || door.welded {
+            return (None, false);
+        }
+        let opened = ctx.open_bypass(door, appearance);
+        if opened {
+            door.sound = Some(DoorSound::Forced);
+        }
+        (opened.then(|| jaws_alert_needed(door)), opened)
+    })
+    .flatten() else {
+        return;
+    };
+    let paramedic = world
+        .get::<ss13_mapload::DmItem>(tool)
+        .is_some_and(|i| crate::obj_damage::is_under(&i.path, PARAMEDIC_JAWS));
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    if !alert
+        || !paramedic
+        || world
+            .get::<JawsAlertReadyAt>(tool)
+            .is_some_and(|r| now < r.0)
+    {
+        return;
+    }
+    world
+        .entity_mut(tool)
+        .insert(JawsAlertReadyAt(now + JAWS_ALERT_COOLDOWN));
+    let Some(&pos) = world.get::<TilePos>(target) else {
+        return;
+    };
+    let (person, tool_name) = (
+        crate::security::name_of(world, mob),
+        crate::security::name_of(world, tool),
+    );
+    let location = crate::bots::area_name(world, pos);
+    let tail = format!(
+        "{person} has forced open a door at {location} using {tool_name}. Confirm that this was done during an emergency by authorized staff."
+    );
+    // `/datum/aas_config_entry/jaws_entry_alert_paramedic`.
+    for (freq, head) in [
+        (ss13_chat::radio::FREQ_SECURITY, "SECURITY ALERT"),
+        (ss13_chat::radio::FREQ_MEDICAL, "MEDICAL ALERT"),
+    ] {
+        world.write_message(crate::radio::MachineRadio {
+            freq,
+            z: pos.z,
+            name: "Automated Announcement System".to_owned(),
+            text: format!("{head}: {tail}"),
+        });
+    }
 }
 
 /// `use_tool(src, user, 40)` of `try_to_weld_secondary`, deciseconds.
@@ -1455,7 +1648,10 @@ pub fn welder_act_secondary(world: &mut World, actor: crate::tools::Actor, targe
 /// still, and its weld is as the job found it.
 pub fn complete(world: &mut World, _client: Entity, mob: Entity, target: Entity, job: DoorJob) {
     use ss13_shared::chat::Span;
-    let DoorJob::Weld { welded: from } = job;
+    let from = match job {
+        DoorJob::Weld { welded } => welded,
+        DoorJob::Pry { tool } => return complete_pry(world, mob, target, tool),
+    };
     let Some(&pos) = world.get::<TilePos>(target) else {
         return;
     };
@@ -1696,6 +1892,29 @@ mod tests {
 
     fn list(items: &[&str]) -> Vec<String> {
         items.iter().map(|s| (*s).to_owned()).collect()
+    }
+
+    #[test]
+    fn paramedic_jaws_refuse_secure_doors_and_alert_on_restricted_ones() {
+        let paramedic = "/obj/item/crowbar/power/paramedic";
+        let jaws = "/obj/item/crowbar/power";
+        let brig = airlock(&["brig"]);
+        assert!(!jaws_may_force(paramedic, &brig));
+        assert!(jaws_may_force(jaws, &brig), "the plain jaws open anything");
+        let one_of = Door {
+            req_one_access: list(&["medical", "command"]),
+            ..airlock(&[])
+        };
+        assert!(!jaws_may_force(paramedic, &one_of));
+        assert!(jaws_may_force(paramedic, &airlock(&["medical"])));
+        // `ignored_access` and doors without access stay quiet.
+        assert!(jaws_alert_needed(&airlock(&["medical"])));
+        assert!(!jaws_alert_needed(&airlock(&["maint_tunnels"])));
+        assert!(!jaws_alert_needed(&airlock(&[
+            "medical",
+            "external airlocks"
+        ])));
+        assert!(!jaws_alert_needed(&airlock(&[])));
     }
 
     #[test]
