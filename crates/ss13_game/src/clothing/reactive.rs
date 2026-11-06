@@ -357,8 +357,9 @@ pub fn react(
         say(world, at, kind.cooldown_message().to_owned());
         return;
     }
+    let now = world_now(world);
     if let Some(mut a) = world.get_mut::<ReactiveArmor>(suit) {
-        a.cooldown_until = world_now(world) + COOLDOWN;
+        a.cooldown_until = now + COOLDOWN;
     }
     let emp = reaction == Reaction::Emp;
     match (kind, emp) {
