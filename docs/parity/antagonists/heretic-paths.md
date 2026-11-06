@@ -11,43 +11,43 @@
 Дуэлянт: «Совершенство Остроты», реорганизация, стойка истерзанного чемпиона, разбитые доспехи, «Волк среди овец» (арена), усиление клинков, «Ярость Стали» (кружащие клинки); вознесение «Серебряный Вихрь».
 
 - **Код:** [`blade_lore.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/heretic/knowledge/blade_lore.dm#L1), [`/datum/heretic_knowledge/limited_amount/starting/base_blade`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/heretic/knowledge/blade_lore.dm#L53), [`/datum/heretic_knowledge/ultimate/blade_final`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/heretic/knowledge/blade_lore.dm#L359)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/antag/heretic/paths.rs`: метка клинков (снимается клинком любого еретика), хватка в спину (1.5 с паралича, 10 урона), «Реорганизация» (8 с восстановления выносливости и оглушений с пацифизмом, уровни спелла +6 с перезарядки), вознесение (поглощение 45 с оглушений с перезарядкой 2 мин, +10 урона клинком с лечением половины); `// shortcut:` метка не запирает в зоне, нет защитных клинков, удара второй рукой, «Ярость Стали», «Волк среди овец», стойки
 
 ### Путь Космоса
 Звёзды и телепорты: «Вечные Врата», космические руны, звёздный взрыв, плащ из звёзд, касание звезды, космический клинок, космическая экспансия; вознесение «Дар Создателей» — призыв Звёздного наблюдателя.
 
 - **Код:** [`cosmic_lore.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/heretic/knowledge/cosmic_lore.dm#L1), [`/datum/heretic_knowledge/limited_amount/starting/base_cosmic`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/heretic/knowledge/cosmic_lore.dm#L50), [`/datum/heretic_knowledge/ultimate/cosmic_final`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/heretic/knowledge/cosmic_lore.dm#L232)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/antag/heretic/paths.rs`: космическая метка (по удару клинком возвращает на место наложения и парализует на 2 с), улучшение клинка (+5 ожога); `// shortcut:` нет звёздной метки, космических полей, комбо клинка, заклинаний и Звёздного наблюдателя
 
 ### Путь Плоти
 Гули и монстры: «Главенство Голода», несовершенный ритуал (гули), переплетение плоти, извивающиеся объятия, сырой пророк, кровоточащая сталь, сталкер; вознесение «Последний Гимн Жреца» — превращение в червя-Armsy.
 
 - **Код:** [`flesh_lore.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/heretic/knowledge/flesh_lore.dm#L1), [`/datum/heretic_knowledge/limited_amount/starting/base_flesh`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/heretic/knowledge/flesh_lore.dm#L52), [`/datum/heretic_knowledge/ultimate/flesh_final`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/heretic/knowledge/flesh_lore.dm#L301)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/antag/heretic/paths.rs`: метка плоти (тяжёлая резаная рана на случайной части тела), «Кровоточащая сталь» (тяжёлая рана при каждом ударе); `// shortcut:` нет гулей, монстров, «Переплетения плоти» и Armsy
 
 ### Путь Замка
 Двери и доступ: «Секрет Хранителя Ключей», связка ключей (открывает двери), обряд Хранителя, меняющийся облик, ловкость воришки, открывающий клинок, убежище Хранителя; вознесение «Открытие Лабиринта» — разрывы реальности со спавном монстров.
 
 - **Код:** [`lock_lore.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/heretic/knowledge/lock_lore.dm#L1), [`/datum/heretic_knowledge/limited_amount/starting/base_lock`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/heretic/knowledge/lock_lore.dm#L48), [`/datum/heretic_knowledge/ultimate/lock_final`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/heretic/knowledge/lock_lore.dm#L237)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/antag/heretic/paths.rs`: метка замка (10 с), «Открывающий клинок» (35% критической резаной раны); `// shortcut:` метка не запрещает доступ, хватка не открывает двери/мехи/компьютеры, нет связки ключей, заклинаний и разрывов вознесения
 
 ### Путь Луны
 Безумие: «Лунная тропа», врата разума, лунный амулет, лунный парад, лунный клинок, «Восшествие Артистов»; вознесение «Последний Акт» — массовое безумие и лунатики.
 
 - **Код:** [`moon_lore.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/heretic/knowledge/moon_lore.dm#L1), [`/datum/heretic_knowledge/limited_amount/starting/base_moon`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/heretic/knowledge/moon_lore.dm#L54), [`/datum/heretic_knowledge/ultimate/moon_final`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/heretic/knowledge/moon_lore.dm#L204)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/antag/heretic/paths.rs`: хватка (лунная галлюцинация, -30 рассудка), лунная метка (пацифизм, по удару: 30 с спутанности, 25 урона мозгу до 160, мудлет «Moon Insanity»), лунный клинок (телесная галлюцинация, -10 рассудка, 10/25 урона мозгу); `// shortcut:` нет антимагии луны, снятия пацифизма уроном, амулета, заклинаний и лунатиков
 
 ### Путь Ржавчины
 Ржавчина и разрушение: «Сказание Кузнеца», ржавый рывок, возведение ржавчины, уцелевшие обломки, агрессивное распространение, токсичный клинок, шлейф энтропии; вознесение «Клятва Несущего Ржавчину» — ржавление станции.
 
 - **Код:** [`rust_lore.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/heretic/knowledge/rust_lore.dm#L1), [`/datum/heretic_knowledge/limited_amount/starting/base_rust`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/heretic/knowledge/rust_lore.dm#L53), [`/datum/heretic_knowledge/ultimate/rust_final`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/heretic/knowledge/rust_lore.dm#L194)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/antag/heretic/paths.rs`: ржавая метка (10 с спутанности по удару); `// shortcut:` нет отвращения (метка и клинок), ржавления, ржавых протезов, заклинаний и ржавления станции
 
 ### Путь Пустоты
 Холод и космос: «Проблеск Зимы», фаза Пустоты, пустотная тюрьма, сплетение Пустоты, притяжение Пустоты, ищущий клинок, поток Пустоты; вознесение «Вальс Конца Времен» — буря и космическая неуязвимость.
 
 - **Код:** [`void_lore.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/heretic/knowledge/void_lore.dm#L1), [`/datum/heretic_knowledge/limited_amount/starting/base_void`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/heretic/knowledge/void_lore.dm#L50), [`/datum/heretic_knowledge/ultimate/void_final`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/heretic/knowledge/void_lore.dm#L294)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/antag/heretic/paths.rs`: хватка (10 с немоты, 2 стака холода), «Холод Пустоты» (до 5 стаков: -12 K в секунду на стак, замедление 0.5 на стак, 30 с), метка Пустоты (3 стака и немота), ищущий клинок (2 стака), «Притяжение Пустоты» (радиус 2: 30 урона, 3 стака, сбивание, подтягивание на 3 шага), вознесение — буря вокруг (немота до 20 с, холод, размытие, охлаждение); `// shortcut:` нет «Фазы Пустоты», тюрьмы, потока, рывка клинком, повреждения дверей/окон и погоды
 
 ### Броня еретика
 Знания брони по путям дают особые робы/доспехи с капюшоном и свойствами пути.
@@ -59,4 +59,4 @@
 Около 40 заклинаний в `magic/`: хватка Мансуса, телепатия, слепота, ЭМИ, теневой плащ, проход сквозь зеркала, космическое ползание, переплетение плоти, ржавая волна, холодный конус Пустоты, кровавое рассечение и др.
 
 - **Код:** [`code/modules/antagonists/heretic/magic`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/heretic/magic), [`/datum/heretic_knowledge/spell`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/heretic/heretic_knowledge.dm#L210)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/antag/heretic/server.rs` (`refresh`, `cast_spell`): кнопки с зарядами для всех заклинаний знаний; работают хватка Мансуса, «Взрыв вулкана», «Перерождение», «Клятва пламени», «Огненный каскад»; остальные сообщают, что не перенесены
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/antag/heretic/server.rs` (`refresh`, `cast_spell`): кнопки с зарядами для всех заклинаний знаний; работают хватка Мансуса, «Взрыв вулкана», «Перерождение», «Клятва пламени», «Огненный каскад», «Притяжение Пустоты», «Реорганизация» (`paths.rs`); остальные сообщают, что не перенесены
