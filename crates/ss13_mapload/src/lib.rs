@@ -469,13 +469,23 @@ fn load_on_startup(world: &mut World) {
 // shortcut: reads the manifest again (and doors read it once more in their init), a one-off
 // hitch per load; keep the manifest's index in a resource if loads become frequent.
 pub fn load_template(world: &mut World, path: &Path) -> anyhow::Result<u16> {
+    load_template_with(world, path, &|_, _| {})
+}
+
+/// [`load_template`] with `prepare` run on the parsed map before it spawns (a virtual domain
+/// pastes its safehouse and takes its landmarks out, `ss13_game::science::bitrunning`).
+pub fn load_template_with(
+    world: &mut World,
+    path: &Path,
+    prepare: &dyn Fn(&Path, &mut ss13_assets::dmm::DmmMap),
+) -> anyhow::Result<u16> {
     let assets = world
         .get_resource::<MapLoadPlugin>()
         .ok_or_else(|| anyhow::anyhow!("no MapLoadPlugin"))?
         .assets
         .clone();
     let manifest = read_manifest(&assets)?;
-    let report = load_maps(world, &[path.to_owned()], &manifest)?;
+    let report = load_maps_with(world, &[path.to_owned()], &manifest, prepare)?;
     let first_z = report
         .maps
         .first()

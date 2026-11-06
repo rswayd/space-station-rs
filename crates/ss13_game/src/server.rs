@@ -744,6 +744,28 @@ pub(crate) fn spawn_mob(world: &mut World, client: Entity, pos: TilePos, name: S
     mob
 }
 
+/// A human body nobody controls at `pos` (tg `new /mob/living/carbon/human(loc)`): [`spawn_mob`]
+/// without the client (a bitrunner's avatar, `crate::science::bitrunning`).
+pub(crate) fn spawn_body(
+    world: &mut World,
+    pos: TilePos,
+    name: String,
+    body: crate::human::HumanLook,
+) -> Entity {
+    let mob = world
+        .resource_scope(|world, template: Mut<MobTemplate>| template.0.spawn(world, Some(pos)));
+    let species = body.species;
+    world.entity_mut(mob).insert((
+        Mover::new(RUN_DELAY_SECS),
+        Networked,
+        Name::new(name),
+        body,
+        living_bundle(),
+    ));
+    crate::species::set_species(world, mob, species);
+    mob
+}
+
 /// Tiles the search around a full spawn point visits before giving up: a crowd of ~250 mobs.
 const SPAWN_SEARCH_TILES: usize = 256;
 

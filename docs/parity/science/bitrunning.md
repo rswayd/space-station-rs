@@ -8,38 +8,38 @@ _«Профессия битраннера» описано в [../round/jobs-te
 Загружает выбранный домен на отдельный z-уровень (холодная загрузка), спавнит тайники и кураторов, рассчитывает награды, остывает между запусками, улучшается деталями (больше очков, меньше остывание).
 
 - **Код:** [`/obj/machinery/quantum_server`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/bitrunning/server/_parent.dm#L4), [`cold_boot_map()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/bitrunning/server/map_handling.dm#L31), [`calculate_rewards()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/bitrunning/server/loot.dm#L2), [`reset()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/bitrunning/server/map_handling.dm#L200)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ `crates/ss13_game/src/science/bitrunning/server.rs`: `cold_boot` (проверки, очки, загрузка домена на свой уровень через `ss13_mapload::load_template_with`, сейф-хаус, тайник), `reset` → `scrub` через 15 с, остывание 2 мин × конденсатор, награды и оценка, детали (конденсатор, сканер, сервоприводы), отключение всех при потере питания; глитчи — в «Угрозы»; `// shortcut:` нет эмага и трансляции на экраны
 
 ### Квантовая консоль
 Выбор домена по сложности и стоимости (очки битраннинга), загрузка/остановка, список аватаров и угроз.
 
 - **Код:** [`/obj/machinery/computer/quantum_console`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/bitrunning/objects/quantum_console.dm#L1); tgui: [`QuantumConsole.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/QuantumConsole.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ `crates/ss13_game/src/science/bitrunning/server.rs`, `crates/ss13_game/src/science/bitrunning/client.rs`: окно `QuantumConsole` — домены по сложности с сокрытием по сканеру и очкам, загрузка по ключу и случайно, остановка (20 с `do_after` при подключённых), аватары с жизнями; `// shortcut:` нет кнопки трансляции и `Collapsible`, разделы доменов всегда раскрыты
 
 ### Нетпод и подключение аватара
 Капсула: игрок ложится, выбирает костюм аватара, тело лечится; сознание переходит в аватара в домене. Урон аватара частично отражается на теле, насильственное отключение (взлом капсулы, потеря питания, смерть аватара) наносит урон.
 
 - **Код:** [`/obj/machinery/netpod`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/bitrunning/netpod/_netpod.dm#L4), [`enter_matrix()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/bitrunning/netpod/utils.dm#L63), [`disconnect_occupant()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/bitrunning/netpod/utils.dm#L24), [`/datum/component/avatar_connection`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/bitrunning/components/avatar_connection.dm#L5), [`/datum/component/netpod_healing`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/bitrunning/components/netpod_healing.dm#L3); tgui: [`NetpodOutfits.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/NetpodOutfits.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/science/bitrunning/avatar.rs`: перетаскивание в под, 2 с подключения, аватар (повторно или новый у свободного выхода, одежда домена/битраннера с обрезкой слотов), лечение 4/с в поде, урон аватара по частям тела в тело, отключения (смерть, бессознательность, выход из пода, питание, вскрытие ломом 15 с, сброс) с уроном мозгу 40 × (1 − серво), автооткрытие; нет окна выбора костюма (`NetpodOutfits`), сканирования тела, хакерского псевдонима, дисков и скилчипов (`stock_gear`), бодикамеры
 
 ### Виртуальные домены
 29 доменов (пляжный бар, мегафауна Лаваленда, пираты, ксено-гнездо, клоун-планета, синдикат и др.): карта, сложность, стоимость, награда, ограничения снаряжения, модульные сегменты мобов. Цель — доставить зашифрованный тайник на ячейку отправки или убить босса.
 
 - **Код:** [`/datum/lazy_template/virtual_domain`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/bitrunning/virtual_domain/virtual_domain.dm#L5), [`/datum/modular_mob_segment`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/bitrunning/virtual_domain/modular_mob_segment.dm#L28), домены: [`virtual_domain/domains/`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/bitrunning/virtual_domain/domains)
 - **BandaStation:** [`modular_bandastation/domains/code/domains.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/domains/code/domains.dm#L7) — свои домены `inka_base` (с командой NT и снаряжением ТСФ) и `water_grot` (подземные воды, водовороты, туман); [`outfits.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/bitrunning/outfits.dm#L50) — замена магазина в снаряжении домена; [`npc_friendly.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/bitrunning/components/npc_friendly.dm#L16) — больше фракций, дружественных аватару
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/science/bitrunning/domains.rs`, `crates/ss13_game/src/science/bitrunning/server.rs`: все 26 игровых доменов (с BandaStation `inka_base`, `water_grot`) — стоимость, сложность, награда, `forced_outfit`, `completion_loot`; карта грузится с сейф-хаусом (`/obj/modular_map_root/safehouse`), ориентиры выходов/целей/тайника, мегафауна роняет тайник; нет модульных сегментов мобов, дополнительных задач (curiosities), ящиков за очки, рандомайзера ящиков, `setup_domain` отдельных доменов, миссий с призраками; замена магазина и фракции `npc_friendly` форка — не перенесены
 
 ### Голо-лестница и выход из домена
 Лестница в домене для безопасного выхода аватара обратно в тело.
 
 - **Код:** [`/obj/structure/hololadder`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/bitrunning/objects/hololadder.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ `crates/ss13_game/src/science/bitrunning/avatar.rs`: лестница у входа аватара и на постоянных выходах, клик или шаг на неё — 3 с и безопасное отключение
 
 ### Байтфорж и награды
 Байтфорж материализует на станции зашифрованный ящик наград (оценка прохождения, бонусы за мультиплеер и без урона, сертификат), иногда диск техвеба.
 
 - **Код:** [`/obj/machinery/byteforge`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/bitrunning/objects/byteforge.dm#L1), [`generate_loot()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/bitrunning/server/loot.dm#L44), [`grade_completion()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/bitrunning/server/loot.dm#L160), [`bitrunning/encrypted`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/bitrunning/objects/loot_crate.dm#L18)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/science/bitrunning/server.rs`: тайник на цели → очки, оценка (`grade_completion`), лучший результат домена, расшифрованный ящик у байтфоржа (4 тайла) с рудами по бонусу (`calculate_rewards`: случайность, серво, мультиплеер, без урона), `completion_loot` и сертификатом; нет диска техвеба, задержки 1 с и угроз в счёте
 
 ### Вендор битраннинга и диски
 Консоль заказов за очки битраннинга: диски способностей и предметов для аватара, гиммик-диски (спорт, данж), флер, BEPIS-предметы.

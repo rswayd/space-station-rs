@@ -8,7 +8,8 @@
 //! (`code/modules/experisci/`) in [`experiments`] with their handlers (the experi-scanner, the
 //! destructive scanner, tgui `ExperimentConfigure`) in [`experi_scanner`], and the server control
 //! console (tgui `ServerControl`) in [`server_control`]. Xenobiology's slimes, extracts and
-//! potions are in [`xenobio`]; exploration drones and the scanner array in [`exodrone`].
+//! potions are in [`xenobio`]; exploration drones and the scanner array in [`exodrone`];
+//! bitrunning (the quantum server, netpods, virtual domains) in [`bitrunning`].
 //! [`client`] draws the windows. This module holds the windows' data, which both halves
 //! share.
 //!
@@ -23,6 +24,7 @@ use ss13_tgui::interfaces::vending::ProductIcon;
 pub mod analyzer;
 #[cfg(feature = "server")]
 pub mod autolathe;
+pub mod bitrunning;
 #[cfg(feature = "client")]
 pub mod client;
 #[cfg(feature = "server")]
@@ -68,6 +70,7 @@ impl bevy::prelude::Plugin for ScienceServerPlugin {
             server_control::ServerControlPlugin,
             xenobio::XenobioPlugin,
             exodrone::server::ExodronePlugin,
+            bitrunning::server::BitrunningServerPlugin,
         ));
     }
 }
