@@ -319,6 +319,8 @@ pub enum Job {
     QuantumPad(crate::science::quantum_pad::PadJob),
     /// Wrenching a light fixture frame apart ([`crate::power::lighting`]).
     Light(crate::power::lighting::LightJob),
+    /// Drawing, outlining or eating with a crayon ([`crate::crayons`]).
+    Crayon(crate::crayons::CrayonJob),
 }
 
 /// A turf's baseturf stack, bottom first (tg `baseturfs`). Absent: assembled from the type's
@@ -1343,6 +1345,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Decor(job) => crate::decor::complete(world, mob, action, job),
         &Job::DisplayCase(job) => crate::displaycase::complete(world, mob, action, job),
         &Job::Light(job) => crate::power::lighting::complete(world, action, job),
+        Job::Crayon(job) => crate::crayons::complete(world, mob, action, job.clone()),
         &Job::QuantumPad(job) => crate::science::quantum_pad::complete(world, client, target, job),
         &Job::Flora(job) => crate::flora::complete(world, mob, action, job),
         Job::Bonfire => crate::fireplace::complete_dismantle(world, action),

@@ -76,6 +76,8 @@
 //! | 3190 | `janitor::broom_attack_self` (push broom wield) |
 //! | 3192 | `power::lighting::replacer_attack_self` (the fixtures on the user's tile) |
 //! | 3194 | `closets::kinds::bodybag_attack_self` (a folded body bag unfolds) |
+//! | 3203 | `crayons::attack_self` (the stencil menu, a spray can's cap and colour) |
+//! | 3213 | `gifts::open` |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):
 //!
@@ -94,6 +96,7 @@
 //! | 467 | `devices::laser_pointer::item_interaction` (diode, crystal lens, their removal) |
 //! | 473 | `cargo::money::item_interaction` (cash onto the ID in the other hand) |
 //! | 480 | `clothing::accessories::attach` (before a jumpsuit's holster takes the item) |
+//! | 483 | `gifts::wrap_parcel` (wrapping paper onto a parcel, before it takes the paper) |
 //! | 500 | core: a storage opens or takes the held item |
 //! | 600 | `implants::item_interaction` |
 //! | 700 | `assemblies::server::item_interaction` |
@@ -294,6 +297,10 @@
 //! | 4000 | `atmos_machinery::windows::item_interaction` |
 //! | 4100 | `modpc::pda::item_interaction_secondary` (right click) |
 //! | 4200 | `disposals::item_interaction` |
+//! | 4253 | `crayons::interact` (drawing, spray painting, chalk outlines, eating a crayon) |
+//! | 4263 | `syndie_spraycan::interact` (the Syndicate rune) |
+//! | 4273 | `stickers::attempt_attach` |
+//! | 4283 | `gifts::wrap_parcel` (wrapping paper on a parcel) |
 //! | 4300 | `tables::item_interaction` |
 //! | 4400 | `science::experi_scanner::pre_attack` (not on living mobs) |
 //! | 4460 | `closets::kinds::held_on_target` (large crates, multitools on abandoned crates) |

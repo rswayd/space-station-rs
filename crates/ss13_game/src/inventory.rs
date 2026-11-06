@@ -591,6 +591,10 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 && crate::science::quantum_pad::click_alt(world, client, mob, item)
             {
                 // A quantum keycard unlinks.
+            } else if let Some(item) = inventory.slot(slot)
+                && crate::crayons::toggle_cap(world, client, item)
+            {
+                // A spray can's cap.
             } else if let Some(item) = inventory.slot(slot) {
                 // A PDA gives back its ID.
                 crate::modpc::pda::alt_click(world, mob, item);

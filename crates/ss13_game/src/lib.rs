@@ -227,6 +227,8 @@ pub mod construction;
 #[cfg(feature = "server")]
 pub mod cooking;
 #[cfg(feature = "server")]
+pub mod crayons;
+#[cfg(feature = "server")]
 pub mod death;
 #[cfg(feature = "server")]
 pub mod debuffs;
@@ -288,6 +290,8 @@ pub mod genetics;
 pub mod ghost;
 #[cfg(feature = "server")]
 pub mod gibber;
+#[cfg(feature = "server")]
+pub mod gifts;
 #[cfg(feature = "server")]
 pub mod grenades;
 #[cfg(feature = "server")]
@@ -469,6 +473,8 @@ pub mod station_traits;
 #[cfg(feature = "server")]
 pub mod status_effects;
 #[cfg(feature = "server")]
+pub mod stickers;
+#[cfg(feature = "server")]
 pub mod stock_parts;
 #[cfg(feature = "server")]
 pub mod storage;
@@ -480,6 +486,8 @@ pub mod stove;
 pub mod strip;
 #[cfg(feature = "server")]
 pub mod stumble;
+#[cfg(feature = "server")]
+pub mod syndie_spraycan;
 #[cfg(feature = "server")]
 pub mod t_scanner;
 #[cfg(feature = "server")]
