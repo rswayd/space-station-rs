@@ -101,6 +101,12 @@ pub enum MiningJob {
     PickUpBeacon,
     /// A marker beacon into a beacon stack.
     CollectBeacon,
+    /// A fulton beacon kit unfolding ([`super::fulton`]).
+    UnfoldFultonBeacon,
+    /// A fulton beacon folding into its kit.
+    FoldFultonBeacon,
+    /// A fulton pack attaching to a thing.
+    Fulton,
 }
 
 /// tg `GIBTONITE_*` stages.
@@ -390,6 +396,9 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter, job: MiningJob
         }
         MiningJob::PickUpBeacon | MiningJob::CollectBeacon => {
             super::beacons::complete(world, mob, action, job);
+        }
+        MiningJob::UnfoldFultonBeacon | MiningJob::FoldFultonBeacon | MiningJob::Fulton => {
+            super::fulton::complete(world, mob, action, job);
         }
     }
 }

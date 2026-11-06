@@ -5,8 +5,8 @@
 //! them ([`console`]), mining vouchers and the point transfer card ([`equipment`]), kinetic
 //! accelerator modkits ([`modkits`]), the stacking machine with its console ([`stacking`]) and
 //! the fauna's monster cores with the stabilizing serum ([`cores`]), the resonator
-//! ([`resonator`]), bluespace shelter capsules ([`capsule`]), marker beacons ([`beacons`]) and the explorer gear's
-//! armour plates ([`explorer`]).
+//! ([`resonator`]), bluespace shelter capsules ([`capsule`]), marker beacons ([`beacons`]), the explorer gear's
+//! armour plates ([`explorer`]) and fulton extraction ([`fulton`]).
 //! This module holds the windows' data, which both halves share; the client views are in
 //! [`client`].
 //!
@@ -32,6 +32,8 @@ pub mod cores;
 pub mod equipment;
 #[cfg(feature = "server")]
 pub mod explorer;
+#[cfg(feature = "server")]
+pub mod fulton;
 #[cfg(feature = "server")]
 pub mod modkits;
 #[cfg(feature = "server")]
@@ -72,6 +74,10 @@ impl bevy::prelude::Plugin for MiningServerPlugin {
         app.add_click_handler(ClickPhase::AttackSelf, 3186, |w, c| {
             crate::mining::beacons::attack_self(w, c.client, c.mob, c.target)
         });
+        // Fulton packs link to a beacon, beacon kits unfold.
+        app.add_click_handler(ClickPhase::AttackSelf, 3188, |w, c| {
+            crate::mining::fulton::attack_self(w, c.client, c.mob, c.target)
+        });
         app.add_click_handler(ClickPhase::EmptyHand, 2900, |w, c| {
             crate::mining::interact(w, c.client, c.mob, c.target)
         });
@@ -97,6 +103,7 @@ impl bevy::prelude::Plugin for MiningServerPlugin {
             capsule::CapsulePlugin,
             beacons::BeaconsPlugin,
             explorer::ExplorerPlugin,
+            fulton::FultonPlugin,
         ));
     }
 }
@@ -115,6 +122,7 @@ pub fn interact(
         || console::interact(world, client, mob, target)
         || stacking::interact(world, client, mob, target)
         || beacons::interact(world, client, mob, target)
+        || fulton::interact(world, client, mob, target)
 }
 
 /// The mining `item_interaction`s of a held item: digging, ore into the ORM or an ore box,
@@ -132,6 +140,7 @@ pub fn item_interaction(
         || resonator::item_interaction(world, mob, held, target)
         || beacons::item_interaction(world, client, mob, held, target)
         || explorer::item_interaction(world, client, held, target)
+        || fulton::item_interaction(world, client, mob, held, target)
         || modkits::item_interaction(world, client, mob, held, target)
         || equipment::item_interaction(world, client, mob, held, target)
         || stacking::item_interaction(world, client, mob, held, target)
@@ -166,6 +175,7 @@ pub fn examine_lines(
     capsule::examine_lines(world, target, lines);
     beacons::examine_lines(world, target, lines);
     explorer::examine_lines(world, target, lines);
+    fulton::examine_lines(world, target, lines);
     equipment::examine_lines(world, target, lines);
     rocks::examine_lines(world, target, lines);
 }
