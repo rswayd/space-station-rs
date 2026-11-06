@@ -96,7 +96,7 @@ fn metastation() {
     println!("MetaStation disposals: {report:#?}");
     assert!(report.pipes > 1000 && report.bins >= 50 && report.outlets >= 10);
     assert!(report.sorting >= 30, "mail sorting junctions");
-    // Wall clock: the gate runs this next to station_maps, so 3x the ~0.05 s idle build time.
+    // Wall clock: the gate runs this next to the station map surveys, so 3x the ~0.05 s idle build time.
     assert!(
         report.build_secs < 0.15,
         "network build {} s",

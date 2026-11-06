@@ -1427,81 +1427,89 @@ fn cyberiad() {
     println!("alarms linked to chamber sensors: {linked}");
 }
 
-/// Every station map through atmos start-up and a minute of air: what it has, what joins
-/// across decks, which alarms found their sensors. A survey (`--nocapture`): it fails only on
-/// a crash or on a multi-deck adapter left alone on a stacked level.
-#[test]
-#[ignore = "needs generated assets and every station map; run with --ignored"]
-fn station_maps() {
+/// A station map through atmos start-up and a minute of air: what it has, what joins across
+/// decks, which alarms found their sensors. A survey (`--nocapture`): it fails only on a crash
+/// or on a multi-deck adapter left alone on a stacked level. One test per map so nextest loads
+/// them in parallel (the maps in turn took ~400 s of the gate).
+fn survey_station_map(path: &str) {
     use ss13_game::atmos_machinery::looks::MultiZAdapter;
-    let maps = [
-        "_maps/map_files/MetaStation/MetaStation.dmm",
-        "_maps/map_files/Cyberiad/Cyberiad.dmm",
-        "_maps/map_files/Deltastation/DeltaStation2.dmm",
-        "_maps/map_files/IceBoxStation/IceBoxStation.dmm",
-        "_maps/map_files/KiloStation/KiloStation.dmm",
-        "_maps/map_files/NebulaStation/NebulaStation.dmm",
-        "_maps/map_files/tramstation/tramstation.dmm",
-        "_maps/map_files/wawastation/wawastation.dmm",
-        "_maps/map_files/CatwalkStation/CatwalkStation_2023.dmm",
-        "_maps/map_files/debug/runtimestation.dmm",
-        "_maps/map_files/debug/multiz.dmm",
-    ];
-    let mut lonely_total = 0;
-    for path in maps {
-        let map = MapLoadPlugin {
-            maps: vec![path.into()],
-            ..metastation_map()
-        };
-        let mut server = server_app(map, |app| {
-            app.add_plugins(AtmosPlugin);
-        });
-        let report = server.world().resource::<AtmosMachineryReport>().clone();
-        let levels = ss13_game::events::controller::station_levels(server.world());
-        let mut adapters = server
-            .world_mut()
-            .query_filtered::<(&AtmosDevice, &TilePos), With<MultiZAdapter>>();
-        let world = server.world();
-        let net = world.resource::<Pipenet>();
-        let all: Vec<(TilePos, bool)> = adapters
-            .iter(world)
-            .map(|(d, &p)| {
-                let n = &net.device(d.id).unwrap().nodes;
-                (p, n[1].is_some() || n[2].is_some())
-            })
-            .collect();
-        let lonely: Vec<TilePos> = all.iter().filter(|(_, j)| !j).map(|(p, _)| *p).collect();
-        lonely_total += lonely.len();
-        run(&mut server, 60.0);
-        let mut vents = server.world_mut().query::<(&AtmosDevice, &VentPump)>();
-        let world = server.world();
-        let net = world.resource::<Pipenet>();
-        let area_vents: Vec<f64> = vents
-            .iter(world)
-            .filter(|(_, v)| v.area.is_some())
-            .map(|(d, _)| net.pipeline_air(d.id, 0).map_or(0.0, |a| a.pressure()))
-            .collect();
-        let pressurized = area_vents.iter().filter(|&&p| p > 50.0).count();
-        let mut alarms = server
-            .world_mut()
-            .query::<&ss13_game::atmos_machinery::AirAlarm>();
-        let linked = alarms
-            .iter(server.world())
-            .filter(|a| a.sensor.is_some())
-            .count();
-        println!(
-            "{path}: levels {levels:?}, {} devices, {} pipelines, {} alarms ({linked} on a \
-             sensor), adapters {} (alone {lonely:?}), vents over 50 kPa after 60 s: \
-             {pressurized}/{}",
-            report.devices,
-            report.pipelines,
-            report.alarms,
-            all.len(),
-            area_vents.len()
-        );
-    }
-    assert_eq!(
-        lonely_total, 0,
+    let map = MapLoadPlugin {
+        maps: vec![path.into()],
+        ..metastation_map()
+    };
+    let mut server = server_app(map, |app| {
+        app.add_plugins(AtmosPlugin);
+    });
+    let report = server.world().resource::<AtmosMachineryReport>().clone();
+    let levels = ss13_game::events::controller::station_levels(server.world());
+    let mut adapters = server
+        .world_mut()
+        .query_filtered::<(&AtmosDevice, &TilePos), With<MultiZAdapter>>();
+    let world = server.world();
+    let net = world.resource::<Pipenet>();
+    let all: Vec<(TilePos, bool)> = adapters
+        .iter(world)
+        .map(|(d, &p)| {
+            let n = &net.device(d.id).unwrap().nodes;
+            (p, n[1].is_some() || n[2].is_some())
+        })
+        .collect();
+    let lonely: Vec<TilePos> = all.iter().filter(|(_, j)| !j).map(|(p, _)| *p).collect();
+    run(&mut server, 60.0);
+    let mut vents = server.world_mut().query::<(&AtmosDevice, &VentPump)>();
+    let world = server.world();
+    let net = world.resource::<Pipenet>();
+    let area_vents: Vec<f64> = vents
+        .iter(world)
+        .filter(|(_, v)| v.area.is_some())
+        .map(|(d, _)| net.pipeline_air(d.id, 0).map_or(0.0, |a| a.pressure()))
+        .collect();
+    let pressurized = area_vents.iter().filter(|&&p| p > 50.0).count();
+    let mut alarms = server
+        .world_mut()
+        .query::<&ss13_game::atmos_machinery::AirAlarm>();
+    let linked = alarms
+        .iter(server.world())
+        .filter(|a| a.sensor.is_some())
+        .count();
+    println!(
+        "{path}: levels {levels:?}, {} devices, {} pipelines, {} alarms ({linked} on a \
+         sensor), adapters {} (alone {lonely:?}), vents over 50 kPa after 60 s: \
+         {pressurized}/{}",
+        report.devices,
+        report.pipelines,
+        report.alarms,
+        all.len(),
+        area_vents.len()
+    );
+    assert!(
+        lonely.is_empty(),
         "every multi-deck adapter finds its other deck"
     );
+}
+
+mod station_maps {
+    macro_rules! station_map {
+        ($($name:ident => $path:literal,)*) => {$(
+            #[test]
+            #[ignore = "needs generated assets and the station map; run with --ignored"]
+            fn $name() {
+                super::survey_station_map($path);
+            }
+        )*};
+    }
+
+    station_map! {
+        metastation => "_maps/map_files/MetaStation/MetaStation.dmm",
+        cyberiad => "_maps/map_files/Cyberiad/Cyberiad.dmm",
+        deltastation => "_maps/map_files/Deltastation/DeltaStation2.dmm",
+        iceboxstation => "_maps/map_files/IceBoxStation/IceBoxStation.dmm",
+        kilostation => "_maps/map_files/KiloStation/KiloStation.dmm",
+        nebulastation => "_maps/map_files/NebulaStation/NebulaStation.dmm",
+        tramstation => "_maps/map_files/tramstation/tramstation.dmm",
+        wawastation => "_maps/map_files/wawastation/wawastation.dmm",
+        catwalkstation => "_maps/map_files/CatwalkStation/CatwalkStation_2023.dmm",
+        runtimestation => "_maps/map_files/debug/runtimestation.dmm",
+        multiz => "_maps/map_files/debug/multiz.dmm",
+    }
 }

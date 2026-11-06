@@ -6,7 +6,8 @@ final-status-level = "slow"
 # The slowest integration test takes ~10 s; a hung server is killed after 5 minutes.
 slow-timeout = { period = "60s", terminate-after = 5 }
 
-# Loads every station map in turn (~260 s alone); slower still beside the other real-asset tests.
+# One station map each (`atmos_machinery::station_maps::*`), all loaded in parallel: a big map
+# takes ~40 s alone and longer beside the other real-asset tests.
 [[profile.default.overrides]]
-filter = "test(=atmos_machinery::station_maps)"
-slow-timeout = { period = "60s", terminate-after = 15 }
+filter = "test(/^atmos_machinery::station_maps::/)"
+slow-timeout = { period = "60s", terminate-after = 8 }
