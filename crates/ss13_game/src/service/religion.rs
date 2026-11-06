@@ -500,7 +500,7 @@ fn rename(world: &mut World, e: Entity, name: &str) {
     }
 }
 
-fn say(world: &mut World, mob: Entity, text: &str) {
+pub(super) fn say(world: &mut World, mob: Entity, text: &str) {
     let Some(&pos) = world.get::<TilePos>(mob) else {
         return;
     };

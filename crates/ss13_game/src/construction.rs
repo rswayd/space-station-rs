@@ -254,6 +254,8 @@ pub enum Job {
     Camera(crate::defenses::cameras::CameraJob),
     /// A rite's step at the altar, unpacking a bible into an altar ([`crate::service`]).
     Religion(crate::service::ReligionJob),
+    /// The Hippocrates bust's oath, carving a statue ([`crate::service`]).
+    Art(crate::service::ArtJob),
     /// Washing at a sink, a shower's valve, a toilet's cistern, a urinal's cap
     /// ([`crate::plumbing`]).
     Sink(crate::plumbing::SinkJob),
@@ -1295,6 +1297,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         Job::SlimeCores => crate::science::xenobio::complete_core_removal(world, action),
         &Job::Martial(job) => crate::martial::complete_reading(world, mob, action, job),
         &Job::Religion(job) => crate::service::religion_complete(world, mob, action, job),
+        &Job::Art(job) => crate::service::art_complete(world, mob, action, job),
         &Job::Camera(job) => crate::defenses::cameras::complete(world, mob, action, job),
         &Job::Sink(job) => crate::plumbing::complete(world, mob, action, job),
         &Job::Decor(job) => crate::decor::complete(world, mob, action, job),

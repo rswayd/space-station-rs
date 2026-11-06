@@ -6,9 +6,14 @@
 //!   when they differ).
 //! - A painted canvas in hand is finished (`finalize` -> `try_rename`): a title, then signed by
 //!   the painter or "Anonymous"; a finished one tells its title, author and medium.
+//! - Paint cans (`code/game/objects/items/paint.dm`) tint the floor or wall they are used on
+//!   (200 uses, then `paint_empty`); adaptive paint picks its colour in hand; paint remover
+//!   takes the tint off again.
 // shortcut: no pixel grid (tgui `Canvas` sprite editor) or generated icon, so a painting looks
 // like a work in progress; no colour palette, cleaning, frames, patronage, persistent
-// paintings or the gallery.
+// paintings or the gallery. Paint: a plain colour multiply instead of the saturation filter
+// (`color_transition_filter`, the right click override), no falling hazard, cleaning does not
+// wash it off (`WASHABLE_COLOUR_PRIORITY`).
 
 use bevy::prelude::*;
 use ss13_mapload::{DmAtom, DmObj, IconIndex};
@@ -27,6 +32,22 @@ const PALETTE: &str = "/obj/item/paint_palette";
 const SPRAYCAN: &str = "/obj/item/toy/crayon/spraycan";
 const CRAYON: &str = "/obj/item/toy/crayon";
 const PEN: &str = "/obj/item/pen";
+const PAINT: &str = "/obj/item/paint";
+const PAINT_ANYCOLOR: &str = "/obj/item/paint/anycolor";
+const PAINT_REMOVER: &str = "/obj/item/paint/paint_remover";
+const PAINT_ICON: &str = "icons/obj/art/paint.dmi";
+/// `paintleft`.
+const PAINT_USES: u32 = 200;
+/// The cans' `paint_color` by subtype, and adaptive paint's radial choices (name, colour).
+const PAINT_COLORS: [(&str, [u8; 4]); 7] = [
+    ("black", [0x33, 0x33, 0x33, 0xFF]),
+    ("blue", [0x00, 0x00, 0xFF, 0xFF]),
+    ("green", [0x00, 0xFF, 0x00, 0xFF]),
+    ("red", [0xFF, 0x00, 0x00, 0xFF]),
+    ("violet", [0xFF, 0x00, 0xFF, 0xFF]),
+    ("white", [0xFF, 0xFF, 0xFF, 0xFF]),
+    ("yellow", [0xFF, 0xFF, 0x00, 0xFF]),
+];
 /// `MAX_NAME_LEN`.
 const MAX_NAME_LEN: u32 = 42;
 
@@ -52,8 +73,31 @@ impl Default for Canvas {
     }
 }
 
+/// `/obj/item/paint`: its `paint_color` and `paintleft`.
+#[derive(Component, Clone, Copy, Debug, PartialEq)]
+pub struct PaintCan {
+    pub color: [u8; 4],
+    pub left: u32,
+}
+
+/// A turf tinted by paint (`WASHABLE_COLOUR_PRIORITY`), with the colour it had before.
+#[derive(Component, Clone, Copy, Debug, PartialEq)]
+pub struct Painted {
+    pub original: Option<[u8; 4]>,
+}
+
+/// The colour of a paint can type: its subtype's, white for the rest (`COLOR_WHITE`).
+fn can_color(path: &str) -> [u8; 4] {
+    PAINT_COLORS
+        .iter()
+        .find(|(name, _)| is_under(path, &format!("{PAINT}/{name}")))
+        .map_or([0xFF; 4], |&(_, c)| c)
+}
+
 #[derive(Clone, Debug)]
 pub enum ArtAsk {
+    /// Adaptive paint's colour (the radial).
+    PaintColor { can: Entity },
     /// "What do you want to name the painting?"
     Title { canvas: Entity },
     /// "Do you want to sign it or remain anonymous?"
@@ -63,6 +107,13 @@ pub enum ArtAsk {
 pub(super) fn add_parts(world: &mut World, e: Entity, path: &str) {
     if is_under(path, CANVAS) && world.get::<Canvas>(e).is_none() {
         world.entity_mut(e).insert(Canvas::default());
+    }
+    if is_under(path, PAINT) && !is_under(path, PAINT_REMOVER) && world.get::<PaintCan>(e).is_none()
+    {
+        world.entity_mut(e).insert(PaintCan {
+            color: can_color(path),
+            left: PAINT_USES,
+        });
     }
 }
 
@@ -89,6 +140,9 @@ pub(super) fn item_interaction(
     held: Entity,
     target: Entity,
 ) -> bool {
+    if paint_on(world, held, target) {
+        return true;
+    }
     let on_easel = world
         .get::<DmObj>(target)
         .is_some_and(|o| is_under(&o.path, EASEL));
@@ -137,6 +191,80 @@ pub(super) fn item_interaction(
     true
 }
 
+/// `paint/interact_with_atom` and `paint_remover/interact_with_atom` on a turf (not space).
+/// True when it was a can on a turf.
+fn paint_on(world: &mut World, held: Entity, target: Entity) -> bool {
+    let path = item_path(world, held);
+    if !is_under(&path, PAINT) || world.get::<ss13_mapload::Turf>(target).is_none() {
+        return false;
+    }
+    if is_under(&path, PAINT_REMOVER) {
+        // tg's `!isturf(...) || !isobj(...)` never passes; the remover is meant to work.
+        let Some(painted) = world.get::<Painted>(target).copied() else {
+            return false;
+        };
+        world.entity_mut(target).remove::<Painted>();
+        if let Some(mut look) = world.get_mut::<Appearance>(target) {
+            look.color = painted.original;
+        }
+        return true;
+    }
+    let space = world
+        .get::<TilePos>(target)
+        .is_some_and(|&pos| crate::construction::is_space(world, pos));
+    let Some(can) = world.get::<PaintCan>(held).copied() else {
+        return false;
+    };
+    if space || can.left == 0 {
+        return false;
+    }
+    let original = match world.get::<Painted>(target) {
+        Some(p) => p.original,
+        None => world.get::<Appearance>(target).and_then(|a| a.color),
+    };
+    world.entity_mut(target).insert(Painted { original });
+    if let Some(mut look) = world.get_mut::<Appearance>(target) {
+        look.color = Some(can.color);
+    }
+    let left = can.left - 1;
+    world.entity_mut(held).insert(PaintCan { left, ..can });
+    if left == 0 {
+        super::server::set_icon_state(world, held, PAINT_ICON, "paint_empty");
+    }
+    true
+}
+
+/// `paint/anycolor/attack_self`: the colour radial (a list here). True when `item` was one.
+fn adaptive_paint(world: &mut World, client: Entity, mob: Entity, item: Entity) -> bool {
+    if !is_under(&item_path(world, item), PAINT_ANYCOLOR) {
+        return false;
+    }
+    let Some(can) = world.get::<PaintCan>(item).copied() else {
+        return false;
+    };
+    if can.left == 0 {
+        tell(world, client, Span::Warning, "Краска закончилась!");
+        return true;
+    }
+    let prompt = ask_world(
+        world,
+        Ask::new(
+            client,
+            mob,
+            "Paint",
+            "Choose a colour",
+            PromptKind::List {
+                items: PAINT_COLORS.iter().map(|(n, _)| (*n).to_owned()).collect(),
+                default: None,
+            },
+        ),
+    );
+    world
+        .entity_mut(prompt)
+        .insert(PendingAsk::Art(ArtAsk::PaintColor { can: item }));
+    true
+}
+
 /// `update_overlays`: the `<icon_state>wip` splotch once painted on.
 fn refresh_look(world: &mut World, canvas: Entity) {
     let used = world.get::<Canvas>(canvas).is_some_and(|c| c.used);
@@ -162,6 +290,9 @@ fn refresh_look(world: &mut World, canvas: Entity) {
 
 /// `canvas/attack_self` -> the window's `finalize` (or its plaque once finished).
 pub(super) fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity) -> bool {
+    if adaptive_paint(world, client, mob, item) {
+        return true;
+    }
     let Some(canvas) = world.get::<Canvas>(item).cloned() else {
         return false;
     };
@@ -209,6 +340,21 @@ pub(super) fn answer(world: &mut World, actor: Entity, ask: ArtAsk, answer: Prom
     };
     let canvas = match &ask {
         ArtAsk::Title { canvas } | ArtAsk::Sign { canvas, .. } => *canvas,
+        &ArtAsk::PaintColor { can } => {
+            // `check_menu`: still held, with paint left.
+            let held = world
+                .get::<crate::inventory::Inventory>(actor)
+                .is_some_and(|i| i.hands.contains(&Some(can)));
+            if let (true, PromptAnswer::Item(i)) = (held, answer)
+                && let Some(&(name, color)) = PAINT_COLORS.get(i)
+                && let Some(state) = world.get::<PaintCan>(can).copied()
+                && state.left > 0
+            {
+                world.entity_mut(can).insert(PaintCan { color, ..state });
+                super::server::set_icon_state(world, can, PAINT_ICON, &format!("paint_{name}"));
+            }
+            return;
+        }
     };
     let unfinished = world.get::<Canvas>(canvas).is_some_and(|c| !c.finalized);
     if !unfinished || !super::paper::reachable(world, actor, canvas) {
@@ -251,5 +397,18 @@ pub(super) fn answer(world: &mut World, actor: Entity, ask: ArtAsk, answer: Prom
             }
         }
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn paint_cans_take_their_subtype_colour() {
+        assert_eq!(can_color("/obj/item/paint/red"), [0xFF, 0, 0, 0xFF]);
+        assert_eq!(can_color("/obj/item/paint/black"), [0x33, 0x33, 0x33, 0xFF]);
+        assert_eq!(can_color("/obj/item/paint/anycolor"), [0xFF; 4]);
+        assert_eq!(can_color("/obj/item/paint"), [0xFF; 4]);
     }
 }
