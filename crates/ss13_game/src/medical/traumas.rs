@@ -22,13 +22,16 @@
 //! ([`super::fear`]); severe — mute, paralysis, pacifism, kleptomania, aphasia
 //! (`ss13_chat::language`), cortical blindness (both read by `crate::vision`), narcolepsy (and
 //! its permanent kind), monophobia ([`super::fear`]), dyslexia ([`illiterate`], papers), split
-//! personality ([`super::split_personality`]). Random gains pick among all of tg's types
+//! personality ([`super::split_personality`]); special — imaginary friend
+//! ([`super::imaginary_friend`]), obsession ([`super::obsession`], [`gain_obsessed`]); hypnosis
+//! ([`gain_hypnosis`]); the other special and the magic ones in [`super::special_traumas`].
+//! Random gains pick among all of tg's types
 //! ([`TG_POOL`]): an unported pick gives nothing, so each ported trauma comes as often as in tg.
 // shortcut: no muscle spasms (no `/datum/status_effect/spasms`), expressive aphasia (needs the
 // common words list), mind echo (needs per-hearer speech rewriting), hypnotic stupor and
 // triggers (no trance), discoordination (no `TRAIT_DISCOORDINATED_TOOL_USER` gates),
-// achromatopsia's `TRAIT_COLORBLIND` (wire colours), imaginary friend, obsession, special and
-// magic traumas; no forced brain damage lines of dumbness (`traumas.json` is not converted), no
+// achromatopsia's `TRAIT_COLORBLIND` (wire colours), psychotic brawling, primal instincts and
+// fire-axe adoration; no forced brain damage lines of dumbness (`traumas.json` is not converted), no
 // fake health HUD, mood events or `TRAIT_DUMB`; kleptomania ignores the damage cooldown; an
 // inserted brain applies its traumas without their gain messages; no head-wound
 // (`TRAUMA_RESILIENCE_WOUND`) traumas, no `TRAIT_SPECIAL_TRAUMA_BOOST`; no admin-only phobia
@@ -184,6 +187,54 @@ pub enum Kind {
     Dyslexia,
     /// `/datum/brain_trauma/severe/split_personality` ([`super::split_personality`]).
     SplitPersonality,
+    /// `/datum/brain_trauma/special/imaginary_friend` ([`super::imaginary_friend`]).
+    ImaginaryFriend,
+    /// `/datum/brain_trauma/hypnosis`: the phrase is the trauma's ([`Trauma::phrase`],
+    /// [`gain_hypnosis`]).
+    Hypnosis,
+    /// `/datum/brain_trauma/special/obsessed` ([`super::obsession`], [`gain_obsessed`]).
+    Obsessed,
+    // `special.dm` and `magic.dm` ([`super::special_traumas`]).
+    Godwoken,
+    BluespaceProphet,
+    QuantumAlignment,
+    Tenacity,
+    DeathWhispers,
+    ExistentialCrisis,
+    /// `/datum/brain_trauma/special/beepsky` (never random, hidden from scanners).
+    Beepsky,
+    /// `/datum/brain_trauma/special/ptsd` (the veteran advisor's).
+    Ptsd,
+    Lumiphobia,
+    Poltergeist,
+    Antimagic,
+    /// `/datum/brain_trauma/magic/stalker` (`cosmic`: the heretic's star gazer).
+    Stalker {
+        cosmic: bool,
+    },
+}
+
+/// Quantum alignment's entangled target.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Link {
+    Entity(Entity),
+    Turf(TilePos),
+}
+
+/// The state of the special and magic traumas ([`super::special_traumas`]).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Extra {
+    /// A cooldown's end (game time): portals, crises, snapbacks, hallucinations, warnings.
+    pub next_at: f64,
+    /// The end of an episode: death whispers, a crisis, a snapback under way.
+    pub until: Option<f64>,
+    /// A phantom chasing the owner: its tile and the image its owner sees.
+    pub phantom: Option<(TilePos, Option<Entity>)>,
+    pub link: Option<Link>,
+    /// An existential crisis' veil.
+    pub entity: Option<Entity>,
+    /// The stalker is within 8 tiles.
+    pub close: bool,
 }
 
 /// The static part of a trauma type (tg vars).
@@ -218,6 +269,24 @@ impl Kind {
             lose,
             category: Category::Severe,
             resilience: Resilience::Surgery,
+        };
+        let special = |path, name, scan_desc, gain, lose| Def {
+            path,
+            name,
+            scan_desc,
+            gain,
+            lose,
+            category: Category::Special,
+            resilience: Resilience::Basic,
+        };
+        let magic = |path, name, scan_desc, gain, lose| Def {
+            path,
+            name,
+            scan_desc,
+            gain,
+            lose,
+            category: Category::Magic,
+            resilience: Resilience::Lobotomy,
         };
         match self {
             Self::Stuttering => mild(
@@ -390,6 +459,172 @@ impl Kind {
                 (Warning, "You feel like your mind was split in two."),
                 (Notice, "You feel alone again."),
             ),
+            Self::ImaginaryFriend => Def {
+                category: Category::Special,
+                resilience: Resilience::Basic,
+                ..mild(
+                    "/datum/brain_trauma/special/imaginary_friend",
+                    "Воображаемый друг",
+                    "частичная шизофрения",
+                    (
+                        Notice,
+                        "По какой-то причине вы чувствуете себя в хорошей компании.",
+                    ),
+                    (Warning, "Вы снова чувствуете себя одиноким."),
+                )
+            },
+            // The lines name the phrase ([`gain_hypnosis`], [`lose_text`]).
+            Self::Hypnosis => Def {
+                category: Category::Special,
+                ..severe(
+                    "/datum/brain_trauma/hypnosis",
+                    "Гипноз",
+                    "повторяющийся мыслительный паттерн",
+                    (Notice, ""),
+                    (Notice, ""),
+                )
+            },
+            Self::Obsessed => Def {
+                category: Category::Special,
+                resilience: Resilience::Lobotomy,
+                ..mild(
+                    "/datum/brain_trauma/special/obsessed",
+                    "Психотическая шизофрения",
+                    "психотические шизофренические бредовые идеи",
+                    (
+                        Warning,
+                        "Вы слышите отвратительный, скрипучий голос у себя в голове. Он требует от вас выполнения одного небольшого задания...",
+                    ),
+                    (Warning, "Голоса в вашей голове замолкают.."),
+                )
+            },
+            Self::Godwoken => special(
+                "/datum/brain_trauma/special/godwoken",
+                "Синдром пробужденного Бога",
+                "божественная иллюзия",
+                (Notice, "Вы чувствуете высшую силу внутри своего разума..."),
+                (
+                    Warning,
+                    "Божественное присутствие покидает вашу голову, потеряв интерес.",
+                ),
+            ),
+            Self::BluespaceProphet => special(
+                "/datum/brain_trauma/special/bluespace_prophet",
+                "Блюспейс пророчество",
+                "bluespace attunement",
+                (
+                    Notice,
+                    "Вы чувствуете, как блюспейс пульсирует вокруг тебя...",
+                ),
+                (Warning, "Слабая пульсация блюспейса сменяется тишиной."),
+            ),
+            Self::QuantumAlignment => special(
+                "/datum/brain_trauma/special/quantum_alignment",
+                "Квантовое выравнивание",
+                "квантовое выравнивание",
+                (
+                    Notice,
+                    "Вы чувствуете слабую связь со всем, что вас окружает...",
+                ),
+                (
+                    Warning,
+                    "Вы больше не чувствуете связи со своим окружением.",
+                ),
+            ),
+            Self::Tenacity => special(
+                "/datum/brain_trauma/special/tenacity",
+                "Упорство",
+                "травматическая невропатия",
+                (Warning, "Вы внезапно перестаете чувствовать боль."),
+                (Warning, "Вы понимаете, что снова можете чувствовать боль."),
+            ),
+            Self::DeathWhispers => special(
+                "/datum/brain_trauma/special/death_whispers",
+                "Функциональный церебральный некроз",
+                "хронический функциональный некроз",
+                (Warning, "Вы чувствуете себя мертвым внутри."),
+                (Notice, "Вы снова чувствуете себя живым."),
+            ),
+            Self::ExistentialCrisis => special(
+                "/datum/brain_trauma/special/existential_crisis",
+                "Экзистенциальный кризис",
+                "экзистенциальный кризис",
+                (Warning, "Вы чувствуете себя менее реальным."),
+                (Notice, "Вы снова чувствуете себя более значимым."),
+            ),
+            Self::Beepsky => special(
+                "/datum/brain_trauma/special/beepsky",
+                "Преступник",
+                "преступный склад ума",
+                (Warning, "Правосудие придет за вами."),
+                (
+                    Notice,
+                    "Вы были освобождены от ответственности за ваши преступления.",
+                ),
+            ),
+            Self::Ptsd => Def {
+                resilience: Resilience::Absolute,
+                ..special(
+                    "/datum/brain_trauma/special/ptsd",
+                    "Боевое ПТСР",
+                    "ПТСР",
+                    (
+                        Warning,
+                        "Вы возвращаетесь в хаос прошлого! Взрывы! Стрельба! Эмоции покинули строй!",
+                    ),
+                    (
+                        Notice,
+                        "Вы чувствуете, как исчезают воспоминания о прошлом, как возвращаются ваши эмоции и проясняется разум.",
+                    ),
+                )
+            },
+            Self::Lumiphobia => magic(
+                "/datum/brain_trauma/magic/lumiphobia",
+                "Люмифобия",
+                "светочувствительность",
+                (Warning, "Вы чувствуете тягу к темноте."),
+                (Notice, "Свет больше не беспокоит вас."),
+            ),
+            Self::Poltergeist => magic(
+                "/datum/brain_trauma/magic/poltergeist",
+                "Полтергейст",
+                "паранормальная активность",
+                (
+                    Warning,
+                    "Вы чувствуете ненавистное присутствие рядом с собой.",
+                ),
+                (
+                    Notice,
+                    "Вы чувствуете, как ненавистное присутствие исчезает.",
+                ),
+            ),
+            Self::Antimagic => magic(
+                "/datum/brain_trauma/magic/antimagic",
+                "Атаумазия",
+                "таумическая пустота",
+                (Notice, "Вы понимаете, что магия не может быть реальной."),
+                (Notice, "Вы понимаете, что магия может быть реальной."),
+            ),
+            Self::Stalker { cosmic } => Def {
+                path: if cosmic {
+                    "/datum/brain_trauma/magic/stalker/cosmic"
+                } else {
+                    "/datum/brain_trauma/magic/stalker"
+                },
+                ..magic(
+                    "",
+                    "Преследующий призрак",
+                    "экстрасенсорная паранойя",
+                    (
+                        Warning,
+                        "Вы чувствуете себя так, словно что-то хочет убить вас...",
+                    ),
+                    (
+                        Notice,
+                        "Вы больше не чувствуете, что кто-то смотрит вам в спину.",
+                    ),
+                )
+            },
             Self::Kleptomaniac => severe(
                 "/datum/brain_trauma/severe/kleptomaniac",
                 "Клептомания",
@@ -458,9 +693,9 @@ fn phobia_label(i: usize) -> &'static str {
 /// kind), category, `initial(resilience)`. Random gains pick among all of them, so each ported
 /// trauma comes as often as in tg.
 // shortcut: a pick of an unported type gives no trauma; add each type's kind as it is ported.
-pub const TG_POOL: [(&str, Option<Kind>, Category, Resilience); 37] = {
-    use Category::{Mild, Severe, Special};
-    use Resilience::{Basic, Surgery};
+pub const TG_POOL: [(&str, Option<Kind>, Category, Resilience); 41] = {
+    use Category::{Magic, Mild, Severe, Special};
+    use Resilience::{Basic, Lobotomy, Surgery};
     [
         (
             "/datum/brain_trauma/mild/color_blindness",
@@ -616,26 +851,31 @@ pub const TG_POOL: [(&str, Option<Kind>, Category, Resilience); 37] = {
         ),
         (
             "/datum/brain_trauma/special/bluespace_prophet",
-            None,
+            Some(Kind::BluespaceProphet),
             Special,
             Basic,
         ),
         (
             "/datum/brain_trauma/special/death_whispers",
-            None,
+            Some(Kind::DeathWhispers),
             Special,
             Basic,
         ),
         (
             "/datum/brain_trauma/special/existential_crisis",
-            None,
+            Some(Kind::ExistentialCrisis),
             Special,
             Basic,
         ),
-        ("/datum/brain_trauma/special/godwoken", None, Special, Basic),
+        (
+            "/datum/brain_trauma/special/godwoken",
+            Some(Kind::Godwoken),
+            Special,
+            Basic,
+        ),
         (
             "/datum/brain_trauma/special/imaginary_friend",
-            None,
+            Some(Kind::ImaginaryFriend),
             Special,
             Basic,
         ),
@@ -659,11 +899,40 @@ pub const TG_POOL: [(&str, Option<Kind>, Category, Resilience); 37] = {
         ),
         (
             "/datum/brain_trauma/special/quantum_alignment",
-            None,
+            Some(Kind::QuantumAlignment),
             Special,
             Basic,
         ),
-        ("/datum/brain_trauma/special/tenacity", None, Special, Basic),
+        (
+            "/datum/brain_trauma/special/tenacity",
+            Some(Kind::Tenacity),
+            Special,
+            Basic,
+        ),
+        (
+            "/datum/brain_trauma/magic/antimagic",
+            Some(Kind::Antimagic),
+            Magic,
+            Lobotomy,
+        ),
+        (
+            "/datum/brain_trauma/magic/lumiphobia",
+            Some(Kind::Lumiphobia),
+            Magic,
+            Lobotomy,
+        ),
+        (
+            "/datum/brain_trauma/magic/poltergeist",
+            Some(Kind::Poltergeist),
+            Magic,
+            Lobotomy,
+        ),
+        (
+            "/datum/brain_trauma/magic/stalker",
+            Some(Kind::Stalker { cosmic: false }),
+            Magic,
+            Lobotomy,
+        ),
     ]
 };
 
@@ -678,6 +947,12 @@ pub struct Trauma {
     steal_at: f64,
     /// Hallucinations: held off by mindbreaker (`TRAIT_RDS_SUPPRESSED`), Gibbering taken away.
     suppressed: bool,
+    /// Hypnosis: `hypnotic_phrase`.
+    pub phrase: String,
+    /// Obsession: the obsession and its counters.
+    pub obsession: Option<super::obsession::Obsession>,
+    /// The special and magic traumas' state.
+    pub extra: Extra,
 }
 
 /// A brain's traumas (tg `traumas`), on the brain organ.
@@ -757,13 +1032,34 @@ pub fn gain(world: &mut World, brain: Entity, kind: Kind, resilience: Option<Res
     {
         return false;
     }
-    let trauma = Trauma {
+    // An imaginary friend: a living body with a player too.
+    if kind == Kind::ImaginaryFriend
+        && owner(world, brain).is_some_and(|mob| !super::imaginary_friend::can_take(world, mob))
+    {
+        return false;
+    }
+    // `/datum/brain_trauma/hypnosis/New(phrase)`: no phrase, no trauma ([`gain_hypnosis`]).
+    if kind == Kind::Hypnosis {
+        return false;
+    }
+    if kind == Kind::Obsessed {
+        let mut rng = super::fork_rng(world);
+        return gain_obsessed(world, brain, None, resilience, &mut rng);
+    }
+    let mut trauma = Trauma {
         kind,
         resilience,
         possessed: Vec::new(),
         steal_at: 0.0,
         suppressed: false,
+        phrase: String::new(),
+        obsession: None,
+        extra: Extra::default(),
     };
+    if let Some(mob) = owner(world, brain) {
+        let mut rng = super::fork_rng(world);
+        super::special_traumas::on_gain(world, mob, &mut trauma, &mut rng);
+    }
     let mut all = world.get::<Traumas>(brain).cloned().unwrap_or_default();
     all.0.push(trauma);
     world.entity_mut(brain).insert(all);
@@ -820,6 +1116,160 @@ pub fn gain_type(
     gain(world, brain, kind, resilience).then_some(kind)
 }
 
+/// The `on_gain` lines of hypnosis, one picked.
+const HYPNOSIS_LINES: [&str; 5] = [
+    "В этом что-то есть... и, по какой-то причине, это кажется правильным. Вам кажется, что вы должны следовать этим словам.",
+    "Эти слова продолжают звучать у вас в голове. Вы обнаруживаете, что совершенно очарованы ими.",
+    "Вы чувствуете, как часть вашего сознания повторяет это снова и снова. Вам нужно следовать этим словам.",
+    "Вы чувствуете, что ваши мысли сосредотачиваются на этой фразе... Кажется, вы не можете выбросить её из головы.",
+    "Болит голова, но это все, о чем вы можете думать. Должно быть, это жизненно важно.",
+];
+
+/// `gain_trauma(/datum/brain_trauma/hypnosis, resilience, phrase)`: `brain` is hypnotized with
+/// `phrase` (trimmed; nothing for an empty one, as `New` deletes itself). False if not gained.
+// shortcut: no `/datum/antagonist/hypnotized` (its objective and antag HUD: the antagonists
+// group), no hypnosis alert, no highlight of the phrase in what the owner hears (no
+// per-hearer speech rewriting; `handle_hearing`).
+pub fn gain_hypnosis(
+    world: &mut World,
+    brain: Entity,
+    phrase: &str,
+    resilience: Option<Resilience>,
+    rng: &mut CombatRng,
+) -> bool {
+    let phrase = phrase.trim();
+    let kind = Kind::Hypnosis;
+    if phrase.is_empty() || !can_gain(traumas(world, brain), kind, resilience, false) {
+        return false;
+    }
+    let resilience = resilience.unwrap_or(kind.def().resilience);
+    if owner(world, brain).is_some_and(|mob| super::bioware::blocks_trauma(world, mob, resilience))
+    {
+        return false;
+    }
+    let mut all = world.get::<Traumas>(brain).cloned().unwrap_or_default();
+    all.0.push(Trauma {
+        kind,
+        resilience,
+        possessed: Vec::new(),
+        steal_at: 0.0,
+        suppressed: false,
+        phrase: phrase.to_owned(),
+        obsession: None,
+        extra: Extra::default(),
+    });
+    world.entity_mut(brain).insert(all);
+    let Some(mob) = owner(world, brain) else {
+        return true;
+    };
+    info!("{mob} was hypnotized with the phrase '{phrase}'");
+    let line = HYPNOSIS_LINES[rng.range(0, HYPNOSIS_LINES.len() as u32 - 1) as usize];
+    tell_owner(world, brain, (Span::Hypnophrase, phrase.to_owned()));
+    tell_owner(world, brain, (Span::Notice, line.to_owned()));
+    tell_owner(
+        world,
+        brain,
+        (
+            Span::BoldWarning,
+            "Вы были загипнотизированы этим предложением. Вы должны следовать этим словам. \
+             Если это не четкий приказ, вы можете свободно интерпретировать, как именно действовать, \
+             главное — вести себя так, будто эти слова являются для вас наивысшим приоритетом."
+                .to_owned(),
+        ),
+    );
+    refresh(world, mob);
+    true
+}
+
+/// `gain_trauma(/datum/brain_trauma/special/obsessed, resilience, obsession)`: `brain` becomes
+/// obsessed with `target`, or (none given) with [`super::obsession::find_obsession`]'s pick.
+/// False if not gained (nobody to obsess over, as `on_gain` returning FALSE).
+pub fn gain_obsessed(
+    world: &mut World,
+    brain: Entity,
+    target: Option<Entity>,
+    resilience: Option<Resilience>,
+    rng: &mut CombatRng,
+) -> bool {
+    let kind = Kind::Obsessed;
+    if !can_gain(traumas(world, brain), kind, resilience, false) {
+        return false;
+    }
+    let resilience = resilience.unwrap_or(kind.def().resilience);
+    let Some(mob) = owner(world, brain) else {
+        return false;
+    };
+    if super::bioware::blocks_trauma(world, mob, resilience) {
+        return false;
+    }
+    let Some(target) = target
+        .filter(|&t| t != mob && world.get_entity(t).is_ok())
+        .or_else(|| super::obsession::find_obsession(world, mob, &[], rng))
+    else {
+        return false;
+    };
+    let mut all = world.get::<Traumas>(brain).cloned().unwrap_or_default();
+    all.0.push(Trauma {
+        kind,
+        resilience,
+        possessed: Vec::new(),
+        steal_at: 0.0,
+        suppressed: false,
+        phrase: String::new(),
+        obsession: Some(super::obsession::Obsession::new(target)),
+        extra: Extra::default(),
+    });
+    world.entity_mut(brain).insert(all);
+    info!("{mob} has developed an obsession with {target}");
+    tell_owner(world, brain, kind.gain_text());
+    refresh(world, mob);
+    true
+}
+
+/// `set_obsession(new_obsession)` (BandaStation): a new obsession for `mob`'s trauma, its
+/// progress reset. False without the trauma.
+pub fn set_obsession(world: &mut World, mob: Entity, target: Entity) -> bool {
+    let Some(brain) = organs::organ(world, mob, Slot::Brain) else {
+        return false;
+    };
+    let Some(mut all) = world.get::<Traumas>(brain).cloned() else {
+        return false;
+    };
+    let Some(trauma) = all.0.iter_mut().find(|t| t.kind == Kind::Obsessed) else {
+        return false;
+    };
+    trauma.obsession = Some(super::obsession::Obsession::new(target));
+    world.entity_mut(brain).insert(all);
+    crate::mood::clear_event(world, mob, super::obsession::CATEGORY);
+    true
+}
+
+/// The phrase `mob`'s brain is hypnotized with, if any.
+pub fn hypnotic_phrase(world: &World, mob: Entity) -> Option<String> {
+    of_mob(world, mob)
+        .into_iter()
+        .find(|t| t.kind == Kind::Hypnosis)
+        .map(|t| t.phrase)
+}
+
+/// `/datum/brain_trauma/hypnosis/on_life`: 1% a second the phrase comes back, as a thought or
+/// as a voice on the radio (a chat hallucination).
+fn hypnosis_life(world: &mut World, mob: Entity, phrase: &str, rng: &mut CombatRng, secs: f32) {
+    if !spt_prob(rng, 1.0, secs) {
+        return;
+    }
+    if rng.chance(50.0) {
+        say_to(
+            world,
+            mob,
+            Span::Hypnophrase,
+            format!("...{}...", phrase.to_lowercase()),
+        );
+    } else {
+        crate::hallucination::kinds::chat(world, mob, true, Some(phrase.to_owned()));
+    }
+}
+
 /// Takes the trauma at `index` out of `brain` (tg `qdel(trauma)` -> `on_lose`).
 fn lose(world: &mut World, brain: Entity, index: usize) {
     let Some(mut all) = world.get::<Traumas>(brain).cloned() else {
@@ -838,6 +1288,27 @@ fn lose(world: &mut World, brain: Entity, index: usize) {
     }
     if let Some(mob) = owner(world, brain) {
         info!("{mob} lost the brain trauma {}", trauma.kind.def().path);
+        if trauma.kind == Kind::Obsessed {
+            crate::mood::clear_event(world, mob, super::obsession::CATEGORY);
+        }
+        super::special_traumas::on_lose(world, Some(mob), &trauma);
+        if trauma.kind == Kind::Hypnosis {
+            info!(
+                "{mob} is no longer hypnotized with the phrase '{}'",
+                trauma.phrase
+            );
+            tell_owner(
+                world,
+                brain,
+                (
+                    Span::Danger,
+                    format!(
+                        "Вы внезапно выходите из состояния гипноза. Фраза '{}' больше не кажется вам важной.",
+                        trauma.phrase
+                    ),
+                ),
+            );
+        }
         tell_owner(world, brain, trauma.kind.lose_text());
         refresh(world, mob);
     }
@@ -939,7 +1410,9 @@ pub fn brain_reagents(world: &mut World, mob: Entity, secs: f32) {
 
 /// The scanner's `Mental trauma: ...` line of `mob`'s brain (`get_status_appendix`).
 pub fn scan_line(world: &World, mob: Entity) -> Option<String> {
-    let all = of_mob(world, mob);
+    let mut all = of_mob(world, mob);
+    // `known_trauma = FALSE`: scanners do not show it.
+    all.retain(|t| t.kind != Kind::Beepsky);
     if all.is_empty() {
         return None;
     }
@@ -1011,6 +1484,8 @@ pub fn refresh(world: &mut World, mob: Entity) {
     let mut phobias = Vec::new();
     let mut monophobia = false;
     let mut split = false;
+    let mut friend = false;
+    let mut tenacity = false;
     for trauma in of_mob(world, mob) {
         match trauma.kind {
             Kind::Aphasia => aphasia = true,
@@ -1018,6 +1493,8 @@ pub fn refresh(world: &mut World, mob: Entity) {
             Kind::Phobia(i) => phobias.push(i),
             Kind::Monophobia => monophobia = true,
             Kind::SplitPersonality => split = true,
+            Kind::ImaginaryFriend => friend = true,
+            Kind::Tenacity => tenacity = true,
             Kind::Stuttering => speech.stutter = true,
             Kind::Dumbness => speech.derp = true,
             Kind::SpeechImpediment => speech.unintelligible = true,
@@ -1049,6 +1526,18 @@ pub fn refresh(world: &mut World, mob: Entity) {
     set_aphasia(world, mob, aphasia, gibbering);
     super::fear::set_sources(world, mob, &phobias, monophobia);
     super::split_personality::sync(world, mob, split);
+    super::imaginary_friend::sync(world, mob, friend);
+    // Tenacity's `TRAIT_NOSOFTCRIT` and `TRAIT_NOHARDCRIT`, with the species' own.
+    let species_softcrit = crate::species::def_of(world, mob).body_mods().no_softcrit;
+    if let Some(health) = world.get::<Health>(mob) {
+        let (soft, hard) = (species_softcrit || tenacity, tenacity);
+        if health.mods.no_softcrit != soft || health.mods.no_hardcrit != hard {
+            let mut health = health.clone();
+            health.mods.no_softcrit = soft;
+            health.mods.no_hardcrit = hard;
+            world.entity_mut(mob).insert(health);
+        }
+    }
     let mut entity = world.entity_mut(mob);
     if speech == ss13_chat::speech::Impediments::default() {
         entity.remove::<ss13_chat::speech::Impediments>();
@@ -1289,7 +1778,9 @@ fn on_life(world: &mut World, mob: Entity, trauma: &mut Trauma, secs: f32, rng: 
         Kind::Narcolepsy { permanent } => narcolepsy(world, mob, permanent, rng, secs),
         Kind::SplitPersonality => super::split_personality::on_life(world, mob, secs, rng),
         Kind::Kleptomaniac => kleptomania(world, mob, trauma, now, rng, secs),
-        _ => {}
+        Kind::Hypnosis => hypnosis_life(world, mob, &trauma.phrase, rng, secs),
+        Kind::Obsessed => super::obsession::on_life(world, mob, trauma, secs),
+        _ => super::special_traumas::on_life(world, mob, trauma, secs, rng),
     }
 }
 
@@ -1496,6 +1987,9 @@ mod tests {
             possessed: Vec::new(),
             steal_at: 0.0,
             suppressed: false,
+            phrase: String::new(),
+            obsession: None,
+            extra: Extra::default(),
         }
     }
 
@@ -1627,6 +2121,115 @@ mod world_tests {
             "Mental trauma: Severe Обширное повреждение речевого центра мозга, and Severe \
              Синдром пацифизма."
         );
+    }
+
+    #[test]
+    fn obsession_counts_time_away_and_goes_with_lobotomy() {
+        let mut world = World::new();
+        let mob = human(&mut world);
+        let b = brain(&world, mob);
+        let mut rng = CombatRng(5);
+        // Nobody to obsess over: no trauma.
+        assert!(!gain(&mut world, b, Kind::Obsessed, None));
+        let target = world.spawn((Stat::Conscious, TilePos::new(20, 20, 1))).id();
+        assert!(
+            !gain_obsessed(&mut world, b, Some(mob), None, &mut rng),
+            "not oneself"
+        );
+        assert!(gain_obsessed(&mut world, b, Some(target), None, &mut rng));
+        let state = |w: &World| of_mob(w, mob)[0].obsession.unwrap();
+        assert_eq!(state(&world).target, target);
+        // Out of view: the time away adds up, the time near resets.
+        life(&mut world, mob, 2.0);
+        life(&mut world, mob, 2.0);
+        let s = state(&world);
+        assert!(!s.viewing);
+        assert!((s.away - 4.0).abs() < 1e-4 && s.creeping == 0.0);
+        // A new obsession starts over.
+        let other = world.spawn((Stat::Conscious, TilePos::new(2, 2, 1))).id();
+        assert!(set_obsession(&mut world, mob, other));
+        assert_eq!(state(&world).target, other);
+        assert_eq!(state(&world).away, 0.0);
+        // Brain surgery does not take it; a lobotomy does.
+        assert_eq!(cure_all(&mut world, b, Resilience::Surgery), 0);
+        assert_eq!(cure_all(&mut world, b, Resilience::Lobotomy), 1);
+        assert!(!has(&world, mob, Kind::Obsessed));
+    }
+
+    #[test]
+    fn special_and_magic_traumas_apply_their_traits() {
+        let mut world = World::new();
+        let mob = human(&mut world);
+        let b = brain(&world, mob);
+        // Tenacity: conscious down to death.
+        assert!(gain(&mut world, b, Kind::Tenacity, None));
+        let health = world.get::<Health>(mob).unwrap().clone();
+        assert!(health.mods.no_softcrit && health.mods.no_hardcrit);
+        let mut hurt = health.clone();
+        hurt.adjust(crate::health::DamageType::Brute, 180.0);
+        let mut stat = Stat::Conscious;
+        crate::health::update_stat(&hurt, &mut stat);
+        assert_eq!(stat, Stat::Conscious);
+        remove_kind(&mut world, b, Kind::Tenacity);
+        assert!(!world.get::<Health>(mob).unwrap().mods.no_hardcrit);
+        // Antimagic and godwoken resist magic.
+        use crate::spells::{MAGIC_RESISTANCE, MAGIC_RESISTANCE_HOLY, can_block_magic};
+        assert!(!can_block_magic(&world, mob, MAGIC_RESISTANCE));
+        assert!(gain(&mut world, b, Kind::Antimagic, None));
+        assert!(gain(&mut world, b, Kind::Godwoken, None));
+        assert!(can_block_magic(&world, mob, MAGIC_RESISTANCE));
+        assert!(can_block_magic(&world, mob, MAGIC_RESISTANCE_HOLY));
+        // Magic traumas are lobotomy-deep; the criminal's is hidden from scanners.
+        assert_eq!(cure_all(&mut world, b, Resilience::Surgery), 1, "godwoken");
+        assert!(has(&world, mob, Kind::Antimagic));
+        assert!(gain(&mut world, b, Kind::Beepsky, None));
+        assert_eq!(
+            scan_line(&world, mob).unwrap(),
+            "Mental trauma: Deep-rooted Таумическая пустота."
+        );
+        // Quantum alignment entangles with a held item before the floor.
+        use super::super::special_traumas::entangle_target;
+        assert_eq!(
+            entangle_target(&world, mob),
+            Some(Link::Turf(TilePos::new(1, 1, 1)))
+        );
+        let item = world.spawn(CarriedBy(mob)).id();
+        world.get_mut::<Inventory>(mob).unwrap().hands[0] = Some(item);
+        assert_eq!(entangle_target(&world, mob), Some(Link::Entity(item)));
+    }
+
+    #[test]
+    fn hypnosis_keeps_its_phrase_until_surgery() {
+        let mut world = World::new();
+        let mob = human(&mut world);
+        let b = brain(&world, mob);
+        let mut rng = CombatRng(3);
+        // `New(phrase)` without a phrase: no trauma; the plain gain needs one too.
+        assert!(!gain_hypnosis(&mut world, b, "  ", None, &mut rng));
+        assert!(!gain(&mut world, b, Kind::Hypnosis, None));
+        assert!(gain_hypnosis(
+            &mut world,
+            b,
+            " Слушай клоуна ",
+            None,
+            &mut rng
+        ));
+        assert!(
+            !gain_hypnosis(&mut world, b, "другое", None, &mut rng),
+            "one of a type"
+        );
+        assert_eq!(
+            hypnotic_phrase(&world, mob).as_deref(),
+            Some("Слушай клоуна")
+        );
+        assert_eq!(
+            scan_line(&world, mob).unwrap(),
+            "Mental trauma: Severe Повторяющийся мыслительный паттерн."
+        );
+        // Neurine's basic cure leaves it; brain surgery takes it.
+        assert_eq!(cure_all(&mut world, b, Resilience::Basic), 0);
+        assert_eq!(cure_all(&mut world, b, Resilience::Surgery), 1);
+        assert_eq!(hypnotic_phrase(&world, mob), None);
     }
 
     #[test]

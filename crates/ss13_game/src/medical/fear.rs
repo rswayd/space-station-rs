@@ -227,7 +227,7 @@ fn seen_tiles(world: &World, pos: TilePos, range: u32) -> HashSet<TilePos> {
 }
 
 /// The entities on the tiles `mob` sees within `range` (`view(range, owner)`), without itself.
-fn in_view(world: &World, mob: Entity, range: u32) -> Vec<Entity> {
+pub(crate) fn in_view(world: &World, mob: Entity, range: u32) -> Vec<Entity> {
     let Some(&pos) = world.get::<TilePos>(mob) else {
         return Vec::new();
     };
