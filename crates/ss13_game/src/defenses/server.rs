@@ -134,7 +134,7 @@ impl Plugin for DefensesPlugin {
         });
         app.register_ui::<TurretWindow>()
             .register_ui::<TurretControlWindow>()
-            .add_systems(PostStartup, (init_turrets, init_panels).chain())
+            .add_systems(ss13_world::MapInitLate, (init_turrets, init_panels).chain())
             .add_systems(
                 Update,
                 (
@@ -172,7 +172,7 @@ fn now(world: &World) -> f64 {
 }
 
 fn init_turrets(world: &mut World) {
-    let mut query = world.query::<(Entity, &DmTurret)>();
+    let mut query = world.query_filtered::<(Entity, &DmTurret), With<ss13_world::Mapped>>();
     let turrets: Vec<(Entity, DmTurret)> =
         query.iter(world).map(|(e, dm)| (e, dm.clone())).collect();
     info!("{} turrets", turrets.len());
@@ -203,7 +203,8 @@ fn init_turrets(world: &mut World) {
 }
 
 fn init_panels(world: &mut World) {
-    let mut query = world.query::<(Entity, &DmWallMount, &TilePos)>();
+    let mut query =
+        world.query_filtered::<(Entity, &DmWallMount, &TilePos), With<ss13_world::Mapped>>();
     let panels: Vec<(Entity, DmWallMount, TilePos)> = query
         .iter(world)
         .filter(|(_, dm, _)| is_under(&dm.path, TURRETID_ROOT))

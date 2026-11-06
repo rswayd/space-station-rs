@@ -353,7 +353,8 @@ pub struct RandomStats {
 /// gives the same station.
 pub fn randomize_all(world: &mut World, icons: &IconIndex, rng: &mut Rng) -> RandomStats {
     let mut stats = RandomStats::default();
-    let mut query = world.query::<(Entity, &DmLook, &DmAtom, &mut Appearance)>();
+    let mut query = world
+        .query_filtered::<(Entity, &DmLook, &DmAtom, &mut Appearance), With<ss13_world::Mapped>>();
     let mut rolls: Vec<_> = query
         .iter_mut(world)
         .filter(|(_, look, ..)| !look.random.is_empty())

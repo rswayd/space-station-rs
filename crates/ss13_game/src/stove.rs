@@ -104,7 +104,10 @@ impl Plugin for StovePlugin {
             })
         });
         app.init_resource::<SoupClock>()
-            .add_systems(Startup, setup_mapped.after(crate::power::init_power))
+            .add_systems(
+                ss13_world::MapInit,
+                setup_mapped.after(crate::power::init_power),
+            )
             .add_systems(
                 Update,
                 (
@@ -136,7 +139,7 @@ fn path_of(world: &World, e: Entity) -> String {
 }
 
 fn setup_mapped(world: &mut World) {
-    let mut q = world.query::<(Entity, &DmPower)>();
+    let mut q = world.query_filtered::<(Entity, &DmPower), With<ss13_world::Mapped>>();
     let found: Vec<Entity> = q
         .iter(world)
         .filter(|(_, p)| is_under(&p.path, STOVE_ROOT) || is_under(&p.path, RANGE))

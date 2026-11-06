@@ -124,7 +124,7 @@ impl Plugin for ExperiScannerPlugin {
                 })
         });
         app.register_ui::<ExperimentConfigureUi>()
-            .add_systems(Startup, setup_destructive_scanners)
+            .add_systems(ss13_world::MapInit, setup_destructive_scanners)
             .add_systems(
                 Update,
                 (
@@ -144,7 +144,7 @@ impl Plugin for ExperiScannerPlugin {
 }
 
 fn setup_destructive_scanners(world: &mut World) {
-    let mut query = world.query::<(Entity, &DmObj)>();
+    let mut query = world.query_filtered::<(Entity, &DmObj), With<ss13_world::Mapped>>();
     let found: Vec<(Entity, String)> = query
         .iter(world)
         .filter(|(_, o)| is_under(&o.path, DESTRUCTIVE_SCANNER))

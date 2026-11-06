@@ -96,7 +96,7 @@ impl Plugin for SmesPlugin {
             })
         });
         app.register_ui::<SmesWindow>()
-            .add_systems(Startup, init_sprites.after(super::init_power))
+            .add_systems(ss13_world::MapInit, init_sprites.after(super::init_power))
             .add_systems(
                 Update,
                 (
@@ -126,7 +126,7 @@ fn sprites_for(world: &World, e: Entity) -> SmesSprites {
 }
 
 fn init_sprites(world: &mut World) {
-    let mut q = world.query_filtered::<Entity, With<Smes>>();
+    let mut q = world.query_filtered::<Entity, (With<Smes>, With<ss13_world::Mapped>)>();
     let all: Vec<Entity> = q.iter(world).collect();
     for e in all {
         let sprites = sprites_for(world, e);

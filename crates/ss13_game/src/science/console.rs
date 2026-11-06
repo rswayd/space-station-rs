@@ -53,7 +53,7 @@ pub struct ConsolePlugin;
 impl Plugin for ConsolePlugin {
     fn build(&self, app: &mut App) {
         app.register_ui::<TechwebUi>()
-            .add_systems(Startup, setup_consoles.after(ResearchLoaded))
+            .add_systems(ss13_world::MapInit, setup_consoles.after(ResearchLoaded))
             .add_systems(
                 Update,
                 (
@@ -127,7 +127,7 @@ pub fn catalogue(db: &ResearchDb, icons: Option<&ResearchIcons>) -> TechwebStati
 }
 
 fn setup_consoles(world: &mut World) {
-    let mut query = world.query::<(Entity, &DmObj)>();
+    let mut query = world.query_filtered::<(Entity, &DmObj), With<ss13_world::Mapped>>();
     let found: Vec<Entity> = query
         .iter(world)
         .filter(|(_, o)| is_under(&o.path, CONSOLE_ROOT))

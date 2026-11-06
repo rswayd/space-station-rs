@@ -62,12 +62,15 @@ pub fn init_looks(world: &mut World) {
         .unwrap_or_default();
     world.insert_resource(AtmosIcons { index });
     // Every machine draws its state once.
-    let mut q = world.query_filtered::<Entity, With<AtmosDevice>>();
+    let mut q = world.query_filtered::<Entity, (With<AtmosDevice>, With<ss13_world::Mapped>)>();
     let all: Vec<Entity> = q.iter(world).collect();
     for e in all {
         world.entity_mut(e).insert(LookDirty);
     }
-    let mut q = world.query_filtered::<Entity, Or<(With<Canister>, With<AirAlarm>)>>();
+    let mut q = world.query_filtered::<Entity, (
+        Or<(With<Canister>, With<AirAlarm>)>,
+        With<ss13_world::Mapped>,
+    )>();
     let all: Vec<Entity> = q.iter(world).collect();
     for e in all {
         world.entity_mut(e).insert(LookDirty);

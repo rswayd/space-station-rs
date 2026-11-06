@@ -87,7 +87,7 @@ pub fn check_operation(miner: &GasMiner, tile: MinerTile) -> Option<&'static str
 pub struct MinerClock(f64);
 
 pub fn init_miners(world: &mut World) {
-    let mut query = world.query::<(Entity, &DmAtmosDevice)>();
+    let mut query = world.query_filtered::<(Entity, &DmAtmosDevice), With<ss13_world::Mapped>>();
     let found: Vec<(Entity, GasMiner)> = query
         .iter(world)
         .filter(|(_, dm)| is_under(&dm.path, MINER))

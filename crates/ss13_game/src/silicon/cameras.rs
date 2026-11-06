@@ -360,7 +360,10 @@ impl Plugin for CamerasPlugin {
             .init_resource::<OpaqueTiles>()
             .register_ui::<CameraConsoleWindow>()
             .register_ui::<CameraViewWindow>()
-            .add_systems(Startup, (init_cameras, build_net, init_consoles).chain())
+            .add_systems(
+                ss13_world::MapInit,
+                (init_cameras, build_net, init_consoles).chain(),
+            )
             .add_systems(
                 Update,
                 (
@@ -382,7 +385,8 @@ impl Plugin for CamerasPlugin {
 }
 
 fn init_cameras(world: &mut World) {
-    let mut query = world.query::<(Entity, &DmCamera, Option<&TilePos>)>();
+    let mut query =
+        world.query_filtered::<(Entity, &DmCamera, Option<&TilePos>), With<ss13_world::Mapped>>();
     let found: Vec<(Entity, DmCamera, Option<TilePos>)> = query
         .iter(world)
         .map(|(e, d, p)| (e, d.clone(), p.copied()))
@@ -429,7 +433,7 @@ fn opacity_fns(world: &World) -> (impl Fn(TilePos) -> bool + '_, impl Fn(TilePos
 
 fn build_net(world: &mut World) {
     let start = Instant::now();
-    let mut query = world.query::<(Entity, &Camera, &TilePos)>();
+    let mut query = world.query_filtered::<(Entity, &Camera, &TilePos), With<ss13_world::Mapped>>();
     let cams: Vec<(Entity, NetCamera)> = query
         .iter(world)
         .map(|(e, c, &pos)| {
@@ -538,7 +542,8 @@ fn init_consoles(world: &mut World) {
         .collect();
     // tg `cmp_camera_ctag_asc`.
     all.sort_by(|a, b| a.1.c_tag.cmp(&b.1.c_tag));
-    let mut consoles = world.query::<(Entity, &DmCameraConsole)>();
+    let mut consoles =
+        world.query_filtered::<(Entity, &DmCameraConsole), With<ss13_world::Mapped>>();
     let found: Vec<(Entity, Vec<String>)> = consoles
         .iter(world)
         .map(|(e, d)| (e, d.network.iter().map(|n| n.to_lowercase()).collect()))

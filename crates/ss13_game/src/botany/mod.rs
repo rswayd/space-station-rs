@@ -190,7 +190,7 @@ impl Plugin for BotanyServerPlugin {
             app.insert_resource(HydroSpeed(speed));
         }
         app.add_observer(add_seed)
-            .add_systems(Startup, setup_trays)
+            .add_systems(ss13_world::MapInit, setup_trays)
             .add_systems(Update, process_trays);
         produce::build(app);
         unique::build(app);
@@ -269,7 +269,7 @@ fn add_seed(
 /// The trays on the map (`Initialize(mapload)`): full of water, half their nutrients (at least
 /// 10) as E-Z-Nutrient.
 fn setup_trays(world: &mut World) {
-    let mut query = world.query::<(Entity, &DmObj)>();
+    let mut query = world.query_filtered::<(Entity, &DmObj), With<ss13_world::Mapped>>();
     let trays: Vec<Entity> = query
         .iter(world)
         .filter(|(_, o)| is_under(&o.path, TRAY_ROOT))

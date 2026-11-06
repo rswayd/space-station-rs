@@ -70,7 +70,7 @@ pub(super) struct OrmPlugin;
 impl Plugin for OrmPlugin {
     fn build(&self, app: &mut App) {
         app.register_ui::<OrmUi>()
-            .add_systems(Startup, setup_orms.after(LatheSetup))
+            .add_systems(ss13_world::MapInit, setup_orms.after(LatheSetup))
             .add_systems(
                 Update,
                 (
@@ -83,7 +83,8 @@ impl Plugin for OrmPlugin {
 }
 
 fn setup_orms(world: &mut World) {
-    let mut query = world.query_filtered::<Entity, With<DmOreRedemption>>();
+    let mut query =
+        world.query_filtered::<Entity, (With<DmOreRedemption>, With<ss13_world::Mapped>)>();
     let orms: Vec<Entity> = query.iter(world).collect();
     for orm in orms {
         setup(world, orm);

@@ -137,8 +137,11 @@ impl Plugin for MobsServerPlugin {
                     (look_dead_or_alive, defense::squeak_on_cross).after(HealthSystems),
                 ),
             )
-            .add_systems(Startup, attach_mapped)
-            .add_systems(PostStartup, spawn::roundstart_vermin);
+            .add_systems(ss13_world::MapInit, attach_mapped)
+            .add_systems(
+                PostStartup,
+                spawn::roundstart_vermin.after(ss13_world::run_map_init),
+            );
         defense::build(app);
         ai::build(app);
         farm::build(app);
@@ -199,7 +202,7 @@ fn on_mob_added(
 
 fn attach_mapped(world: &mut World) {
     let mobs: Vec<Entity> = world
-        .query_filtered::<Entity, (With<DmMob>, Without<BasicMob>)>()
+        .query_filtered::<Entity, (With<DmMob>, Without<BasicMob>, With<ss13_world::Mapped>)>()
         .iter(world)
         .collect();
     for mob in mobs {

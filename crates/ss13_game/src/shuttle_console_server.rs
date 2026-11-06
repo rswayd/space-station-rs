@@ -133,7 +133,10 @@ impl Plugin for ShuttleConsoleServerPlugin {
                 })
         });
         app.register_ui::<EmergencyConsoleUi>()
-            .add_systems(Startup, setup_consoles.after(crate::shuttle::setup_shuttle))
+            .add_systems(
+                ss13_world::MapInit,
+                setup_consoles.after(crate::shuttle::setup_shuttle),
+            )
             .add_systems(
                 Update,
                 (
@@ -150,7 +153,7 @@ fn now(world: &World) -> f64 {
 }
 
 fn setup_consoles(world: &mut World) {
-    let mut objs = world.query::<(Entity, &DmObj)>();
+    let mut objs = world.query_filtered::<(Entity, &DmObj), With<ss13_world::Mapped>>();
     let consoles: Vec<Entity> = objs
         .iter(world)
         .filter(|(_, o)| is_under(&o.path, CONSOLE))

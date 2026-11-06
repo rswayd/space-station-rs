@@ -45,14 +45,14 @@ pub struct Barrel {
 }
 
 pub(super) fn build(app: &mut App) {
-    app.add_systems(Startup, setup_barrels)
+    app.add_systems(ss13_world::MapInit, setup_barrels)
         .add_systems(Update, process_barrels);
 }
 
 /// `Initialize`: closed, drainable; the pirate barrels full of their powder.
 fn setup_barrels(world: &mut World) {
     let barrels: Vec<(Entity, String)> = world
-        .query::<(Entity, &DmObj)>()
+        .query_filtered::<(Entity, &DmObj), With<ss13_world::Mapped>>()
         .iter(world)
         .filter(|(_, o)| is_under(&o.path, BARREL_ROOT))
         .map(|(e, o)| (e, o.path.clone()))

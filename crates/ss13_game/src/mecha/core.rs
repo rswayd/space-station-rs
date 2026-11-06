@@ -309,7 +309,13 @@ impl Plugin for MechCorePlugin {
             .add_message::<MechClick>()
             .add_systems(
                 Startup,
-                (load_mecha, init_cells, init_mapped_mechs)
+                load_mecha
+                    .in_set(MechaLoaded)
+                    .after(crate::storage::StorageStartup),
+            )
+            .add_systems(
+                ss13_world::MapInit,
+                (init_cells, init_mapped_mechs)
                     .chain()
                     .in_set(MechaLoaded)
                     .after(crate::storage::StorageStartup),
@@ -384,7 +390,8 @@ fn cell_charge(
 
 /// Cells already on the map.
 fn init_cells(world: &mut World) {
-    let mut query = world.query_filtered::<(Entity, &DmItem), Without<ItemCell>>();
+    let mut query =
+        world.query_filtered::<(Entity, &DmItem), (Without<ItemCell>, With<ss13_world::Mapped>)>();
     let db = world.resource::<MechaDb>();
     let cells: Vec<(Entity, ItemCell)> = query
         .iter(world)
@@ -401,7 +408,7 @@ pub(crate) fn path_of(world: &World, e: Entity) -> Option<String> {
 /// Mechs placed by the map: tg `Initialize` with `populate_parts` and the default equipment.
 fn init_mapped_mechs(world: &mut World) {
     let mut query =
-        world.query_filtered::<(Entity, &ss13_mapload::DmObj), (With<TilePos>, Without<Mech>)>();
+        world.query_filtered::<(Entity, &ss13_mapload::DmObj), (With<TilePos>, Without<Mech>, With<ss13_world::Mapped>)>();
     let db = world.resource::<MechaDb>();
     let mapped: Vec<(Entity, String)> = query
         .iter(world)

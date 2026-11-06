@@ -76,7 +76,7 @@ pub struct DecayPlugin;
 impl Plugin for DecayPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<DecayClock>()
-            .add_systems(Startup, protect_mapped)
+            .add_systems(ss13_world::MapInit, protect_mapped)
             .add_systems(Update, decay_tick.run_if(any_with_component::<Decay>))
             .add_observer(add_decay);
     }
@@ -100,7 +100,7 @@ fn add_decay(add: On<Add<DmFood>>, foods: Query<&DmFood>, mut commands: Commands
 }
 
 /// `Initialize(mapload)`: the map's food is protected until moved and not handled yet.
-fn protect_mapped(mut foods: Query<(&mut Decay, Option<&TilePos>)>) {
+fn protect_mapped(mut foods: Query<(&mut Decay, Option<&TilePos>), With<ss13_world::Mapped>>) {
     for (mut decay, pos) in &mut foods {
         decay.handled = false;
         decay.protected_at = Some(pos.copied().unwrap_or(TilePos::new(0, 0, 0)));

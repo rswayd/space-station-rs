@@ -451,13 +451,8 @@ impl Plugin for BountyPlugin {
             })
         });
         app.register_ui::<CivBountyUi>()
-            .add_systems(
-                Startup,
-                (
-                    load_bounties.after(super::supply::load_packs),
-                    setup_consoles.after(load_bounties),
-                ),
-            )
+            .add_systems(Startup, load_bounties.after(super::supply::load_packs))
+            .add_systems(ss13_world::MapInit, setup_consoles)
             .add_systems(
                 Update,
                 (
@@ -495,7 +490,7 @@ fn load_bounties(world: &mut World) {
 }
 
 fn setup_consoles(world: &mut World) {
-    let mut query = world.query::<(Entity, &DmObj)>();
+    let mut query = world.query_filtered::<(Entity, &DmObj), With<ss13_world::Mapped>>();
     let found: Vec<(Entity, bool)> = query
         .iter(world)
         .filter_map(|(e, o)| {

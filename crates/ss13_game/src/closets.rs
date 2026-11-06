@@ -37,7 +37,7 @@ use ss13_mapload::{DmAtom, DmCloset, DmContents, DmItem, DmName, IconIndex};
 use ss13_shared::appearance::Overlay;
 use ss13_shared::chat::Span;
 use ss13_shared::{Appearance, IconStateId, Layer, TilePos};
-use ss13_world::{Density, Mover, SpatialIndex, WorldSystems};
+use ss13_world::{Density, MapInit, Mapped, Mover, SpatialIndex, WorldSystems};
 
 use crate::click::{ClickResolved, ResolveClicks};
 use crate::click_handlers::{AddClickHandler, ClickPhase};
@@ -292,7 +292,7 @@ pub struct ClosetServerPlugin;
 impl Plugin for ClosetServerPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ClosetReport>()
-            .add_systems(Startup, init_closets.after(crate::storage::StorageStartup))
+            .add_systems(MapInit, init_closets.after(crate::storage::StorageStartup))
             .add_message::<ClosetRelayMove>()
             .add_systems(
                 Update,
@@ -318,6 +318,7 @@ fn init_closets(world: &mut World) {
     let mut query = world.query_filtered::<(Entity, &DmCloset, &DmAtom, Option<&DmContents>), (
         Without<Closet>,
         With<TilePos>,
+        With<Mapped>,
     )>();
     let icons = world.get_resource::<IconIndex>();
     let found: Vec<(Entity, Closet, Option<DmContents>)> = query

@@ -85,7 +85,10 @@ pub struct ConsolePlugin;
 impl Plugin for ConsolePlugin {
     fn build(&self, app: &mut App) {
         app.register_ui::<CargoUi>()
-            .add_systems(Startup, setup_consoles.after(super::supply::load_packs))
+            .add_systems(
+                ss13_world::MapInit,
+                setup_consoles.after(super::supply::load_packs),
+            )
             .add_systems(
                 Update,
                 (
@@ -172,7 +175,7 @@ pub fn catalogue_with(
 }
 
 fn setup_consoles(world: &mut World) {
-    let mut query = world.query::<(Entity, &DmObj)>();
+    let mut query = world.query_filtered::<(Entity, &DmObj), With<ss13_world::Mapped>>();
     let consoles: Vec<Entity> = query
         .iter(world)
         .filter(|(_, o)| is_under(&o.path, CARGO_CONSOLE) && !is_under(&o.path, EXPRESS_CONSOLE))

@@ -116,20 +116,21 @@ pub struct CameraBuildPlugin;
 
 impl Plugin for CameraBuildPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(PostStartup, init_motion).add_systems(
-            Update,
-            (
-                networks_chosen
-                    .in_set(UiSystems::Handle)
-                    .after(PromptSystems::Answer),
-                motion_sensors,
-            ),
-        );
+        app.add_systems(ss13_world::MapInitLate, init_motion)
+            .add_systems(
+                Update,
+                (
+                    networks_chosen
+                        .in_set(UiSystems::Handle)
+                        .after(PromptSystems::Answer),
+                    motion_sensors,
+                ),
+            );
     }
 }
 
 fn init_motion(world: &mut World) {
-    let mut query = world.query::<(Entity, &DmCamera)>();
+    let mut query = world.query_filtered::<(Entity, &DmCamera), With<ss13_world::Mapped>>();
     let found: Vec<(Entity, String, f64)> = query
         .iter(world)
         .map(|(e, d)| (e, d.path.clone(), d.view_range))

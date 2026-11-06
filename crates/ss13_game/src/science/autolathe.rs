@@ -103,7 +103,7 @@ pub struct AutolathePlugin;
 impl Plugin for AutolathePlugin {
     fn build(&self, app: &mut App) {
         app.register_ui::<AutolatheUi>()
-            .add_systems(Startup, setup_autolathes.after(ResearchLoaded))
+            .add_systems(ss13_world::MapInit, setup_autolathes.after(ResearchLoaded))
             .add_systems(
                 Update,
                 (
@@ -188,7 +188,7 @@ fn setup_autolathes(world: &mut World) {
     let cat = catalogue(db, world.get_resource::<ResearchIcons>());
     info!("autolathe: {} designs", cat.design_ids.len());
     world.insert_resource(cat);
-    let mut q = world.query::<(Entity, &DmObj)>();
+    let mut q = world.query_filtered::<(Entity, &DmObj), With<ss13_world::Mapped>>();
     let found: Vec<Entity> = q
         .iter(world)
         .filter(|(_, o)| is_under(&o.path, AUTOLATHE_ROOT))

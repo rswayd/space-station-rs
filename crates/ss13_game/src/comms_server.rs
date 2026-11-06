@@ -162,7 +162,7 @@ impl Plugin for CommsServerPlugin {
         app.add_plugins(crate::newscaster_server::NewscasterPlugin)
             .add_message::<CommsRequest>()
             .register_ui::<CommsConsoleUi>()
-            .add_systems(Startup, setup_consoles)
+            .add_systems(ss13_world::MapInit, setup_consoles)
             .add_systems(
                 Update,
                 (
@@ -181,7 +181,7 @@ impl Plugin for CommsServerPlugin {
 }
 
 fn setup_consoles(world: &mut World) {
-    let mut query = world.query::<(Entity, &DmObj)>();
+    let mut query = world.query_filtered::<(Entity, &DmObj), With<ss13_world::Mapped>>();
     let consoles: Vec<(Entity, bool)> = query
         .iter(world)
         .filter(|(_, o)| is_under(&o.path, COMMS_CONSOLE))

@@ -170,7 +170,7 @@ impl Plugin for AtmosMachineryPlugin {
         }
         // `find_density` reads which tiles hold air: after atmos is built.
         app.add_systems(
-            PostStartup,
+            ss13_world::MapInitLate,
             (
                 airlock_pump::init_airlock_pumps.after(ss13_atmos::init_atmos),
                 canister::init_canister_cells,
@@ -200,7 +200,7 @@ impl Plugin for AtmosMachineryPlugin {
             )
             .init_resource::<AtmosMachineryReport>()
             .add_systems(
-                Startup,
+                ss13_world::MapInit,
                 (
                     init_atmos_machinery,
                     meter::init_meters,
@@ -705,11 +705,15 @@ pub fn join_built(world: &mut World, e: Entity) -> bool {
     true
 }
 
-/// tg `SSair.Initialize` for machines: every map atmos object into the pipe graph, connected
-/// and in pipelines, with its machine state; vents and scrubbers listed by area.
+/// tg `SSair.Initialize` for machines: every atmos object of the map pass into the pipe graph,
+/// connected and in pipelines, with its machine state; vents and scrubbers listed by area. A
+/// later load joins the built graph device by device ([`Pipenet::add`]).
 pub fn init_atmos_machinery(world: &mut World) {
     let start = Instant::now();
-    let mut query = world.query::<(Entity, &DmAtmosDevice, &TilePos, Option<&DmAtom>)>();
+    let mut query = world.query_filtered::<
+        (Entity, &DmAtmosDevice, &TilePos, Option<&DmAtom>),
+        With<ss13_world::Mapped>,
+    >();
     let found: Vec<(Entity, DmAtmosDevice, TilePos, u8)> = query
         .iter(world)
         .map(|(e, dm, &pos, atom)| (e, dm.clone(), pos, atom.map_or(2, |a| a.dir)))
@@ -718,7 +722,7 @@ pub fn init_atmos_machinery(world: &mut World) {
         return;
     }
     let mut net = world.remove_resource::<Pipenet>().unwrap_or_default();
-    let mut area_atmos = AreaAtmos::default();
+    let mut area_atmos = world.remove_resource::<AreaAtmos>().unwrap_or_default();
     let mut report = AtmosMachineryReport::default();
     let tank_tiles: std::collections::HashSet<TilePos> = found
         .iter()
@@ -764,7 +768,9 @@ pub fn init_atmos_machinery(world: &mut World) {
             net.link_levels(below, above);
         }
     }
-    net.build();
+    if !net.is_built() {
+        net.build();
+    }
     report.devices = net.device_count();
     report.pipelines = net.pipelines().count();
     report.build_time = start.elapsed();

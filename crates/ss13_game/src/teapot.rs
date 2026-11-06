@@ -105,7 +105,7 @@ impl Plugin for TeapotPlugin {
                 .is_some_and(|h| crate::teapot::item_interaction(w, c.client, c.mob, h, c.target))
         });
         app.add_systems(
-            Startup,
+            ss13_world::MapInit,
             setup_mapped
                 .after(crate::power::init_power)
                 .after(crate::mecha::core::MechaLoaded),
@@ -123,7 +123,7 @@ impl Plugin for TeapotPlugin {
 }
 
 fn setup_mapped(world: &mut World) {
-    let mut q = world.query::<(Entity, &DmObj)>();
+    let mut q = world.query_filtered::<(Entity, &DmObj), With<ss13_world::Mapped>>();
     let found: Vec<Entity> = q
         .iter(world)
         .filter(|(_, o)| is_under(&o.path, TEAPOT))

@@ -72,7 +72,7 @@ pub(super) struct StackingPlugin;
 impl Plugin for StackingPlugin {
     fn build(&self, app: &mut App) {
         app.register_ui::<StackingConsoleUi>()
-            .add_systems(Startup, setup_stackers.after(LatheSetup))
+            .add_systems(ss13_world::MapInit, setup_stackers.after(LatheSetup))
             .add_systems(
                 Update,
                 (
@@ -84,7 +84,8 @@ impl Plugin for StackingPlugin {
 }
 
 fn setup_stackers(world: &mut World) {
-    let mut query = world.query::<(Entity, &DmStacker, Option<&TilePos>)>();
+    let mut query =
+        world.query_filtered::<(Entity, &DmStacker, Option<&TilePos>), With<ss13_world::Mapped>>();
     let machines: Vec<(Entity, DmStacker, Option<TilePos>)> = query
         .iter(world)
         .map(|(e, dm, p)| (e, dm.clone(), p.copied()))

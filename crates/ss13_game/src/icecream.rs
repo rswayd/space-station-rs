@@ -292,17 +292,18 @@ impl Plugin for IceCreamPlugin {
                 )
             })
         });
-        app.add_systems(Startup, setup_mapped).add_systems(
-            Update,
-            answers
-                .in_set(ss13_tgui::server::UiSystems::Handle)
-                .after(ss13_tgui::prompt::PromptSystems::Answer),
-        );
+        app.add_systems(ss13_world::MapInit, setup_mapped)
+            .add_systems(
+                Update,
+                answers
+                    .in_set(ss13_tgui::server::UiSystems::Handle)
+                    .after(ss13_tgui::prompt::PromptSystems::Answer),
+            );
     }
 }
 
 fn setup_mapped(world: &mut World) {
-    let mut q = world.query::<(Entity, &DmPower)>();
+    let mut q = world.query_filtered::<(Entity, &DmPower), With<ss13_world::Mapped>>();
     let found: Vec<(Entity, String)> = q
         .iter(world)
         .filter(|(_, p)| is_under(&p.path, VAT_ROOT))

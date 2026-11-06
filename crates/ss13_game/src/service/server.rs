@@ -53,7 +53,7 @@ impl Plugin for ServiceServerPlugin {
             .register_ui::<MarkdownViewerUi>()
             .init_resource::<super::religion::Religion>()
             .init_resource::<super::archive::LibraryArchive>()
-            .add_systems(Startup, super::library::shelve_mapped_books)
+            .add_systems(ss13_world::MapInit, super::library::shelve_mapped_books)
             .add_systems(
                 Update,
                 (

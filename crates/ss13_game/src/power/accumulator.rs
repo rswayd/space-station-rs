@@ -107,7 +107,10 @@ impl Accumulator {
 
 /// Coils and rods from map load; anchored coils join their powernet (`should_have_node`).
 pub(super) fn init_accumulators(world: &mut World) {
-    let mut query = world.query::<(Entity, &super::DmPower, &ss13_shared::TilePos)>();
+    let mut query = world.query_filtered::<
+        (Entity, &super::DmPower, &ss13_shared::TilePos),
+        With<ss13_world::Mapped>,
+    >();
     let found: Vec<(Entity, AccumulatorKind, ss13_shared::TilePos, u8)> = query
         .iter(world)
         .filter_map(|(e, dm, &pos)| {

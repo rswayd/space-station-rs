@@ -69,7 +69,10 @@ impl Plugin for MechBayPlugin {
             crate::mecha::bay::interact(w, c.client, c.mob, c.target)
         });
         app.register_ui::<MechBayWindow>()
-            .add_systems(Startup, init_bays.after(crate::power::init_power))
+            .add_systems(
+                ss13_world::MapInit,
+                init_bays.after(crate::power::init_power),
+            )
             .add_systems(
                 Update,
                 (
@@ -84,7 +87,9 @@ impl Plugin for MechBayPlugin {
 
 /// Ports with their charging tile, then consoles `reconnect()`.
 fn init_bays(world: &mut World) {
-    let mut q = world.query::<(Entity, &DmPower, &TilePos, Option<&DmAtom>)>();
+    let mut q = world
+        .query_filtered::<(Entity, &DmPower, &TilePos, Option<&DmAtom>), With<ss13_world::Mapped>>(
+        );
     let found: Vec<(Entity, bool, TilePos, u8)> = q
         .iter(world)
         .filter_map(|(e, dm, &pos, atom)| {

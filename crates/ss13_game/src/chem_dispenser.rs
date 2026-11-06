@@ -102,7 +102,7 @@ impl Plugin for ChemDispenserPlugin {
         });
         app.register_ui::<DispenserWindow>()
             .add_systems(
-                Startup,
+                ss13_world::MapInit,
                 setup_mapped
                     .after(crate::power::init_power)
                     .after(crate::mecha::core::MechaLoaded),
@@ -121,7 +121,8 @@ impl Plugin for ChemDispenserPlugin {
 }
 
 fn setup_mapped(world: &mut World) {
-    let mut query = world.query_filtered::<Entity, With<DmChemDispenser>>();
+    let mut query =
+        world.query_filtered::<Entity, (With<DmChemDispenser>, With<ss13_world::Mapped>)>();
     let found: Vec<Entity> = query.iter(world).collect();
     for e in found {
         setup(world, e);

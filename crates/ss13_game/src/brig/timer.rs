@@ -74,7 +74,7 @@ pub struct DoorTimerPlugin;
 impl Plugin for DoorTimerPlugin {
     fn build(&self, app: &mut App) {
         app.register_ui::<BrigTimerUi>()
-            .add_systems(PostStartup, link_timers)
+            .add_systems(ss13_world::MapInitLate, link_timers)
             .add_systems(
                 Update,
                 (
@@ -89,7 +89,8 @@ impl Plugin for DoorTimerPlugin {
 /// `door_timer/Initialize`: the doors, flashers and brig lockers with the timer's `id` within
 /// 20 tiles.
 fn link_timers(world: &mut World) {
-    let mut q = world.query::<(Entity, &DmWallMount, &TilePos)>();
+    let mut q =
+        world.query_filtered::<(Entity, &DmWallMount, &TilePos), With<ss13_world::Mapped>>();
     let mut timers = Vec::new();
     let mut flashers = Vec::new();
     for (e, dm, &pos) in q.iter(world) {

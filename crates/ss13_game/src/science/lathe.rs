@@ -298,7 +298,7 @@ impl Plugin for LathePlugin {
     fn build(&self, app: &mut App) {
         app.register_ui::<FabricatorUi>()
             .add_systems(
-                Startup,
+                ss13_world::MapInit,
                 setup_lathes.after(ResearchLoaded).in_set(LatheSetup),
             )
             .add_systems(
@@ -397,7 +397,7 @@ pub(crate) fn plain(name: &str) -> &str {
 }
 
 fn setup_lathes(world: &mut World) {
-    let mut query = world.query::<(Entity, &DmObj, Option<&TilePos>, Option<&DmName>)>();
+    let mut query = world.query_filtered::<(Entity, &DmObj, Option<&TilePos>, Option<&DmName>), With<ss13_world::Mapped>>();
     let found: Vec<(Entity, DmObj, Option<TilePos>, Option<DmName>)> = query
         .iter(world)
         .filter(|(_, o, _, _)| {

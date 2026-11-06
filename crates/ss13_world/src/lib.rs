@@ -4,9 +4,13 @@ use bevy::prelude::*;
 use ss13_shared::TilePos;
 
 pub mod index;
+pub mod map_init;
 pub mod movement;
 
 pub use index::{CHUNK_SIZE, ChunkPos, LevelError, SpatialIndex};
+pub use map_init::{
+    MapInit, MapInitLate, MapInitPass, Mapped, begin_map_init, map_init_open, run_map_init,
+};
 pub use movement::{
     Border, Bumped, ClimbWalkable, ClimbsUp, Density, FallsThrough, MoveRequest, Moved, Mover,
     NonDenseBorder, next_ready_at, resolve_move,
@@ -29,6 +33,8 @@ impl Plugin for WorldPlugin {
             .add_message::<MoveRequest>()
             .add_message::<Moved>()
             .add_message::<Bumped>()
+            // After the station loaded (`PreStartup`) and the data loaders ran (`Startup`).
+            .add_systems(PostStartup, run_map_init)
             .add_systems(
                 Update,
                 movement::apply_move_requests.in_set(WorldSystems::Movement),

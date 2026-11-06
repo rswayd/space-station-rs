@@ -220,7 +220,7 @@ impl Plugin for PacmanPlugin {
                 .is_some_and(|h| item_interaction(w, c.client, h, c.target))
         });
         app.register_ui::<PacmanWindow>()
-            .add_systems(Startup, init_pacmans.after(super::init_power))
+            .add_systems(ss13_world::MapInit, init_pacmans.after(super::init_power))
             .add_systems(
                 Update,
                 (
@@ -232,7 +232,9 @@ impl Plugin for PacmanPlugin {
 }
 
 fn init_pacmans(world: &mut World) {
-    let mut query = world.query::<(Entity, &DmPower, &TilePos, Option<&DmAtom>)>();
+    let mut query = world
+        .query_filtered::<(Entity, &DmPower, &TilePos, Option<&DmAtom>), With<ss13_world::Mapped>>(
+        );
     let found: Vec<(Entity, String, TilePos, u8, Option<String>)> = query
         .iter(world)
         .filter(|(_, dm, ..)| is_under(&dm.path, PACMAN_ROOT))

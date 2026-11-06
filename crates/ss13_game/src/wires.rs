@@ -712,8 +712,8 @@ impl Plugin for WiresServerPlugin {
     fn build(&self, app: &mut App) {
         app.register_ui::<WiresWindow>()
             .init_resource::<WireColors>()
-            // Doors, APCs and vendors are built in `Startup`.
-            .add_systems(PostStartup, init_wires)
+            // Doors, APCs and vendors are built in `MapInit`.
+            .add_systems(ss13_world::MapInitLate, init_wires)
             .add_systems(
                 Update,
                 (
@@ -729,11 +729,13 @@ impl Plugin for WiresServerPlugin {
     }
 }
 
-/// [`Wires`] on every airlock, APC and vending machine, colors from the map seed.
+/// [`Wires`] on every airlock, APC and vending machine of the map pass, colors from the map
+/// seed (a later load keeps the round's colors).
 fn init_wires(world: &mut World) {
     let seed = world.get_resource::<MapSeed>().map_or(0, |s| s.0) ^ 0x3172_e5ee_d5a1_7c3d;
-    let mut colors = WireColors { seed, ..default() };
-    let mut doors = world.query::<(Entity, &Door, &TilePos)>();
+    let mut colors = world.remove_resource::<WireColors>().unwrap_or_default();
+    colors.seed = seed;
+    let mut doors = world.query_filtered::<(Entity, &Door, &TilePos), With<ss13_world::Mapped>>();
     let airlocks: Vec<(Entity, TilePos)> = doors
         .iter(world)
         .filter(|(_, d, _)| d.kind == DoorKind::Airlock)
@@ -752,16 +754,19 @@ fn init_wires(world: &mut World) {
             colors.wires_for(WireHolder::Airlock, &airlock_set(&area_path)),
         ));
     }
-    let mut apcs = world.query_filtered::<Entity, With<Apc>>();
+    let mut apcs = world.query_filtered::<Entity, (With<Apc>, With<ss13_world::Mapped>)>();
     for e in apcs.iter(world).collect::<Vec<_>>() {
         new.push((e, colors.wires_for(WireHolder::Apc, &apc_set())));
     }
-    let mut vendors = world.query_filtered::<Entity, With<Vendor>>();
+    let mut vendors = world.query_filtered::<Entity, (With<Vendor>, With<ss13_world::Mapped>)>();
     let vendors: Vec<Entity> = vendors.iter(world).collect();
     for &e in &vendors {
         new.push((e, colors.wires_for(WireHolder::Vending, &vending_set())));
     }
-    let mut lathes = world.query_filtered::<Entity, With<crate::science::autolathe::Autolathe>>();
+    let mut lathes = world.query_filtered::<Entity, (
+        With<crate::science::autolathe::Autolathe>,
+        With<ss13_world::Mapped>,
+    )>();
     for e in lathes.iter(world).collect::<Vec<_>>() {
         new.push((e, colors.wires_for(WireHolder::Autolathe, &autolathe_set())));
     }

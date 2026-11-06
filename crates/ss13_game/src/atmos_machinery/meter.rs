@@ -100,7 +100,8 @@ const GRAY: [u8; 3] = [0x80; 3];
 /// Meters from the map: each finds the pipe on its tile and `target_layer` (tg keeps the last
 /// one) and shifts by its layer (`PIPING_LAYER_DOUBLE_SHIFT`).
 pub fn init_meters(world: &mut World) {
-    let mut query = world.query::<(Entity, &DmAtmosDevice, &TilePos)>();
+    let mut query =
+        world.query_filtered::<(Entity, &DmAtmosDevice, &TilePos), With<ss13_world::Mapped>>();
     let found: Vec<(Entity, u8, TilePos)> = query
         .iter(world)
         .filter(|(_, dm, _)| is_under(&dm.path, METER))

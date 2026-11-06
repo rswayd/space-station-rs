@@ -4,24 +4,21 @@
 //! (`code/datums/shuttles/emergency.dm`) and `SSshuttle.action_load(template, replace = TRUE)`.
 //!
 //! - The catalog ([`CATALOG`]): station emergency shuttles with tg's name, description, price
-//!   and occupancy. Each one the checkout has loads with the station onto its own level, ready at
-//!   its CentCom stand-in dock ([`ShuttleCatalog`]); the map's own shuttle is not offered.
+//!   and occupancy; the ones the checkout has are offered ([`ShuttleCatalog`]), the map's own
+//!   shuttle is not. The bought one loads then (tg `action_load`) onto its own level, ready at
+//!   its CentCom stand-in dock, and comes up initialized like the station
+//!   (`ss13_mapload::load_template`, `ss13_world::run_map_init`).
 //! - Buying ([`can_buy_shuttles`], [`purchase`]): a non-silicon login whose access is in a
 //!   shuttle's `who_can_purchase` (the captain), the emergency shuttle idle or recalling, nothing
 //!   bought yet this round, and the cargo budget holding the price. The bought shuttle becomes
 //!   the emergency shuttle and keeps the call state (mode and timer) of the old one, which stays
 //!   parked on its own level (tg `jumpToNullSpace`); cargo pays and a minor announcement names
 //!   the buyer (scrambled from an emagged console).
-// shortcut: no template loads mid-round: every startup system (doors, air, power, storage,
-// closets, the emergency console...) initialises map entities once, so a template loaded later
-// would come up inert. The catalog's templates (small station shuttles) load with the station
-// instead, and a purchase swaps which one is the emergency shuttle. Only the [`CATALOG`] subset
-// is offered: plain station shuttles without special machinery, prerequisites, emag lock or
-// department lock. Upgrade when map loading gains a post-load init pass. No shuttle sale trait
-// discount, no insurance event weight, no `allow_custom_shuttles` map opt-out (no station map
-// sets it).
+// shortcut: only the [`CATALOG`] subset is offered: plain station shuttles without special
+// machinery, prerequisites, emag lock or department lock. No shuttle sale trait discount, no
+// insurance event weight, no `allow_custom_shuttles` map opt-out (no station map sets it).
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use bevy::prelude::*;
 use ss13_mapload::MapLoadPlugin;
@@ -35,7 +32,7 @@ use crate::comms::{PAGE_MAIN, ShuttleOffer};
 use crate::comms_server::CommsConsole;
 use crate::shuttle::{
     EMERGENCY_PORT, EmergencyShuttle, EmergencyTemplate, ShuttleMode, TemplateShuttle,
-    push_template, setup_template_shuttle,
+    setup_template_shuttle,
 };
 use crate::tools::tell;
 
@@ -143,12 +140,12 @@ pub const CATALOG: [CatalogEntry; 9] = [
     },
 ];
 
-/// The catalog's loaded shuttles (tg `SSmapping.shuttle_templates` of the emergency port) and
+/// The catalog's shuttles (tg `SSmapping.shuttle_templates` of the emergency port) and
 /// `SSshuttle.shuttle_purchased`.
 #[derive(Resource, Debug, Default)]
 pub struct ShuttleCatalog {
-    /// `(index into CATALOG, the loaded shuttle)`, in catalog order.
-    pub shuttles: Vec<(usize, TemplateShuttle)>,
+    /// `(index into CATALOG, its template)`, in catalog order.
+    pub shuttles: Vec<(usize, PathBuf)>,
     /// `SHUTTLEPURCHASE_PURCHASED`.
     pub purchased: bool,
 }
@@ -161,9 +158,6 @@ impl ShuttleCatalog {
             .flat_map(|(i, _)| CATALOG[*i].who_can_purchase.iter().copied())
     }
 }
-
-#[derive(Resource)]
-struct CatalogTemplates(Vec<(usize, PathBuf)>);
 
 pub struct ShuttleCatalogPlugin;
 
@@ -186,7 +180,7 @@ impl Plugin for ShuttleCatalogPlugin {
         else {
             return;
         };
-        let templates: Vec<(usize, PathBuf)> = CATALOG
+        let shuttles: Vec<(usize, PathBuf)> = CATALOG
             .iter()
             .enumerate()
             .map(|(i, e)| {
@@ -196,37 +190,32 @@ impl Plugin for ShuttleCatalogPlugin {
             })
             .filter(|(_, path)| *path != current && ss13_data::exists(path))
             .collect();
-        for (_, path) in &templates {
-            push_template(app, path.clone());
-        }
-        info!("emergency shuttle catalog: {} templates", templates.len());
-        app.insert_resource(CatalogTemplates(templates))
-            .add_systems(Startup, setup_catalog.after(crate::shuttle::setup_shuttle));
+        info!("emergency shuttle catalog: {} templates", shuttles.len());
+        app.insert_resource(ShuttleCatalog {
+            shuttles,
+            purchased: false,
+        });
     }
 }
 
-/// tg `load_template` + `register` of each catalog template, parked at its CentCom dock.
-fn setup_catalog(world: &mut World) {
-    let Some(CatalogTemplates(templates)) = world.remove_resource::<CatalogTemplates>() else {
-        return;
-    };
-    for (i, path) in templates {
-        let id = CATALOG[i].id;
-        let Some(shuttle) = setup_template_shuttle(
-            world,
-            &path,
-            EMERGENCY_PORT,
-            &format!("emergency_{id}"),
-            &format!("emergency_{id}_away"),
-            "CentCom Emergency Shuttle Dock",
-        ) else {
-            continue;
-        };
-        world
-            .resource_mut::<ShuttleCatalog>()
-            .shuttles
-            .push((i, shuttle));
+/// tg `action_load`: loads the catalog template mid-round, registers it at its CentCom stand-in
+/// dock (`register`) and initializes what it brought (`initTemplateBounds`).
+fn load_shuttle(world: &mut World, id: &str, path: &Path) -> Option<TemplateShuttle> {
+    if let Err(e) = ss13_mapload::load_template(world, path) {
+        warn!("emergency shuttle {}: {e:#}", path.display());
+        ss13_world::run_map_init(world);
+        return None;
     }
+    let shuttle = setup_template_shuttle(
+        world,
+        path,
+        EMERGENCY_PORT,
+        &format!("emergency_{id}"),
+        &format!("emergency_{id}_away"),
+        "CentCom Emergency Shuttle Dock",
+    );
+    ss13_world::run_map_init(world);
+    shuttle
 }
 
 /// tg `can_buy_shuttles(user)`: `TRUE`, `FALSE` or the reason it is refused.
@@ -322,11 +311,11 @@ pub fn purchase(
         BuyStatus::No => return,
     }
     let catalog = world.resource::<ShuttleCatalog>();
-    let Some((entry, shuttle)) = catalog
+    let Some((entry, path)) = catalog
         .shuttles
         .iter()
         .find(|(i, _)| CATALOG[*i].id == id)
-        .map(|(i, s)| (CATALOG[*i], s.clone()))
+        .map(|(i, p)| (CATALOG[*i], p.clone()))
     else {
         return;
     };
@@ -344,6 +333,17 @@ pub fn purchase(
         return;
     }
     world.resource_mut::<ShuttleCatalog>().purchased = true;
+    let Some(shuttle) = load_shuttle(world, entry.id, &path) else {
+        // tg `action_load` failing: the purchase did not happen.
+        if let Some(mut economy) = world.get_resource_mut::<Economy>()
+            && let Some(account) = economy.department_mut(ACCOUNT_CAR)
+        {
+            account.adjust_money(entry.credit_cost);
+        }
+        world.resource_mut::<ShuttleCatalog>().purchased = false;
+        tell(world, client, Span::Warning, "Shuttle purchase failed.");
+        return;
+    };
     {
         let mut emergency = world.resource_mut::<EmergencyShuttle>();
         emergency.port = shuttle.port;
@@ -396,16 +396,8 @@ mod tests {
     }
 
     fn catalog() -> ShuttleCatalog {
-        let shuttle = TemplateShuttle {
-            port: Entity::PLACEHOLDER,
-            name: "box".into(),
-            away: Entity::PLACEHOLDER,
-            transit: Entity::PLACEHOLDER,
-            level_z: 5,
-            transit_z: 6,
-        };
         ShuttleCatalog {
-            shuttles: vec![(4, shuttle)],
+            shuttles: vec![(4, PathBuf::from("emergency_box.dmm"))],
             purchased: false,
         }
     }

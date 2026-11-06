@@ -107,7 +107,7 @@ impl Plugin for CyborgPlugin {
                 crate::silicon::cyborg::CyborgAction::EmptyHandClick,
             )
         });
-        app.add_systems(Startup, init_stations)
+        app.add_systems(ss13_world::MapInit, init_stations)
             .add_systems(
                 Update,
                 (
@@ -558,7 +558,7 @@ fn cell_drain(
 }
 
 fn init_stations(world: &mut World) {
-    let mut q = world.query::<(Entity, &DmObj)>();
+    let mut q = world.query_filtered::<(Entity, &DmObj), With<ss13_world::Mapped>>();
     let stations: Vec<Entity> = q
         .iter(world)
         .filter(|(_, o)| crate::obj_damage::is_under(&o.path, STATION))

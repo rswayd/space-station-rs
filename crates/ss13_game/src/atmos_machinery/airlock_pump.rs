@@ -75,7 +75,7 @@ pub struct AirlockPump {
 
 /// `post_machine_initialize` -> `set_links` of every mapped pump.
 pub fn init_airlock_pumps(world: &mut World) {
-    let mut q = world.query::<(Entity, &DmAtmosDevice, &AtmosDevice, &TilePos)>();
+    let mut q = world.query_filtered::<(Entity, &DmAtmosDevice, &AtmosDevice, &TilePos), With<ss13_world::Mapped>>();
     let found: Vec<(Entity, String, u8, TilePos)> = q
         .iter(world)
         .filter(|(_, dm, ..)| is_under(&dm.path, AIRLOCK_PUMP))
