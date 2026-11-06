@@ -2310,7 +2310,9 @@ fn metabolize_mobs(world: &mut World, mut last_fired: Local<u64>) {
         return;
     };
     let seconds = metabolism::SSMOBS_DT;
-    let mut query = world.query::<(Entity, &MobReagents)>();
+    // `TRAIT_STASIS`: nothing metabolizes (`handle_stasis_chems` runs none of the ported).
+    let mut query =
+        world.query_filtered::<(Entity, &MobReagents), Without<crate::medical::stasis::InStasis>>();
     let mobs: Vec<Entity> = query
         .iter(world)
         .filter(|(_, m)| {

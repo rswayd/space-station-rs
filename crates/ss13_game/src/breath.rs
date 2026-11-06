@@ -1289,8 +1289,11 @@ fn live(world: &mut World, mob: Entity, fired: u64, now: f64) {
     // `handle_breathing`: every 4th fire (3rd or 2nd with badly damaged lungs or heart), or every
     // fire after a failed breath.
     // human `breathe()`: nothing with `TRAIT_NOBREATH`.
+    // `TRAIT_STASIS`: no breathing, environment or crit damage; the body temperature goes on.
+    let stasis = crate::medical::stasis::in_stasis(world, mob);
     if stat != Stat::Dead
         && !no_breath
+        && !stasis
         && (fired.is_multiple_of(next_breath) || resp.failed_last_breath)
     {
         let mut breath = None;
@@ -1331,6 +1334,7 @@ fn live(world: &mut World, mob: Entity, fired: u64, now: f64) {
     }
     // Human `Life()`: crit damage for those who do not suffocate in crit.
     if no_breath
+        && !stasis
         && ctx.stat != Stat::Dead
         && ctx.health.health() < crate::health::HEALTH_THRESHOLD_CRIT
         && !resp.body.no_crit_damage
@@ -1348,8 +1352,10 @@ fn live(world: &mut World, mob: Entity, fired: u64, now: f64) {
         } else {
             pressure
         };
-    resp.environment_pressure(pressure, SSMOBS_WAIT_SECS, &mut ctx);
-    update_stat(ctx.health, &mut ctx.stat);
+    if !stasis {
+        resp.environment_pressure(pressure, SSMOBS_WAIT_SECS, &mut ctx);
+        update_stat(ctx.health, &mut ctx.stat);
+    }
     // human `Life()` -> species `handle_body_temperature`, also for the dead.
     if worn.regulator {
         resp.suit_regulator(SSMOBS_WAIT_SECS);

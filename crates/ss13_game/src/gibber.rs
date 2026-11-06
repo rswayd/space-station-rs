@@ -268,7 +268,7 @@ pub fn interact(world: &mut World, client: Entity, mob: Entity, e: Entity, right
 }
 
 /// `get_equipped_items(INCLUDE_HELD)` without `TRAIT_NODROP`.
-fn has_abiotic(world: &World, mob: Entity) -> bool {
+pub(crate) fn has_abiotic(world: &World, mob: Entity) -> bool {
     let Some(inventory) = world.get::<Inventory>(mob) else {
         return false;
     };

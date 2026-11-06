@@ -32,7 +32,7 @@
 // shortcut: no green glow filter on irradiated atoms, no geiger clicking sound loop
 // (`geiger_sound`), no MOD radiation counter panel, no `radioactive` element on uranium
 // materials (statues, mineral doors), no `/datum/status_effect/radiation_immunity`, no
-// `TRAIT_STASIS` halt, no showers (the wash hook is here); add with those mechanics.
+// showers (the wash hook is here); add with those mechanics.
 
 use std::collections::{HashMap, HashSet};
 
@@ -854,6 +854,7 @@ pub fn clean_act(world: &mut World, target: Entity, clean_types: u32) -> bool {
 fn halted(world: &World, mob: Entity, irr: &Irradiated, now: f64) -> bool {
     use crate::chem::blood_amount;
     irr.clean_until > now
+        || crate::medical::stasis::in_stasis(world, mob)
         || blood_amount(world, mob, POTASS_IODIDE) > 0.0
         || blood_amount(world, mob, PEN_ACID) > 0.0
 }

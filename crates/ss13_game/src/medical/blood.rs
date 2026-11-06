@@ -15,12 +15,13 @@
 //! - Blood packs start full of their type. An IV drip takes a pack (or a cup) clicked on it, is
 //!   dragged onto a mob to attach (1 s), injects or draws `transfer_rate` (5 u/s) every
 //!   `SSmachines` tick (2 s), and tears out (3 brute and a puncture on an arm) when the mob moves
-//!   away. An empty-hand right click detaches it, ejects the container or switches the mode.
+//!   away. An empty-hand right click detaches it, ejects the container or switches the mode; a
+//!   left click opens its window.
 // shortcut: no blood sprays or hit splatters (drips and pools: `crate::janitor`), no dragging
 // bleed, no DNA data (viruses: `super::diseases::BloodDiseases`),
 // no saline/salglu dilution or synthetic blood content; iron in the blood also metabolizes at its
-// own rate besides refilling blood (tg skips the normal tick). The IV drip has no tgui window
-// (`IVDrip`: rate, mode, eject) and no beam; its rate stays at 5 u/s.
+// own rate besides refilling blood (tg skips the normal tick). The IV drip's `IVDrip` window
+// (rate, mode, eject, detach) is `super::iv_drip`; no beam, no saline drip's internal storage.
 
 use bevy::prelude::*;
 use ss13_mapload::DmItem;

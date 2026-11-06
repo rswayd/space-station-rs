@@ -1789,13 +1789,16 @@ fn patient(world: &World, mob: Entity) -> Option<Patient> {
             .fold(0, |bits, c| bits | c.body_parts_covered)
     });
     let unconscious = health.knocked_out(stat);
+    // BandaStation: `TRAIT_STASIS` feels no pain; a stasis bed's `free_operation`.
+    let stasis = super::stasis::in_stasis(world, mob);
+    let free = world.get::<super::stasis::FreeOperation>(mob).is_some();
     Some(Patient {
         lying: world.get::<BodyPosition>(mob).is_some_and(|b| b.lying()),
         unconscious,
-        painless: unconscious || analgesia(world, mob),
+        painless: unconscious || stasis || analgesia(world, mob),
         dead: stat == Stat::Dead,
         covered,
-        prepped_any: limbs.parts.iter().any(|l| l.prepped),
+        prepped_any: free || limbs.parts.iter().any(|l| l.prepped),
         brute: health.brute,
         burn: health.burn,
     })
@@ -1827,7 +1830,7 @@ pub(crate) fn is_available(world: &World, op: Op, mob: Entity, zone: TargetZone)
         Target::Limb => zone.check_zone(),
     };
     let limb = limbs.limb(body);
-    if !limb.prepped {
+    if !limb.prepped && world.get::<super::stasis::FreeOperation>(mob).is_none() {
         return false;
     }
     // A stump takes only operations with `allow_stumps`.
@@ -2137,6 +2140,7 @@ pub fn perform_surgery(world: &mut World, actor: Actor, mob: Entity) -> bool {
             if !world
                 .get::<Limbs>(mob)
                 .is_some_and(|l| l.limb(zone.check_zone()).prepped)
+                && world.get::<super::stasis::FreeOperation>(mob).is_none()
             {
                 return false;
             }
@@ -3650,6 +3654,7 @@ pub struct Buckled(pub Entity);
 pub fn buckles_lying(path: &str) -> bool {
     is_under(path, "/obj/structure/table/optable")
         || is_under(path, "/obj/structure/bed")
+        || super::stasis::is_bed(path)
         || is_under(path, "/obj/structure/altar")
 }
 

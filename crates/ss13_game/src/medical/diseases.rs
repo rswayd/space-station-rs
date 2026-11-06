@@ -21,7 +21,7 @@
 //!   [`Disease::new`] or [`Disease::random_advance`].
 //! - The health analyzer lists the diseases the scanner sees (`crate::health_scan`).
 // shortcut: no darkness or blindfold sleep bonus, no immunodeficiency/virus
-// immunity traits, no stasis; no chronic or incremental-cure
+// immunity traits (stasis skips `life`: `crate::medical`); no chronic or incremental-cure
 // diseases (chronic illness, asthma), no transformation, magic or floor diseases, no bites or
 // bumps spreading contact diseases, no infective items, food or blood decals, no disease
 // archive, HUD icons or logging. Unported effects: butterflies, the decloning status effect.

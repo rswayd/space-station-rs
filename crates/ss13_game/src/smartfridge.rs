@@ -12,7 +12,8 @@
 // - Drying racks and dehydrators take what is dryable and not dried yet; their window's "Dry"
 //   switches drying: every machine tick everything inside dries (`dryable`: marked dried and tan,
 //   or replaced by its `dry_result`), using `active_power_usage`.
-// shortcut: no organ preservation, welding to the floor, prying, breaking, emissive light or
+// Organ fridges preserve and heal organs (`crate::medical::organs`).
+// shortcut: no welding to the floor, prying, breaking, emissive light or
 // vend sound; the window has no search.
 
 use bevy::ecs::message::{MessageCursor, Messages};
