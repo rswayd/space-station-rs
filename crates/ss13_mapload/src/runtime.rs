@@ -62,6 +62,10 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/projectile/hivebotbullet",
     "/obj/projectile/bullet/c9mm",
     "/obj/item/stock_parts/power_store/cell",
+    // An inducer's starting battery (`ss13_game::inducer`).
+    "/obj/item/stock_parts/power_store/battery/high",
+    "/obj/item/stock_parts/power_store/battery/super",
+    "/obj/item/stock_parts/power_store/battery/upgraded",
     "/mob/living/basic/slime",
     "/obj/item/inert_anomaly",
     "/obj/item/storage/toolbox/mechanical",

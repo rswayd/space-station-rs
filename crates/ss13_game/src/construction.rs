@@ -287,6 +287,8 @@ pub enum Job {
     Shield(crate::power::shields::ShieldJob),
     /// Finishing a circuit shell assembly ([`crate::wiremod::server`]).
     Wiremod(Entity),
+    /// One second of an inducer charging this atom's cell ([`crate::inducer`]).
+    Inducer(Entity),
     /// Mending shredded clothing ([`crate::clothing::damage`]).
     Clothing(crate::clothing::ClothingJob),
     /// Tipping or righting a cow, a turtle drinking ([`crate::mobs::farm`]).
@@ -1318,6 +1320,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         Job::Hijack => crate::shuttle_console_server::complete_hijack(world, mob, action),
         &Job::Door(job) => crate::doors::complete(world, client, mob, target, job),
         &Job::Wiremod(shell) => crate::wiremod::server::complete(world, mob, action, shell),
+        &Job::Inducer(thing) => crate::inducer::complete(world, mob, action, thing),
         &Job::Clothing(job) => crate::clothing::damage::complete(world, mob, action, job),
         &Job::Fauna(job) => crate::mobs::farm::complete(world, mob, action, job),
         &Job::Morph { corpse } => crate::antag::morph::complete_eat(world, mob, action, corpse),

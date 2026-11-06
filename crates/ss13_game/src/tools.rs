@@ -170,6 +170,10 @@ impl Plugin for ToolsServerPlugin {
     fn build(&self, app: &mut App) {
         // Click chain hooks (`crate::click_handlers`).
         use crate::click_handlers::{AddClickHandler, ClickPhase};
+        app.add_plugins((
+            crate::t_scanner::TScannerPlugin,
+            crate::inducer::InducerPlugin,
+        ));
         // A welder lights or goes out.
         app.add_click_handler(ClickPhase::AttackSelf, 200, |w, c| {
             crate::tools::attack_self(w, c.client, c.mob, c.target)
