@@ -22,13 +22,14 @@
 //!   spreads), Volcano Blast chains fire, the Fiery Rebirth drains the burning, the blade upgrade
 //!   ignites, and the Ritual of the Ash Lord (three burning or husked corpses) ascends with
 //!   CentCom's announcement, the emergency shuttle and the Oath of Flame / Fire Cascade spells.
-// shortcut: only the Path of Ash has effects. The other paths' knowledge is in the tree and can
-// be researched (spells get a button that says it is not ported; recipes spawn their results
-// when the prototype exists), but their marks, passives, blade upgrades and ascensions do
-// nothing. Side knowledge has no effects beyond its ritual's results; summons (no basic mobs
-// for heretic monsters yet), curses, the knowledge ritual, the focus, the heretic aura, dreams,
-// x-ray near influences, rust healing and spell recharge by focus/holy water/passive are not
-// ported. Ash Passage (jaunt) is not ported. No shadow realm: see [`begin_sacrifice`].
+// shortcut: the Path of Ash is here; the other paths' marks, grasp effects, blade upgrades, Void
+// Pull, Realignment and the Blade and Void ascensions are in [`super::paths`]. Their other
+// spells get a button that says it is not ported, recipes spawn their results when the
+// prototype exists, and passives do nothing. Side knowledge has no effects beyond its ritual's
+// results; summons (no basic mobs for heretic monsters yet), curses, the knowledge ritual, the
+// focus, the heretic aura, dreams, x-ray near influences, rust healing and spell recharge by
+// focus/holy water/passive are not ported. Ash Passage (jaunt) is not ported. No shadow realm:
+// see [`begin_sacrifice`].
 // The radials are list windows; balloon alerts are chat warnings.
 
 use bevy::ecs::message::MessageCursor;
@@ -532,7 +533,7 @@ impl Plugin for HereticPlugin {
 // ---------------------------------------------------------------------------------------------
 // Helpers
 
-fn chat_to(world: &mut World, mob: Entity, span: Span, text: impl Into<String>) {
+pub(super) fn chat_to(world: &mut World, mob: Entity, span: Span, text: impl Into<String>) {
     if let Some(client) = world.get::<PlayerMob>(mob).map(|p| p.client) {
         tell(world, client, span, text);
     }
@@ -544,7 +545,7 @@ fn icon(world: &World, dmi: &str, state: &str) -> Option<ss13_shared::IconStateI
         .and_then(|index| index.get(dmi, state))
 }
 
-fn now(world: &World) -> f64 {
+pub(super) fn now(world: &World) -> f64 {
     world.resource::<Time>().elapsed_secs_f64()
 }
 
@@ -552,7 +553,7 @@ pub fn is_heretic(world: &World, mob: Entity) -> bool {
     world.get::<Heretic>(mob).is_some()
 }
 
-fn say(world: &mut World, mob: Entity, text: &str) {
+pub(super) fn say(world: &mut World, mob: Entity, text: &str) {
     let Some(&pos) = world.get::<TilePos>(mob) else {
         return;
     };
@@ -564,7 +565,7 @@ fn say(world: &mut World, mob: Entity, text: &str) {
     });
 }
 
-fn whisper(world: &mut World, mob: Entity, text: &str) {
+pub(super) fn whisper(world: &mut World, mob: Entity, text: &str) {
     let Some(&pos) = world.get::<TilePos>(mob) else {
         return;
     };
@@ -598,7 +599,7 @@ fn is_head(world: &World, mob: Entity) -> bool {
     job_title(world, mob).is_some_and(|t| HEADS_OF_STAFF.contains(&t.as_str()))
 }
 
-fn hurt(world: &mut World, mob: Entity, kind: DamageType, amount: f32) {
+pub(super) fn hurt(world: &mut World, mob: Entity, kind: DamageType, amount: f32) {
     let (Some(mut health), Some(mut stat)) = (
         world.get::<Health>(mob).cloned(),
         world.get::<Stat>(mob).copied(),
@@ -613,7 +614,7 @@ fn hurt(world: &mut World, mob: Entity, kind: DamageType, amount: f32) {
 }
 
 /// `adjust_*_loss(-amount)` of every kind, and stamina.
-fn heal(world: &mut World, mob: Entity, amount: f32) {
+pub(super) fn heal(world: &mut World, mob: Entity, amount: f32) {
     if let Some(mut health) = world.get::<Health>(mob).cloned() {
         for kind in [
             DamageType::Brute,
@@ -635,7 +636,7 @@ fn heal(world: &mut World, mob: Entity, amount: f32) {
     crate::status_effects::adjust_stamina(world, mob, -amount);
 }
 
-fn rand(world: &mut World, n: usize) -> usize {
+pub(super) fn rand(world: &mut World, n: usize) -> usize {
     if n <= 1 {
         return 0;
     }
@@ -663,7 +664,7 @@ fn area_name(world: &World, pos: TilePos) -> String {
         .unwrap_or_default()
 }
 
-fn hands(world: &World, mob: Entity) -> Vec<Entity> {
+pub(super) fn hands(world: &World, mob: Entity) -> Vec<Entity> {
     world
         .get::<Inventory>(mob)
         .map(|i| i.hands.iter().flatten().copied().collect())
@@ -1472,7 +1473,11 @@ fn blade_attack(world: &mut World, mob: Entity, target: Entity) {
         return;
     };
     let (ash, upgrade) = (h.has(ASH_START), h.has(ASH_BLADE_UPGRADE));
-    if ash && trigger_ash_mark(world, target) {
+    // `starting/trigger_mark` triggers any heretic's mark.
+    let other_path = super::paths::has_path_start(world, mob);
+    let triggered = (ash || other_path)
+        && (trigger_ash_mark(world, target) || super::paths::trigger_path_mark(world, target));
+    if ash && triggered {
         // `base_ash/trigger_mark`: 75% of the grasp's cooldown back.
         if let Some(mut h) = world.get_mut::<Heretic>(mob) {
             let id = spell_id(BASIC);
@@ -1486,6 +1491,7 @@ fn blade_attack(world: &mut World, mob: Entity, target: Entity) {
         crate::fire::adjust_fire_stacks(world, target, 1.0);
         crate::fire::ignite_mob(world, target);
     }
+    super::paths::on_blade(world, mob, target);
 }
 
 /// `/datum/status_effect/eldritch/ash/on_effect`: stamina and burn by repetitions, the mark
@@ -1544,7 +1550,9 @@ fn grasp_hit(world: &mut World, mob: Entity, hand: Entity, target: Entity) {
     // `COMSIG_HERETIC_MANSUS_GRASP_ATTACK`: the starting knowledge's mark.
     let ash = world.get::<Heretic>(mob).is_some_and(|h| h.has(ASH_START));
     let t = now(world);
+    super::paths::on_grasp(world, mob, target);
     if ash && world.get::<Stat>(target) != Some(&Stat::Dead) {
+        world.entity_mut(target).remove::<super::paths::PathMark>();
         world.entity_mut(target).insert(AshMark {
             until: t + MARK_SECS,
             repetitions: 5,
@@ -1617,7 +1625,7 @@ fn grasp_hit(world: &mut World, mob: Entity, hand: Entity, target: Entity) {
     refresh(world, mob);
 }
 
-fn spend_charge(world: &mut World, mob: Entity, path: &str) {
+pub(super) fn spend_charge(world: &mut World, mob: Entity, path: &str) {
     if let Some(mut h) = world.get_mut::<Heretic>(mob) {
         if h.ascended {
             return;
@@ -2610,6 +2618,7 @@ fn ascend(world: &mut World, mob: Entity, def: &'static KnowledgeDef) {
     if let Some(mut shuttle) = world.get_resource_mut::<crate::shuttle::EmergencyShuttle>() {
         shuttle.state.no_recall = true;
     }
+    super::paths::on_ascend(world, mob, def);
     refresh(world, mob);
 }
 
@@ -2636,7 +2645,7 @@ pub fn ascension_text(template: &str, name: &str, mut spooky: impl FnMut() -> St
 // ---------------------------------------------------------------------------------------------
 // Buttons and spells
 
-fn spell_id(path: &str) -> String {
+pub(super) fn spell_id(path: &str) -> String {
     format!("{SPELL_PREFIX}{path}")
 }
 
@@ -2767,7 +2776,7 @@ fn trigger_buttons(world: &mut World, mut acts: Local<MessageCursor<UiActed<Acti
     }
 }
 
-fn set_cooldown(world: &mut World, mob: Entity, id: &str, ready: f64) {
+pub(super) fn set_cooldown(world: &mut World, mob: Entity, id: &str, ready: f64) {
     if let Some(mut h) = world.get_mut::<Heretic>(mob) {
         h.set_cooldown(id, ready);
     }
@@ -2816,6 +2825,7 @@ fn cast_spell(world: &mut World, client: Entity, mob: Entity, def: &'static Know
             );
         }
         FIERY_REBIRTH => cast_fiery_rebirth(world, mob),
+        _ if super::paths::cast(world, client, mob, def) => {}
         _ => tell(
             world,
             client,
@@ -2866,7 +2876,7 @@ fn toggle_grasp(world: &mut World, client: Entity, mob: Entity) {
 }
 
 /// Carbons around `center` within `radius` (`range`): (entity, tile).
-fn carbons_in_range(world: &World, center: TilePos, radius: i32) -> Vec<Entity> {
+pub(super) fn carbons_in_range(world: &World, center: TilePos, radius: i32) -> Vec<Entity> {
     let index = world.resource::<ss13_world::SpatialIndex>();
     let mut out: Vec<Entity> = index
         .in_rect(
@@ -3630,6 +3640,7 @@ fn heretic_tick(world: &mut World) {
     tick_fire_blasts(world, t);
     tick_fire_rings(world, t);
     tick_cascades(world, t);
+    super::paths::tick(world, t);
 }
 
 fn tick_fire_blasts(world: &mut World, t: f64) {

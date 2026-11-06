@@ -22,6 +22,8 @@ pub mod data;
 #[cfg(feature = "server")]
 pub mod knowledge;
 #[cfg(feature = "server")]
+pub mod paths;
+#[cfg(feature = "server")]
 pub mod server;
 
 /// tg `ROLE_HERETIC`: the heretic's `be_special` key.

@@ -473,12 +473,9 @@ impl Station {
     }
 }
 
-#[test]
-fn heretic_drains_researches_sacrifices_and_ascends() {
-    let mut s = Station::start("round");
-    let players: Vec<usize> = (0..4).map(|_| s.connect()).collect();
-    let h = players[0];
-    for &p in &players {
+/// Everyone an assistant, `h` opted in to heretics, all ready, the round started.
+fn start_round(s: &mut Station, players: &[usize], h: usize) {
+    for &p in players {
         s.lobby_act(p, CHARACTER_SETUP);
         let (prefs, _) = s.wait_window(p, JobPrefsUi::NAME);
         s.act(
@@ -508,7 +505,7 @@ fn heretic_drains_researches_sacrifices_and_ascends() {
                     .is_some_and(|prefs| !prefs.levels.is_empty())
             })
     });
-    for &p in &players {
+    for &p in players {
         s.lobby_act(p, TOGGLE_READY);
     }
     s.run_until("all ready", |s| {
@@ -524,6 +521,14 @@ fn heretic_drains_researches_sacrifices_and_ascends() {
     s.run_until("the round starts", |s| {
         s.server.world().resource::<Ticker>().state() >= GameState::Playing
     });
+}
+
+#[test]
+fn heretic_drains_researches_sacrifices_and_ascends() {
+    let mut s = Station::start("round");
+    let players: Vec<usize> = (0..4).map(|_| s.connect()).collect();
+    let h = players[0];
+    start_round(&mut s, &players, h);
 
     // The opted-in player is the only heretic: greeting, objective, window, buttons.
     let mobs: Vec<Entity> = players.iter().map(|&p| s.mob(p)).collect();
@@ -817,4 +822,60 @@ fn heretic_drains_researches_sacrifices_and_ascends() {
             .any(|l| l.contains("Жертвоприношений сделано: 1")),
         "{text:?}"
     );
+}
+
+/// The Path of Void: the grasp marks, silences and chills a crewman; the mark's trigger chills
+/// more and is used up.
+#[test]
+fn void_grasp_marks_and_chills() {
+    use ss13_game::antag::heretic::paths::{MarkKind, PathMark, VoidChill, trigger_path_mark};
+    let mut s = Station::start("void");
+    let players: Vec<usize> = (0..3).map(|_| s.connect()).collect();
+    let h = players[0];
+    start_round(&mut s, &players, h);
+    let (m, victim) = (s.mob(h), s.mob(players[1]));
+    s.wait_window(h, AntagInfoHereticUi::NAME);
+    s.research(
+        h,
+        "/datum/heretic_knowledge/limited_amount/starting/base_void",
+        "start",
+    );
+    s.run_until("the path is taken", |s| {
+        s.heretic(m).route == Some("Путь Пустоты")
+    });
+    let z = s.get::<TilePos>(m).z;
+    s.put(m, TilePos::new(5, 5, z));
+    s.put(victim, TilePos::new(5, 4, z));
+    s.wait_window(h, ActionButtonsUi::NAME);
+    s.trigger(h, "heretic_spell:/datum/heretic_knowledge/spell/basic");
+    s.run_until("the grasp is in hand", |s| {
+        let world = s.server.world();
+        world
+            .get::<Inventory>(m)
+            .unwrap()
+            .hands
+            .iter()
+            .flatten()
+            .any(|&e| world.get::<MansusFist>(e).is_some())
+    });
+    s.sees(h, victim);
+    s.click(h, victim);
+    s.run_until("the crewman is marked", |s| {
+        s.server
+            .world()
+            .get::<PathMark>(victim)
+            .is_some_and(|m| m.kind == MarkKind::Void)
+    });
+    assert!(s.server.world().get::<AshMark>(victim).is_none());
+    assert_eq!(s.server.world().get::<VoidChill>(victim).unwrap().stacks, 2);
+    assert!(
+        ss13_game::status_effects::timed(
+            s.server.world(),
+            victim,
+            ss13_game::status_effects::Timed::Silence
+        ) > 0.0
+    );
+    assert!(trigger_path_mark(s.server.world_mut(), victim));
+    assert!(s.server.world().get::<PathMark>(victim).is_none());
+    assert_eq!(s.server.world().get::<VoidChill>(victim).unwrap().stacks, 5);
 }
