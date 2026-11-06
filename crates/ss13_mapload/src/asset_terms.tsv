@@ -61,3 +61,11 @@ sound/announcer/vox_fem/*	the AI's VOX words: no entry of their own, only their 
 sound/effects/hallucinations/growl*.ogg	The attribution names growl1/2.ogg of sound/mobs/non-humanoids/dog, not these: BandaStation default (CC BY-SA 3.0)	-	sound/attributions.txt
 sound/effects/magic/curse.ogg	sadboysuss: CC BY-SA	-	sound/effects/magic/attribution.txt
 sound/items/dice_roll.ogg	Crovic, freesound.org/people/Crovic/sounds/661935: CC0	-	sound/attributions.txt
+sound/effects/nightmare_poof.ogg	breath_01.wav by Nightflame (CC0) and slide-click.wav by Qat (CC0)	low	sound/attributions.txt
+sound/effects/nightmare_reappear.ogg	breath_01.wav by Nightflame (CC0) and slide-click.wav by Qat (CC0)	low	sound/attributions.txt
+sound/machines/sink-faucet.ogg	FOSSarts, freesound.org/people/FOSSarts/sounds/740086: CC0	low	sound/attributions.txt
+sound/effects/alert.ogg	bbrocer, freesound.org/people/bbrocer/sounds/389511 (extended, looped, reverbed); no license stated	medium	sound/effects/license.txt
+sound/machines/eject.ogg	magedu, freesound.org/people/magedu/sounds/267832 (adapted); no license stated	medium	sound/attributions.txt
+sound/effects/valve_opening.ogg	mixed from freesound.org scriotxstudios 349111 and Department64 669028; no license stated	medium	sound/attributions.txt
+sound/items/weapons/handcuffs.ogg	only named as the source file of handcuffs_drop/handcuffs_pick_up (kimuracarter, CC BY 3.0); the file itself is unlisted: CC BY-SA 3.0	-	sound/items/attributions.txt
+sound/items/zip/zip.ogg	the attribution covers zip_up.ogg and un_zip.ogg only; zip.ogg is unlisted: CC BY-SA 3.0	-	sound/attributions.txt
