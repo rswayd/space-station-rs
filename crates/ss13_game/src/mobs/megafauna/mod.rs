@@ -15,13 +15,15 @@
 //!   station).
 //! - Abilities share one cooldown (`MOB_SHARED_COOLDOWN_1`) and block melee for their cooldown
 //!   (`next_melee_use_time`); their sleeps and timers are timed steps of the mob's queue,
-//!   dropped when it dies (`SLEEP_CHECK_DEATH`). [`colossus`] and [`drake`] hold them.
+//!   dropped when it dies (`SLEEP_CHECK_DEATH`). [`bubblegum`], [`colossus`] and [`drake`]
+//!   hold them.
 //! - Explosions deal 250/100/50 brute and never gib (`ex_act`); death drops the necropolis
 //!   chest with its loot (`loot`, `necropolis_chests.dm` `PopulateContents`).
 //! - [`placement`]: the bosses on the mining level (tg biome population, `SPAWN_MEGAFAUNA`).
 // shortcut: no wall smashing (`environment_smash`), GPS signals, achievements, crusher loot or
 // trophies, sentient (player) control or ability buttons; no organ removal on `devour`.
 
+pub mod bubblegum;
 pub mod colossus;
 pub mod drake;
 pub mod placement;
@@ -47,10 +49,14 @@ use crate::explosions::Severity;
 use crate::health::{DEFAULT_MESSAGE_RANGE, DamageType, Health, HealthSystems, Stat};
 use crate::server::PlayerMob;
 
+pub const BUBBLEGUM: &str = "/mob/living/simple_animal/hostile/megafauna/bubblegum";
+/// Its copies are images of the hallucination charges, never spawned as mobs.
+const BUBBLEGUM_HALLUCINATION: &str =
+    "/mob/living/simple_animal/hostile/megafauna/bubblegum/hallucination";
 pub const COLOSSUS: &str = "/mob/living/simple_animal/hostile/megafauna/colossus";
 pub const DRAKE: &str = "/mob/living/simple_animal/hostile/megafauna/dragon";
-/// Not ported: an admin spawn with its own numbers.
-const LESSER_DRAKE: &str = "/mob/living/simple_animal/hostile/megafauna/dragon/lesser";
+/// The admin-spawned lesser drake (`dragon/lesser`): a [`Kind::Drake`] with fewer abilities.
+pub const LESSER_DRAKE: &str = "/mob/living/simple_animal/hostile/megafauna/dragon/lesser";
 
 /// `SSnpcpool` `wait`.
 pub const NPC_TICK_SECS: f64 = 2.0;
@@ -74,15 +80,18 @@ pub(super) const ABOVE_GAME_PLANE: i16 = -3;
 /// The ported bosses.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
+    Bubblegum,
     Colossus,
     Drake,
 }
 
 impl Kind {
     pub fn of(path: &str) -> Option<Self> {
-        if is_under(path, COLOSSUS) {
+        if is_under(path, BUBBLEGUM) && !is_under(path, BUBBLEGUM_HALLUCINATION) {
+            Some(Self::Bubblegum)
+        } else if is_under(path, COLOSSUS) {
             Some(Self::Colossus)
-        } else if is_under(path, DRAKE) && !is_under(path, LESSER_DRAKE) {
+        } else if is_under(path, DRAKE) {
             Some(Self::Drake)
         } else {
             None
@@ -111,6 +120,7 @@ pub struct Megafauna {
     last_health: f32,
     /// Timed steps of the running abilities.
     queue: Vec<(f64, Step)>,
+    pub bubblegum: bubblegum::State,
     pub colossus: colossus::State,
     pub drake: drake::State,
 }
@@ -128,6 +138,7 @@ impl Megafauna {
             ranged_ready: 0.0,
             last_health: health,
             queue: Vec::new(),
+            bubblegum: bubblegum::State::default(),
             colossus: colossus::State::default(),
             drake: drake::State::default(),
         }
@@ -160,6 +171,7 @@ impl Megafauna {
 pub enum Step {
     /// The telegraphed strike lands (`basic_mob_attack_telegraph` -> `AttackingTarget`).
     Melee(Entity),
+    Bubblegum(bubblegum::Step),
     Colossus(colossus::Step),
     Drake(drake::Step),
 }
@@ -203,7 +215,13 @@ impl Visual {
 pub(super) fn build(app: &mut App) {
     app.add_systems(PostStartup, placement::place).add_systems(
         Update,
-        (think, run_queues, drake::land_strikes, expire_visuals)
+        (
+            think,
+            run_queues,
+            drake::land_strikes,
+            bubblegum::bleed,
+            expire_visuals,
+        )
             .chain()
             .after(crate::click::ResolveClicks)
             .before(HealthSystems),
@@ -222,10 +240,9 @@ pub(super) fn attach(world: &mut World, mob: Entity, def: &MobDef) {
     let mut controller = AiController::default();
     controller.kind = def.path.clone();
     controller.traits = RUN_WHILE_UNWATCHED | ALWAYS_HIGH_PRIORITY;
-    world.entity_mut(mob).insert((
-        Megafauna::new(kind, now + offset, def.max_health),
-        controller,
-    ));
+    let mut brain = Megafauna::new(kind, now + offset, def.max_health);
+    brain.drake.lesser = is_under(&def.path, LESSER_DRAKE);
+    world.entity_mut(mob).insert((brain, controller));
 }
 
 /// The ported megafauna kind of `mob`.
@@ -282,7 +299,7 @@ fn think_one(world: &mut World, mob: Entity, now: f64) {
     if let Some(mut m) = world.get_mut::<Megafauna>(mob) {
         m.last_health = health;
     }
-    if drake::swooping(world, mob) {
+    if moving_itself(world, mob) {
         return;
     }
     let vision = if aggro {
@@ -317,15 +334,25 @@ fn think_one(world: &mut World, mob: Entity, now: f64) {
     if !adjacent {
         open_fire(world, mob, target);
     }
-    if !drake::swooping(world, mob) {
-        // `Goto(target, move_to_delay, minimum_distance = 1)`.
+    if !moving_itself(world, mob) {
+        // `Goto(target, move_to_delay, minimum_distance)`.
+        let min_dist = match world.get::<Megafauna>(mob).map(|m| m.kind) {
+            Some(Kind::Bubblegum) => bubblegum::minimum_distance(world, mob, target, now),
+            _ => 1,
+        };
         if let Some(mut c) = world.get_mut::<AiController>(mob) {
-            c.movement.start(Target::Entity(target), 1);
+            c.movement.start(Target::Entity(target), min_dist);
         }
         if adjacent {
             melee_action(world, mob, target, now);
         }
     }
+}
+
+/// An ability moves the boss (the drake's swoop, Bubblegum's charges): its AI neither walks
+/// nor strikes.
+fn moving_itself(world: &World, mob: Entity) -> bool {
+    drake::swooping(world, mob) || bubblegum::charging(world, mob)
 }
 
 /// `CanAttack` of a megafauna: a living mob (dead too) not of its faction, not gutted.
@@ -385,6 +412,7 @@ fn open_fire(world: &mut World, mob: Entity, target: Entity) {
         return;
     }
     match kind {
+        Kind::Bubblegum => bubblegum::open_fire(world, mob, target, now),
         Kind::Colossus => colossus::open_fire(world, mob, target, now),
         Kind::Drake => drake::open_fire(world, mob, target, now),
     }
@@ -415,7 +443,7 @@ fn attacking_target(world: &mut World, mob: Entity, target: Entity) {
     let ready = world
         .get::<Megafauna>(mob)
         .is_some_and(|m| now >= m.melee_ready);
-    if !near || !ready || !valid_target(world, mob, target) || drake::swooping(world, mob) {
+    if !near || !ready || !valid_target(world, mob, target) || moving_itself(world, mob) {
         return;
     }
     if world.get::<Stat>(target) == Some(&Stat::Dead) {
@@ -448,6 +476,10 @@ fn devour(world: &mut World, mob: Entity, victim: Entity) {
     super::defense::hurt(world, victim, DamageType::Brute, DEVOUR_DAMAGE, None);
     world.entity_mut(victim).insert((Stat::Dead, Gutted));
     lose_target(world, mob);
+    // `bubblegum/devour`: bubblegum in a dish.
+    if kind_of(world, mob) == Some(Kind::Bubblegum) {
+        crate::construction::spawn_obj(world, bubblegum::GUM, pos);
+    }
 }
 
 /// Runs the due steps of every megafauna in time order; a dead one's are dropped.
@@ -482,6 +514,7 @@ fn run_queues(world: &mut World) {
             let (at, step) = m.queue.swap_remove(i);
             match step {
                 Step::Melee(target) => attacking_target(world, mob, target),
+                Step::Bubblegum(step) => bubblegum::run(world, mob, at, step),
                 Step::Colossus(step) => colossus::run(world, mob, at, step),
                 Step::Drake(step) => drake::run(world, mob, at, step),
             }
@@ -611,20 +644,28 @@ pub(super) fn roll<T>(world: &mut World, f: impl FnOnce(&mut CombatRng) -> T) ->
     out
 }
 
-/// `/mob/living/simple_animal/hostile/megafauna/ex_act` (`dragon/ex_act` ignores light ones):
-/// fixed brute, never gibbed. False for other mobs.
+/// `/mob/living/simple_animal/hostile/megafauna/ex_act` (`dragon/ex_act` ignores light ones,
+/// `bubblegum/ex_act` too and takes harder ones as light): fixed brute, never gibbed. False for
+/// other mobs.
 pub fn ex_act(world: &mut World, mob: Entity, severity: Severity) -> bool {
     let Some(kind) = kind_of(world, mob) else {
         return false;
     };
     let amount = match severity {
-        Severity::Light if kind == Kind::Drake => return true,
+        Severity::Light if matches!(kind, Kind::Drake | Kind::Bubblegum) => return true,
+        _ if kind == Kind::Bubblegum => 50.0,
         Severity::Devastate => 250.0,
         Severity::Heavy => 100.0,
         Severity::Light => 50.0,
     };
     super::defense::hurt(world, mob, DamageType::Brute, amount, None);
     true
+}
+
+/// `projectile_hit` of a boss that blocks the projectile (`BULLET_ACT_BLOCK`): an enraged
+/// Bubblegum. The projectile is spent without effect.
+pub fn deflects_projectile(world: &mut World, target: Entity) -> bool {
+    bubblegum::deflects(world, target)
 }
 
 /// A projectile's hit (`on_hit`, `COMSIG_ATOM_BULLET_ACT`): the colossus' bolts and shield.
@@ -649,7 +690,15 @@ pub(super) fn on_death(world: &mut World, mob: Entity, pos: TilePos) {
     }
     stop_moving(world, mob);
     drake::end_swoop_state(world, mob);
+    if kind == Kind::Bubblegum {
+        bubblegum::on_death(world, mob);
+    }
+    // `dragon/lesser`: `loot = list()`.
+    if world.get::<Megafauna>(mob).is_some_and(|m| m.drake.lesser) {
+        return;
+    }
     let (chest, loot) = match kind {
+        Kind::Bubblegum => (bubblegum::CHEST, bubblegum::loot(world)),
         Kind::Colossus => (colossus::CHEST, colossus::loot(world)),
         Kind::Drake => (drake::CHEST, drake::loot(world)),
     };
@@ -671,9 +720,11 @@ mod tests {
     fn kinds_by_path() {
         assert_eq!(Kind::of(COLOSSUS), Some(Kind::Colossus));
         assert_eq!(Kind::of(DRAKE), Some(Kind::Drake));
-        assert_eq!(Kind::of(LESSER_DRAKE), None);
+        assert_eq!(Kind::of(LESSER_DRAKE), Some(Kind::Drake));
+        assert_eq!(Kind::of(BUBBLEGUM), Some(Kind::Bubblegum));
+        assert_eq!(Kind::of(BUBBLEGUM_HALLUCINATION), None);
         assert_eq!(
-            Kind::of("/mob/living/simple_animal/hostile/megafauna/bubblegum"),
+            Kind::of("/mob/living/simple_animal/hostile/megafauna/hierophant"),
             None
         );
     }

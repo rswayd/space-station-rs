@@ -68,7 +68,13 @@ pub const LAVALAND_RUNTIME_TYPES: [&str; 24] = [
 /// What `ss13_game::mobs::megafauna` spawns: the ported bosses (placed on the mining level),
 /// the colossus' death bolt, the necropolis chests and what their `PopulateContents` makes
 /// (tg `necropolis_chests.dm`).
-pub const MEGAFAUNA_RUNTIME_TYPES: [&str; 17] = [
+pub const MEGAFAUNA_RUNTIME_TYPES: [&str; 23] = [
+    "/mob/living/simple_animal/hostile/megafauna/bubblegum",
+    "/obj/structure/closet/crate/necropolis/bubblegum",
+    "/obj/item/clothing/suit/hooded/hostile_environment",
+    "/obj/item/mayhem",
+    "/obj/item/soulscythe",
+    "/obj/item/food/bubblegum/bubblegum",
     "/mob/living/simple_animal/hostile/megafauna/colossus",
     "/mob/living/simple_animal/hostile/megafauna/dragon",
     "/obj/projectile/colossus",

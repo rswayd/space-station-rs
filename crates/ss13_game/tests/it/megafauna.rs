@@ -1,7 +1,8 @@
 //! Megafauna on a fixture station over real WebTransport: the colossus shoots and strikes a
 //! player who comes near and, killed, vanishes into its chest of loot; the ash drake burns,
 //! swoops on or bites its target, shrugs off light explosions, is never gibbed and leaves its
-//! corpse with a chest. The ignored test places the bosses on the real Lavaland.
+//! corpse with a chest; Bubblegum charges its target, takes explosions as light ones and
+//! leaves its sarcophagus. The ignored test places the bosses on the real Lavaland.
 
 use std::path::{Path, PathBuf};
 
@@ -9,7 +10,7 @@ use bevy::prelude::*;
 use ss13_game::explosions::Severity;
 use ss13_game::explosions::ex_act::ex_act_mob;
 use ss13_game::health::{Health, Stat};
-use ss13_game::mobs::megafauna::{COLOSSUS, DRAKE, Megafauna};
+use ss13_game::mobs::megafauna::{BUBBLEGUM, COLOSSUS, DRAKE, Megafauna};
 use ss13_game::storage::StoredIn;
 use ss13_game::testing::{self, Drive, fixture_map, write_fixture};
 use ss13_mapload::{DmItem, DmMob, DmObj};
@@ -57,6 +58,14 @@ const TYPES: &str = r##"{
     "/obj/item/book/granter/action/spell": { "parent": "/obj/item/book/granter/action" },
     "/obj/item/book/granter/action/spell/sacredflame": { "parent": "/obj/item/book/granter/action/spell" },
     "/obj/item/dragons_blood": { "parent": "/obj/item", "declared_vars": { "name": "bottle of dragons blood" } },
+    "/obj/item/clothing/suit": { "parent": "/obj/item/clothing" },
+    "/obj/item/clothing/suit/hooded": { "parent": "/obj/item/clothing/suit" },
+    "/obj/item/clothing/suit/hooded/hostile_environment": { "parent": "/obj/item/clothing/suit/hooded" },
+    "/obj/item/mayhem": { "parent": "/obj/item" },
+    "/obj/item/soulscythe": { "parent": "/obj/item" },
+    "/obj/item/food": { "parent": "/obj/item" },
+    "/obj/item/food/bubblegum": { "parent": "/obj/item/food" },
+    "/obj/item/food/bubblegum/bubblegum": { "parent": "/obj/item/food/bubblegum" },
     "/obj/projectile": { "parent": "/obj", "declared_vars": { "damage": 10,
         "damage_type": "brute", "armor_flag": "bullet", "speed": 1.25, "range": 50,
         "pass_flags": 1, "accurate_range": 100, "accuracy_falloff": 7,
@@ -89,6 +98,8 @@ const TYPES: &str = r##"{
         "parent": "/obj/structure/closet/crate/necropolis", "declared_vars": { "name": "colossus chest" } },
     "/obj/structure/closet/crate/necropolis/dragon": {
         "parent": "/obj/structure/closet/crate/necropolis", "declared_vars": { "name": "dragon chest" } },
+    "/obj/structure/closet/crate/necropolis/bubblegum": {
+        "parent": "/obj/structure/closet/crate/necropolis" },
     "/mob": { "parent": "/atom/movable", "declared_vars": { "layer": 4, "density": 1,
         "faction": { "expr": "list(FACTION_NEUTRAL)" } } },
     "/mob/living": { "parent": "/mob", "declared_vars": { "maxHealth": 100, "health": 100 } },
@@ -118,6 +129,12 @@ const TYPES: &str = r##"{
         "melee_damage_upper": 40, "speed": 5, "attack_verb_continuous": "chomps",
         "attack_verb_simple": "chomp", "icon_state": "dragon", "icon_living": "dragon",
         "icon_dead": "dragon_dead" } },
+    "/mob/living/simple_animal/hostile/megafauna/bubblegum": {
+        "parent": "/mob/living/simple_animal/hostile/megafauna", "declared_vars": {
+        "name": "bubblegum", "maxHealth": 2500, "health": 2500, "melee_damage_lower": 40,
+        "melee_damage_upper": 40, "speed": 5, "del_on_death": 1, "attack_verb_continuous": "rends",
+        "attack_verb_simple": "rend", "speak_emote": { "list": ["gurgles"] },
+        "icon_state": "bubblegum", "icon_living": "bubblegum", "icon_dead": "" } },
     "/turf": { "parent": "/atom", "declared_vars": { "icon": { "resource": "t.dmi" } } },
     "/turf/open": { "parent": "/turf" },
     "/turf/open/floor": { "parent": "/turf/open", "declared_vars": { "icon_state": "floor" } },
@@ -170,7 +187,24 @@ wwwwwwwwwwwwwwww
 "}
 "##;
 
-const STATES: [(&str, &str); 10] = [
+/// `s` the player (3,4), `B` Bubblegum (8,4).
+const BUBBLEGUM_MAP: &str = r##""w" = (/turf/closed/wall,/area/lavaland_test)
+"f" = (/turf/open/floor,/area/lavaland_test)
+"s" = (/obj/effect/landmark/start/assistant,/turf/open/floor,/area/lavaland_test)
+"B" = (/mob/living/simple_animal/hostile/megafauna/bubblegum,/turf/open/floor,/area/lavaland_test)
+
+(1,1,1) = {"
+wwwwwwwwwwwwwwww
+wffffffffffffffw
+wffffffffffffffw
+wfsffffBfffffffw
+wffffffffffffffw
+wffffffffffffffw
+wwwwwwwwwwwwwwww
+"}
+"##;
+
+const STATES: [(&str, &str); 11] = [
     ("t.dmi", "floor"),
     ("t.dmi", "wall"),
     ("l.dmi", "x2"),
@@ -178,12 +212,13 @@ const STATES: [(&str, &str); 10] = [
     ("m.dmi", "eva"),
     ("m.dmi", "dragon"),
     ("m.dmi", "dragon_dead"),
+    ("m.dmi", "bubblegum"),
     ("i.dmi", "toy"),
     ("cr.dmi", "necrocrate"),
     ("cr.dmi", "necrocrateopen"),
 ];
 
-const USED: [&str; 26] = [
+const USED: [&str; 32] = [
     "/obj/effect/landmark/start/assistant",
     "/turf/open/floor",
     "/turf/closed/wall",
@@ -206,6 +241,12 @@ const USED: [&str; 26] = [
     "/obj/item/lava_staff",
     "/obj/item/book/granter/action/spell/sacredflame",
     "/obj/item/dragons_blood",
+    BUBBLEGUM,
+    "/obj/structure/closet/crate/necropolis/bubblegum",
+    "/obj/item/clothing/suit/hooded/hostile_environment",
+    "/obj/item/mayhem",
+    "/obj/item/soulscythe",
+    "/obj/item/food/bubblegum/bubblegum",
     "/mob/living/carbon/human",
     "/obj/item/card/id/advanced",
     "/obj/item/clothing/under/color/grey",
@@ -341,6 +382,36 @@ fn ash_drake_burns_its_target_and_leaves_its_corpse_and_chest() {
         "{chest:?} {at:?}"
     );
     assert_eq!(inside.len(), 1, "{inside:?}");
+}
+
+#[test]
+fn bubblegum_charges_its_target_and_leaves_its_sarcophagus() {
+    let mut s = Station::start("bubblegum", BUBBLEGUM_MAP);
+    let gum = s.mob_of(BUBBLEGUM);
+    {
+        let world = s.0.server.world_mut();
+        ex_act_mob(world, gum, Severity::Light);
+        assert_eq!(world.get::<Health>(gum).unwrap().health(), 2500.0);
+        // Puny mortals: a devastating blast counts as a light one.
+        ex_act_mob(world, gum, Severity::Devastate);
+        assert_eq!(world.get::<Health>(gum).unwrap().health(), 2450.0);
+    }
+    let p = s.join("p0", |_| {});
+    let me = s.players[p].mob;
+    s.run_until_for(30.0, "bubblegum hurts its target", |s| {
+        s.get::<Health>(me).brute > 0.0
+    });
+    assert_eq!(s.get::<Megafauna>(gum).target, Some(me));
+    let at = s.pos(gum);
+    s.kill(gum);
+    assert!(s.0.server.world().get_entity(gum).is_err(), "del_on_death");
+    let (chest, inside) = s.chest("/obj/structure/closet/crate/necropolis/bubblegum");
+    assert!(
+        chest.chebyshev(at).is_some_and(|d| d <= 1),
+        "{chest:?} {at:?}"
+    );
+    assert_eq!(inside.len(), 2, "{inside:?}");
+    assert!(inside.contains(&"/obj/item/clothing/suit/hooded/hostile_environment".to_owned()));
 }
 
 #[test]

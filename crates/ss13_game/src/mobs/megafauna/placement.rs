@@ -5,10 +5,9 @@
 //! `MEGAFAUNA_SPAWN_ALLOWED`), in map order, flora takes 2.5% and features 0.25% first, then
 //! 6% spawn fauna, of which `SPAWN_MEGAFAUNA` is 2 in 179 (`fauna_types`); a boss is then
 //! picked by weight (bubblegum 6, colossus 2, drake 4) and spawns unless another boss is within
-//! 7 tiles (`megafauna_exclusion_radius`). Bubblegum is unique: its first pick takes it off the
-//! list.
-// shortcut: bubblegum is not ported: its pick spawns nothing (the colossus' and drake's odds
-// stay tg's). One biome (basalt) for the whole level, as the cave generator makes one open turf;
+//! 7 tiles (`megafauna_exclusion_radius`). Bubblegum is unique: once it spawns it is taken off
+//! the list.
+// shortcut: one biome (basalt) for the whole level, as the cave generator makes one open turf;
 // the rolls are this module's own, not shared with the flora, features and fauna of the
 // basic mobs' population, whose exclusion radii megafauna ignore in tg too.
 
@@ -19,13 +18,12 @@ use ss13_mapload::spawner::Rng;
 use ss13_mapload::{Areas, DmPower, MapSeed, Turf};
 use ss13_shared::TilePos;
 
-use super::{COLOSSUS, DRAKE};
+use super::{BUBBLEGUM, COLOSSUS, DRAKE};
 
 /// tg `/turf/open/misc/asteroid/basalt/lava_land_surface` (the biome's `open_turf_type`).
 pub const OPEN_TURF: &str = ss13_mapload::cave::LAVALAND_OPEN;
 /// The lavaland area with `MEGAFAUNA_SPAWN_ALLOWED`.
 pub const DANGER_AREA: &str = "/area/lavaland/surface/outdoors/unexplored/danger";
-const BUBBLEGUM: &str = "/mob/living/simple_animal/hostile/megafauna/bubblegum";
 /// `/datum/biome/lavaland/basalt`: `flora_density`, `feature_density`, `fauna_density`
 /// (percent), the `SPAWN_MEGAFAUNA` weight and the sum of `fauna_types` weights.
 const FLORA_DENSITY: f32 = 2.5;
@@ -71,12 +69,12 @@ pub fn plan(tiles: &[TilePos], rng: &mut Rng) -> Vec<(TilePos, &'static str)> {
         {
             continue;
         }
-        if path == BUBBLEGUM {
-            list.retain(|e| e.0 != BUBBLEGUM);
-            continue;
-        }
         placed.push(tile);
         out.push((tile, path));
+        // There can be only one Bubblegum.
+        if path == BUBBLEGUM {
+            list.retain(|e| e.0 != BUBBLEGUM);
+        }
     }
     out
 }
@@ -119,15 +117,27 @@ mod tests {
     use super::*;
 
     #[test]
-    fn bosses_are_rare_apart_and_never_bubblegum() {
+    fn bosses_are_rare_apart_and_one_bubblegum_at_most() {
         let tiles: Vec<TilePos> = (1..=200)
             .flat_map(|y| (1..=200).map(move |x| TilePos::new(x, y, 3)))
             .collect();
         let mut rng = Rng::new(7);
         let bosses = plan(&tiles, &mut rng);
-        // 40000 tiles x ~0.065%: tens of picks, a third of them the unique bubblegum's.
+        // 40000 tiles x ~0.065%: tens of picks.
         assert!((3..40).contains(&bosses.len()), "{} bosses", bosses.len());
-        assert!(bosses.iter().all(|(_, p)| *p == COLOSSUS || *p == DRAKE));
+        let gums = bosses.iter().filter(|(_, p)| *p == BUBBLEGUM).count();
+        assert!(gums <= 1, "{gums} bubblegums");
+        assert!(
+            bosses
+                .iter()
+                .all(|(_, p)| [BUBBLEGUM, COLOSSUS, DRAKE].contains(p))
+        );
+        // Over many seeds Bubblegum (the heaviest weight) spawns.
+        assert!((0..20).any(|seed| {
+            plan(&tiles, &mut Rng::new(seed))
+                .iter()
+                .any(|(_, p)| *p == BUBBLEGUM)
+        }));
         for (i, (a, _)) in bosses.iter().enumerate() {
             for (b, _) in &bosses[i + 1..] {
                 assert!(a.chebyshev(*b).unwrap() > EXCLUSION, "{a:?} {b:?}");
