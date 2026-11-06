@@ -43,6 +43,21 @@ impl Plugin for ServiceServerPlugin {
         app.add_click_handler(ClickPhase::EmptyHand, 3200, |w, c| {
             crate::service::server::interact(w, c.client, c.mob, c.target)
         });
+        // `deck/attack_hand` (draw a card; a right click: face up), `singlecard/attack_hand_secondary`.
+        app.add_click_handler(ClickPhase::EmptyHand, 3211, |w, c| {
+            super::cards::attack_hand(w, c.client, c.mob, c.target, c.modifiers.right)
+        });
+        // Cards, hands and decks used on each other; pens marking cards.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 1691, |w, c| {
+            c.held.is_some_and(|h| {
+                super::cards::item_interaction(w, c.client, c.mob, h, c.target, c.modifiers.right)
+            })
+        });
+        // The same on the card thing in the other hand; an empty hand draws from a held deck.
+        app.add_click_handler(ClickPhase::OtherHand, 901, |w, c| match c.held {
+            Some(h) => super::cards::item_interaction(w, c.client, c.mob, h, c.target, false),
+            None => super::cards::attack_hand(w, c.client, c.mob, c.target, false),
+        });
         // `papercutter/attack_hand_secondary`: a right click cuts its paper.
         app.add_click_handler(ClickPhase::EmptyHand, 3201, |w, c| {
             c.modifiers.right && super::stationery::cutter_right_click(w, c.client, c.mob, c.target)
@@ -83,6 +98,8 @@ impl Plugin for ServiceServerPlugin {
                     super::clown::squeak_on_moves.after(ss13_world::WorldSystems::Movement),
                     super::statues::pulse_radioactive
                         .run_if(any_with_component::<super::statues::Radioactive>),
+                    super::cards::drop_unheld_wield
+                        .run_if(any_with_component::<super::cards::DeckWielded>),
                 ),
             )
             .add_observer(add_item_parts)
@@ -121,6 +138,8 @@ pub(super) enum PendingAsk {
     Religion(super::religion::ReligionAsk),
     /// Biscuit cards and filing cabinets.
     Stationery(super::stationery::StationeryAsk),
+    /// Playing cards.
+    Cards(super::cards::CardsAsk),
 }
 
 /// `Initialize` of the ported items, once all their prototype components are in.
@@ -135,6 +154,7 @@ fn add_item_parts(add: On<Add<DmItem>>, mut commands: Commands) {
         super::art::add_parts(world, e, &path);
         super::statues::add_parts(world, e, &path);
         super::stationery::add_parts(world, e, &path);
+        super::cards::add_parts(world, e, &path);
         add_data_parts(world, e);
     });
 }
@@ -186,6 +206,7 @@ pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity)
         || super::religion::attack_self(world, client, mob, item)
         || super::library::attack_self(world, client, mob, item)
         || super::games::attack_self(world, client, mob, item)
+        || super::cards::attack_self(world, client, mob, item)
         || super::clown::attack_self(world, mob, item)
 }
 
@@ -203,7 +224,8 @@ pub fn interact(world: &mut World, client: Entity, mob: Entity, target: Entity) 
 /// tg `click_alt` of papers (folded into a plane; a carbon sheet tears its copy off first) and
 /// of the paper cutter. True when it was theirs.
 pub fn click_alt(world: &mut World, client: Entity, mob: Entity, target: Entity) -> bool {
-    super::stationery::click_alt(world, client, mob, target)
+    super::cards::click_alt(world, client, mob, target)
+        || super::stationery::click_alt(world, client, mob, target)
         || super::office::fold_plane(world, client, mob, target)
         || super::barber::click_alt(world, client, mob, target)
 }
@@ -277,6 +299,9 @@ fn prompt_answers(world: &mut World, mut cursor: Local<MessageCursor<PromptAnswe
             }
             (PendingAsk::Stationery(ask), answer) => {
                 super::stationery::answer(world, actor, ask, answer);
+            }
+            (PendingAsk::Cards(ask), answer) => {
+                super::cards::answer(world, actor, ask, answer);
             }
             _ => {}
         }

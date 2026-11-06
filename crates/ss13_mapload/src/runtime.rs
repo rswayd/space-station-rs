@@ -57,6 +57,10 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/effect/decal/cleanable/blood/gibs/robot_debris/down",
     "/obj/effect/decal/cleanable/blood/gibs/robot_debris/limb",
     "/obj/effect/decal/cleanable/blood/splatter",
+    // `ss13_game::service::cards`: a card drawn, a hand of cards made, the Wiz-Off rules card.
+    "/obj/item/toy/singlecard",
+    "/obj/item/toy/cards/cardhand",
+    "/obj/item/toy/singlecard/wizoff_ruleset",
     "/obj/item/food/cookie",
     "/obj/item/food/meat/rawcutlet/plain",
     "/obj/item/reagent_containers/cup/glass/drinkingglass",

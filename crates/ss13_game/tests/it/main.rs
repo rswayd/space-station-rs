@@ -15,6 +15,7 @@ mod brig;
 mod brothers;
 mod bs_objects;
 mod buffs;
+mod cards;
 mod cargo;
 mod changeling;
 mod chem;

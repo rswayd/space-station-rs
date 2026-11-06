@@ -97,6 +97,7 @@
 //! | 760 | `wiremod::server::item_interaction` |
 //! | 800 | `grenades::item_interaction` |
 //! | 900 | `service::server::item_interaction` |
+//! | 901 | `service::cards::item_interaction`, `attack_hand` (empty active hand: draw from the deck) |
 //! | 1000 | `antag::uplink::item_interaction` |
 //! | 1100 | `antag::syndie_items::item_interaction` |
 //! | 1150 | `emag::interact_with_atom` on a modular computer (`modpc::pda`) |
@@ -165,6 +166,7 @@
 //! | 3170 | `botany::unique::pickup_backfire` (never handles) |
 //! | 3200 | `service::server::interact` |
 //! | 3201 | `service::stationery::cutter_right_click` (right click) |
+//! | 3211 | `service::cards::attack_hand` (draw from a deck; right click: face up, flip a card) |
 //! | 3250 | `fishing::aquarium::interact` (aquariums, the fish-porter) |
 //! | 3300 | `defenses::server::interact` |
 //! | 3400 | `silicon::law_rack::interact` |
@@ -229,6 +231,7 @@
 //! | 1650 | `radiation::geiger_interact` |
 //! | 1680 | `service::barber::item_interaction` (razor, lipstick, paper on lips, dye spray, mirror frames) |
 //! | 1690 | `service::stationery::cabinet_wrench` (right click) |
+//! | 1691 | `service::cards::item_interaction` (cards, hands and decks on each other, pens marking) |
 //! | 1700 | `service::server::item_interaction` |
 //! | 1750 | `medical::bodyparts::item_interaction` |
 //! | 1777 | `science::xenobio::item_interaction` (slimes, extracts) |

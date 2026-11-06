@@ -23,6 +23,8 @@ mod art;
 #[cfg(feature = "server")]
 pub mod barber;
 #[cfg(feature = "server")]
+pub mod cards;
+#[cfg(feature = "server")]
 mod clown;
 #[cfg(feature = "server")]
 mod games;

@@ -252,6 +252,13 @@ fn drag(world: &mut World, client: Entity, from: DragEnd, to: DragEnd) {
     {
         return;
     }
+    // `drag_pickup` of card decks.
+    if to == End::World(mob)
+        && matches!(from, End::World(_))
+        && crate::service::cards::drag_pickup(world, mob, dragged)
+    {
+        return;
+    }
     // A skateboard picked up, a wheelchair folded (`crate::vehicles`).
     if to == End::World(mob)
         && matches!(from, End::World(_))
