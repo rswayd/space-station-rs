@@ -365,7 +365,7 @@ fn vent_area_name(world: &World, vent: Entity) -> String {
 }
 
 /// `pick(GLOB.teleportlocs)`: a random station area.
-fn random_area_name(world: &mut World) -> String {
+pub(super) fn random_area_name(world: &mut World) -> String {
     let areas: Vec<Entity> = world
         .resource::<ss13_mapload::Areas>()
         .entities()

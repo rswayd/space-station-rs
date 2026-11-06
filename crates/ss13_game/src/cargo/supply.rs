@@ -737,7 +737,49 @@ pub fn buy(world: &mut World) {
 /// tg `supply_order/generate` -> `supply_pack/generate` + `generateManifest`: the crate on
 /// `pos`, filled, with its manifest. `None` without the crate's prototype.
 pub fn generate(world: &mut World, order: &SupplyOrder, pos: TilePos) -> Option<Entity> {
-    let pack = world.resource::<SupplyPacks>().packs[order.pack].clone();
+    let pack_name = world.resource::<SupplyPacks>().packs[order.pack]
+        .name
+        .clone();
+    let (crate_entity, contents) = generate_pack(world, order.pack, pos)?;
+    // `supply_pack/generate`: " - Purchased by <holder>" for a paying account.
+    let purchased = payer_holder(world, order)
+        .map(|holder| format!(" - Purchased by {holder}"))
+        .unwrap_or_default();
+    if let Some(mut n) = world.get_mut::<DmName>(crate_entity) {
+        n.name = format!("{}{purchased} - #{}", n.name, order.id);
+    }
+    if let Some(paper) = spawn_template(world, MANIFEST_PAPER, None) {
+        let station = crate::round::station_name(world);
+        let mut text = format!(
+            "Центральное Командование Shipping Manifest\nOrder: {}\nDestination: {station}\n\
+             Item: {}\nContents:",
+            order.id, pack_name
+        );
+        for (name, n) in count_names(contents) {
+            text.push_str(&format!("\n- {n} {name}"));
+        }
+        text.push_str("\nStamp below to confirm receipt of goods:");
+        // shortcut: no paper text yet; the manifest's text is its description.
+        world.entity_mut(paper).insert((
+            Networked,
+            StoredIn(crate_entity),
+            DmName {
+                name: format!("shipping manifest - #{} ({})", order.id, pack_name),
+                desc: text,
+            },
+        ));
+    }
+    Some(crate_entity)
+}
+
+/// tg `supply_pack/generate` without an order: the pack's crate on `pos` (named after
+/// `crate_name`), filled, and the names of what it holds. `None` without the crate's prototype.
+pub fn generate_pack(
+    world: &mut World,
+    pack: usize,
+    pos: TilePos,
+) -> Option<(Entity, Vec<String>)> {
+    let pack = world.resource::<SupplyPacks>().packs[pack].clone();
     let crate_type = pack.crate_type.as_deref()?;
     let crate_entity = spawn_template(world, crate_type, Some(pos))?;
     world.entity_mut(crate_entity).insert(Networked);
@@ -754,14 +796,7 @@ pub fn generate(world: &mut World, order: &SupplyOrder, pos: TilePos) -> Option<
         .get::<DmName>(crate_entity)
         .map(|n| n.desc.clone())
         .unwrap_or_default();
-    // `supply_pack/generate`: " - Purchased by <holder>" for a paying account.
-    let purchased = payer_holder(world, order)
-        .map(|holder| format!(" - Purchased by {holder}"))
-        .unwrap_or_default();
-    world.entity_mut(crate_entity).insert(DmName {
-        name: format!("{name}{purchased} - #{}", order.id),
-        desc,
-    });
+    world.entity_mut(crate_entity).insert(DmName { name, desc });
     let closet = {
         let icons = world.get_resource::<IconIndex>();
         let entity = world.entity(crate_entity);
@@ -813,28 +848,7 @@ pub fn generate(world: &mut World, order: &SupplyOrder, pos: TilePos) -> Option<
             contents.push(name);
         }
     }
-    if let Some(paper) = spawn_template(world, MANIFEST_PAPER, None) {
-        let station = crate::round::station_name(world);
-        let mut text = format!(
-            "Центральное Командование Shipping Manifest\nOrder: {}\nDestination: {station}\n\
-             Item: {}\nContents:",
-            order.id, pack.name
-        );
-        for (name, n) in count_names(contents) {
-            text.push_str(&format!("\n- {n} {name}"));
-        }
-        text.push_str("\nStamp below to confirm receipt of goods:");
-        // shortcut: no paper text yet; the manifest's text is its description.
-        world.entity_mut(paper).insert((
-            Networked,
-            StoredIn(crate_entity),
-            DmName {
-                name: format!("shipping manifest - #{} ({})", order.id, pack.name),
-                desc: text,
-            },
-        ));
-    }
-    Some(crate_entity)
+    Some((crate_entity, contents))
 }
 
 /// The holder of the account paying `order` (a person or a department), if not cargo's budget.

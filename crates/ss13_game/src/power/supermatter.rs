@@ -238,6 +238,11 @@ pub struct Crystal {
     pub gas_temperature: f64,
     pub gas_total_moles: f64,
     pub delam: Delam,
+    /// `bullet_energy`: MeV per point of beam damage (the Supermatter Surge raises it).
+    pub bullet_energy: f64,
+    /// `current_gas_behavior[/datum/gas/nitrogen]`: tg's one shared datum, which the
+    /// Supermatter Surge changes for its duration (`crate::events::supermatter_surge`).
+    pub nitrogen: SmGas,
 }
 
 impl Default for Crystal {
@@ -275,6 +280,8 @@ impl Default for Crystal {
             gas_temperature: 0.0,
             gas_total_moles: 0.0,
             delam: Delam::Explosive,
+            bullet_energy: SUPERMATTER_DEFAULT_BULLET_ENERGY,
+            nitrogen: SM_GASES[GasId::N2.0 as usize],
         }
     }
 }
@@ -307,7 +314,11 @@ impl Crystal {
             }
             let pct = moles / total;
             self.gas_percentage[i] = pct;
-            let gas = SM_GASES[i];
+            let gas = if i == GasId::N2.0 as usize {
+                self.nitrogen
+            } else {
+                SM_GASES[i]
+            };
             self.gas_power_transmission_rate += gas.power_transmission * pct;
             self.gas_heat_modifier += gas.heat_modifier * pct;
             self.gas_heat_resistance += gas.heat_resistance * pct;
@@ -648,8 +659,7 @@ struct SmLooks {
 impl Supermatter {
     /// `eat_bullets` for a beam (not a `BULLET` armor flag): `damage * bullet_energy` MeV.
     pub fn eat_beam(&mut self, damage: f32) {
-        self.crystal.external_power_immediate +=
-            f64::from(damage) * SUPERMATTER_DEFAULT_BULLET_ENERGY;
+        self.crystal.external_power_immediate += f64::from(damage) * self.crystal.bullet_energy;
     }
 }
 

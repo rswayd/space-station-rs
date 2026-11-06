@@ -59,7 +59,7 @@
 
 - **Код:** [`/datum/round_event_control/stray_cargo`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/stray_cargo.dm#L2), [`/datum/round_event_control/stray_cargo/syndicate`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/stray_cargo.dm#L169)
 - **BandaStation:** [`modular_bandastation/balance/code/events.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/balance/code/events.dm#L5) — поды при падении взрываются сильнее (`explosionSize = list(1,2,3,3)`)
-- **Статус в ss13-rs:** ❌ нет — нет дроп-подов и взрывов
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/events/stray_cargo.rs`: Stray Cargo Pod — вес 20, максимум 4, с 10 минут, объявление 75% (зона падения), через 20–40 тиков обычный под (`crate::cargo::supplypod::launch_stray`) на свободный тайл случайной станционной зоны вне инженерии (кроме комнаты отдыха) и камер ИИ: взрыв BandaStation (1, 2, 3, огонь 3) при приземлении, через 3 с ящик случайного не-`ORDER_SPECIAL` набора, отпертый, без манифеста; под остаётся на тайле; нет админской настройки, гуди-наборов в кейсе, анимации падения и оповещения призраков; Stray Syndicate Cargo Pod не портирован (нет `surplus` предметов аплинка в каталоге)
 
 ### Shuttle Catastrophe
 Аварийный шаттл станции заменяется случайным другим (объявление о «катастрофе»); не срабатывает, если шаттл уже пристыкован, построен игроками или заменён принудительно; страховка оплачивает ЦК компенсацию.

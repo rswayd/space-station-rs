@@ -347,3 +347,55 @@ fn signaller_neutralizes_anomaly() {
         Some(&1)
     );
 }
+
+/// Radiation Leak: a dense powered station machine starts pulsing radiation with the fixing
+/// methods on examine; once its leak is fixed (the repair's end removes `RadiationLeak`), the
+/// event ends on its next fire and the emitter is gone.
+#[test]
+fn radiation_leak_emits_until_fixed() {
+    use ss13_game::events::radiation_leak::{NAME, RadiationLeak};
+    use ss13_game::radiation::RadioactiveEmitter;
+    let mut app = server("radiation_leak");
+    let world = app.world_mut();
+    world.resource_mut::<Events>().scheduled = f64::MAX;
+    world.spawn((
+        TilePos::new(9, 2, 1),
+        ss13_mapload::DmPower {
+            path: "/obj/machinery/leaky".into(),
+            use_power: 1.0,
+            ..default()
+        },
+        ss13_world::Density,
+    ));
+    force_event(world, NAME, Some(false)).unwrap();
+    // `start_when = 1`: the second fire starts it.
+    fire(world);
+    fire(world);
+    let leaking: Vec<Entity> = world
+        .query_filtered::<Entity, (With<RadiationLeak>, With<RadioactiveEmitter>)>()
+        .iter(world)
+        .collect();
+    assert_eq!(leaking.len(), 1);
+    let machine = leaking[0];
+    let tools = world.get::<RadiationLeak>(machine).unwrap().tools.clone();
+    assert!((1..=3).contains(&tools.len()));
+    assert!(
+        world
+            .get::<RadioactiveEmitter>(machine)
+            .unwrap()
+            .examine_text
+            .as_deref()
+            .is_some_and(|t| t.contains("Оно испускает зеленый газ"))
+    );
+    world.entity_mut(machine).remove::<RadiationLeak>();
+    fire(world);
+    assert!(world.get::<RadioactiveEmitter>(machine).is_none());
+    assert_eq!(
+        world
+            .resource::<Events>()
+            .running()
+            .filter(|&n| n == NAME)
+            .count(),
+        0
+    );
+}
