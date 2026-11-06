@@ -8,7 +8,7 @@ use bevy::prelude::*;
 use ss13_game::displaycase::{BurglarAlarm, DisplayCase};
 use ss13_game::inventory::{CarriedBy, Inventory};
 use ss13_game::testing::{self, Drive, fixture_map, write_fixture};
-use ss13_mapload::{DmItem, DmObj};
+use ss13_mapload::DmItem;
 use ss13_shared::TilePos;
 use ss13_world::{Density, SpatialIndex};
 
