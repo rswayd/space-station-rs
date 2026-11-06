@@ -449,6 +449,8 @@ pub fn harvest(world: &mut World, client: Entity, mob: Entity, tray: Entity) {
         state.plant_status = PlantStatus::Growing;
     } else {
         state.set_seed(None);
+        // No reason to pay for an empty tray.
+        state.self_sustaining = false;
     }
     world.entity_mut(tray).insert(state);
     refresh_tray(world, tray);

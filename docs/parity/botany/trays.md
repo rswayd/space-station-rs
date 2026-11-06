@@ -24,7 +24,7 @@
 Ctrl+клик по закреплённому и запитанному лотку включает автороста: лоток сам доливает воду, снижает сорняки и вредителей, но потребляет много энергии; при пропаже питания отключается.
 
 - **Код:** [`click_ctrl()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L1183), [`set_self_sustaining()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L543)
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/botany/tray.rs`: `// shortcut:` нет автополива (`self_sustaining`, ctrl+клик)
+- **Статус в ss13-rs:** ✅ готово — `crates/ss13_game/src/botany/mod.rs` (`ctrl_clicks`, `self_sustain`, `set_self_sustaining`): ctrl+клик по закреплённому лотку в запитанной зоне включает/выключает автополив, каждые 2 с вода `rand(1, 2) × 2 × 0.5`, сорняки и вредители −1; расход удобрений ≤ 0.5, нет мутации вида и захвата сорняками (`tray.rs`, `Tray::self_sustain`); нагрузка `active_power_usage` на зону, свет радиуса 3 и оверлей `gaia_blessing`; без питания — отключается с сообщением; сбор однократного растения и выкапывание выключают
 
 ### Сорняки, вредители и токсичность
 Уровни сорняков, вредителей и токсинов (0–10/100) растут со временем и от реагентов, снижают здоровье растения; на 10 сорняков пустой или слабый лоток захватывает сорняк (`weedinvasion`), растение может мутировать в сорняк (`mutateweed`), вредители — в мутацию (`mutatepest`).

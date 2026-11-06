@@ -6,7 +6,7 @@
 //!
 //! The cycle is a pure function of the tray, its nutrient holder, the light and the dice, so it
 //! is tested without a world.
-// shortcut: no autogrow (`self_sustaining`, ctrl+click), snails, soil sacks, somatoray, bees, plumbing or circuits; `mutatepest` warns without spawning
+// shortcut: no snails, soil sacks, somatoray, bees, plumbing or circuits; `mutatepest` warns without spawning
 // spiderlings, strange reagent spawns no living plant.
 
 use ss13_reagents::{Chemistry, Holder, is_under};
@@ -75,6 +75,10 @@ pub struct Tray {
     pub plant_offset_y: i16,
     pub alt_tray: bool,
     pub status_lights: bool,
+    /// tg `self_sustaining` (autogrow, ctrl+click): the tray refills its water and clears weeds
+    /// and pests while powered, drains less nutrients and never mutates species or gets
+    /// overtaken by weeds. Set through [`super::set_self_sustaining`].
+    pub self_sustaining: bool,
 }
 
 /// What a cycle asks the world to do next.
@@ -176,14 +180,27 @@ impl Tray {
         self.lastproduce = 0.0;
     }
 
-    /// `remove_plant()`: kills it, clears the weeds, empties the tray.
+    /// `remove_plant()`: kills it, clears the weeds, empties the tray and stops autogrow ("no
+    /// reason to pay for an empty tray").
     pub fn remove_plant(&mut self) {
         if self.myseed.is_none() {
             return;
         }
         self.plantdies();
         self.weedlevel = 0.0;
+        self.self_sustaining = false;
         self.set_seed(None);
+    }
+
+    /// The self-sustaining part of `process(seconds_per_tick)` while powered: `rand(1, 2) *
+    /// seconds * 0.5` water, `0.5 * seconds` fewer weeds and pests.
+    pub fn self_sustain(&mut self, seconds: f32, dice: &mut impl Dice) {
+        if !self.self_sustaining {
+            return;
+        }
+        self.adjust_waterlevel(dice.rand(1, 2) as f32 * seconds * 0.5);
+        self.adjust_weedlevel(-0.5 * seconds);
+        self.adjust_pestlevel(-0.5 * seconds);
     }
 
     /// `propagate_plant` after its checks: the seed in, full health, a fresh cycle.
@@ -647,7 +664,11 @@ pub fn cycle(
 
         // Nutrients.
         apply_chemicals(tray, nutrients, env, dice, &mut out);
-        nutrients.remove_all(tray.nutridrain);
+        nutrients.remove_all(if tray.self_sustaining {
+            tray.nutridrain.min(0.5)
+        } else {
+            tray.nutridrain
+        });
         if nutrients.total_volume <= 0.0 {
             if tray.tray_flags & SLOW_RELEASE != 0 {
                 if let Some(id) = env.chem.id(NITROGEN) {
@@ -776,7 +797,7 @@ pub fn cycle(
                 .myseed
                 .as_ref()
                 .is_some_and(|s| !s.mutatelist.is_empty() && !s.has_gene(NEVER_MUTATE));
-            if dice.prob(instability / 2.0) && can {
+            if dice.prob(instability / 2.0) && !tray.self_sustaining && can {
                 tray.mutatespecie(env, dice, &mut out);
                 if let Some(s) = &mut tray.myseed {
                     s.set_instability(s.instability / 2.0);
@@ -837,7 +858,7 @@ pub fn cycle(
     }
 
     // Weeds overtaking the plant spot.
-    if tray.weedlevel >= 10.0 && dice.prob(50.0) {
+    if tray.weedlevel >= 10.0 && dice.prob(50.0) && !tray.self_sustaining {
         let loss = tray
             .myseed
             .as_ref()
@@ -1259,6 +1280,67 @@ mod tests {
         assert_eq!((tray.weedlevel, tray.plant_health), (0.0, 15.0));
         assert_eq!(tray.plant_status, PlantStatus::Growing);
         assert!(out.messages[0].contains("empty tray is overtaken by some starthistle"));
+    }
+
+    #[test]
+    fn autogrow_tends_the_tray_and_blocks_mutations_and_weed_invasions() {
+        let (plants, chem) = (test_plants(), chem());
+        let env = CycleEnv {
+            chem: &chem,
+            plants: &plants,
+            lumcount: None,
+        };
+        // `process(2)`: rand(1, 2) = 2 -> +2 water, -1 weeds, -1 pests.
+        let mut tray = planted(&plants);
+        tray.waterlevel = 50.0;
+        tray.weedlevel = 5.0;
+        tray.pestlevel = 3.0;
+        tray.self_sustain(2.0, &mut Script::default());
+        assert_eq!(tray.waterlevel, 50.0, "off: nothing");
+        tray.self_sustaining = true;
+        tray.self_sustain(
+            2.0,
+            &mut Script {
+                rolls: vec![2],
+                probs: vec![],
+            },
+        );
+        assert_eq!(
+            (tray.waterlevel, tray.weedlevel, tray.pestlevel),
+            (52.0, 4.0, 2.0)
+        );
+
+        // Nutrients drain at most 0.5 per cycle; instability 70 rolls prob(35) (after the two
+        // weed rolls) but no species mutation happens.
+        tray.myseed.as_mut().unwrap().instability = 70.0;
+        let mut nutrients = holder(
+            &chem,
+            &[("/datum/reagent/plantnutriment/eznutriment", 10.0)],
+        );
+        let mut dice = Script {
+            rolls: vec![],
+            probs: vec![false, false, true],
+        };
+        cycle(&mut tray, &mut nutrients, &env, &mut dice);
+        assert_eq!(nutrients.total_volume, 9.5);
+        assert_eq!(seed(&tray).path, "/obj/item/seeds/tomato");
+
+        // Full weeds never overtake an autogrowing empty tray.
+        let mut tray = Tray::new(&plants.data.trays[0]);
+        tray.self_sustaining = true;
+        tray.weedlevel = 10.0;
+        let mut dice = Script {
+            rolls: vec![2],
+            probs: vec![true],
+        };
+        cycle(&mut tray, &mut holder(&chem, &[]), &env, &mut dice);
+        assert!(tray.myseed.is_none());
+
+        // Digging the plant out turns it off.
+        let mut tray = planted(&plants);
+        tray.self_sustaining = true;
+        tray.remove_plant();
+        assert!(!tray.self_sustaining);
     }
 
     #[test]

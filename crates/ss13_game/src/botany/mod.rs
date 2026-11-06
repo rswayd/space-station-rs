@@ -41,6 +41,7 @@ pub mod unique;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use bevy::ecs::message::{MessageCursor, Messages};
 use bevy::prelude::*;
 use ss13_mapload::plants::{
     GROWN_INEDIBLE_ROOT, GROWN_ROOT, PLANTS_FILE, PlantData, SEED_ROOT, SeedDef, TRAY_ROOT,
@@ -64,6 +65,8 @@ pub const MACHINES_WAIT: f64 = 2.0;
 /// The equipment icon of the status lights.
 const EQUIPMENT_DMI: &str = "icons/obj/service/hydroponics/equipment.dmi";
 const EZ_NUTRIENT: &str = "/datum/reagent/plantnutriment/eznutriment";
+/// `self_sustaining_overlay_icon_state` (equipment.dmi).
+const SELF_SUSTAINING_OVERLAY: &str = "gaia_blessing";
 
 /// `plants.ron` with lookups by type.
 #[derive(Debug, Default)]
@@ -191,7 +194,7 @@ impl Plugin for BotanyServerPlugin {
         }
         app.add_observer(add_seed)
             .add_systems(ss13_world::MapInit, setup_trays)
-            .add_systems(Update, process_trays);
+            .add_systems(Update, (ctrl_clicks, process_trays));
         produce::build(app);
         unique::build(app);
         shears::build(app);
@@ -329,6 +332,7 @@ fn process_trays(world: &mut World, mut next: Local<f64>) {
     let speed = f64::from(world.get_resource::<HydroSpeed>().map_or(1.0, |s| s.0));
     *next = t + MACHINES_WAIT / speed;
     let delay = tray::HYDROTRAY_CYCLE_DELAY / speed;
+    self_sustain(world);
     let mut query = world.query::<(Entity, &Tray)>();
     let due: Vec<Entity> = query
         .iter(world)
@@ -337,6 +341,151 @@ fn process_trays(world: &mut World, mut next: Local<f64>) {
         .collect();
     for e in due {
         run_cycle(world, e, t);
+    }
+}
+
+/// The autogrow part of `process(seconds_per_tick)` (before the cycle): a powered tray tends
+/// itself, an unpowered one shuts autogrow off.
+// Cost: a pass over the trays every 2 s, the work only on the few with autogrow on.
+fn self_sustain(world: &mut World) {
+    let mut query = world.query::<(Entity, &Tray)>();
+    let on: Vec<Entity> = query
+        .iter(world)
+        .filter(|(_, t)| t.self_sustaining)
+        .map(|(e, _)| e)
+        .collect();
+    for e in on {
+        let Some(mut state) = world.get::<Tray>(e).cloned() else {
+            continue;
+        };
+        if tray_powered(world, e) {
+            world.resource_scope(|_, mut rng: Mut<CombatRng>| {
+                state.self_sustain(MACHINES_WAIT as f32, &mut *rng);
+            });
+            world.entity_mut(e).insert(state);
+        } else {
+            set_self_sustaining(world, e, false);
+            let text = format!(
+                "{}'s auto-grow functionality shuts off!",
+                crate::chem::name_of(world, e)
+            );
+            crate::chem::visible(world, e, "", &text, Span::Warning);
+        }
+        refresh_tray(world, e);
+    }
+}
+
+/// tg `powered()` of a tray (`NO_POWER_USE` until autogrow): its area's channel.
+pub fn tray_powered(world: &World, e: Entity) -> bool {
+    if !world.contains_resource::<ss13_mapload::Areas>() {
+        return false;
+    }
+    crate::power::machine_power(world, e).is_some_and(|pm| {
+        world
+            .get::<crate::power::AreaPower>(pm.area)
+            .is_some_and(|a| a.powered(pm.channel))
+    })
+}
+
+/// On a tray whose autogrow draws power and lights it (what [`refresh_tray`] undoes).
+#[derive(Component, Clone, Copy, Debug)]
+struct AutogrowOn;
+
+/// tg `set_self_sustaining(new_value)`: the power draw and the look follow in [`refresh_tray`].
+pub fn set_self_sustaining(world: &mut World, e: Entity, on: bool) {
+    if let Some(mut state) = world.get_mut::<Tray>(e)
+        && state.self_sustaining != on
+    {
+        state.self_sustaining = on;
+    }
+    refresh_tray(world, e);
+}
+
+/// tg `click_ctrl` of a tray: an anchored, powered tray turns autogrow on or off.
+fn ctrl_clicks(world: &mut World, mut clicks: Local<MessageCursor<crate::click::CtrlClick>>) {
+    let Some(messages) = world.get_resource::<Messages<crate::click::CtrlClick>>() else {
+        return;
+    };
+    let pending: Vec<(Entity, Entity)> = clicks
+        .read(messages)
+        .map(|c| (c.client, c.target))
+        .collect();
+    for (client, e) in pending {
+        let Some(on) = world.get::<Tray>(e).map(|t| t.self_sustaining) else {
+            continue;
+        };
+        // Unanchored: `NONE`, the click goes on to pulling.
+        if world
+            .get::<crate::obj_damage::Anchored>(e)
+            .is_some_and(|a| !a.0)
+        {
+            continue;
+        }
+        let name = crate::chem::name_of(world, e);
+        if !tray_powered(world, e) {
+            crate::tools::tell(
+                world,
+                client,
+                Span::Warning,
+                format!("{name} has no power."),
+            );
+            continue;
+        }
+        set_self_sustaining(world, e, !on);
+        // tg's own wording ("deactivated").
+        let text = if on {
+            format!("You deactivated {name}'s autogrow function.")
+        } else {
+            format!(
+                "You activate {name}'s autogrow function, maintaining the tray's health while \
+                 using high amounts of power."
+            )
+        };
+        crate::tools::tell(world, client, Span::Notice, text);
+    }
+}
+
+/// `update_use_power(self_sustaining ? ACTIVE_POWER_USE : NO_POWER_USE)` and
+/// `update_appearance`'s `set_light(3)` of autogrow.
+fn sync_autogrow(world: &mut World, e: Entity, on: bool) {
+    let marked = world.get::<AutogrowOn>(e).is_some();
+    if on == marked {
+        return;
+    }
+    if on {
+        if world.get::<crate::power::PowerMachine>(e).is_none()
+            && world.contains_resource::<ss13_mapload::Areas>()
+            && let Some(pm) = crate::power::machine_power(world, e)
+        {
+            world
+                .entity_mut(e)
+                .insert(crate::power::PowerMachine { watts: 0.0, ..pm });
+        }
+        crate::power::update_use_power(world, e, true);
+        let light = ss13_shared::LightSource {
+            range: 3.0,
+            power: 1.0,
+            color: [255, 255, 255],
+            height: 1.0,
+            angle: 360,
+            dir: ss13_shared::Dir::South,
+            offset: [0, 0],
+        };
+        if let Some(mut optics) = world.get_mut::<Optics>(e) {
+            optics.light = Some(light);
+        } else {
+            world.entity_mut(e).insert(Optics {
+                light: Some(light),
+                ..Default::default()
+            });
+        }
+        world.entity_mut(e).insert(AutogrowOn);
+    } else {
+        crate::power::unregister_machine(world, e);
+        if let Some(mut optics) = world.get_mut::<Optics>(e) {
+            optics.light = None;
+        }
+        world.entity_mut(e).remove::<AutogrowOn>();
     }
 }
 
@@ -622,6 +771,7 @@ pub fn refresh_tray(world: &mut World, e: Entity) {
     ) else {
         return;
     };
+    sync_autogrow(world, e, state.self_sustaining);
     let nutrients = world.get::<Reagents>(e).map_or(0.0, |r| r.0.total_volume);
     let Some(icons) = world.get_resource::<IconIndex>() else {
         return;
@@ -646,6 +796,15 @@ pub fn refresh_tray(world: &mut World, e: Entity) {
                 ..ss13_shared::Overlay::new(id)
             });
         }
+    }
+    if state.self_sustaining
+        && let Some(id) = icons.get(EQUIPMENT_DMI, SELF_SUSTAINING_OVERLAY)
+    {
+        overlays.push(ss13_shared::Overlay::new(id));
+        overlays.push(ss13_shared::Overlay {
+            plane: Some(EMISSIVE_PLANE),
+            ..ss13_shared::Overlay::new(id)
+        });
     }
     if let Some(mut appearance) = world.get_mut::<Appearance>(e)
         && appearance.overlays != overlays
@@ -775,6 +934,14 @@ pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<(Span, Strin
         Span::Info,
         format!("Nutrient: {}/{}.", n(nutrients), n(state.maxnutri)),
     ));
+    if state.self_sustaining {
+        lines.push((
+            Span::Info,
+            "The tray's autogrow is active, protecting it from species mutations, weeds, and \
+             pests."
+                .to_owned(),
+        ));
+    }
     if state.weedlevel >= 5.0 {
         lines.push((Span::Warning, "It's filled with weeds!".to_owned()));
     }
