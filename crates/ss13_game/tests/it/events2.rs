@@ -348,6 +348,94 @@ fn signaller_neutralizes_anomaly() {
     );
 }
 
+/// The anomaly neutralizer neutralizes an anomaly (a core of its type counts for the round)
+/// and burns out, leaving a decoy alone; the anomaly releaser turns a core into a stable
+/// anomaly of its type that outlives its lifespan, and only once.
+#[test]
+fn neutralizer_and_releaser() {
+    use ss13_game::construction::Job as DoJob;
+    use ss13_game::events::anomalies::{
+        CoresMade, ReleaserUsed, complete_release, neutralizer_act,
+    };
+    use ss13_game::tools::{Actor, DoAfter};
+    let mut app = server("neutralizer");
+    let user = mob(&mut app, TilePos::new(7, 2, 1));
+    let world = app.world_mut();
+    let item = |world: &mut World, path: &str, pos: Option<TilePos>| {
+        let e = world
+            .spawn(DmItem {
+                path: path.into(),
+                ..default()
+            })
+            .id();
+        if let Some(pos) = pos {
+            world.entity_mut(e).insert(pos);
+        }
+        e
+    };
+    let pyro = spawn_anomaly(world, AnomalyKind::Pyro, TilePos::new(8, 2, 1), None);
+    let tool = item(world, "/obj/item/anomaly_neutralizer", None);
+    let actor = Actor {
+        client: user,
+        mob: user,
+        item: Some(tool),
+    };
+    let other = item(world, "/obj/item/test", None);
+    assert!(!neutralizer_act(
+        world,
+        Actor {
+            item: Some(other),
+            ..actor
+        },
+        pyro
+    ));
+    assert!(neutralizer_act(world, actor, pyro));
+    assert!(world.get_entity(pyro).is_err(), "neutralized");
+    assert!(world.get_entity(tool).is_err(), "burnt out");
+    assert_eq!(
+        world.resource::<CoresMade>().0.get(&AnomalyKind::Pyro),
+        Some(&1)
+    );
+
+    let at = TilePos::new(3, 4, 1);
+    let core = item(world, "/obj/item/assembly/signaler/anomaly/pyro", Some(at));
+    let releaser = item(world, "/obj/item/anomaly_releaser", None);
+    let action = |target: Entity| DoAfter {
+        client: user,
+        target,
+        target_pos: at,
+        user_pos: TilePos::new(7, 2, 1),
+        item: Some(releaser),
+        amount: 0,
+        ends_at: 0.0,
+        job: DoJob::AnomalyRelease,
+    };
+    complete_release(world, &action(core));
+    assert!(world.get_entity(core).is_err(), "core used up");
+    assert!(world.get::<ReleaserUsed>(releaser).is_some());
+    let released: Vec<Entity> = world
+        .query_filtered::<Entity, With<Anomaly>>()
+        .iter(world)
+        .collect();
+    assert_eq!(released.len(), 1);
+    let anomaly = released[0];
+    {
+        let a = world.get::<Anomaly>(anomaly).unwrap();
+        assert_eq!(a.kind, AnomalyKind::Pyro);
+        assert!(a.immortal && a.core.is_some(), "stable, with a fresh core");
+    }
+    world.get_mut::<Anomaly>(anomaly).unwrap().death_time = 0.0;
+    let second = item(world, "/obj/item/assembly/signaler/anomaly/grav", Some(at));
+    complete_release(world, &action(second));
+    assert!(
+        world.get_entity(second).is_ok(),
+        "a used releaser does nothing"
+    );
+
+    run(&mut app, 2.5);
+    assert!(app.world().get_entity(anomaly).is_ok(), "immortal");
+}
+
 /// Radiation Leak: a dense powered station machine starts pulsing radiation with the fixing
 /// methods on examine; once its leak is fixed (the repair's end removes `RadiationLeak`), the
 /// event ends on its next fire and the emitter is gone.

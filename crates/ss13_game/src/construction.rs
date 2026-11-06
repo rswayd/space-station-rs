@@ -291,6 +291,8 @@ pub enum Job {
     Morph { corpse: bool },
     /// Fixing a Radiation Leak's machine ([`crate::events::radiation_leak`]).
     RadiationLeak,
+    /// An anomaly releaser on a core ([`crate::events::anomalies`]).
+    AnomalyRelease,
     /// Netpods, hololadders, the quantum console ([`crate::science::bitrunning`]).
     Bitrunning(crate::science::bitrunning::server::BitrunJob),
 }
@@ -1309,6 +1311,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Smes(job) => crate::power::smes::complete(world, mob, action, job, consume),
         &Job::Shield(job) => crate::power::shields::complete(world, action, job, consume),
         Job::RadiationLeak => crate::events::radiation_leak::complete(world, action, consume),
+        Job::AnomalyRelease => crate::events::anomalies::complete_release(world, action),
         Job::GirderBolts { from } => {
             if !is_under(&path, GIRDER) || obj_state(world, target) != *from || !consume(world) {
                 return;
