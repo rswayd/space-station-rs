@@ -375,12 +375,61 @@ pub const EVENT_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/stack/ore/uranium",
 ];
 
+/// `ss13_game::science::exodrone`: what exploration sites, traders and loot generators give.
+pub const EXPLORATION_RUNTIME_TYPES: &[&str] = &[
+    "/obj/item/analyzer",
+    "/obj/item/antique",
+    "/obj/item/bodypart/head/skeleton",
+    "/obj/item/cardpack/series_one",
+    "/obj/item/clothing/glasses/geist_gazers",
+    "/obj/item/clothing/glasses/psych",
+    "/obj/item/crowbar",
+    "/obj/item/encryptionkey/heads/captain",
+    "/obj/item/firelance",
+    "/obj/item/flashlight",
+    "/obj/item/fuel_pellet/exotic",
+    "/obj/item/gun/energy/laser",
+    "/obj/item/gun/energy/laser/retro/old",
+    "/obj/item/holochip/thousand",
+    "/obj/item/implanter/explosive",
+    "/obj/item/melee/baton/security/loaded",
+    "/obj/item/petri_dish/random",
+    "/obj/item/scalpel/alien",
+    "/obj/item/screwdriver",
+    "/obj/item/seeds/firelemon",
+    "/obj/item/seeds/gatfruit",
+    "/obj/item/seeds/orange_3d",
+    "/obj/item/seeds/tomato/killer",
+    "/obj/item/stack/cable_coil",
+    "/obj/item/stack/sheet/iron/fifty",
+    "/obj/item/stack/sheet/mineral/bananium",
+    "/obj/item/stack/sheet/mineral/plasma/thirty",
+    "/obj/item/stack/sheet/mineral/silver",
+    "/obj/item/stack/sheet/pizza",
+    "/obj/item/stack/sheet/plasteel/twenty",
+    "/obj/item/stack/spacecash/c1000",
+    "/obj/item/storage/bag/money",
+    "/obj/item/storage/fish_case/random",
+    "/obj/item/storage/fish_case/syndicate",
+    "/obj/item/storage/pill_bottle/happy",
+    "/obj/item/storage/pill_bottle/lsd",
+    "/obj/item/storage/pill_bottle/penacid",
+    "/obj/item/storage/pill_bottle/stimulant",
+    "/obj/item/t_scanner",
+    "/obj/item/trade_chip",
+    "/obj/item/trash/can",
+    "/obj/item/trash/candy",
+    "/obj/item/trash/chips",
+    "/obj/item/weldingtool",
+    "/obj/item/wirecutters",
+];
+
 /// Every DM type the game spawns by a constant path: the tables above and every
 /// `*_RUNTIME_TYPES` table of this crate. `ss13-mapload convert` emits all of them.
 pub fn runtime_types() -> BTreeSet<&'static str> {
     use crate::{antag, atmos_machine, cargo, mobs, service, silicon};
     let mut out = BTreeSet::new();
-    let tables: [&[&'static str]; 25] = [
+    let tables: [&[&'static str]; 26] = [
         &crate::RUNTIME_TYPES,
         &crate::RUNTIME_CONTAINER_TYPES,
         &crate::CONSTRUCTION_TYPES,
@@ -408,6 +457,7 @@ pub fn runtime_types() -> BTreeSet<&'static str> {
         SPECIES_RUNTIME_TYPES,
         CYBERIMP_RUNTIME_TYPES,
         EVENT_RUNTIME_TYPES,
+        EXPLORATION_RUNTIME_TYPES,
     ];
     out.extend(tables.into_iter().flatten().copied());
     // Catches and the prefilled aquarium's fish (`ss13_game::fishing`).
