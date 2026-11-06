@@ -38,6 +38,7 @@
 //! | 1720 | `devices::gps::interact` |
 //! | 1730 | `devices::rcd::attack_self` (the design list) |
 //! | 1740 | `devices::taperecorder::attack_self` (recorder and tape menus) |
+//! | 1743 | `devices::beacons::attack_self` (tracking beacons toggle, choice beacons list) |
 //! | 1750 | `radiation::geiger_attack_self` |
 //! | 1800 | `explosions::sources::c4_attack_self` |
 //! | 1900 | `assemblies::server::attack_self` |
@@ -80,6 +81,7 @@
 //! | 450 | `fishing::server::insert_bait`, `fishing::aquarium::item_interaction` |
 //! | 460 | `devices::rcd::load` (matter or a disk onto the RCD) |
 //! | 465 | `devices::taperecorder::item_interaction` (tape in, respool), `attack_hand` (eject) |
+//! | 467 | `devices::laser_pointer::item_interaction` (diode, crystal lens, their removal) |
 //! | 473 | `cargo::money::item_interaction` (cash onto the ID in the other hand) |
 //! | 480 | `clothing::accessories::attach` (before a jumpsuit's holster takes the item) |
 //! | 500 | core: a storage opens or takes the held item |
@@ -157,6 +159,7 @@
 //! | 3300 | `defenses::server::interact` |
 //! | 3400 | `silicon::law_rack::interact` |
 //! | 3470 | `station_goals::interact` (satellites) |
+//! | 3473 | `devices::beacons::attack_self` (right click toggles a tracking beacon) |
 //! | 3450 | `vehicles::attack_hand` |
 //! | 3460 | `wiremod::server::attack_hand` |
 //! | 3455 | `clothing::sensors::interact` (crew console) |
@@ -203,6 +206,7 @@
 //! | 1500 | `bots::construction::item_interaction` |
 //! | 1560 | `devices::rcd::item_interaction` (builds, deconstruction, loading) |
 //! | 1565 | `devices::taperecorder::item_interaction` (a tape into a recorder, respooling) |
+//! | 1567 | `devices::laser_pointer::item_interaction` (diode, crystal lens, their removal) |
 //! | 1580 | `events::anomalies::neutralizer_act`, `releaser_act` (anomalies, anomaly cores) |
 //! | 1585 | `events::radiation_leak::tool_act` (a leaking machine's fixing tools) |
 //! | 1590 | `teapot::item_interaction` (before `machine_frame` takes it apart) |
@@ -270,6 +274,7 @@
 //! | 4600 | core: a cyborg module or `NoDrop` item stops here |
 //! | 4650 | `lockbox::item_interaction` (`closets` plugin) |
 //! | 4700 | core: a storage takes the held item |
+//! | 4753 | `devices::laser_pointer::laser_act` (shining at what is clicked; far clicks: `RangedClick`) |
 //! | 4800 | `cargo::bounty::item_interaction` |
 //! | 4900 | `brig::prisoner::item_interaction` |
 //! | 5000 | `cargo::scanner::item_interaction` |
