@@ -5,13 +5,13 @@
 Старая модель моба: `Life()` с собственной атмосферой/температурой, `speak`/`emote` по таймеру, реакция на руку; урон по `damage_coeff`.
 
 - **Код:** [`/mob/living/simple_animal`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/simple_animal/simple_animal.dm#L2), [`Life()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/simple_animal/simple_animal.dm#L211), [`attack_hand()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/simple_animal/animal_defense.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload/src/mobs.rs`: оставшиеся в апстриме simple animals (мегафауна) читаются конвертером как базовые мобы (`maxHealth`/`health`, урон, `del_on_death` → `DEL_ON_DEATH`, `minbodytemp`/`maxbodytemp` как диапазон выживания, глаголы `response_*`, `speak_emote`), и дальше живут на механике `crates/ss13_game/src/mobs/mod.rs` (атмосфера/температура в `Life`, реакция на руку и удары — `defense.rs`, `death`/`del_on_death`); нет `speak`/`emote_hear` по таймеру, `damage_coeff` (читается `physiology`), прочих подтипов `simple_animal` (элиты, слизни — свои записи; боты — группа силиконов)
 
 ### Враждебные simple animals
 `hostile`: поиск целей в обзоре (`FindTarget`), преследование, ближний и дальний бой, ломание препятствий, агрессия к обидчикам.
 
 - **Код:** [`/mob/living/simple_animal/hostile`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/simple_animal/hostile/hostile.dm#L1), [`proc/FindTarget()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/simple_animal/hostile/hostile.dm#L183)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/mobs/megafauna/mod.rs`: hostile-ИИ мегафауны — `FindTarget`/`PickTarget` (ближайшая видимая цель не своей фракции в `vision_range`/`aggro_vision_range`, по типу: 5/18, Легион 13, защитник 9/9), `Aggro`/`LoseAggro`, поиск по урону, преследование `Goto` с `minimum_distance`, ближний бой с телеграфом и `rapid_melee`, `OpenFire` по `ranged_cooldown`; нет `environment_smash`, отступления (`retreat_distance`), блуждания (`wander`), поиска по звуку/обидчику вне обзора
 
 ### Общие механики мегафауны
 Боссы Лаваленда/Ледяной луны: огромное здоровье, иммунитет к оглушениям, награды за убийство (медали, лут-сундук, трофеи крашера), запись в БД достижений.
@@ -48,13 +48,13 @@
 
 - **Код:** [`/mob/living/simple_animal/hostile/megafauna/legion`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/simple_animal/hostile/megafauna/legion.dm#L24)
 - **BandaStation:** [`legion.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/simple_animal/hostile/megafauna/legion.dm#L66) — флаг `last_legion` для выдачи лута только с последнего
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/mobs/megafauna/legion.rs`: `OpenFire` раз в 2 с — `rand(4)`: череп-`legion_brood` на цель с фракцией Легиона (0–2), рывок (3: «charges!», 6 с без дистанции и на полной скорости, через 2 с бросок на цель на 7 тайлов, удар `22 × size / 2` brute и отброс на 2 тайла), стражи (4: от 2 до `size × 2` `legionturret` на свободных турфах в 4 тайлах; через 1.8 с прицел на видимого сознательного не-шахтёрского моба в 9 тайлах или случайную сторону, через 0.8 с пронзающий хитскан 19 burn на 6 тайлов, распад через 0.5 с); держит дистанцию 5; лежащего без сознания человека заражает новый череп; смерть раскалывает: большой → 3 средних (left/right/eye, 350) → по 3 малых (200); последний живой Легион роняет посох бурь (BandaStation `last_legion`), остальные — сундук щупальца в 20%, иначе кости; `// shortcut:` нет отступления, анимации вращения, визуала луча, ворот некрополя, брони против импульса; содержимое сундука щупальца и механика посоха — группа лута Лаваленда
 
 ### Мегафауна Ледяной луны
 Вендиго (ударные волны, рывки), демонический морозный шахтёр (фазы, ледяные снаряды), заводной защитник.
 
 - **Код:** [`/mob/living/simple_animal/hostile/megafauna/wendigo`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/simple_animal/hostile/megafauna/wendigo.dm#L9), [`/mob/living/simple_animal/hostile/megafauna/demonic_frost_miner`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/simple_animal/hostile/megafauna/demonic_frost_miner.dm#L10), [`/mob/living/simple_animal/hostile/megafauna/clockwork_defender`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/simple_animal/hostile/megafauna/clockwork_knight.dm#L9)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/mobs/megafauna/mod.rs`: заводной защитник (`clockwork_defender`: без дальних атак, обзор 9/9, `rapid_melee = 2` — два удара за тик ИИ, при смерти — заводной сплав); нет вендиго (ударные волны, рывки, фазы) и демонического морозного шахтёра (фазы, ледяные снаряды)
 
 ### Элиты Лаваленда
 Опухоль-элита призывает гост-игрока в элитного моба для дуэли с шахтёром на арене: мать голиафов, геральд, легионер, пандора; победитель получает награду или элиту-питомца.
