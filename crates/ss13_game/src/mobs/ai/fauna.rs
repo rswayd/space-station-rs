@@ -23,6 +23,8 @@ pub enum FaunaCond {
     PetCommand(PetCommand),
     /// `ability_available` of a grown turtle tree's ability.
     TurtleAbilityReady,
+    /// A lavaland mob decorator (`crate::mobs::lavaland::ai`).
+    Lavaland(crate::mobs::lavaland::ai::LavaCond),
 }
 
 impl FaunaCond {
@@ -34,6 +36,7 @@ impl FaunaCond {
             Self::TurtleAbilityReady => {
                 crate::mobs::critters::turtle_ability_ready(ctx.world, ctx.pawn, ctx.now)
             }
+            Self::Lavaland(cond) => cond.check(ctx),
         }
     }
 }
@@ -86,6 +89,8 @@ pub enum FaunaLeaf {
     SniffFlora {
         key: Key,
     },
+    /// A lavaland mob leaf (`crate::mobs::lavaland::ai`).
+    Lavaland(crate::mobs::lavaland::ai::LavaLeaf),
 }
 
 impl FaunaLeaf {
@@ -94,11 +99,15 @@ impl FaunaLeaf {
             Self::FindPartner => 5.0,
             Self::ParrotRepeat => crate::mobs::parrot::REPEAT_COOLDOWN,
             Self::RangedAttack { cooldown, .. } => *cooldown,
+            Self::Lavaland(leaf) => leaf.cooldown(),
             _ => 0.0,
         }
     }
 
     pub fn setup(&mut self, ctx: &mut AiCtx) -> bool {
+        if let Self::Lavaland(leaf) = self {
+            return leaf.setup(ctx);
+        }
         match *self {
             Self::PlayDead => {
                 if ctx.world.get::<Stat>(ctx.pawn) != Some(&Stat::Conscious) {
@@ -142,6 +151,9 @@ impl FaunaLeaf {
     }
 
     pub fn perform(&mut self, ctx: &mut AiCtx) -> Perform {
+        if let Self::Lavaland(leaf) = self {
+            return leaf.perform(ctx);
+        }
         match *self {
             Self::TippedReaction => tipped_reaction(ctx),
             Self::Wait => {
@@ -194,7 +206,9 @@ impl FaunaLeaf {
                 avoid_friendly_fire,
                 ..
             } => crate::mobs::ranged::attack(ctx, key, max_range, avoid_friendly_fire),
-            Self::MaintainDistance { key } => maintain_distance(ctx, key),
+            Self::MaintainDistance { key } => {
+                maintain_distance(ctx, key, SKIRMISH_MIN, SKIRMISH_MAX)
+            }
             Self::TurtleAbility => crate::mobs::critters::use_tree_ability(ctx),
             Self::AcquireTurtleTarget { key, flora } => {
                 crate::mobs::critters::acquire_turtle_target(ctx, key, flora)
@@ -216,10 +230,16 @@ impl FaunaLeaf {
                 crate::mobs::defense::emote(ctx.world, ctx.pawn, &text);
                 SUCCEED
             }
+            // Performed above.
+            Self::Lavaland(_) => FAIL,
         }
     }
 
-    pub fn finish(&mut self, ctx: &mut AiCtx, _succeeded: bool) {
+    pub fn finish(&mut self, ctx: &mut AiCtx, succeeded: bool) {
+        if let Self::Lavaland(leaf) = self {
+            leaf.finish(ctx, succeeded);
+            return;
+        }
         match *self {
             Self::TippedReaction => {
                 // "I'VE SAID MY PEACE..."
@@ -278,9 +298,9 @@ fn tipped_reaction(ctx: &mut AiCtx) -> Perform {
     DELAY_SUCCEED
 }
 
-/// `maintain_distance` `perform`: within 4-6 tiles it succeeds; closer it backs off a step,
-/// farther it closes in.
-fn maintain_distance(ctx: &mut AiCtx, key: Key) -> Perform {
+/// `maintain_distance` `perform`: within `min`-`max` tiles (4-6 by default) it succeeds; closer
+/// it backs off a step, farther it closes in.
+pub(crate) fn maintain_distance(ctx: &mut AiCtx, key: Key, min: u32, max: u32) -> Perform {
     if ctx.movement.failed {
         return FAIL;
     }
@@ -288,10 +308,10 @@ fn maintain_distance(ctx: &mut AiCtx, key: Key) -> Perform {
         return FAIL;
     };
     let range = from.chebyshev(to).unwrap_or(u32::MAX);
-    if (SKIRMISH_MIN..=SKIRMISH_MAX).contains(&range) {
+    if (min..=max).contains(&range) {
         return SUCCEED;
     }
-    if range < SKIRMISH_MIN {
+    if range < min {
         // `retreat`: the step away, else any free way that is not towards the target.
         let away = dir_towards(to, from).unwrap_or(Dir::North);
         let index = ctx.world.resource::<ss13_world::SpatialIndex>();
@@ -317,7 +337,7 @@ fn maintain_distance(ctx: &mut AiCtx, key: Key) -> Perform {
         return RUNNING;
     }
     if let Some(target) = super::behaviors::target_of(ctx, key) {
-        ctx.movement.start(target, SKIRMISH_MAX);
+        ctx.movement.start(target, max);
     }
     RUNNING
 }

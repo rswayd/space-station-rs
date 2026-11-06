@@ -464,6 +464,8 @@ pub fn runtime_types() -> BTreeSet<&'static str> {
         EXPLORATION_RUNTIME_TYPES,
     ];
     out.extend(tables.into_iter().flatten().copied());
+    // Lavaland fauna, their spawns and drops (`ss13_game::mobs::lavaland`).
+    out.extend(mobs::LAVALAND_RUNTIME_TYPES);
     // Catches and the prefilled aquarium's fish (`ss13_game::fishing`).
     out.extend(crate::fishing::runtime_types());
     // Log planks and plant mobs (`ss13_game::botany`).
