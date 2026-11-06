@@ -308,15 +308,18 @@ fn refresh_clipboard(world: &mut World, board: Entity) {
     set_overlays(world, board, wanted);
 }
 
-/// `folder/update_overlays`: `folder_paper` while it holds anything.
-fn refresh_folder(world: &mut World, folder: Entity) {
+/// `folder/update_overlays`: `folder_paper` while it holds anything (a biscuit card's own
+/// overlay, none while sealed).
+pub(super) fn refresh_folder(world: &mut World, folder: Entity) {
     let full = world
         .get::<Stored>(folder)
         .is_some_and(|s| !s.items().is_empty());
     let icon = icon_of(world, folder);
+    let state = super::stationery::folder_overlay(world, folder);
     let wanted: Vec<Overlay> = world
         .get_resource::<IconIndex>()
-        .and_then(|i| i.get(&icon, "folder_paper"))
+        .zip(state)
+        .and_then(|(i, state)| i.get(&icon, state))
         .filter(|_| full)
         .map(Overlay::new)
         .into_iter()

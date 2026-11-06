@@ -152,6 +152,7 @@
 //! | 3160 | `flora::attack_hand` |
 //! | 3170 | `botany::unique::pickup_backfire` (never handles) |
 //! | 3200 | `service::server::interact` |
+//! | 3201 | `service::stationery::cutter_right_click` (right click) |
 //! | 3250 | `fishing::aquarium::interact` (aquariums, the fish-porter) |
 //! | 3300 | `defenses::server::interact` |
 //! | 3400 | `silicon::law_rack::interact` |
@@ -206,6 +207,7 @@
 //! | 1595 | `science::bitrunning::avatar::crowbar_act` (prying a netpod open) |
 //! | 1600 | `machine_frame::item_interaction` |
 //! | 1650 | `radiation::geiger_interact` |
+//! | 1690 | `service::stationery::cabinet_wrench` (right click) |
 //! | 1700 | `service::server::item_interaction` |
 //! | 1750 | `medical::bodyparts::item_interaction` |
 //! | 1777 | `science::xenobio::item_interaction` (slimes, extracts) |

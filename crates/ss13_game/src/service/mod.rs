@@ -34,6 +34,7 @@ mod paper;
 mod religion;
 #[cfg(feature = "server")]
 mod statues;
+mod stationery;
 
 #[cfg(feature = "server")]
 pub use archive::{ArchivedBook, BookBinder, BookScanner, LibraryArchive};
@@ -60,6 +61,7 @@ pub use statues::{
     Radioactive, complete as art_complete, fire_act as flooder_fire_act,
     interrupted as art_interrupted, sworn as hippocratic_sworn,
 };
+pub use stationery::{Biscuit, CabinetKind, CarbonPaper, FilingCabinet, PaperCutter, Paperwork};
 
 /// tgui `PaperSheet` (`/obj/item/paper/ui_interact`), read-only here: writing goes through a
 /// text prompt (see [`server`]).

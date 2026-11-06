@@ -45,7 +45,7 @@
 Запечатанный конверт с бумагой; вскрывается необратимо. Вариант с кодом сейфа запасной ID капитана.
 
 - **Код:** [`/obj/item/folder/biscuit`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/paperwork/paper_biscuit.dm#L1), [`/obj/item/folder/biscuit/confidential/spare_id_safe_code`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/paperwork/paper_biscuit.dm#L111)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ готово — `crates/ss13_game/src/service/stationery.rs`: `Biscuit` — папка, запечатанная не принимает и не отдаёт бумаги («open first!»), вскрытие в руке через alert необратимо (звук, `_cracked`, оверлей `paperbiscuit_paper` только вскрытой), `unsealed` запечатывается один раз; карточки кода сейфа запасной ID создают свой листок (код `[REDACTED]`: сейфа запасной ID в порте нет)
 
 ### Лоток с бумагой
 Выдаёт новые листы (и ручку, если вложена); варианты из натуральной бумаги и с копиркой.
@@ -57,7 +57,7 @@
 Лист с копиркой: написанное отрывается как копия.
 
 - **Код:** [`/obj/item/paper/carbon`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/paperwork/carbonpaper.dm#L1), [`/obj/item/paper/carbon_copy`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/paperwork/carbonpaper.dm#L50)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ готово — `crates/ss13_game/src/service/stationery.rs`: `CarbonPaper` — один раз отрывается копия `carbon_copy` «Copy - имя» (текст, печати) в руки, лист становится `paper`/`paper_words`, дальше складывается в самолётик; отличие: отрыв по Alt+клику по листу в руке (правый клик по слоту руки в порте не перехватывается)
 
 ### Бумажный самолётик
 Сложенная бумага метается и может попасть в глаз; синдикатский вариант острее.
@@ -69,19 +69,19 @@
 Режет бумагу на полоски (записки, предсказания); лезвие снимается.
 
 - **Код:** [`/obj/item/papercutter`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/paperwork/paper_cutter.dm#L1), [`/obj/item/paper/paperslip`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/paperwork/paper_cutter.dm#L180)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ готово — `crates/ss13_game/src/service/stationery.rs`: `PaperCutter` с лезвием `cutterblade` внутри; бумага вставляется (кроме листков, памфлетов, holy writ), отвёртка фиксирует/освобождает лезвие, Alt+клик вынимает бумагу, иначе незакреплённое лезвие, правый клик пустой рукой режет на два `paperslip` (звук, оверлеи `paper`/`cutter_overlay`); нет пореза неуклюжего (нет трейта clumsy)
 
 ### Картотеки
 Шкафы хранят бумаги и папки (tgui `FilingCabinet`); шкафы СБ, медбея и отдела кадров в начале раунда печатают записи экипажа / трудовые контракты.
 
 - **Код:** [`/obj/structure/filingcabinet`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/paperwork/filingcabinet.dm#L13), [`/obj/structure/filingcabinet/security`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/paperwork/filingcabinet.dm#L125), [`/obj/structure/filingcabinet/employment`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/paperwork/filingcabinet.dm#L185); tgui: [`FilingCabinet.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/FilingCabinet.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ готово — `crates/ss13_game/src/service/stationery.rs`: `FilingCabinet` принимает предметы меньше normal (с карты — мелочь со своего тайла), вне боевого режима прочее отказывает, пустая рука — список содержимого вместо tgui `FilingCabinet` (вспышка `-open`), гаечный ключ правым кликом 2 с крепит/открепляет; шкафы СБ/медбея при первом открытии печатают рапшиты (`SR-N`) и медкарты из манифеста; нет телекинеза
 
 ### Трудовой контракт
 Контракт на члена экипажа, хранится в картотеке отдела кадров.
 
 - **Код:** [`/obj/item/paper/employment_contract`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/paperwork/contract.dm#L3)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ готово — `crates/ss13_game/src/service/stationery.rs`: шкаф отдела кадров при открытии кладёт `employment_contract` «paper- имя employment contract» с текстом tg на каждую запись `Manifest.locked`, ещё не подшитую (так же и поздние входы, как `AddEmploymentContract`)
 
 ### Ручной этикетировщик
 Наклеивает на предмет ярлык (переименование в «name (label)»), заправляется рулоном.
@@ -93,4 +93,4 @@
 Документы отделов, которые нужно заверить печатью соответствующего главы; проданные с верной печатью дают деньги карго, без неё — штраф.
 
 - **Код:** [`/obj/item/paperwork`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/paperwork/paperwork.dm#L13), [`/obj/item/paperwork/photocopy`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/paperwork/paperwork.dm#L216)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/service/stationery.rs`: `Paperwork` — печать нужного главы (по подтипу; древние — случайный глава) завершает документ оверлеем `paper_stamp-*`, чужая печать отказывает, VOID аннулирует фотокопию; продажа (`/datum/export/paperwork`, отрицательные цены) — группа карго; нет текста при осмотре для своей должности, копирования на ксероксе

@@ -1,18 +1,23 @@
 //! Office and library machines over a loopback server: a pen fills a paper's input field, a
 //! clipboard takes a paper, a paper folds into a plane and back; the photocopier copies a
 //! paper; a fax reaches another fax; the binder binds a paper, the scanner caches the book, the
-//! librarian's console uploads and prints it; a canvas is painted, finished and put on an easel.
+//! librarian's console uploads and prints it; a canvas is painted, finished and put on an easel;
+//! a carbon sheet tears off its copy, the paper cutter cuts a paper into slips, a filing cabinet
+//! files and returns a paper, a biscuit card cracks open.
 
 use std::path::{Path, PathBuf};
 
 use bevy::prelude::*;
 use ss13_game::inventory::{CarriedBy, Inventory};
-use ss13_game::service::{Book, Canvas, Clipboard, LibraryArchive, Paper, Photocopier};
+use ss13_game::service::{
+    Biscuit, Book, Canvas, CarbonPaper, Clipboard, FilingCabinet, LibraryArchive, Paper,
+    PaperCutter, Photocopier,
+};
 use ss13_game::storage::StoredIn;
 use ss13_game::testing::{self, Drive, fixture_map, write_fixture};
 use ss13_mapload::{DmItem, DmObj};
 use ss13_shared::TilePos;
-use ss13_shared::protocol::{ClientIntent, InventorySlot};
+use ss13_shared::protocol::{ClickModifiers, ClientIntent, InventorySlot};
 use ss13_tgui::UiInterface;
 use ss13_tgui::interfaces::alert::AlertUi;
 use ss13_tgui::interfaces::list_input::ListInputUi;
@@ -44,6 +49,14 @@ const TYPES: &str = r##"{
         "default_raw_text": "Name: [input_field]" } },
     "/obj/item/paper/fluff": { "parent": "/obj/item/paper", "declared_vars": {
         "default_raw_text": "Rule one" } },
+    "/obj/item/paper/carbon": { "parent": "/obj/item/paper" },
+    "/obj/item/paper/carbon_copy": { "parent": "/obj/item/paper" },
+    "/obj/item/paper/paperslip": { "parent": "/obj/item/paper" },
+    "/obj/item/papercutter": { "parent": "/obj/item", "declared_vars": { "w_class": 3 } },
+    "/obj/item/hatchet": { "parent": "/obj/item" },
+    "/obj/item/hatchet/cutterblade": { "parent": "/obj/item/hatchet" },
+    "/obj/item/folder": { "parent": "/obj/item" },
+    "/obj/item/folder/biscuit": { "parent": "/obj/item/folder" },
     "/obj/item/paperplane": { "parent": "/obj/item" },
     "/obj/item/pen": { "parent": "/obj/item" },
     "/obj/item/clipboard": { "parent": "/obj/item" },
@@ -68,6 +81,7 @@ const TYPES: &str = r##"{
     "/obj/structure": { "parent": "/obj", "declared_vars": { "density": 1, "anchored": 1,
         "icon": { "resource": "i.dmi" }, "icon_state": "card_grey" } },
     "/obj/structure/easel": { "parent": "/obj/structure" },
+    "/obj/structure/filingcabinet": { "parent": "/obj/structure" },
     "/obj/machinery": { "parent": "/obj", "declared_vars": { "density": 1, "anchored": 1,
         "icon": { "resource": "i.dmi" }, "icon_state": "card_grey" } },
     "/obj/machinery/photocopier": { "parent": "/obj/machinery" },
@@ -106,7 +120,8 @@ const TYPES: &str = r##"{
 const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 "f" = (/turf/open/floor,/area/space)
 "s" = (/obj/effect/landmark/start/assistant,/turf/open/floor,/area/space)
-"o" = (/obj/item/paper/form,/obj/item/paper/fluff,/obj/item/paper,/obj/item/pen,/obj/item/clipboard,/obj/item/canvas,/obj/item/toy/crayon/red,/turf/open/floor,/area/space)
+"o" = (/obj/item/paper/form,/obj/item/paper/fluff,/obj/item/paper,/obj/item/pen,/obj/item/clipboard,/obj/item/canvas,/obj/item/toy/crayon/red,/obj/item/paper/carbon,/obj/item/papercutter,/obj/item/folder/biscuit,/turf/open/floor,/area/space)
+"K" = (/obj/item/paper/paperslip,/obj/structure/filingcabinet,/turf/open/floor,/area/space)
 "Q" = (/obj/machinery/photocopier/prebuilt,/turf/open/floor,/area/space)
 "Y" = (/obj/machinery/fax/bridge,/turf/open/floor,/area/space)
 "Z" = (/obj/machinery/fax/captain,/turf/open/floor,/area/space)
@@ -117,7 +132,7 @@ const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 
 (1,1,1) = {"
 wwwwwwwwww
-wQfYfSfCfw
+wQfYfSfCKw
 wsoffffffw
 wfffBfZfEw
 wwwwwwwwww
@@ -147,6 +162,12 @@ const SCANNER: &str = "/obj/machinery/libraryscanner";
 const CONSOLE: &str = "/obj/machinery/computer/libraryconsole/bookmanagement";
 const BINDER: &str = "/obj/machinery/bookbinder";
 const EASEL: &str = "/obj/structure/easel";
+const CARBON: &str = "/obj/item/paper/carbon";
+const CARBON_COPY: &str = "/obj/item/paper/carbon_copy";
+const SLIP: &str = "/obj/item/paper/paperslip";
+const CUTTER: &str = "/obj/item/papercutter";
+const BISCUIT: &str = "/obj/item/folder/biscuit";
+const CABINET: &str = "/obj/structure/filingcabinet";
 
 fn fixture_assets(test: &str) -> PathBuf {
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR"))
@@ -171,6 +192,15 @@ fn fixture_assets(test: &str) -> PathBuf {
         CONSOLE,
         BINDER,
         EASEL,
+        CARBON,
+        CARBON_COPY,
+        SLIP,
+        CUTTER,
+        "/obj/item/hatchet",
+        "/obj/item/hatchet/cutterblade",
+        "/obj/item/folder",
+        BISCUIT,
+        CABINET,
         "/turf/open/floor",
         "/turf/closed/wall",
         "/turf/open/space/basic",
@@ -501,4 +531,97 @@ fn a_canvas_is_painted_finished_and_put_up() {
     s.run_until("the canvas is on the easel", |s| {
         s.try_get::<TilePos>(canvas) == Some(&TilePos::new(9, 2, 1))
     });
+}
+
+#[test]
+fn carbon_cutter_cabinet_and_biscuit() {
+    let mut s = Station::start("carbon_cutter_cabinet_and_biscuit");
+
+    // The carbon sheet tears off its copy once, then folds like any paper.
+    let carbon = s.item(CARBON);
+    s.run_until("the carbon is set up", |s| {
+        s.try_get::<CarbonPaper>(carbon).is_some()
+    });
+    s.put_in_hand(carbon);
+    let slot = s.active_slot();
+    s.send(0, ClientIntent::AltClickSlot(slot));
+    s.run_until("the copy is torn off", |s| {
+        s.get::<CarbonPaper>(carbon).copied
+    });
+    let copy = {
+        let world = s.server.world_mut();
+        let mut q = world.query::<(Entity, &DmItem, &ss13_mapload::DmName)>();
+        q.iter(world)
+            .find(|(_, i, _)| i.path == CARBON_COPY)
+            .map(|(e, _, n)| (e, n.name.clone()))
+    };
+    let (copy, name) = copy.expect("a carbon copy");
+    assert!(name.starts_with("Copy - "), "{name}");
+    assert!(s.try_get::<Paper>(copy).is_some());
+    let mob = s.players[0].mob;
+    assert!(s.get::<Inventory>(mob).holds(copy), "the copy is in hand");
+
+    // A paper into the cutter, cut by a right click: two slips where the cutter lies.
+    let (cutter, paper) = (s.item(CUTTER), s.item(PAPER));
+    s.run_until("the cutter has its blade", |s| {
+        s.try_get::<PaperCutter>(cutter)
+            .is_some_and(|c| c.blade.is_some() && c.secured)
+    });
+    s.put_in_hand(paper);
+    s.click(0, cutter);
+    s.run_until("the paper is in the cutter", |s| {
+        s.get::<PaperCutter>(cutter).paper == Some(paper)
+    });
+    s.empty_hand();
+    let right = ClickModifiers {
+        right: true,
+        ..Default::default()
+    };
+    s.click_with(0, cutter, right);
+    s.run_until("the paper is cut", |s| {
+        s.get::<PaperCutter>(cutter).paper.is_none()
+    });
+    let slips = {
+        let world = s.server.world_mut();
+        let mut q = world.query::<(&DmItem, &TilePos)>();
+        q.iter(world)
+            .filter(|(i, at)| i.path == SLIP && **at == TilePos::new(3, 3, 1))
+            .count()
+    };
+    assert_eq!(slips, 2);
+
+    // The biscuit card cracks open in hand.
+    let biscuit = s.item(BISCUIT);
+    s.run_until("the biscuit is set up", |s| {
+        s.try_get::<Biscuit>(biscuit).is_some()
+    });
+    s.put_in_hand(biscuit);
+    let slot = s.active_slot();
+    s.send(0, ClientIntent::ClickSlot(slot));
+    s.answer(AlertUi::NAME, "choose", "choice", "Yes");
+    s.run_until("the biscuit is cracked", |s| {
+        s.get::<Biscuit>(biscuit).cracked
+    });
+
+    // The mapped slip went into the cabinet; a paper goes in and comes back out.
+    let cabinet = s.obj(CABINET);
+    let filed = {
+        let world = s.server.world_mut();
+        let mut q = world.query::<(Entity, &DmItem, &StoredIn)>();
+        q.iter(world)
+            .any(|(_, i, inside)| i.path == SLIP && inside.0 == cabinet)
+    };
+    assert!(filed, "the mapped slip is filed");
+    assert!(s.try_get::<FilingCabinet>(cabinet).is_some());
+    let fluff = s.item(FLUFF);
+    s.stand(TilePos::new(9, 3, 1));
+    s.put_in_hand(fluff);
+    s.click(0, cabinet);
+    s.run_until("the paper is filed", |s| {
+        s.try_get::<StoredIn>(fluff).is_some_and(|i| i.0 == cabinet)
+    });
+    s.empty_hand();
+    s.click(0, cabinet);
+    s.pick("fluff");
+    s.run_until("the paper is back in hand", |s| s.active() == Some(fluff));
 }

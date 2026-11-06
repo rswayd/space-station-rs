@@ -14,7 +14,7 @@
 //! - The hand labeler toggles in hand (asking for the label when it turns on) and, on,
 //!   appends ` (label)` to what it is used on, 30 times per roll; a refill restores the roll.
 // shortcut: no field autofill, signatures or BandaStation `[name]` keys, no stamp placement
-// (stamps land at once), no burning, renaming, carbon copies, bin pens or noticeboards; labels
+// (stamps land at once), no burning, renaming, bin pens or noticeboards; labels
 // are not separate items that peel off.
 
 use bevy::prelude::*;
@@ -282,17 +282,20 @@ pub(super) fn writing(world: &World, item: Entity) -> Option<Writing> {
 }
 
 /// `update_icon_state`: `paper_words` once written on.
-fn refresh_paper_look(world: &mut World, paper: Entity) {
+pub(super) fn refresh_paper_look(world: &mut World, paper: Entity) {
     let written = world
         .get::<Paper>(paper)
         .is_some_and(|p| !p.inputs.is_empty());
     let Some(atom) = world.get::<DmAtom>(paper).cloned() else {
         return;
     };
+    // A torn carbon sheet is drawn as a plain `paper` (`carbon/update_icon_state`).
+    let base = super::stationery::paper_base_state(world, paper)
+        .map_or_else(|| atom.icon_state.clone(), str::to_owned);
     let state = if written {
-        format!("{}_words", atom.icon_state)
+        format!("{base}_words")
     } else {
-        atom.icon_state.clone()
+        base
     };
     set_icon_state(world, paper, &atom.icon, &state);
 }
