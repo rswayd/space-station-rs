@@ -149,6 +149,7 @@
 //! | 1950 | `power::pacman::interact` |
 //! | 1960 | `power::smes::interact` |
 //! | 1970 | `power::shields::interact` |
+//! | 1979 | `eng_machines::atmos_shield::interact` (toggle; right click: lock) |
 //! | 2000 | `wallmount::interact` |
 //! | 2010 | `power::lighting::remove_by_hand` (right click: a bulb out of its fixture) |
 //! | 2012 | `power::lighting::floodlight_hand` (setting, the tube out with the panel open) |
@@ -238,10 +239,12 @@
 //! | 1579 | `clothing::reactive::shell_interaction` (an anomaly core into a reactive armor shell) |
 //! | 1580 | `events::anomalies::neutralizer_act`, `releaser_act` (anomalies, anomaly cores) |
 //! | 1585 | `events::radiation_leak::tool_act` (a leaking machine's fixing tools) |
+//! | 1589 | `eng_machines::atmos_shield::item_interaction` (ID lock, tool refusals, wrench) |
 //! | 1590 | `teapot::item_interaction` (before `machine_frame` takes it apart) |
 //! | 1591 | `service::slots` (coins, holochips, multitool and emag on a slot machine) |
 //! | 1595 | `science::bitrunning::avatar::crowbar_act` (prying a netpod open) |
 //! | 1597 | `science::quantum_pad::item_interaction` (multitool links, keycards) |
+//! | 1599 | `eng_machines::sheetifier::item_interaction` (meat in, wrench) |
 //! | 1600 | `machine_frame::item_interaction` |
 //! | 1650 | `radiation::geiger_interact` |
 //! | 1680 | `service::barber::item_interaction` (razor, lipstick, paper on lips, dye spray, mirror frames) |

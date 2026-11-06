@@ -139,6 +139,9 @@ pub struct DmFood {
     pub decomp_secs: f32,
     pub decomp_req_handle: bool,
     pub ant_attracting: bool,
+    /// Sheets of `/datum/material/meat` in its `custom_materials` (the sheetifier's input;
+    /// 0: none).
+    pub meat_sheets: f32,
 }
 
 /// A cooking component's result, time range (deciseconds) and whether it is a real recipe.
@@ -475,6 +478,7 @@ pub fn food(types: &DmTypes, path: &str) -> Option<DmFood> {
         food_flags: n("food_flags").unwrap_or(0.0) as u32,
         trash_type: path_value(get("trash_type")).unwrap_or_default(),
         processing: processing(types, path),
+        meat_sheets: meat_sheets(get("custom_materials")),
         ..default()
     };
     if food.eatverbs.is_empty() {
@@ -724,6 +728,20 @@ fn pair([a, b]: [f32; 2]) -> String {
     format!("({a:?}, {b:?})")
 }
 
+/// `SHEET_MATERIAL_AMOUNT`.
+const SHEET_MATERIAL_AMOUNT: f32 = 100.0;
+const MEAT_MATERIAL: &str = "/datum/material/meat";
+
+/// The meat of `custom_materials`, in sheets.
+fn meat_sheets(value: Option<&Value>) -> f32 {
+    amounts(value)
+        .unwrap_or_default()
+        .iter()
+        .filter(|(path, _)| is_under(path, MEAT_MATERIAL))
+        .map(|(_, amount)| amount / SHEET_MATERIAL_AMOUNT)
+        .sum()
+}
+
 /// Converter fields of a food type: the whole [`DmFood`].
 pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
     let Some(f) = food(types, path) else {
@@ -792,12 +810,24 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
         ext(c, "decomp_secs", format!("{:?}", f.decomp_secs)),
         ext(c, "decomp_req_handle", f.decomp_req_handle.to_string()),
         ext(c, "ant_attracting", f.ant_attracting.to_string()),
+        ext(c, "meat_sheets", format!("{:?}", f.meat_sheets)),
     ]
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn meat_sheets_read_the_meat_of_custom_materials() {
+        let mats = serde_json::json!({ "list": [
+            { "assoc": [{ "path": "/datum/material/meat" }, 400] },
+            { "assoc": [{ "path": "/datum/material/iron" }, 100] }
+        ] });
+        assert_eq!(meat_sheets(Some(&mats)), 4.0);
+        assert_eq!(meat_sheets(Some(&Value::Null)), 0.0);
+        assert_eq!(meat_sheets(None), 0.0);
+    }
 
     const TYPES: &str = r##"{
       "schema": 3,

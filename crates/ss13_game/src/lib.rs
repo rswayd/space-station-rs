@@ -255,6 +255,8 @@ pub mod effects;
 pub mod emag;
 #[cfg(feature = "server")]
 pub mod emp;
+#[cfg(feature = "server")]
+pub mod eng_machines;
 pub mod escape_menu;
 #[cfg(feature = "client")]
 pub mod escape_menu_client;
