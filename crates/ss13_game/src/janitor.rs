@@ -1220,7 +1220,8 @@ fn add_washer(
             done_at: None,
             bloody: false,
         });
-        commands.queue(move |world: &mut World| washer_look(world, add.entity));
+        let e = add.entity;
+        commands.queue(move |world: &mut World| washer_look(world, e));
     }
 }
 

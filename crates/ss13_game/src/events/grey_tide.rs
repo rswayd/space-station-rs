@@ -74,7 +74,7 @@ impl RoundEvent for GreyTide {
 
     /// `COMSIG_GLOB_GREY_TIDE_LIGHT` every 12 fires: the departments' lights flicker.
     fn tick(&mut self, world: &mut World, ev: &mut EventState) {
-        if ev.active_for % 12 == 0 {
+        if ev.active_for.is_multiple_of(12) {
             crate::power::lighting::grey_tide_flicker(world, &self.areas);
         }
     }
