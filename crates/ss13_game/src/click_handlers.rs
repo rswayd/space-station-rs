@@ -160,6 +160,7 @@
 //! | 1200 | `explosions::sources::fueltank_welder_act` |
 //! | 1300 | `antag::cult::server::item_interaction` |
 //! | 1400 | `antag::heretic::server::item_interaction` |
+//! | 1410 | `antag::nightmare::item_interaction` (the light eater) |
 //! | 1420 | `silicon::aicard::interact_with_atom` |
 //! | 1450 | `silicon::mmi::item_interaction` |
 //! | 1460 | `silicon::ai_core::item_interaction` |

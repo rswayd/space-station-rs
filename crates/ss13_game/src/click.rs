@@ -244,6 +244,7 @@ fn resolve_clicks(
     inside: Query<(), Or<(With<crate::mecha::Pilot>, With<InCloset>)>>,
     positions: Query<&TilePos>,
     module_users: Query<(), With<crate::modsuit::server::ModuleSelected>>,
+    jaunters: Query<(), With<crate::spells::Jaunting>>,
     mut out: ClickWriters,
 ) {
     let now = time.elapsed_secs_f64();
@@ -412,7 +413,8 @@ fn resolve_clicks(
         }
         // shortcut: from inside a closet tg reaches only the closet itself (`CanReach` through
         // `loc`); here a mob inside clicks nothing.
-        if in_closet {
+        // A jaunter is inside its `phased_mob` holder: it reaches nothing (tg `CanReach`).
+        if in_closet || jaunters.contains(mob) {
             continue;
         }
         if intercept && !modifiers.ctrl {

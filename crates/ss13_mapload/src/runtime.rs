@@ -148,6 +148,9 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/stack/ore/glass/siderite",
     "/obj/item/poster",
     "/obj/structure/sign/poster/ripped",
+    // The nightmare's light eater and the morph (`ss13_game::antag`).
+    "/obj/item/light_eater",
+    "/mob/living/basic/morph",
 ];
 
 /// `ss13_game::species`: every species' organs (`mutant*`), meat (`meat`) and the plasmaman
@@ -185,6 +188,7 @@ pub const SPECIES_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/organ/brain/primate",
     "/obj/item/organ/brain/primitive",
     "/obj/item/organ/brain/shadow",
+    "/obj/item/organ/brain/shadow/nightmare",
     "/obj/item/organ/brain/skrell",
     "/obj/item/organ/brain/tajaran",
     "/obj/item/organ/brain/vulpkanin",
@@ -214,6 +218,7 @@ pub const SPECIES_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/organ/eyes/tajaran",
     "/obj/item/organ/eyes/vulpkanin",
     "/obj/item/organ/heart",
+    "/obj/item/organ/heart/nightmare",
     "/obj/item/organ/heart/ethereal",
     "/obj/item/organ/heart/fly",
     "/obj/item/organ/heart/pod",

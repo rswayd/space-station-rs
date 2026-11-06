@@ -250,6 +250,12 @@ fn step(world: &mut World, e: Entity, dt: f32) {
             {
                 continue;
             }
+            // A nightmare in the dark dodges it (`crate::antag::nightmare`): it flies on.
+            if world.get::<Health>(target).is_some()
+                && crate::antag::nightmare::dodge_projectile(world, target, e)
+            {
+                continue;
+            }
             if try_ricochet(world, &mut p, target, tile, prev) {
                 // It stays where it was, turned (tg: the bump happens from the turf before).
                 p.x = old_x;

@@ -82,6 +82,8 @@ pub enum SpeciesId {
     Spirit,
     Ghost,
     Monkey,
+    /// `SPECIES_NIGHTMARE` (`crate::antag::nightmare`).
+    Nightmare,
 }
 
 /// The mob's species (tg `dna.species`). A human mob without it is [`SpeciesId::Human`].
@@ -521,7 +523,7 @@ const SPIRIT: SpeciesDef = SpeciesDef {
 };
 
 /// Every species, in [`SpeciesId`] order.
-pub static SPECIES: [SpeciesDef; 31] = [
+pub static SPECIES: [SpeciesDef; 32] = [
     HUMAN,
     SpeciesDef {
         id: SpeciesId::Felinid,
@@ -1321,6 +1323,57 @@ pub static SPECIES: [SpeciesDef; 31] = [
         no_equip: slot::OCLOTHING | slot::GLOVES | slot::FEET | slot::SUITSTORE,
         languages: "/datum/language_holder/monkey",
         meat: Some("/obj/item/food/meat/slab/monkey"),
+        ..BASE
+    },
+    // `/datum/species/shadow/nightmare`: the shadow's body, its own brain and heart.
+    SpeciesDef {
+        id: SpeciesId::Nightmare,
+        key: "nightmare",
+        path: "/datum/species/shadow/nightmare",
+        name: "Nightmare",
+        sexes: false,
+        traits: &[
+            Trait::NoUnderwear,
+            Trait::ResistCold,
+            Trait::NoBreath,
+            Trait::ResistHighPressure,
+            Trait::ResistLowPressure,
+            Trait::RadImmune,
+            Trait::VirusImmune,
+            Trait::PierceImmune,
+            Trait::NoDismember,
+            Trait::NoHunger,
+            Trait::NoBlood,
+            Trait::NoDnaCopy,
+            Trait::NeverWounded,
+        ],
+        organs: OrganSet {
+            brain: Some("/obj/item/organ/brain/shadow/nightmare"),
+            heart: Some("/obj/item/organ/heart/nightmare"),
+            lungs: None,
+            eyes: Some("/obj/item/organ/eyes/shadow"),
+            tongue: Some("/obj/item/organ/tongue/shadow"),
+            ..HUMAN_ORGANS
+        },
+        limbs: Limbs {
+            dmi: STATIC_DMI,
+            id: "shadow",
+            color: LimbColor::Static,
+            head_dimorphic: false,
+            chest_dimorphic: false,
+            hair: false,
+            eyes: None,
+            ..HUMAN_LIMBS
+        },
+        burn_mod: 1.5,
+        no_equip: slot::MASK
+            | slot::OCLOTHING
+            | slot::GLOVES
+            | slot::FEET
+            | slot::ICLOTHING
+            | slot::SUITSTORE,
+        languages: "/datum/language_holder/shadowpeople",
+        meat: Some("/obj/item/food/meat/slab/human/mutant/shadow"),
         ..BASE
     },
 ];
