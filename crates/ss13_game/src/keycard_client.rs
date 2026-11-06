@@ -1,14 +1,14 @@
 //! The keycard authentication device window (client): tgui `KeycardAuth.jsx`. The data is
 //! `crate::keycard`, the server half `crate::security_level::keycard`.
-// shortcut: no "Grant Janitor Access" button (the server half does not port it); the
-// Authorize button keeps the plain button height (tgui sets `lineHeight="60px"`).
+// shortcut: the Authorize button keeps the plain button height (tgui sets `lineHeight="60px"`).
 
 use bevy::scene::EntityScene;
 use ss13_tgui::client::{AppTguiClientExt, ClientUi};
 use ss13_ui_kit::prelude::*;
 
 use crate::keycard::{
-    AUTH_SWIPE, BSA_UNLOCK, EMERGENCY_MAINT, KeycardAuthData, KeycardAuthUi, RED_ALERT,
+    AUTH_SWIPE, BSA_UNLOCK, EMERGENCY_MAINT, GIVE_JANITOR_ACCESS, KeycardAuthData, KeycardAuthUi,
+    RED_ALERT,
 };
 
 pub struct KeycardClientPlugin;
@@ -58,6 +58,8 @@ fn view(data: &KeycardAuthData) -> impl Scene + use<> {
                 {EntityScene(button("wrench", "Emergency Maintenance Access", EMERGENCY_MAINT))}
                 --
                 {EntityScene(button("meteor", "Bluespace Artillery Unlock", BSA_UNLOCK))}
+                --
+                {EntityScene(button("key", "Grant Janitor Access", GIVE_JANITOR_ACCESS))}
             ]
         })
     });

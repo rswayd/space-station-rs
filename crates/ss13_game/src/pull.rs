@@ -279,7 +279,13 @@ pub(crate) fn step_once(
     dir: Dir,
     ignore: Option<Entity>,
 ) -> Result<(), Vec<Entity>> {
-    step_passing(world, entity, dir, |_, e| Some(e) == ignore)
+    // Holobarriers let dragged unconscious carbons through (`ss13_world::WalkPassable`).
+    let walker = world
+        .get::<ss13_world::PassesWalkBarriers>(entity)
+        .is_some();
+    step_passing(world, entity, dir, move |w, e| {
+        Some(e) == ignore || (walker && w.get::<ss13_world::WalkPassable>(e).is_some())
+    })
 }
 
 /// [`step_once`] where the blockers `passes` accepts let it through.

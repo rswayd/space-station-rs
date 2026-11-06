@@ -70,6 +70,7 @@
 //! | 3187 | `cargo::money::coin_attack_self` (coin flip) |
 //! | 3188 | `mining::fulton::attack_self` (packs link, beacon kits unfold) |
 //! | 3189 | `shuttle_remote::use_remote` |
+//! | 3190 | `janitor::broom_attack_self` (push broom wield) |
 //! | 3192 | `power::lighting::replacer_attack_self` (the fixtures on the user's tile) |
 //! | 3194 | `closets::kinds::bodybag_attack_self` (a folded body bag unfolds) |
 //!
@@ -182,6 +183,7 @@
 //! | 3465 | `effects::teleporters::portal_click` (permanent portals) |
 //! | 3466 | `fireplace::attack_hand` (taking a bonfire apart) |
 //! | 3467 | `science::quantum_pad::attack_hand` |
+//! | 3468 | `janitor::washer_attack_hand` (washing machine door; right click starts it) |
 //!
 //! [`ClickPhase::HeldOnTarget`] (a world click with the active hand's item; tg
 //! `item_interaction`, `interact_with_atom`, `pre_attack`, `attackby`):
@@ -192,6 +194,7 @@
 //! | 100 | `antag::uplink::item_interaction` |
 //! | 200 | `antag::syndie_items::item_interaction` |
 //! | 300 | `emag::interact_with_atom` (left click) |
+//! | 320 | `janitor::key_on_door` (the janitor's key on a door) |
 //! | 330 | `shuttle_console_server` (a held item on a shuttle console) |
 //! | 340 | `shuttle_nav` (a held item on a navigation console) |
 //! | 345 | `shuttle_remote::link` (a shuttle remote on a shuttle console) |
@@ -271,6 +274,7 @@
 //! | 3455 | `clothing::item_interaction` |
 //! | 3465 | `effects::teleporters::portal_click` (permanent portals) |
 //! | 3500 | `janitor::item_interaction` |
+//! | 3510 | `janitor::washer_item_interaction` (a load into a washing machine) |
 //! | 3600 | `genetics::console::item_interaction` |
 //! | 3660 | `mobs::farm` milking, `mobs::critters::turtle_drink` (before `chem::item_interaction`) |
 //! | 3700 | `chem::item_interaction` |

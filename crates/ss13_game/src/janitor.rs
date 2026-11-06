@@ -203,8 +203,12 @@ pub struct Soap {
 /// What a finished cleaning do_after does.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CleanJob {
-    Mop { wash: bool },
+    Mop {
+        wash: bool,
+    },
     Soap,
+    /// The janitor's key finding the right key for a door (`attempt_open_door`).
+    AccessKey,
 }
 
 #[derive(Resource, Default)]
@@ -225,6 +229,34 @@ impl Plugin for JanitorServerPlugin {
                 crate::janitor::item_interaction(w, c.client, c.mob, h, c.target, c.modifiers)
             })
         });
+        // The push broom is braced (wielded) in hand.
+        app.add_click_handler(ClickPhase::AttackSelf, 3190, |w, c| {
+            crate::janitor::broom_attack_self(w, c.client, c.mob, c.target)
+        });
+        // tg washing machine `attack_hand` (door), `attack_hand_secondary` (start).
+        app.add_click_handler(ClickPhase::EmptyHand, 3468, |w, c| {
+            crate::janitor::washer_attack_hand(w, c.client, c.target, c.modifiers.right)
+        });
+        // tg washing machine `item_interaction`: a load goes in.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 3510, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::janitor::washer_item_interaction(w, c.client, c.mob, h, c.target)
+            })
+        });
+        // tg `door/item_interaction` with the janitor's key.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 320, |w, c| {
+            c.held
+                .is_some_and(|h| crate::janitor::key_on_door(w, c.client, c.mob, h, c.target))
+        });
+        app.add_observer(add_washer)
+            .add_observer(add_access_key)
+            .add_systems(
+                Update,
+                (
+                    finish_washing.run_if(any_with_component::<WashingMachine>),
+                    expire_key_access.run_if(any_with_component::<AccessKey>),
+                ),
+            );
         app.init_resource::<JanitorClocks>()
             .add_observer(add_cleanable)
             .add_observer(add_item_parts)
@@ -233,9 +265,13 @@ impl Plugin for JanitorServerPlugin {
                 Update,
                 (
                     toggle_move_intent.before(HealthSystems),
+                    sync_walk_barriers
+                        .after(toggle_move_intent)
+                        .before(WorldSystems::Movement),
                     (
                         condensation,
                         slip_on_entered,
+                        sweep_on_moved,
                         wet_floors,
                         dry_blood,
                         bucket_overlays,
@@ -335,6 +371,63 @@ fn toggle_move_intent(
                 commands.entity(mob).insert(Walking(true));
             }
             _ => {}
+        }
+    }
+}
+
+/// Carbons whose walking or consciousness may have changed.
+type WalkersChanged = Or<(
+    Changed<Walking>,
+    Changed<Stat>,
+    Changed<crate::status_effects::StatusEffects>,
+)>;
+
+/// Holobarriers' `CanAllowThrough`: a carbon passes them walking or `IS_UNCONSCIOUS_OR_CRIT`
+/// (`ss13_world::PassesWalkBarriers`).
+// Cost: change detection only; the status-effect countdown marks a stunned mob changed each tick.
+fn sync_walk_barriers(
+    changed: Query<
+        Entity,
+        (
+            With<Health>,
+            With<crate::inventory::Inventory>,
+            Without<crate::silicon::Silicon>,
+            Without<crate::mobs::BasicMob>,
+            WalkersChanged,
+        ),
+    >,
+    mut cleared: RemovedComponents<crate::status_effects::StatusEffects>,
+    mobs: Query<(
+        Option<&Walking>,
+        Option<&Stat>,
+        Option<&crate::status_effects::StatusEffects>,
+        Has<ss13_world::PassesWalkBarriers>,
+    )>,
+    carbons: Query<
+        (),
+        (
+            With<Health>,
+            With<crate::inventory::Inventory>,
+            Without<crate::silicon::Silicon>,
+            Without<crate::mobs::BasicMob>,
+        ),
+    >,
+    mut commands: Commands,
+) {
+    let cleared: Vec<Entity> = cleared.read().filter(|&e| carbons.contains(e)).collect();
+    for mob in changed.iter().chain(cleared) {
+        let Ok((walking, stat, effects, has)) = mobs.get(mob) else {
+            continue;
+        };
+        let passes = walking.is_some_and(|w| w.0)
+            || stat.is_some_and(|s| *s != Stat::Conscious)
+            || effects.is_some_and(|e| e.knocked_out());
+        if passes && !has {
+            commands.entity(mob).insert(ss13_world::PassesWalkBarriers);
+        } else if !passes && has {
+            commands
+                .entity(mob)
+                .remove::<ss13_world::PassesWalkBarriers>();
         }
     }
 }
@@ -845,6 +938,20 @@ pub fn item_interaction(
         do_after(world, actor, target, speed, 0, Job::Clean(CleanJob::Soap));
         return true;
     }
+    if is_under(&path, PUSHBROOM) {
+        // `interact_with_atom`: sweeps the clicked tile the way the user faces.
+        if living {
+            return false;
+        }
+        let (Some(&pos), Some(dir)) = (
+            world.get::<TilePos>(target),
+            world.get::<ss13_shared::Facing>(mob).map(|f| f.0),
+        ) else {
+            return false;
+        };
+        do_sweep(world, pos, dir);
+        return true;
+    }
     if is_under(&path, SPRAY) && !modifiers.right {
         return spray(world, actor, target);
     }
@@ -951,6 +1058,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter, job: CleanJob)
         return;
     };
     match job {
+        CleanJob::AccessKey => key_opens_door(world, action.client, mob, item, target),
         CleanJob::Mop { wash: do_wash } => {
             if do_wash {
                 clean_and_learn(world, mob, target);
@@ -1078,6 +1186,443 @@ fn spray(world: &mut World, actor: Actor, target: Entity) -> bool {
     true
 }
 
+// ---------------------------------------------------------------------------------------------
+// Washing machine.
+
+const WASHING_MACHINE: &str = "/obj/machinery/washing_machine";
+/// `max_wash_capacity` of the stock machine: two 50 u beakers, `floor(100 / 20)`.
+const WASH_CAPACITY: usize = 5;
+/// `time_to_wash = 20 SECONDS / servo.tier`.
+const WASH_SECS: f64 = 20.0;
+
+/// `/obj/machinery/washing_machine` state.
+#[derive(Component, Clone, Copy, Debug, PartialEq)]
+pub struct WashingMachine {
+    /// `state_open`.
+    pub open: bool,
+    /// `busy`: when the running cycle ends (game seconds).
+    pub done_at: Option<f64>,
+    /// `bloody_mess`.
+    pub bloody: bool,
+}
+
+fn add_washer(
+    add: On<Add<ss13_mapload::DmPower>>,
+    machines: Query<&ss13_mapload::DmPower>,
+    mut commands: Commands,
+) {
+    if machines
+        .get(add.entity)
+        .is_ok_and(|m| is_under(&m.path, WASHING_MACHINE))
+    {
+        commands.entity(add.entity).insert(WashingMachine {
+            open: true,
+            done_at: None,
+            bloody: false,
+        });
+        commands.queue(move |world: &mut World| washer_look(world, add.entity));
+    }
+}
+
+fn washer_load(world: &World, e: Entity) -> Vec<Entity> {
+    world
+        .get::<crate::storage::Stored>(e)
+        .map(|s| s.items().to_vec())
+        .unwrap_or_default()
+}
+
+/// `update_icon_state`: `wm_running_<blood>`, `wm_<open>_blood`, `wm_<open>_<full>`.
+fn washer_look(world: &mut World, e: Entity) {
+    let Some(m) = world.get::<WashingMachine>(e).copied() else {
+        return;
+    };
+    let open = u8::from(m.open);
+    let state = if m.done_at.is_some() {
+        format!("wm_running_{}", u8::from(m.bloody))
+    } else if m.bloody {
+        format!("wm_{open}_blood")
+    } else {
+        format!("wm_{open}_{}", u8::from(!washer_load(world, e).is_empty()))
+    };
+    let Some(id) = world
+        .get::<ss13_mapload::DmAtom>(e)
+        .zip(world.get_resource::<IconIndex>())
+        .and_then(|(atom, icons)| icons.get(&atom.icon, &state))
+    else {
+        return;
+    };
+    if let Some(mut look) = world.get_mut::<Appearance>(e)
+        && look.icon_state != id
+    {
+        look.icon_state = id;
+    }
+}
+
+/// `attack_hand` (the door; `open_machine` drops the load) and `attack_hand_secondary` (a
+/// closed, clean machine starts its cycle). True when `target` is a washing machine.
+// shortcut: no pets or aggressively grabbed humans stuffed in, so no gibbed pets or washed
+// humans; add with mobs inside machines.
+pub fn washer_attack_hand(world: &mut World, client: Entity, target: Entity, right: bool) -> bool {
+    let Some(mut m) = world.get::<WashingMachine>(target).copied() else {
+        return false;
+    };
+    let name = crate::chem::name_of(world, target);
+    if m.done_at.is_some() {
+        tell(world, client, Span::Warning, format!("{name} занята!"));
+        return true;
+    }
+    if right {
+        if m.open {
+            tell(world, client, Span::Warning, "Сначала закройте дверцу!");
+            return true;
+        }
+        if m.bloody {
+            tell(
+                world,
+                client,
+                Span::Warning,
+                format!("{name} нужно сначала отмыть!"),
+            );
+            return true;
+        }
+        let tier = crate::stock_parts::ratings(world, target)
+            .tiers(crate::stock_parts::PartKind::Servo)
+            .max()
+            .unwrap_or(1)
+            .max(1);
+        let now = world.resource::<Time>().elapsed_secs_f64();
+        m.done_at = Some(now + WASH_SECS / f64::from(tier));
+    } else if m.open {
+        m.open = false;
+    } else {
+        open_washer(world, target);
+        m.open = true;
+    }
+    world.entity_mut(target).insert(m);
+    washer_look(world, target);
+    true
+}
+
+/// `open_machine`: the load drops onto the machine's tile.
+fn open_washer(world: &mut World, e: Entity) {
+    let Some(&pos) = world.get::<TilePos>(e) else {
+        return;
+    };
+    for item in washer_load(world, e) {
+        crate::storage::take_out(world, item, pos);
+    }
+}
+
+/// `item_interaction` out of combat mode: into the open, clean, not full machine.
+pub fn washer_item_interaction(
+    world: &mut World,
+    client: Entity,
+    mob: Entity,
+    held: Entity,
+    target: Entity,
+) -> bool {
+    let Some(m) = world.get::<WashingMachine>(target).copied() else {
+        return false;
+    };
+    if world
+        .get::<crate::combat::CombatMode>(mob)
+        .is_some_and(|c| c.0)
+    {
+        return false;
+    }
+    let name = crate::chem::name_of(world, target);
+    if !m.open {
+        tell(world, client, Span::Warning, "Сначала откройте дверцу!");
+    } else if m.bloody {
+        tell(
+            world,
+            client,
+            Span::Warning,
+            format!("{name} нужно сначала отмыть!"),
+        );
+    } else if washer_load(world, target).len() >= WASH_CAPACITY {
+        tell(world, client, Span::Warning, "Стиральная машина полна!");
+    } else if crate::inventory::no_drop(world, held) {
+        tell(
+            world,
+            client,
+            Span::Warning,
+            "Предмет прилип к руке, его не положить в стиральную машину!",
+        );
+    } else {
+        crate::storage::put_inside(world, held, target);
+        washer_look(world, target);
+    }
+    true
+}
+
+/// `wash_cycle` when the timer runs out: every load item is washed (`wash(CLEAN_WASH)`).
+// shortcut: no dyeing by a crayon or other `dye_color` item inside (`dye_registry` and the items'
+// `dying_key` are not converted), no `machine_wash` specials (hides, the Ian costume), no
+// shaking or walking around while running; add with the dye registry in the prototypes.
+fn finish_washing(world: &mut World) {
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    let mut q = world.query::<(Entity, &WashingMachine)>();
+    let done: Vec<Entity> = q
+        .iter(world)
+        .filter(|(_, m)| m.done_at.is_some_and(|t| now >= t))
+        .map(|(e, _)| e)
+        .collect();
+    for e in done {
+        for item in washer_load(world, e) {
+            wash(world, item, CLEAN_WASH);
+        }
+        if let Some(mut m) = world.get_mut::<WashingMachine>(e) {
+            m.done_at = None;
+        }
+        washer_look(world, e);
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Janitor's key.
+
+const ACCESS_KEY: &str = "/obj/item/access_key";
+/// `ACCESS_TIMER_LIMIT`.
+pub const ACCESS_TIMER_SECS: f64 = 600.0;
+/// `key_speed`, deciseconds.
+const KEY_SPEED: f32 = 30.0;
+const RATTLING_KEYS: &str = "sound/items/rattling_keys.ogg";
+const DING: &str = "sound/machines/ding.ogg";
+const SCANBUZZ: &str = "sound/machines/scanner/scanbuzz.ogg";
+
+/// `/obj/item/access_key`: `department_access` and when it clears itself.
+#[derive(Component, Clone, Debug, Default, PartialEq)]
+pub struct AccessKey {
+    pub region: Option<(&'static str, f64)>,
+}
+
+fn add_access_key(add: On<Add<DmItem>>, items: Query<&DmItem>, mut commands: Commands) {
+    if items
+        .get(add.entity)
+        .is_ok_and(|i| is_under(&i.path, ACCESS_KEY))
+    {
+        commands.entity(add.entity).insert(AccessKey::default());
+    }
+}
+
+fn key_sound(world: &mut World, key: Entity, sound: &str) {
+    if let Some(pos) = crate::explosions::turf_of(world, key) {
+        crate::sound::playsound(world, crate::sound::PlaySound::new(pos, sound, 25.0, true));
+    }
+}
+
+/// `COMSIG_ON_DEPARTMENT_ACCESS` -> `department_access_given` of every key: the region for 10
+/// minutes (`TIMER_OVERRIDE`: a new grant restarts the timer).
+pub fn grant_department_access(world: &mut World, region: &'static str) {
+    let until = world.resource::<Time>().elapsed_secs_f64() + ACCESS_TIMER_SECS;
+    let mut q = world.query_filtered::<Entity, With<AccessKey>>();
+    let keys: Vec<Entity> = q.iter(world).collect();
+    for key in keys {
+        world.entity_mut(key).insert(AccessKey {
+            region: Some((region, until)),
+        });
+        crate::atmos_machinery::machine_say(
+            world,
+            key,
+            &format!("Доступ к зоне {region} предоставлен."),
+        );
+        key_sound(world, key, DING);
+        info!("Access to the {region} department was given to the janitor key {key}");
+    }
+}
+
+/// `clear_access` when the timer runs out.
+fn expire_key_access(world: &mut World) {
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    let mut q = world.query::<(Entity, &AccessKey)>();
+    let due: Vec<Entity> = q
+        .iter(world)
+        .filter(|(_, k)| k.region.is_some_and(|(_, at)| now >= at))
+        .map(|(e, _)| e)
+        .collect();
+    for key in due {
+        world.entity_mut(key).insert(AccessKey { region: None });
+        crate::atmos_machinery::machine_say(world, key, "Доступ отозван, время вышло.");
+        key_sound(world, key, SCANBUZZ);
+    }
+}
+
+/// `door/item_interaction` with the key -> `attempt_open_door`: 3 s fumbling for the key.
+/// True when `held` is the janitor's key and `target` a door.
+pub fn key_on_door(
+    world: &mut World,
+    client: Entity,
+    mob: Entity,
+    held: Entity,
+    target: Entity,
+) -> bool {
+    if world.get::<AccessKey>(held).is_none() || world.get::<crate::doors::Door>(target).is_none() {
+        return false;
+    }
+    let actor = Actor {
+        client,
+        mob,
+        item: Some(held),
+    };
+    // `DOING_INTERACTION_WITH_TARGET`: a do_after already running refuses the new one.
+    if do_after(
+        world,
+        actor,
+        target,
+        KEY_SPEED,
+        0,
+        Job::Clean(CleanJob::AccessKey),
+    ) {
+        tell(world, client, Span::Notice, "Вы ищете нужный ключ...");
+        key_sound(world, held, RATTLING_KEYS);
+    }
+    true
+}
+
+/// The region's accesses `key` opens with now (`accesses_by_region[department_access]`).
+fn key_access(world: &World, key: Entity) -> Option<Vec<String>> {
+    let (region, _) = world.get::<AccessKey>(key)?.region?;
+    Some(crate::id_access::region_access_list(&[region]))
+}
+
+/// The end of `attempt_open_door`: the door's access checked against the key's region, then
+/// `try_to_activate_door(access_bypass = TRUE)`.
+fn key_opens_door(world: &mut World, client: Entity, mob: Entity, key: Entity, door: Entity) {
+    let Some(&mob_pos) = world.get::<TilePos>(mob) else {
+        return;
+    };
+    let access = key_access(world, key);
+    let allowed = world
+        .get::<crate::doors::Door>(door)
+        .is_some_and(|d| access.as_deref().is_some_and(|a| d.allows(Some(a))));
+    if !allowed {
+        tell(world, client, Span::Warning, "Нет доступа!");
+        return;
+    }
+    crate::doors::with_door(world, door, |door, appearance, ctx| {
+        (
+            (),
+            ctx.activate(door, appearance, false, (mob_pos, access.as_deref())),
+        )
+    });
+}
+
+// ---------------------------------------------------------------------------------------------
+// Push broom.
+
+const PUSHBROOM: &str = "/obj/item/pushbroom";
+/// `BROOM_PUSH_LIMIT`.
+const BROOM_PUSH_LIMIT: usize = 20;
+const THUDSWOOSH: &str = "sound/items/weapons/thudswoosh.ogg";
+
+/// A push broom braced in both hands (tg `two_handed` wielded, `on_wield`).
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct BroomWielded;
+
+/// tg `two_handed` `attack_self` of a push broom: wields it (the other hand must be free) or
+/// lets go. True when `item` is a push broom.
+// shortcut: no wielded force (12) or icon, no jousting or walking aid; add with two_handed.
+pub fn broom_attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity) -> bool {
+    if !is_under(&item_path(world, item), PUSHBROOM) {
+        return false;
+    }
+    if world.get::<BroomWielded>(item).is_some() {
+        world.entity_mut(item).remove::<BroomWielded>();
+        tell(
+            world,
+            client,
+            Span::Notice,
+            "Вы перестаёте держать метлу обеими руками.",
+        );
+        return true;
+    }
+    if !other_hand_free(world, mob, item) {
+        tell(
+            world,
+            client,
+            Span::Warning,
+            "Вторая рука должна быть свободна!",
+        );
+        return true;
+    }
+    world.entity_mut(item).insert(BroomWielded);
+    tell(
+        world,
+        client,
+        Span::Notice,
+        "Вы упираете метлу в пол, приняв уверенную подметающую стойку.",
+    );
+    true
+}
+
+/// `item` is in one of `mob`'s hands and the other hand is empty.
+fn other_hand_free(world: &World, mob: Entity, item: Entity) -> bool {
+    world
+        .get::<crate::inventory::Inventory>(mob)
+        .is_some_and(|inv| inv.hands.contains(&Some(item)) && inv.hands.contains(&None))
+}
+
+/// The mob's wielded push broom, still held in both hands.
+fn wielded_broom(world: &World, mob: Entity) -> Option<Entity> {
+    let inv = world.get::<crate::inventory::Inventory>(mob)?;
+    inv.hands
+        .iter()
+        .flatten()
+        .copied()
+        .find(|&h| world.get::<BroomWielded>(h).is_some())
+        .filter(|&h| other_hand_free(world, mob, h))
+}
+
+/// `sweep` on `COMSIG_MOVABLE_PRE_MOVE` of a mob with a wielded broom: the items on the tile it
+/// steps onto are pushed one tile further. Run after the step, so they leave the mob's new tile.
+fn sweep_on_moved(world: &mut World, mut cursor: Local<MessageCursor<Moved>>) {
+    let moved: Vec<Moved> = cursor
+        .read(world.resource::<Messages<Moved>>())
+        .copied()
+        .collect();
+    // Cost: one inventory lookup per mob step.
+    for m in moved {
+        if world.get::<crate::inventory::Inventory>(m.entity).is_none() {
+            continue;
+        }
+        if wielded_broom(world, m.entity).is_some() {
+            do_sweep(world, m.to, m.dir);
+        }
+    }
+}
+
+/// `/proc/do_sweep`: up to `BROOM_PUSH_LIMIT` loose items of `pos` step `dir` (each `Move`
+/// refused by what blocks it), with a swoosh when there was anything.
+pub fn do_sweep(world: &mut World, pos: TilePos, dir: ss13_shared::Dir) -> usize {
+    let items: Vec<Entity> = world
+        .resource::<SpatialIndex>()
+        .on_tile(pos)
+        .iter()
+        .copied()
+        .filter(|&e| world.get::<DmItem>(e).is_some_and(|i| !i.anchored))
+        .filter(|&e| {
+            world
+                .get::<crate::obj_damage::Anchored>(e)
+                .is_none_or(|a| !a.0)
+        })
+        .take(BROOM_PUSH_LIMIT)
+        .collect();
+    if items.is_empty() {
+        return 0;
+    }
+    let mut swept = 0;
+    for item in items {
+        if crate::pull::step_once(world, item, dir, None).is_ok() {
+            swept += 1;
+        }
+    }
+    let mut sound = crate::sound::PlaySound::new(pos, THUDSWOOSH, 30.0, true);
+    sound.extrarange = -1.0;
+    crate::sound::playsound(world, sound);
+    swept
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1123,6 +1668,200 @@ mod tests {
         assert_eq!(wet.highest(), TURF_WET_WATER);
         wet.process(T0C + 150.0, 1.0);
         assert_eq!(wet.highest(), 0);
+    }
+
+    /// A grant puts the region on the key for 10 minutes; the key opens a door of that region
+    /// only.
+    #[test]
+    fn janitor_key_holds_a_region_for_ten_minutes() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .add_systems(Update, expire_key_access);
+        let world = app.world_mut();
+        let key = world.spawn(AccessKey::default()).id();
+        assert_eq!(key_access(world, key), None);
+        grant_department_access(world, "Engineering");
+        let access = key_access(world, key).unwrap();
+        assert!(access.iter().any(|a| a == "engineering"), "{access:?}");
+        assert!(crate::doors::test_airlock(&["engineering"]).allows(Some(&access)));
+        assert!(!crate::doors::test_airlock(&["brig"]).allows(Some(&access)));
+        let (_, until) = world.get::<AccessKey>(key).unwrap().region.unwrap();
+        assert!(until >= ACCESS_TIMER_SECS);
+        world.get_mut::<AccessKey>(key).unwrap().region = Some(("Engineering", 0.0));
+        app.update();
+        assert_eq!(app.world().get::<AccessKey>(key).unwrap().region, None);
+    }
+
+    /// Only a head's trim names a region to grant.
+    #[test]
+    fn heads_grant_their_region() {
+        use crate::id_access::{CardAccess, Trim};
+        use crate::security_level::keycard::head_region;
+        let mut world = World::new();
+        let card = world
+            .spawn((
+                crate::inventory::IdCard { access: Vec::new() },
+                CardAccess {
+                    trim: Some(Trim {
+                        job: "Chief Engineer".into(),
+                        ..default()
+                    }),
+                    wildcard_slots: Vec::new(),
+                    registered_age: 30,
+                },
+            ))
+            .id();
+        let mob = world
+            .spawn(crate::inventory::Inventory {
+                id: Some(card),
+                ..default()
+            })
+            .id();
+        assert_eq!(head_region(&world, mob), Some("Engineering"));
+        world
+            .get_mut::<CardAccess>(card)
+            .unwrap()
+            .trim
+            .as_mut()
+            .unwrap()
+            .job = "Janitor".into();
+        assert_eq!(head_region(&world, mob), None);
+    }
+
+    /// A closed washing machine runs its cycle and washes the blood off its load; opening it
+    /// drops the load.
+    #[test]
+    fn washing_machine_washes_its_load() {
+        use crate::forensics::server::Forensics;
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, ss13_world::WorldPlugin));
+        app.add_systems(Update, finish_washing);
+        let world = app.world_mut();
+        world
+            .resource_mut::<SpatialIndex>()
+            .create_level(1, 4, 4)
+            .unwrap();
+        let machine = world
+            .spawn((
+                WashingMachine {
+                    open: true,
+                    done_at: None,
+                    bloody: false,
+                },
+                TilePos::new(1, 1, 1),
+            ))
+            .id();
+        let shirt = world
+            .spawn(Forensics {
+                blood_dna: vec![("abc".into(), crate::medical::blood::BloodType::APlus)],
+                ..default()
+            })
+            .id();
+        crate::storage::put_inside(world, shirt, machine);
+        let client = world.spawn_empty().id();
+        // Shut the door, start the cycle.
+        assert!(washer_attack_hand(world, client, machine, false));
+        assert!(washer_attack_hand(world, client, machine, true));
+        assert!(
+            world
+                .get::<WashingMachine>(machine)
+                .unwrap()
+                .done_at
+                .is_some()
+        );
+        world.get_mut::<WashingMachine>(machine).unwrap().done_at = Some(0.0);
+        app.update();
+        let world = app.world_mut();
+        assert_eq!(world.get::<WashingMachine>(machine).unwrap().done_at, None);
+        assert!(world.get::<Forensics>(shirt).unwrap().blood_dna.is_empty());
+        assert!(washer_attack_hand(world, client, machine, false));
+        assert_eq!(world.get::<TilePos>(shirt), Some(&TilePos::new(1, 1, 1)));
+        assert!(washer_load(world, machine).is_empty());
+    }
+
+    /// The broom pushes loose items one tile on, not through walls and not anchored ones; it
+    /// sweeps only braced with the other hand free.
+    #[test]
+    fn broom_sweeps_loose_items() {
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, ss13_world::WorldPlugin));
+        let world = app.world_mut();
+        world
+            .resource_mut::<SpatialIndex>()
+            .create_level(1, 6, 6)
+            .unwrap();
+        let item = |world: &mut World, anchored: bool| {
+            world
+                .spawn((
+                    DmItem {
+                        path: "/obj/item/trash/candy".into(),
+                        anchored,
+                        ..default()
+                    },
+                    TilePos::new(2, 2, 1),
+                ))
+                .id()
+        };
+        let (loose, fixed) = (item(world, false), item(world, true));
+        world.spawn((TilePos::new(2, 4, 1), Density));
+        assert_eq!(
+            do_sweep(world, TilePos::new(2, 2, 1), ss13_shared::Dir::North),
+            1
+        );
+        assert_eq!(world.get::<TilePos>(loose), Some(&TilePos::new(2, 3, 1)));
+        assert_eq!(world.get::<TilePos>(fixed), Some(&TilePos::new(2, 2, 1)));
+        assert_eq!(
+            do_sweep(world, TilePos::new(2, 3, 1), ss13_shared::Dir::North),
+            0
+        );
+        assert_eq!(world.get::<TilePos>(loose), Some(&TilePos::new(2, 3, 1)));
+
+        let broom = world.spawn(BroomWielded).id();
+        let other = world.spawn_empty().id();
+        let mob = world
+            .spawn(crate::inventory::Inventory {
+                hands: [Some(broom), None],
+                ..default()
+            })
+            .id();
+        assert_eq!(wielded_broom(world, mob), Some(broom));
+        world
+            .get_mut::<crate::inventory::Inventory>(mob)
+            .unwrap()
+            .hands[1] = Some(other);
+        assert_eq!(wielded_broom(world, mob), None);
+    }
+
+    /// Walking or critical carbons pass holobarriers; running conscious ones do not.
+    #[test]
+    fn walkers_and_the_critical_pass_barriers() {
+        let mut app = App::new();
+        app.add_systems(Update, sync_walk_barriers);
+        let mob = app
+            .world_mut()
+            .spawn((
+                Health::default(),
+                crate::inventory::Inventory::default(),
+                Walking(false),
+                Stat::Conscious,
+            ))
+            .id();
+        let passes = |app: &App| {
+            app.world()
+                .get::<ss13_world::PassesWalkBarriers>(mob)
+                .is_some()
+        };
+        app.update();
+        assert!(!passes(&app));
+        app.world_mut().entity_mut(mob).insert(Walking(true));
+        app.update();
+        assert!(passes(&app));
+        app.world_mut().entity_mut(mob).insert(Walking(false));
+        app.update();
+        assert!(!passes(&app));
+        app.world_mut().entity_mut(mob).insert(Stat::HardCrit);
+        app.update();
+        assert!(passes(&app));
     }
 
     #[test]

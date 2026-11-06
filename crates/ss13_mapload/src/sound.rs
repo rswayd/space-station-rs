@@ -323,7 +323,14 @@ pub mod files {
     ];
     /// Sounds the game code plays by a constant path (checked by the real-asset test
     /// `runtime_types::game_sound_literals_are_converted` in ss13_game).
-    pub const GAME_CODE: [&str; 97] = [
+    pub const GAME_CODE: [&str; 104] = [
+        "sound/items/weapons/thudswoosh.ogg",
+        "sound/items/rattling_keys.ogg",
+        "sound/machines/scanner/scanbuzz.ogg",
+        "sound/effects/glass/glasshit.ogg",
+        "sound/effects/footstep/glass_step.ogg",
+        "sound/items/weapons/smash.ogg",
+        "sound/effects/doorcreaky.ogg",
         "sound/effects/bin/bin_close.ogg",
         "sound/effects/magic/RATTLEMEBONES.ogg",
         "sound/machines/airlock/airlockopen.ogg",

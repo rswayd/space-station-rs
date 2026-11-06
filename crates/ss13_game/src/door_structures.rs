@@ -236,9 +236,6 @@ fn face(world: &mut World, e: Entity, dir: Dir) {
     if let Some(border) = border {
         world.entity_mut(e).insert(border);
     }
-    if let Some(mut appearance) = world.get_mut::<Appearance>(e) {
-        appearance.dir = Some(dir);
-    }
 }
 
 fn facing(world: &World, e: Entity) -> Dir {

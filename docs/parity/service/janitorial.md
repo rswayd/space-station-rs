@@ -33,7 +33,7 @@ _«Джанимобиль (pimpin' ride)» описано в [../vehicles/vehicl
 Знак-предупреждение (носится как костюм, ставится на пол); голопроектор уборщика ставит голографические знаки мокрого пола.
 
 - **Код:** [`/obj/item/clothing/suit/caution`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/suits/wetfloor.dm#L1), [`/obj/item/holosign_creator/janibarrier`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/holosign_creator.dm#L117), [`/obj/structure/holosign/barrier/wetsign`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/holosign.dm#L166)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ есть — знак носится в слоте костюма и ставится кликом на пол (`crate::inventory::place`); голопроектор уборщика (`crates/ss13_game/src/holosign.rs`) ставит до 12 плотных голобарьеров за 1 с, их пропускают идущие шагом и бессознательные/критические карбоны (`ss13_world::WalkPassable`/`PassesWalkBarriers`, синхронизация в `janitor.rs`, протаскивание в `pull.rs`); клиент не предсказывает проход (одна коррекция)
 
 ### Мыло
 Мыло очищает тайл/моба/предмет быстрее швабры, расходуется (число использований по сорту: самодельное, NT, люкс, синдикат, омега); на полу скользкое.
@@ -58,7 +58,7 @@ _«Джанимобиль (pimpin' ride)» описано в [../vehicles/vehicl
 Двуручная метла сметает предметы с тайлов перед собой при ходьбе.
 
 - **Код:** [`/obj/item/pushbroom`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/tools/janitorial/broom.dm#L4)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/janitor.rs`: использование в руке упирает метлу (нужна свободная вторая рука), с упёртой метлой каждый шаг сдвигает до 20 незакреплённых предметов с нового тайла дальше по ходу (`do_sweep`, стены и плотное не пускают), клик метлой сметает предметы кликнутого тайла по направлению взгляда; нет урона 12 в двух руках, джаустинга и опоры при ходьбе (`two_handed`, `jousting`, `walking_aid` не портированы)
 
 _«Заменитель ламп» описано в [../power/lighting.md](../power/lighting.md)._
 
@@ -66,16 +66,16 @@ _«Заменитель ламп» описано в [../power/lighting.md](../p
 Стирает одежду и предметы (цикл с водой), окрашивает их цветным предметом внутри (мелок и т.д.), можно залезть внутрь; разбирается.
 
 - **Код:** [`/obj/machinery/washing_machine`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/washing_machine.dm#L176), [`wash_cycle()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/washing_machine.dm#L234), [`/obj/item/proc/dye_item()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/washing_machine.dm#L249), [`/atom/movable/proc/machine_wash()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/washing_machine.dm#L291)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/janitor.rs`: дверца открывается/закрывается рукой (открытие выкладывает загрузку), до 5 предметов внутрь вне боевого режима, правый клик по закрытой запускает цикл 20 с / уровень сервопривода, по окончании всё внутри `wash(CLEAN_WASH)`, спрайты `wm_*`; нет окрашивания (`dye_registry`, `dye_color`/`dying_key` не конвертируются), `machine_wash` шкур и костюма Иана, запихивания питомцев/людей, тряски
 
 ### Душ и раковины
 Душ моет и тушит стоящих под ним (температура воды настраивается, есть бак), раковина моет руки и предметы, наполняет ёмкости водой.
 
 - **Код:** [`/obj/machinery/shower`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/shower.dm#L29), [`/obj/structure/sink`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/water_structures/sink.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/plumbing.rs`: раковина (100 ед., рециркулятор 0,5 ед./с) моет руки/лицо и предметы за 4 с по 5 ед., наполняет ёмкости, сливает (правый клик), мочит швабру; душ (бак 200 ед., пополнение 0,5 ед./с, включается рукой) каждую секунду моет тайл и всё на нём, обливает (тушит, мочит), ледяной/кипящий режим отвёрткой, режимы автоотключения мультитулом, по выключении мочит пол; нет тумана, звука, вантуза, рам (тесты `tests/it/plumbing.rs`)
 
 ### Ключ уборщика и доступ отдела с ключ-карты
 Глава на устройстве авторизации ключ-картой нажимает «Grant Janitor Access» (откат 30 с, должность главы по карте): ключ уборщика временно получает доступ регионов его отдела.
 
 - **Код:** [`ui_act "give_janitor_access"`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/security_levels/keycard_authentication.dm#L89), [`/obj/item/access_key`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/tools/janitorial/janitor_key.dm#L4)
-- **Статус в ss13-rs:** ❌ нет — устройство ключ-карт есть (`crates/ss13_game/src/security_level/keycard.rs`), кнопки и ключа нет
+- **Статус в ss13-rs:** ✅ есть — кнопка «Grant Janitor Access» (`crates/ss13_game/src/keycard_client.rs`, `security_level/keycard.rs`: доступ `keycard_auth`, откат 30 с на устройство, ID в руке первым, должность трима — глава региона) шлёт регион всем ключам (`crates/ss13_game/src/janitor.rs`, `AccessKey`): ключ объявляет доступ, через 10 мин сбрасывает его; ключ на двери — 3 с поиска ключа, затем дверь открывается/закрывается, если её доступ входит в регион; нет логов расследований, осмотра ключа

@@ -13,7 +13,7 @@ pub use map_init::{
 };
 pub use movement::{
     Border, Bumped, ClimbWalkable, ClimbsUp, Density, FallsThrough, MoveRequest, Moved, Mover,
-    NonDenseBorder, next_ready_at, resolve_move,
+    NonDenseBorder, PassesWalkBarriers, WalkPassable, next_ready_at, resolve_move,
 };
 
 /// Ordering points for other plugins: write `MoveRequest` before `Movement`, read `Moved`
@@ -151,6 +151,22 @@ mod tests {
             .read(app.world().resource::<Messages<Bumped>>())
             .map(|b| b.obstacle)
             .collect()
+    }
+
+    /// A holobarrier stops a running mover and lets a walking one through.
+    #[test]
+    fn walk_passable_lets_only_walkers_through() {
+        let mut app = app();
+        app.world_mut()
+            .spawn((TilePos::new(5, 6, 1), Density, WalkPassable));
+        let m = mover(&mut app, 5, 5, 0.0);
+        assert!(request(&mut app, m, Dir::North).is_empty());
+        app.world_mut().entity_mut(m).insert(PassesWalkBarriers);
+        assert_eq!(request(&mut app, m, Dir::North).len(), 1);
+        assert_eq!(pos(&app, m), TilePos::new(5, 6, 1));
+        // A plain wall still blocks a walker.
+        wall(&mut app, 5, 7);
+        assert!(request(&mut app, m, Dir::North).is_empty());
     }
 
     #[test]

@@ -45,6 +45,11 @@ const TYPES: &str = r##"{
         "capacity": 100, "dispensedreagent": { "path": "/datum/reagent/water" },
         "buildstacktype": { "path": "/obj/item/stack/sheet/iron" }, "buildstackamount": 1,
         "has_water_reclaimer": 1, "reclaim_rate": 0.5 } },
+    "/obj/machinery": { "parent": "/obj", "declared_vars": { "anchored": 1 } },
+    "/obj/machinery/shower": { "parent": "/obj/machinery", "declared_vars": {
+        "name": "душ", "icon": { "resource": "w.dmi" }, "icon_state": "shower",
+        "reagent_capacity": 200, "refill_rate": 0.5, "has_water_reclaimer": 1,
+        "reagent_id": { "path": "/datum/reagent/water" } } },
     "/obj/structure/sink/still": { "parent": "/obj/structure/sink", "declared_vars": {
         "reclaim_rate": 0 } },
     "/obj/item": { "parent": "/obj", "declared_vars": {
@@ -102,23 +107,25 @@ const TYPES: &str = r##"{
 }"##;
 
 /// Rows top-down, the last line is y = 1. The spawn `s` (2,2), a sink that does not refill
-/// `S` (3,2).
+/// `S` (3,2), a shower `H` (3,3).
 const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 "f" = (/turf/open/floor,/area/space)
 "s" = (/obj/effect/landmark/start/assistant,/turf/open/floor,/area/space)
 "S" = (/obj/structure/sink/still,/turf/open/floor,/area/space)
+"H" = (/obj/machinery/shower,/turf/open/floor,/area/space)
 
 (1,1,1) = {"
 wwwww
-wfffw
+wfHfw
 wsSfw
 wwwww
 "}
 "##;
 
 const SINK: TilePos = TilePos::new(3, 2, 1);
+const SHOWER: TilePos = TilePos::new(3, 3, 1);
 
-const STATES: [(&str, &str); 7] = [
+const STATES: [(&str, &str); 8] = [
     ("t.dmi", "floor"),
     ("t.dmi", "wall"),
     ("l.dmi", "x2"),
@@ -126,6 +133,7 @@ const STATES: [(&str, &str); 7] = [
     ("i.dmi", "toy"),
     ("c.dmi", "bottle"),
     ("w.dmi", "sink"),
+    ("w.dmi", "shower"),
 ];
 
 fn fixture_assets() -> PathBuf {
@@ -133,6 +141,7 @@ fn fixture_assets() -> PathBuf {
     let used = [
         "/obj/effect/landmark/start/assistant",
         "/obj/structure/sink/still",
+        "/obj/machinery/shower",
         "/obj/item/wrench",
         "/obj/item/stock_parts/water_recycler",
         "/obj/item/stack/sheet/iron",
@@ -254,4 +263,39 @@ fn fill_drain_wash_and_take_apart() {
     s.run_until("taken apart", |s| s.sink().is_none());
     assert!(s.item_on("/obj/item/stack/sheet/iron"));
     assert!(s.item_on("/obj/item/stock_parts/water_recycler"));
+}
+
+/// A shower turned on by hand sprays 5 units a second (`SSplumbing`) and, turned off, leaves
+/// its tile wet.
+#[test]
+fn shower_runs_and_wets_the_floor() {
+    let mut s = Station::start();
+    let shower = {
+        let world = s.server.world();
+        world
+            .resource::<SpatialIndex>()
+            .on_tile(SHOWER)
+            .iter()
+            .copied()
+            .find(|&e| world.get::<ss13_game::plumbing::Shower>(e).is_some())
+            .unwrap()
+    };
+    s.run_until("full of water", |s| s.volume(shower) == 200.0);
+    s.click(0, shower);
+    s.run_until("running", |s| {
+        s.get::<ss13_game::plumbing::Shower>(shower).actually_on
+    });
+    s.run_until("spraying", |s| s.volume(shower) <= 190.0);
+    s.run_for(1.0);
+    s.click(0, shower);
+    s.run_until("off", |s| {
+        !s.get::<ss13_game::plumbing::Shower>(shower).actually_on
+    });
+    let world = s.server.world();
+    let wet = world
+        .resource::<SpatialIndex>()
+        .on_tile(SHOWER)
+        .iter()
+        .any(|&e| world.get::<ss13_game::janitor::WetFloor>(e).is_some());
+    assert!(wet, "the floor under the shower is wet");
 }
