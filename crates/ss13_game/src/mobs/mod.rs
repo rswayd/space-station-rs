@@ -18,13 +18,15 @@
 //!   mob melee (tg `melee_attack` -> `attack_animal`).
 //! - `spawn`: round-start vermin on exposed wires (tg `SSminor_mapping.trigger_migration`).
 //! - `pets` (friends, taming, pet commands, breeding), `farm` (udders, tipping, eggs, chicks),
-//!   `parrot` (speech learning), `critters` (crabs, turtles), `ranged` (shooting mobs).
+//!   `parrot` (speech learning), `critters` (crabs, turtles), `ranged` (shooting mobs),
+//!   `megafauna` (the lavaland bosses).
 
 pub mod ai;
 pub mod critters;
 pub mod defense;
 pub mod eating;
 pub mod farm;
+pub mod megafauna;
 pub mod parrot;
 pub mod pets;
 pub mod ranged;
@@ -145,6 +147,7 @@ impl Plugin for MobsServerPlugin {
         pets::build(app);
         parrot::build(app);
         critters::build(app);
+        megafauna::build(app);
     }
 }
 
@@ -293,6 +296,7 @@ fn attach(world: &mut World, entity: Entity) {
     parrot::attach(world, entity, &def);
     critters::attach(world, entity, &def);
     ranged::attach(world, entity, &def);
+    megafauna::attach(world, entity, &def);
     set_look(world, entity, false);
 }
 
@@ -531,6 +535,7 @@ fn death(world: &mut World, mob: Entity, basic: &BasicMob) {
             message: ss13_chat::server::emote_message(&name, &text),
         });
     }
+    megafauna::on_death(world, mob, pos);
     // A mouse leaves its corpse as a food item (`/obj/item/food/deadmouse`, `copy_corpse`).
     if ss13_mapload::fidelity::is_under(&def.path, MOUSE_ROOT) {
         if let Some(corpse) = crate::construction::spawn_obj(world, DEAD_MOUSE, pos) {

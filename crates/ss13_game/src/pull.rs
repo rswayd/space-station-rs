@@ -259,6 +259,10 @@ pub fn can_be_pulled(world: &World, puller: Entity, target: Entity) -> bool {
     if entity.contains::<crate::mecha::Mech>() {
         return false;
     }
+    // Megafauna: `move_resist = MOVE_FORCE_OVERPOWERING`.
+    if entity.contains::<crate::mobs::megafauna::Megafauna>() {
+        return false;
+    }
     if let Some(anchored) = entity.get::<crate::obj_damage::Anchored>() {
         return !anchored.0;
     }

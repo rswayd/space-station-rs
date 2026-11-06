@@ -500,6 +500,7 @@ fn hit(world: &mut World, e: Entity, p: &Projectile, name: &str, target: Entity)
         return;
     }
     impact(world, p, name, target);
+    crate::mobs::megafauna::on_projectile_hit(world, p, target);
     if let Some(bolt) = bolt {
         crate::spells::effects::bolt_hit(world, &bolt, p, target);
     }

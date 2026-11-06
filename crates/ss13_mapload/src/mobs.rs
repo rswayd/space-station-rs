@@ -20,6 +20,9 @@ use crate::value::Field;
 /// `<assets>/mobs.ron`.
 pub const MOBS_FILE: &str = "mobs.ron";
 pub const BASIC_ROOT: &str = "/mob/living/basic";
+/// tg `/mob/living/simple_animal/hostile/megafauna`: the lavaland bosses, read as basic mobs
+/// (`del_on_death` as `DEL_ON_DEATH`, `minbodytemp`/`maxbodytemp` as the survivable range).
+pub const MEGAFAUNA_ROOT: &str = "/mob/living/simple_animal/hostile/megafauna";
 const COMPONENT: &str = "dm_mob";
 
 /// Types the game spawns by itself: the carp of the migration event (tg `carp_type`,
@@ -30,6 +33,29 @@ pub const MOB_RUNTIME_TYPES: [&str; 5] = [
     "/mob/living/basic/mouse",
     "/mob/living/basic/cockroach",
     "/obj/item/food/deadmouse",
+];
+
+/// What `ss13_game::mobs::megafauna` spawns: the ported bosses (placed on the mining level),
+/// the colossus' death bolt, the necropolis chests and what their `PopulateContents` makes
+/// (tg `necropolis_chests.dm`).
+pub const MEGAFAUNA_RUNTIME_TYPES: [&str; 17] = [
+    "/mob/living/simple_animal/hostile/megafauna/colossus",
+    "/mob/living/simple_animal/hostile/megafauna/dragon",
+    "/obj/projectile/colossus",
+    "/obj/structure/closet/crate/necropolis/colossus",
+    "/obj/structure/closet/crate/necropolis/dragon",
+    "/obj/item/organ/vocal_cords/colossus",
+    "/obj/item/cain_and_abel",
+    "/obj/machinery/anomalous_crystal/dark_reprise",
+    "/obj/machinery/anomalous_crystal/emitter",
+    "/obj/machinery/anomalous_crystal/helpers",
+    "/obj/machinery/anomalous_crystal/honk",
+    "/obj/machinery/anomalous_crystal/possessor",
+    "/obj/machinery/anomalous_crystal/theme_warp",
+    "/obj/item/melee/ghost_sword",
+    "/obj/item/lava_staff",
+    "/obj/item/book/granter/action/spell/sacredflame",
+    "/obj/item/dragons_blood",
 ];
 
 /// The DM type of a basic mob (prototype data): the key into [`MobsData::mobs`].
@@ -273,19 +299,24 @@ fn parse_defines(text: &str) -> HashMap<String, String> {
 
 /// The `dm_mob` prototype field of a basic mob type.
 pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
-    if !is_under(path, BASIC_ROOT) || !types.types.contains_key(path) {
+    if !is_basic(path) || !types.types.contains_key(path) {
         return Vec::new();
     }
     let ron = ron::to_string(path).expect("strings always serialize");
     vec![ext(COMPONENT, "path", ron)]
 }
 
-/// Every `/mob/living/basic` type.
+/// A type read as a basic mob: `/mob/living/basic` and the megafauna.
+fn is_basic(path: &str) -> bool {
+    is_under(path, BASIC_ROOT) || is_under(path, MEGAFAUNA_ROOT)
+}
+
+/// Every `/mob/living/basic` type and the megafauna.
 pub fn resolve(types: &DmTypes, verbs: &RuVerbs, factions: &HashMap<String, String>) -> MobsData {
     let mobs = types
         .types
         .keys()
-        .filter(|p| is_under(p, BASIC_ROOT))
+        .filter(|p| is_basic(p))
         .map(|p| (p.clone(), mob_def(types, p, verbs, factions)))
         .collect();
     let speech = types
@@ -435,6 +466,22 @@ fn mob_def(
         .filter_map(|(k, _)| k.as_str().map(str::to_owned))
         .collect();
     let max_health = num("maxHealth", 20.0);
+    // `/mob/living/simple_animal` names for the same things.
+    let simple = is_under(path, MEGAFAUNA_ROOT);
+    let basic_mob_flags = if simple {
+        // `del_on_death` -> `DEL_ON_DEATH`.
+        u32::from(num("del_on_death", 0.0) != 0.0)
+    } else {
+        num("basic_mob_flags", 0.0) as u32
+    };
+    let (min_temp, max_temp) = if simple {
+        ("minbodytemp", "maxbodytemp")
+    } else {
+        (
+            "minimum_survivable_temperature",
+            "maximum_survivable_temperature",
+        )
+    };
     let ai_controller = dm_path(v("ai_controller")).unwrap_or_default();
     MobDef {
         path: path.to_owned(),
@@ -463,11 +510,11 @@ fn mob_def(
         death_sound: resource("death_sound"),
         death_message: s("death_message"),
         speed: num("speed", 1.0),
-        basic_mob_flags: num("basic_mob_flags", 0.0) as u32,
+        basic_mob_flags,
         habitable_atmos,
         unsuitable_atmos_damage: num("unsuitable_atmos_damage", 1.0),
-        minimum_survivable_temperature: num("minimum_survivable_temperature", 250.0),
-        maximum_survivable_temperature: num("maximum_survivable_temperature", 350.0),
+        minimum_survivable_temperature: num(min_temp, 250.0),
+        maximum_survivable_temperature: num(max_temp, 350.0),
         unsuitable_cold_damage: num("unsuitable_cold_damage", 1.0),
         unsuitable_heat_damage: num("unsuitable_heat_damage", 1.0),
         icon: resource("icon"),
@@ -570,6 +617,15 @@ mod tests {
                 "speak_emote": { "list": ["squeaks"] },
                 "physiology": { "list": [ { "assoc": ["brute", 3] } ] } } },
             "/mob/living/basic/carp/lia": { "parent": "/mob/living/basic/carp", "declared_vars": { "name": "\\improper Lia" } },
+            "/mob/living/simple_animal": { "parent": "/mob/living", "declared_vars": {
+                "minbodytemp": 250, "maxbodytemp": 350, "del_on_death": 0, "speed": 1 } },
+            "/mob/living/simple_animal/hostile": { "parent": "/mob/living/simple_animal" },
+            "/mob/living/simple_animal/hostile/megafauna": { "parent": "/mob/living/simple_animal/hostile",
+                "declared_vars": { "minbodytemp": 0, "maxbodytemp": 1e31, "maxHealth": 1000,
+                "physiology": { "list": [ { "assoc": ["burn", 0.5] }, { "assoc": ["stamina", 0] } ] } } },
+            "/mob/living/simple_animal/hostile/megafauna/colossus": {
+                "parent": "/mob/living/simple_animal/hostile/megafauna", "declared_vars": {
+                "name": "colossus", "maxHealth": 2500, "health": 2500, "del_on_death": 1, "speed": 10 } },
             "/datum/ai_controller/basic_controller/carp": { "parent": null, "declared_vars": {
                 "blackboard": { "list": [ { "assoc": ["targeting_strategy", { "path": "/datum/targeting_strategy/basic" }] },
                     { "assoc": ["BB_speech_lines", { "list": [
@@ -650,6 +706,28 @@ mod tests {
             !data
                 .speech
                 .contains_key("/datum/bt_node/ai_behavior/random_speech_blackboard")
+        );
+    }
+
+    #[test]
+    fn megafauna_read_as_basic_mobs() {
+        let data = data();
+        let colossus = &data.mobs["/mob/living/simple_animal/hostile/megafauna/colossus"];
+        assert_eq!(colossus.max_health, 2500.0);
+        assert_eq!(colossus.speed, 10.0);
+        assert_eq!(colossus.basic_mob_flags, 1, "del_on_death");
+        assert_eq!(colossus.physiology, [1.0, 0.5, 1.0, 1.0, 0.0]);
+        assert_eq!(colossus.minimum_survivable_temperature, 0.0);
+        assert!(colossus.maximum_survivable_temperature >= 1e30);
+        assert!(!data.mobs.contains_key("/mob/living/simple_animal/hostile"));
+        let types = DmTypes::parse(TYPES.as_bytes()).unwrap();
+        assert_eq!(
+            type_fields(
+                &types,
+                "/mob/living/simple_animal/hostile/megafauna/colossus"
+            )
+            .len(),
+            1
         );
     }
 
