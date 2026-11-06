@@ -33,7 +33,7 @@ _«Джанимобиль (pimpin' ride)» описано в [../vehicles/vehicl
 Знак-предупреждение (носится как костюм, ставится на пол); голопроектор уборщика ставит голографические знаки мокрого пола.
 
 - **Код:** [`/obj/item/clothing/suit/caution`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/suits/wetfloor.dm#L1), [`/obj/item/holosign_creator/janibarrier`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/holosign_creator.dm#L117), [`/obj/structure/holosign/barrier/wetsign`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/holosign.dm#L166)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ есть — знак носится в слоте костюма и ставится кликом на пол (`crate::inventory::place`); голопроектор уборщика (`crates/ss13_game/src/holosign.rs`) ставит до 12 плотных голобарьеров за 1 с, их пропускают идущие шагом и бессознательные/критические карбоны (`ss13_world::WalkPassable`/`PassesWalkBarriers`, синхронизация в `janitor.rs`, протаскивание в `pull.rs`); клиент не предсказывает проход (одна коррекция)
 
 ### Мыло
 Мыло очищает тайл/моба/предмет быстрее швабры, расходуется (число использований по сорту: самодельное, NT, люкс, синдикат, омега); на полу скользкое.

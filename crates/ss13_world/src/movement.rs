@@ -20,6 +20,16 @@ pub struct Density;
 #[derive(Component, Clone, Copy, Debug, Default)]
 pub struct ClimbWalkable;
 
+/// tg holobarriers' `CanAllowThrough` (`/obj/structure/holosign/barrier`): a dense blocker a
+/// [`PassesWalkBarriers`] mover steps through.
+#[derive(Component, Clone, Copy, Debug, Default)]
+pub struct WalkPassable;
+
+/// A mover that passes [`WalkPassable`] blockers: tg a carbon walking (`MOVE_INTENT_WALK`) or
+/// unconscious/in crit. The game keeps it in sync.
+#[derive(Component, Clone, Copy, Debug, Default)]
+pub struct PassesWalkBarriers;
+
 /// tg `ON_BORDER_1`: a dense border object blocks only moves across the tile edges in `edges`
 /// (BYOND dir bits): entering its tile from that side (`CanPass` with `border_dir`) and leaving
 /// its tile through it (`COMSIG_ATOM_EXIT`). Directional windows, windoors, railings,
@@ -222,10 +232,12 @@ fn step(world: &mut World, entity: Entity, dir: Dir) -> bool {
         let walkable = |e: &Entity| world.get::<ClimbWalkable>(*e).is_some();
         let on_climbable =
             world.get::<Density>(entity).is_some() && index.on_tile(from).iter().any(walkable);
+        let passes = world.get::<PassesWalkBarriers>(entity).is_some();
         blockers.extend(
             index
                 .enter_blockers(to, dir, entity)
-                .filter(|e| !(on_climbable && walkable(e))),
+                .filter(|e| !(on_climbable && walkable(e)))
+                .filter(|&e| !(passes && world.get::<WalkPassable>(e).is_some())),
         );
     }
     if !blockers.is_empty() {

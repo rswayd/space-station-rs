@@ -233,6 +233,9 @@ impl Plugin for JanitorServerPlugin {
                 Update,
                 (
                     toggle_move_intent.before(HealthSystems),
+                    sync_walk_barriers
+                        .after(toggle_move_intent)
+                        .before(WorldSystems::Movement),
                     (
                         condensation,
                         slip_on_entered,
@@ -335,6 +338,63 @@ fn toggle_move_intent(
                 commands.entity(mob).insert(Walking(true));
             }
             _ => {}
+        }
+    }
+}
+
+/// Carbons whose walking or consciousness may have changed.
+type WalkersChanged = Or<(
+    Changed<Walking>,
+    Changed<Stat>,
+    Changed<crate::status_effects::StatusEffects>,
+)>;
+
+/// Holobarriers' `CanAllowThrough`: a carbon passes them walking or `IS_UNCONSCIOUS_OR_CRIT`
+/// (`ss13_world::PassesWalkBarriers`).
+// Cost: change detection only; the status-effect countdown marks a stunned mob changed each tick.
+fn sync_walk_barriers(
+    changed: Query<
+        Entity,
+        (
+            With<Health>,
+            With<crate::inventory::Inventory>,
+            Without<crate::silicon::Silicon>,
+            Without<crate::mobs::BasicMob>,
+            WalkersChanged,
+        ),
+    >,
+    mut cleared: RemovedComponents<crate::status_effects::StatusEffects>,
+    mobs: Query<(
+        Option<&Walking>,
+        Option<&Stat>,
+        Option<&crate::status_effects::StatusEffects>,
+        Has<ss13_world::PassesWalkBarriers>,
+    )>,
+    carbons: Query<
+        (),
+        (
+            With<Health>,
+            With<crate::inventory::Inventory>,
+            Without<crate::silicon::Silicon>,
+            Without<crate::mobs::BasicMob>,
+        ),
+    >,
+    mut commands: Commands,
+) {
+    let cleared: Vec<Entity> = cleared.read().filter(|&e| carbons.contains(e)).collect();
+    for mob in changed.iter().chain(cleared) {
+        let Ok((walking, stat, effects, has)) = mobs.get(mob) else {
+            continue;
+        };
+        let passes = walking.is_some_and(|w| w.0)
+            || stat.is_some_and(|s| *s != Stat::Conscious)
+            || effects.is_some_and(|e| e.knocked_out());
+        if passes && !has {
+            commands.entity(mob).insert(ss13_world::PassesWalkBarriers);
+        } else if !passes && has {
+            commands
+                .entity(mob)
+                .remove::<ss13_world::PassesWalkBarriers>();
         }
     }
 }
@@ -1123,6 +1183,38 @@ mod tests {
         assert_eq!(wet.highest(), TURF_WET_WATER);
         wet.process(T0C + 150.0, 1.0);
         assert_eq!(wet.highest(), 0);
+    }
+
+    /// Walking or critical carbons pass holobarriers; running conscious ones do not.
+    #[test]
+    fn walkers_and_the_critical_pass_barriers() {
+        let mut app = App::new();
+        app.add_systems(Update, sync_walk_barriers);
+        let mob = app
+            .world_mut()
+            .spawn((
+                Health::default(),
+                crate::inventory::Inventory::default(),
+                Walking(false),
+                Stat::Conscious,
+            ))
+            .id();
+        let passes = |app: &App| {
+            app.world()
+                .get::<ss13_world::PassesWalkBarriers>(mob)
+                .is_some()
+        };
+        app.update();
+        assert!(!passes(&app));
+        app.world_mut().entity_mut(mob).insert(Walking(true));
+        app.update();
+        assert!(passes(&app));
+        app.world_mut().entity_mut(mob).insert(Walking(false));
+        app.update();
+        assert!(!passes(&app));
+        app.world_mut().entity_mut(mob).insert(Stat::HardCrit);
+        app.update();
+        assert!(passes(&app));
     }
 
     #[test]

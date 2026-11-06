@@ -9,9 +9,12 @@
 //! that barrier; signs vanish with their projector. A sign has 1-20 integrity: a hand swat
 //! does 5 (`attack_holosign`), items hit it as any structure. The holofan's barrier blocks air
 //! and heat but not movement (prototype `can_atmos_pass`).
-// shortcut: dense barriers block every mover (tg lets walking and unconscious carbons through,
-// the PENLITE one only the healthy: `CanAllowThrough` needs a movement hook in `ss13_world`);
-// no remote opening (`ranged_item_interaction`), no clearview, no firelock opened under a new
+//! Dense barriers with tg `allow_walk` (security, engineering, wet floor) let walking or
+//! unconscious/critical carbons through (`ss13_world::WalkPassable`, the mover's
+//! `PassesWalkBarriers` kept by `crate::janitor`).
+// shortcut: the cyborg field and the PENLITE medical barrier block every mover (tg lets the
+// unconscious through the first, only the healthy through the second); the client does not
+// predict the walk-through (one correction per crossing); no remote opening (`ranged_item_interaction`), no clearview, no firelock opened under a new
 // holofan, no painted colour.
 
 use bevy::prelude::*;
@@ -115,7 +118,15 @@ impl Plugin for HolosignServerPlugin {
         app.add_click_handler(ClickPhase::EmptyHand, 3000, |w, c| {
             crate::holosign::attack_hand(w, c.mob, c.target)
         });
-        app.add_observer(projector_gone);
+        app.add_observer(projector_gone)
+            .add_observer(add_walk_passable);
+    }
+}
+
+/// A barrier (projected or mapped) with `allow_walk`.
+fn add_walk_passable(add: On<Add<DmObj>>, objs: Query<&DmObj>, mut commands: Commands) {
+    if objs.get(add.entity).is_ok_and(|o| allows_walk(&o.path)) {
+        commands.entity(add.entity).insert(ss13_world::WalkPassable);
     }
 }
 
@@ -289,6 +300,18 @@ fn project(world: &mut World, projector: Entity, pos: TilePos) {
     world.entity_mut(projector).insert(HoloSigns(vec![new]));
 }
 
+/// tg `allow_walk` of a dense barrier the walk-through is ported for.
+fn allows_walk(sign: &str) -> bool {
+    is_under(sign, BARRIER)
+        && ![
+            "/obj/structure/holosign/barrier/atmos",
+            "/obj/structure/holosign/barrier/cyborg",
+            "/obj/structure/holosign/barrier/medical",
+        ]
+        .iter()
+        .any(|p| is_under(sign, p))
+}
+
 /// `attack_self`: the projector's signs are cleared. True when `item` is a projector.
 pub fn attack_self(world: &mut World, client: Entity, item: Entity) -> bool {
     if projector_of(world, item).is_none() {
@@ -348,6 +371,10 @@ mod tests {
             Some("/obj/structure/holosign/wetsign")
         );
         assert_eq!(projector_kind("/obj/item/wrench"), None);
+        assert!(allows_walk("/obj/structure/holosign/barrier/wetsign"));
+        assert!(allows_walk("/obj/structure/holosign/barrier"));
+        assert!(!allows_walk("/obj/structure/holosign/barrier/cyborg"));
+        assert!(!allows_walk("/obj/structure/holosign/wetsign"));
         assert_eq!(
             projector_kind("/obj/item/holosign_creator/robot_seat"),
             None
