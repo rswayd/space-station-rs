@@ -132,10 +132,12 @@ impl CardStrings {
     }
 
     pub fn read(path: &std::path::Path) -> anyhow::Result<Self> {
-        use anyhow::Context as _;
-        let text = ss13_data::read_to_string(path)
-            .with_context(|| format!("reading {}", path.display()))?;
-        ron::from_str(&text).with_context(|| format!("parsing {}", path.display()))
+        let text = anyhow::Context::with_context(ss13_data::read_to_string(path), || {
+            format!("reading {}", path.display())
+        })?;
+        anyhow::Context::with_context(ron::from_str::<Self>(&text), || {
+            format!("parsing {}", path.display())
+        })
     }
 
     pub fn to_ron(&self) -> String {

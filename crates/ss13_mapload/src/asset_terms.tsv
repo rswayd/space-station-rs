@@ -71,3 +71,5 @@ sound/machines/eject.ogg	magedu, freesound.org/people/magedu/sounds/267832 (adap
 sound/effects/valve_opening.ogg	mixed from freesound.org scriotxstudios 349111 and Department64 669028; no license stated	medium	sound/attributions.txt
 sound/items/weapons/handcuffs.ogg	only named as the source file of handcuffs_drop/handcuffs_pick_up (kimuracarter, CC BY 3.0); the file itself is unlisted: CC BY-SA 3.0	-	sound/items/attributions.txt
 sound/items/zip/zip.ogg	the attribution covers zip_up.ogg and un_zip.ogg only; zip.ogg is unlisted: CC BY-SA 3.0	-	sound/attributions.txt
+sound/machines/lever/lever_*.ogg	A_Kuha, freesound.org/people/A_Kuha/sounds/676412: CC0	low	sound/machines/lever/attribution.txt
+sound/machines/kerchunk.ogg	Tom_Kaszuba, freesound.org/people/Tom_Kaszuba/sounds/749869: CC BY 4.0	low	sound/machines/license.txt

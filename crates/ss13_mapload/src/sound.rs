@@ -327,7 +327,31 @@ pub mod files {
     ];
     /// Sounds the game code plays by a constant path (checked by the real-asset test
     /// `runtime_types::game_sound_literals_are_converted` in ss13_game).
-    pub const GAME_CODE: [&str; 105] = [
+    pub const GAME_CODE: [&str; 129] = [
+        "sound/effects/light_flicker.ogg",
+        "sound/machines/click.ogg",
+        "sound/items/deconstruct.ogg",
+        "sound/effects/pop.ogg",
+        "sound/items/tools/ratchet.ogg",
+        "sound/machines/buzz/buzz-sigh.ogg",
+        "sound/effects/magic/fireball.ogg",
+        "sound/effects/tableslam.ogg",
+        "sound/items/weapons/emitter.ogg",
+        "sound/machines/kerchunk.ogg",
+        "sound/items/handling/component_drop.ogg",
+        "sound/items/weapons/emitter2.ogg",
+        "sound/machines/woosh.ogg",
+        "sound/machines/chime.ogg",
+        "sound/machines/buzz/buzz-two.ogg",
+        "sound/machines/lever/lever_start.ogg",
+        "sound/machines/lever/lever_stop.ogg",
+        "sound/machines/roulette/roulettewheel.ogg",
+        "sound/machines/roulette/roulettejackpot.ogg",
+        "sound/machines/coindrop.ogg",
+        "sound/machines/coindrop2.ogg",
+        "sound/items/dump_it.ogg",
+        "sound/items/cards/cardshuffle.ogg",
+        "sound/items/cards/cardflip.ogg",
         "sound/items/hair-clippers.ogg",
         "sound/items/weapons/thudswoosh.ogg",
         "sound/items/rattling_keys.ogg",

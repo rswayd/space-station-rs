@@ -75,15 +75,15 @@ fn view(statics: &SlotMachineStatic, data: &SlotMachineData) -> impl Scene + use
         .filter(|_| !data.working)
         .map(|reel| {
             let cells: Vec<_> = reel.iter().map(|id| symbol(statics, id)).collect();
-            EntityScene(bsn! {
+            bsn! {
                 Node { flex_direction: FlexDirection::Column }
                 Children [ {cells} ]
-            })
+            }
         })
         .collect();
-    let jackpot = symbol(statics, &statics.jackpot_id);
+    let jackpot = EntityScene(symbol(statics, &statics.jackpot_id));
     let trap = statics.trap_id.as_deref().map(|id| {
-        let icon = symbol(statics, id);
+        let icon = EntityScene(symbol(statics, id));
         EntityScene(bsn! {
             Node { align_items: AlignItems::Center, margin: UiRect::left(px(20)) }
             Children [ Text({"Trap:".to_owned()}) -- {icon} ]
