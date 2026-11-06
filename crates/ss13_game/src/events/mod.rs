@@ -12,6 +12,8 @@
 //!   [`heart_attack`] (`crate::medical::organs`), [`brain_trauma`]
 //!   (`crate::medical::traumas`).
 //! - [`wizard`]: Summon Events' wizard events, only in wizard mode or forced.
+//! - [`holidays`]: the holiday calendar (`check_holidays`) and the round start greetings;
+//!   [`holiday_events`] spawn only on their holiday.
 //!
 //! Announcements are tg `priority_announce` from Central Command (`crate::announce`), with the
 //! announcer's `ANNOUNCER_*` sound where tg names one, else its random alert sound.
@@ -31,6 +33,8 @@ pub mod false_alarm;
 pub mod grey_tide;
 pub mod grid_check;
 pub mod heart_attack;
+pub mod holiday_events;
+pub mod holidays;
 pub mod immovable_rod;
 pub mod market_crash;
 pub mod mass_hallucination;
@@ -128,6 +132,7 @@ pub fn controls() -> Vec<EventControl> {
         fakeable: true,
         admin_disabled: false,
         wizard: false,
+        holiday: None,
         available: None,
         make,
     };
@@ -141,6 +146,10 @@ pub fn controls() -> Vec<EventControl> {
     };
     let summon = |control: EventControl| EventControl {
         wizard: true,
+        ..control
+    };
+    let on = |holiday: &'static str, control: EventControl| EventControl {
+        holiday: Some(holiday),
         ..control
     };
     vec![
@@ -321,6 +330,48 @@ pub fn controls() -> Vec<EventControl> {
             5,
             wizard::make_shuffle_names,
         )),
+        summon(c(
+            wizard::SHUFFLE_MINDS,
+            1,
+            0.0,
+            0,
+            3,
+            wizard::make_shuffle_minds,
+        )),
+        summon(c(wizard::BABEL, 3, 0.0, 0, 1, wizard::make_babel)),
+        on(
+            holidays::HALLOWEEN,
+            c(
+                holiday_events::SPOOKY,
+                -1,
+                0.0,
+                0,
+                1,
+                holiday_events::make_spooky,
+            ),
+        ),
+        on(
+            holidays::EASTER,
+            c(
+                holiday_events::EASTER,
+                -1,
+                0.0,
+                0,
+                1,
+                holiday_events::make_easter,
+            ),
+        ),
+        on(
+            holidays::EASTER,
+            c(
+                holiday_events::RABBITS,
+                5,
+                20.0,
+                0,
+                10,
+                holiday_events::make_rabbits,
+            ),
+        ),
     ]
 }
 
@@ -335,6 +386,7 @@ impl Plugin for EventsServerPlugin {
                 .is_some_and(|h| anomalies::analyzer_act(w, c.client, h, c.target))
         });
         app.init_resource::<EventsConfig>()
+            .init_resource::<holidays::HolidaysConfig>()
             .init_resource::<anomalies::CoresMade>()
             .init_resource::<grid_check::GridCheckCooldown>()
             .add_systems(Startup, controller::init_events)
@@ -347,6 +399,7 @@ impl Plugin for EventsServerPlugin {
                     anomalies::process_anomalies,
                     fake_virus::process_fake_viruses,
                     heart_attack::process_heart_attacks,
+                    wizard::curse_joiners,
                 )
                     .chain(),
             )
