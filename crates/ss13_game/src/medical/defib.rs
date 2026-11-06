@@ -49,6 +49,8 @@ pub const PADDLES_ROOT: &str = "/obj/item/shockpaddles";
 /// Why `can_defib` refuses (tg `DEFIB_FAIL_*`), with the unit's buzz.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DefibFail {
+    /// `DEFIB_FAIL_HUSK` ([`crate::human::Husk`]).
+    Husk,
     TissueDamage,
     NoHeart,
     FailingHeart,
@@ -59,6 +61,7 @@ pub enum DefibFail {
 impl DefibFail {
     pub fn reason(self) -> &'static str {
         match self {
+            Self::Husk => "Patient's body is a mere husk, repair and try again.",
             Self::TissueDamage => "Tissue damage too severe, repair and try again.",
             Self::NoHeart => "Patient's heart is missing.",
             Self::FailingHeart => "Patient's heart too damaged, replace or repair and try again.",
@@ -375,6 +378,10 @@ pub enum Stage {
 }
 
 fn revivable(world: &World, mob: Entity) -> Result<(), DefibFail> {
+    // `can_defib`: `TRAIT_HUSK` before the tissue damage.
+    if world.get::<crate::human::Husk>(mob).is_some() {
+        return Err(DefibFail::Husk);
+    }
     let health = world.get::<Health>(mob).cloned().unwrap_or_default();
     can_defib(
         &health,

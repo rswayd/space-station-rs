@@ -3,7 +3,7 @@
 //! output, worded as BandaStation's translation.
 // shortcut: tg's tables become lines ("Ушибы / Ожоги / Токсины / Удушье"); no organ table
 // (organs are not modelled, and tg lists only damaged or missing ones), no quirks, stamina,
-// husking or alcohol lines, no tooltips (compatible blood types, treatments).
+// husk sources or alcohol lines, no tooltips (compatible blood types, treatments).
 
 use bevy::prelude::*;
 use ss13_mapload::DmName;
@@ -69,7 +69,11 @@ pub fn health_percent(health: f32, max: f32) -> i64 {
 
 /// tg `round_timestamp()`: the round's time as `hh:mm:ss`.
 fn timestamp(world: &World) -> String {
-    let now = world.resource::<Time>().elapsed_secs_f64();
+    timestamp_at(world, world.resource::<Time>().elapsed_secs_f64())
+}
+
+/// tg `round_timestamp(wtime)`: the round's time at `now` (`Time::elapsed_secs_f64`).
+fn timestamp_at(world: &World, now: f64) -> String {
     let secs = world
         .get_resource::<Ticker>()
         .map_or(0.0, |t| t.round_duration(now))
@@ -126,6 +130,10 @@ pub fn healthscan(world: &World, target: Entity) -> Option<ChatMessage> {
     // `COMSIG_LIVING_HEALTHSCAN` of the irradiated component.
     if let Some(text) = crate::radiation::scan_line(world, target) {
         lines.text(Span::Warning, text);
+    }
+    // Husk detection (`SCANPOWER_BASIC`).
+    if world.get::<crate::human::Husk>(target).is_some() {
+        lines.text(Span::Warning, "Субъект был превращён в хаска.");
     }
     let (brute, burn, tox, oxy) = (health.brute, health.burn, health.tox, health.oxy);
     let limbs = world.get::<crate::medical::wounds::Limbs>(target);
@@ -220,6 +228,21 @@ pub fn healthscan(world: &World, target: Entity) -> Option<ChatMessage> {
     }
     for (span, text) in crate::medical::diseases::scan_lines(world, target) {
         lines.text(span, text);
+    }
+    // Time of death (`IS_DEAD_OR_FAKING`: fake death keeps `Stat::Dead` here).
+    if dead && let Some(died) = world.get::<crate::death::TimeOfDeath>(target) {
+        let now = world.resource::<Time>().elapsed_secs_f64();
+        lines.text(
+            Span::Info,
+            format!("Время смерти: {}", timestamp_at(world, died.0)),
+        );
+        lines.text(
+            Span::BoldWarning,
+            format!(
+                "Субъект умер {} назад.",
+                crate::jobs::display_time_text(now - died.0)
+            ),
+        );
     }
     Some(lines.into_message())
 }
@@ -343,5 +366,17 @@ mod tests {
         world.entity_mut(mob).insert(Stat::Dead);
         let dead = healthscan(&world, mob).unwrap().plain_text();
         assert!(dead.contains("Общее состояние: Мёртв"), "{dead}");
+        assert!(!dead.contains("Время смерти"), "{dead}");
+        // A husk that died 61 s before the scan (no round started: the stamp is 00:00:00).
+        world
+            .entity_mut(mob)
+            .insert((crate::human::Husk, crate::death::TimeOfDeath(-61.0)));
+        let dead = healthscan(&world, mob).unwrap().plain_text();
+        assert!(dead.contains("Субъект был превращён в хаска."), "{dead}");
+        assert!(dead.contains("Время смерти: 00:00:00"), "{dead}");
+        assert!(
+            dead.contains("Субъект умер 1 минута и 1 секунда назад."),
+            "{dead}"
+        );
     }
 }

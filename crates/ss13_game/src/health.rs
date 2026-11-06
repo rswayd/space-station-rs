@@ -143,6 +143,9 @@ pub struct Health {
     pub basic: Option<[f32; 5]>,
     /// What the body's species does to damage (`crate::species`).
     pub mods: BodyMods,
+    /// tg `damageoverlaytemp`: brute and burn dealt to a bodypart since the last `Life()` (which
+    /// clears it, `crate::medical`), added to the HUD's brute overlay as a damage flash.
+    pub overlay_temp: f32,
 }
 
 /// The damage rules a species brings: its bodyparts' `brute_modifier`/`burn_modifier`
@@ -183,6 +186,7 @@ impl Default for Health {
             missing: 0,
             basic: None,
             mods: BodyMods::default(),
+            overlay_temp: 0.0,
         }
     }
 }
@@ -450,7 +454,13 @@ pub fn apply_damage_zone(
     kind: DamageType,
     amount: f32,
 ) -> Option<Stat> {
+    let before = health.brute + health.burn;
     health.damage_zone(zone, kind, amount);
+    // carbon `apply_damage`: brute or burn on a bodypart flashes the damage overlay.
+    let dealt = health.brute + health.burn - before;
+    if health.basic.is_none() && dealt > 0.0 {
+        health.overlay_temp += dealt;
+    }
     update_stat(health, stat)
 }
 
@@ -583,6 +593,7 @@ pub struct HealthServerPlugin;
 impl Plugin for HealthServerPlugin {
     fn build(&self, app: &mut App) {
         app.register_ui::<HealthHudUi>()
+            .add_plugins(crate::death::DeathPlugin)
             .add_systems(
                 Update,
                 body_state.in_set(HealthSystems).before(UiSystems::Open),

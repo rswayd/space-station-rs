@@ -96,6 +96,7 @@ mod spacemove;
 mod species;
 mod stock_parts;
 mod storage;
+mod succumb;
 mod surfaces;
 mod surgery;
 mod tables;

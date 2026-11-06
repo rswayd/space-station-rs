@@ -6,7 +6,7 @@
 
 - **Код:** [`SUBSYSTEM_DEF(mobs)`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/mobs.dm#L1), [`proc/Life()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/life.dm#L12), [`carbon/Life()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/life.dm#L1), [`human/Life()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/human/life.dm#L21)
 - **BandaStation:** [`code/modules/mob/living/life.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/life.dm#L52) — вызов `handle_ssd()` (SSD-индикатор) в тике
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/breath.rs`, `crates/ss13_game/src/hunger.rs`, `crates/ss13_game/src/chem.rs`: тик 2 с есть для дыхания, температуры, голода и метаболизма; нет органов, крови, обработки гравитации, болезней
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/breath.rs` (`MobsClock`, тик 2 с: дыхание, давление, температура тела, урон в крите), `crates/ss13_game/src/medical.rs` (`medical_life`: раны, органы, кровь, болезни, сброс `damageoverlaytemp`), `crates/ss13_game/src/hunger.rs`, `crates/ss13_game/src/chem.rs` (метаболизм); стазис (`InStasis`) пропускает обработку, как `TRAIT_STASIS`. Повышенная гравитация — отдельная запись ниже
 
 ### Типы урона и apply_damage
 Урон делится на brute, burn, toxin, oxy, stamina и урон органов (brain и т.д.); `apply_damage` распределяет его по выбранной части тела с учётом брони, модификаторов вида (`brutemod`/`burnmod`) и блокировки. Здоровье = `maxHealth` минус сумма brute+burn+tox+oxy.
@@ -24,13 +24,13 @@
 `update_stat` переводит моба между CONSCIOUS, SOFT_CRIT (здоровье ≤ 0: ползает, руки заблокированы), HARD_CRIT (≤ −30: без сознания) и DEAD (≤ −100). В крите моб получает oxy-урон и пропускает вдохи; черта `TRAIT_NOSOFTCRIT`/`TRAIT_NOHARDCRIT` меняет пороги.
 
 - **Код:** [`carbon/update_stat()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/carbon.dm#L610), [`living/set_stat()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/living.dm#L2518), [`HEALTH_THRESHOLD_*`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/__DEFINES/combat.dm#L88), [`proc/check_passout()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/carbon_defense.dm#L523)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/health.rs`, `crates/ss13_game/src/breath.rs`: четыре состояния с порогами tg, ползание в софт-крите, пропуск вдохов, потеря сознания от oxyloss; нет черт, меняющих пороги
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/health.rs`, `crates/ss13_game/src/breath.rs`: четыре состояния с порогами tg, ползание в софт-крите, пропуск вдохов и oxy-урон в крите, крит-урон без дыхания (`TRAIT_NOCRITDAMAGE`), потеря сознания от oxyloss, `TRAIT_NOSOFTCRIT` вида; нет `TRAIT_NOHARDCRIT`/`TRAIT_NODEATH` (их источники — мементо мори, пентрит, халк, сердце-аномалок — не перенесены)
 
 ### Отображение урона: оверлеи и HUD здоровья
 Повреждённые части тела рисуются оверлеями крови/ожогов; HUD показывает куклу здоровья по частям тела, индикатор здоровья и экранные эффекты (красная виньетка боли, затемнение в крите, oxy-оверлей).
 
 - **Код:** [`carbon/update_damage_overlays()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/carbon_update_icons.dm#L283), [`carbon/update_damage_hud()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/carbon.dm#L480), [`human/update_health_hud()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/human/human.dm#L679)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/health.rs`, `crates/ss13_game/src/hud.rs`, `crates/ss13_game/src/vision.rs` (`damage_screens`): кукла здоровья по частям тела, экранные эффекты `update_damage_hud` (красная виньетка по brute+burn, `oxydamageoverlay`, `passage` и крит-зрение по порогам tg); нет оверлеев повреждений на спрайте, `damageoverlaytemp`
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/health.rs`, `crates/ss13_game/src/hud.rs`, `crates/ss13_game/src/vision.rs` (`damage_screens`): кукла здоровья по частям тела, экранные эффекты `update_damage_hud` (красная виньетка по brute+burn, `oxydamageoverlay`, `passage` и крит-зрение по порогам tg), вспышка урона `damageoverlaytemp` (brute/burn по части тела до следующего `Life()`, `crates/ss13_game/src/health.rs` `apply_damage_zone`); нет оверлеев повреждений на спрайте (`dam_mob.dmi`)
 
 ### Замедление от урона
 Человек с большим уроном двигается медленнее (`damage_slowdown` от 40 потерянного здоровья), в софт-крите и лёжа ползает с отдельными модификаторами.
@@ -43,7 +43,7 @@
 
 - **Код:** [`proc/death()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/death.dm#L224), [`carbon/death.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/death.dm#L1), [`human/death.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/human/death.dm#L1), [`proc/send_death_moodlets()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/death.dm#L185)
 - **BandaStation:** [`code/modules/mob/living/death.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/death.dm#L269) — контекстное обновление `time_of_death`
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/health.rs`, `crates/ss13_game/src/ghost.rs`: стат DEAD, сообщение о смерти, тело остаётся, гостинг; нет моодлетов, времени смерти, оживления
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/health.rs`, `crates/ss13_game/src/ghost.rs`: стат DEAD, сообщение о смерти, тело остаётся, гостинг; моодлеты (`crates/ss13_game/src/mood.rs` `send_death_moodlets`); время смерти (`crates/ss13_game/src/death.rs` `TimeOfDeath`, стазис останавливает отсчёт, анализатор здоровья печатает «Время смерти» и «Субъект умер … назад»); оживление — дефибриллятор и хирургия (../medical/). BandaStation `persistent_client.time_of_death` (таймер респавна) не нужен: респавна нет
 
 ### Гиббинг и превращение в пыль
 `gib()` разрывает моба на ошмётки, разбрасывая органы, конечности и вещи (флаги `DROP_*`); `inflate_gib` — с анимацией раздувания; `dust()` оставляет кучку пепла и, возможно, скелет.
@@ -55,7 +55,7 @@
 Сильные ожоги (или высасывание генокрадом) превращают тело в хаска: обезличенное, неклонируемое без лечения ожогов/синтфлеша. Черта `TRAIT_UNHUSKABLE` защищает.
 
 - **Код:** [`proc/become_husk()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/status_procs.dm#L577), [`proc/cure_husk()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/status_procs.dm#L570)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/death.rs` (`become_husk`, `cure_husk`, `BurnHusk`): мёртвый с ожогами больше `maxHealth` + `max_damage` груди становится хаском (`Husk`, вид хаска `HumanLook::husk`), кроме видов с `TRAIT_UNHUSKABLE`; хаск не дефибриллируется (`DEFIB_FAIL_HUSK`), не оживляется и не фильтруется хирургией, виден при осмотре и в анализаторе; `cure_husk(BURN)` снимает только ожоговый источник (хаск генокрада остаётся), админ-исцеление — все. Снятие синтплотью и резадоном — за `expose_mob` реагентов (../chemistry/reagent-families.md)
 
 ### Разложение трупа
 Мёртвое тело без бальзамирования через время начинает гнить (`attach_rot`), выделяя миазмы и не поддаваясь дефибрилляции.
@@ -67,7 +67,7 @@
 В крите игрок может поддаться (`succumb`) и умереть сразу; глагол `suicide` убивает моба способом, зависящим от предмета в руке (у предметов свои `suicide_act`), и запрещает клонирование/возрождение.
 
 - **Код:** [`verb/succumb`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/living.dm#L556), [`verb/suicide`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/client/verbs/suicide.dm#L4), [`human/perform_basic_suicide()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/human/human_suicide.dm#L7)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/death.rs`: в софт- и хард-крите уведомление «Сдаться» (`ALERT_SUCCUMB`), клик спрашивает последние слова (`tgui_input_text`, случайный заголовок), шепчет их соседним тайлам и убивает oxy-уроном до порога смерти; отмена ничего не делает, проверка крита повторяется после ответа. Нет глагола `suicide` и `suicide_act` предметов (нет механизма глаголов в протоколе), `TRAIT_SUICIDED`
 
 ### Электрошок
 `electrocute_act` наносит burn-урон от тока с учётом `siemens_coeff` (перчатки, вид), оглушает и вызывает дрожь; источник — провода, шлюзы под током, ловушки, батоны с флагами.
@@ -87,13 +87,13 @@
 
 - **Код:** [`proc/ZImpactDamage()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/living.dm#L81), [`carbon/on_fall()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/carbon.dm#L148)
 - **BandaStation:** [`code/modules/mob/living/living.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/living.dm#L2790) — убраны проверки plating для перемещения по z
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/multiz.rs`: падение в открытый космос, `(5 × уровни)^1.5` brute (стоя — по ногам), нокдаун `уровни × 5` с, последняя ступенька лестницы ловит падение на один уровень; нет крыльев, free running и кошачьих приземлений (их черты не перенесены)
 
 ### Повышенная гравитация
 При гравитации выше нормы моб получает brute-урон за тик и замедляется; при нулевой гравитации — плавает (см. movement.md).
 
 - **Код:** [`proc/handle_gravity()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/life.dm#L125), [`proc/handle_high_gravity()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/life.dm#L135)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ❌ нет — гравитация есть только «нормальная или нулевая» (`crates/ss13_game/src/multiz.rs` `has_gravity`, `crates/ss13_game/src/spacemove.rs`); нет уровней гравитации, генераторов и аномалий, которые её повышают
 
 ### Лёжа, отдых и сон
 Моб может лечь (`toggle_resting`, клавиша), встать с задержкой, уснуть глаголом `Sleep`; лёжа он не плотный, ползает медленнее, поза влияет на попадания и спрайт.
@@ -112,7 +112,7 @@
 `vomit()` опустошает желудок, оставляет лужу рвоты, отнимает сытость и может нанести toxin-урон или выплюнуть кровь; вызывается реагентами, болезнями, перееданием.
 
 - **Код:** [`proc/vomit()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/carbon.dm#L293)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/medical/diseases.rs` (`vomit`): потеря сытости, оглушение, кровавая рвота брызгает кровью; вызывают болезни и статус-эффекты (`crates/ss13_game/src/status_effects.rs`); нет лужи рвоты (декаль с реагентами), моодлета, очищения желудка, рвоты от переедания
 
 ### Превращения моба (monkeyize, humanize и др.)
 Набор процедур превращения: человек ↔ обезьяна (генетика, мутаген), в корги, краба, гориллу, слайма, оверминда блоба и в произвольный тип моба.

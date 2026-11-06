@@ -138,6 +138,8 @@ pub enum AlertCategory {
     Seizure,
     Woozy,
     HighBloodPressure,
+    /// `ALERT_SUCCUMB` (`crate::death`): in crit, a click succumbs.
+    Succumb,
 }
 
 /// One thrown alert: its type's base `icon_state` and `severity` (0: none).
@@ -160,6 +162,10 @@ impl Alert {
 
     /// `name` and `desc` of the alert type (`screen_objects/alert.dm`, BandaStation).
     pub fn text(&self) -> (&'static str, &'static str) {
+        // `/atom/movable/screen/alert/succumb` has the base `template` state.
+        if self.category == AlertCategory::Succumb {
+            return ("Сдаться", "Покиньте этот бренный мир.");
+        }
         match self.state {
             "not_enough_oxy" => (
                 "Удушье (Нехватка O2)",
