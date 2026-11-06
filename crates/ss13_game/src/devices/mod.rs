@@ -14,7 +14,7 @@
 //!   stop tracking (`scan_for_target`); used again it turns off.
 //! - Handheld crew monitors (`/obj/item/sensor_device`): the crew console's window
 //!   (`crate::clothing::sensors`) for the level the holder is on.
-//! - Flashlights ([`flashlight`]) and GPS units ([`gps`]).
+//! - Flashlights ([`flashlight`]), GPS units ([`gps`]) and the RCD ([`rcd`]).
 // shortcut: the voice spans are bold text (tg `SPAN_COMMAND` is bold and large, the clown's
 // `SPAN_CLOWN`, an emagged one `SPAN_REALLYBIG`): the chat has no larger span yet; no emag, no
 // TTS filter (no TTS), no sign language check; only local speech is loud, not what goes to a
@@ -27,6 +27,7 @@
 
 pub mod flashlight;
 pub mod gps;
+pub mod rcd;
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
@@ -115,6 +116,7 @@ impl Plugin for DevicesPlugin {
         });
         flashlight::build(app);
         gps::build(app);
+        rcd::build(app);
         app.add_message::<Spoke>()
             .add_message::<SendChat>()
             .add_observer(add_megaphone)
@@ -610,6 +612,7 @@ fn tick_pinpointers(world: &mut World, mut next: Local<f64>) {
 /// `/obj/item/pinpointer/pair/examine`: who holds the other half; `/obj/item/pinpointer/examine`
 /// of a crew pinpointer: whom it tracks.
 pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<crate::examine::Line>) {
+    rcd::examine_lines(world, target, lines);
     if let Some(&CrewPinpointer {
         target: Some(tracked),
         ..

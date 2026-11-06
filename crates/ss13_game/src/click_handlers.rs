@@ -36,6 +36,7 @@
 //! | 1700 | `devices::attack_self` (pinpointers, handheld crew monitor) |
 //! | 1710 | `devices::flashlight::toggle_light` |
 //! | 1720 | `devices::gps::interact` |
+//! | 1730 | `devices::rcd::attack_self` (the design list) |
 //! | 1750 | `radiation::geiger_attack_self` |
 //! | 1800 | `explosions::sources::c4_attack_self` |
 //! | 1900 | `assemblies::server::attack_self` |
@@ -72,6 +73,7 @@
 //! | 300 | `forensics::server::item_interaction` |
 //! | 400 | `medical::cyberimps::item_interaction` |
 //! | 450 | `fishing::server::insert_bait`, `fishing::aquarium::item_interaction` |
+//! | 460 | `devices::rcd::load` (matter or a disk onto the RCD) |
 //! | 473 | `cargo::money::item_interaction` (cash onto the ID in the other hand) |
 //! | 480 | `clothing::accessories::attach` (before a jumpsuit's holster takes the item) |
 //! | 500 | core: a storage opens or takes the held item |
@@ -187,6 +189,7 @@
 //! | 1450 | `silicon::mmi::item_interaction` |
 //! | 1460 | `silicon::ai_core::item_interaction` |
 //! | 1500 | `bots::construction::item_interaction` |
+//! | 1560 | `devices::rcd::item_interaction` (builds, deconstruction, loading) |
 //! | 1580 | `events::anomalies::neutralizer_act`, `releaser_act` (anomalies, anomaly cores) |
 //! | 1585 | `events::radiation_leak::tool_act` (a leaking machine's fixing tools) |
 //! | 1590 | `teapot::item_interaction` (before `machine_frame` takes it apart) |
