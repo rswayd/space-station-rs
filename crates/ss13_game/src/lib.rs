@@ -313,6 +313,8 @@ pub mod icecream;
 pub mod id_access;
 #[cfg(feature = "server")]
 pub mod implants;
+#[cfg(feature = "server")]
+pub mod inducer;
 #[cfg(feature = "client")]
 pub mod interact_client;
 #[cfg(feature = "server")]
@@ -474,6 +476,8 @@ pub mod stove;
 pub mod strip;
 #[cfg(feature = "server")]
 pub mod stumble;
+#[cfg(feature = "server")]
+pub mod t_scanner;
 #[cfg(feature = "server")]
 pub mod tables;
 #[cfg(feature = "server")]

@@ -19,6 +19,8 @@
 //! | 150 | `silicon::mmi::attack_self` |
 //! | 160 | `silicon::aicard::attack_self` |
 //! | 200 | `tools::attack_self` |
+//! | 210 | `t_scanner::toggle` |
+//! | 220 | `inducer::attack_self` (the cell out of an open hatch) |
 //! | 300 | `holosign::attack_self` |
 //! | 400 | `forensics::server::attack_self` |
 //! | 500 | `antag::cult::server::attack_self` |
@@ -79,6 +81,7 @@
 //! | 300 | `forensics::server::item_interaction` |
 //! | 400 | `medical::cyberimps::item_interaction` |
 //! | 450 | `fishing::server::insert_bait`, `fishing::aquarium::item_interaction` |
+//! | 455 | `inducer::item_interaction` (screwdriver, a cell, plasma onto the inducer) |
 //! | 460 | `devices::rcd::load` (matter or a disk onto the RCD) |
 //! | 465 | `devices::taperecorder::item_interaction` (tape in, respool), `attack_hand` (eject) |
 //! | 467 | `devices::laser_pointer::item_interaction` (diode, crystal lens, their removal) |
@@ -204,6 +207,7 @@
 //! | 1450 | `silicon::mmi::item_interaction` |
 //! | 1460 | `silicon::ai_core::item_interaction` |
 //! | 1500 | `bots::construction::item_interaction` |
+//! | 1555 | `inducer::interact_with_atom` (charging a cell) |
 //! | 1560 | `devices::rcd::item_interaction` (builds, deconstruction, loading) |
 //! | 1565 | `devices::taperecorder::item_interaction` (a tape into a recorder, respooling) |
 //! | 1567 | `devices::laser_pointer::item_interaction` (diode, crystal lens, their removal) |
