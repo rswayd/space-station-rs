@@ -280,7 +280,8 @@ pub fn damage_screens(health: &Health, stat: Stat) -> Vec<FullscreenScreen> {
         };
         screens.push(FullscreenScreen::new(ScreenCategory::Oxy, Some(severity)));
     }
-    let hurt = health.brute + health.burn;
+    // `hurtdamage`: with the damage flash of `damageoverlaytemp`.
+    let hurt = health.brute + health.burn + health.overlay_temp;
     if hurt > 0.0 {
         let severity = match hurt {
             h if h < 5.0 => 0,

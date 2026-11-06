@@ -91,6 +91,8 @@ pub const CPR_OXY_HEAL: f32 = 7.0;
 /// `HEAL_WOUNDS`, `HEAL_ORGANS`, `HEAL_LIMBS`. Damage and stat are the caller's.
 pub fn heal_all(world: &mut World, mob: Entity) {
     diseases::cure_negative(world, mob);
+    // `fully_heal`: `cure_husk()` of every source.
+    crate::death::cure_husk(world, mob, false);
     organs::regenerate(world, mob);
     bodyparts::regenerate_limbs(world, mob);
     if let Some(mut blood) = world.get_mut::<blood::Blood>(mob) {
@@ -1153,6 +1155,12 @@ fn medical_life(world: &mut World, mut last_fired: Local<u64>) {
 }
 
 fn life_tick(world: &mut World, mob: Entity, secs: f32, now: f64) {
+    // carbon `Life()` first clears `damageoverlaytemp`, also in stasis.
+    if let Some(mut health) = world.get_mut::<Health>(mob)
+        && health.overlay_temp != 0.0
+    {
+        health.overlay_temp = 0.0;
+    }
     let Ok(entity) = world.get_entity(mob) else {
         return;
     };

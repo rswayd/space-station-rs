@@ -1772,6 +1772,8 @@ struct Patient {
     /// Analgesia or unconscious (BandaStation `stat >= UNCONSCIOUS`).
     painless: bool,
     dead: bool,
+    /// tg `TRAIT_HUSK` ([`crate::human::Husk`]).
+    husk: bool,
     covered: u32,
     prepped_any: bool,
     brute: f32,
@@ -1797,6 +1799,7 @@ fn patient(world: &World, mob: Entity) -> Option<Patient> {
         unconscious,
         painless: unconscious || stasis || analgesia(world, mob),
         dead: stat == Stat::Dead,
+        husk: world.get::<crate::human::Husk>(mob).is_some(),
         covered,
         prepped_any: free || limbs.parts.iter().any(|l| l.prepped),
         brute: health.brute,
@@ -1895,15 +1898,16 @@ pub(crate) fn is_available(world: &World, op: Op, mob: Entity, zone: TargetZone)
         }
         // The held implant's slot is checked with the tool ([`available`]).
         Op::InsertImplant => cyberimps::takes_implants(zone) && implant_bone_ok(zone, limb),
-        // shortcut: no suicide, husk or DNR flags yet, so every corpse with a brain qualifies.
-        Op::Revival => p.dead,
+        // `revival/state_check`: not a husk.
+        // shortcut: no suicide or DNR flags yet.
+        Op::Revival => p.dead && !p.husk,
         Op::CoronaryBypass | Op::Lobectomy => repairable(REPAIR_HEAL_TO),
         Op::Hepatectomy => repairable(HEPATECTOMY_HEAL_TO),
         Op::Gastrectomy => repairable(GASTRECTOMY_HEAL_TO),
         Op::EarSurgery | Op::EyeSurgery => bones_intact,
         Op::Debride => limb.wound(Series::Burn).is_some_and(|w| w.infection > 0.0),
-        // shortcut: no husks yet.
-        Op::FilterBlood => body == BodyZone::Chest,
+        // `filter/state_check`: not a husk.
+        Op::FilterBlood => body == BodyZone::Chest && !p.husk,
         // `bioware/state_check`: its zone, no bioware of the same kind yet.
         Op::Bioware(kind) => {
             body == kind.zone().check_zone() && super::bioware::can_gain(world, mob, kind)

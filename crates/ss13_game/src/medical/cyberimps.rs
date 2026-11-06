@@ -1316,7 +1316,9 @@ fn revive_dead(world: &mut World, implant: Entity, mob: Entity, now: f64) {
     };
     let heart = super::defib::vital_organ(world, mob, Slot::Heart);
     let brain = super::defib::vital_organ(world, mob, Slot::Brain);
-    if super::defib::can_defib(&health, heart, brain).is_err() {
+    if world.get::<crate::human::Husk>(mob).is_some()
+        || super::defib::can_defib(&health, heart, brain).is_err()
+    {
         return;
     }
     state.revive_cost += REVIVER_REVIVE_COST;
