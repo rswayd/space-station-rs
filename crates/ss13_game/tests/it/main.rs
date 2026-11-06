@@ -103,6 +103,7 @@ mod surgery;
 mod tables;
 mod tank_storage;
 mod teg;
+mod teleporters;
 mod traitor;
 mod traumas;
 mod ui_smoke;

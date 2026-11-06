@@ -11,7 +11,8 @@
 //! - [`trail`]: `/datum/effect_system/trail_follow`: ion, steam and smoke trails left behind a
 //!   moving holder.
 //! - [`mines`]: `/obj/effect/mine`, set off by stepping off the pressure plate; [`webs`]:
-//!   sticky spider webs catching walkers.
+//!   sticky spider webs catching walkers; [`teleporters`]: step triggers, bump teleporters and
+//!   permanent portals placed by maps.
 //!
 //! Cost: each system runs only while its effects exist (`run_if(any_with_component)`), one
 //! pass over its live particles per tick.
@@ -26,6 +27,7 @@ pub mod mines;
 pub mod particles;
 pub(crate) mod reactions;
 pub mod smoke;
+pub mod teleporters;
 pub mod trail;
 pub mod webs;
 
@@ -47,9 +49,22 @@ impl Plugin for EffectsPlugin {
             )
             .add_systems(
                 Update,
-                (mines::step_on_mines, webs::walk_into_webs)
+                (
+                    mines::step_on_mines,
+                    webs::walk_into_webs,
+                    teleporters::step_on_triggers,
+                    teleporters::bump_teleporters,
+                )
                     .after(ss13_world::WorldSystems::Movement),
             );
+        // Click chain hooks (`crate::click_handlers`): `portal/attack_hand`, `item_interaction`.
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        app.add_click_handler(ClickPhase::EmptyHand, 3465, |w, c| {
+            teleporters::portal_click(w, c.mob, c.mob_pos, c.target)
+        });
+        app.add_click_handler(ClickPhase::HeldOnTarget, 3465, |w, c| {
+            teleporters::portal_click(w, c.mob, c.mob_pos, c.target)
+        });
     }
 }
 

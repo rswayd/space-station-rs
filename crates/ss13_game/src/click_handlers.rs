@@ -155,6 +155,7 @@
 //! | 3462 | `papershredder::empty_hand` (right click) |
 //! | 3463 | `silicon::ai_slipper::interact` |
 //! | 3464 | `science::bitrunning::avatar::ladder_click` (hololadders) |
+//! | 3465 | `effects::teleporters::portal_click` (permanent portals) |
 //!
 //! [`ClickPhase::HeldOnTarget`] (a world click with the active hand's item; tg
 //! `item_interaction`, `interact_with_atom`, `pre_attack`, `attackby`):
@@ -226,6 +227,7 @@
 //! | 3440 | `tank_storage::item_interaction` |
 //! | 3450 | `decor::item_interaction` |
 //! | 3455 | `clothing::item_interaction` |
+//! | 3465 | `effects::teleporters::portal_click` (permanent portals) |
 //! | 3500 | `janitor::item_interaction` |
 //! | 3600 | `genetics::console::item_interaction` |
 //! | 3700 | `chem::item_interaction` |
