@@ -14,8 +14,11 @@
 //!   sheets of a material onto the output tile and `Smelt` makes up to 50 of a smelter alloy
 //!   (`SMELTER` designs of the `initial` category), both behind the silo's ID check and the
 //!   machine's `req_access` (mineral storeroom).
-// shortcut: no request console ore notices, panel/alt-click rotation of the I/O directions,
-// construction or part upgrades (the multipliers stay 1), boulders, silo holds or logs.
+//! - A screwdriver opens its panel (it takes no ore then), a crowbar takes it apart
+//!   (`crate::machine_frame`); alt-click with the panel open turns the input and output a
+//!   quarter clockwise. tg's ORM has no part upgrades: `ore_multiplier` and `point_upgrade`
+//!   are its type's.
+// shortcut: no request console ore notices, I/O overlays, boulders, silo holds or logs.
 
 use bevy::ecs::message::MessageCursor;
 use bevy::ecs::system::SystemParamItem;
@@ -80,6 +83,15 @@ impl Plugin for OrmPlugin {
 }
 
 fn setup_orms(world: &mut World) {
+    let mut query = world.query_filtered::<Entity, With<DmOreRedemption>>();
+    let orms: Vec<Entity> = query.iter(world).collect();
+    for orm in orms {
+        setup(world, orm);
+    }
+}
+
+/// An ORM's live state, at map load or built from a frame (`crate::machine_frame`).
+pub fn setup(world: &mut World, orm: Entity) {
     let Some((materials, alloys)) = world.get_resource::<ResearchDb>().map(|db| {
         let alloys: Vec<usize> = db
             .designs
@@ -97,28 +109,92 @@ fn setup_orms(world: &mut World) {
     }) else {
         return;
     };
-    let mut silos = world.query_filtered::<(Entity, &TilePos), With<OreSilo>>();
-    let silos: Vec<(Entity, u16)> = silos.iter(world).map(|(e, p)| (e, p.z)).collect();
-    let mut query = world.query::<(Entity, &DmOreRedemption, Option<&TilePos>)>();
-    let orms: Vec<(Entity, bool, Option<u16>)> = query
-        .iter(world)
-        .map(|(e, dm, p)| (e, dm.requires_silo, p.map(|p| p.z)))
-        .collect();
-    for (e, requires_silo, z) in orms {
-        let silo = requires_silo
-            .then(|| silos.iter().find(|(_, sz)| Some(*sz) == z).map(|(s, _)| *s))
-            .flatten();
-        let mut entity = world.entity_mut(e);
-        entity.insert(OreRedemption {
-            points: 0.0,
-            silo,
-            alloys: alloys.clone(),
-        });
-        if silo.is_none() {
-            let size = (LOCAL_SHEETS * SHEET_MATERIAL_AMOUNT) as u32 * materials as u32;
-            entity.insert(MaterialStore::new(materials, Some(size)));
-        }
+    let Some(requires_silo) = world.get::<DmOreRedemption>(orm).map(|d| d.requires_silo) else {
+        return;
+    };
+    let z = world.get::<TilePos>(orm).map(|p| p.z);
+    let silo = if requires_silo {
+        silo_on(world, z)
+    } else {
+        None
+    };
+    let mut entity = world.entity_mut(orm);
+    entity.insert(OreRedemption {
+        points: 0.0,
+        silo,
+        alloys,
+    });
+    if silo.is_none() {
+        let size = (LOCAL_SHEETS * SHEET_MATERIAL_AMOUNT) as u32 * materials as u32;
+        entity.insert(MaterialStore::new(materials, Some(size)));
     }
+}
+
+/// The ore silo on level `z`, if any (`GLOB.ore_silo_default` of the station).
+pub fn silo_on(world: &mut World, z: Option<u16>) -> Option<Entity> {
+    let mut silos = world.query_filtered::<(Entity, &TilePos), With<OreSilo>>();
+    silos
+        .iter(world)
+        .find(|(_, p)| Some(p.z) == z)
+        .map(|(e, _)| e)
+}
+
+/// tg `turn(dir, -90)`: a quarter clockwise.
+pub fn clockwise(dir: Dir) -> Dir {
+    match dir {
+        Dir::North => Dir::East,
+        Dir::East => Dir::South,
+        Dir::South => Dir::West,
+        Dir::West => Dir::North,
+        other => other,
+    }
+}
+
+/// tg `dir2text`.
+pub fn dir_text(dir: Dir) -> &'static str {
+    match dir {
+        Dir::North => "north",
+        Dir::South => "south",
+        Dir::East => "east",
+        Dir::West => "west",
+        Dir::NorthEast => "northeast",
+        Dir::NorthWest => "northwest",
+        Dir::SouthEast => "southeast",
+        Dir::SouthWest => "southwest",
+    }
+}
+
+/// `/obj/machinery/mineral/ore_redemption/click_alt`: with the panel open the input and output
+/// turn a quarter clockwise. True when `target` is an ORM (closed, it blocks the click).
+pub fn click_alt(world: &mut World, client: Entity, target: Entity) -> bool {
+    if world.get::<OreRedemption>(target).is_none() {
+        return false;
+    }
+    let open = world
+        .get::<crate::construction::PanelOpen>(target)
+        .is_some_and(|p| p.0);
+    if !open {
+        return true;
+    }
+    let input = clockwise(dirs(world, target).0);
+    if let Some(mut dm) = world.get_mut::<DmOreRedemption>(target) {
+        dm.input_dir = input as u8;
+    }
+    let name = world
+        .get::<DmName>(target)
+        .map(|n| crate::vending::plain_name(&n.name).to_owned())
+        .unwrap_or_default();
+    crate::tools::tell(
+        world,
+        client,
+        Span::Notice,
+        format!(
+            "You change {name}'s I/O settings, setting the input to {} and the output to {}.",
+            dir_text(input),
+            dir_text(input.reverse())
+        ),
+    );
+    true
 }
 
 /// The store `orm` uses: its silo's or its own.

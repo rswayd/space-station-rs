@@ -179,6 +179,10 @@ fn ex_act_item(world: &mut World, item: Entity, severity: Severity) {
     let Some(dm) = world.get::<DmItem>(item).cloned() else {
         return;
     };
+    // `/obj/item/gibtonite/ex_act`, `/obj/item/stack/ore/ex_act`.
+    if crate::mining::rocks::item_ex_act(world, item, severity) {
+        return;
+    }
     if dm.resistance_flags & (INDESTRUCTIBLE | BOMB_PROOF) != 0 {
         return;
     }

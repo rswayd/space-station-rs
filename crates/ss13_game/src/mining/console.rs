@@ -9,7 +9,7 @@
 //! - `express`: at `express_cost_multiplier`, straight to the buyer's tile; the console then
 //!   rests `cooldown_time × express_cost_multiplier`.
 // shortcut: express orders appear on the buyer's tile without the teleporter supply pod, no
-// supply radio announcement, no mining vouchers or point transfer cards, no golem or cook
+// supply radio announcement, no golem or cook
 // consoles (only the mining console has this server half).
 
 use bevy::ecs::message::MessageCursor;

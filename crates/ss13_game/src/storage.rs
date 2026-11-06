@@ -91,7 +91,8 @@ pub enum Refusal {
     Outer,
     /// The item is the container.
     Itself,
-    /// Not a type this storage takes (an RPED: parts, boards and a few stacks).
+    /// Not a type this storage takes (an RPED: parts, boards and a few stacks; a mining satchel:
+    /// ore).
     CantHold,
     /// A locked lockbox (`crate::lockbox`).
     Locked,
@@ -164,6 +165,9 @@ pub fn can_insert(world: &World, storage: Entity, item: Entity) -> Result<(), Re
     if crate::stock_parts::is_rped(world, storage)
         && !crate::stock_parts::rped_accepts(world, storage, item)
     {
+        return Err(Refusal::CantHold);
+    }
+    if crate::mining::rocks::satchel_refuses(world, storage, item) {
         return Err(Refusal::CantHold);
     }
     let contents: Vec<u8> = world

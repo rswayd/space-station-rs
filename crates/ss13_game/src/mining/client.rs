@@ -1,6 +1,6 @@
-//! The mining windows (client): tgui `OreBox.tsx`, `OreRedemptionMachine.tsx` and
-//! `ProduceConsole.tsx`. The data is in [`super`], the server halves in [`super::rocks`],
-//! [`super::orm`] and [`super::console`].
+//! The mining windows (client): tgui `OreBox.tsx`, `OreRedemptionMachine.tsx`,
+//! `ProduceConsole.tsx` and `StackingConsole.jsx`. The data is in [`super`], the server halves
+//! in [`super::rocks`], [`super::orm`], [`super::console`] and [`super::stacking`].
 //!
 //! Client-only state (`useState`): the ORM's materials/alloys tab, the console's tab and
 //! category ([`UiLocalState`] keys).
@@ -25,7 +25,8 @@ impl Plugin for MiningClientPlugin {
     fn build(&self, app: &mut App) {
         app.register_ui_view::<OreBoxUi>()
             .register_ui_view::<OrmUi>()
-            .register_ui_view::<ProduceConsoleUi>();
+            .register_ui_view::<ProduceConsoleUi>()
+            .register_ui_view::<StackingConsoleUi>();
     }
 }
 
@@ -517,6 +518,111 @@ fn checkout_view(st: &ProduceStatic, data: &ProduceData) -> impl Scene + use<> {
                     ]
                 ]
             ]
+        ]
+    }
+}
+
+// --- Stacking console ------------------------------------------------------------------------
+
+impl ClientUi for StackingConsoleUi {
+    const WIDTH: f32 = 320.0;
+    const HEIGHT: f32 = 340.0;
+
+    fn content(_: &(), data: &StackingData) -> impl Scene {
+        stacking_view(data)
+    }
+}
+
+fn stacking_view(data: &StackingData) -> impl Scene + use<> {
+    let body: Box<dyn SceneList> = if data.machine {
+        Box::new(EntityScene(stacking_content(data)))
+    } else {
+        Box::new(EntityScene(bsn! {
+            @NoticeBox
+            Children [ Text("No connected stacking machine") ]
+        }))
+    };
+    bsn! {
+        @WindowContent
+        Children [ {body} ]
+    }
+}
+
+/// A direction row's rotate button (`act('rotate', { input })`).
+fn rotate_button(input: bool) -> Box<dyn SceneList> {
+    let params = ActParams(vec![(
+        STACK_INPUT.to_owned(),
+        if input { "1" } else { "0" }.to_owned(),
+    )]);
+    let name = Name::new(if input {
+        "stacking: rotate input"
+    } else {
+        "stacking: rotate output"
+    });
+    Box::new(EntityScene(bsn! {
+        @ss13_ui_kit::Button { @icon: "rotate", @content: "Rotate" }
+        Act({STACK_ROTATE.to_owned()})
+        params
+        name
+    }))
+}
+
+/// `StackingConsoleContent`.
+fn stacking_content(data: &StackingData) -> impl Scene + use<> {
+    let amount = data
+        .stacking_amount
+        .filter(|&n| n > 0)
+        .map_or_else(|| "Unknown".to_owned(), |n| n.to_string());
+    let input = title_case(&data.input_direction);
+    let output = title_case(&data.output_direction);
+    let (input_buttons, output_buttons) = (rotate_button(true), rotate_button(false));
+    let stored: Box<dyn SceneList> = if data.contents.is_empty() {
+        Box::new(EntityScene(bsn! {
+            @NoticeBox
+            Children [ Text("No stored materials") ]
+        }))
+    } else {
+        let rows: Vec<_> = data
+            .contents
+            .iter()
+            .map(|sheet| {
+                let params = ActParams(vec![(STACK_TYPE.to_owned(), sheet.r#type.clone())]);
+                let buttons: Box<dyn SceneList> = Box::new(EntityScene(bsn! {
+                    @ss13_ui_kit::Button { @icon: "eject", @content: "Release" }
+                    Act({STACK_RELEASE.to_owned()})
+                    params
+                }));
+                let label = sheet.name.clone();
+                let amount = if sheet.amount > 0 {
+                    sheet.amount.to_string()
+                } else {
+                    "Unknown".to_owned()
+                };
+                bsn! { @LabeledListItem { @label: label, @buttons: buttons, @content: amount } }
+            })
+            .collect();
+        Box::new(EntityScene(bsn! {
+            @LabeledList
+            Children [ {rows} ]
+        }))
+    };
+    bsn! {
+        Node { flex_direction: FlexDirection::Column }
+        Children [
+            @Section
+            Children [
+                @LabeledList
+                Children [
+                    @LabeledListItem { @label: "Stacking Amount", @content: amount }
+                    --
+                    @LabeledListItem { @label: "Input", @buttons: input_buttons, @content: input }
+                    --
+                    @LabeledListItem { @label: "Output", @buttons: output_buttons, @content: output }
+                ]
+            ]
+            --
+            @Section { @title: "Stored Materials" }
+            Children [ {stored} ]
         ]
     }
 }

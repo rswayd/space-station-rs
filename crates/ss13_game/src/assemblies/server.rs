@@ -1034,6 +1034,8 @@ pub fn activate(world: &mut World, a: Entity) -> bool {
     }
     if let Some(condenser) = ignite {
         igniter_activate(world, a, condenser);
+        // `SEND_SIGNAL(holder.loc, COMSIG_IGNITER_ACTIVATE)`: a rigged gibtonite ore primes.
+        crate::mining::rocks::igniter_activated(world, a);
     }
     true
 }

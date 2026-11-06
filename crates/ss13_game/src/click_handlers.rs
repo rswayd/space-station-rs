@@ -79,6 +79,7 @@
 //! | 1255 | `clothing::item_interaction` |
 //! | 1300 | `disposals::mail_interaction` |
 //! | 1400 | `chem::item_interaction` |
+//! | 1450 | `mining::hand_interaction` (modkits, point cards, gibtonite ore) |
 //! | 1500 | `guns::item_interaction` |
 //! | 1600 | `guns::attack_hand` (empty active hand) |
 //! | 1700 | `construction::split_into_hand` (empty active hand) |

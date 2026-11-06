@@ -3,7 +3,9 @@
 //! `code/modules/mining/ores_coins.dm`), the ore redemption machine
 //! (`code/modules/mining/machine_redemption.dm`) and the order consoles
 //! (`code/game/machinery/computer/orders/`) with their `/datum/orderable_item` catalogue
-//! resolved per console.
+//! resolved per console, the mining console's voucher sets (`code/modules/mining/voucher_sets.dm`),
+//! kinetic accelerator modkits (`guns/energy/kinetic_accelerator.dm`) and the stacking machine
+//! (`code/modules/mining/machine_stacking.dm`).
 
 use std::collections::BTreeSet;
 
@@ -24,11 +26,18 @@ pub const ORDER_CONSOLE_ROOT: &str = "/obj/machinery/computer/order_console";
 pub const MINING_CONSOLE: &str = "/obj/machinery/computer/order_console/mining";
 const ORDERABLE_ROOT: &str = "/datum/orderable_item";
 pub const GIBTONITE_ITEM: &str = "/obj/item/gibtonite";
+pub const MODKIT_ROOT: &str = "/obj/item/borg/upgrade/modkit";
+/// `AddElement(/datum/element/voucher_redeemer, /obj/item/mining_voucher, /datum/voucher_set/mining)`
+/// of the mining console.
+pub const MINING_VOUCHER_SETS: &str = "/datum/voucher_set/mining";
+pub const STACKER_ROOT: &str = "/obj/machinery/mineral/stacking_machine";
 
 pub const MINERAL_COMPONENT: &str = "dm_mineral";
 pub const ORE_COMPONENT: &str = "dm_ore";
 pub const ORM_COMPONENT: &str = "dm_ore_redemption";
 pub const ORDER_COMPONENT: &str = "dm_order_console";
+pub const MODKIT_COMPONENT: &str = "dm_modkit";
+pub const STACKER_COMPONENT: &str = "dm_stacker";
 
 /// tg `/turf/closed/mineral/random/mineral_chances()`: what a random rock rolls (weights).
 // shortcut: the subtypes' own tables (`high_chance`, `low_chance`, volcanic, snow) and the
@@ -99,11 +108,23 @@ pub struct OrderItem {
     pub max: u32,
 }
 
+/// One `/datum/voucher_set` a voucher redeems at the console.
+#[derive(Reflect, Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
+#[serde(default)]
+pub struct VoucherSet {
+    pub name: String,
+    pub description: String,
+    /// `set_items` that exist as types.
+    pub items: Vec<String>,
+}
+
 /// `/obj/machinery/computer/order_console` vars and its catalogue.
 #[derive(Component, Reflect, Default, Clone, Debug, PartialEq)]
 pub struct DmOrderConsole {
     pub categories: Vec<String>,
     pub items: Vec<OrderItem>,
+    /// The mining console's voucher sets (empty on other consoles).
+    pub vouchers: Vec<VoucherSet>,
     pub cargo_cost_multiplier: f32,
     pub express_cost_multiplier: f32,
     pub credit_type: String,
@@ -112,6 +133,32 @@ pub struct DmOrderConsole {
     pub forced_express: bool,
     pub express_tooltip: String,
     pub purchase_tooltip: String,
+}
+
+/// `/obj/item/borg/upgrade/modkit` vars.
+#[derive(Component, Reflect, Default, Clone, Debug, PartialEq)]
+pub struct DmModkit {
+    /// `cost`: percent of the accelerator's `max_mod_capacity`.
+    pub cost: f32,
+    pub modifier: f32,
+    /// `denied_type` (empty: none).
+    pub denied_type: String,
+    pub maximum_of_type: u32,
+    pub minebot_upgrade: bool,
+    pub minebot_exclusive: bool,
+    pub removable: bool,
+    /// `/obj/item/borg/upgrade/modkit/cooldown/aoe` `turf_aoe`, `damage_modifier`.
+    pub turf_aoe: bool,
+    pub damage_modifier: f32,
+}
+
+/// `/obj/machinery/mineral/stacking_machine` vars (map edits override them).
+#[derive(Component, Reflect, Default, Clone, Debug, PartialEq)]
+pub struct DmStacker {
+    /// BYOND dir bits.
+    pub input_dir: u8,
+    pub output_dir: u8,
+    pub stack_amt: u32,
 }
 
 fn ron<T: Serialize>(value: &T) -> String {
@@ -168,6 +215,101 @@ pub fn redemption(types: &DmTypes, path: &str) -> Option<DmOreRedemption> {
         ore_values: amounts(types.resolved(path, "ore_values")).unwrap_or_default(),
         req_access: strings(types.resolved(path, "req_access")),
     })
+}
+
+pub fn modkit(types: &DmTypes, path: &str) -> Option<DmModkit> {
+    if !is_under(path, MODKIT_ROOT) || !types.types.contains_key(path) {
+        return None;
+    }
+    let n = |var: &str| num(types.resolved(path, var)).unwrap_or(0.0) as f32;
+    let removable = types.resolved(path, "removable");
+    let minebot = types.resolved(path, "minebot_upgrade");
+    Some(DmModkit {
+        cost: n("cost"),
+        modifier: n("modifier"),
+        denied_type: path_of(types, path, "denied_type"),
+        maximum_of_type: n("maximum_of_type").max(0.0) as u32,
+        // Unset is tg's default `TRUE`.
+        minebot_upgrade: minebot.is_none() || truthy(minebot),
+        minebot_exclusive: truthy(types.resolved(path, "minebot_exclusive")),
+        removable: removable.is_none() || truthy(removable),
+        turf_aoe: truthy(types.resolved(path, "turf_aoe")),
+        damage_modifier: n("damage_modifier"),
+    })
+}
+
+pub fn stacker(types: &DmTypes, path: &str) -> Option<DmStacker> {
+    if !is_under(path, STACKER_ROOT) || !types.types.contains_key(path) {
+        return None;
+    }
+    let n = |var: &str, default: f64| num(types.resolved(path, var)).unwrap_or(default);
+    Some(DmStacker {
+        input_dir: n("input_dir", 4.0) as u8,
+        output_dir: n("output_dir", 8.0) as u8,
+        stack_amt: n("stack_amt", 50.0).max(1.0) as u32,
+    })
+}
+
+/// Map edits of the mineral machines' directions and the stacker's `stack_amt`.
+pub fn ext_field(
+    path: &str,
+    var: &str,
+    value: crate::value::Val,
+) -> Result<Field, crate::value::Skip> {
+    use crate::value::{Skip, Val};
+    let component = if is_under(path, STACKER_ROOT) {
+        STACKER_COMPONENT
+    } else if is_under(path, ORM_ROOT) && var == "input_dir" {
+        ORM_COMPONENT
+    } else {
+        return Err(Skip::UnknownVar);
+    };
+    let key = match var {
+        "input_dir" => "input_dir",
+        "output_dir" if component == STACKER_COMPONENT => "output_dir",
+        "stack_amt" if component == STACKER_COMPONENT => "stack_amt",
+        _ => return Err(Skip::UnknownVar),
+    };
+    let Val::Num(n) = value else {
+        return Err(Skip::Unsupported);
+    };
+    let ron = if key == "stack_amt" {
+        (n.max(1.0) as u32).to_string()
+    } else {
+        (n.clamp(0.0, 255.0) as u8).to_string()
+    };
+    Ok(ext(component, key, ron))
+}
+
+/// The subtypes of `root` with a name and items: `voucher_redeemer/generate_sets`.
+pub fn voucher_sets(types: &DmTypes, root: &str) -> Vec<VoucherSet> {
+    types
+        .types
+        .keys()
+        .filter(|p| is_under(p, root) && p.as_str() != root)
+        .filter_map(|p| {
+            let name = string(types.resolved(p, "name"));
+            let items: Vec<String> = match types.resolved(p, "set_items") {
+                Some(Value::Object(o)) => o
+                    .get("list")
+                    .and_then(Value::as_array)
+                    .map(|items| {
+                        items
+                            .iter()
+                            .filter_map(|v| path_value(Some(v)))
+                            .filter(|i| types.types.contains_key(i))
+                            .collect()
+                    })
+                    .unwrap_or_default(),
+                _ => Vec::new(),
+            };
+            (!name.is_empty() && !items.is_empty()).then(|| VoucherSet {
+                name,
+                description: string(types.resolved(p, "description")),
+                items,
+            })
+        })
+        .collect()
 }
 
 /// A list of strings (`list("Mining", ...)`).
@@ -247,9 +389,15 @@ pub fn order_console(types: &DmTypes, path: &str) -> Option<DmOrderConsole> {
         .filter(|i| categories.contains(&i.category))
         .collect();
     let n = |var: &str, default: f64| num(types.resolved(path, var)).unwrap_or(default) as f32;
+    let vouchers = if is_under(path, MINING_CONSOLE) {
+        voucher_sets(types, MINING_VOUCHER_SETS)
+    } else {
+        Vec::new()
+    };
     Some(DmOrderConsole {
         categories,
         items,
+        vouchers,
         cargo_cost_multiplier: n("cargo_cost_multiplier", 1.0),
         express_cost_multiplier: n("express_cost_multiplier", 2.0),
         credit_type: string(types.resolved(path, "credit_type")),
@@ -291,6 +439,7 @@ pub fn mining_closure<'a>(
             && let Some(console) = order_console(types, path)
         {
             out.extend(console.items.into_iter().map(|i| i.purchase_path));
+            out.extend(console.vouchers.into_iter().flat_map(|v| v.items));
         }
     }
     for ore_path in ores {
@@ -338,11 +487,34 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
             ext(c, "req_access", ron(&r.req_access)),
         ]);
     }
+    if let Some(m) = modkit(types, path) {
+        let c = MODKIT_COMPONENT;
+        out.extend([
+            ext(c, "cost", ron(&m.cost)),
+            ext(c, "modifier", ron(&m.modifier)),
+            ext(c, "denied_type", ron(&m.denied_type)),
+            ext(c, "maximum_of_type", ron(&m.maximum_of_type)),
+            ext(c, "minebot_upgrade", ron(&m.minebot_upgrade)),
+            ext(c, "minebot_exclusive", ron(&m.minebot_exclusive)),
+            ext(c, "removable", ron(&m.removable)),
+            ext(c, "turf_aoe", ron(&m.turf_aoe)),
+            ext(c, "damage_modifier", ron(&m.damage_modifier)),
+        ]);
+    }
+    if let Some(st) = stacker(types, path) {
+        let c = STACKER_COMPONENT;
+        out.extend([
+            ext(c, "input_dir", ron(&st.input_dir)),
+            ext(c, "output_dir", ron(&st.output_dir)),
+            ext(c, "stack_amt", ron(&st.stack_amt)),
+        ]);
+    }
     if let Some(o) = order_console(types, path) {
         let c = ORDER_COMPONENT;
         out.extend([
             ext(c, "categories", ron(&o.categories)),
             ext(c, "items", ron(&o.items)),
+            ext(c, "vouchers", ron(&o.vouchers)),
             ext(c, "cargo_cost_multiplier", ron(&o.cargo_cost_multiplier)),
             ext(
                 c,
@@ -441,5 +613,73 @@ mod tests {
         ] {
             assert!(closure.contains(want), "{want} missing from {closure:?}");
         }
+    }
+
+    const KIT_TYPES: &str = r##"{ "schema": 3, "types": {
+        "/datum": { "parent": null },
+        "/datum/voucher_set": { "parent": "/datum", "declared_vars": { "name": null,
+            "description": null, "set_items": null } },
+        "/datum/voucher_set/mining": { "parent": "/datum/voucher_set" },
+        "/datum/voucher_set/mining/resonator_kit": { "parent": "/datum/voucher_set/mining",
+            "declared_vars": { "name": "Resonator Kit", "description": "Rocks.",
+            "set_items": { "list": [ { "path": "/obj/item/resonator" },
+                { "path": "/obj/item/missing" } ] } } },
+        "/datum/voucher_set/mining/nameless": { "parent": "/datum/voucher_set/mining",
+            "declared_vars": { "set_items": { "list": [ { "path": "/obj/item/resonator" } ] } } },
+        "/atom": { "parent": "/datum" },
+        "/obj": { "parent": "/atom" },
+        "/obj/item": { "parent": "/obj" },
+        "/obj/item/resonator": { "parent": "/obj/item" },
+        "/obj/item/borg": { "parent": "/obj/item" },
+        "/obj/item/borg/upgrade": { "parent": "/obj/item/borg" },
+        "/obj/item/borg/upgrade/modkit": { "parent": "/obj/item/borg/upgrade",
+            "declared_vars": { "cost": 30, "modifier": 1, "denied_type": null,
+            "maximum_of_type": 0, "minebot_upgrade": 1, "minebot_exclusive": 0,
+            "removable": 1 } },
+        "/obj/item/borg/upgrade/modkit/cooldown": { "parent": "/obj/item/borg/upgrade/modkit",
+            "declared_vars": { "modifier": -3.2, "minebot_upgrade": 0 } },
+        "/obj/item/borg/upgrade/modkit/cooldown/aoe": {
+            "parent": "/obj/item/borg/upgrade/modkit/cooldown", "declared_vars": {
+            "modifier": 0, "cost": 10, "maximum_of_type": 1, "turf_aoe": 0,
+            "damage_modifier": 0,
+            "denied_type": { "path": "/obj/item/borg/upgrade/modkit/cooldown/aoe" } } },
+        "/obj/item/borg/upgrade/modkit/cooldown/aoe/turfs": {
+            "parent": "/obj/item/borg/upgrade/modkit/cooldown/aoe", "declared_vars": {
+            "turf_aoe": 1, "modifier": 3.2 } },
+        "/obj/machinery": { "parent": "/obj" },
+        "/obj/machinery/mineral": { "parent": "/obj/machinery", "declared_vars": {
+            "input_dir": 1, "output_dir": 2 } },
+        "/obj/machinery/mineral/stacking_machine": { "parent": "/obj/machinery/mineral",
+            "declared_vars": { "input_dir": 4, "output_dir": 8, "stack_amt": 50 } }
+    } }"##;
+
+    #[test]
+    fn modkits_vouchers_and_the_stacker() {
+        let types = DmTypes::parse(KIT_TYPES.as_bytes()).unwrap();
+        let kit = modkit(&types, "/obj/item/borg/upgrade/modkit/cooldown/aoe/turfs").unwrap();
+        assert_eq!((kit.cost, kit.modifier), (10.0, 3.2));
+        assert!(kit.turf_aoe && kit.removable && !kit.minebot_upgrade);
+        assert_eq!(
+            kit.denied_type,
+            "/obj/item/borg/upgrade/modkit/cooldown/aoe"
+        );
+        assert_eq!(kit.maximum_of_type, 1);
+        assert!(modkit(&types, "/obj/item/resonator").is_none());
+        let sets = voucher_sets(&types, MINING_VOUCHER_SETS);
+        assert_eq!(sets.len(), 1, "a set needs a name: {sets:?}");
+        assert_eq!(sets[0].name, "Resonator Kit");
+        assert_eq!(sets[0].items, vec!["/obj/item/resonator".to_owned()]);
+        let st = stacker(&types, STACKER_ROOT).unwrap();
+        assert_eq!((st.input_dir, st.output_dir, st.stack_amt), (4, 8, 50));
+        use crate::value::Val;
+        assert_eq!(
+            ext_field(STACKER_ROOT, "stack_amt", Val::Num(10.0)).ok(),
+            Some(ext(STACKER_COMPONENT, "stack_amt", "10"))
+        );
+        assert_eq!(
+            ext_field(ORM_ROOT, "input_dir", Val::Num(2.0)).ok(),
+            Some(ext(ORM_COMPONENT, "input_dir", "2"))
+        );
+        assert!(ext_field(ORM_ROOT, "stack_amt", Val::Num(2.0)).is_err());
     }
 }

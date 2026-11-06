@@ -108,9 +108,11 @@ pub enum Family {
     Smes,
     /// Shield wall generators (`crate::power::shields`).
     ShieldWallGen,
+    /// Ore redemption machines (`crate::mining::orm`).
+    Orm,
 }
 
-const FAMILIES: [(&str, Family); 29] = [
+const FAMILIES: [(&str, Family); 30] = [
     (CELL_CHARGER, Family::Charger),
     (RECHARGER, Family::Charger),
     (crate::kitchen::MICROWAVE_ROOT, Family::Kitchen),
@@ -152,6 +154,7 @@ const FAMILIES: [(&str, Family); 29] = [
         crate::power::shields::SHIELD_WALL_GEN,
         Family::ShieldWallGen,
     ),
+    (ss13_mapload::mining::ORM_ROOT, Family::Orm),
 ];
 
 /// The covered family of a machine type (`None`: not built or taken apart here).
@@ -1103,6 +1106,7 @@ pub fn setup_built(world: &mut World, machine: Entity) {
         Family::Pacman => crate::power::pacman::setup(world, machine),
         Family::Smes => crate::power::smes::setup(world, machine),
         Family::ShieldWallGen => crate::power::shields::setup_wall_gen(world, machine),
+        Family::Orm => crate::mining::orm::setup(world, machine),
     }
 }
 
