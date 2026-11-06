@@ -136,11 +136,7 @@ impl ClientUi for WhoUi {
 
     fn content(_: &(), data: &WhoData) -> impl Scene {
         let title = format!("Онлайн: {}", data.clients.len());
-        let rows: Vec<_> = data
-            .clients
-            .iter()
-            .map(|key| EntityScene(line(key.clone())))
-            .collect();
+        let rows: Vec<_> = data.clients.iter().map(|key| line(key.clone())).collect();
         let user = EntityScene(line(data.user.clone()));
         let update = UPDATE.to_owned();
         bsn! {
