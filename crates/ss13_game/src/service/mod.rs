@@ -23,6 +23,8 @@ mod art;
 #[cfg(feature = "server")]
 pub mod barber;
 #[cfg(feature = "server")]
+pub mod cards;
+#[cfg(feature = "server")]
 mod clown;
 #[cfg(feature = "server")]
 mod games;
@@ -34,6 +36,8 @@ mod office;
 mod paper;
 #[cfg(feature = "server")]
 mod religion;
+#[cfg(feature = "server")]
+pub mod slots;
 #[cfg(feature = "server")]
 mod stationery;
 #[cfg(feature = "server")]

@@ -378,6 +378,16 @@ fn convert_cmd(config: &MapLoadPlugin, mut map_dirs: Vec<PathBuf>) -> anyhow::Re
         restaurant.customers.len(),
         restaurant_out.display()
     );
+    let cards = ss13_mapload::service::CardStrings::read_source(&config.source);
+    let cards_out = config.assets.join(ss13_mapload::service::CARDS_FILE);
+    std::fs::write(&cards_out, cards.to_ron())
+        .with_context(|| format!("writing {}", cards_out.display()))?;
+    println!(
+        "{} + {} CAS cards -> {}",
+        cards.cas_white.len(),
+        cards.cas_black.len(),
+        cards_out.display()
+    );
     let plants = ss13_mapload::plants::resolve(&types);
     let plants_out = config.assets.join(ss13_mapload::plants::PLANTS_FILE);
     std::fs::write(&plants_out, plants.to_ron())
