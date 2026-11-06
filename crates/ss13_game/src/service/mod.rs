@@ -32,6 +32,7 @@ mod office;
 mod paper;
 #[cfg(feature = "server")]
 mod religion;
+#[cfg(feature = "server")]
 mod stationery;
 #[cfg(feature = "server")]
 mod statues;
@@ -55,6 +56,7 @@ pub use religion::{
     BIBLE_SKINS, BibleDeity, HolyRole, PerformingRite, Religion, ReligionJob, Rite, Sect,
     chaplain_spawned, complete as religion_complete, holy_role,
 };
+#[cfg(feature = "server")]
 pub use stationery::{Biscuit, CabinetKind, CarbonPaper, FilingCabinet, PaperCutter, Paperwork};
 #[cfg(feature = "server")]
 pub use statues::{
