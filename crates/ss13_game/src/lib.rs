@@ -242,6 +242,8 @@ pub mod displaycase;
 #[cfg(feature = "server")]
 pub mod disposals;
 #[cfg(feature = "server")]
+pub mod door_structures;
+#[cfg(feature = "server")]
 pub mod doors;
 #[cfg(feature = "server")]
 pub mod drag;

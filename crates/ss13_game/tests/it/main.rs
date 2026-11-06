@@ -27,6 +27,7 @@ mod devices;
 mod diseases;
 mod displaycase;
 mod disposals;
+mod door_structures;
 mod doors;
 mod drag;
 mod effects;

@@ -220,6 +220,7 @@ impl Plugin for GameServerPlugin {
             crate::displaycase::DisplayCasePlugin,
             crate::flora::FloraPlugin,
             crate::airlock_construction::AirlockConstructionPlugin,
+            crate::door_structures::DoorStructuresPlugin,
         ))
         .add_plugins((
             crate::pull::PullServerPlugin,

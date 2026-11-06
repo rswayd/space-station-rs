@@ -247,6 +247,103 @@ pub(super) fn init_firelocks(world: &mut World) {
     }
 }
 
+/// tg `Initialize` of a firelock built from a frame (`crate::door_structures`): its areas,
+/// watched tiles and row as [`init_firelocks`] gives mapped ones. It joins the row of a firelock
+/// next to it, or starts its own.
+// shortcut: two rows a new firelock connects are not merged (tg `datum/merger` would); it joins
+// the first one found.
+pub fn setup_built(world: &mut World, e: Entity) {
+    let Some(&pos) = world.get::<TilePos>(e) else {
+        return;
+    };
+    let mut areas: Vec<Entity> = Vec::new();
+    let around: Vec<TilePos> = Dir::CARDINALS
+        .into_iter()
+        .map(|d| pos.step(d))
+        .filter(|&p| is_open_turf(world, p))
+        .collect();
+    for p in std::iter::once(pos).chain(around) {
+        if let Some(area) = world.resource::<Areas>().area_at(p)
+            && !areas.contains(&area)
+        {
+            areas.push(area);
+        }
+    }
+    for &area in &areas {
+        fire_alarm::area_fire(world, area).firedoors.push(e);
+    }
+    let watched: Vec<TilePos> = std::iter::once(pos)
+        .chain(Dir::CARDINALS.map(|d| pos.step(d)))
+        .collect();
+    let neighbour_group = watched
+        .iter()
+        .flat_map(|&p| {
+            world
+                .resource::<ss13_world::SpatialIndex>()
+                .on_tile(p)
+                .to_vec()
+        })
+        .find_map(|n| world.get::<Firelock>(n).map(|f| f.group));
+    let my_area = world.resource::<Areas>().area_at(pos);
+    let mut all = world.remove_resource::<Firelocks>().unwrap_or_default();
+    let group = match neighbour_group {
+        Some(g) if g < all.groups.len() => g,
+        _ => {
+            all.groups.push(FirelockGroup::default());
+            all.groups.len() - 1
+        }
+    };
+    all.groups[group].members.push(e);
+    for &p in &watched {
+        all.watch.entry(p).or_default().push(e);
+    }
+    world.insert_resource(all);
+    if let Some(mut atmos) = world.get_resource_mut::<Atmos>() {
+        for &p in &watched {
+            atmos.watch(p, true);
+        }
+    }
+    world.entity_mut(e).insert(Firelock {
+        active: false,
+        areas,
+        my_area,
+        alarm_type: None,
+        ignore_alarms: false,
+        group,
+        ringing: None,
+        cooldown_until: 0.0,
+        activate_at: None,
+        release_at: None,
+        recheck_at: None,
+        held_by: None,
+        settle: false,
+    });
+}
+
+/// A firelock about to be taken apart (`crate::door_structures`): out of its row, its areas'
+/// lists and the watch lists, so nothing keeps its entity.
+pub fn teardown(world: &mut World, e: Entity) {
+    let Some(lock) = world.get::<Firelock>(e).cloned() else {
+        return;
+    };
+    for &area in &lock.areas {
+        let mut fire = fire_alarm::area_fire(world, area);
+        fire.firedoors.retain(|&d| d != e);
+        fire.active_firelocks.retain(|&d| d != e);
+    }
+    if let Some(mut all) = world.get_resource_mut::<Firelocks>() {
+        if let Some(group) = all.groups.get_mut(lock.group) {
+            group.members.retain(|&m| m != e);
+        }
+        for list in all.watch.values_mut() {
+            list.retain(|&m| m != e);
+        }
+    }
+    world
+        .entity_mut(e)
+        .remove::<(Firelock, FirelockPending, Ringing)>();
+}
+
 /// tg `check_atmos(turf)`; `None` where there is no air (walls, off the map).
 pub fn check_atmos(atmos: &Atmos, pos: TilePos) -> Option<AlarmType> {
     let air = atmos.air(pos)?;

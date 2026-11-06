@@ -279,6 +279,8 @@ pub enum Job {
     Hijack,
     /// Welding an airlock shut ([`crate::doors`]).
     Door(crate::doors::DoorJob),
+    /// Firelock frames, windoor assemblies, mineral doors ([`crate::door_structures`]).
+    DoorBuild(crate::door_structures::DoorBuildJob),
     /// Wrenching or welding a field generator ([`crate::power::field_generator`]).
     FieldGenerator(crate::power::field_generator::FieldGenJob),
     /// Laying or cutting a SMES terminal ([`crate::power::smes`]).
@@ -950,6 +952,10 @@ fn interact_secondary(world: &mut World, actor: Actor, target: Entity) -> Intera
                 crate::airlock_construction::build_assembly(world, actor, target, pos);
                 return Interact::Done;
             }
+            // Firelock circuitry in the other hand: a firelock frame.
+            if crate::door_structures::try_build_frame(world, actor, target, pos) {
+                return Interact::Done;
+            }
             let frame = crate::machine_frame::held_board_frame(world, actor.mob, held);
             let (cost, delay, job) = match frame {
                 Some(computer) => (
@@ -971,6 +977,13 @@ fn interact_secondary(world: &mut World, actor: Actor, target: Entity) -> Intera
                 do_after(world, actor, target, delay, cost, job);
             }
         }
+        return Interact::Done;
+    }
+    // Reinforced glass with airlock electronics in the other hand: a windoor assembly.
+    if stack_of(world, held, "/obj/item/stack/sheet/rglass")
+        && !groundless
+        && crate::door_structures::try_build_windoor_assembly(world, actor, pos)
+    {
         return Interact::Done;
     }
     if stack_of(world, held, RODS) {
@@ -1319,6 +1332,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Mining(job) => crate::mining::complete(world, mob, action, job),
         Job::Hijack => crate::shuttle_console_server::complete_hijack(world, mob, action),
         &Job::Door(job) => crate::doors::complete(world, client, mob, target, job),
+        &Job::DoorBuild(job) => crate::door_structures::complete(world, mob, action, job),
         &Job::Wiremod(shell) => crate::wiremod::server::complete(world, mob, action, shell),
         &Job::Inducer(thing) => crate::inducer::complete(world, mob, action, thing),
         &Job::Clothing(job) => crate::clothing::damage::complete(world, mob, action, job),
