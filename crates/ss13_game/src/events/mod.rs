@@ -424,6 +424,16 @@ impl Plugin for EventsServerPlugin {
             c.held
                 .is_some_and(|h| anomalies::analyzer_act(w, c.client, h, c.target))
         });
+        // The anomaly neutralizer on an anomaly, the anomaly releaser on a core.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 1580, |w, c| {
+            let actor = crate::tools::Actor {
+                client: c.client,
+                mob: c.mob,
+                item: c.held,
+            };
+            anomalies::neutralizer_act(w, actor, c.target)
+                || anomalies::releaser_act(w, actor, c.target)
+        });
         // tg `COMSIG_ATOM_TOOL_ACT` of a Radiation Leak's machine: before the machine's own
         // tool acts.
         app.add_click_handler(ClickPhase::HeldOnTarget, 1585, |w, c| {

@@ -29,6 +29,10 @@
 //!
 //! Cost: one anomaly at a time in practice; a process looks at the tiles within 4 (the
 //! gravitational one) every 2 s; a signal looks at the anomalies (a handful).
+//
+// The anomaly neutralizer (`/obj/item/anomaly_neutralizer`, its `effect_remover`) neutralizes
+// an anomaly on hit and burns out; the anomaly releaser (`/obj/item/anomaly_releaser`) turns a
+// core back into a stable (immortal) anomaly of its type after 3 s, once.
 // shortcut: no countdown, light, wibble filter or emissive overlay; no neutralization smoke;
 // explosions do not destroy anomalies; the cores' own `signal()` effects are not ported; the
 // gravitational one does not throw mobs (knockdown only) or check magboots; the pyroclastic
@@ -78,6 +82,13 @@ const EFFECT: &str = "/obj/effect";
 const MIN_FREE_FREQ: i64 = 1201;
 const MAX_FREE_FREQ: i64 = 1599;
 const INERT_CORE: &str = "/obj/item/inert_anomaly";
+const CORE: &str = "/obj/item/assembly/signaler/anomaly";
+const NEUTRALIZER: &str = "/obj/item/anomaly_neutralizer";
+const RELEASER: &str = "/obj/item/anomaly_releaser";
+/// The releaser's `used_icon_state`.
+const RELEASER_USED_STATE: &str = "anomaly_releaser_used";
+/// The releaser's `do_after`, deciseconds.
+const RELEASE_DS: f32 = 30.0;
 /// The hallucination anomaly's `messages`.
 const HALLUCINATION_MESSAGES: [&str; 4] = [
     "Вы чувствуете, как ваш разум разваливается на части!",
@@ -116,6 +127,22 @@ pub enum AnomalyKind {
 }
 
 impl AnomalyKind {
+    pub const ALL: [Self; 6] = [
+        Self::Flux,
+        Self::Bluespace,
+        Self::Grav,
+        Self::Pyro,
+        Self::Vortex,
+        Self::Hallucination,
+    ];
+
+    /// The core's `anomaly_type`: none for the base core and the cores of unported anomalies.
+    pub fn of_core(path: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|k| is_under(path, k.core_path()))
+    }
+
     fn path(self) -> &'static str {
         match self {
             Self::Flux => "/obj/effect/anomaly/flux",
@@ -205,6 +232,8 @@ pub struct Anomaly {
     pub death_time: f64,
     /// `move_chance`, percent per second (0 when stabilized with an anchor).
     pub move_chance: f64,
+    /// `immortal`: never detonates (a stabilized anomaly).
+    pub immortal: bool,
     next_process: f64,
     /// The flux's `canshock`, the gravitational one's `boing`.
     armed: bool,
@@ -455,6 +484,7 @@ fn spawn_one(
             area,
             death_time: now + LIFESPAN_SECS,
             move_chance: MOVE_CHANCE,
+            immortal: false,
             next_process: now + PROCESS_SECS,
             armed: false,
             ticks: 0.0,
@@ -487,7 +517,7 @@ pub(super) fn process_anomalies(world: &mut World) {
         let Some(a) = world.get::<Anomaly>(e) else {
             continue;
         };
-        if a.death_time < now {
+        if a.death_time < now && !a.immortal {
             detonate(world, e);
             world.despawn(e);
         }
@@ -1080,6 +1110,132 @@ pub fn analyzer_act(world: &mut World, client: Entity, tool: Entity, target: Ent
         ),
     );
     true
+}
+
+/// `stabilize(anchor, has_core)`: it lives until neutralized; `anchor` holds it in place, a
+/// hollow one has no core to signal.
+pub fn stabilize(world: &mut World, e: Entity, anchor: bool, has_core: bool) {
+    let Some(mut a) = world.get_mut::<Anomaly>(e) else {
+        return;
+    };
+    a.immortal = true;
+    if !has_core {
+        a.core = None;
+    }
+    if anchor {
+        a.move_chance = 0.0;
+    }
+    if let Some(mut name) = world.get_mut::<DmName>(e) {
+        let prefix = if has_core { "stable" } else { "hollow" };
+        name.name = format!("{prefix} {}", name.name);
+    }
+}
+
+// --- Neutralizer and releaser -------------------------------------------------------------
+
+/// `/obj/item/anomaly_neutralizer`'s `effect_remover` (`try_remove_effect`): a hit neutralizes
+/// the anomaly (`anomalyNeutralize`), the neutralizer sparks and is gone. A decoy
+/// (`TRAIT_ILLUSORY_EFFECT`) is left alone. True when `actor.item` is a neutralizer used on an
+/// anomaly.
+pub fn neutralizer_act(world: &mut World, actor: crate::tools::Actor, target: Entity) -> bool {
+    use ss13_shared::chat::Span;
+    let Some(tool) = actor.item else {
+        return false;
+    };
+    if !path_of(world, tool).is_some_and(|p| is_under(&p, NEUTRALIZER))
+        || world.get::<Health>(actor.mob).is_none()
+    {
+        return false;
+    }
+    let Some(decoy) = world.get::<Anomaly>(target).map(|a| a.decoy) else {
+        return false;
+    };
+    let (tool_name, name) = (
+        crate::chem::name_of(world, tool),
+        crate::chem::name_of(world, target),
+    );
+    if decoy {
+        // tg returns NONE here; nothing else in the chain acts on an anomaly.
+        crate::tools::tell(
+            world,
+            actor.client,
+            Span::Notice,
+            format!(
+                "Вы проводите {tool_name} сквозь {name}, но ничего не происходит. А оно вообще \
+                 здесь есть?"
+            ),
+        );
+        return true;
+    }
+    crate::tools::tell(
+        world,
+        actor.client,
+        Span::Notice,
+        format!("Вы нейтрализуете {name} с помощью {tool_name}, выжигая его схемы."),
+    );
+    neutralize(world, target);
+    if let Some(pos) = crate::explosions::turf_of(world, actor.mob) {
+        crate::effects::particles::do_sparks(world, 3, false, pos);
+    }
+    world.despawn(tool);
+    true
+}
+
+/// `/obj/item/anomaly_releaser/interact_with_atom` on an anomaly core: a 3 s `do_after`, then
+/// [`complete_release`]. A used releaser blocks. True when it is a releaser on a core.
+pub fn releaser_act(world: &mut World, actor: crate::tools::Actor, target: Entity) -> bool {
+    let Some(tool) = actor.item else {
+        return false;
+    };
+    if !path_of(world, tool).is_some_and(|p| is_under(&p, RELEASER))
+        || !path_of(world, target).is_some_and(|p| is_under(&p, CORE))
+    {
+        return false;
+    }
+    if world.get::<ReleaserUsed>(tool).is_none() {
+        crate::tools::do_after(
+            world,
+            actor,
+            target,
+            RELEASE_DS,
+            0,
+            crate::construction::Job::AnomalyRelease,
+        );
+    }
+    true
+}
+
+/// A used `/obj/item/anomaly_releaser` (`used`).
+#[derive(Component, Debug)]
+pub struct ReleaserUsed;
+
+/// The releaser's `do_after` is over: rechecks it is unused and the core still has an
+/// `anomaly_type`, releases a stable anomaly of that type on the core's tile and uses up the
+/// releaser and the core.
+pub fn complete_release(world: &mut World, action: &crate::tools::DoAfter) {
+    let (Some(tool), core) = (action.item, action.target);
+    if world.get::<ReleaserUsed>(tool).is_some()
+        || !path_of(world, tool).is_some_and(|p| is_under(&p, RELEASER))
+    {
+        return;
+    }
+    let Some(kind) = path_of(world, core).and_then(|p| AnomalyKind::of_core(&p)) else {
+        return;
+    };
+    let Some(pos) = crate::explosions::turf_of(world, core) else {
+        return;
+    };
+    let area = world
+        .get_resource::<ss13_mapload::Areas>()
+        .and_then(|a| a.area_at(pos));
+    let anomaly = spawn_anomaly(world, kind, pos, area);
+    stabilize(world, anomaly, false, true);
+    world.entity_mut(tool).insert(ReleaserUsed);
+    if let Some(mut name) = world.get_mut::<DmName>(tool) {
+        name.name = format!("used {}", name.name);
+    }
+    crate::obj_damage::set_icon_state(world, tool, RELEASER_USED_STATE);
+    world.despawn(core);
 }
 
 fn cosmic_sound(world: &mut World, pos: TilePos) {
