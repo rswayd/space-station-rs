@@ -1213,7 +1213,9 @@ pub struct ReleaserUsed;
 /// `anomaly_type`, releases a stable anomaly of that type on the core's tile and uses up the
 /// releaser and the core.
 pub fn complete_release(world: &mut World, action: &crate::tools::DoAfter) {
-    let (Some(tool), core) = (action.item, action.target);
+    let (Some(tool), core) = (action.item, action.target) else {
+        return;
+    };
     if world.get::<ReleaserUsed>(tool).is_some()
         || !path_of(world, tool).is_some_and(|p| is_under(&p, RELEASER))
     {
