@@ -583,6 +583,10 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 && crate::clothing::click_alt(world, client, mob, item)
             {
                 // A jumpsuit's style, a toggle suit, a breath mask.
+            } else if let Some(item) = inventory.slot(slot)
+                && crate::cargo::money::click_alt(world, client, mob, item)
+            {
+                // A holochip splits, an ID card withdraws.
             } else if let Some(item) = inventory.slot(slot) {
                 // A PDA gives back its ID.
                 crate::modpc::pda::alt_click(world, mob, item);

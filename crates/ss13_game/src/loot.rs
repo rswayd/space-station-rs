@@ -231,6 +231,7 @@ fn click_alt(world: &mut World, client: Entity, mob: Entity, target: Entity) -> 
         || crate::mining::click_alt(world, client, mob, target)
         || crate::medical::stasis::click_alt(world, mob, target)
         || crate::medical::pods::click_alt(world, client, mob, target)
+        || crate::cargo::money::click_alt(world, client, mob, target)
 }
 
 /// `try_open_loot_panel_on` -> `/datum/lootpanel/open(get_turf(target))`.

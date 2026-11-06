@@ -39,6 +39,8 @@ pub mod materials_market;
 #[cfg(feature = "client")]
 pub mod materials_market_client;
 #[cfg(feature = "server")]
+pub mod money;
+#[cfg(feature = "server")]
 pub mod scanner;
 #[cfg(feature = "server")]
 pub mod stock_market;
@@ -73,6 +75,7 @@ impl bevy::prelude::Plugin for CargoServerPlugin {
             supplypod::SupplyPodPlugin,
             express::ExpressPlugin,
             materials_market::MaterialsMarketPlugin,
+            money::MoneyPlugin,
         ));
     }
 }
@@ -86,6 +89,7 @@ pub fn examine_lines(
 ) {
     mail_sorter::examine_lines(world, target, lines);
     materials_market::examine_lines(world, target, lines);
+    money::examine_lines(world, target, lines);
 }
 
 /// tg `MONEY_SYMBOL` / `MONEY_NAME`.

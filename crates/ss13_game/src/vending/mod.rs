@@ -9,7 +9,9 @@
 //! it is in stock, the vendor works (power, not broken), and, unless the vendor is free, the
 //! actor carries an ID: old enough for an age-restricted product, with a bank account that pays
 //! the price (`proceed_payment`: 20% for the vendor's own department and the captain, premium
-//! and contraband at full price, into the vendor's department budget; returned items are free).
+//! and contraband at full price, into the vendor's department budget; returned items are free),
+//! or else the cash, holochips and coins the actor carries do (`handle_cardless`, change back as
+//! a holochip: `crate::cargo::money::pay_with_cash`).
 //! tg has no vend cooldown any more (`vend_ready` was removed); repeated acts are bounded by
 //! tgui's act rate limit and the stock, and each one charges at its own moment.
 //!
@@ -23,8 +25,8 @@
 //!   sold first and free.
 //! - Refill canisters, deconstruction and building: [`refill`]. Tilting: [`tilt`]. The custom
 //!   vendor: [`custom`].
-// shortcut: no greyscale (GAGS) colour menu, no cash or holochips (credits a vendor collects
-// stay in it until a restock pays them to the restocker's account), no AAS age announcement
+// shortcut: no greyscale (GAGS) colour menu, credits a vendor collects stay in it until a
+// restock pays them to the restocker's account (tg hands out a holochip), no AAS age announcement
 // (the announcement system is not ported), no speaker language (machine speech is Common).
 
 pub mod custom;
@@ -1078,28 +1080,40 @@ fn pay(
     if price == 0 {
         return Ok(0);
     }
-    let Some(account_id) = account_id.filter(|_| account_department.is_some()) else {
-        tell_mob(world, actor, Span::Warning, "Аккаунт не найден.");
-        return Err(VendReject::NoAccount);
-    };
-    let charged = world
-        .resource_mut::<Economy>()
-        .account_mut(account_id)
-        .is_some_and(|a| a.adjust_money(-i64::from(price)));
-    if !charged {
-        tell_mob(
-            world,
-            actor,
-            Span::Warning,
-            "У вас недостаточно средств для этой покупки.",
-        );
+    let account_id = account_id.filter(|_| account_department.is_some());
+    let charged = account_id.is_some_and(|id| {
+        world
+            .resource_mut::<Economy>()
+            .account_mut(id)
+            .is_some_and(|a| a.adjust_money(-i64::from(price)))
+    });
+    let Some(account_id) = account_id.filter(|_| charged) else {
+        // `handle_card` failed: its line, then `handle_cardless` (the money the buyer carries).
+        let no_account = account_id.is_none();
+        let line = if no_account {
+            "Аккаунт не найден."
+        } else {
+            "У вас недостаточно средств для этой покупки."
+        };
+        tell_mob(world, actor, Span::Warning, line);
+        if crate::cargo::money::pay_with_cash(world, actor, i64::from(price)) {
+            // tg's cash goes to no account; the vendor still collects its share.
+            tell_mob(world, actor, Span::Notice, "Покупка оплачена наличными.");
+            if let Some(mut machine) = world.get_mut::<Vendor>(vendor) {
+                machine.credits_contained += (price as f32 * CREDITS_COLLECTION).round() as i64;
+            }
+            return Ok(price);
+        }
+        if no_account {
+            return Err(VendReject::NoAccount);
+        }
         speak(
             world,
             vendor,
             &format!("У вас недостаточно средств, чтобы купить {product}."),
         );
         return Err(VendReject::NoFunds);
-    }
+    };
     let mut economy = world.resource_mut::<Economy>();
     // `get_dep_account(payment_department)`, CIV for an unknown one.
     let budget = if economy.department(&department).is_some() {
