@@ -5,6 +5,7 @@
 mod airlock_construction;
 mod assemblies;
 mod atmos_machinery;
+mod bitrunning;
 mod border;
 mod botany;
 mod bots;

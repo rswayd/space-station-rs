@@ -291,6 +291,8 @@ pub enum Job {
     Morph { corpse: bool },
     /// Fixing a Radiation Leak's machine ([`crate::events::radiation_leak`]).
     RadiationLeak,
+    /// Netpods, hololadders, the quantum console ([`crate::science::bitrunning`]).
+    Bitrunning(crate::science::bitrunning::server::BitrunJob),
 }
 
 /// A turf's baseturf stack, bottom first (tg `baseturfs`). Absent: assembled from the type's
@@ -1260,6 +1262,9 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Climb(climb) => crate::multiz::complete_climb(world, mob, target, climb),
         &Job::Fly(climb) => crate::multiz::complete_flight(world, client, mob, climb),
         Job::Interact(job) => crate::drag::complete(world, mob, action, *job),
+        &Job::Bitrunning(job) => {
+            crate::science::bitrunning::server::complete(world, mob, action, job)
+        }
         &Job::Table(job) => crate::tables::complete(world, mob, action, job),
         Job::Strip(job) => crate::strip::complete(world, mob, action, *job),
         Job::Medical(job) => crate::medical::complete_med(world, mob, action, *job),

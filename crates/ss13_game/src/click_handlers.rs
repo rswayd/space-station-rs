@@ -151,6 +151,7 @@
 //! | 3461 | `cargo::materials_market::interact` |
 //! | 3462 | `papershredder::empty_hand` (right click) |
 //! | 3463 | `silicon::ai_slipper::interact` |
+//! | 3464 | `science::bitrunning::avatar::ladder_click` (hololadders) |
 //!
 //! [`ClickPhase::HeldOnTarget`] (a world click with the active hand's item; tg
 //! `item_interaction`, `interact_with_atom`, `pre_attack`, `attackby`):
@@ -180,6 +181,7 @@
 //! | 1500 | `bots::construction::item_interaction` |
 //! | 1585 | `events::radiation_leak::tool_act` (a leaking machine's fixing tools) |
 //! | 1590 | `teapot::item_interaction` (before `machine_frame` takes it apart) |
+//! | 1595 | `science::bitrunning::avatar::crowbar_act` (prying a netpod open) |
 //! | 1600 | `machine_frame::item_interaction` |
 //! | 1650 | `radiation::geiger_interact` |
 //! | 1700 | `service::server::item_interaction` |

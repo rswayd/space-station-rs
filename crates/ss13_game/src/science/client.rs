@@ -37,7 +37,10 @@ impl Plugin for ScienceClientPlugin {
             .register_ui_view::<DestructiveAnalyzerUi>()
             .register_ui_view::<ExperimentConfigureUi>()
             .register_ui_view::<ServerControlUi>()
-            .add_plugins(super::exodrone::client::ExodroneClientPlugin);
+            .add_plugins((
+                super::exodrone::client::ExodroneClientPlugin,
+                super::bitrunning::client::BitrunningClientPlugin,
+            ));
     }
 }
 

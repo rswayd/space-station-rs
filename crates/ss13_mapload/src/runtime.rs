@@ -428,12 +428,45 @@ pub const EXPLORATION_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/wirecutters",
 ];
 
+/// `ss13_game::science::bitrunning`: the domain's cache and exit, the byteforge's reward crate,
+/// its certificate, ores and the domains' `completion_loot`, the avatar's backpack.
+pub const BITRUNNING_RUNTIME_TYPES: &[&str] = &[
+    "/obj/structure/closet/crate/secure/bitrunning/encrypted",
+    "/obj/structure/closet/crate/secure/bitrunning/decrypted",
+    "/obj/structure/hololadder",
+    "/obj/item/paper",
+    "/obj/item/stack/ore/iron",
+    "/obj/item/stack/ore/glass",
+    "/obj/item/stack/ore/silver",
+    "/obj/item/stack/ore/titanium",
+    "/obj/item/stack/ore/plasma",
+    "/obj/item/stack/ore/gold",
+    "/obj/item/stack/ore/uranium",
+    "/obj/item/stack/ore/diamond",
+    "/obj/item/stack/ore/bluespace_crystal",
+    "/obj/item/storage/box/survival",
+    "/obj/item/storage/medkit/regular",
+    "/obj/item/flashlight",
+    "/obj/item/toy/plush/abductor/agent",
+    "/obj/item/toy/beach_ball",
+    "/obj/item/toy/plush/bubbleplush",
+    "/obj/item/bikehorn",
+    "/obj/item/food/pizzaslice/meat/pizzeria",
+    "/obj/item/stack/pipe_cleaner_coil/random/five",
+    "/obj/item/radio/headset/psyker",
+    "/obj/item/clothing/suit/costume/snowman",
+    "/obj/item/toy/plush/nukeplushie",
+    "/obj/item/stack/spacecash/c500",
+    "/obj/item/toy/plush/rouny",
+    "/obj/item/toy/plush/hampter/ert",
+];
+
 /// Every DM type the game spawns by a constant path: the tables above and every
 /// `*_RUNTIME_TYPES` table of this crate. `ss13-mapload convert` emits all of them.
 pub fn runtime_types() -> BTreeSet<&'static str> {
     use crate::{antag, atmos_machine, cargo, mobs, service, silicon};
     let mut out = BTreeSet::new();
-    let tables: [&[&'static str]; 26] = [
+    let tables: [&[&'static str]; 27] = [
         &crate::RUNTIME_TYPES,
         &crate::RUNTIME_CONTAINER_TYPES,
         &crate::CONSTRUCTION_TYPES,
@@ -462,6 +495,7 @@ pub fn runtime_types() -> BTreeSet<&'static str> {
         CYBERIMP_RUNTIME_TYPES,
         EVENT_RUNTIME_TYPES,
         EXPLORATION_RUNTIME_TYPES,
+        BITRUNNING_RUNTIME_TYPES,
     ];
     out.extend(tables.into_iter().flatten().copied());
     // Lavaland fauna, their spawns and drops (`ss13_game::mobs::lavaland`).

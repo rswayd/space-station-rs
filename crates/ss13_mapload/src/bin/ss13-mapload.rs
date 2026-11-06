@@ -114,6 +114,9 @@ fn convert_cmd(config: &MapLoadPlugin, mut map_dirs: Vec<PathBuf>) -> anyhow::Re
         map_dirs.push(config.source.join("_maps/shuttles"));
         // Lavaland ruins are pasted onto the mining level (`ss13_mapload::ruins`).
         map_dirs.push(config.source.join(ss13_mapload::ruins::LAVA_RUINS_DIR));
+        // Virtual domains and their safehouses load mid-round (`ss13_game::science::bitrunning`).
+        map_dirs.push(config.source.join("_maps/virtual_domains"));
+        map_dirs.push(config.source.join("_maps/safehouses"));
         // So does the wizard's den (`ss13_game::antag::wizard`).
         map_dirs.push(
             config
