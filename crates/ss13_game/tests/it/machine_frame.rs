@@ -710,6 +710,12 @@ fn metastation_families() {
                 e.contains::<ss13_game::eng_machines::atmos_shield::AtmosShieldGen>()
             }
             Family::Flatpacker => e.contains::<ss13_game::eng_machines::flatpacker::Flatpacker>(),
+            Family::ModularShieldGen => {
+                e.contains::<ss13_game::eng_machines::modular_shield::ShieldGenerator>()
+            }
+            Family::ShieldModule => {
+                e.contains::<ss13_game::eng_machines::modular_shield::ShieldModule>()
+            }
         };
         assert!(live, "{fam:?}: {} has its live state", def.build_path);
         println!("{fam:?}: {path} -> {board} -> {}", def.build_path);

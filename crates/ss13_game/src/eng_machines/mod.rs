@@ -1,11 +1,13 @@
 //! Engineering machines without a home of their own (server), after tg
 //! `code/game/machinery/`: the sheetifier ([`sheetifier`]), atmospheric shield generators
-//! ([`atmos_shield`]) and the flatpacker ([`flatpacker`]).
+//! ([`atmos_shield`]), the flatpacker ([`flatpacker`]) and the modular shield
+//! ([`modular_shield`]).
 
 use bevy::prelude::*;
 
 pub mod atmos_shield;
 pub mod flatpacker;
+pub mod modular_shield;
 pub mod sheetifier;
 
 pub struct EngMachinesPlugin;
@@ -15,6 +17,7 @@ impl Plugin for EngMachinesPlugin {
         sheetifier::build(app);
         atmos_shield::build(app);
         flatpacker::build(app);
+        modular_shield::build(app);
     }
 }
 

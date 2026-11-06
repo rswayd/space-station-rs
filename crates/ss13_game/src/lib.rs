@@ -371,6 +371,9 @@ pub mod mining_shuttles;
 pub mod mobs;
 pub mod modpc;
 pub mod modsuit;
+#[cfg(feature = "client")]
+pub mod modular_shield_client;
+pub mod modular_shield_ui;
 #[cfg(feature = "server")]
 pub mod mood;
 #[cfg(feature = "client")]

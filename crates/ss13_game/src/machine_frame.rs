@@ -124,9 +124,13 @@ pub enum Family {
     AtmosShieldGen,
     /// Flatpackers (`crate::eng_machines::flatpacker`).
     Flatpacker,
+    /// Modular shield generators and gates (`crate::eng_machines::modular_shield`).
+    ModularShieldGen,
+    /// Modular shield nodes, cables, chargers, relays and wells.
+    ShieldModule,
 }
 
-const FAMILIES: [(&str, Family); 37] = [
+const FAMILIES: [(&str, Family); 39] = [
     (CELL_CHARGER, Family::Charger),
     (RECHARGER, Family::Charger),
     (crate::kitchen::MICROWAVE_ROOT, Family::Kitchen),
@@ -187,6 +191,14 @@ const FAMILIES: [(&str, Family); 37] = [
     (
         crate::eng_machines::flatpacker::FLATPACKER,
         Family::Flatpacker,
+    ),
+    (
+        crate::eng_machines::modular_shield::GENERATOR,
+        Family::ModularShieldGen,
+    ),
+    (
+        crate::eng_machines::modular_shield::MODULE,
+        Family::ShieldModule,
     ),
 ];
 
@@ -1147,6 +1159,9 @@ pub fn setup_built(world: &mut World, machine: Entity) {
         Family::Sheetifier => crate::eng_machines::sheetifier::setup(world, machine),
         Family::AtmosShieldGen => crate::eng_machines::atmos_shield::setup(world, machine),
         Family::Flatpacker => crate::eng_machines::flatpacker::setup(world, machine),
+        Family::ModularShieldGen | Family::ShieldModule => {
+            crate::eng_machines::modular_shield::setup(world, machine)
+        }
     }
 }
 

@@ -396,3 +396,110 @@ fn flatpacker_packs_a_board_and_the_flatpack_deploys() {
         .collect();
     assert_eq!(built, vec![t(5, 2)]);
 }
+
+#[test]
+fn modular_shield_charges_raises_a_ring_and_fails_when_drained() {
+    use ss13_game::eng_machines::modular_shield::{
+        self, ModularShield, ShieldGenerator, ShieldModule,
+    };
+    use ss13_shared::{Dir, Facing};
+
+    let mut app = fixture("modular_shield");
+    let g = obj(&mut app, modular_shield::GENERATOR, t(3, 2));
+    modular_shield::setup(app.world_mut(), g);
+    let state = |app: &App| app.world().get::<ShieldGenerator>(g).unwrap().clone();
+    // No parts: 40 strength, 3 regen, radius max(3, 3 / 2); recovering from 0 at a quarter.
+    let s = state(&app);
+    assert_eq!(
+        (s.max_strength, s.max_regeneration, s.max_radius),
+        (40.0, 3.0, 3.0)
+    );
+    assert_eq!((s.stored_strength, s.current_regeneration), (0.0, 0.75));
+    assert!(s.recovering);
+    modular_shield::toggle(app.world_mut(), g);
+    assert!(!state(&app).active, "recovering: it does not start");
+
+    modular_shield::process(app.world_mut(), g, 60.0);
+    let s = state(&app);
+    assert_eq!(s.stored_strength, 40.0);
+    assert!(!s.recovering);
+    assert_eq!(s.current_regeneration, 3.0);
+
+    // Radius 1: the four neighbours.
+    modular_shield::set_radius(app.world_mut(), g, 1.0);
+    modular_shield::toggle(app.world_mut(), g);
+    let s = state(&app);
+    assert!(s.active && s.initiating_until.is_some());
+    let mut tiles: Vec<TilePos> = s
+        .shields
+        .iter()
+        .map(|&f| *app.world().get::<TilePos>(f).unwrap())
+        .collect();
+    tiles.sort_by_key(|p| (p.x, p.y));
+    assert_eq!(tiles, vec![t(2, 2), t(3, 1), t(3, 3), t(4, 2)]);
+    let field = s.shields[0];
+    assert!(app.world().get::<ss13_world::Density>(field).is_none());
+    assert_eq!(
+        app.world()
+            .get::<ss13_atmos::AtmosBlocker>(field)
+            .map(|b| b.0),
+        Some(ss13_atmos::AtmosPass::No)
+    );
+    // Active: 3 / (0.5 + 2 * 1 / 3) * 0.5.
+    assert!((s.current_regeneration - 3.0 / (0.5 + 2.0 / 3.0) * 0.5).abs() < 1e-4);
+    // Radius is locked while active; toggling again while initiating does nothing.
+    modular_shield::set_radius(app.world_mut(), g, 2.0);
+    modular_shield::toggle(app.world_mut(), g);
+    assert_eq!((state(&app).radius, state(&app).active), (1.0, true));
+    run(&mut app, modular_shield::INITIATE_SECS + 0.2);
+    assert!(app.world().get::<ss13_world::Density>(field).is_some());
+    assert!(state(&app).initiating_until.is_none());
+
+    // Damage drains the generator, not the field; under 5 it fails and recovers.
+    let w = app.world_mut();
+    assert!(modular_shield::absorb(w, field, 20.0, true));
+    assert_eq!(w.get::<ShieldGenerator>(g).unwrap().stored_strength, 20.0);
+    assert!(w.get::<ModularShield>(field).is_some());
+    assert!(modular_shield::absorb(w, field, 16.0, true));
+    let s = w.get::<ShieldGenerator>(g).unwrap().clone();
+    assert!(!s.active && s.recovering && s.shields.is_empty());
+    assert_eq!(s.stored_strength, 0.0);
+    assert!(w.get_entity(field).is_err());
+
+    // Modules: a node facing the generator, a relay facing the node.
+    let node = obj(
+        &mut app,
+        "/obj/machinery/modular_shield/module/node",
+        t(2, 2),
+    );
+    let relay = obj(
+        &mut app,
+        "/obj/machinery/modular_shield/module/relay",
+        t(1, 2),
+    );
+    let w = app.world_mut();
+    w.entity_mut(node).insert(Facing(Dir::East));
+    w.entity_mut(relay).insert(Facing(Dir::East));
+    modular_shield::setup(w, node);
+    modular_shield::setup(w, relay);
+    let (n, r) = (
+        w.get::<ShieldModule>(node).unwrap().clone(),
+        w.get::<ShieldModule>(relay).unwrap().clone(),
+    );
+    assert_eq!(n.generator, Some(g));
+    assert_eq!((r.node, r.generator), (Some(node), Some(g)));
+    assert!(n.through_us.contains(&relay));
+    let s = w.get::<ShieldGenerator>(g).unwrap().clone();
+    assert!(s.modules.contains(&node) && s.modules.contains(&relay));
+    // The node goes: the relay loses the generator through it.
+    modular_shield::on_destroy(w, node);
+    w.despawn(node);
+    let r = w.get::<ShieldModule>(relay).unwrap().clone();
+    assert_eq!((r.node, r.generator), (None, None));
+    assert!(
+        !w.get::<ShieldGenerator>(g)
+            .unwrap()
+            .modules
+            .contains(&relay)
+    );
+}

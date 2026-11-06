@@ -151,6 +151,7 @@
 //! | 1970 | `power::shields::interact` |
 //! | 1979 | `eng_machines::atmos_shield::interact` (toggle; right click: lock) |
 //! | 1989 | `eng_machines::flatpacker::interact` (the `Flatpacker` window) |
+//! | 1999 | `eng_machines::modular_shield::interact` (`ModularShieldGen`, `ModularShieldConsole` windows) |
 //! | 2000 | `wallmount::interact` |
 //! | 2010 | `power::lighting::remove_by_hand` (right click: a bulb out of its fixture) |
 //! | 2012 | `power::lighting::floodlight_hand` (setting, the tube out with the panel open) |
@@ -233,6 +234,7 @@
 //! | 1460 | `silicon::ai_core::item_interaction` |
 //! | 1500 | `bots::construction::item_interaction` |
 //! | 1555 | `inducer::interact_with_atom` (charging a cell) |
+//! | 1559 | `eng_machines::modular_shield::item_interaction` (multitool buffer, connect, link; panel-open wrench turn) |
 //! | 1560 | `devices::rcd::item_interaction` (builds, deconstruction, loading) |
 //! | 1565 | `devices::taperecorder::item_interaction` (a tape into a recorder, respooling) |
 //! | 1567 | `devices::laser_pointer::item_interaction` (diode, crystal lens, their removal) |

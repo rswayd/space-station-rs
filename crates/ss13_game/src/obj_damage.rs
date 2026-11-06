@@ -282,6 +282,15 @@ fn apply_damage(
     amount: f32,
     damtype: DamageType,
 ) -> Hit {
+    // A modular shield field passes its damage to its generator (`take_damage` override).
+    let brute_or_burn = matches!(damtype, DamageType::Brute | DamageType::Burn);
+    if crate::eng_machines::modular_shield::absorb(world, target, amount, brute_or_burn) {
+        return Hit {
+            damage: 0.0,
+            broke: false,
+            destroyed: false,
+        };
+    }
     let Some(mut integrity) = world.get::<Integrity>(target).copied() else {
         return Hit {
             damage: 0.0,
@@ -475,6 +484,7 @@ pub fn deconstruct(world: &mut World, target: Entity, disassembled: bool) {
     }
     crate::power::shields::on_destroy(world, target);
     crate::eng_machines::atmos_shield::on_destroy(world, target);
+    crate::eng_machines::modular_shield::on_destroy(world, target);
     world.despawn(target);
     crate::construction::tile_changed(world, pos);
 }
