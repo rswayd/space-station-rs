@@ -32,6 +32,17 @@ const TYPES: &str = r##"{
     "/obj/item/stack/sheet": { "parent": "/obj/item/stack" },
     "/obj/item/stack/sheet/meat": { "parent": "/obj/item/stack/sheet", "declared_vars": {
         "name": "meat", "merge_type": { "path": "/obj/item/stack/sheet/meat" } } },
+    "/obj/item/circuitboard": { "parent": "/obj/item", "declared_vars": { "build_path": null } },
+    "/obj/item/circuitboard/machine": { "parent": "/obj/item/circuitboard",
+        "declared_vars": { "needs_anchored": 1, "req_components": null,
+        "def_components": null } },
+    "/obj/item/circuitboard/machine/sheetifier": { "parent": "/obj/item/circuitboard/machine",
+        "declared_vars": { "name": "Sheet-meister 2000",
+        "build_path": { "path": "/obj/machinery/sheetifier" }, "needs_anchored": 0 } },
+    "/obj/machinery": { "parent": "/obj", "declared_vars": { "density": 1 } },
+    "/obj/machinery/sheetifier": { "parent": "/obj/machinery", "declared_vars": {
+        "name": "Sheet-meister 2000",
+        "circuit": { "path": "/obj/item/circuitboard/machine/sheetifier" } } },
     "/obj/item/card": { "parent": "/obj/item" },
     "/obj/item/card/id": { "parent": "/obj/item/card", "declared_vars": { "slot_flags": 256 } },
     "/obj/item/card/id/advanced": { "parent": "/obj/item/card/id" },
@@ -80,6 +91,8 @@ fn fixture(test: &str) -> App {
     let used = [
         "/obj/effect/landmark/start/assistant",
         "/obj/item/stack/sheet/meat",
+        "/obj/item/circuitboard/machine/sheetifier",
+        "/obj/machinery/sheetifier",
         "/turf/open/floor",
         "/turf/open/space/basic",
         "/area/space",
@@ -307,4 +320,186 @@ fn atmos_shield_generators_span_an_airtight_field_between_them() {
     atmos_shield::process_early(app.world_mut(), a);
     let sa = gen_state(&app, a);
     assert_eq!((sa.on, sa.fields.len()), (GenState::WantPower, 0));
+}
+
+#[test]
+fn flatpacker_packs_a_board_and_the_flatpack_deploys() {
+    use ss13_game::eng_machines::flatpacker::{self, Flatpack, Flatpacker};
+    use ss13_game::science::lathe::MaterialStore;
+    use ss13_game::science::techweb::ResearchDb;
+    use ss13_mapload::research::{MaterialDef, ResearchData};
+
+    let mut app = fixture("flatpacker");
+    let mat = |id: &str| MaterialDef {
+        id: id.into(),
+        name: id.rsplit('/').next().unwrap().into(),
+        ..default()
+    };
+    app.world_mut()
+        .insert_resource(ResearchDb::new(ResearchData {
+            materials: vec![mat("/datum/material/iron"), mat("/datum/material/glass")],
+            ..default()
+        }));
+    let machine = obj(&mut app, flatpacker::FLATPACKER, t(3, 2));
+    flatpacker::setup(app.world_mut(), machine);
+    let client = app.world_mut().spawn_empty().id();
+    let board = ss13_game::construction::spawn_obj(
+        app.world_mut(),
+        "/obj/item/circuitboard/machine/sheetifier",
+        t(2, 2),
+    )
+    .expect("board prototype");
+
+    let w = app.world_mut();
+    flatpacker::insert_board(w, client, client, board, machine);
+    let f = w.get::<Flatpacker>(machine).unwrap().clone();
+    assert_eq!(f.board, Some(board));
+    // No parts: only the frame and cable (iron 5.05 sheets, glass 0.05), at efficiency 2.
+    assert_eq!(f.needed, vec![(0, 505.0), (1, 5.0)]);
+    assert_eq!(f.efficiency, 2.0);
+    assert!(!flatpacker::start_build(w, machine), "no materials");
+
+    w.get_mut::<MaterialStore>(machine).unwrap().amounts = vec![2000, 100];
+    assert!(flatpacker::start_build(w, machine));
+    assert!(!flatpacker::start_build(w, machine), "busy");
+    run(&mut app, flatpacker::BASE_SECS);
+    let world = app.world_mut();
+    assert!(
+        world
+            .get::<Flatpacker>(machine)
+            .unwrap()
+            .busy_until
+            .is_none()
+    );
+    assert_eq!(
+        world.get::<MaterialStore>(machine).unwrap().amounts,
+        vec![990, 90]
+    );
+    let packs: Vec<(Entity, Flatpack)> = world
+        .query::<(Entity, &Flatpack)>()
+        .iter(world)
+        .map(|(e, f)| (e, *f))
+        .collect();
+    assert_eq!(packs.len(), 1);
+    let (pack, packed) = packs[0];
+    assert_eq!(packed.board, board);
+    assert!(world.get::<Flatpacker>(machine).unwrap().board.is_none());
+
+    // Moved off the packer, a multitool deploys it into the board's machine.
+    ss13_game::storage::take_out(world, pack, t(5, 2));
+    assert!(flatpacker::deploy(world, client, pack));
+    assert!(world.get_entity(pack).is_err());
+    let built: Vec<TilePos> = world
+        .query::<(&Sheetifier, &TilePos)>()
+        .iter(world)
+        .map(|(_, p)| *p)
+        .collect();
+    assert_eq!(built, vec![t(5, 2)]);
+}
+
+#[test]
+fn modular_shield_charges_raises_a_ring_and_fails_when_drained() {
+    use ss13_game::eng_machines::modular_shield::{
+        self, ModularShield, ShieldGenerator, ShieldModule,
+    };
+    use ss13_shared::{Dir, Facing};
+
+    let mut app = fixture("modular_shield");
+    let g = obj(&mut app, modular_shield::GENERATOR, t(3, 2));
+    modular_shield::setup(app.world_mut(), g);
+    let state = |app: &App| app.world().get::<ShieldGenerator>(g).unwrap().clone();
+    // No parts: 40 strength, 3 regen, radius max(3, 3 / 2); recovering from 0 at a quarter.
+    let s = state(&app);
+    assert_eq!(
+        (s.max_strength, s.max_regeneration, s.max_radius),
+        (40.0, 3.0, 3.0)
+    );
+    assert_eq!((s.stored_strength, s.current_regeneration), (0.0, 0.75));
+    assert!(s.recovering);
+    modular_shield::toggle(app.world_mut(), g);
+    assert!(!state(&app).active, "recovering: it does not start");
+
+    modular_shield::process(app.world_mut(), g, 60.0);
+    let s = state(&app);
+    assert_eq!(s.stored_strength, 40.0);
+    assert!(!s.recovering);
+    assert_eq!(s.current_regeneration, 3.0);
+
+    // Radius 1: the four neighbours.
+    modular_shield::set_radius(app.world_mut(), g, 1.0);
+    modular_shield::toggle(app.world_mut(), g);
+    let s = state(&app);
+    assert!(s.active && s.initiating_until.is_some());
+    let mut tiles: Vec<TilePos> = s
+        .shields
+        .iter()
+        .map(|&f| *app.world().get::<TilePos>(f).unwrap())
+        .collect();
+    tiles.sort_by_key(|p| (p.x, p.y));
+    assert_eq!(tiles, vec![t(2, 2), t(3, 1), t(3, 3), t(4, 2)]);
+    let field = s.shields[0];
+    assert!(app.world().get::<ss13_world::Density>(field).is_none());
+    assert_eq!(
+        app.world()
+            .get::<ss13_atmos::AtmosBlocker>(field)
+            .map(|b| b.0),
+        Some(ss13_atmos::AtmosPass::No)
+    );
+    // Active: 3 / (0.5 + 2 * 1 / 3) * 0.5.
+    assert!((s.current_regeneration - 3.0 / (0.5 + 2.0 / 3.0) * 0.5).abs() < 1e-4);
+    // Radius is locked while active; toggling again while initiating does nothing.
+    modular_shield::set_radius(app.world_mut(), g, 2.0);
+    modular_shield::toggle(app.world_mut(), g);
+    assert_eq!((state(&app).radius, state(&app).active), (1.0, true));
+    run(&mut app, modular_shield::INITIATE_SECS + 0.2);
+    assert!(app.world().get::<ss13_world::Density>(field).is_some());
+    assert!(state(&app).initiating_until.is_none());
+
+    // Damage drains the generator, not the field; under 5 it fails and recovers.
+    let w = app.world_mut();
+    assert!(modular_shield::absorb(w, field, 20.0, true));
+    assert_eq!(w.get::<ShieldGenerator>(g).unwrap().stored_strength, 20.0);
+    assert!(w.get::<ModularShield>(field).is_some());
+    assert!(modular_shield::absorb(w, field, 16.0, true));
+    let s = w.get::<ShieldGenerator>(g).unwrap().clone();
+    assert!(!s.active && s.recovering && s.shields.is_empty());
+    assert_eq!(s.stored_strength, 0.0);
+    assert!(w.get_entity(field).is_err());
+
+    // Modules: a node facing the generator, a relay facing the node.
+    let node = obj(
+        &mut app,
+        "/obj/machinery/modular_shield/module/node",
+        t(2, 2),
+    );
+    let relay = obj(
+        &mut app,
+        "/obj/machinery/modular_shield/module/relay",
+        t(1, 2),
+    );
+    let w = app.world_mut();
+    w.entity_mut(node).insert(Facing(Dir::East));
+    w.entity_mut(relay).insert(Facing(Dir::East));
+    modular_shield::setup(w, node);
+    modular_shield::setup(w, relay);
+    let (n, r) = (
+        w.get::<ShieldModule>(node).unwrap().clone(),
+        w.get::<ShieldModule>(relay).unwrap().clone(),
+    );
+    assert_eq!(n.generator, Some(g));
+    assert_eq!((r.node, r.generator), (Some(node), Some(g)));
+    assert!(n.through_us.contains(&relay));
+    let s = w.get::<ShieldGenerator>(g).unwrap().clone();
+    assert!(s.modules.contains(&node) && s.modules.contains(&relay));
+    // The node goes: the relay loses the generator through it.
+    modular_shield::on_destroy(w, node);
+    w.despawn(node);
+    let r = w.get::<ShieldModule>(relay).unwrap().clone();
+    assert_eq!((r.node, r.generator), (None, None));
+    assert!(
+        !w.get::<ShieldGenerator>(g)
+            .unwrap()
+            .modules
+            .contains(&relay)
+    );
 }

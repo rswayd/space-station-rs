@@ -675,6 +675,12 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/machinery/atmos_shield_gen",
     "/obj/item/circuitboard/machine/atmos_shield_gen",
     "/obj/effect/atmos_shield",
+    // The flatpacker, its board and flatpacks (`ss13_game::eng_machines::flatpacker`).
+    "/obj/machinery/flatpacker",
+    "/obj/item/circuitboard/machine/flatpacker",
+    "/obj/item/flatpack",
+    // Modular shield fields (`ss13_game::eng_machines::modular_shield`).
+    "/obj/structure/emergency_shield/modular",
 ];
 
 /// `ss13_game::species`: every species' organs (`mutant*`), meat (`meat`) and the plasmaman
