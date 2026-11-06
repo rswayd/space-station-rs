@@ -153,6 +153,12 @@ fn ex_act_obj(world: &mut World, obj: Entity, severity: Severity) {
         crate::mecha::core::take_damage(world, obj, damage, DamageType::Brute, "bomb", None);
         return;
     }
+    // `/obj/machinery/light` `take_damage`: the tube may break, the fixture may come apart.
+    if world.get::<crate::power::LightFixture>(obj).is_some() {
+        let damage = through_armor(bomb_damage(world, severity), dm.armor_bomb);
+        crate::power::lighting::take_damage(world, obj, damage);
+        return;
+    }
     // `/obj/machinery/door/ex_act`: "if it blows up a wall it should blow up a door".
     let severity = if is_under(&dm.path, DOOR) {
         severity.worse()

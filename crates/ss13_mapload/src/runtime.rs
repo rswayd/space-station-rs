@@ -85,6 +85,16 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/stack/sheet/cloth",
     "/obj/item/stack/sheet/plastic",
     "/obj/item/wallframe/urinal",
+    // Bulbs out of fixtures, fixture frames and the fixtures they build
+    // (`ss13_game::power::lighting`).
+    "/obj/item/light/tube",
+    "/obj/item/light/bulb",
+    "/obj/structure/light_construct",
+    "/obj/structure/light_construct/small",
+    "/obj/structure/light_construct/floor",
+    "/obj/machinery/light/empty",
+    "/obj/machinery/light/small/empty",
+    "/obj/machinery/light/floor/empty",
     SHRAPNEL,
     SHRAPNEL_MEGA,
     SMOKE_BAD,

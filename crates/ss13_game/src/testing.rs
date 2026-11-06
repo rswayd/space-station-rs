@@ -74,7 +74,8 @@ pub fn deterministic(app: &mut App, seed: u64) {
         .insert_resource(TimeUpdateStrategy::ManualDuration(TICK))
         .insert_resource(crate::events::EventsConfig::forced_only())
         .insert_resource(crate::events::holidays::HolidaysConfig::none())
-        .insert_resource(crate::station_traits::StationTraitsConfig::none());
+        .insert_resource(crate::station_traits::StationTraitsConfig::none())
+        .insert_resource(crate::power::lighting::RoundstartLightBreak(false));
 }
 
 /// A fixture's map plugin: `maps` relative to `assets`, which is also the BYOND "source".

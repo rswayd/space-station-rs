@@ -21,6 +21,7 @@ pub mod chargers;
 pub mod emitter;
 pub mod field_generator;
 pub mod grid;
+pub mod lighting;
 pub mod model;
 pub mod pacman;
 pub mod shields;
@@ -122,6 +123,21 @@ pub struct LightFixture {
     /// `nightshift_enabled`, [`set_nightshift`]).
     pub night_light: Option<LightSource>,
     pub nightshift: bool,
+    /// tg `status`: `on_light` is the template only with a working bulb.
+    pub status: lighting::LightStatus,
+    /// The light with a working bulb of `brightness`, whatever bulb is in now.
+    pub template: Option<LightSource>,
+    /// `"[base_state]-empty"`, `-broken`, `-burned`.
+    pub status_states: [Option<IconStateId>; 3],
+    /// Takes `/obj/item/light/bulb` (small and floor lights), else tubes (`light_type`).
+    pub bulb: bool,
+    pub switchcount: u32,
+    /// tg `flickering` ([`lighting::flicker`]).
+    pub flickering: bool,
+    pub integrity: f32,
+    /// For the load of a new bulb: `bulb_power`, `power_consumption_rate`.
+    pub bulb_power: f32,
+    pub consumption_rate: f32,
 }
 
 impl LightFixture {
@@ -142,6 +158,14 @@ impl LightFixture {
 
     fn light(&self) -> Option<LightSource> {
         match self.mode {
+            LightMode::On if self.status != lighting::LightStatus::Ok => None,
+            // tg `update()` while `flickering`: a quarter of the range, the night colour.
+            LightMode::On if self.flickering => self.on_light.map(|on| LightSource {
+                range: self.brightness * EMERGENCY_BRIGHTNESS_MUL,
+                power: EMERGENCY_POW_MUL,
+                color: self.night_light.map_or([0xFF, 0xDD, 0xCC], |n| n.color),
+                ..on
+            }),
             LightMode::On if self.fire => self.fire_light,
             LightMode::On if self.nightshift => self.night_light,
             LightMode::On => self.on_light,
@@ -316,6 +340,7 @@ impl Plugin for PowerServerPlugin {
                 chargers::ChargersPlugin,
                 apc_ui::ApcUiPlugin,
                 teg::TegPlugin,
+                lighting::LightingPlugin,
             ))
             .add_systems(
                 MapInit,
@@ -404,7 +429,18 @@ pub(crate) fn init_power(world: &mut World) {
             generators.push((e, pos, dm.power_gen, layer(dm)));
         } else if is_under(path, LIGHT_ROOT) {
             let light = light.cloned().unwrap_or_default();
-            let on_light = optics.and_then(|o| o.light);
+            // The light a working bulb gives: the map's, or `update()`'s for one broken or empty
+            // on the map.
+            let on_light = optics.and_then(|o| o.light).or_else(|| {
+                let whole = DmLight {
+                    status: 0,
+                    ..light.clone()
+                };
+                let pixel = atom.map_or([0, 0], |a| [a.pixel_x, a.pixel_y]);
+                let mut on = source(path, &whole, dir, pixel)?;
+                ss13_mapload::light::tint_fixture(path, &mut on, atom.and_then(|a| a.color));
+                Some(on)
+            });
             let icon = atom.map(|a| a.icon.clone()).unwrap_or_default();
             lights.push((e, pos, dm.clone(), light, on_light, icon));
         } else if is_under(path, MACHINE_ROOT) && dm.use_power > 0.0 {
@@ -578,37 +614,20 @@ pub(crate) fn init_power(world: &mut World) {
         } else {
             0.0
         });
-        let state =
-            |suffix: &str| index.and_then(|i| i.get(&icon, &format!("{}{suffix}", dm.base_state)));
-        let fixture = LightFixture {
-            area,
-            // Map load lit every working bulb; `apply_area_power` sets the real mode.
-            mode: LightMode::Off,
-            on_light,
-            brightness: light.brightness,
-            emergency,
-            watts: f64::from(
-                light.brightness * light.bulb_power * dm.power_consumption_rate as f32,
-            )
-            .ceil(),
-            states: [state(""), state("_emergency")],
-            fire_light: on_light.map(|on| LightSource {
-                range: light.fire_brightness,
-                power: light.fire_power,
-                color: light.fire_colour.map_or([255; 3], |[r, g, b, _]| [r, g, b]),
-                ..on
-            }),
-            fire: false,
-            night_light: on_light.map(|on| LightSource {
-                range: light.nightshift_brightness,
-                power: light.nightshift_light_power,
-                color: light
-                    .nightshift_light_color
-                    .map_or([255; 3], |[r, g, b, _]| [r, g, b]),
-                ..on
-            }),
-            nightshift: false,
-        };
+        let status = lighting::LightStatus::from_dm(light.status);
+        let mut fixture =
+            lighting::new_fixture(index, &dm, &light, on_light, &icon, area, emergency, status);
+        // Map load lit every working bulb; `apply_area_power` sets the real mode.
+        if lighting::roundstart_break(world, &fixture) {
+            fixture.status = lighting::LightStatus::Broken;
+            fixture.on_light = None;
+        }
+        if let Some(mut optics) = world.get_mut::<Optics>(e)
+            && fixture.on_light.is_none()
+        {
+            optics.light = None;
+        }
+        refresh_light(&fixture, None, world.get_mut::<Appearance>(e));
         world.entity_mut(e).insert(fixture);
         world
             .get_mut::<AreaMembers>(area)
@@ -1012,6 +1031,7 @@ fn apply_area_power(
         Option<&mut Optics>,
         Option<&mut Appearance>,
     )>,
+    mut rng: ResMut<EngineRng>,
     mut commands: Commands,
 ) {
     for &AreaPowerChanged(area_entity) in changed.read() {
@@ -1043,6 +1063,22 @@ fn apply_area_power(
             };
             if mode == light.mode {
                 continue;
+            }
+            // tg `update(trigger)`: every switch on counts and may burn the bulb out; the
+            // first one is `post_machine_initialize`'s `update(trigger = FALSE)`.
+            let mut mode = mode;
+            if mode == LightMode::On {
+                light.switchcount += 1;
+                let count = light.switchcount as f32;
+                if light.switchcount > 1 && rng.0.chance((count * count * 0.01).min(60.0)) {
+                    light.status = lighting::LightStatus::Burned;
+                    light.on_light = None;
+                    mode = LightMode::Off;
+                    if mode == light.mode {
+                        refresh_light(&light, optics, appearance);
+                        continue;
+                    }
+                }
             }
             set_mode(&mut light, mode, &mut area, optics, appearance);
             let recharging =
@@ -1092,7 +1128,12 @@ fn refresh_light(
         LightMode::On => light.fire,
         LightMode::Off => false,
     };
-    let state = light.states[usize::from(emergency)];
+    let state = match light.status {
+        lighting::LightStatus::Ok => light.states[usize::from(emergency)],
+        lighting::LightStatus::Empty => light.status_states[0],
+        lighting::LightStatus::Broken => light.status_states[1],
+        lighting::LightStatus::Burned => light.status_states[2],
+    };
     if let (Some(mut appearance), Some(state)) = (appearance, state)
         && appearance.icon_state != state
     {
@@ -1159,61 +1200,16 @@ pub fn set_nightshift(world: &mut World, apc: Entity, on: bool) {
 }
 
 /// tg `/obj/machinery/light/proc/break_light_tube()`: the bulb breaks (`LIGHT_BROKEN`,
-/// `"[base_state]-broken"`), the fixture goes dark and never lights again. False when it had
-/// no working bulb.
-// shortcut: no sparks, sound or glass shards; replacing the tube is not ported.
+/// `"[base_state]-broken"`) with glass and sparks, the fixture goes dark until a new bulb goes
+/// in ([`lighting`]). False when it had no bulb to break.
 pub fn break_light_tube(world: &mut World, light: Entity) -> bool {
-    ruin_tube(world, light, "broken")
+    lighting::break_tube(world, light, false)
 }
 
 /// tg `/obj/machinery/light/proc/burn_out()` of a working bulb (an EMP): `LIGHT_BURNED`,
-/// `"[base_state]-burned"`, dark for good like a broken one.
+/// `"[base_state]-burned"`.
 pub fn burn_out_light(world: &mut World, light: Entity) -> bool {
-    ruin_tube(world, light, "burned")
-}
-
-fn ruin_tube(world: &mut World, light: Entity, suffix: &str) -> bool {
-    let broken = world
-        .get::<DmAtom>(light)
-        .zip(world.get::<DmPower>(light))
-        .and_then(|(atom, dm)| {
-            world
-                .get_resource::<IconIndex>()?
-                .get(&atom.icon, &format!("{}-{suffix}", dm.base_state))
-        });
-    let Some(fixture) = world.get::<LightFixture>(light) else {
-        return false;
-    };
-    if fixture.on_light.is_none() {
-        return false;
-    }
-    let area = fixture.area;
-    world.entity_mut(light).remove::<LightProcessing>();
-    let Ok([mut light_e, mut area_e]) = world.get_entity_mut([light, area]) else {
-        return false;
-    };
-    let Some(mut area_power) = area_e.get_mut::<AreaPower>() else {
-        return false;
-    };
-    let Ok((mut fixture, optics, appearance)) = light_e.get_components_mut::<(
-        &mut LightFixture,
-        Option<&mut Optics>,
-        Option<&mut Appearance>,
-    )>() else {
-        return false;
-    };
-    fixture.states = [broken, broken];
-    fixture.emergency = None;
-    // Off for good: its load leaves the area.
-    set_mode(
-        &mut fixture,
-        LightMode::Off,
-        &mut area_power,
-        optics,
-        appearance,
-    );
-    fixture.on_light = None;
-    true
+    lighting::burn_out(world, light)
 }
 
 /// tg APC `update_overlays()` and its charging-coloured light, when the overlay key changes.
@@ -1315,6 +1311,15 @@ mod nightshift_tests {
             fire: false,
             night_light: Some(source(8.0, 0.45)),
             nightshift: false,
+            status: lighting::LightStatus::Ok,
+            template: Some(source(8.0, 1.0)),
+            status_states: [None; 3],
+            bulb: false,
+            switchcount: 0,
+            flickering: false,
+            integrity: 100.0,
+            bulb_power: 1.0,
+            consumption_rate: 20.0,
         };
         let light = w.spawn((fixture, Optics::default())).id();
         w.entity_mut(area).insert(AreaMembers {

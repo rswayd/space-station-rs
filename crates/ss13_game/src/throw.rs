@@ -447,6 +447,8 @@ fn pick_hit(world: &World, blockers: &[Entity], target: Option<Entity>) -> Optio
 fn finish(world: &mut World, item: Entity, thrown: &Thrown, hit: Option<Entity>) {
     world.entity_mut(item).remove::<Thrown>();
     let Some(hit) = hit else {
+        // `/obj/item/light/throw_impact`: a bulb shatters where it lands.
+        crate::power::lighting::thrown(world, item);
         // `frozen/shatter_on_landed`.
         if crate::effects::frozen::shatter(world, item) {
             return;
@@ -498,6 +500,8 @@ fn finish(world: &mut World, item: Entity, thrown: &Thrown, hit: Option<Entity>)
             crate::bar::glass_thrown(world, item, Some(hit));
         }
     }
+    // `/obj/item/light/throw_impact`: a bulb not caught shatters on what it hit.
+    crate::power::lighting::thrown(world, item);
 }
 
 /// `/atom/movable/hitby`: an unanchored thing hit hard enough steps along the item's direction.

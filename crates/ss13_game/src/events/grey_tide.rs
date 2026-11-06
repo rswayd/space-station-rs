@@ -2,8 +2,7 @@
 //! ends (20-30 fires in) every airlock there opens and bolts (`prison_open`), the secure
 //! lockers unlock and the APCs turn their lighting off (`COMSIG_GLOB_GREY_TIDE`). The
 //! announcement comes 50-60 fires in, after the doors.
-// shortcut: no light flicker every 12 fires (`COMSIG_GLOB_GREY_TIDE_LIGHT`, lights cannot
-// flicker yet), no `critical_machine` doors (none ported).
+// shortcut: no `critical_machine` doors (none ported).
 
 use std::ops::RangeInclusive;
 
@@ -70,6 +69,13 @@ impl RoundEvent for GreyTide {
     fn start(&mut self, _: &mut World, ev: &mut EventState) {
         if self.areas.is_empty() {
             ev.killed = true;
+        }
+    }
+
+    /// `COMSIG_GLOB_GREY_TIDE_LIGHT` every 12 fires: the departments' lights flicker.
+    fn tick(&mut self, world: &mut World, ev: &mut EventState) {
+        if ev.active_for % 12 == 0 {
+            crate::power::lighting::grey_tide_flicker(world, &self.areas);
         }
     }
 
