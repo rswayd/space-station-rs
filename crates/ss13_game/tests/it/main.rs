@@ -62,6 +62,7 @@ mod martial;
 mod mecha;
 mod medical;
 mod medicine;
+mod megafauna;
 mod mining;
 mod misc_ui;
 mod mobs;

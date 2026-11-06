@@ -237,7 +237,7 @@ pub fn destroy_item(world: &mut World, item: Entity) {
 
 /// `/mob/living/.../ex_act` by kind of mob.
 pub fn ex_act_mob(world: &mut World, mob: Entity, severity: Severity) {
-    if world.get::<Stat>(mob).is_none() {
+    if world.get::<Stat>(mob).is_none() || crate::mobs::megafauna::ex_act(world, mob, severity) {
         return;
     }
     if world.get::<crate::silicon::Silicon>(mob).is_some() {
