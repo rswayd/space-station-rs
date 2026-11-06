@@ -81,6 +81,9 @@ const FIXED_SIGNS: [&str; 5] = [
     "/obj/structure/sign/picture_frame",
 ];
 const POSTER: &str = "/obj/structure/sign/poster";
+/// BandaStation's flags (`objects/code/structures/flags.dm`) and their folded items.
+const FLAG: &str = "/obj/structure/sign/flag";
+const FOLDED_FLAG: &str = "/obj/item/sign/flag";
 const POSTER_RIPPED: &str = "/obj/structure/sign/poster/ripped";
 const POSTER_OFFICIAL: &str = "/obj/structure/sign/poster/official";
 const POSTER_ITEM: &str = "/obj/item/poster";
@@ -293,7 +296,8 @@ impl Plugin for DecorPlugin {
         use crate::click_handlers::{AddClickHandler, ClickPhase};
         // tg `attack_hand` of curtains, mirrors, signs and plaques.
         app.add_click_handler(ClickPhase::EmptyHand, 3150, |w, c| {
-            crate::decor::interact(w, c.client, c.mob, c.target)
+            (c.modifiers.right && crate::decor::fold_flag(w, c.mob, c.target))
+                || crate::decor::interact(w, c.client, c.mob, c.target)
         });
         // tg tool acts and `item_interaction` of curtains, mirrors, signs, plaques, statues.
         app.add_click_handler(ClickPhase::HeldOnTarget, 3450, |w, c| {
@@ -433,6 +437,56 @@ pub fn interact(world: &mut World, client: Entity, mob: Entity, target: Entity) 
         return true;
     }
     false
+}
+
+/// BandaStation `flag/attack_hand_secondary` -> `fold`: the flag comes off the wall as its
+/// `foldable_type` (`/obj/item/sign/flag/<kind>`, the same subpath) in the hands. True when
+/// `target` was a flag.
+pub fn fold_flag(world: &mut World, mob: Entity, target: Entity) -> bool {
+    let Some(path) = path(world, target).map(str::to_owned) else {
+        return false;
+    };
+    let Some(kind) = path.strip_prefix(FLAG) else {
+        return false;
+    };
+    if !(kind.is_empty() || kind.starts_with('/')) {
+        return false;
+    }
+    // `can_perform_action(NEED_HANDS | NEED_DEXTERITY)`.
+    if world.get::<crate::restraints::Handcuffed>(mob).is_some()
+        || crate::status_effects::incapacitation(world, mob).incapacitated
+    {
+        return true;
+    }
+    let Some(&pos) = world.get::<TilePos>(target) else {
+        return true;
+    };
+    // `MAPPING_DIRECTIONAL_HELPERS` subtypes fold like their flag; an unknown kind like the base.
+    let kind = kind.split("/directional").next().unwrap_or_default();
+    let mut item_path = format!("{FOLDED_FLAG}{kind}");
+    let item = loop {
+        if let Some(item) = crate::construction::spawn_obj(world, &item_path, pos) {
+            break Some(item);
+        }
+        match item_path.rfind('/') {
+            Some(cut) if item_path.len() > FOLDED_FLAG.len() => item_path.truncate(cut),
+            _ => break None,
+        }
+    };
+    let Some(item) = item else {
+        return true;
+    };
+    let (name, user) = (name_of(world, target), name_of(world, mob));
+    visible(
+        world,
+        mob,
+        &format!("Вы складываете {name}."),
+        &format!("{user} складывает {name}."),
+        Span::Notice,
+    );
+    crate::cooking::give_to(world, mob, target, item);
+    remove(world, target);
+    true
 }
 
 /// tg tool acts and `item_interaction` of the decor. True when handled.
@@ -601,6 +655,8 @@ pub fn item_interaction(
                 start(world, SIGN_DS, 0, DecorJob::Unmount);
                 true
             }
+            // BandaStation `flag/welder_act`: `return` (no repair).
+            ToolKind::Welder if is_under(&path, FLAG) => false,
             ToolKind::Welder if !modifiers.right => {
                 if !damaged(world, target) {
                     tell(

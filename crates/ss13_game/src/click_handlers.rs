@@ -110,6 +110,7 @@
 //! | 1300 | `chem_dispenser::interact` |
 //! | 1400 | `chem_master::interact` |
 //! | 1500 | `chem_heater::interact` |
+//! | 1510 | `teapot::interact` |
 //! | 1600 | `botany::interact` |
 //! | 1700 | `multiz::interact` |
 //! | 1800 | `atmos_machinery::windows::interact` |
@@ -129,7 +130,7 @@
 //! | 2900 | `mining::interact` |
 //! | 3000 | `holosign::attack_hand` |
 //! | 3100 | `plumbing::interact` |
-//! | 3150 | `decor::interact` |
+//! | 3150 | `decor::fold_flag` (right click), `decor::interact` |
 //! | 3160 | `flora::attack_hand` |
 //! | 3170 | `botany::unique::pickup_backfire` (never handles) |
 //! | 3200 | `service::server::interact` |
@@ -145,6 +146,7 @@
 //! | 3458 | `cargo::mail_sorter::interact` |
 //! | 3459 | `cargo::express::interact` |
 //! | 3461 | `cargo::materials_market::interact` |
+//! | 3462 | `papershredder::empty_hand` (right click) |
 //!
 //! [`ClickPhase::HeldOnTarget`] (a world click with the active hand's item; tg
 //! `item_interaction`, `interact_with_atom`, `pre_attack`, `attackby`):
@@ -172,6 +174,7 @@
 //! | 1450 | `silicon::mmi::item_interaction` |
 //! | 1460 | `silicon::ai_core::item_interaction` |
 //! | 1500 | `bots::construction::item_interaction` |
+//! | 1590 | `teapot::item_interaction` (before `machine_frame` takes it apart) |
 //! | 1600 | `machine_frame::item_interaction` |
 //! | 1650 | `radiation::geiger_interact` |
 //! | 1700 | `service::server::item_interaction` |
@@ -182,6 +185,7 @@
 //! | 1900 | `cooking::item_interaction` |
 //! | 2000 | `smartfridge::item_interaction` |
 //! | 2100 | `coffee::item_interaction` |
+//! | 2105 | `papershredder::item_interaction` |
 //! | 2200 | `stove::item_interaction` |
 //! | 2300 | `icecream::item_interaction` |
 //! | 2400 | `chem_dispenser::item_interaction` |

@@ -1541,10 +1541,16 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
                 return;
             }
             crate::obj_damage::set_anchored(world, target, !was);
-            let text = if *was {
-                "Вы откручиваете автомат."
+            // Also the fork's shredder and teapot (`default_unfasten_wrench`).
+            let name = if path_of(world, target).is_some_and(|p| is_under(&p, VENDING)) {
+                "автомат".to_owned()
             } else {
-                "Вы прикручиваете автомат."
+                crate::chem::name_of(world, target)
+            };
+            let text = if *was {
+                format!("Вы откручиваете {name}.")
+            } else {
+                format!("Вы прикручиваете {name}.")
             };
             tell(world, client, Span::Notice, text);
         }

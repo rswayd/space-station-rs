@@ -325,6 +325,10 @@ impl Plugin for GameServerPlugin {
             crate::smartfridge::SmartFridgePlugin,
         ))
         .add_plugins((
+            crate::teapot::TeapotPlugin,
+            crate::papershredder::PaperShredderPlugin,
+        ))
+        .add_plugins((
             crate::projectile::ProjectileServerPlugin,
             crate::guns::GunsServerPlugin,
         ))

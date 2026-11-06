@@ -11,7 +11,7 @@
 Защищённые шкафы Блюшилда, Представителя НТ, Магистрата, адвоката, отряда быстрого реагирования ЦК и шкафы «Гамма» (броня, оружие, дробовики, биозащита) для гамма-тревоги.
 
 - **Код:** [`/obj/structure/closet/secure_closet/blueshield`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/structures/crates_lockers/closets/secure/blueshield.dm#L1), [`/obj/structure/closet/secure_closet/nanotrasen_representative`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/structures/crates_lockers/closets/secure/nanotrasen_representative.dm#L1), [`/obj/structure/closet/secure_closet/magistrate`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/structures/crates_lockers/closets/secure/magistrate.dm#L1), [`/obj/structure/closet/secure_closet/lawyer`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/structures/crates_lockers/closets/secure/lawyer.dm#L2), [`/obj/structure/closet/secure_closet/gamma_armor`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/structures/crates_lockers/closets/secure/gamma.dm#L1), [`/obj/structure/closet/secure_closet/tac/srt`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/structures/crates_lockers/closets/secure/centcom.dm#L1)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/closets.rs`: открываются по доступу, наполняются; гамма-шкафы не завязаны на уровень тревоги
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/closets.rs`: открываются по доступу, наполняются (`PopulateContents`/`generate_items_inside` из DM-данных); в DM гамма-шкафы с уровнем тревоги не связаны — они приходят гамма-шаттлом оружейной, который вызывает админ (группа админки)
 
 ### Гарнитуры и ключи форковых должностей
 Гарнитуры и ключи шифрования Блюшилда, Представителя НТ, Магистрата, адвоката (канал «Правосудие»).
@@ -50,13 +50,13 @@ _«Напитки и реагенты-напитки форка» описано
 Настольная машина: греет или охлаждает напиток в стакане до фиксированной температуры; собирается из платы.
 
 - **Код:** [`/obj/machinery/teapot`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/machinery/teapot.dm#L1), [`/obj/item/circuitboard/machine/teapot`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/items/machine_circuitboards.dm#L1), [`/datum/design/board/teapot`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/items/machine_designs.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/teapot.rs`: стакан внутрь/наружу (ПКМ), меню температуры (±30 K, 183–363 K) и включения, нагрев `(цель − T) × 0.45 × сек × теплоёмкость` каждый машинный тик и шаг реакции, выключение на цели, ключ/отвёртка/лом и сборка из платы (`crate::machine_frame`, семейство `Teapot`); нет доступа ИИ/боргов к меню
 
 ### Шредер бумаги
 Машина уничтожает бумагу в обрывки. (Бумага — см. ../service/.)
 
 - **Код:** [`/obj/machinery/papershredder`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/machinery/papershredder.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/papershredder.rs`: фото, бумага, газеты, ID-карты, папки, книги уничтожаются в корзину (до 15), ПКМ пустой рукой выдаёт обрывок, ключ откручивает, спрайт по заполнению; подтипы считаются (в DM точное `type in` отвергает все ID-карты — баг не перенесён); обрывки не горят (поджиг предметов — другая группа)
 
 ### Торговые автоматы форка
 Автоматы НТ (снаряжение для должностей форка), гардероб роботехника и др. (Механика вендоров — см. ../cargo/.)
@@ -68,7 +68,7 @@ _«Напитки и реагенты-напитки форка» описано
 Синдикатовский ксерокс, хранилище скафандров Блюшилда, уникальный код у каждой ядерной бомбы, сломанный крематорий, мехи ОБР, ядро меха, КПК офицера ЦК.
 
 - **Код:** [`/obj/machinery/photocopier/syndicate`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/machinery/photocopier.dm#L1), [`/obj/machinery/suit_storage_unit/blueshield`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/machinery/suit_storage_unit.dm#L1), [`/obj/machinery/nuclearbomb/Initialize()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/machinery/nuclear_bomb.dm#L1), [`morgue.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/structures/morgue.dm), [`mecha.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/mecha/mecha.dm), [`mech_core.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/items/mech_core.dm), [`role_tablet_presets.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/items/role_tablet_presets.dm)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/antag/nukeop/bomb.rs`: у каждой ядерной бомбы свой случайный код с загрузки карты; синдикатовского ксерокса, хранилища скафандров Блюшилда, крематория (морга нет — ../medical/), мехов ОБР, ядра меха и КПК ЦК нет
 
 ### Мебель, фальшивые лампы и платформы
 Барные табуреты, тактические и корпоративные кресла, витрины капитана и ГСБ, декоративные лампы без питания (в т.ч. разбитые, аварийные, цветные), платформы (ограждения-перила, усиленные).
@@ -80,7 +80,7 @@ _«Напитки и реагенты-напитки форка» описано
 Флаги НТ, ТСФ и др. (сворачиваются/поджигаются), ~40 контрабандных и легальных плакатов, указатели трамвая, статуи (Фемида, карта станции «Кибериада»), знамёна отделов (поднимают дух).
 
 - **Код:** [`/obj/structure/sign/flag`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/structures/flags.dm#L2), [`posters.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/structures/posters.dm), [`signs.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/structures/signs.dm), [`/obj/structure/statue/themis`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/structures/statues.dm#L2), [`/obj/item/banner`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/items/banners.dm#L2)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload`: размещённые на карте рисуются; взаимодействий нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/decor.rs`: флаг складывается ПКМ в свой сложенный флаг в руки (ключ и сварка его не трогают), плакаты срываются/снимаются/вешаются, статуи откручиваются и режутся; нет поджигания флагов, вешания сложенного флага обратно (нет настенных рамок) и знамён (механика знамён апстрима — ../service/)
 
 ### Декали, деревянные полы, спавнеры и маяки трамвая
 Логотипы НТ/Синдиката/SolGov на полу, золотые бордюры, деревянные полы и плитка, случайные спавнеры (ID-наклейки, советская форма), маяки платформ трамвая «Кибериады».

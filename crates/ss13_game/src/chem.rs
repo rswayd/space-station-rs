@@ -1790,6 +1790,7 @@ fn process_reactions(world: &mut World) {
     let reacting: Vec<Entity> = q.iter(world).collect();
     for e in reacting {
         crate::chem_heater::reaction_step(world, e, seconds);
+        crate::teapot::reaction_step(world, e, seconds);
         if let Some(mut reagents) = world.get_mut::<Reagents>(e) {
             reagents.0.process(&chem, seconds);
         }

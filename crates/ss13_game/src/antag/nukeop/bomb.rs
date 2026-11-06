@@ -368,9 +368,17 @@ fn setup_bombs(world: &mut World) {
             world.get::<TilePos>(e),
             if syndicate { " (syndicate)" } else { "" }
         );
+        // BandaStation `nuclearbomb/Initialize`: `r_code = random_nukecode()` for every bomb
+        // instead of `NUKE_CODE_UNSET`.
+        let seed = world
+            .get_resource::<ss13_mapload::MapSeed>()
+            .map_or(0, |s| s.0);
+        let mut rng = ss13_mapload::spawner::Rng::new(seed ^ 0x6e75_6b63 ^ e.to_bits());
+        let r_code = super::server::random_nukecode(&mut rng);
         world.entity_mut(e).insert(NuclearBomb {
             state: NukeState {
                 anchored,
+                r_code,
                 ..default()
             },
             disk: None,
