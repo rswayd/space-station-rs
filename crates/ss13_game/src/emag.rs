@@ -18,7 +18,8 @@
 //!   - an air alarm: the flood and vent siphon modes are offered;
 //!   - a supply console: contraband is offered (`crate::cargo::console`);
 //!   - a communications console, a vending machine, a chem dispenser, a cyborg
-//!     (`crate::silicon::chassis`): their own `emag_act`.
+//!     (`crate::silicon::chassis`), a modular computer (`crate::modpc::pda`): their own
+//!     `emag_act`.
 //! - Bots take emags through their own clicks (`crate::bots`), after [`can_emag`].
 // shortcut: no bluespace emag reach (`prox_check`), no emags stuck together, no Donk Co. fake
 // emag, no `emag_act` of pAIs, the holodeck or other
@@ -149,6 +150,7 @@ fn takes_emag(world: &World, target: Entity) -> bool {
         || e.contains::<crate::vending::Vendor>()
         || e.contains::<crate::chem_dispenser::ChemDispenser>()
         || e.contains::<crate::silicon::chassis::Chassis>()
+        || e.contains::<crate::modpc::pda::ModularComputer>()
 }
 
 fn name(world: &World, e: Entity) -> String {
@@ -292,6 +294,12 @@ pub fn emag_act(world: &mut World, actor: Actor, card: Entity, target: Entity) -
         .is_some()
     {
         return crate::silicon::chassis::emag_act(world, actor, target);
+    }
+    if world
+        .get::<crate::modpc::pda::ModularComputer>(target)
+        .is_some()
+    {
+        return crate::modpc::pda::emag_act(world, client, target);
     }
     false
 }

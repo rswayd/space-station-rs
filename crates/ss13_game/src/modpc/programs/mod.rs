@@ -10,6 +10,8 @@ pub mod apps;
 pub mod card_mod;
 #[cfg(feature = "server")]
 pub mod messenger;
+#[cfg(feature = "server")]
+pub mod minesweeper;
 
 /// An installed program (an entry of `stored_files`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -36,10 +38,12 @@ pub enum ProgramKind {
     StatusDisplay,
     /// `/datum/computer_file/program/newscaster`.
     Newscaster,
+    /// BandaStation `/datum/computer_file/program/minesweeper`: installed by an emag.
+    Minesweeper,
 }
 
 impl ProgramKind {
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 12] = [
         Self::Messenger,
         Self::Notepad,
         Self::CrewManifest,
@@ -51,6 +55,7 @@ impl ProgramKind {
         Self::Signaler,
         Self::StatusDisplay,
         Self::Newscaster,
+        Self::Minesweeper,
     ];
 
     /// `filename`.
@@ -67,6 +72,7 @@ impl ProgramKind {
             Self::Signaler => "signaler",
             Self::StatusDisplay => "statusdisplay",
             Self::Newscaster => "newscasterapp",
+            Self::Minesweeper => "minesweeper",
         }
     }
 
@@ -88,6 +94,7 @@ impl ProgramKind {
             Self::Signaler => "SignalCommander",
             Self::StatusDisplay => "Status Display",
             Self::Newscaster => "Newscaster",
+            Self::Minesweeper => "Сапёр",
         }
     }
 
@@ -105,6 +112,7 @@ impl ProgramKind {
             Self::Signaler => "satellite-dish",
             Self::StatusDisplay => "signal",
             Self::Newscaster => "newspaper",
+            Self::Minesweeper => "bomb",
         }
     }
 

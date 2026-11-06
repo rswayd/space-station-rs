@@ -14,7 +14,7 @@
 //! `UpdateDisplay`). The flashlight lights the holder (tg's overlay light moves with whoever
 //! carries it) or the PDA on the floor.
 // shortcut: infinite battery (`internal_cell`, `handle_power`), NTNet always at good signal
-// (no relays), no inserted pen, disks, pAI, paper, chunky fingers or emag; the light is
+// (no relays), no inserted pen, disks, pAI, paper or chunky fingers; the light is
 // omnidirectional (tg: a directional overlay light) and gives way to any other light on its
 // holder (one `Optics` per entity).
 
@@ -81,6 +81,8 @@ pub struct ModularComputer {
     pub note: String,
     /// `initial(name)`, restored when the imprint is reset.
     pub initial_name: String,
+    /// `obj_flags & EMAGGED`.
+    pub emagged: bool,
 }
 
 impl ModularComputer {
@@ -100,6 +102,7 @@ impl ModularComputer {
             light_on: false,
             note: NOTEPAD_DEFAULT.to_owned(),
             initial_name: name.to_owned(),
+            emagged: false,
         }
     }
 
@@ -217,6 +220,22 @@ impl Plugin for ModpcServerPlugin {
                 crate::modpc::pda::item_interaction(w, c.client, c.mob, h, c.target)
             })
         });
+        // tg `item_interaction` of an emag on the PDA in the other hand.
+        app.add_click_handler(ClickPhase::OtherHand, 1150, |w, c| {
+            c.held.is_some_and(|h| {
+                w.get::<ModularComputer>(c.target).is_some()
+                    && crate::emag::interact_with_atom(
+                        w,
+                        crate::tools::Actor {
+                            client: c.client,
+                            mob: c.mob,
+                            item: Some(h),
+                        },
+                        c.target,
+                    )
+            })
+        });
+        super::programs::minesweeper::build(app);
         app.register_ui::<NtosUi>()
             .add_observer(attach)
             .add_observer(attach_console)
@@ -231,6 +250,47 @@ impl Plugin for ModpcServerPlugin {
                 ),
             );
     }
+}
+
+/// `/obj/item/modular_computer/emag_act` (and BandaStation's PDA override, which installs the
+/// minesweeper). True when it took.
+// shortcut: no device themes (`PDA_THEME_SYNDICATE`) and no syndicate programs to unlock.
+pub fn emag_act(world: &mut World, client: Entity, pc: Entity) -> bool {
+    let Some(computer) = world.get::<ModularComputer>(pc) else {
+        return false;
+    };
+    if !computer.enabled {
+        chat(world, Some(client), Span::Warning, "сначала включите!");
+        return false;
+    }
+    if computer.emagged {
+        chat(world, Some(client), Span::Warning, "уже емагнут!");
+        chat(
+            world,
+            Some(client),
+            Span::Notice,
+            "Вы проводите картой по устройству. Окно консоли включается, но оно быстро \
+             закрывается после того, как в него записывается всего несколько строк.",
+        );
+        return false;
+    }
+    let is_pda = computer.is_pda();
+    world
+        .get_mut::<ModularComputer>(pc)
+        .expect("checked above")
+        .emagged = true;
+    chat(world, Some(client), Span::Notice, "syndieOS загружен");
+    chat(
+        world,
+        Some(client),
+        Span::Notice,
+        "Вы проводите картой по устройству. Окно консоли на мгновение заполняет белый текст, \
+         быстро прокручиваемый по экрану.",
+    );
+    if is_pda {
+        super::programs::minesweeper::install(world, pc);
+    }
+    true
 }
 
 /// `Initialize` of a PDA item, once its components are all in.
@@ -677,6 +737,8 @@ pub struct NtosParams<'w, 's> {
     atmos: Option<Res<'w, Atmos>>,
     alarms: Option<Res<'w, crate::silicon::alarms::StationAlarms>>,
     app_states: Query<'w, 's, &'static super::programs::apps::AppState>,
+    minesweepers: Query<'w, 's, &'static super::programs::minesweeper::Minesweeper>,
+    minesweeper_board: Option<Res<'w, super::programs::minesweeper::MinesweeperLeaderboard>>,
     ticker: Option<Res<'w, crate::round::Ticker>>,
     time: Res<'w, Time>,
 }
@@ -713,6 +775,7 @@ pub enum NtosAct {
     UpdateNote(String),
     Card(super::programs::card_mod::CardAct),
     App(super::programs::apps::AppAct),
+    Minesweeper(super::programs::minesweeper::MinesweeperAct),
 }
 
 fn program_param(params: &UiParams) -> Result<ProgramKind, UiReject> {
@@ -852,6 +915,12 @@ impl ServerUi for NtosUi {
             Some(ProgramKind::StatusDisplay) => NtosScreen::Status(
                 super::programs::apps::status_data(params.app_states.get(entity).ok()),
             ),
+            Some(ProgramKind::Minesweeper) => {
+                NtosScreen::Minesweeper(Box::new(super::programs::minesweeper::ui_data(
+                    params.minesweepers.get(entity).ok(),
+                    params.minesweeper_board.as_deref(),
+                )))
+            }
             // A launcher never comes to the front.
             Some(ProgramKind::Newscaster) => NtosScreen::Main(main_data(
                 computer,
@@ -897,6 +966,9 @@ impl ServerUi for NtosUi {
             other => {
                 if let Some(act) = super::programs::apps::parse(other, params) {
                     return act.map(NtosAct::App);
+                }
+                if let Some(act) = super::programs::minesweeper::parse(other, params) {
+                    return act.map(NtosAct::Minesweeper);
                 }
                 match super::programs::card_mod::parse(other, |k| params.get(k).map(str::to_owned))
                 {
@@ -1030,6 +1102,9 @@ fn apply_act(
         }
         NtosAct::App(act) => {
             return super::programs::apps::apply(world, client, actor, pda, computer, act);
+        }
+        NtosAct::Minesweeper(act) => {
+            return super::programs::minesweeper::apply(world, client, actor, pda, computer, act);
         }
         NtosAct::Run(program) if program.launcher() => {
             if !computer.programs.contains(&program) {
@@ -1344,6 +1419,48 @@ mod tests {
             world.get::<DmName>(pda).unwrap().name,
             "КПК «Боб» (Инженер)"
         );
+    }
+
+    #[test]
+    fn an_emag_installs_the_minesweeper() {
+        use super::super::programs::minesweeper::{Minesweeper, MinesweeperAct, Mode};
+        let mut world = World::new();
+        world.init_resource::<Messages<SendChat>>();
+        world.init_resource::<Time>();
+        let client = world.spawn_empty().id();
+        let pda = world.spawn(ModularComputer::pda(PDA_ROOT, "pda")).id();
+        // Off: refused.
+        assert!(!emag_act(&mut world, client, pda));
+        world.get_mut::<ModularComputer>(pda).unwrap().enabled = true;
+        assert!(emag_act(&mut world, client, pda));
+        assert!(!emag_act(&mut world, client, pda), "already emagged");
+        let pc = world.get::<ModularComputer>(pda).unwrap().clone();
+        assert!(pc.emagged);
+        assert_eq!(
+            pc.programs
+                .iter()
+                .filter(|&&p| p == ProgramKind::Minesweeper)
+                .count(),
+            1
+        );
+        // Only the program in front takes its clicks.
+        let square = MinesweeperAct::Square(4, 4, Mode::Open);
+        assert!(
+            super::super::programs::minesweeper::apply(
+                &mut world,
+                client,
+                client,
+                pda,
+                &pc,
+                square.clone()
+            )
+            .is_err()
+        );
+        let mut pc = pc;
+        assert!(pc.open_program(ProgramKind::Minesweeper));
+        super::super::programs::minesweeper::apply(&mut world, client, client, pda, &pc, square)
+            .unwrap();
+        assert!(!world.get::<Minesweeper>(pda).unwrap().first_touch);
     }
 
     #[test]

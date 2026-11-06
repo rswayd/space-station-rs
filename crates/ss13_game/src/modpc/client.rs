@@ -1,6 +1,6 @@
 //! Client half of the PDA: the NtOS window (tg `NtosWindow` with `NtosMain`, `NtosMessenger`,
 //! `NtosNotepad`, `NtosCrewManifest`, `NtosGasAnalyzer`, `NtosCard`, `NtosStationAlertConsole`,
-//! `NtosRecords`, `NtosSignaler`, `NtosStatus`).
+//! `NtosRecords`, `NtosSignaler`, `NtosStatus`, BandaStation `NtosMinesweeperPanel`).
 // shortcut: one window size for every screen (tg sizes each interface), no device themes, no
 // search field in the records (local input state does not re-render the view), no
 // photos or search field in the messenger, Enter sends (no send button: buttons carry fixed
@@ -8,7 +8,9 @@
 
 use bevy::app::Propagate;
 use bevy::scene::{EntityScene, SceneList};
-use ss13_tgui::client::{ActOnSubmit, AppTguiClientExt, ClientUi, SetLocal, UiLocalState};
+use ss13_tgui::client::{
+    ActOnSubmit, ActWithLocal, AppTguiClientExt, ClientUi, SetLocal, UiLocalState, memo_of,
+};
 use ss13_tgui::interfaces::ru_jobs::department_ru;
 use ss13_ui_kit::prelude::*;
 use ss13_ui_kit::theme::{Bold, FontPx, Italic};
@@ -60,6 +62,7 @@ fn view(data: &NtosData, local: &UiLocalState) -> impl Scene + use<> {
                     local,
                 )))
             }
+            NtosScreen::Minesweeper(m) => Box::new(EntityScene(minesweeper_screen(m, local))),
         };
         bsn! {
             @WindowContent
@@ -1079,6 +1082,191 @@ fn access_list(d: &CardModData, card: &CardUi, local: &UiLocalState) -> impl Sce
                 --
                 Node { flex_grow: 1.0, flex_direction: FlexDirection::Column }
                 Children [ {checkboxes} ]
+            ]
+        ]
+    }
+}
+
+/// The minesweeper's local state: the tab (`currentWindow`) and the click mode.
+const MINESWEEPER_TAB: &str = "minesweeperWindow";
+const MINESWEEPER_MODE: &str = "minesweeperMode";
+
+/// One row of the field: its index, the cell size and its cells.
+type MineRow = (u8, u16, Vec<MineCellUi>);
+
+/// A row of cell buttons. A click sends `Square` with the window's mode (tgui: left click opens,
+/// right click flags; here a mode switch picks what a click does).
+fn mine_row((row, size, cells): &MineRow) -> Box<dyn Scene> {
+    let size = f32::from(*size);
+    let buttons: Vec<_> = cells
+        .iter()
+        .enumerate()
+        .map(|(column, cell)| {
+            let (icon, color) = match (cell.open, cell.bomb, cell.final_bomb, cell.flag) {
+                (true, true, true, _) => ("burst", UiColor::Red),
+                (true, true, false, _) => ("bomb", UiColor::Grey),
+                (true, false, _, _) => ("", UiColor::White),
+                (false, _, _, true) => ("flag", UiColor::Orange),
+                _ => ("", UiColor::Default),
+            };
+            let content = if cell.open && !cell.bomb && cell.around > 0 {
+                cell.around.to_string()
+            } else {
+                String::new()
+            };
+            let params = ActParams(vec![
+                ("X".to_owned(), row.to_string()),
+                ("Y".to_owned(), column.to_string()),
+            ]);
+            let mode = ActWithLocal {
+                param: "mode".into(),
+                key: MINESWEEPER_MODE.into(),
+                default: "bomb".into(),
+            };
+            bsn! {
+                @ss13_ui_kit::Button { @content: content, @icon: icon, @compact: true }
+                ss13_ui_kit::Button { color: color }
+                Node {
+                    width: px(size),
+                    min_height: px(size),
+                    padding: UiRect::ZERO,
+                    justify_content: JustifyContent::Center,
+                }
+                Act({MINESWEEPER_SQUARE.to_owned()})
+                params
+                mode
+            }
+        })
+        .collect();
+    Box::new(bsn! {
+        Node { flex_direction: FlexDirection::Row }
+        Children [ {buttons} ]
+    })
+}
+
+/// BandaStation `NtosMinesweeperPanel`: the field or the leaderboard, and the switch between.
+fn minesweeper_screen(d: &MinesweeperData, local: &UiLocalState) -> impl Scene + use<> {
+    let leaderboard = local.get(MINESWEEPER_TAB) == "Leaderboard";
+    let (other, other_icon) = if leaderboard {
+        ("Game", "gamepad")
+    } else {
+        ("Leaderboard", "book")
+    };
+    let body: Box<dyn SceneList> = if leaderboard {
+        Box::new(EntityScene(minesweeper_leaderboard(d)))
+    } else {
+        Box::new(EntityScene(minesweeper_game(d, local)))
+    };
+    bsn! {
+        @Stack { @vertical: true, @fill: true }
+        Children [
+            @StackItem { @grow: 1.0 }
+            Node { min_height: px(0), flex_direction: FlexDirection::Column }
+            Children [ {body} ]
+            --
+            @StackItem
+            Children [
+                @ss13_ui_kit::Button { @content: other, @icon: other_icon, @fluid: true }
+                SetLocal { key: {MINESWEEPER_TAB.to_owned()}, value: {other.to_owned()}, rerender: true }
+                Name("minesweeper: tab")
+            ]
+        ]
+    }
+}
+
+fn minesweeper_game(d: &MinesweeperData, local: &UiLocalState) -> impl Scene + use<> {
+    let (width, height) = (usize::from(d.width.max(1)), usize::from(d.height.max(1)));
+    // tgui sizes the window by the field; here the cells shrink to fit the one window size.
+    let size = (330 / width).min(520 / height).clamp(12, 26) as u16;
+    let rows: Vec<_> = d
+        .cells
+        .chunks(width)
+        .take(height)
+        .enumerate()
+        .map(|(row, cells)| memo_of(&(row as u8, size, cells.to_vec()), mine_row))
+        .collect();
+    let flag_mode = local.get(MINESWEEPER_MODE) == "flag";
+    let open_mode = mode_button("Открыть", "hand-pointer", "bomb", !flag_mode);
+    let flag_button = mode_button("Флажок", "flag", "flag", flag_mode);
+    let bombs = format!(": {}", d.bombs);
+    let flags = format!(": {}", d.flags);
+    let first_touch = d.first_touch;
+    bsn! {
+        Node { flex_direction: FlexDirection::Row, column_gap: px(6) }
+        Children [
+            Node { flex_direction: FlexDirection::Column }
+            Children [ {rows} ]
+            --
+            Node { flex_direction: FlexDirection::Column, flex_grow: 1.0, row_gap: px(4) }
+            Children [
+                Node { flex_direction: FlexDirection::Row, column_gap: px(4) }
+                Propagate::<FontPx>(FontPx(18.0))
+                Children [ @Icon { @name: "bomb" } -- Node Children [ Text(bombs) ] ]
+                --
+                Node { flex_direction: FlexDirection::Row, column_gap: px(4) }
+                Propagate::<FontPx>(FontPx(18.0))
+                Children [ @Icon { @name: "flag" } -- Node Children [ Text(flags) ] ]
+                --
+                {EntityScene(open_mode)}
+                --
+                {EntityScene(flag_button)}
+                --
+                @ss13_ui_kit::Button { @content: "Change field", @icon: "cog", @fluid: true }
+                ss13_ui_kit::Button { disabled: {!first_touch} }
+                Act({MINESWEEPER_CHANGE_SIZE.to_owned()})
+                Name("minesweeper: change field")
+            ]
+        ]
+    }
+}
+
+/// A switch of the click mode (`value` of the `mode` param).
+fn mode_button(
+    label: &'static str,
+    icon: &'static str,
+    value: &'static str,
+    on: bool,
+) -> impl Scene + use<> {
+    bsn! {
+        @ss13_ui_kit::Button { @content: label, @icon: icon, @fluid: true }
+        ss13_ui_kit::Button { selected: on }
+        SetLocal { key: {MINESWEEPER_MODE.to_owned()}, value: {value.to_owned()}, rerender: true }
+        Name({format!("minesweeper: {value}")})
+    }
+}
+
+fn minesweeper_leaderboard(d: &MinesweeperData) -> impl Scene + use<> {
+    let header: Vec<_> = ["№", "Nick", "Time", "3BV", "3BV/s", "Params"]
+        .into_iter()
+        .map(|h| bsn! { @TableCell { @content: h, @bold: true } })
+        .collect();
+    let rows: Vec<_> = d
+        .leaderboard
+        .iter()
+        .enumerate()
+        .map(|(i, r)| {
+            let cells: Vec<_> = [
+                (i + 1).to_string(),
+                r.name.clone(),
+                r.seconds.to_string(),
+                r.points.to_string(),
+                r.points_per_sec.to_string(),
+                r.field_params.clone(),
+            ]
+            .into_iter()
+            .map(|c| bsn! { @TableCell { @content: c } })
+            .collect();
+            bsn! { @TableRow Children [ {cells} ] }
+        })
+        .collect();
+    bsn! {
+        @Section { @title: "Leaderboard", @fill: true, @scrollable: true }
+        Children [
+            @Table
+            Children [
+                @TableRow Children [ {header} ]
+                --
+                {rows}
             ]
         ]
     }

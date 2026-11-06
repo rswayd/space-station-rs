@@ -66,6 +66,8 @@ pub enum NtosScreen {
     Signaler(crate::assemblies::SignalerData),
     /// `NtosStatus`.
     Status(StatusDisplayData),
+    /// BandaStation `NtosMinesweeperPanel`.
+    Minesweeper(Box<MinesweeperData>),
 }
 
 impl Default for NtosScreen {
@@ -277,6 +279,53 @@ pub struct StatusDisplayData {
     pub lower_text: String,
     pub max_status_line_length: u32,
 }
+
+/// BandaStation `/datum/computer_file/program/minesweeper/ui_data`.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct MinesweeperData {
+    /// `field_params`: columns, rows; `bombs`.
+    pub width: u8,
+    pub height: u8,
+    /// `matrix`, row by row: `height` rows of `width` cells.
+    pub cells: Vec<MineCellUi>,
+    /// `flags`: flags set.
+    pub flags: u32,
+    pub bombs: u32,
+    /// `first_touch`: no game started (the field can be changed).
+    pub first_touch: bool,
+    /// `leaderboard`: this round's results, fastest first.
+    pub leaderboard: Vec<MinesweeperResult>,
+}
+
+/// One cell of the matrix. A closed cell shows only its flag.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct MineCellUi {
+    pub open: bool,
+    pub bomb: bool,
+    pub flag: bool,
+    /// Bombs around an open cell.
+    pub around: u8,
+    /// `final`: the bomb that went off.
+    pub final_bomb: bool,
+}
+
+/// A leaderboard entry (`result_to_add`).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct MinesweeperResult {
+    pub name: String,
+    /// `time`, to a tenth of a second.
+    pub seconds: f64,
+    /// `points`: the field's 3BV.
+    pub points: u32,
+    /// `pointsPerSec`: 3BV/s, to a tenth.
+    pub points_per_sec: f64,
+    /// `fieldParams`: `<width>X<height>(<bombs>)`.
+    pub field_params: String,
+}
+
+// BandaStation `NtosMinesweeperPanel` acts.
+pub const MINESWEEPER_SQUARE: &str = "Square";
+pub const MINESWEEPER_CHANGE_SIZE: &str = "ChangeSize";
 
 // `NtosCard` acts.
 pub const PRG_AUTHENTICATE: &str = "PRG_authenticate";

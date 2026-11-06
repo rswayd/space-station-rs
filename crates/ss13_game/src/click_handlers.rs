@@ -72,6 +72,7 @@
 //! | 900 | `service::server::item_interaction` |
 //! | 1000 | `antag::uplink::item_interaction` |
 //! | 1100 | `antag::syndie_items::item_interaction` |
+//! | 1150 | `emag::interact_with_atom` on a modular computer (`modpc::pda`) |
 //! | 1200 | `modpc::pda::item_interaction` |
 //! | 1250 | `radiation::geiger_interact` |
 //! | 1255 | `clothing::item_interaction` |
