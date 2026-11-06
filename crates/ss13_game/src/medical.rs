@@ -37,8 +37,12 @@ pub mod brainmob;
 pub mod cyberimps;
 pub mod defib;
 pub mod diseases;
+pub mod iv_drip;
 pub mod operating;
 pub mod organs;
+pub mod pods;
+pub mod sleeper;
+pub mod stasis;
 pub mod surgery;
 pub mod symptoms;
 pub mod traumas;
@@ -232,6 +236,10 @@ impl Plugin for MedicalServerPlugin {
         organs::build(app);
         brainmob::build(app);
         cyberimps::build(app);
+        stasis::build(app);
+        pods::build(app);
+        sleeper::build(app);
+        iv_drip::build(app);
     }
 }
 
@@ -1066,9 +1074,10 @@ fn claim_click(world: &mut World, actor: Actor, target: Entity, modifiers: Click
             surgery::drapes(world, actor, target);
             return true;
         }
-        let prepped = world
-            .get::<wounds::Limbs>(target)
-            .is_some_and(|l| l.parts.iter().any(|p| p.prepped));
+        let prepped = world.get::<stasis::FreeOperation>(target).is_some()
+            || world
+                .get::<wounds::Limbs>(target)
+                .is_some_and(|l| l.parts.iter().any(|p| p.prepped));
         if prepped
             && !surgery::combat_mode(world, actor.mob)
             && surgery::perform_surgery(world, actor, target)
@@ -1092,7 +1101,7 @@ fn claim_click(world: &mut World, actor: Actor, target: Entity, modifiers: Click
         return match actor.item {
             Some(item) => blood::iv_item_interaction(world, actor, item, target),
             None if modifiers.right => blood::iv_quick_toggle(world, actor, target),
-            None => false,
+            None => iv_drip::interact(world, actor.client, actor.mob, target),
         };
     }
     let furniture = crate::construction::path_of(world, target).unwrap_or_default();
@@ -1135,6 +1144,10 @@ fn life_tick(world: &mut World, mob: Entity, secs: f32, now: f64) {
     let Ok(entity) = world.get_entity(mob) else {
         return;
     };
+    // `TRAIT_STASIS`: the wounds return early, no `handle_organs`, `handle_blood` or diseases.
+    if entity.contains::<stasis::InStasis>() {
+        return;
+    }
     let dead = entity.get::<Stat>() == Some(&Stat::Dead);
     let lying = entity
         .get::<crate::health::BodyPosition>()

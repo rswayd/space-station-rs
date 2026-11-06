@@ -5,7 +5,7 @@
 //! (`handle_ssd`: `SetSleeping(7 SECONDS)`). A player taking the body again (tg `Login`) removes
 //! both. The examine line of a body without its player is `crate::examine`'s.
 // shortcut: the AI core is not marked (its player controls the eye entity, the core never has a
-// `PlayerMob`); no `TRAIT_STASIS` skip of `handle_ssd` (stasis beds are not ported).
+// `PlayerMob`).
 
 use bevy::prelude::*;
 use ss13_mapload::IconIndex;
@@ -67,7 +67,7 @@ fn ssd_sleep(world: &mut World, mut seen: Local<u64>) {
     }
     *seen = fired;
     let bodies: Vec<Entity> = world
-        .query_filtered::<(Entity, Option<&Stat>), With<Ssd>>()
+        .query_filtered::<(Entity, Option<&Stat>), (With<Ssd>, Without<crate::medical::stasis::InStasis>)>()
         .iter(world)
         .filter(|(_, stat)| stat.is_none_or(|s| *s != Stat::Dead))
         .map(|(e, _)| e)

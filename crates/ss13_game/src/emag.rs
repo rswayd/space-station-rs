@@ -17,7 +17,8 @@
 //!   - an APC (panel shut): its interface unlocks and cannot be locked again;
 //!   - an air alarm: the flood and vent siphon modes are offered;
 //!   - a supply console: contraband is offered (`crate::cargo::console`);
-//!   - a communications console, a vending machine, a chem dispenser, a cyborg
+//!   - a communications console, a vending machine, a chem dispenser, a sleeper, a lipid
+//!     extractor, an organ harvester (`crate::medical::pods`), a cyborg
 //!     (`crate::silicon::chassis`), a modular computer (`crate::modpc::pda`): their own
 //!     `emag_act`.
 //! - Bots take emags through their own clicks (`crate::bots`), after [`can_emag`].
@@ -154,6 +155,7 @@ fn takes_emag(world: &World, target: Entity) -> bool {
         || e.contains::<crate::modpc::pda::ModularComputer>()
         || e.contains::<crate::power::pacman::Pacman>()
         || crate::power::shields::takes_emag(world, target)
+        || e.contains::<crate::medical::pods::Pod>()
 }
 
 fn name(world: &World, e: Entity) -> String {
@@ -290,6 +292,9 @@ pub fn emag_act(world: &mut World, actor: Actor, card: Entity, target: Entity) -
     }
     if world.get::<crate::vending::Vendor>(target).is_some() {
         return crate::vending::emag_act(world, client, target);
+    }
+    if let Some(done) = crate::medical::pods::emag_act(world, client, target) {
+        return done;
     }
     if world
         .get::<crate::chem_dispenser::ChemDispenser>(target)

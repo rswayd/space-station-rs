@@ -1505,17 +1505,20 @@ fn refresh_incapacitation(
             Changed<crate::medical::LimbLimits>,
             Changed<crate::rest::Rest>,
             Added<crate::silicon::chassis::LockedDown>,
+            Added<crate::medical::stasis::InStasis>,
         )>,
     >,
     mut removed_effects: RemovedComponents<StatusEffects>,
     mut removed_cuffs: RemovedComponents<Handcuffed>,
     mut removed_locks: RemovedComponents<crate::silicon::chassis::LockedDown>,
+    mut removed_stasis: RemovedComponents<crate::medical::stasis::InStasis>,
     mut mobs: Query<(
         Option<&StatusEffects>,
         Has<Handcuffed>,
         Option<&crate::medical::LimbLimits>,
         Option<&crate::rest::Rest>,
         Has<crate::silicon::chassis::LockedDown>,
+        Has<crate::medical::stasis::InStasis>,
         &mut Incapacitation,
     )>,
 ) {
@@ -1523,10 +1526,13 @@ fn refresh_incapacitation(
         .read()
         .chain(removed_cuffs.read())
         .chain(removed_locks.read())
+        .chain(removed_stasis.read())
         .collect();
     for mob in changed.iter().chain(removed) {
-        if let Ok((effects, cuffed, limbs, rest, locked, mut traits)) = mobs.get_mut(mob) {
-            traits.set_if_neq(Incapacitation::of(effects, cuffed, limbs, rest, locked));
+        if let Ok((effects, cuffed, limbs, rest, locked, stasis, mut traits)) = mobs.get_mut(mob) {
+            // Stasis (`TRAIT_IMMOBILIZED`, `TRAIT_HANDS_BLOCKED`) blocks what a lockdown does.
+            let held = locked || stasis;
+            traits.set_if_neq(Incapacitation::of(effects, cuffed, limbs, rest, held));
         }
     }
 }

@@ -124,6 +124,7 @@
 //! | 2400 | `modpc::pda::console_interact` |
 //! | 2500 | `disposals::interact` |
 //! | 2600 | `genetics::console::interact` |
+//! | 2650 | `medical::pods::interact` (sleepers, lipid extractors, organ harvesters) |
 //! | 2700 | `tables::attack_hand` |
 //! | 2800 | `falsewall::attack_hand` |
 //! | 2900 | `mining::interact` |

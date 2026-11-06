@@ -46,6 +46,7 @@ use crate::interfaces::gas_analyzer::{
     AtmosHandbook, GasAnalyzerData, GasAnalyzerUi, Gasmix, HandbookGas,
 };
 use crate::interfaces::gps::{GpsData, GpsSignal, GpsUi};
+use crate::interfaces::iv_drip::{IvDripData, IvDripUi};
 use crate::interfaces::job_selection::{
     DepartmentSlots, DepartmentStatic, JobSelectionData, JobSelectionStatic, JobSelectionUi,
     JobSlots, JobStatic,
@@ -64,6 +65,7 @@ use crate::interfaces::portable_generator::{PortableGeneratorData, PortableGener
 use crate::interfaces::rapid_pipe_dispenser::{
     RapidPipeDispenserUi, RpdCategory, RpdData, RpdPreview, RpdRecipe, RpdStatic,
 };
+use crate::interfaces::sleeper::{SleeperChem, SleeperData, SleeperOccupant, SleeperUi};
 use crate::interfaces::smart_vend::{FridgeItem, SmartVendData, SmartVendUi};
 use crate::interfaces::smes::{SmesData, SmesStatic, SmesUi};
 use crate::interfaces::solar_control::{SolarControlData, SolarControlUi};
@@ -780,6 +782,62 @@ pub fn sample(name: &str) -> Option<Sample> {
                 ..Default::default()
             },
             &timer(),
+        ),
+        IvDripUi::NAME => of::<IvDripUi>(
+            "IV drip",
+            &(),
+            &IvDripData {
+                has_container: true,
+                can_remove_container: true,
+                mode: true,
+                can_draw: true,
+                transfer_rate: 5.0,
+                transfer_step: 0.01,
+                min_transfer_rate: 0.0,
+                max_transfer_rate: 5.0,
+                has_object_attached: true,
+                object_name: "Иван Петров".into(),
+                container_reagent_color: Some([0xC8, 0x00, 0x00, 0xFF]),
+                container_current_volume: 150.0,
+                container_max_volume: 200.0,
+                ..Default::default()
+            },
+        ),
+        SleeperUi::NAME => of::<SleeperUi>(
+            "sleeper",
+            &(),
+            &SleeperData {
+                occupied: true,
+                open: false,
+                chems: [
+                    ("Epinephrine", true),
+                    ("Morphine", true),
+                    ("Convermol", false),
+                    ("Libital", true),
+                    ("Aiuri", true),
+                ]
+                .iter()
+                .map(|(name, allowed)| SleeperChem {
+                    name: (*name).into(),
+                    id: format!("/datum/reagent/medicine/{}", name.to_lowercase()),
+                    allowed: *allowed,
+                })
+                .collect(),
+                occupant: Some(SleeperOccupant {
+                    name: "Иван Петров".into(),
+                    stat: "Critical".into(),
+                    statstate: "average".into(),
+                    health: -12.0,
+                    max_health: 100.0,
+                    min_health: -100.0,
+                    brute_loss: 64.0,
+                    oxy_loss: 30.0,
+                    tox_loss: 3.0,
+                    fire_loss: 15.0,
+                    brain_loss: 0.0,
+                    reagents: vec![("Epinephrine".into(), 10.0)],
+                }),
+            },
         ),
         _ => return None,
     })

@@ -12,8 +12,8 @@
 //! healing by `healing_factor`, failure effects, the heart stopping, the lungs coughing, the
 //! ears ringing), then the heart's cardiac arrest and the missing liver hurt; a corpse's organs
 //! decay by its body temperature (not with formaldehyde or cryostylane in the blood). A removed
-//! organ decays by the air around it (a freezer crate or closet keeps it), a removed heart stops
-//! after 12 s. Damage crosses thresholds with tg's messages; at `maxHealth` the organ fails.
+//! organ decays by the air around it (a freezer crate or closet keeps it; an organ smart fridge
+//! keeps it and, upgraded, heals it), a removed heart stops after 12 s. Damage crosses thresholds with tg's messages; at `maxHealth` the organ fails.
 //! Losing the brain kills (`ORGAN_VITAL`); the lungs, liver, stomach and ears are read by
 //! `crate::breath`, `crate::chem`, `crate::hunger` and `crate::sound`; without a tongue the
 //! mob's speech gurgles (`ss13_chat::speech::Tongueless`).
@@ -1093,6 +1093,23 @@ fn temperature_around(world: &World, organ: Entity) -> Option<f64> {
     None
 }
 
+/// The `repair_rate` of the organ smart fridge holding `organ` (directly or in a removed
+/// bodypart): `STANDARD_ORGAN_HEALING * (matter bin tier - 1) * 0.5` of max health a second.
+fn organ_fridge_repair(world: &World, organ: Entity) -> Option<f32> {
+    let holder = world
+        .get::<super::bodyparts::InLimb>(organ)
+        .map_or(organ, |l| l.0);
+    let fridge = world.get::<crate::storage::StoredIn>(holder)?.0;
+    let kind = world.get::<crate::smartfridge::SmartFridge>(fridge)?.kind;
+    if kind != crate::smartfridge::FridgeKind::Organ {
+        return None;
+    }
+    let tier = crate::stock_parts::ratings(world, fridge)
+        .last(crate::stock_parts::PartKind::MatterBin)
+        .unwrap_or(1);
+    Some((STANDARD_ORGAN_HEALING * (tier as f32 - 1.0) * 0.5).max(0.0))
+}
+
 /// tg `process()` of removed organs (`on_death` decay) and the heart's `stop_if_unowned`, each
 /// `SSmobs`-length fire.
 // Cost: every 2 s one pass over organs outside bodies (removed by surgery or spawned loose: a
@@ -1118,7 +1135,13 @@ fn process_loose(world: &mut World, fires: u64, secs: f32, now: f64) {
         let Some(mut state) = world.get::<Organ>(organ).cloned() else {
             continue;
         };
-        if let Some(temperature) = temperature_around(world, organ) {
+        if let Some(rate) = organ_fridge_repair(world, organ) {
+            // `smartfridge/organ`: `ORGAN_FROZEN` inside, organic organs heal at `repair_rate`.
+            if !state.robotic && state.damage > 0.0 {
+                let (max, damage) = (state.spec().max_health, state.damage);
+                state.apply_damage(-rate * max * secs * fires as f32, damage);
+            }
+        } else if let Some(temperature) = temperature_around(world, organ) {
             for _ in 0..fires {
                 state.decay(temperature, secs);
             }

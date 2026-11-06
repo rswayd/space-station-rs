@@ -22,6 +22,7 @@ pub mod gas_analyzer;
 pub mod gps;
 #[cfg(feature = "client")]
 pub(crate) mod input_buttons;
+pub mod iv_drip;
 pub mod job_selection;
 pub mod key_combo;
 pub mod list_input;
@@ -31,6 +32,7 @@ pub mod pipe_dispenser;
 pub mod portable_generator;
 pub mod rapid_pipe_dispenser;
 pub mod ru_jobs;
+pub mod sleeper;
 pub mod smart_vend;
 pub mod smes;
 pub mod solar_control;

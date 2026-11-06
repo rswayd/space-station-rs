@@ -515,7 +515,9 @@ impl Plugin for TguiClientPlugin {
             .register_ui_view::<crate::interfaces::smart_vend::SmartVendUi>()
             .register_ui_view::<crate::interfaces::crystallizer::CrystallizerUi>()
             .register_ui_view::<crate::interfaces::destination_tagger::DestinationTaggerUi>()
-            .register_ui_view::<crate::interfaces::gps::GpsUi>();
+            .register_ui_view::<crate::interfaces::gps::GpsUi>()
+            .register_ui_view::<crate::interfaces::sleeper::SleeperUi>()
+            .register_ui_view::<crate::interfaces::iv_drip::IvDripUi>();
         app.init_resource::<ClientWindows>()
             .init_resource::<HeadlessUis>()
             .init_resource::<WindowPositions>()
