@@ -266,6 +266,8 @@ pub mod explosions;
 pub mod falsewall;
 #[cfg(feature = "server")]
 pub mod fire;
+#[cfg(feature = "server")]
+pub mod fireplace;
 pub mod fishing;
 #[cfg(feature = "server")]
 pub mod flora;

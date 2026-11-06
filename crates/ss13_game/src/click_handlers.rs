@@ -169,6 +169,7 @@
 //! | 3463 | `silicon::ai_slipper::interact` |
 //! | 3464 | `science::bitrunning::avatar::ladder_click` (hololadders) |
 //! | 3465 | `effects::teleporters::portal_click` (permanent portals) |
+//! | 3466 | `fireplace::attack_hand` (taking a bonfire apart) |
 //!
 //! [`ClickPhase::HeldOnTarget`] (a world click with the active hand's item; tg
 //! `item_interaction`, `interact_with_atom`, `pre_attack`, `attackby`):
@@ -247,6 +248,7 @@
 //! | 3400 | `plumbing::item_interaction` |
 //! | 3440 | `tank_storage::item_interaction` |
 //! | 3441 | `displaycase::item_interaction` (display cases, their chassis) |
+//! | 3442 | `fireplace::item_interaction` (fuel, lighting, bonfire rods and grill) |
 //! | 3450 | `decor::item_interaction` |
 //! | 3455 | `clothing::item_interaction` |
 //! | 3465 | `effects::teleporters::portal_click` (permanent portals) |

@@ -579,6 +579,36 @@ fn finish_cooking(
     Some(made)
 }
 
+/// `/datum/component/grillable/on_grill` (`COMSIG_ITEM_GRILL_PROCESS`) from a grill that is not
+/// a griddle (a bonfire's): the food grills `dt` seconds and past its time becomes its
+/// `grill_result`. False when nothing grills it.
+pub fn grill_process(world: &mut World, item: Entity, grill: Entity, dt: f32) -> bool {
+    let Some(food) = world
+        .get::<DmFood>(item)
+        .filter(|f| !f.grill_result.is_empty())
+        .cloned()
+    else {
+        return false;
+    };
+    let mut times = cook_times(world, item);
+    let required = *times
+        .grill_required
+        .get_or_insert_with(|| roll(world, food.grill_time));
+    times.grilled += dt * 10.0;
+    world.entity_mut(item).insert(times);
+    if times.grilled >= required {
+        finish_cooking(
+            world,
+            item,
+            &food.grill_result,
+            food.grill_good,
+            grill,
+            None,
+        );
+    }
+    true
+}
+
 // --- Griddle -----------------------------------------------------------------------------
 
 fn griddle_item(
