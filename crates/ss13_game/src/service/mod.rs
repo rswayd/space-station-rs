@@ -32,9 +32,9 @@ mod office;
 mod paper;
 #[cfg(feature = "server")]
 mod religion;
+mod stationery;
 #[cfg(feature = "server")]
 mod statues;
-mod stationery;
 
 #[cfg(feature = "server")]
 pub use archive::{ArchivedBook, BookBinder, BookScanner, LibraryArchive};
@@ -55,13 +55,13 @@ pub use religion::{
     BIBLE_SKINS, BibleDeity, HolyRole, PerformingRite, Religion, ReligionJob, Rite, Sect,
     chaplain_spawned, complete as religion_complete, holy_role,
 };
+pub use stationery::{Biscuit, CabinetKind, CarbonPaper, FilingCabinet, PaperCutter, Paperwork};
 #[cfg(feature = "server")]
 pub use statues::{
     ArtJob, CarvingBlock, Chisel, CombustibleFlooder, HippocraticBust, HippocraticOath,
     Radioactive, complete as art_complete, fire_act as flooder_fire_act,
     interrupted as art_interrupted, sworn as hippocratic_sworn,
 };
-pub use stationery::{Biscuit, CabinetKind, CarbonPaper, FilingCabinet, PaperCutter, Paperwork};
 
 /// tgui `PaperSheet` (`/obj/item/paper/ui_interact`), read-only here: writing goes through a
 /// text prompt (see [`server`]).

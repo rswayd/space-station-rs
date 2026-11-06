@@ -67,6 +67,7 @@ impl Plugin for ServiceServerPlugin {
             .init_resource::<super::stationery::RapsheetCount>()
             .add_systems(ss13_world::MapInit, super::library::shelve_mapped_books)
             .add_systems(ss13_world::MapInit, super::stationery::file_mapped_items)
+            .add_systems(ss13_world::MapInit, super::stationery::arm_mapped_cutters)
             .add_systems(
                 Update,
                 (

@@ -190,7 +190,8 @@ pub(super) fn add_parts(world: &mut World, e: Entity, path: &str) {
         });
         refresh_cutter(world, e);
     } else if is_under(path, PAPERWORK) {
-        world.entity_mut(e).insert(paperwork_for(world, path));
+        let paperwork = paperwork_for(world, path);
+        world.entity_mut(e).insert(paperwork);
     }
 }
 
@@ -996,6 +997,25 @@ pub fn contract_text(employee: &str) -> String {
 }
 
 /// `filingcabinet/Initialize(mapload)`: the small items on a mapped cabinet's tile go inside.
+/// A mapped cutter's blade: at its first `add_parts` the prototype has no position yet.
+pub(super) fn arm_mapped_cutters(world: &mut World) {
+    let cutters: Vec<(Entity, TilePos)> = world
+        .query_filtered::<(Entity, &TilePos, &PaperCutter), With<ss13_world::Mapped>>()
+        .iter(world)
+        .filter(|(_, _, c)| c.blade.is_none())
+        .map(|(e, &p, _)| (e, p))
+        .collect();
+    for (cutter, pos) in cutters {
+        if let Some(blade) = crate::construction::spawn_obj(world, CUTTER_BLADE, pos) {
+            put_inside(world, blade, cutter);
+            if let Some(mut c) = world.get_mut::<PaperCutter>(cutter) {
+                c.blade = Some(blade);
+            }
+            refresh_cutter(world, cutter);
+        }
+    }
+}
+
 pub(super) fn file_mapped_items(world: &mut World) {
     let mut cabinets =
         world.query_filtered::<(Entity, &TilePos, &DmObj), With<ss13_world::Mapped>>();
