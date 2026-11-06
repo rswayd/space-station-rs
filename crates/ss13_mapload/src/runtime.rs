@@ -133,6 +133,16 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/machinery/meter",
     "/obj/structure/closet/crate",
     "/obj/structure/rack",
+    // Flora's stump and harvests (`ss13_game::flora`), posters and their ripped remains
+    // (`ss13_game::decor`).
+    "/obj/structure/flora/tree/stump",
+    "/obj/item/grown/log/tree",
+    "/obj/item/food/grown/grass",
+    "/obj/item/seeds/grass",
+    "/obj/item/stack/ore/glass/basalt",
+    "/obj/item/stack/ore/glass/siderite",
+    "/obj/item/poster",
+    "/obj/structure/sign/poster/ripped",
 ];
 
 /// `ss13_game::species`: every species' organs (`mutant*`), meat (`meat`) and the plasmaman

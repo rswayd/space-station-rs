@@ -43,7 +43,7 @@
 Комод (сменить нижнее бельё), манекены (одевать), декоративные витрины (`showcase`), гардероб с нарядами, шторы (открыть/закрыть, срезать), корзина для простыней.
 
 - **Код:** [`/obj/structure/dresser`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/dresser.dm#L1), [`/obj/structure/mannequin`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/mannequin.dm#L6), [`/obj/structure/showcase`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/showcase.dm#L5), [`/obj/structure/outfit_wardrobe`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/outfit_wardrobe.dm#L4), [`/obj/structure/curtain`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/curtains.dm#L4), [`bedsheet_bin.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/bedsheet_bin.dm)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — шторы: `crates/ss13_game/src/decor.rs` (см. «Флора, статуи и декор» в `structures-misc.md`); витрины `showcase` там же: отвёртка ослабляет/закручивает винты незакреплённой, ключ (2 с) откручивает/закрепляет с закрученными винтами, лом (2 с) разбирает на 4 листа железа (как в tg — в любом состоянии); нет строки осмотра о винтах. Нет: комода, манекенов, гардероба с нарядами, корзины для простыней
 
 ### Лестницы (ladder)
 Лестница связывает уровни по вертикали: клик — подъём или спуск с задержкой; разборка сваркой, крафтовая лестница.

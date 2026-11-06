@@ -252,8 +252,10 @@ pub enum Job {
     /// Washing at a sink, a shower's valve, a toilet's cistern, a urinal's cap
     /// ([`crate::plumbing`]).
     Sink(crate::plumbing::SinkJob),
-    /// Curtains, mirrors, signs, plaques and statues ([`crate::decor`]).
+    /// Curtains, mirrors, signs, plaques, statues, posters and showcases ([`crate::decor`]).
     Decor(crate::decor::DecorJob),
+    /// Harvesting, uprooting and replanting flora ([`crate::flora`]).
+    Flora(crate::flora::FloraJob),
     /// Screwing, welding or repairing a law rack's module ([`crate::silicon::law_rack`]).
     LawRack(crate::silicon::law_rack::LawRackJob),
     /// AI core construction steps ([`crate::silicon::ai_core`]).
@@ -1265,6 +1267,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Camera(job) => crate::defenses::cameras::complete(world, mob, action, job),
         &Job::Sink(job) => crate::plumbing::complete(world, mob, action, job),
         &Job::Decor(job) => crate::decor::complete(world, mob, action, job),
+        &Job::Flora(job) => crate::flora::complete(world, mob, action, job),
         &Job::LawRack(job) => crate::silicon::law_rack::complete(world, mob, action, job),
         &Job::AiCore(job) => crate::silicon::ai_core::complete(world, mob, action, job),
         &Job::AiCard(job) => crate::silicon::aicard::complete(world, mob, action, job),

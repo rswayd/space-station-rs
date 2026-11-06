@@ -252,6 +252,8 @@ pub mod falsewall;
 pub mod fire;
 pub mod fishing;
 #[cfg(feature = "server")]
+pub mod flora;
+#[cfg(feature = "server")]
 pub mod food;
 #[cfg(feature = "server")]
 pub mod footsteps;
