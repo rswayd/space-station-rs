@@ -255,6 +255,11 @@ impl Plugin for GameServerPlugin {
         .add_plugins(crate::janitor::JanitorServerPlugin)
         .add_plugins(crate::language_menu::LanguageMenuServerPlugin)
         .add_plugins((
+            crate::ssd::SsdPlugin,
+            crate::screentips::ScreentipsServerPlugin,
+            crate::escape_menu::EscapeMenuServerPlugin,
+        ))
+        .add_plugins((
             crate::spacemove::SpaceMovePlugin,
             crate::stumble::StumblePlugin,
         ))

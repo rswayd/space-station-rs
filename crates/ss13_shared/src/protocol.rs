@@ -81,6 +81,10 @@ pub enum ClientIntent {
     /// A right click on a HUD inventory slot: on the active hand's item, tg
     /// `attack_self_secondary` (a gas analyzer opens its window).
     RightClickSlot(InventorySlot),
+    /// The world atom under the cursor changed (BYOND `MouseEntered` -> tg `on_mouse_enter`),
+    /// `None`: nothing (the cursor left the map). Sent only on a change; the server answers with
+    /// the screentip (`ss13_game::screentips`).
+    Hover(Option<NetId>),
 }
 
 /// One end of a [`ClientIntent::Drag`].

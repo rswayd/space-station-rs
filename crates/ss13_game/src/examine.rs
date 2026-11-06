@@ -50,7 +50,7 @@ pub fn weight_class_text(w_class: u8) -> &'static str {
 /// One examine entry: a styled line.
 pub type Line = (Span, String);
 
-fn name_of(world: &World, entity: Entity) -> String {
+pub(crate) fn name_of(world: &World, entity: Entity) -> String {
     if let Some(name) = world.get::<Name>(entity) {
         return name.as_str().to_owned();
     }

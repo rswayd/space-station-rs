@@ -238,6 +238,9 @@ pub mod effects;
 pub mod emag;
 #[cfg(feature = "server")]
 pub mod emp;
+pub mod escape_menu;
+#[cfg(feature = "client")]
+pub mod escape_menu_client;
 #[cfg(feature = "server")]
 pub mod escape_pods;
 #[cfg(feature = "server")]
@@ -388,6 +391,9 @@ pub mod restraints;
 #[cfg(feature = "server")]
 pub mod round;
 pub mod science;
+pub mod screentips;
+#[cfg(feature = "client")]
+pub mod screentips_client;
 #[cfg(feature = "server")]
 pub mod security;
 #[cfg(feature = "server")]
@@ -419,6 +425,8 @@ pub mod species;
 pub mod speech;
 #[cfg(feature = "server")]
 pub mod spells;
+#[cfg(feature = "server")]
+pub mod ssd;
 #[cfg(feature = "server")]
 pub mod station_goals;
 #[cfg(feature = "server")]
