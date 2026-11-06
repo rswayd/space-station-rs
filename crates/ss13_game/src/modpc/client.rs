@@ -66,7 +66,7 @@ fn view(data: &NtosData, local: &UiLocalState) -> impl Scene + use<> {
             }
             NtosScreen::Minesweeper(m) => Box::new(EntityScene(minesweeper_screen(m, local))),
             NtosScreen::Downloader(d) => Box::new(EntityScene(downloader_screen(d, local))),
-            NtosScreen::Chat(c) => Box::new(EntityScene(chat_screen(c))),
+            NtosScreen::Chat(c) => Box::new(EntityScene(relay_chat_screen(c))),
         };
         bsn! {
             @WindowContent
@@ -1439,7 +1439,7 @@ fn submit_input(placeholder: String, max: usize, action: &str, param: &str) -> i
 
 /// `NtosNetChat`: channels and the user on the left; the channel, its input and members on the
 /// right.
-fn chat_screen(d: &ChatClientData) -> impl Scene + use<> {
+fn relay_chat_screen(d: &ChatClientData) -> impl Scene + use<> {
     let channels: Vec<_> = d
         .all_channels
         .iter()

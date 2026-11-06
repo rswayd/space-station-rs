@@ -86,10 +86,12 @@ pub fn mine_effect(path: &str) -> MineEffect {
     MineEffect::None
 }
 
+/// Mapped mines are `/obj/effect`s: their path comes in [`ss13_mapload::DmTrigger`] (no `DmObj`).
 fn mine_path(world: &World, e: Entity) -> Option<&str> {
     world
-        .get::<DmObj>(e)
-        .map(|o| o.path.as_str())
+        .get::<ss13_mapload::DmTrigger>(e)
+        .map(|t| t.path.as_str())
+        .or_else(|| world.get::<DmObj>(e).map(|o| o.path.as_str()))
         .filter(|p| is_under(p, MINE))
 }
 

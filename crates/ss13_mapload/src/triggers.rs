@@ -15,11 +15,14 @@ pub const STEP_TRIGGER_ROOT: &str = "/obj/effect/step_trigger";
 pub const BUMP_TELEPORTER_ROOT: &str = "/obj/effect/bump_teleporter";
 pub const PERMANENT_PORTAL_ROOT: &str = "/obj/effect/portal/permanent";
 pub const PORTAL_EXIT_ROOT: &str = "/obj/effect/landmark/portal_exit";
-const ROOTS: [&str; 4] = [
+/// Mines only need the type path here (`ss13_game::effects::mines`).
+pub const MINE_ROOT: &str = "/obj/effect/mine";
+const ROOTS: [&str; 5] = [
     STEP_TRIGGER_ROOT,
     BUMP_TELEPORTER_ROOT,
     PERMANENT_PORTAL_ROOT,
     PORTAL_EXIT_ROOT,
+    MINE_ROOT,
 ];
 const COMPONENT: &str = "dm_trigger";
 

@@ -207,25 +207,23 @@ pub fn on_grasp(world: &mut World, mob: Entity, target: Entity) {
             hurt(world, target, DamageType::Brute, 10.0);
             chat_to(world, mob, Span::Warning, "Удар в спину!");
         }
-        MarkKind::Moon => {
-            // shortcut: no `MAGIC_RESISTANCE_MOON` items, no `moon_grasp_hide` on the caster.
-            if carbon {
-                chat_to(
-                    world,
-                    target,
-                    Span::Danger,
-                    "Сверху доносится смех, отдающийся эхом.",
-                );
-                crate::hallucination::cause_hallucination(
-                    world,
-                    target,
-                    crate::hallucination::kinds::Kind::Delusion(
-                        crate::hallucination::kinds::Delusion::Moon,
-                    ),
-                    "delusion/preset/moon hallucination caused by mansus grasp",
-                );
-                adjust_sanity(world, target, -30.0);
-            }
+        // shortcut: no `MAGIC_RESISTANCE_MOON` items, no `moon_grasp_hide` on the caster.
+        MarkKind::Moon if carbon => {
+            chat_to(
+                world,
+                target,
+                Span::Danger,
+                "Сверху доносится смех, отдающийся эхом.",
+            );
+            crate::hallucination::cause_hallucination(
+                world,
+                target,
+                crate::hallucination::kinds::Kind::Delusion(
+                    crate::hallucination::kinds::Delusion::Moon,
+                ),
+                "delusion/preset/moon hallucination caused by mansus grasp",
+            );
+            adjust_sanity(world, target, -30.0);
         }
         _ => {}
     }
