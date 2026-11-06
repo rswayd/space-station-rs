@@ -519,6 +519,7 @@ fn tool_act(world: &mut World, actor: Actor, kind: ToolKind, target: Entity) -> 
     }
     if kind == ToolKind::Crowbar
         && (crate::wallmount::firelock::crowbar_act(world, actor, target, false)
+            || crate::doors::force_open_act(world, actor, target)
             || crate::doors::crowbar_act(world, client, target))
     {
         return Interact::Done;

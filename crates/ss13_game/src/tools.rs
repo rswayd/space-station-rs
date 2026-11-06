@@ -227,9 +227,139 @@ pub fn tell(world: &mut World, client: Entity, span: Span, text: impl Into<Strin
     });
 }
 
+/// A power tool's two heads (`/datum/component/transforming` and `on_transform` of the jaws of
+/// life and the hand drill): the type, its first and second `tool_behaviour`, the examine words
+/// of each head, the head-swap sound. Most specific type first.
+static POWER_TOOLS: [PowerTool; 3] = [
+    PowerTool {
+        root: "/obj/item/crowbar/power/paramedic",
+        first: "crowbar",
+        second: "bonesetter",
+        first_text: "prying",
+        second_text: "bonesetting",
+        sound: 0,
+    },
+    PowerTool {
+        root: "/obj/item/crowbar/power",
+        first: "crowbar",
+        second: "cutters",
+        first_text: "prying",
+        second_text: "cutting",
+        sound: 0,
+    },
+    PowerTool {
+        root: "/obj/item/screwdriver/power",
+        first: "screwdriver",
+        second: "wrench",
+        first_text: "screw",
+        second_text: "bolt",
+        sound: 1,
+    },
+];
+
+struct PowerTool {
+    root: &'static str,
+    first: &'static str,
+    second: &'static str,
+    first_text: &'static str,
+    second_text: &'static str,
+    /// Index into [`ss13_mapload::sound::files::POWER_TOOLS`].
+    sound: usize,
+}
+
+fn power_tool(world: &World, item: Entity) -> Option<&'static PowerTool> {
+    let path = &world.get::<DmItem>(item)?.path;
+    POWER_TOOLS
+        .iter()
+        .find(|t| crate::obj_damage::is_under(path, t.root))
+}
+
+/// The other head of a power tool whose behaviour is `current`: the second head unless it is on
+/// already (`active`).
+fn swapped_head(tool: &PowerTool, current: &str) -> (&'static str, &'static str) {
+    if current == tool.second {
+        (tool.first, tool.first_text)
+    } else {
+        (tool.second, tool.second_text)
+    }
+}
+
+/// `/datum/component/transforming/on_attack_self` of a power tool: the other head, the
+/// `[icon_state]_on` sprite while on the second one, the head-swap sound. True when `item` is
+/// one.
+// shortcut: no `cuffsnapping` element of the jaws' cutter head (no cuff cutting by tool yet).
+fn toggle_power_tool(world: &mut World, client: Entity, mob: Entity, item: Entity) -> bool {
+    let Some(tool) = power_tool(world, item) else {
+        return false;
+    };
+    let Some(mut dm) = world.get_mut::<DmTool>(item) else {
+        return false;
+    };
+    let (next, text) = swapped_head(tool, &dm.behaviour);
+    dm.behaviour = next.to_owned();
+    let active = next == tool.second;
+    let look = world
+        .get::<DmAtom>(item)
+        .map(|a| (a.icon.clone(), a.icon_state.clone()));
+    let id = match (look, world.get_resource::<IconIndex>()) {
+        (Some((dmi, base)), Some(icons)) => {
+            let state = if active { format!("{base}_on") } else { base };
+            icons.get(&dmi, &state)
+        }
+        _ => None,
+    };
+    if let (Some(id), Some(mut appearance)) = (id, world.get_mut::<Appearance>(item))
+        && appearance.icon_state != id
+    {
+        appearance.icon_state = id;
+    }
+    let attached = if tool.sound == 1 {
+        format!("{text} bit")
+    } else {
+        text.to_owned()
+    };
+    tell(world, client, Span::Notice, format!("attached {attached}"));
+    if let Some(&pos) = world.get::<TilePos>(mob) {
+        crate::sound::playsound(
+            world,
+            crate::sound::PlaySound::new(
+                pos,
+                ss13_mapload::sound::files::POWER_TOOLS[tool.sound],
+                50.0,
+                true,
+            ),
+        );
+    }
+    if let Some(mut inventory) = world.get_mut::<Inventory>(mob) {
+        inventory.set_changed();
+    }
+    true
+}
+
+/// The power tools' `examine`: which head is fitted.
+pub fn examine_lines(world: &World, item: Entity, lines: &mut Vec<(Span, String)>) {
+    let (Some(tool), Some(dm)) = (power_tool(world, item), world.get::<DmTool>(item)) else {
+        return;
+    };
+    let text = if dm.behaviour == tool.second {
+        tool.second_text
+    } else {
+        tool.first_text
+    };
+    let line = if tool.sound == 1 {
+        format!("It's fitted with a {text} bit.")
+    } else {
+        format!("It's fitted with a {text} head.")
+    };
+    lines.push((Span::Plain, line));
+}
+
 /// tg `attack_self` of the active hand's item, for the items that have one here. False when
 /// the item has none (the slot click then does what it does for other items).
 pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity) -> bool {
+    if toggle_power_tool(world, client, mob, item) {
+        return true;
+    }
     let Some(mut welder) = world.get_mut::<Welder>(item) else {
         return false;
     };
@@ -570,6 +700,28 @@ mod tests {
         assert_eq!(w.gauge(), 100);
         w.fuel = 4.0;
         assert_eq!(w.gauge(), 25);
+    }
+
+    #[test]
+    fn power_tools_swap_heads_like_tg() {
+        let jaws = POWER_TOOLS
+            .iter()
+            .find(|t| t.root == "/obj/item/crowbar/power")
+            .unwrap();
+        assert_eq!(swapped_head(jaws, "crowbar"), ("cutters", "cutting"));
+        assert_eq!(swapped_head(jaws, "cutters"), ("crowbar", "prying"));
+        let drill = POWER_TOOLS
+            .iter()
+            .find(|t| t.root == "/obj/item/screwdriver/power")
+            .unwrap();
+        assert_eq!(swapped_head(drill, "screwdriver"), ("wrench", "bolt"));
+        assert_eq!(swapped_head(drill, "wrench"), ("screwdriver", "screw"));
+        // The paramedic jaws come before the plain jaws they inherit from.
+        let paramedic = POWER_TOOLS
+            .iter()
+            .find(|t| crate::obj_damage::is_under("/obj/item/crowbar/power/paramedic", t.root))
+            .unwrap();
+        assert_eq!(paramedic.second, "bonesetter");
     }
 
     #[test]

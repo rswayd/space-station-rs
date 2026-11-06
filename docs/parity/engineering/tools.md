@@ -47,7 +47,7 @@
 Челюсти жизни (лом/кусачки, вскрывают запитанные шлюзы), электродрель (отвёртка/ключ), складной космический нож-мультиинструмент.
 
 - **Код:** [`/obj/item/crowbar/power`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/tools/engineering/crowbar.dm#L115), [`/obj/item/screwdriver/power`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/tools/engineering/screwdriver.dm#L85), [`/obj/item/spess_knife`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/tools/spess_knife.dm#L3)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/tools.rs` (`toggle_power_tool`, `examine_lines`): челюсти жизни (лом ↔ кусачки; челюсти восстановления — лом ↔ вправление костей) и дрель (отвёртка ↔ ключ) меняют насадку по клику в руке, спрайт `_on`, звук смены, строка осмотра; `crates/ss13_game/src/doors.rs` (`force_open_act`, `DoorJob::Pry`): челюсти вскрывают запитанный шлюз за 5 с × `toolspeed` (электрифицированный бьёт током до и после), проверка болтов/сварки в момент эффекта; челюсти восстановления не вскрывают двери с командным/охранным и т. п. доступом и раз в минуту шлют тревогу в каналы СБ и медбея. Нет: складного космического ножа (радиальное меню, нет `DmTool` при `tool_behaviour = null`), перекусывания наручников (`cuffsnapping`), урона шлюзу при вскрытии (у дверей нет прочности), пожарного топора как вскрывающего инструмента
 
 ### Щётка от ржавчины
 Счищает ржавчину со стен и полов.

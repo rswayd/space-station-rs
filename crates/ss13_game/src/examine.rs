@@ -109,6 +109,7 @@ pub fn examine_lines(world: &World, examiner: Entity, target: Entity) -> (String
         };
         lines.push((Span::Notice, line));
     }
+    crate::tools::examine_lines(world, target, &mut lines);
     crate::chem::examine_lines(world, examiner, target, &mut lines);
     crate::chem_dispenser::examine_lines(world, target, &mut lines);
     crate::chem_master::examine_lines(world, target, &mut lines);
