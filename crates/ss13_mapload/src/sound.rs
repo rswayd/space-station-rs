@@ -419,6 +419,8 @@ pub mod files {
     ];
     /// Admin verbs (`ss13_admin::verbs`): BandaStation's Man Up.
     pub const ADMIN: [&str; 1] = ["modular_bandastation/admin/sound/manup1.ogg"];
+    /// Quantum pads (`ss13_game::science::quantum_pad`): the beam's hum.
+    pub const TELEPORT: [&str; 1] = ["sound/items/weapons/emitter2.ogg"];
     pub const SYNDIE_ITEMS: [&str; 3] = [
         "sound/items/weapons/saberon.ogg",
         "sound/items/weapons/saberoff.ogg",
@@ -843,6 +845,7 @@ pub fn referenced<'a>(
     out.extend(files::DOORS.map(str::to_owned));
     out.extend(files::POWER_TOOLS.map(str::to_owned));
     out.extend(files::ADMIN.map(str::to_owned));
+    out.extend(files::TELEPORT.map(str::to_owned));
     out.extend(files::GAME_CODE.map(str::to_owned));
     out.extend(files::RESTAURANT.map(str::to_owned));
     out.extend(files::DECOR.map(str::to_owned));

@@ -169,6 +169,7 @@
 //! | 3463 | `silicon::ai_slipper::interact` |
 //! | 3464 | `science::bitrunning::avatar::ladder_click` (hololadders) |
 //! | 3465 | `effects::teleporters::portal_click` (permanent portals) |
+//! | 3466 | `science::quantum_pad::attack_hand` |
 //!
 //! [`ClickPhase::HeldOnTarget`] (a world click with the active hand's item; tg
 //! `item_interaction`, `interact_with_atom`, `pre_attack`, `attackby`):
@@ -205,6 +206,7 @@
 //! | 1585 | `events::radiation_leak::tool_act` (a leaking machine's fixing tools) |
 //! | 1590 | `teapot::item_interaction` (before `machine_frame` takes it apart) |
 //! | 1595 | `science::bitrunning::avatar::crowbar_act` (prying a netpod open) |
+//! | 1597 | `science::quantum_pad::item_interaction` (multitool links, keycards) |
 //! | 1600 | `machine_frame::item_interaction` |
 //! | 1650 | `radiation::geiger_interact` |
 //! | 1690 | `service::stationery::cabinet_wrench` (right click) |

@@ -39,6 +39,8 @@ pub mod lathe;
 #[cfg(feature = "server")]
 pub mod points;
 #[cfg(feature = "server")]
+pub mod quantum_pad;
+#[cfg(feature = "server")]
 pub mod server_control;
 #[cfg(feature = "server")]
 pub mod techweb;
@@ -71,6 +73,7 @@ impl bevy::prelude::Plugin for ScienceServerPlugin {
             xenobio::XenobioPlugin,
             exodrone::server::ExodronePlugin,
             bitrunning::server::BitrunningServerPlugin,
+            quantum_pad::QuantumPadPlugin,
         ));
     }
 }

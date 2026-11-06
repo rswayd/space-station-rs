@@ -480,6 +480,8 @@ pub mod taser;
 pub mod teapot;
 #[cfg(feature = "server")]
 pub mod telecomms;
+#[cfg(feature = "server")]
+pub mod teleport;
 #[cfg(feature = "testing")]
 pub mod testing;
 #[cfg(feature = "server")]

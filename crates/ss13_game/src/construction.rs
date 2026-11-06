@@ -303,6 +303,8 @@ pub enum Job {
     TapeRespool(Entity),
     /// Fixing, prying, building display cases ([`crate::displaycase`]).
     DisplayCase(crate::displaycase::CaseJob),
+    /// Linking or unlinking a quantum keycard ([`crate::science::quantum_pad`]).
+    QuantumPad(crate::science::quantum_pad::PadJob),
 }
 
 /// A turf's baseturf stack, bottom first (tg `baseturfs`). Absent: assembled from the type's
@@ -1304,6 +1306,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Sink(job) => crate::plumbing::complete(world, mob, action, job),
         &Job::Decor(job) => crate::decor::complete(world, mob, action, job),
         &Job::DisplayCase(job) => crate::displaycase::complete(world, mob, action, job),
+        &Job::QuantumPad(job) => crate::science::quantum_pad::complete(world, client, target, job),
         &Job::Flora(job) => crate::flora::complete(world, mob, action, job),
         &Job::LawRack(job) => crate::silicon::law_rack::complete(world, mob, action, job),
         &Job::AiCore(job) => crate::silicon::ai_core::complete(world, mob, action, job),

@@ -587,6 +587,10 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 && crate::cargo::money::click_alt(world, client, mob, item)
             {
                 // A holochip splits, an ID card withdraws.
+            } else if let Some(item) = inventory.slot(slot)
+                && crate::science::quantum_pad::click_alt(world, client, mob, item)
+            {
+                // A quantum keycard unlinks.
             } else if let Some(item) = inventory.slot(slot) {
                 // A PDA gives back its ID.
                 crate::modpc::pda::alt_click(world, mob, item);
