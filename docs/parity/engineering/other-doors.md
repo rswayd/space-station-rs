@@ -54,7 +54,7 @@ _«Таймер камеры брига» описано в [../security/brig-pr
 Двери, открывающиеся по произнесённому паролю (голосовые) или вводу — для руин и ивентов.
 
 - **Код:** [`/obj/machinery/door/password`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/doors/passworddoor.dm#L1), [`/obj/machinery/door/password/voice`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/doors/passworddoor.dm#L25)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/password_door.rs`, `crates/ss13_game/src/doors.rs` (`password_lock`), `crates/ss13_mapload/src/door.rs` (`password`, `interaction_activated`, `voice_activated`, звуки `door_open/close/deny`): рука, ID и толчок не открывают; клик по закрытой — ввод пароля (`tgui_input_text`), ответ перепроверяется (дверь закрыта и стоит, игрок рядом): точное совпадение открывает, иначе отказ со звуком; голосовая открывается на реплику с паролем в слышимости (без учёта регистра, шёпот — 1 тайл); кадры и тайминги гермодвери, остаётся открытой. tg спрашивает пароль и при `interaction_activated = FALSE` (переменная не читается) — здесь такая дверь только отказывает. Проверено: `tests/it/door_structures.rs`. Нет: защиты от ЭМИ/взрывов сверх `resistance_flags`, открытия ИИ через запрос
 
 ### Минеральные двери
 Простые двери-структуры из материалов (железо, серебро, золото, уран, песчаник, дерево, бумага): открываются рукой без доступа, копаются киркой, деревянные горят.

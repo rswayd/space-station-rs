@@ -98,6 +98,12 @@ pub struct DmDoor {
     pub id: String,
     /// Airlocks: `id_tag`, the channel airlock buttons (`assembly/control/airlock`) match.
     pub id_tag: String,
+    /// Password doors (`/obj/machinery/door/password`): `password`; empty on every other door.
+    pub password: String,
+    /// Password doors: `interaction_activated` (a click asks for the password).
+    pub interaction_activated: bool,
+    /// Password doors: `voice_activated` (saying the password nearby opens it).
+    pub voice_activated: bool,
 }
 
 /// An airlock mapping helper's payload.
@@ -145,6 +151,9 @@ pub enum DoorField {
     AnimationSound(String),
     Id(String),
     IdTag(String),
+    Password(String),
+    InteractionActivated(bool),
+    VoiceActivated(bool),
 }
 
 fn under(path: &str, root: &str) -> bool {
@@ -294,6 +303,13 @@ fn field(
         "animation_sound" => text(value).map(DoorField::AnimationSound),
         "id" => link_id(value).map(DoorField::Id),
         "id_tag" => link_id(value).map(DoorField::IdTag),
+        "password" => text(value).map(DoorField::Password),
+        "interaction_activated" => flag(value).map(DoorField::InteractionActivated),
+        "voice_activated" => flag(value).map(DoorField::VoiceActivated),
+        // Password doors name their sounds in lower case.
+        "door_open" => text(value).map(DoorField::DoorOpen),
+        "door_close" => text(value).map(DoorField::DoorClose),
+        "door_deny" => text(value).map(DoorField::DoorDeni),
         _ => return None,
     })
 }
@@ -349,6 +365,9 @@ pub fn patch_entry(fields: &[DoorField]) -> Option<String> {
             DoorField::AnimationSound(s) => ("animation_sound", ron_str(s)),
             DoorField::Id(s) => ("id", ron_str(s)),
             DoorField::IdTag(s) => ("id_tag", ron_str(s)),
+            DoorField::Password(s) => ("password", ron_str(s)),
+            DoorField::InteractionActivated(v) => ("interaction_activated", v.to_string()),
+            DoorField::VoiceActivated(v) => ("voice_activated", v.to_string()),
         };
         if !out.is_empty() {
             out.push_str(", ");
@@ -421,6 +440,18 @@ mod tests {
         assert_eq!(
             field_dmm("id_tag", &DmValue::Str("lock".into())),
             Some(Ok(DoorField::IdTag("lock".into())))
+        );
+        assert_eq!(
+            field_dmm("password", &DmValue::Str("Swordfish".into())),
+            Some(Ok(DoorField::Password("Swordfish".into())))
+        );
+        assert_eq!(
+            patch_entry(&[
+                DoorField::Password("x".into()),
+                DoorField::VoiceActivated(true)
+            ])
+            .unwrap(),
+            r#""dm_door": (password: "x", voice_activated: true)"#
         );
         assert!(is_door("/obj/machinery/door/airlock/glass"));
         assert!(!is_door("/obj/machinery/door_buttons"));

@@ -386,6 +386,8 @@ pub mod panels_client;
 #[cfg(feature = "server")]
 pub mod papershredder;
 #[cfg(feature = "server")]
+pub mod password_door;
+#[cfg(feature = "server")]
 pub mod plumbing;
 #[cfg(feature = "server")]
 pub mod point;
