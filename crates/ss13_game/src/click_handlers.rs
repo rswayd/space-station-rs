@@ -156,6 +156,8 @@
 //! | 2650 | `medical::pods::interact` (sleepers, cryo cells, lipid extractors, organ harvesters) |
 //! | 2660 | `medical::kiosk::interact` |
 //! | 2670 | `medical::limbgrower::interact` |
+//! | 2685 | `brig::gulag::interact` (labor camp teleporter, its console, the item reclaimer) |
+//! | 2695 | `brig::labor::interact` (claim console, plate press; right click: produceporter) |
 //! | 2700 | `tables::attack_hand` |
 //! | 2800 | `falsewall::attack_hand` |
 //! | 2810 | `door_structures::mineral_attack_hand` (mineral doors) |
@@ -302,6 +304,7 @@
 //! | 4753 | `devices::laser_pointer::laser_act` (shining at what is clicked; far clicks: `RangedClick`) |
 //! | 4800 | `cargo::bounty::item_interaction` |
 //! | 4900 | `brig::prisoner::item_interaction` |
+//! | 4925 | `brig::labor::item_interaction` (blank plates, grown items, prisoner IDs, sheets) |
 //! | 5000 | `cargo::scanner::item_interaction` |
 //! | 5090 | `events::anomalies::analyzer_act` (anomalies, anomaly cores) |
 //! | 5100 | `atmos` analyzer scans the clicked atom |

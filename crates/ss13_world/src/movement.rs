@@ -30,6 +30,29 @@ pub struct WalkPassable;
 #[derive(Component, Clone, Copy, Debug, Default)]
 pub struct PassesWalkBarriers;
 
+/// tg `/obj/machinery/prisongate` `CanAllowThrough`: a non-dense gate whose tile a mover enters
+/// only when the [`GatePolicy`] lets it (no policy: everyone passes). Server-side only: the
+/// client predicts the step and is corrected.
+#[derive(Component, Clone, Copy, Debug, Default)]
+pub struct PrisonGate;
+
+/// The game's decision for [`PrisonGate`]s: `(world, mover, gate)` -> may it enter.
+#[derive(Resource, Clone, Copy)]
+pub struct GatePolicy(pub fn(&World, Entity, Entity) -> bool);
+
+/// The [`PrisonGate`] on `to` that refuses `mover`, if any.
+// Cost: per step, a resource read and (with a policy) a component check per entity on the
+// target tile (a handful).
+pub fn gate_refuses(world: &World, mover: Entity, to: TilePos) -> Option<Entity> {
+    let policy = world.get_resource::<GatePolicy>()?.0;
+    world
+        .resource::<SpatialIndex>()
+        .on_tile(to)
+        .iter()
+        .copied()
+        .find(|&g| world.get::<PrisonGate>(g).is_some() && !policy(world, mover, g))
+}
+
 /// tg `ON_BORDER_1`: a dense border object blocks only moves across the tile edges in `edges`
 /// (BYOND dir bits): entering its tile from that side (`CanPass` with `border_dir`) and leaving
 /// its tile through it (`COMSIG_ATOM_EXIT`). Directional windows, windoors, railings,
@@ -239,6 +262,7 @@ fn step(world: &mut World, entity: Entity, dir: Dir) -> bool {
                 .filter(|e| !(on_climbable && walkable(e)))
                 .filter(|&e| !(passes && world.get::<WalkPassable>(e).is_some())),
         );
+        blockers.extend(gate_refuses(world, entity, to));
     }
     if !blockers.is_empty() {
         for obstacle in blockers {

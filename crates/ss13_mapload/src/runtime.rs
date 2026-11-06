@@ -44,6 +44,11 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/clothing/suit/armor/reactive/weather",
     "/obj/item/clothing/suit/armor/reactive/stealth",
     "/obj/structure/table",
+    // `brig::gulag`: the labor camp teleporter dresses its prisoner.
+    "/obj/item/clothing/under/rank/prisoner",
+    "/obj/item/clothing/shoes/sneakers/orange",
+    // `brig::labor`: the plate press's finished plate.
+    "/obj/item/stack/license_plates/filled",
     "/mob/living/basic/mining/demon_afterimage",
     "/obj/item/raw_anomaly_core/bluespace",
     "/obj/item/hatchet/cutterblade",
