@@ -664,6 +664,7 @@ fn metastation_families() {
                     || e.contains::<ss13_game::stove::Stove>()
             }
             Family::Tray => e.contains::<ss13_game::botany::tray::Tray>(),
+            Family::QuantumPad => e.contains::<ss13_game::science::quantum_pad::QuantumPad>(),
             Family::Station => e.contains::<ss13_game::silicon::cyborg::RechargeStation>(),
             Family::Analyzer => e.contains::<ss13_game::science::analyzer::Analyzer>(),
             Family::Thermo => e

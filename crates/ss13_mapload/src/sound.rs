@@ -323,7 +323,9 @@ pub mod files {
     ];
     /// Sounds the game code plays by a constant path (checked by the real-asset test
     /// `runtime_types::game_sound_literals_are_converted` in ss13_game).
-    pub const GAME_CODE: [&str; 92] = [
+    pub const GAME_CODE: [&str; 94] = [
+        "sound/items/match_strike.ogg",
+        "sound/effects/comfyfire.ogg",
         "modular_bandastation/objects/sounds/pshred.ogg",
         "sound/announcer/alarm/bloblarm.ogg",
         "sound/effects/adminhelp.ogg",
