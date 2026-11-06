@@ -77,6 +77,7 @@ mod medicine;
 mod megafauna;
 mod mining;
 mod misc_ui;
+mod mob_holder;
 mod mobs;
 mod modsuit;
 mod mood;

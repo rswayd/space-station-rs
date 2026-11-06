@@ -200,6 +200,22 @@ pub struct MobDef {
     /// Its controller's `ai_traits` (DM bits: `STOP_MOVING_WHEN_PULLED` 1, ...).
     #[serde(default)]
     pub ai_traits: u32,
+    /// `AddElement(/datum/element/can_be_held)` in its `Initialize` (or an ancestor's): picked
+    /// up into a hand as a `/obj/item/mob_holder`.
+    #[serde(default)]
+    pub can_be_held: bool,
+    /// The holder's in-hand state (`held_state`) and files (`held_lh`, `held_rh`, `head_icon`),
+    /// and the slots it is worn in (`worn_slot_flags`).
+    #[serde(default)]
+    pub held_state: String,
+    #[serde(default)]
+    pub held_lh: String,
+    #[serde(default)]
+    pub held_rh: String,
+    #[serde(default)]
+    pub head_icon: String,
+    #[serde(default)]
+    pub worn_slot_flags: u32,
 }
 
 /// What a mob says at random: a `/datum/bt_node/ai_behavior/random_speech` type's vars, or a
@@ -434,10 +450,17 @@ const SIMPLE_FLYING: &str = "/datum/element/simple_flying";
 
 /// `simple_flying` added in the `Initialize` of `path` or an ancestor (calls in other procs come
 /// and go with status effects and fish traits).
+const CAN_BE_HELD: &str = "/datum/element/can_be_held";
+
 fn flies(types: &DmTypes, path: &str) -> bool {
+    adds_element(types, path, SIMPLE_FLYING)
+}
+
+/// An `AddElement(element)` in the `Initialize` of `path` or an ancestor.
+fn adds_element(types: &DmTypes, path: &str, element: &str) -> bool {
     types
         .element_calls
-        .get(SIMPLE_FLYING)
+        .get(element)
         .into_iter()
         .flatten()
         .any(|c| {
@@ -588,6 +611,12 @@ fn mob_def(
             .and_then(Value::as_f64)
             .is_some_and(|c| c != 0.0),
         flying: flies(types, path),
+        can_be_held: adds_element(types, path, CAN_BE_HELD),
+        held_state: s("held_state"),
+        held_lh: resource("held_lh"),
+        held_rh: resource("held_rh"),
+        head_icon: resource("head_icon"),
+        worn_slot_flags: num("worn_slot_flags", 0.0) as u32,
         cable_zap_prob: num("cable_zap_prob", 0.0),
         bot: is_under(path, BOT_ROOT).then(|| bot_def(types, path)),
     }

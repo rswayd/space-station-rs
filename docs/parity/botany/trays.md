@@ -55,7 +55,7 @@ Ctrl+клик по закреплённому и запитанному лотк
 
 - **Код:** [`handle_snail()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L647), [`/obj/effect/overlay/vis_effect/snail`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/snail_overlay.dm#L4)
 - **BandaStation:** [`hydroponics.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/hydroponics.dm#L184) — у лотка отключена рыболовная точка (`fishing_spot`)
-- **Статус в ss13-rs:** ❌ нет — моб-улитка есть (`/mob/living/basic/snail`), но улитку сажают в лоток из руки как `/obj/item/mob_holder/snail`, а мобов в руках нет (❌ «Мобы в руках (mob holder)» в [inventory-stripping.md](../mobs/inventory-stripping.md)); лоточная часть (`handle_snail`: 5% за тик −2 сорняка, оверлей `snail_hydrotray`, выход при движении/смерти и опустошении) ждёт его
+- **Статус в ss13-rs:** ✅ готово — `crates/ss13_game/src/botany/mod.rs` (`snail_interaction`, `handle_snails`, `TraySnail`): живая улитка в руке (`crate::mob_holder`) по лотку без улитки за 2 с садится в него, каждые 2 с 5% −2 сорняка, оверлей `snail_hydrotray`; при попытке шагнуть или смерти выходит на тайл лотка; `// shortcut:` оверлей не ползает (`handle_animation`), опустошения лотка ПКМ нет (его группа)
 
 ### Собираемые лотки и улучшения
 Лоток собирается из платы (`/obj/machinery/hydroponics/constructable`), детали (матлазеры/манипуляторы) повышают `maxwater`, `maxnutri` и снижают расход; есть старый вид лотка и «делюкс»-вариант с максимальными деталями. Отвёртка/лом — разборка.
