@@ -95,6 +95,8 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/machinery/light/empty",
     "/obj/machinery/light/small/empty",
     "/obj/machinery/light/floor/empty",
+    "/obj/machinery/power/floodlight",
+    "/obj/structure/floodlight_frame",
     SHRAPNEL,
     SHRAPNEL_MEGA,
     SMOKE_BAD,

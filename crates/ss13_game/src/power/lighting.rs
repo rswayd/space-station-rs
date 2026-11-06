@@ -158,6 +158,8 @@ impl Default for RoundstartLightBreak {
 pub enum LightJob {
     /// Wrenching an unwired frame off the wall.
     FrameApart,
+    /// Wrenching an unwired floodlight frame apart.
+    FloodFrameApart,
 }
 
 pub struct LightingPlugin;
@@ -177,7 +179,18 @@ impl Plugin for LightingPlugin {
                 c.held
                     .is_some_and(|held| swing_bulb(w, c.mob, held, c.target))
             })
-            .add_click_handler(ClickPhase::AttackSelf, 3190, |w, c| {
+            .add_click_handler(ClickPhase::EmptyHand, 2012, |w, c| {
+                floodlight_hand(w, c.client, c.mob, c.target)
+            })
+            .add_systems(
+                ss13_world::MapInit,
+                init_floodlights.after(super::init_power),
+            )
+            .add_systems(
+                Update,
+                (floodlight_tick, floodlight_emp).after(super::PowerSystems),
+            )
+            .add_click_handler(ClickPhase::AttackSelf, 3192, |w, c| {
                 replacer_attack_self(w, c.client, c.mob, c.target)
             })
             .add_systems(
@@ -721,6 +734,12 @@ fn item_interaction(
         return refill(world, client, held, target, replacer);
     }
     let target_path = crate::emp::path_of(world, target).unwrap_or_default();
+    if world.get::<Floodlight>(target).is_some() {
+        return floodlight_tool(world, client, held, target);
+    }
+    if is_under(&target_path, FLOOD_FRAME) {
+        return flood_frame_interaction(world, client, mob, held, target);
+    }
     if is_under(&target_path, FRAME) {
         return frame_interaction(world, client, mob, held, target, &target_path);
     }
@@ -946,7 +965,10 @@ fn frame_interaction(
 
 /// [`Job::Light`] at its end (`extra_checks`: the frame is still unwired).
 pub fn complete(world: &mut World, action: &crate::tools::DoAfter, job: LightJob) {
-    let LightJob::FrameApart = job;
+    if job == LightJob::FloodFrameApart {
+        flood_frame_apart(world, action);
+        return;
+    }
     let frame = action.target;
     if frame_stage(world, frame) != STAGE_EMPTY {
         return;
@@ -1191,6 +1213,29 @@ fn replacer_on(
         replace_light(world, client, mob, replacer, target);
         return true;
     }
+    // `do_action` on a floodlight frame waiting for its tube: one use finishes it.
+    if crate::emp::path_of(world, target).is_some_and(|p| is_under(&p, FLOOD_FRAME)) {
+        if flood_stage(world, target) == FLOOD_NEEDS_LIGHTS {
+            let Some(mut r) = replacer_of(world, replacer) else {
+                return true;
+            };
+            if r.uses == 0 {
+                tell(world, client, Span::Warning, "Лампозаменитель пуст!");
+                return true;
+            }
+            r.uses -= 1;
+            world.entity_mut(replacer).insert(r);
+            playsound(world, PlaySound::new(pos, CLICK, 50.0, true));
+            finish_floodlight(world, target);
+            tell(
+                world,
+                client,
+                Span::Notice,
+                "Вы завершаете прожектор трубкой.",
+            );
+        }
+        return true;
+    }
     if world.get::<ss13_mapload::Turf>(target).is_none() {
         return false;
     }
@@ -1262,6 +1307,413 @@ fn replace_light(world: &mut World, client: Entity, mob: Entity, replacer: Entit
     }
     let brightness = if fixture.bulb { 4.0 } else { 8.0 };
     set_status(world, light, LightStatus::Ok, Some(brightness));
+}
+
+// ---------------------------------------------------------------------------------------------
+// Floodlight (`code/modules/power/floodlight.dm`)
+// shortcut: wrenching a floodlight is instant (tg `default_unfasten_wrench`, 2 s); no spray
+// paint colour, no cable layer tool, no damage or `integrity_failure` breaking (only EMPs and
+// saboteurs break it here: the EMP part).
+
+pub const FLOODLIGHT: &str = "/obj/machinery/power/floodlight";
+pub const FLOOD_FRAME: &str = "/obj/structure/floodlight_frame";
+/// `FLOODLIGHT_NEEDS_WIRES`, `FLOODLIGHT_NEEDS_LIGHTS`, `FLOODLIGHT_NEEDS_SECURING`.
+pub const FLOOD_NEEDS_WIRES: u8 = 0;
+pub const FLOOD_NEEDS_LIGHTS: u8 = 1;
+pub const FLOOD_NEEDS_SECURING: u8 = 2;
+/// `light_setting_list` (index `setting - 1`), `light_power_coefficient`, `light_power`.
+const FLOOD_RANGES: [f32; 4] = [0.0, 5.0, 10.0, 15.0];
+const FLOOD_POWER_COEFF: f64 = 200.0;
+const FLOOD_LIGHT_POWER: f32 = 1.75;
+/// `coil.use(5)`, `new /obj/item/stack/sheet/iron(loc, 5)`.
+const FLOOD_CABLE: u32 = 5;
+const FLOOD_IRON: u32 = 5;
+const GLASSBR3: &str = "sound/effects/glass/glassbr3.ogg";
+
+/// `/obj/machinery/power/floodlight`: `setting` 1 (off) to 4 (high), `panel_open`, its cable
+/// layer.
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Floodlight {
+    pub setting: u8,
+    pub panel_open: bool,
+    pub layer: u8,
+}
+
+impl Floodlight {
+    /// `active_power_usage` of a setting, watts.
+    pub fn watts(setting: u8) -> f64 {
+        f64::from(FLOOD_RANGES[usize::from(setting.clamp(1, 4) - 1)]) * FLOOD_POWER_COEFF
+    }
+}
+
+/// `/obj/structure/floodlight_frame` `state`.
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FloodFrame(pub u8);
+
+fn flood_stage(world: &World, frame: Entity) -> u8 {
+    if let Some(f) = world.get::<FloodFrame>(frame) {
+        return f.0;
+    }
+    // `/obj/structure/floodlight_frame/completed`.
+    let completed = crate::emp::path_of(world, frame)
+        .is_some_and(|p| is_under(&p, "/obj/structure/floodlight_frame/completed"));
+    if completed {
+        FLOOD_NEEDS_LIGHTS
+    } else {
+        FLOOD_NEEDS_WIRES
+    }
+}
+
+fn set_flood_stage(world: &mut World, frame: Entity, stage: u8) {
+    world.entity_mut(frame).insert(FloodFrame(stage));
+    let state = match stage {
+        FLOOD_NEEDS_SECURING => "floodlight_c2",
+        FLOOD_NEEDS_LIGHTS => "floodlight_c3",
+        _ => "floodlight_c1",
+    };
+    crate::obj_damage::set_icon_state(world, frame, state);
+}
+
+/// Map floodlights: `if(mapload) set_anchored(TRUE); connect_to_network()`.
+fn init_floodlights(world: &mut World) {
+    let mut query = world
+        .query_filtered::<(Entity, &ss13_mapload::DmObj, &TilePos), With<ss13_world::Mapped>>();
+    let found: Vec<(Entity, TilePos)> = query
+        .iter(world)
+        .filter(|(_, o, _)| is_under(&o.path, FLOODLIGHT))
+        .map(|(e, _, &p)| (e, p))
+        .collect();
+    for (e, pos) in found {
+        let layer = world.get::<DmPower>(e).map_or(2, super::layer);
+        world.entity_mut(e).insert(Floodlight {
+            setting: 1,
+            panel_open: false,
+            layer,
+        });
+        crate::obj_damage::set_anchored(world, e, true);
+        world
+            .resource_mut::<super::Grid>()
+            .add_node(e, pos, layer, super::NodeKind::Machine);
+    }
+}
+
+/// tg `change_setting(newval)`: steps down while the net cannot feed it, then the light and
+/// icon state. Returns the setting it ended on.
+pub fn change_setting(world: &mut World, flood: Entity, setting: u8) -> u8 {
+    let net_surplus = {
+        let grid = world.resource::<super::Grid>();
+        grid.node_net(flood)
+            .and_then(|n| grid.net(n))
+            .map_or(0.0, |n| n.surplus())
+    };
+    let mut setting = setting.clamp(1, 4);
+    while setting > 1 && net_surplus < Floodlight::watts(setting) * super::MACHINE_TICK_SECS {
+        setting -= 1;
+    }
+    let Some(mut f) = world.get_mut::<Floodlight>(flood) else {
+        return 1;
+    };
+    f.setting = setting;
+    let color = world
+        .get::<DmAtom>(flood)
+        .and_then(|a| a.color)
+        .map_or([255; 3], |[r, g, b, _]| [r, g, b]);
+    let light = (setting > 1).then_some(LightSource {
+        range: FLOOD_RANGES[usize::from(setting - 1)],
+        power: FLOOD_LIGHT_POWER,
+        color,
+        height: 1.0,
+        angle: 360,
+        dir: Dir::North,
+        offset: [0, 0],
+    });
+    match world.get_mut::<Optics>(flood) {
+        Some(mut optics) => {
+            if optics.light != light {
+                optics.light = light;
+            }
+        }
+        None => {
+            world
+                .entity_mut(flood)
+                .insert(Optics { light, ..default() });
+        }
+    }
+    let state = if setting > 1 {
+        "floodlight_on"
+    } else {
+        "floodlight"
+    };
+    crate::obj_damage::set_icon_state(world, flood, state);
+    setting
+}
+
+/// tg `process()` once per machine tick: a lit floodlight draws from its cable's net, or goes
+/// off when the net cannot pay.
+// Cost: per machine tick (0.5 Hz), one lookup per lit floodlight (a handful per round).
+fn floodlight_tick(world: &mut World, mut last: Local<u64>) {
+    let ticks = world.resource::<super::MachineTicks>().0;
+    if ticks == *last {
+        return;
+    }
+    *last = ticks;
+    let mut query = world.query::<(Entity, &Floodlight)>();
+    let lit: Vec<(Entity, u8)> = query
+        .iter(world)
+        .filter(|(_, f)| f.setting > 1)
+        .map(|(e, f)| (e, f.setting))
+        .collect();
+    for (flood, setting) in lit {
+        let need = Floodlight::watts(setting) * super::MACHINE_TICK_SECS;
+        let paid = {
+            let mut grid = world.resource_mut::<super::Grid>();
+            let net = grid.node_net(flood);
+            match net.and_then(|n| grid.net_mut(n)) {
+                Some(net) if net.surplus() >= need => {
+                    net.load += need;
+                    true
+                }
+                _ => false,
+            }
+        };
+        if !paid {
+            change_setting(world, flood, 1);
+        }
+    }
+}
+
+/// `attack_hand`: with the panel open the tube comes out (the frame stays, waiting for a
+/// tube); else the setting steps high -> med -> low -> off -> high.
+fn floodlight_hand(world: &mut World, client: Entity, mob: Entity, flood: Entity) -> bool {
+    let Some(f) = world.get::<Floodlight>(flood).copied() else {
+        return false;
+    };
+    let Some(&pos) = world.get::<TilePos>(flood) else {
+        return false;
+    };
+    if f.panel_open {
+        break_floodlight(world, flood, pos, false);
+        if let Some(tube) = crate::construction::spawn_obj(world, TUBE, pos)
+            && let Some(inventory) = world.get::<Inventory>(mob).cloned()
+        {
+            crate::storage::put_in_hands(world, mob, &inventory, tube);
+        }
+        return true;
+    }
+    let wanted = if f.setting == 1 { 4 } else { f.setting - 1 };
+    let got = change_setting(world, flood, wanted);
+    let text = match got {
+        2 => "слабую мощность",
+        3 => "стандартное освещение",
+        4 => "высокую мощность",
+        _ => "ВЫКЛ",
+    };
+    tell(
+        world,
+        client,
+        Span::Notice,
+        format!("Вы переключаете прожектор на {text}."),
+    );
+    true
+}
+
+/// The floodlight gone, its frame (waiting for a tube) in its place; `shattered`: tg
+/// `atom_break` (glass sound, a broken tube on the floor).
+fn break_floodlight(world: &mut World, flood: Entity, pos: TilePos, shattered: bool) {
+    world.resource_mut::<super::Grid>().remove_node(flood);
+    world.despawn(flood);
+    if let Some(frame) = crate::construction::spawn_obj(world, FLOOD_FRAME, pos) {
+        set_flood_stage(world, frame, FLOOD_NEEDS_LIGHTS);
+    }
+    if shattered {
+        playsound(world, PlaySound::new(pos, GLASSBR3, 100.0, true));
+        if let Some(tube) = crate::construction::spawn_obj(world, TUBE, pos) {
+            shatter(world, tube);
+        }
+    }
+    crate::construction::tile_changed(world, pos);
+}
+
+/// Screwdriver (panel; opening switches it off) and wrench (anchor and connect, or loose) on a
+/// floodlight.
+fn floodlight_tool(world: &mut World, client: Entity, held: Entity, flood: Entity) -> bool {
+    let (Some(f), Some(&pos)) = (
+        world.get::<Floodlight>(flood).copied(),
+        world.get::<TilePos>(flood),
+    ) else {
+        return false;
+    };
+    match tool_of(world, held).map(|t| t.0) {
+        Some(ToolKind::Screwdriver) => {
+            if !f.panel_open {
+                change_setting(world, flood, 1);
+            }
+            if let Some(mut f) = world.get_mut::<Floodlight>(flood) {
+                f.panel_open = !f.panel_open;
+            }
+            playsound(world, PlaySound::new(pos, SCREWDRIVER, 50.0, true));
+            let text = if f.panel_open {
+                "Панель закрыта."
+            } else {
+                "Панель открыта."
+            };
+            tell(world, client, Span::Notice, text);
+            true
+        }
+        Some(ToolKind::Wrench) => {
+            let anchored = !world
+                .get::<crate::obj_damage::Anchored>(flood)
+                .is_some_and(|a| a.0);
+            crate::obj_damage::set_anchored(world, flood, anchored);
+            change_setting(world, flood, 1);
+            {
+                let mut grid = world.resource_mut::<super::Grid>();
+                grid.remove_node(flood);
+                if anchored {
+                    grid.add_node(flood, pos, f.layer, super::NodeKind::Machine);
+                }
+            }
+            playsound(world, PlaySound::new(pos, RATCHET, 50.0, true));
+            let text = if anchored {
+                "Вы закрепляете прожектор."
+            } else {
+                "Вы откручиваете прожектор."
+            };
+            tell(world, client, Span::Notice, text);
+            true
+        }
+        _ => false,
+    }
+}
+
+/// `/obj/structure/floodlight_frame` `item_interaction`, `screwdriver_act`, `wirecutter_act`,
+/// `wrench_act`.
+fn flood_frame_interaction(
+    world: &mut World,
+    client: Entity,
+    mob: Entity,
+    held: Entity,
+    frame: Entity,
+) -> bool {
+    let stage = flood_stage(world, frame);
+    let Some(&pos) = world.get::<TilePos>(frame) else {
+        return false;
+    };
+    let held_path = crate::emp::path_of(world, held).unwrap_or_default();
+    if is_under(&held_path, CABLE) && stage == FLOOD_NEEDS_WIRES {
+        if crate::tools::stack_amount(world, held) < FLOOD_CABLE
+            || !crate::tools::use_stack(world, held, FLOOD_CABLE)
+        {
+            tell(world, client, Span::Warning, "Нужно 5 кусков кабеля!");
+            return true;
+        }
+        set_flood_stage(world, frame, FLOOD_NEEDS_SECURING);
+        return true;
+    }
+    if is_under(&held_path, TUBE) {
+        if stage != FLOOD_NEEDS_LIGHTS {
+            tell(world, client, Span::Warning, "Сборка не закончена!");
+            return true;
+        }
+        if bulb_of(world, held).is_some_and(|b| b.status == LightStatus::Broken) {
+            tell(world, client, Span::Warning, "Трубка разбита!");
+            return true;
+        }
+        world.despawn(held);
+        finish_floodlight(world, frame);
+        return true;
+    }
+    match tool_of(world, held).map(|t| t.0) {
+        Some(ToolKind::Screwdriver) => {
+            match stage {
+                FLOOD_NEEDS_SECURING => set_flood_stage(world, frame, FLOOD_NEEDS_LIGHTS),
+                FLOOD_NEEDS_LIGHTS => set_flood_stage(world, frame, FLOOD_NEEDS_SECURING),
+                _ => {}
+            }
+            true
+        }
+        Some(ToolKind::Wirecutters) => {
+            if stage == FLOOD_NEEDS_SECURING {
+                set_flood_stage(world, frame, FLOOD_NEEDS_WIRES);
+                crate::construction::spawn_stack(world, CABLE, pos, FLOOD_CABLE);
+            }
+            true
+        }
+        Some(ToolKind::Wrench) => {
+            if stage == FLOOD_NEEDS_WIRES {
+                crate::tools::use_tool(
+                    world,
+                    Actor {
+                        client,
+                        mob,
+                        item: Some(held),
+                    },
+                    frame,
+                    FRAME_WRENCH_DS,
+                    0,
+                    Job::Light(LightJob::FloodFrameApart),
+                );
+            }
+            true
+        }
+        _ => false,
+    }
+}
+
+/// The frame becomes a floodlight (unanchored, off).
+fn finish_floodlight(world: &mut World, frame: Entity) {
+    let Some(&pos) = world.get::<TilePos>(frame) else {
+        return;
+    };
+    world.despawn(frame);
+    if let Some(flood) = crate::construction::spawn_obj(world, FLOODLIGHT, pos) {
+        let layer = world.get::<DmPower>(flood).map_or(2, super::layer);
+        world.entity_mut(flood).insert(Floodlight {
+            setting: 1,
+            panel_open: false,
+            layer,
+        });
+        crate::obj_damage::set_anchored(world, flood, false);
+    }
+    crate::construction::tile_changed(world, pos);
+}
+
+/// [`LightJob::FloodFrameApart`] at its end: still unwired, 5 iron sheets.
+fn flood_frame_apart(world: &mut World, action: &crate::tools::DoAfter) {
+    let frame = action.target;
+    if flood_stage(world, frame) != FLOOD_NEEDS_WIRES {
+        return;
+    }
+    let Some(&pos) = world.get::<TilePos>(frame) else {
+        return;
+    };
+    world.despawn(frame);
+    crate::construction::spawn_stack(world, IRON, pos, FLOOD_IRON);
+    crate::construction::tile_changed(world, pos);
+}
+
+/// `/obj/machinery/power/floodlight/emp_act`: `prob(150 / severity)` breaks it.
+fn floodlight_emp(world: &mut World, mut cursor: Local<MessageCursor<crate::emp::EmpAct>>) {
+    let Some(messages) = world.get_resource::<Messages<crate::emp::EmpAct>>() else {
+        return;
+    };
+    let hits: Vec<crate::emp::EmpAct> = cursor
+        .read(messages)
+        .filter(|e| e.hits_self())
+        .copied()
+        .collect();
+    for ev in hits {
+        if world.get::<Floodlight>(ev.target).is_none() {
+            continue;
+        }
+        let Some(&pos) = world.get::<TilePos>(ev.target) else {
+            continue;
+        };
+        let chance = 150.0 / f32::from(ev.severity.max(1));
+        if world.resource_mut::<EngineRng>().0.chance(chance) {
+            break_floodlight(world, ev.target, pos, true);
+        }
+    }
 }
 
 /// Examine lines of fixtures, frames and replacers.
@@ -1405,6 +1857,35 @@ mod tests {
         assert!(w.get::<Flicker>(e).is_none());
         assert!(!w.get::<LightFixture>(e).unwrap().flickering);
         assert_eq!(lit(&w, e).map(|l| l.range), Some(8.0));
+    }
+
+    #[test]
+    fn a_floodlight_steps_down_to_what_its_net_pays() {
+        let mut w = World::new();
+        let mut grid = super::super::Grid::default();
+        let cable = w.spawn_empty().id();
+        let pos = TilePos::new(1, 1, 1);
+        grid.build([(cable, pos, 2)]);
+        let flood = w
+            .spawn((
+                Floodlight {
+                    setting: 1,
+                    panel_open: false,
+                    layer: 2,
+                },
+                pos,
+            ))
+            .id();
+        grid.add_node(flood, pos, 2, super::super::NodeKind::Machine);
+        let net = grid.node_net(flood).expect("on the cable");
+        // 2.5 kW for a machine tick: medium (2 kW) but not high (3 kW).
+        grid.net_mut(net).unwrap().avail = 2500.0 * super::super::MACHINE_TICK_SECS;
+        w.insert_resource(grid);
+        assert_eq!(change_setting(&mut w, flood, 4), 3);
+        assert_eq!(lit(&w, flood).map(|l| l.range), Some(10.0));
+        assert_eq!(change_setting(&mut w, flood, 1), 1);
+        assert_eq!(lit(&w, flood), None);
+        assert_eq!(Floodlight::watts(2), 1000.0);
     }
 
     #[test]

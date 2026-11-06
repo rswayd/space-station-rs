@@ -70,7 +70,7 @@
 //! | 3187 | `cargo::money::coin_attack_self` (coin flip) |
 //! | 3188 | `mining::fulton::attack_self` (packs link, beacon kits unfold) |
 //! | 3189 | `shuttle_remote::use_remote` |
-//! | 3190 | `power::lighting::replacer_attack_self` (the fixtures on the user's tile) |
+//! | 3192 | `power::lighting::replacer_attack_self` (the fixtures on the user's tile) |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):
 //!
@@ -139,6 +139,7 @@
 //! | 1970 | `power::shields::interact` |
 //! | 2000 | `wallmount::interact` |
 //! | 2010 | `power::lighting::remove_by_hand` (right click: a bulb out of its fixture) |
+//! | 2012 | `power::lighting::floodlight_hand` (setting, the tube out with the panel open) |
 //! | 2100 | `power::apc_ui::interact` |
 //! | 2200 | `mecha::bay::interact` |
 //! | 2300 | `mecha::core::attack_hand` |
@@ -238,7 +239,7 @@
 //! | 2610 | `medical::cryo::item_interaction` (a cup into the cell) |
 //! | 2630 | `medical::limbgrower::item_interaction` (limb design disks) |
 //! | 2700 | `wallmount::item_interaction` |
-//! | 2710 | `power::lighting::item_interaction` (bulbs, replacers, fixtures, frames, wall frames) |
+//! | 2710 | `power::lighting::item_interaction` (bulbs, replacers, fixtures, frames, wall frames, floodlights and their frames) |
 //! | 2715 | `power::lighting::swing_bulb` (a bulb shatters on a mob; never handles) |
 //! | 2800 | `power::chargers::item_interaction` |
 //! | 2850 | `power::pacman::item_interaction` (also PACMAN boards) |

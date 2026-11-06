@@ -55,4 +55,4 @@
 Собираемый прожектор на кабеле с уровнями яркости и потреблением из сети.
 
 - **Код:** [`/obj/machinery/power/floodlight`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/floodlight.dm#L135), [`/obj/structure/floodlight_frame`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/floodlight.dm#L7)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/power/lighting.rs` (`Floodlight`, `FloodFrame`, `change_setting`, `floodlight_tick`): каркас — 5 кабеля, отвёртка, целая трубка (или лампозаменитель), кусачки и ключ (3 с, 5 листов железа) обратно; рукой — уровни выкл/5/10/15 тайлов (1/2/3 кВт из сети кабеля под ним, без оплаты понижается или гаснет); отвёртка — панель (с открытой рука вынимает трубку, остаётся каркас), ключ — закрепить и подключить к сети; с карты закреплён; ЭМИ `prob(150/severity)` ломает в каркас с разбитой трубкой. Нет: 2 с у ключа, покраски, смены слоя кабеля, поломки от урона
