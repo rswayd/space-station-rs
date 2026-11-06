@@ -23,7 +23,8 @@ use ss13_net::admin::client::{AdminResponseReceived, SendAdminRequest};
 use ss13_net::client::NetClientConfig;
 use ss13_shared::admin::rights::*;
 use ss13_shared::admin::{
-    AdminRequest, AdminResponse, AntagRole, PlayerEntry, PlayerState, Smite, Ticket, TicketState,
+    AdminEntry, AdminRequest, AdminResponse, AntagRole, PlayerEntry, PlayerState, Smite,
+    SoundScope, Ticket, TicketState,
 };
 
 /// The player list is asked for this often while it is shown (seconds).
@@ -37,6 +38,8 @@ pub enum Tab {
     Players,
     Tickets,
     Game,
+    /// tg "Permissions Panel" (`R_PERMISSIONS`).
+    Permissions,
 }
 
 /// What the server told this client, and the panel's state.
@@ -55,6 +58,9 @@ pub struct AdminUi {
     pub prototypes: Vec<String>,
     pub events: Vec<String>,
     pub dynamic: Vec<String>,
+    /// The permissions panel's last [`AdminResponse::AdminList`].
+    pub admins: Vec<AdminEntry>,
+    pub ranks: Vec<String>,
     /// The last `Done`/`Refused`.
     pub last_reply: String,
     players_asked: f64,
@@ -70,6 +76,12 @@ pub struct AdminUi {
     confirm_end: bool,
     emp_heavy: u8,
     emp_light: u8,
+    new_admin: String,
+    new_rank: String,
+    sound_file: String,
+    sound_volume: u8,
+    gas_text: String,
+    confirm_man_up: bool,
 }
 
 impl Default for AdminUi {
@@ -87,6 +99,8 @@ impl Default for AdminUi {
             prototypes: Vec::new(),
             events: Vec::new(),
             dynamic: Vec::new(),
+            admins: Vec::new(),
+            ranks: Vec::new(),
             last_reply: String::new(),
             players_asked: f64::NEG_INFINITY,
             focus_help: false,
@@ -101,6 +115,12 @@ impl Default for AdminUi {
             confirm_end: false,
             emp_heavy: 1,
             emp_light: 3,
+            new_admin: String::new(),
+            new_rank: String::new(),
+            sound_file: String::new(),
+            sound_volume: 100,
+            gas_text: String::new(),
+            confirm_man_up: false,
         }
     }
 }
@@ -203,7 +223,8 @@ fn collect(mut responses: MessageReader<AdminResponseReceived>, mut ui: ResMut<A
     for AdminResponseReceived(response) in responses.read() {
         match response {
             AdminResponse::Rights { rank, rights } => {
-                ui.listed = true;
+                // An empty rank: removed from the admins (the permissions panel).
+                ui.listed = !rank.is_empty();
                 ui.rank.clone_from(rank);
                 ui.rights = *rights;
             }
@@ -214,6 +235,10 @@ fn collect(mut responses: MessageReader<AdminResponseReceived>, mut ui: ResMut<A
             AdminResponse::Dynamic(lines) => ui.dynamic.clone_from(lines),
             AdminResponse::Done(text) => ui.last_reply = format!("ok: {text}"),
             AdminResponse::Refused(text) => ui.last_reply = format!("отказано: {text}"),
+            AdminResponse::AdminList { admins, ranks } => {
+                ui.admins.clone_from(admins);
+                ui.ranks.clone_from(ranks);
+            }
         }
     }
 }
@@ -425,12 +450,20 @@ fn admin_panel(
                     format!("Тикеты ({open_tickets})"),
                 );
                 ui.selectable_value(&mut state.tab, Tab::Game, "Игра");
+                if state.can(R_PERMISSIONS)
+                    && ui
+                        .selectable_value(&mut state.tab, Tab::Permissions, "Права")
+                        .clicked()
+                {
+                    out.push(AdminRequest::AdminList);
+                }
             });
             ui.separator();
             match state.tab {
                 Tab::Players => players_tab(ui, state, &mut out),
                 Tab::Tickets => tickets_tab(ui, state, &mut out),
                 Tab::Game => game_tab(ui, state, &mut out),
+                Tab::Permissions => permissions_tab(ui, state, &mut out),
             }
             if !state.last_reply.is_empty() {
                 ui.separator();
@@ -530,6 +563,7 @@ fn players_tab(ui: &mut egui::Ui, state: &mut AdminUi, out: &mut Vec<AdminReques
                             },
                         );
                         button(ui, "Heal", R_ADMIN, AdminRequest::Rejuvenate(ckey.clone()));
+                        button(ui, "Man Up", R_ADMIN, AdminRequest::ManUp(ckey.clone()));
                         button(
                             ui,
                             "Smite",
@@ -794,6 +828,62 @@ fn game_tab(ui: &mut egui::Ui, state: &mut AdminUi, out: &mut Vec<AdminRequest>)
         });
         ui.separator();
         ui.add_enabled_ui(state.can(R_ADMIN), |ui| {
+            // BandaStation "Global Man Up" (asks for the confirmation).
+            ui.horizontal(|ui| {
+                ui.checkbox(&mut state.confirm_man_up, "точно");
+                if ui
+                    .add_enabled(state.confirm_man_up, egui::Button::new("Global Man Up"))
+                    .clicked()
+                {
+                    state.confirm_man_up = false;
+                    out.push(AdminRequest::GlobalManUp);
+                }
+            });
+        });
+        ui.add_enabled_ui(state.can(R_SOUND), |ui| {
+            // BandaStation "Play Z-level Sound" / "Play Sound in View".
+            ui.horizontal_wrapped(|ui| {
+                ui.strong("Звук");
+                ui.add(
+                    egui::TextEdit::singleline(&mut state.sound_file)
+                        .hint_text("sound/….ogg")
+                        .desired_width(300.0),
+                );
+                ui.add(egui::DragValue::new(&mut state.sound_volume).range(1..=100));
+                for (label, scope) in [
+                    ("на z-уровне", SoundScope::ZLevel),
+                    ("в поле зрения", SoundScope::View),
+                ] {
+                    if ui.small_button(label).clicked() && !state.sound_file.trim().is_empty() {
+                        out.push(AdminRequest::PlaySound {
+                            file: state.sound_file.trim().to_owned(),
+                            volume: state.sound_volume,
+                            scope,
+                        });
+                    }
+                }
+            });
+        });
+        ui.add_enabled_ui(state.can(R_DEBUG), |ui| {
+            // tg "Debug Air Status" and `atmos_spawn_air` on the own tile.
+            ui.horizontal_wrapped(|ui| {
+                ui.strong("Атмос");
+                if ui.small_button("Воздух под собой").clicked() {
+                    out.push(AdminRequest::AirStatus);
+                }
+                ui.add(
+                    egui::TextEdit::singleline(&mut state.gas_text)
+                        .hint_text("o2=22;n2=82;TEMP=293.15")
+                        .desired_width(240.0),
+                );
+                if ui.small_button("Выпустить газ").clicked() && !state.gas_text.trim().is_empty()
+                {
+                    out.push(AdminRequest::SpawnAir(state.gas_text.clone()));
+                }
+            });
+        });
+        ui.separator();
+        ui.add_enabled_ui(state.can(R_ADMIN), |ui| {
             ui.strong("Объявление ЦК");
             ui.add(
                 egui::TextEdit::singleline(&mut state.announce_title)
@@ -868,6 +958,77 @@ fn game_tab(ui: &mut egui::Ui, state: &mut AdminUi, out: &mut Vec<AdminRequest>)
                 ui.label(line);
             }
         });
+    });
+}
+
+/// tg "Permissions Panel": the admins, a rank change or a new admin, and removal. Changes last
+/// the round (no database yet); the server checks the edit flags and the target's rights.
+fn permissions_tab(ui: &mut egui::Ui, state: &mut AdminUi, out: &mut Vec<AdminRequest>) {
+    ui.horizontal(|ui| {
+        if ui.button("Обновить").clicked() {
+            out.push(AdminRequest::AdminList);
+        }
+        ui.small("изменения действуют до конца раунда");
+    });
+    ui.horizontal_wrapped(|ui| {
+        ui.add(
+            egui::TextEdit::singleline(&mut state.new_admin)
+                .hint_text("ckey")
+                .desired_width(160.0),
+        );
+        ui.add(
+            egui::TextEdit::singleline(&mut state.new_rank)
+                .hint_text("Ранг или Ранг1+Ранг2")
+                .desired_width(220.0),
+        );
+        if ui.button("Назначить").clicked()
+            && !state.new_admin.trim().is_empty()
+            && !state.new_rank.trim().is_empty()
+        {
+            out.push(AdminRequest::SetAdminRank {
+                ckey: state.new_admin.trim().to_owned(),
+                rank: state.new_rank.trim().to_owned(),
+            });
+            out.push(AdminRequest::AdminList);
+        }
+    });
+    ui.horizontal_wrapped(|ui| {
+        ui.label("Ранги:");
+        for rank in &state.ranks {
+            if ui.small_button(rank).clicked() {
+                state.new_rank.clone_from(rank);
+            }
+        }
+    });
+    ui.separator();
+    egui::ScrollArea::vertical().show(ui, |ui| {
+        egui::Grid::new("admin permissions")
+            .striped(true)
+            .show(ui, |ui| {
+                for h in ["ckey", "ранг", "права", ""] {
+                    ui.strong(h);
+                }
+                ui.end_row();
+                for a in &state.admins {
+                    ui.label(if a.online {
+                        format!("{} (в сети)", a.ckey)
+                    } else {
+                        a.ckey.clone()
+                    });
+                    ui.label(&a.rank);
+                    ui.small(crate::rights::rights_text(a.rights));
+                    ui.horizontal(|ui| {
+                        if ui.small_button("Сменить ранг").clicked() {
+                            state.new_admin.clone_from(&a.ckey);
+                        }
+                        if ui.small_button("Убрать").clicked() {
+                            out.push(AdminRequest::RemoveAdmin(a.ckey.clone()));
+                            out.push(AdminRequest::AdminList);
+                        }
+                    });
+                    ui.end_row();
+                }
+            });
     });
 }
 

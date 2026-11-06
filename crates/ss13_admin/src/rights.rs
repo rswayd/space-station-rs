@@ -25,7 +25,7 @@ pub struct Rank {
     pub rights: u32,
     pub include: u32,
     pub exclude: u32,
-    /// `can_edit_rights` (used by the permissions panel, which is not ported).
+    /// `can_edit_rights`: the flags a holder of this rank may grant in the permissions panel.
     pub edit: u32,
 }
 
@@ -165,6 +165,8 @@ pub fn parse_ranks(text: &str) -> (Vec<Rank>, Vec<String>) {
 pub struct Holder {
     pub rank: String,
     pub rights: u32,
+    /// tg `can_edit_rights_flags`: the ranks' `Edit` flags.
+    pub edit: u32,
 }
 
 /// `admins.txt`: `key = Rank` (or `Rank1+Rank2`) per line, `#` comments. A key whose ranks are
@@ -207,10 +209,60 @@ pub fn parse_admins(text: &str, ranks: &[Rank]) -> (HashMap<String, Holder>, Vec
                     .collect::<Vec<_>>()
                     .join("+"),
                 rights: found.iter().fold(0, |acc, r| acc | r.rights),
+                edit: found.iter().fold(0, |acc, r| acc | r.edit),
             },
         );
     }
     (admins, warnings)
+}
+
+/// The permissions panel's rank text (`Rank1+Rank2`): every name must be a known rank.
+pub fn resolve_rank(text: &str, ranks: &[Rank]) -> Result<Holder, String> {
+    let mut found: Vec<&Rank> = Vec::new();
+    for name in text.split('+').map(str::trim) {
+        let rank = ranks
+            .iter()
+            .find(|r| r.name == name)
+            .ok_or_else(|| format!("Ранга «{name}» нет."))?;
+        if !found.iter().any(|r| r.name == rank.name) {
+            found.push(rank);
+        }
+    }
+    Ok(Holder {
+        rank: found
+            .iter()
+            .map(|r| r.name.as_str())
+            .collect::<Vec<_>>()
+            .join("+"),
+        rights: found.iter().fold(0, |acc, r| acc | r.rights),
+        edit: found.iter().fold(0, |acc, r| acc | r.edit),
+    })
+}
+
+/// tg `edit_rights_topic` + `change_admin_rank`: an editor with `actor_rights` (active) and
+/// `actor_edit` (`can_edit_rights_flags`) may touch an admin with `target` rights (`None`: not
+/// listed yet) only with greater rights, and may give a rank only within its edit flags
+/// (`new_rights`, `None` for a removal).
+pub fn may_edit_admin(
+    actor_rights: u32,
+    actor_edit: u32,
+    target: Option<u32>,
+    new_rights: Option<u32>,
+) -> Result<(), &'static str> {
+    if actor_edit == 0 {
+        return Err("Ваш ранг не может менять права других.");
+    }
+    if let Some(target) = target
+        && !greater_rights(actor_rights, target)
+    {
+        return Err("Ошибка: у цели больше прав, чем у вас.");
+    }
+    if let Some(rights) = new_rights
+        && rights & actor_edit != rights
+    {
+        return Err("Этот ранг выдаёт права, которые вы не можете выдавать.");
+    }
+    Ok(())
 }
 
 /// tg `check_rights_for`: every flag of `required` (any of them with `any`).
@@ -313,6 +365,26 @@ Edit =
         assert_eq!(both.rank, "Moderator+Coder");
         assert!(has(both.rights, R_ADMIN | R_DEBUG | R_AUTOADMIN));
         assert_eq!(warnings.len(), 2, "{warnings:?}");
+    }
+
+    #[test]
+    fn ranks_resolve_and_edits_stay_within_edit_flags() {
+        let (ranks, _) = parse_ranks(RANKS);
+        let both = resolve_rank("Moderator+Coder", &ranks).unwrap();
+        assert!(has(both.rights, R_ADMIN | R_DEBUG));
+        assert!(resolve_rank("Moderator+Nope", &ranks).is_err());
+        let gm = resolve_rank("Game Master", &ranks).unwrap();
+        assert_eq!(gm.edit, R_EVERYTHING);
+        // A Game Master lists a Moderator, and may demote another Game Master.
+        assert!(may_edit_admin(R_EVERYTHING, gm.edit, None, Some(both.rights)).is_ok());
+        assert!(may_edit_admin(R_EVERYTHING, gm.edit, Some(R_EVERYTHING), None).is_ok());
+        // No Edit flags: nothing.
+        assert!(may_edit_admin(R_ADMIN | R_PERMISSIONS, 0, None, Some(R_ADMIN)).is_err());
+        // Edit ADMIN only: cannot grant DEBUG, cannot touch an equal admin.
+        let editor = R_ADMIN | R_PERMISSIONS | R_DEBUG;
+        assert!(may_edit_admin(editor, R_ADMIN, None, Some(R_ADMIN)).is_ok());
+        assert!(may_edit_admin(editor, R_ADMIN, None, Some(R_ADMIN | R_DEBUG)).is_err());
+        assert!(may_edit_admin(editor, R_ADMIN, Some(editor), None).is_err());
     }
 
     #[test]

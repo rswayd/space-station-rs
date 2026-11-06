@@ -6132,6 +6132,7 @@ dependencies = [
  "bevy_egui",
  "postcard",
  "ss13_assets",
+ "ss13_atmos",
  "ss13_chat",
  "ss13_data",
  "ss13_game",

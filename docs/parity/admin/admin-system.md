@@ -11,7 +11,7 @@
 Редактирование админов и рангов (добавить, удалить, сменить ранг и флаги), с записью в БД.
 
 - **Код:** [`/datum/admins/proc/edit_admin_permissions()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/permissionedit.dm#L18)
-- **Статус в ss13-rs:** ❌ нет — админ-системы нет
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_admin/src/verbs.rs`, вкладка «Права» админ-панели: список админов и рангов, назначить/сменить ранг (`Ранг1+Ранг2`), убрать админа; сервер проверяет `R_PERMISSIONS`, флаги `Edit` ранга редактора (tg `can_edit_rights_flags`) и старшинство над целью; онлайн-цель сразу получает/теряет сессию. Изменения на раунд (tg «temporary»); запись в БД («permanent») — в SQL/persistence (отложено)
 
 ### Регистрация вербов и панель вербов
 `ADMIN_VERB` регистрирует ~380 вербов по категориям (Main, Game, Fun, Events, Server, Debug, Mapping, Shuttle, Profile...), скрытие вербов; TGUI-панель «Admin Verb Panel» с поиском и выбором цели.
@@ -30,33 +30,33 @@ ASay (админы), MSay (менторы, BandaStation), DSay (в мёртвы�
 
 - **Код:** [`admin_hotkeys.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/admin/code/admin_hotkeys.dm#L1), [`admin_verbs.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/admin/code/admin_verbs.dm#L1), [`admin_secrets.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/admin/code/admin_secrets.dm#L1)
 - **BandaStation:** [`_admin.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/admin/_admin.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — админ-системы нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_admin/src/verbs.rs`: Man Up (кнопка игрока, `R_ADMIN`), Global Man Up (с подтверждением), Play Z-level Sound и Play Sound in View (`R_SOUND`, путь к ассету `.ogg`, без множителей громкости из префов); нет хоткеев призрака (Ctrl-клик → player panel, Ctrl-Shift-клик → VV), Debug Outfit, Download Icon, секрета шаттла «Гамма»
 
 ### Анти-рейд контроллер (BandaStation)
 Админ-панель «Raider Controller» для защиты от рейдов (ограничения взрывов и др.).
 
 - **Код:** [`raider_controller.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/admin/code/raider_controller.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — админ-системы нет
+- **Статус в ss13-rs:** ❌ нет — кап взрыва по наигранному живому времени (`get_exp_living`, таблица `role_time` в БД): отложено до SQL/persistence
 
 ### Панический бункер и вход
 Panic bunker (новые ckey не пускаются или идут на интервью), запрет гостей, переключатели входа/респавна/OOC/хаба.
 
 - **Код:** [`panicbunker.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/verbs/panicbunker.dm#L1), [`server.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/verbs/server.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — админ-системы нет
+- **Статус в ss13-rs:** ❌ нет — бункер опирается на возраст аккаунта/первое появление из БД: отложено до SQL/persistence; переключатели входа/OOC/респавна не сделаны
 
 ### Центральный сервер SS220 (BandaStation)
 Подсистема `central`: связь с метасервером — привязка Discord, белый список (с банами по нему), уровень доната, запросы банов на центральный сервер.
 
 - **Код:** [`SUBSYSTEM_DEF(central)`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/metaserver/code/ss_central.dm#L12), [`/datum/controller/subsystem/central/proc/is_player_whitelisted()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/metaserver/code/ss_central.dm#L127), [`/datum/controller/subsystem/central/proc/update_player_donate_tier_async()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/metaserver/code/ss_central.dm#L204)
 - **BandaStation:** [`_metaserver.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/metaserver/_metaserver.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ❌ нет — внешний метасервер SS220 (HTTP API), вне порта до появления сервиса
 
 ### Привязка Discord и вебхуки (BandaStation)
 Обязательная верификация Discord (OAuth в лобби), вебхуки интервью и конца раунда (с пингом роли), верб «discord» со ссылкой.
 
 - **Код:** [`discord_link.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/metaserver/code/discord_link.dm#L1), [`interview.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/metaserver/code/interview.dm#L1), [`discord.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/discord/code/discord.dm#L1)
 - **BandaStation:** [`_discord.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/discord/_discord.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ❌ нет — внешние сервисы (Discord OAuth, вебхуки), вне порта до появления сервиса
 
 ### Особенности сервера Prime (BandaStation)
 Изменения только для сервера Prime: вендомат бодикамер, аутфит Apex, генератор рыболовного портала, оружие, событийная роль «выживший кхаарут» (инфекция, улей, способности).

@@ -18,6 +18,7 @@ ss13_chat = { workspace = true, optional = true }
 ss13_proto = { workspace = true, optional = true }
 ss13_mapload = { workspace = true, optional = true }
 ss13_world = { workspace = true, optional = true }
+ss13_atmos = { workspace = true, optional = true }
 ss13_render = { workspace = true, optional = true }
 bevy_egui = { workspace = true, optional = true }
 
@@ -32,6 +33,7 @@ server = [
     "dep:ss13_proto",
     "dep:ss13_mapload",
     "dep:ss13_world",
+    "dep:ss13_atmos",
 ]
 client = [
     "ss13_net/client",

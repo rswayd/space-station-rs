@@ -586,3 +586,83 @@ fn mutes_follow_the_ckey_and_offline_admins_keep_their_rank() {
         },
     ));
 }
+
+#[test]
+fn the_permissions_panel_lists_changes_and_removes_admins_for_the_round() {
+    let mut s = Session::start("permissions");
+    assert!(refused(s.ask(PLAYER, AdminRequest::AdminList)).contains("не администратор"));
+    let why = refused(s.ask(
+        ADMIN,
+        AdminRequest::SetAdminRank {
+            ckey: "bob".into(),
+            rank: "Nope".into(),
+        },
+    ));
+    assert!(why.contains("Nope"), "{why}");
+    done(s.ask(
+        ADMIN,
+        AdminRequest::SetAdminRank {
+            ckey: "bob".into(),
+            rank: "Moderator".into(),
+        },
+    ));
+    let bob = s.server_client("bob");
+    let session = s.server.world().get::<AdminSession>(bob).cloned().unwrap();
+    assert_eq!(session.rank, "Moderator");
+    assert_eq!(session.active_rights(), R_ADMIN | R_AUTOADMIN);
+    s.run_until("bob gets his rights", |s| {
+        s.seen(PLAYER).responses.iter().any(|r| {
+            matches!(r, AdminResponse::Rights { rank, rights } if rank == "Moderator" && *rights != 0)
+        })
+    });
+    // A Moderator has no PERMISSIONS.
+    let why = refused(s.ask(PLAYER, AdminRequest::RemoveAdmin("The Admin".into())));
+    assert!(why.contains("PERMISSIONS"), "{why}");
+    s.send(ADMIN, AdminRequest::AdminList);
+    s.run_until("the admin list shows bob online", |s| {
+        s.seen(ADMIN).responses.iter().any(|r| {
+            matches!(r, AdminResponse::AdminList { admins, ranks }
+                if ranks.len() == 2 && admins.iter().any(|a| a.ckey == "bob" && a.online))
+        })
+    });
+    done(s.ask(ADMIN, AdminRequest::RemoveAdmin("bob".into())));
+    assert!(s.server.world().get::<AdminSession>(bob).is_none());
+    s.run_until("bob loses the panel", |s| {
+        s.seen(PLAYER).responses.iter().any(|r| {
+            matches!(r, AdminResponse::Rights { rank, rights } if rank.is_empty() && *rights == 0)
+        })
+    });
+    assert!(
+        s.admin_log()
+            .contains("removed bob from the admins list temporarily")
+    );
+}
+
+#[test]
+fn man_up_and_admin_sounds_reach_the_players() {
+    let mut s = Session::start("man_up");
+    done(s.ask(ADMIN, AdminRequest::ManUp("bob".into())));
+    s.run_until("bob is told to man up", |s| {
+        s.chat_has(PLAYER, "Deal with it")
+    });
+    let why = refused(s.ask(
+        ADMIN,
+        AdminRequest::PlaySound {
+            file: "../secret.ogg".into(),
+            volume: 50,
+            scope: ss13_shared::admin::SoundScope::ZLevel,
+        },
+    ));
+    assert!(why.contains(".ogg"), "{why}");
+    done(s.ask(
+        ADMIN,
+        AdminRequest::PlaySound {
+            file: "sound/misc/server-ready.ogg".into(),
+            volume: 50,
+            scope: ss13_shared::admin::SoundScope::ZLevel,
+        },
+    ));
+    assert!(s.admin_log().contains("played a z-level sound"));
+    // Bob is no admin: no sounds, no man up.
+    assert!(refused(s.ask(PLAYER, AdminRequest::GlobalManUp)).contains("не администратор"));
+}

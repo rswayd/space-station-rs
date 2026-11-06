@@ -46,7 +46,9 @@ use ss13_shared::admin::rights::*;
 use ss13_shared::admin::{AdminRequest, AdminResponse, AntagRole, PlayerEntry, PlayerState, Smite};
 use ss13_shared::chat::{ChatChannel, ChatMessage, MAX_MESSAGE_LEN, Span};
 
-use crate::rights::{Holder, ckey, greater_rights, has, parse_admins, parse_ranks, rights_text};
+use crate::rights::{
+    Holder, Rank, ckey, greater_rights, has, parse_admins, parse_ranks, rights_text,
+};
 use crate::tickets::{self, Tickets};
 
 /// The admins' request notification (`comms_notification`).
@@ -98,6 +100,8 @@ impl AdminConfig {
 #[derive(Resource, Clone, Debug, Default)]
 pub struct Admins {
     pub holders: HashMap<String, Holder>,
+    /// `admin_ranks.txt`, for the permissions panel.
+    pub ranks: Vec<Rank>,
 }
 
 impl Admins {
@@ -108,6 +112,7 @@ impl Admins {
             Holder {
                 rank: rank.to_owned(),
                 rights,
+                edit: 0,
             },
         );
     }
@@ -127,7 +132,7 @@ impl Admins {
             ranks.len(),
             holders.len()
         );
-        Self { holders }
+        Self { holders, ranks }
     }
 }
 
@@ -357,7 +362,7 @@ fn comms_requests(world: &mut World, mut cursor: Local<MessageCursor<CommsReques
 }
 
 /// An admin action: logged and announced to the admins.
-fn admin_action(world: &mut World, text: &str) {
+pub(crate) fn admin_action(world: &mut World, text: &str) {
     log_admin(world, "ADMIN", text);
     message_admins(world, text);
 }
@@ -405,7 +410,7 @@ pub fn sanitize_text(raw: &str, max: usize) -> String {
 
 /// Whether a listed ckey may be trusted with its rights: the token proves it, or the server
 /// trusts every client.
-fn identity_trusted(world: &World) -> bool {
+pub(crate) fn identity_trusted(world: &World) -> bool {
     world.resource::<AdminConfig>().insecure_admins
         || world
             .get_resource::<TokenValidator>()
@@ -551,7 +556,12 @@ pub fn required_rights(request: &AdminRequest) -> Option<u32> {
         | MakeAntag { .. }
         | Dynamic
         | ForceMidround(_)
-        | SetSecurityLevel(_) => R_ADMIN,
+        | SetSecurityLevel(_)
+        | ManUp(_)
+        | GlobalManUp => R_ADMIN,
+        AdminList | SetAdminRank { .. } | RemoveAdmin(_) => R_PERMISSIONS,
+        PlaySound { .. } => R_SOUND,
+        AirStatus | SpawnAir(_) => R_DEBUG,
         Ban { .. } | Unban(_) => R_BAN,
         FindPrototypes(_) | Spawn(_) => R_SPAWN,
         Smite { .. } | Emp { .. } => R_ADMIN | R_FUN,
@@ -587,7 +597,7 @@ fn handle_requests(world: &mut World) {
 
 pub(crate) type AnswerResult = Result<Option<AdminResponse>, String>;
 
-fn done(text: impl Into<String>) -> AnswerResult {
+pub(crate) fn done(text: impl Into<String>) -> AnswerResult {
     Ok(Some(AdminResponse::Done(text.into())))
 }
 
@@ -1018,6 +1028,22 @@ fn answer(world: &mut World, client: Entity, request: AdminRequest) -> AnswerRes
             done(format!("{target_key} is {what}"))
         }
         AdminRequest::Dynamic => Ok(Some(AdminResponse::Dynamic(dynamic_report(world)))),
+        AdminRequest::AdminList => Ok(Some(crate::verbs::admin_list(world))),
+        AdminRequest::SetAdminRank { ckey: target, rank } => {
+            crate::verbs::set_admin_rank(world, client, &key, &target, &rank)
+        }
+        AdminRequest::RemoveAdmin(target) => {
+            crate::verbs::remove_admin(world, client, &key, &target)
+        }
+        AdminRequest::ManUp(target) => crate::verbs::man_up(world, &key, &target),
+        AdminRequest::GlobalManUp => crate::verbs::global_man_up(world, &key),
+        AdminRequest::PlaySound {
+            file,
+            volume,
+            scope,
+        } => crate::verbs::play_sound(world, client, &key, &file, volume, scope),
+        AdminRequest::AirStatus => crate::verbs::air_status(world, client),
+        AdminRequest::SpawnAir(text) => crate::verbs::spawn_air(world, client, &key, &text),
         AdminRequest::ForceMidround(tag) => {
             let picked = ss13_game::antag::midround::force_midround(world, &tag)?;
             admin_action(
@@ -1139,12 +1165,12 @@ fn check_greater(world: &World, actor: Entity, target_ckey: &str) -> Result<(), 
     }
 }
 
-fn target_client(world: &mut World, target: &str) -> Result<Entity, String> {
+pub(crate) fn target_client(world: &mut World, target: &str) -> Result<Entity, String> {
     client_by_ckey(world, target).ok_or_else(|| format!("Игрок {} не в сети.", ckey(target)))
 }
 
 /// The target's client and its current mob (a ghost included).
-fn target_mob(world: &mut World, target: &str) -> Result<(Entity, Entity), String> {
+pub(crate) fn target_mob(world: &mut World, target: &str) -> Result<(Entity, Entity), String> {
     let client = target_client(world, target)?;
     let mob = world
         .resource::<Players>()
@@ -1154,7 +1180,7 @@ fn target_mob(world: &mut World, target: &str) -> Result<(Entity, Entity), Strin
     Ok((client, mob))
 }
 
-fn own_mob(world: &World, client: Entity) -> Result<Entity, String> {
+pub(crate) fn own_mob(world: &World, client: Entity) -> Result<Entity, String> {
     world
         .resource::<Players>()
         .mob(client)
@@ -1162,7 +1188,7 @@ fn own_mob(world: &World, client: Entity) -> Result<Entity, String> {
         .ok_or_else(|| "У вас нет тела (лобби).".into())
 }
 
-fn mob_pos(world: &World, mob: Entity) -> Result<TilePos, String> {
+pub(crate) fn mob_pos(world: &World, mob: Entity) -> Result<TilePos, String> {
     world
         .get::<TilePos>(mob)
         .copied()

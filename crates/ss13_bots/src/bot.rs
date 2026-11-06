@@ -502,6 +502,9 @@ fn record(
             AdminResponse::Refused(text) => {
                 observed.admin_replies.push(format!("refused: {text}"));
             }
+            AdminResponse::AdminList { admins, .. } => {
+                observed.admin_lists.insert("admins".into(), json(admins));
+            }
         }
     }
     for ChatReceived(message) in chat.read() {

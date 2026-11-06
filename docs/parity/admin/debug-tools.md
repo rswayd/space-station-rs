@@ -5,19 +5,19 @@ View Variables, вызов процедур, SDQL2 и Lua, отладочные 
 Окно переменных любого датума: правка значений (вкл. массовую), списки, отметка датума, теги, удаление, отслеживание ссылок, редакторы цветовых матриц, фильтров и частиц.
 
 - **Код:** [`/client/proc/debug_variables()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/view_variables/view_variables.dm#L9), [`modify_variables.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/view_variables/modify_variables.dm#L1), [`mass_edit_variables.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/view_variables/mass_edit_variables.dm#L1), [`reference_tracking.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/view_variables/reference_tracking.dm#L1); tgui: [`Filterrific.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/Filterrific.jsx), [`ParticleEdit.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/ParticleEdit/index.tsx)
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_debug` даёт инспектор ECS для разработчиков, не админ-инструмент
+- **Статус в ss13-rs:** ❌ нет — компоненты `ss13_game` не регистрируют `Reflect`, перечислять и править поля нечем; `crates/ss13_debug` даёт инспектор ECS для разработчиков, не админ-инструмент
 
 ### Вызов процедур
 Advanced ProcCall / Atom ProcCall с аргументами, глобальные вызовы, защита от опасных процедур.
 
 - **Код:** [`code/modules/admin/callproc`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/callproc)
-- **Статус в ss13-rs:** ❌ нет — админ-системы нет
+- **Статус в ss13-rs:** ❌ нет — в Rust нет вызова процедур по имени; аналог потребует реестра админ-команд
 
 ### SDQL2
 SQL-подобные запросы к объектам мира (SELECT/UPDATE/CALL/DELETE с фильтрами).
 
 - **Код:** [`/datum/sdql_parser`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/verbs/SDQL2/SDQL_2_parser.dm#L68), [`SDQL_2.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/verbs/SDQL2/SDQL_2.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — админ-системы нет
+- **Статус в ss13-rs:** ❌ нет — нужен рефлекшн компонентов (см. View Variables)
 
 ### Lua-скрипты (auxlua)
 Редактор и состояния Lua для скриптования событий админами.
@@ -35,7 +35,7 @@ Debug-Game, счётчики атомов/датумов, Del-All/Hard-Del-All, 
 Панель SSair (`Atmos Control Panel`: группы возбуждённых тайлов и их показ `display_turfs`, заморозка подсистемы), `Debug Air Status`, проверка трубных сетей (`Check Plumbing`), выпуск газа в тайл. Перенесено из ../atmos/linda.md.
 
 - **Код:** [`atmos_control`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/admin_verbs.dm#L322), [`/datum/excited_group/proc/display_turfs()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/atmospherics/environmental/LINDA_turf_tile.dm#L545), [`debug_air_status`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/verbs/diagnostics.dm#L3), [`atmos_debug`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/verbs/atmosdebug.dm#L2)
-- **Статус в ss13-rs:** ❌ нет — в отладочном оверлее `crates/ss13_debug` только счётчики SSair
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_admin/src/verbs.rs` (вкладка «Игра», `R_DEBUG`): Debug Air Status (показания анализатора своего тайла) со счётчиками SSair (активные тайлы, возбуждённые группы, очаги), выпуск газа строкой tg (`atmos_spawn_air`) в свой тайл; нет показа тайлов возбуждённых групп, заморозки SSair, Check Plumbing
 
 ### Маппинг-вербы
 Отчёты карты, проверка зон, атмоса, питания, водопровода, диапазоны камер/интеркомов, счётчики объектов, загрузка шаблонов и руин, экспорт карты, дебаг z-уровней.

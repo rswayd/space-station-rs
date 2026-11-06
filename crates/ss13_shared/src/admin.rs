@@ -132,6 +132,53 @@ pub enum AdminRequest {
         heavy: u8,
         light: u8,
     },
+    /// `R_PERMISSIONS`: the admins and ranks, answered by [`AdminResponse::AdminList`] (tg
+    /// "Permissions Panel").
+    AdminList,
+    /// `R_PERMISSIONS`: lists `ckey` as an admin of `rank` (`Rank1+Rank2` allowed) or changes
+    /// the rank, for this round only (tg "temporary" change; no database yet).
+    SetAdminRank {
+        ckey: String,
+        rank: String,
+    },
+    /// `R_PERMISSIONS`: removes `ckey` from the admins for this round.
+    RemoveAdmin(String),
+    /// `R_ADMIN`: BandaStation "Man Up" to a living player.
+    ManUp(String),
+    /// `R_ADMIN`: BandaStation "Global Man Up" to every connected player.
+    GlobalManUp,
+    /// `R_SOUND`: BandaStation "Play Z-level Sound" / "Play Sound in View": an asset sound path
+    /// (`sound/...` or `modular_bandastation/...`, `.ogg`) at `volume` (1-100).
+    PlaySound {
+        file: String,
+        volume: u8,
+        scope: SoundScope,
+    },
+    /// `R_DEBUG`: tg "Debug Air Status" (analyzer readout of the own tile) and the SSair
+    /// counters of the Atmos Control Panel.
+    AirStatus,
+    /// `R_DEBUG`: tg `atmos_spawn_air`: a gas string (`o2=22;n2=82;TEMP=293.15`) into the own
+    /// tile.
+    SpawnAir(String),
+}
+
+/// Who hears an admin sound.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum SoundScope {
+    /// Every player on the admin's z-level.
+    ZLevel,
+    /// Every player the admin's tile sees (tg `get_hearers_in_view`).
+    View,
+}
+
+/// A row of the permissions panel.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AdminEntry {
+    pub ckey: String,
+    /// The rank names joined by `+`.
+    pub rank: String,
+    pub rights: u32,
+    pub online: bool,
 }
 
 /// tg "Drop Bomb" choices: `(devastation, heavy, light, flash)` ranges.
@@ -202,6 +249,11 @@ pub enum AdminResponse {
     Done(String),
     /// Why a request was not applied.
     Refused(String),
+    /// The permissions panel: every listed admin and the rank names from `admin_ranks.txt`.
+    AdminList {
+        admins: Vec<AdminEntry>,
+        ranks: Vec<String>,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
