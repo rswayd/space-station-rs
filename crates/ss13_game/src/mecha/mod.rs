@@ -1,7 +1,8 @@
 //! Exosuits, after tg `code/modules/vehicles/mecha/`: the mechs themselves
 //! (`/obj/vehicle/sealed/mecha`: entering, driving, the pilot's clicks, damage, wreckage) in
 //! [`core`], their equipment (`/obj/item/mecha_parts/mecha_equipment`: the hydraulic clamp, the
-//! drill, the cargo compartment) in [`equipment`], building them from a chassis
+//! drill, the cargo compartment) in [`equipment`], the weapons and their ammo boxes in
+//! [`weapons`], building them from a chassis
 //! (`/datum/component/construction/mecha`) in [`construction`] and the exosuit fabricator
 //! (`/obj/machinery/mecha_part_fabricator`, tgui `ExosuitFabricator`) in [`fab`]. [`client`]
 //! draws the fabricator's window; this module holds its data, which both halves share.
@@ -27,6 +28,8 @@ pub mod core;
 pub mod equipment;
 #[cfg(feature = "server")]
 pub mod fab;
+#[cfg(feature = "server")]
+pub mod weapons;
 
 #[cfg(feature = "server")]
 pub use core::{Mech, MechaDb, Pilot};
@@ -47,7 +50,12 @@ impl bevy::prelude::Plugin for MechaServerPlugin {
                 crate::mecha::item_interaction(w, c.client, c.mob, h, c.target, c.modifiers)
             })
         });
-        app.add_plugins((core::MechCorePlugin, fab::FabPlugin, bay::MechBayPlugin));
+        app.add_plugins((
+            core::MechCorePlugin,
+            fab::FabPlugin,
+            bay::MechBayPlugin,
+            weapons::MechWeaponsPlugin,
+        ));
     }
 }
 
@@ -154,6 +162,10 @@ pub fn item_interaction(
         item: Some(held),
     };
     if world.get::<Mech>(target).is_some() {
+        // `ammo_resupply`; an unusable box falls through to hitting the mech.
+        if weapons::is_ammo(world, held) && weapons::ammo_resupply(world, actor, held, target) {
+            return true;
+        }
         if equipment::is_equipment(world, held) {
             return equipment::try_attach_part(world, actor, held, target, modifiers.right);
         }

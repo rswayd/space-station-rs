@@ -16,9 +16,9 @@
 //! - Drill: walls fall after `60 / drill_level` deciseconds (reinforced walls need a hardened
 //!   drill), objects with integrity take 15 brute and mobs 10 brute per `drill_delay`, repeated
 //!   while the target stays.
-// shortcut: no ranged equipment (weapons, the syringe gun, the medical beam), no sleeper, no
-// detaching through the Mecha window, no clamp forcing doors open, no mining (no mineral turfs
-// here), boulders, butchering or the killer clamp's dismemberment.
+// shortcut: weapons live in `super::weapons`; no other ranged equipment (the syringe gun, the
+// medical beam), no sleeper, no detaching through the Mecha window, no clamp forcing doors open,
+// no mining (no mineral turfs here), boulders, butchering or the killer clamp's dismemberment.
 
 use bevy::prelude::*;
 use ss13_mapload::mecha::EquipDef;
@@ -72,7 +72,7 @@ pub enum EquipJob {
     DrillTurn { equip: Entity },
 }
 
-fn def(world: &World, equip: Entity) -> Option<EquipDef> {
+pub(super) fn def(world: &World, equip: Entity) -> Option<EquipDef> {
     let e = world.get::<MechEquip>(equip)?;
     Some(world.resource::<MechaDb>().data.equipment[e.def].clone())
 }
@@ -242,7 +242,7 @@ pub fn try_attach_part(
 }
 
 /// tg `action_checks`.
-fn action_checks(world: &World, mech: Entity, equip: Entity) -> bool {
+pub(super) fn action_checks(world: &World, mech: Entity, equip: Entity) -> bool {
     let (Some(m), Some(state)) = (world.get::<Mech>(mech), world.get::<MechEquip>(equip)) else {
         return false;
     };
@@ -255,7 +255,7 @@ fn action_checks(world: &World, mech: Entity, equip: Entity) -> bool {
 }
 
 /// tg `/obj/item/mecha_parts/mecha_equipment/action`'s own part: the cooldown and the energy.
-fn spend(world: &mut World, mech: Entity, equip: Entity, cooldown_ds: f32) {
+pub(super) fn spend(world: &mut World, mech: Entity, equip: Entity, cooldown_ds: f32) {
     let Some(state) = world.get::<MechEquip>(equip).copied() else {
         return;
     };

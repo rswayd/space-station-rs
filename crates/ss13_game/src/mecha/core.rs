@@ -1210,6 +1210,28 @@ fn on_mouseclick(world: &mut World, click: MechClick) {
             e == click.target || e == mech || world.get::<Mover>(e).is_some()
         });
     let selected = if modifiers.right { m.r_arm } else { m.l_arm };
+    // A ranged weapon on a target out of reach (`selected.range & MECHA_RANGED`).
+    if let Some(equip) = selected
+        && !adjacent
+        && world
+            .get::<MechEquip>(equip)
+            .is_some_and(|e| world.resource::<MechaDb>().data.equipment[e.def].range & 2 != 0)
+    {
+        if world
+            .get::<crate::emp::power::MechEquipmentDisabled>(mech)
+            .is_some()
+        {
+            tell_occupant(
+                world,
+                mech,
+                Span::Warning,
+                "Error -- Equipment control unit is unresponsive.",
+            );
+            return;
+        }
+        super::weapons::fire(world, click, mech, equip);
+        return;
+    }
     if let Some(equip) = selected
         && adjacent
         && world

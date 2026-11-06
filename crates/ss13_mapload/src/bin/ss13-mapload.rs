@@ -304,6 +304,7 @@ fn convert_cmd(config: &MapLoadPlugin, mut map_dirs: Vec<PathBuf>) -> anyhow::Re
     let mut sounds =
         ss13_mapload::sound::referenced(&types, &sfx, conversion.types.iter().map(String::as_str));
     sounds.extend(modsuits.sounds().into_iter().map(str::to_owned));
+    sounds.extend(mecha.sounds().into_iter().map(str::to_owned));
     let copied = ss13_mapload::sound::copy_sounds(
         &config.source,
         &config.assets,

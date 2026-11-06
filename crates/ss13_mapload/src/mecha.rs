@@ -17,6 +17,7 @@ use serde_json::Value;
 
 use crate::convert::DmTypes;
 use crate::fidelity::is_under;
+use crate::guns::ProjectileData;
 use crate::research::{amounts, list, path, paths, plain, subtypes, text, texts};
 
 /// `<assets>/mecha.ron`.
@@ -31,6 +32,8 @@ pub const STOCK_PART_ROOT: &str = "/obj/item/stock_parts";
 const SERVO: &str = "/datum/stock_part/servo";
 const MATTER_BIN: &str = "/datum/stock_part/matter_bin";
 const MICRO_LASER: &str = "/datum/stock_part/micro_laser";
+pub const AMMO_ROOT: &str = "/obj/item/mecha_ammo";
+const PROJECTILE_ROOT: &str = "/obj/projectile";
 
 /// `/datum/armor` ratings, percent.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq)]
@@ -120,6 +123,46 @@ pub struct EquipDef {
     /// Clamps: `clamp_damage`, `killer_clamp`.
     pub clamp_damage: f32,
     pub killer_clamp: bool,
+    /// Weapons (`/obj/item/mecha_parts/mecha_equipment/weapon`): the `projectile` when it is an
+    /// `/obj/projectile` (launchers throw items, the thermal guns fire casings: empty then).
+    #[serde(default)]
+    pub projectile: ProjectileData,
+    #[serde(default)]
+    pub fire_sound: String,
+    #[serde(default)]
+    pub projectiles_per_shot: u32,
+    /// Degrees (`variance`), random (`randomspread`) or fanned; deciseconds between the shots
+    /// of a burst (`projectile_delay`).
+    #[serde(default)]
+    pub variance: f32,
+    #[serde(default)]
+    pub randomspread: bool,
+    #[serde(default)]
+    pub projectile_delay: f32,
+    /// Ballistic weapons: the magazine (`initial(projectiles)`), the reserve
+    /// (`projectiles_cache`, `projectiles_cache_max`), `disabledreload` and `ammo_type`.
+    #[serde(default)]
+    pub projectiles: u32,
+    #[serde(default)]
+    pub projectiles_cache: u32,
+    #[serde(default)]
+    pub projectiles_cache_max: u32,
+    #[serde(default)]
+    pub disabledreload: bool,
+    #[serde(default)]
+    pub ammo_type: String,
+}
+
+/// An `/obj/item/mecha_ammo` box (`mecha_ammo.dm`).
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct AmmoDef {
+    pub path: String,
+    pub rounds: u32,
+    /// `direct_load`: into the magazine instead of the reserve.
+    pub direct_load: bool,
+    pub ammo_type: String,
+    pub load_audio: String,
+    pub qdel_on_empty: bool,
 }
 
 /// A chassis and its two construction components.
@@ -189,6 +232,8 @@ pub struct MechaData {
     pub fabs: Vec<FabDef>,
     /// `/obj/item/stock_parts/*` -> `rating` (servos, capacitors, scanning modules, ...).
     pub stock_parts: Vec<(String, u32)>,
+    #[serde(default)]
+    pub ammo: Vec<AmmoDef>,
 }
 
 impl MechaData {
@@ -233,9 +278,21 @@ impl MechaData {
             out.extend(w.welder_salvage.iter().map(String::as_str));
         }
         out.extend(self.equipment.iter().map(|e| e.path.as_str()));
+        out.extend(self.equipment.iter().map(|e| e.projectile.path.as_str()));
+        out.extend(self.ammo.iter().map(|a| a.path.as_str()));
         out.extend(self.cells.iter().map(|c| c.path.as_str()));
         out.retain(|p| !p.is_empty());
         out
+    }
+
+    /// Sounds the game names beyond the converted types' sound vars: the ammo boxes'
+    /// `load_audio`.
+    pub fn sounds(&self) -> BTreeSet<&str> {
+        self.ammo
+            .iter()
+            .map(|a| a.load_audio.as_str())
+            .filter(|s| !s.is_empty())
+            .collect()
     }
 }
 
@@ -372,6 +429,31 @@ fn equipment(types: &DmTypes, p: &str) -> EquipDef {
         drill_level: n("drill_level") as u32,
         clamp_damage: n("clamp_damage") as f32,
         killer_clamp: n("killer_clamp") != 0.0,
+        projectile: type_path(types.resolved(p, "projectile"))
+            .filter(|t| is_under(t, PROJECTILE_ROOT) && types.types.contains_key(t))
+            .map(|t| crate::guns::projectile(types, &t))
+            .unwrap_or_default(),
+        fire_sound: crate::sound::sound_var(types, p, "fire_sound"),
+        projectiles_per_shot: (n("projectiles_per_shot") as u32).max(1),
+        variance: n("variance") as f32,
+        randomspread: n("randomspread") != 0.0,
+        projectile_delay: n("projectile_delay") as f32,
+        projectiles: n("projectiles") as u32,
+        projectiles_cache: n("projectiles_cache") as u32,
+        projectiles_cache_max: n("projectiles_cache_max") as u32,
+        disabledreload: n("disabledreload") != 0.0,
+        ammo_type: text(types.resolved(p, "ammo_type")),
+    }
+}
+
+fn ammo(types: &DmTypes, p: &str) -> AmmoDef {
+    AmmoDef {
+        path: p.to_owned(),
+        rounds: number(types.resolved(p, "rounds")) as u32,
+        direct_load: number(types.resolved(p, "direct_load")) != 0.0,
+        ammo_type: text(types.resolved(p, "ammo_type")),
+        load_audio: crate::sound::sound_var(types, p, "load_audio"),
+        qdel_on_empty: number(types.resolved(p, "qdel_on_empty")) != 0.0,
     }
 }
 
@@ -466,6 +548,10 @@ pub fn resolve(types: &DmTypes) -> MechaData {
             )
         })
         .collect();
+    let ammo = subtypes(types, AMMO_ROOT)
+        .into_iter()
+        .map(|p| ammo(types, p))
+        .collect();
     MechaData {
         mechs,
         equipment,
@@ -474,6 +560,7 @@ pub fn resolve(types: &DmTypes) -> MechaData {
         cells,
         fabs,
         stock_parts,
+        ammo,
     }
 }
 
@@ -532,6 +619,29 @@ mod tests {
         "/obj/item/mecha_parts/mecha_equipment/ejector": {
             "parent": "/obj/item/mecha_parts/mecha_equipment", "declared_vars": {
                 "equipment_slot": "mecha_utility", "detachable": 0, "cargo_capacity": 15 } },
+        "/obj/item/mecha_parts/mecha_equipment/weapon": {
+            "parent": "/obj/item/mecha_parts/mecha_equipment", "declared_vars": {
+                "abstract_type": { "path": "/obj/item/mecha_parts/mecha_equipment/weapon" },
+                "range": 2, "projectiles_per_shot": 1 } },
+        "/obj/item/mecha_parts/mecha_equipment/weapon/laser": {
+            "parent": "/obj/item/mecha_parts/mecha_equipment/weapon", "declared_vars": {
+                "projectile": { "path": "/obj/projectile/beam/laser" },
+                "fire_sound": { "resource": "sound/items/weapons/laser.ogg" },
+                "energy_drain": 3000, "equip_cooldown": 8 } },
+        "/obj/item/mecha_parts/mecha_equipment/weapon/lmg": {
+            "parent": "/obj/item/mecha_parts/mecha_equipment/weapon", "declared_vars": {
+                "projectile": { "path": "/obj/projectile/beam/laser" },
+                "projectiles": 300, "projectiles_cache": 300, "projectiles_cache_max": 1200,
+                "projectiles_per_shot": 3, "variance": 6, "randomspread": 1,
+                "projectile_delay": 2, "ammo_type": "lmg" } },
+        "/obj/item/mecha_ammo": { "parent": "/obj/item" },
+        "/obj/item/mecha_ammo/lmg": { "parent": "/obj/item/mecha_ammo", "declared_vars": {
+            "rounds": 300, "ammo_type": "lmg",
+            "load_audio": { "resource": "sound/items/weapons/gun/general/mag_bullet_insert.ogg" } } },
+        "/obj/projectile": { "parent": "/obj", "declared_vars": { "damage": 10, "speed": 1.25 } },
+        "/obj/projectile/beam": { "parent": "/obj/projectile" },
+        "/obj/projectile/beam/laser": { "parent": "/obj/projectile/beam", "declared_vars": {
+            "damage": 20 } },
         "/obj/vehicle": { "parent": "/obj", "declared_vars": { "movedelay": 2 } },
         "/obj/vehicle/sealed": { "parent": "/obj/vehicle", "declared_vars": { "enter_delay": 20 } },
         "/obj/vehicle/sealed/mecha": { "parent": "/obj/vehicle/sealed", "declared_vars": {
@@ -580,7 +690,44 @@ mod tests {
                 "/obj/item/mecha_parts/mecha_equipment/ejector".to_owned()
             )]
         );
-        assert_eq!(data.equipment.len(), 2, "the abstract root is left out");
+        assert_eq!(data.equipment.len(), 4, "the abstract roots are left out");
+        let laser = data
+            .equipment
+            .iter()
+            .find(|e| e.path.ends_with("/weapon/laser"))
+            .unwrap();
+        assert_eq!(laser.projectile.path, "/obj/projectile/beam/laser");
+        assert_eq!(laser.projectile.damage, 20.0);
+        assert_eq!(laser.fire_sound, "sound/items/weapons/laser.ogg");
+        assert_eq!(laser.projectiles_per_shot, 1);
+        let lmg = data
+            .equipment
+            .iter()
+            .find(|e| e.path.ends_with("/weapon/lmg"))
+            .unwrap();
+        assert_eq!(
+            (
+                lmg.projectiles,
+                lmg.projectiles_cache,
+                lmg.projectiles_cache_max
+            ),
+            (300, 300, 1200)
+        );
+        assert!(lmg.randomspread);
+        assert_eq!(lmg.ammo_type, "lmg");
+        assert_eq!(data.ammo.len(), 1);
+        assert_eq!(
+            (data.ammo[0].rounds, data.ammo[0].ammo_type.as_str()),
+            (300, "lmg")
+        );
+        assert!(
+            data.prototype_types()
+                .contains("/obj/projectile/beam/laser")
+        );
+        assert!(
+            data.sounds()
+                .contains("sound/items/weapons/gun/general/mag_bullet_insert.ogg")
+        );
         let clamp = data
             .equipment
             .iter()
