@@ -63,7 +63,6 @@ pub const PORTAL_ROOT: &str = "/obj/machinery/restaurant_portal";
 const SEAT_ROOT: &str = "/obj/structure/holosign/robot_seat";
 const SEAT_PROJECTOR: &str = "/obj/item/holosign_creator/robot_seat";
 const PORTAL_DMI: &str = "icons/obj/machines/restaurant_portal.dmi";
-const ECONOMY_DMI: &str = "icons/obj/economy.dmi";
 /// `VENUE_RESTAURANT`: the venue that eats what it is sold and takes items as orders.
 const VENUE_RESTAURANT: &str = "Restaurant Venue";
 const DRINKING_GLASS: &str = "/obj/item/reagent_containers/cup/glass/drinkingglass";
@@ -179,12 +178,6 @@ pub struct Portal {
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RobotSeat {
     pub venue: usize,
-}
-
-/// A holochip's `credits`.
-#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Holochip {
-    pub credits: u32,
 }
 
 /// What a customer waits for (`BB_CUSTOMER_CURRENT_ORDER`).
@@ -1064,17 +1057,7 @@ pub fn is_correct_order(world: &World, restaurant: bool, order: &Order, item: En
 /// `venue_price/produce_cash`: a holochip where the thing was, the register's ring.
 fn pay(world: &mut World, venue: usize, at: TilePos, credits: u32) {
     if let Some(chip) = crate::construction::spawn_obj(world, HOLOCHIP, at) {
-        world.entity_mut(chip).insert((
-            Holochip { credits },
-            Name::new(format!("голочип номиналом {credits}¢")),
-        ));
-        // `holochip/update_icon_state`.
-        let state = if credits >= 1000 {
-            "holochip_kilo"
-        } else {
-            "holochip"
-        };
-        crate::mobs::set_icon_state(world, chip, ECONOMY_DMI, state);
+        crate::cargo::money::make_holochip(world, chip, credits);
     }
     crate::sound::playsound(
         world,

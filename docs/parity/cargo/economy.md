@@ -30,37 +30,37 @@
 ID привязана к счёту: наличные, голочипы и монеты, вложенные в карту, зачисляются на счёт; Alt-клик снимает голочип нужного номинала; карта показывает баланс при осмотре.
 
 - **Код:** [`/obj/item/card/id/proc/insert_money()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/cards_ids.dm#L599), [`click_alt()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/cards_ids.dm#L680), [`set_account()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/cards_ids.dm#L478)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/cargo/economy.rs` (`BankAccountId`, `account_of`): номер счёта на ID-карте профессии (также через КПК с картой), им оплачиваются частные заказы в консоли снабжения и покупки в торговых автоматах (`crates/ss13_game/src/vending/`); баланс в осмотре и наличные на карту — нет
+- **Статус в ss13-rs:** ✅ — `crates/ss13_game/src/cargo/economy.rs` (`BankAccountId`, `account_of`): номер счёта на ID-карте профессии (также через КПК с картой), им оплачиваются частные заказы и покупки в автоматах; `crates/ss13_game/src/cargo/money.rs` (`insert_money`, `click_alt`, `examine_lines`): наличные, голочипы, монеты, фишки и мешок денег на карту, Alt-клик по карте в руке снимает голочип, баланс счёта (и бюджет отдела при доступе command) в осмотре; `// shortcut:` нет привязки другого счёта (Alt-ПКМ) и долгов
 
 ### Оплата картой (компонент payment)
 Компонент `payment` на машинах (вендоматы, лавки, консоли заказов): списывает цену с карты покупателя, при нехватке — отказ или оплата наличными из рук; скидка своему отделу.
 
 - **Код:** [`/datum/component/payment`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/payment.dm#L12)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ — `crates/ss13_game/src/vending/mod.rs` (`pay`, `handle_card` со скидкой отдела в бюджет отдела) и `crates/ss13_game/src/cargo/money.rs` (`pay_with_cash`, `handle_cardless`): при отказе карты платят наличные, голочипы и монеты при себе, сдача голочипом; другие машины с этим компонентом (ксерокс, медкиоск) — в своих группах; `// shortcut:` не учитываются деньги, которые тянут
 
 ### Наличные (space cash)
 Стопки купюр номиналом 1–10000 кредитов, стоимость = номинал × количество.
 
 - **Код:** [`/obj/item/stack/spacecash`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/stacks/cash.dm#L1), [`/obj/item/stack/spacecash/c1000`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/stacks/cash.dm#L137)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/inventory.rs`: только как разрешённый предмет хранения в слоте костюма; денежной стоимости и оплаты нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/cargo/money.rs` (`bill_value`, `credit_value`): номинал × количество, «Стоит N¢ в общей сумме» в осмотре, зачисление на ID-карту и оплата в автоматах; нет смены спрайта по размеру стопки (`spacecash_2/3/4`) и `credits_to_spacecash`
 
 ### Голочипы
 Голографический чип с произвольной суммой: снимается с ID, делится, сливается, исчезает от ЭМИ.
 
 - **Код:** [`/obj/item/holochip`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/credit_holochip.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ — `crates/ss13_game/src/cargo/money.rs` (`Holochip`, `refresh_holochip`, `split_holochip`, `holochip_emps`): имя и спрайт по сумме (kilo/mega/giga, цветной оверлей), слияние, Alt-клик делит сумму в новый чип, ЭМИ стирает с шансом 60/severity, снятие с ID-карты
 
 ### Монеты и покерные фишки
 Монеты из металлов (стоимость по материалу), подбрасывание орёл/решка; покерные фишки разных цветов.
 
 - **Код:** [`/obj/item/coin`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/ores_coins.dm#L520), [`/obj/item/poker_chip`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/economy/poker_chips.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/cargo/money.rs` (`coin_value`, `coin_attack_self`, `poker_chip_value`): стоимость монеты по материалу, случайная сторона при создании, подбрасывание (перезарядка 1,5 с, итог через 1,5 с с перепроверкой), номиналы фишек; нет верёвочки (кабель/кусачки), цвета материала и смещения спрайта; действия сторон eldritch coin — в группе еретика
 
 ### Стоимость предмета в кредитах
 `get_item_credit_value()` — сколько денег «стоит» предмет при вкладывании в карту или оплате (наличные, голочипы, монеты).
 
 - **Код:** [`/obj/item/proc/get_item_credit_value()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/economy/_economy.dm#L2)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ — `crates/ss13_game/src/cargo/money.rs` (`credit_value`): купюры, голочипы, монеты, покерные фишки
 
 ### Банковский терминал хранилища (bank machine)
 Консоль в хранилище: показывает бюджет станции; её можно взломать, чтобы откачивать деньги из карго-бюджета наличными с объявлением тревоги.
