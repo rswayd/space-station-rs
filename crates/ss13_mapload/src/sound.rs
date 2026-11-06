@@ -321,6 +321,8 @@ pub mod files {
         "sound/items/tools/change_drill.ogg",
         "sound/machines/airlock/airlock_alien_prying.ogg",
     ];
+    /// Admin verbs (`ss13_admin::verbs`): BandaStation's Man Up.
+    pub const ADMIN: [&str; 1] = ["modular_bandastation/admin/sound/manup1.ogg"];
     pub const SYNDIE_ITEMS: [&str; 3] = [
         "sound/items/weapons/saberon.ogg",
         "sound/items/weapons/saberoff.ogg",
@@ -744,6 +746,7 @@ pub fn referenced<'a>(
     out.extend(files::SYNDIE_ITEMS.map(str::to_owned));
     out.extend(files::DOORS.map(str::to_owned));
     out.extend(files::POWER_TOOLS.map(str::to_owned));
+    out.extend(files::ADMIN.map(str::to_owned));
     out.extend(files::RESTAURANT.map(str::to_owned));
     out.extend(files::DECOR.map(str::to_owned));
     for path in converted {
