@@ -1,7 +1,7 @@
 //! The `MODsuit` window (client), after `MODsuit.tsx`: the suit's parameters (power bar,
 //! activation, the ID lock, core, complexity, wearer), its parts with a deploy toggle each, and
 //! its modules with their costs, select/toggle and pin buttons and their configuration
-//! (numbers as -/+ buttons, lists as one button per option).
+//! (numbers as -/+ buttons, lists as one button per option, booleans as one toggle).
 // shortcut: no MODlink, AI/pAI or wire sections, no module custom status panels (health
 // readout, radiation counter), no per-theme window style; the layout is one column.
 
@@ -124,6 +124,13 @@ fn config_buttons(module: &ModuleInfo, config: &ModuleConfig) -> Vec<Box<dyn Sce
                 button(config.value.clone(), config.value.clone(), true),
                 button("+".to_owned(), format!("{}", current + 1.0), false),
             ]
+        }
+        // `add_ui_configuration(.., "bool", ..)`: one toggle sending the other value.
+        "bool" => {
+            let on = config.value == "1";
+            let label = if on { "Вкл" } else { "Выкл" };
+            let next = if on { "0" } else { "1" };
+            vec![button(label.to_owned(), next.to_owned(), on)]
         }
         _ => config
             .values

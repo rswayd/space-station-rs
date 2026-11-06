@@ -146,6 +146,18 @@ pub struct ModuleDef {
     /// Magboots: `slowdown_active`.
     pub slowdown_active: f32,
     pub active_traits: Vec<String>,
+    /// Worn overlays (`generate_worn_overlay`): `overlay_state_inactive`, `overlay_state_active`,
+    /// `overlay_state_use` in `overlay_icon_file`; `mask_worn_overlay` ones are masked by the part.
+    #[serde(default)]
+    pub overlay_inactive: String,
+    #[serde(default)]
+    pub overlay_active: String,
+    #[serde(default)]
+    pub overlay_use: String,
+    #[serde(default)]
+    pub overlay_icon: String,
+    #[serde(default)]
+    pub mask_worn_overlay: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
@@ -366,6 +378,11 @@ fn module(types: &DmTypes, p: &str) -> ModuleDef {
         light,
         slowdown_active: n("slowdown_active") as f32,
         active_traits: texts(types.resolved(p, "active_traits")),
+        overlay_inactive: text(types.resolved(p, "overlay_state_inactive")),
+        overlay_active: text(types.resolved(p, "overlay_state_active")),
+        overlay_use: text(types.resolved(p, "overlay_state_use")),
+        overlay_icon: resource(types.resolved(p, "overlay_icon_file")),
+        mask_worn_overlay: n("mask_worn_overlay") != 0.0,
     }
 }
 

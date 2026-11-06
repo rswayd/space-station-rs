@@ -14,13 +14,31 @@
 //! - health analyzer: selected, a middle click scans the clicked mob (health or wound mode);
 //! - EMP shield: `EMP_PROTECT_ALL` on the unit; the advanced one also protects the wearer and
 //!   its contents while sealed.
+//! - radiation protection: the parts of a suit with it sealed are radiation-protected clothing
+//!   (`crate::radiation`).
+//! - ion jetpacks (`jetpack`, `jetpack/advanced`, tg `/datum/component/jetpack`): while on, a
+//!   weightless wearer ([`Jetpack`], `crate::spacemove`) steps without a backup, paying
+//!   `use_energy_cost` per step; with stabilizers (configurable, on by default) it also stops
+//!   drifting, without them it always drifts, `drift_force` times faster; an ion trail follows
+//!   it and it is 0.3 ds per tile faster while floating (`jetpack/full_speed`).
+//! - medical and security visors: the wearer sees the medical / security data HUD
+//!   (`crate::records::hud`, [`VisorHud`]).
+//! - megaphone: the wearer speaks loudly (`VoiceSpan`), each line paying `use_energy_cost`.
+//! - restraint assist (`quick_cuff`): sealed gauntlets cuff in 0.75 of the time
+//!   (`TRAIT_FAST_CUFFING`, [`FastCuffing`]).
+//! - bike horn: used, it honks.
+//! - worn overlays (`generate_worn_overlay`): the module's inactive / active / use state drawn
+//!   over the part of its first required slot (the unit without required slots) while its parts
+//!   are sealed ([`ModOverlays`]).
 //!
 //! Every other module still installs, counts its complexity, toggles or selects, pays its power
 //! and cooldown.
-// shortcut: jetpacks, magboots' `TRAIT_NEGATES_GRAVITY`, t-ray, the radiation counter, tethers,
-// visors and the department modules toggle and pay power but have no effect yet (no zero-g
-// drift, t-ray reveal, radiation, HUDs); no worn overlays, no light color picker, the light is
-// omnidirectional (tg: directional), no chemical scan mode effect. Add them with their mechanics.
+// shortcut: t-ray, tethers, the diagnostic, meson, thermal and night visors and the remaining
+// department modules toggle and pay power but have no effect yet (no t-ray reveal, diagnostic HUD,
+// vision modes); the radiation counter panel is not drawn; overlays with `mask_worn_overlay` (an
+// alpha mask of the part) and BandaStation species overlay files are not drawn; no light color
+// picker, the light is omnidirectional (tg: directional), no chemical scan mode effect. Add them
+// with their mechanics.
 
 use bevy::prelude::*;
 use ss13_mapload::fidelity::is_under;
@@ -28,7 +46,7 @@ use ss13_mapload::modsuit::ModuleDef;
 use ss13_mapload::{DmClothing, DmItem};
 use ss13_shared::chat::Span;
 use ss13_shared::protocol::InventorySlot;
-use ss13_shared::{Dir, LightSource, Optics};
+use ss13_shared::{Dir, IconStateId, LightSource, Optics};
 
 use super::server::{
     ModDb, ModSuit, ModuleSelected, SHIELD_PROTECTION, buzz, check_charge, name, refresh_buttons,
@@ -38,6 +56,7 @@ use super::*;
 use crate::emp::{PROTECT_CONTENTS, PROTECT_SELF};
 use crate::health::{Health, Stat};
 use crate::storage::{Storage, Stored};
+use ss13_chat::speech::VoiceSpan;
 
 /// `MODULE_ALLOW_PHASEOUT`, `MODULE_ALLOW_INCAPACITATED`, `MODULE_ALLOW_INACTIVE`,
 /// `MODULE_ALLOW_UNWORN`.
@@ -50,6 +69,18 @@ const WELDER_HYPER_SENSITIVE: i32 = 4;
 const FLASHLIGHT_POWER_PER_RANGE: f64 = 5.0;
 /// The health analyzer's `modes`.
 const SCAN_MODES: [&str; 3] = ["Health", "Wound", "Chemical"];
+/// The jetpacks' `drift_force`, newtons.
+const JETPACK_DRIFT_FORCE: f32 = 1.5;
+const ADVANCED_JETPACK_DRIFT_FORCE: f32 = 2.0;
+/// `/datum/movespeed_modifier/jetpack/full_speed`, deciseconds per tile while floating.
+pub const JETPACK_FULL_SPEED: f32 = -0.3;
+/// `TRAIT_FAST_CUFFING`: `handcuff_time * 0.75`.
+pub const FAST_CUFFING_FACTOR: f32 = 0.75;
+/// The megaphone's voice span (`SPAN_COMMAND`; bold, as the handheld megaphone's).
+const MEGAPHONE_VOICE: Span = Span::Bold;
+const BIKEHORN_SOUND: &str = "sound/items/bikehorn.ogg";
+/// `overlay_icon_file`'s default.
+const MODULES_WORN_DMI: &str = "icons/mob/clothing/modsuit/mod_modules.dmi";
 
 /// What a module does here.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -64,6 +95,17 @@ pub enum Kind {
     },
     /// `rad_protection`: its parts protect from radiation (`crate::radiation`).
     RadProtection,
+    Jetpack {
+        advanced: bool,
+    },
+    /// `visor/sechud`, `visor/medhud`.
+    Visor {
+        security: bool,
+        medical: bool,
+    },
+    Megaphone,
+    QuickCuff,
+    Bikehorn,
     Other,
 }
 
@@ -88,6 +130,26 @@ impl Kind {
             Self::EmpShield { advanced: false }
         } else if under("rad_protection") {
             Self::RadProtection
+        } else if under("jetpack/advanced") {
+            Self::Jetpack { advanced: true }
+        } else if under("jetpack") {
+            Self::Jetpack { advanced: false }
+        } else if under("visor/sechud") {
+            Self::Visor {
+                security: true,
+                medical: false,
+            }
+        } else if under("visor/medhud") {
+            Self::Visor {
+                security: false,
+                medical: true,
+            }
+        } else if under("megaphone") {
+            Self::Megaphone
+        } else if under("quick_cuff") {
+            Self::QuickCuff
+        } else if under("bikehorn") {
+            Self::Bikehorn
         } else {
             Self::Other
         }
@@ -111,11 +173,48 @@ pub struct ModModule {
     pub light_range: f32,
     /// The light this module put on the wearer.
     pub lit: Option<(Entity, LightSource)>,
+    /// The jetpack's `stabilize`.
+    pub stabilize: bool,
 }
 
 /// On a wearer: `TRAIT_NO_SLIP_WATER` and `TRAIT_NO_SLIP_ICE` from active magboots.
 #[derive(Component, Clone, Copy, Debug, Default)]
 pub struct NoSlip;
+
+/// On a wearer: an active ion jetpack (tg `/datum/component/jetpack` on the wearer's signals).
+#[derive(Component, Clone, Copy, Debug, PartialEq)]
+pub struct Jetpack {
+    pub control: Entity,
+    pub module: Entity,
+    pub stabilize: bool,
+    /// Newtons; drifting is this many times faster (`inertia_move_multiplier_active`).
+    pub drift_force: f32,
+    /// `use_energy_cost`, joules per thrust.
+    pub cost: f64,
+}
+
+/// On a wearer: the data HUDs of an active visor (`TRAIT_SECURITY_HUD`, `TRAIT_MEDICAL_HUD`).
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct VisorHud {
+    pub security: bool,
+    pub medical: bool,
+}
+
+/// On a wearer: `TRAIT_FAST_CUFFING` from the restraint assist module.
+#[derive(Component, Clone, Copy, Debug, Default)]
+pub struct FastCuffing;
+
+/// On a wearer: an active megaphone module (`COMSIG_MOB_SAY` registered).
+#[derive(Component, Clone, Copy, Debug, PartialEq)]
+pub struct ModMegaphone {
+    pub control: Entity,
+    pub module: Entity,
+}
+
+/// On a part or the control unit: the worn overlays of the modules drawn on it
+/// (`COMSIG_ITEM_GET_SEPARATE_WORN_OVERLAYS`), drawn just above the item's own sprite.
+#[derive(Component, Clone, Debug, Default, PartialEq)]
+pub struct ModOverlays(pub Vec<IconStateId>);
 
 /// Whether `mob` keeps its footing on a wet floor slip of this knockdown (`crate::janitor`:
 /// water 6 s, ice 12 s; lube still gets it).
@@ -150,6 +249,7 @@ pub fn init_module(world: &mut World, module: Entity) {
         mode: 0,
         light_range: module_def.light.as_ref().map_or(0.0, |l| l.0),
         lit: None,
+        stabilize: true,
     };
     world.entity_mut(module).insert(state);
 }
@@ -254,6 +354,11 @@ pub fn on_part_activation(world: &mut World, control: Entity, module: Entity) {
                 set_emp_protection(world, wearer, PROTECT_SELF | PROTECT_CONTENTS, true);
             }
         }
+        Kind::QuickCuff => {
+            if let Some(wearer) = suit.wearer {
+                world.entity_mut(wearer).insert(FastCuffing);
+            }
+        }
         _ => {}
     }
 }
@@ -274,6 +379,11 @@ pub fn on_part_deactivation(world: &mut World, control: Entity, module: Entity) 
         Kind::EmpShield { advanced: true } => {
             if let Some(wearer) = suit.wearer.filter(|&w| world.get_entity(w).is_ok()) {
                 set_emp_protection(world, wearer, PROTECT_SELF | PROTECT_CONTENTS, false);
+            }
+        }
+        Kind::QuickCuff => {
+            if let Some(wearer) = suit.wearer.filter(|&w| world.get_entity(w).is_ok()) {
+                world.entity_mut(wearer).remove::<FastCuffing>();
             }
         }
         _ => {}
@@ -309,7 +419,9 @@ pub fn on_select(world: &mut World, control: Entity, module: Entity, activator: 
         return;
     }
     if def.module_type == MODULE_USABLE {
-        used(world, control, module, who);
+        if used(world, control, module, who) {
+            on_use(world, control, module);
+        }
     } else if world.get::<ModModule>(module).is_some_and(|m| m.active) {
         deactivate(world, control, module, true);
     } else {
@@ -392,7 +504,6 @@ pub fn deactivate(world: &mut World, control: Entity, module: Entity, display: b
 }
 
 /// tg `used(activator)`: the cooldown starts. True when it could be used.
-// The usable modules' own `on_use` effects (and their `drain_power`) are not ported.
 pub fn used(world: &mut World, control: Entity, module: Entity, activator: Option<Entity>) -> bool {
     let (Some(def), Some(state)) = (
         def_of(world, module),
@@ -413,6 +524,22 @@ pub fn used(world: &mut World, control: Entity, module: Entity, activator: Optio
         m.cooldown_until = now + f64::from(def.cooldown_time) / 10.0;
     }
     true
+}
+
+/// tg `on_use(activator)` of the usable modules ported here (the others do nothing).
+fn on_use(world: &mut World, control: Entity, module: Entity) {
+    if kind(world, module) != Kind::Bikehorn {
+        return;
+    }
+    // `playsound(src, 'bikehorn.ogg', 100, FALSE)`.
+    if let Some(pos) = crate::chem::map_pos(world, control) {
+        crate::sound::playsound(
+            world,
+            crate::sound::PlaySound::new(pos, BIKEHORN_SOUND, 100.0, false),
+        );
+    }
+    let cost = def_of(world, module).map_or(0.0, |d| d.use_energy_cost);
+    drain_power(world, control, cost);
 }
 
 /// tg `drain_power(amount)`: nothing is taken when there is not enough.
@@ -484,6 +611,77 @@ fn on_activation(world: &mut World, control: Entity, module: Entity) {
         Kind::Magboot => {
             world.entity_mut(wearer).insert(NoSlip);
         }
+        Kind::Jetpack { advanced } => {
+            let stabilize = world.get::<ModModule>(module).is_none_or(|m| m.stabilize);
+            let cost = def_of(world, module).map_or(0.0, |d| d.use_energy_cost);
+            let drift_force = if advanced {
+                ADVANCED_JETPACK_DRIFT_FORCE
+            } else {
+                JETPACK_DRIFT_FORCE
+            };
+            // `setup_trail`: `trail_follow/ion/grav_allowed`, generated only while floating
+            // (`should_trigger`), which the plain ion trail checks by itself.
+            world.entity_mut(wearer).insert((
+                Jetpack {
+                    control,
+                    module,
+                    stabilize,
+                    drift_force,
+                    cost,
+                },
+                crate::effects::trail::Trail::new(crate::effects::trail::TrailKind::Ion),
+            ));
+        }
+        Kind::Visor { security, medical } => {
+            world
+                .entity_mut(wearer)
+                .insert(VisorHud { security, medical });
+        }
+        Kind::Megaphone => {
+            world
+                .entity_mut(wearer)
+                .insert((ModMegaphone { control, module }, VoiceSpan(MEGAPHONE_VOICE)));
+        }
+        _ => {}
+    }
+}
+
+/// Takes off `wearer` what the module's `on_activation` gave it.
+fn strip_wearer(world: &mut World, module: Entity, kind: Kind, wearer: Entity) {
+    match kind {
+        Kind::Magboot => {
+            world.entity_mut(wearer).remove::<NoSlip>();
+        }
+        Kind::Jetpack { .. } => {
+            if world
+                .get::<Jetpack>(wearer)
+                .is_some_and(|j| j.module == module)
+            {
+                world
+                    .entity_mut(wearer)
+                    .remove::<(Jetpack, crate::effects::trail::Trail)>();
+            }
+        }
+        Kind::Visor { .. } => {
+            world.entity_mut(wearer).remove::<VisorHud>();
+        }
+        Kind::Megaphone => {
+            if world
+                .get::<ModMegaphone>(wearer)
+                .is_some_and(|m| m.module == module)
+            {
+                world.entity_mut(wearer).remove::<ModMegaphone>();
+                // A handheld megaphone in the active hand keeps its voice.
+                let handheld = world
+                    .get::<crate::inventory::Inventory>(wearer)
+                    .and_then(crate::inventory::Inventory::active_item)
+                    .and_then(|i| world.get::<crate::devices::Megaphone>(i))
+                    .is_some_and(|m| m.voiced == Some(wearer));
+                if !handheld {
+                    world.entity_mut(wearer).remove::<VoiceSpan>();
+                }
+            }
+        }
         _ => {}
     }
 }
@@ -491,15 +689,159 @@ fn on_activation(world: &mut World, control: Entity, module: Entity) {
 /// `on_deactivation`.
 fn on_deactivation(world: &mut World, control: Entity, module: Entity) {
     let wearer = suit(world, control).and_then(|s| s.wearer);
-    match kind(world, module) {
-        Kind::Flashlight => light_off(world, module),
-        Kind::Magboot => {
-            if let Some(w) = wearer.filter(|&w| world.get_entity(w).is_ok()) {
-                world.entity_mut(w).remove::<NoSlip>();
+    let kind = kind(world, module);
+    if kind == Kind::Flashlight {
+        light_off(world, module);
+    }
+    if let Some(w) = wearer.filter(|&w| world.get_entity(w).is_ok()) {
+        strip_wearer(world, module, kind, w);
+    }
+}
+
+/// `jetpack/stabilize` (`COMSIG_MOVABLE_SPACEMOVE`) with `check_on_move.Invoke(FALSE)`: an
+/// active jetpack with the charge for a thrust holds a weightless wearer when stabilized or on
+/// its own step; the own step pays the thrust (`move_react`'s `check_on_move.Invoke(TRUE)`).
+pub fn jetpack_holds(world: &mut World, mob: Entity, dir: Option<Dir>, continuous: bool) -> bool {
+    let Some(jet) = world.get::<Jetpack>(mob).copied() else {
+        return false;
+    };
+    let own_step = !continuous && dir.is_some();
+    if !(jet.stabilize || own_step) || !check_charge(world, jet.control, jet.cost) {
+        return false;
+    }
+    if own_step {
+        subtract_charge(world, jet.control, jet.cost);
+    }
+    true
+}
+
+/// Whether a weightless `mob` can thrust at all (its HUD does not say it is stuck).
+pub fn jetpack_ready(world: &World, mob: Entity) -> bool {
+    world
+        .get::<Jetpack>(mob)
+        .is_some_and(|j| check_charge(world, j.control, j.cost))
+}
+
+/// `TRAIT_NOGRAV_ALWAYS_DRIFT`: an active jetpack without stabilizers.
+pub fn always_drifts(world: &World, mob: Entity) -> bool {
+    world.get::<Jetpack>(mob).is_some_and(|j| !j.stabilize)
+}
+
+/// `min(inertia_move_multiplier_passive, inertia_move_multiplier_active)`: a jetpack divides the
+/// drift's loop delay by its `drift_force`.
+pub fn inertia_multiplier(world: &World, e: Entity) -> f64 {
+    world
+        .get::<Jetpack>(e)
+        .map_or(1.0, |j| 1.0 / f64::from(j.drift_force.max(1.0)))
+}
+
+/// `megaphone/handle_speech`: every line of a wearer with an active megaphone module pays
+/// `use_energy_cost`.
+pub fn megaphone_spoke(world: &mut World, speaker: Entity) {
+    let Some(m) = world.get::<ModMegaphone>(speaker).copied() else {
+        return;
+    };
+    let cost = def_of(world, m.module).map_or(0.0, |d| d.use_energy_cost);
+    drain_power(world, m.control, cost);
+}
+
+/// The data HUDs a worn active visor gives `mob`: (security, medical).
+pub fn visor_huds(world: &World, mob: Entity) -> (bool, bool) {
+    world
+        .get::<VisorHud>(mob)
+        .map_or((false, false), |v| (v.security, v.medical))
+}
+
+/// `get_current_overlay_state`.
+fn overlay_state(def: &ModuleDef, state: &ModModule, now: f64) -> Option<String> {
+    let pick = if !def.overlay_use.is_empty() && now < state.cooldown_until {
+        &def.overlay_use
+    } else if !def.overlay_active.is_empty() && state.active {
+        &def.overlay_active
+    } else {
+        &def.overlay_inactive
+    };
+    (!pick.is_empty()).then(|| pick.clone())
+}
+
+/// `on_install`'s overlay target: the part in the first required slot, else the unit.
+fn overlay_target(world: &World, suit: &ModSuit, def: &ModuleDef, control: Entity) -> Entity {
+    let Some(&first) = def.required_slots.first() else {
+        return control;
+    };
+    let theme = theme_of(world, suit);
+    if theme.slot_flags & first != 0 {
+        return control;
+    }
+    suit.parts
+        .iter()
+        .find(|p| crate::inventory::slot_bit(p.slot) & first != 0)
+        .map_or(control, |p| p.item)
+}
+
+/// The worn overlays of every module (`generate_worn_overlay`) onto their items' [`ModOverlays`];
+/// true when one changed (the wearer is drawn again).
+// Cost: per suit per tick, a pass over its modules (a handful) and an icon lookup each.
+pub fn refresh_overlays(world: &mut World, control: Entity) -> bool {
+    let Some(suit) = suit(world, control) else {
+        return false;
+    };
+    let theme = theme_of(world, &suit);
+    let sealed = suit.part_slots(&theme, true);
+    let now = now(world);
+    let mut wanted: Vec<(Entity, Vec<IconStateId>)> = suit
+        .parts
+        .iter()
+        .map(|p| p.item)
+        .chain([control])
+        .map(|e| (e, Vec::new()))
+        .collect();
+    for &module in &suit.modules {
+        let (Some(def), Some(state)) = (
+            def_of(world, module),
+            world.get::<ModModule>(module).cloned(),
+        ) else {
+            continue;
+        };
+        if def.mask_worn_overlay || !has_required_parts(&def, sealed) {
+            continue;
+        }
+        let Some(icon_state) = overlay_state(&def, &state, now) else {
+            continue;
+        };
+        let dmi = if def.overlay_icon.is_empty() {
+            MODULES_WORN_DMI
+        } else {
+            def.overlay_icon.as_str()
+        };
+        let Some(id) = world
+            .get_resource::<ss13_mapload::fidelity::IconIndex>()
+            .and_then(|i| i.get(dmi, &icon_state))
+        else {
+            continue;
+        };
+        let target = overlay_target(world, &suit, &def, control);
+        if let Some((_, list)) = wanted.iter_mut().find(|(e, _)| *e == target) {
+            list.push(id);
+        }
+    }
+    let mut changed = false;
+    for (e, list) in wanted {
+        let now_has = world.get::<ModOverlays>(e).map(|o| o.0.clone());
+        match (now_has, list.is_empty()) {
+            (None, true) => {}
+            (Some(old), _) if old == list => {}
+            (Some(_), true) => {
+                world.entity_mut(e).remove::<ModOverlays>();
+                changed = true;
+            }
+            (_, false) => {
+                world.entity_mut(e).insert(ModOverlays(list));
+                changed = true;
             }
         }
-        _ => {}
     }
+    changed
 }
 
 /// tg `on_process(seconds_per_tick)`: with its parts sealed, an active module pays its active
@@ -572,12 +914,19 @@ pub fn configuration(world: &World, module: Entity) -> Vec<ModuleConfig> {
             value: SCAN_MODES[state.mode.min(SCAN_MODES.len() - 1)].into(),
             values: SCAN_MODES.iter().map(|m| (*m).to_owned()).collect(),
         }],
+        Kind::Jetpack { .. } => vec![ModuleConfig {
+            key: "stabilizers".into(),
+            display_name: "Стабилизаторы".into(),
+            kind: "bool".into(),
+            value: if state.stabilize { "1" } else { "0" }.into(),
+            values: Vec::new(),
+        }],
         _ => Vec::new(),
     }
 }
 
 /// `configure_edit(key, value)`, the value checked against the module's limits.
-pub fn configure_edit(world: &mut World, _control: Entity, module: Entity, key: &str, value: &str) {
+pub fn configure_edit(world: &mut World, control: Entity, module: Entity, key: &str, value: &str) {
     let Some(state) = world.get::<ModModule>(module).cloned() else {
         return;
     };
@@ -605,6 +954,19 @@ pub fn configure_edit(world: &mut World, _control: Entity, module: Entity, key: 
                 && let Some(mut m) = world.get_mut::<ModModule>(module)
             {
                 m.mode = i;
+            }
+        }
+        // `configure_jetpack(text2num(value))`: an active jetpack's wearer follows at once.
+        (Kind::Jetpack { .. }, "stabilizers") => {
+            let stabilize = matches!(value.trim(), "1" | "true" | "TRUE");
+            if let Some(mut m) = world.get_mut::<ModModule>(module) {
+                m.stabilize = stabilize;
+            }
+            if let Some(wearer) = suit(world, control).and_then(|s| s.wearer)
+                && let Some(mut jet) = world.get_mut::<Jetpack>(wearer)
+                && jet.module == module
+            {
+                jet.stabilize = stabilize;
             }
         }
         _ => {}
@@ -708,7 +1070,22 @@ mod tests {
             Kind::of(&def("/obj/item/mod/module/emp_shield/advanced")),
             Kind::EmpShield { advanced: true }
         );
-        assert_eq!(Kind::of(&def("/obj/item/mod/module/jetpack")), Kind::Other);
+        assert_eq!(
+            Kind::of(&def("/obj/item/mod/module/jetpack/advanced")),
+            Kind::Jetpack { advanced: true }
+        );
+        assert_eq!(
+            Kind::of(&def("/obj/item/mod/module/visor/sechud")),
+            Kind::Visor {
+                security: true,
+                medical: false
+            }
+        );
+        assert_eq!(
+            Kind::of(&def("/obj/item/mod/module/visor/thermal")),
+            Kind::Other
+        );
+        assert_eq!(Kind::of(&def("/obj/item/mod/module/t_ray")), Kind::Other);
         let mut storage = def("/obj/item/mod/module/storage/bluespace");
         storage.storage = Some(Default::default());
         assert_eq!(Kind::of(&storage), Kind::Storage);

@@ -174,6 +174,7 @@ mod server {
         accessories: Query<'w, 's, &'static Accessories>,
         items: Query<'w, 's, (&'static DmItem, Option<&'static DmAtom>)>,
         wear: Query<'w, 's, &'static damage::ClothingWear>,
+        mod_overlays: Query<'w, 's, &'static crate::modsuit::modules::ModOverlays>,
     }
 
     impl WornLook<'_, '_> {
@@ -223,6 +224,22 @@ mod server {
                 && let Some(id) = icons.get(ITEM_DAMAGE_DMI, "damagedmask")
             {
                 out.push((FACEMASK_LAYER - 0.2, id));
+            }
+            // MOD module overlays over their part or unit (`standing.layer + 0.1`).
+            use crate::human::layers::{
+                BACK_LAYER, BELT_LAYER, GLOVES_LAYER, HEAD_LAYER, SHOES_LAYER, SUIT_LAYER,
+            };
+            for (item, layer) in [
+                (shown.back, BACK_LAYER),
+                (shown.belt, BELT_LAYER),
+                (shown.suit, SUIT_LAYER),
+                (shown.head, HEAD_LAYER),
+                (shown.gloves, GLOVES_LAYER),
+                (shown.shoes, SHOES_LAYER),
+            ] {
+                if let Some(o) = item.and_then(|e| self.mod_overlays.get(e).ok()) {
+                    out.extend(o.0.iter().map(|&id| (layer - 0.1, id)));
+                }
             }
             out
         }

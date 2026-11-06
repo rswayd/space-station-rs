@@ -112,11 +112,20 @@ pub fn attempt_to_cuff(world: &mut World, actor: Actor, cuffs: Entity, victim: E
     let Some(&at) = world.get::<TilePos>(victim) else {
         return true;
     };
+    // `get_handcuff_time`: `TRAIT_FAST_CUFFING` (MOD restraint assist) cuffs in 0.75 of it.
+    let fast = world
+        .get::<crate::modsuit::modules::FastCuffing>(actor.mob)
+        .is_some();
+    let time = if fast {
+        dm.handcuff_time * crate::modsuit::modules::FAST_CUFFING_FACTOR
+    } else {
+        dm.handcuff_time
+    };
     if !do_after(
         world,
         actor,
         victim,
-        dm.handcuff_time,
+        time,
         0,
         crate::construction::Job::Restraints(RestraintJob::Cuff),
     ) {

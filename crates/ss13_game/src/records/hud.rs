@@ -202,7 +202,12 @@ fn refresh(world: &mut World, mut next: Local<f64>) {
             .and_then(|e| world.get::<DmItem>(e))
             .map_or((false, false), |i| glasses_huds(&i.path));
         let (implant_sec, implant_med) = crate::medical::cyberimps::implant_huds(world, mob);
-        let (sec, med) = (sec || implant_sec, med || implant_med);
+        // MOD security and medical visors (`crate::modsuit::modules::VisorHud`).
+        let (visor_sec, visor_med) = crate::modsuit::modules::visor_huds(world, mob);
+        let (sec, med) = (
+            sec || implant_sec || visor_sec,
+            med || implant_med || visor_med,
+        );
         if !sec && !med && old.is_none_or(|d| d.entries.is_empty()) {
             continue;
         }

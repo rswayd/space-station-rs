@@ -22,10 +22,15 @@
 //!   cells and IDs (the access lock) go in with the cover open; an emag flips the lock.
 //! - The action buttons (deploy, activate with confirmation, panel, module, pinned modules),
 //!   tgui `MODsuit` and `emp_act` (burns an active wearer, drops the selected module).
+//! - Cores: standard (a cell inside), infinite, plasma (its own charge, refuelled by plasma ore
+//!   and sheets used on it or on the unit) and ethereal (no charge: ethereals have no charge
+//!   here).
+//! - The parts hide what their skin's `UNSEALED_INVISIBILITY`/`SEALED_INVISIBILITY` and cover
+//!   what `UNSEALED_COVER`/`SEALED_COVER` say (`flags_inv`, `flags_cover`).
 // shortcut: no wires, malfunctions, electrification, MODlink calls, AI/pAI assistants, paint
-// kits, ethereal and plasma cores (they give no charge), speed potions, strip actions, the
-// spacesuit HUD charge icon, `flags_inv` hiding, worn module overlays or hearing protection;
-// a radial menu is a list prompt. Add them with their mechanics.
+// kits, ethereal charge (the ethereal core reads "Biological Battery Missing"), the lavaland
+// core's light and pollen, speed potions, strip actions, the spacesuit HUD charge icon or
+// hearing protection; a radial menu is a list prompt. Add them with their mechanics.
 
 use std::collections::VecDeque;
 
@@ -81,6 +86,19 @@ const READY_SECS: f64 = 3.0;
 const BUTTON: &str = "mod:";
 const INFINITE_CORE: &str = "/obj/item/mod/core/infinite";
 const STANDARD_CORE: &str = "/obj/item/mod/core/standard";
+const ETHEREAL_CORE: &str = "/obj/item/mod/core/ethereal";
+const PLASMA_CORE: &str = "/obj/item/mod/core/plasma";
+const LAVALAND_CORE: &str = "/obj/item/mod/core/plasma/lavaland";
+/// `STANDARD_CELL_CHARGE`, joules.
+const STANDARD_CELL_CHARGE: f64 = 10_000.0;
+/// `charger_list`: `PLASMA_CORE_ORE_CHARGE`, `PLASMA_CORE_SHEET_CHARGE` (subtypes count).
+const PLASMA_CHARGERS: [(&str, f64); 2] = [
+    ("/obj/item/stack/ore/plasma", 1.5 * STANDARD_CELL_CHARGE),
+    (
+        "/obj/item/stack/sheet/mineral/plasma",
+        2.0 * STANDARD_CELL_CHARGE,
+    ),
+];
 
 /// The MODsuit data from `<assets>/modsuits.ron`, with lookups by type.
 #[derive(Resource, Default)]
@@ -313,8 +331,24 @@ impl Plugin for ModSuitPlugin {
                     suit_emp
                         .in_set(EmpSystems::Effects)
                         .run_if(resource_exists::<Messages<EmpAct>>),
+                    megaphone_lines
+                        .after(ss13_chat::server::SaySystems)
+                        .run_if(resource_exists::<Messages<ss13_chat::server::Spoke>>),
                 ),
             );
+    }
+}
+
+/// `megaphone/handle_speech`'s power: every spoken line of a megaphone module's wearer.
+fn megaphone_lines(world: &mut World, mut cursor: Local<MessageCursor<ss13_chat::server::Spoke>>) {
+    let speakers: Vec<Entity> = cursor
+        .read(world.resource::<Messages<ss13_chat::server::Spoke>>())
+        .map(|s| s.speaker)
+        .collect();
+    for speaker in speakers {
+        if world.get_entity(speaker).is_ok() {
+            modules::megaphone_spoke(world, speaker);
+        }
     }
 }
 
@@ -439,6 +473,11 @@ pub fn init_suit(world: &mut World, control: Entity) {
     for part in &parts {
         if let Some(mut c) = world.get_mut::<DmClothing>(part.item) {
             c.clothing_flags = part.def.unsealed_clothing;
+            c.flags_inv = part.def.unsealed_inv;
+            c.flags_cover = part.def.unsealed_cover;
+            c.visor_flags = part.def.sealed_clothing;
+            c.visor_flags_inv = part.def.sealed_inv;
+            c.visor_flags_cover = part.def.sealed_cover;
             c.heat_protection = 0;
             c.cold_protection = 0;
             c.max_heat_protection_temperature = theme.max_heat_protection_temperature;
@@ -525,13 +564,16 @@ pub fn init_suit(world: &mut World, control: Entity) {
 }
 
 /// A MOD core's state (tg `/obj/item/mod/core`): the standard core holds a cell, the infinite
-/// one never runs out.
+/// one never runs out, the plasma one keeps its own charge, the ethereal one has none here.
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq)]
 pub struct ModCore {
     pub infinite: bool,
     pub standard: bool,
     /// `cell`, [`StoredIn`] the core.
     pub cell: Option<Entity>,
+    pub ethereal: bool,
+    /// The plasma core's `charge` and `maxcharge`, joules.
+    pub plasma: Option<(f64, f64)>,
 }
 
 /// Gives a core item its [`ModCore`] (idempotent).
@@ -545,10 +587,21 @@ pub fn init_core(world: &mut World, core: Entity) {
     if !is_under(&path, ss13_mapload::modsuit::CORE_ROOT) {
         return;
     }
+    // `maxcharge = charge = 10 (lavaland: 15) * STANDARD_CELL_CHARGE`.
+    let plasma = is_under(&path, PLASMA_CORE).then(|| {
+        let max = if is_under(&path, LAVALAND_CORE) {
+            15.0
+        } else {
+            10.0
+        } * STANDARD_CELL_CHARGE;
+        (max, max)
+    });
     world.entity_mut(core).insert(ModCore {
         infinite: is_under(&path, INFINITE_CORE),
         standard: is_under(&path, STANDARD_CORE),
         cell: None,
+        ethereal: is_under(&path, ETHEREAL_CORE),
+        plasma,
     });
 }
 
@@ -685,6 +738,10 @@ fn core_state(world: &World, control: Entity) -> Option<ModCore> {
 pub fn charge(world: &World, control: Entity) -> f64 {
     match core_state(world, control) {
         Some(c) if c.infinite => f64::INFINITY,
+        Some(ModCore {
+            plasma: Some((charge, _)),
+            ..
+        }) => charge,
         Some(_) => cell_of(world, control)
             .and_then(|c| world.get::<ItemCell>(c))
             .map_or(0.0, |c| c.0.charge),
@@ -696,6 +753,10 @@ pub fn charge(world: &World, control: Entity) -> f64 {
 pub fn max_charge(world: &World, control: Entity) -> f64 {
     match core_state(world, control) {
         Some(c) if c.infinite => f64::INFINITY,
+        Some(ModCore {
+            plasma: Some((_, max)),
+            ..
+        }) => max.max(1.0),
         Some(_) => cell_of(world, control)
             .and_then(|c| world.get::<ItemCell>(c))
             .map_or(1.0, |c| c.0.maxcharge),
@@ -712,6 +773,20 @@ pub fn check_charge(world: &World, control: Entity, amount: f64) -> bool {
 pub fn subtract_charge(world: &mut World, control: Entity, amount: f64) -> bool {
     match core_state(world, control) {
         Some(c) if c.infinite => true,
+        Some(ModCore {
+            plasma: Some((charge, _)),
+            ..
+        }) => {
+            // `amount = min(amount, charge); charge -= amount`.
+            let taken = amount.max(0.0).min(charge);
+            if let Some(core) = world.get::<ModSuit>(control).and_then(|s| s.core)
+                && let Some(mut c) = world.get_mut::<ModCore>(core)
+                && let Some((now, _)) = c.plasma.as_mut()
+            {
+                *now -= taken;
+            }
+            taken > 0.0
+        }
         Some(_) => {
             let Some(cell) = cell_of(world, control) else {
                 return false;
@@ -731,12 +806,17 @@ fn chargebar(world: &World, control: Entity) -> (String, String) {
     if core.infinite {
         return ("teal".into(), "Infinite".into());
     }
-    if !core.standard || cell_of(world, control).is_none() {
+    if core.ethereal {
+        return ("transparent".into(), "Biological Battery Missing".into());
+    }
+    if core.plasma.is_none() && (!core.standard || cell_of(world, control).is_none()) {
         return ("transparent".into(), "Power Cell Missing".into());
     }
     let (now, max) = (charge(world, control), max_charge(world, control));
     let ratio = ((now / max) * 100.0).round() / 100.0;
-    let color = if ratio < 0.33 {
+    let color = if core.plasma.is_some() {
+        if ratio < 0.33 { "bad" } else { "purple" }
+    } else if ratio < 0.33 {
         "bad"
     } else if ratio < 0.66 {
         "average"
@@ -954,7 +1034,8 @@ fn clean_up(world: &mut World, control: Entity) {
     {
         world
             .entity_mut(old)
-            .remove::<(SuitSlowdown, ModuleSelected, modules::NoSlip)>();
+            .remove::<(SuitSlowdown, ModuleSelected, modules::NoSlip)>()
+            .remove::<(modules::Jetpack, modules::VisorHud, modules::FastCuffing)>();
     }
 }
 
@@ -1224,10 +1305,14 @@ pub fn seal_part(world: &mut World, control: Entity, index: usize, sealed: bool)
     if let Some(mut c) = world.get_mut::<DmClothing>(part.item) {
         if sealed {
             c.clothing_flags |= part.def.sealed_clothing;
+            c.flags_inv |= part.def.sealed_inv;
+            c.flags_cover |= part.def.sealed_cover;
             c.heat_protection = part.heat_protection;
             c.cold_protection = part.cold_protection;
         } else {
             c.clothing_flags &= !part.def.sealed_clothing;
+            c.flags_inv &= !part.def.sealed_inv;
+            c.flags_cover &= !part.def.sealed_cover;
             c.heat_protection = 0;
             c.cold_protection = 0;
         }
@@ -1497,6 +1582,11 @@ pub fn tick(world: &mut World) {
         run_pending(world, control);
         process(world, control, dt);
         update_wearer(world, control);
+        if modules::refresh_overlays(world, control)
+            && let Some(mob) = world.get::<ModSuit>(control).and_then(|s| s.wearer)
+        {
+            crate::inventory::refresh_look(world, mob);
+        }
         refresh_view(world, control);
     }
 }
@@ -1670,6 +1760,14 @@ fn update_wearer(world: &mut World, control: Entity) {
     }
     let share = total / (suit.parts.len() + 1) as f32;
     let mut slowdown = share;
+    // `/datum/movespeed_modifier/jetpack/full_speed` (`movetypes = FLOATING`).
+    if world
+        .get::<modules::Jetpack>(wearer)
+        .is_some_and(|j| suit.modules.contains(&j.module))
+        && world.get::<crate::spacemove::Weightless>(wearer).is_some()
+    {
+        slowdown += modules::JETPACK_FULL_SPEED;
+    }
     for p in &suit.parts {
         if world
             .get::<CarriedBy>(p.item)
@@ -2302,6 +2400,9 @@ pub fn item_interaction(
     held: Entity,
     target: Entity,
 ) -> bool {
+    if charge_plasma(world, client, held, target) {
+        return true;
+    }
     let Some(suit) = world.get::<ModSuit>(target).cloned() else {
         return false;
     };
@@ -2478,6 +2579,49 @@ pub fn item_interaction(
 
 /// A click on the control unit in the other hand: with an item, [`item_interaction`]; with an
 /// empty hand and the cover open, the standard core's cell comes out (tg `on_attack_hand`).
+/// tg `core/plasma/charge_plasma` (also through the unit's `COMSIG_ATOM_ITEM_INTERACTION`):
+/// plasma ore or sheets used on a plasma core, or a unit with one, refuel it with as few as fill
+/// it up. True when it took some.
+pub fn charge_plasma(world: &mut World, client: Entity, held: Entity, target: Entity) -> bool {
+    let Some(path) = world.get::<DmItem>(held).map(|i| i.path.clone()) else {
+        return false;
+    };
+    let Some(&(_, given)) = PLASMA_CHARGERS.iter().find(|(p, _)| is_under(&path, p)) else {
+        return false;
+    };
+    let core = match world.get::<ModSuit>(target) {
+        Some(suit) => suit.core,
+        None => Some(target),
+    };
+    let Some(core) = core else {
+        return false;
+    };
+    init_core(world, core);
+    let Some((charge, max)) = world.get::<ModCore>(core).and_then(|c| c.plasma) else {
+        return false;
+    };
+    let uses = plasma_uses(charge, max, given, crate::tools::stack_amount(world, held));
+    if uses == 0 || !crate::tools::use_stack(world, held, uses) {
+        return false;
+    }
+    if let Some(mut c) = world.get_mut::<ModCore>(core)
+        && let Some((now, max)) = c.plasma.as_mut()
+    {
+        *now = (*now + f64::from(uses) * given).min(*max);
+    }
+    tell(world, client, Span::Notice, "ядро заправлено");
+    true
+}
+
+/// `min(plasma.amount, ROUND_UP((max_charge_amount() - charge_amount()) / charge_given))`.
+pub fn plasma_uses(charge: f64, max: f64, given: f64, amount: u32) -> u32 {
+    if given <= 0.0 {
+        return 0;
+    }
+    let needed = ((max - charge) / given).ceil().max(0.0) as u32;
+    amount.min(needed)
+}
+
 pub fn hand_interaction(
     world: &mut World,
     client: Entity,
@@ -2629,5 +2773,13 @@ mod tests {
         assert_eq!(slot_of_flags(1 << 7), Some(InventorySlot::Shoes));
         assert_eq!(slot_of_flags(1 << 10), Some(InventorySlot::Back));
         assert_eq!(base_of("/obj/item/clothing/shoes/mod"), "boots");
+    }
+
+    #[test]
+    fn plasma_refuels_only_what_fits() {
+        // 100 kJ core at 75 kJ: two sheets (20 kJ each) fill it, the rest stays.
+        assert_eq!(plasma_uses(75_000.0, 100_000.0, 20_000.0, 5), 2);
+        assert_eq!(plasma_uses(75_000.0, 100_000.0, 20_000.0, 1), 1);
+        assert_eq!(plasma_uses(100_000.0, 100_000.0, 20_000.0, 5), 0);
     }
 }

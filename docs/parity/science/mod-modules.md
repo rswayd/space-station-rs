@@ -7,25 +7,25 @@
 
 - **Код:** [`/obj/item/mod/module`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/_module.dm#L2), [`activate()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/_module.dm#L149), [`on_select()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/_module.dm#L116)
 - **BandaStation:** [`_module.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/_module.dm#L417) — учёт видов (species) для модулей
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/modsuit/modules.rs` (`ModModule`), `crates/ss13_game/src/modsuit/server.rs`: типы (пассивный, используемый, переключаемый, выбираемый с использованием средней кнопкой), сложность, простой/работа/использование заряда, кулдаун, требуемые части (`on_part_activation` при герметизации), `MODULE_ALLOW_*`, закрепление на панели действий (и `default_pins` один раз на носителя); нет оверлеев модулей на спрайте (и BandaStation-вариантов по видам)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/modsuit/modules.rs` (`ModModule`), `crates/ss13_game/src/modsuit/server.rs`: типы (пассивный, используемый, переключаемый, выбираемый с использованием средней кнопкой), сложность, простой/работа/использование заряда, кулдаун, требуемые части (`on_part_activation` при герметизации), `MODULE_ALLOW_*`, закрепление на панели действий (и `default_pins` один раз на носителя); оверлеи модулей на спрайте (`ModOverlays`: неактивный/активный/использования поверх части первого требуемого слота, пока она герметизирована); нет оверлеев с `mask_worn_overlay` (альфа-маска части) и BandaStation-вариантов по видам (`worn_icon_species`)
 
 ### Общие модули
 Хранилище (и блюспейс-хранилище), джетпак, джамп-джет, статус-ридаут, отверстие для рта, ЭМИ-щит, фонарь, диспенсер, longfall, терморегулятор, ДНК-замок, плазменный стабилизатор, стабилизатор шляпы, радио жестового языка, joint torsion, переработчик, рыболовная перчатка, амортизатор.
 
 - **Код:** [`storage`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_general.dm#L4), [`jetpack`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_general.dm#L93), [`dna_lock`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_general.dm#L608), [`recycler`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_general.dm#L814), [`storage/holding`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/module_holding.dm#L4)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/modsuit/modules.rs`: хранилища (все с `storage_type`: блок становится хранилищем, извлечение высыпает содержимое), ЭМИ-щит (`EMP_PROTECT_ALL` блока; продвинутый — носителю при герметизации), фонарь (свет на носителе, дальность 2–5 в настройке, `5 Вт × дальность`); джетпак и остальные переключаются и тратят заряд без эффекта — нет невесомого дрейфа (группа движения), longfall, терморегулятора, ДНК-замка и т.д.
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/modsuit/modules.rs`: хранилища (все с `storage_type`: блок становится хранилищем, извлечение высыпает содержимое), ЭМИ-щит (`EMP_PROTECT_ALL` блока; продвинутый — носителю при герметизации), фонарь (свет на носителе, дальность 2–5 в настройке, `5 Вт × дальность`), ионные джетпаки (`Jetpack`, `crate::spacemove`: шаг в невесомости без опоры за `use_energy_cost`, стабилизаторы в настройке гасят дрейф, без них носитель всегда дрейфует в `drift_force` раз быстрее, ионный след, −0,3 дс/тайл в невесомости); остальные переключаются и тратят заряд без эффекта — нет джамп-джета, longfall, терморегулятора, ДНК-замка, статус-ридаута и т.д.
 
 ### Визоры
 HUD-визоры: медицинский, диагностический, СБ, мезонный, тепловизор, ночного видения.
 
 - **Код:** [`/obj/item/mod/module/visor`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_visor.dm#L4)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/modsuit/modules.rs` (`VisorHud`): медицинский и СБ-визоры дают носителю медицинский / СБ дата-HUD (`crates/ss13_game/src/records/hud.rs`); диагностический, мезонный, тепловизор и ночного видения переключаются без эффекта — нет диагностического HUD и режимов зрения (группа зрения, `crates/ss13_game/src/vision.rs`)
 
 ### Инженерные модули
 Сварочная защита, T-ray сканер, магнитные ботинки, трос (tether), радиационная защита, конструктор (сканер чертежей), защита головы, распылитель.
 
 - **Код:** [`welding`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_engineering.dm#L4), [`magboot`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_engineering.dm#L80), [`tether`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_engineering.dm#L126), [`constructor`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_engineering.dm#L415)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/modsuit/modules.rs`: сварочная защита (`flash_protect` шлема = 4 при герметизации), магнитные ботинки (не скользят на воде и льду, `slowdown_active`); нет `TRAIT_NEGATES_GRAVITY` (гравитация — группа движения), T-ray, троса, счётчика радиации модуля (радзащита частей есть, `crates/ss13_game/src/radiation.rs`), конструктора, распылителя
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/modsuit/modules.rs`: сварочная защита (`flash_protect` шлема = 4 при герметизации), магнитные ботинки (не скользят на воде и льду, `slowdown_active`, `TRAIT_NEGATES_GRAVITY` в `crates/ss13_game/src/spacemove.rs`), радиационная защита (части — радзащитная одежда, `crates/ss13_game/src/radiation.rs`); нет T-ray (нет t-ray сканирования, группа инженерных инструментов), троса, панели счётчика радиации, конструктора, распылителя
 
 ### Медицинские модули
 Анализатор здоровья, быстрый перенос, инжектор, органайзер (выстрел органами), дефибриллятор, thread ripper, хирургический процессор.
@@ -37,7 +37,7 @@ HUD-визоры: медицинский, диагностический, СБ, 
 Магнитная сбруя, перцовые наплечники, кобура, мегафон, захват преступника, гаситель снарядов, активный сонар, помощник стрельбы, блок толчков, быстрые наручники.
 
 - **Код:** [`magnetic_harness`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_security.dm#L4), [`holster`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_security.dm#L108), [`active_sonar`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_security.dm#L350), [`quick_cuff`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_security.dm#L592)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/modsuit/modules.rs`: мегафон (громкая речь `VoiceSpan`, каждая реплика за `use_energy_cost`; без TTS-фильтра BandaStation — нет TTS), быстрые наручники (`FastCuffing`: `handcuff_time × 0,75` в `crates/ss13_game/src/restraints.rs`); остальные модули СБ не портированы
 
 ### Модули снабжения и шахты
 GPS, клешня, бур, рудный мешок, гидравлическая рука погрузчика, коннектор утилизации, магнит, ash accretion, сфера (трансформация), candela spool.
@@ -56,7 +56,7 @@ GPS, клешня, бур, рудный мешок, гидравлическая
 
 - **Код:** [`bikehorn`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_service.dm#L4), [`microwave_beam`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_service.dm#L30), [`springlock`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_maint.dm#L4), [`atrocinator`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_maint.dm#L317)
 - **BandaStation:** [`modules_maint.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/modules/modules_maint.dm#L397) — тише шаги атроцинатора; [`monitor_module.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/items/clothing/mod/modules/monitor_module.dm#L1) — модуль-монитор (с чертежом)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/modsuit/modules.rs`: велосипедный гудок (использование — звук `bikehorn.ogg`, `use_energy_cost`, кулдаун 1 с); остальные сервисные и техобслуживающие модули (и BandaStation-монитор) не портированы
 
 ### Модуль-поисковик (pathfinder)
 Имплант вызывает костюм, который сам приходит к владельцу.

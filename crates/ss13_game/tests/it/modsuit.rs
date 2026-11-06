@@ -3,7 +3,9 @@
 //! parts, seals them one second apart on activation (pressure sealing, the theme's slowdown),
 //! drains `charge_drain` from its cell, burns its wearer on an EMP, and unseals on
 //! deactivation; it cannot come off with parts out. Module installs refuse over the theme's
-//! complexity and on incompatible modules.
+//! complexity and on incompatible modules. Sealing hides what the skin's sealed
+//! `flags_inv` say; an active ion jetpack lets a weightless wearer step off nothing, paying
+//! for each thrust.
 
 use std::path::{Path, PathBuf};
 
@@ -30,6 +32,10 @@ const HELMET: &str = "/obj/item/clothing/head/mod";
 const CHESTPLATE: &str = "/obj/item/clothing/suit/mod";
 const STORAGE: &str = "/obj/item/mod/module/storage";
 const BIG: &str = "/obj/item/mod/module/big";
+const JETPACK: &str = "/obj/item/mod/module/jetpack";
+/// `HIDEEARS`, `HIDEHAIR`.
+const HIDEEARS: u32 = 1 << 5;
+const HIDEHAIR: u32 = 1 << 8;
 const CORE: &str = "/obj/item/mod/core/standard";
 const CELL: &str = "/obj/item/stock_parts/power_store/cell/super";
 const STOPSPRESSUREDAMAGE: u32 = 1 << 1;
@@ -81,6 +87,7 @@ const TYPES: &str = r##"{
     "/obj/item/mod/module/storage": { "parent": "/obj/item/mod/module", "declared_vars": {
         "name": "MOD storage module" } },
     "/obj/item/mod/module/big": { "parent": "/obj/item/mod/module" },
+    "/obj/item/mod/module/jetpack": { "parent": "/obj/item/mod/module" },
     "/obj/item/stock_parts": { "parent": "/obj/item" },
     "/obj/item/stock_parts/power_store": { "parent": "/obj/item/stock_parts" },
     "/obj/item/stock_parts/power_store/cell": { "parent": "/obj/item/stock_parts/power_store" },
@@ -93,7 +100,7 @@ const TYPES: &str = r##"{
     "/turf": { "parent": "/atom", "declared_vars": { "icon": { "resource": "t.dmi" } } },
     "/turf/open": { "parent": "/turf" },
     "/turf/open/floor": { "parent": "/turf/open", "declared_vars": { "icon_state": "floor" } },
-    "/turf/open/space": { "parent": "/turf/open" },
+    "/turf/open/space": { "parent": "/turf/open", "declared_vars": { "icon_state": "space" } },
     "/turf/open/space/basic": { "parent": "/turf/open/space" },
     "/turf/closed": { "parent": "/turf", "declared_vars": { "density": 1, "opacity": 1 } },
     "/turf/closed/wall": { "parent": "/turf/closed", "declared_vars": { "icon_state": "wall" } },
@@ -104,17 +111,22 @@ const TYPES: &str = r##"{
 
 const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 "f" = (/turf/open/floor,/area/space)
+"s" = (/turf/open/space/basic,/area/space)
 
 (1,1,1) = {"
-wwww
-wffw
-wffw
-wwww
+wwwwsssssss
+wffwsssssss
+wffwsssssss
+wwwwsssssss
 "}
 "##;
 
-const STATES: [(&str, &str); 5] = [
+/// Open space with nothing within a tile to push off.
+const SPACE: TilePos = TilePos::new(8, 2, 1);
+
+const STATES: [(&str, &str); 6] = [
     ("t.dmi", "floor"),
+    ("t.dmi", "space"),
     ("t.dmi", "wall"),
     ("i.dmi", "thing"),
     ("h.dmi", "human_basic"),
@@ -131,6 +143,7 @@ fn fixture_assets(test: &str) -> PathBuf {
         CHESTPLATE,
         STORAGE,
         BIG,
+        JETPACK,
         CORE,
         CELL,
         "/turf/open/floor",
@@ -173,7 +186,11 @@ fn data() -> ModData {
             skins: vec![SkinDef {
                 name: "standard".into(),
                 parts: vec![
-                    part(HELMET, STOPSPRESSUREDAMAGE),
+                    PartDef {
+                        unsealed_inv: HIDEEARS,
+                        sealed_inv: HIDEHAIR,
+                        ..part(HELMET, STOPSPRESSUREDAMAGE)
+                    },
                     part(CHESTPLATE, STOPSPRESSUREDAMAGE),
                 ],
                 ..Default::default()
@@ -207,6 +224,18 @@ fn data() -> ModData {
                 path: BIG.into(),
                 complexity: 15,
                 removable: true,
+                ..Default::default()
+            },
+            // `/obj/item/mod/module/jetpack`.
+            ModuleDef {
+                path: JETPACK.into(),
+                module_type: ss13_game::modsuit::MODULE_TOGGLE,
+                complexity: 3,
+                active_power_cost: 2.5,
+                use_energy_cost: 50.0,
+                required_slots: vec![1 << 10],
+                removable: true,
+                incompatible: vec![JETPACK.into()],
                 ..Default::default()
             },
         ],
@@ -341,6 +370,11 @@ fn deploys_seals_drains_and_unseals() {
     let c = clothing(&app, helmet);
     assert_eq!(c.clothing_flags, THICKMATERIAL | STOPSPRESSUREDAMAGE);
     assert_eq!(c.heat_protection, 4, "initial heat protection back");
+    assert_eq!(
+        c.flags_inv,
+        HIDEEARS | HIDEHAIR,
+        "sealed: the sealed flags_inv too"
+    );
 
     let before = charge(&app, control);
     for _ in 0..steps(10.0) {
@@ -366,6 +400,11 @@ fn deploys_seals_drains_and_unseals() {
     assert!(!suit.active && !suit.activating);
     assert!(suit.parts.iter().all(|p| !p.sealed));
     assert_eq!(clothing(&app, helmet).clothing_flags, THICKMATERIAL);
+    assert_eq!(
+        clothing(&app, helmet).flags_inv,
+        HIDEEARS,
+        "unsealed flags_inv"
+    );
 
     assert!(quick_deploy(app.world_mut(), control, mob));
     app.update();
@@ -389,4 +428,59 @@ fn installs_check_complexity_and_incompatibility() {
     assert!(!install(world, control, big, None), "1 + 15 > 15");
     assert!(!install(world, control, storage, None), "a second storage");
     assert_eq!(world.get::<ModSuit>(control).unwrap().modules.len(), 1);
+}
+
+#[test]
+fn jetpack_thrusts_a_weightless_wearer() {
+    use ss13_game::modsuit::modules::{self, Jetpack};
+    use ss13_game::spacemove::process_spacemove;
+    use ss13_shared::Dir;
+
+    let (mut app, control, mob) = setup("jetpack");
+    wear(&mut app, control, mob);
+    assert!(quick_deploy(app.world_mut(), control, mob));
+    app.update();
+    assert!(toggle_activate(app.world_mut(), control, Some(mob), false));
+    for _ in 0..steps(3.5) {
+        app.update();
+    }
+    let world = app.world_mut();
+    let jet = ss13_game::construction::spawn_obj(world, JETPACK, FLOOR).unwrap();
+    modules::init_module(world, jet);
+    assert!(install(world, control, jet, None));
+
+    world.entity_mut(mob).insert(SPACE);
+    app.update();
+    let world = app.world_mut();
+    assert!(
+        !process_spacemove(world, mob, Some(Dir::East), false),
+        "no backup, no jetpack: no step"
+    );
+
+    assert!(modules::activate(world, control, jet, Some(mob)));
+    assert!(world.get::<Jetpack>(mob).is_some_and(|j| j.stabilize));
+    let before = ss13_game::modsuit::server::charge(world, control);
+    assert!(
+        process_spacemove(world, mob, Some(Dir::East), false),
+        "the jetpack thrusts"
+    );
+    let used = before - ss13_game::modsuit::server::charge(world, control);
+    assert!(
+        (used - 50.0).abs() < 1e-6,
+        "a thrust costs use_energy_cost: {used}"
+    );
+    assert!(
+        process_spacemove(world, mob, Some(Dir::East), true),
+        "stabilized: the drift stops"
+    );
+
+    // Without stabilizers the wearer drifts on.
+    modules::configure_edit(world, control, jet, "stabilizers", "0");
+    assert!(world.get::<Jetpack>(mob).is_some_and(|j| !j.stabilize));
+    assert!(!process_spacemove(world, mob, Some(Dir::East), true));
+    assert!(process_spacemove(world, mob, Some(Dir::East), false));
+
+    assert!(modules::deactivate(world, control, jet, false));
+    assert!(world.get::<Jetpack>(mob).is_none());
+    assert!(!process_spacemove(world, mob, Some(Dir::East), false));
 }
