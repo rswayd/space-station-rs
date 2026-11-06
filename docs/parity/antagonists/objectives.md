@@ -62,7 +62,7 @@ Protect/protect_object — сохранить человека/объект; deb
 Steal_n_of_type: набрать N предметов (оружие при Summon Guns, магия при Summon Magic, органы для абдукторов-подобных).
 
 - **Код:** [`/datum/objective/steal_n_of_type`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/gamemodes/objective.dm#L891), [`/datum/objective/steal_n_of_type/summon_guns`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/gamemodes/objective.dm#L919), [`/datum/objective/steal_n_of_type/organs`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/gamemodes/objective.dm#L955)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `summon_guns` готов (`crates/ss13_game/src/antag/survivalist.rs`: 5 настоящих стволов на теле, без `NOT_A_REAL_GUN`); `summon_magic` и `organs` ❌
 
 ### Особые цели: ядерная, поглощение, своя
 Nuclear — взорвать станцию; absorb/absorb_most/absorb_changeling — цели генокрада; custom — произвольный текст от админа.

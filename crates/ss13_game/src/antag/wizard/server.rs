@@ -27,11 +27,12 @@
 //!   bluespace, healing, robeless); a ghost who wants `ROLE_WIZARD_MIDROUND` becomes the
 //!   apprentice next to the wizard ([`add_apprentice`]): the apprentice outfit (no book, no staff,
 //!   a one-use scroll), the school's spells, "protect the wizard".
-//! - **Summon Events** (`spellbook_entries/summons.dm`): the one ritual, only in books prepared
-//!   in a high chaos round (dynamic tier 4); each cast turns on or intensifies wizard mode
-//!   (`crate::events::controller::summon_events`).
+//! - **Rituals** (`spellbook_entries/summons.dm`), only in books prepared in a high chaos round
+//!   (dynamic tier 4): Summon Guns (once; a gun for everyone, survivalists 10% of the time,
+//!   `crate::antag::survivalist`) and Summon Events (each cast turns on or intensifies wizard
+//!   mode, `crate::events::controller::summon_events`).
 //! - [`roundend_report`]: each wizard, its objectives and what it bought.
-// shortcut: no Grand Ritual, perks, other summons, challenges, loadouts or randomized books, no team
+// shortcut: no Grand Ritual, perks, Summon Magic or Ghosts or other summons, challenges, loadouts or randomized books, no team
 // HUD between a wizard and its apprentices, no imposters or academy wizards; the book refunds
 // no contract or bottles; the apprentice is the first willing ghost (tg polls them for 15 s);
 // the robeless school's mindswap is not ported (only Knock). Entries whose mechanics are missing
@@ -133,6 +134,8 @@ pub enum EntryKind {
 /// The ported `/datum/spellbook_entry/summon` rituals.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Ritual {
+    /// `/datum/spellbook_entry/summon/guns` (`crate::antag::survivalist`).
+    SummonGuns,
     SummonEvents,
 }
 
@@ -155,6 +158,7 @@ impl EntryDef {
             EntryKind::Spell(spell) => Some(u32::from(spell.def().max_level)),
             EntryKind::Item(_) => None,
             EntryKind::Ritual(Ritual::SummonEvents) => Some(5),
+            EntryKind::Ritual(Ritual::SummonGuns) => Some(1),
         }
     }
 
@@ -389,6 +393,16 @@ pub const ENTRIES: [EntryDef; 22] = [
         "Магический контракт, привязывающий ученика волшебника к вашей службе, при \
          использовании вызовет его на вашу сторону.",
     ),
+    EntryDef {
+        id: "/datum/spellbook_entry/summon/guns",
+        name: "Summon Guns",
+        desc: "Нет ничего плохого в том, чтобы вооружить команду сумасшедших, которые только и \
+               ждут повода, чтобы убить вас. Но велика вероятность, что они сперва перестреляют \
+               друг друга.",
+        category: RITUALS,
+        cost: 2,
+        kind: EntryKind::Ritual(Ritual::SummonGuns),
+    },
     EntryDef {
         id: "/datum/spellbook_entry/summon/events",
         name: "Summon Events",
@@ -991,7 +1005,7 @@ fn into_pack(world: &mut World, pack: Entity, path: &str) -> Option<Entity> {
 }
 
 /// `put_in_hands`, else on the floor under `mob`; true when in a hand.
-fn give(world: &mut World, mob: Entity, item: Entity) -> bool {
+pub(crate) fn give(world: &mut World, mob: Entity, item: Entity) -> bool {
     let hand = world.get::<Inventory>(mob).and_then(|i| {
         [i.active, 1 - i.active]
             .into_iter()
@@ -1420,6 +1434,22 @@ pub fn purchase(world: &mut World, mob: Entity, book: Entity, id: &str) -> bool 
             }
         }
         EntryKind::Item(path) => summon_item(world, mob, path),
+        EntryKind::Ritual(Ritual::SummonGuns) => {
+            // `summon_guns(user, 10)`.
+            crate::antag::survivalist::summon_guns(world, Some(mob), 10.0);
+            if let Some(pos) = crate::explosions::turf_of(world, mob) {
+                crate::sound::playsound(
+                    world,
+                    crate::sound::PlaySound::new(
+                        pos,
+                        "sound/effects/magic/castsummon.ogg",
+                        50.0,
+                        true,
+                    ),
+                );
+            }
+            true
+        }
         EntryKind::Ritual(Ritual::SummonEvents) => {
             let intensified = crate::events::controller::summon_events(world);
             chat_to(
@@ -1910,7 +1940,7 @@ mod tests {
     fn static_data_lists_categories_in_book_order() {
         let st = SpellbookUi::static_data(&Spellbook::default());
         assert_eq!(st.categories, [OFFENSIVE, DEFENSIVE, MOBILITY, ASSISTANCE]);
-        assert_eq!(st.entries.len(), ENTRIES.len() - 1, "no rituals");
+        assert_eq!(st.entries.len(), ENTRIES.len() - 2, "no rituals");
         let data = SpellbookUi::data(&Spellbook::default(), Entity::PLACEHOLDER, &());
         assert_eq!(data.times.len(), st.entries.len());
         let smoke = st.entries.iter().find(|e| e.name == "Smoke").unwrap();

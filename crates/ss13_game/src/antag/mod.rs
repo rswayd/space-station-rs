@@ -46,11 +46,15 @@ pub mod objectives;
 pub mod paradox_clone;
 pub mod revolution;
 #[cfg(feature = "server")]
+pub mod survivalist;
+#[cfg(feature = "server")]
 pub mod syndie_items;
 #[cfg(feature = "server")]
 pub mod traitor;
 #[cfg(feature = "server")]
 pub mod uplink;
+#[cfg(feature = "server")]
+pub mod valentine;
 pub mod vampire;
 pub mod wizard;
 
@@ -76,6 +80,8 @@ impl bevy::prelude::Plugin for AntagServerPlugin {
             brainwashed::BrainwashedPlugin,
             nightmare::NightmarePlugin,
             morph::MorphPlugin,
+            valentine::ValentinePlugin,
+            survivalist::SurvivalistPlugin,
         ))
         .add_systems(Startup, dynamic::init)
         .add_plugins(midround::MidroundPlugin);

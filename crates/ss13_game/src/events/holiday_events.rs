@@ -6,9 +6,12 @@
 //! - Easter Eggselence (`easter.dm`): the Easter announcement.
 //! - Release the Rabbits! (`easter.dm`): Easter rabbits on 15% of the maintenance landmarks and
 //!   space rabbits on 15% of the carp spawns.
+//! - Valentines! (`vday.dm`): the announcement, then everyone is put on a date
+//!   (`crate::antag::valentine`).
 // shortcut: Halloween's Ian in a bedsheet and ghost Poly, Easter's surprise eggs in maintenance
 // loot and the 35% rabbits on `/obj/effect/landmark/event_spawn` (those landmarks are not
-// tracked) are not ported; Visit by Santa and Valentines! need ghost polls and their antagonists.
+// tracked) are not ported; Visit by Santa needs a ghost poll and its antagonist; the valentine
+// card's message and the candy heart's text (`strings/valentines.json`) are not picked.
 
 use bevy::prelude::*;
 use ss13_mapload::DmItem;
@@ -21,6 +24,7 @@ use crate::inventory::Inventory;
 pub const SPOOKY: &str = "2 SPOOKY! (Halloween)";
 pub const EASTER: &str = "Easter Eggselence";
 pub const RABBITS: &str = "Release the Rabbits!";
+pub const VALENTINES: &str = "Valentines!";
 
 const BACKPACK: &str = "/obj/item/storage/backpack";
 const TREAT_BAG: &str = "/obj/item/storage/spooky";
@@ -47,6 +51,30 @@ pub fn make_easter(_: &mut World) -> Box<dyn RoundEvent> {
 
 pub fn make_rabbits(_: &mut World) -> Box<dyn RoundEvent> {
     Box::new(Rabbits)
+}
+
+pub fn make_valentines(_: &mut World) -> Box<dyn RoundEvent> {
+    Box::new(Valentines)
+}
+
+struct Valentines;
+
+impl RoundEvent for Valentines {
+    fn announce(&mut self, world: &mut World, _: &mut EventState, _: bool) {
+        super::priority_announce(
+            world,
+            "",
+            "Сегодня День святого Валентина! Подарите валентинку кому-нибудь особенному!",
+        );
+    }
+
+    fn start(&mut self, world: &mut World, _: &mut EventState) {
+        let Some(mut rng) = world.remove_resource::<EventRng>() else {
+            return;
+        };
+        crate::antag::valentine::start_valentines(world, &mut rng.0);
+        world.insert_resource(rng);
+    }
 }
 
 struct Spooky;

@@ -16,7 +16,7 @@ Robeless: маг (и все, у кого есть заклинания) колд
 Каждый член экипажа получает случайное оружие (или магический предмет); часть получивших становится выжившими-антагонистами.
 
 - **Код:** [`/datum/round_event_control/wizard/summonguns`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/wizard/summons.dm#L1), [`/datum/round_event_control/wizard/summonmagic`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/wizard/summons.dm#L17)
-- **Статус в ss13-rs:** ❌ нет — нет мага
+- **Статус в ss13-rs:** 🟡 частично — Summon Guns готов (wizard-событие и ритуал книги, `crates/ss13_game/src/antag/survivalist.rs`, `events/wizard.rs`); Summon Magic ❌ — нет большинства магических предметов
 
 ### Перемешивание: Change Places / Faces / Minds
 Все люди меняются местами, внешностью и именами или разумами (массовый обмен телами).
@@ -78,7 +78,7 @@ Robeless: маг (и все, у кого есть заклинания) колд
 В День святого Валентина экипаж разбивают на пары «валентинок» с открытками и задачами защищать пару.
 
 - **Код:** [`/datum/round_event_control/valentines`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/holiday/vday.dm#L8)
-- **Статус в ss13-rs:** ❌ нет — нет опроса кандидатов и антагонистов-валентинок (праздник Valentine's Day есть: `crates/ss13_game/src/events/holidays.rs`)
+- **Статус в ss13-rs:** ✅ готово — `events/holiday_events.rs` + `crates/ss13_game/src/antag/valentine.rs` (пары, третий лишний, разбиватель сердец, подарки). Без опроса (все записаны по умолчанию, как в tg) и текстов открытки/конфеты
 
 ### Easter Eggselence / Release the Rabbits!
 На Пасху по станции прячут пасхальные яйца; отдельное событие выпускает кроликов.
