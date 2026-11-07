@@ -4,14 +4,15 @@
 //! door button opens and closes a blast door, a restricted one refuses an assistant, an
 //! unpowered one does nothing; an airlock button bolts its airlock; a flasher button fires a
 //! mounted flasher at the player in front of it; the extinguisher cabinet gives and takes its
-//! extinguisher; the fire axe cabinet stays shut until a multitool unlocks it.
+//! extinguisher; the fire axe cabinet stays shut until a multitool unlocks it; wall frames mount
+//! onto walls (one per wall side) and a wrench takes one apart.
 
 use std::path::{Path, PathBuf};
 
 use bevy::prelude::*;
 use ss13_game::combat::NextMove;
 use ss13_game::doors::Door;
-use ss13_game::inventory::Inventory;
+use ss13_game::inventory::{CarriedBy, Inventory};
 use ss13_game::power::{AreaPower, LightFixture, LightMode};
 use ss13_game::status_effects::StatusEffects;
 use ss13_game::testing::{self, Drive, fixture_map, write_fixture};
@@ -21,7 +22,7 @@ use ss13_game::wallmount::cabinets::{ExtinguisherCabinet, FireaxeCabinet};
 use ss13_game::wallmount::controls::{Button, Flasher};
 use ss13_game::wallmount::fire_alarm::FireAlarm;
 use ss13_game::wallmount::firelock::Firelock;
-use ss13_mapload::{Areas, DmItem, DmWallMount};
+use ss13_mapload::{Areas, DmItem, DmTurfBuild, DmWallMount};
 use ss13_net::chat::client::ChatReceived;
 use ss13_shared::protocol::ClickModifiers;
 use ss13_shared::{Appearance, IconStateId, Optics, TilePos};
@@ -63,6 +64,21 @@ const TYPES: &str = r##"{
     "/obj/item/multitool": { "parent": "/obj/item", "declared_vars": {
         "name": "multitool", "icon_state": "multitool", "tool_behaviour": "multitool",
         "toolspeed": 1 } },
+    "/obj/item/wrench": { "parent": "/obj/item", "declared_vars": {
+        "name": "wrench", "icon_state": "toy", "tool_behaviour": "wrench", "toolspeed": 1 } },
+    "/obj/item/stack": { "parent": "/obj/item", "declared_vars": { "amount": 1,
+        "max_amount": 50, "merge_type": null, "singular_name": null } },
+    "/obj/item/stack/sheet": { "parent": "/obj/item/stack" },
+    "/obj/item/stack/sheet/iron": { "parent": "/obj/item/stack/sheet", "declared_vars": {
+        "name": "iron", "merge_type": { "path": "/obj/item/stack/sheet/iron" } } },
+    "/obj/item/wallframe": { "parent": "/obj/item", "declared_vars": { "result_path": null,
+        "pixel_shift": null } },
+    "/obj/item/wallframe/light_switch": { "parent": "/obj/item/wallframe", "declared_vars": {
+        "name": "light switch", "result_path": { "path": "/obj/machinery/light_switch" },
+        "pixel_shift": 26 } },
+    "/obj/item/wallframe/extinguisher_cabinet": { "parent": "/obj/item/wallframe",
+        "declared_vars": { "name": "extinguisher cabinet frame",
+        "result_path": { "path": "/obj/structure/extinguisher_cabinet" }, "pixel_shift": 29 } },
     "/obj/machinery": { "parent": "/obj", "declared_vars": { "anchored": 1,
         "use_power": 1, "idle_power_usage": 100, "active_power_usage": 1000, "power_channel": 1,
         "req_access": null, "req_one_access": null } },
@@ -164,7 +180,21 @@ wwwwwwwwwwww
 "}
 "##;
 
+/// Wall frames: the player stands at (2,3) with walls to the north and west.
+const FRAMES_MAP: &str = r##""w" = (/turf/closed/wall,/area/station)
+"f" = (/turf/open/floor,/area/station)
+"s" = (/obj/effect/landmark/start/assistant,/turf/open/floor,/area/station)
+
+(1,1,1) = {"
+wwww
+wsfw
+wffw
+wwww
+"}
+"##;
+
 const SPAWN: TilePos = TilePos::new(3, 5, 1);
+const FRAME_SPAWN: TilePos = TilePos::new(2, 3, 1);
 const MOUNTS: TilePos = TilePos::new(4, 5, 1);
 
 fn states() -> Vec<(&'static str, &'static str)> {
@@ -251,6 +281,10 @@ fn fixture_assets(test: &str) -> PathBuf {
         "/obj/machinery/door/airlock",
         "/obj/structure/extinguisher_cabinet",
         "/obj/structure/fireaxecabinet",
+        "/obj/item/wallframe/light_switch",
+        "/obj/item/wallframe/extinguisher_cabinet",
+        "/obj/item/wrench",
+        "/obj/item/stack/sheet/iron",
         "/turf/open/floor",
         "/turf/closed/wall",
         "/turf/open/space/basic",
@@ -260,7 +294,13 @@ fn fixture_assets(test: &str) -> PathBuf {
         "/area/station/dark",
     ];
     used.extend(ss13_mapload::WALLMOUNT_RUNTIME_TYPES);
-    write_fixture(&dir, TYPES, &used, &states(), &[("map.dmm", MAP)])
+    write_fixture(
+        &dir,
+        TYPES,
+        &used,
+        &states(),
+        &[("map.dmm", MAP), ("frames.dmm", FRAMES_MAP)],
+    )
 }
 
 #[derive(Resource, Default)]
@@ -286,6 +326,46 @@ impl Station {
         let s = Self(s);
         assert_eq!(*s.get::<TilePos>(s.players[0].mob), SPAWN);
         s
+    }
+
+    /// [`Station::start`] on the wall frame map.
+    fn start_frames(test: &str) -> Self {
+        let assets = fixture_assets(test);
+        let mut s = testing::Station::start(fixture_map(&assets, &["frames.dmm"]), |_| {});
+        s.join("p0", |app| {
+            app.init_resource::<Received>().add_systems(Update, record);
+        });
+        let s = Self(s);
+        assert_eq!(*s.get::<TilePos>(s.players[0].mob), FRAME_SPAWN);
+        s
+    }
+
+    /// A new `path` item straight into the active hand, the old one gone.
+    fn give_new(&mut self, path: &str) -> Entity {
+        let mob = self.players[0].mob;
+        let world = self.server.world_mut();
+        let old = world.get::<Inventory>(mob).and_then(|i| i.hands[i.active]);
+        if let Some(old) = old {
+            world.despawn(old);
+        }
+        let item = ss13_game::construction::spawn_obj(world, path, FRAME_SPAWN).unwrap();
+        world
+            .entity_mut(item)
+            .remove::<TilePos>()
+            .insert(CarriedBy(mob));
+        let mut inventory = world.get_mut::<Inventory>(mob).unwrap();
+        let hand = inventory.active;
+        inventory.hands[hand] = Some(item);
+        item
+    }
+
+    fn turf_at(&mut self, pos: TilePos) -> Entity {
+        let world = self.server.world_mut();
+        let mut q = world.query::<(Entity, &TilePos, &DmTurfBuild)>();
+        q.iter(world)
+            .find(|(_, p, _)| **p == pos)
+            .map(|(e, ..)| e)
+            .unwrap()
     }
 
     /// The entities on `pos` with `T` that `keep` accepts.
@@ -489,6 +569,93 @@ fn buttons_and_flasher() {
             .is_some_and(|e| e.paralyze > 0.0)
     });
     assert!(s.get::<Flasher>(flasher).ready_at > s.now(), "cooling down");
+}
+
+#[test]
+fn wall_frames_mount_and_dismantle() {
+    let mut s = Station::start_frames("frames");
+    let north = s.turf_at(TilePos::new(2, 4, 1));
+    let west = s.turf_at(TilePos::new(1, 3, 1));
+    let switches = |s: &Station| -> Vec<Entity> {
+        let world = s.server.world();
+        world
+            .resource::<SpatialIndex>()
+            .on_tile(FRAME_SPAWN)
+            .iter()
+            .copied()
+            .filter(|&e| world.get::<LightSwitch>(e).is_some())
+            .collect()
+    };
+
+    // A light switch frame on the north wall: a working switch on the player's tile.
+    let frame = s.give_new("/obj/item/wallframe/light_switch");
+    s.click(north);
+    s.run_until("mounted", |s| !switches(&*s).is_empty());
+    let switch = switches(&s)[0];
+    assert_eq!(s.get::<Appearance>(switch).pixel_offset, [0, 26]);
+    assert_eq!(
+        s.get::<DmWallMount>(switch).path,
+        "/obj/machinery/light_switch"
+    );
+    assert!(s.server.world().get_entity(frame).is_err());
+    assert_eq!(s.held(), None);
+    let area = s.area(FRAME_SPAWN);
+    assert_eq!(s.get::<LightSwitch>(switch).area, area);
+
+    // That wall side is taken; the west wall is free.
+    let second = s.give_new("/obj/item/wallframe/light_switch");
+    s.click(north);
+    s.run_until("refused", |s| s.said("уже что-то висит"));
+    assert_eq!(switches(&s).len(), 1);
+    assert_eq!(s.held(), Some(second));
+    s.click(west);
+    s.run_until("the second one mounted", |s| switches(&*s).len() == 2);
+    let offsets: Vec<[i16; 2]> = switches(&s)
+        .iter()
+        .map(|&e| s.get::<Appearance>(e).pixel_offset)
+        .collect();
+    assert!(offsets.contains(&[-26, 0]));
+
+    // A built extinguisher cabinet starts open and empty.
+    s.give_new("/obj/item/wallframe/extinguisher_cabinet");
+    let east_floor = s.turf_at(TilePos::new(3, 3, 1));
+    s.click(east_floor);
+    s.run_for(0.5);
+    let world = s.server.world();
+    let cabinets = world
+        .resource::<SpatialIndex>()
+        .on_tile(FRAME_SPAWN)
+        .iter()
+        .filter(|&&e| world.get::<ExtinguisherCabinet>(e).is_some())
+        .count();
+    assert_eq!(cabinets, 0, "a floor is no wall");
+
+    // A wrench on a frame on the floor: its iron.
+    let frame = {
+        let world = s.server.world_mut();
+        ss13_game::construction::spawn_obj(
+            world,
+            "/obj/item/wallframe/extinguisher_cabinet",
+            TilePos::new(3, 3, 1),
+        )
+        .unwrap()
+    };
+    s.give_new("/obj/item/wrench");
+    s.click(frame);
+    s.run_until("dismantled", |s| {
+        s.server.world().get_entity(frame).is_err()
+    });
+    let world = s.server.world();
+    let iron = world
+        .resource::<SpatialIndex>()
+        .on_tile(TilePos::new(3, 3, 1))
+        .iter()
+        .any(|&e| {
+            world
+                .get::<DmItem>(e)
+                .is_some_and(|i| i.path == "/obj/item/stack/sheet/iron")
+        });
+    assert!(iron, "two iron sheets drop");
 }
 
 #[test]

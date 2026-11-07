@@ -137,6 +137,8 @@ pub enum RequestKind {
     Syndicate,
     NukeCodes,
     Ert,
+    /// A station charter's proposed name (`crate::misc_items::charter`).
+    StationRename,
 }
 
 impl RequestKind {
@@ -147,6 +149,7 @@ impl RequestKind {
             Self::Syndicate => "SYNDICATE",
             Self::NukeCodes => "NUKE CODE REQUEST",
             Self::Ert => "ERT REQUEST",
+            Self::StationRename => "CUSTOM STATION RENAME",
         }
     }
 }

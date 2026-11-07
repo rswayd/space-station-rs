@@ -82,6 +82,7 @@
 //! | 3213 | `gifts::open` |
 //! | 3221 | `weapons::two_handed::attack_self` (wield, let go) |
 //! | 3245 | `mining::crusher::attack_self` (the kinetic crusher wields) |
+//! | 3227 | `misc_items::charter::attack_self` (the station name question) |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):
 //!
@@ -101,6 +102,7 @@
 //! | 473 | `cargo::money::item_interaction` (cash onto the ID in the other hand) |
 //! | 480 | `clothing::accessories::attach` (before a jumpsuit's holster takes the item) |
 //! | 483 | `gifts::wrap_parcel` (wrapping paper onto a parcel, before it takes the paper) |
+//! | 487 | `misc_items::documents::forge_seal` (a red or blue crayon on a photocopy) |
 //! | 500 | core: a storage opens or takes the held item |
 //! | 600 | `implants::item_interaction` |
 //! | 700 | `assemblies::server::item_interaction` |
@@ -160,6 +162,8 @@
 //! | 2000 | `wallmount::interact` |
 //! | 2010 | `power::lighting::remove_by_hand` (right click: a bulb out of its fixture) |
 //! | 2012 | `power::lighting::floodlight_hand` (setting, the tube out with the panel open) |
+//! | 2017 | `misc_items::puzzle::press` (ruin puzzle buttons) |
+//! | 2027 | `misc_items::flatpacks::unload` (the topmost flatpack off a cart) |
 //! | 2100 | `power::apc_ui::interact` |
 //! | 2200 | `mecha::bay::interact` |
 //! | 2300 | `mecha::core::attack_hand` |
@@ -219,6 +223,7 @@
 //! | 251 | `weapons` whetstone (`sharpener`), shield bash (`block::bash`) |
 //! | 219 | `clothing::chameleon::scanner_click` (the chameleon scanner on a human, or a turf with one) |
 //! | 300 | `emag::interact_with_atom` (left click) |
+//! | 317 | `misc_items::puzzle::swipe` (keycards on keycard doors and panels) |
 //! | 320 | `janitor::key_on_door` (the janitor's key on a door) |
 //! | 330 | `shuttle_console_server` (a held item on a shuttle console) |
 //! | 340 | `shuttle_nav` (a held item on a navigation console) |
@@ -279,6 +284,7 @@
 //! | 2610 | `medical::cryo::item_interaction` (a cup into the cell) |
 //! | 2630 | `medical::limbgrower::item_interaction` (limb design disks) |
 //! | 2700 | `wallmount::item_interaction` |
+//! | 2707 | `wallmount::frames::item_interaction` (wall frames on walls, their screwdriver and wrench) |
 //! | 2710 | `power::lighting::item_interaction` (bulbs, replacers, fixtures, frames, wall frames, floodlights and their frames) |
 //! | 2715 | `power::lighting::swing_bulb` (a bulb shatters on a mob; never handles) |
 //! | 2800 | `power::chargers::item_interaction` |
@@ -321,7 +327,9 @@
 //! | 4000 | `atmos_machinery::windows::item_interaction` |
 //! | 4100 | `modpc::pda::item_interaction_secondary` (right click) |
 //! | 4200 | `disposals::item_interaction` |
+//! | 4247 | `misc_items::documents::forge_seal` (a red or blue crayon on a photocopy) |
 //! | 4253 | `crayons::interact` (drawing, spray painting, chalk outlines, eating a crayon) |
+//! | 4257 | `misc_items::target::welder_act` (a lit welder clears a target's marks) |
 //! | 4263 | `syndie_spraycan::interact` (the Syndicate rune) |
 //! | 4273 | `stickers::attempt_attach` |
 //! | 4283 | `gifts::wrap_parcel` (wrapping paper on a parcel) |
@@ -329,6 +337,7 @@
 //! | 4400 | `science::experi_scanner::pre_attack` (not on living mobs) |
 //! | 4460 | `closets::kinds::held_on_target` (large crates, multitools on abandoned crates) |
 //! | 4491 | `weapons::rip_and_tear::pre_attack` (a wielded sledgehammer on a wall) |
+//! | 4467 | `misc_items::flatpacks::load` (a flatpack onto a flatpack cart) |
 //! | 4500 | `construction::item_interaction` |
 //! | 4600 | core: a cyborg module or `NoDrop` item stops here |
 //! | 4650 | `lockbox::item_interaction` (`closets` plugin) |

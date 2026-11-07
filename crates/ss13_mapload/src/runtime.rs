@@ -486,6 +486,31 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/stack/sheet/cloth",
     "/obj/item/stack/sheet/plastic",
     "/obj/item/wallframe/urinal",
+    // Wall frames and the mounts they build (`ss13_game::wallmount::frames`).
+    "/obj/item/wallframe/button",
+    "/obj/item/wallframe/light_switch",
+    "/obj/item/wallframe/flasher",
+    "/obj/item/wallframe/extinguisher_cabinet",
+    "/obj/item/wallframe/fireaxecabinet",
+    "/obj/item/wallframe/fireaxecabinet/mechremoval",
+    "/obj/item/wallframe/fireaxecabinet/jawsofrecovery",
+    "/obj/machinery/button",
+    "/obj/machinery/light_switch",
+    "/obj/machinery/flasher",
+    "/obj/structure/extinguisher_cabinet",
+    "/obj/structure/fireaxecabinet/empty",
+    "/obj/structure/fireaxecabinet/mechremoval/empty",
+    "/obj/structure/fireaxecabinet/jawsofrecovery/empty",
+    // The captain's charter and its variants (`ss13_game::misc_items::charter`).
+    "/obj/item/station_charter",
+    "/obj/item/station_charter/admin",
+    "/obj/item/station_charter/banner",
+    // The photocopier's copy of secret documents (`ss13_game::misc_items::documents`).
+    "/obj/item/documents/photocopy",
+    // The typed flatpacks' boards (`ss13_game::misc_items::flatpacks`).
+    "/obj/item/circuitboard/machine/flatpacker",
+    "/obj/item/circuitboard/machine/engine/propulsion",
+    "/obj/item/circuitboard/machine/mailsorter",
     // Bulbs out of fixtures, fixture frames and the fixtures they build
     // (`ss13_game::power::lighting`).
     "/obj/item/light/tube",

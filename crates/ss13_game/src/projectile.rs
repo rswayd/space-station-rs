@@ -84,6 +84,11 @@ pub struct Projectile {
     pub ricochets: u32,
 }
 
+/// tg `p_x`, `p_y`: the clicked point the projectile was aimed at, pixels from the target
+/// tile's center ([`Shot::pixel`]).
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct AimPixel(pub [i16; 2]);
+
 /// What a shot needs: tg `ready_proj` + `aim_projectile`.
 pub struct Shot<'a> {
     pub data: &'a ProjectileData,
@@ -176,7 +181,9 @@ pub fn fire_with(world: &mut World, shot: Shot, extra: impl Bundle) -> Option<En
         ricochets: 0,
     };
     let entity = crate::construction::spawn_obj(world, &shot.data.path, shot.from)?;
-    world.entity_mut(entity).insert(extra);
+    world
+        .entity_mut(entity)
+        .insert((extra, AimPixel(shot.pixel)));
     if let Some(mut look) = world.get_mut::<Appearance>(entity) {
         look.rotation = angle.round() as u16 % 360;
         look.mouse_opacity = ss13_shared::MouseOpacity::Transparent;
@@ -464,7 +471,9 @@ fn select_target(world: &World, p: &Projectile, me: Entity, tile: TilePos) -> Op
     if let Some(original) = p.original
         && original != p.firer
         && world.get::<TilePos>(original) == Some(&tile)
-        && (world.get::<Health>(original).is_some() || world.get::<Density>(original).is_some())
+        && (world.get::<Health>(original).is_some()
+            || world.get::<Density>(original).is_some()
+            || crate::misc_items::target::is_target(world, original))
     {
         return Some(original);
     }
@@ -513,6 +522,7 @@ fn hit(world: &mut World, e: Entity, p: &Projectile, name: &str, target: Entity)
     crate::guns_special::dart_hit(world, e, p, target);
     // The kinetic crusher's destabilizer marks or mines (`crate::mining::crusher`).
     crate::mining::crusher::destabilizer_hit(world, e, p.firer, target);
+    crate::misc_items::target::bullet_act(world, e, p, target);
     crate::mobs::megafauna::on_projectile_hit(world, p, target);
     if let Some(bolt) = bolt {
         crate::spells::effects::bolt_hit(world, &bolt, p, target);

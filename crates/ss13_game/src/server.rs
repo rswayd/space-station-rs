@@ -315,6 +315,7 @@ impl Plugin for GameServerPlugin {
         .add_plugins(crate::disposals::DisposalsServerPlugin)
         .add_plugins(crate::genetics::GeneticsServerPlugin)
         .add_plugins(crate::wallmount::WallMountPlugin)
+        .add_plugins(crate::misc_items::MiscItemsPlugin)
         .add_plugins(crate::security_level::SecurityLevelPlugin)
         .add_plugins(crate::announce::AnnouncePlugin)
         .add_plugins((

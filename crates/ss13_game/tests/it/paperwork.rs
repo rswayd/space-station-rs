@@ -1,6 +1,6 @@
 //! Office and library machines over a loopback server: a pen fills a paper's input field, a
 //! clipboard takes a paper, a paper folds into a plane and back; the photocopier copies a
-//! paper; a fax reaches another fax; the binder binds a paper, the scanner caches the book, the
+//! paper and secret documents (a crayon forges the copy's seal); a fax reaches another fax; the binder binds a paper, the scanner caches the book, the
 //! librarian's console uploads and prints it; a canvas is painted, finished and put on an easel;
 //! a carbon sheet tears off its copy, the paper cutter cuts a paper into slips, a filing cabinet
 //! files and returns a paper, a biscuit card cracks open; the barcode scanner connects to the
@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 
 use bevy::prelude::*;
 use ss13_game::inventory::{CarriedBy, Inventory};
+use ss13_game::misc_items::documents::DocumentCopy;
 use ss13_game::service::{
     BarcodeScanner, Biscuit, Book, Canvas, CarbonPaper, Clipboard, FilingCabinet, Ledger,
     LibraryArchive, Paper, PaperCutter, Photocopier, ScanMode,
@@ -64,6 +65,10 @@ const TYPES: &str = r##"{
     "/obj/item/pen": { "parent": "/obj/item" },
     "/obj/item/clipboard": { "parent": "/obj/item" },
     "/obj/item/toner": { "parent": "/obj/item" },
+    "/obj/item/documents": { "parent": "/obj/item", "declared_vars": {
+        "name": "secret documents", "resistance_flags": 115 } },
+    "/obj/item/documents/nanotrasen": { "parent": "/obj/item/documents" },
+    "/obj/item/documents/photocopy": { "parent": "/obj/item/documents" },
     "/obj/item/barcodescanner": { "parent": "/obj/item" },
     "/obj/item/book/bible": { "parent": "/obj/item/book" },
     "/obj/item/toy": { "parent": "/obj/item" },
@@ -190,6 +195,8 @@ fn fixture_assets(test: &str) -> PathBuf {
         CANVAS,
         CRAYON,
         "/obj/item/toner",
+        "/obj/item/documents/nanotrasen",
+        "/obj/item/documents/photocopy",
         "/obj/item/book",
         BARCODE,
         "/obj/item/book/bible",
@@ -437,6 +444,54 @@ fn the_photocopier_copies_and_the_fax_sends() {
         s.try_get::<TilePos>(fluff) == Some(&TilePos::new(7, 2, 1))
     });
     assert!(s.try_get::<StoredIn>(fluff).is_none());
+}
+
+#[test]
+fn secret_documents_are_photocopied_and_a_seal_forged() {
+    let mut s = Station::start("secret_documents_are_photocopied_and_a_seal_forged");
+    let copier = s.obj(COPIER);
+    s.run_until("the copier is set up with paper and toner", |s| {
+        s.try_get::<Photocopier>(copier)
+            .is_some_and(|c| c.paper == 30 && c.toner.is_some())
+    });
+    let docs = ss13_game::construction::spawn_obj(
+        s.server.world_mut(),
+        "/obj/item/documents/nanotrasen",
+        TilePos::new(3, 3, 1),
+    )
+    .unwrap();
+    s.put_in_hand(docs);
+    s.click(0, copier);
+    s.run_until("the documents are in the tray", |s| {
+        s.get::<Photocopier>(copier).object == Some(docs)
+    });
+    s.click(0, copier);
+    s.pick("Copy (1)");
+    let copy = |s: &mut Station| {
+        let world = s.server.world_mut();
+        let mut q = world.query::<(Entity, &DocumentCopy)>();
+        q.iter(world).map(|(e, _)| e).next()
+    };
+    s.run_until("a photocopy comes out", |s| copy(s).is_some());
+    let photocopy = copy(&mut s).unwrap();
+    assert_eq!(
+        s.get::<DocumentCopy>(photocopy).copy_type,
+        "/obj/item/documents/nanotrasen"
+    );
+    assert_eq!(
+        s.get::<Photocopier>(copier).paper,
+        10,
+        "DOCUMENT_PAPER_USE sheets"
+    );
+
+    // A red crayon forges the seal once.
+    let crayon = s.item(CRAYON);
+    s.put_in_hand(crayon);
+    s.click(0, photocopy);
+    s.run_until("the seal is forged", |s| {
+        s.get::<DocumentCopy>(photocopy).forged_seal == Some("red")
+    });
+    assert_eq!(s.get::<Name>(photocopy).as_str(), "red secret documents");
 }
 
 #[test]

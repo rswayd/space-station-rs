@@ -194,6 +194,7 @@ pub fn ext_field(path: &str, var: &str, value: Val) -> Result<Field, Skip> {
         .or_else(|_| crate::service::ext_field(path, var, value))
         .or_else(|_| crate::mining::ext_field(path, var, value))
         .or_else(|_| crate::triggers::ext_field(path, var, value))
+        .or_else(|_| crate::puzzle::ext_field(path, var, value))
 }
 
 pub(crate) fn ext(component: &'static str, key: &'static str, ron: impl Into<String>) -> Field {
@@ -304,6 +305,7 @@ impl<'a> ConvertContext<'a> {
         fields.extend(crate::circuit::type_fields(self.types, path));
         fields.extend(crate::mining::type_fields(self.types, path));
         fields.extend(crate::triggers::type_fields(self.types, path));
+        fields.extend(crate::puzzle::type_fields(self.types, path));
         // Last: GAGS replaces the icon vars read above.
         fields.extend(crate::gags::type_fields(self.types, path));
         fields

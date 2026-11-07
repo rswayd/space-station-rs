@@ -17,7 +17,7 @@
 //!   faxes to send it to (and the Central Command network), or takes it out. The receiving fax
 //!   says who sent it and drops it 1.9 s later.
 // shortcut: tier-1 stock parts (30 sheets, efficiency 2, 4 s per copy) and one blank paper
-// kind; no photo, document, blank-form or ass copies, payment, emag, toner colour or pixel
+// kind; no photo, blank-form or ass copies, payment, emag, toner colour or pixel
 // shifting; folders cannot be renamed or cut apart; planes have no eye hits, carbon look or
 // stamp overlays; the fax has no wires, jams, history, emag network or multitool renaming, and
 // a fax to Central Command reaches the CentCom fax machines without the admins' request panel
@@ -58,6 +58,8 @@ const TONER_EFFICIENCY: f32 = 2.0;
 const PRINT_SECS: f64 = 4.0;
 /// `PAPER_TONER_USE`, `MAX_COPIES_AT_ONCE`.
 const PAPER_TONER_USE: f32 = 0.125;
+/// `DOCUMENT_PAPER_USE`.
+const DOCUMENT_PAPER_USE: u32 = 20;
 const MAX_COPIES: u32 = 10;
 /// `/obj/machinery/fax/receive`: `addtimer(vend_item, 1.9 SECONDS)`.
 const FAX_VEND_SECS: f64 = 1.9;
@@ -728,10 +730,13 @@ fn copier_insert(
         copier_take_bin(world, client, copier, held, bin);
         return true;
     }
-    let Some(paper) = world.get::<Paper>(held) else {
-        return false;
+    // `/obj/item/documents` is in `allowed_copy_types` too (`crate::misc_items::documents`).
+    let blank = match world.get::<Paper>(held) {
+        Some(paper) => paper.is_empty(),
+        None if crate::misc_items::documents::is_documents(world, held) => false,
+        None => return false,
     };
-    if paper.is_empty() {
+    if blank {
         if state.paper >= PAPER_CAPACITY {
             tell(world, client, Span::Warning, "cannot hold more paper!");
             return true;
@@ -931,7 +936,10 @@ fn start_copies(world: &mut World, client: Entity, copier: Entity, state: Photoc
     }
     let name = name_of(world, copier);
     let flash = |text: &str| format!("An error message flashes across {name}'s screen: \"{text}\"");
-    let per_copy = PAPER_TONER_USE / TONER_EFFICIENCY;
+    let (paper_use, toner_use) = state
+        .object
+        .map_or((1, PAPER_TONER_USE), |o| copy_cost(world, o));
+    let per_copy = toner_use / TONER_EFFICIENCY;
     let mut amount = state.copies;
     let mut error = None;
     match state.toner.and_then(|t| world.get::<Toner>(t)) {
@@ -948,8 +956,8 @@ fn start_copies(world: &mut World, client: Entity, copier: Entity, state: Photoc
         }
         Some(_) => {}
     }
-    if state.paper < amount {
-        amount = state.paper;
+    if state.paper < paper_use * amount {
+        amount = state.paper / paper_use;
         let full = if amount >= 1 { "full " } else { "" };
         error = Some(flash(&format!(
             "Not enough paper to perform {full}operation."
@@ -966,6 +974,19 @@ fn start_copies(world: &mut World, client: Entity, copier: Entity, state: Photoc
     after(world, PRINT_SECS, TimerJob::Copy { copier });
 }
 
+/// `PAPER_PAPER_USE`, `PAPER_TONER_USE` of a paper; `DOCUMENT_PAPER_USE` and
+/// `DOCUMENT_TONER_USE` of secret documents.
+fn copy_cost(world: &World, original: Entity) -> (u32, f32) {
+    if crate::misc_items::documents::is_documents(world, original) {
+        (
+            DOCUMENT_PAPER_USE,
+            PAPER_TONER_USE * DOCUMENT_PAPER_USE as f32,
+        )
+    } else {
+        (1, PAPER_TONER_USE)
+    }
+}
+
 /// One copy of the original onto the copier's tile; the next one is queued. The loop stops
 /// without power, the cartridge, the original, paper or toner (`make_paper_copy` -> null).
 pub(super) fn next_copy(world: &mut World, copier: Entity) {
@@ -975,8 +996,9 @@ pub(super) fn next_copy(world: &mut World, copier: Entity) {
     if state.queue == 0 {
         return;
     }
-    let per_copy = PAPER_TONER_USE / TONER_EFFICIENCY;
     let original = state.object.filter(|&o| inside(world, o, copier));
+    let (paper_use, toner_use) = original.map_or((1, PAPER_TONER_USE), |o| copy_cost(world, o));
+    let per_copy = toner_use / TONER_EFFICIENCY;
     let toner = state
         .toner
         .filter(|&t| world.get::<Toner>(t).is_some_and(|t| t.charges >= per_copy));
@@ -986,13 +1008,21 @@ pub(super) fn next_copy(world: &mut World, copier: Entity) {
         toner,
         pos,
         powered(world, copier),
-        state.paper > 0,
+        state.paper >= paper_use,
     ) else {
         set_copier(world, copier, |c| c.queue = 0);
         return;
     };
-    if let Some(copy) = crate::construction::spawn_obj(world, PAPER, pos) {
-        super::paper::copy_paper(world, original, copy);
+    let copy = if crate::misc_items::documents::is_documents(world, original) {
+        crate::misc_items::documents::make_copy(world, original, pos)
+    } else {
+        let copy = crate::construction::spawn_obj(world, PAPER, pos);
+        if let Some(copy) = copy {
+            super::paper::copy_paper(world, original, copy);
+        }
+        copy
+    };
+    if let Some(copy) = copy {
         let mut rng = world.resource_mut::<crate::combat::CombatRng>();
         let offset = [0, 0].map(|_| rng.range(0, 20) as i16 - 10);
         if let Some(mut look) = world.get_mut::<Appearance>(copy) {
@@ -1003,7 +1033,7 @@ pub(super) fn next_copy(world: &mut World, copier: Entity) {
         cartridge.charges -= per_copy;
     }
     set_copier(world, copier, |c| {
-        c.paper -= 1;
+        c.paper -= paper_use;
         c.queue -= 1;
     });
     if world
