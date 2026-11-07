@@ -91,7 +91,8 @@
 //!   and the reagent grinder.
 //! - `mood` (feature `server`): mood events, sanity and its effects, the mood face's server half;
 //!   `mood_client` (feature `client`) draws the face. `quirks` (feature `server`): character
-//!   quirks, their points and effects. `hallucination` (feature `server`): the hallucination
+//!   quirks, their points and effects. `personality` (feature `server`): character
+//!   personalities and their mood reactions. `hallucination` (feature `server`): the hallucination
 //!   status effect and the hallucinations only their victim perceives.
 //! - `cargo` (feature `server`; the window's data shared, `cargo::client` with `client`): the
 //!   economy (department budgets, bank accounts on ID cards, paydays), supply packs and orders,
@@ -453,6 +454,8 @@ pub mod panels_client;
 pub mod papershredder;
 #[cfg(feature = "server")]
 pub mod password_door;
+#[cfg(feature = "server")]
+pub mod personality;
 #[cfg(feature = "server")]
 pub mod pixel_shift;
 #[cfg(feature = "server")]

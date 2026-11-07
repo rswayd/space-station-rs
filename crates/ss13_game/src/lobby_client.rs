@@ -28,6 +28,7 @@ use crate::lobby::{
     SET_ANTAGS, SET_APPEARANCE, SET_JOB_PREFERENCE, SET_PREFERENCE, TOGGLE_ANTAG_ROLL,
     TOGGLE_READY,
 };
+use crate::lobby::{CLEAR_PERSONALITIES, HANDLE_PERSONALITY};
 
 /// tg `/datum/hud/new_player` title: `icons/runtime/default_title.dmi`, the unnamed state.
 const TITLE_DMI: &str = "icons/runtime/default_title.dmi";
@@ -536,6 +537,49 @@ impl ClientUi for JobPrefsUi {
             "Очки квирков: {} (положительных не больше {})",
             data.quirk_balance, st.max_positive_quirks
         );
+        // tg's personality page (`PersonalityPage.tsx`) as a grid of toggles; the server checks
+        // the limit and the groups.
+        let personalities: Vec<_> = st
+            .personalities
+            .iter()
+            .map(|p| {
+                let on = data.personalities.contains(&p.key);
+                let mut tooltip = p.description.clone();
+                for (sign, text) in [
+                    ("+", &p.pos_gameplay_description),
+                    ("-", &p.neg_gameplay_description),
+                    ("±", &p.neut_gameplay_description),
+                ] {
+                    if !text.is_empty() {
+                        tooltip.push_str(&format!("\n{sign} {text}"));
+                    }
+                }
+                let params = vec![("personality_type".to_owned(), p.key.clone())];
+                let name = format!("personality: {}", p.key);
+                bsn! {
+                    @Button {
+                        @content: {p.name.clone()},
+                        @icon: {if on { "check-square-o" } else { "square-o" }},
+                        @fluid: true,
+                        @ellipsis: true,
+                        @tooltip: tooltip,
+                    }
+                    Button { selected: on }
+                    Act({HANDLE_PERSONALITY.to_owned()})
+                    ActParams(params)
+                    Name(name)
+                }
+            })
+            .collect();
+        let personality_count = if st.max_personalities < 0 {
+            format!("Выбрано личностей: {}", data.personalities.len())
+        } else {
+            format!(
+                "Выбрано личностей: {} из {}",
+                data.personalities.len(),
+                st.max_personalities
+            )
+        };
         let appearance = appearance_rows(st, &data.appearance);
         bsn! {
             @WindowContent
@@ -572,6 +616,26 @@ impl ClientUi for JobPrefsUi {
                         row_gap: px(2),
                     }
                     Children [ {quirks} ]
+                ]
+                --
+                @Section { @title: "Личность" }
+                Children [
+                    Node { flex_direction: FlexDirection::Row, column_gap: px(8), margin: UiRect::bottom(px(4)) }
+                    Children [
+                        Text(personality_count)
+                        --
+                        @Button { @content: "Сбросить", @compact: true }
+                        Act({CLEAR_PERSONALITIES.to_owned()})
+                        Name("personality: clear")
+                    ]
+                    --
+                    Node {
+                        display: Display::Grid,
+                        grid_template_columns: {RepeatedGridTrack::flex::<Vec<RepeatedGridTrack>>(4, 1.0)},
+                        column_gap: px(4),
+                        row_gap: px(2),
+                    }
+                    Children [ {personalities} ]
                 ]
                 --
                 @Section { @title: "Что делать если не удалось войти?" }

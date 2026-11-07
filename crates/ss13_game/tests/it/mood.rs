@@ -1,6 +1,6 @@
 //! Mood and quirks over real WebTransport on 127.0.0.1: need events follow the mob's state,
 //! seeing B die saddens A, a hug cheers B up, low sanity slows A down, the mood face's click
-//! prints the mood, and quirks apply their traits.
+//! prints the mood, quirks apply their traits and personalities react.
 // shortcut: Bad Back and the quirk items need backpack and item prototypes the fixture lacks.
 
 use std::path::{Path, PathBuf};
@@ -355,4 +355,31 @@ fn more_quirks_and_skills_apply() {
     s.run_until("B hears the level up", |s| {
         s.heard(1, "I'm starting to figure out what Cleaning really is!")
     });
+}
+
+#[test]
+fn personalities_react_in_the_round() {
+    use ss13_game::personality::{self, Personality};
+    let mut s = Station::start("personalities_react_in_the_round");
+    let (a, b) = (s.players[0].mob, s.players[1].mob);
+    {
+        let world = s.server.world_mut();
+        assert!(personality::apply_to_mob(world, a, Personality::Paranoid));
+        assert!(personality::apply_to_mob(world, b, Personality::Sensitive));
+    }
+    assert!(s.mood(a).has_personality(Personality::Paranoid));
+    assert!((s.mood(b).mood_modifier - 1.2).abs() < 1e-6);
+    // SSpersonalities (3 s): A is alone with B.
+    s.run_until("A fears being alone with B", |s| {
+        s.mood(a)
+            .get("paranoia_personality")
+            .is_some_and(|e| e.id == "paranoid_one_on_one")
+    });
+    // Removing it clears its moodlet.
+    assert!(personality::remove_from_mob(
+        s.server.world_mut(),
+        a,
+        Personality::Paranoid
+    ));
+    assert!(!s.has_event(a, "paranoia_personality"));
 }

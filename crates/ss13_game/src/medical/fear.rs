@@ -174,8 +174,10 @@ pub fn tick(world: &mut World, mob: Entity, secs: f32, rng: &mut CombatRng) {
     let now = world.resource::<Time>().elapsed_secs_f64();
     let unconscious = status_effects::knocked_out(world, mob);
     let mut adjustment = 0.0;
+    // `get_fear_multiplier`: the personalities (Cowardly, Paranoid, Brave).
+    let modifier = crate::personality::fear_multiplier(world, mob);
     let add = |fear: &mut Fearful, amount: f32| {
-        fear.buildup = (fear.buildup + amount).clamp(0.0, MAXIMUM);
+        fear.buildup = (fear.buildup + amount * modifier).clamp(0.0, MAXIMUM);
         amount
     };
     // Sources.
@@ -211,7 +213,7 @@ pub fn tick(world: &mut World, mob: Entity, secs: f32, rng: &mut CombatRng) {
         startle(world, mob, &mut fear, now, rng);
     }
     if !(adjustment > 0.0 || fear.buildup > fear.last_tick) && fear.buildup > 0.0 {
-        fear.buildup = (fear.buildup - PASSIVE_DECREASE * secs).max(0.0);
+        fear.buildup = (fear.buildup - PASSIVE_DECREASE / modifier * secs).max(0.0);
     }
     fear.last_tick = fear.buildup;
     // The terrified source removed itself and nothing else feeds the fear.

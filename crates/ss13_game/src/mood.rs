@@ -18,7 +18,7 @@
 //!   tinted by sanity; clicking it prints the mood (`print_mood`).
 // shortcut: no crit threshold change from insanity (crit thresholds are constants in
 // `crate::health`), no area beauty or area
-// mood bonuses, no special screen icons, no personalities (their mood multipliers), no full-heal
+// mood bonuses (but those of `crate::personality`), no special screen icons, no full-heal
 // reset (no aheal yet), gibbed/dusted deaths count as plain ones, conditional death moodlets other
 // than the base one (cult, revolution, pets) are not ported. The food, drug, morbid and most
 // generic events wait for the mechanics that raise them.
@@ -228,6 +228,8 @@ pub struct Mood {
     /// tg applies the action speed modifier only from the first sanity change on
     /// (`set_actionspeed_effect` runs in `set_sanity`): a new mood has none.
     pub speed_applied: bool,
+    /// tg `mob.personalities`: [`crate::personality::Personality::bit`]s.
+    pub personalities: u64,
 }
 
 impl Default for Mood {
@@ -246,6 +248,7 @@ impl Default for Mood {
             negative_length_modifier: 1.0,
             unstable: false,
             speed_applied: false,
+            personalities: 0,
         }
     }
 }
@@ -295,6 +298,11 @@ fn sanity_level_of(sanity: f32) -> Option<u8> {
 }
 
 impl Mood {
+    /// tg `HAS_PERSONALITY`.
+    pub fn has_personality(&self, personality: crate::personality::Personality) -> bool {
+        self.personalities & personality.bit() != 0
+    }
+
     pub fn get(&self, category: &str) -> Option<&ActiveMood> {
         self.events.iter().find(|e| e.category == category)
     }
@@ -319,9 +327,16 @@ impl Mood {
                 self.update_mood();
                 return;
             }
+            // tg `can_effect_mob` comes before the old one is replaced.
+            if !crate::personality::can_effect(self.personalities, &new) {
+                return;
+            }
             self.events.remove(i);
+        } else if !crate::personality::can_effect(self.personalities, &new) {
+            return;
         }
         // `on_add`.
+        crate::personality::on_add(self.personalities, &mut new);
         new.mood_change = new.mood_change.floor();
         let length = if new.mood_change > 0.0 {
             self.positive_length_modifier
@@ -493,6 +508,8 @@ impl Mood {
         // the drunkenness (`update_change`).
         if needs.drunk >= ss13_reagents::metabolism::TIPSY_THRESHOLD {
             let (change, description) = drunk_mood(needs.drunk);
+            let (change, description) =
+                crate::personality::drunk_mood(self.personalities, change, description);
             let existing = self
                 .events
                 .iter()
@@ -610,7 +627,6 @@ pub fn add_event(world: &mut World, mob: Entity, category: &str, event: &MoodEve
 /// tg `/datum/mood_event/food` (`quality_food`) of a food of `quality` (1-7): `ceil(1 + 1.5 *
 /// quality)` for 5 minutes times `timeout_mod`; another one keeps the stronger change and the
 /// longer time (`be_refreshed`).
-// shortcut: no personalities (ascetic, gourmand).
 pub fn add_food_event(world: &mut World, mob: Entity, quality: i32, label: &str, timeout_mod: f32) {
     const CATEGORY: &str = "quality_food";
     const ID: &str = "food";
@@ -619,7 +635,7 @@ pub fn add_food_event(world: &mut World, mob: Entity, quality: i32, label: &str,
     let Some(mut mood) = world.get_mut::<Mood>(mob) else {
         return;
     };
-    let change = (1.0 + 1.5 * quality as f32).ceil();
+    let change = crate::personality::food_mood_change(mood.personalities, quality);
     if let Some(existing) = mood
         .events
         .iter_mut()
@@ -679,6 +695,8 @@ pub fn on_hug(world: &mut World, helper: Entity, target: Entity) {
     } else {
         add_event(world, target, "hug", &events::WARMHUG);
     }
+    // Aloof's `COMSIG_CARBON_HELP_ACT`.
+    crate::personality::uncomfortable_touch(world, target);
     if crate::quirks::has(world, helper, Quirk::Friendly) {
         let sanity = sanity(world, helper);
         if sanity >= SANITY_GREAT {
@@ -753,7 +771,9 @@ pub fn send_death_moodlets(world: &mut World, dead: Entity, pos: TilePos) {
             continue;
         }
         if let Some(mut mood) = world.get_mut::<Mood>(viewer) {
-            mood.add_instance(now, see_death_event(&descriptor));
+            let mut event = see_death_event(&descriptor);
+            crate::personality::see_death(mood.personalities, &mut event, &descriptor);
+            mood.add_instance(now, event);
         }
     }
 }

@@ -5,28 +5,28 @@
 Подсистема `SSpersonalities` хранит синглтоны; преференс `personality` применяет выбранные личности к человеку при спавне; группы (`groups`) запрещают несовместимые сочетания.
 
 - **Код:** [`/datum/personality`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/personality/_personality.dm#L13), [`PROCESSING_SUBSYSTEM_DEF(personalities)`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/processing/personality.dm#L1), [`/datum/preference/personality`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/personality/personality_preference.dm#L1), [`_personality_groups.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/personality/_personality_groups.dm#L1); tgui: [`PersonalityPage.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/PreferencesMenu/CharacterPreferences/PersonalityPage.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ `crate::personality`: все 40 личностей с ключами, группами и текстами; `PersonalityPrefs` в лобби (`handle_personality`/`clear_personalities`, лимит 5, группы), применение при входе в раунд (`assign`), биты на `Mood` (`HAS_PERSONALITY`), тик `SSpersonalities` раз в 3 с.
 
 ### Общие реакции: апатичный, чувствительный, стойкий, угрюмый, надеющийся, пессимист, причудливый, сноб
 Ослабляют или усиливают все муд-события, сдвигают базовое настроение.
 
 - **Код:** [`/datum/personality/apathetic`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/personality/reaction_generic.dm#L1), [`/datum/personality/sensitive`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/personality/reaction_generic.dm#L16), [`/datum/personality/snob`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/personality/reaction_generic.dm#L97)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ модификаторы силы и длительности муд-событий (апатичный, чувствительный, стойкий, задумчивый, оптимист, пессимист), эксцентричный через флаг `MOOD_EVENT_WHIMSY` (хонк). 🟡 Сноб: только сама личность — красота комнат (`update_beauty`) относится к группе муда.
 
 ### Досуг и работа: игрок, бездельник, трудолюбивый, атлетичный, эрудит, необразованный, духовный, отдел, лояльный NT
 Муд от азартных игр, отлынивания, работы, тренировок, книг, религии, своего отдела и корпорации.
 
 - **Код:** [`/datum/personality/gambler`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/personality/reaction_to_recreation.dm#L1), [`/datum/personality/slacking`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/personality/reaction_to_recreation.dm#L7), [`/datum/personality/industrious`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/personality/reaction_to_recreation.dm#L74), [`/datum/personality/department`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/personality/reaction_to_job.dm#L1), [`/datum/personality/nt`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/personality/reaction_to_nt.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ ленивый/старательный (зоны отдыха и отдела), аналитик/импульсивный (зоны отдела), лояльный/разочарованный (знаки НТ в поле зрения), эрудит/необразованный (`book_nerd`), духовный (`MOOD_EVENT_SPIRITUAL` ×0.2 для остальных). 🟡 Реакции игрока/трудолюбивого (аркады, карты, слоты) и атлетичного (тренажёры) ждут своих событий в их группах.
 
 ### Отношения к людям: интроверт, экстраверт, параноик, чёрствый, сострадательный, эмпатичный, мизантроп, отстранённый
 Муд от толпы или одиночества, от помощи другим и чужих страданий.
 
 - **Код:** [`/datum/personality/introvert`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/personality/reaction_to_groups.dm#L1), [`/datum/personality/extrovert`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/personality/reaction_to_groups.dm#L10), [`/datum/personality/callous`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/personality/reaction_to_others.dm#L1), [`/datum/personality/compassionate`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/personality/reaction_to_others.dm#L9)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ интроверт/экстраверт (бонус библиотеки/бара), параноик (люди в радиусе 5), чёрствый и сострадательный (смерть на глазах, объятия), отстранённый (объятия, `bad_touch` при помощи и тяге). 🟡 Эмпатичный/мизантроп — эмпатические мутации (группа мутаций); «помог встать» не портировано.
 
 ### Животные, искусство, страх, еда
 Любитель животных/кошек/собак или их недруг; творческий и лишённый воображения (реакция на искусство); храбрый и трусливый; аскет, гурман, трезвенник, любитель выпить.
 
 - **Код:** [`/datum/personality/animal_friend`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/personality/reaction_to_animals.dm#L1), [`/datum/personality/creative`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/personality/reaction_to_art.dm#L1), [`/datum/personality/brave`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/personality/reaction_to_fear.dm#L1), [`/datum/personality/gourmand`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/personality/reaction_to_food.dm#L9), [`/datum/personality/teetotal`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/personality/reaction_to_food.dm#L17)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ храбрый/трусливый (`MOOD_EVENT_FEAR` ×0.75/×1.25, множитель страха `fearful`), аскет/гурман (`calculate_mood_change`, `MOOD_EVENT_FOOD`), трезвенник/любитель выпить (`drunk`), творческий/лишённый воображения (`MOOD_EVENT_ART`). 🟡 Реакции на животных (поглаживание, смерть питомцев) и сами арт-события ждут своих механик; `drunk_after` любителя выпить — с опьянением.

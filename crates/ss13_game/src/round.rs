@@ -47,6 +47,8 @@ use crate::lobby::{
     REMOVE_QUIRK, SET_ANTAGS, SET_APPEARANCE, SET_JOB_PREFERENCE, SET_PREFERENCE,
     TOGGLE_ANTAG_ROLL, TOGGLE_READY,
 };
+use crate::lobby::{CLEAR_PERSONALITIES, HANDLE_PERSONALITY, PersonalityInfo};
+use crate::personality::PersonalityPrefs;
 use crate::quirks::QuirkPrefs;
 use crate::server::{MoveQueue, Players, SpawnPoints};
 
@@ -297,6 +299,26 @@ fn build_prefs_static(world: &mut World) {
             .collect(),
         default_quirk_balance: crate::quirks::DEFAULT_QUIRK_POINTS,
         max_positive_quirks: crate::quirks::MAX_POSITIVE_QUIRKS as u8,
+        personalities: crate::personality::PERSONALITIES
+            .iter()
+            .map(|p| PersonalityInfo {
+                key: p.key.to_owned(),
+                name: p.name.to_owned(),
+                description: p.desc.to_owned(),
+                pos_gameplay_description: p.pos.to_owned(),
+                neg_gameplay_description: p.neg.to_owned(),
+                neut_gameplay_description: p.neut.to_owned(),
+                groups: p.groups.iter().map(|g| g.key().to_owned()).collect(),
+            })
+            .collect(),
+        // tg: -1 when the limit is not below the number of personalities.
+        max_personalities: if crate::personality::MAX_PERSONALITIES
+            >= crate::personality::PERSONALITIES.len()
+        {
+            -1
+        } else {
+            crate::personality::MAX_PERSONALITIES as i32
+        },
         species: crate::human::roundstart_species()
             .into_iter()
             .map(|s| s.def().name.to_owned())
@@ -331,6 +353,7 @@ pub(crate) fn new_player(world: &mut World, client: Entity) {
         AntagPreferences::default(),
         AppearancePrefs::random(client.to_bits()),
         QuirkPrefs::default(),
+        PersonalityPrefs::default(),
         board,
         AlwaysState,
     ));
@@ -879,6 +902,10 @@ pub enum PrefAct {
     RandomAppearance,
     /// tg `give_quirk` (true) / `remove_quirk` (false) by name.
     Quirk(String, bool),
+    /// tg `handle_personality` by savefile key.
+    Personality(String),
+    /// tg `clear_personalities`.
+    ClearPersonalities,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -902,6 +929,7 @@ impl ServerUi for JobPrefsUi {
         &'static AppearancePrefs,
         &'static NewPlayer,
         &'static QuirkPrefs,
+        &'static PersonalityPrefs,
     );
     type UserParam = Option<Res<'static, Jobs>>;
     type Act = PrefAct;
@@ -914,19 +942,21 @@ impl ServerUi for JobPrefsUi {
             &AppearancePrefs,
             &NewPlayer,
             &QuirkPrefs,
+            &PersonalityPrefs,
         ),
     ) -> JobPrefsStatic {
         (*board.0).clone()
     }
 
     fn data(
-        (prefs, _, antag, look, _, quirks): (
+        (prefs, _, antag, look, _, quirks, personalities): (
             &JobPreferences,
             &PrefsBoard,
             &AntagPreferences,
             &AppearancePrefs,
             &NewPlayer,
             &QuirkPrefs,
+            &PersonalityPrefs,
         ),
         _: Entity,
         jobs: &Option<Res<Jobs>>,
@@ -957,6 +987,7 @@ impl ServerUi for JobPrefsUi {
             },
             quirks: quirks.0.clone(),
             quirk_balance: quirks.balance(),
+            personalities: personalities.0.clone(),
         }
     }
 
@@ -1010,6 +1041,11 @@ impl ServerUi for JobPrefsUi {
                 let quirk = params.get("quirk").ok_or_else(|| bad("quirk: missing"))?;
                 Ok(PrefAct::Quirk(quirk.to_owned(), action == GIVE_QUIRK))
             }
+            HANDLE_PERSONALITY => params
+                .get("personality_type")
+                .map(|key| PrefAct::Personality(key.to_owned()))
+                .ok_or_else(|| bad("personality_type: missing")),
+            CLEAR_PERSONALITIES => Ok(PrefAct::ClearPersonalities),
             _ => Err(UiReject::UnknownAction),
         }
     }
@@ -1035,6 +1071,7 @@ pub(crate) fn return_to_lobby(world: &mut World, client: Entity) {
             AntagPreferences::default(),
             AppearancePrefs::random(client.to_bits()),
             QuirkPrefs::default(),
+            PersonalityPrefs::default(),
         ));
     }
     entity.insert((NewPlayer::default(), AlwaysState));
@@ -1135,6 +1172,7 @@ fn preference_acts(
         &mut AntagPreferences,
         &mut AppearancePrefs,
         &mut QuirkPrefs,
+        &mut PersonalityPrefs,
     )>,
     mut randomized: Local<u64>,
 ) {
@@ -1142,7 +1180,9 @@ fn preference_acts(
         return;
     };
     for act in acts.read() {
-        let Ok((mut prefs, mut antag, mut look, mut quirks)) = prefs.get_mut(act.client) else {
+        let Ok((mut prefs, mut antag, mut look, mut quirks, mut personalities)) =
+            prefs.get_mut(act.client)
+        else {
             continue;
         };
         match &act.act {
@@ -1168,6 +1208,16 @@ fn preference_acts(
                 if crate::quirks::change_prefs(&mut new, name, *give) {
                     *quirks = new;
                 }
+            }
+            // `toggle_prefs` refuses unknown keys, a full set and incompatible picks.
+            PrefAct::Personality(key) => {
+                let mut new = (*personalities).clone();
+                if crate::personality::toggle_prefs(&mut new, key) {
+                    personalities.set_if_neq(new);
+                }
+            }
+            PrefAct::ClearPersonalities => {
+                personalities.set_if_neq(PersonalityPrefs::default());
             }
             PrefAct::RandomAppearance => {
                 *randomized += 1;

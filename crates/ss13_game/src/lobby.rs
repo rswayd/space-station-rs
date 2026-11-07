@@ -138,10 +138,29 @@ pub struct JobPrefsStatic {
     /// tg `default_quirk_balance`, `max_positive_quirks`.
     pub default_quirk_balance: i32,
     pub max_positive_quirks: u8,
+    /// tg `personalities` (constant data), in menu order (`crate::personality::PERSONALITIES`).
+    pub personalities: Vec<PersonalityInfo>,
+    /// tg `max_personalities` (-1: no limit below the number of personalities).
+    pub max_personalities: i32,
     /// The selectable species' names (`crate::human::roundstart_species`) and the mutant colors
     /// of species with `TRAIT_MUTANT_COLORS`.
     pub species: Vec<String>,
     pub mutant_colors: Vec<[u8; 3]>,
+}
+
+/// One personality of the menu (tg `personalities` entry); `key` is its savefile key, sent back
+/// by `handle_personality`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PersonalityInfo {
+    pub key: String,
+    pub name: String,
+    pub description: String,
+    /// "" for none.
+    pub pos_gameplay_description: String,
+    pub neg_gameplay_description: String,
+    pub neut_gameplay_description: String,
+    /// `PERSONALITY_GROUP_*` values: personalities sharing one exclude each other.
+    pub groups: Vec<String>,
 }
 
 /// One quirk of the menu (tg `quirk_info` entry).
@@ -180,6 +199,8 @@ pub struct JobPrefsData {
     pub quirks: Vec<String>,
     /// The points left: `default_quirk_balance` minus the chosen quirks' values.
     pub quirk_balance: i32,
+    /// tg `selected_personalities`: the chosen personalities' keys.
+    pub personalities: Vec<String>,
 }
 
 impl JobPrefsData {
@@ -202,6 +223,11 @@ pub const SET_ANTAGS: &str = "set_antags";
 /// tg `preference_middleware/quirks` `give_quirk`/`remove_quirk`: `{ quirk }` (a quirk name).
 pub const GIVE_QUIRK: &str = "give_quirk";
 pub const REMOVE_QUIRK: &str = "remove_quirk";
+
+/// tg `preference_middleware/personality` `handle_personality`: `{ personality_type }` (here a
+/// savefile key, not a typepath) toggles it; `clear_personalities` drops them all.
+pub const HANDLE_PERSONALITY: &str = "handle_personality";
+pub const CLEAR_PERSONALITIES: &str = "clear_personalities";
 
 /// `act('set_appearance', { key, value })`: `key` one of the `APPEARANCE_*` keys, `value` an index
 /// (`female`: "1"/"0"; `hair_style`: empty for bald).
