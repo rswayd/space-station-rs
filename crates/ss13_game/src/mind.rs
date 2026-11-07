@@ -25,6 +25,8 @@
 use bevy::prelude::*;
 use ss13_net::server::ClientToken;
 
+use ss13_shared::admin::{AntagRole, MindPanel};
+
 use crate::antag::AntagHudData;
 use crate::antag::brother::{Brother, BrotherTeam};
 use crate::antag::objectives::{Objective, ObjectiveKind};
@@ -142,9 +144,13 @@ pub fn transfer(world: &mut World, from: Entity, to: Entity) {
     move_component::<MindData>(world, from, to);
     move_component::<crate::addictions::Addictions>(world, from, to);
     move_component::<crate::skills::Skills>(world, from, to);
+    // The antag HUD is shared with the datums that stay on the body: it goes only with these.
+    let hud = world.get::<Traitor>(from).is_some() || world.get::<Brother>(from).is_some();
     move_component::<Traitor>(world, from, to);
     move_component::<Brother>(world, from, to);
-    move_component::<AntagHudData>(world, from, to);
+    if hud {
+        move_component::<AntagHudData>(world, from, to);
+    }
     // Cost: one pass over the traitors and brother teams per transfer (rare).
     for mut traitor in world.query::<&mut Traitor>().iter_mut(world) {
         retarget(&mut traitor.objectives, from, to);
@@ -218,6 +224,113 @@ pub fn desensitized_level(world: &World, viewer: Entity) -> f32 {
         .map_or(1.0, |m| m.desensitized_level.max(DESENSITIZED_MINIMUM))
 }
 
+/// tg `traitor_panel` of the mind on `mob` (`ckey` is the admin's to fill).
+pub fn panel(world: &World, mob: Entity) -> MindPanel {
+    let mut lines = Vec::new();
+    let body = world
+        .get::<Name>(mob)
+        .map(|n| n.to_string())
+        .unwrap_or_default();
+    match world.get::<MindData>(mob) {
+        Some(mind) => {
+            lines.push(format!("Разум: {} (ключ {})", mind.name, mind.key));
+            lines.push(format!("Тело: {body}"));
+            lines.push(format!(
+                "Увидено смертей: {}, десенсибилизация {:.3}",
+                mind.deaths_witnessed, mind.desensitized_level
+            ));
+            lines.push(match mind.last_death {
+                Some(t) => format!("Последняя смерть: {t:.0} с"),
+                None => "Не умирал".to_owned(),
+            });
+        }
+        None => lines.push(format!("Тело без разума: {body}")),
+    }
+    if let Some(addictions) = world.get::<crate::addictions::Addictions>(mob) {
+        for (a, points) in &addictions.points {
+            let active = if addictions.cycle(*a).is_some() {
+                ", зависимость"
+            } else {
+                ""
+            };
+            lines.push(format!(
+                "Очки зависимости {}: {points:.0}{active}",
+                a.name()
+            ));
+        }
+    }
+    let mut antag = Vec::new();
+    let mut objectives = Vec::new();
+    if let Some(t) = world.get::<Traitor>(mob) {
+        antag.push(crate::antag::ROLE_TRAITOR.to_owned());
+        objectives.extend(t.objectives.iter().map(|o| o.explanation.clone()));
+    }
+    if let Some(b) = world.get::<Brother>(mob) {
+        antag.push(crate::antag::ROLE_BROTHER.to_owned());
+        objectives.extend(b.objectives.iter().map(|o| o.explanation.clone()));
+    }
+    MindPanel {
+        ckey: String::new(),
+        lines,
+        antag,
+        objectives,
+    }
+}
+
+/// tg `obj_delete`: the objective at `index` of [`panel`]'s list. False when there is none.
+pub fn remove_objective(world: &mut World, mob: Entity, index: usize) -> bool {
+    let traitor = world.get::<Traitor>(mob).map_or(0, |t| t.objectives.len());
+    if index < traitor {
+        world
+            .get_mut::<Traitor>(mob)
+            .expect("counted above")
+            .objectives
+            .remove(index);
+        return true;
+    }
+    match world.get_mut::<Brother>(mob) {
+        Some(mut b) if index - traitor < b.objectives.len() => {
+            b.objectives.remove(index - traitor);
+            true
+        }
+        _ => false,
+    }
+}
+
+/// tg `remove_antag_datum` for the traitor and the blood brother: the datum goes, the brother
+/// leaves its team, and the antag HUD goes when it is this role's. False when not that role.
+pub fn remove_antag(world: &mut World, mob: Entity, role: AntagRole) -> bool {
+    let icon = match role {
+        AntagRole::Traitor => {
+            if world.entity_mut(mob).take::<Traitor>().is_none() {
+                return false;
+            }
+            "traitor"
+        }
+        AntagRole::Brother => {
+            let Some(brother) = world.entity_mut(mob).take::<Brother>() else {
+                return false;
+            };
+            if let Some(mut team) = world.get_mut::<BrotherTeam>(brother.team) {
+                team.members.retain(|&m| m != mob);
+            }
+            "brother"
+        }
+        _ => return false,
+    };
+    let own = world
+        .get_resource::<ss13_mapload::IconIndex>()
+        .and_then(|index| index.get("icons/mob/huds/antag_hud.dmi", icon));
+    if world
+        .get::<AntagHudData>(mob)
+        .is_some_and(|h| h.hud_icon == own)
+    {
+        world.entity_mut(mob).remove::<AntagHudData>();
+    }
+    info!("{mob} is no longer {icon}");
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -270,6 +383,17 @@ mod tests {
         let other = world.spawn_empty().id();
         transfer(&mut world, old, other);
         assert!(world.get::<MindData>(new).is_some());
+
+        // The admin panel: the hunter's objective listed, then removed with the datum.
+        let p = panel(&world, hunter);
+        assert_eq!(p.antag, vec![crate::antag::ROLE_TRAITOR.to_owned()]);
+        assert_eq!(p.objectives.len(), 1);
+        assert!(!remove_objective(&mut world, hunter, 1));
+        assert!(remove_objective(&mut world, hunter, 0));
+        assert!(panel(&world, hunter).objectives.is_empty());
+        assert!(remove_antag(&mut world, hunter, AntagRole::Traitor));
+        assert!(!remove_antag(&mut world, hunter, AntagRole::Traitor));
+        assert!(panel(&world, hunter).antag.is_empty());
     }
 
     fn human() -> crate::human::HumanLook {

@@ -43,7 +43,9 @@ use ss13_net::server::{
 use ss13_proto::Prototypes;
 use ss13_shared::TilePos;
 use ss13_shared::admin::rights::*;
-use ss13_shared::admin::{AdminRequest, AdminResponse, AntagRole, PlayerEntry, PlayerState, Smite};
+use ss13_shared::admin::{
+    AdminRequest, AdminResponse, AntagRole, MindAct, PlayerEntry, PlayerState, Smite,
+};
 use ss13_shared::chat::{ChatChannel, ChatMessage, ChatSegment, MAX_MESSAGE_LEN, Span};
 
 use crate::rights::{
@@ -555,6 +557,8 @@ pub fn required_rights(request: &AdminRequest) -> Option<u32> {
         | Rejuvenate(_)
         | Announce { .. }
         | MakeAntag { .. }
+        | MindPanel(_)
+        | MindAct { .. }
         | Dynamic
         | ForceMidround(_)
         | SetSecurityLevel(_)
@@ -1036,6 +1040,40 @@ fn answer(world: &mut World, client: Entity, request: AdminRequest) -> AnswerRes
             admin_action(world, &format!("{key} has made {target_key} {what}."));
             done(format!("{target_key} is {what}"))
         }
+        AdminRequest::MindPanel(target) => mind_panel(world, &target),
+        AdminRequest::MindAct { ckey: target, act } => {
+            let (target_client, mob) = target_mob(world, &target)?;
+            let body = mind_mob(world, mob);
+            let target_key = key_name(world, target_client);
+            match act {
+                MindAct::RemoveAntag(role) => {
+                    if !ss13_game::mind::remove_antag(world, body, role) {
+                        return Err(format!(
+                            "{target_key} не {role:?} (снимаются предатель и брат)."
+                        ));
+                    }
+                    admin_action(
+                        world,
+                        &format!("{key} has removed {role:?} from {target_key}."),
+                    );
+                }
+                MindAct::RemoveObjective(index) => {
+                    if !ss13_game::mind::remove_objective(world, body, index as usize) {
+                        return Err("Нет такой цели.".into());
+                    }
+                    admin_action(
+                        world,
+                        &format!("{key} removed an objective #{} of {target_key}.", index + 1),
+                    );
+                }
+                MindAct::AnnounceObjectives => {
+                    if !ss13_game::antag::traitor::announce_objectives_of(world, body) {
+                        return Err(format!("У {target_key} нет целей предателя."));
+                    }
+                }
+            }
+            mind_panel(world, &target)
+        }
         AdminRequest::Dynamic => Ok(Some(AdminResponse::Dynamic(dynamic_report(world)))),
         AdminRequest::AdminList => Ok(Some(crate::verbs::admin_list(world))),
         AdminRequest::SetAdminRank { ckey: target, rank } => {
@@ -1176,6 +1214,24 @@ fn check_greater(world: &World, actor: Entity, target_ckey: &str) -> Result<(), 
 
 pub(crate) fn target_client(world: &mut World, target: &str) -> Result<Entity, String> {
     client_by_ckey(world, target).ok_or_else(|| format!("Игрок {} не в сети.", ckey(target)))
+}
+
+/// The mob holding the mind of `mob`: a ghost's body (also a DNR ghost's), else `mob`.
+fn mind_mob(world: &World, mob: Entity) -> Entity {
+    let dnr = world.get::<ss13_game::mind::DnrBody>(mob).map(|d| d.0);
+    world
+        .get::<Ghost>(mob)
+        .and_then(|g| g.body.or(dnr))
+        .filter(|&b| world.get_entity(b).is_ok())
+        .unwrap_or(mob)
+}
+
+/// tg `traitor_panel` of the player.
+fn mind_panel(world: &mut World, target: &str) -> AnswerResult {
+    let (_, mob) = target_mob(world, target)?;
+    let mut panel = ss13_game::mind::panel(world, mind_mob(world, mob));
+    panel.ckey = ckey(target);
+    Ok(Some(AdminResponse::Mind(panel)))
 }
 
 /// The target's client and its current mob (a ghost included).
@@ -1466,6 +1522,17 @@ mod tests {
             Some(R_ADMIN | R_FUN)
         );
         assert_eq!(required_rights(&TimeScale(1.0)), Some(R_DEBUG));
+        assert_eq!(
+            required_rights(&AdminRequest::MindPanel("a".into())),
+            Some(R_ADMIN)
+        );
+        assert_eq!(
+            required_rights(&AdminRequest::MindAct {
+                ckey: "a".into(),
+                act: ss13_shared::admin::MindAct::AnnounceObjectives
+            }),
+            Some(R_ADMIN)
+        );
     }
 
     #[test]

@@ -498,6 +498,9 @@ fn record(
             AdminResponse::Dynamic(lines) => {
                 observed.admin_lists.insert("dynamic".into(), json(lines));
             }
+            AdminResponse::Mind(panel) => {
+                observed.admin_lists.insert("mind".into(), json(panel));
+            }
             AdminResponse::Done(text) => observed.admin_replies.push(format!("ok: {text}")),
             AdminResponse::Refused(text) => {
                 observed.admin_replies.push(format!("refused: {text}"));

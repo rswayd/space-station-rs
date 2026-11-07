@@ -36,4 +36,4 @@
 
 - **Код:** [`/datum/mind/Topic()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/mind/_mind.dm#L236)
 - **BandaStation:** [`_mind.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/mind/_mind.dm#L338) — уведомление антаг-операций при замене/удалении цели админом
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `AdminRequest::MindPanel`/`MindAct` (`crates/ss13_admin/src/server.rs`, кнопка «Mind» в списке игроков): панель разума (ключ, тело, смерти, зависимости, антаги, цели), снятие предателя/брата, удаление цели, объявление целей; выдача антагов — существующий `MakeAntag`. Логика — `crates/ss13_game/src/mind.rs` `panel`/`remove_objective`/`remove_antag`, юнит-тест там же. Нет: смены должности, добавления/редактирования целей, аплинка, снятия остальных антагов; уведомление антаг-операций BandaStation — см. ../antagonists/
