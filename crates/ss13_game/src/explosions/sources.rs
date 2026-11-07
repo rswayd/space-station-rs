@@ -261,6 +261,14 @@ pub fn item_destruction(world: &mut World, item: Entity) {
         );
         let power =
             (tank.volume * (tank.pressure() - TANK_FRAGMENT_PRESSURE)) / TANK_FRAGMENT_SCALE;
+        // `COMSIG_ATOM_INTERNAL_EXPLOSION`: a refinery cancels it and keeps no gas
+        // (`assume_air` returns null).
+        if crate::science::anomaly_refinery::internal_explosion(world, item, power as f32) {
+            if let Some(mut t) = world.get_mut::<TankAir>(item) {
+                t.air = ss13_atmos::GasMixture::default();
+            }
+            return;
+        }
         if let Some(pos) = pos {
             info!("a gas tank at {pos:?} exploded with a power of {power}");
             super::dyn_explosion(world, pos, power as f32, Some(0.0), Some(1.5), false);

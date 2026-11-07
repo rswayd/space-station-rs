@@ -24,19 +24,19 @@
 Метель охлаждает тела снаружи; вариант `forever_storm` не прекращается.
 
 - **Код:** [`/datum/weather/snow_storm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/weather/weather_types/snow_storm.dm#L1), [`/datum/weather/snow_storm/forever_storm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/weather/weather_types/snow_storm.dm#L47)
-- **Статус в ss13-rs:** ❌ нет — каркас погоды есть (`crates/ss13_game/src/weather.rs`), но нет Ледяной Луны и уровней с `ZTRAIT_SNOWSTORM`
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/weather.rs` (`WeatherKind::SnowStorm`): сообщения, звук начала, длительности tg; раз в секунду тянет температуру тела к 140 K сквозь одежду (шагами); запускается погодной аномалией; нет Ледяной Луны и уровней с `ZTRAIT_SNOWSTORM`, звука конца, бесконечного варианта
 
 ### Песчаная буря
 Песчаный шторм на песчаных планетах ранит незащищённых; безвредный вариант только засыпает местность.
 
 - **Код:** [`/datum/weather/sand_storm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/weather/weather_types/sand_storm.dm#L2), [`/datum/weather/sand_storm/harmless`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/weather/weather_types/sand_storm.dm#L52)
-- **Статус в ss13-rs:** ❌ нет — каркас погоды есть (`crates/ss13_game/src/weather.rs`), но нет песчаных планет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/weather.rs` (`WeatherKind::SandStorm`): сообщения, сирена, длительности tg, 5 урона в секунду; запускается погодной аномалией; нет песчаных планет, безвредного варианта и звуков в зонах
 
 ### Дождь и его варианты
 Ливень с частицами мочит всех снаружи; варианты: кровавый, плазменный, «пережаренный», кислотный и волшебный (событие мага). Может сопровождаться грозой с молниями.
 
 - **Код:** [`/datum/weather/particle/rain_storm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/weather/weather_types/rain_storm.dm#L1), [`/datum/weather/particle/rain_storm/blood`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/weather/weather_types/rain_storm.dm#L92), [`/datum/weather/particle/rain_storm/plasma`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/weather/weather_types/rain_storm.dm#L98), [`/datum/weather/particle/rain_storm/acid`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/weather/weather_types/rain_storm.dm#L108), [`/datum/weather/particle/rain_storm/wizard`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/weather/weather_types/rain_storm.dm#L130)
-- **Статус в ss13-rs:** ❌ нет — каркас погоды есть (`crates/ss13_game/src/weather.rs`), но нет уровней с дождём, погодных реагентов и грозы; волшебный дождь — событие мага
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/weather.rs` (`WeatherKind::RainStorm`, `thunder_act_turf`): сообщения и длительности tg, гроза при заданном шансе (удар током 50, звук, огонь); запускается погодной аномалией; нет уровней с дождём, погодных реагентов (мытьё водой) и частиц; волшебный дождь — событие мага
 
 ### Радиационный шторм
 Станционная погода: тревога, все прячутся в техтоннелях; в открытых зонах облучает (мутации, токсины). Вариант `nebula` для туманностей станционного трейта.

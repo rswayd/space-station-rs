@@ -78,6 +78,7 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/assembly/signaler/anomaly/bioscrambler",
     "/obj/item/assembly/signaler/anomaly/dimensional",
     "/obj/item/assembly/signaler/anomaly/ectoplasm",
+    "/obj/item/assembly/signaler/anomaly/weather",
     "/obj/structure/ghost_portal",
     "/obj/effect/decal/cleanable/greenglow/ecto",
     "/obj/effect/decal/cleanable/dirt/dust",

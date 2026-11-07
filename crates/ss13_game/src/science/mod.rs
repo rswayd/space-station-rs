@@ -22,6 +22,7 @@ use ss13_tgui::interfaces::vending::ProductIcon;
 
 #[cfg(feature = "server")]
 pub mod analyzer;
+pub mod anomaly_refinery;
 #[cfg(feature = "server")]
 pub mod autolathe;
 pub mod bitrunning;
@@ -74,6 +75,7 @@ impl bevy::prelude::Plugin for ScienceServerPlugin {
             exodrone::server::ExodronePlugin,
             bitrunning::server::BitrunningServerPlugin,
             quantum_pad::QuantumPadPlugin,
+            anomaly_refinery::AnomalyRefineryPlugin,
         ));
     }
 }

@@ -66,6 +66,8 @@ pub const HALLUCINATION: &str = "Anomaly: Hallucination";
 pub const BIOSCRAMBLER: &str = "Anomaly: Bioscrambler";
 pub const DIMENSIONAL: &str = "Anomaly: Dimensional";
 pub const ECTOPLASM: &str = "Anomaly: Ectoplasmic Outburst";
+pub const WEATHER: &str = "Anomaly: Weather";
+pub const WEATHER_THUNDERING: &str = "Anomaly: Thundering Weather";
 
 /// `ANOMALY_COUNTDOWN_TIMER`.
 const LIFESPAN_SECS: f64 = 120.0;
@@ -132,10 +134,11 @@ pub enum AnomalyKind {
     Bioscrambler,
     Dimensional,
     Ectoplasm,
+    Weather,
 }
 
 impl AnomalyKind {
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 10] = [
         Self::Flux,
         Self::Bluespace,
         Self::Grav,
@@ -145,6 +148,7 @@ impl AnomalyKind {
         Self::Bioscrambler,
         Self::Dimensional,
         Self::Ectoplasm,
+        Self::Weather,
     ];
 
     /// The core's `anomaly_type`: none for the base core and the cores of unported anomalies.
@@ -165,6 +169,7 @@ impl AnomalyKind {
             Self::Bioscrambler => "/obj/effect/anomaly/bioscrambler",
             Self::Dimensional => "/obj/effect/anomaly/dimensional",
             Self::Ectoplasm => "/obj/effect/anomaly/ectoplasm",
+            Self::Weather => "/obj/effect/anomaly/weather",
         }
     }
 
@@ -180,6 +185,7 @@ impl AnomalyKind {
             Self::Bioscrambler => "/obj/item/assembly/signaler/anomaly/bioscrambler",
             Self::Dimensional => "/obj/item/assembly/signaler/anomaly/dimensional",
             Self::Ectoplasm => "/obj/item/assembly/signaler/anomaly/ectoplasm",
+            Self::Weather => "/obj/item/assembly/signaler/anomaly/weather",
         }
     }
 
@@ -187,7 +193,7 @@ impl AnomalyKind {
     pub fn max_cores(self) -> u32 {
         match self {
             Self::Bluespace | Self::Vortex => 3,
-            Self::Flux => 5,
+            Self::Flux | Self::Weather => 5,
             Self::Grav => 6,
             Self::Pyro
             | Self::Hallucination
@@ -224,6 +230,7 @@ impl AnomalyKind {
             Self::Bioscrambler => "bioscrambler anomaly",
             Self::Dimensional => "dimensional anomaly",
             Self::Ectoplasm => "ectoplasm anomaly",
+            Self::Weather => "weather anomaly",
         }
     }
 
@@ -238,6 +245,8 @@ impl AnomalyKind {
             Self::Bioscrambler => ("icons/effects/anomalies.dmi", "bioscrambler"),
             Self::Dimensional => ("icons/effects/anomalies.dmi", "dimensional"),
             Self::Ectoplasm => ("icons/effects/anomalies.dmi", "ectoplasm"),
+            // The base `vortex` state (tg inverts its colors).
+            Self::Weather => ("icons/effects/anomalies.dmi", "vortex"),
         }
     }
 
@@ -251,7 +260,12 @@ impl AnomalyKind {
             Self::Bluespace | Self::Hallucination | Self::Bioscrambler | Self::Dimensional => {
                 (3, 1)
             }
-            Self::Flux | Self::Grav | Self::Pyro | Self::Vortex | Self::Ectoplasm => (1, 15),
+            Self::Flux
+            | Self::Grav
+            | Self::Pyro
+            | Self::Vortex
+            | Self::Ectoplasm
+            | Self::Weather => (1, 15),
         }
     }
 
@@ -261,6 +275,7 @@ impl AnomalyKind {
             Self::Bioscrambler => LIFESPAN_SECS * 2.0,
             Self::Dimensional => LIFESPAN_SECS * 20.0,
             Self::Ectoplasm => LIFESPAN_SECS + 2.0,
+            Self::Weather => LIFESPAN_SECS * 2.5,
             _ => LIFESPAN_SECS,
         }
     }
@@ -312,12 +327,37 @@ pub struct CoresMade(pub HashMap<AnomalyKind, u32>);
 
 struct AnomalyEvent {
     kind: AnomalyKind,
+    /// `/obj/effect/anomaly/weather/thundering`.
+    thundering: bool,
     /// `impact_area` and its tiles.
     area: Option<(Entity, Vec<TilePos>)>,
 }
 
 fn event(kind: AnomalyKind) -> Box<dyn RoundEvent> {
-    Box::new(AnomalyEvent { kind, area: None })
+    Box::new(AnomalyEvent {
+        kind,
+        thundering: false,
+        area: None,
+    })
+}
+
+pub fn make_weather(_: &mut World) -> Box<dyn RoundEvent> {
+    event(AnomalyKind::Weather)
+}
+
+pub fn make_weather_thundering(_: &mut World) -> Box<dyn RoundEvent> {
+    Box::new(AnomalyEvent {
+        kind: AnomalyKind::Weather,
+        thundering: true,
+        area: None,
+    })
+}
+
+/// The weather events' `can_spawn_event`: no weather running (`SSweather.processing`).
+pub fn no_weather_running(world: &mut World) -> bool {
+    world
+        .get_resource::<crate::weather::ActiveWeather>()
+        .is_none_or(|w| w.0.is_empty())
 }
 
 pub fn make_flux(_: &mut World) -> Box<dyn RoundEvent> {
@@ -429,6 +469,16 @@ impl RoundEvent for AnomalyEvent {
                 title,
                 &format!("Паранормальный выброс эктоплазмы обнаружен на {HARMFUL_TEXT} {name}."),
             ),
+            AnomalyKind::Weather if self.thundering => super::priority_announce(
+                world,
+                title,
+                &format!("Серьезная барометрическая аномалия обнаружена на {HARMFUL_TEXT} {name}."),
+            ),
+            AnomalyKind::Weather => super::priority_announce(
+                world,
+                title,
+                &format!("Барометрическая аномалия обнаружена на {HARMFUL_TEXT} {name}."),
+            ),
         }
     }
 
@@ -443,7 +493,11 @@ impl RoundEvent for AnomalyEvent {
         let Some(&pos) = world.resource_mut::<EventRng>().pick(&valid) else {
             return;
         };
-        spawn_anomaly(world, self.kind, pos, Some(area));
+        if self.kind == AnomalyKind::Weather {
+            spawn_weather(world, pos, Some(area), self.thundering);
+        } else {
+            spawn_anomaly(world, self.kind, pos, Some(area));
+        }
     }
 }
 
@@ -496,6 +550,9 @@ pub fn spawn_anomaly(
     pos: TilePos,
     area: Option<Entity>,
 ) -> Entity {
+    if kind == AnomalyKind::Weather {
+        return spawn_weather(world, pos, area, false);
+    }
     let e = spawn_one(world, kind, pos, area, false);
     if kind == AnomalyKind::Hallucination {
         for dx in -1..=1 {
@@ -511,6 +568,19 @@ pub fn spawn_anomaly(
             }
         }
     }
+    e
+}
+
+/// `new /obj/effect/anomaly/weather(pos)` (`thundering`: its `thundering` subtype): the
+/// weather starts with it.
+pub fn spawn_weather(
+    world: &mut World,
+    pos: TilePos,
+    area: Option<Entity>,
+    thundering: bool,
+) -> Entity {
+    let e = spawn_one(world, AnomalyKind::Weather, pos, area, false);
+    exotic::start_weather(world, e, thundering);
     e
 }
 
@@ -684,6 +754,7 @@ fn anomaly_effect(world: &mut World, e: Entity, secs: f64) {
         AnomalyKind::Bioscrambler => exotic::bioscrambler_effect(world, e, false),
         AnomalyKind::Dimensional => exotic::dimensional_effect(world, e),
         AnomalyKind::Ectoplasm => exotic::ectoplasm_effect(world, e, pos),
+        AnomalyKind::Weather => {}
     }
 }
 
@@ -1076,6 +1147,7 @@ fn detonate(world: &mut World, e: Entity) {
         AnomalyKind::Bioscrambler => exotic::bioscrambler_effect(world, e, true),
         AnomalyKind::Dimensional => {}
         AnomalyKind::Ectoplasm => exotic::ectoplasm_detonate(world, e, pos),
+        AnomalyKind::Weather => exotic::weather_detonate(world, e, pos),
     }
 }
 
@@ -1111,6 +1183,10 @@ pub fn neutralize(world: &mut World, e: Entity) {
         return;
     };
     let (kind, core) = (a.kind, a.core);
+    // The weather anomaly's `anomalyNeutralize`: its weathers wind down.
+    if kind == AnomalyKind::Weather {
+        crate::weather::wind_down_from(world, e);
+    }
     world.despawn(e);
     let Some(core) = core else {
         return;
@@ -1139,9 +1215,17 @@ pub fn neutralize(world: &mut World, e: Entity) {
         crate::construction::spawn_obj(world, INERT_CORE, pos);
         return;
     }
-    let Some(item) = crate::construction::spawn_obj(world, kind.core_path(), pos) else {
-        return;
-    };
+    spawn_core_on(world, kind, pos, core);
+}
+
+/// A finished core of `kind` on `pos` listening on `core`'s frequency and code.
+fn spawn_core_on(
+    world: &mut World,
+    kind: AnomalyKind,
+    pos: TilePos,
+    core: CoreSignal,
+) -> Option<Entity> {
+    let item = crate::construction::spawn_obj(world, kind.core_path(), pos)?;
     world.flush();
     if let Some(mut asm) = world.get_mut::<crate::assemblies::server::Assembly>(item)
         && let crate::assemblies::server::Device::Signaler {
@@ -1151,6 +1235,14 @@ pub fn neutralize(world: &mut World, e: Entity) {
         *frequency = core.frequency;
         *code = core.code;
     }
+    Some(item)
+}
+
+/// `new anomaly_type(loc)`: a finished core of `kind` on a random free frequency and code (the
+/// refinery's `create_core`). Not counted towards the round's limit here.
+pub fn spawn_core(world: &mut World, kind: AnomalyKind, pos: TilePos) -> Option<Entity> {
+    let core = roll_core(world);
+    spawn_core_on(world, kind, pos, core)
 }
 
 /// tg `analyzer_act` of an anomaly (or of an anomaly core): its core's frequency and code.

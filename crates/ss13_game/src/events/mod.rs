@@ -343,6 +343,21 @@ pub fn controls() -> Vec<EventControl> {
             2,
             anomalies::make_ectoplasm,
         ),
+        needs(
+            anomalies::no_weather_running,
+            c(anomalies::WEATHER, 10, 20.0, 0, 2, anomalies::make_weather),
+        ),
+        needs(
+            anomalies::no_weather_running,
+            c(
+                anomalies::WEATHER_THUNDERING,
+                5,
+                20.0,
+                0,
+                1,
+                anomalies::make_weather_thundering,
+            ),
+        ),
         unfakeable(c(
             mass_hallucination::NAME,
             10,

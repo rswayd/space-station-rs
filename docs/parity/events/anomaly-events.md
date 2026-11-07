@@ -67,4 +67,4 @@
 Погодная аномалия: локальный дождь (или гроза с молниями) в зоне вокруг себя.
 
 - **Код:** [`/datum/round_event_control/anomaly/anomaly_weather`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/anomaly/anomaly_weather.dm#L1), [`/datum/round_event_control/anomaly/anomaly_weather/thundering`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/anomaly/anomaly_weather.dm#L38)
-- **Статус в ss13-rs:** ❌ нет — нет аномалий и погоды
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/events/anomalies.rs`: Weather (вес 10, до 2 раз) и Thundering Weather (вес 5, до 1), только если погода не идёт (`SSweather.processing`), объявление через 15 тиков с текстами tg; нет админского выбора погоды и шанса грозы; сама аномалия — ../science/anomalies.md

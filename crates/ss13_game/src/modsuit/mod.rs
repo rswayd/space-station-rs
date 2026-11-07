@@ -8,6 +8,8 @@
 //! Themes, control unit types and module types come from `ss13-mapload convert`
 //! (`<assets>/modsuits.ron`, [`ss13_mapload::modsuit`]); rerun it after updating.
 
+#[cfg(feature = "server")]
+pub mod anomalock;
 #[cfg(feature = "client")]
 pub mod client;
 #[cfg(feature = "server")]

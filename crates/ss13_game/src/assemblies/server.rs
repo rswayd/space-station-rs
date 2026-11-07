@@ -2145,6 +2145,7 @@ fn infra_acts(world: &mut World, mut cursor: Local<MessageCursor<UiActed<Infrare
 pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<crate::examine::Line>) {
     super::chem_grenade::examine_lines(world, target, lines);
     super::ttv::examine_lines(world, target, lines);
+    crate::modsuit::anomalock::examine_lines(world, target, lines);
     let Some(asm) = world.get::<Assembly>(target) else {
         return;
     };

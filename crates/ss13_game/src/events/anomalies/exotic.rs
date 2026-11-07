@@ -1134,3 +1134,129 @@ mod tests {
         ));
     }
 }
+
+// --- Weather ------------------------------------------------------------------------------
+
+/// `/obj/effect/anomaly/weather`: the weather it started (`active_weathers`).
+#[derive(Component, Debug)]
+pub struct WeatherAnomaly {
+    pub weather: crate::weather::WeatherKind,
+    pub thundering: bool,
+}
+
+const REPULSE: &str = "sound/effects/magic/repulse.ogg";
+
+/// The weather anomaly's `Initialize`: a rain, snow or sand storm (`select_weather`; the
+/// thundering kind always rains, with `THUNDER_CHANCE_HIGH`) over its area and the adjacent ones
+/// found stepping out up to 9 tiles each way (not those over 1.5 times its size), indoors,
+/// telegraphing a fifth of its life, winding down a fifteenth.
+pub fn start_weather(world: &mut World, e: Entity, thundering: bool) {
+    use crate::weather::{Forced, THUNDER_CHANCE_HIGH, WeatherKind, run_weather_forced};
+    let Some(&pos) = world.get::<TilePos>(e) else {
+        return;
+    };
+    let kind = if thundering {
+        WeatherKind::RainStorm
+    } else {
+        let options = [
+            WeatherKind::RainStorm,
+            WeatherKind::SnowStorm,
+            WeatherKind::SandStorm,
+        ];
+        *world
+            .resource_mut::<EventRng>()
+            .pick(&options)
+            .unwrap_or(&WeatherKind::RainStorm)
+    };
+    let areas_res = world.get_resource::<ss13_mapload::Areas>();
+    let impact = world
+        .get::<Anomaly>(e)
+        .and_then(|a| a.area)
+        .or_else(|| areas_res.and_then(|a| a.area_at(pos)));
+    let Some(impact) = impact else {
+        return;
+    };
+    let mut sizes: std::collections::HashMap<Entity, usize> = std::collections::HashMap::new();
+    for (area, _) in crate::events::station_tiles(world) {
+        *sizes.entry(area).or_default() += 1;
+    }
+    let own = sizes.get(&impact).copied().unwrap_or(0) as f64;
+    let mut areas = std::collections::HashSet::from([impact]);
+    for (dx, dy) in [
+        (0, 1),
+        (1, 1),
+        (1, 0),
+        (1, -1),
+        (0, -1),
+        (-1, -1),
+        (-1, 0),
+        (-1, 1),
+    ] {
+        // `find_adjacent_impacted_area`.
+        let area_of = |p: TilePos| {
+            world
+                .get_resource::<ss13_mapload::Areas>()
+                .and_then(|a| a.area_at(p))
+        };
+        let mut next = TilePos::new(pos.x + dx, pos.y + dy, pos.z);
+        let mut limit = 9;
+        while area_of(next) == Some(impact) && limit > 0 {
+            next = TilePos::new(next.x + dx, next.y + dy, next.z);
+            limit -= 1;
+        }
+        if let Some(nearby) = area_of(next)
+            && (sizes.get(&nearby).copied().unwrap_or(0) as f64) <= own * 1.5
+        {
+            areas.insert(nearby);
+        }
+    }
+    let lifespan = world.get::<Anomaly>(e).map_or(0.0, |a| {
+        a.death_time - world.resource::<Time>().elapsed_secs_f64()
+    });
+    let telegraph = lifespan / 5.0;
+    let end = lifespan / 15.0;
+    run_weather_forced(
+        world,
+        kind,
+        vec![pos.z],
+        Forced {
+            areas,
+            telegraph,
+            duration: lifespan - telegraph - end,
+            end,
+            thunder: if thundering { THUNDER_CHANCE_HIGH } else { 0.0 },
+            source: Some(e),
+        },
+    );
+    world.entity_mut(e).insert(WeatherAnomaly {
+        weather: kind,
+        thundering,
+    });
+    if thundering && let Some(mut name) = world.get_mut::<ss13_mapload::DmName>(e) {
+        name.name = "thundering weather anomaly".to_owned();
+    }
+}
+
+/// The weather anomaly's `detonate()`: a repulse throwing everything loose within 5 tiles
+/// 6 tiles away from it.
+// shortcut: mobs are not thrown (no mob throws yet).
+pub(super) fn weather_detonate(world: &mut World, e: Entity, pos: TilePos) {
+    crate::sound::playsound(
+        world,
+        crate::sound::PlaySound::new(pos, REPULSE, 100.0, true),
+    );
+    let near: Vec<Entity> = world
+        .resource::<SpatialIndex>()
+        .in_radius(pos, 5)
+        .filter(|&t| t != e && super::loose_obj(world, t))
+        .collect();
+    for t in near {
+        let Some(&at) = world.get::<TilePos>(t) else {
+            continue;
+        };
+        let (dx, dy) = ((at.x - pos.x).signum(), (at.y - pos.y).signum());
+        let (dx, dy) = if (dx, dy) == (0, 0) { (0, 1) } else { (dx, dy) };
+        let to = TilePos::new(at.x + dx * 6, at.y + dy * 6, at.z);
+        crate::throw::throw_at(world, t, to, 6, 2.0);
+    }
+}
