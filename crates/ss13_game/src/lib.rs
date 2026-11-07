@@ -450,6 +450,8 @@ pub mod security_level;
 pub mod server;
 pub mod service;
 #[cfg(feature = "server")]
+pub mod sheets;
+#[cfg(feature = "server")]
 pub mod shuttle;
 #[cfg(feature = "server")]
 pub mod shuttle_catalog;

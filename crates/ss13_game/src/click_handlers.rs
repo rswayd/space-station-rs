@@ -121,6 +121,7 @@
 //! | 1261 | `weapons` whetstone (`sharpener`), shield bash (`block::bash`) |
 //! | 1300 | `disposals::mail_interaction` |
 //! | 1350 | `botany::grown_interaction` (log cutting, potato batteries) |
+//! | 1369 | `sheets::item_interaction` (a hot tool on burning sheets, rods on titanium in the other hand) |
 //! | 1393 | `guns_special::item_interaction` (a syringe or DNA injector into a syringe gun, a grenade into a grenade launcher) |
 //! | 1400 | `chem::item_interaction` |
 //! | 1450 | `mining::hand_interaction` (modkits, point cards, gibtonite ore) |
@@ -312,6 +313,7 @@
 //! | 3440 | `tank_storage::item_interaction` |
 //! | 3441 | `displaycase::item_interaction` (display cases, their chassis) |
 //! | 3442 | `fireplace::item_interaction` (fuel, lighting, bonfire rods and grill) |
+//! | 3449 | `sheets::item_interaction` (a hot tool on burning sheets, rods on titanium) |
 //! | 3450 | `decor::item_interaction` |
 //! | 3455 | `clothing::item_interaction` |
 //! | 3465 | `effects::teleporters::portal_click` (permanent portals) |

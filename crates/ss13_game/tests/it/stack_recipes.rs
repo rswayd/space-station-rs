@@ -1,7 +1,8 @@
 //! Stack crafting menus over real WebTransport on 127.0.0.1 (`ss13_game::stack_recipes`):
 //! iron in hand opens its recipe list, a bed is built at once on the builder's tile, a second
 //! bed on the same tile is refused (`CRAFT_ONE_PER_TURF`), iron rods ask the multiplier and come
-//! out `2 × multiplier`, a girder takes its 4 s.
+//! out `2 × multiplier`, a girder takes its 4 s. Plasma sheets burn into plasma, rods on titanium
+//! make shuttle rods (`ss13_game::sheets`).
 
 use std::path::{Path, PathBuf};
 
@@ -50,6 +51,27 @@ const TYPES: &str = r##"{
     "/obj/item/stack/sheet/iron": { "parent": "/obj/item/stack/sheet", "declared_vars": {
         "name": "iron", "icon_state": "sheet-metal",
         "merge_type": { "path": "/obj/item/stack/sheet/iron" } } },
+    "/obj/item/stack/sheet/mineral": { "parent": "/obj/item/stack/sheet" },
+    "/obj/item/stack/sheet/mineral/plasma": { "parent": "/obj/item/stack/sheet/mineral",
+        "declared_vars": { "name": "solid plasma", "icon_state": "sheet-metal",
+        "merge_type": { "path": "/obj/item/stack/sheet/mineral/plasma" } } },
+    "/obj/item/stack/sheet/mineral/titanium": { "parent": "/obj/item/stack/sheet/mineral",
+        "declared_vars": { "name": "titanium", "icon_state": "sheet-metal",
+        "merge_type": { "path": "/obj/item/stack/sheet/mineral/titanium" } } },
+    "/obj/item/knife": { "parent": "/obj/item", "declared_vars": { "name": "knife",
+        "sharpness": 1 } },
+    "/obj/item/stack/sheet/animalhide": { "parent": "/obj/item/stack/sheet", "declared_vars": {
+        "name": "hide", "icon_state": "sheet-metal" } },
+    "/obj/item/stack/sheet/animalhide/corgi": { "parent": "/obj/item/stack/sheet/animalhide",
+        "declared_vars": { "merge_type": { "path": "/obj/item/stack/sheet/animalhide/corgi" } } },
+    "/obj/item/stack/sheet/hairlesshide": { "parent": "/obj/item/stack/sheet", "declared_vars": {
+        "icon_state": "sheet-metal", "merge_type": { "path": "/obj/item/stack/sheet/hairlesshide" } } },
+    "/obj/item/stack/sheet/wethide": { "parent": "/obj/item/stack/sheet", "declared_vars": {
+        "icon_state": "sheet-metal", "merge_type": { "path": "/obj/item/stack/sheet/wethide" } } },
+    "/obj/item/stack/rods/shuttle": { "parent": "/obj/item/stack/rods", "declared_vars": {
+        "merge_type": { "path": "/obj/item/stack/rods/shuttle" } } },
+    "/obj/item/stack/rods/shuttle/five": { "parent": "/obj/item/stack/rods/shuttle",
+        "declared_vars": { "amount": 5 } },
     "/obj/item/stack/rods": { "parent": "/obj/item/stack", "declared_vars": {
         "icon_state": "rods", "merge_type": { "path": "/obj/item/stack/rods" } } },
     "/obj/item/card": { "parent": "/obj/item" },
@@ -68,12 +90,17 @@ const TYPES: &str = r##"{
     "/mob/living/carbon": { "parent": "/mob/living" },
     "/mob/living/carbon/human": { "parent": "/mob/living/carbon", "declared_vars": {
         "icon": { "resource": "h.dmi" }, "icon_state": "human_basic" } },
-    "/turf": { "parent": "/atom", "declared_vars": { "icon": { "resource": "t.dmi" } } },
-    "/turf/open": { "parent": "/turf" },
+    "/turf": { "parent": "/atom", "declared_vars": { "icon": { "resource": "t.dmi" },
+        "blocks_air": 0, "can_atmos_pass": 0, "initial_gas_mix": "o2=22;n2=82;TEMP=293.15",
+        "temperature": 293.15 } },
+    "/turf/open": { "parent": "/turf", "declared_vars": { "can_atmos_pass": -1,
+        "planetary_atmos": 0 } },
     "/turf/open/floor": { "parent": "/turf/open", "declared_vars": { "icon_state": "floor" } },
-    "/turf/open/space": { "parent": "/turf/open" },
+    "/turf/open/space": { "parent": "/turf/open", "declared_vars": { "temperature": 2.7,
+        "initial_gas_mix": "TEMP=2.7" } },
     "/turf/open/space/basic": { "parent": "/turf/open/space" },
-    "/turf/closed": { "parent": "/turf", "declared_vars": { "density": 1, "opacity": 1 } },
+    "/turf/closed": { "parent": "/turf", "declared_vars": { "density": 1, "opacity": 1,
+        "blocks_air": 1 } },
     "/turf/closed/wall": { "parent": "/turf/closed", "declared_vars": { "icon_state": "wall" } },
     "/area": { "parent": "/atom" },
     "/area/space": { "parent": "/area" }
@@ -117,6 +144,13 @@ fn fixture_assets() -> PathBuf {
         "/obj/structure/girder",
         IRON,
         "/obj/item/stack/rods",
+        "/obj/item/stack/rods/shuttle/five",
+        "/obj/item/knife",
+        "/obj/item/stack/sheet/animalhide/corgi",
+        "/obj/item/stack/sheet/hairlesshide",
+        "/obj/item/stack/sheet/wethide",
+        "/obj/item/stack/sheet/mineral/plasma",
+        "/obj/item/stack/sheet/mineral/titanium",
         "/turf/open/floor",
         "/turf/closed/wall",
         "/turf/open/space/basic",
@@ -131,8 +165,12 @@ ss13_game::drive_station!(Station, 0);
 
 impl Station {
     fn start() -> Self {
+        Self::start_with(|_| {})
+    }
+
+    fn start_with(setup: impl FnOnce(&mut App)) -> Self {
         let assets = fixture_assets();
-        let mut s = testing::Station::start(fixture_map(&assets, &["map.dmm"]), |_| {});
+        let mut s = testing::Station::start(fixture_map(&assets, &["map.dmm"]), setup);
         s.join("p0", |_| {});
         s.without_mood();
         let s = Self(s);
@@ -146,15 +184,20 @@ impl Station {
 
     /// `amount` iron sheets straight into the active hand.
     fn give_iron(&mut self, amount: u32) -> Entity {
+        self.give(IRON, amount, 0)
+    }
+
+    /// An `amount` stack of `path` straight into the active hand (`other`: 1 for the other one).
+    fn give(&mut self, path: &str, amount: u32, other: usize) -> Entity {
         let mob = self.mob();
         let world = self.server.world_mut();
-        let item = ss13_game::construction::spawn_obj(world, IRON, SPAWN).unwrap();
+        let item = ss13_game::construction::spawn_obj(world, path, SPAWN).unwrap();
         world
             .entity_mut(item)
             .remove::<TilePos>()
             .insert((CarriedBy(mob), Stack { amount }));
         let mut inventory = world.get_mut::<Inventory>(mob).unwrap();
-        let hand = inventory.active;
+        let hand = (inventory.active + other) % 2;
         inventory.hands[hand] = Some(item);
         item
     }
@@ -218,6 +261,17 @@ impl Station {
             .count()
     }
 
+    fn stack_on_floor(&self, path: &str) -> Entity {
+        let world = self.server.world();
+        world
+            .resource::<SpatialIndex>()
+            .on_tile(SPAWN)
+            .iter()
+            .copied()
+            .find(|&e| world.get::<DmItem>(e).is_some_and(|i| i.path == path))
+            .unwrap_or_else(|| panic!("no {path} on the floor"))
+    }
+
     fn amount(&self, stack: Entity) -> u32 {
         self.try_get::<Stack>(stack).map_or(0, |s| s.amount)
     }
@@ -263,4 +317,114 @@ fn iron_builds_beds_girders_and_rods_from_its_menu() {
     assert_eq!(s.count_at("/obj/structure/girder"), 0, "still building");
     s.run_until("the girder", |s| s.count_at("/obj/structure/girder") == 1);
     assert_eq!(s.amount(iron), 13);
+}
+
+#[test]
+fn plasma_sheets_flood_their_tile_when_burnt() {
+    let mut s = Station::start_with(|app| {
+        app.add_plugins(ss13_atmos::AtmosPlugin);
+    });
+    let world = s.server.world_mut();
+    let sheets = ss13_game::construction::spawn_stack(
+        world,
+        "/obj/item/stack/sheet/mineral/plasma",
+        SPAWN,
+        4,
+    )
+    .unwrap();
+    let before = world
+        .resource::<ss13_atmos::Atmos>()
+        .air(SPAWN)
+        .map_or(0.0, |a| a.get(ss13_atmos::GasId::PLASMA));
+    // Not hot enough for a fire: nothing.
+    ss13_game::fire::fire_act(world, sheets, 300.0);
+    assert!(world.get_entity(sheets).is_ok());
+    ss13_game::fire::fire_act(world, sheets, 1000.0);
+    assert!(world.get_entity(sheets).is_err(), "the sheets burn away");
+    let after = world
+        .resource::<ss13_atmos::Atmos>()
+        .air(SPAWN)
+        .map_or(0.0, |a| a.get(ss13_atmos::GasId::PLASMA));
+    assert!(
+        (after - before - 20.0).abs() < 1e-6,
+        "5 moles a sheet: {after}"
+    );
+}
+
+#[test]
+fn five_rods_on_titanium_make_shuttle_rods() {
+    let mut s = Station::start();
+    let rods = s.give("/obj/item/stack/rods", 7, 0);
+    let titanium = s.give("/obj/item/stack/sheet/mineral/titanium", 1, 1);
+    let mob = s.mob();
+    s.run_until("off the click cooldown", |s| {
+        s.now() >= s.get::<NextMove>(mob).0
+    });
+    let slot = other_slot(&s);
+    s.send(0, ClientIntent::ClickSlot(slot));
+    s.run_until("the shuttle rods", |s| s.amount(rods) == 2);
+    let world = s.server.world();
+    assert!(
+        world.get_entity(titanium).is_err(),
+        "the titanium is used up"
+    );
+    let shuttle = s
+        .get::<Inventory>(mob)
+        .hands
+        .iter()
+        .flatten()
+        .copied()
+        .find(|&h| {
+            s.try_get::<DmItem>(h)
+                .is_some_and(|i| i.path == "/obj/item/stack/rods/shuttle/five")
+        })
+        .expect("the shuttle rods take the titanium's hand");
+    assert_eq!(s.amount(shuttle), 5);
+}
+
+fn other_slot(s: &Station) -> InventorySlot {
+    if s.get::<Inventory>(s.mob()).active == 0 {
+        InventorySlot::RightHand
+    } else {
+        InventorySlot::LeftHand
+    }
+}
+
+#[test]
+fn a_knife_dehairs_a_hide_and_water_soaks_it() {
+    let mut s = Station::start();
+    let mob = s.mob();
+    let knife = {
+        let world = s.server.world_mut();
+        let knife = ss13_game::construction::spawn_obj(world, "/obj/item/knife", SPAWN).unwrap();
+        world
+            .entity_mut(knife)
+            .remove::<TilePos>()
+            .insert(CarriedBy(mob));
+        let mut inventory = world.get_mut::<Inventory>(mob).unwrap();
+        let hand = inventory.active;
+        inventory.hands[hand] = Some(knife);
+        knife
+    };
+    let hide = s.give("/obj/item/stack/sheet/animalhide/corgi", 3, 1);
+    assert!(s.try_get::<ss13_mapload::DmWounding>(knife).is_some());
+    s.run_until("off the click cooldown", |s| {
+        s.now() >= s.get::<NextMove>(mob).0
+    });
+    let slot = other_slot(&s);
+    s.send(0, ClientIntent::ClickSlot(slot));
+    s.run_until("the hair cut off (5 s)", |s| {
+        s.server.world().get_entity(hide).is_err()
+    });
+    let hairless = s.stack_on_floor("/obj/item/stack/sheet/hairlesshide");
+    assert_eq!(s.amount(hairless), 3);
+    let world = s.server.world_mut();
+    assert!(ss13_game::sheets::soak(world, hairless));
+    let wet = s.stack_on_floor("/obj/item/stack/sheet/wethide");
+    assert_eq!(s.amount(wet), 3);
+    s.tick();
+    assert_eq!(
+        s.try_get::<ss13_game::sheets::Wetness>(wet).copied(),
+        Some(ss13_game::sheets::Wetness(30))
+    );
 }

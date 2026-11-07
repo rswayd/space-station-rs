@@ -74,6 +74,13 @@ pub const GIFT_TYPES: &[&str] = &[
 /// Constant paths `ss13_game` spawns that no other table of this crate lists: leftovers,
 /// products and printouts of machines, decals, grenade payloads, quirk items, paper kinds.
 pub const GAME_RUNTIME_TYPES: &[&str] = &[
+    // `sheets`: five rods on a titanium sheet, tanning, stamped cardboard.
+    "/obj/item/stack/rods/shuttle/five",
+    "/obj/item/stack/sheet/hairlesshide",
+    "/obj/item/stack/sheet/wethide",
+    "/obj/item/stack/sheet/leather",
+    "/obj/item/storage/box/clown",
+    "/obj/item/storage/box/syndie_kit",
     "/obj/item/crusher_trophy/legion_skull",
     // `weapons::two_handed`: the offhand a wielded item fills the other hand with.
     "/obj/item/offhand",
