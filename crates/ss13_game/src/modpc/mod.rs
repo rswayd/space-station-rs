@@ -13,6 +13,8 @@ use ss13_tgui::UiInterface;
 pub mod client;
 #[cfg(feature = "server")]
 pub mod pda;
+#[cfg(feature = "server")]
+pub mod power;
 pub mod programs;
 
 /// The NtOS window of one computer.

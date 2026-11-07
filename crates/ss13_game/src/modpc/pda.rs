@@ -13,7 +13,7 @@
 //! reaches the PDA at once. The PDA's name follows its imprint (`imprint_id` ->
 //! `UpdateDisplay`). The flashlight lights the holder (tg's overlay light moves with whoever
 //! carries it) or the PDA on the floor.
-// shortcut: infinite battery (`internal_cell`, `handle_power`), NTNet always at good signal
+// shortcut: NTNet always at good signal
 // (no relays), no inserted pen, disks, pAI, paper or chunky fingers; the light is
 // omnidirectional (tg: a directional overlay light) and gives way to any other light on its
 // holder (one `Optics` per entity).
@@ -238,6 +238,7 @@ impl Plugin for ModpcServerPlugin {
         super::programs::minesweeper::build(app);
         super::programs::downloader::build(app);
         super::programs::chat::build(app);
+        super::power::build(app);
         app.register_ui::<NtosUi>()
             .add_observer(attach)
             .add_observer(attach_console)
@@ -364,7 +365,11 @@ pub fn console_interact(world: &mut World, client: Entity, mob: Entity, target: 
     if !is_console {
         return false;
     }
-    if world.get::<crate::power::Unpowered>(target).is_some() {
+    let enabled = world
+        .get::<ModularComputer>(target)
+        .is_some_and(|c| c.enabled);
+    // `turn_on`: no area power and an empty cell, no response.
+    if !enabled && !super::power::can_turn_on(world, target) {
         return true;
     }
     if let Some(mut computer) = world.get_mut::<ModularComputer>(target) {
@@ -423,6 +428,15 @@ pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity)
     }
     if !computer.enabled {
         let name = computer.display_name();
+        if !super::power::can_turn_on(world, item) {
+            chat(
+                world,
+                Some(client),
+                Span::Warning,
+                format!("Вы нажимаете кнопку питания {name}, но он не отвечает."),
+            );
+            return true;
+        }
         world
             .get_mut::<ModularComputer>(item)
             .expect("checked above")
@@ -687,7 +701,6 @@ fn ntos_status(
     mut windows: Query<&mut UiWindow>,
     computers: Query<(&ModularComputer, Option<&TilePos>)>,
     users: Query<(&Inventory, Option<&Stat>, Option<&TilePos>)>,
-    unpowered: Query<(), With<crate::power::Unpowered>>,
 ) {
     use ss13_tgui::UiInterface as _;
     for mut window in &mut windows {
@@ -707,7 +720,8 @@ fn ntos_status(
             continue;
         };
         let app_gone = !ntos && !computer.programs.contains(&ProgramKind::Newscaster);
-        if !computer.enabled || app_gone || unpowered.contains(window.source) {
+        // A console without area power runs on its cell (`crate::modpc::power`).
+        if !computer.enabled || app_gone {
             window.cap_status(UiStatus::Close);
             continue;
         }
@@ -748,6 +762,7 @@ pub struct NtosParams<'w, 's> {
     chat_channels: Option<Res<'w, super::programs::chat::ChatChannels>>,
     ticker: Option<Res<'w, crate::round::Ticker>>,
     time: Res<'w, Time>,
+    cells: Query<'w, 's, &'static super::power::ComputerCell>,
 }
 
 impl NtosParams<'_, '_> {
@@ -835,7 +850,11 @@ impl ServerUi for NtosUi {
                 .map_or(MAIN_TITLE, ProgramKind::filedesc)
                 .to_owned(),
             station_time: format!("{:02}:{:02}:{:02}", secs / 3600, secs / 60 % 60, secs % 60),
-            battery_percent: Some(100),
+            battery_percent: params
+                .cells
+                .get(entity)
+                .ok()
+                .and_then(super::power::ComputerCell::percent),
             ntnet: NTNET_GOOD_SIGNAL,
             program_headers: computer
                 .idle

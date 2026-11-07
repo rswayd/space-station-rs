@@ -31,7 +31,7 @@
 Расход энергии ячейки на программы, подзарядка от APC (консоли) или зарядников, отключение при разряде.
 
 - **Код:** [`proc/handle_power()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/modular_computers/computers/item/computer_power.dm#L38), [`proc/power_failure()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/modular_computers/computers/item/computer_power.dm#L25)
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/modpc/pda.rs`: `// shortcut:` бесконечная батарея (`internal_cell`, `handle_power` не моделируются)
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/modpc/power.rs`: ячейка (`ComputerCell`: КПК — стандартная, консоль — AA), `handle_power` раз в 2 с (экран, фонарик ×1.1, программы спереди и в фоне), консоль питается от зоны и подзаряжает ячейку, без питания — от ячейки; разряд закрывает программы и выключает (`power_failure`), пустой не включается; зарядник (`power/chargers.rs`) заряжает КПК; заряд в заголовке. `// shortcut:` ячейка не отдельный предмет (без отвёртки и замены, без ЭМИ)
 
 ### Файлы, хранилище и диски
 Файловая система компьютера: программы и данные занимают место, диски данных (обычные, продвинутые, супер, ролевые, техтоннельные, Синдиката, чёрного рынка), файловый менеджер.
