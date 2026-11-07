@@ -1,8 +1,8 @@
 //! Brand Intelligence (`code/modules/events/brand_intelligence.dm`): one station vending
 //! machine starts shooting its stock at people and, every 4 s, infects another; silencing it
 //! (its speaker wire) or cutting all its wires ends the event and cures the rest.
-// shortcut: infected machines never deny poor customers (`deny_vending_interact`) and do not
-// come alive when every machine is infected (`/datum/ai_controller/vending_machine`): no mob AI.
+// shortcut: infected machines never deny poor customers (`deny_vending_interact`); when every
+// machine is infected they come alive (`crate::mobs::ai::objects`).
 
 use bevy::prelude::*;
 use ss13_mapload::DmName;
@@ -73,7 +73,7 @@ fn set_rampant(world: &mut World, vendor: Entity, on: bool) {
 }
 
 /// `/obj/machinery/vending/speak(message)`: said to everyone in view.
-fn speak(world: &mut World, vendor: Entity, text: &str) {
+pub(crate) fn speak(world: &mut World, vendor: Entity, text: &str) {
     let Some(&pos) = world.get::<TilePos>(vendor) else {
         return;
     };
@@ -99,6 +99,10 @@ impl RoundEvent for BrandIntelligence {
         ev.end_when = 1000;
         self.vending_machines = station_vendors(world);
         if self.vending_machines.is_empty() {
+            // Every machine infected: they rise (`/datum/ai_controller/vending_machine/eventspawn`).
+            for upriser in self.infected_machines.clone() {
+                crate::mobs::ai::objects::possess_vendor(world, upriser);
+            }
             ev.killed = true;
             return;
         }

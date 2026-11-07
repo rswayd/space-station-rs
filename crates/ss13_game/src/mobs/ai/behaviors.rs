@@ -320,6 +320,8 @@ pub enum Behavior {
     Fauna(super::fauna::FaunaLeaf),
     /// Monkey leaves ([`super::monkey`]).
     Monkey(super::monkey::MonkeyLeaf),
+    /// Object leaves ([`super::objects`]).
+    Object(super::objects::ObjectLeaf),
 }
 
 impl Behavior {
@@ -506,6 +508,7 @@ impl Behavior {
             Self::Customer(ref mut leaf) => leaf.perform(ctx),
             Self::Fauna(ref mut leaf) => leaf.perform(ctx),
             Self::Monkey(ref mut leaf) => leaf.perform(ctx),
+            Self::Object(ref mut leaf) => leaf.perform(ctx),
         }
     }
 
@@ -523,6 +526,10 @@ impl Behavior {
             return;
         }
         if let Self::Monkey(leaf) = self {
+            leaf.finish(ctx, succeeded);
+            return;
+        }
+        if let Self::Object(leaf) = self {
             leaf.finish(ctx, succeeded);
             return;
         }

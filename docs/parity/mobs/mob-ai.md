@@ -66,7 +66,7 @@
 Проклятые и одержимые предметы летают и бьют людей, «бейн»-предмет, робот-посетитель ресторана заказывает еду, торговый автомат-мститель падает на людей.
 
 - **Код:** [`/datum/ai_controller/cursed`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/ai/cursed/cursed_controller.dm#L8), [`/datum/ai_controller/haunted`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/ai/hauntium/haunted_controller.dm#L2), [`/datum/ai_controller/bane`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/ai/bane/bane_controller.dm#L5), [`/datum/ai_controller/robot_customer`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/ai/robot_customer/robot_customer_controller.dm#L1), [`/datum/ai_controller/vending_machine`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/ai/objects/vending_machines/vending_machine_controller.dm#L2), [`/datum/bt_node/ai_behavior/throw_attack`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/ai/_item_behaviors.dm#L2)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/mobs/ai/objects.rs`: контроллер `vending_machine/eventspawn` — при заражении всех автоматов Brand Intelligence (`crates/ss13_game/src/events/brand_intelligence.rs`) они оживают, ищут стоящего человека в 7 клетках, подходят, телеграфируют 0,8 с и падают на него (`squish_damage` 15, фразы), встают через 1 с (5 с паузы после попадания); робот-посетитель — `crates/ss13_game/src/restaurant.rs`; нет проклятых и одержимых предметов, «бейна», отказа в продаже у оживших автоматов
 
 ### Телеграф атак ИИ
 Временный визуальный эффект-предупреждение на клетке перед атакой моба.
@@ -84,7 +84,7 @@
 Процессинг старых `simple_animal` без контроллеров (мегафауна, элиты): их `handle_automated_action`/движение.
 
 - **Код:** [`SUBSYSTEM_DEF(npcpool)`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/npcpool.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/mobs/megafauna/mod.rs` (`NPC_TICK_SECS`, тикер `handle_automated_action`): оставшиеся в tg на `simple_animal` мобы (мегафауна) крутятся раз в 2 с, как `SSnpcpool`; остальные простые животные портированы базовыми мобами с контроллерами; элиты — у группы лаваленда
 
 ### Просмотрщик деревьев поведения (админ)
 Админ-верб «View Behavior Tree»: окно с живым деревом выбранного моба — какие узлы активны, лог выполнения.

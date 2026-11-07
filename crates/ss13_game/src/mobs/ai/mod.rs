@@ -20,6 +20,7 @@ pub mod bt;
 pub mod fauna;
 pub mod monkey;
 pub mod movement;
+pub mod objects;
 #[cfg(test)]
 mod tests;
 pub mod trees;
@@ -129,6 +130,11 @@ pub enum Key {
     MonkeyPickup,
     MonkeyAggressive,
     MonkeyBlacklist,
+    /// Risen vendors ([`objects`]): `BB_VENDING_TILT_COOLDOWN`, `BB_VENDING_UNTILT_COOLDOWN`,
+    /// `BB_VENDING_LAST_HIT_SUCCESSFUL`.
+    VendingTiltCooldown,
+    VendingUntiltCooldown,
+    VendingLastHit,
 }
 
 #[derive(Clone, Debug, PartialEq)]

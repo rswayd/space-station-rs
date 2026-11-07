@@ -893,3 +893,21 @@ fn admins_give_carbons_the_monkey_ai_and_take_it_away() {
     );
     assert!(w.get::<super::AiController>(carbon).is_none());
 }
+
+#[test]
+fn risen_vendors_wait_without_victims_and_wind_up_next_to_one() {
+    let mut w = world();
+    let vendor = w.spawn(TilePos::new(5, 5, 1)).id();
+    super::objects::possess_vendor(&mut w, vendor);
+    let mut controller = w.entity_mut(vendor).take::<super::AiController>().unwrap();
+    let mut bb = std::mem::take(&mut controller.bb);
+    run(&mut w, vendor, &mut controller.tree, &mut bb, 1);
+    // `search_cooldown`: nobody in view.
+    assert!(bb.time(Key::VendingTiltCooldown).is_some_and(|t| t > 1.0));
+    let victim = mob(&mut w, 6, 5, "neutral");
+    bb.clear(Key::VendingTiltCooldown);
+    run(&mut w, vendor, &mut controller.tree, &mut bb, 2);
+    assert_eq!(bb.entity(Key::CurrentTarget), Some(victim));
+    // The 0.8 s telegraph runs: no tilt yet, the target is kept.
+    assert!(w.get::<crate::vending::tilt::Tilted>(vendor).is_none());
+}

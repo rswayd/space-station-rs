@@ -60,6 +60,8 @@ pub enum Cond {
     Fauna(super::fauna::FaunaCond),
     /// Monkey decorators ([`super::monkey`]).
     Monkey(super::monkey::MonkeyCond),
+    /// Object decorators ([`super::objects`]).
+    Object(super::objects::ObjectCond),
 }
 
 impl Cond {
@@ -79,6 +81,7 @@ impl Cond {
             Self::Customer(cond) => cond.check(ctx),
             Self::Fauna(cond) => cond.check(ctx),
             Self::Monkey(cond) => cond.check(ctx),
+            Self::Object(cond) => cond.check(ctx),
         }
     }
 }
