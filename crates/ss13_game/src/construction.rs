@@ -294,6 +294,8 @@ pub enum Job {
     DeployableTurret(crate::deployable_turrets::TurretJob),
     /// Loading and winding mounted guns ([`crate::cannons`]).
     Cannon(crate::cannons::CannonJob),
+    /// The punching bag and the loom ([`crate::gym`]).
+    Gym(crate::gym::GymJob),
     /// Safes ([`crate::safes`], [`crate::secure_safes`]).
     Safe(crate::safes::SafeJob),
     SecureSafe(crate::secure_safes::SecureSafeJob),

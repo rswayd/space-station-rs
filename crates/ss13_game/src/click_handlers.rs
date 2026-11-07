@@ -242,6 +242,7 @@
 //! | 3507 | `blackbox::attack_hand` (the blackbox out of its recorder) |
 //! | 3517 | `ntnet_relay::interact` (the `NtnetRelay` window) |
 //! | 3529 | `cannons::attack_hand` (a mounted gun fires, the repeater winds) |
+//! | 3539 | `gym::punch` (the punching bag) |
 //!
 //! [`ClickPhase::HeldOnTarget`] (a world click with the active hand's item; tg
 //! `item_interaction`, `interact_with_atom`, `pre_attack`, `attackby`):
@@ -250,6 +251,7 @@
 //! | ---- | ------- |
 //! | 50 | `fishing::server::held_on_target` (casts, a fisher's clicks), `fishing::aquarium::item_interaction` |
 //! | 59 | `deployable_turrets::item_interaction` (a wrench packs an HMG up) |
+//! | 79 | `gym::item_interaction` (punching bag wrench/crowbar right clicks, the loom) |
 //! | 69 | `cannons::item_interaction` (cannon balls, charge, fuse, wrench; mounted gun ammo and wrench) |
 //! | 53 | `holodeck::item_interaction` (holo floors take no items, ready buttons, the holodeck conveyor) |
 //! | 100 | `antag::uplink::item_interaction` |

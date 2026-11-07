@@ -91,6 +91,9 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/projectile/bullet/junk",
     "/obj/projectile/beam/laser/repeater",
     "/obj/item/stack/sheet/iron/five",
+    // `gym`: the punching bag's leftovers, the loom's cloth.
+    "/obj/item/pillow",
+    "/obj/item/stack/sheet/durathread",
     // `traps`: the earth trap's rock, the cables strung between tripwire posts.
     "/obj/structure/flora/rock/style_random",
     "/obj/structure/tripwire/cable",

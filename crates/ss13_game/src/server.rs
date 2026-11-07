@@ -240,6 +240,7 @@ impl Plugin for GameServerPlugin {
             crate::spawners::SpawnersPlugin,
             crate::deployable_turrets::DeployableTurretsPlugin,
             crate::cannons::CannonsPlugin,
+            crate::gym::GymPlugin,
         ))
         .add_plugins((
             crate::pull::PullServerPlugin,
