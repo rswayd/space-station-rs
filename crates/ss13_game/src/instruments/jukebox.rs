@@ -21,7 +21,7 @@ use bevy::ecs::message::{MessageCursor, Messages};
 use bevy::ecs::query::QueryItem;
 use bevy::ecs::system::SystemParamItem;
 use bevy::prelude::*;
-use ss13_mapload::{DmObj, MapLoadPlugin};
+use ss13_mapload::MapLoadPlugin;
 use ss13_shared::TilePos;
 use ss13_shared::chat::Span;
 use ss13_shared::ui::UiStatus;
