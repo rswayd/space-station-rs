@@ -1,7 +1,7 @@
 //! The programs a PDA runs (`/datum/computer_file/program/*`): their catalog entries here, their
 //! state and acts in the submodules.
-// shortcut: only programs backed by systems that exist: no navigator (no nanomaps), supermatter
-// and power monitors, theme manager.
+// shortcut: only programs backed by systems that exist: no supermatter and power monitors,
+// theme manager.
 
 #[cfg(feature = "server")]
 pub mod apps;
@@ -20,6 +20,7 @@ pub mod station;
 pub mod station_kinds;
 
 pub use station_kinds::StationProgram;
+pub mod navigator;
 
 /// An installed program (an entry of `stored_files`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -49,6 +50,8 @@ pub enum ProgramKind {
     /// BandaStation `/datum/computer_file/program/minesweeper`: installed by an emag or
     /// downloaded.
     Minesweeper,
+    /// BandaStation `/datum/computer_file/program/navigator`: downloaded.
+    Navigator,
     /// `/datum/computer_file/program/ntnetdownload` (NT Software Hub).
     Downloader,
     /// `/datum/computer_file/program/chatclient` (NTNet Relay Chat).
@@ -80,8 +83,8 @@ pub const CATEGORIES: [&str; 8] = [
 ];
 
 impl ProgramKind {
-    pub const ALL: [Self; 15 + StationProgram::ALL.len()] = {
-        let mut all = [Self::Messenger; 15 + StationProgram::ALL.len()];
+    pub const ALL: [Self; 16 + StationProgram::ALL.len()] = {
+        let mut all = [Self::Messenger; 16 + StationProgram::ALL.len()];
         let mut i = 0;
         while i < Self::BASE.len() {
             all[i] = Self::BASE[i];
@@ -94,7 +97,7 @@ impl ProgramKind {
         all
     };
 
-    const BASE: [Self; 15] = [
+    const BASE: [Self; 16] = [
         Self::Messenger,
         Self::Notepad,
         Self::CrewManifest,
@@ -107,6 +110,7 @@ impl ProgramKind {
         Self::StatusDisplay,
         Self::Newscaster,
         Self::Minesweeper,
+        Self::Navigator,
         Self::Downloader,
         Self::ChatClient,
         Self::FileManager,
@@ -127,6 +131,7 @@ impl ProgramKind {
             Self::StatusDisplay => "statusdisplay",
             Self::Newscaster => "newscasterapp",
             Self::Minesweeper => "minesweeper",
+            Self::Navigator => "ntos_navigator",
             Self::Downloader => "ntsoftwarehub",
             Self::ChatClient => "ntnrc_client",
             Self::FileManager => "filemanager",
@@ -153,6 +158,7 @@ impl ProgramKind {
             Self::StatusDisplay => "Status Display",
             Self::Newscaster => "Newscaster",
             Self::Minesweeper => "Сапёр",
+            Self::Navigator => "Навигатор",
             Self::Downloader => "NT Software Hub",
             Self::ChatClient => "Chat Client",
             Self::FileManager => "File Manager",
@@ -175,6 +181,7 @@ impl ProgramKind {
             Self::StatusDisplay => "signal",
             Self::Newscaster => "newspaper",
             Self::Minesweeper => "bomb",
+            Self::Navigator => "route",
             Self::Downloader => "download",
             Self::ChatClient => "comment-alt",
             Self::FileManager => "folder",
@@ -222,6 +229,10 @@ impl ProgramKind {
                  привести к взрыву! Сразись с друзьями и стань мастером разминирования в этой \
                  захватывающей игре!."
             }
+            Self::Navigator => {
+                "Просмотр вашего текущего местоположения, и карты станции. Так же позволяет \
+                 найти ближайшую лестницу."
+            }
             Self::Downloader => {
                 "This program allows downloads of software from official NT repositories"
             }
@@ -244,6 +255,7 @@ impl ProgramKind {
             | Self::SecRecords
             | Self::MedRecords
             | Self::Downloader => 4,
+            Self::Navigator => 5,
             Self::Minesweeper => 6,
             Self::CardMod | Self::ChatClient | Self::FileManager => 8,
             Self::Station(p) => p.size(),
@@ -286,7 +298,7 @@ impl ProgramKind {
         match self {
             Self::Messenger => pda,
             // `PROGRAM_PDA | PROGRAM_LAPTOP`.
-            Self::SecRecords | Self::MedRecords | Self::Signaler => pda,
+            Self::SecRecords | Self::MedRecords | Self::Signaler | Self::Navigator => pda,
             Self::Station(p) => p.runs_on(pda),
             _ => true,
         }

@@ -65,6 +65,8 @@ pub fn span_style(span: Span) -> SpanStyle {
         Span::Mansus => (Color::srgb_u8(0x0d, 0x9b, 0x00), false, false),
         // shortcut: the `hypnocolor` animation is drawn in its 50% purple.
         Span::Hypnophrase => (Color::hsl(272.0, 0.863, 0.6), true, false),
+        // Drawn as an icon (`super::panel`); its `:name:` text measures the line.
+        Span::Emoji(_) => (CHAT_TEXT, false, false),
     };
     SpanStyle {
         color,

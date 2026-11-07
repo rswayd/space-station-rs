@@ -32,6 +32,7 @@ use ss13_shared::chat::{
 use ss13_shared::protocol::ClientIntent;
 use ss13_world::{SpatialIndex, WorldSystems};
 
+use crate::emoji::{Emojis, emoji_parse};
 use crate::emote::{EMOTE_AUDIO_COOLDOWN_SECS, EmoteOutcome, EmoteSound, EmoteUser};
 use crate::language::{self, LanguageHolder, LanguageId, ScrambleSeed, Tongue};
 use crate::speech::{
@@ -502,17 +503,18 @@ pub fn emote_message(name: &str, text: &str) -> ChatMessage {
     }
 }
 
-/// tg `say_dead`: `МЕРТВ: Имя говорит, "текст"`.
-pub fn deadchat_message(name: &str, text: &str) -> ChatMessage {
+/// tg `say_dead`: `МЕРТВ: Имя говорит, "текст"`, with `emoji_parse` of the text.
+pub fn deadchat_message(name: &str, text: &str, emojis: Option<&Emojis>) -> ChatMessage {
+    let mut segments = vec![
+        ChatSegment::new(Span::Emote, "МЕРТВ: "),
+        ChatSegment::new(Span::Name, name),
+        ChatSegment::new(Span::Emote, format!(" {}, \"", say_verb(text))),
+    ];
+    segments.extend(emoji_parse(text, Span::Emote, emojis));
+    segments.push(ChatSegment::new(Span::Emote, "\""));
     ChatMessage {
         channel: ChatChannel::Local,
-        segments: vec![
-            ChatSegment::new(Span::Emote, "МЕРТВ: "),
-            ChatSegment::new(Span::Name, name),
-            ChatSegment::new(Span::Emote, format!(" {}, \"", say_verb(text))),
-            ChatSegment::new(Span::Emote, text),
-            ChatSegment::new(Span::Emote, "\""),
-        ],
+        segments,
     }
 }
 
@@ -561,13 +563,14 @@ fn handle_say(
     bodies: Query<Body>,
     stats: Query<(Entity, &SpeakerStat)>,
     mut emotes_used: Query<&mut EmotesUsed>,
-    (sight, senses, voices, seed, seen_by, sixth_sense): (
+    (sight, senses, voices, seed, seen_by, sixth_sense, emojis): (
         Query<&SeeInvisible>,
         Senses,
         Query<&VoiceSpan>,
         Option<Res<ScrambleSeed>>,
         Query<&VisibleToMobs>,
         Query<Entity, With<SixthSense>>,
+        Option<Res<Emojis>>,
     ),
     index: Res<SpatialIndex>,
     listeners: Res<Listeners>,
@@ -685,7 +688,7 @@ fn handle_say(
             info!(target: "say", "{client} {name} (dead): {text}");
             chat.write(SendChat {
                 clients,
-                message: deadchat_message(&name, &text),
+                message: deadchat_message(&name, &text, emojis.as_deref()),
             });
             continue;
         }
@@ -1009,6 +1012,22 @@ fn handle_say(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn deadchat_parses_emojis() {
+        let emojis = Emojis(
+            [("ai".to_owned(), ss13_shared::IconStateId(5))]
+                .into_iter()
+                .collect(),
+        );
+        let line = deadchat_message("Боб", "привет :ai:", Some(&emojis));
+        assert_eq!(line.plain_text(), "МЕРТВ: Боб говорит, \"привет :ai:\"");
+        assert!(
+            line.segments
+                .iter()
+                .any(|s| s.span == Span::Emoji(ss13_shared::IconStateId(5)) && s.text == ":ai:")
+        );
+    }
 
     #[test]
     fn sanitize_strips_controls_checks_length_and_capitalizes() {

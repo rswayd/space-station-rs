@@ -32,7 +32,13 @@ pub enum Animation {
     Transform(TransformAnimation),
     /// BYOND `animate(atom)` with no steps: ends every transform animation of the entity.
     StopTransforms,
+    /// tg `balloon_alert`: `text` (at most [`MAX_BALLOON_CHARS`] characters, plain) floats up
+    /// from the entity and fades. Sent to one client only, never to every viewer.
+    Balloon { text: String },
 }
+
+/// Most characters of a [`Animation::Balloon`]; the server cuts longer texts.
+pub const MAX_BALLOON_CHARS: usize = 120;
 
 /// Keyframes from the rest transform: step `i` moves from step `i - 1`'s pose (the first from
 /// rest) to its own over its time. The whole list plays `loops` times (0: until stopped), each

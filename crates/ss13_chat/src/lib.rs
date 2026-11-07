@@ -5,6 +5,7 @@
 
 #[cfg(feature = "client")]
 pub mod client;
+pub mod emoji;
 #[cfg(feature = "server")]
 pub mod emote;
 #[cfg(feature = "server")]

@@ -83,6 +83,8 @@ pub enum NtosScreen {
     Status(StatusDisplayData),
     /// BandaStation `NtosMinesweeperPanel`.
     Minesweeper(Box<MinesweeperData>),
+    /// BandaStation `NtosNavigator`.
+    Navigator(Box<NavigatorData>),
     /// `NtosNetDownloader`.
     Downloader(Box<DownloaderData>),
     /// `NtosNetChat`.
@@ -347,6 +349,41 @@ pub struct MinesweeperResult {
     pub points_per_sec: f64,
     /// `fieldParams`: `<width>X<height>(<bombs>)`.
     pub field_params: String,
+}
+
+/// BandaStation `/datum/computer_file/program/navigator/ui_data`: the signal, where the user is
+/// and the ladders and stairs (`mapData.stairs`) of the user's level.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct NavigatorData {
+    /// `signal`: 0 lost, 1 low, 2 good.
+    pub signal: u8,
+    /// `location`; `None` without a signal.
+    pub location: Option<NavLocation>,
+    /// The ladders and stairs on the user's level, nearest first (the map's stair markers).
+    pub stairs: Vec<NavStair>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct NavLocation {
+    pub x: i32,
+    pub y: i32,
+    pub z: u16,
+    /// `dir`, Russian (`"север"`); `None` on a low signal (the map's arrow is hidden).
+    pub dir: Option<String>,
+    /// `area.declent_ru(NOMINATIVE)`.
+    pub area: String,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct NavStair {
+    pub x: i32,
+    pub y: i32,
+    /// Tiles from the user (Chebyshev).
+    pub distance: u32,
+    /// Which way it lies from the user, Russian; empty on the user's tile.
+    pub toward: String,
+    /// A ladder (`false`: stairs).
+    pub ladder: bool,
 }
 
 /// `/datum/computer_file/program/ntnetdownload/ui_data`.

@@ -40,6 +40,8 @@ client = [
     "dep:ss13_render",
     "dep:ss13_world",
     "ss13_tgui/client",
+    "dep:ss13_chat",
+    "ss13_chat/client",
     "dep:ss13_ui_kit",
     "bevy/2d",
     "bevy/ui",

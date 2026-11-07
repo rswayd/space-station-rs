@@ -99,6 +99,24 @@ pub enum Refusal {
     Locked,
 }
 
+/// tg `can_insert`'s balloon for `refusal`; `None` where it says nothing.
+pub fn refusal_text(world: &World, refusal: Refusal, storage: Entity) -> Option<String> {
+    Some(match refusal {
+        Refusal::TooBig => "не помещается!".into(),
+        Refusal::Full => "нет места!".into(),
+        Refusal::Anchored => "anchored!".into(),
+        Refusal::Nesting => "слишком большое!".into(),
+        Refusal::CantHold => "не может вмещать!".into(),
+        Refusal::Locked => "закрыто!".into(),
+        Refusal::Outer => {
+            let outer = world.get::<StoredIn>(storage)?.0;
+            let name = world.get::<DmName>(outer)?.name.to_lowercase();
+            format!("{name} на пути!")
+        }
+        Refusal::Itself => return None,
+    })
+}
+
 /// What [`fits`] needs to know about the item and the container.
 #[derive(Clone, Copy, Debug)]
 pub struct Candidate {
@@ -561,9 +579,15 @@ pub fn click_storage(world: &mut World, client: Entity, mob: Entity, storage: En
     }
 }
 
-/// The active hand's `held` into `storage`, if it fits.
+/// The active hand's `held` into `storage`, if it fits; otherwise tg's refusal balloon to the
+/// holder (`can_insert(messages = TRUE)`).
 pub fn insert_from_hand(world: &mut World, held: Entity, storage: Entity) -> bool {
-    if can_insert(world, storage, held).is_err() {
+    if let Err(refusal) = can_insert(world, storage, held) {
+        if let Some(user) = world.get::<CarriedBy>(held).map(|c| c.0)
+            && let Some(text) = refusal_text(world, refusal, storage)
+        {
+            crate::balloon::balloon_alert(world, user, user, &text);
+        }
         return false;
     }
     put_inside(world, held, storage);

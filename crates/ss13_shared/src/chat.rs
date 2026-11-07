@@ -94,6 +94,9 @@ pub enum Span {
     Mansus,
     /// `.hypnophrase` (`span_hypnophrase`: influences drained, sacrifices accepted).
     Hypnophrase,
+    /// tg `emoji_parse`: the segment is one emoji, drawn as this icon state of `EMOJI_SET`; its
+    /// text (`:name:`) is what a client without the icon shows and what logs keep.
+    Emoji(crate::IconStateId),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]

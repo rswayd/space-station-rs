@@ -803,6 +803,7 @@ pub struct NtosParams<'w, 's> {
     app_states: Query<'w, 's, &'static super::programs::apps::AppState>,
     minesweepers: Query<'w, 's, &'static super::programs::minesweeper::Minesweeper>,
     minesweeper_board: Option<Res<'w, super::programs::minesweeper::MinesweeperLeaderboard>>,
+    navigator: super::programs::navigator::NavigatorParams<'w, 's>,
     downloads: Query<'w, 's, &'static super::programs::downloader::Download>,
     id_cards: Query<'w, 's, &'static crate::inventory::IdCard>,
     computers: Query<'w, 's, &'static ModularComputer>,
@@ -1040,6 +1041,9 @@ impl ServerUi for NtosUi {
                     params.minesweeper_board.as_deref(),
                 )))
             }
+            Some(ProgramKind::Navigator) => NtosScreen::Navigator(Box::new(
+                super::programs::navigator::ui_data(&params.navigator, user, header.ntnet),
+            )),
             Some(ProgramKind::Downloader) => {
                 let access = computer
                     .stored_id

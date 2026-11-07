@@ -17,6 +17,7 @@ use bevy::text::{
 };
 use bevy::ui::ComputedNode;
 use ss13_net::client::SendIntent;
+use ss13_shared::IconStateId;
 use ss13_shared::chat::{ChatChannel, MAX_MESSAGE_LEN, Span};
 use ss13_shared::protocol::ClientIntent;
 use ss13_ui_kit::prelude::*;
@@ -230,18 +231,70 @@ fn span_font(span: Span, outer: Option<Span>, size: f32) -> impl Scene {
     }
 }
 
+/// An emoji of a chat line ([`Span::Emoji`]): the game's renderer gives the node its
+/// `ImageNode` from the icon atlas.
+#[derive(Component, Clone, Debug, Default, PartialEq)]
+#[require(Node)]
+pub struct ChatEmoji {
+    pub icon_state: Option<IconStateId>,
+}
+
+/// A run of a row: its text pieces, or one emoji.
+fn run_scene(
+    texts: Vec<(Span, String)>,
+    emoji: Option<IconStateId>,
+    outer: Option<Span>,
+) -> impl Scene {
+    let spans: Vec<_> = texts
+        .into_iter()
+        .map(|(span, text)| bsn! { TextSpan(text) @span_font(span, outer, FONT_SIZE) })
+        .collect();
+    let text = (!spans.is_empty()).then(|| {
+        bsn! {
+            Children [
+                Text("") @span_font(Span::Plain, None, FONT_SIZE) TextLayout::no_wrap()
+                Children [ {spans} ]
+            ]
+        }
+    });
+    let icon = emoji.map(|id| {
+        bsn! {
+            Children [
+                Node { width: px(LINE_HEIGHT), height: px(LINE_HEIGHT) }
+                ChatEmoji { icon_state: {Some(id)} }
+            ]
+        }
+    });
+    bsn! {
+        Node { align_items: AlignItems::Center }
+        @{text}
+        @{icon}
+    }
+}
+
 fn row_scene(line: Option<Arc<ChatLine>>) -> impl Scene {
     let (pieces, badge) = line.map_or((Vec::new(), None), |line| {
         let outer = line.outer;
-        let pieces: Vec<_> = line
-            .pieces
-            .iter()
-            .map(|(span, text)| {
-                let text = text.clone();
-                bsn! { TextSpan(text) @span_font(*span, outer, FONT_SIZE) }
-            })
-            .collect();
-        (pieces, line.badge)
+        let mut runs = Vec::new();
+        let mut texts = Vec::new();
+        for (span, text) in &line.pieces {
+            match *span {
+                // A whole `:name:`; half of one broken over two lines stays text.
+                Span::Emoji(id)
+                    if text.len() > 2 && text.starts_with(':') && text.ends_with(':') =>
+                {
+                    if !texts.is_empty() {
+                        runs.push(run_scene(std::mem::take(&mut texts), None, outer));
+                    }
+                    runs.push(run_scene(Vec::new(), Some(id), outer));
+                }
+                _ => texts.push((*span, text.clone())),
+            }
+        }
+        if !texts.is_empty() {
+            runs.push(run_scene(texts, None, outer));
+        }
+        (runs, line.badge)
     });
     let badge = badge.map(|times| {
         let label = format!("x{times}");
@@ -266,10 +319,7 @@ fn row_scene(line: Option<Arc<ChatLine>>) -> impl Scene {
             align_items: AlignItems::Center,
             overflow: Overflow::clip(),
         }
-        Children [
-            Text("") @span_font(Span::Plain, None, FONT_SIZE) TextLayout::no_wrap()
-            Children [ {pieces} ]
-        ]
+        Children [ {pieces} ]
         @{badge}
     }
 }

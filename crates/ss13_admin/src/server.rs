@@ -44,7 +44,7 @@ use ss13_proto::Prototypes;
 use ss13_shared::TilePos;
 use ss13_shared::admin::rights::*;
 use ss13_shared::admin::{AdminRequest, AdminResponse, AntagRole, PlayerEntry, PlayerState, Smite};
-use ss13_shared::chat::{ChatChannel, ChatMessage, MAX_MESSAGE_LEN, Span};
+use ss13_shared::chat::{ChatChannel, ChatMessage, ChatSegment, MAX_MESSAGE_LEN, Span};
 
 use crate::rights::{
     Holder, Rank, ckey, greater_rights, has, parse_admins, parse_ranks, rights_text,
@@ -651,14 +651,20 @@ fn answer(world: &mut World, client: Entity, request: AdminRequest) -> AnswerRes
             }
             log_admin(world, "ASAY", &format!("{key}: {text}"));
             let to = admins_with(world, R_ADMIN);
+            // tg `emoji_parse` of the asay text.
+            let mut segments = vec![ChatSegment::new(Span::AdminSay, format!("ADMIN: {key}: "))];
+            segments.extend(ss13_chat::emoji::emoji_parse(
+                &text,
+                Span::AdminSay,
+                world.get_resource::<ss13_chat::emoji::Emojis>(),
+            ));
             chat(
                 world,
                 to,
-                ChatMessage::simple(
-                    ChatChannel::AdminChat,
-                    Span::AdminSay,
-                    format!("ADMIN: {key}: {text}"),
-                ),
+                ChatMessage {
+                    channel: ChatChannel::AdminChat,
+                    segments,
+                },
             );
             Ok(None)
         }

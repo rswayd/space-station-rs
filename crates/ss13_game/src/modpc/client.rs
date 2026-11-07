@@ -1,8 +1,7 @@
 //! Client half of the PDA: the NtOS window (tg `NtosWindow` with `NtosMain`, `NtosMessenger`,
 //! `NtosNotepad`, `NtosCrewManifest`, `NtosGasAnalyzer`, `NtosCard`, `NtosStationAlertConsole`,
 //! `NtosRecords`, `NtosSignaler`, `NtosStatus`, `NtosNetDownloader`, `NtosNetChat`,
-//! `NtosFileManager`, BandaStation
-//! `NtosMinesweeperPanel`).
+//! `NtosFileManager`, BandaStation `NtosMinesweeperPanel` and `NtosNavigator`).
 // shortcut: one window size for every screen (tg sizes each interface), no device themes, no
 // search field in the records (local input state does not re-render the view), no
 // photos or search field in the messenger, Enter sends (no send button: buttons carry fixed
@@ -66,6 +65,7 @@ fn view(data: &NtosData, local: &UiLocalState) -> impl Scene + use<> {
                 )))
             }
             NtosScreen::Minesweeper(m) => Box::new(EntityScene(minesweeper_screen(m, local))),
+            NtosScreen::Navigator(n) => Box::new(EntityScene(navigator_screen(n))),
             NtosScreen::Downloader(d) => Box::new(EntityScene(downloader_screen(d, local))),
             NtosScreen::Chat(c) => Box::new(EntityScene(relay_chat_screen(c))),
             NtosScreen::FileManager(f) => Box::new(EntityScene(file_manager_screen(f))),
@@ -673,6 +673,77 @@ fn gas_screen(mixes: &[GasMix]) -> impl Scene + use<> {
     bsn! {
         @Section { @title: "AtmoZphere", @fill: true, @scrollable: true }
         Children [ {empty} -- {sections} ]
+    }
+}
+
+/// BandaStation `NtosNavigator`: the area name, the position ("Вы тут!") and the ladders and
+/// stairs as a list instead of nanomap markers, the `BadSignal` notice under them.
+fn navigator_screen(d: &NavigatorData) -> impl Scene + use<> {
+    let here: Vec<_> = d
+        .location
+        .iter()
+        .map(|l| {
+            let area = l.area.clone();
+            let mut items = vec![(
+                "Вы тут!".to_owned(),
+                format!("X: {}, Y: {}, Z: {}", l.x, l.y, l.z),
+            )];
+            if let Some(dir) = &l.dir {
+                items.push(("Направление".to_owned(), dir.clone()));
+            }
+            let items: Vec<_> = items
+                .into_iter()
+                .map(|(label, value)| bsn! { @LabeledListItem { @label: label, @content: value } })
+                .collect();
+            bsn! {
+                @Section { @title: area }
+                Children [ @LabeledList Children [ {items} ] ]
+            }
+        })
+        .collect();
+    let stairs: Vec<_> = d
+        .stairs
+        .iter()
+        .map(|s| {
+            let label = if s.ladder {
+                "Лестница (стремянка)"
+            } else {
+                "Лестница"
+            }
+            .to_owned();
+            let value = if s.toward.is_empty() {
+                format!("X: {}, Y: {} — здесь", s.x, s.y)
+            } else {
+                format!("X: {}, Y: {} — {} м, {}", s.x, s.y, s.distance, s.toward)
+            };
+            bsn! { @LabeledListItem { @label: label, @content: value } }
+        })
+        .collect();
+    let notice = (d.signal != super::programs::navigator::SIGNAL_GOOD).then(|| {
+        let (text, danger) = if d.signal == super::programs::navigator::SIGNAL_LOW {
+            (
+                "Нестабильный или крайне слабый сигнал! Местоположение может быть некорректным.",
+                false,
+            )
+        } else {
+            (
+                "Не удаётся определить местоположение устройства! Проверьте качество \
+                 подключения к NTnet.",
+                true,
+            )
+        };
+        EntityScene(bsn! { @NoticeBox { @danger: danger } Children [ Text({text.to_owned()}) ] })
+    });
+    bsn! {
+        @Section { @title: "Навигатор", @fill: true, @scrollable: true }
+        Children [
+            {here}
+            --
+            @Section { @title: "Лестницы" }
+            Children [ @LabeledList Children [ {stairs} ] ]
+            --
+            {notice}
+        ]
     }
 }
 

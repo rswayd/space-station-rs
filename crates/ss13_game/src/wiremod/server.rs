@@ -1007,11 +1007,11 @@ pub enum CircuitAct {
 
 /// `/obj/item/integrated_circuit/ui_act`.
 fn circuit_acts(world: &mut World, mut cursor: Local<MessageCursor<UiActed<IntegratedCircuitUi>>>) {
-    let acts: Vec<(Entity, Entity, Entity, CircuitAct)> = cursor
+    let acts: Vec<(Entity, Entity, CircuitAct)> = cursor
         .read(world.resource::<Messages<UiActed<IntegratedCircuitUi>>>())
-        .map(|a| (a.client, a.actor, a.source, a.act.clone()))
+        .map(|a| (a.actor, a.source, a.act.clone()))
         .collect();
-    for (client, actor, circuit, act) in acts {
+    for (actor, circuit, act) in acts {
         if world.get::<IntegratedCircuit>(circuit).is_none() {
             continue;
         }
@@ -1042,7 +1042,7 @@ fn circuit_acts(world: &mut World, mut cursor: Local<MessageCursor<UiActed<Integ
                 })
                 .flatten();
                 if let Some(text) = balloon {
-                    tell(world, client, Span::Notice, text);
+                    crate::balloon::balloon_alert(world, actor, circuit, &text);
                 }
             }
             CircuitAct::GetValue { component, port } => {
@@ -1050,7 +1050,7 @@ fn circuit_acts(world: &mut World, mut cursor: Local<MessageCursor<UiActed<Integ
                     .get::<IntegratedCircuit>(circuit)
                     .and_then(|ic| ic.circuit.output_text(component, port));
                 if let Some(text) = text {
-                    tell(world, client, Span::Notice, text);
+                    crate::balloon::balloon_alert(world, actor, circuit, &text);
                 }
             }
             CircuitAct::DisplayName(name) => {

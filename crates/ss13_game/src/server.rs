@@ -277,6 +277,8 @@ impl Plugin for GameServerPlugin {
         .add_plugins(crate::statpanel::StatPanelServerPlugin)
         .add_plugins((
             crate::ssd::SsdPlugin,
+            crate::dreams::DreamsPlugin,
+            crate::emojis::EmojisPlugin,
             crate::locked_pickup::LockedPickupPlugin,
             crate::screentips::ScreentipsServerPlugin,
             crate::escape_menu::EscapeMenuServerPlugin,
