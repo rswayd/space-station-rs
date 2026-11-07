@@ -925,6 +925,7 @@ pub const EVENT_RUNTIME_TYPES: &[&str] = &[
     "/mob/living/basic/bee",
     "/mob/living/basic/bee/toxin",
     "/mob/living/basic/butterfly",
+    "/mob/living/basic/cockroach",
     "/mob/living/basic/cockroach/bloodroach",
     "/mob/living/basic/cockroach/glockroach",
     "/mob/living/basic/cockroach/glockroach/mobroach",

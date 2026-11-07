@@ -2,7 +2,6 @@
 //! default lawset from the config, the law list as `show_laws` prints it, and a cyborg's copy of
 //! its AI's laws (`ai_to_cyborg`, `lawsync`). Law racks combine their modules into one
 //! ([`super::law_rack`]).
-// shortcut: no ion law events (tg `generate_ion_law`).
 
 use bevy::prelude::*;
 use ss13_mapload::silicon::{Lawset, SiliconData};
@@ -112,7 +111,7 @@ impl Laws {
 }
 
 /// tg `ion_num()` is random `"[pick(...)]#!"`-style garbage; a fixed one keeps the list stable.
-// shortcut: no randomized ion numbers (there are no ion laws yet).
+// shortcut: no randomized ion numbers (a fixed one keeps tests and diffs stable).
 fn ion_num() -> &'static str {
     "#"
 }

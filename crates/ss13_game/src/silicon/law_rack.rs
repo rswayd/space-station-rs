@@ -22,8 +22,8 @@
 //! - The mapped core rack is named after a greek letter and starts with the round's default
 //!   lawset module welded in its core slot. A joining AI links to the first core rack that
 //!   takes it (`link_to_first_rack`), a cyborg too when no AI takes it.
-// shortcut: no rack stun or firewall on core removal and rack loss (only the message), no ion
-// storm damage or ion law generation (the damaged module and the toy AI keep their laws), no
+// Ion storms scramble the modules (`scramble_ai_rack`, `crate::events::ion_storm`).
+// shortcut: no rack stun or firewall on core removal and rack loss (only the message), no
 // wrench or cable anchoring, no examine of slots, no GPS on linked racks, no law change log,
 // no IC filter on typed laws, deleted silicons are not kept as names in the linked list.
 

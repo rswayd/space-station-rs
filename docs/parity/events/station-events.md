@@ -42,7 +42,7 @@
 Генератор гравитации отключается: на станции пропадает гравитация, пока инженеры его не перезапустят.
 
 - **Код:** [`/datum/round_event_control/gravity_generator_blackout`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/gravity_generator_blackout.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — нет генератора гравитации и невесомости
+- **Статус в ss13-rs:** ❌ нет — нет генератора гравитации (`docs/parity/power/generators.md`: машина, зарядка, окно `GravityGenerator` с рубильником) и гравитации по z-уровням (`crate::multiz::has_gravity` знает только космос); событие — один вызов `blackout()` на генераторах станции, без перезапуска оно лишило бы станцию гравитации навсегда
 
 ### Radiation Leak
 Машина в случайной зоне начинает излучать радиацию и газ (часто плазму/трития), пока её не починят инструментами.
@@ -60,13 +60,13 @@
 Трамвай (на картах с трамваем) идёт с ошибками: пропускает станции, сигналы переходов сбоят, шанс аварий растёт.
 
 - **Код:** [`/datum/round_event_control/tram_malfunction`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/tram_malfunction.dm#L4)
-- **Статус в ss13-rs:** ❌ нет — нет трамвая
+- **Статус в ss13-rs:** ❌ нет — нет трамвая (`SStransport`, `/obj/structure/transport/linear/tram`, контроллеры и сигналы переходов); ни одна карта порта его не загружает
 
 ### Chasmic Earthquake
 По станции проходит разлом: после предупреждения с тряской участок турфов проваливается в пропасть, разрушая всё на линии.
 
 - **Код:** [`/datum/round_event_control/earthquake`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/earthquake.dm#L5)
-- **Статус в ss13-rs:** ❌ нет — нет пропастей и события
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/events/earthquake.rs`: вес 7, от 20 игроков, с 35 минуты, до 3 раз, только на планетарной карте (`"planetary"` в json карты); эпицентр — случайный тайл станции ±10, разлом между двумя противоположными точками излома (прямоугольник, оставлены тайлы в пределах 2 от линии tg, кромка — ровно 3), объявление в 25%; каждые 10 тиков у игроков станции тряска камеры и далёкий гул, на 23 тике живые на разломе сбиты (7 с) и парализованы (5 с), на 24 — лёгкий взрыв 90% разлома, порода под ним выбурена, скрип металла; в конце разлом бомбится (опустошение, 10% — тяжёлый), кромка — лёгкий/25% тяжёлый через очередь взрывов (`crate::explosions::queue_turfs`) без самого взрыва; эпицентр не от ландмарок `generic_event_spawns` (не загружаются), нет анимации тряски турфов, оповещения призраков и ачивки; тряска в конце — игрокам станции (в tg из-за `||` почти никому)
 
 ### Brand Intelligence
 Один торговый автомат становится «разумным» и заражает остальные автоматы своего отдела: они кричат рекламу, стреляют товаром и в конце могут ожить; остановка — уничтожить первоисточник.
@@ -78,7 +78,7 @@
 Ионный шторм добавляет ИИ и киборгам случайный закон (или меняет/удаляет законы), шанс ботам сойти с ума, сообщение «ионный шторм».
 
 - **Код:** [`/datum/round_event_control/ion_storm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/ion_storm.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — нет ИИ и законов
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/events/ion_storm.rs`: вес 15, от 2 игроков; объявление в 33% (`ANNOUNCER_IONSTORM`); BandaStation `scramble_ai_rack` на каждой стойке законов (`crate::silicon::law_rack`): ядровой модуль — новый набор по `LAW_WEIGHT` конфига (25%), удаление закона (10%), перемешивание (10%), ионный закон сверху, иначе замена (10%); модули законов — замена ионным (до двух на стойку) или стирание дополнительного; модули ионизируются (чинятся мультитулом), стойка обновляет законы ИИ/киборгов; `generate_ion_law` — 165 шаблонов с весами tg по `strings/ion_laws.json`; 1% ботам — `emag_act`; без лога законов, станционной черты Unique AI и двойного броска шанса объявления tg
 
 ### Radiation Storm
 Погода `rad_storm` на станции: тревога, экипаж прячется в техтоннелях, открытые зоны облучаются (мутации, ожоги).
@@ -97,4 +97,4 @@
 
 - **Код:** [`/datum/round_event_control/scrubber_overflow`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/scrubber_overflow.dm#L1), [`/datum/round_event_control/scrubber_overflow/threatening`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/scrubber_overflow.dm#L125), [`/datum/round_event_control/scrubber_overflow/catastrophic`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/scrubber_overflow.dm#L140), [`/datum/round_event_control/scrubber_overflow/every_vent`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/scrubber_overflow.dm#L155)
 - **BandaStation:** [`code/modules/events/scrubber_overflow.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/scrubber_overflow.dm#L54) — убран случайный блеск (`glitter/random`) из списка реагентов
-- **Статус в ss13-rs:** ❌ нет — нет скрубберов и пены
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/events/scrubber_overflow.rs`: четыре события с весами/порогами tg (Every Vent — вес 0, только принудительно), только при незаваренном скруббере станции; объявление «Инженерный отдел», через 5 тиков каждый отобранный скруббер (50%, Every Vent — 100%) выпускает короткоживущую пену (`crate::effects::foam::do_foam`, `FoamKind::ShortLife`) на `reagents_amount` (50/100/150/100) одного реагента: безопасного из списка BandaStation (без блёсток) или, с `danger_chance` 1/10/30%, случайного (`get_random_reagent_id`) с тараканом и кровавым тараканом; нет админской настройки реагента
