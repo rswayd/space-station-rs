@@ -1144,7 +1144,7 @@ mod tests {
         assert_eq!(kind("/datum/action/item_action/adjust"), None);
         assert_eq!(
             kind("/datum/action/item_action/chameleon/change/stamp"),
-            None
+            Some("Stamp")
         );
     }
 

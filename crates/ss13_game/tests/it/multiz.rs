@@ -96,6 +96,10 @@ fn cyberiad_decks() {
     );
 
     let dog = ss13_game::mobs::spawn::spawn_mob(app.world_mut(), DOG, at).expect("a corgi");
+    // A wandering dog can step off the stairs before it is moved.
+    app.world_mut()
+        .entity_mut(dog)
+        .remove::<ss13_game::mobs::ai::AiController>();
     run(&mut app, 0.5);
     let full = health(&app, dog);
     app.world_mut().write_message(MoveRequest {

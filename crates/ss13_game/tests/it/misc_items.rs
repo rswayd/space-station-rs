@@ -354,7 +354,8 @@ fn charter_renames_the_station_once() {
     s.run_until("renamed", |s| {
         s.station_name() == "Imperial Aegis Station 13"
     });
-    assert!(s.said("одобрено автоматически"));
+    // The chat line reaches the client a frame after the rename.
+    s.run_until("told", |s| s.said("одобрено автоматически"));
     assert!(s.get::<Charter>(charter).used);
     assert_eq!(
         s.get::<Name>(charter).as_str(),

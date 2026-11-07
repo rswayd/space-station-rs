@@ -584,29 +584,6 @@ fn synthesise_darts(world: &mut World) {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn beams_cross_where_their_lines_share_a_tile() {
-        let t = |x, y| TilePos::new(x, y, 1);
-        let mine = beam_tiles(t(3, 6), t(7, 6));
-        let across = beam_tiles(t(5, 3), t(5, 9));
-        let parallel = beam_tiles(t(3, 8), t(7, 8));
-        assert_eq!(beams_cross(&mine, &[parallel.clone()]), None);
-        assert_eq!(beams_cross(&mine, &[parallel, across]), Some(t(5, 6)));
-    }
-
-    #[test]
-    fn rapid_syringe_gun_holds_six() {
-        assert_eq!(max_syringes(RAPID_SYRINGE_GUN), 6);
-        assert_eq!(max_syringes(SYRINGE_GUN), 1);
-        assert_eq!(max_syringes(BLOWGUN), 1);
-        assert_eq!(max_syringes(DNA_GUN), 1);
-    }
-}
-
 /// tg `/obj/item/gun/medbeam/process_fire`: the old beam lets go; a living target is beamed.
 fn medbeam_fire(world: &mut World, mob: Entity, gun: Entity, target: Entity) {
     let living = world.get::<crate::health::Health>(target).is_some() && target != mob;
@@ -883,5 +860,28 @@ fn reel_in(world: &mut World) {
         if let Some(mut h) = world.get_mut::<Hooked>(victim) {
             h.next_step = now + HOOK_STEP_SECS;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn beams_cross_where_their_lines_share_a_tile() {
+        let t = |x, y| TilePos::new(x, y, 1);
+        let mine = beam_tiles(t(3, 6), t(7, 6));
+        let across = beam_tiles(t(5, 3), t(5, 9));
+        let parallel = beam_tiles(t(3, 8), t(7, 8));
+        assert_eq!(beams_cross(&mine, std::slice::from_ref(&parallel)), None);
+        assert_eq!(beams_cross(&mine, &[parallel, across]), Some(t(5, 6)));
+    }
+
+    #[test]
+    fn rapid_syringe_gun_holds_six() {
+        assert_eq!(max_syringes(RAPID_SYRINGE_GUN), 6);
+        assert_eq!(max_syringes(SYRINGE_GUN), 1);
+        assert_eq!(max_syringes(BLOWGUN), 1);
+        assert_eq!(max_syringes(DNA_GUN), 1);
     }
 }

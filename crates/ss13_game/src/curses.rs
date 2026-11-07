@@ -1134,7 +1134,9 @@ mod tests {
         assert_eq!(curse.until, NECRO_SECS + NECRO_EXTRA_SECS);
         advance(&mut world, 5.0);
         necropolis_tick(&mut world);
-        assert_eq!(world.get::<Health>(mob).unwrap().burn, 0.75);
+        // 0.75 burn through the limbs, which keep one decimal.
+        let burn = world.get::<Health>(mob).unwrap().burn;
+        assert!((burn - 0.75).abs() < 0.1, "wasting burn {burn}");
     }
 
     #[test]

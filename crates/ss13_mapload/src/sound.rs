@@ -327,7 +327,32 @@ pub mod files {
     ];
     /// Sounds the game code plays by a constant path (checked by the real-asset test
     /// `runtime_types::game_sound_literals_are_converted` in ss13_game).
-    pub const GAME_CODE: [&str; 143] = [
+    pub const GAME_CODE: [&str; 168] = [
+        "sound/mobs/humanoids/human/gag_vomit/gag1.ogg",
+        "sound/mobs/humanoids/human/gag_vomit/gag2.ogg",
+        "sound/mobs/humanoids/human/gag_vomit/gag3.ogg",
+        "sound/mobs/humanoids/human/gag_vomit/gag4.ogg",
+        "sound/mobs/humanoids/human/gag_vomit/gag5.ogg",
+        "sound/mobs/humanoids/human/gag_vomit/crack_vomit.ogg",
+        "sound/effects/desecration/desecration-01.ogg",
+        "sound/effects/desecration/desecration-02.ogg",
+        "sound/effects/desecration/desecration-03.ogg",
+        "sound/items/weapons/gun/shotgun/insert_shell.ogg",
+        "sound/items/unsheath.ogg",
+        "sound/items/weapons/block_shield.ogg",
+        "sound/items/weapons/block_blade.ogg",
+        "sound/effects/shieldbash.ogg",
+        "sound/effects/energyshieldbash.ogg",
+        "sound/effects/bang.ogg",
+        "sound/effects/grillehit.ogg",
+        "sound/effects/glass/glassbr3.ogg",
+        "sound/items/trayhit/trayhit2.ogg",
+        "sound/effects/meteorimpact.ogg",
+        "sound/effects/curse/curse5.ogg",
+        "sound/items/weapons/plasma_cutter.ogg",
+        "sound/items/weapons/kinetic_accel.ogg",
+        "sound/items/bikehorn.ogg",
+        "sound/machines/terminal/terminal_button07.ogg",
         "sound/items/barcodebeep.ogg",
         "sound/items/click.ogg",
         "sound/machines/cryo_warning.ogg",
