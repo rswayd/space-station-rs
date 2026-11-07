@@ -973,7 +973,12 @@ mod tests {
         assert!(c.machines.is_empty() && c.status.as_deref().unwrap().contains("UNABLE"));
         apply_monitor_act(&mut world, console, &MonitorAct::Probe("tcommsat".into()));
         let c = world.get::<TelecommsMonitor>(console).unwrap();
-        assert_eq!(c.machines, vec![hub, bus]);
+        // Query order is not spawn order.
+        let mut found = c.machines.clone();
+        found.sort();
+        let mut want = vec![hub, bus];
+        want.sort();
+        assert_eq!(found, want);
         assert_eq!(c.status.as_deref(), Some("2 ENTITIES LOCATED & BUFFERED"));
         apply_monitor_act(&mut world, console, &MonitorAct::Probe("tcommsat".into()));
         assert!(
