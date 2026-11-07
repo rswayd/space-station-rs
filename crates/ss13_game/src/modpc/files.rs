@@ -330,13 +330,16 @@ mod tests {
         pc.disk = Some(disk);
         assert!(pc.open_program(ProgramKind::Notepad));
         let e = world.spawn(pc).id();
-        let snapshot = |w: &World| w.get::<ModularComputer>(e).unwrap().clone();
+        // `apply` with the computer as it is now.
+        fn apply_now(world: &mut World, e: Entity, act: FileAct) -> Result<(), &'static str> {
+            let computer = world.get::<ModularComputer>(e).unwrap().clone();
+            apply(world, e, &computer, act)
+        }
         // Not in front: refused.
         assert!(
-            apply(
+            apply_now(
                 &mut world,
                 e,
-                &snapshot(&world),
                 FileAct::CopyToUsb(ProgramKind::Notepad)
             )
             .is_err()
@@ -345,10 +348,9 @@ mod tests {
             .get_mut::<ModularComputer>(e)
             .unwrap()
             .open_program(ProgramKind::FileManager);
-        apply(
+        apply_now(
             &mut world,
             e,
-            &snapshot(&world),
             FileAct::CopyToUsb(ProgramKind::Notepad),
         )
         .unwrap();
@@ -360,14 +362,13 @@ mod tests {
                 .contains(&ProgramKind::Notepad)
         );
         // The running notepad is deleted: it closes too. The messenger is undeletable.
-        apply(
+        apply_now(
             &mut world,
             e,
-            &snapshot(&world),
             FileAct::Delete(ProgramKind::Notepad),
         )
         .unwrap();
-        let pc = snapshot(&world);
+        let pc = world.get::<ModularComputer>(e).unwrap().clone();
         assert!(
             !pc.programs.contains(&ProgramKind::Notepad)
                 && !pc.idle.contains(&ProgramKind::Notepad)
@@ -381,14 +382,13 @@ mod tests {
             FileAct::CopyFromUsb(ProgramKind::Notepad),
         )
         .unwrap();
-        apply(
+        apply_now(
             &mut world,
             e,
-            &snapshot(&world),
             FileAct::CopyFromUsb(ProgramKind::SecRecords),
         )
         .unwrap();
-        let data = ui_data(&snapshot(&world), world.get::<ComputerDisk>(disk));
+        let data = ui_data(&world.get::<ModularComputer>(e).unwrap().clone(), world.get::<ComputerDisk>(disk));
         assert!(data.usbconnected);
         assert!(
             data.files
@@ -400,10 +400,9 @@ mod tests {
                 .iter()
                 .any(|f| f.name == "filemanager" && f.undeletable)
         );
-        apply(
+        apply_now(
             &mut world,
             e,
-            &snapshot(&world),
             FileAct::UsbDelete(ProgramKind::SecRecords),
         )
         .unwrap();

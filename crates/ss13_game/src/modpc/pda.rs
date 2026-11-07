@@ -835,7 +835,7 @@ impl NtosParams<'_, '_> {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum NtosAct {
     Exit,
     Shutdown,

@@ -348,7 +348,7 @@ impl ProgramKind {
 
 /// `/obj/item/modular_computer` `default_programs` (no theme manager) + `/obj/item/modular_computer/pda`
 /// `pda_programs` this port has, in `stored_files` order.
-pub const PDA_PROGRAMS: [ProgramKind; 5] = [
+pub const PDA_PROGRAMS: [ProgramKind; 6] = [
     ProgramKind::Downloader,
     ProgramKind::FileManager,
     ProgramKind::Messenger,
