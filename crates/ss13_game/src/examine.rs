@@ -328,6 +328,8 @@ fn examine(world: &mut World, mut clicks: Local<MessageCursor<ExamineClick>>) {
             });
         }
         crate::quirks::examined(world, click.examiner, click.target);
+        // `photo/examine` and `picture_frame/examine` show the picture.
+        crate::service::photo_examined(world, click.client, click.examiner, click.target);
     }
 }
 

@@ -1,5 +1,6 @@
-//! The paper and book windows (client): tgui `PaperSheet` and `MarkdownViewer`. The data is
-//! `crate::service`, the server half `crate::service::server`.
+//! The paper and book windows (client): tgui `PaperSheet` and `MarkdownViewer`; the photo
+//! window, drawing a picture's sprites. The data is `crate::service`, the server half
+//! `crate::service::server`.
 // shortcut: plain text instead of rendered markdown/HTML and fonts (each input keeps its colour
 // and boldness on a white sheet); stamps are listed by name under the text, not drawn.
 
@@ -14,7 +15,7 @@ use super::{
     DsmBookData, DsmBookUi, IdcBookData, IdcBookUi, LIBRARY_ARCHIVE, LIBRARY_CHECKOUT,
     LIBRARY_INVENTORY, LIBRARY_PRINT, LIBRARY_TOP_SNEAKY, LIBRARY_UPLOAD, LibraryConsoleData,
     LibraryConsoleUi, MarkdownViewerData, MarkdownViewerUi, PaperSheetData, PaperSheetUi,
-    plain_text,
+    PhotoData, PhotoUi, plain_text,
 };
 
 pub struct ServiceClientPlugin;
@@ -25,7 +26,9 @@ impl Plugin for ServiceClientPlugin {
             .register_ui_view::<MarkdownViewerUi>()
             .register_ui_view::<DsmBookUi>()
             .register_ui_view::<IdcBookUi>()
-            .register_ui_view::<LibraryConsoleUi>();
+            .register_ui_view::<LibraryConsoleUi>()
+            .register_ui_view::<PhotoUi>()
+            .add_systems(PostUpdate, resolve_photo_sprites);
     }
 }
 
@@ -427,5 +430,128 @@ mod tests {
     fn pen_colours_parse() {
         assert_eq!(parse_color("#FF0000"), Color::srgb_u8(255, 0, 0));
         assert_eq!(parse_color("nope"), Color::BLACK);
+    }
+}
+
+/// The side the picture is scaled up to (tg shows it 480 px wide).
+const PHOTO_SIDE: f32 = 448.0;
+
+/// Window pixels per picture pixel: whole steps, so the sprites stay crisp.
+fn photo_scale(width: u8, height: u8) -> f32 {
+    let side = f32::from(width.max(height).max(1)) * ss13_shared::TILE_SIZE as f32;
+    (PHOTO_SIDE / side).floor().clamp(1.0, 4.0)
+}
+
+impl ClientUi for PhotoUi {
+    const WIDTH: f32 = 480.0;
+    const HEIGHT: f32 = 500.0;
+
+    fn size(data: &PhotoData, _: &()) -> (f32, f32) {
+        (
+            Self::WIDTH,
+            if data.scribble.is_empty() {
+                Self::HEIGHT
+            } else {
+                600.0
+            },
+        )
+    }
+
+    fn content(data: &PhotoData, _: &()) -> impl Scene {
+        photo_view(data)
+    }
+}
+
+/// One picture sprite in the photo window; [`resolve_photo_sprites`] gives it its image and
+/// size (the frame's, scaled), so sprites larger than a tile keep their size.
+#[derive(Component, Clone, Debug, Default, PartialEq)]
+#[require(Node)]
+pub struct PhotoSpriteNode {
+    pub icon_state: Option<ss13_shared::IconStateId>,
+    pub dir: ss13_shared::Dir,
+    pub color: Option<[u8; 4]>,
+    pub scale: f32,
+}
+
+fn photo_view(data: &PhotoData) -> impl Scene + use<> {
+    let scale = photo_scale(data.width, data.height);
+    let tile = ss13_shared::TILE_SIZE as f32 * scale;
+    let (width, height) = (f32::from(data.width) * tile, f32::from(data.height) * tile);
+    let sprites: Vec<_> = data
+        .sprites
+        .iter()
+        .map(|s| {
+            let sprite = PhotoSpriteNode {
+                icon_state: Some(s.icon_state),
+                dir: s.dir,
+                color: s.color,
+                scale,
+            };
+            let (left, bottom) = (f32::from(s.x) * scale, f32::from(s.y) * scale);
+            bsn! {
+                Node { position_type: PositionType::Absolute, left: px(left), bottom: px(bottom) }
+                sprite
+            }
+        })
+        .collect();
+    let back = (!data.scribble.is_empty()).then(|| {
+        let text = format!("На обороте написано:\n{}", data.scribble);
+        EntityScene(bsn! {
+            Node { margin: UiRect::top(px(8)) }
+            Children [ Text(text) ]
+        })
+    });
+    bsn! {
+        @WindowContent
+        Children [
+            Node { flex_direction: FlexDirection::Column, align_items: AlignItems::Center }
+            Children [
+                Node { width: px(width), height: px(height), overflow: Overflow::clip() }
+                BackgroundColor(Color::BLACK)
+                Children [ {sprites} ]
+                --
+                {back}
+            ]
+        ]
+    }
+}
+
+/// Each new picture sprite's first frame from the icon atlas (the page loads on demand), sized
+/// as its frame.
+fn resolve_photo_sprites(
+    mut sprites: Query<(Entity, &PhotoSpriteNode, &mut Node), Changed<PhotoSpriteNode>>,
+    mut atlas: Option<ResMut<ss13_render::IconAtlas>>,
+    mut commands: Commands,
+) {
+    let Some(atlas) = atlas.as_deref_mut() else {
+        return;
+    };
+    for (entity, sprite, mut node) in &mut sprites {
+        let Some((info, image)) = sprite.icon_state.and_then(|id| atlas.state(id)) else {
+            continue;
+        };
+        node.width = px(info.width as f32 * sprite.scale);
+        node.height = px(info.height as f32 * sprite.scale);
+        let color = sprite
+            .color
+            .map_or(Color::WHITE, |[r, g, b, a]| Color::srgba_u8(r, g, b, a));
+        commands.entity(entity).insert(ImageNode {
+            image,
+            rect: ss13_render::atlas::frame_rect(info, sprite.dir, 0),
+            color,
+            ..default()
+        });
+    }
+}
+
+#[cfg(test)]
+mod photo_tests {
+    use super::photo_scale;
+
+    #[test]
+    fn pictures_scale_by_whole_steps() {
+        assert_eq!(photo_scale(3, 3), 4.0);
+        assert_eq!(photo_scale(7, 5), 2.0);
+        assert_eq!(photo_scale(1, 1), 4.0);
     }
 }

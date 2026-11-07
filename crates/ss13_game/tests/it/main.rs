@@ -93,6 +93,7 @@ mod nukeops;
 mod paperwork;
 mod paradox_clone;
 mod pda;
+mod photography;
 mod play;
 mod plumbing;
 mod power;

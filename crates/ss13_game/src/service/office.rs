@@ -12,16 +12,17 @@
 //!   cartridge), a toner cartridge and the paper to copy. An empty hand lists its actions (tgui
 //!   `Photocopier` as a list): copy `num_copies` (1-10) copies, each `PAPER_TONER_USE /
 //!   toner_efficiency` of toner and one sheet, one every `time_to_print`; take the original or
-//!   the cartridge out. A blank paper or a paper bin's sheets refill it.
+//!   the cartridge out. A blank paper or a paper bin's sheets refill it. A photo is copied too
+//!   (`PHOTO_TONER_USE`), without what is written on its back.
 //! - The fax machine takes a paper, paper plane or canvas; an empty hand lists the station's
 //!   faxes to send it to (and the Central Command network), or takes it out. The receiving fax
 //!   says who sent it and drops it 1.9 s later.
 // shortcut: tier-1 stock parts (30 sheets, efficiency 2, 4 s per copy) and one blank paper
-// kind; no photo, blank-form or ass copies, payment, emag, toner colour or pixel
-// shifting; folders cannot be renamed or cut apart; planes have no eye hits, carbon look or
-// stamp overlays; the fax has no wires, jams, history, emag network or multitool renaming, and
-// a fax to Central Command reaches the CentCom fax machines without the admins' request panel
-// (admin group).
+// kind; photos are copied in colour only (no greyscale mode); no blank-form or ass copies,
+// payment, emag, toner colour or pixel shifting; folders cannot be renamed or cut apart;
+// planes have no eye hits, carbon look or stamp overlays; the fax has no wires, jams,
+// history, emag network or multitool renaming, and a fax to Central Command reaches the
+// CentCom fax machines without the admins' request panel (admin group).
 
 use bevy::prelude::*;
 use ss13_mapload::{DmAtom, IconIndex};
@@ -58,6 +59,8 @@ const TONER_EFFICIENCY: f32 = 2.0;
 const PRINT_SECS: f64 = 4.0;
 /// `PAPER_TONER_USE`, `MAX_COPIES_AT_ONCE`.
 const PAPER_TONER_USE: f32 = 0.125;
+/// `PHOTO_TONER_USE` (`PHOTO_PAPER_USE` is one sheet).
+const PHOTO_TONER_USE: f32 = 0.625;
 /// `DOCUMENT_PAPER_USE`.
 const DOCUMENT_PAPER_USE: u32 = 20;
 const MAX_COPIES: u32 = 10;
@@ -734,6 +737,7 @@ fn copier_insert(
     let blank = match world.get::<Paper>(held) {
         Some(paper) => paper.is_empty(),
         None if crate::misc_items::documents::is_documents(world, held) => false,
+        None if super::photo::copyable(world, held) => false,
         None => return false,
     };
     if blank {
@@ -982,6 +986,8 @@ fn copy_cost(world: &World, original: Entity) -> (u32, f32) {
             DOCUMENT_PAPER_USE,
             PAPER_TONER_USE * DOCUMENT_PAPER_USE as f32,
         )
+    } else if super::photo::copyable(world, original) {
+        (1, PHOTO_TONER_USE)
     } else {
         (1, PAPER_TONER_USE)
     }
@@ -1015,6 +1021,8 @@ pub(super) fn next_copy(world: &mut World, copier: Entity) {
     };
     let copy = if crate::misc_items::documents::is_documents(world, original) {
         crate::misc_items::documents::make_copy(world, original, pos)
+    } else if super::photo::copyable(world, original) {
+        super::photo::copy_photo(world, original, pos)
     } else {
         let copy = crate::construction::spawn_obj(world, PAPER, pos);
         if let Some(copy) = copy {
