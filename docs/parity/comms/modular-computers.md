@@ -49,7 +49,7 @@
 Программы требуют связи с NTNet (реле и телекомы), уровень сигнала зависит от z-уровня и состояния реле.
 
 - **Код:** [`proc/get_ntnet_status()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/modular_computers/computers/item/computer.dm#L763)
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/modpc/pda.rs`: `// shortcut:` сигнал NTNet всегда хороший, реле не учитываются
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/modpc/ntnet.rs`: консоль — провод (3), переносной — только при запитанном реле `/obj/machinery/ntnet_relay`: станционный z — хороший (ноутбук — провод), шахтёрский или `long_ranged` — слабый, иначе нет; сетевые программы (`PROGRAM_REQUIRES_NTNET`) не запускаются без сигнала и падают при его потере (`event_networkfailure`), сигнал в заголовке. Сама машина реле (вкл/выкл, DoS, UI) — в [telecomms.md](telecomms.md#реле-ntnet); `// shortcut:` скорость загрузки не зависит от сигнала
 
 ### Модульный компьютер как оболочка схем
 Компьютер принимает интегральную схему (wiremod) и даёт ей компоненты программ.

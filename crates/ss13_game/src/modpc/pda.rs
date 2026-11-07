@@ -13,8 +13,7 @@
 //! reaches the PDA at once. The PDA's name follows its imprint (`imprint_id` ->
 //! `UpdateDisplay`). The flashlight lights the holder (tg's overlay light moves with whoever
 //! carries it) or the PDA on the floor.
-// shortcut: NTNet always at good signal
-// (no relays), no inserted pen, disks, pAI, paper or chunky fingers; the light is
+// shortcut: no inserted pen, disks, pAI, paper or chunky fingers; the light is
 // omnidirectional (tg: a directional overlay light) and gives way to any other light on its
 // holder (one `Optics` per entity).
 
@@ -53,8 +52,6 @@ const MAX_IDLE_PROGRAMS: usize = 2;
 /// `comp_light_luminosity` of a PDA, `light_power` of a modular computer, `COLOR_WHITE`.
 const LIGHT_RANGE: f32 = 2.3;
 const LIGHT_POWER: f32 = 1.2;
-/// `NTNET_GOOD_SIGNAL`.
-const NTNET_GOOD_SIGNAL: u8 = 2;
 /// `NtosMain`'s title.
 const MAIN_TITLE: &str = "NtOS Главное Меню";
 
@@ -239,6 +236,7 @@ impl Plugin for ModpcServerPlugin {
         super::programs::downloader::build(app);
         super::programs::chat::build(app);
         super::power::build(app);
+        super::ntnet::build(app);
         app.register_ui::<NtosUi>()
             .add_observer(attach)
             .add_observer(attach_console)
@@ -763,6 +761,7 @@ pub struct NtosParams<'w, 's> {
     ticker: Option<Res<'w, crate::round::Ticker>>,
     time: Res<'w, Time>,
     cells: Query<'w, 's, &'static super::power::ComputerCell>,
+    ntnet: Option<Res<'w, super::ntnet::Ntnet>>,
 }
 
 impl NtosParams<'_, '_> {
@@ -844,6 +843,9 @@ impl ServerUi for NtosUi {
         params: &SystemParamItem<'_, '_, Self::UserParam>,
     ) -> NtosData {
         let secs = params.round_secs();
+        let pos = at
+            .copied()
+            .or_else(|| carried.and_then(|c| params.positions.get(c.0).ok().copied()));
         let header = NtosHeader {
             title: computer
                 .active
@@ -855,7 +857,10 @@ impl ServerUi for NtosUi {
                 .get(entity)
                 .ok()
                 .and_then(super::power::ComputerCell::percent),
-            ntnet: NTNET_GOOD_SIGNAL,
+            ntnet: params
+                .ntnet
+                .as_deref()
+                .map_or(0, |n| n.signal(&computer.path, pos)),
             program_headers: computer
                 .idle
                 .iter()
@@ -882,9 +887,6 @@ impl ServerUi for NtosUi {
                 .collect(),
             show_exit: computer.active.is_some(),
         };
-        let pos = at
-            .copied()
-            .or_else(|| carried.and_then(|c| params.positions.get(c.0).ok().copied()));
         let screen = match computer.active {
             None => NtosScreen::Main(main_data(
                 computer,
@@ -1201,9 +1203,18 @@ fn apply_act(
             if !computer.programs.contains(&program) {
                 return Err("not installed");
             }
+            if !super::ntnet::can_open(world, client, pda, program) {
+                return Err("no NTNet");
+            }
             super::programs::apps::open_newscaster(world, client, actor, pda);
         }
         NtosAct::Run(program) => {
+            if computer.programs.contains(&program)
+                && computer.active != Some(program)
+                && !super::ntnet::can_open(world, client, pda, program)
+            {
+                return Err("no NTNet");
+            }
             if !pc!().open_program(program) {
                 chat(
                     world,

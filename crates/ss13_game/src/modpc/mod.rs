@@ -12,6 +12,8 @@ use ss13_tgui::UiInterface;
 #[cfg(feature = "client")]
 pub mod client;
 #[cfg(feature = "server")]
+pub mod ntnet;
+#[cfg(feature = "server")]
 pub mod pda;
 #[cfg(feature = "server")]
 pub mod power;

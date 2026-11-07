@@ -191,6 +191,9 @@ pub fn tick(world: &mut World, dt: f64) {
         .map(|(e, c, off)| (e, c.enabled, power_usage(c, !off)))
         .collect();
     for (pc, enabled, usage) in computers {
+        if enabled {
+            super::ntnet::network_check(world, pc);
+        }
         if enabled && !use_energy(world, pc, usage * dt, true) {
             power_failure(world, pc);
         }
