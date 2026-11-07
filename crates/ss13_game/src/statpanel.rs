@@ -368,9 +368,13 @@ mod server {
         let hosts: Vec<(Entity, Entity)> = query.iter(world).map(|(e, h)| (e, h.client)).collect();
         for (host, client) in hosts {
             let mob = world.get::<ControlledEntity>(client).map(|c| c.0);
+            let mut status = lines.clone();
+            if let Some(mob) = mob {
+                status.extend(crate::silicon::ai_status::status_lines(world, mob));
+            }
             let mut tabs = vec![StatTab {
                 name: STATUS_TAB.to_owned(),
-                lines: lines.clone(),
+                lines: status,
                 verbs: Vec::new(),
             }];
             if let Some(mob) = mob {

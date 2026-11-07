@@ -230,9 +230,11 @@ fn trigger(world: &mut World, mut acts: Local<MessageCursor<UiActed<ActionButton
         if id == CORE {
             // tg `view_core`: `eyeobj.setLoc(loc)`, the APC or card of a housed AI.
             let pos = match world.get::<super::ai::AiInside>(core) {
-                Some(&super::ai::AiInside::Apc(e) | &super::ai::AiInside::Card(e)) => {
-                    crate::explosions::turf_of(world, e)
-                }
+                Some(
+                    &super::ai::AiInside::Apc(e)
+                    | &super::ai::AiInside::Card(e)
+                    | &super::ai::AiInside::Terminal(e),
+                ) => crate::explosions::turf_of(world, e),
                 None => world.get::<TilePos>(core).copied(),
             };
             if let Some(pos) = pos {

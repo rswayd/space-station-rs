@@ -96,6 +96,9 @@ pub struct AiCore {
 pub enum AiInside {
     Card(Entity),
     Apc(Entity),
+    /// The AI system integrity restorer (`super::ai_fixer`): like a card, its eye sits on the
+    /// terminal and sees around it; its wireless is off there.
+    Terminal(Entity),
 }
 
 /// tg `linked_core`: the emptied core a shunted AI returns to (`resolve_core_link`).
@@ -120,7 +123,10 @@ pub fn unhouse(world: &mut World, ai: Entity, pos: TilePos) {
 
 /// Whether the AI mob `core` is in an intelliCard.
 pub fn carded(world: &World, core: Entity) -> bool {
-    matches!(world.get::<AiInside>(core), Some(AiInside::Card(_)))
+    matches!(
+        world.get::<AiInside>(core),
+        Some(AiInside::Card(_) | AiInside::Terminal(_))
+    )
 }
 
 /// On the AI's eye, the entity its client controls.
@@ -352,7 +358,10 @@ fn move_eyes(
             continue;
         };
         if stats.get(ai.ai).is_ok_and(|s| *s == Stat::Dead)
-            || matches!(inside.get(ai.ai), Ok(AiInside::Card(_)))
+            || matches!(
+                inside.get(ai.ai),
+                Ok(AiInside::Card(_) | AiInside::Terminal(_))
+            )
         {
             continue;
         }
@@ -370,7 +379,7 @@ fn pin_carded_eyes(world: &mut World) {
     let cards: Vec<(Entity, Entity)> = q
         .iter(world)
         .filter_map(|(core, inside)| match *inside {
-            AiInside::Card(card) => Some((core.eye, card)),
+            AiInside::Card(card) | AiInside::Terminal(card) => Some((core.eye, card)),
             AiInside::Apc(_) => None,
         })
         .collect();
@@ -399,7 +408,10 @@ fn refresh_eye_views(
         }
         let visible = if eye.blind {
             super::cameras::box_bits(*pos, VIEW_RADIUS, |_| false)
-        } else if matches!(inside.get(eye.ai), Ok(AiInside::Card(_))) {
+        } else if matches!(
+            inside.get(eye.ai),
+            Ok(AiInside::Card(_) | AiInside::Terminal(_))
+        ) {
             super::cameras::box_bits(*pos, VIEW_RADIUS, |_| true)
         } else {
             net.view_bits(*pos, VIEW_RADIUS)
@@ -443,7 +455,7 @@ fn ai_clicks(world: &mut World, mut clicks: Local<MessageCursor<AiClick>>) {
         } else {
             world.resource::<CameraNet>().visible(click.target_pos)
         };
-        if !sees {
+        if !sees || super::ai_upgrades::intercept_click(world, &click, ai) {
             continue;
         }
         let m = click.modifiers;
