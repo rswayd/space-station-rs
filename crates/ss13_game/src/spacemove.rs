@@ -451,6 +451,7 @@ fn drift(
                     world.write_message(Bumped {
                         entity: e,
                         obstacle,
+                        diagonal: !Dir::CARDINALS.contains(&d.dir),
                     });
                 }
                 world.entity_mut(e).remove::<Drift>();

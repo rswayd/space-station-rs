@@ -66,7 +66,7 @@ pub(crate) const TYPES: &str = r##"{
     "/obj/item/circuitboard/machine/smes": { "parent": "/obj/item/circuitboard", "declared_vars": {
         "def_components": {"list": [{"assoc": [{"path": "/obj/item/stock_parts/power_store/battery"}, {"path": "/obj/item/stock_parts/power_store/battery/high/empty"}]}]},
         "req_components": {"list": [{"assoc": [{"path": "/obj/item/stock_parts/power_store/battery"}, 5]}]} } },
-    "/obj/machinery": { "parent": "/obj", "declared_vars": {
+    "/obj/machinery": { "parent": "/obj", "declared_vars": { "anchored": 1,
         "use_power": 1, "idle_power_usage": 100, "active_power_usage": 1000, "power_channel": 1 } },
     "/obj/machinery/door": { "parent": "/obj/machinery", "declared_vars": {
         "icon": { "resource": "d.dmi" }, "icon_state": "door_closed", "density": 1, "opacity": 1,

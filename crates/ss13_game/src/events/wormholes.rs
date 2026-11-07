@@ -150,7 +150,10 @@ pub(super) fn enter_wormholes(world: &mut World, mut bumps: Local<MessageCursor<
         .read(world.resource::<Messages<Bumped>>())
         .copied()
         .collect();
-    for Bumped { entity, obstacle } in pending {
+    for Bumped {
+        entity, obstacle, ..
+    } in pending
+    {
         if world.get::<Wormhole>(obstacle).is_some() {
             teleport(world, entity);
         }

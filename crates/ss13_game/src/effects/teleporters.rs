@@ -281,7 +281,10 @@ pub(super) fn bump_teleporters(world: &mut World, mut cursor: Local<MessageCurso
         .read(world.resource::<Messages<Bumped>>())
         .copied()
         .collect();
-    for Bumped { entity, obstacle } in pending {
+    for Bumped {
+        entity, obstacle, ..
+    } in pending
+    {
         if world.get::<DmTrigger>(obstacle).is_none() {
             continue;
         }

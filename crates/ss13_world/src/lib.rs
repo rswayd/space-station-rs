@@ -429,7 +429,8 @@ mod tests {
             seen,
             [Bumped {
                 entity: m,
-                obstacle: w
+                obstacle: w,
+                diagonal: false,
             }]
         );
 

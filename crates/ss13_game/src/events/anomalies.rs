@@ -1068,7 +1068,10 @@ pub(super) fn anomaly_contacts(
         .read(world.resource::<Messages<Moved>>())
         .copied()
         .collect();
-    for Bumped { entity, obstacle } in bumped {
+    for Bumped {
+        entity, obstacle, ..
+    } in bumped
+    {
         match world.get::<Anomaly>(obstacle).map(|a| a.kind) {
             Some(AnomalyKind::Flux) => flux_shock(world, obstacle, entity),
             Some(AnomalyKind::Grav) => grav_shock(world, obstacle, entity),

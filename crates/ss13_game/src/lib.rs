@@ -53,7 +53,8 @@
 //!   `server`): zero gravity: pushing off, drifting, the weightless alert. `stumble` (feature
 //!   `server`): BandaStation's tripping from running too fast.
 //! - `pull` (feature `server`): ctrl+click pulling, pulled things following, grabs and resisting,
-//!   the pull/throw HUD's server half; `throw` (feature `server`): throw mode, flying items,
+//!   the pull/throw HUD's server half; `bump` (feature `server`): walking into a mob swaps places
+//!   or pushes it, walking into an unanchored object pushes it; `throw` (feature `server`): throw mode, flying items,
 //!   hits and catches; `examine` (feature `server`): shift+click examine text; `speech` (feature
 //!   `server`): the mob's stat for `ss13_chat` (crit whispers, deadchat, emote checks).
 //!   `interact_client` (feature `client`): the pull, resist and throw keys and HUD buttons.
@@ -213,6 +214,8 @@ pub mod breath_client;
 pub mod brig;
 #[cfg(feature = "server")]
 pub mod buffs;
+#[cfg(feature = "server")]
+pub mod bump;
 #[cfg(feature = "server")]
 pub mod cannons;
 pub mod cargo;
