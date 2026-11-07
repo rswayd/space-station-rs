@@ -177,14 +177,7 @@ fn on_shuttle(world: &World, console: Entity) -> bool {
 /// tg `get_idcard(hand_first = TRUE)`: the card, its access, registered name and assignment.
 fn id_card(world: &World, mob: Entity) -> Option<(Entity, Vec<String>, String, String)> {
     let inventory = world.get::<Inventory>(mob)?;
-    [
-        inventory.hands[inventory.active],
-        inventory.hands[1 - inventory.active],
-        inventory.id,
-    ]
-    .into_iter()
-    .flatten()
-    .find_map(|item| {
+    inventory.id_search().find_map(|item| {
         let card = crate::inventory::get_id(world, item)?;
         let access = world.get::<IdCard>(card)?.access.clone();
         let (name, job) = world

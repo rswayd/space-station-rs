@@ -449,15 +449,10 @@ pub fn toggle_open(world: &mut World, venue: usize) {
     refresh_venue_portals(world, venue);
 }
 
-/// The ID in a hand first, then the worn one (`get_idcard(hand_first = TRUE)`): its access.
+/// The access of `get_idcard(hand_first = TRUE)`.
 fn id_access(world: &World, mob: Entity) -> Option<Vec<String>> {
-    let inv = world.get::<Inventory>(mob)?;
-    inv.hands
-        .iter()
-        .flatten()
-        .find_map(|&h| world.get::<IdCard>(h))
-        .or_else(|| inv.id_card(world).and_then(|c| world.get::<IdCard>(c)))
-        .map(|c| c.access.clone())
+    let card = world.get::<Inventory>(mob)?.id_card(world)?;
+    world.get::<IdCard>(card).map(|c| c.access.clone())
 }
 
 fn venue_access(world: &World, mob: Entity, venue: usize) -> bool {

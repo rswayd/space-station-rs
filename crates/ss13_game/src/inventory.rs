@@ -231,13 +231,15 @@ impl Inventory {
             self.hands[self.active],
             self.hands[1 - self.active],
             self.id,
+            self.belt,
         ]
         .into_iter()
         .flatten()
     }
 
     /// The access of the ID tg's `get_idcard(hand_first = TRUE)` finds: active hand, other
-    /// hand, then the ID slot (a card, or the card in a PDA there). `None` without any ID.
+    /// hand, the ID slot, then the belt (a card, or the card in a PDA there). `None` without
+    /// any ID.
     pub fn access<'a>(&self, cards: &'a IdCards) -> Option<&'a [String]> {
         self.id_search()
             .find_map(|e| cards.card(e))
@@ -1181,6 +1183,31 @@ mod tests {
             "the active hand first"
         );
         assert_eq!(check(Inventory::default()), None);
+    }
+
+    #[test]
+    fn the_belt_is_searched_after_the_id_slot() {
+        let mut world = World::new();
+        let card = world
+            .spawn(IdCard {
+                access: list(&["belt"]),
+            })
+            .id();
+        let mut pc = crate::modpc::pda::ModularComputer::pda(crate::modpc::pda::PDA_ROOT, "pda");
+        pc.stored_id = Some(card);
+        let pda = world.spawn(pc).id();
+        let mut inventory = Inventory {
+            belt: Some(pda),
+            ..default()
+        };
+        assert_eq!(inventory.id_card(&world), Some(card));
+        let worn = world
+            .spawn(IdCard {
+                access: list(&["worn"]),
+            })
+            .id();
+        inventory.id = Some(worn);
+        assert_eq!(inventory.id_card(&world), Some(worn));
     }
 
     #[test]

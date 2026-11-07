@@ -574,14 +574,7 @@ struct ActorId {
 
 fn actor_id(world: &World, mob: Entity) -> Option<ActorId> {
     let inventory = world.get::<Inventory>(mob)?;
-    [
-        inventory.hands[inventory.active],
-        inventory.hands[1 - inventory.active],
-        inventory.id,
-    ]
-    .into_iter()
-    .flatten()
-    .find_map(|item| {
+    inventory.id_search().find_map(|item| {
         let item = crate::inventory::get_id(world, item)?;
         let card = world.get::<IdCard>(item)?;
         let registration = world.get::<IdRegistration>(item);

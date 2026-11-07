@@ -717,7 +717,8 @@ impl ClientUi for JobPrefsUi {
         };
         let appearance = appearance_rows(st, &data.appearance);
         bsn! {
-            @WindowContent
+            // The whole page scrolls: the sections above the jobs outgrow the window.
+            @WindowContent { @scrollable: true }
             Children [
                 // shortcut: tg's character page is its own tab with a preview and color pickers;
                 // here one section with the random tables' choices.
@@ -779,7 +780,7 @@ impl ClientUi for JobPrefsUi {
                     Children [ {jobless} ]
                 ]
                 --
-                @Section { @fill: true, @scrollable: true }
+                @Section
                 Children [
                     Node { flex_direction: FlexDirection::Row, column_gap: px(8) }
                     Children [ {columns} ]

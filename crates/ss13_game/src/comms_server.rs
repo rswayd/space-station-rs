@@ -1048,17 +1048,10 @@ fn change_security_level(
 }
 
 /// tg `get_idcard(hand_first = TRUE)`: the access and `"<name> - <assignment>"` of the first ID
-/// in the active hand, the other hand, then the ID slot.
+/// in the active hand, the other hand, the ID slot, then the belt.
 fn id_card(world: &World, mob: Entity) -> Option<(Vec<String>, String)> {
     let inventory = world.get::<Inventory>(mob)?;
-    [
-        inventory.hands[inventory.active],
-        inventory.hands[1 - inventory.active],
-        inventory.id,
-    ]
-    .into_iter()
-    .flatten()
-    .find_map(|item| {
+    inventory.id_search().find_map(|item| {
         let item = crate::inventory::get_id(world, item)?;
         let card = world.get::<IdCard>(item)?;
         let name = world

@@ -477,18 +477,15 @@ pub enum ConsoleAct {
     SetDestination(String),
 }
 
-/// The access on the actor's ID (hands first, then the ID slot).
+/// The access on the actor's ID (`get_idcard(hand_first = TRUE)`).
 fn actor_access(world: &World, actor: Entity) -> Vec<String> {
     world
         .get::<Inventory>(actor)
         .and_then(|inv| {
-            [inv.hands[inv.active], inv.hands[1 - inv.active], inv.id]
-                .into_iter()
-                .flatten()
-                .find_map(|i| {
-                    let card = crate::inventory::get_id(world, i)?;
-                    world.get::<IdCard>(card).map(|c| c.access.clone())
-                })
+            inv.id_search().find_map(|i| {
+                let card = crate::inventory::get_id(world, i)?;
+                world.get::<IdCard>(card).map(|c| c.access.clone())
+            })
         })
         .unwrap_or_default()
 }

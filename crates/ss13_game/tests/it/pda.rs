@@ -1,7 +1,7 @@
 //! PDAs over real WebTransport on 127.0.0.1: two assistants spawn with an imprinted PDA on the
 //! belt. A opens it, runs the messenger and messages B; B gets the chat line and the ring, opens
 //! the conversation and reads it; a second message inside the cooldown is dropped. A's ID goes
-//! into the PDA: on the belt it opens nothing, in the ID slot it opens a maintenance door. A
+//! into the PDA, and the PDA on the belt opens a maintenance door (tg `get_idcard`). A
 //! traitor's uplink hides in the PDA and the ringtone code opens it.
 
 use std::path::{Path, PathBuf};
@@ -246,14 +246,6 @@ impl Station {
         self.wait_window(p, NtosUi::NAME)
     }
 
-    fn pos(&self, p: usize) -> TilePos {
-        *self
-            .server
-            .world()
-            .get::<TilePos>(self.players[p].mob)
-            .unwrap()
-    }
-
     /// The door east of player 0's spawn.
     fn door(&self) -> Entity {
         let world = self.server.world();
@@ -388,24 +380,7 @@ fn messenger_and_id_slot() {
     assert!(s.server.world().get::<IdCard>(pda_a).is_none());
     assert!(s.server.world().get::<IdCard>(card).is_some());
 
-    // On the belt the PDA is no ID: the maintenance door stays shut.
-    let start = s.pos(a);
-    for _ in 0..testing::steps(1.5) {
-        s.try_step(a, Dir::East);
-        s.step();
-    }
-    assert_eq!(s.pos(a), start);
-    assert_ne!(s.door_state(), DoorState::Open);
-
-    // In the ID slot it is (tg `GetID`): the door opens.
-    s.slot(a, InventorySlot::Belt);
-    s.run_until("the PDA is in hand", |s| {
-        s.inventory(a).hands[0] == Some(pda_a)
-    });
-    s.slot(a, InventorySlot::Id);
-    s.run_until("the PDA is in the ID slot", |s| {
-        s.inventory(a).id == Some(pda_a)
-    });
+    // tg `get_idcard`: `wear_id?.GetID() || belt?.GetID()`, so the PDA on the belt opens it.
     s.run_until("the door opens", |s| {
         s.try_step(a, Dir::East);
         s.door_state() == DoorState::Open
