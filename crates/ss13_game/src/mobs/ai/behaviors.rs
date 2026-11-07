@@ -43,6 +43,9 @@ pub enum Strategy {
     NotFriends,
     /// `basic/of_size/smaller` with `BB_ALWAYS_IGNORE_FACTION` (crabs): a smaller living mob.
     Smaller,
+    /// `basic/same_faction/construct` with `BB_TARGET_WOUNDED_ONLY` (artificers): a hurt
+    /// construct or shade of a shared faction.
+    Construct,
 }
 
 impl Strategy {
@@ -84,6 +87,14 @@ impl Strategy {
                     && stat != Stat::Dead
             }
             Self::IgnoreFaction => stat != Stat::Dead,
+            Self::Construct => {
+                stat != Stat::Dead
+                    && crate::mobs::same_faction(world, ctx.pawn, target)
+                    && crate::mobs::constructs::is_construct_or_shade(world, target)
+                    && world
+                        .get::<Health>(target)
+                        .is_some_and(|h| h.health() < h.max)
+            }
             Self::HoldingTongs => {
                 (ignore_faction || !crate::mobs::same_faction(world, ctx.pawn, target))
                     && stat != Stat::Dead
@@ -239,6 +250,11 @@ pub enum Behavior {
         key: Key,
         strategy: Strategy,
     },
+    /// `update_combat_targets/most_wounded`: the valid one in view with the lowest health.
+    AcquireMostWounded {
+        key: Key,
+        strategy: Strategy,
+    },
     /// `acquire_target/update_interaction_target` of a cat's mouse (`oview_single_type/mouse`).
     AcquireMouse {
         key: Key,
@@ -352,6 +368,7 @@ impl Behavior {
             Self::AcquireCombatTarget { key, strategy } => {
                 acquire_combat_target(ctx, key, strategy)
             }
+            Self::AcquireMostWounded { key, strategy } => most_wounded(ctx, key, strategy),
             Self::AcquireMouse { key, vision } => {
                 if ctx
                     .bb
@@ -935,6 +952,30 @@ fn acquire_combat_target(ctx: &mut AiCtx, key: Key, strategy: Strategy) -> Perfo
             {
                 return DELAY_SUCCEED;
             }
+            ctx.bb.clear(key);
+            DELAY_FAIL
+        }
+    }
+}
+
+/// `most_wounded` `select_target` over the valid mobs in `vision_range` 9 (the nearest of
+/// equals).
+fn most_wounded(ctx: &mut AiCtx, key: Key, strategy: Strategy) -> Perform {
+    const VISION: u32 = 9;
+    let found = candidates(ctx, VISION)
+        .into_iter()
+        .filter(|&t| strategy.valid(ctx, t, VISION))
+        .filter_map(|t| Some((ctx.world.get::<Health>(t)?.health(), t)))
+        .fold(None::<(f32, Entity)>, |best, (h, t)| match best {
+            Some((b, _)) if b <= h => best,
+            _ => Some((h, t)),
+        });
+    match found {
+        Some((_, t)) => {
+            ctx.bb.set(key, Value::Entity(t));
+            DELAY_SUCCEED
+        }
+        None => {
             ctx.bb.clear(key);
             DELAY_FAIL
         }

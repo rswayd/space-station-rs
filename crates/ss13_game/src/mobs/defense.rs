@@ -339,6 +339,13 @@ pub fn melee_attack(world: &mut World, attacker: Entity, target: Entity) -> bool
     {
         facing.set_if_neq(ss13_shared::Facing(dir));
     }
+    // `healing_touch` (`COMSIG_HOSTILE_PRE_ATTACKINGTARGET`): constructs repair constructs.
+    if super::constructs::healing_touch(world, attacker, target) {
+        world.entity_mut(attacker).insert(NextMove(
+            now + f64::from(basic.def.melee_attack_cooldown) / 10.0,
+        ));
+        return true;
+    }
     let def = &basic.def;
     let user = capitalize(&name_of(world, attacker));
     let victim = name_of(world, target);

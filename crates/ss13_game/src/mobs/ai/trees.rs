@@ -630,6 +630,63 @@ fn generic(path: &str) -> Option<Built> {
         // `garden_gnome.bt.json`: fights back; left out: escape captivity.
         retaliates = true;
         retaliate_combat()
+    } else if is("juggernaut") {
+        // `juggernaut.bt.json`: `simple_hostile_obstacles_combat` without the obstacles.
+        hostile_combat(25.0)
+    } else if is("wraith") {
+        // `wraith.bt.json`: hunts the most wounded in view; left out: obstacles.
+        par(
+            vec![
+                selector(vec![
+                    decorator(
+                        Cond::KeySet(Key::CurrentTarget),
+                        false,
+                        Abort::Both,
+                        melee_combat(Strategy::Basic),
+                    ),
+                    random_walk(25.0),
+                ]),
+                leaf(Behavior::AcquireMostWounded {
+                    key: Key::CurrentTarget,
+                    strategy: Strategy::Basic,
+                }),
+            ],
+            FIND_TARGET_RATE,
+        )
+    } else if is("proteon") {
+        // `proteon.bt.json`: `skittish_brawler_combat` on whoever hit it
+        // (`ai_retaliate_advanced`); left out: forgetting them after 2-4 s.
+        retaliates = true;
+        brawler_combat()
+    } else if is("artificer") {
+        // `artificer.bt.json`: repairs the most wounded construct or shade in view
+        // (`healing_touch` on its "attack"), else runs from whoever hit it (`ai_retaliate`).
+        retaliates = true;
+        par(
+            vec![
+                selector(vec![
+                    decorator(
+                        Cond::KeySet(Key::CurrentTarget),
+                        false,
+                        Abort::Both,
+                        melee_combat(Strategy::Construct),
+                    ),
+                    decorator(
+                        Cond::KeySet(Key::FleeTarget),
+                        false,
+                        Abort::Both,
+                        run_away(Key::FleeTarget),
+                    ),
+                    random_walk(25.0),
+                ]),
+                leaf(Behavior::AcquireMostWounded {
+                    key: Key::CurrentTarget,
+                    strategy: Strategy::Construct,
+                }),
+                retaliate_target(Key::FleeTarget),
+            ],
+            FIND_TARGET_RATE,
+        )
     } else if is("mouse/rat/syndi") {
         // BandaStation `mouse/rat/syndi`: tg's rat tree binds the mouse's lines, so the
         // syndicate rats' own never play there; they are used here.

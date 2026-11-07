@@ -24,6 +24,7 @@
 //!   `megafauna` (the lavaland bosses).
 
 pub mod ai;
+pub mod constructs;
 pub mod critters;
 pub mod defense;
 pub mod eating;
@@ -554,6 +555,7 @@ fn death(world: &mut World, mob: Entity, basic: &BasicMob) {
     lavaland::on_death(world, mob, def, pos);
     megafauna::on_death(world, mob, pos);
     troopers::on_death(world, def, pos);
+    constructs::on_death(world, def, pos);
     // A mouse leaves its corpse as a food item (`/obj/item/food/deadmouse`, `copy_corpse`).
     if ss13_mapload::fidelity::is_under(&def.path, MOUSE_ROOT) {
         if let Some(corpse) = crate::construction::spawn_obj(world, DEAD_MOUSE, pos) {
@@ -594,6 +596,7 @@ pub fn examine_lines(world: &World, mob: Entity, lines: &mut Vec<crate::examine:
     crate::bots::examine_lines(world, mob, lines);
     farm::examine_lines(world, mob, lines);
     critters::examine_lines(world, mob, lines);
+    constructs::examine_lines(world, mob, lines);
     if world.get::<Stat>(mob) == Some(&Stat::Dead) {
         // tg `span_deadsay`, untranslated in BandaStation; the plural pronoun of
         // `p_they()` without a gender.

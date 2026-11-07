@@ -86,6 +86,10 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/knife/kitchen",
     "/obj/item/gun/ballistic/revolver/nagant",
     "/obj/item/melee/energy/sword/pirate",
+    // `ss13_game::mobs::constructs`: the themes' ectoplasm.
+    "/obj/item/ectoplasm/construct",
+    "/obj/item/ectoplasm/angelic",
+    "/obj/item/ectoplasm/mystic",
     // `sheets`: five rods on a titanium sheet, tanning, stamped cardboard.
     "/obj/item/stack/rods/shuttle/five",
     "/obj/item/stack/sheet/hairlesshide",

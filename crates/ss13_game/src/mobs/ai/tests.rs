@@ -654,3 +654,70 @@ fn troopers_fight_shoot_in_bursts_or_wait_to_be_hit() {
         }
     }
 }
+
+#[test]
+fn artificers_pick_hurt_constructs_and_wraiths_the_weakest() {
+    let def = ss13_mapload::mobs::MobDef::default();
+    let setup = || {
+        let mut w = world();
+        w.init_resource::<Time>();
+        w.insert_resource(CombatRng(5));
+        w
+    };
+    // An artificer goes for the hurt juggernaut, never the healthy one or a stranger.
+    let mut w = setup();
+    let artificer = basic_mob(
+        &mut w,
+        5,
+        5,
+        "cult",
+        "/mob/living/basic/construct/artificer/hostile",
+    );
+    let healthy = basic_mob(
+        &mut w,
+        6,
+        5,
+        "cult",
+        "/mob/living/basic/construct/juggernaut/hostile",
+    );
+    let hurt = basic_mob(
+        &mut w,
+        8,
+        5,
+        "cult",
+        "/mob/living/basic/construct/juggernaut/hostile",
+    );
+    w.get_mut::<Health>(hurt)
+        .unwrap()
+        .adjust(crate::health::DamageType::Brute, 5.0);
+    let _stranger = mob(&mut w, 4, 5, "neutral");
+    let built = super::trees::build(&format!("{BASIC}/artificer"), &def).unwrap();
+    assert!(built.retaliates);
+    let mut bb = Blackboard::default();
+    let mut tree = Tree::new(built.roots);
+    run(&mut w, artificer, &mut tree, &mut bb, 4);
+    assert_eq!(bb.entity(Key::CurrentTarget), Some(hurt));
+    assert_ne!(bb.entity(Key::CurrentTarget), Some(healthy));
+    // A wraith takes the weaker of two strangers, not the nearer.
+    let mut w = setup();
+    let wraith = basic_mob(
+        &mut w,
+        5,
+        5,
+        "cult",
+        "/mob/living/basic/construct/wraith/hostile",
+    );
+    let _near = mob(&mut w, 6, 5, "neutral");
+    let weak = mob(&mut w, 9, 5, "neutral");
+    w.get_mut::<Health>(weak)
+        .unwrap()
+        .adjust(crate::health::DamageType::Brute, 10.0);
+    let built = super::trees::build(&format!("{BASIC}/wraith"), &def).unwrap();
+    let mut bb = Blackboard::default();
+    let mut tree = Tree::new(built.roots);
+    run(&mut w, wraith, &mut tree, &mut bb, 4);
+    assert_eq!(bb.entity(Key::CurrentTarget), Some(weak));
+    for sub in ["juggernaut", "proteon"] {
+        assert!(super::trees::build(&format!("{BASIC}/{sub}"), &def).is_some());
+    }
+}
