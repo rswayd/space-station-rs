@@ -39,7 +39,7 @@ pub fn is_laptop(path: &str) -> bool {
 
 /// `default_programs` + `starting_programs` of a laptop of type `path`.
 pub fn laptop_programs(path: &str) -> Vec<ProgramKind> {
-    let mut programs = vec![ProgramKind::Downloader];
+    let mut programs = vec![ProgramKind::Downloader, ProgramKind::FileManager];
     if is_under(path, CIVILIAN) {
         programs.push(ProgramKind::ChatClient);
     }
@@ -189,7 +189,11 @@ mod tests {
     fn a_laptop_opens_and_closes_and_runs_its_preset() {
         assert_eq!(
             laptop_programs(CIVILIAN),
-            [ProgramKind::Downloader, ProgramKind::ChatClient]
+            [
+                ProgramKind::Downloader,
+                ProgramKind::FileManager,
+                ProgramKind::ChatClient
+            ]
         );
         let mut world = World::new();
         world.init_resource::<Messages<ss13_net::chat::server::SendChat>>();

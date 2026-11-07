@@ -13,7 +13,7 @@
 //! reaches the PDA at once. The PDA's name follows its imprint (`imprint_id` ->
 //! `UpdateDisplay`). The flashlight lights the holder (tg's overlay light moves with whoever
 //! carries it) or the PDA on the floor.
-// shortcut: no inserted pen, disks, pAI, paper or chunky fingers; the light is
+// shortcut: no inserted pen, pAI, paper or chunky fingers; the light is
 // omnidirectional (tg: a directional overlay light) and gives way to any other light on its
 // holder (one `Optics` per entity).
 
@@ -78,6 +78,8 @@ pub struct ModularComputer {
     pub initial_name: String,
     /// `obj_flags & EMAGGED`.
     pub emagged: bool,
+    /// `inserted_disk` (`crate::modpc::files`).
+    pub disk: Option<Entity>,
 }
 
 impl ModularComputer {
@@ -98,6 +100,7 @@ impl ModularComputer {
             note: NOTEPAD_DEFAULT.to_owned(),
             initial_name: name.to_owned(),
             emagged: false,
+            disk: None,
         }
     }
 
@@ -247,6 +250,7 @@ impl Plugin for ModpcServerPlugin {
         super::power::build(app);
         super::ntnet::build(app);
         super::laptop::build(app);
+        super::files::build(app);
         app.register_ui::<NtosUi>()
             .add_observer(attach)
             .add_observer(attach_console)
@@ -476,6 +480,9 @@ pub fn item_interaction(
     held: Entity,
     target: Entity,
 ) -> bool {
+    if super::files::insert_disk(world, client, mob, held, target) {
+        return true;
+    }
     let is_card = world.get::<DmItem>(held).is_some_and(DmItem::is_id_card);
     if !is_card || world.get::<ModularComputer>(target).is_none() {
         return false;
@@ -638,6 +645,9 @@ fn card_left(
         if computer.alt_stored_id == Some(remove.entity) {
             computer.alt_stored_id = None;
         }
+        if computer.disk == Some(remove.entity) {
+            computer.disk = None;
+        }
     }
 }
 
@@ -780,6 +790,7 @@ pub struct NtosParams<'w, 's> {
     time: Res<'w, Time>,
     cells: Query<'w, 's, &'static super::power::ComputerCell>,
     ntnet: Option<Res<'w, super::ntnet::Ntnet>>,
+    disks: Query<'w, 's, &'static super::files::ComputerDisk>,
 }
 
 impl NtosParams<'_, '_> {
@@ -801,6 +812,7 @@ pub enum NtosAct {
     Run(ProgramKind),
     ToggleLight,
     EjectId,
+    EjectDisk,
     ImprintId,
     RingSet(String),
     ToggleAlerts,
@@ -817,6 +829,7 @@ pub enum NtosAct {
     Minesweeper(super::programs::minesweeper::MinesweeperAct),
     Downloader(super::programs::downloader::DownloaderAct),
     Chat(super::programs::chat::ChatAct),
+    Files(super::files::FileAct),
 }
 
 fn program_param(params: &UiParams) -> Result<ProgramKind, UiReject> {
@@ -1020,6 +1033,12 @@ impl ServerUi for NtosUi {
                     &names,
                 )))
             }
+            Some(ProgramKind::FileManager) => {
+                NtosScreen::FileManager(Box::new(super::files::ui_data(
+                    computer,
+                    computer.disk.and_then(|d| params.disks.get(d).ok()),
+                )))
+            }
             // A launcher never comes to the front.
             Some(ProgramKind::Newscaster) => NtosScreen::Main(main_data(
                 computer,
@@ -1040,7 +1059,8 @@ impl ServerUi for NtosUi {
             PC_RUNPROGRAM => NtosAct::Run(program_param(params)?),
             PC_TOGGLE_LIGHT => NtosAct::ToggleLight,
             PC_EJECT_DISK if params.get("name") == Some("ID") => NtosAct::EjectId,
-            PC_EJECT_DISK => return Err(UiReject::BadParams("name: only ID".into())),
+            PC_EJECT_DISK if params.get("name") == Some(EJECT_DISK) => NtosAct::EjectDisk,
+            PC_EJECT_DISK => return Err(UiReject::BadParams("name: ID or Eject Disk".into())),
             PC_IMPRINT_ID => NtosAct::ImprintId,
             PDA_RING_SET => NtosAct::RingSet(params.text("ringtone")?),
             PDA_TOGGLE_ALERTS => NtosAct::ToggleAlerts,
@@ -1075,6 +1095,9 @@ impl ServerUi for NtosUi {
                 if let Some(act) = super::programs::chat::parse(other, params) {
                     return act.map(NtosAct::Chat);
                 }
+                if let Some(act) = super::files::parse(other, params) {
+                    return act.map(NtosAct::Files);
+                }
                 match super::programs::card_mod::parse(other, |k| params.get(k).map(str::to_owned))
                 {
                     Some(Ok(act)) => NtosAct::Card(act),
@@ -1100,6 +1123,11 @@ fn main_data(computer: &ModularComputer, card: Option<&IdRegistration>) -> NtosM
         },
         id_inserted: computer.stored_id.is_some(),
         show_imprint: computer.is_pda(),
+        removable_media: computer
+            .disk
+            .map(|_| EJECT_DISK.to_owned())
+            .into_iter()
+            .collect(),
         programs: computer
             .programs
             .iter()
@@ -1256,6 +1284,10 @@ fn apply_act(
         NtosAct::EjectId => {
             remove_id(world, pda, Some(actor), false, false);
         }
+        NtosAct::EjectDisk => {
+            super::files::eject_disk(world, pda, Some(actor));
+        }
+        NtosAct::Files(act) => return super::files::apply(world, pda, computer, act),
         NtosAct::ImprintId => imprint_id(world, pda, None, None),
         NtosAct::UpdateNote(note) => {
             if computer.active != Some(ProgramKind::Notepad) {
@@ -1600,7 +1632,12 @@ mod tests {
             Ok(NtosAct::Run(ProgramKind::Messenger))
         );
         assert!(parse(PC_RUNPROGRAM, &[("name", "../../etc")]).is_err());
-        assert!(parse(PC_EJECT_DISK, &[("name", "Eject Disk")]).is_err());
+        assert_eq!(
+            parse(PC_EJECT_DISK, &[("name", "Eject Disk")]),
+            Ok(NtosAct::EjectDisk)
+        );
+        assert!(parse(PC_EJECT_DISK, &[("name", "intelliCard")]).is_err());
+        assert!(parse(PRG_DELETE_FILE, &[("name", "nope")]).is_err());
         assert!(parse(PDA_SEND_MESSAGE, &[("message", "x")]).is_err());
         assert!(parse(PDA_SEND_MESSAGE, &[("ref", "pda:abc"), ("message", "x")]).is_err());
         assert!(parse(PDA_CLOSE_MESSAGES, &[("ref", "pda:5")]).is_err());

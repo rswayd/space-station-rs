@@ -2,7 +2,7 @@
 //! state and acts in the submodules.
 // shortcut: only programs backed by systems that exist: no NT Pay (no pay tokens or transaction
 // history in the economy), navigator (no nanomaps), supermatter and power monitors, theme
-// manager or file manager.
+// manager.
 
 #[cfg(feature = "server")]
 pub mod apps;
@@ -49,6 +49,8 @@ pub enum ProgramKind {
     Downloader,
     /// `/datum/computer_file/program/chatclient` (NTNet Relay Chat).
     ChatClient,
+    /// `/datum/computer_file/program/filemanager` (`crate::modpc::files`).
+    FileManager,
 }
 
 /// `PROGRAM_CATEGORY_*`, the downloader's tabs in `show_categories` order.
@@ -72,7 +74,7 @@ pub const CATEGORIES: [&str; 8] = [
 ];
 
 impl ProgramKind {
-    pub const ALL: [Self; 14] = [
+    pub const ALL: [Self; 15] = [
         Self::Messenger,
         Self::Notepad,
         Self::CrewManifest,
@@ -87,6 +89,7 @@ impl ProgramKind {
         Self::Minesweeper,
         Self::Downloader,
         Self::ChatClient,
+        Self::FileManager,
     ];
 
     /// `filename`.
@@ -106,6 +109,7 @@ impl ProgramKind {
             Self::Minesweeper => "minesweeper",
             Self::Downloader => "ntsoftwarehub",
             Self::ChatClient => "ntnrc_client",
+            Self::FileManager => "filemanager",
         }
     }
 
@@ -130,6 +134,7 @@ impl ProgramKind {
             Self::Minesweeper => "Сапёр",
             Self::Downloader => "NT Software Hub",
             Self::ChatClient => "Chat Client",
+            Self::FileManager => "File Manager",
         }
     }
 
@@ -150,6 +155,7 @@ impl ProgramKind {
             Self::Minesweeper => "bomb",
             Self::Downloader => "download",
             Self::ChatClient => "comment-alt",
+            Self::FileManager => "folder",
         }
     }
 
@@ -199,6 +205,7 @@ impl ProgramKind {
             Self::ChatClient => {
                 "Эта программа позволяет осуществлять коммуникацию через сеть NTNRC."
             }
+            Self::FileManager => "This program allows management of files.",
         }
     }
 
@@ -214,7 +221,7 @@ impl ProgramKind {
             | Self::MedRecords
             | Self::Downloader => 4,
             Self::Minesweeper => 6,
-            Self::CardMod | Self::ChatClient => 8,
+            Self::CardMod | Self::ChatClient | Self::FileManager => 8,
         }
     }
 
@@ -235,7 +242,7 @@ impl ProgramKind {
     pub fn on_ntnet_store(self) -> bool {
         !matches!(
             self,
-            Self::Messenger | Self::StatusDisplay | Self::Downloader
+            Self::Messenger | Self::StatusDisplay | Self::Downloader | Self::FileManager
         )
     }
 
@@ -267,7 +274,7 @@ impl ProgramKind {
 
     /// `undeletable`.
     pub fn undeletable(self) -> bool {
-        matches!(self, Self::Messenger | Self::Downloader)
+        matches!(self, Self::Messenger | Self::Downloader | Self::FileManager)
     }
 
     /// `program_flags & PROGRAM_HEADER`: shown above the program list.
@@ -292,10 +299,11 @@ impl ProgramKind {
     }
 }
 
-/// `/obj/item/modular_computer` `default_programs` + `/obj/item/modular_computer/pda`
+/// `/obj/item/modular_computer` `default_programs` (no theme manager) + `/obj/item/modular_computer/pda`
 /// `pda_programs` this port has, in `stored_files` order.
-pub const PDA_PROGRAMS: [ProgramKind; 4] = [
+pub const PDA_PROGRAMS: [ProgramKind; 5] = [
     ProgramKind::Downloader,
+    ProgramKind::FileManager,
     ProgramKind::Messenger,
     ProgramKind::Notepad,
     ProgramKind::CrewManifest,
@@ -336,7 +344,7 @@ pub fn console_programs(path: &str) -> Option<Vec<ProgramKind>> {
     } else {
         &[]
     };
-    let mut programs = vec![Downloader];
+    let mut programs = vec![Downloader, FileManager];
     programs.extend_from_slice(preset);
     Some(programs)
 }
@@ -469,7 +477,7 @@ mod tests {
 
     #[test]
     fn engineering_pdas_get_the_atmos_scanner() {
-        assert_eq!(pda_programs("/obj/item/modular_computer/pda/crew").len(), 4);
+        assert_eq!(pda_programs("/obj/item/modular_computer/pda/crew").len(), 5);
         assert_eq!(
             pda_programs("/obj/item/modular_computer/pda/crew/atmos").last(),
             Some(&ProgramKind::Atmosscan)
@@ -483,7 +491,7 @@ mod tests {
     fn role_pdas_get_their_starting_and_head_programs() {
         use ProgramKind::*;
         assert_eq!(
-            pda_programs("/obj/item/modular_computer/pda/crew/heads/ce")[4..],
+            pda_programs("/obj/item/modular_computer/pda/crew/heads/ce")[5..],
             [Atmosscan, AlarmMonitor, StatusDisplay]
         );
         // The paramedic inherits nothing new: its own list has medical records too.
@@ -492,7 +500,7 @@ mod tests {
                 .contains(&MedRecords)
         );
         assert_eq!(
-            pda_programs("/obj/item/modular_computer/pda/crew/heads/quartermaster")[4..],
+            pda_programs("/obj/item/modular_computer/pda/crew/heads/quartermaster")[5..],
             [StatusDisplay]
         );
         assert_eq!(
@@ -501,15 +509,15 @@ mod tests {
         );
         assert_eq!(
             console_programs(ENGINEERING_CONSOLE),
-            Some(vec![Downloader, AlarmMonitor])
+            Some(vec![Downloader, FileManager, AlarmMonitor])
         );
         assert_eq!(
             console_programs("/obj/machinery/modular_computer/preset/cargochat/cargo"),
-            Some(vec![Downloader, ChatClient])
+            Some(vec![Downloader, FileManager, ChatClient])
         );
         assert_eq!(
             console_programs("/obj/machinery/modular_computer/preset/curator"),
-            Some(vec![Downloader])
+            Some(vec![Downloader, FileManager])
         );
         assert_eq!(console_programs("/obj/machinery/computer/card"), None);
         for p in ProgramKind::ALL {
