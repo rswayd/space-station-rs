@@ -12,10 +12,11 @@
 //!
 //! `SS13_ASSETS=<dir> cargo test -p ss13_game --all-features --test it disposals:: -- --ignored --nocapture`
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 
+use crate::harness::open_windows::{Received, record};
 use bevy::prelude::*;
 use ss13_atmos::AtmosPlugin;
 use ss13_game::closets::InCloset;
@@ -28,11 +29,8 @@ use ss13_game::storage::StoredIn;
 use ss13_game::testing::{self, Drive, fixture_map, write_fixture};
 use ss13_game::tools::DoAfter;
 use ss13_mapload::{Areas, DmItem, DmName, MapLoadPlugin};
-use ss13_net::chat::client::ChatReceived;
-use ss13_net::ui::client::UiMessageReceived;
 use ss13_shared::TilePos;
 use ss13_shared::protocol::{ClickModifiers, ClientIntent, DragEnd, InventorySlot, TICK_DURATION};
-use ss13_shared::ui::UiServerMessage;
 use ss13_tgui::UiInterface;
 use ss13_tgui::interfaces::destination_tagger::DestinationTaggerUi;
 use ss13_tgui::interfaces::disposal_unit::{DisposalUnitData, DisposalUnitUi};
@@ -404,50 +402,6 @@ fn fixture_assets(test: &str) -> PathBuf {
     ];
     used.extend(ss13_mapload::DISPOSAL_RUNTIME_TYPES);
     write_fixture(&dir, TYPES, &used, &STATES, &[("map.dmm", MAP)])
-}
-
-/// Every open window of a client (interface, last data) and its chat.
-#[derive(Resource, Default)]
-struct Received {
-    windows: HashMap<u32, (String, Vec<u8>)>,
-    chat: Vec<String>,
-}
-
-fn record(
-    mut chat: MessageReader<ChatReceived>,
-    mut ui: MessageReader<UiMessageReceived>,
-    mut received: ResMut<Received>,
-) {
-    for ChatReceived(message) in chat.read() {
-        received.chat.push(message.plain_text());
-    }
-    for UiMessageReceived(message) in ui.read() {
-        match message {
-            UiServerMessage::Open {
-                window,
-                interface,
-                data,
-                ..
-            } => {
-                received
-                    .windows
-                    .insert(*window, (interface.clone(), data.clone()));
-            }
-            UiServerMessage::Update {
-                window,
-                data: Some(data),
-                ..
-            } => {
-                if let Some(w) = received.windows.get_mut(window) {
-                    w.1 = data.clone();
-                }
-            }
-            UiServerMessage::Close { window } => {
-                received.windows.remove(window);
-            }
-            _ => {}
-        }
-    }
 }
 
 struct Station(testing::Station);

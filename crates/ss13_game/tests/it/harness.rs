@@ -199,3 +199,57 @@ pub mod chat {
         }
     }
 }
+
+/// For tests that read the windows a client has open now: each open window's interface and last
+/// data, and its chat.
+pub mod open_windows {
+    use std::collections::HashMap;
+
+    use bevy::prelude::*;
+    use ss13_net::chat::client::ChatReceived;
+    use ss13_net::ui::client::UiMessageReceived;
+    use ss13_shared::ui::UiServerMessage;
+
+    #[derive(Resource, Default)]
+    pub struct Received {
+        pub windows: HashMap<u32, (String, Vec<u8>)>,
+        pub chat: Vec<String>,
+    }
+
+    pub fn record(
+        mut chat: MessageReader<ChatReceived>,
+        mut ui: MessageReader<UiMessageReceived>,
+        mut received: ResMut<Received>,
+    ) {
+        for ChatReceived(message) in chat.read() {
+            received.chat.push(message.plain_text());
+        }
+        for UiMessageReceived(message) in ui.read() {
+            match message {
+                UiServerMessage::Open {
+                    window,
+                    interface,
+                    data,
+                    ..
+                } => {
+                    received
+                        .windows
+                        .insert(*window, (interface.clone(), data.clone()));
+                }
+                UiServerMessage::Update {
+                    window,
+                    data: Some(data),
+                    ..
+                } => {
+                    if let Some(w) = received.windows.get_mut(window) {
+                        w.1 = data.clone();
+                    }
+                }
+                UiServerMessage::Close { window } => {
+                    received.windows.remove(window);
+                }
+                _ => {}
+            }
+        }
+    }
+}
