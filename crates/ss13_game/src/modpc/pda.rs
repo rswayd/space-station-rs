@@ -47,8 +47,6 @@ use crate::storage::StoredIn;
 
 /// `/obj/item/modular_computer/pda` and subtypes.
 pub const PDA_ROOT: &str = "/obj/item/modular_computer/pda";
-/// `max_idle_programs` of a PDA.
-const MAX_IDLE_PROGRAMS: usize = 2;
 /// `comp_light_luminosity` of a PDA, `light_power` of a modular computer, `COLOR_WHITE`.
 const LIGHT_RANGE: f32 = 2.3;
 const LIGHT_POWER: f32 = 1.2;
@@ -117,6 +115,17 @@ impl ModularComputer {
         is_under(&self.path, PDA_ROOT)
     }
 
+    /// `max_idle_programs`: a console 4, a laptop 3, a PDA 2.
+    pub fn max_idle_programs(&self) -> usize {
+        if super::power::is_console(&self.path) {
+            4
+        } else if super::laptop::is_laptop(&self.path) {
+            3
+        } else {
+            2
+        }
+    }
+
     /// `open_program`: the program comes to the front; the one in front goes to the background.
     /// `false` when it is not installed or the background is full.
     pub fn open_program(&mut self, program: ProgramKind) -> bool {
@@ -124,7 +133,7 @@ impl ModularComputer {
             return false;
         }
         let resumed = self.idle.contains(&program);
-        if !resumed && self.idle.len() > MAX_IDLE_PROGRAMS {
+        if !resumed && self.idle.len() > self.max_idle_programs() {
             return false;
         }
         self.idle.retain(|&p| p != program);
@@ -237,6 +246,7 @@ impl Plugin for ModpcServerPlugin {
         super::programs::chat::build(app);
         super::power::build(app);
         super::ntnet::build(app);
+        super::laptop::build(app);
         app.register_ui::<NtosUi>()
             .add_observer(attach)
             .add_observer(attach_console)
@@ -359,7 +369,7 @@ fn attach_console(add: On<Add<DmObj>>, objs: Query<&DmObj>, mut commands: Comman
 pub fn console_interact(world: &mut World, client: Entity, mob: Entity, target: Entity) -> bool {
     let is_console = world
         .get::<ModularComputer>(target)
-        .is_some_and(|c| !c.is_pda());
+        .is_some_and(|c| super::power::is_console(&c.path));
     if !is_console {
         return false;
     }
@@ -602,6 +612,9 @@ pub fn remove_id(
 
 /// tg `click_alt`: the ID comes out.
 pub fn alt_click(world: &mut World, mob: Entity, item: Entity) -> bool {
+    if super::laptop::alt_click(world, mob, item) {
+        return true;
+    }
     if world.get::<ModularComputer>(item).is_none() {
         return false;
     }
@@ -697,7 +710,11 @@ pub fn post_equip(world: &mut World, mob: Entity, name: &str, job: &str) {
 /// user is conscious.
 fn ntos_status(
     mut windows: Query<&mut UiWindow>,
-    computers: Query<(&ModularComputer, Option<&TilePos>)>,
+    computers: Query<(
+        &ModularComputer,
+        Option<&TilePos>,
+        Option<&super::laptop::Laptop>,
+    )>,
     users: Query<(&Inventory, Option<&Stat>, Option<&TilePos>)>,
 ) {
     use ss13_tgui::UiInterface as _;
@@ -707,7 +724,7 @@ fn ntos_status(
         if !ntos && window.interface != crate::newscaster::NewscasterUi::NAME {
             continue;
         }
-        let Ok((computer, at)) = computers.get(window.source) else {
+        let Ok((computer, at, lid)) = computers.get(window.source) else {
             if ntos {
                 window.cap_status(UiStatus::Close);
             }
@@ -719,7 +736,8 @@ fn ntos_status(
         };
         let app_gone = !ntos && !computer.programs.contains(&ProgramKind::Newscaster);
         // A console without area power runs on its cell (`crate::modpc::power`).
-        if !computer.enabled || app_gone {
+        // A closed laptop's screen (`!screen_on`).
+        if !computer.enabled || app_gone || lid.is_some_and(|l| !l.open) {
             window.cap_status(UiStatus::Close);
             continue;
         }

@@ -66,10 +66,6 @@ impl ComputerCell {
     }
 }
 
-/// On a computer whose screen is closed (a folded laptop: `screen_on = FALSE`).
-#[derive(Component, Clone, Copy, Debug, Default)]
-pub struct ScreenOff;
-
 /// `/obj/machinery/modular_computer`: powered by its area.
 pub fn is_console(path: &str) -> bool {
     is_under(path, MACHINE_ROOT)
@@ -185,10 +181,11 @@ pub fn power_failure(world: &mut World, pc: Entity) {
 /// One `SSobj` tick of `dt` seconds: `handle_power` of every enabled computer, then
 /// `modular_computer/process` (the cell top-up) of every powered console.
 pub fn tick(world: &mut World, dt: f64) {
-    let mut q = world.query::<(Entity, &ModularComputer, Has<ScreenOff>)>();
+    // `screen_on`: false for a closed laptop.
+    let mut q = world.query::<(Entity, &ModularComputer, Option<&super::laptop::Laptop>)>();
     let computers: Vec<(Entity, bool, f64)> = q
         .iter(world)
-        .map(|(e, c, off)| (e, c.enabled, power_usage(c, !off)))
+        .map(|(e, c, lid)| (e, c.enabled, power_usage(c, lid.is_none_or(|l| l.open))))
         .collect();
     for (pc, enabled, usage) in computers {
         if enabled {

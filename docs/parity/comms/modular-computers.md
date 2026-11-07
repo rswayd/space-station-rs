@@ -25,7 +25,7 @@
 Ноутбук (раскрывается, ставится на стол) и стационарные консоли с NtOS (инженерная, научная, командная и др. пресеты).
 
 - **Код:** [`/obj/item/modular_computer/laptop`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/modular_computers/computers/item/laptop.dm#L1), [`/obj/machinery/modular_computer`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/modular_computers/computers/machinery/modular_computer.dm#L4), [`/obj/machinery/modular_computer/preset`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/modular_computers/computers/machinery/console_presets.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/modpc/laptop.rs`: ноутбук открывается/закрывается (в руке, ПКМ на месте, alt-клик закрывает, не в сумке), закрытый закрывает окно и тратит холостое питание, 3 фоновые программы, пресет civilian с чатом, иконка крышки; `modpc/programs/mod.rs` `console_programs`: каждая `/obj/machinery/modular_computer` — NtOS-консоль (хаб + программы пресетов id, command, engineering, research, civilian, cargochat), 4 фоновые программы, питание от зоны (`modpc/power.rs`). `// shortcut:` нет замедления/веса открытого ноутбука, оверлеев экрана; программ пресетов, которых нет в порте (монитор питания, СМ, аркада и др.) — в [ntos-apps.md](ntos-apps.md)
 
 ### Питание модульных компьютеров
 Расход энергии ячейки на программы, подзарядка от APC (консоли) или зарядников, отключение при разряде.

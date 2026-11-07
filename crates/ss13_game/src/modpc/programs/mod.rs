@@ -307,17 +307,38 @@ pub const ID_CONSOLE: &str = "/obj/machinery/modular_computer/preset/id";
 /// `/obj/machinery/modular_computer/preset/engineering`.
 pub const ENGINEERING_CONSOLE: &str = "/obj/machinery/modular_computer/preset/engineering";
 
-/// `default_programs` + `starting_programs` of the stationary consoles this port has
-/// (`console_presets.dm`), by type: every one has the software hub, the identification console
-/// runs the chat client, the ID writer and the crew list, the engineering one the alarm monitor.
-// shortcut: no job management program on the ID console, no power or
-// supermatter monitor on the engineering one, and no other console presets.
+/// `/obj/machinery/modular_computer`: every stationary console, preset or not.
+pub const CONSOLE_ROOT: &str = "/obj/machinery/modular_computer";
+
+/// `default_programs` + `starting_programs` of a stationary console (`console_presets.dm`), the
+/// programs this port has: every one has the software hub; the identification console the chat
+/// client, the ID writer and the crew list, the command one the chat and the ID writer, the
+/// engineering one the alarm monitor, the research, civilian and cargo chat ones the chat.
+// shortcut: no job management, power, supermatter, NTNet or robot monitors, AI restorer,
+// arcade, portrait printer or cargo department chat setup.
 pub fn console_programs(path: &str) -> Option<Vec<ProgramKind>> {
     use ProgramKind::*;
-    if is_under_path(path, ID_CONSOLE) {
-        return Some(vec![Downloader, ChatClient, CardMod, CrewManifest]);
+    if !is_under_path(path, CONSOLE_ROOT) {
+        return None;
     }
-    is_under_path(path, ENGINEERING_CONSOLE).then(|| vec![Downloader, AlarmMonitor])
+    let preset: &[ProgramKind] = if is_under_path(path, ID_CONSOLE) {
+        &[ChatClient, CardMod, CrewManifest]
+    } else if is_under_path(path, ENGINEERING_CONSOLE) {
+        &[AlarmMonitor]
+    } else if is_under_path(path, "/obj/machinery/modular_computer/preset/command") {
+        &[ChatClient, CardMod]
+    } else if ["research", "civilian", "cargochat"]
+        .iter()
+        .any(|p| is_under_path(path, &format!("/obj/machinery/modular_computer/preset/{p}")))
+        && !is_under_path(path, "/obj/machinery/modular_computer/preset/research/away")
+    {
+        &[ChatClient]
+    } else {
+        &[]
+    };
+    let mut programs = vec![Downloader];
+    programs.extend_from_slice(preset);
+    Some(programs)
 }
 
 /// `max_capacity` in GQ: a PDA 64, a head's PDA twice that, a console's processor 128.
@@ -482,6 +503,15 @@ mod tests {
             console_programs(ENGINEERING_CONSOLE),
             Some(vec![Downloader, AlarmMonitor])
         );
+        assert_eq!(
+            console_programs("/obj/machinery/modular_computer/preset/cargochat/cargo"),
+            Some(vec![Downloader, ChatClient])
+        );
+        assert_eq!(
+            console_programs("/obj/machinery/modular_computer/preset/curator"),
+            Some(vec![Downloader])
+        );
+        assert_eq!(console_programs("/obj/machinery/computer/card"), None);
         for p in ProgramKind::ALL {
             assert_eq!(ProgramKind::from_filename(p.filename()), Some(p));
             assert!(CATEGORIES.contains(&p.category()));
