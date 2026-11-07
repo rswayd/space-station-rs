@@ -7,16 +7,26 @@
 //! (available, not researched, affordable) before the techweb's, pays the science budget its
 //! bounty and logs the research; `enqueueNode`/`dequeueNode` manage the techweb's research queue.
 //! An unpowered console is update-only and refuses acts.
-// shortcut: no tech/design disks (`ejectDisk`, `uploadDisk`, `loadTech` are unknown acts),
-// emagging, multitool relinking or the experiments section of the nodes.
+//!
+//! Disks (`research_disk.dm`, `_design_disk.dm`): a tech disk (`/obj/item/disk/tech_disk`, the
+//! starting nodes; the CentCom one every node) and a design disk (`/obj/item/disk/design_disk`;
+//! limb disks their `blueprints`, the BEPIS disk a random experimental node's designs) go into
+//! the console's two slots (`item_interaction`). `uploadDisk` researches the tech disk's nodes
+//! (`absorb_techdisk`) or adds the design disk's designs (the BEPIS disk also unhides and
+//! researches its node); `loadTech` copies the researched nodes onto the tech disk; tech disk
+//! copies share one 5 s cooldown (`cooldowncopy`); `ejectDisk` drops the disk.
+// shortcut: no emagging, multitool relinking or the experiments section of the nodes; the disk
+// menu is a header section, not a routed view.
 
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use bevy::ecs::message::MessageCursor;
 use bevy::ecs::system::SystemParamItem;
 use bevy::prelude::*;
-use ss13_mapload::research::{SHEET_MATERIAL_AMOUNT, build_type};
+use ss13_mapload::research::{SHEET_MATERIAL_AMOUNT, build_type, node_flags};
 use ss13_mapload::{DmName, DmObj};
+use ss13_shared::TilePos;
 use ss13_shared::chat::Span;
 use ss13_tgui::UiInterface as _;
 use ss13_tgui::UiStatus;
@@ -31,9 +41,11 @@ use super::*;
 use crate::cargo::console::machine_say;
 use crate::cargo::economy::Economy;
 use crate::click::{ClickResolved, ResolveClicks};
-use crate::inventory::{IdCard, Inventory, check_access};
+use crate::combat::CombatRng;
+use crate::inventory::{CarriedBy, IdCard, Inventory, check_access};
 use crate::obj_damage::is_under;
 use crate::power::Unpowered;
+use crate::storage::{put_inside, take_out};
 use crate::tools::tell;
 
 pub const CONSOLE_ROOT: &str = ss13_mapload::research::CONSOLE_ROOT;
@@ -46,6 +58,87 @@ pub struct RdConsole {
     pub locked: bool,
     pub req_access: Vec<String>,
     catalogue: Arc<TechwebStatic>,
+    /// `t_disk`: the inserted tech disk.
+    pub t_disk: Option<Entity>,
+    /// `d_disk`: the inserted design disk.
+    pub d_disk: Option<Entity>,
+}
+
+pub const DISK_ROOT: &str = "/obj/item/disk";
+pub const TECH_DISK_ROOT: &str = "/obj/item/disk/tech_disk";
+const TECH_DISK_DEBUG: &str = "/obj/item/disk/tech_disk/debug";
+pub const DESIGN_DISK_ROOT: &str = "/obj/item/disk/design_disk";
+pub const BEPIS_DISK_ROOT: &str = "/obj/item/disk/design_disk/bepis";
+/// `cooldowncopy`, seconds.
+const COPY_COOLDOWN: f64 = 5.0;
+
+/// `/obj/item/disk/tech_disk`'s `stored_nodes`.
+#[derive(Component, Clone, Debug, Default)]
+pub struct TechDisk {
+    pub stored_nodes: BTreeSet<usize>,
+}
+
+/// `/obj/item/disk/design_disk`'s `blueprints`, and the BEPIS disk's `bepis_node`.
+#[derive(Component, Clone, Debug, Default)]
+pub struct DesignDisk {
+    pub blueprints: Vec<usize>,
+    pub bepis_node: Option<usize>,
+}
+
+/// The disk's `Initialize`, on first use: its data by its type. False when `disk` is not a tech
+/// or design disk.
+pub fn ensure_disk(world: &mut World, disk: Entity) -> bool {
+    if world.get::<TechDisk>(disk).is_some() || world.get::<DesignDisk>(disk).is_some() {
+        return true;
+    }
+    let Some(path) = world.get::<DmObj>(disk).map(|o| o.path.clone()) else {
+        return false;
+    };
+    let Some(db) = world.get_resource::<ResearchDb>() else {
+        return false;
+    };
+    if is_under(&path, TECH_DISK_ROOT) {
+        let stored_nodes = if is_under(&path, TECH_DISK_DEBUG) {
+            (0..db.nodes.len()).collect()
+        } else {
+            db.starting.iter().copied().collect()
+        };
+        world.entity_mut(disk).insert(TechDisk { stored_nodes });
+        return true;
+    }
+    if !is_under(&path, DESIGN_DISK_ROOT) {
+        return false;
+    }
+    let design = |p: &String| db.design_index.get(p).copied();
+    let mut state = DesignDisk {
+        blueprints: db
+            .limb_disks
+            .get(&path)
+            .map(|b| b.iter().filter_map(design).collect())
+            .unwrap_or_default(),
+        bepis_node: None,
+    };
+    if is_under(&path, BEPIS_DISK_ROOT) {
+        let experimental: Vec<usize> = db
+            .nodes
+            .iter()
+            .enumerate()
+            .filter(|(_, n)| n.flags & node_flags::EXPERIMENTAL != 0)
+            .map(|(i, _)| i)
+            .collect();
+        if !experimental.is_empty() {
+            let high = experimental.len() as u32 - 1;
+            let pick = world
+                .get_resource_mut::<CombatRng>()
+                .map_or(0, |mut r| r.range(0, high)) as usize;
+            let node = experimental[pick];
+            let db = world.resource::<ResearchDb>();
+            state.blueprints = db.node_designs[node].clone();
+            state.bepis_node = Some(node);
+        }
+    }
+    world.entity_mut(disk).insert(state);
+    true
 }
 
 pub struct ConsolePlugin;
@@ -158,6 +251,8 @@ pub(crate) fn setup_console(world: &mut World, e: Entity, shared: Option<Arc<Tec
         locked: def.is_some_and(|d| d.locked),
         req_access: def.map(|d| d.req_access.clone()).unwrap_or_default(),
         catalogue,
+        t_disk: None,
+        d_disk: None,
     };
     world.entity_mut(e).insert(console);
 }
@@ -173,6 +268,8 @@ pub(crate) fn program_console(world: &mut World, pc: Entity) {
         locked: false,
         req_access: vec!["research".to_owned()],
         catalogue,
+        t_disk: None,
+        d_disk: None,
     });
 }
 
@@ -229,6 +326,7 @@ type ConsoleParams = (
     Option<Res<'static, ResearchDb>>,
     Option<Res<'static, Techweb>>,
     Query<'static, 'static, &'static DmName>,
+    Query<'static, 'static, (Option<&'static TechDisk>, Option<&'static DesignDisk>)>,
 );
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -237,6 +335,11 @@ pub enum ConsoleAct {
     Research(String),
     Enqueue(String),
     Dequeue(String),
+    /// `ejectDisk`: true for the tech disk.
+    EjectDisk(bool),
+    /// `uploadDisk`: true for the tech disk.
+    UploadDisk(bool),
+    LoadTech,
 }
 
 /// tg `ui_data` for `user`.
@@ -301,9 +404,30 @@ impl ServerUi for TechwebUi {
     fn data(
         console: &RdConsole,
         user: Entity,
-        (db, web, names): &SystemParamItem<'_, '_, ConsoleParams>,
+        (db, web, names, disks): &SystemParamItem<'_, '_, ConsoleParams>,
     ) -> TechwebData {
-        console_data(console, user, db.as_deref(), web.as_deref(), names)
+        let mut data = console_data(console, user, db.as_deref(), web.as_deref(), names);
+        data.t_disk = console
+            .t_disk
+            .and_then(|d| disks.get(d).ok())
+            .and_then(|(t, _)| t)
+            .map(|t| t.stored_nodes.iter().map(|&n| n as u16).collect());
+        data.d_disk = console
+            .d_disk
+            .and_then(|d| disks.get(d).ok())
+            .and_then(|(_, d)| d)
+            .map(|d| {
+                d.blueprints
+                    .iter()
+                    .map(|&b| {
+                        db.as_deref()
+                            .and_then(|db| db.designs.get(b))
+                            .map(|d| d.name.clone())
+                            .unwrap_or_default()
+                    })
+                    .collect()
+            });
+        data
     }
 
     fn parse_act(action: &str, params: &UiParams) -> Result<ConsoleAct, UiReject> {
@@ -318,6 +442,19 @@ impl ServerUi for TechwebUi {
             RESEARCH_NODE => Ok(ConsoleAct::Research(node()?)),
             ENQUEUE_NODE => Ok(ConsoleAct::Enqueue(node()?)),
             DEQUEUE_NODE => Ok(ConsoleAct::Dequeue(node()?)),
+            EJECT_DISK | UPLOAD_DISK => {
+                let tech = match params.get(DISK_TYPE) {
+                    Some(TECH_DISK) => true,
+                    Some(DESIGN_DISK) => false,
+                    _ => return Err(UiReject::BadParams("type: tech or design".into())),
+                };
+                Ok(if action == EJECT_DISK {
+                    ConsoleAct::EjectDisk(tech)
+                } else {
+                    ConsoleAct::UploadDisk(tech)
+                })
+            }
+            LOAD_TECH => Ok(ConsoleAct::LoadTech),
             _ => Err(UiReject::UnknownAction),
         }
     }
@@ -345,7 +482,12 @@ pub(super) fn id_access(world: &World, mob: Entity) -> (Vec<String>, Vec<String>
     (any, card(inventory.id).unwrap_or_default())
 }
 
-fn console_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed<TechwebUi>>>) {
+fn console_acts(
+    world: &mut World,
+    mut acts: Local<MessageCursor<UiActed<TechwebUi>>>,
+    // `STATIC_COOLDOWN_DECLARE(cooldowncopy)`: game time the next tech disk copy may start.
+    mut copy_ready: Local<f64>,
+) {
     let pending: Vec<(Entity, Entity, Entity, ConsoleAct)> = acts
         .read(world.resource::<Messages<UiActed<TechwebUi>>>())
         .map(|a| (a.client, a.actor, a.source, a.act.clone()))
@@ -381,6 +523,12 @@ fn console_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed<Techweb
             }
             ConsoleAct::Enqueue(path) => queue(world, console, actor, &path, true),
             ConsoleAct::Dequeue(path) => queue(world, console, actor, &path, false),
+            ConsoleAct::EjectDisk(tech) => {
+                eject_disk(world, console, tech);
+            }
+            ConsoleAct::UploadDisk(false) => upload_design_disk(world, console),
+            ConsoleAct::UploadDisk(true) => tech_copy(world, console, false, &mut *copy_ready),
+            ConsoleAct::LoadTech => tech_copy(world, console, true, &mut *copy_ready),
         }
     }
 }
@@ -488,4 +636,204 @@ fn queue(world: &mut World, console: Entity, actor: Entity, path: &str, enqueue:
         };
         machine_say(world, console, text);
     }
+}
+
+/// `uploadDisk` with the tech disk (`load` false) and `loadTech` (true), behind `cooldowncopy`.
+fn tech_copy(world: &mut World, console: Entity, load: bool, copy_ready: &mut f64) {
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    if now < *copy_ready {
+        machine_say(world, console, "Серверы заняты!");
+        return;
+    }
+    let Some(disk) = live_disk(world, console, true) else {
+        machine_say(world, console, "Технологический диск не вставлен!");
+        return;
+    };
+    *copy_ready = now + COPY_COOLDOWN;
+    if load {
+        machine_say(world, console, "Загрузка на технологический диск.");
+        let researched = world
+            .get_resource::<Techweb>()
+            .map(|w| w.researched.clone())
+            .unwrap_or_default();
+        if let Some(mut t) = world.get_mut::<TechDisk>(disk) {
+            t.stored_nodes.extend(researched);
+        }
+    } else {
+        machine_say(world, console, "Загрузка технологии на диск.");
+        absorb_techdisk(world, disk);
+    }
+}
+
+/// The console's tech (or design) disk while it still exists (`QDELETED` clears it).
+fn live_disk(world: &mut World, console: Entity, tech: bool) -> Option<Entity> {
+    let state = world.get::<RdConsole>(console)?;
+    let disk = if tech { state.t_disk } else { state.d_disk }?;
+    let present = world.get_entity(disk).is_ok()
+        && if tech {
+            world.get::<TechDisk>(disk).is_some()
+        } else {
+            world.get::<DesignDisk>(disk).is_some()
+        };
+    if !present && let Some(mut c) = world.get_mut::<RdConsole>(console) {
+        if tech {
+            c.t_disk = None;
+        } else {
+            c.d_disk = None;
+        }
+    }
+    present.then_some(disk)
+}
+
+/// tg `absorb_techdisk`: every node on the disk not yet researched, forced and free.
+pub fn absorb_techdisk(world: &mut World, disk: Entity) {
+    let Some(nodes) = world.get::<TechDisk>(disk).map(|t| t.stored_nodes.clone()) else {
+        return;
+    };
+    world.try_resource_scope(|world, mut web: Mut<Techweb>| {
+        let db = world.resource::<ResearchDb>();
+        for node in nodes {
+            if node < db.nodes.len() && !web.researched.contains(&node) {
+                web.research_node(db, node, true, false);
+            }
+        }
+    });
+}
+
+/// `uploadDisk` with the design disk: its designs, then `on_upload`.
+fn upload_design_disk(world: &mut World, console: Entity) {
+    let Some(disk) = live_disk(world, console, false) else {
+        machine_say(world, console, "Диск с дизайном не вставлен!");
+        return;
+    };
+    let Some(state) = world.get::<DesignDisk>(disk).cloned() else {
+        return;
+    };
+    world.try_resource_scope(|world, mut web: Mut<Techweb>| {
+        let db = world.resource::<ResearchDb>();
+        for &design in &state.blueprints {
+            if design < db.designs.len() {
+                web.add_design(db, design);
+            }
+        }
+    });
+    machine_say(world, console, "Загрузка чертежей с диска.");
+    // `/obj/item/disk/design_disk/bepis/on_upload`.
+    if let Some(node) = state.bepis_node {
+        world.try_resource_scope(|world, mut web: Mut<Techweb>| {
+            let db = world.resource::<ResearchDb>();
+            web.hidden.remove(&node);
+            web.research_node(db, node, true, false);
+        });
+    }
+}
+
+/// tg `eject_disk(type)`: the disk drops on the console's tile.
+pub fn eject_disk(world: &mut World, console: Entity, tech: bool) -> bool {
+    let Some(state) = world.get::<RdConsole>(console) else {
+        return false;
+    };
+    let Some(disk) = (if tech { state.t_disk } else { state.d_disk }) else {
+        return false;
+    };
+    if let Some(mut c) = world.get_mut::<RdConsole>(console) {
+        if tech {
+            c.t_disk = None;
+        } else {
+            c.d_disk = None;
+        }
+    }
+    let Some(&pos) = world.get::<TilePos>(console) else {
+        return false;
+    };
+    if world.get_entity(disk).is_err() {
+        return false;
+    }
+    take_out(world, disk, pos);
+    crate::construction::tile_changed(world, pos);
+    true
+}
+
+/// tg `rdconsole/item_interaction`: a tech or design disk into its slot. True when the click
+/// was the console's.
+pub fn item_interaction(
+    world: &mut World,
+    client: Entity,
+    mob: Entity,
+    held: Entity,
+    target: Entity,
+) -> bool {
+    if world
+        .get::<crate::modpc::pda::ModularComputer>(target)
+        .is_some()
+    {
+        return false;
+    }
+    let Some(state) = world.get::<RdConsole>(target) else {
+        return false;
+    };
+    let (t_disk, d_disk) = (state.t_disk, state.d_disk);
+    if !world
+        .get::<DmObj>(held)
+        .is_some_and(|o| is_under(&o.path, DISK_ROOT))
+    {
+        return false;
+    }
+    if !ensure_disk(world, held) {
+        tell(
+            world,
+            client,
+            Span::Warning,
+            "Консоль не принимает диски такого формата.",
+        );
+        return true;
+    }
+    let tech = world.get::<TechDisk>(held).is_some();
+    let occupied = if tech { t_disk } else { d_disk };
+    if occupied.is_some_and(|d| world.get_entity(d).is_ok()) {
+        tell(
+            world,
+            client,
+            Span::Warning,
+            "Диск с технологией уже загружен!",
+        );
+        return true;
+    }
+    let name = world
+        .get::<DmName>(held)
+        .map(|n| n.name.clone())
+        .unwrap_or_default();
+    if let Some(mut inventory) = world.get_mut::<Inventory>(mob) {
+        for hand in inventory.hands.iter_mut() {
+            if *hand == Some(held) {
+                *hand = None;
+            }
+        }
+    }
+    world.entity_mut(held).remove::<CarriedBy>();
+    put_inside(world, held, target);
+    if let Some(mut c) = world.get_mut::<RdConsole>(target) {
+        if tech {
+            c.t_disk = Some(held);
+        } else {
+            c.d_disk = Some(held);
+        }
+    }
+    tell(
+        world,
+        client,
+        Span::Notice,
+        format!(
+            "Вы вставляете {name} в {}!",
+            plain(&console_name(world, target))
+        ),
+    );
+    true
+}
+
+fn console_name(world: &World, console: Entity) -> String {
+    world
+        .get::<DmName>(console)
+        .map(|n| n.name.clone())
+        .unwrap_or_default()
 }

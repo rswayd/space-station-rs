@@ -37,6 +37,7 @@ impl Plugin for ScienceClientPlugin {
             .register_ui_view::<DestructiveAnalyzerUi>()
             .register_ui_view::<ExperimentConfigureUi>()
             .register_ui_view::<ServerControlUi>()
+            .register_ui_view::<ExperimentorUi>()
             .register_ui_view::<super::anomaly_refinery::AnomalyRefineryUi>()
             .add_plugins((
                 super::exodrone::client::ExodroneClientPlugin,
@@ -194,6 +195,7 @@ fn techweb_content(
         ("Disengaged", UiColor::Bad)
     };
     let sec_color = sec_color.text().unwrap_or_default();
+    let disks = disk_rows(st, data);
     let routed: Box<dyn SceneList> = match local
         .get(DETAILS)
         .parse::<u16>()
@@ -221,6 +223,8 @@ fn techweb_content(
                             --
                             @LabeledListItem { @label: "Queue" }
                             Children [ {queue} ]
+                            --
+                            {disks}
                         ]
                     ]
                     --
@@ -238,6 +242,67 @@ fn techweb_content(
             Children [ {routed} ]
         ]
     }
+}
+
+fn disk_button(
+    icon: &'static str,
+    label: &'static str,
+    act: &'static str,
+    kind: &'static str,
+) -> impl Scene + use<> {
+    let params = ActParams(vec![(DISK_TYPE.to_owned(), kind.to_owned())]);
+    let name = Name::new(format!("techweb: {act} {kind}"));
+    bsn! {
+        @ss13_ui_kit::Button { @icon: icon, @content: label }
+        Act({act.to_owned()})
+        params
+        name
+    }
+}
+
+/// `TechwebDiskMenu` of each inserted disk, as header rows: its contents and buttons.
+fn disk_rows(st: &TechwebStatic, data: &TechwebData) -> Vec<Box<dyn SceneList>> {
+    let mut rows: Vec<Box<dyn SceneList>> = Vec::new();
+    if let Some(nodes) = &data.t_disk {
+        let names: Vec<String> = nodes
+            .iter()
+            .filter_map(|&n| st.nodes.get(usize::from(n)).map(|n| n.name.clone()))
+            .collect();
+        let summary = format!("{} nodes: {}", names.len(), names.join(", "));
+        let upload = disk_button("upload", "Web -> Disk", LOAD_TECH, TECH_DISK);
+        let download = disk_button("download", "Disk -> Web", UPLOAD_DISK, TECH_DISK);
+        let eject = disk_button("eject", "Eject Disk", EJECT_DISK, TECH_DISK);
+        rows.push(Box::new(EntityScene(bsn! {
+            @LabeledListItem { @label: "Tech Disk" }
+            Children [
+                Node { flex_direction: FlexDirection::Column }
+                Children [
+                    Text(summary)
+                    --
+                    Node { flex_direction: FlexDirection::Row }
+                    Children [ {upload} -- {download} -- {eject} ]
+                ]
+            ]
+        })));
+    }
+    if let Some(blueprints) = &data.d_disk {
+        let summary = format!("{} designs: {}", blueprints.len(), blueprints.join(", "));
+        let upload = disk_button("download", "Upload All", UPLOAD_DISK, DESIGN_DISK);
+        let eject = disk_button("eject", "Eject Disk", EJECT_DISK, DESIGN_DISK);
+        rows.push(Box::new(EntityScene(bsn! {
+            @LabeledListItem { @label: "Design Disk" }
+            Children [
+                Node { flex_direction: FlexDirection::Column }
+                Children [
+                    Text(summary)
+                    --
+                    Node { flex_direction: FlexDirection::Row }
+                    Children [ {upload} -- {eject} ]
+                ]
+            ]
+        })));
+    }
+    rows
 }
 
 /// `TechwebOverview`: Researched (tier 0), Available (tier 1), Future (tier 2+).
@@ -903,6 +968,86 @@ fn material_bar_with(
         Node { flex_direction: FlexDirection::Row, flex_wrap: FlexWrap::Wrap }
         Children [ {docks} ]
     }
+}
+
+// --- E.X.P.E.R.I-MENTOR --------------------------------------------------------------------
+
+impl ClientUi for ExperimentorUi {
+    const WIDTH: f32 = 400.0;
+    const HEIGHT: f32 = 340.0;
+
+    fn content(_: &(), data: &ExperimentorData) -> impl Scene {
+        experimentor_view(data)
+    }
+}
+
+/// `Experimentor.tsx`: the loaded item, its nodes and one button per scan.
+fn experimentor_view(data: &ExperimentorData) -> impl Scene + use<> {
+    let body: Box<dyn SceneList> = if !data.is_server_connected {
+        Box::new(EntityScene(bsn! {
+            @NoticeBox { @danger: true }
+            Children [ Text("Not connected to a server.") ]
+        }))
+    } else if let Some(item) = data.loaded_item.clone() {
+        let nodes: Vec<_> = item
+            .associated_nodes
+            .iter()
+            .map(|(name, unlocked)| {
+                let text = format!("{name}: {}", if *unlocked { "unlocked" } else { "hidden" });
+                EntityScene(text_row(text))
+            })
+            .collect();
+        let relic = if item.is_relic { "Strange object" } else { "" }.to_owned();
+        let image = sprite(item.icon);
+        let item_name = item.name.clone();
+        let cooldown = data.is_on_cooldown;
+        let buttons: Vec<_> = data
+            .available_experiments
+            .iter()
+            .map(|e| {
+                let params = ActParams(vec![(EXPERIMENTOR_ID.to_owned(), e.id.clone())]);
+                let disabled = !e.is_available || cooldown;
+                let name = Name::new(format!("experimentor: {}", e.id));
+                let icon = e.fa_icon.clone();
+                let label = e.name.clone();
+                EntityScene(bsn! {
+                    @ss13_ui_kit::Button { @icon: icon, @content: label }
+                    ss13_ui_kit::Button { disabled: disabled }
+                    Act({EXPERIMENTOR_EXPERIMENT.to_owned()})
+                    params
+                    name
+                })
+            })
+            .collect();
+        Box::new(EntityScene(bsn! {
+            Node { flex_direction: FlexDirection::Column }
+            Children [
+                Node { flex_direction: FlexDirection::Row, margin: UiRect::bottom(px(6)) }
+                Children [
+                    Node { width: px(32), height: px(32) } Children [ {image} ]
+                    --
+                    Node Propagate::<Bold>(Bold(true)) Children [ Text(item_name) ]
+                    --
+                    @ss13_ui_kit::Button { @icon: "eject", @content: "Eject" }
+                    Act({EXPERIMENTOR_EJECT.to_owned()})
+                    Name("experimentor: eject")
+                ]
+                --
+                {EntityScene(text_row(relic))}
+                --
+                {nodes}
+                --
+                Node { flex_direction: FlexDirection::Row, flex_wrap: FlexWrap::Wrap }
+                Children [ {buttons} ]
+            ]
+        }))
+    } else {
+        Box::new(EntityScene(bsn! {
+            @NoticeBox { @info: true }
+            Children [ Text("No item loaded.") ]
+        }))
+    };
+    bsn! { @WindowContent Children [ {body} ] }
 }
 
 // --- Destructive analyzer ------------------------------------------------------------------

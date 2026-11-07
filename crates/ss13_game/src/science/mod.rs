@@ -38,13 +38,19 @@ pub mod exodrone;
 #[cfg(feature = "server")]
 pub mod experi_scanner;
 #[cfg(feature = "server")]
+pub mod experimentor;
+#[cfg(feature = "server")]
 pub mod experiments;
+#[cfg(feature = "server")]
+pub mod gizmo;
 #[cfg(feature = "server")]
 pub mod lathe;
 #[cfg(feature = "server")]
 pub mod points;
 #[cfg(feature = "server")]
 pub mod quantum_pad;
+#[cfg(feature = "server")]
+pub mod relics;
 #[cfg(feature = "server")]
 pub mod server_control;
 #[cfg(feature = "server")]
@@ -84,6 +90,9 @@ impl bevy::prelude::Plugin for ScienceServerPlugin {
             bitrunning::server::BitrunningServerPlugin,
             quantum_pad::QuantumPadPlugin,
             anomaly_refinery::AnomalyRefineryPlugin,
+            experimentor::ExperimentorPlugin,
+            relics::RelicPlugin,
+            gizmo::GizmoPlugin,
         ));
     }
 }
@@ -100,7 +109,53 @@ pub fn item_interaction(
     lathe::item_interaction(world, client, mob, held, target)
         || analyzer::item_interaction(world, client, mob, held, target)
         || autolathe::item_interaction(world, client, mob, held, target)
+        || console::item_interaction(world, client, mob, held, target)
+        || experimentor::item_interaction(world, client, mob, held, target)
 }
+
+/// tgui `Experimentor`.
+pub struct ExperimentorUi;
+
+impl UiInterface for ExperimentorUi {
+    const NAME: &'static str = "Experimentor";
+    type Data = ExperimentorData;
+    type StaticData = ();
+}
+
+/// An `availableExperiments` entry.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct ExperimentorOption {
+    /// The scan type: the `experiment` act's `id`.
+    pub id: String,
+    pub name: String,
+    pub fa_icon: String,
+    pub is_available: bool,
+    pub is_discover: bool,
+}
+
+/// `loadedItem`.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct ExperimentorItem {
+    pub name: String,
+    pub icon: Option<ProductIcon>,
+    pub is_relic: bool,
+    /// `associatedNodes`: node name, unhidden.
+    pub associated_nodes: Vec<(String, bool)>,
+}
+
+/// `ui_data`.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct ExperimentorData {
+    pub has_item: bool,
+    pub is_on_cooldown: bool,
+    pub is_server_connected: bool,
+    pub available_experiments: Vec<ExperimentorOption>,
+    pub loaded_item: Option<ExperimentorItem>,
+}
+
+pub const EXPERIMENTOR_EJECT: &str = "eject";
+pub const EXPERIMENTOR_EXPERIMENT: &str = "experiment";
+pub const EXPERIMENTOR_ID: &str = "id";
 
 /// tgui `Techweb`.
 pub struct TechwebUi;
@@ -180,6 +235,11 @@ pub struct TechwebData {
     pub sec_protocols: bool,
     /// Experiments counted as completed.
     pub completed_experiments: Vec<String>,
+    /// `t_disk.stored_research`: the nodes on the inserted tech disk (indices into
+    /// [`TechwebStatic::nodes`]).
+    pub t_disk: Option<Vec<u16>>,
+    /// `d_disk.blueprints`: the names of the designs on the inserted design disk.
+    pub d_disk: Option<Vec<String>>,
 }
 
 impl TechwebData {
@@ -193,6 +253,13 @@ pub const RESEARCH_NODE: &str = "researchNode";
 pub const ENQUEUE_NODE: &str = "enqueueNode";
 pub const DEQUEUE_NODE: &str = "dequeueNode";
 pub const NODE_PATH: &str = "node_path";
+pub const EJECT_DISK: &str = "ejectDisk";
+pub const UPLOAD_DISK: &str = "uploadDisk";
+pub const LOAD_TECH: &str = "loadTech";
+/// The disk acts' param: [`TECH_DISK`] or [`DESIGN_DISK`] (`RND_TECH_DISK`, `RND_DESIGN_DISK`).
+pub const DISK_TYPE: &str = "type";
+pub const TECH_DISK: &str = "tech";
+pub const DESIGN_DISK: &str = "design";
 
 /// tgui `Fabricator`.
 pub struct FabricatorUi;

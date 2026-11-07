@@ -146,6 +146,11 @@ const TYPES: &str = r##"{
         "declared_vars": { "name": "protolathe", "icon_state": "protolathe",
             "allowed_buildtypes": 2,
             "circuit": { "path": "/obj/item/circuitboard/machine/protolathe" } } },
+    "/obj/machinery/gizmo": { "parent": "/obj/machinery", "declared_vars": {
+        "name": "gizmo", "icon": { "resource": "r.dmi" }, "icon_state": "server",
+        "anchored": 0 } },
+    "/obj/machinery/rnd/experimentor": { "parent": "/obj/machinery/rnd", "declared_vars": {
+        "name": "\\improper E.X.P.E.R.I-MENTOR", "icon_state": "server" } },
     "/obj/machinery/destructive_scanner": { "parent": "/obj/machinery", "declared_vars": {
         "name": "experimental destructive scanner", "icon": { "resource": "r.dmi" },
         "icon_state": "tube_open" } },
@@ -162,6 +167,14 @@ const TYPES: &str = r##"{
         "name": "screwdriver", "icon_state": "screwdriver" } },
     "/obj/item/experi_scanner": { "parent": "/obj/item", "declared_vars": {
         "name": "Experi-Scanner", "icon_state": "experiscanner" } },
+    "/obj/item/disk": { "parent": "/obj/item" },
+    "/obj/item/assembly": { "parent": "/obj/item" },
+    "/obj/item/assembly/relic": { "parent": "/obj/item/assembly", "declared_vars": {
+        "name": "strange object" } },
+    "/obj/item/disk/tech_disk": { "parent": "/obj/item/disk", "declared_vars": {
+        "name": "technology disk" } },
+    "/obj/item/disk/design_disk": { "parent": "/obj/item/disk", "declared_vars": {
+        "name": "Component Design Disk" } },
     "/obj/item/circuitboard": { "parent": "/obj/item" },
     "/obj/item/circuitboard/computer": { "parent": "/obj/item/circuitboard" },
     "/obj/item/circuitboard/computer/rdconsole": { "parent": "/obj/item/circuitboard/computer",
@@ -285,6 +298,12 @@ fn fixture_assets(test: &str) -> PathBuf {
         "/obj/machinery/ore_silo",
         "/obj/item/screwdriver",
         "/obj/item/experi_scanner",
+        "/obj/item/disk/tech_disk",
+        "/obj/item/assembly/relic",
+        "/obj/machinery/rnd/experimentor",
+        "/obj/machinery/gizmo",
+        "/obj/item/wrench",
+        "/obj/item/disk/design_disk",
         "/obj/machinery/destructive_scanner",
         "/obj/machinery/computer/rdservercontrol",
         "/turf/open/floor",
@@ -940,6 +959,304 @@ fn server_control_toggles_servers() {
     let before = s.web().points_of(POINT_GENERIC);
     s.steps(testing::steps(3.0) as usize);
     assert_eq!(s.web().points_of(POINT_GENERIC), before, "no income");
+}
+
+/// Tech and design disks in the R&D console: a design disk's designs upload; a tech disk starts
+/// with the starting nodes, its nodes are researched on upload, the researched nodes copy onto
+/// it behind the 5 s copy cooldown; both eject onto the console's tile.
+#[test]
+fn rd_console_disks() {
+    use ss13_game::science::console::{DesignDisk, TechDisk};
+    let mut s = Lab::start("rd_console_disks");
+    let console = s.machine::<RdConsole>(CONSOLE);
+    s.server
+        .world_mut()
+        .get_mut::<RdConsole>(console)
+        .unwrap()
+        .locked = false;
+    let tools = s.node(TOOLS);
+    let base = s.node("/datum/techweb_node/base");
+    let wrench = s.server.world().resource::<ResearchDb>().design_index["/datum/design/wrench"];
+
+    // A design disk with the wrench.
+    let disk = s.give("/obj/item/disk/design_disk", 1);
+    s.server.world_mut().entity_mut(disk).insert(DesignDisk {
+        blueprints: vec![wrench],
+        bepis_node: None,
+    });
+    s.click(console);
+    s.run_until_for(5.0, "design disk inserted", |s| {
+        s.server.world().get::<RdConsole>(console).unwrap().d_disk == Some(disk)
+    });
+    assert_eq!(s.held(), None);
+    s.open::<TechwebUi>(console);
+    s.run_until_for(5.0, "the window lists the disk", |s| {
+        s.window::<TechwebUi>()
+            .is_some_and(|(_, _, d)| d.d_disk == Some(vec!["Wrench".to_owned()]))
+    });
+    assert!(!s.web().researched_designs.contains(&wrench));
+    s.act::<TechwebUi>("uploadDisk", &[("type", "design")]);
+    s.run_until_for(5.0, "design uploaded", |s| {
+        s.web().researched_designs.contains(&wrench)
+    });
+    assert!(!s.web().researched.contains(&tools), "designs only");
+    s.act::<TechwebUi>("ejectDisk", &[("type", "design")]);
+    s.run_until_for(5.0, "design disk ejected", |s| {
+        s.items_on(CONSOLE, "/obj/item/disk/design_disk") == 1
+    });
+    assert_eq!(
+        s.server.world().get::<RdConsole>(console).unwrap().d_disk,
+        None
+    );
+
+    // A tech disk: the starting nodes; Tools added and uploaded.
+    let disk = s.give("/obj/item/disk/tech_disk", 1);
+    s.click(console);
+    s.run_until_for(5.0, "tech disk inserted", |s| {
+        s.server.world().get::<RdConsole>(console).unwrap().t_disk == Some(disk)
+    });
+    let stored = &s.server.world().get::<TechDisk>(disk).unwrap().stored_nodes;
+    assert!(stored.contains(&base) && !stored.contains(&tools));
+    s.server
+        .world_mut()
+        .get_mut::<TechDisk>(disk)
+        .unwrap()
+        .stored_nodes
+        .insert(tools);
+    let points = s.web().points_of(POINT_GENERIC);
+    s.act::<TechwebUi>("uploadDisk", &[("type", "tech")]);
+    s.run_until_for(5.0, "tech uploaded", |s| {
+        s.web().researched.contains(&tools)
+    });
+    assert!(s.web().points_of(POINT_GENERIC) >= points, "free");
+
+    // Copying back waits for the cooldown.
+    let secret = s.node(SECRET);
+    s.server
+        .world_mut()
+        .resource_mut::<Techweb>()
+        .researched
+        .insert(secret);
+    s.act::<TechwebUi>("loadTech", &[]);
+    s.run_until_for(5.0, "busy", |s| s.said("Серверы заняты!"));
+    assert!(
+        !s.server
+            .world()
+            .get::<TechDisk>(disk)
+            .unwrap()
+            .stored_nodes
+            .contains(&secret)
+    );
+    s.steps(testing::steps(5.0) as usize);
+    s.act::<TechwebUi>("loadTech", &[]);
+    s.run_until_for(5.0, "copied", |s| {
+        s.server
+            .world()
+            .get::<TechDisk>(disk)
+            .unwrap()
+            .stored_nodes
+            .contains(&secret)
+    });
+    s.act::<TechwebUi>("ejectDisk", &[("type", "tech")]);
+    s.run_until_for(5.0, "tech disk ejected", |s| {
+        s.items_on(CONSOLE, "/obj/item/disk/tech_disk") == 1
+    });
+}
+
+/// The E.X.P.E.R.I-MENTOR: a loaded relic is revealed by `Discover` and ejected east, then its
+/// power fires in hand and waits out its cooldown; a scan that is not the item's reaction fails;
+/// the matching scan unhides a node the item unlocks (Obliterate destroys the screwdriver).
+#[test]
+fn experimentor_reveals_relics() {
+    use ss13_game::science::experimentor::{Experimentor, Scan};
+    use ss13_game::science::relics::{Relic, RelicPower, attack_self};
+    use ss13_game::science::{ExperimentorData, ExperimentorUi};
+    let mut s = Lab::start("experimentor_reveals_relics");
+    let at = TilePos::new(5, 4, 1);
+    let machine = ss13_game::construction::spawn_obj(
+        s.server.world_mut(),
+        "/obj/machinery/rnd/experimentor",
+        at,
+    )
+    .unwrap();
+    s.server
+        .world_mut()
+        .entity_mut(machine)
+        .insert(Experimentor::default());
+
+    // A relic: only Discover is offered; it reveals and ejects it.
+    let relic = s.give("/obj/item/assembly/relic", 1);
+    s.click(machine);
+    s.run_until_for(5.0, "relic loaded", |s| {
+        s.server
+            .world()
+            .get::<Experimentor>(machine)
+            .unwrap()
+            .loaded
+            == Some(relic)
+    });
+    s.open::<ExperimentorUi>(machine);
+    let (_, (), data): (u32, (), ExperimentorData) = s.window::<ExperimentorUi>().unwrap();
+    let item = data.loaded_item.expect("loaded item");
+    assert!(item.is_relic);
+    assert!(item.name.starts_with("strange "), "{}", item.name);
+    let offered: Vec<&str> = data
+        .available_experiments
+        .iter()
+        .filter(|e| e.is_available)
+        .map(|e| e.id.as_str())
+        .collect();
+    assert_eq!(offered, ["Discover"]);
+    s.act::<ExperimentorUi>("experiment", &[("id", "Poke")]);
+    s.run_until_for(5.0, "revealed", |s| {
+        s.server
+            .world()
+            .get::<Relic>(relic)
+            .is_some_and(|r| r.activated)
+    });
+    let state = s.server.world().get::<Relic>(relic).unwrap().clone();
+    assert!(state.hidden_power.is_some());
+    assert!((6.0..=30.0).contains(&state.cooldown));
+    s.run_until_for(5.0, "ejected east", |s| {
+        s.items_on(TilePos::new(6, 4, 1), "/obj/item/assembly/relic") == 1
+    });
+    let name = s
+        .server
+        .world()
+        .get::<ss13_mapload::DmName>(relic)
+        .unwrap()
+        .name
+        .clone();
+    assert_eq!(name, state.real_name);
+
+    // In hand: the power (the harmless hugger here) fires once, then the cooldown.
+    s.server
+        .world_mut()
+        .get_mut::<Relic>(relic)
+        .unwrap()
+        .hidden_power = Some(RelicPower::Hugger);
+    let mob = s.mob();
+    let link = s.players[0].link;
+    {
+        let world = s.server.world_mut();
+        world
+            .entity_mut(relic)
+            .remove::<TilePos>()
+            .insert(ss13_game::inventory::CarriedBy(mob));
+        let hand = world.get::<Inventory>(mob).unwrap().active;
+        world.get_mut::<Inventory>(mob).unwrap().hands[hand] = Some(relic);
+        assert!(attack_self(world, link, mob, relic));
+    }
+    let next = s.server.world().get::<Relic>(relic).unwrap().next_activate;
+    assert!(next > s.server.world().resource::<Time>().elapsed_secs_f64());
+    assert!(attack_self(s.server.world_mut(), link, mob, relic));
+    s.run_until_for(5.0, "cooldown", |s| s.said("does not react!"));
+
+    // A screwdriver whose reaction is Obliterate: Heat fails.
+    {
+        let world = s.server.world_mut();
+        let hand = world.get::<Inventory>(mob).unwrap().active;
+        world.get_mut::<Inventory>(mob).unwrap().hands[hand] = None;
+        if world.get_entity(relic).is_ok() {
+            world.despawn(relic);
+        }
+    }
+    s.steps(testing::steps(2.5) as usize);
+    let screwdriver = s.give("/obj/item/screwdriver", 1);
+    s.click(machine);
+    s.run_until_for(5.0, "screwdriver loaded", |s| {
+        s.server
+            .world()
+            .get::<Experimentor>(machine)
+            .unwrap()
+            .loaded
+            == Some(screwdriver)
+    });
+    s.server
+        .world_mut()
+        .get_mut::<Experimentor>(machine)
+        .unwrap()
+        .item_reactions
+        .insert("/obj/item/screwdriver".into(), Scan::Obliterate);
+    s.act::<ExperimentorUi>("experiment", &[("id", "Heat")]);
+    s.run_until_for(5.0, "failure", |s| s.said("the experiment was a failure."));
+    let secret = s.node(SECRET);
+    assert!(s.web().hidden.contains(&secret));
+    // A failure may eject the item (a global malfunction); reload it then.
+    s.steps(testing::steps(2.5) as usize);
+    if s.server
+        .world()
+        .get::<Experimentor>(machine)
+        .unwrap()
+        .loaded
+        != Some(screwdriver)
+    {
+        return;
+    }
+    s.act::<ExperimentorUi>("experiment", &[("id", "Obliterate")]);
+    s.run_until_for(5.0, "secret unhidden", |s| {
+        !s.web().hidden.contains(&secret)
+    });
+    assert!(s.server.world().get_entity(screwdriver).is_err(), "crushed");
+}
+
+/// A gizmo: a random name and eight cryptic wires; pulsing its wires walks the puzzle, a solved
+/// sequence runs its gizpulse (here a dispenser) once per cooldown.
+#[test]
+fn gizmo_wires_solve_the_puzzle() {
+    use ss13_game::science::gizmo::{
+        CRYPTIC_WIRES, Control, Gizmo, Gizmode, Pulse, Solution, ensure,
+    };
+    let mut s = Lab::start("gizmo_wires_solve_the_puzzle");
+    let at = TilePos::new(5, 4, 1);
+    let gizmo = {
+        let world = s.server.world_mut();
+        let e = ss13_game::construction::spawn_obj(world, "/obj/machinery/gizmo", at).unwrap();
+        assert!(ensure(world, e));
+        let wires = world.get::<ss13_game::wires::Wires>(e).unwrap();
+        assert_eq!(wires.colors.len(), 8);
+        assert_ne!(world.get::<ss13_mapload::DmName>(e).unwrap().name, "gizmo");
+        assert!(!world.get::<Gizmo>(e).unwrap().codes.is_empty());
+        // A known puzzle: wires 1, 2, 3 dispense.
+        world.entity_mut(e).insert(Gizmo {
+            modes: vec![Gizmode {
+                pulses: vec![Pulse::Food("/obj/item/wrench")],
+                current: 0,
+                control: Control::Direct,
+                cooldown: 1.0,
+                ready_at: 0.0,
+            }],
+            codes: vec![(vec![0, 1, 2], Solution::Direct(0, 0))],
+            ..Default::default()
+        });
+        e
+    };
+    let mob = s.mob();
+    let pulse = |s: &mut Lab, i: usize| {
+        ss13_game::wires::pulse(s.server.world_mut(), gizmo, CRYPTIC_WIRES[i], Some(mob));
+    };
+    pulse(&mut s, 0);
+    pulse(&mut s, 5);
+    assert!(
+        s.server
+            .world()
+            .get::<Gizmo>(gizmo)
+            .unwrap()
+            .current
+            .is_empty(),
+        "reset"
+    );
+    for i in [0, 1, 2] {
+        pulse(&mut s, i);
+    }
+    s.steps(2);
+    assert_eq!(s.items_on(at, "/obj/item/wrench"), 1);
+    // The cooldown: an immediate second solution dispenses nothing.
+    for i in [0, 1, 2] {
+        pulse(&mut s, i);
+    }
+    s.steps(2);
+    assert_eq!(s.items_on(at, "/obj/item/wrench"), 1);
 }
 
 impl Lab {

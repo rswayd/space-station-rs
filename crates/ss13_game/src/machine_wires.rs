@@ -81,6 +81,8 @@ pub enum MachineWires {
     Radio,
     /// A circuit shell's wires from its wire bundle component (`crate::wiremod::server`).
     WireBundle,
+    /// A gizmo's cryptic wires (`crate::science::gizmo`).
+    Gizmo,
 }
 
 impl MachineWires {
@@ -168,6 +170,7 @@ impl MachineWires {
                 | Self::Mecha
                 | Self::Radio
                 | Self::WireBundle
+                | Self::Gizmo
         )
     }
 }
