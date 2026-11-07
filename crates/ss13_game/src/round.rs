@@ -48,6 +48,10 @@ use crate::lobby::{
     TOGGLE_ANTAG_ROLL, TOGGLE_READY,
 };
 use crate::lobby::{CLEAR_PERSONALITIES, HANDLE_PERSONALITY, PersonalityInfo};
+use crate::lobby::{
+    CrewManifestData, CrewManifestUi, DELAY, DepartmentPositions, LobbyTrait, MANIFEST, NOTICE,
+    RESET_HUD, START_NOW, TRAIT_PARAM, TRAIT_SIGNUP,
+};
 use crate::personality::PersonalityPrefs;
 use crate::quirks::QuirkPrefs;
 use crate::server::{MoveQueue, Players, SpawnPoints};
@@ -58,6 +62,13 @@ pub const REBOOT_EXIT_CODE: u8 = 75;
 const START_NOW_CANCEL_SECS: f64 = 180.0;
 /// tg `declare_completion`: `sleep(5 SECONDS)` before `standard_reboot`.
 const REPORT_TO_REBOOT_SECS: f64 = 5.0;
+/// BandaStation lobby "delay": `static/time` toggles between 1.5 minutes and 1984 days.
+const DELAY_SECS: f64 = 90.0;
+const DELAY_FOREVER_SECS: f64 = 1984.0 * 86_400.0;
+/// tg `RESET_HUD_INTERVAL`.
+const RESET_HUD_SECS: f64 = 15.0;
+/// BandaStation `change_title_screen_notice` `max_length`.
+pub const NOTICE_MAX_LEN: u32 = 2048;
 /// From the round end song to the reboot.
 const ROUND_END_SOUND_LEAD_SECS: f64 = 1.0;
 /// tg `security_scaling_coeff`, BandaStation `security_min_positions`/`security_max_positions`
@@ -219,6 +230,8 @@ pub struct Ticker {
     pub force_ending: bool,
     /// tg `start_immediately`: an admin started the round; the lobby ends on the next tick.
     start_immediately: bool,
+    /// BandaStation's lobby "delay" toggle is on the long wait (its `static/time`).
+    delayed: bool,
     total_players: u32,
     ready_players: u32,
     in_lobby: u32,
@@ -293,6 +306,43 @@ impl JobPreferences {
     }
 }
 
+/// On a client connection whose active admin rights include `R_ADMIN` or `R_DEBUG`
+/// (BandaStation `check_rights_for(client, R_ADMIN|R_DEBUG)`): the lobby shows the admin buttons.
+/// Kept in sync by `ss13_admin`, which also handles the admin acts and checks the rights again.
+#[derive(Component, Clone, Copy, Debug, Default)]
+pub struct LobbyAdmin;
+
+/// BandaStation `SStitle.notice`: the lobby's admin notice.
+// shortcut: not persisted between rounds (BandaStation's `TITLE_NOTICE_FILE`); the reboot is a
+// new `App`, add a file next to the admin config when admins ask for it.
+#[derive(Resource, Clone, Debug, Default, PartialEq, Eq)]
+pub struct LobbyNotice(pub Option<String>);
+
+/// A lobby admin button pressed, for `ss13_admin` to check the client's rights, apply and log
+/// (BandaStation `new_player/Topic` `picture`/`notice`/`start_now`/`delay`).
+#[derive(Message, Clone, Debug, PartialEq, Eq)]
+pub struct LobbyAdminAct {
+    pub client: Entity,
+    pub request: LobbyAdminRequest,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum LobbyAdminRequest {
+    StartNow,
+    Delay,
+    /// The notice the admin typed (`None`: the button of a client without [`LobbyAdmin`],
+    /// asked nothing, for the exploit warning).
+    Notice(Option<String>),
+}
+
+/// On the prompt of BandaStation `change_title_screen_notice`.
+#[derive(Component)]
+struct NoticePrompt;
+
+/// tg `reset_hud_cooldown`: when the client may reset the lobby HUD again.
+#[derive(Component, Clone, Copy, Debug)]
+struct ResetHudCooldown(f64);
+
 /// The preferences window's static half, on every client connection.
 #[derive(Component, Clone, Debug)]
 pub struct PrefsBoard(Arc<JobPrefsStatic>);
@@ -325,7 +375,10 @@ impl Plugin for RoundServerPlugin {
             ..default()
         })
         .register_ui::<LobbyUi>()
-        .register_ui::<JobPrefsUi>();
+        .register_ui::<JobPrefsUi>()
+        .register_ui::<CrewManifestUi>()
+        .init_resource::<LobbyNotice>()
+        .add_message::<LobbyAdminAct>();
         crate::lobby_music::build(app);
         app.init_resource::<crate::join_queue::JoinQueue>()
             .add_systems(Startup, build_prefs_static.after(JobsStartup))
@@ -335,6 +388,9 @@ impl Plugin for RoundServerPlugin {
                     tick.before(UiSystems::Open),
                     crate::join_queue::fire.after(tick).before(UiSystems::Open),
                     (lobby_acts, preference_acts).in_set(UiSystems::Handle),
+                    notice_answers
+                        .in_set(UiSystems::Handle)
+                        .after(ss13_tgui::prompt::PromptSystems::Answer),
                 ),
             );
     }
@@ -468,6 +524,42 @@ pub fn start_now(world: &mut World) -> Result<bool, &'static str> {
         to_world(world, Span::BoldNotice, "Игра начнётся через 3 минуты.");
     }
     Ok(started)
+}
+
+/// BandaStation's lobby "delay" button: the countdown is set to 1.5 minutes, or to 1984 days
+/// when it was 1.5 minutes (a toggle), and an earlier "start now" is cancelled. Returns the new
+/// countdown; refused once the round is setting up.
+pub fn delay_start(world: &mut World) -> Result<f64, &'static str> {
+    let mut ticker = world.resource_mut::<Ticker>();
+    if ticker.state > GameState::Pregame {
+        return Err("Слишком поздно... Игра уже началась!");
+    }
+    ticker.delayed = !ticker.delayed;
+    let secs = if ticker.delayed {
+        DELAY_FOREVER_SECS
+    } else {
+        DELAY_SECS
+    };
+    ticker.time_left = secs;
+    ticker.start_immediately = false;
+    let text = format!("Игра начнётся через {}.", display_time_text(secs));
+    to_world(world, Span::Bold, text);
+    Ok(secs)
+}
+
+/// BandaStation `SStitle.set_notice` with `change_title_screen_notice`'s announcement to the
+/// lobby: an empty text removes the notice.
+pub fn set_notice(world: &mut World, text: &str) {
+    let text: String = text.trim().chars().take(NOTICE_MAX_LEN as usize).collect();
+    let announce = if text.is_empty() {
+        "УВЕДОМЛЕНИЕ В ЛОББИ УДАЛЕНО.".to_owned()
+    } else {
+        format!("УВЕДОМЛЕНИЕ В ЛОББИ ОБНОВЛЕНО: {text}")
+    };
+    world.resource_mut::<LobbyNotice>().0 = (!text.is_empty()).then_some(text);
+    let mut lobby = world.query_filtered::<Entity, With<NewPlayer>>();
+    let clients: Vec<Entity> = lobby.iter(world).collect();
+    chat(world, clients, Span::BoldAnnounce, announce);
 }
 
 fn to_world(world: &mut World, span: Span, text: impl Into<String>) {
@@ -1043,6 +1135,14 @@ pub enum LobbyAct {
     Observe,
     CharacterSetup,
     ToggleAntagRoll,
+    Manifest,
+    /// A station trait's name.
+    TraitSignup(String),
+    ResetHud,
+    /// Admin buttons, handled by `ss13_admin` (rights, log).
+    StartNow,
+    Delay,
+    Notice,
 }
 
 impl ServerUi for LobbyUi {
@@ -1050,17 +1150,48 @@ impl ServerUi for LobbyUi {
         &'static NewPlayer,
         &'static CharacterName,
         &'static AntagPreferences,
+        Has<LobbyAdmin>,
     );
-    type UserParam = (Res<'static, Ticker>, Res<'static, RoundConfig>);
+    type UserParam = (
+        Res<'static, Ticker>,
+        Res<'static, RoundConfig>,
+        Res<'static, LobbyNotice>,
+        Option<Res<'static, crate::station_traits::StationTraits>>,
+        Option<Res<'static, crate::station_traits::LobbyCandidates>>,
+    );
     type Act = LobbyAct;
 
-    fn static_data(_: (&NewPlayer, &CharacterName, &AntagPreferences)) {}
+    fn static_data(_: (&NewPlayer, &CharacterName, &AntagPreferences, bool)) {}
 
     fn data(
-        (player, name, antag): (&NewPlayer, &CharacterName, &AntagPreferences),
-        _: Entity,
-        (ticker, config): &(Res<Ticker>, Res<RoundConfig>),
+        (player, name, antag, admin): (&NewPlayer, &CharacterName, &AntagPreferences, bool),
+        client: Entity,
+        (ticker, config, notice, traits, candidates): &(
+            Res<Ticker>,
+            Res<RoundConfig>,
+            Res<LobbyNotice>,
+            Option<Res<crate::station_traits::StationTraits>>,
+            Option<Res<crate::station_traits::LobbyCandidates>>,
+        ),
     ) -> LobbyData {
+        // tg `can_display_lobby_button`: `sign_up_button && !SSticker.HasRoundStarted()`.
+        let traits = match traits {
+            Some(traits) if ticker.state < GameState::SettingUp => traits
+                .active
+                .iter()
+                .filter_map(|t| {
+                    let desc = crate::station_traits::lobby_button_desc(t.path)?;
+                    Some(LobbyTrait {
+                        name: t.name.to_owned(),
+                        desc: desc.to_owned(),
+                        signed_up: candidates
+                            .as_ref()
+                            .is_some_and(|c| c.signed_up(t.path, client)),
+                    })
+                })
+                .collect(),
+            _ => Vec::new(),
+        };
         LobbyData {
             state: ticker.state,
             time_left: (ticker.state == GameState::Pregame)
@@ -1072,15 +1203,24 @@ impl ServerUi for LobbyUi {
             in_lobby: ticker.in_lobby,
             antag_roll: antag.antag_roll,
             source_url: config.source_url.clone(),
+            notice: notice.0.clone(),
+            admin,
+            traits,
         }
     }
 
-    fn parse_act(action: &str, _: &UiParams) -> Result<LobbyAct, UiReject> {
+    fn parse_act(action: &str, params: &UiParams) -> Result<LobbyAct, UiReject> {
         match action {
             TOGGLE_READY => Ok(LobbyAct::ToggleReady),
             OBSERVE => Ok(LobbyAct::Observe),
             CHARACTER_SETUP => Ok(LobbyAct::CharacterSetup),
             TOGGLE_ANTAG_ROLL => Ok(LobbyAct::ToggleAntagRoll),
+            MANIFEST => Ok(LobbyAct::Manifest),
+            TRAIT_SIGNUP => Ok(LobbyAct::TraitSignup(params.text(TRAIT_PARAM)?)),
+            RESET_HUD => Ok(LobbyAct::ResetHud),
+            START_NOW => Ok(LobbyAct::StartNow),
+            DELAY => Ok(LobbyAct::Delay),
+            NOTICE => Ok(LobbyAct::Notice),
             _ => Err(UiReject::UnknownAction),
         }
     }
@@ -1338,7 +1478,202 @@ fn lobby_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed<LobbyUi>>
                     "Настройка персонажа",
                 ));
             }
+            // tg `ViewManifest`: `GLOB.manifest.ui_interact(new_player)`.
+            LobbyAct::Manifest => {
+                world.write_message(OpenUi::new::<CrewManifestUi>(
+                    client,
+                    client,
+                    client,
+                    "Манифест экипажа",
+                ));
+            }
+            LobbyAct::TraitSignup(name) => trait_signup(world, client, &name),
+            LobbyAct::ResetHud => reset_hud(world, client),
+            LobbyAct::StartNow => {
+                world.write_message(LobbyAdminAct {
+                    client,
+                    request: LobbyAdminRequest::StartNow,
+                });
+            }
+            LobbyAct::Delay => {
+                world.write_message(LobbyAdminAct {
+                    client,
+                    request: LobbyAdminRequest::Delay,
+                });
+            }
+            LobbyAct::Notice if world.get::<LobbyAdmin>(client).is_some() => {
+                use ss13_tgui::prompt::{Ask, PromptKind, ask_world};
+                let prompt = ask_world(
+                    world,
+                    Ask::new(
+                        client,
+                        client,
+                        "Уведомление в лобби",
+                        "Введи то что должно отображаться в лобби:",
+                        PromptKind::Text {
+                            default: String::new(),
+                            max_length: NOTICE_MAX_LEN,
+                            multiline: false,
+                        },
+                    ),
+                );
+                world.entity_mut(prompt).insert(NoticePrompt);
+            }
+            LobbyAct::Notice => {
+                world.write_message(LobbyAdminAct {
+                    client,
+                    request: LobbyAdminRequest::Notice(None),
+                });
+            }
         }
+    }
+}
+
+/// The typed notices, passed on to `ss13_admin` (which checks the rights again).
+fn notice_answers(
+    world: &mut World,
+    mut cursor: Local<MessageCursor<ss13_tgui::prompt::PromptAnswered>>,
+) {
+    let answers: Vec<(Entity, Entity, Option<ss13_tgui::prompt::PromptAnswer>)> = cursor
+        .read(world.resource::<Messages<ss13_tgui::prompt::PromptAnswered>>())
+        .map(|a| (a.prompt, a.client, a.answer.clone()))
+        .collect();
+    for (prompt, client, answer) in answers {
+        if world.get::<NoticePrompt>(prompt).is_none() {
+            continue;
+        }
+        // tg `isnull(new_notice)`: a cancel changes nothing.
+        let Some(ss13_tgui::prompt::PromptAnswer::Text(text)) = answer else {
+            continue;
+        };
+        world.write_message(LobbyAdminAct {
+            client,
+            request: LobbyAdminRequest::Notice(Some(text)),
+        });
+    }
+}
+
+/// BandaStation `/datum/station_trait/job/on_lobby_button_click`: in or out of the trait's
+/// candidates, before the round starts.
+fn trait_signup(world: &mut World, client: Entity, name: &str) {
+    let Some(path) = world
+        .get_resource::<crate::station_traits::StationTraits>()
+        .and_then(|t| t.active.iter().find(|t| t.name == name))
+        .map(|t| t.path)
+        .filter(|path| crate::station_traits::lobby_button_desc(path).is_some())
+    else {
+        return;
+    };
+    if world.resource::<Ticker>().state >= GameState::SettingUp {
+        chat(world, vec![client], Span::RedText, "Раунд уже начался!");
+        return;
+    }
+    let signed_up = world
+        .get_resource_or_init::<crate::station_traits::LobbyCandidates>()
+        .toggle(path, client);
+    let (span, text) = if signed_up {
+        (
+            Span::GreenText,
+            format!("Вы были добавлены в список кандидатов на роль {name}."),
+        )
+    } else {
+        (
+            Span::RedText,
+            format!("Вы были убраны из списка кандидатов на роль {name}."),
+        )
+    };
+    chat(world, vec![client], span, text);
+}
+
+/// tg `reset_menu_hud`: the lobby window is sent again (the client redraws its screen from
+/// scratch), once per 15 seconds.
+fn reset_hud(world: &mut World, client: Entity) {
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    if let Some(&ResetHudCooldown(at)) = world.get::<ResetHudCooldown>(client)
+        && now < at
+    {
+        let text = format!(
+            "Вы должны подождать {} перед повторным сбросом HUD лобби!",
+            display_time_text(at - now)
+        );
+        chat(world, vec![client], Span::Warning, text);
+        return;
+    }
+    world
+        .entity_mut(client)
+        .insert(ResetHudCooldown(now + RESET_HUD_SECS));
+    world.write_message(OpenUi::new::<LobbyUi>(client, client, client, ""));
+    let text = format!(
+        "HUD лобби сброшен. Повторно сбросить его можно через {}.",
+        display_time_text(RESET_HUD_SECS)
+    );
+    chat(world, vec![client], Span::Info, text);
+}
+
+impl ServerUi for CrewManifestUi {
+    /// tg `ui_status`: interactive for new players (observers have their own verb), else closed.
+    type Source = &'static NewPlayer;
+    type UserParam = (
+        Option<Res<'static, crate::records::manifest::Manifest>>,
+        Option<Res<'static, Jobs>>,
+    );
+    type Act = ();
+
+    fn static_data(_: &NewPlayer) {}
+
+    fn data(
+        _: &NewPlayer,
+        _: Entity,
+        (manifest, jobs): &(
+            Option<Res<crate::records::manifest::Manifest>>,
+            Option<Res<Jobs>>,
+        ),
+    ) -> CrewManifestData {
+        let Some(jobs) = jobs else {
+            return CrewManifestData::default();
+        };
+        crew_manifest(manifest.as_deref(), jobs)
+    }
+
+    fn parse_act(_: &str, _: &UiParams) -> Result<(), UiReject> {
+        Err(UiReject::UnknownAction)
+    }
+}
+
+/// `/datum/manifest/ui_data`: the records by department, and per joinable department the open
+/// slots and the unlimited jobs.
+pub fn crew_manifest(
+    manifest: Option<&crate::records::manifest::Manifest>,
+    jobs: &Jobs,
+) -> CrewManifestData {
+    let positions = jobs
+        .data
+        .departments
+        .iter()
+        .map(|d| {
+            let mut open = 0;
+            let mut exceptions = Vec::new();
+            for &j in &d.jobs {
+                let job = &jobs.data.jobs[usize::from(j)];
+                if job.total_positions < 0 {
+                    exceptions.push(job.title.clone());
+                    continue;
+                }
+                open += (job.total_positions as u32).saturating_sub(jobs.positions(usize::from(j)));
+            }
+            DepartmentPositions {
+                name: d.name.clone(),
+                open,
+                exceptions,
+                color: d.color.clone(),
+            }
+        })
+        .collect();
+    CrewManifestData {
+        manifest: manifest
+            .map(|m| m.departments(&jobs.data))
+            .unwrap_or_default(),
+        positions,
     }
 }
 
@@ -1494,6 +1829,142 @@ mod tests {
         assert_eq!(ticker.start_now(), Ok(true));
         ticker.state = GameState::Playing;
         assert!(ticker.start_now().is_err());
+    }
+
+    #[test]
+    fn the_lobby_manifest_counts_open_slots_and_unlimited_jobs() {
+        let mut d = data();
+        d.departments
+            .last_mut()
+            .unwrap()
+            .jobs
+            .push(ASSISTANT as u16);
+        let mut jobs = Jobs::new(d, 1);
+        jobs.add_position(OFFICER);
+        let mut manifest = crate::records::manifest::Manifest::default();
+        manifest.inject(crate::records::manifest::Joiner {
+            name: "Боб",
+            assignment: SECURITY_OFFICER,
+            job: Some(OFFICER),
+            mob: Entity::PLACEHOLDER,
+        });
+        let m = crew_manifest(Some(&manifest), &jobs);
+        let station = m.positions.iter().find(|p| p.name == "Station").unwrap();
+        // Captain 1 + officers 5 - 1 + engineers 2 + clown 1 + AI 1; the assistant is unlimited.
+        assert_eq!(station.open, 9);
+        assert_eq!(station.exceptions, vec!["Assistant".to_owned()]);
+        let dept = m.manifest.iter().find(|d| d.name == "Station").unwrap();
+        assert_eq!(
+            dept.entries,
+            vec![("Боб".to_owned(), SECURITY_OFFICER.to_owned())]
+        );
+        assert!(crew_manifest(None, &jobs).manifest.is_empty());
+    }
+
+    fn lobby_world() -> World {
+        let mut world = World::new();
+        world.init_resource::<Messages<SendChat>>();
+        world.init_resource::<Messages<OpenUi>>();
+        world.init_resource::<LobbyNotice>();
+        world.insert_resource(Time::<()>::default());
+        world.insert_resource(Ticker {
+            state: GameState::Pregame,
+            time_left: 120.0,
+            ..default()
+        });
+        world
+    }
+
+    #[test]
+    fn delay_toggles_between_ninety_seconds_and_forever_until_the_round_starts() {
+        let mut world = lobby_world();
+        world.resource_mut::<Ticker>().start_immediately = true;
+        assert_eq!(delay_start(&mut world), Ok(DELAY_FOREVER_SECS));
+        assert!(!world.resource::<Ticker>().start_immediately);
+        assert_eq!(world.resource::<Ticker>().time_left, DELAY_FOREVER_SECS);
+        assert_eq!(delay_start(&mut world), Ok(DELAY_SECS));
+        assert_eq!(world.resource::<Ticker>().time_left, DELAY_SECS);
+        world.resource_mut::<Ticker>().state = GameState::SettingUp;
+        assert!(delay_start(&mut world).is_err());
+        assert_eq!(world.resource::<Ticker>().time_left, DELAY_SECS);
+    }
+
+    #[test]
+    fn the_notice_is_set_capped_announced_to_the_lobby_and_removed_by_empty_text() {
+        let mut world = lobby_world();
+        let player = world.spawn(NewPlayer::default()).id();
+        set_notice(&mut world, &"а".repeat(3000));
+        assert_eq!(
+            world
+                .resource::<LobbyNotice>()
+                .0
+                .as_ref()
+                .map(|n| n.chars().count()),
+            Some(NOTICE_MAX_LEN as usize)
+        );
+        let sent: Vec<_> = world
+            .resource::<Messages<SendChat>>()
+            .iter_current_update_messages()
+            .map(|m| m.clients.clone())
+            .collect();
+        assert_eq!(sent, vec![vec![player]]);
+        set_notice(&mut world, "  ");
+        assert_eq!(world.resource::<LobbyNotice>().0, None);
+    }
+
+    #[test]
+    fn the_lobby_hud_resets_once_per_fifteen_seconds() {
+        let mut world = lobby_world();
+        let client = world.spawn(NewPlayer::default()).id();
+        let opens = |world: &World| {
+            world
+                .resource::<Messages<OpenUi>>()
+                .iter_current_update_messages()
+                .filter(|o| o.interface == LobbyUi::NAME && o.client == client)
+                .count()
+        };
+        reset_hud(&mut world, client);
+        assert_eq!(opens(&world), 1);
+        reset_hud(&mut world, client);
+        assert_eq!(opens(&world), 1, "on cooldown");
+        world
+            .resource_mut::<Time>()
+            .advance_by(std::time::Duration::from_secs_f64(RESET_HUD_SECS));
+        reset_hud(&mut world, client);
+        assert_eq!(opens(&world), 2);
+    }
+
+    #[test]
+    fn trait_signup_toggles_candidates_of_lobby_traits_only_before_the_round() {
+        static GORILLA: crate::station_traits::TraitDef = crate::station_traits::TraitDef {
+            path: "/datum/station_trait/job/cargorilla",
+            name: "Cargo Gorilla",
+            kind: crate::station_traits::TraitKind::Neutral,
+            weight: 1,
+            cost: 0.0,
+            show_in_report: false,
+            report: "",
+            blacklist: &[],
+        };
+        let mut world = lobby_world();
+        world.insert_resource(crate::station_traits::StationTraits {
+            active: vec![&GORILLA],
+        });
+        let client = world.spawn(NewPlayer::default()).id();
+        let signed = |world: &World| {
+            world
+                .get_resource::<crate::station_traits::LobbyCandidates>()
+                .is_some_and(|c| c.signed_up(GORILLA.path, client))
+        };
+        trait_signup(&mut world, client, "Nope");
+        assert!(!signed(&world));
+        trait_signup(&mut world, client, "Cargo Gorilla");
+        assert!(signed(&world));
+        trait_signup(&mut world, client, "Cargo Gorilla");
+        assert!(!signed(&world));
+        world.resource_mut::<Ticker>().state = GameState::Playing;
+        trait_signup(&mut world, client, "Cargo Gorilla");
+        assert!(!signed(&world));
     }
 
     const ASSISTANT: usize = 0;

@@ -29,6 +29,10 @@ use crate::lobby::{
     TOGGLE_READY,
 };
 use crate::lobby::{CLEAR_PERSONALITIES, HANDLE_PERSONALITY};
+use crate::lobby::{
+    CrewManifestData, CrewManifestUi, DELAY, MANIFEST, NOTICE, RESET_HUD, START_NOW, TRAIT_PARAM,
+    TRAIT_SIGNUP,
+};
 
 /// tg `/datum/hud/new_player` title: `icons/runtime/default_title.dmi`, the unnamed state.
 const TITLE_DMI: &str = "icons/runtime/default_title.dmi";
@@ -43,6 +47,7 @@ const READY_TEXT: &str = "Готов";
 const JOIN_TEXT: &str = "Присоединиться";
 const OBSERVE_TEXT: &str = "Наблюдать";
 const SETUP_TEXT: &str = "Настройка персонажа";
+const MANIFEST_TEXT: &str = "Манифест персонала";
 
 pub struct LobbyClientPlugin;
 
@@ -50,6 +55,7 @@ impl Plugin for LobbyClientPlugin {
     fn build(&self, app: &mut App) {
         app.register_ui_headless::<LobbyUi>()
             .register_ui_view::<JobPrefsUi>()
+            .register_ui_view::<CrewManifestUi>()
             .init_resource::<Lobby>()
             .add_systems(Startup, spawn_lobby)
             .add_systems(
@@ -338,6 +344,66 @@ fn panel_scene(data: &LobbyData, confirm_observe: bool) -> impl Scene + use<> {
         .map(|line| bsn! { Node Children [ Text(line) ] })
         .collect();
     let time = time_remaining(data);
+    // BandaStation `updateNotice`: big red text.
+    let notice = data.notice.clone().map(|text| {
+        EntityScene(bsn! {
+            Node { margin: UiRect::bottom(px(8)) }
+            Propagate::<FontPx>(FontPx(16.0))
+            Propagate::<Bold>(Bold(true))
+            Propagate::<TextColor>(TextColor(Color::srgb(1.0, 0.2, 0.2)))
+            Children [ Text(text) ]
+        })
+    });
+    // BandaStation `create_trait_buttons`.
+    let traits: Vec<_> = data
+        .traits
+        .iter()
+        .map(|t| {
+            let (icon, color) = if t.signed_up {
+                ("check-square-o", UiColor::Good)
+            } else {
+                ("square-o", UiColor::Bad)
+            };
+            let (content, tooltip, label) = (
+                t.name.clone(),
+                t.desc.clone(),
+                format!("lobby: trait {}", t.name),
+            );
+            let params = vec![(TRAIT_PARAM.to_owned(), t.name.clone())];
+            bsn! {
+                @Button { @content: content, @icon: icon, @fluid: true, @tooltip: tooltip }
+                Button { color: color }
+                Act({TRAIT_SIGNUP.to_owned()})
+                ActParams(params)
+                Name(label)
+            }
+        })
+        .collect();
+    // BandaStation's admin buttons (`toggleAdmin`); the server checks the rights again.
+    let admin = data.admin.then(|| {
+        EntityScene(bsn! {
+            Node {
+                flex_direction: FlexDirection::Column,
+                margin: UiRect::top(px(8)),
+                padding: UiRect::top(px(6)),
+                border: UiRect::top(px(1)),
+            }
+            BorderColor::all(Color::srgba(1.0, 1.0, 1.0, 0.3))
+            Children [
+                @Button { @content: "Запустить раунд", @icon: "play", @fluid: true }
+                Act({START_NOW.to_owned()})
+                Name("lobby: start now")
+                --
+                @Button { @content: "Отложить начало", @icon: "hourglass", @fluid: true }
+                Act({DELAY.to_owned()})
+                Name("lobby: delay")
+                --
+                @Button { @content: "Уведомление", @icon: "exclamation", @fluid: true }
+                Act({NOTICE.to_owned()})
+                Name("lobby: notice")
+            ]
+        })
+    });
     bsn! {
         Node { flex_direction: FlexDirection::Column }
         Children [
@@ -345,6 +411,8 @@ fn panel_scene(data: &LobbyData, confirm_observe: bool) -> impl Scene + use<> {
             Propagate::<FontPx>(FontPx(18.0))
             Propagate::<Bold>(Bold(true))
             Children [ Text(name) ]
+            --
+            {notice}
             --
             {ready}
             --
@@ -359,6 +427,21 @@ fn panel_scene(data: &LobbyData, confirm_observe: bool) -> impl Scene + use<> {
             @Button { @content: SETUP_TEXT, @icon: "user-cog", @fluid: true }
             Act({CHARACTER_SETUP.to_owned()})
             Name("lobby: setup")
+            --
+            @Button { @content: MANIFEST_TEXT, @icon: "clipboard-list", @fluid: true }
+            Act({MANIFEST.to_owned()})
+            Name("lobby: manifest")
+            --
+            {traits}
+            --
+            @Button {
+                @content: "Сбросить HUD лобби",
+                @icon: "redo",
+                @fluid: true,
+                @tooltip: "Reset Lobby Menu HUD",
+            }
+            Act({RESET_HUD.to_owned()})
+            Name("lobby: reset hud")
             --
             Node {
                 flex_direction: FlexDirection::Column,
@@ -376,7 +459,59 @@ fn panel_scene(data: &LobbyData, confirm_observe: bool) -> impl Scene + use<> {
                 --
                 {info}
             ]
+            --
+            {admin}
         ]
+    }
+}
+
+impl ClientUi for CrewManifestUi {
+    const WIDTH: f32 = 350.0;
+    const HEIGHT: f32 = 500.0;
+
+    /// tg `CrewManifest.jsx`: a section per department with its open positions (none for
+    /// "Misc"), name and rank rows, an infinity mark on unlimited jobs.
+    // shortcut: no captain star or command chevron (the entries carry no trim).
+    fn content(_: &(), data: &CrewManifestData) -> impl Scene {
+        let sections: Vec<_> = data
+            .manifest
+            .iter()
+            .map(|dept| {
+                let positions = data.positions.iter().find(|p| p.name == dept.name);
+                let mut title = department_ru(&dept.name).unwrap_or(&dept.name).to_owned();
+                if dept.name != "Misc" {
+                    let open = positions.map_or(0, |p| p.open);
+                    title.push_str(&format!(" (позиций открыто: {open})"));
+                }
+                let rows: Vec<_> = dept
+                    .entries
+                    .iter()
+                    .map(|(name, rank)| {
+                        let unlimited = positions.is_some_and(|p| p.exceptions.contains(rank));
+                        let mark = if unlimited { "∞" } else { "" }.to_owned();
+                        let (name, rank) = (name.clone(), rank.clone());
+                        bsn! {
+                            @TableRow
+                            Children [
+                                @TableCell { @content: name }
+                                --
+                                @TableCell { @content: mark }
+                                --
+                                @TableCell { @content: rank }
+                            ]
+                        }
+                    })
+                    .collect();
+                bsn! {
+                    @Section { @title: title }
+                    Children [ @Table Children [ {rows} ] ]
+                }
+            })
+            .collect();
+        bsn! {
+            @Section { @fill: true, @scrollable: true }
+            Children [ {sections} ]
+        }
     }
 }
 
