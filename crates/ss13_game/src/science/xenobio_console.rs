@@ -30,7 +30,6 @@ use ss13_shared::protocol::ClickModifiers;
 use ss13_world::Density;
 
 use super::xenobio::{SLIME, Slime, say_around, slime_type, stop_feeding};
-use crate::chem::name_of;
 use crate::closets::InCloset;
 use crate::health::{Health, Stat};
 use crate::species::{Species, SpeciesId};
@@ -257,7 +256,7 @@ pub fn valid_turf(world: &World, console: Entity, pos: TilePos) -> bool {
     };
     let (_, flags) = crate::teleport::area_flags(world, pos);
     flags & XENOBIOLOGY_COMPATIBLE != 0
-        || crate::bots::core::area_name(world, pos) == crate::bots::core::area_name(world, home)
+        || crate::bots::area_name(world, pos) == crate::bots::area_name(world, home)
 }
 
 fn is_slime(world: &World, e: Entity) -> bool {
@@ -456,7 +455,7 @@ fn can_recycle(world: &mut World, client: Entity, console: Entity) -> bool {
     let Some(&home) = world.get::<TilePos>(console) else {
         return false;
     };
-    let area = crate::bots::core::area_name(world, home);
+    let area = crate::bots::area_name(world, home);
     let recyclers: Vec<TilePos> = world
         .query::<(&DmObj, &TilePos)>()
         .iter(world)
@@ -465,7 +464,7 @@ fn can_recycle(world: &mut World, client: Entity, console: Entity) -> bool {
         .collect();
     if recyclers
         .into_iter()
-        .any(|p| crate::bots::core::area_name(world, p) == area)
+        .any(|p| crate::bots::area_name(world, p) == area)
     {
         return true;
     }
