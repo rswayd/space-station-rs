@@ -22,6 +22,7 @@ pub mod bots;
 pub mod cable;
 pub mod cargo;
 pub mod cave;
+pub mod cell_line_types;
 pub mod circuit;
 pub mod clothing;
 pub mod construct;

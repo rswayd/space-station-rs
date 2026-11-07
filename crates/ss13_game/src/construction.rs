@@ -248,6 +248,8 @@ pub enum Job {
     Experiment,
     /// Taking a dead slime's cores out ([`crate::science::xenobio`]).
     SlimeCores,
+    /// Swabbing an atom for a sample ([`crate::science::cell_lines`]).
+    Swab,
     /// Reading a martial arts manual or scroll ([`crate::martial`]).
     Martial(crate::martial::ReadJob),
     /// Welding a camera frame or a camera off the wall ([`crate::defenses::cameras`]).
@@ -1359,6 +1361,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Explosive(job) => crate::explosions::sources::complete(world, mob, action, job),
         Job::Experiment => crate::science::experi_scanner::complete(world, mob, action),
         Job::SlimeCores => crate::science::xenobio::complete_core_removal(world, action),
+        Job::Swab => crate::science::cell_lines::complete_swab(world, action),
         &Job::Martial(job) => crate::martial::complete_reading(world, mob, action, job),
         &Job::Religion(job) => crate::service::religion_complete(world, mob, action, job),
         &Job::Art(job) => crate::service::art_complete(world, mob, action, job),

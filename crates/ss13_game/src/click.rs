@@ -189,6 +189,7 @@ impl Plugin for ClickServerPlugin {
             .add_message::<RangedClick>()
             .add_message::<crate::modsuit::server::ModuleClick>()
             .add_message::<crate::silicon::ai::AiClick>()
+            .add_message::<crate::science::xenobio_console::XenoConsoleClick>()
             .add_message::<crate::silicon::interact::RobotClick>()
             .add_systems(
                 Update,
@@ -244,6 +245,7 @@ fn resolve_clicks(
         Has<ClickIntercept>,
         Has<crate::silicon::cyborg::Cyborg>,
         Has<crate::ghost::Ghost>,
+        Has<crate::science::xenobio_console::XenoOperator>,
     )>,
     movers: Query<(), With<Mover>>,
     objs: Query<&ss13_mapload::DmObj>,
@@ -252,6 +254,7 @@ fn resolve_clicks(
     module_users: Query<(), With<crate::modsuit::server::ModuleSelected>>,
     jaunters: Query<(), With<crate::spells::Jaunting>>,
     mut out: ClickWriters,
+    mut xeno: MessageWriter<crate::science::xenobio_console::XenoConsoleClick>,
 ) {
     let now = time.elapsed_secs_f64();
     let second = now as u64;
@@ -298,6 +301,7 @@ fn resolve_clicks(
             intercept,
             robot,
             ghost,
+            xeno_operator,
         )) = mobs.get(mob)
         else {
             continue;
@@ -367,6 +371,21 @@ fn resolve_clicks(
                 reach: !in_closet && reach_of(target_pos),
                 loot_only: true,
                 secondary: false,
+            });
+            continue;
+        }
+        // tg `GrantActions` of the slime console: its operator's shift, ctrl and alt clicks
+        // (`crate::science::xenobio_console`, which examines other shift-clicked things).
+        if xeno_operator
+            && !modifiers.middle
+            && u8::from(modifiers.shift) + u8::from(modifiers.ctrl) + u8::from(modifiers.alt) == 1
+        {
+            xeno.write(crate::science::xenobio_console::XenoConsoleClick {
+                client,
+                mob,
+                target,
+                target_pos,
+                modifiers,
             });
             continue;
         }

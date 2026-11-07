@@ -20,13 +20,13 @@
 Плитки из экстрактов: ускоряют передвижение / замедляют время на тайле.
 
 - **Код:** [`/obj/item/stack/tile/bluespace`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/xenobiology/xenobiology.dm#L1131), [`/obj/item/stack/tile/sepia`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/xenobiology/xenobiology.dm#L1148)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/science/xenobio.rs` (`TurfSlowdown`): плитки кладут `/turf/open/floor/bluespace` (`slowdown = -1`) и `/turf/open/floor/sepia` (`slowdown = 2`), моб на таком полу получает модификатор скорости `turf_slowdown` и теряет его, сойдя; без исключения летающих мобов
 
 ### Консоль ксенобиологии
 Камера-консоль с удалённым «глазом»: всасывает и выплёвывает слаймов, кормит обезьянками (переработка трупов обезьян в кубы), применяет зелья, сканирует слаймов; горячие клавиши.
 
 - **Код:** [`/obj/machinery/computer/camera_advanced/xenobio`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/xenobiology/xenobio_camera.dm#L28), [`slime_place()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/xenobiology/xenobio_camera.dm#L214), [`recycle_monkey()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/xenobiology/xenobio_camera.dm#L338)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/science/xenobio_console.rs`: клик по консоли берёт управление, горячие клавиши tg (shift — всосать слайма / выплюнуть всех на пол, ctrl — скан слайма, переработка мёртвой обезьяны в 0,2 куба при переработчике в отсеке, выпуск обезьяны из куба; alt — зелье на слайма) в отсеке консоли или `XENOBIOLOGY_COMPATIBLE`; до 5 слаймов в стазисе, кубы и зелья загружаются рукой; без удалённого «глаза» (оператор видит со своего места, без проверки камер), кнопок действий и HUD-счётчика (счётчики в чате), без загрузки кубов из сумок и привязки мультитулом
 
 ### Кроссбридинг экстрактов
 Экстракт, накормленный 10 экстрактами одного цвета, становится кросс-экстрактом одного из 11 семейств: горящие, заряженные, охлаждающие, поглощающие, промышленные, призматические, повторяющиеся, регенеративные, репродуктивные, самоподдерживающиеся, стабилизированные (постоянный эффект в рюкзаке, 22 вида).
@@ -39,16 +39,16 @@
 Чан, питаемый реагентами, выращивает мобов из образцов клеточных линий (34 обычных линии и органы); вирусы в образце мешают росту.
 
 - **Код:** [`/obj/machinery/vatgrower`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/xenobiology/vatgrowing/vatgrower.dm#L2), [`/datum/micro_organism/cell_line`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/xenobiology/vatgrowing/samples/_micro_organism.dm#L13), [`/datum/biological_sample`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/xenobiology/vatgrowing/samples/_sample.dm#L2)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/science/cell_lines.rs`, данные `cell_line_data.rs` (`scripts/gen-cell-lines.py`: 55 клеточных линий, таблицы, swabable-типы): чан на 300 ед. (малый 50) берёт копию образца из чашки, каждый цикл SSmachines (2 с) линии едят требуемые реагенты, растут с бонусами/штрафами реагентов и вирусов (спейсациллин их гасит), на 100% выпускают результат; ресэмплер (клик) перезапускает образец, правый клик сливает чан; без особых результатов (vat beast, nether, клоуны, пчёлы), «блестящих» мутаций, взрыва малого чана и сантехники
 
 ### Сбор образцов: мазок, биопсия, чашка Петри
 Мазок (swab) берёт пробы с предметов и существ, биопсийный инструмент — с органов/мобов; образцы хранятся в чашках Петри.
 
 - **Код:** [`/obj/item/swab`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/xenobiology/vatgrowing/swab.dm#L2), [`/obj/item/biopsy_tool`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/xenobiology/vatgrowing/biopsy_tool.dm#L2), [`/obj/item/petri_dish`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/xenobiology/vatgrowing/petri_dish.dm#L2)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/science/cell_lines.rs`: мазок (предметы/объекты), биопсия (мобы), тканевая биопсия (оба) за 3 с берут один образец по таблице атома (`swabable`, однократно), с шансом вируса; образец переносится в пустую чашку Петри, осмотр показывает микроорганизмы; случайная чашка с образцом; без оверлеев цвета образца
 
 ### Микроскоп
 Показывает состав образца в чашке Петри (клеточные линии, вирусы, условия роста).
 
 - **Код:** [`/obj/structure/microscope`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/xenobiology/vatgrowing/microscope.dm#L1); tgui: [`Microscope.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/Microscope.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/science/cell_lines.rs` (`microscope_text`): чашка Петри вставляется (правый клик — забрать), клик показывает клеточные линии (рост, потребление, восприимчивость, требуемые/любимые/вредные реагенты) и вирусы; вместо tgui `Microscope` — текст в чате

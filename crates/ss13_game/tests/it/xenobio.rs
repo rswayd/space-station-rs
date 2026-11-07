@@ -1,14 +1,26 @@
 //! Xenobiology without clients (`ss13_game::science::xenobio`): a mapped slime starts as a
 //! grey baby, grows into an adult and splits into four; a dead one gives its core up; a grey
 //! extract injected with plasma makes a baby slime and is gone, one given water makes
-//! epinephrine and is spent.
+//! epinephrine and is spent; the slime console stores, places and doses slimes; a sepia floor
+//! slows the mob on it; a biopsy samples a slime, the microscope reads the sample and a vat
+//! grows it.
 
 use std::path::{Path, PathBuf};
 
 use bevy::prelude::*;
 use ss13_game::chem::{Chem, Reagents};
+use ss13_game::closets::InCloset;
 use ss13_game::health::Stat;
-use ss13_game::science::xenobio::{Slime, SlimeExtract, complete_core_removal};
+use ss13_game::science::cell_line_data::CELL_LINES;
+use ss13_game::science::cell_lines::{
+    Microscope, Organism, PetriDish, Sample, Swabber, VatGrower, complete_swab, microscope_text,
+};
+use ss13_game::science::xenobio::{
+    Slime, SlimeExtract, TurfSlowdown, complete_core_removal, turf_slowdown,
+};
+use ss13_game::science::xenobio_console::{
+    XenoConsole, feed_potion, feed_slime, slime_pickup, slime_place, valid_turf,
+};
 use ss13_game::testing::{self, fixture_map, steps, write_fixture};
 use ss13_game::tools::DoAfter;
 use ss13_mapload::DmItem;
@@ -30,6 +42,11 @@ const TYPES: &str = r##"{
     "/datum/reagent/toxin/plasma": { "parent": "/datum/reagent/toxin", "declared_vars": {
         "name": "Plasma" } },
     "/datum/reagent/medicine": { "parent": "/datum/reagent" },
+    "/datum/reagent/consumable": { "parent": "/datum/reagent" },
+    "/datum/reagent/consumable/nutriment": { "parent": "/datum/reagent/consumable",
+        "declared_vars": { "name": "Nutriment" } },
+    "/datum/reagent/consumable/nutriment/protein": {
+        "parent": "/datum/reagent/consumable/nutriment", "declared_vars": { "name": "Protein" } },
     "/datum/reagent/medicine/epinephrine": { "parent": "/datum/reagent/medicine",
         "declared_vars": { "name": "Epinephrine" } },
     "/datum/chemical_reaction": { "parent": "/datum", "declared_vars": {
@@ -68,6 +85,25 @@ const TYPES: &str = r##"{
         "icon_state": "grey-core" } },
     "/obj/item/slime_extract/grey": { "parent": "/obj/item/slime_extract", "declared_vars": {
         "name": "grey slime extract" } },
+    "/obj/item/slimepotion": { "parent": "/obj/item" },
+    "/obj/item/slimepotion/slime": { "parent": "/obj/item/slimepotion" },
+    "/obj/item/slimepotion/slime/steroid": { "parent": "/obj/item/slimepotion/slime",
+        "declared_vars": { "name": "slime steroid" } },
+    "/obj/machinery": { "parent": "/obj", "declared_vars": { "anchored": 1, "density": 1,
+        "icon": { "resource": "i.dmi" }, "icon_state": "toy" } },
+    "/obj/machinery/computer": { "parent": "/obj/machinery" },
+    "/obj/machinery/computer/camera_advanced": { "parent": "/obj/machinery/computer" },
+    "/obj/machinery/computer/camera_advanced/xenobio": {
+        "parent": "/obj/machinery/computer/camera_advanced",
+        "declared_vars": { "name": "Slime management console" } },
+    "/obj/item/petri_dish": { "parent": "/obj/item", "declared_vars": { "name": "petri dish" } },
+    "/obj/item/biopsy_tool": { "parent": "/obj/item", "declared_vars": { "name": "biopsy tool" } },
+    "/obj/machinery/vatgrower": { "parent": "/obj/machinery", "declared_vars": {
+        "name": "growing vat" } },
+    "/obj/structure": { "parent": "/obj", "declared_vars": { "anchored": 1, "density": 1,
+        "icon": { "resource": "i.dmi" }, "icon_state": "toy" } },
+    "/obj/structure/microscope": { "parent": "/obj/structure", "declared_vars": {
+        "name": "Microscope" } },
     "/obj/item/card": { "parent": "/obj/item" },
     "/obj/item/card/id": { "parent": "/obj/item/card", "declared_vars": { "access": { "list": [] } } },
     "/obj/item/card/id/advanced": { "parent": "/obj/item/card/id" },
@@ -98,6 +134,8 @@ const TYPES: &str = r##"{
     "/turf": { "parent": "/atom", "declared_vars": { "icon": { "resource": "t.dmi" } } },
     "/turf/open": { "parent": "/turf" },
     "/turf/open/floor": { "parent": "/turf/open", "declared_vars": { "icon_state": "floor" } },
+    "/turf/open/floor/sepia": { "parent": "/turf/open/floor", "declared_vars": {
+        "icon_state": "sepia" } },
     "/turf/open/space": { "parent": "/turf/open" },
     "/turf/open/space/basic": { "parent": "/turf/open/space" },
     "/turf/closed": { "parent": "/turf", "declared_vars": { "density": 1, "opacity": 1 } },
@@ -111,11 +149,13 @@ const TYPES: &str = r##"{
 const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 "f" = (/turf/open/floor,/area/space)
 "S" = (/mob/living/basic/slime,/turf/open/floor,/area/space)
+"p" = (/turf/open/floor/sepia,/area/space)
+"C" = (/obj/machinery/computer/camera_advanced/xenobio,/turf/open/floor,/area/space)
 
 (1,1,1) = {"
 wwwwwww
-wfffffw
-wfSfffw
+wffffCw
+wfSpffw
 wfffffw
 wwwwwww
 "}
@@ -124,9 +164,13 @@ wwwwwww
 const SLIME_AT: TilePos = TilePos::new(3, 3, 1);
 const BENCH: TilePos = TilePos::new(5, 2, 1);
 const GREY_EXTRACT: &str = "/obj/item/slime_extract/grey";
+const STEROID: &str = "/obj/item/slimepotion/slime/steroid";
+const SEPIA_AT: TilePos = TilePos::new(4, 3, 1);
+const CONSOLE_AT: TilePos = TilePos::new(6, 4, 1);
 
-const STATES: [(&str, &str); 10] = [
+const STATES: [(&str, &str); 11] = [
     ("t.dmi", "floor"),
+    ("t.dmi", "sepia"),
     ("t.dmi", "wall"),
     ("h.dmi", "human_basic"),
     ("i.dmi", "toy"),
@@ -145,7 +189,14 @@ fn fixture(test: &str) -> PathBuf {
     let used = [
         "/mob/living/basic/slime",
         GREY_EXTRACT,
+        STEROID,
+        "/obj/machinery/computer/camera_advanced/xenobio",
+        "/obj/item/petri_dish",
+        "/obj/item/biopsy_tool",
+        "/obj/machinery/vatgrower",
+        "/obj/structure/microscope",
         "/turf/open/floor",
+        "/turf/open/floor/sepia",
         "/turf/closed/wall",
         "/turf/open/space/basic",
         "/area/space",
@@ -311,4 +362,182 @@ fn grey_extract_with_water_is_spent() {
     inject(&mut app, e, "/datum/reagent/toxin/plasma", 1.0);
     app.update();
     assert_eq!(slimes(&mut app).len(), 1, "a spent extract does not react");
+}
+
+/// The slime console sucks a slime up (hidden on the console's tile, in stasis), spits it out
+/// onto a floor of its area, doses it with the loaded potion and places no monkey without a
+/// cube.
+#[test]
+fn slime_console_stores_places_and_doses_slimes() {
+    let mut app = server("console");
+    let slime = the_slime(&mut app);
+    let world = app.world_mut();
+    let console = {
+        let mut q = world.query_filtered::<Entity, With<XenoConsole>>();
+        q.single(world).expect("the mapped console")
+    };
+    assert!(valid_turf(world, console, BENCH));
+    // `tell` only queues chat: any entity stands in for the client.
+    slime_pickup(world, slime, console, slime);
+    world.flush();
+    assert_eq!(
+        world.get::<XenoConsole>(console).unwrap().slimes,
+        vec![slime]
+    );
+    assert!(
+        world.get::<InCloset>(slime).is_some(),
+        "hidden in the console"
+    );
+    assert_eq!(world.get::<TilePos>(slime), Some(&CONSOLE_AT));
+    run(&mut app, 2.5);
+    assert!(
+        app.world().get::<Slime>(slime).unwrap().stasis,
+        "stored in stasis"
+    );
+
+    let world = app.world_mut();
+    slime_place(world, console, BENCH);
+    world.flush();
+    assert!(world.get::<XenoConsole>(console).unwrap().slimes.is_empty());
+    assert!(world.get::<InCloset>(slime).is_none());
+    assert_eq!(world.get::<TilePos>(slime), Some(&BENCH));
+
+    world.get_mut::<XenoConsole>(console).unwrap().potion = Some(STEROID.to_owned());
+    feed_potion(world, slime, slime, console, slime);
+    world.flush();
+    assert_eq!(
+        world.get::<Slime>(slime).unwrap().cores,
+        2,
+        "steroid applied"
+    );
+    assert_eq!(world.get::<XenoConsole>(console).unwrap().potion, None);
+
+    feed_slime(world, slime, console, BENCH);
+    assert_eq!(world.get::<XenoConsole>(console).unwrap().monkeys, 0.0);
+}
+
+/// A mob stepping onto a sepia floor gets its `slowdown = 2`, and loses it stepping off.
+#[test]
+fn sepia_floor_slows_the_mob_on_it() {
+    let mut app = server("sepia");
+    let slime = the_slime(&mut app);
+    assert_eq!(turf_slowdown(app.world(), SEPIA_AT), 2.0);
+    assert_eq!(turf_slowdown(app.world(), SLIME_AT), 0.0);
+    app.world_mut().write_message(ss13_world::MoveRequest {
+        entity: slime,
+        dir: ss13_shared::Dir::East,
+    });
+    run(&mut app, 1.0);
+    assert_eq!(app.world().get::<TilePos>(slime), Some(&SEPIA_AT));
+    assert_eq!(
+        app.world().get::<TurfSlowdown>(slime),
+        Some(&TurfSlowdown(2.0))
+    );
+    app.world_mut().write_message(ss13_world::MoveRequest {
+        entity: slime,
+        dir: ss13_shared::Dir::West,
+    });
+    run(&mut app, 2.0);
+    assert_eq!(app.world().get::<TilePos>(slime), Some(&SLIME_AT));
+    assert_eq!(
+        app.world().get::<TurfSlowdown>(slime),
+        Some(&TurfSlowdown(0.0))
+    );
+}
+
+fn slime_line() -> usize {
+    CELL_LINES
+        .iter()
+        .position(|l| l.path == "/datum/micro_organism/cell_line/slime")
+        .expect("the slime cell line")
+}
+
+/// A biopsy tool takes a slime's cell line once; the sample goes onto a petri dish, which the
+/// microscope reads.
+#[test]
+fn biopsy_samples_a_slime_once_and_the_microscope_reads_it() {
+    let mut app = server("biopsy");
+    let slime = the_slime(&mut app);
+    let world = app.world_mut();
+    let spawn = |world: &mut World, path: &str| {
+        let e = ss13_game::construction::spawn_obj(world, path, BENCH).unwrap();
+        world.flush();
+        e
+    };
+    let tool = spawn(world, "/obj/item/biopsy_tool");
+    assert_eq!(world.get::<Swabber>(tool), Some(&Swabber(None)));
+    let action = |item| DoAfter {
+        client: slime,
+        target: slime,
+        target_pos: SLIME_AT,
+        user_pos: BENCH,
+        item: Some(item),
+        amount: 0,
+        ends_at: 0.0,
+        job: ss13_game::construction::Job::Swab,
+    };
+    complete_swab(world, &action(tool));
+    let sample = world
+        .get::<Swabber>(tool)
+        .unwrap()
+        .0
+        .clone()
+        .expect("sampled");
+    assert_eq!(
+        sample.organisms[0],
+        Organism::Cell {
+            line: slime_line(),
+            growth: 0.0
+        }
+    );
+    let second = spawn(world, "/obj/item/biopsy_tool");
+    complete_swab(world, &action(second));
+    assert_eq!(
+        world.get::<Swabber>(second),
+        Some(&Swabber(None)),
+        "swabbed once"
+    );
+
+    let dish = spawn(world, "/obj/item/petri_dish");
+    assert_eq!(world.get::<PetriDish>(dish), Some(&PetriDish(None)));
+    let scope = spawn(world, "/obj/structure/microscope");
+    assert_eq!(world.get::<Microscope>(scope), Some(&Microscope(None)));
+    let text = microscope_text(world, Some(&Some(sample)));
+    assert!(text.contains("Slime particles"), "{text}");
+    assert!(text.contains("Protein"), "{text}");
+}
+
+/// A vat fed protein grows a slime sample to 100 (4 a 2 s cycle) and a slime pops out; the
+/// sample is used up.
+#[test]
+fn vat_grows_a_slime_from_its_sample() {
+    let mut app = server("vat");
+    let world = app.world_mut();
+    let vat = ss13_game::construction::spawn_obj(world, "/obj/machinery/vatgrower", BENCH).unwrap();
+    world.flush();
+    world.get_mut::<VatGrower>(vat).unwrap().sample = Some(Sample {
+        organisms: vec![Organism::Cell {
+            line: slime_line(),
+            growth: 0.0,
+        }],
+        color: "#91542d",
+    });
+    inject(
+        &mut app,
+        vat,
+        "/datum/reagent/consumable/nutriment/protein",
+        50.0,
+    );
+    run(&mut app, 30.0);
+    let growth = match &app.world().get::<VatGrower>(vat).unwrap().sample {
+        Some(s) => match s.organisms[0] {
+            Organism::Cell { growth, .. } => growth,
+            Organism::Virus => unreachable!(),
+        },
+        None => panic!("grown too early"),
+    };
+    assert!((52.0..=64.0).contains(&growth), "15 cycles of 4: {growth}");
+    run(&mut app, 22.0);
+    assert_eq!(slimes(&mut app).len(), 2, "a slime popped out");
+    assert_eq!(app.world().get::<VatGrower>(vat).unwrap().sample, None);
 }

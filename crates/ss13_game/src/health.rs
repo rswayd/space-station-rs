@@ -643,6 +643,7 @@ type BodyItem<'a> = (
         Option<&'a crate::vehicles::Rider>,
         Option<&'a crate::buffs::FoodBuff>,
         Option<&'a crate::clothing::slowdown::EquipmentSlowdown>,
+        Option<&'a crate::science::xenobio::TurfSlowdown>,
     ),
 );
 
@@ -672,6 +673,7 @@ fn body_state(
                 Changed<crate::vehicles::Rider>,
                 Changed<crate::buffs::FoodBuff>,
                 Changed<crate::clothing::slowdown::EquipmentSlowdown>,
+                Changed<crate::science::xenobio::TurfSlowdown>,
             )>,
         )>,
     >,
@@ -698,7 +700,22 @@ fn body_state(
         name,
         drag,
         traits,
-        (zone, fat, limits, pilot, speed, walking, tased, sanity, screwy, suit, rider, food, worn),
+        (
+            zone,
+            fat,
+            limits,
+            pilot,
+            speed,
+            walking,
+            tased,
+            sanity,
+            screwy,
+            suit,
+            rider,
+            food,
+            worn,
+            turf_slowdown,
+        ),
     ) in &mut mobs
     {
         let traits = traits.copied().unwrap_or_default();
@@ -730,6 +747,10 @@ fn body_state(
         // `/datum/movespeed_modifier/equipment_speedmod` (`crate::clothing::slowdown`).
         if let Some(worn) = worn {
             delay = (delay + worn.0 / 10.0).max(0.0);
+        }
+        // `/datum/movespeed_modifier/turf_slowdown` (`crate::science::xenobio`).
+        if let Some(turf) = turf_slowdown {
+            delay = (delay + turf.0 / 10.0).max(0.0);
         }
         // Limping and disabled legs (`crate::medical::wounds`).
         if let Some(limits) = limits {

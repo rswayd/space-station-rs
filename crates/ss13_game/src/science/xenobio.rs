@@ -24,6 +24,9 @@
 //! - Potions on slimes: docility, steroid, stabilizer, mutator; the enhancer on an extract.
 //! - An adult slime fed 10 extracts of one kind becomes the cross-extract of its colour and
 //!   that extract's family (`spawn_corecross`).
+//! - The extracts' floor tiles lay `/turf/open/floor/bluespace` (`slowdown = -1`) and
+//!   `/turf/open/floor/sepia` (`slowdown = 2`): a mob stepping onto one gets its slowdown
+//!   (`/datum/movespeed_modifier/turf_slowdown`, [`TurfSlowdown`]) until it steps off.
 //!
 //! Cost: every 2 s one pass over the slimes (tens in a pen); hunting slimes scan 7 tiles every
 //! 0.5 s; a feeding slime follows its meal every tick.
@@ -357,6 +360,9 @@ impl Plugin for XenobioPlugin {
                         .after(crate::click::ResolveClicks)
                         .before(HealthSystems),
                     extract_timers,
+                    update_turf_slowdown
+                        .after(ss13_world::WorldSystems::Movement)
+                        .before(HealthSystems),
                 ),
             );
     }
@@ -492,7 +498,7 @@ fn set_name(world: &mut World, e: Entity, name: &str) {
     }
 }
 
-fn say_around(world: &mut World, pos: TilePos, span: Span, text: &str) {
+pub(crate) fn say_around(world: &mut World, pos: TilePos, span: Span, text: &str) {
     let clients = clients_near(world, pos, None);
     if !clients.is_empty() {
         world.write_message(SendChat {
@@ -548,7 +554,9 @@ fn live(world: &mut World, e: Entity, secs: f64) {
                 0.0
             }
         });
-    let stasis = bz >= 0.05 && body < T0C + 100.0;
+    // `TRAIT_STASIS` from the slime console's storage (`super::xenobio_console`).
+    let stored = world.get::<crate::closets::InCloset>(e).is_some();
+    let stasis = stored || (bz >= 0.05 && body < T0C + 100.0);
     let mut rng = CombatRng(world.resource::<CombatRng>().0);
     let mut starve_damage = 0.0;
     {
@@ -729,6 +737,10 @@ fn slime_tick(world: &mut World) {
         let Some(s) = world.get::<Slime>(e).cloned() else {
             continue;
         };
+        // Stored in a slime console: in stasis.
+        if world.get::<crate::closets::InCloset>(e).is_some() {
+            continue;
+        }
         let dead = world.get::<Stat>(e).is_none_or(|st| *st == Stat::Dead);
         let dying = world.get::<Health>(e).is_some_and(|h| h.health() <= 0.0);
         if s.adult && (dead || dying) {
@@ -791,6 +803,7 @@ pub fn can_feed_on(world: &World, slime: Entity, meal: Entity) -> bool {
         || world.get::<Slime>(meal).is_some()
         || world.get::<crate::silicon::Silicon>(meal).is_some()
         || world.get::<Stat>(meal).is_none_or(|s| *s == Stat::Dead)
+        || world.get::<crate::closets::InCloset>(meal).is_some()
     {
         return false;
     }
@@ -1682,5 +1695,63 @@ mod tests {
         };
         handle_nutrition(&mut pet, &mut rng, 2.0);
         assert_eq!((pet.nutrition, pet.hungry), (100.0, false));
+    }
+}
+
+// --- Bluespace and sepia floors -------------------------------------------------------------
+
+/// `/turf/open/floor/bluespace`, `/turf/open/floor/sepia` and their `slowdown` (deciseconds).
+pub const FLOOR_SLOWDOWNS: [(&str, f32); 2] = [
+    ("/turf/open/floor/bluespace", -1.0),
+    ("/turf/open/floor/sepia", 2.0),
+];
+
+/// On a mob: `/datum/movespeed_modifier/turf_slowdown` of the turf it stands on, deciseconds
+/// per tile (negative: faster); `crate::health` adds it to the step delay.
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq)]
+pub struct TurfSlowdown(pub f32);
+
+/// The `slowdown` of the turf at `pos`.
+// shortcut: only the two xenobiology floors; other turfs' `slowdown` (lava, snow, water) is not
+// carried by the converter yet.
+pub fn turf_slowdown(world: &World, pos: TilePos) -> f32 {
+    world
+        .resource::<SpatialIndex>()
+        .on_tile(pos)
+        .iter()
+        .find_map(|&e| {
+            world.get::<ss13_mapload::Turf>(e)?;
+            let path = &world.get::<ss13_mapload::DmTurfBuild>(e)?.path;
+            FLOOR_SLOWDOWNS
+                .iter()
+                .find(|(floor, _)| is_under(path, floor))
+                .map(|&(_, slowdown)| slowdown)
+        })
+        .unwrap_or(0.0)
+}
+
+/// `update_turf_movespeed(loc)` after a living mob moved.
+// shortcut: flying and floating mobs are slowed too (tg skips `FLYING`/`FLOATING` movement
+// types and `TRAIT_TURF_IGNORE_SLOWDOWN`); a tile laid under a standing mob counts from its
+// next step.
+// Cost: per tick, one tile lookup per living mob that moved.
+fn update_turf_slowdown(
+    world: &mut World,
+    mut cursor: Local<bevy::ecs::message::MessageCursor<ss13_world::Moved>>,
+) {
+    let moved: Vec<ss13_world::Moved> = cursor
+        .read(world.resource::<bevy::ecs::message::Messages<ss13_world::Moved>>())
+        .copied()
+        .collect();
+    for m in moved {
+        if world.get::<Health>(m.entity).is_none() || world.get::<TilePos>(m.entity) != Some(&m.to)
+        {
+            continue;
+        }
+        let slowdown = turf_slowdown(world, m.to);
+        let old = world.get::<TurfSlowdown>(m.entity).map_or(0.0, |t| t.0);
+        if slowdown != old {
+            world.entity_mut(m.entity).insert(TurfSlowdown(slowdown));
+        }
     }
 }
