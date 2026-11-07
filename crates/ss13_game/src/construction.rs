@@ -290,6 +290,8 @@ pub enum Job {
     Flora(crate::flora::FloraJob),
     /// Tripwires ([`crate::traps`]).
     Trap(crate::traps::TrapJob),
+    /// Packing and unfolding deployable turrets ([`crate::deployable_turrets`]).
+    DeployableTurret(crate::deployable_turrets::TurretJob),
     /// Safes ([`crate::safes`], [`crate::secure_safes`]).
     Safe(crate::safes::SafeJob),
     SecureSafe(crate::secure_safes::SecureSafeJob),
@@ -1413,6 +1415,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::EngMachine(job) => crate::eng_machines::complete(world, client, target, job),
         &Job::Flora(job) => crate::flora::complete(world, mob, action, job),
         &Job::Trap(job) => crate::traps::complete(world, mob, action, job),
+        &Job::DeployableTurret(job) => crate::deployable_turrets::complete(world, mob, action, job),
         &Job::Safe(job) => crate::safes::complete(world, action, job),
         &Job::SecureSafe(job) => crate::secure_safes::complete(world, action, job),
         Job::Bonfire => crate::fireplace::complete_dismantle(world, action),

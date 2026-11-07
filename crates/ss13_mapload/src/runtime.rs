@@ -74,6 +74,13 @@ pub const GIFT_TYPES: &[&str] = &[
 /// Constant paths `ss13_game` spawns that no other table of this crate lists: leftovers,
 /// products and printouts of machines, decals, grenade payloads, quirk items, paper kinds.
 pub const GAME_RUNTIME_TYPES: &[&str] = &[
+    // `deployable_turrets`: the shots, the deployed and folded heavy machine guns.
+    "/obj/projectile/bullet/manned_turret",
+    "/obj/projectile/beam/laser/flare",
+    "/obj/machinery/deployable_turret/hmg",
+    "/obj/machinery/deployable_turret/hmg/full_auto",
+    "/obj/item/deployable_turret_folded",
+    "/obj/item/deployable_turret_folded/full_auto",
     // `traps`: the earth trap's rock, the cables strung between tripwire posts.
     "/obj/structure/flora/rock/style_random",
     "/obj/structure/tripwire/cable",

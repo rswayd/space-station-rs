@@ -90,6 +90,7 @@
 //! | 3239 | `stack_recipes::attack_self` (a stack's crafting menu) |
 //! | 3249 | `sheets::crush_attack_self` (a bluespace crystal crushed: blink) |
 //! | 3259 | `traps::attack_self` (a sturdy tripwire cable recoils) |
+//! | 3269 | `deployable_turrets::attack_self` (a folded machine gun deploys) |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):
 //!
@@ -144,6 +145,7 @@
 //!
 //! | prio | handler |
 //! | ---- | ------- |
+//! | 9 | `deployable_turrets::gunner_click` (a turret's gunner aims and fires) |
 //! | 97 | `science::gizmo` (a gizmo spawned after map load gets its puzzle; never takes the click) |
 //! | 99 | `machine_wires::empty_hand` (an open panel shows the wires) |
 //! | 100 | `silicon::interact::attack_robot` |
@@ -246,6 +248,7 @@
 //! | prio | handler |
 //! | ---- | ------- |
 //! | 50 | `fishing::server::held_on_target` (casts, a fisher's clicks), `fishing::aquarium::item_interaction` |
+//! | 59 | `deployable_turrets::item_interaction` (a wrench packs an HMG up) |
 //! | 53 | `holodeck::item_interaction` (holo floors take no items, ready buttons, the holodeck conveyor) |
 //! | 100 | `antag::uplink::item_interaction` |
 //! | 200 | `antag::syndie_items::item_interaction` |

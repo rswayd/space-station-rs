@@ -88,6 +88,7 @@ pub fn can_buckle(path: &str) -> bool {
     is_chair(path)
         || crate::medical::surgery::buckles_lying(path)
         || crate::vehicles::is_ridable(path)
+        || crate::deployable_turrets::def(path).is_some()
 }
 
 fn obj(world: &World, e: Entity) -> Option<&DmObj> {
@@ -157,6 +158,10 @@ pub(crate) fn post_buckle(world: &mut World, actor: Actor, mob: Entity, furnitur
         return false;
     };
     sound(world, furniture, &dm.buckle_sound);
+    if crate::deployable_turrets::def(&dm.path).is_some() {
+        crate::deployable_turrets::post_buckle(world, actor, mob, furniture);
+        return true;
+    }
     if crate::vehicles::is_ridable(&dm.path) {
         crate::vehicles::post_buckle(world, actor, mob, furniture);
         return true;
@@ -218,6 +223,10 @@ pub(crate) fn post_unbuckle(
         return false;
     };
     sound(world, furniture, &dm.unbuckle_sound);
+    if crate::deployable_turrets::def(&dm.path).is_some() {
+        crate::deployable_turrets::post_unbuckle(world, furniture);
+        return false;
+    }
     if crate::vehicles::is_ridable(&dm.path) {
         crate::vehicles::post_unbuckle(world, actor, mob, furniture);
         return true;
