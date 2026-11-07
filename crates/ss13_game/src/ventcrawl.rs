@@ -531,6 +531,12 @@ mod tests {
         let mut world = World::new();
         world.insert_resource(Time::<()>::default());
         world.init_resource::<Messages<PlaySound>>();
+        // Moving the crawler out updates the spatial index.
+        world.init_resource::<ss13_world::SpatialIndex>();
+        world
+            .resource_mut::<ss13_world::SpatialIndex>()
+            .create_level(1, 16, 16)
+            .unwrap();
         let mut net = Pipenet::default();
         // Vent (1) -> smart pipe (2) -> vent (3).
         let a = device(&mut world, &mut net, VENT_PUMP, 1, 4, 1.0);

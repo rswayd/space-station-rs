@@ -177,7 +177,7 @@ pub fn attack_self(world: &mut World, client: Entity, mob: Entity, stack: Entity
         match entry {
             Entry::Recipe(recipe) if shown(recipe) => lines.push(Line::Recipe(recipe)),
             Entry::List(_, recipes) if recipes.iter().any(shown) => {
-                lines.push(Line::List(*recipes))
+                lines.push(Line::List(recipes))
             }
             _ => {}
         }
@@ -260,10 +260,10 @@ fn menu_answers(world: &mut World, mut cursor: Local<MessageCursor<PromptAnswere
                     }
                 }
             }
-            (_, Some(MultiplierFor(stack, recipe)), Some(PromptAnswer::Number(n))) => {
-                if can_use(world, actor, stack) && n.is_finite() && n >= 1.0 {
-                    make_item(world, client, actor, stack, recipe, n as u32);
-                }
+            (_, Some(MultiplierFor(stack, recipe)), Some(PromptAnswer::Number(n)))
+                if can_use(world, actor, stack) && n.is_finite() && n >= 1.0 =>
+            {
+                make_item(world, client, actor, stack, recipe, n as u32);
             }
             _ => {}
         }

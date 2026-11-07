@@ -318,21 +318,6 @@ fn shuttle_rods(world: &mut World, client: Entity, mob: Entity, rods: Entity, ti
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn flood_table_is_tg_numbers() {
-        let (_, hot_ice) = FLOODS.iter().find(|(p, _)| *p == HOT_ICE).unwrap();
-        // 3 sheets: 450 moles at 360 K.
-        assert_eq!(hot_ice.moles_per_unit * 3.0, 450.0);
-        let (base, per) = hot_ice.temperature.unwrap();
-        assert_eq!(base + per * 3.0, 360.0);
-        let (_, coal) = FLOODS.iter().find(|(p, _)| *p == COAL).unwrap();
-        assert!(!coal.hot_fire_only);
-    }
-}
 
 /// [`Job::Sheet`] done.
 pub fn complete(world: &mut World, client: Entity, mob: Entity, job: SheetJob) {
@@ -490,5 +475,21 @@ fn dry_hides(world: &mut World, mut next: Local<f64>) {
         world.entity_mut(hide).insert(Wetness(WETNESS));
         crate::construction::spawn_stack(world, LEATHER, pos, 1);
         use_stack(world, hide, 1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn flood_table_is_tg_numbers() {
+        let (_, hot_ice) = FLOODS.iter().find(|(p, _)| *p == HOT_ICE).unwrap();
+        // 3 sheets: 450 moles at 360 K.
+        assert_eq!(hot_ice.moles_per_unit * 3.0, 450.0);
+        let (base, per) = hot_ice.temperature.unwrap();
+        assert_eq!(base + per * 3.0, 360.0);
+        let (_, coal) = FLOODS.iter().find(|(p, _)| *p == COAL).unwrap();
+        assert!(!coal.hot_fire_only);
     }
 }

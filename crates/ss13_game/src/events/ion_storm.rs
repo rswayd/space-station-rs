@@ -250,19 +250,16 @@ pub fn scramble(
         {
             core.set_ioned(true);
             core.laws = laws.into_iter().map(|l| (l, false)).collect();
-            changed = true;
         }
         // tg runtimes on an empty core module here.
         if rng.prob(params.remove_law_prob) && !core.laws.is_empty() {
             let at = rng.range(0, core.laws.len() as i64 - 1) as usize;
             core.set_ioned(true);
             core.laws.remove(at);
-            changed = true;
         }
         if rng.prob(params.shuffle_prob) {
             core.set_ioned(true);
             shuffle(&mut core.laws, rng);
-            changed = true;
         }
         if !core_sub_ion && rng.prob(params.base_ion_prob) {
             core.set_ioned(true);
