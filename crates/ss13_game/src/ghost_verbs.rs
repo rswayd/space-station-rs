@@ -87,6 +87,9 @@ pub struct GhostRoleSpawner {
     pub desc: String,
     /// tg `uses`.
     pub uses: u32,
+    /// The map spawner type ([`ss13_mapload::mob_spawn`]) whose human it makes; `None`: a
+    /// plain human with the player's look.
+    pub def: Option<String>,
 }
 
 /// tg `CONFIG_GET(flag/allow_respawn)`.
@@ -443,6 +446,18 @@ fn ghost_scans(world: &mut World, mut clicks: Local<MessageCursor<crate::multiz:
     };
     let pending: Vec<crate::multiz::GhostClick> = clicks.read(messages).copied().collect();
     for click in pending {
+        // tg `mob_spawn/ghost_role/attack_ghost`: the spawner's role, through the menu.
+        if world.get::<GhostRoleSpawner>(click.target).is_some()
+            && world.get::<PlayerMob>(click.ghost).map(|p| p.client) == Some(click.client)
+        {
+            world.write_message(OpenUi::new::<SpawnersMenuUi>(
+                click.client,
+                click.ghost,
+                click.ghost,
+                "Spawners Menu",
+            ));
+            continue;
+        }
         let scanning = world
             .get::<GhostSettings>(click.ghost)
             .is_some_and(|s| s.health_scan)
@@ -644,25 +659,74 @@ pub fn take_role(world: &mut World, ghost: Entity, spawner: Entity) -> Option<En
     let client = world.get::<PlayerMob>(ghost)?.client;
     let s = world.get::<GhostRoleSpawner>(spawner)?.clone();
     let &pos = world.get::<TilePos>(spawner)?;
-    if s.uses == 0 {
+    let def = s
+        .def
+        .as_deref()
+        .and_then(|p| crate::ghost_roles::def(world, p));
+    let infinite = def.as_ref().is_some_and(|d| d.infinite_use);
+    if s.uses == 0 && !infinite {
+        chat(
+            world,
+            client,
+            Span::Warning,
+            "This spawner is out of charges!",
+        );
         return None;
     }
-    let name = crate::jobs::character_name(world, client);
-    let look =
-        crate::human::player_body(client, world.get::<crate::human::AppearancePrefs>(client));
-    let mob = crate::server::spawn_body(world, pos, name, look);
+    // `SSticker.HasRoundStarted()`.
+    if world
+        .get_resource::<crate::round::Ticker>()
+        .is_some_and(|t| t.state() < crate::lobby::GameState::Playing)
+    {
+        return None;
+    }
+    let mob = match &def {
+        Some(d) => {
+            let name = d
+                .mob_name
+                .clone()
+                .unwrap_or_else(|| crate::jobs::character_name(world, client));
+            crate::ghost_roles::create_human(world, d, pos, name)
+        }
+        None => {
+            let name = crate::jobs::character_name(world, client);
+            let look = crate::human::player_body(
+                client,
+                world.get::<crate::human::AppearancePrefs>(client),
+            );
+            crate::server::spawn_body(world, pos, name, look)
+        }
+    };
     if !crate::medical::brainmob::possess(world, client, ghost, mob) {
         world.despawn(mob);
         return None;
     }
     world.despawn(ghost);
-    let left = s.uses - 1;
-    if left == 0 {
-        world.despawn(spawner);
-    } else if let Some(mut sp) = world.get_mut::<GhostRoleSpawner>(spawner) {
-        sp.uses = left;
+    if !infinite {
+        let left = s.uses - 1;
+        let deletes = def.as_ref().is_none_or(|d| d.deletes_on_zero_uses_left);
+        if left == 0 && deletes {
+            world.despawn(spawner);
+        } else if let Some(mut sp) = world.get_mut::<GhostRoleSpawner>(spawner) {
+            sp.uses = left;
+        }
     }
-    chat(world, client, Span::BoldNotice, format!("Вы — {}.", s.name));
+    // `special`'s boxed message: who they are, the context, the rules.
+    match &def {
+        Some(d) => {
+            let lines = [
+                (Span::BoldNotice, &d.you_are_text),
+                (Span::Notice, &d.flavour_text),
+                (Span::Danger, &d.important_text),
+            ];
+            for (span, text) in lines {
+                if !text.is_empty() {
+                    chat(world, client, span, text.clone());
+                }
+            }
+        }
+        None => chat(world, client, Span::BoldNotice, format!("Вы — {}.", s.name)),
+    }
     info!("client {client} took the ghost role {} at {pos:?}", s.name);
     Some(mob)
 }
@@ -1131,6 +1195,7 @@ mod tests {
             name: name.into(),
             desc: String::new(),
             uses,
+            def: None,
         };
         let (x, y, z) = (role("Hermit", 1), role("Hermit", 2), role("Ash walker", 0));
         let groups = spawner_groups([(a, &x), (b, &y), (c, &z)].into_iter());

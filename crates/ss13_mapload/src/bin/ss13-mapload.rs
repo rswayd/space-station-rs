@@ -221,6 +221,15 @@ fn convert_cmd(config: &MapLoadPlugin, mut map_dirs: Vec<PathBuf>) -> anyhow::Re
             .filter(|p| types.types.contains_key(*p))
             .map(str::to_owned),
     );
+    let mob_spawns = ss13_mapload::mob_spawn::resolve(&types);
+    // The ghost roles' and corpses' outfits are spawned at runtime.
+    used.extend(
+        mob_spawns
+            .item_types()
+            .into_iter()
+            .filter(|p| types.types.contains_key(*p))
+            .map(str::to_owned),
+    );
     let conversion = convert(&types, used.iter().map(String::as_str))?;
     let out = config.prototypes_dir().join("dm_types.ron");
     std::fs::create_dir_all(config.prototypes_dir())?;
@@ -250,6 +259,14 @@ fn convert_cmd(config: &MapLoadPlugin, mut map_dirs: Vec<PathBuf>) -> anyhow::Re
         skipped.randomized,
         skipped.own_checks.len(),
         skipped.unreadable.len()
+    );
+    let mob_spawn_out = config.assets.join(ss13_mapload::mob_spawn::MOB_SPAWN_FILE);
+    std::fs::write(&mob_spawn_out, mob_spawns.to_ron())
+        .with_context(|| format!("writing {}", mob_spawn_out.display()))?;
+    println!(
+        "{} mob spawners -> {}",
+        mob_spawns.spawns.len(),
+        mob_spawn_out.display()
     );
     let antag_out = config.assets.join(ss13_mapload::antag::ANTAG_FILE);
     std::fs::write(&antag_out, antag.to_ron())

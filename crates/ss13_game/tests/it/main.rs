@@ -50,6 +50,7 @@ mod food;
 mod forensics;
 mod furniture;
 mod genetics;
+mod ghost_roles;
 mod grenades;
 mod gulag;
 mod guns;

@@ -215,6 +215,7 @@ impl Plugin for GameServerPlugin {
             crate::atmos::AtmosGluePlugin,
         ))
         .add_plugins(crate::round::RoundServerPlugin)
+        .add_plugins(crate::ghost_roles::GhostRolesPlugin)
         .add_plugins(crate::weapons::WeaponsPlugin)
         .add_plugins((
             crate::tables::TablesPlugin,
