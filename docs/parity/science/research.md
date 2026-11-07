@@ -84,24 +84,24 @@ _«Автолат» описано в [../engineering/machines.md](../engineerin
 Машина для опытов над странными предметами (тык, облучение, газ, нагрев, охлаждение, уничтожение, открытие): случайные эффекты, раскрытие реликвий, очки.
 
 - **Код:** [`/obj/machinery/rnd/experimentor`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/experimentor/experimentor.dm#L1), [`/datum/experimentor_result_handler`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/experimentor/experiments.dm#L1); tgui: [`Experimentor.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/Experimentor.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ `ss13_game::science::experimentor` + tgui `Experimentor`: загрузка предмета (не в боевом режиме), выброс на тайл к востоку; каждому типу — случайная реакция (реликвии — `Discover`), совпавший скан раскрывает один из узлов `required_items_to_unlock` предмета, иначе провал; обработчики семи сканов с сообщениями, критическими реакциями на критические предметы (клон, плазма, пласталь, счётчик) и неисправностями (уничтожение с уроном соседям, повторный Obliterate, выброс, радиация, дым, ЭМИ, пламя, ожоги), глобальные неисправности (сброс реакции с выбросом, корги, кот, вытягивание жизни 50 brute, слив 500 кДж, взрыв/хонк через 5 с); кулдаун и вероятность неисправности — от деталей (коэффициент не копится при каждом `RefreshParts`, как в tg). Проверено: `tests/it/science.rs` (`experimentor_reveals_relics`), `science::experimentor::tests`. Нет: проводов и панели, кражи Иана/Рантайма (спавнится новый корги/кот), химического дыма, превращения предмета, огненного шара, горячего/холодного воздуха, кофе, бросков, звуков
 
 ### Странные объекты (реликвии)
 `/obj/item/assembly/relic`: случайный артефакт с неизвестным эффектом (телепорт, взрыв, клоны, флеш и т. д.), раскрывается экспериментором.
 
 - **Код:** [`/obj/item/assembly/relic`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/relics.dm#L4), [`activate()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/relics.dm#L106)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 `ss13_game::science::relics`: странное имя и настоящее (`random_themed_appearance`, прототип и некротех), раскрытие экспериментором (настоящее имя, случайная сила, кулдаун 6–30 с, без перебросов), использование в руке до раскрытия — подсказка, после — сила с кулдауном; силы: корги-пушка, призыв животных (с распадом 60%), неуправляемый телепорт (1–3 с), нагрев и взрыв (3,5–10 с, если всё ещё в руке), самокопирование (5–10 исчезающих копий), обнимашки. Проверено: `tests/it/science.rs` (`experimentor_reveals_relics`). Нет сил: моющая/кислотная пена, флешбенг, напитки, перемешивание органов, зарядка, сдвиг измерения, маскировка, щиты, камни, кровь, AoE-телепорт (некротех катает силы прототипа); нет иконок тем, бросков, раскрытия из подарка
 
 ### Гизмо
 Случайно генерируемые устройства-головоломки (предметы и машины) с режимами: телепорт, копирование, электричество, настроение и т. п.; управляются интерфейсом/голосом.
 
 - **Код:** [`/obj/item/gizmo`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/gizmo/gizmo_items.dm#L2), [`/obj/machinery/gizmo`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/gizmo/gizmo_machines.dm#L2), [`/datum/gizmo_controller`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/gizmo/gizmo_controller.dm#L4), режимы: [`gizmo/gizmodes/`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/gizmo/gizmodes)
 - **BandaStation:** [`gizmo_items.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/gizmo/gizmo_items.dm#L13) — случайные имена гизмо
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ❌ нет (не успели в волне research)
 
 ### Скиллчип инженера для RCD
 Без скиллчипа инженера (выдаётся инженерам и атмосферникам) RCD не позволяет деконструкцию и настройку доступа шлюзов; силиконы, дроны и ремботы могут без чипа.
 
 - **Код:** [`/obj/item/construction/rcd`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/rcd/RCD.dm#L6)
 - **BandaStation:** [`modular_bandastation/skillchip_rcd/code/skillchip_rcd.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/skillchip_rcd/code/skillchip_rcd.dm#L19) — проверка `TRAIT_ADVANCED_RCD_KNOWLEDGE`
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ❌ нет — скиллчипы не портированы (`crates/ss13_game/src/devices/rcd.rs`: деконструкцию и доступ шлюзов может любой); нужен сначала механизм скиллчипов (`/obj/item/skillchip`, слот мозга)

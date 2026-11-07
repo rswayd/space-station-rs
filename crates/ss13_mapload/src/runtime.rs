@@ -74,6 +74,15 @@ pub const GIFT_TYPES: &[&str] = &[
 /// Constant paths `ss13_game` spawns that no other table of this crate lists: leftovers,
 /// products and printouts of machines, decals, grenade payloads, quirk items, paper kinds.
 pub const GAME_RUNTIME_TYPES: &[&str] = &[
+    // `science::experimentor` (critical sheets, the honk's peel) and `science::relics` (the
+    // animals a strange object summons).
+    "/obj/item/grown/bananapeel",
+    "/mob/living/basic/carp",
+    "/mob/living/basic/crab",
+    "/mob/living/basic/lizard",
+    "/mob/living/basic/mouse",
+    "/mob/living/basic/parrot",
+    "/mob/living/basic/pet/fox",
     // `blackbox`: the recorder's blackbox.
     "/obj/item/blackbox",
     // `holodeck`: what the holodeck effects spawn (decks, manuals, holographic animals).

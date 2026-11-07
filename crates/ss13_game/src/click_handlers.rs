@@ -47,6 +47,7 @@
 //! | 1743 | `devices::beacons::attack_self` (tracking beacons toggle, choice beacons list) |
 //! | 1750 | `radiation::geiger_attack_self` |
 //! | 1800 | `explosions::sources::c4_attack_self` |
+//! | 1897 | `science::relics::attack_self` (a strange object: the hint, or its power) |
 //! | 1900 | `assemblies::server::attack_self` |
 //! | 1960 | `wiremod::server::attack_self` |
 //! | 2000 | `grenades::attack_self` |

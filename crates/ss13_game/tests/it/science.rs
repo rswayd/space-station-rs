@@ -146,6 +146,8 @@ const TYPES: &str = r##"{
         "declared_vars": { "name": "protolathe", "icon_state": "protolathe",
             "allowed_buildtypes": 2,
             "circuit": { "path": "/obj/item/circuitboard/machine/protolathe" } } },
+    "/obj/machinery/rnd/experimentor": { "parent": "/obj/machinery/rnd", "declared_vars": {
+        "name": "\\improper E.X.P.E.R.I-MENTOR", "icon_state": "server" } },
     "/obj/machinery/destructive_scanner": { "parent": "/obj/machinery", "declared_vars": {
         "name": "experimental destructive scanner", "icon": { "resource": "r.dmi" },
         "icon_state": "tube_open" } },
@@ -163,6 +165,9 @@ const TYPES: &str = r##"{
     "/obj/item/experi_scanner": { "parent": "/obj/item", "declared_vars": {
         "name": "Experi-Scanner", "icon_state": "experiscanner" } },
     "/obj/item/disk": { "parent": "/obj/item" },
+    "/obj/item/assembly": { "parent": "/obj/item" },
+    "/obj/item/assembly/relic": { "parent": "/obj/item/assembly", "declared_vars": {
+        "name": "strange object" } },
     "/obj/item/disk/tech_disk": { "parent": "/obj/item/disk", "declared_vars": {
         "name": "technology disk" } },
     "/obj/item/disk/design_disk": { "parent": "/obj/item/disk", "declared_vars": {
@@ -291,6 +296,9 @@ fn fixture_assets(test: &str) -> PathBuf {
         "/obj/item/screwdriver",
         "/obj/item/experi_scanner",
         "/obj/item/disk/tech_disk",
+        "/obj/item/assembly/relic",
+        "/obj/machinery/rnd/experimentor",
+        "/obj/item/wrench",
         "/obj/item/disk/design_disk",
         "/obj/machinery/destructive_scanner",
         "/obj/machinery/computer/rdservercontrol",
@@ -1049,6 +1057,143 @@ fn rd_console_disks() {
     s.run_until_for(5.0, "tech disk ejected", |s| {
         s.items_on(CONSOLE, "/obj/item/disk/tech_disk") == 1
     });
+}
+
+/// The E.X.P.E.R.I-MENTOR: a loaded relic is revealed by `Discover` and ejected east, then its
+/// power fires in hand and waits out its cooldown; a scan that is not the item's reaction fails;
+/// the matching scan unhides a node the item unlocks (Obliterate destroys the screwdriver).
+#[test]
+fn experimentor_reveals_relics() {
+    use ss13_game::science::experimentor::{Experimentor, Scan};
+    use ss13_game::science::relics::{Relic, RelicPower, attack_self};
+    use ss13_game::science::{ExperimentorData, ExperimentorUi};
+    let mut s = Lab::start("experimentor_reveals_relics");
+    let at = TilePos::new(5, 4, 1);
+    let machine = ss13_game::construction::spawn_obj(
+        s.server.world_mut(),
+        "/obj/machinery/rnd/experimentor",
+        at,
+    )
+    .unwrap();
+    s.server
+        .world_mut()
+        .entity_mut(machine)
+        .insert(Experimentor::default());
+
+    // A relic: only Discover is offered; it reveals and ejects it.
+    let relic = s.give("/obj/item/assembly/relic", 1);
+    s.click(machine);
+    s.run_until_for(5.0, "relic loaded", |s| {
+        s.server
+            .world()
+            .get::<Experimentor>(machine)
+            .unwrap()
+            .loaded
+            == Some(relic)
+    });
+    s.open::<ExperimentorUi>(machine);
+    let (_, (), data): (u32, (), ExperimentorData) = s.window::<ExperimentorUi>().unwrap();
+    let item = data.loaded_item.expect("loaded item");
+    assert!(item.is_relic);
+    assert!(item.name.starts_with("strange "), "{}", item.name);
+    let offered: Vec<&str> = data
+        .available_experiments
+        .iter()
+        .filter(|e| e.is_available)
+        .map(|e| e.id.as_str())
+        .collect();
+    assert_eq!(offered, ["Discover"]);
+    s.act::<ExperimentorUi>("experiment", &[("id", "Poke")]);
+    s.run_until_for(5.0, "revealed", |s| {
+        s.server
+            .world()
+            .get::<Relic>(relic)
+            .is_some_and(|r| r.activated)
+    });
+    let state = s.server.world().get::<Relic>(relic).unwrap().clone();
+    assert!(state.hidden_power.is_some());
+    assert!((6.0..=30.0).contains(&state.cooldown));
+    s.run_until_for(5.0, "ejected east", |s| {
+        s.items_on(TilePos::new(6, 4, 1), "/obj/item/assembly/relic") == 1
+    });
+    let name = s
+        .server
+        .world()
+        .get::<ss13_mapload::DmName>(relic)
+        .unwrap()
+        .name
+        .clone();
+    assert_eq!(name, state.real_name);
+
+    // In hand: the power (the harmless hugger here) fires once, then the cooldown.
+    s.server
+        .world_mut()
+        .get_mut::<Relic>(relic)
+        .unwrap()
+        .hidden_power = Some(RelicPower::Hugger);
+    let mob = s.mob();
+    let link = s.players[0].link;
+    {
+        let world = s.server.world_mut();
+        world
+            .entity_mut(relic)
+            .remove::<TilePos>()
+            .insert(ss13_game::inventory::CarriedBy(mob));
+        let hand = world.get::<Inventory>(mob).unwrap().active;
+        world.get_mut::<Inventory>(mob).unwrap().hands[hand] = Some(relic);
+        assert!(attack_self(world, link, mob, relic));
+    }
+    let next = s.server.world().get::<Relic>(relic).unwrap().next_activate;
+    assert!(next > s.server.world().resource::<Time>().elapsed_secs_f64());
+    assert!(attack_self(s.server.world_mut(), link, mob, relic));
+    s.run_until_for(5.0, "cooldown", |s| s.said("does not react!"));
+
+    // A screwdriver whose reaction is Obliterate: Heat fails.
+    {
+        let world = s.server.world_mut();
+        let hand = world.get::<Inventory>(mob).unwrap().active;
+        world.get_mut::<Inventory>(mob).unwrap().hands[hand] = None;
+        if world.get_entity(relic).is_ok() {
+            world.despawn(relic);
+        }
+    }
+    s.steps(testing::steps(2.5) as usize);
+    let screwdriver = s.give("/obj/item/screwdriver", 1);
+    s.click(machine);
+    s.run_until_for(5.0, "screwdriver loaded", |s| {
+        s.server
+            .world()
+            .get::<Experimentor>(machine)
+            .unwrap()
+            .loaded
+            == Some(screwdriver)
+    });
+    s.server
+        .world_mut()
+        .get_mut::<Experimentor>(machine)
+        .unwrap()
+        .item_reactions
+        .insert("/obj/item/screwdriver".into(), Scan::Obliterate);
+    s.act::<ExperimentorUi>("experiment", &[("id", "Heat")]);
+    s.run_until_for(5.0, "failure", |s| s.said("the experiment was a failure."));
+    let secret = s.node(SECRET);
+    assert!(s.web().hidden.contains(&secret));
+    // A failure may eject the item (a global malfunction); reload it then.
+    s.steps(testing::steps(2.5) as usize);
+    if s.server
+        .world()
+        .get::<Experimentor>(machine)
+        .unwrap()
+        .loaded
+        != Some(screwdriver)
+    {
+        return;
+    }
+    s.act::<ExperimentorUi>("experiment", &[("id", "Obliterate")]);
+    s.run_until_for(5.0, "secret unhidden", |s| {
+        !s.web().hidden.contains(&secret)
+    });
+    assert!(s.server.world().get_entity(screwdriver).is_err(), "crushed");
 }
 
 impl Lab {

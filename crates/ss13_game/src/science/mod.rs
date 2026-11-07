@@ -38,6 +38,8 @@ pub mod exodrone;
 #[cfg(feature = "server")]
 pub mod experi_scanner;
 #[cfg(feature = "server")]
+pub mod experimentor;
+#[cfg(feature = "server")]
 pub mod experiments;
 #[cfg(feature = "server")]
 pub mod lathe;
@@ -45,6 +47,8 @@ pub mod lathe;
 pub mod points;
 #[cfg(feature = "server")]
 pub mod quantum_pad;
+#[cfg(feature = "server")]
+pub mod relics;
 #[cfg(feature = "server")]
 pub mod server_control;
 #[cfg(feature = "server")]
@@ -84,6 +88,8 @@ impl bevy::prelude::Plugin for ScienceServerPlugin {
             bitrunning::server::BitrunningServerPlugin,
             quantum_pad::QuantumPadPlugin,
             anomaly_refinery::AnomalyRefineryPlugin,
+            experimentor::ExperimentorPlugin,
+            relics::RelicPlugin,
         ));
     }
 }
@@ -101,7 +107,52 @@ pub fn item_interaction(
         || analyzer::item_interaction(world, client, mob, held, target)
         || autolathe::item_interaction(world, client, mob, held, target)
         || console::item_interaction(world, client, mob, held, target)
+        || experimentor::item_interaction(world, client, mob, held, target)
 }
+
+/// tgui `Experimentor`.
+pub struct ExperimentorUi;
+
+impl UiInterface for ExperimentorUi {
+    const NAME: &'static str = "Experimentor";
+    type Data = ExperimentorData;
+    type StaticData = ();
+}
+
+/// An `availableExperiments` entry.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct ExperimentorOption {
+    /// The scan type: the `experiment` act's `id`.
+    pub id: String,
+    pub name: String,
+    pub fa_icon: String,
+    pub is_available: bool,
+    pub is_discover: bool,
+}
+
+/// `loadedItem`.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct ExperimentorItem {
+    pub name: String,
+    pub icon: Option<ProductIcon>,
+    pub is_relic: bool,
+    /// `associatedNodes`: node name, unhidden.
+    pub associated_nodes: Vec<(String, bool)>,
+}
+
+/// `ui_data`.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct ExperimentorData {
+    pub has_item: bool,
+    pub is_on_cooldown: bool,
+    pub is_server_connected: bool,
+    pub available_experiments: Vec<ExperimentorOption>,
+    pub loaded_item: Option<ExperimentorItem>,
+}
+
+pub const EXPERIMENTOR_EJECT: &str = "eject";
+pub const EXPERIMENTOR_EXPERIMENT: &str = "experiment";
+pub const EXPERIMENTOR_ID: &str = "id";
 
 /// tgui `Techweb`.
 pub struct TechwebUi;
