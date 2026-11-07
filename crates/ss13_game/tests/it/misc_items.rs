@@ -6,6 +6,7 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::harness::chat::{Received, record};
 use bevy::prelude::*;
 use ss13_game::combat::NextMove;
 use ss13_game::doors::{Door, DoorState};
@@ -16,7 +17,6 @@ use ss13_game::misc_items::flatpacks::FlatpackCart;
 use ss13_game::misc_items::puzzle::PuzzleUsed;
 use ss13_game::storage::StoredIn;
 use ss13_game::testing::{self, Drive, fixture_map, write_fixture};
-use ss13_net::chat::client::ChatReceived;
 use ss13_shared::TilePos;
 use ss13_shared::protocol::{ClientIntent, InventorySlot};
 use ss13_tgui::prompt::{Prompt, PromptAnswer, PromptAnswered};
@@ -196,15 +196,6 @@ fn fixture_assets() -> PathBuf {
             ("strings/numbers_as_words.txt", "One\n"),
         ],
     )
-}
-
-#[derive(Resource, Default)]
-struct Received(Vec<String>);
-
-fn record(mut chat: MessageReader<ChatReceived>, mut received: ResMut<Received>) {
-    for ChatReceived(message) in chat.read() {
-        received.0.push(message.plain_text());
-    }
 }
 
 struct Station(testing::Station);

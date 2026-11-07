@@ -9,6 +9,7 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::harness::chat::{Received, record};
 use bevy::prelude::*;
 use ss13_game::combat::NextMove;
 use ss13_game::doors::Door;
@@ -23,7 +24,6 @@ use ss13_game::wallmount::controls::{Button, Flasher};
 use ss13_game::wallmount::fire_alarm::FireAlarm;
 use ss13_game::wallmount::firelock::Firelock;
 use ss13_mapload::{Areas, DmItem, DmTurfBuild, DmWallMount};
-use ss13_net::chat::client::ChatReceived;
 use ss13_shared::protocol::ClickModifiers;
 use ss13_shared::{Appearance, IconStateId, Optics, TilePos};
 use ss13_world::{Density, SpatialIndex};
@@ -301,15 +301,6 @@ fn fixture_assets(test: &str) -> PathBuf {
         &states(),
         &[("map.dmm", MAP), ("frames.dmm", FRAMES_MAP)],
     )
-}
-
-#[derive(Resource, Default)]
-struct Received(Vec<String>);
-
-fn record(mut chat: MessageReader<ChatReceived>, mut received: ResMut<Received>) {
-    for ChatReceived(message) in chat.read() {
-        received.0.push(message.plain_text());
-    }
 }
 
 struct Station(testing::Station);

@@ -6,6 +6,7 @@
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 
+use crate::harness::chat::{Received, record};
 use bevy::prelude::*;
 use ss13_game::botany::{HydroSpeed, PlantStatus, Seed, Tray};
 use ss13_game::chem::{Chem, Reagents};
@@ -14,7 +15,6 @@ use ss13_game::inventory::Inventory;
 use ss13_game::testing::{self, Drive, fixture_map, write_fixture};
 use ss13_mapload::convert::DmTypes;
 use ss13_mapload::{DmItem, MapLoadPlugin};
-use ss13_net::chat::client::ChatReceived;
 use ss13_shared::protocol::{ClickModifiers, ClientIntent};
 use ss13_shared::{Appearance, TilePos};
 use ss13_world::SpatialIndex;
@@ -254,15 +254,6 @@ fn fixture_assets(test: &str) -> PathBuf {
     let plants = ss13_mapload::plants::resolve(&types);
     std::fs::write(dir.join(ss13_mapload::plants::PLANTS_FILE), plants.to_ron()).unwrap();
     dir
-}
-
-#[derive(Resource, Default)]
-struct Received(Vec<String>);
-
-fn record(mut chat: MessageReader<ChatReceived>, mut received: ResMut<Received>) {
-    for ChatReceived(message) in chat.read() {
-        received.0.push(message.plain_text());
-    }
 }
 
 struct Station(testing::Station);

@@ -4,10 +4,10 @@
 //! soda dispenser's `ChemDispenser` window into a drinking glass that takes cola's glass style,
 //! and a soda can opened by hand.
 
-use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 
+use crate::harness::open_windows::{Received, record};
 use bevy::prelude::*;
 use ss13_game::chem::{Chem, Reagents};
 use ss13_game::chem_dispenser::ChemDispenser;
@@ -20,10 +20,7 @@ use ss13_game::storage::Stored;
 use ss13_game::testing::{self, Drive, fixture_map, write_fixture};
 use ss13_mapload::convert::DmTypes;
 use ss13_mapload::{DmFood, DmItem, DmName, IconIndex};
-use ss13_net::chat::client::ChatReceived;
-use ss13_net::ui::client::UiMessageReceived;
 use ss13_shared::protocol::{ClickModifiers, InventorySlot};
-use ss13_shared::ui::UiServerMessage;
 use ss13_shared::{Appearance, TilePos};
 use ss13_tgui::UiInterface;
 use ss13_tgui::interfaces::chem_dispenser::{ChemDispenserData, ChemDispenserUi};
@@ -345,49 +342,6 @@ fn fixture_assets(test: &str) -> PathBuf {
     let mecha = ss13_mapload::mecha::resolve(&types);
     std::fs::write(dir.join(ss13_mapload::mecha::MECHA_FILE), mecha.to_ron()).unwrap();
     dir
-}
-
-#[derive(Resource, Default)]
-struct Received {
-    chat: Vec<String>,
-    windows: HashMap<u32, (String, Vec<u8>)>,
-}
-
-fn record(
-    mut chat: MessageReader<ChatReceived>,
-    mut ui: MessageReader<UiMessageReceived>,
-    mut received: ResMut<Received>,
-) {
-    for ChatReceived(message) in chat.read() {
-        received.chat.push(message.plain_text());
-    }
-    for UiMessageReceived(message) in ui.read() {
-        match message {
-            UiServerMessage::Open {
-                window,
-                interface,
-                data,
-                ..
-            } => {
-                received
-                    .windows
-                    .insert(*window, (interface.clone(), data.clone()));
-            }
-            UiServerMessage::Update {
-                window,
-                data: Some(data),
-                ..
-            } => {
-                if let Some(w) = received.windows.get_mut(window) {
-                    w.1 = data.clone();
-                }
-            }
-            UiServerMessage::Close { window } => {
-                received.windows.remove(window);
-            }
-            _ => {}
-        }
-    }
 }
 
 struct Station(testing::Station);

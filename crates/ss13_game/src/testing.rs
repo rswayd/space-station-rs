@@ -484,13 +484,15 @@ impl Drive for Station {
 /// Makes a test's type that holds a [`Station`] in `$field` act as one: `Deref`/`DerefMut` to
 /// it (its helpers) and [`Drive`] (waits whose conditions see the test type's helpers).
 ///
+/// `context = f` makes [`Drive::context`] `f(&station)`.
+///
 /// ```ignore
 /// struct Station(testing::Station);
 /// ss13_game::drive_station!(Station, 0);
 /// ```
 #[macro_export]
 macro_rules! drive_station {
-    ($ty:ty, $field:tt) => {
+    (@deref $ty:ty, $field:tt) => {
         impl ::core::ops::Deref for $ty {
             type Target = $crate::testing::Station;
             fn deref(&self) -> &$crate::testing::Station {
@@ -502,6 +504,20 @@ macro_rules! drive_station {
                 &mut self.$field
             }
         }
+    };
+    ($ty:ty, $field:tt, context = $context:expr) => {
+        $crate::drive_station!(@deref $ty, $field);
+        impl $crate::testing::Drive for $ty {
+            fn station(&mut self) -> &mut $crate::testing::Station {
+                &mut self.$field
+            }
+            fn context(&self) -> ::std::string::String {
+                ($context)(&self.$field)
+            }
+        }
+    };
+    ($ty:ty, $field:tt) => {
+        $crate::drive_station!(@deref $ty, $field);
         impl $crate::testing::Drive for $ty {
             fn station(&mut self) -> &mut $crate::testing::Station {
                 &mut self.$field

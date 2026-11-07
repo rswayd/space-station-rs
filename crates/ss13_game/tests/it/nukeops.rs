@@ -7,9 +7,9 @@
 //! and a timer, arms it, disarms it, arms it again, flies home; the detonation kills the crew on
 //! the station, ends the round, and the report says the syndicate won.
 
-use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 
+use crate::harness::{self, Client};
 use bevy::prelude::*;
 use ss13_chat::server::ChatServerPlugin;
 use ss13_game::antag::dynamic::{DevTraitor, DynamicConfig, NUKEOPS_RULESET};
@@ -26,20 +26,15 @@ use ss13_game::health::Stat;
 use ss13_game::inventory::{CarriedBy, IdCard, Inventory};
 use ss13_game::jobs::{PlayerJob, fallback_jobs};
 use ss13_game::lobby::{
-    CHARACTER_SETUP, GameState, JobPrefsUi, LobbyData, LobbyUi, SET_ANTAGS, SET_JOB_PREFERENCE,
-    TOGGLE_READY,
+    CHARACTER_SETUP, GameState, JobPrefsUi, SET_ANTAGS, SET_JOB_PREFERENCE, TOGGLE_READY,
 };
 use ss13_game::round::{RoundConfig, Ticker};
-use ss13_game::server::Players;
 use ss13_game::shuttle::MobileDock;
 use ss13_game::testing::{self, Drive, fixture_map, write_fixture};
 use ss13_mapload::antag::{ANTAG_FILE, AntagData, NUKEOP_RUNTIME_TYPES};
 use ss13_mapload::jobs::{JOBS_FILE, Outfit, OutfitSlot};
 use ss13_mapload::{DmItem, DmObj};
-use ss13_net::chat::client::ChatReceived;
-use ss13_net::ui::client::UiMessageReceived;
 use ss13_shared::TilePos;
-use ss13_shared::ui::UiServerMessage;
 use ss13_tgui::UiInterface;
 
 const TYPES: &str = r##"{
@@ -285,87 +280,10 @@ fn fixture_assets(test: &str) -> PathBuf {
     dir
 }
 
-#[derive(Resource, Default)]
-struct Received {
-    windows: Vec<(u32, String)>,
-    data: Vec<(u32, Vec<u8>)>,
-    lobby: Option<(u32, LobbyData)>,
-    chat: Vec<String>,
-}
-
-fn record(
-    mut ui: MessageReader<UiMessageReceived>,
-    mut chat: MessageReader<ChatReceived>,
-    mut received: ResMut<Received>,
-) {
-    for UiMessageReceived(message) in ui.read() {
-        match message {
-            UiServerMessage::Open {
-                window,
-                interface,
-                data,
-                ..
-            } => {
-                if interface == LobbyUi::NAME {
-                    received.lobby = Some((*window, ss13_tgui::decode(data).unwrap()));
-                }
-                received.windows.push((*window, interface.clone()));
-                received.data.push((*window, data.clone()));
-            }
-            UiServerMessage::Update {
-                window,
-                data: Some(data),
-                ..
-            } => {
-                if let Some((id, lobby)) = &mut received.lobby
-                    && id == window
-                {
-                    *lobby = ss13_tgui::decode(data).unwrap();
-                }
-                received.data.push((*window, data.clone()));
-            }
-            UiServerMessage::Update { .. } => {}
-            UiServerMessage::Close { window } => {
-                if received.lobby.as_ref().is_some_and(|(id, _)| id == window) {
-                    received.lobby = None;
-                }
-            }
-        }
-    }
-    for ChatReceived(message) in chat.read() {
-        received.chat.push(message.plain_text());
-    }
-}
-
 struct Station(testing::Station);
 
-impl Deref for Station {
-    type Target = testing::Station;
-    fn deref(&self) -> &testing::Station {
-        &self.0
-    }
-}
-
-impl DerefMut for Station {
-    fn deref_mut(&mut self) -> &mut testing::Station {
-        &mut self.0
-    }
-}
-
-impl Drive for Station {
-    fn station(&mut self) -> &mut testing::Station {
-        &mut self.0
-    }
-
-    fn context(&self) -> String {
-        let chat: Vec<_> = self
-            .players
-            .iter()
-            .map(|p| &p.app.world().resource::<Received>().chat)
-            .collect();
-        format!("; chat {chat:?}")
-    }
-}
+ss13_game::drive_station!(Station, 0, context = harness::chat_context);
+impl Client for Station {}
 
 impl Station {
     fn start(test: &str) -> Self {
@@ -393,66 +311,8 @@ impl Station {
         ))
     }
 
-    fn start_now(&mut self) {
-        let world = self.server.world_mut();
-        world.resource_mut::<RoundConfig>().lobby_secs = 0.5;
-        world.insert_resource(Ticker::default());
-    }
-
-    fn connect(&mut self) -> usize {
-        let token = format!("p{}", self.players.len());
-        let i = self.0.connect(&token, |app| {
-            app.init_resource::<Received>().add_systems(Update, record);
-        });
-        self.run_until("in the lobby", |s| s.received(i).lobby.is_some());
-        i
-    }
-
-    fn received(&self, p: usize) -> &Received {
-        self.players[p].app.world().resource::<Received>()
-    }
-
-    fn lobby_act(&mut self, p: usize, action: &str) {
-        let window = self.received(p).lobby.as_ref().expect("in the lobby").0;
-        self.act(p, window, action, &[]);
-    }
-
     fn wait_window(&mut self, p: usize, interface: &str) -> u32 {
-        self.run_until(&format!("{interface} opens"), |s| {
-            s.received(p).windows.iter().any(|(_, i)| i == interface)
-        });
-        self.received(p)
-            .windows
-            .iter()
-            .rev()
-            .find(|(_, i)| i == interface)
-            .unwrap()
-            .0
-    }
-
-    fn latest_data<T: serde::de::DeserializeOwned>(&self, p: usize, window: u32) -> T {
-        let (_, data) = self
-            .received(p)
-            .data
-            .iter()
-            .rev()
-            .find(|(w, _)| *w == window)
-            .unwrap();
-        ss13_tgui::decode(data).unwrap()
-    }
-
-    fn wait_chat(&mut self, p: usize, part: &str) {
-        self.run_until(&format!("a chat line with {part:?}"), |s| {
-            s.received(p).chat.iter().any(|n| n.contains(part))
-        });
-    }
-
-    fn mob(&self, p: usize) -> Entity {
-        self.server
-            .world()
-            .resource::<Players>()
-            .mob(self.players[p].link)
-            .unwrap()
+        Client::wait_window(self, p, interface).0
     }
 
     fn find_obj(&mut self, path: &str) -> Entity {

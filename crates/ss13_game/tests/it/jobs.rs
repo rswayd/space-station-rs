@@ -12,6 +12,7 @@ use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
+use crate::harness::{Client, Received, record};
 use bevy::prelude::*;
 use ss13_game::doors::{Door, DoorState};
 use ss13_game::ghost::Ghost;
@@ -19,8 +20,8 @@ use ss13_game::human::{AppearancePrefs, HumanLook, SKIN_TONES};
 use ss13_game::inventory::{IdCard, Inventory};
 use ss13_game::jobs::{CharacterName, JobSpawns, Jobs, PlayerJob, fallback_jobs};
 use ss13_game::lobby::{
-    CHARACTER_SETUP, GameState, JobPrefsUi, LobbyData, LobbyUi, OBSERVE, SET_APPEARANCE,
-    SET_JOB_PREFERENCE, TOGGLE_READY,
+    CHARACTER_SETUP, GameState, JobPrefsUi, LobbyData, OBSERVE, SET_APPEARANCE, SET_JOB_PREFERENCE,
+    TOGGLE_READY,
 };
 use ss13_game::outfit::IdRegistration;
 use ss13_game::round::{NewPlayer, REBOOT_EXIT_CODE, RoundConfig, Ticker};
@@ -30,12 +31,9 @@ use ss13_game::testing::{self, Drive, write_fixture};
 use ss13_mapload::convert::DmTypes;
 use ss13_mapload::jobs::{JOBS_FILE, JobsData, OutfitSlot};
 use ss13_mapload::{DmName, MapLoadPlugin};
-use ss13_net::chat::client::ChatReceived;
-use ss13_net::client::{NetClientState, NetEntityMap, NoticeReceived};
+use ss13_net::client::{NetClientState, NetEntityMap};
 use ss13_net::server::NetServerConfig;
-use ss13_net::ui::client::UiMessageReceived;
 use ss13_shared::protocol::ClientIntent;
-use ss13_shared::ui::UiServerMessage;
 use ss13_shared::{Dir, TilePos};
 use ss13_tgui::UiInterface;
 use ss13_tgui::interfaces::job_selection::{JobSelectionStatic, JobSelectionUi, SELECT_JOB};
@@ -242,67 +240,6 @@ fn fixture_assets(test: &str) -> PathBuf {
     dir
 }
 
-/// What a client received: windows opened (id, interface, static data), closed windows, the
-/// lobby's data, notices and chat lines.
-#[derive(Resource, Default)]
-struct Received {
-    windows: Vec<(u32, String, Vec<u8>)>,
-    closed: Vec<u32>,
-    lobby: Option<(u32, LobbyData)>,
-    notices: Vec<String>,
-    chat: Vec<String>,
-}
-
-fn record(
-    mut ui: MessageReader<UiMessageReceived>,
-    mut notices: MessageReader<NoticeReceived>,
-    mut chat: MessageReader<ChatReceived>,
-    mut received: ResMut<Received>,
-) {
-    for UiMessageReceived(message) in ui.read() {
-        match message {
-            UiServerMessage::Open {
-                window,
-                interface,
-                static_data,
-                data,
-                ..
-            } => {
-                if interface == LobbyUi::NAME {
-                    received.lobby = Some((*window, ss13_tgui::decode(data).unwrap()));
-                }
-                received
-                    .windows
-                    .push((*window, interface.clone(), static_data.clone()));
-            }
-            UiServerMessage::Update {
-                window,
-                data: Some(data),
-                ..
-            } => {
-                if let Some((id, lobby)) = &mut received.lobby
-                    && id == window
-                {
-                    *lobby = ss13_tgui::decode(data).unwrap();
-                }
-            }
-            UiServerMessage::Update { .. } => {}
-            UiServerMessage::Close { window } => {
-                received.closed.push(*window);
-                if received.lobby.as_ref().is_some_and(|(id, _)| id == window) {
-                    received.lobby = None;
-                }
-            }
-        }
-    }
-    for NoticeReceived(notice) in notices.read() {
-        received.notices.push(notice.text.clone());
-    }
-    for ChatReceived(message) in chat.read() {
-        received.chat.push(message.plain_text());
-    }
-}
-
 struct Station {
     st: testing::Station,
     map: MapLoadPlugin,
@@ -346,6 +283,8 @@ impl Drive for Station {
     }
 }
 
+impl Client for Station {}
+
 /// A test server on `addr` (a free port when `None`) in the round state of `config`.
 fn server_app(addr: Option<SocketAddr>, map: MapLoadPlugin, config: RoundConfig) -> App {
     testing::server_app(map, |app| {
@@ -386,15 +325,6 @@ impl Station {
         }
     }
 
-    /// An admin's "start now": the fixture lobby counts down for 10 minutes of game time (the
-    /// clients gather on real time, so a short countdown could run out before they are ready),
-    /// and once they are, the ticker restarts with a half-second countdown.
-    fn start_now(&mut self) {
-        let world = self.server.world_mut();
-        world.resource_mut::<RoundConfig>().lobby_secs = 0.5;
-        world.insert_resource(Ticker::default());
-    }
-
     /// A new client, in the lobby once its handshake is accepted.
     fn connect(&mut self) -> usize {
         let token = format!("p{}", self.players.len());
@@ -420,21 +350,8 @@ impl Station {
         &self.received(p).lobby.as_ref().expect("in the lobby").1
     }
 
-    fn lobby_act(&mut self, p: usize, action: &str) {
-        let window = self.received(p).lobby.as_ref().expect("in the lobby").0;
-        self.act(p, window, action, &[]);
-    }
-
     fn state(&self) -> GameState {
         self.server.world().resource::<Ticker>().state()
-    }
-
-    fn mob(&self, p: usize) -> Entity {
-        self.server
-            .world()
-            .resource::<Players>()
-            .mob(self.players[p].link)
-            .unwrap()
     }
 
     fn has_mob(&self, p: usize) -> bool {
@@ -481,10 +398,6 @@ impl Station {
             .expect("a door")
     }
 
-    fn received(&self, p: usize) -> &Received {
-        self.players[p].app.world().resource::<Received>()
-    }
-
     /// Waits for a new window of `interface` opened after `before` windows.
     fn wait_window(&mut self, p: usize, before: usize, interface: &str) -> (u32, Vec<u8>) {
         self.run_until(&format!("{interface} opens"), |s| {
@@ -527,12 +440,6 @@ impl Station {
     fn wait_notice(&mut self, p: usize, part: &str) {
         self.run_until(&format!("a notice with {part:?}"), |s| {
             s.received(p).notices.iter().any(|n| n.contains(part))
-        });
-    }
-
-    fn wait_chat(&mut self, p: usize, part: &str) {
-        self.run_until(&format!("a chat line with {part:?}"), |s| {
-            s.received(p).chat.iter().any(|n| n.contains(part))
         });
     }
 
