@@ -247,6 +247,14 @@ pub fn attackby(world: &mut World, actor: Actor, target: Entity) -> bool {
         clients: vec![actor.client],
         message: message(format!("Вы атакуете {thing} с помощью {weapon}{tail}")),
     });
+    // `/obj/item/fireaxe/afterattack`: wielded, it destroys windows and grilles in one hit.
+    if !hit.destroyed
+        && obj.resistance_flags & INDESTRUCTIBLE == 0
+        && world.get_entity(target).is_ok()
+        && crate::weapons::fireaxe_destroys(world, item, &obj.path)
+    {
+        deconstruct(world, target, false);
+    }
     true
 }
 

@@ -74,6 +74,12 @@ pub const GIFT_TYPES: &[&str] = &[
 /// Constant paths `ss13_game` spawns that no other table of this crate lists: leftovers,
 /// products and printouts of machines, decals, grenade payloads, quirk items, paper kinds.
 pub const GAME_RUNTIME_TYPES: &[&str] = &[
+    // `weapons::two_handed`: the offhand a wielded item fills the other hand with.
+    "/obj/item/offhand",
+    // `weapons::block`: what a broken shield leaves (`shield_break_leftover`).
+    "/obj/item/shard",
+    "/obj/item/stack/rods/ten",
+    "/obj/item/stack/rods/two",
     // `mob_holder`: small mobs picked up into a hand.
     "/obj/item/mob_holder",
     "/obj/item/mob_holder/snail",

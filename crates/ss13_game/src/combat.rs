@@ -207,6 +207,29 @@ type Mob<'a> = (
     Option<&'a crate::medical::wounds::Limbs>,
 );
 
+/// What a held item blocks with (`crate::weapons::block`).
+type Blocker<'a> = (
+    &'a DmItem,
+    Option<&'a ss13_mapload::DmMelee>,
+    Has<ss13_mapload::DmClothing>,
+    Has<crate::weapons::two_handed::Wielded>,
+    Option<&'a crate::antag::syndie_items::EnergyBlade>,
+);
+
+/// tg human `check_block` over the held items (after the worn ones): the item that blocks.
+fn held_block(
+    blockers: &Query<Blocker>,
+    rng: &mut CombatRng,
+    worn: Option<&Inventory>,
+    damage: f32,
+) -> Option<Entity> {
+    let hands = worn?.hands;
+    crate::weapons::block::roll_held_block(rng, hands, damage, |item| {
+        let (dm, melee, clothing, wielded, blade) = blockers.get(item).ok()?;
+        crate::weapons::block::chance(&dm.path, melee?, clothing, wielded, blade.map(|b| b.active))
+    })
+}
+
 /// What a held item hits with.
 struct Weapon {
     entity: Entity,
@@ -230,11 +253,12 @@ fn melee(
     handled: Res<crate::security::MeleeHandled>,
     medical: Res<crate::medical::MedicalHandled>,
     clothing: Query<(&ss13_mapload::DmClothing, &ss13_mapload::DmArmor)>,
-    (mut sounds, pacifists, artists, mut reactive): (
+    (mut sounds, pacifists, artists, mut reactive, blockers): (
         MessageWriter<PlaySound>,
         Query<(), With<crate::medical::traumas::Pacifist>>,
         Query<&crate::martial::MartialArts>,
         Query<&mut crate::clothing::reactive::ReactiveArmor>,
+        Query<Blocker>,
     ),
     mut commands: Commands,
 ) {
@@ -397,6 +421,15 @@ fn melee(
                     target_stat.set_if_neq(new_stat);
                     continue;
                 }
+                // ... then the held items (`hit_reaction` of a shield, an energy sword).
+                if let Some(item) = held_block(&blockers, &mut rng, worn, force) {
+                    let text = name.clone();
+                    commands.queue(move |world: &mut World| {
+                        crate::weapons::block::on_block(world, target, item, &text, force, kind);
+                    });
+                    target_stat.set_if_neq(new_stat);
+                    continue;
+                }
                 let armor = armor_check(
                     hit,
                     Some(format!("Ваша броня защитила вашу {zone_text}!")),
@@ -480,6 +513,27 @@ fn melee(
                             (attacker, target),
                             format!("удар {user}"),
                         ) =>
+                    {
+                        None
+                    }
+                    // `check_block(owner, 0, owner, UNARMED_ATTACK)` of the held items.
+                    Some(_)
+                        if attacker != target
+                            && held_block(&blockers, &mut rng, worn, 0.0)
+                                .inspect(|&item| {
+                                    let text = user.clone();
+                                    commands.queue(move |world: &mut World| {
+                                        crate::weapons::block::on_block(
+                                            world,
+                                            target,
+                                            item,
+                                            &text,
+                                            0.0,
+                                            DamageType::Brute,
+                                        );
+                                    });
+                                })
+                                .is_some() =>
                     {
                         None
                     }

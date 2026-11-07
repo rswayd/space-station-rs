@@ -126,8 +126,13 @@ fn path_of(world: &World, item: Entity) -> Option<String> {
 
 /// Whether `path` is a transforming energy blade ported here.
 pub fn is_blade(path: &str) -> bool {
-    is_under(path, ESWORD_ROOT) || is_under(path, EDAGGER)
+    // `/obj/item/melee/energy/blade/make_transformable` returns FALSE: always out.
+    (is_under(path, ss13_mapload::melee::ENERGY_ROOT) && !is_under(path, ENERGY_BLADE))
+        || is_under(path, EDAGGER)
 }
+
+/// `/obj/item/melee/energy/blade`, the non-transforming energy blades.
+const ENERGY_BLADE: &str = "/obj/item/melee/energy/blade";
 
 /// The sleepy pen's clicks on mobs are its own: `crate::combat` leaves them.
 pub fn interacts_with_mobs(path: &str) -> bool {
@@ -199,11 +204,14 @@ pub fn toggle_blade(world: &mut World, client: Entity, mob: Entity, item: Entity
     apply_blade(world, item, &blade, dagger);
     world.entity_mut(item).insert(blade.clone());
     // `balloon_alert(user, "[name] enabled/disabled")`, the dagger's "active/concealed".
+    let name = world
+        .get::<DmName>(item)
+        .map_or_else(|| "energy sword".to_owned(), |n| n.name.clone());
     let text = match (dagger, blade.active) {
-        (true, true) => "energy dagger active",
-        (true, false) => "energy dagger concealed",
-        (false, true) => "energy sword enabled",
-        (false, false) => "energy sword disabled",
+        (true, true) => "energy dagger active".to_owned(),
+        (true, false) => "energy dagger concealed".to_owned(),
+        (false, true) => format!("{name} enabled"),
+        (false, false) => format!("{name} disabled"),
     };
     tell(world, client, Span::Notice, text);
     if let Some(pos) = turf_of(world, mob) {
@@ -223,11 +231,28 @@ pub fn toggle_blade(world: &mut World, client: Entity, mob: Entity, item: Entity
 /// The blade's live vars for its state.
 fn apply_blade(world: &mut World, item: Entity, blade: &EnergyBlade, dagger: bool) {
     let on = blade.active;
-    let (force, throwforce, w_class) = match (on, dagger) {
-        (true, true) => (18.0, 35.0, WEIGHT_CLASS_NORMAL),
-        (true, false) => (30.0, 20.0, WEIGHT_CLASS_HUGE),
-        (false, _) => (blade.force, blade.throwforce, blade.w_class),
+    // `/obj/item/melee/energy`'s `active_*` vars (the axe's 150), 30/20/huge without them.
+    let active = world
+        .get::<ss13_mapload::DmMelee>(item)
+        .filter(|m| m.active_force > 0.0)
+        .map(|m| {
+            (
+                m.active_force,
+                m.active_throwforce,
+                m.active_w_class,
+                m.active_hitsound.clone(),
+            )
+        });
+    let (force, throwforce, w_class) = match (on, dagger, &active) {
+        (true, true, _) => (18.0, 35.0, WEIGHT_CLASS_NORMAL),
+        (true, false, Some((f, t, w, _))) => (*f, *t, *w),
+        (true, false, None) => (30.0, 20.0, WEIGHT_CLASS_HUGE),
+        (false, _, _) => (blade.force, blade.throwforce, blade.w_class),
     };
+    let active_hit = active
+        .map(|a| a.3)
+        .filter(|h| !h.is_empty())
+        .unwrap_or_else(|| BLADE_HIT.to_owned());
     let sharpness = if on { SHARP_EDGED } else { blade.sharpness };
     let (icon_state, inhand, lefthand, righthand) = match (on, dagger) {
         // `hidden_icon` and the swords' in-hand files.
@@ -269,7 +294,7 @@ fn apply_blade(world: &mut World, item: Entity, blade: &EnergyBlade, dagger: boo
         dm.force = force;
         dm.throwforce = throwforce;
         dm.hitsound = if on {
-            BLADE_HIT.to_owned()
+            active_hit
         } else {
             blade.hitsound.clone()
         };

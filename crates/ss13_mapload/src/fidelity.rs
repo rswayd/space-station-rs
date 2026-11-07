@@ -285,6 +285,7 @@ impl<'a> ConvertContext<'a> {
         fields.extend(crate::radio::type_fields(self.types, path));
         fields.extend(crate::silicon::type_fields(self.types, path));
         fields.extend(crate::security::type_fields(self.types, path));
+        fields.extend(crate::melee::type_fields(self.types, path));
         fields.extend(crate::guns::type_fields(self.types, path));
         fields.extend(crate::medical::type_fields(self.types, path));
         fields.extend(crate::dock::type_fields(self.types, path));

@@ -534,6 +534,8 @@ pub mod vision;
 #[cfg(feature = "server")]
 pub mod wallmount;
 #[cfg(feature = "server")]
+pub mod weapons;
+#[cfg(feature = "server")]
 pub mod weather;
 /// Shared window data; `wiremod::circuit` and `wiremod::server` with `server`, `wiremod::client`
 /// with `client`.

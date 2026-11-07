@@ -79,6 +79,7 @@
 //! | 3194 | `closets::kinds::bodybag_attack_self` (a folded body bag unfolds) |
 //! | 3203 | `crayons::attack_self` (the stencil menu, a spray can's cap and colour) |
 //! | 3213 | `gifts::open` |
+//! | 3221 | `weapons::two_handed::attack_self` (wield, let go) |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):
 //!
@@ -112,6 +113,7 @@
 //! | 1250 | `radiation::geiger_interact` |
 //! | 1255 | `clothing::item_interaction` |
 //! | 1259 | `clothing::reactive::shell_interaction` (an anomaly core into a reactive armor shell) |
+//! | 1261 | `weapons` whetstone (`sharpener`), shield bash (`block::bash`) |
 //! | 1300 | `disposals::mail_interaction` |
 //! | 1350 | `botany::grown_interaction` (log cutting, potato batteries) |
 //! | 1400 | `chem::item_interaction` |
@@ -211,6 +213,7 @@
 //! | 50 | `fishing::server::held_on_target` (casts, a fisher's clicks), `fishing::aquarium::item_interaction` |
 //! | 100 | `antag::uplink::item_interaction` |
 //! | 200 | `antag::syndie_items::item_interaction` |
+//! | 251 | `weapons` whetstone (`sharpener`), shield bash (`block::bash`) |
 //! | 300 | `emag::interact_with_atom` (left click) |
 //! | 320 | `janitor::key_on_door` (the janitor's key on a door) |
 //! | 330 | `shuttle_console_server` (a held item on a shuttle console) |

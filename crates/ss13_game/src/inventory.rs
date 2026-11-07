@@ -665,6 +665,10 @@ fn apply(world: &mut World, client: Entity, action: Action) {
 }
 
 fn set_active(world: &mut World, mob: Entity, hand: usize) {
+    // tg `two_handed/on_swapping_hands`: the offhand's hand is busy holding the weapon.
+    if crate::weapons::two_handed::blocks_swap(world, mob, hand) {
+        return;
+    }
     let mut inventory = world.get_mut::<Inventory>(mob).expect("checked by actor");
     if inventory.active != hand {
         inventory.active = hand;

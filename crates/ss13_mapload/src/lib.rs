@@ -44,6 +44,7 @@ pub mod load;
 pub mod look;
 pub mod mecha;
 pub mod medical;
+pub mod melee;
 pub mod mining;
 pub mod mobs;
 pub mod modsuit;
@@ -107,6 +108,7 @@ pub use load::{
 };
 pub use look::{DmLook, DmSprite};
 pub use medical::{DmDefib, DmMedical, DmWounding, MEDICAL_RUNTIME_TYPES};
+pub use melee::DmMelee;
 pub use mining::{
     DmMineral, DmModkit, DmOrderConsole, DmOre, DmOreRedemption, DmStacker, OrderItem, VoucherSet,
 };
@@ -360,6 +362,7 @@ impl Plugin for DmProtoPlugin {
             .register_proto_component::<DmClothing>("dm_clothing")
             .register_proto_component::<DmTank>("dm_tank")
             .register_proto_component::<DmBaton>("dm_baton")
+            .register_proto_component::<DmMelee>(melee::MELEE_COMPONENT)
             .register_proto_component::<DmHandcuffs>("dm_handcuffs")
             .register_proto_component::<DmGun>("dm_gun")
             .register_proto_component::<DmMagazine>("dm_magazine")
