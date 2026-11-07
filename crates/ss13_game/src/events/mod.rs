@@ -35,6 +35,7 @@ pub mod comms_blackout;
 pub mod controller;
 pub mod disease_outbreak;
 pub mod dynamic_tweak;
+pub mod earthquake;
 pub mod electrical_storm;
 pub mod fake_virus;
 pub mod false_alarm;
@@ -280,6 +281,10 @@ pub fn controls() -> Vec<EventControl> {
         )),
         c(grey_tide::NAME, 10, 20.0, 5, 2, grey_tide::make),
         c(ion_storm::NAME, 15, 20.0, 2, 20, ion_storm::make),
+        needs(
+            earthquake::is_planetary,
+            c(earthquake::NAME, 7, 35.0, 20, 3, earthquake::make),
+        ),
         needs(
             scrubber_overflow::has_scrubbers,
             c(
