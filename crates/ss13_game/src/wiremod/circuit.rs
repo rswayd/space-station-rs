@@ -268,6 +268,8 @@ pub enum Kind {
     Controller,
     Bot,
     WireBundle,
+    /// `/obj/item/circuit_component/modpc`: a modular computer shell's own component.
+    Modpc,
 }
 
 pub struct KindDef {
@@ -295,7 +297,7 @@ const fn def(
     }
 }
 
-pub static KINDS: [KindDef; 22] = [
+pub static KINDS: [KindDef; 23] = [
     def(
         Kind::Arithmetic,
         "/obj/item/circuit_component/arithmetic",
@@ -449,6 +451,13 @@ pub static KINDS: [KindDef; 22] = [
         "Wire Bundle",
         "Utility",
         "A bundle of exposed wires that assemblies can be attached to. Ports will only show up once the circuit is inserted into a shell.",
+    ),
+    def(
+        Kind::Modpc,
+        "/obj/item/circuit_component/modpc",
+        "Modular Computer",
+        "Unassigned",
+        "Circuit for basic functions of a modular computer.",
     ),
 ];
 
@@ -677,6 +686,22 @@ impl Node {
                 vec![out("User", Ty::User), out("Signal", Ty::Signal)],
                 0,
             ),
+            // tg adds the light ports only to computers with a light; here every computer has
+            // them and a computer without a light ignores them.
+            Kind::Modpc => (
+                vec![
+                    sig("Turn On/Off"),
+                    inp("Print Text", Ty::String, NoTrigger),
+                    sig("Print"),
+                    sig("Toggle Lights"),
+                    inp("Red", Ty::Number, NoTrigger),
+                    inp("Green", Ty::Number, NoTrigger),
+                    inp("Blue", Ty::Number, NoTrigger),
+                    sig("Set Color"),
+                ],
+                vec![out("Turned On", Ty::Signal), out("Shut Down", Ty::Signal)],
+                0,
+            ),
             // Its ports come with the shell's wires ([`Circuit::set_bundle_ports`]).
             Kind::WireBundle => (Vec::new(), Vec::new(), 0),
             Kind::Controller => (
@@ -754,6 +779,21 @@ pub enum Effect {
         frequency: u16,
         code: i32,
     },
+    /// The modular computer component acts on its computer (`crate::modpc::circuit`).
+    Computer(ComputerEffect),
+}
+
+/// What the modular computer component asks of its computer.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ComputerEffect {
+    /// `toggle_power`: shut down if on, else `turn_on`.
+    TogglePower,
+    /// `print_text` of the `Print Text` value.
+    Print(String),
+    /// `toggle_flashlight`.
+    ToggleLight,
+    /// `set_flashlight_color`: each channel clamped to 0-255.
+    LightColor([u8; 3]),
 }
 
 /// What a run sees of the world.
@@ -1239,7 +1279,27 @@ impl Circuit {
                     ctx.effects.push(Effect::BundleActivate { port });
                 }
             }
-            Kind::Delay | Kind::Hear | Kind::CompactRemote | Kind::Controller | Kind::Bot => {}
+            Kind::Modpc if ctx.has_shell => {
+                let channel = |p: usize| n.value(p).num().unwrap_or(0.0).clamp(0.0, 255.0) as u8;
+                let effect = match port {
+                    Some(0) => Some(ComputerEffect::TogglePower),
+                    Some(2) => Some(ComputerEffect::Print(n.value(1).text())),
+                    Some(3) => Some(ComputerEffect::ToggleLight),
+                    Some(7) => Some(ComputerEffect::LightColor([
+                        channel(4),
+                        channel(5),
+                        channel(6),
+                    ])),
+                    _ => None,
+                };
+                ctx.effects.extend(effect.map(Effect::Computer));
+            }
+            Kind::Delay
+            | Kind::Hear
+            | Kind::CompactRemote
+            | Kind::Controller
+            | Kind::Bot
+            | Kind::Modpc => {}
         }
         Outcome { outs, stop: false }
     }
@@ -1335,6 +1395,16 @@ impl Circuit {
         for id in ids {
             self.set_output(id, index, signal(now));
         }
+    }
+
+    /// A shell's own component sends a signal on `port` (no `User` port: the modular
+    /// computer's `Turned On` / `Shut Down`).
+    pub fn shell_output(&mut self, kind: Kind, port: usize, now: f64) -> bool {
+        let Some(id) = self.nodes.iter().find(|n| n.kind == kind).map(|n| n.id) else {
+            return false;
+        };
+        self.set_output(id, port, signal(now));
+        true
     }
 
     /// A shell's own component sends its signal: the user on its `User` port, then `port`.

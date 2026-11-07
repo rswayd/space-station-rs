@@ -9,6 +9,8 @@
 use serde::{Deserialize, Serialize};
 use ss13_tgui::UiInterface;
 
+#[cfg(feature = "server")]
+pub mod circuit;
 #[cfg(feature = "client")]
 pub mod client;
 #[cfg(feature = "server")]

@@ -55,4 +55,4 @@
 Компьютер принимает интегральную схему (wiremod) и даёт ей компоненты программ.
 
 - **Код:** [`computer_circuit.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/modular_computers/computers/item/computer_circuit.dm#L2)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/modpc/circuit.rs`, `wiremod/server.rs` (`ShellKind::Computer` 50, `Console` 100): схема вставляется в КПК, ноутбук или консоль и получает компонент «Modular Computer» (`Kind::Modpc`): вкл/выкл, фонарик, печать; выходы «Turned On»/«Shut Down» при любом включении/выключении; схема без своей ячейки питается от компьютера. У КПК синтетиков оболочки нет. `// shortcut:` нет бумаги (печать ничего не печатает), цвет фонарика не сохраняется, компоненты программ (мессенджер, сигналер и др.) — в [ntos-apps.md](ntos-apps.md)

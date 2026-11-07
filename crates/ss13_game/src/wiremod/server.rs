@@ -85,6 +85,10 @@ pub enum ShellKind {
     CompactRemote,
     Controller,
     Bot,
+    /// A carried modular computer (`crate::modpc::circuit`).
+    Computer,
+    /// A stationary modular console.
+    Console,
 }
 
 impl ShellKind {
@@ -95,6 +99,10 @@ impl ShellKind {
             Some(Self::Controller)
         } else if is_under(path, BOT) {
             Some(Self::Bot)
+        } else if is_under(path, crate::modpc::circuit::COMPUTER_ITEM) {
+            Some(Self::Computer)
+        } else if is_under(path, crate::modpc::programs::CONSOLE_ROOT) {
+            Some(Self::Console)
         } else {
             None
         }
@@ -106,6 +114,7 @@ impl ShellKind {
             Self::CompactRemote => &[Kind::CompactRemote],
             Self::Controller => &[Kind::Controller],
             Self::Bot => &[Kind::Bot],
+            Self::Computer | Self::Console => &[Kind::Modpc],
         }
     }
 
@@ -113,8 +122,8 @@ impl ShellKind {
     pub fn capacity(self) -> u32 {
         match self {
             Self::CompactRemote => 25,
-            Self::Controller => 50,
-            Self::Bot => 100,
+            Self::Controller | Self::Computer => 50,
+            Self::Bot | Self::Console => 100,
         }
     }
 }
@@ -200,12 +209,17 @@ fn make_structures(add: On<Add<DmObj>>, objs: Query<&DmObj>, mut commands: Comma
     let Ok(obj) = objs.get(add.entity) else {
         return;
     };
-    if is_under(&obj.path, BOT) {
-        commands.entity(add.entity).try_insert(Shell {
-            kind: ShellKind::Bot,
-            circuit: None,
-        });
-    }
+    let kind = if is_under(&obj.path, BOT) {
+        ShellKind::Bot
+    } else if is_under(&obj.path, crate::modpc::programs::CONSOLE_ROOT) {
+        ShellKind::Console
+    } else {
+        return;
+    };
+    commands.entity(add.entity).try_insert(Shell {
+        kind,
+        circuit: None,
+    });
 }
 
 // --- Running ----------------------------------------------------------------------------
@@ -219,10 +233,19 @@ pub fn with_circuit<R>(
 ) -> Option<R> {
     let mut ic = world.get_entity_mut(e).ok()?.take::<IntegratedCircuit>()?;
     let now = now(world);
-    let charge = ic
-        .cell
-        .and_then(|c| world.get::<ItemCell>(c))
-        .map(|c| c.0.charge);
+    // A computer shell powers its circuit from its own cell (`use_energy_for_circuits`).
+    let computer_cell = ic
+        .shell
+        .filter(|_| ic.cell.is_none())
+        .filter(|&s| crate::modpc::circuit::powers_circuit(world, s));
+    let charge = match computer_cell {
+        Some(shell) => crate::modpc::circuit::circuit_charge(world, shell),
+        None => ic
+            .cell
+            .and_then(|c| world.get::<ItemCell>(c))
+            .map(|c| c.0.charge),
+    };
+    let before = charge;
     let pos = crate::explosions::turf_of(world, e);
     let mut rng = CombatRng(world.get_resource::<CombatRng>().map_or(0x5eed, |r| r.0));
     let (result, charge, effects) = {
@@ -249,6 +272,11 @@ pub fn with_circuit<R>(
         && c.0.charge != charge
     {
         c.0.charge = charge;
+    }
+    if let (Some(shell), Some(before), Some(after)) = (computer_cell, before, charge)
+        && before > after
+    {
+        crate::modpc::power::use_energy(world, shell, before - after, false);
     }
     if let Some(mut r) = world.get_resource_mut::<CombatRng>() {
         r.0 = rng.0;
@@ -305,6 +333,11 @@ fn apply(world: &mut World, circuit: Entity, shell: Option<Entity>, effect: Effe
                 from,
                 0,
             );
+        }
+        Effect::Computer(effect) => {
+            if let Some(shell) = shell {
+                crate::modpc::circuit::apply(world, shell, effect);
+            }
         }
     }
 }
@@ -453,7 +486,8 @@ pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity)
         let kind = match shell.kind {
             ShellKind::CompactRemote => Kind::CompactRemote,
             ShellKind::Controller => Kind::Controller,
-            ShellKind::Bot => return false,
+            // A computer used in hand turns on (`crate::modpc`).
+            ShellKind::Bot | ShellKind::Computer | ShellKind::Console => return false,
         };
         shell_signal(world, client, mob, item, circuit, kind);
         return true;

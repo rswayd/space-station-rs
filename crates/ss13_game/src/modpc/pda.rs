@@ -252,6 +252,7 @@ impl Plugin for ModpcServerPlugin {
         super::laptop::build(app);
         super::files::build(app);
         super::silicon::build(app);
+        super::circuit::build(app);
         app.register_ui::<NtosUi>()
             .add_observer(attach)
             .add_observer(attach_console)
