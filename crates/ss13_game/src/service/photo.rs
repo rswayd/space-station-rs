@@ -346,7 +346,7 @@ pub fn capture(
             }
         }
     }
-    drawn.sort_by(|(a, _), (b, _)| a.cmp(b));
+    drawn.sort_by_key(|(a, _)| *a);
     let mut desc = vec![area_line(width, height)];
     desc.extend(mobs.iter().map(|&mob| mob_line(world, mob)));
     Some(Picture {
@@ -1342,7 +1342,7 @@ mod tests {
         let mut out = Vec::new();
         sprites_of(&mob, Dir::East, [32, 0], 0, &mut out);
         sprites_of(&floor, Dir::South, [32, 0], 1, &mut out);
-        out.sort_by(|(a, _), (b, _)| a.cmp(b));
+        out.sort_by_key(|(a, _)| *a);
         let ids: Vec<u32> = out.iter().map(|(_, s)| s.icon_state.0).collect();
         assert_eq!(
             ids,

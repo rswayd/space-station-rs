@@ -11,6 +11,7 @@ use ss13_game::storage::StoredIn;
 use ss13_game::testing::{self, Drive, fixture_map, write_fixture};
 use ss13_mapload::{DmItem, DmObj};
 use ss13_shared::TilePos;
+use ss13_tgui::UiInterface;
 use ss13_tgui::interfaces::alert::AlertUi;
 use ss13_tgui::server::UiWindow;
 
@@ -222,6 +223,7 @@ fn a_camera_prints_a_photo_of_who_it_sees() {
     });
     s.put_in_hand(Some(camera));
     // The film lying next to the player: the 3x3 picture around it has the player in it.
+    s.run_until("the film is replicated", |s| s.net_id(0, film).is_some());
     s.click(0, film);
     s.run_until("the customisation question", |s| {
         s.window(AlertUi::NAME).is_some()
@@ -268,6 +270,7 @@ fn a_camera_prints_a_photo_of_who_it_sees() {
         .entity_mut(camera)
         .insert(TilePos::new(3, 3, 1));
     s.put_in_hand(Some(film));
+    s.run_until("the camera is replicated", |s| s.net_id(0, camera).is_some());
     s.click(0, camera);
     s.run_until("the film reloads the camera", |s| {
         s.get::<Camera>(camera).pictures_left == 10
