@@ -497,3 +497,38 @@ fn a_medbeam_heals_its_target_every_2_s_and_crossed_beams_explode() {
             .is_none()
     );
 }
+
+#[test]
+fn a_meat_hook_reels_its_victim_in_and_recharges_in_8_s() {
+    use ss13_game::guns_special::{HookGun, Hooked, MEAT_HOOK, hook_hit};
+    let mut app = server("a_meat_hook_reels_its_victim_in_and_recharges_in_8_s");
+    let firer = mob(&mut app, at(3, 6));
+    let victim = mob(&mut app, at(9, 6));
+    hook_hit(app.world_mut(), firer, victim);
+    assert!(app.world().get::<Hooked>(victim).is_some());
+    // 5 tiles a second (a step per `SSfastprocess` tick).
+    run(&mut app, 0.5);
+    let x = |app: &App| app.world().get::<TilePos>(victim).unwrap().x;
+    assert!((6..=7).contains(&x(&app)), "x = {}", x(&app));
+    run(&mut app, 1.5);
+    assert!(x(&app) <= 4, "x = {}", x(&app));
+    assert!(
+        app.world().get::<Hooked>(victim).is_none(),
+        "the pull ended"
+    );
+
+    let hook = app
+        .world_mut()
+        .spawn(ss13_mapload::DmGun {
+            path: MEAT_HOOK.into(),
+            ..default()
+        })
+        .id();
+    app.update();
+    assert_eq!(app.world().get::<HookGun>(hook).unwrap().charges, 1);
+    app.world_mut().get_mut::<HookGun>(hook).unwrap().charges = 0;
+    run(&mut app, 7.8);
+    assert_eq!(app.world().get::<HookGun>(hook).unwrap().charges, 0);
+    run(&mut app, 0.4);
+    assert_eq!(app.world().get::<HookGun>(hook).unwrap().charges, 1);
+}

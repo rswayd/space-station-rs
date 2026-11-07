@@ -13,12 +13,15 @@
 //! - **Reagent gun** (`chem_gun.dm`): a 90 u open container that synthesises a piercing dart
 //!   of 15 u from it per shot; it holds 4 darts and makes a new one every 25 s.
 //!
+//! - **Meat hook** (`meat_hook.dm`): one charge back every 8 s; the hook reels what it hits
+//!   in toward the firer's tile (`reel_in`).
 //! - **Grenade launcher** (`grenade_launcher.dm`) and **medical beamgun** (`medbeam.dm`):
-//!   see [`process_fire`] and [`process_medbeams`].
+//!   see `process_fire` and `process_medbeams`.
 //!
 //! Messages are BandaStation's translation.
 // shortcut: no low power mode (syringes embedding instead: there is no embedding yet), no
-// overlays for the loaded syringes and no examine lines; the dart flies under its own type's
+// overlays for the loaded syringes and no examine lines; an empty meat hook clicks instead of
+// "not ready yet!" and ignores `TRAIT_NOGUNS` like any gun; the dart flies under its own type's
 // name, not the syringe's.
 
 use bevy::prelude::*;
@@ -68,6 +71,14 @@ const C4: &str = "/obj/item/grenade/c4";
 pub const MAX_GRENADES: usize = 3;
 const GRENADE_LAUNCHER_FUSE: f64 = 1.5;
 pub const MEDBEAM: &str = "/obj/item/gun/medbeam";
+pub const MEAT_HOOK: &str = "/obj/item/gun/magic/hook";
+/// The meat hook's `max_charges`, `/obj/item/gun/magic` `recharge_rate` (seconds),
+/// `IMMOBILIZATION_TIMER`, the victim's `knockdown_time` and the `SSfastprocess` step period.
+pub const HOOK_MAX_CHARGES: u32 = 1;
+pub const HOOK_RECHARGE_SECS: f64 = 8.0;
+const HOOK_IMMOBILIZE_SECS: f32 = 0.25;
+const HOOK_KNOCKDOWN_SECS: f32 = 0.5;
+pub const HOOK_STEP_SECS: f64 = 0.2;
 /// `/obj/item/gun/medbeam` `max_range` (the beam's `maxdistance`), and its `process` period
 /// (`SSobj`'s 2 s `wait`: `check_delay` is shorter).
 pub const MEDBEAM_RANGE: u32 = 8;
@@ -103,6 +114,24 @@ pub struct Dart {
     pub dna: Option<DnaInjector>,
     /// `INJECT_CHECK_PENETRATE_THICK`.
     pub piercing: bool,
+    /// `/obj/projectile/hook`: it reels in what it hits.
+    pub hook: bool,
+}
+
+/// A meat hook's charge (tg `/obj/item/gun/magic` `charges`, `charge_timer`).
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq)]
+pub struct HookGun {
+    pub charges: u32,
+    pub charge_timer: f64,
+}
+
+/// Something a hook reels in (tg `/datum/hook_and_move`, `TRAIT_HOOKED`): one step toward
+/// `dest` (the firer's tile at the hit) every `SSfastprocess` tick.
+#[derive(Component, Clone, Copy, Debug, PartialEq)]
+pub struct Hooked {
+    pub firer: Entity,
+    pub dest: TilePos,
+    pub next_step: f64,
 }
 
 pub(crate) fn plugin(app: &mut App) {
@@ -120,8 +149,10 @@ pub(crate) fn plugin(app: &mut App) {
                 || (is_launcher(w, c.target) && load_grenade(w, c.client, h, c.target))
         })
     });
-    app.add_observer(add_state)
-        .add_systems(Update, (synthesise_darts, process_medbeams));
+    app.add_observer(add_state).add_systems(
+        Update,
+        (synthesise_darts, process_medbeams, recharge_hooks, reel_in),
+    );
 }
 
 fn is_syringe_gun(world: &World, gun: Entity) -> Option<String> {
@@ -175,7 +206,12 @@ fn add_state(add: On<Add<DmGun>>, guns: Query<&DmGun>, mut commands: Commands) {
         return;
     };
     let gun = add.entity;
-    if is_under(&dm.path, MEDBEAM) {
+    if is_under(&dm.path, MEAT_HOOK) {
+        commands.entity(gun).insert_if_new(HookGun {
+            charges: HOOK_MAX_CHARGES,
+            charge_timer: 0.0,
+        });
+    } else if is_under(&dm.path, MEDBEAM) {
         commands.entity(gun).insert_if_new(Medbeam::default());
     } else if is_under(&dm.path, CHEM_GUN) {
         let owner = Owner {
@@ -204,7 +240,9 @@ fn add_state(add: On<Add<DmGun>>, guns: Query<&DmGun>, mut commands: Commands) {
 /// tg `recharge_newshot` / `can_shoot`: the internal casing is chambered while there is a
 /// syringe, an injector or a synthesised dart to fire.
 pub(crate) fn before_fire(world: &mut World, gun: Entity) {
-    let ready = if world.get::<ChemGun>(gun).is_some() {
+    let ready = if let Some(hook) = world.get::<HookGun>(gun) {
+        hook.charges > 0
+    } else if world.get::<ChemGun>(gun).is_some() {
         world.get::<ChemGun>(gun).is_some_and(|c| c.left > 0)
     } else if is_syringe_gun(world, gun).is_some() {
         !loaded(world, gun).is_empty()
@@ -230,6 +268,27 @@ pub(crate) fn ready_proj(
     user: Entity,
     data: &mut ss13_mapload::ProjectileData,
 ) -> Option<Dart> {
+    if let Some(hook) = world.get::<HookGun>(gun).copied() {
+        if hook.charges == 0 {
+            return None;
+        }
+        if let Some(mut h) = world.get_mut::<HookGun>(gun) {
+            h.charges -= 1;
+        }
+        // `hook/fire`: the firer stands still while the chain flies (`IMMOBILIZATION_TIMER`).
+        crate::status_effects::apply(
+            world,
+            user,
+            crate::status_effects::Incap::Immobilize,
+            HOOK_IMMOBILIZE_SECS,
+        );
+        return Some(Dart {
+            reagents: None,
+            dna: None,
+            piercing: false,
+            hook: true,
+        });
+    }
     if let Some(chem_gun) = world.get::<ChemGun>(gun).copied() {
         if chem_gun.left == 0 {
             return None;
@@ -248,6 +307,7 @@ pub(crate) fn ready_proj(
             reagents: Some(dart),
             dna: None,
             piercing: true,
+            hook: false,
         });
     }
     let gun_path = is_syringe_gun(world, gun)?;
@@ -257,6 +317,7 @@ pub(crate) fn ready_proj(
             reagents: None,
             dna: world.get::<DnaInjector>(first).cloned(),
             piercing: false,
+            hook: false,
         }
     } else {
         let piercing = is_under(&path_of(world, first), PIERCING_SYRINGE);
@@ -272,6 +333,7 @@ pub(crate) fn ready_proj(
             reagents: holder,
             dna: None,
             piercing,
+            hook: false,
         }
     };
     world.despawn(first);
@@ -309,6 +371,10 @@ pub(crate) fn dart_hit(world: &mut World, e: Entity, p: &Projectile, target: Ent
     let Some(dart) = world.get::<Dart>(e).cloned() else {
         return;
     };
+    if dart.hook {
+        hook_hit(world, p.firer, target);
+        return;
+    }
     if world.get::<MobReagents>(target).is_none() {
         return;
     }
@@ -708,5 +774,114 @@ fn heal_tick(world: &mut World, target: Entity, at: TilePos) {
         (DamageType::Oxy, 1.0),
     ] {
         crate::medical::diseases::damage(world, target, kind, -amount);
+    }
+}
+
+/// `/obj/item/gun/magic/process`: a spent hook charges back after `recharge_rate`.
+fn recharge_hooks(time: Res<Time>, mut hooks: Query<&mut HookGun>) {
+    let dt = time.delta_secs_f64();
+    for mut hook in &mut hooks {
+        if hook.charges >= HOOK_MAX_CHARGES {
+            continue;
+        }
+        hook.charge_timer += dt;
+        if hook.charge_timer >= HOOK_RECHARGE_SECS {
+            hook.charge_timer = 0.0;
+            hook.charges += 1;
+        }
+    }
+}
+
+/// `/obj/projectile/hook/on_hit` -> `hook_and_move/begin_pulling`: an unanchored movable is
+/// snagged and reeled in toward the firer's tile; a living one falls for 0.5 s.
+pub fn hook_hit(world: &mut World, firer: Entity, target: Entity) {
+    if !crate::pull::can_be_pulled(world, firer, target)
+        || world
+            .get::<Hooked>(target)
+            .is_some_and(|h| h.firer == firer)
+    {
+        return;
+    }
+    let (Some(&dest), Some(&at)) = (world.get::<TilePos>(firer), world.get::<TilePos>(target))
+    else {
+        return;
+    };
+    let text = format!(
+        "{} подцеплен крюком {}!",
+        name_of(world, target),
+        name_of(world, firer)
+    );
+    crate::security::show(
+        world,
+        at,
+        DEFAULT_MESSAGE_RANGE,
+        ChatChannel::Combat,
+        (Span::Danger, text),
+        &[],
+    );
+    if world.get::<crate::health::Health>(target).is_some() {
+        crate::status_effects::knockdown(world, target, HOOK_KNOCKDOWN_SECS, 0.0);
+    }
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    world.entity_mut(target).insert(Hooked {
+        firer,
+        dest,
+        next_step: now,
+    });
+}
+
+/// `hook_and_move/attempt_movement`: `step_towards`, else a step along x, else along y.
+fn hook_step(world: &mut World, victim: Entity, from: TilePos, dest: TilePos) -> bool {
+    use ss13_shared::Dir;
+    if let Some(dir) = crate::pull::dir_between(from, dest)
+        && crate::pull::move_to_adjacent(world, victim, from.step(dir))
+    {
+        return true;
+    }
+    let x = match dest.x.cmp(&from.x) {
+        std::cmp::Ordering::Greater => Some(Dir::East),
+        std::cmp::Ordering::Less => Some(Dir::West),
+        std::cmp::Ordering::Equal => None,
+    };
+    let y = match dest.y.cmp(&from.y) {
+        std::cmp::Ordering::Greater => Some(Dir::North),
+        std::cmp::Ordering::Less => Some(Dir::South),
+        std::cmp::Ordering::Equal => None,
+    };
+    [x, y]
+        .into_iter()
+        .flatten()
+        .any(|d| crate::pull::step_once(world, victim, d, None).is_ok())
+}
+
+/// `hook_and_move/process` on `SSfastprocess`: a step every 0.2 s while the firer stays
+/// immobilized; it ends when a step fails or the victim is on the destination.
+// Cost: per tick, one pass over hooked things (rarely more than one).
+// shortcut: no chain beam sprite.
+fn reel_in(world: &mut World) {
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    let mut q = world.query::<(Entity, &Hooked, &TilePos)>();
+    let due: Vec<(Entity, Hooked, TilePos)> = q
+        .iter(world)
+        .filter(|(_, h, _)| now >= h.next_step)
+        .map(|(e, h, p)| (e, *h, *p))
+        .collect();
+    for (victim, hook, at) in due {
+        let firer_gone = world.get_entity(hook.firer).is_err();
+        let moved = !firer_gone && at != hook.dest && hook_step(world, victim, at, hook.dest);
+        let arrived = world.get::<TilePos>(victim) == Some(&hook.dest);
+        if !moved || arrived {
+            world.entity_mut(victim).remove::<Hooked>();
+            continue;
+        }
+        crate::status_effects::apply(
+            world,
+            hook.firer,
+            crate::status_effects::Incap::Immobilize,
+            HOOK_STEP_SECS as f32 + 0.05,
+        );
+        if let Some(mut h) = world.get_mut::<Hooked>(victim) {
+            h.next_step = now + HOOK_STEP_SECS;
+        }
     }
 }
