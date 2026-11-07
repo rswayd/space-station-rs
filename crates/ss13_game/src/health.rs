@@ -642,6 +642,7 @@ type BodyItem<'a> = (
         Option<&'a crate::modsuit::server::SuitSlowdown>,
         Option<&'a crate::vehicles::Rider>,
         Option<&'a crate::buffs::FoodBuff>,
+        Option<&'a crate::clothing::slowdown::EquipmentSlowdown>,
     ),
 );
 
@@ -670,6 +671,7 @@ fn body_state(
                 Changed<crate::modsuit::server::SuitSlowdown>,
                 Changed<crate::vehicles::Rider>,
                 Changed<crate::buffs::FoodBuff>,
+                Changed<crate::clothing::slowdown::EquipmentSlowdown>,
             )>,
         )>,
     >,
@@ -696,7 +698,7 @@ fn body_state(
         name,
         drag,
         traits,
-        (zone, fat, limits, pilot, speed, walking, tased, sanity, screwy, suit, rider, food),
+        (zone, fat, limits, pilot, speed, walking, tased, sanity, screwy, suit, rider, food, worn),
     ) in &mut mobs
     {
         let traits = traits.copied().unwrap_or_default();
@@ -724,6 +726,10 @@ fn body_state(
         // MOD parts (`/datum/movespeed_modifier/equipment_speedmod`, `crate::modsuit`).
         if let Some(suit) = suit {
             delay += suit.0 / 10.0;
+        }
+        // `/datum/movespeed_modifier/equipment_speedmod` (`crate::clothing::slowdown`).
+        if let Some(worn) = worn {
+            delay = (delay + worn.0 / 10.0).max(0.0);
         }
         // Limping and disabled legs (`crate::medical::wounds`).
         if let Some(limits) = limits {

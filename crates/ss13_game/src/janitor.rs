@@ -675,14 +675,17 @@ fn slip_on_entered(world: &mut World, mut cursor: Local<MessageCursor<Moved>>) {
         if world.get::<Health>(m.entity).is_none() {
             continue;
         }
-        let Some(slip) = turf_at(world, m.to)
+        let Some((slip, wet)) = turf_at(world, m.to)
             .and_then(|t| world.get::<WetFloor>(t))
-            .and_then(WetFloor::slip)
+            .and_then(|w| Some((w.slip()?, w.highest())))
         else {
             continue;
         };
-        // Active MOD magboots (`TRAIT_NO_SLIP_WATER`, `TRAIT_NO_SLIP_ICE`).
-        if crate::modsuit::modules::resists_slip(world, m.entity, slip.1, slip.0) {
+        // Active MOD magboots (`TRAIT_NO_SLIP_WATER`, `TRAIT_NO_SLIP_ICE`), worn
+        // `clothing_traits` (`crate::clothing::traits`).
+        if crate::modsuit::modules::resists_slip(world, m.entity, slip.1, slip.0)
+            || crate::clothing::traits::resists_wet_slip(world, m.entity, wet)
+        {
             continue;
         }
         try_slip(world, m.entity, slip);

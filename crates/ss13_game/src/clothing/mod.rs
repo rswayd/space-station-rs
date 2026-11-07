@@ -15,6 +15,8 @@ use ss13_tgui::UiInterface;
 pub mod ablative;
 #[cfg(feature = "server")]
 pub mod accessories;
+#[cfg(feature = "server")]
+pub mod chameleon;
 #[cfg(feature = "client")]
 pub mod client;
 #[cfg(feature = "server")]
@@ -32,7 +34,11 @@ pub mod reactive;
 #[cfg(feature = "server")]
 pub mod sensors;
 #[cfg(feature = "server")]
+pub mod slowdown;
+#[cfg(feature = "server")]
 pub mod toggles;
+#[cfg(feature = "server")]
+pub mod traits;
 
 #[cfg(feature = "server")]
 pub use server::*;
@@ -89,7 +95,7 @@ mod server {
     use ss13_shared::IconStateId;
 
     use super::accessories::{self, Accessories};
-    use super::{cover, damage, envirosuit, reactive, sensors, toggles};
+    use super::{chameleon, cover, damage, envirosuit, reactive, sensors, slowdown, toggles};
     use crate::click_handlers::{AddClickHandler, ClickPhase};
     use crate::human::layers::{FACEMASK_LAYER, UNIFORM_LAYER};
     use crate::inventory::Inventory;
@@ -131,6 +137,8 @@ mod server {
                     reactive::shell_interaction(w, c.client, c.mob, held, c.target)
                 })
             })
+            // Before attacks: the chameleon scanner scans a human in range.
+            .add_click_handler(ClickPhase::HeldOnTarget, 219, chameleon::scanner_click)
             .add_click_handler(ClickPhase::HeldOnTarget, 1579, |w, c| {
                 c.held.is_some_and(|held| {
                     reactive::shell_interaction(w, c.client, c.mob, held, c.target)
@@ -139,6 +147,8 @@ mod server {
             reactive::build(app);
             envirosuit::build(app);
             sensors::build(app);
+            slowdown::build(app);
+            chameleon::build(app);
             toggles::build(app);
         }
     }

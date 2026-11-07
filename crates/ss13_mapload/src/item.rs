@@ -58,6 +58,9 @@ pub struct DmItem {
     pub resistance_flags: u32,
     /// `max_integrity` (`/obj/item` 200).
     pub max_integrity: f32,
+    /// `slowdown`: deciseconds added to the wearer's step while worn (negative: faster).
+    /// Runtime state: items that toggle it (magboots, armor) change this copy.
+    pub slowdown: f32,
 }
 
 impl DmItem {
@@ -72,7 +75,7 @@ impl DmItem {
 }
 
 /// Item vars and their [`DmItem`] field names.
-const VARS: [(&str, &str); 19] = [
+const VARS: [(&str, &str); 20] = [
     ("anchored", "anchored"),
     ("interaction_flags_item", "interaction_flags_item"),
     ("slot_flags", "slot_flags"),
@@ -92,6 +95,7 @@ const VARS: [(&str, &str); 19] = [
     ("item_flags", "item_flags"),
     ("resistance_flags", "resistance_flags"),
     ("max_integrity", "max_integrity"),
+    ("slowdown", "slowdown"),
 ];
 
 /// Converter fields of `path`: its type path, and the item vars it declares. The root
@@ -187,7 +191,7 @@ fn scalar_ron(var: &str, n: f64, text: &str) -> Option<String> {
         "inhand_icon_state" | "lefthand_file" | "righthand_file" | "worn_icon"
         | "worn_icon_state" | "damtype" | "hitsound" => str_ron(text),
         "force" | "attack_speed" | "throwforce" | "throw_speed" | "throw_range"
-        | "max_integrity" => {
+        | "max_integrity" | "slowdown" => {
             format!("{:?}", n as f32)
         }
         _ => return None,
@@ -218,7 +222,7 @@ mod tests {
             "access": { "list": ["brig", "maint_tunnels"] }, "slot_flags": 256,
             "worn_icon_state": "nothing" } },
         "/obj/item/toolbox": { "parent": "/obj/item", "declared_vars": {
-            "force": 13, "damtype": "burn" } },
+            "force": 13, "damtype": "burn", "slowdown": 1.5 } },
         "/obj/item/bolted": { "parent": "/obj/item", "declared_vars": {
             "anchored": 1, "access": { "list": ["x"] } } },
         "/obj/structure": { "parent": "/obj" }
@@ -243,7 +247,7 @@ mod tests {
         );
         assert_eq!(
             ron("/obj/item/toolbox"),
-            r#"{"dm_item": (path: "/obj/item/toolbox", force: 13.0, damtype: "burn")}"#
+            r#"{"dm_item": (path: "/obj/item/toolbox", force: 13.0, damtype: "burn", slowdown: 1.5)}"#
         );
         // `access` means something else outside ID cards.
         assert_eq!(

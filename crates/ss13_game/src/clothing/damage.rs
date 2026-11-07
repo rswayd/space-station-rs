@@ -77,6 +77,8 @@ pub struct ClothingWear {
 pub enum ClothingJob {
     /// Three cloth sheets on a shredded piece of clothing.
     Repair { item: Entity },
+    /// The chameleon scanner's 0.5 s scan of `target` (`crate::clothing::chameleon`).
+    ChameleonScan { target: Entity, equip: bool },
 }
 
 /// `body_zone2cover_flags`.
@@ -459,7 +461,13 @@ pub fn item_interaction(
 /// The end of a [`ClothingJob`], revalidated: the item is still shredded and in reach, the cloth
 /// still in hand with three sheets.
 pub fn complete(world: &mut World, mob: Entity, action: &crate::tools::DoAfter, job: ClothingJob) {
-    let ClothingJob::Repair { item } = job;
+    let item = match job {
+        ClothingJob::Repair { item } => item,
+        ClothingJob::ChameleonScan { target, equip } => {
+            super::chameleon::complete_scan(world, mob, action, target, equip);
+            return;
+        }
+    };
     let Some(cloth) = action.item else {
         return;
     };

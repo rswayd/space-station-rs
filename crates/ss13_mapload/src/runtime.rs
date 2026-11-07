@@ -109,6 +109,23 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/clothing/suit/armor/reactive/weather",
     "/obj/item/clothing/suit/armor/reactive/stealth",
     "/obj/structure/table",
+    // `clothing::chameleon`: the `active_type` looks chameleon clothing starts with, and the
+    // chameleon kit of the uplink.
+    "/obj/item/clothing/glasses/meson",
+    "/obj/item/clothing/under/color/black",
+    "/obj/item/clothing/suit/armor/vest",
+    "/obj/item/clothing/gloves/color/yellow",
+    "/obj/item/clothing/head/soft/black",
+    "/obj/item/clothing/mask/gas",
+    "/obj/item/clothing/shoes/sneakers/black",
+    "/obj/item/clothing/neck/tie/black",
+    "/obj/item/storage/backpack",
+    "/obj/item/storage/belt/utility",
+    "/obj/item/radio/headset",
+    "/obj/item/gun/energy/laser",
+    "/obj/item/gun/ballistic/automatic/mini_uzi",
+    "/obj/item/storage/fancy/cigarettes/cigpack_robustgold",
+    "/obj/item/storage/box/syndie_kit/chameleon",
     // `brig::gulag`: the labor camp teleporter dresses its prisoner.
     "/obj/item/clothing/under/rank/prisoner",
     "/obj/item/clothing/shoes/sneakers/orange",

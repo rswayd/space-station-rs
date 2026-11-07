@@ -31,7 +31,7 @@ _«Броня одежды» описано в [../combat/armor.md](../combat/ar
 `slowdown` вещи прибавляется к задержке шага (тяжёлые скафандры, магбутсы во включённом состоянии, некоторые костюмы); часть вещей снижает замедление.
 
 - **Код:** [`slowdown`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items.dm#L150)
-- **Статус в ss13-rs:** ❌ нет — скорость мобов (`crates/ss13_game/src/health.rs`) не учитывает `slowdown` одежды
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/clothing/slowdown.rs`: `slowdown` (`DmItem`, меняется в рантайме) всех надетых вещей без карманов и хранилища костюма, в руках — только `SLOWS_WHILE_IN_HAND`, суммируется в `EquipmentSlowdown` (`equipment_speedmod`; в невесомости остаются только `IMMUTABLE_SLOW`), `crates/ss13_game/src/health.rs` прибавляет его к задержке шага. Нет `TRAIT_STURDY_FRAME`/`TRAIT_IGNORESLOWDOWN` (их источников нет); переключение `slowdown` магбутсами и бронёй — у самих этих вещей
 
 ### Регулируемые маски и визоры
 Маски, сварочные щитки и шлемы с визором сдвигаются вверх/вниз (`adjust_visor`), меняя `flags_inv`, `flags_cover`, защиту от вспышек и работу с баллоном.
@@ -56,19 +56,19 @@ _«Броня одежды» описано в [../combat/armor.md](../combat/ar
 Вещи выдают трейты носителю (`clothing_traits`): иммунитет к скольжению, тихие шаги, защита от прослушки и т.п.
 
 - **Код:** [`attach_clothing_traits()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/clothing.dm#L293)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/clothing/traits.rs`: `clothing_traits` (`DmClothing`) принадлежат носителю, пока вещь в одном из своих `slot_flags`-слотов (`has_trait`, правка списка в рантайме действует сразу); потребители: `TRAIT_NO_SLIP_WATER`/`_ICE`/`_ALL` на мокром полу (`crate::janitor`), `TRAIT_FAST_CUFFING` (`crate::restraints`), `TRAIT_FINGERPRINT_PASSTHROUGH` (`crate::forensics`). Эффекты остальных трейтов (HUD, зрение, тихие шаги, ...) — в группах их механик
 
 ### Хамелеон-одежда
 Агентская одежда с действием «сменить облик»: копирует вид любой вещи своего слота, полный комплект меняется разом; ЭМИ сбивает облик. Сканер хамелеона запоминает наряды людей.
 
 - **Код:** [`/datum/action/item_action/chameleon/change`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/chameleon/_chameleon_action.dm#L6), [`code/modules/clothing/chameleon`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/chameleon), [`chameleon_scanner.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/chameleon/chameleon_scanner.dm)
-- **Статус в ss13-rs:** ❌ нет — в каталоге аплинка (`crates/ss13_mapload/src/antag.rs`) хамелеон не продаётся
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/clothing/chameleon.rs`: одежда с `chameleon/change` (комбинезон, костюм, очки, перчатки, головной убор, маска, обувь, шея) и нетканевые хамелеон-вещи по типу (рюкзак, пояс и кобура, гарнитура, PDA, штамп, агентская ID, хамелеон-пистолеты, сканер) получают кнопку «Change ... Appearance» в любом слоте и в руке; список (`ListInputWindow`) — все прототипы семейства без чёрного списка и своего типа; выбор копирует имя, описание, иконку (GAGS — уже отрендеренные), worn/inhand-спрайты, `flags_inv`, `transparent_protection`, `flags_cover`; старт в `active_type`; «Select Chameleon Outfit» меняет все хамелеон-вещи по наряду профессии или сохранённому наряду разом; ЭМИ — случайный облик каждую секунду 30 с (кроме пистолета), `/broken` — навсегда; сканер хамелеона (до 5 тайлов, 0,5 с, откат 5 с) сохраняет надетое человеком в «Custom Outfit #n» (10 слотов), ПКМ сразу надевает; набор продаётся в аплинке (`crates/ss13_mapload/src/antag.rs`). Нет: сохранения текущего облика ПКМ по кнопке (у кнопок действий нет ПКМ в протоколе), капюшона для шапки при худи, голосовых фильтров маски. Другие группы: трим, должность и имя агентской ID (id_access), метка профессии PDA (modpc), копирование снарядов хамелеон-пистолета (guns)
 
 ### Пояс-полиморф
 Аномальный пояс: после сканирования существа превращает носителя в него.
 
 - **Код:** [`/obj/item/polymorph_belt`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/belts/polymorph_belt.dm#L2)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ❌ нет — в порте нет превращения в существо (`/datum/action/cooldown/spell/shapeshift`), на котором стоит пояс
 
 _«Наборы снаряжения (`/datum/outfit`)» описано в [../round/outfits.md](../round/outfits.md)._
 
@@ -76,4 +76,4 @@ _«Наборы снаряжения (`/datum/outfit`)» описано в [../r
 `/datum/greyscale_modify_menu`: окно выбора цветов GAGS-предмета (предпросмотр, слои), которым торговые автоматы перекрашивают выдаваемые `colorable` товары, а админы — любые GAGS-атомы.
 
 - **Код:** [`/datum/greyscale_modify_menu`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/greyscale_modify_menu.dm#L3), [`_vend_greyscale()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/vending/vendor/ui_data.dm#L178)
-- **Статус в ss13-rs:** ❌ нет — автоматы выдают товары в цветах по умолчанию (`colorable` всегда false)
+- **Статус в ss13-rs:** ❌ нет — автоматы выдают товары в цветах по умолчанию (`colorable` всегда false); GAGS-иконки рендерятся только конвертером в цветах типа (`crates/ss13_mapload/src/gags.rs`), перекраске нужен рендер на лету и доставка новых иконок клиенту

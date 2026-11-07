@@ -216,6 +216,7 @@
 //! | 100 | `antag::uplink::item_interaction` |
 //! | 200 | `antag::syndie_items::item_interaction` |
 //! | 251 | `weapons` whetstone (`sharpener`), shield bash (`block::bash`) |
+//! | 219 | `clothing::chameleon::scanner_click` (the chameleon scanner on a human, or a turf with one) |
 //! | 300 | `emag::interact_with_atom` (left click) |
 //! | 320 | `janitor::key_on_door` (the janitor's key on a door) |
 //! | 330 | `shuttle_console_server` (a held item on a shuttle console) |

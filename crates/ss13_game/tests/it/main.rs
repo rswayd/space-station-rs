@@ -20,6 +20,7 @@ mod cargo;
 mod changeling;
 mod chem;
 mod chem_machines;
+mod clothing_core;
 mod combat;
 mod comms;
 mod construction;

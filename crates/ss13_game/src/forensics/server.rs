@@ -295,7 +295,12 @@ pub fn add_fingerprint(world: &mut World, target: Entity, suspect: Entity, ignor
         let passthrough = !covers(world, Some(gloves), HANDS)
             || FINGERPRINT_PASSTHROUGH
                 .iter()
-                .any(|p| is_under(&path_of(world, gloves), p));
+                .any(|p| is_under(&path_of(world, gloves), p))
+            || crate::clothing::traits::has_trait(
+                world,
+                suspect,
+                crate::clothing::traits::FINGERPRINT_PASSTHROUGH,
+            );
         if !ignore_gloves && !passthrough {
             if gloves != target {
                 add_fingerprint(world, gloves, suspect, true);
