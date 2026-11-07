@@ -518,20 +518,17 @@ fn run_solution(world: &mut World, e: Entity, solution: Solution) -> Option<Puzz
             Some(PuzzleResult::SolvedModeControl)
         }
         Solution::Activate(m) => {
-            drop(gizmo);
             activate(world, e, m);
             None
         }
         Solution::Direct(m, p) => {
             gizmo.modes.get_mut(m)?.current = p;
-            drop(gizmo);
             activate(world, e, m);
             None
         }
         Solution::CycleActivate(m) => {
             let g = gizmo.modes.get_mut(m)?;
             g.current = (g.current + 1) % g.pulses.len().max(1);
-            drop(gizmo);
             activate(world, e, m);
             None
         }

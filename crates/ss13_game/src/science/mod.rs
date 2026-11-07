@@ -90,6 +90,9 @@ impl bevy::prelude::Plugin for ScienceServerPlugin {
             bitrunning::server::BitrunningServerPlugin,
             quantum_pad::QuantumPadPlugin,
             anomaly_refinery::AnomalyRefineryPlugin,
+        ));
+        // Bevy takes at most 15 plugins per tuple.
+        app.add_plugins((
             experimentor::ExperimentorPlugin,
             relics::RelicPlugin,
             gizmo::GizmoPlugin,

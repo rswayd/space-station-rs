@@ -327,7 +327,13 @@ pub mod files {
     ];
     /// Sounds the game code plays by a constant path (checked by the real-asset test
     /// `runtime_types::game_sound_literals_are_converted` in ss13_game).
-    pub const GAME_CODE: [&str; 254] = [
+    pub const GAME_CODE: [&str; 260] = [
+        "sound/music/lobby_music/title0.ogg",
+        "sound/music/lobby_music/clown.ogg",
+        "sound/announcer/notice/notice1.ogg",
+        "sound/items/weapons/punch1.ogg",
+        "sound/effects/magic/demon_dies.ogg",
+        "sound/effects/cartoon_sfx/cartoon_pop.ogg",
         "sound/effects/ping_hit.ogg",
         "sound/machines/synth/synth_no.ogg",
         "sound/items/toy_squeak/toysqueak1.ogg",

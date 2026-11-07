@@ -360,6 +360,9 @@ pub fn console_data(
     TechwebData {
         stored_research: true,
         locked: console.locked,
+        // Filled by the caller from the console's disks.
+        t_disk: None,
+        d_disk: None,
         nodes: web
             .shown_nodes()
             .map(|(node, tier)| NodeState {
@@ -527,8 +530,8 @@ fn console_acts(
                 eject_disk(world, console, tech);
             }
             ConsoleAct::UploadDisk(false) => upload_design_disk(world, console),
-            ConsoleAct::UploadDisk(true) => tech_copy(world, console, false, &mut *copy_ready),
-            ConsoleAct::LoadTech => tech_copy(world, console, true, &mut *copy_ready),
+            ConsoleAct::UploadDisk(true) => tech_copy(world, console, false, &mut copy_ready),
+            ConsoleAct::LoadTech => tech_copy(world, console, true, &mut copy_ready),
         }
     }
 }

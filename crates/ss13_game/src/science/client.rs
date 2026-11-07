@@ -269,9 +269,14 @@ fn disk_rows(st: &TechwebStatic, data: &TechwebData) -> Vec<Box<dyn SceneList>> 
             .filter_map(|&n| st.nodes.get(usize::from(n)).map(|n| n.name.clone()))
             .collect();
         let summary = format!("{} nodes: {}", names.len(), names.join(", "));
-        let upload = disk_button("upload", "Web -> Disk", LOAD_TECH, TECH_DISK);
-        let download = disk_button("download", "Disk -> Web", UPLOAD_DISK, TECH_DISK);
-        let eject = disk_button("eject", "Eject Disk", EJECT_DISK, TECH_DISK);
+        let upload = EntityScene(disk_button("upload", "Web -> Disk", LOAD_TECH, TECH_DISK));
+        let download = EntityScene(disk_button(
+            "download",
+            "Disk -> Web",
+            UPLOAD_DISK,
+            TECH_DISK,
+        ));
+        let eject = EntityScene(disk_button("eject", "Eject Disk", EJECT_DISK, TECH_DISK));
         rows.push(Box::new(EntityScene(bsn! {
             @LabeledListItem { @label: "Tech Disk" }
             Children [
@@ -287,8 +292,13 @@ fn disk_rows(st: &TechwebStatic, data: &TechwebData) -> Vec<Box<dyn SceneList>> 
     }
     if let Some(blueprints) = &data.d_disk {
         let summary = format!("{} designs: {}", blueprints.len(), blueprints.join(", "));
-        let upload = disk_button("download", "Upload All", UPLOAD_DISK, DESIGN_DISK);
-        let eject = disk_button("eject", "Eject Disk", EJECT_DISK, DESIGN_DISK);
+        let upload = EntityScene(disk_button(
+            "download",
+            "Upload All",
+            UPLOAD_DISK,
+            DESIGN_DISK,
+        ));
+        let eject = EntityScene(disk_button("eject", "Eject Disk", EJECT_DISK, DESIGN_DISK));
         rows.push(Box::new(EntityScene(bsn! {
             @LabeledListItem { @label: "Design Disk" }
             Children [
@@ -994,7 +1004,7 @@ fn experimentor_view(data: &ExperimentorData) -> impl Scene + use<> {
             .iter()
             .map(|(name, unlocked)| {
                 let text = format!("{name}: {}", if *unlocked { "unlocked" } else { "hidden" });
-                EntityScene(text_row(text))
+                text_row(text)
             })
             .collect();
         let relic = if item.is_relic { "Strange object" } else { "" }.to_owned();
@@ -1010,13 +1020,13 @@ fn experimentor_view(data: &ExperimentorData) -> impl Scene + use<> {
                 let name = Name::new(format!("experimentor: {}", e.id));
                 let icon = e.fa_icon.clone();
                 let label = e.name.clone();
-                EntityScene(bsn! {
+                bsn! {
                     @ss13_ui_kit::Button { @icon: icon, @content: label }
                     ss13_ui_kit::Button { disabled: disabled }
                     Act({EXPERIMENTOR_EXPERIMENT.to_owned()})
                     params
                     name
-                })
+                }
             })
             .collect();
         Box::new(EntityScene(bsn! {

@@ -24,13 +24,10 @@ use ss13_shared::protocol::{CHANNEL_LOBBYMUSIC, ChannelSound, SoundEvent};
 
 use crate::round::NewPlayer;
 
-/// `strings/round_start_sounds.txt` without `title1.mod`.
-pub const ROUND_START_MUSIC: [&str; 4] = [
-    "sound/music/lobby_music/title0.ogg",
-    "sound/music/lobby_music/title2.ogg",
-    "sound/music/lobby_music/title3.ogg",
-    CLOWN_MUSIC,
-];
+/// `strings/round_start_sounds.txt` without `title1.mod` (a tracker module) and without
+/// `title2`/`title3`: remixes of copyrighted themes (Robocop, Tintin) with no licence we can
+/// redistribute under (sound/music/lobby_music/license.txt).
+pub const ROUND_START_MUSIC: [&str; 2] = ["sound/music/lobby_music/title0.ogg", CLOWN_MUSIC];
 /// April Fools' `celebrate()`: `set_lobby_music(clown.ogg, override = TRUE)`.
 pub const CLOWN_MUSIC: &str = "sound/music/lobby_music/clown.ogg";
 /// `config/reboot_themes/`: `choose_round_end_song` picks one.
