@@ -123,6 +123,7 @@ mod tables;
 mod tank_storage;
 mod teg;
 mod teleporters;
+mod tendrils;
 mod traitor;
 mod traumas;
 mod ui_smoke;
