@@ -294,6 +294,7 @@ fn attach(world: &mut World, entity: Entity) {
         Faction(def.faction.clone()),
         BodyTemperature(BODYTEMP_NORMAL),
         NextMove::default(),
+        crate::combat::CombatMode(def.combat_mode),
         Name::new(name),
         // tg `simplemob_varspeed`: `speed` deciseconds per tile.
         Mover::new(def.speed.max(0.0) / 10.0),

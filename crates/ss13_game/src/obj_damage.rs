@@ -149,16 +149,21 @@ impl Plugin for ObjDamageServerPlugin {
     }
 }
 
-/// Keeps [`Pushable`] on the dense structures and machines that are not anchored and do not walk
-/// (tg `PushAM` refuses `anchored`), whoever changes the anchoring or the density; the client's
-/// movement prediction reads it.
-// shortcut: `move_resist` is not modelled, so a heavy loose object is predicted as shoved and the
-// server's refusal rolls the step back; mark it here once `move_resist` is ported.
+/// Keeps [`Pushable`] on the dense structures and machines that are not anchored, do not walk
+/// and give way to the default force (tg `PushAM` refuses `anchored` and
+/// `force < move_resist * MOVE_FORCE_PUSH_RATIO`), whoever changes the anchoring or the density;
+/// the client's movement prediction reads it.
 fn sync_pushable(
     changed: Query<Entity, Or<(Changed<Anchored>, Added<Density>, Added<Mover>)>>,
     mut lost_density: RemovedComponents<Density>,
     mut lost_mover: RemovedComponents<Mover>,
-    objs: Query<(&Anchored, Has<Density>, Has<Mover>, Has<Pushable>)>,
+    objs: Query<(
+        &Anchored,
+        Option<&DmObj>,
+        Has<Density>,
+        Has<Mover>,
+        Has<Pushable>,
+    )>,
     mut commands: Commands,
 ) {
     let touched = changed
@@ -166,10 +171,14 @@ fn sync_pushable(
         .chain(lost_density.read())
         .chain(lost_mover.read());
     for e in touched {
-        let Ok((anchored, dense, mover, pushable)) = objs.get(e) else {
+        let Ok((anchored, obj, dense, mover, pushable)) = objs.get(e) else {
             continue;
         };
-        let loose = dense && !anchored.0 && !mover;
+        let light = obj.is_none_or(|o| {
+            crate::fire::MOVE_FORCE_DEFAULT
+                >= f64::from(o.move_resist) * crate::fire::MOVE_FORCE_PUSH_RATIO
+        });
+        let loose = dense && !anchored.0 && !mover && light;
         if loose && !pushable {
             commands.entity(e).try_insert(Pushable);
         } else if !loose && pushable {
@@ -674,10 +683,25 @@ mod tests {
         app.add_systems(Update, sync_pushable);
         let e = app.world_mut().spawn((Anchored(false), Density)).id();
         let anchored = app.world_mut().spawn((Anchored(true), Density)).id();
+        let obj = |move_resist| DmObj {
+            move_resist,
+            ..default()
+        };
+        // An unbolted door (2999) is beyond the default force; a default object (1000) is not.
+        let heavy = app
+            .world_mut()
+            .spawn((Anchored(false), Density, obj(2999.0)))
+            .id();
+        let normal = app
+            .world_mut()
+            .spawn((Anchored(false), Density, obj(1000.0)))
+            .id();
         app.update();
         let pushable = |app: &App, e| app.world().get::<Pushable>(e).is_some();
         assert!(pushable(&app, e));
         assert!(!pushable(&app, anchored));
+        assert!(!pushable(&app, heavy), "too heavy");
+        assert!(pushable(&app, normal));
         app.world_mut().entity_mut(e).insert(Anchored(true));
         app.update();
         assert!(!pushable(&app, e), "wrenched down");

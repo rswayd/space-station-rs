@@ -23,6 +23,9 @@ pub const BASIC_ROOT: &str = "/mob/living/basic";
 /// (`del_on_death` as `DEL_ON_DEATH`, `minbodytemp`/`maxbodytemp` as the survivable range).
 pub const MEGAFAUNA_ROOT: &str = "/mob/living/simple_animal/hostile/megafauna";
 const COMPONENT: &str = "dm_mob";
+/// `CANPUSH` of `status_flags`; `MOVE_RESIST_DEFAULT`.
+const CANPUSH: u32 = 1 << 3;
+const MOVE_RESIST_DEFAULT: f32 = 1000.0;
 
 /// Types the game spawns by itself: the carp of the migration event (tg `carp_type`,
 /// `boss_type`), round-start vermin (tg `SSminor_mapping`), and the dead mouse a mouse leaves.
@@ -215,6 +218,16 @@ pub struct MobDef {
     pub head_icon: String,
     #[serde(default)]
     pub worn_slot_flags: u32,
+    /// `combat_mode` (hostile fauna start in it).
+    #[serde(default)]
+    pub combat_mode: bool,
+    /// `status_flags` without `CANPUSH`: nobody pushes it out of the way (the alien queen,
+    /// spiders, megafauna).
+    #[serde(default)]
+    pub unpushable: bool,
+    /// `move_resist` when not `MOVE_RESIST_DEFAULT` (1000).
+    #[serde(default)]
+    pub move_resist: Option<f32>,
 }
 
 /// What a mob says at random: a `/datum/bt_node/ai_behavior/random_speech` type's vars, or a
@@ -616,6 +629,10 @@ fn mob_def(
         worn_slot_flags: num("worn_slot_flags", 0.0) as u32,
         cable_zap_prob: num("cable_zap_prob", 0.0),
         bot: is_under(path, BOT_ROOT).then(|| bot_def(types, path)),
+        combat_mode: num("combat_mode", 0.0) != 0.0,
+        unpushable: num("status_flags", CANPUSH as f32) as u32 & CANPUSH == 0,
+        move_resist: Some(num("move_resist", MOVE_RESIST_DEFAULT))
+            .filter(|&r| r != MOVE_RESIST_DEFAULT),
     }
 }
 

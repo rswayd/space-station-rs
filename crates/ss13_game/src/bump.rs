@@ -1,26 +1,33 @@
 //! A living mob walking into something (server), after tg `living.dm` `/mob/living/Bump`,
 //! `MobBump`, `can_mobswap_with` and `PushAM`.
 //!
-//! A player's mob whose step is refused (`ss13_world::Bumped`) by:
-//! - a living mob: their skin-contact diseases go both ways (`crate::medical::diseases::touch`);
-//!   then the two swap tiles ([`can_mobswap_with`]) unless the bumper walks (move intent), either
-//!   is in combat mode (a restrained one excepted), the target is buckled or carries a buckled
-//!   mob, is a restrained mob pulled by someone else or pulls a restrained mob (with tg's
-//!   warning), or the step is half of a diagonal. The swap lets both through other mobs (tg
+//! A living mob (a player's or an NPC) whose step is refused (`ss13_world::Bumped`) by:
+//! - a living mob: fire spreads between them (`crate::fire::spread_fire`), their skin-contact
+//!   diseases go both ways (`crate::medical::diseases::touch`); then the two swap tiles
+//!   ([`can_mobswap_with`]) unless the bumper walks (move intent), either is in combat mode (a
+//!   restrained one excepted), the target is buckled or carries a buckled mob, is a restrained
+//!   mob pulled by someone else or pulls a restrained mob (with tg's warning), or the step is
+//!   half of a diagonal. The swap lets both through other mobs (tg
 //!   `PASSMOB`) and puts both back if either cannot move.
 //! - when there is no swap, the target is pushed one tile and the bumper steps after it, unless it
-//!   is push immune (a Hulk, the security, medical, peacekeeper and syndicate cyborg models), a
-//!   human or living cyborg in combat mode, or an item in its hands blocks (`block_chance * 2`).
-//! - an object: pushed the same way when unanchored and not too heavy (`move_resist`), a full tile
-//!   window never into a tile with a window. Pushing what the bumper pulls stops the pull; a
-//!   pushed mob keeps facing where it faced. No pushes on a diagonal step.
-// shortcut: no `spreadFire` (burning mobs do not light each other: the port has no fire spread
-// between mobs yet), no `move_crush`/`force_push` (no mob here has three or two times the default
-// `move_force`), and no "the faster one passes first" when both mobs press the same direction
-// (`client.intended_direction` is not tracked); add them with strong mobs and held-key state.
-// shortcut: only player mobs bump this way (NPC mobs have no tracked `combat_mode` here and stay
-// blocked), and a buckled mob is never pushed with its chair; add with NPC combat mode and
-// moving buckled furniture.
+//!   lacks `CANPUSH` (`MobDef::unpushable`: the alien queen, spiders, megafauna), is push immune
+//!   (a Hulk, the security, medical, peacekeeper and syndicate cyborg models), is a human or
+//!   living cyborg in combat mode, or an item in its hands blocks (`block_chance * 2`). A mob
+//!   buckled to something is pushed with it (tg `/mob/living/Move` -> `buckled.Move`): not when
+//!   that is anchored, too heavy or a MULEbot (`buckle_prevents_pull`).
+//! - an object: pushed the same way when unanchored and not too heavy (`move_resist` of its DM
+//!   type), a full tile window never into a tile with a window. Pushing what the bumper pulls
+//!   stops the pull; a pushed mob keeps facing where it faced. No pushes on a diagonal step, and
+//!   none by an NPC smaller than `MOB_SIZE_SMALL` (mice).
+//!
+//! NPCs follow the same rules through their DM vars: basic mobs carry [`CombatMode`] from their
+//! type's `combat_mode` (hostile fauna start in it, so they neither swap with nor are swapped by
+//! anyone, and they push peaceful mobs out of their way), switched by traders and minebots like
+//! tg's `set_combat_mode`.
+// shortcut: no `move_crush`/`force_push` and every mob pushes with `MOVE_FORCE_DEFAULT` (the
+// megafauna's `move_force` is not carried), and no "the faster one passes first" when two
+// players press the same direction (`client.intended_direction` is not tracked); add them with
+// strong mobs and held-key state.
 
 use bevy::ecs::entity::EntityHashSet;
 use bevy::ecs::message::MessageCursor;
@@ -36,6 +43,7 @@ use crate::fire::{MOVE_FORCE_DEFAULT, MOVE_FORCE_PUSH_RATIO, MOVE_RESIST_DEFAULT
 use crate::health::{Health, Stat};
 use crate::inventory::Inventory;
 use crate::medical::surgery::Buckled;
+use crate::mobs::BasicMob;
 use crate::pull::{PulledBy, Pulling, dir_between, step_once, step_passing};
 use crate::server::PlayerMob;
 use crate::status_effects::Incapacitation;
@@ -43,6 +51,8 @@ use crate::status_effects::Incapacitation;
 /// `MOVE_FORCE_EXTREMELY_STRONG` (mechs), `MOVE_FORCE_OVERPOWERING` (megafauna).
 pub const MOVE_FORCE_EXTREMELY_STRONG: f64 = MOVE_FORCE_DEFAULT * 3.0 * 3.0;
 pub const MOVE_FORCE_OVERPOWERING: f64 = MOVE_FORCE_DEFAULT * 3.0 * 10.0;
+/// `MOB_SIZE_SMALL`: an NPC below it pushes nothing.
+const MOB_SIZE_SMALL: u8 = 1;
 /// The cyborg models with `TRAIT_PUSHIMMUNE` in `model_traits`.
 const PUSH_IMMUNE_MODELS: [&str; 6] = [
     "/obj/item/robot_model/medical",
@@ -99,14 +109,15 @@ pub fn can_mobswap_with(me: SwapSide, other: SwapSide, pulled_by_me: bool) -> bo
     !(other.combat_mode && (!other.restrained || too_strong))
 }
 
-/// The first refused step of each player mob this tick (BYOND bumps only the first refusing
+/// The first refused step of each living mob this tick (BYOND bumps only the first refusing
 /// object; tg `now_pushing` keeps one bump at a time).
-// Cost: per tick, per bump of a player mob a few lookups; nothing when nobody bumps.
+// Cost: per tick, per bump of a living mob a few lookups; nothing when nobody bumps (AI movement
+// sidesteps blockers, so NPCs bump only when they walk into a tile anyway).
 fn mob_bumps(world: &mut World, mut cursor: Local<MessageCursor<Bumped>>) {
     let mut seen = EntityHashSet::default();
     let bumps: Vec<Bumped> = cursor
         .read(world.resource::<Messages<Bumped>>())
-        .filter(|b| world.get::<PlayerMob>(b.entity).is_some())
+        .filter(|b| world.get::<Health>(b.entity).is_some())
         .filter(|b| seen.insert(b.entity))
         .copied()
         .collect();
@@ -163,7 +174,8 @@ fn mob_bump(world: &mut World, mob: Entity, other: Entity, diagonal: bool) -> bo
     {
         return true;
     }
-    // shortcut: no `spreadFire` here (see the module docs).
+    // Even without a swap or a push they touched.
+    crate::fire::spread_fire(world, mob, other);
     crate::medical::diseases::touch(world, mob, other);
 
     if restrained(world, other)
@@ -202,9 +214,9 @@ fn mob_bump(world: &mut World, mob: Entity, other: Entity, diagonal: bool) -> bo
             return true;
         }
     }
-    // No swap: should we push? Not a push immune mob, a human or a living cyborg in combat mode,
-    // nor one whose held item blocks (anti-riot gear is anti-push).
-    if push_immune(world, other) {
+    // No swap: should we push? Not a mob without `CANPUSH`, a push immune mob, a human or a
+    // living cyborg in combat mode, nor one whose held item blocks (anti-riot gear is anti-push).
+    if unpushable(world, other) || push_immune(world, other) {
         return true;
     }
     let combat = world.get::<CombatMode>(other).is_some_and(|c| c.0);
@@ -253,6 +265,11 @@ fn push_am(world: &mut World, mob: Entity, target: Entity, diagonal: bool) {
     else {
         return;
     };
+    if world.get::<PlayerMob>(mob).is_none()
+        && crate::mobs::pets::mob_size(world, mob) < MOB_SIZE_SMALL
+    {
+        return;
+    }
     // On the same tile (a directional window the mob stands on): the way the mob faces.
     let Some(dir) = dir_between(from, target_at).or(world.get::<Facing>(mob).map(|f| f.0)) else {
         return;
@@ -277,7 +294,7 @@ fn push_am(world: &mut World, mob: Entity, target: Entity, diagonal: bool) {
     let facing = world
         .get::<Health>(target)
         .and(world.get::<Facing>(target).copied());
-    if step_once(world, target, dir, None).is_ok() {
+    if step_target(world, target, dir) {
         crate::forensics::server::add_fingerprint(world, target, mob, false);
         step_once(world, mob, dir, None).ok();
     }
@@ -288,34 +305,74 @@ fn push_am(world: &mut World, mob: Entity, target: Entity, diagonal: bool) {
     }
 }
 
-/// `anchored` and `force < move_resist * MOVE_FORCE_PUSH_RATIO`, and a mob buckled to something
-/// is not pushed (see the module docs).
+/// tg `/mob/living/Move` of a buckled mob: what it is buckled to moves instead when it is not
+/// anchored, carrying the mob (`handle_buckled_mob_movement`: both go back when the mob cannot
+/// follow). Anything else takes one step.
+fn step_target(world: &mut World, target: Entity, dir: ss13_shared::Dir) -> bool {
+    let Some(&Buckled(seat)) = world.get::<Buckled>(target) else {
+        return step_once(world, target, dir, None).is_ok();
+    };
+    if crate::obj_damage::anchored(world, seat) {
+        return false;
+    }
+    let Some(&seat_from) = world.get::<TilePos>(seat) else {
+        return false;
+    };
+    if step_once(world, seat, dir, Some(target)).is_err() {
+        return false;
+    }
+    // tg `CanAllowThrough`: a buckled mob passes what it is buckled to.
+    if step_passing(world, target, dir, |_, e| e == seat).is_ok() {
+        return true;
+    }
+    world.entity_mut(seat).insert(seat_from);
+    world.write_message(Moved {
+        entity: seat,
+        from: seat_from.step(dir),
+        to: seat_from,
+        dir: dir.reverse(),
+    });
+    false
+}
+
+/// `anchored` and `force < move_resist * MOVE_FORCE_PUSH_RATIO`; a mob buckled to something only
+/// when that is not too heavy and does not prevent pulls (a MULEbot's rider).
 fn pushable(world: &World, mob: Entity, target: Entity) -> bool {
-    if world
-        .get::<crate::obj_damage::Anchored>(target)
-        .is_some_and(|a| a.0)
-    {
+    if crate::obj_damage::anchored(world, target) {
         return false;
     }
-    if world.get::<Health>(target).is_some() && buckled(world, target) {
-        return false;
+    if world.get::<Health>(target).is_some() {
+        if world.get::<crate::bots::mule::Riding>(target).is_some() {
+            return false;
+        }
+        if let Some(&Buckled(seat)) = world.get::<Buckled>(target)
+            && MOVE_FORCE_DEFAULT < move_resist(world, seat) * MOVE_FORCE_PUSH_RATIO
+        {
+            return false;
+        }
     }
-    if MOVE_FORCE_DEFAULT < move_resist(world, target) * MOVE_FORCE_PUSH_RATIO {
-        return false;
-    }
-    // Items, closets, structures and machines by their `anchored`, living mobs.
+    // Items, closets, structures and machines by their `anchored`, living mobs; anything heavier
+    // than the default force (`MOVE_FORCE_PUSH_RATIO` and `MOVE_FORCE_PULL_RATIO` are both 1).
     crate::pull::can_be_pulled(world, mob, target)
 }
 
-/// tg `move_resist`: `MOVE_RESIST_DEFAULT` for everything here but mechs and megafauna.
+/// tg `move_resist`: of the object's or the basic mob's DM type, `MOVE_FORCE_EXTREMELY_STRONG`
+/// for mechs, `MOVE_RESIST_DEFAULT` for everything else (humans, cyborgs, items).
 pub fn move_resist(world: &World, e: Entity) -> f64 {
-    if world.get::<crate::mobs::megafauna::Megafauna>(e).is_some() {
-        MOVE_FORCE_OVERPOWERING
-    } else if world.get::<crate::mecha::Mech>(e).is_some() {
+    if world.get::<crate::mecha::Mech>(e).is_some() {
         MOVE_FORCE_EXTREMELY_STRONG
+    } else if let Some(obj) = world.get::<DmObj>(e) {
+        f64::from(obj.move_resist)
+    } else if let Some(basic) = world.get::<BasicMob>(e) {
+        basic.def.move_resist.map_or(MOVE_RESIST_DEFAULT, f64::from)
     } else {
         MOVE_RESIST_DEFAULT
     }
+}
+
+/// tg `status_flags` without `CANPUSH` (basic mobs; every other mob here has it).
+fn unpushable(world: &World, mob: Entity) -> bool {
+    world.get::<BasicMob>(mob).is_some_and(|b| b.def.unpushable)
 }
 
 fn swap_side(world: &World, mob: Entity) -> SwapSide {
@@ -475,5 +532,202 @@ mod tests {
             ..heavy
         };
         assert!(!can_mobswap_with(side(), heavy_cuffed, true));
+    }
+
+    fn world() -> World {
+        let mut app = App::new();
+        app.add_plugins(ss13_world::WorldPlugin);
+        app.init_resource::<Time>();
+        app.insert_resource(CombatRng(7));
+        app.add_message::<ss13_net::chat::server::SendChat>();
+        app.world_mut()
+            .resource_mut::<SpatialIndex>()
+            .create_level(1, 20, 20)
+            .unwrap();
+        std::mem::take(app.world_mut())
+    }
+
+    fn mob(world: &mut World, x: i32, combat: bool) -> Entity {
+        world
+            .spawn((
+                Health::default(),
+                Stat::Conscious,
+                CombatMode(combat),
+                ss13_world::Density,
+                TilePos::new(x, 5, 1),
+            ))
+            .id()
+    }
+
+    /// A basic mob of a type with these DM vars, its `combat_mode` on it like `crate::mobs`.
+    fn npc(world: &mut World, x: i32, def: ss13_mapload::mobs::MobDef) -> Entity {
+        let e = mob(world, x, def.combat_mode);
+        world.entity_mut(e).insert(BasicMob {
+            def: std::sync::Arc::new(def),
+            icon_living: String::new(),
+            icon_dead: String::new(),
+            mouth: false,
+        });
+        e
+    }
+
+    fn hostile() -> ss13_mapload::mobs::MobDef {
+        ss13_mapload::mobs::MobDef {
+            combat_mode: true,
+            mob_size: 2,
+            ..default()
+        }
+    }
+
+    fn bump(world: &mut World, entity: Entity, obstacle: Entity) {
+        living_bump(
+            world,
+            Bumped {
+                entity,
+                obstacle,
+                diagonal: false,
+            },
+        );
+    }
+
+    fn x(world: &World, e: Entity) -> i32 {
+        world.get::<TilePos>(e).unwrap().x
+    }
+
+    #[test]
+    fn npcs_swap_and_push_by_their_dm_vars() {
+        let mut w = world();
+        // Two peaceful NPCs swap (tg `can_mobswap_with`: no client is no obstacle).
+        let (pig, cow) = (npc(&mut w, 5, default()), npc(&mut w, 6, default()));
+        bump(&mut w, pig, cow);
+        assert_eq!((x(&w, pig), x(&w, cow)), (6, 5), "swapped");
+
+        // A hostile NPC (in combat mode) does not swap with a peaceful human: it pushes him and
+        // steps after him.
+        let mut w = world();
+        let (carp, human) = (npc(&mut w, 5, hostile()), mob(&mut w, 6, false));
+        w.entity_mut(human)
+            .insert(crate::human::AppearancePrefs::random(1).body());
+        bump(&mut w, carp, human);
+        assert_eq!((x(&w, carp), x(&w, human)), (6, 7), "pushed");
+        // A human in combat mode holds.
+        w.entity_mut(human).insert(CombatMode(true));
+        bump(&mut w, carp, human);
+        assert_eq!((x(&w, carp), x(&w, human)), (6, 7), "a fighter holds");
+
+        // The human walks into the hostile NPC: no swap, it is pushed (`CANPUSH`)...
+        let mut w = world();
+        let (human, carp) = (mob(&mut w, 5, false), npc(&mut w, 6, hostile()));
+        bump(&mut w, human, carp);
+        assert_eq!((x(&w, human), x(&w, carp)), (6, 7), "the carp is shoved");
+        // ...unless it has no `CANPUSH` (a spider).
+        let spider = npc(
+            &mut w,
+            8,
+            ss13_mapload::mobs::MobDef {
+                unpushable: true,
+                ..hostile()
+            },
+        );
+        w.entity_mut(carp).despawn();
+        w.entity_mut(human).insert(TilePos::new(7, 5, 1));
+        bump(&mut w, human, spider);
+        assert_eq!((x(&w, human), x(&w, spider)), (7, 8), "the spider holds");
+
+        // A mouse (`MOB_SIZE_TINY`, no client) pushes nothing, but swaps with the peaceful.
+        let mut w = world();
+        let tiny = ss13_mapload::mobs::MobDef {
+            mob_size: 0,
+            ..default()
+        };
+        let (mouse, human) = (npc(&mut w, 5, tiny), mob(&mut w, 6, true));
+        bump(&mut w, mouse, human);
+        assert_eq!((x(&w, mouse), x(&w, human)), (5, 6), "no swap, no push");
+        w.entity_mut(human).insert(CombatMode(false));
+        bump(&mut w, mouse, human);
+        assert_eq!((x(&w, mouse), x(&w, human)), (6, 5), "swapped");
+    }
+
+    #[test]
+    fn a_burning_mob_lights_whoever_it_bumps() {
+        let mut w = world();
+        let (burning, human) = (npc(&mut w, 5, hostile()), mob(&mut w, 6, true));
+        crate::fire::adjust_fire_stacks(&mut w, burning, 10.0);
+        crate::fire::ignite_mob(&mut w, burning);
+        bump(&mut w, burning, human);
+        assert!(crate::fire::on_fire(&w, human));
+        let stacks = |w: &World, e| w.get::<crate::fire::FireStacks>(e).unwrap().stacks;
+        assert_eq!((stacks(&w, burning), stacks(&w, human)), (5.0, 5.0));
+    }
+
+    #[test]
+    fn a_buckled_mob_is_pushed_with_its_seat() {
+        let mut w = world();
+        let pusher = mob(&mut w, 5, true);
+        let sitter = mob(&mut w, 6, false);
+        let seat = |w: &mut World, anchored: bool, move_resist: f32| {
+            w.spawn((
+                crate::obj_damage::Anchored(anchored),
+                DmObj {
+                    move_resist,
+                    ..default()
+                },
+                TilePos::new(6, 5, 1),
+            ))
+            .id()
+        };
+        // Bolted down: neither moves.
+        let chair = seat(&mut w, true, 1000.0);
+        w.entity_mut(sitter).insert(Buckled(chair));
+        bump(&mut w, pusher, sitter);
+        assert_eq!((x(&w, sitter), x(&w, chair), x(&w, pusher)), (6, 6, 5));
+        // Too heavy (`move_resist` 2999): neither moves.
+        w.entity_mut(chair).despawn();
+        let heavy = seat(&mut w, false, 2999.0);
+        w.entity_mut(sitter).insert(Buckled(heavy));
+        bump(&mut w, pusher, sitter);
+        assert_eq!((x(&w, sitter), x(&w, heavy), x(&w, pusher)), (6, 6, 5));
+        // A loose roller bed: it rolls on with its patient, the pusher steps after.
+        w.entity_mut(heavy).despawn();
+        let bed = seat(&mut w, false, 1000.0);
+        w.entity_mut(sitter).insert(Buckled(bed));
+        bump(&mut w, pusher, sitter);
+        assert_eq!((x(&w, sitter), x(&w, bed), x(&w, pusher)), (7, 7, 6));
+        assert_eq!(w.get::<Buckled>(sitter), Some(&Buckled(bed)));
+        // A MULEbot's rider (`buckle_prevents_pull`) is not pushed.
+        w.entity_mut(sitter)
+            .remove::<Buckled>()
+            .insert(crate::bots::mule::Riding(pusher));
+        bump(&mut w, pusher, sitter);
+        assert_eq!((x(&w, sitter), x(&w, pusher)), (7, 6));
+    }
+
+    #[test]
+    fn heavy_objects_are_not_pushed() {
+        let mut w = world();
+        let human = mob(&mut w, 5, true);
+        let crate_of = |w: &mut World, x: i32, move_resist: f32| {
+            w.spawn((
+                crate::obj_damage::Anchored(false),
+                DmObj {
+                    move_resist,
+                    ..default()
+                },
+                ss13_world::Density,
+                TilePos::new(x, 5, 1),
+            ))
+            .id()
+        };
+        let door = crate_of(&mut w, 6, 2999.0);
+        bump(&mut w, human, door);
+        assert_eq!(
+            (x(&w, human), x(&w, door)),
+            (5, 6),
+            "an unbolted door holds"
+        );
+        w.entity_mut(door).despawn();
+        let closet = crate_of(&mut w, 6, 1000.0);
+        bump(&mut w, human, closet);
+        assert_eq!((x(&w, human), x(&w, closet)), (6, 7), "a closet is shoved");
     }
 }

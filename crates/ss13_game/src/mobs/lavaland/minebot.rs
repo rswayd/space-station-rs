@@ -27,6 +27,7 @@ use ss13_shared::TilePos;
 use ss13_world::SpatialIndex;
 
 use super::abilities::{alive, now};
+use crate::combat::CombatMode;
 use crate::health::{DamageType, Health, Stat};
 
 pub const MINEBOT: &str = "/mob/living/basic/mining_drone";
@@ -43,10 +44,10 @@ const WELD_SOUND: &str = "sound/items/tools/welder.ogg";
 /// How far a minebot looks for ore and drones (`oview` of its controller's finders).
 pub const SEARCH_RANGE: u32 = 7;
 
-/// A minebot: `combat_mode`, the ore it holds (path, amount), a repair under way.
+/// A minebot: the ore it holds (path, amount), a repair under way. Its `combat_mode` is its
+/// [`CombatMode`].
 #[derive(Component, Clone, Debug, Default)]
 pub struct Minebot {
-    pub combat: bool,
     pub ore: Vec<(String, u32)>,
     /// `do_after` on a NODE drone: done at this time.
     pub repair: Option<(f64, Entity)>,
@@ -77,13 +78,8 @@ pub fn click_alt(world: &mut World, user: Entity, bot: Entity) -> bool {
     if user_combat {
         return true;
     }
-    let combat = match world.get_mut::<Minebot>(bot) {
-        Some(mut b) => {
-            b.combat = !b.combat;
-            b.combat
-        }
-        None => return false,
-    };
+    let combat = !in_combat(world, bot);
+    world.entity_mut(bot).insert(CombatMode(combat));
     let text = if combat {
         "Теперь атакует фауну."
     } else {
@@ -101,9 +97,10 @@ pub fn click_alt(world: &mut World, user: Entity, bot: Entity) -> bool {
 /// `mining_drone/welder_act`: 15 brute mended, not in either's combat mode, not at full health.
 /// False when the click goes on (not a welder, not a minebot, the user in combat mode).
 pub fn weld_repair(world: &mut World, user: Entity, welder: Entity, bot: Entity) -> bool {
-    let Some(combat) = world.get::<Minebot>(bot).map(|b| b.combat) else {
+    if world.get::<Minebot>(bot).is_none() {
         return false;
-    };
+    }
+    let combat = in_combat(world, bot);
     let user_combat = world
         .get::<crate::combat::CombatMode>(user)
         .is_some_and(|c| c.0);
@@ -133,6 +130,10 @@ pub fn weld_repair(world: &mut World, user: Entity, welder: Entity, bot: Entity)
     };
     super::abilities::tell(world, user, ss13_shared::chat::Span::Notice, text);
     true
+}
+
+fn in_combat(world: &World, bot: Entity) -> bool {
+    world.get::<CombatMode>(bot).is_some_and(|c| c.0)
 }
 
 pub(super) fn attach(world: &mut World, mob: Entity, path: &str) {
@@ -190,7 +191,7 @@ fn loose_ore(world: &mut World) -> Vec<(Entity, TilePos)> {
 
 /// `find_and_set` of ore for a minebot collecting: the nearest loose ore it sees.
 pub fn ore_to_collect(world: &mut World, bot: Entity, range: u32) -> Option<(Entity, TilePos)> {
-    if world.get::<Minebot>(bot).is_none_or(|b| b.combat) {
+    if world.get::<Minebot>(bot).is_none() || in_combat(world, bot) {
         return None;
     }
     let from = *world.get::<TilePos>(bot)?;
@@ -207,7 +208,7 @@ pub fn ore_to_collect(world: &mut World, bot: Entity, range: u32) -> Option<(Ent
 /// `mining_drone/UnarmedAttack` on ore at `at`, out of combat mode, next to it: every ore stack
 /// of that tile goes into the bot. The amount taken.
 pub fn collect_ore(world: &mut World, bot: Entity, at: TilePos) -> u32 {
-    if world.get::<Minebot>(bot).is_none_or(|b| b.combat) || !alive(world, bot) {
+    if world.get::<Minebot>(bot).is_none() || in_combat(world, bot) || !alive(world, bot) {
         return 0;
     }
     let Some(&from) = world.get::<TilePos>(bot) else {
@@ -355,9 +356,9 @@ mod tests {
         assert!(!weld_repair(&mut world, user, rock, user));
         // Alt-click flips its mode, back and forth.
         assert!(click_alt(&mut world, user, bot));
-        assert!(world.get::<Minebot>(bot).unwrap().combat);
+        assert!(in_combat(&world, bot));
         assert!(click_alt(&mut world, user, bot));
-        assert!(!world.get::<Minebot>(bot).unwrap().combat);
+        assert!(!in_combat(&world, bot));
         assert!(!click_alt(&mut world, user, user));
     }
 
@@ -376,10 +377,10 @@ mod tests {
             at,
             crate::tools::Stack { amount: 5 },
         ));
-        world.get_mut::<Minebot>(bot).unwrap().combat = true;
+        world.entity_mut(bot).insert(CombatMode(true));
         assert_eq!(ore_to_collect(&mut world, bot, SEARCH_RANGE), None);
         assert_eq!(collect_ore(&mut world, bot, at), 0);
-        world.get_mut::<Minebot>(bot).unwrap().combat = false;
+        world.entity_mut(bot).insert(CombatMode(false));
         assert!(ore_to_collect(&mut world, bot, SEARCH_RANGE).is_some());
         assert_eq!(collect_ore(&mut world, bot, at), 5);
         assert_eq!(

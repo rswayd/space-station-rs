@@ -490,6 +490,40 @@ pub fn examine_text(world: &World, mob: Entity) -> Option<&'static str> {
     })
 }
 
+/// tg `spreadFire` (a living mob bumping another): two burning mobs share their stacks evenly; a
+/// burning one gives half of its stacks to the other and lights it. Silicons and megafauna
+/// (`TRAIT_NOFIRE_SPREAD`) neither give nor take.
+pub fn spread_fire(world: &mut World, mob: Entity, to: Entity) {
+    let no_spread = |e: Entity| {
+        world.get::<crate::silicon::Silicon>(e).is_some()
+            || world.get::<crate::mobs::megafauna::Megafauna>(e).is_some()
+    };
+    if world.get::<Health>(to).is_none() || no_spread(mob) || no_spread(to) {
+        return;
+    }
+    let stacks = |w: &World, e: Entity| w.get::<FireStacks>(e).map_or(0.0, |f| f.stacks);
+    let (mine, theirs) = (stacks(world, mob), stacks(world, to));
+    match (on_fire(world, mob), on_fire(world, to)) {
+        (true, true) => {
+            let split = (mine + theirs) / 2.0;
+            adjust_fire_stacks(world, mob, split - mine);
+            adjust_fire_stacks(world, to, split - theirs);
+        }
+        (true, false) => give_half(world, mob, to),
+        (false, true) => give_half(world, to, mob),
+        (false, false) => {}
+    }
+}
+
+/// The burning `from` keeps half of its stacks and gives the other half to `to`, who ignites.
+fn give_half(world: &mut World, from: Entity, to: Entity) {
+    let stacks = world.get::<FireStacks>(from).map_or(0.0, |f| f.stacks);
+    adjust_fire_stacks(world, from, -stacks / 2.0);
+    let left = world.get::<FireStacks>(from).map_or(0.0, |f| f.stacks);
+    adjust_fire_stacks(world, to, left);
+    ignite_mob(world, to);
+}
+
 /// tg `ignite_mob` -> `ignite()`: with stacks and not burning yet.
 pub fn ignite_mob(world: &mut World, mob: Entity) -> bool {
     let Some(fire) = world.get::<FireStacks>(mob) else {
@@ -1067,6 +1101,37 @@ mod tests {
         assert!(!experience_pressure_difference(
             &mut world, 25.0, 25.0, -30.0
         ));
+    }
+
+    #[test]
+    fn bumping_spreads_fire_like_tg() {
+        let mut world = World::new();
+        world.init_resource::<Time>();
+        world.init_resource::<Messages<SendChat>>();
+        let stacks = |w: &World, e: Entity| w.get::<FireStacks>(e).map_or(0.0, |f| f.stacks);
+        // One burning with 8: it keeps 4 and the other takes 4 and lights.
+        let burning = world.spawn(Health::default()).id();
+        let dry = world.spawn(Health::default()).id();
+        adjust_fire_stacks(&mut world, burning, 8.0);
+        ignite_mob(&mut world, burning);
+        spread_fire(&mut world, dry, burning);
+        assert_eq!((stacks(&world, burning), stacks(&world, dry)), (4.0, 4.0));
+        assert!(on_fire(&world, dry));
+        // Both burning: 4 and 10 become 7 each.
+        adjust_fire_stacks(&mut world, dry, 6.0);
+        spread_fire(&mut world, burning, dry);
+        assert_eq!((stacks(&world, burning), stacks(&world, dry)), (7.0, 7.0));
+        // Neither burning: nothing; a silicon takes no fire.
+        let calm = world.spawn(Health::default()).id();
+        let other = world.spawn(Health::default()).id();
+        spread_fire(&mut world, calm, other);
+        assert!(world.get::<FireStacks>(other).is_none());
+        let borg = world
+            .spawn((Health::default(), crate::silicon::Silicon))
+            .id();
+        spread_fire(&mut world, burning, borg);
+        assert!(world.get::<FireStacks>(borg).is_none());
+        assert_eq!(stacks(&world, burning), 7.0);
     }
 
     #[test]
