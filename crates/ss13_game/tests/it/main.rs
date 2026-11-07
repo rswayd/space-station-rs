@@ -109,6 +109,7 @@ mod silicon;
 mod sound;
 mod spacemove;
 mod species;
+mod stack_recipes;
 mod stock_parts;
 mod storage;
 mod succumb;

@@ -1082,6 +1082,8 @@ pub fn runtime_types() -> BTreeSet<&'static str> {
     out.extend(mobs::MEGAFAUNA_RUNTIME_TYPES);
     // Catches and the prefilled aquarium's fish (`ss13_game::fishing`).
     out.extend(crate::fishing::runtime_types());
+    // What the stack crafting menus make (`ss13_game::stack_recipes`).
+    out.extend(crate::stack_recipe_types::STACK_RECIPE_RESULTS);
     // Log planks and plant mobs (`ss13_game::botany`).
     out.extend(crate::plants::BOTANY_RUNTIME_TYPES);
     // A canister's `relabel` copies another canister type's name and look.

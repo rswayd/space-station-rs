@@ -83,6 +83,7 @@
 //! | 3221 | `weapons::two_handed::attack_self` (wield, let go) |
 //! | 3245 | `mining::crusher::attack_self` (the kinetic crusher wields) |
 //! | 3227 | `misc_items::charter::attack_self` (the station name question) |
+//! | 3239 | `stack_recipes::attack_self` (a stack's crafting menu) |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):
 //!

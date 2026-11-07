@@ -224,7 +224,7 @@ fn icon_state(world: &mut World, e: Entity, state: &str) {
 }
 
 /// `setDir`: the facing, the prototype dir and a border object's blocked edge.
-fn face(world: &mut World, e: Entity, dir: Dir) {
+pub(crate) fn face(world: &mut World, e: Entity, dir: Dir) {
     world.entity_mut(e).insert(Facing(dir));
     if let Some(mut atom) = world.get_mut::<DmAtom>(e) {
         atom.dir = dir as u8;

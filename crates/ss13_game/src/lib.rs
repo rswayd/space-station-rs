@@ -485,6 +485,8 @@ pub mod spells;
 #[cfg(feature = "server")]
 pub mod ssd;
 #[cfg(feature = "server")]
+pub mod stack_recipes;
+#[cfg(feature = "server")]
 pub mod station_goals;
 #[cfg(feature = "server")]
 pub mod station_traits;

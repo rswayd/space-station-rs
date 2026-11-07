@@ -64,6 +64,7 @@ pub mod smartfridge;
 pub mod smooth;
 pub mod sound;
 pub mod spawner;
+pub mod stack_recipe_types;
 pub mod triggers;
 pub mod turf_damage;
 pub mod undertile;

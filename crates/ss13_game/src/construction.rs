@@ -331,6 +331,8 @@ pub enum Job {
     Affliction(crate::afflictions::AfflictionJob),
     /// Shaking ants off, taking a strand off ([`crate::curses`]).
     Curse(crate::curses::CurseJob),
+    /// A stack crafting menu's recipe ([`crate::stack_recipes`]).
+    StackRecipe(crate::stack_recipes::StackJob),
 }
 
 /// A turf's baseturf stack, bottom first (tg `baseturfs`). Absent: assembled from the type's
@@ -352,6 +354,7 @@ impl Plugin for ConstructionServerPlugin {
     fn build(&self, app: &mut App) {
         // Click chain hooks (`crate::click_handlers`).
         use crate::click_handlers::{AddClickHandler, ClickPhase};
+        app.add_plugins(crate::stack_recipes::StackRecipesPlugin);
         // tg `/obj/item/stack/attack_hand` from the other hand: one unit into the empty active
         // hand.
         app.add_click_handler(ClickPhase::OtherHand, 1700, |w, c| {
@@ -1358,6 +1361,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         Job::Crayon(job) => crate::crayons::complete(world, mob, action, job.clone()),
         &Job::Affliction(job) => crate::afflictions::complete(world, mob, action, job),
         &Job::Curse(job) => crate::curses::complete(world, mob, action, job),
+        &Job::StackRecipe(job) => crate::stack_recipes::complete(world, client, mob, job),
         &Job::QuantumPad(job) => crate::science::quantum_pad::complete(world, client, target, job),
         &Job::EngMachine(job) => crate::eng_machines::complete(world, client, target, job),
         &Job::Flora(job) => crate::flora::complete(world, mob, action, job),
