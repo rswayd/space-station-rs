@@ -1048,13 +1048,50 @@ fn answer(world: &mut World, client: Entity, request: AdminRequest) -> AnswerRes
             match act {
                 MindAct::RemoveAntag(role) => {
                     if !ss13_game::mind::remove_antag(world, body, role) {
-                        return Err(format!(
-                            "{target_key} не {role:?} (снимаются предатель и брат)."
-                        ));
+                        return Err(format!("{target_key} не {role:?}."));
                     }
                     admin_action(
                         world,
                         &format!("{key} has removed {role:?} from {target_key}."),
+                    );
+                }
+                MindAct::SetJob(title) => {
+                    let title = sanitize_text(&title, MAX_SHORT_TEXT);
+                    if !ss13_game::mind::set_job(world, body, &title) {
+                        return Err(format!("Нет должности «{title}»."));
+                    }
+                    admin_action(
+                        world,
+                        &format!("{key} set the job of {target_key} to {title}."),
+                    );
+                }
+                MindAct::AddObjective(text) => {
+                    let text = sanitize_text(&text, MAX_MESSAGE_LEN);
+                    if text.is_empty() {
+                        return Err("Пустая цель.".into());
+                    }
+                    if !ss13_game::mind::add_objective(world, body, text.clone()) {
+                        return Err(format!("{target_key} не предатель и не брат."));
+                    }
+                    admin_action(
+                        world,
+                        &format!("{key} gave {target_key} an objective: {text}"),
+                    );
+                }
+                MindAct::EditObjective { index, text } => {
+                    let text = sanitize_text(&text, MAX_MESSAGE_LEN);
+                    if text.is_empty() {
+                        return Err("Пустая цель.".into());
+                    }
+                    if !ss13_game::mind::edit_objective(world, body, index as usize, text.clone()) {
+                        return Err("Нет такой цели.".into());
+                    }
+                    admin_action(
+                        world,
+                        &format!(
+                            "{key} edited objective #{} of {target_key}: {text}",
+                            index + 1
+                        ),
                     );
                 }
                 MindAct::RemoveObjective(index) => {

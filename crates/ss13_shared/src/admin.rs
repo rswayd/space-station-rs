@@ -236,10 +236,16 @@ pub enum AntagRole {
 }
 
 /// A mind panel change (tg `/datum/mind/Topic` hrefs).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MindAct {
-    /// `remove_antag`: only the traitor and the blood brother.
+    /// `remove_antag`.
     RemoveAntag(AntagRole),
+    /// `set_assigned_role`: the job by its title.
+    SetJob(String),
+    /// `obj_add`: a custom objective for the traitor, else the blood brother.
+    AddObjective(String),
+    /// `obj_edit`: the explanation of the objective at the index of [`MindPanel::objectives`].
+    EditObjective { index: u32, text: String },
     /// `obj_delete`: the objective by its index in [`MindPanel::objectives`].
     RemoveObjective(u32),
     /// `obj_announce`.

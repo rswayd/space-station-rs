@@ -658,12 +658,14 @@ fn players_tab(ui: &mut egui::Ui, state: &mut AdminUi, out: &mut Vec<AdminReques
     mind_panel(ui, state, out);
 }
 
-/// tg `traitor_panel`: the mind of the player asked with "Mind", and its `Topic` buttons.
+/// tg `traitor_panel`: the mind of the player asked with "Mind", and its `Topic` buttons. The
+/// job title and objective texts come from the players tab's text field.
 fn mind_panel(ui: &mut egui::Ui, state: &AdminUi, out: &mut Vec<AdminRequest>) {
     let Some(panel) = &state.mind else {
         return;
     };
     let can = state.can(R_ADMIN);
+    let text = state.player_text.trim().to_owned();
     let act = |act| AdminRequest::MindAct {
         ckey: panel.ckey.clone(),
         act,
@@ -673,13 +675,21 @@ fn mind_panel(ui: &mut egui::Ui, state: &AdminUi, out: &mut Vec<AdminRequest>) {
     for line in &panel.lines {
         ui.label(line);
     }
-    ui.horizontal(|ui| {
-        for (role, name, label) in [
-            (AntagRole::Traitor, "Traitor", "Снять предателя"),
-            (AntagRole::Brother, "Blood Brother", "Снять брата"),
+    ui.horizontal_wrapped(|ui| {
+        for (role, name) in [
+            (AntagRole::Traitor, "Traitor"),
+            (AntagRole::Brother, "Blood Brother"),
+            (AntagRole::Changeling, "Changeling"),
+            (AntagRole::Vampire, "Vampire"),
+            (AntagRole::Cultist, "Cultist"),
+            (AntagRole::Heretic, "Heretic"),
+            (AntagRole::HeadRev, "Head Revolutionary"),
+            (AntagRole::Revolutionary, "Revolutionary"),
         ] {
             if panel.antag.iter().any(|a| a == name)
-                && ui.add_enabled(can, egui::Button::new(label)).clicked()
+                && ui
+                    .add_enabled(can, egui::Button::new(format!("Снять: {name}")))
+                    .clicked()
             {
                 out.push(act(MindAct::RemoveAntag(role)));
             }
@@ -690,10 +700,35 @@ fn mind_panel(ui: &mut egui::Ui, state: &AdminUi, out: &mut Vec<AdminRequest>) {
         {
             out.push(act(MindAct::AnnounceObjectives));
         }
+        let typed = can && !text.is_empty();
+        if ui
+            .add_enabled(typed, egui::Button::new("Должность = текст"))
+            .clicked()
+        {
+            out.push(act(MindAct::SetJob(text.clone())));
+        }
+        if ui
+            .add_enabled(typed, egui::Button::new("Добавить цель (текст)"))
+            .clicked()
+        {
+            out.push(act(MindAct::AddObjective(text.clone())));
+        }
     });
     for (i, objective) in panel.objectives.iter().enumerate() {
         ui.horizontal(|ui| {
             ui.label(format!("#{} {objective}", i + 1));
+            if ui
+                .add_enabled(
+                    can && !text.is_empty(),
+                    egui::Button::new("Заменить текстом"),
+                )
+                .clicked()
+            {
+                out.push(act(MindAct::EditObjective {
+                    index: i as u32,
+                    text: text.clone(),
+                }));
+            }
             if ui.add_enabled(can, egui::Button::new("Удалить")).clicked() {
                 out.push(act(MindAct::RemoveObjective(i as u32)));
             }
