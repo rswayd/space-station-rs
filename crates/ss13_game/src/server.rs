@@ -223,6 +223,7 @@ impl Plugin for GameServerPlugin {
             crate::furniture::FurniturePlugin,
             crate::devices::DevicesPlugin,
             crate::plumbing::PlumbingPlugin,
+            crate::plumbing_net::PlumbingNetPlugin,
             crate::decor::DecorPlugin,
             crate::tank_storage::TankStoragePlugin,
             crate::displaycase::DisplayCasePlugin,

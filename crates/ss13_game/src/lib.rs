@@ -429,6 +429,8 @@ pub mod pixel_shift;
 #[cfg(feature = "server")]
 pub mod plumbing;
 #[cfg(feature = "server")]
+pub mod plumbing_net;
+#[cfg(feature = "server")]
 pub mod point;
 #[cfg(feature = "server")]
 pub mod power;

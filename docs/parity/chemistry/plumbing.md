@@ -1,24 +1,24 @@
 # Сантехника (plumbing)
-Автоматизация химии трубами-дуктами: машины, перекачивающие и обрабатывающие реагенты. В ss13-rs сантехники нет.
+Автоматизация химии трубами-дуктами: машины, перекачивающие и обрабатывающие реагенты. В ss13-rs: `crates/ss13_game/src/plumbing_net.rs` (дукты, сети, машины).
 
 ### Дукты и сети
 Дукты (стопки) прокладываются по слоям и соединяют машины; машины имеют входы/выходы, цветовые слои, поворачиваются; строятся RPLD.
 
 - **Код:** [`/obj/machinery/duct`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/plumbing/ducts.dm#L1), [`/obj/item/stack/ducts`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/plumbing/ducts.dm#L264), [`/obj/machinery/plumbing`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/plumbing/plumbers/_plumb_machinery.dm#L6), [`/datum/reagents/plumbing`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/plumbing/plumbers/_plumb_reagents.dm#L6), [`/obj/item/construction/plumbing`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/rcd/RPLD.dm#L2); tgui: [`RapidPlumbingDevice.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/RapidPlumbingDevice.tsx)
 - **BandaStation:** [`code/modules/plumbing/ducts.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/plumbing/ducts.dm#L163) — временное исправление дуктов
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ `plumbing_net.rs`: дукты по пяти слоям, сети пересобираются раз в секунду (`SSplumbing`), подключения машин с поворотом по `dir`, машина-к-машине, запросы по 10 u поровну от поставщиков, `distinct_reagent_cap`; стопка дуктов (клик по полу/дукту, слой в руке), гаечный ключ (дукт → стопка, машина 2 с), alt-click поворачивает; RPLD строит их (`devices::rhd`). Тест: `plumbing_net::tests::ducts_join_machines_into_networks`. Без цветов дуктов и оверлеев коннекторов, без undertile
 
 ### Ввод, вывод, баки, насосы
 Входной и выходной порты, кран, бак-хранилище, многослойный коллектор, насос жидкостей (выкачивает из гейзеров на Лаваленде).
 
 - **Код:** [`/obj/machinery/plumbing/input`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/plumbing/plumbers/simple_machines.dm#L2), [`/obj/machinery/plumbing/output`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/plumbing/plumbers/simple_machines.dm#L14), [`/obj/machinery/plumbing/tank`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/plumbing/plumbers/simple_machines.dm#L33), [`/obj/machinery/plumbing/liquid_pump`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/plumbing/plumbers/pumps.dm#L2)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ входной (REFILLABLE) и выходной/кран (DRAINABLE, 5 реагентов), бак 400 u, многослойный коллектор, насос; тест `machine_types`. Гейзеров нет → ../mining (насосу нечего качать)
 
 ### Обработка: реакционная камера, акклиматор, фильтр, сплиттер, буфер
 Реакционная камера смешивает по списку и держит температуру/pH; акклиматор нагревает/охлаждает; фильтр разделяет по реагентам; сплиттер делит поток; буфер копит и выпускает партиями.
 
 - **Код:** [`/obj/machinery/plumbing/reaction_chamber`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/plumbing/plumbers/reaction_chamber.dm#L6), [`/obj/machinery/plumbing/acclimator`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/plumbing/plumbers/acclimator.dm#L8), [`/obj/machinery/plumbing/filter`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/plumbing/plumbers/filter.dm#L2), [`/obj/machinery/plumbing/splitter`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/plumbing/plumbers/splitters.dm#L4), [`/obj/machinery/plumbing/buffer`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/plumbing/plumbers/plumbing_buffer.dm#L1); tgui: [`ChemReactionChamber.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/ChemReactionChamber.tsx), [`ChemAcclimator.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/ChemAcclimator.tsx), [`ChemFilter.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/ChemFilter.tsx), [`ChemSplitter.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/ChemSplitter.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 акклиматор (наполнение/нагрев/охлаждение/выпуск), фильтр (лево/право/прямо), сплиттер (1..9 u), буфер (порог, связь отвёрткой), реакционная камера (список реагентов, температура, выпуск) — настройки через prompt вместо окон ChemAcclimator/ChemFilter/ChemSplitter/ChemMixingChamber; тест `filter_directions`. Нет: катализаторы и pH-буферные входы камеры, тест полного цикла камеры/акклиматора
 
 ### Производство: синтезатор, пресс таблеток, разливщик, ферментер, гриндер
 Синтезатор базовых реагентов (химический, содовый, пивной, шахтный), пресс таблеток и пластырей, разливщик по бутылкам, ферментер (растения в алкоголь), химический гриндер.
@@ -30,4 +30,4 @@
 Утилизатор уничтожает реагенты; передатчик/приёмник телепортируют жидкости; сантехническая капельница кормит пациента из сети.
 
 - **Код:** [`/obj/machinery/plumbing/disposer`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/plumbing/plumbers/destroyer.dm#L4), [`/obj/machinery/plumbing/sender`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/plumbing/plumbers/teleporter.dm#L2), [`/obj/machinery/iv_drip/plumbing`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/plumbing/plumbers/iv_drip.dm#L2); tgui: [`ChemDisposer.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/ChemDisposer.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 утилизатор (вкл/скорость через prompt, `remove_all(rate × dt)`), сантехническая капельница (своё хранилище 100 u как контейнер, вход при вливании, выход при заборе). Нет: передатчик/приёмник (телепорт)
