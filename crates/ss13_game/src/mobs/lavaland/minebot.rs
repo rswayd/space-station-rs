@@ -9,11 +9,13 @@
 //!   (`death_drops`).
 //! - It repairs a hurt NODE drone next to it (`repair_node_drone`: 6 s holding still next to
 //!   it, then 50 brute healed), and fights back with its drill.
+//! - A welder used on it out of combat mode (neither in combat mode) mends 15 brute
+//!   (`welder_act`).
 //! - A NODE drone fights nobody, remembers who hurts it (`ai_retaliate`) and blows up lightly
 //!   when it dies (`explosion(light_impact_range = 1)`).
 // shortcut: no minebot gun (the kinetic accelerator shots and keeping its shooting distance;
 // its modkits are `crate::mining::modkits`), missiles, landmines, light and meson toggles, the
-// `MineBot` UI, alt-click combat mode, welder repair, pet commands, colours, mining walls, the
+// `MineBot` UI, alt-click combat mode, pet commands, colours, mining walls, the
 // SOS for downed miners, sentience; the drone has no ore vent to latch onto (vents and their
 // wave defense are `docs/parity/cargo/mining-ores.md`), no fly-in/escape animation.
 
@@ -34,6 +36,9 @@ pub const ROBOT_DEBRIS: &str = "/obj/effect/decal/cleanable/blood/gibs/robot_deb
 /// `repair_node_drone`: the `do_after` and the brute it heals.
 const REPAIR_TIME: f64 = 6.0;
 const REPAIR_AMOUNT: f32 = 50.0;
+/// `welder_act`: `adjust_brute_loss(-15)`, `use_tool` at volume 40.
+const WELD_AMOUNT: f32 = 15.0;
+const WELD_SOUND: &str = "sound/items/tools/welder.ogg";
 /// How far a minebot looks for ore and drones (`oview` of its controller's finders).
 pub const SEARCH_RANGE: u32 = 7;
 
@@ -51,7 +56,49 @@ pub struct Minebot {
 pub struct NodeDrone;
 
 pub(super) fn build(app: &mut App) {
+    use crate::click_handlers::{AddClickHandler, ClickPhase};
+    // A welder mends a minebot.
+    app.add_click_handler(ClickPhase::HeldOnTarget, 1511, |w, c| {
+        c.held.is_some_and(|h| weld_repair(w, c.mob, h, c.target))
+    });
     app.add_systems(Update, repairs.before(crate::health::HealthSystems));
+}
+
+/// `mining_drone/welder_act`: 15 brute mended, not in either's combat mode, not at full health.
+/// False when the click goes on (not a welder, not a minebot, the user in combat mode).
+pub fn weld_repair(world: &mut World, user: Entity, welder: Entity, bot: Entity) -> bool {
+    let Some(combat) = world.get::<Minebot>(bot).map(|b| b.combat) else {
+        return false;
+    };
+    let user_combat = world
+        .get::<crate::combat::CombatMode>(user)
+        .is_some_and(|c| c.0);
+    let is_welder =
+        crate::tools::tool_of(world, welder).is_some_and(|t| t.0 == crate::tools::ToolKind::Welder);
+    if !is_welder || user_combat {
+        return false;
+    }
+    let full = world.get::<Health>(bot).is_none_or(|h| h.health() >= h.max);
+    let text = if combat {
+        "Нельзя чинить в боевом режиме!".to_owned()
+    } else if full {
+        "Повреждений нет!".to_owned()
+    } else if !crate::tools::tool_usable(world, welder, 0, 0.0) {
+        crate::tools::unusable_message(world, welder, 0)
+    } else {
+        if let Some(mut health) = world.get_mut::<Health>(bot) {
+            health.adjust(DamageType::Brute, -WELD_AMOUNT);
+        }
+        if let Some(&at) = world.get::<TilePos>(bot) {
+            crate::sound::playsound(
+                world,
+                crate::sound::PlaySound::new(at, WELD_SOUND, 40.0, true),
+            );
+        }
+        "Успешно отремонтирован!".to_owned()
+    };
+    super::abilities::tell(world, user, ss13_shared::chat::Span::Notice, text);
+    true
 }
 
 pub(super) fn attach(world: &mut World, mob: Entity, path: &str) {
@@ -258,6 +305,20 @@ mod tests {
         world.run_system_once(repairs).unwrap();
         assert!((world.get::<Health>(drone).unwrap().brute - 30.0).abs() < 1e-3);
         assert!(!channeling(&world, bot));
+    }
+
+    #[test]
+    fn a_welder_needs_a_minebot_out_of_combat_mode() {
+        let mut world = world();
+        let bot = world
+            .spawn((TilePos::new(5, 5, 1), Stat::Conscious, Minebot::default()))
+            .id();
+        let user = world.spawn(TilePos::new(6, 5, 1)).id();
+        // Not a welder: the click goes on.
+        let rock = world.spawn_empty().id();
+        assert!(!weld_repair(&mut world, user, rock, bot));
+        // Not a minebot either.
+        assert!(!weld_repair(&mut world, user, rock, user));
     }
 
     #[test]
