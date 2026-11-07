@@ -317,6 +317,28 @@ pub struct IdCard {
     pub access: Vec<String>,
 }
 
+/// The access of the ID tg's `get_idcard(hand_first = TRUE)` finds on `mob` (a card or the card
+/// in a PDA: active hand, other hand, ID slot, belt); empty without one.
+pub fn mob_access(world: &World, mob: Entity) -> Vec<String> {
+    world
+        .get::<Inventory>(mob)
+        .and_then(|i| i.id_card(world))
+        .and_then(|card| world.get::<IdCard>(card))
+        .map(|c| c.access.clone())
+        .unwrap_or_default()
+}
+
+/// tg `allowed(user)` by ID alone ([`mob_access`] against the requirements); each caller adds
+/// its own silicon rule.
+pub fn id_allowed(
+    world: &World,
+    mob: Entity,
+    req_access: &[String],
+    req_one_access: &[String],
+) -> bool {
+    check_access(req_access, req_one_access, &mob_access(world, mob))
+}
+
 /// tg `check_access_list`: no requirement opens for anyone; otherwise every `req_access` entry
 /// and, if `req_one_access` is set, one of its entries must be in `access` (no ID = no access).
 pub fn check_access(req_access: &[String], req_one_access: &[String], access: &[String]) -> bool {

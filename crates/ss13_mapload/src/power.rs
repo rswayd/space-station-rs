@@ -29,10 +29,14 @@ pub const APC_HELPER_CELL_5K: &str = "/obj/effect/mapping_helpers/apc/cell_5k";
 pub const APC_HELPER_CELL_10K: &str = "/obj/effect/mapping_helpers/apc/cell_10k";
 pub const APC_HELPER_NO_CHARGE: &str = "/obj/effect/mapping_helpers/apc/no_charge";
 pub const APC_HELPER_FULL_CHARGE: &str = "/obj/effect/mapping_helpers/apc/full_charge";
+/// `unlock()`, `give_syndicate_access()`, `give_away_general_access()` (`apc_main.dm`).
+pub const APC_HELPER_UNLOCKED: &str = "/obj/effect/mapping_helpers/apc/unlocked";
+pub const APC_HELPER_SYNDICATE_ACCESS: &str = "/obj/effect/mapping_helpers/apc/syndicate_access";
+pub const APC_HELPER_AWAY_GENERAL_ACCESS: &str =
+    "/obj/effect/mapping_helpers/apc/away_general_access";
 /// Turns the lights of its area off with the light switch (`area.lightswitch = FALSE`).
 pub const LIGHTS_OFF_HELPER: &str = "/obj/effect/mapping_helpers/turn_off_lights_with_lightswitch";
-// shortcut: `cut_AI_wire`, `unlocked`, `syndicate_access` and `away_general_access` APC helpers
-// change wires and access the APC does not model yet; add them with the APC interface.
+// shortcut: no `cut_AI_wire` APC helper (it cuts a wire at map load); add it with map-time wires.
 
 /// The cells `install_cell_5k()` / `install_cell_10k()` create (`apc_main.dm`).
 const HELPER_CELLS: [(&str, &str); 2] = [

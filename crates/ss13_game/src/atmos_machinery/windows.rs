@@ -87,7 +87,7 @@ use super::portable::{
 use super::{AreaAtmos, AtmosDevice};
 use crate::click::CtrlClick;
 use crate::internals::TankAir;
-use crate::inventory::{IdCard, Inventory, check_access};
+use crate::inventory::Inventory;
 use crate::power::Unpowered;
 use crate::tools::{Actor, ToolKind, tell, tool_of};
 
@@ -1576,18 +1576,13 @@ fn toggle_lock(world: &mut World, alarm: Entity, client: Entity, mob: Entity) {
         }
         return;
     }
-    let access: Vec<String> = {
-        world
-            .get::<Inventory>(mob)
-            .and_then(|inv| inv.id_card(world))
-            .and_then(|card| world.get::<IdCard>(card))
-            .map(|c| c.access.clone())
-            .unwrap_or_default()
-    };
+    let allowed = world.get::<AirAlarm>(alarm).is_some_and(|a| {
+        crate::inventory::id_allowed(world, mob, &a.req_access, &a.req_one_access)
+    });
     let Some(mut a) = world.get_mut::<AirAlarm>(alarm) else {
         return;
     };
-    if check_access(&a.req_access, &a.req_one_access, &access) {
+    if allowed {
         a.locked = !a.locked;
         let text = if a.locked {
             "You lock the air alarm interface."

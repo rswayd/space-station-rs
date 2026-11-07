@@ -400,13 +400,7 @@ fn pop_down(world: &mut World, e: Entity) {
 
 /// tg `allowed(perp)` against the turret's `req_access`.
 fn allowed(world: &World, req_access: &[String], mob: Entity) -> bool {
-    let access = world
-        .get::<Inventory>(mob)
-        .and_then(|i| i.id_card(world))
-        .and_then(|c| world.get::<IdCard>(c))
-        .map(|c| c.access.clone())
-        .unwrap_or_default();
-    check_access(req_access, &[], &access)
+    crate::inventory::id_allowed(world, mob, req_access, &[])
 }
 
 fn item_under(world: &World, item: Option<Entity>, root: &str) -> bool {

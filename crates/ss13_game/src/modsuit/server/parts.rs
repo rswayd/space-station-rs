@@ -40,13 +40,7 @@ pub fn allowed(world: &World, control: Entity, user: Entity) -> bool {
     let Some(suit) = world.get::<ModSuit>(control) else {
         return false;
     };
-    let access = world
-        .get::<Inventory>(user)
-        .and_then(|i| i.id_card(world))
-        .and_then(|c| world.get::<IdCard>(c))
-        .map(|c| c.access.clone())
-        .unwrap_or_default();
-    check_access(&suit.req_access, &[], &access)
+    crate::inventory::id_allowed(world, user, &suit.req_access, &[])
 }
 
 /// The core's cell, if still inside it.
