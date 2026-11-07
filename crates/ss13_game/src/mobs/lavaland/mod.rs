@@ -17,6 +17,7 @@
 //!   a dead brimdemon bursts (`brim_burst`).
 //! - Icemoon's polar bears, wolves, whelps and demonic watchers ([`icemoon`]).
 //! - The jungle village's mooks: leaping workers, healers ([`mook`]).
+//! - Minebots collecting ore and repairing NODE drones ([`minebot`]).
 // shortcut: no crusher trophies, kill tally, lava/ash storm immunity traits (the weather and
 // lava are not dangerous to mobs here yet), butchering (`butcher_results`: goliath hide plates
 // and the rest come with tg's butchering component), taming or riding; thrown items are not
@@ -25,6 +26,7 @@
 pub mod abilities;
 pub mod ai;
 pub mod icemoon;
+pub mod minebot;
 pub mod mook;
 pub mod spawn;
 
@@ -77,12 +79,14 @@ pub(super) fn build(app: &mut App) {
     abilities::build(app);
     icemoon::build(app);
     mook::build(app);
+    minebot::build(app);
     app.add_systems(PostStartup, spawn::populate);
 }
 
 /// tg `/mob/living/basic/mining/Initialize` and the kinds' own: their components.
 pub(super) fn attach(world: &mut World, mob: Entity, def: &MobDef) {
     let path = def.path.as_str();
+    minebot::attach(world, mob, path);
     if !is_under(path, MINING_ROOT) && !is_under(path, HIVELORD_BROOD) {
         return;
     }
@@ -132,6 +136,7 @@ pub(super) fn on_death(world: &mut World, mob: Entity, def: &MobDef, pos: TilePo
     }
     abilities::on_death(world, mob, path);
     icemoon::on_death(world, path, pos);
+    minebot::on_death(world, mob, path, pos);
 }
 
 /// tg `ranged_armour` `pre_bullet_impact` of a mining mob: the damage a projectile does to it.
@@ -194,6 +199,7 @@ pub fn busy(world: &World, mob: Entity) -> bool {
     abilities::channeling(world, mob)
         || icemoon::channeling(world, mob)
         || mook::channeling(world, mob)
+        || minebot::channeling(world, mob)
 }
 
 /// Applies `amount` of `kind` to a living mob on `zone` (a carbon's) through

@@ -7,7 +7,7 @@
 use bevy::prelude::*;
 use ss13_shared::TilePos;
 
-use super::{abilities, icemoon, mook};
+use super::{abilities, icemoon, minebot, mook};
 use crate::health::Stat;
 use crate::mobs::ai::behaviors::{
     DELAY_FAIL, DELAY_SUCCEED, FAIL, Perform, RUNNING, SUCCEED, Strategy,
@@ -109,6 +109,10 @@ pub enum LavaLeaf {
     /// `heal_injured`: the nearest hurt mook it sees within `range` (`injured_mob`), walked to
     /// and healed (`interact_with_target` -> `healing_touch`).
     MookHeal { range: u32 },
+    /// `minebot_mining` out of combat mode: the nearest loose ore it sees, walked to and taken.
+    MinebotCollect,
+    /// `BB_MINEBOT_REPAIR_DRONE`: a hurt NODE drone it sees, walked to and repaired.
+    MinebotRepair,
 }
 
 impl LavaLeaf {
@@ -325,6 +329,32 @@ impl LavaLeaf {
                 ctx.movement.start(Target::Entity(patient), 1);
                 RUNNING
             }
+            Self::MinebotCollect => {
+                let Some((_, at)) =
+                    minebot::ore_to_collect(ctx.world, ctx.pawn, minebot::SEARCH_RANGE)
+                else {
+                    return FAIL;
+                };
+                if minebot::collect_ore(ctx.world, ctx.pawn, at) > 0 {
+                    ctx.movement.stop();
+                    return DELAY_SUCCEED;
+                }
+                ctx.movement.start(Target::Tile(at), 1);
+                RUNNING
+            }
+            Self::MinebotRepair => {
+                let Some(drone) =
+                    minebot::drone_to_repair(ctx.world, ctx.pawn, minebot::SEARCH_RANGE)
+                else {
+                    return FAIL;
+                };
+                if minebot::start_repair(ctx.world, ctx.pawn, drone) {
+                    ctx.movement.stop();
+                    return DELAY_SUCCEED;
+                }
+                ctx.movement.start(Target::Entity(drone), 1);
+                RUNNING
+            }
             Self::DemonClone => {
                 if icemoon::conjure_afterimages(ctx.world, ctx.pawn) {
                     DELAY_SUCCEED
@@ -336,8 +366,11 @@ impl LavaLeaf {
     }
 
     pub fn finish(&mut self, ctx: &mut AiCtx, _succeeded: bool) {
-        if let Self::MaintainDistance { .. } | Self::MoveToCardinal { .. } | Self::MookHeal { .. } =
-            self
+        if let Self::MaintainDistance { .. }
+        | Self::MoveToCardinal { .. }
+        | Self::MookHeal { .. }
+        | Self::MinebotCollect
+        | Self::MinebotRepair = self
         {
             ctx.movement.failed = false;
             ctx.movement.stop();

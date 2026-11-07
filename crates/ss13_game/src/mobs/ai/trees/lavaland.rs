@@ -388,6 +388,31 @@ pub(super) fn build(path: &str) -> Option<Built> {
             ),
             retaliate_then_acquire(),
         )
+    } else if is("minebot") {
+        // `minebot.bt.json`: fights back (drilling: no gun here), repairs hurt NODE drones,
+        // collects loose ore; left out: following and protecting its miner, pet commands,
+        // shooting, missiles and mines, mining walls, the SOS (see `lavaland::minebot`).
+        par(
+            vec![
+                selector(vec![
+                    decorator(
+                        Cond::KeySet(Key::CurrentTarget),
+                        false,
+                        Abort::Both,
+                        fight(melee(), move_to_target()),
+                    ),
+                    lava(LavaLeaf::MinebotRepair),
+                    lava(LavaLeaf::MinebotCollect),
+                    leaf(Behavior::Fauna(FaunaLeaf::Wait)),
+                ]),
+                retaliate_target(Key::CurrentTarget),
+            ],
+            FIND_TARGET_RATE,
+        )
+    } else if is("node_drone") {
+        // `node_drone.bt.json`: it only latches onto an unclaimed ore vent (none here);
+        // `PASSIVE_AI_FLAGS`, it never fights.
+        leaf(Behavior::Fauna(FaunaLeaf::Wait))
     } else if is("ice_demon/afterimage") {
         // `ice_demon_afterimage.bt.json`: `simple_hostile_combat`; left out: fleeing fire.
         hostile_combat(25.0)
@@ -463,6 +488,8 @@ mod tests {
             "mook/support",
             "mook/bard",
             "mook/tribal_chief",
+            "minebot",
+            "node_drone",
         ] {
             let built = build(&format!("{BASIC}/{sub}"));
             assert!(built.is_some_and(|b| b.retaliates), "{sub}");
