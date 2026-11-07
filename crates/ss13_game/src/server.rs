@@ -140,6 +140,11 @@ impl Players {
     pub(crate) fn set_mob(&mut self, client: Entity, mob: Entity) {
         self.0.insert(client, mob);
     }
+
+    /// The client controls no mob any more (a ghost back in the lobby, `crate::ghost_verbs`).
+    pub(crate) fn remove(&mut self, client: Entity) -> Option<Entity> {
+        self.0.remove(&client)
+    }
 }
 
 /// On a player's mob.
@@ -203,6 +208,7 @@ impl Plugin for GameServerPlugin {
             crate::health::HealthServerPlugin,
             crate::combat::CombatServerPlugin,
             crate::ghost::GhostServerPlugin,
+            crate::ghost_verbs::GhostVerbsPlugin,
             crate::multiz::MultiZPlugin,
             crate::power::PowerServerPlugin,
             crate::jobs::JobsServerPlugin,

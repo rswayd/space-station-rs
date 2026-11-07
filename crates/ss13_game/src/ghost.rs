@@ -45,6 +45,22 @@ pub struct Ghost {
     pub body: Option<Entity>,
 }
 
+/// On a ghost: it follows `target` onto its tile (tg `/datum/component/orbiter`; `ManualFollow`).
+/// Its own step ends it (`crate::ghost_verbs`).
+// shortcut: the ghost stands on the target's tile instead of circling it (tg's orbit animation);
+// add the circling when the client animates offsets.
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Orbiting {
+    pub target: Entity,
+}
+
+/// On a ghost: its client sees `target`'s HUD (tg `do_observe` / `observetarget`). Always comes
+/// with [`Orbiting`] the same target, as tg's orbit menu `auto_observe`, so the view follows it.
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Observing {
+    pub target: Entity,
+}
+
 /// The client's dead mob asked to move: it becomes a ghost (tg `ghostize`).
 #[derive(Message, Clone, Copy, Debug)]
 pub struct Ghostize {
@@ -211,13 +227,27 @@ pub fn return_to_body(world: &mut World, body: Entity) {
 }
 
 /// tgui `on_logout` / `on_transfer`: a window whose actor is no longer the client's mob (the body
-/// it ghosted from) closes. Lobby windows act as the client itself.
+/// it ghosted from) closes. Lobby windows act as the client itself. An observer keeps the HUD
+/// windows of the mob it observes (`crate::ghost_verbs`), which it sees but cannot work.
 // Cost: one pass over the open windows per tick, like tgui's default status.
-fn close_foreign_windows(mut windows: Query<&mut UiWindow>, players: Res<Players>) {
+fn close_foreign_windows(
+    mut windows: Query<&mut UiWindow>,
+    players: Res<Players>,
+    observing: Query<&Observing>,
+) {
     for mut window in &mut windows {
-        if window.actor != window.client && players.mob(window.client) != Some(window.actor) {
-            window.cap_status(UiStatus::Close);
+        let mob = players.mob(window.client);
+        if window.actor == window.client || mob == Some(window.actor) {
+            continue;
         }
+        let observed = mob
+            .and_then(|m| observing.get(m).ok())
+            .is_some_and(|o| o.target == window.actor);
+        window.cap_status(if observed {
+            UiStatus::Update
+        } else {
+            UiStatus::Close
+        });
     }
 }
 
@@ -274,17 +304,21 @@ pub(crate) fn reopen_body_huds(world: &mut World, client: Entity, body: Entity) 
 }
 
 /// tg `/mob/dead/observer/Move` -> `abstract_move`: straight to the next tile, density ignored,
-/// diagonals in one step, never off the map.
+/// diagonals in one step, never off the map. A step stops orbiting and observing (tg's orbiter
+/// ends when the orbiter moves itself).
 fn move_ghosts(
     mut steps: MessageReader<GhostStep>,
     index: Res<SpatialIndex>,
-    mut ghosts: Query<(&TilePos, &mut Facing), With<Ghost>>,
+    mut ghosts: Query<(&TilePos, &mut Facing, Has<Orbiting>), With<Ghost>>,
     mut commands: Commands,
 ) {
     for &GhostStep { ghost, dir } in steps.read() {
-        let Ok((&pos, mut facing)) = ghosts.get_mut(ghost) else {
+        let Ok((&pos, mut facing, orbiting)) = ghosts.get_mut(ghost) else {
             continue;
         };
+        if orbiting {
+            commands.entity(ghost).remove::<(Orbiting, Observing)>();
+        }
         facing.set_if_neq(Facing(dir));
         let to = pos.step(dir);
         if index.in_bounds(to) {

@@ -1015,6 +1015,32 @@ impl ServerUi for JobPrefsUi {
     }
 }
 
+/// tg `abandon_mob` -> `new /mob/dead/new_player`: the client is in the lobby again, its
+/// preferences kept (made fresh when it never was in the lobby: a skip-lobby client).
+pub(crate) fn return_to_lobby(world: &mut World, client: Entity) {
+    if world.get_entity(client).is_err() {
+        return;
+    }
+    character_name(world, client);
+    let board = world
+        .get_resource::<PrefsStatic>()
+        .map(|p| PrefsBoard(p.0.clone()));
+    let mut entity = world.entity_mut(client);
+    if let Some(board) = board {
+        entity.insert(board);
+    }
+    if !entity.contains::<JobPreferences>() {
+        entity.insert((
+            JobPreferences::default(),
+            AntagPreferences::default(),
+            AppearancePrefs::random(client.to_bits()),
+            QuirkPrefs::default(),
+        ));
+    }
+    entity.insert((NewPlayer::default(), AlwaysState));
+    world.write_message(OpenUi::new::<LobbyUi>(client, client, client, ""));
+}
+
 /// BandaStation `new_player/Topic`: ready, observe, character setup; checked when applied.
 fn lobby_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed<LobbyUi>>>) {
     let acted: Vec<(Entity, LobbyAct)> = acts

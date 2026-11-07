@@ -21,7 +21,7 @@ use bevy::prelude::*;
 pub use atlas::{AlphaMask, IconAtlas};
 pub use camera::{CameraTarget, MapInsets, WorldCamera};
 pub use filter::ScreenFilter;
-pub use lighting::{LightingPlugin, LightingSettings};
+pub use lighting::{LightingCutoff, LightingPlugin, LightingSettings};
 pub use order::DrawOrder;
 pub use parallax::ParallaxPlugin;
 pub use sprites::{Animated, IconSprite, Overlays};

@@ -21,7 +21,7 @@ struct Region {
 // One texel per tile: how much of it is in view (r). Sampled linearly between tile centres, so
 // the edge of the view is soft; what is out of view is black, as BYOND draws turfs out of view().
 @group(2) @binding(5) var view: texture_2d<f32>;
-// x = 1: the level below's lightmap. `view` is where that level is known; outside it the light
+// x = 1: the level below's lightmap; y: the lighting cutoff. `view` is where that level is known; outside it the light
 // is 1 (the world below stays as it is) instead of black.
 @group(2) @binding(6) var<uniform> mode: vec4<f32>;
 
@@ -36,7 +36,8 @@ fn light_at(world: vec2<f32>, frag: vec2<f32>) -> vec3<f32> {
     let size = vec2<i32>(textureDimensions(emissive));
     let glow = textureLoad(emissive, clamp(vec2<i32>(frag), vec2<i32>(0), size - 1), 0).a;
     let seen = textureSampleLevel(view, corners_sampler, p / region.size, 0.0).r;
-    let light = clamp(corner * tile.a + tile.rgb + glow, vec3<f32>(0.0), vec3<f32>(1.0));
+    // mode.y: the client's lighting cutoff (tg `lighting_cutoff`), added to every tile.
+    let light = clamp(corner * tile.a + tile.rgb + glow + vec3<f32>(mode.y), vec3<f32>(0.0), vec3<f32>(1.0));
     if mode.x > 0.5 {
         return mix(vec3<f32>(1.0), light, seen);
     }

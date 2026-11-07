@@ -52,6 +52,11 @@ pub struct TRayShown {
     pub until: f64,
 }
 
+/// Mobs scanned by the next pulse once, without a scanner (a ghost's "T-ray scan",
+/// `crate::ghost_verbs`).
+#[derive(Resource, Default, Debug)]
+pub struct TRayRequests(pub Vec<Entity>);
+
 /// The shared pulse clock.
 #[derive(Resource, Default)]
 struct TRayClock {
@@ -67,6 +72,7 @@ impl Plugin for TScannerPlugin {
             toggle(w, c.mob, c.target)
         });
         app.init_resource::<TRayClock>()
+            .init_resource::<TRayRequests>()
             .add_observer(add_scanner)
             .add_observer(uncovered)
             .add_systems(Update, (end_flicks, pulse).chain());
@@ -141,6 +147,7 @@ fn pulse(world: &mut World) {
         .filter(|(s, _)| s.on)
         .map(|(_, c)| c.0)
         .collect();
+    viewers.append(&mut world.resource_mut::<TRayRequests>().0);
     viewers.sort();
     viewers.dedup();
     let mut seen: Vec<(Entity, Entity)> = Vec::new();

@@ -89,6 +89,11 @@ impl Default for LightingSettings {
     }
 }
 
+/// tg `lighting_cutoff` of the client's mob, as a fraction of full light (0..=1) added to every
+/// tile's light: a ghost's darkness setting (`ss13_game::ghost_menu`). 0: lighting as is.
+#[derive(Resource, Clone, Copy, Debug, Default, PartialEq)]
+pub struct LightingCutoff(pub f32);
+
 /// Cost of the lighting systems, for logs and benchmarks.
 #[derive(Resource, Default, Debug, Clone, Copy)]
 pub struct LightingStats {
@@ -113,6 +118,7 @@ impl Plugin for LightingPlugin {
         app.add_plugins(Material2dPlugin::<LightmapMaterial>::default())
             .init_resource::<LightingSettings>()
             .init_resource::<LightingStats>()
+            .init_resource::<LightingCutoff>()
             .init_resource::<LightWorld>()
             .add_message::<LightUpdate>()
             .add_systems(Startup, spawn_lightmap)
@@ -123,6 +129,7 @@ impl Plugin for LightingPlugin {
                     update_sources,
                     sync_emissive_camera,
                     update_lightmap,
+                    apply_cutoff.run_if(resource_changed::<LightingCutoff>),
                     log_stats,
                 )
                     .chain()
@@ -614,7 +621,7 @@ pub struct LightmapMaterial {
     #[texture(5)]
     view: Handle<Image>,
     /// x: 1 for [`LowerLightmap`]: `view` is where that level is known and the light outside
-    /// it is 1 (untouched) instead of black.
+    /// it is 1 (untouched) instead of black. y: [`LightingCutoff`].
     #[uniform(6)]
     mode: Vec4,
 }
@@ -725,6 +732,20 @@ fn spawn_lightmap(
         ));
         if lower {
             lightmap.insert(LowerLightmap);
+        }
+    }
+}
+
+/// [`LightingCutoff`] into both lightmaps' materials; runs only when it changes.
+fn apply_cutoff(
+    cutoff: Res<LightingCutoff>,
+    lightmaps: Query<&MeshMaterial2d<LightmapMaterial>, With<Lightmap>>,
+    mut materials: ResMut<Assets<LightmapMaterial>>,
+) {
+    let y = cutoff.0.clamp(0.0, 1.0);
+    for handle in &lightmaps {
+        if let Some(mut material) = materials.get_mut(&handle.0) {
+            material.mode.y = y;
         }
     }
 }
