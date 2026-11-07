@@ -159,6 +159,8 @@ pub mod actions_client;
 #[cfg(feature = "server")]
 pub mod actionspeed;
 #[cfg(feature = "server")]
+pub mod addictions;
+#[cfg(feature = "server")]
 pub mod afflictions;
 #[cfg(feature = "server")]
 pub mod airlock_construction;

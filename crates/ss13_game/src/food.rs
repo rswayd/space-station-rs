@@ -630,10 +630,14 @@ fn check_liked(world: &mut World, eater: Entity, food: Entity, dm: &DmFood) {
         return;
     }
     world.entity_mut(food).insert(LikedChecked(now));
+    // Food Allergy: `FOOD_QUALITY_DANGEROUS` -> `check_allergic_reaction`.
+    if crate::quirks::food_allergy_reaction(world, eater, dm.foodtypes) {
+        return;
+    }
     let handmade = world.get::<Handmade>(food).is_some();
     let quality = perceived_quality(dm, handmade, tongue_of(world, eater));
     // The moodlets of `checkLiked` (`crate::mood`).
-    // shortcut: no disgust (`adjust_disgust`), allergies, breakfast or good food memories.
+    // shortcut: no disgust (`adjust_disgust`), breakfast or good food memories.
     use crate::mood::events::{DISGUSTING_FOOD, GROSS_FOOD};
     let (span, text) = if quality <= TOXIC_QUALITY {
         crate::mood::add_event(world, eater, "toxic_food", &DISGUSTING_FOOD);

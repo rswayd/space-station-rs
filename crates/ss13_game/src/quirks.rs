@@ -20,9 +20,9 @@
 //! Deficiency (`crate::medical::blood`), Illiterate (papers), Tin Man (surplus cybernetic
 //! organs), Body Purist (a moodlet per cybernetic part), Smooth-Headed (bald, a moodlet when the
 //! head is uncovered), and the tastes of `crate::food`: Ageusia, Vegetarian, Deviant Tastes,
-//! Ananas Affinity and Aversion.
-// shortcut: the other tg quirks wait for their mechanics (addictions, allergies,
-// phobias, skillchips, hallucinations, wheelchairs...); no medical record lines, no
+//! Ananas Affinity and Aversion; Junkie, Smoker and Alcoholic (`crate::addictions`), Extreme
+//! Medicine Allergy (`crate::chem` metabolism) and Food Allergy (`crate::food`).
+// shortcut: the other tg quirks wait for their mechanics (phobias, skillchips, hallucinations, wheelchairs...); no medical record lines, no
 // customization options (blindfold colour, glasses type, paraplegic variant, hemiplegic side,
 // CSL strength), no hardcore or random quirks, no mail goodies, no quirk transfer between
 // bodies; the point settings are tg's config defaults, not read from `config/game_options.txt`.
@@ -105,8 +105,185 @@ const BALD_EVENT: MoodEvent = MoodEvent {
     timeout: 0.0,
     hidden: false,
 };
+/// `/datum/quirk/item_quirk/addict`: `process_interval`, seconds.
+const ADDICT_PROCESS_SECS: f64 = 30.0;
+const PILL_BOTTLE: &str = "/obj/item/storage/pill_bottle";
+const PILL: &str = "/obj/item/reagent_containers/applicator/pill";
+/// The Junkie's pills: 7 of 3 units.
+const JUNKIE_PILLS: usize = 7;
+const JUNKIE_PILL_UNITS: f32 = 3.0;
+const LIGHTER: &str = "/obj/item/lighter/greyscale";
+const NICOTINE: &str = "/datum/reagent/drug/nicotine";
+const ETHANOL: &str = "/datum/reagent/consumable/ethanol";
+/// `GLOB.possible_junkie_addictions` (with BandaStation's cocaine).
+const JUNKIE_DRUGS: [&str; 7] = [
+    "/datum/reagent/drug/blastoff",
+    "/datum/reagent/drug/krokodil",
+    "/datum/reagent/medicine/morphine",
+    "/datum/reagent/drug/happiness",
+    "/datum/reagent/drug/methamphetamine",
+    "/datum/reagent/drug/cocaine/freebase_cocaine",
+    "/datum/reagent/drug/cocaine",
+];
+/// `GLOB.possible_smoker_addictions`: the pack and its `spawn_type`.
+const SMOKER_PACKS: [(&str, &str); 9] = [
+    (
+        "/obj/item/storage/fancy/cigarettes",
+        "/obj/item/cigarette/space_cigarette",
+    ),
+    (
+        "/obj/item/storage/fancy/cigarettes/cigpack_midori",
+        "/obj/item/cigarette/rollie/nicotine",
+    ),
+    (
+        "/obj/item/storage/fancy/cigarettes/cigpack_uplift",
+        "/obj/item/cigarette/uplift",
+    ),
+    (
+        "/obj/item/storage/fancy/cigarettes/cigpack_robust",
+        "/obj/item/cigarette/robust",
+    ),
+    (
+        "/obj/item/storage/fancy/cigarettes/cigpack_robustgold",
+        "/obj/item/cigarette/robustgold",
+    ),
+    (
+        "/obj/item/storage/fancy/cigarettes/cigpack_carp",
+        "/obj/item/cigarette/carp",
+    ),
+    (
+        "/obj/item/storage/fancy/cigarettes/cigars",
+        "/obj/item/cigarette/cigar/premium",
+    ),
+    (
+        "/obj/item/storage/fancy/cigarettes/cigars/cohiba",
+        "/obj/item/cigarette/cigar/cohiba",
+    ),
+    (
+        "/obj/item/storage/fancy/cigarettes/cigars/havana",
+        "/obj/item/cigarette/cigar/havana",
+    ),
+];
+/// `GLOB.possible_alcoholic_addictions`: the bottle and the favourite reagent.
+const ALCOHOLIC_BOTTLES: [(&str, &str); 26] = [
+    ("curacao", "curacao"),
+    ("applejack", "applejack"),
+    ("wine_voltaic", "wine_voltaic"),
+    ("tequila", "tequila"),
+    ("rum", "rum"),
+    ("cognac", "cognac"),
+    ("wine", "wine"),
+    ("absinthe", "absinthe"),
+    ("vermouth", "vermouth"),
+    ("gin", "gin"),
+    ("hcider", "hcider"),
+    ("amaretto", "amaretto"),
+    ("ale", "ale"),
+    ("grappa", "grappa"),
+    ("navy_rum", "navy_rum"),
+    ("maltliquor", "beer/maltliquor"),
+    ("kahlua", "kahlua"),
+    ("sake", "sake"),
+    ("beer", "beer"),
+    ("vodka", "vodka"),
+    ("whiskey", "whiskey"),
+    ("coconut_rum", "coconut_rum"),
+    ("yuyake", "yuyake"),
+    ("shochu", "shochu"),
+    ("aperitivo", "aperitivo"),
+    ("maraschino", "maraschino"),
+];
+const BOTTLE_ROOT: &str = "/obj/item/reagent_containers/cup/glass/bottle/";
+/// `/datum/mood_event/wrong_brand` and `wrong_brandy`.
+const WRONG_BRAND_EVENT: MoodEvent = MoodEvent {
+    id: "wrong_brand",
+    description: "Я ненавижу эту марку сигарет.",
+    mood_change: -2.0,
+    timeout: 360.0,
+    hidden: false,
+};
+const WRONG_BRANDY_EVENT: MoodEvent = MoodEvent {
+    id: "wrong_brandy",
+    description: "Я ненавижу такие напитки.",
+    mood_change: -2.0,
+    timeout: 360.0,
+    hidden: false,
+};
+
+const ALLERGY_DOGTAG: &str = "/obj/item/clothing/accessory/dogtag/allergy";
+const HISTAMINE: &str = "/datum/reagent/toxin/histamine";
+const EPINEPHRINE: &str = "/datum/reagent/medicine/epinephrine";
+/// Extreme Medicine Allergy: 6 medicines (`for(var/i in 0 to 5)`).
+const MEDICINE_ALLERGIES: usize = 6;
+/// `GLOB.allergy_reagent_blacklist` (a typecache: subtypes too).
+const ALLERGY_BLACKLIST: [&str; 21] = [
+    "/datum/reagent/medicine/adminordrazine",
+    "/datum/reagent/medicine/albuterol",
+    "/datum/reagent/medicine/changelingadrenaline",
+    "/datum/reagent/medicine/changelinghaste",
+    "/datum/reagent/medicine/coagulant/banana_peel",
+    "/datum/reagent/medicine/coagulant/seraka_extract",
+    "/datum/reagent/medicine/cordiolis_hepatico",
+    "/datum/reagent/medicine/diphenhydramine",
+    "/datum/reagent/medicine/epinephrine",
+    "/datum/reagent/medicine/insulin",
+    "/datum/reagent/medicine/muscle_stimulant",
+    "/datum/reagent/medicine/oculine/flumpuline",
+    "/datum/reagent/medicine/omnizine/godblood",
+    "/datum/reagent/medicine/omnizine/protozine",
+    "/datum/reagent/medicine/regen_jelly",
+    "/datum/reagent/medicine/salglu_solution",
+    "/datum/reagent/medicine/sansufentanyl",
+    "/datum/reagent/medicine/strange_reagent",
+    "/datum/reagent/medicine/synaphydramine",
+    "/datum/reagent/medicine/synaptizine/synaptizinevirusfood",
+    "/datum/reagent/medicine/syndicate_nanites",
+];
+/// `GLOB.possible_food_allergies` (foodtype bits, BandaStation names).
+pub const FOOD_ALLERGIES: [(&str, u32); 10] = [
+    ("алкоголь", 1 << 8),
+    ("жуки", 1 << 18),
+    ("молочные продукты", 1 << 6),
+    ("фрукты", 1 << 5),
+    ("зерна", 1 << 4),
+    ("мясо", 1 << 0),
+    ("орехи", 1 << 15),
+    ("морепродукты", 1 << 16),
+    ("сахар", 1 << 9),
+    ("овощи", 1 << 1),
+];
+/// `/datum/mood_event/allergic_food`.
+const ALLERGIC_FOOD_EVENT: MoodEvent = MoodEvent {
+    id: "allergic_food",
+    description: "Моё горло зудит.",
+    mood_change: -2.0,
+    timeout: 240.0,
+    hidden: false,
+};
+
 /// Items the quirks hand out: `crate::jobs` builds their templates with the outfits'.
-pub const ITEM_PATHS: [&str; 4] = [BLINDFOLD, GLASSES, MANNITOL_BOTTLE, DEAF_PIN];
+pub fn item_paths() -> Vec<String> {
+    let mut paths: Vec<String> = [
+        BLINDFOLD,
+        GLASSES,
+        MANNITOL_BOTTLE,
+        DEAF_PIN,
+        PILL_BOTTLE,
+        PILL,
+        LIGHTER,
+        ALLERGY_DOGTAG,
+    ]
+    .iter()
+    .map(|p| (*p).to_owned())
+    .collect();
+    paths.extend(SMOKER_PACKS.iter().map(|(pack, _)| (*pack).to_owned()));
+    paths.extend(
+        ALCOHOLIC_BOTTLES
+            .iter()
+            .map(|(bottle, _)| format!("{BOTTLE_ROOT}{bottle}")),
+    );
+    paths
+}
 
 /// The ported tg quirk types.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -146,6 +323,11 @@ pub enum Quirk {
     Foreigner,
     Bald,
     Vegetarian,
+    Junkie,
+    Smoker,
+    Alcoholic,
+    MedicineAllergy,
+    FoodAllergy,
 }
 
 /// The static part of a quirk (tg vars).
@@ -187,7 +369,7 @@ const fn q(
 
 /// Every ported quirk in tg's menu order (`cmp_quirk_asc`: positive, negative, neutral, then by
 /// name). BandaStation texts.
-pub const QUIRKS: [QuirkDef; 35] = [
+pub const QUIRKS: [QuirkDef; 40] = [
     q(
         Quirk::AlcoholTolerance,
         "/datum/quirk/alcohol_tolerance",
@@ -287,6 +469,19 @@ pub const QUIRKS: [QuirkDef; 35] = [
         Some((Span::Danger, "Кажется вы больше не хотите ЖРАААААТЬ.")),
     ),
     q(
+        Quirk::Alcoholic,
+        "/datum/quirk/item_quirk/addict/alcoholic",
+        "Alcoholic",
+        "Вы просто не можете жить без алкоголя. Ваша печень - это машина, которая превращает этанол в ацетальдегид.",
+        "wine-glass",
+        -4,
+        Some((Span::Danger, "Вам действительно нужно выпить.")),
+        Some((
+            Span::Notice,
+            "Алкоголь уже не кажется таким привлекательным.",
+        )),
+    ),
+    q(
         Quirk::BadBack,
         "/datum/quirk/badback",
         "Bad Back",
@@ -378,6 +573,38 @@ pub const QUIRKS: [QuirkDef; 35] = [
         Some((Span::Notice, "Вы больше не испытываете депрессию.")),
     ),
     q(
+        Quirk::MedicineAllergy,
+        "/datum/quirk/item_quirk/allergic",
+        "Extreme Medicine Allergy",
+        "С самого детства у вас была аллергия на некоторые химические вещества...",
+        "prescription-bottle",
+        -6,
+        Some((
+            Span::Danger,
+            "Вы чувствуете, как меняется ваша иммунная система.",
+        )),
+        Some((
+            Span::Notice,
+            "Вы чувствуете, как ваша иммунная система приходит норму.",
+        )),
+    ),
+    q(
+        Quirk::FoodAllergy,
+        "/datum/quirk/item_quirk/food_allergic",
+        "Food Allergy",
+        "С самого детства у вас была аллергия на некоторые продукты.",
+        "shrimp",
+        -2,
+        Some((
+            Span::Danger,
+            "Вы чувствуете, как меняется ваша иммунная система.",
+        )),
+        Some((
+            Span::Notice,
+            "Вы чувствуете, как ваша иммунная система возвращается к норме.",
+        )),
+    ),
+    q(
         Quirk::Hemiplegic,
         "/datum/quirk/hemiplegic",
         "Hemiplegic",
@@ -412,6 +639,16 @@ pub const QUIRKS: [QuirkDef; 35] = [
         "graduation-cap",
         -8,
         None,
+        None,
+    ),
+    q(
+        Quirk::Junkie,
+        "/datum/quirk/item_quirk/addict/junkie",
+        "Junkie",
+        "Вы не можете перестать употреблять тяжелые наркотики.",
+        "pills",
+        -6,
+        Some((Span::Danger, "Вы вдруг почувствовали тягу к наркотикам.")),
         None,
     ),
     q(
@@ -487,6 +724,19 @@ pub const QUIRKS: [QuirkDef; 35] = [
         // Handled by the trauma.
         None,
         None,
+    ),
+    q(
+        Quirk::Smoker,
+        "/datum/quirk/item_quirk/addict/smoker",
+        "Smoker",
+        "Иногда вам очень хочется закурить. Возможно, это не очень полезно для ваших легких.",
+        "smoking",
+        -4,
+        Some((Span::Danger, "Эх, вот бы сейчас закурить.")),
+        Some((
+            Span::Notice,
+            "Вы больше не чувствуете такой сильной зависимости от никотина.",
+        )),
     ),
     q(
         Quirk::SoftSpoken,
@@ -681,6 +931,29 @@ pub struct BaldHead {
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Cybernetics(pub u32);
 
+/// One addict quirk's state: `reagent_type`, `drug_container_type`, the Smoker's pack
+/// cigarette or the Alcoholic's `favorite_alcohol`, and the `next_process` cooldown.
+#[derive(Clone, Debug, PartialEq)]
+pub struct AddictState {
+    pub quirk: Quirk,
+    pub reagent: &'static str,
+    pub container: String,
+    pub favorite: Option<String>,
+    pub next_process: f64,
+}
+
+/// The mob's addict quirks (Junkie, Smoker, Alcoholic can all be taken).
+#[derive(Component, Clone, Debug, Default, PartialEq)]
+pub struct AddictQuirks(pub Vec<AddictState>);
+
+/// Extreme Medicine Allergy's `allergies` (reagent paths) and Food Allergy's
+/// `target_foodtypes`.
+#[derive(Component, Clone, Debug, Default, PartialEq, Eq)]
+pub struct Allergies {
+    pub medicines: Vec<String>,
+    pub foods: u32,
+}
+
 /// On a client connection: the character's quirks by name (tg `prefs.all_quirks`).
 #[derive(Component, Clone, Debug, Default, PartialEq, Eq)]
 pub struct QuirkPrefs(pub Vec<String>);
@@ -836,6 +1109,8 @@ pub fn add_quirk(
             }
         }
         Quirk::BodyPurist => update_cybernetics(world, mob),
+        Quirk::Junkie | Quirk::Smoker | Quirk::Alcoholic => addict_add(world, mob, quirk),
+        Quirk::MedicineAllergy | Quirk::FoodAllergy => allergy_add(world, mob, quirk),
         // `/datum/brain_trauma/severe/paralysis/hemiplegic` of a random side.
         Quirk::Hemiplegic => {
             let side = if world.get_resource_or_init::<CombatRng>().chance(50.0) {
@@ -885,6 +1160,8 @@ pub fn add_quirk(
                 give_item(world, mob, DEAF_PIN, &[Location::Backpack, Location::Hands]);
             }
             Quirk::TinMan => tin_man(world, mob),
+            Quirk::Junkie | Quirk::Smoker | Quirk::Alcoholic => addict_items(world, mob, quirk),
+            Quirk::MedicineAllergy | Quirk::FoodAllergy => allergy_items(world, mob, quirk),
             Quirk::BrainTumor => {
                 if let Some(at) = give_item(
                     world,
@@ -977,6 +1254,29 @@ pub fn remove_quirk(world: &mut World, mob: Entity, quirk: Quirk) -> bool {
         Quirk::Mute | Quirk::Pacifist | Quirk::SoftSpoken => traumas::refresh(world, mob),
         Quirk::Csl => csl(world, mob, false),
         Quirk::Foreigner => foreigner(world, mob, false),
+        Quirk::MedicineAllergy | Quirk::FoodAllergy => {
+            if let Some(mut allergies) = world.get_mut::<Allergies>(mob) {
+                if quirk == Quirk::MedicineAllergy {
+                    allergies.medicines.clear();
+                } else {
+                    allergies.foods = 0;
+                }
+            }
+        }
+        // `/datum/quirk/item_quirk/addict/remove`: every addiction goes.
+        Quirk::Junkie | Quirk::Smoker | Quirk::Alcoholic => {
+            if let Some(mut addicts) = world.get_mut::<AddictQuirks>(mob) {
+                addicts.0.retain(|a| a.quirk != quirk);
+            }
+            for a in crate::addictions::Addiction::ALL {
+                crate::addictions::remove_points(
+                    world,
+                    mob,
+                    a,
+                    crate::addictions::MAX_ADDICTION_POINTS,
+                );
+            }
+        }
         Quirk::BodyPurist => {
             world.entity_mut(mob).remove::<Cybernetics>();
             mood::clear_event(world, mob, "body_purist");
@@ -1047,6 +1347,12 @@ fn give_item(
     path: &str,
     locations: &[Location],
 ) -> Option<&'static str> {
+    let item = spawn_item(world, path)?;
+    Some(place_item(world, mob, item, locations))
+}
+
+/// A new quirk item of `path` from its outfit template, nowhere yet.
+fn spawn_item(world: &mut World, path: &str) -> Option<Entity> {
     if !world.contains_resource::<OutfitTemplates>() {
         return None;
     }
@@ -1059,6 +1365,16 @@ fn give_item(
     };
     world.entity_mut(item).insert(Networked);
     crate::storage::finish_item(world, item, 0);
+    Some(item)
+}
+
+/// The rest of `give_item_to_holder`: `item` into the first location that takes it.
+fn place_item(
+    world: &mut World,
+    mob: Entity,
+    item: Entity,
+    locations: &[Location],
+) -> &'static str {
     for &location in locations {
         let Some(mut inventory) = world.get::<Inventory>(mob).cloned() else {
             break;
@@ -1074,7 +1390,7 @@ fn give_item(
                 inventory.hands[hand] = Some(item);
                 world.entity_mut(item).insert(CarriedBy(mob));
                 world.entity_mut(mob).insert(inventory);
-                return Some("в руках");
+                return "в руках";
             }
             Location::Backpack => {
                 let Some(pack) = inventory.back else {
@@ -1084,7 +1400,7 @@ fn give_item(
                     continue;
                 }
                 crate::storage::put_inside(world, item, pack);
-                return Some("в рюкзаке");
+                return "в рюкзаке";
             }
         };
         // Pockets need a jumpsuit (tg `mob_can_equip`).
@@ -1103,12 +1419,482 @@ fn give_item(
         }
         world.entity_mut(item).insert(CarriedBy(mob));
         world.entity_mut(mob).insert(inventory);
-        return Some(where_);
+        return where_;
     }
     if let Some(&pos) = world.get::<TilePos>(mob) {
         crate::inventory::put_down(world, item, pos);
     }
-    Some("у ваших ног")
+    "у ваших ног"
+}
+
+/// Extreme Medicine Allergy's pick: `MEDICINE_ALLERGIES` of the `/datum/reagent/medicine`
+/// subtypes outside the blacklist.
+pub fn pick_medicine_allergies(medicines: &[&str], rng: &mut CombatRng) -> Vec<String> {
+    use ss13_mapload::fidelity::is_under;
+    let mut pool: Vec<&str> = medicines
+        .iter()
+        .copied()
+        .filter(|p| is_under(p, "/datum/reagent/medicine") && *p != "/datum/reagent/medicine")
+        .filter(|p| !ALLERGY_BLACKLIST.iter().any(|b| is_under(p, b)))
+        .collect();
+    let mut out = Vec::new();
+    while out.len() < MEDICINE_ALLERGIES && !pool.is_empty() {
+        let i = rng.range(0, pool.len() as u32 - 1) as usize;
+        out.push(pool.swap_remove(i).to_owned());
+    }
+    out
+}
+
+/// `/datum/quirk/item_quirk/allergic/add` and `food_allergic/add`: the allergens.
+// shortcut: no Food Allergy preference (always "Random").
+fn allergy_add(world: &mut World, mob: Entity, quirk: Quirk) {
+    let medicines: Vec<String> = if quirk == Quirk::MedicineAllergy {
+        let paths: Vec<String> = world
+            .get_resource::<crate::chem::Chem>()
+            .map(|c| c.0.reagents.iter().map(|r| r.path.clone()).collect())
+            .unwrap_or_default();
+        let paths: Vec<&str> = paths.iter().map(String::as_str).collect();
+        let mut rng = world.get_resource_or_init::<CombatRng>();
+        pick_medicine_allergies(&paths, &mut rng)
+    } else {
+        Vec::new()
+    };
+    let food = if quirk == Quirk::FoodAllergy {
+        let mut rng = world.get_resource_or_init::<CombatRng>();
+        FOOD_ALLERGIES[rng.range(0, FOOD_ALLERGIES.len() as u32 - 1) as usize].1
+    } else {
+        0
+    };
+    if world.get::<Allergies>(mob).is_none() {
+        world.entity_mut(mob).insert(Allergies::default());
+    }
+    let mut allergies = world.get_mut::<Allergies>(mob).expect("inserted above");
+    if quirk == Quirk::MedicineAllergy {
+        allergies.medicines = medicines;
+    } else {
+        allergies.foods = food;
+    }
+}
+
+/// What the mob is allergic to, for the dog tag and the chat.
+pub fn allergy_string(world: &World, mob: Entity, quirk: Quirk) -> String {
+    let Some(allergies) = world.get::<Allergies>(mob) else {
+        return String::new();
+    };
+    if quirk == Quirk::FoodAllergy {
+        return FOOD_ALLERGIES
+            .iter()
+            .filter(|(_, bit)| allergies.foods & bit != 0)
+            .map(|(name, _)| *name)
+            .collect::<Vec<_>>()
+            .join(", ");
+    }
+    let chem = world.get_resource::<crate::chem::Chem>();
+    allergies
+        .medicines
+        .iter()
+        .map(|path| {
+            chem.and_then(|c| c.0.id(path)).map_or(path.clone(), |id| {
+                chem.unwrap().0.def(id).name.to_lowercase()
+            })
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// `add_unique` and `post_add`: the allergy dog tag and the warning.
+// shortcut: the dog tag does not name the allergens (no `dogtag/allergy` text).
+fn allergy_items(world: &mut World, mob: Entity, quirk: Quirk) {
+    let allergens = allergy_string(world, mob, quirk);
+    let text = if quirk == Quirk::FoodAllergy {
+        format!("У вас аллергия на: <b>{allergens}</b>. Следите за тем, что вы едите!")
+    } else {
+        format!(
+            "У вас аллергия на: <b>{allergens}</b>. Убедитесь, что вы не употребляете ничего из \
+             этого!"
+        )
+    };
+    let span = if quirk == Quirk::FoodAllergy {
+        Span::Info
+    } else {
+        Span::BoldNotice
+    };
+    tell_mob(world, mob, (span, &text));
+    if let Some(at) = give_item(
+        world,
+        mob,
+        ALLERGY_DOGTAG,
+        &[Location::Backpack, Location::Hands],
+    ) {
+        let flavour = if quirk == Quirk::FoodAllergy {
+            "Держите его поблизости с кухней."
+        } else {
+            "Make sure medical staff can see this..."
+        };
+        tell_mob(
+            world,
+            mob,
+            (
+                Span::BoldNotice,
+                &format!("У вас есть жетон аллергика {at}. {flavour}"),
+            ),
+        );
+    }
+}
+
+/// `histamine` into the blood (no chemistry: nothing).
+fn add_histamine(world: &mut World, mob: Entity, amount: f32) {
+    let Some(chem) = world
+        .get_resource::<crate::chem::Chem>()
+        .map(|c| c.0.clone())
+    else {
+        return;
+    };
+    let Some(id) = chem.id(HISTAMINE) else {
+        return;
+    };
+    if let Some(mut reagents) = world.get_mut::<crate::chem::MobReagents>(mob) {
+        reagents.blood.add_reagent(
+            &chem,
+            id,
+            amount,
+            ss13_reagents::DEFAULT_REAGENT_TEMPERATURE,
+            None,
+            None,
+            false,
+            false,
+        );
+    }
+}
+
+/// Extreme Medicine Allergy's `block_metab` on each metabolism tick (`crate::chem`): an
+/// allergen in the blood deals 3 toxin a second and adds 3 histamine a second, with 10% a
+/// second to vomit and take 10 damage to a random organ; epinephrine stops it.
+// shortcut: epinephrine stops the reaction but not the allergen's metabolism.
+pub fn allergic_reagents(world: &mut World, mob: Entity, secs: f32) {
+    let Some(allergies) = world.get::<Allergies>(mob) else {
+        return;
+    };
+    if allergies.medicines.is_empty() || world.get::<Stat>(mob) == Some(&Stat::Dead) {
+        return;
+    }
+    let (count, epinephrine) = {
+        let (Some(chem), Some(reagents)) = (
+            world.get_resource::<crate::chem::Chem>(),
+            world.get::<crate::chem::MobReagents>(mob),
+        ) else {
+            return;
+        };
+        let mut count = 0;
+        let mut epinephrine = false;
+        for r in &reagents.blood.reagents {
+            let path = &chem.0.def(r.id).path;
+            if ss13_mapload::fidelity::is_under(path, EPINEPHRINE) {
+                epinephrine = true;
+            }
+            if allergies
+                .medicines
+                .iter()
+                .any(|a| ss13_mapload::fidelity::is_under(path, a))
+            {
+                count += 1;
+            }
+        }
+        (count, epinephrine)
+    };
+    if count == 0 || epinephrine {
+        return;
+    }
+    for _ in 0..count {
+        if let (Some(mut health), Some(mut stat)) = (
+            world.get::<Health>(mob).cloned(),
+            world.get::<Stat>(mob).copied(),
+        ) {
+            crate::health::apply_damage(&mut health, &mut stat, DamageType::Tox, 3.0 * secs);
+            world.entity_mut(mob).insert((health, stat));
+        }
+        add_histamine(world, mob, 3.0 * secs);
+        if spt_prob(world, 10.0, secs) {
+            crate::medical::diseases::vomit(world, mob, 10.0, true, false, 1);
+            let slot = {
+                let mut rng = world.get_resource_or_init::<CombatRng>();
+                [
+                    Slot::Brain,
+                    Slot::Appendix,
+                    Slot::Lungs,
+                    Slot::Heart,
+                    Slot::Liver,
+                    Slot::Stomach,
+                ][rng.range(0, 5) as usize]
+            };
+            organs::adjust_organ_loss(world, mob, slot, 10.0);
+        }
+    }
+}
+
+/// `checkLiked`'s `check_allergic_reaction(foodtypes, chance = 100, histamine_add = 10)` for
+/// a food of `foodtypes`: anaphylaxis (or more histamine when it is already there). True if
+/// the mob is allergic to it (the other food reactions are skipped).
+// The reagent exposures (sugar, alcohol, bugs) that also check it are chemistry's.
+pub fn food_allergy_reaction(world: &mut World, mob: Entity, foodtypes: u32) -> bool {
+    let allergic = world.get::<Allergies>(mob).map_or(0, |a| a.foods);
+    if allergic & foodtypes == 0 {
+        return false;
+    }
+    use crate::medical::diseases::{Disease, Kind, force_contract};
+    if force_contract(world, mob, &Disease::new(Kind::Anaphylaxis)) {
+        tell_mob(
+            world,
+            mob,
+            (Span::Warning, "Вы чувствуете начинающийся зуд в горле."),
+        );
+        mood::add_event(world, mob, "allergic_food", &ALLERGIC_FOOD_EVENT);
+    } else {
+        add_histamine(world, mob, 10.0);
+    }
+    true
+}
+
+/// The addiction of an addict quirk's reagent.
+fn addict_addiction(reagent: &str) -> Option<crate::addictions::Addiction> {
+    crate::addictions::of_reagent(reagent, 1.0)
+}
+
+/// `/datum/quirk/item_quirk/addict/add` with the subtypes' `New`: the drug (Junkie: a random
+/// one; Smoker: nicotine and a random pack; Alcoholic: ethanol and a random bottle with its
+/// favourite booze), then its addiction maxed out.
+// shortcut: no Junkie, Smoker or Alcoholic preference (always "Random").
+fn addict_add(world: &mut World, mob: Entity, quirk: Quirk) {
+    let state = {
+        let mut rng = world.get_resource_or_init::<CombatRng>();
+        let mut pick = |n: usize| rng.range(0, n as u32 - 1) as usize;
+        match quirk {
+            Quirk::Junkie => AddictState {
+                quirk,
+                reagent: JUNKIE_DRUGS[pick(JUNKIE_DRUGS.len())],
+                container: PILL_BOTTLE.to_owned(),
+                favorite: None,
+                next_process: 0.0,
+            },
+            Quirk::Smoker => {
+                let (pack, cigarette) = SMOKER_PACKS[pick(SMOKER_PACKS.len())];
+                AddictState {
+                    quirk,
+                    reagent: NICOTINE,
+                    container: pack.to_owned(),
+                    favorite: Some(cigarette.to_owned()),
+                    next_process: 0.0,
+                }
+            }
+            _ => {
+                let (bottle, booze) = ALCOHOLIC_BOTTLES[pick(ALCOHOLIC_BOTTLES.len())];
+                AddictState {
+                    quirk,
+                    reagent: ETHANOL,
+                    container: format!("{BOTTLE_ROOT}{bottle}"),
+                    favorite: Some(format!("{ETHANOL}/{booze}")),
+                    next_process: 0.0,
+                }
+            }
+        }
+    };
+    let addiction = addict_addiction(state.reagent);
+    match world.get_mut::<AddictQuirks>(mob) {
+        Some(mut addicts) => addicts.0.push(state),
+        None => {
+            world.entity_mut(mob).insert(AddictQuirks(vec![state]));
+        }
+    }
+    if let Some(addiction) = addiction {
+        crate::addictions::add_points(
+            world,
+            mob,
+            addiction,
+            crate::addictions::MAX_ADDICTION_POINTS,
+        );
+    }
+}
+
+fn addict_state(world: &World, mob: Entity, quirk: Quirk) -> Option<AddictState> {
+    world
+        .get::<AddictQuirks>(mob)?
+        .0
+        .iter()
+        .find(|a| a.quirk == quirk)
+        .cloned()
+}
+
+/// `/datum/quirk/item_quirk/addict/add_unique`: the drug container (the Junkie's pill bottle
+/// with 7 pills of 3 units), the Smoker's lighter.
+// shortcut: the pills keep the template's look (no random `pill[1-20]` state).
+fn addict_items(world: &mut World, mob: Entity, quirk: Quirk) {
+    let Some(state) = addict_state(world, mob, quirk) else {
+        return;
+    };
+    let Some(container) = spawn_item(world, &state.container) else {
+        return;
+    };
+    if quirk == Quirk::Junkie {
+        let chem = world
+            .get_resource::<crate::chem::Chem>()
+            .map(|c| c.0.clone());
+        let id = chem.as_ref().and_then(|c| c.id(state.reagent));
+        for _ in 0..JUNKIE_PILLS {
+            let Some(pill) = spawn_item(world, PILL) else {
+                break;
+            };
+            crate::storage::put_inside(world, pill, container);
+            if let (Some(chem), Some(id)) = (chem.as_ref(), id)
+                && let Some(mut reagents) = world.get_mut::<crate::chem::Reagents>(pill)
+            {
+                reagents.0.add_reagent(
+                    chem,
+                    id,
+                    JUNKIE_PILL_UNITS,
+                    ss13_reagents::DEFAULT_REAGENT_TEMPERATURE,
+                    None,
+                    None,
+                    true,
+                    false,
+                );
+            }
+        }
+    }
+    let at = place_item(
+        world,
+        mob,
+        container,
+        &[
+            Location::LeftPocket,
+            Location::RightPocket,
+            Location::Backpack,
+            Location::Hands,
+        ],
+    );
+    let flavour = match quirk {
+        Quirk::Junkie => "Лучше надеяться, что у вас они не закончатся...",
+        Quirk::Smoker => "Убедитесь, что вы получите свои любимые, до того, как они закончатся.",
+        _ => "Убедитесь, что запасы вашего любимого напитка не закончатся.",
+    };
+    let name = crate::chem::name_of(world, container);
+    tell_mob(
+        world,
+        mob,
+        (
+            Span::BoldNotice,
+            &format!("У вас есть {name} {at}. {flavour}"),
+        ),
+    );
+    if quirk == Quirk::Smoker {
+        give_item(
+            world,
+            mob,
+            LIGHTER,
+            &[
+                Location::LeftPocket,
+                Location::RightPocket,
+                Location::Backpack,
+                Location::Hands,
+            ],
+        );
+    }
+}
+
+/// `/datum/quirk/item_quirk/addict/process` (every 30 s: the addiction comes back if it was
+/// kicked), the Smoker's brand check of the cigarette in the mask slot and the Alcoholic's
+/// `check_brandy` (followed every fire instead of each reagent tick).
+// The booze check looks at the blood and the stomach (tg: the reagents that tick).
+fn addict_process(world: &mut World, mob: Entity, quirk: Quirk) {
+    let Some(state) = addict_state(world, mob, quirk) else {
+        return;
+    };
+    // `no_process_traits = list(TRAIT_LIVERLESS_METABOLISM)`.
+    if crate::species::has_trait(world, mob, Trait::LiverlessMetabolism) {
+        return;
+    }
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    if now >= state.next_process {
+        if let Some(mut addicts) = world.get_mut::<AddictQuirks>(mob)
+            && let Some(a) = addicts.0.iter_mut().find(|a| a.quirk == quirk)
+        {
+            a.next_process = now + ADDICT_PROCESS_SECS;
+        }
+        if let Some(addiction) = addict_addiction(state.reagent) {
+            let active = world
+                .get::<crate::addictions::Addictions>(mob)
+                .and_then(|a| a.cycle(addiction))
+                .is_some();
+            if !active {
+                tell_mob(
+                    world,
+                    mob,
+                    (
+                        Span::Danger,
+                        "Вы думали, что завязали, но чувствуете, что возвращаетесь к вредным привычкам...",
+                    ),
+                );
+                crate::addictions::add_points(
+                    world,
+                    mob,
+                    addiction,
+                    crate::addictions::MAX_ADDICTION_POINTS,
+                );
+            }
+        }
+    }
+    let Some(favorite) = state.favorite else {
+        return;
+    };
+    match quirk {
+        Quirk::Smoker => {
+            let mask = world
+                .get::<Inventory>(mob)
+                .and_then(|i| i.mask)
+                .and_then(|m| world.get::<DmItem>(m))
+                .map(|dm| dm.path.clone());
+            let Some(mask) = mask else {
+                return;
+            };
+            if !ss13_mapload::fidelity::is_under(&mask, "/obj/item/cigarette") {
+                return;
+            }
+            if ss13_mapload::fidelity::is_under(&mask, &favorite) {
+                mood::clear_event(world, mob, "wrong_cigs");
+            } else {
+                mood::add_event(world, mob, "wrong_cigs", &WRONG_BRAND_EVENT);
+            }
+        }
+        Quirk::Alcoholic => {
+            let (mut favourite, mut other) = (false, false);
+            if let (Some(chem), Some(reagents)) = (
+                world.get_resource::<crate::chem::Chem>(),
+                world.get::<crate::chem::MobReagents>(mob),
+            ) {
+                for r in reagents
+                    .blood
+                    .reagents
+                    .iter()
+                    .chain(&reagents.stomach.reagents)
+                {
+                    let path = &chem.0.def(r.id).path;
+                    if !ss13_mapload::fidelity::is_under(path, ETHANOL) {
+                        continue;
+                    }
+                    if ss13_mapload::fidelity::is_under(path, &favorite) {
+                        favourite = true;
+                    } else {
+                        other = true;
+                    }
+                }
+            }
+            if favourite {
+                mood::clear_event(world, mob, "wrong_alcohol");
+            } else if other {
+                mood::add_event(world, mob, "wrong_alcohol", &WRONG_BRANDY_EVENT);
+            }
+        }
+        _ => {}
+    }
 }
 
 /// The taste quirks on a tongue's `(liked, disliked, toxic)` foodtypes: tg
@@ -1303,6 +2089,13 @@ impl Plugin for QuirksServerPlugin {
                 .before(crate::health::HealthSystems)
                 .run_if(any_with_component::<Quirks>),
         );
+        // `crate::addictions` has no plugin of its own: the addict quirks are its only source.
+        app.add_systems(
+            Update,
+            crate::addictions::addiction_life
+                .before(crate::health::HealthSystems)
+                .run_if(any_with_component::<crate::addictions::Addictions>),
+        );
     }
 }
 
@@ -1411,6 +2204,7 @@ fn process(world: &mut World, mob: Entity, quirk: Quirk, secs: f32) {
         Quirk::BrainTumor => {
             organs::adjust_organ_loss(world, mob, Slot::Brain, TUMOR_DAMAGE_PER_SECOND * secs);
         }
+        Quirk::Junkie | Quirk::Smoker | Quirk::Alcoholic => addict_process(world, mob, quirk),
         _ => {}
     }
 }
@@ -1518,11 +2312,93 @@ mod tests {
     }
 
     #[test]
+    fn addict_quirks_max_their_addiction_and_take_it_back() {
+        use crate::addictions::{Addiction, Addictions, MAX_ADDICTION_POINTS};
+        let mut world = World::new();
+        world.init_resource::<Time>();
+        let mob = world.spawn_empty().id();
+        assert!(add_quirk(&mut world, mob, Quirk::Smoker, false, true));
+        assert!(add_quirk(&mut world, mob, Quirk::Alcoholic, false, true));
+        let a = world.get::<Addictions>(mob).unwrap();
+        assert_eq!(a.points(Addiction::Nicotine), MAX_ADDICTION_POINTS);
+        assert_eq!(a.cycle(Addiction::Nicotine), Some(1.0));
+        assert_eq!(a.cycle(Addiction::Alcohol), Some(1.0));
+        let addicts = world.get::<AddictQuirks>(mob).unwrap();
+        let smoker = addicts.0.iter().find(|s| s.quirk == Quirk::Smoker).unwrap();
+        assert!(SMOKER_PACKS.iter().any(|(p, _)| *p == smoker.container));
+        // A kicked habit comes back on the next 30 s process.
+        crate::addictions::remove_points(&mut world, mob, Addiction::Nicotine, 900.0);
+        assert_eq!(
+            world
+                .get::<Addictions>(mob)
+                .unwrap()
+                .cycle(Addiction::Nicotine),
+            None
+        );
+        world.entity_mut(mob).insert(Stat::Conscious);
+        process(&mut world, mob, Quirk::Smoker, 1.0);
+        assert_eq!(
+            world
+                .get::<Addictions>(mob)
+                .unwrap()
+                .cycle(Addiction::Nicotine),
+            Some(1.0)
+        );
+        assert!(remove_quirk(&mut world, mob, Quirk::Smoker));
+        let a = world.get::<Addictions>(mob).unwrap();
+        assert_eq!(a.points(Addiction::Nicotine), 0.0);
+        assert_eq!(a.points(Addiction::Alcohol), 0.0);
+    }
+
+    #[test]
+    fn medicine_allergies_skip_the_blacklist() {
+        let medicines = [
+            "/datum/reagent/medicine",
+            "/datum/reagent/medicine/epinephrine",
+            "/datum/reagent/medicine/omnizine/godblood",
+            "/datum/reagent/medicine/c2/libital",
+            "/datum/reagent/medicine/c2/aiuri",
+            "/datum/reagent/medicine/morphine",
+            "/datum/reagent/medicine/spaceacillin",
+            "/datum/reagent/medicine/inacusiate",
+            "/datum/reagent/medicine/oculine",
+            "/datum/reagent/medicine/mannitol",
+            "/datum/reagent/water",
+        ];
+        let mut rng = CombatRng::default();
+        let picked = pick_medicine_allergies(&medicines, &mut rng);
+        assert_eq!(picked.len(), MEDICINE_ALLERGIES);
+        for p in &picked {
+            assert!(p.starts_with("/datum/reagent/medicine/"));
+            assert!(!p.contains("epinephrine") && !p.contains("godblood"));
+        }
+        let mut unique = picked.clone();
+        unique.sort();
+        unique.dedup();
+        assert_eq!(unique.len(), picked.len());
+    }
+
+    #[test]
+    fn food_allergy_reacts_only_to_its_foodtype() {
+        let mut world = World::new();
+        world.init_resource::<Time>();
+        let mob = world.spawn_empty().id();
+        assert!(add_quirk(&mut world, mob, Quirk::FoodAllergy, false, true));
+        let foods = world.get::<Allergies>(mob).unwrap().foods;
+        assert_eq!(foods.count_ones(), 1);
+        assert!(FOOD_ALLERGIES.iter().any(|(_, bit)| *bit == foods));
+        assert!(!food_allergy_reaction(&mut world, mob, !foods));
+        assert!(food_allergy_reaction(&mut world, mob, foods));
+        assert!(remove_quirk(&mut world, mob, Quirk::FoodAllergy));
+        assert!(!food_allergy_reaction(&mut world, mob, foods));
+    }
+
+    #[test]
     fn quirk_items_are_runtime_types() {
         let registry = ss13_mapload::runtime::runtime_types();
-        let missing: Vec<&str> = ITEM_PATHS
+        let missing: Vec<String> = item_paths()
             .into_iter()
-            .filter(|p| !registry.contains(p))
+            .filter(|p| !registry.contains(p.as_str()))
             .collect();
         assert!(
             missing.is_empty(),
