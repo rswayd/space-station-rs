@@ -914,8 +914,14 @@ pub fn interact(world: &mut World, client: Entity, user: Entity, holder: Entity)
         return;
     };
     let electrified = world.get::<Electrified>(holder).is_some();
+    // `fax/interactable`: an electrified fax shocks the hand too.
     if electrified
-        && matches!(kind, WireHolder::Airlock | WireHolder::Vending)
+        && matches!(
+            kind,
+            WireHolder::Airlock
+                | WireHolder::Vending
+                | WireHolder::Machine(crate::machine_wires::MachineWires::Fax)
+        )
         && shock(world, holder, user, 100.0)
     {
         return;
@@ -1369,6 +1375,12 @@ fn apply_act(
     }
     if !interactable(world, holder, actor) {
         return Err("not interactable");
+    }
+    // `mod/ui_act`, `mecha/ui_act`: an electrified MOD, a short-circuited mech shock first.
+    if let Some(WireHolder::Machine(kind)) = world.get::<Wires>(holder).map(|w| w.holder)
+        && !crate::device_wires::act_allowed(world, holder, kind, actor)
+    {
+        return Err("shocked");
     }
     let color = match act {
         WireAct::Cut(c) | WireAct::Pulse(c) | WireAct::Attach(c) => c,

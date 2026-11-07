@@ -248,6 +248,8 @@ pub mod decay;
 pub mod decor;
 pub mod defenses;
 #[cfg(feature = "server")]
+pub mod device_wires;
+#[cfg(feature = "server")]
 pub mod devices;
 #[cfg(feature = "server")]
 pub mod displaycase;

@@ -1869,7 +1869,9 @@ fn refresh_view(world: &mut World, control: Entity) {
                 active: suit.active,
                 activating: suit.activating,
                 open: suit.open,
-                malfunctioning: false,
+                malfunctioning: world
+                    .get::<crate::device_wires::WireState>(control)
+                    .is_some_and(|w| w.malfunctioning),
                 locked: suit.locked,
                 complexity: suit.complexity,
             },

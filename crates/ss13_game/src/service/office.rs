@@ -1054,9 +1054,15 @@ fn fax_insert(world: &mut World, client: Entity, mob: Entity, held: Entity, fax:
         return false;
     }
     let path = item_path(world, held);
+    // `is_allowed_type`: the load check wire cut lets the exotic types in too.
+    let exotic = world
+        .get::<crate::device_wires::WireState>(fax)
+        .is_some_and(|w| w.exotic)
+        && EXOTIC_FAXES.iter().any(|t| is_under(&path, t));
     let allowed = world.get::<Paper>(held).is_some()
         || world.get::<PaperPlane>(held).is_some()
-        || is_under(&path, CANVAS);
+        || is_under(&path, CANVAS)
+        || exotic;
     if !allowed {
         return false;
     }
@@ -1243,5 +1249,59 @@ pub(super) fn vend(world: &mut World, fax: Entity, item: Entity) {
     }
     if let Some(pos) = world.get::<TilePos>(fax).copied() {
         take_out(world, item, pos);
+        // `hurl_contents` (the throw wire): flung 1-4 tiles in a random direction.
+        if world
+            .get::<crate::device_wires::WireState>(fax)
+            .is_some_and(|w| w.hurl)
+        {
+            hurl(world, item, pos);
+        }
     }
+}
+
+/// tg `/obj/machinery/fax` `exotic_types`.
+const EXOTIC_FAXES: [&str; 13] = [
+    "/obj/item/card",
+    "/obj/item/folder/biscuit",
+    "/obj/item/food/breadslice",
+    "/obj/item/food/chapslice",
+    "/obj/item/food/cookie",
+    "/obj/item/food/grilled_chapslice",
+    "/obj/item/food/pizza/flatbread",
+    "/obj/item/food/pizzaslice",
+    "/obj/item/food/root_flatbread",
+    "/obj/item/food/salami",
+    "/obj/item/holochip",
+    "/obj/item/stack/spacecash",
+    "/obj/item/throwing_star",
+];
+
+/// `throw_at(get_edge_target_turf(loc, pick(alldirs)), rand(1, 4), EMBED_THROWSPEED_THRESHOLD)`.
+fn hurl(world: &mut World, item: Entity, pos: TilePos) {
+    let (dir, range) = {
+        let mut rng = world.resource_mut::<crate::combat::CombatRng>();
+        (rng.range(0, 7) as usize, rng.range(1, 4) as u32)
+    };
+    let (dx, dy) = [
+        (0, 1),
+        (1, 1),
+        (1, 0),
+        (1, -1),
+        (0, -1),
+        (-1, -1),
+        (-1, 0),
+        (-1, 1),
+    ][dir];
+    let target = TilePos::new(pos.x + dx * 32, pos.y + dy * 32, pos.z);
+    let now_ds = world.resource::<Time>().elapsed_secs_f64() * 10.0;
+    // `EMBED_THROWSPEED_THRESHOLD`.
+    let Some(path) = crate::throw::Trajectory::new(pos, target, range, 4.0, now_ds) else {
+        return;
+    };
+    world.entity_mut(item).insert(crate::throw::Thrown {
+        path,
+        thrower: None,
+        target: None,
+        last_dir: None,
+    });
 }

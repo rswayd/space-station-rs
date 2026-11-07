@@ -35,7 +35,7 @@ use crate::power::Unpowered;
 use crate::power::accumulator::{Accumulator, AccumulatorKind};
 use crate::power::emitter::Emitter;
 use crate::power::shields::ShieldWallGen;
-use crate::tools::{Actor, ToolKind, tell, tool_of};
+use crate::tools::{ToolKind, tell, tool_of};
 use crate::wallmount::fire_alarm::{self, AreaFire, FireAlarm};
 use crate::wallmount::machines::MassDriver;
 use crate::wires::{
@@ -70,6 +70,15 @@ pub enum MachineWires {
     ShieldWallGen,
     MassDriver,
     TeslaCoil,
+    /// The kinds of [`crate::device_wires`].
+    Microwave,
+    Holopad,
+    Fax,
+    Rnd,
+    Robot,
+    Mecha,
+    Mod,
+    Radio,
 }
 
 impl MachineWires {
@@ -125,6 +134,7 @@ impl MachineWires {
                 &[WIRE_ZAP],
                 0,
             ),
+            _ => return crate::device_wires::set(self),
         };
         WireSet {
             key,
@@ -135,12 +145,27 @@ impl MachineWires {
 
     /// `randomize = TRUE`: every instance its own colors.
     fn randomized(self) -> bool {
-        matches!(self, Self::ShieldWallGen | Self::TeslaCoil)
+        matches!(
+            self,
+            Self::ShieldWallGen | Self::TeslaCoil | Self::Rnd | Self::Robot
+        )
     }
 
     /// The panel toggles with a screwdriver here (no frame family owns it).
     fn own_panel(self) -> bool {
-        !matches!(self, Self::AtmosShieldGen | Self::ShieldWallGen)
+        // A frame's panel (`crate::machine_frame`), an R&D lathe's, the MOD's cover
+        // (`crate::modsuit`); cyborgs, mechs and radios: `crate::device_wires::screwdriver`.
+        !matches!(
+            self,
+            Self::AtmosShieldGen
+                | Self::ShieldWallGen
+                | Self::Microwave
+                | Self::Rnd
+                | Self::Mod
+                | Self::Robot
+                | Self::Mecha
+                | Self::Radio
+        )
     }
 }
 
@@ -158,7 +183,9 @@ pub(crate) fn build(app: &mut App) {
         ),
     )
     .add_click_handler(ClickPhase::EmptyHand, 99, empty_hand)
-    .add_click_handler(ClickPhase::HeldOnTarget, 289, held_on_target);
+    .add_click_handler(ClickPhase::HeldOnTarget, 289, held_on_target)
+    .add_click_handler(ClickPhase::OtherHand, 89, held_on_target);
+    crate::device_wires::build(app);
 }
 
 /// The kind's [`Wires`] for `e`, colors from the round's directory (or per instance).
@@ -235,27 +262,33 @@ fn attach_wires(
     }
 }
 
-fn kind_of(world: &World, e: Entity) -> Option<MachineWires> {
+pub(crate) fn kind_of(world: &World, e: Entity) -> Option<MachineWires> {
     match world.get::<Wires>(e)?.holder {
         WireHolder::Machine(kind) => Some(kind),
         _ => None,
     }
 }
 
-fn panel_open(world: &World, e: Entity) -> bool {
+pub(crate) fn panel_open(world: &World, e: Entity) -> bool {
     world.get::<PanelOpen>(e).is_some_and(|p| p.0)
 }
 
 /// The kind's `interactable(user)`: the panel is open.
 // tg's shield generators and emitters do not check the panel in `interactable`, so their window
 // would stay open with the panel shut; the panel check here is the intent, the bug not carried.
-pub fn interactable(world: &World, e: Entity, _kind: MachineWires) -> bool {
-    panel_open(world, e)
+pub fn interactable(world: &World, e: Entity, kind: MachineWires) -> bool {
+    crate::device_wires::interactable(world, e, kind).unwrap_or_else(|| panel_open(world, e))
 }
 
 /// `INTERACT_MACHINE_WIRES_IF_OPEN`: an empty hand on an open panel opens the wires.
 fn empty_hand(world: &mut World, ctx: &ClickCtx) -> bool {
-    if kind_of(world, ctx.target).is_none() || !panel_open(world, ctx.target) {
+    let Some(kind) = kind_of(world, ctx.target) else {
+        return false;
+    };
+    // Items are picked up by hand; a cyborg's wires take a wire tool.
+    if !crate::device_wires::hand_opens(world, ctx.target, kind)
+        || !interactable(world, ctx.target, kind)
+    {
         return false;
     }
     wires::interact(world, ctx.client, ctx.mob, ctx.target);
@@ -270,11 +303,9 @@ fn held_on_target(world: &mut World, ctx: &ClickCtx) -> bool {
     let Some(kind) = kind_of(world, ctx.target) else {
         return false;
     };
-    let actor = Actor {
-        client: ctx.client,
-        mob: ctx.mob,
-        item: Some(held),
-    };
+    if let Some(done) = crate::device_wires::screwdriver(world, ctx, kind, held) {
+        return done;
+    }
     if kind.own_panel() && tool_of(world, held).map(|t| t.0) == Some(ToolKind::Screwdriver) {
         let open = !panel_open(world, ctx.target);
         world.entity_mut(ctx.target).insert(PanelOpen(open));
@@ -286,11 +317,19 @@ fn held_on_target(world: &mut World, ctx: &ClickCtx) -> bool {
         tell(world, ctx.client, Span::Notice, text);
         return true;
     }
-    wires::wire_tool_interaction(world, actor, held, ctx.target)
+    let wire_tool = matches!(
+        tool_of(world, held).map(|t| t.0),
+        Some(ToolKind::Wirecutters | ToolKind::Multitool)
+    );
+    if !wire_tool || !interactable(world, ctx.target, kind) {
+        return false;
+    }
+    wires::interact(world, ctx.client, ctx.mob, ctx.target);
+    true
 }
 
 /// Everyone within hearing of `e` (tg `visible_message` / `audible_message`).
-fn announce(world: &mut World, e: Entity, text: &str) {
+pub(crate) fn announce(world: &mut World, e: Entity, text: &str) {
     let Some(pos) = crate::explosions::turf_of(world, e) else {
         return;
     };
@@ -392,7 +431,7 @@ pub fn on_cut(
                 announce(world, e, "Тревожное жужжание массдрайвера стихает.");
             }
         }
-        _ => {}
+        _ => crate::device_wires::on_cut(world, e, kind, wire, mend, source),
     }
 }
 
@@ -402,7 +441,7 @@ pub fn on_pulse(
     e: Entity,
     kind: MachineWires,
     wire: &str,
-    _user: Option<Entity>,
+    user: Option<Entity>,
 ) {
     match (kind, wire) {
         (MachineWires::AirAlarm, WIRE_POWER) => {
@@ -458,7 +497,7 @@ pub fn on_pulse(
             }
             announce(world, e, "Из массдрайвера доносится тревожное жужжание.");
         }
-        _ => {}
+        _ => crate::device_wires::on_pulse(world, e, kind, wire, user),
     }
 }
 
@@ -526,7 +565,7 @@ pub fn can_shock(world: &World, e: Entity) -> bool {
     world.get::<Unpowered>(e).is_none()
 }
 
-fn on_off(on: bool) -> &'static str {
+pub(crate) fn on_off(on: bool) -> &'static str {
     if on { "on" } else { "off" }
 }
 
@@ -556,7 +595,7 @@ pub fn status(world: &World, e: Entity, kind: MachineWires) -> Vec<String> {
                 .is_some_and(|f| f.fire_detect);
             vec![format!("The thermal sensor light is {}.", on_off(detect))]
         }
-        _ => Vec::new(),
+        _ => crate::device_wires::status(world, e, kind),
     }
 }
 

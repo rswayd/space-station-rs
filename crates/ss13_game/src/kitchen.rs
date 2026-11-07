@@ -567,7 +567,26 @@ fn microwave_interact(world: &mut World, client: Entity, e: Entity, right: bool)
         eject(world, e, None);
         return;
     }
+    // `start_cycle`: the mode wire cut swaps to `charge()`, which needs the vampire upgrade
+    // (not ported).
+    let swapped = world
+        .get::<crate::wires::Wires>(e)
+        .is_some_and(|w| w.is_cut(crate::device_wires::WIRE_MODE_SELECT));
+    if swapped {
+        if let Some(pos) = world.get::<TilePos>(e).copied() {
+            crate::effects::particles::do_sparks(world, 3, true, pos);
+        }
+        tell(world, client, Span::Warning, "нужны улучшения!");
+        return;
+    }
     cook(world, e);
+}
+
+/// `/datum/wires/microwave` `WIRE_ACTIVATE` pulse: `cook()`.
+pub(crate) fn wire_cook(world: &mut World, e: Entity) {
+    if world.get::<Microwave>(e).is_some() {
+        cook(world, e);
+    }
 }
 
 /// tg `cook()`: the checks, then a normal, a mucky or a possibly failing cycle loop.
@@ -576,8 +595,18 @@ fn cook(world: &mut World, e: Entity) {
     if world.get::<Unpowered>(e).is_some()
         || mw.operating.is_some()
         || mw.broken > 0
+        || crate::machine_frame::panel_open(world, e)
         || mw.dirty >= MAX_MICROWAVE_DIRTINESS
     {
+        return;
+    }
+    // `wire_disabled`: the activate wire is cut.
+    if world
+        .get::<crate::wires::Wires>(e)
+        .is_some_and(|w| w.is_cut(crate::machine_wires::WIRE_ACTIVATE))
+    {
+        let name = name_of(world, e);
+        crate::machine_wires::announce(world, e, &format!("{name} жужжит."));
         return;
     }
     let non_food = contents(world, e)
