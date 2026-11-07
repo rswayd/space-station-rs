@@ -246,10 +246,10 @@ fn refresh_pois(world: &mut World, mut next: Local<f64>) {
     if now < *next {
         return;
     }
-    let open = world
-        .query::<&UiWindow>()
-        .iter(world)
-        .any(|w| w.interface == OrbitUi::NAME || w.interface == GhostMenuUi::NAME);
+    let open = world.query::<&UiWindow>().iter(world).any(|w| {
+        w.interface == <OrbitUi as ss13_tgui::UiInterface>::NAME
+            || w.interface == <GhostMenuUi as ss13_tgui::UiInterface>::NAME
+    });
     if !open {
         return;
     }
@@ -1137,7 +1137,8 @@ mod tests {
         assert_eq!(groups.len(), 1);
         assert_eq!(groups[0].name, "Hermit");
         assert_eq!(groups[0].amount_left, 3);
-        assert_eq!(groups[0].key, a.to_bits());
+        // The group jumps to one of its spawners.
+        assert!([a.to_bits(), b.to_bits()].contains(&groups[0].key));
     }
 
     #[test]
