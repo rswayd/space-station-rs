@@ -4,8 +4,7 @@
 //! statpanel (`crate::statpanel`) appends them to the Status tab of the client whose mob is an
 //! AI's eye. Lockdown of these cyborgs is the robotics console's (`super::robotics`), which the
 //! AI opens with a click.
-// shortcut: a cyborg's line is text, not the tg `track_cyborg` link; no "AI shell beacons"
-// line until AI shells exist.
+// shortcut: a cyborg's line is text, not the tg `track_cyborg` link.
 
 use bevy::prelude::*;
 use ss13_shared::TilePos;
@@ -100,6 +99,7 @@ pub fn ai_lines(world: &World, ai: Entity) -> Vec<String> {
         let has_client = world
             .get::<PlayerMob>(borg)
             .is_some_and(|p| world.get_entity(p.client).is_ok());
+        let shell = world.get::<super::ai_shell::AiShell>(borg).is_some();
         let status = RobotStatus::of(conscious, has_client, has_cell, cyborg.charge);
         let cell = if has_cell {
             format!("{}/{}", energy(cyborg.charge), energy(cyborg.max_charge))
@@ -119,10 +119,20 @@ pub fn ai_lines(world: &World, ai: Entity) -> Vec<String> {
             "{}: S.Integrity: {}% | Cell: {cell} | Model: {model} | Loc: {area} | Status: {}",
             name_of(world, borg),
             trim(integrity as f64),
-            status.text()
+            if shell { "AI SHELL" } else { status.text() }
         ));
     }
+    lines.push(format!("AI shell beacons detected: {}", shells(world)));
     lines
+}
+
+/// tg `GLOB.available_ai_shells`.
+// Cost: one pass over the entities per AI client per statpanel refresh (once a second).
+fn shells(world: &World) -> usize {
+    world
+        .iter_entities()
+        .filter(|e| e.contains::<super::ai_shell::AiShell>())
+        .count()
 }
 
 /// A BYOND number as text: no trailing `.0`.

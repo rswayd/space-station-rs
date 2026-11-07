@@ -20,7 +20,8 @@
 //!   endoskeleton go inside (tg `mmi`, `robot_suit`), and it starts as the Cyborg job's does
 //!   (`crate::silicon::cyborg::activate`).
 // AI cores built around a processor: `crate::silicon::ai_core`.
-// shortcut: no AI shells (B.O.R.I.S.), multitool debug window
+// B.O.R.I.S. modules build AI shells (`crate::silicon::ai_shell`).
+// shortcut: no multitool debug window
 // (`CyborgBootDebug`: name, locomotion, panel, forced AI, lawsync), wrench disassembly,
 // screwdriver cell swap, crowbar flash removal or wirecutters; no syndicate MMI laws, MMI
 // EMPs, sphere posibrains, personality seeds, posibrain bans or the ghost's confirmation
@@ -806,6 +807,10 @@ fn suit_interaction(
         build_cyborg(world, client, tool, suit, &state);
         return true;
     }
+    if is_under(tool_path, super::ai_shell::BORIS) {
+        build_shell(world, client, tool, suit, &state);
+        return true;
+    }
     false
 }
 
@@ -933,6 +938,41 @@ fn build_cyborg(
     super::cyborg::activate(world, borg, player, pos);
     refresh_look(world, processor);
     info!("{client} built the cyborg {borg} around {processor}");
+}
+
+/// tg `robot_suit/item_interaction` with a B.O.R.I.S. module: an empty AI shell
+/// (`super::ai_shell`), the module used up.
+fn build_shell(world: &mut World, client: Entity, boris: Entity, suit: Entity, state: &RobotSuit) {
+    if !complete(world, state) {
+        return;
+    }
+    let Some(&pos) = world.get::<TilePos>(suit) else {
+        let name = name_of(world, boris);
+        tell(
+            world,
+            client,
+            Span::Warning,
+            format!(
+                "You cannot install {name}, the frame has to be standing on the ground to be \
+                 perfectly precise!"
+            ),
+        );
+        return;
+    };
+    let Some(borg) = super::cyborg::spawn_borg(world, pos, "AI Shell") else {
+        return;
+    };
+    let chest = state.parts[CHEST].expect("checked by complete");
+    if let Some(cell) = world.get::<RobotChest>(chest).and_then(|c| c.cell) {
+        install_cell(world, borg, cell);
+        if let Some(mut c) = world.get_mut::<RobotChest>(chest) {
+            c.cell = None;
+        }
+    }
+    world.try_despawn(boris).ok();
+    put_inside(world, suit, borg);
+    super::ai_shell::make_shell(world, borg);
+    info!("{client} built the AI shell {borg}");
 }
 
 /// The cyborg's stock cell gives way to `cell`, whose charge it now runs on.

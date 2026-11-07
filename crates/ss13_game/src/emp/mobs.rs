@@ -93,7 +93,7 @@ pub fn modifier_by_capacity(maxcharge: f64) -> f64 {
 
 /// `/mob/living/silicon/emp_act` (burn, `*БЗЗЗТ*`, the static flash), then the cyborg's
 /// knockout and cell drain or the AI's surge (`view_core` or an evacuation call, 30%).
-// shortcut: buckled riders do not fall off (no riding cyborgs); no AI shells to disconnect.
+// shortcut: buckled riders do not fall off (no riding cyborgs).
 fn silicons(world: &mut World, mut cursor: Local<MessageCursor<EmpAct>>) {
     for ev in emp_acts(world, &mut cursor) {
         let mob = ev.target;
@@ -129,6 +129,13 @@ fn silicons(world: &mut World, mut cursor: Local<MessageCursor<EmpAct>>) {
             }
         }
         if let Some(eye) = world.get::<AiCore>(mob).map(|c| c.eye) {
+            // `/mob/living/silicon/ai/emp_act`: `disconnect_shell()`.
+            if world
+                .get::<crate::silicon::ai_shell::DeployedShell>(mob)
+                .is_some()
+            {
+                crate::silicon::ai_shell::undeploy(world, mob);
+            }
             let (surge, pick) = {
                 let mut rng = world.resource_mut::<EmpRng>();
                 (rng.prob(30.0), rng.range(1, 2))

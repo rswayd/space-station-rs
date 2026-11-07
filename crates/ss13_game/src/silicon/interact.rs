@@ -92,6 +92,12 @@ pub fn attack_ai(world: &mut World, client: Entity, user: Entity, target: Entity
         super::airlock::attack_ai(world, client, user, target);
         return true;
     }
+    if super::ai_shell::attack_ai(world, user, target) {
+        return true;
+    }
+    let Ok(e) = world.get_entity(target) else {
+        return false;
+    };
     if e.contains::<Apc>() {
         crate::power::apc_ui::open(world, client, user, target);
         return true;

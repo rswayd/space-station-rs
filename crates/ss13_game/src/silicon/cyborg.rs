@@ -149,7 +149,7 @@ fn forget_ai(remove: On<Remove<AiCore>>, cores: Query<&AiCore>, mut borgs: Query
 }
 
 /// tg `select_active_ai_with_fewest_borgs`.
-fn fewest_borgs_ai(world: &mut World) -> Option<Entity> {
+pub(crate) fn fewest_borgs_ai(world: &mut World) -> Option<Entity> {
     let mut ais = world.query::<(Entity, &AiCore, &Stat)>();
     ais.iter(world)
         .filter(|(_, _, s)| **s != Stat::Dead)

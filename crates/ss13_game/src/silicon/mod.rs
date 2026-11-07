@@ -4,7 +4,7 @@
 //! - [`ai`] (server): the AI in its core, its eye, AI clicks on doors and APCs; [`ai_power`]
 //!   (server): the core's power loss and restore routine; [`ai_hud`] (server): the AI's and
 //!   cyborgs' HUD buttons, VOX announcements, the core display; [`ai_track`] (server): camera
-//!   tracking; [`ai_upgrades`] (server): rack upgrade modules; [`ai_status`] (server): the AI's Status tab lines and its connected cyborgs;
+//!   tracking; [`ai_shell`] (server): AI shells; [`ai_upgrades`] (server): rack upgrade modules; [`ai_status`] (server): the AI's Status tab lines and its connected cyborgs;
 //! - [`alarms`] (server): station alarms, their silicon listeners and the alert console;
 //! - [`cyborg`] (server): cyborgs, their models, cell and the recharging station;
 //!   [`chassis`] (server): the cover and its lock, the cell slot, emags, lockdown, the
@@ -43,6 +43,8 @@ pub mod ai_fixer;
 pub mod ai_hud;
 #[cfg(feature = "server")]
 pub mod ai_power;
+#[cfg(feature = "server")]
+pub mod ai_shell;
 #[cfg(feature = "server")]
 pub mod ai_slipper;
 #[cfg(feature = "server")]
@@ -146,6 +148,7 @@ mod server {
                     super::aicard::AiCardPlugin,
                     super::ai_fixer::AiFixerPlugin,
                     super::ai_upgrades::AiUpgradesPlugin,
+                    super::ai_shell::AiShellPlugin,
                     super::ai_slipper::AiSlipperPlugin,
                     super::holopad::HolopadPlugin,
                     super::pai::PaiPlugin,
