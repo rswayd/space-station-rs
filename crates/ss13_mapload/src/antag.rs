@@ -164,9 +164,9 @@ pub const WIZARD_RUNTIME_TYPES: [&str; 40] = [
 ];
 
 /// The uplink items sold here: the ones whose item exists in this codebase. The rest of tg's
-/// catalog needs mechanics that are not modelled yet (explosions, implants).
+/// catalog needs mechanics that are not modelled yet (see `docs/parity/antagonists/uplink.md`).
 // shortcut: a curated list; grow it as the items' mechanics land.
-pub const UPLINK_ITEMS: [&str; 31] = [
+pub const UPLINK_ITEMS: [&str; 97] = [
     // Guns that fire (`ss13_game::guns`): the traitors' Makarov case and .357 revolver, the
     // operatives' C-20r case, and their ammunition.
     "/datum/uplink_item/dangerous/pistol",
@@ -216,6 +216,91 @@ pub const UPLINK_ITEMS: [&str; 31] = [
     // `buy_raw_tc`.
     "/datum/uplink_item/bundles_tc/telecrystal",
     "/datum/uplink_item/badass/balloon",
+    // Makarov magazines: armour piercing, hollow point, incendiary (`ss13_game::projectile`).
+    "/datum/uplink_item/ammo/pistolap",
+    "/datum/uplink_item/ammo/pistolhp",
+    "/datum/uplink_item/ammo/pistolfire",
+    // MODsuits and modules (`ss13_game::modsuit`).
+    // shortcut: the infiltrator's psi-emitter stealth module, the shock absorber, the magnetic
+    // harness and the other effectless modules of these suits only install and draw power.
+    "/datum/uplink_item/suits/infiltrator_bundle",
+    "/datum/uplink_item/suits/space_suit",
+    "/datum/uplink_item/suits/modsuit",
+    "/datum/uplink_item/suits/noslip",
+    "/datum/uplink_item/suits/modsuit/elite",
+    "/datum/uplink_item/suits/emp_shield",
+    // Role-restricted: the counterfeit mail kit (`ss13_game::cargo::mail`), the DNA syringe gun,
+    // the reagent dartgun and the meat hook (`ss13_game::guns_special`), the syndicate rebar
+    // crossbow, the surgery disks (`ss13_game::medical::operating`), the pressure modkit
+    // (`ss13_game::mining::modkits`), the laser arm autosurgeon
+    // (`ss13_game::medical::cyberimps`), BandaStation's breaching sledgehammer
+    // (`ss13_game::weapons::rip_and_tear`) and the ancient jumpsuit (plain clothing in tg too).
+    "/datum/uplink_item/role_restricted/mail_counterfeit_kit",
+    "/datum/uplink_item/role_restricted/ancient_jumpsuit",
+    "/datum/uplink_item/role_restricted/modified_syringe_gun",
+    "/datum/uplink_item/role_restricted/meathook",
+    "/datum/uplink_item/role_restricted/rebarxbowsyndie",
+    "/datum/uplink_item/role_restricted/brainwash_disk",
+    "/datum/uplink_item/role_restricted/advanced_plastic_surgery",
+    "/datum/uplink_item/role_restricted/pressure_mod",
+    "/datum/uplink_item/role_restricted/laser_arm",
+    "/datum/uplink_item/role_restricted/chemical_gun",
+    "/datum/uplink_item/role_restricted/syndiesledge",
+    // `purchasable_from = NONE`: tg sells it to traitors only under the cybernetic revolution
+    // station trait, which is not ported.
+    "/datum/uplink_item/special/autosurgeon",
+    // The operatives' guns, their ammunition (`ss13_game::guns`) and kits.
+    // shortcut: the M-90gl's underbarrel launcher, the L6 SAW's cover and the sniper scope are
+    // not modelled; the guns fire and reload as plain ballistics.
+    "/datum/uplink_item/weapon_kits/low_cost/shotgun",
+    "/datum/uplink_item/ammo_nuclear/basic/buck",
+    "/datum/uplink_item/ammo_nuclear/basic/slug",
+    "/datum/uplink_item/ammo_nuclear/basic/flechette",
+    "/datum/uplink_item/ammo_nuclear/incendiary/dragon",
+    "/datum/uplink_item/weapon_kits/low_cost/clandestine",
+    "/datum/uplink_item/ammo_nuclear/basic/m10mm",
+    "/datum/uplink_item/ammo_nuclear/ap/m10mm",
+    "/datum/uplink_item/ammo_nuclear/hp/m10mm",
+    "/datum/uplink_item/ammo_nuclear/incendiary/m10mm",
+    "/datum/uplink_item/ammo_nuclear/ap/smg",
+    "/datum/uplink_item/ammo_nuclear/hp/smg",
+    "/datum/uplink_item/ammo_nuclear/incendiary/smg",
+    "/datum/uplink_item/weapon_kits/medium_cost/revolvercase",
+    "/datum/uplink_item/ammo_nuclear/basic/revolver",
+    "/datum/uplink_item/weapon_kits/high_cost/machinegun",
+    "/datum/uplink_item/ammo_nuclear/basic/machinegun",
+    "/datum/uplink_item/ammo_nuclear/ap/machinegun",
+    "/datum/uplink_item/ammo_nuclear/hp/machinegun",
+    "/datum/uplink_item/ammo_nuclear/incendiary/machinegun",
+    "/datum/uplink_item/ammo_nuclear/special/machinegun",
+    "/datum/uplink_item/weapon_kits/high_cost/carbine",
+    "/datum/uplink_item/ammo_nuclear/basic/carbine",
+    "/datum/uplink_item/weapon_kits/high_cost/sniper",
+    "/datum/uplink_item/ammo_nuclear/basic/sniper",
+    "/datum/uplink_item/ammo_nuclear/incendiary/sniper",
+    "/datum/uplink_item/weapon_kits/surplus_smg",
+    "/datum/uplink_item/ammo_nuclear/surplus_smg",
+    "/datum/uplink_item/weapon_kits/medium_cost/syndiesledge",
+    "/datum/uplink_item/explosives/military_grade/frag_grenade",
+    "/datum/uplink_item/explosives/military_grade/x4",
+    "/datum/uplink_item/explosives/military_grade/syndicate_minibomb",
+    "/datum/uplink_item/explosives/military_grade/x4bag",
+    // Mechs (`ss13_game::mecha`) land at the buyer's feet; their support bags.
+    "/datum/uplink_item/mech/gygax",
+    "/datum/uplink_item/mech/mauler",
+    "/datum/uplink_item/mech/support_bag",
+    "/datum/uplink_item/mech/support_bag/mauler",
+    "/datum/uplink_item/stealthy_tools/syndigaloshes/nuke",
+    // Bomb implants (`ss13_game::implants`), the reviver and CNS rebooter autosurgeons.
+    "/datum/uplink_item/implants/nuclear/microbomb",
+    "/datum/uplink_item/implants/nuclear/macrobomb",
+    "/datum/uplink_item/implants/nuclear/reviver",
+    "/datum/uplink_item/implants/nuclear/antistun",
+    "/datum/uplink_item/device_tools/medkit",
+    // The syndicate jaws of life (`ss13_game::doors`) and BandaStation's tacticool holster
+    // (`ss13_game::clothing::holsters`).
+    "/datum/uplink_item/device_tools/syndie_jaws_of_life",
+    "/datum/uplink_item/device_tools/holster_tacticool",
 ];
 
 /// tg `/datum/uplink_category/discounts`: the category of an uplink's sales.
