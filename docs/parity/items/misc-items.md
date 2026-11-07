@@ -25,7 +25,7 @@
 
 - **Код:** [`/obj/item/flatpack`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/flatpacks.dm#L1), [`multitool_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/flatpacks.dm#L55), [`/obj/structure/flatpack_cart`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/flatpacks.dm#L100)
 - **BandaStation:** [`flatpacks.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/flatpacks.dm#L29) — флэтпак носится только двумя руками
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/eng_machines/flatpacker.rs`: упаковка флэтпакером, развёртывание мультитулом (1 с, открытый свободный пол) в машину с упакованными деталями, имя по машине; `crates/ss13_game/src/misc_items/flatpacks.rs`: типовые флэтпаки (флэтпакер, двигатель шаттла, сортировщик почты) со своей платой, тележка на 3 флэтпака (верхний — в руку, коробки на спрайте, осмотр снизу вверх). Двуручный перенос (BandaStation) и замедление в руке/при волочении — общие механики двуручных предметов и замедления; выпадение содержимого тележки при разрушении — общая разборка структур
 
 ### Хартия станции
 Капитан один раз за раунд переименовывает станцию хартией (с админским вето); баннер-вариант для других карт.

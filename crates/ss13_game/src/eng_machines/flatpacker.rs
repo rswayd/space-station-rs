@@ -19,9 +19,9 @@
 //! - A flatpack on an open, unblocked floor deploys with a multitool after 1 s: the board's
 //!   machine with its default parts (the packed parts in place of their kind) and the setup of
 //!   a frame-built one (`crate::machine_frame::build_machine`).
-// shortcut: no ctrl-click board eject, insertion energy and animations, flatpack carts,
-// two-handed carrying or slowdown; the window's material bar is plain rows
-// (`crate::flatpacker_client`).
+// shortcut: no ctrl-click board eject, insertion energy and animations, two-handed carrying or
+// slowdown (flatpack carts and typed flatpacks: `crate::misc_items::flatpacks`); the window's
+// material bar is plain rows (`crate::flatpacker_client`).
 
 use bevy::ecs::message::{MessageCursor, Messages};
 use bevy::prelude::*;
@@ -156,14 +156,7 @@ fn setup_mapped(world: &mut World) {
         let Some(board) = spawn_obj(world, MAPPED_FLATPACK_BOARD, pos) else {
             continue;
         };
-        world.entity_mut(pack).insert(Flatpack { board });
-        put_inside(world, board, pack);
-        let name = circuit_of(world, board)
-            .map(|d| proto_name(world, &d.build_path))
-            .unwrap_or_default();
-        world
-            .entity_mut(pack)
-            .insert(Name::new(format!("flatpack ({name})")));
+        pack_board(world, pack, board);
     }
     let mut q = world.query_filtered::<(Entity, &DmObj), With<ss13_world::Mapped>>();
     let found: Vec<Entity> = q
@@ -174,6 +167,19 @@ fn setup_mapped(world: &mut World) {
     for e in found {
         setup(world, e);
     }
+}
+
+/// A flatpack's `Initialize(mapload, new_board)`: `board` inside it, the pack named after its
+/// machine (also the typed flatpacks of `crate::misc_items::flatpacks`).
+pub fn pack_board(world: &mut World, pack: Entity, board: Entity) {
+    world.entity_mut(pack).insert(Flatpack { board });
+    put_inside(world, board, pack);
+    let name = circuit_of(world, board)
+        .map(|d| proto_name(world, &d.build_path))
+        .unwrap_or_default();
+    world
+        .entity_mut(pack)
+        .insert(Name::new(format!("flatpack ({name})")));
 }
 
 /// `Initialize`; also for one built from a frame (`crate::machine_frame::setup_built`).

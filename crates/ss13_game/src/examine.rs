@@ -151,6 +151,7 @@ pub fn examine_lines(world: &World, examiner: Entity, target: Entity) -> (String
     crate::mining::examine_lines(world, target, &mut lines);
     crate::science::quantum_pad::examine_lines(world, target, &mut lines);
     crate::silicon::ai_slipper::examine_lines(world, target, &mut lines);
+    crate::misc_items::flatpacks::examine_lines(world, target, &mut lines);
     (name, lines)
 }
 

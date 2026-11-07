@@ -4,10 +4,12 @@
 //! - [`charter`]: the station charter renaming the station.
 //! - [`documents`]: secret documents, their photocopies and forged seals.
 //! - [`target`]: shooting range targets and their bullet holes.
+//! - [`flatpacks`]: typed flatpacks and the flatpack cart.
 //! - [`puzzle`]: ruin keycards, keycard doors and the puzzle panels opening puzzle doors.
 
 pub mod charter;
 pub mod documents;
+pub mod flatpacks;
 pub mod puzzle;
 pub mod target;
 
@@ -21,5 +23,6 @@ impl Plugin for MiscItemsPlugin {
         documents::build(app);
         target::build(app);
         puzzle::build(app);
+        flatpacks::build(app);
     }
 }

@@ -158,6 +158,7 @@
 //! | 2010 | `power::lighting::remove_by_hand` (right click: a bulb out of its fixture) |
 //! | 2012 | `power::lighting::floodlight_hand` (setting, the tube out with the panel open) |
 //! | 2017 | `misc_items::puzzle::press` (ruin puzzle buttons) |
+//! | 2027 | `misc_items::flatpacks::unload` (the topmost flatpack off a cart) |
 //! | 2100 | `power::apc_ui::interact` |
 //! | 2200 | `mecha::bay::interact` |
 //! | 2300 | `mecha::core::attack_hand` |
@@ -326,6 +327,7 @@
 //! | 4300 | `tables::item_interaction` |
 //! | 4400 | `science::experi_scanner::pre_attack` (not on living mobs) |
 //! | 4460 | `closets::kinds::held_on_target` (large crates, multitools on abandoned crates) |
+//! | 4467 | `misc_items::flatpacks::load` (a flatpack onto a flatpack cart) |
 //! | 4500 | `construction::item_interaction` |
 //! | 4600 | core: a cyborg module or `NoDrop` item stops here |
 //! | 4650 | `lockbox::item_interaction` (`closets` plugin) |

@@ -1,16 +1,20 @@
 //! Single items over real WebTransport on 127.0.0.1 (`ss13_game::misc_items`): the station
 //! charter renames the station (a standard name at once, another after the admins' wait unless
 //! rejected) and is used up; a keycard door opens only for its keycard, a keycard panel opens its
-//! puzzle door once.
+//! puzzle door once; a typed flatpack holds its board, a flatpack cart takes three packs and
+//! gives back the topmost.
 
 use std::path::{Path, PathBuf};
 
 use bevy::prelude::*;
 use ss13_game::combat::NextMove;
 use ss13_game::doors::{Door, DoorState};
+use ss13_game::eng_machines::flatpacker::Flatpack;
 use ss13_game::inventory::{CarriedBy, Inventory};
 use ss13_game::misc_items::charter::{Charter, StationName, reject_proposed};
+use ss13_game::misc_items::flatpacks::FlatpackCart;
 use ss13_game::misc_items::puzzle::PuzzleUsed;
+use ss13_game::storage::StoredIn;
 use ss13_game::testing::{self, Drive, fixture_map, write_fixture};
 use ss13_net::chat::client::ChatReceived;
 use ss13_shared::TilePos;
@@ -72,6 +76,16 @@ const TYPES: &str = r##"{
         "queue_size": 2 } },
     "/obj/machinery/puzzle/keycardpad": { "parent": "/obj/machinery/puzzle", "declared_vars": {
         "name": "keycard panel", "icon_state": "keycardpad0", "base_icon_state": "keycardpad" } },
+    "/obj/item/flatpack": { "parent": "/obj/item", "declared_vars": {
+        "name": "flatpack", "icon_state": "flatpack", "density": 1 } },
+    "/obj/item/flatpack/flatpacker": { "parent": "/obj/item/flatpack", "declared_vars": {
+        "name": "flatpacker" } },
+    "/obj/item/circuitboard": { "parent": "/obj/item" },
+    "/obj/item/circuitboard/machine": { "parent": "/obj/item/circuitboard" },
+    "/obj/item/circuitboard/machine/flatpacker": { "parent": "/obj/item/circuitboard/machine" },
+    "/obj/structure/flatpack_cart": { "parent": "/obj/structure", "declared_vars": {
+        "name": "flatpack cart", "icon": { "resource": "st.dmi" }, "icon_state": "flatcart",
+        "density": 1 } },
     "/obj/item/card": { "parent": "/obj/item" },
     "/obj/item/card/id": { "parent": "/obj/item/card", "declared_vars": {
         "access": { "list": [] }, "slot_flags": 256 } },
@@ -101,16 +115,19 @@ const TYPES: &str = r##"{
 }"##;
 
 /// Rows top-down, the last line is y = 1. The spawn `s` (2,3); a yellow keycard door `K`
-/// (3,3); a keycard panel `B` (2,2) of the puzzle `vault`, whose puzzle door is `D` (3,2).
+/// (3,3); a keycard panel `B` (2,2) of the puzzle `vault`, whose puzzle door is `D` (3,2); a
+/// flatpack cart `C` (2,4).
 const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 "f" = (/turf/open/floor,/area/space)
 "s" = (/obj/effect/landmark/start/assistant,/turf/open/floor,/area/space)
 "K" = (/obj/machinery/door/puzzle/keycard/yellow_required,/turf/open/floor,/area/space)
 "B" = (/obj/machinery/puzzle/keycardpad{id = "vault"},/turf/open/floor,/area/space)
 "D" = (/obj/machinery/door/puzzle{puzzle_id = "vault"},/turf/open/floor,/area/space)
+"C" = (/obj/structure/flatpack_cart,/turf/open/floor,/area/space)
 
 (1,1,1) = {"
 wwwww
+wCffw
 wsKfw
 wBDfw
 wwwww
@@ -120,10 +137,11 @@ wwwww
 const KEYCARD_DOOR: TilePos = TilePos::new(3, 3, 1);
 const PAD: TilePos = TilePos::new(2, 2, 1);
 const PUZZLE_DOOR: TilePos = TilePos::new(3, 2, 1);
+const CART: TilePos = TilePos::new(2, 4, 1);
 
 const SPAWN: TilePos = TilePos::new(2, 3, 1);
 
-const STATES: [(&str, &str); 13] = [
+const STATES: [(&str, &str); 16] = [
     ("t.dmi", "floor"),
     ("t.dmi", "wall"),
     ("l.dmi", "x2"),
@@ -137,6 +155,9 @@ const STATES: [(&str, &str); 13] = [
     ("pz.dmi", "door_closing"),
     ("wm.dmi", "keycardpad0"),
     ("wm.dmi", "keycardpad1"),
+    ("i.dmi", "flatpack"),
+    ("st.dmi", "flatcart"),
+    ("st.dmi", "flatcart_flat"),
 ];
 
 fn fixture_assets() -> PathBuf {
@@ -151,6 +172,10 @@ fn fixture_assets() -> PathBuf {
         "/obj/machinery/door/puzzle",
         "/obj/machinery/door/puzzle/keycard/yellow_required",
         "/obj/machinery/puzzle/keycardpad",
+        "/obj/item/flatpack",
+        "/obj/item/flatpack/flatpacker",
+        "/obj/item/circuitboard/machine/flatpacker",
+        "/obj/structure/flatpack_cart",
         "/turf/open/floor",
         "/turf/closed/wall",
         "/turf/open/space/basic",
@@ -377,4 +402,47 @@ fn keycards_open_their_puzzle_doors() {
     s.click_on(pad);
     s.run_until("the vault door opens", |s| !s.closed(puzzle_door));
     assert!(s.try_get::<PuzzleUsed>(pad).is_some());
+}
+
+#[test]
+fn typed_flatpacks_and_the_cart() {
+    let mut s = Station::start();
+    let cart = s.on_tile::<ss13_mapload::DmObj>(CART);
+    // A typed flatpack holds its board from the start.
+    let typed = s.give_new("/obj/item/flatpack/flatpacker");
+    s.run_until("packed", |s| s.try_get::<Flatpack>(typed).is_some());
+    let board = s.get::<Flatpack>(typed).board;
+    assert_eq!(
+        s.try_get::<StoredIn>(board).map(|i| i.0),
+        Some(typed),
+        "the board is inside"
+    );
+
+    // Three packs go onto the cart, a fourth does not; an empty hand takes the topmost.
+    let mut loaded = Vec::new();
+    for _ in 0..3 {
+        let pack = s.give_new("/obj/item/flatpack/flatpacker");
+        s.click_on(cart);
+        s.run_until("loaded", |s| {
+            s.try_get::<StoredIn>(pack).is_some_and(|i| i.0 == cart)
+        });
+        loaded.push(pack);
+    }
+    let extra = s.give_new("/obj/item/flatpack/flatpacker");
+    s.click_on(cart);
+    s.run_until("full", |s| s.said("Тележка заполнена"));
+    assert_eq!(s.held(), Some(extra));
+    assert_eq!(s.get::<FlatpackCart>(cart).0, loaded);
+    assert_eq!(s.get::<ss13_shared::Appearance>(cart).overlays.len(), 3);
+
+    let mob = s.mob();
+    let world = s.server.world_mut();
+    world.despawn(extra);
+    let mut inventory = world.get_mut::<Inventory>(mob).unwrap();
+    let hand = inventory.active;
+    inventory.hands[hand] = None;
+    s.click_on(cart);
+    s.run_until("the topmost in hand", |s| s.held() == Some(loaded[2]));
+    assert_eq!(s.get::<FlatpackCart>(cart).0, loaded[..2]);
+    assert_eq!(s.get::<ss13_shared::Appearance>(cart).overlays.len(), 2);
 }
