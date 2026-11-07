@@ -351,6 +351,11 @@ pub struct MinesweeperResult {
     pub field_params: String,
 }
 
+/// The navigator's signal levels (`NavigatorData::signal`).
+pub const SIGNAL_LOST: u8 = 0;
+pub const SIGNAL_LOW: u8 = 1;
+pub const SIGNAL_GOOD: u8 = 2;
+
 /// BandaStation `/datum/computer_file/program/navigator/ui_data`: the signal, where the user is
 /// and the ladders and stairs (`mapData.stairs`) of the user's level.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]

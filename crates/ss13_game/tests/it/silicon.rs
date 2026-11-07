@@ -1405,6 +1405,7 @@ fn ai_hud_alerts_and_announcement() {
             "camera",
             "camera_track",
             "alerts",
+            "modpc",
             "announcement",
             "call_shuttle",
             "core_display",

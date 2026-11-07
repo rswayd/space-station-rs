@@ -20,9 +20,7 @@ pub const MAX_STAIRS: usize = 10;
 pub const LOW_SIGNAL_STEP: i32 = 5;
 
 /// `get_ntnet_status()` values the program knows (`SIGNAL` of the interface).
-pub const SIGNAL_LOST: u8 = 0;
-pub const SIGNAL_LOW: u8 = 1;
-pub const SIGNAL_GOOD: u8 = 2;
+pub use crate::modpc::{SIGNAL_GOOD, SIGNAL_LOST, SIGNAL_LOW};
 
 /// What `ui_data` reads.
 #[derive(SystemParam)]

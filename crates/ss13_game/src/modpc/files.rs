@@ -336,24 +336,12 @@ mod tests {
             apply(world, e, &computer, act)
         }
         // Not in front: refused.
-        assert!(
-            apply_now(
-                &mut world,
-                e,
-                FileAct::CopyToUsb(ProgramKind::Notepad)
-            )
-            .is_err()
-        );
+        assert!(apply_now(&mut world, e, FileAct::CopyToUsb(ProgramKind::Notepad)).is_err());
         world
             .get_mut::<ModularComputer>(e)
             .unwrap()
             .open_program(ProgramKind::FileManager);
-        apply_now(
-            &mut world,
-            e,
-            FileAct::CopyToUsb(ProgramKind::Notepad),
-        )
-        .unwrap();
+        apply_now(&mut world, e, FileAct::CopyToUsb(ProgramKind::Notepad)).unwrap();
         assert!(
             world
                 .get::<ComputerDisk>(disk)
@@ -362,12 +350,7 @@ mod tests {
                 .contains(&ProgramKind::Notepad)
         );
         // The running notepad is deleted: it closes too. The messenger is undeletable.
-        apply_now(
-            &mut world,
-            e,
-            FileAct::Delete(ProgramKind::Notepad),
-        )
-        .unwrap();
+        apply_now(&mut world, e, FileAct::Delete(ProgramKind::Notepad)).unwrap();
         let pc = world.get::<ModularComputer>(e).unwrap().clone();
         assert!(
             !pc.programs.contains(&ProgramKind::Notepad)
@@ -382,13 +365,11 @@ mod tests {
             FileAct::CopyFromUsb(ProgramKind::Notepad),
         )
         .unwrap();
-        apply_now(
-            &mut world,
-            e,
-            FileAct::CopyFromUsb(ProgramKind::SecRecords),
-        )
-        .unwrap();
-        let data = ui_data(&world.get::<ModularComputer>(e).unwrap().clone(), world.get::<ComputerDisk>(disk));
+        apply_now(&mut world, e, FileAct::CopyFromUsb(ProgramKind::SecRecords)).unwrap();
+        let data = ui_data(
+            &world.get::<ModularComputer>(e).unwrap().clone(),
+            world.get::<ComputerDisk>(disk),
+        );
         assert!(data.usbconnected);
         assert!(
             data.files
@@ -400,12 +381,7 @@ mod tests {
                 .iter()
                 .any(|f| f.name == "filemanager" && f.undeletable)
         );
-        apply_now(
-            &mut world,
-            e,
-            FileAct::UsbDelete(ProgramKind::SecRecords),
-        )
-        .unwrap();
+        apply_now(&mut world, e, FileAct::UsbDelete(ProgramKind::SecRecords)).unwrap();
         assert_eq!(
             world.get::<ComputerDisk>(disk).unwrap().files,
             [ProgramKind::Notepad]

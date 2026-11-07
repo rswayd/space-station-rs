@@ -20,6 +20,7 @@ pub mod station;
 pub mod station_kinds;
 
 pub use station_kinds::StationProgram;
+#[cfg(feature = "server")]
 pub mod navigator;
 
 /// An installed program (an entry of `stored_files`).
@@ -581,7 +582,7 @@ mod tests {
 
     #[test]
     fn engineering_pdas_get_the_atmos_scanner() {
-        assert_eq!(pda_programs("/obj/item/modular_computer/pda/crew").len(), 5);
+        assert_eq!(pda_programs("/obj/item/modular_computer/pda/crew").len(), PDA_PROGRAMS.len());
         assert_eq!(
             pda_programs("/obj/item/modular_computer/pda/crew/atmos").last(),
             Some(&ProgramKind::Atmosscan)
@@ -595,7 +596,7 @@ mod tests {
     fn role_pdas_get_their_starting_and_head_programs() {
         use ProgramKind::*;
         assert_eq!(
-            pda_programs("/obj/item/modular_computer/pda/crew/heads/ce")[5..],
+            pda_programs("/obj/item/modular_computer/pda/crew/heads/ce")[PDA_PROGRAMS.len()..],
             [
                 Atmosscan,
                 AlarmMonitor,
@@ -611,7 +612,7 @@ mod tests {
                 .contains(&MedRecords)
         );
         assert_eq!(
-            pda_programs("/obj/item/modular_computer/pda/crew/heads/quartermaster")[7..],
+            pda_programs("/obj/item/modular_computer/pda/crew/heads/quartermaster")[PDA_PROGRAMS.len() + 1..],
             HEAD_PROGRAMS
         );
         assert_eq!(

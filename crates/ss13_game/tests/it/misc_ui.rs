@@ -156,7 +156,10 @@ ss13_game::drive_station!(Station, 0);
 impl Station {
     fn start(test: &str) -> Self {
         let assets = fixture_assets(test);
-        let mut s = testing::Station::start(fixture_map(&assets, &["map.dmm"]), |_| {});
+        // Balloons find a mob's client through the chat listeners.
+        let mut s = testing::Station::start(fixture_map(&assets, &["map.dmm"]), |app| {
+            app.add_plugins(ss13_chat::server::ChatServerPlugin);
+        });
         s.join_all(2, |app| {
             app.init_resource::<Opened>()
                 .init_resource::<Balloons>()
@@ -335,6 +338,8 @@ fn a_sleeper_dreams_in_fragments() {
     s.run_until_for(20.0, "the dream ends", |s| {
         s.try_get::<Dreaming>(b).is_none()
     });
+    // The last fragment's chat line reaches the client a frame later.
+    s.run_for(0.5);
     let dream: Vec<String> = s.players[1]
         .app
         .world()

@@ -719,8 +719,8 @@ fn navigator_screen(d: &NavigatorData) -> impl Scene + use<> {
             bsn! { @LabeledListItem { @label: label, @content: value } }
         })
         .collect();
-    let notice = (d.signal != super::programs::navigator::SIGNAL_GOOD).then(|| {
-        let (text, danger) = if d.signal == super::programs::navigator::SIGNAL_LOW {
+    let notice = (d.signal != super::SIGNAL_GOOD).then(|| {
+        let (text, danger) = if d.signal == super::SIGNAL_LOW {
             (
                 "Нестабильный или крайне слабый сигнал! Местоположение может быть некорректным.",
                 false,

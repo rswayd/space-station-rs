@@ -132,6 +132,7 @@
 //! | 1400 | `chem::item_interaction` |
 //! | 1450 | `mining::hand_interaction` (modkits, point cards, gibtonite ore) |
 //! | 1491 | `gun_attachments::attach` (a seclite, suppressor, bayonet or screwdriver on the gun) |
+//! | 1195 | `modpc::programs::station` (a program disk into the computer in the other hand) |
 //! | 1500 | `guns::item_interaction` |
 //! | 1600 | `guns::attack_hand` (empty active hand) |
 //! | 1700 | `construction::split_into_hand` (empty active hand) |
@@ -381,6 +382,8 @@
 //! | 4800 | `cargo::bounty::item_interaction` |
 //! | 4900 | `brig::prisoner::item_interaction` |
 //! | 4925 | `brig::labor::item_interaction` (blank plates, grown items, prisoner IDs, sheets) |
+//! | 5195 | `modpc::programs::station` (a program disk into a computer) |
+//! | 5205 | `modpc::programs::station` (Physical Scanner: a PDA on a mob) |
 //! | 5000 | `cargo::scanner::item_interaction` |
 //! | 5090 | `events::anomalies::analyzer_act` (anomalies, anomaly cores) |
 //! | 5100 | `atmos` analyzer scans the clicked atom |

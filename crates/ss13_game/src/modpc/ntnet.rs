@@ -55,6 +55,8 @@ pub struct Ntnet {
     pub mining: Option<u16>,
 }
 
+// `station` starts empty (no station level known yet).
+#[allow(clippy::reversed_empty_ranges)]
 impl Default for Ntnet {
     fn default() -> Self {
         Self {
