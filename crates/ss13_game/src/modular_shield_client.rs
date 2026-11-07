@@ -176,7 +176,7 @@ fn console_view(d: &ModularShieldConsoleData) -> impl Scene + use<> {
     let empty = d
         .generators
         .is_empty()
-        .then(|| EntityScene(bsn! { Text("No generators linked.") }));
+        .then_some(EntityScene(bsn! { Text("No generators linked.") }));
     bsn! {
         @WindowContent
         Children [ {empty} -- {gens} ]

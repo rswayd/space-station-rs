@@ -327,7 +327,21 @@ pub mod files {
     ];
     /// Sounds the game code plays by a constant path (checked by the real-asset test
     /// `runtime_types::game_sound_literals_are_converted` in ss13_game).
-    pub const GAME_CODE: [&str; 129] = [
+    pub const GAME_CODE: [&str; 143] = [
+        "sound/items/barcodebeep.ogg",
+        "sound/items/click.ogg",
+        "sound/machines/cryo_warning.ogg",
+        "sound/effects/soil_plop.ogg",
+        "sound/effects/meatslap.ogg",
+        "sound/machines/ping.ogg",
+        "sound/effects/pai_boot.ogg",
+        "sound/machines/airlock/airlock_alien_prying.ogg",
+        "sound/effects/magic/clockwork/invoke_general.ogg",
+        "sound/effects/magic/lightning_chargeup.ogg",
+        "sound/mobs/non-humanoids/beepsky/iamthelaw.ogg",
+        "sound/mobs/non-humanoids/beepsky/criminal.ogg",
+        "sound/items/weapons/egloves.ogg",
+        "sound/machines/terminal/terminal_eject.ogg",
         "sound/effects/light_flicker.ogg",
         "sound/machines/click.ogg",
         "sound/items/deconstruct.ogg",
