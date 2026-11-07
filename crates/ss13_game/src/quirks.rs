@@ -21,7 +21,9 @@
 //! organs), Body Purist (a moodlet per cybernetic part), Smooth-Headed (bald, a moodlet when the
 //! head is uncovered), and the tastes of `crate::food`: Ageusia, Vegetarian, Deviant Tastes,
 //! Ananas Affinity and Aversion; Junkie, Smoker and Alcoholic (`crate::addictions`), Extreme
-//! Medicine Allergy (`crate::chem` metabolism) and Food Allergy (`crate::food`).
+//! Medicine Allergy (`crate::chem` metabolism), Food Allergy (`crate::food`), Social Anxiety
+//! (`ss13_chat::speech::Anxiety`, eye contact on examine), Clown Enjoyer, Mime Fan, Musician,
+//! Tagger (`crate::crayons`, `crate::syndie_spraycan`) and Pyromania (`crate::breath`).
 // shortcut: the other tg quirks wait for their mechanics (phobias, skillchips, hallucinations, wheelchairs...); no medical record lines, no
 // customization options (blindfold colour, glasses type, paraplegic variant, hemiplegic side,
 // CSL strength), no hardcore or random quirks, no mail goodies, no quirk transfer between
@@ -276,6 +278,37 @@ const ANXIETY_EYECONTACT_EVENT: MoodEvent = MoodEvent {
     hidden: false,
 };
 
+const CLOWN_PIN: &str = "/obj/item/clothing/accessory/clown_enjoyer_pin";
+const MIME_PIN: &str = "/obj/item/clothing/accessory/mime_fan_pin";
+const MUSIC_BEACON: &str = "/obj/item/choice_beacon/music";
+const SPRAYCAN: &str = "/obj/item/toy/crayon/spraycan";
+/// `/datum/mood_event/clown_enjoyer_pin`, `mime_fan_pin`, `pyromania` (its change is the
+/// fire count).
+const CLOWN_PIN_EVENT: MoodEvent = MoodEvent {
+    id: "clown_enjoyer_pin",
+    description: "Мне нравится показывать свою клоунскую булавку!",
+    mood_change: 1.0,
+    timeout: 0.0,
+    hidden: false,
+};
+const MIME_PIN_EVENT: MoodEvent = MoodEvent {
+    id: "mime_fan_pin",
+    description: "Мне нравится показывать свою мимскую булавку!",
+    mood_change: 1.0,
+    timeout: 0.0,
+    hidden: false,
+};
+const PYROMANIA_EVENT: MoodEvent = MoodEvent {
+    id: "pyromania",
+    description: "Прекрасный, тёплый огонь...",
+    mood_change: 1.0,
+    timeout: 0.0,
+    hidden: false,
+};
+/// Pyromania's `damage_mod` (`PHYS_COEFF_HEAT`) and `count_nearby_fire_sources` radius.
+const PYROMANIA_HEAT_MOD: f64 = 0.67;
+const PYROMANIA_RADIUS: u32 = 5;
+
 /// Items the quirks hand out: `crate::jobs` builds their templates with the outfits'.
 pub fn item_paths() -> Vec<String> {
     let mut paths: Vec<String> = [
@@ -287,6 +320,10 @@ pub fn item_paths() -> Vec<String> {
         PILL,
         LIGHTER,
         ALLERGY_DOGTAG,
+        CLOWN_PIN,
+        MIME_PIN,
+        MUSIC_BEACON,
+        SPRAYCAN,
     ]
     .iter()
     .map(|p| (*p).to_owned())
@@ -344,6 +381,11 @@ pub enum Quirk {
     MedicineAllergy,
     FoodAllergy,
     SocialAnxiety,
+    ClownEnjoyer,
+    MimeFan,
+    Musician,
+    Tagger,
+    Pyromania,
 }
 
 /// The static part of a quirk (tg vars).
@@ -385,7 +427,7 @@ const fn q(
 
 /// Every ported quirk in tg's menu order (`cmp_quirk_asc`: positive, negative, neutral, then by
 /// name). BandaStation texts.
-pub const QUIRKS: [QuirkDef; 41] = [
+pub const QUIRKS: [QuirkDef; 46] = [
     q(
         Quirk::AlcoholTolerance,
         "/datum/quirk/alcohol_tolerance",
@@ -415,6 +457,16 @@ pub const QUIRKS: [QuirkDef; 41] = [
              научились их понимать.",
         )),
         Some((Span::Notice, "Кажется, вы забыли свой второй язык.")),
+    ),
+    q(
+        Quirk::ClownEnjoyer,
+        "/datum/quirk/item_quirk/clown_enjoyer",
+        "Clown Enjoyer",
+        "Вам нравятся клоунские выходки, и у вас поднимается настроение от ношения клоунского значка.",
+        "map-pin",
+        2,
+        Some((Span::Notice, "Вы очень любите клоунов.")),
+        Some((Span::Danger, "Клоуны не кажутся такими уж замечательными.")),
     ),
     q(
         Quirk::DrunkHealing,
@@ -472,6 +524,58 @@ pub const QUIRKS: [QuirkDef; 41] = [
         4,
         Some((Span::Notice, "Вы ходите с большей гибкостью.")),
         Some((Span::Danger, "Вы начинаете рыскать повсюду, как варвар.")),
+    ),
+    q(
+        Quirk::MimeFan,
+        "/datum/quirk/item_quirk/mime_fan",
+        "Mime Fan",
+        "Вы поклонник выходок мимов и получаете заряд бодрости от ношения их значков.",
+        "thumbtack",
+        2,
+        Some((Span::Notice, "Вы большой поклонник пантомимы.")),
+        Some((
+            Span::Danger,
+            "Похоже, мимы не такие и крутые, как казалось раньше.",
+        )),
+    ),
+    q(
+        Quirk::Musician,
+        "/datum/quirk/item_quirk/musician",
+        "Musician",
+        "Вы можете настраивать ручные музыкальные инструменты, чтобы играть мелодии, которые устраняют некоторые негативные эффекты и успокаивают душу.",
+        "guitar",
+        2,
+        Some((Span::Notice, "Вы знаете все о музыкальных инструментах.")),
+        Some((
+            Span::Danger,
+            "Вы забыли, как работают музыкальные инструменты.",
+        )),
+    ),
+    q(
+        Quirk::Pyromania,
+        "/datum/quirk/pyromania",
+        "Pyromania",
+        "Огонь завораживает вас. Рядом с огнём вы чувствуете себя счастливее, а также получаете повышенную устойчивость к жаре и пламени.",
+        "fire",
+        6,
+        Some((
+            Span::Warning,
+            "Вас одолевает непреодолимое желание разжигать огонь.",
+        )),
+        Some((Span::Notice, "Вы осознали опасность огня.")),
+    ),
+    q(
+        Quirk::Tagger,
+        "/datum/quirk/item_quirk/tagger",
+        "Tagger",
+        "Вы опытный художник. Люди будут впечатлены вашим граффити, а вы сможете использовать в два раза больше краски для рисования.",
+        "spray-can",
+        4,
+        Some((
+            Span::Notice,
+            "Вы знаете, как эффективно и быстро размечать стены.",
+        )),
+        Some((Span::Danger, "Вы забыли, как правильно размечать стены.")),
     ),
     q(
         Quirk::Voracious,
@@ -915,7 +1019,8 @@ pub const QUIRKS: [QuirkDef; 41] = [
 
 /// `GLOB.quirk_blacklist`, the lists with at least two ported quirks: quirks of one list
 /// exclude each other.
-pub const BLACKLIST: [&[Quirk]; 8] = [
+pub const BLACKLIST: [&[Quirk]; 9] = [
+    &[Quirk::ClownEnjoyer, Quirk::MimeFan],
     &[Quirk::SocialAnxiety, Quirk::Mute],
     &[Quirk::Blind, Quirk::Nearsighted],
     &[Quirk::Jolly, Quirk::Depression, Quirk::Hypersensitive],
@@ -983,6 +1088,10 @@ pub struct Allergies {
     pub medicines: Vec<String>,
     pub foods: u32,
 }
+
+/// Pyromania's `last_fire_size`.
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LastFireSize(pub i32);
 
 /// A client's `recent_examines`: what its mob examined and when (game seconds).
 #[derive(Component, Clone, Debug, Default, PartialEq)]
@@ -1145,6 +1254,16 @@ pub fn add_quirk(
         Quirk::BodyPurist => update_cybernetics(world, mob),
         Quirk::Junkie | Quirk::Smoker | Quirk::Alcoholic => addict_add(world, mob, quirk),
         Quirk::MedicineAllergy | Quirk::FoodAllergy => allergy_add(world, mob, quirk),
+        // `post_add`: the policy line.
+        Quirk::Pyromania => tell_mob(
+            world,
+            mob,
+            (
+                Span::Info,
+                "Обратите внимание: наличие черты pyromania не даёт вам никаких дополнительных \
+                 прав на устраивание поджогов.",
+            ),
+        ),
         Quirk::SocialAnxiety => {
             let mood_mod = anxiety_mood_mod(world, mob);
             world.entity_mut(mob).insert(ss13_chat::speech::Anxiety {
@@ -1203,6 +1322,15 @@ pub fn add_quirk(
             Quirk::TinMan => tin_man(world, mob),
             Quirk::Junkie | Quirk::Smoker | Quirk::Alcoholic => addict_items(world, mob, quirk),
             Quirk::MedicineAllergy | Quirk::FoodAllergy => allergy_items(world, mob, quirk),
+            Quirk::ClownEnjoyer | Quirk::MimeFan | Quirk::Musician | Quirk::Tagger => {
+                let path = match quirk {
+                    Quirk::ClownEnjoyer => CLOWN_PIN,
+                    Quirk::MimeFan => MIME_PIN,
+                    Quirk::Musician => MUSIC_BEACON,
+                    _ => SPRAYCAN,
+                };
+                give_item(world, mob, path, &[Location::Backpack, Location::Hands]);
+            }
             Quirk::BrainTumor => {
                 if let Some(at) = give_item(
                     world,
@@ -1297,6 +1425,12 @@ pub fn remove_quirk(world: &mut World, mob: Entity, quirk: Quirk) -> bool {
         Quirk::Foreigner => foreigner(world, mob, false),
         Quirk::SocialAnxiety => {
             world.entity_mut(mob).remove::<ss13_chat::speech::Anxiety>();
+        }
+        Quirk::ClownEnjoyer => mood::clear_event(world, mob, "clown_enjoyer_pin"),
+        Quirk::MimeFan => mood::clear_event(world, mob, "mime_fan_pin"),
+        Quirk::Pyromania => {
+            world.entity_mut(mob).remove::<LastFireSize>();
+            mood::clear_event(world, mob, "pyromania_fire");
         }
         Quirk::MedicineAllergy | Quirk::FoodAllergy => {
             if let Some(mut allergies) = world.get_mut::<Allergies>(mob) {
@@ -1469,6 +1603,106 @@ fn place_item(
         crate::inventory::put_down(world, item, pos);
     }
     "у ваших ног"
+}
+
+/// Tagger (`TRAIT_TAGGER`): paint costs and the syndicate spraycan's drawing time are halved.
+pub fn tagger_multiplier(world: &World, mob: Entity) -> f32 {
+    if has(world, mob, Quirk::Tagger) {
+        0.5
+    } else {
+        1.0
+    }
+}
+
+/// Pyromania's `MODIFY_PHYSIOLOGY(PHYS_COEFF_HEAT, 0.67)` (`crate::breath` body heat damage).
+pub fn heat_multiplier(world: &World, mob: Entity) -> f64 {
+    if has(world, mob, Quirk::Pyromania) {
+        PYROMANIA_HEAT_MOD
+    } else {
+        1.0
+    }
+}
+
+/// The fan pin moodlet while the pin of `quirk` is on the worn jumpsuit.
+// shortcut: the clown's and mime's own job traits give no pin moodlet; no fan HUD.
+fn fan_pin(world: &mut World, mob: Entity, quirk: Quirk) {
+    let (pin, category, event) = if quirk == Quirk::ClownEnjoyer {
+        (CLOWN_PIN, "clown_enjoyer_pin", &CLOWN_PIN_EVENT)
+    } else {
+        (MIME_PIN, "mime_fan_pin", &MIME_PIN_EVENT)
+    };
+    let worn = world
+        .get::<Inventory>(mob)
+        .and_then(|i| i.uniform)
+        .is_some_and(|uniform| {
+            crate::clothing::accessories::attached(world, uniform)
+                .into_iter()
+                .any(|a| {
+                    world
+                        .get::<DmItem>(a)
+                        .is_some_and(|dm| ss13_mapload::fidelity::is_under(&dm.path, pin))
+                })
+        });
+    let has_event = world
+        .get::<Mood>(mob)
+        .is_some_and(|m| m.get(category).is_some());
+    if worn && !has_event {
+        mood::add_event(world, mob, category, event);
+    } else if !worn && has_event {
+        mood::clear_event(world, mob, category);
+    }
+}
+
+/// `count_nearby_fire_sources(5)` (unweighted): burning mobs, bonfires, lit fireplaces,
+/// hotspots and burning objects in 5 tiles.
+// shortcut: no line of sight; lit lighters, matches and flares are not ported as flames.
+// Cost: 1 Hz per pyromaniac, one 5-tile spatial lookup.
+pub fn count_nearby_fire_sources(world: &World, mob: Entity) -> i32 {
+    let Some(&pos) = world.get::<TilePos>(mob) else {
+        return 0;
+    };
+    let Some(index) = world.get_resource::<ss13_world::SpatialIndex>() else {
+        return 0;
+    };
+    index
+        .in_radius(pos, PYROMANIA_RADIUS)
+        .filter(|&e| {
+            world
+                .get::<crate::fire::FireStacks>(e)
+                .is_some_and(|f| f.on_fire)
+                || world
+                    .get::<crate::fireplace::Bonfire>(e)
+                    .is_some_and(|b| b.burning)
+                || world
+                    .get::<crate::fireplace::Fireplace>(e)
+                    .is_some_and(|f| f.lit)
+                || world.get::<ss13_atmos::HotspotEffect>(e).is_some()
+                || world.get::<crate::fire::Burning>(e).is_some()
+        })
+        .count() as i32
+}
+
+/// Pyromania's `process`: the fire moodlet follows the fire count (its change the count, kept
+/// at the highest while fires stay, `be_replaced`).
+// shortcut: no impulsive lighter flicking (lighters are not lit-able); the damage pause goes
+// with it.
+fn pyromania(world: &mut World, mob: Entity) {
+    let fire_size = count_nearby_fire_sources(world, mob);
+    let last = world.get::<LastFireSize>(mob).map_or(-1, |l| l.0);
+    if fire_size != last {
+        if fire_size >= 1 {
+            let now = world.resource::<Time>().elapsed_secs_f64();
+            if let Some(mut mood) = world.get_mut::<Mood>(mob) {
+                let current = mood.get("pyromania_fire").map_or(0.0, |m| m.mood_change);
+                let mut event = ActiveMood::new("pyromania_fire", &PYROMANIA_EVENT);
+                event.mood_change = current.max(fire_size as f32);
+                mood.add_instance(now, event);
+            }
+        } else {
+            mood::clear_event(world, mob, "pyromania_fire");
+        }
+    }
+    world.entity_mut(mob).insert(LastFireSize(fire_size));
 }
 
 /// Social Anxiety's `calculate_mood_mod`: the mood factor (`1 + 0.02 * (50 - max(50,
@@ -2385,6 +2619,11 @@ fn process(world: &mut World, mob: Entity, quirk: Quirk, secs: f32) {
             bald_head(world, mob);
             return;
         }
+        // The pins' `accessory_equipped`/`accessory_dropped`, followed every fire.
+        Quirk::ClownEnjoyer | Quirk::MimeFan => {
+            fan_pin(world, mob, quirk);
+            return;
+        }
         // `calculate_mood_mod` at the time of speech in tg; refreshed every fire here.
         Quirk::SocialAnxiety => {
             let mood_mod = anxiety_mood_mod(world, mob);
@@ -2461,6 +2700,7 @@ fn process(world: &mut World, mob: Entity, quirk: Quirk, secs: f32) {
             organs::adjust_organ_loss(world, mob, Slot::Brain, TUMOR_DAMAGE_PER_SECOND * secs);
         }
         Quirk::Junkie | Quirk::Smoker | Quirk::Alcoholic => addict_process(world, mob, quirk),
+        Quirk::Pyromania => pyromania(world, mob),
         _ => {}
     }
 }
@@ -2680,6 +2920,27 @@ mod tests {
         );
         assert!(remove_quirk(&mut world, mob, Quirk::SocialAnxiety));
         assert!(world.get::<ss13_chat::speech::Anxiety>(mob).is_none());
+    }
+
+    #[test]
+    fn hobby_quirks_change_paint_heat_and_pick_one_fandom() {
+        let mut world = World::new();
+        world.init_resource::<Time>();
+        let mob = world.spawn(Stat::Conscious).id();
+        assert_eq!(tagger_multiplier(&world, mob), 1.0);
+        assert!(add_quirk(&mut world, mob, Quirk::Tagger, false, true));
+        assert!(add_quirk(&mut world, mob, Quirk::Pyromania, false, true));
+        assert_eq!(tagger_multiplier(&world, mob), 0.5);
+        assert_eq!(heat_multiplier(&world, mob), PYROMANIA_HEAT_MOD);
+        // No fire around: the count stays 0 and no moodlet.
+        process(&mut world, mob, Quirk::Pyromania, 1.0);
+        assert_eq!(world.get::<LastFireSize>(mob), Some(&LastFireSize(0)));
+        assert!(remove_quirk(&mut world, mob, Quirk::Pyromania));
+        assert_eq!(heat_multiplier(&world, mob), 1.0);
+        assert_eq!(
+            filter_invalid(&names(&["Clown Enjoyer", "Mime Fan", "Mute"])),
+            names(&["Clown Enjoyer", "Mute"])
+        );
     }
 
     #[test]

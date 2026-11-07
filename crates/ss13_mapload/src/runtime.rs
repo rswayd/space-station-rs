@@ -688,6 +688,11 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/clothing/accessory/dogtag/allergy",
     // Social Anxiety's once-a-life spaghetti.
     "/obj/item/food/spaghetti/pastatomato",
+    // The hobby quirks' items.
+    "/obj/item/clothing/accessory/clown_enjoyer_pin",
+    "/obj/item/clothing/accessory/mime_fan_pin",
+    "/obj/item/choice_beacon/music",
+    "/obj/item/toy/crayon/spraycan",
     "/obj/item/storage/fancy/cigarettes",
     "/obj/item/storage/fancy/cigarettes/cigpack_midori",
     "/obj/item/storage/fancy/cigarettes/cigpack_uplift",

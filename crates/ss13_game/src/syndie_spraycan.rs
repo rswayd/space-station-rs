@@ -162,11 +162,12 @@ pub fn interact(
             return true;
         }
         tell(world, client, Span::Notice, "Вы рисуете контур...");
+        let draw = DRAW_DS * crate::quirks::tagger_multiplier(world, mob);
         do_after(
             world,
             actor,
             target,
-            DRAW_DS,
+            draw,
             0,
             Job::Crayon(CrayonJob::Rune(None)),
         );
@@ -203,11 +204,13 @@ fn step(world: &mut World, actor: Actor, rune: Entity) {
                 "...вы наносите финальное покрытие..."
             };
             tell(world, actor.client, Span::Notice, text);
+            // `TRAIT_TAGGER` (`crate::quirks`): twice as fast.
+            let draw = DRAW_DS * crate::quirks::tagger_multiplier(world, actor.mob);
             do_after(
                 world,
                 actor,
                 rune,
-                DRAW_DS,
+                draw,
                 0,
                 Job::Crayon(CrayonJob::Rune(Some(rune))),
             );
