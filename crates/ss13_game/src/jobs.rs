@@ -39,10 +39,11 @@ use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiActed, UiParams, UiRejec
 
 use crate::lobby::GameState;
 
+use crate::human::AppearancePrefs;
 use crate::human::{ASSISTANT_SHOES, ASSISTANT_UNIFORM};
 use crate::inventory::ASSISTANT_ACCESS;
 use crate::outfit::{OutfitTemplates, equip};
-use crate::round::NewPlayer;
+use crate::round::{JobPreferences, NewPlayer, RoundConfig};
 use crate::server::{PlayerMob, SpawnPoints};
 
 /// tgui window title (`new(user, src, "JobSelection", "Latejoin Menu")`).
@@ -73,6 +74,7 @@ impl Plugin for JobsServerPlugin {
                 (
                     open_menus.before(UiSystems::Open),
                     apply_choices.in_set(UiSystems::Handle),
+                    validate_job_restrictions.after(UiSystems::Handle),
                 ),
             )
             .add_observer(free_slot);
@@ -89,6 +91,8 @@ pub struct Jobs {
     pub default_job: usize,
     pub(crate) static_data: Arc<JobSelectionStatic>,
     pub(crate) rng: Rng,
+    /// tg `SSjob.assigned_captain`: someone was made captain or acting captain this shift.
+    pub assigned_captain: bool,
 }
 
 impl Jobs {
@@ -101,6 +105,7 @@ impl Jobs {
             default_job,
             static_data,
             rng: Rng::new(seed ^ 0x6a6f_6273),
+            assigned_captain: false,
         }
     }
 
@@ -113,6 +118,7 @@ impl Jobs {
             default_job: self.default_job,
             static_data: self.static_data.clone(),
             rng: Rng::new(self.rng.next_u64()),
+            assigned_captain: self.assigned_captain,
         }
     }
 
@@ -546,9 +552,12 @@ pub fn join(world: &mut World, client: Entity, job: usize, latejoin: bool) -> En
     // `/datum/job/chaplain/after_spawn`: the bible, the religion's names.
     crate::service::chaplain_spawned(world, client, mob);
     crate::records::manifest::inject_joiner(world, mob, job);
-    // `AttemptLateSpawn`: `SSshuttle.arrivals.QueueAnnounce(humanc, rank)`.
+    // `equip_rank`: `job.announce_job(equipping)`.
+    announce_head(world, mob, &name, &def.title);
+    // `AttemptLateSpawn`: `SSshuttle.arrivals.QueueAnnounce(humanc, rank)`, the captaincy.
     if latejoin {
         crate::arrivals::queue_announce(world, mob, &def.title);
+        latejoin_captaincy(world, mob, &name, &def.title);
     }
     world.entity_mut(client).remove::<(NewPlayer, JobBoard)>();
     info!(
@@ -557,6 +566,272 @@ pub fn join(world: &mut World, client: Entity, job: usize, latejoin: bool) -> En
         if latejoin { " (latejoin)" } else { "" }
     );
     mob
+}
+
+/// tg `JOB_CAPTAIN` (`is_captain_job`).
+const CAPTAIN: &str = "Captain";
+/// The jobs' `head_announce`: the channel announcing a new head of that department.
+const HEAD_ANNOUNCE: [(&str, u16); 7] = [
+    ("Head of Personnel", ss13_chat::radio::FREQ_SERVICE),
+    ("Head of Security", ss13_chat::radio::FREQ_SECURITY),
+    ("Chief Engineer", ss13_chat::radio::FREQ_ENGINEERING),
+    ("Chief Medical Officer", ss13_chat::radio::FREQ_MEDICAL),
+    ("Research Director", ss13_chat::radio::FREQ_SCIENCE),
+    ("Quartermaster", ss13_chat::radio::FREQ_SUPPLY),
+    // BandaStation `/datum/job/magistrate`.
+    ("Magistrate", ss13_chat::radio::FREQ_JUSTICE),
+];
+/// tg `SSjob.chain_of_command`: who becomes acting captain without one, lowest first.
+const CHAIN_OF_COMMAND: [(&str, u8); 7] = [
+    (CAPTAIN, 1),
+    ("Head of Personnel", 2),
+    ("Research Director", 3),
+    ("Chief Engineer", 4),
+    ("Chief Medical Officer", 5),
+    ("Head of Security", 6),
+    ("Quartermaster", 7),
+];
+/// tg `ACCESS_COMMAND`, forced onto a promoted captain's card.
+const ACCESS_COMMAND: &str = "command";
+
+fn chain_rank(title: &str) -> Option<u8> {
+    CHAIN_OF_COMMAND
+        .iter()
+        .find(|(t, _)| *t == title)
+        .map(|&(_, r)| r)
+}
+
+/// `get_captaincy_announcement`: the captain's, else the acting captain's.
+pub fn captaincy_announcement(captain_job: bool, name: &str) -> String {
+    if captain_job {
+        format!("Капитан {name} на борту!")
+    } else {
+        format!(
+            "В связи с острой нехваткой персонала, недавно назначенный исполняющий обязанности \
+             капитана {name} на борту!"
+        )
+    }
+}
+
+/// tg `announce_head`: the AAS's `/datum/aas_config_entry/newhead` line on the job's
+/// `head_announce` channel. tg delays it a tick past the round start (after the captain's); the
+/// radio delivers it after this tick's announcements anyway.
+fn announce_head(world: &mut World, mob: Entity, name: &str, title: &str) {
+    let Some(&(_, freq)) = HEAD_ANNOUNCE.iter().find(|(t, _)| *t == title) else {
+        return;
+    };
+    if world.get_entity(mob).is_err() {
+        return;
+    }
+    let text = format!("{name}, {title} назначен(а) главой отдела.");
+    crate::arrivals::aas_announce_on(world, freq, &text);
+}
+
+/// `AttemptLateSpawn`'s captaincy: a captain is announced (the announcement sound); without a
+/// captain so far, a latejoining head of the chain of command becomes acting captain.
+fn latejoin_captaincy(world: &mut World, mob: Entity, name: &str, title: &str) {
+    let Some(full) = latejoin_captain(title, world.resource::<Jobs>().assigned_captain) else {
+        return;
+    };
+    let acting = !full;
+    let sound = if full {
+        crate::announce::ANNOUNCE_SOUND
+    } else {
+        crate::security_level::NOTICE
+    };
+    let text = captaincy_announcement(full, name);
+    crate::security_level::minor_announce_with_sound(world, "", &text, sound);
+    promote_to_captain(world, mob, acting);
+}
+
+/// `AttemptLateSpawn`'s `is_captain`: `Some(true)` for a Captain, `Some(false)` for an acting
+/// captain (in the chain of command while nobody was made captain), `None` otherwise.
+fn latejoin_captain(title: &str, assigned_captain: bool) -> Option<bool> {
+    if title == CAPTAIN {
+        Some(true)
+    } else {
+        (!assigned_captain && chain_rank(title).is_some()).then_some(false)
+    }
+}
+
+/// tg `SSticker.equip_characters`' spare ID pick: of the spawned crew (client, mob, job), the one
+/// highest in the chain of command (a random one of equals) becomes captain, acting unless a
+/// Captain; nobody: every spawned crew member hears so.
+pub fn roundstart_captaincy(world: &mut World, spawned: &[(Entity, Entity, usize)]) {
+    let ranked: Vec<(usize, u8)> = {
+        let jobs = world.resource::<Jobs>();
+        spawned
+            .iter()
+            .enumerate()
+            .filter_map(|(i, &(_, _, job))| {
+                chain_rank(&jobs.data.jobs.get(job)?.title).map(|r| (i, r))
+            })
+            .collect()
+    };
+    let Some(best) = ranked.iter().map(|&(_, r)| r).min() else {
+        let clients: Vec<Entity> = spawned
+            .iter()
+            .filter(|&&(_, mob, _)| world.get::<crate::silicon::Silicon>(mob).is_none())
+            .map(|&(client, _, _)| client)
+            .collect();
+        if !clients.is_empty() {
+            world.write_message(ss13_net::chat::server::SendChat {
+                clients,
+                message: ss13_shared::chat::ChatMessage::simple(
+                    ss13_shared::chat::ChatChannel::System,
+                    ss13_shared::chat::Span::Notice,
+                    "Капитанство никому не назначено.",
+                ),
+            });
+        }
+        return;
+    };
+    let candidates: Vec<usize> = ranked
+        .iter()
+        .filter(|&&(_, r)| r == best)
+        .map(|&(i, _)| i)
+        .collect();
+    let pick = {
+        let mut jobs = world.resource_mut::<Jobs>();
+        candidates[jobs.rng.range(0, candidates.len() as i64 - 1) as usize]
+    };
+    let (_, mob, job) = spawned[pick];
+    let full = world.resource::<Jobs>().data.jobs[job].title == CAPTAIN;
+    promote_to_captain(world, mob, !full);
+    let name = world
+        .get::<Name>(mob)
+        .map(|n| n.to_string())
+        .unwrap_or_default();
+    crate::security_level::minor_announce(world, "", &captaincy_announcement(full, &name), false);
+}
+
+/// tg `SSjob.promote_to_captain`: command access forced onto the ID card, the shift has its
+/// captain.
+// shortcut: no spare ID safe (`SSid_access.spare_id_safe_code`) here, so no code folder or
+// memory: the full captain's message is only about it and is left out, the acting one's note
+// part too. Add both with the spare ID safe.
+pub fn promote_to_captain(world: &mut World, mob: Entity, acting: bool) {
+    world.resource_mut::<Jobs>().assigned_captain = true;
+    if let Some(card) = world
+        .get::<crate::inventory::Inventory>(mob)
+        .and_then(|inv| inv.id)
+        .and_then(|item| crate::inventory::get_id(world, item))
+        && let Some(mut card) = world.get_mut::<crate::inventory::IdCard>(card)
+        && !card.access.iter().any(|a| a == ACCESS_COMMAND)
+    {
+        card.access.push(ACCESS_COMMAND.to_owned());
+    }
+    if acting && let Some(client) = world.get::<PlayerMob>(mob).map(|p| p.client) {
+        world.write_message(ss13_net::chat::server::SendChat {
+            clients: vec![client],
+            message: ss13_shared::chat::ChatMessage::simple(
+                ss13_shared::chat::ChatChannel::System,
+                ss13_shared::chat::Span::Notice,
+                "Due to your position in the chain of command, you have been promoted to \
+                 Acting Captain.",
+            ),
+        });
+    }
+}
+
+/// BandaStation `is_job_allowed_for_species_with_string` (inverted): the `job_restrictions`
+/// config keeps `title` from every species path outside `allowed_species`; an empty
+/// `allowed_species` restricts nobody, and the xenobureaucracy error trait lifts it all.
+pub fn species_restricted(
+    config: &RoundConfig,
+    xeno_error: bool,
+    species: &str,
+    title: &str,
+) -> bool {
+    !xeno_error
+        && !config.allowed_species.is_empty()
+        && config.job_restrictions.iter().any(|t| t == title)
+        && !config.allowed_species.iter().any(|s| s == species)
+}
+
+/// The jobs of `data` that `species` may not take.
+pub fn restricted_indexes(
+    config: &RoundConfig,
+    xeno_error: bool,
+    species: &str,
+    data: &JobsData,
+) -> Vec<usize> {
+    (0..data.jobs.len())
+        .filter(|&j| species_restricted(config, xeno_error, species, &data.jobs[j].title))
+        .collect()
+}
+
+/// The species path of the character `look` describes (tg `read_preference(species)`).
+fn species_path(look: &AppearancePrefs) -> Option<&'static str> {
+    crate::human::roundstart_species()
+        .get(look.species)
+        .map(|s| s.def().path)
+}
+
+/// The jobs `client`'s chosen species may not take (none without preferences: tg's
+/// `if(!species) return TRUE`).
+pub fn restricted_jobs(world: &World, client: Entity) -> Vec<usize> {
+    let (Some(config), Some(jobs), Some(species)) = (
+        world.get_resource::<RoundConfig>(),
+        world.get_resource::<Jobs>(),
+        world.get::<AppearancePrefs>(client).and_then(species_path),
+    ) else {
+        return Vec::new();
+    };
+    let xeno = crate::station_traits::has(world, crate::station_traits::XENOBUREAUCRACY_ERROR);
+    restricted_indexes(config, xeno, species, &jobs.data)
+}
+
+/// The lobby's "Готов" check (BandaStation `new_player/Topic` `toggle_ready`): a wanted job the
+/// species may not take.
+pub fn prefs_restricted(world: &World, client: Entity) -> bool {
+    let restricted = restricted_jobs(world, client);
+    world
+        .get::<JobPreferences>(client)
+        .is_some_and(|p| p.levels.keys().any(|j| restricted.contains(j)))
+}
+
+/// BandaStation's ready-check message.
+pub const SPECIES_INCOMPATIBLE: &str =
+    "Выбранная раса несовместима с одной или более выбранных профессий.";
+
+/// BandaStation `validate_job_restrictions`: a ready player whose species or wanted jobs
+/// changed into a restricted pair is no longer ready (before the round sets up).
+fn validate_job_restrictions(
+    ticker: Option<Res<crate::round::Ticker>>,
+    config: Option<Res<RoundConfig>>,
+    jobs: Option<Res<Jobs>>,
+    traits: Option<Res<crate::station_traits::StationTraits>>,
+    mut players: Query<
+        (Entity, &mut NewPlayer, &AppearancePrefs, &JobPreferences),
+        Or<(Changed<AppearancePrefs>, Changed<JobPreferences>)>,
+    >,
+    mut chat: MessageWriter<ss13_net::chat::server::SendChat>,
+) {
+    let (Some(config), Some(jobs), Some(ticker)) = (config, jobs, ticker) else {
+        return;
+    };
+    if ticker.state() >= GameState::SettingUp {
+        return;
+    }
+    let xeno = traits.is_some_and(|t| t.has(crate::station_traits::XENOBUREAUCRACY_ERROR));
+    for (client, mut player, look, prefs) in &mut players {
+        let Some(species) = species_path(look).filter(|_| player.ready) else {
+            continue;
+        };
+        let restricted = restricted_indexes(&config, xeno, species, &jobs.data);
+        if prefs.levels.keys().any(|j| restricted.contains(j)) {
+            player.ready = false;
+            chat.write(ss13_net::chat::server::SendChat {
+                clients: vec![client],
+                message: ss13_shared::chat::ChatMessage::simple(
+                    ss13_shared::chat::ChatChannel::System,
+                    ss13_shared::chat::Span::Warning,
+                    SPECIES_INCOMPATIBLE,
+                ),
+            });
+        }
+    }
 }
 
 /// The next free start landmark of `title`, round robin (tg takes the first unused one).
@@ -695,7 +970,7 @@ fn apply_choices(world: &mut World, mut acts: Local<MessageCursor<UiActed<JobSel
         if world.get::<NewPlayer>(client).is_none() {
             continue;
         }
-        let verdict = choose(world, &title).and_then(|job| {
+        let verdict = choose(world, client, &title).and_then(|job| {
             // `select_job`'s queue check: only the first in line, below the cap.
             let cap =
                 crate::join_queue::relevant_cap(world.resource::<crate::round::RoundConfig>());
@@ -724,15 +999,18 @@ fn apply_choices(world: &mut World, mut acts: Local<MessageCursor<UiActed<JobSel
 }
 
 /// The job `title` names, or why it cannot be taken now (tg `select_job` + `AttemptLateSpawn`).
-fn choose(world: &mut World, title: &str) -> Result<usize, String> {
+fn choose(world: &mut World, client: Entity, title: &str) -> Result<usize, String> {
     if world.resource::<crate::round::Ticker>().state() != GameState::Playing {
         return Err("The round is either not ready, or has already finished...".into());
     }
+    let restricted = restricted_jobs(world, client);
     let jobs = world.resource::<Jobs>();
     if title == RANDOM_JOB {
-        // tg `get_random_job`: any job the player could pick now.
+        // tg `get_random_job`: any job the player could pick now. BandaStation checks the
+        // species against the "Random" title only, which lets a random pick land on a
+        // restricted job; the restricted ones are left out here.
         let open: Vec<usize> = (0..jobs.data.jobs.len())
-            .filter(|&j| jobs.unavailable(j).is_none())
+            .filter(|&j| jobs.unavailable(j).is_none() && !restricted.contains(&j))
             .collect();
         if open.is_empty() {
             return Err(
@@ -747,6 +1025,10 @@ fn choose(world: &mut World, title: &str) -> Result<usize, String> {
     let Some(job) = jobs.data.job(title) else {
         return Err(format!("Профессии «{title}» нет."));
     };
+    // BandaStation's `select_job` check, before `AttemptLateSpawn`'s.
+    if restricted.contains(&job) {
+        return Err("Выбранная раса несовместима с выбранной профессией!".into());
+    }
     match jobs.unavailable(job) {
         Some(reason) => Err(reason),
         None => Ok(job),
@@ -812,6 +1094,130 @@ mod tests {
         assert_eq!(data.departments[1].open_slots, Some(1));
         assert_eq!(data.departments[1].jobs[0].used_slots, 1);
         assert_eq!(data.departments[1].jobs[0].open_slots, Some(1));
+    }
+
+    fn restricting(titles: &[&str], species: &[&str]) -> RoundConfig {
+        RoundConfig {
+            job_restrictions: titles.iter().map(|t| (*t).to_owned()).collect(),
+            allowed_species: species.iter().map(|t| (*t).to_owned()).collect(),
+            ..RoundConfig::tg()
+        }
+    }
+
+    #[test]
+    fn species_restrictions_follow_banda_config() {
+        const HUMAN: &str = "/datum/species/human";
+        const LIZARD: &str = "/datum/species/lizard";
+        let config = restricting(&["Security Officer"], &[HUMAN, "/datum/species/skrell"]);
+        assert!(species_restricted(
+            &config,
+            false,
+            LIZARD,
+            "Security Officer"
+        ));
+        assert!(!species_restricted(
+            &config,
+            false,
+            HUMAN,
+            "Security Officer"
+        ));
+        assert!(!species_restricted(&config, false, LIZARD, "Assistant"));
+        // Felinids are their own path, not humans.
+        assert!(species_restricted(
+            &config,
+            false,
+            "/datum/species/human/felinid",
+            "Security Officer"
+        ));
+        // The xenobureaucracy error lifts it; no allowed species restricts nobody.
+        assert!(!species_restricted(
+            &config,
+            true,
+            LIZARD,
+            "Security Officer"
+        ));
+        let open = restricting(&["Security Officer"], &[]);
+        assert!(!species_restricted(
+            &open,
+            false,
+            LIZARD,
+            "Security Officer"
+        ));
+        assert_eq!(
+            restricted_indexes(&config, false, LIZARD, &officer_data(1)),
+            vec![1]
+        );
+    }
+
+    #[test]
+    fn wanted_restricted_job_blocks_ready_and_random_picks() {
+        let mut world = World::new();
+        world.insert_resource(restricting(
+            &["Security Officer"],
+            &["/datum/species/human"],
+        ));
+        world.insert_resource(Jobs::new(officer_data(5), 3));
+        let alien = crate::human::roundstart_species()
+            .iter()
+            .position(|s| s.def().path != "/datum/species/human")
+            .expect("a non-human roundstart species");
+        let mut look = AppearancePrefs::random(1);
+        look.species = alien;
+        let mut prefs = JobPreferences::default();
+        prefs.set(0, Some(crate::lobby::JobPriority::High), 0);
+        let client = world.spawn((look, prefs.clone())).id();
+        assert_eq!(restricted_jobs(&world, client), vec![1]);
+        assert!(!prefs_restricted(&world, client));
+        prefs.set(1, Some(crate::lobby::JobPriority::Low), 0);
+        world.entity_mut(client).insert(prefs);
+        assert!(prefs_restricted(&world, client));
+        // A human may.
+        look.species = 0;
+        world.entity_mut(client).insert(look);
+        assert!(!prefs_restricted(&world, client));
+        // Without a character there is nothing to check.
+        let bare = world.spawn_empty().id();
+        assert!(restricted_jobs(&world, bare).is_empty());
+    }
+
+    #[test]
+    fn captaincy_follows_the_chain_of_command() {
+        assert_eq!(latejoin_captain("Captain", true), Some(true));
+        assert_eq!(latejoin_captain("Head of Personnel", false), Some(false));
+        // Somebody already holds the spare: no acting captain.
+        assert_eq!(latejoin_captain("Head of Personnel", true), None);
+        assert_eq!(latejoin_captain("Assistant", false), None);
+        // The Magistrate announces as a head but is not in the chain.
+        assert_eq!(latejoin_captain("Magistrate", false), None);
+        assert!(HEAD_ANNOUNCE.iter().any(|(t, _)| *t == "Magistrate"));
+        assert_eq!(chain_rank("Research Director"), Some(3));
+        assert_eq!(captaincy_announcement(true, "Боб"), "Капитан Боб на борту!");
+        assert!(captaincy_announcement(false, "Боб").ends_with("капитана Боб на борту!"));
+    }
+
+    #[test]
+    fn promotion_forces_command_access() {
+        let mut world = World::new();
+        world.init_resource::<Messages<ss13_net::chat::server::SendChat>>();
+        world.insert_resource(Jobs::new(fallback_jobs(), 1));
+        let card = world
+            .spawn(crate::inventory::IdCard {
+                access: vec!["hop".into()],
+            })
+            .id();
+        let mob = world
+            .spawn(crate::inventory::Inventory {
+                id: Some(card),
+                ..default()
+            })
+            .id();
+        promote_to_captain(&mut world, mob, true);
+        promote_to_captain(&mut world, mob, true);
+        assert!(world.resource::<Jobs>().assigned_captain);
+        assert_eq!(
+            world.get::<crate::inventory::IdCard>(card).unwrap().access,
+            vec!["hop".to_owned(), "command".to_owned()]
+        );
     }
 
     #[test]

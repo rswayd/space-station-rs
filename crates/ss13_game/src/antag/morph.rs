@@ -217,7 +217,7 @@ pub fn make_morph(world: &mut World, mob: Entity) -> bool {
     if world.get::<Morph>(mob).is_some() || world.get_entity(mob).is_err() {
         return false;
     }
-    world.entity_mut(mob).remove::<crate::jobs::PlayerJob>();
+    crate::noncrew_jobs::set_assigned_role(world, mob, crate::noncrew_jobs::MORPH);
     let client = world.get::<PlayerMob>(mob).map(|p| p.client);
     let key = client
         .and_then(|c| world.get::<ClientToken>(c))

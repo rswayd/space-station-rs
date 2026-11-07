@@ -50,6 +50,7 @@ pub const RAD_STORMS: &str = "/datum/station_trait/random_event_weight_modifier/
 pub const DUST_STORMS: &str = "/datum/station_trait/random_event_weight_modifier/dust_storms";
 pub const SPIKED_DRINKS: &str = "/datum/station_trait/spiked_drinks";
 pub const VENDING_SHORTAGE: &str = "/datum/station_trait/vending_shortage";
+pub const XENOBUREAUCRACY_ERROR: &str = "/datum/station_trait/xenobureaucracy_error";
 
 /// Blacklist entries of traits that are not ported (kept so the tables read as tg's).
 const RANDOM_SPAWNS: &str = "/datum/station_trait/random_spawns";
@@ -59,6 +60,8 @@ const BIRTHDAY: &str = "/datum/station_trait/birthday";
 /// `STATION_TRAIT_COST_FULL`, `STATION_TRAIT_COST_LOW`.
 pub const COST_FULL: f64 = 1.0;
 pub const COST_LOW: f64 = 0.5;
+/// `STATION_TRAIT_COST_MINIMAL`.
+pub const COST_MINIMAL: f64 = 0.3;
 /// BandaStation's blackout: `prob(30)` per station APC (tg 60).
 const BLACKOUT_CHANCE: f32 = 30.0;
 /// `/datum/centcom_announcer/medbot`.
@@ -132,7 +135,7 @@ const fn def(
 use TraitKind::{Negative, Neutral, Positive};
 
 /// The ported traits with tg's (BandaStation's) vars, in tg's file order.
-pub static TRAITS: [TraitDef; 17] = [
+pub static TRAITS: [TraitDef; 18] = [
     def(
         GALACTIC_GRANT,
         "Галактический грант",
@@ -296,6 +299,18 @@ pub static TRAITS: [TraitDef; 17] = [
         COST_FULL,
         "We haven't had the time to take care of the station's food and drink vending \
          machines. Food and drink products are empty and need to be restocked.",
+        &[],
+    ),
+    // BandaStation `/datum/station_trait/xenobureaucracy_error`: weight 0, only forced (an
+    // admin's pick); lifts the species job restrictions (`crate::jobs::species_restricted`).
+    def(
+        XENOBUREAUCRACY_ERROR,
+        "Ксеноглавы",
+        Neutral,
+        0,
+        COST_MINIMAL,
+        "Вследствии изменений в кадровой политике НаноТрейзен - ограничения по биологическому \
+         виду для командного состава были аннулированы.",
         &[],
     ),
 ];

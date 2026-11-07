@@ -337,7 +337,7 @@ pub fn add_clone(
         .map(|t| t.0.clone())
         .unwrap_or_default();
     // `set_assigned_role(/datum/job/paradox_clone)`: not a crew member.
-    world.entity_mut(mob).remove::<PlayerJob>();
+    crate::noncrew_jobs::set_assigned_role(world, mob, crate::noncrew_jobs::PARADOX_CLONE);
     let objectives = vec![
         CloneObjective::AcceptNoSubstitutes {
             target_name: if target_name.is_empty() {
