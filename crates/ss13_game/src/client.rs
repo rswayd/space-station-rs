@@ -172,17 +172,38 @@ pub fn held_dir(keys: &ButtonInput<KeyCode>) -> Option<Dir> {
     Dir::from_bits(bits)
 }
 
-/// The held direction, none while typing in a text field.
+/// BandaStation's pixel shift key (`/datum/keybinding/mob/pixel_shift`, there `B`; B resists
+/// here).
+pub const PIXEL_SHIFT_KEY: KeyCode = KeyCode::KeyN;
+
+/// The held direction, none while typing in a text field. While the pixel shift key is held
+/// the direction shifts the sprite instead (`ClientIntent::PixelShift`, one per server tick):
+/// no step is predicted or sent.
 fn read_move_input(
     keys: Res<ButtonInput<KeyCode>>,
     focus: Option<Res<InputFocus>>,
     text_fields: Query<(), With<EditableText>>,
     mut input: ResMut<MoveInput>,
+    time: Res<Time>,
+    mut next_shift: Local<f64>,
+    mut intents: MessageWriter<SendIntent>,
 ) {
     let typing = focus
         .and_then(|f| f.get())
         .is_some_and(|e| text_fields.contains(e));
-    input.set_if_neq(MoveInput(held_dir(&keys).filter(|_| !typing)));
+    let dir = held_dir(&keys).filter(|_| !typing);
+    if !typing && keys.pressed(PIXEL_SHIFT_KEY) {
+        input.set_if_neq(MoveInput(None));
+        let now = time.elapsed_secs_f64();
+        if let Some(dir) = dir.filter(|d| Dir::CARDINALS.contains(d))
+            && now >= *next_shift
+        {
+            *next_shift = now + ss13_shared::protocol::TICK_DURATION.as_secs_f64();
+            intents.write(SendIntent(ClientIntent::PixelShift(dir)));
+        }
+        return;
+    }
+    input.set_if_neq(MoveInput(dir));
 }
 
 /// The tile under a world-space point (sprites sit with their bottom-left corner on

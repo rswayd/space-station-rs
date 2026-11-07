@@ -873,15 +873,17 @@ fn lying_appearance(
             &DmAtom,
             &mut Appearance,
             Option<&crate::tables::Elevated>,
+            Option<&crate::pixel_shift::PixelShift>,
         ),
         Or<(
             Changed<BodyPosition>,
             Changed<Appearance>,
             Changed<crate::tables::Elevated>,
+            Changed<crate::pixel_shift::PixelShift>,
         )>,
     >,
 ) {
-    for (posture, atom, mut appearance, elevated) in &mut mobs {
+    for (posture, atom, mut appearance, elevated, shift) in &mut mobs {
         // tg `/datum/element/elevation`: up on a table or rack, lying or not.
         let up = elevated.map_or(0, |e| e.0);
         let (layer, pixel_y) = if posture.lying() {
@@ -890,7 +892,13 @@ fn lying_appearance(
         } else {
             (atom.layer, atom.pixel_y + up)
         };
-        let wanted = (Layer(layer), [atom.pixel_x, pixel_y], posture.lying_angle);
+        // BandaStation pixel shift (`crate::pixel_shift`), on top of everything else.
+        let [sx, sy] = shift.map_or([0, 0], |s| s.0);
+        let wanted = (
+            Layer(layer),
+            [atom.pixel_x + sx, pixel_y + sy],
+            posture.lying_angle,
+        );
         let current = (
             appearance.layer,
             appearance.pixel_offset,
