@@ -356,6 +356,10 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/crusher_trophy/legion_skull",
     // `weapons::two_handed`: the offhand a wielded item fills the other hand with.
     "/obj/item/offhand",
+    // `devices::hand_items`: the hand gestures the `circle`, `slap`, `shoesteal` emotes give.
+    "/obj/item/hand_item/circlegame",
+    "/obj/item/hand_item/slapper",
+    "/obj/item/hand_item/stealer",
     // `weapons::block`: what a broken shield leaves (`shield_break_leftover`).
     "/obj/item/shard",
     "/obj/item/stack/rods/ten",

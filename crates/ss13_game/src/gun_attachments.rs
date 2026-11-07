@@ -643,13 +643,24 @@ pub fn scope_click(
     true
 }
 
-fn send_scope(world: &mut World, mob: Entity, offset: [i16; 2]) {
-    if let Some(client) = world.get::<PlayerMob>(mob).map(|p| p.client) {
-        world.write_message(SendCameraEffect {
-            client,
-            effect: CameraEffect::Scope { offset },
-        });
+/// Sends the zoom `offset` to the mob's client and widens its replication box to cover the
+/// moved view (BYOND sends the map under a client's `pixel_x`/`pixel_y` too); `[0, 0]` puts
+/// both back.
+pub fn send_scope(world: &mut World, mob: Entity, offset: [i16; 2]) {
+    let Some(client) = world.get::<PlayerMob>(mob).map(|p| p.client) else {
+        return;
+    };
+    let reach = offset[0].unsigned_abs().max(offset[1].unsigned_abs());
+    let radius = ss13_net::server::DEFAULT_VIEW_RADIUS + u32::from(reach).div_ceil(32);
+    if let Some(mut viewer) = world.get_mut::<ss13_net::server::Viewer>(client)
+        && viewer.radius != radius
+    {
+        viewer.radius = radius;
     }
+    world.write_message(SendCameraEffect {
+        client,
+        effect: CameraEffect::Scope { offset },
+    });
 }
 
 /// `stop_zooming`: the view back on the user.

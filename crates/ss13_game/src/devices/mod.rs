@@ -16,8 +16,9 @@
 //!   (`crate::clothing::sensors`) for the level the holder is on.
 //! - Flashlights ([`flashlight`]), GPS units ([`gps`]), the RCD ([`rcd`]) and its family
 //!   (RLD, RTD, RDD, RPLD, RWD, RSF: [`rhd`]), tape recorders
-//!   ([`taperecorder`]), laser pointers ([`laser_pointer`]) and tracking and choice beacons
-//!   ([`beacons`]).
+//!   ([`taperecorder`]), laser pointers ([`laser_pointer`]), tracking and choice beacons
+//!   ([`beacons`]), binoculars ([`binoculars`]), broadcast cameras ([`broadcast_camera`]), door seals ([`door_seal`]), table clocks
+//!   ([`table_clock`]) and hand gestures ([`hand_items`]).
 // shortcut: the voice spans are bold text (tg `SPAN_COMMAND` is bold and large, the clown's
 // `SPAN_CLOWN`, an emagged one `SPAN_REALLYBIG`): the chat has no larger span yet; no emag, no
 // TTS filter (no TTS), no sign language check; only local speech is loud, not what goes to a
@@ -29,11 +30,16 @@
 // over the mobs with an inventory, on use).
 
 pub mod beacons;
+pub mod binoculars;
+pub mod broadcast_camera;
+pub mod door_seal;
 pub mod flashlight;
 pub mod gps;
+pub mod hand_items;
 pub mod laser_pointer;
 pub mod rcd;
 pub mod rhd;
+pub mod table_clock;
 pub mod taperecorder;
 
 use bevy::ecs::message::MessageCursor;
@@ -111,6 +117,35 @@ pub struct Megaphone {
     pub voiced: Option<Entity>,
 }
 
+/// A timed action of a device ([`crate::construction::Job::Device`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DeviceJob {
+    /// Bracing an airlock with this seal ([`door_seal`]).
+    SealDoor { seal: Entity },
+    /// Taking an airlock's seal off ([`door_seal`]).
+    UnsealDoor,
+    /// Fixing a broken table clock ([`table_clock`]).
+    RepairClock(Entity),
+    /// The stealing hand taking these shoes ([`hand_items`]).
+    StealShoes(Entity),
+}
+
+/// The end of a [`DeviceJob`].
+pub fn complete_job(
+    world: &mut World,
+    client: Entity,
+    mob: Entity,
+    target: Entity,
+    job: DeviceJob,
+) {
+    match job {
+        DeviceJob::SealDoor { seal } => door_seal::complete_seal(world, client, mob, target, seal),
+        DeviceJob::UnsealDoor => door_seal::complete_unseal(world, mob, target),
+        DeviceJob::RepairClock(clock) => table_clock::complete_repair(world, mob, clock),
+        DeviceJob::StealShoes(shoes) => hand_items::complete_steal(world, mob, target, shoes),
+    }
+}
+
 pub struct DevicesPlugin;
 
 impl Plugin for DevicesPlugin {
@@ -122,6 +157,10 @@ impl Plugin for DevicesPlugin {
             crate::devices::attack_self(w, c.client, c.mob, c.target)
         });
         beacons::build(app);
+        binoculars::build(app);
+        broadcast_camera::build(app);
+        hand_items::build(app);
+        table_clock::build(app);
         flashlight::build(app);
         gps::build(app);
         laser_pointer::build(app);
@@ -624,6 +663,10 @@ fn tick_pinpointers(world: &mut World, mut next: Local<f64>) {
 /// of a crew pinpointer: whom it tracks.
 pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<crate::examine::Line>) {
     rcd::examine_lines(world, target, lines);
+    binoculars::examine_lines(world, target, lines);
+    broadcast_camera::examine_lines(world, target, lines);
+    door_seal::examine_lines(world, target, lines);
+    table_clock::examine_lines(world, target, lines);
     rhd::examine_lines(world, target, lines);
     laser_pointer::examine_lines(world, target, lines);
     taperecorder::examine_lines(world, target, lines);

@@ -338,6 +338,11 @@ pub const EMOTES: &[Emote] = &[
     ),
     emote("wave", "машет рукой.", 0),
     only(CARBON, emote("whistle", "свистит.", AUDIBLE)),
+    // `/datum/emote/living/carbon/circle`, `slap`, `shoesteal`: no message, the game puts the
+    // hand gesture in a free hand (`ss13_game::devices::hand_items`, on `Emoted`).
+    only(CARBON, emote("circle", "", REQUIRE_HANDS)),
+    only(CARBON, emote("slap", "", REQUIRE_HANDS)),
+    only(CARBON, emote("shoesteal", "", REQUIRE_HANDS)),
     only(CARBON, emote("wink", "подмигивает.", 0)),
     Emote {
         // BandaStation's "сочувственно зевнуть." is an infinitive slip; the verb form here.
@@ -640,6 +645,9 @@ fn select_message(emote: &Emote, user: &EmoteUser) -> &'static str {
     });
     special.unwrap_or(emote.message)
 }
+
+/// The emotes that only put a hand gesture (`/obj/item/hand_item`) in a free hand.
+pub const HAND_GESTURES: [&str; 3] = ["circle", "slap", "shoesteal"];
 
 /// tg `/datum/emote/ai/emotion_display`'s `emotion` (`AI_EMOTION_*`) of an AI emote key.
 pub fn ai_emotion(key: &str) -> Option<&'static str> {
@@ -945,7 +953,8 @@ pub fn run(
     };
     // A plain emote without words does nothing; an effect-only one still runs (tg calls the
     // display / mood code after the parent's empty-message return).
-    let effect_only = ai_emotion(key).is_some() || slime_mood_key(key).is_some();
+    let effect_only =
+        ai_emotion(key).is_some() || slime_mood_key(key).is_some() || HAND_GESTURES.contains(&key);
     if text.is_empty() && !effect_only {
         return EmoteOutcome::Silent;
     }
@@ -1156,5 +1165,15 @@ mod tests {
             ..HUMAN_USER
         };
         assert_eq!(ran(run_as("croak_anger", &skrell)), "гневно квакает!");
+    }
+
+    /// The hand gestures run without words for carbons only; the game makes the gesture.
+    #[test]
+    fn hand_gestures_run_without_words() {
+        assert!(matches!(
+            run_as("slap", &HUMAN_USER),
+            EmoteOutcome::Run { key: "slap", text, .. } if text.is_empty()
+        ));
+        assert!(refused(&run_as("circle", &user(EmoteMob::Cyborg))));
     }
 }

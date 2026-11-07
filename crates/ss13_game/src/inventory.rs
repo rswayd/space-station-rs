@@ -572,6 +572,11 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 && crate::atmos::is_analyzer(world, item)
             {
                 crate::atmos::open_analyzer(world, client, mob, item);
+            } else if slot == active
+                && let Some(item) = inventory.slot(slot)
+                && crate::devices::broadcast_camera::rename(world, client, mob, item)
+            {
+                // A broadcast camera's name.
             } else if let Some(item) = inventory.slot(slot) {
                 // A jumpsuit's sensors (`attack_self_secondary`, `attack_hand_secondary`).
                 crate::clothing::right_click_slot(world, client, mob, item);
@@ -614,6 +619,10 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 && crate::crayons::toggle_cap(world, client, item)
             {
                 // A spray can's cap.
+            } else if let Some(item) = inventory.slot(slot)
+                && crate::devices::broadcast_camera::click_alt(world, mob, item)
+            {
+                // A broadcast camera's microphone.
             } else if let Some(item) = inventory.slot(slot) {
                 // A PDA gives back its ID.
                 crate::modpc::pda::alt_click(world, mob, item);
