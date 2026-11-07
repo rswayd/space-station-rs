@@ -239,6 +239,7 @@ impl Plugin for GameServerPlugin {
             crate::secure_safes::SecureSafesPlugin,
             crate::spawners::SpawnersPlugin,
             crate::deployable_turrets::DeployableTurretsPlugin,
+            crate::cannons::CannonsPlugin,
         ))
         .add_plugins((
             crate::pull::PullServerPlugin,

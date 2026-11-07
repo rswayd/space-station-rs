@@ -81,6 +81,16 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/machinery/deployable_turret/hmg/full_auto",
     "/obj/item/deployable_turret_folded",
     "/obj/item/deployable_turret_folded/full_auto",
+    // `cannons`: cannonballs and mounted gun shots, the trash cannon's leftovers.
+    "/obj/projectile/bullet/cannonball",
+    "/obj/projectile/bullet/cannonball/explosive",
+    "/obj/projectile/bullet/cannonball/emp",
+    "/obj/projectile/bullet/cannonball/biggest_one",
+    "/obj/projectile/bullet/cannonball/trashball",
+    "/obj/projectile/bullet/strilka310",
+    "/obj/projectile/bullet/junk",
+    "/obj/projectile/beam/laser/repeater",
+    "/obj/item/stack/sheet/iron/five",
     // `traps`: the earth trap's rock, the cables strung between tripwire posts.
     "/obj/structure/flora/rock/style_random",
     "/obj/structure/tripwire/cable",
