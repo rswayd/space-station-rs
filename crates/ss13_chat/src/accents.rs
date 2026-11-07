@@ -361,10 +361,12 @@ fn heckacious(text: &str, roll: &mut impl FnMut() -> f32) -> String {
         }
         if !edited {
             if roll() < 65.0 {
-                word = word.replace(pick(&VOWELS, roll), pick(&VOWELS, roll));
+                let (from, to) = (pick(&VOWELS, roll), pick(&VOWELS, roll));
+                word = word.replace(from, to);
             }
             for _ in 0..rand(1, 2, roll) {
-                word = word.replace(pick(&CONSONANTS, roll), pick(&CONSONANTS, roll));
+                let (from, to) = (pick(&CONSONANTS, roll), pick(&CONSONANTS, roll));
+                word = word.replace(from, to);
             }
             let mut patched = String::with_capacity(word.len());
             for c in word.chars() {
