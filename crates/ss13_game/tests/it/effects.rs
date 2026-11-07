@@ -84,6 +84,8 @@ const TYPES: &str = r##"{
         "declared_vars": { "name": "foam" } },
     "/obj/effect/particle_effect/fluid/foam/metal": {
         "parent": "/obj/effect/particle_effect/fluid/foam" },
+    "/obj/effect/particle_effect/fluid/foam/short_life": {
+        "parent": "/obj/effect/particle_effect/fluid/foam" },
     "/obj/structure": { "parent": "/obj", "declared_vars": { "icon": { "resource": "i.dmi" },
         "icon_state": "toy" } },
     "/obj/structure/foamedmetal": { "parent": "/obj/structure", "declared_vars": {
@@ -203,6 +205,7 @@ fn fixture_assets(test: &str) -> PathBuf {
         "/obj/effect/particle_effect/fluid/smoke/sleeping",
         "/obj/effect/particle_effect/fluid/foam",
         "/obj/effect/particle_effect/fluid/foam/metal",
+        "/obj/effect/particle_effect/fluid/foam/short_life",
         "/obj/structure/foamedmetal",
         "/obj/structure/table",
         "/turf/open/floor/iron",
@@ -347,6 +350,36 @@ fn a_foam_reaction_spews_foam_and_empties_the_container() {
         app.world().get::<Reagents>(beaker).unwrap().0.total_volume,
         0.0
     );
+}
+
+/// Scrubber Overflow: only unwelded station scrubbers overflow, and an overflow starts a
+/// short-lived foam flood on the scrubber's tile.
+#[test]
+fn scrubber_overflow_spews_short_foam() {
+    use ss13_game::atmos_machinery::VentScrubber;
+    use ss13_game::events::scrubber_overflow::{overflow, station_scrubbers};
+    let mut app = server("scrubber_overflow_spews_short_foam");
+    let scrubber = |welded| VentScrubber {
+        on: true,
+        scrubbing: true,
+        filter: 0,
+        widenet: false,
+        volume_rate: 200.0,
+        welded,
+        area: None,
+    };
+    let world = app.world_mut();
+    let open = world.spawn((at(10, 6), scrubber(false))).id();
+    world.spawn((at(12, 6), scrubber(true)));
+    assert_eq!(station_scrubbers(world), [open]);
+    overflow(world, at(10, 6), 0.0, 10);
+    let world = app.world_mut();
+    let kinds: Vec<(TilePos, FoamKind)> = world
+        .query::<(&TilePos, &Foam)>()
+        .iter(world)
+        .map(|(p, f)| (*p, f.kind))
+        .collect();
+    assert_eq!(kinds, [(at(10, 6), FoamKind::ShortLife)]);
 }
 
 #[test]

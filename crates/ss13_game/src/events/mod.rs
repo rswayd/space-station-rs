@@ -54,6 +54,7 @@ pub mod object_rain;
 pub mod processor_overload;
 pub mod radiation_leak;
 pub mod radiation_storm;
+pub mod scrubber_overflow;
 pub mod shuttle;
 pub mod stray_cargo;
 pub mod supermatter_surge;
@@ -279,6 +280,51 @@ pub fn controls() -> Vec<EventControl> {
         )),
         c(grey_tide::NAME, 10, 20.0, 5, 2, grey_tide::make),
         c(ion_storm::NAME, 15, 20.0, 2, 20, ion_storm::make),
+        needs(
+            scrubber_overflow::has_scrubbers,
+            c(
+                scrubber_overflow::NORMAL,
+                10,
+                20.0,
+                10,
+                3,
+                scrubber_overflow::make_normal,
+            ),
+        ),
+        needs(
+            scrubber_overflow::has_scrubbers,
+            c(
+                scrubber_overflow::THREATENING,
+                4,
+                35.0,
+                25,
+                1,
+                scrubber_overflow::make_threatening,
+            ),
+        ),
+        needs(
+            scrubber_overflow::has_scrubbers,
+            c(
+                scrubber_overflow::CATASTROPHIC,
+                2,
+                45.0,
+                35,
+                1,
+                scrubber_overflow::make_catastrophic,
+            ),
+        ),
+        // Weight 0, `max_occurrences = 0`: admins only.
+        needs(
+            scrubber_overflow::has_scrubbers,
+            c(
+                scrubber_overflow::EVERY_VENT,
+                0,
+                20.0,
+                0,
+                0,
+                scrubber_overflow::make_every_vent,
+            ),
+        ),
         c(
             bureaucratic_error::NAME,
             5,

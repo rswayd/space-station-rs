@@ -206,7 +206,7 @@ pub struct WisdomCow {
 }
 
 /// `get_random_reagent_id()`: a reagent with `REAGENT_SPAWN_RANDOM_PRODUCERS`.
-fn random_reagent(world: &mut World) -> Option<String> {
+pub(crate) fn random_reagent(world: &mut World) -> Option<String> {
     let pool = world
         .get_resource::<crate::botany::Botany>()
         .map(|b| b.0.data.random_reagents.clone())
