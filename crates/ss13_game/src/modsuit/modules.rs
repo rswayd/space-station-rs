@@ -26,6 +26,8 @@
 //! - megaphone: the wearer speaks loudly (`VoiceSpan`), each line paying `use_energy_cost`.
 //! - restraint assist (`quick_cuff`): sealed gauntlets cuff in 0.75 of the time
 //!   (`TRAIT_FAST_CUFFING`, [`FastCuffing`]).
+//! - anti-slip (`noslip`): sealed boots do not slip on water (`TRAIT_NO_SLIP_WATER`,
+//!   [`NoSlipWater`]).
 //! - bike horn: used, it honks.
 //! - worn overlays (`generate_worn_overlay`): the module's inactive / active / use state drawn
 //!   over the part of its first required slot (the unit without required slots) while its parts
@@ -105,6 +107,7 @@ pub enum Kind {
     },
     Megaphone,
     QuickCuff,
+    NoSlipWater,
     Bikehorn,
     Other,
 }
@@ -148,6 +151,8 @@ impl Kind {
             Self::Megaphone
         } else if under("quick_cuff") {
             Self::QuickCuff
+        } else if under("noslip") {
+            Self::NoSlipWater
         } else if under("bikehorn") {
             Self::Bikehorn
         } else {
@@ -200,6 +205,10 @@ pub struct VisorHud {
     pub medical: bool,
 }
 
+/// On a wearer: `TRAIT_NO_SLIP_WATER` from the anti-slip module.
+#[derive(Component, Clone, Copy, Debug, Default)]
+pub struct NoSlipWater;
+
 /// On a wearer: `TRAIT_FAST_CUFFING` from the restraint assist module.
 #[derive(Component, Clone, Copy, Debug, Default)]
 pub struct FastCuffing;
@@ -220,6 +229,11 @@ pub struct ModOverlays(pub Vec<IconStateId>);
 /// water 6 s, ice 12 s; lube still gets it).
 pub fn resists_slip(world: &World, mob: Entity, walking_safe: bool, knockdown: f32) -> bool {
     world.get::<NoSlip>(mob).is_some() && (walking_safe || knockdown >= 12.0)
+}
+
+/// Whether the anti-slip module keeps `mob` up on a wet floor of strength `wet` (water only).
+pub fn resists_wet_slip(world: &World, mob: Entity, wet: u8) -> bool {
+    wet == crate::janitor::TURF_WET_WATER && world.get::<NoSlipWater>(mob).is_some()
 }
 
 /// Gives a module item its [`ModModule`] (idempotent).
@@ -357,6 +371,11 @@ pub fn on_part_activation(world: &mut World, control: Entity, module: Entity) {
                 world.entity_mut(wearer).insert(FastCuffing);
             }
         }
+        Kind::NoSlipWater => {
+            if let Some(wearer) = suit.wearer {
+                world.entity_mut(wearer).insert(NoSlipWater);
+            }
+        }
         _ => {}
     }
 }
@@ -382,6 +401,11 @@ pub fn on_part_deactivation(world: &mut World, control: Entity, module: Entity) 
         Kind::QuickCuff => {
             if let Some(wearer) = suit.wearer.filter(|&w| world.get_entity(w).is_ok()) {
                 world.entity_mut(wearer).remove::<FastCuffing>();
+            }
+        }
+        Kind::NoSlipWater => {
+            if let Some(wearer) = suit.wearer.filter(|&w| world.get_entity(w).is_ok()) {
+                world.entity_mut(wearer).remove::<NoSlipWater>();
             }
         }
         _ => {}
@@ -1094,9 +1118,25 @@ mod tests {
             Kind::Other
         );
         assert_eq!(Kind::of(&def("/obj/item/mod/module/t_ray")), Kind::Other);
+        assert_eq!(
+            Kind::of(&def("/obj/item/mod/module/noslip")),
+            Kind::NoSlipWater
+        );
         let mut storage = def("/obj/item/mod/module/storage/bluespace");
         storage.storage = Some(Default::default());
         assert_eq!(Kind::of(&storage), Kind::Storage);
+    }
+
+    /// The anti-slip module's trait stops water slips only.
+    #[test]
+    fn anti_slip_resists_water_only() {
+        use crate::janitor::{TURF_WET_LUBE, TURF_WET_WATER};
+        let mut world = World::new();
+        let mob = world.spawn_empty().id();
+        assert!(!resists_wet_slip(&world, mob, TURF_WET_WATER));
+        world.entity_mut(mob).insert(NoSlipWater);
+        assert!(resists_wet_slip(&world, mob, TURF_WET_WATER));
+        assert!(!resists_wet_slip(&world, mob, TURF_WET_LUBE));
     }
 
     #[test]

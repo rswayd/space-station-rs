@@ -11,7 +11,8 @@
 //! checked at the moment of effect (`can_purchase_item`): the uplink is active and in the
 //! buyer's hands or slots (`inventory_state`), the item is sold to traitors, the shop is not
 //! locked, the population is high enough, there are telecrystals and stock. The item appears in
-//! the buyer's hands, else at their feet.
+//! the buyer's hands, else at their feet (a mech always lands there). The window does not list
+//! items restricted to other roles (tg `Uplink`'s `restricted_roles` filter).
 //!
 //! A traitor's uplink also gets 4-6 sales (`create_uplink_sales`) in the "Discounted Gear"
 //! category: copies of catalog items at 25/50/75% off, bought by their own id (`<path>?sale`)
@@ -317,6 +318,26 @@ fn record(item: &UplinkItemDef, templates: &HashMap<String, Template>) -> Uplink
     }
 }
 
+/// The window's catalog for `role`: tg's `Uplink` hides the items restricted to other roles.
+fn board_for_role(
+    catalog: &UplinkCatalog,
+    board: &Arc<UplinkStatic>,
+    role: &str,
+) -> Arc<UplinkStatic> {
+    let hidden = |r: &UplinkItemRecord| {
+        catalog.item(&r.id).is_some_and(|i| {
+            !i.restricted_roles.is_empty() && !i.restricted_roles.iter().any(|x| x == role)
+        })
+    };
+    if !board.items.iter().any(|r| hidden(r)) {
+        return board.clone();
+    }
+    let mut out = (**board).clone();
+    out.items.retain(|r| !hidden(r));
+    out.categories = categories_of(&catalog.data, &out.items);
+    Arc::new(out)
+}
+
 /// Categories that have `items`, by weight.
 fn categories_of(data: &AntagData, items: &[UplinkItemRecord]) -> Vec<String> {
     data.uplink_categories
@@ -568,7 +589,10 @@ pub fn give_uplink(
             )
         })
         .unwrap_or_default();
-    let board = world.resource::<UplinkCatalog>().board.clone();
+    let board = {
+        let catalog = world.resource::<UplinkCatalog>();
+        board_for_role(catalog, &catalog.board, &role)
+    };
     world.entity_mut(radio).insert((
         Uplink {
             owner: mob,
@@ -912,10 +936,12 @@ pub fn purchase(
     }
     let owner = uplink.owner;
     crate::storage::finish_item(world, spawned, 0);
-    // `spawn_item`: `put_in_hands`, the active hand first; else it stays on the floor.
+    // `spawn_item`: `put_in_hands`, the active hand first; else (or not an item: a mech) it
+    // stays on the floor.
+    let is_item = world.get::<DmItem>(spawned).is_some();
     let hand = [inventory.active, 1 - inventory.active]
         .into_iter()
-        .find(|&h| inventory.hands[h].is_none());
+        .find(|&h| is_item && inventory.hands[h].is_none());
     let pos = world.get::<TilePos>(user).copied();
     match (hand, pos) {
         (Some(hand), _) => {
@@ -929,6 +955,14 @@ pub fn purchase(
         }
         (None, Some(pos)) => {
             world.entity_mut(spawned).insert((Networked, pos));
+            // tg `new spawn_path(get_turf(user))` runs the mech's `Initialize`.
+            if !is_item
+                && world
+                    .get_resource::<crate::mecha::core::MechaDb>()
+                    .is_some_and(|db| db.mech(&item.item).is_some())
+            {
+                crate::mecha::core::init_mech(world, spawned, &item.item, false);
+            }
         }
         (None, None) => {
             world.entity_mut(spawned).despawn();
@@ -1274,6 +1308,35 @@ mod tests {
             board: default(),
         });
         (world, user, device)
+    }
+
+    /// Items restricted to other roles are not listed; the role's own are.
+    #[test]
+    fn the_window_hides_other_roles_items() {
+        let mut hook = def("/datum/uplink_item/role_restricted/meathook", 11);
+        hook.restricted_roles = vec!["Cook".into()];
+        hook.category = "Role-Restricted".into();
+        let mut toolbox = def("/datum/uplink_item/device_tools/toolbox", 1);
+        toolbox.category = "Misc. Gadgets".into();
+        let mut catalog = catalog(vec![hook, toolbox]);
+        catalog.data.uplink_categories = vec!["Misc. Gadgets".into(), "Role-Restricted".into()];
+        let items: Vec<UplinkItemRecord> = catalog
+            .data
+            .uplink_items
+            .iter()
+            .map(|i| record(i, &HashMap::new()))
+            .collect();
+        let board = Arc::new(UplinkStatic {
+            categories: categories_of(&catalog.data, &items),
+            items,
+            lockable: true,
+        });
+        let ids = |b: &UplinkStatic| b.items.iter().map(|i| i.id.clone()).collect::<Vec<_>>();
+        let cook = board_for_role(&catalog, &board, "Cook");
+        assert_eq!(ids(&*cook).len(), 2);
+        let clown = board_for_role(&catalog, &board, "Clown");
+        assert_eq!(ids(&*clown), ["/datum/uplink_item/device_tools/toolbox"]);
+        assert_eq!(clown.categories, ["Misc. Gadgets"]);
     }
 
     #[test]

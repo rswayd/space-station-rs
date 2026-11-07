@@ -684,9 +684,10 @@ fn slip_on_entered(world: &mut World, mut cursor: Local<MessageCursor<Moved>>) {
         else {
             continue;
         };
-        // Active MOD magboots (`TRAIT_NO_SLIP_WATER`, `TRAIT_NO_SLIP_ICE`), worn
-        // `clothing_traits` (`crate::clothing::traits`).
+        // Active MOD magboots (`TRAIT_NO_SLIP_WATER`, `TRAIT_NO_SLIP_ICE`), the MOD anti-slip
+        // module, worn `clothing_traits` (`crate::clothing::traits`).
         if crate::modsuit::modules::resists_slip(world, m.entity, slip.1, slip.0)
+            || crate::modsuit::modules::resists_wet_slip(world, m.entity, wet)
             || crate::clothing::traits::resists_wet_slip(world, m.entity, wet)
         {
             continue;

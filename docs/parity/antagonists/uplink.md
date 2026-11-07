@@ -23,7 +23,7 @@
 TGUI `Uplink`: категории, поиск, компактный режим, цены и остатки, баланс ТК, блокировка.
 
 - **Код:** [`/datum/component/uplink/proc/interact()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/uplink.dm#L138); tgui: [`Uplink.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/Uplink/index.tsx)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/antag/client.rs`: категории, цены, остатки, баланс (клик — вывод сырых ТК), блокировка, «Заменить задачи»; нет поиска, компактного режима и тем
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/antag/client.rs`: категории, цены, остатки, баланс (клик — вывод сырых ТК), блокировка, «Заменить задачи»; товары чужих ролей скрыты (`board_for_role` в `crates/ss13_game/src/antag/uplink.rs`); нет поиска, компактного режима, тем и фильтра по виду (`restricted_species`)
 
 ### Ограниченный запас и эксклюзивные покупки
 У части товаров лимит штук (`limited_stock`); некоторые покупки блокируют весь остальной магазин (`lock_other_purchases`).
@@ -96,7 +96,7 @@ C-4, X-4, мешок C-4, гранаты (осколочная, EMP, дымов�
 Магазины 9 мм (обычные, бронебойные, экспансивные, зажигательные), спидлоадер .357, патроны Donksoft.
 
 - **Код:** [`/datum/uplink_item/ammo`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/uplink/uplink_items/ammunition.dm#L5)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload/src/antag.rs` (`UPLINK_ITEMS`): кейс магазинов 9 мм, бронебойный, экспансивный и зажигательный магазины 9 мм, спидлоадер .357 (`crates/ss13_game/src/guns.rs`); зажигательные пули (`incendiary_hit` в `crates/ss13_game/src/projectile.rs`, `fire_stacks`/`fireblast_radius` в `crates/ss13_mapload/src/guns.rs`) поджигают карбона и дают хотспоты вокруг цели — только там, где воздух горит; нет патронов Donksoft (нет пенных дротиков и пистолета)
 
 ### Категория «Импланты»
 Импланты свободы, радио Синдиката, скрытности, хранилища, аплинк-имплант.
@@ -108,14 +108,14 @@ C-4, X-4, мешок C-4, гранаты (осколочная, EMP, дымов�
 Инфильтраторский и обычный MODsuit Синдиката, скафандр, модули MOD (термальный визор, хамелеон, компрессия брони, антислип, амортизация, маскировка wraith).
 
 - **Код:** [`/datum/uplink_item/suits`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/uplink/uplink_items/suits.dm#L7)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload/src/antag.rs`: инфильтраторский и обычный MODsuit Синдиката, коробка со скафандром, модуль антислипа (`Kind::NoSlipWater` в `crates/ss13_game/src/modsuit/modules.rs`: запечатанные ботинки не скользят по воде); у нюков — элитный MODsuit и продвинутый EMP-щит; psi-эмиттер инфильтратора, амортизатор (нет `TRAIT_BATON_RESISTANCE`) и прочие модули без механики в этих костюмах только ставятся и тратят заряд; нет модулей термального визора (нет зрения `SEE_MOBS`), хамелеона, компрессии брони, амортизации и wraith
 
 ### Категория «Ролевые товары»
 Товары для конкретных профессий: проклятый шар-восьмёрка, вирус капитала, инжектор неуклюжести, MMI Синдиката, горячая картошка, перевёрнутый медвежий капкан, мясной крюк, турель, арбалет из арматуры, программы хирургии и т.д.
 
 - **Код:** [`/datum/uplink_item/role_restricted`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/uplink/uplink_items/job.dm#L5), [`/datum/uplink_item/species_restricted`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/uplink/uplink_items/species.dm#L5)
 - **BandaStation:** [`syndiesledge`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/uplink_items/code/role_restricted.dm#L1) — кувалда Синдиката для пролома стен
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload/src/antag.rs`: набор подделки почты (`crates/ss13_game/src/cargo/mail.rs`), древний комбинезон, ДНК-шприцемёт, реагентный дартган и мясной крюк (`crates/ss13_game/src/guns_special.rs`), арбалет из арматуры Синдиката, диски хирургии промывки мозгов и продвинутой пластики (`crates/ss13_game/src/medical/operating.rs`), модкит давления (`crates/ss13_game/src/mining/modkits.rs`), автохирург с лазерной рукой (`crates/ss13_game/src/medical/cyberimps.rs`), кувалда Синдиката BandaStation (`crates/ss13_game/src/weapons/rip_and_tear.rs`); нет проклятого шара, вируса капитала, инжектора неуклюжести (у готовых ДНК-инжекторов нет мутаций), силы древнего ящика от ТК, клоунских бойков, законов MMI Синдиката, горячей картошки, боевой выпечки, EZ Clean, перевёрнутого капкана, Molt'Obeso, турели-ящика, магиллитиса, куба гориллы, springlock-модуля, обратного револьвера, мимики, пироговой пушки, клоун-бомбы и машины, His Grace, скрытого отсека мехов, паучьего мутатора, бласт-пушки, злого саженца, пчелиного дымаря, обезьян-агентов, Reticence, диода-диска, кейса-пистолета; товар для вида (фонарь мотылька) — нет фильтра `restricted_species`
 
 ### Категория «Понты» и наборы
 Шарик, карты, сигареты, кейс с деньгами, костюмы, наклейки, постеры, спрей; наборы: случайный предмет, Syndi-kit Tactical/Special, ящик излишков, 1 сырой ТК.
@@ -129,10 +129,10 @@ C-4, X-4, мешок C-4, гранаты (осколочная, EMP, дымов�
 
 - **Код:** [`/datum/uplink_item/weapon_kits`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/uplink/uplink_items/nukeops.dm#L7), [`/datum/uplink_item/ammo_nuclear`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/uplink/uplink_items/nukeops.dm#L18), [`/datum/uplink_item/reinforcements`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/uplink/uplink_items/nukeops.dm#L617), [`/datum/uplink_item/mech`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/uplink/uplink_items/nukeops.dm#L747), [`/datum/uplink_item/weapon_kits/pie_cannon`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/uplink/uplink_items/clownops.dm#L5)
 - **BandaStation:** [`nukeops.dm#L1005`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/uplink/uplink_items/nukeops.dm#L1005), [`modular_bandastation/uplink_items/code/nukeops.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/uplink_items/code/nukeops.dm#L1) — тактическая кобура, кувалда
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload/src/antag.rs` (каталог `UPLINK_NUKE_OPS`): наборы Bulldog, Clandestine, C-20r, револьвер, L6 SAW, M-90gl, снайперский кейс, смартган, кувалда BandaStation и их магазины (картечь, пуля, флешетты, «дыхание дракона», 10 мм/.45/7 мм обычные, бронебойные, экспансивные и зажигательные, матчевые 7 мм, .223, .50 обычные и зажигательные, .357); ящик осколочных гранат, X-4, минибомба, мешок X-4; мехи Dark Gygax и Mauler (на пол к покупателю, `init_mech`) и их сумки поддержки; syndigaloshes, импланты микро- и макробомбы, автохирурги ревайвера и CNS-ребутера, тактическая аптечка, челюсти жизни Синдиката, тактическая кобура BandaStation (`crates/ss13_game/src/clothing/holsters.rs`); подствольник M-90gl, крышка L6 и прицел снайперки не смоделированы. Нет: базового набора, ракетницы, China Lake, двойного меча, меча со щитом, CQC, фазовых и самонаводящихся .357, метеор-пули, Donk-картечи, .50 пробивных/дизрапторов/марксман, гранат с пчёлами/вирусом/мэнхэками, бомбы-пиццы, гренадёра, детонатора и бомбы Синдиката, подкреплений (оперативники, киборги, оверволч, ED-209, турель), наборов (импланты, медик, поджигатель, ковбой), ромерола, MOD-модулей энергощита/инжектора/кобуры/медлуча, интелкарты и апгрейда ИИ, штурмовой капсулы, премиум-аптечки, зелья разума, имплантов deathrattle/deniability, термальных и рентген-глаз, ключей базы (нет базы нюков), шляп. Клоун-опов нет совсем (нет режима и флага `UPLINK_CLOWN_OPS`) — относится к [nuclear-operatives.md](nuclear-operatives.md)
 
 ### Особые товары
 Автохирург Синдиката, яркий фонарь для вида, товары контрактора (Contract Kit, реролл, фултон, подкрепление).
 
 - **Код:** [`/datum/uplink_item/special`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/uplink/uplink_items/special.dm#L5), [`/datum/uplink_item/contractor`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/uplink/uplink_items/contractor.dm#L24)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload/src/antag.rs`: автохирург Синдиката в каталоге с `purchasable_from = NONE`, как в tg; трейта станции «кибернетическая революция», который открывает его предателям, нет (трейты — [station-traits-goals.md](../round/station-traits-goals.md)) — фактически не продаётся; нет фонаря для мотыльков (нет `restricted_species`) и товаров контрактора (нет контрактора)

@@ -540,6 +540,7 @@ fn impact(world: &mut World, p: &Projectile, name: &str, target: Entity) {
         hit_living(world, p, name, target);
         return;
     }
+    incendiary_hit(world, p, target);
     // `hydroponics/bullet_act`: a somatoray shot on a planted tray.
     if crate::botany::bullet_act(world, &p.data.path, target) {
         return;
@@ -563,6 +564,34 @@ fn impact(world: &mut World, p: &Projectile, name: &str, target: Entity) {
     if world.get::<Turf>(target).is_none() && matches!(kind, DamageType::Brute | DamageType::Burn) {
         // shortcut: objects check their melee armor, not the projectile's flag.
         crate::obj_damage::take_damage(world, target, p.data.damage, kind);
+    }
+}
+
+/// `/obj/projectile/bullet/incendiary/on_hit` (and `p50/incendiary`'s): a carbon target gets
+/// the round's fire stacks and is ignited; the tiles within `fireblast_radius` get a hotspot.
+// shortcut: as explosions' flame tiles, a hotspot lights only where the air burns; tg's
+// short-lived `/obj/effect/hotspot` in plain air and its exposure of what stands there are not
+// made.
+fn incendiary_hit(world: &mut World, p: &Projectile, target: Entity) {
+    // `iscarbon(target)`.
+    if p.data.fire_stacks > 0.0 && world.get::<crate::medical::wounds::Limbs>(target).is_some() {
+        crate::fire::adjust_fire_stacks(world, target, p.data.fire_stacks);
+        crate::fire::ignite_mob(world, target);
+    }
+    let radius = p.data.fireblast_radius as i32;
+    if radius == 0 {
+        return;
+    }
+    let Some(&at) = world.get::<TilePos>(target) else {
+        return;
+    };
+    if let Some(mut atmos) = world.get_resource_mut::<ss13_atmos::Atmos>() {
+        for dx in -radius..=radius {
+            for dy in -radius..=radius {
+                let pos = TilePos::new(at.x + dx, at.y + dy, at.z);
+                atmos.hotspot_expose(pos, 1000.0, 2500.0, false);
+            }
+        }
     }
 }
 
@@ -602,6 +631,7 @@ fn hit_living(world: &mut World, p: &Projectile, name: &str, target: Entity) {
     if blocked {
         return;
     }
+    incendiary_hit(world, p, target);
     let distance = p.start.chebyshev(at).unwrap_or(0) as f32;
     let accuracy = (p.data.accurate_range - p.data.accuracy_falloff * distance).clamp(5.0, 100.0);
     let zone =
@@ -717,6 +747,42 @@ use ss13_chat::capitalize;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// An incendiary round sets a carbon on fire with its stacks; anything else does not burn.
+    #[test]
+    fn incendiary_rounds_ignite_carbons() {
+        let mut world = World::new();
+        world.insert_resource(Time::<()>::default());
+        let firer = world.spawn_empty().id();
+        let carbon = world.spawn(crate::medical::wounds::Limbs::default()).id();
+        let simple = world.spawn_empty().id();
+        let start = TilePos::new(1, 1, 1);
+        let round = Projectile {
+            data: ProjectileData {
+                path: "/obj/projectile/bullet/incendiary/c9mm".into(),
+                fire_stacks: 2.0,
+                ..default()
+            },
+            firer,
+            original: None,
+            zone: BodyZone::Chest,
+            hit_prone: false,
+            start,
+            x: 1.0,
+            y: 1.0,
+            dx: 1.0,
+            dy: 0.0,
+            moved: 0.0,
+            angle: 90.0,
+            fired_from: None,
+            ricochets: 0,
+        };
+        incendiary_hit(&mut world, &round, carbon);
+        incendiary_hit(&mut world, &round, simple);
+        let fire = world.get::<crate::fire::FireStacks>(carbon).unwrap();
+        assert_eq!((fire.stacks, fire.on_fire), (2.0, true));
+        assert!(world.get::<crate::fire::FireStacks>(simple).is_none());
+    }
 
     #[test]
     fn angles_are_clockwise_from_north() {

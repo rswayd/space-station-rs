@@ -75,6 +75,10 @@ pub struct ProjectileData {
     pub tase_stamina: f32,
     /// `reflectable`: reflective armor can bounce it (lasers and disablers).
     pub reflectable: bool,
+    /// Incendiary rounds' `on_hit`: fire stacks for a carbon target and the radius of the
+    /// hotspots around it (`/obj/projectile/bullet/incendiary`, `p50/incendiary`); 0 elsewhere.
+    pub fire_stacks: f32,
+    pub fireblast_radius: u32,
 }
 
 /// `/obj/item/ammo_casing` vars, with its projectile resolved.
@@ -390,6 +394,23 @@ pub fn projectile(types: &DmTypes, path: &str) -> ProjectileData {
             0.0
         },
         reflectable: truthy(types.resolved(path, "reflectable")),
+        fire_stacks: incendiary(types, path).0,
+        fireblast_radius: incendiary(types, path).1,
+    }
+}
+
+/// `(fire_stacks, fireblast_radius)` of an incendiary round's `on_hit`. The .50 BMG one
+/// hard-codes them in its own `on_hit` (`adjust_fire_stacks(20)`, `RANGE_TURFS(2, target)`).
+fn incendiary(types: &DmTypes, path: &str) -> (f32, u32) {
+    if is_under(path, "/obj/projectile/bullet/p50/incendiary") {
+        (20.0, 2)
+    } else if is_under(path, "/obj/projectile/bullet/incendiary") {
+        (
+            num(types, path, "fire_stacks") as f32,
+            num(types, path, "fireblast_radius").max(0.0) as u32,
+        )
+    } else {
+        (0.0, 0)
     }
 }
 
@@ -840,6 +861,39 @@ mod tests {
             "lethal_projectile": { "path": "/obj/projectile/bullet/c9mm" } } }
       }
     }"##;
+
+    /// Incendiary rounds carry their `fire_stacks` and `fireblast_radius`; the .50 BMG one its
+    /// hard-coded 20 stacks and radius 2; other bullets none.
+    #[test]
+    fn incendiary_rounds_carry_their_fire() {
+        let types = DmTypes::parse(
+            r##"{ "schema": 3, "types": {
+            "/obj": { "parent": null },
+            "/obj/projectile": { "parent": "/obj", "declared_vars": { "damage": 10 } },
+            "/obj/projectile/bullet": { "parent": "/obj/projectile" },
+            "/obj/projectile/bullet/incendiary": { "parent": "/obj/projectile/bullet",
+                "declared_vars": { "fire_stacks": 4, "fireblast_radius": 1 } },
+            "/obj/projectile/bullet/incendiary/c9mm": {
+                "parent": "/obj/projectile/bullet/incendiary",
+                "declared_vars": { "fire_stacks": 2 } },
+            "/obj/projectile/bullet/incendiary/fire": {
+                "parent": "/obj/projectile/bullet/incendiary",
+                "declared_vars": { "fireblast_radius": null } },
+            "/obj/projectile/bullet/p50": { "parent": "/obj/projectile/bullet" },
+            "/obj/projectile/bullet/p50/incendiary": { "parent": "/obj/projectile/bullet/p50" }
+            } }"##
+                .as_bytes(),
+        )
+        .unwrap();
+        let fire = |p: &str| {
+            let d = projectile(&types, p);
+            (d.fire_stacks, d.fireblast_radius)
+        };
+        assert_eq!(fire("/obj/projectile/bullet/incendiary/c9mm"), (2.0, 1));
+        assert_eq!(fire("/obj/projectile/bullet/incendiary/fire"), (4.0, 0));
+        assert_eq!(fire("/obj/projectile/bullet/p50/incendiary"), (20.0, 2));
+        assert_eq!(fire("/obj/projectile/bullet/p50"), (0.0, 0));
+    }
 
     /// tg `setup()`: a gun turret takes its gun's first shot for both modes when the gun has one
     /// mode; a gunless turret keeps its own projectiles; both are spawned at runtime.
