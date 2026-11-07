@@ -10,15 +10,16 @@
 //! unlocked (or broken) safe opens and closes; open, it takes items while they fit and hands
 //! them back from the window. Three devastating explosions (or heavy ones aimed at it) break the
 //! lock for good. The vault safe starts with the vault piggy bank.
-// shortcut: no lock reset with a wrench (`tgui_input_number` per tumbler, 10 s), no climbing or
-// elevation, the floor safe is not hidden under tiles; the explosion counter is not wired to
-// `ex_act`. Add each with its mechanic.
+// A wrench on an open safe asks a number per tumbler, then resets the lock in 10 s.
+// shortcut: no climbing or elevation, the floor safe is not hidden under tiles; a heavy
+// explosion aimed at the safe does not count (`target == src` is unknown to `ex_act_movable`). Add each with its mechanic.
 
 use bevy::ecs::message::{MessageCursor, Messages};
 use bevy::prelude::*;
 use ss13_mapload::{DmAtom, DmItem, DmObj, DmWeight};
 use ss13_shared::TilePos;
 use ss13_shared::chat::Span;
+use ss13_tgui::prompt::{Ask, PromptAnswer, PromptAnswered, PromptKind, ask_world};
 use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiActed, UiParams, UiReject, UiSystems};
 use ss13_world::SpatialIndex;
 
@@ -167,7 +168,8 @@ impl Plugin for SafesPlugin {
         app.register_ui::<SafeUi>()
             .add_observer(add_safe)
             .add_systems(ss13_world::MapInit, fill_mapped_safes)
-            .add_systems(Update, safe_acts.in_set(UiSystems::Handle));
+            .add_systems(Update, safe_acts.in_set(UiSystems::Handle))
+            .add_systems(Update, reset_answers.after(crate::click::ResolveClicks));
         app.add_click_handler(ClickPhase::EmptyHand, 3169, |w, c| {
             interact(w, c.client, c.mob, c.target)
         });
@@ -333,6 +335,24 @@ fn item_interaction(
     {
         return false;
     }
+    // `safe/wrench_act`: a new combination, one number per tumbler, then 10 s.
+    if matches!(
+        crate::tools::tool_of(world, held),
+        Some((crate::tools::ToolKind::Wrench, _))
+    ) {
+        if !open {
+            tell(world, client, Span::Warning, "сначала откройте!");
+        } else {
+            tell(
+                world,
+                client,
+                Span::Notice,
+                "Вы начинаете сбрасывать замок. Нужно задать 2 числа.",
+            );
+            ask_tumbler(world, client, mob, target, held, Vec::new());
+        }
+        return true;
+    }
     let name = name_of(world, held);
     if !open {
         let stethoscope = world
@@ -370,6 +390,125 @@ fn item_interaction(
     );
     refresh(world, target);
     true
+}
+
+/// A pending tumbler question of a wrench reset.
+#[derive(Component, Clone, Debug)]
+struct ResetAsk {
+    safe: Entity,
+    tool: Entity,
+    got: Vec<u8>,
+}
+
+/// The timed steps of this module.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SafeJob {
+    /// The wrench reset's `do_after(10 SECONDS)` with the new combination.
+    Reset { tumblers: [u8; 2] },
+}
+
+fn ask_tumbler(
+    world: &mut World,
+    client: Entity,
+    mob: Entity,
+    safe: Entity,
+    tool: Entity,
+    got: Vec<u8>,
+) {
+    let ask = Ask::new(
+        client,
+        mob,
+        "Set Lock",
+        format!("Set tumbler #{} (0-99):", got.len() + 1),
+        PromptKind::Number {
+            default: 0.0,
+            min: 0.0,
+            max: 99.0,
+            round: true,
+        },
+    );
+    let prompt = ask_world(world, ask);
+    world
+        .entity_mut(prompt)
+        .insert(ResetAsk { safe, tool, got });
+}
+
+/// The answers of [`ResetAsk`]: the next tumbler, or the 10 s reset; rechecked each time
+/// (`can_perform_action`).
+fn reset_answers(world: &mut World, mut cursor: Local<MessageCursor<PromptAnswered>>) {
+    let Some(messages) = world.get_resource::<Messages<PromptAnswered>>() else {
+        return;
+    };
+    let pending: Vec<(Entity, Entity, Entity, Option<PromptAnswer>)> = cursor
+        .read(messages)
+        .map(|a| (a.prompt, a.client, a.actor, a.answer.clone()))
+        .collect();
+    for (prompt, client, mob, answer) in pending {
+        let Some(ask) = world.get::<ResetAsk>(prompt).cloned() else {
+            continue;
+        };
+        let Some(PromptAnswer::Number(value)) = answer else {
+            tell(world, client, Span::Warning, "сброс отменён!");
+            continue;
+        };
+        let carried = world
+            .get::<crate::inventory::CarriedBy>(ask.tool)
+            .is_some_and(|c| c.0 == mob);
+        let near = world
+            .get::<TilePos>(mob)
+            .zip(world.get::<TilePos>(ask.safe))
+            .and_then(|(a, b)| a.chebyshev(*b))
+            .is_some_and(|d| d <= 1);
+        let open = world.get::<Safe>(ask.safe).is_some_and(|s| s.open);
+        if !carried || !near || !open {
+            tell(world, client, Span::Warning, "сброс прерван!");
+            continue;
+        }
+        let mut got = ask.got;
+        got.push(value.clamp(0.0, 99.0) as u8);
+        if got.len() < 2 {
+            ask_tumbler(world, client, mob, ask.safe, ask.tool, got);
+            continue;
+        }
+        let actor = crate::tools::Actor {
+            client,
+            mob,
+            item: Some(ask.tool),
+        };
+        crate::tools::do_after(
+            world,
+            actor,
+            ask.safe,
+            100.0,
+            0,
+            crate::construction::Job::Safe(SafeJob::Reset {
+                tumblers: [got[0], got[1]],
+            }),
+        );
+    }
+}
+
+/// [`SafeJob`] at the end of its `do_after`.
+pub fn complete(world: &mut World, action: &crate::tools::DoAfter, job: SafeJob) {
+    let SafeJob::Reset { tumblers } = job;
+    let Some(mut s) = world.get_mut::<Safe>(action.target) else {
+        return;
+    };
+    if !s.open {
+        return;
+    }
+    s.tumblers = tumblers.to_vec();
+    s.index = 0;
+    s.dial = 0;
+    tell(
+        world,
+        action.client,
+        Span::Notice,
+        format!(
+            "Вы сбрасываете замок. Новая комбинация: {}-{}.",
+            tumblers[0], tumblers[1]
+        ),
+    );
 }
 
 /// `notify_user`'s sounds of a right turn (hit, miss) and a left one.

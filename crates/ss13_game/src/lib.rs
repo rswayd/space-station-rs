@@ -513,6 +513,8 @@ pub mod screentips;
 #[cfg(feature = "client")]
 pub mod screentips_client;
 #[cfg(feature = "server")]
+pub mod secure_safes;
+#[cfg(feature = "server")]
 pub mod security;
 #[cfg(feature = "server")]
 pub mod security_level;

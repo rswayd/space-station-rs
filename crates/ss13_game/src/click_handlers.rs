@@ -206,6 +206,7 @@
 //! | 3156 | `displaycase::attack_hand` |
 //! | 3160 | `flora::attack_hand` |
 //! | 3169 | `safes::interact` (the `Safe` window) |
+//! | 3179 | `secure_safes::interact` (the `LockedSafe` keypad, the unlocked storage) |
 //! | 3170 | `botany::unique::pickup_backfire` (never handles) |
 //! | 3175 | `events::space_vines::attack_hand` (frees the mob tangled in kudzu) |
 //! | 3200 | `service::server::interact` |
@@ -347,6 +348,7 @@
 //! | 3300 | `food::item_interaction` |
 //! | 3397 | `plumbing_net::item_interaction` (ducts, duct stacks, wrenches on machines) |
 //! | 3400 | `plumbing::item_interaction` |
+//! | 3419 | `secure_safes::item_interaction` (panel screwdriver, multitool hack, items into the storage) |
 //! | 3429 | `safes::item_interaction` (a stethoscope on a closed safe, items into an open one) |
 //! | 3439 | `traps::item_interaction` (tripwire posts and cables: tying, wiring, cutting, wrench) |
 //! | 3440 | `tank_storage::item_interaction` |

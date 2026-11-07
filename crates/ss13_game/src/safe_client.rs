@@ -12,7 +12,8 @@ pub struct SafeClientPlugin;
 
 impl Plugin for SafeClientPlugin {
     fn build(&self, app: &mut App) {
-        app.register_ui_view::<SafeUi>();
+        app.register_ui_view::<SafeUi>()
+            .register_ui_view::<LockedSafeUi>();
     }
 }
 
@@ -74,6 +75,37 @@ fn safe_view(d: &SafeData) -> impl Scene + use<> {
         @WindowContent
         Children [
             @Section { @title: "Сейф" }
+            Children [ {rows} ]
+        ]
+    }
+}
+
+impl ClientUi for LockedSafeUi {
+    const WIDTH: f32 = 300.0;
+    const HEIGHT: f32 = 400.0;
+
+    fn content(_: &(), data: &LockedSafeData) -> impl Scene {
+        keypad_view(data)
+    }
+}
+
+fn keypad_view(d: &LockedSafeData) -> impl Scene + use<> {
+    let state = if !d.lock_code {
+        "Задайте код из 5 цифр"
+    } else if d.locked {
+        "Заперто"
+    } else {
+        "Открыто"
+    };
+    let mut rows: Vec<Box<dyn Scene>> = vec![text(format!("{} — {state}", d.input_code))];
+    for key in KEYS {
+        let digit = vec![("digit".to_owned(), key.to_owned())];
+        rows.push(button(key.to_owned(), KEYPAD, digit));
+    }
+    bsn! {
+        @WindowContent
+        Children [
+            @Section { @title: "Кодовый замок" }
             Children [ {rows} ]
         ]
     }

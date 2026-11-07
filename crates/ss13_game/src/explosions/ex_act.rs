@@ -102,6 +102,11 @@ pub fn ex_act_movable(world: &mut World, thing: Entity, severity: Severity) {
     if crate::events::space_vines::ex_act(world, thing, severity) {
         return;
     }
+    // `safe/ex_act`: indestructible, only its lock wears out (`target == src` is not known here).
+    if world.get::<crate::safes::Safe>(thing).is_some() {
+        crate::safes::ex_act(world, thing, matches!(severity, Severity::Devastate), false);
+        return;
+    }
     if world.get::<Health>(thing).is_some() {
         ex_act_mob(world, thing, severity);
     } else if world.get::<DmItem>(thing).is_some() {

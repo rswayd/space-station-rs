@@ -227,13 +227,16 @@ impl Plugin for GameServerPlugin {
             crate::plumbing_net::PlumbingNetPlugin,
             crate::decor::DecorPlugin,
             crate::tank_storage::TankStoragePlugin,
-            crate::traps::TrapsPlugin,
-            crate::safes::SafesPlugin,
             crate::displaycase::DisplayCasePlugin,
             crate::flora::FloraPlugin,
             crate::airlock_construction::AirlockConstructionPlugin,
             crate::door_structures::DoorStructuresPlugin,
             crate::password_door::PasswordDoorPlugin,
+        ))
+        .add_plugins((
+            crate::traps::TrapsPlugin,
+            crate::safes::SafesPlugin,
+            crate::secure_safes::SecureSafesPlugin,
         ))
         .add_plugins((
             crate::pull::PullServerPlugin,

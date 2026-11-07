@@ -68,6 +68,7 @@ impl Lockbox {
 /// Whether `storage` is a locked lockbox (tg `atom_storage.locked`).
 pub fn is_locked(world: &World, storage: Entity) -> bool {
     world.get::<Lockbox>(storage).is_some_and(|l| l.locked)
+        || crate::secure_safes::is_locked(world, storage)
 }
 
 /// The lock of a new lockbox (from `crate::storage::finish_item`): locked, with its sprite.

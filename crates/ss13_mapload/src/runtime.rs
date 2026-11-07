@@ -79,6 +79,8 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/structure/tripwire/cable",
     // `safes`: the vault safe's piggy bank.
     "/obj/item/piggy_bank/vault",
+    // `secure_safes`: the captain's spare ID safe's card.
+    "/obj/item/card/id/advanced/gold/captains_spare",
     // `genetics::effects`: what Geladikinesis conjures (Cindikinesis' ash is listed below).
     "/obj/item/stack/sheet/mineral/snow",
     // `genetics::effects`: the Cryokinesis and Pyrokinesis beams.
