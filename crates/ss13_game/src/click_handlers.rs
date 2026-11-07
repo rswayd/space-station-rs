@@ -55,6 +55,7 @@
 //! | 2300 | `atmos_machinery::rpd::attack_self` |
 //! | 2400 | `science::experi_scanner::attack_self` |
 //! | 2500 | `atmos_machinery::fitting::attack_self` |
+//! | 2593 | `modpc::laptop::attack_self` (a closed laptop opens) |
 //! | 2600 | `modpc::pda::attack_self` |
 //! | 2700 | `radio::attack_self` |
 //! | 2800 | `martial::attack_self` |
@@ -178,6 +179,7 @@
 //! | 2200 | `mecha::bay::interact` |
 //! | 2300 | `mecha::core::attack_hand` |
 //! | 2400 | `modpc::pda::console_interact` |
+//! | 2403 | `modpc::laptop::attack_hand_secondary` (right click: open or use a laptop where it lies) |
 //! | 2500 | `disposals::interact` |
 //! | 2600 | `genetics::console::interact` |
 //! | 2650 | `medical::pods::interact` (sleepers, cryo cells, lipid extractors, organ harvesters) |

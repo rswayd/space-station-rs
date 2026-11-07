@@ -9,11 +9,23 @@
 use serde::{Deserialize, Serialize};
 use ss13_tgui::UiInterface;
 
+#[cfg(feature = "server")]
+pub mod circuit;
 #[cfg(feature = "client")]
 pub mod client;
 #[cfg(feature = "server")]
+pub mod files;
+#[cfg(feature = "server")]
+pub mod laptop;
+#[cfg(feature = "server")]
+pub mod ntnet;
+#[cfg(feature = "server")]
 pub mod pda;
+#[cfg(feature = "server")]
+pub mod power;
 pub mod programs;
+#[cfg(feature = "server")]
+pub mod silicon;
 
 /// The NtOS window of one computer.
 pub struct NtosUi;
@@ -72,6 +84,8 @@ pub enum NtosScreen {
     Downloader(Box<DownloaderData>),
     /// `NtosNetChat`.
     Chat(Box<ChatClientData>),
+    /// `NtosFileManager`.
+    FileManager(Box<FileManagerData>),
 }
 
 impl Default for NtosScreen {
@@ -92,6 +106,9 @@ pub struct NtosMainData {
     pub id_inserted: bool,
     pub show_imprint: bool,
     pub programs: Vec<ProgramEntry>,
+    /// `removable_media`: the `PC_Eject_Disk` names of what can come out besides the ID
+    /// ([`EJECT_DISK`]).
+    pub removable_media: Vec<String>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -409,6 +426,34 @@ pub struct ChatMessageUi {
     pub key: u32,
     pub msg: String,
 }
+
+/// `/datum/computer_file/program/filemanager/ui_data`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FileManagerData {
+    pub files: Vec<FileEntry>,
+    /// `usbconnected`, `usbfiles`: the inserted data disk's files.
+    pub usbconnected: bool,
+    pub usbfiles: Vec<FileEntry>,
+}
+
+/// A `files` entry.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FileEntry {
+    /// `filename`: the param of the file acts.
+    pub name: String,
+    /// `filetype`.
+    pub filetype: String,
+    pub size: u32,
+    pub undeletable: bool,
+}
+
+// `NtosFileManager` acts.
+pub const PRG_DELETE_FILE: &str = "PRG_deletefile";
+pub const PRG_USB_DELETE_FILE: &str = "PRG_usbdeletefile";
+pub const PRG_COPY_TO_USB: &str = "PRG_copytousb";
+pub const PRG_COPY_FROM_USB: &str = "PRG_copyfromusb";
+/// The `PC_Eject_Disk` name of the data disk.
+pub const EJECT_DISK: &str = "Eject Disk";
 
 // `NtosNetChat` acts.
 pub const PRG_SPEAK: &str = "PRG_speak";

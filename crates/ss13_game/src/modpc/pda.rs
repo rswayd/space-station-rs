@@ -13,8 +13,7 @@
 //! reaches the PDA at once. The PDA's name follows its imprint (`imprint_id` ->
 //! `UpdateDisplay`). The flashlight lights the holder (tg's overlay light moves with whoever
 //! carries it) or the PDA on the floor.
-// shortcut: infinite battery (`internal_cell`, `handle_power`), NTNet always at good signal
-// (no relays), no inserted pen, disks, pAI, paper or chunky fingers; the light is
+// shortcut: no inserted pen, pAI, paper or chunky fingers; the light is
 // omnidirectional (tg: a directional overlay light) and gives way to any other light on its
 // holder (one `Optics` per entity).
 
@@ -48,13 +47,9 @@ use crate::storage::StoredIn;
 
 /// `/obj/item/modular_computer/pda` and subtypes.
 pub const PDA_ROOT: &str = "/obj/item/modular_computer/pda";
-/// `max_idle_programs` of a PDA.
-const MAX_IDLE_PROGRAMS: usize = 2;
 /// `comp_light_luminosity` of a PDA, `light_power` of a modular computer, `COLOR_WHITE`.
 const LIGHT_RANGE: f32 = 2.3;
 const LIGHT_POWER: f32 = 1.2;
-/// `NTNET_GOOD_SIGNAL`.
-const NTNET_GOOD_SIGNAL: u8 = 2;
 /// `NtosMain`'s title.
 const MAIN_TITLE: &str = "NtOS Главное Меню";
 
@@ -83,6 +78,8 @@ pub struct ModularComputer {
     pub initial_name: String,
     /// `obj_flags & EMAGGED`.
     pub emagged: bool,
+    /// `inserted_disk` (`crate::modpc::files`).
+    pub disk: Option<Entity>,
 }
 
 impl ModularComputer {
@@ -103,6 +100,7 @@ impl ModularComputer {
             note: NOTEPAD_DEFAULT.to_owned(),
             initial_name: name.to_owned(),
             emagged: false,
+            disk: None,
         }
     }
 
@@ -120,6 +118,17 @@ impl ModularComputer {
         is_under(&self.path, PDA_ROOT)
     }
 
+    /// `max_idle_programs`: a console 4, a laptop 3, a PDA 2.
+    pub fn max_idle_programs(&self) -> usize {
+        if super::power::is_console(&self.path) {
+            4
+        } else if super::laptop::is_laptop(&self.path) {
+            3
+        } else {
+            2
+        }
+    }
+
     /// `open_program`: the program comes to the front; the one in front goes to the background.
     /// `false` when it is not installed or the background is full.
     pub fn open_program(&mut self, program: ProgramKind) -> bool {
@@ -127,7 +136,7 @@ impl ModularComputer {
             return false;
         }
         let resumed = self.idle.contains(&program);
-        if !resumed && self.idle.len() > MAX_IDLE_PROGRAMS {
+        if !resumed && self.idle.len() > self.max_idle_programs() {
             return false;
         }
         self.idle.retain(|&p| p != program);
@@ -238,6 +247,12 @@ impl Plugin for ModpcServerPlugin {
         super::programs::minesweeper::build(app);
         super::programs::downloader::build(app);
         super::programs::chat::build(app);
+        super::power::build(app);
+        super::ntnet::build(app);
+        super::laptop::build(app);
+        super::files::build(app);
+        super::silicon::build(app);
+        super::circuit::build(app);
         app.register_ui::<NtosUi>()
             .add_observer(attach)
             .add_observer(attach_console)
@@ -360,11 +375,15 @@ fn attach_console(add: On<Add<DmObj>>, objs: Query<&DmObj>, mut commands: Comman
 pub fn console_interact(world: &mut World, client: Entity, mob: Entity, target: Entity) -> bool {
     let is_console = world
         .get::<ModularComputer>(target)
-        .is_some_and(|c| !c.is_pda());
+        .is_some_and(|c| super::power::is_console(&c.path));
     if !is_console {
         return false;
     }
-    if world.get::<crate::power::Unpowered>(target).is_some() {
+    let enabled = world
+        .get::<ModularComputer>(target)
+        .is_some_and(|c| c.enabled);
+    // `turn_on`: no area power and an empty cell, no response.
+    if !enabled && !super::power::can_turn_on(world, target) {
         return true;
     }
     if let Some(mut computer) = world.get_mut::<ModularComputer>(target) {
@@ -423,6 +442,15 @@ pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity)
     }
     if !computer.enabled {
         let name = computer.display_name();
+        if !super::power::can_turn_on(world, item) {
+            chat(
+                world,
+                Some(client),
+                Span::Warning,
+                format!("Вы нажимаете кнопку питания {name}, но он не отвечает."),
+            );
+            return true;
+        }
         world
             .get_mut::<ModularComputer>(item)
             .expect("checked above")
@@ -454,6 +482,9 @@ pub fn item_interaction(
     held: Entity,
     target: Entity,
 ) -> bool {
+    if super::files::insert_disk(world, client, mob, held, target) {
+        return true;
+    }
     let is_card = world.get::<DmItem>(held).is_some_and(DmItem::is_id_card);
     if !is_card || world.get::<ModularComputer>(target).is_none() {
         return false;
@@ -590,6 +621,9 @@ pub fn remove_id(
 
 /// tg `click_alt`: the ID comes out.
 pub fn alt_click(world: &mut World, mob: Entity, item: Entity) -> bool {
+    if super::laptop::alt_click(world, mob, item) {
+        return true;
+    }
     if world.get::<ModularComputer>(item).is_none() {
         return false;
     }
@@ -612,6 +646,9 @@ fn card_left(
         }
         if computer.alt_stored_id == Some(remove.entity) {
             computer.alt_stored_id = None;
+        }
+        if computer.disk == Some(remove.entity) {
+            computer.disk = None;
         }
     }
 }
@@ -685,9 +722,15 @@ pub fn post_equip(world: &mut World, mob: Entity, name: &str, job: &str) {
 /// user is conscious.
 fn ntos_status(
     mut windows: Query<&mut UiWindow>,
-    computers: Query<(&ModularComputer, Option<&TilePos>)>,
+    computers: Query<(
+        &ModularComputer,
+        Option<&TilePos>,
+        Option<&super::laptop::Laptop>,
+        Option<&super::silicon::SiliconPda>,
+    )>,
+    eyes: Query<&crate::silicon::ai::AiEye>,
+    stats: Query<&Stat>,
     users: Query<(&Inventory, Option<&Stat>, Option<&TilePos>)>,
-    unpowered: Query<(), With<crate::power::Unpowered>>,
 ) {
     use ss13_tgui::UiInterface as _;
     for mut window in &mut windows {
@@ -696,18 +739,31 @@ fn ntos_status(
         if !ntos && window.interface != crate::newscaster::NewscasterUi::NAME {
             continue;
         }
-        let Ok((computer, at)) = computers.get(window.source) else {
+        let Ok((computer, at, lid, silicon)) = computers.get(window.source) else {
             if ntos {
                 window.cap_status(UiStatus::Close);
             }
             continue;
         };
+        // A silicon's built-in computer: only its silicon (or the AI's eye), while on.
+        if let Some(s) = silicon {
+            let own =
+                window.actor == s.owner || eyes.get(window.actor).is_ok_and(|e| e.ai == s.owner);
+            if !own || !computer.enabled {
+                window.cap_status(UiStatus::Close);
+            } else if stats.get(s.owner).is_ok_and(|st| *st != Stat::Conscious) {
+                window.cap_status(UiStatus::Disabled);
+            }
+            continue;
+        }
         let Ok((inventory, stat, user_at)) = users.get(window.actor) else {
             window.cap_status(UiStatus::Close);
             continue;
         };
         let app_gone = !ntos && !computer.programs.contains(&ProgramKind::Newscaster);
-        if !computer.enabled || app_gone || unpowered.contains(window.source) {
+        // A console without area power runs on its cell (`crate::modpc::power`).
+        // A closed laptop's screen (`!screen_on`).
+        if !computer.enabled || app_gone || lid.is_some_and(|l| !l.open) {
             window.cap_status(UiStatus::Close);
             continue;
         }
@@ -748,6 +804,18 @@ pub struct NtosParams<'w, 's> {
     chat_channels: Option<Res<'w, super::programs::chat::ChatChannels>>,
     ticker: Option<Res<'w, crate::round::Ticker>>,
     time: Res<'w, Time>,
+    cells: Query<'w, 's, &'static super::power::ComputerCell>,
+    ntnet: Option<Res<'w, super::ntnet::Ntnet>>,
+    disks: Query<'w, 's, &'static super::files::ComputerDisk>,
+    silicons: Query<'w, 's, &'static super::silicon::SiliconPda>,
+    silicon_net: Query<
+        'w,
+        's,
+        (
+            Option<&'static crate::silicon::cyborg::Cyborg>,
+            Has<crate::silicon::chassis::LockedDown>,
+        ),
+    >,
 }
 
 impl NtosParams<'_, '_> {
@@ -769,6 +837,7 @@ pub enum NtosAct {
     Run(ProgramKind),
     ToggleLight,
     EjectId,
+    EjectDisk,
     ImprintId,
     RingSet(String),
     ToggleAlerts,
@@ -785,6 +854,7 @@ pub enum NtosAct {
     Minesweeper(super::programs::minesweeper::MinesweeperAct),
     Downloader(super::programs::downloader::DownloaderAct),
     Chat(super::programs::chat::ChatAct),
+    Files(super::files::FileAct),
 }
 
 fn program_param(params: &UiParams) -> Result<ProgramKind, UiReject> {
@@ -829,14 +899,38 @@ impl ServerUi for NtosUi {
         params: &SystemParamItem<'_, '_, Self::UserParam>,
     ) -> NtosData {
         let secs = params.round_secs();
+        let pos = at
+            .copied()
+            .or_else(|| carried.and_then(|c| params.positions.get(c.0).ok().copied()))
+            .or_else(|| {
+                let owner = params.silicons.get(entity).ok()?.owner;
+                params.positions.get(owner).ok().copied()
+            });
+        let silicon_offline = params.silicons.get(entity).is_ok_and(|s| {
+            !params
+                .silicon_net
+                .get(s.owner)
+                .is_ok_and(|(borg, locked)| borg.is_none_or(|b| b.charge > 0.0 && !locked))
+        });
         let header = NtosHeader {
             title: computer
                 .active
                 .map_or(MAIN_TITLE, ProgramKind::filedesc)
                 .to_owned(),
             station_time: format!("{:02}:{:02}:{:02}", secs / 3600, secs / 60 % 60, secs % 60),
-            battery_percent: Some(100),
-            ntnet: NTNET_GOOD_SIGNAL,
+            battery_percent: params
+                .cells
+                .get(entity)
+                .ok()
+                .and_then(super::power::ComputerCell::percent),
+            ntnet: if silicon_offline {
+                0
+            } else {
+                params
+                    .ntnet
+                    .as_deref()
+                    .map_or(0, |n| n.signal(&computer.path, pos))
+            },
             program_headers: computer
                 .idle
                 .iter()
@@ -863,9 +957,6 @@ impl ServerUi for NtosUi {
                 .collect(),
             show_exit: computer.active.is_some(),
         };
-        let pos = at
-            .copied()
-            .or_else(|| carried.and_then(|c| params.positions.get(c.0).ok().copied()));
         let screen = match computer.active {
             None => NtosScreen::Main(main_data(
                 computer,
@@ -981,6 +1072,12 @@ impl ServerUi for NtosUi {
                     &names,
                 )))
             }
+            Some(ProgramKind::FileManager) => {
+                NtosScreen::FileManager(Box::new(super::files::ui_data(
+                    computer,
+                    computer.disk.and_then(|d| params.disks.get(d).ok()),
+                )))
+            }
             // A launcher never comes to the front.
             Some(ProgramKind::Newscaster) => NtosScreen::Main(main_data(
                 computer,
@@ -1001,7 +1098,8 @@ impl ServerUi for NtosUi {
             PC_RUNPROGRAM => NtosAct::Run(program_param(params)?),
             PC_TOGGLE_LIGHT => NtosAct::ToggleLight,
             PC_EJECT_DISK if params.get("name") == Some("ID") => NtosAct::EjectId,
-            PC_EJECT_DISK => return Err(UiReject::BadParams("name: only ID".into())),
+            PC_EJECT_DISK if params.get("name") == Some(EJECT_DISK) => NtosAct::EjectDisk,
+            PC_EJECT_DISK => return Err(UiReject::BadParams("name: ID or Eject Disk".into())),
             PC_IMPRINT_ID => NtosAct::ImprintId,
             PDA_RING_SET => NtosAct::RingSet(params.text("ringtone")?),
             PDA_TOGGLE_ALERTS => NtosAct::ToggleAlerts,
@@ -1036,6 +1134,9 @@ impl ServerUi for NtosUi {
                 if let Some(act) = super::programs::chat::parse(other, params) {
                     return act.map(NtosAct::Chat);
                 }
+                if let Some(act) = super::files::parse(other, params) {
+                    return act.map(NtosAct::Files);
+                }
                 match super::programs::card_mod::parse(other, |k| params.get(k).map(str::to_owned))
                 {
                     Some(Ok(act)) => NtosAct::Card(act),
@@ -1061,6 +1162,11 @@ fn main_data(computer: &ModularComputer, card: Option<&IdRegistration>) -> NtosM
         },
         id_inserted: computer.stored_id.is_some(),
         show_imprint: computer.is_pda(),
+        removable_media: computer
+            .disk
+            .map(|_| EJECT_DISK.to_owned())
+            .into_iter()
+            .collect(),
         programs: computer
             .programs
             .iter()
@@ -1182,9 +1288,18 @@ fn apply_act(
             if !computer.programs.contains(&program) {
                 return Err("not installed");
             }
+            if !super::ntnet::can_open(world, client, pda, program) {
+                return Err("no NTNet");
+            }
             super::programs::apps::open_newscaster(world, client, actor, pda);
         }
         NtosAct::Run(program) => {
+            if computer.programs.contains(&program)
+                && computer.active != Some(program)
+                && !super::ntnet::can_open(world, client, pda, program)
+            {
+                return Err("no NTNet");
+            }
             if !pc!().open_program(program) {
                 chat(
                     world,
@@ -1208,6 +1323,10 @@ fn apply_act(
         NtosAct::EjectId => {
             remove_id(world, pda, Some(actor), false, false);
         }
+        NtosAct::EjectDisk => {
+            super::files::eject_disk(world, pda, Some(actor));
+        }
+        NtosAct::Files(act) => return super::files::apply(world, pda, computer, act),
         NtosAct::ImprintId => imprint_id(world, pda, None, None),
         NtosAct::UpdateNote(note) => {
             if computer.active != Some(ProgramKind::Notepad) {
@@ -1552,7 +1671,12 @@ mod tests {
             Ok(NtosAct::Run(ProgramKind::Messenger))
         );
         assert!(parse(PC_RUNPROGRAM, &[("name", "../../etc")]).is_err());
-        assert!(parse(PC_EJECT_DISK, &[("name", "Eject Disk")]).is_err());
+        assert_eq!(
+            parse(PC_EJECT_DISK, &[("name", "Eject Disk")]),
+            Ok(NtosAct::EjectDisk)
+        );
+        assert!(parse(PC_EJECT_DISK, &[("name", "intelliCard")]).is_err());
+        assert!(parse(PRG_DELETE_FILE, &[("name", "nope")]).is_err());
         assert!(parse(PDA_SEND_MESSAGE, &[("message", "x")]).is_err());
         assert!(parse(PDA_SEND_MESSAGE, &[("ref", "pda:abc"), ("message", "x")]).is_err());
         assert!(parse(PDA_CLOSE_MESSAGES, &[("ref", "pda:5")]).is_err());

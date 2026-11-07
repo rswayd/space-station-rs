@@ -19,25 +19,25 @@
 Встроенные «КПК» ИИ, киборгов и пИИ (мессенджер, Robotact).
 
 - **Код:** [`/obj/item/modular_computer/pda/silicon`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/modular_computers/computers/item/pda.dm#L317), [`/obj/item/modular_computer/pda/silicon/cyborg`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/modular_computers/computers/item/pda.dm#L347)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/modpc/silicon.rs`: у ИИ, киборга и пИИ встроенный компьютер (`ModularInterface`), привязанный к имени и «AI»/«Cyborg»/«pAI Messenger»; ИИ и пИИ — мессенджер (пИИ ещё чат), киборг — файловый менеджер, газоанализатор, список экипажа; не тратит питание, у киборга без сети при блокировке и пустой ячейке; открывается кнопками «Messenger»/«Modular Interface» (`silicon/ai_hud.rs`) и софтом пИИ «Digital Messenger»; окно только у своего синтетика. RoboTact (журнал киборга) — в [ntos-apps.md](ntos-apps.md); `// shortcut:` не переименовывается вместе с синтетиком
 
 ### Ноутбуки и консоли NTOS
 Ноутбук (раскрывается, ставится на стол) и стационарные консоли с NtOS (инженерная, научная, командная и др. пресеты).
 
 - **Код:** [`/obj/item/modular_computer/laptop`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/modular_computers/computers/item/laptop.dm#L1), [`/obj/machinery/modular_computer`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/modular_computers/computers/machinery/modular_computer.dm#L4), [`/obj/machinery/modular_computer/preset`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/modular_computers/computers/machinery/console_presets.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/modpc/laptop.rs`: ноутбук открывается/закрывается (в руке, ПКМ на месте, alt-клик закрывает, не в сумке), закрытый закрывает окно и тратит холостое питание, 3 фоновые программы, пресет civilian с чатом, иконка крышки; `modpc/programs/mod.rs` `console_programs`: каждая `/obj/machinery/modular_computer` — NtOS-консоль (хаб + программы пресетов id, command, engineering, research, civilian, cargochat), 4 фоновые программы, питание от зоны (`modpc/power.rs`). `// shortcut:` нет замедления/веса открытого ноутбука, оверлеев экрана; программ пресетов, которых нет в порте (монитор питания, СМ, аркада и др.) — в [ntos-apps.md](ntos-apps.md)
 
 ### Питание модульных компьютеров
 Расход энергии ячейки на программы, подзарядка от APC (консоли) или зарядников, отключение при разряде.
 
 - **Код:** [`proc/handle_power()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/modular_computers/computers/item/computer_power.dm#L38), [`proc/power_failure()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/modular_computers/computers/item/computer_power.dm#L25)
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/modpc/pda.rs`: `// shortcut:` бесконечная батарея (`internal_cell`, `handle_power` не моделируются)
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/modpc/power.rs`: ячейка (`ComputerCell`: КПК — стандартная, консоль — AA), `handle_power` раз в 2 с (экран, фонарик ×1.1, программы спереди и в фоне), консоль питается от зоны и подзаряжает ячейку, без питания — от ячейки; разряд закрывает программы и выключает (`power_failure`), пустой не включается; зарядник (`power/chargers.rs`) заряжает КПК; заряд в заголовке. `// shortcut:` ячейка не отдельный предмет (без отвёртки и замены, без ЭМИ)
 
 ### Файлы, хранилище и диски
 Файловая система компьютера: программы и данные занимают место, диски данных (обычные, продвинутые, супер, ролевые, техтоннельные, Синдиката, чёрного рынка), файловый менеджер.
 
 - **Код:** [`/datum/computer_file`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/modular_computers/file_system/computer_file.dm#L1), [`/datum/computer_file/program`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/modular_computers/file_system/program.dm#L2), [`proc/store_file()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/modular_computers/computers/item/computer_files.dm#L8), [`/obj/item/disk/computer`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/modular_computers/computers/item/disks/computer_disk.dm#L1), [`/obj/item/disk/computer/maintenance`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/modular_computers/computers/item/disks/maintenance_disks.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/modpc/files.rs`: файлы — программы, занимают `size` из `max_capacity`; диски данных (`ComputerDisk`: обычный 16, командный 32, продвинутый 64, супер 256 GQ; ролевые со своими программами) вставляются предметом (замена), «Eject Disk» на главном экране; файловый менеджер `NtosFileManager` (по умолчанию на всех компьютерах): удаление (кроме неудаляемых, запущенная закрывается), копирование на диск и с диска. `// shortcut:` нет текстовых/графических файлов (печать, переименование), диски программ, которых нет в порте (техтоннельные, Синдиката, чёрного рынка, вирусы), пустые
 
 ### ID и доступ в компьютере
 Слот ID (основной и второй), привязка имени/должности (imprint), доступ программ по ID.
@@ -49,10 +49,10 @@
 Программы требуют связи с NTNet (реле и телекомы), уровень сигнала зависит от z-уровня и состояния реле.
 
 - **Код:** [`proc/get_ntnet_status()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/modular_computers/computers/item/computer.dm#L763)
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/modpc/pda.rs`: `// shortcut:` сигнал NTNet всегда хороший, реле не учитываются
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/modpc/ntnet.rs`: консоль — провод (3), переносной — только при запитанном реле `/obj/machinery/ntnet_relay`: станционный z — хороший (ноутбук — провод), шахтёрский или `long_ranged` — слабый, иначе нет; сетевые программы (`PROGRAM_REQUIRES_NTNET`) не запускаются без сигнала и падают при его потере (`event_networkfailure`), сигнал в заголовке. Сама машина реле (вкл/выкл, DoS, UI) — в [telecomms.md](telecomms.md#реле-ntnet); `// shortcut:` скорость загрузки не зависит от сигнала
 
 ### Модульный компьютер как оболочка схем
 Компьютер принимает интегральную схему (wiremod) и даёт ей компоненты программ.
 
 - **Код:** [`computer_circuit.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/modular_computers/computers/item/computer_circuit.dm#L2)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/modpc/circuit.rs`, `wiremod/server.rs` (`ShellKind::Computer` 50, `Console` 100): схема вставляется в КПК, ноутбук или консоль и получает компонент «Modular Computer» (`Kind::Modpc`): вкл/выкл, фонарик, печать; выходы «Turned On»/«Shut Down» при любом включении/выключении; схема без своей ячейки питается от компьютера. У КПК синтетиков оболочки нет. `// shortcut:` нет бумаги (печать ничего не печатает), цвет фонарика не сохраняется, компоненты программ (мессенджер, сигналер и др.) — в [ntos-apps.md](ntos-apps.md)

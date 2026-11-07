@@ -14,8 +14,8 @@
 //!   when full the recharger says so; its overlay shows empty, charging or full.
 //!
 //! Cost: O(chargers) per machine tick (0.5 Hz); MetaStation maps ~20 of each.
-// shortcut: no wrench (unanchoring), telekinesis or sounds; the recharger takes only stun
-// batons (no energy guns, recharge magazines, modular computers or battle rifles exist yet).
+// shortcut: no wrench (unanchoring), telekinesis or sounds; the recharger takes stun batons,
+// energy guns and modular computers (no recharge magazines or battle rifles exist yet).
 // shortcut: the "charged" line uses the neuter ending (`genderize_ru` of the DM `gender`, which
 // objects leave `NEUTER`); use the ru_names gender once names carry it.
 
@@ -141,11 +141,17 @@ fn area_has_equipment_power(world: &World, machine: Entity) -> bool {
         .is_some_and(|a| a.powered(Channel::Equip))
 }
 
-/// A recharger takes `/obj/item/melee/baton/security` and `/obj/item/gun/energy` (tg
-/// `allowed_devices`).
+/// A recharger takes `/obj/item/melee/baton/security`, `/obj/item/gun/energy` and
+/// `/obj/item/modular_computer` (tg `allowed_devices`).
 fn rechargeable(world: &World, item: Entity) -> bool {
     world.get::<DmBaton>(item).is_some_and(|b| b.uses_cell)
         || crate::guns::energy_cell(world, item).is_some()
+        || world
+            .get::<crate::modpc::power::ComputerCell>(item)
+            .is_some_and(|c| {
+                // A carried computer, not a console.
+                c.0.is_some() && world.get::<ss13_mapload::DmItem>(item).is_some()
+            })
 }
 
 /// tg `item_interaction` of the cell charger and the recharger. True when the click was theirs.
@@ -345,7 +351,12 @@ pub fn process_recharger(world: &mut World, recharger: Entity, item: Entity, dt:
             .charge
             .map(|c| (c, dm.cell_maxcharge, dm.cell_chargerate)),
         _ => crate::guns::energy_cell(world, item),
-    };
+    }
+    .or_else(|| {
+        // `/obj/item/modular_computer`: `get_cell()` is its internal cell.
+        let c = world.get::<crate::modpc::power::ComputerCell>(item)?.0?;
+        Some((c.charge, c.maxcharge, c.chargerate))
+    });
     let Some((charge, maxcharge, rate)) = device else {
         world.entity_mut(recharger).insert(Recharger {
             charging: Some(item),
@@ -366,6 +377,10 @@ pub fn process_recharger(world: &mut World, recharger: Entity, item: Entity, dt:
             b.charge = Some(cell.charge);
         } else if let Some(mut g) = world.get_mut::<crate::guns::Gun>(item) {
             g.charge = cell.charge;
+        } else if let Some(mut pc) = world.get_mut::<crate::modpc::power::ComputerCell>(item)
+            && let Some(c) = pc.0.as_mut()
+        {
+            c.charge = cell.charge;
         }
         if cell.charge >= cell.maxcharge {
             let name = capitalize(&name_of(world, item));

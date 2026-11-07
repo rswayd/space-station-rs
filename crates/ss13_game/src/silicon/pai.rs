@@ -28,7 +28,7 @@
 // candidacy lives for the round (no `pai.sav` savefile: persistence comes with the SQL wave);
 // no screen images, card overlays or light (pickups: `crate::mob_holder`); the
 // medical/security HUD, atmos sensor, GPS, music synthesizer, newscaster, signaler, camera,
-// messenger, crew manifest and crew monitor programs can be bought but tell their device is
+// crew manifest and crew monitor programs can be bought but tell their device is
 // missing (their devices' groups); no EMP or explosion effects, no encryption keys in the
 // card; messages are chat lines (tg balloon alerts).
 
@@ -1433,6 +1433,9 @@ fn soft_act(world: &mut World, client: Entity, pai: Entity, act: SoftAct) {
             around(world, pai, Span::Notice, "The cable retracts into the pAI.");
         }
         SoftAct::CheckDna => check_dna(world, client, pai),
+        // `modularInterface?.interact(usr)` (`crate::modpc::silicon`).
+        SoftAct::Missing("Digital Messenger")
+            if crate::modpc::silicon::interact(world, client, pai) => {}
         SoftAct::Missing(name) => tell(
             world,
             client,

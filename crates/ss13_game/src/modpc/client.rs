@@ -1,6 +1,7 @@
 //! Client half of the PDA: the NtOS window (tg `NtosWindow` with `NtosMain`, `NtosMessenger`,
 //! `NtosNotepad`, `NtosCrewManifest`, `NtosGasAnalyzer`, `NtosCard`, `NtosStationAlertConsole`,
-//! `NtosRecords`, `NtosSignaler`, `NtosStatus`, `NtosNetDownloader`, `NtosNetChat`, BandaStation
+//! `NtosRecords`, `NtosSignaler`, `NtosStatus`, `NtosNetDownloader`, `NtosNetChat`,
+//! `NtosFileManager`, BandaStation
 //! `NtosMinesweeperPanel`).
 // shortcut: one window size for every screen (tg sizes each interface), no device themes, no
 // search field in the records (local input state does not re-render the view), no
@@ -67,6 +68,7 @@ fn view(data: &NtosData, local: &UiLocalState) -> impl Scene + use<> {
             NtosScreen::Minesweeper(m) => Box::new(EntityScene(minesweeper_screen(m, local))),
             NtosScreen::Downloader(d) => Box::new(EntityScene(downloader_screen(d, local))),
             NtosScreen::Chat(c) => Box::new(EntityScene(relay_chat_screen(c))),
+            NtosScreen::FileManager(f) => Box::new(EntityScene(file_manager_screen(f))),
         };
         bsn! {
             @WindowContent
@@ -205,6 +207,18 @@ fn main_screen(d: &NtosMainData) -> impl Scene + use<> {
         })
     });
     let id_inserted = d.id_inserted;
+    let media: Vec<_> = d
+        .removable_media
+        .iter()
+        .map(|device| {
+            let (label, params) = (device.clone(), run_params(device));
+            bsn! {
+                @ss13_ui_kit::Button { @icon: "eject", @content: label }
+                Act({PC_EJECT_DISK.to_owned()})
+                params
+            }
+        })
+        .collect();
     let programs: Vec<_> = d
         .programs
         .iter()
@@ -251,6 +265,8 @@ fn main_screen(d: &NtosMainData) -> impl Scene + use<> {
                 @title: "Детали",
                 @buttons: bsn_list! {
                     {light}
+                    --
+                    {media}
                     --
                     @ss13_ui_kit::Button { @icon: "eject", @content: "Вытащить ID" }
                     ss13_ui_kit::Button { disabled: {!id_inserted} }
@@ -1424,6 +1440,97 @@ fn downloader_screen(d: &DownloaderData, local: &UiLocalState) -> impl Scene + u
                     Children [ {rows} ]
                 ]
             ]
+        ]
+    }
+}
+
+/// `NtosFileManager`: the computer's files, then the data disk's (`FileTable`).
+fn file_manager_screen(d: &FileManagerData) -> impl Scene + use<> {
+    let local = file_table(&d.files, d.usbconnected, false);
+    let usb = d.usbconnected.then(|| {
+        let table = file_table(&d.usbfiles, true, true);
+        EntityScene(bsn! {
+            @Section { @title: "Data Disk" }
+            Children [ {EntityScene(table)} ]
+        })
+    });
+    bsn! {
+        @Section { @fill: true, @scrollable: true }
+        Children [
+            @Section
+            Children [ {EntityScene(local)} ]
+            --
+            {usb}
+        ]
+    }
+}
+
+/// `FileTable`: name, type, size; delete and upload (download from the disk) buttons.
+fn file_table(files: &[FileEntry], usbconnected: bool, usbmode: bool) -> impl Scene + use<> {
+    let (delete, copy, copy_icon, copy_tip) = if usbmode {
+        (
+            PRG_USB_DELETE_FILE,
+            PRG_COPY_FROM_USB,
+            "download",
+            "Download",
+        )
+    } else {
+        (PRG_DELETE_FILE, PRG_COPY_TO_USB, "upload", "Upload")
+    };
+    let rows: Vec<_> = files
+        .iter()
+        .map(|f| {
+            let (name, filetype, size) = (f.name.clone(), f.filetype.clone(), f.size.to_string());
+            let buttons = (!f.undeletable).then(|| {
+                let (del_params, copy_params) = (run_params(&f.name), run_params(&f.name));
+                let copy_button = usbconnected.then(|| {
+                    EntityScene(bsn! {
+                        @ss13_ui_kit::Button { @icon: copy_icon, @tooltip: copy_tip }
+                        Act({copy.to_owned()})
+                        copy_params
+                    })
+                });
+                EntityScene(bsn! {
+                    Node { flex_direction: FlexDirection::Row }
+                    Children [
+                        @ss13_ui_kit::Button { @icon: "trash", @tooltip: "Delete" }
+                        Act({delete.to_owned()})
+                        del_params
+                        --
+                        {copy_button}
+                    ]
+                })
+            });
+            bsn! {
+                @TableRow
+                Children [
+                    @TableCell { @content: name }
+                    --
+                    @TableCell { @collapsing: true, @content: filetype }
+                    --
+                    @TableCell { @collapsing: true, @content: size }
+                    --
+                    @TableCell { @collapsing: true }
+                    Children [ {buttons} ]
+                ]
+            }
+        })
+        .collect();
+    bsn! {
+        @Table
+        Children [
+            @TableRow { @header: true }
+            Children [
+                @TableCell { @content: "File" }
+                --
+                @TableCell { @collapsing: true, @content: "Type" }
+                --
+                @TableCell { @collapsing: true, @content: "Size" }
+                --
+                @TableCell { @collapsing: true }
+            ]
+            --
+            {rows}
         ]
     }
 }
