@@ -84,6 +84,7 @@
 //! | 3245 | `mining::crusher::attack_self` (the kinetic crusher wields) |
 //! | 3227 | `misc_items::charter::attack_self` (the station name question) |
 //! | 3239 | `stack_recipes::attack_self` (a stack's crafting menu) |
+//! | 3249 | `sheets::crush_attack_self` (a bluespace crystal crushed: blink) |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):
 //!

@@ -66,7 +66,7 @@
 
 - **Код:** [`/obj/item/stack/ore/bluespace_crystal`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/stacks/bscrystal.dm#L2), [`/obj/item/stack/license_plates`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/stacks/license_plates.dm#L1)
 - **BandaStation:** [`bscrystal.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/stacks/bscrystal.dm#L41) — раздавить кристалл можно только после задержки `do_after`
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ `crates/ss13_game/src/sheets.rs`: кристалл в руке давится после `do_after` 1,5 с (BandaStation) — искры, звук портала, телепорт до 8 клеток (`do_teleport`, блюспейс-канал), минус один кристалл; меню очищенного кристалла — `stack_recipes`; номерные знаки — `crates/ss13_game/src/brig/labor.rs`; брошенный кристалл не телепортирует цель (shortcut)
 
 ### Материалы (datum/material)
 Синглтоны материалов (сталь, стекло, золото, плазма, уран, бананиум, дерево, бумага, мясо, пицца, ...): цвет, сила, плотность, свойства (`material_property`), эффекты на предмет из материала (урановый фонит, плазменный горит, мясной съедобен); сплавы.

@@ -58,6 +58,10 @@ const TYPES: &str = r##"{
     "/obj/item/stack/sheet/mineral/titanium": { "parent": "/obj/item/stack/sheet/mineral",
         "declared_vars": { "name": "titanium", "icon_state": "sheet-metal",
         "merge_type": { "path": "/obj/item/stack/sheet/mineral/titanium" } } },
+    "/obj/item/stack/ore": { "parent": "/obj/item/stack" },
+    "/obj/item/stack/ore/bluespace_crystal": { "parent": "/obj/item/stack/ore",
+        "declared_vars": { "name": "bluespace crystal", "icon_state": "sheet-metal",
+        "merge_type": { "path": "/obj/item/stack/ore/bluespace_crystal" } } },
     "/obj/item/knife": { "parent": "/obj/item", "declared_vars": { "name": "knife",
         "sharpness": 1 } },
     "/obj/item/stack/sheet/animalhide": { "parent": "/obj/item/stack/sheet", "declared_vars": {
@@ -146,6 +150,7 @@ fn fixture_assets() -> PathBuf {
         "/obj/item/stack/rods",
         "/obj/item/stack/rods/shuttle/five",
         "/obj/item/knife",
+        "/obj/item/stack/ore/bluespace_crystal",
         "/obj/item/stack/sheet/animalhide/corgi",
         "/obj/item/stack/sheet/hairlesshide",
         "/obj/item/stack/sheet/wethide",
@@ -427,4 +432,14 @@ fn a_knife_dehairs_a_hide_and_water_soaks_it() {
         s.try_get::<ss13_game::sheets::Wetness>(wet).copied(),
         Some(ss13_game::sheets::Wetness(30))
     );
+}
+
+#[test]
+fn a_crushed_bluespace_crystal_is_used_after_its_delay() {
+    let mut s = Station::start();
+    let crystal = s.give("/obj/item/stack/ore/bluespace_crystal", 2, 0);
+    s.use_in_hand();
+    s.tick();
+    assert_eq!(s.amount(crystal), 2, "BandaStation's 1.5 s squash delay");
+    s.run_until("the crystal crushed", |s| s.amount(crystal) == 1);
 }

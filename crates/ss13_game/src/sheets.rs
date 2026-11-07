@@ -16,11 +16,15 @@
 //!   machine cycle (`machine_wash`) makes it wet hide; wet hide on a tile hotter than 500 K
 //!   loses a point of its 30 `wetness` every air tick (0.5 s, `atmos_expose`) and at 0 one
 //!   piece becomes leather.
+//! - A bluespace crystal used in hand (`bscrystal.dm`, BandaStation's 1.5 s `do_after`) is
+//!   crushed: sparks, the portal sound, the user blinks up to 8 tiles away
+//!   (`do_teleport(precision = blink_range)`, bluespace channel), one crystal used.
 //! - Cardboard stamped with a clown stamp folds into a clown box, with a chameleon stamp into a
 //!   syndicate kit box (one sheet each, not inside a storage).
 // shortcut: the only hot tool is a lit welder (no lighters or matches yet); sparks and burn
 // projectiles do not ignite sheets; bananium sheets do not squeak or slip; wet hide is not dried
-// by drying racks, microwaves, grills or ovens, and a wooden peg leg is not repaired with wood.
+// by drying racks, microwaves, grills or ovens, and a wooden peg leg is not repaired with wood;
+// a thrown bluespace crystal does not blink what it hits.
 
 use bevy::prelude::*;
 use ss13_mapload::{DmItem, DmStack};
@@ -63,11 +67,21 @@ const AIR_TICK_SECS: f64 = 0.5;
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Wetness(pub u32);
 
+const BLUESPACE_CRYSTAL: &str = "/obj/item/stack/ore/bluespace_crystal";
+/// `SQUASH_WITH_HANDS_DELAY` (BandaStation), deciseconds.
+const SQUASH_DS: f32 = 15.0;
+/// `blink_range`.
+const BLINK_RANGE: i32 = 8;
+const SFX_PORTAL_ENTER: &str = "portal_enter";
+const PHASEIN_SOUND: &str = "sound/effects/phasein.ogg";
+
 /// The timed actions of this module ([`crate::construction::Job::Sheet`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SheetJob {
     /// Cutting the hair off this hide.
     Dehair(Entity),
+    /// Crushing this bluespace crystal in hand.
+    Crush(Entity),
 }
 const FIRE_MIN_TEMP: f64 = ss13_atmos::reactions::FIRE_MINIMUM_TEMPERATURE_TO_EXIST;
 
@@ -129,6 +143,9 @@ impl Plugin for SheetsPlugin {
         app.add_click_handler(ClickPhase::OtherHand, 1369, |w, c| {
             c.held
                 .is_some_and(|h| item_interaction(w, c.client, c.mob, h, c.target))
+        });
+        app.add_click_handler(ClickPhase::AttackSelf, 3249, |w, c| {
+            crush_attack_self(w, c.client, c.mob, c.target)
         });
         app.add_observer(wet_hide_state)
             .add_systems(Update, dry_hides.run_if(any_with_component::<Wetness>));
@@ -332,7 +349,59 @@ pub fn complete(world: &mut World, client: Entity, mob: Entity, job: SheetJob) {
             crate::construction::spawn_stack(world, HAIRLESS_HIDE, pos, amount);
             use_stack(world, hide, amount);
         }
+        SheetJob::Crush(crystal) => crush(world, client, mob, crystal),
     }
+}
+
+/// `bluespace_crystal/attack_self`: the crush starts. True when `item` is a crystal.
+fn crush_attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity) -> bool {
+    if stack_path(world, item).is_none_or(|p| !is_under(&p, BLUESPACE_CRYSTAL)) {
+        return false;
+    }
+    let actor = Actor {
+        client,
+        mob,
+        item: Some(item),
+    };
+    do_after(
+        world,
+        actor,
+        mob,
+        SQUASH_DS,
+        0,
+        Job::Sheet(SheetJob::Crush(item)),
+    );
+    true
+}
+
+/// The crush after its `do_after`: the crystal still in hand.
+fn crush(world: &mut World, client: Entity, mob: Entity, crystal: Entity) {
+    let held = world
+        .get::<Inventory>(mob)
+        .is_some_and(|inv| inv.hands.contains(&Some(crystal)));
+    if !held || stack_path(world, crystal).is_none() {
+        return;
+    }
+    let Some(pos) = world.get::<TilePos>(mob).copied() else {
+        return;
+    };
+    tell(
+        world,
+        client,
+        Span::Danger,
+        "Вы раздавливаете блюспейс-кристалл!",
+    );
+    crate::emp::do_sparks(world, pos);
+    let mut sound = PlaySound::new(pos, SFX_PORTAL_ENTER, 50.0, true);
+    sound.extrarange = crate::sound::SHORT_RANGE_SOUND_EXTRARANGE;
+    playsound(world, sound);
+    let tele = crate::teleport::Tele {
+        precision: BLINK_RANGE,
+        sound_in: Some(PHASEIN_SOUND),
+        ..Default::default()
+    };
+    crate::teleport::do_teleport(world, mob, pos, tele);
+    use_stack(world, crystal, 1);
 }
 
 /// `/obj/item/stack/sheet/cardboard/item_interaction` with a clown or chameleon stamp.
