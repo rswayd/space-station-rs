@@ -54,6 +54,7 @@ mod ghost_roles;
 mod grenades;
 mod gulag;
 mod guns;
+mod harness;
 mod heretic;
 mod holodeck;
 mod icemoon_fauna;

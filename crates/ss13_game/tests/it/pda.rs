@@ -4,9 +4,9 @@
 //! into the PDA: on the belt it opens nothing, in the ID slot it opens a maintenance door. A
 //! traitor's uplink hides in the PDA and the ringtone code opens it.
 
-use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 
+use crate::harness::{self, Client, Received, record};
 use bevy::prelude::*;
 use ss13_game::antag::UplinkUi;
 use ss13_game::antag::traitor::{Traitor, add_traitor};
@@ -25,10 +25,7 @@ use ss13_mapload::DmName;
 use ss13_mapload::antag::{ANTAG_FILE, AntagData};
 use ss13_mapload::convert::DmTypes;
 use ss13_mapload::jobs::{JOBS_FILE, JobsData, OutfitSlot};
-use ss13_net::chat::client::ChatReceived;
-use ss13_net::ui::client::UiMessageReceived;
 use ss13_shared::protocol::{ClientIntent, InventorySlot};
-use ss13_shared::ui::UiServerMessage;
 use ss13_shared::{Dir, TilePos};
 use ss13_tgui::UiInterface;
 use ss13_world::SpatialIndex;
@@ -162,76 +159,14 @@ fn fixture_assets(test: &str) -> PathBuf {
     dir
 }
 
-/// Windows opened (id, interface), the latest data per window, chat lines.
-#[derive(Resource, Default)]
-struct Received {
-    windows: Vec<(u32, String)>,
-    data: Vec<(u32, Vec<u8>)>,
-    chat: Vec<String>,
-}
-
-fn record(
-    mut ui: MessageReader<UiMessageReceived>,
-    mut chat: MessageReader<ChatReceived>,
-    mut received: ResMut<Received>,
-) {
-    for UiMessageReceived(message) in ui.read() {
-        match message {
-            UiServerMessage::Open {
-                window,
-                interface,
-                data,
-                ..
-            } => {
-                received.windows.push((*window, interface.clone()));
-                received.data.push((*window, data.clone()));
-            }
-            UiServerMessage::Update {
-                window,
-                data: Some(data),
-                ..
-            } => received.data.push((*window, data.clone())),
-            _ => {}
-        }
-    }
-    for ChatReceived(message) in chat.read() {
-        received.chat.push(message.plain_text());
-    }
-}
-
 struct Station {
     st: testing::Station,
     /// Player 0's spawn.
     spawn: TilePos,
 }
 
-impl Deref for Station {
-    type Target = testing::Station;
-    fn deref(&self) -> &testing::Station {
-        &self.st
-    }
-}
-
-impl DerefMut for Station {
-    fn deref_mut(&mut self) -> &mut testing::Station {
-        &mut self.st
-    }
-}
-
-impl Drive for Station {
-    fn station(&mut self) -> &mut testing::Station {
-        &mut self.st
-    }
-
-    fn context(&self) -> String {
-        let chat: Vec<_> = self
-            .players
-            .iter()
-            .map(|p| &p.app.world().resource::<Received>().chat)
-            .collect();
-        format!("; chat {chat:?}")
-    }
-}
+ss13_game::drive_station!(Station, st, context = harness::chat_context);
+impl Client for Station {}
 
 impl Station {
     fn start(test: &str, clients: usize) -> Self {
@@ -250,21 +185,8 @@ impl Station {
         self.send(p, ClientIntent::ClickSlot(slot));
     }
 
-    fn received(&self, p: usize) -> &Received {
-        self.players[p].app.world().resource::<Received>()
-    }
-
     fn wait_window(&mut self, p: usize, interface: &str) -> u32 {
-        self.run_until(&format!("{interface} opens"), |s| {
-            s.received(p).windows.iter().any(|(_, i)| i == interface)
-        });
-        self.received(p)
-            .windows
-            .iter()
-            .rev()
-            .find(|(_, i)| i == interface)
-            .unwrap()
-            .0
+        Client::wait_window(self, p, interface).0
     }
 
     fn ntos(&self, p: usize, window: u32) -> NtosData {
@@ -294,12 +216,6 @@ impl Station {
             NtosScreen::Messenger(m) => m,
             _ => unreachable!(),
         }
-    }
-
-    fn wait_chat(&mut self, p: usize, part: &str) {
-        self.run_until(&format!("a chat line with {part:?}"), |s| {
-            s.received(p).chat.iter().any(|n| n.contains(part))
-        });
     }
 
     fn inventory(&self, p: usize) -> Inventory {
