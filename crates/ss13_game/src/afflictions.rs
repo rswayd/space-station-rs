@@ -284,6 +284,7 @@ pub fn examine_lines(world: &World, mob: Entity, lines: &mut Vec<(Span, String)>
     if world.get::<Slimed>(mob).is_some() {
         lines.push((Span::Warning, "Он покрыт пузырящейся слизью!".to_owned()));
     }
+    crate::curses::examine_lines(world, mob, lines);
     if world.get::<NeckSlice>(mob).is_some() {
         lines.push((
             Span::Warning,
@@ -294,7 +295,9 @@ pub fn examine_lines(world: &World, mob: Entity, lines: &mut Vec<(Span, String)>
 
 /// `TRAIT_MUTE` of these effects, for `crate::medical::traumas::refresh`.
 pub fn mutes(world: &World, mob: Entity) -> bool {
-    world.get::<Choking>(mob).is_some() || world.get::<NeckSlice>(mob).is_some()
+    world.get::<Choking>(mob).is_some()
+        || world.get::<NeckSlice>(mob).is_some()
+        || crate::curses::mutes(world, mob)
 }
 
 // --- Choking ---------------------------------------------------------------------------------

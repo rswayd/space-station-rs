@@ -471,6 +471,8 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/mob/living/basic/chick",
     "/obj/item/food/egg/organic",
     "/obj/projectile/hivebotbullet",
+    // The kinetic crusher's shot (`ss13_game::mining::crusher`).
+    "/obj/projectile/destabilizer",
     "/obj/projectile/bullet/c9mm",
     "/obj/item/stock_parts/power_store/cell",
     // An inducer's starting battery (`ss13_game::inducer`).

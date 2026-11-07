@@ -329,6 +329,8 @@ pub enum Job {
     Crayon(crate::crayons::CrayonJob),
     /// The Heimlich, washing slime off ([`crate::afflictions`]).
     Affliction(crate::afflictions::AfflictionJob),
+    /// Shaking ants off, taking a strand off ([`crate::curses`]).
+    Curse(crate::curses::CurseJob),
 }
 
 /// A turf's baseturf stack, bottom first (tg `baseturfs`). Absent: assembled from the type's
@@ -1355,6 +1357,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Light(job) => crate::power::lighting::complete(world, action, job),
         Job::Crayon(job) => crate::crayons::complete(world, mob, action, job.clone()),
         &Job::Affliction(job) => crate::afflictions::complete(world, mob, action, job),
+        &Job::Curse(job) => crate::curses::complete(world, mob, action, job),
         &Job::QuantumPad(job) => crate::science::quantum_pad::complete(world, client, target, job),
         &Job::EngMachine(job) => crate::eng_machines::complete(world, client, target, job),
         &Job::Flora(job) => crate::flora::complete(world, mob, action, job),

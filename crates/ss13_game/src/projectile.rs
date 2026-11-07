@@ -511,6 +511,8 @@ fn hit(world: &mut World, e: Entity, p: &Projectile, name: &str, target: Entity)
     impact(world, p, name, target);
     // A dart's `on_hit`: its reagents or DNA injector (`crate::guns_special`).
     crate::guns_special::dart_hit(world, e, p, target);
+    // The kinetic crusher's destabilizer marks or mines (`crate::mining::crusher`).
+    crate::mining::crusher::destabilizer_hit(world, e, p.firer, target);
     crate::mobs::megafauna::on_projectile_hit(world, p, target);
     if let Some(bolt) = bolt {
         crate::spells::effects::bolt_hit(world, &bolt, p, target);
