@@ -19,14 +19,14 @@
 Эмоции ИИ (дисплей), киборгов (бип, пинг, сирена), мозга, слаймов, ксеноморфов, животных.
 
 - **Код:** [`ai emote.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/silicon/ai/emote.dm#L1), [`robot emote.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/silicon/robot/emote.dm#L1), [`slime emote.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/slime/emote.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ готово — `crates/ss13_chat/src/emote.rs` (типы мобов `EmoteMob`, `TRAIT_SILICON_EMOTES_ALLOWED`, эмоции ИИ/силиконов/мозга в процессоре/ксеноморфов/слаймов/горилл, `message_robot`/`_AI`/`_alien`/`_larva`/`_animal`, звуки, общий аудио-кулдаун 3 с), `crates/ss13_game/src/speech.rs` (`EmoteUser` тела, звук, эмоция дисплеев ИИ `AiDisplayEmotion`, настроение слайма `SlimeMood`). Отрисовка статус-дисплеев ИИ — в «Инфо станции» (comms), лица слайма — в ксенобиологии; ксеноморфов как мобов пока нет
 
 ### Эмоции рас BandaStation
 Звуковые эмоции вульпканинов, скреллов, таяран, ящеров, молей, подов, слаймолюдей.
 
 - **Код:** [`modular_bandastation/emote_panel/code`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/emote_panel/code)
 - **BandaStation:** [`_emote_panel.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/emote_panel/_emote_panel.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ готово — `crates/ss13_chat/src/emote.rs`: эмоции вульпканинов, таяран и скреллов (белый список вида, свои кулдауны, звуки), звуки языков (`tongue_sounds`: по виду и полу) вульпканинов, таяран, скреллов, ящеров, молей, подов и слаймолюдей; вид и пол тела — `crates/ss13_game/src/speech.rs`. Без мим-вариантов; звуки `sniff`/`snore`/`hiss` придут с этими эмоциями (группа «Эмоции живых и людей»)
 
 ### Вербы-панель эмоций (BandaStation)
 Вкладка «Эмоции» с вербами «▷ Смеяться», «▷ Плакать», «▷ Кашлять», ... для быстрого вызова.

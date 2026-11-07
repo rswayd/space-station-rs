@@ -32,7 +32,7 @@ use ss13_shared::chat::{
 use ss13_shared::protocol::ClientIntent;
 use ss13_world::{SpatialIndex, WorldSystems};
 
-use crate::emote::{EMOTE_COOLDOWN_SECS, EmoteOutcome};
+use crate::emote::{EMOTE_AUDIO_COOLDOWN_SECS, EmoteOutcome, EmoteSound, EmoteUser};
 use crate::language::{self, LanguageHolder, LanguageId, ScrambleSeed, Tongue};
 use crate::speech::{
     BinaryCapable, ChangelingHivemind, EarsWorn, Impediments, RadioExtension, RadioTarget,
@@ -169,11 +169,13 @@ impl Spoke {
 }
 
 /// An intentional emote a body ran (`*key`), for the game's emote effects (tg `run_emote`
-/// overrides, e.g. `surrender`).
-#[derive(Message, Clone, Copy, Debug, PartialEq, Eq)]
+/// overrides, e.g. `surrender`, the AI's display) and its sound (`playsound` of `get_sound`,
+/// already gated by the audio cooldown and muteness).
+#[derive(Message, Clone, Copy, Debug, PartialEq)]
 pub struct Emoted {
     pub speaker: Entity,
     pub key: &'static str,
+    pub sound: Option<EmoteSound>,
 }
 
 /// What one group of listeners hears of a message (tg `translate_language` per hearer): the
@@ -282,6 +284,10 @@ pub const WHISPER_VERB: &str = "шепчет";
 /// tg `emotes_used`: when each emote of this speaker was last used, `Time<Real>` seconds.
 #[derive(Component, Default, Debug)]
 struct EmotesUsed(HashMap<&'static str, f64>);
+
+/// The [`EmotesUsed`] entry of the last emote sound (`MANUAL_GENERAL_EMOTE_AUDIO_COOLDOWN`); no
+/// emote key has a space.
+const EMOTE_AUDIO: &str = "audio cooldown";
 
 /// `prob`/`rand` for speech (stars, sing notes): splitmix64, seeded from the clock; the game
 /// reseeds it from the map seed (`ss13_game::server::seed_rngs`).
@@ -532,6 +538,7 @@ type Body<'a> = (
     Option<&'a SpeechEffects>,
     Option<&'a LanguageHolder>,
     Option<&'a Tongue>,
+    Option<&'a EmoteUser>,
 );
 
 fn handle_say(
@@ -606,6 +613,7 @@ fn handle_say(
                 speech_effects,
                 holder,
                 tongue,
+                emote_user,
             ),
             text,
         ) = match checked {
@@ -697,33 +705,58 @@ fn handle_say(
         };
         if let Some(act) = text.strip_prefix('*') {
             let mut used = emotes_used.get_mut(speaker).ok();
-            let outcome = crate::emote::run(act, stat, |key| {
+            let user = emote_user.copied().unwrap_or_default();
+            let outcome = crate::emote::run(act, stat, &user, |key, cooldown| {
                 used.as_ref()
                     .and_then(|u| u.0.get(key))
-                    .is_some_and(|&at| now < at + EMOTE_COOLDOWN_SECS)
+                    .is_some_and(|&at| now < at + cooldown)
             });
             match outcome {
-                EmoteOutcome::Run { key, text } => {
+                EmoteOutcome::Run { key, text, sound } => {
+                    // `should_play_sound`: a mute or tongueless mob makes no audible sound.
+                    let silenced = impediments.is_some_and(|i| i.mute) || tongueless;
+                    let sound = sound.filter(|s| !(s.audible && silenced));
+                    let audio_busy = sound.is_some()
+                        && used
+                            .as_ref()
+                            .and_then(|u| u.0.get(EMOTE_AUDIO))
+                            .is_some_and(|&at| now < at + EMOTE_AUDIO_COOLDOWN_SECS);
                     match used.as_mut() {
                         Some(used) => {
                             used.0.insert(key, now);
+                            if sound.is_some() && !audio_busy {
+                                used.0.insert(EMOTE_AUDIO, now);
+                            }
                         }
                         None => {
-                            commands
-                                .entity(speaker)
-                                .try_insert(EmotesUsed(HashMap::from_iter([(key, now)])));
+                            let mut first = HashMap::from_iter([(key, now)]);
+                            if sound.is_some() {
+                                first.insert(EMOTE_AUDIO, now);
+                            }
+                            commands.entity(speaker).try_insert(EmotesUsed(first));
                         }
                     }
-                    info!(target: "say", "{client} {name} emote: {text}");
-                    let clients = hearers_within(HEARING_RANGE)
-                        .into_iter()
-                        .map(|(c, ..)| c)
-                        .collect();
-                    chat.write(SendChat {
-                        clients,
-                        message: emote_message(&name, &text),
+                    // BandaStation: `run_emote` returns before the message while the general
+                    // emote audio cooldown runs.
+                    if audio_busy {
+                        continue;
+                    }
+                    if !text.is_empty() {
+                        info!(target: "say", "{client} {name} emote: {text}");
+                        let clients = hearers_within(HEARING_RANGE)
+                            .into_iter()
+                            .map(|(c, ..)| c)
+                            .collect();
+                        chat.write(SendChat {
+                            clients,
+                            message: emote_message(&name, &text),
+                        });
+                    }
+                    emoted.write(Emoted {
+                        speaker,
+                        key,
+                        sound,
                     });
-                    emoted.write(Emoted { speaker, key });
                 }
                 EmoteOutcome::Refused(text) | EmoteOutcome::Help(text) => {
                     chat.write(notice(text));
