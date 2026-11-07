@@ -559,8 +559,10 @@ impl ServerUi for WiresWindow {
                 .map(|(color, wire)| WireEntry {
                     color: (*color).to_owned(),
                     shown_color: (*color).to_owned(),
-                    // `can_reveal_wires` is always false here (see the module shortcut).
-                    wire: None,
+                    // `can_reveal_wires` is always false here (see the module shortcut);
+                    // `always_reveal_wire` of the fire alarm (detection), the cyborg (model
+                    // reset) and the wire bundle (every port).
+                    wire: always_reveal(wires.holder, wire).then(|| wire.clone()),
                     cut: wires.is_cut(wire),
                     attached: source.assemblies.is_some_and(|a| a.at(color).is_some()),
                 })
@@ -581,6 +583,17 @@ impl ServerUi for WiresWindow {
             "attach" => Ok(WireAct::Attach(wire)),
             _ => Err(UiReject::UnknownAction),
         }
+    }
+}
+
+/// tg `always_reveal_wire(color)`.
+fn always_reveal(holder: WireHolder, wire: &str) -> bool {
+    use crate::machine_wires::MachineWires as M;
+    match holder {
+        WireHolder::Machine(M::WireBundle) => true,
+        WireHolder::Machine(M::FireAlarm) => wire == crate::machine_wires::WIRE_FIRE_DETECT,
+        WireHolder::Machine(M::Robot) => wire == crate::device_wires::WIRE_RESET_MODEL,
+        _ => false,
     }
 }
 

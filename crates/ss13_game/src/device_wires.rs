@@ -253,6 +253,8 @@ pub fn interactable(world: &World, e: Entity, kind: MachineWires) -> Option<bool
             .get::<Mech>(e)
             .is_some_and(|m| m.flags & MECH_PANEL_OPEN != 0),
         MachineWires::Mod => world.get::<ModSuit>(e).is_some_and(|s| s.open),
+        // `can_access_wires`: a shell that is not a machine always (no shell locking).
+        MachineWires::WireBundle => true,
         _ => return None,
     })
 }
@@ -261,7 +263,10 @@ pub fn interactable(world: &World, e: Entity, kind: MachineWires) -> Option<bool
 /// cyborg or a mech (their `attack_hand`); an intercom does.
 pub fn hand_opens(world: &World, e: Entity, kind: MachineWires) -> bool {
     match kind {
-        MachineWires::Robot | MachineWires::Mecha | MachineWires::Mod => false,
+        MachineWires::Robot
+        | MachineWires::Mecha
+        | MachineWires::Mod
+        | MachineWires::WireBundle => false,
         MachineWires::Radio => world
             .get::<Radio>(e)
             .is_some_and(|r| r.kind == RadioKind::Intercom),
@@ -542,6 +547,7 @@ pub fn on_pulse(
         (MachineWires::Mod, WIRE_INTERFACE) => {
             state(world, e, |s| s.interface_break = !s.interface_break);
         }
+        (MachineWires::WireBundle, _) => crate::wiremod::server::bundle_pulsed(world, e, wire),
         // `set_listening(!listening)`, then broadcasting follows listening.
         (MachineWires::Radio, WIRE_SIGNAL) => {
             if let Some(mut r) = world.get_mut::<Radio>(e) {

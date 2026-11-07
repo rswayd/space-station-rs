@@ -79,6 +79,8 @@ pub enum MachineWires {
     Mecha,
     Mod,
     Radio,
+    /// A circuit shell's wires from its wire bundle component (`crate::wiremod::server`).
+    WireBundle,
 }
 
 impl MachineWires {
@@ -165,6 +167,7 @@ impl MachineWires {
                 | Self::Robot
                 | Self::Mecha
                 | Self::Radio
+                | Self::WireBundle
         )
     }
 }
@@ -321,6 +324,11 @@ fn held_on_target(world: &mut World, ctx: &ClickCtx) -> bool {
         tool_of(world, held).map(|t| t.0),
         Some(ToolKind::Wirecutters | ToolKind::Multitool)
     );
+    // `wire_bundle/on_shell_secondary_interaction`: a right click (the left multitool opens the
+    // circuit).
+    if kind == MachineWires::WireBundle && !ctx.modifiers.right {
+        return false;
+    }
     if !wire_tool || !interactable(world, ctx.target, kind) {
         return false;
     }
