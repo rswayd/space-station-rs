@@ -1,6 +1,7 @@
 //! Misc UI over a loopback server: A's screentip over B names B with the carbon contexts (hug or
 //! attack, shove, pull); B leaves and its body gets the SSD `zzz_glow` and falls asleep; Esc's
-//! menu opens the Who window with both keys.
+//! menu opens the Who window with both keys; balloon alerts reach only their viewers; a sleeper
+//! dreams in fragments.
 
 use std::path::{Path, PathBuf};
 
@@ -14,7 +15,10 @@ use ss13_game::ssd::{SSD_DMI, SSD_STATE, Ssd};
 use ss13_game::status_effects::{Incap, StatusEffects};
 use ss13_game::testing::{self, Drive, fixture_map, write_fixture};
 use ss13_mapload::IconIndex;
+use ss13_net::animation::client::AnimationReceived;
+use ss13_net::chat::client::ChatReceived;
 use ss13_net::ui::client::UiMessageReceived;
+use ss13_shared::animation::Animation;
 use ss13_shared::protocol::ClientIntent;
 use ss13_shared::ui::UiServerMessage;
 use ss13_shared::{Appearance, TilePos};
@@ -123,6 +127,29 @@ fn record(mut ui: MessageReader<UiMessageReceived>, mut opened: ResMut<Opened>) 
     }
 }
 
+/// Balloon alerts a client got: target id and text.
+#[derive(Resource, Default)]
+struct Balloons(Vec<(ss13_shared::protocol::NetId, String)>);
+
+fn record_balloons(mut received: MessageReader<AnimationReceived>, mut got: ResMut<Balloons>) {
+    for AnimationReceived(event) in received.read() {
+        if let Animation::Balloon { text } = &event.animation {
+            got.0.push((event.target, text.clone()));
+        }
+    }
+}
+
+/// Chat lines a client got.
+#[derive(Resource, Default)]
+struct Lines(Vec<String>);
+
+fn record_chat(mut received: MessageReader<ChatReceived>, mut lines: ResMut<Lines>) {
+    for ChatReceived(message) in received.read() {
+        let text: String = message.segments.iter().map(|s| s.text.as_str()).collect();
+        lines.0.push(text);
+    }
+}
+
 struct Station(testing::Station);
 ss13_game::drive_station!(Station, 0);
 
@@ -131,7 +158,10 @@ impl Station {
         let assets = fixture_assets(test);
         let mut s = testing::Station::start(fixture_map(&assets, &["map.dmm"]), |_| {});
         s.join_all(2, |app| {
-            app.init_resource::<Opened>().add_systems(Update, record);
+            app.init_resource::<Opened>()
+                .init_resource::<Balloons>()
+                .init_resource::<Lines>()
+                .add_systems(Update, (record, record_balloons, record_chat));
         });
         let (a, b) = (s.players[0].mob, s.players[1].mob);
         let world = s.server.world_mut();
@@ -239,4 +269,96 @@ fn escape_opens_the_menu_and_who() {
     let who = decode::<WhoData>(&data).unwrap();
     assert_eq!(who.user, "p0");
     assert_eq!(who.clients, ["p0", "p1"]);
+}
+
+#[test]
+fn balloon_alerts_reach_only_their_viewers() {
+    let mut s = Station::start("balloon_alerts_reach_only_their_viewers");
+    let (a, b) = (s.players[0].mob, s.players[1].mob);
+    s.run_until("both see both", |s| {
+        s.net_id(0, b).is_some() && s.net_id(1, a).is_some() && s.net_id(0, a).is_some()
+    });
+    let balloons =
+        |s: &Station, p: usize| s.players[p].app.world().resource::<Balloons>().0.clone();
+
+    // One viewer: only A gets it, over B.
+    ss13_game::balloon::balloon_alert(s.server.world_mut(), a, b, "нет места!");
+    let b_for_a = s.net_id(0, b).unwrap();
+    s.run_until("A gets the balloon", |s| !balloons(s, 0).is_empty());
+    assert_eq!(balloons(&s, 0), [(b_for_a, "нет места!".to_owned())]);
+    s.run_for(0.5);
+    assert!(balloons(&s, 1).is_empty());
+
+    // To viewers: A gets its own line, B the others' one, both over A.
+    ss13_game::balloon::balloon_alert_to_viewers(
+        s.server.world_mut(),
+        a,
+        "flips a card",
+        Some("own"),
+        &[],
+    );
+    let (a_for_a, a_for_b) = (s.net_id(0, a).unwrap(), s.net_id(1, a).unwrap());
+    s.run_until("both get it", |s| {
+        balloons(s, 0).len() == 2 && !balloons(s, 1).is_empty()
+    });
+    assert_eq!(balloons(&s, 0)[1], (a_for_a, "own".to_owned()));
+    assert_eq!(balloons(&s, 1), [(a_for_b, "flips a card".to_owned())]);
+}
+
+#[test]
+fn a_sleeper_dreams_in_fragments() {
+    use ss13_game::dreams::{self, DreamStrings, Dreaming};
+    let mut s = Station::start("a_sleeper_dreams_in_fragments");
+    let b = s.players[1].mob;
+    let world = s.server.world_mut();
+    let v = |l: &[&str]| l.iter().map(|s| (*s).to_owned()).collect::<Vec<_>>();
+    world.insert_resource(DreamStrings {
+        dream_strings: v(&["%A% %ADJECTIVE% admiral"]),
+        adjectives: v(&["old"]),
+        adverbs: v(&["angrily"]),
+        ing_verbs: v(&["dancing"]),
+        verbs: v(&["dance"]),
+    });
+    ss13_game::status_effects::apply(world, b, Incap::Sleeping, 60.0);
+    // `handle_dreams` starts one on 10% of calls.
+    for _ in 0..1000 {
+        if world.get::<Dreaming>(b).is_some() {
+            break;
+        }
+        dreams::handle_dreams(world, b);
+    }
+    let fragments = world
+        .get::<Dreaming>(b)
+        .expect("a dream started")
+        .fragments
+        .len();
+    s.run_until_for(20.0, "the dream ends", |s| {
+        s.try_get::<Dreaming>(b).is_none()
+    });
+    let dream: Vec<String> = s.players[1]
+        .app
+        .world()
+        .resource::<Lines>()
+        .0
+        .iter()
+        .filter(|l| l.starts_with("... ") && l.ends_with(" ..."))
+        .cloned()
+        .collect();
+    assert_eq!(dream.len(), fragments, "{dream:?}");
+    assert!(
+        dream[0] == "... you see ..." || dream[0].starts_with("... you "),
+        "{dream:?}"
+    );
+    // A waking sleeper stops dreaming.
+    let world = s.server.world_mut();
+    for _ in 0..1000 {
+        if world.get::<Dreaming>(b).is_some() {
+            break;
+        }
+        dreams::handle_dreams(world, b);
+    }
+    ss13_game::status_effects::adjust(world, b, Incap::Sleeping, -100.0);
+    s.run_until_for(5.0, "the dream is cut short", |s| {
+        s.try_get::<Dreaming>(b).is_none()
+    });
 }

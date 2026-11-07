@@ -82,6 +82,8 @@ fn start_animations(
                 }
                 fresh.remove(&entity);
             }
+            // Drawn by `crate::balloon_client`.
+            Animation::Balloon { .. } => {}
         }
     }
     for (entity, anims) in fresh.drain() {

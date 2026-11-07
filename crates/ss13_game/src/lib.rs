@@ -190,6 +190,10 @@ pub mod atmos_machinery;
 #[cfg(feature = "server")]
 pub mod away_shuttles;
 #[cfg(feature = "server")]
+pub mod balloon;
+#[cfg(feature = "client")]
+pub mod balloon_client;
+#[cfg(feature = "server")]
 pub mod bar;
 #[cfg(feature = "server")]
 pub mod barsign;
@@ -261,6 +265,8 @@ pub mod door_structures;
 pub mod doors;
 #[cfg(feature = "server")]
 pub mod drag;
+#[cfg(feature = "server")]
+pub mod dreams;
 #[cfg(feature = "server")]
 pub mod effects;
 #[cfg(feature = "server")]

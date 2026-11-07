@@ -24,7 +24,7 @@ use ss13_shared::chat::Span;
 use ss13_shared::{Appearance, Overlay, TilePos};
 use ss13_tgui::prompt::{Ask, PromptAnswer, PromptKind, ask_world};
 
-use super::server::{PendingAsk, item_path, now, say_around, set_name, sound_at};
+use super::server::{PendingAsk, item_path, now, set_name, sound_at};
 use crate::combat::CombatRng;
 use crate::inventory::{CarriedBy, Inventory};
 use crate::obj_damage::is_under;
@@ -722,9 +722,9 @@ fn draw(world: &mut World, client: Entity, deck: Entity) -> Option<Card> {
     Some(card)
 }
 
+/// tg `user.balloon_alert_to_viewers(text)`.
 fn balloon(world: &mut World, mob: Entity, text: &str) {
-    let user = crate::chem::name_of(world, mob);
-    say_around(world, mob, Span::Notice, format!("{user} {text}."), &[]);
+    crate::balloon::balloon_alert_to_viewers(world, mob, text, None, &[]);
 }
 
 /// The held card thing's tg `attack_self`. True when `item` is one.

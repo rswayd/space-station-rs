@@ -17,7 +17,7 @@
 Короткие всплывающие надписи над объектом для отказов и результатов действий (видны только себе или окружающим).
 
 - **Код:** [`/atom/proc/balloon_alert()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/balloon_alert/balloon_alert.dm#L18), [`/atom/proc/balloon_alert_to_viewers()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/balloon_alert/balloon_alert.dm#L25)
-- **Статус в ss13-rs:** ❌ нет — отказы идут сообщениями в чат (`crates/ss13_game/src/storage.rs` и др.)
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/balloon.rs` (`balloon_alert`, `balloon_alert_to_viewers`: в радиусе 7, видящим тайл и не слепым, своя строка источнику), клиент — `crates/ss13_game/src/balloon_client.rs`: текст над объектом (предмет в руке/хранилище — над держателем) поднимается на 1.2 тайла и гаснет по таймингам tg (0.2 / 0.7×длина / 0.1 с); доставка — `Animation::Balloon` только клиенту зрителя (`PlayAnimationFor`). Переведены отказы хранилищ (`storage::refusal_text`), карты, ввод/значение портов схем. Отличия: шрифт Bevy с тенью вместо обводки; нет запасной строки в чат при выключенном runechat и `balloon_alert_to_hearers`; остальные места tg с баллонами по-прежнему пишут в чат
 
 ### Статпанель
 Панель вкладок (Status, вербы по категориям, MC для админов, тикеты, объекты на тайле), обновляется подсистемой `SSstatpanels`.
@@ -62,7 +62,7 @@ Alt-клик по тайлу открывает окно со списком о�
 Во сне игрок видит обрывки «снов» (фрагменты из окружения и строк).
 
 - **Код:** [`dreaming.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/flufftext/dreaming.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/dreams.rs`: спящий карбон (пульс сна `status_effects`) с шансом 10% начинает сон, если ещё не видит его; обрывки «... x ...» приходят в чат через 1–3 с, сон прерывается при пробуждении или тяжёлом крите. Сны `random` (вес 1000: «you see», субъект — 90% из `dream_messages` простыни на тайле, иначе `strings/dreamstrings.txt`, прилагательные, глагол/наречие, 75% — объект) и `hear_something` (500: звук и строки). Отличия: звук «hear something» — из короткого списка вместо всех файлов `sound/`, не обрывается через 5 с; нет пулов снов `COMSIG_PRE_DREAMING`
 
 ### Эмодзи
 `:emoji:` в OOC/чате заменяется иконкой; BandaStation добавляет свой набор.

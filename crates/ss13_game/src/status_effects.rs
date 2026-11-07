@@ -1351,6 +1351,14 @@ fn sleep_pulse(world: &mut World, mob: Entity) {
     {
         reagents.drunk *= 0.997;
     }
+    // `handle_dreams` of a carbon.
+    if world.contains_resource::<crate::dreams::DreamRng>()
+        && world.get::<crate::inventory::Inventory>(mob).is_some()
+        && world.get::<crate::silicon::Silicon>(mob).is_none()
+        && world.get::<crate::mobs::BasicMob>(mob).is_none()
+    {
+        crate::dreams::handle_dreams(world, mob);
+    }
 }
 
 /// `/datum/status_effect/inebriated/drunk/on_tick_effects` after the drunkenness decayed to
