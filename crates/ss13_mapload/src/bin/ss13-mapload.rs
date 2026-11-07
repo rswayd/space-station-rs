@@ -322,6 +322,19 @@ fn convert_cmd(config: &MapLoadPlugin, mut map_dirs: Vec<PathBuf>) -> anyhow::Re
         ss13_mapload::sound::referenced(&types, &sfx, conversion.types.iter().map(String::as_str));
     sounds.extend(modsuits.sounds().into_iter().map(str::to_owned));
     sounds.extend(mecha.sounds().into_iter().map(str::to_owned));
+    let instruments = ss13_mapload::instruments::resolve(&types, &config.source);
+    sounds.extend(instruments.sounds());
+    let instruments_out = config
+        .assets
+        .join(ss13_mapload::instruments::INSTRUMENTS_FILE);
+    std::fs::write(&instruments_out, instruments.to_ron())
+        .with_context(|| format!("writing {}", instruments_out.display()))?;
+    println!(
+        "{} instruments, {} instrument holders -> {}",
+        instruments.instruments.len(),
+        instruments.holders.len(),
+        instruments_out.display()
+    );
     let copied = ss13_mapload::sound::copy_sounds(
         &config.source,
         &config.assets,

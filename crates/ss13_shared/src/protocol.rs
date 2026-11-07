@@ -195,14 +195,21 @@ pub struct SoundEvent {
 
 /// tg `CHANNEL_LOBBYMUSIC`: the lobby's title music.
 pub const CHANNEL_LOBBYMUSIC: u16 = 1024;
+/// tg `CHANNEL_JUKEBOX`: jukeboxes and boomboxes.
+pub const CHANNEL_JUKEBOX: u16 = 1021;
 
 /// Server → client: a sound on a numbered BYOND channel (tg `sound(file, channel = N)`); it
 /// replaces whatever plays on that channel, and `None` stops it (`sound(null, channel = N)`,
 /// `stop_sound_channel`).
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 pub struct ChannelSound {
     pub channel: u16,
     pub sound: Option<SoundEvent>,
+    /// BYOND `SOUND_UPDATE`: only the volume and offset of the sound already playing on the
+    /// channel change (nothing restarts); ignored when the channel is silent.
+    pub update: bool,
+    /// BYOND `sound.repeat`: loops until stopped.
+    pub repeat: bool,
 }
 
 /// Server → client system notice (MOTD, admin message, kick reason, ...).

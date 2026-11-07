@@ -96,6 +96,7 @@ pub fn play_title_music(world: &mut World, client: Entity, volume_multiplier: f3
         sound: ChannelSound {
             channel: CHANNEL_LOBBYMUSIC,
             sound: Some(event(music, DEFAULT_VOLUME * volume_multiplier)),
+            ..default()
         },
     });
 }
@@ -113,6 +114,7 @@ fn lobby_left(remove: On<Remove<NewPlayer>>, mut out: MessageWriter<SendChannelS
         sound: ChannelSound {
             channel: CHANNEL_LOBBYMUSIC,
             sound: None,
+            ..default()
         },
     });
 }

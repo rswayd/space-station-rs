@@ -45,6 +45,7 @@
 //! | 1737 | `devices::rhd::attack_self` (RLD, RTD, RDD, RPLD, RWD, RSF lists) |
 //! | 1740 | `devices::taperecorder::attack_self` (recorder and tape menus) |
 //! | 1743 | `devices::beacons::attack_self` (tracking beacons toggle, choice beacons list) |
+//! | 1747 | `instruments::attack_self` (a held instrument's song editor, the boombox menu) |
 //! | 1750 | `radiation::geiger_attack_self` |
 //! | 1800 | `explosions::sources::c4_attack_self` |
 //! | 1897 | `science::relics::attack_self` (a strange object: the hint, or its power) |
@@ -111,6 +112,7 @@
 //! | 465 | `devices::taperecorder::item_interaction` (tape in, respool), `attack_hand` (eject) |
 //! | 467 | `devices::laser_pointer::item_interaction` (diode, crystal lens, their removal) |
 //! | 473 | `cargo::money::item_interaction` (cash onto the ID in the other hand) |
+//! | 477 | `instruments::boombox::other_hand` (a music tape into the boombox in the other hand, its menu) |
 //! | 480 | `clothing::accessories::attach` (before a jumpsuit's holster takes the item) |
 //! | 483 | `gifts::wrap_parcel` (wrapping paper onto a parcel, before it takes the paper) |
 //! | 487 | `misc_items::documents::forge_seal` (a red or blue crayon on a photocopy) |
@@ -243,6 +245,7 @@
 //! | 3517 | `ntnet_relay::interact` (the `NtnetRelay` window) |
 //! | 3529 | `cannons::attack_hand` (a mounted gun fires, the repeater winds) |
 //! | 3539 | `gym::punch` (the punching bag) |
+//! | 3547 | `instruments::attack_hand` (piano editor, jukebox window and right-click toggle, boombox menu) |
 //!
 //! [`ClickPhase::HeldOnTarget`] (a world click with the active hand's item; tg
 //! `item_interaction`, `interact_with_atom`, `pre_attack`, `attackby`):
@@ -364,6 +367,7 @@
 //! | 3440 | `tank_storage::item_interaction` |
 //! | 3441 | `displaycase::item_interaction` (display cases, their chassis) |
 //! | 3442 | `fireplace::item_interaction` (fuel, lighting, bonfire rods and grill) |
+//! | 3447 | `instruments::item_interaction` (a wrench on pianos and jukeboxes, music tapes into boomboxes) |
 //! | 3449 | `sheets::item_interaction` (a hot tool on burning sheets, rods on titanium) |
 //! | 3450 | `decor::item_interaction` |
 //! | 3455 | `clothing::item_interaction` |

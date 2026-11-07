@@ -7,8 +7,8 @@
 //!
 //! `SS13_VOLUME` (0-100, default 100) is the master volume.
 //!
-//! A channel sound ([`ChannelSoundReceived`], the lobby music) replaces the one playing on its
-//! channel, or stops it.
+//! A channel sound ([`ChannelSoundReceived`]: the lobby music, jukeboxes, boomboxes) replaces
+//! the one playing on its channel, or stops it; an update only changes its volume and offset.
 //!
 //! Every sound file (13 MB on MetaStation's assets) is read in the background at startup
 //! ([`preload`]); a sound played before that finishes is read on the spot, as before (a cold
@@ -20,7 +20,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use bevy::audio::{AudioPlayer, AudioSource, GlobalVolume, PlaybackSettings, SpatialListener};
-use bevy::audio::{SpatialScale, Volume};
+use bevy::audio::{AudioSink, AudioSinkPlayback, SpatialAudioSink, SpatialScale, Volume};
 use bevy::prelude::*;
 use bevy::tasks::futures_lite::future::poll_once;
 use bevy::tasks::{IoTaskPool, Task, block_on};
@@ -214,15 +214,44 @@ fn sound_handle(
 }
 
 /// Channel sounds: the new one replaces the channel's player (not dropped after a pause: the
-/// lobby music is sent once).
+/// lobby music is sent once); an update (`SOUND_UPDATE`) only moves and re-levels it.
 fn play_channels(
     mut received: MessageReader<ChannelSoundReceived>,
     mut channels: ResMut<ChannelPlayers>,
     mut files: ResMut<SoundFiles>,
     mut sources: ResMut<Assets<AudioSource>>,
+    global: Res<GlobalVolume>,
+    mut players: Query<(
+        &mut PlaybackSettings,
+        &mut Transform,
+        Option<&mut AudioSink>,
+        Option<&mut SpatialAudioSink>,
+    )>,
     mut commands: Commands,
 ) {
     for ChannelSoundReceived(channel_sound) in received.read() {
+        if channel_sound.update {
+            let (Some(sound), Some(&player)) =
+                (&channel_sound.sound, channels.0.get(&channel_sound.channel))
+            else {
+                continue;
+            };
+            let Ok((mut settings, mut transform, sink, spatial)) = players.get_mut(player) else {
+                continue;
+            };
+            let volume = (sound.volume / 100.0).clamp(0.0, 1.0);
+            settings.volume = Volume::Linear(volume);
+            let [dx, dy] = sound.offset.unwrap_or([0, 0]);
+            transform.translation = Vec3::new(f32::from(dx), f32::from(dy), 0.0);
+            let level = Volume::Linear(volume * global.volume.to_linear());
+            if let Some(mut sink) = sink {
+                sink.set_volume(level);
+            }
+            if let Some(mut sink) = spatial {
+                sink.set_volume(level);
+            }
+            continue;
+        }
         if let Some(old) = channels.0.remove(&channel_sound.channel) {
             commands.entity(old).try_despawn();
         }
@@ -232,14 +261,23 @@ fn play_channels(
         let Some(handle) = sound_handle(&mut files, &mut sources, &sound.file) else {
             continue;
         };
+        let [dx, dy] = sound.offset.unwrap_or([0, 0]);
+        let base = if channel_sound.repeat {
+            PlaybackSettings::LOOP
+        } else {
+            PlaybackSettings::DESPAWN
+        };
         let player = commands
             .spawn((
                 AudioPlayer(handle),
                 PlaybackSettings {
                     volume: Volume::Linear((sound.volume / 100.0).clamp(0.0, 1.0)),
                     speed: sound.speed.max(0.01),
-                    ..PlaybackSettings::DESPAWN
+                    spatial: sound.offset.is_some(),
+                    spatial_scale: Some(SpatialScale(Vec3::splat(SPATIAL_SCALE))),
+                    ..base
                 },
+                Transform::from_xyz(f32::from(dx), f32::from(dy), 0.0),
             ))
             .id();
         channels.0.insert(channel_sound.channel, player);
