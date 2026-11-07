@@ -9,13 +9,14 @@
 //!   (`death_drops`).
 //! - It repairs a hurt NODE drone next to it (`repair_node_drone`: 6 s holding still next to
 //!   it, then 50 brute healed), and fights back with its drill.
+//! - Alt-click (not in combat mode) toggles its combat mode (`click_alt`).
 //! - A welder used on it out of combat mode (neither in combat mode) mends 15 brute
 //!   (`welder_act`).
 //! - A NODE drone fights nobody, remembers who hurts it (`ai_retaliate`) and blows up lightly
 //!   when it dies (`explosion(light_impact_range = 1)`).
 // shortcut: no minebot gun (the kinetic accelerator shots and keeping its shooting distance;
 // its modkits are `crate::mining::modkits`), missiles, landmines, light and meson toggles, the
-// `MineBot` UI, alt-click combat mode, pet commands, colours, mining walls, the
+// `MineBot` UI, pet commands, colours, mining walls, the
 // SOS for downed miners, sentience; the drone has no ore vent to latch onto (vents and their
 // wave defense are `docs/parity/cargo/mining-ores.md`), no fly-in/escape animation.
 
@@ -62,6 +63,36 @@ pub(super) fn build(app: &mut App) {
         c.held.is_some_and(|h| weld_repair(w, c.mob, h, c.target))
     });
     app.add_systems(Update, repairs.before(crate::health::HealthSystems));
+}
+
+/// `mining_drone/click_alt`: out of combat mode, the user flips the bot between collecting ore
+/// and attacking wildlife. True on a minebot (`CLICK_ACTION_BLOCKING` in combat mode).
+pub fn click_alt(world: &mut World, user: Entity, bot: Entity) -> bool {
+    if world.get::<Minebot>(bot).is_none() {
+        return false;
+    }
+    let user_combat = world
+        .get::<crate::combat::CombatMode>(user)
+        .is_some_and(|c| c.0);
+    if user_combat {
+        return true;
+    }
+    let Some(mut b) = world.get_mut::<Minebot>(bot) else {
+        return false;
+    };
+    b.combat = !b.combat;
+    let text = if b.combat {
+        "Теперь атакует фауну."
+    } else {
+        "Теперь собирает рассыпанную руду."
+    };
+    super::abilities::tell(
+        world,
+        user,
+        ss13_shared::chat::Span::Notice,
+        text.to_owned(),
+    );
+    true
 }
 
 /// `mining_drone/welder_act`: 15 brute mended, not in either's combat mode, not at full health.
@@ -319,6 +350,12 @@ mod tests {
         assert!(!weld_repair(&mut world, user, rock, bot));
         // Not a minebot either.
         assert!(!weld_repair(&mut world, user, rock, user));
+        // Alt-click flips its mode, back and forth.
+        assert!(click_alt(&mut world, user, bot));
+        assert!(world.get::<Minebot>(bot).unwrap().combat);
+        assert!(click_alt(&mut world, user, bot));
+        assert!(!world.get::<Minebot>(bot).unwrap().combat);
+        assert!(!click_alt(&mut world, user, user));
     }
 
     #[test]
