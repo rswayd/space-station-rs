@@ -123,6 +123,8 @@ struct DoorSprites {
     opening_lights: Option<IconStateId>,
     closing_lights: Option<IconStateId>,
     welded: Option<IconStateId>,
+    /// Airlock `sealed` (a pneumatic seal on the closed door).
+    sealed: Option<IconStateId>,
     /// Basic doors and windoors: the deny frame; airlocks: the denied lights.
     deny: Option<IconStateId>,
     /// Airlock maintenance panel per frame (`panel_<frame>`).
@@ -201,6 +203,9 @@ pub struct Door {
     /// tg `/obj/machinery/door/password` (`crate::password_door`): no hand, ID or bump opens it,
     /// only its password; blast door frames and timings.
     pub password_lock: bool,
+    /// tg airlock `seal`: the pneumatic seal braced on it (`crate::devices::door_seal`); a
+    /// sealed airlock neither opens nor is pried.
+    pub seal: Option<Entity>,
 }
 
 /// An airlock's sound vars (empty: silent).
@@ -360,8 +365,11 @@ impl Door {
         let lights = lights.filter(|_| self.feedback && self.wire_power() && !self.emagging);
         let panel = s.panel[frame].filter(|_| self.panel_open);
         let welded = s.welded.filter(|_| self.welded);
+        let sealed = s
+            .sealed
+            .filter(|_| self.seal.is_some() && self.state == DoorState::Closed);
         let sparks = s.sparks.filter(|_| self.emagging);
-        appearance.overlays = [s.fills[frame], lights, panel, welded, sparks]
+        appearance.overlays = [s.fills[frame], lights, panel, welded, sealed, sparks]
             .into_iter()
             .flatten()
             .map(Overlay::new)
@@ -583,6 +591,7 @@ fn door_from(
         emagging: false,
         crush: false,
         password_lock: !dm.password.is_empty(),
+        seal: None,
     }
 }
 
@@ -799,6 +808,7 @@ fn resolve_sprites(
         opening_lights: get(overlays, "lights_opening"),
         closing_lights: get(overlays, "lights_closing"),
         welded: get(overlays, "welded"),
+        sealed: get(overlays, "sealed"),
         deny: get(overlays, "lights_denied"),
         panel: FRAMES.map(|f| get(overlays, &format!("panel_{f}"))),
         sparks: get(overlays, "sparks"),
@@ -877,11 +887,21 @@ fn open(
     forced: bool,
 ) -> bool {
     // `airlock/open`: a bolted airlock with a cycling pump asks the pump instead.
-    if door.cycle_pump.is_some() && door.state == DoorState::Closed && door.locked && !door.welded {
+    if door.cycle_pump.is_some()
+        && door.state == DoorState::Closed
+        && door.locked
+        && !door.welded
+        && door.seal.is_none()
+    {
         door.cycle_requested = true;
         return false;
     }
-    if door.state != DoorState::Closed || door.locked || door.welded || emag_stuck(door) {
+    if door.state != DoorState::Closed
+        || door.locked
+        || door.welded
+        || door.seal.is_some()
+        || emag_stuck(door)
+    {
         return false;
     }
     if door.kind == DoorKind::Airlock
@@ -1077,6 +1097,20 @@ fn door_clicks(
         }) {
             continue;
         }
+        // `airlock/item_interaction` with a pneumatic seal (`crate::devices::door_seal`).
+        if door.kind == DoorKind::Airlock
+            && let Some(seal) = held.filter(|&h| {
+                items.get(h).is_ok_and(|i| {
+                    ss13_mapload::fidelity::is_under(&i.path, crate::devices::door_seal::DOOR_SEAL)
+                })
+            })
+        {
+            let (client, mob) = (click.client, click.mob);
+            commands.queue(move |world: &mut World| {
+                crate::devices::door_seal::start_seal(world, client, mob, entity, seal);
+            });
+            continue;
+        }
         // `password/try_to_activate_door`: a closed one asks for its password.
         if door.password_lock {
             if door.state == DoorState::Closed && !door.is_operating() {
@@ -1107,6 +1141,14 @@ fn door_clicks(
             tool,
             electrified.contains(entity),
         ) {
+            continue;
+        }
+        // `door/attack_hand` -> `try_remove_seal`.
+        if held.is_none() && door.seal.is_some() {
+            let (client, mob) = (click.client, click.mob);
+            commands.queue(move |world: &mut World| {
+                crate::devices::door_seal::start_unseal(world, client, mob, entity);
+            });
             continue;
         }
         let access = inventory.and_then(|i| i.access(&cards));
@@ -1365,14 +1407,16 @@ fn crush(world: &mut World, door: Entity, tiles: &[TilePos]) {
 /// it; an unpowered airlock that is not moving opens or closes at once with
 /// `BYPASS_DOOR_CHECKS` (`airlockforced`), a powered one resists. True when `target` is an
 /// airlock (the click is handled).
-// shortcut: no electronics removal (open panel, `security_level` 0) or door seals. A forcing
+// shortcut: no electronics removal (open panel, `security_level` 0). A forcing
 // tool on a powered airlock is [`force_open_act`].
 pub fn crowbar_act(world: &mut World, client: Entity, target: Entity) -> bool {
     let warning = with_door(world, target, |door, appearance, ctx| {
         if door.kind != DoorKind::Airlock {
             return (None, false);
         }
-        let text = if door.locked {
+        let text = if door.seal.is_some() {
+            "Сначала снимите герметизатор!"
+        } else if door.locked {
             "The airlock's bolts prevent it from being forced!"
         } else if door.welded {
             "It's welded, it won't budge!"
@@ -1496,7 +1540,12 @@ pub fn force_open_act(world: &mut World, actor: crate::tools::Actor, target: Ent
     let Some(door) = world.get::<Door>(target) else {
         return false;
     };
-    if door.kind != DoorKind::Airlock || door.locked || door.welded || !door.has_power(powered) {
+    if door.kind != DoorKind::Airlock
+        || door.locked
+        || door.welded
+        || door.seal.is_some()
+        || !door.has_power(powered)
+    {
         return false;
     }
     let (closed, allowed) = (door.state == DoorState::Closed, jaws_may_force(&path, door));
@@ -1550,7 +1599,7 @@ fn complete_pry(world: &mut World, mob: Entity, target: Entity, tool: Entity) {
     }
     // `Some(alert needed)` once it opened.
     let Some(alert) = with_door(world, target, |door, appearance, ctx| {
-        if door.kind != DoorKind::Airlock || door.locked || door.welded {
+        if door.kind != DoorKind::Airlock || door.locked || door.welded || door.seal.is_some() {
             return (None, false);
         }
         let opened = ctx.open_bypass(door, appearance);
@@ -1621,7 +1670,7 @@ fn toggle_weld(door: &mut Door, from: bool) -> bool {
 
 /// tg `/obj/machinery/door/airlock/try_to_weld_secondary` (right click with a lit welder):
 /// 4 s, then the airlock is welded shut or unwelded. True when `target` is an airlock.
-// shortcut: no left-click repair (`try_to_weld`): doors have no integrity yet; no door seals.
+// shortcut: no left-click repair (`try_to_weld`): doors have no integrity yet.
 pub fn welder_act_secondary(world: &mut World, actor: crate::tools::Actor, target: Entity) -> bool {
     use ss13_shared::chat::Span;
     let Some(door) = world.get::<Door>(target) else {
@@ -1807,7 +1856,8 @@ impl DoorCtx<'_> {
 
     /// tg windoor `open(BYPASS_DOOR_CHECKS)`: a closed door opens whatever else holds it.
     pub fn open_bypass(&self, door: &mut Door, appearance: &mut Appearance) -> bool {
-        if door.state != DoorState::Closed {
+        // `airlock/open` refuses a sealed airlock even with `BYPASS_DOOR_CHECKS`.
+        if door.state != DoorState::Closed || door.seal.is_some() {
             return false;
         }
         start_opening(door, appearance, self.now, false);
@@ -1976,6 +2026,7 @@ pub(crate) fn test_airlock(req_access: &[&str]) -> Door {
         emagging: false,
         crush: false,
         password_lock: false,
+        seal: None,
     }
 }
 
@@ -2104,6 +2155,10 @@ mod tests {
             wires: None,
         };
         assert!(!open(&mut door, &mut look, 0.0, false, env, false));
+        // A sealed one neither, even forced by the open wire.
+        let mut door = airlock(&[]);
+        door.seal = Some(Entity::PLACEHOLDER);
+        assert!(!open(&mut door, &mut look, 0.0, false, env, true));
         let mut door = airlock(&[]);
         door.state = DoorState::Open;
         door.safe = false;

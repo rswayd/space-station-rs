@@ -47,6 +47,8 @@
 //! | 1743 | `devices::beacons::attack_self` (tracking beacons toggle, choice beacons list) |
 //! | 1745 | `science::teleportation::hand_tele::attack_self` (the hand tele's destination list, the locator's window) |
 //! | 1750 | `radiation::geiger_attack_self` |
+//! | 1753 | `devices::table_clock::interact` (repairing a broken clock) |
+//! | 1763 | `devices::broadcast_camera::attack_self` (live or offline) |
 //! | 1800 | `explosions::sources::c4_attack_self` |
 //! | 1897 | `science::relics::attack_self` (a strange object: the hint, or its power) |
 //! | 1900 | `assemblies::server::attack_self` |
@@ -138,6 +140,7 @@
 //! | 1400 | `chem::item_interaction` |
 //! | 1450 | `mining::hand_interaction` (modkits, point cards, gibtonite ore) |
 //! | 1491 | `gun_attachments::attach` (a seclite, suppressor, bayonet or screwdriver on the gun) |
+//! | 1493 | `devices::table_clock::attackby` (a heavy item smashes the clock) |
 //! | 1195 | `modpc::programs::station` (a program disk into the computer in the other hand) |
 //! | 1500 | `guns::item_interaction` |
 //! | 1600 | `guns::attack_hand` (empty active hand) |
@@ -263,6 +266,7 @@
 //! | 200 | `antag::syndie_items::item_interaction` |
 //! | 251 | `weapons` whetstone (`sharpener`), shield bash (`block::bash`) |
 //! | 219 | `clothing::chameleon::scanner_click` (the chameleon scanner on a human, or a turf with one) |
+//! | 233 | `devices::hand_items::held_on_target` (the slapper on a mob or table, the stealing hand) |
 //! | 277 | `science::gizmo` (a gizmo spawned after map load gets its puzzle; never takes the click) |
 //! | 289 | `machine_wires::held_on_target` (panel screwdrivers of machines, cyborgs, mechs and radios; wire tools on an open panel, MOD or radio) |
 //! | 300 | `emag::interact_with_atom` (left click) |
@@ -396,6 +400,7 @@
 //! | 4283 | `gifts::wrap_parcel` (wrapping paper on a parcel) |
 //! | 4291 | `gun_attachments::attach` (a seclite, bayonet or screwdriver on a gun lying around) |
 //! | 4300 | `tables::item_interaction` |
+//! | 4313 | `devices::table_clock::attackby` (a heavy item smashes the clock) |
 //! | 4400 | `science::experi_scanner::pre_attack` (not on living mobs) |
 //! | 4460 | `closets::kinds::held_on_target` (large crates, multitools on abandoned crates) |
 //! | 4491 | `weapons::rip_and_tear::pre_attack` (a wielded sledgehammer on a wall) |

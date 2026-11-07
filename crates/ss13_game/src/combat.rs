@@ -316,6 +316,8 @@ fn melee(
                 // Food is eaten out of combat mode (`crate::food`), hits in it.
                 || (crate::food::is_food(&item.path) && !combat.0)
                 || crate::crayons::interacts_with_mobs(&item.path, combat.0)
+                // Hand gestures slap, steal or do nothing (`crate::devices::hand_items`).
+                || crate::devices::hand_items::interacts_with_mobs(&item.path)
         }) {
             continue;
         }

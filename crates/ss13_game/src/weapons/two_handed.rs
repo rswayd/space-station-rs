@@ -102,6 +102,8 @@ pub const SPECS: &[Spec] = &[
     required("/obj/item/kirbyplants", Force::Fixed(10.0, 10.0)),
     required("/obj/item/v8_engine", Force::Fixed(5.0, 5.0)),
     required("/obj/item/flatpack", Force::Same),
+    // `binoculars.dm`: their wield is `crate::devices::binoculars::on_wield`.
+    spec("/obj/item/binoculars", Force::Fixed(8.0, 12.0), false),
 ];
 
 /// The spec of an item type.
@@ -290,6 +292,7 @@ pub fn wield(world: &mut World, client: Option<Entity>, mob: Entity, item: Entit
             format!("Вы хватаете {name} двумя руками."),
         );
     }
+    crate::devices::binoculars::on_wield(world, mob, item, true);
     play(world, mob, th.spec.wieldsound);
     true
 }
@@ -305,6 +308,7 @@ pub fn unwield(world: &mut World, item: Entity, client: Option<Entity>, can_drop
         refresh(world, item, th, false);
     }
     crate::weapons::energy::on_wield(world, item, false);
+    crate::devices::binoculars::on_wield(world, wielded.mob, item, false);
     if world.get_entity(wielded.offhand).is_ok() {
         world.despawn(wielded.offhand);
     }
