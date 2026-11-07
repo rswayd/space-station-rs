@@ -26,6 +26,7 @@
 //! announcer's `ANNOUNCER_*` sound where tg names one, else its random alert sound.
 
 pub mod anomalies;
+pub mod aurora_caelus;
 pub mod brain_trauma;
 pub mod brand_intelligence;
 pub mod bureaucratic_error;
@@ -50,6 +51,7 @@ pub mod meteors;
 pub mod mice_migration;
 pub mod nightshift;
 pub mod object_rain;
+pub mod portal_storm;
 pub mod processor_overload;
 pub mod radiation_leak;
 pub mod radiation_storm;
@@ -268,6 +270,24 @@ pub fn controls() -> Vec<EventControl> {
             3,
             meteors::make_stray,
         )),
+        c(meteors::SANDSTORM, 10, 35.0, 35, 3, meteors::make_sandstorm),
+        // Weight 0, `max_occurrences` 0: admin only.
+        unfakeable(c(
+            meteors::SANDSTORM_CLASSIC,
+            0,
+            0.0,
+            0,
+            0,
+            meteors::make_sandstorm_classic,
+        )),
+        unfakeable(c(
+            meteors::DARK_MATTEOR,
+            0,
+            20.0,
+            0,
+            0,
+            meteors::make_dark_matteor,
+        )),
         unfakeable(c(
             camera_failure::NAME,
             100,
@@ -351,6 +371,23 @@ pub fn controls() -> Vec<EventControl> {
         ),
         c(fake_virus::NAME, 20, 20.0, 0, 20, fake_virus::make),
         c(wisdom_cow::NAME, 20, 20.0, 0, 1, wisdom_cow::make),
+        c(aurora_caelus::NAME, 1, 5.0, 0, 1, aurora_caelus::make),
+        c(
+            portal_storm::SYNDICATE,
+            2,
+            30.0,
+            15,
+            20,
+            portal_storm::make_syndicate,
+        ),
+        c(
+            portal_storm::NARSIE,
+            0,
+            20.0,
+            0,
+            0,
+            portal_storm::make_narsie,
+        ),
         // `max_occurrences = 0` without `ENABLE_NIGHT_SHIFTS` (off in BandaStation's config).
         unfakeable(c(nightshift::NAME, 2, 0.5, 0, 0, nightshift::make)),
         needs(
@@ -529,6 +566,7 @@ impl Plugin for EventsServerPlugin {
                     heart_attack::process_heart_attacks,
                     wizard::curse_joiners,
                     wizard::madden_joiners,
+                    aurora_caelus::process_fades,
                 )
                     .chain(),
             )

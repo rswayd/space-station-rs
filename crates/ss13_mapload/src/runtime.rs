@@ -929,6 +929,9 @@ pub const EVENT_RUNTIME_TYPES: &[&str] = &[
     "/mob/living/basic/cockroach/glockroach",
     "/mob/living/basic/cockroach/glockroach/mobroach",
     "/mob/living/basic/cockroach/hauberoach",
+    "/mob/living/basic/construct/artificer/hostile",
+    "/mob/living/basic/construct/juggernaut/hostile",
+    "/mob/living/basic/construct/wraith/hostile",
     "/mob/living/basic/cow/wisdom",
     "/mob/living/basic/goose",
     "/mob/living/basic/lightgeist",
@@ -939,6 +942,9 @@ pub const EVENT_RUNTIME_TYPES: &[&str] = &[
     "/mob/living/basic/snail",
     "/mob/living/basic/spider/giant",
     "/mob/living/basic/spider/maintenance",
+    "/mob/living/basic/trooper/syndicate/melee/space",
+    "/mob/living/basic/trooper/syndicate/melee/space/stormtrooper",
+    "/mob/living/basic/trooper/syndicate/ranged/space",
     "/mob/living/basic/viscerator",
     "/obj/effect/decal/cleanable/blood/splatter",
     "/obj/effect/decal/cleanable/blood/xeno",
@@ -954,6 +960,7 @@ pub const EVENT_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/stack/ore/iron",
     "/obj/item/stack/ore/plasma",
     "/obj/item/stack/ore/uranium",
+    "/obj/singularity/dark_matter",
 ];
 
 /// `ss13_game::science::exodrone`: what exploration sites, traders and loot generators give.

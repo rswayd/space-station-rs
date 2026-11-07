@@ -25,6 +25,7 @@ use crate::construction::{path_of, spawn_obj, spawn_stack, turf_at};
 use crate::explosions::ex_act::{ex_act_movable, ex_act_tile, ex_act_turf};
 use crate::explosions::{Explosion, Severity, explosion};
 use crate::obj_damage::is_under;
+use crate::security_level::SecLevel;
 
 pub const WAVE_NORMAL: &str = "Meteor Wave: Normal";
 pub const WAVE_THREATENING: &str = "Meteor Wave: Threatening";
@@ -33,6 +34,9 @@ pub const WAVE_MEATY: &str = "Meteor Wave: Meaty";
 pub const DUST_STORM: &str = "Major Space Dust";
 pub const SPACE_DUST: &str = "Space Dust: Minor";
 pub const STRAY_METEOR: &str = "Stray Meteor";
+pub const SANDSTORM: &str = "Sandstorm: Directional";
+pub const SANDSTORM_CLASSIC: &str = "Sandstorm: Classic";
+pub const DARK_MATTEOR: &str = "Dark Matt-eor";
 
 const ICON: &str = "icons/obj/meteor.dmi";
 /// `TRANSITIONEDGE + MAP_EDGE_PAD`.
@@ -48,6 +52,10 @@ const OBJ_LAYER: f32 = 3.0;
 const CLUSTER_COUNT: usize = 8;
 
 const ORE_IRON: &str = "/obj/item/stack/ore/iron";
+/// `EVENT_PROTECTED` (`area_flags`): arrivals, spared by space sand.
+const EVENT_PROTECTED: u32 = 1 << 9;
+/// `/obj/singularity/dark_matter`: what a spent dark matt-eor leaves.
+pub const DARK_MATTER_SINGULARITY: &str = "/obj/singularity/dark_matter";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Special {
@@ -64,6 +72,10 @@ enum Special {
     Emp,
     /// 20% to explode on a bump.
     Tunguska,
+    /// `meteor/sand/ram_turf`: spares hard walls (`hardness <= 25`) and `EVENT_PROTECTED` areas.
+    Sand,
+    /// Sets red alert while it flies; missing the station restores the level.
+    DarkMatteor,
 }
 
 /// One `/obj/effect/meteor` subtype.
@@ -222,8 +234,31 @@ static TUNGUSKA: MeteorKind = MeteorKind {
     ..kind("/obj/effect/meteor/tunguska", "tunguska meteor", "flaming")
 };
 
+static SAND: MeteorKind = MeteorKind {
+    hits: 2,
+    hitpwr: Severity::Light,
+    dropamt: 0,
+    drops: &[],
+    special: Special::Sand,
+    ..kind("/obj/effect/meteor/sand", "space sand", "dust")
+};
+// shortcut: no warp ring or quantum sparks around the dark matt-eor (visual only).
+static DARK_MATTEOR_KIND: MeteorKind = MeteorKind {
+    hits: 15,
+    hitpwr: Severity::Devastate,
+    dropamt: 1,
+    drops: &[DARK_MATTER_SINGULARITY],
+    signature: "темной материи",
+    special: Special::DarkMatteor,
+    ..kind(
+        "/obj/effect/meteor/dark_matteor",
+        "dark matt-eor",
+        "dark_matter",
+    )
+};
+
 /// Every ported meteor type, for lookups by path.
-static KINDS: [&MeteorKind; 14] = [
+static KINDS: [&MeteorKind; 16] = [
     &DUST,
     &MEDIUM,
     &BIG,
@@ -238,6 +273,8 @@ static KINDS: [&MeteorKind; 14] = [
     &MEATY,
     &MEATY_XENO,
     &TUNGUSKA,
+    &SAND,
+    &DARK_MATTEOR_KIND,
 ];
 
 type Wave = &'static [(&'static MeteorKind, i64)];
@@ -278,6 +315,8 @@ pub static METEORS_CATASTROPHIC: Wave = &[
 ];
 pub static MEATEORS: Wave = &[(&MEATY, 5), (&MEATY_XENO, 1)];
 pub static METEORS_DUST: Wave = &[(&DUST, 1)];
+pub static METEORS_SANDSTORM: Wave = &[(&SAND, 45), (&DUST, 5)];
+static DARK_MATTEORS: Wave = &[(&DARK_MATTEOR_KIND, 1)];
 pub static METEORS_STRAY: Wave = &[
     (&MEDIUM, 15),
     (&BIG, 10),
@@ -528,6 +567,122 @@ impl RoundEvent for StrayMeteor {
     }
 }
 
+/// `/datum/round_event/sandstorm`: the side picked on the announcement, then 15 sand meteors
+/// from it every tick.
+struct Sandstorm {
+    /// `GLOB.cardinals` index (`None` until announced: then from random sides, as tg's null
+    /// `direction`).
+    start_side: Option<usize>,
+}
+
+/// `Sandstorm: Directional` with its side preset (the admin's `listed_options` choice).
+pub fn make_sandstorm_from(side: Option<usize>) -> Box<dyn RoundEvent> {
+    Box::new(Sandstorm { start_side: side })
+}
+
+pub fn make_sandstorm(_: &mut World) -> Box<dyn RoundEvent> {
+    make_sandstorm_from(None)
+}
+
+/// The side's name in the announcement (north, south, east, west).
+pub fn sandstorm_side_text(side: usize) -> &'static str {
+    ["носа", "кормы", "правого борта", "левого борта"][side.min(3)]
+}
+
+impl RoundEvent for Sandstorm {
+    fn setup(&mut self, world: &mut World, ev: &mut EventState) {
+        let rng = &mut world.resource_mut::<EventRng>().0;
+        ev.start_when = rng.range(70, 90) as u32;
+        ev.end_when = rng.range(110, 140) as u32;
+        ev.announce_when = 1;
+    }
+
+    fn announce(&mut self, world: &mut World, _: &mut EventState, _: bool) {
+        let side = *self
+            .start_side
+            .get_or_insert_with(|| world.resource_mut::<EventRng>().0.range(0, 3) as usize);
+        let text = format!(
+            "Большая волна космической пыли приближается с {} станции. Удар ожидается в \
+             ближайшие две минуты. Всем сотрудникам рекомендуется по возможности оказать помощь \
+             в ремонте и уменьшении ущерба.",
+            sandstorm_side_text(side)
+        );
+        super::priority_announce(world, "Экстренное оповещение о столкновении", &text);
+    }
+
+    fn tick(&mut self, world: &mut World, _: &mut EventState) {
+        spawn_meteors_from(world, 15, METEORS_SANDSTORM, self.start_side);
+    }
+}
+
+/// `/datum/round_event/sandstorm_classic`: 10 dust meteors from random sides every tick for
+/// ~5 minutes, no announcement.
+struct SandstormClassic;
+
+pub fn make_sandstorm_classic(_: &mut World) -> Box<dyn RoundEvent> {
+    Box::new(SandstormClassic)
+}
+
+impl RoundEvent for SandstormClassic {
+    fn setup(&mut self, _: &mut World, ev: &mut EventState) {
+        ev.start_when = 1;
+        ev.end_when = 150;
+        ev.announce_when = 0;
+        // tg announces nothing (no `announce()` override).
+    }
+
+    fn tick(&mut self, world: &mut World, _: &mut EventState) {
+        spawn_meteors(world, 10, METEORS_DUST);
+    }
+}
+
+/// `/datum/round_event/dark_matteor`: one dark matt-eor 10 tiles further in, at the first
+/// living mob on a station level standing on ground (none: by the opposite edge).
+struct DarkMatteorEvent;
+
+pub fn make_dark_matteor(_: &mut World) -> Box<dyn RoundEvent> {
+    Box::new(DarkMatteorEvent)
+}
+
+/// The dark matt-eor's target: a living mob on a station level, not over a groundless turf.
+pub fn dark_matteor_target(world: &mut World) -> Option<TilePos> {
+    let levels = station_levels(world);
+    let mut q = world.query_filtered::<&TilePos, With<crate::health::Health>>();
+    let mobs: Vec<TilePos> = q
+        .iter(world)
+        .copied()
+        .filter(|p| levels.contains(&p.z))
+        .collect();
+    mobs.into_iter().find(|&pos| {
+        !turf_at(world, pos)
+            .and_then(|t| world.get::<ss13_mapload::DmTurf>(t))
+            .is_some_and(|t| t.groundless)
+    })
+}
+
+impl RoundEvent for DarkMatteorEvent {
+    fn start(&mut self, world: &mut World, _: &mut EventState) {
+        let target = dark_matteor_target(world);
+        spawn_meteor_from(world, DARK_MATTEORS, None, target, 10);
+    }
+
+    fn announce(&mut self, world: &mut World, _: &mut EventState, _: bool) {
+        super::priority_announce_sound(
+            world,
+            "Метеоры",
+            &format!(
+                "Тревога. Помехи в работе метеоритных спутников привлекли темный маттериор. \
+                 Объект стремительно приближается к {}. Приготовьтесь к столкновению",
+                super::station_name(world)
+            ),
+            AIRRAID,
+        );
+    }
+}
+
+/// The Dark Matt-eor announcement's sound.
+const AIRRAID: &str = "sound/announcer/alarm/airraid.ogg";
+
 // --- Spawning -----------------------------------------------------------------------------
 
 /// tg `spawn_meteors(number, meteor_types)`.
@@ -540,15 +695,37 @@ pub fn spawn_meteors(world: &mut World, number: usize, wave: Wave) {
 /// tg `spawn_meteor(meteor_types)`: up to 10 tries for a space start tile on a random side of
 /// a random station level, flying to the opposite side.
 pub fn spawn_meteor(world: &mut World, wave: Wave) -> Option<Entity> {
+    spawn_meteor_from(world, wave, None, None, 0)
+}
+
+/// tg `spawn_meteors(number, meteor_types, direction)`: every meteor from the side `side`.
+pub fn spawn_meteors_from(world: &mut World, number: usize, wave: Wave, side: Option<usize>) {
+    for _ in 0..number {
+        spawn_meteor_from(world, wave, side, None, 0);
+    }
+}
+
+/// tg `spawn_meteor(meteor_types, direction, target, distance_from_edge)`: the start side is
+/// `side` (`GLOB.cardinals` index) or random, the goal `target` or by the opposite edge.
+pub fn spawn_meteor_from(
+    world: &mut World,
+    wave: Wave,
+    side: Option<usize>,
+    target: Option<TilePos>,
+    distance_from_edge: i32,
+) -> Option<Entity> {
     let levels: Vec<u16> = station_levels(world).collect();
     for _ in 0..10 {
         let mut rng = world.resource_mut::<EventRng>();
-        let side = rng.0.range(0, 3) as usize;
+        let side = side.unwrap_or_else(|| rng.0.range(0, 3) as usize);
         let &z = rng.pick(&levels)?;
         let size = world.resource::<SpatialIndex>().level_size(z)?;
         let rng = &mut world.resource_mut::<EventRng>().0;
-        let start = debris_start(side, z, size, rng);
-        let goal = debris_finish(side, z, size, rng);
+        let start = debris_start_from(side, z, size, distance_from_edge, rng);
+        let goal = match target {
+            Some(target) => Some(target),
+            None => debris_finish(side, z, size, rng),
+        };
         let (Some(start), Some(goal)) = (start, goal) else {
             continue;
         };
@@ -565,21 +742,33 @@ pub fn spawn_meteor(world: &mut World, wave: Wave) -> Option<Entity> {
 pub(super) fn debris_start(
     side: usize,
     z: u16,
+    size: (u32, u32),
+    rng: &mut ss13_mapload::spawner::Rng,
+) -> Option<TilePos> {
+    debris_start_from(side, z, size, 0, rng)
+}
+
+/// tg `spaceDebrisStartLoc(start_side, Z, distance_from_edge)`.
+pub(super) fn debris_start_from(
+    side: usize,
+    z: u16,
     (w, h): (u32, u32),
+    distance: i32,
     rng: &mut ss13_mapload::spawner::Rng,
 ) -> Option<TilePos> {
     let (w, h) = (w as i32, h as i32);
+    let edge = EDGE + distance;
     let (x, y) = match side {
         0 => (
-            rng.range(i64::from(EDGE), i64::from(w - EDGE)) as i32,
-            h - EDGE,
+            rng.range(i64::from(edge), i64::from(w - edge)) as i32,
+            h - edge,
         ),
-        1 => (rng.range(i64::from(EDGE), i64::from(w - EDGE)) as i32, EDGE),
+        1 => (rng.range(i64::from(edge), i64::from(w - edge)) as i32, edge),
         2 => (
-            w - EDGE,
-            rng.range(i64::from(EDGE), i64::from(h - EDGE)) as i32,
+            w - edge,
+            rng.range(i64::from(edge), i64::from(h - edge)) as i32,
         ),
-        _ => (EDGE, rng.range(i64::from(EDGE), i64::from(h - EDGE)) as i32),
+        _ => (edge, rng.range(i64::from(edge), i64::from(h - edge)) as i32),
     };
     (x >= 1 && y >= 1 && x <= w && y <= h).then(|| TilePos::new(x, y, z))
 }
@@ -649,7 +838,43 @@ pub fn spawn_meteor_at(
             },
         ))
         .id();
+    if kind.special == Special::DarkMatteor {
+        // `dark_matteor/Initialize`: red alert, remembering a lower level.
+        let level = crate::security_level::current(world);
+        let previous = (level < SecLevel::Red).then_some(level);
+        if previous.is_some() {
+            crate::security_level::set_level(world, SecLevel::Red, true);
+        }
+        world.entity_mut(entity).insert(DarkMatteor { previous });
+    }
     Some(entity)
+}
+
+/// A flying dark matt-eor: the security level it found below red.
+#[derive(Component, Debug)]
+pub struct DarkMatteor {
+    pub previous: Option<SecLevel>,
+}
+
+/// `moved_off_z()`: the meteor is gone without going off. A dark matt-eor missed: the level it
+/// raised goes back (not from delta) and the station hears of its luck.
+fn moved_off_z(world: &mut World, e: Entity) {
+    let missed = world.get::<DarkMatteor>(e).map(|d| d.previous);
+    world.despawn(e);
+    let Some(previous) = missed else {
+        return;
+    };
+    if let Some(previous) = previous
+        && crate::security_level::current(world) != SecLevel::Delta
+    {
+        crate::security_level::set_level(world, previous, true);
+    }
+    super::priority_announce(
+        world,
+        "Отслеживание метеора",
+        "Ого. Темный Маттеор действительно промахнулся мимо вашей станции. Не забудьте \
+         поблагодарить своего священника за его явное божественное вмешательство.",
+    );
 }
 
 // --- Flight -------------------------------------------------------------------------------
@@ -683,11 +908,11 @@ fn step(world: &mut World, e: Entity) {
     let next = meteor.towards.next(pos);
     if next == pos {
         // At the goal already (`home` reached): the loop has nothing left to do.
-        world.despawn(e);
+        moved_off_z(world, e);
         return;
     }
     if !world.resource::<SpatialIndex>().in_bounds(next) {
-        world.despawn(e);
+        moved_off_z(world, e);
         return;
     }
     if kind.special != Special::Banana
@@ -732,7 +957,7 @@ fn moved(world: &mut World, e: Entity, pos: TilePos) {
         get_hit(world, e);
     }
     if world.get::<Meteor>(e).is_some_and(|m| m.dest == pos) {
-        world.despawn(e);
+        moved_off_z(world, e);
     }
 }
 
@@ -800,8 +1025,51 @@ fn ram_turf(world: &mut World, e: Entity, pos: TilePos, kind: &MeteorKind) {
             }
             get_hit(world, e);
         }
+        Special::Sand if sand_spares(world, pos) => {}
         _ => ex_act_tile(world, pos, kind.hitpwr),
     }
+}
+
+/// `meteor/sand/ram_turf`: too weak for walls with `hardness <= 25`; never in an
+/// `EVENT_PROTECTED` area (arrivals).
+pub fn sand_spares(world: &World, pos: TilePos) -> bool {
+    let hard_wall = turf_at(world, pos)
+        .and_then(|t| path_of(world, t))
+        .and_then(|p| wall_hardness(&p))
+        .is_some_and(|h| h <= 25);
+    hard_wall || crate::teleport::area_flags(world, pos).1 & EVENT_PROTECTED != 0
+}
+
+/// `/turf/closed/wall` `hardness` (`code/game/turfs/closed/wall/`), `None` off walls.
+pub fn wall_hardness(path: &str) -> Option<u32> {
+    const HARDNESS: &[(&str, u32)] = &[
+        ("/turf/closed/wall/r_wall/plastitanium", 25),
+        ("/turf/closed/wall/r_wall", 10),
+        ("/turf/closed/wall/concrete/reinforced", 15),
+        ("/turf/closed/wall/concrete", 30),
+        ("/turf/closed/wall/mineral/diamond", 5),
+        ("/turf/closed/wall/mineral/abductor", 10),
+        ("/turf/closed/wall/mineral/plastitanium", 25),
+        ("/turf/closed/wall/mineral/gold", 65),
+        ("/turf/closed/wall/mineral/silver", 65),
+        ("/turf/closed/wall/mineral/bananium", 70),
+        ("/turf/closed/wall/mineral/plasma", 70),
+        ("/turf/closed/wall/mineral/sandstone", 50),
+        ("/turf/closed/wall/mineral/wood/nonmetal", 67),
+        ("/turf/closed/wall/mineral/wood", 80),
+        ("/turf/closed/wall/mineral/bamboo", 80),
+        ("/turf/closed/wall/mineral/snow", 80),
+        ("/turf/closed/wall/mineral/iron", 60),
+    ];
+    if !is_under(path, "/turf/closed/wall") {
+        return None;
+    }
+    Some(
+        HARDNESS
+            .iter()
+            .find(|(root, _)| is_under(path, root))
+            .map_or(40, |&(_, h)| h),
+    )
 }
 
 /// `get_hit()`: out of hits, it drops its debris and goes off.
@@ -899,6 +1167,43 @@ mod tests {
         assert_eq!(total(METEORS_NORMAL), 21);
         assert_eq!(total(METEORS_CATASTROPHIC), 127);
         assert_eq!(total(METEORS_STRAY), 229);
+    }
+
+    #[test]
+    fn sand_and_dark_matteor_follow_tg() {
+        assert_eq!(SAND.hits, 2);
+        assert_eq!(SAND.dropamt, 0, "sand drops nothing");
+        assert_eq!(METEORS_SANDSTORM.iter().map(|(_, n)| n).sum::<i64>(), 50);
+        let dark = kind_by_path("/obj/effect/meteor/dark_matteor").unwrap();
+        assert_eq!((dark.hits, dark.hitpwr), (15, Severity::Devastate));
+        assert_eq!(dark.drops, &[DARK_MATTER_SINGULARITY]);
+        assert_eq!(sandstorm_side_text(0), "носа");
+        assert_eq!(sandstorm_side_text(3), "левого борта");
+    }
+
+    #[test]
+    fn wall_hardness_spares_reinforced_walls_from_sand() {
+        assert_eq!(wall_hardness("/turf/closed/wall"), Some(40));
+        assert_eq!(wall_hardness("/turf/closed/wall/r_wall"), Some(10));
+        assert_eq!(
+            wall_hardness("/turf/closed/wall/r_wall/plastitanium"),
+            Some(25)
+        );
+        assert_eq!(
+            wall_hardness("/turf/closed/wall/mineral/titanium"),
+            Some(40)
+        );
+        assert_eq!(wall_hardness("/turf/open/floor"), None);
+    }
+
+    #[test]
+    fn distance_from_edge_moves_the_start_in() {
+        let mut rng = ss13_mapload::spawner::Rng::new(3);
+        for _ in 0..50 {
+            let e = debris_start_from(2, 1, (255, 255), 10, &mut rng).unwrap();
+            assert_eq!(e.x, 255 - 23);
+            assert!((23..=232).contains(&e.y));
+        }
     }
 
     #[test]

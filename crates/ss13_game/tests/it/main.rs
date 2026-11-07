@@ -107,6 +107,7 @@ mod service;
 mod shuttle;
 mod silicon;
 mod sound;
+mod space_events;
 mod spacemove;
 mod species;
 mod stock_parts;
