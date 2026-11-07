@@ -362,7 +362,20 @@ mod tests {
             ..default()
         };
         world
-            .spawn((atom, dm, Appearance::new(IconStateId(0))))
+            .spawn((
+                atom,
+                dm,
+                Appearance {
+                    icon_state: IconStateId(0),
+                    layer: ss13_shared::Layer::default(),
+                    plane: 0,
+                    color: None,
+                    pixel_offset: [0, 0],
+                    rotation: 0,
+                    overlays: Vec::new(),
+                    mouse_opacity: ss13_shared::MouseOpacity::default(),
+                },
+            ))
             .id()
     }
 

@@ -220,7 +220,7 @@ pub fn possess_vendor(world: &mut World, vendor: Entity) {
         v.squish_damage = SQUISH_DAMAGE;
     }
     world.entity_mut(vendor).insert((
-        Mover::new(MOVE_DELAY),
+        Mover::new(MOVE_DELAY as f32),
         AiController {
             kind: VENDING.to_owned(),
             tree: super::bt::Tree::new(vec![tree()]),

@@ -385,7 +385,7 @@ pub struct PanelOpen(pub bool);
 
 /// Templates of the types construction spawns, built on first use.
 #[derive(Resource, Default)]
-struct BuildTemplates(HashMap<String, Option<Template>>);
+pub(crate) struct BuildTemplates(HashMap<String, Option<Template>>);
 
 pub struct ConstructionServerPlugin;
 

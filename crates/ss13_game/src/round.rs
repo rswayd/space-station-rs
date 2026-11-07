@@ -1920,7 +1920,9 @@ mod tests {
             world
                 .resource::<Messages<OpenUi>>()
                 .iter_current_update_messages()
-                .filter(|o| o.interface == LobbyUi::NAME && o.client == client)
+                .filter(|o| {
+                    o.interface == <LobbyUi as ss13_tgui::UiInterface>::NAME && o.client == client
+                })
                 .count()
         };
         reset_hud(&mut world, client);

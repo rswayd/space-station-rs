@@ -100,7 +100,7 @@ pub fn spawn(world: &mut World, pos: TilePos, v: Visual) -> Option<Entity> {
 }
 
 /// `/obj/effect/temp_visual/telegraphing` subtypes.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Telegraph {
     /// `telegraphing`: the holographic target box, 2 s.
     Box,

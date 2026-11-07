@@ -619,6 +619,8 @@ fn troopers_fight_shoot_in_bursts_or_wait_to_be_hit() {
         let mut w = world();
         w.init_resource::<Time>();
         w.insert_resource(CombatRng(5));
+        // A shot spawns its projectile (`construction::spawn_obj`).
+        w.init_resource::<crate::construction::BuildTemplates>();
         let pawn = basic_mob(
             &mut w,
             5,
