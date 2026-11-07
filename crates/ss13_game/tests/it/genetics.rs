@@ -2,7 +2,8 @@
 //! the subject opens the scanner and steps in, the geneticist closes it from the `DnaConsole`
 //! window, completes the Glowy block base by base with `pulse_gene` (the mutation activates,
 //! the subject glows, the station discovers it), prints a mutator, picks it up and injects
-//! himself (he glows too), and mutadone in his blood takes the mutation away.
+//! himself (he glows too), and mutadone in his blood takes the mutation away. The mutation
+//! effects: the Hulk, a power button, speech, the monkey and the mood aura.
 
 use std::path::{Path, PathBuf};
 
@@ -52,6 +53,11 @@ const TYPES: &str = r##"{
     "/atom/movable": { "parent": "/atom", "declared_vars": { "layer": 3, "anchored": 0 } },
     "/obj": { "parent": "/atom/movable" },
     "/obj/effect": { "parent": "/obj" },
+    "/obj/effect/decal": { "parent": "/obj/effect" },
+    "/obj/effect/decal/cleanable": { "parent": "/obj/effect/decal" },
+    "/obj/effect/decal/cleanable/ash": { "parent": "/obj/effect/decal/cleanable",
+        "declared_vars": { "name": "ash", "icon": { "resource": "i.dmi" },
+        "icon_state": "dnainjector" } },
     "/obj/effect/landmark": { "parent": "/obj/effect", "declared_vars": {
         "icon": { "resource": "l.dmi" }, "icon_state": "x2", "invisibility": 101 } },
     "/obj/effect/landmark/start": { "parent": "/obj/effect/landmark" },
@@ -144,6 +150,7 @@ fn fixture_assets(test: &str) -> PathBuf {
         "/obj/machinery/computer/dna_console",
         "/obj/machinery/dna_scannernew",
         "/obj/item/dnainjector/activator",
+        "/obj/effect/decal/cleanable/ash",
         "/turf/open/floor",
         "/turf/closed/wall",
         "/turf/open/space/basic",
@@ -232,6 +239,19 @@ fn sequence_inject_and_cure() {
     let (gmob, tmob) = (s.players[g].mob, s.players[t].mob);
     assert!(s.try_get::<Dna>(tmob).is_some(), "every human has DNA");
     assert_eq!(s.dna(tmob).mutation_index.len(), 8);
+    // The index holds 8 of the unlocked mutations: make Glowy one of them, two bases missing.
+    {
+        let glow = mutation_id("/datum/mutation/glow").unwrap();
+        let db = s.0.server.world().resource::<SharedDb>().0.clone();
+        let mut seq = db.full_sequences[glow].clone();
+        seq.replace_range(0..2, "XX");
+        let world = s.0.server.world_mut();
+        let mut dna = world.get_mut::<Dna>(tmob).unwrap();
+        if !dna.in_sequence(glow) {
+            dna.mutation_index[0] = (glow, seq.clone());
+            dna.default_mutation_genes[0] = seq;
+        }
+    }
     // A crew member's record DNA is its unique enzymes.
     let records = s
         .server
@@ -384,3 +404,120 @@ fn radiation_storm_mutates_humans() {
         assert!(now.in_sequence(m.id));
     }
 }
+
+#[test]
+fn mutation_effects() {
+    use ss13_chat::accents::{Accent, Accents};
+    use ss13_game::actions::ActionButtons;
+    use ss13_game::genetics::effects::{self, Power};
+    use ss13_game::genetics::{SOURCE_MUTATOR, add_mutation, mutadone, remove_mutation};
+    use ss13_game::human::HumanLook;
+    use ss13_game::species::{Species, SpeciesId};
+
+    let mut s = Station::start("mutation_effects");
+    let (a, b) = (s.players[0].mob, s.players[1].mob);
+    let id = |path: &str| mutation_id(path).unwrap();
+
+    // The Hulk: stun immune, green, shouting, too big for guns; mutadone takes it all away.
+    {
+        let world = s.0.server.world_mut();
+        assert!(add_mutation(
+            world,
+            a,
+            id("/datum/mutation/hulk"),
+            SOURCE_MUTATOR
+        ));
+        assert!(effects::is_hulk(world, a));
+        assert!(effects::chunky_fingers(world, a));
+    }
+    assert!(
+        s.try_get::<ss13_game::status_effects::StunImmunity>(a)
+            .is_some()
+    );
+    assert!(s.get::<HumanLook>(a).hulk);
+    assert_eq!(s.get::<Accents>(a).0, vec![Accent::Hulk]);
+    mutadone(s.0.server.world_mut(), a);
+    assert!(
+        s.try_get::<ss13_game::status_effects::StunImmunity>(a)
+            .is_none()
+    );
+    assert!(!s.get::<HumanLook>(a).hulk);
+    assert!(s.try_get::<Accents>(a).is_none());
+
+    // A power mutation gives its button; casting conjures ash on the floor.
+    let ash_power = id("/datum/mutation/cindikinesis");
+    let pos = *s.get::<TilePos>(a);
+    let on_tile = |s: &Station| {
+        s.0.server
+            .world()
+            .resource::<SpatialIndex>()
+            .on_tile(pos)
+            .len()
+    };
+    let before = on_tile(&s);
+    {
+        let world = s.0.server.world_mut();
+        assert!(add_mutation(world, a, ash_power, SOURCE_MUTATOR));
+        effects::cast(world, a, Power::Cindikinesis);
+    }
+    assert!(
+        s.get::<ActionButtons>(a)
+            .0
+            .iter()
+            .any(|(b, _)| b.id == "mutation:Cindikinesis")
+    );
+    s.run_for(0.2);
+    assert_eq!(on_tile(&s), before + 1, "the ash lies there");
+    remove_mutation(s.0.server.world_mut(), a, ash_power, SOURCE_MUTATOR);
+    assert!(
+        !s.get::<ActionButtons>(a)
+            .0
+            .iter()
+            .any(|(b, _)| b.id.starts_with("mutation:"))
+    );
+
+    // Speech: an accent, and Unintelligible garbles through the impediments.
+    {
+        let world = s.0.server.world_mut();
+        add_mutation(world, b, id("/datum/mutation/swedish"), SOURCE_MUTATOR);
+        add_mutation(
+            world,
+            b,
+            id("/datum/mutation/unintelligible"),
+            SOURCE_MUTATOR,
+        );
+    }
+    assert_eq!(s.get::<Accents>(b).0, vec![Accent::Swedish]);
+    assert!(s.get::<ss13_chat::speech::Impediments>(b).unintelligible);
+    mutadone(s.0.server.world_mut(), b);
+    assert!(
+        s.try_get::<ss13_chat::speech::Impediments>(b)
+            .is_none_or(|i| !i.unintelligible)
+    );
+
+    // The monkey and back, name and all.
+    let name = s.get::<Name>(b).to_string();
+    let race = id("/datum/mutation/race");
+    assert!(effects::make_monkey(s.0.server.world_mut(), b));
+    assert_eq!(s.get::<Species>(b).0, SpeciesId::Monkey);
+    assert_eq!(s.get::<Name>(b).as_str(), "monkey");
+    remove_mutation(s.0.server.world_mut(), b, race, STANDARD);
+    assert_eq!(s.get::<Species>(b).0, SpeciesId::Human);
+    assert_eq!(s.get::<Name>(b).as_str(), name);
+
+    // The comely aura cheers up whoever sees its carrier within 3 tiles.
+    add_mutation(
+        s.0.server.world_mut(),
+        a,
+        id("/datum/mutation/aoe_moodlet/positive"),
+        SOURCE_MUTATOR,
+    );
+    s.run_until("b sees a pretty face", |s| {
+        s.get::<ss13_game::mood::Mood>(b)
+            .events
+            .iter()
+            .any(|e| e.id == "seen_pretty_mutation" && e.mood_change == 3.0)
+    });
+}
+
+const STANDARD: u8 = ss13_game::genetics::STANDARD_SOURCES;

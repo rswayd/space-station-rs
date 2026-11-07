@@ -11,13 +11,13 @@
 Огромная сила (урон рукой, ломает стены), игнор оглушения, неспособность пользоваться оружием, зелёная кожа, крик; варианты — волшебный, сверхчеловек, орк.
 
 - **Код:** [`/datum/mutation/hulk`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/mutations/hulk.dm#L2)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/genetics/effects.rs`: иммунитет к оглушению, удар 15 brute по мобу и крик «WAAAGH!» (раз в 5 с), стены рушатся с `prob(hardness)` (иначе грохот), огнестрел не стреляет (толстые пальцы), зелёные конечности, речь заглавными с «!!», мудлет «hulk», потеря ниже порога крита; только человек с health ≥ 25. Нет варианта бросания за хвост и вариантов волшебный/сверхчеловек/орк (отдельные типы)
 
 ### Активные силы
 Телекинез, телепатия, чтение мыслей (антенна), огненное дыхание, пиро-/крио-/цинди-/гелади-кинез, лазерные глаза, удлинённые руки, хамелеон, паутина, шип-язык, электрический удар рукой, наложение рук, адреналиновый рывок, самоампутация, пустотный магнит, обоняние (выслеживание), дальнее зрение.
 
 - **Код:** [`/datum/mutation/telekinesis`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/mutations/reach.dm#L2), [`/datum/mutation/telepathy`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/mutations/telepathy.dm#L1), [`/datum/mutation/firebreath`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/mutations/fire_breath.dm#L1), [`/datum/mutation/pyrokinesis`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/mutations/hot.dm#L24), [`/datum/mutation/cryokinesis`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/mutations/cold.dm#L23), [`/datum/mutation/laser_eyes`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/mutations/sight.dm#L128), [`/datum/mutation/chameleon`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/mutations/chameleon.dm#L2), [`/datum/mutation/webbing`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/mutations/webbing.dm#L2), [`/datum/mutation/shock`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/mutations/touch.dm#L1), [`/datum/mutation/olfaction`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/mutations/olfaction.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/genetics/effects.rs`: силы мутаций — кнопки действий (`crate::actions`) с перезарядкой и проверкой в момент применения; Геладикинез (снег в руку) и Циндикинез (пепел); нет нацеливаемых (крио/пиро-лучи, огненное дыхание, лазерные глаза), телекинеза, телепатии и остальных, хромосом энергоэффективности
 
 ### Пассивные полезные мутации
 Адаптации к холоду, жару, давлению, ночное зрение, рентгеновское и тепловое зрение, сила, изоляция, светимость/антисвет, регенерация конечностей, поедание камней, ускоренный метаболизм, неудержимость, умный, совместимость с имплантами.
@@ -35,16 +35,16 @@
 Нервозность (заикание), невнятность, шведский, гопник, Элвис, укурок, средневековый, поросячья латынь, «wacky», «heckacious».
 
 - **Код:** [`/datum/mutation/nervousness`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/mutations/speech.dm#L6), [`/datum/mutation/unintelligible`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/mutations/speech.dm#L155), [`/datum/mutation/swedish`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/mutations/speech.dm#L174), [`/datum/mutation/chav`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/mutations/speech.dm#L187), [`/datum/mutation/medieval`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/mutations/speech.dm#L245)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_chat/src/accents.rs` (применяются в `handle_say` на месте `COMSIG_MOB_SAY`), `crates/ss13_game/src/genetics/effects.rs`: нервозность (заикание 20 с), невнятность (`Impediments.unintelligible`), шведский, гопник, Элвис (с танцами), средневековый (часть словаря), поросячья латынь; нет wacky (шрифт sans), heckacious и укурка (язык beachbum)
 
 ### Мутация вида (обезьяна)
 Мутация `race` превращает в обезьяну и обратно (ключевая мутация генетиков).
 
 - **Код:** [`/datum/mutation/race`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/mutations/body.dm#L239)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/genetics/effects.rs`: `race` превращает в обезьяну (вид, имя «monkey», исходные вид и имя запоминаются) и обратно при потере (не у мёртвых); мгновенно, без анимации; блок не всегда в индексе ДНК
 
 ### Мутации настроения окружающих
 Аура, поднимающая или понижающая настроение соседей.
 
 - **Код:** [`/datum/mutation/aoe_moodlet`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/mutations/aoe_moodlet.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/genetics/effects.rs`: Extremely Unsightly/Comely раз в 2 с дают живым в пределах видимости 3 тайлов мудлет ∓3 (∓1 при скрытом лице) на 2 минуты; нет зеркал, газет и личностей

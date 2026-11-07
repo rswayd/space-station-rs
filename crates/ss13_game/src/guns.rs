@@ -671,6 +671,10 @@ fn try_fire(
         );
         return true;
     }
+    // `can_use_guns`: `TRIGGER_GUARD_NORMAL` and `TRAIT_CHUNKYFINGERS` (the Hulk).
+    if crate::genetics::effects::chunky_fingers(world, mob) {
+        return true;
+    }
     if let Err(fail) = pin_auth(world, &dm, &gun, mob) {
         if gun.pin.is_empty() {
             let name = name_of(world, gun_entity);

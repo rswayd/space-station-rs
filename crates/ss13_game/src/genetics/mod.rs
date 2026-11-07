@@ -8,12 +8,13 @@
 //! mutations outside the sequence, which cost stability (`update_instability`); at 0 the
 //! genetic breakdown (`dna_melt`) ends in a meltdown after 60 s unless the mutations go.
 //! Mutadone removes them.
-// shortcut: a starter set of mutations (see [`MUTATIONS`]); no monkey (`/datum/mutation/race`,
-// whose block tg always adds), unique features, chromosomes, combined recipes, power actions or
-// mutation overlays. Cold and heat adaptation carry their tg numbers but no effect yet (body
+// shortcut: a starter set of mutations (see [`MUTATIONS`], their effects in [`effects`]); the
+// monkey block (`/datum/mutation/race`) is not always in the index as tg adds it; no unique
+// features, chromosomes, combined recipes or mutation overlays. Cold and heat adaptation carry their tg numbers but no effect yet (body
 // temperature damage has no resist traits). Add each with the system it needs.
 
 pub mod console;
+pub mod effects;
 
 use std::sync::Arc;
 
@@ -56,8 +57,10 @@ pub const MINOR_NEGATIVE: u8 = 4;
 
 /// `POSITIVE_INSTABILITY_*` / `NEGATIVE_STABILITY_*` (`_mutations.dm`).
 const POSITIVE_INSTABILITY_MINI: i32 = 5;
+const POSITIVE_INSTABILITY_MINOR: i32 = 10;
 const POSITIVE_INSTABILITY_MODERATE: i32 = 25;
 const POSITIVE_INSTABILITY_MAJOR: i32 = 35;
+const NEGATIVE_STABILITY_MINI: i32 = -10;
 const NEGATIVE_STABILITY_MODERATE: i32 = -30;
 const NEGATIVE_STABILITY_MAJOR: i32 = -40;
 
@@ -69,6 +72,23 @@ pub enum Effect {
     Epilepsy,
     /// `TRAIT_RESISTLOWPRESSURE` + `TRAIT_RESISTHIGHPRESSURE` (read by `crate::breath`).
     PressureAdaptation,
+    /// `/datum/mutation/hulk` ([`effects`]).
+    Hulk,
+    /// `/datum/mutation/nervousness`: stutters now and then.
+    Nervousness,
+    /// `/datum/mutation/unintelligible`: `TRAIT_UNINTELLIGIBLE_SPEECH` (read by
+    /// `crate::medical::traumas::refresh`).
+    Unintelligible,
+    /// The speech mutations of `ss13_chat::accents`.
+    Accent(ss13_chat::accents::Accent),
+    /// A `power_path` action.
+    Power(effects::Power),
+    /// `/datum/mutation/race`: the monkey.
+    Race,
+    /// `/datum/mutation/aoe_moodlet` (`positive`: the comely one).
+    Aura {
+        positive: bool,
+    },
     /// Numbers only (see the module shortcut).
     None,
 }
@@ -203,6 +223,172 @@ pub const MUTATIONS: &[MutationDef] = &[
         gain: "Стены вдруг исчезли!",
         lose: "",
         effect: Effect::None,
+    },
+    MutationDef {
+        path: "/datum/mutation/hulk",
+        name: "Hulk",
+        desc: "Слабо изученный геном, заставляющий мышцы своего носителя увеличиваться, подавлять \
+               речь и придавать болезненное состояние коже.",
+        quality: POSITIVE,
+        instability: POSITIVE_INSTABILITY_MAJOR,
+        difficulty: 16,
+        locked: true,
+        gain: "Ты чувствуешь боль в мышцах!",
+        lose: "",
+        effect: Effect::Hulk,
+    },
+    MutationDef {
+        path: "/datum/mutation/geladikinesis",
+        name: "Geladikinesis",
+        desc: "Позволяет обладателю генома сконцентрировать влагу и холод в снег.",
+        quality: POSITIVE,
+        instability: POSITIVE_INSTABILITY_MINOR,
+        difficulty: 10,
+        locked: false,
+        gain: "Ты ощущаешь холод в руках.",
+        lose: "",
+        effect: Effect::Power(effects::Power::Geladikinesis),
+    },
+    MutationDef {
+        path: "/datum/mutation/cindikinesis",
+        name: "Cindikinesis",
+        desc: "Позволяет обладателю мутации сконцентрировать рядом находящееся тепло в кучу \
+               пепла. Вау. Очень интересно.",
+        quality: POSITIVE,
+        instability: POSITIVE_INSTABILITY_MINOR,
+        difficulty: 10,
+        locked: true,
+        gain: "Твоя рука кажется тёплой.",
+        lose: "",
+        effect: Effect::Power(effects::Power::Cindikinesis),
+    },
+    MutationDef {
+        path: "/datum/mutation/nervousness",
+        name: "Nervousness",
+        desc: "Обладатель данного генома заикается.",
+        quality: MINOR_NEGATIVE,
+        instability: 0,
+        difficulty: 8,
+        locked: false,
+        gain: "Ты нервничаешь.",
+        lose: "",
+        effect: Effect::Nervousness,
+    },
+    MutationDef {
+        path: "/datum/mutation/unintelligible",
+        name: "Unintelligible",
+        desc: "Геном частично подавляет отдел головного мозга, отвечающий за речевой аппарат, \
+               сильно искажая речь.",
+        quality: NEGATIVE,
+        instability: NEGATIVE_STABILITY_MODERATE,
+        difficulty: 8,
+        locked: false,
+        gain: "Ты чувствуешь себя неспособным сформировать предложение!",
+        lose: "Твой ум, кажется более ясным.",
+        effect: Effect::Unintelligible,
+    },
+    MutationDef {
+        path: "/datum/mutation/swedish",
+        name: "Swedish",
+        desc: "Ужасающая мутация, котороя происходит из далёкого прошлого. Считается, что она \
+               была полностью искоренена после 2037.",
+        quality: MINOR_NEGATIVE,
+        instability: 0,
+        difficulty: 8,
+        locked: false,
+        gain: "Ты ощущаешь себя шведом, что бы это ни значило.",
+        lose: "Ты перестаешь ощущать себя шведом.",
+        effect: Effect::Accent(ss13_chat::accents::Accent::Swedish),
+    },
+    MutationDef {
+        path: "/datum/mutation/chav",
+        name: "Chav",
+        desc: "Неизвестно.",
+        quality: MINOR_NEGATIVE,
+        instability: 0,
+        difficulty: 8,
+        locked: false,
+        gain: "Ты ощущаешь себя мудаком, не так ли?",
+        lose: "Ты перестаешь ощущать себя грубым и нахальным.",
+        effect: Effect::Accent(ss13_chat::accents::Accent::Chav),
+    },
+    MutationDef {
+        path: "/datum/mutation/elvis",
+        name: "Elvis",
+        desc: "Ужасающая мутация, названная в честь нулевого пациента.",
+        quality: MINOR_NEGATIVE,
+        instability: 0,
+        difficulty: 8,
+        locked: false,
+        gain: "Ты хорошо себя чувствуешь, куколка.",
+        lose: "Ты чувствуешь, что немного меньше разговоров не помешало бы.",
+        effect: Effect::Accent(ss13_chat::accents::Accent::Elvis),
+    },
+    MutationDef {
+        path: "/datum/mutation/medieval",
+        name: "Medieval",
+        desc: "Ужасная мутация, происходящая из далёкого прошлого, считается, что была \
+               распространённым геномом во всей старой Европе.",
+        quality: MINOR_NEGATIVE,
+        instability: 0,
+        difficulty: 8,
+        locked: false,
+        gain: "Ты чувствуешь себя стремящимся к Святому Граали!",
+        lose: "Ты больше не стремишься к чему-либо.",
+        effect: Effect::Accent(ss13_chat::accents::Accent::Medieval),
+    },
+    MutationDef {
+        path: "/datum/mutation/piglatin",
+        name: "Pig Latin",
+        desc: "Историки говорят, что в 2020 году человечество полностью говорило на этом \
+               мистическом языке.",
+        quality: MINOR_NEGATIVE,
+        instability: 0,
+        difficulty: 8,
+        locked: false,
+        gain: "Ты ощущаешь себя мамонтом.",
+        lose: "Кажется, это прошло.",
+        effect: Effect::Accent(ss13_chat::accents::Accent::PigLatin),
+    },
+    MutationDef {
+        path: "/datum/mutation/race",
+        name: "Monkified",
+        desc: "Странный геном который, по мнению общества, отличает обезьяну от человека.",
+        quality: NEGATIVE,
+        instability: NEGATIVE_STABILITY_MAJOR,
+        difficulty: 8,
+        locked: true,
+        gain: "Ты чувствуешь необычно по-обезьяни.",
+        lose: "Ты чувствуешь себя как раньше.",
+        effect: Effect::Race,
+    },
+    MutationDef {
+        path: "/datum/mutation/aoe_moodlet",
+        name: "Extremely Unsightly",
+        desc: "The subject's body - and especially their face - is unnaturally unsightly, \
+               causing a negative reaction from those around them. Wearing a mask will dampen \
+               the effect.",
+        quality: NEGATIVE,
+        instability: NEGATIVE_STABILITY_MINI,
+        difficulty: 12,
+        locked: false,
+        gain: "You feel pretty in your own way.",
+        lose: "You feel less self-conscious.",
+        effect: Effect::Aura { positive: false },
+    },
+    MutationDef {
+        path: "/datum/mutation/aoe_moodlet/positive",
+        name: "Extremely Comely",
+        desc: "The subject's body - and especially their face - is unnaturally comely, causing \
+               a positive reaction from those around them. Wearing a mask will dampen the \
+               effect.",
+        quality: POSITIVE,
+        instability: POSITIVE_INSTABILITY_MINOR,
+        difficulty: 12,
+        locked: false,
+        gain: "You feel pretty in your own way.",
+        lose: "You feel less self-conscious.",
+        effect: Effect::Aura { positive: true },
     },
 ];
 
@@ -479,7 +665,17 @@ impl Plugin for GeneticsServerPlugin {
         });
         app.init_resource::<DiscoveredMutations>()
             .add_observer(attach_dna)
-            .add_systems(Update, mutations_life);
+            .add_systems(Update, mutations_life)
+            .add_systems(
+                Update,
+                effects::hulk_clicks
+                    .after(crate::security::security_clicks)
+                    .before(crate::combat::MeleeSystems),
+            )
+            .add_systems(
+                Update,
+                effects::trigger_powers.in_set(ss13_tgui::server::UiSystems::Handle),
+            );
         console::build(app);
     }
 }
@@ -511,6 +707,13 @@ fn tell(world: &mut World, mob: Entity, span: Span, text: &str) {
 pub fn add_mutation(world: &mut World, mob: Entity, id: usize, sources: u8) -> bool {
     // `can_mutate()`: an organic body that is not `TRAIT_GENELESS`.
     if !crate::species::can_mutate(world, mob) {
+        return false;
+    }
+    // `on_acquiring` of the mutation itself fails: nothing is added.
+    let had = world
+        .get::<Dna>(mob)
+        .is_some_and(|d| d.get_mutation(id).is_some());
+    if !had && !effects::can_acquire(world, mob, MUTATIONS[id].effect) {
         return false;
     }
     let db = db(world);
@@ -691,6 +894,7 @@ fn on_acquiring(world: &mut World, mob: Entity, id: usize) {
         Span::Danger
     };
     tell(world, mob, span, def.gain);
+    effects::on_gain(world, mob, def.effect);
     if def.effect == Effect::Glow {
         // `get_glow_color`: red, blue, yellow, green, purple, orange.
         const COLORS: [[u8; 3]; 6] = [
@@ -729,6 +933,7 @@ fn on_losing(world: &mut World, mob: Entity, id: usize) {
     if def.effect == Effect::Glow {
         world.entity_mut(mob).remove::<Optics>();
     }
+    effects::on_lose(world, mob, def.effect);
 }
 
 /// Whether `mob` has a mutation with this effect.
@@ -777,7 +982,8 @@ fn mutations_life(world: &mut World, mut next: Local<f64>) {
                 Effect::Cough if conscious && spt_prob(rng, 2.5, secs) => cough(world, mob),
                 // `epilepsy/on_life`: `SPT_PROB(0.5)` seizure, `Unconscious(200)`.
                 Effect::Epilepsy if conscious && spt_prob(rng, 0.5, secs) => seizure(world, mob),
-                _ => {}
+                Effect::Cough | Effect::Epilepsy => {}
+                effect => effects::on_life(world, mob, effect, secs),
             }
         }
         if let Some(until) = melt

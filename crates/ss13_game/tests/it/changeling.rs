@@ -146,6 +146,7 @@ fn human_states() -> Vec<(String, String)> {
                     uniform: Some(ASSISTANT_UNIFORM.into()),
                     shoes: Some(ASSISTANT_SHOES.into()),
                     husk,
+                    hulk: false,
                     missing: 0,
                     robotic: 0,
                     eyeless: false,

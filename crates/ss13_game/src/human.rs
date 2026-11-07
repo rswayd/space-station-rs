@@ -248,6 +248,8 @@ pub struct HumanLook {
     /// tg `TRAIT_HUSK` (`HUSKED_BURN`): limbs husked (`huskify_image`), no hair
     /// (`head_hair_and_lips.dm`) and no eyes (`update_body_parts`).
     pub husk: bool,
+    /// tg `LIMB_COLOR_HULK`: the limbs drawn `COLOR_DARK_LIME` (the Hulk mutation).
+    pub hulk: bool,
     /// Amputated bodyparts, bits by [`crate::zone::BodyZone::index`] (tg draws no limb there).
     pub missing: u8,
     /// Robotic prosthetics, bits by [`crate::zone::BodyZone::index`]: drawn from
@@ -343,6 +345,7 @@ impl AppearancePrefs {
             uniform: None,
             shoes: None,
             husk: false,
+            hulk: false,
             missing: 0,
             robotic: 0,
             eyeless: false,
@@ -411,6 +414,10 @@ pub fn parts(look: &HumanLook) -> Result<Vec<Part>, LookError> {
         LimbColor::Fixed(color) => Some(color),
         LimbColor::Static => None,
     };
+    // `add_color_override(COLOR_DARK_LIME, LIMB_COLOR_HULK)`.
+    if look.hulk && skin.is_some() {
+        skin = Some([0x00, 0xAA, 0x00]);
+    }
     if look.husk {
         skin = Some(HUSK_SKIN);
     }

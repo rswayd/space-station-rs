@@ -563,7 +563,7 @@ fn handle_say(
     bodies: Query<Body>,
     stats: Query<(Entity, &SpeakerStat)>,
     mut emotes_used: Query<&mut EmotesUsed>,
-    (sight, senses, voices, seed, seen_by, sixth_sense, emojis): (
+    (sight, senses, voices, seed, seen_by, sixth_sense, emojis, accents): (
         Query<&SeeInvisible>,
         Senses,
         Query<&VoiceSpan>,
@@ -571,6 +571,7 @@ fn handle_say(
         Query<&VisibleToMobs>,
         Query<Entity, With<SixthSense>>,
         Option<Res<Emojis>>,
+        Query<&crate::accents::Accents>,
     ),
     index: Res<SpatialIndex>,
     listeners: Res<Listeners>,
@@ -870,6 +871,10 @@ fn handle_say(
                 let i = (rng.percent() as usize * ANXIOUS_FILLERS.len()) / 100;
                 message = ANXIOUS_FILLERS[i.min(ANXIOUS_FILLERS.len() - 1)].to_owned();
             }
+        }
+        // `COMSIG_MOB_SAY`: the speech mutations (`crate::accents`).
+        if let Ok(accents) = accents.get(speaker) {
+            message = crate::accents::apply_all(&accents.0, &message, || rng.percent());
         }
         // tg `treat_message`: `TRAIT_UNINTELLIGIBLE_SPEECH`, then the speech status effects.
         if impediments.unintelligible {
