@@ -115,7 +115,7 @@
 //! | 1259 | `clothing::reactive::shell_interaction` (an anomaly core into a reactive armor shell) |
 //! | 1300 | `disposals::mail_interaction` |
 //! | 1350 | `botany::grown_interaction` (log cutting, potato batteries) |
-//! | 1393 | `guns_special::item_interaction` (a syringe or DNA injector into a syringe gun) |
+//! | 1393 | `guns_special::item_interaction` (a syringe or DNA injector into a syringe gun, a grenade into a grenade launcher) |
 //! | 1400 | `chem::item_interaction` |
 //! | 1450 | `mining::hand_interaction` (modkits, point cards, gibtonite ore) |
 //! | 1500 | `guns::item_interaction` |

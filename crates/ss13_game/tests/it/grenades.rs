@@ -376,3 +376,53 @@ fn a_grenade_destroyed_by_a_blast_goes_off() {
     assert!(!exists(&app, bomb));
     assert_eq!(explosions(&app), 2, "the minibomb's own explosion");
 }
+
+#[test]
+fn a_grenade_launcher_throws_its_grenade_which_goes_off_in_1_5_s() {
+    use ss13_game::guns::Aim;
+    use ss13_game::guns_special::{GRENADE_LAUNCHER, grenades as loaded, process_fire};
+    let mut app = server("a_grenade_launcher_throws_its_grenade_which_goes_off_in_1_5_s");
+    let shooter = mob(&mut app, at(3, 6));
+    let launcher = app
+        .world_mut()
+        .spawn(ss13_mapload::DmGun {
+            path: GRENADE_LAUNCHER.into(),
+            ..default()
+        })
+        .id();
+    let bomb = grenade(&mut app, MINIBOMB, at(3, 6));
+    grenades::grenade(app.world_mut(), bomb);
+    ss13_game::storage::put_inside(app.world_mut(), bomb, launcher);
+    app.update();
+    assert_eq!(loaded(app.world(), launcher), vec![bomb]);
+    let aim = Aim::new(shooter, at(7, 6), default());
+    assert!(process_fire(
+        app.world_mut(),
+        shooter,
+        shooter,
+        launcher,
+        aim
+    ));
+    let now = app.world().resource::<Time>().elapsed_secs_f64();
+    let armed = app.world().get::<Armed>(bomb).unwrap().at;
+    assert!(
+        (armed - now - 1.5).abs() < 1e-6,
+        "1.5 s fuse: {armed} at {now}"
+    );
+    assert!(loaded(app.world(), launcher).is_empty());
+    assert!(
+        app.world().get::<TilePos>(bomb).is_some(),
+        "out of the launcher"
+    );
+    // Empty now: the gun clicks instead.
+    assert!(!process_fire(
+        app.world_mut(),
+        shooter,
+        shooter,
+        launcher,
+        aim
+    ));
+    run(&mut app, 1.7);
+    assert!(!exists(&app, bomb));
+    assert_eq!(explosions(&app), 1);
+}

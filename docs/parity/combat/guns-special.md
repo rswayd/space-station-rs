@@ -17,7 +17,7 @@
 Ручной гранатомёт для обычных гранат; бласт-пушка стреляет взрывом бомбы-ТТВ в линию.
 
 - **Код:** [`/obj/item/gun/grenadelauncher`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/projectiles/guns/special/grenade_launcher.dm#L1), [`/obj/item/gun/blastcannon`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/projectiles/guns/special/blastcannon.dm#L12)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 гранатомёт готов (`guns_special`): до 3 гранат (не C4) из другой руки, выстрел бросает первую с тайла стрелка на 30 тайлов и взводит её на 1,5 с; бласт-пушки (TTV) нет
 
 ### Медлуч
 Лечащий луч (ЦК/ЕРТ): постоянно лечит цель, пересечение лучей взрывается.

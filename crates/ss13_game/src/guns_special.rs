@@ -59,6 +59,11 @@ pub const CHEM_GUN_VOLUME: f32 = 90.0;
 pub const CHEM_GUN_DARTS: u32 = 4;
 pub const CHEM_GUN_SYNTH_SECS: f64 = 25.0;
 pub const CHEM_DART_UNITS: f32 = 15.0;
+pub const GRENADE_LAUNCHER: &str = "/obj/item/gun/grenadelauncher";
+const C4: &str = "/obj/item/grenade/c4";
+/// `max_grenades`; the fuse of a launched grenade (`addtimer(detonate, 1.5 SECONDS)`).
+pub const MAX_GRENADES: usize = 3;
+const GRENADE_LAUNCHER_FUSE: f64 = 1.5;
 /// `/obj/item/gun/syringe/blowgun/process_fire`.
 const BLOWGUN_STAMINA: f32 = 20.0;
 const BLOWGUN_OXY: f32 = 20.0;
@@ -90,8 +95,10 @@ pub(crate) fn plugin(app: &mut App) {
     // A syringe or DNA injector onto the syringe gun in the other hand (before
     // `chem::item_interaction` takes the syringe).
     app.add_click_handler(ClickPhase::OtherHand, 1393, |w, c| {
-        c.held
-            .is_some_and(|h| item_interaction(w, c.client, c.mob, h, c.target))
+        c.held.is_some_and(|h| {
+            item_interaction(w, c.client, c.mob, h, c.target)
+                || (is_launcher(w, c.target) && load_grenade(w, c.client, h, c.target))
+        })
     });
     app.add_observer(add_state)
         .add_systems(Update, synthesise_darts);
@@ -373,6 +380,89 @@ pub fn item_interaction(
     if let Some(at) = crate::modpc::pda::turf_of(world, gun) {
         crate::sound::playsound(world, PlaySound::new(at, LOAD_SOUND, 40.0, false));
     }
+    true
+}
+
+/// tg `/obj/item/gun/grenadelauncher/item_interaction`: a grenade (not C4) in, up to
+/// `max_grenades`.
+fn load_grenade(world: &mut World, client: Entity, held: Entity, launcher: Entity) -> bool {
+    let path = path_of(world, held);
+    if is_under(&path, C4) || crate::grenades::grenade(world, held).is_none() {
+        return false;
+    }
+    let count = grenades(world, launcher).len();
+    if count >= MAX_GRENADES {
+        tell(world, client, Span::Warning, "уже заполнен!");
+        return true;
+    }
+    if crate::inventory::no_drop(world, held) {
+        return true;
+    }
+    crate::storage::put_inside(world, held, launcher);
+    tell(
+        world,
+        client,
+        Span::Notice,
+        format!("{} / {MAX_GRENADES} гранат заряжено", count + 1),
+    );
+    true
+}
+
+/// tg `grenades`: the loaded ones, first in first.
+pub fn grenades(world: &World, launcher: Entity) -> Vec<Entity> {
+    world
+        .get::<Stored>(launcher)
+        .map(|s| {
+            s.items()
+                .iter()
+                .copied()
+                .filter(|&e| world.get::<crate::grenades::Grenade>(e).is_some())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn is_launcher(world: &World, gun: Entity) -> bool {
+    world
+        .get::<DmGun>(gun)
+        .is_some_and(|g| is_under(&g.path, GRENADE_LAUNCHER))
+}
+
+/// tg `/obj/item/gun/grenadelauncher/process_fire` (with `can_shoot`): the first grenade is
+/// thrown from the shooter's tile at the target (30 tiles, speed 2) and goes off 1.5 s later.
+/// False for anything else or an empty launcher (it clicks).
+pub fn process_fire(
+    world: &mut World,
+    _client: Entity,
+    mob: Entity,
+    gun: Entity,
+    aim: crate::guns::Aim,
+) -> bool {
+    if !is_launcher(world, gun) {
+        return false;
+    }
+    let Some(&grenade) = grenades(world, gun).first() else {
+        return false;
+    };
+    let Some(&from) = world.get::<TilePos>(mob) else {
+        return true;
+    };
+    let (user, name) = (name_of(world, mob), name_of(world, grenade));
+    crate::security::show(
+        world,
+        from,
+        DEFAULT_MESSAGE_RANGE,
+        ChatChannel::Combat,
+        (Span::Danger, format!("{user} стреляет гранатой!")),
+        &[(mob, Span::Danger, "Вы стреляете из гранатомёта!".to_owned())],
+    );
+    info!(
+        "{mob:?} fired a grenade ({name}) from a grenade launcher from {from:?} at {:?}",
+        aim.target_pos
+    );
+    crate::storage::take_out(world, grenade, from);
+    crate::throw::throw_at(world, grenade, aim.target_pos, 30, 2.0);
+    crate::grenades::arm(world, grenade, None, Some(GRENADE_LAUNCHER_FUSE));
     true
 }
 

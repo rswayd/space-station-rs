@@ -411,6 +411,10 @@ fn try_fire(world: &mut World, client: Entity, mob: Entity, gun_entity: Entity, 
         tell(world, client, Span::Warning, fail);
         return true;
     }
+    // A grenade launcher throws its grenade instead (`crate::guns_special`).
+    if crate::guns_special::process_fire(world, client, mob, gun_entity, aim) {
+        return true;
+    }
     let combat = world.get::<CombatMode>(mob).is_some_and(|c| c.0);
     if ready_round(&dm, &gun).is_none() {
         empty_click(world, client, &dm, gun_entity);
