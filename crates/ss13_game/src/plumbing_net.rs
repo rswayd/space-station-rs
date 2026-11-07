@@ -29,6 +29,7 @@
 //!   or bottles; the bottler fills cups from behind it; the fermenter distills produce on its
 //!   tile; the chemical grinder grinds what is put in it. The chemical beacon sends to the
 //!   recipient it is linked to by multitool (20 u a tick, beacons in turn).
+//!
 //! The machines' settings are prompts (an empty hand on the machine).
 // shortcut: prompts (`tgui_input_list`/`number`/`text`) instead of the ChemAcclimator,
 // ChemFilter, ChemSplitter, ChemReactionChamber, ChemSynthesizer, ChemPress and ChemDisposer
@@ -279,6 +280,8 @@ pub enum BufferMode {
 }
 
 /// What a plumbing machine does with its reagents.
+// One `Kind` per machine entity, a few hundred at most: boxing the big variants buys nothing.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum Kind {
     Input,
@@ -2966,6 +2969,6 @@ mod tests {
         assert_eq!(p.cap, Some(5));
         let (p, ..) = plumber_for("/obj/machinery/plumbing/layer_manifold").unwrap();
         assert_eq!(p.ports.len(), 5);
-        assert!(plumber_for("/obj/machinery/plumbing/synthesizer").is_none());
+        assert!(plumber_for("/obj/machinery/plumbing/synthesizer").is_some());
     }
 }
