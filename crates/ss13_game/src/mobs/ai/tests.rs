@@ -599,3 +599,58 @@ fn hivebot_trees_shoot_or_bite() {
         );
     }
 }
+
+#[test]
+fn troopers_fight_shoot_in_bursts_or_wait_to_be_hit() {
+    let def = ss13_mapload::mobs::MobDef::default();
+    for (sub, hostile) in [
+        ("trooper", true),
+        ("trooper/calls_reinforcements", true),
+        ("trooper/viscerator", true),
+        ("trooper/ranged", true),
+        ("trooper/ranged/burst", true),
+        ("trooper/ranged/shotgunner", true),
+        ("trooper/peaceful", false),
+        ("trooper/ranged/burst/peaceful_burst", false),
+    ] {
+        let built = super::trees::build(&format!("{BASIC}/{sub}"), &def).unwrap();
+        assert_eq!(built.roots.len(), 1, "{sub}");
+        assert_eq!(built.retaliates, !hostile, "{sub}");
+        let mut w = world();
+        w.init_resource::<Time>();
+        w.insert_resource(CombatRng(5));
+        let pawn = basic_mob(
+            &mut w,
+            5,
+            5,
+            "Syndicate",
+            "/mob/living/basic/trooper/syndicate/ranged/smg",
+        );
+        let mut ranged = crate::mobs::ranged::RangedAttacks::new(
+            ss13_mapload::ProjectileData {
+                path: "/obj/projectile/bullet/c45".to_owned(),
+                damage: 30.0,
+                ..Default::default()
+            },
+            3.0,
+        );
+        ranged.burst = 3;
+        w.entity_mut(pawn).insert(ranged);
+        let _victim = mob(&mut w, 8, 5, "neutral");
+        let mut bb = Blackboard::default();
+        let mut tree = Tree::new(built.roots);
+        run(&mut w, pawn, &mut tree, &mut bb, 8);
+        assert_eq!(
+            bb.entity(Key::CurrentTarget).is_some(),
+            hostile,
+            "{sub}: picks the stranger only when hostile"
+        );
+        if hostile && sub.starts_with("trooper/ranged") {
+            let r = w.get::<crate::mobs::ranged::RangedAttacks>(pawn).unwrap();
+            assert!(r.next > 1.0, "{sub}: fired");
+            // `burst_shots` 3: the other two 0.2 s apart.
+            assert_eq!(r.queued.len(), 2, "{sub}");
+            assert!((r.queued[1].0 - r.queued[0].0 - 0.2).abs() < 1e-9);
+        }
+    }
+}

@@ -44,7 +44,7 @@ _«Ремонтные дроны» описано в [../silicon/drones.md](../s
 Гуманоидные NPC руин и шаттлов: Нанотрейзен, Синдикат (штурмовики, мечники), пираты, русские, абдукторы; ближний бой и стрельба.
 
 - **Код:** [`/mob/living/basic/trooper`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/trooper/trooper.dm#L1), [`/mob/living/basic/trooper/syndicate`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/trooper/syndicate.dm#L2), [`/mob/living/basic/trooper/pirate`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/trooper/pirate.dm#L2)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/mobs/troopers.rs`, `crates/ss13_game/src/mobs/ai/trees/troopers.rs`, `crates/ss13_game/src/mobs/ranged.rs`: деревья `trooper` (ближний бой), `trooper/ranged` (1 с, 5 клеток, держит 3-4), `burst`/`shotgunner` (3 с, держат 2-3), мирные `peaceful`/`peaceful_burst` (бьют обидчиков); оружие по типам (гильзы Синдиката, НТ, русских, пиратов, абдукторов: снаряд и дробь гильзы, звук выстрела, очереди `burst_shots` через 0.2 с, без огня по своим), посмертный `loot` и гибы; без вызова подкрепления, ломания препятствий, человеческого облика и трупов-спавнеров, отражения пуль щитом, грабежа пиратов
 
 ### Защитники руин
 Мимики (ящик-мимик, копия предмета/машины), живой пол, кусок плоти, плотяной шар, безумное пианино, скелеты (поселенцы, тамплиеры, ледяные, плазменные шахтёры), стикмены, тёмный волшебник и волшебники, зомби, ИИ-ядро Киберсана.

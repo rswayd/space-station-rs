@@ -19,6 +19,7 @@
 //! - `spawn`: round-start vermin on exposed wires (tg `SSminor_mapping.trigger_migration`).
 //! - `pets` (friends, taming, pet commands, breeding), `farm` (udders, tipping, eggs, chicks),
 //!   `parrot` (speech learning), `critters` (crabs, turtles), `ranged` (shooting mobs),
+//!   `troopers` (NPC soldiers' guns and drops),
 //!   `lavaland` (the mining level's fauna, their abilities and cave population).
 //!   `megafauna` (the lavaland bosses).
 
@@ -33,6 +34,7 @@ pub mod parrot;
 pub mod pets;
 pub mod ranged;
 pub mod spawn;
+pub mod troopers;
 pub mod wisdoms;
 
 use std::collections::HashMap;
@@ -139,7 +141,12 @@ impl Plugin for MobsServerPlugin {
                 Update,
                 (
                     life.before(HealthSystems),
-                    (look_dead_or_alive, defense::squeak_on_cross).after(HealthSystems),
+                    (
+                        look_dead_or_alive,
+                        defense::squeak_on_cross,
+                        ranged::fire_bursts,
+                    )
+                        .after(HealthSystems),
                 ),
             )
             .add_systems(ss13_world::MapInit, attach_mapped)
@@ -303,6 +310,7 @@ fn attach(world: &mut World, entity: Entity) {
     parrot::attach(world, entity, &def);
     critters::attach(world, entity, &def);
     ranged::attach(world, entity, &def);
+    troopers::attach(world, entity, &def);
     lavaland::attach(world, entity, &def);
     megafauna::attach(world, entity, &def);
     set_look(world, entity, false);
@@ -545,6 +553,7 @@ fn death(world: &mut World, mob: Entity, basic: &BasicMob) {
     }
     lavaland::on_death(world, mob, def, pos);
     megafauna::on_death(world, mob, pos);
+    troopers::on_death(world, def, pos);
     // A mouse leaves its corpse as a food item (`/obj/item/food/deadmouse`, `copy_corpse`).
     if ss13_mapload::fidelity::is_under(&def.path, MOUSE_ROOT) {
         if let Some(corpse) = crate::construction::spawn_obj(world, DEAD_MOUSE, pos) {

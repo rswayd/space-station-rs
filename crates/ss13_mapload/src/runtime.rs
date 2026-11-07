@@ -74,6 +74,18 @@ pub const GIFT_TYPES: &[&str] = &[
 /// Constant paths `ss13_game` spawns that no other table of this crate lists: leftovers,
 /// products and printouts of machines, decals, grenade payloads, quirk items, paper kinds.
 pub const GAME_RUNTIME_TYPES: &[&str] = &[
+    // `ss13_game::mobs::troopers`: the casings they fire (prototype lookups) and their loot.
+    "/obj/item/ammo_casing/c9mm",
+    "/obj/item/ammo_casing/c45",
+    "/obj/item/ammo_casing/c46x30mm",
+    "/obj/item/ammo_casing/a223/weak",
+    "/obj/item/ammo_casing/shotgun/buckshot",
+    "/obj/item/ammo_casing/n762",
+    "/obj/item/ammo_casing/energy/laser",
+    "/obj/item/ammo_casing/energy/lasergun",
+    "/obj/item/knife/kitchen",
+    "/obj/item/gun/ballistic/revolver/nagant",
+    "/obj/item/melee/energy/sword/pirate",
     // `sheets`: five rods on a titanium sheet, tanning, stamped cardboard.
     "/obj/item/stack/rods/shuttle/five",
     "/obj/item/stack/sheet/hairlesshide",

@@ -49,6 +49,7 @@ macro_rules! speech {
 }
 
 mod lavaland;
+mod troopers;
 
 pub struct Built {
     pub roots: Vec<Node>,
@@ -105,6 +106,8 @@ pub fn build(path: &str, def: &MobDef) -> Option<Built> {
         built.retaliates = true;
     } else if let Some(lava) = lavaland::build(path) {
         built = lava;
+    } else if let Some(trooper) = troopers::build(path) {
+        built = trooper;
     } else if let Some(generic) = generic(path) {
         built = generic;
         // DM `STOP_MOVING_WHEN_PULLED` of the controller's `ai_traits`.
