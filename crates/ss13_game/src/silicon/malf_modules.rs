@@ -156,9 +156,7 @@ impl Plugin for MalfModulesPlugin {
     }
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 fn button_of(world: &World, id: &str, name: &str, icon: (&str, &str)) -> (ActionButton, f64) {
     let icon = world

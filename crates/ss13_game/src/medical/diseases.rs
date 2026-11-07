@@ -1496,7 +1496,7 @@ pub(crate) fn vomit(
             world,
             mob,
             "Вы пытаетесь блевать, но в желудке ничего нет!",
-            &format!("{} всухую тужится!", ss13_chat::speech::capitalize(&name)),
+            &format!("{} всухую тужится!", ss13_chat::capitalize(&name)),
             Span::Warning,
         );
         if stun {
@@ -1508,7 +1508,7 @@ pub(crate) fn vomit(
         world,
         mob,
         "Вы блюете!",
-        &format!("{} блюет!", ss13_chat::speech::capitalize(&name)),
+        &format!("{} блюет!", ss13_chat::capitalize(&name)),
         Span::Danger,
     );
     if stun {

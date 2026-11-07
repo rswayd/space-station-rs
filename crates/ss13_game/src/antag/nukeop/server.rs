@@ -319,9 +319,7 @@ fn setup_infiltrator(world: &mut World) {
         .insert(crate::shuttle_nav::NavShuttle::new(shuttle.transit));
 }
 
-pub(crate) fn client_of(world: &World, mob: Entity) -> Option<Entity> {
-    world.get::<PlayerMob>(mob).map(|p| p.client)
-}
+pub(crate) use crate::tools::client_of;
 
 pub(crate) fn chat_to(
     world: &mut World,

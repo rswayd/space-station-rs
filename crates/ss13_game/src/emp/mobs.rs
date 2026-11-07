@@ -21,7 +21,6 @@ use crate::inventory::CarriedBy;
 use crate::medical::organs::{Organ, OrganOf, Slot};
 use crate::radio::Radio;
 use crate::security::Baton;
-use crate::server::PlayerMob;
 use crate::silicon::Silicon;
 use crate::silicon::ai::{AiCore, AiEye};
 use crate::silicon::cyborg::Cyborg;
@@ -73,11 +72,7 @@ fn severity_index(severity: u8) -> Option<usize> {
     }
 }
 
-fn tell_mob(world: &mut World, mob: Entity, span: Span, text: &str) {
-    if let Some(client) = world.get::<PlayerMob>(mob).map(|p| p.client) {
-        crate::tools::tell(world, client, span, text);
-    }
-}
+use crate::tools::tell_mob;
 
 /// `emp_damage_modifier` of a cell by its capacity, for devices that only know the
 /// `maxcharge` of their `preload_cell_type`: high cells 3, super and better 5.
@@ -419,7 +414,7 @@ fn radios(world: &mut World, mut cursor: Local<MessageCursor<EmpAct>>) {
                 world,
                 holder,
                 Span::Warning,
-                &format!("{name} перегружается."),
+                format!("{name} перегружается."),
             );
         }
         if let Some(mut radio) = world.get_mut::<Radio>(ev.target) {

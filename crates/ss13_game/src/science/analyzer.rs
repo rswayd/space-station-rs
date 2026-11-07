@@ -86,9 +86,7 @@ pub(crate) fn setup(world: &mut World, e: Entity) {
     world.entity_mut(e).insert(Analyzer::default());
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 fn open_analyzer(
     mut clicks: MessageReader<ClickResolved>,

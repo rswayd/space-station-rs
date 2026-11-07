@@ -269,9 +269,7 @@ pub(crate) fn setup(world: &mut World, e: Entity) {
     world.entity_mut(e).insert(Experimentor::default());
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 fn rng(world: &mut World) -> CombatRng {
     CombatRng(world.get_resource::<CombatRng>().map_or(0, |r| r.0))

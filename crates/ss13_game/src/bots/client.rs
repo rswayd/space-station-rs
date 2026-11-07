@@ -297,13 +297,7 @@ impl ClientUi for MuleUi {
     }
 }
 
-/// tgui `capitalize`.
-fn capitalize(text: &str) -> String {
-    let mut c = text.chars();
-    c.next()
-        .map(|f| f.to_uppercase().chain(c).collect())
-        .unwrap_or_default()
-}
+use ss13_chat::capitalize;
 
 #[cfg(test)]
 mod tests {

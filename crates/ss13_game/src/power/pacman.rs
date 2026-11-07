@@ -384,9 +384,7 @@ fn pacman_looks(mut pacmans: Query<(&Pacman, &mut Appearance), Changed<Pacman>>)
     }
 }
 
-fn anchored(world: &World, e: Entity) -> bool {
-    world.get::<Anchored>(e).is_some_and(|a| a.0)
-}
+use crate::obj_damage::anchored;
 
 /// An empty hand opens the window of an anchored generator (`INTERACT_ATOM_REQUIRES_ANCHORED`).
 pub fn interact(world: &mut World, client: Entity, mob: Entity, target: Entity) -> bool {
@@ -542,14 +540,7 @@ pub enum PacmanAct {
     HigherPower,
 }
 
-/// `capitalize`.
-fn capitalize(s: &str) -> String {
-    let mut chars = s.chars();
-    chars
-        .next()
-        .map(|c| c.to_uppercase().chain(chars).collect())
-        .unwrap_or_default()
-}
+use ss13_chat::capitalize;
 
 impl ServerUi for PacmanWindow {
     type Source = (Entity, &'static Pacman, Option<&'static Anchored>);

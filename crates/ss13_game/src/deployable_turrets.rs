@@ -225,9 +225,7 @@ impl Plugin for DeployableTurretsPlugin {
     }
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 fn def_of(world: &World, e: Entity) -> Option<TurretDef> {
     def(&crate::construction::path_of(world, e)?)

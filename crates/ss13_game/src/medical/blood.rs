@@ -367,11 +367,7 @@ pub fn bleed_warning(rate: f32) -> Option<(&'static str, f64)> {
     })
 }
 
-fn tell_mob(world: &mut World, mob: Entity, span: Span, text: impl Into<String>) {
-    if let Some(client) = world.get::<PlayerMob>(mob).map(|p| p.client) {
-        tell(world, client, span, text);
-    }
-}
+use crate::tools::tell_mob;
 
 /// tg `bleed(amount)`: blood volume lost, sometimes a splatter on the floor
 /// ([`crate::janitor::bleed_splatter`]).

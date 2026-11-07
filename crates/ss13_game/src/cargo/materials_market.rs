@@ -145,9 +145,7 @@ pub fn setup(world: &mut World, e: Entity) {
     });
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 fn name_of(world: &World, e: Entity) -> String {
     world

@@ -113,12 +113,7 @@ pub fn shatter(world: &mut World, e: Entity) -> bool {
     true
 }
 
-fn capitalize(s: &str) -> String {
-    let mut chars = s.chars();
-    chars.next().map_or_else(String::new, |c| {
-        c.to_uppercase().collect::<String>() + chars.as_str()
-    })
-}
+use ss13_chat::capitalize;
 
 /// `on_moved`: a frozen object that comes to rest on an open tile at `T0C` or warmer thaws.
 // Cost: only frozen objects that moved this tick (`Changed<TilePos>`).

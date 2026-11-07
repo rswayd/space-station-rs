@@ -24,7 +24,7 @@
 use bevy::prelude::*;
 use ss13_mapload::DmClothing;
 use ss13_shared::chat::Span;
-use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiParams, UiReject, UiSystems};
+use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiSystems};
 
 use crate::combat::CombatRng;
 use crate::health::{Health, HealthSystems, Stat};
@@ -351,11 +351,7 @@ pub fn eye_protection(world: &World, mob: Entity, worn: i32) -> i32 {
     }
 }
 
-fn tell_mob(world: &mut World, mob: Entity, span: Span, text: &str) {
-    if let Some(client) = world.get::<PlayerMob>(mob).map(|p| p.client) {
-        crate::tools::tell(world, client, span, text);
-    }
-}
+use crate::tools::tell_mob;
 
 /// tg `flash_act(intensity, override_blindness_check, visual = visual, length = length)` of a
 /// living mob (the carbon one for a mob with organs): the flash overlay for `length` seconds,
@@ -551,10 +547,6 @@ impl ServerUi for FullscreenHudUi {
 
     fn data(source: &FullscreenHudData, _: Entity, _: &()) -> FullscreenHudData {
         source.clone()
-    }
-
-    fn parse_act(_: &str, _: &UiParams) -> Result<(), UiReject> {
-        Err(UiReject::UnknownAction)
     }
 }
 

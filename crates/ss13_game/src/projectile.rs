@@ -712,12 +712,7 @@ fn hit_living(world: &mut World, p: &Projectile, name: &str, target: Entity) {
     }
 }
 
-fn capitalize(s: &str) -> String {
-    let mut chars = s.chars();
-    chars.next().map_or_else(String::new, |c| {
-        c.to_uppercase().collect::<String>() + chars.as_str()
-    })
-}
+use ss13_chat::capitalize;
 
 #[cfg(test)]
 mod tests {

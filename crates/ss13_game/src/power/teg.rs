@@ -28,7 +28,7 @@ use ss13_mapload::{DmAtmosDevice, DmAtom, DmName};
 use ss13_shared::appearance::Overlay;
 use ss13_shared::{Appearance, Dir, EMISSIVE_PLANE, TilePos};
 use ss13_tgui::interfaces::teg::{CirculatorData, ThermoElectricGeneratorData};
-use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiParams, UiReject, UiSystems};
+use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiSystems};
 use ss13_tgui::{UiInterface, interfaces::teg::ThermoElectricGeneratorUi};
 
 use super::{Grid, NodeKind, Unpowered};
@@ -200,9 +200,7 @@ fn init_tegs(world: &mut World) {
     }
 }
 
-fn anchored(world: &World, e: Entity) -> bool {
-    world.get::<Anchored>(e).is_some_and(|a| a.0)
-}
+use crate::obj_damage::anchored;
 
 fn dir_of(world: &World, e: Entity) -> u8 {
     world
@@ -546,10 +544,6 @@ impl ServerUi for TegWindow {
         (net, grid, devices): &bevy::ecs::system::SystemParamItem<'_, '_, TegUser>,
     ) -> ThermoElectricGeneratorData {
         ui_data(e, teg, net, grid.as_deref(), devices)
-    }
-
-    fn parse_act(_: &str, _: &UiParams) -> Result<(), UiReject> {
-        Err(UiReject::UnknownAction)
     }
 }
 

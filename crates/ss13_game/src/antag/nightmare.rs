@@ -43,7 +43,7 @@ use ss13_net::server::{ClientToken, Networked};
 use ss13_shared::chat::{ChatChannel, ChatMessage, ChatSegment, Span};
 use ss13_shared::{Appearance, MouseOpacity, Optics, TilePos};
 use ss13_tgui::UiInterface;
-use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiActed, UiParams, UiReject, UiSystems};
+use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiActed, UiSystems};
 
 use super::dynamic::DynamicRng;
 use super::objectives::RoundEnd;
@@ -192,10 +192,6 @@ impl ServerUi for NightmareInfoWindow {
     }
 
     fn data(_: &Nightmare, _: Entity, _: &()) {}
-
-    fn parse_act(_: &str, _: &UiParams) -> Result<(), UiReject> {
-        Err(UiReject::UnknownAction)
-    }
 }
 
 pub struct NightmarePlugin;
@@ -217,9 +213,7 @@ impl Plugin for NightmarePlugin {
     }
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 fn with_rng<R>(world: &mut World, f: impl FnOnce(&mut Rng) -> R) -> R {
     if !world.contains_resource::<DynamicRng>() {

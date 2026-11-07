@@ -27,7 +27,7 @@ use ss13_net::chat::server::SendChat;
 use ss13_net::server::{ClientToken, Networked};
 use ss13_shared::chat::{ChatChannel, ChatMessage, ChatSegment, Span};
 use ss13_tgui::UiInterface;
-use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiActed, UiParams, UiReject, UiSystems};
+use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiActed, UiSystems};
 
 use super::objectives::{Objective, ObjectiveKind, RoundEnd, considered_alive};
 use super::{AntagHudData, AntagHudUi, BrotherInfo, ObjectiveInfo};
@@ -124,10 +124,6 @@ impl ServerUi for HeartbreakerInfoWindow {
     }
 
     fn data(_: &Heartbreaker, _: Entity, _: &()) {}
-
-    fn parse_act(_: &str, _: &UiParams) -> Result<(), UiReject> {
-        Err(UiReject::UnknownAction)
-    }
 }
 
 pub struct ValentinePlugin;
@@ -159,11 +155,7 @@ fn name_of(world: &World, mob: Entity) -> String {
         .unwrap_or_default()
 }
 
-fn chat_to(world: &mut World, mob: Entity, span: Span, text: impl Into<String>) {
-    if let Some(client) = world.get::<PlayerMob>(mob).map(|p| p.client) {
-        tell(world, client, span, text);
-    }
-}
+use crate::tools::tell_mob as chat_to;
 
 /// `is_valid_valentine` over `GLOB.player_list`: living bodies with a player, sorted.
 pub fn valentine_candidates(world: &mut World) -> Vec<Entity> {

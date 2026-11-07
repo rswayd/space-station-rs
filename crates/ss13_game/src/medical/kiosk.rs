@@ -281,11 +281,7 @@ fn pay(world: &mut World, e: Entity) -> bool {
     true
 }
 
-fn tell_mob(world: &mut World, mob: Entity, span: Span, text: &str) {
-    if let Some(client) = world.get::<crate::server::PlayerMob>(mob).map(|p| p.client) {
-        tell(world, client, span, text);
-    }
-}
+use crate::tools::tell_mob;
 
 /// tg's `round(x, 0.001)`.
 fn thousandths(x: f32) -> f32 {
@@ -491,7 +487,7 @@ fn compute_view(world: &mut World, e: Entity) -> MedicalKioskData {
         patient_illness: illness,
         illness_info,
         bleed_status,
-        blood_name: ss13_chat::speech::capitalize(&blood_name),
+        blood_name: ss13_chat::capitalize(&blood_name),
         blood_levels: percent - noise(35),
         blood_status,
         blood_alcohol,

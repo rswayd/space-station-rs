@@ -136,9 +136,7 @@ pub fn frame(world: &mut World, e: Entity) -> Option<CoreFrame> {
     Some(state)
 }
 
-fn anchored(world: &World, e: Entity) -> bool {
-    world.get::<Anchored>(e).is_some_and(|a| a.0)
-}
+use crate::obj_damage::anchored;
 
 fn set_state(world: &mut World, core: Entity, state: CoreState) {
     if let Some(mut f) = world.get_mut::<CoreFrame>(core) {

@@ -12,16 +12,13 @@ use ss13_net::chat::server::SendChat;
 use ss13_shared::chat::{ChatChannel, Span};
 use ss13_shared::{Appearance, TilePos};
 use ss13_tgui::prompt::{PromptAnswer, PromptAnswered, PromptSystems};
-use ss13_tgui::server::{
-    AppTguiExt, ServerUi, UiParams, UiReject, UiSystems, UiWindow, distance_status,
-};
+use ss13_tgui::server::{AppTguiExt, ServerUi, UiSystems, UiWindow, distance_status};
 use ss13_tgui::{UiInterface as _, UiStatus};
 
 use super::library::Book;
 use super::paper::Paper;
 use super::{MarkdownViewerData, MarkdownViewerUi, PaperInput, PaperSheetData, PaperSheetUi};
 use crate::inventory::Inventory;
-use crate::server::PlayerMob;
 
 pub struct ServiceServerPlugin;
 
@@ -346,10 +343,6 @@ impl ServerUi for PaperSheetUi {
     }
 
     fn data(_: (&Paper, Option<&DmName>), _: Entity, _: &()) {}
-
-    fn parse_act(_: &str, _: &UiParams) -> Result<(), UiReject> {
-        Err(UiReject::UnknownAction)
-    }
 }
 
 impl ServerUi for MarkdownViewerUi {
@@ -366,10 +359,6 @@ impl ServerUi for MarkdownViewerUi {
     }
 
     fn data(_: &Book, _: Entity, _: &()) {}
-
-    fn parse_act(_: &str, _: &UiParams) -> Result<(), UiReject> {
-        Err(UiReject::UnknownAction)
-    }
 }
 
 /// tg `paper/ui_status`: readable while held or near (the source has `AlwaysState`, so the
@@ -409,9 +398,7 @@ pub(super) fn item_path(world: &World, e: Entity) -> String {
         .unwrap_or_default()
 }
 
-pub(super) fn client_of(world: &World, mob: Entity) -> Option<Entity> {
-    world.get::<PlayerMob>(mob).map(|p| p.client)
-}
+pub(super) use crate::tools::client_of;
 
 /// The job title of a player's mob (tg `mind.assigned_role.title`).
 pub(super) fn job_title(world: &World, mob: Entity) -> Option<String> {
@@ -503,9 +490,7 @@ pub(super) enum TimerJob {
     CabinetClose { cabinet: Entity },
 }
 
-pub(super) fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+pub(super) use crate::tools::now;
 
 /// `addtimer(job, secs)`.
 pub(super) fn after(world: &mut World, secs: f64, job: TimerJob) {

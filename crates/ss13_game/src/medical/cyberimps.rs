@@ -1707,12 +1707,7 @@ pub fn item_interaction(
     false
 }
 
-fn capitalize(text: &str) -> String {
-    let mut chars = text.chars();
-    chars
-        .next()
-        .map_or_else(String::new, |c| c.to_uppercase().chain(chars).collect())
-}
+use ss13_chat::capitalize;
 
 /// tg `load_organ(organ, user)`.
 fn load(world: &mut World, client: Entity, autosurgeon: Entity, organ: Entity) {

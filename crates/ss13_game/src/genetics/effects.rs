@@ -151,9 +151,7 @@ pub fn can_acquire(world: &World, mob: Entity, effect: Effect) -> bool {
     }
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 /// The effect's own part of `on_acquiring`.
 pub fn on_gain(world: &mut World, mob: Entity, effect: Effect) {

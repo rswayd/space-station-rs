@@ -468,9 +468,7 @@ impl Plugin for LawRackPlugin {
     }
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 fn operational(world: &World, rack: Entity) -> bool {
     world.get::<Unpowered>(rack).is_none()

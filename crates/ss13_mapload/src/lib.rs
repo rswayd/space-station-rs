@@ -516,3 +516,15 @@ pub fn load_template_with(
     total.maps.extend(report.maps);
     Ok(first_z)
 }
+
+/// Reads and parses one generated RON file, naming the path in both errors.
+pub(crate) fn read_ron<T: serde::de::DeserializeOwned>(
+    path: &std::path::Path,
+) -> anyhow::Result<T> {
+    let text = anyhow::Context::with_context(ss13_data::read_to_string(path), || {
+        format!("reading {}", path.display())
+    })?;
+    anyhow::Context::with_context(ron::from_str(&text), || {
+        format!("parsing {}", path.display())
+    })
+}

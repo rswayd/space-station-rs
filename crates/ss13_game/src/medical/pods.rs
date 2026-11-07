@@ -229,15 +229,9 @@ fn is_open(world: &World, pod: Entity) -> bool {
     world.get::<Pod>(pod).is_some_and(|p| p.open)
 }
 
-fn tell_mob(world: &mut World, mob: Entity, span: Span, text: impl Into<String>) {
-    if let Some(client) = world.get::<crate::server::PlayerMob>(mob).map(|p| p.client) {
-        tell(world, client, span, text);
-    }
-}
+use crate::tools::tell_mob;
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 /// `open_machine` (base): the occupant out, undense.
 pub fn open_pod(world: &mut World, pod: Entity) {

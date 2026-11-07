@@ -249,9 +249,7 @@ fn timer_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed<BrigTimer
     }
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 /// The access of the ID `user` holds or wears, read now.
 fn access_of(world: &World, user: Entity) -> Vec<String> {

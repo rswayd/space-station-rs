@@ -243,9 +243,7 @@ pub(super) fn add_flasher(world: &mut World, e: Entity, dm: &DmWallMount) {
     });
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 /// The access of the ID `mob` holds or wears (tg `allowed()` -> `GetID`).
 fn access_of(world: &World, mob: Entity) -> Vec<String> {

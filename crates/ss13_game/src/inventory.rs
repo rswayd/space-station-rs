@@ -32,7 +32,7 @@ use ss13_mapload::{DmAtom, DmClothing, DmItem, DmObj, DmWeight, IconIndex};
 use ss13_net::server::IntentReceived;
 use ss13_shared::protocol::{ClickModifiers, ClientIntent, InventorySlot};
 use ss13_shared::{Appearance, IconStateId, TilePos};
-use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiParams, UiReject, UiSystems};
+use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiSystems};
 use ss13_world::{Density, Mover, SpatialIndex, WorldSystems};
 
 use crate::click::{ClickResolved, ResolveClicks};
@@ -337,11 +337,6 @@ impl ServerUi for InventoryHudUi {
 
     fn data(source: &HudData, _: Entity, _: &()) -> HudData {
         source.clone()
-    }
-
-    /// Slot clicks are `ClientIntent::ClickSlot`; the HUD window takes no acts.
-    fn parse_act(_: &str, _: &UiParams) -> Result<(), UiReject> {
-        Err(UiReject::UnknownAction)
     }
 }
 

@@ -463,11 +463,7 @@ fn refresh_holder_look(world: &mut World, holder: Entity) {
     }
 }
 
-fn tell_mob(world: &mut World, mob: Entity, span: Span, text: impl Into<String>) {
-    if let Some(client) = world.get::<PlayerMob>(mob).map(|p| p.client) {
-        tell(world, client, span, text);
-    }
-}
+use crate::tools::tell_mob;
 
 // ---------------------------------------------------------------------------------------------
 // Implanting

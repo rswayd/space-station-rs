@@ -24,7 +24,7 @@ use ss13_net::server::ClientToken;
 use ss13_shared::chat::{ChatChannel, ChatMessage, ChatSegment, Span};
 use ss13_tgui::interfaces::ru_jobs::job_ru;
 use ss13_tgui::prompt::{Ask, PromptAnswer, PromptAnswered, PromptKind, PromptSystems, ask_world};
-use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiActed, UiParams, UiReject, UiSystems};
+use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiActed, UiSystems};
 
 use super::dynamic::DynamicRng;
 use super::objectives::{Objective, ObjectiveKind, RoundEnd, forge_traitor_objectives};
@@ -480,10 +480,6 @@ impl ServerUi for AntagInfoTraitorUi {
     }
 
     fn data(_: &Traitor, _: Entity, _: &()) {}
-
-    fn parse_act(_: &str, _: &UiParams) -> Result<(), UiReject> {
-        Err(UiReject::UnknownAction)
-    }
 }
 
 /// `/datum/action/antag_info/Trigger`: the panel of the antagonist the button belongs to.

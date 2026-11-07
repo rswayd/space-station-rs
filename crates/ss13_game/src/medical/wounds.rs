@@ -2140,9 +2140,4 @@ pub fn after_hit(world: &mut World, victim: Entity, zone: BodyZone, hit: Hit) {
     }
 }
 
-fn capitalize(text: &str) -> String {
-    let mut chars = text.chars();
-    chars
-        .next()
-        .map_or_else(String::new, |c| c.to_uppercase().chain(chars).collect())
-}
+use ss13_chat::capitalize;

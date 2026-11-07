@@ -48,7 +48,6 @@ use crate::combat::CombatRng;
 use crate::health::Stat;
 use crate::hud::{DOLL_LIMBS, HealthReadout};
 use crate::mood::{Mood, SANITY_LEVEL_CRAZY, SANITY_LEVEL_INSANE};
-use crate::server::PlayerMob;
 
 pub use kinds::{Delusion, Kind, Tier};
 
@@ -144,9 +143,7 @@ impl Plugin for HallucinationPlugin {
     }
 }
 
-pub(crate) fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+pub(crate) use crate::tools::now;
 
 pub(crate) fn rng(world: &mut World) -> CombatRng {
     crate::medical::fork_rng(world)
@@ -526,9 +523,7 @@ pub fn reagents(world: &mut World, mob: Entity, secs: f32) {
 
 // --- What the hallucinator perceives -------------------------------------------------------
 
-pub(crate) fn client_of(world: &World, mob: Entity) -> Option<Entity> {
-    world.get::<PlayerMob>(mob).map(|p| p.client)
-}
+pub(crate) use crate::tools::client_of;
 
 /// `to_chat(hallucinator, ...)`.
 pub(crate) fn tell(world: &mut World, mob: Entity, span: Span, text: &str) {
@@ -876,6 +871,7 @@ pub fn last_name(name: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::server::PlayerMob;
 
     #[test]
     fn adjusting_follows_tg_timed_status_effects() {

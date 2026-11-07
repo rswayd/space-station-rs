@@ -434,14 +434,7 @@ fn functions_section(data: &CommsConsoleData) -> impl Scene + use<> {
     }
 }
 
-/// tgui `capitalize`.
-fn capitalize(s: &str) -> String {
-    let mut chars = s.chars();
-    chars
-        .next()
-        .map(|c| c.to_uppercase().chain(chars).collect())
-        .unwrap_or_default()
-}
+use ss13_chat::capitalize;
 
 /// `Main.tsx` `<Section title="Alert Level">` with green and blue `AlertButton`s: the current
 /// one does nothing, the other asks for the swipe (`SWIPE_NEEDED`) or sets the level at once.

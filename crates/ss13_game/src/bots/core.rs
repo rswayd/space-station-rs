@@ -17,7 +17,7 @@ use crate::health::{DEFAULT_MESSAGE_RANGE, DamageType, Health, Stat};
 use crate::inventory::{IdCard, Inventory};
 use crate::mobs::BasicMob;
 use crate::security::{name_of, show};
-use crate::tools::{ToolKind, tell};
+use crate::tools::ToolKind;
 
 /// `BOT_MODE_*`.
 pub const MODE_ON: u32 = 1 << 0;
@@ -829,11 +829,7 @@ pub fn user_access(world: &World, user: Entity) -> Vec<String> {
         .unwrap_or_default()
 }
 
-fn tell_mob(world: &mut World, mob: Entity, span: Span, text: impl Into<String>) {
-    if let Some(client) = world.get::<crate::server::PlayerMob>(mob).map(|p| p.client) {
-        tell(world, client, span, text);
-    }
-}
+use crate::tools::tell_mob;
 
 /// tg `unlock_with_id`.
 pub fn unlock_with_id(world: &mut World, mob: Entity, user: Entity) {

@@ -63,9 +63,7 @@ pub struct Sparker {
     pub last_spark: f64,
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 pub(super) fn add_mass_driver(world: &mut World, e: Entity, dm: &DmWallMount) {
     let id = super::controls::id_of(dm);

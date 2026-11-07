@@ -3613,12 +3613,7 @@ pub fn drapes(world: &mut World, actor: Actor, mob: Entity) {
     tell(world, actor.client, Span::Notice, text);
 }
 
-fn capitalize(text: &str) -> String {
-    let mut chars = text.chars();
-    chars
-        .next()
-        .map_or_else(String::new, |c| c.to_uppercase().chain(chars).collect())
-}
+use ss13_chat::capitalize;
 
 /// `/datum/status_effect/surgery_prepped/on_move`: four steps standing and the drapes fall off.
 fn drapes_fall_off(

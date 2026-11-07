@@ -405,9 +405,7 @@ impl Plugin for BitrunningServerPlugin {
     }
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 fn path_of(world: &World, e: Entity) -> Option<String> {
     crate::construction::path_of(world, e).or_else(|| world.get::<DmMob>(e).map(|m| m.path.clone()))

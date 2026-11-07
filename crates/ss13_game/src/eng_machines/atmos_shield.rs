@@ -127,9 +127,7 @@ fn powered(world: &World, e: Entity) -> bool {
     world.get::<Unpowered>(e).is_none()
 }
 
-fn anchored(world: &World, e: Entity) -> bool {
-    world.get::<Anchored>(e).is_some_and(|a| a.0)
-}
+use crate::obj_damage::anchored;
 
 fn facing(world: &World, e: Entity) -> Dir {
     world.get::<Facing>(e).map_or(Dir::South, |f| f.0)

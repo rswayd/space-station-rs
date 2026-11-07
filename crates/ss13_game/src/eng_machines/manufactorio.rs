@@ -52,7 +52,7 @@ use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiActed, UiParams, UiRejec
 use super::EngJob;
 use crate::construction::Job;
 use crate::manufactorio_ui::*;
-use crate::obj_damage::{Anchored, is_under, set_icon_state};
+use crate::obj_damage::{is_under, set_icon_state};
 use crate::power::{Grid, NodeKind};
 use crate::science::lathe::{MaterialStore, design_cost};
 use crate::science::techweb::ResearchDb;
@@ -265,9 +265,7 @@ pub fn dir_of(world: &World, e: Entity) -> Dir {
     world.get::<Facing>(e).map_or(Dir::South, |f| f.0)
 }
 
-fn anchored(world: &World, e: Entity) -> bool {
-    world.get::<Anchored>(e).is_some_and(|a| a.0)
-}
+use crate::obj_damage::anchored;
 
 /// tg `turn(dir, 90)`.
 pub fn ccw(dir: Dir) -> Dir {
@@ -1107,9 +1105,7 @@ fn lathe_insert(world: &mut World, machine: Entity, item: Entity) -> bool {
     taken == amount
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 fn set_busy(world: &mut World, machine: Entity, until: Option<f64>) {
     if let Some(mut m) = world.get_mut::<Manufacturing>(machine) {

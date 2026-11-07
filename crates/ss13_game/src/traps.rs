@@ -35,7 +35,7 @@ use crate::click::ExamineClick;
 use crate::construction::Job;
 use crate::health::{DamageType, Health};
 use crate::medical::{name_of, visible};
-use crate::obj_damage::{Anchored, is_under, set_anchored, set_icon_state};
+use crate::obj_damage::{is_under, set_anchored, set_icon_state};
 use crate::status_effects::Incap;
 use crate::tools::{Actor, DoAfter, ToolKind, do_after, tell, tool_of, use_tool};
 
@@ -442,9 +442,7 @@ pub fn wire_layout(from: TilePos, to: TilePos) -> Option<Vec<(TilePos, &'static 
     Some(tiles)
 }
 
-fn anchored(world: &World, e: Entity) -> bool {
-    world.get::<Anchored>(e).is_some_and(|a| a.0)
-}
+use crate::obj_damage::anchored;
 
 /// `post/clear_wire`: both posts unwired, every cable gone.
 pub fn clear_wire(world: &mut World, post: Entity) {

@@ -105,12 +105,7 @@ pub fn reflect_projectile(
     true
 }
 
-fn capitalize(s: &str) -> String {
-    let mut c = s.chars();
-    c.next().map_or_else(String::new, |f| {
-        f.to_uppercase().collect::<String>() + c.as_str()
-    })
-}
+use ss13_chat::capitalize;
 
 #[cfg(test)]
 mod tests {

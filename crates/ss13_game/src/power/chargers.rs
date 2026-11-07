@@ -290,12 +290,7 @@ fn give_back(world: &mut World, mob: Entity, machine: Entity, item: Entity) {
     }
 }
 
-fn capitalize(text: &str) -> String {
-    let mut chars = text.chars();
-    chars.next().map_or_else(String::new, |c| {
-        c.to_uppercase().collect::<String>() + chars.as_str()
-    })
-}
+use ss13_chat::capitalize;
 
 /// One machine tick of every charger, after the APCs (tg `SSmachines` processes machines in
 /// one list; the order among them does not matter for these).

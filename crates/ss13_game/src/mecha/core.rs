@@ -58,7 +58,6 @@ use crate::health::{DamageType, Health, Stat};
 use crate::inventory::{IdCard, Inventory};
 use crate::obj_damage::{Anchored, strip};
 use crate::power::model::Cell;
-use crate::server::PlayerMob;
 use crate::storage::{put_inside, take_out};
 use crate::tools::{Actor, DoAfter, do_after, tell};
 
@@ -569,9 +568,7 @@ pub(crate) fn name_of(world: &World, e: Entity) -> String {
         .unwrap_or_else(|| "что-то".to_owned())
 }
 
-pub(crate) fn client_of(world: &World, mob: Entity) -> Option<Entity> {
-    world.get::<PlayerMob>(mob).map(|p| p.client)
-}
+pub(crate) use crate::tools::client_of;
 
 /// `to_chat(occupants, ...)`.
 pub(crate) fn tell_occupant(world: &mut World, mech: Entity, span: Span, text: impl Into<String>) {

@@ -25,7 +25,7 @@ use ss13_net::chat::server::SendChat;
 use ss13_net::server::{ClientToken, Networked};
 use ss13_shared::chat::{ChatChannel, ChatMessage, ChatSegment, Span};
 use ss13_tgui::UiInterface;
-use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiActed, UiParams, UiReject, UiSystems};
+use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiActed, UiSystems};
 
 use super::dynamic::DynamicRng;
 use super::objectives::{RoundEnd, all_contents, considered_alive};
@@ -246,10 +246,6 @@ impl ServerUi for SurvivalistInfoWindow {
     }
 
     fn data(_: &Survivalist, _: Entity, _: &()) {}
-
-    fn parse_act(_: &str, _: &UiParams) -> Result<(), UiReject> {
-        Err(UiReject::UnknownAction)
-    }
 }
 
 pub struct SurvivalistPlugin;
@@ -272,11 +268,7 @@ fn with_rng<R>(world: &mut World, f: impl FnOnce(&mut World, &mut Rng) -> R) -> 
     out
 }
 
-fn chat_to(world: &mut World, mob: Entity, span: Span, text: impl Into<String>) {
-    if let Some(client) = world.get::<PlayerMob>(mob).map(|p| p.client) {
-        tell(world, client, span, text);
-    }
-}
+use crate::tools::tell_mob as chat_to;
 
 /// `/proc/summon_guns(user, survivor_probability)`: the controller made or its chance set,
 /// then `equip_all_affected`.

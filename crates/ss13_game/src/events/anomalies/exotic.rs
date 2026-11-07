@@ -96,11 +96,7 @@ pub(super) fn on_spawn(world: &mut World, e: Entity, kind: AnomalyKind) {
     }
 }
 
-fn tell_mob(world: &mut World, mob: Entity, span: Span, text: &str) {
-    if let Some(client) = world.get::<PlayerMob>(mob).map(|p| p.client) {
-        crate::tools::tell(world, client, span, text);
-    }
-}
+use crate::tools::tell_mob;
 
 // --- Bioscrambler -------------------------------------------------------------------------
 
@@ -250,7 +246,7 @@ pub fn bioscramble(world: &mut World, mob: Entity, source: &str) -> bool {
             world,
             mob,
             Span::Warning,
-            &format!("Ваша броня поглощает воздействие от {source}!"),
+            format!("Ваша броня поглощает воздействие от {source}!"),
         );
         return false;
     }
@@ -271,7 +267,7 @@ pub fn bioscramble(world: &mut World, mob: Entity, source: &str) -> bool {
             world,
             mob,
             Span::Notice,
-            &format!("Ваше аугментированное тело защищает вас от: {source}!"),
+            format!("Ваше аугментированное тело защищает вас от: {source}!"),
         );
         return false;
     }

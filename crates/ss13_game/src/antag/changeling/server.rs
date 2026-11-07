@@ -722,11 +722,7 @@ impl Plugin for ChangelingPlugin {
     }
 }
 
-fn chat_to(world: &mut World, mob: Entity, span: Span, text: impl Into<String>) {
-    if let Some(client) = world.get::<PlayerMob>(mob).map(|p| p.client) {
-        tell(world, client, span, text);
-    }
-}
+use crate::tools::tell_mob as chat_to;
 
 fn rng_of(world: &mut World, seed: u64) -> Rng {
     world
@@ -2215,10 +2211,6 @@ impl ServerUi for AntagInfoChangelingUi {
             absorbed_dna: ling.absorbed_count,
         }
     }
-
-    fn parse_act(_: &str, _: &UiParams) -> Result<(), UiReject> {
-        Err(UiReject::UnknownAction)
-    }
 }
 
 impl ServerUi for ChangelingHudUi {
@@ -2230,10 +2222,6 @@ impl ServerUi for ChangelingHudUi {
 
     fn data(source: &ChangelingHudData, _: Entity, _: &()) -> ChangelingHudData {
         *source
-    }
-
-    fn parse_act(_: &str, _: &UiParams) -> Result<(), UiReject> {
-        Err(UiReject::UnknownAction)
     }
 }
 

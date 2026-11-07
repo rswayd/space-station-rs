@@ -31,7 +31,7 @@ use ss13_net::server::ClientToken;
 use ss13_shared::chat::{ChatChannel, ChatMessage, ChatSegment, Span};
 use ss13_shared::{Appearance, TilePos};
 use ss13_tgui::UiInterface;
-use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiActed, UiParams, UiReject, UiSystems};
+use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiActed, UiSystems};
 use ss13_world::Mover;
 
 use super::dynamic::DynamicRng;
@@ -115,10 +115,6 @@ impl ServerUi for MorphInfoWindow {
     }
 
     fn data(_: &Morph, _: Entity, _: &()) {}
-
-    fn parse_act(_: &str, _: &UiParams) -> Result<(), UiReject> {
-        Err(UiReject::UnknownAction)
-    }
 }
 
 pub struct MorphPlugin;
@@ -140,9 +136,7 @@ impl Plugin for MorphPlugin {
     }
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 fn with_rng<R>(world: &mut World, f: impl FnOnce(&mut Rng) -> R) -> R {
     if !world.contains_resource::<DynamicRng>() {
@@ -168,11 +162,7 @@ fn visible(world: &mut World, mob: Entity, span: Span, others: String, own: Opti
     }
 }
 
-fn tell_mob(world: &mut World, mob: Entity, span: Span, text: &str) {
-    if let Some(client) = world.get::<PlayerMob>(mob).map(|p| p.client) {
-        tell(world, client, span, text);
-    }
-}
+use crate::tools::tell_mob;
 
 // ---------------------------------------------------------------------------------------------
 // Selection

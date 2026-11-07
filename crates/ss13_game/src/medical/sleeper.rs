@@ -207,11 +207,7 @@ pub fn open(world: &mut World, e: Entity) {
     refresh_view(world, e);
 }
 
-fn tell_mob(world: &mut World, mob: Entity, span: Span, text: &str) {
-    if let Some(client) = world.get::<crate::server::PlayerMob>(mob).map(|p| p.client) {
-        tell(world, client, span, text);
-    }
-}
+use crate::tools::tell_mob;
 
 /// `update_icon_state`: `[base]-open`, `[base]-o` (panel), `[base]`.
 pub fn refresh_look(world: &mut World, e: Entity) {

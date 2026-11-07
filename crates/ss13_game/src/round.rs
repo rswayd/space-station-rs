@@ -1634,10 +1634,6 @@ impl ServerUi for CrewManifestUi {
         };
         crew_manifest(manifest.as_deref(), jobs)
     }
-
-    fn parse_act(_: &str, _: &UiParams) -> Result<(), UiReject> {
-        Err(UiReject::UnknownAction)
-    }
 }
 
 /// `/datum/manifest/ui_data`: the records by department, and per joinable department the open

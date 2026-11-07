@@ -148,9 +148,7 @@ impl Plugin for ShuttleConsoleServerPlugin {
     }
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 fn setup_consoles(world: &mut World) {
     let mut objs = world.query_filtered::<(Entity, &DmObj), With<ss13_world::Mapped>>();

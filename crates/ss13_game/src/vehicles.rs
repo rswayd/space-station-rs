@@ -461,9 +461,7 @@ fn dir_index(dir: Dir) -> Option<usize> {
     }
 }
 
-fn client_of(world: &World, mob: Entity) -> Option<Entity> {
-    world.get::<PlayerMob>(mob).map(|p| p.client)
-}
+use crate::tools::client_of;
 
 fn tell_mob(world: &mut World, mob: Entity, span: Span, text: impl Into<String>) {
     if let Some(client) = client_of(world, mob) {

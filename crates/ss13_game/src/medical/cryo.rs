@@ -188,9 +188,7 @@ pub fn beaker_dose(efficiency: f32, seconds: f32) -> (f32, f32) {
     (TX_QTY / multiplier * seconds, multiplier)
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 /// The cryo cell `mob` is in.
 pub fn holder(world: &World, mob: Entity) -> Option<Entity> {

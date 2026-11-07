@@ -57,7 +57,6 @@ use ss13_world::SpatialIndex;
 use crate::chem::{Chem, Reagents};
 use crate::construction::{Job, path_of, spawn_stack};
 use crate::devices::rhd::PlumbingLayer;
-use crate::obj_damage::Anchored;
 use crate::sound::{PlaySound, playsound};
 use crate::tools::{Actor, Stack, ToolKind, do_after, tell, tool_of, use_stack};
 
@@ -737,9 +736,7 @@ fn reverse(dir: u8) -> u8 {
     }
 }
 
-fn anchored(world: &World, e: Entity) -> bool {
-    world.get::<Anchored>(e).is_some_and(|a| a.0)
-}
+use crate::obj_damage::anchored;
 
 /// The networks: ducts joined by layer, the anchored machines' connects into them, and
 /// machine-to-machine connects (`duct/post_machine_initialize`, `plumbing/enable`). Updates the
@@ -2640,6 +2637,7 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
+    use crate::obj_damage::Anchored;
 
     #[test]
     fn connects_turn_with_the_machine() {

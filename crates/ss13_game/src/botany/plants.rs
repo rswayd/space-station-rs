@@ -48,9 +48,7 @@ fn plants(world: &World) -> std::sync::Arc<Plants> {
     world.resource::<Botany>().0.clone()
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 fn is_grown(path: &str) -> bool {
     is_under(path, GROWN_ROOT) || is_under(path, GROWN_INEDIBLE_ROOT)

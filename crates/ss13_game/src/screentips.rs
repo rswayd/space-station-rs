@@ -99,7 +99,7 @@ mod server {
     use ss13_net::server::{IntentReceived, Interest};
     use ss13_shared::TilePos;
     use ss13_shared::protocol::{ClientIntent, NetId};
-    use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiParams, UiReject, UiSystems};
+    use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiSystems};
 
     use super::*;
     use crate::combat::CombatMode;
@@ -163,11 +163,6 @@ mod server {
 
         fn data(source: &Screentip, _: Entity, _: &()) -> ScreentipData {
             source.0.clone()
-        }
-
-        /// Hovers are `ClientIntent::Hover`, outside the tgui act budget.
-        fn parse_act(_: &str, _: &UiParams) -> Result<(), UiReject> {
-            Err(UiReject::UnknownAction)
         }
     }
 

@@ -87,9 +87,7 @@ impl Plugin for CrusherPlugin {
     }
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 fn path_of(world: &World, e: Entity) -> Option<&str> {
     world.get::<DmItem>(e).map(|i| i.path.as_str())

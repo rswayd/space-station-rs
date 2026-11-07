@@ -173,9 +173,7 @@ fn clear_alert(world: &mut World, mob: Entity, category: AlertCategory) {
     }
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 /// Living, conscious and not incapacitated (tg `!incapacitated` of a living mob).
 fn able(world: &World, mob: Entity) -> bool {

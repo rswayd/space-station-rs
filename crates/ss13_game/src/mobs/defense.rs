@@ -94,14 +94,7 @@ pub(super) fn name_of(world: &World, e: Entity) -> String {
         .unwrap_or_else(|| "Кто-то".to_owned())
 }
 
-/// tg `capitalize`.
-fn capitalize(s: &str) -> String {
-    let mut chars = s.chars();
-    chars
-        .next()
-        .map(|c| c.to_uppercase().chain(chars).collect())
-        .unwrap_or_default()
-}
+use ss13_chat::capitalize;
 
 /// Applies `amount` of `kind` to a living mob and updates its stat; `zone` for carbons.
 pub(super) fn hurt(

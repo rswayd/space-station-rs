@@ -414,9 +414,7 @@ impl Plugin for MidroundPlugin {
     }
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 fn with_rng<R>(world: &mut World, f: impl FnOnce(&mut Rng) -> R) -> R {
     if !world.contains_resource::<DynamicRng>() {

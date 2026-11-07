@@ -245,13 +245,9 @@ pub fn crowbar_blocked(world: &World, e: Entity) -> bool {
     world.get::<ShieldWallGen>(e).is_some_and(ShieldWallGen::on)
 }
 
-fn anchored(world: &World, e: Entity) -> bool {
-    world.get::<Anchored>(e).is_some_and(|a| a.0)
-}
+use crate::obj_damage::anchored;
 
-fn panel_open(world: &World, e: Entity) -> bool {
-    world.get::<PanelOpen>(e).is_some_and(|p| p.0)
-}
+use crate::construction::panel_open;
 
 fn broken(world: &World, e: Entity) -> bool {
     world.get::<Integrity>(e).is_some_and(|i| i.broken)

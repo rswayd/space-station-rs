@@ -77,9 +77,7 @@ pub(super) fn build(app: &mut App) {
     app.add_systems(Update, expire.before(crate::health::HealthSystems));
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 /// `new path(pos)` + `full_setup(original, ...)`. `None` without the prototype or the original.
 pub fn spawn_illusion(

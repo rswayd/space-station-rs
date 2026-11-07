@@ -428,9 +428,7 @@ pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity)
     true
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 /// The chosen option, if the user still can act and has the item at hand (`require_near`).
 fn menu_answers(world: &mut World, mut cursor: Local<MessageCursor<PromptAnswered>>) {

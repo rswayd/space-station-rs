@@ -1262,7 +1262,7 @@ pub fn chat(world: &mut World, mob: Entity, force_radio: bool, specific: Option<
                 ),
                 "Borgs rogue!".to_owned(),
             ];
-            ss13_chat::speech::capitalize(&pick(&mut rng, &options).cloned().unwrap_or_default())
+            ss13_chat::capitalize(&pick(&mut rng, &options).cloned().unwrap_or_default())
         }
         None => {
             let options = [
@@ -1278,7 +1278,7 @@ pub fn chat(world: &mut World, mob: Entity, force_radio: bool, specific: Option<
                 pick_line(&mut rng, "escape"),
                 format!("I'm infected, {}!", pick_line(&mut rng, "infection_advice")),
             ];
-            ss13_chat::speech::capitalize(&pick(&mut rng, &options).cloned().unwrap_or_default())
+            ss13_chat::capitalize(&pick(&mut rng, &options).cloned().unwrap_or_default())
         }
     };
     let text = text.replace("%TARGETNAME%", &target);

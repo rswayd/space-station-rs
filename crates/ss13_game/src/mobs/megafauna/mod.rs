@@ -275,9 +275,7 @@ pub(super) fn schedule(world: &mut World, mob: Entity, at: f64, step: Step) {
     }
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 /// `SSnpcpool` -> `handle_automated_action` of every megafauna whose tick is due.
 // Cost: every 2 s per boss (a handful on the mining level) one scan of the tiles within its

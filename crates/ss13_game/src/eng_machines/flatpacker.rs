@@ -221,9 +221,7 @@ pub(crate) fn refresh_parts(world: &mut World, e: Entity) {
     }
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 fn plain(name: &str) -> String {
     crate::obj_damage::strip(name).to_owned()

@@ -328,9 +328,7 @@ pub(crate) fn setup_tray(world: &mut World, e: Entity, mapload: bool) {
     refresh_tray(world, e);
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 /// `SSmachines` firing every [`MACHINES_WAIT`]: trays whose cycle is due run it.
 // Cost: one pass over the trays (a few dozen on a station) every 2 s; the light of a tray is

@@ -230,9 +230,7 @@ pub(super) fn build(app: &mut App) {
     .add_observer(release_corpse);
 }
 
-pub(super) fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+pub(super) use crate::tools::now;
 
 /// The abilities a mob of type `path` starts with.
 pub(super) fn attach(world: &mut World, mob: Entity, path: &str) {
@@ -395,13 +393,7 @@ pub(super) fn name(world: &World, e: Entity) -> String {
     crate::security::name_of(world, e)
 }
 
-pub(super) fn capitalize(s: &str) -> String {
-    let mut chars = s.chars();
-    chars
-        .next()
-        .map(|c| c.to_uppercase().chain(chars).collect())
-        .unwrap_or_default()
-}
+pub(super) use ss13_chat::capitalize;
 
 /// Living mobs on `pos` other than `except`.
 pub(super) fn living_on(world: &World, pos: TilePos, except: Option<Entity>) -> Vec<Entity> {

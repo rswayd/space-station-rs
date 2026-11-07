@@ -469,14 +469,7 @@ pub(crate) fn plain_name(name: &str) -> &str {
         .trim_start_matches("\\proper ")
 }
 
-/// tg `capitalize`: the first letter upper-cased.
-fn capitalize(text: &str) -> String {
-    let mut chars = text.chars();
-    chars
-        .next()
-        .map(|c| c.to_uppercase().chain(chars).collect())
-        .unwrap_or_default()
-}
+use ss13_chat::capitalize;
 
 pub(crate) fn name_of(world: &World, e: Entity) -> String {
     world

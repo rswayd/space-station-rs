@@ -13,7 +13,7 @@
 use bevy::prelude::*;
 use ss13_mapload::DmGun;
 use ss13_mapload::fidelity::is_under;
-use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiParams, UiReject, UiSystems};
+use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiSystems};
 
 use crate::guns::Gun;
 use crate::hud::{GunHudData, GunHudUi};
@@ -37,10 +37,6 @@ impl ServerUi for GunHudUi {
 
     fn data(source: &GunHudData, _: Entity, _: &()) -> GunHudData {
         source.clone()
-    }
-
-    fn parse_act(_: &str, _: &UiParams) -> Result<(), UiReject> {
-        Err(UiReject::UnknownAction)
     }
 }
 

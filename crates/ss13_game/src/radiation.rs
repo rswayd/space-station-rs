@@ -262,9 +262,7 @@ impl Plugin for RadiationPlugin {
     }
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 fn item_path(world: &World, e: Entity) -> Option<&str> {
     world.get::<DmItem>(e).map(|i| i.path.as_str())

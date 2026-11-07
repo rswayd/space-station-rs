@@ -38,7 +38,6 @@ use ss13_world::SpatialIndex;
 use crate::combat::CombatRng;
 use crate::health::{Health, Stat};
 use crate::inventory::{CarriedBy, Inventory};
-use crate::server::PlayerMob;
 use crate::status_effects::Incap;
 use crate::tools::ToolKind;
 
@@ -241,11 +240,7 @@ fn name_of(world: &World, e: Entity) -> String {
     crate::chem::name_of(world, e)
 }
 
-fn tell_mob(world: &mut World, mob: Entity, span: Span, text: impl Into<String>) {
-    if let Some(client) = world.get::<PlayerMob>(mob).map(|p| p.client) {
-        crate::tools::tell(world, client, span, text);
-    }
-}
+use crate::tools::tell_mob;
 
 /// `/obj/item/grenade/attack_self`: arms it (an armed one ignores it). False for anything that
 /// is not a ported grenade.

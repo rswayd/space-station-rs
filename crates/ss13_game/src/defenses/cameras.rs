@@ -145,9 +145,7 @@ fn init_motion(world: &mut World) {
     }
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 fn path_of(world: &World, e: Entity) -> String {
     crate::construction::path_of(world, e).unwrap_or_default()
@@ -157,9 +155,7 @@ fn is_camera(world: &World, e: Entity) -> bool {
     world.get::<Camera>(e).is_some()
 }
 
-fn panel_open(world: &World, e: Entity) -> bool {
-    world.get::<PanelOpen>(e).is_some_and(|p| p.0)
-}
+use crate::construction::panel_open;
 
 fn held_path(world: &World, item: Entity) -> String {
     world

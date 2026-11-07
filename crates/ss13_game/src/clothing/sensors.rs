@@ -26,7 +26,7 @@ use ss13_shared::TilePos;
 use ss13_shared::chat::Span;
 use ss13_tgui::UiInterface;
 use ss13_tgui::prompt::{Ask, PromptAnswer, PromptAnswered, PromptKind, ask_world};
-use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiParams, UiReject};
+use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi};
 
 use super::{CrewConsoleData, CrewConsoleUi, CrewSensor, CrewVitals};
 use crate::health::{COMBAT_MESSAGE_RANGE, Health, Stat};
@@ -586,11 +586,6 @@ impl ServerUi for CrewWindow {
             sensors: console.sensors.clone(),
             link_allowed: false,
         }
-    }
-
-    /// `select_person` is the AI's tracking link, which is not ported.
-    fn parse_act(_: &str, _: &UiParams) -> Result<(), UiReject> {
-        Err(UiReject::UnknownAction)
     }
 }
 

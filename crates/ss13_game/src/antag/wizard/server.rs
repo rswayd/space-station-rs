@@ -662,10 +662,6 @@ impl ServerUi for WizardInfoWindow {
     }
 
     fn data(_: &Wizard, _: Entity, _: &()) {}
-
-    fn parse_act(_: &str, _: &UiParams) -> Result<(), UiReject> {
-        Err(UiReject::UnknownAction)
-    }
 }
 
 /// A parsed spellbook act.
@@ -931,11 +927,7 @@ fn adopt_items(
 // ---------------------------------------------------------------------------------------------
 // Helpers
 
-fn chat_to(world: &mut World, mob: Entity, span: Span, text: impl Into<String>) {
-    if let Some(client) = world.get::<PlayerMob>(mob).map(|p| p.client) {
-        tell(world, client, span, text);
-    }
-}
+use crate::tools::tell_mob as chat_to;
 
 fn line(world: &mut World, mob: Entity, segments: Vec<ChatSegment>) {
     if let Some(client) = world.get::<PlayerMob>(mob).map(|p| p.client) {
@@ -1817,12 +1809,7 @@ fn open_info(world: &mut World, mut acts: Local<MessageCursor<UiActed<AntagHudUi
     }
 }
 
-fn capitalize(s: &str) -> String {
-    let mut chars = s.chars();
-    chars.next().map_or_else(String::new, |c| {
-        c.to_uppercase().collect::<String>() + chars.as_str()
-    })
-}
+use ss13_chat::capitalize;
 
 // ---------------------------------------------------------------------------------------------
 // Round end

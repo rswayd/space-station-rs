@@ -28,7 +28,7 @@ use ss13_shared::{Dir, Facing, TilePos};
 use crate::chem::Reagents;
 use crate::combat::CombatMode;
 use crate::construction::Job;
-use crate::obj_damage::{Anchored, is_under};
+use crate::obj_damage::is_under;
 use crate::sound::{PlaySound, playsound};
 use crate::tools::{Actor, DoAfter, ToolKind, do_after, tell, tool_of, use_tool};
 use crate::zone::BodyZone;
@@ -250,17 +250,13 @@ impl Plugin for CannonsPlugin {
     }
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 fn path_of(world: &World, e: Entity) -> String {
     crate::construction::path_of(world, e).unwrap_or_default()
 }
 
-fn anchored(world: &World, e: Entity) -> bool {
-    world.get::<Anchored>(e).is_some_and(|a| a.0)
-}
+use crate::obj_damage::anchored;
 
 fn balloon(world: &mut World, mob: Entity, source: Entity, text: &str) {
     crate::balloon::balloon_alert(world, mob, source, text);

@@ -737,11 +737,7 @@ impl Plugin for CultPlugin {
 // ---------------------------------------------------------------------------------------------
 // Helpers
 
-fn chat_to(world: &mut World, mob: Entity, span: Span, text: impl Into<String>) {
-    if let Some(client) = world.get::<PlayerMob>(mob).map(|p| p.client) {
-        tell(world, client, span, text);
-    }
-}
+use crate::tools::tell_mob as chat_to;
 
 fn icon(world: &World, dmi: &str, state: &str) -> Option<ss13_shared::IconStateId> {
     world
@@ -749,9 +745,7 @@ fn icon(world: &World, dmi: &str, state: &str) -> Option<ss13_shared::IconStateI
         .and_then(|index| index.get(dmi, state))
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 pub fn is_cultist(world: &World, mob: Entity) -> bool {
     world.get::<Cultist>(mob).is_some()
@@ -3788,10 +3782,6 @@ impl ServerUi for AntagInfoGenericUi {
     }
 
     fn data(_: &CultInfo, _: Entity, _: &()) {}
-
-    fn parse_act(_: &str, _: &UiParams) -> Result<(), UiReject> {
-        Err(UiReject::UnknownAction)
-    }
 }
 
 /// `/datum/action/antag_info/Trigger` of a cultist.

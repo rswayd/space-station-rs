@@ -737,13 +737,7 @@ pub fn see_death_event(descriptor: &str) -> ActiveMood {
     event
 }
 
-fn capitalize(text: &str) -> String {
-    let mut chars = text.chars();
-    match chars.next() {
-        Some(first) => first.to_uppercase().chain(chars).collect(),
-        None => String::new(),
-    }
-}
+use ss13_chat::capitalize;
 
 /// tg `send_death_moodlets`: every conscious, seeing human that sees `dead` die at `pos`.
 pub fn send_death_moodlets(world: &mut World, dead: Entity, pos: TilePos) {

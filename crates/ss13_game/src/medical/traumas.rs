@@ -1422,7 +1422,7 @@ pub fn scan_line(world: &World, mob: Entity) -> Option<String> {
             format!(
                 "{} {}",
                 t.resilience.scan_word(),
-                ss13_chat::speech::capitalize(&t.kind.scan_desc())
+                ss13_chat::capitalize(&t.kind.scan_desc())
             )
         })
         .collect();

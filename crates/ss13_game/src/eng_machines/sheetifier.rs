@@ -82,9 +82,7 @@ pub fn setup(world: &mut World, e: Entity) {
     update_look(world, e);
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 /// `update_icon_state`.
 fn update_look(world: &mut World, e: Entity) {

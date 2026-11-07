@@ -685,14 +685,7 @@ pub fn parse_mods_speaking(
     (mods, message)
 }
 
-/// tg `capitalize`.
-pub fn capitalize(text: &str) -> String {
-    let mut chars = text.chars();
-    chars
-        .next()
-        .map(|first| first.to_uppercase().chain(chars).collect())
-        .unwrap_or_default()
-}
+pub use crate::capitalize;
 
 /// tg `stars`: each non-space character becomes `*` with `probability` percent, rolled by
 /// `roll` (a value in 0..100 per character).

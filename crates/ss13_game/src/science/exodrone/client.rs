@@ -49,14 +49,7 @@ pub fn format_time(secs: f64, short: bool) -> String {
     }
 }
 
-/// tg `capitalize`.
-fn capitalize(text: &str) -> String {
-    let mut chars = text.chars();
-    chars
-        .next()
-        .map(|c| c.to_uppercase().chain(chars).collect())
-        .unwrap_or_default()
-}
+use ss13_chat::capitalize;
 
 fn text_row(text: String) -> impl Scene {
     bsn! { Node { margin: UiRect::bottom(px(4)) } Children [ Text(text) ] }

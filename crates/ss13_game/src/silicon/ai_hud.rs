@@ -531,13 +531,7 @@ fn english_list(items: &[String]) -> String {
     }
 }
 
-fn capitalize(text: &str) -> String {
-    let mut chars = text.chars();
-    match chars.next() {
-        Some(first) => first.to_uppercase().chain(chars).collect(),
-        None => String::new(),
-    }
-}
+use ss13_chat::capitalize;
 
 /// Each announcement's next word when the previous one has played.
 // Cost: one entry per running announcement (at most one a minute), a sound per listener per

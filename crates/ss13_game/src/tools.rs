@@ -216,6 +216,23 @@ fn add_stack_state(add: On<Add<DmStack>>, stacks: Query<&DmStack>, mut commands:
     }
 }
 
+/// Seconds since the world started.
+pub fn now(world: &World) -> f64 {
+    world.resource::<Time>().elapsed_secs_f64()
+}
+
+/// The client controlling `mob`, if any.
+pub fn client_of(world: &World, mob: Entity) -> Option<Entity> {
+    world.get::<crate::server::PlayerMob>(mob).map(|p| p.client)
+}
+
+/// One line to the player controlling `mob`, if any.
+pub fn tell_mob(world: &mut World, mob: Entity, span: Span, text: impl Into<String>) {
+    if let Some(client) = world.get::<crate::server::PlayerMob>(mob).map(|p| p.client) {
+        tell(world, client, span, text);
+    }
+}
+
 /// One line to one client.
 pub fn tell(world: &mut World, client: Entity, span: Span, text: impl Into<String>) {
     world.write_message(SendChat {

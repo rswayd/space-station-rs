@@ -148,9 +148,7 @@ impl Plugin for ChassisPlugin {
     }
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 pub(crate) fn name_of(world: &World, e: Entity) -> String {
     if let Some(name) = world.get::<Name>(e) {
@@ -162,12 +160,7 @@ pub(crate) fn name_of(world: &World, e: Entity) -> String {
         .unwrap_or_default()
 }
 
-/// `to_chat(mob, ...)` for a mob with a client.
-pub(crate) fn tell_mob(world: &mut World, mob: Entity, span: Span, text: impl Into<String>) {
-    if let Some(client) = world.get::<PlayerMob>(mob).map(|p| p.client) {
-        crate::tools::tell(world, client, span, text);
-    }
-}
+pub(crate) use crate::tools::tell_mob;
 
 /// `to_chat(connected_ai, ...)`: the AI's client is on its eye.
 pub(crate) fn tell_ai(world: &mut World, ai: Entity, span: Span, text: impl Into<String>) {

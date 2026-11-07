@@ -275,9 +275,7 @@ pub(crate) fn kind_of(world: &World, e: Entity) -> Option<MachineWires> {
     }
 }
 
-pub(crate) fn panel_open(world: &World, e: Entity) -> bool {
-    world.get::<PanelOpen>(e).is_some_and(|p| p.0)
-}
+pub(crate) use crate::construction::panel_open;
 
 /// The kind's `interactable(user)`: the panel is open.
 // tg's shield generators and emitters do not check the panel in `interactable`, so their window

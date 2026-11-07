@@ -27,7 +27,7 @@ use ss13_net::server::ClientToken;
 use ss13_shared::TilePos;
 use ss13_shared::chat::{ChatChannel, ChatMessage, ChatSegment, Span};
 use ss13_shared::protocol::InventorySlot;
-use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiActed, UiParams, UiReject, UiSystems};
+use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiActed, UiSystems};
 
 use super::dynamic::DynamicRng;
 use super::objectives::{Objective, ObjectiveKind, RoundEnd, forge_brother_objectives};
@@ -421,10 +421,6 @@ impl ServerUi for AntagInfoBrotherUi {
     }
 
     fn data(_: &Brother, _: Entity, _: &()) {}
-
-    fn parse_act(_: &str, _: &UiParams) -> Result<(), UiReject> {
-        Err(UiReject::UnknownAction)
-    }
 }
 
 /// `/datum/action/antag_info/Trigger` of the brother's button.

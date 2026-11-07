@@ -23,7 +23,7 @@ use ss13_tgui::prompt::{Ask, PromptAnswer, PromptAnswered, PromptKind, ask_world
 
 use crate::chem::{Chem, Reagents, name_of};
 use crate::chem_dispenser::{InsertedBeaker, beaker_of, replace_beaker};
-use crate::obj_damage::{Anchored, is_under};
+use crate::obj_damage::is_under;
 use crate::power::{MACHINE_TICK_SECS, MachineTicks, Unpowered};
 use crate::sound::{PlaySound, playsound};
 use crate::storage::{StoredIn, put_inside};
@@ -154,9 +154,7 @@ fn operational(world: &World, e: Entity) -> bool {
     world.get::<Unpowered>(e).is_none()
 }
 
-fn anchored(world: &World, e: Entity) -> bool {
-    world.get::<Anchored>(e).is_some_and(|a| a.0)
-}
+use crate::obj_damage::anchored;
 
 fn operating(world: &World, e: Entity) -> bool {
     world.get::<Teapot>(e).is_some_and(|t| t.operating)

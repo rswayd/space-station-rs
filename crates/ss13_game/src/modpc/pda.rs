@@ -42,7 +42,6 @@ use crate::health::Stat;
 use crate::inventory::{CarriedBy, Inventory};
 use crate::jobs::Jobs;
 use crate::outfit::IdRegistration;
-use crate::server::PlayerMob;
 use crate::storage::StoredIn;
 
 /// `/obj/item/modular_computer/pda` and subtypes.
@@ -423,9 +422,7 @@ fn chat(world: &mut World, client: Option<Entity>, span: Span, text: impl Into<S
     }
 }
 
-fn client_of(world: &World, mob: Entity) -> Option<Entity> {
-    world.get::<PlayerMob>(mob).map(|p| p.client)
-}
+use crate::tools::client_of;
 
 /// tg `attack_self` of a held PDA: an unlocked uplink opens (it "blocks opening the PDA menu"),
 /// else `interact`: a computer that is off turns on, and its window opens. `false` for items

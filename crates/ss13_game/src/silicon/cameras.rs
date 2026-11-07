@@ -640,10 +640,6 @@ impl ServerUi for CameraViewWindow {
     fn data(source: &CameraViewSource, _: Entity, _: &()) -> CameraViewData {
         source.0.clone()
     }
-
-    fn parse_act(_: &str, _: &UiParams) -> Result<(), UiReject> {
-        Err(UiReject::UnknownAction)
-    }
 }
 
 /// tg `/obj/machinery/computer/security` `interact` with an empty hand: the window.

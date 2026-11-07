@@ -16,7 +16,7 @@ use ss13_mapload::DmItem;
 use ss13_shared::TilePos;
 
 use crate::construction::Job;
-use crate::obj_damage::{Anchored, is_under};
+use crate::obj_damage::is_under;
 use crate::sound::{PlaySound, playsound};
 use crate::tools::{Actor, DoAfter, Stack, ToolKind, do_after, tool_of};
 
@@ -84,9 +84,7 @@ fn path_of(world: &World, e: Entity) -> String {
     crate::construction::path_of(world, e).unwrap_or_default()
 }
 
-fn anchored(world: &World, e: Entity) -> bool {
-    world.get::<Anchored>(e).is_some_and(|a| a.0)
-}
+use crate::obj_damage::anchored;
 
 /// The stamina a punch costs `user`: 3, 2 in boxing gloves.
 pub fn punch_cost(world: &World, user: Entity) -> f32 {

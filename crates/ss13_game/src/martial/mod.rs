@@ -1066,18 +1066,9 @@ pub(crate) fn name(world: &World, e: Entity) -> String {
     crate::security::name_of(world, e)
 }
 
-pub(crate) fn capitalize(s: &str) -> String {
-    let mut chars = s.chars();
-    chars
-        .next()
-        .map_or_else(String::new, |c| c.to_uppercase().chain(chars).collect())
-}
+pub(crate) use ss13_chat::capitalize;
 
-pub(crate) fn tell_mob(world: &mut World, mob: Entity, span: Span, text: impl Into<String>) {
-    if let Some(client) = world.get::<PlayerMob>(mob).map(|p| p.client) {
-        tell(world, client, span, text);
-    }
-}
+pub(crate) use crate::tools::tell_mob;
 
 pub(crate) fn lying(world: &World, mob: Entity) -> bool {
     world.get::<BodyPosition>(mob).is_some_and(|b| b.lying())

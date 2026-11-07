@@ -765,12 +765,7 @@ fn spt_percent(percent: f32, seconds: f32) -> f32 {
     100.0 * (1.0 - (1.0 - percent / 100.0).powf(seconds))
 }
 
-pub(crate) fn capitalize(s: &str) -> String {
-    let mut chars = s.chars();
-    chars.next().map_or_else(String::new, |c| {
-        c.to_uppercase().chain(chars).collect::<String>()
-    })
-}
+pub(crate) use ss13_chat::capitalize;
 
 /// `/obj/fire_act(temperature)` of an item in a cooking machine: `0.02 × temperature` damage
 /// (at most 20) unless `FIRE_PROOF`; at 0 integrity it burns to ash (`/obj/item/burn()`).

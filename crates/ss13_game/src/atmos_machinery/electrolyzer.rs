@@ -58,9 +58,7 @@ pub fn init_electrolyzers(mut commands: Commands, added: Query<(Entity, &DmObj),
     }
 }
 
-fn anchored(world: &World, e: Entity) -> bool {
-    world.get::<Anchored>(e).is_some_and(|a| a.0)
-}
+use crate::obj_damage::anchored;
 
 /// The cell still inside.
 pub fn cell_of(world: &World, e: Entity) -> Option<Entity> {

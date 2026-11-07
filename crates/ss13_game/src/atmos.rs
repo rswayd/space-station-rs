@@ -19,7 +19,7 @@ use ss13_net::server::Networked;
 use ss13_shared::TilePos;
 use ss13_tgui::UiInterface;
 use ss13_tgui::interfaces::gas_analyzer::{AtmosHandbook, GasAnalyzerData, GasAnalyzerUi, Gasmix};
-use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiParams, UiReject};
+use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi};
 use ss13_world::SpatialIndex;
 
 use crate::atmos_machinery::AtmosDevice;
@@ -493,10 +493,6 @@ impl ServerUi for AnalyzerWindow {
         GasAnalyzerData {
             gasmixes: memory.gasmixes.clone(),
         }
-    }
-
-    fn parse_act(_: &str, _: &UiParams) -> Result<(), UiReject> {
-        Err(UiReject::UnknownAction)
     }
 }
 

@@ -146,11 +146,4 @@ pub const DELETE: &str = "delete";
 pub const PRINT: &str = "print";
 pub const INDEX: &str = "index";
 
-/// DM `capitalize`: the first letter upper case.
-pub fn capitalize(text: &str) -> String {
-    let mut chars = text.chars();
-    match chars.next() {
-        Some(first) => first.to_uppercase().chain(chars).collect(),
-        None => String::new(),
-    }
-}
+pub use ss13_chat::capitalize;

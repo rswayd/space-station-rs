@@ -308,11 +308,7 @@ pub fn can_turn_on(world: &mut World, mob: Entity, user: Option<Entity>) -> bool
     }
 }
 
-fn tell_mob(world: &mut World, mob: Entity, span: Span, text: impl Into<String>) {
-    if let Some(client) = world.get::<crate::server::PlayerMob>(mob).map(|p| p.client) {
-        tell(world, client, span, text);
-    }
-}
+use crate::tools::tell_mob;
 
 /// `buzz(type)`: the message and the sound.
 pub fn buzz(world: &mut World, mob: Entity, mood: Mood) {

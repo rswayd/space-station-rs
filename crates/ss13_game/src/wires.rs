@@ -50,7 +50,6 @@ use crate::health::{DEFAULT_MESSAGE_RANGE, DamageType, Health, Stat, update_stat
 use crate::inventory::Inventory;
 use crate::power::model::{CHANNEL_AUTO_ON, CHANNEL_OFF};
 use crate::power::{Apc, AreaPower, AreaPowerChanged, Channel, Grid, MACHINE_TICK_SECS, Unpowered};
-use crate::server::PlayerMob;
 use crate::status_effects::Incap;
 use crate::tools::{Actor, ToolKind, tool_of};
 use crate::vending::{RecordKind, Vendor};
@@ -817,11 +816,7 @@ pub fn airlock_takes_click(
     }
 }
 
-fn tell_mob(world: &mut World, mob: Entity, span: Span, text: impl Into<String>) {
-    if let Some(client) = world.get::<PlayerMob>(mob).map(|p| p.client) {
-        crate::tools::tell(world, client, span, text);
-    }
-}
+use crate::tools::tell_mob;
 
 /// Everyone within hearing of `pos` (tg `audible_message`).
 fn hear(world: &mut World, pos: TilePos, text: &str) {

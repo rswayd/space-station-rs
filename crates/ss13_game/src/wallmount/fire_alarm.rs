@@ -145,9 +145,7 @@ pub(super) fn look(world: &World, e: Entity, alarm: &FireAlarm, powered: bool) -
     look
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 /// tg `firealarm/check_security_level`: every alarm's look follows the new level.
 pub fn on_security_level_changed(world: &mut World) {

@@ -112,9 +112,7 @@ impl Plugin for DebuffsPlugin {
     }
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 fn throw_alert(world: &mut World, mob: Entity, category: AlertCategory, state: &'static str) {
     if let Some(mut alerts) = world.get_mut::<Alerts>(mob) {

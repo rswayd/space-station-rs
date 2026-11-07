@@ -287,12 +287,7 @@ fn short_name(op: &OperationData) -> (String, String) {
     (capitalize(&name), op.tool_rec.clone())
 }
 
-fn capitalize(text: &str) -> String {
-    let mut chars = text.chars();
-    chars
-        .next()
-        .map_or_else(String::new, |c| c.to_uppercase().chain(chars).collect())
-}
+use ss13_chat::capitalize;
 
 /// `SurgeryProceduresView`: every operation the computer knows, with its requirements.
 fn catalog_view(data: &OperatingComputerData) -> impl Scene + use<> {

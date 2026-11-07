@@ -26,7 +26,7 @@ use ss13_net::server::ClientToken;
 use ss13_shared::TilePos;
 use ss13_shared::chat::{ChatChannel, ChatMessage, ChatSegment, Span};
 use ss13_tgui::prompt::{Ask, PromptAnswer, PromptAnswered, PromptKind, PromptSystems, ask_world};
-use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiActed, UiParams, UiReject, UiSystems};
+use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiActed, UiSystems};
 
 use super::objectives::RoundEnd;
 use super::{AntagHudData, AntagHudUi, AntagInfoBrainwashedUi, BrotherInfo, ObjectiveInfo};
@@ -116,10 +116,6 @@ impl ServerUi for AntagInfoBrainwashedUi {
     }
 
     fn data(_: &Brainwashed, _: Entity, _: &()) {}
-
-    fn parse_act(_: &str, _: &UiParams) -> Result<(), UiReject> {
-        Err(UiReject::UnknownAction)
-    }
 }
 
 pub struct BrainwashedPlugin;
@@ -133,11 +129,7 @@ impl Plugin for BrainwashedPlugin {
     }
 }
 
-fn chat_to(world: &mut World, mob: Entity, span: Span, text: impl Into<String>) {
-    if let Some(client) = world.get::<PlayerMob>(mob).map(|p| p.client) {
-        tell(world, client, span, text);
-    }
-}
+use crate::tools::tell_mob as chat_to;
 
 /// `/proc/brainwash(victim, directives)`. `false` when there is nothing to add or no body.
 pub fn brainwash(world: &mut World, mob: Entity, directives: Vec<String>) -> bool {

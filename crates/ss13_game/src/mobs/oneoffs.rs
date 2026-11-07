@@ -118,9 +118,7 @@ pub(super) fn build(app: &mut App) {
         .add_systems(Update, photosynthesis.after(crate::health::HealthSystems));
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 fn roll(world: &mut World, percent: f32) -> bool {
     let mut rng = CombatRng(world.resource::<CombatRng>().0);
@@ -328,12 +326,7 @@ pub fn after_melee(world: &mut World, attacker: Entity, target: Entity) {
     }
 }
 
-fn capitalize(s: &str) -> String {
-    let mut c = s.chars();
-    c.next()
-        .map(|f| f.to_uppercase().chain(c).collect())
-        .unwrap_or_default()
-}
+use ss13_chat::capitalize;
 
 /// The festivus pole's `attack_hand` out of combat mode: every cell within 2 tiles charges.
 pub fn festivus_touch(world: &mut World, pole: Entity) {

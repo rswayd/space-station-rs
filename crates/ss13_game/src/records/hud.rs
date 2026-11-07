@@ -19,7 +19,7 @@ use bevy::prelude::*;
 use ss13_mapload::DmItem;
 use ss13_mapload::fidelity::{IconIndex, is_under};
 use ss13_net::server::Interest;
-use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiParams, UiReject, UiSystems};
+use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiSystems};
 
 use super::manifest::Manifest;
 use super::*;
@@ -59,10 +59,6 @@ impl ServerUi for DataHudUi {
 
     fn data(source: &DataHudData, _: Entity, _: &()) -> DataHudData {
         source.clone()
-    }
-
-    fn parse_act(_: &str, _: &UiParams) -> Result<(), UiReject> {
-        Err(UiReject::UnknownAction)
     }
 }
 

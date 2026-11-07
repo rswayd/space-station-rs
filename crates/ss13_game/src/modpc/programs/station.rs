@@ -120,9 +120,7 @@ pub fn build(app: &mut App) {
     );
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 fn tell(world: &mut World, client: Entity, span: Span, text: impl Into<String>) {
     world.write_message(SendChat {

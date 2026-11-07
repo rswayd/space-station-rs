@@ -131,9 +131,7 @@ pub struct Firelocks {
     pub watch: HashMap<TilePos, Vec<Entity>>,
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 fn is_open_turf(world: &World, pos: TilePos) -> bool {
     use ss13_mapload::DmTurfBuild;

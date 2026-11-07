@@ -230,13 +230,7 @@ fn name_of(world: &World, e: Entity) -> String {
         .unwrap_or_default()
 }
 
-fn capitalize(text: &str) -> String {
-    let mut chars = text.chars();
-    match chars.next() {
-        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
-        None => String::new(),
-    }
-}
+use ss13_chat::capitalize;
 
 /// Where an atom is: its tile, or its holder's or container's.
 fn atom_pos(world: &World, e: Entity) -> Option<TilePos> {

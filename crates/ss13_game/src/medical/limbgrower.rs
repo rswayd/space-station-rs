@@ -521,7 +521,7 @@ fn build_item(
         if let Some(zone) = super::bodyparts::zone_of_path(&build) {
             let name = format!(
                 "{} (синтетическая, {category})",
-                ss13_chat::speech::capitalize(zone.ru().0)
+                ss13_chat::capitalize(zone.ru().0)
             );
             world.entity_mut(limb).insert(Name::new(name));
         }

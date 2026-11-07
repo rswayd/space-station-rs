@@ -274,9 +274,7 @@ fn suit(world: &World, control: Entity) -> Option<ModSuit> {
     world.get::<ModSuit>(control).cloned()
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 fn tell_opt(world: &mut World, mob: Option<Entity>, span: Span, text: impl Into<String>) {
     if let Some(mob) = mob {

@@ -28,7 +28,7 @@ use bevy::prelude::*;
 use ss13_mapload::IconIndex;
 use ss13_net::server::ClientToken;
 use ss13_shared::chat::{ChatChannel, ChatMessage, ChatSegment, Span};
-use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiActed, UiParams, UiReject, UiSystems};
+use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiActed, UiSystems};
 
 use super::{AntagInfoRevolutionUi, ROLE_PROVOCATEUR, ROLE_REV_HEAD};
 use crate::antag::brother::MINDSHIELD_JOBS;
@@ -165,13 +165,9 @@ impl Plugin for RevolutionPlugin {
 // ---------------------------------------------------------------------------------------------
 // Queries
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
-fn client_of(world: &World, mob: Entity) -> Option<Entity> {
-    world.get::<PlayerMob>(mob).map(|p| p.client)
-}
+use crate::tools::client_of;
 
 fn chat_to(world: &mut World, mob: Entity, span: Span, text: impl Into<String>) {
     if let Some(client) = client_of(world, mob) {
@@ -785,10 +781,6 @@ impl ServerUi for AntagInfoRevolutionUi {
     }
 
     fn data(_: &RevInfo, _: Entity, _: &()) {}
-
-    fn parse_act(_: &str, _: &UiParams) -> Result<(), UiReject> {
-        Err(UiReject::UnknownAction)
-    }
 }
 
 /// `/datum/action/antag_info/Trigger` of a revolutionary.

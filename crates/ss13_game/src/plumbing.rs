@@ -263,9 +263,7 @@ pub struct Urinal {
     pub hidden: Option<Entity>,
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 /// The reagent store of a shower or toilet: `capacity` (or tg's 200) units of `reagent`, full
 /// with a recycler (`create_reagents(reagent_capacity)`, `add_reagent` in `Initialize`).

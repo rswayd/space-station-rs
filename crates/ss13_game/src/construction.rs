@@ -55,9 +55,8 @@ use crate::combat::{CombatMode, NextMove};
 use crate::explosions::ex_act::{CATWALK, LATTICE};
 use crate::health::Health;
 use crate::obj_damage::{
-    Anchored, GIRDER, GIRDER_DISPLACED, GIRDER_NORMAL, GIRDER_REINF, GIRDER_REINF_STRUTS, GRILLE,
-    Integrity, ObjState, WINDOW, WINDOW_IN_FRAME, WINDOW_OUT_OF_FRAME, WINDOW_SCREWED_TO_FRAME,
-    is_under,
+    GIRDER, GIRDER_DISPLACED, GIRDER_NORMAL, GIRDER_REINF, GIRDER_REINF_STRUTS, GRILLE, Integrity,
+    ObjState, WINDOW, WINDOW_IN_FRAME, WINDOW_OUT_OF_FRAME, WINDOW_SCREWED_TO_FRAME, is_under,
 };
 use crate::tools::{Actor, DoAfter, Stack, ToolKind, do_after, tell, tool_of, use_tool};
 
@@ -389,6 +388,11 @@ pub struct Baseturfs(pub Vec<String>);
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PanelOpen(pub bool);
 
+/// Whether the maintenance panel of `e` is open.
+pub fn panel_open(world: &World, e: Entity) -> bool {
+    world.get::<PanelOpen>(e).is_some_and(|p| p.0)
+}
+
 /// Templates of the types construction spawns, built on first use.
 #[derive(Resource, Default)]
 pub(crate) struct BuildTemplates(HashMap<String, Option<Template>>);
@@ -507,9 +511,7 @@ fn obj_state(world: &World, e: Entity) -> i32 {
     world.get::<ObjState>(e).map_or(0, |s| s.0)
 }
 
-fn anchored(world: &World, e: Entity) -> bool {
-    world.get::<Anchored>(e).is_some_and(|a| a.0)
-}
+use crate::obj_damage::anchored;
 
 /// The item is a stack of `root` (or a subtype).
 fn stack_of(world: &World, item: Entity, root: &str) -> bool {
@@ -2093,6 +2095,7 @@ pub fn split_into_hand(world: &mut World, mob: Entity, stack: Entity, hand: usiz
 
 #[cfg(test)]
 mod tests {
+    use crate::obj_damage::Anchored;
     use ss13_atmos::{AtmosBlocker, AtmosPass};
     use ss13_net::chat::server::SendChat;
     use ss13_world::WorldPlugin;

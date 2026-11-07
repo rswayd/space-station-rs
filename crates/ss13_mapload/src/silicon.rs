@@ -14,7 +14,6 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use anyhow::Context as _;
 use bevy::prelude::{Component, Reflect};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -183,9 +182,7 @@ pub struct SiliconData {
 
 impl SiliconData {
     pub fn read(path: &Path) -> anyhow::Result<Self> {
-        let text = ss13_data::read_to_string(path)
-            .with_context(|| format!("reading {}", path.display()))?;
-        ron::from_str(&text).with_context(|| format!("parsing {}", path.display()))
+        crate::read_ron(path)
     }
 
     pub fn to_ron(&self) -> String {

@@ -420,9 +420,7 @@ fn mark_active(
 
 // --- Helpers ----------------------------------------------------------------------------
 
-pub(crate) fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+pub(crate) use crate::tools::now;
 
 pub(crate) fn name_of(world: &World, e: Entity) -> String {
     crate::chem::name_of(world, e)

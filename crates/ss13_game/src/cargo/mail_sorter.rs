@@ -135,9 +135,7 @@ pub fn setup(world: &mut World, e: Entity) {
     world.entity_mut(e).insert_if_new(MailSorter::default());
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 fn item_path(world: &World, e: Entity) -> String {
     world

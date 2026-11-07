@@ -147,9 +147,7 @@ impl Plugin for MalfPlugin {
     }
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 /// tg `forge_ai_objectives` with BandaStation's special objective (always one, 50/50).
 fn forge_objectives(world: &mut World, core: Entity, rng: &mut Rng) -> Vec<MalfObjective> {

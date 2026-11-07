@@ -33,7 +33,7 @@ use ss13_shared::{Facing, TilePos};
 use ss13_world::{Mover, SpatialIndex};
 
 use crate::construction::{Job, PanelOpen, spawn_obj, spawn_stack, tile_changed, turf_at};
-use crate::obj_damage::{Anchored, Integrity, ObjState, is_under, set_anchored, set_icon_state};
+use crate::obj_damage::{Integrity, ObjState, is_under, set_anchored, set_icon_state};
 use crate::stock_parts::{ComponentParts, attach, detach};
 use crate::storage::{Stored, take_out};
 use crate::tools::{Actor, DoAfter, Stack, ToolKind, tell, tool_of, use_tool};
@@ -257,9 +257,7 @@ fn state(world: &World, e: Entity) -> i32 {
     world.get::<ObjState>(e).map_or(0, |s| s.0)
 }
 
-fn anchored(world: &World, e: Entity) -> bool {
-    world.get::<Anchored>(e).is_some_and(|a| a.0)
-}
+use crate::obj_damage::anchored;
 
 fn board_def(world: &World, board: &str) -> Option<DmCircuit> {
     world

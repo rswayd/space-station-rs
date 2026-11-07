@@ -311,12 +311,7 @@ pub fn woundscan(
     Some(lines.into_message())
 }
 
-fn capitalize(text: &str) -> String {
-    let mut chars = text.chars();
-    chars.next().map_or_else(String::new, |c| {
-        c.to_uppercase().chain(chars).collect::<String>()
-    })
-}
+use ss13_chat::capitalize;
 
 #[cfg(test)]
 mod tests {

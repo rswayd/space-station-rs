@@ -193,9 +193,7 @@ fn name_type(world: &World, item: Entity) -> &'static str {
     }
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 /// Why the charter cannot be used now: `used`, the time limit, a proposal waiting.
 fn refusal(world: &World, item: Entity) -> Option<String> {

@@ -977,11 +977,7 @@ impl Plugin for VampirePlugin {
     }
 }
 
-fn chat_to(world: &mut World, mob: Entity, span: Span, text: impl Into<String>) {
-    if let Some(client) = world.get::<PlayerMob>(mob).map(|p| p.client) {
-        tell(world, client, span, text);
-    }
-}
+use crate::tools::tell_mob as chat_to;
 
 fn rng_of(world: &mut World, seed: u64) -> Rng {
     world
@@ -2451,10 +2447,6 @@ impl ServerUi for VampireHudUi {
 
     fn data(source: &VampireHudData, _: Entity, _: &()) -> VampireHudData {
         *source
-    }
-
-    fn parse_act(_: &str, _: &UiParams) -> Result<(), UiReject> {
-        Err(UiReject::UnknownAction)
     }
 }
 

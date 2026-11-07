@@ -190,9 +190,7 @@ impl Plugin for CursesPlugin {
     }
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 fn rng_range(world: &mut World, low: u32, high: u32) -> u32 {
     world.get_resource_or_init::<CombatRng>().range(low, high)

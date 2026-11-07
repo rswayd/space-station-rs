@@ -471,12 +471,7 @@ pub fn magically_charge(world: &mut World, item: Entity) -> Charged {
     Charged::Nothing
 }
 
-fn capitalize(s: &str) -> String {
-    let mut chars = s.chars();
-    chars.next().map_or_else(String::new, |c| {
-        c.to_uppercase().collect::<String>() + chars.as_str()
-    })
-}
+use ss13_chat::capitalize;
 
 #[cfg(test)]
 mod tests {

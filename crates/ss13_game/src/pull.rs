@@ -44,7 +44,7 @@ use crate::hud::{InteractHudData, InteractHudUi};
 use crate::inventory::CarriedBy;
 use crate::server::{PlayerMob, Players};
 use crate::status_effects::Incapacitation;
-use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiParams, UiReject, UiSystems};
+use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiSystems};
 
 /// `PULL_PRONE_SLOWDOWN`, deciseconds; closets' `drag_slowdown` is the same.
 pub const PULL_PRONE_SLOWDOWN: f32 = 1.5;
@@ -158,11 +158,6 @@ impl ServerUi for InteractHudUi {
 
     fn data(source: &InteractHudData, _: Entity, _: &()) -> InteractHudData {
         *source
-    }
-
-    /// The buttons send `ClientIntent`s; the window takes no acts.
-    fn parse_act(_: &str, _: &UiParams) -> Result<(), UiReject> {
-        Err(UiReject::UnknownAction)
     }
 }
 

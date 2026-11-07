@@ -1489,7 +1489,7 @@ fn activate(
             if s.flag && !incapacitated {
                 damage(world, mob, DamageType::Brute, 0.5);
             }
-            let name = ss13_chat::speech::capitalize(&super::name_of(world, mob));
+            let name = ss13_chat::capitalize(&super::name_of(world, mob));
             let (own, others) = if s.flag {
                 (
                     "Вы хотите почесать бок. И успешно чешетесь.".to_owned(),

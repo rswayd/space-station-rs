@@ -462,9 +462,7 @@ pub fn ensure(world: &mut World, e: Entity) -> bool {
     true
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 /// `/datum/wires/gizmo/on_pulse`: the wire into the puzzle.
 pub fn pulsed(world: &mut World, e: Entity, wire: &str, user: Option<Entity>) {

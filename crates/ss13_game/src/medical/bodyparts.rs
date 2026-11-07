@@ -557,12 +557,7 @@ fn set_drawn(world: &mut World, mob: Entity, zone: BodyZone, drawn: bool, roboti
     crate::inventory::refresh_look(world, mob);
 }
 
-fn capitalize(text: &str) -> String {
-    let mut chars = text.chars();
-    chars
-        .next()
-        .map_or_else(String::new, |c| c.to_uppercase().chain(chars).collect())
-}
+use ss13_chat::capitalize;
 
 #[cfg(test)]
 mod tests {

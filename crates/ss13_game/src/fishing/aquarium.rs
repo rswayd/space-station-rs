@@ -237,9 +237,7 @@ fn tell(world: &mut World, mob: Entity, span: Span, text: impl Into<String>) {
     }
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 /// The live fish inside `aquarium`.
 fn fish_in(world: &World, aquarium: Entity) -> Vec<Entity> {

@@ -340,12 +340,7 @@ fn leave(world: &mut World, mob: Entity) {
     crate::closets::let_out(world, mob);
 }
 
-fn capitalize(s: &str) -> String {
-    let mut chars = s.chars();
-    chars.next().map_or_else(String::new, |c| {
-        c.to_uppercase().chain(chars).collect::<String>()
-    })
-}
+use ss13_chat::capitalize;
 
 /// Whether crawlers pass through `device` (`vent_movement & VENTCRAWL_ALLOWED`).
 fn passable(world: &World, net: &Pipenet, device: Entity) -> bool {

@@ -189,9 +189,7 @@ fn prob(world: &mut World, percent: f32) -> bool {
         .is_some_and(|mut r| r.chance(percent))
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 /// `Initialize`'s `random_themed_appearance`, on first use: the strange name and the real one.
 pub fn ensure_relic(world: &mut World, item: Entity) -> bool {

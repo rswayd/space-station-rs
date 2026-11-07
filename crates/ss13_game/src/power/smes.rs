@@ -171,9 +171,7 @@ fn smes_looks(
     }
 }
 
-fn panel_open(world: &World, e: Entity) -> bool {
-    world.get::<PanelOpen>(e).is_some_and(|p| p.0)
-}
+use crate::construction::panel_open;
 
 /// An empty hand opens the window of a SMES that works (a broken one, without a terminal,
 /// cannot be interacted with).

@@ -65,6 +65,11 @@ pub fn is_under(path: &str, root: &str) -> bool {
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Anchored(pub bool);
 
+/// Whether `e` is anchored; entities without the component are not.
+pub fn anchored(world: &World, e: Entity) -> bool {
+    world.get::<Anchored>(e).is_some_and(|a| a.0)
+}
+
 /// tg `atom_integrity` and `broken` of a breakable structure.
 #[derive(Component, Clone, Copy, Debug, PartialEq)]
 pub struct Integrity {

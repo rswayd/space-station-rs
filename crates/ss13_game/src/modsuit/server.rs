@@ -679,19 +679,13 @@ pub fn update_icons(world: &mut World, control: Entity) {
 // ---------------------------------------------------------------------------------------------
 // Helpers
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 pub(crate) fn theme_of(world: &World, suit: &ModSuit) -> ThemeDef {
     world.resource::<ModDb>().data.themes[suit.theme].clone()
 }
 
-pub(crate) fn tell_mob(world: &mut World, mob: Entity, span: Span, text: impl Into<String>) {
-    if let Some(client) = world.get::<PlayerMob>(mob).map(|p| p.client) {
-        tell(world, client, span, text);
-    }
-}
+pub(crate) use crate::tools::tell_mob;
 
 fn tell_opt(world: &mut World, mob: Option<Entity>, span: Span, text: impl Into<String>) {
     if let Some(mob) = mob {

@@ -130,9 +130,7 @@ pub fn ratings(world: &World, e: Entity) -> (f32, f32, bool) {
     (efficiency, gibtime, ignore_clothing)
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 /// The mob inside `gibber` (`occupant`).
 pub fn occupant(world: &mut World, gibber: Entity) -> Option<Entity> {
@@ -668,12 +666,7 @@ pub fn examine_lines(world: &World, e: Entity, lines: &mut Vec<(Span, String)>) 
     }
 }
 
-fn capitalize(s: &str) -> String {
-    let mut chars = s.chars();
-    chars.next().map_or_else(String::new, |c| {
-        c.to_uppercase().chain(chars).collect::<String>()
-    })
-}
+use ss13_chat::capitalize;
 
 #[cfg(test)]
 mod tests {

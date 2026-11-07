@@ -167,9 +167,7 @@ fn faction_of(path: &str) -> Vec<String> {
     }
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 fn init_turrets(world: &mut World) {
     let mut query = world.query_filtered::<(Entity, &DmTurret), With<ss13_world::Mapped>>();

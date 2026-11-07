@@ -194,9 +194,7 @@ fn path_of(world: &World, e: Entity) -> Option<String> {
         .or_else(|| world.get::<DmItem>(e).map(|i| i.path.clone()))
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 /// `RefreshParts`: `speed` is the micro-lasers' tier sum (at least 1 without parts).
 pub fn speed(world: &World, e: Entity) -> f64 {

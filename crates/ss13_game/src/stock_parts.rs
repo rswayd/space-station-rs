@@ -401,12 +401,7 @@ fn name(world: &World, e: Entity) -> String {
         })
 }
 
-fn capitalize(text: &str) -> String {
-    let mut chars = text.chars();
-    chars.next().map_or_else(String::new, |c| {
-        c.to_uppercase().collect::<String>() + chars.as_str()
-    })
-}
+use ss13_chat::capitalize;
 
 /// tg `play_rped_effect`.
 fn rped_sound(world: &mut World, rped: Entity, at: TilePos) {

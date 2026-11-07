@@ -412,9 +412,7 @@ enum Asked {
     Nickname(MinesweeperResult),
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 fn sound(world: &mut World, pc: Entity, file: &str, vol: f32) {
     if let Some(pos) = crate::modpc::pda::turf_of(world, pc) {

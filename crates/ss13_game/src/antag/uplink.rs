@@ -1166,13 +1166,7 @@ pub fn item_interaction(
     true
 }
 
-fn capitalize(text: &str) -> String {
-    let mut chars = text.chars();
-    chars
-        .next()
-        .map(|c| c.to_uppercase().chain(chars).collect())
-        .unwrap_or_default()
-}
+use ss13_chat::capitalize;
 
 /// `ui_act`: `buy`, `buy_raw_tc`, `lock` and `renegotiate_objectives`.
 fn uplink_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed<UplinkUi>>>) {

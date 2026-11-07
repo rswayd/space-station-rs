@@ -172,9 +172,7 @@ pub(super) fn setup_netpod(world: &mut World, pod: Entity) {
     refresh_look(world, pod);
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 /// The `do_after` actor `mob` with what it holds now (a `do_after` stops when that changes).
 pub(super) fn actor(world: &World, client: Entity, mob: Entity) -> Actor {
@@ -185,12 +183,7 @@ pub(super) fn actor(world: &World, client: Entity, mob: Entity) -> Actor {
     }
 }
 
-/// A line to `mob`'s player, if it has one.
-pub fn tell_mob(world: &mut World, mob: Entity, span: Span, text: &str) {
-    if let Some(client) = world.get::<PlayerMob>(mob).map(|p| p.client) {
-        tell(world, client, span, text);
-    }
-}
+pub use crate::tools::tell_mob;
 
 /// A hololadder at `pos`.
 pub fn spawn_ladder(world: &mut World, pos: TilePos) -> Option<Entity> {

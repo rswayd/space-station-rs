@@ -45,7 +45,7 @@ use crate::airlock_construction::{AirlockElectronics, ELECTRONICS};
 use crate::construction::{Job, spawn_obj, spawn_stack, tile_changed};
 use crate::doors::Door;
 use crate::inventory::Inventory;
-use crate::obj_damage::{Anchored, set_anchored};
+use crate::obj_damage::set_anchored;
 use crate::sound::{PlaySound, playsound};
 use crate::tools::{Actor, DoAfter, ToolKind, do_after, tell, tool_of, use_tool};
 
@@ -195,13 +195,9 @@ fn is(world: &World, e: Entity, root: &str) -> bool {
     path(world, e).is_some_and(|p| is_under(p, root))
 }
 
-fn anchored(world: &World, e: Entity) -> bool {
-    world.get::<Anchored>(e).is_some_and(|a| a.0)
-}
+use crate::obj_damage::anchored;
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 fn sound(world: &mut World, e: Entity, file: &str, vol: f32) {
     if let Some(&pos) = world.get::<TilePos>(e) {

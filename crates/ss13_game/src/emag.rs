@@ -105,9 +105,7 @@ impl Plugin for EmagPlugin {
     }
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 fn item_path(world: &World, item: Entity) -> Option<&str> {
     world.get::<DmItem>(item).map(|i| i.path.as_str())
@@ -173,11 +171,7 @@ fn name(world: &World, e: Entity) -> String {
         .unwrap_or_default()
 }
 
-fn tell_mob(world: &mut World, mob: Entity, span: Span, text: impl Into<String>) {
-    if let Some(client) = world.get::<crate::server::PlayerMob>(mob).map(|p| p.client) {
-        crate::tools::tell(world, client, span, text);
-    }
-}
+use crate::tools::tell_mob;
 
 fn sparks(world: &mut World, target: Entity, vol: f32) {
     if let Some(&pos) = world.get::<TilePos>(target) {

@@ -69,7 +69,10 @@ pub trait ServerUi: UiInterface {
     ) -> Self::Data;
     /// Validates the action name and params shape. State-dependent checks (ranges, ownership,
     /// stock) belong in the handler, at the moment of effect.
-    fn parse_act(action: &str, params: &UiParams) -> Result<Self::Act, UiReject>;
+    /// The default suits view-only interfaces: every action is rejected.
+    fn parse_act(_action: &str, _params: &UiParams) -> Result<Self::Act, UiReject> {
+        Err(UiReject::UnknownAction)
+    }
 }
 
 /// Why an act was dropped. Reported in [`UiActRejected`]; the client gets no answer, as in tgui.

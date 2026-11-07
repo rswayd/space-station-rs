@@ -172,9 +172,7 @@ pub(super) fn build(app: &mut App) {
     );
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 fn say_to(world: &mut World, mob: Entity, span: Span, text: impl Into<String>) {
     super::diseases::say_to(world, mob, span, text);

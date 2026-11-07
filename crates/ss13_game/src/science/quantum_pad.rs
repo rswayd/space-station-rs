@@ -112,9 +112,7 @@ fn is_keycard(world: &World, e: Entity) -> bool {
         .is_some_and(|i| is_under(&i.path, KEYCARD))
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 fn state(world: &World, pad: Entity) -> QuantumPad {
     world.get::<QuantumPad>(pad).copied().unwrap_or_default()

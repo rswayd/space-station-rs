@@ -54,7 +54,7 @@ use crate::construction::{Job, spawn_obj, spawn_stack, tile_changed};
 use crate::doors::Door;
 use crate::id_access::{STATION_REGIONS, access_desc, all_station_access, region_access_list};
 use crate::inventory::Inventory;
-use crate::obj_damage::{Anchored, set_anchored};
+use crate::obj_damage::set_anchored;
 use crate::sound::{PlaySound, playsound};
 use crate::tools::{Actor, DoAfter, ToolKind, do_after, tell, tool_of, use_tool};
 
@@ -177,9 +177,7 @@ fn assembly_def(world: &World, e: Entity) -> Option<DmDoorAssembly> {
     world.get::<DmDoorAssembly>(e).cloned()
 }
 
-fn anchored(world: &World, e: Entity) -> bool {
-    world.get::<Anchored>(e).is_some_and(|a| a.0)
-}
+use crate::obj_damage::anchored;
 
 /// The assembly's live state, made from its type on first use (a mapped or spawned assembly).
 fn assembly(world: &mut World, e: Entity) -> Option<DoorAssembly> {

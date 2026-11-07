@@ -279,9 +279,7 @@ impl Plugin for FieldGeneratorPlugin {
     }
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 fn init_generators(world: &mut World) {
     let mut query =

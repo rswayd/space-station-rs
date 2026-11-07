@@ -533,11 +533,7 @@ impl Plugin for HereticPlugin {
 // ---------------------------------------------------------------------------------------------
 // Helpers
 
-pub(super) fn chat_to(world: &mut World, mob: Entity, span: Span, text: impl Into<String>) {
-    if let Some(client) = world.get::<PlayerMob>(mob).map(|p| p.client) {
-        tell(world, client, span, text);
-    }
-}
+pub(super) use crate::tools::tell_mob as chat_to;
 
 fn icon(world: &World, dmi: &str, state: &str) -> Option<ss13_shared::IconStateId> {
     world
@@ -545,9 +541,7 @@ fn icon(world: &World, dmi: &str, state: &str) -> Option<ss13_shared::IconStateI
         .and_then(|index| index.get(dmi, state))
 }
 
-pub(super) fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+pub(super) use crate::tools::now;
 
 pub fn is_heretic(world: &World, mob: Entity) -> bool {
     world.get::<Heretic>(mob).is_some()
@@ -1139,13 +1133,7 @@ fn finish_drain(world: &mut World, mob: Entity, action: &DoAfter, points: u32) {
     update_ui(world, mob);
 }
 
-fn capitalize(text: &str) -> String {
-    let mut chars = text.chars();
-    chars
-        .next()
-        .map(|c| c.to_uppercase().chain(chars).collect())
-        .unwrap_or_default()
-}
+use ss13_chat::capitalize;
 
 /// `show_presence`: `alpha` 0 for 15 s, then up to 255 over 15 s.
 fn fade_in_influences(

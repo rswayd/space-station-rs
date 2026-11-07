@@ -21,7 +21,7 @@ use bevy::prelude::*;
 use ss13_net::chat::server::SendChat;
 use ss13_reagents::metabolism;
 use ss13_shared::chat::{ChatChannel, ChatMessage, ChatSegment, Span};
-use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiParams, UiReject, UiSystems};
+use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiSystems};
 
 use crate::breath::MobsClock;
 use crate::chem::{Chem, MobReagents};
@@ -207,10 +207,6 @@ impl ServerUi for HungerHudUi {
 
     fn data(source: &HungerHudData, _: Entity, _: &()) -> HungerHudData {
         *source
-    }
-
-    fn parse_act(_: &str, _: &UiParams) -> Result<(), UiReject> {
-        Err(UiReject::UnknownAction)
     }
 }
 

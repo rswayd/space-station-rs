@@ -35,7 +35,7 @@ use ss13_shared::{Dir, Facing, TilePos};
 use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiActed, UiParams, UiReject, UiSystems};
 use ss13_world::SpatialIndex;
 
-use crate::construction::{PanelOpen, path_of, spawn_obj, tile_changed, turf_at};
+use crate::construction::{path_of, spawn_obj, tile_changed, turf_at};
 use crate::modular_shield_ui::{
     ID, LinkedGenerator, ModularShieldConsoleData, ModularShieldConsoleUi, ModularShieldGenData,
     ModularShieldGenUi, NAME, NEW_RADIUS, RENAME, SET_RADIUS, TOGGLE_EXTERIOR, TOGGLE_SHIELDS,
@@ -255,9 +255,7 @@ fn facing(world: &World, e: Entity) -> Dir {
     world.get::<Facing>(e).map_or(Dir::South, |f| f.0)
 }
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
 /// The generator's own numbers (`RefreshParts`): (strength, regen, radius).
 pub fn innate(r: &crate::stock_parts::PartRatings) -> (f32, f32, f32) {
@@ -746,9 +744,7 @@ fn clockwise(dir: Dir) -> Dir {
     }
 }
 
-fn panel_open(world: &World, e: Entity) -> bool {
-    world.get::<PanelOpen>(e).is_some_and(|p| p.0)
-}
+use crate::construction::panel_open;
 
 /// The held item on a generator, module or console. True when it was ours.
 pub fn item_interaction(

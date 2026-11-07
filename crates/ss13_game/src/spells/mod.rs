@@ -55,7 +55,6 @@ use crate::health::{Health, Stat};
 use crate::human::HumanLook;
 use crate::inventory::Inventory;
 use crate::server::PlayerMob;
-use crate::tools::tell;
 
 pub use effects::{BoltKind, JauntStep, Jaunting, MagicBolt, SummonMark, TouchHand};
 pub use magic_guns::MagicGun;
@@ -690,15 +689,9 @@ fn refresh_on_change(
 // ---------------------------------------------------------------------------------------------
 // Checks
 
-fn now(world: &World) -> f64 {
-    world.resource::<Time>().elapsed_secs_f64()
-}
+use crate::tools::now;
 
-pub(crate) fn chat_to(world: &mut World, mob: Entity, span: Span, text: impl Into<String>) {
-    if let Some(client) = world.get::<PlayerMob>(mob).map(|p| p.client) {
-        tell(world, client, span, text);
-    }
-}
+pub(crate) use crate::tools::tell_mob as chat_to;
 
 /// An item `mob` holds or wears (not what is inside its bags).
 fn carried(world: &World, mob: Entity) -> Vec<Entity> {
