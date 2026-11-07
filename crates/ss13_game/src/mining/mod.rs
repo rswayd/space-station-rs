@@ -6,7 +6,8 @@
 //! accelerator modkits ([`modkits`]), the stacking machine with its console ([`stacking`]) and
 //! the fauna's monster cores with the stabilizing serum ([`cores`]), the resonator
 //! ([`resonator`]), bluespace shelter capsules ([`capsule`]), marker beacons ([`beacons`]), the explorer gear's
-//! armour plates ([`explorer`]) and fulton extraction ([`fulton`]).
+//! armour plates ([`explorer`]), fulton extraction ([`fulton`]) and the necropolis tendrils with
+//! their chests ([`necropolis`]).
 //! This module holds the windows' data, which both halves share; the client views are in
 //! [`client`].
 //!
@@ -38,6 +39,8 @@ pub mod explorer;
 pub mod fulton;
 #[cfg(feature = "server")]
 pub mod modkits;
+#[cfg(feature = "server")]
+pub mod necropolis;
 #[cfg(feature = "server")]
 pub mod orm;
 #[cfg(feature = "server")]
@@ -107,6 +110,7 @@ impl bevy::prelude::Plugin for MiningServerPlugin {
             explorer::ExplorerPlugin,
             fulton::FultonPlugin,
             crusher::CrusherPlugin,
+            necropolis::NecropolisPlugin,
         ));
     }
 }

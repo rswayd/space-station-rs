@@ -425,7 +425,10 @@ pub fn open(world: &mut World, closet: Entity) -> bool {
     if !dense_when_open {
         world.entity_mut(closet).remove::<Density>();
     }
-    if !initialized && let Some(contents) = world.get::<DmContents>(closet).cloned() {
+    if !initialized
+        && !crate::mining::necropolis::populate(world, closet)
+        && let Some(contents) = world.get::<DmContents>(closet).cloned()
+    {
         spawn_contents(world, closet, &contents.populate, 0);
     }
     let contents: Vec<Entity> = world

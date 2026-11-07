@@ -128,6 +128,7 @@ pub(super) fn on_death(world: &mut World, mob: Entity, def: &MobDef, pos: TilePo
     }
     abilities::on_death(world, mob, path);
     icemoon::on_death(world, path, pos);
+    crate::mining::necropolis::on_death(world, mob, pos);
 }
 
 /// tg `ranged_armour` `pre_bullet_impact` of a mining mob: the damage a projectile does to it.
