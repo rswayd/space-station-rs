@@ -865,6 +865,7 @@ pub fn start_feeding(world: &mut World, e: Entity, meal: Entity) {
         s.next_leech = now + LEECH_SECS;
     }
     world.entity_mut(e).insert(at).remove::<Density>();
+    crate::afflictions::leech_started(world, meal);
     let (slime, victim) = (name_of(world, e), name_of(world, meal));
     say_around(
         world,
@@ -885,6 +886,8 @@ pub fn stop_feeding(world: &mut World, e: Entity, silent: bool) {
     let Some(meal) = world.get_mut::<Slime>(e).and_then(|mut s| s.feeding.take()) else {
         return;
     };
+    // `slime_leech/on_buckle_end`: the meal may be slimed.
+    crate::afflictions::leech_ended(world, meal);
     let alive = world.get::<Stat>(e).is_some_and(|s| *s != Stat::Dead);
     let dense = world.get::<BasicMob>(e).is_some_and(|b| b.def.density);
     if alive && dense {

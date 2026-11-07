@@ -117,6 +117,10 @@ pub struct Fearful {
     panic_active: bool,
     attack_until: Option<f64>,
     startle_at: f64,
+    /// `/datum/terror_handler/simple_source/nyctophobia/terrified` (`crate::afflictions`).
+    pub terrified: bool,
+    /// Its `active` (the nyctophobia moodlet).
+    terrified_active: bool,
 }
 
 /// The phobia of `key` (an index into [`PHOBIAS`]).
@@ -130,7 +134,8 @@ pub fn set_sources(world: &mut World, mob: Entity, phobias: &[usize], monophobia
     let Ok(mut entity) = world.get_entity_mut(mob) else {
         return;
     };
-    if phobias.is_empty() && !monophobia {
+    let terrified = entity.get::<Fearful>().is_some_and(|f| f.terrified);
+    if phobias.is_empty() && !monophobia && !terrified {
         entity.remove::<Fearful>();
         return;
     }
@@ -182,6 +187,10 @@ pub fn tick(world: &mut World, mob: Entity, secs: f32, rng: &mut CombatRng) {
         let amount = monophobia_tick(world, mob, &mut fear, now, unconscious, secs, rng);
         adjustment += add(&mut fear, amount);
     }
+    if fear.terrified {
+        let amount = terrified_tick(world, mob, &mut fear, unconscious, secs);
+        adjustment += add(&mut fear, amount);
+    }
     // Effects.
     if !unconscious {
         jittering(world, mob, &mut fear, now, secs, rng);
@@ -205,6 +214,13 @@ pub fn tick(world: &mut World, mob: Entity, secs: f32, rng: &mut CombatRng) {
         fear.buildup = (fear.buildup - PASSIVE_DECREASE * secs).max(0.0);
     }
     fear.last_tick = fear.buildup;
+    // The terrified source removed itself and nothing else feeds the fear.
+    if !fear.terrified && fear.phobias.is_empty() && !fear.monophobia {
+        if let Ok(mut entity) = world.get_entity_mut(mob) {
+            entity.remove::<Fearful>();
+        }
+        return;
+    }
     if world.get::<Fearful>(mob) != Some(&fear)
         && let Ok(mut entity) = world.get_entity_mut(mob)
     {
@@ -443,6 +459,64 @@ fn monophobia_tick(
     } else {
         0.0
     }
+}
+
+/// `/datum/mood_event/nyctophobia` (BandaStation's text).
+const NYCTOPHOBIA_MOOD: MoodEvent = MoodEvent {
+    id: "nyctophobia",
+    description: "Здесь слишком темно...",
+    mood_change: -3.0,
+    timeout: 0.0,
+    hidden: false,
+};
+
+/// `AddComponentFrom("terrified", /datum/component/fearful, ..., amount)`: the terrified source
+/// on the mob's fear, `amount` more terror.
+pub fn add_terrified(world: &mut World, mob: Entity, amount: f32) {
+    let Ok(mut entity) = world.get_entity_mut(mob) else {
+        return;
+    };
+    let mut fear = entity.get::<Fearful>().cloned().unwrap_or_default();
+    fear.terrified = true;
+    fear.buildup = (fear.buildup + amount).clamp(0.0, MAXIMUM);
+    entity.insert(fear);
+}
+
+/// `nyctophobia/terrified/tick`: the simple source of the dark (5 a second up to the passive
+/// maximum) three times over; at no terror and no buildup the source goes.
+fn terrified_tick(
+    world: &mut World,
+    mob: Entity,
+    fear: &mut Fearful,
+    unconscious: bool,
+    secs: f32,
+) -> f32 {
+    let buildup = fear.buildup;
+    let per_second = if !unconscious && crate::afflictions::dark_around(world, mob) {
+        5.0
+    } else {
+        0.0
+    };
+    let mut amount = 0.0;
+    if per_second > 0.0 && buildup < PASSIVE_MAXIMUM {
+        if !fear.terrified_active {
+            fear.terrified_active = true;
+            crate::mood::add_event(world, mob, "nyctophobia", &NYCTOPHOBIA_MOOD);
+        }
+        amount = (per_second * secs).min(PASSIVE_MAXIMUM - buildup);
+    } else if fear.terrified_active {
+        fear.terrified_active = false;
+        crate::mood::clear_event(world, mob, "nyctophobia");
+    }
+    let amount = amount * 3.0;
+    if buildup <= 0.0 && amount <= 0.0 {
+        fear.terrified = false;
+        if fear.terrified_active {
+            fear.terrified_active = false;
+            crate::mood::clear_event(world, mob, "nyctophobia");
+        }
+    }
+    amount
 }
 
 /// `/datum/terror_handler/jittering`.

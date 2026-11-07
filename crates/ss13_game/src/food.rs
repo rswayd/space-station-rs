@@ -259,6 +259,10 @@ fn can_consume(world: &mut World, actor: Actor, eater: Entity) -> bool {
         tell(world, actor.client, Span::Warning, "рот закрыт!");
         return false;
     }
+    // `COMSIG_CARBON_ATTEMPT_EAT` of a choking mob (`crate::afflictions`).
+    if crate::afflictions::blocks_eating(world, eater) {
+        return false;
+    }
     true
 }
 
