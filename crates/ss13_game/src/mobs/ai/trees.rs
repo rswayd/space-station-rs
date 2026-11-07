@@ -630,6 +630,40 @@ fn generic(path: &str) -> Option<Built> {
         // `garden_gnome.bt.json`: fights back; left out: escape captivity.
         retaliates = true;
         retaliate_combat()
+    } else if is("vatbeast") {
+        // `vatbeast.bt.json`: fights back first, else strangers; the slap after 10 s is
+        // `crate::mobs::oneoffs::pre_melee`. Left out: walking to fries (`move_to_and_eat`).
+        retaliates = true;
+        par(
+            vec![
+                selector(vec![
+                    decorator(
+                        Cond::KeySet(Key::CurrentTarget),
+                        false,
+                        Abort::Both,
+                        melee_combat(Strategy::Basic),
+                    ),
+                    random_walk(25.0),
+                ]),
+                selector(vec![
+                    retaliate_target(Key::CurrentTarget),
+                    leaf(Behavior::AcquireCombatTarget {
+                        key: Key::CurrentTarget,
+                        strategy: Strategy::Basic,
+                    }),
+                ]),
+            ],
+            FIND_TARGET_RATE,
+        )
+    } else if is("tree") {
+        // `tree.bt.json`: `simple_hostile_obstacles_combat` with its speech, without obstacles.
+        par(vec![hostile_combat(25.0), speech_loop_of(None)], 1.0)
+    } else if is("festivus_pole") {
+        // `festivus_pole.bt.json` (walks 10%); left out: charging APCs (`charge_apc`).
+        hostile_combat(10.0)
+    } else if is("revolutionary") {
+        // `revolutionary.bt.json`: `simple_hostile_combat` shouting its slogans.
+        par(vec![hostile_combat(25.0), speech_loop_of(None)], 1.0)
     } else if is("trader") {
         // `trader.bt.json`: shoots whoever hit it (`ai_retaliate`), else wanders until its shop
         // is set (`crate::mobs::trader` opens it for the first customer).

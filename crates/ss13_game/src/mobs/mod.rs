@@ -32,6 +32,7 @@ pub mod farm;
 pub mod illusion;
 pub mod lavaland;
 pub mod megafauna;
+pub mod oneoffs;
 pub mod parrot;
 pub mod pets;
 pub mod ranged;
@@ -165,6 +166,7 @@ impl Plugin for MobsServerPlugin {
         critters::build(app);
         illusion::build(app);
         trader::build(app);
+        oneoffs::build(app);
         lavaland::build(app);
         megafauna::build(app);
     }
@@ -317,6 +319,7 @@ fn attach(world: &mut World, entity: Entity) {
     ranged::attach(world, entity, &def);
     troopers::attach(world, entity, &def);
     trader::attach(world, entity, &def);
+    oneoffs::attach(world, entity, &def);
     lavaland::attach(world, entity, &def);
     megafauna::attach(world, entity, &def);
     set_look(world, entity, false);
@@ -562,6 +565,7 @@ fn death(world: &mut World, mob: Entity, basic: &BasicMob) {
     troopers::on_death(world, def, pos);
     constructs::on_death(world, def, pos);
     trader::on_death(world, def, pos);
+    oneoffs::on_death(world, def, pos);
     // A mouse leaves its corpse as a food item (`/obj/item/food/deadmouse`, `copy_corpse`).
     if ss13_mapload::fidelity::is_under(&def.path, MOUSE_ROOT) {
         if let Some(corpse) = crate::construction::spawn_obj(world, DEAD_MOUSE, pos) {

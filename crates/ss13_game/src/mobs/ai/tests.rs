@@ -765,3 +765,25 @@ fn traders_shoot_back_and_stop_wandering_once_open() {
     run(&mut w, trader, &mut tree, &mut bb, 4);
     assert_eq!(bb.entity(Key::CurrentTarget), Some(thief), "the thief");
 }
+
+#[test]
+fn one_off_mobs_hunt_and_the_vatbeast_fights_back_first() {
+    let def = ss13_mapload::mobs::MobDef::default();
+    for sub in ["tree", "festivus_pole", "revolutionary"] {
+        let built = super::trees::build(&format!("{BASIC}/{sub}"), &def).unwrap();
+        assert!(!built.retaliates, "{sub}");
+    }
+    let built = super::trees::build(&format!("{BASIC}/vatbeast"), &def).unwrap();
+    assert!(built.retaliates);
+    let mut w = world();
+    w.init_resource::<Time>();
+    w.insert_resource(CombatRng(5));
+    let beast = basic_mob(&mut w, 5, 5, "hostile", "/mob/living/basic/vatbeast");
+    let _near = mob(&mut w, 6, 5, "neutral");
+    let attacker = mob(&mut w, 9, 5, "neutral");
+    let mut bb = Blackboard::default();
+    bb.set(Key::RetaliateList, Value::Attackers(vec![(attacker, 0.0)]));
+    let mut tree = Tree::new(built.roots);
+    run(&mut w, beast, &mut tree, &mut bb, 2);
+    assert_eq!(bb.entity(Key::CurrentTarget), Some(attacker));
+}
