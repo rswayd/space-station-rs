@@ -38,7 +38,7 @@ use ss13_shared::protocol::NetId;
 use ss13_shared::{Appearance, Facing, LevelStack, Optics, TilePos, light_block};
 use ss13_world::{
     Border, ChunkPos, ClimbWalkable, ClimbsUp, Density, FallsThrough, Mover, NonDenseBorder,
-    SpatialIndex,
+    Pushable, SpatialIndex,
 };
 
 use crate::light_server::{LIGHT_MARGIN, LightGrid, block_overlaps, blocks_in};
@@ -898,17 +898,19 @@ type BlockData = (
     Has<NonDenseBorder>,
     Option<&'static ClimbsUp>,
     Has<FallsThrough>,
+    Has<Pushable>,
 );
 
 /// [`Blocks`] of an entity: dense things that do not move by themselves.
 fn blocks_of(
-    (dense, border, climbable, mover, edge_only, climbs, hole): (
+    (dense, border, climbable, mover, edge_only, climbs, hole, pushable): (
         bool,
         Option<&Border>,
         bool,
         bool,
         bool,
         Option<&ClimbsUp>,
+        bool,
         bool,
     ),
 ) -> Option<Blocks> {
@@ -922,9 +924,12 @@ fn blocks_of(
     if !dense || mover {
         return None;
     }
+    // shortcut: a loose border object (an unanchored directional window) goes as its edges, not
+    // pushable; the client predicts no shove of it and waits for the server.
     Some(match (border, climbable) {
         (Some(b), _) => Blocks::Edges(b.edges),
         (None, true) => Blocks::Climbable,
+        (None, false) if pushable => Blocks::Pushable,
         (None, false) => Blocks::Dense,
     })
 }
@@ -971,7 +976,14 @@ fn replicate(
     >,
     mut removed_viewers: RemovedComponents<Viewer>,
     links: Query<&ClientLink>,
-    (blocking_changed, mut lost_density, mut lost_border, mut lost_climbable, mut lost_hole): (
+    (
+        blocking_changed,
+        mut lost_density,
+        mut lost_border,
+        mut lost_climbable,
+        mut lost_hole,
+        mut lost_pushable,
+    ): (
         Query<
             Entity,
             (
@@ -982,6 +994,7 @@ fn replicate(
                     Added<ClimbWalkable>,
                     Added<Mover>,
                     Added<FallsThrough>,
+                    Added<Pushable>,
                 )>,
             ),
         >,
@@ -989,6 +1002,7 @@ fn replicate(
         RemovedComponents<Border>,
         RemovedComponents<ClimbWalkable>,
         RemovedComponents<FallsThrough>,
+        RemovedComponents<Pushable>,
     ),
     (stack, alt_states, alt_changed, mut removed_alts): (
         Option<Res<LevelStack>>,
@@ -1228,6 +1242,7 @@ fn replicate(
     reblocked.extend(lost_border.read());
     reblocked.extend(lost_climbable.read());
     reblocked.extend(lost_hole.read());
+    reblocked.extend(lost_pushable.read());
     reblocked.sort_unstable();
     reblocked.dedup();
     for entity in reblocked {

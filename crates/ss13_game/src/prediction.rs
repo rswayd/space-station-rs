@@ -13,7 +13,13 @@
 //! border objects with their edges; `ss13_net` files them in the client's
 //! [`SpatialIndex`]), so a step into them is not taken locally, by the same `exit_blockers` /
 //! `enter_blockers` rule as the server's. The step is still sent: a closed door opens on the
-//! bump, its density replicates away and the next step passes. Mobs are not replicated as
+//! bump, its density replicates away and the next step passes. A loose dense object
+//! (`ss13_world::Pushable`, tg `PushAM`) is the exception: a cardinal step into a tile where it
+//! is the only blocker, with the tile beyond it free for it, is predicted as taken (the server
+//! shoves it on and the mob follows); a diagonal step never shoves (tg `moving_diagonally`). The
+//! object itself is not moved locally: its server position replicates about when the ack comes,
+//! and a refused shove (a mob behind it, `move_resist`) is rolled back like any refused step.
+//! Mobs are not replicated as
 //! blockers (they are pushed, swap places and walk away): a step into one is predicted and, if
 //! the server refuses it, learnt from the ack as blocked until the server moves the mob
 //! somewhere else. A ghost or the AI's eye ([`OwnPhasing`]) ignores blockers.
@@ -27,7 +33,7 @@ use ss13_net::move_ack::client::MoveAckReceived;
 use ss13_shared::protocol::{ClientIntent, MoveAck, TICK_DURATION};
 use ss13_shared::{Dir, Facing, TilePos};
 use ss13_world::{
-    ClimbWalkable, ClimbsUp, FallsThrough, SpatialIndex, next_ready_at, resolve_move,
+    ClimbWalkable, ClimbsUp, FallsThrough, Pushable, SpatialIndex, next_ready_at, resolve_move,
 };
 
 use crate::{MAX_UNACKED_STEPS, RUN_DELAY_SECS};
@@ -126,20 +132,30 @@ impl Prediction {
     }
 
     /// Server state plus the unacked steps; their predicted outcome is refreshed on the way.
-    /// `walls`: what the replicated blockers refuse.
-    fn replay(&mut self, walls: &dyn Fn(TilePos, Dir) -> bool, levels: &Levels) {
+    /// `walls`: what the replicated blockers refuse ([`Walls::check`]).
+    fn replay(&mut self, walls: &Blocked, levels: &Levels) {
         let Some(auth) = self.auth else {
             return;
         };
         let (mut pos, mut facing) = (auth.pos, auth.facing);
         let learnt = &self.blocked;
-        let blocked = |at: TilePos, d: Dir| learnt.contains(&(at, d)) || walls(at, d);
         for step in &mut self.pending {
+            let push = shoves(step.dir);
+            let blocked = |at: TilePos, d: Dir| learnt.contains(&(at, d)) || walls(at, d, push);
             (*step, facing) = predict_with(pos, facing, step.seq, step.dir, &blocked, levels);
             pos = step.to;
         }
         (self.pos, self.facing) = (Some(pos), facing);
     }
+}
+
+/// Whether a cardinal move of `mover` from a tile in a direction is refused; the flag: the step
+/// may shove a [`Pushable`] ([`shoves`]).
+type Blocked<'a> = dyn Fn(TilePos, Dir, bool) -> bool + 'a;
+
+/// tg `PushAM`: no shoving during a diagonal move.
+fn shoves(dir: Dir) -> bool {
+    Dir::CARDINALS.contains(&dir)
 }
 
 /// Where a step off the last stair of a flight lands (`ClimbsUp`), if it is one.
@@ -232,21 +248,38 @@ fn predict_with(
 }
 
 /// The replicated blockers' verdict on a cardinal move of `mover` from `at` in `d`: `ss13_world`'s
-/// `step` (`exit_blockers`, then `enter_blockers`, tables walked across from a table).
+/// `step` (`exit_blockers`, then `enter_blockers`, tables walked across from a table). With
+/// `push`, a lone [`Pushable`] blocker whose own move on in `d` is free is shoved (tg `PushAM`:
+/// it moves, then the mob steps; a second blocker would still stop the mob).
 fn index_blocks(
     index: &SpatialIndex,
-    climbable: &dyn Fn(Entity) -> bool,
+    is: &Kinds,
     mover: Entity,
-    at: TilePos,
-    d: Dir,
+    (at, d, push): (TilePos, Dir, bool),
 ) -> bool {
     if index.exit_blockers(at, d, mover).next().is_some() {
         return true;
     }
-    let on_climbable = index.on_tile(at).iter().any(|&e| climbable(e));
-    index
-        .enter_blockers(at.step(d), d, mover)
-        .any(|e| !(on_climbable && climbable(e)))
+    let on_climbable = index.on_tile(at).iter().any(|&e| (is.climbable)(e));
+    let to = at.step(d);
+    let mut blockers = index
+        .enter_blockers(to, d, mover)
+        .filter(|&e| !(on_climbable && (is.climbable)(e)));
+    let Some(first) = blockers.next() else {
+        return false;
+    };
+    let shoved = push
+        && (is.pushable)(first)
+        && blockers.next().is_none()
+        && index.exit_blockers(to, d, first).next().is_none()
+        && index.enter_blockers(to.step(d), d, first).next().is_none();
+    !shoved
+}
+
+/// Component checks [`index_blocks`] needs.
+struct Kinds<'a> {
+    climbable: &'a dyn Fn(Entity) -> bool,
+    pushable: &'a dyn Fn(Entity) -> bool,
 }
 
 /// What the systems need to ask [`index_blocks`].
@@ -254,6 +287,7 @@ fn index_blocks(
 struct Walls<'w, 's> {
     index: Option<Res<'w, SpatialIndex>>,
     climbable: Query<'w, 's, (), With<ClimbWalkable>>,
+    pushable: Query<'w, 's, (), With<Pushable>>,
     phasing: Option<Res<'w, OwnPhasing>>,
     stairs: Query<'w, 's, &'static ClimbsUp>,
     holes: Query<'w, 's, (), With<FallsThrough>>,
@@ -261,14 +295,20 @@ struct Walls<'w, 's> {
 }
 
 impl Walls<'_, '_> {
-    fn check(&self, mover: Option<Entity>) -> impl Fn(TilePos, Dir) -> bool + '_ {
+    fn check(&self, mover: Option<Entity>) -> impl Fn(TilePos, Dir, bool) -> bool + '_ {
         let index = self
             .index
             .as_deref()
             .filter(|_| !self.phasing.as_deref().is_some_and(|p| p.0));
         let mover = mover.unwrap_or(Entity::PLACEHOLDER);
-        move |at, d| {
-            index.is_some_and(|i| index_blocks(i, &|e| self.climbable.contains(e), mover, at, d))
+        move |at, d, push| {
+            index.is_some_and(|i| {
+                let is = Kinds {
+                    climbable: &|e| self.climbable.contains(e),
+                    pushable: &|e| self.pushable.contains(e),
+                };
+                index_blocks(i, &is, mover, (at, d, push))
+            })
         }
     }
 
@@ -402,7 +442,8 @@ fn predict_steps(
     let seq = state.last_seq + 1;
     let wall = walls.check(state.entity);
     let learnt = &state.blocked;
-    let blocked = |at: TilePos, d: Dir| learnt.contains(&(at, d)) || wall(at, d);
+    let push = shoves(dir);
+    let blocked = |at: TilePos, d: Dir| learnt.contains(&(at, d)) || wall(at, d, push);
     let (climb, fall) = (walls.climb(), walls.fall());
     let levels = Walls::levels(&climb, &fall);
     let (step, facing) = predict_with(pos, state.facing, seq, dir, &blocked, &levels);
@@ -464,7 +505,7 @@ mod tests {
             }),
             ..default()
         };
-        state.replay(&|_, _| false, &Levels::NONE);
+        state.replay(&|_, _, _| false, &Levels::NONE);
         state
     }
 
@@ -608,6 +649,76 @@ mod tests {
         }
         assert_eq!(state.corrections(), mismatches as u32);
         assert_eq!(*server.world().get::<TilePos>(mob).unwrap(), at(10, 4));
+    }
+
+    /// A level with dense things (`true`: loose, `ss13_world::Pushable`), as replicated.
+    fn shove_world(things: &[(TilePos, bool)]) -> App {
+        use ss13_world::{Density, WorldPlugin};
+
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, WorldPlugin));
+        app.world_mut()
+            .resource_mut::<SpatialIndex>()
+            .create_level(Z, 20, 20)
+            .unwrap();
+        for &(pos, loose) in things {
+            let mut e = app.world_mut().spawn((pos, Density));
+            if loose {
+                e.insert(Pushable);
+            }
+        }
+        app.update();
+        app
+    }
+
+    /// Where `predict_steps`' rules take a step from `from`.
+    fn walk(app: &mut App, from: TilePos, dir: Dir) -> TilePos {
+        use bevy::ecs::system::RunSystemOnce;
+
+        app.world_mut()
+            .run_system_once(move |walls: Walls| {
+                let wall = walls.check(None);
+                let push = shoves(dir);
+                predict(from, None, 1, dir, &|a, d| wall(a, d, push)).0.to
+            })
+            .unwrap()
+    }
+
+    #[test]
+    fn a_step_into_a_loose_crate_is_predicted() {
+        let mut app = shove_world(&[(at(5, 6), true)]);
+        assert_eq!(walk(&mut app, at(5, 5), Dir::North), at(5, 6));
+        // From the side the tile beyond is free as well.
+        assert_eq!(walk(&mut app, at(4, 6), Dir::East), at(5, 6));
+    }
+
+    #[test]
+    fn an_anchored_machine_is_not_shoved() {
+        let mut app = shove_world(&[(at(5, 6), false)]);
+        assert_eq!(walk(&mut app, at(5, 5), Dir::North), at(5, 5));
+    }
+
+    #[test]
+    fn a_crate_against_a_wall_or_a_crate_is_not_shoved() {
+        // A wall behind it, another crate behind it, two crates on one tile.
+        let mut app = shove_world(&[
+            (at(5, 6), true),
+            (at(5, 7), false),
+            (at(8, 6), true),
+            (at(8, 7), true),
+            (at(11, 6), true),
+            (at(11, 6), true),
+        ]);
+        assert_eq!(walk(&mut app, at(5, 5), Dir::North), at(5, 5));
+        assert_eq!(walk(&mut app, at(8, 5), Dir::North), at(8, 5));
+        assert_eq!(walk(&mut app, at(11, 5), Dir::North), at(11, 5));
+    }
+
+    #[test]
+    fn a_diagonal_step_does_not_shove() {
+        let mut app = shove_world(&[(at(6, 6), true)]);
+        assert_ne!(walk(&mut app, at(5, 5), Dir::NorthEast), at(6, 6));
+        assert_eq!(walk(&mut app, at(6, 5), Dir::North), at(6, 6));
     }
 
     #[test]
