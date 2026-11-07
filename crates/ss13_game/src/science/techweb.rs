@@ -10,7 +10,7 @@
 // `super::experiments`); of the six nodes with `required_experiments` only medbay_equip_adv
 // (haloperidol scan) is gated, the others (cyber_organs_upgraded, explosives, fishing_equip_adv,
 // mech_combat, selection) unlock on points and prerequisites alone.
-// shortcut: no tech or design disks, node boosts (`boost_techweb_node`, toxins papers) or
+// shortcut: no node boosts (`boost_techweb_node`, toxins papers) or
 // research announcements over the radio (`announce_channels`).
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};

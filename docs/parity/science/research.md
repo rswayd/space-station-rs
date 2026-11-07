@@ -66,7 +66,7 @@ _«Автолат» описано в [../engineering/machines.md](../engineerin
 Диск техвеба переносит исследованные узлы между сетями; диск чертежей хранит отдельные чертежи; BEPIS-диск открывает экспериментальный узел.
 
 - **Код:** [`/obj/item/disk/tech_disk`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/research_disk.dm#L1), [`/obj/item/disk/design_disk`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/designs/_design_disk.dm#L1), [`design_disk/bepis`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/designs/_design_disk.dm#L28)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ `ss13_game::science::console` (`TechDisk`, `DesignDisk`, `ensure_disk`): диски вставляются в два слота R&D-консоли; диск техвеба начинает со стартовыми узлами (CentCom — со всеми), `uploadDisk` изучает его узлы бесплатно (`absorb_techdisk`), `loadTech` копирует изученные узлы на диск, обе копии — за общим кулдауном 5 с; диск чертежей добавляет свои чертежи (диски конечностей — `blueprints` из `limb_disks`), BEPIS-диск — чертежи случайного экспериментального узла, при загрузке раскрывает и изучает узел; `ejectDisk` выбрасывает диск на тайл консоли; в tgui `Techweb` — строки дисков в шапке (`t_disk`, `d_disk`). Проверено: `tests/it/science.rs` (`rd_console_disks`). Списка экспериментальных узлов BEPIS-машины (`remove_tech`) нет — машина BEPIS не портирована
 
 ### Детали машин (stock parts)
 Конденсаторы, сканирующие модули, сервоприводы, микролазеры, бункеры материи четырёх тиров; их рейтинг через `RefreshParts()` определяет скорость и эффективность машин.

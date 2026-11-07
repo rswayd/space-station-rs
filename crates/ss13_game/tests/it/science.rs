@@ -162,6 +162,11 @@ const TYPES: &str = r##"{
         "name": "screwdriver", "icon_state": "screwdriver" } },
     "/obj/item/experi_scanner": { "parent": "/obj/item", "declared_vars": {
         "name": "Experi-Scanner", "icon_state": "experiscanner" } },
+    "/obj/item/disk": { "parent": "/obj/item" },
+    "/obj/item/disk/tech_disk": { "parent": "/obj/item/disk", "declared_vars": {
+        "name": "technology disk" } },
+    "/obj/item/disk/design_disk": { "parent": "/obj/item/disk", "declared_vars": {
+        "name": "Component Design Disk" } },
     "/obj/item/circuitboard": { "parent": "/obj/item" },
     "/obj/item/circuitboard/computer": { "parent": "/obj/item/circuitboard" },
     "/obj/item/circuitboard/computer/rdconsole": { "parent": "/obj/item/circuitboard/computer",
@@ -285,6 +290,8 @@ fn fixture_assets(test: &str) -> PathBuf {
         "/obj/machinery/ore_silo",
         "/obj/item/screwdriver",
         "/obj/item/experi_scanner",
+        "/obj/item/disk/tech_disk",
+        "/obj/item/disk/design_disk",
         "/obj/machinery/destructive_scanner",
         "/obj/machinery/computer/rdservercontrol",
         "/turf/open/floor",
@@ -940,6 +947,108 @@ fn server_control_toggles_servers() {
     let before = s.web().points_of(POINT_GENERIC);
     s.steps(testing::steps(3.0) as usize);
     assert_eq!(s.web().points_of(POINT_GENERIC), before, "no income");
+}
+
+/// Tech and design disks in the R&D console: a design disk's designs upload; a tech disk starts
+/// with the starting nodes, its nodes are researched on upload, the researched nodes copy onto
+/// it behind the 5 s copy cooldown; both eject onto the console's tile.
+#[test]
+fn rd_console_disks() {
+    use ss13_game::science::console::{DesignDisk, TechDisk};
+    let mut s = Lab::start("rd_console_disks");
+    let console = s.machine::<RdConsole>(CONSOLE);
+    s.server
+        .world_mut()
+        .get_mut::<RdConsole>(console)
+        .unwrap()
+        .locked = false;
+    let tools = s.node(TOOLS);
+    let base = s.node("/datum/techweb_node/base");
+    let wrench = s.server.world().resource::<ResearchDb>().design_index["/datum/design/wrench"];
+
+    // A design disk with the wrench.
+    let disk = s.give("/obj/item/disk/design_disk", 1);
+    s.server.world_mut().entity_mut(disk).insert(DesignDisk {
+        blueprints: vec![wrench],
+        bepis_node: None,
+    });
+    s.click(console);
+    s.run_until_for(5.0, "design disk inserted", |s| {
+        s.server.world().get::<RdConsole>(console).unwrap().d_disk == Some(disk)
+    });
+    assert_eq!(s.held(), None);
+    s.open::<TechwebUi>(console);
+    s.run_until_for(5.0, "the window lists the disk", |s| {
+        s.window::<TechwebUi>()
+            .is_some_and(|(_, _, d)| d.d_disk == Some(vec!["Wrench".to_owned()]))
+    });
+    assert!(!s.web().researched_designs.contains(&wrench));
+    s.act::<TechwebUi>("uploadDisk", &[("type", "design")]);
+    s.run_until_for(5.0, "design uploaded", |s| {
+        s.web().researched_designs.contains(&wrench)
+    });
+    assert!(!s.web().researched.contains(&tools), "designs only");
+    s.act::<TechwebUi>("ejectDisk", &[("type", "design")]);
+    s.run_until_for(5.0, "design disk ejected", |s| {
+        s.items_on(CONSOLE, "/obj/item/disk/design_disk") == 1
+    });
+    assert_eq!(
+        s.server.world().get::<RdConsole>(console).unwrap().d_disk,
+        None
+    );
+
+    // A tech disk: the starting nodes; Tools added and uploaded.
+    let disk = s.give("/obj/item/disk/tech_disk", 1);
+    s.click(console);
+    s.run_until_for(5.0, "tech disk inserted", |s| {
+        s.server.world().get::<RdConsole>(console).unwrap().t_disk == Some(disk)
+    });
+    let stored = &s.server.world().get::<TechDisk>(disk).unwrap().stored_nodes;
+    assert!(stored.contains(&base) && !stored.contains(&tools));
+    s.server
+        .world_mut()
+        .get_mut::<TechDisk>(disk)
+        .unwrap()
+        .stored_nodes
+        .insert(tools);
+    let points = s.web().points_of(POINT_GENERIC);
+    s.act::<TechwebUi>("uploadDisk", &[("type", "tech")]);
+    s.run_until_for(5.0, "tech uploaded", |s| {
+        s.web().researched.contains(&tools)
+    });
+    assert!(s.web().points_of(POINT_GENERIC) >= points, "free");
+
+    // Copying back waits for the cooldown.
+    let secret = s.node(SECRET);
+    s.server
+        .world_mut()
+        .resource_mut::<Techweb>()
+        .researched
+        .insert(secret);
+    s.act::<TechwebUi>("loadTech", &[]);
+    s.run_until_for(5.0, "busy", |s| s.said("Серверы заняты!"));
+    assert!(
+        !s.server
+            .world()
+            .get::<TechDisk>(disk)
+            .unwrap()
+            .stored_nodes
+            .contains(&secret)
+    );
+    s.steps(testing::steps(5.0) as usize);
+    s.act::<TechwebUi>("loadTech", &[]);
+    s.run_until_for(5.0, "copied", |s| {
+        s.server
+            .world()
+            .get::<TechDisk>(disk)
+            .unwrap()
+            .stored_nodes
+            .contains(&secret)
+    });
+    s.act::<TechwebUi>("ejectDisk", &[("type", "tech")]);
+    s.run_until_for(5.0, "tech disk ejected", |s| {
+        s.items_on(CONSOLE, "/obj/item/disk/tech_disk") == 1
+    });
 }
 
 impl Lab {

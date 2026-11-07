@@ -100,6 +100,7 @@ pub fn item_interaction(
     lathe::item_interaction(world, client, mob, held, target)
         || analyzer::item_interaction(world, client, mob, held, target)
         || autolathe::item_interaction(world, client, mob, held, target)
+        || console::item_interaction(world, client, mob, held, target)
 }
 
 /// tgui `Techweb`.
@@ -180,6 +181,11 @@ pub struct TechwebData {
     pub sec_protocols: bool,
     /// Experiments counted as completed.
     pub completed_experiments: Vec<String>,
+    /// `t_disk.stored_research`: the nodes on the inserted tech disk (indices into
+    /// [`TechwebStatic::nodes`]).
+    pub t_disk: Option<Vec<u16>>,
+    /// `d_disk.blueprints`: the names of the designs on the inserted design disk.
+    pub d_disk: Option<Vec<String>>,
 }
 
 impl TechwebData {
@@ -193,6 +199,13 @@ pub const RESEARCH_NODE: &str = "researchNode";
 pub const ENQUEUE_NODE: &str = "enqueueNode";
 pub const DEQUEUE_NODE: &str = "dequeueNode";
 pub const NODE_PATH: &str = "node_path";
+pub const EJECT_DISK: &str = "ejectDisk";
+pub const UPLOAD_DISK: &str = "uploadDisk";
+pub const LOAD_TECH: &str = "loadTech";
+/// The disk acts' param: [`TECH_DISK`] or [`DESIGN_DISK`] (`RND_TECH_DISK`, `RND_DESIGN_DISK`).
+pub const DISK_TYPE: &str = "type";
+pub const TECH_DISK: &str = "tech";
+pub const DESIGN_DISK: &str = "design";
 
 /// tgui `Fabricator`.
 pub struct FabricatorUi;

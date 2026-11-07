@@ -194,6 +194,7 @@ fn techweb_content(
         ("Disengaged", UiColor::Bad)
     };
     let sec_color = sec_color.text().unwrap_or_default();
+    let disks = disk_rows(st, data);
     let routed: Box<dyn SceneList> = match local
         .get(DETAILS)
         .parse::<u16>()
@@ -221,6 +222,8 @@ fn techweb_content(
                             --
                             @LabeledListItem { @label: "Queue" }
                             Children [ {queue} ]
+                            --
+                            {disks}
                         ]
                     ]
                     --
@@ -238,6 +241,67 @@ fn techweb_content(
             Children [ {routed} ]
         ]
     }
+}
+
+fn disk_button(
+    icon: &'static str,
+    label: &'static str,
+    act: &'static str,
+    kind: &'static str,
+) -> impl Scene + use<> {
+    let params = ActParams(vec![(DISK_TYPE.to_owned(), kind.to_owned())]);
+    let name = Name::new(format!("techweb: {act} {kind}"));
+    bsn! {
+        @ss13_ui_kit::Button { @icon: icon, @content: label }
+        Act({act.to_owned()})
+        params
+        name
+    }
+}
+
+/// `TechwebDiskMenu` of each inserted disk, as header rows: its contents and buttons.
+fn disk_rows(st: &TechwebStatic, data: &TechwebData) -> Vec<Box<dyn SceneList>> {
+    let mut rows: Vec<Box<dyn SceneList>> = Vec::new();
+    if let Some(nodes) = &data.t_disk {
+        let names: Vec<String> = nodes
+            .iter()
+            .filter_map(|&n| st.nodes.get(usize::from(n)).map(|n| n.name.clone()))
+            .collect();
+        let summary = format!("{} nodes: {}", names.len(), names.join(", "));
+        let upload = disk_button("upload", "Web -> Disk", LOAD_TECH, TECH_DISK);
+        let download = disk_button("download", "Disk -> Web", UPLOAD_DISK, TECH_DISK);
+        let eject = disk_button("eject", "Eject Disk", EJECT_DISK, TECH_DISK);
+        rows.push(Box::new(EntityScene(bsn! {
+            @LabeledListItem { @label: "Tech Disk" }
+            Children [
+                Node { flex_direction: FlexDirection::Column }
+                Children [
+                    Text(summary)
+                    --
+                    Node { flex_direction: FlexDirection::Row }
+                    Children [ {upload} -- {download} -- {eject} ]
+                ]
+            ]
+        })));
+    }
+    if let Some(blueprints) = &data.d_disk {
+        let summary = format!("{} designs: {}", blueprints.len(), blueprints.join(", "));
+        let upload = disk_button("download", "Upload All", UPLOAD_DISK, DESIGN_DISK);
+        let eject = disk_button("eject", "Eject Disk", EJECT_DISK, DESIGN_DISK);
+        rows.push(Box::new(EntityScene(bsn! {
+            @LabeledListItem { @label: "Design Disk" }
+            Children [
+                Node { flex_direction: FlexDirection::Column }
+                Children [
+                    Text(summary)
+                    --
+                    Node { flex_direction: FlexDirection::Row }
+                    Children [ {upload} -- {eject} ]
+                ]
+            ]
+        })));
+    }
+    rows
 }
 
 /// `TechwebOverview`: Researched (tier 0), Available (tier 1), Future (tier 2+).
