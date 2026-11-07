@@ -126,6 +126,13 @@ impl Jobs {
         self.positions[job] += 1;
     }
 
+    /// One slot of `job` opens again (tg `current_positions = max(current_positions - 1, 0)`).
+    pub(crate) fn free_position(&mut self, job: usize) {
+        if let Some(n) = self.positions.get_mut(job) {
+            *n = n.saturating_sub(1);
+        }
+    }
+
     /// tg `IsJobUnavailable(latejoin = TRUE)` + `get_job_unavailable_error_message`: `None` if
     /// the job can be taken now.
     pub fn unavailable(&self, job: usize) -> Option<String> {
@@ -571,13 +578,12 @@ pub(crate) fn job_spawn(world: &mut World, title: &str) -> Option<TilePos> {
 
 fn free_slot(
     remove: On<Remove<PlayerJob>>,
-    jobs_of: Query<&PlayerJob>,
+    // A slot `round::reopen_roundstart_suicide_roles` already freed.
+    jobs_of: Query<&PlayerJob, Without<crate::round::SlotReopened>>,
     jobs: Option<ResMut<Jobs>>,
 ) {
-    if let (Ok(&PlayerJob(job)), Some(mut jobs)) = (jobs_of.get(remove.entity), jobs)
-        && let Some(n) = jobs.positions.get_mut(job)
-    {
-        *n = n.saturating_sub(1);
+    if let (Ok(&PlayerJob(job)), Some(mut jobs)) = (jobs_of.get(remove.entity), jobs) {
+        jobs.free_position(job);
     }
 }
 
@@ -590,6 +596,7 @@ fn notice(client: Entity, text: impl Into<String>) -> SendNotice {
 
 /// `LateJoinMenu` (the lobby's "Join game", tg `late_join` href) -> the window, for a client
 /// still in the lobby.
+#[allow(clippy::too_many_arguments)]
 fn open_menus(
     mut intents: MessageReader<IntentReceived>,
     new_players: Query<(), With<NewPlayer>>,
@@ -598,6 +605,12 @@ fn open_menus(
     mut open: MessageWriter<OpenUi>,
     mut notices: MessageWriter<SendNotice>,
     mut commands: Commands,
+    (config, mut queue, living, mut chat): (
+        Res<crate::round::RoundConfig>,
+        ResMut<crate::join_queue::JoinQueue>,
+        Query<Option<&crate::health::Stat>, (With<PlayerMob>, Without<crate::ghost::Ghost>)>,
+        MessageWriter<ss13_net::chat::server::SendChat>,
+    ),
 ) {
     let Some(jobs) = jobs else {
         return;
@@ -618,6 +631,27 @@ fn open_menus(
             ));
             continue;
         }
+        // The population cap: the button queues instead (`crate::join_queue`).
+        let alive = living
+            .iter()
+            .filter(|s| s.copied() != Some(crate::health::Stat::Dead))
+            .count() as u32;
+        let cap = crate::join_queue::relevant_cap(&config);
+        if ticker.state() == GameState::Playing
+            && let Some(lines) = crate::join_queue::join_button(&mut queue, cap, alive, client)
+        {
+            for (span, text) in lines {
+                chat.write(ss13_net::chat::server::SendChat {
+                    clients: vec![client],
+                    message: ss13_shared::chat::ChatMessage::simple(
+                        ss13_shared::chat::ChatChannel::System,
+                        span,
+                        text,
+                    ),
+                });
+            }
+            continue;
+        }
         commands
             .entity(client)
             .insert(JobBoard(jobs.static_data.clone()));
@@ -628,6 +662,26 @@ fn open_menus(
             WINDOW_TITLE,
         ));
     }
+}
+
+/// Opens the latejoin menu for a lobby client (the join queue's turn).
+pub(crate) fn open_latejoin_menu(world: &mut World, client: Entity) {
+    if world.get::<NewPlayer>(client).is_none() {
+        return;
+    }
+    let Some(board) = world
+        .get_resource::<Jobs>()
+        .map(|jobs| JobBoard(jobs.static_data.clone()))
+    else {
+        return;
+    };
+    world.entity_mut(client).insert(board);
+    world.write_message(OpenUi::new::<JobSelectionWindow>(
+        client,
+        client,
+        client,
+        WINDOW_TITLE,
+    ));
 }
 
 /// `select_job`, checked at the moment of effect.
@@ -641,9 +695,22 @@ fn apply_choices(world: &mut World, mut acts: Local<MessageCursor<UiActed<JobSel
         if world.get::<NewPlayer>(client).is_none() {
             continue;
         }
-        let verdict = choose(world, &title);
+        let verdict = choose(world, &title).and_then(|job| {
+            // `select_job`'s queue check: only the first in line, below the cap.
+            let cap =
+                crate::join_queue::relevant_cap(world.resource::<crate::round::RoundConfig>());
+            let living = crate::join_queue::living_player_count(world);
+            let queue = world.resource::<crate::join_queue::JoinQueue>();
+            if crate::join_queue::may_select(queue, cap, living, client) {
+                Ok(job)
+            } else {
+                Err("Сервер заполнен!".to_owned())
+            }
+        });
         match verdict {
             Ok(job) => {
+                // `AttemptLateSpawn`: out of the queue.
+                crate::join_queue::joined(world, client);
                 let mob = join(world, client, job, true);
                 // `COMSIG_GLOB_JOB_AFTER_LATEJOIN_SPAWN` and `SSdynamic.on_latejoin`.
                 crate::antag::revolution::server::on_latejoin(world, mob);

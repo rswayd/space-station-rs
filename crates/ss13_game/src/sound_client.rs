@@ -7,6 +7,9 @@
 //!
 //! `SS13_VOLUME` (0-100, default 100) is the master volume.
 //!
+//! A channel sound ([`ChannelSoundReceived`], the lobby music) replaces the one playing on its
+//! channel, or stops it.
+//!
 //! Every sound file (13 MB on MetaStation's assets) is read in the background at startup
 //! ([`preload`]); a sound played before that finishes is read on the spot, as before (a cold
 //! read took ~10 ms of the frame).
@@ -21,7 +24,7 @@ use bevy::audio::{SpatialScale, Volume};
 use bevy::prelude::*;
 use bevy::tasks::futures_lite::future::poll_once;
 use bevy::tasks::{IoTaskPool, Task, block_on};
-use ss13_net::sound::client::SoundReceived;
+use ss13_net::sound::client::{ChannelSoundReceived, SoundReceived};
 
 /// Tiles between the ears: a source this far to one side plays from that side only.
 const EAR_GAP_TILES: f32 = 8.0;
@@ -40,6 +43,10 @@ const CATCH_UP_SECS: f64 = 1.0;
 /// Real time until which received sounds are dropped (the catch-up after a pause).
 #[derive(Resource, Default)]
 struct MutedUntil(f64);
+
+/// The player of each BYOND channel's sound.
+#[derive(Resource, Default)]
+struct ChannelPlayers(HashMap<u16, Entity>);
 
 /// Whether a sound received at `now` (real seconds), in a frame `gap` seconds after the previous
 /// one, is dropped; updates `muted_until`.
@@ -74,12 +81,13 @@ impl Plugin for SoundClientPlugin {
             .map_or(1.0, |v| (v / 100.0).clamp(0.0, 1.0));
         app.insert_resource(GlobalVolume::new(Volume::Linear(master)))
             .init_resource::<MutedUntil>()
+            .init_resource::<ChannelPlayers>()
             .insert_resource(SoundFiles {
                 root: self.asset_root.join(SOUND_DIR),
                 loaded: HashMap::new(),
             })
             .add_systems(Startup, (spawn_listener, start_preload))
-            .add_systems(Update, (preload, play).chain());
+            .add_systems(Update, (preload, play, play_channels).chain());
     }
 }
 
@@ -160,25 +168,7 @@ fn play(
         return;
     }
     for SoundReceived(sound) in received.read() {
-        // The server names files; never leave the sound directory.
-        if sound.file.contains("..") || sound.file.starts_with('/') {
-            continue;
-        }
-        let root = files.root.clone();
-        let handle = files
-            .loaded
-            .entry(sound.file.clone())
-            .or_insert_with(|| match ss13_data::read(&root.join(&sound.file)) {
-                Ok(bytes) => Some(sources.add(AudioSource {
-                    bytes: bytes.into(),
-                })),
-                Err(e) => {
-                    warn!("sound {}: {e}", sound.file);
-                    None
-                }
-            })
-            .clone();
-        let Some(handle) = handle else {
+        let Some(handle) = sound_handle(&mut files, &mut sources, &sound.file) else {
             continue;
         };
         let [dx, dy] = sound.offset.unwrap_or([0, 0]);
@@ -193,6 +183,66 @@ fn play(
             },
             Transform::from_xyz(f32::from(dx), f32::from(dy), 0.0),
         ));
+    }
+}
+
+/// The loaded file, read on the spot if the preload has not got it; `None` for a missing file or
+/// one outside the sound directory.
+fn sound_handle(
+    files: &mut SoundFiles,
+    sources: &mut Assets<AudioSource>,
+    file: &str,
+) -> Option<Handle<AudioSource>> {
+    // The server names files; never leave the sound directory.
+    if file.contains("..") || file.starts_with('/') {
+        return None;
+    }
+    let root = files.root.clone();
+    files
+        .loaded
+        .entry(file.to_owned())
+        .or_insert_with(|| match ss13_data::read(&root.join(file)) {
+            Ok(bytes) => Some(sources.add(AudioSource {
+                bytes: bytes.into(),
+            })),
+            Err(e) => {
+                warn!("sound {file}: {e}");
+                None
+            }
+        })
+        .clone()
+}
+
+/// Channel sounds: the new one replaces the channel's player (not dropped after a pause: the
+/// lobby music is sent once).
+fn play_channels(
+    mut received: MessageReader<ChannelSoundReceived>,
+    mut channels: ResMut<ChannelPlayers>,
+    mut files: ResMut<SoundFiles>,
+    mut sources: ResMut<Assets<AudioSource>>,
+    mut commands: Commands,
+) {
+    for ChannelSoundReceived(channel_sound) in received.read() {
+        if let Some(old) = channels.0.remove(&channel_sound.channel) {
+            commands.entity(old).try_despawn();
+        }
+        let Some(sound) = &channel_sound.sound else {
+            continue;
+        };
+        let Some(handle) = sound_handle(&mut files, &mut sources, &sound.file) else {
+            continue;
+        };
+        let player = commands
+            .spawn((
+                AudioPlayer(handle),
+                PlaybackSettings {
+                    volume: Volume::Linear((sound.volume / 100.0).clamp(0.0, 1.0)),
+                    speed: sound.speed.max(0.01),
+                    ..PlaybackSettings::DESPAWN
+                },
+            ))
+            .id();
+        channels.0.insert(channel_sound.channel, player);
     }
 }
 
