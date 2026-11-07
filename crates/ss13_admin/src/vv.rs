@@ -9,8 +9,6 @@
 //! see. Rights are checked by `server::required_rights` before any of this runs.
 
 use bevy::prelude::*;
-use bevy::reflect::structs::Struct;
-use bevy::reflect::tuple_struct::TupleStruct;
 use bevy::reflect::{PartialReflect, ReflectMut, ReflectRef};
 use ss13_net::server::Interest;
 use ss13_proto::Prototypes;
@@ -126,6 +124,8 @@ fn fields(value: &dyn PartialReflect) -> Vec<VvField> {
     }
 }
 
+// `i64::try_from` is infallible for the narrow types: the macro covers all of them alike.
+#[allow(irrefutable_let_patterns)]
 macro_rules! read_ints {
     ($value:ident, $($t:ty),*) => {
         $(if let Some(v) = $value.try_downcast_ref::<$t>() {
@@ -265,7 +265,6 @@ pub fn edit(
     let slot = field_mut(reflected.as_partial_reflect_mut(), field)
         .ok_or_else(|| format!("{component}: нет поля «{field}»."))?;
     write(slot, value)?;
-    drop(reflected);
     let shown = match value {
         VvValue::Text(t) => format!("{:?}", sanitize_text(t, MAX_TEXT_LEN)),
         other => format!("{other:?}"),

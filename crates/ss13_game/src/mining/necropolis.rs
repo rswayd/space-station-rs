@@ -872,7 +872,7 @@ mod tests {
     fn floors_turn_back_from_the_outside_in() {
         assert_eq!(restore_delay(0.0), 5.0);
         assert_eq!(restore_delay(1.0), 4.0);
-        assert_eq!(restore_delay(1.4142), 3.5);
+        assert_eq!(restore_delay(std::f32::consts::SQRT_2), 3.5);
         assert_eq!(restore_delay(4.4721), 0.5);
         assert!(runtime_paths().all(|p| p != PKA_MOD));
     }

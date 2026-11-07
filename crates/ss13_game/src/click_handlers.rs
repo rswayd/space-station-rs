@@ -279,6 +279,7 @@
 //! | 1460 | `silicon::ai_core::item_interaction` |
 //! | 1500 | `bots::construction::item_interaction` |
 //! | 1549 | `eng_machines::manufactorio::item_interaction` (wrench, router, unloader, lathe and sorter multitool, sorter item filter, storage unit screwdriver) |
+//! | 1511 | `mobs::lavaland::minebot` (a welder repairs a minebot) |
 //! | 1555 | `inducer::interact_with_atom` (charging a cell) |
 //! | 1557 | `telecomms_config` (a multitool on a telecomms machine opens its window) |
 //! | 1559 | `eng_machines::modular_shield::item_interaction` (multitool buffer, connect, link; panel-open wrench turn) |
