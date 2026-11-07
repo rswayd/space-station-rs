@@ -128,9 +128,11 @@ pub enum Family {
     ModularShieldGen,
     /// Modular shield nodes, cables, chargers, relays and wells.
     ShieldModule,
+    /// Manufactorio machines (`crate::eng_machines::manufactorio`).
+    Manufacturing,
 }
 
-const FAMILIES: [(&str, Family); 39] = [
+const FAMILIES: [(&str, Family); 40] = [
     (CELL_CHARGER, Family::Charger),
     (RECHARGER, Family::Charger),
     (crate::kitchen::MICROWAVE_ROOT, Family::Kitchen),
@@ -199,6 +201,10 @@ const FAMILIES: [(&str, Family); 39] = [
     (
         crate::eng_machines::modular_shield::MODULE,
         Family::ShieldModule,
+    ),
+    (
+        crate::eng_machines::manufactorio::ROOT,
+        Family::Manufacturing,
     ),
 ];
 
@@ -1162,6 +1168,7 @@ pub fn setup_built(world: &mut World, machine: Entity) {
         Family::ModularShieldGen | Family::ShieldModule => {
             crate::eng_machines::modular_shield::setup(world, machine)
         }
+        Family::Manufacturing => crate::eng_machines::manufactorio::setup(world, machine),
     }
 }
 
@@ -1204,6 +1211,7 @@ pub fn on_deconstruction(world: &mut World, machine: Entity, pos: TilePos, disas
     crate::science::autolathe::drop_sheets(world, machine, pos);
     crate::power::pacman::on_deconstruction(world, machine, pos);
     crate::power::smes::on_deconstruction(world, machine);
+    crate::eng_machines::manufactorio::on_destroy(world, machine);
     let Some(def) = board_def(world, &board) else {
         return;
     };

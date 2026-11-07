@@ -396,6 +396,9 @@ pub mod loot;
 pub mod machine_frame;
 #[cfg(feature = "server")]
 pub mod machine_wires;
+#[cfg(feature = "client")]
+pub mod manufactorio_client;
+pub mod manufactorio_ui;
 #[cfg(feature = "server")]
 pub mod martial;
 pub mod mecha;

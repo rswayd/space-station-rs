@@ -233,6 +233,7 @@ fn click_alt(world: &mut World, client: Entity, mob: Entity, target: Entity) -> 
         || crate::icecream::click_alt(world, client, mob, target)
         || crate::furniture::click_alt(world, client, mob, target)
         || crate::plumbing::click_alt(world, target)
+        || crate::eng_machines::manufactorio::rotate(world, target)
         || crate::vehicles::click_alt(world, client, mob, target)
         || crate::ventcrawl::click_alt(world, client, mob, target)
         || crate::radiation::geiger_alt_click(world, client, target)
