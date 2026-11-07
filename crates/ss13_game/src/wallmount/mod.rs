@@ -15,13 +15,14 @@
 //!   buttons; mounted flashers.
 //! - [`machines`]: mass drivers, igniters and sparkers the buttons drive.
 //! - [`cabinets`]: extinguisher and fire axe cabinets.
+//! - [`frames`]: wall frames mounting those onto walls.
 //! - The light switch, here: it flips its area's `lightswitch`.
 //!
 //! Cost: nothing per tick but the firelocks with something pending, a pass over the fire alarms
 //! and the ringing firelocks (one sound per 2.4 s each), the reported air tiles next to
 //! firelocks and buttons with a pending flick or timer; everything else runs on a click or a
 //! power change.
-// shortcut: no construction or deconstruction (wall frames, screwdriver panels, wires,
+// shortcut: no construction or deconstruction beyond [`frames`] (screwdriver panels, wires,
 // electronics), no damage, breaking or emag (EMPs: `crate::emp::machines`), no silicon access (AI clicks, ctrl-click
 // thermal sensors), no circuit USB ports; the light switch's `area` var (controlling another
 // area) is not read. Add each with its mechanic.
@@ -30,6 +31,7 @@ pub mod cabinets;
 pub mod controls;
 pub mod fire_alarm;
 pub mod firelock;
+pub mod frames;
 pub mod machines;
 
 use bevy::prelude::*;
@@ -83,6 +85,11 @@ impl Plugin for WallMountPlugin {
             c.held.is_some_and(|h| {
                 crate::wallmount::item_interaction(w, c.client, c.mob, h, c.target, c.modifiers)
             })
+        });
+        // tg `/obj/item/wallframe` mounting and its screwdriver and wrench.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 2707, |w, c| {
+            c.held
+                .is_some_and(|h| frames::item_interaction(w, c.client, c.mob, h, c.target))
         });
         app.init_resource::<controls::Links>()
             // After doors (`Door`) and power (`AreaPower`, `PowerMachine`) are built.

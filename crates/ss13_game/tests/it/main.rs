@@ -76,6 +76,7 @@ mod medical_machines;
 mod medicine;
 mod megafauna;
 mod mining;
+mod misc_items;
 mod misc_ui;
 mod mob_holder;
 mod mobs;

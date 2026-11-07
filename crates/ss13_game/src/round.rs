@@ -376,8 +376,14 @@ fn to_world(world: &mut World, span: Span, text: impl Into<String>) {
     chat(world, clients, span, text);
 }
 
-/// tg `station_name()`: the map's name here.
+/// tg `station_name()`: the name a charter gave (`crate::misc_items::charter`), else the map's.
 pub(crate) fn station_name(world: &World) -> String {
+    if let Some(name) = world
+        .get_resource::<crate::misc_items::charter::StationName>()
+        .filter(|n| !n.0.is_empty())
+    {
+        return name.0.clone();
+    }
     world
         .get_resource::<MapLoadPlugin>()
         .and_then(|m| m.maps.first())

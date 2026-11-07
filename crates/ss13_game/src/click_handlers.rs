@@ -79,6 +79,7 @@
 //! | 3194 | `closets::kinds::bodybag_attack_self` (a folded body bag unfolds) |
 //! | 3203 | `crayons::attack_self` (the stencil menu, a spray can's cap and colour) |
 //! | 3213 | `gifts::open` |
+//! | 3227 | `misc_items::charter::attack_self` (the station name question) |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):
 //!
@@ -272,6 +273,7 @@
 //! | 2610 | `medical::cryo::item_interaction` (a cup into the cell) |
 //! | 2630 | `medical::limbgrower::item_interaction` (limb design disks) |
 //! | 2700 | `wallmount::item_interaction` |
+//! | 2707 | `wallmount::frames::item_interaction` (wall frames on walls, their screwdriver and wrench) |
 //! | 2710 | `power::lighting::item_interaction` (bulbs, replacers, fixtures, frames, wall frames, floodlights and their frames) |
 //! | 2715 | `power::lighting::swing_bulb` (a bulb shatters on a mob; never handles) |
 //! | 2800 | `power::chargers::item_interaction` |
