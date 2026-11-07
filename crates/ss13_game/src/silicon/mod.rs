@@ -4,7 +4,7 @@
 //! - [`ai`] (server): the AI in its core, its eye, AI clicks on doors and APCs; [`ai_power`]
 //!   (server): the core's power loss and restore routine; [`ai_hud`] (server): the AI's and
 //!   cyborgs' HUD buttons, VOX announcements, the core display; [`ai_track`] (server): camera
-//!   tracking;
+//!   tracking; [`ai_upgrades`] (server): rack upgrade modules; [`ai_status`] (server): the AI's Status tab lines and its connected cyborgs;
 //! - [`alarms`] (server): station alarms, their silicon listeners and the alert console;
 //! - [`cyborg`] (server): cyborgs, their models, cell and the recharging station;
 //!   [`chassis`] (server): the cover and its lock, the cell slot, emags, lockdown, the
@@ -15,7 +15,7 @@
 //! - [`malf`] (server): the malfunctioning AI, its APC hacks and shunting; [`malf_modules`]
 //!   (server): its module picker and modules;
 //! - [`ai_core`] (server): the AI core structure, its construction around a brain processor;
-//!   [`aicard`] (server): the intelliCard; [`ai_slipper`] (server): the foam dispenser;
+//!   [`aicard`] (server): the intelliCard; [`ai_fixer`] (server): the AI integrity restorer; [`ai_slipper`] (server): the foam dispenser;
 //!   [`holopad`] (server): holopads, the AI's hologram;
 //! - [`interact`] (server): silicons opening machine windows (`attack_ai`), their window
 //!   status; [`airlock`] (server): the airlock's `AiAirlock` window;
@@ -38,13 +38,19 @@ pub mod ai;
 #[cfg(feature = "server")]
 pub mod ai_core;
 #[cfg(feature = "server")]
+pub mod ai_fixer;
+#[cfg(feature = "server")]
 pub mod ai_hud;
 #[cfg(feature = "server")]
 pub mod ai_power;
 #[cfg(feature = "server")]
 pub mod ai_slipper;
 #[cfg(feature = "server")]
+pub mod ai_status;
+#[cfg(feature = "server")]
 pub mod ai_track;
+#[cfg(feature = "server")]
+pub mod ai_upgrades;
 #[cfg(feature = "server")]
 pub mod aicard;
 #[cfg(feature = "server")]
@@ -138,6 +144,8 @@ mod server {
                 .add_plugins((
                     super::ai_core::AiCorePlugin,
                     super::aicard::AiCardPlugin,
+                    super::ai_fixer::AiFixerPlugin,
+                    super::ai_upgrades::AiUpgradesPlugin,
                     super::ai_slipper::AiSlipperPlugin,
                     super::holopad::HolopadPlugin,
                     super::pai::PaiPlugin,

@@ -189,6 +189,32 @@ pub struct RoboticsConsoleData {
 /// `act('stopbot', { ref })`.
 pub const STOPBOT: &str = "stopbot";
 
+/// tg `AiRestorer`: the AI system integrity restorer (`/obj/machinery/computer/aifixer`).
+pub struct AiRestorerUi;
+
+impl UiInterface for AiRestorerUi {
+    const NAME: &'static str = "AiRestorer";
+    type Data = AiRestorerData;
+    type StaticData = ();
+}
+
+/// `ui_data` (tg `ejectable` is the NTOS app's, always false on the console: not sent).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct AiRestorerData {
+    pub ai_present: bool,
+    /// "Please transfer an AI unit." without an AI.
+    pub error: Option<String>,
+    pub name: String,
+    pub restoring: bool,
+    /// `(health + 100) / 2`, percent.
+    pub health: f32,
+    pub is_dead: bool,
+    pub laws: Vec<String>,
+}
+
+/// `act('PRG_beginReconstruction')`.
+pub const BEGIN_RECONSTRUCTION: &str = "PRG_beginReconstruction";
+
 /// tg `LawRack`: a module rack's slots and links.
 pub struct LawRackUi;
 

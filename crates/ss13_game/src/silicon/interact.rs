@@ -8,7 +8,7 @@
 //!   ([`super::airlock`]), an APC's `Apc` (`crate::power::apc_ui`), air alarms and atmos
 //!   machines (`crate::atmos_machinery::windows`), the solar control, the mech bay console, the
 //!   communications console (`crate::comms_server`), the robotics console
-//!   (`super::robotics`), a bot's `SimpleBot` (`crate::bots`).
+//!   (`super::robotics`), the AI restorer (`super::ai_fixer`), a bot's `SimpleBot` (`crate::bots`).
 //!   The cell charger ignores silicons (`attack_ai` returns), as in tg.
 //! - Windows of a silicon actor ([`RemoteActor`]) are not judged by distance: the AI's are
 //!   interactive while its core is conscious with control enabled and the cameras see the
@@ -122,6 +122,10 @@ pub fn attack_ai(world: &mut World, client: Entity, user: Entity, target: Entity
         super::robotics::open(world, client, user, target);
         return true;
     }
+    if super::ai_fixer::is_fixer(world, target) {
+        super::ai_fixer::open(world, client, user, target);
+        return true;
+    }
     // `/mob/living/basic/bot/attack_ai`.
     if world.get::<crate::bots::Bot>(target).is_some() {
         crate::bots::ui::open(world, client, user, target);
@@ -195,7 +199,10 @@ fn silicon_status(
             }
             let controls = !core.control_disabled && *stat == Stat::Conscious;
             // tg `can_see`: a carded AI by the distance from its card (its eye is on it).
-            let sees = if matches!(inside.get(eye.ai), Ok(super::ai::AiInside::Card(_))) {
+            let sees = if matches!(
+                inside.get(eye.ai),
+                Ok(super::ai::AiInside::Card(_) | super::ai::AiInside::Terminal(_))
+            ) {
                 positions
                     .get(actor)
                     .ok()

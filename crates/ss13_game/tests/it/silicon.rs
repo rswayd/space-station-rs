@@ -907,6 +907,22 @@ fn cyborg_links_picks_a_model_and_charges() {
             .connected_robots
             .contains(&borg)
     );
+    // The AI's Status tab lists the cyborg (tg `get_status_tab_items`).
+    // The client is the cyborg's now (the AI's eye went with the second join): read the core's.
+    let lines = ss13_game::silicon::ai_status::ai_lines(s.server.world(), core);
+    assert_eq!(lines[0], "System integrity: 100%");
+    assert!(
+        lines.contains(&"Connected cyborgs: 1".to_owned()),
+        "{lines:?}"
+    );
+    let borg_line = lines.iter().find(|l| l.contains("S.Integrity")).unwrap();
+    assert!(
+        // The fixture has no high-capacity cell type: the chassis is empty.
+        borg_line.contains("S.Integrity: 100%")
+            && borg_line.contains("Cell: Empty")
+            && borg_line.contains("Status: DEPOWERED"),
+        "{borg_line}"
+    );
     // No lungs, stomach or reagents.
     assert!(
         s.server

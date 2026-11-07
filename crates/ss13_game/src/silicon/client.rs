@@ -11,6 +11,8 @@
 //!   area's camera button.
 //! - `RoboticsControlConsole`: a section per cyborg (status, charge, model, master AI) with
 //!   its Lockdown / Release button.
+//! - `AiRestorer`: the restorer's AI (integrity bar, Functional / Nonfunctional, laws) and its
+//!   Begin Reconstruction button.
 //! - `LawRack`: a row per slot (screw, weld, repair, insert or remove, by the tool in hand) and
 //!   the rack's links.
 // shortcut: the static is plain dark tiles, not tg's animated `cameravis.dmi` static.
@@ -56,6 +58,7 @@ impl Plugin for SiliconClientPlugin {
             .register_ui_view::<ListInputUi>()
             .register_ui_view::<StationAlertUi>()
             .register_ui_view::<RoboticsConsoleUi>()
+            .register_ui_view::<AiRestorerUi>()
             .register_ui_view::<LawRackUi>()
             .init_resource::<CameraView>()
             .add_systems(Startup, spawn_static)
@@ -550,6 +553,101 @@ fn cyborg_section(borg: &RoboticsCyborg) -> Box<dyn SceneList> {
                 --
                 @LabeledListItem { @label: "Master AI", @color: master_color, @content: master }
             ]
+        ]
+    }))
+}
+
+impl ClientUi for AiRestorerUi {
+    const WIDTH: f32 = 370.0;
+    const HEIGHT: f32 = 360.0;
+
+    fn content(_: &(), data: &AiRestorerData) -> impl Scene {
+        let error: Vec<Box<dyn SceneList>> = data
+            .error
+            .iter()
+            .map(|e| -> Box<dyn SceneList> {
+                let text = e.clone();
+                Box::new(EntityScene(bsn! { @NoticeBox Children [ Text(text) ] }))
+            })
+            .collect();
+        let body: Vec<Box<dyn SceneList>> = if data.ai_present {
+            vec![restorer_section(data)]
+        } else {
+            Vec::new()
+        };
+        bsn! {
+            @WindowContent
+            Children [
+                @Section { @fill: true, @scrollable: true } Children [ {error} -- {body} ]
+            ]
+        }
+    }
+}
+
+/// tgui `AiRestorer`'s integrity bar color (`good` 70+, `average` 50-70, `bad` below).
+pub fn integrity_color(health: f32) -> UiColor {
+    if health >= 70.0 {
+        UiColor::Good
+    } else if health >= 50.0 {
+        UiColor::Average
+    } else {
+        UiColor::Bad
+    }
+}
+
+fn restorer_section(data: &AiRestorerData) -> Box<dyn SceneList> {
+    let (state, state_color) = if data.is_dead {
+        ("Nonfunctional".to_owned(), UiColor::Bad.base())
+    } else {
+        ("Functional".to_owned(), UiColor::Good.base())
+    };
+    let buttons: Box<dyn SceneList> = Box::new(EntityScene(bsn! {
+        Node Propagate::<TextColor>(TextColor(state_color))
+        Children [ Text(state) ]
+    }));
+    let health = data.health;
+    let bar_color = integrity_color(health);
+    let label = format!("{}%", health.round());
+    let bar = EntityScene(bsn! {
+        @ProgressBar { @empty: true }
+        ProgressBar { value: health, min_value: 0.0, max_value: 100.0, color: bar_color }
+        Children [ Text(label) ]
+    });
+    let restoring: Vec<Box<dyn SceneList>> = if data.restoring {
+        let good = UiColor::Good.base();
+        vec![Box::new(EntityScene(bsn! {
+            Node { margin: UiRect::top(px(4)) } Propagate::<TextColor>(TextColor(good))
+            Children [ Text("RECONSTRUCTION IN PROGRESS") ]
+        }))]
+    } else {
+        Vec::new()
+    };
+    let disabled = data.restoring;
+    let laws: Vec<Box<dyn SceneList>> = data
+        .laws
+        .iter()
+        .map(|law| -> Box<dyn SceneList> {
+            let law = law.clone();
+            Box::new(EntityScene(bsn! { Node Children [ Text(law) ] }))
+        })
+        .collect();
+    let title = data.name.clone();
+    Box::new(EntityScene(bsn! {
+        @Section { @title: title, @buttons: buttons }
+        Children [
+            @LabeledList
+            Children [
+                @LabeledListItem { @label: "Integrity" }
+                Children [ {bar} ]
+            ]
+            --
+            {restoring}
+            --
+            @ss13_ui_kit::Button { @icon: "plus", @content: "Begin Reconstruction", @fluid: true }
+            ss13_ui_kit::Button { disabled: disabled }
+            Act({BEGIN_RECONSTRUCTION.to_owned()})
+            --
+            @Section { @title: "Laws" } Children [ {laws} ]
         ]
     }))
 }
