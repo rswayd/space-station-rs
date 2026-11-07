@@ -1008,3 +1008,35 @@ fn a_seclite_a_suppressor_and_a_bayonet_go_on_guns() {
         s.get::<Health>(b).brute
     );
 }
+
+#[test]
+fn the_ammo_counter_follows_the_held_gun() {
+    use ss13_game::hud::GunHudData;
+    let mut s = Station::start("the_ammo_counter_follows_the_held_gun");
+    let a = s.players[0].mob;
+    let layers = |s: &Station| -> Vec<String> {
+        s.try_get::<GunHudData>(a)
+            .map(|d| d.layers.iter().map(|(l, _)| l.clone()).collect())
+            .unwrap_or_default()
+    };
+    // 12 in the magazine and one chambered: "13".
+    s.give(0, "/obj/item/gun/ballistic/automatic/pistol");
+    s.run_until("counted", |s| layers(s) == ["oth_light", "o3", "t1"]);
+    let floor = s.turf_at(TilePos::new(7, 5, 1));
+    s.shoot(0, floor);
+    s.run_until("one less", |s| layers(s) == ["oth_light", "o2", "t1"]);
+    // An energy gun: the cell and shot cost in percent.
+    s.give(0, "/obj/item/gun/energy/e_gun");
+    s.run_until("percent", |s| {
+        s.try_get::<GunHudData>(a).is_some_and(|d| {
+            d.base == "eammo_counter" && d.energy.is_some_and(|e| e.0 == 100 && e.2 == 5)
+        })
+    });
+    // Empty hands: hidden.
+    let world = s.0.server.world_mut();
+    let hand = world.get::<Inventory>(a).unwrap().active;
+    world.get_mut::<Inventory>(a).unwrap().hands[hand] = None;
+    s.run_until("hidden", |s| {
+        s.try_get::<GunHudData>(a).is_some_and(|d| !d.shown)
+    });
+}

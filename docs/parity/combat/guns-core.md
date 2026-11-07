@@ -43,7 +43,7 @@
 
 - **Код:** [`/datum/component/gunhud`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/gunhud/code/gunhud_component.dm#L1)
 - **BandaStation:** [`modular_bandastation/gunhud/code/gunhud_component.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/gunhud/code/gunhud_component.dm#L1) — весь механизм
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/gunhud.rs` (сервер) и `crates/ss13_game/src/gunhud_client.rs` (клиент), безоконный интерфейс `GunHud` (`crates/ss13_game/src/hud.rs`): у человека с оружием или сваркой в руке в `ui_gunhud` — патроны баллистики тремя цифрами `oth` (с патронником; у револьвера только живые), `no_mag`/`empty_flash`, у энергооружия процент батареи (лайм/жёлтый ≤25%/красный без выстрела) и цена выстрела, у сварки топливо и пламя; показывается оружие активной руки, иначе другой; без индикатора режима огня (переключения режимов нет)
 
 ### Оружейные стойки и маяки выбора оружия (BandaStation)
 Форк добавляет оружейные стойки для арсенала (с наполненными спавнерами) и маяки выбора табельного оружия для СБ, ГСБ и блюшилда; кобуры с быстрым выхватыванием.

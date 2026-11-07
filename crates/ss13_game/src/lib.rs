@@ -321,6 +321,10 @@ pub mod grenades;
 #[cfg(feature = "server")]
 pub mod gun_attachments;
 #[cfg(feature = "server")]
+pub mod gunhud;
+#[cfg(feature = "client")]
+pub mod gunhud_client;
+#[cfg(feature = "server")]
 pub mod gunpoint;
 #[cfg(feature = "server")]
 pub mod guns;

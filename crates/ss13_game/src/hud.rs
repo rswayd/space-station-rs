@@ -236,6 +236,34 @@ pub struct HungerHudData {
     pub shown: bool,
 }
 
+/// The owner's ammo counter (BandaStation `/atom/movable/screen/gunhud_screen` at `ui_gunhud`),
+/// a headless tgui interface like [`HealthHudUi`] (`crate::gunhud`, `crate::gunhud_client`).
+pub struct GunHudUi;
+
+impl UiInterface for GunHudUi {
+    const NAME: &'static str = "GunHud";
+    type Data = GunHudData;
+    type StaticData = ();
+}
+
+/// What the counter shows; all states are in [`GUNHUD_DMI`].
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(bevy::prelude::Component))]
+pub struct GunHudData {
+    /// `invisibility = 0` (a gun or welder in hand).
+    pub shown: bool,
+    /// The screen object's `icon_state` (`backing`, `eammo_counter`, `eammo_counter_empty`).
+    pub base: String,
+    /// `update_overlays` in order: each overlay's state and `backing_color` (RGB).
+    pub layers: Vec<(String, [u8; 3])>,
+    /// An energy gun's maptext: the cell percent and its colour, the shot's cost percent
+    /// (cyan).
+    pub energy: Option<(u32, [u8; 3], u32)>,
+}
+
+/// BandaStation `modular_bandastation/gunhud/icons/gun_hud.dmi`.
+pub const GUNHUD_DMI: &str = "modular_bandastation/gunhud/icons/gun_hud.dmi";
+
 /// The owner's mood face (tg `/atom/movable/screen/mood`, `ui_mood`), a headless tgui interface
 /// like [`HealthHudUi`]. Its one act, [`MOOD_CLICK`], prints the mood to the owner's chat
 /// (`/datum/mood/proc/hud_click`).

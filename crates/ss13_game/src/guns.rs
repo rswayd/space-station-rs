@@ -217,6 +217,7 @@ impl Plugin for GunsServerPlugin {
         crate::taser::plugin(app);
         crate::gunpoint::plugin(app);
         crate::gun_attachments::plugin(app);
+        crate::gunhud::plugin(app);
         crate::guns_special::plugin(app);
         app.init_resource::<Bursts>()
             .add_observer(add_gun_state)
