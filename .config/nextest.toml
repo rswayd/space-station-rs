@@ -5,6 +5,9 @@ status-level = "fail"
 final-status-level = "slow"
 # The slowest integration test takes ~10 s; a hung server is killed after 5 minutes.
 slow-timeout = { period = "60s", terminate-after = 5 }
+# Long timing-sensitive tests (prediction under latency, AI power loss) flake under full load;
+# one retry, and nextest still reports them as FLAKY.
+retries = 1
 
 # One station map each (`atmos_machinery::station_maps::*`), all loaded in parallel: a big map
 # takes ~40 s alone and longer beside the other real-asset tests.

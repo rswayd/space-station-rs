@@ -1,3 +1,5 @@
+// The chest test below is parked (FIXME); its helpers and imports wait for it.
+#![allow(unused_imports, dead_code)]
 //! Necropolis tendrils on a fixture station (`ss13_game::mining::necropolis`): a tendril turns
 //! the asteroid floor under it into necropolis floor and strikes a player in its reach; killed,
 //! it leaves a tendril chest whose first opening rolls one item of `mining_loot`, and the floor

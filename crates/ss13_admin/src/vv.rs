@@ -125,10 +125,10 @@ fn fields(value: &dyn PartialReflect) -> Vec<VvField> {
 }
 
 // `i64::try_from` is infallible for the narrow types: the macro covers all of them alike.
-#[allow(irrefutable_let_patterns)]
 macro_rules! read_ints {
     ($value:ident, $($t:ty),*) => {
         $(if let Some(v) = $value.try_downcast_ref::<$t>() {
+            #[allow(irrefutable_let_patterns)]
             if let Ok(v) = i64::try_from(*v) {
                 return VvValue::Int(v);
             }

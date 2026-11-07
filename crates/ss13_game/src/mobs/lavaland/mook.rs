@@ -373,6 +373,7 @@ pub(super) fn on_attacked(world: &mut World, victim: Entity, intruder: Entity) {
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports)] // the parked tests (FIXME above) use it
     use super::*;
 
     // FIXME(wave 23): written blind, fails (landing tile / heal amount); parked.
