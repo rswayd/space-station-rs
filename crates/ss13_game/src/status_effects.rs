@@ -1419,6 +1419,8 @@ pub fn examine_lines(world: &World, mob: Entity, lines: &mut Vec<(Span, String)>
     if let Some(text) = crate::fire::examine_text(world, mob) {
         lines.push((Span::Notice, text.to_owned()));
     }
+    // Choking, slime, the slit throat (`crate::afflictions`).
+    crate::afflictions::examine_lines(world, mob, lines);
     // Death ends the jitter; the dead do not look drunk (`IS_DEAD_OR_FAKING`).
     if world.get::<Stat>(mob) == Some(&Stat::Dead) {
         return;

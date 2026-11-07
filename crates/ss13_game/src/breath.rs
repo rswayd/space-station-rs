@@ -138,6 +138,12 @@ pub enum AlertCategory {
     Seizure,
     Woozy,
     HighBloodPressure,
+    /// The alerts of `crate::afflictions`: `terrified`, `gravity_sickness`, `slimed`,
+    /// `slime_leech`.
+    Terrified,
+    GravitySickness,
+    Slimed,
+    SlimeLeech,
     /// `ALERT_SUCCUMB` (`crate::death`): in crit, a click succumbs.
     Succumb,
 }
@@ -165,6 +171,13 @@ impl Alert {
         // `/atom/movable/screen/alert/succumb` has the base `template` state.
         if self.category == AlertCategory::Succumb {
             return ("Сдаться", "Покиньте этот бренный мир.");
+        }
+        // `/atom/movable/screen/alert/status_effect/gravity_sickness` shares the `paralysis` state.
+        if self.category == AlertCategory::GravitySickness {
+            return (
+                "Гравитационная болезнь",
+                "Гравитация планеты вокруг вызывает у вас тошноту и усталость.",
+            );
         }
         match self.state {
             "not_enough_oxy" => (
@@ -293,6 +306,19 @@ impl Alert {
                 "Вялость",
                 "Вы чувствуете себя медленнее обычного, кажется, всё руками выходит дольше, чем \
                  обычно.",
+            ),
+            "terrified" => (
+                "В ужасе!",
+                "Вас окутывает сверхъестественная тьма, захлёстывая паникой! Выйдите на свет!",
+            ),
+            "slimed" => (
+                "Покрыт слизью",
+                "Вас покрывает слизь, и она разъедает вас! Нажмите, чтобы начать счищать её, \
+                 или найдите способ смыть её быстрее!",
+            ),
+            "slime_leech" => (
+                "Покрыт слизью",
+                "Слайм высасывает вашу жизненную силу! Снимите его руками, ударом или водой.",
             ),
             "highbloodpressure" => (
                 "Высокое давление",

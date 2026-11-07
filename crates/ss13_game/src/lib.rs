@@ -156,6 +156,7 @@ use std::path::{Path, PathBuf};
 pub mod actions;
 #[cfg(feature = "client")]
 pub mod actions_client;
+pub mod afflictions;
 #[cfg(feature = "server")]
 pub mod airlock_construction;
 #[cfg(feature = "server")]

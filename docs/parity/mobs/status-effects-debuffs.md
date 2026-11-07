@@ -66,7 +66,7 @@
 Застрявший в горле предмет: нельзя дышать, нужен приём Геймлиха.
 
 - **Код:** [`/datum/status_effect/choke`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/choke.dm#L2)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/afflictions.rs` (`Choking`, `apply_choke`, `end_choke`, `choke_clicks`, `complete_heimlich`): только карбоны, предмет внутри моба, немота (`TRAIT_MUTE` через `medical/traumas.rs`), запрет еды (`food.rs`), −1 вдох в секунду (`losebreath`), горящий предмет — 2 ожога голове и 2 стамины в секунду 15–25 с, хрипы (`gag1-5.ogg`), муд «choke» (−10), строка осмотра, конец по задержке с рвотой и выбросом предмета; приём Геймлиха — клик пустой рукой вне боевого режима, две свободные руки, живая жертва, 7 с, 14 брута, тяжёлая тупая травма груди, `crack_vomit.ogg`. Нет тряски камеры, частиц пепла и паузы при `TRAIT_NOBREATH`, предмет падает на тайл (не летит). Чужое: источники — сигарета при `force_say` (сигареты/речь), нож в слоте маски (ножи)
 
 ### Судороги, спазмы, припадки
 `spasms` (случайные движения и удары), `convulsing` (роняет предметы), `seizure` (от передоза).
@@ -84,7 +84,7 @@
 Нарастающий страх в темноте от теневых существ: дрожь, замедление, потеря сознания при максимуме.
 
 - **Код:** [`/datum/status_effect/terrified`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/terrified.dm#L6)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/afflictions.rs` (`Terrified`, `apply_terrified`, `dark_around`), `crates/ss13_game/src/medical/fear.rs` (`Fearful::terrified`, `add_terrified`, `terrified_tick`): алерт, сообщение, крик, 100 ужаса (повторно +135), источник «тьма» ×3 (15/с, если тёмных открытых тайлов вокруг больше светлых, теневые виды не боятся) с мудом «nyctophobia», эффекты страха (дрожь, заикание, сердце, паника), конец при нуле ужаса; страх тикает и без травм (`traumas::life`). Чужое: заклинание Terrify кошмара (`antag/nightmare.rs`, не портировано)
 
 ### Токсичная рвота и температура со временем
 `tox_vomit` (рвота от токсинов), `temperature_over_time` (постепенный нагрев/охлаждение тела, перегрев чипа).
@@ -96,7 +96,7 @@
 Квирк «Космонавт»: недомогание в гравитации и бонусы в невесомости.
 
 - **Код:** [`/datum/status_effect/spacer`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/spacer.dm#L3), [`/datum/status_effect/spacer/gravity_sickness`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/spacer.dm#L73)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/afflictions.rs` (`GravitySickness`, `GravityWellness`, `set_spacer`, `sickness_step`, `wellness_step`): эффекты взаимно заменяются, только карбоны; болезнь — алерт, после 2 минут (кроме планетарных карт) стамина-урон 5 за минуту до 25, без баллона −1 вдох каждые 10 с (не больше минут и 8); здоровье в невесомости — после 10 с −2 с всех оглушений в секунду, после минуты −4 стамины в секунду, гравитация сбрасывает счёт. Счёт секунд — в секундах (в tg единицы перепутаны, ×0,1 децисекунды). Нет множителя нокдауна 0,75. Чужое: отвращение (`disgust`, голод — не портировано), квирк «Космонавт» с мудлетами и модификаторами скорости (квирки)
 
 ### Генетические повреждения и временные превращения
 `genetic_damage` (от мутаторов, токсин-урон), `decloning`, `dna_melt`, временное превращение (жало трансформации, ДНК-инъектор). Подробно — см. ../genetics/.
@@ -108,14 +108,14 @@
 Облепление слизью, кормление слайма, высасывание слаймом.
 
 - **Код:** [`/datum/status_effect/slimed`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/slime/slimed.dm#L46), [`/datum/status_effect/slime_food`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/slime/slime_food.dm#L2), [`/datum/status_effect/slime_leech`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/slime/slime_leech.dm#L7)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/afflictions.rs` (`Slimed`, `apply_slimed`, `remove_slime_stacks`, `leech_started`, `leech_ended`): 10 стаков, раз в 3 с 2–4 брута в секунду и 10% строк боли, мокрые стаки (>15) смывают стак в секунду за 5 мокрых, при здоровье ≤10 слизь сползает, клик по алерту — счищать по стаку за 1,5 с (не мокрым, не занятым), строка осмотра; высасывание слаймом (`science/xenobio.rs`: урон, питание, лечение слайма) теперь с алертом жертвы, по окончании — слизь с шансом `100 − bio`-брони. Нет частиц слизи. Чужое: `slime_food` — феромоны консоли ксенобиологии и дружба слаймов (ксенобиология, не портированы)
 
 ### Метки и кровотечения шахтёрского/боевого снаряжения
 Метка крашера (лаваленд), стекущее кровотечение пилы-тесака, перерезанное горло (`neck_slice`).
 
 - **Код:** [`/datum/status_effect/crusher_mark`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/debuffs.dm#L433), [`/datum/status_effect/stacking/saw_bleed`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/debuffs.dm#L525), [`/datum/status_effect/neck_slice`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/debuffs.dm#L551)
 - **BandaStation:** [`modular_bandastation/status_effects/code/debuffs.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/status_effects/code/debuffs.dm#L1) — перерезанное горло делает немым (`TRAIT_MUTE`)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/afflictions.rs`: `CrusherMark` (`apply_crusher_mark`, `crusher_mark_ready`, `detonate_crusher_mark`: только крупные мобы, 30 с с обновлением, готовность через 0,8 с, подрыв 50 брута за вычетом `bomb`-брони плюс бонус удара в спину при усилении или со спины), `SawBleeds` (`add_saw_bleed`: пила — 10 стаков → 200 брута, кровопускание — 7 → 20, распад стака раз в 0,6 с с задержкой 0,5 с за новые стаки, звук `desecration`), `NeckSlice` (`apply_neck_slice`: люди с головой, немота BandaStation, конец со смертью, потерей головы или без тяжёлой режущей кровоточащей раны головы, 10% gasp/gag/choke). Нет подложки метки, оверлея и брызг крови. Чужое: кинетический крашер и трофеи, пила-тесак, проклятая катана (шахтёрское снаряжение), перерезание горла (`butchering`)
 
 ### Магические и антагонистские проклятия
 Проклятие некрополя, гипнотический транс, «уходи» (go_away), фальшивый вирус, муравьи, упрёк, морозный взрыв, телепортационное безумие, проклятие Мидаса, метка цели, теневая речь, проклятие игрового автомата, Вавилонская башня, ржавая порча, огненная стена, нить-удавка, крючок рыболова, дискоординация.

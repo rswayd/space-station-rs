@@ -1523,6 +1523,8 @@ pub fn refresh(world: &mut World, mob: Entity) {
     pacifist |= crate::service::hippocratic_sworn(world, mob);
     // The mime's vow (`TRAIT_MIMING`, `can_speak(allow_mimes = FALSE)`).
     speech.mute |= world.get::<crate::service::MimeVow>(mob).is_some();
+    // A stuck item, a slit throat (`crate::afflictions`).
+    speech.mute |= crate::afflictions::mutes(world, mob);
     set_aphasia(world, mob, aphasia, gibbering);
     super::fear::set_sources(world, mob, &phobias, monophobia);
     super::split_personality::sync(world, mob, split);
@@ -1623,6 +1625,11 @@ pub fn life(world: &mut World, mob: Entity, secs: f32) {
     };
     let count = traumas(world, brain).len();
     if count == 0 {
+        // A fear without traumas (`crate::afflictions` terrified) still ticks.
+        if world.get::<super::fear::Fearful>(mob).is_some() {
+            let mut rng = super::fork_rng(world);
+            super::fear::tick(world, mob, secs, &mut rng);
+        }
         return;
     }
     let mut rng = super::fork_rng(world);
