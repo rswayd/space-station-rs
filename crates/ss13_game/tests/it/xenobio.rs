@@ -7,8 +7,12 @@ use std::path::{Path, PathBuf};
 
 use bevy::prelude::*;
 use ss13_game::chem::{Chem, Reagents};
+use ss13_game::closets::InCloset;
 use ss13_game::health::Stat;
 use ss13_game::science::xenobio::{Slime, SlimeExtract, complete_core_removal};
+use ss13_game::science::xenobio_console::{
+    XenoConsole, feed_potion, feed_slime, slime_pickup, slime_place, valid_turf,
+};
 use ss13_game::testing::{self, fixture_map, steps, write_fixture};
 use ss13_game::tools::DoAfter;
 use ss13_mapload::DmItem;
@@ -68,6 +72,17 @@ const TYPES: &str = r##"{
         "icon_state": "grey-core" } },
     "/obj/item/slime_extract/grey": { "parent": "/obj/item/slime_extract", "declared_vars": {
         "name": "grey slime extract" } },
+    "/obj/item/slimepotion": { "parent": "/obj/item" },
+    "/obj/item/slimepotion/slime": { "parent": "/obj/item/slimepotion" },
+    "/obj/item/slimepotion/slime/steroid": { "parent": "/obj/item/slimepotion/slime",
+        "declared_vars": { "name": "slime steroid" } },
+    "/obj/machinery": { "parent": "/obj", "declared_vars": { "anchored": 1, "density": 1,
+        "icon": { "resource": "i.dmi" }, "icon_state": "toy" } },
+    "/obj/machinery/computer": { "parent": "/obj/machinery" },
+    "/obj/machinery/computer/camera_advanced": { "parent": "/obj/machinery/computer" },
+    "/obj/machinery/computer/camera_advanced/xenobio": {
+        "parent": "/obj/machinery/computer/camera_advanced",
+        "declared_vars": { "name": "Slime management console" } },
     "/obj/item/card": { "parent": "/obj/item" },
     "/obj/item/card/id": { "parent": "/obj/item/card", "declared_vars": { "access": { "list": [] } } },
     "/obj/item/card/id/advanced": { "parent": "/obj/item/card/id" },
@@ -111,10 +126,11 @@ const TYPES: &str = r##"{
 const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 "f" = (/turf/open/floor,/area/space)
 "S" = (/mob/living/basic/slime,/turf/open/floor,/area/space)
+"C" = (/obj/machinery/computer/camera_advanced/xenobio,/turf/open/floor,/area/space)
 
 (1,1,1) = {"
 wwwwwww
-wfffffw
+wffffCw
 wfSfffw
 wfffffw
 wwwwwww
@@ -124,6 +140,8 @@ wwwwwww
 const SLIME_AT: TilePos = TilePos::new(3, 3, 1);
 const BENCH: TilePos = TilePos::new(5, 2, 1);
 const GREY_EXTRACT: &str = "/obj/item/slime_extract/grey";
+const STEROID: &str = "/obj/item/slimepotion/slime/steroid";
+const CONSOLE_AT: TilePos = TilePos::new(6, 4, 1);
 
 const STATES: [(&str, &str); 10] = [
     ("t.dmi", "floor"),
@@ -145,6 +163,8 @@ fn fixture(test: &str) -> PathBuf {
     let used = [
         "/mob/living/basic/slime",
         GREY_EXTRACT,
+        STEROID,
+        "/obj/machinery/computer/camera_advanced/xenobio",
         "/turf/open/floor",
         "/turf/closed/wall",
         "/turf/open/space/basic",
@@ -311,4 +331,56 @@ fn grey_extract_with_water_is_spent() {
     inject(&mut app, e, "/datum/reagent/toxin/plasma", 1.0);
     app.update();
     assert_eq!(slimes(&mut app).len(), 1, "a spent extract does not react");
+}
+
+/// The slime console sucks a slime up (hidden on the console's tile, in stasis), spits it out
+/// onto a floor of its area, doses it with the loaded potion and places no monkey without a
+/// cube.
+#[test]
+fn slime_console_stores_places_and_doses_slimes() {
+    let mut app = server("console");
+    let slime = the_slime(&mut app);
+    let world = app.world_mut();
+    let console = {
+        let mut q = world.query_filtered::<Entity, With<XenoConsole>>();
+        q.single(world).expect("the mapped console")
+    };
+    assert!(valid_turf(world, console, BENCH));
+    // `tell` only queues chat: any entity stands in for the client.
+    slime_pickup(world, slime, console, slime);
+    world.flush();
+    assert_eq!(
+        world.get::<XenoConsole>(console).unwrap().slimes,
+        vec![slime]
+    );
+    assert!(
+        world.get::<InCloset>(slime).is_some(),
+        "hidden in the console"
+    );
+    assert_eq!(world.get::<TilePos>(slime), Some(&CONSOLE_AT));
+    run(&mut app, 2.5);
+    assert!(
+        app.world().get::<Slime>(slime).unwrap().stasis,
+        "stored in stasis"
+    );
+
+    let world = app.world_mut();
+    slime_place(world, console, BENCH);
+    world.flush();
+    assert!(world.get::<XenoConsole>(console).unwrap().slimes.is_empty());
+    assert!(world.get::<InCloset>(slime).is_none());
+    assert_eq!(world.get::<TilePos>(slime), Some(&BENCH));
+
+    world.get_mut::<XenoConsole>(console).unwrap().potion = Some(STEROID.to_owned());
+    feed_potion(world, slime, slime, console, slime);
+    world.flush();
+    assert_eq!(
+        world.get::<Slime>(slime).unwrap().cores,
+        2,
+        "steroid applied"
+    );
+    assert_eq!(world.get::<XenoConsole>(console).unwrap().potion, None);
+
+    feed_slime(world, slime, console, BENCH);
+    assert_eq!(world.get::<XenoConsole>(console).unwrap().monkeys, 0.0);
 }

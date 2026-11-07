@@ -47,6 +47,8 @@ pub mod server_control;
 pub mod techweb;
 #[cfg(feature = "server")]
 pub mod xenobio;
+#[cfg(feature = "server")]
+pub mod xenobio_console;
 
 /// Research on the server: the techweb, its servers, consoles, lathes and the analyzer.
 #[cfg(feature = "server")]
@@ -72,6 +74,7 @@ impl bevy::prelude::Plugin for ScienceServerPlugin {
             experi_scanner::ExperiScannerPlugin,
             server_control::ServerControlPlugin,
             xenobio::XenobioPlugin,
+            xenobio_console::XenobioConsolePlugin,
             exodrone::server::ExodronePlugin,
             bitrunning::server::BitrunningServerPlugin,
             quantum_pad::QuantumPadPlugin,

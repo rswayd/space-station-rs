@@ -176,6 +176,7 @@
 //! | 2600 | `genetics::console::interact` |
 //! | 2650 | `medical::pods::interact` (sleepers, cryo cells, lipid extractors, organ harvesters) |
 //! | 2660 | `medical::kiosk::interact` |
+//! | 2663 | `science::xenobio_console::take_controls` (the slime console's controls) |
 //! | 2670 | `medical::limbgrower::interact` |
 //! | 2685 | `brig::gulag::interact` (labor camp teleporter, its console, the item reclaimer) |
 //! | 2695 | `brig::labor::interact` (claim console, plate press; right click: produceporter) |
@@ -277,6 +278,7 @@
 //! | 1691 | `service::cards::item_interaction` (cards, hands and decks on each other, pens marking) |
 //! | 1700 | `service::server::item_interaction` |
 //! | 1750 | `medical::bodyparts::item_interaction` |
+//! | 1773 | `science::xenobio_console::item_interaction` (potions, monkey cubes into the slime console) |
 //! | 1777 | `science::xenobio::item_interaction` (slimes, extracts) |
 //! | 1800 | `kitchen::item_interaction` |
 //! | 1850 | `restaurant::item_interaction` |

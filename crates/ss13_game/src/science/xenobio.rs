@@ -492,7 +492,7 @@ fn set_name(world: &mut World, e: Entity, name: &str) {
     }
 }
 
-fn say_around(world: &mut World, pos: TilePos, span: Span, text: &str) {
+pub(crate) fn say_around(world: &mut World, pos: TilePos, span: Span, text: &str) {
     let clients = clients_near(world, pos, None);
     if !clients.is_empty() {
         world.write_message(SendChat {
@@ -548,7 +548,9 @@ fn live(world: &mut World, e: Entity, secs: f64) {
                 0.0
             }
         });
-    let stasis = bz >= 0.05 && body < T0C + 100.0;
+    // `TRAIT_STASIS` from the slime console's storage (`super::xenobio_console`).
+    let stored = world.get::<crate::closets::InCloset>(e).is_some();
+    let stasis = stored || (bz >= 0.05 && body < T0C + 100.0);
     let mut rng = CombatRng(world.resource::<CombatRng>().0);
     let mut starve_damage = 0.0;
     {
@@ -729,6 +731,10 @@ fn slime_tick(world: &mut World) {
         let Some(s) = world.get::<Slime>(e).cloned() else {
             continue;
         };
+        // Stored in a slime console: in stasis.
+        if world.get::<crate::closets::InCloset>(e).is_some() {
+            continue;
+        }
         let dead = world.get::<Stat>(e).is_none_or(|st| *st == Stat::Dead);
         let dying = world.get::<Health>(e).is_some_and(|h| h.health() <= 0.0);
         if s.adult && (dead || dying) {
@@ -791,6 +797,7 @@ pub fn can_feed_on(world: &World, slime: Entity, meal: Entity) -> bool {
         || world.get::<Slime>(meal).is_some()
         || world.get::<crate::silicon::Silicon>(meal).is_some()
         || world.get::<Stat>(meal).is_none_or(|s| *s == Stat::Dead)
+        || world.get::<crate::closets::InCloset>(meal).is_some()
     {
         return false;
     }
