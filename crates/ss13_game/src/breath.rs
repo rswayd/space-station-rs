@@ -144,6 +144,15 @@ pub enum AlertCategory {
     GravitySickness,
     Slimed,
     SlimeLeech,
+    /// The alerts of `crate::curses`.
+    Trance,
+    GoAway,
+    Ants,
+    FreezingBlast,
+    Discoordinated,
+    DesignatedTarget,
+    MidasBlight,
+    Strandling,
     /// `ALERT_SUCCUMB` (`crate::death`): in crit, a click succumbs.
     Succumb,
 }
@@ -171,6 +180,28 @@ impl Alert {
         // `/atom/movable/screen/alert/succumb` has the base `template` state.
         if self.category == AlertCategory::Succumb {
             return ("Сдаться", "Покиньте этот бренный мир.");
+        }
+        // Alerts that share a state with another one.
+        match self.category {
+            AlertCategory::Trance => {
+                return (
+                    "Транс",
+                    "Всё кажется таким далёким, а мысли закольцовываются в голове...",
+                );
+            }
+            AlertCategory::GoAway => {
+                return (
+                    "К ЗВЁЗДАМ И ДАЛЬШЕ!",
+                    "Я должен идти, мой народ нуждается во мне!",
+                );
+            }
+            AlertCategory::Discoordinated => {
+                return (
+                    "Дискоординация",
+                    "Кажется, вы ничем не можете толком пользоваться...",
+                );
+            }
+            _ => {}
         }
         // `/atom/movable/screen/alert/status_effect/gravity_sickness` shares the `paralysis` state.
         if self.category == AlertCategory::GravitySickness {
@@ -306,6 +337,29 @@ impl Alert {
                 "Вялость",
                 "Вы чувствуете себя медленнее обычного, кажется, всё руками выходит дольше, чем \
                  обычно.",
+            ),
+            "antalert" => ("Муравьи!", "ГОСПОДИ! НАЖМИТЕ, ЧТОБЫ СТРЯХНУТЬ ЭТИХ ТВАРЕЙ!"),
+            "fire_antalert" => (
+                "Огненные муравьи!",
+                "ГОСПОДИ, КАК ЖЖЁТСЯ! НАЖМИТЕ, ЧТОБЫ СТРЯХНУТЬ ЭТИХ ТВАРЕЙ!",
+            ),
+            "frozen" => (
+                "Морозный взрыв",
+                "Вас поразил морозный взрыв! Ваше тело двигается медленнее!",
+            ),
+            "designated_target" => (
+                "Отмеченная цель",
+                "Вас подсветила какая-то яркая энергия! Смойте её, иначе в вас будет куда проще \
+                 попасть!",
+            ),
+            "midas_blight" => (
+                "Проклятие Мидаса",
+                "Ваша кровь превращается в золото, замедляя движения!",
+            ),
+            "strandling" => (
+                "Удушающая нить",
+                "Нить дюраткани обвилась вокруг шеи и не даёт дышать! Нажмите на себя, чтобы \
+                 снять её, или найдите кусачки.",
             ),
             "terrified" => (
                 "В ужасе!",

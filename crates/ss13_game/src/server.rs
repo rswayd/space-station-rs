@@ -263,6 +263,7 @@ impl Plugin for GameServerPlugin {
         .add_plugins(crate::buffs::BuffsPlugin)
         .add_plugins(crate::debuffs::DebuffsPlugin)
         .add_plugins(crate::afflictions::AfflictionsPlugin)
+        .add_plugins(crate::curses::CursesPlugin)
         .add_plugins(crate::language_menu::LanguageMenuServerPlugin)
         .add_plugins((
             crate::ssd::SsdPlugin,

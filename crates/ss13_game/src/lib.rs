@@ -229,6 +229,7 @@ pub mod construction;
 pub mod cooking;
 #[cfg(feature = "server")]
 pub mod crayons;
+pub mod curses;
 #[cfg(feature = "server")]
 pub mod death;
 #[cfg(feature = "server")]
