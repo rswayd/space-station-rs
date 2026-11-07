@@ -47,6 +47,7 @@ pub mod mecha;
 pub mod medical;
 pub mod melee;
 pub mod mining;
+pub mod mob_spawn;
 pub mod mobs;
 pub mod modsuit;
 pub mod plants;
@@ -360,6 +361,7 @@ impl Plugin for DmProtoPlugin {
             .register_proto_component::<DmRadio>("dm_radio")
             .register_proto_component::<DmCamera>("dm_camera")
             .register_proto_component::<DmCameraConsole>("dm_camera_console")
+            .register_proto_component::<mob_spawn::DmMobSpawn>("dm_mob_spawn")
             .register_proto_component::<DmAiSlipper>("dm_ai_slipper")
             .register_proto_component::<DmLook>("dm_look")
             .register_proto_component::<DmCable>("dm_cable")
