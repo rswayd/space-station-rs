@@ -59,6 +59,116 @@ use crate::tools::{Actor, Stack, ToolKind, do_after, tell, tool_of, use_stack};
 pub const DUCT: &str = "/obj/machinery/duct";
 pub const DUCT_STACK: &str = "/obj/item/stack/ducts";
 const PLUMBING: &str = "/obj/machinery/plumbing";
+const PILL_STYLE: &str = "/obj/item/reagent_containers/applicator/pill/style";
+const PATCH_STYLE: &str = "/obj/item/reagent_containers/applicator/patch/style";
+const BOTTLE: &str = "/obj/item/reagent_containers/cup/bottle";
+const CUP: &str = "/obj/item/reagent_containers/cup";
+const DART: &str = "/obj/item/ammo_casing/shotgun/dart";
+const REAGENT_CONTAINER: &str = "/obj/item/reagent_containers";
+const GROWN: &str = "/obj/item/food/grown";
+const ACIDIC_BUFFER: &str = "/datum/reagent/reaction_agent/acidic_buffer";
+const BASIC_BUFFER: &str = "/datum/reagent/reaction_agent/basic_buffer";
+/// `BUFFER_IONIZING_STRENGTH`.
+const BUFFER_IONIZING_STRENGTH: f32 = 30.0;
+/// The pill press's `MIN_VOLUME`, `MAX_FLOOR_PRODUCTS`.
+const PRESS_MIN_VOLUME: f32 = 5.0;
+const MAX_FLOOR_PRODUCTS: usize = 10;
+/// The receiver's `pull_amount`.
+const RECEIVER_PULL: f32 = 20.0;
+/// `synthesizer/possible_amounts`.
+const SYNTH_MAX: f32 = 5.0;
+/// `MAX_NAME_LEN`.
+const MAX_NAME_LEN: u32 = 42;
+/// `synthesizer/default_reagents`.
+const DEFAULT_REAGENTS: &[&str] = &[
+    "/datum/reagent/aluminium",
+    "/datum/reagent/bromine",
+    "/datum/reagent/carbon",
+    "/datum/reagent/chlorine",
+    "/datum/reagent/copper",
+    "/datum/reagent/consumable/ethanol",
+    "/datum/reagent/fluorine",
+    "/datum/reagent/hydrogen",
+    "/datum/reagent/iodine",
+    "/datum/reagent/iron",
+    "/datum/reagent/lithium",
+    "/datum/reagent/mercury",
+    "/datum/reagent/nitrogen",
+    "/datum/reagent/oxygen",
+    "/datum/reagent/phosphorus",
+    "/datum/reagent/potassium",
+    "/datum/reagent/uranium/radium",
+    "/datum/reagent/sodium",
+    "/datum/reagent/stable_plasma",
+    "/datum/reagent/consumable/sugar",
+    "/datum/reagent/sulfur",
+    "/datum/reagent/toxin/acid",
+    "/datum/reagent/water",
+    "/datum/reagent/fuel",
+];
+/// `synthesizer/soda/soda_reagents`.
+const SODA_REAGENTS: &[&str] = &[
+    "/datum/reagent/consumable/coffee",
+    "/datum/reagent/consumable/space_cola",
+    "/datum/reagent/consumable/cream",
+    "/datum/reagent/consumable/dr_gibb",
+    "/datum/reagent/consumable/grenadine",
+    "/datum/reagent/consumable/ice",
+    "/datum/reagent/consumable/icetea",
+    "/datum/reagent/consumable/lemonjuice",
+    "/datum/reagent/consumable/lemon_lime",
+    "/datum/reagent/consumable/limejuice",
+    "/datum/reagent/consumable/menthol",
+    "/datum/reagent/consumable/orangejuice",
+    "/datum/reagent/consumable/pineapplejuice",
+    "/datum/reagent/consumable/pwr_game",
+    "/datum/reagent/consumable/shamblers",
+    "/datum/reagent/consumable/spacemountainwind",
+    "/datum/reagent/consumable/sodawater",
+    "/datum/reagent/consumable/space_up",
+    "/datum/reagent/consumable/sugar",
+    "/datum/reagent/consumable/tea",
+    "/datum/reagent/consumable/tomatojuice",
+    "/datum/reagent/consumable/tonic",
+    "/datum/reagent/water",
+];
+/// `synthesizer/beer/beer_reagents`.
+const BEER_REAGENTS: &[&str] = &[
+    "/datum/reagent/consumable/ethanol/absinthe",
+    "/datum/reagent/consumable/ethanol/ale",
+    "/datum/reagent/consumable/ethanol/applejack",
+    "/datum/reagent/consumable/ethanol/beer",
+    "/datum/reagent/consumable/ethanol/cognac",
+    "/datum/reagent/consumable/ethanol/creme_de_cacao",
+    "/datum/reagent/consumable/ethanol/creme_de_coconut",
+    "/datum/reagent/consumable/ethanol/creme_de_menthe",
+    "/datum/reagent/consumable/ethanol/curacao",
+    "/datum/reagent/consumable/ethanol/gin",
+    "/datum/reagent/consumable/ethanol/hcider",
+    "/datum/reagent/consumable/ethanol/kahlua",
+    "/datum/reagent/consumable/ethanol/beer/maltliquor",
+    "/datum/reagent/consumable/ethanol/navy_rum",
+    "/datum/reagent/consumable/ethanol/rum",
+    "/datum/reagent/consumable/ethanol/sake",
+    "/datum/reagent/consumable/ethanol/tequila",
+    "/datum/reagent/consumable/ethanol/triple_sec",
+    "/datum/reagent/consumable/ethanol/vermouth",
+    "/datum/reagent/consumable/ethanol/vodka",
+    "/datum/reagent/consumable/ethanol/whiskey",
+    "/datum/reagent/consumable/ethanol/wine",
+];
+/// `synthesizer/mining/mining_chems`.
+const MINING_REAGENTS: &[&str] = &[
+    "/datum/reagent/toxin/acid",
+    "/datum/reagent/toxin/acid/fluacid",
+    "/datum/reagent/toxin/acid/nitracid",
+    "/datum/reagent/teslium",
+    "/datum/reagent/fuel",
+    "/datum/reagent/thermite",
+    "/datum/reagent/gunpowder",
+    "/datum/reagent/liquid_dark_matter",
+    "/datum/reagent/toxin/acid/industrial_waste",
+];
 const IV_PLUMBING: &str = "/obj/machinery/iv_drip/plumbing";
 const RATCHET: &str = "sound/items/tools/ratchet.ogg";
 const CLICK: &str = "sound/machines/click.ogg";
@@ -106,6 +216,45 @@ pub struct Port {
     pub layer: u8,
     pub demand: u8,
     pub supply: u8,
+    /// `/datum/component/plumbing/buffered`: the chemistry reaction chamber's acidic (true) or
+    /// alkaline (false) buffer input, received into that buffer instead of the machine.
+    pub buffer: Option<bool>,
+}
+
+/// The chemistry reaction chamber's pH control (`reaction_chamber/chem`): the limits and the
+/// two 50 u buffer beakers.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PhControl {
+    pub acidic_limit: f32,
+    pub alkaline_limit: f32,
+    pub acid: Holder,
+    pub base: Holder,
+}
+
+/// The pill press's packaging (`packaging_category`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Package {
+    Pill,
+    Patch,
+    Bottle,
+}
+
+impl Package {
+    /// `GLOB.reagent_containers[category][1]` and its `volume`.
+    fn container(self) -> (&'static str, f32) {
+        match self {
+            Self::Pill => (PILL_STYLE, 50.0),
+            Self::Patch => (PATCH_STYLE, 40.0),
+            Self::Bottle => (BOTTLE, 50.0),
+        }
+    }
+    fn suffix(self) -> &'static str {
+        match self {
+            Self::Pill => "таблетка",
+            Self::Patch => "пластырь",
+            Self::Bottle => "бутылочка",
+        }
+    }
 }
 
 /// `acclimate_state`.
@@ -154,8 +303,35 @@ pub enum Kind {
     },
     ReactionChamber {
         required: Vec<(ReagentId, f32)>,
+        /// `catalysts`: kept in the chamber, never sent on.
+        catalysts: Vec<(ReagentId, f32)>,
         emptying: bool,
         target: f32,
+        ph: Option<PhControl>,
+    },
+    Synthesizer {
+        /// `dispensable_reagents`.
+        list: &'static [&'static str],
+        reagent: Option<ReagentId>,
+        amount: f32,
+    },
+    PillPress {
+        volume: f32,
+        product: String,
+        package: Package,
+        duration: f32,
+    },
+    Bottler {
+        wanted: f32,
+    },
+    Fermenter,
+    Grinder,
+    Sender {
+        target: Option<Entity>,
+    },
+    Receiver {
+        senders: Vec<Entity>,
+        next: usize,
     },
     Disposer {
         on: bool,
@@ -208,6 +384,10 @@ enum Step {
     Reagent { left: Option<bool>, amount: f32 },
     /// A number for a setting.
     Number(Setting),
+    /// The synthesizer's reagent, out of its list.
+    Synth(Vec<ReagentId>),
+    /// The pill press's `product_name`.
+    Name,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -217,7 +397,12 @@ enum Choice {
     FilterRemove(bool, ReagentId),
     ChamberAdd,
     ChamberRemove(ReagentId),
+    /// `catalyst`: a required reagent becomes a catalyst, or back.
+    ChamberCatalyst(ReagentId),
     DisposerToggle,
+    SynthReagent,
+    PressPackage(Package),
+    PressName,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -229,6 +414,12 @@ enum Setting {
     ChamberTarget,
     ChamberAmount,
     DisposerRate,
+    AcidicLimit,
+    AlkalineLimit,
+    SynthAmount,
+    PressVolume,
+    PillDuration,
+    BottlerAmount,
 }
 
 pub struct PlumbingNetPlugin;
@@ -277,6 +468,7 @@ fn port(demand: u8, supply: u8) -> Vec<Port> {
         layer: DEFAULT_LAYER,
         demand,
         supply,
+        buffer: None,
     }]
 }
 
@@ -308,6 +500,7 @@ fn plumber_for(path: &str) -> Option<(Plumber, f32, u32)> {
                 layer: 1 << i,
                 demand: N,
                 supply: S,
+                buffer: None,
             })
             .collect();
         (Kind::Manifold, ports, None, 50.0, base)
@@ -341,12 +534,89 @@ fn plumber_for(path: &str) -> Option<(Plumber, f32, u32)> {
         };
         (kind, port(W, E), None, 200.0, base)
     } else if sub("reaction_chamber") {
+        let chem = sub("reaction_chamber/chem");
+        let mut ports = port(N, S);
+        // `buffered/acidic_input` (west, second layer), `alkaline_input` (east, fourth layer).
+        let beaker = || Holder::new(50.0, flags::NO_REACT, Owner::default());
+        let ph = chem.then(|| {
+            ports.push(Port {
+                layer: 1 << 1,
+                demand: W,
+                supply: 0,
+                buffer: Some(true),
+            });
+            ports.push(Port {
+                layer: 1 << 3,
+                demand: E,
+                supply: 0,
+                buffer: Some(false),
+            });
+            PhControl {
+                acidic_limit: 5.0,
+                alkaline_limit: 9.0,
+                acid: beaker(),
+                base: beaker(),
+            }
+        });
         let kind = Kind::ReactionChamber {
             required: Vec::new(),
+            catalysts: Vec::new(),
             emptying: false,
             target: 300.0,
+            ph,
         };
-        (kind, port(N, S), None, 200.0, base)
+        (kind, ports, None, 200.0, base)
+    } else if sub("synthesizer") {
+        let list = if sub("synthesizer/soda") {
+            SODA_REAGENTS
+        } else if sub("synthesizer/beer") {
+            BEER_REAGENTS
+        } else if sub("synthesizer/mining") {
+            MINING_REAGENTS
+        } else {
+            DEFAULT_REAGENTS
+        };
+        let kind = Kind::Synthesizer {
+            list,
+            reagent: None,
+            amount: 5.0,
+        };
+        (kind, port(0, S), None, 50.0, base)
+    } else if sub("pill_press") {
+        let kind = Kind::PillPress {
+            volume: 10.0,
+            product: "factory".to_owned(),
+            package: Package::Pill,
+            duration: crate::chem_master::PILL_LAYERS,
+        };
+        (kind, port(S, 0), Some(3), 50.0, base)
+    } else if sub("bottler") {
+        let kind = Kind::Bottler { wanted: 10.0 };
+        (kind, port(S, 0), Some(3), 100.0, base | flags::DRAINABLE)
+    } else if sub("fermenter") {
+        (
+            Kind::Fermenter,
+            port(0, S),
+            None,
+            400.0,
+            base | flags::DRAINABLE,
+        )
+    } else if sub("grinder_chemical") {
+        (
+            Kind::Grinder,
+            port(0, S),
+            None,
+            400.0,
+            base | flags::DRAINABLE,
+        )
+    } else if sub("sender") {
+        (Kind::Sender { target: None }, port(S, 0), None, 50.0, base)
+    } else if sub("receiver") {
+        let kind = Kind::Receiver {
+            senders: Vec::new(),
+            next: 0,
+        };
+        (kind, port(0, S), None, 150.0, base)
     } else if sub("disposer") {
         let kind = Kind::Disposer {
             on: false,
@@ -395,8 +665,9 @@ fn add_plumbing(add: On<Add<DmObj>>, objs: Query<&DmObj>, mut commands: Commands
             return;
         }
         let layer = layer_bit(world, entity);
+        // The manifold and the chamber's buffer inputs keep their own layers.
         if let Some(mut p) = world.get_mut::<Plumber>(entity)
-            && p.ports.len() == 1
+            && !matches!(p.kind, Kind::Manifold)
         {
             p.ports[0].layer = layer;
         }
@@ -607,6 +878,14 @@ fn take_holder(world: &mut World, e: Entity) -> Option<Holder> {
     ))
 }
 
+/// Both holders of a transfer, or neither (a missing one leaves the other in place).
+fn take_pair(world: &mut World, a: Entity, b: Entity) -> Option<(Holder, Holder)> {
+    if a == b || world.get::<Reagents>(a).is_none() || world.get::<Reagents>(b).is_none() {
+        return None;
+    }
+    Some((take_holder(world, a)?, take_holder(world, b)?))
+}
+
 fn put_holder(world: &mut World, e: Entity, holder: Holder) {
     let reacting = holder.is_reacting;
     if let Some(mut r) = world.get_mut::<Reagents>(e) {
@@ -652,7 +931,19 @@ fn can_give(world: &World, end: End, amount: f32, reagent: Option<ReagentId>) ->
         Some(Kind::Acclimator { state, .. }) => {
             *state == Acclimate::Emptying && !h.is_reacting && base
         }
-        Some(Kind::ReactionChamber { emptying, .. }) => *emptying && !h.is_reacting && base,
+        // `reaction_chamber/can_give`: only what exceeds the catalysts.
+        Some(Kind::ReactionChamber {
+            emptying,
+            catalysts,
+            ..
+        }) => {
+            *emptying
+                && !h.is_reacting
+                && h.reagents.iter().any(|r| {
+                    reagent.is_none_or(|id| id == r.id)
+                        && r.volume > catalyst_amount(catalysts, r.id)
+                })
+        }
         Some(Kind::Filter { left, right }) => {
             reagent.is_none_or(|id| filter_allows(left, right, end.dir, id)) && base
         }
@@ -665,11 +956,29 @@ fn can_give(world: &World, end: End, amount: f32, reagent: Option<ReagentId>) ->
     }
 }
 
+fn catalyst_amount(catalysts: &[(ReagentId, f32)], id: ReagentId) -> f32 {
+    catalysts
+        .iter()
+        .find(|&&(c, _)| c == id)
+        .map_or(0.0, |&(_, v)| v)
+}
+
+/// `get_catalyst_excluded_volume`.
+fn catalyst_excluded_volume(h: &Holder, catalysts: &[(ReagentId, f32)]) -> f32 {
+    let total: f32 = h
+        .reagents
+        .iter()
+        .map(|r| (r.volume - catalyst_amount(catalysts, r.id)).max(0.0))
+        .sum();
+    round_to(total, CHEMICAL_VOLUME_ROUNDING).min(h.maximum_volume)
+}
+
 /// `transfer_to` from `from` into `to`.
 fn transfer_to(world: &mut World, from: End, to: Entity, amount: f32, reagent: Option<ReagentId>) {
     let chem = world.resource::<Chem>().0.clone();
     let mut amount = amount;
-    let mut allowed: Option<Vec<ReagentId>> = None;
+    // The reagents that may leave and how much of each (`remove_blacklisted`, catalysts).
+    let mut allowed: Option<Vec<(ReagentId, f32)>> = None;
     match kind(world, from.machine) {
         Some(Kind::Splitter {
             straight,
@@ -690,8 +999,23 @@ fn transfer_to(world: &mut World, from: End, to: Entity, amount: f32, reagent: O
                 h.map(|h| {
                     h.reagents
                         .iter()
-                        .map(|r| r.id)
-                        .filter(|&id| filter_allows(left, right, from.dir, id))
+                        .filter(|r| filter_allows(left, right, from.dir, r.id))
+                        .map(|r| (r.id, r.volume))
+                        .collect()
+                })
+                .unwrap_or_default(),
+            );
+        }
+        // `/datum/reagents/plumbing/reaction_chamber/trans_to`: the catalysts stay.
+        Some(Kind::ReactionChamber { catalysts, .. }) if !catalysts.is_empty() => {
+            let h = holder(world, from.machine);
+            allowed = Some(
+                h.map(|h| {
+                    h.reagents
+                        .iter()
+                        .filter(|r| reagent.is_none_or(|id| id == r.id))
+                        .map(|r| (r.id, r.volume - catalyst_amount(catalysts, r.id)))
+                        .filter(|&(_, v)| v > 0.0)
                         .collect()
                 })
                 .unwrap_or_default(),
@@ -702,23 +1026,17 @@ fn transfer_to(world: &mut World, from: End, to: Entity, amount: f32, reagent: O
     if from.machine == to {
         return;
     }
-    let (Some(mut a), Some(mut b)) = (take_holder(world, from.machine), take_holder(world, to))
-    else {
+    let Some((mut a, mut b)) = take_pair(world, from.machine, to) else {
         return;
     };
     match allowed {
         // `remove_blacklisted`: only the allowed reagents, in proportion.
         Some(ids) => {
-            let total: f32 = a
-                .reagents
-                .iter()
-                .filter(|r| ids.contains(&r.id))
-                .map(|r| r.volume)
-                .sum();
+            let total: f32 = ids.iter().map(|&(_, v)| v).sum();
             if total > 0.0 {
                 let amount = amount.min(total);
-                for id in ids {
-                    let part = a.amount(id) / total * amount;
+                for (id, available) in ids {
+                    let part = available / total * amount;
                     a.trans_to(&chem, &mut b, part, 1.0, Some(id), false, false);
                 }
             }
@@ -812,10 +1130,15 @@ fn set_flag(world: &mut World, e: Entity, flag: u32, on: bool) {
 }
 
 /// `send_request(dir)` of a demander's connect.
-fn send_request(world: &mut World, net: &Net, me: Entity) {
+fn send_request(world: &mut World, net: &Net, end: End) {
+    let me = end.machine;
     let Some(plumber) = world.get::<Plumber>(me).cloned() else {
         return;
     };
+    if let Some(acidic) = plumber.ports.get(end.port).and_then(|p| p.buffer) {
+        buffered_request(world, net, me, acidic);
+        return;
+    }
     match plumber.kind {
         Kind::Disposer { on, rate } => {
             if on {
@@ -861,35 +1184,69 @@ fn send_request(world: &mut World, net: &Net, me: Entity) {
         Kind::Acclimator { .. } => {}
         Kind::ReactionChamber {
             required,
+            catalysts,
             emptying,
-            target,
+            ..
         } => {
-            if emptying || required.is_empty() {
+            if emptying || (required.is_empty() && catalysts.is_empty()) {
                 return;
             }
-            for &(id, wanted) in &required {
+            // `catalysts | required_reagents`: a missing catalyst is asked for without waiting.
+            let wanted = catalysts
+                .iter()
+                .map(|&(id, v)| (id, v, true))
+                .chain(required.iter().map(|&(id, v)| (id, v, false)));
+            for (id, wanted, catalyst) in wanted.collect::<Vec<_>>() {
                 let present = holder(world, me).map_or(0.0, |h| h.amount(id));
                 let diff = (wanted - present).min(MACHINE_REAGENT_TRANSFER);
                 if diff >= ss13_reagents::CHEMICAL_QUANTISATION_LEVEL {
                     process_request(world, net, me, diff, Some(id));
-                    return;
+                    if !catalyst {
+                        return;
+                    }
                 }
             }
             set_flag(world, me, flags::NO_REACT, false);
             let chem = world.resource::<Chem>().0.clone();
+            let mut emptying = true;
             if let Some(mut h) = take_holder(world, me) {
                 h.handle_reactions(&chem);
+                // `on_reagent_change`: some reactions leave nothing to send on.
+                if catalyst_excluded_volume(&h, &catalysts) <= 0.0 {
+                    emptying = false;
+                    h.flags |= flags::NO_REACT;
+                }
                 put_holder(world, me, h);
             }
-            set_kind(
-                world,
-                me,
-                Kind::ReactionChamber {
-                    required,
-                    emptying: true,
-                    target,
-                },
-            );
+            if let Some(mut p) = world.get_mut::<Plumber>(me)
+                && let Kind::ReactionChamber { emptying: e, .. } = &mut p.kind
+            {
+                *e = emptying;
+            }
+        }
+        // `pill_press/send_request`: not past the product's volume, nor with 10 containers on
+        // the floor.
+        Kind::PillPress { volume, .. } => {
+            if holder(world, me).is_some_and(|h| h.total_volume >= volume) {
+                return;
+            }
+            let Some(&pos) = world.get::<TilePos>(me) else {
+                return;
+            };
+            let products = world
+                .resource::<SpatialIndex>()
+                .on_tile(pos)
+                .iter()
+                .filter(|&&e| {
+                    world
+                        .get::<ss13_mapload::DmItem>(e)
+                        .is_some_and(|i| is_under(&i.path, REAGENT_CONTAINER))
+                })
+                .count();
+            if products >= MAX_FLOOR_PRODUCTS {
+                return;
+            }
+            default_request(world, net, me, plumber.cap);
         }
         Kind::IvDrip => {
             if world
@@ -900,6 +1257,41 @@ fn send_request(world: &mut World, net: &Net, me: Entity) {
             }
         }
         _ => default_request(world, net, me, plumber.cap),
+    }
+}
+
+/// `buffered/send_request`: the chamber's acidic or alkaline buffer beaker asks for its
+/// buffer. The beaker stands in for the chamber's holder while the request runs.
+fn buffered_request(world: &mut World, net: &Net, me: Entity, acidic: bool) {
+    let chem = world.resource::<Chem>().0.clone();
+    let Some(id) = chem.id(if acidic { ACIDIC_BUFFER } else { BASIC_BUFFER }) else {
+        return;
+    };
+    let Some(Kind::ReactionChamber { ph: Some(ph), .. }) = kind(world, me).cloned() else {
+        return;
+    };
+    let beaker = if acidic { ph.acid } else { ph.base };
+    if beaker.holder_full() {
+        return;
+    }
+    let Some(main) = take_holder(world, me) else {
+        return;
+    };
+    if let Some(mut r) = world.get_mut::<Reagents>(me) {
+        r.0 = beaker;
+    }
+    process_request(world, net, me, MACHINE_REAGENT_TRANSFER, Some(id));
+    let beaker = take_holder(world, me);
+    put_holder(world, me, main);
+    if let Some(beaker) = beaker
+        && let Some(mut p) = world.get_mut::<Plumber>(me)
+        && let Kind::ReactionChamber { ph: Some(ph), .. } = &mut p.kind
+    {
+        if acidic {
+            ph.acid = beaker;
+        } else {
+            ph.base = beaker;
+        }
     }
 }
 
@@ -968,37 +1360,65 @@ fn process_machines(world: &mut World, secs: f32) {
                     },
                 );
             }
-            Kind::ReactionChamber {
-                required,
-                emptying,
-                target,
+            Kind::ReactionChamber { .. } => chamber_process(world, e, secs),
+            Kind::Synthesizer {
+                reagent: Some(id),
+                amount,
+                ..
             } => {
-                let Some(mut h) = take_holder(world, e) else {
-                    continue;
-                };
-                let mut emptying = emptying;
-                if emptying && h.total_volume <= 0.0 {
-                    emptying = false;
-                    h.flags |= flags::NO_REACT;
-                }
-                if h.total_volume > 0.0 && (!emptying || h.is_reacting) {
-                    let energy =
-                        (target - h.chem_temp) * CHAMBER_COEFF * secs * h.heat_capacity(&chem);
-                    h.adjust_thermal_energy(
+                // `synthesizer/process`: `amount` more whenever it holds less.
+                if amount > 0.0
+                    && let Some(mut r) = world.get_mut::<Reagents>(e)
+                    && r.0.total_volume < amount
+                {
+                    r.0.add_reagent(
                         &chem,
-                        energy,
-                        0.0,
-                        ss13_reagents::CHEMICAL_MAXIMUM_TEMPERATURE,
+                        id,
+                        amount,
+                        ss13_reagents::DEFAULT_REAGENT_TEMPERATURE,
+                        None,
+                        None,
+                        false,
+                        false,
                     );
                 }
-                put_holder(world, e, h);
+            }
+            Kind::PillPress {
+                volume,
+                product,
+                package,
+                duration,
+            } => press(world, e, volume, &product, package, duration),
+            Kind::Bottler { wanted } => bottle(world, e, wanted),
+            Kind::Fermenter => ferment_tile(world, e),
+            Kind::Grinder => {
+                for item in loose_items(world, e) {
+                    blend(world, e, item);
+                }
+            }
+            Kind::Receiver { senders, next } => {
+                // `receiver/process`: one sender a tick, in turn.
+                let senders: Vec<Entity> = senders
+                    .into_iter()
+                    .filter(|&s| matches!(kind(world, s), Some(Kind::Sender { target: Some(t) }) if *t == e))
+                    .collect();
+                if senders.is_empty() {
+                    set_kind(world, e, Kind::Receiver { senders, next: 0 });
+                    continue;
+                }
+                let index = if next >= senders.len() { 0 } else { next };
+                let sender = senders[index];
+                if let Some((mut a, mut b)) = take_pair(world, sender, e) {
+                    a.trans_to(&chem, &mut b, RECEIVER_PULL, 1.0, None, false, false);
+                    put_holder(world, sender, a);
+                    put_holder(world, e, b);
+                }
                 set_kind(
                     world,
                     e,
-                    Kind::ReactionChamber {
-                        required,
-                        emptying,
-                        target,
+                    Kind::Receiver {
+                        senders,
+                        next: index + 1,
                     },
                 );
             }
@@ -1011,6 +1431,220 @@ fn process_machines(world: &mut World, secs: f32) {
             _ => {}
         }
     }
+}
+
+/// `reaction_chamber/process`: holds the target temperature while filling or reacting, and
+/// the chemistry chamber's `handle_reagents` keeps the pH between its limits from its
+/// buffers; `on_reagent_change` ends the emptying.
+fn chamber_process(world: &mut World, e: Entity, secs: f32) {
+    let chem = world.resource::<Chem>().0.clone();
+    let Some(Kind::ReactionChamber {
+        catalysts,
+        emptying,
+        target,
+        ph,
+        ..
+    }) = kind(world, e).cloned()
+    else {
+        return;
+    };
+    let Some(mut h) = take_holder(world, e) else {
+        return;
+    };
+    let mut emptying = emptying;
+    let mut ph = ph;
+    if emptying && catalyst_excluded_volume(&h, &catalysts) <= 0.0 {
+        emptying = false;
+        h.flags |= flags::NO_REACT;
+    }
+    if h.total_volume > 0.0 && (!emptying || h.is_reacting) {
+        let energy = (target - h.chem_temp) * CHAMBER_COEFF * secs * h.heat_capacity(&chem);
+        h.adjust_thermal_energy(
+            &chem,
+            energy,
+            0.0,
+            ss13_reagents::CHEMICAL_MAXIMUM_TEMPERATURE,
+        );
+        if let Some(ph) = ph.as_mut() {
+            let n = h.reagents.len();
+            let too_basic = h.ph > ph.alkaline_limit;
+            if n > 0 && (h.ph < ph.acidic_limit || too_basic) {
+                let change = if too_basic {
+                    h.ph - ph.alkaline_limit
+                } else {
+                    ph.acidic_limit - h.ph
+                }
+                .max(0.25);
+                let amount = change * h.total_volume / (BUFFER_IONIZING_STRENGTH * n as f32) * secs;
+                let buffer = if too_basic {
+                    &mut ph.acid
+                } else {
+                    &mut ph.base
+                };
+                buffer.trans_to(&chem, &mut h, amount, 1.0, None, false, false);
+            }
+        }
+    }
+    put_holder(world, e, h);
+    if let Some(mut p) = world.get_mut::<Plumber>(e)
+        && let Kind::ReactionChamber {
+            emptying: em,
+            ph: p_ph,
+            ..
+        } = &mut p.kind
+    {
+        *em = emptying;
+        *p_ph = ph;
+    }
+}
+
+/// Items lying loose on the machine's tile.
+fn loose_items(world: &World, e: Entity) -> Vec<Entity> {
+    let Some(&pos) = world.get::<TilePos>(e) else {
+        return Vec::new();
+    };
+    world
+        .resource::<SpatialIndex>()
+        .on_tile(pos)
+        .iter()
+        .copied()
+        .filter(|&i| i != e && world.get::<ss13_mapload::DmItem>(i).is_some())
+        .filter(|&i| !anchored(world, i))
+        .collect()
+}
+
+/// `pill_press/process`: a product of `volume` units on the floor.
+fn press(world: &mut World, e: Entity, volume: f32, product: &str, package: Package, layers: f32) {
+    if holder(world, e).is_none_or(|h| h.total_volume < volume) {
+        return;
+    }
+    let Some(&pos) = world.get::<TilePos>(e) else {
+        return;
+    };
+    let (path, _) = package.container();
+    let Some(item) = crate::construction::spawn_obj(world, path, pos) else {
+        warn!("pill press: no prototype for {path}");
+        return;
+    };
+    if let Some(mut n) = world.get_mut::<ss13_mapload::DmName>(item) {
+        n.name = format!("{product} {}", package.suffix());
+    }
+    let chem = world.resource::<Chem>().0.clone();
+    if let Some((mut a, mut b)) = take_pair(world, e, item) {
+        b.clear();
+        a.trans_to(&chem, &mut b, volume, 1.0, None, false, false);
+        put_holder(world, e, a);
+        put_holder(world, item, b);
+    }
+    if package == Package::Pill {
+        world
+            .entity_mut(item)
+            .insert(crate::chem::PillShell(layers));
+    }
+}
+
+/// `bottler/process`: a cup or dart from behind is filled and put in front, or to the side
+/// when it has no room.
+// shortcut: the first item behind instead of `pick` among the tile's contents; slime extracts
+// are not filled (→ ../xenobiology).
+fn bottle(world: &mut World, e: Entity, wanted: f32) {
+    if holder(world, e).is_none_or(|h| h.total_volume < wanted) {
+        return;
+    }
+    let Some(&pos) = world.get::<TilePos>(e) else {
+        return;
+    };
+    let facing = dir_of(world, e);
+    let step = |d: u8| Dir::from_bits(d).map(|d| pos.step(d));
+    // `setDir`: front, behind, and the side clockwise of the front.
+    let (Some(good), Some(input), Some(bad)) = (
+        step(facing),
+        step(reverse(facing)),
+        step(CW[(cw_index(facing) + 1) % 4]),
+    ) else {
+        return;
+    };
+    let item = world
+        .resource::<SpatialIndex>()
+        .on_tile(input)
+        .iter()
+        .copied()
+        .find(|&i| world.get::<ss13_mapload::DmItem>(i).is_some() && !anchored(world, i));
+    let Some(item) = item else {
+        return;
+    };
+    let path = path_of(world, item).unwrap_or_default();
+    if !is_under(&path, CUP) && !is_under(&path, DART) {
+        return;
+    }
+    let fits = holder(world, item).is_some_and(|h| h.total_volume + wanted <= h.maximum_volume);
+    if !fits {
+        world.entity_mut(item).insert(bad);
+        return;
+    }
+    let chem = world.resource::<Chem>().0.clone();
+    if let Some((mut a, mut b)) = take_pair(world, e, item) {
+        a.trans_to(&chem, &mut b, wanted, 1.0, None, false, false);
+        put_holder(world, e, a);
+        put_holder(world, item, b);
+    }
+    world.entity_mut(item).insert(good);
+}
+
+/// `fermenter/ferment` of the produce on its tile: `potency × 0.25` of its `distill_reagent`.
+// shortcut: the tile is checked every plumbing tick (no `COMSIG_ATOM_ENTERED`), and the
+// fermenter does not let items through its eating side.
+fn ferment_tile(world: &mut World, e: Entity) {
+    let chem = world.resource::<Chem>().0.clone();
+    for item in loose_items(world, e) {
+        if holder(world, e).is_none_or(Holder::holder_full) {
+            return;
+        }
+        let path = path_of(world, item).unwrap_or_default();
+        if !is_under(&path, GROWN) {
+            continue;
+        }
+        let distill = world
+            .get_resource::<crate::botany::Botany>()
+            .and_then(|b| b.0.grown_def(&path).map(|d| d.distill_reagent.clone()))
+            .unwrap_or_default();
+        let Some(id) = chem.id(&distill) else {
+            continue;
+        };
+        let potency = world
+            .get::<crate::botany::seeds::Seed>(item)
+            .map_or(0.0, |s| s.potency);
+        if let Some(mut r) = world.get_mut::<Reagents>(e) {
+            r.0.add_reagent(
+                &chem,
+                id,
+                potency * 0.25,
+                ss13_reagents::DEFAULT_REAGENT_TEMPERATURE,
+                None,
+                None,
+                false,
+                false,
+            );
+        }
+        world.despawn(item);
+    }
+}
+
+/// `grinder_chemical/blend`: the item's reagents into the grinder (`/obj/item/proc/grind`),
+/// and it is gone.
+// shortcut: no juicing mode and no `grind_results` (as `crate::kitchen`'s grinder).
+fn blend(world: &mut World, grinder: Entity, item: Entity) {
+    if holder(world, grinder).is_none_or(Holder::holder_full) {
+        return;
+    }
+    let chem = world.resource::<Chem>().0.clone();
+    if let Some((mut a, mut b)) = take_pair(world, item, grinder) {
+        let total = a.total_volume;
+        a.trans_to(&chem, &mut b, total, 1.0, None, false, false);
+        put_holder(world, item, a);
+        put_holder(world, grinder, b);
+    }
+    world.despawn(item);
 }
 
 /// `buffer/on_reagent_change`: fill to the threshold, wait for the linked ones, release
@@ -1083,17 +1717,30 @@ fn run_plumbing(world: &mut World, mut since: Local<f32>) {
     }
     let secs = *since;
     *since = 0.0;
+    tick(world, secs);
+}
+
+/// One `SSplumbing` fire: the networks, the machines' `process`, every demand connect's
+/// request.
+pub fn tick(world: &mut World, secs: f32) {
     let nets = rebuild(world);
     process_machines(world, secs);
     for net in &nets {
-        for d in &net.demanders {
-            if holder(world, d.machine).is_none_or(Holder::holder_full) {
+        for &d in &net.demanders {
+            // A buffered input checks its own beaker.
+            let buffered = world
+                .get::<Plumber>(d.machine)
+                .and_then(|p| p.ports.get(d.port))
+                .is_some_and(|p| p.buffer.is_some());
+            if !buffered && holder(world, d.machine).is_none_or(Holder::holder_full) {
                 continue;
             }
-            send_request(world, net, d.machine);
+            send_request(world, net, d);
         }
     }
-    world.resource_mut::<DuctNets>().nets = nets;
+    if let Some(mut r) = world.get_resource_mut::<DuctNets>() {
+        r.nets = nets;
+    }
 }
 
 fn sound(world: &mut World, e: Entity, file: &str, vol: f32) {
@@ -1189,6 +1836,29 @@ pub fn item_interaction(
         return true;
     }
     let Some((tool, _)) = tool_of(world, held) else {
+        // `grinder_chemical/item_interaction`: a non-tool item in hand is ground at once.
+        if matches!(kind(world, target), Some(Kind::Grinder)) {
+            let combat = world
+                .get::<crate::combat::CombatMode>(mob)
+                .is_some_and(|c| c.0);
+            if combat {
+                return false;
+            }
+            if !anchored(world, target) {
+                tell(world, client, Span::Warning, "Сначала прикрутите его.");
+                return true;
+            }
+            let name = crate::chem::name_of(world, held);
+            crate::storage::put_inside(world, held, target);
+            blend(world, target, held);
+            tell(
+                world,
+                client,
+                Span::Notice,
+                format!("Вы перемалываете {name}."),
+            );
+            return true;
+        }
         return false;
     };
     // `duct/wrench_act`: `deconstruct` into a stack of one.
@@ -1269,7 +1939,50 @@ pub fn item_interaction(
             );
             true
         }
+        // `receiver/multitool_act`: into the multitool's buffer.
+        ToolKind::Multitool if matches!(kind(world, target), Some(Kind::Receiver { .. })) => {
+            crate::tools::set_multitool_buffer(world, held, target);
+            tell(world, client, Span::Notice, "Сохранено в буфер мультитула.");
+            true
+        }
+        // `sender/multitool_act`: linked to the buffered receiver.
+        ToolKind::Multitool if matches!(kind(world, target), Some(Kind::Sender { .. })) => {
+            let receiver = crate::tools::multitool_buffer(world, held)
+                .filter(|&r| matches!(kind(world, r), Some(Kind::Receiver { .. })));
+            let Some(receiver) = receiver else {
+                tell(world, client, Span::Warning, "Неверный буфер.");
+                return true;
+            };
+            link_sender(world, target, receiver);
+            tell(world, client, Span::Notice, "Маяк связан с приёмником.");
+            true
+        }
         _ => false,
+    }
+}
+
+/// `sender/set_teleport_target` (after `lose_teleport_target`).
+fn link_sender(world: &mut World, sender: Entity, receiver: Entity) {
+    if let Some(Kind::Sender {
+        target: Some(old), ..
+    }) = kind(world, sender).cloned()
+        && let Some(mut p) = world.get_mut::<Plumber>(old)
+        && let Kind::Receiver { senders, .. } = &mut p.kind
+    {
+        senders.retain(|&s| s != sender);
+    }
+    set_kind(
+        world,
+        sender,
+        Kind::Sender {
+            target: Some(receiver),
+        },
+    );
+    if let Some(mut p) = world.get_mut::<Plumber>(receiver)
+        && let Kind::Receiver { senders, .. } = &mut p.kind
+        && !senders.contains(&sender)
+    {
+        senders.push(sender);
     }
 }
 
@@ -1345,9 +2058,24 @@ fn ask(world: &mut World, client: Entity, mob: Entity, machine: Entity, title: &
                 default,
                 min,
                 max,
-                round: false,
+                round: matches!(
+                    setting,
+                    Setting::SynthAmount | Setting::PillDuration | Setting::BottlerAmount
+                ),
             }
         }
+        Step::Synth(ids) => PromptKind::List {
+            items: ids.iter().map(|&id| reagent_name(world, id)).collect(),
+            default: None,
+        },
+        Step::Name => PromptKind::Text {
+            default: match kind(world, machine) {
+                Some(Kind::PillPress { product, .. }) => product.clone(),
+                _ => String::new(),
+            },
+            max_length: MAX_NAME_LEN,
+            multiline: false,
+        },
     };
     let prompt = ask_world(world, Ask::new(client, mob, title, "", kind));
     world
@@ -1386,6 +2114,22 @@ fn choice_label(world: &World, machine: Entity, choice: Choice) -> String {
             (Setting::DisposerRate, Some(Kind::Disposer { rate, .. })) => {
                 format!("Скорость: {rate} u/с")
             }
+            (Setting::AcclimatorVolume, _) => "Объём".to_owned(),
+            (Setting::AcidicLimit, Some(Kind::ReactionChamber { ph: Some(ph), .. })) => {
+                format!("Кислотный предел pH: {}", ph.acidic_limit)
+            }
+            (Setting::AlkalineLimit, Some(Kind::ReactionChamber { ph: Some(ph), .. })) => {
+                format!("Щелочной предел pH: {}", ph.alkaline_limit)
+            }
+            (Setting::SynthAmount, Some(Kind::Synthesizer { amount, .. })) => {
+                format!("Количество: {amount} u")
+            }
+            (Setting::PressVolume, Some(Kind::PillPress { volume, .. })) => {
+                format!("Объём продукта: {volume} u")
+            }
+            (Setting::PillDuration, Some(Kind::PillPress { duration, .. })) => {
+                format!("Слои сахара таблетки: {duration}")
+            }
             _ => "?".to_owned(),
         },
         Choice::FilterAdd(true) => "Добавить влево".to_owned(),
@@ -1400,6 +2144,29 @@ fn choice_label(world: &World, machine: Entity, choice: Choice) -> String {
         Choice::DisposerToggle => match k {
             Some(Kind::Disposer { on: true, .. }) => "Выключить".to_owned(),
             _ => "Включить".to_owned(),
+        },
+        Choice::ChamberCatalyst(id) => {
+            let catalyst = matches!(k, Some(Kind::ReactionChamber { catalysts, .. })
+                if catalysts.iter().any(|&(c, _)| c == id));
+            if catalyst {
+                format!("{}: катализатор → реагент", reagent_name(world, id))
+            } else {
+                format!("{}: реагент → катализатор", reagent_name(world, id))
+            }
+        }
+        Choice::SynthReagent => match k {
+            Some(Kind::Synthesizer {
+                reagent: Some(id), ..
+            }) => format!("Реагент: {}", reagent_name(world, *id)),
+            _ => "Реагент: нет".to_owned(),
+        },
+        Choice::PressPackage(p) => {
+            let current = matches!(k, Some(Kind::PillPress { package, .. }) if *package == p);
+            format!("{}{}", p.suffix(), if current { " (выбрано)" } else { "" })
+        }
+        Choice::PressName => match k {
+            Some(Kind::PillPress { product, .. }) => format!("Название: {product}"),
+            _ => "Название".to_owned(),
         },
     }
 }
@@ -1425,6 +2192,39 @@ fn setting_range(world: &World, machine: Entity, setting: Setting) -> (f64, f64,
         (Setting::ChamberAmount, _) => (10.0, 0.01, 200.0),
         (Setting::DisposerRate, Some(Kind::Disposer { rate, .. })) => {
             (f64::from(*rate), 0.1, f64::from(DISPOSAL_MAX))
+        }
+        // `acidic`: `CHEMICAL_MIN_PH..alkaline_limit - 1`; `alkaline`: `acidic_limit + 1..14`.
+        (Setting::AcidicLimit, Some(Kind::ReactionChamber { ph: Some(ph), .. })) => (
+            f64::from(ph.acidic_limit),
+            0.0,
+            f64::from(ph.alkaline_limit - 1.0),
+        ),
+        (Setting::AlkalineLimit, Some(Kind::ReactionChamber { ph: Some(ph), .. })) => (
+            f64::from(ph.alkaline_limit),
+            f64::from(ph.acidic_limit + 1.0),
+            14.0,
+        ),
+        (Setting::SynthAmount, Some(Kind::Synthesizer { amount, .. })) => {
+            (f64::from(*amount), 0.0, f64::from(SYNTH_MAX))
+        }
+        (
+            Setting::PressVolume,
+            Some(Kind::PillPress {
+                volume, package, ..
+            }),
+        ) => (
+            f64::from(*volume),
+            f64::from(PRESS_MIN_VOLUME),
+            f64::from(package.container().1),
+        ),
+        (Setting::PillDuration, Some(Kind::PillPress { duration, .. })) => (
+            f64::from(*duration),
+            0.0,
+            f64::from(crate::chem_master::MAX_PILL_LAYERS),
+        ),
+        // `bottler/interact`: `tgui_input_number(..., max_value = 100, min_value = 1)`.
+        (Setting::BottlerAmount, Some(Kind::Bottler { wanted })) => {
+            (f64::from(*wanted), 1.0, 100.0)
         }
         _ => (0.0, 0.0, 0.0),
     }
@@ -1463,10 +2263,44 @@ pub fn interact(world: &mut World, client: Entity, mob: Entity, target: Entity) 
             );
             return true;
         }
-        Kind::ReactionChamber { required, .. } => {
+        Kind::ReactionChamber {
+            required,
+            catalysts,
+            ph,
+            ..
+        } => {
             let mut c = vec![Choice::ChamberAdd, Choice::Number(Setting::ChamberTarget)];
-            c.extend(required.iter().map(|&(id, _)| Choice::ChamberRemove(id)));
+            if ph.is_some() {
+                c.push(Choice::Number(Setting::AcidicLimit));
+                c.push(Choice::Number(Setting::AlkalineLimit));
+            }
+            for &(id, _) in required.iter().chain(&catalysts) {
+                c.push(Choice::ChamberCatalyst(id));
+                c.push(Choice::ChamberRemove(id));
+            }
             c
+        }
+        Kind::Synthesizer { .. } => {
+            vec![Choice::SynthReagent, Choice::Number(Setting::SynthAmount)]
+        }
+        Kind::PillPress { .. } => vec![
+            Choice::PressPackage(Package::Pill),
+            Choice::PressPackage(Package::Patch),
+            Choice::PressPackage(Package::Bottle),
+            Choice::Number(Setting::PressVolume),
+            Choice::Number(Setting::PillDuration),
+            Choice::PressName,
+        ],
+        Kind::Bottler { .. } => {
+            ask(
+                world,
+                client,
+                mob,
+                target,
+                "Объём заполнения",
+                Step::Number(Setting::BottlerAmount),
+            );
+            return true;
         }
         Kind::Disposer { .. } => vec![
             Choice::DisposerToggle,
@@ -1560,6 +2394,42 @@ fn apply_answer(
                         *on = !*on;
                     }
                 }
+                Choice::ChamberCatalyst(id) => {
+                    if let Kind::ReactionChamber {
+                        required,
+                        catalysts,
+                        ..
+                    } = &mut plumber.kind
+                    {
+                        if let Some(i) = required.iter().position(|&(r, _)| r == id) {
+                            catalysts.push(required.remove(i));
+                        } else if let Some(i) = catalysts.iter().position(|&(r, _)| r == id) {
+                            required.push(catalysts.remove(i));
+                        }
+                    }
+                }
+                Choice::SynthReagent => {
+                    if let Kind::Synthesizer { list, .. } = &plumber.kind {
+                        let chem = world.resource::<Chem>().0.clone();
+                        let ids = list.iter().filter_map(|p| chem.id(p)).collect();
+                        ask(world, client, mob, machine, "Реагент", Step::Synth(ids));
+                    }
+                    return;
+                }
+                Choice::PressPackage(p) => {
+                    // `change_product`: the volume clamps to the new container's.
+                    if let Kind::PillPress {
+                        package, volume, ..
+                    } = &mut plumber.kind
+                    {
+                        *package = p;
+                        *volume = volume.clamp(PRESS_MIN_VOLUME, p.container().1);
+                    }
+                }
+                Choice::PressName => {
+                    ask(world, client, mob, machine, "Название", Step::Name);
+                    return;
+                }
             }
         }
         (Step::Number(Setting::ChamberAmount), PromptAnswer::Number(n)) => {
@@ -1611,6 +2481,19 @@ fn apply_answer(
                 (Kind::Disposer { rate, .. }, Setting::DisposerRate) => {
                     *rate = round_to(v, CHEMICAL_VOLUME_ROUNDING);
                 }
+                (Kind::ReactionChamber { ph: Some(ph), .. }, Setting::AcidicLimit) => {
+                    ph.acidic_limit = v.round();
+                }
+                (Kind::ReactionChamber { ph: Some(ph), .. }, Setting::AlkalineLimit) => {
+                    ph.alkaline_limit = v.round();
+                }
+                // `possible_amounts`: 0..5.
+                (Kind::Synthesizer { amount, .. }, Setting::SynthAmount) => *amount = v.round(),
+                (Kind::PillPress { volume, .. }, Setting::PressVolume) => *volume = v,
+                (Kind::PillPress { duration, .. }, Setting::PillDuration) => {
+                    *duration = v.round();
+                }
+                (Kind::Bottler { wanted }, Setting::BottlerAmount) => *wanted = v.round(),
                 _ => return,
             }
         }
@@ -1637,52 +2520,118 @@ fn apply_answer(
                 _ => return,
             }
         }
+        // `ui_act("select")`: only a reagent of the machine's list.
+        (Step::Synth(ids), PromptAnswer::Item(i)) => {
+            let Some(&id) = ids.get(i) else {
+                return;
+            };
+            if let Kind::Synthesizer { list, reagent, .. } = &mut plumber.kind {
+                let chem = world.resource::<Chem>().0.clone();
+                if !list.iter().any(|p| chem.id(p) == Some(id)) {
+                    return;
+                }
+                *reagent = Some(id);
+            }
+            // The old reagent is flushed (`reagents.clear_reagents()`).
+            if let Some(mut r) = world.get_mut::<Reagents>(machine) {
+                r.0.clear();
+            }
+        }
+        (Step::Name, PromptAnswer::Text(name)) => {
+            let name: String = name.trim().chars().take(MAX_NAME_LEN as usize).collect();
+            if name.is_empty() {
+                return;
+            }
+            if let Kind::PillPress { product, .. } = &mut plumber.kind {
+                *product = name;
+            }
+        }
         _ => return,
     }
     world.entity_mut(machine).insert(plumber);
 }
 
-/// Examine lines of a duct, duct stack or plumbing machine (`plumbing/examine`,
-/// `duct/examine`).
-pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<String>) {
+/// Examine lines of a duct, duct stack or plumbing machine (`duct/examine`,
+/// `stack/ducts/examine`, `plumbing/examine`, the machines' own `examine`).
+pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<crate::examine::Line>) {
+    let mut note = |text: String| lines.push((Span::Notice, text));
     if let Some(d) = world.get::<Duct>(target) {
-        lines.push(format!(
-            "Слой: {}. Его можно открутить гаечным ключом.",
+        note(format!("Слой дукта: {}.", layer_index(d.layer)));
+        note("Его можно открутить гаечным ключом.".to_owned());
+        return;
+    }
+    if let Some(d) = world.get::<DuctStack>(target) {
+        note(format!(
+            "Слой: {}. Используйте в руке, чтобы сменить.",
             layer_index(d.layer)
         ));
+        note("Кликните по полу, чтобы проложить дукт.".to_owned());
         return;
     }
     let Some(p) = world.get::<Plumber>(target) else {
         return;
     };
     if let Some(h) = holder(world, target) {
-        lines.push(format!(
-            "Максимальный объём: {} u. Содержит:",
-            h.maximum_volume
+        note(format!(
+            "Дисплей максимального объёма: {} u. Содержит:",
+            crate::chem::dm_num(h.maximum_volume)
         ));
         if h.reagents.is_empty() {
-            lines.push("Ничего.".to_owned());
+            note("Ничего.".to_owned());
         }
         for r in &h.reagents {
-            lines.push(format!(
+            note(format!(
                 "{} u {}",
-                round_to(r.volume, CHEMICAL_VOLUME_ROUNDING),
+                crate::chem::dm_num(round_to(r.volume, CHEMICAL_VOLUME_ROUNDING)),
                 reagent_name(world, r.id)
             ));
         }
     }
     if anchored(world, target) {
-        lines.push("Прикручено.".to_owned());
+        note("Прикручено на месте.".to_owned());
     } else {
-        lines.push("Нужно прикрутить гаечным ключом, чтобы заработало.".to_owned());
+        lines.push((
+            Span::Warning,
+            "Нужно прикрутить гаечным ключом, чтобы заработало.".to_owned(),
+        ));
     }
+    let mut note = |text: String| lines.push((Span::Notice, text));
     if let Some(cap) = p.cap {
-        lines.push(format!("Принимает не больше {cap} разных реагентов."));
+        note(format!("Принимает не больше {cap} разных реагентов."));
+    }
+    match &p.kind {
+        Kind::Buffer {
+            activation, mode, ..
+        } => {
+            note(format!("Срабатывает при {activation} u."));
+            note(
+                match mode {
+                    BufferMode::Unready => "Набирает реагенты.",
+                    BufferMode::Idle => "Ждёт другие буферы.",
+                    BufferMode::Ready => "Выпускает реагенты.",
+                }
+                .to_owned(),
+            );
+        }
+        Kind::Disposer { rate, .. } => note(format!("Уничтожает {rate} u реагентов в секунду.")),
+        Kind::Bottler { wanted } => note(format!("Наполняет по {wanted} u.")),
+        Kind::ReactionChamber {
+            ph: Some(ph),
+            target: temp,
+            ..
+        } => note(format!(
+            "Держит {temp} K и pH {}–{}.",
+            ph.acidic_limit, ph.alkaline_limit
+        )),
+        Kind::Sender { target: None } => note("Не связан с приёмником.".to_owned()),
+        _ => {}
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::*;
 
     #[test]
@@ -1783,6 +2732,215 @@ mod tests {
             .expect("machine to machine");
         assert_eq!(direct.demanders[0].machine, b);
         assert_eq!(ends(loose), 0);
+    }
+
+    /// The chemistry of the full-cycle test: alpha + beta make gamma at once.
+    const CHEM_TYPES: &str = r##"{
+  "schema": 3,
+  "types": {
+    "/datum": { "parent": null },
+    "/datum/reagent": { "parent": "/datum", "declared_vars": {
+        "abstract_type": { "path": "/datum/reagent" }, "name": "", "description": "",
+        "color": "#000000", "taste_description": "metaphorical salt", "taste_mult": 1,
+        "metabolization_rate": 0.2, "overdose_threshold": 0, "ph": 7, "specific_heat": 200,
+        "chemical_flags": 0, "purity": 1, "creation_purity": 1, "inverse_chem": null,
+        "inverse_chem_val": 0.25, "purge_multiplier": 1,
+        "default_container": { "path": "/obj/item/reagent_containers/cup/bottle" } } },
+    "/datum/reagent/water": { "parent": "/datum/reagent", "declared_vars": { "name": "Water" } },
+    "/datum/reagent/alpha": { "parent": "/datum/reagent", "declared_vars": { "name": "Alpha" } },
+    "/datum/reagent/beta": { "parent": "/datum/reagent", "declared_vars": { "name": "Beta" } },
+    "/datum/reagent/gamma": { "parent": "/datum/reagent", "declared_vars": { "name": "Gamma" } },
+    "/datum/chemical_reaction": { "parent": "/datum", "declared_vars": {
+        "H_ion_release": 0, "determin_ph_range": 4, "is_cold_recipe": 0,
+        "mix_message": "The solution begins to bubble.", "mob_react": 1, "optimal_ph_max": 14,
+        "optimal_ph_min": 0, "optimal_temp": 500, "overheat_temp": 900, "ph_exponent_factor": 2,
+        "purity_min": 0.15, "rate_up_lim": 30, "reaction_flags": 0,
+        "required_catalysts": { "list": [] }, "required_container": null,
+        "required_container_accepts_subtypes": 0, "required_reagents": { "list": [] },
+        "required_temp": 100, "results": { "list": [] }, "temp_exponent_factor": 2,
+        "thermic_constant": 0 } },
+    "/datum/chemical_reaction/gamma": { "parent": "/datum/chemical_reaction",
+        "declared_vars": { "required_temp": 0, "reaction_flags": 2,
+        "results": { "list": [{ "assoc": [{ "path": "/datum/reagent/gamma" }, 2] }] },
+        "required_reagents": { "list": [
+            { "assoc": [{ "path": "/datum/reagent/alpha" }, 1] },
+            { "assoc": [{ "path": "/datum/reagent/beta" }, 1] }] } } }
+  }
+}"##;
+
+    fn chem_world() -> (World, Arc<ss13_reagents::Chemistry>) {
+        let types = ss13_mapload::convert::DmTypes::parse(CHEM_TYPES.as_bytes()).unwrap();
+        let (data, _) = ss13_mapload::reagents::chem_data(&types);
+        let chem = Arc::new(ss13_reagents::Chemistry::new(data));
+        let mut world = World::new();
+        world.insert_resource(Chem(chem.clone()));
+        (world, chem)
+    }
+
+    fn with_reagents(world: &mut World, path: &str, pos: TilePos, facing: Dir) -> Entity {
+        let (plumber, buffer, f) = plumber_for(path).unwrap();
+        let holder = Holder::new(buffer, f, Owner::default());
+        world
+            .spawn((
+                plumber,
+                Reagents(holder),
+                pos,
+                Facing(facing),
+                Anchored(true),
+            ))
+            .id()
+    }
+
+    fn amount(world: &World, e: Entity, chem: &ss13_reagents::Chemistry, path: &str) -> f32 {
+        let id = chem.id(path).unwrap();
+        world.get::<Reagents>(e).unwrap().0.amount(id)
+    }
+
+    /// Input gate → duct → reaction chamber (alpha 5, beta 5, water 5 as a catalyst) → output
+    /// gate: the chamber fills one reagent per tick, reacts, sends the gamma on and keeps its
+    /// catalyst water.
+    #[test]
+    fn input_duct_chamber_output_cycle() {
+        let (mut world, chem) = chem_world();
+        let at = |x, y| TilePos { x, y, z: 0 };
+        let input = with_reagents(
+            &mut world,
+            "/obj/machinery/plumbing/input",
+            at(0, 3),
+            Dir::South,
+        );
+        world.spawn((
+            Duct {
+                layer: DEFAULT_LAYER,
+            },
+            at(0, 2),
+        ));
+        let chamber = with_reagents(
+            &mut world,
+            "/obj/machinery/plumbing/reaction_chamber",
+            at(0, 1),
+            Dir::South,
+        );
+        let output = with_reagents(
+            &mut world,
+            "/obj/machinery/plumbing/output",
+            at(0, 0),
+            Dir::North,
+        );
+        let id = |p: &str| chem.id(p).unwrap();
+        {
+            let mut r = world.get_mut::<Reagents>(input).unwrap();
+            for (p, v) in [
+                ("/datum/reagent/alpha", 20.0),
+                ("/datum/reagent/beta", 20.0),
+                ("/datum/reagent/water", 10.0),
+            ] {
+                r.0.add_reagent(&chem, id(p), v, 300.0, None, None, true, false);
+            }
+        }
+        if let Some(mut p) = world.get_mut::<Plumber>(chamber)
+            && let Kind::ReactionChamber {
+                required,
+                catalysts,
+                ..
+            } = &mut p.kind
+        {
+            *required = vec![
+                (id("/datum/reagent/alpha"), 5.0),
+                (id("/datum/reagent/beta"), 5.0),
+            ];
+            *catalysts = vec![(id("/datum/reagent/water"), 5.0)];
+        }
+        // Water and alpha, then beta, then the reaction and the first half sent on.
+        tick(&mut world, 1.0);
+        assert_eq!(amount(&world, chamber, &chem, "/datum/reagent/water"), 5.0);
+        assert_eq!(amount(&world, chamber, &chem, "/datum/reagent/alpha"), 5.0);
+        tick(&mut world, 1.0);
+        assert_eq!(amount(&world, chamber, &chem, "/datum/reagent/beta"), 5.0);
+        for _ in 0..3 {
+            tick(&mut world, 1.0);
+        }
+        assert_eq!(amount(&world, output, &chem, "/datum/reagent/gamma"), 10.0);
+        assert_eq!(amount(&world, output, &chem, "/datum/reagent/water"), 0.0);
+        // The catalyst stayed; the input gave its water only once.
+        assert_eq!(amount(&world, chamber, &chem, "/datum/reagent/water"), 5.0);
+        assert_eq!(amount(&world, input, &chem, "/datum/reagent/water"), 5.0);
+    }
+
+    #[test]
+    fn synthesizer_and_disposer() {
+        let (mut world, chem) = chem_world();
+        let at = |x, y| TilePos { x, y, z: 0 };
+        let synth = with_reagents(
+            &mut world,
+            "/obj/machinery/plumbing/synthesizer",
+            at(0, 1),
+            Dir::South,
+        );
+        let disposer = with_reagents(
+            &mut world,
+            "/obj/machinery/plumbing/disposer",
+            at(0, 0),
+            Dir::North,
+        );
+        set_kind(
+            &mut world,
+            synth,
+            Kind::Synthesizer {
+                list: &["/datum/reagent/water"],
+                reagent: chem.id("/datum/reagent/water"),
+                amount: 5.0,
+            },
+        );
+        tick(&mut world, 1.0);
+        assert_eq!(amount(&world, synth, &chem, "/datum/reagent/water"), 5.0);
+        // Off: the disposer takes nothing.
+        tick(&mut world, 1.0);
+        assert_eq!(world.get::<Reagents>(disposer).unwrap().0.total_volume, 0.0);
+        set_kind(
+            &mut world,
+            disposer,
+            Kind::Disposer {
+                on: true,
+                rate: 5.0,
+            },
+        );
+        tick(&mut world, 1.0);
+        assert_eq!(amount(&world, disposer, &chem, "/datum/reagent/water"), 5.0);
+        // Destroyed at its rate the next tick.
+        tick(&mut world, 1.0);
+        assert!(amount(&world, disposer, &chem, "/datum/reagent/water") <= 5.0);
+    }
+
+    #[test]
+    fn receiver_pulls_from_linked_sender() {
+        let (mut world, chem) = chem_world();
+        let at = |x, y| TilePos { x, y, z: 0 };
+        let sender = with_reagents(
+            &mut world,
+            "/obj/machinery/plumbing/sender",
+            at(0, 0),
+            Dir::South,
+        );
+        let receiver = with_reagents(
+            &mut world,
+            "/obj/machinery/plumbing/receiver",
+            at(9, 9),
+            Dir::South,
+        );
+        let water = chem.id("/datum/reagent/water").unwrap();
+        world
+            .get_mut::<Reagents>(sender)
+            .unwrap()
+            .0
+            .add_reagent(&chem, water, 30.0, 300.0, None, None, true, false);
+        link_sender(&mut world, sender, receiver);
+        tick(&mut world, 1.0);
+        assert_eq!(
+            amount(&world, receiver, &chem, "/datum/reagent/water"),
+            RECEIVER_PULL
+        );
+        assert_eq!(amount(&world, sender, &chem, "/datum/reagent/water"), 10.0);
     }
 
     #[test]

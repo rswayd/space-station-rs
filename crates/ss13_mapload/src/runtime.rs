@@ -77,6 +77,10 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     // `plumbing_net`: ducts laid from a stack, a wrenched duct's stack.
     "/obj/machinery/duct",
     "/obj/item/stack/ducts",
+    // `plumbing_net`: the pill press's products.
+    "/obj/item/reagent_containers/applicator/pill/style",
+    "/obj/item/reagent_containers/applicator/patch/style",
+    "/obj/item/reagent_containers/cup/bottle",
     // `science::xenobio`: the extracts' floor tiles and the floors they lay.
     "/obj/item/stack/tile/bluespace",
     "/obj/item/stack/tile/sepia",
