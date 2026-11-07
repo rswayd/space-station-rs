@@ -50,7 +50,7 @@
 Случайная музыка в лобби (с учётом праздника) и песня конца раунда.
 
 - **Код:** [`/datum/controller/subsystem/ticker/proc/set_lobby_music()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/ticker.dm#L853), [`/datum/controller/subsystem/ticker/proc/choose_round_end_song()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/ticker.dm#L842), [`/datum/controller/subsystem/ticker/proc/SetRoundEndSound()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/ticker.dm#L763)
-- **Статус в ss13-rs:** ❌ нет — звуков нет
+- **Статус в ss13-rs:** ✅ — `crates/ss13_game/src/lobby_music.rs` (`login_music`, `play_title_music`, `play_round_end_song`), канал звука в протоколе (`ss13_shared::protocol::ChannelSound`, `CHANNEL_LOBBYMUSIC`; клиент — `crates/ss13_game/src/sound_client.rs`, `play_channels`): трек лобби на раунд из `strings/round_start_sounds.txt` (на 1 апреля — `clown.ogg`) играет в лобби и останавливается при входе в игру или наблюдении, при возврате в лобби играет снова; в конце раунда — всем на половине громкости; перед перезагрузкой — случайная песня из `config/reboot_themes/`. Тесты в модуле. `// shortcut:` нет музыки деплоя (`config/title_music/sounds/`, редкие и картовые треки), не исключается трек прошлого раунда, громкость — значения настроек по умолчанию; `title1.mod` не играется (клиент не декодирует трекерные модули)
 
 ### Очередь на сервер (popcap)
 При превышении лимита игроков новые игроки ждут в очереди лобби.

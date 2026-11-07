@@ -73,6 +73,7 @@ impl NetPacket {
             ServerMessage::Camera(c) => ("Camera".into(), bounded(c)),
             ServerMessage::Sound(s) => ("Sound".into(), bounded(s)),
             ServerMessage::Animation(a) => ("Animation".into(), bounded(a)),
+            ServerMessage::ChannelSound(s) => ("ChannelSound".into(), bounded(s)),
         };
         Self {
             outgoing: false,

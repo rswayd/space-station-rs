@@ -56,6 +56,8 @@ pub const REBOOT_EXIT_CODE: u8 = 75;
 const START_NOW_CANCEL_SECS: f64 = 180.0;
 /// tg `declare_completion`: `sleep(5 SECONDS)` before `standard_reboot`.
 const REPORT_TO_REBOOT_SECS: f64 = 5.0;
+/// From the round end song to the reboot.
+const ROUND_END_SOUND_LEAD_SECS: f64 = 1.0;
 /// tg `security_scaling_coeff`, BandaStation `security_min_positions`/`security_max_positions`
 /// (config defaults).
 const SECURITY_SCALING_COEFF: f64 = 8.0;
@@ -169,6 +171,8 @@ pub struct Ticker {
     round_start: f64,
     finished_at: f64,
     reboot_at: Option<f64>,
+    /// tg `round_end_sound_sent`: the round end song went out; the reboot follows.
+    round_end_sound_sent: bool,
     /// When [`reopen_roundstart_suicide_roles`] runs (tg's `addtimer` in `PostSetup`).
     reopen_at: Option<f64>,
     /// tg `force_ending`: an admin ended the round; it ends on the next tick.
@@ -281,15 +285,16 @@ impl Plugin for RoundServerPlugin {
             ..default()
         })
         .register_ui::<LobbyUi>()
-        .register_ui::<JobPrefsUi>()
-        .add_systems(Startup, build_prefs_static.after(JobsStartup))
-        .add_systems(
-            Update,
-            (
-                tick.before(UiSystems::Open),
-                (lobby_acts, preference_acts).in_set(UiSystems::Handle),
-            ),
-        );
+        .register_ui::<JobPrefsUi>();
+        crate::lobby_music::build(app);
+        app.add_systems(Startup, build_prefs_static.after(JobsStartup))
+            .add_systems(
+                Update,
+                (
+                    tick.before(UiSystems::Open),
+                    (lobby_acts, preference_acts).in_set(UiSystems::Handle),
+                ),
+            );
     }
 }
 
@@ -488,8 +493,17 @@ fn tick(world: &mut World) {
                 );
                 to_world(world, Span::BoldAnnounce, text);
             } else if reboot_at.is_some_and(|at| now >= at) {
-                info!("round over: rebooting the world");
-                world.write_message(AppExit::from_code(REBOOT_EXIT_CODE));
+                if !ticker.round_end_sound_sent {
+                    // `Shutdown`'s round end song, a moment before the exit so that the
+                    // streams deliver it (the client keeps playing it while it reconnects).
+                    ticker.round_end_sound_sent = true;
+                    ticker.reboot_at = Some(now + ROUND_END_SOUND_LEAD_SECS);
+                    let song = crate::lobby_music::play_round_end_song(world);
+                    info!("round end song: {song}");
+                } else {
+                    info!("round over: rebooting the world");
+                    world.write_message(AppExit::from_code(REBOOT_EXIT_CODE));
+                }
             }
         }
     }
@@ -786,6 +800,8 @@ fn declare_completion(world: &mut World, now: f64) {
     to_world(world, Span::BoldAnnounce, "Раунд закончился.");
     // `SSdynamic.set_round_result` + `send_news_report`.
     crate::round_news::send_news_report(world, end);
+    // `C?.playtitlemusic(volume_multiplier = 0.5)`.
+    crate::lobby_music::round_end_title_music(world);
     info!(
         "round ended after {duration}: {survivors}/{total} crew survived, {escapees} escaped \
          ({shuttle_escapees} on the shuttle): {escaped_names:?}"

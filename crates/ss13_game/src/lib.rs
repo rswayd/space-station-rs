@@ -15,7 +15,8 @@
 //!   ticker states, round start job division, round end report and reboot; `lobby` holds the
 //!   interfaces both halves share, `lobby_client` (feature `client`) draws the lobby screen and
 //!   the job preferences window.
-//! - `round_news` (feature `server`): the round end news story on the station's fate.
+//! - `round_news` (feature `server`): the round end news story on the station's fate;
+//!   `lobby_music` (feature `server`): the lobby's title music and the round end song.
 //! - `antag` (feature `server`; shared interfaces and `antag::client` with `client`): roundstart
 //!   antagonists (BandaStation's dynamic), the traitor, objectives, the uplink, round-end report.
 //! - `power` (feature `server`): tg areas, APCs, powernets, SMES, machine loads; unpowered doors
@@ -395,6 +396,8 @@ pub mod lava;
 pub mod lobby;
 #[cfg(feature = "client")]
 pub mod lobby_client;
+#[cfg(feature = "server")]
+pub mod lobby_music;
 #[cfg(feature = "server")]
 pub mod lockbox;
 #[cfg(feature = "server")]

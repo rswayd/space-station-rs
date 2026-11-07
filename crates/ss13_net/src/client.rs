@@ -419,11 +419,12 @@ fn receive(
     mut notices: MessageWriter<NoticeReceived>,
     mut ui: MessageWriter<UiMessageReceived>,
     mut chat: MessageWriter<ChatReceived>,
-    (mut acks, mut camera, mut sounds, mut animations): (
+    (mut acks, mut camera, mut sounds, mut animations, mut channel_sounds): (
         MessageWriter<MoveAckReceived>,
         MessageWriter<crate::camera::client::CameraEffectReceived>,
         MessageWriter<crate::sound::client::SoundReceived>,
         MessageWriter<crate::animation::client::AnimationReceived>,
+        MessageWriter<crate::sound::client::ChannelSoundReceived>,
     ),
     mut debug: MessageWriter<crate::debug::client::DebugResponseReceived>,
     mut admin: MessageWriter<crate::admin::client::AdminResponseReceived>,
@@ -490,6 +491,9 @@ fn receive(
                 }
                 ServerMessage::Sound(sound) => {
                     sounds.write(crate::sound::client::SoundReceived(sound));
+                }
+                ServerMessage::ChannelSound(sound) => {
+                    channel_sounds.write(crate::sound::client::ChannelSoundReceived(sound));
                 }
                 ServerMessage::Animation(event) => {
                     animations.write(crate::animation::client::AnimationReceived(event));
