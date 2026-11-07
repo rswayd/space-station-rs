@@ -776,7 +776,6 @@ pub fn send_death_moodlets(world: &mut World, dead: Entity, pos: TilePos) {
         event.mood_change =
             (event.mood_change * crate::mind::desensitized_level(world, viewer)).ceil();
         if let Some(mut mood) = world.get_mut::<Mood>(viewer) {
-            let mut event = see_death_event(&descriptor);
             crate::personality::see_death(mood.personalities, &mut event, &descriptor);
             mood.add_instance(now, event);
         }

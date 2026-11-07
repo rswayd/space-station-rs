@@ -637,6 +637,7 @@ mod tests {
     fn other_antags_travel_and_the_panel_edits_them() {
         let mut world = World::new();
         world.init_resource::<RevolutionHandler>();
+        world.init_resource::<Time>();
         let old = world
             .spawn((
                 MindData::new("p1", "Bob"),
