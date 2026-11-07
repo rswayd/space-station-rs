@@ -69,6 +69,7 @@ fn view(data: &NtosData, local: &UiLocalState) -> impl Scene + use<> {
             NtosScreen::Downloader(d) => Box::new(EntityScene(downloader_screen(d, local))),
             NtosScreen::Chat(c) => Box::new(EntityScene(relay_chat_screen(c))),
             NtosScreen::FileManager(f) => Box::new(EntityScene(file_manager_screen(f))),
+            NtosScreen::Station(s) => super::station_client::screen(s),
         };
         bsn! {
             @WindowContent

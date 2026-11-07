@@ -26,6 +26,9 @@ pub mod power;
 pub mod programs;
 #[cfg(feature = "server")]
 pub mod silicon;
+#[cfg(feature = "client")]
+pub mod station_client;
+pub mod station_ui;
 
 /// The NtOS window of one computer.
 pub struct NtosUi;
@@ -86,6 +89,8 @@ pub enum NtosScreen {
     Chat(Box<ChatClientData>),
     /// `NtosFileManager`.
     FileManager(Box<FileManagerData>),
+    /// The station programs (`programs::station`).
+    Station(Box<station_ui::StationScreen>),
 }
 
 impl Default for NtosScreen {

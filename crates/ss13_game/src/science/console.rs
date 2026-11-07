@@ -162,6 +162,20 @@ pub(crate) fn setup_console(world: &mut World, e: Entity, shared: Option<Arc<Tec
     world.entity_mut(e).insert(console);
 }
 
+/// The techweb state of a modular computer's Science Hub (`/datum/computer_file/program/science`):
+/// unlocked, `lock_access = ACCESS_RESEARCH`.
+pub(crate) fn program_console(world: &mut World, pc: Entity) {
+    let Some(db) = world.get_resource::<ResearchDb>() else {
+        return;
+    };
+    let catalogue = Arc::new(catalogue(db, world.get_resource::<ResearchIcons>()));
+    world.entity_mut(pc).insert(RdConsole {
+        locked: false,
+        req_access: vec!["research".to_owned()],
+        catalogue,
+    });
+}
+
 fn plain(name: &str) -> &str {
     name.trim_start_matches("\\improper ")
         .trim_start_matches("\\proper ")
@@ -170,7 +184,15 @@ fn plain(name: &str) -> &str {
 /// tg `ui_interact` on `attack_hand`.
 fn open_console(
     mut clicks: MessageReader<ClickResolved>,
-    consoles: Query<&DmName, (With<RdConsole>, Without<Unpowered>)>,
+    // A modular computer's Science Hub opens from its program (`crate::modpc`).
+    consoles: Query<
+        &DmName,
+        (
+            With<RdConsole>,
+            Without<Unpowered>,
+            Without<crate::modpc::pda::ModularComputer>,
+        ),
+    >,
     inventories: Query<&Inventory>,
     mut open: MessageWriter<OpenUi>,
 ) {

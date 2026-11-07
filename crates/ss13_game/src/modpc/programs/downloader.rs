@@ -3,8 +3,7 @@
 //! runs while the hub is open (in front or in the background) at the good-signal NTNet speed
 //! and is stored on completion if it still fits.
 // shortcut: NTNet is always at good signal (no relays, no `TRAIT_MODPC_HALVED_DOWNLOAD_SPEED`),
-// no network logs, and no Syndicate catalog (no antagonist programs in the port), so an emag
-// changes nothing here.
+// and no network logs; the Syndicate catalog of an emagged computer is Revelation only.
 // tg's `begin_file_download` checks neither the ID's access nor the device's hardware (only the
 // UI greys them out); here the server refuses both.
 
@@ -94,7 +93,7 @@ pub fn ui_data(
         emagged: computer.emagged,
         programs: ProgramKind::ALL
             .into_iter()
-            .filter(|p| p.on_ntnet_store())
+            .filter(|p| p.on_ntnet_store() || (computer.emagged && p.on_syndinet_store()))
             .map(|p| DownloadableProgram {
                 icon: p.icon().to_owned(),
                 filename: p.filename().to_owned(),
@@ -125,7 +124,7 @@ pub fn parse(action: &str, params: &UiParams) -> Option<Result<DownloaderAct, Ui
         PRG_DOWNLOAD_FILE => params
             .get("filename")
             .and_then(ProgramKind::from_filename)
-            .filter(|p| p.on_ntnet_store())
+            .filter(|p| p.on_ntnet_store() || p.on_syndinet_store())
             .map(DownloaderAct::Download)
             .ok_or_else(|| UiReject::BadParams("filename: not in the catalog".into())),
         PRG_RESET_ERROR => Ok(DownloaderAct::ResetError),
@@ -159,6 +158,10 @@ pub fn apply(
             }
             if !program.runs_on(computer.is_pda()) {
                 return Err("incompatible hardware");
+            }
+            // The Syndicate store opens on an emagged computer only.
+            if !program.on_ntnet_store() && !computer.emagged {
+                return Err("not in the catalog");
             }
             if !can_download(program, access_of(world, computer).as_deref()) {
                 return Err("access denied");

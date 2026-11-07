@@ -253,6 +253,7 @@ impl Plugin for ModpcServerPlugin {
         super::files::build(app);
         super::silicon::build(app);
         super::circuit::build(app);
+        super::programs::station::build(app);
         app.register_ui::<NtosUi>()
             .add_observer(attach)
             .add_observer(attach_console)
@@ -735,8 +736,13 @@ fn ntos_status(
     use ss13_tgui::UiInterface as _;
     for mut window in &mut windows {
         let ntos = window.interface == NtosUi::NAME;
-        // The newscaster app's window on a computer (`super::programs::apps`).
-        if !ntos && window.interface != crate::newscaster::NewscasterUi::NAME {
+        // The window of a launcher program on a computer (`super::programs::apps`, `station`).
+        let launcher = if window.interface == crate::newscaster::NewscasterUi::NAME {
+            Some(ProgramKind::Newscaster)
+        } else {
+            super::programs::station::launcher_of(window.interface)
+        };
+        if !ntos && launcher.is_none() {
             continue;
         }
         let Ok((computer, at, lid, silicon)) = computers.get(window.source) else {
@@ -760,7 +766,7 @@ fn ntos_status(
             window.cap_status(UiStatus::Close);
             continue;
         };
-        let app_gone = !ntos && !computer.programs.contains(&ProgramKind::Newscaster);
+        let app_gone = launcher.is_some_and(|p| !computer.programs.contains(&p));
         // A console without area power runs on its cell (`crate::modpc::power`).
         // A closed laptop's screen (`!screen_on`).
         if !computer.enabled || app_gone || lid.is_some_and(|l| !l.open) {
@@ -802,6 +808,7 @@ pub struct NtosParams<'w, 's> {
     computers: Query<'w, 's, &'static ModularComputer>,
     chat_clients: Query<'w, 's, &'static super::programs::chat::ChatClient>,
     chat_channels: Option<Res<'w, super::programs::chat::ChatChannels>>,
+    station_apps: Query<'w, 's, &'static super::programs::station::StationApps>,
     ticker: Option<Res<'w, crate::round::Ticker>>,
     time: Res<'w, Time>,
     cells: Query<'w, 's, &'static super::power::ComputerCell>,
@@ -855,6 +862,7 @@ pub enum NtosAct {
     Downloader(super::programs::downloader::DownloaderAct),
     Chat(super::programs::chat::ChatAct),
     Files(super::files::FileAct),
+    Station(super::programs::station::StationAct),
 }
 
 fn program_param(params: &UiParams) -> Result<ProgramKind, UiReject> {
@@ -1078,6 +1086,16 @@ impl ServerUi for NtosUi {
                     computer.disk.and_then(|d| params.disks.get(d).ok()),
                 )))
             }
+            Some(ProgramKind::Station(_)) => match params
+                .station_apps
+                .get(entity)
+                .ok()
+                .and_then(|s| s.view.clone())
+            {
+                Some(view) => NtosScreen::Station(Box::new(view)),
+                // The first tick, before `station::refresh` built it.
+                None => NtosScreen::Main(NtosMainData::default()),
+            },
             // A launcher never comes to the front.
             Some(ProgramKind::Newscaster) => NtosScreen::Main(main_data(
                 computer,
@@ -1136,6 +1154,9 @@ impl ServerUi for NtosUi {
                 }
                 if let Some(act) = super::files::parse(other, params) {
                     return act.map(NtosAct::Files);
+                }
+                if let Some(act) = super::programs::station::parse(other, params) {
+                    return act.map(NtosAct::Station);
                 }
                 match super::programs::card_mod::parse(other, |k| params.get(k).map(str::to_owned))
                 {
@@ -1284,6 +1305,9 @@ fn apply_act(
         NtosAct::Chat(act) => {
             return super::programs::chat::apply(world, actor, pda, computer, act);
         }
+        NtosAct::Station(act) => {
+            return super::programs::station::apply(world, client, actor, pda, computer, act);
+        }
         NtosAct::Run(program) if program.launcher() => {
             if !computer.programs.contains(&program) {
                 return Err("not installed");
@@ -1291,7 +1315,12 @@ fn apply_act(
             if !super::ntnet::can_open(world, client, pda, program) {
                 return Err("no NTNet");
             }
-            super::programs::apps::open_newscaster(world, client, actor, pda);
+            match program {
+                ProgramKind::Station(p) => {
+                    super::programs::station::open_launcher(world, client, actor, pda, p)
+                }
+                _ => super::programs::apps::open_newscaster(world, client, actor, pda),
+            }
         }
         NtosAct::Run(program) => {
             if computer.programs.contains(&program)
