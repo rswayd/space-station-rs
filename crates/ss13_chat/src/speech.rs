@@ -284,13 +284,35 @@ pub fn slur(text: &str, slur: &Slur, mut roll: impl FnMut() -> f32) -> String {
     words.join(" ")
 }
 
+/// A stutter's chances, percent (tg `stutter_prob`, `four_char_chance`, `three_char_chance`,
+/// `two_char_chance`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct StutterChances {
+    pub word: f32,
+    pub four: f32,
+    pub three: f32,
+    pub two: f32,
+}
+
+/// `/datum/status_effect/speech/stutter`.
+pub const STUTTER: StutterChances = StutterChances {
+    word: 75.0,
+    four: 10.0,
+    three: 20.0,
+    two: 90.0,
+};
+
 /// tg `/datum/status_effect/speech/stutter/stutter_char` (`roll` gives 0..100 per call).
 fn stutter_char(c: &str, roll: &mut impl FnMut() -> f32) -> String {
-    let times = if roll() < 10.0 {
+    stutter_char_with(c, &STUTTER, roll)
+}
+
+fn stutter_char_with(c: &str, chances: &StutterChances, roll: &mut impl FnMut() -> f32) -> String {
+    let times = if roll() < chances.four {
         4
-    } else if roll() < 20.0 {
+    } else if roll() < chances.three {
         3
-    } else if roll() < 90.0 {
+    } else if roll() < chances.two {
         2
     } else {
         1
@@ -300,10 +322,10 @@ fn stutter_char(c: &str, roll: &mut impl FnMut() -> f32) -> String {
 
 /// tg `/datum/status_effect/speech/stutter/apply_speech` on one word: 75% of words repeat
 /// their first sound (`stutter_regex`, then BandaStation's Cyrillic consonant regex).
-fn stutter_word(word: &str, roll: &mut impl FnMut() -> f32) -> String {
+fn stutter_word(word: &str, chances: &StutterChances, roll: &mut impl FnMut() -> f32) -> String {
     const LEADING: &str = " \t\"'()[]{}.!?,:;_`~-";
     const CYRILLIC: &str = "бвгджзйклмнпрстфхцчшщБВГДЖЗЙКЛМНПРСТФХЦЧШЩ";
-    if roll() >= 75.0 {
+    if roll() >= chances.word {
         return word.to_owned();
     }
     let rest = word.trim_start_matches(|c| LEADING.contains(c));
@@ -329,15 +351,89 @@ fn stutter_word(word: &str, roll: &mut impl FnMut() -> f32) -> String {
         .nth(sound_len)
         .map_or(rest.len(), |(i, _)| i);
     let (sound, tail) = rest.split_at(split);
-    format!("{lead}{}{tail}", stutter_char(sound, roll))
+    format!("{lead}{}{tail}", stutter_char_with(sound, chances, roll))
 }
 
 /// The stutter of every word of `text`.
-pub fn stutter(text: &str, mut roll: impl FnMut() -> f32) -> String {
+pub fn stutter(text: &str, roll: impl FnMut() -> f32) -> String {
+    stutter_with(text, &STUTTER, roll)
+}
+
+/// [`stutter`] with other chances (the anxiety stutter).
+pub fn stutter_with(text: &str, chances: &StutterChances, mut roll: impl FnMut() -> f32) -> String {
     text.split(' ')
-        .map(|w| stutter_word(w, &mut roll))
+        .map(|w| stutter_word(w, chances, &mut roll))
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+/// The Social Anxiety quirk's speech (tg `/datum/quirk/social_anxiety/handle_speech` and
+/// `/datum/status_effect/speech/stutter/anxiety`), kept by the game.
+#[derive(Component, Clone, Copy, Debug, PartialEq)]
+pub struct Anxiety {
+    /// `calculate_mood_mod()`: the mood factor times 12.5 per nearby human with a player.
+    pub mood_mod: f32,
+    /// `dumb_thing`: the once-a-life cringe is still to come.
+    pub dumb_thing: bool,
+}
+
+/// What the anxiety does to one say.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AnxiousSay {
+    Speaks,
+    /// The once-a-life memory; the message is replaced.
+    DumbThing,
+    /// Decided not to say it; the message is replaced.
+    Skipped,
+    /// Skipped and withdrew: 6 s of silence.
+    Withdrew,
+}
+
+/// BandaStation's fillers that replace a message the speaker did not dare to say.
+pub const ANXIOUS_FILLERS: [&str; 9] = [
+    "Э-э-эм.",
+    "Эмм.",
+    "Ам.",
+    "Ммм.",
+    "Х-э-эм.",
+    "Ну.",
+    "Ой.",
+    "Простите.",
+    "Извините.",
+];
+
+impl Anxiety {
+    /// `prob(min(20, 0.20 * moodmod))`.
+    pub fn skip_chance(&self) -> f32 {
+        (0.2 * self.mood_mod).min(20.0)
+    }
+
+    /// `/datum/status_effect/speech/stutter/anxiety`: `clamp(moodmod * 0.5, 5, 50)` of the
+    /// words, 4/10/100% for four, three and two sounds.
+    pub fn stutter(&self) -> StutterChances {
+        StutterChances {
+            word: (self.mood_mod * 0.5).clamp(5.0, 50.0),
+            four: 4.0,
+            three: 10.0,
+            two: 100.0,
+        }
+    }
+
+    /// `handle_speech`'s rolls (`roll` gives 0..100).
+    pub fn roll(&self, mut roll: impl FnMut() -> f32) -> AnxiousSay {
+        let chance = self.skip_chance();
+        if roll() >= chance {
+            return AnxiousSay::Speaks;
+        }
+        if self.dumb_thing {
+            return AnxiousSay::DumbThing;
+        }
+        if roll() < chance {
+            AnxiousSay::Withdrew
+        } else {
+            AnxiousSay::Skipped
+        }
+    }
 }
 
 /// tg `/datum/status_effect/speech/stutter/derpspeech/handle_message`: English simplifications,
@@ -644,6 +740,31 @@ mod tests {
     }
 
     #[test]
+    fn anxiety_skips_with_the_mood_and_company() {
+        // Alone: never silent.
+        let alone = Anxiety {
+            mood_mod: 0.0,
+            dumb_thing: true,
+        };
+        assert_eq!(alone.roll(|| 0.0), AnxiousSay::Speaks);
+        // A crowd at bad mood: capped at 20%.
+        let crowd = Anxiety {
+            mood_mod: 500.0,
+            dumb_thing: true,
+        };
+        assert_eq!(crowd.skip_chance(), 20.0);
+        assert_eq!(crowd.roll(|| 10.0), AnxiousSay::DumbThing);
+        assert_eq!(crowd.roll(|| 30.0), AnxiousSay::Speaks);
+        let later = Anxiety {
+            dumb_thing: false,
+            ..crowd
+        };
+        assert_eq!(later.roll(|| 10.0), AnxiousSay::Withdrew);
+        let mut rolls = [10.0, 50.0].into_iter();
+        assert_eq!(later.roll(|| rolls.next().unwrap()), AnxiousSay::Skipped);
+    }
+
+    #[test]
     fn stutter_repeats_the_first_sound() {
         // Every roll 50: each word stutters (< 75) twice (not < 10, not < 20, < 90).
         let half = || 50.0;
@@ -652,6 +773,14 @@ mod tests {
         assert_eq!(stutter("42 ok", half), "42 o-ok");
         // A roll of 80 leaves words alone.
         assert_eq!(stutter("hello", || 80.0), "hello");
+        // The anxiety stutter: a calm speaker alone still stutters 5% of the words.
+        let calm = Anxiety {
+            mood_mod: 0.0,
+            dumb_thing: true,
+        };
+        assert_eq!(calm.stutter().word, 5.0);
+        assert_eq!(stutter_with("hello", &calm.stutter(), || 4.5), "h-h-hello");
+        assert_eq!(stutter_with("hello", &calm.stutter(), || 6.0), "hello");
     }
 
     #[test]

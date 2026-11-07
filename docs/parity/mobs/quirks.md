@@ -44,13 +44,13 @@
 Разъём для извлечения скиллчипов; стартовый скиллчип.
 
 - **Код:** [`/datum/quirk/chip_connector`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/positive_quirks/chip_connector.dm#L1), [`/datum/quirk/chipped`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/positive_quirks/chipped.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ❌ нет — в порте нет скиллчипов (`/obj/item/skillchip`, слоты чипов в мозге: `crate::medical::organs` — «no skillchips»); квирки ждут этой механики
 
 ### Хобби с предметами: Clown Enjoyer, Mime Fan, Musician, Poster Boy, Tagger, Pyromania
 Значки фаната (муд-бонус от клоуна/мима), инструмент и лечащая музыка, плакаты, баллончик с краской, радость от огня.
 
 - **Код:** [`/datum/quirk/item_quirk/clown_enjoyer`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/positive_quirks/clown_enjoyer.dm#L1), [`/datum/quirk/item_quirk/mime_fan`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/positive_quirks/mime_fan.dm#L1), [`/datum/quirk/item_quirk/musician`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/positive_quirks/musician.dm#L1), [`/datum/quirk/item_quirk/poster_boy`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/positive_quirks/poster_boy.dm#L1), [`/datum/quirk/item_quirk/tagger`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/positive_quirks/tagger.dm#L1), [`/datum/quirk/pyromania`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/positive_quirks/pyromania.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/quirks.rs`: Clown Enjoyer и Mime Fan (значок в рюкзак/руки, мудлет +1, пока значок на надетом комбинезоне; квирки несовместимы), Musician (музыкальный маяк выбора инструмента; лечащая музыка — в группе инструментов, их игра не портирована), Tagger (баллончик; краска ×0.5 в `crate::crayons`, рисунок синдикатским баллончиком вдвое быстрее, `crate::syndie_spraycan`), Pyromania (теплоурон тела ×0.67, `crate::breath`; мудлет по числу огней в 5 тайлах: горящие мобы, костры, камины, очаги пламени, горящие объекты). Нет Poster Boy (коробка самодельных плакатов и мудлет от них), фан-HUD, запрета двух значков на одном комбинезоне, цвета баллончика из настроек, импульсного щёлканья зажигалкой (зажигалки не зажигаются в порте) и линии видимости
 
 ## Нейтральные
 
@@ -78,13 +78,13 @@
 Стартовый запас вещества; без него — ломка и плохое настроение.
 
 - **Код:** [`/datum/quirk/item_quirk/addict/junkie`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/addict.dm#L83), [`/datum/quirk/item_quirk/addict/smoker`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/addict.dm#L110), [`/datum/quirk/item_quirk/addict/alcoholic`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/addict.dm#L191)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/quirks.rs` (`addict_*`), `crates/ss13_game/src/addictions.rs`: зависимость доводится до максимума (1000 очков) и возвращается каждые 30 с, если её «бросили»; снятие квирка убирает все зависимости; Junkie — случайный наркотик из списка BandaStation (с кокаином) и баночка из 7 таблеток по 3 ед., Smoker — никотин, случайная пачка и зажигалка, мудлет «не та марка» за чужую сигарету во рту, Alcoholic — случайная бутылка и любимый алкоголь, мудлет за чужой алкоголь; общая ломка (стадии по циклам, мудлеты, сообщения, облегчение веществом в крови, никотиновый тремор). Без настроек выбора наркотика/марки (всегда «Random»), без лёгких курильщика и ослабленной печени алкоголика (в органах нет здоровья на экземпляр — группа органов), без воспоминаний; набор очков зависимости от метаболизма и особые эффекты ломки остальных типов — в группе химии (`../chemistry/reagent-mechanics.md`)
 
 ### Аллергии: Extreme Medicine Allergy, Food Allergy
 Случайные лекарства или продукты вызывают тяжёлую реакцию; медицинский браслет.
 
 - **Код:** [`/datum/quirk/item_quirk/allergic`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/allergic.dm#L26), [`/datum/quirk/item_quirk/food_allergic`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/food_allergy.dm#L14)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/quirks.rs` (`Allergies`, `allergic_reagents`, `food_allergy_reaction`), вызовы из `crate::chem` (метаболизм) и `crate::food` (`check_liked`): Extreme Medicine Allergy — 6 случайных лекарств вне чёрного списка, аллерген в крови даёт 3 токсина и 3 гистамина в секунду, 10% в секунду рвота и 10 урона случайному органу, адреналин останавливает реакцию; Food Allergy — случайный тип еды из списка BandaStation, такая еда вызывает анафилаксию (или +10 гистамина), мудлет «горло зудит»; жетон аллергика и сообщение со списком. Отклонения: адреналин не замораживает метаболизм аллергена, на жетоне нет списка, нет настройки выбора еды; реакции на контакт с сахаром/алкоголем/жуками — в группе химии
 
 ### Органы чувств: Blind, Deaf, Nearsighted, Scarred Eye, Anosmia, Fluoride Stare
 Слепота (повязка), глухота, близорукость (очки), шрам на глазу, отсутствие нюха, немигающие глаза (нужны капли).
@@ -115,7 +115,7 @@
 
 - **Код:** [`/datum/quirk/social_anxiety`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/social_anxiety.dm#L1)
 - **BandaStation:** [`social_anxiety.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/social_anxiety.dm#L50) — шанс промолчать зависит от настроения, заикание работает на кириллице
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/quirks.rs` (`anxiety_mood_mod`, `examined`, `anxious_speech`), `crates/ss13_chat/src/speech.rs` (`Anxiety`), `crates/ss13_chat/src/server.rs` (`handle_say`): шанс промолчать до 20% от настроения и людей рядом (12.5 за человека с игроком в 3 тайлах), замена фразы на «Эмм.»-реплику BandaStation, раз за жизнь «глупость», 1% спагетти, уход в себя с 6 с немоты, постоянное заикание 5–50% (на кириллице); зрительный контакт при взаимном осмотре в 2 с и 5 тайлах: 25% тремор 20 с / заикание 6 с / оглушение 2 с и мудлет −5, 15% «смотрите в глаза» предмету; несовместим с Mute. Отклонения: коэффициент настроения обновляется раз в секунду, нет проверки линии видимости, закрытого лица, Fearless и языка жестов
 
 ### Речь и общение: Mute, Soft-Spoken, Common Second Language, Illiterate, Prosopagnosia
 Немота, только шёпот, плохое знание общего языка, неграмотность, неспособность различать лица.

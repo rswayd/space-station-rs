@@ -819,7 +819,8 @@ fn use_on_surface(
     }
     let drawing = resolve_random(world, &crayon.drawtype);
     let large = LARGE.contains(&drawing.as_str());
-    let cost = cost_of(&drawing);
+    // `TRAIT_TAGGER` (`crate::quirks`): half the paint.
+    let cost = cost_of(&drawing) * crate::quirks::tagger_multiplier(world, actor.mob);
     // `check_empty(user, cost)`.
     if crayon.charges.is_some() && crayon.charges_left < cost {
         if crayon.charges_left <= 0.0 && crayon.spray.is_none() {
@@ -1207,7 +1208,9 @@ fn paint_obj(
         a.color = Some(crayon.color);
     }
     // `crayon/on_painted`: a decal costs its stencil.
-    let cost = art.as_deref().map_or(2.0, cost_of);
+    let cost = art.as_deref().map_or(2.0, |a| {
+        cost_of(a) * crate::quirks::tagger_multiplier(world, user)
+    });
     if let Some(mut c) = world.get_mut::<Crayon>(can) {
         c.use_charges(cost, false);
     }

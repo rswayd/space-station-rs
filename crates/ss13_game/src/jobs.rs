@@ -441,9 +441,9 @@ fn build_outfit_templates(world: &mut World) {
         jobs.data
             .outfit_items()
             .into_iter()
-            // The items quirks give at spawn (`crate::quirks`).
-            .chain(crate::quirks::ITEM_PATHS)
             .map(str::to_owned)
+            // The items quirks give at spawn (`crate::quirks`).
+            .chain(crate::quirks::item_paths())
             .collect::<Vec<_>>()
     };
     let Some(assets) = world

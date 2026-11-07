@@ -544,7 +544,8 @@ impl BodyLife {
             normal: def.bodytemp_normal,
             heat_limit: def.bodytemp_heat_damage_limit,
             cold_limit: def.bodytemp_cold_damage_limit,
-            heatmod: def.heatmod,
+            // Pyromania's `PHYS_COEFF_HEAT` (`crate::quirks`).
+            heatmod: def.heatmod * crate::quirks::heat_multiplier(world, mob),
             coldmod: def.coldmod,
             resist_heat: has(Trait::ResistHeat),
             resist_cold: has(Trait::ResistCold),

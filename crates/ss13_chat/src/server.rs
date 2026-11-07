@@ -35,9 +35,10 @@ use ss13_world::{SpatialIndex, WorldSystems};
 use crate::emote::{EMOTE_AUDIO_COOLDOWN_SECS, EmoteOutcome, EmoteSound, EmoteUser};
 use crate::language::{self, LanguageHolder, LanguageId, ScrambleSeed, Tongue};
 use crate::speech::{
-    BinaryCapable, ChangelingHivemind, EarsWorn, Impediments, RadioExtension, RadioTarget,
-    SpeakerStat, SpeechEffects, Tongueless, VoiceSpan, WhisperHeard, capitalize, derpspeech,
-    parse_mods_speaking, slur, stars, stutter, unintelligize, whisper_heard,
+    ANXIOUS_FILLERS, Anxiety, AnxiousSay, BinaryCapable, ChangelingHivemind, EarsWorn, Impediments,
+    RadioExtension, RadioTarget, SpeakerStat, SpeechEffects, Tongueless, VoiceSpan, WhisperHeard,
+    capitalize, derpspeech, parse_mods_speaking, slur, stars, stutter, stutter_with, unintelligize,
+    whisper_heard,
 };
 
 /// tg `get_hearers_in_view(world.view)`: 7 tiles, Chebyshev, like BYOND `view()`.
@@ -176,6 +177,16 @@ pub struct Emoted {
     pub speaker: Entity,
     pub key: &'static str,
     pub sound: Option<EmoteSound>,
+}
+
+/// A say the Social Anxiety quirk swallowed ([`Anxiety`]), for its game effects: the
+/// withdrawal's silence, the once-a-life spaghetti.
+#[derive(Message, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AnxiousSpoke {
+    pub speaker: Entity,
+    pub outcome: AnxiousSay,
+    /// `prob(1)` of the dumb thing: a plate of spaghetti drops.
+    pub spaghetti: bool,
 }
 
 /// What one group of listeners hears of a message (tg `translate_language` per hearer): the
@@ -348,6 +359,7 @@ impl Plugin for ChatServerPlugin {
             .add_message::<SayRejected>()
             .add_message::<Spoke>()
             .add_message::<Emoted>()
+            .add_message::<AnxiousSpoke>()
             .add_observer(on_control_inserted)
             .add_observer(on_control_discarded)
             .add_systems(
@@ -539,6 +551,7 @@ type Body<'a> = (
     Option<&'a LanguageHolder>,
     Option<&'a Tongue>,
     Option<&'a EmoteUser>,
+    Option<&'a Anxiety>,
 );
 
 fn handle_say(
@@ -562,7 +575,11 @@ fn handle_say(
     mut rng: ResMut<SpeechRng>,
     time: Res<Time<Real>>,
     mut chat: MessageWriter<SendChat>,
-    (mut rejected, mut emoted): (MessageWriter<SayRejected>, MessageWriter<Emoted>),
+    (mut rejected, mut emoted, mut anxious): (
+        MessageWriter<SayRejected>,
+        MessageWriter<Emoted>,
+        MessageWriter<AnxiousSpoke>,
+    ),
     mut spoke: MessageWriter<Spoke>,
     mut commands: Commands,
 ) {
@@ -614,6 +631,7 @@ fn handle_say(
                 holder,
                 tongue,
                 emote_user,
+                anxiety,
             ),
             text,
         ) = match checked {
@@ -801,14 +819,65 @@ fn handle_say(
             });
             continue;
         }
-        // tg `treat_message`: `TRAIT_UNINTELLIGIBLE_SPEECH`, then the speech status effects.
+        // `COMSIG_MOB_SAY`: Social Anxiety may swallow the message.
+        // shortcut: no `TRAIT_FEARLESS` or sign language exemption.
         let mut message = message;
+        if let Some(anxiety) = anxiety {
+            let outcome = anxiety.roll(|| rng.percent());
+            let mut tell = |span: Span, text: &str| {
+                chat.write(SendChat {
+                    clients: vec![client],
+                    message: ChatMessage::simple(ChatChannel::Warning, span, text),
+                });
+            };
+            match outcome {
+                AnxiousSay::Speaks => {}
+                AnxiousSay::DumbThing => {
+                    tell(
+                        Span::BoldWarning,
+                        "Вы вспоминаете глупость, которую сказали давным-давно, и внутренне \
+                         кричите.",
+                    );
+                    commands.entity(speaker).try_insert(Anxiety {
+                        dumb_thing: false,
+                        ..*anxiety
+                    });
+                }
+                AnxiousSay::Skipped | AnxiousSay::Withdrew => {
+                    tell(
+                        Span::Warning,
+                        "Вы думаете, что это не добавит ничего нового к разговору, и решаете не \
+                         говорить об этом.",
+                    );
+                    if outcome == AnxiousSay::Withdrew {
+                        tell(
+                            Span::Danger,
+                            "Вы уходите в себя. Вы действительно не настроены на разговор.",
+                        );
+                    }
+                }
+            }
+            if outcome != AnxiousSay::Speaks {
+                let spaghetti = outcome == AnxiousSay::DumbThing && rng.percent() < 1.0;
+                anxious.write(AnxiousSpoke {
+                    speaker,
+                    outcome,
+                    spaghetti,
+                });
+                let i = (rng.percent() as usize * ANXIOUS_FILLERS.len()) / 100;
+                message = ANXIOUS_FILLERS[i.min(ANXIOUS_FILLERS.len() - 1)].to_owned();
+            }
+        }
+        // tg `treat_message`: `TRAIT_UNINTELLIGIBLE_SPEECH`, then the speech status effects.
         if impediments.unintelligible {
             message = unintelligize(&message, || rng.percent());
         }
         let stuttering = impediments.stutter || speech_effects.stutter;
         if stuttering {
             message = stutter(&message, || rng.percent());
+        }
+        if let Some(anxiety) = anxiety {
+            message = stutter_with(&message, &anxiety.stutter(), || rng.percent());
         }
         for effect in speech_effects.slurs.iter().flatten() {
             message = slur(&message, effect, || rng.percent());

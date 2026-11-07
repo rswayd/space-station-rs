@@ -323,6 +323,7 @@ fn examine(world: &mut World, mut clicks: Local<MessageCursor<ExamineClick>>) {
                 message,
             });
         }
+        crate::quirks::examined(world, click.examiner, click.target);
     }
 }
 
