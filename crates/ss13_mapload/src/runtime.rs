@@ -74,6 +74,11 @@ pub const GIFT_TYPES: &[&str] = &[
 /// Constant paths `ss13_game` spawns that no other table of this crate lists: leftovers,
 /// products and printouts of machines, decals, grenade payloads, quirk items, paper kinds.
 pub const GAME_RUNTIME_TYPES: &[&str] = &[
+    // `science::xenobio`: the extracts' floor tiles and the floors they lay.
+    "/obj/item/stack/tile/bluespace",
+    "/obj/item/stack/tile/sepia",
+    "/turf/open/floor/bluespace",
+    "/turf/open/floor/sepia",
     // `sheets`: five rods on a titanium sheet, tanning, stamped cardboard.
     "/obj/item/stack/rods/shuttle/five",
     "/obj/item/stack/sheet/hairlesshide",

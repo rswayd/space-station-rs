@@ -1,7 +1,8 @@
 //! Xenobiology without clients (`ss13_game::science::xenobio`): a mapped slime starts as a
 //! grey baby, grows into an adult and splits into four; a dead one gives its core up; a grey
 //! extract injected with plasma makes a baby slime and is gone, one given water makes
-//! epinephrine and is spent.
+//! epinephrine and is spent; the slime console stores, places and doses slimes; a sepia floor
+//! slows the mob on it.
 
 use std::path::{Path, PathBuf};
 
@@ -9,7 +10,9 @@ use bevy::prelude::*;
 use ss13_game::chem::{Chem, Reagents};
 use ss13_game::closets::InCloset;
 use ss13_game::health::Stat;
-use ss13_game::science::xenobio::{Slime, SlimeExtract, complete_core_removal};
+use ss13_game::science::xenobio::{
+    Slime, SlimeExtract, TurfSlowdown, complete_core_removal, turf_slowdown,
+};
 use ss13_game::science::xenobio_console::{
     XenoConsole, feed_potion, feed_slime, slime_pickup, slime_place, valid_turf,
 };
@@ -113,6 +116,8 @@ const TYPES: &str = r##"{
     "/turf": { "parent": "/atom", "declared_vars": { "icon": { "resource": "t.dmi" } } },
     "/turf/open": { "parent": "/turf" },
     "/turf/open/floor": { "parent": "/turf/open", "declared_vars": { "icon_state": "floor" } },
+    "/turf/open/floor/sepia": { "parent": "/turf/open/floor", "declared_vars": {
+        "icon_state": "sepia" } },
     "/turf/open/space": { "parent": "/turf/open" },
     "/turf/open/space/basic": { "parent": "/turf/open/space" },
     "/turf/closed": { "parent": "/turf", "declared_vars": { "density": 1, "opacity": 1 } },
@@ -126,12 +131,13 @@ const TYPES: &str = r##"{
 const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 "f" = (/turf/open/floor,/area/space)
 "S" = (/mob/living/basic/slime,/turf/open/floor,/area/space)
+"p" = (/turf/open/floor/sepia,/area/space)
 "C" = (/obj/machinery/computer/camera_advanced/xenobio,/turf/open/floor,/area/space)
 
 (1,1,1) = {"
 wwwwwww
 wffffCw
-wfSfffw
+wfSpffw
 wfffffw
 wwwwwww
 "}
@@ -141,10 +147,12 @@ const SLIME_AT: TilePos = TilePos::new(3, 3, 1);
 const BENCH: TilePos = TilePos::new(5, 2, 1);
 const GREY_EXTRACT: &str = "/obj/item/slime_extract/grey";
 const STEROID: &str = "/obj/item/slimepotion/slime/steroid";
+const SEPIA_AT: TilePos = TilePos::new(4, 3, 1);
 const CONSOLE_AT: TilePos = TilePos::new(6, 4, 1);
 
-const STATES: [(&str, &str); 10] = [
+const STATES: [(&str, &str); 11] = [
     ("t.dmi", "floor"),
+    ("t.dmi", "sepia"),
     ("t.dmi", "wall"),
     ("h.dmi", "human_basic"),
     ("i.dmi", "toy"),
@@ -166,6 +174,7 @@ fn fixture(test: &str) -> PathBuf {
         STEROID,
         "/obj/machinery/computer/camera_advanced/xenobio",
         "/turf/open/floor",
+        "/turf/open/floor/sepia",
         "/turf/closed/wall",
         "/turf/open/space/basic",
         "/area/space",
@@ -383,4 +392,33 @@ fn slime_console_stores_places_and_doses_slimes() {
 
     feed_slime(world, slime, console, BENCH);
     assert_eq!(world.get::<XenoConsole>(console).unwrap().monkeys, 0.0);
+}
+
+/// A mob stepping onto a sepia floor gets its `slowdown = 2`, and loses it stepping off.
+#[test]
+fn sepia_floor_slows_the_mob_on_it() {
+    let mut app = server("sepia");
+    let slime = the_slime(&mut app);
+    assert_eq!(turf_slowdown(app.world(), SEPIA_AT), 2.0);
+    assert_eq!(turf_slowdown(app.world(), SLIME_AT), 0.0);
+    app.world_mut().write_message(ss13_world::MoveRequest {
+        entity: slime,
+        dir: ss13_shared::Dir::East,
+    });
+    run(&mut app, 1.0);
+    assert_eq!(app.world().get::<TilePos>(slime), Some(&SEPIA_AT));
+    assert_eq!(
+        app.world().get::<TurfSlowdown>(slime),
+        Some(&TurfSlowdown(2.0))
+    );
+    app.world_mut().write_message(ss13_world::MoveRequest {
+        entity: slime,
+        dir: ss13_shared::Dir::West,
+    });
+    run(&mut app, 2.0);
+    assert_eq!(app.world().get::<TilePos>(slime), Some(&SLIME_AT));
+    assert_eq!(
+        app.world().get::<TurfSlowdown>(slime),
+        Some(&TurfSlowdown(0.0))
+    );
 }

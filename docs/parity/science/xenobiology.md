@@ -20,7 +20,7 @@
 Плитки из экстрактов: ускоряют передвижение / замедляют время на тайле.
 
 - **Код:** [`/obj/item/stack/tile/bluespace`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/xenobiology/xenobiology.dm#L1131), [`/obj/item/stack/tile/sepia`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/xenobiology/xenobiology.dm#L1148)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/science/xenobio.rs` (`TurfSlowdown`): плитки кладут `/turf/open/floor/bluespace` (`slowdown = -1`) и `/turf/open/floor/sepia` (`slowdown = 2`), моб на таком полу получает модификатор скорости `turf_slowdown` и теряет его, сойдя; без исключения летающих мобов
 
 ### Консоль ксенобиологии
 Камера-консоль с удалённым «глазом»: всасывает и выплёвывает слаймов, кормит обезьянками (переработка трупов обезьян в кубы), применяет зелья, сканирует слаймов; горячие клавиши.
