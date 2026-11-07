@@ -547,14 +547,8 @@ pub fn do_after(
     if world.get::<DoAfter>(actor.mob).is_some() {
         return false;
     }
-    // `cached_multiplicative_actions_slowdown`: the sanity action speed (`crate::mood`) plus
-    // the food haste (`crate::buffs`).
-    let delay_ds = delay_ds
-        * (world
-            .get::<crate::mood::Mood>(actor.mob)
-            .map_or(1.0, |m| m.action_multiplier())
-            + crate::buffs::action_slowdown(world, actor.mob))
-        .max(0.0);
+    // `cached_multiplicative_actions_slowdown` (`crate::actionspeed`).
+    let delay_ds = delay_ds * crate::actionspeed::action_multiplier(world, actor.mob);
     let now = world.resource::<Time>().elapsed_secs_f64();
     let pending = DoAfter {
         client: actor.client,
@@ -684,6 +678,51 @@ fn still_valid(world: &World, mob: Entity, action: &DoAfter) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn do_after_delay_follows_action_speed_modifiers() {
+        let mut world = World::new();
+        world.insert_resource(Time::<()>::default());
+        let client = world.spawn_empty().id();
+        let mob = world.spawn(TilePos::new(1, 1, 0)).id();
+        let girder = world.spawn(TilePos::new(1, 2, 0)).id();
+        let actor = Actor {
+            client,
+            mob,
+            item: None,
+        };
+        // Midas blight's gold tier: 1 + 2 = three times as long.
+        crate::actionspeed::add_actionspeed_modifier(
+            &mut world,
+            mob,
+            crate::actionspeed::ID_MIDAS_BLIGHT,
+            2.0,
+        );
+        assert!(do_after(
+            &mut world,
+            actor,
+            girder,
+            40.0,
+            0,
+            Job::GirderDisassemble
+        ));
+        assert_eq!(world.get::<DoAfter>(mob).unwrap().ends_at, 12.0);
+        world.entity_mut(mob).remove::<DoAfter>();
+        crate::actionspeed::remove_actionspeed_modifier(
+            &mut world,
+            mob,
+            crate::actionspeed::ID_MIDAS_BLIGHT,
+        );
+        assert!(do_after(
+            &mut world,
+            actor,
+            girder,
+            40.0,
+            0,
+            Job::GirderDisassemble
+        ));
+        assert_eq!(world.get::<DoAfter>(mob).unwrap().ends_at, 4.0);
+    }
 
     #[test]
     fn welder_burns_one_unit_per_five_seconds_and_goes_out() {
