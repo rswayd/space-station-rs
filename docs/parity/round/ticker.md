@@ -19,13 +19,13 @@
 
 - **Код:** [`/datum/controller/subsystem/ticker/proc/display_roundstart_logout_report()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/ticker.dm#L358)
 - **BandaStation:** [`ticker.dm#L357`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/ticker.dm#L357) — отчёт через `/datum/roundstart_logout_report_builder`
-- **Статус в ss13-rs:** ❌ нет — админов нет
+- **Статус в ss13-rs:** ✅ — `crates/ss13_admin/src/logout_report.rs` (`LogoutReport`, `PlayedBy`, `entries`): через 10 ± 3 мин после старта админы с `R_ADMIN` получают отчёт в чат и админ-лог («Disconnected», «Dying», «Dead»); тест `crates/ss13_admin/tests/admin.rs` (`the_roundstart_logout_report_lists_the_dead_and_the_disconnected`). Подробности и `// shortcut:` — [../bandastation/fork-misc.md](../bandastation/fork-misc.md); запись в blackbox — SQL, отложено ([../persistence-sql/database.md](../persistence-sql/database.md))
 
 ### Переоткрытие ролей самоубийц
 Если игрок убил себя в начале раунда, его профессия снова открывается для латджойна.
 
 - **Код:** [`/datum/controller/subsystem/ticker/proc/reopen_roundstart_suicide_roles()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/ticker.dm#L414)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ — `crates/ss13_game/src/round.rs` (`reopen_roundstart_suicide_roles`, `ReopenSuicideRoles`, `Suicided`): с `SS13_REOPEN_SUICIDE_ROLES=1` (в tg флаг выключен по умолчанию) через `SS13_REOPEN_SUICIDE_ROLES_DELAY` (по умолчанию 240 с, не меньше 30) после старта каждая станционная профессия тела с `Suicided` получает слот обратно (кроме ИИ/киборга; командные — только с `SS13_REOPEN_SUICIDE_ROLES_COMMAND=1`), с `SS13_REOPEN_SUICIDE_ROLES_REPORT=1` ЦК печатает список на консолях связи; освобождённый слот не освобождается второй раз (`SlotReopened`). Тесты в модуле. Сам глагол `suicide`, ставящий `Suicided`, — группа [../mobs/life-and-health.md](../mobs/life-and-health.md) (🟡)
 
 ### Итоговый отчёт раунда
 `declare_completion`: личный отчёт (выжил/сбежал), отчёт выживших (статистика), законы ИИ, цели станции, рынок, медали, антагонисты, достижения; окно отчёта и кнопка «Показать отчёт»; лог в файл.
@@ -37,7 +37,7 @@
 В конце раунда — «новость» о судьбе станции (эвакуация, уничтожение ядеркой, победа культа/революции и т.д.).
 
 - **Код:** [`/datum/controller/subsystem/ticker/proc/send_news_report()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/ticker.dm#L657)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ — `crates/ss13_game/src/round_news.rs` (`round_result`, `news_message`, `send_news_report`, из `declare_completion`): результат раунда по `set_round_result` — культ (призыв, побег ≥ 50 %, провал), все волшебники мертвы, итог ядерных оперативников (`NUKE_RESULT_*`), революция, взрыв станции, эвакуация/угон шаттла — и новость Nanotrasen News Network о станции; тесты в модуле. `// shortcut:` связи между серверами (`send2otherserver`) нет — новость уходит в лог сервера; нет историй блоба и каскада суперматерии (механик нет), причины вызова шаттла нет (эвакуация без маяка). Отклонение: `STATION_NUKED` не перекрывает историю оперативников (баг tg, см. комментарий в коде)
 
 ### Перезагрузка мира
 После конца раунда — отсчёт `round_end_countdown`, таймер на экране, возможность отмены админом, перезагрузка и автопереподключение клиентов.

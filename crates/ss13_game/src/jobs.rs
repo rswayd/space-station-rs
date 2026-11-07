@@ -126,6 +126,13 @@ impl Jobs {
         self.positions[job] += 1;
     }
 
+    /// One slot of `job` opens again (tg `current_positions = max(current_positions - 1, 0)`).
+    pub(crate) fn free_position(&mut self, job: usize) {
+        if let Some(n) = self.positions.get_mut(job) {
+            *n = n.saturating_sub(1);
+        }
+    }
+
     /// tg `IsJobUnavailable(latejoin = TRUE)` + `get_job_unavailable_error_message`: `None` if
     /// the job can be taken now.
     pub fn unavailable(&self, job: usize) -> Option<String> {
@@ -569,13 +576,12 @@ pub(crate) fn job_spawn(world: &mut World, title: &str) -> Option<TilePos> {
 
 fn free_slot(
     remove: On<Remove<PlayerJob>>,
-    jobs_of: Query<&PlayerJob>,
+    // A slot `round::reopen_roundstart_suicide_roles` already freed.
+    jobs_of: Query<&PlayerJob, Without<crate::round::SlotReopened>>,
     jobs: Option<ResMut<Jobs>>,
 ) {
-    if let (Ok(&PlayerJob(job)), Some(mut jobs)) = (jobs_of.get(remove.entity), jobs)
-        && let Some(n) = jobs.positions.get_mut(job)
-    {
-        *n = n.saturating_sub(1);
+    if let (Ok(&PlayerJob(job)), Some(mut jobs)) = (jobs_of.get(remove.entity), jobs) {
+        jobs.free_position(job);
     }
 }
 

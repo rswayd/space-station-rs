@@ -74,6 +74,9 @@ const SECURITY_OFFICER: &str = "Security Officer";
 /// - `SS13_ROUND_SECONDS` (dev, debug builds only): the round ends that long after it started;
 /// - `SS13_SOURCE_URL`: where players get this server's source code (AGPL-3.0 §13), shown in
 ///   the lobby; unset logs a warning at startup.
+/// - `SS13_REOPEN_SUICIDE_ROLES=1` (tg `REOPEN_ROUNDSTART_SUICIDE_ROLES`, off by default):
+///   [`ReopenSuicideRoles`], with `SS13_REOPEN_SUICIDE_ROLES_DELAY` (seconds, at least 30,
+///   default 240), `SS13_REOPEN_SUICIDE_ROLES_COMMAND=1` and `SS13_REOPEN_SUICIDE_ROLES_REPORT=1`.
 #[derive(Resource, Clone, Debug, PartialEq)]
 pub struct RoundConfig {
     pub lobby_secs: f64,
@@ -81,7 +84,24 @@ pub struct RoundConfig {
     pub skip_lobby: bool,
     pub round_secs: Option<f64>,
     pub source_url: Option<String>,
+    pub reopen_suicide_roles: Option<ReopenSuicideRoles>,
 }
+
+/// tg `reopen_roundstart_suicide_roles*` config: the jobs of the players who killed themselves
+/// early in the round open again for latejoiners ([`reopen_roundstart_suicide_roles`]).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ReopenSuicideRoles {
+    /// `reopen_roundstart_suicide_roles_delay`: after the round start (min 30 s; unset 4 min).
+    pub delay_secs: f64,
+    /// `reopen_roundstart_suicide_roles_command_positions`: command jobs reopen too.
+    pub command_positions: bool,
+    /// `reopen_roundstart_suicide_roles_command_report`: CentCom reports the reopened jobs.
+    pub command_report: bool,
+}
+
+/// tg `reopen_roundstart_suicide_roles_delay` when unset (`|| 4 MINUTES`) and its `min_val`.
+const REOPEN_DEFAULT_SECS: f64 = 240.0;
+const REOPEN_MIN_SECS: f64 = 30.0;
 
 impl RoundConfig {
     /// tg's defaults, no environment.
@@ -92,6 +112,7 @@ impl RoundConfig {
             skip_lobby: false,
             round_secs: None,
             source_url: None,
+            reopen_suicide_roles: None,
         }
     }
 
@@ -113,6 +134,13 @@ impl Default for RoundConfig {
                 .filter(|v| v.is_finite() && *v >= 0.0)
         };
         let tg = Self::tg();
+        let flag = |key: &str| std::env::var(key).is_ok_and(|v| v == "1");
+        let reopen_suicide_roles = flag("SS13_REOPEN_SUICIDE_ROLES").then(|| ReopenSuicideRoles {
+            delay_secs: secs("SS13_REOPEN_SUICIDE_ROLES_DELAY")
+                .map_or(REOPEN_DEFAULT_SECS, |s| s.max(REOPEN_MIN_SECS)),
+            command_positions: flag("SS13_REOPEN_SUICIDE_ROLES_COMMAND"),
+            command_report: flag("SS13_REOPEN_SUICIDE_ROLES_REPORT"),
+        });
         let round_secs = secs("SS13_ROUND_SECONDS");
         if round_secs.is_some() && !cfg!(debug_assertions) {
             warn!("SS13_ROUND_SECONDS is ignored: it exists in debug builds only");
@@ -126,6 +154,7 @@ impl Default for RoundConfig {
                 .ok()
                 .map(|v| v.trim().to_owned())
                 .filter(|v| !v.is_empty()),
+            reopen_suicide_roles,
         }
     }
 }
@@ -140,6 +169,8 @@ pub struct Ticker {
     round_start: f64,
     finished_at: f64,
     reboot_at: Option<f64>,
+    /// When [`reopen_roundstart_suicide_roles`] runs (tg's `addtimer` in `PostSetup`).
+    reopen_at: Option<f64>,
     /// tg `force_ending`: an admin ended the round; it ends on the next tick.
     pub force_ending: bool,
     /// tg `start_immediately`: an admin started the round; the lobby ends on the next tick.
@@ -428,12 +459,22 @@ fn tick(world: &mut World) {
         }
         GameState::SettingUp => setup(world, now),
         GameState::Playing => {
+            let reopen_due = ticker.reopen_at.is_some_and(|at| now >= at);
+            if reopen_due {
+                ticker.reopen_at = None;
+            }
             let timed_out = config
                 .round_secs
                 .is_some_and(|secs| now - ticker.round_start >= secs);
-            if ticker.force_ending || timed_out || shuttle_home {
+            let ending = ticker.force_ending || timed_out || shuttle_home;
+            if ending {
                 ticker.state = GameState::Finished;
                 ticker.finished_at = now;
+            }
+            if reopen_due && let Some(reopen) = config.reopen_suicide_roles {
+                reopen_roundstart_suicide_roles(world, reopen);
+            }
+            if ending {
                 declare_completion(world, now);
             }
         }
@@ -503,9 +544,12 @@ fn setup(world: &mut World, now: f64) {
     crate::antag::nukeop::server::spawn_operatives(world, &operatives);
     crate::antag::wizard::server::spawn_wizards(world, &wizards);
     crate::antag::dynamic::execute_roundstart(world, &antags);
+    let reopen = world.resource::<RoundConfig>().reopen_suicide_roles;
     let mut ticker = world.resource_mut::<Ticker>();
     ticker.state = GameState::Playing;
     ticker.round_start = now;
+    // `PostSetup`: `addtimer(reopen_roundstart_suicide_roles, delay)`.
+    ticker.reopen_at = reopen.map(|r| now + r.delay_secs);
     let station = station_name(world);
     let text = format!("Приветствуем вас на {station}. Приятного вам пребывания!");
     to_world(world, Span::BoldNotice, text);
@@ -526,6 +570,88 @@ fn setup(world: &mut World, now: f64) {
         "round started: {} players spawned",
         ready.len() + operatives.len()
     );
+}
+
+/// tg `TRAIT_SUICIDED` (`GLOB.suicided_mob_list`): this body's player killed it with the suicide
+/// verb. The verb is `docs/parity/mobs/life-and-health.md`'s (not ported yet); it inserts this.
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Suicided;
+
+/// On a body whose job slot [`reopen_roundstart_suicide_roles`] freed: its `PlayerJob` no longer
+/// holds a slot (`crate::jobs` does not free it a second time).
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SlotReopened;
+
+/// Jobs without `JOB_REOPEN_ON_ROUNDSTART_LOSS`: every other station job has it
+/// (`STATION_JOB_FLAGS`).
+const NO_REOPEN_JOBS: [&str; 2] = ["AI", "Cyborg"];
+
+/// tg `reopen_roundstart_suicide_roles`: each suicided body's job gets its slot back (command jobs
+/// only with [`ReopenSuicideRoles::command_positions`]), and with
+/// [`ReopenSuicideRoles::command_report`] CentCom prints the list. Returns the reopened titles.
+pub fn reopen_roundstart_suicide_roles(
+    world: &mut World,
+    config: ReopenSuicideRoles,
+) -> Vec<String> {
+    let mut quitters: Vec<(Entity, usize)> = world
+        .query_filtered::<(Entity, &PlayerJob), (With<Suicided>, Without<SlotReopened>)>()
+        .iter(world)
+        .map(|(e, j)| (e, j.0))
+        .collect();
+    quitters.sort_by_key(|(e, _)| *e);
+    let mut reopened = Vec::new();
+    for (body, job) in quitters {
+        let Some(mut jobs) = world.get_resource_mut::<Jobs>() else {
+            return reopened;
+        };
+        let (title, command) = match jobs.data.jobs.get(job) {
+            Some(j) => (j.title.clone(), j.command),
+            None => continue,
+        };
+        if NO_REOPEN_JOBS.contains(&title.as_str()) || (command && !config.command_positions) {
+            continue;
+        }
+        // `current_positions = max(current_positions - 1, 0)`.
+        jobs.free_position(job);
+        world.entity_mut(body).insert(SlotReopened);
+        reopened.push(title);
+    }
+    if config.command_report && !reopened.is_empty() {
+        let text = suicide_report(&station_name(world), &reopened);
+        crate::announce::print_command_report(
+            world,
+            &text,
+            Some(&format!(
+                "{}: Кадровые изменения",
+                crate::events::COMMAND_NAME
+            )),
+            true,
+        );
+    }
+    if !reopened.is_empty() {
+        info!("reopened roundstart suicide roles: {reopened:?}");
+    }
+    reopened
+}
+
+/// tg `reopen_roundstart_suicide_roles`' `suicide_command_report`.
+pub fn suicide_report(station: &str, titles: &[String]) -> String {
+    let command = crate::events::COMMAND_NAME;
+    format!(
+        "{command}: Отдел кадров\n\
+         Уведомление о кадровых изменениях\n\n\
+         Кадровому составу {station}:\n\n\
+         Наш медицинский персонал зафиксировал ряд аномалий в показаниях жизненных датчиков \
+         некоторых сотрудников вашей станции.\n\n\
+         Дальнейшее расследование с нашей стороны выявило ряд весьма... неудачных решений, \
+         принятых этими сотрудниками.\n\n\
+         Поэтому мы взяли на себя смелость автоматически вновь открыть вакансии сотрудников, \
+         решивших не участвовать в наших исследованиях. Их дела будут переданы комиссии по \
+         найму для оценки пригодности к дальнейшей службе в компании (и, разумеется, \
+         дальнейшего хранения записей клонирования на центральном медицинском сервере).\n\n\
+         Следующие должности открыты повторно:\n\n{}",
+        titles.join("\n")
+    )
 }
 
 /// tg `declare_completion`: `personal_report` + `survivor_report` per client, into the chat.
@@ -658,6 +784,8 @@ fn declare_completion(world: &mut World, now: f64) {
         });
     }
     to_world(world, Span::BoldAnnounce, "Раунд закончился.");
+    // `SSdynamic.set_round_result` + `send_news_report`.
+    crate::round_news::send_news_report(world, end);
     info!(
         "round ended after {duration}: {survivors}/{total} crew survived, {escapees} escaped \
          ({shuttle_escapees} on the shuttle): {escaped_names:?}"
@@ -1295,6 +1423,46 @@ mod tests {
     }
 
     use JobPriority::{High, Low, Medium};
+
+    #[test]
+    fn suicides_reopen_station_slots_once_and_command_slots_only_when_configured() {
+        let mut world = World::new();
+        let mut jobs = Jobs::new(data(), 1);
+        for job in [CAPTAIN, ENGINEER, ENGINEER, CLOWN] {
+            jobs.add_position(job);
+        }
+        world.insert_resource(jobs);
+        let engineer = world.spawn((PlayerJob(ENGINEER), Suicided)).id();
+        world.spawn(PlayerJob(ENGINEER));
+        world.spawn((PlayerJob(CAPTAIN), Suicided));
+        world.spawn(PlayerJob(CLOWN));
+        let mut config = ReopenSuicideRoles {
+            delay_secs: REOPEN_DEFAULT_SECS,
+            command_positions: false,
+            command_report: false,
+        };
+        let reopened = reopen_roundstart_suicide_roles(&mut world, config);
+        assert_eq!(reopened, vec!["Station Engineer".to_owned()]);
+        let jobs = world.resource::<Jobs>();
+        assert_eq!(jobs.positions(ENGINEER), 1);
+        assert_eq!(jobs.positions(CAPTAIN), 1, "command stays filled");
+        assert_eq!(jobs.positions(CLOWN), 1);
+        assert!(world.get::<SlotReopened>(engineer).is_some());
+        // With command positions: the captain reopens, the engineer is not freed twice.
+        config.command_positions = true;
+        let reopened = reopen_roundstart_suicide_roles(&mut world, config);
+        assert_eq!(reopened, vec!["Captain".to_owned()]);
+        let jobs = world.resource::<Jobs>();
+        assert_eq!(jobs.positions(CAPTAIN), 0);
+        assert_eq!(jobs.positions(ENGINEER), 1);
+    }
+
+    #[test]
+    fn the_suicide_report_lists_the_reopened_jobs() {
+        let text = suicide_report("Box", &["Clown".into(), "Station Engineer".into()]);
+        assert!(text.contains("Кадровому составу Box"));
+        assert!(text.ends_with("Clown\nStation Engineer"));
+    }
 
     #[test]
     fn slots_cap_jobs_and_the_rest_overflow_to_assistant() {

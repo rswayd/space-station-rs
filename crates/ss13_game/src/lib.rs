@@ -15,6 +15,7 @@
 //!   ticker states, round start job division, round end report and reboot; `lobby` holds the
 //!   interfaces both halves share, `lobby_client` (feature `client`) draws the lobby screen and
 //!   the job preferences window.
+//! - `round_news` (feature `server`): the round end news story on the station's fate.
 //! - `antag` (feature `server`; shared interfaces and `antag::client` with `client`): roundstart
 //!   antagonists (BandaStation's dynamic), the traitor, objectives, the uplink, round-end report.
 //! - `power` (feature `server`): tg areas, APCs, powernets, SMES, machine loads; unpowered doors
@@ -489,6 +490,8 @@ pub mod restaurant;
 pub mod restraints;
 #[cfg(feature = "server")]
 pub mod round;
+#[cfg(feature = "server")]
+pub mod round_news;
 pub mod science;
 pub mod screentips;
 #[cfg(feature = "client")]
