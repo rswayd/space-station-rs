@@ -61,6 +61,7 @@
 //! | 3000 | `service::server::attack_self` |
 //! | 3010 | `service::barber::attack_self` (lipstick twist, the dye spray on oneself) |
 //! | 3050 | `fishing::server::attack_self` (rods), `fishing::aquarium::attack_self` (fish tanks) |
+//! | 3097 | `plumbing_net::attack_self` (a duct stack's layer) |
 //! | 3100 | `silicon::law_rack::attack_self` |
 //! | 3150 | `vehicles::attack_self` |
 //! | 3155 | `clothing::toggles::attack_self` (adjustable masks) |
@@ -186,6 +187,7 @@
 //! | 2810 | `door_structures::mineral_attack_hand` (mineral doors) |
 //! | 2900 | `mining::interact` |
 //! | 3000 | `holosign::attack_hand` |
+//! | 3097 | `plumbing_net::interact` (plumbing machine settings) |
 //! | 3100 | `plumbing::interact` |
 //! | 3150 | `decor::fold_flag` (right click), `decor::interact` |
 //! | 3155 | `tank_storage::attack_hand` (tank dispensers, tank holders) |
@@ -322,6 +324,7 @@
 //! | 3200 | `botany::item_interaction` |
 //! | 3260 | `mobs::farm::feed_egg_layer` |
 //! | 3300 | `food::item_interaction` |
+//! | 3397 | `plumbing_net::item_interaction` (ducts, duct stacks, wrenches on machines) |
 //! | 3400 | `plumbing::item_interaction` |
 //! | 3440 | `tank_storage::item_interaction` |
 //! | 3441 | `displaycase::item_interaction` (display cases, their chassis) |

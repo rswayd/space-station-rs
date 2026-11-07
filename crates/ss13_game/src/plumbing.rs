@@ -856,6 +856,10 @@ fn refresh_toilet(world: &mut World, toilet: Entity) {
 /// `toilet/click_alt`: the lid goes up or down (not while flushing). True when `target` is a
 /// toilet.
 pub fn click_alt(world: &mut World, target: Entity) -> bool {
+    // `simple_rotation` of the plumbing machines (`crate::plumbing_net`).
+    if crate::plumbing_net::rotate_machine(world, target) {
+        return true;
+    }
     let Some(state) = world.get::<Toilet>(target).cloned() else {
         return false;
     };

@@ -180,6 +180,10 @@ pub fn apply(world: &mut World, drip: Entity, actor: Entity, act: IvAct) {
         IvAct::ChangeMode => state.injecting = !state.injecting,
         // `eject_beaker`.
         IvAct::Eject => {
+            // `use_internal_storage` (the automated drip): its own reagents stay.
+            if state.container == Some(drip) {
+                return;
+            }
             let Some(container) = state.container.take() else {
                 return;
             };
