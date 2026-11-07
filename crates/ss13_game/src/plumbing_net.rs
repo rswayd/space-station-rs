@@ -25,12 +25,16 @@
 //! - Disposer: when on, destroys `disposal_rate` u a second. Automated IV drip: its own 100 u
 //!   storage is the drip's container, filled from the network while injecting, emptied into it
 //!   while drawing.
+//! - Production: synthesizers make their chosen reagent; the pill press packs pills, patches
+//!   or bottles; the bottler fills cups from behind it; the fermenter distills produce on its
+//!   tile; the chemical grinder grinds what is put in it. The chemical beacon sends to the
+//!   recipient it is linked to by multitool (20 u a tick, beacons in turn).
 //! The machines' settings are prompts (an empty hand on the machine).
-// shortcut: prompts (`tgui_input_list`/`number`) instead of the ChemAcclimator, ChemFilter,
-// ChemSplitter, ChemMixingChamber and ChemDisposer windows; no duct colours (every duct is
-// omni), no duct or connect overlays (only the duct's own `nduct_<dirs>` icon), no undertile
-// hiding, no plunger flush, no welder deconstruction, no power use; the reaction chamber has
-// no catalysts and no acid/base buffer inputs; the networks are rebuilt every plumbing tick
+// shortcut: prompts (`tgui_input_list`/`number`/`text`) instead of the ChemAcclimator,
+// ChemFilter, ChemSplitter, ChemReactionChamber, ChemSynthesizer, ChemPress and ChemDisposer
+// windows; no duct colours (every duct is omni), no duct or connect overlays (only the duct's
+// own `nduct_<dirs>` icon), no undertile hiding, no plunger flush, no welder deconstruction,
+// no power use; the networks are rebuilt every plumbing tick
 // (upgrade to tg's incremental merge/split when a map has thousands of ducts). Geysers are not
 // ported (→ ../mining): a liquid pump has nothing to pump.
 // Cost: every second one pass over the ducts and plumbing machines (none on most maps, a few
