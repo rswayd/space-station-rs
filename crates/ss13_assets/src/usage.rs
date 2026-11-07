@@ -353,4 +353,40 @@ aab
             ]
         );
     }
+
+    /// BandaStation's own configs (`modular_bandastation/objects/code/greyscale/config_types/
+    /// greyscale_clothes.dm`) are collected like tg's: the `/worn` subtype inherits the parent's
+    /// `json_config` and draws from its own `icon_file`, and a fork item using both gets its
+    /// rendered icon and worn icon.
+    #[test]
+    fn fork_greyscale_configs_render_with_inherited_json() {
+        let types = DmTypes::parse(
+            br##"{"schema": 3, "types": {
+            "/datum/greyscale_config": {"parent": null},
+            "/datum/greyscale_config/carnival_formal": {"parent": "/datum/greyscale_config",
+                "declared_vars": {
+                "icon_file": {"resource": "modular_bandastation/objects/icons/obj/clothing/under/carnival.dmi"},
+                "json_config": {"resource": "code/datums/greyscale/json_configs/bandastation/under_carnival_formal.json"}}},
+            "/datum/greyscale_config/carnival_formal/worn": {
+                "parent": "/datum/greyscale_config/carnival_formal", "declared_vars": {
+                "icon_file": {"resource": "modular_bandastation/objects/icons/mob/clothing/under/carnival.dmi"}}},
+            "/obj/item/clothing/under/carnival/formal": {"parent": null, "declared_vars": {
+                "greyscale_config": {"path": "/datum/greyscale_config/carnival_formal"},
+                "greyscale_config_worn": {"path": "/datum/greyscale_config/carnival_formal/worn"},
+                "greyscale_colors": "#242424#dddddd"}}
+        }}"##,
+        )
+        .unwrap();
+        let path = "/obj/item/clothing/under/carnival/formal";
+        let icon = "gags:/datum/greyscale_config/carnival_formal#242424#dddddd";
+        let worn = "gags:/datum/greyscale_config/carnival_formal/worn#242424#dddddd";
+        assert_eq!(drawn(&types, path), [icon, worn]);
+        let gags = types.gags(Path::new("/nonexistent"));
+        assert_eq!(gags.library.len(), 2);
+        assert!(gags.keys.contains(icon) && gags.keys.contains(worn));
+        assert_eq!(
+            gags.library.icon_file(worn),
+            Some("modular_bandastation/objects/icons/mob/clothing/under/carnival.dmi")
+        );
+    }
 }

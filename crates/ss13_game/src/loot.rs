@@ -224,6 +224,10 @@ fn alt_clicks(world: &mut World, mut clicks: Local<MessageCursor<AltClick>>) {
 
 /// tg `click_alt` of the types that define it here. True when it handled the click.
 fn click_alt(world: &mut World, client: Entity, mob: Entity, target: Entity) -> bool {
+    // The sabre sheath's reskin comes before its storage (`COMSIG_CLICK_ALT`).
+    if crate::clothing::reskin::click_alt(world, client, mob, target) {
+        return true;
+    }
     if let Some(storage) = crate::storage::storage_of(world, target) {
         crate::storage::open_view(world, client, mob, storage);
         return true;
