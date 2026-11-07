@@ -16,7 +16,6 @@ use ss13_shared::TilePos;
 use ss13_shared::protocol::ClickModifiers;
 use ss13_world::SpatialIndex;
 
-const CONSOLE: TilePos = TilePos::new(3, 2, 1);
 const ROOM: TilePos = TilePos::new(14, 2, 1);
 
 const HOLO_TYPES: &str = r##"
