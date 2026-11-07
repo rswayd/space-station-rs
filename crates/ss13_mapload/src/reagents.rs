@@ -31,6 +31,9 @@ const GLASS_STYLE_ROOT: &str = "/datum/glass_style";
 const SOUP_STYLE: &str = "/datum/glass_style/has_foodtype/soup";
 pub const CONTAINER_ROOT: &str = "/obj/item/reagent_containers";
 pub const CONTAINER_COMPONENT: &str = "dm_reagents";
+/// Fuel and water tanks, kegs, coolers: their holder comes from `tank_volume`, `reagent_flags`
+/// and `reagent_id` (`/obj/structure/reagent_dispensers/Initialize`).
+pub const DISPENSER_ROOT: &str = "/obj/structure/reagent_dispensers";
 
 /// `REAGENT_UNAFFECTED_BY_METABOLISM`, which `/datum/reagent/consumable/New()` adds.
 const REAGENT_UNAFFECTED_BY_METABOLISM: u32 = 1 << 10;
@@ -323,7 +326,13 @@ pub struct Skipped {
 
 /// Converter fields of a reagent container type: the whole [`DmReagents`].
 pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
-    if !is_under(path, CONTAINER_ROOT) || !types.types.contains_key(path) {
+    if !types.types.contains_key(path) {
+        return Vec::new();
+    }
+    if is_under(path, DISPENSER_ROOT) {
+        return dispenser_fields(types, path);
+    }
+    if !is_under(path, CONTAINER_ROOT) {
         return Vec::new();
     }
     let get = |var: &str| types.resolved(path, var);
@@ -380,6 +389,46 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
 }
 
 /// A typepath var's value (`{"path": ...}`); empty when unset.
+/// tg `/obj/structure/reagent_dispensers/Initialize`: `create_reagents(tank_volume,
+/// reagent_flags)`, then `add_reagent(reagent_id, tank_volume)` when `reagent_id` is set.
+fn dispenser_fields(types: &DmTypes, path: &str) -> Vec<Field> {
+    let get = |var: &str| types.resolved(path, var);
+    let volume = num(get("tank_volume")).unwrap_or(0.0) as f32;
+    let reagent = type_path(get("reagent_id"));
+    let list = if reagent.is_empty() {
+        String::from("[]")
+    } else {
+        let path = ron::to_string(&reagent).expect("strings serialize");
+        format!("[(path: {path}, amount: {volume:?})]")
+    };
+    let c = CONTAINER_COMPONENT;
+    vec![
+        ext(c, "volume", format!("{volume:?}")),
+        ext(
+            c,
+            "initial_reagent_flags",
+            (num(get("reagent_flags")).unwrap_or(0.0).max(0.0) as u32).to_string(),
+        ),
+        ext(c, "list_reagents", list),
+        ext(
+            c,
+            "amount_per_transfer_from_this",
+            format!(
+                "{:?}",
+                num(get("amount_per_transfer_from_this")).unwrap_or(0.0) as f32
+            ),
+        ),
+        ext(c, "possible_transfer_amounts", "[]"),
+        ext(c, "has_variable_transfer_amount", "false"),
+        ext(c, "list_reagents_purity", "0.0"),
+        ext(c, "fill_icon_thresholds", "[]"),
+        ext(c, "fill_icon_state", "\"\""),
+        ext(c, "fill_icon", "\"\""),
+        ext(c, "gulp_size", "0.0"),
+        ext(c, "blood_type", "\"\""),
+    ]
+}
+
 fn type_path(value: Option<&Value>) -> String {
     value
         .and_then(|v| v.get("path"))
@@ -438,6 +487,13 @@ mod tests {
             "procs": ["on_reaction"] },
         "/obj": { "parent": "/datum" },
         "/obj/item": { "parent": "/obj" },
+        "/obj/structure": { "parent": "/obj" },
+        "/obj/structure/reagent_dispensers": { "parent": "/obj/structure", "declared_vars": {
+            "tank_volume": 1000, "reagent_flags": 72,
+            "reagent_id": { "path": "/datum/reagent/water" } } },
+        "/obj/structure/reagent_dispensers/fueltank": {
+            "parent": "/obj/structure/reagent_dispensers", "declared_vars": {
+            "reagent_id": { "path": "/datum/reagent/fuel" } } },
         "/obj/item/reagent_containers": { "parent": "/obj/item", "declared_vars": {
             "amount_per_transfer_from_this": 5, "has_variable_transfer_amount": 1,
             "possible_transfer_amounts": { "list": [5, 10, 15] }, "volume": 30,
@@ -536,5 +592,20 @@ mod tests {
             "{ron}"
         );
         assert!(crate::value::patch_ron(&type_fields(&types, "/obj/item")) == "{}");
+    }
+
+    #[test]
+    fn dispensers_spawn_full() {
+        let types = DmTypes::parse(TYPES.as_bytes()).unwrap();
+        let ron = crate::value::patch_ron(&type_fields(
+            &types,
+            "/obj/structure/reagent_dispensers/fueltank",
+        ));
+        assert!(ron.contains("volume: 1000.0"), "{ron}");
+        assert!(ron.contains("initial_reagent_flags: 72"), "{ron}");
+        assert!(
+            ron.contains(r#"list_reagents: [(path: "/datum/reagent/fuel", amount: 1000.0)]"#),
+            "{ron}"
+        );
     }
 }

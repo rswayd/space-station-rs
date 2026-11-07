@@ -243,16 +243,20 @@ pub fn interacts_with_mobs(path: &str) -> bool {
 /// and `add_initial_reagents`.
 fn create_container_reagents(
     add: On<Add<DmReagents>>,
-    containers: Query<(&DmReagents, Option<&DmItem>)>,
+    containers: Query<(&DmReagents, Option<&DmItem>, Option<&ss13_mapload::DmObj>)>,
     chem: Option<Res<Chem>>,
     mut rng: ResMut<CombatRng>,
     mut commands: Commands,
 ) {
-    let Ok((dm, item)) = containers.get(add.entity) else {
+    let Ok((dm, item, obj)) = containers.get(add.entity) else {
         return;
     };
+    // A tank (`reagent_dispensers`) is a structure, not an item.
     let owner = Owner {
-        path: item.map(|i| i.path.clone()).unwrap_or_default(),
+        path: item
+            .map(|i| i.path.clone())
+            .or_else(|| obj.map(|o| o.path.clone()))
+            .unwrap_or_default(),
         living: false,
     };
     let mut holder = Holder::new(dm.volume, dm.initial_reagent_flags, owner);
