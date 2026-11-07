@@ -53,7 +53,60 @@ pub enum ChoiceKind {
     Music,
     Hero,
     Augments,
+    /// BandaStation `/obj/item/choice_beacon/weapon/*`: the sidearm of security, the
+    /// blueshield and the head of security.
+    SecurityPistol,
+    Blueshield,
+    HosPistol,
 }
+
+/// BandaStation `weapon_choice.dm` `selectable_gun_types`: display name, gun case.
+const SECURITY_PISTOLS: [(&str, &str); 2] = [
+    (
+        "Пистолет GP-9 9x25мм",
+        "/obj/item/storage/toolbox/guncase/ntcase/pistol/gp9/sec",
+    ),
+    (
+        "Энергетический пистолет дизейблер",
+        "/obj/item/gun/energy/disabler",
+    ),
+];
+const BLUESHIELD_PISTOLS: [(&str, &str); 4] = [
+    (
+        "Энергетический пистолет EG-14",
+        "/obj/item/storage/toolbox/guncase/ntspecial/pistol/eg_14",
+    ),
+    (
+        "Термально-нанитовый пистолет TNG-3",
+        "/obj/item/storage/toolbox/guncase/ntspecial/pistol/tng_3",
+    ),
+    (
+        "Пистолет GP-38 калибра .38",
+        "/obj/item/storage/toolbox/guncase/ntspecial/pistol/gp38",
+    ),
+    (
+        "PDH-A1-M 'Ladon'",
+        "/obj/item/storage/toolbox/guncase/ntspecial/pistol/ladon",
+    ),
+];
+const HOS_PISTOLS: [(&str, &str); 4] = [
+    (
+        "Мультифазовый энергетический пистолет X-01",
+        "/obj/item/storage/toolbox/guncase/ntspecial/pistol/hos_laser",
+    ),
+    (
+        "Лазерный пистолет X-02",
+        "/obj/item/storage/toolbox/guncase/ntspecial/pistol/hos_laser2",
+    ),
+    (
+        "Пистолет GP-45M калибра .45",
+        "/obj/item/storage/toolbox/guncase/ntspecial/pistol/hos_gp45",
+    ),
+    (
+        "PDH-A2-NR 'Osprey'",
+        "/obj/item/storage/toolbox/guncase/ntspecial/pistol/hos_pdh",
+    ),
+];
 
 /// `/obj/item/choice_beacon/music/generate_display_names`, BandaStation's additions included.
 const INSTRUMENTS: [&str; 16] = [
@@ -102,17 +155,43 @@ impl ChoiceKind {
             Some(Self::Hero)
         } else if is_under(path, "/obj/item/choice_beacon/augments") {
             Some(Self::Augments)
+        } else if is_under(path, "/obj/item/choice_beacon/weapon/security_pistol") {
+            Some(Self::SecurityPistol)
+        } else if is_under(path, "/obj/item/choice_beacon/weapon/blueshield") {
+            Some(Self::Blueshield)
+        } else if is_under(path, "/obj/item/choice_beacon/weapon/hos") {
+            Some(Self::HosPistol)
         } else {
             None
         }
     }
 
-    pub fn options(self) -> &'static [&'static str] {
+    pub fn options(self) -> Vec<&'static str> {
         match self {
-            Self::Music => &INSTRUMENTS,
-            Self::Hero => &HERO_BOXES,
-            Self::Augments => &AUGMENTS,
+            Self::Music => INSTRUMENTS.to_vec(),
+            Self::Hero => HERO_BOXES.to_vec(),
+            Self::Augments => AUGMENTS.to_vec(),
+            _ => self.named().iter().map(|(_, p)| *p).collect(),
         }
+    }
+
+    /// The options listed under their own names (the weapon beacons' list keys) instead of
+    /// their type names.
+    fn named(self) -> &'static [(&'static str, &'static str)] {
+        match self {
+            Self::SecurityPistol => &SECURITY_PISTOLS,
+            Self::Blueshield => &BLUESHIELD_PISTOLS,
+            Self::HosPistol => &HOS_PISTOLS,
+            _ => &[],
+        }
+    }
+
+    /// The prompt's name for option `path`.
+    fn display_name(self, world: &World, path: &str) -> String {
+        self.named().iter().find(|(_, p)| *p == path).map_or_else(
+            || crate::machine_frame::type_name(world, path),
+            |(name, _)| (*name).to_owned(),
+        )
     }
 
     /// `uses`.
@@ -140,6 +219,11 @@ impl ChoiceKind {
                 "S.E.L.F.",
                 "Статус запроса: получен. Статус посылки: доставлена. Примечание: для \
                  оптимального результата используйте приложенные автохирурги Interdyne.",
+            ),
+            // The base `company_source` and `company_message`.
+            Self::SecurityPistol | Self::Blueshield | Self::HosPistol => (
+                "Центрального командования",
+                "Запрос получен. Ваша посылка в пути, пожалуйста, отойдите от места посадки.",
             ),
         }
     }
@@ -241,10 +325,7 @@ pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity)
         return true;
     }
     let read: &World = world;
-    let names = paths
-        .iter()
-        .map(|p| crate::machine_frame::type_name(read, p))
-        .collect();
+    let names = paths.iter().map(|p| kind.display_name(read, p)).collect();
     let prompt = ask_world(
         world,
         Ask::new(
@@ -406,5 +487,19 @@ mod tests {
         assert_eq!(ChoiceKind::from_path("/obj/item/choice_beacon/holy"), None);
         assert_eq!(ChoiceKind::Augments.uses(), 3);
         assert_eq!(ChoiceKind::Hero.uses(), 1);
+        // BandaStation's sidearm beacons offer gun cases under their list names.
+        let hos = ChoiceKind::from_path("/obj/item/choice_beacon/weapon/hos").unwrap();
+        assert_eq!(hos, ChoiceKind::HosPistol);
+        assert_eq!(hos.options().len(), 4);
+        assert_eq!(hos.uses(), 1);
+        let world = World::new();
+        assert_eq!(
+            ChoiceKind::SecurityPistol.display_name(&world, "/obj/item/gun/energy/disabler"),
+            "Энергетический пистолет дизейблер"
+        );
+        assert_eq!(
+            ChoiceKind::from_path("/obj/item/choice_beacon/weapon"),
+            None
+        );
     }
 }

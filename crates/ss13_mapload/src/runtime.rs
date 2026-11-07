@@ -826,6 +826,17 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/organ/cyberimp/chest/thrusters",
     "/obj/item/organ/lungs/cybernetic/tier3",
     "/obj/item/organ/liver/cybernetic/tier3",
+    // BandaStation's sidearm beacons (`ss13_game::devices::beacons`).
+    "/obj/item/storage/toolbox/guncase/ntcase/pistol/gp9/sec",
+    "/obj/item/gun/energy/disabler",
+    "/obj/item/storage/toolbox/guncase/ntspecial/pistol/eg_14",
+    "/obj/item/storage/toolbox/guncase/ntspecial/pistol/tng_3",
+    "/obj/item/storage/toolbox/guncase/ntspecial/pistol/gp38",
+    "/obj/item/storage/toolbox/guncase/ntspecial/pistol/ladon",
+    "/obj/item/storage/toolbox/guncase/ntspecial/pistol/hos_laser",
+    "/obj/item/storage/toolbox/guncase/ntspecial/pistol/hos_laser2",
+    "/obj/item/storage/toolbox/guncase/ntspecial/pistol/hos_gp45",
+    "/obj/item/storage/toolbox/guncase/ntspecial/pistol/hos_pdh",
     // Large crates, abandoned crate loot, body bags (`ss13_game::closets::kinds`).
     "/mob/living/basic/bot/secbot/honkbot",
     "/mob/living/basic/mimic/crate",

@@ -28,7 +28,8 @@
 //! with Z, automatic ones after each shot; loose shells load one by one.
 //!
 //! Messages are BandaStation's translation.
-// shortcut: no gunpoint, suppressors, seclites, bayonets,
+//! Gunpoint holds are `crate::gunpoint`; a gun in the mouth is `handle_suicide`.
+// shortcut: no suppressors, seclites, bayonets, scopes,
 // misfires, sawing off, fire mode toggles (burst guns always burst), clumsy botches or charge
 // overlays; pins cannot be removed or swapped. Add them
 // as their mechanics land.
@@ -214,6 +215,7 @@ impl Plugin for GunsServerPlugin {
         app.init_resource::<Bursts>()
             .add_observer(add_gun_state)
             .add_observer(add_magazine_state)
+            .add_observer(unrack)
             .add_systems(
                 Update,
                 (ranged_clicks, run_bursts, crate::gunpoint::upkeep)
@@ -1592,6 +1594,56 @@ pub fn item_interaction(
         return true;
     }
     false
+}
+
+/// BandaStation `/obj/structure/rack/gunrack`.
+const GUN_RACK: &str = "/obj/structure/rack/gunrack";
+
+/// A gun stood up on a gun rack (`rotate_weapon`) until it is picked up.
+#[derive(Component, Clone, Copy, Debug)]
+pub struct Racked;
+
+/// BandaStation `gunrack/base_item_interaction` (out of combat mode): where a gun goes on the
+/// rack, at the clicked column and 2 pixels up. `None` when `held` is not a gun or `rack` not a
+/// gun rack.
+// shortcut: wide (48 and 64 px) guns are not scaled down or shifted back by their width.
+pub fn gun_rack_offset(
+    world: &World,
+    held: Entity,
+    rack: Entity,
+    modifiers: ClickModifiers,
+) -> Option<[i16; 2]> {
+    if world.get::<Gun>(held).is_none()
+        || !crate::construction::path_of(world, rack).is_some_and(|p| is_under(&p, GUN_RACK))
+    {
+        return None;
+    }
+    let x = modifiers.pixel.map_or(0, |p| i16::from(p[0]));
+    Some([x.clamp(-16, 16), 2])
+}
+
+/// `rotate_weapon(being_removed = FALSE)`: `Turn(-90)`.
+pub fn rack_gun(world: &mut World, gun: Entity) {
+    if let Some(mut look) = world.get_mut::<ss13_shared::Appearance>(gun) {
+        look.rotation = 270;
+    }
+    world.entity_mut(gun).insert(Racked);
+}
+
+/// `item_picked_up` -> `rotate_weapon(being_removed = TRUE)`: upright again in a hand.
+fn unrack(
+    add: On<Add<crate::inventory::CarriedBy>>,
+    racked: Query<(), With<Racked>>,
+    mut looks: Query<&mut ss13_shared::Appearance>,
+    mut commands: Commands,
+) {
+    if racked.get(add.entity).is_err() {
+        return;
+    }
+    commands.entity(add.entity).remove::<Racked>();
+    if let Ok(mut look) = looks.get_mut(add.entity) {
+        look.rotation = 0;
+    }
 }
 
 /// The energy gun's cell for a recharger: (charge, maxcharge, chargerate), when it takes one.

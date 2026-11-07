@@ -328,6 +328,12 @@ pub fn place(
         (true, Some(p)) => p.map(|v| i16::from(v).clamp(-16, 16)),
         _ => [0, 0],
     };
+    // BandaStation's gun rack stands a gun up (`crate::guns`).
+    if let Some(offset) = crate::guns::gun_rack_offset(world, held, target, modifiers) {
+        put_down_at(world, held, pos, offset);
+        crate::guns::rack_gun(world, held);
+        return true;
+    }
     put_down_at(world, held, pos, offset);
     true
 }

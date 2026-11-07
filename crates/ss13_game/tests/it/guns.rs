@@ -178,6 +178,11 @@ const TYPES: &str = r##"{
     "/obj/item/clothing/shoes": { "parent": "/obj/item/clothing", "declared_vars": { "slot_flags": 128 } },
     "/obj/item/clothing/shoes/sneakers": { "parent": "/obj/item/clothing/shoes" },
     "/obj/item/clothing/shoes/sneakers/black": { "parent": "/obj/item/clothing/shoes/sneakers" },
+    "/obj/structure": { "parent": "/obj", "declared_vars": { "anchored": 1, "density": 1 } },
+    "/obj/structure/rack": { "parent": "/obj/structure", "declared_vars": { "name": "rack",
+        "icon_state": "rack" } },
+    "/obj/structure/rack/gunrack": { "parent": "/obj/structure/rack", "declared_vars": {
+        "name": "gun rack", "icon_state": "gunrack" } },
     "/obj/machinery": { "parent": "/obj", "declared_vars": { "anchored": 1, "density": 1 } },
     "/obj/machinery/recharger": { "parent": "/obj/machinery", "declared_vars": {
         "name": "recharger", "icon": { "resource": "icons/obj/machines/sec.dmi" },
@@ -216,7 +221,9 @@ wwwwwwwww
 "}
 "##;
 
-const STATES: [(&str, &str); 20] = [
+const STATES: [(&str, &str); 22] = [
+    ("i.dmi", "rack"),
+    ("i.dmi", "gunrack"),
     ("i.dmi", "shotgun"),
     ("i.dmi", "gshell"),
     ("i.dmi", "taser"),
@@ -253,6 +260,7 @@ fn fixture_assets(test: &str) -> PathBuf {
         "/obj/item/gun/energy/taser",
         "/obj/item/clothing/suit/armor/vest",
         "/obj/machinery/recharger",
+        "/obj/structure/rack/gunrack",
         "/turf/open/floor",
         "/turf/closed/wall",
         "/turf/open/space/basic",
@@ -831,4 +839,37 @@ fn a_held_up_mob_that_moves_is_shot_with_the_charged_round() {
         s.get::<Gun>(pistol).magazine.as_ref().unwrap().rounds.len(),
         11
     );
+}
+
+#[test]
+fn a_gun_rack_stands_a_gun_up_until_it_is_taken() {
+    let mut s = Station::start("a_gun_rack_stands_a_gun_up_until_it_is_taken");
+    let a = s.players[0].mob;
+    let rack = ss13_game::construction::spawn_obj(
+        s.0.server.world_mut(),
+        "/obj/structure/rack/gunrack",
+        TilePos::new(3, 3, 1),
+    )
+    .unwrap();
+    let pistol = s.give(0, "/obj/item/gun/ballistic/automatic/pistol");
+    s.run_until("replicated", |s| s.net_id(0, rack).is_some());
+    let at = ClickModifiers {
+        pixel: Some([-6, 0]),
+        ..default()
+    };
+    s.0.click_with(0, rack, at);
+    s.run_until("on the rack", |s| {
+        s.try_get::<TilePos>(pistol) == Some(&TilePos::new(3, 3, 1))
+    });
+    assert_eq!(s.projectiles(), 0, "it is not fired at the rack");
+    let look = s.get::<ss13_shared::Appearance>(pistol).clone();
+    assert_eq!((look.rotation, look.pixel_offset), (270, [-6, 2]));
+    assert!(s.try_get::<ss13_game::guns::Racked>(pistol).is_some());
+    // Picked up: upright again.
+    s.run_until("off cooldown", |s| s.now() >= s.get::<NextMove>(a).0);
+    s.run_until("replicated", |s| s.net_id(0, pistol).is_some());
+    s.0.click(0, pistol);
+    s.run_until("in hand", |s| s.get::<Inventory>(a).holds(pistol));
+    assert_eq!(s.get::<ss13_shared::Appearance>(pistol).rotation, 0);
+    assert!(s.try_get::<ss13_game::guns::Racked>(pistol).is_none());
 }
