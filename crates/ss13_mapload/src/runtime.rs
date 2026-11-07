@@ -111,6 +111,12 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/clothing/mask/gas",
     "/obj/item/clothing/shoes/sneakers/black",
     "/obj/item/clothing/neck/tie/black",
+    "/obj/item/storage/backpack",
+    "/obj/item/storage/belt/utility",
+    "/obj/item/radio/headset",
+    "/obj/item/gun/energy/laser",
+    "/obj/item/gun/ballistic/automatic/mini_uzi",
+    "/obj/item/storage/fancy/cigarettes/cigpack_robustgold",
     "/obj/item/storage/box/syndie_kit/chameleon",
     // `brig::gulag`: the labor camp teleporter dresses its prisoner.
     "/obj/item/clothing/under/rank/prisoner",

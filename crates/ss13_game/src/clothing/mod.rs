@@ -137,6 +137,8 @@ mod server {
                     reactive::shell_interaction(w, c.client, c.mob, held, c.target)
                 })
             })
+            // Before attacks: the chameleon scanner scans a human in range.
+            .add_click_handler(ClickPhase::HeldOnTarget, 219, chameleon::scanner_click)
             .add_click_handler(ClickPhase::HeldOnTarget, 1579, |w, c| {
                 c.held.is_some_and(|held| {
                     reactive::shell_interaction(w, c.client, c.mob, held, c.target)
