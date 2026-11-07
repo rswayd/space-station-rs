@@ -168,6 +168,9 @@ pub struct DmDoorAssembly {
 pub struct DmObj {
     pub path: String,
     pub anchored: bool,
+    /// `move_resist`: the `move_force` it takes to push or pull it (`MOVE_RESIST_DEFAULT` 1000,
+    /// doors 2999, atmospherics `INFINITY` dumped as 1e31).
+    pub move_resist: f32,
     pub max_integrity: f32,
     /// Fraction of `max_integrity` at which `atom_break` runs (0: never).
     pub integrity_failure: f32,
@@ -313,8 +316,9 @@ const TURF_VARS: [(&str, &str, Kind); 8] = [
     ("explosive_resistance", "explosive_resistance", Kind::Num),
 ];
 
-const OBJ_VARS: [(&str, &str, Kind); 26] = [
+const OBJ_VARS: [(&str, &str, Kind); 27] = [
     ("anchored", "anchored", Kind::Bool),
+    ("move_resist", "move_resist", Kind::Num),
     ("max_integrity", "max_integrity", Kind::Num),
     ("integrity_failure", "integrity_failure", Kind::Num),
     ("damage_deflection", "damage_deflection", Kind::Num),

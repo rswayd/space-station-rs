@@ -721,6 +721,9 @@ fn combat_mode(world: &mut World) {
             }
             None => continue,
         };
+        world
+            .entity_mut(trader)
+            .insert(crate::combat::CombatMode(now));
         let line = if now {
             data.phrases.battle_start
         } else {

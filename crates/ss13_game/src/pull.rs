@@ -235,7 +235,8 @@ fn refresh_interact_hud(
     }
 }
 
-/// tg `can_be_pulled` without move force: an unanchored item lying on a tile, a closet that is
+/// tg `can_be_pulled` with the default move force: nothing heavier than `MOVE_FORCE_DEFAULT`
+/// (`crate::bump::move_resist`); an unanchored item lying on a tile, a closet that is
 /// not wall-mounted, an unanchored structure or machine, a living mob; never the puller itself.
 pub fn can_be_pulled(world: &World, puller: Entity, target: Entity) -> bool {
     let Ok(entity) = world.get_entity(target) else {
@@ -244,19 +245,16 @@ pub fn can_be_pulled(world: &World, puller: Entity, target: Entity) -> bool {
     if target == puller || !entity.contains::<TilePos>() || entity.contains::<CarriedBy>() {
         return false;
     }
+    // `force < move_resist * MOVE_FORCE_PULL_RATIO` (1): every puller here pulls with
+    // `MOVE_FORCE_DEFAULT`, short of mechs, megafauna, doors.
+    if crate::bump::move_resist(world, target) > crate::fire::MOVE_FORCE_DEFAULT {
+        return false;
+    }
     if let Some(item) = entity.get::<DmItem>() {
         return !item.anchored;
     }
     if let Some(closet) = entity.get::<DmCloset>() {
         return !closet.wall_mounted;
-    }
-    // A mech's `move_resist` (`MOVE_FORCE_EXTREMELY_STRONG`) is beyond any puller here.
-    if entity.contains::<crate::mecha::Mech>() {
-        return false;
-    }
-    // Megafauna: `move_resist = MOVE_FORCE_OVERPOWERING`.
-    if entity.contains::<crate::mobs::megafauna::Megafauna>() {
-        return false;
     }
     if let Some(anchored) = entity.get::<crate::obj_damage::Anchored>() {
         return !anchored.0;
