@@ -16,7 +16,8 @@
 //!   interfaces both halves share, `lobby_client` (feature `client`) draws the lobby screen and
 //!   the job preferences window.
 //! - `round_news` (feature `server`): the round end news story on the station's fate;
-//!   `lobby_music` (feature `server`): the lobby's title music and the round end song.
+//!   `lobby_music` (feature `server`): the lobby's title music and the round end song;
+//!   `join_queue` (feature `server`): the latejoin queue over the population cap.
 //! - `antag` (feature `server`; shared interfaces and `antag::client` with `client`): roundstart
 //!   antagonists (BandaStation's dynamic), the traitor, objectives, the uplink, round-end report.
 //! - `power` (feature `server`): tg areas, APCs, powernets, SMES, machine loads; unpowered doors
@@ -383,6 +384,8 @@ pub mod inventory_client;
 pub mod janitor;
 #[cfg(feature = "server")]
 pub mod jobs;
+#[cfg(feature = "server")]
+pub mod join_queue;
 pub mod keycard;
 #[cfg(feature = "client")]
 pub mod keycard_client;

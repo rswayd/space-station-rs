@@ -56,7 +56,7 @@
 При превышении лимита игроков новые игроки ждут в очереди лобби.
 
 - **Код:** [`/datum/controller/subsystem/ticker/proc/check_queue()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/ticker.dm#L576), [`/datum/controller/subsystem/job/proc/popcap_reached()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/job.dm#L692)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ — `crates/ss13_game/src/join_queue.rs` (`JoinQueue`, `join_button`, `may_select`, `step`), кнопка «Присоединиться» и выбор профессии — `crates/ss13_game/src/jobs.rs`: с `SS13_HARD_POPCAP`/`SS13_EXTREME_POPCAP` (в tg не заданы по умолчанию) игрок лобби при достижении лимита живых игроков (или при непустой очереди) встаёт в очередь с сообщением о позиции; выбрать профессию может только первый и только ниже лимита; раз в секунду `check_queue`: каждые 5 с первому сообщают о свободном месте (звук `notice1.ogg`, меню латджойна), через 25 с без входа он выбывает, ушедшие из лобби выбывают, снятие лимита отпускает всех. Тесты в модуле. `// shortcut:` админы ждут в очереди наравне со всеми (игровой крейт не знает админов); отказ в подключении по `extreme_popcap` — это редирект на запасной сервер, не портирован; нет уведомления `soft_popcap` при входе
 
 ### Хардкорный режим
 Рандомный «хардкор» с очками за набор квирков; счёт выживших хардкорщиков.

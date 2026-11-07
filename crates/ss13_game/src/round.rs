@@ -78,7 +78,9 @@ const SECURITY_OFFICER: &str = "Security Officer";
 ///   the lobby; unset logs a warning at startup.
 /// - `SS13_REOPEN_SUICIDE_ROLES=1` (tg `REOPEN_ROUNDSTART_SUICIDE_ROLES`, off by default):
 ///   [`ReopenSuicideRoles`], with `SS13_REOPEN_SUICIDE_ROLES_DELAY` (seconds, at least 30,
-///   default 240), `SS13_REOPEN_SUICIDE_ROLES_COMMAND=1` and `SS13_REOPEN_SUICIDE_ROLES_REPORT=1`.
+///   default 240), `SS13_REOPEN_SUICIDE_ROLES_COMMAND=1` and `SS13_REOPEN_SUICIDE_ROLES_REPORT=1`;
+/// - `SS13_HARD_POPCAP`, `SS13_EXTREME_POPCAP` (tg `HARD_POPCAP`, `EXTREME_POPCAP`, unset by
+///   default): living players at which latejoiners queue (`crate::join_queue`).
 #[derive(Resource, Clone, Debug, PartialEq)]
 pub struct RoundConfig {
     pub lobby_secs: f64,
@@ -87,6 +89,8 @@ pub struct RoundConfig {
     pub round_secs: Option<f64>,
     pub source_url: Option<String>,
     pub reopen_suicide_roles: Option<ReopenSuicideRoles>,
+    pub hard_popcap: Option<u32>,
+    pub extreme_popcap: Option<u32>,
 }
 
 /// tg `reopen_roundstart_suicide_roles*` config: the jobs of the players who killed themselves
@@ -115,6 +119,8 @@ impl RoundConfig {
             round_secs: None,
             source_url: None,
             reopen_suicide_roles: None,
+            hard_popcap: None,
+            extreme_popcap: None,
         }
     }
 
@@ -143,6 +149,13 @@ impl Default for RoundConfig {
             command_positions: flag("SS13_REOPEN_SUICIDE_ROLES_COMMAND"),
             command_report: flag("SS13_REOPEN_SUICIDE_ROLES_REPORT"),
         });
+        // tg `min_val = 0`; 0 is no cap (`if(hard_popcap)`).
+        let cap = |key: &str| {
+            std::env::var(key)
+                .ok()
+                .and_then(|v| v.trim().parse::<u32>().ok())
+                .filter(|&v| v > 0)
+        };
         let round_secs = secs("SS13_ROUND_SECONDS");
         if round_secs.is_some() && !cfg!(debug_assertions) {
             warn!("SS13_ROUND_SECONDS is ignored: it exists in debug builds only");
@@ -157,6 +170,8 @@ impl Default for RoundConfig {
                 .map(|v| v.trim().to_owned())
                 .filter(|v| !v.is_empty()),
             reopen_suicide_roles,
+            hard_popcap: cap("SS13_HARD_POPCAP"),
+            extreme_popcap: cap("SS13_EXTREME_POPCAP"),
         }
     }
 }
@@ -287,11 +302,13 @@ impl Plugin for RoundServerPlugin {
         .register_ui::<LobbyUi>()
         .register_ui::<JobPrefsUi>();
         crate::lobby_music::build(app);
-        app.add_systems(Startup, build_prefs_static.after(JobsStartup))
+        app.init_resource::<crate::join_queue::JoinQueue>()
+            .add_systems(Startup, build_prefs_static.after(JobsStartup))
             .add_systems(
                 Update,
                 (
                     tick.before(UiSystems::Open),
+                    crate::join_queue::fire.after(tick).before(UiSystems::Open),
                     (lobby_acts, preference_acts).in_set(UiSystems::Handle),
                 ),
             );
