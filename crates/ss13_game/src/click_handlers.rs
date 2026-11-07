@@ -45,6 +45,7 @@
 //! | 1737 | `devices::rhd::attack_self` (RLD, RTD, RDD, RPLD, RWD, RSF lists) |
 //! | 1740 | `devices::taperecorder::attack_self` (recorder and tape menus) |
 //! | 1743 | `devices::beacons::attack_self` (tracking beacons toggle, choice beacons list) |
+//! | 1745 | `science::teleportation::hand_tele::attack_self` (the hand tele's destination list, the locator's window) |
 //! | 1750 | `radiation::geiger_attack_self` |
 //! | 1800 | `explosions::sources::c4_attack_self` |
 //! | 1897 | `science::relics::attack_self` (a strange object: the hint, or its power) |
@@ -220,6 +221,8 @@
 //! | 3400 | `silicon::law_rack::interact` |
 //! | 3470 | `station_goals::interact` (satellites) |
 //! | 3473 | `devices::beacons::attack_self` (right click toggles a tracking beacon) |
+//! | 3475 | `science::teleportation` (teleporter station toggle; teleporter, launchpad, satellite and gateway consoles; away gateways) |
+//! | 3485 | `science::teleportation::hand_tele::portal_hand` (through an adjacent portal) |
 //! | 3450 | `vehicles::attack_hand` |
 //! | 3460 | `wiremod::server::attack_hand` |
 //! | 3455 | `clothing::sensors::interact` (crew console) |
@@ -286,6 +289,7 @@
 //! | 1460 | `silicon::ai_core::item_interaction` |
 //! | 1500 | `bots::construction::item_interaction` |
 //! | 1549 | `eng_machines::manufactorio::item_interaction` (wrench, router, unloader, lathe and sorter multitool, sorter item filter, storage unit screwdriver) |
+//! | 1545 | `science::teleportation::hand_tele::item_interaction` (dispelling its portals, right click portal; items on a portal) |
 //! | 1511 | `mobs::lavaland::minebot` (a welder repairs a minebot) |
 //! | 1555 | `inducer::interact_with_atom` (charging a cell) |
 //! | 1557 | `telecomms_config` (a multitool on a telecomms machine opens its window) |
@@ -295,6 +299,7 @@
 //! | 1567 | `devices::laser_pointer::item_interaction` (diode, crystal lens, their removal) |
 //! | 1569 | `eng_machines::flatpacker::item_interaction` (boards, packed parts, stacks; multitool on flatpacks) |
 //! | 1571 | `modsuit::anomalock::item_interaction` (an anomaly core into a locked MOD module, a screwdriver taking it out) |
+//! | 1575 | `science::teleportation` multitool (teleporter station and launchpad buffers and links, gateway calibration) |
 //! | 1577 | `devices::rhd::item_interaction` (the RCD family's clicks and loading) |
 //! | 1579 | `clothing::reactive::shell_interaction` (an anomaly core into a reactive armor shell) |
 //! | 1580 | `events::anomalies::neutralizer_act`, `releaser_act` (anomalies, anomaly cores) |
