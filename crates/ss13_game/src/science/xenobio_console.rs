@@ -441,6 +441,8 @@ pub fn feed_slime(world: &mut World, client: Entity, console: Entity, pos: TileP
     look.species = SpeciesId::Monkey;
     let monkey = crate::server::spawn_body(world, pos, "monkey".to_owned(), look);
     world.entity_mut(monkey).insert(ConsoleMonkey);
+    // `/mob/living/carbon/human/species/monkey` `ai_controller`.
+    crate::mobs::ai::monkey::attach(world, monkey, crate::mobs::ai::monkey::MONKEY);
     if let Some(mut c) = world.get_mut::<XenoConsole>(console) {
         c.monkeys = ((c.monkeys - 1.0) * 10.0).round() / 10.0;
     }

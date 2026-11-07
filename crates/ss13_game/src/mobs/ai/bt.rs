@@ -58,6 +58,10 @@ pub enum Cond {
     Customer(crate::restaurant::CustomerCond),
     /// Pet command, turtle ability and breeding decorators ([`super::fauna`]).
     Fauna(super::fauna::FaunaCond),
+    /// Monkey decorators ([`super::monkey`]).
+    Monkey(super::monkey::MonkeyCond),
+    /// Object decorators ([`super::objects`]).
+    Object(super::objects::ObjectCond),
 }
 
 impl Cond {
@@ -76,6 +80,8 @@ impl Cond {
             Self::Bot(ref cond) => cond.check(ctx),
             Self::Customer(cond) => cond.check(ctx),
             Self::Fauna(cond) => cond.check(ctx),
+            Self::Monkey(cond) => cond.check(ctx),
+            Self::Object(cond) => cond.check(ctx),
         }
     }
 }

@@ -8,6 +8,9 @@
 //! - [`blood_splatter`]: `dir_setting/bloodsplatter` of `/mob/living/create_splatter`, on a
 //!   brute projectile hit of a mob that has blood (`create_projectile_hit_effects`).
 //!
+//! - [`telegraph`]: `/obj/effect/temp_visual/telegraphing` and its subtypes, the warning box,
+//!   circle or line on a tile an attack is about to land on (`code/datums/ai/telegraph_effects.dm`).
+//!
 //! The other visuals belong to their mechanics and are spawned there with [`spawn`] (older
 //! ones keep their own copies: `crate::point`, `crate::emp`, `crate::mobs::megafauna`).
 // shortcut: the splatter does not slide 16 px and fade over its 0.5 s (`animate`): it shows
@@ -96,6 +99,52 @@ pub fn spawn(world: &mut World, pos: TilePos, v: Visual) -> Option<Entity> {
     )
 }
 
+/// `/obj/effect/temp_visual/telegraphing` subtypes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Telegraph {
+    /// `telegraphing`: the holographic target box, 2 s.
+    Box,
+    /// `telegraphing/vending_machine_tilt`: the box, 1 s.
+    VendingTilt,
+    /// `telegraphing/lift_travel` and `vending_machine_tilt` with a set duration (deciseconds
+    /// in tg, seconds here).
+    BoxFor(f64),
+    /// `telegraphing/circle`, 2 s, and `circle/short`, 1 s.
+    Circle,
+    CircleShort,
+    /// `telegraphing/line`, 1.2 s, and `line/short`, 0.5 s.
+    Line,
+    LineShort,
+}
+
+impl Telegraph {
+    /// The visual: `BELOW_MOB_LAYER` on the game plane, turned at random (`randomdir`).
+    pub fn visual(self) -> Visual {
+        const HOLO: &str = "icons/mob/telegraphing/telegraph_holographic.dmi";
+        const PLAIN: &str = "icons/mob/telegraphing/telegraph.dmi";
+        let (icon, state, secs) = match self {
+            Self::Box => (HOLO, "target_box", 2.0),
+            Self::VendingTilt => (HOLO, "target_box", 1.0),
+            Self::BoxFor(secs) => (HOLO, "target_box", secs),
+            Self::Circle => (PLAIN, "target_circle", 2.0),
+            Self::CircleShort => (PLAIN, "target_circle", 1.0),
+            Self::Line => (PLAIN, "line", 1.2),
+            Self::LineShort => (PLAIN, "line", 0.5),
+        };
+        Visual {
+            layer: BELOW_MOB_LAYER,
+            ..Visual::new(icon, state, secs)
+        }
+    }
+}
+
+/// `new /obj/effect/temp_visual/telegraphing/...(pos)`.
+// shortcut: no `light_range = 1` and no emissive overlay (alpha 90): the box does not glow in
+// the dark; add both when temp visuals get lights.
+pub fn telegraph(world: &mut World, pos: TilePos, kind: Telegraph) -> Option<Entity> {
+    spawn(world, pos, kind.visual())
+}
+
 /// `QDEL_IN(src, duration)`.
 pub(super) fn expire_visuals(
     time: Res<Time>,
@@ -177,6 +226,27 @@ mod tests {
         assert_eq!(angle_dir(90.0), Dir::East);
         assert_eq!(angle_dir(-90.0), Dir::West);
         assert_eq!(angle_dir(200.0), Dir::South);
+    }
+
+    #[test]
+    fn telegraphs_keep_tg_icons_and_durations() {
+        let v = Telegraph::Box.visual();
+        assert_eq!(
+            (v.icon, v.state, v.secs, v.layer),
+            (
+                "icons/mob/telegraphing/telegraph_holographic.dmi",
+                "target_box",
+                2.0,
+                BELOW_MOB_LAYER
+            )
+        );
+        assert_eq!(Telegraph::VendingTilt.visual().secs, 1.0);
+        assert_eq!(Telegraph::BoxFor(0.7).visual().secs, 0.7);
+        let c = Telegraph::CircleShort.visual();
+        assert_eq!((c.state, c.secs), ("target_circle", 1.0));
+        assert_eq!(Telegraph::Line.visual().secs, 1.2);
+        assert_eq!(Telegraph::LineShort.visual().state, "line");
+        assert_eq!(c.plane, GAME_PLANE);
     }
 
     #[test]

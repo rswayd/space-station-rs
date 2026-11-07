@@ -645,10 +645,8 @@ fn troopers_fight_shoot_in_bursts_or_wait_to_be_hit() {
             hostile,
             "{sub}: picks the stranger only when hostile"
         );
-        // FIXME: no ranged trooper fires in this bare test world (the leaf fails before the
-        // shot: line of sight or target validity without a map); the burst queue check is off
-        // until it is reproduced on a fixture map.
-        if false && hostile && sub.starts_with("trooper/ranged") {
+        // `Strategy::valid` with vision 0 is unlimited (it used to mean one tile).
+        if hostile && sub.starts_with("trooper/ranged") {
             let r = w.get::<crate::mobs::ranged::RangedAttacks>(pawn).unwrap();
             assert!(r.next > 1.0, "{sub}: fired");
             // `burst_shots` 3: the other two 0.2 s apart.
@@ -789,4 +787,127 @@ fn one_off_mobs_hunt_and_the_vatbeast_fights_back_first() {
     let mut tree = Tree::new(built.roots);
     run(&mut w, beast, &mut tree, &mut bb, 2);
     assert_eq!(bb.entity(Key::CurrentTarget), Some(attacker));
+}
+
+fn item(world: &mut World, x: i32, y: i32, force: f32) -> Entity {
+    world
+        .spawn((
+            ss13_mapload::DmItem {
+                force,
+                interaction_flags_item: ss13_mapload::item::INTERACT_ITEM_ATTACK_HAND_PICKUP,
+                ..default()
+            },
+            TilePos::new(x, y, 1),
+        ))
+        .id()
+}
+
+#[test]
+fn monkeys_hate_their_attackers_and_pick_them_as_targets() {
+    let mut w = world();
+    let monkey = mob(&mut w, 5, 5, "monkey");
+    let human = mob(&mut w, 8, 5, "neutral");
+    let mut controller = super::monkey::controller(super::monkey::MONKEY);
+    let mut bb = std::mem::take(&mut controller.bb);
+    // Calm monkeys pick nobody.
+    run(&mut w, monkey, &mut controller.tree, &mut bb, 2);
+    assert_eq!(bb.entity(Key::CurrentTarget), None);
+    super::monkey::add_hatred(&mut bb, human, 4.0);
+    run(&mut w, monkey, &mut controller.tree, &mut bb, 1);
+    assert_eq!(bb.entity(Key::CurrentTarget), Some(human));
+    // Hatred that falls to nothing is forgotten.
+    super::monkey::add_hatred(&mut bb, human, -4.0);
+    assert_eq!(bb.get(Key::MonkeyEnemies), Some(&Value::Attackers(vec![])));
+}
+
+#[test]
+fn angry_monkeys_go_for_anyone_but_monkeys() {
+    let mut w = world();
+    let monkey = mob(&mut w, 5, 5, "monkey");
+    let _kin = mob(&mut w, 6, 5, "monkey");
+    let human = mob(&mut w, 9, 5, "neutral");
+    let mut controller = super::monkey::controller(super::monkey::MONKEY_ANGRY);
+    let mut bb = std::mem::take(&mut controller.bb);
+    run(&mut w, monkey, &mut controller.tree, &mut bb, 1);
+    assert_eq!(bb.entity(Key::CurrentTarget), Some(human));
+}
+
+#[test]
+fn monkeys_grab_the_strongest_weapon_they_see_and_flee_when_hurt() {
+    let mut w = world();
+    let monkey = mob(&mut w, 5, 5, "monkey");
+    w.entity_mut(monkey).insert((
+        crate::inventory::Inventory::default(),
+        Health::basic(100.0, [1.0; 5]),
+    ));
+    let _weak = item(&mut w, 6, 5, 2.0);
+    let strong = item(&mut w, 6, 6, 10.0);
+    let mut controller = super::monkey::controller(super::monkey::MONKEY);
+    let mut bb = std::mem::take(&mut controller.bb);
+    run(&mut w, monkey, &mut controller.tree, &mut bb, 2);
+    // Next to it: taken into a hand on the following ticks.
+    run(&mut w, monkey, &mut controller.tree, &mut bb, 4);
+    let inv = w.get::<crate::inventory::Inventory>(monkey).unwrap();
+    assert!(inv.holds(strong), "{:?}", inv.hands);
+    assert!(w.get::<TilePos>(strong).is_none());
+    // Below 40 health with a target: it looks for a way out instead of fighting.
+    let enemy = mob(&mut w, 7, 5, "neutral");
+    super::monkey::add_hatred(&mut bb, enemy, 4.0);
+    w.get_mut::<Health>(monkey).unwrap().brute = 70.0;
+    run(&mut w, monkey, &mut controller.tree, &mut bb, 3);
+    assert!(matches!(bb.get(Key::FleeLocation), Some(Value::Tile(_))));
+}
+
+#[test]
+fn admin_ai_templates_match_the_protocol_list() {
+    let names: Vec<&str> = super::admin::TEMPLATES.iter().map(|(n, _)| *n).collect();
+    assert_eq!(names, ss13_shared::admin::AI_TEMPLATES);
+}
+
+#[test]
+fn admins_give_carbons_the_monkey_ai_and_take_it_away() {
+    let mut w = world();
+    let admin = mob(&mut w, 5, 5, "neutral");
+    let carbon = mob(&mut w, 5, 5, "neutral");
+    let elsewhere = mob(&mut w, 9, 9, "neutral");
+    assert!(super::admin::give(&mut w, TilePos::new(5, 5, 1), admin, "Nope", false).is_err());
+    // A basic mob template does not fit a carbon.
+    assert!(
+        super::admin::give(&mut w, TilePos::new(5, 5, 1), admin, "Hostile Melee", false).is_err()
+    );
+    assert_eq!(
+        super::admin::give(&mut w, TilePos::new(5, 5, 1), admin, "Monkey", true),
+        Ok(1)
+    );
+    let c = w.get::<super::AiController>(carbon).unwrap();
+    assert_eq!(c.kind, super::monkey::MONKEY);
+    assert_eq!(
+        w.get::<Faction>(carbon).unwrap().0,
+        vec!["hostile".to_owned()]
+    );
+    assert!(w.get::<super::AiController>(admin).is_none());
+    assert!(w.get::<super::AiController>(elsewhere).is_none());
+    assert_eq!(
+        super::admin::give(&mut w, TilePos::new(5, 5, 1), admin, "None", false),
+        Ok(1)
+    );
+    assert!(w.get::<super::AiController>(carbon).is_none());
+}
+
+#[test]
+fn risen_vendors_wait_without_victims_and_wind_up_next_to_one() {
+    let mut w = world();
+    let vendor = w.spawn(TilePos::new(5, 5, 1)).id();
+    super::objects::possess_vendor(&mut w, vendor);
+    let mut controller = w.entity_mut(vendor).take::<super::AiController>().unwrap();
+    let mut bb = std::mem::take(&mut controller.bb);
+    run(&mut w, vendor, &mut controller.tree, &mut bb, 1);
+    // `search_cooldown`: nobody in view.
+    assert!(bb.time(Key::VendingTiltCooldown).is_some_and(|t| t > 1.0));
+    let victim = mob(&mut w, 6, 5, "neutral");
+    bb.clear(Key::VendingTiltCooldown);
+    run(&mut w, vendor, &mut controller.tree, &mut bb, 2);
+    assert_eq!(bb.entity(Key::CurrentTarget), Some(victim));
+    // The 0.8 s telegraph runs: no tilt yet, the target is kept.
+    assert!(w.get::<crate::vending::tilt::Tilted>(vendor).is_none());
 }

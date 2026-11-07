@@ -112,7 +112,10 @@ impl Strategy {
                         .is_some_and(|b| ss13_mapload::fidelity::is_under(&b.def.path, MOUSE_ROOT))
             }
         };
-        ok && can_see(world, from, to, vision.max(1))
+        // Vision 0 is unlimited: only the line of sight counts (a range of 1 here made every
+        // ranged mob hold fire until its target stood next to it).
+        let range = if vision == 0 { u32::MAX } else { vision };
+        ok && can_see(world, from, to, range)
     }
 }
 
@@ -315,6 +318,10 @@ pub enum Behavior {
     Customer(crate::restaurant::CustomerLeaf),
     /// Farm, pet, parrot, ranged and critter leaves ([`super::fauna`]).
     Fauna(super::fauna::FaunaLeaf),
+    /// Monkey leaves ([`super::monkey`]).
+    Monkey(super::monkey::MonkeyLeaf),
+    /// Object leaves ([`super::objects`]).
+    Object(super::objects::ObjectLeaf),
 }
 
 impl Behavior {
@@ -341,6 +348,7 @@ impl Behavior {
             }
             Self::MeleeAttack { key, .. } | Self::PlayWithMouse { key } => ctx.truthy(key),
             Self::Fauna(ref mut leaf) => leaf.setup(ctx),
+            Self::Monkey(ref mut leaf) => leaf.setup(ctx),
             _ => true,
         }
     }
@@ -499,6 +507,8 @@ impl Behavior {
             Self::Bot(ref mut leaf) => leaf.perform(ctx),
             Self::Customer(ref mut leaf) => leaf.perform(ctx),
             Self::Fauna(ref mut leaf) => leaf.perform(ctx),
+            Self::Monkey(ref mut leaf) => leaf.perform(ctx),
+            Self::Object(ref mut leaf) => leaf.perform(ctx),
         }
     }
 
@@ -512,6 +522,14 @@ impl Behavior {
             return;
         }
         if let Self::Fauna(leaf) = self {
+            leaf.finish(ctx, succeeded);
+            return;
+        }
+        if let Self::Monkey(leaf) = self {
+            leaf.finish(ctx, succeeded);
+            return;
+        }
+        if let Self::Object(leaf) = self {
             leaf.finish(ctx, succeeded);
             return;
         }

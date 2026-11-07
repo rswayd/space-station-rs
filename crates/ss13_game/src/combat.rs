@@ -378,6 +378,12 @@ fn melee(
                 crate::medical::diseases::touch(world, attacker, target);
             });
         }
+        // `COMSIG_ATOM_WAS_ATTACKED` (`relay_attackers`): a harmful hit angers a monkey's AI.
+        if combat.0 || weapon.is_some() {
+            commands.queue(move |world: &mut World| {
+                crate::mobs::ai::monkey::on_attacked(world, target, attacker);
+            });
+        }
         let Ok((mut health, mut target_stat, _, _, _, worn, _, _, limbs)) = mobs.get_mut(target)
         else {
             continue;

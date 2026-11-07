@@ -54,7 +54,7 @@
 Мартышки (и Пун-Пун бармена) ищут оружие, мстят обидчикам, дурачатся, разносят еду; применяется и к людям, обращённым в мартышек.
 
 - **Код:** [`/datum/ai_controller/monkey`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/ai/monkey/monkey_controller.dm#L7)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/mobs/ai/monkey.rs`, `trees.rs` (`monkey`): контроллер `monkey`/`monkey/angry` на карбоне без игрока (мартышки консоли ксенобиологии), ненависть к обидчику (85%, 4 очка; удар в боевом режиме или предметом), выбор цели среди врагов в обзоре 9 клеток с весом `100 / дистанция` (злые — любые, кроме мартышек и выведенных из строя), бой через обычный ближний бой человека (свой `ClickResolved` в боевом режиме), снижение ненависти на 40% удачных ударов, бегство ниже 40 здоровья, поиск и подбор самого сильного предмета в 5 клетках (черный список неудачных), `monkey_idle`; нет карманных краж, обезоруживания, толчков, утилизации в мусоропровод, созыва мартышек, Пун-Пуна (подача еды, звонок), инструментов, оружия, эмоций (`// shortcut:`)
 
 ### ИИ собак и кошек
 Собаки апортируют, преследуют обидчиков хозяина, корги открывают двери по доступу; кошки охотятся на мышей, носят еду, выпрашивают.
@@ -66,13 +66,13 @@
 Проклятые и одержимые предметы летают и бьют людей, «бейн»-предмет, робот-посетитель ресторана заказывает еду, торговый автомат-мститель падает на людей.
 
 - **Код:** [`/datum/ai_controller/cursed`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/ai/cursed/cursed_controller.dm#L8), [`/datum/ai_controller/haunted`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/ai/hauntium/haunted_controller.dm#L2), [`/datum/ai_controller/bane`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/ai/bane/bane_controller.dm#L5), [`/datum/ai_controller/robot_customer`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/ai/robot_customer/robot_customer_controller.dm#L1), [`/datum/ai_controller/vending_machine`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/ai/objects/vending_machines/vending_machine_controller.dm#L2), [`/datum/bt_node/ai_behavior/throw_attack`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/ai/_item_behaviors.dm#L2)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/mobs/ai/objects.rs`: контроллер `vending_machine/eventspawn` — при заражении всех автоматов Brand Intelligence (`crates/ss13_game/src/events/brand_intelligence.rs`) они оживают, ищут стоящего человека в 7 клетках, подходят, телеграфируют 0,8 с и падают на него (`squish_damage` 15, фразы), встают через 1 с (5 с паузы после попадания); робот-посетитель — `crates/ss13_game/src/restaurant.rs`; нет проклятых и одержимых предметов, «бейна», отказа в продаже у оживших автоматов
 
 ### Телеграф атак ИИ
 Временный визуальный эффект-предупреждение на клетке перед атакой моба.
 
 - **Код:** [`/obj/effect/temp_visual/telegraphing`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/ai/telegraph_effects.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/effects/temp_visual.rs` (`Telegraph`, `telegraph`): `telegraphing` (рамка, 2 с), `vending_machine_tilt` (1 с), `lift_travel` с длительностью, `circle`/`circle/short`, `line`/`line/short` под мобами; без свечения (`light_range`, эмиссив — `// shortcut:`); вызовы из механик (автомат-мститель, посох Легиона, реактивная броня) — у их групп
 
 ### Подсистема ai_controllers
 `SSai_controllers` тикает активные контроллеры; контроллеры на z-уровнях без игроков простаивают (`ai_controllers_by_zlevel`); отдельная подсистема низкого приоритета для второстепенного ИИ.
@@ -84,7 +84,7 @@
 Процессинг старых `simple_animal` без контроллеров (мегафауна, элиты): их `handle_automated_action`/движение.
 
 - **Код:** [`SUBSYSTEM_DEF(npcpool)`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/npcpool.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/mobs/megafauna/mod.rs` (`NPC_TICK_SECS`, тикер `handle_automated_action`): оставшиеся в tg на `simple_animal` мобы (мегафауна) крутятся раз в 2 с, как `SSnpcpool`; остальные простые животные портированы базовыми мобами с контроллерами; элиты — у группы лаваленда
 
 ### Просмотрщик деревьев поведения (админ)
 Админ-верб «View Behavior Tree»: окно с живым деревом выбранного моба — какие узлы активны, лог выполнения.
@@ -96,4 +96,4 @@
 Админ-верб «Give AI Controller»: шаблоны ИИ (`admin_ai_template`) вешаются на любого живого моба с настройкой фракции и поведения.
 
 - **Код:** [`/datum/admin_ai_template`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/ai/basic_mobs/admin_ai_templates.dm#L2), [`ADMIN_VERB(give_ai_controller)`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/admin_verbs.dm#L742)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/mobs/ai/admin.rs`, запрос `AdminRequest::GiveAi` (`R_FUN`, кнопки «ИИ на тайле» в админ-панели): шаблоны tg (ближний/дальний/застрельщик, мстительный, капризный, пугливый, шуганый, Reset, None) на живых существ своего тайла с фракцией `hostile` по выбору; «Monkey» — ИИ мартышки на карбона; нет «активен при клиенте», шанса прогулки и минимального стата целей, шаблонов способностей и `goon` (`// shortcut:`)

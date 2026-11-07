@@ -14,10 +14,13 @@
 //! `RUN_WHILE_UNWATCHED` (on with `ALWAYS_HIGH_PRIORITY`), else off. On-low controllers plan at
 //! the same rate (tg's low-priority ticker has the same `wait`, only a lower MC priority).
 
+pub mod admin;
 pub mod behaviors;
 pub mod bt;
 pub mod fauna;
+pub mod monkey;
 pub mod movement;
+pub mod objects;
 #[cfg(test)]
 mod tests;
 pub mod trees;
@@ -121,6 +124,17 @@ pub enum Key {
     TargetTimerOf,
     /// A trader's `BB_SHOP_SPOT` (`crate::mobs::trader`).
     ShopSpot,
+    /// Monkeys ([`monkey`]): `BB_MONKEY_ENEMIES` (mob -> hatred in [`Value::Attackers`]),
+    /// `BB_MONKEY_PICKUPTARGET`, `BB_MONKEY_AGGRESSIVE`, `BB_MONKEY_BLACKLISTITEMS`.
+    MonkeyEnemies,
+    MonkeyPickup,
+    MonkeyAggressive,
+    MonkeyBlacklist,
+    /// Risen vendors ([`objects`]): `BB_VENDING_TILT_COOLDOWN`, `BB_VENDING_UNTILT_COOLDOWN`,
+    /// `BB_VENDING_LAST_HIT_SUCCESSFUL`.
+    VendingTiltCooldown,
+    VendingUntiltCooldown,
+    VendingLastHit,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -288,6 +302,7 @@ pub fn record_attacker(world: &mut World, victim: Entity, attacker: Entity) {
     crate::mobs::pets::on_attacked(world, victim, attacker);
     crate::mobs::lavaland::on_attacked(world, victim, attacker);
     crate::mobs::illusion::on_attacked(world, victim);
+    monkey::on_attacked(world, victim, attacker);
     let now = world.resource::<Time>().elapsed_secs_f64();
     let health = world.get::<crate::health::Health>(victim).cloned();
     let retaliates = world.get::<Retaliates>(victim).is_some();
