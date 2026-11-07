@@ -646,7 +646,10 @@ pub fn climb_stairs(world: &mut World, mut bumps: Local<MessageCursor<Bumped>>) 
         .read(world.resource::<Messages<Bumped>>())
         .copied()
         .collect();
-    for Bumped { entity, obstacle } in pending {
+    for Bumped {
+        entity, obstacle, ..
+    } in pending
+    {
         let Some(stairs) = world.get::<Stairs>(obstacle).copied() else {
             continue;
         };

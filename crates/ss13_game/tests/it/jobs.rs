@@ -92,7 +92,7 @@ const TYPES: &str = r##"{
     "/obj/item/clothing/shoes/sneakers": { "parent": "/obj/item/clothing/shoes" },
     "/obj/item/clothing/shoes/sneakers/black": { "parent": "/obj/item/clothing/shoes/sneakers" },
     "/obj/item/clothing/shoes/jackboots/sec": { "parent": "/obj/item/clothing/shoes" },
-    "/obj/machinery": { "parent": "/obj" },
+    "/obj/machinery": { "parent": "/obj", "declared_vars": { "anchored": 1 } },
     "/obj/machinery/door": { "parent": "/obj/machinery", "declared_vars": {
         "icon": { "resource": "d.dmi" }, "icon_state": "door_closed", "density": 1, "opacity": 1,
         "layer": 2.7, "base_icon_state": "door", "autoclose": 0, "can_open_with_hands": 1,

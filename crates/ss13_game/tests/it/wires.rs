@@ -68,7 +68,7 @@ const TYPES: &str = r##"{
         "declared_vars": { "maxcharge": 1000000, "chargerate": 1000000 } },
     "/obj/item/stock_parts/power_store/battery/upgraded": { "parent": "/obj/item/stock_parts/power_store/battery",
         "declared_vars": { "maxcharge": 2500000, "chargerate": 500000 } },
-    "/obj/machinery": { "parent": "/obj", "declared_vars": {
+    "/obj/machinery": { "parent": "/obj", "declared_vars": { "anchored": 1,
         "use_power": 1, "idle_power_usage": 100, "active_power_usage": 1000, "power_channel": 1 } },
     "/obj/machinery/door": { "parent": "/obj/machinery", "declared_vars": {
         "name": "door", "icon": { "resource": "d.dmi" }, "icon_state": "door_closed",

@@ -138,6 +138,8 @@ pub struct MoveRequest {
 pub struct Bumped {
     pub entity: Entity,
     pub obstacle: Entity,
+    /// The refused step is a half of a diagonal move (tg `moving_diagonally`).
+    pub diagonal: bool,
 }
 
 /// One successful single-tile step. A diagonal move emits two (one per cardinal half), as BYOND
@@ -180,11 +182,11 @@ fn try_move(world: &mut World, MoveRequest { entity, dir }: MoveRequest, now: f6
     }
 
     let target = start.step(dir);
-    if let Some(face) = resolve_move(dir, |d| step(world, entity, d)) {
+    let diagonal = !Dir::CARDINALS.contains(&dir);
+    if let Some(face) = resolve_move(dir, |d| step(world, entity, d, diagonal)) {
         set_facing(world, entity, face);
     }
-    let reached_diagonal =
-        !Dir::CARDINALS.contains(&dir) && world.get::<TilePos>(entity) == Some(&target);
+    let reached_diagonal = diagonal && world.get::<TilePos>(entity) == Some(&target);
     let ready_at = next_ready_at(mover.ready_at, now, tick, mover.delay, reached_diagonal);
     if let Some(mut m) = world.get_mut::<Mover>(entity) {
         m.ready_at = ready_at;
@@ -239,7 +241,7 @@ pub fn next_ready_at(
 /// except at the map edge where there is no target turf. tg `Move`: the old tile's `Exit`
 /// (border objects facing `dir`) is asked first and, only if it allows, the new tile's `Enter`;
 /// each refusing object hears a `Bumped`.
-fn step(world: &mut World, entity: Entity, dir: Dir) -> bool {
+fn step(world: &mut World, entity: Entity, dir: Dir, diagonal: bool) -> bool {
     let Some(&from) = world.get::<TilePos>(entity) else {
         return false;
     };
@@ -266,7 +268,11 @@ fn step(world: &mut World, entity: Entity, dir: Dir) -> bool {
     }
     if !blockers.is_empty() {
         for obstacle in blockers {
-            world.write_message(Bumped { entity, obstacle });
+            world.write_message(Bumped {
+                entity,
+                obstacle,
+                diagonal,
+            });
         }
         return false;
     }

@@ -243,7 +243,7 @@ impl Plugin for GameServerPlugin {
             crate::gym::GymPlugin,
         ))
         .add_plugins((
-            crate::pull::PullServerPlugin,
+            (crate::pull::PullServerPlugin, crate::bump::BumpPlugin),
             crate::throw::ThrowServerPlugin,
             crate::examine::ExamineServerPlugin,
             crate::speech::SpeechServerPlugin,
