@@ -208,6 +208,7 @@ impl Plugin for GameServerPlugin {
             crate::health::HealthServerPlugin,
             crate::combat::CombatServerPlugin,
             crate::ghost::GhostServerPlugin,
+            crate::mind::MindPlugin,
             crate::ghost_verbs::GhostVerbsPlugin,
             crate::multiz::MultiZPlugin,
             crate::power::PowerServerPlugin,

@@ -118,6 +118,14 @@ pub enum AdminRequest {
         ckey: String,
         role: AntagRole,
     },
+    /// `R_ADMIN`: the player's mind (tg `traitor_panel`), answered by [`AdminResponse::Mind`].
+    MindPanel(String),
+    /// `R_ADMIN`: a change from the mind panel (tg `/datum/mind/Topic`), answered by the
+    /// updated [`AdminResponse::Mind`].
+    MindAct {
+        ckey: String,
+        act: MindAct,
+    },
     /// `R_ADMIN`: view-only round and antagonist summary (tg "Dynamic Panel").
     Dynamic,
     /// `R_ADMIN`: run a midround ruleset now, by config tag (tg `force_run_midround`).
@@ -227,6 +235,35 @@ pub enum AntagRole {
     Revolutionary,
 }
 
+/// A mind panel change (tg `/datum/mind/Topic` hrefs).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MindAct {
+    /// `remove_antag`.
+    RemoveAntag(AntagRole),
+    /// `set_assigned_role`: the job by its title.
+    SetJob(String),
+    /// `obj_add`: a custom objective for the traitor, else the blood brother.
+    AddObjective(String),
+    /// `obj_edit`: the explanation of the objective at the index of [`MindPanel::objectives`].
+    EditObjective { index: u32, text: String },
+    /// `obj_delete`: the objective by its index in [`MindPanel::objectives`].
+    RemoveObjective(u32),
+    /// `obj_announce`.
+    AnnounceObjectives,
+}
+
+/// tg `traitor_panel`: what the mind holds.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct MindPanel {
+    pub ckey: String,
+    /// Mind name, current mob, role, deaths and the like, one per line.
+    pub lines: Vec<String>,
+    /// Antagonist role names.
+    pub antag: Vec<String>,
+    /// The traitor's objectives, then the blood brother's.
+    pub objectives: Vec<String>,
+}
+
 /// Server → client.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum AdminResponse {
@@ -245,6 +282,7 @@ pub enum AdminResponse {
     },
     Events(Vec<String>),
     Dynamic(Vec<String>),
+    Mind(MindPanel),
     /// A request was applied; what happened.
     Done(String),
     /// Why a request was not applied.

@@ -361,6 +361,17 @@ pub fn submit_custom_objective(world: &mut World, mob: Entity, text: &str) -> bo
     true
 }
 
+/// The admin mind panel's `obj_announce`: the traitor `mob`'s objectives to its player. False
+/// when it is no traitor.
+pub fn announce_objectives_of(world: &mut World, mob: Entity) -> bool {
+    if world.get::<Traitor>(mob).is_none() {
+        return false;
+    }
+    let client = world.get::<PlayerMob>(mob).map(|p| p.client);
+    announce_objectives(world, client, mob);
+    true
+}
+
 /// `/datum/mind/announce_objectives`.
 fn announce_objectives(world: &mut World, client: Option<Entity>, mob: Entity) {
     let Some(objectives) = world.get::<Traitor>(mob).map(|t| t.objectives.clone()) else {

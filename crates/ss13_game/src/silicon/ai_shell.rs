@@ -249,6 +249,8 @@ fn move_client(world: &mut World, client: Entity, from: Entity, to: Entity, pos:
     if let Some(mut players) = world.get_resource_mut::<Players>() {
         players.set_mob(client, to);
     }
+    // tg `mind.transfer_to(shell)` / `transfer_to(mainframe)`.
+    crate::mind::transfer(world, from, to);
 }
 
 /// tg `deploy_init` and the mind's transfer into the shell.

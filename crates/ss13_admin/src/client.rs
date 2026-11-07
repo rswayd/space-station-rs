@@ -23,8 +23,8 @@ use ss13_net::admin::client::{AdminResponseReceived, SendAdminRequest};
 use ss13_net::client::NetClientConfig;
 use ss13_shared::admin::rights::*;
 use ss13_shared::admin::{
-    AdminEntry, AdminRequest, AdminResponse, AntagRole, PlayerEntry, PlayerState, Smite,
-    SoundScope, Ticket, TicketState,
+    AdminEntry, AdminRequest, AdminResponse, AntagRole, MindAct, MindPanel, PlayerEntry,
+    PlayerState, Smite, SoundScope, Ticket, TicketState,
 };
 
 /// The player list is asked for this often while it is shown (seconds).
@@ -58,6 +58,8 @@ pub struct AdminUi {
     pub prototypes: Vec<String>,
     pub events: Vec<String>,
     pub dynamic: Vec<String>,
+    /// The last [`AdminResponse::Mind`] (tg `traitor_panel`).
+    pub mind: Option<MindPanel>,
     /// The permissions panel's last [`AdminResponse::AdminList`].
     pub admins: Vec<AdminEntry>,
     pub ranks: Vec<String>,
@@ -99,6 +101,7 @@ impl Default for AdminUi {
             prototypes: Vec::new(),
             events: Vec::new(),
             dynamic: Vec::new(),
+            mind: None,
             admins: Vec::new(),
             ranks: Vec::new(),
             last_reply: String::new(),
@@ -233,6 +236,7 @@ fn collect(mut responses: MessageReader<AdminResponseReceived>, mut ui: ResMut<A
             AdminResponse::Prototypes { ids, .. } => ui.prototypes.clone_from(ids),
             AdminResponse::Events(names) => ui.events.clone_from(names),
             AdminResponse::Dynamic(lines) => ui.dynamic.clone_from(lines),
+            AdminResponse::Mind(panel) => ui.mind = Some(panel.clone()),
             AdminResponse::Done(text) => ui.last_reply = format!("ok: {text}"),
             AdminResponse::Refused(text) => ui.last_reply = format!("отказано: {text}"),
             AdminResponse::AdminList { admins, ranks } => {
@@ -563,6 +567,7 @@ fn players_tab(ui: &mut egui::Ui, state: &mut AdminUi, out: &mut Vec<AdminReques
                             },
                         );
                         button(ui, "Heal", R_ADMIN, AdminRequest::Rejuvenate(ckey.clone()));
+                        button(ui, "Mind", R_ADMIN, AdminRequest::MindPanel(ckey.clone()));
                         button(ui, "Man Up", R_ADMIN, AdminRequest::ManUp(ckey.clone()));
                         button(
                             ui,
@@ -650,6 +655,85 @@ fn players_tab(ui: &mut egui::Ui, state: &mut AdminUi, out: &mut Vec<AdminReques
                 }
             });
     });
+    mind_panel(ui, state, out);
+}
+
+/// tg `traitor_panel`: the mind of the player asked with "Mind", and its `Topic` buttons. The
+/// job title and objective texts come from the players tab's text field.
+fn mind_panel(ui: &mut egui::Ui, state: &AdminUi, out: &mut Vec<AdminRequest>) {
+    let Some(panel) = &state.mind else {
+        return;
+    };
+    let can = state.can(R_ADMIN);
+    let text = state.player_text.trim().to_owned();
+    let act = |act| AdminRequest::MindAct {
+        ckey: panel.ckey.clone(),
+        act,
+    };
+    ui.separator();
+    ui.strong(format!("Разум {}", panel.ckey));
+    for line in &panel.lines {
+        ui.label(line);
+    }
+    ui.horizontal_wrapped(|ui| {
+        for (role, name) in [
+            (AntagRole::Traitor, "Traitor"),
+            (AntagRole::Brother, "Blood Brother"),
+            (AntagRole::Changeling, "Changeling"),
+            (AntagRole::Vampire, "Vampire"),
+            (AntagRole::Cultist, "Cultist"),
+            (AntagRole::Heretic, "Heretic"),
+            (AntagRole::HeadRev, "Head Revolutionary"),
+            (AntagRole::Revolutionary, "Revolutionary"),
+        ] {
+            if panel.antag.iter().any(|a| a == name)
+                && ui
+                    .add_enabled(can, egui::Button::new(format!("Снять: {name}")))
+                    .clicked()
+            {
+                out.push(act(MindAct::RemoveAntag(role)));
+            }
+        }
+        if ui
+            .add_enabled(can, egui::Button::new("Объявить цели"))
+            .clicked()
+        {
+            out.push(act(MindAct::AnnounceObjectives));
+        }
+        let typed = can && !text.is_empty();
+        if ui
+            .add_enabled(typed, egui::Button::new("Должность = текст"))
+            .clicked()
+        {
+            out.push(act(MindAct::SetJob(text.clone())));
+        }
+        if ui
+            .add_enabled(typed, egui::Button::new("Добавить цель (текст)"))
+            .clicked()
+        {
+            out.push(act(MindAct::AddObjective(text.clone())));
+        }
+    });
+    for (i, objective) in panel.objectives.iter().enumerate() {
+        ui.horizontal(|ui| {
+            ui.label(format!("#{} {objective}", i + 1));
+            if ui
+                .add_enabled(
+                    can && !text.is_empty(),
+                    egui::Button::new("Заменить текстом"),
+                )
+                .clicked()
+            {
+                out.push(act(MindAct::EditObjective {
+                    index: i as u32,
+                    text: text.clone(),
+                }));
+            }
+            if ui.add_enabled(can, egui::Button::new("Удалить")).clicked() {
+                out.push(act(MindAct::RemoveObjective(i as u32)));
+            }
+        });
+    }
 }
 
 fn tickets_tab(ui: &mut egui::Ui, state: &mut AdminUi, out: &mut Vec<AdminRequest>) {

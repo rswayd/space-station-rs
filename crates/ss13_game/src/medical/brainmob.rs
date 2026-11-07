@@ -75,11 +75,20 @@ pub fn mind_of(world: &mut World, mob: Entity) -> Option<Mind> {
 /// `from` now belongs to `to`. False when `from` has no mind.
 pub fn transfer_mind(world: &mut World, from: Entity, to: Entity) -> bool {
     match mind_of(world, from) {
-        Some(Mind::Client(client)) => possess(world, client, from, to),
+        Some(Mind::Client(client)) => {
+            // The mind's data first, so the body's HUDs reopen with its antag HUD.
+            crate::mind::transfer(world, from, to);
+            let moved = possess(world, client, from, to);
+            if !moved {
+                crate::mind::transfer(world, to, from);
+            }
+            moved
+        }
         Some(Mind::Ghost(ghost)) => {
             if let Some(mut g) = world.get_mut::<Ghost>(ghost) {
                 g.body = Some(to);
             }
+            crate::mind::transfer(world, from, to);
             true
         }
         None => false,

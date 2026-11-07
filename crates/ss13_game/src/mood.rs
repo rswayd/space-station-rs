@@ -770,12 +770,20 @@ pub fn send_death_moodlets(world: &mut World, dead: Entity, pos: TilePos) {
         if !crate::mobs::ai::behaviors::can_see(world, from, pos, DEATH_VIEW_RANGE) {
             continue;
         }
+        // `mood_change * max(DESENSITIZED_MINIMUM, mind.desensitized_level)`, then the mind
+        // grows used to it (`crate::mind`).
+        let mut event = see_death_event(&descriptor);
+        event.mood_change =
+            (event.mood_change * crate::mind::desensitized_level(world, viewer)).ceil();
         if let Some(mut mood) = world.get_mut::<Mood>(viewer) {
             let mut event = see_death_event(&descriptor);
             crate::personality::see_death(mood.personalities, &mut event, &descriptor);
             mood.add_instance(now, event);
         }
+        crate::mind::witnessed_death(world, viewer, dead);
     }
+    // tg `experienced_death` (not for gibs and dusts, which never reach here).
+    crate::mind::experienced_death(world, dead);
 }
 
 /// tg `print_mood` for the owner's chat.
