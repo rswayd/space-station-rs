@@ -412,6 +412,8 @@ pub mod martial;
 pub mod mecha;
 #[cfg(feature = "server")]
 pub mod medical;
+#[cfg(feature = "server")]
+pub mod mind;
 pub mod mining;
 #[cfg(feature = "server")]
 pub mod mining_shuttles;

@@ -1,19 +1,26 @@
 //! Mood and quirks over real WebTransport on 127.0.0.1: need events follow the mob's state,
 //! seeing B die saddens A, a hug cheers B up, low sanity slows A down, the mood face's click
-//! prints the mood, and quirks apply their traits.
+//! prints the mood, and quirks apply their traits. The mind (`ss13_game::mind`): deaths seen
+//! desensitize it, it moves with `transfer_mind`, and a forced grab brings back a DNR ghost.
 // shortcut: Bad Back and the quirk items need backpack and item prototypes the fixture lacks.
 
 use std::path::{Path, PathBuf};
 
 use bevy::prelude::*;
 use ss13_chat::speech::Impediments;
+use ss13_game::addictions::{self, Addiction, Addictions};
 use ss13_game::combat::NextMove;
+use ss13_game::ghost::ghostize_client;
+use ss13_game::ghost_verbs;
 use ss13_game::health::Stat;
 use ss13_game::hud::{MOOD_CLICK, MoodHudData, MoodHudUi};
 use ss13_game::hunger::Hunger;
+use ss13_game::medical::brainmob;
 use ss13_game::medical::traumas::Pacifist;
+use ss13_game::mind::{self, DESENSITIZED_REDUCTION_PER_DEATH, MindData};
 use ss13_game::mood::{Mood, SANITY_GREAT, SANITY_INSANE, SANITY_LEVEL_UNSTABLE, SanitySlowdown};
 use ss13_game::quirks::{self, Quirk, Quirks};
+use ss13_game::server::Players;
 use ss13_game::testing::{self, Drive, fixture_map, write_fixture};
 use ss13_mapload::convert::DmTypes;
 use ss13_net::chat::client::ChatReceived;
@@ -238,6 +245,17 @@ fn needs_deaths_hugs_and_sanity() {
     let saw = s.mood(a).get("saw_death").unwrap();
     assert_eq!(saw.mood_change, -8.0);
     assert!(saw.description.contains("умер"), "{}", saw.description);
+    // The minds: A witnessed one death, B experienced its own and knows when.
+    s.run_until("B's mind knows its death", |s| {
+        s.get::<MindData>(b).last_death.is_some()
+    });
+    let mind = s.get::<MindData>(a);
+    assert_eq!(mind.deaths_witnessed, 1);
+    assert_eq!(
+        mind.desensitized_level,
+        1.0 - DESENSITIZED_REDUCTION_PER_DEATH
+    );
+    assert_eq!(s.get::<MindData>(b).deaths_witnessed, 1);
 
     // Low sanity slows A down and tints the face.
     s.server.world_mut().get_mut::<Mood>(a).unwrap().set_sanity(
@@ -251,6 +269,51 @@ fn needs_deaths_hugs_and_sanity() {
     });
     assert_eq!(s.mood(a).sanity_level, SANITY_LEVEL_UNSTABLE);
     assert_eq!(s.mood(a).action_multiplier(), 1.25);
+}
+
+#[test]
+fn mind_follows_transfers_and_ghosts() {
+    let mut s = Station::start("mind_follows_transfers_and_ghosts");
+    let a = s.players[0].mob;
+    let link = s.players[0].link;
+    s.run_until("A has a mind", |s| s.try_get::<MindData>(a).is_some());
+    assert_eq!(s.get::<MindData>(a).key, "p0");
+
+    // tg `transfer_to`: the client, the mind and its addictions go to the new mob and back.
+    let world = s.server.world_mut();
+    addictions::add_points(world, a, Addiction::Nicotine, 700.0);
+    let vessel = world
+        .spawn((Name::new("vessel"), TilePos::new(3, 2, 1)))
+        .id();
+    assert!(brainmob::transfer_mind(world, a, vessel));
+    assert_eq!(world.resource::<Players>().mob(link), Some(vessel));
+    assert!(world.get::<MindData>(a).is_none());
+    assert_eq!(world.get::<MindData>(vessel).unwrap().key, "p0");
+    assert_eq!(
+        world
+            .get::<Addictions>(vessel)
+            .unwrap()
+            .points(Addiction::Nicotine),
+        700.0
+    );
+    assert!(brainmob::transfer_mind(world, vessel, a));
+    assert!(world.get::<MindData>(vessel).is_none());
+    assert!(world.get::<Addictions>(a).is_some());
+    s.tick();
+    // No second mind for the body it came back to.
+    assert_eq!(s.get::<MindData>(a).key, "p0");
+
+    // A ghost that gave up on its body (DNR) is found only when forced, and goes back.
+    let world = s.server.world_mut();
+    let ghost = ghostize_client(world, link).expect("a ghost");
+    assert_eq!(mind::get_ghost(world, a, false), Some(ghost));
+    assert!(ghost_verbs::do_not_resuscitate(world, ghost));
+    assert_eq!(mind::get_ghost(world, a, false), None);
+    assert_eq!(mind::grab_ghost(world, a, false), None);
+    assert_eq!(mind::get_ghost(world, a, true), Some(ghost));
+    assert_eq!(mind::grab_ghost(world, a, true), Some(ghost));
+    assert_eq!(world.resource::<Players>().mob(link), Some(a));
+    assert!(world.get_entity(ghost).is_err());
 }
 
 #[test]

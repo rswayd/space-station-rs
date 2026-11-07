@@ -560,9 +560,11 @@ pub fn do_not_resuscitate(world: &mut World, ghost: Entity) -> bool {
     let Some(mut g) = world.get_mut::<Ghost>(ghost) else {
         return false;
     };
-    if g.body.take().is_none() {
+    let Some(body) = g.body.take() else {
         return false;
-    }
+    };
+    // The mind still knows its body: a forced `grab_ghost` (admin revive) brings it back.
+    world.entity_mut(ghost).insert(crate::mind::DnrBody(body));
     if let Some(client) = world.get::<PlayerMob>(ghost).map(|p| p.client) {
         chat(
             world,

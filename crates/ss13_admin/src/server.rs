@@ -869,9 +869,11 @@ fn answer(world: &mut World, client: Entity, request: AdminRequest) -> AnswerRes
         }
         AdminRequest::Rejuvenate(target) => {
             let (target_client, mob) = target_mob(world, &target)?;
+            // A DNR ghost's mind still knows its body (tg `revive(force_grab_ghost = TRUE)`).
+            let dnr = world.get::<ss13_game::mind::DnrBody>(mob).map(|d| d.0);
             let body = world
                 .get::<Ghost>(mob)
-                .map_or(Some(mob), |g| g.body)
+                .map_or(Some(mob), |g| g.body.or(dnr))
                 .ok_or("Призрака нельзя вылечить.")?;
             let Some(health) = world.get::<Health>(body).cloned() else {
                 return Err("Это не живое существо.".into());
@@ -886,7 +888,7 @@ fn answer(world: &mut World, client: Entity, request: AdminRequest) -> AnswerRes
                 world.entity_mut(body).insert(Stat::Conscious);
             }
             if body != mob {
-                return_to_body(world, body);
+                ss13_game::mind::grab_ghost(world, body, true);
             }
             let target_key = key_name(world, target_client);
             admin_action(

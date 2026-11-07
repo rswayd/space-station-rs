@@ -10,9 +10,9 @@
 //!   drop by the stage's rate and an active addiction advances a cycle per second: stage 1
 //!   from cycle 61 (light moodlet), 2 from 121, 3 from 181, each with its chat lines.
 //! - Nicotine withdrawal also jitters (10/20/30 s per second of each stage).
-// shortcut: the points live on the body, not the mind (no transfer between bodies); reagents
-// do not add points when metabolized and only the quirk drugs (Junkie, Smoker, Alcoholic)
-// count for relief (the `addiction_types` of the other reagents are chemistry's, not
+// The points live on the mind's mob and move with it (`crate::mind::transfer`).
+// shortcut: reagents do not add points when metabolized and only the quirk drugs (Junkie,
+// Smoker, Alcoholic) count for relief (the `addiction_types` of the other reagents are chemistry's, not
 // extracted); the type-specific withdrawal effects other than nicotine's jitter (opioid
 // nausea, stimulant slowdown, alcohol seizures, hallucinogen blur) are chemistry's; no
 // `TRAIT_NO_WITHDRAWALS`, `TRAIT_ADDICTIONRESILIENT` or high sanity loss bonus.
