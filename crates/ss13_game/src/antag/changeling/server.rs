@@ -746,6 +746,7 @@ fn dna_of(world: &World, mob: Entity) -> (String, Option<HumanLook>) {
         uniform: None,
         shoes: None,
         husk: false,
+        hulk: false,
         missing: 0,
         robotic: 0,
         eyeless: false,

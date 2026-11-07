@@ -1525,6 +1525,9 @@ pub fn refresh(world: &mut World, mob: Entity) {
     speech.mute |= world.get::<crate::service::MimeVow>(mob).is_some();
     // A stuck item, a slit throat (`crate::afflictions`).
     speech.mute |= crate::afflictions::mutes(world, mob);
+    // The Unintelligible mutation (`crate::genetics`).
+    speech.unintelligible |=
+        crate::genetics::has_effect(world, mob, crate::genetics::Effect::Unintelligible);
     set_aphasia(world, mob, aphasia, gibbering);
     super::fear::set_sources(world, mob, &phobias, monophobia);
     super::split_personality::sync(world, mob, split);

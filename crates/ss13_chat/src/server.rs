@@ -563,7 +563,7 @@ fn handle_say(
     bodies: Query<Body>,
     stats: Query<(Entity, &SpeakerStat)>,
     mut emotes_used: Query<&mut EmotesUsed>,
-    (sight, senses, voices, seed, seen_by, sixth_sense, emojis): (
+    (sight, senses, voices, seed, seen_by, sixth_sense, emojis, accents): (
         Query<&SeeInvisible>,
         Senses,
         Query<&VoiceSpan>,
@@ -571,6 +571,7 @@ fn handle_say(
         Query<&VisibleToMobs>,
         Query<Entity, With<SixthSense>>,
         Option<Res<Emojis>>,
+        Query<&crate::accents::Accents>,
     ),
     index: Res<SpatialIndex>,
     listeners: Res<Listeners>,
@@ -871,6 +872,10 @@ fn handle_say(
                 message = ANXIOUS_FILLERS[i.min(ANXIOUS_FILLERS.len() - 1)].to_owned();
             }
         }
+        // `COMSIG_MOB_SAY`: the speech mutations (`crate::accents`).
+        if let Ok(accents) = accents.get(speaker) {
+            message = crate::accents::apply_all(&accents.0, &message, || rng.percent());
+        }
         // tg `treat_message`: `TRAIT_UNINTELLIGIBLE_SPEECH`, then the speech status effects.
         if impediments.unintelligible {
             message = unintelligize(&message, || rng.percent());
@@ -888,7 +893,15 @@ fn handle_say(
         if impediments.derp {
             message = derpspeech(&message, stuttering, || rng.percent());
         }
-        let mut message = capitalize(&message);
+        // `heckacious/handle_caps`: `TREAT_CAPITALIZE_MESSAGE = FALSE`.
+        let mut message = if accents
+            .get(speaker)
+            .is_ok_and(|a| crate::accents::no_capitalize(&a.0))
+        {
+            message
+        } else {
+            capitalize(&message)
+        };
         if tongueless {
             const SOUNDS: [(&str, &str); 3] = [("aa", "AA"), ("oo", "OO"), ("'", "'")];
             let (lower, upper) = SOUNDS[(rng.percent() as usize * SOUNDS.len()) / 100];

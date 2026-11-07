@@ -74,6 +74,11 @@ pub const GIFT_TYPES: &[&str] = &[
 /// Constant paths `ss13_game` spawns that no other table of this crate lists: leftovers,
 /// products and printouts of machines, decals, grenade payloads, quirk items, paper kinds.
 pub const GAME_RUNTIME_TYPES: &[&str] = &[
+    // `genetics::effects`: what Geladikinesis conjures (Cindikinesis' ash is listed below).
+    "/obj/item/stack/sheet/mineral/snow",
+    // `genetics::effects`: the Cryokinesis and Pyrokinesis beams.
+    "/obj/projectile/temp/cryo",
+    "/obj/projectile/temp/pyro",
     // `blackbox`: the recorder's blackbox.
     "/obj/item/blackbox",
     // `holodeck`: what the holodeck effects spawn (decks, manuals, holographic animals).

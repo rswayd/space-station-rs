@@ -3,6 +3,8 @@
 //!
 //! Features: `server` ([`server`]), `client` ([`client`]). Wire types are in `ss13_shared::chat`.
 
+#[cfg(feature = "server")]
+pub mod accents;
 #[cfg(feature = "client")]
 pub mod client;
 pub mod emoji;
