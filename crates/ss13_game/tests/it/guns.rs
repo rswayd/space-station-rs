@@ -142,7 +142,21 @@ const TYPES: &str = r##"{
         "accepted_magazine_type": { "path": "/obj/item/ammo_box/magazine/m9mm" } } },
     "/obj/item/gun/ballistic/automatic": { "parent": "/obj/item/gun/ballistic" },
     "/obj/item/gun/ballistic/automatic/pistol": { "parent": "/obj/item/gun/ballistic/automatic",
-        "declared_vars": { "name": "Makarov pistol", "icon_state": "pistol", "bolt_type": 4 } },
+        "declared_vars": { "name": "Makarov pistol", "icon_state": "pistol", "bolt_type": 4,
+        "can_suppress": 1, "can_unsuppress": 1, "suppressed": 0, "suppressed_volume": 60 } },
+    "/obj/item/gun/ballistic/automatic/c20r": { "parent": "/obj/item/gun/ballistic/automatic",
+        "declared_vars": { "name": "C-20r SMG", "icon_state": "pistol" } },
+    "/obj/item/flashlight": { "parent": "/obj/item", "declared_vars": {
+        "name": "flashlight", "icon_state": "flashlight", "light_range": 4, "light_power": 1,
+        "light_color": "#FFD8A8", "light_on": 0, "start_on": 0 } },
+    "/obj/item/flashlight/seclite": { "parent": "/obj/item/flashlight", "declared_vars": {
+        "name": "seclite", "icon_state": "seclite" } },
+    "/obj/item/suppressor": { "parent": "/obj/item", "declared_vars": {
+        "name": "suppressor", "icon_state": "suppressor" } },
+    "/obj/item/knife": { "parent": "/obj/item", "declared_vars": { "name": "knife",
+        "icon_state": "knife", "force": 10 } },
+    "/obj/item/knife/combat": { "parent": "/obj/item/knife", "declared_vars": {
+        "name": "combat knife", "force": 20 } },
     "/obj/item/gun/ballistic/automatic/pistol/bouncy": {
         "parent": "/obj/item/gun/ballistic/automatic/pistol", "declared_vars": {
         "accepted_magazine_type": { "path": "/obj/item/ammo_box/magazine/bouncy" } } },
@@ -221,7 +235,13 @@ wwwwwwwww
 "}
 "##;
 
-const STATES: [(&str, &str); 22] = [
+const STATES: [(&str, &str); 28] = [
+    ("i.dmi", "flashlight"),
+    ("i.dmi", "flashlight-on"),
+    ("i.dmi", "seclite"),
+    ("i.dmi", "seclite-on"),
+    ("i.dmi", "suppressor"),
+    ("i.dmi", "knife"),
     ("i.dmi", "rack"),
     ("i.dmi", "gunrack"),
     ("i.dmi", "shotgun"),
@@ -261,6 +281,10 @@ fn fixture_assets(test: &str) -> PathBuf {
         "/obj/item/clothing/suit/armor/vest",
         "/obj/machinery/recharger",
         "/obj/structure/rack/gunrack",
+        "/obj/item/gun/ballistic/automatic/c20r",
+        "/obj/item/flashlight/seclite",
+        "/obj/item/suppressor",
+        "/obj/item/knife/combat",
         "/turf/open/floor",
         "/turf/closed/wall",
         "/turf/open/space/basic",
@@ -329,6 +353,37 @@ impl Station {
             .insert(CarriedBy(mob));
         world.get_mut::<Inventory>(mob).unwrap().hands[hand] = Some(item);
         item
+    }
+
+    /// `active_path` into `p`'s active hand and `other_path` into the other one, then a click
+    /// on the other hand's slot (the active item used on the other).
+    fn use_on_other_hand(
+        &mut self,
+        p: usize,
+        active_path: &str,
+        other_path: &str,
+    ) -> (Entity, Entity) {
+        let mob = self.players[p].mob;
+        let active = self.give(p, active_path);
+        let world = self.0.server.world_mut();
+        let pos = *world.get::<TilePos>(mob).unwrap();
+        let other = ss13_game::construction::spawn_obj(world, other_path, pos).unwrap();
+        world
+            .entity_mut(other)
+            .remove::<TilePos>()
+            .insert(CarriedBy(mob));
+        let hand = 1 - world.get::<Inventory>(mob).unwrap().active;
+        world.get_mut::<Inventory>(mob).unwrap().hands[hand] = Some(other);
+        let slot = if hand == 0 {
+            InventorySlot::LeftHand
+        } else {
+            InventorySlot::RightHand
+        };
+        self.run_until("off the click cooldown", |s| {
+            s.now() >= s.get::<NextMove>(mob).0
+        });
+        self.send(p, ClientIntent::ClickSlot(slot));
+        (active, other)
     }
 
     /// Puts `path` on `p` (suit slot).
@@ -872,4 +927,84 @@ fn a_gun_rack_stands_a_gun_up_until_it_is_taken() {
     s.run_until("in hand", |s| s.get::<Inventory>(a).holds(pistol));
     assert_eq!(s.get::<ss13_shared::Appearance>(pistol).rotation, 0);
     assert!(s.try_get::<ss13_game::guns::Racked>(pistol).is_none());
+}
+
+#[test]
+fn a_seclite_a_suppressor_and_a_bayonet_go_on_guns() {
+    use ss13_game::gun_attachments::{BayonetMount, LightMount};
+    let mut s = Station::start("a_seclite_a_suppressor_and_a_bayonet_go_on_guns");
+    let (a, b) = (s.players[0].mob, s.players[1].mob);
+    // A seclite onto the energy gun in the other hand; switched on, it lights A.
+    let (light, egun) = s.use_on_other_hand(
+        0,
+        "/obj/item/flashlight/seclite",
+        "/obj/item/gun/energy/e_gun",
+    );
+    s.run_until("mounted", |s| {
+        s.get::<LightMount>(egun).light == Some(light)
+    });
+    assert!(!s.get::<Inventory>(a).holds(light));
+    s.run_until("a toggle button", |s| {
+        s.try_get::<ss13_game::actions::ActionButtons>(a)
+            .is_some_and(|b| b.0.iter().any(|(b, _)| b.id.starts_with("gunlight:")))
+    });
+    let client = s.get::<ss13_game::server::PlayerMob>(a).client;
+    ss13_game::gun_attachments::toggle_mounted(s.0.server.world_mut(), client, light);
+    s.run_until("A shines", |s| {
+        s.try_get::<ss13_shared::Optics>(a)
+            .is_some_and(|o| o.light.is_some())
+    });
+
+    // A suppressor onto the pistol: its shots print no shot message.
+    let (suppressor, pistol) = s.use_on_other_hand(
+        0,
+        "/obj/item/suppressor",
+        "/obj/item/gun/ballistic/automatic/pistol",
+    );
+    s.run_until("suppressed", |s| {
+        s.get::<Gun>(pistol).suppressor == Some(suppressor)
+    });
+    assert_eq!(s.get::<Gun>(pistol).suppressed, 1);
+    s.send(0, ClientIntent::SwapHands);
+    s.run_until("pistol in the active hand", |s| {
+        s.get::<Inventory>(a).active_item() == Some(pistol)
+    });
+    let floor = s.turf_at(TilePos::new(7, 5, 1));
+    s.shoot(0, floor);
+    s.run_until_for(3.0, "the bullet lands", |s| s.projectiles() == 0);
+    s.run_for(0.5);
+    assert!(!s.said(0, "Вы стреляете из"), "a suppressed shot is quiet");
+
+    // A combat knife onto the C-20r: a combat-mode right click on B stabs with it.
+    let (knife, smg) = s.use_on_other_hand(
+        0,
+        "/obj/item/knife/combat",
+        "/obj/item/gun/ballistic/automatic/c20r",
+    );
+    s.run_until("bayonet on", |s| {
+        s.get::<BayonetMount>(smg).bayonet == Some(knife)
+    });
+    s.send(0, ClientIntent::SwapHands);
+    s.run_until("smg in the active hand", |s| {
+        s.get::<Inventory>(a).active_item() == Some(smg)
+    });
+    let world = s.0.server.world_mut();
+    world.entity_mut(b).insert(TilePos::new(3, 3, 1));
+    world
+        .entity_mut(a)
+        .insert(ss13_game::combat::CombatMode(true));
+    s.run_until("replicated", |s| s.net_id(0, b).is_some());
+    s.run_until("off cooldown", |s| s.now() >= s.get::<NextMove>(a).0);
+    let right = ClickModifiers {
+        right: true,
+        ..default()
+    };
+    s.0.click_with(0, b, right);
+    s.run_until("stabbed", |s| s.get::<Health>(b).brute > 0.0);
+    assert_eq!(s.projectiles(), 0, "the bayonet, not a shot");
+    assert!(
+        s.get::<Health>(b).brute >= 15.0,
+        "{}",
+        s.get::<Health>(b).brute
+    );
 }

@@ -826,6 +826,8 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/organ/cyberimp/chest/thrusters",
     "/obj/item/organ/lungs/cybernetic/tier3",
     "/obj/item/organ/liver/cybernetic/tier3",
+    // The seclite some guns start with (`ss13_game::gun_attachments`).
+    "/obj/item/flashlight/seclite",
     // BandaStation's sidearm beacons (`ss13_game::devices::beacons`).
     "/obj/item/storage/toolbox/guncase/ntcase/pistol/gp9/sec",
     "/obj/item/gun/energy/disabler",

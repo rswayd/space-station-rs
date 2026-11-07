@@ -28,8 +28,9 @@
 //! with Z, automatic ones after each shot; loose shells load one by one.
 //!
 //! Messages are BandaStation's translation.
-//! Gunpoint holds are `crate::gunpoint`; a gun in the mouth is `handle_suicide`.
-// shortcut: no suppressors, seclites, bayonets, scopes,
+//! Gunpoint holds are `crate::gunpoint`; a gun in the mouth is `handle_suicide`; seclites,
+//! suppressors, bayonets and scopes are `crate::gun_attachments`.
+// shortcut: no
 // misfires, sawing off, fire mode toggles (burst guns always burst), clumsy botches or charge
 // overlays; pins cannot be removed or swapped. Add them
 // as their mechanics land.
@@ -137,6 +138,10 @@ pub struct Gun {
     pub ready_at: f64,
     /// The installed pin (`pin`): the gun's own until removed.
     pub pin: String,
+    /// `suppressed` (`SUPPRESSED_*`) and the installed `/obj/item/suppressor`
+    /// (`crate::gun_attachments`); a built-in one has no item.
+    pub suppressed: u32,
+    pub suppressor: Option<Entity>,
 }
 
 /// A change to the chambered round's projectile before it is fired (tg edits
@@ -211,6 +216,7 @@ impl Plugin for GunsServerPlugin {
         });
         crate::taser::plugin(app);
         crate::gunpoint::plugin(app);
+        crate::gun_attachments::plugin(app);
         crate::guns_special::plugin(app);
         app.init_resource::<Bursts>()
             .add_observer(add_gun_state)
@@ -235,6 +241,7 @@ fn add_gun_state(add: On<Add<DmGun>>, guns: Query<&DmGun>, mut commands: Command
     };
     let mut gun = Gun {
         pin: dm.pin.clone(),
+        suppressed: dm.suppressed,
         charge: dm.cell_maxcharge,
         ..default()
     };
@@ -352,6 +359,18 @@ fn ranged_clicks(
         else {
             continue;
         };
+        // `COMSIG_RANGED_ITEM_INTERACTING_WITH_ATOM_SECONDARY`: a scoped gun zooms instead.
+        if click.modifiers.right
+            && crate::gun_attachments::scope_click(
+                world,
+                click.mob,
+                gun,
+                click.target_pos,
+                click.modifiers,
+            )
+        {
+            continue;
+        }
         // `ranged_interact_with_atom_secondary`: a right click within the stray range holds up.
         if click.modifiers.right
             && !world.get::<CombatMode>(click.mob).is_some_and(|c| c.0)
@@ -892,7 +911,19 @@ pub fn energy_pitch(e_cost: f64, charge: f64, maxcharge: f64) -> f32 {
 /// counts the spent chambered casing, as `get_ammo`). `gun` is after the shot was paid.
 fn fire_sounds(world: &mut World, dm: &DmGun, gun: &Gun, entity: Entity, casing: &CasingData) {
     let s = &dm.sounds;
-    if dm.energy {
+    // `if(suppressed)`: the quiet shot, heard only nearby (`SILENCED_SOUND_EXTRARANGE`).
+    let quiet = gun.suppressed > 0;
+    if quiet {
+        if let Some(at) = crate::modpc::pda::turf_of(world, entity) {
+            let sound = PlaySound::new(
+                at,
+                &*dm.suppressed_sound,
+                dm.suppressed_volume,
+                s.vary_fire_sound,
+            );
+            crate::sound::playsound(world, silenced(sound));
+        }
+    } else if dm.energy {
         let pitch = energy_pitch(casing.e_cost, gun.charge + casing.e_cost, dm.cell_maxcharge);
         if let Some(at) = crate::modpc::pda::turf_of(world, entity) {
             let sound = PlaySound::new(
@@ -928,17 +959,28 @@ fn fire_sounds(world: &mut World, dm: &DmGun, gun: &Gun, entity: Entity, casing:
         .to_radians()
         .sin();
     if let Some(at) = crate::modpc::pda::turf_of(world, entity) {
-        crate::sound::playsound(
-            world,
-            PlaySound::new(
-                at,
-                ss13_mapload::sound::files::BALLISTIC_CLICK,
-                s.fire_sound_volume,
-                s.vary_fire_sound,
-            )
-            .frequency(1.0 - frequency * 0.75),
-        );
+        let volume = if quiet {
+            dm.suppressed_volume
+        } else {
+            s.fire_sound_volume
+        };
+        let click = PlaySound::new(
+            at,
+            ss13_mapload::sound::files::BALLISTIC_CLICK,
+            volume,
+            s.vary_fire_sound,
+        )
+        .frequency(1.0 - frequency * 0.75);
+        crate::sound::playsound(world, if quiet { silenced(click) } else { click });
     }
+}
+
+/// `ignore_walls = FALSE, extrarange = SILENCED_SOUND_EXTRARANGE, falloff_distance = 0`.
+fn silenced(sound: PlaySound) -> PlaySound {
+    sound
+        .ignore_walls(false)
+        .extrarange(-10.0)
+        .falloff_distance(0.0)
 }
 
 /// tg `shoot_with_empty_chamber`; a revolver turns its cylinder.
@@ -1019,7 +1061,8 @@ fn shoot(
     {
         facing.set_if_neq(ss13_shared::Facing(dir));
     }
-    if message {
+    // `shoot_live_shot`: `if(suppressed || !message) return`.
+    if message && gun.suppressed == 0 {
         shot_message(world, mob, gun_entity, target, from, target_pos);
     }
     fire_sounds(world, &dm, &gun, gun_entity, &casing);

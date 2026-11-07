@@ -127,6 +127,7 @@
 //! | 1393 | `guns_special::item_interaction` (a syringe or DNA injector into a syringe gun, a grenade into a grenade launcher) |
 //! | 1400 | `chem::item_interaction` |
 //! | 1450 | `mining::hand_interaction` (modkits, point cards, gibtonite ore) |
+//! | 1491 | `gun_attachments::attach` (a seclite, suppressor, bayonet or screwdriver on the gun) |
 //! | 1500 | `guns::item_interaction` |
 //! | 1600 | `guns::attack_hand` (empty active hand) |
 //! | 1700 | `construction::split_into_hand` (empty active hand) |
@@ -347,6 +348,7 @@
 //! | 4263 | `syndie_spraycan::interact` (the Syndicate rune) |
 //! | 4273 | `stickers::attempt_attach` |
 //! | 4283 | `gifts::wrap_parcel` (wrapping paper on a parcel) |
+//! | 4291 | `gun_attachments::attach` (a seclite, bayonet or screwdriver on a gun lying around) |
 //! | 4300 | `tables::item_interaction` |
 //! | 4400 | `science::experi_scanner::pre_attack` (not on living mobs) |
 //! | 4460 | `closets::kinds::held_on_target` (large crates, multitools on abandoned crates) |

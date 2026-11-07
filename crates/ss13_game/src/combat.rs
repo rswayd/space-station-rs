@@ -253,13 +253,14 @@ fn melee(
     handled: Res<crate::security::MeleeHandled>,
     medical: Res<crate::medical::MedicalHandled>,
     clothing: Query<(&ss13_mapload::DmClothing, &ss13_mapload::DmArmor)>,
-    (mut sounds, pacifists, artists, mut reactive, blockers, staminas): (
+    (mut sounds, pacifists, artists, mut reactive, blockers, staminas, bayonets): (
         MessageWriter<PlaySound>,
         Query<(), With<crate::medical::traumas::Pacifist>>,
         Query<&crate::martial::MartialArts>,
         Query<&mut crate::clothing::reactive::ReactiveArmor>,
         Query<Blocker>,
         Query<&crate::status_effects::StatusEffects>,
+        Query<&crate::gun_attachments::BayonetMount>,
     ),
     mut commands: Commands,
 ) {
@@ -292,6 +293,15 @@ fn melee(
             facing.set_if_neq(Facing(dir));
         }
         let held_entity = inventory.and_then(Inventory::active_item);
+        // `bayonet_attachable/on_pre_attack`: in combat mode the bayonet hits instead.
+        let held_entity = held_entity.map(|item| {
+            bayonets
+                .get(item)
+                .ok()
+                .and_then(|m| m.bayonet)
+                .filter(|_| combat.0)
+                .unwrap_or(item)
+        });
         let held = held_entity.and_then(|item| items.get(item).ok());
         // tg `interact_with_atom` of medical items, health analyzers and reagent containers
         // succeeds, so they never attack (`crate::medical`, `crate::chem` handle that click).
