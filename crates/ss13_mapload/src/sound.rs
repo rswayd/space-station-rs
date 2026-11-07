@@ -327,7 +327,24 @@ pub mod files {
     ];
     /// Sounds the game code plays by a constant path (checked by the real-asset test
     /// `runtime_types::game_sound_literals_are_converted` in ss13_game).
-    pub const GAME_CODE: [&str; 260] = [
+    pub const GAME_CODE: [&str; 277] = [
+        "sound/mobs/non-humanoids/mook/mook_leap_yell.ogg",
+        "sound/effects/tendril_destroyed.ogg",
+        "sound/vehicles/mecha/mechmove01.ogg",
+        "sound/items/weapons/sear.ogg",
+        "sound/items/weapons/gun/hmg/hmg.ogg",
+        "sound/items/weapons/gun/smg/smgrack.ogg",
+        "sound/effects/wounds/pierce1.ogg",
+        "sound/items/weapons/gun/general/cannon.ogg",
+        "sound/items/weapons/gun/general/mountedgun.ogg",
+        "sound/items/weapons/gun/general/mountedgunend.ogg",
+        "sound/items/weapons/thermalpistol.ogg",
+        "sound/items/weapons/genhit1.ogg",
+        "sound/items/weapons/genhit2.ogg",
+        "sound/items/weapons/genhit3.ogg",
+        "sound/items/weapons/punch2.ogg",
+        "sound/items/weapons/punch3.ogg",
+        "sound/items/weapons/punch4.ogg",
         "sound/music/lobby_music/title0.ogg",
         "sound/music/lobby_music/clown.ogg",
         "sound/announcer/notice/notice1.ogg",
