@@ -76,4 +76,4 @@ Alt-клик по тайлу открывает окно со списком о�
 
 - **Код:** [`/datum/computer_file/program/navigator`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/navigator/code/navigator.dm#L1)
 - **BandaStation:** [`_navigator.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/navigator/_navigator.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — КПК есть (`crates/ss13_game/src/modpc/`), программы «Навигатор» нет
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/modpc/programs/navigator.rs` (`ProgramKind::Navigator`, `ntos_navigator`, 5 ГК, только КПК, в каталоге NT Software Hub), экран — `NtosScreen::Navigator` в `crates/ss13_game/src/modpc/client.rs`: зона, координаты и направление пользователя по сигналу NTNet (слабый — позиция округляется до 5 тайлов на сервере, без направления; нет сигнала — уведомление), лестницы и стремянки уровня с расстоянием и направлением, ближайшие первыми. Отличие: в порте нет изображений nanomap — вместо карты список (10 ближайших); сама программа в оригинале маршрут не строит

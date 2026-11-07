@@ -1,8 +1,7 @@
 //! The programs a PDA runs (`/datum/computer_file/program/*`): their catalog entries here, their
 //! state and acts in the submodules.
 // shortcut: only programs backed by systems that exist: no NT Pay (no pay tokens or transaction
-// history in the economy), navigator (no nanomaps), supermatter and power monitors, theme
-// manager or file manager.
+// history in the economy), supermatter and power monitors, theme manager or file manager.
 
 #[cfg(feature = "server")]
 pub mod apps;
@@ -16,6 +15,8 @@ pub mod downloader;
 pub mod messenger;
 #[cfg(feature = "server")]
 pub mod minesweeper;
+#[cfg(feature = "server")]
+pub mod navigator;
 
 /// An installed program (an entry of `stored_files`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -45,6 +46,8 @@ pub enum ProgramKind {
     /// BandaStation `/datum/computer_file/program/minesweeper`: installed by an emag or
     /// downloaded.
     Minesweeper,
+    /// BandaStation `/datum/computer_file/program/navigator`: downloaded.
+    Navigator,
     /// `/datum/computer_file/program/ntnetdownload` (NT Software Hub).
     Downloader,
     /// `/datum/computer_file/program/chatclient` (NTNet Relay Chat).
@@ -72,7 +75,7 @@ pub const CATEGORIES: [&str; 8] = [
 ];
 
 impl ProgramKind {
-    pub const ALL: [Self; 14] = [
+    pub const ALL: [Self; 15] = [
         Self::Messenger,
         Self::Notepad,
         Self::CrewManifest,
@@ -85,6 +88,7 @@ impl ProgramKind {
         Self::StatusDisplay,
         Self::Newscaster,
         Self::Minesweeper,
+        Self::Navigator,
         Self::Downloader,
         Self::ChatClient,
     ];
@@ -104,6 +108,7 @@ impl ProgramKind {
             Self::StatusDisplay => "statusdisplay",
             Self::Newscaster => "newscasterapp",
             Self::Minesweeper => "minesweeper",
+            Self::Navigator => "ntos_navigator",
             Self::Downloader => "ntsoftwarehub",
             Self::ChatClient => "ntnrc_client",
         }
@@ -128,6 +133,7 @@ impl ProgramKind {
             Self::StatusDisplay => "Status Display",
             Self::Newscaster => "Newscaster",
             Self::Minesweeper => "Сапёр",
+            Self::Navigator => "Навигатор",
             Self::Downloader => "NT Software Hub",
             Self::ChatClient => "Chat Client",
         }
@@ -148,6 +154,7 @@ impl ProgramKind {
             Self::StatusDisplay => "signal",
             Self::Newscaster => "newspaper",
             Self::Minesweeper => "bomb",
+            Self::Navigator => "route",
             Self::Downloader => "download",
             Self::ChatClient => "comment-alt",
         }
@@ -193,6 +200,10 @@ impl ProgramKind {
                  привести к взрыву! Сразись с друзьями и стань мастером разминирования в этой \
                  захватывающей игре!."
             }
+            Self::Navigator => {
+                "Просмотр вашего текущего местоположения, и карты станции. Так же позволяет \
+                 найти ближайшую лестницу."
+            }
             Self::Downloader => {
                 "This program allows downloads of software from official NT repositories"
             }
@@ -213,6 +224,7 @@ impl ProgramKind {
             | Self::SecRecords
             | Self::MedRecords
             | Self::Downloader => 4,
+            Self::Navigator => 5,
             Self::Minesweeper => 6,
             Self::CardMod | Self::ChatClient => 8,
         }
@@ -245,7 +257,7 @@ impl ProgramKind {
         match self {
             Self::Messenger => pda,
             // `PROGRAM_PDA | PROGRAM_LAPTOP`.
-            Self::SecRecords | Self::MedRecords | Self::Signaler => pda,
+            Self::SecRecords | Self::MedRecords | Self::Signaler | Self::Navigator => pda,
             _ => true,
         }
     }
