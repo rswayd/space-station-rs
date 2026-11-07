@@ -121,6 +121,7 @@
 //! | 800 | `grenades::item_interaction` |
 //! | 900 | `service::server::item_interaction` |
 //! | 901 | `service::cards::item_interaction`, `attack_hand` (empty active hand: draw from the deck) |
+//! | 909 | `service::photo::frame_take_photo` (empty active hand: the photo out of a held picture frame) |
 //! | 1000 | `antag::uplink::item_interaction` |
 //! | 1100 | `antag::syndie_items::item_interaction` |
 //! | 1150 | `emag::interact_with_atom` on a modular computer (`modpc::pda`) |
@@ -203,6 +204,7 @@
 //! | 3000 | `holosign::attack_hand` |
 //! | 3097 | `plumbing_net::interact` (plumbing machine settings) |
 //! | 3100 | `plumbing::interact` |
+//! | 3149 | `service::photo::frame_hand` (a wall picture frame shows its photo) |
 //! | 3150 | `decor::fold_flag` (right click), `decor::interact` |
 //! | 3155 | `tank_storage::attack_hand` (tank dispensers, tank holders) |
 //! | 3156 | `displaycase::attack_hand` |
@@ -399,6 +401,7 @@
 //! | 4650 | `lockbox::item_interaction` (`closets` plugin) |
 //! | 4700 | core: a storage takes the held item |
 //! | 4753 | `devices::laser_pointer::laser_act` (shining at what is clicked; far clicks: `RangedClick`) |
+//! | 4759 | `service::photo::snap` (a camera takes a picture; far clicks: `RangedClick`) |
 //! | 4800 | `cargo::bounty::item_interaction` |
 //! | 4900 | `brig::prisoner::item_interaction` |
 //! | 4925 | `brig::labor::item_interaction` (blank plates, grown items, prisoner IDs, sheets) |

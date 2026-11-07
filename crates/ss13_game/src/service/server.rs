@@ -72,6 +72,23 @@ impl Plugin for ServiceServerPlugin {
                 crate::service::server::item_interaction(w, c.client, c.mob, h, c.target)
             })
         });
+        // A camera takes a picture of what it is used on (`camera/interact_with_atom`), after
+        // tables and storages took it.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 4759, |w, c| {
+            !c.modifiers.right
+                && c.held.is_some_and(|h| {
+                    w.get::<super::photo::Camera>(h).is_some()
+                        && super::photo::snap(w, c.client, c.mob, h, c.target)
+                })
+        });
+        // `wallframe/picture/attack_hand` from the other hand: its photo out.
+        app.add_click_handler(ClickPhase::OtherHand, 909, |w, c| {
+            c.held.is_none() && super::photo::frame_take_photo(w, c.client, c.mob, c.target)
+        });
+        // `picture_frame/attack_hand` shows its photo (before the signs' examine).
+        app.add_click_handler(ClickPhase::EmptyHand, 3149, |w, c| {
+            super::photo::frame_hand(w, c.client, c.mob, c.target)
+        });
         // Razors, lipstick, the dye spray and mirrors (`super::barber`).
         super::barber::build(app);
         // The slot machine (`super::slots`).
@@ -81,6 +98,7 @@ impl Plugin for ServiceServerPlugin {
             .register_ui::<super::DsmBookUi>()
             .register_ui::<super::IdcBookUi>()
             .register_ui::<super::LibraryConsoleUi>()
+            .register_ui::<super::PhotoUi>()
             .init_resource::<super::religion::Religion>()
             .init_resource::<super::archive::LibraryArchive>()
             .init_resource::<super::stationery::RapsheetCount>()
@@ -97,6 +115,7 @@ impl Plugin for ServiceServerPlugin {
                     super::manuals::window_status.in_set(UiSystems::StatusHook),
                     super::manuals::flip_sounds.in_set(UiSystems::Handle),
                     super::library_console::console_acts.in_set(UiSystems::Handle),
+                    super::photo::ranged_snaps.after(crate::click::ResolveClicks),
                     run_timers.run_if(any_with_component::<ServiceTimer>),
                     super::office::load_starting_toner
                         .run_if(any_with_component::<super::office::StartingToner>),
@@ -145,6 +164,8 @@ pub(super) enum PendingAsk {
     Stationery(super::stationery::StationeryAsk),
     /// Playing cards.
     Cards(super::cards::CardsAsk),
+    /// Cameras and photos.
+    Photo(super::photo::PhotoAsk),
 }
 
 /// `Initialize` of the ported items, once all their prototype components are in.
@@ -162,6 +183,7 @@ fn add_item_parts(add: On<Add<DmItem>>, mut commands: Commands) {
         super::cards::add_parts(world, e, &path);
         super::manuals::add_parts(world, e, &path);
         super::barcode::add_parts(world, e, &path);
+        super::photo::add_parts(world, e, &path);
         add_data_parts(world, e);
     });
 }
@@ -202,12 +224,14 @@ fn add_obj_parts(add: On<Add<DmObj>>, mut commands: Commands) {
         super::statues::add_obj_parts(world, e, &path);
         super::stationery::add_obj_parts(world, e, &path);
         super::slots::add_obj_parts(world, e, &path);
+        super::photo::add_obj_parts(world, e, &path);
     });
 }
 
 /// tg `attack_self` of the held service item. True when it was one.
 pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity) -> bool {
     super::paper::attack_self(world, client, mob, item)
+        || super::photo::attack_self(world, client, mob, item)
         || super::stationery::attack_self(world, client, mob, item)
         || super::office::attack_self(world, client, mob, item)
         || super::art::attack_self(world, client, mob, item)
@@ -236,6 +260,7 @@ pub fn interact(world: &mut World, client: Entity, mob: Entity, target: Entity) 
 /// of the paper cutter. True when it was theirs.
 pub fn click_alt(world: &mut World, client: Entity, mob: Entity, target: Entity) -> bool {
     super::cards::click_alt(world, client, mob, target)
+        || super::photo::click_alt(world, client, mob, target)
         || super::stationery::click_alt(world, client, mob, target)
         || super::office::fold_plane(world, client, mob, target)
         || super::barber::click_alt(world, client, mob, target)
@@ -255,6 +280,7 @@ pub fn item_interaction(
     super::clown::used_on(world, mob, held, target);
     super::barcode::item_interaction(world, client, held, target)
         || super::paper::item_interaction(world, client, mob, held, target)
+        || super::photo::item_interaction(world, client, mob, held, target)
         || super::stationery::item_interaction(world, client, mob, held, target)
         || super::office::item_interaction(world, client, mob, held, target)
         || super::religion::item_interaction(world, client, mob, held, target)
@@ -315,6 +341,9 @@ fn prompt_answers(world: &mut World, mut cursor: Local<MessageCursor<PromptAnswe
             (PendingAsk::Cards(ask), answer) => {
                 super::cards::answer(world, actor, ask, answer);
             }
+            (PendingAsk::Photo(ask), answer) => {
+                super::photo::answer(world, actor, ask, answer);
+            }
             _ => {}
         }
     }
@@ -371,7 +400,13 @@ fn window_status(
     stored: Query<&crate::storage::StoredIn>,
 ) {
     for mut window in &mut windows {
-        if window.interface != PaperSheetUi::NAME && window.interface != MarkdownViewerUi::NAME {
+        if ![
+            PaperSheetUi::NAME,
+            MarkdownViewerUi::NAME,
+            super::PhotoUi::NAME,
+        ]
+        .contains(&window.interface)
+        {
             continue;
         }
         let source = match stored.get(window.source) {
@@ -488,6 +523,10 @@ pub(super) enum TimerJob {
     PrintBible { console: Entity },
     /// A filing cabinet's drawer closes.
     CabinetClose { cabinet: Entity },
+    /// A camera's flash is charged again.
+    CameraReady { camera: Entity },
+    /// A camera's flash light goes out.
+    FlashEnd { light: Entity },
 }
 
 pub(super) use crate::tools::now;
@@ -515,6 +554,8 @@ fn run_timers(world: &mut World) {
             TimerJob::PrintBook { console, id } => super::archive::print(world, console, id),
             TimerJob::PrintBible { console } => super::library_console::print_bible(world, console),
             TimerJob::CabinetClose { cabinet } => super::stationery::close_cabinet(world, cabinet),
+            TimerJob::CameraReady { camera } => super::photo::camera_ready(world, camera),
+            TimerJob::FlashEnd { light } => super::photo::flash_end(world, light),
         }
     }
 }

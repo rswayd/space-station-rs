@@ -28,6 +28,7 @@ const CLICK: &str = "sound/machines/click.ogg";
 const IRON: &str = "/obj/item/stack/sheet/iron";
 const GLASS: &str = "/obj/item/stack/sheet/glass";
 const PLASTEEL: &str = "/obj/item/stack/sheet/plasteel";
+const WOOD: &str = "/obj/item/stack/sheet/mineral/wood";
 
 /// One frame type: tg `result_path`, `pixel_shift` and `custom_materials` (whole sheets, as
 /// `atom_deconstruct` rounds them).
@@ -38,9 +39,10 @@ pub struct FrameKind {
     pub materials: &'static [(&'static str, u32)],
 }
 
-/// The frames of `buttons.dm`, `lightswitch.dm`, `flasher.dm`, `extinguisher.dm` and
-/// `fireaxe.dm`. Subtypes come before their parents.
-pub static FRAMES: [FrameKind; 7] = [
+/// The frames of `buttons.dm`, `lightswitch.dm`, `flasher.dm`, `extinguisher.dm`,
+/// `fireaxe.dm` and the photo frame (`photos/frame.dm`, its photo moves along:
+/// [`crate::service::picture_frame_moved`]). Subtypes come before their parents.
+pub static FRAMES: [FrameKind; 8] = [
     FrameKind {
         frame: "/obj/item/wallframe/button",
         result: "/obj/machinery/button",
@@ -76,6 +78,12 @@ pub static FRAMES: [FrameKind; 7] = [
         result: "/obj/structure/fireaxecabinet/jawsofrecovery/empty",
         pixel_shift: 32,
         materials: &[(GLASS, 5), (PLASTEEL, 5)],
+    },
+    FrameKind {
+        frame: "/obj/item/wallframe/picture",
+        result: "/obj/structure/sign/picture_frame",
+        pixel_shift: 30,
+        materials: &[(WOOD, 1)],
     },
     FrameKind {
         frame: "/obj/item/wallframe/fireaxecabinet",
@@ -186,6 +194,7 @@ fn mount(world: &mut World, client: Entity, mob: Entity, frame: Entity, wall: Ti
         atom.pixel_y = offset[1];
     }
     take_out(world, mob, frame);
+    crate::service::picture_frame_moved(world, frame, Some(built), at);
     world.despawn(frame);
     init_built(world, built, at);
     playsound(world, PlaySound::new(at, CLICK, 75.0, true));
@@ -262,6 +271,7 @@ fn dismantle(world: &mut World, client: Entity, mob: Entity, frame: Entity) {
     };
     tell(world, client, Span::Notice, "Вы разбираете рамку.");
     take_out(world, mob, frame);
+    crate::service::picture_frame_moved(world, frame, None, pos);
     world.despawn(frame);
     for &(sheet, amount) in kind.materials {
         crate::construction::spawn_stack(world, sheet, pos, amount);

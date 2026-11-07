@@ -3,10 +3,11 @@
 //! paper with text and stamps, pens, paper bins, the hand labeler, the desk bell, books and
 //! bookcases, the bible, dice, squeaky things, the mime's vow and the chaplain's religion;
 //! clipboards, folders, paper planes, the photocopier and the fax (`office`), the library's
-//! archive, consoles, scanner and binder (`archive`), easels and canvases (`art`).
+//! archive, consoles, scanner and binder (`archive`), easels and canvases (`art`), cameras,
+//! photos and picture frames (`photo`).
 //!
 //! This module holds what both halves share: the tgui `PaperSheet` and `MarkdownViewer` window
-//! data. [`server`] runs the items, [`client`] draws the windows.
+//! data, the photo window's picture. [`server`] runs the items, [`client`] draws the windows.
 
 use serde::{Deserialize, Serialize};
 use ss13_tgui::UiInterface;
@@ -43,6 +44,8 @@ mod office;
 #[cfg(feature = "server")]
 mod paper;
 #[cfg(feature = "server")]
+mod photo;
+#[cfg(feature = "server")]
 mod religion;
 #[cfg(feature = "server")]
 pub mod slots;
@@ -71,6 +74,11 @@ pub use library_console::{ConsoleAct as LibraryConsoleAct, emag_act as library_e
 pub use office::{Clipboard, Fax, Photocopier, Toner};
 #[cfg(feature = "server")]
 pub use paper::{Paper, PaperBin, write_printed};
+#[cfg(feature = "server")]
+pub use photo::{
+    Camera, Photo, PhotoJob, Picture, PictureFrame, capture, complete as photo_complete,
+    examined as photo_examined, frame_moved as picture_frame_moved,
+};
 #[cfg(feature = "server")]
 pub use religion::{
     BIBLE_SKINS, BibleDeity, HolyRole, PerformingRite, Religion, ReligionJob, Rite, Sect,
@@ -227,6 +235,39 @@ pub struct PaperSheetData {
     pub raw_text_input: Vec<PaperInput>,
     /// The stamps' names, in stamping order (tg sends their class and position).
     pub raw_stamp_input: Vec<String>,
+}
+
+/// The photo window (tg `/obj/item/photo/show`, a browser window with the picture). The
+/// server keeps no pixels: a picture is the sprites the camera saw, which the client draws.
+pub struct PhotoUi;
+
+impl UiInterface for PhotoUi {
+    const NAME: &'static str = "Photo";
+    type Data = ();
+    type StaticData = PhotoData;
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct PhotoData {
+    pub name: String,
+    /// Tiles.
+    pub width: u8,
+    pub height: u8,
+    /// Back to front.
+    pub sprites: Vec<PhotoSprite>,
+    /// "Written on the back".
+    pub scribble: String,
+}
+
+/// One sprite of a picture: an atom's base sprite or one of its overlays as it was drawn.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+pub struct PhotoSprite {
+    pub icon_state: ss13_shared::IconStateId,
+    pub dir: ss13_shared::Dir,
+    pub color: Option<[u8; 4]>,
+    /// Pixels from the picture's bottom-left corner to the sprite's, +y up.
+    pub x: i16,
+    pub y: i16,
 }
 
 /// tgui `MarkdownViewer` (`/obj/item/book/ui_static_data`).

@@ -781,6 +781,10 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/structure/fireaxecabinet/empty",
     "/obj/structure/fireaxecabinet/mechremoval/empty",
     "/obj/structure/fireaxecabinet/jawsofrecovery/empty",
+    // Printed photos and picture frames on and off the wall (`ss13_game::service` photos).
+    "/obj/item/photo",
+    "/obj/item/wallframe/picture",
+    "/obj/structure/sign/picture_frame",
     // The captain's charter and its variants (`ss13_game::misc_items::charter`).
     "/obj/item/station_charter",
     "/obj/item/station_charter/admin",
