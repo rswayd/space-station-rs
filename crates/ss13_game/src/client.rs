@@ -45,6 +45,7 @@ impl Plugin for GameClientPlugin {
         app.add_plugins(crate::mining::client::MiningClientPlugin);
         app.add_plugins(crate::animation_client::AnimationClientPlugin);
         app.add_plugins(crate::language_menu_client::LanguageMenuClientPlugin);
+        app.add_plugins(crate::statpanel_client::StatPanelClientPlugin);
         app.add_plugins((
             crate::screentips_client::ScreentipsClientPlugin,
             crate::escape_menu_client::EscapeMenuClientPlugin,

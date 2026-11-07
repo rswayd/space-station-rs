@@ -266,6 +266,7 @@ impl Plugin for GameServerPlugin {
         .add_plugins(crate::afflictions::AfflictionsPlugin)
         .add_plugins(crate::curses::CursesPlugin)
         .add_plugins(crate::language_menu::LanguageMenuServerPlugin)
+        .add_plugins(crate::statpanel::StatPanelServerPlugin)
         .add_plugins((
             crate::ssd::SsdPlugin,
             crate::locked_pickup::LockedPickupPlugin,

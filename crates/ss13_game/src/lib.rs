@@ -501,6 +501,9 @@ pub mod stack_recipes;
 pub mod station_goals;
 #[cfg(feature = "server")]
 pub mod station_traits;
+pub mod statpanel;
+#[cfg(feature = "client")]
+pub mod statpanel_client;
 #[cfg(feature = "server")]
 pub mod status_effects;
 #[cfg(feature = "server")]
