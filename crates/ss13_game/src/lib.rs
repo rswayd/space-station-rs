@@ -289,6 +289,8 @@ pub mod food;
 #[cfg(feature = "server")]
 pub mod footsteps;
 pub mod forensics;
+#[cfg(feature = "server")]
+pub mod fov;
 #[cfg(feature = "client")]
 pub mod fullscreen_client;
 #[cfg(feature = "server")]

@@ -49,14 +49,9 @@ pub fn add_actionspeed_modifier(world: &mut World, mob: Entity, id: &'static str
     let Ok(mut entity) = world.get_entity_mut(mob) else {
         return;
     };
-    match entity.get_mut::<ActionSpeedModifiers>() {
-        Some(mut mods) => mods.add(id, slowdown),
-        None => {
-            let mut mods = ActionSpeedModifiers::default();
-            mods.add(id, slowdown);
-            entity.insert(mods);
-        }
-    }
+    let mut mods = entity.take::<ActionSpeedModifiers>().unwrap_or_default();
+    mods.add(id, slowdown);
+    entity.insert(mods);
 }
 
 /// tg `remove_actionspeed_modifier(mob, id)`.

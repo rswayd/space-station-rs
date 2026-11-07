@@ -61,13 +61,13 @@
 Глагол «Navigate» строит путь к выбранной точке (маяки, лестницы на другой z) и рисует линию на полу.
 
 - **Код:** [`proc/create_navigation()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/navigation.dm#L29), [`proc/find_nearest_stair_or_ladder()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/navigation.dm#L147)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ❌ нет — глагол «Navigate» требует смены контракта: в протоколе нет вызова глаголов (`ClientIntent` без verb), выбор точки — `tgui_input_list`, линия пути — клиентские `images` на 1 игрока. Нужны: интент или кнопка-действие + окно выбора, путь — `crate::bots` A* (`get_path_to`), отрисовка — персональные оверлеи
 
 ### Поле зрения (FOV)
 Мобы с ограниченным полем зрения (некоторые шлемы, черты) не видят, что у них за спиной.
 
 - **Код:** [`proc/in_fov()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/living_fov.dm#L2), [`proc/update_fov()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/living_fov.dm#L53)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/fov.rs`: `FovTraits` (`add_fov_trait`/`remove_fov_trait`, `fov_view` — наибольший), `in_fov` (слепота, 3×3 вокруг, конус по `Facing`, обратные конусы). Нет маски поля зрения на клиенте (`fov_handler`, `FIELD_OF_VISION_BLOCKER_PLANE` — нужен клиентский проход рендера и поле угла в протоколе: смена контракта), `play_fov_effect`, близорукости, источников (визоры, глаза, страх, газеты)
 
 ### Звуки шагов
 Элемент `footstep` проигрывает звуки шагов по типу пола и обуви (босиком, когти, тяжёлые ботинки).
@@ -80,10 +80,10 @@
 
 - **Код:** [`/datum/component/pixel_shift`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/pixel_shift/code/pixel_shift_component.dm#L1), [`/datum/keybinding/mob/pixel_shift`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/pixel_shift/code/pixel_shift_keybind.dm#L1)
 - **BandaStation:** [`modular_bandastation/pixel_shift/code/pixel_shift_component.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/pixel_shift/code/pixel_shift_component.dm#L1) — весь механизм
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ❌ нет — нужна смена контракта: зажатая клавиша (`/datum/keybinding/mob/pixel_shift` down/up) — новый `ClientIntent` (или флаг в `Move`), клиент не должен предсказывать шаг, пока клавиша зажата, а смещение — реплицируемое поле (`Appearance` pixel offset). Сервер: компонент со смещением ±12 px, сброс при перемещении/падении/захвате, проход с порога 8 px (`COMSIG_LIVING_CAN_ALLOW_THROUGH`)
 
 ### Езда верхом и транспорт
 Компонент `riding` позволяет ехать на мобах (боргах, животных, людях на плечах) и транспорте, с правилами смещения и скорости.
 
 - **Код:** [`/datum/component/riding`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/riding/riding.dm#L14)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/vehicles.rs`: компонент езды транспорта (`RidingDef` по типам: скорость, `ride_check_flags`, смещения и слои всадника и транспорта по направлению, `driver_move`, водитель едет вместе с транспортом); тесты `crates/ss13_game/tests/it/vehicles.rs`. Езда на существах (`riding/creature`) → [basic-mobs-core.md](basic-mobs-core.md#езда-на-существах), переноска на плечах и piggyback → [pull-grab-throw.md](pull-grab-throw.md#переноска-на-плечах-и-на-закорках)
