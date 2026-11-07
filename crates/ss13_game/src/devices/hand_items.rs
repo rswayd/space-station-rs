@@ -178,11 +178,11 @@ fn give(world: &mut World, mob: Entity, kind: Gesture, path: &str) -> bool {
 /// `qdel(src)` of a gesture: out of the hand and gone.
 fn spend(world: &mut World, item: Entity) {
     let holder = world.get::<CarriedBy>(item).map(|c| c.0);
-    if let Some(mob) = holder {
-        if let Some(mut inv) = world.get_mut::<Inventory>(mob) {
-            for hand in inv.hands.iter_mut().filter(|h| **h == Some(item)) {
-                *hand = None;
-            }
+    if let Some(mob) = holder
+        && let Some(mut inv) = world.get_mut::<Inventory>(mob)
+    {
+        for hand in inv.hands.iter_mut().filter(|h| **h == Some(item)) {
+            *hand = None;
         }
     }
     if world.get_entity(item).is_ok() {
