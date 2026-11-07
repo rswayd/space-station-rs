@@ -947,11 +947,13 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/machinery/power/manufacturing/sorter",
     "/obj/machinery/power/manufacturing/storagebox",
     "/obj/machinery/power/manufacturing/unloader",
+    "/obj/machinery/power/manufacturing/lathe",
     "/obj/item/circuitboard/machine/manucrusher",
     "/obj/item/circuitboard/machine/manusmelter",
     "/obj/item/circuitboard/machine/manurouter",
     "/obj/item/circuitboard/machine/manusorter",
     "/obj/item/circuitboard/machine/manuunloader",
+    "/obj/item/circuitboard/machine/manulathe",
     // Atmospheric shield generators, their board and fields
     // (`ss13_game::eng_machines::atmos_shield`).
     "/obj/machinery/atmos_shield_gen",

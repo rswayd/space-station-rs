@@ -156,7 +156,7 @@
 //! | 1300 | `chem_dispenser::interact` |
 //! | 1400 | `chem_master::interact` |
 //! | 1500 | `chem_heater::interact` |
-//! | 1509 | `eng_machines::manufactorio` storage unit dump (`storagebox/attack_hand`) |
+//! | 1509 | `eng_machines::manufactorio` storage unit dump (`storagebox/attack_hand`), the sorter's window |
 //! | 1510 | `teapot::interact` |
 //! | 1600 | `botany::interact` |
 //! | 1700 | `multiz::interact` |
@@ -265,7 +265,7 @@
 //! | 1450 | `silicon::mmi::item_interaction` |
 //! | 1460 | `silicon::ai_core::item_interaction` |
 //! | 1500 | `bots::construction::item_interaction` |
-//! | 1549 | `eng_machines::manufactorio::item_interaction` (wrench, router and unloader multitool, storage unit screwdriver) |
+//! | 1549 | `eng_machines::manufactorio::item_interaction` (wrench, router, unloader, lathe and sorter multitool, sorter item filter, storage unit screwdriver) |
 //! | 1555 | `inducer::interact_with_atom` (charging a cell) |
 //! | 1559 | `eng_machines::modular_shield::item_interaction` (multitool buffer, connect, link; panel-open wrench turn) |
 //! | 1560 | `devices::rcd::item_interaction` (builds, deconstruction, loading) |

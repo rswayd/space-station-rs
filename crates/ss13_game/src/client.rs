@@ -43,6 +43,7 @@ impl Plugin for GameClientPlugin {
         app.add_plugins(crate::fishing::client::FishingClientPlugin);
         app.add_plugins(crate::brig::client::BrigClientPlugin);
         app.add_plugins(crate::mining::client::MiningClientPlugin);
+        app.add_plugins(crate::manufactorio_client::ManufactorioClientPlugin);
         app.add_plugins(crate::animation_client::AnimationClientPlugin);
         app.add_plugins(crate::language_menu_client::LanguageMenuClientPlugin);
         app.add_plugins(crate::ghost_menu_client::GhostMenuClientPlugin);

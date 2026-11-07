@@ -15,7 +15,13 @@
 //! - Router: what it receives goes out of one of its other three sides in turn (stacks one at a
 //!   time), never back and never to another router; a multitool from a side toggles that output.
 //!   Sorter (not dense): what lies on it goes to the direction of the first filter it matches
-//!   (or fails, when inverted), else to its unmet direction.
+//!   (or fails, when inverted), else to its unmet direction. Its window (`ManufacturingSorter`,
+//!   an empty hand or a multitool) adds up to 10 filters from a list, turns their sides and the
+//!   unmet one, moves, deletes and edits them (a name text; an item filter waits for the item
+//!   the sorter is hit with).
+//! - Lathe: takes material stacks (not ore) from behind into its storage (50 sheets a matter
+//!   bin tier); a multitool picks an autolathe design; while 5 kW are there and the materials
+//!   last, it prints it every `(construction_time * lathe_time_factor) ** 0.8` ds, forward.
 //! - Storage unit: holds up to 16 things (no closet with contents); an empty hand out of combat
 //!   mode dumps it (1.25 s), a screwdriver (5 s) breaks it into 10 iron sheets. Unloader: takes
 //!   one openable crate or ore box from behind (2 kW); each tick, 2 kW, its contents go forward
@@ -29,8 +35,9 @@
 // shortcut: the crusher knows the materials of stacks only (`ResearchDb::stacks`: rods, sheets,
 // tiles); other items have no `custom_materials` extracted and are crushed to nothing; no
 // boulders, no mobs crushed. The smelter does not burn what passes through (`fire_act`).
-// shortcut: the sorter has no filter window (`ManufacturingSorter`, a tgui contract change):
-// filters come from code; it moves items only, once a second (tg 0.2 s after entry).
+// shortcut: the sorter moves items only, once a second (tg 0.2 s after entry); the lathe
+// prints only plain-material autolathe designs, finishes on the tick after its time and has no
+// ctrl-shift dump, print sound or examine lines. No crafter: crafting recipes are not ported.
 
 use bevy::prelude::*;
 use ss13_mapload::{DmItem, DmName, DmObj, DmOre, DmPower, DmStack};
@@ -38,10 +45,17 @@ use ss13_shared::chat::Span;
 use ss13_shared::{Dir, Facing, TilePos};
 use ss13_world::SpatialIndex;
 
+use bevy::ecs::message::MessageCursor;
+use ss13_tgui::prompt::{Ask, PromptAnswer, PromptAnswered, PromptKind, ask_world};
+use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiActed, UiParams, UiReject, UiSystems};
+
 use super::EngJob;
 use crate::construction::Job;
+use crate::manufactorio_ui::*;
 use crate::obj_damage::{Anchored, is_under, set_icon_state};
 use crate::power::{Grid, NodeKind};
+use crate::science::lathe::{MaterialStore, design_cost};
+use crate::science::techweb::ResearchDb;
 use crate::storage::{Stored, StoredIn, put_inside, take_out};
 use crate::tools::{Actor, Stack, ToolKind, stack_amount, tell, tool_of, use_tool};
 
@@ -52,6 +66,7 @@ pub const ROUTER: &str = "/obj/machinery/power/manufacturing/router";
 pub const SORTER: &str = "/obj/machinery/power/manufacturing/sorter";
 pub const STORAGE: &str = "/obj/machinery/power/manufacturing/storagebox";
 pub const UNLOADER: &str = "/obj/machinery/power/manufacturing/unloader";
+pub const LATHE: &str = "/obj/machinery/power/manufacturing/lathe";
 const ORE: &str = "/obj/item/stack/ore";
 const MAIL: &str = "/obj/item/mail";
 const IRON: &str = "/obj/item/stack/sheet/iron";
@@ -67,6 +82,13 @@ const SHEET: f64 = 100.0;
 pub const CRUSH_COST: f64 = 3000.0;
 pub const SMELT_COST: f64 = 4000.0;
 pub const UNLOAD_COST: f64 = 2000.0;
+pub const LATHE_COST: f64 = 5000.0;
+/// `max_filters` of the sorter.
+pub const MAX_FILTERS: usize = 10;
+/// `tgui_input_text(..., 12)` of `name_contains`.
+const FILTER_TEXT_LEN: u32 = 12;
+/// `SHEET_MATERIAL_AMOUNT * MAX_STACK_SIZE` per matter bin tier.
+const UNITS_PER_BIN: f64 = SHEET * 50.0;
 /// `capacity` of the crusher, the smelter's 5, `max_stuff` of the storage unit.
 pub const CRUSHER_SLOTS: usize = 5;
 pub const SMELTER_SLOTS: usize = 5;
@@ -88,6 +110,7 @@ pub enum Kind {
     Sorter,
     Storage,
     Unloader,
+    Lathe,
 }
 
 impl Kind {
@@ -99,6 +122,7 @@ impl Kind {
             (SORTER, Kind::Sorter),
             (STORAGE, Kind::Storage),
             (UNLOADER, Kind::Unloader),
+            (LATHE, Kind::Lathe),
         ]
         .into_iter()
         .find(|(root, _)| is_under(path, root))
@@ -122,6 +146,10 @@ pub enum FilterKind {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SortFilter {
+    /// The window's `ref`.
+    pub id: u32,
+    /// `return_name()`.
+    pub name: String,
     pub kind: FilterKind,
     pub dir: Dir,
     pub inverted: bool,
@@ -145,6 +173,13 @@ pub struct Manufacturing {
     /// Sorter: its filters in order, and `dir_if_not_met`.
     pub filters: Vec<SortFilter>,
     pub unmet: Dir,
+    /// Sorter: the next filter id, the item filter waiting for an item (`currently_listening`).
+    pub next_id: u32,
+    pub awaiting: Option<u32>,
+    /// Lathe: the chosen design (`chosen_design_path`, a [`ResearchDb`] index) and when the
+    /// running print ends (`busy`).
+    pub design: Option<usize>,
+    pub busy_until: Option<f64>,
 }
 
 impl Manufacturing {
@@ -159,6 +194,10 @@ impl Manufacturing {
             flip: false,
             filters: Vec::new(),
             unmet: dir,
+            next_id: 0,
+            awaiting: None,
+            design: None,
+            busy_until: None,
         }
     }
 }
@@ -175,6 +214,13 @@ pub(super) fn build(app: &mut App) {
     app.add_click_handler(ClickPhase::EmptyHand, 1509, |w, c| {
         attack_hand(w, c.client, c.mob, c.target)
     });
+    app.register_ui::<ManufacturingSorterUi>().add_systems(
+        Update,
+        (
+            sorter_acts.in_set(UiSystems::Handle),
+            prompt_answers.after(crate::click::ResolveClicks),
+        ),
+    );
     app.add_systems(
         ss13_world::MapInit,
         setup_mapped.after(crate::power::init_power),
@@ -205,6 +251,13 @@ pub fn setup(world: &mut World, e: Entity) {
     };
     let dir = dir_of(world, e);
     world.entity_mut(e).insert(Manufacturing::new(kind, dir));
+    if kind == Kind::Lathe {
+        let materials = world
+            .get_resource::<ResearchDb>()
+            .map_or(0, |db| db.materials.len());
+        let store = MaterialStore::new(materials, Some(lathe_capacity(world, e)));
+        world.entity_mut(e).insert(store);
+    }
     sync_grid(world, e);
 }
 
@@ -438,6 +491,13 @@ pub fn receive_resource(
             !full_closet && take_into(world, machine, item, STORAGE_SLOTS)
         }
         Kind::Unloader => receive_crate(world, machine, item, behind),
+        Kind::Lathe => {
+            let ore = item_path(world, item).is_some_and(|p| is_under(p, ORE));
+            if ore || world.get::<Stack>(item).is_none() || !behind {
+                return false;
+            }
+            lathe_insert(world, machine, item)
+        }
         Kind::Router => route(world, machine, item, from, from_dir),
         Kind::Sorter => {
             let Some(&pos) = world.get::<TilePos>(machine) else {
@@ -609,6 +669,7 @@ pub fn process(world: &mut World, machine: Entity) {
         Some(Kind::Smelter) => smelt(world, machine),
         Some(Kind::Sorter) => sort(world, machine),
         Some(Kind::Unloader) => unload(world, machine),
+        Some(Kind::Lathe) => lathe(world, machine),
         _ => {}
     }
 }
@@ -736,9 +797,9 @@ pub fn meets(world: &World, filter: &FilterKind, item: Entity) -> bool {
                 .to_lowercase()
                 .contains(text.as_str())
         }),
-        FilterKind::Path(p) => path == p.as_str(),
+        FilterKind::Path(p) => !p.is_empty() && path == p.as_str(),
         // tg `istype(checking.type, value)` on a path; `ispath` is meant.
-        FilterKind::Subtypes(p) => is_under(path, p),
+        FilterKind::Subtypes(p) => !p.is_empty() && is_under(path, p),
     }
 }
 
@@ -826,6 +887,13 @@ pub fn item_interaction(
     {
         return false;
     }
+    // `is_path_specific/sorter_hit`: the item hit with sets the waiting filter.
+    if kind == Kind::Sorter
+        && let Some(id) = world.get::<Manufacturing>(target).and_then(|m| m.awaiting)
+    {
+        set_item_filter(world, client, target, id, held);
+        return true;
+    }
     let actor = Actor {
         client,
         mob,
@@ -858,6 +926,14 @@ pub fn item_interaction(
         }
         Some(ToolKind::Multitool) if kind == Kind::Router => {
             toggle_output(world, client, mob, target);
+            true
+        }
+        Some(ToolKind::Multitool) if kind == Kind::Lathe => {
+            ask_design(world, client, mob, target);
+            true
+        }
+        Some(ToolKind::Multitool) if kind == Kind::Sorter => {
+            open_sorter(world, client, mob, target);
             true
         }
         Some(ToolKind::Multitool) if kind == Kind::Unloader => {
@@ -893,6 +969,11 @@ pub fn toggle_output(world: &mut World, client: Entity, mob: Entity, router: Ent
 
 /// `storagebox/attack_hand`: out of combat mode, a dump after 1.25 s.
 fn attack_hand(world: &mut World, client: Entity, mob: Entity, target: Entity) -> bool {
+    // `INTERACT_ATOM_ATTACK_HAND`: the sorter's window.
+    if kind_of(world, target) == Some(Kind::Sorter) {
+        open_sorter(world, client, mob, target);
+        return true;
+    }
     if kind_of(world, target) != Some(Kind::Storage) {
         return false;
     }
@@ -966,6 +1047,507 @@ pub fn rotate(world: &mut World, target: Entity) -> bool {
     let dir = ccw(dir_of(world, target));
     world.entity_mut(target).insert(Facing(dir));
     true
+}
+
+// --- Lathe -----------------------------------------------------------------------------------
+
+/// `RefreshParts`: `bin.tier * SHEET_MATERIAL_AMOUNT * MAX_STACK_SIZE`.
+fn lathe_capacity(world: &World, e: Entity) -> u32 {
+    let tier = crate::stock_parts::ratings(world, e)
+        .sum(crate::stock_parts::PartKind::MatterBin)
+        .max(1);
+    (f64::from(tier) * UNITS_PER_BIN) as u32
+}
+
+/// The autolathe's `initial` designs (`/datum/techweb/autounlocking/autolathe`
+/// `researched_designs`) it can print, by name.
+pub fn lathe_designs(db: &ResearchDb) -> Vec<usize> {
+    let mut ids: Vec<usize> = db
+        .designs
+        .iter()
+        .enumerate()
+        .filter(|(_, d)| {
+            d.build_type & ss13_mapload::research::build_type::AUTOLATHE != 0
+                && d.category.iter().any(|c| c == "initial")
+                && d.build_path.is_some()
+                && !d.material_requirements
+                && !d.materials.is_empty()
+        })
+        .map(|(i, _)| i)
+        .collect();
+    ids.sort_by(|&a, &b| db.designs[a].name.cmp(&db.designs[b].name));
+    ids
+}
+
+/// `materials.insert_item`: what fits of the stack. True when all of it went in.
+fn lathe_insert(world: &mut World, machine: Entity, item: Entity) -> bool {
+    let Some(path) = world.get::<DmItem>(item).map(|i| i.path.clone()) else {
+        return false;
+    };
+    let per_unit = world
+        .get_resource::<ResearchDb>()
+        .and_then(|db| db.stacks.get(&path).cloned())
+        .unwrap_or_default();
+    if per_unit.is_empty() {
+        return false;
+    }
+    let amount = stack_amount(world, item);
+    let capacity = lathe_capacity(world, machine);
+    let taken = world
+        .get_mut::<MaterialStore>(machine)
+        .map_or(0, |mut store| {
+            store.max = Some(capacity);
+            store.insert_stack(&per_unit, amount)
+        });
+    if taken == 0 {
+        return false;
+    }
+    crate::tools::use_stack(world, item, taken);
+    // The rest stays with the sender (tg reports success and keeps what did not fit).
+    taken == amount
+}
+
+fn now(world: &World) -> f64 {
+    world.resource::<Time>().elapsed_secs_f64()
+}
+
+fn set_busy(world: &mut World, machine: Entity, until: Option<f64>) {
+    if let Some(mut m) = world.get_mut::<Manufacturing>(machine) {
+        m.busy_until = until;
+    }
+}
+
+/// `lathe/process`: a print starts when power and materials allow; it ends after
+/// `(construction_time * lathe_time_factor) ** 0.8` deciseconds.
+fn lathe(world: &mut World, machine: Entity) {
+    if !flush_withheld(world, machine) {
+        return;
+    }
+    let Some((Some(design), busy)) = world
+        .get::<Manufacturing>(machine)
+        .map(|m| (m.design, m.busy_until))
+    else {
+        return;
+    };
+    if surplus(world, machine) < LATHE_COST {
+        // `finalize_build`: a power cut ends the print.
+        set_busy(world, machine, None);
+        return;
+    }
+    let t = now(world);
+    if let Some(until) = busy {
+        add_load(world, machine, LATHE_COST);
+        if t >= until {
+            set_busy(world, machine, None);
+            make_design(world, machine, design);
+        }
+        return;
+    }
+    let Some(db) = world.get_resource::<ResearchDb>() else {
+        return;
+    };
+    let Some(d) = db.designs.get(design) else {
+        return;
+    };
+    let secs = (d.construction_time * d.lathe_time_factor).powf(0.8) / 10.0;
+    let cost = design_cost(db, design);
+    let enough = world
+        .get::<MaterialStore>(machine)
+        .is_some_and(|s| s.has_materials(&cost, 1.0, 1));
+    if !enough {
+        return;
+    }
+    add_load(world, machine, LATHE_COST);
+    set_busy(world, machine, Some(t + secs));
+}
+
+/// `do_make_item`: the materials go, the item comes out forward (or waits inside).
+fn make_design(world: &mut World, machine: Entity, design: usize) {
+    let Some(db) = world.get_resource::<ResearchDb>() else {
+        return;
+    };
+    let Some(d) = db.designs.get(design) else {
+        return;
+    };
+    let (Some(path), stack) = (d.build_path.clone(), d.stack) else {
+        return;
+    };
+    let cost = design_cost(db, design);
+    let Some(mut store) = world.get_mut::<MaterialStore>(machine) else {
+        return;
+    };
+    if !store.has_materials(&cost, 1.0, 1) {
+        return;
+    }
+    store.use_materials(&cost, 1.0, 1);
+    let made = if stack {
+        let amount = world
+            .get_resource::<ss13_proto::Prototypes>()
+            .and_then(|p| p.get(&path))
+            .and_then(|p| p.get::<DmStack>())
+            .map_or(1, |s| s.amount.max(1));
+        make_inside(world, machine, &path, amount)
+    } else {
+        world.get::<TilePos>(machine).copied().and_then(|pos| {
+            let e = crate::construction::spawn_obj(world, &path, pos)?;
+            put_inside(world, e, machine);
+            Some(e)
+        })
+    };
+    let Some(made) = made else {
+        return;
+    };
+    let dir = dir_of(world, machine);
+    if !send_resource(world, machine, Some(made), dir) {
+        set_withheld(world, machine, Some(made));
+    }
+}
+
+/// `lathe/multitool_act`: the design list.
+fn ask_design(world: &mut World, client: Entity, mob: Entity, machine: Entity) {
+    let Some(db) = world.get_resource::<ResearchDb>() else {
+        return;
+    };
+    let ids = lathe_designs(db);
+    let items = ids.iter().map(|&i| db.designs[i].name.clone()).collect();
+    let kind = PromptKind::List {
+        items,
+        default: None,
+    };
+    let prompt = ask_world(
+        world,
+        Ask::new(client, mob, "Select Design", "Select Design", kind),
+    );
+    world.entity_mut(prompt).insert(ManuPrompt {
+        machine,
+        asks: Asks::Design(ids),
+    });
+}
+
+// --- Sorter window ---------------------------------------------------------------------------
+
+/// What a manufacturing prompt answers.
+#[derive(Clone, Debug)]
+pub enum Asks {
+    Design(Vec<usize>),
+    NewFilter,
+    FilterText(u32),
+}
+
+#[derive(Component, Clone, Debug)]
+struct ManuPrompt {
+    machine: Entity,
+    asks: Asks,
+}
+
+/// The `new_filter` list, sorted by name (`sort_list(filter_by_name)`).
+// shortcut: no `is_tagged` filter (destination tags of parcels are not ported).
+pub fn filter_choices() -> [(&'static str, FilterKind); 6] {
+    [
+        ("input is mail", FilterKind::IsMail),
+        ("input is ore", FilterKind::IsOre),
+        ("input is specific item", FilterKind::Path(String::new())),
+        (
+            "input is specific kind of item",
+            FilterKind::Subtypes(String::new()),
+        ),
+        ("input is stack", FilterKind::IsStack),
+        (
+            "input's name contains",
+            FilterKind::NameContains(String::new()),
+        ),
+    ]
+}
+
+fn open_sorter(world: &mut World, client: Entity, mob: Entity, sorter: Entity) {
+    let name = world
+        .get::<DmName>(sorter)
+        .map(|n| crate::obj_damage::strip(&n.name).to_owned())
+        .unwrap_or_default();
+    world.write_message(OpenUi::new::<ManufacturingSorterUi>(
+        client, mob, sorter, name,
+    ));
+}
+
+impl ServerUi for ManufacturingSorterUi {
+    type Source = &'static Manufacturing;
+    type UserParam = ();
+    type Act = SorterAct;
+
+    fn static_data(_: &Manufacturing) {}
+
+    fn data(m: &Manufacturing, _: Entity, _: &()) -> SorterData {
+        SorterData {
+            unmet_dir: m.unmet as u8,
+            filters: m
+                .filters
+                .iter()
+                .map(|f| SorterFilterRow {
+                    name: f.name.clone(),
+                    r#ref: f.id.to_string(),
+                    inverted: f.inverted,
+                    dir: f.dir as u8,
+                })
+                .collect(),
+        }
+    }
+
+    fn parse_act(action: &str, params: &UiParams) -> Result<SorterAct, UiReject> {
+        let id = || {
+            params
+                .get(SORTER_REF)
+                .and_then(|r| r.parse::<u32>().ok())
+                .ok_or_else(|| UiReject::BadParams("ref: expected a filter".into()))
+        };
+        match action {
+            SORTER_DEL => Ok(SorterAct::Delete(id()?)),
+            SORTER_NEW => Ok(SorterAct::New),
+            SORTER_ROTATE => Ok(SorterAct::Rotate(id()?)),
+            SORTER_ROTATE_UNMET => Ok(SorterAct::RotateUnmet),
+            SORTER_EDIT => Ok(SorterAct::Edit(id()?)),
+            SORTER_SHIFT => {
+                let amount = params.number(SORTER_AMOUNT)?;
+                if !amount.is_finite() {
+                    return Err(UiReject::BadParams("amount: expected a number".into()));
+                }
+                Ok(SorterAct::Shift(id()?, amount.clamp(-100.0, 100.0) as i64))
+            }
+            _ => Err(UiReject::UnknownAction),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SorterAct {
+    Delete(u32),
+    New,
+    Rotate(u32),
+    RotateUnmet,
+    Edit(u32),
+    Shift(u32, i64),
+}
+
+/// The next of `GLOB.cardinals` (north, south, east, west).
+fn next_cardinal(dir: Dir) -> Dir {
+    let i = Dir::CARDINALS.iter().position(|d| *d == dir).unwrap_or(3);
+    Dir::CARDINALS[(i + 1) % 4]
+}
+
+fn sorter_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed<ManufacturingSorterUi>>>) {
+    let pending: Vec<(Entity, Entity, Entity, SorterAct)> = acts
+        .read(world.resource::<Messages<UiActed<ManufacturingSorterUi>>>())
+        .map(|a| (a.client, a.actor, a.source, a.act.clone()))
+        .collect();
+    for (client, mob, sorter, act) in pending {
+        if kind_of(world, sorter) == Some(Kind::Sorter) {
+            apply_sorter_act(world, client, mob, sorter, act);
+        }
+    }
+}
+
+/// A window act on a sorter; ids it does not have are ignored.
+pub fn apply_sorter_act(
+    world: &mut World,
+    client: Entity,
+    mob: Entity,
+    sorter: Entity,
+    act: SorterAct,
+) {
+    let Some(mut m) = world.get::<Manufacturing>(sorter).cloned() else {
+        return;
+    };
+    let find = |m: &Manufacturing, id: u32| m.filters.iter().position(|f| f.id == id);
+    match act {
+        SorterAct::Delete(id) => {
+            if let Some(i) = find(&m, id) {
+                m.filters.remove(i);
+                if m.awaiting == Some(id) {
+                    m.awaiting = None;
+                }
+            }
+        }
+        SorterAct::Rotate(id) => {
+            if let Some(i) = find(&m, id) {
+                m.filters[i].dir = next_cardinal(m.filters[i].dir);
+            }
+        }
+        SorterAct::RotateUnmet => m.unmet = next_cardinal(m.unmet),
+        SorterAct::Shift(id, amount) => {
+            if let Some(i) = find(&m, id) {
+                let len = m.filters.len() as i64;
+                let to = (i as i64 + amount).rem_euclid(len) as usize;
+                let f = m.filters.remove(i);
+                m.filters.insert(to.min(m.filters.len()), f);
+            }
+        }
+        SorterAct::New => {
+            if m.filters.len() >= MAX_FILTERS {
+                return;
+            }
+            let items = filter_choices()
+                .iter()
+                .map(|(n, _)| (*n).to_owned())
+                .collect();
+            let kind = PromptKind::List {
+                items,
+                default: None,
+            };
+            let prompt = ask_world(
+                world,
+                Ask::new(client, mob, "New Filter", "Select a filter", kind),
+            );
+            world.entity_mut(prompt).insert(ManuPrompt {
+                machine: sorter,
+                asks: Asks::NewFilter,
+            });
+        }
+        SorterAct::Edit(id) => {
+            let Some(i) = find(&m, id) else {
+                return;
+            };
+            match m.filters[i].kind.clone() {
+                FilterKind::NameContains(value) => {
+                    let kind = PromptKind::Text {
+                        default: value,
+                        max_length: FILTER_TEXT_LEN,
+                        multiline: false,
+                    };
+                    let prompt = ask_world(
+                        world,
+                        Ask::new(client, mob, "Name", "What should it contain?", kind),
+                    );
+                    world.entity_mut(prompt).insert(ManuPrompt {
+                        machine: sorter,
+                        asks: Asks::FilterText(id),
+                    });
+                }
+                FilterKind::Path(_) | FilterKind::Subtypes(_) => {
+                    // `is_path_specific/edit`: listening toggles.
+                    let base = filter_choices()
+                        .into_iter()
+                        .find(|(_, k)| {
+                            std::mem::discriminant(k) == std::mem::discriminant(&m.filters[i].kind)
+                        })
+                        .map_or("", |(n, _)| n);
+                    if m.awaiting == Some(id) {
+                        m.awaiting = None;
+                        m.filters[i].name = base.to_owned();
+                    } else {
+                        m.awaiting = Some(id);
+                        m.filters[i].name = "awaiting item".to_owned();
+                        tell(
+                            world,
+                            client,
+                            Span::Notice,
+                            "Hit the sorter with the item of choice to set the filter.",
+                        );
+                    }
+                }
+                _ => tell(world, client, Span::Notice, "This filter is not editable."),
+            }
+        }
+    }
+    if let Some(mut live) = world.get_mut::<Manufacturing>(sorter) {
+        *live = m;
+    }
+}
+
+/// `sorter_hit`: the waiting item filter takes the item's type and name.
+fn set_item_filter(world: &mut World, client: Entity, sorter: Entity, id: u32, item: Entity) {
+    let Some(path) = item_path(world, item).map(str::to_owned) else {
+        return;
+    };
+    let name = world
+        .get::<DmName>(item)
+        .map(|n| crate::obj_damage::strip(&n.name).to_owned())
+        .unwrap_or_else(|| path.clone());
+    let Some(mut m) = world.get_mut::<Manufacturing>(sorter) else {
+        return;
+    };
+    m.awaiting = None;
+    if let Some(f) = m.filters.iter_mut().find(|f| f.id == id) {
+        f.kind = match f.kind {
+            FilterKind::Subtypes(_) => FilterKind::Subtypes(path),
+            _ => FilterKind::Path(path),
+        };
+        f.name = name;
+    }
+    tell(world, client, Span::Notice, "filter set");
+}
+
+fn prompt_answers(world: &mut World, mut cursor: Local<MessageCursor<PromptAnswered>>) {
+    let answers: Vec<(Entity, Entity, Entity, Option<PromptAnswer>)> = cursor
+        .read(world.resource::<Messages<PromptAnswered>>())
+        .map(|a| (a.prompt, a.client, a.actor, a.answer.clone()))
+        .collect();
+    for (prompt, client, mob, answer) in answers {
+        let Some(ManuPrompt { machine, asks }) = world.get::<ManuPrompt>(prompt).cloned() else {
+            continue;
+        };
+        // `can_perform_action(src)` after the input.
+        // shortcut: no silicon reach (`ALLOW_SILICON_REACH`); add with remote machine access.
+        let (Some(answer), true) = (answer, crate::storage::in_reach(world, mob, machine)) else {
+            continue;
+        };
+        apply_answer(world, client, machine, asks, answer);
+    }
+}
+
+/// A prompt's answer, checked against the machine as it is now.
+pub fn apply_answer(
+    world: &mut World,
+    client: Entity,
+    machine: Entity,
+    asks: Asks,
+    answer: PromptAnswer,
+) {
+    let kind = kind_of(world, machine);
+    match (asks, answer) {
+        (Asks::Design(ids), PromptAnswer::Item(i)) if kind == Some(Kind::Lathe) => {
+            let Some(&design) = ids.get(i) else {
+                return;
+            };
+            if let Some(mut m) = world.get_mut::<Manufacturing>(machine) {
+                m.design = Some(design);
+                m.busy_until = None;
+            }
+            tell(world, client, Span::Notice, "set");
+        }
+        (Asks::NewFilter, PromptAnswer::Item(i)) if kind == Some(Kind::Sorter) => {
+            let Some((name, filter)) = filter_choices().into_iter().nth(i) else {
+                return;
+            };
+            let Some(mut m) = world.get_mut::<Manufacturing>(machine) else {
+                return;
+            };
+            if m.filters.len() >= MAX_FILTERS {
+                return;
+            }
+            let id = m.next_id;
+            m.next_id += 1;
+            m.filters.push(SortFilter {
+                id,
+                name: name.to_owned(),
+                kind: filter,
+                dir: Dir::North,
+                inverted: false,
+            });
+        }
+        (Asks::FilterText(id), PromptAnswer::Text(text)) if kind == Some(Kind::Sorter) => {
+            let Some(mut m) = world.get_mut::<Manufacturing>(machine) else {
+                return;
+            };
+            if let Some(f) = m.filters.iter_mut().find(|f| f.id == id)
+                && matches!(f.kind, FilterKind::NameContains(_))
+            {
+                let value: String = text.chars().take(FILTER_TEXT_LEN as usize).collect();
+                f.name = format!("input's name contains {value}");
+                // `findtext` is case-insensitive.
+                f.kind = FilterKind::NameContains(value.to_lowercase());
+            }
+        }
+        _ => {}
+    }
 }
 
 #[cfg(test)]

@@ -17,13 +17,13 @@
 Станок (урезанный автолат) печатает заданный рецепт, пока есть материалы; крафтер собирает предметы по рецептам крафта из поступающих компонентов (вариант-повар).
 
 - **Код:** [`/obj/machinery/power/manufacturing/lathe`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/manufactorio/machines/lathe.dm#L1), [`/obj/machinery/power/manufacturing/crafter`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/manufactorio/machines/crafter.dm#L1), [`/obj/machinery/power/manufacturing/crafter/cooker`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/manufactorio/machines/crafter.dm#L120)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 станок ✅ (`eng_machines/manufactorio.rs`: листы сзади в хранилище по 50 листов на уровень матрицы, мультитул выбирает дизайн автолата, печать за `(construction_time * lathe_time_factor) ** 0.8` дс при 5 кВт, выход вперёд). Крафтер и повар — вместе с меню крафта (рецептов крафта в ss13-rs нет)
 
 ### Маршрутизатор и сортировщик
 Маршрутизатор делит поток поровну на 3 выхода (выходы переключаются мультитулом), сортировщик отправляет предметы по фильтрам (tgui).
 
 - **Код:** [`/obj/machinery/power/manufacturing/router`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/manufactorio/machines/router.dm#L1), [`/obj/machinery/power/manufacturing/sorter`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/manufactorio/machines/sorter.dm#L1), [`/datum/sortrouter_filter`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/manufactorio/machines/sorter_filters.dm#L1); tgui: [`ManufacturingSorter.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/ManufacturingSorter.tsx)
-- **Статус в ss13-rs:** 🟡 маршрутизатор ✅ (по очереди на 3 стороны, стаки по одному, мультитул переключает выход); сортировщик раскладывает предметы по фильтрам (`FilterKind`), но окна `ManufacturingSorter` нет (контракт tgui) — фильтры не настраиваются игроком
+- **Статус в ss13-rs:** ✅ маршрутизатор (по очереди на 3 стороны, стаки по одному, мультитул переключает выход); сортировщик по фильтрам с окном `ManufacturingSorter` (новый фильтр из списка, стороны, порядок, удаление, правка текста, фильтр по предмету ударом). Нет фильтра `is_tagged` — вместе с метками посылок
 
 ### Хранилище и разгрузчик
 Ящик-накопитель на линии и разгрузчик, вынимающий содержимое ящиков и контейнеров в линию.

@@ -517,7 +517,10 @@ mod manufactorio {
     };
     use ss13_game::obj_damage::Anchored;
     use ss13_game::power::Grid;
+    use ss13_game::science::lathe::MaterialStore;
+    use ss13_game::science::techweb::ResearchDb;
     use ss13_mapload::DmOre;
+    use ss13_mapload::research::{DesignDef, MaterialDef, ResearchData, build_type};
     use ss13_shared::{Dir, Facing};
 
     const IRON: &str = "/obj/item/stack/sheet/iron";
@@ -717,6 +720,8 @@ mod manufactorio {
             .unwrap()
             .filters
             .push(SortFilter {
+                id: 0,
+                name: "input is ore".into(),
                 kind: FilterKind::IsOre,
                 dir: Dir::North,
                 inverted: false,
@@ -735,6 +740,142 @@ mod manufactorio {
         manu::process(world, sorter);
         assert_eq!(amount_on(&mut app, ORE, t(3, 3)), 2, "ore north");
         assert_eq!(amount_on(&mut app, IRON, t(4, 2)), 2, "the rest east");
+    }
+
+    const IRON_MAT: &str = "/datum/material/iron";
+    const BOARD: &str = "/obj/item/circuitboard/machine/sheetifier";
+
+    fn research() -> ResearchDb {
+        ResearchDb::new(ResearchData {
+            materials: vec![MaterialDef {
+                id: IRON_MAT.into(),
+                name: "iron".into(),
+                sheet_type: Some(IRON.into()),
+                color: None,
+            }],
+            stacks: vec![
+                (IRON.into(), vec![(IRON_MAT.into(), 100.0)]),
+                ("/obj/item/stack/rods".into(), vec![(IRON_MAT.into(), 50.0)]),
+            ],
+            designs: vec![DesignDef {
+                id: "board".into(),
+                name: "board".into(),
+                build_type: build_type::AUTOLATHE,
+                build_path: Some(BOARD.into()),
+                materials: vec![(IRON_MAT.into(), 50.0)],
+                category: vec!["initial".into()],
+                construction_time: 10.0,
+                lathe_time_factor: 1.0,
+                ..default()
+            }],
+            ..default()
+        })
+    }
+
+    #[test]
+    fn lathe_prints_its_design_from_the_sheets_it_takes() {
+        let mut app = fixture("manufactorio_lathe");
+        app.world_mut().insert_resource(research());
+        let lathe = machine(&mut app, manu::LATHE, t(3, 2), Dir::East);
+        let sheets = stack(&mut app, IRON, t(2, 2), 2);
+        let world = app.world_mut();
+        assert_eq!(manu::lathe_designs(world.resource::<ResearchDb>()), vec![0]);
+        assert!(manu::receive_resource(
+            world,
+            lathe,
+            sheets,
+            None,
+            Dir::West
+        ));
+        assert_eq!(
+            world.get::<MaterialStore>(lathe).unwrap().amounts,
+            vec![200]
+        );
+        world.get_mut::<Manufacturing>(lathe).unwrap().design = Some(0);
+        manu::process(world, lathe);
+        let busy = world.get::<Manufacturing>(lathe).unwrap().busy_until;
+        assert!(busy.is_some(), "the print started");
+        // Its time is up.
+        world.get_mut::<Manufacturing>(lathe).unwrap().busy_until = Some(0.0);
+        power(&mut app, lathe);
+        manu::process(app.world_mut(), lathe);
+        let world = app.world_mut();
+        assert_eq!(
+            world.get::<MaterialStore>(lathe).unwrap().amounts,
+            vec![150]
+        );
+        let mut q = world.query::<(&DmItem, &TilePos)>();
+        assert!(
+            q.iter(world).any(|(i, p)| i.path == BOARD && *p == t(4, 2)),
+            "the print came out forward"
+        );
+    }
+
+    #[test]
+    fn crusher_turns_rods_into_iron_sheets() {
+        let mut app = fixture("manufactorio_crusher_rods");
+        app.world_mut().insert_resource(research());
+        let crusher = machine(&mut app, manu::CRUSHER, t(3, 2), Dir::East);
+        let rods = stack(&mut app, "/obj/item/stack/rods", t(2, 2), 3);
+        let world = app.world_mut();
+        assert!(manu::receive_resource(
+            world,
+            crusher,
+            rods,
+            None,
+            Dir::West
+        ));
+        manu::process(world, crusher);
+        // 3 rods are 1.5 sheets: one goes out, half a sheet is kept.
+        assert_eq!(amount_on(&mut app, IRON, t(4, 2)), 1);
+        let held = app
+            .world()
+            .get::<Manufacturing>(crusher)
+            .unwrap()
+            .held_mats
+            .clone();
+        assert!((held[0].1 - 0.5).abs() < 1e-6, "{held:?}");
+    }
+
+    #[test]
+    fn sorter_window_adds_turns_moves_and_deletes_filters() {
+        use ss13_game::eng_machines::manufactorio::{Asks, SorterAct};
+        use ss13_tgui::prompt::PromptAnswer;
+        let mut app = fixture("manufactorio_sorter_window");
+        let sorter = machine(&mut app, manu::SORTER, t(3, 2), Dir::East);
+        let client = app.world_mut().spawn_empty().id();
+        let world = app.world_mut();
+        // "input is ore" and "input is stack" from the new filter list.
+        for i in [1, 4] {
+            manu::apply_answer(
+                world,
+                client,
+                sorter,
+                Asks::NewFilter,
+                PromptAnswer::Item(i),
+            );
+        }
+        let names = |w: &World| -> Vec<String> {
+            w.get::<Manufacturing>(sorter)
+                .unwrap()
+                .filters
+                .iter()
+                .map(|f| f.name.clone())
+                .collect()
+        };
+        assert_eq!(names(world), ["input is ore", "input is stack"]);
+        manu::apply_sorter_act(world, client, client, sorter, SorterAct::Rotate(0));
+        manu::apply_sorter_act(world, client, client, sorter, SorterAct::Shift(0, 1));
+        assert_eq!(names(world), ["input is stack", "input is ore"]);
+        manu::apply_sorter_act(world, client, client, sorter, SorterAct::RotateUnmet);
+        let m = world.get::<Manufacturing>(sorter).unwrap();
+        assert_eq!(m.filters[1].dir, Dir::South, "north turns to south");
+        assert_eq!(m.unmet, Dir::West, "east turns to west");
+        manu::apply_sorter_act(world, client, client, sorter, SorterAct::Delete(1));
+        assert_eq!(names(world), ["input is ore"]);
+        // A bogus id does nothing.
+        manu::apply_sorter_act(world, client, client, sorter, SorterAct::Delete(7));
+        assert_eq!(names(world).len(), 1);
     }
 
     #[test]
