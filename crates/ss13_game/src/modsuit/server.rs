@@ -309,6 +309,24 @@ impl Plugin for ModSuitPlugin {
                 crate::modsuit::server::item_interaction(w, c.client, c.mob, h, c.target)
             })
         });
+        // An anomaly core into an anomaly-locked module, a screwdriver taking it out
+        // (`crate::modsuit::anomalock`): the module in the other hand or on the floor.
+        app.add_click_handler(ClickPhase::OtherHand, 91, |w, c| {
+            let actor = crate::tools::Actor {
+                client: c.client,
+                mob: c.mob,
+                item: c.held,
+            };
+            crate::modsuit::anomalock::item_interaction(w, actor, c.target)
+        });
+        app.add_click_handler(ClickPhase::HeldOnTarget, 1571, |w, c| {
+            let actor = crate::tools::Actor {
+                client: c.client,
+                mob: c.mob,
+                item: c.held,
+            };
+            crate::modsuit::anomalock::item_interaction(w, actor, c.target)
+        });
         app.register_ui::<ModSuitUi>()
             .add_systems(Startup, load_db)
             .add_systems(

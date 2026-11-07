@@ -90,6 +90,7 @@
 //!
 //! | prio | handler |
 //! | ---- | ------- |
+//! | 91 | `modsuit::anomalock::item_interaction` (an anomaly core into a locked MOD module, a screwdriver taking it out) |
 //! | 100 | `modsuit::server::hand_interaction` |
 //! | 150 | `silicon::mmi::item_interaction` |
 //! | 200 | `bots::construction::item_interaction` |
@@ -215,6 +216,7 @@
 //! | 3467 | `science::quantum_pad::attack_hand` |
 //! | 3468 | `janitor::washer_attack_hand` (washing machine door; right click starts it) |
 //! | 3471 | `medical::special_traumas::stream_click` (a bluespace prophet's stream) |
+//! | 3481 | `science::anomaly_refinery::interact` (the `AnomalyRefinery` window) |
 //!
 //! [`ClickPhase::HeldOnTarget`] (a world click with the active hand's item; tg
 //! `item_interaction`, `interact_with_atom`, `pre_attack`, `attackby`):
@@ -256,9 +258,11 @@
 //! | 1565 | `devices::taperecorder::item_interaction` (a tape into a recorder, respooling) |
 //! | 1567 | `devices::laser_pointer::item_interaction` (diode, crystal lens, their removal) |
 //! | 1569 | `eng_machines::flatpacker::item_interaction` (boards, packed parts, stacks; multitool on flatpacks) |
+//! | 1571 | `modsuit::anomalock::item_interaction` (an anomaly core into a locked MOD module, a screwdriver taking it out) |
 //! | 1577 | `devices::rhd::item_interaction` (the RCD family's clicks and loading) |
 //! | 1579 | `clothing::reactive::shell_interaction` (an anomaly core into a reactive armor shell) |
 //! | 1580 | `events::anomalies::neutralizer_act`, `releaser_act` (anomalies, anomaly cores) |
+//! | 1581 | `science::anomaly_refinery::item_interaction` (raw cores, transfer valves) |
 //! | 1585 | `events::radiation_leak::tool_act` (a leaking machine's fixing tools) |
 //! | 1589 | `eng_machines::atmos_shield::item_interaction` (ID lock, tool refusals, wrench) |
 //! | 1590 | `teapot::item_interaction` (before `machine_frame` takes it apart) |

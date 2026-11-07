@@ -103,6 +103,12 @@ pub enum WeatherKind {
     AshStorm,
     /// `/datum/weather/particle/ash_storm/emberfall`.
     Emberfall,
+    /// `/datum/weather/particle/rain_storm`.
+    RainStorm,
+    /// `/datum/weather/snow_storm`.
+    SnowStorm,
+    /// `/datum/weather/sand_storm`.
+    SandStorm,
 }
 
 /// `target_trait`: the levels a weather runs on by default and is scheduled for.
@@ -137,13 +143,16 @@ const WIND_UP: (Span, &str) = (Span::Warning, "The wind begins to pick up.");
 const WIND_DOWN: (Span, &str) = (Span::Danger, "The wind relents its assault.");
 
 impl WeatherKind {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 9] = [
         Self::RadStorm,
         Self::RadStormNebula,
         Self::FloorIsLava,
         Self::VoidStorm,
         Self::AshStorm,
         Self::Emberfall,
+        Self::RainStorm,
+        Self::SnowStorm,
+        Self::SandStorm,
     ];
 
     fn def(self) -> Def {
@@ -248,6 +257,81 @@ impl WeatherKind {
                 target: Target::Station,
             },
             Self::AshStorm => ash,
+            // The planetary storms: no level here has their traits (`ZTRAIT_RAINSTORM`,
+            // `ZTRAIT_SNOWSTORM`, `ZTRAIT_SANDSTORM`), so they only run when started (the
+            // weather anomaly).
+            Self::RainStorm => Def {
+                name: "rain",
+                telegraph_message: Some((
+                    Span::Warning,
+                    "Thunder rumbles from above. You hear droplets hitting the floor around you.",
+                )),
+                telegraph_duration: 30.0,
+                telegraph_sound: None,
+                weather_message: Some((Span::BoldWarning, "На вас выпадает дождь!")),
+                duration: (180, 300),
+                weather_sound: None,
+                end_message: Some((Span::Danger, "Стук дождя постепенно затихает.")),
+                end_duration: 30.0,
+                area_type: "/area",
+                protected_areas: &[],
+                flags: WEATHER_MOBS,
+                probability: 0,
+                target: Target::Station,
+            },
+            Self::SnowStorm => Def {
+                name: "snow storm",
+                telegraph_message: Some((
+                    Span::Warning,
+                    "В воздухе начинают скапливаться крупные снежинки...",
+                )),
+                telegraph_duration: 30.0,
+                telegraph_sound: Some("sound/ambience/weather/snowstorm/snow_start.ogg"),
+                weather_message: Some((
+                    Span::BoldWarning,
+                    "Сильная метель начинает разносить падающий с неба снег! Немедленно \
+                     прячьтесь внутрь!",
+                )),
+                duration: (60, 150),
+                weather_sound: None,
+                end_message: Some((
+                    Span::Danger,
+                    "Метель успокаивается, теперь можно безопасно выходить наружу.",
+                )),
+                end_duration: 10.0,
+                area_type: "/area",
+                protected_areas: &[],
+                flags: WEATHER_MOBS,
+                probability: 0,
+                target: Target::Station,
+            },
+            Self::SandStorm => Def {
+                name: "severe sandstorm",
+                telegraph_message: Some((
+                    Span::Danger,
+                    "Вы видите песчаные облака, поднимающиеся из-за горизонта. Это не кажется \
+                     чем-то хорошим...",
+                )),
+                telegraph_duration: 30.0,
+                telegraph_sound: Some("sound/effects/siren.ogg"),
+                weather_message: Some((
+                    Span::BoldWarning,
+                    "Ветер ударяет в вас горячим песком. Немедленно прячьтесь внутрь!",
+                )),
+                duration: (60, 120),
+                weather_sound: None,
+                end_message: Some((
+                    Span::Danger,
+                    "Ветер уносит от вас остатки песка и возвращается к своему привычному тихому \
+                     гулу. Теперь можно безопасно выходить наружу.",
+                )),
+                end_duration: 30.0,
+                area_type: "/area",
+                protected_areas: &[],
+                flags: WEATHER_MOBS,
+                probability: 0,
+                target: Target::Station,
+            },
             Self::Emberfall => Def {
                 name: "emberfall",
                 weather_message: Some((
@@ -306,7 +390,38 @@ pub struct Weather {
     /// `impacted_areas`.
     pub areas: HashSet<Entity>,
     next_fire: f64,
+    /// `end_duration`, seconds (`WEATHER_FORCED_END` may set it).
+    pub end_duration: f64,
+    /// `turf_thunder_chance` per impacted tile per fire (`WEATHER_THUNDER`; 0: none).
+    pub thunder_chance: f64,
+    /// The impacted tiles thunder may strike (filled for a thundering weather only).
+    pub tiles: Vec<TilePos>,
+    /// What started it (the weather anomaly), to wind it down.
+    pub source: Option<Entity>,
+    next_thunder: f64,
 }
+
+/// `weather_data` of `SSweather.run_weather`: the `WEATHER_FORCED_*` overrides.
+#[derive(Clone, Debug, Default)]
+pub struct Forced {
+    /// `WEATHER_FORCED_AREAS` (indoors too: `WEATHER_INDOORS`).
+    pub areas: HashSet<Entity>,
+    /// `WEATHER_FORCED_TELEGRAPH`, `WEATHER_FORCED_DURATION`, `WEATHER_FORCED_END`, seconds.
+    pub telegraph: f64,
+    pub duration: f64,
+    pub end: f64,
+    /// `WEATHER_FORCED_THUNDER`.
+    pub thunder: f64,
+    pub source: Option<Entity>,
+}
+
+/// `THUNDER_CHANCE_HIGH`.
+pub const THUNDER_CHANCE_HIGH: f64 = 0.001;
+/// `MAX_TURFS_PER_TICK`.
+const MAX_TURFS_PER_TICK: f64 = 500.0;
+/// `/datum/weather/snow_storm` `weather_temperature`: `ICEBOX_MIN_TEMPERATURE - 40`.
+const SNOW_TEMPERATURE: f64 = 180.0 - 40.0;
+const LIGHTNING_SOUND: &str = "sound/effects/magic/lightningbolt.ogg";
 
 /// `SSweather.processing`.
 #[derive(Resource, Clone, Debug, Default)]
@@ -391,6 +506,11 @@ pub fn run_weather(world: &mut World, kind: WeatherKind, levels: Option<Vec<u16>
         levels,
         areas,
         next_fire: now,
+        end_duration: def.end_duration,
+        thunder_chance: 0.0,
+        tiles: Vec::new(),
+        source: None,
+        next_thunder: now,
     };
     info!("{} started on levels {:?}", def.name, weather.levels);
     // `telegraph`: the alert only with a telegraph.
@@ -398,6 +518,79 @@ pub fn run_weather(world: &mut World, kind: WeatherKind, levels: Option<Vec<u16>
         send_alert(world, &weather, def.telegraph_message, def.telegraph_sound);
     }
     world.resource_mut::<ActiveWeather>().0.push(weather);
+}
+
+/// `SSweather.run_weather(type, z_levels, weather_data)` with forced areas, stage durations,
+/// thunder and a source.
+pub fn run_weather_forced(world: &mut World, kind: WeatherKind, levels: Vec<u16>, forced: Forced) {
+    let def = kind.def();
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    let tiles = if forced.thunder > 0.0 {
+        area_tiles(world, &forced.areas, &levels)
+    } else {
+        Vec::new()
+    };
+    let weather = Weather {
+        kind,
+        stage: Stage::Telegraph,
+        stage_end: now + forced.telegraph,
+        duration: forced.duration,
+        levels,
+        areas: forced.areas,
+        next_fire: now,
+        end_duration: forced.end,
+        thunder_chance: forced.thunder,
+        tiles,
+        source: forced.source,
+        next_thunder: now,
+    };
+    info!(
+        "{} started (forced) on levels {:?}",
+        def.name, weather.levels
+    );
+    if forced.telegraph > 0.0 {
+        send_alert(world, &weather, def.telegraph_message, def.telegraph_sound);
+    }
+    world.resource_mut::<ActiveWeather>().0.push(weather);
+}
+
+/// The tiles of `areas` on `levels` (`get_turfs_from_all_zlevels`).
+fn area_tiles(world: &World, areas: &HashSet<Entity>, levels: &[u16]) -> Vec<TilePos> {
+    let Some(index) = world.get_resource::<Areas>() else {
+        return Vec::new();
+    };
+    let spatial = world.resource::<ss13_world::SpatialIndex>();
+    let mut out = Vec::new();
+    for &z in levels {
+        let Some((w, h)) = spatial.level_size(z) else {
+            continue;
+        };
+        for y in 1..=h as i32 {
+            for x in 1..=w as i32 {
+                let pos = TilePos::new(x, y, z);
+                if index.area_at(pos).is_some_and(|a| areas.contains(&a)) {
+                    out.push(pos);
+                }
+            }
+        }
+    }
+    out
+}
+
+/// `wind_down()` of the weathers `source` started (the weather anomaly neutralized).
+pub fn wind_down_from(world: &mut World, source: Entity) {
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    let mut ended = Vec::new();
+    for w in world.resource_mut::<ActiveWeather>().0.iter_mut() {
+        if w.source == Some(source) && w.stage != Stage::WindDown {
+            w.stage = Stage::WindDown;
+            w.stage_end = now + w.end_duration;
+            ended.push(w.clone());
+        }
+    }
+    for w in ended {
+        send_alert(world, &w, w.kind.def().end_message, None);
+    }
 }
 
 /// `setup_weather_areas`.
@@ -465,6 +658,7 @@ fn fire(world: &mut World) {
     if !world.resource::<ActiveWeather>().0.is_empty() {
         advance_stages(world, now);
         act_on_mobs(world, now);
+        thunder(world, now);
     }
     schedule(world, now);
 }
@@ -493,7 +687,7 @@ fn advance_stages(world: &mut World, now: f64) {
             // `wind_down()`.
             Stage::Main => {
                 weather.stage = Stage::WindDown;
-                weather.stage_end = now + def.end_duration;
+                weather.stage_end = now + weather.end_duration;
                 send_alert(world, &weather, def.end_message, None);
             }
             // `end()`.
@@ -536,6 +730,93 @@ fn act_on_mobs(world: &mut World, now: f64) {
                 weather_act_mob(world, weather.kind, mob);
             }
         }
+    }
+}
+
+/// The `SSWEATHER_THUNDER` task of every thundering weather in its main stage, once a fire:
+/// `ROUND_PROB(tiles × chance)` strikes on random impacted tiles that are not walls, space or
+/// full-tile windows.
+fn thunder(world: &mut World, now: f64) {
+    let due: Vec<(usize, f64, usize)> = world
+        .resource_mut::<ActiveWeather>()
+        .0
+        .iter_mut()
+        .enumerate()
+        .filter(|(_, w)| {
+            w.stage == Stage::Main
+                && w.thunder_chance > 0.0
+                && !w.tiles.is_empty()
+                && w.next_thunder <= now
+        })
+        .map(|(i, w)| {
+            w.next_thunder = now + FIRE_SECS;
+            (i, w.thunder_chance, w.tiles.len())
+        })
+        .collect();
+    for (i, chance, count) in due {
+        let per_tick = (count as f64 * chance).min(MAX_TURFS_PER_TICK);
+        let mut strikes = per_tick.floor() as u32;
+        let frac = (per_tick - per_tick.floor()) as f32 * 100.0;
+        if world.resource_mut::<CombatRng>().chance(frac) {
+            strikes += 1;
+        }
+        for _ in 0..strikes {
+            let pick = world.resource_mut::<CombatRng>().range(0, count as u32 - 1) as usize;
+            let pos = world.resource::<ActiveWeather>().0[i].tiles[pick];
+            if can_weather_act_turf(world, pos) {
+                thunder_act_turf(world, pos);
+            }
+        }
+    }
+}
+
+/// `can_weather_act_turf`: open, not space, no full-tile window.
+fn can_weather_act_turf(world: &World, pos: TilePos) -> bool {
+    let Some(path) = crate::construction::turf_at(world, pos)
+        .and_then(|t| crate::construction::path_of(world, t))
+    else {
+        return false;
+    };
+    if !is_under(&path, "/turf/open") || is_under(&path, "/turf/open/space") {
+        return false;
+    }
+    !world
+        .resource::<ss13_world::SpatialIndex>()
+        .on_tile(pos)
+        .iter()
+        .any(|&e| {
+            crate::construction::path_of(world, e)
+                .is_some_and(|p| is_under(&p, "/obj/structure/window") && p.contains("fulltile"))
+        })
+}
+
+/// `thunder_act_turf`: the living there are shocked (50, no gloves), the bolt's sound, a fire.
+// shortcut: no thunderbolt flash effect, no ore smelting.
+pub fn thunder_act_turf(world: &mut World, pos: TilePos) {
+    let mobs: Vec<Entity> = world
+        .resource::<ss13_world::SpatialIndex>()
+        .on_tile(pos)
+        .iter()
+        .copied()
+        .filter(|&m| world.get::<Health>(m).is_some())
+        .collect();
+    for mob in mobs {
+        if let Some(client) = world.get::<PlayerMob>(mob).map(|p| p.client) {
+            crate::tools::tell(
+                world,
+                client,
+                Span::BoldWarning,
+                "You've been struck by lightning!",
+            );
+        }
+        crate::wires::electrocute_act(world, mob, 50.0, mob, 1.0);
+    }
+    crate::sound::playsound(
+        world,
+        crate::sound::PlaySound::new(pos, LIGHTNING_SOUND, 100.0, true).extrarange(10.0),
+    );
+    if let Some(mut atmos) = world.get_resource_mut::<ss13_atmos::Atmos>() {
+        atmos.hotspot_expose(pos, 1000.0, 2500.0, false);
     }
 }
 
@@ -655,7 +936,37 @@ fn weather_act_mob(world: &mut World, kind: WeatherKind, mob: Entity) {
                 );
             }
         }
-        WeatherKind::VoidStorm | WeatherKind::Emberfall => {}
+        WeatherKind::SandStorm => {
+            // `adjust_brute_loss(5, required_bodytype = BODYTYPE_ORGANIC)`.
+            if let Ok(mut entity) = world.get_entity_mut(mob)
+                && let Ok((mut health, mut stat)) =
+                    entity.get_components_mut::<(&mut Health, &mut Stat)>()
+            {
+                crate::health::apply_damage(
+                    &mut health,
+                    &mut stat,
+                    crate::health::DamageType::Brute,
+                    5.0,
+                );
+            }
+        }
+        WeatherKind::SnowStorm => {
+            // The base `weather_act_mob` at the storm's `weather_temperature`, through any
+            // clothing (`WEATHER_TEMPERATURE_BYPASS_CLOTHING`), in steps.
+            let body = world
+                .get::<crate::breath::Respiration>(mob)
+                .map(|r| r.bodytemperature);
+            if let Some(body) = body {
+                let delta = SNOW_TEMPERATURE - body;
+                let step = if delta > 0.0 {
+                    (delta / 15.0).min(30.0)
+                } else {
+                    (delta / 15.0).max(-30.0)
+                };
+                crate::medical::diseases::adjust_bodytemperature(world, mob, step, 0.0);
+            }
+        }
+        WeatherKind::VoidStorm | WeatherKind::Emberfall | WeatherKind::RainStorm => {}
     }
 }
 

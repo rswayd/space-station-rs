@@ -454,6 +454,10 @@ pub fn activate(
     let Some(wearer) = suit.wearer else {
         return false;
     };
+    // `COMSIG_MODULE_TRIGGERED`.
+    if !super::anomalock::may_trigger(world, module, Some(wearer)) {
+        return false;
+    }
     if def.module_type == MODULE_ACTIVE {
         if let Some(old) = suit.selected.filter(|&s| s != module) {
             deactivate(world, control, old, false);
@@ -518,6 +522,11 @@ pub fn used(world: &mut World, control: Entity, module: Entity, activator: Optio
     }
     if !check_charge(world, control, def.use_energy_cost) {
         tell_opt(world, activator, Span::Warning, "недостаточно заряда!");
+        return false;
+    }
+    // `COMSIG_MODULE_TRIGGERED`.
+    let wearer = suit(world, control).and_then(|s| s.wearer);
+    if !super::anomalock::may_trigger(world, module, wearer) {
         return false;
     }
     if let Some(mut m) = world.get_mut::<ModModule>(module) {

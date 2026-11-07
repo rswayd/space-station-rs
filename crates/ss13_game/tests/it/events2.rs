@@ -487,3 +487,320 @@ fn radiation_leak_emits_until_fixed() {
         0
     );
 }
+
+fn organ_set(app: &App, mob: Entity) -> Vec<Entity> {
+    let mut organs: Vec<Entity> = app
+        .world()
+        .get::<ss13_game::medical::organs::Organs>(mob)
+        .map(|o| o.iter().collect())
+        .unwrap_or_default();
+    organs.sort();
+    organs
+}
+
+/// A bioscrambler pulses on its first process: a carbon within 2 tiles gets one of its organs
+/// swapped for another species' (the old one is gone); one 3 tiles away keeps them.
+#[test]
+fn bioscrambler_swaps_an_organ() {
+    let mut app = server("bioscrambler");
+    let near = mob(&mut app, TilePos::new(9, 2, 1));
+    let far = mob(&mut app, TilePos::new(11, 2, 1));
+    app.update();
+    let (near_before, far_before) = (organ_set(&app, near), organ_set(&app, far));
+    assert!(!near_before.is_empty(), "carbons get organs");
+    let anomaly = spawn_anomaly(
+        app.world_mut(),
+        AnomalyKind::Bioscrambler,
+        TilePos::new(8, 2, 1),
+        None,
+    );
+    app.world_mut()
+        .get_mut::<Anomaly>(anomaly)
+        .unwrap()
+        .move_chance = 0.0;
+    run(&mut app, 2.5);
+    let after = organ_set(&app, near);
+    assert_ne!(after, near_before, "an organ was replaced");
+    assert_eq!(after.len(), near_before.len(), "one for one");
+    assert_eq!(organ_set(&app, far), far_before, "out of range");
+}
+
+/// A dimensional anomaly takes one turf of its spiral per process; with no turfs left it
+/// relocates while it has teleports, then it is gone.
+#[test]
+fn dimensional_transmutes_then_relocates_and_ends() {
+    use ss13_game::events::anomalies::exotic::{Dimensional, prepare_area};
+    let mut app = server("dimensional");
+    let at = TilePos::new(8, 2, 1);
+    let e = spawn_anomaly(app.world_mut(), AnomalyKind::Dimensional, at, None);
+    prepare_area(app.world_mut(), e, Some(6));
+    let queued = app.world().get::<Dimensional>(e).unwrap().targets.len();
+    assert!(queued > 0, "floors around");
+    assert_eq!(app.world().get::<Dimensional>(e).unwrap().targets[0], at);
+    run(&mut app, 2.5);
+    assert_eq!(
+        app.world().get::<Dimensional>(e).unwrap().targets.len(),
+        queued - 1
+    );
+    {
+        let mut d = app.world_mut().get_mut::<Dimensional>(e).unwrap();
+        d.targets.clear();
+        d.teleports_left = 1;
+    }
+    run(&mut app, 2.0);
+    let d = app.world().get::<Dimensional>(e).unwrap();
+    assert_eq!(d.teleports_left, 0, "relocated once");
+    assert!(d.theme.is_some());
+    app.world_mut()
+        .get_mut::<Dimensional>(e)
+        .unwrap()
+        .targets
+        .clear();
+    run(&mut app, 2.0);
+    assert!(app.world().get_entity(e).is_err(), "out of teleports");
+}
+
+/// An ectoplasm anomaly detonating at 50% power opens a ghost portal that closes after two
+/// minutes; under 10% it leaves nothing.
+#[test]
+fn ectoplasm_portal_by_power() {
+    use ss13_game::events::anomalies::exotic::{Ectoplasm, GhostPortal};
+    let mut app = server("ectoplasm");
+    let world = app.world_mut();
+    let strong = spawn_anomaly(world, AnomalyKind::Ectoplasm, TilePos::new(8, 2, 1), None);
+    let weak = spawn_anomaly(world, AnomalyKind::Ectoplasm, TilePos::new(3, 4, 1), None);
+    for (e, power) in [(strong, 60.0), (weak, 5.0)] {
+        world.entity_mut(e).insert(Ectoplasm {
+            power,
+            orbiting: 0,
+            override_ghosts: true,
+        });
+        world.get_mut::<Anomaly>(e).unwrap().death_time = 0.0;
+    }
+    run(&mut app, 2.5);
+    let world = app.world_mut();
+    assert!(world.get_entity(strong).is_err() && world.get_entity(weak).is_err());
+    let portals: Vec<TilePos> = world
+        .query_filtered::<&TilePos, With<GhostPortal>>()
+        .iter(world)
+        .copied()
+        .collect();
+    assert_eq!(portals, vec![TilePos::new(8, 2, 1)]);
+    run(&mut app, 121.0);
+    let world = app.world_mut();
+    assert_eq!(
+        world
+            .query_filtered::<(), With<GhostPortal>>()
+            .iter(world)
+            .count(),
+        0,
+        "closed"
+    );
+}
+
+/// The anomaly refinery takes a raw core and a two-tank valve; a tank rupturing inside it is
+/// cancelled (no blast, no gas) and judged: under the required light radius the core stays raw,
+/// at it the raw core becomes a finished core of its type counted for the round; the test ends
+/// 10 s after it started, dropping both out.
+#[test]
+fn anomaly_refinery_compresses_a_raw_core() {
+    use ss13_game::assemblies::ttv::Valve;
+    use ss13_game::events::anomalies::CoresMade;
+    use ss13_game::internals::TankAir;
+    use ss13_game::science::anomaly_refinery::{
+        REFINERY, Refinery, internal_explosion, item_interaction, required_radius, start_test,
+    };
+    use ss13_game::storage::StoredIn;
+    use ss13_mapload::DmObj;
+    let mut app = server("refinery");
+    let user = mob(&mut app, TilePos::new(7, 2, 1));
+    let world = app.world_mut();
+    let at = TilePos::new(8, 2, 1);
+    let refinery = world
+        .spawn((
+            at,
+            DmObj {
+                path: REFINERY.into(),
+                anchored: true,
+                ..default()
+            },
+        ))
+        .id();
+    let item = |world: &mut World, path: &str| {
+        world
+            .spawn(DmItem {
+                path: path.into(),
+                ..default()
+            })
+            .id()
+    };
+    let raw = item(world, "/obj/item/raw_anomaly_core/grav");
+    assert_eq!(required_radius(world, raw), Some(4));
+    let valve = item(world, "/obj/item/transfer_valve");
+    let tank = |world: &mut World| {
+        let t = item(world, "/obj/item/tank/internals/plasma");
+        world.entity_mut(t).insert((
+            TankAir {
+                air: Default::default(),
+                volume: 70.0,
+                distribute_pressure: 0.0,
+            },
+            StoredIn(valve),
+        ));
+        t
+    };
+    let (one, two) = (tank(world), tank(world));
+    world.entity_mut(valve).insert(Valve {
+        tank_one: Some(one),
+        tank_two: Some(two),
+        ..Valve::default()
+    });
+    assert!(item_interaction(world, user, user, raw, refinery));
+    assert!(item_interaction(world, user, user, valve, refinery));
+    let r = world.get::<Refinery>(refinery).unwrap();
+    assert_eq!((r.core, r.bomb), (Some(raw), Some(valve)));
+
+    start_test(world, refinery);
+    assert!(world.get::<Refinery>(refinery).unwrap().active);
+    // A weak rupture: light radius 1.
+    assert!(internal_explosion(world, two, 1.0));
+    assert!(world.get_entity(raw).is_ok(), "still raw");
+    assert!(
+        world
+            .get::<Refinery>(refinery)
+            .unwrap()
+            .test_status
+            .is_some(),
+        "failure noted"
+    );
+    // A clean second test with a strong one: light radius 10.
+    world.get_mut::<Refinery>(refinery).unwrap().test_status = None;
+    assert!(internal_explosion(world, two, 50.0));
+    assert!(world.get_entity(raw).is_err(), "compressed");
+    let core = world
+        .get::<Refinery>(refinery)
+        .unwrap()
+        .core
+        .expect("a core");
+    assert_eq!(
+        world.get::<DmItem>(core).unwrap().path,
+        "/obj/item/assembly/signaler/anomaly/grav"
+    );
+    assert_eq!(
+        world.resource::<CoresMade>().0.get(&AnomalyKind::Grav),
+        Some(&1)
+    );
+    // Not a refinery's tank: no cancel.
+    let loose = item(world, "/obj/item/tank/internals/plasma");
+    assert!(!internal_explosion(world, loose, 50.0));
+
+    run(&mut app, 11.0);
+    let world = app.world();
+    let r = world.get::<Refinery>(refinery).unwrap();
+    assert!(!r.active && r.core.is_none() && r.bomb.is_none(), "ended");
+    assert_eq!(world.get::<TilePos>(core), Some(&at), "dropped out");
+}
+
+/// An anomaly-locked MOD module triggers only with its core: a gravitational core goes into
+/// kinesis (a bluespace one is not its), and comes back out; a prototype starts with a core it
+/// never gives up.
+#[test]
+fn anomaly_locked_module_needs_its_core() {
+    use ss13_game::modsuit::anomalock::{
+        AnomalyLock, complete_removal, item_interaction, lock, may_trigger,
+    };
+    use ss13_game::tools::Actor;
+    let mut app = server("anomalock");
+    let user = mob(&mut app, TilePos::new(7, 2, 1));
+    let world = app.world_mut();
+    let item = |world: &mut World, path: &str| {
+        world
+            .spawn(DmItem {
+                path: path.into(),
+                ..default()
+            })
+            .id()
+    };
+    let module = item(world, "/obj/item/mod/module/anomaly_locked/kinesis");
+    assert!(!may_trigger(world, module, Some(user)), "no core");
+    let actor = |held| Actor {
+        client: user,
+        mob: user,
+        item: Some(held),
+    };
+    let wrong = item(world, "/obj/item/assembly/signaler/anomaly/bluespace");
+    assert!(!item_interaction(world, actor(wrong), module));
+    let core = item(world, "/obj/item/assembly/signaler/anomaly/grav");
+    assert!(item_interaction(world, actor(core), module));
+    assert_eq!(world.get::<AnomalyLock>(module).unwrap().core, Some(core));
+    assert!(may_trigger(world, module, Some(user)));
+    let other = item(world, "/obj/item/assembly/signaler/anomaly/grav");
+    assert!(
+        item_interaction(world, actor(other), module),
+        "already has one"
+    );
+    assert_eq!(world.get::<AnomalyLock>(module).unwrap().core, Some(core));
+    complete_removal(world, user, user, module);
+    assert_eq!(world.get::<AnomalyLock>(module).unwrap().core, None);
+    assert_eq!(
+        world.get::<TilePos>(core),
+        Some(&TilePos::new(7, 2, 1)),
+        "out"
+    );
+
+    let prototype = item(
+        world,
+        "/obj/item/mod/module/anomaly_locked/kinesis/prototype",
+    );
+    let (_, l) = lock(world, prototype).unwrap();
+    let built = l.core.expect("prebuilt");
+    assert!(may_trigger(world, prototype, None));
+    complete_removal(world, user, user, prototype);
+    assert_eq!(
+        world.get::<AnomalyLock>(prototype).unwrap().core,
+        Some(built),
+        "not removable"
+    );
+}
+
+/// A weather anomaly starts a storm over its area (telegraphing a fifth of its 300 s life, with
+/// it as the source); neutralizing it winds the storm down. A thunderbolt shocks who stands
+/// where it strikes.
+#[test]
+fn weather_anomaly_storm_winds_down_when_neutralized() {
+    use ss13_game::events::anomalies::exotic::WeatherAnomaly;
+    use ss13_game::events::anomalies::{neutralize, spawn_weather};
+    use ss13_game::weather::{ActiveWeather, Stage, WeatherKind, thunder_act_turf};
+    let mut app = server("weather_anomaly");
+    let at = TilePos::new(8, 2, 1);
+    let world = app.world_mut();
+    let e = spawn_weather(world, at, None, true);
+    assert_eq!(
+        world.get::<WeatherAnomaly>(e).map(|w| w.weather),
+        Some(WeatherKind::RainStorm),
+        "the thundering kind rains"
+    );
+    {
+        let active = &world.resource::<ActiveWeather>().0;
+        assert_eq!(active.len(), 1);
+        let w = &active[0];
+        assert_eq!((w.source, w.stage), (Some(e), Stage::Telegraph));
+        assert!(!w.areas.is_empty() && !w.tiles.is_empty());
+        assert!(w.thunder_chance > 0.0);
+        assert!((w.end_duration - 20.0).abs() < 0.5);
+    }
+    neutralize(world, e);
+    assert_eq!(
+        world.resource::<ActiveWeather>().0[0].stage,
+        Stage::WindDown
+    );
+
+    let victim = mob(&mut app, TilePos::new(9, 2, 1));
+    let before = app.world().get::<Health>(victim).unwrap().clone();
+    thunder_act_turf(app.world_mut(), TilePos::new(9, 2, 1));
+    assert_ne!(
+        *app.world().get::<Health>(victim).unwrap(),
+        before,
+        "struck"
+    );
+}

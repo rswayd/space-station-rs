@@ -307,6 +307,9 @@ pub enum Job {
     RadiationLeak,
     /// An anomaly releaser on a core ([`crate::events::anomalies`]).
     AnomalyRelease,
+    /// A screwdriver taking the core out of an anomaly-locked MOD module
+    /// ([`crate::modsuit::anomalock`]).
+    AnomalockRemove { module: Entity },
     /// Netpods, hololadders, the quantum console ([`crate::science::bitrunning`]).
     Bitrunning(crate::science::bitrunning::server::BitrunJob),
     /// Pressing a license plate ([`crate::brig::labor`]).
@@ -1396,6 +1399,9 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Shield(job) => crate::power::shields::complete(world, action, job, consume),
         Job::RadiationLeak => crate::events::radiation_leak::complete(world, action, consume),
         Job::AnomalyRelease => crate::events::anomalies::complete_release(world, action),
+        &Job::AnomalockRemove { module } => {
+            crate::modsuit::anomalock::complete_removal(world, mob, action.client, module);
+        }
         &Job::Rcd(job) => crate::devices::rcd::complete(world, mob, action, job),
         &Job::Rhd(job) => crate::devices::rhd::complete(world, action, job),
         &Job::TapeRespool(tape) => {
