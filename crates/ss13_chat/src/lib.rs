@@ -20,11 +20,4 @@ pub mod speech;
 
 pub use ss13_shared::chat::{ChatChannel, ChatMessage, ChatSegment, MAX_MESSAGE_LEN, Span};
 
-/// tg `capitalize`.
-pub fn capitalize(text: &str) -> String {
-    let mut chars = text.chars();
-    chars
-        .next()
-        .map(|first| first.to_uppercase().chain(chars).collect())
-        .unwrap_or_default()
-}
+pub use ss13_shared::capitalize;

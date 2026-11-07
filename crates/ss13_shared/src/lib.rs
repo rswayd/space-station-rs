@@ -22,3 +22,12 @@ pub use light::{
     LIGHT_BLOCK, LightSource, LightUpdate, Optics, STARLIGHT_AMBIENT, TileLighting, light_block,
 };
 pub use tile::{LevelStack, TILE_SIZE, TilePos};
+
+/// tg `capitalize`.
+pub fn capitalize(text: &str) -> String {
+    let mut chars = text.chars();
+    chars
+        .next()
+        .map(|first| first.to_uppercase().chain(chars).collect())
+        .unwrap_or_default()
+}

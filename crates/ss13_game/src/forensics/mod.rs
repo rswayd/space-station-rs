@@ -146,4 +146,4 @@ pub const DELETE: &str = "delete";
 pub const PRINT: &str = "print";
 pub const INDEX: &str = "index";
 
-pub use ss13_chat::capitalize;
+pub use ss13_shared::capitalize;

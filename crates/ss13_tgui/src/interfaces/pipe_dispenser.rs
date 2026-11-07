@@ -101,6 +101,7 @@ pub fn hex_rgb(hex: &str) -> [u8; 3] {
 }
 
 /// lodash `capitalize` per word (`capitalizeAll`).
+#[cfg(any(feature = "client", test))]
 fn capitalize_all(text: &str) -> String {
     text.split(' ')
         .map(|w| {
