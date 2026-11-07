@@ -19,6 +19,13 @@ pub enum Accent {
     PigLatin,
     /// The Hulk's speechmod: `.` becomes `!`, `!!` at the end, all upper case.
     Hulk,
+    /// `heckacious/handle_speech`; also `TREAT_CAPITALIZE_MESSAGE = FALSE` ([`no_capitalize`]).
+    Heckacious,
+}
+
+/// `heckacious/handle_caps`: the message keeps its case.
+pub fn no_capitalize(accents: &[Accent]) -> bool {
+    accents.contains(&Accent::Heckacious)
 }
 
 /// The accents of a body, in the order they were gained.
@@ -205,6 +212,174 @@ const MEDIEVAL: Table = &[
     ),
 ];
 
+/// `strings/heckacious.json`.
+const HECKACIOUS: Table = &[
+    ("your", &["youre"]),
+    ("fucking", &["banging"]),
+    ("economy", &["econony"]),
+    ("know", &["no"]),
+    ("ing", &["in"]),
+    ("they are", &["there"]),
+    ("sometimes", &["some times"]),
+    ("do", &["does"]),
+    ("hug", &["bro hug bump"]),
+    ("we're", &["where"]),
+    ("game", &["big game"]),
+    ("has", &["hass"]),
+    ("downtown", &["down town"]),
+    ("jimmy", &["geromy"]),
+    ("jeremy", &["geromy"]),
+    ("anywhere", &["anywear"]),
+    ("smoking", &["toking up"]),
+    ("lying", &["lyong"]),
+    ("AH", &["AUGH"]),
+    ("distraction", &["distaction"]),
+    ("lie", &["ruse"]),
+    ("angle", &["angel"]),
+    ("drink", &["pour"]),
+    ("the", &["thef"]),
+    ("backward", &["back ward", "awayways"]),
+    ("god damn", &["GOD DAMN"]),
+    ("goddamn", &["GOD DAMN"]),
+    ("trick", &["dunk"]),
+    ("impossible", &["unreal"]),
+    ("court", &["coart"]),
+    ("holding", &["holdung"]),
+    ("reverse", &["flip"]),
+    ("inverse", &["flip"]),
+    ("around", &["turn-ways"]),
+    ("difference", &["differance"]),
+    ("values", &["vaules"]),
+    ("inside", &["insine"]),
+    ("pipe", &["punpe"]),
+    ("suspicious", &["plot thicken"]),
+    ("awesome", &["hella"]),
+    ("reference", &["refrance"]),
+    ("amazing", &["fucking incredible"]),
+    ("woman", &["wonan"]),
+    ("god", &["gog"]),
+    ("bible", &["bibble"]),
+    ("jesus", &["jescus"]),
+    ("christ", &["chris", "dick"]),
+    ("sigh", &["sign"]),
+    ("bathroom", &["banthroom"]),
+    ("remember", &["remender"]),
+    ("night", &["nite"]),
+    ("nachos", &["nachoes"]),
+    ("nacho", &["nancho"]),
+    ("dorito", &["nancho"]),
+    ("party", &["panty"]),
+    ("dumbass", &["dumpass"]),
+    ("they", &["their"]),
+    ("okay", &["ohh kayy"]),
+    ("stupid", &["stutid"]),
+    ("reagent", &["regent"]),
+    ("idiot", &["fuckass"]),
+    ("awful", &["conksuck"]),
+    ("moron", &["PIECE OF SHIT"]),
+    ("more", &["wider"]),
+    ("serious", &["keeping it real"]),
+    ("extreme", &["x-treme"]),
+    ("guaranteed", &["garganted"]),
+    ("black", &["blapck"]),
+    ("glow", &["glowns"]),
+    ("deadly", &["deudly"]),
+    ("flying", &["lifdoff"]),
+    ("cloud", &["cloun"]),
+    ("seeing", &["scoping"]),
+    ("great", &["choice"]),
+    ("look", &["lonk"]),
+    ("battery", &["babbery"]),
+    ("gay", &["homo"]),
+    ("close", &["closte"]),
+    ("wrong", &["wrog"]),
+    ("who", &["whoof"]),
+    ("new", &["newd"]),
+    ("holy", &["hopy"]),
+    ("um", &["unm"]),
+    ("horse", &["hornse"]),
+    ("this", &["thits"]),
+    ("then", &["than"]),
+    ("quick", &["soon"]),
+    ("bro", &["brah", "bro"]),
+    ("dude", &["duge", "bro", "brah"]),
+    ("'", &["'", ""]),
+    ("i'm", &["im", "i am"]),
+    ("shit", &["balls warmed oveur", "shit"]),
+    ("he's", &["hes", "he is", "he'ss"]),
+];
+
+const VOWELS: [&str; 5] = ["a", "e", "i", "o", "u"];
+const CONSONANTS: [&str; 21] = [
+    "b", "c", "d", "f", "g", "h", "j", "k", "l", "m", "n", "p", "q", "r", "s", "t", "v", "w", "x",
+    "y", "z",
+];
+
+/// BYOND `rand(low, high)` over `roll`.
+fn rand(low: u32, high: u32, roll: &mut impl FnMut() -> f32) -> u32 {
+    let span = (high - low + 1) as f32;
+    low + ((roll() / 100.0 * span) as u32).min(high - low)
+}
+
+/// `heckacious/handle_speech`: per word the table's swaps (as written, upper case and
+/// capitalized), random caps, trailing dots and emphasis marks; a word the table left alone
+/// gets a vowel and consonants swapped and some letters doubled.
+// shortcut: BYOND `replacetext` of the vowel swap ignores case; here it matches as written.
+fn heckacious(text: &str, roll: &mut impl FnMut() -> f32) -> String {
+    let mut words = Vec::new();
+    for word in text.split(' ').filter(|w| !w.is_empty()) {
+        let original = word.to_owned();
+        let mut word = original.clone();
+        let mut edited = false;
+        for (key, values) in HECKACIOUS {
+            let value = pick(values, roll);
+            word = word.replace(&key.to_uppercase(), &value.to_uppercase());
+            word = word.replace(
+                &crate::speech::capitalize(key),
+                &crate::speech::capitalize(value),
+            );
+            word = word.replace(key, value);
+            if word != original {
+                edited = true;
+            }
+        }
+        if roll() < 10.0 {
+            word = if roll() < 85.0 {
+                word.to_uppercase()
+            } else {
+                word.to_lowercase()
+            };
+        }
+        if roll() < 10.0 {
+            for _ in 0..rand(2, 8, roll) {
+                word.push('.');
+            }
+        }
+        if roll() < 10.0 {
+            let mark = pick(&["+", "_", "|"], roll);
+            word = format!("{mark}{word}{mark}");
+        }
+        if !edited {
+            if roll() < 65.0 {
+                word = word.replace(pick(&VOWELS, roll), pick(&VOWELS, roll));
+            }
+            for _ in 0..rand(1, 2, roll) {
+                word = word.replace(pick(&CONSONANTS, roll), pick(&CONSONANTS, roll));
+            }
+            let mut patched = String::with_capacity(word.len());
+            for c in word.chars() {
+                patched.push(c);
+                if roll() >= 92.0 {
+                    patched.push(c);
+                }
+            }
+            word = patched;
+        }
+        words.push(word);
+    }
+    words.join(" ").trim().to_owned()
+}
+
 /// BYOND `pick` over `roll` (a value in 0..100).
 fn pick<'a>(list: &[&'a str], roll: &mut impl FnMut() -> f32) -> &'a str {
     let i = (roll() / 100.0 * list.len() as f32) as usize;
@@ -313,6 +488,7 @@ impl Accent {
             Self::PigLatin => piglatin(text, roll),
             // `COMPONENT_UPPERCASE_SPEECH`.
             Self::Hulk => speechmod(text, HULK, &["!!"], 100.0, roll).to_uppercase(),
+            Self::Heckacious => heckacious(text, roll),
         }
     }
 }
@@ -350,5 +526,11 @@ mod tests {
         // Whole words only.
         assert_eq!(replace_words(" yourself ", "you", "thou"), " yourself ");
         assert_eq!(apply_all(&[Accent::Hulk], "*scream", || 0.0), "*scream");
+        // Table swaps, no random marks at a high roll.
+        assert_eq!(
+            Accent::Heckacious.apply("the party", &mut || 99.0),
+            "thef panty"
+        );
+        assert!(no_capitalize(&[Accent::Heckacious]));
     }
 }

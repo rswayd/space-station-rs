@@ -525,6 +525,8 @@ fn hit(world: &mut World, e: Entity, p: &Projectile, name: &str, target: Entity)
     crate::mining::crusher::destabilizer_hit(world, e, p.firer, target);
     crate::misc_items::target::bullet_act(world, e, p, target);
     crate::mobs::megafauna::on_projectile_hit(world, p, target);
+    // A cryo/pyro beam's `temp/on_hit` (`crate::genetics::effects`).
+    crate::genetics::effects::beam_hit(world, e, target);
     if let Some(bolt) = bolt {
         crate::spells::effects::bolt_hit(world, &bolt, p, target);
     }

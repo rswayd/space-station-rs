@@ -85,6 +85,8 @@ pub enum Effect {
     Power(effects::Power),
     /// `/datum/mutation/race`: the monkey.
     Race,
+    /// `/datum/mutation/stoner`: only Beach Bum (`LANGUAGE_STONER`).
+    Stoner,
     /// `/datum/mutation/aoe_moodlet` (`positive`: the comely one).
     Aura {
         positive: bool,
@@ -349,6 +351,69 @@ pub const MUTATIONS: &[MutationDef] = &[
         gain: "Ты ощущаешь себя мамонтом.",
         lose: "Кажется, это прошло.",
         effect: Effect::Accent(ss13_chat::accents::Accent::PigLatin),
+    },
+    MutationDef {
+        path: "/datum/mutation/cryokinesis",
+        name: "Cryokinesis",
+        desc: "Даёт возможность в любой момент притянуть негативную энергию из морозной пустоты, \
+               чтобы заморозить окружение вокруг субъекта.",
+        quality: POSITIVE,
+        instability: POSITIVE_INSTABILITY_MODERATE,
+        difficulty: 12,
+        locked: false,
+        gain: "Ты ощущаешь холод в руках.",
+        lose: "",
+        effect: Effect::Power(effects::Power::Cryokinesis),
+    },
+    MutationDef {
+        path: "/datum/mutation/pyrokinesis",
+        name: "Pyrokinesis",
+        desc: "Притягивает положительную энергию окружения для повышения температуры вокруг \
+               субъекта.",
+        quality: POSITIVE,
+        instability: POSITIVE_INSTABILITY_MODERATE,
+        difficulty: 12,
+        locked: true,
+        gain: "Твоя рука кажется горячей!",
+        lose: "",
+        effect: Effect::Power(effects::Power::Pyrokinesis),
+    },
+    MutationDef {
+        path: "/datum/mutation/firebreath",
+        name: "Fire Breath",
+        desc: "Древняя мутация, позволяющая ящерицам дышать огнём.",
+        quality: POSITIVE,
+        instability: POSITIVE_INSTABILITY_MODERATE,
+        difficulty: 12,
+        locked: true,
+        gain: "Ты ощущаешь жжение в горле!",
+        lose: "Жжение в горле проходит.",
+        effect: Effect::Power(effects::Power::FireBreath),
+    },
+    MutationDef {
+        path: "/datum/mutation/stoner",
+        name: "Stoner",
+        desc: "Обычная мутация, которая сильно понижает интеллект.",
+        quality: NEGATIVE,
+        instability: 0,
+        difficulty: 8,
+        locked: false,
+        gain: "Ты чувствуешь себя...максимально расслабленным, чувак!",
+        lose: "Ты чувствуешь, что твоё восприятие времени стало лучше.",
+        effect: Effect::Stoner,
+    },
+    MutationDef {
+        path: "/datum/mutation/heckacious",
+        name: "Heckacious Larincks",
+        desc: "чел что ЖЕЛАЮТ твои слова чувак...........",
+        quality: MINOR_NEGATIVE,
+        instability: 0,
+        difficulty: 8,
+        locked: true,
+        gain: "ЧЁРТ, чувак. твоё горло как ДЕРЬМО.",
+        lose: "Демоническое существо, овладевшее твоей гортанью, наконец-то ослабило свою \
+               хватку.",
+        effect: Effect::Accent(ss13_chat::accents::Accent::Heckacious),
     },
     MutationDef {
         path: "/datum/mutation/race",
@@ -674,7 +739,8 @@ impl Plugin for GeneticsServerPlugin {
             )
             .add_systems(
                 Update,
-                effects::trigger_powers.in_set(ss13_tgui::server::UiSystems::Handle),
+                (effects::trigger_powers, effects::pointed_clicks)
+                    .in_set(ss13_tgui::server::UiSystems::Handle),
             );
         console::build(app);
     }

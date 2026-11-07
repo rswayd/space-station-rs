@@ -269,6 +269,8 @@ pub enum LanguageSource {
     MartialArt,
     /// `LANGUAGE_BABEL`: the Tower of Babel's curse (and the wizards' gift).
     Babel,
+    /// `LANGUAGE_STONER`: the Stoner mutation.
+    Stoner,
 }
 
 /// `/datum/language_holder`.

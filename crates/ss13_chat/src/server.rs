@@ -893,7 +893,15 @@ fn handle_say(
         if impediments.derp {
             message = derpspeech(&message, stuttering, || rng.percent());
         }
-        let mut message = capitalize(&message);
+        // `heckacious/handle_caps`: `TREAT_CAPITALIZE_MESSAGE = FALSE`.
+        let mut message = if accents
+            .get(speaker)
+            .is_ok_and(|a| crate::accents::no_capitalize(&a.0))
+        {
+            message
+        } else {
+            capitalize(&message)
+        };
         if tongueless {
             const SOUNDS: [(&str, &str); 3] = [("aa", "AA"), ("oo", "OO"), ("'", "'")];
             let (lower, upper) = SOUNDS[(rng.percent() as usize * SOUNDS.len()) / 100];

@@ -76,6 +76,9 @@ pub const GIFT_TYPES: &[&str] = &[
 pub const GAME_RUNTIME_TYPES: &[&str] = &[
     // `genetics::effects`: what Geladikinesis conjures (Cindikinesis' ash is listed below).
     "/obj/item/stack/sheet/mineral/snow",
+    // `genetics::effects`: the Cryokinesis and Pyrokinesis beams.
+    "/obj/projectile/temp/cryo",
+    "/obj/projectile/temp/pyro",
     // `blackbox`: the recorder's blackbox.
     "/obj/item/blackbox",
     // `holodeck`: what the holodeck effects spawn (decks, manuals, holographic animals).

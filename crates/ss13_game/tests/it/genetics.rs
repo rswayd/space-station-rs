@@ -53,6 +53,10 @@ const TYPES: &str = r##"{
     "/atom/movable": { "parent": "/atom", "declared_vars": { "layer": 3, "anchored": 0 } },
     "/obj": { "parent": "/atom/movable" },
     "/obj/effect": { "parent": "/obj" },
+    "/obj/projectile": { "parent": "/obj", "declared_vars": { "icon": { "resource": "i.dmi" },
+        "icon_state": "dnainjector" } },
+    "/obj/projectile/temp": { "parent": "/obj/projectile" },
+    "/obj/projectile/temp/cryo": { "parent": "/obj/projectile/temp" },
     "/obj/effect/decal": { "parent": "/obj/effect" },
     "/obj/effect/decal/cleanable": { "parent": "/obj/effect/decal" },
     "/obj/effect/decal/cleanable/ash": { "parent": "/obj/effect/decal/cleanable",
@@ -151,6 +155,7 @@ fn fixture_assets(test: &str) -> PathBuf {
         "/obj/machinery/dna_scannernew",
         "/obj/item/dnainjector/activator",
         "/obj/effect/decal/cleanable/ash",
+        "/obj/projectile/temp/cryo",
         "/turf/open/floor",
         "/turf/closed/wall",
         "/turf/open/space/basic",
@@ -504,6 +509,41 @@ fn mutation_effects() {
     remove_mutation(s.0.server.world_mut(), b, race, STANDARD);
     assert_eq!(s.get::<Species>(b).0, SpeciesId::Human);
     assert_eq!(s.get::<Name>(b).as_str(), name);
+
+    // A cryo beam at oneself hits at once and chills the body (-350 twice, unprotected).
+    let cryo = id("/datum/mutation/cryokinesis");
+    {
+        let world = s.0.server.world_mut();
+        assert!(add_mutation(world, a, cryo, SOURCE_MUTATOR));
+        effects::fire_beam(world, a, Power::Cryokinesis, Some(a), pos);
+    }
+    assert!(
+        s.get::<ActionButtons>(a)
+            .0
+            .iter()
+            .any(|(b, _)| b.id == "mutation:Cryokinesis")
+    );
+    s.run_for(0.2);
+    assert!(s.get::<ss13_game::breath::Respiration>(a).bodytemperature < 100.0);
+    remove_mutation(s.0.server.world_mut(), a, cryo, SOURCE_MUTATOR);
+
+    // Stoner: Beach Bum only; heckacious speech keeps its case.
+    {
+        use ss13_chat::language::{LanguageHolder, LanguageId, SPOKEN};
+        let world = s.0.server.world_mut();
+        add_mutation(world, b, id("/datum/mutation/stoner"), SOURCE_MUTATOR);
+        add_mutation(world, b, id("/datum/mutation/heckacious"), SOURCE_MUTATOR);
+        let holder = world.get::<LanguageHolder>(b).unwrap();
+        assert!(holder.has(LanguageId::Beachbum, SPOKEN));
+        assert!(!holder.has(LanguageId::Common, SPOKEN));
+    }
+    assert_eq!(s.get::<Accents>(b).0, vec![Accent::Heckacious]);
+    mutadone(s.0.server.world_mut(), b);
+    {
+        use ss13_chat::language::{LanguageHolder, LanguageId, SPOKEN};
+        let holder = s.get::<LanguageHolder>(b);
+        assert!(!holder.has(LanguageId::Beachbum, SPOKEN));
+    }
 
     // The comely aura cheers up whoever sees its carrier within 3 tiles.
     add_mutation(
