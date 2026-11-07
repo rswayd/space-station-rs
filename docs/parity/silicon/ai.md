@@ -18,7 +18,7 @@
 Апгрейд, открывающий несколько дополнительных окон-камер на экране ИИ.
 
 - **Код:** [`multicam.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/silicon/ai/multicam.dm#L3), [`proc/toggle_multicam()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/silicon/ai/multicam.dm#L230)
-- **Статус в ss13-rs:** ❌ нет — упирается в клиент: у него один вид карты (`ss13_render`), окна-врезки с отдельной камерой и своей репликацией тайлов (tg `pic_in_pic`) нужно сначала сделать там; серверная часть (маска камеры на окно, `cameras.rs` `camera_mask`) уже есть
+- **Статус в ss13-rs:** ❌ нет — упирается в сеть и клиент: репликация (`ss13_net` `replication_server.rs`: `Viewer` — один центр и один `ViewBox` на клиента, `Interest`/`chunk_viewers`/LOS/`ViewMask` по нему) должна уметь несколько боксов на клиента (окна tg `pic_in_pic` 3×3+, до `max_multicams`), а клиент (`ss13_render`: одна камера карты) — рисовать вторые камеры с освещением и статикой в окна HUD; серверная часть маски (`cameras.rs` `camera_mask`) уже есть. Конфиг tg `ALLOW_AI_MULTICAM` включён в BandaStation
 
 ### Питание ядра и потеря энергии
 Ядро питается от APC зоны; без питания ИИ слепнет и запускает резервную процедуру восстановления (перезапуск APC через провода). Действие «удалённое питание» включает/выключает APC машин.
