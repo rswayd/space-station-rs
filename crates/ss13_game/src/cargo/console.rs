@@ -232,6 +232,30 @@ pub(crate) fn setup_console(world: &mut World, e: Entity, shared: Option<Arc<Car
     });
 }
 
+/// The supply state of a modular computer's NT Shopping Network
+/// (`/datum/computer_file/program/budgetorders`, `requestonly = TRUE`): a request console whose
+/// orders the cargo console approves; an emagged computer sees contraband.
+// shortcut: no `ACCESS_BUDGET` purchases from the department budget or approval on the computer.
+pub(crate) fn program_console(world: &mut World, pc: Entity, emagged: bool) {
+    let catalogue = Arc::new(
+        world
+            .get_resource::<SupplyPacks>()
+            .map(|p| catalogue(p, emagged, emagged))
+            .unwrap_or_default(),
+    );
+    world.entity_mut(pc).insert(CargoConsole {
+        request_only: true,
+        can_send: false,
+        can_approve_requests: false,
+        contraband: emagged,
+        emagged,
+        self_paid: false,
+        catalogue,
+        next_announcement: 0.0,
+        loaded_coupons: Vec::new(),
+    });
+}
+
 /// tg `/obj/machinery/computer/cargo/emag_act` (from `crate::emag`): contraband and the
 /// emag-only packs for good, the open windows get the new catalogue. True when it took.
 // shortcut: the circuit board does not keep it (a rebuilt console is clean).

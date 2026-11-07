@@ -24,6 +24,47 @@ pub enum StationScreen {
         auto_mode: bool,
         on_cooldown: bool,
     },
+    /// `NtosCivCargoHoldTerminal`: the civilian bounty console's data without a pad.
+    CivBounties(Box<crate::cargo::CivBountyData>),
+    /// `NtosBountyBoard`.
+    BountyBoard(BountyBoardData),
+    /// `NtosRestock`: `vending_list`.
+    Restock(Vec<VendorRow>),
+}
+
+/// A vending machine of `restock_tracker/ui_data`.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct VendorRow {
+    pub name: String,
+    pub location: String,
+    pub credits: i64,
+    /// Legal stock, percent.
+    pub percentage: f32,
+}
+
+/// `/datum/computer_file/program/bounty_board/ui_data`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BountyBoardData {
+    /// `user`: the account holder and job, `None` without an account.
+    pub user: Option<(String, String)>,
+    pub requests: Vec<RequestRow>,
+    pub applicants: Vec<ApplicantRow>,
+}
+
+/// A `/datum/station_request`; `acc_number` is the owner's account id (one request each).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RequestRow {
+    pub owner: String,
+    pub value: i64,
+    pub description: String,
+    pub acc_number: u32,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ApplicantRow {
+    pub name: String,
+    pub request_id: u32,
+    pub requestee_id: u32,
 }
 
 /// `/datum/computer_file/program/nt_pay/ui_data`.
@@ -107,6 +148,12 @@ pub const BOT_INTERACT: &str = "interact";
 // `NtosRevelation` acts.
 pub const REVELATION_ARM: &str = "PRG_arm";
 pub const REVELATION_ACTIVATE: &str = "PRG_activate";
+// `NtosBountyBoard` acts (`request`, `applicant`: account ids); `createBounty` takes
+// `bountyval` and `bountytext` (this port's screen sends both as `bounty`: "VALUE TEXT").
+pub const BOARD_CREATE: &str = "createBounty";
+pub const BOARD_APPLY: &str = "apply";
+pub const BOARD_PAY: &str = "payApplicant";
+pub const BOARD_DELETE: &str = "deleteRequest";
 // `NtosSpectreMeter` acts.
 pub const SPECTRE_SCAN: &str = "manual_scan";
 pub const SPECTRE_MODE: &str = "toggle_mode";

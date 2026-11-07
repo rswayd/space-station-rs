@@ -324,7 +324,18 @@ impl ProgramKind {
     /// Programs that open their own window instead of an NtOS screen (tg's newscaster app runs
     /// a hidden newscaster's `PhysicalNewscaster` interface).
     pub fn launcher(self) -> bool {
-        self == Self::Newscaster
+        match self {
+            Self::Station(p) => p.launcher(),
+            p => p == Self::Newscaster,
+        }
+    }
+
+    /// `run_access` (any one of them opens; none: anyone).
+    pub fn run_access(self) -> &'static [&'static str] {
+        match self {
+            Self::Station(p) => p.run_access(),
+            _ => &[],
+        }
     }
 }
 
@@ -375,13 +386,22 @@ fn is_under_path(path: &str, root: &str) -> bool {
             .is_some_and(|rest| rest.starts_with('/'))
 }
 
+/// `head_programs` the port has (no fax notifier).
+const HEAD_PROGRAMS: [ProgramKind; 4] = [
+    ProgramKind::StatusDisplay,
+    ProgramKind::Station(StationProgram::ScienceHub),
+    ProgramKind::Station(StationProgram::RoboControl),
+    ProgramKind::Station(StationProgram::BudgetOrders),
+];
+
 /// `/obj/item/modular_computer/pda/crew/heads`: `head_programs` are added after the rest.
 const HEADS_PDA: &str = "/obj/item/modular_computer/pda/crew/heads";
 
 /// tg `starting_programs` of the PDA types (`role_tablet_presets.dm`), the ones this port has;
 /// a type without an entry inherits its parent's.
-const STARTING_PROGRAMS: [(&str, &[ProgramKind]); 22] = {
+const STARTING_PROGRAMS: [(&str, &[ProgramKind]); 24] = {
     use ProgramKind::*;
+    use StationProgram::*;
     [
         (
             "/obj/item/modular_computer/pda/crew/heads/hop",
@@ -397,22 +417,28 @@ const STARTING_PROGRAMS: [(&str, &[ProgramKind]); 22] = {
         ),
         (
             "/obj/item/modular_computer/pda/crew/heads/cmo",
-            &[MedRecords],
+            &[Station(PhysScanner), MedRecords],
         ),
-        ("/obj/item/modular_computer/pda/crew/heads/rd", &[Signaler]),
+        (
+            "/obj/item/modular_computer/pda/crew/heads/rd",
+            &[Station(BorgMonitor), Signaler],
+        ),
         (
             "/obj/item/modular_computer/pda/crew/heads/quartermaster",
-            &[],
+            &[Station(RestockTracker)],
         ),
         (
             "/obj/item/modular_computer/pda/crew/security",
-            &[SecRecords],
+            &[SecRecords, Station(RoboControl)],
         ),
         (
             "/obj/item/modular_computer/pda/crew/detective",
-            &[SecRecords],
+            &[SecRecords, Station(RoboControl)],
         ),
-        ("/obj/item/modular_computer/pda/crew/warden", &[SecRecords]),
+        (
+            "/obj/item/modular_computer/pda/crew/warden",
+            &[SecRecords, Station(RoboControl), Station(BudgetOrders)],
+        ),
         (
             "/obj/item/modular_computer/pda/crew/engineering",
             &[AlarmMonitor, Atmosscan],
@@ -423,18 +449,32 @@ const STARTING_PROGRAMS: [(&str, &[ProgramKind]); 22] = {
         ),
         (
             "/obj/item/modular_computer/pda/crew/science",
-            &[Atmosscan, Signaler],
+            &[Atmosscan, Station(ScienceHub), Signaler],
         ),
-        ("/obj/item/modular_computer/pda/crew/roboticist", &[]),
+        (
+            "/obj/item/modular_computer/pda/crew/roboticist",
+            &[
+                Station(ScienceHub),
+                Station(RoboControl),
+                Station(BorgMonitor),
+            ],
+        ),
         (
             "/obj/item/modular_computer/pda/crew/geneticist",
             &[MedRecords],
         ),
-        ("/obj/item/modular_computer/pda/crew/medical", &[MedRecords]),
+        (
+            "/obj/item/modular_computer/pda/crew/medical",
+            &[MedRecords, Station(RoboControl)],
+        ),
+        (
+            "/obj/item/modular_computer/pda/crew/medical/paramedic",
+            &[MedRecords, Station(Lifeline)],
+        ),
         ("/obj/item/modular_computer/pda/crew/coroner", &[MedRecords]),
         (
             "/obj/item/modular_computer/pda/crew/psychologist",
-            &[MedRecords],
+            &[MedRecords, Station(RoboControl)],
         ),
         ("/obj/item/modular_computer/pda/crew/lawyer", &[SecRecords]),
         ("/obj/item/modular_computer/pda/crew/curator", &[Newscaster]),
@@ -446,7 +486,18 @@ const STARTING_PROGRAMS: [(&str, &[ProgramKind]); 22] = {
             "/obj/item/modular_computer/pda/veteran_advisor",
             &[SecRecords],
         ),
-        ("/obj/item/modular_computer/pda/crew/cargo", &[]),
+        (
+            "/obj/item/modular_computer/pda/crew/cargo",
+            &[
+                Station(BudgetOrders),
+                Station(RoboControl),
+                Station(RestockTracker),
+            ],
+        ),
+        (
+            "/obj/item/modular_computer/pda/crew/janitor",
+            &[Station(CustodialLocator)],
+        ),
     ]
 };
 
@@ -473,8 +524,12 @@ pub fn pda_programs(path: &str) -> Vec<ProgramKind> {
             programs.push(p);
         }
     }
-    if is_under_path(path, HEADS_PDA) && !programs.contains(&ProgramKind::StatusDisplay) {
-        programs.push(ProgramKind::StatusDisplay);
+    if is_under_path(path, HEADS_PDA) {
+        for p in HEAD_PROGRAMS {
+            if !programs.contains(&p) {
+                programs.push(p);
+            }
+        }
     }
     programs
 }
@@ -500,7 +555,14 @@ mod tests {
         use ProgramKind::*;
         assert_eq!(
             pda_programs("/obj/item/modular_computer/pda/crew/heads/ce")[5..],
-            [Atmosscan, AlarmMonitor, StatusDisplay]
+            [
+                Atmosscan,
+                AlarmMonitor,
+                StatusDisplay,
+                Station(StationProgram::ScienceHub),
+                Station(StationProgram::RoboControl),
+                Station(StationProgram::BudgetOrders)
+            ]
         );
         // The paramedic inherits nothing new: its own list has medical records too.
         assert!(
@@ -508,8 +570,8 @@ mod tests {
                 .contains(&MedRecords)
         );
         assert_eq!(
-            pda_programs("/obj/item/modular_computer/pda/crew/heads/quartermaster")[5..],
-            [StatusDisplay]
+            pda_programs("/obj/item/modular_computer/pda/crew/heads/quartermaster")[6..],
+            HEAD_PROGRAMS
         );
         assert_eq!(
             pda_programs("/obj/item/modular_computer/pda/crew/curator").last(),
@@ -522,6 +584,26 @@ mod tests {
         for p in ProgramKind::ALL {
             assert_eq!(ProgramKind::from_filename(p.filename()), Some(p));
             assert!(CATEGORIES.contains(&p.category()));
+        }
+    }
+
+    #[test]
+    fn role_pdas_get_their_station_programs() {
+        use StationProgram::*;
+        let has = |path: &str, p: StationProgram| {
+            pda_programs(&format!("/obj/item/modular_computer/pda/crew/{path}"))
+                .contains(&ProgramKind::Station(p))
+        };
+        assert!(has("medical/paramedic", Lifeline));
+        assert!(!has("medical", Lifeline));
+        assert!(has("janitor", CustodialLocator));
+        assert!(has("roboticist", RoboControl) && has("roboticist", BorgMonitor));
+        assert!(has("heads/rd", BorgMonitor) && has("heads/rd", ScienceHub));
+        assert!(has("cargo", BudgetOrders));
+        // Every role's defaults fit its disk.
+        for path in STARTING_PROGRAMS.iter().map(|(p, _)| *p) {
+            let used: u32 = pda_programs(path).iter().map(|p| p.size()).sum();
+            assert!(used <= max_capacity(path), "{path}");
         }
     }
 

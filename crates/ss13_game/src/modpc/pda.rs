@@ -693,8 +693,13 @@ fn ntos_status(
     use ss13_tgui::UiInterface as _;
     for mut window in &mut windows {
         let ntos = window.interface == NtosUi::NAME;
-        // The newscaster app's window on a computer (`super::programs::apps`).
-        if !ntos && window.interface != crate::newscaster::NewscasterUi::NAME {
+        // The window of a launcher program on a computer (`super::programs::apps`, `station`).
+        let launcher = if window.interface == crate::newscaster::NewscasterUi::NAME {
+            Some(ProgramKind::Newscaster)
+        } else {
+            super::programs::station::launcher_of(window.interface)
+        };
+        if !ntos && launcher.is_none() {
             continue;
         }
         let Ok((computer, at)) = computers.get(window.source) else {
@@ -707,7 +712,7 @@ fn ntos_status(
             window.cap_status(UiStatus::Close);
             continue;
         };
-        let app_gone = !ntos && !computer.programs.contains(&ProgramKind::Newscaster);
+        let app_gone = launcher.is_some_and(|p| !computer.programs.contains(&p));
         if !computer.enabled || app_gone || unpowered.contains(window.source) {
             window.cap_status(UiStatus::Close);
             continue;
@@ -1201,7 +1206,12 @@ fn apply_act(
             if !computer.programs.contains(&program) {
                 return Err("not installed");
             }
-            super::programs::apps::open_newscaster(world, client, actor, pda);
+            match program {
+                ProgramKind::Station(p) => {
+                    super::programs::station::open_launcher(world, client, actor, pda, p)
+                }
+                _ => super::programs::apps::open_newscaster(world, client, actor, pda),
+            }
         }
         NtosAct::Run(program) => {
             if !pc!().open_program(program) {

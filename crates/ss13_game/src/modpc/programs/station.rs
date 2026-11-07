@@ -48,6 +48,11 @@ const SPOOK_RANGE: i32 = 5;
 const SPOOK_VALUE_DEF_MOB: f32 = 10.0;
 const SPOOK_VALUE_SAME_TURF_MULT: f32 = 1.5;
 const SPOOK_PING: &str = "sound/effects/ping_hit.ogg";
+/// The largest bounty board reward (tg takes any number).
+const MAX_REQUEST_VALUE: i64 = 1_000_000;
+const BUZZ: &str = "sound/machines/buzz/buzz-sigh.ogg";
+const SYNTH_NO: &str = "sound/machines/synth/synth_no.ogg";
+const CASH_REGISTER: &str = "sound/effects/cashregister.ogg";
 /// `MAX_MESSAGE_LEN`.
 const MAX_MESSAGE_LEN: usize = 1024;
 
@@ -74,6 +79,8 @@ pub struct StationApps {
     pub auto_mode: bool,
     pub spook_ready: f64,
     pub next_auto_scan: f64,
+    /// Civilian Bounties `status_report`.
+    pub status_report: Option<String>,
     /// The station program in front at the last refresh: a different one has just started.
     pub front: Option<StationProgram>,
 }
@@ -103,6 +110,7 @@ pub fn build(app: &mut App) {
         c.held
             .is_some_and(|h| phys_scan(w, c.client, c.mob, h, c.target))
     });
+    app.init_resource::<StationRequests>();
     app.init_resource::<PayHistory>().add_systems(
         Update,
         refresh
@@ -254,6 +262,131 @@ fn screen(
             auto_mode: state.auto_mode,
             on_cooldown: now(world) < state.spook_ready,
         },
+        StationProgram::CivBounties => {
+            StationScreen::CivBounties(Box::new(civ_bounty_data(world, pc, state)))
+        }
+        StationProgram::BountyBoard => StationScreen::BountyBoard(board_data(world, pc)),
+        StationProgram::RestockTracker => StationScreen::Restock(vendor_rows(world)),
+        // Launchers open their own window and never come to the front.
+        StationProgram::BudgetOrders | StationProgram::ScienceHub => {
+            StationScreen::Bots(Vec::new())
+        }
+    }
+}
+
+/// `civilianbounties/ui_data`: the account's bounty and choices (the console's data, no pad).
+fn civ_bounty_data(world: &World, pc: Entity, state: &StationApps) -> crate::cargo::CivBountyData {
+    let mut console = crate::cargo::bounty::CivBountyConsole::default();
+    console.status_report = state
+        .status_report
+        .clone()
+        .unwrap_or_else(|| "Ready for delivery.".to_owned());
+    let mut data = crate::cargo::bounty::console_data(
+        &console,
+        account_of(world, pc),
+        false,
+        world.get_resource::<crate::cargo::bounty::Bounties>(),
+    );
+    data.id_inserted = world
+        .get::<ModularComputer>(pc)
+        .is_some_and(|c| c.stored_id.is_some());
+    data.list_bounty.clear();
+    data
+}
+
+/// `restock_tracker/ui_data`: paid vendors that are short of legal stock or hold credits.
+fn vendor_rows(world: &World) -> Vec<VendorRow> {
+    let Some(mut vendors) = world.try_query::<(Entity, &crate::vending::Vendor)>() else {
+        return Vec::new();
+    };
+    let list: Vec<(Entity, u32, u32, i64)> = vendors
+        .iter(world)
+        .filter(|(_, v)| !v.all_products_free)
+        .map(|(e, v)| {
+            let (stock, max) = v
+                .records
+                .iter()
+                .filter(|r| r.kind != crate::vending::RecordKind::Hidden)
+                .fold((0, 0), |(n, m), r| (n + r.amount, m + r.max_amount));
+            (e, stock, max, v.credits_contained)
+        })
+        .filter(|&(_, stock, max, credits)| (max > 0 && stock < max) || credits != 0)
+        .collect();
+    list.into_iter()
+        .map(|(e, stock, max, credits)| VendorRow {
+            name: crate::examine::name_of(world, e),
+            location: turf_of(world, e)
+                .map(|p| crate::bots::area_name(world, p))
+                .unwrap_or_default(),
+            credits,
+            percentage: if max > 0 {
+                stock as f32 / max as f32 * 100.0
+            } else {
+                0.0
+            },
+        })
+        .collect()
+}
+
+/// `GLOB.request_list`.
+#[derive(Resource, Default, Debug)]
+pub struct StationRequests(pub Vec<StationRequest>);
+
+/// `/datum/station_request`: one per owner account (`req_number`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StationRequest {
+    pub owner: String,
+    pub owner_account: u32,
+    pub value: i64,
+    pub description: String,
+    /// Applicant account ids.
+    pub applicants: Vec<u32>,
+}
+
+/// `bounty_board/ui_data`.
+fn board_data(world: &World, pc: Entity) -> BountyBoardData {
+    let economy = world.get_resource::<Economy>();
+    let holder = |id: u32| {
+        economy
+            .and_then(|e| e.account(id))
+            .map(|a| a.holder.clone())
+            .unwrap_or_default()
+    };
+    let user = account_of(world, pc)
+        .and_then(|id| economy?.account(id))
+        .map(|a| {
+            let job = if a.job.is_empty() {
+                "No Job".to_owned()
+            } else {
+                a.job.clone()
+            };
+            (a.holder.clone(), job)
+        });
+    let requests = world
+        .get_resource::<StationRequests>()
+        .map(|r| r.0.as_slice())
+        .unwrap_or_default();
+    BountyBoardData {
+        user,
+        requests: requests
+            .iter()
+            .map(|r| RequestRow {
+                owner: r.owner.clone(),
+                value: r.value,
+                description: r.description.clone(),
+                acc_number: r.owner_account,
+            })
+            .collect(),
+        applicants: requests
+            .iter()
+            .flat_map(|r| {
+                r.applicants.iter().map(|&a| ApplicantRow {
+                    name: holder(a),
+                    request_id: r.owner_account,
+                    requestee_id: a,
+                })
+            })
+            .collect(),
     }
 }
 
@@ -497,16 +630,33 @@ pub fn spook_value(world: &mut World, pc: Entity) -> u32 {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum StationAct {
-    Pay { token: String, amount: f64 },
+    Pay {
+        token: String,
+        amount: f64,
+    },
     GetToken(String),
     RadarSelect(String),
     RadarScan,
-    BorgMessage { borg: String, message: String },
-    BotPower { bot: String, on: bool },
+    BorgMessage {
+        borg: String,
+        message: String,
+    },
+    BotPower {
+        bot: String,
+        on: bool,
+    },
     Arm,
     Activate,
     SpectreScan,
     SpectreMode,
+    /// Civilian Bounties `pick` (1-3) and `bounty`.
+    PickBounty(usize),
+    NewBounties,
+    /// Bounty board: `createBounty` (value, text), `apply`, `payApplicant`, `deleteRequest`.
+    CreateRequest(i64, String),
+    ApplyRequest(u32),
+    PayApplicant(u32, u32),
+    DeleteRequest(u32),
 }
 
 impl StationAct {
@@ -519,6 +669,11 @@ impl StationAct {
             Self::BotPower { .. } => &[RoboControl],
             Self::Arm | Self::Activate => &[Revelation],
             Self::SpectreScan | Self::SpectreMode => &[SpectreMeter],
+            Self::PickBounty(_) | Self::NewBounties => &[CivBounties],
+            Self::CreateRequest(..)
+            | Self::ApplyRequest(_)
+            | Self::PayApplicant(..)
+            | Self::DeleteRequest(_) => &[BountyBoard],
         }
     }
 }
@@ -569,6 +724,45 @@ pub fn parse(action: &str, params: &UiParams) -> Option<Result<StationAct, UiRej
         REVELATION_ACTIVATE => Ok(StationAct::Activate),
         SPECTRE_SCAN => Ok(StationAct::SpectreScan),
         SPECTRE_MODE => Ok(StationAct::SpectreMode),
+        crate::cargo::PICK => match params.number(crate::cargo::VALUE) {
+            Ok(n) if (1.0..=3.0).contains(&n) && n.fract() == 0.0 => {
+                Ok(StationAct::PickBounty(n as usize))
+            }
+            Ok(_) => Err(UiReject::BadParams("value: expected 1..3".into())),
+            Err(e) => Err(e),
+        },
+        crate::cargo::BOUNTY => Ok(StationAct::NewBounties),
+        BOARD_CREATE => {
+            // tg keeps `bountyval`/`bountytext` from earlier acts; here they come together.
+            let (value, text) = match params.get("bounty") {
+                Some(b) => {
+                    let (v, t) = b.trim().split_once(' ').unwrap_or((b.trim(), ""));
+                    (v.parse::<f64>().ok(), t.trim().to_owned())
+                }
+                None => (params.number("bountyval").ok(), text("bountytext")),
+            };
+            match value.filter(|v| v.is_finite()) {
+                Some(v) => Ok(StationAct::CreateRequest(
+                    (v.round() as i64).clamp(1, MAX_REQUEST_VALUE),
+                    text.chars().take(MAX_MESSAGE_LEN).collect(),
+                )),
+                None => Err(UiReject::BadParams("bounty: VALUE TEXT".into())),
+            }
+        }
+        BOARD_APPLY | BOARD_DELETE => match params.get("request").and_then(|r| r.parse().ok()) {
+            Some(r) if action == BOARD_APPLY => Ok(StationAct::ApplyRequest(r)),
+            Some(r) => Ok(StationAct::DeleteRequest(r)),
+            None => Err(UiReject::BadParams("request: an account id".into())),
+        },
+        BOARD_PAY => match (
+            params.get("request").and_then(|r| r.parse().ok()),
+            params.get("applicant").and_then(|r| r.parse().ok()),
+        ) {
+            (Some(r), Some(a)) => Ok(StationAct::PayApplicant(r, a)),
+            _ => Err(UiReject::BadParams(
+                "request, applicant: account ids".into(),
+            )),
+        },
         _ => return None,
     })
 }
@@ -663,6 +857,12 @@ pub fn apply(
             state.auto_mode = !state.auto_mode;
             Ok(())
         }
+        StationAct::PickBounty(n) => pick_bounty(world, pc, n),
+        StationAct::NewBounties => new_bounties(world, client, pc, computer),
+        StationAct::CreateRequest(value, text) => create_request(world, client, pc, value, text),
+        StationAct::ApplyRequest(r) => apply_request(world, client, pc, r),
+        StationAct::PayApplicant(r, a) => pay_applicant(world, client, pc, r, a),
+        StationAct::DeleteRequest(r) => delete_request(world, client, pc, r),
     };
     if world.get_entity(pc).is_ok() {
         world.entity_mut(pc).insert(state);
@@ -931,6 +1131,316 @@ pub fn phys_scan(
     true
 }
 
+fn sound(world: &mut World, pc: Entity, file: &str, volume: f32) {
+    if let Some(pos) = turf_of(world, pc) {
+        crate::sound::playsound(world, crate::sound::PlaySound::new(pos, file, volume, true));
+    }
+}
+
+/// `civilianbounties/pick_bounty`.
+fn pick_bounty(world: &mut World, pc: Entity, n: usize) -> Result<(), &'static str> {
+    let account = account_of(world, pc);
+    let picked = account.is_some_and(|account| {
+        let Some(mut bounties) = world.get_resource_mut::<crate::cargo::bounty::Bounties>() else {
+            return false;
+        };
+        let state = bounties.accounts.entry(account).or_default();
+        if n == 0 || n > state.choices.len() {
+            return false;
+        }
+        let choice = state.choices.swap_remove(n - 1);
+        state.current = Some(choice);
+        state.choices.clear();
+        true
+    });
+    if !picked {
+        sound(world, pc, SYNTH_NO, 40.0);
+        return Err("no such bounty");
+    }
+    Ok(())
+}
+
+/// `civilianbounties/add_bounties` (no pad parts, so no cooldown reduction).
+fn new_bounties(
+    world: &mut World,
+    client: Entity,
+    pc: Entity,
+    computer: &ModularComputer,
+) -> Result<(), &'static str> {
+    use crate::cargo::bounty::{BOUNTY_COOLDOWN_SECS, Bounties};
+    let Some(account) = account_of(world, pc) else {
+        return Err("no account");
+    };
+    let time = now(world);
+    let Some(bounties) = world.get_resource::<Bounties>() else {
+        return Err("no bounties");
+    };
+    let cooldown = bounties
+        .account(account)
+        .filter(|s| (s.current.is_some() || !s.choices.is_empty()) && time < s.ready_at)
+        .map(|s| (s.ready_at - time).ceil() as u64);
+    if let Some(left) = cooldown {
+        let text = format!("попробуйте еще раз через {}:{:02}!", left / 60, left % 60);
+        tell(world, client, Span::Warning, text);
+        return Err("cooling down");
+    }
+    let job = computer
+        .stored_id
+        .and_then(|card| world.get::<crate::outfit::IdRegistration>(card))
+        .map(|r| {
+            if r.job.is_empty() {
+                r.assignment.clone()
+            } else {
+                r.job.clone()
+            }
+        })
+        .filter(|j| !j.is_empty());
+    let Some(job) = job else {
+        tell(
+            world,
+            client,
+            Span::Warning,
+            "Запрашиваемая ID карта не имеет зарегистрированной должности!",
+        );
+        return Err("no job");
+    };
+    let mut bounties = world.resource_mut::<Bounties>();
+    let category = bounties.bounty_types(&job);
+    let list = bounties.generate_bounty_list(category);
+    let state = bounties.accounts.entry(account).or_default();
+    state.choices = list;
+    state.ready_at = time + BOUNTY_COOLDOWN_SECS;
+    Ok(())
+}
+
+/// The computer's account and its holder.
+fn current_user(world: &World, pc: Entity) -> Option<(u32, String)> {
+    let id = account_of(world, pc)?;
+    let holder = world.get_resource::<Economy>()?.account(id)?.holder.clone();
+    Some((id, holder))
+}
+
+/// `createBounty`: one request per account.
+fn create_request(
+    world: &mut World,
+    client: Entity,
+    pc: Entity,
+    value: i64,
+    text: String,
+) -> Result<(), &'static str> {
+    let user = current_user(world, pc);
+    let Some((account, holder)) = user.filter(|_| !text.trim().is_empty()) else {
+        sound(world, pc, BUZZ, 20.0);
+        return Err("no account or text");
+    };
+    let mut requests = world.resource_mut::<StationRequests>();
+    if requests.0.iter().any(|r| r.owner_account == account) {
+        tell(
+            world,
+            client,
+            Span::Notice,
+            "Account already has active bounty.",
+        );
+        return Err("already has a request");
+    }
+    requests.0.push(StationRequest {
+        owner: holder,
+        owner_account: account,
+        value,
+        description: text,
+        applicants: Vec::new(),
+    });
+    tell(world, client, Span::Notice, "New bounty has been added!");
+    sound(world, pc, CASH_REGISTER, 30.0);
+    Ok(())
+}
+
+/// `apply`: not one's own request, once per applicant.
+fn apply_request(
+    world: &mut World,
+    client: Entity,
+    pc: Entity,
+    request: u32,
+) -> Result<(), &'static str> {
+    let Some((account, _)) = current_user(world, pc) else {
+        tell(
+            world,
+            client,
+            Span::Notice,
+            "Please swipe a valid ID first.",
+        );
+        return Err("no account");
+    };
+    let mut requests = world.resource_mut::<StationRequests>();
+    let Some(r) = requests.0.iter_mut().find(|r| r.owner_account == request) else {
+        return Err("no such request");
+    };
+    if r.owner_account == account {
+        sound(world, pc, BUZZ, 20.0);
+        return Err("own request");
+    }
+    if !r.applicants.contains(&account) {
+        r.applicants.push(account);
+    }
+    Ok(())
+}
+
+/// `payApplicant`: the owner pays the request's value to an applicant; the request closes.
+fn pay_applicant(
+    world: &mut World,
+    client: Entity,
+    pc: Entity,
+    request: u32,
+    applicant: u32,
+) -> Result<(), &'static str> {
+    let Some((account, _)) = current_user(world, pc) else {
+        return Err("no account");
+    };
+    let Some(r) = world
+        .resource::<StationRequests>()
+        .0
+        .iter()
+        .find(|r| r.owner_account == request && r.applicants.contains(&applicant))
+        .cloned()
+    else {
+        return Err("no such applicant");
+    };
+    let mut economy = world.resource_mut::<Economy>();
+    let paid = r.owner_account == account
+        && economy.account(applicant).is_some()
+        && economy
+            .account_mut(account)
+            .is_some_and(|a| a.adjust_money(-r.value));
+    if !paid {
+        sound(world, pc, BUZZ, 30.0);
+        return Err("cannot pay");
+    }
+    if let Some(a) = economy.account_mut(applicant) {
+        a.adjust_money(r.value);
+    }
+    let mut history = world.resource_mut::<PayHistory>();
+    history.0.entry(applicant).or_default().push(PayRecord {
+        adjusted_money: r.value,
+        reason: "Bounties: Request Completed".to_owned(),
+    });
+    history.0.entry(account).or_default().push(PayRecord {
+        adjusted_money: -r.value,
+        reason: "Bounties: Request Completed".to_owned(),
+    });
+    world
+        .resource_mut::<StationRequests>()
+        .0
+        .retain(|q| q.owner_account != request);
+    let money = crate::cargo::MONEY_SYMBOL;
+    tell(
+        world,
+        client,
+        Span::Notice,
+        format!("Paid out {}{money}.", r.value),
+    );
+    Ok(())
+}
+
+/// `deleteRequest`: the owner's only.
+fn delete_request(
+    world: &mut World,
+    client: Entity,
+    pc: Entity,
+    request: u32,
+) -> Result<(), &'static str> {
+    let owner = current_user(world, pc).is_some_and(|(account, _)| account == request);
+    let exists = world
+        .resource::<StationRequests>()
+        .0
+        .iter()
+        .any(|r| r.owner_account == request);
+    if !owner || !exists {
+        sound(world, pc, BUZZ, 20.0);
+        return Err("not the owner");
+    }
+    world
+        .resource_mut::<StationRequests>()
+        .0
+        .retain(|r| r.owner_account != request);
+    tell(world, client, Span::Notice, "Deleted current request.");
+    Ok(())
+}
+
+/// The program a launcher window on a computer belongs to.
+pub fn launcher_of(interface: &str) -> Option<ProgramKind> {
+    use ss13_tgui::UiInterface as _;
+    if interface == crate::cargo::CargoUi::NAME {
+        Some(ProgramKind::Station(StationProgram::BudgetOrders))
+    } else if interface == crate::science::TechwebUi::NAME {
+        Some(ProgramKind::Station(StationProgram::ScienceHub))
+    } else {
+        None
+    }
+}
+
+/// `can_run` of a program with `run_access`: the computer's ID (or an emag) opens it.
+fn can_run(world: &World, computer: &ModularComputer, program: StationProgram) -> bool {
+    let required = program.run_access();
+    if required.is_empty() || computer.emagged {
+        return true;
+    }
+    computer
+        .stored_id
+        .and_then(|c| world.get::<crate::inventory::IdCard>(c))
+        .is_some_and(|card| card.access.iter().any(|a| required.contains(&a.as_str())))
+}
+
+/// A launcher run: the computer becomes the machine of the window and opens it.
+pub fn open_launcher(
+    world: &mut World,
+    client: Entity,
+    actor: Entity,
+    pc: Entity,
+    program: StationProgram,
+) {
+    let Some(computer) = world.get::<ModularComputer>(pc).cloned() else {
+        return;
+    };
+    if !can_run(world, &computer, program) {
+        tell(
+            world,
+            client,
+            Span::Danger,
+            format!(
+                "{} показывает ошибку \"Access Denied\".",
+                computer.display_name()
+            ),
+        );
+        return;
+    }
+    let title = program.filedesc();
+    match program {
+        StationProgram::BudgetOrders => {
+            if world
+                .get::<crate::cargo::console::CargoConsole>(pc)
+                .is_none()
+            {
+                crate::cargo::console::program_console(world, pc, computer.emagged);
+            }
+            world.write_message(ss13_tgui::server::OpenUi::new::<crate::cargo::CargoUi>(
+                client, actor, pc, title,
+            ));
+        }
+        StationProgram::ScienceHub => {
+            if world
+                .get::<crate::science::console::RdConsole>(pc)
+                .is_none()
+            {
+                crate::science::console::program_console(world, pc);
+            }
+            world.write_message(ss13_tgui::server::OpenUi::new::<crate::science::TechwebUi>(
+                client, actor, pc, title,
+            ));
+        }
+        _ => {}
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1132,6 +1642,87 @@ mod tests {
                 .programs
                 .contains(&scanner)
         );
+    }
+
+    #[test]
+    fn bounty_board_requests_are_paid_by_their_owner() {
+        use crate::cargo::economy::BankAccountId;
+        let (mut world, pc) = world_with_pda(StationProgram::BountyBoard);
+        world.init_resource::<StationRequests>();
+        let client = world.spawn_empty().id();
+        let (owner, worker) = {
+            let mut economy = world.resource_mut::<Economy>();
+            let owner = economy.open_account("Alice Smith", 10, "civilian");
+            let worker = economy.open_account("Bob Jones", 10, "civilian");
+            economy.account_mut(owner).unwrap().balance = 100;
+            economy.account_mut(worker).unwrap().balance = 0;
+            (owner, worker)
+        };
+        let card = world.spawn(BankAccountId(owner)).id();
+        world.get_mut::<ModularComputer>(pc).unwrap().stored_id = Some(card);
+        assert!(create_request(&mut world, client, pc, 30, "Принесите пиццу".into()).is_ok());
+        // One per account, and not an empty one.
+        assert!(create_request(&mut world, client, pc, 30, "ещё".into()).is_err());
+        // The owner cannot apply to their own request.
+        assert!(apply_request(&mut world, client, pc, owner).is_err());
+        world.entity_mut(card).insert(BankAccountId(worker));
+        assert!(apply_request(&mut world, client, pc, owner).is_ok());
+        // Only the owner pays, and only an applicant.
+        assert!(pay_applicant(&mut world, client, pc, owner, worker).is_err());
+        assert!(delete_request(&mut world, client, pc, owner).is_err());
+        world.entity_mut(card).insert(BankAccountId(owner));
+        assert!(pay_applicant(&mut world, client, pc, owner, owner).is_err());
+        assert!(pay_applicant(&mut world, client, pc, owner, worker).is_ok());
+        let economy = world.resource::<Economy>();
+        assert_eq!(economy.account(owner).unwrap().balance, 70);
+        assert_eq!(economy.account(worker).unwrap().balance, 30);
+        assert!(world.resource::<StationRequests>().0.is_empty());
+    }
+
+    #[test]
+    fn science_hub_needs_research_or_command_access() {
+        let (world, pc) = world_with_pda(StationProgram::ScienceHub);
+        let mut computer = world.get::<ModularComputer>(pc).unwrap().clone();
+        assert!(!can_run(&world, &computer, StationProgram::ScienceHub));
+        assert!(can_run(&world, &computer, StationProgram::BudgetOrders));
+        computer.emagged = true;
+        assert!(can_run(&world, &computer, StationProgram::ScienceHub));
+        use ss13_tgui::UiInterface as _;
+        assert_eq!(
+            launcher_of(crate::cargo::CargoUi::NAME),
+            Some(ProgramKind::Station(StationProgram::BudgetOrders))
+        );
+        assert!(ProgramKind::Station(StationProgram::ScienceHub).launcher());
+    }
+
+    #[test]
+    fn board_acts_parse_hostile_params() {
+        let parse_with = |action: &str, params: &[(&str, &str)]| {
+            let params: Vec<(String, String)> = params
+                .iter()
+                .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+                .collect();
+            parse(action, &UiParams::new(&params))
+        };
+        assert_eq!(
+            parse_with(BOARD_CREATE, &[("bounty", "1e12 очень дорого")]),
+            Some(Ok(StationAct::CreateRequest(
+                MAX_REQUEST_VALUE,
+                "очень дорого".into()
+            )))
+        );
+        assert!(matches!(
+            parse_with(BOARD_CREATE, &[("bounty", "много денег")]),
+            Some(Err(_))
+        ));
+        assert!(matches!(
+            parse_with(crate::cargo::PICK, &[("value", "4")]),
+            Some(Err(_))
+        ));
+        assert!(matches!(
+            parse_with(BOARD_PAY, &[("request", "1")]),
+            Some(Err(_))
+        ));
     }
 
     #[test]

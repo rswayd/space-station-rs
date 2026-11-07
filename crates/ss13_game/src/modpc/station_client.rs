@@ -116,7 +116,112 @@ pub fn screen(s: &StationScreen) -> Part {
             parts.push(button(mode.to_owned(), "sync", SPECTRE_MODE, Vec::new()));
             section("Spectre-Meter".to_owned(), parts)
         }
+        StationScreen::CivBounties(d) => civ_bounties(d),
+        StationScreen::BountyBoard(d) => bounty_board(d),
+        StationScreen::Restock(rows) => {
+            let mut parts: Vec<Part> = rows
+                .iter()
+                .map(|v| {
+                    line(format!(
+                        "{} ({}) — {:.0}%, {} кредитов",
+                        v.name, v.location, v.percentage, v.credits
+                    ))
+                })
+                .collect();
+            if parts.is_empty() {
+                parts.push(line("Все автоматы укомплектованы.".to_owned()));
+            }
+            section("NT Restock Tracker".to_owned(), parts)
+        }
     }
+}
+
+/// `NtosCivCargoHoldTerminal`.
+fn civ_bounties(d: &crate::cargo::CivBountyData) -> Part {
+    if !d.id_inserted {
+        return section(
+            "Civilian Bounties".to_owned(),
+            vec![line("Вставьте ID-карту.".to_owned())],
+        );
+    }
+    let mut parts = vec![line(d.status_report.clone())];
+    match &d.id_bounty_info {
+        Some(info) => {
+            parts.push(line(format!("Заказ: {info}")));
+            parts.push(line(format!(
+                "Выполнено: {}, награда: {:.0}",
+                d.id_bounty_num, d.id_bounty_value
+            )));
+        }
+        None => parts.push(line("Нет активного заказа.".to_owned())),
+    }
+    if d.picking {
+        for (i, c) in d.choices.iter().enumerate() {
+            parts.push(line(format!("{} — {} ({:.0})", c.name, c.info, c.value)));
+            parts.push(button(
+                "Выбрать".to_owned(),
+                "check",
+                crate::cargo::PICK,
+                vec![(crate::cargo::VALUE.to_owned(), (i + 1).to_string())],
+            ));
+        }
+    }
+    parts.push(button(
+        "Новые заказы".to_owned(),
+        "sync",
+        crate::cargo::BOUNTY,
+        Vec::new(),
+    ));
+    section("Civilian Bounties".to_owned(), parts)
+}
+
+/// `NtosBountyBoard`.
+fn bounty_board(d: &BountyBoardData) -> Part {
+    let mut parts = Vec::new();
+    match &d.user {
+        Some((name, job)) => parts.push(line(format!("{name} ({job})"))),
+        None => parts.push(line("Вставьте ID-карту с банковским счётом.".to_owned())),
+    }
+    for r in &d.requests {
+        let request = ("request".to_owned(), r.acc_number.to_string());
+        parts.push(line(format!(
+            "{} — {}: {}",
+            r.owner, r.value, r.description
+        )));
+        parts.push(button(
+            "Откликнуться".to_owned(),
+            "handshake",
+            BOARD_APPLY,
+            vec![request.clone()],
+        ));
+        parts.push(button(
+            "Удалить".to_owned(),
+            "trash",
+            BOARD_DELETE,
+            vec![request.clone()],
+        ));
+        for a in d.applicants.iter().filter(|a| a.request_id == r.acc_number) {
+            parts.push(button(
+                format!("Оплатить: {}", a.name),
+                "money-bill",
+                BOARD_PAY,
+                vec![
+                    request.clone(),
+                    ("applicant".to_owned(), a.requestee_id.to_string()),
+                ],
+            ));
+        }
+    }
+    parts.push(line(
+        "Новая заявка: «СУММА ОПИСАНИЕ», Enter — разместить".to_owned(),
+    ));
+    parts.push(input(
+        "СУММА ОПИСАНИЕ".to_owned(),
+        BOARD_CREATE,
+        "bounty",
+        Vec::new(),
+    ));
+    section("Bounty Board".to_owned(), parts)
 }
 
 fn pay(d: &PayData) -> Part {

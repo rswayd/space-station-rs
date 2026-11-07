@@ -2,7 +2,7 @@
 //! Lifeline, Custodial Locator, SiliConnect, Bot Remote Controller, Revelation and the
 //! maintenance disk programs (Physical Scanner, Spectre-Meter).
 
-use super::{CATEGORY_DEVICE, CATEGORY_EQUIPMENT, CATEGORY_SCIENCE};
+use super::{CATEGORY_DEVICE, CATEGORY_EQUIPMENT, CATEGORY_SCIENCE, CATEGORY_SUPPLY};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum StationProgram {
@@ -22,10 +22,20 @@ pub enum StationProgram {
     PhysScanner,
     /// `/datum/computer_file/program/maintenance/spectre_meter`: from a maintenance disk.
     SpectreMeter,
+    /// `/datum/computer_file/program/budgetorders` (NT Shopping Network): the supply window.
+    BudgetOrders,
+    /// `/datum/computer_file/program/civilianbounties`.
+    CivBounties,
+    /// `/datum/computer_file/program/bounty_board`.
+    BountyBoard,
+    /// `/datum/computer_file/program/science` (Nanotrasen Science Hub): the techweb window.
+    ScienceHub,
+    /// `/datum/computer_file/program/restock_tracker`.
+    RestockTracker,
 }
 
 impl StationProgram {
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 13] = [
         Self::NtPay,
         Self::Lifeline,
         Self::CustodialLocator,
@@ -34,6 +44,11 @@ impl StationProgram {
         Self::Revelation,
         Self::PhysScanner,
         Self::SpectreMeter,
+        Self::BudgetOrders,
+        Self::CivBounties,
+        Self::BountyBoard,
+        Self::ScienceHub,
+        Self::RestockTracker,
     ];
 
     pub fn filename(self) -> &'static str {
@@ -46,6 +61,11 @@ impl StationProgram {
             Self::Revelation => "revelation",
             Self::PhysScanner => "phys_scanner",
             Self::SpectreMeter => "spectre_meter",
+            Self::BudgetOrders => "orderapp",
+            Self::CivBounties => "bountyapp",
+            Self::BountyBoard => "bountyboard",
+            Self::ScienceHub => "experi_track",
+            Self::RestockTracker => "restockapp",
         }
     }
 
@@ -58,6 +78,11 @@ impl StationProgram {
             Self::RoboControl => "BotKeeper",
             Self::Revelation => "Revelation",
             Self::PhysScanner => "Physical Scanner",
+            Self::BudgetOrders => "NT Shopping Network",
+            Self::CivBounties => "Civilian Bounties",
+            Self::BountyBoard => "Bounty Board Request Network",
+            Self::ScienceHub => "Nanotrasen Science Hub",
+            Self::RestockTracker => "NT Restock Tracker",
             Self::SpectreMeter => "Spectre-Meter",
         }
     }
@@ -72,6 +97,11 @@ impl StationProgram {
             Self::Revelation => "magnet",
             Self::PhysScanner => "barcode",
             Self::SpectreMeter => "ghost",
+            Self::BudgetOrders => "cart-flatbed",
+            Self::CivBounties => "boxes-stacked",
+            Self::BountyBoard => "hand-holding-usd",
+            Self::ScienceHub => "atom",
+            Self::RestockTracker => "cash-register",
         }
     }
 
@@ -105,13 +135,35 @@ impl StationProgram {
                 "Программа, используемая для того, чтобы каким-то образом обнаружить присутствие \
                  призраков поблизости."
             }
+            Self::BudgetOrders => {
+                "Nanotrasen Shopping Requisition - сетевой интерфейс для закупки поставок с \
+                 использованием счета отдела."
+            }
+            Self::CivBounties => {
+                "Nanotrasen Civilian Bounty Requisition Network interface for displaying wanted \
+                 items."
+            }
+            Self::BountyBoard => {
+                "Мультиплатформенная сеть для размещения заявок по всей станции, с возможностью \
+                 удаленной оплаты."
+            }
+            Self::ScienceHub => {
+                "Подключитесь к внутреннему научному серверу, чтобы помочь в исследованиях на \
+                 станции."
+            }
+            Self::RestockTracker => {
+                "Сеть Nanotrasen IoT, в которой перечислены все торговые автоматы, находящиеся на \
+                 станции, и насколько хорошо укомплектован каждый из них. Прибыльно!"
+            }
         }
     }
 
     pub fn size(self) -> u32 {
         match self {
             Self::NtPay | Self::CustodialLocator | Self::PhysScanner => 2,
-            Self::Lifeline | Self::BorgMonitor => 5,
+            Self::RestockTracker => 4,
+            Self::Lifeline | Self::BorgMonitor | Self::CivBounties => 5,
+            Self::BudgetOrders | Self::BountyBoard | Self::ScienceHub => 10,
             Self::RoboControl => 6,
             Self::SpectreMeter => 7,
             Self::Revelation => 13,
@@ -121,7 +173,10 @@ impl StationProgram {
     pub fn category(self) -> &'static str {
         match self {
             Self::NtPay | Self::Revelation => CATEGORY_DEVICE,
-            Self::BorgMonitor | Self::RoboControl => CATEGORY_SCIENCE,
+            Self::BorgMonitor | Self::RoboControl | Self::ScienceHub => CATEGORY_SCIENCE,
+            Self::BudgetOrders | Self::CivBounties | Self::BountyBoard | Self::RestockTracker => {
+                CATEGORY_SUPPLY
+            }
             Self::Lifeline | Self::CustodialLocator | Self::PhysScanner | Self::SpectreMeter => {
                 CATEGORY_EQUIPMENT
             }
@@ -146,7 +201,12 @@ impl StationProgram {
     /// physical scanner (`PROGRAM_PDA`) need a portable device.
     pub fn runs_on(self, pda: bool) -> bool {
         match self {
-            Self::Lifeline | Self::CustodialLocator | Self::PhysScanner | Self::SpectreMeter => pda,
+            Self::Lifeline
+            | Self::CustodialLocator
+            | Self::PhysScanner
+            | Self::SpectreMeter
+            | Self::BudgetOrders
+            | Self::CivBounties => pda,
             _ => true,
         }
     }
@@ -158,8 +218,23 @@ impl StationProgram {
             Self::CustodialLocator => &["janitor"],
             Self::BorgMonitor => &["robotics"],
             Self::RoboControl => &["robotics"],
+            Self::ScienceHub => &["research"],
             _ => &[],
         }
+    }
+
+    /// `run_access` (any one of them opens).
+    pub fn run_access(self) -> &'static [&'static str] {
+        match self {
+            Self::ScienceHub => &["command", "research"],
+            _ => &[],
+        }
+    }
+
+    /// Programs that open an existing window with the computer as its machine (the supply
+    /// console's `Cargo`, the R&D console's `Techweb`) instead of an NtOS screen.
+    pub fn launcher(self) -> bool {
+        matches!(self, Self::BudgetOrders | Self::ScienceHub)
     }
 
     /// The `/obj/item/disk/computer/maintenance/*` that carries it.
