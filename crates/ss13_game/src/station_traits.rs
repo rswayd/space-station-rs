@@ -23,7 +23,8 @@
 // Pun's revenge, revolutionary trashing, nebulae, structural weaknesses, every neutral trait but
 // the announcers, the job traits; planetary-only ones (bright day, forested, eternal storm) never
 // apply to the space maps here. No admin traits panel (forcing is `SS13_STATION_TRAITS`), no
-// lobby trait buttons, no `revert()`.
+// `revert()`. The lobby sign-up buttons ([`LobbyCandidates`]) exist; the job traits that own
+// them (and `pre_jobs_assigned`, which picks among the candidates) are not in the pool yet.
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
@@ -376,6 +377,63 @@ impl StationTraits {
 #[derive(Resource)]
 pub struct TraitRng(pub Rng);
 
+/// `/datum/station_trait/job` subtypes (`sign_up_button = TRUE`): path and `button_desc`.
+pub const LOBBY_TRAITS: [(&str, &str); 5] = [
+    (
+        "/datum/station_trait/job/cargorilla",
+        "Sign up to become the Cargo Gorilla, a peaceful shepherd of boxes.",
+    ),
+    (
+        "/datum/station_trait/job/bridge_assistant",
+        "Sign up to become the Bridge Assistant and watch over the Bridge.",
+    ),
+    (
+        "/datum/station_trait/job/veteran_advisor",
+        "Sign up to become a DISABLED but hard boiled Veteran Advisor of Nanotrasen Security \
+         Force. Advise HoS and Captain, train Officers, all while fighting your PTSD.",
+    ),
+    (
+        "/datum/station_trait/job/human_ai",
+        "Sign up to become the \"AI\".",
+    ),
+    (
+        "/datum/station_trait/job/pun_pun",
+        "Ook ook ah ah, sign up to play as the bartender's monkey.",
+    ),
+];
+
+/// The lobby button text of a trait with a sign-up button, `None` for the others.
+pub fn lobby_button_desc(path: &str) -> Option<&'static str> {
+    LOBBY_TRAITS
+        .iter()
+        .find(|(p, _)| *p == path)
+        .map(|(_, desc)| *desc)
+}
+
+/// tg `/datum/station_trait/job` `lobby_candidates`: the client connections signed up per trait
+/// path. Stale entries (disconnected, not ready) are the reader's to drop, as tg's
+/// `pre_jobs_assigned` does.
+#[derive(Resource, Clone, Debug, Default)]
+pub struct LobbyCandidates(pub std::collections::HashMap<&'static str, Vec<Entity>>);
+
+impl LobbyCandidates {
+    pub fn signed_up(&self, path: &str, client: Entity) -> bool {
+        self.0.get(path).is_some_and(|c| c.contains(&client))
+    }
+
+    /// Adds `client`, or removes it when it was signed up; `true` when it is now signed up.
+    pub fn toggle(&mut self, path: &'static str, client: Entity) -> bool {
+        let list = self.0.entry(path).or_default();
+        if let Some(i) = list.iter().position(|&c| c == client) {
+            list.remove(i);
+            false
+        } else {
+            list.push(client);
+            true
+        }
+    }
+}
+
 /// `HAS_TRAIT(SSstation, ...)` of the trait type `path`.
 pub fn has(world: &World, path: &str) -> bool {
     world
@@ -507,6 +565,7 @@ impl Plugin for StationTraitsPlugin {
         app.insert_resource(MaintLootScale(scale))
             .insert_resource(StationTraits { active })
             .insert_resource(TraitRng(rng))
+            .init_resource::<LobbyCandidates>()
             .add_systems(Startup, traits_new)
             .add_systems(Update, spike_drinks);
     }

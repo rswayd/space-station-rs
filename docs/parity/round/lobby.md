@@ -6,7 +6,7 @@
 
 - **Код:** [`/datum/controller/subsystem/title`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/title_screen/code/title_screen_subsystem.dm#L1), [`title_screen_html.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/title_screen/code/title_screen_html.dm#L1), [`/datum/controller/subsystem/title/proc/show_title_screen_to()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/title_screen/code/title_screen_subsystem.dm#L154)
 - **BandaStation:** [`_title_screen.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/title_screen/_title_screen.dm#L1), [`new_player.dm#L89`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/dead/new_player/new_player.dm#L89)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/round.rs` (`LobbyUi`), `crates/ss13_game/src/lobby_client.rs`: tg-заставка `default_title.dmi` с кнопками BandaStation и блоком информации; нет HTML-страницы, пула фонов, уведомлений, ссылок, индикатора загрузки
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/round.rs` (`LobbyUi`), `crates/ss13_game/src/lobby_client.rs`: tg-заставка `default_title.dmi` с кнопками BandaStation и блоком информации; нет HTML-страницы, пула фонов и смены фона админом, видео YouTube/RuTube, ссылок, индикатора загрузки; уведомление админов показывается (см. «Админ-кнопки лобби»)
 
 ### Готовность и галочка «Антагонисты»
 Кнопка «Готов» до старта; «Антагонисты» — согласие на роли антагов (по умолчанию включено).
@@ -33,7 +33,7 @@ TGUI `JobSelection`: профессии по отделам со свободн�
 Кнопка «Манифест персонала» показывает список экипажа по отделам.
 
 - **Код:** [`/mob/dead/new_player/proc/ViewManifest()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/dead/new_player/new_player.dm#L324); tgui: [`CrewManifest.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/CrewManifest.jsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/round.rs` (`LobbyAct::Manifest`, `CrewManifestUi`, `crew_manifest`), `crates/ss13_game/src/lobby_client.rs`: окно `CrewManifest` с открытыми позициями отделов и отметкой безлимитных профессий; без значков капитана/командования (в записях нет трима)
 
 ### Кнопки настройки персонажа и игры
 «Настройка персонажа» и «Настройки игры» открывают окна предпочтений (см. ../ui/).
@@ -46,23 +46,23 @@ TGUI `JobSelection`: профессии по отделам со свободн�
 
 - **Код:** [`new_player.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/title_screen/code/new_player.dm#L35), [`/mob/dead/new_player/proc/register_for_interview()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/dead/new_player/new_player.dm#L364)
 - **BandaStation:** [`new_player.dm#L375`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/dead/new_player/new_player.dm#L109) — интервью только с привязанным Discord
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ❌ нет — нужен внешний сервис SScentral (привязка Discord, OAuth); интервью BandaStation открывается только с привязанным Discord
 
 ### Админ-кнопки лобби
 Для админов: «Запустить раунд», «Отложить начало», оставить уведомление, сменить фон, проиграть видео YouTube/Rutube.
 
 - **Код:** [`/datum/controller/subsystem/title/proc/set_notice()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/title_screen/code/title_screen_subsystem.dm#L192), [`/datum/controller/subsystem/title/proc/set_title_image()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/title_screen/code/title_screen_subsystem.dm#L278), [`/datum/controller/subsystem/title/proc/play_youtube_video()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/title_screen/code/title_screen_subsystem.dm#L245)
-- **Статус в ss13-rs:** ❌ нет — `SS13_LOBBY_SECONDS=0` только для разработки
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_admin/src/lobby.rs`, `crates/ss13_game/src/round.rs` (`LobbyAdmin`, `delay_start`, `set_notice`): кнопки «Запустить раунд» (`R_SERVER`), «Отложить начало» (90 с ↔ 1984 дня), «Уведомление» (ввод текста, до 2048 символов) для `R_ADMIN`/`R_DEBUG`, права проверяются сервером, попытка без прав — предупреждение и лог админам. Смена фона и видео YouTube/RuTube — часть HTML-заставки (см. «Экран-заставка»); уведомление не сохраняется между раундами, звуков нет
 
 ### Запись на станционные трейты
 Кнопки в лобби для трейтов с записью (например, добровольцы на особую роль).
 
 - **Код:** [`station_traits.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/title_screen/code/station_traits.dm#L1), [`create_trait_buttons`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/title_screen/code/title_screen_html.dm#L47)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/round.rs` (`LobbyAct::TraitSignup`), `crates/ss13_game/src/station_traits.rs` (`LOBBY_TRAITS`, `LobbyCandidates`): кнопка на каждый активный трейт с записью до начала раунда, запись/отписка. Сами профессиональные трейты и выбор кандидата (`pre_jobs_assigned`) — в [station-traits-goals.md](station-traits-goals.md), пока не в пуле
 
 ### Сброс HUD лобби
 Верб «Reset Lobby Menu HUD» перерисовывает лобби.
 
 - **Код:** [`reset_menu_hud`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/dead/new_player/new_player.dm#L37)
 - **BandaStation:** [`new_player.dm#L384`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/dead/new_player/new_player.dm#L384)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/round.rs` (`LobbyAct::ResetHud`, `reset_hud`): кнопка лобби вместо верба, окно лобби пересылается и перерисовывается, раз в 15 с

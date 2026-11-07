@@ -203,6 +203,7 @@ impl Plugin for AdminServerPlugin {
                 .map(std::io::BufWriter::new)
         });
         crate::logout_report::build(app);
+        crate::lobby::build(app);
         app.insert_resource(AdminLogFile(file))
             .init_resource::<Bans>()
             .init_resource::<Mutes>()

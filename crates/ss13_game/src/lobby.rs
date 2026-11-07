@@ -51,6 +51,22 @@ pub struct LobbyData {
     pub antag_roll: bool,
     /// `SS13_SOURCE_URL` (`crate::round::RoundConfig::source_url`): the AGPL source offer.
     pub source_url: Option<String>,
+    /// BandaStation `SStitle.notice`: the admins' big red text; `None` when unset.
+    pub notice: Option<String>,
+    /// Admin buttons are shown (BandaStation `check_rights_for(client, R_ADMIN|R_DEBUG)`); the
+    /// server checks the rights again on every act.
+    pub admin: bool,
+    /// BandaStation `create_trait_buttons`: the lobby station traits, before the round starts.
+    pub traits: Vec<LobbyTrait>,
+}
+
+/// One station trait button (`/datum/station_trait/job`: `name`, `button_desc`).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LobbyTrait {
+    pub name: String,
+    pub desc: String,
+    /// In the trait's `lobby_candidates`.
+    pub signed_up: bool,
 }
 
 /// Lobby acts (BandaStation `new_player/Topic` hrefs). "Join game" is
@@ -61,6 +77,44 @@ pub const OBSERVE: &str = "observe";
 pub const CHARACTER_SETUP: &str = "character_setup";
 /// BandaStation's lobby "Антагонисты" checkbox (`toggle_antag_roll` href).
 pub const TOGGLE_ANTAG_ROLL: &str = "toggle_antag_roll";
+/// BandaStation "Манифест персонала" (`manifest` href): opens [`CrewManifestUi`].
+pub const MANIFEST: &str = "manifest";
+/// BandaStation `trait_signup` href: `{ trait }` is the trait's name.
+pub const TRAIT_SIGNUP: &str = "trait_signup";
+pub const TRAIT_PARAM: &str = "trait";
+/// tg `reset_menu_hud` verb ("Reset Lobby Menu HUD").
+pub const RESET_HUD: &str = "reset_hud";
+/// BandaStation's admin buttons (`start_now`, `delay`, `notice` hrefs); `notice` takes
+/// `{ text }` (empty: remove the notice).
+pub const START_NOW: &str = "start_now";
+pub const DELAY: &str = "delay";
+pub const NOTICE: &str = "notice";
+pub const NOTICE_PARAM: &str = "text";
+
+/// tg `GLOB.manifest.ui_interact(new_player)`: the `CrewManifest` window.
+pub struct CrewManifestUi;
+
+impl UiInterface for CrewManifestUi {
+    const NAME: &'static str = "CrewManifest";
+    type Data = CrewManifestData;
+    type StaticData = ();
+}
+
+/// `/datum/manifest/ui_data`: `manifest` (`get_manifest()`) and `positions`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CrewManifestData {
+    pub manifest: Vec<crate::modpc::ManifestDepartment>,
+    pub positions: Vec<DepartmentPositions>,
+}
+
+/// One department of `positions`: `open` slots, the unlimited jobs (`exceptions`), `color`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DepartmentPositions {
+    pub name: String,
+    pub open: u32,
+    pub exceptions: Vec<String>,
+    pub color: String,
+}
 
 /// tg `JP_LOW`, `JP_MEDIUM`, `JP_HIGH`; a job without a level is "never".
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
