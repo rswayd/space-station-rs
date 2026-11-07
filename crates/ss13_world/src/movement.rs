@@ -20,6 +20,12 @@ pub struct Density;
 #[derive(Component, Clone, Copy, Debug, Default)]
 pub struct ClimbWalkable;
 
+/// tg `PushAM` target: a dense movable that is not anchored and does not walk (closets, crates,
+/// loose machines). A step into it shoves it a tile on and follows. The game keeps it in sync;
+/// replicated with the blocking so the client predicts the shove.
+#[derive(Component, Clone, Copy, Debug, Default)]
+pub struct Pushable;
+
 /// tg holobarriers' `CanAllowThrough` (`/obj/structure/holosign/barrier`): a dense blocker a
 /// [`PassesWalkBarriers`] mover steps through.
 #[derive(Component, Clone, Copy, Debug, Default)]

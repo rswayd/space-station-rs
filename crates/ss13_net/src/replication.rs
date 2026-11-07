@@ -71,6 +71,8 @@ pub(crate) enum Blocks {
     Stairs(u8),
     /// Open space a walker falls through (`ss13_world::FallsThrough`), on its turf.
     Hole,
+    /// A loose dense object a step shoves on (`ss13_world::Pushable`, tg `PushAM`).
+    Pushable,
 }
 
 /// One entity of a [`ReplicationOp::Spawn`] tile group.

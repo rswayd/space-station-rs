@@ -13,7 +13,7 @@ pub use map_init::{
 };
 pub use movement::{
     Border, Bumped, ClimbWalkable, ClimbsUp, Density, FallsThrough, GatePolicy, MoveRequest, Moved,
-    Mover, NonDenseBorder, PassesWalkBarriers, PrisonGate, WalkPassable, gate_refuses,
+    Mover, NonDenseBorder, PassesWalkBarriers, PrisonGate, Pushable, WalkPassable, gate_refuses,
     next_ready_at, resolve_move,
 };
 

@@ -8,7 +8,8 @@
 //! (a window into shards, rods for reinforced ones, a grille into rods, a girder into a rod or a
 //! sheet). A destroyed window takes its `AtmosBlocker` with it, so its tile opens to the air.
 //!
-//! Every structure and machine also gets [`Anchored`] (tg `anchored`), which pulling reads.
+//! Every structure and machine also gets [`Anchored`] (tg `anchored`), which pulling reads; a
+//! dense loose one is [`Pushable`] (`sync_pushable`).
 // shortcut: only windows, grilles, girders, frames, gas machines and vendors take damage; other
 // structures and machines (tables, closets, doors) wait for their own
 // `atom_break`/`atom_deconstruct`.
@@ -18,7 +19,7 @@ use ss13_atmos::{AtmosBlocker, AtmosPass};
 use ss13_mapload::{DmAtom, DmItem, DmName, DmObj, IconIndex};
 use ss13_shared::chat::{ChatChannel, ChatMessage, ChatSegment, Span};
 use ss13_shared::{Appearance, TilePos};
-use ss13_world::{Density, SpatialIndex};
+use ss13_world::{Density, Mover, Pushable, SpatialIndex};
 
 use crate::combat::{CombatRng, NextMove};
 use crate::health::{COMBAT_MESSAGE_RANGE, DamageType};
@@ -141,7 +142,39 @@ pub struct ObjDamageServerPlugin;
 
 impl Plugin for ObjDamageServerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_observer(add_obj_state);
+        app.add_observer(add_obj_state).add_systems(
+            PostUpdate,
+            sync_pushable.before(ss13_net::server::NetServerSystems::Send),
+        );
+    }
+}
+
+/// Keeps [`Pushable`] on the dense structures and machines that are not anchored and do not walk
+/// (tg `PushAM` refuses `anchored`), whoever changes the anchoring or the density; the client's
+/// movement prediction reads it.
+// shortcut: `move_resist` is not modelled, so a heavy loose object is predicted as shoved and the
+// server's refusal rolls the step back; mark it here once `move_resist` is ported.
+fn sync_pushable(
+    changed: Query<Entity, Or<(Changed<Anchored>, Added<Density>, Added<Mover>)>>,
+    mut lost_density: RemovedComponents<Density>,
+    mut lost_mover: RemovedComponents<Mover>,
+    objs: Query<(&Anchored, Has<Density>, Has<Mover>, Has<Pushable>)>,
+    mut commands: Commands,
+) {
+    let touched = changed
+        .iter()
+        .chain(lost_density.read())
+        .chain(lost_mover.read());
+    for e in touched {
+        let Ok((anchored, dense, mover, pushable)) = objs.get(e) else {
+            continue;
+        };
+        let loose = dense && !anchored.0 && !mover;
+        if loose && !pushable {
+            commands.entity(e).try_insert(Pushable);
+        } else if !loose && pushable {
+            commands.entity(e).try_remove::<Pushable>();
+        }
     }
 }
 
@@ -633,5 +666,31 @@ mod tests {
         };
         let hit = damage_numbers(&indestructible, &mut full, 100.0, DamageType::Brute);
         assert_eq!((hit.damage, full.current), (0.0, 50.0));
+    }
+
+    #[test]
+    fn pushable_follows_anchoring_and_density() {
+        let mut app = App::new();
+        app.add_systems(Update, sync_pushable);
+        let e = app.world_mut().spawn((Anchored(false), Density)).id();
+        let anchored = app.world_mut().spawn((Anchored(true), Density)).id();
+        app.update();
+        let pushable = |app: &App, e| app.world().get::<Pushable>(e).is_some();
+        assert!(pushable(&app, e));
+        assert!(!pushable(&app, anchored));
+        app.world_mut().entity_mut(e).insert(Anchored(true));
+        app.update();
+        assert!(!pushable(&app, e), "wrenched down");
+        app.world_mut().entity_mut(e).insert(Anchored(false));
+        app.update();
+        assert!(pushable(&app, e), "unwrenched");
+        app.world_mut().entity_mut(e).remove::<Density>();
+        app.update();
+        assert!(!pushable(&app, e), "no longer dense");
+        app.world_mut()
+            .entity_mut(e)
+            .insert((Density, Mover::new(0.0)));
+        app.update();
+        assert!(!pushable(&app, e), "walks by itself");
     }
 }

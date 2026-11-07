@@ -320,6 +320,9 @@ fn insert_blocks(entity: &mut EntityCommands, blocks: Option<Blocks>) {
         Some(Blocks::Edges(edges)) => {
             entity.try_insert((Density, Border { edges }));
         }
+        Some(Blocks::Pushable) => {
+            entity.try_insert((Density, ss13_world::Pushable));
+        }
         Some(Blocks::Hole) => {
             entity.try_insert(ss13_world::FallsThrough);
         }
@@ -383,6 +386,7 @@ fn apply_op(map: &mut NetEntityMap, commands: &mut Commands, tick: u32, op: Repl
                     ss13_world::NonDenseBorder,
                     ss13_world::ClimbsUp,
                     ss13_world::FallsThrough,
+                    ss13_world::Pushable,
                 )>();
                 insert_blocks(&mut entity, blocks);
             }
