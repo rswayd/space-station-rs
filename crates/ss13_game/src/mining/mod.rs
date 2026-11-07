@@ -29,6 +29,8 @@ pub mod console;
 #[cfg(feature = "server")]
 pub mod cores;
 #[cfg(feature = "server")]
+pub mod crusher;
+#[cfg(feature = "server")]
 pub mod equipment;
 #[cfg(feature = "server")]
 pub mod explorer;
@@ -104,6 +106,7 @@ impl bevy::prelude::Plugin for MiningServerPlugin {
             beacons::BeaconsPlugin,
             explorer::ExplorerPlugin,
             fulton::FultonPlugin,
+            crusher::CrusherPlugin,
         ));
     }
 }

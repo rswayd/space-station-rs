@@ -634,7 +634,15 @@ fn ants_tick(world: &mut World) {
 
 /// tg `apply_status_effect(/datum/status_effect/rebuked)` (`STATUS_EFFECT_REFRESH`).
 pub fn apply_rebuked(world: &mut World, mob: Entity) {
-    let until = now(world) + REBUKED_SECS;
+    apply_rebuked_for(world, mob, REBUKED_SECS);
+}
+
+/// [`apply_rebuked`] for `secs` (the lobster claw trophy's second).
+pub fn apply_rebuked_for(world: &mut World, mob: Entity, secs: f64) {
+    if world.get::<Stat>(mob).is_none() {
+        return;
+    }
+    let until = now(world) + secs;
     world.entity_mut(mob).insert(Rebuked { until });
 }
 

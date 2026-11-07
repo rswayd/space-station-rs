@@ -79,6 +79,7 @@
 //! | 3194 | `closets::kinds::bodybag_attack_self` (a folded body bag unfolds) |
 //! | 3203 | `crayons::attack_self` (the stencil menu, a spray can's cap and colour) |
 //! | 3213 | `gifts::open` |
+//! | 3245 | `mining::crusher::attack_self` (the kinetic crusher wields) |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):
 //!
@@ -301,6 +302,7 @@
 //! | 3450 | `decor::item_interaction` |
 //! | 3455 | `clothing::item_interaction` |
 //! | 3465 | `effects::teleporters::portal_click` (permanent portals) |
+//! | 3475 | `mining::crusher::item_interaction` (crusher trophies on and off) |
 //! | 3485 | `curses::cut_strand` (wirecutters on a strangled mob) |
 //! | 3500 | `janitor::item_interaction` |
 //! | 3510 | `janitor::washer_item_interaction` (a load into a washing machine) |

@@ -418,6 +418,7 @@ fn melee(
                         brute,
                     );
                     crate::botany::unique::on_item_attack(world, attacker, target, weapon_entity);
+                    crate::mining::crusher::after_attack(world, attacker, target, weapon_entity);
                 });
                 // tg `attacked_by`, `BODY_ZONE_HEAD`: blunt brute force may deconvert a rev.
                 if hit == BodyZone::Head && kind == DamageType::Brute && wounding.sharpness == 0 {
