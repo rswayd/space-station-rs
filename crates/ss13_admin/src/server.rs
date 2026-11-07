@@ -567,9 +567,10 @@ pub fn required_rights(request: &AdminRequest) -> Option<u32> {
         | GlobalManUp => R_ADMIN,
         AdminList | SetAdminRank { .. } | RemoveAdmin(_) => R_PERMISSIONS,
         PlaySound { .. } => R_SOUND,
-        AirStatus | SpawnAir(_) => R_DEBUG,
+        AirStatus | SpawnAir(_) | VvTile | ViewVariables(_) => R_DEBUG,
+        EditVariable { .. } => R_VAREDIT,
         Ban { .. } | Unban(_) => R_BAN,
-        FindPrototypes(_) | Spawn(_) => R_SPAWN,
+        FindPrototypes(_) | Spawn(_) | Subtypes(_) => R_SPAWN,
         Smite { .. } | Emp { .. } => R_ADMIN | R_FUN,
         Events | ForceEvent { .. } | DropBomb(_) | GiveAi { .. } => R_FUN,
         StartNow | EndRound | Restart => R_SERVER,
@@ -1187,6 +1188,24 @@ fn answer(world: &mut World, client: Entity, request: AdminRequest) -> AnswerRes
             );
             done(format!("EM pulse ({heavy}, {light})"))
         }
+        AdminRequest::VvTile => crate::vv::tile(world, client),
+        AdminRequest::ViewVariables(id) => crate::vv::view(world, client, id),
+        AdminRequest::EditVariable {
+            id,
+            component,
+            field,
+            value,
+        } => crate::vv::edit(world, client, &key, id, &component, &field, &value),
+        AdminRequest::Subtypes(path) => {
+            let Some(prototypes) = world.get_resource::<Prototypes>() else {
+                return Err("Прототипы не загружены.".into());
+            };
+            let ids = crate::vv::subtypes(prototypes, &path);
+            if ids.is_empty() {
+                return Err(format!("{path}: нет такого прототипа /obj."));
+            }
+            Ok(Some(AdminResponse::Prototypes { query: path, ids }))
+        }
         AdminRequest::SetSecurityLevel(name) => {
             let level = ss13_game::security_level::SecLevel::from_name(&name)
                 .ok_or_else(|| format!("Нет уровня угрозы {name:?}."))?;
@@ -1564,6 +1583,21 @@ mod tests {
             Some(R_ADMIN | R_FUN)
         );
         assert_eq!(required_rights(&TimeScale(1.0)), Some(R_DEBUG));
+        assert_eq!(
+            required_rights(&ViewVariables(ss13_shared::protocol::NetId(1))),
+            Some(R_DEBUG)
+        );
+        assert_eq!(required_rights(&VvTile), Some(R_DEBUG));
+        assert_eq!(
+            required_rights(&EditVariable {
+                id: ss13_shared::protocol::NetId(1),
+                component: String::new(),
+                field: String::new(),
+                value: ss13_shared::admin::VvValue::Bool(true),
+            }),
+            Some(R_VAREDIT)
+        );
+        assert_eq!(required_rights(&Subtypes("/obj".into())), Some(R_SPAWN));
         assert_eq!(
             required_rights(&AdminRequest::MindPanel("a".into())),
             Some(R_ADMIN)

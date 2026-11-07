@@ -6,6 +6,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::TilePos;
+use crate::protocol::NetId;
 
 /// tg `R_*` rights flags (`code/__DEFINES/admin.dm`), same bits.
 pub mod rights {
@@ -190,6 +191,68 @@ pub enum AdminRequest {
         template: String,
         make_hostile: bool,
     },
+    /// `R_DEBUG`: the entities on the own tile the client sees, answered by
+    /// [`AdminResponse::VvTile`] (where tg "View Variables" is opened from the context menu).
+    VvTile,
+    /// `R_DEBUG`: tg "View Variables" of an entity the client sees, answered by
+    /// [`AdminResponse::Variables`].
+    ViewVariables(NetId),
+    /// `R_VAREDIT`: tg `modify_variables` of one top-level field of a reflected component (by
+    /// its type path); only booleans, numbers and text. Answered by the updated
+    /// [`AdminResponse::Variables`].
+    EditVariable {
+        id: NetId,
+        component: String,
+        field: String,
+        value: VvValue,
+    },
+    /// `R_SPAWN`: the prototype and every `/obj` prototype that inherits from it (tg subtype
+    /// vendor's `get_sane_item_types`), answered by [`AdminResponse::Prototypes`]; spawned with
+    /// [`AdminRequest::Spawn`].
+    Subtypes(String),
+}
+
+/// An entity in the View Variables window.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct VvRef {
+    pub id: NetId,
+    pub name: String,
+}
+
+/// tg `debug_variables`: the components of an entity and their reflected fields.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct VvEntity {
+    pub id: NetId,
+    pub name: String,
+    pub components: Vec<VvComponent>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct VvComponent {
+    /// The type path of a reflected component (what [`AdminRequest::EditVariable`] names),
+    /// else the component's name.
+    pub name: String,
+    /// Whether the fields are known (the component is reflected).
+    pub reflected: bool,
+    pub fields: Vec<VvField>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct VvField {
+    /// The field name, or the index of a tuple struct's field.
+    pub name: String,
+    pub value: VvValue,
+}
+
+/// A field value; only the first four are editable.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum VvValue {
+    Bool(bool),
+    Int(i64),
+    Float(f64),
+    Text(String),
+    /// Anything else, as its debug text (cut).
+    Other(String),
 }
 
 /// Who hears an admin sound.
@@ -314,6 +377,10 @@ pub enum AdminResponse {
         admins: Vec<AdminEntry>,
         ranks: Vec<String>,
     },
+    /// The entities of [`AdminRequest::VvTile`].
+    VvTile(Vec<VvRef>),
+    /// tg "View Variables" window.
+    Variables(VvEntity),
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

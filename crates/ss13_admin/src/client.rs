@@ -24,7 +24,7 @@ use ss13_net::client::NetClientConfig;
 use ss13_shared::admin::rights::*;
 use ss13_shared::admin::{
     AdminEntry, AdminRequest, AdminResponse, AntagRole, MindAct, MindPanel, PlayerEntry,
-    PlayerState, Smite, SoundScope, Ticket, TicketState,
+    PlayerState, Smite, SoundScope, Ticket, TicketState, VvEntity, VvRef, VvValue,
 };
 
 /// The player list is asked for this often while it is shown (seconds).
@@ -40,6 +40,8 @@ pub enum Tab {
     Game,
     /// tg "Permissions Panel" (`R_PERMISSIONS`).
     Permissions,
+    /// tg "View Variables" (`R_DEBUG`, editing `R_VAREDIT`).
+    Variables,
 }
 
 /// What the server told this client, and the panel's state.
@@ -63,6 +65,11 @@ pub struct AdminUi {
     /// The permissions panel's last [`AdminResponse::AdminList`].
     pub admins: Vec<AdminEntry>,
     pub ranks: Vec<String>,
+    /// [`AdminResponse::VvTile`] and the last [`AdminResponse::Variables`].
+    pub vv_tile: Vec<VvRef>,
+    pub vv: Option<VvEntity>,
+    /// The field being edited: component, field, typed text.
+    vv_edit: Option<(String, String, String)>,
     /// The last `Done`/`Refused`.
     pub last_reply: String,
     players_asked: f64,
@@ -105,6 +112,9 @@ impl Default for AdminUi {
             mind: None,
             admins: Vec::new(),
             ranks: Vec::new(),
+            vv_tile: Vec::new(),
+            vv: None,
+            vv_edit: None,
             last_reply: String::new(),
             players_asked: f64::NEG_INFINITY,
             focus_help: false,
@@ -244,6 +254,11 @@ fn collect(mut responses: MessageReader<AdminResponseReceived>, mut ui: ResMut<A
             AdminResponse::AdminList { admins, ranks } => {
                 ui.admins.clone_from(admins);
                 ui.ranks.clone_from(ranks);
+            }
+            AdminResponse::VvTile(refs) => ui.vv_tile.clone_from(refs),
+            AdminResponse::Variables(entity) => {
+                ui.vv = Some(entity.clone());
+                ui.vv_edit = None;
             }
         }
     }
@@ -463,6 +478,13 @@ fn admin_panel(
                 {
                     out.push(AdminRequest::AdminList);
                 }
+                if state.can(R_DEBUG)
+                    && ui
+                        .selectable_value(&mut state.tab, Tab::Variables, "Переменные")
+                        .clicked()
+                {
+                    out.push(AdminRequest::VvTile);
+                }
             });
             ui.separator();
             match state.tab {
@@ -470,6 +492,7 @@ fn admin_panel(
                 Tab::Tickets => tickets_tab(ui, state, &mut out),
                 Tab::Game => game_tab(ui, state, &mut out),
                 Tab::Permissions => permissions_tab(ui, state, &mut out),
+                Tab::Variables => variables_tab(ui, state, &mut out),
             }
             if !state.last_reply.is_empty() {
                 ui.separator();
@@ -834,6 +857,10 @@ fn game_tab(ui: &mut egui::Ui, state: &mut AdminUi, out: &mut Vec<AdminRequest>)
                 if ui.button("Найти").clicked() || enter {
                     out.push(AdminRequest::FindPrototypes(state.search.clone()));
                 }
+                // tg subtype vendor: the prototype typed in full and everything inheriting it.
+                if ui.button("Подтипы").clicked() {
+                    out.push(AdminRequest::Subtypes(state.search.trim().to_owned()));
+                }
             });
             egui::ScrollArea::vertical()
                 .id_salt("prototypes")
@@ -1065,6 +1092,101 @@ fn game_tab(ui: &mut egui::Ui, state: &mut AdminUi, out: &mut Vec<AdminRequest>)
 
 /// tg "Permissions Panel": the admins, a rank change or a new admin, and removal. Changes last
 /// the round (no database yet); the server checks the edit flags and the target's rights.
+/// The text of an editable value, `None` for [`VvValue::Other`].
+fn vv_text(value: &VvValue) -> Option<String> {
+    match value {
+        VvValue::Bool(v) => Some(v.to_string()),
+        VvValue::Int(v) => Some(v.to_string()),
+        VvValue::Float(v) => Some(v.to_string()),
+        VvValue::Text(v) => Some(v.clone()),
+        VvValue::Other(_) => None,
+    }
+}
+
+/// Typed text as a value of the same kind as `old`; the server checks it again.
+fn vv_parse(old: &VvValue, text: &str) -> Option<VvValue> {
+    let text = text.trim();
+    Some(match old {
+        VvValue::Bool(_) => VvValue::Bool(text.parse().ok()?),
+        VvValue::Int(_) => VvValue::Int(text.parse().ok()?),
+        VvValue::Float(_) => VvValue::Float(text.parse().ok()?),
+        VvValue::Text(_) => VvValue::Text(text.to_owned()),
+        VvValue::Other(_) => return None,
+    })
+}
+
+fn variables_tab(ui: &mut egui::Ui, state: &mut AdminUi, out: &mut Vec<AdminRequest>) {
+    ui.horizontal_wrapped(|ui| {
+        if ui.button("Мой тайл").clicked() {
+            out.push(AdminRequest::VvTile);
+        }
+        for entry in &state.vv_tile {
+            if ui.small_button(&entry.name).clicked() {
+                out.push(AdminRequest::ViewVariables(entry.id));
+            }
+        }
+    });
+    ui.separator();
+    let Some(entity) = &state.vv else {
+        ui.label("Выберите объект.");
+        return;
+    };
+    let can_edit = state.can(R_VAREDIT);
+    let id = entity.id;
+    ui.horizontal(|ui| {
+        ui.strong(entity.name.as_str());
+        if ui.small_button("Обновить").clicked() {
+            out.push(AdminRequest::ViewVariables(id));
+        }
+    });
+    egui::ScrollArea::vertical().id_salt("vv").show(ui, |ui| {
+        for component in &entity.components {
+            if !component.reflected {
+                ui.weak(component.name.as_str());
+                continue;
+            }
+            egui::CollapsingHeader::new(&component.name)
+                .id_salt(&component.name)
+                .show(ui, |ui| {
+                    for field in &component.fields {
+                        ui.horizontal(|ui| {
+                            ui.label(format!("{} =", field.name));
+                            let editing = state
+                                .vv_edit
+                                .as_ref()
+                                .is_some_and(|(c, f, _)| *c == component.name && *f == field.name);
+                            let Some(shown) = vv_text(&field.value) else {
+                                if let VvValue::Other(text) = &field.value {
+                                    ui.weak(text.as_str());
+                                }
+                                return;
+                            };
+                            if editing && let Some((_, _, text)) = state.vv_edit.as_mut() {
+                                ui.text_edit_singleline(text);
+                                if ui.small_button("OK").clicked()
+                                    && let Some(value) = vv_parse(&field.value, text)
+                                {
+                                    out.push(AdminRequest::EditVariable {
+                                        id,
+                                        component: component.name.clone(),
+                                        field: field.name.clone(),
+                                        value,
+                                    });
+                                }
+                            } else {
+                                ui.monospace(shown.as_str());
+                                if can_edit && ui.small_button("✎").clicked() {
+                                    state.vv_edit =
+                                        Some((component.name.clone(), field.name.clone(), shown));
+                                }
+                            }
+                        });
+                    }
+                });
+        }
+    });
+}
+
 fn permissions_tab(ui: &mut egui::Ui, state: &mut AdminUi, out: &mut Vec<AdminRequest>) {
     ui.horizontal(|ui| {
         if ui.button("Обновить").clicked() {
@@ -1151,5 +1273,17 @@ mod tests {
         assert!(ui.can(R_ADMIN) && !ui.can(R_BAN));
         ui.rights = 0;
         assert!(!ui.can(0), "deadminned: nothing");
+    }
+
+    #[test]
+    fn typed_variables_keep_the_field_kind() {
+        assert_eq!(vv_parse(&VvValue::Int(1), " 42 "), Some(VvValue::Int(42)));
+        assert_eq!(vv_parse(&VvValue::Int(1), "4.5"), None);
+        assert_eq!(
+            vv_parse(&VvValue::Bool(false), "true"),
+            Some(VvValue::Bool(true))
+        );
+        assert_eq!(vv_parse(&VvValue::Other("[]".into()), "1"), None);
+        assert_eq!(vv_text(&VvValue::Float(1.5)).as_deref(), Some("1.5"));
     }
 }

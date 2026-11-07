@@ -705,3 +705,108 @@ fn the_roundstart_logout_report_lists_the_dead_and_the_disconnected() {
     assert!(s.admin_log().contains("Roundstart logout report"));
     assert!(s.server.world().resource::<LogoutReport>().sent);
 }
+
+#[test]
+fn view_variables_lists_and_edits_reflected_fields_and_subtypes_list_children() {
+    use ss13_shared::admin::VvValue;
+    let mut s = Session::start("view_variables");
+    // A player gets nothing.
+    refused(s.ask(PLAYER, AdminRequest::VvTile));
+
+    let last = |s: &Session, pick: fn(&AdminResponse) -> bool| {
+        s.seen(ADMIN)
+            .responses
+            .iter()
+            .rev()
+            .find(|r| pick(r))
+            .cloned()
+    };
+    s.send(ADMIN, AdminRequest::VvTile);
+    s.run_until("the own tile's entities", |s| {
+        last(s, |r| matches!(r, AdminResponse::VvTile(_))).is_some()
+    });
+    let Some(AdminResponse::VvTile(refs)) = last(&s, |r| matches!(r, AdminResponse::VvTile(_)))
+    else {
+        unreachable!()
+    };
+    let own = refs.first().expect("the own mob is listed first").id;
+
+    // Rights are checked before the id is resolved.
+    refused(s.ask(PLAYER, AdminRequest::ViewVariables(own)));
+
+    s.send(ADMIN, AdminRequest::ViewVariables(own));
+    s.run_until("the variables", |s| {
+        last(s, |r| matches!(r, AdminResponse::Variables(_))).is_some()
+    });
+    let Some(AdminResponse::Variables(entity)) =
+        last(&s, |r| matches!(r, AdminResponse::Variables(_)))
+    else {
+        unreachable!()
+    };
+    assert_eq!(entity.id, own);
+    let (component, field, old) = entity
+        .components
+        .iter()
+        .filter(|c| c.reflected)
+        .flat_map(|c| c.fields.iter().map(move |f| (c, f)))
+        .find_map(|(c, f)| match f.value {
+            VvValue::Bool(v) => Some((c.name.clone(), f.name.clone(), v)),
+            _ => None,
+        })
+        .expect("a reflected boolean field on a human");
+    let edit = |value| AdminRequest::EditVariable {
+        id: own,
+        component: component.clone(),
+        field: field.clone(),
+        value,
+    };
+    refused(s.ask(PLAYER, edit(VvValue::Bool(!old))));
+    // Wrong kind for the field.
+    refused(s.ask(ADMIN, edit(VvValue::Text("x".into()))));
+
+    let before = s.seen(ADMIN).responses.len();
+    s.send(ADMIN, edit(VvValue::Bool(!old)));
+    s.run_until("the edited variables", |s| {
+        s.seen(ADMIN).responses[before..]
+            .iter()
+            .any(|r| matches!(r, AdminResponse::Variables(_)))
+    });
+    let edited = s.seen(ADMIN).responses[before..]
+        .iter()
+        .find_map(|r| match r {
+            AdminResponse::Variables(e) => Some(e.clone()),
+            _ => None,
+        })
+        .unwrap();
+    let now = edited
+        .components
+        .iter()
+        .find(|c| c.name == component)
+        .and_then(|c| c.fields.iter().find(|f| f.name == field))
+        .map(|f| f.value.clone());
+    assert_eq!(now, Some(VvValue::Bool(!old)));
+    assert!(s.admin_log().contains(&format!("{component}.{field}")));
+
+    // The subtype vendor's list.
+    refused(s.ask(PLAYER, AdminRequest::Subtypes("/obj/item/clothing".into())));
+    s.send(ADMIN, AdminRequest::Subtypes("/obj/item/clothing".into()));
+    s.run_until("the subtypes", |s| {
+        last(s, |r| matches!(r, AdminResponse::Prototypes { .. })).is_some()
+    });
+    let Some(AdminResponse::Prototypes { ids, .. }) =
+        last(&s, |r| matches!(r, AdminResponse::Prototypes { .. }))
+    else {
+        unreachable!()
+    };
+    assert!(
+        ids.iter()
+            .any(|i| i == "/obj/item/clothing/under/color/grey"),
+        "{ids:?}"
+    );
+    assert!(
+        ids.iter()
+            .any(|i| i == "/obj/item/clothing/shoes/sneakers/black"),
+        "{ids:?}"
+    );
+    assert!(!ids.iter().any(|i| i == ID_CARD), "{ids:?}");
+}

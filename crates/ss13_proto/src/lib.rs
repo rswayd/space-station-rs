@@ -95,7 +95,10 @@ pub trait ProtoAppExt {
 
 impl ProtoAppExt for App {
     fn register_proto_component<T: ProtoComponent>(&mut self, name: &str) -> &mut Self {
-        self.register_type::<T>();
+        // `ReflectComponent` lets the admin View Variables and the debug inspector read and edit
+        // the component through the type registry.
+        self.register_type::<T>()
+            .register_type_data::<T, ReflectComponent>();
         self.world_mut()
             .get_resource_or_init::<ProtoComponents>()
             .register::<T>(name);

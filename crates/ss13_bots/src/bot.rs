@@ -508,6 +508,14 @@ fn record(
             AdminResponse::AdminList { admins, .. } => {
                 observed.admin_lists.insert("admins".into(), json(admins));
             }
+            AdminResponse::VvTile(refs) => {
+                observed.admin_lists.insert("vv_tile".into(), json(refs));
+            }
+            AdminResponse::Variables(entity) => {
+                observed
+                    .admin_lists
+                    .insert("variables".into(), json(entity));
+            }
         }
     }
     for ChatReceived(message) in chat.read() {

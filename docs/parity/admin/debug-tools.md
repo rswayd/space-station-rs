@@ -5,25 +5,25 @@ View Variables, вызов процедур, SDQL2 и Lua, отладочные 
 Окно переменных любого датума: правка значений (вкл. массовую), списки, отметка датума, теги, удаление, отслеживание ссылок, редакторы цветовых матриц, фильтров и частиц.
 
 - **Код:** [`/client/proc/debug_variables()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/view_variables/view_variables.dm#L9), [`modify_variables.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/view_variables/modify_variables.dm#L1), [`mass_edit_variables.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/view_variables/mass_edit_variables.dm#L1), [`reference_tracking.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/view_variables/reference_tracking.dm#L1); tgui: [`Filterrific.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/Filterrific.jsx), [`ParticleEdit.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/ParticleEdit/index.tsx)
-- **Статус в ss13-rs:** ❌ нет — компоненты `ss13_game` не регистрируют `Reflect`, перечислять и править поля нечем; `crates/ss13_debug` даёт инспектор ECS для разработчиков, не админ-инструмент
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_admin/src/vv.rs`, вкладка «Переменные» админ-панели (`R_DEBUG`): объекты своего тайла, все компоненты сущности и верхнеуровневые поля отражённых (каждый компонент прототипов регистрируется с `ReflectComponent`), правка булевых, целых, дробных и строковых полей (`R_VAREDIT`, с проверкой типа и диапазона, в админ-лог); цель — `NetId`, видимый клиенту, права проверяются на каждый запрос. Не перенесено: массовая правка, списки и вложенные поля, отметка/теги датума, удаление, отслеживание ссылок, редакторы цветовых матриц, фильтров и частиц
 
 ### Вызов процедур
 Advanced ProcCall / Atom ProcCall с аргументами, глобальные вызовы, защита от опасных процедур.
 
 - **Код:** [`code/modules/admin/callproc`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/callproc)
-- **Статус в ss13-rs:** ❌ нет — в Rust нет вызова процедур по имени; аналог потребует реестра админ-команд
+- **Статус в ss13-rs:** ❌ нет — нет DM-рантайма: в Rust нет вызова процедур по имени; аналог потребует реестра админ-команд
 
 ### SDQL2
 SQL-подобные запросы к объектам мира (SELECT/UPDATE/CALL/DELETE с фильтрами).
 
 - **Код:** [`/datum/sdql_parser`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/verbs/SDQL2/SDQL_2_parser.dm#L68), [`SDQL_2.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/verbs/SDQL2/SDQL_2.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — нужен рефлекшн компонентов (см. View Variables)
+- **Статус в ss13-rs:** ❌ нет — нет DM-рантайма и языка запросов; рефлекшн компонентов уже есть (см. View Variables)
 
 ### Lua-скрипты (auxlua)
 Редактор и состояния Lua для скриптования событий админами.
 
 - **Код:** [`/datum/lua_state`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/verbs/lua/lua_state.dm#L10), [`/datum/lua_editor`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/verbs/lua/lua_editor.dm#L2); tgui: [`LuaEditor.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/LuaEditor/index.tsx)
-- **Статус в ss13-rs:** ❌ нет — админ-системы нет
+- **Статус в ss13-rs:** ❌ нет — нет DM-рантайма (auxlua встраивается в BYOND)
 
 ### Отладочные вербы
 Debug-Game, счётчики атомов/датумов, Del-All/Hard-Del-All, логи del()/Initialize/overlay, MC-зависимости, таймеры, отладка HUD/плоскостей/света/FOV/путей/спрайтов, очистка кэша ассетов, тест дальтонизма, полный доступ.
@@ -47,10 +47,10 @@ Debug-Game, счётчики атомов/датумов, Del-All/Hard-Del-All, 
 Line profiling (старт/стоп/просмотр), профайлер BYOND, Tracy.
 
 - **Код:** [`Start Line Profiling`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/verbs/debug.dm#L728)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ❌ нет — нет DM-рантайма: профайлер BYOND неприменим, админ-верба для Rust-профилирования нет
 
 ### Автомат подтипов (subtype vendor)
 Админский автомат, бесплатно выдающий все подтипы заданного типа; тип меняется правым кликом (только с правами R_SERVER/R_DEBUG). Общая механика автомата — ../cargo/vending.md.
 
 - **Код:** [`/obj/machinery/vending/subtype_vendor`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/vending/subtype.dm#L2)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_admin/src/vv.rs` `subtypes`, кнопка «Подтипы» во вкладке «Игра» (`R_SPAWN`): прототип и все `/obj`-прототипы, наследующие его (по DM-пути или цепочке родителей), выдаются по клику под собой через `Spawn`. Отклонение: админ-окно вместо машины-автомата на карте (смена типа правым кликом), до 300 строк
