@@ -645,10 +645,8 @@ fn troopers_fight_shoot_in_bursts_or_wait_to_be_hit() {
             hostile,
             "{sub}: picks the stranger only when hostile"
         );
-        // FIXME: no ranged trooper fires in this bare test world (the leaf fails before the
-        // shot: line of sight or target validity without a map); the burst queue check is off
-        // until it is reproduced on a fixture map.
-        if false && hostile && sub.starts_with("trooper/ranged") {
+        // `Strategy::valid` with vision 0 is unlimited (it used to mean one tile).
+        if hostile && sub.starts_with("trooper/ranged") {
             let r = w.get::<crate::mobs::ranged::RangedAttacks>(pawn).unwrap();
             assert!(r.next > 1.0, "{sub}: fired");
             // `burst_shots` 3: the other two 0.2 s apart.

@@ -112,7 +112,10 @@ impl Strategy {
                         .is_some_and(|b| ss13_mapload::fidelity::is_under(&b.def.path, MOUSE_ROOT))
             }
         };
-        ok && can_see(world, from, to, vision.max(1))
+        // Vision 0 is unlimited: only the line of sight counts (a range of 1 here made every
+        // ranged mob hold fire until its target stood next to it).
+        let range = if vision == 0 { u32::MAX } else { vision };
+        ok && can_see(world, from, to, range)
     }
 }
 
