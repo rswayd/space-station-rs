@@ -47,7 +47,17 @@ fn read_sources(dir: &Path, out: &mut Vec<Source>) {
             read_sources(&path, out);
         } else if path.extension().is_some_and(|e| e == "rs") {
             let text = std::fs::read_to_string(&path).unwrap();
-            let code = text.split("#[cfg(test)]").next().unwrap_or_default();
+            // Cut at the first inline test module; `#[cfg(test)] mod tests;` declares a file.
+            let code = text
+                .match_indices("#[cfg(test)]")
+                .find(|(at, attr)| {
+                    let next = text[at + attr.len()..].trim_start();
+                    next.starts_with("mod ")
+                        && next
+                            .find(['{', ';'])
+                            .is_some_and(|j| next.as_bytes()[j] == b'{')
+                })
+                .map_or(text.as_str(), |(at, _)| &text[..at]);
             let text = code
                 .lines()
                 .map(strip_comment)
@@ -136,6 +146,8 @@ fn str_consts(sources: &[Source]) -> BTreeMap<&str, Vec<(usize, &str)>> {
 
 struct Resolver<'a> {
     consts: BTreeMap<&'a str, Vec<(usize, &'a str)>>,
+    /// The module directory of each source: `foo/mod.rs` and `foo/bar.rs` share `foo/`.
+    dirs: Vec<&'a Path>,
 }
 
 impl<'a> Resolver<'a> {
@@ -156,8 +168,20 @@ impl<'a> Resolver<'a> {
             .flatten()
             .filter(|(i, _)| Some(*i) != skip)
             .collect();
-        let local: Vec<_> = defs.iter().copied().filter(|(i, _)| *i == from).collect();
-        let defs = if local.is_empty() { defs } else { local };
+        // The nearest definition wins: the same file, then its module directory and up.
+        let mut near: Vec<_> = defs.iter().copied().filter(|(i, _)| *i == from).collect();
+        let mut dir = Some(self.dirs[from]);
+        while near.is_empty()
+            && let Some(d) = dir
+        {
+            near = defs
+                .iter()
+                .copied()
+                .filter(|(i, _)| self.dirs[*i].starts_with(d))
+                .collect();
+            dir = d.parent();
+        }
+        let defs = if near.is_empty() { defs } else { near };
         if defs.is_empty() || depth > 8 {
             return Err(name.to_owned());
         }
@@ -230,6 +254,10 @@ fn constant_spawn_paths_are_runtime_types() {
     read_sources(&crates.join("ss13_mapload/src"), &mut sources);
     let resolver = Resolver {
         consts: str_consts(&sources),
+        dirs: sources
+            .iter()
+            .map(|s| s.file.parent().expect("source in a directory"))
+            .collect(),
     };
     let registry = ss13_mapload::runtime::runtime_types();
     let mut checked = BTreeSet::new();
