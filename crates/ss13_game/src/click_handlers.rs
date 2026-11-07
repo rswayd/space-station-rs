@@ -324,6 +324,7 @@
 //! | 4300 | `tables::item_interaction` |
 //! | 4400 | `science::experi_scanner::pre_attack` (not on living mobs) |
 //! | 4460 | `closets::kinds::held_on_target` (large crates, multitools on abandoned crates) |
+//! | 4491 | `weapons::rip_and_tear::pre_attack` (a wielded sledgehammer on a wall) |
 //! | 4500 | `construction::item_interaction` |
 //! | 4600 | core: a cyborg module or `NoDrop` item stops here |
 //! | 4650 | `lockbox::item_interaction` (`closets` plugin) |

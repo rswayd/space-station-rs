@@ -253,12 +253,13 @@ fn melee(
     handled: Res<crate::security::MeleeHandled>,
     medical: Res<crate::medical::MedicalHandled>,
     clothing: Query<(&ss13_mapload::DmClothing, &ss13_mapload::DmArmor)>,
-    (mut sounds, pacifists, artists, mut reactive, blockers): (
+    (mut sounds, pacifists, artists, mut reactive, blockers, staminas): (
         MessageWriter<PlaySound>,
         Query<(), With<crate::medical::traumas::Pacifist>>,
         Query<&crate::martial::MartialArts>,
         Query<&mut crate::clothing::reactive::ReactiveArmor>,
         Query<Blocker>,
+        Query<&crate::status_effects::StatusEffects>,
     ),
     mut commands: Commands,
 ) {
@@ -340,6 +341,26 @@ fn melee(
                 });
                 continue;
             }
+        }
+        // BandaStation `stamina_cost_per_hit` (the sledgehammers): too tired, no attack.
+        if let (Some(w), Some((item, _, _))) = (&weapon, held)
+            && let Some(cost) = crate::weapons::stamina_cost::cost_per_hit(
+                &item.path,
+                blockers.get(w.entity).is_ok_and(|b| b.3),
+                true,
+            )
+        {
+            let loss = staminas.get(attacker).map_or(0.0, |s| s.stamina);
+            if crate::weapons::stamina_cost::exhausted(loss, cost) {
+                chat.write(SendChat {
+                    clients: vec![click.client],
+                    message: ChatMessage::simple(ChatChannel::Warning, Span::Warning, "нет сил!"),
+                });
+                continue;
+            }
+            commands.queue(move |world: &mut World| {
+                crate::status_effects::adjust_stamina(world, attacker, cost);
+            });
         }
         // tg carbon `attack_hand`: skin-contact diseases pass both ways.
         if weapon.is_none() && attacker != target {

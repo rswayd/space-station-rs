@@ -1,12 +1,15 @@
 //! Melee weapon mechanics shared by many items (server): two-handed wielding
 //! ([`two_handed`]), the double-bladed energy sword ([`energy`]), blocking and shields
-//! ([`block`]) and whetstones ([`sharpener`]).
+//! ([`block`]), whetstones ([`sharpener`]), the fork's sledgehammer components
+//! ([`stamina_cost`], [`rip_and_tear`]).
 
 use bevy::prelude::*;
 
 pub mod block;
 pub mod energy;
+pub mod rip_and_tear;
 pub mod sharpener;
+pub mod stamina_cost;
 pub mod two_handed;
 
 pub struct WeaponsPlugin;
@@ -27,6 +30,11 @@ impl Plugin for WeaponsPlugin {
         app.add_click_handler(ClickPhase::HeldOnTarget, 251, |w, c| {
             c.held
                 .is_some_and(|h| item_interaction(w, c.client, c.mob, h, c.target))
+        });
+        // A wielded sledgehammer on a wall (`rip_and_tear`, `COMSIG_ITEM_PRE_ATTACK`).
+        app.add_click_handler(ClickPhase::HeldOnTarget, 4491, |w, c| {
+            c.held
+                .is_some_and(|h| rip_and_tear::pre_attack(w, c.client, c.mob, h, c.target))
         });
         app.add_systems(
             Update,

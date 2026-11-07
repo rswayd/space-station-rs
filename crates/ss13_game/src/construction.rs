@@ -297,6 +297,8 @@ pub enum Job {
     Inducer(Entity),
     /// Mending shredded clothing ([`crate::clothing::damage`]).
     Clothing(crate::clothing::ClothingJob),
+    /// A sledgehammer tearing at a wall ([`crate::weapons::rip_and_tear`]).
+    TearWall,
     /// Tipping or righting a cow, a turtle drinking ([`crate::mobs::farm`]).
     Fauna(crate::mobs::farm::FarmJob),
     /// A morph eating a corpse or an item ([`crate::antag::morph`]).
@@ -1469,6 +1471,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Reinforced(job) => crate::reinforced::complete(world, client, target, job),
         Job::Holosign => crate::holosign::complete(world, item, pos),
         Job::Satellite => crate::station_goals::complete_toggle(world, client, target),
+        Job::TearWall => crate::weapons::rip_and_tear::complete(world, mob, action),
         Job::FanDisassemble => {
             if !is_under(&path, FANS) {
                 return;

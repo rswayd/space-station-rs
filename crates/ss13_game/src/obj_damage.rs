@@ -207,6 +207,15 @@ pub fn attackby(world: &mut World, actor: Actor, target: Entity) -> bool {
     if let Some(mut next) = world.get_mut::<NextMove>(actor.mob) {
         next.0 = now + f64::from(dm.attack_speed) / 10.0;
     }
+    // BandaStation `stamina_cost_per_hit` on `COMSIG_ITEM_ATTACK_ATOM` (the sledgehammers).
+    match crate::weapons::stamina_cost::charge(world, actor.mob, item, false) {
+        None => {
+            crate::tools::tell(world, actor.client, Span::Warning, "нет сил!");
+            return true;
+        }
+        Some(cost) if cost > 0.0 => crate::status_effects::adjust_stamina(world, actor.mob, cost),
+        Some(_) => {}
+    }
     if dm.force <= 0.0 {
         return true;
     }
