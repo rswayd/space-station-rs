@@ -13,9 +13,9 @@
 //!   the Chernobyl anniversary doubles the Radiation Storm's weight ([`adjust_controls`]).
 // shortcut: no station name prefixes (station names are the map's here), holiday hats, holiday
 // mail, posters and decoration colors, and no `celebrate()` side effects (April Fools' clown
-// overflow (its lobby music is `crate::lobby_music`), Christmas telescreens and Ian's hat, Monkey Day's Pun Pun, holiday
-// maintenance loot); the many item and species checks of single holidays live with their
-// mechanics.
+// overflow (its lobby music is `crate::lobby_music`), Christmas telescreens and Ian's hat,
+// Monkey Day's Pun Pun, holiday maintenance loot); the many item and species checks of single
+// holidays live with their mechanics.
 
 use bevy::prelude::*;
 use ss13_net::chat::server::SendChat;
