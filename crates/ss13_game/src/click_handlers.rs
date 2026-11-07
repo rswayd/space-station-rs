@@ -182,7 +182,7 @@
 //! | 2012 | `power::lighting::floodlight_hand` (setting, the tube out with the panel open) |
 //! | 2017 | `misc_items::puzzle::press` (ruin puzzle buttons) |
 //! | 2027 | `misc_items::flatpacks::unload` (the topmost flatpack off a cart) |
-//! | 2100 | `power::apc_ui::interact` |
+//! | 2100 | `power::apc_ui::interact` (right click by a human: `toggle_lock`) |
 //! | 2200 | `mecha::bay::interact` |
 //! | 2300 | `mecha::core::attack_hand` |
 //! | 2400 | `modpc::pda::console_interact` |
@@ -335,6 +335,8 @@
 //! | 2710 | `power::lighting::item_interaction` (bulbs, replacers, fixtures, frames, wall frames, floodlights and their frames) |
 //! | 2715 | `power::lighting::swing_bulb` (a bulb shatters on a mob; never handles) |
 //! | 2800 | `power::chargers::item_interaction` |
+//! | 2820 | `power::apc_ui::toggle_lock` (an ID or a PDA with one on an APC) |
+//! | 2830 | `power::emitter::toggle_lock` (an ID or a PDA with one on an emitter) |
 //! | 2850 | `power::pacman::item_interaction` (also PACMAN boards) |
 //! | 2860 | `power::smes::item_interaction` (also SMES terminals) |
 //! | 2870 | `power::shields::item_interaction` |

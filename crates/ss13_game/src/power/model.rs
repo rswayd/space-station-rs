@@ -144,6 +144,9 @@ impl ChargeStep {
     ];
 }
 
+/// tg `ACCESS_ENGINE_EQUIP`: the APC's default `req_access`.
+pub const ACCESS_ENGINE_EQUIP: &str = "engine_equip";
+
 /// tg `/obj/machinery/power/apc` state the power tick uses.
 #[derive(Component, Clone, Debug, Reflect)]
 pub struct Apc {
@@ -155,6 +158,9 @@ pub struct Apc {
     pub chargemode: bool,
     pub shorted: bool,
     pub locked: bool,
+    /// tg `req_access`: `ACCESS_ENGINE_EQUIP`, or what an access helper gives
+    /// (`give_syndicate_access`, `give_away_general_access`).
+    pub req_access: Vec<String>,
     /// tg `obj_flags & EMAGGED` (`crate::emag`): the interface stays unlocked, the panel shut.
     pub emagged: bool,
     /// tg `aidisabled` (the AI wire); there is no AI yet.
@@ -188,6 +194,7 @@ impl Apc {
             chargemode: true,
             shorted: false,
             locked: true,
+            req_access: vec![ACCESS_ENGINE_EQUIP.to_owned()],
             emagged: false,
             aidisabled: false,
             charging: NOT_CHARGING,

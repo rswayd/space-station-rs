@@ -7,8 +7,10 @@
 //! failure (tg). Acts: the breaker, the charge mode, the three channels (`setsubsystem`), the
 //! silicon interface lock, the cover bolts, emergency lighting, night shift, reboot.
 // The malfunctioning AI's "hack", "occupy" and "deoccupy" acts: `crate::silicon::malf`.
-// shortcut: no ID swipe to unlock the interface, no remote
-// control console; "overload" (silicons) does nothing; the cover bolts and emergency-lighting
+// An ID (or a PDA with one) on the APC, or a human's empty-hand right click, is tg `togglelock`
+// ([`toggle_lock`]).
+// shortcut: no APC cover state (`opened`), `BROKEN|MAINT`, ethereal charge or remote control
+// console, so `togglelock` skips those refusals; "overload" (silicons) does nothing; the cover bolts and emergency-lighting
 // switches are kept and shown but do not change the cover or the lights' backup cells yet
 // (night shift dims the area's lights, `super::set_nightshift`).
 
@@ -194,8 +196,27 @@ impl Plugin for ApcUiPlugin {
         // Click chain hooks (`crate::click_handlers`).
         use crate::click_handlers::{AddClickHandler, ClickPhase};
         // tg `attack_hand` of an APC with its cover closed: its window.
+        // A human's right click (`attack_hand_secondary`) is `togglelock` instead.
         app.add_click_handler(ClickPhase::EmptyHand, 2100, |w, c| {
+            if c.modifiers.right
+                && w.get::<Apc>(c.target).is_some()
+                && w.get::<crate::human::HumanLook>(c.mob).is_some()
+            {
+                toggle_lock(w, c.mob, c.target);
+                return true;
+            }
             crate::power::apc_ui::interact(w, c.client, c.mob, c.target)
+        })
+        // `item_interaction`: `if(tool.GetID()) togglelock(user)`.
+        .add_click_handler(ClickPhase::HeldOnTarget, 2820, |w, c| {
+            let Some(held) = c.held else {
+                return false;
+            };
+            if w.get::<Apc>(c.target).is_none() || crate::inventory::get_id(w, held).is_none() {
+                return false;
+            }
+            toggle_lock(w, c.mob, c.target);
+            true
         });
         app.register_ui::<ApcWindow>()
             .add_systems(Update, apply_acts.in_set(UiSystems::Handle));
@@ -223,6 +244,37 @@ pub fn interact(world: &mut World, client: Entity, mob: Entity, target: Entity) 
         open(world, client, mob, target);
     }
     true
+}
+
+/// tg `togglelock(user)`: the interface lock flips for the user's ID access (tg `allowed`,
+/// [`crate::inventory::id_allowed`]), with tg's refusals as balloon alerts. Silicons reach it
+/// through neither click (no ID, not human); they flip the lock from the window. A malf-hacked
+/// APC answers only its AI and that AI's cyborgs, so never an ID swipe.
+pub fn toggle_lock(world: &mut World, user: Entity, apc: Entity) {
+    let Some(state) = world.get::<Apc>(apc) else {
+        return;
+    };
+    let panel_open = world
+        .get::<crate::construction::PanelOpen>(apc)
+        .is_some_and(|p| p.0);
+    let text = if state.emagged {
+        "интерфейс сломан!"
+    } else if panel_open {
+        "сначала закройте панель!"
+    } else if world.get::<crate::silicon::malf::MalfHacked>(apc).is_none()
+        && crate::inventory::id_allowed(world, user, &state.req_access, &[])
+    {
+        let locked = !state.locked;
+        world.get_mut::<Apc>(apc).expect("checked").locked = locked;
+        if locked {
+            "заблокирован"
+        } else {
+            "разблокирован"
+        }
+    } else {
+        "в доступе отказано!"
+    };
+    crate::balloon::balloon_alert(world, user, apc, text);
 }
 
 fn apply_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed<ApcWindow>>>) {

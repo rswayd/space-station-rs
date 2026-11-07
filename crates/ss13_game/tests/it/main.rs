@@ -59,6 +59,7 @@ mod harness;
 mod heretic;
 mod holodeck;
 mod icemoon_fauna;
+mod id_lock;
 mod implants;
 mod interact;
 mod inventory;

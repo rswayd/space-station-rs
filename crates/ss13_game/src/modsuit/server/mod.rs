@@ -55,7 +55,7 @@ use super::*;
 use crate::actions::{ActionButton, ActionButtons, ActionButtonsUi, set_buttons};
 use crate::emp::{EmpAct, EmpProtection, EmpSystems, PROTECT_ALL, emp_acts};
 use crate::health::{DamageType, Health, Stat};
-use crate::inventory::{ALL_SLOTS, CarriedBy, IdCard, Inventory, NoDrop, check_access, slot_bit};
+use crate::inventory::{ALL_SLOTS, CarriedBy, IdCard, Inventory, NoDrop, slot_bit};
 use crate::mecha::core::ItemCell;
 use crate::server::PlayerMob;
 use crate::sound::{PlaySound, SHORT_RANGE_SOUND_EXTRARANGE, playsound};

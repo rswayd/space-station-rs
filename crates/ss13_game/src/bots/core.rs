@@ -14,7 +14,7 @@ use ss13_shared::chat::{ChatChannel, Span};
 use crate::click::{ClickResolved, ResolveClicks};
 use crate::combat::CombatMode;
 use crate::health::{DEFAULT_MESSAGE_RANGE, DamageType, Health, Stat};
-use crate::inventory::{IdCard, Inventory};
+use crate::inventory::Inventory;
 use crate::mobs::BasicMob;
 use crate::security::{name_of, show};
 use crate::tools::ToolKind;
@@ -821,12 +821,7 @@ pub fn allowed(world: &World, mob: Entity, user: Entity) -> bool {
 
 /// The access of the ID tg's `get_idcard(hand_first = TRUE)` finds on `user`.
 pub fn user_access(world: &World, user: Entity) -> Vec<String> {
-    world
-        .get::<Inventory>(user)
-        .and_then(|i| i.id_card(world))
-        .and_then(|card| world.get::<IdCard>(card))
-        .map(|c| c.access.clone())
-        .unwrap_or_default()
+    crate::inventory::mob_access(world, user)
 }
 
 use crate::tools::tell_mob;

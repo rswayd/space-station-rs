@@ -11,7 +11,8 @@
 //!   reflectors and stops at the first other dense thing. A supermatter it hits gains
 //!   `30 damage * 2` MeV (`eat_bullets`), a mob takes 30 burn.
 //! - Empty-hand click toggles it (welded and wired only); wrench anchors, welder welds
-//!   (`welder_act`, 2 s, 1 fuel), as tg.
+//!   (`welder_act`, 2 s, 1 fuel), as tg. An ID (or a PDA with one) locks or unlocks the controls
+//!   of a running emitter for `ACCESS_ENGINE_EQUIP` (`togglelock`).
 //!
 //! Cost: a beam is at most 50 tiles per straight run, 10 runs; MetaStation fires about one
 //! beam per second with all three engine emitters on.
@@ -24,6 +25,7 @@ use ss13_shared::chat::Span;
 use ss13_shared::{Appearance, Dir, EMISSIVE_PLANE, IconStateId, Overlay, TilePos};
 use ss13_world::{Density, SpatialIndex};
 
+use super::model::ACCESS_ENGINE_EQUIP;
 use super::{Grid, NodeKind, Powernet};
 use crate::click::ClickResolved;
 use crate::combat::CombatRng;
@@ -238,6 +240,18 @@ pub struct EmitterServerPlugin;
 
 impl Plugin for EmitterServerPlugin {
     fn build(&self, app: &mut App) {
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // `item_interaction`: `if(tool.GetID()) togglelock(user)`.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 2830, |w, c| {
+            let Some(held) = c.held else {
+                return false;
+            };
+            if w.get::<Emitter>(c.target).is_none() || crate::inventory::get_id(w, held).is_none() {
+                return false;
+            }
+            toggle_lock(w, c.client, c.mob, c.target);
+            true
+        });
         app.init_resource::<PendingBeams>()
             .add_message::<BeamHit>()
             .add_systems(ss13_world::MapInit, init_emitters.after(super::init_power))
@@ -477,6 +491,36 @@ fn toggle_on_click(world: &mut World, mut clicks: Local<MessageCursor<ClickResol
         tell(world, click.client, span, text);
         info!(target: "engine", "emitter {:?} turned {} by {:?}", click.target, if on { "ON" } else { "OFF" }, click.mob);
     }
+}
+
+/// tg `togglelock(user)`: the user's ID access (tg `allowed`) flips the lock of a running
+/// emitter.
+// shortcut: emitters are never emagged here (no `emag_act`), so no "The lock seems to be
+// broken!"; the `ctf` subtype's science access is not mapped.
+pub fn toggle_lock(world: &mut World, client: Entity, mob: Entity, e: Entity) {
+    if !crate::inventory::id_allowed(world, mob, &[ACCESS_ENGINE_EQUIP.to_owned()], &[]) {
+        tell(world, client, Span::Danger, "Access denied.");
+        return;
+    }
+    let Some(mut emitter) = world.get_mut::<Emitter>(e) else {
+        return;
+    };
+    if !emitter.active {
+        tell(
+            world,
+            client,
+            Span::Warning,
+            "The controls can only be locked when the emitter is online!",
+        );
+        return;
+    }
+    emitter.locked = !emitter.locked;
+    let text = if emitter.locked {
+        "You lock the controls."
+    } else {
+        "You unlock the controls."
+    };
+    tell(world, client, Span::Notice, text);
 }
 
 /// tg `fire_beam_pulse()` (the zap wire): a shot out of turn when the delay has passed, the

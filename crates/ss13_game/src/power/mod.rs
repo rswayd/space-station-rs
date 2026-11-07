@@ -38,9 +38,10 @@ use bevy::prelude::*;
 use ss13_mapload::fidelity::{IconIndex, is_under};
 use ss13_mapload::light::{DmLight, MINIMUM_USEFUL_LIGHT_RANGE, source};
 use ss13_mapload::power::{
-    APC_HELPER_CELL_5K, APC_HELPER_CELL_10K, APC_HELPER_FULL_CHARGE, APC_HELPER_NO_CHARGE,
-    APC_HELPER_ROOT, APC_ROOT, CABLE_ROOT, LIGHT_ROOT, LIGHTS_OFF_HELPER, MACHINE_ROOT, RTG_ROOT,
-    SMES_ROOT, TERMINAL_ROOT,
+    APC_HELPER_AWAY_GENERAL_ACCESS, APC_HELPER_CELL_5K, APC_HELPER_CELL_10K,
+    APC_HELPER_FULL_CHARGE, APC_HELPER_NO_CHARGE, APC_HELPER_ROOT, APC_HELPER_SYNDICATE_ACCESS,
+    APC_HELPER_UNLOCKED, APC_ROOT, CABLE_ROOT, LIGHT_ROOT, LIGHTS_OFF_HELPER, MACHINE_ROOT,
+    RTG_ROOT, SMES_ROOT, TERMINAL_ROOT,
 };
 use ss13_mapload::{Area, Areas, DmAtom, DmPower};
 use ss13_shared::appearance::Overlay;
@@ -514,6 +515,16 @@ pub(crate) fn init_power(world: &mut World) {
         apc.channels = [dm.equipment, dm.lighting, dm.environ].map(|c| c.clamp(0.0, 3.0) as u8);
         apc.operating = dm.operating;
         apc.chargemode = dm.chargemode;
+        // `unlock()`, `give_syndicate_access()`, `give_away_general_access()`.
+        for (_, _, helper, ..) in apc_helpers.iter().filter(|h| h.1 == pos) {
+            if is_under(helper, APC_HELPER_UNLOCKED) {
+                apc.locked = false;
+            } else if is_under(helper, APC_HELPER_SYNDICATE_ACCESS) {
+                apc.req_access = vec!["syndicate".to_owned()];
+            } else if is_under(helper, APC_HELPER_AWAY_GENERAL_ACCESS) {
+                apc.req_access = vec!["away_general".to_owned()];
+            }
+        }
         grid.add_node(e, pos, layer(&dm), NodeKind::Machine);
         let atom = atom.unwrap_or_default();
         let sprites = sprites_of_icon
