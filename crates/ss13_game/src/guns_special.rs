@@ -13,6 +13,9 @@
 //! - **Reagent gun** (`chem_gun.dm`): a 90 u open container that synthesises a piercing dart
 //!   of 15 u from it per shot; it holds 4 darts and makes a new one every 25 s.
 //!
+//! - **Grenade launcher** (`grenade_launcher.dm`) and **medical beamgun** (`medbeam.dm`):
+//!   see [`process_fire`] and [`process_medbeams`].
+//!
 //! Messages are BandaStation's translation.
 // shortcut: no low power mode (syringes embedding instead: there is no embedding yet), no
 // overlays for the loaded syringes and no examine lines; the dart flies under its own type's
@@ -64,9 +67,26 @@ const C4: &str = "/obj/item/grenade/c4";
 /// `max_grenades`; the fuse of a launched grenade (`addtimer(detonate, 1.5 SECONDS)`).
 pub const MAX_GRENADES: usize = 3;
 const GRENADE_LAUNCHER_FUSE: f64 = 1.5;
+pub const MEDBEAM: &str = "/obj/item/gun/medbeam";
+/// `/obj/item/gun/medbeam` `max_range` (the beam's `maxdistance`), and its `process` period
+/// (`SSobj`'s 2 s `wait`: `check_delay` is shorter).
+pub const MEDBEAM_RANGE: u32 = 8;
+pub const MEDBEAM_TICK_SECS: f64 = 2.0;
+/// `COLOR_HEALING_CYAN`.
+const HEALING_CYAN: [u8; 4] = [0x80, 0xF5, 0xFF, 0xFF];
 /// `/obj/item/gun/syringe/blowgun/process_fire`.
 const BLOWGUN_STAMINA: f32 = 20.0;
 const BLOWGUN_OXY: f32 = 20.0;
+
+/// A medical beamgun's beam (tg `current_target`, the beam's `origin`, `last_check`).
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq)]
+pub struct Medbeam {
+    pub target: Option<Entity>,
+    /// The mob that fired it: the beam leaves with the gun's holder change (`dropped`,
+    /// `equipped`).
+    pub origin: Option<Entity>,
+    pub last_check: f64,
+}
 
 /// A reagent gun's darts (tg `syringes_left`, `last_synth`).
 #[derive(Component, Clone, Copy, Debug, PartialEq)]
@@ -101,7 +121,7 @@ pub(crate) fn plugin(app: &mut App) {
         })
     });
     app.add_observer(add_state)
-        .add_systems(Update, synthesise_darts);
+        .add_systems(Update, (synthesise_darts, process_medbeams));
 }
 
 fn is_syringe_gun(world: &World, gun: Entity) -> Option<String> {
@@ -155,7 +175,9 @@ fn add_state(add: On<Add<DmGun>>, guns: Query<&DmGun>, mut commands: Commands) {
         return;
     };
     let gun = add.entity;
-    if is_under(&dm.path, CHEM_GUN) {
+    if is_under(&dm.path, MEDBEAM) {
+        commands.entity(gun).insert_if_new(Medbeam::default());
+    } else if is_under(&dm.path, CHEM_GUN) {
         let owner = Owner {
             path: dm.path.clone(),
             living: false,
@@ -438,6 +460,10 @@ pub fn process_fire(
     gun: Entity,
     aim: crate::guns::Aim,
 ) -> bool {
+    if world.get::<Medbeam>(gun).is_some() {
+        medbeam_fire(world, mob, gun, aim.target);
+        return true;
+    }
     if !is_launcher(world, gun) {
         return false;
     }
@@ -497,10 +523,190 @@ mod tests {
     use super::*;
 
     #[test]
+    fn beams_cross_where_their_lines_share_a_tile() {
+        let t = |x, y| TilePos::new(x, y, 1);
+        let mine = beam_tiles(t(3, 6), t(7, 6));
+        let across = beam_tiles(t(5, 3), t(5, 9));
+        let parallel = beam_tiles(t(3, 8), t(7, 8));
+        assert_eq!(beams_cross(&mine, &[parallel.clone()]), None);
+        assert_eq!(beams_cross(&mine, &[parallel, across]), Some(t(5, 6)));
+    }
+
+    #[test]
     fn rapid_syringe_gun_holds_six() {
         assert_eq!(max_syringes(RAPID_SYRINGE_GUN), 6);
         assert_eq!(max_syringes(SYRINGE_GUN), 1);
         assert_eq!(max_syringes(BLOWGUN), 1);
         assert_eq!(max_syringes(DNA_GUN), 1);
+    }
+}
+
+/// tg `/obj/item/gun/medbeam/process_fire`: the old beam lets go; a living target is beamed.
+fn medbeam_fire(world: &mut World, mob: Entity, gun: Entity, target: Entity) {
+    let living = world.get::<crate::health::Health>(target).is_some() && target != mob;
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    if let Some(mut beam) = world.get_mut::<Medbeam>(gun) {
+        *beam = if living {
+            Medbeam {
+                target: Some(target),
+                origin: Some(mob),
+                last_check: now,
+            }
+        } else {
+            Medbeam::default()
+        };
+    }
+}
+
+/// The tiles a beam from `from` to `to` lies on (tg `Beam` segments on `get_line`).
+pub fn beam_tiles(from: TilePos, to: TilePos) -> Vec<TilePos> {
+    crate::radiation::get_line(from, to)
+}
+
+/// tg `los_check` with the dummy's `PASSTABLE|PASSGLASS|PASSGRILLE`: nothing dense in the way
+/// (mobs do not stop the beam).
+fn beam_clear(world: &World, line: &[TilePos]) -> bool {
+    let index = world.resource::<ss13_world::SpatialIndex>();
+    line.iter().skip(1).all(|&tile| {
+        index.on_tile(tile).iter().all(|&e| {
+            world.get::<ss13_world::Density>(e).is_none()
+                || world.get::<crate::health::Health>(e).is_some()
+                || crate::projectile::passes(
+                    world,
+                    e,
+                    crate::projectile::PASSTABLE
+                        | crate::projectile::PASSGLASS
+                        | crate::projectile::PASSGRILLE,
+                )
+        })
+    })
+}
+
+/// tg `mid_los_check`: the first tile of `line` (past its start) another origin's beam lies on.
+pub fn beams_cross(line: &[TilePos], others: &[Vec<TilePos>]) -> Option<TilePos> {
+    line.iter()
+        .skip(1)
+        .copied()
+        .find(|t| others.iter().any(|o| o.contains(t)))
+}
+
+/// tg `/obj/item/gun/medbeam/process`, `beam_died` and `on_beam_tick`: every `SSobj` tick the
+/// beam stays while its gun is held by who fired it, within range and in sight; crossed
+/// beams explode (`explosion(3 heavy, 5 light, 8 flash)`); the target heals 4 brute, 4 burn,
+/// 1 toxin and 1 oxygen.
+// Cost: per tick, one pass over beamguns (a handful); the line work runs every 2 s per beam.
+// shortcut: the beam has no sprite (`Beam` visuals are not ported); dragging the holder away
+// past the range ends it at the next check instead of at once.
+fn process_medbeams(world: &mut World) {
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    let mut q = world.query::<(Entity, &Medbeam)>();
+    let active: Vec<(Entity, Medbeam)> = q
+        .iter(world)
+        .filter(|(_, b)| b.target.is_some())
+        .map(|(e, b)| (e, *b))
+        .collect();
+    let line_of = |world: &World, b: &Medbeam| -> Option<Vec<TilePos>> {
+        let from = *world.get::<TilePos>(b.origin?)?;
+        let to = *world.get::<TilePos>(b.target?)?;
+        Some(beam_tiles(from, to))
+    };
+    for (gun, beam) in active {
+        let (Some(origin), Some(target)) = (beam.origin, beam.target) else {
+            continue;
+        };
+        if world
+            .get::<Medbeam>(gun)
+            .is_none_or(|b| b.target != Some(target))
+        {
+            continue; // released by a crossing this tick
+        }
+        // `dropped` / `equipped` / `!isliving(loc)`: the beam ends silently.
+        let held = world.get::<CarriedBy>(gun).is_some_and(|c| c.0 == origin)
+            && world
+                .get::<Inventory>(origin)
+                .is_some_and(|i| i.hands.contains(&Some(gun)));
+        if !held || world.get_entity(target).is_err() {
+            world.entity_mut(gun).insert(Medbeam::default());
+            continue;
+        }
+        if now < beam.last_check + MEDBEAM_TICK_SECS {
+            continue;
+        }
+        if let Some(mut b) = world.get_mut::<Medbeam>(gun) {
+            b.last_check = now;
+        }
+        let Some(line) = line_of(world, &beam) else {
+            lose_beam(world, gun, origin);
+            continue;
+        };
+        let (from, to) = (line[0], *line.last().expect("get_line has its start"));
+        if from.z != to.z || from.chebyshev(to).is_none_or(|d| d > MEDBEAM_RANGE) {
+            lose_beam(world, gun, origin);
+            continue;
+        }
+        let mut q = world.query::<(Entity, &Medbeam)>();
+        let others: Vec<(Entity, Medbeam)> = q
+            .iter(world)
+            .filter(|(e, b)| *e != gun && b.target.is_some() && b.origin != Some(origin))
+            .map(|(e, b)| (e, *b))
+            .collect();
+        let other_lines: Vec<Vec<TilePos>> = others
+            .iter()
+            .map(|(_, b)| line_of(world, b).unwrap_or_default())
+            .collect();
+        if let Some(at) = beams_cross(&line, &other_lines) {
+            info!("{origin:?} crossed medical beams at {at:?}");
+            let mut ex = crate::explosions::Explosion::new(0, 3, 5);
+            ex.flash = Some(8.0);
+            ex.cause = "medbeam".to_owned();
+            crate::explosions::explosion(world, at, ex);
+            lose_beam(world, gun, origin);
+            for ((other, b), l) in others.iter().zip(&other_lines) {
+                if l.contains(&at)
+                    && let Some(o) = b.origin
+                {
+                    lose_beam(world, *other, o);
+                }
+            }
+            continue;
+        }
+        if !beam_clear(world, &line) {
+            lose_beam(world, gun, origin);
+            continue;
+        }
+        heal_tick(world, target, to);
+    }
+}
+
+/// tg `beam_died`: the warning, then `LoseTarget`.
+fn lose_beam(world: &mut World, gun: Entity, holder: Entity) {
+    world.entity_mut(gun).insert(Medbeam::default());
+    crate::chem::tell_mob(
+        world,
+        holder,
+        Span::Warning,
+        "Вы теряете контроль над лучом!",
+    );
+}
+
+/// tg `on_beam_tick`.
+fn heal_tick(world: &mut World, target: Entity, at: TilePos) {
+    use crate::health::DamageType;
+    let hurt = world
+        .get::<crate::health::Health>(target)
+        .is_some_and(|h| h.brute + h.burn + h.tox + h.oxy > 0.0);
+    if hurt {
+        let mut v =
+            crate::effects::temp_visual::Visual::new("icons/effects/effects.dmi", "heal", 1.5);
+        v.color = Some(HEALING_CYAN);
+        crate::effects::temp_visual::spawn(world, at, v);
+    }
+    for (kind, amount) in [
+        (DamageType::Brute, 4.0),
+        (DamageType::Burn, 4.0),
+        (DamageType::Tox, 1.0),
+        (DamageType::Oxy, 1.0),
+    ] {
+        crate::medical::diseases::damage(world, target, kind, -amount);
     }
 }

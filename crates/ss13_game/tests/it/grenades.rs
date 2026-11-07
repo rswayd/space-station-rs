@@ -426,3 +426,74 @@ fn a_grenade_launcher_throws_its_grenade_which_goes_off_in_1_5_s() {
     assert!(!exists(&app, bomb));
     assert_eq!(explosions(&app), 1);
 }
+
+/// A medical beamgun `MEDBEAM` held by a fresh mob on `pos`.
+fn beamgun(app: &mut App, pos: TilePos) -> (Entity, Entity) {
+    use ss13_game::inventory::CarriedBy;
+    let holder = mob(app, pos);
+    let gun = app
+        .world_mut()
+        .spawn((
+            ss13_mapload::DmGun {
+                path: ss13_game::guns_special::MEDBEAM.into(),
+                ..default()
+            },
+            CarriedBy(holder),
+        ))
+        .id();
+    app.world_mut().entity_mut(holder).insert(Inventory {
+        hands: [Some(gun), None],
+        ..default()
+    });
+    app.update();
+    (holder, gun)
+}
+
+fn beam_at(app: &mut App, holder: Entity, gun: Entity, target: Entity) {
+    let pos = *app.world().get::<TilePos>(target).unwrap();
+    let aim = ss13_game::guns::Aim::new(target, pos, default());
+    assert!(ss13_game::guns_special::process_fire(
+        app.world_mut(),
+        holder,
+        holder,
+        gun,
+        aim
+    ));
+}
+
+#[test]
+fn a_medbeam_heals_its_target_every_2_s_and_crossed_beams_explode() {
+    use ss13_game::guns_special::Medbeam;
+    let mut app = server("a_medbeam_heals_its_target_every_2_s_and_crossed_beams_explode");
+    let (healer, gun) = beamgun(&mut app, at(3, 6));
+    let patient = mob(&mut app, at(7, 6));
+    {
+        let mut h = app.world_mut().get_mut::<Health>(patient).unwrap();
+        h.damage_zone(
+            ss13_game::zone::BodyZone::Chest,
+            ss13_game::health::DamageType::Brute,
+            20.0,
+        );
+    }
+    beam_at(&mut app, healer, gun, patient);
+    let brute = |app: &App| app.world().get::<Health>(patient).unwrap().brute;
+    run(&mut app, 2.2);
+    assert_eq!(brute(&app), 16.0, "4 brute per SSobj tick");
+    run(&mut app, 2.0);
+    assert_eq!(brute(&app), 12.0);
+
+    // A second healer's beam across the first: both go, with an explosion where they cross.
+    let (other, other_gun) = beamgun(&mut app, at(5, 3));
+    let other_patient = mob(&mut app, at(5, 9));
+    beam_at(&mut app, other, other_gun, other_patient);
+    run(&mut app, 2.2);
+    assert_eq!(explosions(&app), 1);
+    assert!(app.world().get::<Medbeam>(gun).unwrap().target.is_none());
+    assert!(
+        app.world()
+            .get::<Medbeam>(other_gun)
+            .unwrap()
+            .target
+            .is_none()
+    );
+}
