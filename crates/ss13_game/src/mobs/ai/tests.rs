@@ -748,3 +748,20 @@ fn illusions_attack_or_run_from_their_target() {
     let spot = bb.get(Key::FleeLocation).cloned();
     assert!(spot.is_some(), "flees");
 }
+
+#[test]
+fn traders_shoot_back_and_stop_wandering_once_open() {
+    let def = ss13_mapload::mobs::MobDef::default();
+    let built = super::trees::build(&format!("{BASIC}/trader/jumpscare"), &def).unwrap();
+    assert!(built.retaliates);
+    let mut w = world();
+    w.init_resource::<Time>();
+    w.insert_resource(CombatRng(5));
+    let trader = basic_mob(&mut w, 5, 5, "neutral", "/mob/living/basic/trader");
+    let thief = mob(&mut w, 8, 5, "neutral");
+    let mut bb = Blackboard::default();
+    bb.set(Key::RetaliateList, Value::Attackers(vec![(thief, 0.0)]));
+    let mut tree = Tree::new(built.roots);
+    run(&mut w, trader, &mut tree, &mut bb, 4);
+    assert_eq!(bb.entity(Key::CurrentTarget), Some(thief), "the thief");
+}

@@ -119,6 +119,8 @@ pub enum Key {
     /// target in `TargetTimerOf` has been the current one (`crate::mobs::lavaland::ai`).
     TargetTimer,
     TargetTimerOf,
+    /// A trader's `BB_SHOP_SPOT` (`crate::mobs::trader`).
+    ShopSpot,
 }
 
 #[derive(Clone, Debug, PartialEq)]

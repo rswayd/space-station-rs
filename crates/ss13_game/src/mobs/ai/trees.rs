@@ -630,6 +630,37 @@ fn generic(path: &str) -> Option<Built> {
         // `garden_gnome.bt.json`: fights back; left out: escape captivity.
         retaliates = true;
         retaliate_combat()
+    } else if is("trader") {
+        // `trader.bt.json`: shoots whoever hit it (`ai_retaliate`), else wanders until its shop
+        // is set (`crate::mobs::trader` opens it for the first customer).
+        retaliates = true;
+        par(
+            vec![
+                selector(vec![
+                    decorator(
+                        Cond::KeySet(Key::CurrentTarget),
+                        false,
+                        Abort::Both,
+                        while_closing_in(
+                            ranged_attack(3.0, true),
+                            leaf(Behavior::MoveToTarget {
+                                key: Key::CurrentTarget,
+                                dist: 1,
+                                finish_on_arrival: false,
+                            }),
+                        ),
+                    ),
+                    decorator(
+                        Cond::KeySet(Key::ShopSpot),
+                        true,
+                        Abort::None,
+                        random_walk(25.0),
+                    ),
+                ]),
+                retaliate_target(Key::CurrentTarget),
+            ],
+            FIND_TARGET_RATE,
+        )
     } else if is("illusion/escape") {
         // `escape.bt.json` (and `retaliate.bt.json`, the same tree): runs from its target and
         // whoever hit it (`ai_retaliate` on the mob).

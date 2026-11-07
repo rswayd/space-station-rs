@@ -230,6 +230,10 @@ fn attacked_by_humans(
                 if mob_stat == Stat::Conscious && super::farm::wisdom_touch(world, user, mob) {
                     continue;
                 }
+                // tg `trader/on_attack_hand`: the trade menu instead of the help response.
+                if mob_stat == Stat::Conscious && super::trader::attack_hand(world, user, mob) {
+                    continue;
+                }
                 let (cont, simple) = (&def.response_help_continuous, &def.response_help_simple);
                 send_seen(
                     world,
