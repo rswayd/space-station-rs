@@ -156,6 +156,7 @@ use std::path::{Path, PathBuf};
 pub mod actions;
 #[cfg(feature = "client")]
 pub mod actions_client;
+#[cfg(feature = "server")]
 pub mod afflictions;
 #[cfg(feature = "server")]
 pub mod airlock_construction;
@@ -229,6 +230,7 @@ pub mod construction;
 pub mod cooking;
 #[cfg(feature = "server")]
 pub mod crayons;
+#[cfg(feature = "server")]
 pub mod curses;
 #[cfg(feature = "server")]
 pub mod death;
@@ -303,6 +305,7 @@ pub mod gifts;
 pub mod grenades;
 #[cfg(feature = "server")]
 pub mod guns;
+#[cfg(feature = "server")]
 pub mod guns_special;
 #[cfg(feature = "server")]
 pub mod hallucination;
