@@ -154,8 +154,9 @@ pub fn fire_with(world: &mut World, shot: Shot, extra: impl Bundle) -> Option<En
     if shot.data.path.is_empty() {
         return None;
     }
+    // `throw_proj`: a target on the firer's own tile (a gun in one's mouth) is hit at once.
     let direct = shot.target.filter(|&t| {
-        t != shot.firer
+        (t != shot.firer || shot.target_pos == shot.from)
             && world.get::<Health>(t).is_some()
             && world
                 .resource::<SpatialIndex>()

@@ -183,6 +183,10 @@ pub enum Job {
     Restraints(crate::restraints::RestraintJob),
     /// Pulling taser electrodes out of yourself (`crate::taser`).
     RemoveElectrodes,
+    /// A gun in the mouth or to a head (`crate::guns`, tg `handle_suicide`).
+    GunSuicide,
+    /// Taking aim at a mob (`crate::gunpoint`).
+    Gunpoint,
     /// A medical stack on a living mob ([`crate::medical`]).
     Heal(crate::medical::HealJob),
     /// tg `do_cpr` ([`crate::medical`]).
@@ -1325,6 +1329,8 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
     match &action.job {
         &Job::Restraints(job) => crate::restraints::complete(world, mob, action, job),
         Job::RemoveElectrodes => crate::taser::complete_removal(world, mob),
+        Job::GunSuicide => crate::guns::complete_suicide(world, mob, action),
+        Job::Gunpoint => crate::gunpoint::complete_aim(world, mob, action),
         Job::Heal(job) => crate::medical::complete_heal(world, mob, action, *job),
         Job::Cpr { panicking } => crate::medical::complete_cpr(world, mob, action, *panicking),
         Job::Chem(job) => crate::chem::complete(world, mob, action, *job),

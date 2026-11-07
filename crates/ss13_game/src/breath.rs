@@ -128,6 +128,9 @@ pub enum AlertCategory {
     Offer(Entity),
     /// `/datum/status_effect/grouped/surrender`'s alert (`crate::buffs`).
     Surrender,
+    /// `/datum/status_effect/holdup` and `grouped/heldup` (`crate::gunpoint`).
+    Holdup,
+    Heldup,
     /// `/datum/status_effect/drugginess`'s alert (`high`).
     Drugged,
     /// `/datum/status_effect/food`'s alert (`crate::buffs`).
@@ -183,6 +186,19 @@ impl Alert {
         }
         // Alerts that share a state with another one.
         match self.category {
+            // tg has these only in English.
+            AlertCategory::Holdup => {
+                return (
+                    "Держите на прицеле",
+                    "Вы целитесь в кого-то из оружия. Нажмите, чтобы опустить его.",
+                );
+            }
+            AlertCategory::Heldup => {
+                return (
+                    "Вас держат на прицеле",
+                    "Резкие движения сейчас, пожалуй, будут плохой идеей!",
+                );
+            }
             AlertCategory::Trance => {
                 return (
                     "Транс",

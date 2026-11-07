@@ -160,6 +160,13 @@ pub struct DmGun {
     pub projectile_damage_multiplier: f32,
     /// `/obj/item/gun/ballistic/shotgun/automatic`: racks itself after a shot.
     pub auto_rack: bool,
+    /// `can_suppress`, the starting `suppressed` (`SUPPRESSED_NONE` 0, `QUIET` 1, `VERY` 2),
+    /// `can_unsuppress` (false: built in), `suppressed_sound`, `suppressed_volume`.
+    pub can_suppress: bool,
+    pub suppressed: u32,
+    pub can_unsuppress: bool,
+    pub suppressed_sound: String,
+    pub suppressed_volume: f32,
     pub sounds: GunSounds,
 }
 
@@ -487,6 +494,11 @@ pub fn gun(types: &DmTypes, path: &str) -> DmGun {
         min_recoil: n("min_recoil") as f32,
         projectile_damage_multiplier: n("projectile_damage_multiplier") as f32,
         auto_rack: is_under(path, "/obj/item/gun/ballistic/shotgun/automatic"),
+        can_suppress: truthy(types.resolved(path, "can_suppress")),
+        suppressed: n("suppressed").max(0.0) as u32,
+        can_unsuppress: truthy(types.resolved(path, "can_unsuppress")),
+        suppressed_sound: crate::sound::sound_var(types, path, "suppressed_sound"),
+        suppressed_volume: n("suppressed_volume") as f32,
         sounds: gun_sounds(types, path),
     }
 }

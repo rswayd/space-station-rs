@@ -683,6 +683,7 @@ fn apply_camera_effects(
     time: Res<Time>,
     mut kick: Local<Option<Kick>>,
     mut shake: Local<Option<Shake>>,
+    mut scope: Local<Vec2>,
     mut offset: ResMut<ss13_render::camera::CameraOffset>,
 ) {
     use ss13_shared::protocol::CameraEffect;
@@ -712,6 +713,10 @@ fn apply_camera_effects(
                     *shake = Some(Shake::new(duration_ds, strength, now, now.to_bits()));
                 }
             }
+            // shortcut: the zoom jumps instead of tg's 0.2 s `animate`.
+            CameraEffect::Scope { offset: [x, y] } => {
+                *scope = Vec2::new(f32::from(x), f32::from(y));
+            }
         }
     }
     let at = kick.and_then(|k| k.at(now));
@@ -722,7 +727,7 @@ fn apply_camera_effects(
     if shaken.is_none() {
         *shake = None;
     }
-    let total = at.unwrap_or(Vec2::ZERO) + shaken.unwrap_or(Vec2::ZERO);
+    let total = at.unwrap_or(Vec2::ZERO) + shaken.unwrap_or(Vec2::ZERO) + *scope;
     offset.set_if_neq(ss13_render::camera::CameraOffset(total));
 }
 

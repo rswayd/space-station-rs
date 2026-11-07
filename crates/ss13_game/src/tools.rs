@@ -637,6 +637,9 @@ fn run_do_afters(world: &mut World) {
             if let Job::Art(job) = action.job {
                 crate::service::art_interrupted(world, mob, &action, job);
             }
+            if let Job::GunSuicide = action.job {
+                crate::guns::suicide_interrupted(world, mob, action.target);
+            }
             continue;
         }
         if now >= action.ends_at {
