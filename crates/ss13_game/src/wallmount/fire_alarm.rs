@@ -11,9 +11,10 @@
 //! hazard light, the fault (location, automatic or manual), the security level and the thermal
 //! detection light. An idle alarm shows the security level (`fire_<number>`, the level's light
 //! color) and follows its changes (`check_security_level`).
-// shortcut: no alarm manager (consoles, AI), no `fire_detect` toggle (silicon ctrl-click,
-// multitool), no off-station look (`fire_offstation`): every alarm counts as on the station.
-// Add with those systems.
+// The `fire_detect` toggle and the stuck trigger/reset come from the wires
+// (`crate::machine_wires`).
+// shortcut: no alarm manager (consoles, AI), no silicon ctrl-click toggle, no off-station look
+// (`fire_offstation`): every alarm counts as on the station. Add with those systems.
 
 use bevy::prelude::*;
 use ss13_shared::TilePos;
@@ -45,6 +46,11 @@ pub struct FireAlarm {
     pub area: Entity,
     /// The next siren sound while it rings.
     pub ringing: Option<f64>,
+    /// `can_trigger`, `can_reset`, `can_toggle_detection`: false while their wire is cut
+    /// (`crate::machine_wires`).
+    pub can_trigger: bool,
+    pub can_reset: bool,
+    pub can_toggle_detection: bool,
 }
 
 /// An area's fire alarm state (tg `/area` `firedoors`, `active_firelocks`, `firealarms`,
@@ -89,11 +95,14 @@ pub(super) fn area_fire(world: &mut World, area: Entity) -> Mut<'_, AreaFire> {
     world.get_mut::<AreaFire>(area).expect("inserted above")
 }
 
-pub(super) fn add_alarm(world: &mut World, alarm: Entity, area: Entity) {
+pub(crate) fn add_alarm(world: &mut World, alarm: Entity, area: Entity) {
     area_fire(world, area).firealarms.push(alarm);
     world.entity_mut(alarm).insert(FireAlarm {
         area,
         ringing: None,
+        can_trigger: true,
+        can_reset: true,
+        can_toggle_detection: true,
     });
 }
 
@@ -152,11 +161,15 @@ pub fn on_security_level_changed(world: &mut World) {
 /// tg `firealarm/alarm(user)`: closes every firelock of the area and rings. `client`: the user
 /// who pulled it, told so.
 pub fn alarm(world: &mut World, alarm: Entity, client: Option<Entity>) {
-    let Some(&FireAlarm { area, .. }) = world.get::<FireAlarm>(alarm) else {
+    let Some(&FireAlarm {
+        area, can_trigger, ..
+    }) = world.get::<FireAlarm>(alarm)
+    else {
         return;
     };
-    // `is_operational`, `my_area.fire`.
+    // `is_operational`, `can_trigger`, `my_area.fire`.
     if world.get::<Unpowered>(alarm).is_some()
+        || !can_trigger
         || world.get::<AreaPower>(area).is_some_and(|a| a.fire)
     {
         return;
@@ -185,10 +198,13 @@ pub fn alarm(world: &mut World, alarm: Entity, client: Option<Entity>) {
 
 /// tg `firealarm/reset(user)`: cracks every firelock of the area open and stops ringing.
 pub fn reset(world: &mut World, alarm: Entity, client: Option<Entity>) {
-    let Some(&FireAlarm { area, .. }) = world.get::<FireAlarm>(alarm) else {
+    let Some(&FireAlarm {
+        area, can_reset, ..
+    }) = world.get::<FireAlarm>(alarm)
+    else {
         return;
     };
-    if world.get::<Unpowered>(alarm).is_some() {
+    if world.get::<Unpowered>(alarm).is_some() || !can_reset {
         return;
     }
     let firelocks = world
@@ -206,6 +222,45 @@ pub fn reset(world: &mut World, alarm: Entity, client: Option<Entity>) {
         a.ringing = None;
     }
     refresh_look(world, alarm);
+}
+
+/// tg `firealarm/toggle_fire_detect(user, silent = TRUE)`: nothing while the detection wire is
+/// cut.
+pub fn toggle_fire_detect(world: &mut World, alarm: Entity) {
+    let Some(&FireAlarm {
+        area,
+        can_toggle_detection,
+        ..
+    }) = world.get::<FireAlarm>(alarm)
+    else {
+        return;
+    };
+    if !can_toggle_detection {
+        return;
+    }
+    let on = world.get::<AreaFire>(area).is_none_or(|f| f.fire_detect);
+    set_fire_detect(world, alarm, !on);
+}
+
+/// tg `enable_fire_detect` / `disable_fire_detect`: the area's thermal detection, every alarm
+/// of the area relit, and a `reset()` unless the area was pulled by hand.
+pub fn set_fire_detect(world: &mut World, alarm: Entity, on: bool) {
+    let Some(area) = world.get::<FireAlarm>(alarm).map(|a| a.area) else {
+        return;
+    };
+    let mut fire = area_fire(world, area);
+    if fire.fire_detect == on {
+        return;
+    }
+    fire.fire_detect = on;
+    let manual = fire.fault == Fault::Manual;
+    let alarms = fire.firealarms.clone();
+    for a in alarms {
+        refresh_look(world, a);
+    }
+    if !manual {
+        reset(world, alarm, None);
+    }
 }
 
 /// tg `/area/proc/set_fire_effect` and the `COMSIG_AREA_FIRE_CHANGED` handlers: the lights, and

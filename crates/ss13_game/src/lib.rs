@@ -381,6 +381,8 @@ pub mod loot;
 #[cfg(feature = "server")]
 pub mod machine_frame;
 #[cfg(feature = "server")]
+pub mod machine_wires;
+#[cfg(feature = "server")]
 pub mod martial;
 pub mod mecha;
 #[cfg(feature = "server")]

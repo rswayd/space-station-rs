@@ -1681,10 +1681,12 @@ pub fn interact(
         }
         return true;
     }
-    if e.contains::<AirAlarm>() {
+    if let Some(alarm) = e.get::<AirAlarm>() {
+        // `ui_status`: a shorted alarm's window closes (`UI_CLOSE`).
+        let shorted = alarm.shorted;
         if modifiers.right {
             toggle_lock(world, target, client, mob);
-        } else if powered {
+        } else if powered && !shorted {
             open::<AirAlarmWindow>(world, client, mob, target);
         }
         return true;

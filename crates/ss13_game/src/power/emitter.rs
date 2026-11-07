@@ -461,7 +461,13 @@ fn toggle_on_click(world: &mut World, mut clicks: Local<MessageCursor<ClickResol
         let empty = world
             .get::<crate::inventory::Inventory>(click.mob)
             .is_some_and(|i| i.active_item().is_none());
-        if !empty {
+        // `INTERACT_MACHINE_WIRES_IF_OPEN`: an open panel shows the wires instead
+        // (`crate::machine_wires`).
+        if !empty
+            || world
+                .get::<crate::construction::PanelOpen>(click.target)
+                .is_some_and(|p| p.0)
+        {
             continue;
         }
         let wired = world.resource::<Grid>().node_net(click.target).is_some();
@@ -470,6 +476,48 @@ fn toggle_on_click(world: &mut World, mut clicks: Local<MessageCursor<ClickResol
         let on = emitter.active;
         tell(world, click.client, span, text);
         info!(target: "engine", "emitter {:?} turned {} by {:?}", click.target, if on { "ON" } else { "OFF" }, click.mob);
+    }
+}
+
+/// tg `fire_beam_pulse()` (the zap wire): a shot out of turn when the delay has passed, the
+/// emitter is welded and its powernet has `active_power_usage` to spare. True when it fired.
+pub fn fire_beam_pulse(world: &mut World, e: Entity) -> bool {
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    let (Some(mut emitter), Some(&pos)) =
+        (world.get::<Emitter>(e).cloned(), world.get::<TilePos>(e))
+    else {
+        return false;
+    };
+    let fired = {
+        let mut grid = world.resource_mut::<Grid>();
+        let net = grid.node_net(e).and_then(|id| grid.net_mut(id));
+        emitter.pulse_shot(net, now)
+    };
+    if !fired {
+        return false;
+    }
+    world.entity_mut(e).insert(emitter.clone());
+    world
+        .resource_mut::<PendingBeams>()
+        .0
+        .push((e, pos, dir2angle(emitter.dir)));
+    true
+}
+
+impl Emitter {
+    /// The checks and the draw of `fire_beam_pulse()`: `check_delay()`, welded,
+    /// `surplus() >= active_power_usage` (one machine tick of it here).
+    pub fn pulse_shot(&mut self, net: Option<&mut Powernet>, now: f64) -> bool {
+        if self.last_shot + self.fire_delay > now || !self.welded {
+            return false;
+        }
+        let usage = EMITTER_POWER_USAGE * super::MACHINE_TICK_SECS;
+        let Some(net) = net.filter(|n| n.surplus() >= usage) else {
+            return false;
+        };
+        net.load += usage;
+        self.last_shot = now;
+        true
     }
 }
 
@@ -666,6 +714,30 @@ mod tests {
             angle: 45.0,
         };
         assert_eq!(double.reflect(270.0), Some(0.0));
+    }
+
+    #[test]
+    fn zap_wire_shot_needs_delay_weld_and_surplus() {
+        let mut net = Powernet {
+            avail: 1e6,
+            ..default()
+        };
+        let mut e = Emitter::new(Dir::North, false, 2);
+        assert!(!e.pulse_shot(Some(&mut net), 100.0), "not welded");
+        e.welded = true;
+        assert!(!e.pulse_shot(None, 100.0), "no powernet");
+        assert!(e.pulse_shot(Some(&mut net), 100.0));
+        assert_eq!(
+            net.load,
+            EMITTER_POWER_USAGE * super::super::MACHINE_TICK_SECS
+        );
+        assert!(!e.pulse_shot(Some(&mut net), 101.0), "fire delay");
+        let mut poor = Powernet {
+            avail: 10.0,
+            ..default()
+        };
+        assert!(!e.pulse_shot(Some(&mut poor), 200.0), "no surplus");
+        assert_eq!(poor.load, 0.0);
     }
 
     #[test]

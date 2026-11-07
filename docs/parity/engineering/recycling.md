@@ -2,7 +2,7 @@
 Конвейерные ленты и переключатели, система мусоропровода (disposals) с сортировкой почты, упаковка посылок и переработчик.
 
 ### Конвейерные ленты
-Лента двигает предметы и мобов по направлению (с поворотами и изгибами), работает от питания; собирается из стака лент, поворачивается гаечным ключом, переворачивается отвёрткой.
+Лента двигает предметы и мобов по направлению (с поворотами и изгибами), работает от питания; собирается из стака лент, поворачивается гаечным ключом, переворачивается отвёрткой. Провода ленты (`/datum/wires/conveyor`) — вместе с ней (механизм проводов: [wires.md](wires.md)).
 
 - **Код:** [`/obj/machinery/conveyor`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/recycling/conveyor.dm#L11), [`proc/update_move_direction()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/recycling/conveyor.dm#L187), [`proc/start_conveying()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/recycling/conveyor.dm#L276), [`/obj/item/stack/conveyor`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/recycling/conveyor.dm#L650)
 - **Статус в ss13-rs:** ❌ нет

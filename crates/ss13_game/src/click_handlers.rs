@@ -135,6 +135,7 @@
 //!
 //! | prio | handler |
 //! | ---- | ------- |
+//! | 99 | `machine_wires::empty_hand` (an open panel shows the wires) |
 //! | 100 | `silicon::interact::attack_robot` |
 //! | 200 | `silicon::cyborg::inventory_action` (`EmptyHandClick`) |
 //! | 300 | `antag::cult::server::interact` |
@@ -230,6 +231,7 @@
 //! | 200 | `antag::syndie_items::item_interaction` |
 //! | 251 | `weapons` whetstone (`sharpener`), shield bash (`block::bash`) |
 //! | 219 | `clothing::chameleon::scanner_click` (the chameleon scanner on a human, or a turf with one) |
+//! | 289 | `machine_wires::held_on_target` (the alarms', emitter's, mass driver's and tesla coil's panel screwdriver; wire tools on an open panel) |
 //! | 300 | `emag::interact_with_atom` (left click) |
 //! | 317 | `misc_items::puzzle::swipe` (keycards on keycard doors and panels) |
 //! | 320 | `janitor::key_on_door` (the janitor's key on a door) |

@@ -505,6 +505,25 @@ pub fn interact(world: &mut World, client: Entity, mob: Entity, target: Entity) 
     true
 }
 
+/// `/datum/wires/shieldwallgen/on_pulse`: an anchored generator on a powernet flips on or off.
+pub fn wire_toggle(world: &mut World, e: Entity) {
+    let Some(on) = world.get::<ShieldWallGen>(e).map(ShieldWallGen::on) else {
+        return;
+    };
+    if !anchored(world, e) || world.resource::<Grid>().node_net(e).is_none() {
+        return;
+    }
+    if on {
+        deactivate(world, e);
+    } else {
+        if let Some(mut g) = world.get_mut::<ShieldWallGen>(e) {
+            g.active = WallActive::SetupFields;
+            g.starved = false;
+        }
+        wall_gen_look(world, e);
+    }
+}
+
 /// Tools, IDs and cable on a projector or a wall generator. True when handled.
 pub fn item_interaction(world: &mut World, actor: Actor, target: Entity) -> bool {
     let Some(held) = actor.item else {
