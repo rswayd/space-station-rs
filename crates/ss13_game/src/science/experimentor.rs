@@ -13,9 +13,8 @@
 // Not tg: tg adds the part tiers to `malfunction_probability_coeff` on every `RefreshParts` without
 // resetting it (a bug that drives malfunctions to zero after a few part swaps); it is computed from
 // the current parts here.
-// shortcut: no wires, panel, Ian/Runtime theft (a new corgi or cat spawns), chemical smoke clouds
-// (plain smoke), green glow decals, item transformation, fireballs, hot/cold air, suspicious
-// coffee, space-time throws, thrown items (they eject), sounds, the loading flick or admin logs.
+// shortcut: no wires, panel, Ian/Runtime theft (a new corgi or cat spawns), suspicious coffee,
+// space-time throws, thrown items (they eject), sounds, the loading flick or admin logs.
 
 use std::collections::HashMap;
 
@@ -59,6 +58,47 @@ const PROB_MEDIUM: f64 = 50.0;
 /// `use_energy(750 JOULES)` per experiment; the global power drain's 500 kJ.
 const EXPERIMENT_ENERGY: f64 = 750.0;
 const DRAIN_ENERGY: f64 = 500_000.0;
+const PROB_VERYHIGH: f64 = 95.0;
+/// `do_chem_smoke`'s 50 units.
+const CHEM_SMOKE_UNITS: f32 = 50.0;
+/// The hot and cold air malfunctions' energy, joules.
+const HOT_AIR_ENERGY: f64 = 100_000.0;
+const COLD_AIR_ENERGY: f64 = -75_000.0;
+/// `TCMB`.
+const TCMB: f64 = 2.7;
+const GREENGLOW: &str = "/obj/effect/decal/cleanable/greenglow/filled";
+const GREENGLOW_ROOT: &str = "/obj/effect/decal/cleanable/greenglow";
+const FROSTOIL: &str = "/datum/reagent/consumable/frostoil";
+/// The gas malfunction's dangerous chemicals and the leak's.
+const GAS_CHEMS: [&str; 8] = [
+    "/datum/reagent/carbon",
+    "/datum/reagent/uranium/radium",
+    "/datum/reagent/toxin",
+    "/datum/reagent/consumable/condensedcapsaicin",
+    "/datum/reagent/drug/mushroomhallucinogen",
+    "/datum/reagent/drug/space_drugs",
+    "/datum/reagent/consumable/ethanol",
+    "/datum/reagent/consumable/ethanol/beepsky_smash",
+];
+const LEAK_CHEMS: [&str; 3] = [
+    "/datum/reagent/mutationtoxin/classic",
+    "/datum/reagent/cyborg_mutation_nanomachines",
+    "/datum/reagent/toxin/acid",
+];
+/// `valid_items`: stock parts and knives at 15, food at 1-4 (here 2); spawnable at runtime
+/// (`ss13_mapload::runtime::GAME_RUNTIME_TYPES`).
+// shortcut: a fixed list instead of every `/obj/item` subtype, no chem grenades (tg detonates
+// them on the spot).
+const VALID_ITEMS: [(&str, u32); 8] = [
+    ("/obj/item/stock_parts/servo", 15),
+    ("/obj/item/stock_parts/capacitor", 15),
+    ("/obj/item/stock_parts/scanning_module", 15),
+    ("/obj/item/stock_parts/micro_laser", 15),
+    ("/obj/item/stock_parts/matter_bin", 15),
+    ("/obj/item/knife/kitchen", 15),
+    ("/obj/item/food/donut/plain", 2),
+    ("/obj/item/food/burger/plain", 2),
+];
 /// The `boom`/`honk` timer, seconds.
 const BLOW_DELAY: f64 = 5.0;
 
@@ -762,7 +802,17 @@ fn handle_malfunctions(world: &mut World, machine: Entity, scan: Scan, name: &st
                     Span::Warning,
                     &format!("{machine_name} malfunctions, spewing toxic waste!"),
                 );
+                for tile in ring(world, pos) {
+                    if !turf_dense(world, tile)
+                        && prob(world, PROB_VERYHIGH)
+                        && !has_on_tile(world, tile, GREENGLOW_ROOT)
+                    {
+                        crate::construction::spawn_obj(world, GREENGLOW, tile);
+                    }
+                }
                 destroy_loaded(world, machine);
+            } else if prob(world, PROB_MEDIUM * chance) {
+                transform(world, machine, &machine_name, name, pos);
             }
         }
         Scan::Gas => {
@@ -773,8 +823,20 @@ fn handle_malfunctions(world: &mut World, machine: Entity, scan: Scan, name: &st
                     Span::Danger,
                     &format!("{machine_name} destroys {name}, leaking dangerous gas!"),
                 );
-                do_smoke(world, 0, pos, Some(50), SmokeKind::Bad);
+                let chem = GAS_CHEMS[rand_range(world, 0, GAS_CHEMS.len() as u32 - 1) as usize];
+                chem_smoke(world, pos, chem);
                 destroy_loaded(world, machine);
+            } else if prob(world, PROB_VERYLOW * chance) {
+                say(
+                    world,
+                    machine,
+                    Span::Danger,
+                    &format!("{machine_name}'s chemical chamber has sprung a leak!"),
+                );
+                let chem = LEAK_CHEMS[rand_range(world, 0, LEAK_CHEMS.len() as u32 - 1) as usize];
+                chem_smoke(world, pos, chem);
+                destroy_loaded(world, machine);
+                warn!("experimentor: {chem} smoke at {pos:?}");
             } else if prob(world, PROB_LOW * chance) {
                 say(
                     world,
@@ -802,7 +864,30 @@ fn handle_malfunctions(world: &mut World, machine: Entity, scan: Scan, name: &st
             }
         }
         Scan::Heat => {
-            if prob(world, PROB_LOW * chance) {
+            if prob(world, PROB_VERYLOW * chance) {
+                // `locate(/mob/living) in view(machine, 3)`.
+                if let Some(target) = mobs_near(world, pos, 3, false).first().copied()
+                    && let Some(&at) = world.get::<TilePos>(target)
+                {
+                    say(
+                        world,
+                        machine,
+                        Span::Danger,
+                        &format!(
+                            "{machine_name} dangerously overheats, launching a flaming fuel orb!"
+                        ),
+                    );
+                    crate::spells::effects::fire_bolt(
+                        world,
+                        machine,
+                        pos,
+                        Some(target),
+                        at,
+                        crate::spells::effects::BoltKind::Fireball,
+                        1,
+                    );
+                }
+            } else if prob(world, PROB_LOW * chance) {
                 say(
                     world,
                     machine,
@@ -818,6 +903,15 @@ fn handle_malfunctions(world: &mut World, machine: Entity, scan: Scan, name: &st
                     pos,
                     crate::explosions::Explosion::new(-1, 0, 0).flame(2),
                 );
+            } else if prob(world, PROB_MEDIUM * chance) {
+                say(
+                    world,
+                    machine,
+                    Span::Warning,
+                    &format!("{machine_name} malfunctions, melting {name} and leaking hot air!"),
+                );
+                change_air(world, pos, HOT_AIR_ENERGY);
+                destroy_loaded(world, machine);
             } else if prob(world, PROB_MEDIUM * chance) {
                 say(
                     world,
@@ -846,7 +940,18 @@ fn handle_malfunctions(world: &mut World, machine: Entity, scan: Scan, name: &st
                          dangerous cloud of coolant!"
                     ),
                 );
-                do_smoke(world, 0, pos, Some(50), SmokeKind::Bad);
+                chem_smoke(world, pos, FROSTOIL);
+                destroy_loaded(world, machine);
+            } else if prob(world, PROB_LOW * chance) {
+                say(
+                    world,
+                    machine,
+                    Span::Warning,
+                    &format!(
+                        "{machine_name} malfunctions, shattering {name} and leaking cold air!"
+                    ),
+                );
+                change_air(world, pos, COLD_AIR_ENERGY);
                 destroy_loaded(world, machine);
             } else if prob(world, PROB_MEDIUM * chance) {
                 say(
@@ -865,6 +970,108 @@ fn handle_malfunctions(world: &mut World, machine: Entity, scan: Scan, name: &st
         Scan::Obliterate => destroy_loaded(world, machine),
         Scan::Discover | Scan::Fail => {}
     }
+}
+
+/// `do_chem_smoke(0, machine, machine.loc, chem, 50)`.
+fn chem_smoke(world: &mut World, pos: TilePos, reagent: &str) {
+    let Some(chem) = world
+        .get_resource::<crate::chem::Chem>()
+        .map(|c| c.0.clone())
+    else {
+        return;
+    };
+    let Some(id) = chem.id(reagent) else {
+        do_smoke(world, 0, pos, None, SmokeKind::Bad);
+        return;
+    };
+    let mut carry =
+        ss13_reagents::Holder::new(CHEM_SMOKE_UNITS, 0, ss13_reagents::Owner::default());
+    carry.add_reagent_list(&chem, &[(id, CHEM_SMOKE_UNITS)], None, true);
+    crate::effects::smoke::do_chem_smoke(world, 0, pos, None, &carry, SmokeKind::Chem);
+}
+
+/// The hot (`+100 kJ`, at most 1000 K) and cold (`-75 kJ`, at least `TCMB`) air of the machine's
+/// turf.
+fn change_air(world: &mut World, pos: TilePos, energy: f64) {
+    let Some(mut atmos) = world.get_resource_mut::<ss13_atmos::Atmos>() else {
+        return;
+    };
+    atmos.modify_air(pos, |a| {
+        let capacity = a.heat_capacity().max(1.0);
+        let t = (a.temperature * capacity + energy) / capacity;
+        a.temperature = if energy > 0.0 {
+            t.min(1000.0)
+        } else {
+            t.max(TCMB)
+        };
+    });
+}
+
+/// The tiles of `oview(1, machine)` in bounds.
+fn ring(world: &World, pos: TilePos) -> Vec<TilePos> {
+    let index = world.resource::<SpatialIndex>();
+    (-1..=1)
+        .flat_map(|dy| (-1..=1).map(move |dx| (dx, dy)))
+        .filter(|&d| d != (0, 0))
+        .map(|(dx, dy)| TilePos::new(pos.x + dx, pos.y + dy, pos.z))
+        .filter(|&p| index.in_bounds(p))
+        .collect()
+}
+
+/// `T.density` of the turf.
+fn turf_dense(world: &World, pos: TilePos) -> bool {
+    world
+        .resource::<SpatialIndex>()
+        .on_tile(pos)
+        .iter()
+        .any(|&e| {
+            world
+                .get::<DmObj>(e)
+                .is_some_and(|o| is_under(&o.path, "/turf/closed"))
+        })
+}
+
+fn has_on_tile(world: &World, pos: TilePos, root: &str) -> bool {
+    world
+        .resource::<SpatialIndex>()
+        .on_tile(pos)
+        .iter()
+        .any(|&e| {
+            world
+                .get::<DmObj>(e)
+                .is_some_and(|o| is_under(&o.path, root))
+        })
+}
+
+/// The irradiate malfunction's transformation: the item becomes a random `valid_items` one,
+/// which pops out.
+fn transform(world: &mut World, machine: Entity, machine_name: &str, name: &str, pos: TilePos) {
+    let total: u32 = VALID_ITEMS.iter().map(|(_, w)| w).sum();
+    let mut roll = rand_range(world, 1, total);
+    let mut path = VALID_ITEMS[0].0;
+    for (p, w) in VALID_ITEMS {
+        if roll <= w {
+            path = p;
+            break;
+        }
+        roll -= w;
+    }
+    destroy_loaded(world, machine);
+    let Some(new) = crate::construction::spawn_obj(world, path, pos) else {
+        return;
+    };
+    put_inside(world, new, machine);
+    if let Some(mut m) = world.get_mut::<Experimentor>(machine) {
+        m.loaded = Some(new);
+    }
+    let new_name = item_name(world, new);
+    say(
+        world,
+        machine,
+        Span::Warning,
+        &format!("{machine_name} malfunctions, transforming {name} into {new_name}!"),
+    );
+    item_eject(world, machine, false);
 }
 
 /// tg `handle_global_reactions`.

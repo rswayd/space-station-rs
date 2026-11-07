@@ -42,6 +42,8 @@ pub mod experimentor;
 #[cfg(feature = "server")]
 pub mod experiments;
 #[cfg(feature = "server")]
+pub mod gizmo;
+#[cfg(feature = "server")]
 pub mod lathe;
 #[cfg(feature = "server")]
 pub mod points;
@@ -90,6 +92,7 @@ impl bevy::prelude::Plugin for ScienceServerPlugin {
             anomaly_refinery::AnomalyRefineryPlugin,
             experimentor::ExperimentorPlugin,
             relics::RelicPlugin,
+            gizmo::GizmoPlugin,
         ));
     }
 }

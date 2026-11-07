@@ -7,12 +7,13 @@
 //! uncontrolled teleport (1-3 s later the holder, or the relic, within 8 tiles), heat and explode
 //! (3.5-10 s later, if still held by the user), the rapid self-duplicator (5-10 copies that vanish
 //! in 1-10 s) and the hugger.
-// shortcut: of the prototype powers, cleaning foam, the flashbanger, the drink dispenser, tummy
-// ache, the charger, dimensional shift and the disguiser are not ported (their effects —
-// foam grenades, organ scrambling, dimension themes, costumes — are elsewhere or missing) and
-// are not rolled; the lavaland necrotech theme rolls the prototype powers. No themed icon
-// states, no throws (copies and corgis land around the relic), no gift auto-reveal, assembly
-// signals or admin warnings.
+// Also the flashbanger (a flashbang goes off) and, for the necrotech theme, monster summoning
+// (3-9, 80% falls apart) and the area teleport (view 2 onto the relic, 30% it vanishes).
+// shortcut: cleaning and acid foam, the drink dispenser, tummy ache, the charger, dimensional
+// shift, the disguiser, the shield holders, rocks and the blood powers are not ported (foam
+// grenades, organ scrambling, dimension themes, costumes, shield components, mineral turfs) and
+// not rolled. No themed icon states, no throws (copies and corgis land around the relic), no
+// gift auto-reveal, relic mob cap, assembly signals or admin warnings.
 
 use bevy::prelude::*;
 use ss13_mapload::{DmName, DmObj};
@@ -93,15 +94,49 @@ pub enum RelicPower {
     HeatAndExplode,
     RapidSelfDupe,
     Hugger,
+    Flashbanger,
+    SummonMonsters,
+    AoeTeleport,
 }
 
-const POWERS: [RelicPower; 6] = [
+/// The ported powers of the prototype theme.
+const PROTOTYPE_POWERS: [RelicPower; 7] = [
     RelicPower::CorgiCannon,
     RelicPower::SummonAnimals,
     RelicPower::UncontrolledTeleport,
     RelicPower::HeatAndExplode,
     RelicPower::RapidSelfDupe,
     RelicPower::Hugger,
+    RelicPower::Flashbanger,
+];
+/// The ported powers of the necrotech theme.
+const NECROTECH_POWERS: [RelicPower; 4] = [
+    RelicPower::SummonMonsters,
+    RelicPower::HeatAndExplode,
+    RelicPower::UncontrolledTeleport,
+    RelicPower::AoeTeleport,
+];
+const FLASHBANG: &str = "/obj/item/grenade/flashbang";
+/// `summon_animals_monsters`'s `valid_monsters` (`ss13_mapload::runtime::GAME_RUNTIME_TYPES`).
+const MONSTERS: [&str; 18] = [
+    "/mob/living/basic/construct/artificer/hostile",
+    "/mob/living/basic/construct/juggernaut/hostile",
+    "/mob/living/basic/construct/proteon/hostile",
+    "/mob/living/basic/construct/wraith/hostile",
+    "/mob/living/basic/mining/brimdemon",
+    "/mob/living/basic/mining/goldgrub",
+    "/mob/living/basic/mining/goliath",
+    "/mob/living/basic/mining/hivelord",
+    "/mob/living/basic/mining/ice_demon",
+    "/mob/living/basic/mining/legion",
+    "/mob/living/basic/mining/lobstrosity",
+    "/mob/living/basic/mining/watcher",
+    "/mob/living/basic/raptor/blue",
+    "/mob/living/basic/raptor/green",
+    "/mob/living/basic/raptor/purple",
+    "/mob/living/basic/raptor/red",
+    "/mob/living/basic/raptor/white",
+    "/mob/living/basic/raptor/yellow",
 ];
 
 #[derive(Component, Clone, Debug, Default)]
@@ -187,6 +222,10 @@ pub fn ensure_relic(world: &mut World, item: Entity) -> bool {
         ..default()
     });
     set_name(world, item, &strange);
+    // `relic/revealed`, `relic/lavaland/revealed`: `auto_reveal` on spawn.
+    if path.ends_with("/revealed") {
+        reveal(world, item);
+    }
     true
 }
 
@@ -205,7 +244,15 @@ pub fn reveal(world: &mut World, item: Entity) {
         return;
     }
     let cooldown = f64::from(rand_range(world, MIN_COOLDOWN, MAX_COOLDOWN));
-    let power = POWERS[rand_range(world, 0, POWERS.len() as u32 - 1) as usize];
+    let necrotech = world
+        .get::<DmObj>(item)
+        .is_some_and(|o| is_under(&o.path, NECROTECH));
+    let powers: &[RelicPower] = if necrotech {
+        &NECROTECH_POWERS
+    } else {
+        &PROTOTYPE_POWERS
+    };
+    let power = powers[rand_range(world, 0, powers.len() as u32 - 1) as usize];
     let name = {
         let Some(mut relic) = world.get_mut::<Relic>(item) else {
             return;
@@ -363,8 +410,97 @@ pub fn activate(world: &mut World, client: Entity, user: Entity, item: Entity) -
             };
             tell(world, client, Span::Notice, text);
         }
+        RelicPower::Flashbanger => {
+            if let Some(bang) = crate::construction::spawn_obj(world, FLASHBANG, pos) {
+                crate::grenades::detonate(world, bang);
+            }
+        }
+        RelicPower::SummonMonsters => {
+            let mut spawned = 0;
+            for _ in 0..rand_range(world, 3, 9) {
+                let path = MONSTERS[rand_range(world, 0, MONSTERS.len() as u32 - 1) as usize];
+                if let Some(tile) = random_tile(world, pos, 7)
+                    && crate::mobs::spawn::spawn_mob(world, path, tile).is_some()
+                {
+                    spawned += 1;
+                }
+            }
+            let name = item_name(world, item);
+            let (span, text) = if spawned > 0 {
+                (
+                    Span::Danger,
+                    format!(
+                        "{name} begins to shake, and in the distance the sound of roaring arises!"
+                    ),
+                )
+            } else {
+                (
+                    Span::Warning,
+                    format!("{name} begins to shake, but nothing happens..."),
+                )
+            };
+            crate::medical::visible(world, user, &text, &text, span);
+            if spawned > 0 && prob(world, 80.0) {
+                fall_apart(world, user, item);
+            }
+        }
+        RelicPower::AoeTeleport => {
+            let name = item_name(world, item);
+            tell(
+                world,
+                client,
+                Span::Notice,
+                format!("{name} begins to vibrate intensely!"),
+            );
+            let at = t + f64::from(rand_range(world, 10, 30)) / 10.0;
+            world
+                .entity_mut(item)
+                .insert(RelicTimer { at, power, user });
+        }
     }
     true
+}
+
+/// `do_the_aoe_teleport`: every loose living mob and item in view 2 lands near the relic; 30%
+/// the relic is gone.
+// shortcut: no holy-magic resistance, no cult phase effects.
+fn aoe_teleport(world: &mut World, item: Entity, user: Entity, pos: TilePos) {
+    let name = item_name(world, item);
+    let text = format!("{name} twists and bends, relocating anything nearby!");
+    crate::medical::visible(world, user, &text, &text, Span::Notice);
+    let index = world.resource::<ss13_world::SpatialIndex>();
+    let mut movers = Vec::new();
+    for dy in -2..=2 {
+        for dx in -2..=2 {
+            let p = TilePos::new(pos.x + dx, pos.y + dy, pos.z);
+            movers.extend(index.on_tile(p).iter().copied().filter(|&e| {
+                let anchored = world
+                    .get::<crate::obj_damage::Anchored>(e)
+                    .is_some_and(|a| a.0);
+                !anchored
+                    && (world.get::<crate::health::Health>(e).is_some()
+                        || world.get::<ss13_mapload::DmItem>(e).is_some())
+            }));
+        }
+    }
+    for mover in movers {
+        crate::teleport::do_teleport(
+            world,
+            mover,
+            pos,
+            crate::teleport::Tele {
+                precision: 5,
+                channel: crate::teleport::Channel::Cult,
+                sound_in: Some("sound/effects/phasein.ogg"),
+                ..default()
+            },
+        );
+    }
+    if prob(world, 30.0) && world.get_entity(item).is_ok() {
+        let text = format!("{name} teleports away, never to be seen again!");
+        crate::medical::visible(world, user, &text, &text, Span::Warning);
+        world.despawn(item);
+    }
 }
 
 fn item_name(world: &World, item: Entity) -> String {
@@ -429,7 +565,9 @@ fn relic_timers(world: &mut World) {
         let Some(pos) = turf_of(world, item) else {
             continue;
         };
-        if timer.power == RelicPower::HeatAndExplode {
+        if timer.power == RelicPower::AoeTeleport {
+            aoe_teleport(world, item, timer.user, pos);
+        } else if timer.power == RelicPower::HeatAndExplode {
             // `blow_up`: only while the user still holds it (or nobody does).
             let holder = world.get::<CarriedBy>(item).map(|c| c.0);
             if holder.is_some_and(|h| h != timer.user) {

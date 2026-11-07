@@ -146,6 +146,9 @@ const TYPES: &str = r##"{
         "declared_vars": { "name": "protolathe", "icon_state": "protolathe",
             "allowed_buildtypes": 2,
             "circuit": { "path": "/obj/item/circuitboard/machine/protolathe" } } },
+    "/obj/machinery/gizmo": { "parent": "/obj/machinery", "declared_vars": {
+        "name": "gizmo", "icon": { "resource": "r.dmi" }, "icon_state": "server",
+        "anchored": 0 } },
     "/obj/machinery/rnd/experimentor": { "parent": "/obj/machinery/rnd", "declared_vars": {
         "name": "\\improper E.X.P.E.R.I-MENTOR", "icon_state": "server" } },
     "/obj/machinery/destructive_scanner": { "parent": "/obj/machinery", "declared_vars": {
@@ -298,6 +301,7 @@ fn fixture_assets(test: &str) -> PathBuf {
         "/obj/item/disk/tech_disk",
         "/obj/item/assembly/relic",
         "/obj/machinery/rnd/experimentor",
+        "/obj/machinery/gizmo",
         "/obj/item/wrench",
         "/obj/item/disk/design_disk",
         "/obj/machinery/destructive_scanner",
@@ -1194,6 +1198,65 @@ fn experimentor_reveals_relics() {
         !s.web().hidden.contains(&secret)
     });
     assert!(s.server.world().get_entity(screwdriver).is_err(), "crushed");
+}
+
+/// A gizmo: a random name and eight cryptic wires; pulsing its wires walks the puzzle, a solved
+/// sequence runs its gizpulse (here a dispenser) once per cooldown.
+#[test]
+fn gizmo_wires_solve_the_puzzle() {
+    use ss13_game::science::gizmo::{
+        CRYPTIC_WIRES, Control, Gizmo, Gizmode, Pulse, Solution, ensure,
+    };
+    let mut s = Lab::start("gizmo_wires_solve_the_puzzle");
+    let at = TilePos::new(5, 4, 1);
+    let gizmo = {
+        let world = s.server.world_mut();
+        let e = ss13_game::construction::spawn_obj(world, "/obj/machinery/gizmo", at).unwrap();
+        assert!(ensure(world, e));
+        let wires = world.get::<ss13_game::wires::Wires>(e).unwrap();
+        assert_eq!(wires.colors.len(), 8);
+        assert_ne!(world.get::<ss13_mapload::DmName>(e).unwrap().name, "gizmo");
+        assert!(!world.get::<Gizmo>(e).unwrap().codes.is_empty());
+        // A known puzzle: wires 1, 2, 3 dispense.
+        world.entity_mut(e).insert(Gizmo {
+            modes: vec![Gizmode {
+                pulses: vec![Pulse::Food("/obj/item/wrench")],
+                current: 0,
+                control: Control::Direct,
+                cooldown: 1.0,
+                ready_at: 0.0,
+            }],
+            codes: vec![(vec![0, 1, 2], Solution::Direct(0, 0))],
+            ..Default::default()
+        });
+        e
+    };
+    let mob = s.mob();
+    let pulse = |s: &mut Lab, i: usize| {
+        ss13_game::wires::pulse(s.server.world_mut(), gizmo, CRYPTIC_WIRES[i], Some(mob));
+    };
+    pulse(&mut s, 0);
+    pulse(&mut s, 5);
+    assert!(
+        s.server
+            .world()
+            .get::<Gizmo>(gizmo)
+            .unwrap()
+            .current
+            .is_empty(),
+        "reset"
+    );
+    for i in [0, 1, 2] {
+        pulse(&mut s, i);
+    }
+    s.steps(2);
+    assert_eq!(s.items_on(at, "/obj/item/wrench"), 1);
+    // The cooldown: an immediate second solution dispenses nothing.
+    for i in [0, 1, 2] {
+        pulse(&mut s, i);
+    }
+    s.steps(2);
+    assert_eq!(s.items_on(at, "/obj/item/wrench"), 1);
 }
 
 impl Lab {

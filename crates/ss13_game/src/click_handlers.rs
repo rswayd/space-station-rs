@@ -94,6 +94,7 @@
 //!
 //! | prio | handler |
 //! | ---- | ------- |
+//! | 77 | `science::gizmo` (a gizmo spawned after map load gets its puzzle; never takes the click) |
 //! | 89 | `machine_wires::held_on_target` (a screwdriver on a radio, wire tools on an open MOD or radio in the other hand) |
 //! | 91 | `modsuit::anomalock::item_interaction` (an anomaly core into a locked MOD module, a screwdriver taking it out) |
 //! | 100 | `modsuit::server::hand_interaction` |
@@ -142,6 +143,7 @@
 //!
 //! | prio | handler |
 //! | ---- | ------- |
+//! | 97 | `science::gizmo` (a gizmo spawned after map load gets its puzzle; never takes the click) |
 //! | 99 | `machine_wires::empty_hand` (an open panel shows the wires) |
 //! | 100 | `silicon::interact::attack_robot` |
 //! | 200 | `silicon::cyborg::inventory_action` (`EmptyHandClick`) |
@@ -246,6 +248,7 @@
 //! | 200 | `antag::syndie_items::item_interaction` |
 //! | 251 | `weapons` whetstone (`sharpener`), shield bash (`block::bash`) |
 //! | 219 | `clothing::chameleon::scanner_click` (the chameleon scanner on a human, or a turf with one) |
+//! | 277 | `science::gizmo` (a gizmo spawned after map load gets its puzzle; never takes the click) |
 //! | 289 | `machine_wires::held_on_target` (panel screwdrivers of machines, cyborgs, mechs and radios; wire tools on an open panel, MOD or radio) |
 //! | 300 | `emag::interact_with_atom` (left click) |
 //! | 317 | `misc_items::puzzle::swipe` (keycards on keycard doors and panels) |

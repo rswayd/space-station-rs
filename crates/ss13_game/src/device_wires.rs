@@ -252,6 +252,9 @@ pub fn interactable(world: &World, e: Entity, kind: MachineWires) -> Option<bool
         MachineWires::Mod => world.get::<ModSuit>(e).is_some_and(|s| s.open),
         // `can_access_wires`: a shell that is not a machine always (no shell locking).
         MachineWires::WireBundle => true,
+        // `/obj/machinery/gizmo` starts and stays open (`panel_open = TRUE`); the handheld one
+        // has no panel.
+        MachineWires::Gizmo => true,
         _ => return None,
     })
 }
@@ -264,6 +267,8 @@ pub fn hand_opens(world: &World, e: Entity, kind: MachineWires) -> bool {
         | MachineWires::Mecha
         | MachineWires::Mod
         | MachineWires::WireBundle => false,
+        // The handheld gizmo is picked up by hand.
+        MachineWires::Gizmo => world.get::<ss13_mapload::DmItem>(e).is_none(),
         MachineWires::Radio => world
             .get::<Radio>(e)
             .is_some_and(|r| r.kind == RadioKind::Intercom),
@@ -543,6 +548,7 @@ pub fn on_pulse(
             state(world, e, |s| s.interface_break = !s.interface_break);
         }
         (MachineWires::WireBundle, _) => crate::wiremod::server::bundle_pulsed(world, e, wire),
+        (MachineWires::Gizmo, _) => crate::science::gizmo::pulsed(world, e, wire, _user),
         // `set_listening(!listening)`, then broadcasting follows listening.
         (MachineWires::Radio, WIRE_SIGNAL) => {
             if let Some(mut r) = world.get_mut::<Radio>(e) {

@@ -77,6 +77,31 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     // `science::experimentor` (critical sheets, the honk's peel) and `science::relics` (the
     // animals a strange object summons).
     "/obj/item/grown/bananapeel",
+    // `science::gizmo`: the food dispenser.
+    "/obj/item/food/donut/plain",
+    "/obj/item/food/burger/plain",
+    // `science::experimentor`: toxic waste and the transformation's items.
+    "/obj/effect/decal/cleanable/greenglow/filled",
+    "/obj/item/stock_parts/servo",
+    "/obj/item/stock_parts/capacitor",
+    "/obj/item/stock_parts/scanning_module",
+    "/obj/item/stock_parts/matter_bin",
+    // `science::relics`: the necrotech monsters.
+    "/mob/living/basic/construct/proteon/hostile",
+    "/mob/living/basic/mining/brimdemon",
+    "/mob/living/basic/mining/goldgrub",
+    "/mob/living/basic/mining/goliath",
+    "/mob/living/basic/mining/hivelord",
+    "/mob/living/basic/mining/ice_demon",
+    "/mob/living/basic/mining/legion",
+    "/mob/living/basic/mining/lobstrosity",
+    "/mob/living/basic/mining/watcher",
+    "/mob/living/basic/raptor/blue",
+    "/mob/living/basic/raptor/green",
+    "/mob/living/basic/raptor/purple",
+    "/mob/living/basic/raptor/red",
+    "/mob/living/basic/raptor/white",
+    "/mob/living/basic/raptor/yellow",
     "/mob/living/basic/carp",
     "/mob/living/basic/crab",
     "/mob/living/basic/lizard",
