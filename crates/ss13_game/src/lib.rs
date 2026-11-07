@@ -157,6 +157,8 @@ pub mod actions;
 #[cfg(feature = "client")]
 pub mod actions_client;
 #[cfg(feature = "server")]
+#[cfg(feature = "server")]
+pub mod actionspeed;
 pub mod afflictions;
 #[cfg(feature = "server")]
 pub mod airlock_construction;
@@ -289,6 +291,8 @@ pub mod food;
 #[cfg(feature = "server")]
 pub mod footsteps;
 pub mod forensics;
+#[cfg(feature = "server")]
+pub mod fov;
 #[cfg(feature = "client")]
 pub mod fullscreen_client;
 #[cfg(feature = "server")]
@@ -409,6 +413,8 @@ pub mod panels_client;
 pub mod papershredder;
 #[cfg(feature = "server")]
 pub mod password_door;
+#[cfg(feature = "server")]
+pub mod pixel_shift;
 #[cfg(feature = "server")]
 pub mod plumbing;
 #[cfg(feature = "server")]
@@ -537,6 +543,8 @@ pub mod ui_sprites;
 pub mod vehicles;
 #[cfg(feature = "server")]
 pub mod vending;
+#[cfg(feature = "server")]
+pub mod ventcrawl;
 #[cfg(feature = "server")]
 pub mod vision;
 #[cfg(feature = "server")]

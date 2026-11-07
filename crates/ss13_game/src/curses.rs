@@ -21,7 +21,7 @@
 //!   oneself) takes it off in 3.5 s, wirecutters in 1.4 s.
 // shortcut: no curse fullscreen, wasting visual, grasping curse hands (the projectile is not
 // ported: the flag is kept), trance monochrome colour or deafness check, ants speech lines (the
-// scream only) or washing off by cleaning, midas overlays and actionspeed, flare light and
+// scream only) or washing off by cleaning, midas overlays, flare light and
 // outline of the designated target, `TRAIT_DISCOORDINATED_TOOL_USER` users, the
 // `deletes_mob` fade; the rust's disgust (not ported) and robotic limb damage. Fake virus and
 // the tower of Babel live in `crate::events`.
@@ -754,6 +754,20 @@ pub fn midas_slowdown(gold: f32) -> f32 {
     }
 }
 
+/// The gold actionspeed tiers of `midas_blight/tick` (`actionspeed_modifier/status_effect/
+/// midas_blight/*`).
+pub fn midas_action_slowdown(gold: f32) -> f32 {
+    if gold < 50.0 {
+        0.25
+    } else if gold < 100.0 {
+        0.75
+    } else if gold < 200.0 {
+        1.5
+    } else {
+        2.0
+    }
+}
+
 /// tg `apply_status_effect(/datum/status_effect/midas_blight, duration)` (`REPLACE`): humans.
 pub fn apply_midas_blight(world: &mut World, mob: Entity, secs: f32) {
     if world.get::<crate::chem::MobReagents>(mob).is_none() {
@@ -773,6 +787,11 @@ fn end_midas(world: &mut World, mob: Entity) {
     if let Some(m) = world.get::<MidasBlight>(mob).copied() {
         add_slowdown(world, mob, -m.slowdown);
     }
+    crate::actionspeed::remove_actionspeed_modifier(
+        world,
+        mob,
+        crate::actionspeed::ID_MIDAS_BLIGHT,
+    );
     world.entity_mut(mob).remove::<MidasBlight>();
     alert(world, mob, AlertCategory::MidasBlight, None);
 }
@@ -821,6 +840,12 @@ fn midas_tick(world: &mut World) {
         let gold = crate::chem::blood_amount(world, mob, "/datum/reagent/gold")
             + crate::chem::blood_amount(world, mob, CURSED_GOLD);
         let wanted = midas_slowdown(gold);
+        crate::actionspeed::add_actionspeed_modifier(
+            world,
+            mob,
+            crate::actionspeed::ID_MIDAS_BLIGHT,
+            midas_action_slowdown(gold),
+        );
         if wanted != m.slowdown {
             add_slowdown(world, mob, wanted - m.slowdown);
             if let Some(mut mb) = world.get_mut::<MidasBlight>(mob) {
@@ -1190,5 +1215,9 @@ mod tests {
         assert_eq!(midas_slowdown(60.0), 1.0);
         assert_eq!(midas_slowdown(150.0), 1.5);
         assert_eq!(midas_slowdown(250.0), 2.0);
+        assert_eq!(midas_action_slowdown(10.0), 0.25);
+        assert_eq!(midas_action_slowdown(60.0), 0.75);
+        assert_eq!(midas_action_slowdown(150.0), 1.5);
+        assert_eq!(midas_action_slowdown(250.0), 2.0);
     }
 }

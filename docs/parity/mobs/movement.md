@@ -23,7 +23,7 @@
 `actionspeed_modifier` ускоряет или замедляет `do_after` (наркотики, настроение, раны, зависимости, статус-эффекты).
 
 - **Код:** [`/datum/actionspeed_modifier`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/actionspeed/_actionspeed_modifier.dm#L23), [`proc/add_actionspeed_modifier()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/actionspeed/_actionspeed_modifier.dm#L64), [`proc/update_actionspeed()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/actionspeed/_actionspeed_modifier.dm#L150), [`code/modules/actionspeed/modifiers/`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/actionspeed/modifiers)
-- **Статус в ss13-rs:** ❌ нет — `do_after` в `crates/ss13_game/src/tools.rs` без модификаторов
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/actionspeed.rs` (`ActionSpeedModifiers`, `add_actionspeed_modifier`/`remove_actionspeed_modifier` по id, `action_multiplier` = база 1 + модификаторы + рассудок `crate::mood` + еда `crate::buffs`), `do_after` в `crates/ss13_game/src/tools.rs` умножает задержку на него; источник Midas blight (`crates/ss13_game/src/curses.rs`, 0,25/0,75/1,5/2 по золоту). `// shortcut:` нет `conflicts_with`/иммунитетов (их не использует ни один перенесённый источник); источники-реагенты (стимуляторы, кронкаин), раны, hazard_area — в своих группах
 
 ### Спотыкание от слишком быстрого бега (BandaStation)
 Модпак форка: если суммарный множитель скорости человека ниже порога (0.85), он с шансом 50% спотыкается, а при очень высокой скорости (ниже 0.3) может сломать ноги.
@@ -55,19 +55,19 @@
 Мобы с `TRAIT_VENTCRAWLER_*` (мыши, ксенолярвы, голые мартышки и др.) входят в вентиляцию и скрубберы, ползут по трубам и видят их сеть.
 
 - **Код:** [`proc/can_enter_vent()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/ventcrawling.dm#L17), [`proc/handle_ventcrawl()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/ventcrawling.dm#L68), [`proc/update_pipe_vision()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/ventcrawling.dm#L132)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/ventcrawl.rs`: вентиляционные ползуны (базовые мобы с `TRAIT_VENTCRAWLER_ALWAYS` по типу, мартышки — только голыми, компонент `Ventcrawler`); альт-клик по соседней вентиляции/скрубберу — проверки `can_enter_vent` (сознание, руки, пристёгнутость, одежда, заварка), `do_after` 2,5 с, моб внутри трубы (`InCloset`, невидим, не плотен); шаги идут по узлам трубной сети (`find_connecting`, развилки по `last_vent_dir`), насосы/фильтры/смесители/термомашины/закрытые клапаны не пропускают, `ventcrawl.ogg` раз в 3 с; на вентиляции или в тупике — вылезание за 1 с; разобранная труба выпускает. `// shortcut:` нет зрения труб (`update_pipe_vision` — плоскости клиента), дыхание воздухом тайла, скорость шагов — скорость моба, нет мульти-z труб, пассивных вентиляций и ИИ-поведения ползания
 
 ### Навигация
 Глагол «Navigate» строит путь к выбранной точке (маяки, лестницы на другой z) и рисует линию на полу.
 
 - **Код:** [`proc/create_navigation()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/navigation.dm#L29), [`proc/find_nearest_stair_or_ladder()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/navigation.dm#L147)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ❌ нет — глагол «Navigate» требует смены контракта: в протоколе нет вызова глаголов (`ClientIntent` без verb), выбор точки — `tgui_input_list`, линия пути — клиентские `images` на 1 игрока. Нужны: интент или кнопка-действие + окно выбора, путь — `crate::bots` A* (`get_path_to`), отрисовка — персональные оверлеи
 
 ### Поле зрения (FOV)
 Мобы с ограниченным полем зрения (некоторые шлемы, черты) не видят, что у них за спиной.
 
 - **Код:** [`proc/in_fov()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/living_fov.dm#L2), [`proc/update_fov()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/living_fov.dm#L53)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/fov.rs`: `FovTraits` (`add_fov_trait`/`remove_fov_trait`, `fov_view` — наибольший), `in_fov` (слепота, 3×3 вокруг, конус по `Facing`, обратные конусы). Нет маски поля зрения на клиенте (`fov_handler`, `FIELD_OF_VISION_BLOCKER_PLANE` — нужен клиентский проход рендера и поле угла в протоколе: смена контракта), `play_fov_effect`, близорукости, источников (визоры, глаза, страх, газеты)
 
 ### Звуки шагов
 Элемент `footstep` проигрывает звуки шагов по типу пола и обуви (босиком, когти, тяжёлые ботинки).
@@ -80,10 +80,10 @@
 
 - **Код:** [`/datum/component/pixel_shift`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/pixel_shift/code/pixel_shift_component.dm#L1), [`/datum/keybinding/mob/pixel_shift`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/pixel_shift/code/pixel_shift_keybind.dm#L1)
 - **BandaStation:** [`modular_bandastation/pixel_shift/code/pixel_shift_component.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/pixel_shift/code/pixel_shift_component.dm#L1) — весь механизм
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/pixel_shift.rs`: зажатая клавиша N (B здесь — сопротивление) с направлением шлёт `ClientIntent::PixelShift` вместо шага (`crates/ss13_game/src/client.rs`, без предсказания, не чаще тика), сервер сдвигает на 1 px по сторонам света до ±12 px, только стоящего в сознании, не связанного/обездвиженного/тянутого/пристёгнутого/внутри чего-то; шаг, падение, захват сбрасывают; смещение — `Appearance.pixel_offset` поверх своего (`crates/ss13_game/src/health.rs`, `lying_appearance`). `// shortcut:` правило прохода с 8 px (`passable_from`) не подключено к столкновениям, нет базовых мобов и глаголов сдвига слоя
 
 ### Езда верхом и транспорт
 Компонент `riding` позволяет ехать на мобах (боргах, животных, людях на плечах) и транспорте, с правилами смещения и скорости.
 
 - **Код:** [`/datum/component/riding`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/riding/riding.dm#L14)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/vehicles.rs`: компонент езды транспорта (`RidingDef` по типам: скорость, `ride_check_flags`, смещения и слои всадника и транспорта по направлению, `driver_move`, водитель едет вместе с транспортом); тесты `crates/ss13_game/tests/it/vehicles.rs`. Езда на существах (`riding/creature`) → [basic-mobs-core.md](basic-mobs-core.md#езда-на-существах), переноска на плечах и piggyback → [pull-grab-throw.md](pull-grab-throw.md#переноска-на-плечах-и-на-закорках)

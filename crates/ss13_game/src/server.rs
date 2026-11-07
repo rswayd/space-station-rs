@@ -275,6 +275,8 @@ impl Plugin for GameServerPlugin {
         .add_plugins((
             crate::spacemove::SpaceMovePlugin,
             crate::stumble::StumblePlugin,
+            crate::ventcrawl::VentcrawlPlugin,
+            crate::pixel_shift::PixelShiftPlugin,
         ))
         .add_plugins(crate::mining::MiningServerPlugin)
         .add_plugins(crate::forensics::server::ForensicsServerPlugin)

@@ -85,6 +85,11 @@ pub enum ClientIntent {
     /// `None`: nothing (the cursor left the map). Sent only on a change; the server answers with
     /// the screentip (`ss13_game::screentips`).
     Hover(Option<NetId>),
+    /// BandaStation `pixel_shift` (the key held with a direction): the own mob's sprite one
+    /// pixel that way inside its tile. The client sends it instead of a [`Self::Move`] (and
+    /// predicts nothing) while the key is held, at most once per server tick; the server checks
+    /// the mob may shift and caps the offset.
+    PixelShift(Dir),
 }
 
 /// One end of a [`ClientIntent::Drag`].
