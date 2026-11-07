@@ -160,7 +160,19 @@ struct TameDef {
 }
 
 /// The `tameable` components of the ported mobs (their `Initialize`/`make_tameable`).
-static TAMES: [TameDef; 8] = [
+static TAMES: [TameDef; 9] = [
+    TameDef {
+        root: "/mob/living/basic/vatbeast",
+        foods: &[
+            "/obj/item/food/carrotfries",
+            "/obj/item/food/cheesyfries",
+            "/obj/item/food/cornchips",
+            "/obj/item/food/fries",
+        ],
+        chance: 30.0,
+        bonus: 0.0,
+        unique: true,
+    },
     TameDef {
         root: "/mob/living/basic/cow",
         foods: &["/obj/item/food/grown/wheat"],
@@ -472,7 +484,9 @@ fn tamed(world: &mut World, mob: Entity, tamer: Entity) {
     };
     let under = |root: &str| is_under(&path, root);
     let tamer_name = super::defense::name_of(world, tamer);
-    if under("/mob/living/basic/cow") {
+    if under(super::oneoffs::VATBEAST) {
+        super::oneoffs::vatbeast_tamed(world, mob);
+    } else if under("/mob/living/basic/cow") {
         super::defense::emote(
             world,
             mob,

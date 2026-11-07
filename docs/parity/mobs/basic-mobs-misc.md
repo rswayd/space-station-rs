@@ -21,7 +21,7 @@ _«Миньоны блоба» описано в [../antagonists/blob.md](../ant
 
 - **Код:** [`/mob/living/basic/construct`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/cult/constructs/_construct.dm#L1), [`/mob/living/basic/construct/artificer`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/cult/constructs/artificer.dm#L1), [`/mob/living/basic/construct/juggernaut`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/cult/constructs/juggernaut.dm#L1), [`/mob/living/basic/construct/wraith`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/cult/constructs/wraith.dm#L1), [`/mob/living/basic/construct/harvester`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/cult/constructs/harvester.dm#L1), [`/mob/living/basic/shade`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/cult/shade.dm#L1)
 - **BandaStation:** [`_construct.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/cult/constructs/_construct.dm#L110) — склонения имени при осмотре
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/mobs/constructs.rs`, `crates/ss13_game/src/mobs/ai/trees.rs`: враждебные NPC-конструкты (в т.ч. из Портального шторма): джаггернаут бьёт ближайшего, призрак — самого раненого в поле зрения, протеон бьёт и отбегает от обидчика, артифицер чинит самого раненого конструкта/тень (`healing_touch`: 5 урона ушибами, и себя) и убегает от обидчиков; эктоплазма по теме (культ/ангельская/мистическая) после смерти, «помятость» при осмотре; без заклинаний конструктов, ломания стен, порога урона и отражения лучей джаггернаутом, ампутаций жнеца, лечения у пилонов; создание конструктов и теней — в [../antagonists/cult.md](../antagonists/cult.md)
 
 ### Стражи (голопаразиты)
 Привязанный к хозяину дух из набора (предатель, волшебник, генокрад): типы стандарт, ассасин, рывок, ловкий, взрывной, газовый, гравитокинетик, молния, защитник, стрелок, поддержка; урон делится с хозяином.
@@ -44,7 +44,7 @@ _«Ремонтные дроны» описано в [../silicon/drones.md](../s
 Гуманоидные NPC руин и шаттлов: Нанотрейзен, Синдикат (штурмовики, мечники), пираты, русские, абдукторы; ближний бой и стрельба.
 
 - **Код:** [`/mob/living/basic/trooper`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/trooper/trooper.dm#L1), [`/mob/living/basic/trooper/syndicate`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/trooper/syndicate.dm#L2), [`/mob/living/basic/trooper/pirate`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/trooper/pirate.dm#L2)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/mobs/troopers.rs`, `crates/ss13_game/src/mobs/ai/trees/troopers.rs`, `crates/ss13_game/src/mobs/ranged.rs`: деревья `trooper` (ближний бой), `trooper/ranged` (1 с, 5 клеток, держит 3-4), `burst`/`shotgunner` (3 с, держат 2-3), мирные `peaceful`/`peaceful_burst` (бьют обидчиков); оружие по типам (гильзы Синдиката, НТ, русских, пиратов, абдукторов: снаряд и дробь гильзы, звук выстрела, очереди `burst_shots` через 0.2 с, без огня по своим), посмертный `loot` и гибы; без вызова подкрепления, ломания препятствий, человеческого облика и трупов-спавнеров, отражения пуль щитом, грабежа пиратов
 
 ### Защитники руин
 Мимики (ящик-мимик, копия предмета/машины), живой пол, кусок плоти, плотяной шар, безумное пианино, скелеты (поселенцы, тамплиеры, ледяные, плазменные шахтёры), стикмены, тёмный волшебник и волшебники, зомби, ИИ-ядро Киберсана.
@@ -57,16 +57,16 @@ _«Ремонтные дроны» описано в [../silicon/drones.md](../s
 Копии моба (от бутылки иллюзий, способностей): толкающие, убегающие, миражи.
 
 - **Код:** [`/mob/living/basic/illusion`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/illusion/illusion.dm#L3)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/mobs/illusion.rs`: `spawn_illusion` (tg `full_setup`) копирует облик, имя и направление оригинала, задаёт здоровье, урон, фракцию, цель и время жизни (исчезает «It was a fake!»); обычная бьёт цель, толкающая толкает карбонов, убегающие бегут от цели и обидчиков и не бьют оригинал, мираж без ИИ искрит при исчезновении; размножение с шансом при ударе и получении урона (клон: половина здоровья и шанса, 8 с); без пересылки осмотра оригиналу; источники иллюзий (реактивная броня, жезл, магия) — в своих группах
 
 ### Торговцы
 NPC-торговец (Мистер Боунс) продаёт и покупает товары через радиальное меню.
 
 - **Код:** [`/mob/living/basic/trader`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/trader/trader.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/mobs/trader.rs`: торговец и Мистер Боунс (свои товары, спрос, фразы); рука вне боевого режима открывает меню (списки и Да/Нет tgui вместо радиальных): покупка за голочип в руке, продажа нужного предмета из руки за новый голочип (стопки — за лист, в пределах спроса), разговор (лор, что продаёт, что покупает), каждое решение перепроверяется; открытие лавки при первом покупателе (фраза, сиденье, вывеска сбоку, искры); ответная стрельба по обидчику с боевыми фразами (`ai_swap_combat_mode`), останки Боунса; без человеческого облика и трупа-спавнера, подхода Боунса к покупателю
 
 ### Цитология и прочие одиночки
 Ватзверь из цитологии (растёт в чане из образцов клеток), фестивус-шест, живое дерево (событие), NPC-революционер.
 
 - **Код:** [`/mob/living/basic/vatbeast`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/cytology/vatbeast.dm#L2), [`/mob/living/basic/festivus`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/festivus_pole.dm#L4), [`/mob/living/basic/tree`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/tree.dm#L1), [`/mob/living/basic/revolutionary`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/revolutionary.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/mobs/oneoffs.rs`, `crates/ss13_game/src/mobs/ai/trees.rs`: ватзверь (мстит, потом охотится; шлепок щупальцем через 10 с на цели: 30 урона и бросок на 6 клеток, перезарядка 12 с; приручение картошкой фри 30%, ручной — нейтрален), живая сосна (сбивает с ног 15%, +50% и +5 с при пиле/топорике/дереве в руках; CO2 → O2 до 9 молей; оставляет доску), фестивус-шест (поглаживание заряжает ячейки, АПЦ и боргов в 2 клетках на 7.5%; оставляет стержень), NPC-революционер (случайные пол, имя, причина, крик смерти, лозунги с визгом); без выращивания ватзверя в чане (цитология — в группе науки), езды на нём, зарядки АПЦ шестом по ИИ, человеческого облика революционера

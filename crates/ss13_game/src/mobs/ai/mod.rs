@@ -119,6 +119,8 @@ pub enum Key {
     /// target in `TargetTimerOf` has been the current one (`crate::mobs::lavaland::ai`).
     TargetTimer,
     TargetTimerOf,
+    /// A trader's `BB_SHOP_SPOT` (`crate::mobs::trader`).
+    ShopSpot,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -285,6 +287,7 @@ pub fn record_attacker(world: &mut World, victim: Entity, attacker: Entity) {
     crate::restaurant::on_attacked(world, victim, attacker);
     crate::mobs::pets::on_attacked(world, victim, attacker);
     crate::mobs::lavaland::on_attacked(world, victim, attacker);
+    crate::mobs::illusion::on_attacked(world, victim);
     let now = world.resource::<Time>().elapsed_secs_f64();
     let health = world.get::<crate::health::Health>(victim).cloned();
     let retaliates = world.get::<Retaliates>(victim).is_some();

@@ -599,3 +599,191 @@ fn hivebot_trees_shoot_or_bite() {
         );
     }
 }
+
+#[test]
+fn troopers_fight_shoot_in_bursts_or_wait_to_be_hit() {
+    let def = ss13_mapload::mobs::MobDef::default();
+    for (sub, hostile) in [
+        ("trooper", true),
+        ("trooper/calls_reinforcements", true),
+        ("trooper/viscerator", true),
+        ("trooper/ranged", true),
+        ("trooper/ranged/burst", true),
+        ("trooper/ranged/shotgunner", true),
+        ("trooper/peaceful", false),
+        ("trooper/ranged/burst/peaceful_burst", false),
+    ] {
+        let built = super::trees::build(&format!("{BASIC}/{sub}"), &def).unwrap();
+        assert_eq!(built.roots.len(), 1, "{sub}");
+        assert_eq!(built.retaliates, !hostile, "{sub}");
+        let mut w = world();
+        w.init_resource::<Time>();
+        w.insert_resource(CombatRng(5));
+        let pawn = basic_mob(
+            &mut w,
+            5,
+            5,
+            "Syndicate",
+            "/mob/living/basic/trooper/syndicate/ranged/smg",
+        );
+        let mut ranged = crate::mobs::ranged::RangedAttacks::new(
+            ss13_mapload::ProjectileData {
+                path: "/obj/projectile/bullet/c45".to_owned(),
+                damage: 30.0,
+                ..Default::default()
+            },
+            3.0,
+        );
+        ranged.burst = 3;
+        w.entity_mut(pawn).insert(ranged);
+        let _victim = mob(&mut w, 8, 5, "neutral");
+        let mut bb = Blackboard::default();
+        let mut tree = Tree::new(built.roots);
+        run(&mut w, pawn, &mut tree, &mut bb, 8);
+        assert_eq!(
+            bb.entity(Key::CurrentTarget).is_some(),
+            hostile,
+            "{sub}: picks the stranger only when hostile"
+        );
+        if hostile && sub.starts_with("trooper/ranged") {
+            let r = w.get::<crate::mobs::ranged::RangedAttacks>(pawn).unwrap();
+            assert!(r.next > 1.0, "{sub}: fired");
+            // `burst_shots` 3: the other two 0.2 s apart.
+            assert_eq!(r.queued.len(), 2, "{sub}");
+            assert!((r.queued[1].0 - r.queued[0].0 - 0.2).abs() < 1e-9);
+        }
+    }
+}
+
+#[test]
+fn artificers_pick_hurt_constructs_and_wraiths_the_weakest() {
+    let def = ss13_mapload::mobs::MobDef::default();
+    let setup = || {
+        let mut w = world();
+        w.init_resource::<Time>();
+        w.insert_resource(CombatRng(5));
+        w
+    };
+    // An artificer goes for the hurt juggernaut, never the healthy one or a stranger.
+    let mut w = setup();
+    let artificer = basic_mob(
+        &mut w,
+        5,
+        5,
+        "cult",
+        "/mob/living/basic/construct/artificer/hostile",
+    );
+    let healthy = basic_mob(
+        &mut w,
+        6,
+        5,
+        "cult",
+        "/mob/living/basic/construct/juggernaut/hostile",
+    );
+    let hurt = basic_mob(
+        &mut w,
+        8,
+        5,
+        "cult",
+        "/mob/living/basic/construct/juggernaut/hostile",
+    );
+    w.get_mut::<Health>(hurt)
+        .unwrap()
+        .adjust(crate::health::DamageType::Brute, 5.0);
+    let _stranger = mob(&mut w, 4, 5, "neutral");
+    let built = super::trees::build(&format!("{BASIC}/artificer"), &def).unwrap();
+    assert!(built.retaliates);
+    let mut bb = Blackboard::default();
+    let mut tree = Tree::new(built.roots);
+    run(&mut w, artificer, &mut tree, &mut bb, 4);
+    assert_eq!(bb.entity(Key::CurrentTarget), Some(hurt));
+    assert_ne!(bb.entity(Key::CurrentTarget), Some(healthy));
+    // A wraith takes the weaker of two strangers, not the nearer.
+    let mut w = setup();
+    let wraith = basic_mob(
+        &mut w,
+        5,
+        5,
+        "cult",
+        "/mob/living/basic/construct/wraith/hostile",
+    );
+    let _near = mob(&mut w, 6, 5, "neutral");
+    let weak = mob(&mut w, 9, 5, "neutral");
+    w.get_mut::<Health>(weak)
+        .unwrap()
+        .adjust(crate::health::DamageType::Brute, 10.0);
+    let built = super::trees::build(&format!("{BASIC}/wraith"), &def).unwrap();
+    let mut bb = Blackboard::default();
+    let mut tree = Tree::new(built.roots);
+    run(&mut w, wraith, &mut tree, &mut bb, 4);
+    assert_eq!(bb.entity(Key::CurrentTarget), Some(weak));
+    for sub in ["juggernaut", "proteon"] {
+        assert!(super::trees::build(&format!("{BASIC}/{sub}"), &def).is_some());
+    }
+}
+
+#[test]
+fn illusions_attack_or_run_from_their_target() {
+    let def = ss13_mapload::mobs::MobDef::default();
+    let hostile = super::trees::build(&format!("{BASIC}/illusion"), &def).unwrap();
+    assert!(!hostile.retaliates);
+    let escape = super::trees::build(&format!("{BASIC}/illusion/escape/retaliate"), &def).unwrap();
+    assert!(escape.retaliates);
+    let mut w = world();
+    w.init_resource::<Time>();
+    w.insert_resource(CombatRng(5));
+    let pawn = basic_mob(
+        &mut w,
+        5,
+        5,
+        "illusion",
+        "/mob/living/basic/illusion/escape",
+    );
+    let threat = mob(&mut w, 6, 5, "neutral");
+    let mut bb = Blackboard::default();
+    bb.set(Key::CurrentTarget, Value::Entity(threat));
+    let mut tree = Tree::new(escape.roots);
+    run(&mut w, pawn, &mut tree, &mut bb, 4);
+    // It picked a spot to flee to, away from the threat.
+    let spot = bb.get(Key::FleeLocation).cloned();
+    assert!(spot.is_some(), "flees");
+}
+
+#[test]
+fn traders_shoot_back_and_stop_wandering_once_open() {
+    let def = ss13_mapload::mobs::MobDef::default();
+    let built = super::trees::build(&format!("{BASIC}/trader/jumpscare"), &def).unwrap();
+    assert!(built.retaliates);
+    let mut w = world();
+    w.init_resource::<Time>();
+    w.insert_resource(CombatRng(5));
+    let trader = basic_mob(&mut w, 5, 5, "neutral", "/mob/living/basic/trader");
+    let thief = mob(&mut w, 8, 5, "neutral");
+    let mut bb = Blackboard::default();
+    bb.set(Key::RetaliateList, Value::Attackers(vec![(thief, 0.0)]));
+    let mut tree = Tree::new(built.roots);
+    run(&mut w, trader, &mut tree, &mut bb, 4);
+    assert_eq!(bb.entity(Key::CurrentTarget), Some(thief), "the thief");
+}
+
+#[test]
+fn one_off_mobs_hunt_and_the_vatbeast_fights_back_first() {
+    let def = ss13_mapload::mobs::MobDef::default();
+    for sub in ["tree", "festivus_pole", "revolutionary"] {
+        let built = super::trees::build(&format!("{BASIC}/{sub}"), &def).unwrap();
+        assert!(!built.retaliates, "{sub}");
+    }
+    let built = super::trees::build(&format!("{BASIC}/vatbeast"), &def).unwrap();
+    assert!(built.retaliates);
+    let mut w = world();
+    w.init_resource::<Time>();
+    w.insert_resource(CombatRng(5));
+    let beast = basic_mob(&mut w, 5, 5, "hostile", "/mob/living/basic/vatbeast");
+    let _near = mob(&mut w, 6, 5, "neutral");
+    let attacker = mob(&mut w, 9, 5, "neutral");
+    let mut bb = Blackboard::default();
+    bb.set(Key::RetaliateList, Value::Attackers(vec![(attacker, 0.0)]));
+    let mut tree = Tree::new(built.roots);
+    run(&mut w, beast, &mut tree, &mut bb, 2);
+    assert_eq!(bb.entity(Key::CurrentTarget), Some(attacker));
+}

@@ -230,6 +230,10 @@ fn attacked_by_humans(
                 if mob_stat == Stat::Conscious && super::farm::wisdom_touch(world, user, mob) {
                     continue;
                 }
+                // tg `trader/on_attack_hand`: the trade menu instead of the help response.
+                if mob_stat == Stat::Conscious && super::trader::attack_hand(world, user, mob) {
+                    continue;
+                }
                 let (cont, simple) = (&def.response_help_continuous, &def.response_help_simple);
                 send_seen(
                     world,
@@ -246,6 +250,7 @@ fn attacked_by_humans(
                 );
                 pet_bonus(world, mob, &basic);
                 super::parrot::on_pet(world, mob);
+                super::oneoffs::festivus_touch(world, mob);
             }
             None => {
                 world
@@ -339,6 +344,17 @@ pub fn melee_attack(world: &mut World, attacker: Entity, target: Entity) -> bool
     {
         facing.set_if_neq(ss13_shared::Facing(dir));
     }
+    // `COMSIG_HOSTILE_PRE_ATTACKINGTARGET`: constructs repair constructs, illusions replicate,
+    // shove or spare their original.
+    if super::constructs::healing_touch(world, attacker, target)
+        || super::illusion::on_preattack(world, attacker, target)
+        || super::oneoffs::pre_melee(world, attacker, target)
+    {
+        world.entity_mut(attacker).insert(NextMove(
+            now + f64::from(basic.def.melee_attack_cooldown) / 10.0,
+        ));
+        return true;
+    }
     let def = &basic.def;
     let user = capitalize(&name_of(world, attacker));
     let victim = name_of(world, target);
@@ -391,6 +407,7 @@ pub fn melee_attack(world: &mut World, attacker: Entity, target: Entity) -> bool
     let kind = DamageType::from_dm(&def.melee_damage_type).unwrap_or(DamageType::Brute);
     hurt(world, target, kind, damage, Some(zone));
     ai::record_attacker(world, target, attacker);
+    super::oneoffs::after_melee(world, attacker, target);
     true
 }
 

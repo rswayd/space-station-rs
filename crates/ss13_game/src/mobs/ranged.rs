@@ -6,8 +6,10 @@
 //! The ported shooters are the hivebots (`/obj/item/ammo_casing/hivebot`: 10 brute), the
 //! stick gunman (`/obj/item/ammo_casing/c9mm`, 5 s), and lavaland's watchers and basilisks
 //! (`/obj/projectile/temp/watcher`: 10 burn, the wings' 5; 3 s).
-// shortcut: one projectile per shot (no `burst_shots`, no casings left behind, no firing sound);
-// add them with the ranged troopers.
+//! Troopers (`crate::mobs::troopers`) fire their casings' projectiles (with pellets), in
+//! `burst_shots` 0.2 s apart (`burst_intervals`), with their `projectile_sound`.
+// shortcut: no casings left behind; hivebots, stickmen and watchers fire silently (tg's default
+// `projectile_sound` is the pistol shot), add it when their sounds are checked.
 
 use bevy::prelude::*;
 use ss13_mapload::ProjectileData;
@@ -18,7 +20,7 @@ use ss13_world::{MoveRequest, SpatialIndex};
 
 use super::ai::behaviors::{DELAY_SUCCEED, FAIL, Perform, Strategy, can_see};
 use super::ai::{AiCtx, Key};
-use crate::health::Health;
+use crate::health::{Health, Stat};
 
 /// `/datum/component/ranged_attacks` of a mob.
 #[derive(Component, Clone, Debug, PartialEq)]
@@ -28,6 +30,36 @@ pub struct RangedAttacks {
     pub cooldown: f64,
     /// When it may shoot again.
     pub next: f64,
+    /// `projectile_sound`, played at 100 with `vary`; empty: silent.
+    pub sound: String,
+    /// `burst_shots` (1: a single shot), fired `BURST_INTERVAL` apart.
+    pub burst: u32,
+    /// The casing's `pellets` (at least 1), `variance` and `randomspread`.
+    pub pellets: u32,
+    pub variance: f32,
+    pub randomspread: bool,
+    /// The burst's shots still to come: when, and at whom.
+    pub queued: Vec<(f64, Entity)>,
+}
+
+/// `burst_intervals` default, seconds.
+pub const BURST_INTERVAL: f64 = 0.2;
+
+impl RangedAttacks {
+    /// One silent projectile every `cooldown` seconds.
+    pub fn new(projectile: ProjectileData, cooldown: f64) -> Self {
+        Self {
+            projectile,
+            cooldown,
+            next: 0.0,
+            sound: String::new(),
+            burst: 1,
+            pellets: 1,
+            variance: 0.0,
+            randomspread: false,
+            queued: Vec::new(),
+        }
+    }
 }
 
 /// `/obj/projectile/hivebotbullet` with the `/obj/projectile` defaults.
@@ -88,13 +120,7 @@ pub fn watcher_blast(path: &str, damage: f32) -> ProjectileData {
 /// watchers and basilisks (`ranged_cooldown` 3 s, the component's default).
 fn ranged_of(path: &str) -> Option<RangedAttacks> {
     let under = |root: &str| is_under(path, root);
-    let watcher = |projectile: ProjectileData| {
-        Some(RangedAttacks {
-            projectile,
-            cooldown: 3.0,
-            next: 0.0,
-        })
-    };
+    let watcher = |projectile: ProjectileData| Some(RangedAttacks::new(projectile, 3.0));
     if under("/mob/living/basic/mining/watcher/magmawing") {
         return watcher(watcher_blast(
             "/obj/projectile/temp/watcher/magma_wing",
@@ -115,11 +141,7 @@ fn ranged_of(path: &str) -> Option<RangedAttacks> {
         });
     }
     if under("/mob/living/basic/stickman/ranged") {
-        return Some(RangedAttacks {
-            projectile: c9mm_bullet(),
-            cooldown: 5.0,
-            next: 0.0,
-        });
+        return Some(RangedAttacks::new(c9mm_bullet(), 5.0));
     }
     let cooldown = if under("/mob/living/basic/hivebot/rapid") {
         1.5
@@ -131,11 +153,7 @@ fn ranged_of(path: &str) -> Option<RangedAttacks> {
     } else {
         return None;
     };
-    Some(RangedAttacks {
-        projectile: hivebot_bullet(),
-        cooldown,
-        next: 0.0,
-    })
+    Some(RangedAttacks::new(hivebot_bullet(), cooldown))
 }
 
 pub(super) fn attach(world: &mut World, mob: Entity, def: &MobDef) {
@@ -172,29 +190,95 @@ pub fn attack(ctx: &mut AiCtx, key: Key, max_range: u32, avoid_friendly_fire: bo
     if let Some(mut r) = ctx.world.get_mut::<RangedAttacks>(ctx.pawn) {
         r.next = ctx.now + ranged.cooldown;
     }
-    // tg `face_atom` before firing.
+    for i in 1..ranged.burst {
+        let at = ctx.now + f64::from(i) * BURST_INTERVAL;
+        if let Some(mut r) = ctx.world.get_mut::<RangedAttacks>(ctx.pawn) {
+            r.queued.push((at, target));
+        }
+    }
+    shoot(ctx.world, ctx.pawn, &ranged, target, from, to);
+    DELAY_SUCCEED
+}
+
+/// `async_fire_ranged_attack`: faces the target, plays the sound, fires every pellet.
+fn shoot(
+    world: &mut World,
+    firer: Entity,
+    ranged: &RangedAttacks,
+    target: Entity,
+    from: TilePos,
+    to: TilePos,
+) {
     if let Some(dir) = crate::pull::dir_between(from, to)
-        && let Some(mut facing) = ctx.world.get_mut::<ss13_shared::Facing>(ctx.pawn)
+        && let Some(mut facing) = world.get_mut::<ss13_shared::Facing>(firer)
     {
         facing.set_if_neq(ss13_shared::Facing(dir));
     }
-    crate::projectile::fire(
-        ctx.world,
-        crate::projectile::Shot {
-            data: &ranged.projectile,
-            firer: ctx.pawn,
-            from,
-            target: Some(target),
-            target_pos: to,
-            zone: crate::zone::BodyZone::Chest,
-            // `combat_mode = TRUE` shooters hit the prone too.
-            hit_prone: true,
-            pixel: [0, 0],
-            deviation: 0.0,
-            fired_from: None,
-        },
-    );
-    DELAY_SUCCEED
+    if !ranged.sound.is_empty() {
+        crate::sound::playsound(
+            world,
+            crate::sound::PlaySound::new(from, ranged.sound.clone(), 100.0, true),
+        );
+    }
+    let spreads = if ranged.pellets > 1 {
+        let casing = ss13_mapload::CasingData {
+            pellets: ranged.pellets,
+            variance: ranged.variance,
+            randomspread: ranged.randomspread,
+            ..default()
+        };
+        let mut rng = world.resource_mut::<crate::combat::CombatRng>();
+        crate::guns::pellet_spreads(&mut rng, &casing, 0.0)
+    } else {
+        vec![0.0]
+    };
+    for deviation in spreads {
+        crate::projectile::fire(
+            world,
+            crate::projectile::Shot {
+                data: &ranged.projectile,
+                firer,
+                from,
+                target: Some(target),
+                target_pos: to,
+                zone: crate::zone::BodyZone::Chest,
+                // `combat_mode = TRUE` shooters hit the prone too.
+                hit_prone: true,
+                pixel: [0, 0],
+                deviation,
+                fired_from: None,
+            },
+        );
+    }
+}
+
+/// The burst's later shots (tg `addtimer(... i * burst_intervals)`), at the target's tile then;
+/// a shooter that died or lost its target meanwhile holds fire.
+pub fn fire_bursts(world: &mut World) {
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    let mut due = Vec::new();
+    let mut q = world.query::<(Entity, &mut RangedAttacks)>();
+    for (mob, mut ranged) in q.iter_mut(world) {
+        if ranged.queued.iter().any(|&(at, _)| at <= now) {
+            let (ready, wait): (Vec<_>, Vec<_>) =
+                ranged.queued.drain(..).partition(|&(at, _)| at <= now);
+            ranged.queued = wait;
+            due.extend(ready.into_iter().map(|(_, t)| (mob, t)));
+        }
+    }
+    for (mob, target) in due {
+        if world.get::<Stat>(mob) != Some(&Stat::Conscious) {
+            continue;
+        }
+        let (Some(&from), Some(&to)) = (world.get::<TilePos>(mob), world.get::<TilePos>(target))
+        else {
+            continue;
+        };
+        let Some(ranged) = world.get::<RangedAttacks>(mob).cloned() else {
+            continue;
+        };
+        shoot(world, mob, &ranged, target, from, to);
+    }
 }
 
 /// `calculate_trajectory`: the line's tiles, and both cardinal neighbours at each diagonal step,

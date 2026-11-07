@@ -49,6 +49,7 @@ macro_rules! speech {
 }
 
 mod lavaland;
+mod troopers;
 
 pub struct Built {
     pub roots: Vec<Node>,
@@ -105,6 +106,8 @@ pub fn build(path: &str, def: &MobDef) -> Option<Built> {
         built.retaliates = true;
     } else if let Some(lava) = lavaland::build(path) {
         built = lava;
+    } else if let Some(trooper) = troopers::build(path) {
+        built = trooper;
     } else if let Some(generic) = generic(path) {
         built = generic;
         // DM `STOP_MOVING_WHEN_PULLED` of the controller's `ai_traits`.
@@ -627,6 +630,142 @@ fn generic(path: &str) -> Option<Built> {
         // `garden_gnome.bt.json`: fights back; left out: escape captivity.
         retaliates = true;
         retaliate_combat()
+    } else if is("vatbeast") {
+        // `vatbeast.bt.json`: fights back first, else strangers; the slap after 10 s is
+        // `crate::mobs::oneoffs::pre_melee`. Left out: walking to fries (`move_to_and_eat`).
+        retaliates = true;
+        par(
+            vec![
+                selector(vec![
+                    decorator(
+                        Cond::KeySet(Key::CurrentTarget),
+                        false,
+                        Abort::Both,
+                        melee_combat(Strategy::Basic),
+                    ),
+                    random_walk(25.0),
+                ]),
+                selector(vec![
+                    retaliate_target(Key::CurrentTarget),
+                    leaf(Behavior::AcquireCombatTarget {
+                        key: Key::CurrentTarget,
+                        strategy: Strategy::Basic,
+                    }),
+                ]),
+            ],
+            FIND_TARGET_RATE,
+        )
+    } else if is("tree") {
+        // `tree.bt.json`: `simple_hostile_obstacles_combat` with its speech, without obstacles.
+        par(vec![hostile_combat(25.0), speech_loop_of(None)], 1.0)
+    } else if is("festivus_pole") {
+        // `festivus_pole.bt.json` (walks 10%); left out: charging APCs (`charge_apc`).
+        hostile_combat(10.0)
+    } else if is("revolutionary") {
+        // `revolutionary.bt.json`: `simple_hostile_combat` shouting its slogans.
+        par(vec![hostile_combat(25.0), speech_loop_of(None)], 1.0)
+    } else if is("trader") {
+        // `trader.bt.json`: shoots whoever hit it (`ai_retaliate`), else wanders until its shop
+        // is set (`crate::mobs::trader` opens it for the first customer).
+        retaliates = true;
+        par(
+            vec![
+                selector(vec![
+                    decorator(
+                        Cond::KeySet(Key::CurrentTarget),
+                        false,
+                        Abort::Both,
+                        while_closing_in(
+                            ranged_attack(3.0, true),
+                            leaf(Behavior::MoveToTarget {
+                                key: Key::CurrentTarget,
+                                dist: 1,
+                                finish_on_arrival: false,
+                            }),
+                        ),
+                    ),
+                    decorator(
+                        Cond::KeySet(Key::ShopSpot),
+                        true,
+                        Abort::None,
+                        random_walk(25.0),
+                    ),
+                ]),
+                retaliate_target(Key::CurrentTarget),
+            ],
+            FIND_TARGET_RATE,
+        )
+    } else if is("illusion/escape") {
+        // `escape.bt.json` (and `retaliate.bt.json`, the same tree): runs from its target and
+        // whoever hit it (`ai_retaliate` on the mob).
+        retaliates = true;
+        par(
+            vec![
+                run_away(Key::CurrentTarget),
+                retaliate_target(Key::CurrentTarget),
+            ],
+            FIND_TARGET_RATE,
+        )
+    } else if is("illusion") {
+        // `simple_hostile.bt.json` at the target it was given.
+        hostile_combat(25.0)
+    } else if is("juggernaut") {
+        // `juggernaut.bt.json`: `simple_hostile_obstacles_combat` without the obstacles.
+        hostile_combat(25.0)
+    } else if is("wraith") {
+        // `wraith.bt.json`: hunts the most wounded in view; left out: obstacles.
+        par(
+            vec![
+                selector(vec![
+                    decorator(
+                        Cond::KeySet(Key::CurrentTarget),
+                        false,
+                        Abort::Both,
+                        melee_combat(Strategy::Basic),
+                    ),
+                    random_walk(25.0),
+                ]),
+                leaf(Behavior::AcquireMostWounded {
+                    key: Key::CurrentTarget,
+                    strategy: Strategy::Basic,
+                }),
+            ],
+            FIND_TARGET_RATE,
+        )
+    } else if is("proteon") {
+        // `proteon.bt.json`: `skittish_brawler_combat` on whoever hit it
+        // (`ai_retaliate_advanced`); left out: forgetting them after 2-4 s.
+        retaliates = true;
+        brawler_combat()
+    } else if is("artificer") {
+        // `artificer.bt.json`: repairs the most wounded construct or shade in view
+        // (`healing_touch` on its "attack"), else runs from whoever hit it (`ai_retaliate`).
+        retaliates = true;
+        par(
+            vec![
+                selector(vec![
+                    decorator(
+                        Cond::KeySet(Key::CurrentTarget),
+                        false,
+                        Abort::Both,
+                        melee_combat(Strategy::Construct),
+                    ),
+                    decorator(
+                        Cond::KeySet(Key::FleeTarget),
+                        false,
+                        Abort::Both,
+                        run_away(Key::FleeTarget),
+                    ),
+                    random_walk(25.0),
+                ]),
+                leaf(Behavior::AcquireMostWounded {
+                    key: Key::CurrentTarget,
+                    strategy: Strategy::Construct,
+                }),
+                retaliate_target(Key::FleeTarget),
+            ],
+            FIND_TARGET_RATE,
+        )
     } else if is("mouse/rat/syndi") {
         // BandaStation `mouse/rat/syndi`: tg's rat tree binds the mouse's lines, so the
         // syndicate rats' own never play there; they are used here.
