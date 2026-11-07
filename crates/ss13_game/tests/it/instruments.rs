@@ -35,6 +35,18 @@ const TYPES: &str = r##"{
         "icon": { "resource": "l.dmi" }, "icon_state": "x2", "invisibility": 101 } },
     "/obj/effect/landmark/start": { "parent": "/obj/effect/landmark" },
     "/obj/effect/landmark/start/assistant": { "parent": "/obj/effect/landmark/start" },
+    "/obj/item": { "parent": "/obj" },
+    "/obj/item/clothing": { "parent": "/obj/item" },
+    "/obj/item/clothing/under": { "parent": "/obj/item/clothing", "declared_vars": { "slot_flags": 2 } },
+    "/obj/item/clothing/under/color": { "parent": "/obj/item/clothing/under" },
+    "/obj/item/clothing/under/color/grey": { "parent": "/obj/item/clothing/under/color" },
+    "/obj/item/clothing/shoes": { "parent": "/obj/item/clothing", "declared_vars": { "slot_flags": 128 } },
+    "/obj/item/clothing/shoes/sneakers": { "parent": "/obj/item/clothing/shoes" },
+    "/obj/item/clothing/shoes/sneakers/black": { "parent": "/obj/item/clothing/shoes/sneakers" },
+    "/obj/item/card": { "parent": "/obj/item" },
+    "/obj/item/card/id": { "parent": "/obj/item/card", "declared_vars": {
+        "access": { "list": [] }, "slot_flags": 256 } },
+    "/obj/item/card/id/advanced": { "parent": "/obj/item/card/id" },
     "/obj/structure": { "parent": "/obj", "declared_vars": { "anchored": 1 } },
     "/obj/structure/musician": { "parent": "/obj/structure", "declared_vars": {
         "name": "Not A Piano", "icon": { "resource": "m.dmi" }, "icon_state": "piano" } },
