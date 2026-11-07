@@ -22,6 +22,8 @@ pub mod pda;
 #[cfg(feature = "server")]
 pub mod power;
 pub mod programs;
+#[cfg(feature = "server")]
+pub mod silicon;
 
 /// The NtOS window of one computer.
 pub struct NtosUi;

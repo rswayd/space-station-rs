@@ -108,10 +108,26 @@ pub fn status(world: &World, pc: Entity) -> u8 {
     let Some(computer) = world.get::<ModularComputer>(pc) else {
         return NO_SIGNAL;
     };
-    let pos = super::pda::turf_of(world, pc);
+    // A silicon's built-in computer: the silicon's tile, unless it cuts the network.
+    let pos = match super::silicon::owner(world, pc) {
+        Some(owner) if !super::silicon::has_network(world, owner) => return NO_SIGNAL,
+        Some(owner) => silicon_turf(world, owner),
+        None => super::pda::turf_of(world, pc),
+    };
     world
         .get_resource::<Ntnet>()
         .map_or(NO_SIGNAL, |n| n.signal(&computer.path, pos))
+}
+
+/// The tile of a silicon: its own, or (an AI in a card or an APC) its holder's.
+pub fn silicon_turf(world: &World, silicon: Entity) -> Option<TilePos> {
+    super::pda::turf_of(world, silicon).or_else(|| {
+        match world.get::<crate::silicon::ai::AiInside>(silicon)? {
+            crate::silicon::ai::AiInside::Apc(e)
+            | crate::silicon::ai::AiInside::Card(e)
+            | crate::silicon::ai::AiInside::Terminal(e) => crate::explosions::turf_of(world, *e),
+        }
+    })
 }
 
 /// `open_program`'s check: false (and the warning to `client`) when `program` needs NTNet the

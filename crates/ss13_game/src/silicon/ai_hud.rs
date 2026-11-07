@@ -5,6 +5,7 @@
 //! - Show Camera List (`show_camera_list`): the `ss13` network's cameras by tag; the eye jumps
 //!   to the chosen one (`switchCamera`).
 //! - Show Alerts: the station alerts window (`crate::silicon::alarms`); cyborgs have it too.
+//! - Messenger (a cyborg's Modular Interface): the built-in computer (`crate::modpc::silicon`).
 //! - Make Vox Announcement (`announcement`, `ai_say.dm`): a text prompt; up to 30 words, each
 //!   a VOX word, every 60 s station-wide (one cooldown for all AIs); the text goes to the players
 //!   on the AI's z-level as a minor announcement, then the words play to them one after the
@@ -16,7 +17,7 @@
 //!
 //! The buttons do nothing while the AI is incapacitated (dead or depowered); the AI core
 //! button works anyway, as tg's does not call the parent click.
-// shortcut: no camera tracking, camera light, crew monitor, manifest, messenger, laws stating,
+// shortcut: no camera tracking, camera light, crew monitor, manifest, laws stating,
 // photos, sensors, multicam or z-level buttons; the display picker is a list without previews;
 // no `Announcement Help` word list and no BandaStation VOX voices (HL, BMS and military: Valve
 // and Crowbar Collective assets, not freely licensed), no per-player VOX volume.
@@ -61,6 +62,9 @@ const ALERTS: &str = "alerts";
 const ANNOUNCEMENT: &str = "announcement";
 const CALL_SHUTTLE: &str = "call_shuttle";
 const CORE_DISPLAY: &str = "core_display";
+/// `/atom/movable/screen/ai/modpc`, `/atom/movable/screen/robot/modpc` (`crate::modpc::silicon`).
+const MODPC: &str = "modpc";
+const SCREEN_CYBORG: &str = "icons/hud/screen_cyborg.dmi";
 
 /// tg `GLOB.ai_core_display_screens` (sorted).
 pub const CORE_DISPLAYS: [&str; 39] = [
@@ -179,6 +183,7 @@ pub(crate) fn give_ai_buttons(world: &mut World, eye: Entity) {
         button(world, CAMERA_LIST, "Show Camera List", SCREEN_AI, "camera"),
         button(world, CAMERA_TRACK, "Track With Camera", SCREEN_AI, "track"),
         button(world, ALERTS, "Show Alerts", SCREEN_AI, "alerts"),
+        button(world, MODPC, "Messenger", SCREEN_AI, "pda_send"),
         button(
             world,
             ANNOUNCEMENT,
@@ -201,7 +206,10 @@ pub(crate) fn give_ai_buttons(world: &mut World, eye: Entity) {
 
 /// A cyborg's alert panel (tg `/atom/movable/screen/robot/alerts`).
 pub(crate) fn give_borg_buttons(world: &mut World, borg: Entity) {
-    let buttons = vec![button(world, ALERTS, "Alert Panel", SCREEN_AI, "alerts")];
+    let buttons = vec![
+        button(world, MODPC, "Modular Interface", SCREEN_CYBORG, "template"),
+        button(world, ALERTS, "Alert Panel", SCREEN_AI, "alerts"),
+    ];
     set_buttons(world, borg, buttons);
 }
 
@@ -221,6 +229,8 @@ fn trigger(world: &mut World, mut acts: Local<MessageCursor<UiActed<ActionButton
         if world.get::<Cyborg>(actor).is_some() {
             if id == ALERTS {
                 super::alarms::open(world, client, actor, actor);
+            } else if id == MODPC {
+                crate::modpc::silicon::interact(world, client, actor);
             }
             continue;
         }
@@ -259,6 +269,9 @@ fn trigger(world: &mut World, mut acts: Local<MessageCursor<UiActed<ActionButton
             }
             CAMERA_TRACK => super::ai_track::ask(world, client, actor),
             ALERTS => super::alarms::open(world, client, actor, actor),
+            MODPC => {
+                crate::modpc::silicon::interact(world, client, actor);
+            }
             ANNOUNCEMENT => ask_announcement(world, client, actor),
             CALL_SHUTTLE => ask_shuttle(world, client, actor, core),
             CORE_DISPLAY => {

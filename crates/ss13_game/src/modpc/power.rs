@@ -117,6 +117,10 @@ pub fn use_energy(world: &mut World, pc: Entity, amount: f64, check_programs: bo
     let Some(path) = world.get::<ModularComputer>(pc).map(|c| c.path.clone()) else {
         return false;
     };
+    // `pda/silicon/check_power_override`: the silicon powers it.
+    if world.get::<super::silicon::SiliconPda>(pc).is_some() {
+        return true;
+    }
     if is_console(&path) && world.get::<Unpowered>(pc).is_none() {
         // A machine with no `PowerMachine` uses no power (tg `NO_POWER_USE`).
         if world.get::<PowerMachine>(pc).is_some()

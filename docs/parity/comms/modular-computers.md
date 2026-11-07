@@ -19,7 +19,7 @@
 Встроенные «КПК» ИИ, киборгов и пИИ (мессенджер, Robotact).
 
 - **Код:** [`/obj/item/modular_computer/pda/silicon`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/modular_computers/computers/item/pda.dm#L317), [`/obj/item/modular_computer/pda/silicon/cyborg`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/modular_computers/computers/item/pda.dm#L347)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/modpc/silicon.rs`: у ИИ, киборга и пИИ встроенный компьютер (`ModularInterface`), привязанный к имени и «AI»/«Cyborg»/«pAI Messenger»; ИИ и пИИ — мессенджер (пИИ ещё чат), киборг — файловый менеджер, газоанализатор, список экипажа; не тратит питание, у киборга без сети при блокировке и пустой ячейке; открывается кнопками «Messenger»/«Modular Interface» (`silicon/ai_hud.rs`) и софтом пИИ «Digital Messenger»; окно только у своего синтетика. RoboTact (журнал киборга) — в [ntos-apps.md](ntos-apps.md); `// shortcut:` не переименовывается вместе с синтетиком
 
 ### Ноутбуки и консоли NTOS
 Ноутбук (раскрывается, ставится на стол) и стационарные консоли с NtOS (инженерная, научная, командная и др. пресеты).

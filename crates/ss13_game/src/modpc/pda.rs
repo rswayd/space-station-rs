@@ -251,6 +251,7 @@ impl Plugin for ModpcServerPlugin {
         super::ntnet::build(app);
         super::laptop::build(app);
         super::files::build(app);
+        super::silicon::build(app);
         app.register_ui::<NtosUi>()
             .add_observer(attach)
             .add_observer(attach_console)
@@ -724,7 +725,10 @@ fn ntos_status(
         &ModularComputer,
         Option<&TilePos>,
         Option<&super::laptop::Laptop>,
+        Option<&super::silicon::SiliconPda>,
     )>,
+    eyes: Query<&crate::silicon::ai::AiEye>,
+    stats: Query<&Stat>,
     users: Query<(&Inventory, Option<&Stat>, Option<&TilePos>)>,
 ) {
     use ss13_tgui::UiInterface as _;
@@ -734,12 +738,23 @@ fn ntos_status(
         if !ntos && window.interface != crate::newscaster::NewscasterUi::NAME {
             continue;
         }
-        let Ok((computer, at, lid)) = computers.get(window.source) else {
+        let Ok((computer, at, lid, silicon)) = computers.get(window.source) else {
             if ntos {
                 window.cap_status(UiStatus::Close);
             }
             continue;
         };
+        // A silicon's built-in computer: only its silicon (or the AI's eye), while on.
+        if let Some(s) = silicon {
+            let own =
+                window.actor == s.owner || eyes.get(window.actor).is_ok_and(|e| e.ai == s.owner);
+            if !own || !computer.enabled {
+                window.cap_status(UiStatus::Close);
+            } else if stats.get(s.owner).is_ok_and(|st| *st != Stat::Conscious) {
+                window.cap_status(UiStatus::Disabled);
+            }
+            continue;
+        }
         let Ok((inventory, stat, user_at)) = users.get(window.actor) else {
             window.cap_status(UiStatus::Close);
             continue;
@@ -791,6 +806,15 @@ pub struct NtosParams<'w, 's> {
     cells: Query<'w, 's, &'static super::power::ComputerCell>,
     ntnet: Option<Res<'w, super::ntnet::Ntnet>>,
     disks: Query<'w, 's, &'static super::files::ComputerDisk>,
+    silicons: Query<'w, 's, &'static super::silicon::SiliconPda>,
+    silicon_net: Query<
+        'w,
+        's,
+        (
+            Option<&'static crate::silicon::cyborg::Cyborg>,
+            Has<crate::silicon::chassis::LockedDown>,
+        ),
+    >,
 }
 
 impl NtosParams<'_, '_> {
@@ -876,7 +900,17 @@ impl ServerUi for NtosUi {
         let secs = params.round_secs();
         let pos = at
             .copied()
-            .or_else(|| carried.and_then(|c| params.positions.get(c.0).ok().copied()));
+            .or_else(|| carried.and_then(|c| params.positions.get(c.0).ok().copied()))
+            .or_else(|| {
+                let owner = params.silicons.get(entity).ok()?.owner;
+                params.positions.get(owner).ok().copied()
+            });
+        let silicon_offline = params.silicons.get(entity).is_ok_and(|s| {
+            !params
+                .silicon_net
+                .get(s.owner)
+                .is_ok_and(|(borg, locked)| borg.is_none_or(|b| b.charge > 0.0 && !locked))
+        });
         let header = NtosHeader {
             title: computer
                 .active
@@ -888,10 +922,14 @@ impl ServerUi for NtosUi {
                 .get(entity)
                 .ok()
                 .and_then(super::power::ComputerCell::percent),
-            ntnet: params
-                .ntnet
-                .as_deref()
-                .map_or(0, |n| n.signal(&computer.path, pos)),
+            ntnet: if silicon_offline {
+                0
+            } else {
+                params
+                    .ntnet
+                    .as_deref()
+                    .map_or(0, |n| n.signal(&computer.path, pos))
+            },
             program_headers: computer
                 .idle
                 .iter()
