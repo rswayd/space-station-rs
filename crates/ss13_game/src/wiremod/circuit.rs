@@ -267,6 +267,7 @@ pub enum Kind {
     CompactRemote,
     Controller,
     Bot,
+    WireBundle,
 }
 
 pub struct KindDef {
@@ -294,7 +295,7 @@ const fn def(
     }
 }
 
-pub static KINDS: [KindDef; 21] = [
+pub static KINDS: [KindDef; 22] = [
     def(
         Kind::Arithmetic,
         "/obj/item/circuit_component/arithmetic",
@@ -441,6 +442,13 @@ pub static KINDS: [KindDef; 21] = [
         "Bot",
         "Unassigned",
         "Triggers when someone interacts with the bot.",
+    ),
+    def(
+        Kind::WireBundle,
+        "/obj/item/circuit_component/wire_bundle",
+        "Wire Bundle",
+        "Utility",
+        "A bundle of exposed wires that assemblies can be attached to. Ports will only show up once the circuit is inserted into a shell.",
     ),
 ];
 
@@ -669,6 +677,8 @@ impl Node {
                 vec![out("User", Ty::User), out("Signal", Ty::Signal)],
                 0,
             ),
+            // Its ports come with the shell's wires ([`Circuit::set_bundle_ports`]).
+            Kind::WireBundle => (Vec::new(), Vec::new(), 0),
             Kind::Controller => (
                 Vec::new(),
                 vec![
@@ -735,6 +745,9 @@ impl Node {
 pub enum Effect {
     /// The shell says it (`say`, whispered range in quiet mode).
     Say { text: String, quiet: bool },
+    /// The wire bundle's `Pulse <wire>` input: the assembly on that wire of the shell
+    /// activates (`attached?.activate()`); `port` is the wire's index.
+    BundleActivate { port: usize },
     /// A radio component posts a signal (`post_signal`).
     Radio {
         node: u32,
@@ -1221,6 +1234,11 @@ impl Circuit {
                     });
                 }
             }
+            Kind::WireBundle => {
+                if let Some(port) = port {
+                    ctx.effects.push(Effect::BundleActivate { port });
+                }
+            }
             Kind::Delay | Kind::Hear | Kind::CompactRemote | Kind::Controller | Kind::Bot => {}
         }
         Outcome { outs, stop: false }
@@ -1266,6 +1284,56 @@ impl Circuit {
                 }
                 self.set_output(id, 0, v);
             }
+        }
+    }
+
+    /// Whether a wire bundle is in the circuit (`TRAIT_COMPONENT_WIRE_BUNDLE`: one at most).
+    pub fn has_bundle(&self) -> bool {
+        self.nodes.iter().any(|n| n.kind == Kind::WireBundle)
+    }
+
+    /// `wire_bundle/register_shell`: a `Pulse <wire>` input and a `<wire> Pulsed` output per
+    /// wire of the shell.
+    pub fn set_bundle_ports(&mut self, wires: &[String]) {
+        for n in self.nodes.iter_mut().filter(|n| n.kind == Kind::WireBundle) {
+            n.inputs = wires.iter().map(|w| sig(&format!("Pulse {w}"))).collect();
+            n.outputs = wires
+                .iter()
+                .map(|w| out(&format!("{w} Pulsed"), Ty::Signal))
+                .collect();
+        }
+    }
+
+    /// `wire_bundle/unregister_shell`: its ports go, with the wires into and out of them.
+    pub fn clear_bundle_ports(&mut self) {
+        let ids: Vec<u32> = self
+            .nodes
+            .iter()
+            .filter(|n| n.kind == Kind::WireBundle)
+            .map(|n| n.id)
+            .collect();
+        for n in &mut self.nodes {
+            if n.kind == Kind::WireBundle {
+                n.inputs.clear();
+                n.outputs.clear();
+            }
+            for p in &mut n.inputs {
+                p.links.retain(|(from, _)| !ids.contains(from));
+            }
+        }
+        self.pending.retain(|(to, _, _)| !ids.contains(to));
+    }
+
+    /// `wire_bundle/on_pulse_wire`: the wire's `Pulsed` output signals.
+    pub fn bundle_pulsed(&mut self, index: usize, now: f64) {
+        let ids: Vec<u32> = self
+            .nodes
+            .iter()
+            .filter(|n| n.kind == Kind::WireBundle && index < n.outputs.len())
+            .map(|n| n.id)
+            .collect();
+        for id in ids {
+            self.set_output(id, index, signal(now));
         }
     }
 
@@ -1827,6 +1895,35 @@ mod tests {
         assert!(!b.circuit.on);
         assert_eq!(b.circuit.nodes.len(), 1);
         assert!(b.circuit.nodes[not].inputs[1].links.is_empty(), "wires go");
+    }
+
+    #[test]
+    fn wire_bundle_ports_follow_the_shell_wires() {
+        let mut b = Bench::new();
+        let not = b.add(Kind::Not);
+        let bundle = b.add(Kind::WireBundle);
+        assert!(b.circuit.has_bundle());
+        assert!(
+            b.circuit.nodes[bundle].inputs.is_empty(),
+            "no ports before a shell"
+        );
+        b.circuit
+            .set_bundle_ports(&["Port 1".to_owned(), "Port 2".to_owned()]);
+        let node = &b.circuit.nodes[bundle];
+        assert_eq!(node.inputs[1].name, "Pulse Port 2");
+        assert_eq!(node.outputs[0].name, "Port 1 Pulsed");
+        // An input pulses the assembly on that wire.
+        b.input(bundle, 1, "");
+        assert_eq!(b.effects, vec![Effect::BundleActivate { port: 1 }]);
+        // A pulsed wire signals its output.
+        assert!(b.connect((not, 1), (bundle, 0)));
+        b.circuit.bundle_pulsed(0, 20.0);
+        b.step();
+        assert_eq!(*b.out(not, 0), Value::Num(1.0));
+        // The shell gone, the ports and their wires go.
+        b.circuit.clear_bundle_ports();
+        assert!(b.circuit.nodes[bundle].outputs.is_empty());
+        assert!(b.circuit.nodes[not].inputs[1].links.is_empty());
     }
 
     #[test]

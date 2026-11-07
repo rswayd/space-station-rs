@@ -988,6 +988,11 @@ pub fn item_interaction(
     if world.get::<CombatMode>(mob).is_some_and(|c| c.0) {
         return false;
     }
+    // `is_insertion_ready`: the disable wire (`crate::device_wires`).
+    if crate::device_wires::rnd_disabled(world, target) {
+        tell(world, client, Span::Warning, "belts disabled!");
+        return true;
+    }
     let store = store_of(world, target);
     insert_stack(world, client, target, store, held, &path);
     true

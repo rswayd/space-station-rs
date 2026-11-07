@@ -15,6 +15,7 @@
 //!
 //! | prio | handler |
 //! | ---- | ------- |
+//! | 89 | `device_wires::attack_self` (an unscrewed radio shows its wires) |
 //! | 100 | `atmos` analyzer scans the user's turf |
 //! | 150 | `silicon::mmi::attack_self` |
 //! | 160 | `silicon::aicard::attack_self` |
@@ -91,6 +92,7 @@
 //!
 //! | prio | handler |
 //! | ---- | ------- |
+//! | 89 | `machine_wires::held_on_target` (a screwdriver on a radio, wire tools on an open MOD or radio in the other hand) |
 //! | 91 | `modsuit::anomalock::item_interaction` (an anomaly core into a locked MOD module, a screwdriver taking it out) |
 //! | 100 | `modsuit::server::hand_interaction` |
 //! | 150 | `silicon::mmi::item_interaction` |
@@ -137,6 +139,7 @@
 //!
 //! | prio | handler |
 //! | ---- | ------- |
+//! | 99 | `machine_wires::empty_hand` (an open panel shows the wires) |
 //! | 100 | `silicon::interact::attack_robot` |
 //! | 200 | `silicon::cyborg::inventory_action` (`EmptyHandClick`) |
 //! | 300 | `antag::cult::server::interact` |
@@ -235,6 +238,7 @@
 //! | 200 | `antag::syndie_items::item_interaction` |
 //! | 251 | `weapons` whetstone (`sharpener`), shield bash (`block::bash`) |
 //! | 219 | `clothing::chameleon::scanner_click` (the chameleon scanner on a human, or a turf with one) |
+//! | 289 | `machine_wires::held_on_target` (panel screwdrivers of machines, cyborgs, mechs and radios; wire tools on an open panel, MOD or radio) |
 //! | 300 | `emag::interact_with_atom` (left click) |
 //! | 317 | `misc_items::puzzle::swipe` (keycards on keycard doors and panels) |
 //! | 320 | `janitor::key_on_door` (the janitor's key on a door) |

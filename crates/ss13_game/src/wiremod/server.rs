@@ -281,6 +281,11 @@ fn apply(world: &mut World, circuit: Entity, shell: Option<Entity>, effect: Effe
                 message: ss13_chat::server::say_message(&name, &text),
             });
         }
+        Effect::BundleActivate { port } => {
+            if let Some(shell) = shell {
+                bundle_activate(world, shell, port);
+            }
+        }
         Effect::Radio {
             node,
             frequency,
@@ -609,11 +614,123 @@ fn add_component(world: &mut World, client: Entity, circuit: Entity, item: Entit
         tell(world, client, Span::Warning, "it won't fit!");
         return;
     }
+    // `TRAIT_COMPONENT_WIRE_BUNDLE`: one bundle per circuit.
+    if kind == Kind::WireBundle && ic.circuit.has_bundle() {
+        return;
+    }
+    let shell = ic.shell;
     insert(world, item, circuit);
     world.entity_mut(item).remove::<CircuitPart>();
     with_circuit(world, circuit, |c, ctx| {
         c.add(kind, Some(item), true, ctx.rng)
     });
+    if kind == Kind::WireBundle
+        && let Some(shell) = shell
+    {
+        register_bundle(world, shell, circuit);
+    }
+}
+
+/// `CAPACITY_PER_WIRE`, `MAX_WIRE_COUNT`.
+const CAPACITY_PER_WIRE: f64 = 10.0;
+const MAX_WIRE_COUNT: f64 = 17.0;
+
+/// `wire_bundle/register_shell`: a shell without wires gets `Port 1`..`Port n` (one per 10
+/// capacity, 1-17; `/datum/wires/wire_bundle_component`, random per instance) and the bundle
+/// its ports.
+fn register_bundle(world: &mut World, shell: Entity, circuit: Entity) {
+    let has_bundle = world
+        .get::<IntegratedCircuit>(circuit)
+        .is_some_and(|ic| ic.circuit.has_bundle());
+    let Some(kind) = world.get::<Shell>(shell).map(|s| s.kind) else {
+        return;
+    };
+    if !has_bundle || world.get::<crate::wires::Wires>(shell).is_some() {
+        return;
+    }
+    let count = (f64::from(kind.capacity()) / CAPACITY_PER_WIRE)
+        .round()
+        .clamp(1.0, MAX_WIRE_COUNT) as usize;
+    let names: Vec<String> = (1..=count).map(|i| format!("Port {i}")).collect();
+    let set = crate::wires::WireSet {
+        key: "/datum/wires/wire_bundle_component",
+        proper_name: "Unknown",
+        wires: names.clone(),
+    };
+    let seed = world
+        .get_resource::<crate::wires::WireColors>()
+        .map_or(0, |c| c.seed);
+    let wires = crate::wires::Wires {
+        holder: crate::wires::WireHolder::Machine(crate::machine_wires::MachineWires::WireBundle),
+        proper_name: set.proper_name,
+        colors: crate::wires::colors_for(seed ^ shell.to_bits(), &set),
+        cut: Vec::new(),
+    };
+    world.entity_mut(shell).insert(wires);
+    with_circuit(world, circuit, |c, _| c.set_bundle_ports(&names));
+}
+
+/// `wire_bundle/unregister_shell`: the assemblies drop out, the wires and the ports go.
+fn unregister_bundle(world: &mut World, shell: Entity, circuit: Entity) {
+    let is_bundle = world.get::<crate::wires::Wires>(shell).is_some_and(|w| {
+        w.holder
+            == crate::wires::WireHolder::Machine(crate::machine_wires::MachineWires::WireBundle)
+    });
+    if !is_bundle {
+        return;
+    }
+    let colors: Vec<&'static str> = world
+        .get::<crate::wires::Wires>(shell)
+        .map(|w| w.colors.iter().map(|(c, _)| *c).collect())
+        .unwrap_or_default();
+    for color in colors {
+        crate::wires::detach_assembly(world, shell, color);
+    }
+    world
+        .entity_mut(shell)
+        .remove::<(crate::wires::Wires, crate::wires::WireAssemblies)>();
+    with_circuit(world, circuit, |c, _| c.clear_bundle_ports());
+}
+
+/// The bundle's `input_received`: the assembly on the shell's wire `port` activates, unless
+/// the wire is cut.
+fn bundle_activate(world: &mut World, shell: Entity, port: usize) {
+    let wire = format!("Port {}", port + 1);
+    let Some(color) = world
+        .get::<crate::wires::Wires>(shell)
+        .filter(|w| !w.is_cut(&wire))
+        .and_then(|w| w.color_of(&wire))
+    else {
+        return;
+    };
+    if let Some(a) = world
+        .get::<crate::wires::WireAssemblies>(shell)
+        .and_then(|w| w.at(color))
+    {
+        crate::assemblies::server::activate(world, a);
+    }
+}
+
+/// `wire_bundle/on_pulse_wire` (from the shell's wires): the wire's `Pulsed` output, unless cut.
+pub fn bundle_pulsed(world: &mut World, shell: Entity, wire: &str) {
+    let cut = world
+        .get::<crate::wires::Wires>(shell)
+        .is_none_or(|w| w.is_cut(wire));
+    let Some(circuit) = world.get::<Shell>(shell).and_then(|s| s.circuit) else {
+        return;
+    };
+    let Some(index) = wire
+        .strip_prefix("Port ")
+        .and_then(|n| n.parse::<usize>().ok())
+        .and_then(|n| n.checked_sub(1))
+    else {
+        return;
+    };
+    if cut {
+        return;
+    }
+    let now = now(world);
+    with_circuit(world, circuit, |c, _| c.bundle_pulsed(index, now));
 }
 
 /// `attach_circuit`: the shell's components join, the circuit turns on.
@@ -640,6 +757,7 @@ fn attach_circuit(world: &mut World, client: Entity, shell: Entity, circuit: Ent
         s.circuit = Some(circuit);
     }
     with_circuit(world, circuit, |c, ctx| c.attach_shell(s.kind.parts(), ctx));
+    register_bundle(world, shell, circuit);
     rename_shell(world, circuit);
 }
 
@@ -651,6 +769,7 @@ pub fn remove_circuit(world: &mut World, shell: Entity) {
     else {
         return;
     };
+    unregister_bundle(world, shell, circuit);
     with_circuit(world, circuit, |c, _| c.detach_shell());
     if let Some(mut ic) = world.get_mut::<IntegratedCircuit>(circuit) {
         ic.shell = None;
@@ -923,6 +1042,13 @@ fn detach(world: &mut World, actor: Entity, circuit: Entity, component: usize) {
     else {
         return;
     };
+    if kind == Kind::WireBundle
+        && let Some(shell) = world
+            .get::<IntegratedCircuit>(circuit)
+            .and_then(|ic| ic.shell)
+    {
+        unregister_bundle(world, shell, circuit);
+    }
     with_circuit(world, circuit, |c, _| c.remove(id));
     if let Some(item) = item
         && world.get_entity(item).is_ok()

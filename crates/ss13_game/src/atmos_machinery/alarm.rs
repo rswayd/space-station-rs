@@ -10,7 +10,9 @@
 //! multitool carrying the sensor) moves the alarm to the sensor: it rates the sensor's tile
 //! (nothing while the sensor is off) and controls the sensor's area. A mapped link cannot be
 //! undone from the alarm (`allow_link_change`) until the sensor is reset.
-// shortcut: no wires, no construction stages, no fire alarm / fault status; add with wires.
+// Wires: `crate::machine_wires` (the panel is a screwdriver away).
+// shortcut: no construction stages, no fire alarm / fault status, no look change while
+// shorted or with the panel open.
 // The flood and vent siphon modes need an emag (`crate::emag`).
 
 use std::collections::HashSet;
@@ -384,6 +386,12 @@ pub struct AirAlarm {
     pub sensor: Option<Entity>,
     /// `allow_link_change`: the window may disconnect the sensor and a multitool link another.
     pub allow_link_change: bool,
+    /// `shorted` (power wire): no rating, no window.
+    pub shorted: bool,
+    /// `aidisabled` (AI wire).
+    pub aidisabled: bool,
+    /// `speaker_enabled` (speaker wire): the warnings are spoken.
+    pub speaker_enabled: bool,
     /// Total moles and temperature last rated: the same air is not rated again (tg rates on
     /// `COMSIG_TURF_EXPOSE`, i.e. only while the tile's air changes).
     sampled: Option<(f64, f64)>,
@@ -408,6 +416,9 @@ impl AirAlarm {
             next_warning: 0.0,
             sensor: None,
             allow_link_change: true,
+            shorted: false,
+            aidisabled: false,
+            speaker_enabled: true,
             sampled: None,
         }
     }
@@ -637,7 +648,8 @@ pub fn process_alarms(
     let mut alarmed: HashSet<Entity> = HashSet::new();
     let mut refill = Vec::new();
     for (e, &pos, mut alarm, unpowered) in &mut alarms {
-        if unpowered {
+        // `check_danger`: `(machine_stat & (NOPOWER|BROKEN)) || shorted`.
+        if unpowered || alarm.shorted {
             continue;
         }
         // A sensor that is gone (`COMSIG_QDELETING`): back to the alarm's own tile.
@@ -674,7 +686,9 @@ pub fn process_alarms(
         {
             alarmed.insert(area);
         }
+        // `speak()`: nothing with the speaker wire cut.
         if let Some(text) = warning
+            && alarm.speaker_enabled
             && now >= alarm.next_warning
         {
             alarm.next_warning = now + WARNING_COOLDOWN;
