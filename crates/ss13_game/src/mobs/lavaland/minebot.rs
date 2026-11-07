@@ -77,11 +77,14 @@ pub fn click_alt(world: &mut World, user: Entity, bot: Entity) -> bool {
     if user_combat {
         return true;
     }
-    let Some(mut b) = world.get_mut::<Minebot>(bot) else {
-        return false;
+    let combat = match world.get_mut::<Minebot>(bot) {
+        Some(mut b) => {
+            b.combat = !b.combat;
+            b.combat
+        }
+        None => return false,
     };
-    b.combat = !b.combat;
-    let text = if b.combat {
+    let text = if combat {
         "Теперь атакует фауну."
     } else {
         "Теперь собирает рассыпанную руду."
