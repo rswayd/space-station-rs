@@ -409,6 +409,11 @@ pub(super) fn build(path: &str) -> Option<Built> {
             ],
             FIND_TARGET_RATE,
         )
+    } else if is("raptor") || is("baby_raptor") {
+        // `raptor_ai.bt.json` (and the aggressive breeds', the babies'): fights back; left out:
+        // fleeing when hurt, eating, troughs, breeding, playing with the owner, healing
+        // (white), mothers caring for the young and babies following them, pet commands.
+        retaliate_combat()
     } else if is("node_drone") {
         // `node_drone.bt.json`: it only latches onto an unclaimed ore vent (none here);
         // `PASSIVE_AI_FLAGS`, it never fights.
@@ -490,6 +495,9 @@ mod tests {
             "mook/tribal_chief",
             "minebot",
             "node_drone",
+            "raptor",
+            "raptor/aggressive",
+            "baby_raptor",
         ] {
             let built = build(&format!("{BASIC}/{sub}"));
             assert!(built.is_some_and(|b| b.retaliates), "{sub}");
