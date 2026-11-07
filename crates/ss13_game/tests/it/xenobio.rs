@@ -2,7 +2,8 @@
 //! grey baby, grows into an adult and splits into four; a dead one gives its core up; a grey
 //! extract injected with plasma makes a baby slime and is gone, one given water makes
 //! epinephrine and is spent; the slime console stores, places and doses slimes; a sepia floor
-//! slows the mob on it.
+//! slows the mob on it; a biopsy samples a slime, the microscope reads the sample and a vat
+//! grows it.
 
 use std::path::{Path, PathBuf};
 
@@ -10,6 +11,10 @@ use bevy::prelude::*;
 use ss13_game::chem::{Chem, Reagents};
 use ss13_game::closets::InCloset;
 use ss13_game::health::Stat;
+use ss13_game::science::cell_line_data::CELL_LINES;
+use ss13_game::science::cell_lines::{
+    Microscope, Organism, PetriDish, Sample, Swabber, VatGrower, complete_swab, microscope_text,
+};
 use ss13_game::science::xenobio::{
     Slime, SlimeExtract, TurfSlowdown, complete_core_removal, turf_slowdown,
 };
@@ -37,6 +42,11 @@ const TYPES: &str = r##"{
     "/datum/reagent/toxin/plasma": { "parent": "/datum/reagent/toxin", "declared_vars": {
         "name": "Plasma" } },
     "/datum/reagent/medicine": { "parent": "/datum/reagent" },
+    "/datum/reagent/consumable": { "parent": "/datum/reagent" },
+    "/datum/reagent/consumable/nutriment": { "parent": "/datum/reagent/consumable",
+        "declared_vars": { "name": "Nutriment" } },
+    "/datum/reagent/consumable/nutriment/protein": {
+        "parent": "/datum/reagent/consumable/nutriment", "declared_vars": { "name": "Protein" } },
     "/datum/reagent/medicine/epinephrine": { "parent": "/datum/reagent/medicine",
         "declared_vars": { "name": "Epinephrine" } },
     "/datum/chemical_reaction": { "parent": "/datum", "declared_vars": {
@@ -86,6 +96,14 @@ const TYPES: &str = r##"{
     "/obj/machinery/computer/camera_advanced/xenobio": {
         "parent": "/obj/machinery/computer/camera_advanced",
         "declared_vars": { "name": "Slime management console" } },
+    "/obj/item/petri_dish": { "parent": "/obj/item", "declared_vars": { "name": "petri dish" } },
+    "/obj/item/biopsy_tool": { "parent": "/obj/item", "declared_vars": { "name": "biopsy tool" } },
+    "/obj/machinery/vatgrower": { "parent": "/obj/machinery", "declared_vars": {
+        "name": "growing vat" } },
+    "/obj/structure": { "parent": "/obj", "declared_vars": { "anchored": 1, "density": 1,
+        "icon": { "resource": "i.dmi" }, "icon_state": "toy" } },
+    "/obj/structure/microscope": { "parent": "/obj/structure", "declared_vars": {
+        "name": "Microscope" } },
     "/obj/item/card": { "parent": "/obj/item" },
     "/obj/item/card/id": { "parent": "/obj/item/card", "declared_vars": { "access": { "list": [] } } },
     "/obj/item/card/id/advanced": { "parent": "/obj/item/card/id" },
@@ -173,6 +191,10 @@ fn fixture(test: &str) -> PathBuf {
         GREY_EXTRACT,
         STEROID,
         "/obj/machinery/computer/camera_advanced/xenobio",
+        "/obj/item/petri_dish",
+        "/obj/item/biopsy_tool",
+        "/obj/machinery/vatgrower",
+        "/obj/structure/microscope",
         "/turf/open/floor",
         "/turf/open/floor/sepia",
         "/turf/closed/wall",
@@ -421,4 +443,101 @@ fn sepia_floor_slows_the_mob_on_it() {
         app.world().get::<TurfSlowdown>(slime),
         Some(&TurfSlowdown(0.0))
     );
+}
+
+fn slime_line() -> usize {
+    CELL_LINES
+        .iter()
+        .position(|l| l.path == "/datum/micro_organism/cell_line/slime")
+        .expect("the slime cell line")
+}
+
+/// A biopsy tool takes a slime's cell line once; the sample goes onto a petri dish, which the
+/// microscope reads.
+#[test]
+fn biopsy_samples_a_slime_once_and_the_microscope_reads_it() {
+    let mut app = server("biopsy");
+    let slime = the_slime(&mut app);
+    let world = app.world_mut();
+    let spawn = |world: &mut World, path: &str| {
+        let e = ss13_game::construction::spawn_obj(world, path, BENCH).unwrap();
+        world.flush();
+        e
+    };
+    let tool = spawn(world, "/obj/item/biopsy_tool");
+    assert_eq!(world.get::<Swabber>(tool), Some(&Swabber(None)));
+    let action = |item| DoAfter {
+        client: slime,
+        target: slime,
+        target_pos: SLIME_AT,
+        user_pos: BENCH,
+        item: Some(item),
+        amount: 0,
+        ends_at: 0.0,
+        job: ss13_game::construction::Job::Swab,
+    };
+    complete_swab(world, &action(tool));
+    let sample = world
+        .get::<Swabber>(tool)
+        .unwrap()
+        .0
+        .clone()
+        .expect("sampled");
+    assert_eq!(
+        sample.organisms[0],
+        Organism::Cell {
+            line: slime_line(),
+            growth: 0.0
+        }
+    );
+    let second = spawn(world, "/obj/item/biopsy_tool");
+    complete_swab(world, &action(second));
+    assert_eq!(
+        world.get::<Swabber>(second),
+        Some(&Swabber(None)),
+        "swabbed once"
+    );
+
+    let dish = spawn(world, "/obj/item/petri_dish");
+    assert_eq!(world.get::<PetriDish>(dish), Some(&PetriDish(None)));
+    let scope = spawn(world, "/obj/structure/microscope");
+    assert_eq!(world.get::<Microscope>(scope), Some(&Microscope(None)));
+    let text = microscope_text(world, Some(&Some(sample)));
+    assert!(text.contains("Slime particles"), "{text}");
+    assert!(text.contains("Protein"), "{text}");
+}
+
+/// A vat fed protein grows a slime sample to 100 (4 a 2 s cycle) and a slime pops out; the
+/// sample is used up.
+#[test]
+fn vat_grows_a_slime_from_its_sample() {
+    let mut app = server("vat");
+    let world = app.world_mut();
+    let vat = ss13_game::construction::spawn_obj(world, "/obj/machinery/vatgrower", BENCH).unwrap();
+    world.flush();
+    world.get_mut::<VatGrower>(vat).unwrap().sample = Some(Sample {
+        organisms: vec![Organism::Cell {
+            line: slime_line(),
+            growth: 0.0,
+        }],
+        color: "#91542d",
+    });
+    inject(
+        &mut app,
+        vat,
+        "/datum/reagent/consumable/nutriment/protein",
+        50.0,
+    );
+    run(&mut app, 30.0);
+    let growth = match &app.world().get::<VatGrower>(vat).unwrap().sample {
+        Some(s) => match s.organisms[0] {
+            Organism::Cell { growth, .. } => growth,
+            Organism::Virus => unreachable!(),
+        },
+        None => panic!("grown too early"),
+    };
+    assert!((52.0..=64.0).contains(&growth), "15 cycles of 4: {growth}");
+    run(&mut app, 22.0);
+    assert_eq!(slimes(&mut app).len(), 2, "a slime popped out");
+    assert_eq!(app.world().get::<VatGrower>(vat).unwrap().sample, None);
 }

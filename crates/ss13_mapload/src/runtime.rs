@@ -1177,6 +1177,9 @@ pub fn runtime_types() -> BTreeSet<&'static str> {
     out.extend(crate::fishing::runtime_types());
     // What the stack crafting menus make (`ss13_game::stack_recipes`).
     out.extend(crate::stack_recipe_types::STACK_RECIPE_RESULTS);
+    // What growing vats grow and the dish the microscope hands back (`ss13_game::science`).
+    out.extend(crate::cell_line_types::CELL_LINE_RESULTS);
+    out.insert("/obj/item/petri_dish");
     // Log planks and plant mobs (`ss13_game::botany`).
     out.extend(crate::plants::BOTANY_RUNTIME_TYPES);
     // A canister's `relabel` copies another canister type's name and look.

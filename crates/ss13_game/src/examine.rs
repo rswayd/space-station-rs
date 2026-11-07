@@ -150,6 +150,7 @@ pub fn examine_lines(world: &World, examiner: Entity, target: Entity) -> (String
     crate::fishing::fish::examine_lines(world, target, &mut lines);
     crate::mining::examine_lines(world, target, &mut lines);
     crate::science::quantum_pad::examine_lines(world, target, &mut lines);
+    crate::science::cell_lines::examine_lines(world, target, &mut lines);
     crate::silicon::ai_slipper::examine_lines(world, target, &mut lines);
     crate::misc_items::flatpacks::examine_lines(world, target, &mut lines);
     (name, lines)

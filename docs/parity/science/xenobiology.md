@@ -39,16 +39,16 @@
 Чан, питаемый реагентами, выращивает мобов из образцов клеточных линий (34 обычных линии и органы); вирусы в образце мешают росту.
 
 - **Код:** [`/obj/machinery/vatgrower`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/xenobiology/vatgrowing/vatgrower.dm#L2), [`/datum/micro_organism/cell_line`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/xenobiology/vatgrowing/samples/_micro_organism.dm#L13), [`/datum/biological_sample`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/xenobiology/vatgrowing/samples/_sample.dm#L2)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/science/cell_lines.rs`, данные `cell_line_data.rs` (`scripts/gen-cell-lines.py`: 55 клеточных линий, таблицы, swabable-типы): чан на 300 ед. (малый 50) берёт копию образца из чашки, каждый цикл SSmachines (2 с) линии едят требуемые реагенты, растут с бонусами/штрафами реагентов и вирусов (спейсациллин их гасит), на 100% выпускают результат; ресэмплер (клик) перезапускает образец, правый клик сливает чан; без особых результатов (vat beast, nether, клоуны, пчёлы), «блестящих» мутаций, взрыва малого чана и сантехники
 
 ### Сбор образцов: мазок, биопсия, чашка Петри
 Мазок (swab) берёт пробы с предметов и существ, биопсийный инструмент — с органов/мобов; образцы хранятся в чашках Петри.
 
 - **Код:** [`/obj/item/swab`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/xenobiology/vatgrowing/swab.dm#L2), [`/obj/item/biopsy_tool`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/xenobiology/vatgrowing/biopsy_tool.dm#L2), [`/obj/item/petri_dish`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/xenobiology/vatgrowing/petri_dish.dm#L2)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/science/cell_lines.rs`: мазок (предметы/объекты), биопсия (мобы), тканевая биопсия (оба) за 3 с берут один образец по таблице атома (`swabable`, однократно), с шансом вируса; образец переносится в пустую чашку Петри, осмотр показывает микроорганизмы; случайная чашка с образцом; без оверлеев цвета образца
 
 ### Микроскоп
 Показывает состав образца в чашке Петри (клеточные линии, вирусы, условия роста).
 
 - **Код:** [`/obj/structure/microscope`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/research/xenobiology/vatgrowing/microscope.dm#L1); tgui: [`Microscope.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/Microscope.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/science/cell_lines.rs` (`microscope_text`): чашка Петри вставляется (правый клик — забрать), клик показывает клеточные линии (рост, потребление, восприимчивость, требуемые/любимые/вредные реагенты) и вирусы; вместо tgui `Microscope` — текст в чате

@@ -177,6 +177,7 @@
 //! | 2650 | `medical::pods::interact` (sleepers, cryo cells, lipid extractors, organ harvesters) |
 //! | 2660 | `medical::kiosk::interact` |
 //! | 2663 | `science::xenobio_console::take_controls` (the slime console's controls) |
+//! | 2673 | `science::cell_lines::attack_hand` (microscope readout and dish removal, vat resampler and flush) |
 //! | 2670 | `medical::limbgrower::interact` |
 //! | 2685 | `brig::gulag::interact` (labor camp teleporter, its console, the item reclaimer) |
 //! | 2695 | `brig::labor::interact` (claim console, plate press; right click: produceporter) |
@@ -239,6 +240,7 @@
 //! | 500 | `assemblies::server::item_interaction` |
 //! | 560 | `wiremod::server::item_interaction` |
 //! | 600 | `grenades::item_interaction` |
+//! | 603 | `science::cell_lines::swab_interaction` (swabs and biopsy tools: sampling, onto petri dishes) |
 //! | 700 | `implants::item_interaction` |
 //! | 800 | `defenses::server::item_interaction` |
 //! | 900 | `silicon::law_rack::item_interaction` |
@@ -280,6 +282,7 @@
 //! | 1750 | `medical::bodyparts::item_interaction` |
 //! | 1773 | `science::xenobio_console::item_interaction` (potions, monkey cubes into the slime console) |
 //! | 1777 | `science::xenobio::item_interaction` (slimes, extracts) |
+//! | 1783 | `science::cell_lines::dish_interaction` (a petri dish into the microscope or a growing vat) |
 //! | 1800 | `kitchen::item_interaction` |
 //! | 1850 | `restaurant::item_interaction` |
 //! | 1900 | `cooking::item_interaction` |

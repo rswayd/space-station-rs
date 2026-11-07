@@ -26,6 +26,10 @@ pub mod anomaly_refinery;
 #[cfg(feature = "server")]
 pub mod autolathe;
 pub mod bitrunning;
+#[cfg(feature = "server")]
+pub mod cell_line_data;
+#[cfg(feature = "server")]
+pub mod cell_lines;
 #[cfg(feature = "client")]
 pub mod client;
 #[cfg(feature = "server")]
@@ -75,6 +79,7 @@ impl bevy::prelude::Plugin for ScienceServerPlugin {
             server_control::ServerControlPlugin,
             xenobio::XenobioPlugin,
             xenobio_console::XenobioConsolePlugin,
+            cell_lines::CellLinesPlugin,
             exodrone::server::ExodronePlugin,
             bitrunning::server::BitrunningServerPlugin,
             quantum_pad::QuantumPadPlugin,
