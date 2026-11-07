@@ -790,3 +790,72 @@ fn one_off_mobs_hunt_and_the_vatbeast_fights_back_first() {
     run(&mut w, beast, &mut tree, &mut bb, 2);
     assert_eq!(bb.entity(Key::CurrentTarget), Some(attacker));
 }
+
+fn item(world: &mut World, x: i32, y: i32, force: f32) -> Entity {
+    world
+        .spawn((
+            ss13_mapload::DmItem {
+                force,
+                interaction_flags_item: ss13_mapload::item::INTERACT_ITEM_ATTACK_HAND_PICKUP,
+                ..default()
+            },
+            TilePos::new(x, y, 1),
+        ))
+        .id()
+}
+
+#[test]
+fn monkeys_hate_their_attackers_and_pick_them_as_targets() {
+    let mut w = world();
+    let monkey = mob(&mut w, 5, 5, "monkey");
+    let human = mob(&mut w, 8, 5, "neutral");
+    let mut controller = super::monkey::controller(super::monkey::MONKEY);
+    let mut bb = std::mem::take(&mut controller.bb);
+    // Calm monkeys pick nobody.
+    run(&mut w, monkey, &mut controller.tree, &mut bb, 2);
+    assert_eq!(bb.entity(Key::CurrentTarget), None);
+    super::monkey::add_hatred(&mut bb, human, 4.0);
+    run(&mut w, monkey, &mut controller.tree, &mut bb, 1);
+    assert_eq!(bb.entity(Key::CurrentTarget), Some(human));
+    // Hatred that falls to nothing is forgotten.
+    super::monkey::add_hatred(&mut bb, human, -4.0);
+    assert_eq!(bb.get(Key::MonkeyEnemies), Some(&Value::Attackers(vec![])));
+}
+
+#[test]
+fn angry_monkeys_go_for_anyone_but_monkeys() {
+    let mut w = world();
+    let monkey = mob(&mut w, 5, 5, "monkey");
+    let _kin = mob(&mut w, 6, 5, "monkey");
+    let human = mob(&mut w, 9, 5, "neutral");
+    let mut controller = super::monkey::controller(super::monkey::MONKEY_ANGRY);
+    let mut bb = std::mem::take(&mut controller.bb);
+    run(&mut w, monkey, &mut controller.tree, &mut bb, 1);
+    assert_eq!(bb.entity(Key::CurrentTarget), Some(human));
+}
+
+#[test]
+fn monkeys_grab_the_strongest_weapon_they_see_and_flee_when_hurt() {
+    let mut w = world();
+    let monkey = mob(&mut w, 5, 5, "monkey");
+    w.entity_mut(monkey).insert((
+        crate::inventory::Inventory::default(),
+        Health::basic(100.0, [1.0; 5]),
+    ));
+    let _weak = item(&mut w, 6, 5, 2.0);
+    let strong = item(&mut w, 6, 6, 10.0);
+    let mut controller = super::monkey::controller(super::monkey::MONKEY);
+    let mut bb = std::mem::take(&mut controller.bb);
+    run(&mut w, monkey, &mut controller.tree, &mut bb, 2);
+    // Next to it: taken into a hand on the following ticks.
+    run(&mut w, monkey, &mut controller.tree, &mut bb, 4);
+    let inv = w.get::<crate::inventory::Inventory>(monkey).unwrap();
+    assert!(inv.holds(strong), "{:?}", inv.hands);
+    assert!(w.get::<TilePos>(strong).is_none());
+    // Below 40 health with a target: it looks for a way out instead of fighting.
+    let enemy = mob(&mut w, 7, 5, "neutral");
+    super::monkey::add_hatred(&mut bb, enemy, 4.0);
+    w.get_mut::<Health>(monkey).unwrap().brute = 70.0;
+    run(&mut w, monkey, &mut controller.tree, &mut bb, 3);
+    assert!(matches!(bb.get(Key::FleeLocation), Some(Value::Tile(_))));
+}

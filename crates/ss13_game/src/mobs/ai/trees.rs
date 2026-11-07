@@ -1740,3 +1740,67 @@ fn fox() -> Node {
         ),
     ])
 }
+
+/// `monkey/monkey.bt.json` with `monkey_combat` and `monkey_find_weapon` (see
+/// [`super::monkey`] for the branches left out): fight the current target (run below 40
+/// health, grab a better weapon first, else hit while closing in), else take a weapon in
+/// view, else `monkey_idle`; beside it, pick a target while there is none and look for
+/// weapons.
+pub fn monkey() -> Node {
+    use super::monkey::{FLEE_HEALTH, MonkeyCond, MonkeyLeaf};
+    let pick_up = || {
+        decorator(
+            Cond::KeySet(Key::MonkeyPickup),
+            false,
+            Abort::Both,
+            sequence(vec![
+                leaf(Behavior::MoveToTarget {
+                    key: Key::MonkeyPickup,
+                    dist: 1,
+                    finish_on_arrival: true,
+                }),
+                leaf(Behavior::Monkey(MonkeyLeaf::EquipGround)),
+            ]),
+        )
+    };
+    let combat = decorator(
+        Cond::KeySet(Key::CurrentTarget),
+        false,
+        Abort::Both,
+        selector(vec![
+            decorator(
+                Cond::Monkey(MonkeyCond::HealthBelow(FLEE_HEALTH)),
+                false,
+                Abort::Both,
+                run_away(Key::CurrentTarget),
+            ),
+            pick_up(),
+            while_closing_in(
+                leaf(Behavior::Monkey(MonkeyLeaf::Attack)),
+                leaf(Behavior::MoveToTarget {
+                    key: Key::CurrentTarget,
+                    dist: 1,
+                    finish_on_arrival: false,
+                }),
+            ),
+        ]),
+    );
+    par(
+        vec![
+            selector(vec![
+                combat,
+                pick_up(),
+                // `monkey_idle`: `SPT_PROB(25)` a random step.
+                leaf(Behavior::IdleRandomWalk { chance: 25.0 }),
+            ]),
+            decorator(
+                Cond::KeySet(Key::CurrentTarget),
+                true,
+                Abort::None,
+                leaf(Behavior::Monkey(MonkeyLeaf::SetCombatTarget)),
+            ),
+            leaf(Behavior::Monkey(MonkeyLeaf::FindWeapon)),
+        ],
+        0.0,
+    )
+}

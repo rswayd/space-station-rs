@@ -17,6 +17,7 @@
 pub mod behaviors;
 pub mod bt;
 pub mod fauna;
+pub mod monkey;
 pub mod movement;
 #[cfg(test)]
 mod tests;
@@ -121,6 +122,12 @@ pub enum Key {
     TargetTimerOf,
     /// A trader's `BB_SHOP_SPOT` (`crate::mobs::trader`).
     ShopSpot,
+    /// Monkeys ([`monkey`]): `BB_MONKEY_ENEMIES` (mob -> hatred in [`Value::Attackers`]),
+    /// `BB_MONKEY_PICKUPTARGET`, `BB_MONKEY_AGGRESSIVE`, `BB_MONKEY_BLACKLISTITEMS`.
+    MonkeyEnemies,
+    MonkeyPickup,
+    MonkeyAggressive,
+    MonkeyBlacklist,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -288,6 +295,7 @@ pub fn record_attacker(world: &mut World, victim: Entity, attacker: Entity) {
     crate::mobs::pets::on_attacked(world, victim, attacker);
     crate::mobs::lavaland::on_attacked(world, victim, attacker);
     crate::mobs::illusion::on_attacked(world, victim);
+    monkey::on_attacked(world, victim, attacker);
     let now = world.resource::<Time>().elapsed_secs_f64();
     let health = world.get::<crate::health::Health>(victim).cloned();
     let retaliates = world.get::<Retaliates>(victim).is_some();

@@ -315,6 +315,8 @@ pub enum Behavior {
     Customer(crate::restaurant::CustomerLeaf),
     /// Farm, pet, parrot, ranged and critter leaves ([`super::fauna`]).
     Fauna(super::fauna::FaunaLeaf),
+    /// Monkey leaves ([`super::monkey`]).
+    Monkey(super::monkey::MonkeyLeaf),
 }
 
 impl Behavior {
@@ -341,6 +343,7 @@ impl Behavior {
             }
             Self::MeleeAttack { key, .. } | Self::PlayWithMouse { key } => ctx.truthy(key),
             Self::Fauna(ref mut leaf) => leaf.setup(ctx),
+            Self::Monkey(ref mut leaf) => leaf.setup(ctx),
             _ => true,
         }
     }
@@ -499,6 +502,7 @@ impl Behavior {
             Self::Bot(ref mut leaf) => leaf.perform(ctx),
             Self::Customer(ref mut leaf) => leaf.perform(ctx),
             Self::Fauna(ref mut leaf) => leaf.perform(ctx),
+            Self::Monkey(ref mut leaf) => leaf.perform(ctx),
         }
     }
 
@@ -512,6 +516,10 @@ impl Behavior {
             return;
         }
         if let Self::Fauna(leaf) = self {
+            leaf.finish(ctx, succeeded);
+            return;
+        }
+        if let Self::Monkey(leaf) = self {
             leaf.finish(ctx, succeeded);
             return;
         }
