@@ -176,9 +176,7 @@ pub fn attack_self(world: &mut World, client: Entity, mob: Entity, stack: Entity
     for entry in lists.iter().flat_map(|l| l.iter()) {
         match entry {
             Entry::Recipe(recipe) if shown(recipe) => lines.push(Line::Recipe(recipe)),
-            Entry::List(_, recipes) if recipes.iter().any(shown) => {
-                lines.push(Line::List(recipes))
-            }
+            Entry::List(_, recipes) if recipes.iter().any(shown) => lines.push(Line::List(recipes)),
             _ => {}
         }
     }

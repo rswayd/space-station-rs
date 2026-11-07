@@ -167,7 +167,7 @@ def parse_entries(body):
         req = int(values.get("req_amount", "1"))
         entries.append(("recipe", {
             "title": unquote(values["title"]),
-            "result": values["result_type"].strip(),
+            "result": values["result_type"].strip().rstrip("/"),
             "req": req,
             "res": int(values.get("res_amount", "1")),
             "max_res": int(values.get("max_res_amount", "1")),

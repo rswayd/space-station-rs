@@ -318,7 +318,6 @@ fn shuttle_rods(world: &mut World, client: Entity, mob: Entity, rods: Entity, ti
     }
 }
 
-
 /// [`Job::Sheet`] done.
 pub fn complete(world: &mut World, client: Entity, mob: Entity, job: SheetJob) {
     match job {

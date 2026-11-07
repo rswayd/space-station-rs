@@ -327,7 +327,7 @@ pub const STACK_RECIPE_RESULTS: &[&str] = &[
     "/obj/structure/chair/stool",
     "/obj/structure/chair/stool/bamboo",
     "/obj/structure/chair/stool/bar",
-    "/obj/structure/chair/wood/",
+    "/obj/structure/chair/wood",
     "/obj/structure/chair/wood/wings",
     "/obj/structure/chess/blackbishop",
     "/obj/structure/chess/blackking",

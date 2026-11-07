@@ -4652,7 +4652,7 @@ pub static WOOD_RECIPES: &[Entry] = &[
     )),
     Entry::Recipe(r(
         "wooden chair",
-        "/obj/structure/chair/wood/",
+        "/obj/structure/chair/wood",
         3,
         1,
         1,
