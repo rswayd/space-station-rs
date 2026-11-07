@@ -1589,6 +1589,36 @@ fn law_rack_modules_change_the_ai_laws() {
     assert!(s.get::<LawRack>(rack).linked_mobs.is_empty());
 }
 
+/// An ion storm's scramble of the mapped core rack: the welded default module gets the ion law on
+/// top and is ioned, and the linked AI gets it as its first (ion-numbered) law.
+#[test]
+fn ion_storm_adds_an_ion_law_to_the_ai() {
+    use ss13_game::events::EventRng;
+    use ss13_game::events::ion_storm::{Scramble, scramble_all_racks};
+    use ss13_game::silicon::law_rack::{LawModule, LawRack};
+    let mut s = Station::start_on("ion_storm_adds_an_ion_law_to_the_ai", MAP_RACK, 2, false);
+    let rack = s.find::<LawRack>(RACK_POS);
+    let job = s.server.world().resource::<Jobs>().data.job("AI").unwrap();
+    let link = s.players[1].link;
+    let core = ss13_game::jobs::join(s.server.world_mut(), link, job, false);
+    s.step();
+    assert_eq!(s.get::<Laws>(core).law_list(true).len(), 3);
+    let world = s.server.world_mut();
+    if !world.contains_resource::<EventRng>() {
+        world.insert_resource(EventRng(ss13_mapload::spawner::Rng::new(1)));
+    }
+    scramble_all_racks(
+        world,
+        &Scramble::add_law_only(Some("ЛЮДИ ДОЛЖНЫ ЕСТЬ ЛАМПЫ".into())),
+    );
+    let module = s.get::<LawRack>(rack).slots[0].as_ref().unwrap().module;
+    assert!(s.get::<LawModule>(module).ioned);
+    assert_eq!(
+        s.get::<Laws>(core).law_list(true),
+        ["#: ЛЮДИ ДОЛЖНЫ ЕСТЬ ЛАМПЫ", "1: L1", "2: L2", "3: L3"]
+    );
+}
+
 /// "Track With Camera" lists the human the room's camera sees; the eye follows it while the
 /// camera sees it, and a step of the eye ends the tracking.
 #[test]

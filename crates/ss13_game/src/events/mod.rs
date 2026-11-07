@@ -44,6 +44,7 @@ pub mod heart_attack;
 pub mod holiday_events;
 pub mod holidays;
 pub mod immovable_rod;
+pub mod ion_storm;
 pub mod market_crash;
 pub mod mass_hallucination;
 pub mod meteors;
@@ -277,6 +278,7 @@ pub fn controls() -> Vec<EventControl> {
             camera_failure::make,
         )),
         c(grey_tide::NAME, 10, 20.0, 5, 2, grey_tide::make),
+        c(ion_storm::NAME, 15, 20.0, 2, 20, ion_storm::make),
         c(
             bureaucratic_error::NAME,
             5,
