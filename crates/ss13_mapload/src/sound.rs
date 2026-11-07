@@ -327,7 +327,10 @@ pub mod files {
     ];
     /// Sounds the game code plays by a constant path (checked by the real-asset test
     /// `runtime_types::game_sound_literals_are_converted` in ss13_game).
-    pub const GAME_CODE: [&str; 242] = [
+    pub const GAME_CODE: [&str; 245] = [
+        "sound/machines/terminal/terminal_prompt_confirm.ogg",
+        "sound/items/dodgeball.ogg",
+        "sound/items/tools/screwdriver.ogg",
         "sound/mobs/humanoids/human/scream/femalescream_1.ogg",
         "sound/mobs/humanoids/human/scream/malescream_1.ogg",
         "sound/mobs/humanoids/human/scream/femalescream_2.ogg",
