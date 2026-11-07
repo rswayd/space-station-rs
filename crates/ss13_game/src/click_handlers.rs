@@ -219,6 +219,7 @@
 //! | 3468 | `janitor::washer_attack_hand` (washing machine door; right click starts it) |
 //! | 3471 | `medical::special_traumas::stream_click` (a bluespace prophet's stream) |
 //! | 3481 | `science::anomaly_refinery::interact` (the `AnomalyRefinery` window) |
+//! | 3493 | `holodeck::interact` (the `Holodeck` window, ready buttons) |
 //!
 //! [`ClickPhase::HeldOnTarget`] (a world click with the active hand's item; tg
 //! `item_interaction`, `interact_with_atom`, `pre_attack`, `attackby`):
@@ -226,6 +227,7 @@
 //! | prio | handler |
 //! | ---- | ------- |
 //! | 50 | `fishing::server::held_on_target` (casts, a fisher's clicks), `fishing::aquarium::item_interaction` |
+//! | 53 | `holodeck::item_interaction` (holo floors take no items, ready buttons, the holodeck conveyor) |
 //! | 100 | `antag::uplink::item_interaction` |
 //! | 200 | `antag::syndie_items::item_interaction` |
 //! | 251 | `weapons` whetstone (`sharpener`), shield bash (`block::bash`) |

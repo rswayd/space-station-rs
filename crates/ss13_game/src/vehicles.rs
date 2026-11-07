@@ -68,6 +68,7 @@ const RIDDEN: &str = "/obj/vehicle/ridden";
 const SCOOTER: &str = "/obj/vehicle/ridden/scooter";
 const SKATEBOARD: &str = "/obj/vehicle/ridden/scooter/skateboard";
 const WHEELYS: &str = "/obj/vehicle/ridden/scooter/skateboard/wheelys";
+const HOLO_SKATEBOARD: &str = "/obj/vehicle/ridden/scooter/skateboard/pro/holodeck";
 const WHEELCHAIR: &str = "/obj/vehicle/ridden/wheelchair";
 const MOTORIZED: &str = "/obj/vehicle/ridden/wheelchair/motorized";
 const ITEM_WHEELCHAIR: &str = "/obj/item/wheelchair";
@@ -208,7 +209,8 @@ pub fn riding_def(path: &str) -> Option<RidingDef> {
                 (0, 0, Some(OBJ_LAYER)),
             ],
             instability,
-            item: Some(item),
+            // `skateboard/pro/holodeck/pick_up_board`: never picked up.
+            item: (!under(HOLO_SKATEBOARD)).then_some(item),
             ..base
         }
     } else if under(SCOOTER) {
@@ -1244,6 +1246,9 @@ fn pick_up_board(world: &mut World, mob: Entity, board: Entity, forced: bool) {
     let Some(v) = world.get::<Vehicle>(board).cloned() else {
         return;
     };
+    if v.def.item.is_none() {
+        return;
+    }
     if world.get::<Inventory>(mob).is_none() {
         return;
     }

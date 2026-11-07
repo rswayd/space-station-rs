@@ -465,6 +465,7 @@ fn finish(world: &mut World, item: Entity, thrown: &Thrown, hit: Option<Entity>)
     };
     if world.get::<Health>(hit).is_some() {
         hit_living(world, item, thrown, hit);
+        crate::holodeck::dodgeball_hit(world, item, hit);
         // `frozen/shatter_on_throw`: not caught.
         if world.get_entity(item).is_ok() && crate::effects::frozen::shatter(world, item) {
             return;

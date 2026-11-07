@@ -55,6 +55,7 @@ mod grenades;
 mod gulag;
 mod guns;
 mod heretic;
+mod holodeck;
 mod icemoon_fauna;
 mod implants;
 mod interact;

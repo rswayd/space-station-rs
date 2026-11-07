@@ -47,6 +47,7 @@ use crate::interfaces::gas_analyzer::{
     AtmosHandbook, GasAnalyzerData, GasAnalyzerUi, Gasmix, HandbookGas,
 };
 use crate::interfaces::gps::{GpsData, GpsSignal, GpsUi};
+use crate::interfaces::holodeck::{HoloProgram, HolodeckData, HolodeckUi};
 use crate::interfaces::iv_drip::{IvDripData, IvDripUi};
 use crate::interfaces::job_selection::{
     DepartmentSlots, DepartmentStatic, JobSelectionData, JobSelectionStatic, JobSelectionUi,
@@ -359,6 +360,29 @@ pub fn sample(name: &str) -> Option<Sample> {
             &handbook(),
             &GasAnalyzerData {
                 gasmixes: vec![floor_mix()],
+            },
+        ),
+        HolodeckUi::NAME => of::<HolodeckUi>(
+            "holodeck control console",
+            &(),
+            &HolodeckData {
+                default_programs: vec![
+                    HoloProgram {
+                        id: "holodeck_offline".into(),
+                        name: "Holodeck - Offline".into(),
+                    },
+                    HoloProgram {
+                        id: "holodeck_beach".into(),
+                        name: "Holodeck - Beach".into(),
+                    },
+                ],
+                emagged: true,
+                emag_programs: vec![HoloProgram {
+                    id: "holodeck_burntest".into(),
+                    name: "Holodeck - Atmospheric Burn Test".into(),
+                }],
+                program: "holodeck_beach".into(),
+                can_toggle_safety: false,
             },
         ),
         AtmosAlertUi::NAME => of::<AtmosAlertUi>(

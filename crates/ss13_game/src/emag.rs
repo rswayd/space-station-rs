@@ -23,8 +23,8 @@
 //!     `emag_act`.
 //! - Bots take emags through their own clicks (`crate::bots`), after [`can_emag`].
 // shortcut: no bluespace emag reach (`prox_check`), no emags stuck together, no Donk Co. fake
-// emag, no `emag_act` of the holodeck or other
-// unported families; no hacked-APC flicker; no blackbox or combat log of the attempt.
+// emag, no `emag_act` of the unported families; no hacked-APC flicker; no blackbox or
+// combat log of the attempt.
 
 use bevy::prelude::*;
 use ss13_mapload::fidelity::is_under;
@@ -160,6 +160,7 @@ fn takes_emag(world: &World, target: Entity) -> bool {
         || e.contains::<crate::medical::limbgrower::Limbgrower>()
         || crate::silicon::pai::takes_emag(world, target)
         || e.contains::<crate::service::Ledger>()
+        || e.contains::<crate::holodeck::Holodeck>()
 }
 
 fn name(world: &World, e: Entity) -> String {
@@ -336,6 +337,9 @@ pub fn emag_act(world: &mut World, actor: Actor, card: Entity, target: Entity) -
     }
     if world.get::<crate::service::Ledger>(target).is_some() {
         return crate::service::library_emag_act(world, client, target);
+    }
+    if world.get::<crate::holodeck::Holodeck>(target).is_some() {
+        return crate::holodeck::emag_act(world, client, target);
     }
     false
 }

@@ -480,6 +480,7 @@ impl Plugin for TguiClientPlugin {
             .register_ui_view::<crate::interfaces::atmos::AtmosTempGateUi>()
             .register_ui_view::<crate::interfaces::gas_analyzer::GasAnalyzerUi>()
             .register_ui_view::<crate::interfaces::atmos_alert::AtmosAlertUi>()
+            .register_ui_view::<crate::interfaces::holodeck::HolodeckUi>()
             .register_ui_view::<crate::interfaces::atmos_control::AtmosControlUi>()
             .register_ui_view::<crate::interfaces::atmos::AtmosTempPumpUi>()
             .register_ui_view::<crate::interfaces::atmos::AtmosFilterUi>()

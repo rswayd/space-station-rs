@@ -331,6 +331,8 @@ pub mod health_client;
 #[cfg(feature = "server")]
 pub mod health_scan;
 #[cfg(feature = "server")]
+pub mod holodeck;
+#[cfg(feature = "server")]
 pub mod holosign;
 pub mod hud;
 #[cfg(feature = "server")]
