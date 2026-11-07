@@ -3,9 +3,11 @@
 //!
 //! - [`charter`]: the station charter renaming the station.
 //! - [`documents`]: secret documents, their photocopies and forged seals.
+//! - [`target`]: shooting range targets and their bullet holes.
 
 pub mod charter;
 pub mod documents;
+pub mod target;
 
 use bevy::prelude::*;
 
@@ -15,5 +17,6 @@ impl Plugin for MiscItemsPlugin {
     fn build(&self, app: &mut App) {
         charter::build(app);
         documents::build(app);
+        target::build(app);
     }
 }

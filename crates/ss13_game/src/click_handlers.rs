@@ -317,6 +317,7 @@
 //! | 4200 | `disposals::item_interaction` |
 //! | 4247 | `misc_items::documents::forge_seal` (a red or blue crayon on a photocopy) |
 //! | 4253 | `crayons::interact` (drawing, spray painting, chalk outlines, eating a crayon) |
+//! | 4257 | `misc_items::target::welder_act` (a lit welder clears a target's marks) |
 //! | 4263 | `syndie_spraycan::interact` (the Syndicate rune) |
 //! | 4273 | `stickers::attempt_attach` |
 //! | 4283 | `gifts::wrap_parcel` (wrapping paper on a parcel) |
