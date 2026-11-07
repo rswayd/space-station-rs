@@ -500,8 +500,11 @@ pub fn expose(world: &mut World, target: Entity, holder: &Holder, modifier: f32)
             } else if living {
                 water_expose_mob(world, target, volume);
             } else {
-                // `/datum/reagent/water/expose_obj` -> `extinguish()` (fireplaces, bonfires).
-                crate::fireplace::extinguish(world, target);
+                // `/datum/reagent/water/expose_obj` -> `extinguish()` (fireplaces, bonfires);
+                // hairless hide soaks into wet hide.
+                if !crate::sheets::soak(world, target) {
+                    crate::fireplace::extinguish(world, target);
+                }
             }
         } else if chem.is_type(r.id, SPACE_CLEANER) {
             match turf {
@@ -1369,7 +1372,7 @@ pub fn washer_item_interaction(
 
 /// `wash_cycle` when the timer runs out: every load item is washed (`wash(CLEAN_WASH)`).
 // shortcut: no dyeing by a crayon or other `dye_color` item inside (`dye_registry` and the items'
-// `dying_key` are not converted), no `machine_wash` specials (hides, the Ian costume), no
+// `dying_key` are not converted), no `machine_wash` specials but hides (the Ian costume), no
 // shaking or walking around while running; add with the dye registry in the prototypes.
 fn finish_washing(world: &mut World) {
     let now = world.resource::<Time>().elapsed_secs_f64();
@@ -1381,7 +1384,10 @@ fn finish_washing(world: &mut World) {
         .collect();
     for e in done {
         for item in washer_load(world, e) {
-            wash(world, item, CLEAN_WASH);
+            // `hairlesshide/machine_wash`: wet hide on the washer's tile.
+            if !crate::sheets::soak(world, item) {
+                wash(world, item, CLEAN_WASH);
+            }
         }
         if let Some(mut m) = world.get_mut::<WashingMachine>(e) {
             m.done_at = None;

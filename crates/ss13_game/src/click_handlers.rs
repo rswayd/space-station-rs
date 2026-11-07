@@ -83,6 +83,8 @@
 //! | 3221 | `weapons::two_handed::attack_self` (wield, let go) |
 //! | 3245 | `mining::crusher::attack_self` (the kinetic crusher wields) |
 //! | 3227 | `misc_items::charter::attack_self` (the station name question) |
+//! | 3239 | `stack_recipes::attack_self` (a stack's crafting menu) |
+//! | 3249 | `sheets::crush_attack_self` (a bluespace crystal crushed: blink) |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):
 //!
@@ -120,6 +122,7 @@
 //! | 1261 | `weapons` whetstone (`sharpener`), shield bash (`block::bash`) |
 //! | 1300 | `disposals::mail_interaction` |
 //! | 1350 | `botany::grown_interaction` (log cutting, potato batteries) |
+//! | 1369 | `sheets::item_interaction` (a hot tool on burning sheets, rods on titanium in the other hand) |
 //! | 1393 | `guns_special::item_interaction` (a syringe or DNA injector into a syringe gun, a grenade into a grenade launcher) |
 //! | 1400 | `chem::item_interaction` |
 //! | 1450 | `mining::hand_interaction` (modkits, point cards, gibtonite ore) |
@@ -312,6 +315,7 @@
 //! | 3440 | `tank_storage::item_interaction` |
 //! | 3441 | `displaycase::item_interaction` (display cases, their chassis) |
 //! | 3442 | `fireplace::item_interaction` (fuel, lighting, bonfire rods and grill) |
+//! | 3449 | `sheets::item_interaction` (a hot tool on burning sheets, rods on titanium) |
 //! | 3450 | `decor::item_interaction` |
 //! | 3455 | `clothing::item_interaction` |
 //! | 3465 | `effects::teleporters::portal_click` (permanent portals) |

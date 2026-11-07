@@ -459,6 +459,8 @@ pub mod security_level;
 pub mod server;
 pub mod service;
 #[cfg(feature = "server")]
+pub mod sheets;
+#[cfg(feature = "server")]
 pub mod shuttle;
 #[cfg(feature = "server")]
 pub mod shuttle_catalog;
@@ -493,6 +495,8 @@ pub mod speech;
 pub mod spells;
 #[cfg(feature = "server")]
 pub mod ssd;
+#[cfg(feature = "server")]
+pub mod stack_recipes;
 #[cfg(feature = "server")]
 pub mod station_goals;
 #[cfg(feature = "server")]
