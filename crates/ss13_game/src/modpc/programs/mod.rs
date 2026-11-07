@@ -582,7 +582,10 @@ mod tests {
 
     #[test]
     fn engineering_pdas_get_the_atmos_scanner() {
-        assert_eq!(pda_programs("/obj/item/modular_computer/pda/crew").len(), PDA_PROGRAMS.len());
+        assert_eq!(
+            pda_programs("/obj/item/modular_computer/pda/crew").len(),
+            PDA_PROGRAMS.len()
+        );
         assert_eq!(
             pda_programs("/obj/item/modular_computer/pda/crew/atmos").last(),
             Some(&ProgramKind::Atmosscan)
@@ -612,7 +615,8 @@ mod tests {
                 .contains(&MedRecords)
         );
         assert_eq!(
-            pda_programs("/obj/item/modular_computer/pda/crew/heads/quartermaster")[PDA_PROGRAMS.len() + 1..],
+            pda_programs("/obj/item/modular_computer/pda/crew/heads/quartermaster")
+                [PDA_PROGRAMS.len() + 1..],
             HEAD_PROGRAMS
         );
         assert_eq!(
