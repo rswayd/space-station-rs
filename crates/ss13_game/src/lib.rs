@@ -551,6 +551,8 @@ pub mod sound_client;
 #[cfg(feature = "server")]
 pub mod spacemove;
 #[cfg(feature = "server")]
+pub mod spawners;
+#[cfg(feature = "server")]
 pub mod species;
 #[cfg(feature = "server")]
 pub mod speech;

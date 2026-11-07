@@ -165,7 +165,8 @@ fn add_obj_state(add: On<Add<DmObj>>, objs: Query<&DmObj>, mut commands: Command
     .any(|root| is_under(&obj.path, root))
         || crate::decor::breakable(&obj.path)
         || crate::tank_storage::breakable(&obj.path)
-        || crate::displaycase::breakable(&obj.path);
+        || crate::displaycase::breakable(&obj.path)
+        || crate::spawners::breakable(&obj.path);
     if !breakable {
         return;
     }

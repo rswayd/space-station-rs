@@ -81,6 +81,28 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/piggy_bank/vault",
     // `secure_safes`: the captain's spare ID safe's card.
     "/obj/item/card/id/advanced/gold/captains_spare",
+    // `spawners`: what monster nests make (`ss13_game::spawners::KINDS`).
+    "/mob/living/basic/carp",
+    "/mob/living/basic/trooper/syndicate/ranged",
+    "/mob/living/basic/skeleton",
+    "/mob/living/basic/clown",
+    "/mob/living/basic/clown/banana",
+    "/mob/living/basic/clown/clownhulk",
+    "/mob/living/basic/clown/clownhulk/chlown",
+    "/mob/living/basic/clown/clownhulk/honkmunculus",
+    "/mob/living/basic/clown/fleshclown",
+    "/mob/living/basic/clown/mutant/glutton",
+    "/mob/living/basic/clown/honkling",
+    "/mob/living/basic/clown/longface",
+    "/mob/living/basic/clown/lube",
+    "/mob/living/basic/mining/basilisk",
+    "/mob/living/basic/mining/goldgrub",
+    "/mob/living/basic/mining/goliath/ancient",
+    "/mob/living/basic/mining/hivelord",
+    "/mob/living/basic/wumborian_fugu",
+    "/mob/living/basic/blankbody",
+    "/mob/living/basic/creature",
+    "/mob/living/basic/migo",
     // `genetics::effects`: what Geladikinesis conjures (Cindikinesis' ash is listed below).
     "/obj/item/stack/sheet/mineral/snow",
     // `genetics::effects`: the Cryokinesis and Pyrokinesis beams.
