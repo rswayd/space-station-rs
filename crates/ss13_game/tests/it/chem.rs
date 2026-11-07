@@ -127,6 +127,42 @@ const TYPES: &str = r##"{
         "icon_state": "syringe_0", "amount_per_transfer_from_this": 5,
         "possible_transfer_amounts": { "list": [5, 10, 15] }, "volume": 15,
         "initial_reagent_flags": 32 } },
+    "/obj/projectile": { "parent": "/obj", "declared_vars": { "name": "projectile",
+        "icon": { "resource": "p.dmi" }, "icon_state": "bullet", "anchored": 1, "damage": 10,
+        "damage_type": "brute", "armor_flag": "bullet", "armour_penetration": 0, "stamina": 0,
+        "knockdown": 0, "paralyze": 0, "stun": 0, "immobilize": 0, "speed": 1.25, "range": 50,
+        "pass_flags": 1, "accurate_range": 100, "accuracy_falloff": 7, "ricochets_max": 0,
+        "ricochet_chance": 0, "ricochet_decay_chance": 0.7, "ricochet_decay_damage": 0.7,
+        "ricochet_incidence_leeway": 40, "wound_bonus": -100, "exposed_wound_bonus": 0,
+        "wound_falloff_tile": 0, "sharpness": 0, "damage_falloff_tile": 0 } },
+    "/obj/projectile/bullet": { "parent": "/obj/projectile", "declared_vars": {
+        "name": "bullet", "damage": 60 } },
+    "/obj/projectile/bullet/dart": { "parent": "/obj/projectile/bullet", "declared_vars": {
+        "name": "dart", "icon_state": "cbbolt", "damage": 6 } },
+    "/obj/projectile/bullet/dart/syringe": { "parent": "/obj/projectile/bullet/dart",
+        "declared_vars": { "name": "syringe", "icon_state": "syringeproj" } },
+    "/obj/projectile/bullet/dart/piercing": { "parent": "/obj/projectile/bullet/dart" },
+    "/obj/item/firing_pin": { "parent": "/obj/item", "declared_vars": {
+        "default_pin_auth": 1, "fail_message": "недопустимый пользователь!" } },
+    "/obj/item/ammo_casing": { "parent": "/obj/item", "declared_vars": { "name": "casing",
+        "caliber": null, "projectile_type": null, "harmful": 1, "click_cooldown_override": 0,
+        "delay": 0, "pellets": 1, "variance": 0, "randomspread": 0 } },
+    "/obj/item/ammo_casing/syringegun": { "parent": "/obj/item/ammo_casing", "declared_vars": {
+        "name": "syringe gun spring",
+        "projectile_type": { "path": "/obj/projectile/bullet/dart/syringe" } } },
+    "/obj/item/ammo_casing/chemgun": { "parent": "/obj/item/ammo_casing", "declared_vars": {
+        "name": "dart synthesiser",
+        "projectile_type": { "path": "/obj/projectile/bullet/dart/piercing" } } },
+    "/obj/item/gun": { "parent": "/obj/item", "declared_vars": { "name": "gun",
+        "icon": { "resource": "g.dmi" }, "fire_delay": 0, "burst_size": 1, "burst_delay": 2,
+        "pinless": 0, "pin": { "path": "/obj/item/firing_pin" }, "spread": 0,
+        "randomspread": 1, "dual_wield_spread": 24, "weapon_weight": 1, "recoil": 0,
+        "recoil_backtime_multiplier": 1.5, "recoil_deviation": 20,
+        "projectile_damage_multiplier": 1 } },
+    "/obj/item/gun/syringe": { "parent": "/obj/item/gun", "declared_vars": {
+        "name": "medical syringe gun", "icon_state": "medicalsyringegun" } },
+    "/obj/item/gun/chem": { "parent": "/obj/item/gun", "declared_vars": {
+        "name": "reagent gun", "icon_state": "chemgun" } },
     "/obj/item/card": { "parent": "/obj/item", "declared_vars": { "inhand_icon_state": "card-id" } },
     "/obj/item/card/id": { "parent": "/obj/item/card", "declared_vars": {
         "access": { "list": [] }, "icon_state": "card_grey", "slot_flags": 256,
@@ -158,7 +194,8 @@ const TYPES: &str = r##"{
 
 /// Rows top-down, the last line is y = 1. Spawns `s`: (3,3) for A, (3,4) for B. Around A:
 /// hydrogen `H` east, nitrogen `N` west, beaker `B` south, water glass `W` south-east; a
-/// syringe `S` north-east and a libital bottle `L` north-west.
+/// syringe `S` north-east, a libital bottle `L` north-west and a syringe gun `G` south-west;
+/// a reagent gun `C` at (5,2).
 const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 "f" = (/turf/open/floor,/area/space)
 "s" = (/obj/effect/landmark/start/assistant,/turf/open/floor,/area/space)
@@ -168,13 +205,15 @@ const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 "W" = (/obj/item/reagent_containers/cup/glass/drinkingglass/filled/half_full,/turf/open/floor,/area/space)
 "S" = (/obj/item/reagent_containers/syringe,/turf/open/floor,/area/space)
 "L" = (/obj/item/reagent_containers/cup/bottle/libital,/turf/open/floor,/area/space)
+"G" = (/obj/item/gun/syringe,/turf/open/floor,/area/space)
+"C" = (/obj/item/gun/chem,/turf/open/floor,/area/space)
 
 (1,1,1) = {"
 wwwwwwww
 wffffffw
 wLsSfffw
 wNsHfffw
-wfBWfffw
+wGBWCffw
 wwwwwwww
 "}
 "##;
@@ -189,7 +228,7 @@ const SYRINGE: TilePos = TilePos::new(4, 4, 1);
 const LIBITAL: TilePos = TilePos::new(2, 4, 1);
 
 /// Manifest order = `IconStateId`.
-const STATES: [(&str, &str); 11] = [
+const STATES: [(&str, &str); 16] = [
     ("t.dmi", "floor"),
     ("t.dmi", "wall"),
     ("l.dmi", "x2"),
@@ -201,6 +240,11 @@ const STATES: [(&str, &str); 11] = [
     ("s.dmi", "syringe_15"),
     ("f.dmi", "syringe15"),
     ("c.dmi", "glass_empty"),
+    ("g.dmi", "medicalsyringegun"),
+    ("g.dmi", "chemgun"),
+    ("p.dmi", "syringeproj"),
+    ("p.dmi", "cbbolt"),
+    ("p.dmi", "bullet"),
 ];
 
 fn fixture_assets(test: &str) -> PathBuf {
@@ -215,6 +259,8 @@ fn fixture_assets(test: &str) -> PathBuf {
         "/obj/item/reagent_containers/cup/beaker",
         "/obj/item/reagent_containers/cup/glass/drinkingglass/filled/half_full",
         "/obj/item/reagent_containers/syringe",
+        "/obj/item/gun/syringe",
+        "/obj/item/gun/chem",
         "/turf/open/floor",
         "/turf/closed/wall",
         "/turf/open/space/basic",
@@ -479,4 +525,97 @@ fn syringe_injects_libital_and_heals() {
         "{units} -> {}",
         libital(&s)
     );
+}
+
+/// The hand slot that is not active.
+fn other_slot(s: &Station, p: usize) -> InventorySlot {
+    if s.get::<Inventory>(s.players[p].mob).active == 0 {
+        InventorySlot::RightHand
+    } else {
+        InventorySlot::LeftHand
+    }
+}
+
+#[test]
+fn syringe_gun_shoots_a_loaded_syringe_into_b() {
+    let mut s = Station::start("syringe_gun_shoots_a_loaded_syringe_into_b", 2);
+    let (a, b) = (s.players[0].mob, s.players[1].mob);
+    let gun = s.item_on(TilePos::new(2, 2, 1));
+    let (syringe, bottle) = (s.item_on(SYRINGE), s.item_on(LIBITAL));
+    s.take(0, gun);
+    s.send(0, ClientIntent::SwapHands);
+    s.run_until("swapped", |s| s.get::<Inventory>(a).active_item().is_none());
+    s.take(0, syringe);
+    s.click_active_slot(0);
+    s.run_until("10", |s| s.get::<TransferAmount>(syringe).0 == 10.0);
+    s.click_active_slot(0);
+    s.run_until("15", |s| s.get::<TransferAmount>(syringe).0 == 15.0);
+    s.click_with(
+        0,
+        bottle,
+        ClickModifiers {
+            right: true,
+            ..default()
+        },
+    );
+    s.run_until("drawn", |s| {
+        s.amount(syringe, "/datum/reagent/medicine/c2/libital") == 15.0
+    });
+
+    // The syringe onto the gun in the other hand: it goes in.
+    let slot = other_slot(&s, 0);
+    s.send(0, ClientIntent::ClickSlot(slot));
+    s.run_until("loaded", |s| {
+        ss13_game::guns_special::loaded(s.server.world(), gun) == vec![syringe]
+    });
+    assert!(s.get::<Inventory>(a).active_item().is_none());
+
+    // Point blank at B: the dart injects all 15 units, the syringe is used up.
+    s.send(0, ClientIntent::SwapHands);
+    s.run_until("the gun in hand", |s| {
+        s.get::<Inventory>(a).active_item() == Some(gun)
+    });
+    let libital =
+        |s: &Station| blood_amount(s.server.world(), b, "/datum/reagent/medicine/c2/libital");
+    s.click(0, b);
+    s.run_until("B is injected", |s| libital(s) > 0.0);
+    assert!(libital(&s) > 14.0, "{}", libital(&s));
+    assert!(s.server.world().get_entity(syringe).is_err());
+
+    // Empty now: the trigger clicks.
+    s.click(0, b);
+    s.run_until("A hears the click", |s| s.said(0, "*щёлк*"));
+}
+
+#[test]
+fn reagent_gun_fires_darts_from_its_reservoir_and_makes_more() {
+    let mut s = Station::start(
+        "reagent_gun_fires_darts_from_its_reservoir_and_makes_more",
+        2,
+    );
+    let (a, b) = (s.players[0].mob, s.players[1].mob);
+    s.try_step(0, ss13_shared::Dir::East);
+    s.run_until("A moved", |s| *s.get::<TilePos>(a) == TilePos::new(4, 3, 1));
+    let gun = s.item_on(TilePos::new(5, 2, 1));
+    s.take(0, gun);
+    {
+        let world = s.server.world_mut();
+        let chem = world.resource::<Chem>().0.clone();
+        let id = chem.id("/datum/reagent/medicine/c2/libital").unwrap();
+        let mut reservoir = world.get_mut::<Reagents>(gun).unwrap();
+        reservoir
+            .0
+            .add_reagent(&chem, id, 60.0, 300.0, None, None, true, false);
+    }
+    let darts = |s: &Station| s.get::<ss13_game::guns_special::ChemGun>(gun).left;
+    assert_eq!(darts(&s), 4);
+    let libital =
+        |s: &Station| blood_amount(s.server.world(), b, "/datum/reagent/medicine/c2/libital");
+    s.click(0, b);
+    s.run_until("B is injected", |s| libital(s) > 0.0);
+    assert!(libital(&s) > 14.0, "{}", libital(&s));
+    assert_eq!(darts(&s), 3);
+    assert_eq!(s.amount(gun, "/datum/reagent/medicine/c2/libital"), 45.0);
+    // A new dart after `time_per_syringe` (25 s from the round start).
+    s.run_until_for(30.0, "a dart is made", |s| darts(s) == 4);
 }

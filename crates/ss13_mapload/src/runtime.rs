@@ -74,6 +74,8 @@ pub const GIFT_TYPES: &[&str] = &[
 /// Constant paths `ss13_game` spawns that no other table of this crate lists: leftovers,
 /// products and printouts of machines, decals, grenade payloads, quirk items, paper kinds.
 pub const GAME_RUNTIME_TYPES: &[&str] = &[
+    // `guns_special`: the dart pistol's starting syringe.
+    "/obj/item/reagent_containers/syringe",
     // `mob_holder`: small mobs picked up into a hand.
     "/obj/item/mob_holder",
     "/obj/item/mob_holder/snail",

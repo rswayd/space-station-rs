@@ -5,13 +5,13 @@
 Стреляют заряженными шприцами (реагенты вводятся при попадании), скорострельный, синдикатский, ДНК-шприцемёт, духовая трубка.
 
 - **Код:** [`/obj/item/gun/syringe`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/projectiles/guns/special/syringe_gun.dm#L1), [`/obj/item/gun/syringe/rapidsyringe`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/projectiles/guns/special/syringe_gun.dm#L137), [`/obj/item/gun/syringe/dna`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/projectiles/guns/special/syringe_gun.dm#L174), [`/obj/item/gun/syringe/blowgun`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/projectiles/guns/special/syringe_gun.dm#L213)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ `guns_special`: шприцы (ДНК-инъекторы у ДНК-шприцемёта) вставляются в шприцемёт в другой руке до `max_syringes` (скорострельный — 6), Z вынимает последний; выстрел несёт реагенты первого шприца в дротике, при попадании в карбона всё вводится в кровь, если толстая одежда не закрывает зону (пронзающий шприц пробивает её); дартс-пистолет начинает с шприцем, духовая трубка отнимает у стрелка 20 выносливости и 20 кислорода. Без режима низкого давления (встраивание шприцев — нет встраивания) и оверлеев
 
 ### Химическая пушка
 Самостоятельно синтезирует дротики из своего резервуара реагентов.
 
 - **Код:** [`/obj/item/gun/chem`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/projectiles/guns/special/chem_gun.dm#L3)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ `guns_special`: резервуар 90 ед. (открытый контейнер), 4 пронзающих дротика по 15 ед. из резервуара, новый дротик каждые 25 с
 
 ### Гранатомёт и бласт-пушка
 Ручной гранатомёт для обычных гранат; бласт-пушка стреляет взрывом бомбы-ТТВ в линию.

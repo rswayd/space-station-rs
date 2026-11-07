@@ -509,6 +509,8 @@ fn hit(world: &mut World, e: Entity, p: &Projectile, name: &str, target: Entity)
         return;
     }
     impact(world, p, name, target);
+    // A dart's `on_hit`: its reagents or DNA injector (`crate::guns_special`).
+    crate::guns_special::dart_hit(world, e, p, target);
     crate::mobs::megafauna::on_projectile_hit(world, p, target);
     if let Some(bolt) = bolt {
         crate::spells::effects::bolt_hit(world, &bolt, p, target);
