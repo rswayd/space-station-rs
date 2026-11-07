@@ -502,6 +502,7 @@ pub fn deconstruct(world: &mut World, target: Entity, disassembled: bool) {
     crate::power::shields::on_destroy(world, target);
     crate::eng_machines::atmos_shield::on_destroy(world, target);
     crate::eng_machines::modular_shield::on_destroy(world, target);
+    crate::traps::deconstruct(world, target);
     world.despawn(target);
     crate::construction::tile_changed(world, pos);
 }

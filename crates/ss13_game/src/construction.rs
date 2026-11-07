@@ -271,6 +271,8 @@ pub enum Job {
     Barber(crate::service::BarberJob),
     /// Harvesting, uprooting and replanting flora ([`crate::flora`]).
     Flora(crate::flora::FloraJob),
+    /// Tripwires ([`crate::traps`]).
+    Trap(crate::traps::TrapJob),
     /// Taking an unlit bonfire apart ([`crate::fireplace`]).
     Bonfire,
     /// Screwing, welding or repairing a law rack's module ([`crate::silicon::law_rack`]).
@@ -1386,6 +1388,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::QuantumPad(job) => crate::science::quantum_pad::complete(world, client, target, job),
         &Job::EngMachine(job) => crate::eng_machines::complete(world, client, target, job),
         &Job::Flora(job) => crate::flora::complete(world, mob, action, job),
+        &Job::Trap(job) => crate::traps::complete(world, mob, action, job),
         Job::Bonfire => crate::fireplace::complete_dismantle(world, action),
         &Job::LawRack(job) => crate::silicon::law_rack::complete(world, mob, action, job),
         &Job::AiCore(job) => crate::silicon::ai_core::complete(world, mob, action, job),

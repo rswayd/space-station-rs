@@ -604,6 +604,8 @@ pub mod throw;
 #[cfg(feature = "server")]
 pub mod tools;
 #[cfg(feature = "server")]
+pub mod traps;
+#[cfg(feature = "server")]
 pub mod turf_damage;
 #[cfg(feature = "client")]
 pub mod ui_sprites;

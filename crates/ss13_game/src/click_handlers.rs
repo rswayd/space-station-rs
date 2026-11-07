@@ -89,6 +89,7 @@
 //! | 3227 | `misc_items::charter::attack_self` (the station name question) |
 //! | 3239 | `stack_recipes::attack_self` (a stack's crafting menu) |
 //! | 3249 | `sheets::crush_attack_self` (a bluespace crystal crushed: blink) |
+//! | 3259 | `traps::attack_self` (a sturdy tripwire cable recoils) |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):
 //!
@@ -345,6 +346,7 @@
 //! | 3300 | `food::item_interaction` |
 //! | 3397 | `plumbing_net::item_interaction` (ducts, duct stacks, wrenches on machines) |
 //! | 3400 | `plumbing::item_interaction` |
+//! | 3439 | `traps::item_interaction` (tripwire posts and cables: tying, wiring, cutting, wrench) |
 //! | 3440 | `tank_storage::item_interaction` |
 //! | 3441 | `displaycase::item_interaction` (display cases, their chassis) |
 //! | 3442 | `fireplace::item_interaction` (fuel, lighting, bonfire rods and grill) |

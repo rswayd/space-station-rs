@@ -74,6 +74,9 @@ pub const GIFT_TYPES: &[&str] = &[
 /// Constant paths `ss13_game` spawns that no other table of this crate lists: leftovers,
 /// products and printouts of machines, decals, grenade payloads, quirk items, paper kinds.
 pub const GAME_RUNTIME_TYPES: &[&str] = &[
+    // `traps`: the earth trap's rock, the cables strung between tripwire posts.
+    "/obj/structure/flora/rock/style_random",
+    "/obj/structure/tripwire/cable",
     // `genetics::effects`: what Geladikinesis conjures (Cindikinesis' ash is listed below).
     "/obj/item/stack/sheet/mineral/snow",
     // `genetics::effects`: the Cryokinesis and Pyrokinesis beams.
