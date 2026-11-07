@@ -99,6 +99,7 @@
 //! | 473 | `cargo::money::item_interaction` (cash onto the ID in the other hand) |
 //! | 480 | `clothing::accessories::attach` (before a jumpsuit's holster takes the item) |
 //! | 483 | `gifts::wrap_parcel` (wrapping paper onto a parcel, before it takes the paper) |
+//! | 487 | `misc_items::documents::forge_seal` (a red or blue crayon on a photocopy) |
 //! | 500 | core: a storage opens or takes the held item |
 //! | 600 | `implants::item_interaction` |
 //! | 700 | `assemblies::server::item_interaction` |
@@ -314,6 +315,7 @@
 //! | 4000 | `atmos_machinery::windows::item_interaction` |
 //! | 4100 | `modpc::pda::item_interaction_secondary` (right click) |
 //! | 4200 | `disposals::item_interaction` |
+//! | 4247 | `misc_items::documents::forge_seal` (a red or blue crayon on a photocopy) |
 //! | 4253 | `crayons::interact` (drawing, spray painting, chalk outlines, eating a crayon) |
 //! | 4263 | `syndie_spraycan::interact` (the Syndicate rune) |
 //! | 4273 | `stickers::attempt_attach` |

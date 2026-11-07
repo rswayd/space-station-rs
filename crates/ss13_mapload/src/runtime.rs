@@ -478,6 +478,8 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/station_charter",
     "/obj/item/station_charter/admin",
     "/obj/item/station_charter/banner",
+    // The photocopier's copy of secret documents (`ss13_game::misc_items::documents`).
+    "/obj/item/documents/photocopy",
     // Bulbs out of fixtures, fixture frames and the fixtures they build
     // (`ss13_game::power::lighting`).
     "/obj/item/light/tube",

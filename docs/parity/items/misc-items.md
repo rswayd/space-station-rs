@@ -38,7 +38,7 @@
 
 - **Код:** [`/obj/item/documents`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/secret_documents.dm#L10)
 - **BandaStation:** [`/obj/item/documents/syndicate/exchange_red`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/items/secret_documents.dm#L3) — документы для обмена между агентами, кейс и пинпоинтер к нему
-- **Статус в ss13-rs:** ❌ нет — в целях кражи (`crates/ss13_game/src/antag/objectives.rs`) только предметы из `antag.ron`
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/misc_items/documents.rs`: неуничтожимые (`resistance_flags`, `obj_damage`), цель кражи `/datum/objective_item/steal/documents` извлекается в `antag.ron` вместе с прочими; ксерокс (`service/office.rs`) копирует их за 20 листов в фотокопию с `copy_type` (копия копии помнит оригинал), красный или синий мелок один раз подделывает печать. Обмен документами между агентами BandaStation (кейс, пинпоинтер) — цель предателя, раздел антагонистов
 
 ### Мишени тира
 Мишени для стрельбы, на которых остаются следы попаданий.
