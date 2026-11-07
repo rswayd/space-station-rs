@@ -448,6 +448,8 @@ pub mod newscaster_client;
 #[cfg(feature = "server")]
 pub mod newscaster_server;
 #[cfg(feature = "server")]
+pub mod noncrew_jobs;
+#[cfg(feature = "server")]
 pub mod ntnet_relay;
 #[cfg(feature = "server")]
 pub mod obj_damage;

@@ -485,6 +485,13 @@ pub fn spawn_operatives(world: &mut World, clients: &[Entity]) {
         };
         let mob = crate::server::spawn_mob(world, client, pos, String::new());
         world.entity_mut(client).remove::<crate::round::NewPlayer>();
+        // `forced_occupations`: the operative (leader) job.
+        let job = if i == 0 {
+            crate::noncrew_jobs::NUCLEAR_OPERATIVE_LEADER
+        } else {
+            crate::noncrew_jobs::NUCLEAR_OPERATIVE
+        };
+        crate::noncrew_jobs::set_assigned_role(world, mob, job);
         add_nukeop(world, mob, i == 0, joined, &mut rng);
     }
     world.insert_resource(NukeopRng(rng));
@@ -514,7 +521,7 @@ pub fn dev_nukeop(world: &mut World, client: Entity, mob: Entity) {
             world.despawn(item);
         }
     }
-    world.entity_mut(mob).remove::<crate::jobs::PlayerJob>();
+    crate::noncrew_jobs::set_assigned_role(world, mob, crate::noncrew_jobs::NUCLEAR_OPERATIVE);
     let spawns = infiltrator_spawns(world);
     let level = world.get_resource::<Infiltrator>().map(|i| i.level_z);
     let kept = crate::server::dev_spawn(world, client).is_some_and(|p| Some(p.z) == level);

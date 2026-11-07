@@ -335,7 +335,7 @@ pub fn make_nightmare(world: &mut World, mob: Entity) -> bool {
     });
     crate::inventory::refresh_look(world, mob);
     // `on_gain`: `set_assigned_role(/datum/job/nightmare)`.
-    world.entity_mut(mob).remove::<crate::jobs::PlayerJob>();
+    crate::noncrew_jobs::set_assigned_role(world, mob, crate::noncrew_jobs::NIGHTMARE);
     let client = world.get::<PlayerMob>(mob).map(|p| p.client);
     let key = client
         .and_then(|c| world.get::<ClientToken>(c))

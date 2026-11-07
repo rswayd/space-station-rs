@@ -82,7 +82,10 @@ const SECURITY_OFFICER: &str = "Security Officer";
 ///   [`ReopenSuicideRoles`], with `SS13_REOPEN_SUICIDE_ROLES_DELAY` (seconds, at least 30,
 ///   default 240), `SS13_REOPEN_SUICIDE_ROLES_COMMAND=1` and `SS13_REOPEN_SUICIDE_ROLES_REPORT=1`;
 /// - `SS13_HARD_POPCAP`, `SS13_EXTREME_POPCAP` (tg `HARD_POPCAP`, `EXTREME_POPCAP`, unset by
-///   default): living players at which latejoiners queue (`crate::join_queue`).
+///   default): living players at which latejoiners queue (`crate::join_queue`);
+/// - `SS13_JOB_RESTRICTIONS` (job titles), `SS13_ALLOWED_SPECIES` (`/datum/species/*` paths),
+///   comma separated (BandaStation `JOB_RESTRICTIONS`, `ALLOWED_SPECIES`, unset by default):
+///   only the allowed species may take the restricted jobs (`crate::jobs::species_restricted`).
 #[derive(Resource, Clone, Debug, PartialEq)]
 pub struct RoundConfig {
     pub lobby_secs: f64,
@@ -93,6 +96,10 @@ pub struct RoundConfig {
     pub reopen_suicide_roles: Option<ReopenSuicideRoles>,
     pub hard_popcap: Option<u32>,
     pub extreme_popcap: Option<u32>,
+    /// BandaStation `job_restrictions`: titles only [`Self::allowed_species`] may take.
+    pub job_restrictions: Vec<String>,
+    /// BandaStation `allowed_species`: species paths; empty restricts nobody.
+    pub allowed_species: Vec<String>,
 }
 
 /// tg `reopen_roundstart_suicide_roles*` config: the jobs of the players who killed themselves
@@ -123,6 +130,8 @@ impl RoundConfig {
             reopen_suicide_roles: None,
             hard_popcap: None,
             extreme_popcap: None,
+            job_restrictions: Vec::new(),
+            allowed_species: Vec::new(),
         }
     }
 
@@ -158,6 +167,18 @@ impl Default for RoundConfig {
                 .and_then(|v| v.trim().parse::<u32>().ok())
                 .filter(|&v| v > 0)
         };
+        // tg `str_list`: one entry per line there, comma separated here.
+        let list = |key: &str| -> Vec<String> {
+            std::env::var(key)
+                .map(|v| {
+                    v.split(',')
+                        .map(str::trim)
+                        .filter(|s| !s.is_empty())
+                        .map(str::to_owned)
+                        .collect()
+                })
+                .unwrap_or_default()
+        };
         let round_secs = secs("SS13_ROUND_SECONDS");
         if round_secs.is_some() && !cfg!(debug_assertions) {
             warn!("SS13_ROUND_SECONDS is ignored: it exists in debug builds only");
@@ -174,6 +195,8 @@ impl Default for RoundConfig {
             reopen_suicide_roles,
             hard_popcap: cap("SS13_HARD_POPCAP"),
             extreme_popcap: cap("SS13_EXTREME_POPCAP"),
+            job_restrictions: list("SS13_JOB_RESTRICTIONS"),
+            allowed_species: list("SS13_ALLOWED_SPECIES"),
         }
     }
 }
@@ -562,6 +585,13 @@ fn setup(world: &mut World, now: f64) {
     ready.sort_by_key(|(e, _)| *e);
     // `SSdynamic.select_roundstart_antagonists`: before the jobs, which it restricts.
     let antags = crate::antag::dynamic::prepare_roundstart(world, &mut ready);
+    // BandaStation's species job restrictions. Its ready check keeps them out of the wanted
+    // jobs only; the random job fallback could still land on one, so they are prevented too.
+    for (client, prefs) in &mut ready {
+        prefs
+            .prevented
+            .extend(crate::jobs::restricted_jobs(world, *client));
+    }
     // The nuclear operatives and the wizard get no station job (tg `forced_occupations`).
     let invaders = |ruleset: &str| -> Vec<Entity> {
         antags
@@ -575,10 +605,12 @@ fn setup(world: &mut World, now: f64) {
     ready.retain(|(c, _)| !operatives.contains(c) && !wizards.contains(c));
     let prefs: Vec<&JobPreferences> = ready.iter().map(|(_, p)| p).collect();
     let assigned = divide_occupations(&mut world.resource_mut::<Jobs>(), &prefs);
+    let mut spawned = Vec::new();
     for ((client, _), assignment) in ready.iter().zip(assigned) {
         match assignment {
             Assignment::Job(job) => {
-                crate::jobs::join(world, *client, job, false);
+                let mob = crate::jobs::join(world, *client, job, false);
+                spawned.push((*client, mob, job));
             }
             rejected => {
                 if let Some(mut player) = world.get_mut::<NewPlayer>(*client) {
@@ -598,6 +630,8 @@ fn setup(world: &mut World, now: f64) {
     crate::antag::nukeop::server::spawn_operatives(world, &operatives);
     crate::antag::wizard::server::spawn_wizards(world, &wizards);
     crate::antag::dynamic::execute_roundstart(world, &antags);
+    // `equip_characters`: the spare ID's captain, announced `OnRoundstart`.
+    crate::jobs::roundstart_captaincy(world, &spawned);
     let reopen = world.resource::<RoundConfig>().reopen_suicide_roles;
     let mut ticker = world.resource_mut::<Ticker>();
     ticker.state = GameState::Playing;
@@ -1266,6 +1300,12 @@ fn lobby_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed<LobbyUi>>
                         Span::BoldWarning,
                         "Ошибка настроек персонажа. Выберите предпочитаемую должность.",
                     );
+                    continue;
+                }
+                // BandaStation: a wanted job the chosen species may not take.
+                if !player.ready && crate::jobs::prefs_restricted(world, client) {
+                    let text = crate::jobs::SPECIES_INCOMPATIBLE;
+                    chat(world, vec![client], Span::Warning, text);
                     continue;
                 }
                 world.entity_mut(client).insert(NewPlayer {

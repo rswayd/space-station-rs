@@ -1169,7 +1169,7 @@ pub fn add_wizard(world: &mut World, mob: Entity) -> bool {
         .unwrap_or_default();
     strip(world, mob);
     // `owner.set_assigned_role(space_wizard)`, `set_species(/datum/species/human)`.
-    world.entity_mut(mob).remove::<crate::jobs::PlayerJob>();
+    crate::noncrew_jobs::set_assigned_role(world, mob, crate::noncrew_jobs::SPACE_WIZARD);
     crate::species::set_species(world, mob, crate::species::SpeciesId::Human);
     equip(world, mob, false);
     let objectives = with_rng(world, |world, rng| forge_objectives(world, mob, rng));
@@ -1314,7 +1314,8 @@ pub fn add_apprentice(world: &mut World, mob: Entity, master: Entity, school: Sc
         .map(|t| t.0.clone())
         .unwrap_or_default();
     strip(world, mob);
-    world.entity_mut(mob).remove::<crate::jobs::PlayerJob>();
+    // `set_assigned_role(wizard_apprentice)`.
+    crate::noncrew_jobs::set_assigned_role(world, mob, crate::noncrew_jobs::WIZARD_APPRENTICE);
     crate::species::set_species(world, mob, crate::species::SpeciesId::Human);
     equip(world, mob, true);
     for &spell in school.spells() {

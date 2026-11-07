@@ -39,7 +39,7 @@
 Профессии требуют наигранных часов (общих или по отделу) и возраста аккаунта; окно `TrackedPlaytime` показывает наигранное время.
 
 - **Код:** [`/datum/job/proc/required_playtime_remaining()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/jobs/job_exp.dm#L6), [`/datum/job/proc/player_old_enough()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/jobs/job_types/_job.dm#L242), [`/datum/job_report_menu`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/jobs/job_report.dm#L4); tgui: [`TrackedPlaytime.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/TrackedPlaytime.jsx)
-- **Статус в ss13-rs:** ❌ нет — нет БД и учёта времени (см. ../persistence-sql/)
+- **Статус в ss13-rs:** ❌ нет — нет БД и учёта времени (см. ../persistence-sql/); отложено до волны SQL/persistence
 
 ### Проверка допуска к профессии
 `check_job_eligibility`: джоббан, время игры, возраст аккаунта, конфиг, карта, лимит слотов.
@@ -52,7 +52,7 @@
 
 - **Код:** [`/client/proc/validate_job_restrictions()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/title_screen/code/title_screen_controls.dm#L79), [`job_restrictions config`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/job_restrictions/code/config.dm#L1), [`/datum/station_trait/xenobureaucracy_error`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/job_restrictions/code/xenobureaucracy_trait.dm#L1)
 - **BandaStation:** [`_job_restrictions.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/job_restrictions/_job_restrictions.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — рас нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/jobs.rs` (`species_restricted`, `restricted_jobs`, `validate_job_restrictions`): `SS13_JOB_RESTRICTIONS`/`SS13_ALLOWED_SPECIES` (`RoundConfig`), проверка «Готов» в лобби (`round.rs`), снятие готовности при смене расы/профессий, отказ в латджойне; случайная профессия и распределение на старте обходят запрещённые (отклонение: BandaStation проверяет только явный выбор); трейт `xenobureaucracy_error` в `station_traits.rs` (вес 0, только принудительно)
 
 ### Слоты персонажей по профессиям (BandaStation)
 Профессии можно привязать к слотам персонажей: при входе на эту профессию загружается нужный персонаж.
@@ -78,11 +78,11 @@
 При входе главы/капитана — объявление по радио/станции; повышение до капитана, если капитана нет; рассылка кода запасной ID.
 
 - **Код:** [`/datum/job/proc/announce_head()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/jobs/job_types/_job.dm#L236), [`/datum/controller/subsystem/job/proc/promote_to_captain()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/job.dm#L843), [`/datum/controller/subsystem/job/proc/send_spare_id_safe_code()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/job.dm#L874)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/jobs.rs` (`announce_head`, `latejoin_captaincy`, `roundstart_captaincy`, `promote_to_captain`): AAS «назначен(а) главой отдела» на канале отдела, капитанство по `chain_of_command` на старте и в латджойне с объявлением, доступ `command` на ID; 🟡 папка с кодом запасной ID и `send_spare_id_safe_code` — нет сейфа запасной ID (`SSid_access`, группа ID/доступа)
 
 ### Профессии не-экипажа
 Датумы профессий для антагонистов (нюки, маг, абдукторы, ...), спавнеров призраков, событий (Санта, беглецы, админ), ОБР и станционных трейтов (ассистент мостика, ИИ-человек, ветеран-советник, горилла карго, Пун-Пун).
 
 - **Код:** [`code/modules/jobs/job_types/antagonists`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/jobs/job_types/antagonists), [`code/modules/jobs/job_types/spawner`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/jobs/job_types/spawner), [`code/modules/jobs/job_types/event`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/jobs/job_types/event), [`code/modules/jobs/job_types/station_trait`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/jobs/job_types/station_trait), [`/datum/job/veteran_advisor`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/jobs/job_types/station_trait/veteran_advisor.dm#L1)
 - **BandaStation:** [`veteran_advisor.dm#L77`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/jobs/job_types/station_trait/veteran_advisor.dm#L77) — кобура советника
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/noncrew_jobs.rs` (`NON_CREW_JOBS`, `NonCrewJob`, `set_assigned_role`): датумы антагонистов, спавнеров, событий и ОБР; назначаются нюкам, магу и ученику, кошмару, парадокс-клону, морфу, гост-ролям; видны в панели разума и `job_title`; 🟡 профессии станционных трейтов (ассистент мостика, ветеран-советник, ИИ-человек, горилла, Пун-Пун) — у станционных трейтов (их трейтов нет в пуле); `spawner_job_path` спавнеров не конвертируется (все — `ghost_role`)

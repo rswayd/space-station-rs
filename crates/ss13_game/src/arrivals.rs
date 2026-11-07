@@ -545,6 +545,11 @@ pub fn announce_arrival(world: &mut World, mob: Entity, rank: &str, announce_to_
 /// `aas_config_announce` without channels: a powered `/obj/machinery/announcement_system` of
 /// the base type (`has_supported_channels`) says `text` on the common channel.
 fn aas_announce(world: &mut World, text: &str) {
+    aas_announce_on(world, ss13_chat::radio::FREQ_COMMON, text);
+}
+
+/// `aas_config_announce` on one channel (`freq`).
+pub(crate) fn aas_announce_on(world: &mut World, freq: u16, text: &str) {
     let mut objs = world.query::<(Entity, &DmObj, &TilePos)>();
     let found = objs
         .iter(world)
@@ -557,7 +562,7 @@ fn aas_announce(world: &mut World, text: &str) {
         return;
     };
     world.write_message(crate::radio::MachineRadio {
-        freq: ss13_chat::radio::FREQ_COMMON,
+        freq,
         z,
         name: AAS_NAME.to_owned(),
         text: text.to_owned(),

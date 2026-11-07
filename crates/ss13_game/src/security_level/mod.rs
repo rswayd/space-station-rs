@@ -400,6 +400,13 @@ pub fn minor_announce_to(
     );
 }
 
+/// tg `minor_announce(message, title, sound_override = sound)` to every player.
+pub fn minor_announce_with_sound(world: &mut World, title: &str, text: &str, sound: &str) {
+    if !text.is_empty() {
+        announce(world, title, text, Some(sound), None);
+    }
+}
+
 /// [`minor_announce_to`] with `should_play_sound` false for everyone (the AI's VOX
 /// announcement, whose words play instead).
 pub fn minor_announce_silent_to(world: &mut World, title: &str, text: &str, players: Vec<Entity>) {

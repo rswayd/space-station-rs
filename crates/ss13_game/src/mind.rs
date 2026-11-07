@@ -348,7 +348,9 @@ pub fn panel(world: &World, mob: Entity) -> MindPanel {
                 .jobs
                 .get(j.0)
         })
-        .map_or_else(|| "нет".to_owned(), |j| j.title.clone());
+        .map(|j| j.title.clone())
+        .or_else(|| crate::noncrew_jobs::title_of(world, mob).map(str::to_owned))
+        .unwrap_or_else(|| "нет".to_owned());
     lines.push(format!("Должность: {job}"));
     match world.get::<MindData>(mob) {
         Some(mind) => {
@@ -559,12 +561,21 @@ pub fn set_job(world: &mut World, mob: Entity, title: &str) -> bool {
             .iter()
             .position(|j| j.title.eq_ignore_ascii_case(title))
     }) else {
-        return false;
+        // Not a station job: a non-crew one (`/datum/job/space_wizard`, ...).
+        let Some(job) = crate::noncrew_jobs::by_title(title) else {
+            return false;
+        };
+        if world.get_entity(mob).is_err() {
+            return false;
+        }
+        crate::noncrew_jobs::set_assigned_role(world, mob, job.path);
+        return true;
     };
     let Ok(mut e) = world.get_entity_mut(mob) else {
         return false;
     };
     e.insert(crate::jobs::PlayerJob(index));
+    e.remove::<crate::noncrew_jobs::NonCrewJob>();
     true
 }
 
