@@ -7,6 +7,7 @@
 //!   crowbar right click takes a loose one apart in 10 s (2 iron, a rod, a pillow).
 //! - Cotton (and durathread, wool) used on a secured loom weaves 4 into one cloth (durathread
 //!   into durathread) a second at a time while the stack lasts. A wrench (0.5 s) fastens the loom.
+//! - A wrench takes a chess piece apart in 0.5 s (2 iron; a holodeck one cannot be).
 // shortcut: no heavy gravity, spine implant or `TRAIT_STRENGTH` modifiers, no `exercised`
 // status, no punch flick; every woven sheet is its own stack on the loom's tile.
 
@@ -21,6 +22,7 @@ use crate::tools::{Actor, DoAfter, Stack, ToolKind, do_after, tool_of};
 
 pub const PUNCHING_BAG: &str = "/obj/structure/punching_bag";
 pub const LOOM: &str = "/obj/structure/loom";
+pub const CHESS: &str = "/obj/structure/chess";
 const COTTON: &str = "/obj/item/stack/sheet/cotton";
 const DURATHREAD_COTTON: &str = "/obj/item/stack/sheet/cotton/durathread";
 const BOXING_GLOVES: &str = "/obj/item/clothing/gloves/boxing";
@@ -48,6 +50,8 @@ const LOOM_DS: f32 = 10.0;
 const DECONSTRUCT_DS: f32 = 100.0;
 /// The loom's `default_unfasten_wrench` time, deciseconds.
 const LOOM_WRENCH_DS: f32 = 5.0;
+/// Taking a chess piece apart, deciseconds.
+const CHESS_DS: f32 = 5.0;
 
 /// The timed steps of this module.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -56,6 +60,8 @@ pub enum GymJob {
     Deconstruct,
     /// One weave of `stack` on the loom.
     Weave { stack: Entity },
+    /// A wrench takes a chess piece apart.
+    Chess,
 }
 
 pub struct GymPlugin;
@@ -169,6 +175,20 @@ fn item_interaction(
             _ => false,
         };
     }
+    if is_under(&path, CHESS) && tool == Some(ToolKind::Wrench) {
+        if world.get::<crate::holodeck::Hologram>(target).is_some() {
+            crate::balloon::balloon_alert(world, mob, target, "проходит насквозь!");
+            return true;
+        }
+        crate::tools::tell(
+            world,
+            client,
+            ss13_shared::chat::Span::Notice,
+            "Вы начинаете разбирать шахматную фигуру.",
+        );
+        do_after(world, actor, target, CHESS_DS, 0, Job::Gym(GymJob::Chess));
+        return true;
+    }
     if !is_under(&path, LOOM) {
         return false;
     }
@@ -244,6 +264,17 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter, job: GymJob) {
             crate::construction::spawn_stack(world, IRON, pos, 2);
             crate::construction::spawn_stack(world, RODS, pos, 1);
             crate::construction::spawn_obj(world, PILLOW, pos);
+        }
+        GymJob::Chess => {
+            if !is_under(&path_of(world, target), CHESS) {
+                return;
+            }
+            world.despawn(target);
+            crate::construction::spawn_stack(world, IRON, pos, 2);
+            playsound(
+                world,
+                PlaySound::new(pos, "sound/items/tools/ratchet.ogg", 50.0, true),
+            );
         }
         GymJob::Weave { stack } => {
             let cotton = path_of(world, stack);
