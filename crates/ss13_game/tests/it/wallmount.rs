@@ -590,7 +590,7 @@ fn wall_frames_mount_and_dismantle() {
     // A light switch frame on the north wall: a working switch on the player's tile.
     let frame = s.give_new("/obj/item/wallframe/light_switch");
     s.click(north);
-    s.run_until("mounted", |s| !switches(s).is_empty());
+    s.run_until("mounted", |s| !switches(&*s).is_empty());
     let switch = switches(&s)[0];
     assert_eq!(s.get::<Appearance>(switch).pixel_offset, [0, 26]);
     assert_eq!(
@@ -609,7 +609,7 @@ fn wall_frames_mount_and_dismantle() {
     assert_eq!(switches(&s).len(), 1);
     assert_eq!(s.held(), Some(second));
     s.click(west);
-    s.run_until("the second one mounted", |s| switches(&s).len() == 2);
+    s.run_until("the second one mounted", |s| switches(&*s).len() == 2);
     let offsets: Vec<[i16; 2]> = switches(&s)
         .iter()
         .map(|&e| s.get::<Appearance>(e).pixel_offset)

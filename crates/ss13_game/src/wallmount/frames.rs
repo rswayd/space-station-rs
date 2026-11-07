@@ -40,7 +40,7 @@ pub struct FrameKind {
 
 /// The frames of `buttons.dm`, `lightswitch.dm`, `flasher.dm`, `extinguisher.dm` and
 /// `fireaxe.dm`. Subtypes come before their parents.
-pub const FRAMES: [FrameKind; 7] = [
+pub static FRAMES: [FrameKind; 7] = [
     FrameKind {
         frame: "/obj/item/wallframe/button",
         result: "/obj/machinery/button",

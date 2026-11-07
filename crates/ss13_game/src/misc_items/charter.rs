@@ -310,16 +310,17 @@ fn propose(world: &mut World, client: Entity, mob: Entity, item: Entity, name: &
         user: user.clone(),
         at,
     });
+    let text = format!(
+        "предлагает переименовать {} в {name} (одобрится само через {} с)",
+        name_type(world, item),
+        APPROVAL_TIME as u32
+    );
     if world.contains_resource::<Messages<crate::comms_server::CommsRequest>>() {
         world.write_message(crate::comms_server::CommsRequest {
             kind: crate::comms_server::RequestKind::StationRename,
             client,
             sender: user,
-            text: format!(
-                "предлагает переименовать {} в {name} (одобрится само через {} с)",
-                name_type(world, item),
-                APPROVAL_TIME as u32
-            ),
+            text,
         });
     }
 }
