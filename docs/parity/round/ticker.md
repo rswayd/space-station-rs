@@ -62,4 +62,4 @@
 Рандомный «хардкор» с очками за набор квирков; счёт выживших хардкорщиков.
 
 - **Код:** [`/datum/controller/subsystem/ticker/proc/HandleRandomHardcoreScore()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/__HELPERS/roundend.dm#L185), [`/datum/controller/subsystem/ticker/proc/hardcore_random_report()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/__HELPERS/roundend.dm#L597)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ❌ нет — отложено: очки хардкора — это награда `/datum/award/score/hardcore_random` в таблице достижений (SQL, [../persistence-sql/database.md](../persistence-sql/database.md)); без неё остаются переключатель «случайный хардкор» в настройках лобби (контракт tgui), `hardcore_value` квирков и подбор квирков по бюджету `rand(8, 35)`, счёт `score ** 1.2` и строка отчёта о выживших хардкорщиках
