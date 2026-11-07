@@ -165,9 +165,9 @@ pub const WIZARD_RUNTIME_TYPES: [&str; 40] = [
 ];
 
 /// The uplink items sold here: the ones whose item exists in this codebase. The rest of tg's
-/// catalog needs mechanics that are not modelled yet (explosions, implants, chameleon).
+/// catalog needs mechanics that are not modelled yet (explosions, implants).
 // shortcut: a curated list; grow it as the items' mechanics land.
-pub const UPLINK_ITEMS: [&str; 30] = [
+pub const UPLINK_ITEMS: [&str; 31] = [
     // Guns that fire (`ss13_game::guns`): the traitors' Makarov case and .357 revolver, the
     // operatives' C-20r case, and their ammunition.
     "/datum/uplink_item/dangerous/pistol",
@@ -189,6 +189,8 @@ pub const UPLINK_ITEMS: [&str; 30] = [
     // shortcut: an ID card without the agent card's forging and access copying.
     "/datum/uplink_item/stealthy_tools/agent_card",
     "/datum/uplink_item/stealthy_tools/syndigaloshes",
+    // The chameleon kit (`ss13_game::clothing::chameleon`): only its clothing changes looks.
+    "/datum/uplink_item/stealthy_tools/chameleon",
     // C-4 (`ss13_game::explosions::sources`): timer, planting, the blast; no wires or
     // assemblies.
     "/datum/uplink_item/explosives/c4",

@@ -70,6 +70,9 @@ pub struct DmClothing {
     /// Accessories: `attachment_slot` (body part bits, 0: any) and `above_suit`.
     pub attachment_slot: u32,
     pub above_suit: bool,
+    /// `clothing_traits`: trait ids (`"noslip_water"`, ...) the wearer has while this is worn in
+    /// one of its `slot_flags` slots. Runtime state (`attach_clothing_traits`).
+    pub clothing_traits: Vec<String>,
 }
 
 impl Default for DmClothing {
@@ -109,6 +112,7 @@ impl Default for DmClothing {
             toggle_noun: String::new(),
             attachment_slot: 0,
             above_suit: false,
+            clothing_traits: Vec::new(),
         }
     }
 }
@@ -337,6 +341,16 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
                 "reagent_scanner",
                 has(REAGENT_SCANNER).to_string(),
             ));
+            let list: Vec<&str> = traits
+                .get("list")
+                .and_then(|l| l.as_array())
+                .map(|l| l.iter().filter_map(|t| t.as_str()).collect())
+                .unwrap_or_default();
+            out.push(ext(
+                "dm_clothing",
+                "clothing_traits",
+                ron::to_string(&list).expect("string lists always serialize"),
+            ));
         }
         if let Some(allowed) = value(CLOTHING_ROOT, "allowed").and_then(path_list) {
             out.push(ext(
@@ -437,12 +451,14 @@ mod tests {
         assert_eq!(glasses, [("flash_protect".into(), "1".into())]);
         assert!(root.contains(&("tint".into(), "0.0".into())));
         assert!(root.contains(&("vision_correction".into(), "false".into())));
+        assert!(root.contains(&("clothing_traits".into(), "[]".into())));
         let regular = fields(&types, "/obj/item/clothing/glasses/regular");
         assert_eq!(
             regular,
             [
                 ("vision_correction".into(), "true".into()),
-                ("reagent_scanner".into(), "false".into())
+                ("reagent_scanner".into(), "false".into()),
+                ("clothing_traits".into(), "[\"fixes_nearsighted\"]".into())
             ]
         );
         let blindfold = fields(&types, "/obj/item/clothing/glasses/blindfold");

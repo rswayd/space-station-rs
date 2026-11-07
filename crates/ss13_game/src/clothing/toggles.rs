@@ -460,6 +460,10 @@ fn watch_hoods(world: &mut World) {
 /// "Toggle Hood" for a hooded suit in the suit slot, "Adjust" for an adjustable mask worn,
 /// "Toggle" for a worn toggleable helmet with an action.
 fn button_name(world: &World, slot: InventorySlot, item: Entity) -> Option<&'static str> {
+    // Chameleon items (`action_slots = ALL`, `crate::clothing::chameleon`).
+    if let Some(name) = super::chameleon::button_name(world, item) {
+        return Some(name);
+    }
     if slot == InventorySlot::Suit && hood_type(world, item).is_some() {
         return Some("Toggle Hood");
     }
@@ -550,6 +554,10 @@ fn trigger_buttons(world: &mut World, mut acts: Local<MessageCursor<UiActed<Acti
         let Some(item) = world.get::<Inventory>(actor).and_then(|i| i.slot(slot)) else {
             continue;
         };
+        if world.get::<super::chameleon::Chameleon>(item).is_some() {
+            super::chameleon::select_look(world, client, actor, item);
+            continue;
+        }
         match button_name(world, slot, item) {
             Some("Toggle Hood") => {
                 toggle_hood(world, client, actor, item);
