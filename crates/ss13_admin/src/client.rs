@@ -84,6 +84,7 @@ pub struct AdminUi {
     sound_volume: u8,
     gas_text: String,
     confirm_man_up: bool,
+    ai_hostile: bool,
 }
 
 impl Default for AdminUi {
@@ -124,6 +125,7 @@ impl Default for AdminUi {
             sound_volume: 100,
             gas_text: String::new(),
             confirm_man_up: false,
+            ai_hostile: false,
         }
     }
 }
@@ -858,6 +860,22 @@ fn game_tab(ui: &mut egui::Ui, state: &mut AdminUi, out: &mut Vec<AdminRequest>)
                         out.push(AdminRequest::ForceEvent {
                             name: name.clone(),
                             announce: None,
+                        });
+                    }
+                }
+            });
+        });
+        ui.separator();
+        ui.add_enabled_ui(state.can(R_FUN), |ui| {
+            // tg "Give AI Controller" on the living mobs of the own tile.
+            ui.horizontal_wrapped(|ui| {
+                ui.strong("ИИ на тайле");
+                ui.checkbox(&mut state.ai_hostile, "враждебный");
+                for name in ss13_shared::admin::AI_TEMPLATES {
+                    if ui.small_button(*name).clicked() {
+                        out.push(AdminRequest::GiveAi {
+                            template: (*name).to_owned(),
+                            make_hostile: state.ai_hostile,
                         });
                     }
                 }

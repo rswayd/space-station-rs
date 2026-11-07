@@ -857,3 +857,39 @@ fn monkeys_grab_the_strongest_weapon_they_see_and_flee_when_hurt() {
     run(&mut w, monkey, &mut controller.tree, &mut bb, 3);
     assert!(matches!(bb.get(Key::FleeLocation), Some(Value::Tile(_))));
 }
+
+#[test]
+fn admin_ai_templates_match_the_protocol_list() {
+    let names: Vec<&str> = super::admin::TEMPLATES.iter().map(|(n, _)| *n).collect();
+    assert_eq!(names, ss13_shared::admin::AI_TEMPLATES);
+}
+
+#[test]
+fn admins_give_carbons_the_monkey_ai_and_take_it_away() {
+    let mut w = world();
+    let admin = mob(&mut w, 5, 5, "neutral");
+    let carbon = mob(&mut w, 5, 5, "neutral");
+    let elsewhere = mob(&mut w, 9, 9, "neutral");
+    assert!(super::admin::give(&mut w, TilePos::new(5, 5, 1), admin, "Nope", false).is_err());
+    // A basic mob template does not fit a carbon.
+    assert!(
+        super::admin::give(&mut w, TilePos::new(5, 5, 1), admin, "Hostile Melee", false).is_err()
+    );
+    assert_eq!(
+        super::admin::give(&mut w, TilePos::new(5, 5, 1), admin, "Monkey", true),
+        Ok(1)
+    );
+    let c = w.get::<super::AiController>(carbon).unwrap();
+    assert_eq!(c.kind, super::monkey::MONKEY);
+    assert_eq!(
+        w.get::<Faction>(carbon).unwrap().0,
+        vec!["hostile".to_owned()]
+    );
+    assert!(w.get::<super::AiController>(admin).is_none());
+    assert!(w.get::<super::AiController>(elsewhere).is_none());
+    assert_eq!(
+        super::admin::give(&mut w, TilePos::new(5, 5, 1), admin, "None", false),
+        Ok(1)
+    );
+    assert!(w.get::<super::AiController>(carbon).is_none());
+}

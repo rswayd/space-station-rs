@@ -96,4 +96,4 @@
 Админ-верб «Give AI Controller»: шаблоны ИИ (`admin_ai_template`) вешаются на любого живого моба с настройкой фракции и поведения.
 
 - **Код:** [`/datum/admin_ai_template`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/ai/basic_mobs/admin_ai_templates.dm#L2), [`ADMIN_VERB(give_ai_controller)`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/admin_verbs.dm#L742)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/mobs/ai/admin.rs`, запрос `AdminRequest::GiveAi` (`R_FUN`, кнопки «ИИ на тайле» в админ-панели): шаблоны tg (ближний/дальний/застрельщик, мстительный, капризный, пугливый, шуганый, Reset, None) на живых существ своего тайла с фракцией `hostile` по выбору; «Monkey» — ИИ мартышки на карбона; нет «активен при клиенте», шанса прогулки и минимального стата целей, шаблонов способностей и `goon` (`// shortcut:`)

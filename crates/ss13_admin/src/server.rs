@@ -570,7 +570,7 @@ pub fn required_rights(request: &AdminRequest) -> Option<u32> {
         Ban { .. } | Unban(_) => R_BAN,
         FindPrototypes(_) | Spawn(_) => R_SPAWN,
         Smite { .. } | Emp { .. } => R_ADMIN | R_FUN,
-        Events | ForceEvent { .. } | DropBomb(_) => R_FUN,
+        Events | ForceEvent { .. } | DropBomb(_) | GiveAi { .. } => R_FUN,
         StartNow | EndRound | Restart => R_SERVER,
         TimeScale(_) => R_DEBUG,
     })
@@ -1128,6 +1128,10 @@ fn answer(world: &mut World, client: Entity, request: AdminRequest) -> AnswerRes
         } => crate::verbs::play_sound(world, client, &key, &file, volume, scope),
         AdminRequest::AirStatus => crate::verbs::air_status(world, client),
         AdminRequest::SpawnAir(text) => crate::verbs::spawn_air(world, client, &key, &text),
+        AdminRequest::GiveAi {
+            template,
+            make_hostile,
+        } => crate::verbs::give_ai(world, client, &key, &template, make_hostile),
         AdminRequest::ForceMidround(tag) => {
             let picked = ss13_game::antag::midround::force_midround(world, &tag)?;
             admin_action(

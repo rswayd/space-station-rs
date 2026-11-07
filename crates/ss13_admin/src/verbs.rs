@@ -356,6 +356,31 @@ pub fn spawn_air(world: &mut World, client: Entity, key: &str, text: &str) -> An
     done(format!("воздух: {text}"))
 }
 
+/// tg "Give AI Controller" on the living mobs of the own tile.
+pub fn give_ai(
+    world: &mut World,
+    client: Entity,
+    key: &str,
+    template: &str,
+    make_hostile: bool,
+) -> AnswerResult {
+    let template = sanitize_text(template, MAX_TEXT);
+    let own = own_mob(world, client)?;
+    let pos = mob_pos(world, own)?;
+    let n = ss13_game::mobs::ai::admin::give(world, pos, own, &template, make_hostile)?;
+    admin_action(
+        world,
+        &format!(
+            "{key} gave the AI template {template}{} to {n} mob(s) at ({}, {}, {})",
+            if make_hostile { " (hostile)" } else { "" },
+            pos.x,
+            pos.y,
+            pos.z
+        ),
+    );
+    done(format!("ИИ «{template}»: {n}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

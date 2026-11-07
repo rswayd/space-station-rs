@@ -154,6 +154,19 @@ pub fn controller(kind: &str) -> AiController {
     }
 }
 
+/// `new /mob/living/carbon/human/species/monkey(pos)`: a monkey body with a random look and
+/// its controller.
+pub fn spawn(world: &mut World, pos: TilePos, kind: &str) -> Entity {
+    let seed = world
+        .resource_mut::<crate::combat::CombatRng>()
+        .range(0, u32::MAX);
+    let mut look = crate::human::AppearancePrefs::random(u64::from(seed)).body();
+    look.species = crate::species::SpeciesId::Monkey;
+    let monkey = crate::server::spawn_body(world, pos, "monkey".to_owned(), look);
+    attach(world, monkey, kind);
+    monkey
+}
+
 /// Puts the monkey controller on a carbon `mob` nobody controls (tg `ai_controller` of the
 /// monkey species type, `InitializeAIController`).
 pub fn attach(world: &mut World, mob: Entity, kind: &str) {

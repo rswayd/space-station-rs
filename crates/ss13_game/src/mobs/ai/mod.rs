@@ -14,6 +14,7 @@
 //! `RUN_WHILE_UNWATCHED` (on with `ALWAYS_HIGH_PRIORITY`), else off. On-low controllers plan at
 //! the same rate (tg's low-priority ticker has the same `wait`, only a lower MC priority).
 
+pub mod admin;
 pub mod behaviors;
 pub mod bt;
 pub mod fauna;

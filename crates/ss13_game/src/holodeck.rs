@@ -630,7 +630,16 @@ fn activate_effect(world: &mut World, effect: Entity) -> Vec<Entity> {
         }
         _ if kind.starts_with("/mobspawner") => {
             let mob = mob_type(world, kind);
-            crate::mobs::spawn::spawn_mob(world, mob, pos)
+            if mob == HOLO_MONKEY {
+                // A carbon, not a basic mob: a body with the monkey AI.
+                Some(crate::mobs::ai::monkey::spawn(
+                    world,
+                    pos,
+                    crate::mobs::ai::monkey::MONKEY,
+                ))
+            } else {
+                crate::mobs::spawn::spawn_mob(world, mob, pos)
+            }
         }
         _ => None,
     };
