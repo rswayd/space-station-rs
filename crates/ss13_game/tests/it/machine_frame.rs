@@ -716,6 +716,9 @@ fn metastation_families() {
             Family::ShieldModule => {
                 e.contains::<ss13_game::eng_machines::modular_shield::ShieldModule>()
             }
+            Family::Manufacturing => {
+                e.contains::<ss13_game::eng_machines::manufactorio::Manufacturing>()
+            }
         };
         assert!(live, "{fam:?}: {} has its live state", def.build_path);
         println!("{fam:?}: {path} -> {board} -> {}", def.build_path);

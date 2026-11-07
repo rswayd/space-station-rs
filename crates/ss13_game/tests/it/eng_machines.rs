@@ -32,6 +32,8 @@ const TYPES: &str = r##"{
     "/obj/item/stack/sheet": { "parent": "/obj/item/stack" },
     "/obj/item/stack/sheet/meat": { "parent": "/obj/item/stack/sheet", "declared_vars": {
         "name": "meat", "merge_type": { "path": "/obj/item/stack/sheet/meat" } } },
+    "/obj/item/stack/sheet/iron": { "parent": "/obj/item/stack/sheet", "declared_vars": {
+        "name": "iron", "merge_type": { "path": "/obj/item/stack/sheet/iron" } } },
     "/obj/item/circuitboard": { "parent": "/obj/item", "declared_vars": { "build_path": null } },
     "/obj/item/circuitboard/machine": { "parent": "/obj/item/circuitboard",
         "declared_vars": { "needs_anchored": 1, "req_components": null,
@@ -91,6 +93,7 @@ fn fixture(test: &str) -> App {
     let used = [
         "/obj/effect/landmark/start/assistant",
         "/obj/item/stack/sheet/meat",
+        "/obj/item/stack/sheet/iron",
         "/obj/item/circuitboard/machine/sheetifier",
         "/obj/machinery/sheetifier",
         "/turf/open/floor",
@@ -502,4 +505,269 @@ fn modular_shield_charges_raises_a_ring_and_fails_when_drained() {
             .modules
             .contains(&relay)
     );
+}
+
+// Manufactorio (`ss13_game::eng_machines::manufactorio`): machines on a powered cable, their
+// procs called directly.
+
+mod manufactorio {
+    use super::*;
+    use ss13_game::eng_machines::manufactorio::{
+        self as manu, FilterKind, Manufacturing, SortFilter,
+    };
+    use ss13_game::obj_damage::Anchored;
+    use ss13_game::power::Grid;
+    use ss13_mapload::DmOre;
+    use ss13_shared::{Dir, Facing};
+
+    const IRON: &str = "/obj/item/stack/sheet/iron";
+    const ORE: &str = "/obj/item/stack/ore/iron";
+
+    /// A machine of `path` facing `dir` on a cable whose net has plenty of surplus.
+    fn machine(app: &mut App, path: &str, pos: TilePos, dir: Dir) -> Entity {
+        let world = app.world_mut();
+        let cable = world.spawn_empty().id();
+        let net = world.resource_mut::<Grid>().add_cable(cable, pos, 2);
+        let e = world
+            .spawn((
+                pos,
+                DmObj {
+                    path: path.into(),
+                    anchored: true,
+                    ..default()
+                },
+                Anchored(true),
+                Facing(dir),
+            ))
+            .id();
+        manu::setup(world, e);
+        power(app, e);
+        let _ = net;
+        e
+    }
+
+    /// Refills the machine's net (the power tick resets it).
+    fn power(app: &mut App, e: Entity) {
+        let world = app.world_mut();
+        let mut grid = world.resource_mut::<Grid>();
+        if let Some(id) = grid.node_net(e)
+            && let Some(net) = grid.net_mut(id)
+        {
+            net.avail = 1e9;
+            net.load = 0.0;
+        }
+    }
+
+    fn stack(app: &mut App, path: &str, pos: TilePos, amount: u32) -> Entity {
+        app.world_mut()
+            .spawn((
+                pos,
+                DmItem {
+                    path: path.into(),
+                    ..default()
+                },
+                Stack { amount },
+            ))
+            .id()
+    }
+
+    fn amount_on(app: &mut App, path: &str, pos: TilePos) -> u32 {
+        let world = app.world_mut();
+        let mut q = world.query::<(&DmItem, &TilePos, &Stack)>();
+        q.iter(world)
+            .filter(|(i, p, _)| i.path == path && **p == pos)
+            .map(|(_, _, s)| s.amount)
+            .sum()
+    }
+
+    fn amount_inside(app: &mut App, machine: Entity) -> u32 {
+        let world = app.world_mut();
+        manu::contents(world, machine)
+            .iter()
+            .map(|&e| ss13_game::tools::stack_amount(world, e))
+            .sum()
+    }
+
+    #[test]
+    fn smelter_refines_ore_into_the_storage_unit_next_to_it() {
+        let mut app = fixture("manufactorio_smelter");
+        let smelter = machine(&mut app, manu::SMELTER, t(3, 2), Dir::East);
+        let storage = machine(&mut app, manu::STORAGE, t(4, 2), Dir::South);
+        let ore = stack(&mut app, ORE, t(2, 2), 7);
+        app.world_mut().entity_mut(ore).insert(DmOre {
+            refined_type: IRON.into(),
+            ..default()
+        });
+        let world = app.world_mut();
+        // Only from behind (its input side is west when it outputs east).
+        assert!(!manu::receive_resource(
+            world,
+            smelter,
+            ore,
+            None,
+            Dir::East
+        ));
+        assert!(manu::receive_resource(world, smelter, ore, None, Dir::West));
+        assert_eq!(manu::contents(world, smelter), vec![ore]);
+        manu::process(world, smelter);
+        assert_eq!(amount_inside(&mut app, storage), 5, "5 ore a tick");
+        power(&mut app, smelter);
+        manu::process(app.world_mut(), smelter);
+        assert_eq!(amount_inside(&mut app, storage), 7);
+        assert!(app.world().get_entity(ore).is_err(), "the ore is used up");
+        assert!(manu::contents(app.world(), smelter).is_empty());
+    }
+
+    #[test]
+    fn crusher_keeps_fractions_and_sends_whole_sheets_forward() {
+        let mut app = fixture("manufactorio_crusher");
+        let crusher = machine(&mut app, manu::CRUSHER, t(3, 2), Dir::East);
+        let world = app.world_mut();
+        world
+            .get_mut::<Manufacturing>(crusher)
+            .unwrap()
+            .held_mats
+            .push((IRON.into(), 1.5));
+        manu::process(world, crusher);
+        // The whole sheet is made this tick and goes out on the next.
+        manu::process(world, crusher);
+        assert_eq!(amount_on(&mut app, IRON, t(4, 2)), 1);
+        let held = app
+            .world()
+            .get::<Manufacturing>(crusher)
+            .unwrap()
+            .held_mats
+            .clone();
+        assert_eq!(held.len(), 1);
+        assert!((held[0].1 - 0.5).abs() < 1e-6, "{held:?}");
+        // Ore is refused; an item without materials is crushed to nothing.
+        let ore = stack(&mut app, ORE, t(2, 2), 1);
+        let junk = stack(&mut app, "/obj/item/stack/sheet/meat", t(2, 2), 1);
+        let world = app.world_mut();
+        assert!(!manu::receive_resource(
+            world,
+            crusher,
+            ore,
+            None,
+            Dir::West
+        ));
+        assert!(manu::receive_resource(
+            world,
+            crusher,
+            junk,
+            None,
+            Dir::West
+        ));
+        manu::process(world, crusher);
+        assert!(world.get_entity(junk).is_err());
+    }
+
+    #[test]
+    fn router_splits_a_stack_over_its_three_other_sides() {
+        let mut app = fixture("manufactorio_router");
+        let router = machine(&mut app, manu::ROUTER, t(3, 2), Dir::South);
+        let sheets = stack(&mut app, IRON, t(2, 2), 3);
+        let world = app.world_mut();
+        // One sheet per offer: the rest stays with the sender until the last one.
+        assert!(!manu::receive_resource(
+            world,
+            router,
+            sheets,
+            None,
+            Dir::West
+        ));
+        assert!(!manu::receive_resource(
+            world,
+            router,
+            sheets,
+            None,
+            Dir::West
+        ));
+        assert!(manu::receive_resource(
+            world,
+            router,
+            sheets,
+            None,
+            Dir::West
+        ));
+        for pos in [t(3, 3), t(3, 1), t(4, 2)] {
+            assert_eq!(amount_on(&mut app, IRON, pos), 1, "{pos:?}");
+        }
+        assert_eq!(amount_on(&mut app, IRON, t(2, 2)), 0, "never back west");
+        // An output toggled off is skipped.
+        let world = app.world_mut();
+        world.get_mut::<Manufacturing>(router).unwrap().disabled = vec![Dir::North, Dir::South];
+        let one = stack(&mut app, IRON, t(2, 2), 1);
+        assert!(manu::receive_resource(
+            app.world_mut(),
+            router,
+            one,
+            None,
+            Dir::West
+        ));
+        assert_eq!(amount_on(&mut app, IRON, t(4, 2)), 2);
+    }
+
+    #[test]
+    fn sorter_pushes_by_its_filters() {
+        let mut app = fixture("manufactorio_sorter");
+        let sorter = machine(&mut app, manu::SORTER, t(3, 2), Dir::East);
+        app.world_mut()
+            .get_mut::<Manufacturing>(sorter)
+            .unwrap()
+            .filters
+            .push(SortFilter {
+                kind: FilterKind::IsOre,
+                dir: Dir::North,
+                inverted: false,
+            });
+        let ore = stack(&mut app, ORE, t(2, 2), 2);
+        let sheet = stack(&mut app, IRON, t(2, 2), 2);
+        let world = app.world_mut();
+        assert!(manu::receive_resource(world, sorter, ore, None, Dir::West));
+        assert!(manu::receive_resource(
+            world,
+            sorter,
+            sheet,
+            None,
+            Dir::West
+        ));
+        manu::process(world, sorter);
+        assert_eq!(amount_on(&mut app, ORE, t(3, 3)), 2, "ore north");
+        assert_eq!(amount_on(&mut app, IRON, t(4, 2)), 2, "the rest east");
+    }
+
+    #[test]
+    fn unloader_empties_an_ore_box_forward_and_the_box_aside() {
+        let mut app = fixture("manufactorio_unloader");
+        let unloader = machine(&mut app, manu::UNLOADER, t(3, 2), Dir::East);
+        let storage = machine(&mut app, manu::STORAGE, t(4, 2), Dir::South);
+        let world = app.world_mut();
+        let ore_box = world
+            .spawn((
+                t(2, 2),
+                DmObj {
+                    path: "/obj/structure/ore_box".into(),
+                    ..default()
+                },
+            ))
+            .id();
+        let ore = stack(&mut app, ORE, t(2, 2), 4);
+        let world = app.world_mut();
+        ss13_game::storage::put_inside(world, ore, ore_box);
+        assert!(manu::receive_resource(
+            world,
+            unloader,
+            ore_box,
+            None,
+            Dir::West
+        ));
+        manu::process(world, unloader);
+        assert_eq!(manu::contents(app.world(), storage), vec![ore]);
+        // Right of east is south.
+        assert_eq!(app.world().get::<TilePos>(ore_box), Some(&t(3, 1)));
+        // The storage unit dumps onto its tile.
+        manu::dump(app.world_mut(), storage);
+        assert_eq!(amount_on(&mut app, ORE, t(4, 2)), 4);
+    }
 }
