@@ -76,6 +76,26 @@ pub const GIFT_TYPES: &[&str] = &[
 pub const GAME_RUNTIME_TYPES: &[&str] = &[
     // `mobs::lavaland::minebot`: what a dead minebot leaves.
     "/obj/effect/decal/cleanable/blood/gibs/robot_debris/old",
+    // `deployable_turrets`: the shots, the deployed and folded heavy machine guns.
+    "/obj/projectile/bullet/manned_turret",
+    "/obj/projectile/beam/laser/flare",
+    "/obj/machinery/deployable_turret/hmg",
+    "/obj/machinery/deployable_turret/hmg/full_auto",
+    "/obj/item/deployable_turret_folded",
+    "/obj/item/deployable_turret_folded/full_auto",
+    // `cannons`: cannonballs and mounted gun shots, the trash cannon's leftovers.
+    "/obj/projectile/bullet/cannonball",
+    "/obj/projectile/bullet/cannonball/explosive",
+    "/obj/projectile/bullet/cannonball/emp",
+    "/obj/projectile/bullet/cannonball/biggest_one",
+    "/obj/projectile/bullet/cannonball/trashball",
+    "/obj/projectile/bullet/strilka310",
+    "/obj/projectile/bullet/junk",
+    "/obj/projectile/beam/laser/repeater",
+    "/obj/item/stack/sheet/iron/five",
+    // `gym`: the punching bag's leftovers, the loom's cloth.
+    "/obj/item/pillow",
+    "/obj/item/stack/sheet/durathread",
     // `traps`: the earth trap's rock, the cables strung between tripwire posts.
     "/obj/structure/flora/rock/style_random",
     "/obj/structure/tripwire/cable",

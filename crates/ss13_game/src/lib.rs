@@ -213,6 +213,8 @@ pub mod breath_client;
 pub mod brig;
 #[cfg(feature = "server")]
 pub mod buffs;
+#[cfg(feature = "server")]
+pub mod cannons;
 pub mod cargo;
 #[cfg(feature = "server")]
 pub mod chem;
@@ -257,6 +259,8 @@ pub mod decay;
 #[cfg(feature = "server")]
 pub mod decor;
 pub mod defenses;
+#[cfg(feature = "server")]
+pub mod deployable_turrets;
 #[cfg(feature = "server")]
 pub mod device_wires;
 #[cfg(feature = "server")]
@@ -346,6 +350,8 @@ pub mod gunpoint;
 pub mod guns;
 #[cfg(feature = "server")]
 pub mod guns_special;
+#[cfg(feature = "server")]
+pub mod gym;
 #[cfg(feature = "server")]
 pub mod hallucination;
 #[cfg(feature = "server")]
