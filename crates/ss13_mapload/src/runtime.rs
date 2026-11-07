@@ -77,6 +77,8 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     // `traps`: the earth trap's rock, the cables strung between tripwire posts.
     "/obj/structure/flora/rock/style_random",
     "/obj/structure/tripwire/cable",
+    // `safes`: the vault safe's piggy bank.
+    "/obj/item/piggy_bank/vault",
     // `genetics::effects`: what Geladikinesis conjures (Cindikinesis' ash is listed below).
     "/obj/item/stack/sheet/mineral/snow",
     // `genetics::effects`: the Cryokinesis and Pyrokinesis beams.

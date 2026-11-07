@@ -503,6 +503,11 @@ pub mod restraints;
 pub mod round;
 #[cfg(feature = "server")]
 pub mod round_news;
+#[cfg(feature = "client")]
+pub mod safe_client;
+pub mod safe_ui;
+#[cfg(feature = "server")]
+pub mod safes;
 pub mod science;
 pub mod screentips;
 #[cfg(feature = "client")]
