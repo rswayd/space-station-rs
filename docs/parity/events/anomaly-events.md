@@ -42,20 +42,20 @@
 Подменяет органы и конечности ближайших существ чужими.
 
 - **Код:** [`/datum/round_event_control/anomaly/anomaly_bioscrambler`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/anomaly/anomaly_bioscrambler.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — нет аномалий
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/events/anomalies.rs`: событие (вес 20, мин. 10 игроков, до 5 раз), объявление сразу, аномалия на 3-м тике; сама аномалия — ../science/anomalies.md
 
 ### Anomaly: Dimensional
 Перестраивает окружающие турфы и объекты в случайную «тему» (материал стен, пола, окон).
 
 - **Код:** [`/datum/round_event_control/anomaly/anomaly_dimensional`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/anomaly/anomaly_dimensional.dm#L1)
 - **BandaStation:** [`anomalies_dimensional_themes.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/anomalies/anomalies_dimensional_themes.dm#L196) — темы перекрашивают и обводку окон (`edge_overlay_color`)
-- **Статус в ss13-rs:** ❌ нет — нет аномалий
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/events/anomalies.rs`: событие (вес 20, мин. 10 игроков, до 5 раз), объявление сразу, аномалия на 3-м тике; нет админского выбора темы; сама аномалия — ../science/anomalies.md
 
 ### Anomaly: Ectoplasmic Outburst
 Реагирует на число призраков рядом: от сглаза предметов до призыва призрачной орды.
 
 - **Код:** [`/datum/round_event_control/anomaly/anomaly_ectoplasm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/anomaly/anomaly_ectoplasm.dm#L5)
-- **Статус в ss13-rs:** ❌ нет — нет аномалий
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/events/anomalies.rs`: событие (вес 4, мин. 30 игроков, до 2 раз), объявление через 15 тиков; нет админского оверрайда силы и оповещения призраков; сама аномалия — ../science/anomalies.md
 
 ### Anomaly: Hallucination
 Вызывает галлюцинации у всех вокруг, в конце — сильная волна галлюцинаций.

@@ -487,3 +487,113 @@ fn radiation_leak_emits_until_fixed() {
         0
     );
 }
+
+fn organ_set(app: &App, mob: Entity) -> Vec<Entity> {
+    let mut organs: Vec<Entity> = app
+        .world()
+        .get::<ss13_game::medical::organs::Organs>(mob)
+        .map(|o| o.iter().collect())
+        .unwrap_or_default();
+    organs.sort();
+    organs
+}
+
+/// A bioscrambler pulses on its first process: a carbon within 2 tiles gets one of its organs
+/// swapped for another species' (the old one is gone); one 3 tiles away keeps them.
+#[test]
+fn bioscrambler_swaps_an_organ() {
+    let mut app = server("bioscrambler");
+    let near = mob(&mut app, TilePos::new(9, 2, 1));
+    let far = mob(&mut app, TilePos::new(11, 2, 1));
+    app.update();
+    let (near_before, far_before) = (organ_set(&app, near), organ_set(&app, far));
+    assert!(!near_before.is_empty(), "carbons get organs");
+    let anomaly = spawn_anomaly(
+        app.world_mut(),
+        AnomalyKind::Bioscrambler,
+        TilePos::new(8, 2, 1),
+        None,
+    );
+    app.world_mut()
+        .get_mut::<Anomaly>(anomaly)
+        .unwrap()
+        .move_chance = 0.0;
+    run(&mut app, 2.5);
+    let after = organ_set(&app, near);
+    assert_ne!(after, near_before, "an organ was replaced");
+    assert_eq!(after.len(), near_before.len(), "one for one");
+    assert_eq!(organ_set(&app, far), far_before, "out of range");
+}
+
+/// A dimensional anomaly takes one turf of its spiral per process; with no turfs left it
+/// relocates while it has teleports, then it is gone.
+#[test]
+fn dimensional_transmutes_then_relocates_and_ends() {
+    use ss13_game::events::anomalies::exotic::{Dimensional, prepare_area};
+    let mut app = server("dimensional");
+    let at = TilePos::new(8, 2, 1);
+    let e = spawn_anomaly(app.world_mut(), AnomalyKind::Dimensional, at, None);
+    prepare_area(app.world_mut(), e, Some(6));
+    let queued = app.world().get::<Dimensional>(e).unwrap().targets.len();
+    assert!(queued > 0, "floors around");
+    assert_eq!(app.world().get::<Dimensional>(e).unwrap().targets[0], at);
+    run(&mut app, 2.5);
+    assert_eq!(
+        app.world().get::<Dimensional>(e).unwrap().targets.len(),
+        queued - 1
+    );
+    {
+        let mut d = app.world_mut().get_mut::<Dimensional>(e).unwrap();
+        d.targets.clear();
+        d.teleports_left = 1;
+    }
+    run(&mut app, 2.0);
+    let d = app.world().get::<Dimensional>(e).unwrap();
+    assert_eq!(d.teleports_left, 0, "relocated once");
+    assert!(d.theme.is_some());
+    app.world_mut()
+        .get_mut::<Dimensional>(e)
+        .unwrap()
+        .targets
+        .clear();
+    run(&mut app, 2.0);
+    assert!(app.world().get_entity(e).is_err(), "out of teleports");
+}
+
+/// An ectoplasm anomaly detonating at 50% power opens a ghost portal that closes after two
+/// minutes; under 10% it leaves nothing.
+#[test]
+fn ectoplasm_portal_by_power() {
+    use ss13_game::events::anomalies::exotic::{Ectoplasm, GhostPortal};
+    let mut app = server("ectoplasm");
+    let world = app.world_mut();
+    let strong = spawn_anomaly(world, AnomalyKind::Ectoplasm, TilePos::new(8, 2, 1), None);
+    let weak = spawn_anomaly(world, AnomalyKind::Ectoplasm, TilePos::new(3, 4, 1), None);
+    for (e, power) in [(strong, 60.0), (weak, 5.0)] {
+        world.entity_mut(e).insert(Ectoplasm {
+            power,
+            orbiting: 0,
+            override_ghosts: true,
+        });
+        world.get_mut::<Anomaly>(e).unwrap().death_time = 0.0;
+    }
+    run(&mut app, 2.5);
+    let world = app.world_mut();
+    assert!(world.get_entity(strong).is_err() && world.get_entity(weak).is_err());
+    let portals: Vec<TilePos> = world
+        .query_filtered::<&TilePos, With<GhostPortal>>()
+        .iter(world)
+        .copied()
+        .collect();
+    assert_eq!(portals, vec![TilePos::new(8, 2, 1)]);
+    run(&mut app, 121.0);
+    let world = app.world_mut();
+    assert_eq!(
+        world
+            .query_filtered::<(), With<GhostPortal>>()
+            .iter(world)
+            .count(),
+        0,
+        "closed"
+    );
+}

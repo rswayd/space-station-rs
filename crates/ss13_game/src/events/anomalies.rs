@@ -39,6 +39,8 @@
 // one makes no slime (no ghost polls); the bluespace one has no sparkle flash; the
 // hallucination pulse ignores line of sight (tg `visible_hallucination_pulse`).
 
+pub mod exotic;
+
 use std::collections::HashMap;
 
 use bevy::ecs::message::{MessageCursor, Messages};
@@ -61,6 +63,9 @@ pub const GRAV: &str = "Anomaly: Gravitational";
 pub const PYRO: &str = "Anomaly: Pyroclastic";
 pub const VORTEX: &str = "Anomaly: Vortex";
 pub const HALLUCINATION: &str = "Anomaly: Hallucination";
+pub const BIOSCRAMBLER: &str = "Anomaly: Bioscrambler";
+pub const DIMENSIONAL: &str = "Anomaly: Dimensional";
+pub const ECTOPLASM: &str = "Anomaly: Ectoplasmic Outburst";
 
 /// `ANOMALY_COUNTDOWN_TIMER`.
 const LIFESPAN_SECS: f64 = 120.0;
@@ -124,16 +129,22 @@ pub enum AnomalyKind {
     Pyro,
     Vortex,
     Hallucination,
+    Bioscrambler,
+    Dimensional,
+    Ectoplasm,
 }
 
 impl AnomalyKind {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 9] = [
         Self::Flux,
         Self::Bluespace,
         Self::Grav,
         Self::Pyro,
         Self::Vortex,
         Self::Hallucination,
+        Self::Bioscrambler,
+        Self::Dimensional,
+        Self::Ectoplasm,
     ];
 
     /// The core's `anomaly_type`: none for the base core and the cores of unported anomalies.
@@ -151,6 +162,9 @@ impl AnomalyKind {
             Self::Pyro => "/obj/effect/anomaly/pyro",
             Self::Vortex => "/obj/effect/anomaly/bhole",
             Self::Hallucination => "/obj/effect/anomaly/hallucination",
+            Self::Bioscrambler => "/obj/effect/anomaly/bioscrambler",
+            Self::Dimensional => "/obj/effect/anomaly/dimensional",
+            Self::Ectoplasm => "/obj/effect/anomaly/ectoplasm",
         }
     }
 
@@ -163,6 +177,9 @@ impl AnomalyKind {
             Self::Pyro => "/obj/item/assembly/signaler/anomaly/pyro",
             Self::Vortex => "/obj/item/assembly/signaler/anomaly/vortex",
             Self::Hallucination => "/obj/item/assembly/signaler/anomaly/hallucination",
+            Self::Bioscrambler => "/obj/item/assembly/signaler/anomaly/bioscrambler",
+            Self::Dimensional => "/obj/item/assembly/signaler/anomaly/dimensional",
+            Self::Ectoplasm => "/obj/item/assembly/signaler/anomaly/ectoplasm",
         }
     }
 
@@ -172,7 +189,11 @@ impl AnomalyKind {
             Self::Bluespace | Self::Vortex => 3,
             Self::Flux => 5,
             Self::Grav => 6,
-            Self::Pyro | Self::Hallucination => 8,
+            Self::Pyro
+            | Self::Hallucination
+            | Self::Bioscrambler
+            | Self::Dimensional
+            | Self::Ectoplasm => 8,
         }
     }
 
@@ -180,6 +201,10 @@ impl AnomalyKind {
         match self {
             Self::Vortex => {
                 "That's a nice station you have there. It'd be a shame if something happened to it."
+            }
+            Self::Ectoplasm => {
+                "It looks like the souls of the damned are trying to break into the realm of the \
+                 living again. How upsetting."
             }
             _ => {
                 "A mysterious anomaly, seen commonly only in the region of space that the station \
@@ -196,6 +221,9 @@ impl AnomalyKind {
             Self::Pyro => "pyroclastic anomaly",
             Self::Vortex => "vortex anomaly",
             Self::Hallucination => "hallucination anomaly",
+            Self::Bioscrambler => "bioscrambler anomaly",
+            Self::Dimensional => "dimensional anomaly",
+            Self::Ectoplasm => "ectoplasm anomaly",
         }
     }
 
@@ -207,6 +235,9 @@ impl AnomalyKind {
             Self::Pyro => ("icons/effects/anomalies.dmi", "pyroclastic"),
             Self::Vortex => ("icons/effects/anomalies.dmi", "vortex"),
             Self::Hallucination => ("icons/effects/anomalies.dmi", "hallucination"),
+            Self::Bioscrambler => ("icons/effects/anomalies.dmi", "bioscrambler"),
+            Self::Dimensional => ("icons/effects/anomalies.dmi", "dimensional"),
+            Self::Ectoplasm => ("icons/effects/anomalies.dmi", "ectoplasm"),
         }
     }
 
@@ -217,8 +248,28 @@ impl AnomalyKind {
     /// The event's `start_when` and `announce_when` (`ANOMALY_*_TIME`, in fires).
     fn timing(self) -> (u32, u32) {
         match self {
-            Self::Bluespace | Self::Hallucination => (3, 1),
-            Self::Flux | Self::Grav | Self::Pyro | Self::Vortex => (1, 15),
+            Self::Bluespace | Self::Hallucination | Self::Bioscrambler | Self::Dimensional => {
+                (3, 1)
+            }
+            Self::Flux | Self::Grav | Self::Pyro | Self::Vortex | Self::Ectoplasm => (1, 15),
+        }
+    }
+
+    /// `lifespan`, seconds (`ANOMALY_COUNTDOWN_TIMER` scaled by the type).
+    fn lifespan(self) -> f64 {
+        match self {
+            Self::Bioscrambler => LIFESPAN_SECS * 2.0,
+            Self::Dimensional => LIFESPAN_SECS * 20.0,
+            Self::Ectoplasm => LIFESPAN_SECS + 2.0,
+            _ => LIFESPAN_SECS,
+        }
+    }
+
+    /// `move_chance`, percent per second.
+    fn move_chance(self) -> f64 {
+        match self {
+            Self::Dimensional | Self::Ectoplasm => 0.0,
+            _ => MOVE_CHANCE,
         }
     }
 }
@@ -293,6 +344,18 @@ pub fn make_hallucination(_: &mut World) -> Box<dyn RoundEvent> {
     event(AnomalyKind::Hallucination)
 }
 
+pub fn make_bioscrambler(_: &mut World) -> Box<dyn RoundEvent> {
+    event(AnomalyKind::Bioscrambler)
+}
+
+pub fn make_dimensional(_: &mut World) -> Box<dyn RoundEvent> {
+    event(AnomalyKind::Dimensional)
+}
+
+pub fn make_ectoplasm(_: &mut World) -> Box<dyn RoundEvent> {
+    event(AnomalyKind::Ectoplasm)
+}
+
 impl RoundEvent for AnomalyEvent {
     fn setup(&mut self, world: &mut World, ev: &mut EventState) {
         (ev.start_when, ev.announce_when) = self.kind.timing();
@@ -346,6 +409,25 @@ impl RoundEvent for AnomalyEvent {
                 world,
                 title,
                 &format!("Галлюцинаторное событие обнаружено на {MEDIUM_TEXT} {name}."),
+            ),
+            AnomalyKind::Bioscrambler => super::priority_announce(
+                world,
+                title,
+                &format!(
+                    "Биологический агент замены конечностей обнаружен на {MEDIUM_TEXT} {name}. \
+                     Используйте биокостюмы или другое защитное снаряжение, чтобы противостоять \
+                     последствиям."
+                ),
+            ),
+            AnomalyKind::Dimensional => super::priority_announce(
+                world,
+                title,
+                &format!("Пространственная аномалия обнаружена на {MEDIUM_TEXT} {name}."),
+            ),
+            AnomalyKind::Ectoplasm => super::priority_announce(
+                world,
+                title,
+                &format!("Паранормальный выброс эктоплазмы обнаружен на {HARMFUL_TEXT} {name}."),
             ),
         }
     }
@@ -482,8 +564,8 @@ fn spawn_one(
         Anomaly {
             kind,
             area,
-            death_time: now + LIFESPAN_SECS,
-            move_chance: MOVE_CHANCE,
+            death_time: now + kind.lifespan(),
+            move_chance: kind.move_chance(),
             immortal: false,
             next_process: now + PROCESS_SECS,
             armed: false,
@@ -495,7 +577,9 @@ fn spawn_one(
     if kind.dense() {
         e.insert(Density);
     }
-    e.id()
+    let e = e.id();
+    exotic::on_spawn(world, e, kind);
+    e
 }
 
 // --- Processing ---------------------------------------------------------------------------
@@ -503,6 +587,8 @@ fn spawn_one(
 /// `/obj/effect/anomaly/process()` of every anomaly whose `SSobj` fire has come.
 pub(super) fn process_anomalies(world: &mut World) {
     let now = world.resource::<Time>().elapsed_secs_f64();
+    let secs = f64::from(world.resource::<Time>().delta_secs());
+    exotic::process_portals(world, now, secs);
     let mut q = world.query::<(Entity, &Anomaly)>();
     let due: Vec<Entity> = q
         .iter(world)
@@ -534,7 +620,9 @@ fn anomaly_effect(world: &mut World, e: Entity, secs: f64) {
     };
     // `SPT_PROB(move_chance, seconds_per_tick)`.
     let chance = 100.0 * (1.0 - (1.0 - move_chance / 100.0).powf(secs));
-    if world.resource_mut::<EventRng>().0.prob(chance as f32) {
+    if world.resource_mut::<EventRng>().0.prob(chance as f32)
+        && !(kind == AnomalyKind::Bioscrambler && exotic::bioscrambler_move(world, e))
+    {
         drift(world, e, kind);
     }
     let Some(&pos) = world.get::<TilePos>(e) else {
@@ -593,6 +681,9 @@ fn anomaly_effect(world: &mut World, e: Entity, secs: f64) {
                 &HALLUCINATION_MESSAGES,
             );
         }
+        AnomalyKind::Bioscrambler => exotic::bioscrambler_effect(world, e, false),
+        AnomalyKind::Dimensional => exotic::dimensional_effect(world, e),
+        AnomalyKind::Ectoplasm => exotic::ectoplasm_effect(world, e, pos),
     }
 }
 
@@ -982,6 +1073,9 @@ fn detonate(world: &mut World, e: Entity) {
             300.0,
             &HALLUCINATION_MESSAGES,
         ),
+        AnomalyKind::Bioscrambler => exotic::bioscrambler_effect(world, e, true),
+        AnomalyKind::Dimensional => {}
+        AnomalyKind::Ectoplasm => exotic::ectoplasm_detonate(world, e, pos),
     }
 }
 
