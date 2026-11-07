@@ -664,6 +664,16 @@ fn metastation_families() {
                     || e.contains::<ss13_game::stove::Stove>()
             }
             Family::Tray => e.contains::<ss13_game::botany::tray::Tray>(),
+            Family::Teleportation => {
+                use ss13_game::science::teleportation::{launchpad, teleporter};
+                e.contains::<teleporter::TeleHub>()
+                    || e.contains::<teleporter::TeleStation>()
+                    || e.contains::<teleporter::TeleConsole>()
+                    || e.contains::<launchpad::Launchpad>()
+                    || e.contains::<launchpad::PadConsole>()
+                    // The satellite console has no state of its own.
+                    || def.build_path.ends_with("/sat_control")
+            }
             Family::QuantumPad => e.contains::<ss13_game::science::quantum_pad::QuantumPad>(),
             Family::Station => e.contains::<ss13_game::silicon::cyborg::RechargeStation>(),
             Family::Analyzer => e.contains::<ss13_game::science::analyzer::Analyzer>(),

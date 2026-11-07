@@ -134,7 +134,7 @@ pub enum Family {
     Manufacturing,
 }
 
-const FAMILIES: [(&str, Family); 40] = [
+const FAMILIES: [(&str, Family); 45] = [
     (CELL_CHARGER, Family::Charger),
     (RECHARGER, Family::Charger),
     (crate::kitchen::MICROWAVE_ROOT, Family::Kitchen),
