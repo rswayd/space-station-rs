@@ -261,6 +261,21 @@ const ALLERGIC_FOOD_EVENT: MoodEvent = MoodEvent {
     hidden: false,
 };
 
+/// Social Anxiety: `oview(3)` for the people around, `EYE_CONTACT_RANGE`,
+/// `RECENT_EXAMINE_MAX_WINDOW` (seconds).
+const ANXIETY_RANGE: u32 = 3;
+const EYE_CONTACT_RANGE: u32 = 5;
+const RECENT_EXAMINE_SECS: f64 = 2.0;
+const SPAGHETTI: &str = "/obj/item/food/spaghetti/pastatomato";
+/// `/datum/mood_event/anxiety_eyecontact`.
+const ANXIETY_EYECONTACT_EVENT: MoodEvent = MoodEvent {
+    id: "anxiety_eyecontact",
+    description: "Иногда взгляд в глаза заставляет меня нервничать...",
+    mood_change: -5.0,
+    timeout: 180.0,
+    hidden: false,
+};
+
 /// Items the quirks hand out: `crate::jobs` builds their templates with the outfits'.
 pub fn item_paths() -> Vec<String> {
     let mut paths: Vec<String> = [
@@ -328,6 +343,7 @@ pub enum Quirk {
     Alcoholic,
     MedicineAllergy,
     FoodAllergy,
+    SocialAnxiety,
 }
 
 /// The static part of a quirk (tg vars).
@@ -369,7 +385,7 @@ const fn q(
 
 /// Every ported quirk in tg's menu order (`cmp_quirk_asc`: positive, negative, neutral, then by
 /// name). BandaStation texts.
-pub const QUIRKS: [QuirkDef; 40] = [
+pub const QUIRKS: [QuirkDef; 41] = [
     q(
         Quirk::AlcoholTolerance,
         "/datum/quirk/alcohol_tolerance",
@@ -739,6 +755,19 @@ pub const QUIRKS: [QuirkDef; 40] = [
         )),
     ),
     q(
+        Quirk::SocialAnxiety,
+        "/datum/quirk/social_anxiety",
+        "Social Anxiety",
+        "Вам очень трудно разговаривать с людьми, заикаясь или даже запираясь в себе.",
+        "comment-slash",
+        -3,
+        Some((
+            Span::Danger,
+            "Вы начинаете беспокоиться о том, что говорите.",
+        )),
+        Some((Span::Notice, "Вам снова легко разговаривать.")),
+    ),
+    q(
         Quirk::SoftSpoken,
         "/datum/quirk/softspoken",
         "Soft-Spoken",
@@ -886,7 +915,8 @@ pub const QUIRKS: [QuirkDef; 40] = [
 
 /// `GLOB.quirk_blacklist`, the lists with at least two ported quirks: quirks of one list
 /// exclude each other.
-pub const BLACKLIST: [&[Quirk]; 7] = [
+pub const BLACKLIST: [&[Quirk]; 8] = [
+    &[Quirk::SocialAnxiety, Quirk::Mute],
     &[Quirk::Blind, Quirk::Nearsighted],
     &[Quirk::Jolly, Quirk::Depression, Quirk::Hypersensitive],
     &[Quirk::Ageusia, Quirk::Vegetarian, Quirk::DeviantTastes],
@@ -953,6 +983,10 @@ pub struct Allergies {
     pub medicines: Vec<String>,
     pub foods: u32,
 }
+
+/// A client's `recent_examines`: what its mob examined and when (game seconds).
+#[derive(Component, Clone, Debug, Default, PartialEq)]
+pub struct RecentExamines(pub Vec<(Entity, f64)>);
 
 /// On a client connection: the character's quirks by name (tg `prefs.all_quirks`).
 #[derive(Component, Clone, Debug, Default, PartialEq, Eq)]
@@ -1111,6 +1145,13 @@ pub fn add_quirk(
         Quirk::BodyPurist => update_cybernetics(world, mob),
         Quirk::Junkie | Quirk::Smoker | Quirk::Alcoholic => addict_add(world, mob, quirk),
         Quirk::MedicineAllergy | Quirk::FoodAllergy => allergy_add(world, mob, quirk),
+        Quirk::SocialAnxiety => {
+            let mood_mod = anxiety_mood_mod(world, mob);
+            world.entity_mut(mob).insert(ss13_chat::speech::Anxiety {
+                mood_mod,
+                dumb_thing: true,
+            });
+        }
         // `/datum/brain_trauma/severe/paralysis/hemiplegic` of a random side.
         Quirk::Hemiplegic => {
             let side = if world.get_resource_or_init::<CombatRng>().chance(50.0) {
@@ -1254,6 +1295,9 @@ pub fn remove_quirk(world: &mut World, mob: Entity, quirk: Quirk) -> bool {
         Quirk::Mute | Quirk::Pacifist | Quirk::SoftSpoken => traumas::refresh(world, mob),
         Quirk::Csl => csl(world, mob, false),
         Quirk::Foreigner => foreigner(world, mob, false),
+        Quirk::SocialAnxiety => {
+            world.entity_mut(mob).remove::<ss13_chat::speech::Anxiety>();
+        }
         Quirk::MedicineAllergy | Quirk::FoodAllergy => {
             if let Some(mut allergies) = world.get_mut::<Allergies>(mob) {
                 if quirk == Quirk::MedicineAllergy {
@@ -1425,6 +1469,202 @@ fn place_item(
         crate::inventory::put_down(world, item, pos);
     }
     "у ваших ног"
+}
+
+/// Social Anxiety's `calculate_mood_mod`: the mood factor (`1 + 0.02 * (50 - max(50,
+/// mood_level * (7 - sanity_level)))`: a good mood calms, the nutrition stands in without a
+/// mood) times 12.5 per human with a player within 3 tiles.
+// shortcut: no line of sight (`oview`), a player body counts (no minds without clients).
+// Cost: 1 Hz per anxious mob, one 3-tile spatial lookup.
+pub fn anxiety_mood_mod(world: &World, mob: Entity) -> f32 {
+    let Some(&pos) = world.get::<TilePos>(mob) else {
+        return 0.0;
+    };
+    let nearby = world
+        .get_resource::<ss13_world::SpatialIndex>()
+        .map_or(0, |index| {
+            index
+                .in_radius(pos, ANXIETY_RANGE)
+                .filter(|&e| e != mob)
+                .filter(|&e| world.get::<PlayerMob>(e).is_some())
+                .filter(|&e| world.get::<crate::human::HumanLook>(e).is_some())
+                .count()
+        });
+    anxiety_mod(world.get::<Mood>(mob), nutrition(world, mob), nearby)
+}
+
+fn nutrition(world: &World, mob: Entity) -> f32 {
+    world
+        .get::<crate::hunger::Hunger>(mob)
+        .map_or(0.0, |h| h.nutrition)
+}
+
+/// The formula of `calculate_mood_mod`.
+pub fn anxiety_mod(mood: Option<&Mood>, nutrition: f32, nearby: usize) -> f32 {
+    let factor = match mood {
+        Some(m) => {
+            let level = f32::from(m.mood_level)
+                * (f32::from(crate::mood::SANITY_LEVEL_INSANE) + 1.0 - f32::from(m.sanity_level));
+            1.0 + 0.02 * (50.0 - level.max(50.0))
+        }
+        None => 1.0 + 0.02 * (50.0 - (0.1 * nutrition).max(50.0)),
+    };
+    factor * nearby as f32 * 12.5
+}
+
+/// After a normal examine (`crate::examine`): `recent_examines`, then `handle_eye_contact`
+/// with Social Anxiety's `eye_contact` and `looks_at_floor`.
+// shortcut: the plain eye contact lines come at once (tg: 0.3 s later); no face covering
+// (`is_eyes_visible`), no Shifty Eyes imagined contact.
+pub fn examined(world: &mut World, examiner: Entity, target: Entity) {
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    if world.get::<PlayerMob>(examiner).is_none() {
+        return;
+    }
+    // `COMSIG_MOB_EXAMINATE`: `looks_at_floor`, 15% at anything without a mind.
+    if has(world, examiner, Quirk::SocialAnxiety)
+        && world.get::<PlayerMob>(target).is_none()
+        && world.get_resource_or_init::<CombatRng>().chance(15.0)
+    {
+        let name = crate::examine::name_of(world, target);
+        tell_mob(
+            world,
+            examiner,
+            (Span::Notice, &format!("Вы смотрите в глаза {name}.")),
+        );
+    }
+    {
+        let mut recent = world
+            .get::<RecentExamines>(examiner)
+            .cloned()
+            .unwrap_or_default();
+        recent
+            .0
+            .retain(|(e, at)| *e != target && now - *at < RECENT_EXAMINE_SECS);
+        recent.0.push((target, now));
+        world.entity_mut(examiner).insert(recent);
+    }
+    eye_contact(world, examiner, target, now);
+}
+
+/// tg `/mob/living/handle_eye_contact`: a living, awake target that looked at the examiner
+/// in the last 2 s, within 5 tiles.
+fn eye_contact(world: &mut World, examiner: Entity, target: Entity, now: f64) {
+    if examiner == target
+        || world
+            .get::<Stat>(target)
+            .is_none_or(|s| *s >= Stat::HardCrit)
+        || crate::vision::is_blind(world, examiner)
+    {
+        return;
+    }
+    let looked_back = world.get::<RecentExamines>(target).is_some_and(|r| {
+        r.0.iter()
+            .any(|(e, at)| *e == examiner && now - *at < RECENT_EXAMINE_SECS)
+    });
+    if !looked_back {
+        return;
+    }
+    let (Some(&a), Some(&b)) = (world.get::<TilePos>(examiner), world.get::<TilePos>(target))
+    else {
+        return;
+    };
+    if a.chebyshev(b).is_none_or(|d| d > EYE_CONTACT_RANGE) {
+        return;
+    }
+    if !anxious_eye_contact(world, examiner, target, true) {
+        let name = crate::examine::name_of(world, target);
+        tell_mob(
+            world,
+            examiner,
+            (Span::Notice, &format!("Вы смотрите в глаза {name}.")),
+        );
+    }
+    if !crate::vision::is_blind(world, target)
+        && !anxious_eye_contact(world, target, examiner, false)
+    {
+        let name = crate::examine::name_of(world, examiner);
+        tell_mob(
+            world,
+            target,
+            (Span::Notice, &format!("{name} смотрит вам в глаза.")),
+        );
+    }
+}
+
+/// Social Anxiety's `eye_contact` (`COMSIG_MOB_EYECONTACT` on `holder`): 25% to jitter 20 s,
+/// stutter 6 s or freeze 2 s, with the moodlet. True if it blocked the plain line.
+fn anxious_eye_contact(world: &mut World, holder: Entity, other: Entity, examiner: bool) -> bool {
+    if !has(world, holder, Quirk::SocialAnxiety) {
+        return false;
+    }
+    let pick = {
+        let mut rng = world.get_resource_or_init::<CombatRng>();
+        if rng.chance(75.0) {
+            return false;
+        }
+        rng.range(1, 3)
+    };
+    let name = crate::examine::name_of(world, other);
+    let mut text = if examiner {
+        format!("Вы смотрите в глаза {name}, ")
+    } else {
+        format!("{name} смотрит вам в глаза, ")
+    };
+    use crate::status_effects::{Incap, Timed, set_timed};
+    match pick {
+        1 => {
+            set_timed(world, holder, Timed::Jitter, 20.0, true);
+            text.push_str("что заставляет вас нервничать!");
+        }
+        2 => {
+            set_timed(world, holder, Timed::Stutter, 6.0, true);
+            text.push_str("что заставляет вас заикаться!");
+        }
+        _ => {
+            crate::status_effects::apply(world, holder, Incap::Stun, 2.0);
+            text.push_str("что заставляет вас застыть на месте!");
+        }
+    }
+    mood::add_event(
+        world,
+        holder,
+        "anxiety_eyecontact",
+        &ANXIETY_EYECONTACT_EVENT,
+    );
+    tell_mob(world, holder, (Span::BoldWarning, &text));
+    true
+}
+
+/// The chat's [`ss13_chat::server::AnxiousSpoke`]: the withdrawal's 6 s of silence and the
+/// once-a-life spaghetti (`prob(1)`).
+fn anxious_speech(
+    world: &mut World,
+    mut cursor: Local<bevy::ecs::message::MessageCursor<ss13_chat::server::AnxiousSpoke>>,
+) {
+    let said: Vec<ss13_chat::server::AnxiousSpoke> = cursor
+        .read(world.resource::<Messages<ss13_chat::server::AnxiousSpoke>>())
+        .copied()
+        .collect();
+    for spoke in said {
+        if world.get_entity(spoke.speaker).is_err() {
+            continue;
+        }
+        if spoke.outcome == ss13_chat::speech::AnxiousSay::Withdrew {
+            crate::status_effects::set_timed(
+                world,
+                spoke.speaker,
+                crate::status_effects::Timed::Silence,
+                6.0,
+                true,
+            );
+        }
+        if spoke.spaghetti
+            && let Some(&pos) = world.get::<TilePos>(spoke.speaker)
+        {
+            crate::construction::spawn_obj(world, SPAGHETTI, pos);
+        }
+    }
 }
 
 /// Extreme Medicine Allergy's pick: `MEDICINE_ALLERGIES` of the `/datum/reagent/medicine`
@@ -2089,6 +2329,12 @@ impl Plugin for QuirksServerPlugin {
                 .before(crate::health::HealthSystems)
                 .run_if(any_with_component::<Quirks>),
         );
+        app.add_systems(
+            Update,
+            anxious_speech
+                .after(ss13_chat::server::SaySystems)
+                .run_if(any_with_component::<ss13_chat::speech::Anxiety>),
+        );
         // `crate::addictions` has no plugin of its own: the addict quirks are its only source.
         app.add_systems(
             Update,
@@ -2137,6 +2383,16 @@ fn process(world: &mut World, mob: Entity, quirk: Quirk, secs: f32) {
         }
         Quirk::Bald => {
             bald_head(world, mob);
+            return;
+        }
+        // `calculate_mood_mod` at the time of speech in tg; refreshed every fire here.
+        Quirk::SocialAnxiety => {
+            let mood_mod = anxiety_mood_mod(world, mob);
+            if let Some(mut anxiety) = world.get_mut::<ss13_chat::speech::Anxiety>(mob)
+                && anxiety.mood_mod != mood_mod
+            {
+                anxiety.mood_mod = mood_mod;
+            }
             return;
         }
         _ => {}
@@ -2391,6 +2647,39 @@ mod tests {
         assert!(food_allergy_reaction(&mut world, mob, foods));
         assert!(remove_quirk(&mut world, mob, Quirk::FoodAllergy));
         assert!(!food_allergy_reaction(&mut world, mob, foods));
+    }
+
+    #[test]
+    fn anxiety_grows_with_company_and_bad_mood() {
+        assert_eq!(anxiety_mod(None, 400.0, 0), 0.0);
+        // Two people around: 12.5 each.
+        assert_eq!(anxiety_mod(None, 400.0, 2), 25.0);
+        // Very well fed: calm (the factor drops to 0 at 1000 nutrition).
+        assert_eq!(anxiety_mod(None, 1000.0, 1), 0.0);
+        assert!(filter_invalid(&names(&["Social Anxiety", "Mute"])) == names(&["Social Anxiety"]));
+    }
+
+    #[test]
+    fn anxious_mob_gets_the_chat_component() {
+        let mut world = World::new();
+        world.init_resource::<Time>();
+        let mob = world.spawn(TilePos::new(1, 1, 0)).id();
+        assert!(add_quirk(
+            &mut world,
+            mob,
+            Quirk::SocialAnxiety,
+            false,
+            true
+        ));
+        assert_eq!(
+            world.get::<ss13_chat::speech::Anxiety>(mob),
+            Some(&ss13_chat::speech::Anxiety {
+                mood_mod: 0.0,
+                dumb_thing: true
+            })
+        );
+        assert!(remove_quirk(&mut world, mob, Quirk::SocialAnxiety));
+        assert!(world.get::<ss13_chat::speech::Anxiety>(mob).is_none());
     }
 
     #[test]

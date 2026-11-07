@@ -686,6 +686,8 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/reagent_containers/applicator/pill",
     "/obj/item/lighter/greyscale",
     "/obj/item/clothing/accessory/dogtag/allergy",
+    // Social Anxiety's once-a-life spaghetti.
+    "/obj/item/food/spaghetti/pastatomato",
     "/obj/item/storage/fancy/cigarettes",
     "/obj/item/storage/fancy/cigarettes/cigpack_midori",
     "/obj/item/storage/fancy/cigarettes/cigpack_uplift",

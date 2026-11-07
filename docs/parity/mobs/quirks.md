@@ -115,7 +115,7 @@
 
 - **Код:** [`/datum/quirk/social_anxiety`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/social_anxiety.dm#L1)
 - **BandaStation:** [`social_anxiety.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/negative_quirks/social_anxiety.dm#L50) — шанс промолчать зависит от настроения, заикание работает на кириллице
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/quirks.rs` (`anxiety_mood_mod`, `examined`, `anxious_speech`), `crates/ss13_chat/src/speech.rs` (`Anxiety`), `crates/ss13_chat/src/server.rs` (`handle_say`): шанс промолчать до 20% от настроения и людей рядом (12.5 за человека с игроком в 3 тайлах), замена фразы на «Эмм.»-реплику BandaStation, раз за жизнь «глупость», 1% спагетти, уход в себя с 6 с немоты, постоянное заикание 5–50% (на кириллице); зрительный контакт при взаимном осмотре в 2 с и 5 тайлах: 25% тремор 20 с / заикание 6 с / оглушение 2 с и мудлет −5, 15% «смотрите в глаза» предмету; несовместим с Mute. Отклонения: коэффициент настроения обновляется раз в секунду, нет проверки линии видимости, закрытого лица, Fearless и языка жестов
 
 ### Речь и общение: Mute, Soft-Spoken, Common Second Language, Illiterate, Prosopagnosia
 Немота, только шёпот, плохое знание общего языка, неграмотность, неспособность различать лица.
