@@ -353,6 +353,41 @@ pub(super) fn build(path: &str) -> Option<Built> {
             ),
             acquire(),
         )
+    } else if is("mook/support") {
+        // `support.bt.json`: fights back (`target_from_retaliate_list`), else heals hurt
+        // mooks it sees (`heal_injured`); left out: the village (see `lavaland::mook`).
+        par(
+            vec![
+                selector(vec![
+                    decorator(
+                        Cond::KeySet(Key::CurrentTarget),
+                        false,
+                        Abort::Both,
+                        fight(melee(), move_to_target()),
+                    ),
+                    lava(LavaLeaf::MookHeal { range: 9 }),
+                    random_walk(25.0),
+                ]),
+                retaliate_target(Key::CurrentTarget),
+            ],
+            FIND_TARGET_RATE,
+        )
+    } else if is("mook") {
+        // `mook.bt.json` and the bard's and chief's: `worker_find_targets` (the retaliate list,
+        // then `update_combat_targets`), leaping at the target, else hacking at it; left out:
+        // mining, the chief's commands, the bard's song, storm shelter.
+        combat_or_walk(
+            fight(
+                selector(vec![
+                    lava(LavaLeaf::MookLeap {
+                        key: Key::CurrentTarget,
+                    }),
+                    melee(),
+                ]),
+                move_to_target(),
+            ),
+            retaliate_then_acquire(),
+        )
     } else if is("ice_demon/afterimage") {
         // `ice_demon_afterimage.bt.json`: `simple_hostile_combat`; left out: fleeing fire.
         hostile_combat(25.0)
@@ -424,6 +459,10 @@ mod tests {
             "ice_whelp",
             "ice_demon",
             "ice_demon/afterimage",
+            "mook",
+            "mook/support",
+            "mook/bard",
+            "mook/tribal_chief",
         ] {
             let built = build(&format!("{BASIC}/{sub}"));
             assert!(built.is_some_and(|b| b.retaliates), "{sub}");

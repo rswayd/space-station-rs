@@ -7,7 +7,7 @@
 use bevy::prelude::*;
 use ss13_shared::TilePos;
 
-use super::{abilities, icemoon};
+use super::{abilities, icemoon, mook};
 use crate::health::Stat;
 use crate::mobs::ai::behaviors::{
     DELAY_FAIL, DELAY_SUCCEED, FAIL, Perform, RUNNING, SUCCEED, Strategy,
@@ -104,6 +104,11 @@ pub enum LavaLeaf {
     /// `pawn_health_below(75)` + `ability_available` + `targeted_mob_ability` with
     /// `create_afterimages`.
     DemonClone,
+    /// `targeted_mob_ability` with the worker's `mook_leap`.
+    MookLeap { key: Key },
+    /// `heal_injured`: the nearest hurt mook it sees within `range` (`injured_mob`), walked to
+    /// and healed (`interact_with_target` -> `healing_touch`).
+    MookHeal { range: u32 },
 }
 
 impl LavaLeaf {
@@ -277,6 +282,49 @@ impl LavaLeaf {
                     FAIL
                 }
             }
+            Self::MookLeap { key } => {
+                let Some(target) = living_target(ctx, key) else {
+                    return FAIL;
+                };
+                let (Some(from), Some(to)) = (ctx.pawn_pos(), ctx.target_pos(key)) else {
+                    return FAIL;
+                };
+                // A `click_to_activate` ability: on a target it sees.
+                if !mook::leap_ready(ctx.world, ctx.pawn, ctx.now)
+                    || !crate::mobs::ai::behaviors::can_see(ctx.world, from, to, 9)
+                {
+                    return FAIL;
+                }
+                if mook::start_leap(ctx.world, ctx.pawn, target) {
+                    ctx.movement.stop();
+                    DELAY_SUCCEED
+                } else {
+                    FAIL
+                }
+            }
+            Self::MookHeal { range } => {
+                let Some(patient) = mook::injured_mook_near(ctx.world, ctx.pawn, range) else {
+                    return FAIL;
+                };
+                // `interact_with_target` is a melee click: the attack cooldown paces it.
+                let ready = ctx
+                    .world
+                    .get::<crate::combat::NextMove>(ctx.pawn)
+                    .is_none_or(|n| ctx.now >= n.0);
+                if !ready {
+                    return RUNNING;
+                }
+                if mook::heal(ctx.world, ctx.pawn, patient) {
+                    let next = ctx.now + mook::HEAL_PACE;
+                    ctx.world
+                        .entity_mut(ctx.pawn)
+                        .insert(crate::combat::NextMove(next));
+                    ctx.movement.stop();
+                    return DELAY_SUCCEED;
+                }
+                ctx.movement.start(Target::Entity(patient), 1);
+                RUNNING
+            }
             Self::DemonClone => {
                 if icemoon::conjure_afterimages(ctx.world, ctx.pawn) {
                     DELAY_SUCCEED
@@ -288,7 +336,9 @@ impl LavaLeaf {
     }
 
     pub fn finish(&mut self, ctx: &mut AiCtx, _succeeded: bool) {
-        if let Self::MaintainDistance { .. } | Self::MoveToCardinal { .. } = self {
+        if let Self::MaintainDistance { .. } | Self::MoveToCardinal { .. } | Self::MookHeal { .. } =
+            self
+        {
             ctx.movement.failed = false;
             ctx.movement.stop();
         }
