@@ -142,15 +142,21 @@ pub const GIRDER_RECIPES: [GirderRecipe; 4] = [
 #[derive(Clone, Debug, PartialEq)]
 pub enum Job {
     /// Wrench on a girder: `GIRDER_NORMAL` <-> `GIRDER_DISPLACED`.
-    GirderBolts { from: i32 },
+    GirderBolts {
+        from: i32,
+    },
     /// Screwdriver on a displaced girder.
     GirderDisassemble,
     /// Sheets on a girder: the index of its [`GIRDER_RECIPES`] entry.
-    Wall { recipe: usize },
+    Wall {
+        recipe: usize,
+    },
     /// Plasteel on a secured girder.
     GirderReinforce,
     /// Screwdriver on a reinforced girder: its struts from `from`.
-    GirderStruts { from: i32 },
+    GirderStruts {
+        from: i32,
+    },
     /// Wirecutters on a reinforced girder with loose struts.
     GirderGrille,
     /// Reinforced wall and window steps ([`crate::reinforced`]).
@@ -164,11 +170,18 @@ pub enum Job {
     /// Iron sheets on an open turf (right click).
     BuildGirder,
     /// Screwdriver on a window.
-    WindowScrew { state: i32, anchored: bool },
+    WindowScrew {
+        state: i32,
+        anchored: bool,
+    },
     /// Crowbar on an anchored window.
-    WindowPry { state: i32 },
+    WindowPry {
+        state: i32,
+    },
     /// Wrench on an unanchored window.
-    WindowDisassemble { state: i32 },
+    WindowDisassemble {
+        state: i32,
+    },
     /// Welder on a damaged window.
     WindowRepair,
     /// Glass sheets on a grille.
@@ -178,7 +191,9 @@ pub enum Job {
     /// Rods on an open turf (right click).
     BuildGrille,
     /// Wrench on a vending machine with an open panel.
-    Unfasten { anchored: bool },
+    Unfasten {
+        anchored: bool,
+    },
     /// Cuffing, taking cuffs off, breaking out (`crate::restraints`).
     Restraints(crate::restraints::RestraintJob),
     /// Pulling taser electrodes out of yourself (`crate::taser`).
@@ -190,7 +205,9 @@ pub enum Job {
     /// A medical stack on a living mob ([`crate::medical`]).
     Heal(crate::medical::HealJob),
     /// tg `do_cpr` ([`crate::medical`]).
-    Cpr { panicking: bool },
+    Cpr {
+        panicking: bool,
+    },
     /// An implanter on a mob ([`crate::implants`]).
     Implant,
     /// Feeding, injecting or forcing a pill on someone ([`crate::chem`]).
@@ -271,6 +288,11 @@ pub enum Job {
     Barber(crate::service::BarberJob),
     /// Harvesting, uprooting and replanting flora ([`crate::flora`]).
     Flora(crate::flora::FloraJob),
+    /// Tripwires ([`crate::traps`]).
+    Trap(crate::traps::TrapJob),
+    /// Safes ([`crate::safes`], [`crate::secure_safes`]).
+    Safe(crate::safes::SafeJob),
+    SecureSafe(crate::secure_safes::SecureSafeJob),
     /// Taking an unlit bonfire apart ([`crate::fireplace`]).
     Bonfire,
     /// Screwing, welding or repairing a law rack's module ([`crate::silicon::law_rack`]).
@@ -308,14 +330,18 @@ pub enum Job {
     /// Tipping or righting a cow, a turtle drinking ([`crate::mobs::farm`]).
     Fauna(crate::mobs::farm::FarmJob),
     /// A morph eating a corpse or an item ([`crate::antag::morph`]).
-    Morph { corpse: bool },
+    Morph {
+        corpse: bool,
+    },
     /// Fixing a Radiation Leak's machine ([`crate::events::radiation_leak`]).
     RadiationLeak,
     /// An anomaly releaser on a core ([`crate::events::anomalies`]).
     AnomalyRelease,
     /// A screwdriver taking the core out of an anomaly-locked MOD module
     /// ([`crate::modsuit::anomalock`]).
-    AnomalockRemove { module: Entity },
+    AnomalockRemove {
+        module: Entity,
+    },
     /// Netpods, hololadders, the quantum console ([`crate::science::bitrunning`]).
     Bitrunning(crate::science::bitrunning::server::BitrunJob),
     /// Pressing a license plate ([`crate::brig::labor`]).
@@ -1386,6 +1412,9 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::QuantumPad(job) => crate::science::quantum_pad::complete(world, client, target, job),
         &Job::EngMachine(job) => crate::eng_machines::complete(world, client, target, job),
         &Job::Flora(job) => crate::flora::complete(world, mob, action, job),
+        &Job::Trap(job) => crate::traps::complete(world, mob, action, job),
+        &Job::Safe(job) => crate::safes::complete(world, action, job),
+        &Job::SecureSafe(job) => crate::secure_safes::complete(world, action, job),
         Job::Bonfire => crate::fireplace::complete_dismantle(world, action),
         &Job::LawRack(job) => crate::silicon::law_rack::complete(world, mob, action, job),
         &Job::AiCore(job) => crate::silicon::ai_core::complete(world, mob, action, job),

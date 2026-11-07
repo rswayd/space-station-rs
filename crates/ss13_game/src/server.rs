@@ -234,6 +234,12 @@ impl Plugin for GameServerPlugin {
             crate::password_door::PasswordDoorPlugin,
         ))
         .add_plugins((
+            crate::traps::TrapsPlugin,
+            crate::safes::SafesPlugin,
+            crate::secure_safes::SecureSafesPlugin,
+            crate::spawners::SpawnersPlugin,
+        ))
+        .add_plugins((
             crate::pull::PullServerPlugin,
             crate::throw::ThrowServerPlugin,
             crate::examine::ExamineServerPlugin,

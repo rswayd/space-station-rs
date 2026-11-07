@@ -89,6 +89,7 @@
 //! | 3227 | `misc_items::charter::attack_self` (the station name question) |
 //! | 3239 | `stack_recipes::attack_self` (a stack's crafting menu) |
 //! | 3249 | `sheets::crush_attack_self` (a bluespace crystal crushed: blink) |
+//! | 3259 | `traps::attack_self` (a sturdy tripwire cable recoils) |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):
 //!
@@ -204,6 +205,8 @@
 //! | 3155 | `tank_storage::attack_hand` (tank dispensers, tank holders) |
 //! | 3156 | `displaycase::attack_hand` |
 //! | 3160 | `flora::attack_hand` |
+//! | 3169 | `safes::interact` (the `Safe` window) |
+//! | 3179 | `secure_safes::interact` (the `LockedSafe` keypad, the unlocked storage) |
 //! | 3170 | `botany::unique::pickup_backfire` (never handles) |
 //! | 3175 | `events::space_vines::attack_hand` (frees the mob tangled in kudzu) |
 //! | 3200 | `service::server::interact` |
@@ -345,6 +348,9 @@
 //! | 3300 | `food::item_interaction` |
 //! | 3397 | `plumbing_net::item_interaction` (ducts, duct stacks, wrenches on machines) |
 //! | 3400 | `plumbing::item_interaction` |
+//! | 3419 | `secure_safes::item_interaction` (panel screwdriver, multitool hack, items into the storage) |
+//! | 3429 | `safes::item_interaction` (a stethoscope on a closed safe, items into an open one) |
+//! | 3439 | `traps::item_interaction` (tripwire posts and cables: tying, wiring, cutting, wrench) |
 //! | 3440 | `tank_storage::item_interaction` |
 //! | 3441 | `displaycase::item_interaction` (display cases, their chassis) |
 //! | 3442 | `fireplace::item_interaction` (fuel, lighting, bonfire rods and grill) |

@@ -503,10 +503,17 @@ pub mod restraints;
 pub mod round;
 #[cfg(feature = "server")]
 pub mod round_news;
+#[cfg(feature = "client")]
+pub mod safe_client;
+pub mod safe_ui;
+#[cfg(feature = "server")]
+pub mod safes;
 pub mod science;
 pub mod screentips;
 #[cfg(feature = "client")]
 pub mod screentips_client;
+#[cfg(feature = "server")]
+pub mod secure_safes;
 #[cfg(feature = "server")]
 pub mod security;
 #[cfg(feature = "server")]
@@ -543,6 +550,8 @@ pub mod sound;
 pub mod sound_client;
 #[cfg(feature = "server")]
 pub mod spacemove;
+#[cfg(feature = "server")]
+pub mod spawners;
 #[cfg(feature = "server")]
 pub mod species;
 #[cfg(feature = "server")]
@@ -603,6 +612,8 @@ pub mod testing;
 pub mod throw;
 #[cfg(feature = "server")]
 pub mod tools;
+#[cfg(feature = "server")]
+pub mod traps;
 #[cfg(feature = "server")]
 pub mod turf_damage;
 #[cfg(feature = "client")]
