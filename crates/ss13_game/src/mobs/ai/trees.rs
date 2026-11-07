@@ -630,6 +630,20 @@ fn generic(path: &str) -> Option<Built> {
         // `garden_gnome.bt.json`: fights back; left out: escape captivity.
         retaliates = true;
         retaliate_combat()
+    } else if is("illusion/escape") {
+        // `escape.bt.json` (and `retaliate.bt.json`, the same tree): runs from its target and
+        // whoever hit it (`ai_retaliate` on the mob).
+        retaliates = true;
+        par(
+            vec![
+                run_away(Key::CurrentTarget),
+                retaliate_target(Key::CurrentTarget),
+            ],
+            FIND_TARGET_RATE,
+        )
+    } else if is("illusion") {
+        // `simple_hostile.bt.json` at the target it was given.
+        hostile_combat(25.0)
     } else if is("juggernaut") {
         // `juggernaut.bt.json`: `simple_hostile_obstacles_combat` without the obstacles.
         hostile_combat(25.0)

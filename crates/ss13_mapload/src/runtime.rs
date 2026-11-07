@@ -90,6 +90,12 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/ectoplasm/construct",
     "/obj/item/ectoplasm/angelic",
     "/obj/item/ectoplasm/mystic",
+    // `ss13_game::mobs::illusion`.
+    "/mob/living/basic/illusion",
+    "/mob/living/basic/illusion/shover",
+    "/mob/living/basic/illusion/escape",
+    "/mob/living/basic/illusion/escape/retaliate",
+    "/mob/living/basic/illusion/mirage",
     // `sheets`: five rods on a titanium sheet, tanning, stamped cardboard.
     "/obj/item/stack/rods/shuttle/five",
     "/obj/item/stack/sheet/hairlesshide",

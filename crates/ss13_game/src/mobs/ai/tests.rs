@@ -721,3 +721,30 @@ fn artificers_pick_hurt_constructs_and_wraiths_the_weakest() {
         assert!(super::trees::build(&format!("{BASIC}/{sub}"), &def).is_some());
     }
 }
+
+#[test]
+fn illusions_attack_or_run_from_their_target() {
+    let def = ss13_mapload::mobs::MobDef::default();
+    let hostile = super::trees::build(&format!("{BASIC}/illusion"), &def).unwrap();
+    assert!(!hostile.retaliates);
+    let escape = super::trees::build(&format!("{BASIC}/illusion/escape/retaliate"), &def).unwrap();
+    assert!(escape.retaliates);
+    let mut w = world();
+    w.init_resource::<Time>();
+    w.insert_resource(CombatRng(5));
+    let pawn = basic_mob(
+        &mut w,
+        5,
+        5,
+        "illusion",
+        "/mob/living/basic/illusion/escape",
+    );
+    let threat = mob(&mut w, 6, 5, "neutral");
+    let mut bb = Blackboard::default();
+    bb.set(Key::CurrentTarget, Value::Entity(threat));
+    let mut tree = Tree::new(escape.roots);
+    run(&mut w, pawn, &mut tree, &mut bb, 4);
+    // It picked a spot to flee to, away from the threat.
+    let spot = bb.get(Key::FleeLocation).cloned();
+    assert!(spot.is_some(), "flees");
+}

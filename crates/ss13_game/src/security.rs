@@ -968,7 +968,7 @@ pub(crate) fn flash_mob_from(
 }
 
 /// tg `/mob/living/proc/disarm` with an empty hand (`can_disarm`, carbon `get_shove_flags`).
-fn shove(world: &mut World, user: Entity, target: Entity) {
+pub(crate) fn shove(world: &mut World, user: Entity, target: Entity) {
     let lying = |world: &World, e: Entity| world.get::<BodyPosition>(e).is_some_and(|b| b.lying());
     let (Some(&from), Some(&target_at)) =
         (world.get::<TilePos>(user), world.get::<TilePos>(target))

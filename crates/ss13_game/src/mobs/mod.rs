@@ -29,6 +29,7 @@ pub mod critters;
 pub mod defense;
 pub mod eating;
 pub mod farm;
+pub mod illusion;
 pub mod lavaland;
 pub mod megafauna;
 pub mod parrot;
@@ -161,6 +162,7 @@ impl Plugin for MobsServerPlugin {
         pets::build(app);
         parrot::build(app);
         critters::build(app);
+        illusion::build(app);
         lavaland::build(app);
         megafauna::build(app);
     }
