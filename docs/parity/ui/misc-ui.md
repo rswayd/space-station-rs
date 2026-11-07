@@ -69,7 +69,7 @@ Alt-клик по тайлу открывает окно со списком о�
 
 - **Код:** [`emoji_parse()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/emoji/emoji_parse.dm#L1)
 - **BandaStation:** [`modular_bandastation/emojis220/icons`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/emojis220/icons) — эмодзи BandaStation
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_chat/src/emoji.rs` (`emoji_parse` по алгоритму tg, `EMOJI_SET` форка `emoji220.dmi`), набор — `crates/ss13_game/src/emojis.rs` (состояния иконки из манифеста), сегмент `Span::Emoji(IconStateId)` с текстом `:name:`; клиент рисует его иконкой в строке чата (`ChatEmoji` в `crates/ss13_chat/src/client/panel.rs`, спрайт — `crates/ss13_game/src/ui_sprites.rs`). Разбираются мёртвый чат и asay; OOC/LOOC, админ-PM и мессенджер КПК в порте пока нет — их отправка должна вызывать `emoji_parse`. Отличие: нет флага конфига `emojis` (пустой набор = выключено)
 
 ### Навигатор (BandaStation)
 Программа КПК: построение маршрута к выбранной точке станции.

@@ -272,6 +272,8 @@ pub mod effects;
 #[cfg(feature = "server")]
 pub mod emag;
 #[cfg(feature = "server")]
+pub mod emojis;
+#[cfg(feature = "server")]
 pub mod emp;
 #[cfg(feature = "server")]
 pub mod eng_machines;
