@@ -353,6 +353,71 @@ pub(super) fn build(path: &str) -> Option<Built> {
             ),
             acquire(),
         )
+    } else if is("mook/support") {
+        // `support.bt.json`: fights back (`target_from_retaliate_list`), else heals hurt
+        // mooks it sees (`heal_injured`); left out: the village (see `lavaland::mook`).
+        par(
+            vec![
+                selector(vec![
+                    decorator(
+                        Cond::KeySet(Key::CurrentTarget),
+                        false,
+                        Abort::Both,
+                        fight(melee(), move_to_target()),
+                    ),
+                    lava(LavaLeaf::MookHeal { range: 9 }),
+                    random_walk(25.0),
+                ]),
+                retaliate_target(Key::CurrentTarget),
+            ],
+            FIND_TARGET_RATE,
+        )
+    } else if is("mook") {
+        // `mook.bt.json` and the bard's and chief's: `worker_find_targets` (the retaliate list,
+        // then `update_combat_targets`), leaping at the target, else hacking at it; left out:
+        // mining, the chief's commands, the bard's song, storm shelter.
+        combat_or_walk(
+            fight(
+                selector(vec![
+                    lava(LavaLeaf::MookLeap {
+                        key: Key::CurrentTarget,
+                    }),
+                    melee(),
+                ]),
+                move_to_target(),
+            ),
+            retaliate_then_acquire(),
+        )
+    } else if is("minebot") {
+        // `minebot.bt.json`: fights back (drilling: no gun here), repairs hurt NODE drones,
+        // collects loose ore; left out: following and protecting its miner, pet commands,
+        // shooting, missiles and mines, mining walls, the SOS (see `lavaland::minebot`).
+        par(
+            vec![
+                selector(vec![
+                    decorator(
+                        Cond::KeySet(Key::CurrentTarget),
+                        false,
+                        Abort::Both,
+                        fight(melee(), move_to_target()),
+                    ),
+                    lava(LavaLeaf::MinebotRepair),
+                    lava(LavaLeaf::MinebotCollect),
+                    leaf(Behavior::Fauna(FaunaLeaf::Wait)),
+                ]),
+                retaliate_target(Key::CurrentTarget),
+            ],
+            FIND_TARGET_RATE,
+        )
+    } else if is("raptor") || is("baby_raptor") {
+        // `raptor_ai.bt.json` (and the aggressive breeds', the babies'): fights back; left out:
+        // fleeing when hurt, eating, troughs, breeding, playing with the owner, healing
+        // (white), mothers caring for the young and babies following them, pet commands.
+        retaliate_combat()
+    } else if is("node_drone") {
+        // `node_drone.bt.json`: it only latches onto an unclaimed ore vent (none here);
+        // `PASSIVE_AI_FLAGS`, it never fights.
+        leaf(Behavior::Fauna(FaunaLeaf::Wait))
     } else if is("ice_demon/afterimage") {
         // `ice_demon_afterimage.bt.json`: `simple_hostile_combat`; left out: fleeing fire.
         hostile_combat(25.0)
@@ -424,6 +489,15 @@ mod tests {
             "ice_whelp",
             "ice_demon",
             "ice_demon/afterimage",
+            "mook",
+            "mook/support",
+            "mook/bard",
+            "mook/tribal_chief",
+            "minebot",
+            "node_drone",
+            "raptor",
+            "raptor/aggressive",
+            "baby_raptor",
         ] {
             let built = build(&format!("{BASIC}/{sub}"));
             assert!(built.is_some_and(|b| b.retaliates), "{sub}");
