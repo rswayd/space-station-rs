@@ -194,6 +194,8 @@ pub mod bar;
 #[cfg(feature = "server")]
 pub mod barsign;
 #[cfg(feature = "server")]
+pub mod blackbox;
+#[cfg(feature = "server")]
 pub mod botany;
 pub mod bots;
 #[cfg(feature = "server")]
@@ -425,6 +427,8 @@ pub mod newscaster_client;
 #[cfg(feature = "server")]
 pub mod newscaster_server;
 #[cfg(feature = "server")]
+pub mod ntnet_relay;
+#[cfg(feature = "server")]
 pub mod obj_damage;
 pub mod operating;
 #[cfg(feature = "client")]
@@ -561,6 +565,11 @@ pub mod taser;
 pub mod teapot;
 #[cfg(feature = "server")]
 pub mod telecomms;
+#[cfg(feature = "client")]
+pub mod telecomms_client;
+#[cfg(feature = "server")]
+pub mod telecomms_config;
+pub mod telecomms_ui;
 #[cfg(feature = "server")]
 pub mod teleport;
 #[cfg(feature = "testing")]

@@ -19,9 +19,9 @@
 //! ~60 links); the [`Net`] snapshot is rebuilt per radio tick that has transmissions.
 // shortcut: the presets' vars come from the type table in [`preset`] (map var edits of
 // `autolinkers`, `freq_listening` and `id` are not read; MetaStation has none). No traffic and
-// network lag (`traffic`, `netspeed`, `data["slow"]`), no server logs, no bus frequency change,
-// no compressing processors (no telecomms configuration window); `recent_messages` dedupes only
-// within one signal.
+// network lag (`traffic`, `netspeed`, `data["slow"]`), no compressing processors;
+// `recent_messages` dedupes only within one signal. Configuration, monitoring and server logs:
+// `crate::telecomms_config`.
 
 use std::ops::RangeInclusive;
 
@@ -116,7 +116,23 @@ pub struct Telecomms {
     pub syndicate: bool,
     /// Message servers: working from this server time (`calibrating`).
     pub calibrated_at: f64,
+    /// `network`: what the monitoring consoles probe for (`"tcommsat"` for the presets).
+    pub network: String,
+    /// `tempfreq`: the frequency the configuration window adds to `freq_listening`.
+    pub tempfreq: u16,
+    /// Buses: `change_frequency`, `0` for none.
+    pub change_frequency: u16,
 }
+
+/// `banned_frequencies`: never listened to, rewritten to or logged.
+pub const BANNED_FREQUENCIES: [u16; 6] = [
+    FREQ_SYNDICATE,
+    ss13_chat::radio::FREQ_CENTCOM,
+    ss13_chat::radio::FREQ_CTF_RED,
+    ss13_chat::radio::FREQ_CTF_YELLOW,
+    ss13_chat::radio::FREQ_CTF_GREEN,
+    ss13_chat::radio::FREQ_CTF_BLUE,
+];
 
 /// The type's vars (tg presets) for `path`.
 pub fn preset(path: &str) -> Option<Telecomms> {
@@ -144,6 +160,14 @@ pub fn preset(path: &str) -> Option<Telecomms> {
         relay_receiving: true,
         syndicate: false,
         calibrated_at: 0.0,
+        network: if path.contains("/preset") {
+            "tcommsat"
+        } else {
+            "NULL"
+        }
+        .to_owned(),
+        tempfreq: ss13_chat::radio::FREQ_COMMON,
+        change_frequency: 0,
     };
     let mut set = |id: &str, links: &[&'static str], freqs: Vec<u16>| {
         id.clone_into(&mut m.id);
@@ -310,6 +334,11 @@ pub struct TelecommsPlugin;
 
 impl Plugin for TelecommsPlugin {
     fn build(&self, app: &mut App) {
+        app.add_plugins((
+            crate::telecomms_config::TelecommsConfigPlugin,
+            crate::blackbox::BlackboxPlugin,
+            crate::ntnet_relay::NtnetRelayPlugin,
+        ));
         app.init_resource::<TelecommsLevels>()
             .add_observer(setup_machine)
             .add_systems(
@@ -513,9 +542,20 @@ impl Signal {
 pub struct Broadcast {
     pub levels: Levels,
     pub compression: u8,
+    /// The frequency it went out on: a bus's `change_frequency` rewrites it.
+    pub freq: u16,
+}
+
+/// A route's outcome: the broadcast and the servers that logged the signal, with its
+/// compression at that point (`/obj/machinery/telecomms/server/receive_information`).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Routed {
+    pub broadcast: Option<Broadcast>,
+    pub logged: Vec<(Entity, u8)>,
 }
 
 struct Node {
+    entity: Entity,
     m: Telecomms,
     pos: TilePos,
     links: Vec<usize>,
@@ -540,7 +580,8 @@ impl Net {
         let index = |e: Entity| list.iter().position(|(x, ..)| *x == e);
         let nodes = list
             .iter()
-            .map(|(_, m, pos)| Node {
+            .map(|(e, m, pos)| Node {
+                entity: *e,
                 links: m.links.iter().filter_map(|&l| index(l)).collect(),
                 calibrating: m.calibrated_at > now,
                 m: (*m).clone(),
@@ -567,9 +608,15 @@ impl Net {
     /// `send_to_receivers()` and everything after it: the broadcast, if any machine broadcast
     /// the signal (`data["done"]`).
     pub fn route(&self, signal: &Signal) -> Option<Broadcast> {
+        self.route_logged(signal).broadcast
+    }
+
+    /// [`Self::route`] with the servers that logged the signal.
+    pub fn route_logged(&self, signal: &Signal) -> Routed {
         let mut router = Router {
             net: self,
             out: None,
+            logged: Vec::new(),
         };
         for (i, node) in self.nodes.iter().enumerate() {
             match node.m.kind {
@@ -578,13 +625,17 @@ impl Net {
                 _ => {}
             }
         }
-        router.out
+        Routed {
+            broadcast: router.out,
+            logged: router.logged,
+        }
     }
 }
 
 struct Router<'a> {
     net: &'a Net,
     out: Option<Broadcast>,
+    logged: Vec<(Entity, u8)>,
 }
 
 impl Router<'_> {
@@ -646,6 +697,7 @@ impl Router<'_> {
             self.out = Some(Broadcast {
                 levels: copy.levels,
                 compression: 0,
+                freq: copy.freq,
             });
         }
     }
@@ -699,6 +751,9 @@ impl Router<'_> {
                 if !node.m.listens(signal.freq) {
                     return;
                 }
+                if node.m.change_frequency != 0 && !BANNED_FREQUENCIES.contains(&signal.freq) {
+                    signal.freq = node.m.change_frequency;
+                }
                 if from_kind != MachineKind::Processor
                     && from != i
                     && self.relay(i, signal, MachineKind::Processor, false) > 0
@@ -726,6 +781,9 @@ impl Router<'_> {
             MachineKind::Server => {
                 if signal.kind != SignalKind::Vocal || !node.m.listens(signal.freq) {
                     return;
+                }
+                if !BANNED_FREQUENCIES.contains(&signal.freq) {
+                    self.logged.push((node.entity, signal.compression));
                 }
                 if self.relay(i, signal, MachineKind::Hub, false) == 0 {
                     self.relay(i, signal, MachineKind::Broadcaster, false);
@@ -765,6 +823,7 @@ impl Router<'_> {
                 self.out = Some(Broadcast {
                     levels: signal.levels.clone(),
                     compression: signal.compression,
+                    freq: signal.freq,
                 });
             }
             MachineKind::Receiver | MachineKind::AllInOne => {}
@@ -1005,6 +1064,27 @@ mod tests {
             x.1.on = false;
         }
         assert!(route(&m, &levels, &msg).is_none());
+    }
+
+    #[test]
+    fn servers_log_and_a_bus_rewrites_the_frequency() {
+        let (mut m, levels) = station(&[]);
+        let net = |m: &[(Entity, Telecomms, TilePos)]| {
+            Net::new(m.iter().map(|(e, t, p)| (*e, t, p)), &levels, 0.0)
+        };
+        let science = m.iter().find(|x| x.1.id == "Science Server").unwrap().0;
+        let routed = net(&m).route_logged(&vocal(FREQ_SCIENCE, 2));
+        assert_eq!(routed.logged, vec![(science, 0)]);
+        assert_eq!(routed.broadcast.unwrap().freq, FREQ_SCIENCE);
+        // Bus 1 (science, medical) rewrites science to medical: the medical server logs it.
+        let bus = m.iter().position(|x| x.1.id == "Bus 1").unwrap();
+        m[bus].1.change_frequency = FREQ_MEDICAL;
+        let medical = m.iter().find(|x| x.1.id == "Medical Server").unwrap().0;
+        let routed = net(&m).route_logged(&vocal(FREQ_SCIENCE, 2));
+        assert_eq!(routed.logged, vec![(medical, 0)]);
+        assert_eq!(routed.broadcast.unwrap().freq, FREQ_MEDICAL);
+        // A new network id on a preset does not matter to routing; the presets carry tcommsat.
+        assert_eq!(m[bus].1.network, "tcommsat");
     }
 
     #[test]

@@ -226,6 +226,9 @@
 //! | 3471 | `medical::special_traumas::stream_click` (a bluespace prophet's stream) |
 //! | 3481 | `science::anomaly_refinery::interact` (the `AnomalyRefinery` window) |
 //! | 3493 | `holodeck::interact` (the `Holodeck` window, ready buttons) |
+//! | 3497 | `telecomms_config::interact` (telecomms machine, monitor and log browser windows) |
+//! | 3507 | `blackbox::attack_hand` (the blackbox out of its recorder) |
+//! | 3517 | `ntnet_relay::interact` (the `NtnetRelay` window) |
 //!
 //! [`ClickPhase::HeldOnTarget`] (a world click with the active hand's item; tg
 //! `item_interaction`, `interact_with_atom`, `pre_attack`, `attackby`):
@@ -265,6 +268,7 @@
 //! | 1460 | `silicon::ai_core::item_interaction` |
 //! | 1500 | `bots::construction::item_interaction` |
 //! | 1555 | `inducer::interact_with_atom` (charging a cell) |
+//! | 1557 | `telecomms_config` (a multitool on a telecomms machine opens its window) |
 //! | 1559 | `eng_machines::modular_shield::item_interaction` (multitool buffer, connect, link; panel-open wrench turn) |
 //! | 1560 | `devices::rcd::item_interaction` (builds, deconstruction, loading) |
 //! | 1565 | `devices::taperecorder::item_interaction` (a tape into a recorder, respooling) |
@@ -276,6 +280,7 @@
 //! | 1580 | `events::anomalies::neutralizer_act`, `releaser_act` (anomalies, anomaly cores) |
 //! | 1581 | `science::anomaly_refinery::item_interaction` (raw cores, transfer valves) |
 //! | 1585 | `events::radiation_leak::tool_act` (a leaking machine's fixing tools) |
+//! | 1587 | `blackbox::item_interaction` (the blackbox back into its recorder) |
 //! | 1589 | `eng_machines::atmos_shield::item_interaction` (ID lock, tool refusals, wrench) |
 //! | 1590 | `teapot::item_interaction` (before `machine_frame` takes it apart) |
 //! | 1591 | `service::slots` (coins, holochips, multitool and emag on a slot machine) |

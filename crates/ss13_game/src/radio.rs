@@ -532,10 +532,14 @@ struct Transmission {
     subspace: bool,
     /// A CentCom radio on the CentCom frequency (`TRANSMISSION_SUPERSPACE`).
     superspace: bool,
+    /// What the server logs make of the speaker (`mobtype`).
+    race: &'static str,
 }
 
 /// Which radios a transmission reaches, and its words.
 struct Reach {
+    /// The frequency it is heard on (a bus may have rewritten it).
+    freq: u16,
     levels: Levels,
     /// `TRANSMISSION_RADIO`: only radios that are not subspace-only.
     mundane: bool,
@@ -560,8 +564,10 @@ fn reach(
     net: Option<&Net>,
     telecomms_down: bool,
     rng: &mut CombatRng,
+    logged: &mut Vec<(Entity, u8)>,
 ) -> Option<Reach> {
     let reach = |levels, mundane, text| Reach {
+        freq: tx.freq,
         levels,
         mundane,
         superspace: false,
@@ -569,6 +575,7 @@ fn reach(
     };
     if tx.superspace {
         return Some(Reach {
+            freq: tx.freq,
             levels: Levels {
                 all: true,
                 z: Vec::new(),
@@ -587,10 +594,15 @@ fn reach(
         return Some(reach(Levels::of([tx.z]), telecomms_down, tx.text.clone()));
     };
     let signal = Signal::vocal(tx.freq, net.connected(tx.z), vocal_compression(rng));
-    match net.route(&signal) {
+    let routed = net.route_logged(&signal);
+    *logged = routed.logged;
+    match routed.broadcast {
         Some(b) => {
             let text = broadcast_text(&tx.text, b.compression, rng);
-            Some(reach(b.levels, false, text))
+            Some(Reach {
+                freq: b.freq,
+                ..reach(b.levels, false, text)
+            })
         }
         None if !tx.subspace => Some(reach(net.connected(tx.z), true, tx.text.clone())),
         None => None,
@@ -641,13 +653,14 @@ fn transmit_speech(
     senses: ss13_chat::server::Senses,
     mut chat: MessageWriter<SendChat>,
     mut machine: MessageReader<MachineRadio>,
-    (outage, time, machines, telecomms_levels, mut rng, understanding): (
+    (outage, time, machines, telecomms_levels, mut rng, understanding, mut server_logs): (
         Res<TelecommsOutage>,
         Res<Time>,
         Query<(Entity, &Telecomms, &TilePos)>,
         Res<TelecommsLevels>,
         ResMut<CombatRng>,
         ss13_chat::server::Understanding,
+        Query<&mut crate::telecomms_config::ServerLog>,
     ),
 ) {
     let now = time.elapsed_secs_f64();
@@ -662,7 +675,18 @@ fn transmit_speech(
         radio.on && (radio.kind != RadioKind::Intercom || powered(pos))
     };
     let mut sent: Vec<(String, Transmission)> = Vec::new();
+    // `signal.virt.source.type` as the log browser reads it.
+    let race_of = |speaker: Entity| {
+        if silicons.contains(speaker) {
+            "Artificial Life"
+        } else if mobs.contains(speaker) {
+            "Humanoid"
+        } else {
+            "Unidentifiable"
+        }
+    };
     for spoke in spoken.read() {
+        let race = race_of(spoke.speaker);
         let mut transmissions = Vec::new();
         // `talk_into` of the target's devices (`radio()`).
         let devices: Vec<(Entity, Option<RadioTarget>)> = match spoke.radio {
@@ -727,6 +751,7 @@ fn transmit_speech(
                 subspace: radio.subspace(),
                 superspace: radio.special_channels & RADIO_SPECIAL_CENTCOM != 0
                     && (freq == FREQ_CENTCOM || freq == FREQ_STATUS_DISPLAYS),
+                race,
             });
         }
         // Broadcasting radios that heard the words relay them (`/obj/item/radio/Hear`); the
@@ -784,6 +809,7 @@ fn transmit_speech(
                 subspace: false,
                 superspace: radio.special_channels & RADIO_SPECIAL_CENTCOM != 0
                     && (radio.frequency == FREQ_CENTCOM || radio.frequency == FREQ_STATUS_DISPLAYS),
+                race,
             });
         }
         sent.extend(transmissions.into_iter().map(|tx| (spoke.name.clone(), tx)));
@@ -802,17 +828,33 @@ fn transmit_speech(
                 language: Some(ss13_chat::language::LanguageId::Common),
                 subspace: false,
                 superspace: false,
+                race: "Machinery",
             },
         )
     }));
     let net = (!sent.is_empty()).then(|| Net::new(machines.iter(), &telecomms_levels, now));
     for (name, tx) in sent {
-        let Some(reach) = reach(&tx, net.as_ref(), telecomms_down, &mut rng) else {
+        let mut logged = Vec::new();
+        let reach = reach(&tx, net.as_ref(), telecomms_down, &mut rng, &mut logged);
+        for (server, compression) in logged {
+            if let Ok(mut log) = server_logs.get_mut(server) {
+                let entry = crate::telecomms_config::LogEntry::new(
+                    &name,
+                    &tx.text,
+                    tx.language,
+                    tx.race,
+                    compression,
+                    &mut rng,
+                );
+                log.push(entry);
+            }
+        }
+        let Some(reach) = reach else {
             continue;
         };
         let mut clients: Vec<Entity> = Vec::new();
         for (e, radio, pos, carried, builtin) in &radios {
-            if !radio.receives(tx.freq) || !reach.hears(radio) {
+            if !radio.receives(reach.freq) || !reach.hears(radio) {
                 continue;
             }
             if let Some(b) = builtin {
@@ -859,7 +901,7 @@ fn transmit_speech(
         }
         info!(target: "say", "radio {} from {}: {}", tx.freq, name, reach.text);
         for heard in understanding.split(clients, tx.language, &reach.text) {
-            let mut message = radio_message(tx.freq, &name, tx.verb, &heard.text, tx.italics);
+            let mut message = radio_message(reach.freq, &name, tx.verb, &heard.text, tx.italics);
             // After the channel, before the name (tg `compose_message`'s `languageicon`).
             if let Some(tag) = heard.tag {
                 message.segments.insert(
