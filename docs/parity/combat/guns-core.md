@@ -24,13 +24,13 @@
 Выстрел себе в голову в упор с задержкой (`handle_suicide`) — мгновенная смерть.
 
 - **Код:** [`proc/handle_suicide()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/projectiles/gun.dm#L681)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/guns.rs` (`handle_suicide`, `complete_suicide`): зона «рот» и клик оружием по себе или соседнему человеку — 12 с `do_after`, затем выстрел в голову с уроном ×5 и `wound_bonus` +5; отмена при движении или смене зоны («решает не стрелять» / «решает пощадить»); русская рулетка (`doafter_self_shoot = FALSE`) исключена; у очереди стреляет только первый патрон
 
 ### Взятие на мушку (gunpoint)
 Наведение оружия на моба: цель получает `heldup` и алерт сдачи, стрелок — `holdup` с алертом отмены; движение или действие цели — выстрел.
 
 - **Код:** [`/datum/component/gunpoint`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/gunpoint.dm#L15), [`/datum/status_effect/holdup`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/neutral.dm#L185)
-- **Статус в ss13-rs:** ❌ нет — сдача и её алерт есть (`crates/ss13_game/src/buffs.rs`, см. ../mobs/status-effects-buffs.md)
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/gunpoint.rs`: ПКМ оружием без боевого режима по живому мобу в пределах 4 тайлов (BandaStation) — `do_after` 0,5 с, обездвиживание обоих на 0,75 с / дистанция, алерты `holdup` (клик — опустить оружие), `heldup` и сдачи у цели, мудлет `gunpoint`; стадии ×1,25 → ×1,75 (2,5 с) → ×2,25 (ещё 7,5 с) с бонусом ранения; шаг цели, её атака моба или выстрел — заряженный выстрел; потеря видимости за 4 тайла или оружие не в руках — отмена; без выстрела от вздрагивания при ранении стрелка, блокировки толчков и строк осмотра
 
 ### Обвесы: фонарь, глушитель, штык, прицел
 Подствольный фонарь (`seclite_attachable`), глушитель (тихие выстрелы), штык (ближний бой оружием), оптический прицел (`scope`, дальний обзор).

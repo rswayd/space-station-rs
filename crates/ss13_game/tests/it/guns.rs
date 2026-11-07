@@ -734,3 +734,101 @@ fn a_taser_hooks_and_drains_stamina_until_clicked_off() {
             .is_some_and(|t| t.0.is_empty())
     });
 }
+
+#[test]
+fn a_gun_in_the_mouth_fires_after_twelve_seconds_for_five_times_the_damage() {
+    let mut s =
+        Station::start("a_gun_in_the_mouth_fires_after_twelve_seconds_for_five_times_the_damage");
+    let a = s.players[0].mob;
+    let pistol = s.give(0, "/obj/item/gun/ballistic/automatic/pistol");
+    // The chest selected: clicking yourself does not shoot.
+    s.run_until("replicated", |s| s.net_id(0, a).is_some());
+    s.0.click(0, a);
+    s.hold(0.5, "no shot", |s| s.get::<Health>(a).brute == 0.0);
+    assert!(!s.said(0, "Вы вставляете"));
+    s.0.server
+        .world_mut()
+        .entity_mut(a)
+        .insert(ss13_game::health::ZoneSelected(
+            ss13_game::zone::TargetZone::Mouth,
+        ));
+    s.0.click(0, a);
+    s.run_until("in the mouth", |s| {
+        s.said(0, "Вы вставляете") && s.try_get::<ss13_game::tools::DoAfter>(a).is_some()
+    });
+    // Nothing for most of the 12 seconds (tg delays need no mood here: ×0.9 is 10.8 s).
+    s.hold(10.0, "not yet", |s| s.get::<Health>(a).brute == 0.0);
+    s.run_until_for(4.0, "the trigger is pulled", |s| {
+        s.get::<Health>(a).brute > 0.0
+    });
+    assert!(s.said(0, "Вы спускаете курок!"));
+    // 30 × 5 to the head.
+    assert!(
+        s.get::<Health>(a).brute >= 100.0,
+        "{}",
+        s.get::<Health>(a).brute
+    );
+    let gun = s.get::<Gun>(pistol);
+    assert!(gun.chambered.as_ref().is_some_and(|r| r.live));
+}
+
+#[test]
+fn a_held_up_mob_that_moves_is_shot_with_the_charged_round() {
+    use ss13_game::breath::{AlertCategory, Alerts};
+    use ss13_game::gunpoint::Gunpoint;
+    let mut s = Station::start("a_held_up_mob_that_moves_is_shot_with_the_charged_round");
+    let (a, b) = (s.players[0].mob, s.players[1].mob);
+    s.0.server
+        .world_mut()
+        .entity_mut(b)
+        .insert(TilePos::new(5, 3, 1));
+    let pistol = s.give(0, "/obj/item/gun/ballistic/automatic/pistol");
+    s.run_until("replicated", |s| s.net_id(0, b).is_some());
+    let right = ClickModifiers {
+        right: true,
+        ..default()
+    };
+    s.0.click_with(0, b, right);
+    s.run_until("aiming", |s| s.try_get::<Gunpoint>(a).is_some());
+    assert_eq!(s.projectiles(), 0, "a right click does not fire");
+    assert!(s.get::<Alerts>(a).get(AlertCategory::Holdup).is_some());
+    assert!(s.get::<Alerts>(b).get(AlertCategory::Heldup).is_some());
+    assert!(s.get::<Alerts>(b).get(AlertCategory::Surrender).is_some());
+    s.run_until("B is told", |s| s.said(1, "целится из"));
+    // 2.5 s later the aim steadies.
+    s.run_until_for(4.0, "stage 2", |s| s.get::<Gunpoint>(a).stage == 2);
+    assert_eq!(s.get::<Gunpoint>(a).damage_mult(), 1.75);
+    // B steps away: the charged shot, 30 × 1.75.
+    s.run_until("B steps", |s| {
+        s.try_step(1, ss13_shared::Dir::North);
+        s.pos(b) != TilePos::new(5, 3, 1)
+    });
+    s.run_until("the trigger is pulled", |s| {
+        s.try_get::<Gunpoint>(a).is_none()
+    });
+    assert!(s.get::<Alerts>(b).get(AlertCategory::Heldup).is_none());
+    s.run_until_for(3.0, "B is hit", |s| s.get::<Health>(b).brute > 0.0);
+    assert!(
+        s.get::<Health>(b).brute > 50.0,
+        "{}",
+        s.get::<Health>(b).brute
+    );
+    assert_eq!(
+        s.get::<Gun>(pistol).magazine.as_ref().unwrap().rounds.len(),
+        11
+    );
+
+    // Aimed again, the gun leaves A's hands: the aim is lowered without a shot.
+    s.run_until("off cooldown", |s| s.now() >= s.get::<NextMove>(a).0);
+    s.0.click_with(0, b, right);
+    s.run_until("aiming", |s| s.try_get::<Gunpoint>(a).is_some());
+    let world = s.0.server.world_mut();
+    let hand = world.get::<Inventory>(a).unwrap().active;
+    world.get_mut::<Inventory>(a).unwrap().hands[hand] = None;
+    s.run_until("lowered", |s| s.try_get::<Gunpoint>(a).is_none());
+    assert!(s.get::<Alerts>(b).get(AlertCategory::Heldup).is_none());
+    assert_eq!(
+        s.get::<Gun>(pistol).magazine.as_ref().unwrap().rounds.len(),
+        11
+    );
+}

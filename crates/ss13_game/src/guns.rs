@@ -28,9 +28,9 @@
 //! with Z, automatic ones after each shot; loose shells load one by one.
 //!
 //! Messages are BandaStation's translation.
-// shortcut: no suicide, gunpoint, suppressors, seclites, bayonets,
+// shortcut: no gunpoint, suppressors, seclites, bayonets,
 // misfires, sawing off, fire mode toggles (burst guns always burst), clumsy botches or charge
-// overlays; pins cannot be removed or swapped; the mouth zone does not shoot yourself. Add them
+// overlays; pins cannot be removed or swapped. Add them
 // as their mechanics land.
 
 use bevy::prelude::*;
@@ -138,6 +138,32 @@ pub struct Gun {
     pub pin: String,
 }
 
+/// A change to the chambered round's projectile before it is fired (tg edits
+/// `chambered.loaded_projectile`: `handle_suicide`, the gunpoint's charged shot); the next shot
+/// takes it.
+#[derive(Component, Clone, Copy, Debug, PartialEq)]
+pub struct ChamberBoost {
+    pub damage_mult: f32,
+    /// Added unless the projectile is `CANT_WOUND` (-100).
+    pub wound_bonus: f32,
+    pub exposed_wound_bonus: f32,
+    /// `zone_override = BODY_ZONE_HEAD`.
+    pub head: bool,
+}
+
+impl ChamberBoost {
+    pub fn apply(&self, data: &mut ss13_mapload::ProjectileData) {
+        data.damage *= self.damage_mult;
+        if data.wound_bonus != CANT_WOUND {
+            data.wound_bonus += self.wound_bonus;
+            data.exposed_wound_bonus += self.exposed_wound_bonus;
+        }
+    }
+}
+
+/// `CANT_WOUND`.
+const CANT_WOUND: f32 = -100.0;
+
 /// Rounds of a burst still to fire (tg `process_burst` timers).
 #[derive(Resource, Default)]
 struct Bursts(Vec<Burst>);
@@ -183,13 +209,14 @@ impl Plugin for GunsServerPlugin {
             c.held.is_none() && crate::guns::attack_hand(w, c.client, c.mob, c.target)
         });
         crate::taser::plugin(app);
+        crate::gunpoint::plugin(app);
         crate::guns_special::plugin(app);
         app.init_resource::<Bursts>()
             .add_observer(add_gun_state)
             .add_observer(add_magazine_state)
             .add_systems(
                 Update,
-                (ranged_clicks, run_bursts)
+                (ranged_clicks, run_bursts, crate::gunpoint::upkeep)
                     .chain()
                     .in_set(GunSystems)
                     .after(crate::click::ResolveClicks)
@@ -323,8 +350,20 @@ fn ranged_clicks(
         else {
             continue;
         };
+        // `ranged_interact_with_atom_secondary`: a right click within the stray range holds up.
+        if click.modifiers.right
+            && !world.get::<CombatMode>(click.mob).is_some_and(|c| c.0)
+            && world.get::<Health>(click.target).is_some()
+            && world
+                .get::<TilePos>(click.mob)
+                .and_then(|p| p.chebyshev(click.target_pos))
+                .is_some_and(|d| d <= crate::gunpoint::GUNPOINT_SHOOTER_STRAY_RANGE)
+            && crate::gunpoint::start(world, click.client, click.mob, gun, click.target)
+        {
+            continue;
+        }
         let aim = Aim::new(click.target, click.target_pos, click.modifiers);
-        try_fire(world, click.client, click.mob, gun, aim);
+        try_fire(world, click.client, click.mob, gun, aim, false);
     }
 }
 
@@ -353,16 +392,230 @@ impl Aim {
 /// tg `interact_with_atom` of a held gun on an adjacent mob (`crate::security` hands it the
 /// click): true when the click is used up (the gun fired, or refused without combat mode).
 pub fn interact_with_mob(world: &mut World, click: &ClickResolved, gun: Entity) -> bool {
-    if click.target == click.mob || world.get::<Health>(click.target).is_none() {
+    if world.get::<Health>(click.target).is_none() {
+        return false;
+    }
+    // `interact_with_atom_secondary`: in combat mode a right click bashes, otherwise it holds
+    // the mob up.
+    if click.modifiers.right {
+        if world.get::<CombatMode>(click.mob).is_some_and(|c| c.0) {
+            return false;
+        }
+        return crate::gunpoint::start(world, click.client, click.mob, gun, click.target);
+    }
+    // `fire_gun`: no shooting yourself unless the mouth is selected (`handle_suicide`).
+    if click.target == click.mob && !suicide_aim(world, click.mob, gun) {
         return false;
     }
     let aim = Aim::new(click.target, click.target_pos, click.modifiers);
-    try_fire(world, click.client, click.mob, gun, aim)
+    try_fire(world, click.client, click.mob, gun, aim, true)
+}
+
+/// tg `fire_gun(target, user)` from afar (the gunpoint's charged shot). True when the click is
+/// used up.
+pub fn fire_gun(world: &mut World, client: Entity, mob: Entity, gun: Entity, aim: Aim) -> bool {
+    try_fire(world, client, mob, gun, aim, false)
+}
+
+/// tg `doafter_self_shoot && user.zone_selected == BODY_ZONE_PRECISE_MOUTH`: a point blank click
+/// becomes `handle_suicide`. The russian revolver (`doafter_self_shoot = FALSE`) just fires.
+fn suicide_aim(world: &World, mob: Entity, gun: Entity) -> bool {
+    world.get::<ZoneSelected>(mob).map(|z| z.0) == Some(crate::zone::TargetZone::Mouth)
+        && world
+            .get::<DmGun>(gun)
+            .is_some_and(|dm| !is_under(&dm.path, "/obj/item/gun/ballistic/revolver/russian"))
+}
+
+/// tg `ishuman`.
+fn is_human(world: &World, mob: Entity) -> bool {
+    world.get::<crate::human::HumanLook>(mob).is_some()
+}
+
+/// tg `handle_suicide` up to its `do_after`: the gun goes in the mouth (or to the head of the
+/// adjacent human) for 12 seconds ([`complete_suicide`]). False when it is not a human's.
+fn handle_suicide(
+    world: &mut World,
+    client: Entity,
+    mob: Entity,
+    gun: Entity,
+    target: Entity,
+) -> bool {
+    if !is_human(world, mob) || !is_human(world, target) {
+        return false;
+    }
+    // `fire_cd`: one at a time.
+    if world
+        .get::<crate::tools::DoAfter>(mob)
+        .is_some_and(|d| matches!(d.job, crate::construction::Job::GunSuicide))
+    {
+        return true;
+    }
+    let Some(&at) = world.get::<TilePos>(mob) else {
+        return false;
+    };
+    let (user, item) = (name_of(world, mob), name_of(world, gun));
+    let item = crate::obj_damage::strip(&item).to_owned();
+    if mob == target {
+        show(
+            world,
+            at,
+            COMBAT_MESSAGE_RANGE,
+            ChatChannel::Combat,
+            (
+                Span::Warning,
+                format!("{user} вставляет {item} себе в рот, готовясь спустить курок..."),
+            ),
+            &[(
+                mob,
+                Span::BoldWarning,
+                format!("Вы вставляете {item} себе в рот, готовясь спустить курок..."),
+            )],
+        );
+    } else {
+        let victim = name_of(world, target);
+        show(
+            world,
+            at,
+            COMBAT_MESSAGE_RANGE,
+            ChatChannel::Combat,
+            (
+                Span::Warning,
+                format!("{user} направляет {item} на голову {victim}, готовясь спустить курок..."),
+            ),
+            &[(
+                target,
+                Span::BoldWarning,
+                format!("{user} направляет {item} на вашу голову, готовясь спустить курок..."),
+            )],
+        );
+    }
+    let actor = crate::tools::Actor {
+        client,
+        mob,
+        item: Some(gun),
+    };
+    crate::tools::do_after(
+        world,
+        actor,
+        target,
+        SUICIDE_DELAY_DS,
+        0,
+        crate::construction::Job::GunSuicide,
+    );
+    true
+}
+
+/// `handle_suicide`'s `do_after(user, 12 SECONDS, target)`, deciseconds.
+pub const SUICIDE_DELAY_DS: f32 = 120.0;
+
+/// tg `handle_suicide` when the `do_after` stops (or the mouth is no longer selected).
+pub fn suicide_interrupted(world: &mut World, mob: Entity, target: Entity) {
+    let Some(&at) = world.get::<TilePos>(mob) else {
+        return;
+    };
+    let user = name_of(world, mob);
+    if mob == target {
+        show(
+            world,
+            at,
+            COMBAT_MESSAGE_RANGE,
+            ChatChannel::Combat,
+            (Span::Notice, format!("{user} решает не стрелять.")),
+            &[],
+        );
+    } else if world
+        .get::<TilePos>(target)
+        .and_then(|t| t.chebyshev(at))
+        .is_some_and(|d| d <= 1)
+    {
+        let victim = name_of(world, target);
+        show(
+            world,
+            at,
+            COMBAT_MESSAGE_RANGE,
+            ChatChannel::Combat,
+            (Span::Notice, format!("{user} решает пощадить {victim}")),
+            &[(
+                target,
+                Span::Notice,
+                format!("{user} решает пощадить вашу жизнь!"),
+            )],
+        );
+    }
+}
+
+/// tg `handle_suicide` after its `do_after`: the trigger is pulled, the chambered round hits
+/// the head for five times its damage (and +5 wound bonus).
+pub fn complete_suicide(world: &mut World, mob: Entity, action: &crate::tools::DoAfter) {
+    let target = action.target;
+    let Some(gun) = action.item else {
+        return;
+    };
+    if !suicide_aim(world, mob, gun) {
+        suicide_interrupted(world, mob, target);
+        return;
+    }
+    let (Some(&at), Some(&target_pos)) = (world.get::<TilePos>(mob), world.get::<TilePos>(target))
+    else {
+        return;
+    };
+    let user = name_of(world, mob);
+    let own = if mob == target {
+        "Вы спускаете курок!".to_owned()
+    } else {
+        format!("{user} спускает курок!")
+    };
+    show(
+        world,
+        at,
+        COMBAT_MESSAGE_RANGE,
+        ChatChannel::Combat,
+        (Span::Warning, format!("{user} спускает курок!")),
+        &[(target, Span::BoldWarning, own)],
+    );
+    let (Some(dm), Some(state)) = (
+        world.get::<DmGun>(gun).cloned(),
+        world.get::<Gun>(gun).cloned(),
+    ) else {
+        return;
+    };
+    if ready_round(&dm, &state).is_none() {
+        empty_click(world, action.client, &dm, gun);
+        return;
+    }
+    let aim = Aim {
+        target,
+        target_pos,
+        pixel: [0, 0],
+    };
+    world.entity_mut(gun).insert(ChamberBoost {
+        damage_mult: 5.0,
+        wound_bonus: 5.0,
+        exposed_wound_bonus: 0.0,
+        head: true,
+    });
+    // shortcut: a burst gun fires only the suicide round, not the rest of its burst.
+    let fired = shoot(world, mob, gun, aim, true, 0.0);
+    world.entity_mut(gun).remove::<ChamberBoost>();
+    if fired {
+        let now = world.resource::<Time>().elapsed_secs_f64();
+        let delay = f64::from(dm.fire_delay) / 10.0;
+        if let Some(mut g) = world.get_mut::<Gun>(gun) {
+            g.ready_at = now + delay;
+        }
+    }
 }
 
 /// tg `fire_gun` up to `process_fire`: pins, an empty chamber, `WEAPON_HEAVY`, dual wielding.
 /// True when the click is used up.
-fn try_fire(world: &mut World, client: Entity, mob: Entity, gun_entity: Entity, aim: Aim) -> bool {
+fn try_fire(
+    world: &mut World,
+    client: Entity,
+    mob: Entity,
+    gun_entity: Entity,
+    aim: Aim,
+    point_blank: bool,
+) -> bool {
     // A syringe or reagent gun chambers its spring while it holds a dart.
     crate::guns_special::before_fire(world, gun_entity);
     let (Some(dm), Some(gun)) = (
@@ -410,6 +663,9 @@ fn try_fire(world: &mut World, client: Entity, mob: Entity, gun_entity: Entity, 
         }
         tell(world, client, Span::Warning, fail);
         return true;
+    }
+    if point_blank && suicide_aim(world, mob, gun_entity) {
+        return handle_suicide(world, client, mob, gun_entity, aim.target);
     }
     // A grenade launcher throws its grenade instead (`crate::guns_special`).
     if crate::guns_special::process_fire(world, client, mob, gun_entity, aim) {
@@ -700,8 +956,8 @@ fn empty_click(world: &mut World, client: Entity, dm: &DmGun, gun: Entity) {
     }
 }
 
-/// tg `fire_casing` + `shoot_live_shot` + `process_chamber` for one round. False when nothing
-/// was ready.
+/// tg `fire_casing` + `shoot_live_shot` + `process_chamber` for one round, with the gun's
+/// [`ChamberBoost`]. False when nothing was ready.
 fn shoot(
     world: &mut World,
     mob: Entity,
@@ -726,12 +982,18 @@ fn shoot(
         return false;
     };
     let now = world.resource::<Time>().elapsed_secs_f64();
-    let zone = world
-        .get::<ZoneSelected>(mob)
-        .copied()
-        .unwrap_or_default()
-        .0
-        .check_zone();
+    // The boost belongs to this round only.
+    let boost = world.entity_mut(gun_entity).take::<ChamberBoost>();
+    let zone = if boost.is_some_and(|b| b.head) {
+        crate::zone::BodyZone::Head
+    } else {
+        world
+            .get::<ZoneSelected>(mob)
+            .copied()
+            .unwrap_or_default()
+            .0
+            .check_zone()
+    };
     let hit_prone = world.get::<CombatMode>(mob).is_some_and(|c| c.0);
     // The round is spent before the projectile flies (a point blank hit can change the gun's
     // holder).
@@ -800,6 +1062,9 @@ fn shoot(
     };
     data.damage *= mult;
     data.stamina *= mult;
+    if let Some(boost) = boost {
+        boost.apply(&mut data);
+    }
     // `/obj/item/ammo_casing/energy/kinetic/ready_proj`: the accelerator's modkits.
     crate::mining::modkits::modify_projectile(world, gun_entity, &mut data);
     // `ready_proj` of a special casing: the syringe, injector or synthesised dart it carries.
