@@ -329,7 +329,7 @@ fn board_for_role(
             !i.restricted_roles.is_empty() && !i.restricted_roles.iter().any(|x| x == role)
         })
     };
-    if !board.items.iter().any(|r| hidden(r)) {
+    if !board.items.iter().any(&hidden) {
         return board.clone();
     }
     let mut out = (**board).clone();
@@ -1333,9 +1333,9 @@ mod tests {
         });
         let ids = |b: &UplinkStatic| b.items.iter().map(|i| i.id.clone()).collect::<Vec<_>>();
         let cook = board_for_role(&catalog, &board, "Cook");
-        assert_eq!(ids(&*cook).len(), 2);
+        assert_eq!(ids(&cook).len(), 2);
         let clown = board_for_role(&catalog, &board, "Clown");
-        assert_eq!(ids(&*clown), ["/datum/uplink_item/device_tools/toolbox"]);
+        assert_eq!(ids(&clown), ["/datum/uplink_item/device_tools/toolbox"]);
         assert_eq!(clown.categories, ["Misc. Gadgets"]);
     }
 
