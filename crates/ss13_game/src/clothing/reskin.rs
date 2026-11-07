@@ -138,11 +138,13 @@ fn refresh_sheaths(world: &mut World) {
 
 /// `/obj/item/storage/belt/sheath/update_icon_state` (with `update_icon_updates_onmob`).
 fn draw_sheath(world: &mut World, e: Entity, full: bool) {
-    let Some(mut look) = world.get_mut::<SheathLook>(e) else {
-        return;
+    let look = {
+        let Some(mut look) = world.get_mut::<SheathLook>(e) else {
+            return;
+        };
+        look.full = Some(full);
+        look.clone()
     };
-    look.full = Some(full);
-    let look = look.clone();
     let suffix = if full { "-full" } else { "" };
     let icon_state = format!("{}{suffix}", look.icon);
     set_states(
