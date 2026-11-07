@@ -25,6 +25,7 @@ use ss13_mapload::MapLoadPlugin;
 use ss13_shared::TilePos;
 use ss13_shared::chat::Span;
 use ss13_shared::ui::UiStatus;
+use ss13_tgui::UiInterface;
 use ss13_tgui::server::{OpenUi, ServerUi, UiActed, UiParams, UiReject, UiWindow};
 
 use super::music::{self, MusicPlayer, Reach};

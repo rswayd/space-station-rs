@@ -270,7 +270,9 @@ fn a_camera_prints_a_photo_of_who_it_sees() {
         .entity_mut(camera)
         .insert(TilePos::new(3, 3, 1));
     s.put_in_hand(Some(film));
-    s.run_until("the camera is replicated", |s| s.net_id(0, camera).is_some());
+    s.run_until("the camera is replicated", |s| {
+        s.net_id(0, camera).is_some()
+    });
     s.click(0, camera);
     s.run_until("the film reloads the camera", |s| {
         s.get::<Camera>(camera).pictures_left == 10

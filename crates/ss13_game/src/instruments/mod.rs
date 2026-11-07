@@ -42,12 +42,14 @@ use ss13_tgui::server::{
 
 use crate::health::Stat;
 use crate::instruments_ui::*;
-use crate::inventory::{CarriedBy, Inventory, InventorySlot, slot_bit};
+use crate::inventory::{CarriedBy, Inventory, slot_bit};
 use crate::modpc::pda::turf_of;
 use crate::obj_damage::is_under;
 use crate::sound::{PlaySound, SOUND_RANGE, playsound};
 use crate::tools::tell;
 use song::Chord;
+use ss13_shared::protocol::InventorySlot;
+use ss13_tgui::UiInterface;
 
 const ITEM_ROOT: &str = "/obj/item/instrument";
 const STRUCTURE_ROOT: &str = "/obj/structure/musician";
