@@ -32,6 +32,8 @@ pub mod lasertag;
 #[cfg(feature = "server")]
 pub mod reactive;
 #[cfg(feature = "server")]
+pub mod reskin;
+#[cfg(feature = "server")]
 pub mod sensors;
 #[cfg(feature = "server")]
 pub mod slowdown;
@@ -95,7 +97,9 @@ mod server {
     use ss13_shared::IconStateId;
 
     use super::accessories::{self, Accessories};
-    use super::{chameleon, cover, damage, envirosuit, reactive, sensors, slowdown, toggles};
+    use super::{
+        chameleon, cover, damage, envirosuit, reactive, reskin, sensors, slowdown, toggles,
+    };
     use crate::click_handlers::{AddClickHandler, ClickPhase};
     use crate::human::layers::{FACEMASK_LAYER, UNIFORM_LAYER};
     use crate::inventory::Inventory;
@@ -150,6 +154,7 @@ mod server {
             slowdown::build(app);
             chameleon::build(app);
             toggles::build(app);
+            reskin::build(app);
         }
     }
 
@@ -170,7 +175,8 @@ mod server {
 
     /// tg `click_alt` of clothing: a jumpsuit's style, a toggle suit, a breath mask.
     pub fn click_alt(world: &mut World, client: Entity, mob: Entity, item: Entity) -> bool {
-        toggles::rolldown(world, client, mob, item)
+        reskin::click_alt(world, client, mob, item)
+            || toggles::rolldown(world, client, mob, item)
             || toggles::toggle_suit(world, client, mob, item)
             || toggles::breath_alt(world, client, mob, item)
     }
