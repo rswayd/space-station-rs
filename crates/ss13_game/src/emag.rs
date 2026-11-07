@@ -277,9 +277,13 @@ pub fn emag_act(world: &mut World, actor: Actor, card: Entity, target: Entity) -
     if world.get::<AirAlarm>(target).is_some() {
         return air_alarm(world, mob, target);
     }
+    // A modular computer's shopping program is not a console: the computer takes the emag.
     if world
         .get::<crate::cargo::console::CargoConsole>(target)
         .is_some()
+        && world
+            .get::<crate::modpc::pda::ModularComputer>(target)
+            .is_none()
     {
         return crate::cargo::console::emag_act(world, mob, card, target);
     }

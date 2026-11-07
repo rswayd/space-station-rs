@@ -184,7 +184,15 @@ fn plain(name: &str) -> &str {
 /// tg `ui_interact` on `attack_hand`.
 fn open_console(
     mut clicks: MessageReader<ClickResolved>,
-    consoles: Query<&DmName, (With<RdConsole>, Without<Unpowered>)>,
+    // A modular computer's Science Hub opens from its program (`crate::modpc`).
+    consoles: Query<
+        &DmName,
+        (
+            With<RdConsole>,
+            Without<Unpowered>,
+            Without<crate::modpc::pda::ModularComputer>,
+        ),
+    >,
     inventories: Query<&Inventory>,
     mut open: MessageWriter<OpenUi>,
 ) {

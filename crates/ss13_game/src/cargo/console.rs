@@ -327,7 +327,15 @@ fn plain(name: &str) -> &str {
 /// tg `attack_hand` (empty hand) or a click with an ID card: opens the window.
 fn open_console(
     mut clicks: MessageReader<ClickResolved>,
-    consoles: Query<&DmName, (With<CargoConsole>, Without<Unpowered>)>,
+    // A modular computer's NT Shopping Network opens from its program (`crate::modpc`).
+    consoles: Query<
+        &DmName,
+        (
+            With<CargoConsole>,
+            Without<Unpowered>,
+            Without<crate::modpc::pda::ModularComputer>,
+        ),
+    >,
     inventories: Query<&Inventory>,
     cards: Query<(), With<IdCard>>,
     mut open: MessageWriter<OpenUi>,
