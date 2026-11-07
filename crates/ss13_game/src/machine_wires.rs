@@ -650,9 +650,10 @@ mod tests {
         world.insert_resource(Time::<()>::default());
         world.insert_resource(ss13_world::SpatialIndex::default());
         world.insert_resource(crate::combat::CombatRng(1));
-        world.insert_resource(WireColors {
-            seed: 9,
-            ..default()
+        world.insert_resource({
+            let mut colors = WireColors::default();
+            colors.seed = 9;
+            colors
         });
         world
     }

@@ -80,11 +80,8 @@ pub struct WireState {
 }
 
 pub(crate) fn build(app: &mut App) {
-    app.add_systems(Update, attach_wires).add_click_handler(
-        ClickPhase::AttackSelf,
-        89,
-        attack_self,
-    );
+    app.add_systems(Update, attach_wires);
+    app.add_click_handler(ClickPhase::AttackSelf, 89, attack_self);
 }
 
 /// The set of a kind of this module.
@@ -307,9 +304,7 @@ pub fn screwdriver(
         }
         // `mecha/screwdriver_act`: not with someone inside.
         MachineWires::Mecha => {
-            let Some(occupied) = world.get::<Mech>(e).map(|m| m.occupant.is_some()) else {
-                return None;
-            };
+            let occupied = world.get::<Mech>(e).map(|m| m.occupant.is_some())?;
             if occupied {
                 tell(world, ctx.client, Span::Warning, "панель заблокирована");
                 return Some(true);
@@ -679,9 +674,10 @@ mod tests {
         world.insert_resource(Time::<()>::default());
         world.insert_resource(ss13_world::SpatialIndex::default());
         world.insert_resource(crate::combat::CombatRng(1));
-        world.insert_resource(WireColors {
-            seed: 3,
-            ..default()
+        world.insert_resource({
+            let mut colors = WireColors::default();
+            colors.seed = 3;
+            colors
         });
         world
     }

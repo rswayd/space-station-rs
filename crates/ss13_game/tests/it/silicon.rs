@@ -1407,7 +1407,8 @@ fn ai_hud_alerts_and_announcement() {
             "alerts",
             "announcement",
             "call_shuttle",
-            "core_display"
+            "core_display",
+            "deploy_shell"
         ]
     );
     s.act::<ActionButtonsUi>("trigger", &[("id", "alerts")]);

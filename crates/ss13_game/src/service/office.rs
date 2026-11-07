@@ -1280,7 +1280,7 @@ const EXOTIC_FAXES: [&str; 13] = [
 fn hurl(world: &mut World, item: Entity, pos: TilePos) {
     let (dir, range) = {
         let mut rng = world.resource_mut::<crate::combat::CombatRng>();
-        (rng.range(0, 7) as usize, rng.range(1, 4) as u32)
+        (rng.range(0, 7) as usize, rng.range(1, 4))
     };
     let (dx, dy) = [
         (0, 1),
