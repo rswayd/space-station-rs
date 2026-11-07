@@ -69,7 +69,7 @@ _«Лампозаменитель» описано в [../power/lighting.md](../
 Переносной магнитофон проигрывает песни с кассет вокруг.
 
 - **Код:** [`/obj/item/boombox`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/devices/boombox/boombox.dm#L1), [`/obj/item/music_tape`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/devices/boombox/music_tapes.dm#L2)
-- **Статус в ss13-rs:** ❌ нет — звука нет
+- **Статус в ss13-rs:** 🟡 `crates/ss13_game/src/instruments/boombox.rs`: кассеты (`MusicTape`, треки `/datum/looping_sound/boombox`), вставка кассеты, меню (играть/стоп/извлечь) в руке, на полу и в другой руке, нативный повтор трека на `CHANNEL_JUKEBOX` для всех в 12 тайлах с затуханием (sound token), подбор перетаскиванием. Нет: режим «на плече», частицы нот, строки осмотра, трек кассеты robocop (ремикс без лицензии — молчит)
 
 ### Камера трансляции
 Ручная камера транслирует картинку и звук на телеэкраны станции.

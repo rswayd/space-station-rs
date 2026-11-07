@@ -241,6 +241,7 @@ impl Plugin for GameServerPlugin {
             crate::deployable_turrets::DeployableTurretsPlugin,
             crate::cannons::CannonsPlugin,
             crate::gym::GymPlugin,
+            crate::instruments::InstrumentsPlugin,
         ))
         .add_plugins((
             (crate::pull::PullServerPlugin, crate::bump::BumpPlugin),

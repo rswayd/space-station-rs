@@ -382,6 +382,11 @@ pub mod id_access;
 pub mod implants;
 #[cfg(feature = "server")]
 pub mod inducer;
+#[cfg(feature = "server")]
+pub mod instruments;
+#[cfg(feature = "client")]
+pub mod instruments_client;
+pub mod instruments_ui;
 #[cfg(feature = "client")]
 pub mod interact_client;
 #[cfg(feature = "server")]

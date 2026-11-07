@@ -264,10 +264,11 @@ fn drag(world: &mut World, client: Entity, from: DragEnd, to: DragEnd) {
     {
         return;
     }
-    // `drag_pickup` of card decks.
+    // `drag_pickup` of card decks and boomboxes.
     if to == End::World(mob)
         && matches!(from, End::World(_))
-        && crate::service::cards::drag_pickup(world, mob, dragged)
+        && (crate::service::cards::drag_pickup(world, mob, dragged)
+            || crate::instruments::boombox::drag_pickup(world, mob, dragged))
     {
         return;
     }

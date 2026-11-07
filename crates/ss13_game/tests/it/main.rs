@@ -61,6 +61,7 @@ mod holodeck;
 mod icemoon_fauna;
 mod id_lock;
 mod implants;
+mod instruments;
 mod interact;
 mod inventory;
 mod janitor;

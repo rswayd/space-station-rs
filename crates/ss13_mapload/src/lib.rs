@@ -38,6 +38,7 @@ pub mod fishing;
 pub mod food;
 pub mod gags;
 pub mod guns;
+pub mod instruments;
 pub mod item;
 pub mod jobs;
 pub mod light;
