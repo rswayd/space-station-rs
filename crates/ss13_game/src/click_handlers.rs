@@ -186,6 +186,7 @@
 //! | 3156 | `displaycase::attack_hand` |
 //! | 3160 | `flora::attack_hand` |
 //! | 3170 | `botany::unique::pickup_backfire` (never handles) |
+//! | 3175 | `events::space_vines::attack_hand` (frees the mob tangled in kudzu) |
 //! | 3200 | `service::server::interact` |
 //! | 3201 | `service::stationery::cutter_right_click` (right click) |
 //! | 3211 | `service::cards::attack_hand` (draw from a deck; right click: face up, flip a card) |
@@ -337,6 +338,7 @@
 //! | 4400 | `science::experi_scanner::pre_attack` (not on living mobs) |
 //! | 4460 | `closets::kinds::held_on_target` (large crates, multitools on abandoned crates) |
 //! | 4491 | `weapons::rip_and_tear::pre_attack` (a wielded sledgehammer on a wall) |
+//! | 4495 | `events::space_vines::attacked_by` (an item hitting kudzu) |
 //! | 4467 | `misc_items::flatpacks::load` (a flatpack onto a flatpack cart) |
 //! | 4500 | `construction::item_interaction` |
 //! | 4600 | core: a cyborg module or `NoDrop` item stops here |

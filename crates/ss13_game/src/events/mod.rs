@@ -56,6 +56,7 @@ pub mod processor_overload;
 pub mod radiation_leak;
 pub mod radiation_storm;
 pub mod shuttle;
+pub mod space_vines;
 pub mod stray_cargo;
 pub mod supermatter_surge;
 pub mod vent_clog;
@@ -388,6 +389,7 @@ pub fn controls() -> Vec<EventControl> {
             0,
             portal_storm::make_narsie,
         ),
+        unfakeable(c(space_vines::NAME, 15, 20.0, 10, 3, space_vines::make)),
         // `max_occurrences = 0` without `ENABLE_NIGHT_SHIFTS` (off in BandaStation's config).
         unfakeable(c(nightshift::NAME, 2, 0.5, 0, 0, nightshift::make)),
         needs(
@@ -521,6 +523,18 @@ pub struct EventsServerPlugin;
 impl Plugin for EventsServerPlugin {
     fn build(&self, app: &mut App) {
         use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // Items on kudzu (`attacked_by`), an empty hand freeing the tangled.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 4495, |w, c| {
+            let actor = crate::tools::Actor {
+                client: c.client,
+                mob: c.mob,
+                item: c.held,
+            };
+            space_vines::attacked_by(w, actor, c.target)
+        });
+        app.add_click_handler(ClickPhase::EmptyHand, 3175, |w, c| {
+            space_vines::attack_hand(w, c.target)
+        });
         // tg `analyzer_act` of anomalies and anomaly cores: their frequency and code.
         app.add_click_handler(ClickPhase::HeldOnTarget, 5090, |w, c| {
             c.held
@@ -567,12 +581,18 @@ impl Plugin for EventsServerPlugin {
                     wizard::curse_joiners,
                     wizard::madden_joiners,
                     aurora_caelus::process_fades,
+                    space_vines::process_vines,
                 )
                     .chain(),
             )
             .add_systems(
                 Update,
-                (wormholes::enter_wormholes, anomalies::anomaly_contacts)
+                (
+                    wormholes::enter_wormholes,
+                    anomalies::anomaly_contacts,
+                    space_vines::vine_contacts,
+                    space_vines::resist_vines,
+                )
                     .after(ss13_world::WorldSystems::Movement),
             );
     }

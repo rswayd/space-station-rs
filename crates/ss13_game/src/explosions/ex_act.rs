@@ -99,6 +99,9 @@ pub fn ex_act_movable(world: &mut World, thing: Entity, severity: Severity) {
     if world.get_entity(thing).is_err() {
         return;
     }
+    if crate::events::space_vines::ex_act(world, thing, severity) {
+        return;
+    }
     if world.get::<Health>(thing).is_some() {
         ex_act_mob(world, thing, severity);
     } else if world.get::<DmItem>(thing).is_some() {

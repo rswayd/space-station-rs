@@ -954,6 +954,7 @@ pub const EVENT_RUNTIME_TYPES: &[&str] = &[
     "/obj/effect/decal/cleanable/vomit",
     "/obj/item/food/meat/slab/xeno",
     "/obj/item/organ/tongue/alien",
+    "/obj/item/seeds/kudzu",
     "/obj/item/stack/ore/bananium",
     "/obj/item/stack/ore/bluespace_crystal",
     "/obj/item/stack/ore/glass",
@@ -961,6 +962,7 @@ pub const EVENT_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/stack/ore/plasma",
     "/obj/item/stack/ore/uranium",
     "/obj/singularity/dark_matter",
+    "/obj/structure/alien/resin/flower_bud",
 ];
 
 /// `ss13_game::science::exodrone`: what exploration sites, traders and loot generators give.

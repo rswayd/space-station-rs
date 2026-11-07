@@ -202,3 +202,121 @@ fn portal_storm_ends_when_everything_came_out() {
     }
     assert_eq!(world.resource::<Events>().running().count(), 0);
 }
+
+/// Kudzu on the room's floors (potency 0: no new mutations): the controller's ticks spread it over open floors only (never
+/// into walls, one vine a tile); a sharp item does ×4 damage and two hits cut a vine down; the
+/// last vine takes its controller with it.
+#[test]
+fn space_vines_spread_and_are_cut_down() {
+    use ss13_game::events::space_vines::{self, Vine, VineController};
+    let mut app = server("vines");
+    let world = app.world_mut();
+    let start = TilePos::new(8, 3, 1);
+    let controller = space_vines::spawn_controller(world, start, &[], Some(0.0), Some(1.0), true);
+    for _ in 0..10 {
+        space_vines::process_controller(world, controller, space_vines::PROCESS_SECS);
+    }
+    let mut q = world.query::<(Entity, &Vine, &TilePos)>();
+    let vines: Vec<(Entity, TilePos)> = q.iter(world).map(|(e, _, &p)| (e, p)).collect();
+    assert!(vines.len() > 5, "spread: {}", vines.len());
+    let mut tiles: Vec<TilePos> = vines.iter().map(|&(_, p)| p).collect();
+    tiles.sort_by_key(|p| (p.x, p.y));
+    tiles.dedup();
+    assert_eq!(tiles.len(), vines.len(), "one vine a tile");
+    assert!(
+        tiles
+            .iter()
+            .all(|p| (2..=12).contains(&p.x) && (2..=5).contains(&p.y)),
+        "inside the walls: {tiles:?}"
+    );
+    assert_eq!(
+        world.get::<VineController>(controller).unwrap().vines.len(),
+        vines.len()
+    );
+
+    // Everything but one vine gone; then a sharp 10-force item cuts it in two hits (40 each).
+    let (last, _) = vines[0];
+    for &(v, _) in &vines[1..] {
+        space_vines::destroy_vine(world, v);
+    }
+    let mob = world
+        .spawn((TilePos::new(7, 3, 1), ss13_game::health::Health::default()))
+        .id();
+    let knife = world
+        .spawn((
+            ss13_mapload::DmItem {
+                force: 10.0,
+                damtype: "brute".into(),
+                ..default()
+            },
+            ss13_mapload::DmWounding {
+                sharpness: 1,
+                ..default()
+            },
+        ))
+        .id();
+    let actor = ss13_game::tools::Actor {
+        client: mob,
+        mob,
+        item: Some(knife),
+    };
+    assert!(space_vines::attacked_by(world, actor, last));
+    assert_eq!(world.get::<Vine>(last).unwrap().integrity, 10.0);
+    assert!(space_vines::attacked_by(world, actor, last));
+    assert!(world.get_entity(last).is_err(), "cut down");
+    assert!(
+        world.get_entity(controller).is_err(),
+        "the controller is gone with it"
+    );
+}
+
+/// A grown vine tangles a living mob (buckled to it); an empty hand frees it. Explosive vines
+/// always go in an explosion.
+#[test]
+fn space_vines_tangle_and_explode() {
+    use ss13_game::events::space_vines::{self, Mutation, Vine};
+    use ss13_game::health::{Health, Stat};
+    use ss13_game::medical::surgery::Buckled;
+    let mut app = server("vines_tangle");
+    let world = app.world_mut();
+    let pos = TilePos::new(8, 4, 1);
+    let controller = space_vines::spawn_controller(world, pos, &[], None, None, false);
+    let vine = world
+        .get::<ss13_game::events::space_vines::VineController>(controller)
+        .unwrap()
+        .vines[0];
+    let mob = world.spawn((pos, Health::default(), Stat::Conscious)).id();
+    space_vines::entangle(world, vine, mob);
+    assert_eq!(world.get::<Buckled>(mob).map(|b| b.0), Some(vine));
+    assert!(space_vines::attack_hand(world, vine));
+    assert!(world.get::<Buckled>(mob).is_none());
+
+    let boom = space_vines::spawn_controller(
+        world,
+        TilePos::new(10, 4, 1),
+        &[Mutation::Explosive],
+        None,
+        None,
+        false,
+    );
+    let bomb = world
+        .get::<ss13_game::events::space_vines::VineController>(boom)
+        .unwrap()
+        .vines[0];
+    assert!(
+        world
+            .get::<Vine>(bomb)
+            .unwrap()
+            .mutations
+            .has(Mutation::Explosive)
+    );
+    assert!(space_vines::ex_act(
+        world,
+        bomb,
+        ss13_game::explosions::Severity::Light
+    ));
+    assert!(
+        world.get_entity(bomb).is_err(),
+        "an explosive vine always goes"
+    );
+}
