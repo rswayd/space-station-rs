@@ -1,8 +1,7 @@
 //! The programs a PDA runs (`/datum/computer_file/program/*`): their catalog entries here, their
 //! state and acts in the submodules.
-// shortcut: only programs backed by systems that exist: no NT Pay (no pay tokens or transaction
-// history in the economy), navigator (no nanomaps), supermatter and power monitors, theme
-// manager or file manager.
+// shortcut: only programs backed by systems that exist: no navigator (no nanomaps), supermatter
+// and power monitors, theme manager or file manager.
 
 #[cfg(feature = "server")]
 pub mod apps;
@@ -16,6 +15,11 @@ pub mod downloader;
 pub mod messenger;
 #[cfg(feature = "server")]
 pub mod minesweeper;
+#[cfg(feature = "server")]
+pub mod station;
+pub mod station_kinds;
+
+pub use station_kinds::StationProgram;
 
 /// An installed program (an entry of `stored_files`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -49,6 +53,8 @@ pub enum ProgramKind {
     Downloader,
     /// `/datum/computer_file/program/chatclient` (NTNet Relay Chat).
     ChatClient,
+    /// The programs of `station_kinds` (state in `station`).
+    Station(StationProgram),
 }
 
 /// `PROGRAM_CATEGORY_*`, the downloader's tabs in `show_categories` order.
@@ -72,7 +78,21 @@ pub const CATEGORIES: [&str; 8] = [
 ];
 
 impl ProgramKind {
-    pub const ALL: [Self; 14] = [
+    pub const ALL: [Self; 14 + StationProgram::ALL.len()] = {
+        let mut all = [Self::Messenger; 14 + StationProgram::ALL.len()];
+        let mut i = 0;
+        while i < Self::BASE.len() {
+            all[i] = Self::BASE[i];
+            i += 1;
+        }
+        while i < all.len() {
+            all[i] = Self::Station(StationProgram::ALL[i - Self::BASE.len()]);
+            i += 1;
+        }
+        all
+    };
+
+    const BASE: [Self; 14] = [
         Self::Messenger,
         Self::Notepad,
         Self::CrewManifest,
@@ -106,6 +126,7 @@ impl ProgramKind {
             Self::Minesweeper => "minesweeper",
             Self::Downloader => "ntsoftwarehub",
             Self::ChatClient => "ntnrc_client",
+            Self::Station(p) => p.filename(),
         }
     }
 
@@ -130,6 +151,7 @@ impl ProgramKind {
             Self::Minesweeper => "Сапёр",
             Self::Downloader => "NT Software Hub",
             Self::ChatClient => "Chat Client",
+            Self::Station(p) => p.filedesc(),
         }
     }
 
@@ -150,6 +172,7 @@ impl ProgramKind {
             Self::Minesweeper => "bomb",
             Self::Downloader => "download",
             Self::ChatClient => "comment-alt",
+            Self::Station(p) => p.icon(),
         }
     }
 
@@ -199,6 +222,7 @@ impl ProgramKind {
             Self::ChatClient => {
                 "Эта программа позволяет осуществлять коммуникацию через сеть NTNRC."
             }
+            Self::Station(p) => p.extended_desc(),
         }
     }
 
@@ -215,6 +239,7 @@ impl ProgramKind {
             | Self::Downloader => 4,
             Self::Minesweeper => 6,
             Self::CardMod | Self::ChatClient => 8,
+            Self::Station(p) => p.size(),
         }
     }
 
@@ -225,6 +250,7 @@ impl ProgramKind {
             Self::CardMod | Self::Signaler => CATEGORY_EQUIPMENT,
             Self::SecRecords | Self::MedRecords => CATEGORY_SECURITY,
             Self::Newscaster | Self::Minesweeper => CATEGORY_GAMES,
+            Self::Station(p) => p.category(),
             _ => CATEGORY_DEVICE,
         }
     }
@@ -233,10 +259,18 @@ impl ProgramKind {
     /// comes with every PDA, the status display with the heads' and the hub itself with every
     /// computer.
     pub fn on_ntnet_store(self) -> bool {
-        !matches!(
-            self,
-            Self::Messenger | Self::StatusDisplay | Self::Downloader
-        )
+        match self {
+            Self::Station(p) => p.on_ntnet_store(),
+            _ => !matches!(
+                self,
+                Self::Messenger | Self::StatusDisplay | Self::Downloader
+            ),
+        }
+    }
+
+    /// `PROGRAM_ON_SYNDINET_STORE`: offered by the hub of an emagged computer.
+    pub fn on_syndinet_store(self) -> bool {
+        matches!(self, Self::Station(p) if p.on_syndinet_store())
     }
 
     /// `can_run_on_flags`: whether it runs on a PDA (`PROGRAM_PDA`) or a console
@@ -246,6 +280,7 @@ impl ProgramKind {
             Self::Messenger => pda,
             // `PROGRAM_PDA | PROGRAM_LAPTOP`.
             Self::SecRecords | Self::MedRecords | Self::Signaler => pda,
+            Self::Station(p) => p.runs_on(pda),
             _ => true,
         }
     }
@@ -260,6 +295,7 @@ impl ProgramKind {
             Self::MedRecords => (&["medical"], true),
             Self::SecRecords => (&["security"], true),
             Self::Newscaster => (&["library"], false),
+            Self::Station(p) => (p.download_access(), false),
             // BandaStation `crew_manifest.download_access = list()`.
             _ => (&[], false),
         }
@@ -294,9 +330,10 @@ impl ProgramKind {
 
 /// `/obj/item/modular_computer` `default_programs` + `/obj/item/modular_computer/pda`
 /// `pda_programs` this port has, in `stored_files` order.
-pub const PDA_PROGRAMS: [ProgramKind; 4] = [
+pub const PDA_PROGRAMS: [ProgramKind; 5] = [
     ProgramKind::Downloader,
     ProgramKind::Messenger,
+    ProgramKind::Station(StationProgram::NtPay),
     ProgramKind::Notepad,
     ProgramKind::CrewManifest,
 ];
@@ -448,7 +485,7 @@ mod tests {
 
     #[test]
     fn engineering_pdas_get_the_atmos_scanner() {
-        assert_eq!(pda_programs("/obj/item/modular_computer/pda/crew").len(), 4);
+        assert_eq!(pda_programs("/obj/item/modular_computer/pda/crew").len(), 5);
         assert_eq!(
             pda_programs("/obj/item/modular_computer/pda/crew/atmos").last(),
             Some(&ProgramKind::Atmosscan)
@@ -462,7 +499,7 @@ mod tests {
     fn role_pdas_get_their_starting_and_head_programs() {
         use ProgramKind::*;
         assert_eq!(
-            pda_programs("/obj/item/modular_computer/pda/crew/heads/ce")[4..],
+            pda_programs("/obj/item/modular_computer/pda/crew/heads/ce")[5..],
             [Atmosscan, AlarmMonitor, StatusDisplay]
         );
         // The paramedic inherits nothing new: its own list has medical records too.
@@ -471,7 +508,7 @@ mod tests {
                 .contains(&MedRecords)
         );
         assert_eq!(
-            pda_programs("/obj/item/modular_computer/pda/crew/heads/quartermaster")[4..],
+            pda_programs("/obj/item/modular_computer/pda/crew/heads/quartermaster")[5..],
             [StatusDisplay]
         );
         assert_eq!(

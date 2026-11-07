@@ -67,6 +67,7 @@ fn view(data: &NtosData, local: &UiLocalState) -> impl Scene + use<> {
             NtosScreen::Minesweeper(m) => Box::new(EntityScene(minesweeper_screen(m, local))),
             NtosScreen::Downloader(d) => Box::new(EntityScene(downloader_screen(d, local))),
             NtosScreen::Chat(c) => Box::new(EntityScene(relay_chat_screen(c))),
+            NtosScreen::Station(s) => super::station_client::screen(s),
         };
         bsn! {
             @WindowContent

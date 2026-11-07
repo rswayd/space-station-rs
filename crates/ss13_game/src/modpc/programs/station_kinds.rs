@@ -1,0 +1,173 @@
+//! Catalog entries of the station programs whose state lives in [`super::station`]: NT Pay,
+//! Lifeline, Custodial Locator, SiliConnect, Bot Remote Controller, Revelation and the
+//! maintenance disk programs (Physical Scanner, Spectre-Meter).
+
+use super::{CATEGORY_DEVICE, CATEGORY_EQUIPMENT, CATEGORY_SCIENCE};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum StationProgram {
+    /// `/datum/computer_file/program/nt_pay`.
+    NtPay,
+    /// `/datum/computer_file/program/radar/lifeline`.
+    Lifeline,
+    /// `/datum/computer_file/program/radar/custodial_locator`.
+    CustodialLocator,
+    /// `/datum/computer_file/program/borg_monitor` (SiliConnect).
+    BorgMonitor,
+    /// `/datum/computer_file/program/robocontrol`.
+    RoboControl,
+    /// `/datum/computer_file/program/revelation`: Syndicate store only.
+    Revelation,
+    /// `/datum/computer_file/program/maintenance/phys_scanner`: from a maintenance disk.
+    PhysScanner,
+    /// `/datum/computer_file/program/maintenance/spectre_meter`: from a maintenance disk.
+    SpectreMeter,
+}
+
+impl StationProgram {
+    pub const ALL: [Self; 8] = [
+        Self::NtPay,
+        Self::Lifeline,
+        Self::CustodialLocator,
+        Self::BorgMonitor,
+        Self::RoboControl,
+        Self::Revelation,
+        Self::PhysScanner,
+        Self::SpectreMeter,
+    ];
+
+    pub fn filename(self) -> &'static str {
+        match self {
+            Self::NtPay => "ntpay",
+            Self::Lifeline => "lifeline",
+            Self::CustodialLocator => "custodiallocator",
+            Self::BorgMonitor => "siliconnect",
+            Self::RoboControl => "botkeeper",
+            Self::Revelation => "revelation",
+            Self::PhysScanner => "phys_scanner",
+            Self::SpectreMeter => "spectre_meter",
+        }
+    }
+
+    pub fn filedesc(self) -> &'static str {
+        match self {
+            Self::NtPay => "Nanotrasen Pay System",
+            Self::Lifeline => "Lifeline",
+            Self::CustodialLocator => "Custodial Locator",
+            Self::BorgMonitor => "SiliConnect",
+            Self::RoboControl => "BotKeeper",
+            Self::Revelation => "Revelation",
+            Self::PhysScanner => "Physical Scanner",
+            Self::SpectreMeter => "Spectre-Meter",
+        }
+    }
+
+    pub fn icon(self) -> &'static str {
+        match self {
+            Self::NtPay => "money-bill-wave",
+            Self::Lifeline => "heartbeat",
+            Self::CustodialLocator => "broom",
+            Self::BorgMonitor => "project-diagram",
+            Self::RoboControl => "robot",
+            Self::Revelation => "magnet",
+            Self::PhysScanner => "barcode",
+            Self::SpectreMeter => "ghost",
+        }
+    }
+
+    pub fn extended_desc(self) -> &'static str {
+        match self {
+            Self::NtPay => {
+                "Приложение, которое локально (в вашем секторе) помогает переводить деньги или \
+                 отслеживать расходы и прибыль."
+            }
+            Self::Lifeline => {
+                "Эта программа позволяет отслеживать членов экипажа по датчикам их костюма."
+            }
+            Self::CustodialLocator => {
+                "Эта программа позволяет отслеживать оборудование для уборки помещений."
+            }
+            Self::BorgMonitor => {
+                "Эта программа позволяет удаленно отслеживать киборгов станции и отправлять им \
+                 сообщения."
+            }
+            Self::RoboControl => "Программа для удаленного управления ботами станции.",
+            Self::Revelation => {
+                "Этот вирус может уничтожить жесткий диск системы, на которой он запущен. Он \
+                 может быть замаскирован под другую программу, не являющуюся вредоносной. После \
+                 запуска он уничтожит систему при следующем использовании."
+            }
+            Self::PhysScanner => {
+                "Эта программа позволяет планшету сканировать физические объекты и выводить \
+                 данные на экран."
+            }
+            Self::SpectreMeter => {
+                "Программа, используемая для того, чтобы каким-то образом обнаружить присутствие \
+                 призраков поблизости."
+            }
+        }
+    }
+
+    pub fn size(self) -> u32 {
+        match self {
+            Self::NtPay | Self::CustodialLocator | Self::PhysScanner => 2,
+            Self::Lifeline | Self::BorgMonitor => 5,
+            Self::RoboControl => 6,
+            Self::SpectreMeter => 7,
+            Self::Revelation => 13,
+        }
+    }
+
+    pub fn category(self) -> &'static str {
+        match self {
+            Self::NtPay | Self::Revelation => CATEGORY_DEVICE,
+            Self::BorgMonitor | Self::RoboControl => CATEGORY_SCIENCE,
+            Self::Lifeline | Self::CustodialLocator | Self::PhysScanner | Self::SpectreMeter => {
+                CATEGORY_EQUIPMENT
+            }
+        }
+    }
+
+    /// `PROGRAM_ON_NTNET_STORE`: maintenance programs come only on disks, Revelation only from
+    /// the Syndicate store.
+    pub fn on_ntnet_store(self) -> bool {
+        !matches!(
+            self,
+            Self::Revelation | Self::PhysScanner | Self::SpectreMeter
+        )
+    }
+
+    /// `PROGRAM_ON_SYNDINET_STORE`: in the hub of an emagged computer.
+    pub fn on_syndinet_store(self) -> bool {
+        self == Self::Revelation
+    }
+
+    /// `can_run_on_flags`: the radars, the spectre meter (`PROGRAM_LAPTOP | PROGRAM_PDA`) and the
+    /// physical scanner (`PROGRAM_PDA`) need a portable device.
+    pub fn runs_on(self, pda: bool) -> bool {
+        match self {
+            Self::Lifeline | Self::CustodialLocator | Self::PhysScanner | Self::SpectreMeter => pda,
+            _ => true,
+        }
+    }
+
+    /// `download_access`.
+    pub fn download_access(self) -> &'static [&'static str] {
+        match self {
+            Self::Lifeline => &["medical"],
+            Self::CustodialLocator => &["janitor"],
+            Self::BorgMonitor => &["robotics"],
+            Self::RoboControl => &["robotics"],
+            _ => &[],
+        }
+    }
+
+    /// The `/obj/item/disk/computer/maintenance/*` that carries it.
+    pub fn from_maintenance_disk(path: &str) -> Option<Self> {
+        match path {
+            "/obj/item/disk/computer/maintenance/scanner" => Some(Self::PhysScanner),
+            "/obj/item/disk/computer/maintenance/spectre_meter" => Some(Self::SpectreMeter),
+            _ => None,
+        }
+    }
+}

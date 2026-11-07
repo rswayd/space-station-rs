@@ -14,6 +14,9 @@ pub mod client;
 #[cfg(feature = "server")]
 pub mod pda;
 pub mod programs;
+#[cfg(feature = "client")]
+pub mod station_client;
+pub mod station_ui;
 
 /// The NtOS window of one computer.
 pub struct NtosUi;
@@ -72,6 +75,8 @@ pub enum NtosScreen {
     Downloader(Box<DownloaderData>),
     /// `NtosNetChat`.
     Chat(Box<ChatClientData>),
+    /// The station programs (`programs::station`).
+    Station(Box<station_ui::StationScreen>),
 }
 
 impl Default for NtosScreen {
