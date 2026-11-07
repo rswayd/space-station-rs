@@ -11,7 +11,7 @@
 //!   (`update_coverage`).
 //! - The round-end report lists every goal and whether it was met ([`goal_report`]).
 // shortcut: the DNA vault and the bluespace artillery are not offered (their machines, probes
-// and parts are not ported); no satellite control console (`sat_control`), no emagged
+// and parts are not ported); no emagged
 // satellites (meteor chance, the dark matt-eor), no beam visual, no admin goals panel (the
 // toggle is [`set_completed`]).
 
@@ -228,7 +228,7 @@ pub fn goal_report(world: &mut World) -> Vec<ChatMessage> {
         .collect()
 }
 
-fn is_satellite(world: &World, e: Entity) -> bool {
+pub fn is_satellite(world: &World, e: Entity) -> bool {
     world
         .get::<DmObj>(e)
         .is_some_and(|o| is_under(&o.path, SATELLITE))
@@ -267,11 +267,17 @@ pub fn interact(world: &mut World, client: Entity, mob: Entity, target: Entity) 
 /// The end of the meteor shield's `toggle`: `/obj/machinery/satellite/toggle` (only in space
 /// to switch on), `set_anchored`, the coverage updated.
 pub fn complete_toggle(world: &mut World, client: Entity, target: Entity) {
+    toggle(world, target, Some(client));
+}
+
+/// `/obj/machinery/satellite/toggle(user)`: the satellite control console calls it without a
+/// user (no `do_after`, no messages). True when it switched.
+pub fn toggle(world: &mut World, target: Entity, client: Option<Entity>) -> bool {
     let Some(&pos) = world.get::<TilePos>(target) else {
-        return;
+        return false;
     };
     if !is_satellite(world, target) {
-        return;
+        return false;
     }
     let on = !active(world, target);
     let name = world
@@ -279,16 +285,20 @@ pub fn complete_toggle(world: &mut World, client: Entity, target: Entity) {
         .map(|n| n.name.trim_start_matches("\\improper ").to_owned())
         .unwrap_or_default();
     if on && !is_space(world, pos) {
-        tell(
-            world,
-            client,
-            Span::Warning,
-            format!("You can only activate {name} in space."),
-        );
-        return;
+        if let Some(client) = client {
+            tell(
+                world,
+                client,
+                Span::Warning,
+                format!("You can only activate {name} in space."),
+            );
+        }
+        return false;
     }
-    let verb = if on { "activate" } else { "deactivate" };
-    tell(world, client, Span::Notice, format!("You {verb} {name}."));
+    if let Some(client) = client {
+        let verb = if on { "activate" } else { "deactivate" };
+        tell(world, client, Span::Notice, format!("You {verb} {name}."));
+    }
     world
         .entity_mut(target)
         .insert((Satellite { active: on }, Anchored(on)));
@@ -300,6 +310,7 @@ pub fn complete_toggle(world: &mut World, client: Entity, target: Entity) {
         appearance.icon_state = id;
     }
     update_coverage(world);
+    true
 }
 
 /// The active meteor shields on the station levels with their tiles.

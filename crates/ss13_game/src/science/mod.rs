@@ -9,7 +9,8 @@
 //! destructive scanner, tgui `ExperimentConfigure`) in [`experi_scanner`], and the server control
 //! console (tgui `ServerControl`) in [`server_control`]. Xenobiology's slimes, extracts and
 //! potions are in [`xenobio`]; exploration drones and the scanner array in [`exodrone`];
-//! bitrunning (the quantum server, netpods, virtual domains) in [`bitrunning`].
+//! bitrunning (the quantum server, netpods, virtual domains) in [`bitrunning`]; the teleporter,
+//! hand tele, launchpads, gateways and satellite console in [`teleportation`].
 //! [`client`] draws the windows. This module holds the windows' data, which both halves
 //! share.
 //!
@@ -55,6 +56,7 @@ pub mod relics;
 pub mod server_control;
 #[cfg(feature = "server")]
 pub mod techweb;
+pub mod teleportation;
 #[cfg(feature = "server")]
 pub mod xenobio;
 #[cfg(feature = "server")]
@@ -96,6 +98,7 @@ impl bevy::prelude::Plugin for ScienceServerPlugin {
             experimentor::ExperimentorPlugin,
             relics::RelicPlugin,
             gizmo::GizmoPlugin,
+            teleportation::server::TeleportationPlugin,
         ));
     }
 }

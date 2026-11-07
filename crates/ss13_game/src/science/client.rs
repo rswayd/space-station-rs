@@ -42,6 +42,7 @@ impl Plugin for ScienceClientPlugin {
             .add_plugins((
                 super::exodrone::client::ExodroneClientPlugin,
                 super::bitrunning::client::BitrunningClientPlugin,
+                super::teleportation::client::TeleportationClientPlugin,
             ));
     }
 }

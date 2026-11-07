@@ -11,8 +11,8 @@
 //!   `crate::cargo::supplypod::launch`; the augment beacon drops it at the user's feet) and use
 //!   up a charge (the last one: sparks and the beacon is gone). Music (with BandaStation's extra
 //!   instruments), hero costume and augment beacons.
-// shortcut: no teleporter console reads the tracking beacons yet (no teleporter hub/console in
-// the port; `enabled_beacons` is their list), no rename. The chaplain's armaments beacon (a radial
+// shortcut: no rename (the teleporter console names beacons by their area,
+// `crate::science::teleportation::teleporter`). The chaplain's armaments beacon (a radial
 // of holy armour sets, `GLOB.holy_armor_type`) is not ported: it needs the chaplain armour sets
 // (religion group).
 
@@ -289,6 +289,10 @@ pub fn enabled_beacons(world: &mut World) -> Vec<Entity> {
 fn set_enabled(world: &mut World, beacon: Entity, enabled: bool) {
     if let Some(mut b) = world.get_mut::<TrackingBeacon>(beacon) {
         b.enabled = enabled;
+    }
+    if !enabled {
+        // `COMSIG_BEACON_DISABLED`.
+        crate::science::teleportation::teleporter::beacon_disabled(world, beacon);
     }
     let state = if enabled { "beacon" } else { "beacon-off" };
     crate::obj_damage::set_icon_state(world, beacon, state);

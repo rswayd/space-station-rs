@@ -118,6 +118,8 @@ pub enum Family {
     Teapot,
     /// Quantum pads (`crate::science::quantum_pad`: no state until used).
     QuantumPad,
+    /// Teleporter hub, station and console; launchpads and their console; satellite control.
+    Teleportation,
     /// Sheetifiers (`crate::eng_machines::sheetifier`).
     Sheetifier,
     /// Atmospheric shield generators (`crate::eng_machines::atmos_shield`).
@@ -182,6 +184,11 @@ const FAMILIES: [(&str, Family); 40] = [
     ),
     (crate::teapot::TEAPOT, Family::Teapot),
     (crate::science::quantum_pad::PAD, Family::QuantumPad),
+    ("/obj/machinery/teleport", Family::Teleportation),
+    ("/obj/machinery/computer/teleporter", Family::Teleportation),
+    ("/obj/machinery/launchpad", Family::Teleportation),
+    ("/obj/machinery/computer/launchpad", Family::Teleportation),
+    ("/obj/machinery/computer/sat_control", Family::Teleportation),
     (
         crate::eng_machines::sheetifier::SHEETIFIER,
         Family::Sheetifier,
@@ -212,6 +219,13 @@ const FAMILIES: [(&str, Family); 40] = [
 pub fn family(path: &str) -> Option<Family> {
     if is_under(path, "/obj/machinery/computer/cargo/express") {
         // Its own console state is not ported.
+        return None;
+    }
+    if is_under(
+        path,
+        crate::science::teleportation::launchpad::BRIEFCASE_PAD,
+    ) {
+        // A syndicate kit without a board.
         return None;
     }
     FAMILIES
@@ -1159,7 +1173,7 @@ pub fn setup_built(world: &mut World, machine: Entity) {
         Family::MailSorter => crate::cargo::mail_sorter::setup(world, machine),
         Family::MaterialsMarket => crate::cargo::materials_market::setup(world, machine),
         Family::Teapot => crate::teapot::setup(world, machine, false),
-        Family::QuantumPad => {}
+        Family::QuantumPad | Family::Teleportation => {}
         Family::Sheetifier => crate::eng_machines::sheetifier::setup(world, machine),
         Family::AtmosShieldGen => crate::eng_machines::atmos_shield::setup(world, machine),
         Family::Flatpacker => crate::eng_machines::flatpacker::setup(world, machine),

@@ -126,6 +126,7 @@ mod surgery;
 mod tables;
 mod tank_storage;
 mod teg;
+mod teleportation;
 mod teleporters;
 mod tendrils;
 mod traitor;
