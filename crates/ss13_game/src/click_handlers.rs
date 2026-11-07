@@ -157,6 +157,7 @@
 //! | 2000 | `wallmount::interact` |
 //! | 2010 | `power::lighting::remove_by_hand` (right click: a bulb out of its fixture) |
 //! | 2012 | `power::lighting::floodlight_hand` (setting, the tube out with the panel open) |
+//! | 2017 | `misc_items::puzzle::press` (ruin puzzle buttons) |
 //! | 2100 | `power::apc_ui::interact` |
 //! | 2200 | `mecha::bay::interact` |
 //! | 2300 | `mecha::core::attack_hand` |
@@ -214,6 +215,7 @@
 //! | 100 | `antag::uplink::item_interaction` |
 //! | 200 | `antag::syndie_items::item_interaction` |
 //! | 300 | `emag::interact_with_atom` (left click) |
+//! | 317 | `misc_items::puzzle::swipe` (keycards on keycard doors and panels) |
 //! | 320 | `janitor::key_on_door` (the janitor's key on a door) |
 //! | 330 | `shuttle_console_server` (a held item on a shuttle console) |
 //! | 340 | `shuttle_nav` (a held item on a navigation console) |

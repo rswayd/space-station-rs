@@ -1,18 +1,22 @@
 //! Single items over real WebTransport on 127.0.0.1 (`ss13_game::misc_items`): the station
 //! charter renames the station (a standard name at once, another after the admins' wait unless
-//! rejected) and is used up.
+//! rejected) and is used up; a keycard door opens only for its keycard, a keycard panel opens its
+//! puzzle door once.
 
 use std::path::{Path, PathBuf};
 
 use bevy::prelude::*;
 use ss13_game::combat::NextMove;
+use ss13_game::doors::{Door, DoorState};
 use ss13_game::inventory::{CarriedBy, Inventory};
 use ss13_game::misc_items::charter::{Charter, StationName, reject_proposed};
+use ss13_game::misc_items::puzzle::PuzzleUsed;
 use ss13_game::testing::{self, Drive, fixture_map, write_fixture};
 use ss13_net::chat::client::ChatReceived;
 use ss13_shared::TilePos;
 use ss13_shared::protocol::{ClientIntent, InventorySlot};
 use ss13_tgui::prompt::{Prompt, PromptAnswer, PromptAnswered};
+use ss13_world::SpatialIndex;
 
 const TYPES: &str = r##"{
   "schema": 3,
@@ -39,6 +43,35 @@ const TYPES: &str = r##"{
         "tool_behaviour": null, "toolspeed": 1 } },
     "/obj/item/station_charter": { "parent": "/obj/item", "declared_vars": {
         "name": "station charter", "icon_state": "charter" } },
+    "/obj/item/keycard": { "parent": "/obj/item", "declared_vars": {
+        "name": "security keycard", "icon_state": "keycard", "puzzle_id": null } },
+    "/obj/item/keycard/yellow": { "parent": "/obj/item/keycard", "declared_vars": {
+        "name": "yellow keycard", "puzzle_id": "yellow" } },
+    "/obj/item/keycard/blue": { "parent": "/obj/item/keycard", "declared_vars": {
+        "name": "blue keycard", "puzzle_id": "blue" } },
+    "/obj/item/keycard/vault": { "parent": "/obj/item/keycard", "declared_vars": {
+        "puzzle_id": "vault" } },
+    "/obj/machinery": { "parent": "/obj", "declared_vars": { "anchored": 1,
+        "use_power": 1, "idle_power_usage": 100, "active_power_usage": 1000, "power_channel": 1,
+        "req_access": null, "req_one_access": null } },
+    "/obj/machinery/door": { "parent": "/obj/machinery", "declared_vars": {
+        "icon": { "resource": "pz.dmi" }, "icon_state": "door_closed", "density": 1,
+        "opacity": 1, "layer": 2.7, "base_icon_state": "door", "autoclose": 0,
+        "can_open_with_hands": 1, "closingLayer": 3.1, "glass": 0, "locked": 0, "safe": 1,
+        "visible": 1, "welded": 0, "power_channel": 3, "idle_power_usage": 10,
+        "active_power_usage": 200, "id_tag": null } },
+    "/obj/machinery/door/puzzle": { "parent": "/obj/machinery/door", "declared_vars": {
+        "name": "locked door", "can_open_with_hands": 0, "puzzle_id": null,
+        "uses_queuelinks": 1, "open_message": "The door beeps, and slides opens." } },
+    "/obj/machinery/door/puzzle/keycard": { "parent": "/obj/machinery/door/puzzle",
+        "declared_vars": { "uses_queuelinks": 0 } },
+    "/obj/machinery/door/puzzle/keycard/yellow_required": {
+        "parent": "/obj/machinery/door/puzzle/keycard", "declared_vars": { "puzzle_id": "yellow" } },
+    "/obj/machinery/puzzle": { "parent": "/obj/machinery", "declared_vars": {
+        "icon": { "resource": "wm.dmi" }, "used": 0, "single_use": 1, "id": null,
+        "queue_size": 2 } },
+    "/obj/machinery/puzzle/keycardpad": { "parent": "/obj/machinery/puzzle", "declared_vars": {
+        "name": "keycard panel", "icon_state": "keycardpad0", "base_icon_state": "keycardpad" } },
     "/obj/item/card": { "parent": "/obj/item" },
     "/obj/item/card/id": { "parent": "/obj/item/card", "declared_vars": {
         "access": { "list": [] }, "slot_flags": 256 } },
@@ -67,28 +100,43 @@ const TYPES: &str = r##"{
   }
 }"##;
 
-/// Rows top-down, the last line is y = 1. The spawn `s` (2,2).
+/// Rows top-down, the last line is y = 1. The spawn `s` (2,3); a yellow keycard door `K`
+/// (3,3); a keycard panel `B` (2,2) of the puzzle `vault`, whose puzzle door is `D` (3,2).
 const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 "f" = (/turf/open/floor,/area/space)
 "s" = (/obj/effect/landmark/start/assistant,/turf/open/floor,/area/space)
+"K" = (/obj/machinery/door/puzzle/keycard/yellow_required,/turf/open/floor,/area/space)
+"B" = (/obj/machinery/puzzle/keycardpad{id = "vault"},/turf/open/floor,/area/space)
+"D" = (/obj/machinery/door/puzzle{puzzle_id = "vault"},/turf/open/floor,/area/space)
 
 (1,1,1) = {"
 wwwww
-wsffw
-wfffw
+wsKfw
+wBDfw
 wwwww
 "}
 "##;
 
+const KEYCARD_DOOR: TilePos = TilePos::new(3, 3, 1);
+const PAD: TilePos = TilePos::new(2, 2, 1);
+const PUZZLE_DOOR: TilePos = TilePos::new(3, 2, 1);
+
 const SPAWN: TilePos = TilePos::new(2, 3, 1);
 
-const STATES: [(&str, &str); 6] = [
+const STATES: [(&str, &str); 13] = [
     ("t.dmi", "floor"),
     ("t.dmi", "wall"),
     ("l.dmi", "x2"),
     ("h.dmi", "human_basic"),
     ("i.dmi", "toy"),
     ("i.dmi", "charter"),
+    ("i.dmi", "keycard"),
+    ("pz.dmi", "door_closed"),
+    ("pz.dmi", "door_opening"),
+    ("pz.dmi", "door_open"),
+    ("pz.dmi", "door_closing"),
+    ("wm.dmi", "keycardpad0"),
+    ("wm.dmi", "keycardpad1"),
 ];
 
 fn fixture_assets() -> PathBuf {
@@ -97,6 +145,12 @@ fn fixture_assets() -> PathBuf {
     let used = [
         "/obj/effect/landmark/start/assistant",
         "/obj/item/station_charter",
+        "/obj/item/keycard/yellow",
+        "/obj/item/keycard/blue",
+        "/obj/item/keycard/vault",
+        "/obj/machinery/door/puzzle",
+        "/obj/machinery/door/puzzle/keycard/yellow_required",
+        "/obj/machinery/puzzle/keycardpad",
         "/turf/open/floor",
         "/turf/closed/wall",
         "/turf/open/space/basic",
@@ -219,6 +273,34 @@ impl Station {
             .any(|l| l.contains(text))
     }
 
+    fn door_at(&self, pos: TilePos) -> Entity {
+        self.on_tile::<Door>(pos)
+    }
+
+    fn on_tile<T: Component>(&self, pos: TilePos) -> Entity {
+        let world = self.server.world();
+        world
+            .resource::<SpatialIndex>()
+            .on_tile(pos)
+            .iter()
+            .copied()
+            .find(|&e| world.get::<T>(e).is_some())
+            .unwrap_or_else(|| panic!("nothing with {} on {pos:?}", std::any::type_name::<T>()))
+    }
+
+    fn closed(&self, door: Entity) -> bool {
+        self.get::<Door>(door).state == DoorState::Closed
+    }
+
+    /// A click on `e` once off the click cooldown and replicated.
+    fn click_on(&mut self, e: Entity) {
+        let mob = self.mob();
+        self.run_until("off the click cooldown and replicated", |s| {
+            s.now() >= s.get::<NextMove>(mob).0 && s.net_id(0, e).is_some()
+        });
+        self.0.click(0, e);
+    }
+
     fn station_name(&self) -> String {
         self.server.world().resource::<StationName>().0.clone()
     }
@@ -266,4 +348,33 @@ fn charter_renames_the_station_once() {
     s.run_until_for(15.0, "approved by itself", |s| {
         s.station_name() == "Butt Land"
     });
+}
+
+#[test]
+fn keycards_open_their_puzzle_doors() {
+    let mut s = Station::start();
+    let keycard_door = s.door_at(KEYCARD_DOOR);
+    let puzzle_door = s.door_at(PUZZLE_DOOR);
+    let pad = s.on_tile::<ss13_mapload::DmPuzzle>(PAD);
+    assert!(s.closed(keycard_door) && s.closed(puzzle_door));
+
+    // The wrong keycard buzzes; the yellow one opens the door for good.
+    s.give_new("/obj/item/keycard/blue");
+    s.click_on(keycard_door);
+    s.run_until("buzzed", |s| s.said("не тот ключ"));
+    assert!(s.closed(keycard_door));
+    s.give_new("/obj/item/keycard/yellow");
+    s.click_on(keycard_door);
+    s.run_until("opened", |s| !s.closed(keycard_door));
+    s.hold(3.0, "it stays open", |s| !s.closed(keycard_door));
+
+    // The panel takes only the vault keycard, once, and opens the vault door.
+    s.give_new("/obj/item/keycard/yellow");
+    s.click_on(pad);
+    s.hold(1.5, "a wrong card opens nothing", |s| s.closed(puzzle_door));
+    assert!(s.try_get::<PuzzleUsed>(pad).is_none());
+    s.give_new("/obj/item/keycard/vault");
+    s.click_on(pad);
+    s.run_until("the vault door opens", |s| !s.closed(puzzle_door));
+    assert!(s.try_get::<PuzzleUsed>(pad).is_some());
 }

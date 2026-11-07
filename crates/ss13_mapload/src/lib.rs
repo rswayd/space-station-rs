@@ -49,6 +49,7 @@ pub mod mobs;
 pub mod modsuit;
 pub mod plants;
 pub mod power;
+pub mod puzzle;
 pub mod radio;
 pub mod reagents;
 pub mod research;
@@ -112,6 +113,7 @@ pub use mining::{
 };
 pub use mobs::DmMob;
 pub use power::DmPower;
+pub use puzzle::DmPuzzle;
 pub use radio::DmRadio;
 pub use reagents::DmReagents;
 pub use security::{DmBaton, DmHandcuffs};
@@ -370,6 +372,7 @@ impl Plugin for DmProtoPlugin {
             .register_proto_component::<DmMailSort>("dm_mail_sort")
             .register_proto_component::<DmNavBeacon>("dm_navbeacon")
             .register_proto_component::<DmTrigger>("dm_trigger")
+            .register_proto_component::<DmPuzzle>("dm_puzzle")
             .register_proto_component::<DmTool>(construct::TOOL_COMPONENT)
             .register_proto_component::<DmStack>(construct::STACK_COMPONENT)
             .register_proto_component::<DmTurfBuild>(construct::TURF_COMPONENT)

@@ -4,9 +4,11 @@
 //! - [`charter`]: the station charter renaming the station.
 //! - [`documents`]: secret documents, their photocopies and forged seals.
 //! - [`target`]: shooting range targets and their bullet holes.
+//! - [`puzzle`]: ruin keycards, keycard doors and the puzzle panels opening puzzle doors.
 
 pub mod charter;
 pub mod documents;
+pub mod puzzle;
 pub mod target;
 
 use bevy::prelude::*;
@@ -18,5 +20,6 @@ impl Plugin for MiscItemsPlugin {
         charter::build(app);
         documents::build(app);
         target::build(app);
+        puzzle::build(app);
     }
 }
