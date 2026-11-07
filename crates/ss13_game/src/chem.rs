@@ -767,14 +767,7 @@ pub(crate) fn try_inject(world: &mut World, actor: Actor, target: Entity) -> boo
         .unwrap_or_default()
         .0
         .check_zone();
-    let bit = body_part_bit(zone);
-    let thick = world.get::<Inventory>(target).is_some_and(|inv| {
-        inv.equipped().any(|item| {
-            world.get::<DmClothing>(item).is_some_and(|c| {
-                c.body_parts_covered & bit != 0 && c.clothing_flags & THICKMATERIAL != 0
-            })
-        })
-    });
+    let thick = thick_covered(world, target, zone);
     if thick {
         tell(
             world,
@@ -784,6 +777,19 @@ pub(crate) fn try_inject(world: &mut World, actor: Actor, target: Entity) -> boo
         );
     }
     !thick
+}
+
+/// tg `/mob/living/carbon/human/can_inject` without `INJECT_CHECK_PENETRATE_THICK`: worn
+/// `THICKMATERIAL` clothing covers `zone`.
+pub(crate) fn thick_covered(world: &World, target: Entity, zone: BodyZone) -> bool {
+    let bit = body_part_bit(zone);
+    world.get::<Inventory>(target).is_some_and(|inv| {
+        inv.equipped().any(|item| {
+            world.get::<DmClothing>(item).is_some_and(|c| {
+                c.body_parts_covered & bit != 0 && c.clothing_flags & THICKMATERIAL != 0
+            })
+        })
+    })
 }
 
 /// The bodypart's `body_part` bit (`CHEST`, `HEAD`, `ARM_LEFT`, ...).

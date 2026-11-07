@@ -136,7 +136,8 @@ pub struct DmGun {
     pub bolt_type: u32,
     pub casing_ejector: bool,
     pub semi_auto: bool,
-    /// `/obj/item/gun/energy`: its `ammo_type` list, cell and charging.
+    /// `/obj/item/gun/energy`: its `ammo_type` list, cell and charging. A special gun
+    /// (syringe, DNA and reagent guns) has its internal casing as the only shot.
     pub energy: bool,
     pub shots: Vec<CasingData>,
     pub cell_maxcharge: f64,
@@ -460,7 +461,10 @@ pub fn gun(types: &DmTypes, path: &str) -> DmGun {
                 .map(|c| casing(types, c))
                 .collect()
         } else {
-            Vec::new()
+            internal_casing(path)
+                .filter(|c| types.types.contains_key(*c))
+                .map(|c| vec![casing(types, c)])
+                .unwrap_or_default()
         },
         cell_maxcharge: if energy {
             num(types, &cell, "maxcharge")
@@ -484,6 +488,20 @@ pub fn gun(types: &DmTypes, path: &str) -> DmGun {
         projectile_damage_multiplier: n("projectile_damage_multiplier") as f32,
         auto_rack: is_under(path, "/obj/item/gun/ballistic/shotgun/automatic"),
         sounds: gun_sounds(types, path),
+    }
+}
+
+/// The casing a special gun makes for itself in `Initialize` (`chambered = new ...`): the
+/// syringe guns' spring, the DNA gun's rigged one, the reagent gun's dart synthesiser.
+fn internal_casing(path: &str) -> Option<&'static str> {
+    if is_under(path, "/obj/item/gun/syringe/dna") {
+        Some("/obj/item/ammo_casing/dnainjector")
+    } else if is_under(path, "/obj/item/gun/syringe") {
+        Some("/obj/item/ammo_casing/syringegun")
+    } else if is_under(path, "/obj/item/gun/chem") {
+        Some("/obj/item/ammo_casing/chemgun")
+    } else {
+        None
     }
 }
 

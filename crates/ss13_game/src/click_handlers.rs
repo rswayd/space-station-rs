@@ -29,6 +29,7 @@
 //! | 700 | `antag::wizard::server::attack_self` |
 //! | 800 | `vision::visor_attack_self` |
 //! | 900 | `security::attack_self` |
+//! | 993 | `guns_special::attack_self` (the last syringe out of a syringe gun) |
 //! | 1000 | `guns::attack_self` |
 //! | 1100 | `chem::attack_self` |
 //! | 1200 | `medical::attack_self` |
@@ -116,6 +117,7 @@
 //! | 1261 | `weapons` whetstone (`sharpener`), shield bash (`block::bash`) |
 //! | 1300 | `disposals::mail_interaction` |
 //! | 1350 | `botany::grown_interaction` (log cutting, potato batteries) |
+//! | 1393 | `guns_special::item_interaction` (a syringe or DNA injector into a syringe gun, a grenade into a grenade launcher) |
 //! | 1400 | `chem::item_interaction` |
 //! | 1450 | `mining::hand_interaction` (modkits, point cards, gibtonite ore) |
 //! | 1500 | `guns::item_interaction` |

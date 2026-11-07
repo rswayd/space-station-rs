@@ -183,6 +183,7 @@ impl Plugin for GunsServerPlugin {
             c.held.is_none() && crate::guns::attack_hand(w, c.client, c.mob, c.target)
         });
         crate::taser::plugin(app);
+        crate::guns_special::plugin(app);
         app.init_resource::<Bursts>()
             .add_observer(add_gun_state)
             .add_observer(add_magazine_state)
@@ -362,6 +363,8 @@ pub fn interact_with_mob(world: &mut World, click: &ClickResolved, gun: Entity) 
 /// tg `fire_gun` up to `process_fire`: pins, an empty chamber, `WEAPON_HEAVY`, dual wielding.
 /// True when the click is used up.
 fn try_fire(world: &mut World, client: Entity, mob: Entity, gun_entity: Entity, aim: Aim) -> bool {
+    // A syringe or reagent gun chambers its spring while it holds a dart.
+    crate::guns_special::before_fire(world, gun_entity);
     let (Some(dm), Some(gun)) = (
         world.get::<DmGun>(gun_entity).cloned(),
         world.get::<Gun>(gun_entity).cloned(),
@@ -406,6 +409,10 @@ fn try_fire(world: &mut World, client: Entity, mob: Entity, gun_entity: Entity, 
             );
         }
         tell(world, client, Span::Warning, fail);
+        return true;
+    }
+    // A grenade launcher throws its grenade instead (`crate::guns_special`).
+    if crate::guns_special::process_fire(world, client, mob, gun_entity, aim) {
         return true;
     }
     let combat = world.get::<CombatMode>(mob).is_some_and(|c| c.0);
@@ -795,23 +802,26 @@ fn shoot(
     data.stamina *= mult;
     // `/obj/item/ammo_casing/energy/kinetic/ready_proj`: the accelerator's modkits.
     crate::mining::modkits::modify_projectile(world, gun_entity, &mut data);
+    // `ready_proj` of a special casing: the syringe, injector or synthesised dart it carries.
+    let mut dart = crate::guns_special::ready_proj(world, gun_entity, mob, &mut data);
     let spreads = pellet_spreads(&mut world.resource_mut::<CombatRng>(), &casing, sprd);
     for deviation in spreads {
-        crate::projectile::fire(
-            world,
-            Shot {
-                data: &data,
-                firer: mob,
-                from,
-                target: Some(target),
-                target_pos,
-                zone,
-                hit_prone,
-                pixel: aim.pixel,
-                deviation,
-                fired_from: Some(gun_entity),
-            },
-        );
+        let shot = Shot {
+            data: &data,
+            firer: mob,
+            from,
+            target: Some(target),
+            target_pos,
+            zone,
+            hit_prone,
+            pixel: aim.pixel,
+            deviation,
+            fired_from: Some(gun_entity),
+        };
+        match dart.take() {
+            Some(dart) => crate::projectile::fire_with(world, shot, dart),
+            None => crate::projectile::fire(world, shot),
+        };
     }
     // `shoot_live_shot` -> `simulate_recoil` -> `calculate_recoil`.
     // shortcut: the `min_recoil_multiplier` preference is always its default (100%).

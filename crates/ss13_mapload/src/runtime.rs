@@ -80,6 +80,8 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/shard",
     "/obj/item/stack/rods/ten",
     "/obj/item/stack/rods/two",
+    // `guns_special`: the dart pistol's starting syringe.
+    "/obj/item/reagent_containers/syringe",
     // `mob_holder`: small mobs picked up into a hand.
     "/obj/item/mob_holder",
     "/obj/item/mob_holder/snail",

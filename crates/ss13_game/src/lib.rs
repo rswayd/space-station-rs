@@ -301,6 +301,7 @@ pub mod gifts;
 pub mod grenades;
 #[cfg(feature = "server")]
 pub mod guns;
+pub mod guns_special;
 #[cfg(feature = "server")]
 pub mod hallucination;
 #[cfg(feature = "server")]
