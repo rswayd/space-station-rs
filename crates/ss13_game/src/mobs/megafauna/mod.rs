@@ -719,6 +719,21 @@ pub fn on_projectile_hit(world: &mut World, p: &crate::projectile::Projectile, t
     }
 }
 
+/// `PopulateContents` of a boss chest by its type, for a chest mapped or spawned without its
+/// boss (`crate::mining::necropolis::populate`).
+// shortcut: the crusher chests' trophies are left out (no crusher trophies yet).
+pub fn chest_loot(world: &mut World, path: &str) -> Option<Vec<&'static str>> {
+    if is_under(path, bubblegum::CHEST) {
+        Some(bubblegum::loot(world))
+    } else if is_under(path, colossus::CHEST) {
+        Some(colossus::loot(world))
+    } else if is_under(path, drake::CHEST) {
+        Some(drake::loot(world))
+    } else {
+        None
+    }
+}
+
 /// tg `drop_loot` of a dying megafauna, before `del_on_death`: its necropolis chest with what
 /// `PopulateContents` puts in it. Its abilities stop.
 pub(super) fn on_death(world: &mut World, mob: Entity, pos: TilePos) {
