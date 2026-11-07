@@ -137,7 +137,7 @@ pub struct DmGun {
     pub casing_ejector: bool,
     pub semi_auto: bool,
     /// `/obj/item/gun/energy`: its `ammo_type` list, cell and charging. A special gun
-    /// (syringe, DNA and reagent guns) has its internal casing as the only shot.
+    /// (syringe, DNA and reagent guns, the meat hook) has its internal casing as the only shot.
     pub energy: bool,
     pub shots: Vec<CasingData>,
     pub cell_maxcharge: f64,
@@ -461,9 +461,9 @@ pub fn gun(types: &DmTypes, path: &str) -> DmGun {
                 .map(|c| casing(types, c))
                 .collect()
         } else {
-            internal_casing(path)
-                .filter(|c| types.types.contains_key(*c))
-                .map(|c| vec![casing(types, c)])
+            internal_casing(types, path)
+                .filter(|c| types.types.contains_key(c))
+                .map(|c| vec![casing(types, &c)])
                 .unwrap_or_default()
         },
         cell_maxcharge: if energy {
@@ -492,14 +492,17 @@ pub fn gun(types: &DmTypes, path: &str) -> DmGun {
 }
 
 /// The casing a special gun makes for itself in `Initialize` (`chambered = new ...`): the
-/// syringe guns' spring, the DNA gun's rigged one, the reagent gun's dart synthesiser.
-fn internal_casing(path: &str) -> Option<&'static str> {
+/// syringe guns' spring, the DNA gun's rigged one, the reagent gun's dart synthesiser; the meat
+/// hook's `ammo_type` (`/obj/item/gun/magic` chambers it per charge).
+fn internal_casing(types: &DmTypes, path: &str) -> Option<String> {
     if is_under(path, "/obj/item/gun/syringe/dna") {
-        Some("/obj/item/ammo_casing/dnainjector")
+        Some("/obj/item/ammo_casing/dnainjector".to_owned())
     } else if is_under(path, "/obj/item/gun/syringe") {
-        Some("/obj/item/ammo_casing/syringegun")
+        Some("/obj/item/ammo_casing/syringegun".to_owned())
     } else if is_under(path, "/obj/item/gun/chem") {
-        Some("/obj/item/ammo_casing/chemgun")
+        Some("/obj/item/ammo_casing/chemgun".to_owned())
+    } else if is_under(path, "/obj/item/gun/magic/hook") {
+        Some(type_var(types, path, "ammo_type")).filter(|c| !c.is_empty())
     } else {
         None
     }
