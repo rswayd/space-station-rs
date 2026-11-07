@@ -198,7 +198,6 @@
 //! | 3463 | `silicon::ai_slipper::interact` |
 //! | 3464 | `science::bitrunning::avatar::ladder_click` (hololadders) |
 //! | 3465 | `effects::teleporters::portal_click` (permanent portals) |
-//! | 3485 | `curses::cut_strand` (wirecutters on a strangled mob) |
 //! | 3466 | `fireplace::attack_hand` (taking a bonfire apart) |
 //! | 3467 | `science::quantum_pad::attack_hand` |
 //! | 3468 | `janitor::washer_attack_hand` (washing machine door; right click starts it) |
