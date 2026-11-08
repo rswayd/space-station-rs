@@ -464,7 +464,7 @@ fn flashbang(world: &mut World, item: Entity) {
 }
 
 /// `get_hearers_in_view(range, turf)`: the living mobs on the tiles seen from `pos`.
-fn hearers(world: &World, pos: TilePos, range: u32) -> Vec<Entity> {
+pub(crate) fn hearers(world: &World, pos: TilePos, range: u32) -> Vec<Entity> {
     let index = world.resource::<SpatialIndex>();
     let opaque = |p: TilePos| {
         index

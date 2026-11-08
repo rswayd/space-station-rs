@@ -47,6 +47,8 @@ const LIFE_SECS: f64 = 2.0;
 /// `MUTATION_SOURCE_ACTIVATED` / `MUTATION_SOURCE_MUTATOR`.
 pub const SOURCE_ACTIVATED: u8 = 1;
 pub const SOURCE_MUTATOR: u8 = 2;
+/// `MUTATION_SOURCE_BURDENED_TRAUMA` (`crate::service` punished god).
+pub const SOURCE_BURDENED: u8 = 4;
 /// `GLOB.standard_mutation_sources`.
 pub const STANDARD_SOURCES: u8 = SOURCE_ACTIVATED | SOURCE_MUTATOR;
 

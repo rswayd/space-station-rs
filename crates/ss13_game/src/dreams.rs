@@ -10,8 +10,9 @@
 //! - `/datum/dream/hear_something` (weight 500): a toy or a record, then a sound.
 // shortcut: the "hear something" sound comes from a short list ([`DREAM_SOUNDS`]) instead of every
 // file under `sound/` (`SSsounds.all_sounds`, most of them never converted for the client), and
-// is not stopped 5 s after the dream (no sound channels yet). No `COMSIG_PRE_DREAMING` dream
-// pools (none of their sources is ported).
+// is not stopped 5 s after the dream (no sound channels yet). `COMSIG_PRE_DREAMING` and
+// `COMSIG_START_DREAMING` are calls into the dream god (`crate::service::dream_pool`,
+// `crate::service::dream_started`); no `sleep_until_finished`.
 
 use bevy::prelude::*;
 use ss13_mapload::MapLoadPlugin;
@@ -47,6 +48,36 @@ impl Default for DreamRng {
 pub struct Dreaming {
     pub fragments: Vec<Fragment>,
     pub next_at: f64,
+    pub kind: DreamKind,
+}
+
+/// The `/datum/dream` type being dreamt.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum DreamKind {
+    #[default]
+    Random,
+    HearSomething,
+    /// The dream portent rite's (`/datum/dream/specific_portent`).
+    SpecificPortent,
+    /// The dream god's (`/datum/dream/random/vague_portent`).
+    VaguePortent,
+    /// The slumber party's (`/datum/dream/shared`).
+    Shared,
+}
+
+/// A dream another system puts in the pool (`COMSIG_PRE_DREAMING`'s `dream_pool[dream] = weight`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct ExtraDream {
+    pub kind: DreamKind,
+    pub weight: u32,
+    pub source: DreamSource,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum DreamSource {
+    Fragments(Vec<Fragment>),
+    /// A random dream about these nouns.
+    RandomOf(Vec<&'static str>),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -364,20 +395,53 @@ pub fn handle_dreams(world: &mut World, mob: Entity) {
     if world.get::<Dreaming>(mob).is_some() || !world.resource_mut::<DreamRng>().0.chance(10.0) {
         return;
     }
-    let nouns = bedsheet_nouns(world, mob);
-    if !world.contains_resource::<DreamStrings>() {
+    dream(world, mob);
+}
+
+/// tg `dream()`: a dream picked from `GLOB.dreams` and the extra pool starts now.
+pub fn dream(world: &mut World, mob: Entity) {
+    if world.get::<Dreaming>(mob).is_some() {
         return;
     }
-    let fragments = world.resource_scope(|world, strings: Mut<DreamStrings>| {
-        let mut dream_rng = world.resource_mut::<DreamRng>();
-        let rng = &mut dream_rng.0;
-        // `pick_weight(GLOB.dreams)`: random 1000, hear_something 500.
-        if rng.range(1, 1500) <= 1000 {
-            random_dream(&strings, &nouns, rng)
-        } else {
-            hear_something(rng)
+    let nouns = bedsheet_nouns(world, mob);
+    let extra = crate::service::dream_pool(world, mob);
+    let has_strings = world.contains_resource::<DreamStrings>();
+    // `pick_weight(dream_pool)`: random 1000, hear_something 500, then the extras.
+    let mut pool: Vec<(usize, u32)> = Vec::new();
+    if has_strings {
+        pool.extend([(usize::MAX, 1000), (usize::MAX - 1, 500)]);
+    }
+    pool.extend(extra.iter().enumerate().map(|(i, d)| (i, d.weight)));
+    let total: u32 = pool.iter().map(|(_, w)| w).sum();
+    if total == 0 {
+        return;
+    }
+    let mut roll = world.resource_mut::<DreamRng>().0.range(1, total);
+    let mut picked = pool[pool.len() - 1].0;
+    for &(i, weight) in &pool {
+        if roll <= weight {
+            picked = i;
+            break;
         }
-    });
+        roll -= weight;
+    }
+    let (kind, source) = match picked {
+        usize::MAX => (DreamKind::Random, DreamSource::RandomOf(nouns)),
+        i if i == usize::MAX - 1 => (DreamKind::HearSomething, DreamSource::Fragments(Vec::new())),
+        i => (extra[i].kind, extra[i].source.clone()),
+    };
+    let fragments = match source {
+        DreamSource::Fragments(f) if kind != DreamKind::HearSomething => f,
+        DreamSource::Fragments(_) => hear_something(&mut world.resource_mut::<DreamRng>().0),
+        DreamSource::RandomOf(nouns) => {
+            if !has_strings {
+                return;
+            }
+            world.resource_scope(|world, strings: Mut<DreamStrings>| {
+                random_dream(&strings, &nouns, &mut world.resource_mut::<DreamRng>().0)
+            })
+        }
+    };
     if fragments.is_empty() {
         return;
     }
@@ -385,7 +449,9 @@ pub fn handle_dreams(world: &mut World, mob: Entity) {
     world.entity_mut(mob).insert(Dreaming {
         fragments,
         next_at: now,
+        kind,
     });
+    crate::service::dream_started(world, mob, kind);
 }
 
 /// `get_dream_nouns`: the `dream_messages` of the bedsheets on the sleeper's tile.

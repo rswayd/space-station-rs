@@ -26,9 +26,15 @@ pub mod barber;
 #[cfg(feature = "server")]
 mod barcode;
 #[cfg(feature = "server")]
+mod burden;
+#[cfg(feature = "server")]
 pub mod cards;
 #[cfg(feature = "server")]
 mod clown;
+#[cfg(feature = "server")]
+mod dream_sect;
+#[cfg(feature = "server")]
+mod festival;
 #[cfg(feature = "server")]
 mod games;
 #[cfg(feature = "server")]
@@ -50,6 +56,8 @@ mod religion;
 #[cfg(feature = "server")]
 pub mod slots;
 #[cfg(feature = "server")]
+mod sparring;
+#[cfg(feature = "server")]
 mod stationery;
 #[cfg(feature = "server")]
 mod statues;
@@ -63,7 +71,13 @@ pub use barber::{BarberJob, complete as barber_complete};
 #[cfg(feature = "server")]
 pub use barcode::{BarcodeScanner, Ledger, Loan, ScanMode};
 #[cfg(feature = "server")]
+pub use burden::{Burdened, Psyker};
+#[cfg(feature = "server")]
 pub use clown::MimeVow;
+#[cfg(feature = "server")]
+pub use dream_sect::{DreamProtection, SlumberParty, dream_pool, dream_started};
+#[cfg(feature = "server")]
+pub use festival::{PortableAltar, SmoothTunes, SongTune};
 #[cfg(feature = "server")]
 pub use games::Die;
 #[cfg(feature = "server")]
@@ -82,8 +96,11 @@ pub use photo::{
 #[cfg(feature = "server")]
 pub use religion::{
     BIBLE_SKINS, BibleDeity, HolyRole, PerformingRite, Religion, ReligionJob, Rite, Sect,
-    chaplain_spawned, complete as religion_complete, holy_role,
+    antimagic_flags as religion_antimagic, chaplain_spawned, complete as religion_complete,
+    holy_role,
 };
+#[cfg(feature = "server")]
+pub use sparring::{SparMatch, Sparring, Unbreakable};
 #[cfg(feature = "server")]
 pub use stationery::{Biscuit, CabinetKind, CarbonPaper, FilingCabinet, PaperCutter, Paperwork};
 #[cfg(feature = "server")]

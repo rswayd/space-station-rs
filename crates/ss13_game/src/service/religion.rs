@@ -25,11 +25,12 @@
 //!   candles). The sect recolors every altar.
 //! - Sects change the bible's blessing: the machine god charges cyborgs and refuses flesh, the
 //!   greedy god heals 30 for 50 credits from the priest's account.
+//! - The punished ([`super::burden`]), festival ([`super::festival`]), dream
+//!   ([`super::dream_sect`]) and sparring ([`super::sparring`]) gods live in their own modules;
+//!   this one dispatches to them.
 //!
 //! The windows are list prompts, not tgui's `ReligiousTool`.
-// shortcut: only the puritan, machine, pyre and greedy sects are offered (BandaStation already
-// hides the honorbound one); the punished, maintenance, sparring, festival and dream sects need
-// burdens, addictions, sparring matches, songs and dreams first. No blazing star (no holy
+// shortcut: no maintenance sect (BandaStation already hides the honorbound one). No blazing star (no holy
 // arrows), no candle lighting (only immortal candles count as lit), no robotic limbs or
 // ethereal stomachs for the machine god, no holy faction, no supply pod for the beacon, no
 // examine lines, no admin sect reset.
@@ -45,6 +46,7 @@ use ss13_shared::chat::Span;
 use ss13_tgui::prompt::{Ask, PromptAnswer, PromptKind, ask_world};
 use ss13_world::SpatialIndex;
 
+use super::festival::SongTune;
 use super::server::{
     PendingAsk, client_of, item_path, job_title, say_around, set_icon_state, sound_at,
 };
@@ -89,6 +91,8 @@ const SUPERMATTER: &str = "sound/effects/supermatter.ogg";
 const CASH_REGISTER: &str = "sound/effects/cashregister.ogg";
 const BUZZ: &str = "sound/machines/buzz/buzz-sigh.ogg";
 const BANG: &str = "sound/effects/bang.ogg";
+/// `DEFAULT_SMACK_CHANCE`, percent.
+const DEFAULT_SMACK_CHANCE: f32 = 60.0;
 
 /// `GLOB.biblenames` with `GLOB.biblestates` and `GLOB.bibleitemstates`.
 pub const BIBLE_SKINS: [(&str, &str, &str); 19] = [
@@ -132,6 +136,10 @@ pub enum Sect {
     Mechanical,
     Pyre,
     Greed,
+    Burden,
+    Spar,
+    Music,
+    Dreams,
 }
 
 pub struct SectDef {
@@ -140,12 +148,23 @@ pub struct SectDef {
     pub desc: &'static str,
     pub max_favor: f32,
     pub altar_icon_state: Option<&'static str>,
-    /// `rites_list` without the deaconize every sect gets.
+    /// `smack_chance`, percent.
+    pub smack_chance: f32,
+    /// `rites_list` without the deaconize every sect gets (unless it has its own).
     pub rites: &'static [Rite],
 }
 
 impl Sect {
-    pub const ALL: [Sect; 4] = [Sect::Puritanism, Sect::Mechanical, Sect::Pyre, Sect::Greed];
+    pub const ALL: [Sect; 8] = [
+        Sect::Puritanism,
+        Sect::Mechanical,
+        Sect::Pyre,
+        Sect::Greed,
+        Sect::Burden,
+        Sect::Spar,
+        Sect::Music,
+        Sect::Dreams,
+    ];
 
     pub fn def(self) -> &'static SectDef {
         match self {
@@ -155,6 +174,7 @@ impl Sect {
                 desc: "Your run-of-the-mill sect, there are no benefits or boons associated.",
                 max_favor: 1000.0,
                 altar_icon_state: None,
+                smack_chance: DEFAULT_SMACK_CHANCE,
                 rites: &[],
             },
             Sect::Mechanical => &SectDef {
@@ -165,6 +185,7 @@ impl Sect {
                        depending on their charge.",
                 max_favor: 2500.0,
                 altar_icon_state: Some("convertaltar-blue"),
+                smack_chance: DEFAULT_SMACK_CHANCE,
                 rites: &[Rite::SynthConversion, Rite::MachineBlessing],
             },
             Sect::Pyre => &SectDef {
@@ -174,6 +195,7 @@ impl Sect {
                        you favor.",
                 max_favor: 10000.0,
                 altar_icon_state: Some("convertaltar-red"),
+                smack_chance: DEFAULT_SMACK_CHANCE,
                 rites: &[
                     Rite::Fireproof,
                     Rite::BurningSacrifice,
@@ -187,7 +209,70 @@ impl Sect {
                        enough wealth to purchase some more business opportunities.",
                 max_favor: 1000.0,
                 altar_icon_state: Some("convertaltar-yellow"),
+                smack_chance: DEFAULT_SMACK_CHANCE,
                 rites: &[Rite::CustomVending],
+            },
+            Sect::Burden => &SectDef {
+                name: "Punished God",
+                quote: "To feel the freedom, you must first understand captivity.",
+                desc: "Incapacitate yourself in any way possible. Bad mutations, lost limbs, \
+                       traumas, even addictions. You will learn the secrets of the universe from \
+                       your defeated shell.",
+                max_favor: 1000.0,
+                altar_icon_state: Some("convertaltar-burden"),
+                smack_chance: 0.0,
+                rites: &[Rite::NullrodTransformation],
+            },
+            // shortcut: no "Become Tenacious" (no movespeed modifiers for crawling yet).
+            Sect::Spar => &SectDef {
+                name: "Sparring God",
+                quote: "Your next swing must be faster, neophyte. Steel your heart.",
+                desc: "Spar other crewmembers to gain favor or other rewards. Exchange favor to \
+                       steel yourself against real battles.",
+                max_favor: 1000.0,
+                altar_icon_state: Some("convertaltar-orange"),
+                smack_chance: DEFAULT_SMACK_CHANCE,
+                rites: &[
+                    Rite::SparringContract,
+                    Rite::CeremonialWeapon,
+                    Rite::DeclareArena,
+                    Rite::Unbreakable,
+                ],
+            },
+            Sect::Music => &SectDef {
+                name: "Festival God",
+                quote: "Everything follows a rhythm: the heartbeat of the universe!",
+                desc: "Make wonderful music! Sooth or serrate your friends and foes with the beat.",
+                max_favor: 1000.0,
+                altar_icon_state: Some("convertaltar-festival"),
+                smack_chance: DEFAULT_SMACK_CHANCE,
+                rites: &[
+                    Rite::HolyViolin,
+                    Rite::PortableSongTuning,
+                    Rite::Tune(SongTune::Evangelism),
+                    Rite::Tune(SongTune::Light),
+                    Rite::Tune(SongTune::Nullwave),
+                    Rite::Tune(SongTune::Pain),
+                    Rite::Tune(SongTune::Lullaby),
+                ],
+            },
+            // shortcut: no "Banish Nightmare" (no nightmares) and no "Dream Projection" (no
+            // projection eye mob).
+            Sect::Dreams => &SectDef {
+                name: "Dream God",
+                quote: "The dream is a window into the soul.",
+                desc: "Dream deeply to gain insights into the universe. Earn favor by dreaming or \
+                       blessing dreaming creatures. Your blessings invoke dreams and promote \
+                       healing in those who are sound asleep.",
+                max_favor: 1000.0,
+                altar_icon_state: Some("convertaltar-dream"),
+                smack_chance: 20.0,
+                rites: &[
+                    Rite::DeaconizeDreamers,
+                    Rite::DreamPortent,
+                    Rite::DreamProtection,
+                    Rite::SlumberParty,
+                ],
             },
         }
     }
@@ -203,13 +288,69 @@ pub enum Rite {
     BurningSacrifice,
     InfiniteCandle,
     CustomVending,
+    NullrodTransformation,
+    SparringContract,
+    CeremonialWeapon,
+    DeclareArena,
+    Unbreakable,
+    HolyViolin,
+    PortableSongTuning,
+    Tune(SongTune),
+    DeaconizeDreamers,
+    DreamPortent,
+    DreamProtection,
+    SlumberParty,
 }
 
+/// `/datum/religion_rites` defaults: 10 s, no invocations, free, reusable.
+pub(super) const BASE_RITE: RiteDef = RiteDef {
+    name: "religious rite",
+    desc: "",
+    length: 10.0,
+    invocations: &[],
+    invoke_msg: None,
+    favor_cost: 0.0,
+    money_cost: 0,
+    one_time: false,
+};
+
+/// `/datum/religion_rites/deaconize`.
+const DEACONIZE: RiteDef = RiteDef {
+    name: "Посвящение в диакона",
+    desc: "Обращает кого-то в вашу религию. Необходимо добровольное согласие, так \
+           как при первом использовании претенденту сначала предложат вступить. Он \
+           обретёт те же святые силы, что и вы. Вы можете посвятить только одного \
+           человека, так что убедитесь, что он достоин!",
+    length: 30.0,
+    invocations: &[
+        "Хороший, благородный человек был приведен сюда верой ...",
+        "С руками, готовыми служить ...",
+        "С сердцем, готовым слушать ...",
+        "И душой, готовой следовать ...",
+        "Да предложим мы свою руку взамен ...",
+    ],
+    invoke_msg: Some("И использовать их наилучшим образом."),
+    favor_cost: 0.0,
+    money_cost: 0,
+    one_time: true,
+};
+
+/// A `&'static RiteDef` from a struct literal that may use `..BASE_RITE`.
+macro_rules! rite_def {
+    ($($field:tt)*) => {{
+        const DEF: RiteDef = RiteDef { $($field)* };
+        &DEF
+    }};
+}
+pub(super) use rite_def;
+
+#[derive(Clone, Copy)]
 pub struct RiteDef {
     pub name: &'static str,
     pub desc: &'static str,
     /// `ritual_length`, seconds.
     pub length: f32,
+    /// `{deity}` stands for `GLOB.deity` (the dream god's invocations name it).
     pub invocations: &'static [&'static str],
     pub invoke_msg: Option<&'static str>,
     pub favor_cost: f32,
@@ -222,25 +363,7 @@ pub struct RiteDef {
 impl Rite {
     pub fn def(self) -> &'static RiteDef {
         match self {
-            Rite::Deaconize => &RiteDef {
-                name: "Посвящение в диакона",
-                desc: "Обращает кого-то в вашу религию. Необходимо добровольное согласие, так \
-                       как при первом использовании претенденту сначала предложат вступить. Он \
-                       обретёт те же святые силы, что и вы. Вы можете посвятить только одного \
-                       человека, так что убедитесь, что он достоин!",
-                length: 30.0,
-                invocations: &[
-                    "Хороший, благородный человек был приведен сюда верой ...",
-                    "С руками, готовыми служить ...",
-                    "С сердцем, готовым слушать ...",
-                    "И душой, готовой следовать ...",
-                    "Да предложим мы свою руку взамен ...",
-                ],
-                invoke_msg: Some("И использовать их наилучшим образом."),
-                favor_cost: 0.0,
-                money_cost: 0,
-                one_time: true,
-            },
+            Rite::Deaconize => &DEACONIZE,
             Rite::SynthConversion => &RiteDef {
                 name: "Synthetic Conversion",
                 desc: "Convert a humanoid individual into a (superior) android. Buckle a human \
@@ -329,6 +452,116 @@ impl Rite {
                 money_cost: 1000,
                 one_time: false,
             },
+            Rite::NullrodTransformation => rite_def! {
+                name: "Transmogrify",
+                desc: "Your full power needs a firearm to be realized. You may transform your null \
+                       rod into one.",
+                ..BASE_RITE
+            },
+            Rite::SparringContract => rite_def! {
+                name: "Summon Sparring Contract",
+                desc: "Turns some paper into a sparring contract.",
+                invoke_msg: Some("Я буду тренироваться во имя моего бога."),
+                ..BASE_RITE
+            },
+            Rite::CeremonialWeapon => rite_def! {
+                name: "Forge Ceremonial Gear",
+                desc: "Turn some material into ceremonial gear. Ceremonial blades are weak outside \
+                       of sparring and quite heavy to lug around.",
+                invoke_msg: Some("Оружие во имя твоё! Бои с кровью твоей!"),
+                ..BASE_RITE
+            },
+            Rite::DeclareArena => rite_def! {
+                name: "Declare Arena",
+                desc: "Declare a new area as fit for sparring. You'll be able to select it in \
+                       contracts.",
+                length: 6.0,
+                invocations: &["Я стремлюсь к новым горизонтам ..."],
+                invoke_msg: Some("... и пусть мой подъем будет крут."),
+                favor_cost: 1.0,
+                ..BASE_RITE
+            },
+            Rite::Unbreakable => rite_def! {
+                name: "Become Unbreakable",
+                desc: "Your training has made you unbreakable. In times of crisis, you will \
+                       attempt to keep fighting on.",
+                invoke_msg: Some("Моя воля должна быть непоколебимой. Даруй мне это благословение!"),
+                favor_cost: 4.0,
+                ..BASE_RITE
+            },
+            Rite::HolyViolin => rite_def! {
+                name: "Cogitandi Fidis",
+                desc: "Creates a holy violin that can analyze songs played from it.",
+                length: 6.0,
+                invocations: &["Нужен слуга торжества ..."],
+                invoke_msg: Some("... Великий разум для музыкальных дел!"),
+                favor_cost: 20.0,
+                ..BASE_RITE
+            },
+            Rite::PortableSongTuning => rite_def! {
+                name: "Portable Song Tuning",
+                desc: "Empowers a provided instrument to work as a portable altar for tuning \
+                       songs. It will need to be recharged after five rites.",
+                length: 6.0,
+                invocations: &["Позвольте мне даровать вам святые вдохновения ..."],
+                invoke_msg: Some(
+                    "... И пусть их несут ветра, что играют в унисон с моей мелодией!",
+                ),
+                favor_cost: 10.0,
+                ..BASE_RITE
+            },
+            Rite::Tune(tune) => tune.rite(),
+            Rite::DeaconizeDreamers => rite_def! {
+                desc: "Converts someone to your sect. They must be willing, so the first \
+                       invocation will only prompt them to join. They will gain the same holy \
+                       abilities as you. You can deaconize up to three followers, so choose \
+                       wisely!",
+                one_time: false,
+                ..DEACONIZE
+            },
+            Rite::DreamPortent => rite_def! {
+                name: "Dream Portent",
+                desc: "Immediately fall into a slumber and receive a portent of the future. The \
+                       vision may be difficult to interpret, but will likely come true in some \
+                       form. Any form of harm will awaken you and disrupt the vision.",
+                length: 6.0,
+                invocations: &[
+                    "O great shepherd {deity}, grant me a vision of the future!..",
+                    "That our flock may persevere through the trials to come...",
+                ],
+                favor_cost: 50.0,
+                ..BASE_RITE
+            },
+            Rite::DreamProtection => rite_def! {
+                name: "Dream Protection",
+                desc: "Bless you and all of your followers with protection in their slumber, \
+                       granting resistance to damage while asleep, which is further increased \
+                       while dreaming.",
+                length: 15.0,
+                invocations: &[
+                    "Protect our flock from harm, great shepherd {deity}!..",
+                    "Grant us peaceful slumber, free from nightmares and those who would do us \
+                     harm!..",
+                    "Our sleepers shall be safe to dream to their heart's desire!..",
+                ],
+                favor_cost: 200.0,
+                one_time: true,
+                ..BASE_RITE
+            },
+            Rite::SlumberParty => rite_def! {
+                name: "Slumber Party",
+                desc: "Put all nearby creatures to sleep. All affected creatures share the same \
+                       dream and heal rapidly while sleeping. You and your followers heal even \
+                       faster during the ritual.",
+                length: 20.0,
+                invocations: &[
+                    "Sleep now, flock of {deity}, and share in each other's dreams...",
+                    "Our slumber shall rejuvenate us for the trials ahead...",
+                    "May we all wake up refreshed and renewed!",
+                ],
+                favor_cost: 200.0,
+                ..BASE_RITE
+            },
         }
     }
 
@@ -359,6 +592,10 @@ pub struct Religion {
     pub holy_armor: Option<String>,
     /// The deaconize rite's `potential_deacon`: who accepted the invitation.
     pub deacon_candidate: Option<Entity>,
+    /// The sparring god's contract, arenas and record.
+    pub spar: super::sparring::SparState,
+    /// The dream god's protection, deacons and blessings.
+    pub dreams: super::dream_sect::DreamState,
 }
 
 impl Religion {
@@ -371,16 +608,17 @@ impl Religion {
         self.favor - before
     }
 
-    /// The rites the altar offers now: the sect's and deaconize, minus used one-time rites.
+    /// The rites the altar offers now: the sect's and deaconize (unless the sect has its own),
+    /// minus used one-time rites.
     pub fn rites(&self) -> Vec<Rite> {
         let Some(sect) = self.sect else {
             return Vec::new();
         };
-        sect.def()
-            .rites
-            .iter()
+        let own = sect.def().rites;
+        let deaconize = (!own.contains(&Rite::DeaconizeDreamers)).then_some(Rite::Deaconize);
+        own.iter()
             .copied()
-            .chain([Rite::Deaconize])
+            .chain(deaconize)
             .filter(|r| !self.used_rites.contains(r))
             .collect()
     }
@@ -393,7 +631,7 @@ pub struct PerformingRite {
     pub altar: Entity,
     /// Steps done.
     pub step: usize,
-    /// The clothing, corpse or convert the rite chose when it began.
+    /// The clothing, corpse, convert, offering or area the rite chose when it began.
     pub target: Option<Entity>,
 }
 
@@ -404,6 +642,8 @@ pub enum ReligionJob {
     RiteStep,
     /// `make_new_altar`.
     UnpackAltar,
+    /// The chaplain's revolver's `pray_refill`.
+    PrayRefill,
 }
 
 /// The religion questions waiting for answers ([`PendingAsk::Religion`]).
@@ -442,26 +682,40 @@ pub enum ReligionAsk {
     },
     /// The deaconize invitation, to the buckled candidate.
     Deacon,
+    /// "Declare Arena": the area to declare, before the rite begins.
+    Arena {
+        altar: Entity,
+        areas: Vec<Entity>,
+    },
+    /// The sparring contract's menus.
+    Spar(super::sparring::SparAsk),
 }
 
 // ---------------------------------------------------------------------------------------------
 // Holy roles and the religion
 
+/// `mind.set_holy_role(NONE)`: excommunicated (the sparring god's third lost holy match).
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Excommunicated;
+
 /// `mind.holy_role`; a chaplain without one is the high priest.
 pub fn holy_role(world: &World, mob: Entity) -> Option<HolyRole> {
+    if world.get::<Excommunicated>(mob).is_some() {
+        return None;
+    }
     world.get::<HolyRole>(mob).copied().or_else(|| {
         (job_title(world, mob).as_deref() == Some(CHAPLAIN)).then_some(HolyRole::HighPriest)
     })
 }
 
-fn religion(world: &World) -> Religion {
+pub(super) fn religion(world: &World) -> Religion {
     world
         .get_resource::<Religion>()
         .cloned()
         .unwrap_or_default()
 }
 
-fn religion_mut(world: &mut World) -> Mut<'_, Religion> {
+pub(super) fn religion_mut(world: &mut World) -> Mut<'_, Religion> {
     if !world.contains_resource::<Religion>() {
         world.init_resource::<Religion>();
     }
@@ -482,16 +736,34 @@ pub fn deity(world: &World, bible: Option<Entity>) -> String {
 }
 
 /// The station's deity for sect messages (`GLOB.deity`).
-fn glob_deity(world: &World) -> String {
+pub(super) fn glob_deity(world: &World) -> String {
     deity(world, None)
 }
 
-/// The sect's `smack_chance` (`DEFAULT_SMACK_CHANCE` for every offered sect).
-pub fn smack_chance(_: &World) -> f32 {
-    60.0
+/// The antimagic the sects give a mob: the psyker brain's (`MAGIC_RESISTANCE_MIND`), the nullwave
+/// song's (`TRAIT_ANTIMAGIC`) and a protected sleeper's (`TRAIT_HOLY`).
+pub fn antimagic_flags(world: &World, mob: Entity) -> u32 {
+    let mut flags = 0;
+    if world.get::<super::burden::Psyker>(mob).is_some() {
+        flags |= crate::spells::MAGIC_RESISTANCE_MIND;
+    }
+    if super::festival::song_antimagic(world, mob) {
+        flags |= crate::spells::MAGIC_RESISTANCE;
+    }
+    if super::dream_sect::protected_now(world, mob) {
+        flags |= crate::spells::MAGIC_RESISTANCE_HOLY;
+    }
+    flags
 }
 
-fn rename(world: &mut World, e: Entity, name: &str) {
+/// The sect's `smack_chance` (`DEFAULT_SMACK_CHANCE` without one).
+pub fn smack_chance(world: &World) -> f32 {
+    religion(world)
+        .sect
+        .map_or(DEFAULT_SMACK_CHANCE, |s| s.def().smack_chance)
+}
+
+pub(super) fn rename(world: &mut World, e: Entity, name: &str) {
     if let Some(mut dm) = world.get_mut::<DmName>(e) {
         name.clone_into(&mut dm.name);
     }
@@ -512,13 +784,13 @@ pub(super) fn say(world: &mut World, mob: Entity, text: &str) {
     });
 }
 
-fn tell_mob(world: &mut World, mob: Entity, span: Span, text: impl Into<String>) {
+pub(super) fn tell_mob(world: &mut World, mob: Entity, span: Span, text: impl Into<String>) {
     if let Some(client) = client_of(world, mob) {
         tell(world, client, span, text);
     }
 }
 
-fn holding(world: &World, mob: Entity, item: Entity) -> bool {
+pub(super) fn holding(world: &World, mob: Entity, item: Entity) -> bool {
     world
         .get::<Inventory>(mob)
         .is_some_and(|i| i.hands.contains(&Some(item)))
@@ -533,11 +805,11 @@ fn holds_bible(world: &World, mob: Entity) -> bool {
     })
 }
 
-fn is_human(world: &World, mob: Entity) -> bool {
+pub(super) fn is_human(world: &World, mob: Entity) -> bool {
     world.get::<crate::human::HumanLook>(mob).is_some()
 }
 
-fn has_prototype(world: &World, path: &str) -> bool {
+pub(super) fn has_prototype(world: &World, path: &str) -> bool {
     world
         .get_resource::<ss13_proto::Prototypes>()
         .is_some_and(|p| p.get(path).is_some())
@@ -654,7 +926,7 @@ fn ask_text(
     world.entity_mut(prompt).insert(PendingAsk::Religion(ask));
 }
 
-fn ask_list(
+pub(super) fn ask_list(
     world: &mut World,
     client: Entity,
     mob: Entity,
@@ -782,7 +1054,7 @@ impl Joke {
     }
 }
 
-fn pick<'a>(world: &mut World, from: &[&'a str]) -> &'a str {
+pub(super) fn pick<'a>(world: &mut World, from: &[&'a str]) -> &'a str {
     let i = world
         .resource_mut::<crate::combat::CombatRng>()
         .range(0, from.len() as u32 - 1);
@@ -829,11 +1101,17 @@ fn establish(
     }
 }
 
-/// `on_conversion`: the sect's greeting.
+/// `on_conversion`: the sect's greeting, then what the sect gives its converts.
 fn on_conversion(world: &mut World, mob: Entity, sect: Sect) {
     let def = sect.def();
     tell_mob(world, mob, Span::BoldNotice, format!("\"{}\"", def.quote));
     tell_mob(world, mob, Span::Notice, def.desc);
+    match sect {
+        Sect::Burden => super::burden::on_conversion(world, mob),
+        Sect::Music => super::festival::on_conversion(world, mob),
+        Sect::Dreams => super::dream_sect::on_conversion(world, mob),
+        _ => {}
+    }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1103,6 +1381,12 @@ pub(super) fn answer(
                 religion_mut(world).deacon_candidate = Some(actor);
             }
         }
+        ReligionAsk::Arena { altar, areas } => {
+            if let Some(&area) = item.and_then(|i| areas.get(i)) {
+                start_rite(world, actor, altar, Rite::DeclareArena, Some(area));
+            }
+        }
+        ReligionAsk::Spar(ask) => super::sparring::answer(world, actor, ask, answer),
     }
 }
 
@@ -1146,6 +1430,15 @@ pub(super) fn item_interaction(
     target: Entity,
 ) -> bool {
     if !is_altar(world, target) {
+        // `portable_song_tuning`: a bible on an empowered instrument offers its song rites.
+        if is_under(&item_path(world, held), BIBLE)
+            && world
+                .get::<super::festival::PortableAltar>(target)
+                .is_some()
+        {
+            open_tool(world, client, mob, target);
+            return true;
+        }
         return false;
     }
     if is_under(&item_path(world, held), BIBLE) {
@@ -1159,7 +1452,11 @@ pub(super) fn item_interaction(
 fn open_tool(world: &mut World, client: Entity, mob: Entity, altar: Entity) {
     let station = religion(world);
     let deity = glob_deity(world);
+    let portable = world.get::<super::festival::PortableAltar>(altar).is_some();
     let Some(sect) = station.sect else {
+        if portable {
+            return;
+        }
         let names = Sect::ALL.iter().map(|s| s.def().name.to_owned()).collect();
         let message = Sect::ALL
             .iter()
@@ -1178,14 +1475,26 @@ fn open_tool(world: &mut World, client: Entity, mob: Entity, altar: Entity) {
         return;
     };
     let def = sect.def();
-    let rites = station.rites();
-    let favor = if sect == Sect::Greed {
-        format!("In the eyes of {deity}, your wealth is your favor.")
-    } else {
-        format!(
+    let mut rites = station.rites();
+    if portable {
+        // `rite_types_allowlist`: the song tuners only.
+        rites.retain(|r| matches!(r, Rite::Tune(_)));
+    }
+    let favor = match sect {
+        Sect::Greed => format!("In the eyes of {deity}, your wealth is your favor."),
+        _ => format!(
             "You are currently at {} favor with {deity}.",
             station.favor.floor()
-        )
+        ),
+    };
+    // `tool_examine`.
+    let favor = match sect {
+        Sect::Burden => format!("{favor}\n{}", super::burden::tool_examine(world, mob)),
+        Sect::Spar => format!(
+            "{favor}\n{}",
+            super::sparring::tool_examine(&station, &deity)
+        ),
+        _ => favor,
     };
     let names = rites
         .iter()
@@ -1259,7 +1568,7 @@ fn sacrifice(world: &mut World, client: Entity, mob: Entity, item: Entity) -> bo
     let wanted = match sect {
         Sect::Mechanical => is_under(&path, CELL),
         Sect::Pyre => is_under(&path, CANDLE),
-        Sect::Puritanism | Sect::Greed => false,
+        _ => false,
     };
     if !wanted {
         return false;
@@ -1320,7 +1629,7 @@ fn sacrifice(world: &mut World, client: Entity, mob: Entity, item: Entity) -> bo
             religion_mut(world).adjust_favor(40.0);
             world.despawn(item);
         }
-        Sect::Puritanism | Sect::Greed => {}
+        _ => {}
     }
     true
 }
@@ -1328,14 +1637,14 @@ fn sacrifice(world: &mut World, client: Entity, mob: Entity, item: Entity) -> bo
 // ---------------------------------------------------------------------------------------------
 // Rites
 
-fn account_of_mob(world: &World, mob: Entity) -> Option<u32> {
+pub(super) fn account_of_mob(world: &World, mob: Entity) -> Option<u32> {
     let inventory = world.get::<Inventory>(mob)?;
     inventory
         .id_search()
         .find_map(|card| crate::cargo::economy::account_of(world, card))
 }
 
-fn balance(world: &World, mob: Entity) -> Option<i64> {
+pub(super) fn balance(world: &World, mob: Entity) -> Option<i64> {
     let id = account_of_mob(world, mob)?;
     world
         .get_resource::<crate::cargo::economy::Economy>()?
@@ -1388,6 +1697,44 @@ fn buckled_human(world: &mut World, altar: Entity) -> Option<Entity> {
 
 /// `religious_tool/perform_rite` -> the rite's `perform_rite` checks, then its first step.
 fn perform_rite(world: &mut World, user: Entity, altar: Entity, rite: Rite) {
+    if !can_begin(world, user, altar, rite) {
+        return;
+    }
+    let Some(target) = rite_target(world, user, altar, rite) else {
+        return;
+    };
+    begin_rite(world, user, altar, rite, target);
+}
+
+/// A rite whose target was asked for first ("Declare Arena"): the checks again, then it begins.
+fn start_rite(world: &mut World, user: Entity, altar: Entity, rite: Rite, target: Option<Entity>) {
+    if can_begin(world, user, altar, rite) {
+        begin_rite(world, user, altar, rite, target);
+    }
+}
+
+/// The altar of the gods, or the instrument of portable song tuning held or next to the user.
+fn tool_in_reach(world: &World, user: Entity, tool: Entity) -> bool {
+    world.get::<CarriedBy>(tool).map(|c| c.0) == Some(user)
+        || crate::storage::in_reach(world, user, tool)
+}
+
+/// What the rite's do_afters are on: the tool on the floor, else the user (a held instrument).
+fn rite_anchor(world: &World, user: Entity, tool: Entity) -> Entity {
+    if world.get::<TilePos>(tool).is_some() {
+        tool
+    } else {
+        user
+    }
+}
+
+/// The rite's text with `GLOB.deity` in.
+fn rite_line(world: &World, line: &str) -> String {
+    line.replace("{deity}", &glob_deity(world))
+}
+
+/// The holy role, the rite still on offer, the tool in reach with a bible in hand, the price.
+fn can_begin(world: &mut World, user: Entity, altar: Entity, rite: Rite) -> bool {
     let deity = glob_deity(world);
     match holy_role(world, user) {
         Some(HolyRole::Priest | HolyRole::HighPriest) => {}
@@ -1398,7 +1745,7 @@ fn perform_rite(world: &mut World, user: Entity, altar: Entity, rite: Rite) {
                 Span::Warning,
                 format!("You are merely a deacon of {deity}, and therefore cannot perform rites."),
             );
-            return;
+            return false;
         }
         None => {
             tell_mob(
@@ -1407,14 +1754,14 @@ fn perform_rite(world: &mut World, user: Entity, altar: Entity, rite: Rite) {
                 Span::Warning,
                 "You are not holy, and therefore cannot perform rites.",
             );
-            return;
+            return false;
         }
     }
     if !religion(world).rites().contains(&rite) {
-        return;
+        return false;
     }
     if world.get_entity(altar).is_err()
-        || !crate::storage::in_reach(world, user, altar)
+        || !tool_in_reach(world, user, altar)
         || !holds_bible(world, user)
     {
         tell_mob(
@@ -1423,14 +1770,12 @@ fn perform_rite(world: &mut World, user: Entity, altar: Entity, rite: Rite) {
             Span::Warning,
             "You are not close enough to perform the rite.",
         );
-        return;
+        return false;
     }
-    if !can_afford(world, user, rite) {
-        return;
-    }
-    let Some(target) = rite_target(world, user, altar, rite) else {
-        return;
-    };
+    can_afford(world, user, rite)
+}
+
+fn begin_rite(world: &mut World, user: Entity, altar: Entity, rite: Rite, target: Option<Entity>) {
     let def = rite.def();
     tell_mob(
         world,
@@ -1439,7 +1784,8 @@ fn perform_rite(world: &mut World, user: Entity, altar: Entity, rite: Rite) {
         format!("You begin to perform the rite of {}...", def.name),
     );
     if let Some(first) = def.invocations.first() {
-        say(world, user, first);
+        let line = rite_line(world, first);
+        say(world, user, &line);
     }
     world.entity_mut(user).insert(PerformingRite {
         rite,
@@ -1460,6 +1806,7 @@ fn rite_step(world: &mut World, user: Entity, altar: Entity, rite: Rite) -> bool
         .get::<Inventory>(user)
         .and_then(Inventory::active_item);
     let delay = rite.def().length * 10.0 / rite.steps() as f32;
+    let anchor = rite_anchor(world, user, altar);
     do_after(
         world,
         Actor {
@@ -1467,7 +1814,7 @@ fn rite_step(world: &mut World, user: Entity, altar: Entity, rite: Rite) -> bool
             mob: user,
             item,
         },
-        altar,
+        anchor,
         delay,
         0,
         Job::Religion(ReligionJob::RiteStep),
@@ -1482,7 +1829,7 @@ fn rite_target(
     rite: Rite,
 ) -> Option<Option<Entity>> {
     match rite {
-        Rite::Deaconize => {
+        Rite::Deaconize | Rite::DeaconizeDreamers => {
             let Some(candidate) = buckled_human(world, altar) else {
                 let what = name_of(world, altar);
                 tell_mob(
@@ -1614,6 +1961,35 @@ fn rite_target(
             Some(Some(corpse))
         }
         Rite::MachineBlessing | Rite::InfiniteCandle | Rite::CustomVending => Some(None),
+        Rite::NullrodTransformation => super::burden::rite_target(world, user, altar),
+        Rite::SparringContract | Rite::CeremonialWeapon | Rite::Unbreakable => {
+            super::sparring::rite_target(world, user, altar, rite)
+        }
+        Rite::DeclareArena => {
+            let Some(client) = client_of(world, user) else {
+                return None;
+            };
+            let areas = super::sparring::declarable_areas(world);
+            let names = areas
+                .iter()
+                .map(|&a| crate::shuttle::area_name(world, a))
+                .collect();
+            ask_list(
+                world,
+                client,
+                user,
+                "Arena Declaration",
+                "Choose an area to mark as an arena!",
+                names,
+                ReligionAsk::Arena { altar, areas },
+            );
+            None
+        }
+        Rite::HolyViolin | Rite::Tune(_) => Some(None),
+        Rite::PortableSongTuning => super::festival::rite_target(world, user, altar),
+        Rite::DreamPortent | Rite::DreamProtection | Rite::SlumberParty => {
+            super::dream_sect::rite_target(world, user, rite)
+        }
     }
 }
 
@@ -1661,14 +2037,15 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter, job: ReligionJ
             let Some(mut state) = world.get::<PerformingRite>(mob).copied() else {
                 return;
             };
-            if state.altar != action.target {
+            if rite_anchor(world, mob, state.altar) != action.target {
                 return;
             }
             state.step += 1;
             let def = state.rite.def();
             if state.step < state.rite.steps() {
                 if let Some(line) = def.invocations.get(state.step) {
-                    say(world, mob, line);
+                    let line = rite_line(world, line);
+                    say(world, mob, &line);
                 }
                 world.entity_mut(mob).insert(state);
                 if !rite_step(world, mob, state.altar, state.rite) {
@@ -1693,6 +2070,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter, job: ReligionJ
             }
             refresh_altars(world);
         }
+        ReligionJob::PrayRefill => super::burden::refill_complete(world, mob, action),
     }
 }
 
@@ -1709,10 +2087,27 @@ fn finish_rite(world: &mut World, user: Entity, state: PerformingRite) {
         return;
     }
     let def = state.rite.def();
-    let mut station = religion_mut(world);
-    station.adjust_favor(-def.favor_cost);
-    if def.one_time {
-        station.used_rites.push(state.rite);
+    {
+        let mut station = religion_mut(world);
+        station.adjust_favor(-def.favor_cost);
+        if def.one_time {
+            station.used_rites.push(state.rite);
+        }
+    }
+    post_invoke_effects(world, user, state);
+}
+
+/// `post_invoke_effects` of the rites with one, and the portable altar's charge.
+fn post_invoke_effects(world: &mut World, user: Entity, state: PerformingRite) {
+    super::festival::use_charge(world, state.altar);
+    match state.rite {
+        Rite::DeaconizeDreamers
+        | Rite::DreamPortent
+        | Rite::DreamProtection
+        | Rite::SlumberParty => {
+            super::dream_sect::post_invoke(world, user, state.rite, state.altar);
+        }
+        _ => {}
     }
 }
 
@@ -1722,12 +2117,24 @@ fn altar_pos(world: &World, altar: Entity) -> Option<TilePos> {
 
 fn invoke_effect(world: &mut World, user: Entity, state: PerformingRite) -> bool {
     let altar = state.altar;
-    let Some(pos) = altar_pos(world, altar) else {
+    // A held instrument (portable song tuning) is where its holder is.
+    let Some(pos) = altar_pos(world, altar).or_else(|| crate::chem::map_pos(world, altar)) else {
         return false;
     };
     let deity = glob_deity(world);
     match state.rite {
-        Rite::Deaconize => {
+        Rite::NullrodTransformation => super::burden::transmogrify(world, user, state, pos),
+        Rite::SparringContract
+        | Rite::CeremonialWeapon
+        | Rite::DeclareArena
+        | Rite::Unbreakable => super::sparring::invoke_effect(world, user, state, pos),
+        Rite::HolyViolin | Rite::PortableSongTuning | Rite::Tune(_) => {
+            super::festival::invoke_effect(world, user, state, pos)
+        }
+        Rite::DreamPortent | Rite::DreamProtection | Rite::SlumberParty => {
+            super::dream_sect::invoke_effect(world, user, state.rite)
+        }
+        Rite::Deaconize | Rite::DeaconizeDreamers => {
             let Some(deacon) = state.target else {
                 return false;
             };
@@ -1987,7 +2394,9 @@ pub(super) fn sect_bless(world: &mut World, user: Entity, target: Entity) -> Opt
     let deity = glob_deity(world);
     let (name, user_name) = (name_of(world, target), name_of(world, user));
     match sect {
-        Sect::Puritanism | Sect::Pyre => None,
+        Sect::Puritanism | Sect::Pyre | Sect::Spar | Sect::Music => None,
+        Sect::Burden => Some(super::burden::sect_bless(world, user, target)),
+        Sect::Dreams => Some(super::dream_sect::sect_bless(world, user, target)),
         Sect::Mechanical => {
             // tg adds over the cell's capacity; the cell is meant to fill up.
             let charged = world
@@ -2072,6 +2481,15 @@ pub(super) fn sect_bless(world: &mut World, user: Entity, target: Entity) -> Opt
             crate::mood::add_event(world, target, "blessing", &super::library::BLESSING);
             Some(Blessing::Success)
         }
+    }
+}
+
+/// The sect's `sect_dead_bless` on a corpse; `Blessing::Failed` smacks it.
+pub(super) fn sect_dead_bless(world: &mut World, user: Entity, target: Entity) -> Blessing {
+    match religion(world).sect {
+        Some(Sect::Burden) => super::burden::sect_bless(world, user, target),
+        Some(Sect::Dreams) => super::dream_sect::sect_dead_bless(world, user, target),
+        _ => Blessing::Failed,
     }
 }
 
@@ -2204,6 +2622,53 @@ mod tests {
         ] {
             assert!(rite.def().length > 0.0);
         }
+    }
+
+    #[test]
+    fn the_new_sects_bring_their_rites_and_smack_chances() {
+        let music = Religion {
+            sect: Some(Sect::Music),
+            ..Default::default()
+        };
+        let rites = music.rites();
+        assert!(rites.contains(&Rite::Tune(SongTune::Lullaby)));
+        assert!(rites.contains(&Rite::Deaconize));
+        let dreams = Religion {
+            sect: Some(Sect::Dreams),
+            ..Default::default()
+        };
+        assert!(!dreams.rites().contains(&Rite::Deaconize));
+        assert_eq!(Sect::Burden.def().smack_chance, 0.0);
+        assert_eq!(Sect::Dreams.def().smack_chance, 20.0);
+        assert_eq!(Sect::Spar.def().smack_chance, DEFAULT_SMACK_CHANCE);
+        // The dream god's deacon rite is the deaconize rite, reusable.
+        let dreamers = Rite::DeaconizeDreamers.def();
+        assert_eq!(dreamers.name, Rite::Deaconize.def().name);
+        assert!(!dreamers.one_time && Rite::Deaconize.def().one_time);
+        assert_eq!(Rite::DeclareArena.def().favor_cost, 1.0);
+        assert_eq!(Rite::NullrodTransformation.def().length, 10.0);
+        assert!(Rite::DreamProtection.def().one_time);
+    }
+
+    #[test]
+    fn excommunicated_chaplains_are_not_holy() {
+        let mut world = World::new();
+        let mob = world.spawn((HolyRole::Priest, Excommunicated)).id();
+        assert_eq!(holy_role(&world, mob), None);
+    }
+
+    #[test]
+    fn dream_invocations_name_the_deity() {
+        let mut world = World::new();
+        world.insert_resource(Religion {
+            deity: "Morpheus".into(),
+            ..Default::default()
+        });
+        let line = rite_line(&world, Rite::DreamPortent.def().invocations[0]);
+        assert_eq!(
+            line,
+            "O great shepherd Morpheus, grant me a vision of the future!.."
+        );
     }
 
     #[test]
