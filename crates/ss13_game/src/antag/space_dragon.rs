@@ -1512,14 +1512,15 @@ pub fn summon_carp(
     }
     world.try_despawn(ghost).ok();
     world.entity_mut(carp).insert(SpaceCarp { rift });
-    if let Some(mut r) = world.get_mut::<CarpRift>(rift) {
+    let emptied = world.get_mut::<CarpRift>(rift).is_some_and(|mut r| {
         if !r.keys.contains(&key) {
             r.keys.push(key.clone());
         }
         r.carp_stored -= 1;
-        if r.carp_stored == 0 && r.charge < Charge::Completed {
-            crate::obj_damage::set_icon_state(world, rift, "carp_rift");
-        }
+        r.carp_stored == 0 && r.charge < Charge::Completed
+    });
+    if emptied {
+        crate::obj_damage::set_icon_state(world, rift, "carp_rift");
     }
     if let Some(mut d) = world.get_mut::<SpaceDragon>(dragon) {
         d.carp.push(key);
