@@ -20,8 +20,8 @@
 // nuclear operatives (opted-in ghosts are taken without a poll), the latejoin traitor
 // (infiltrator), the stowaway changeling, the latejoin revolution (provocateur), the midround
 // wizard, the paradox clone (`super::paradox_clone`), the nightmare (`super::nightmare`), the
-// morph (`super::morph`), the space dragon (`super::space_dragon`) and the revenant
-// (`super::revenant`) spawn anyone;
+// morph (`super::morph`), the space dragon (`super::space_dragon`), the revenant
+// (`super::revenant`) and the slaughter demon (`super::slaughter`) spawn anyone;
 // the others keep their weights, are logged and fail preparation, as tg's do without candidates.
 // There is no admin cancel or reroll window before a midround, no false alarms, no AFK checks,
 // no account age or job bans, and `EMERGENCY_PAST_POINT_OF_NO_RETURN` ignores the call's
@@ -129,6 +129,7 @@ pub const NIGHTMARE: &str = "Nightmare";
 pub const MORPH: &str = "Morph";
 pub const SPACE_DRAGON: &str = "Space Dragon";
 pub const REVENANT: &str = "Revenant";
+pub const SLAUGHTER_DEMON: &str = "Slaughter Demon";
 
 const HOP: &[&str] = &["Head of Personnel"];
 const ONE: (Cap, Cap) = (Cap::Fixed(1), Cap::Fixed(1));
@@ -258,7 +259,10 @@ pub const RULESETS: [Ruleset; 30] = {
             decrease(other("Mass Changelings", Heavy, [0, 3, 4, 5], 25), 4),
             "Midround Changeling",
         ),
-        other("Slaughter Demon", Heavy, flat(0), 20),
+        Ruleset {
+            role: Some(super::ROLE_SLAUGHTER_DEMON),
+            ..other(SLAUGHTER_DEMON, Heavy, flat(0), 20)
+        },
         Ruleset {
             role: Some(ROLE_SLEEPER_AGENT),
             candidates: Candidates::Living,
@@ -552,6 +556,7 @@ fn can_be_selected(world: &mut World, r: &Ruleset) -> bool {
         SPACE_DRAGON => super::space_dragon::can_spawn(world),
         // More than 10 corpses on the station.
         REVENANT => super::revenant::can_spawn(world),
+        SLAUGHTER_DEMON => super::slaughter::can_spawn(world),
         _ => true,
     }
 }
@@ -813,6 +818,15 @@ fn execute(
                 .filter_map(|&g| world.get::<PlayerMob>(g).map(|p| (p.client, g)))
                 .collect();
             if super::revenant::spawn_revenants(world, &ghosts).is_empty() {
+                return Vec::new();
+            }
+        }
+        SLAUGHTER_DEMON => {
+            let ghosts: Vec<(Entity, Entity)> = chosen
+                .iter()
+                .filter_map(|&g| world.get::<PlayerMob>(g).map(|p| (p.client, g)))
+                .collect();
+            if super::slaughter::spawn_demons(world, &ghosts).is_empty() {
                 return Vec::new();
             }
         }

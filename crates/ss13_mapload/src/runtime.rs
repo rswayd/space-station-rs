@@ -971,6 +971,10 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     // The revenant and its residue (`ss13_game::antag::revenant`).
     "/mob/living/basic/revenant",
     "/obj/item/ectoplasm/revenant",
+    // The slaughter demon and its death drops (`ss13_game::antag::slaughter`).
+    "/mob/living/basic/demon/slaughter",
+    "/obj/effect/decal/cleanable/blood/innards",
+    "/obj/item/organ/heart/demon",
     // Laser pointer diodes, the choice beacons' deliveries (`ss13_game::devices`).
     "/obj/item/stock_parts/micro_laser",
     "/obj/item/stock_parts/micro_laser/high",

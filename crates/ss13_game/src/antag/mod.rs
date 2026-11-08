@@ -48,6 +48,8 @@ pub mod paradox_clone;
 pub mod revenant;
 pub mod revolution;
 #[cfg(feature = "server")]
+pub mod slaughter;
+#[cfg(feature = "server")]
 pub mod space_dragon;
 #[cfg(feature = "server")]
 pub mod survivalist;
@@ -87,7 +89,11 @@ impl bevy::prelude::Plugin for AntagServerPlugin {
             valentine::ValentinePlugin,
             survivalist::SurvivalistPlugin,
         ))
-        .add_plugins((space_dragon::SpaceDragonPlugin, revenant::RevenantPlugin))
+        .add_plugins((
+            space_dragon::SpaceDragonPlugin,
+            revenant::RevenantPlugin,
+            slaughter::SlaughterPlugin,
+        ))
         .add_systems(Startup, dynamic::init)
         .add_plugins(midround::MidroundPlugin);
     }
@@ -114,6 +120,9 @@ pub const ROLE_NIGHTMARE: &str = "Nightmare";
 /// tg `ROLE_MORPH` (`morph`). tg polls every ghost for the morph; here it is a `be_special`
 /// key, as willing ghosts are taken without a poll.
 pub const ROLE_MORPH: &str = "Morph";
+/// The slaughter demon midround's candidates (`slaughter`): tg polls every ghost (no
+/// `pref_flag`); here it is a `be_special` key as for the morph.
+pub const ROLE_SLAUGHTER_DEMON: &str = "Slaughter Demon";
 /// tg `ROLE_REVENANT` (`revenant`), a `be_special` key as for the morph.
 pub const ROLE_REVENANT: &str = "Revenant";
 /// tg `ROLE_SPACE_DRAGON` (`space_dragon`), a `be_special` key as for the morph.
