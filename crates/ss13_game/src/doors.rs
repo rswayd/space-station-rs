@@ -129,6 +129,8 @@ struct DoorSprites {
     deny: Option<IconStateId>,
     /// Airlock maintenance panel per frame (`panel_<frame>`).
     panel: [Option<IconStateId>; 4],
+    /// The panel of a reinforced airlock (`panel_<frame>_protected`).
+    panel_protected: [Option<IconStateId>; 4],
     /// Airlock `sparks` while being emagged.
     sparks: Option<IconStateId>,
 }
@@ -206,6 +208,19 @@ pub struct Door {
     /// tg airlock `seal`: the pneumatic seal braced on it (`crate::devices::door_seal`); a
     /// sealed airlock neither opens nor is pried.
     pub seal: Option<Entity>,
+    /// tg airlock `security_level` (`crate::airlock_security`): the plating over its wires.
+    pub security_level: u8,
+    /// tg `closeOtherId` and `close_others`, `cyclelinkedairlock` (`crate::airlock_cycle`):
+    /// the airlocks that close when this one opens.
+    pub close_other_id: String,
+    pub close_others: Vec<Entity>,
+    pub cyclelinked: Option<Entity>,
+    /// An airlock started opening since [`crate::airlock_cycle`] last looked.
+    pub(crate) cycle_opened: bool,
+    /// When a linked airlock's opening closes this one (tg `addtimer(close)`).
+    pub(crate) cycle_close_at: Option<f64>,
+    /// tg `delayed_close_requested`: a linked airlock opened while this one moved.
+    pub(crate) delayed_close_requested: bool,
 }
 
 /// An airlock's sound vars (empty: silent).
@@ -363,7 +378,12 @@ impl Door {
         // shortcut: the area's power is not checked (the look has no access to it); an airlock
         // in an unpowered area keeps its lights.
         let lights = lights.filter(|_| self.feedback && self.wire_power() && !self.emagging);
-        let panel = s.panel[frame].filter(|_| self.panel_open);
+        let panels = if self.security_level > 0 {
+            &s.panel_protected
+        } else {
+            &s.panel
+        };
+        let panel = panels[frame].filter(|_| self.panel_open);
         let welded = s.welded.filter(|_| self.welded);
         let sealed = s
             .sealed
@@ -481,6 +501,7 @@ fn init_doors(world: &mut World) {
     world.insert_batch(doors);
     spawn_fillers(world);
 
+    let mut cyclelink_dirs = Vec::new();
     let mut helpers = world.query::<(Entity, &DmAirlockHelper, &DmAtom, &TilePos)>();
     let helpers: Vec<(Entity, DmAirlockHelper, u8, TilePos)> = helpers
         .iter(world)
@@ -501,6 +522,9 @@ fn init_doors(world: &mut World) {
             Some(mut door) => {
                 apply_helper(&mut door, &payload, dir, pos);
                 report.helpers += 1;
+                if payload.cyclelink {
+                    cyclelink_dirs.push((airlock.expect("found above"), dir));
+                }
             }
             None => {
                 warn!("airlock helper at {pos:?} has no airlock on its tile");
@@ -509,6 +533,7 @@ fn init_doors(world: &mut World) {
         }
         world.despawn(helper);
     }
+    crate::airlock_cycle::link_mapped(world, &cyclelink_dirs);
 
     let mut looks = world.query_filtered::<(&Door, &mut Appearance), With<Mapped>>();
     for (door, mut appearance) in looks.iter_mut(world) {
@@ -592,6 +617,13 @@ fn door_from(
         crush: false,
         password_lock: !dm.password.is_empty(),
         seal: None,
+        security_level: dm.security_level,
+        close_other_id: dm.close_other_id.clone(),
+        close_others: Vec::new(),
+        cyclelinked: None,
+        cycle_opened: false,
+        cycle_close_at: None,
+        delayed_close_requested: false,
     }
 }
 
@@ -743,6 +775,16 @@ fn apply_helper(door: &mut Door, h: &DmAirlockHelper, dir: u8, pos: TilePos) {
     door.locked |= h.locked;
     door.welded |= h.welded;
     door.red_alert_access |= h.red_alert_access;
+    // `cyclelink_helper_multi/payload`: an id already set or none given is a mapping error.
+    if h.cyclelink_multi {
+        if !door.close_other_id.is_empty() {
+            warn!("cyclelink helper at {pos:?}: the airlock's closeOtherId is already set");
+        } else if h.cycle_id.is_empty() {
+            warn!("cyclelink helper at {pos:?} has no cycle_id");
+        } else {
+            door.close_other_id = h.cycle_id.clone();
+        }
+    }
     if h.unres {
         door.unres_sides ^= dir;
         door.unres_latch = true;
@@ -811,6 +853,7 @@ fn resolve_sprites(
         sealed: get(overlays, "sealed"),
         deny: get(overlays, "lights_denied"),
         panel: FRAMES.map(|f| get(overlays, &format!("panel_{f}"))),
+        panel_protected: FRAMES.map(|f| get(overlays, &format!("panel_{f}_protected"))),
         sparks: get(overlays, "sparks"),
     }
 }
@@ -939,6 +982,7 @@ fn start_opening(door: &mut Door, appearance: &mut Appearance, now: f64, bumped:
     };
     door.state = DoorState::Opening { since: now };
     door.sound = Some(DoorSound::Open);
+    door.cycle_opened = door.kind == DoorKind::Airlock;
     door.apply_look(appearance);
 }
 
@@ -1090,10 +1134,15 @@ fn door_clicks(
         let inventory = inventories.get(click.mob).ok();
         let held = inventory.and_then(Inventory::active_item);
         // An emag is used on the door (`crate::emag`), an airlock painter paints it
-        // (`crate::airlock_construction`); neither works it.
+        // (`crate::airlock_construction`), a door remote works it (`crate::devices::door_remote`);
+        // none works it by hand.
         if held.and_then(|h| items.get(h).ok()).is_some_and(|i| {
             ss13_mapload::fidelity::is_under(&i.path, crate::emag::EMAG)
                 || ss13_mapload::fidelity::is_under(&i.path, crate::airlock_construction::PAINTER)
+                || ss13_mapload::fidelity::is_under(
+                    &i.path,
+                    crate::devices::door_remote::DOOR_REMOTE,
+                )
         }) {
             continue;
         }
@@ -1109,6 +1158,14 @@ fn door_clicks(
             commands.queue(move |world: &mut World| {
                 crate::devices::door_seal::start_seal(world, client, mob, entity, seal);
             });
+            continue;
+        }
+        // `airlock/item_interaction`: sheets reinforcing an open panel
+        // (`crate::airlock_security`) do not work the door.
+        if held
+            .and_then(|h| items.get(h).ok())
+            .is_some_and(|i| crate::airlock_security::reinforces(&door, &i.path))
+        {
             continue;
         }
         // `password/try_to_activate_door`: a closed one asks for its password.
@@ -1212,9 +1269,25 @@ fn run_doors(
                 if elapsed >= t.open_done {
                     door.state = DoorState::Open;
                     door.apply_look(&mut appearance);
+                    // `airlock/open`: `addtimer(close, FORCING_DOOR_CHECKS)`.
+                    if std::mem::take(&mut door.delayed_close_requested) {
+                        door.cycle_close_at = Some(now + 0.1);
+                    }
                 }
             }
             DoorState::Open => {
+                if door.cycle_close_at.is_some_and(|at| now >= at) {
+                    door.cycle_close_at = None;
+                    close(
+                        &mut door,
+                        &mut appearance,
+                        (*pos, entity, &index),
+                        now,
+                        false,
+                        env,
+                        false,
+                    );
+                }
                 if door.close_at.is_some_and(|at| now >= at) {
                     door.close_at = None;
                     // tg `autoclose()`: bolted-open, welded-open or unpowered doors stay open.
@@ -1259,6 +1332,7 @@ fn run_doors(
                 }
                 if elapsed >= t.close_done {
                     door.state = DoorState::Closed;
+                    door.delayed_close_requested = false;
                     door.apply_look(&mut appearance);
                     // tg `CheckForMobs`: a mob that stepped in while it closed reopens a safe
                     // door (an unsafe one crushed it instead); windoors override `close`
@@ -1274,7 +1348,14 @@ fn run_doors(
             }
             DoorState::Closed => {}
         }
-        let pending = door.is_operating() || door.close_at.is_some() || door.denied();
+        if door.state != DoorState::Open {
+            // tg `close()` on a door that is not open does nothing.
+            door.cycle_close_at = None;
+        }
+        let pending = door.is_operating()
+            || door.close_at.is_some()
+            || door.cycle_close_at.is_some()
+            || door.denied();
         if !pending {
             e.remove::<DoorActive>();
         }
@@ -1453,6 +1534,10 @@ pub enum DoorJob {
     Weld { welded: bool },
     /// `try_to_crowbar(forced)`: a forcing tool prying a powered airlock open.
     Pry { tool: Entity },
+    /// `try_reinforce` with this sheet stack to `level` (`crate::airlock_security`).
+    Reinforce { sheet: Entity, level: u8 },
+    /// A plating removal step from `security_level` `from` (`crate::airlock_security`).
+    Shield { from: u8 },
 }
 
 /// Items with `force_opens` that pry powered airlocks: the jaws of life and their subtypes.
@@ -1737,6 +1822,9 @@ pub fn complete(world: &mut World, _client: Entity, mob: Entity, target: Entity,
     let from = match job {
         DoorJob::Weld { welded } => welded,
         DoorJob::Pry { tool } => return complete_pry(world, mob, target, tool),
+        DoorJob::Reinforce { .. } | DoorJob::Shield { .. } => {
+            return crate::airlock_security::complete(world, mob, target, job);
+        }
     };
     let Some(&pos) = world.get::<TilePos>(target) else {
         return;
@@ -2027,6 +2115,13 @@ pub(crate) fn test_airlock(req_access: &[&str]) -> Door {
         crush: false,
         password_lock: false,
         seal: None,
+        security_level: 0,
+        close_other_id: String::new(),
+        close_others: Vec::new(),
+        cyclelinked: None,
+        cycle_opened: false,
+        cycle_close_at: None,
+        delayed_close_requested: false,
     }
 }
 

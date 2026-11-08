@@ -2,6 +2,7 @@
 
 pub mod ai_airlock;
 pub mod air_alarm;
+pub mod airlock_controller;
 pub mod airlock_electronics;
 pub mod alert;
 pub mod apc;

@@ -320,9 +320,8 @@ mod server {
 
     /// `/obj/machinery/door/add_context` and, for airlocks, `/obj/machinery/door/airlock/
     /// add_context`'s tool lines.
-    // shortcut: no silicon lines (bolt, electrify, emergency access), no crowbar shielding or
-    // electronics removal (airlock security levels are not ported); every airlock has an access
-    // panel.
+    // shortcut: no silicon lines (bolt, electrify, emergency access), no electronics removal;
+    // every airlock has an access panel.
     fn door_context(
         world: &World,
         user: Entity,
@@ -355,10 +354,25 @@ mod server {
                 };
                 context.set(LMB, text);
             }
-            Some(ToolKind::Crowbar) => context.set(LMB, "Pry open"),
+            Some(ToolKind::Crowbar) => {
+                use crate::airlock_security::{PLASTEEL_I_S, PLASTEEL_O_S};
+                let shielding =
+                    door.panel_open && matches!(door.security_level, PLASTEEL_O_S | PLASTEEL_I_S);
+                context.set(
+                    LMB,
+                    if shielding {
+                        "Remove shielding"
+                    } else {
+                        "Pry open"
+                    },
+                );
+            }
             Some(ToolKind::Welder) => {
+                use crate::airlock_security::{IRON, PLASTEEL_I, PLASTEEL_O};
                 context.set(RMB, if door.welded { "Unweld" } else { "Weld shut" });
-                context.set(LMB, "Repair");
+                let shielding = door.panel_open
+                    && matches!(door.security_level, IRON | PLASTEEL_I | PLASTEEL_O);
+                context.set(LMB, if shielding { "Cut shielding" } else { "Repair" });
             }
             _ => {}
         }

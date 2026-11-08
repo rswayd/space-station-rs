@@ -610,6 +610,10 @@ fn tool_act(world: &mut World, actor: Actor, kind: ToolKind, target: Entity) -> 
     if crate::wires::screwdriver_act(world, actor, kind, target) {
         return Interact::Done;
     }
+    // Airlock `welder_act`, `crowbar_act`, `wirecutter_act` on its plating.
+    if crate::airlock_security::tool_act(world, actor, kind, target) {
+        return Interact::Done;
+    }
     if kind == ToolKind::Crowbar
         && (crate::wallmount::firelock::crowbar_act(world, actor, target, false)
             || crate::doors::force_open_act(world, actor, target)
@@ -902,6 +906,10 @@ fn target_interaction(world: &mut World, actor: Actor, target: Entity) -> Intera
     };
     // `is_wire_tool(tool) && panel_open`: the wires window.
     if crate::wires::wire_tool_interaction(world, actor, held, target) {
+        return Interact::Done;
+    }
+    // Airlock `item_interaction`: sheets reinforce an open, bare panel.
+    if crate::airlock_security::item_interaction(world, actor, held, target) {
         return Interact::Done;
     }
     if crate::holosign::interact_with_atom(world, actor, held, target) {

@@ -7,6 +7,10 @@ use crate::interfaces::air_alarm::{
     AirAlarmData, AirAlarmUi, AlarmControls, EnvEntry, ModeEntry, ScrubberEntry, TlvEntry,
     VentEntry,
 };
+use crate::interfaces::airlock_controller::{
+    AirlockButtonControllerData, AirlockButtonControllerUi, AirlockControllerData,
+    AirlockControllerUi,
+};
 use crate::interfaces::airlock_electronics::{
     AccessRegion, AirlockElectronicsData, AirlockElectronicsStatic, AirlockElectronicsUi,
     RegionAccess,
@@ -965,6 +969,28 @@ pub fn sample(name: &str) -> Option<Sample> {
                 total_reagents: 60.0,
                 max_reagents: 100.0,
                 busy: false,
+            },
+        ),
+        AirlockButtonControllerUi::NAME => of::<AirlockButtonControllerUi>(
+            "Virology Access Console",
+            &(),
+            &AirlockButtonControllerData {
+                interior_door: true,
+                exterior_door: true,
+                interior_door_closed: true,
+                exterior_door_closed: false,
+                busy: false,
+            },
+        ),
+        AirlockControllerUi::NAME => of::<AirlockControllerUi>(
+            "incinerator access console",
+            &(),
+            &AirlockControllerData {
+                airlock_state: "depressurize".into(),
+                sensor_pressure: Some(52.4),
+                pump_status: "siphon".into(),
+                interior_status: "closed".into(),
+                exterior_status: "closed".into(),
             },
         ),
         _ => return None,

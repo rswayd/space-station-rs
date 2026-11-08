@@ -36,9 +36,13 @@ pub const HELPER_ACCESS_ANY: &str = "/obj/effect/mapping_helpers/airlock/access/
 pub const HELPER_ACCESS_ALL: &str = "/obj/effect/mapping_helpers/airlock/access/all";
 /// `red_alert_access`: the airlock lifts its access at red alert and above.
 pub const HELPER_RED_ALERT_ACCESS: &str = "/obj/effect/mapping_helpers/airlock/red_alert_access";
-// shortcut: `cyclelink_helper`(_multi) (cycling airlock pairs), `abandoned` (random wall/weld/
-// bolt per round) and the rarer airlock helpers are not applied; their entities stay inert. Add
-// each with the mechanic it configures.
+/// `cyclelink_helper`: the helper's `dir` becomes the airlock's `cyclelinkeddir`.
+pub const HELPER_CYCLELINK: &str = "/obj/effect/mapping_helpers/airlock/cyclelink_helper";
+/// `cyclelink_helper_multi`: its `cycle_id` (a map edit) becomes the airlock's `closeOtherId`.
+pub const HELPER_CYCLELINK_MULTI: &str =
+    "/obj/effect/mapping_helpers/airlock/cyclelink_helper_multi";
+// shortcut: `abandoned` (random wall/weld/bolt per round) and the rarer airlock helpers are not
+// applied; their entities stay inert. Add each with the mechanic it configures.
 
 /// Which tg door family a type belongs to; decides timings, icon state names and who may open it.
 #[derive(Reflect, Default, Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -104,6 +108,10 @@ pub struct DmDoor {
     pub interaction_activated: bool,
     /// Password doors: `voice_activated` (saying the password nearby opens it).
     pub voice_activated: bool,
+    /// Airlocks: `security_level` (`AIRLOCK_SECURITY_*`, 0-6), the plating over the wires.
+    pub security_level: u8,
+    /// Airlocks: `closeOtherId`, the cycle group whose other airlocks close when one opens.
+    pub close_other_id: String,
 }
 
 /// An airlock mapping helper's payload.
@@ -121,6 +129,11 @@ pub struct DmAirlockHelper {
     pub access_all: Vec<String>,
     /// `red_alert_access`.
     pub red_alert_access: bool,
+    /// `cyclelink_helper`: the helper's `dir` becomes `cyclelinkeddir`.
+    pub cyclelink: bool,
+    /// `cyclelink_helper_multi`: `cycle_id` becomes `closeOtherId` (empty: no group).
+    pub cyclelink_multi: bool,
+    pub cycle_id: String,
 }
 
 /// One door var with its converted value.
@@ -154,6 +167,8 @@ pub enum DoorField {
     Password(String),
     InteractionActivated(bool),
     VoiceActivated(bool),
+    SecurityLevel(u8),
+    CloseOtherId(String),
 }
 
 fn under(path: &str, root: &str) -> bool {
@@ -214,6 +229,21 @@ pub fn helper(types: &DmTypes, path: &str) -> Option<DmAirlockHelper> {
     } else if under(path, HELPER_RED_ALERT_ACCESS) {
         DmAirlockHelper {
             red_alert_access: true,
+            ..default()
+        }
+    } else if under(path, HELPER_CYCLELINK) {
+        DmAirlockHelper {
+            cyclelink: true,
+            ..default()
+        }
+    } else if under(path, HELPER_CYCLELINK_MULTI) {
+        let cycle_id = types
+            .resolved(path, "cycle_id")
+            .and_then(|v| link_id(Val::from_json(v)).ok())
+            .unwrap_or_default();
+        DmAirlockHelper {
+            cyclelink_multi: true,
+            cycle_id,
             ..default()
         }
     } else {
@@ -306,6 +336,12 @@ fn field(
         "password" => text(value).map(DoorField::Password),
         "interaction_activated" => flag(value).map(DoorField::InteractionActivated),
         "voice_activated" => flag(value).map(DoorField::VoiceActivated),
+        "security_level" => match value {
+            Val::Num(n) => Ok(DoorField::SecurityLevel(n.clamp(0.0, 6.0) as u8)),
+            Val::Null => Ok(DoorField::SecurityLevel(0)),
+            _ => Err(Skip::Unsupported),
+        },
+        "closeOtherId" => link_id(value).map(DoorField::CloseOtherId),
         // Password doors name their sounds in lower case.
         "door_open" => text(value).map(DoorField::DoorOpen),
         "door_close" => text(value).map(DoorField::DoorClose),
@@ -368,6 +404,8 @@ pub fn patch_entry(fields: &[DoorField]) -> Option<String> {
             DoorField::Password(s) => ("password", ron_str(s)),
             DoorField::InteractionActivated(v) => ("interaction_activated", v.to_string()),
             DoorField::VoiceActivated(v) => ("voice_activated", v.to_string()),
+            DoorField::SecurityLevel(v) => ("security_level", v.to_string()),
+            DoorField::CloseOtherId(s) => ("close_other_id", ron_str(s)),
         };
         if !out.is_empty() {
             out.push_str(", ");
@@ -382,15 +420,33 @@ pub fn helper_entry(h: &DmAirlockHelper) -> String {
     let list = |l: &[String]| ron::to_string(l).expect("string lists always serialize");
     format!(
         "\"dm_airlock_helper\": (locked: {}, welded: {}, unres: {}, unres_delayed: {}, \
-         access_any: {}, access_all: {}, red_alert_access: {})",
+         access_any: {}, access_all: {}, red_alert_access: {}, cyclelink: {}, \
+         cyclelink_multi: {}, cycle_id: {})",
         h.locked,
         h.welded,
         h.unres,
         h.unres_delayed,
         list(&h.access_any),
         list(&h.access_all),
-        h.red_alert_access
+        h.red_alert_access,
+        h.cyclelink,
+        h.cyclelink_multi,
+        ron::to_string(&h.cycle_id).expect("strings always serialize")
     )
+}
+
+/// `.dmm` edit of a helper var (`cycle_id` of `cyclelink_helper_multi`) as a
+/// `"dm_airlock_helper": (...)` patch; `None` for other vars or types.
+pub fn helper_field_dmm(path: &str, var: &str, value: &DmValue) -> Option<Result<String, Skip>> {
+    if var != "cycle_id" || !under(path, HELPER_CYCLELINK_MULTI) {
+        return None;
+    }
+    Some(link_id(Val::from_dmm(value)).map(|id| {
+        format!(
+            "\"dm_airlock_helper\": (cycle_id: {})",
+            ron::to_string(&id).expect("strings always serialize")
+        )
+    }))
 }
 
 #[cfg(test)]
@@ -453,6 +509,26 @@ mod tests {
             .unwrap(),
             r#""dm_door": (password: "x", voice_activated: true)"#
         );
+        assert_eq!(
+            field_dmm("security_level", &DmValue::Number(6.0)),
+            Some(Ok(DoorField::SecurityLevel(6)))
+        );
+        assert_eq!(
+            field_json("closeOtherId", &serde_json::json!("bridge")),
+            Some(Ok(DoorField::CloseOtherId("bridge".into())))
+        );
+        assert_eq!(
+            helper_field_dmm(
+                HELPER_CYCLELINK_MULTI,
+                "cycle_id",
+                &DmValue::Str("pod".into())
+            ),
+            Some(Ok(r#""dm_airlock_helper": (cycle_id: "pod")"#.to_owned()))
+        );
+        assert_eq!(
+            helper_field_dmm(HELPER_CYCLELINK, "cycle_id", &DmValue::Str("pod".into())),
+            None
+        );
         assert!(is_door("/obj/machinery/door/airlock/glass"));
         assert!(!is_door("/obj/machinery/door_buttons"));
     }
@@ -498,7 +574,7 @@ mod tests {
                 ..default()
             })
         );
-        assert_eq!(h("cyclelink_helper"), None);
+        assert!(h("cyclelink_helper").unwrap().cyclelink);
         assert!(h("red_alert_access").unwrap().red_alert_access);
         assert_eq!(
             h("access/any/command/maintenance/extra")
@@ -513,7 +589,7 @@ mod tests {
         );
         assert_eq!(
             helper_entry(&h("access/all/security/brig").unwrap()),
-            r#""dm_airlock_helper": (locked: false, welded: false, unres: false, unres_delayed: false, access_any: [], access_all: ["brig"], red_alert_access: false)"#
+            r#""dm_airlock_helper": (locked: false, welded: false, unres: false, unres_delayed: false, access_any: [], access_all: ["brig"], red_alert_access: false, cyclelink: false, cyclelink_multi: false, cycle_id: "")"#
         );
     }
 }

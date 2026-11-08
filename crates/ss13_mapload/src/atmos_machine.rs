@@ -613,6 +613,8 @@ pub struct DmAtmosDevice {
     pub can_unwrench: bool,
     pub construction_type: String,
     pub pipe_state: String,
+    /// `id_tag`: the tag airlock controllers find their pump by (`binary/dp_vent_pump`).
+    pub id_tag: String,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -627,7 +629,7 @@ enum Kind {
 }
 
 /// Scalar vars: DM name, kind, field name.
-const VARS: [(&str, Kind, &str); 54] = [
+const VARS: [(&str, Kind, &str); 55] = [
     ("piping_layer", Kind::Num, "piping_layer"),
     ("target_layer", Kind::Num, "piping_layer"),
     ("pipe_color", Kind::Text, "pipe_color"),
@@ -695,6 +697,7 @@ const VARS: [(&str, Kind, &str); 54] = [
     ("can_unwrench", Kind::Flag, "can_unwrench"),
     ("construction_type", Kind::Path, "construction_type"),
     ("pipe_state", Kind::Text, "pipe_state"),
+    ("id_tag", Kind::Text, "id_tag"),
 ];
 
 /// List vars: gas lists, then access lists.

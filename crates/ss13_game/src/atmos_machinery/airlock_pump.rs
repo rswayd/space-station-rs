@@ -8,8 +8,8 @@
 //! and bolt, then for up to 10 s it fills its tile and the tiles around from the distro port
 //! (toward the internal side's target) or siphons them into the waste port (toward the external
 //! side's), and finally unbolts and opens the side that was asked for.
-// shortcut: no shuttle docking (`on_dock_request`, `safe_dock`, `undock`), no `close_others`
-// group fallback, no pipe underlay drawing, no unwrenching or rebuilding.
+// shortcut: no shuttle docking (`on_dock_request`, `safe_dock`, `undock`), no pipe underlay
+// drawing, no unwrenching or rebuilding.
 
 use bevy::prelude::*;
 use ss13_atmos::Atmos;
@@ -171,8 +171,15 @@ fn set_links(world: &mut World, e: Entity, pump: &mut AirlockPump, pos: TilePos,
     } else {
         [Dir::North, Dir::South]
     };
-    let internal = adjacent_airlocks(world, find_density(world, pos, front), sides);
-    let external = adjacent_airlocks(world, find_density(world, pos, front.reverse()), sides);
+    let mut internal = adjacent_airlocks(world, find_density(world, pos, front), sides);
+    let mut external = adjacent_airlocks(world, find_density(world, pos, front.reverse()), sides);
+    // "support for awkwardly shaped airlocks that cycle on a group ID" (`crate::airlock_cycle`).
+    if internal.is_empty() {
+        internal = cycle_group(world, &external);
+    }
+    if external.is_empty() {
+        external = cycle_group(world, &internal);
+    }
     if internal.is_empty() || external.is_empty() {
         warn!("airlock pump at {pos:?} found no airlocks to cycle with");
         return;
@@ -193,6 +200,19 @@ fn set_links(world: &mut World, e: Entity, pump: &mut AirlockPump, pos: TilePos,
     pump.internal = internal;
     pump.external = external;
     pump.set_up = true;
+}
+
+/// The `close_others` of `side`'s airlocks that are not on `side` themselves.
+fn cycle_group(world: &World, side: &[Entity]) -> Vec<Entity> {
+    let mut out = Vec::new();
+    for door in side.iter().filter_map(|&a| world.get::<Door>(a)) {
+        for &other in &door.close_others {
+            if !side.contains(&other) && !out.contains(&other) {
+                out.push(other);
+            }
+        }
+    }
+    out
 }
 
 /// `secure_open` / `secure_close`: unbolt, move (forced), bolt again.
