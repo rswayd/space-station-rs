@@ -30,7 +30,7 @@
 Притягивается, только если взломать (emag) 10 спутников метеорного щита; летит с кольцом искажения пространства и оставляет сингулярность тёмной материи.
 
 - **Код:** [`/obj/effect/meteor/dark_matteor`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/meteors/meteor_dark_matteor.dm#L2)
-- **Статус в ss13-rs:** ❌ нет — нет метеоров и сингулярности
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/events/meteors.rs` (`DARK_MATTEOR_KIND`, `DarkMatteorEvent`): 15 ударов `EXPLODE_DEVASTATE`, красная тревога на время полёта и возврат уровня с объявлением при промахе, событие по цели-мобу; притягивается 10 емагнутыми щитами (`crates/ss13_game/src/station_goals.rs`, `emag_threshold`); отражает луч щита и уничтожает его (`shield_meteors`); нет кольца искажения и квантовых искр (визуал), сингулярность тёмной материи спавнится как объект без поведения — механика сингулярности относится к группе двигателей (engine/singularity)
 
 ### Таблицы волн
 Глобальные списки весов типов метеоров для каждой волны (нормальная, угрожающая, катастрофическая, мясная, пыль, одиночный, песчаная, хэллоуинская).
@@ -42,16 +42,16 @@
 Компонент `meteor_combat`: метеор можно ударить кулаком (с ачивкой) и отразить, или разбить кирка/инструментом; осмотр приближающегося метеора тоже даёт ачивку.
 
 - **Код:** [`/datum/component/meteor_combat`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/meteors/meteor_deflection.dm#L5)
-- **Статус в ss13-rs:** ❌ нет — нет метеоров
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/events/meteors.rs` (`punch`, `attacked`, `redirect`, клики 3559/1519 в `events/mod.rs`): легендарный атлет в боевом режиме отбивает метеор кулаком, бита при атлетике ≥ эксперта, кирка/бур (`TOOL_MINING`) разбивает метеор на обломки; отбитый летит к краю уровня прочь от атлета (`get_cardinal_dir`); нет ачивок (не портированы), силового кулака (не портирован), строки осмотра «doesn't look too tough»
 
 ### Метеорный щит (станционная цель)
 Спутники `meteor_shield`, развёрнутые карго и включённые с консоли спутников, сбивают метеоры в радиусе; станционная цель — покрыть станцию.
 
 - **Код:** [`/obj/machinery/satellite/meteor_shield`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/station_goals/meteor_shield.dm#L60), [`/obj/machinery/computer/sat_control`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/satellite/satellite_control.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — нет метеоров и спутников
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/station_goals.rs`: цель «Станционные щиты» с покрытием 500 клеток, включение руками за 2 с и с консоли (`science/teleportation/sat_control.rs`), сбивание метеоров в `kill_range` 14 по прямой через космос; емаг (`emag_act`, кулдаун 1 мин на всю станцию, GPS-сигнал через `Gps::fixed`): активный емагнутый щит удваивает веса волн метеоров и бродячего метеора, выключение/уничтожение возвращает; пороги 3/6/7/10 — предупреждения, объявление, тёмный маттеор; нет визуала луча и взрыва, строк осмотра и показаний мультитула, разблокировки карго-паков по цели
 
 ### Контроллер режима метеоров
 `/datum/meteor_mode_controller`: постоянный метеорный дождь с нарастающей силой (используется режимами/админами).
 
 - **Код:** [`/datum/meteor_mode_controller`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/meteors/meteor_mode_controller.dm#L5)
-- **Статус в ss13-rs:** ❌ нет — нет метеоров
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/events/meteors.rs` (`MeteorMode`, `start_meteor_mode`, `stop_meteor_mode`, `process_meteor_mode`): раз в секунду после задержки метеоры по `meteorminutes` (шанс угрожающей/катастрофической волны, 1..10 штук по `rampupdelta`); не подключено к вызывающим: секрет админов «meteormode» (группа админки), раундстарт-правило Meteor динамика (вес 0) и финал ритуала мага «армагеддон» (группа антагов)

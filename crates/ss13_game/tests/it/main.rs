@@ -82,6 +82,7 @@ mod medical;
 mod medical_machines;
 mod medicine;
 mod megafauna;
+mod meteors;
 mod mining;
 mod misc_items;
 mod misc_ui;

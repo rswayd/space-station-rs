@@ -9,6 +9,10 @@
 //! is bumped: rammed, and a hit taken. Out of hits it drops its ore and goes off (its
 //! `meteor_effect`: an [`explosion`](crate::explosions::explosion) for the bigger ones).
 //!
+//! A meteor can be punched or batted away by an athlete or broken up with a mining tool
+//! (`meteor_combat`: [`punch`], [`attacked`]); the meteor mode ([`MeteorMode`]) throws meteors
+//! every second until stopped.
+//!
 //! Cost: a wave keeps up to ~100 meteors in flight, 10 steps per second each, every step one
 //! tile lookup; far below a millisecond per tick.
 
@@ -1134,6 +1138,217 @@ fn meteor_effect(world: &mut World, kind: &MeteorKind, pos: TilePos) {
     }
 }
 
+pub fn is_dark_matteor(world: &World, e: Entity) -> bool {
+    world
+        .get::<Meteor>(e)
+        .is_some_and(|m| m.kind.special == Special::DarkMatteor)
+}
+
+// --- Meteor combat ------------------------------------------------------------------------
+
+/// `TOOL_MINING`.
+const TOOL_MINING: &str = "mining";
+const BASEBALL_BAT: &str = "/obj/item/melee/baseball_bat";
+/// `SKILL_LEVEL_EXPERT`.
+const SKILL_EXPERT: u8 = 5;
+const PICKAXE_SOUND: &str = "sound/effects/pickaxe/picaxe1.ogg";
+const BAT_SOUND: &str = "sound/items/baseballhit.ogg";
+/// `SFX_PUNCH`.
+const PUNCH_SOUND: &str = "punch";
+
+fn meteor_sound(world: &mut World, meteor: Entity, sound: &str, vol: f32) {
+    if let Some(&pos) = world.get::<TilePos>(meteor) {
+        crate::sound::playsound(world, crate::sound::PlaySound::new(pos, sound, vol, true));
+    }
+}
+
+/// `/datum/component/meteor_combat/on_punched`: a legendary athlete in combat mode punches the
+/// meteor away. False lets the click go on.
+pub fn punch(world: &mut World, mob: Entity, meteor: Entity) -> bool {
+    if world.get::<Meteor>(meteor).is_none() {
+        return false;
+    }
+    let combat = world
+        .get::<crate::combat::CombatMode>(mob)
+        .is_some_and(|c| c.0);
+    let level = crate::skills::level(world, mob, crate::skills::Skill::Athletics);
+    if !combat || level < crate::skills::LEVEL_LEGENDARY {
+        return false;
+    }
+    // shortcut: no meteor punch achievement (no achievements).
+    meteor_sound(world, meteor, PUNCH_SOUND, 50.0);
+    redirect(world, meteor, mob);
+    true
+}
+
+/// `/datum/component/meteor_combat/on_attacked`: a mining tool breaks the meteor into its
+/// debris; an expert athlete's baseball bat sends it away. False lets the click go on.
+// shortcut: no power fist (not ported).
+pub fn attacked(
+    world: &mut World,
+    client: Entity,
+    mob: Entity,
+    item: Entity,
+    meteor: Entity,
+) -> bool {
+    let Some(kind) = world.get::<Meteor>(meteor).map(|m| m.kind) else {
+        return false;
+    };
+    if world
+        .get::<ss13_mapload::DmTool>(item)
+        .is_some_and(|t| t.behaviour == TOOL_MINING)
+    {
+        let pos = world.get::<TilePos>(meteor).copied();
+        meteor_sound(world, meteor, PICKAXE_SOUND, 50.0);
+        world.despawn(meteor);
+        if let Some(pos) = pos {
+            make_debris(world, kind, pos);
+        }
+        return true;
+    }
+    if path_of(world, item).is_some_and(|p| is_under(&p, BASEBALL_BAT)) {
+        if crate::skills::level(world, mob, crate::skills::Skill::Athletics) < SKILL_EXPERT {
+            crate::tools::tell(
+                world,
+                client,
+                ss13_shared::chat::Span::Warning,
+                format!("The {} is too heavy for you!", kind.name),
+            );
+            return true;
+        }
+        meteor_sound(world, meteor, BAT_SOUND, 100.0);
+        redirect(world, meteor, mob);
+        return true;
+    }
+    false
+}
+
+/// tg `get_cardinal_dir(start, end)` as a `GLOB.cardinals` index (north, south, east, west):
+/// the vertical axis with the chance of its share of the distance. `None` on the same tile.
+pub fn cardinal_side(from: TilePos, to: TilePos, roll: f64) -> Option<usize> {
+    let (dx, dy) = (to.x - from.x, to.y - from.y);
+    if dx == 0 && dy == 0 {
+        return None;
+    }
+    let vertical = roll * f64::from(dx.abs() + dy.abs()) < f64::from(dy.abs());
+    Some(match (vertical, dx, dy) {
+        (true, _, dy) if dy > 0 => 0,
+        (true, _, dy) if dy < 0 => 1,
+        (false, dx, _) if dx > 0 => 2,
+        (false, dx, _) if dx < 0 => 3,
+        // `get_dir & mask` empty: no edge, the meteor flies on.
+        _ => return None,
+    })
+}
+
+/// `/obj/effect/meteor/redirect(athlete)`: off to the edge away from the athlete, a new flight.
+pub fn redirect(world: &mut World, meteor: Entity, athlete: Entity) {
+    let (Some(&from), Some(&pos)) = (world.get::<TilePos>(athlete), world.get::<TilePos>(meteor))
+    else {
+        return;
+    };
+    let roll = world.resource_mut::<EventRng>().unit();
+    let Some(side) = cardinal_side(from, pos, roll) else {
+        return;
+    };
+    let Some(size) = world.resource::<SpatialIndex>().level_size(pos.z) else {
+        return;
+    };
+    let Some(dest) = debris_start(side, pos.z, size, &mut world.resource_mut::<EventRng>().0)
+    else {
+        return;
+    };
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    if let Some(mut m) = world.get_mut::<Meteor>(meteor) {
+        m.dest = dest;
+        m.towards = Towards::new(pos, dest);
+        m.expires = now + LIFETIME_SECS;
+    }
+}
+
+// --- Meteor mode --------------------------------------------------------------------------
+
+/// `meteordelay` default (5 minutes), seconds of round time.
+pub const METEOR_MODE_DELAY_SECS: f64 = 300.0;
+/// `rampupdelta` default, minutes.
+pub const METEOR_MODE_RAMPUP_MINUTES: f64 = 5.0;
+/// `SSprocessing` wait.
+const METEOR_MODE_TICK_SECS: f64 = 1.0;
+
+/// tg `GLOB.meteor_mode` (`/datum/meteor_mode_controller`): meteors every second from
+/// `start_at` seconds of round time on, worse and more of them as minutes pass.
+#[derive(Resource, Clone, Debug, PartialEq)]
+pub struct MeteorMode {
+    /// `meteordelay`: seconds of round time.
+    pub start_at: f64,
+    /// `rampupdelta`: minutes per extra meteor.
+    pub rampup: f64,
+    next_fire: f64,
+}
+
+/// `GLOB.meteor_mode = new()` + `start_meteor()`. The admin secret's inputs (30 s minimum
+/// ramp) bound `rampup` from below. Replaces a running controller.
+pub fn start_meteor_mode(world: &mut World, start_at: f64, rampup_minutes: f64) {
+    world.insert_resource(MeteorMode {
+        start_at: start_at.max(0.0),
+        rampup: rampup_minutes.max(0.5),
+        next_fire: 0.0,
+    });
+}
+
+/// `QDEL_NULL(GLOB.meteor_mode)`.
+pub fn stop_meteor_mode(world: &mut World) {
+    world.remove_resource::<MeteorMode>();
+}
+
+/// One `process()` past the delay: how many meteors and from which list, `meteorminutes`
+/// after the delay.
+pub fn meteor_mode_wave(
+    minutes: f64,
+    rampup: f64,
+    rng: &mut ss13_mapload::spawner::Rng,
+) -> (usize, Wave) {
+    let mut wave = METEORS_NORMAL;
+    if rng.prob(minutes as f32) {
+        wave = METEORS_THREATENING;
+    }
+    if rng.prob((minutes / 2.0) as f32) {
+        wave = METEORS_CATASTROPHIC;
+    }
+    // DM `round(x)` floors.
+    let count = (minutes / rampup).floor().clamp(1.0, 10.0) as usize;
+    (count, wave)
+}
+
+/// `/datum/meteor_mode_controller/process`.
+// Cost: up to 10 meteors a second once ramped up; each flies as any other.
+pub(super) fn process_meteor_mode(world: &mut World) {
+    let Some(mode) = world.get_resource::<MeteorMode>().cloned() else {
+        return;
+    };
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    if now < mode.next_fire {
+        return;
+    }
+    world.resource_mut::<MeteorMode>().next_fire = now + METEOR_MODE_TICK_SECS;
+    let Some(round) = world
+        .get_resource::<crate::round::Ticker>()
+        .map(|t| t.round_duration(now))
+    else {
+        return;
+    };
+    if mode.start_at > round {
+        return;
+    }
+    let minutes = (round - mode.start_at) / 60.0;
+    let (count, wave) = meteor_mode_wave(
+        minutes,
+        mode.rampup,
+        &mut world.resource_mut::<EventRng>().0,
+    );
+    spawn_meteors(world, count, wave);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1204,6 +1419,32 @@ mod tests {
             assert_eq!(e.x, 255 - 23);
             assert!((23..=232).contains(&e.y));
         }
+    }
+
+    #[test]
+    fn cardinal_side_follows_the_longer_share() {
+        let me = TilePos::new(10, 10, 1);
+        // Straight up: always north; straight left: always west.
+        assert_eq!(cardinal_side(me, TilePos::new(10, 15, 1), 0.99), Some(0));
+        assert_eq!(cardinal_side(me, TilePos::new(4, 10, 1), 0.0), Some(3));
+        // Diagonal south-east: the roll picks the axis.
+        assert_eq!(cardinal_side(me, TilePos::new(13, 7, 1), 0.2), Some(1));
+        assert_eq!(cardinal_side(me, TilePos::new(13, 7, 1), 0.7), Some(2));
+        assert_eq!(cardinal_side(me, me, 0.5), None);
+    }
+
+    #[test]
+    fn meteor_mode_ramps_up() {
+        let mut rng = ss13_mapload::spawner::Rng::new(9);
+        // Right at the start: one normal meteor a second.
+        let (n, wave) = meteor_mode_wave(0.0, 5.0, &mut rng);
+        assert_eq!(n, 1);
+        assert!(std::ptr::eq(wave, METEORS_NORMAL));
+        assert_eq!(meteor_mode_wave(12.0, 5.0, &mut rng).0, 2);
+        // Capped at 10; past 200 minutes always catastrophic.
+        let (n, wave) = meteor_mode_wave(500.0, 5.0, &mut rng);
+        assert_eq!(n, 10);
+        assert!(std::ptr::eq(wave, METEORS_CATASTROPHIC));
     }
 
     #[test]

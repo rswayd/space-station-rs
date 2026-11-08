@@ -9,11 +9,14 @@
 //!   that comes within 14 tiles through open space (`HasProximity`, `space_los`). The goal is
 //!   met when the active satellites on the station levels see 500 tiles together
 //!   (`update_coverage`).
+//! - An emagged meteor shield ([`emag_act`], one per minute station-wide) shows on GPS and,
+//!   while active, doubles the weights of the meteor wave and stray meteor events
+//!   ([`update_emagged`]); 3, 6 and 7 at once bring warnings (7: an announcement), 10 the dark
+//!   matt-eor. A dark matt-eor reflects the beam and destroys the shield.
 //! - The round-end report lists every goal and whether it was met ([`goal_report`]).
 // shortcut: the DNA vault and the bluespace artillery are not offered (their machines, probes
-// and parts are not ported); no emagged
-// satellites (meteor chance, the dark matt-eor), no beam visual, no admin goals panel (the
-// toggle is [`set_completed`]).
+// and parts are not ported); no beam visual or explosion visual, no examine lines or multitool
+// readout of satellites, no admin goals panel (the toggle is [`set_completed`]).
 
 use crate::construction::is_space;
 use std::collections::HashSet;
@@ -38,6 +41,19 @@ pub const KILL_RANGE: i32 = 14;
 pub const COVERAGE_GOAL: usize = 500;
 /// `toggle`'s `do_after(user, 2 SECONDS)`, deciseconds.
 const TOGGLE_DELAY_DS: f32 = 20.0;
+/// `METEOR_SHIELD_EMAG_COOLDOWN`, seconds.
+pub const EMAG_COOLDOWN_SECS: f64 = 60.0;
+/// `EMAGGED_METEOR_SHIELD_THRESHOLD_ONE` .. `_FOUR`.
+const EMAG_THRESHOLDS: [u32; 4] = [3, 6, 7, 10];
+/// `change_meteor_chance`: the `meteor_wave` controls and the stray meteor.
+const METEOR_CHANCE_EVENTS: [&str; 6] = [
+    crate::events::meteors::WAVE_NORMAL,
+    crate::events::meteors::WAVE_THREATENING,
+    crate::events::meteors::WAVE_CATASTROPHIC,
+    crate::events::meteors::WAVE_MEATY,
+    crate::events::meteors::DUST_STORM,
+    crate::events::meteors::STRAY_METEOR,
+];
 
 /// A `/datum/station_goal` type's vars.
 #[derive(Debug, PartialEq)]
@@ -111,6 +127,20 @@ pub struct Satellite {
     pub active: bool,
 }
 
+/// A meteor shield's `obj_flags & EMAGGED`.
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct EmaggedShield;
+
+/// The meteor shield's statics: `emagged_active_meteor_shields` (here the shields themselves,
+/// so a shield counts down only after it counted up), `highest_emagged_threshold_reached`,
+/// `shared_emag_cooldown`.
+#[derive(Resource, Default, Debug)]
+pub struct ShieldEmags {
+    pub counted: Vec<Entity>,
+    pub highest: u32,
+    pub cooldown_until: f64,
+}
+
 pub struct StationGoalsPlugin;
 
 impl Plugin for StationGoalsPlugin {
@@ -124,7 +154,8 @@ impl Plugin for StationGoalsPlugin {
             app.init_resource::<StationGoalsConfig>();
         }
         app.init_resource::<StationGoals>()
-            .add_systems(Update, shield_meteors);
+            .init_resource::<ShieldEmags>()
+            .add_systems(Update, (shield_meteors, forget_destroyed_shields).chain());
     }
 }
 
@@ -302,6 +333,9 @@ pub fn toggle(world: &mut World, target: Entity, client: Option<Entity>) -> bool
     world
         .entity_mut(target)
         .insert((Satellite { active: on }, Anchored(on)));
+    if world.get::<EmaggedShield>(target).is_some() {
+        update_emagged(world, target, client);
+    }
     // `update_icon_state`: "<base_icon_state>_<active|inactive>".
     let state = if on { "sat_active" } else { "sat_inactive" };
     let icon = world.get::<DmAtom>(target).map(|a| a.icon.clone());
@@ -371,7 +405,8 @@ pub fn update_coverage(world: &mut World) -> usize {
 }
 
 /// `HasProximity` of the active meteor shields: a meteor within `kill_range` seen through open
-/// space only (`space_los`) is destroyed (`shield_defense`: every ported meteor gives in).
+/// space only (`space_los`) is destroyed (`shield_defense`), but a dark matt-eor destroys the
+/// shield instead.
 // Cost: meteors in flight (up to ~100) × active shields per tick, a line of at most 15 tiles
 // for those in range.
 fn shield_meteors(world: &mut World) {
@@ -381,25 +416,242 @@ fn shield_meteors(world: &mut World) {
     if flying.is_empty() {
         return;
     }
-    let mut sats = world.query::<(&Satellite, &DmObj, &TilePos)>();
-    let shields: Vec<TilePos> = sats
+    let mut sats = world.query::<(Entity, &Satellite, &DmObj, &TilePos)>();
+    let mut shields: Vec<(Entity, TilePos)> = sats
         .iter(world)
-        .filter(|(s, o, _)| s.active && is_under(&o.path, METEOR_SHIELD))
-        .map(|(_, _, p)| *p)
+        .filter(|(_, s, o, _)| s.active && is_under(&o.path, METEOR_SHIELD))
+        .map(|(e, _, _, p)| (e, *p))
         .collect();
     if shields.is_empty() {
         return;
     }
     for (meteor, pos) in flying {
-        let shot = shields.iter().any(|&sat| {
-            sat.chebyshev(pos).is_some_and(|d| d <= KILL_RANGE as u32)
-                && crate::radiation::get_line(sat, pos)
-                    .iter()
-                    .all(|&p| is_space(world, p))
-        });
-        if shot {
-            world.despawn(meteor);
+        let in_reach: Vec<(Entity, TilePos)> = shields
+            .iter()
+            .copied()
+            .filter(|&(_, sat)| {
+                sat.chebyshev(pos).is_some_and(|d| d <= KILL_RANGE as u32)
+                    && crate::radiation::get_line(sat, pos)
+                        .iter()
+                        .all(|&p| is_space(world, p))
+            })
+            .collect();
+        if in_reach.is_empty() {
+            continue;
         }
+        if !crate::events::meteors::is_dark_matteor(world, meteor) {
+            world.despawn(meteor);
+            continue;
+        }
+        // `dark_matteor/shield_defense`: the beam is reflected and the shield goes.
+        let name = world
+            .get::<ss13_mapload::DmName>(meteor)
+            .map(|n| n.name.clone())
+            .unwrap_or_default();
+        for (sat, at) in in_reach {
+            let text = format!("{}'s beam is reflected by {name}!", plain_name(world, sat));
+            for message in crate::pull::visible_message(
+                world,
+                at,
+                ChatChannel::Local,
+                (Span::Danger, text),
+                &[],
+            ) {
+                world.write_message(message);
+            }
+            world.despawn(sat);
+            shields.retain(|&(s, _)| s != sat);
+        }
+    }
+}
+
+fn plain_name(world: &World, e: Entity) -> String {
+    world
+        .get::<ss13_mapload::DmName>(e)
+        .map(|n| crate::vending::plain_name(&n.name).to_owned())
+        .unwrap_or_default()
+}
+
+/// The meteor shield's family takes emags (`crate::emag`).
+pub fn takes_emag(world: &World, target: Entity) -> bool {
+    world
+        .get::<DmObj>(target)
+        .is_some_and(|o| is_under(&o.path, METEOR_SHIELD))
+}
+
+/// `/obj/machinery/satellite/meteor_shield/emag_act`: once per shield, one shield a minute
+/// station-wide; the shield shows on GPS and, if active, counts.
+pub fn emag_act(world: &mut World, client: Entity, mob: Entity, target: Entity) -> bool {
+    if !takes_emag(world, target) {
+        return false;
+    }
+    if world.get::<EmaggedShield>(target).is_some() {
+        crate::balloon::balloon_alert(world, mob, target, "уже емагнуто!");
+        return false;
+    }
+    let now = crate::tools::now(world);
+    let until = world.resource::<ShieldEmags>().cooldown_until;
+    if now < until {
+        crate::balloon::balloon_alert(world, mob, target, "на перезарядке!");
+        tell(
+            world,
+            client,
+            Span::Warning,
+            format!(
+                "Последнему емагнутому спутнику требуется {} для перекалибровки. Емаг другого \
+                 спутника в слишком короткое время может повредить сеть.",
+                crate::jobs::display_time_text(until - now)
+            ),
+        );
+        return false;
+    }
+    world.resource_mut::<ShieldEmags>().cooldown_until = now + EMAG_COOLDOWN_SECS;
+    tell(
+        world,
+        client,
+        Span::Notice,
+        "Вы получаете доступ к режиму отладки спутника, и он начинает излучать странный сигнал, \
+         увеличивая вероятность метеоритных ударов.",
+    );
+    world.entity_mut(target).insert((
+        EmaggedShield,
+        crate::devices::gps::Gps::fixed("Сигнал привлечения повреждённого метеоритного щита"),
+    ));
+    let text = format!(
+        "Перекалибровка... Примерное время: {}.",
+        crate::jobs::display_time_text(EMAG_COOLDOWN_SECS)
+    );
+    crate::atmos_machinery::machine_say(world, target, &text);
+    if active(world, target) {
+        update_emagged(world, target, Some(client));
+    }
+    true
+}
+
+/// `update_emagged_meteor_sat(user)`: an active emagged shield doubles the meteor chance and
+/// counts toward the thresholds; an inactive one that counted halves it back.
+pub fn update_emagged(world: &mut World, sat: Entity, client: Option<Entity>) {
+    let mob = client.and_then(|c| world.get_resource::<crate::server::Players>()?.mob(c));
+    let counted = world.resource::<ShieldEmags>().counted.contains(&sat);
+    if !active(world, sat) {
+        if !counted {
+            return;
+        }
+        world
+            .resource_mut::<ShieldEmags>()
+            .counted
+            .retain(|&e| e != sat);
+        change_meteor_chance(world, false);
+        if let Some(mob) = mob {
+            crate::balloon::balloon_alert(
+                world,
+                mob,
+                sat,
+                "вероятность метеоров уменьшилась вдвое",
+            );
+        }
+        return;
+    }
+    if counted {
+        return;
+    }
+    change_meteor_chance(world, true);
+    let reached = {
+        let mut emags = world.resource_mut::<ShieldEmags>();
+        emags.counted.push(sat);
+        let n = emags.counted.len() as u32;
+        (n > emags.highest).then(|| {
+            emags.highest = n;
+            n
+        })
+    };
+    if let Some(mob) = mob {
+        crate::balloon::balloon_alert(world, mob, sat, "вероятность метеоров удвоена");
+    }
+    if let Some(n) = reached {
+        emag_threshold(world, sat, n);
+    }
+}
+
+/// `handle_new_emagged_shield_threshold`.
+fn emag_threshold(world: &mut World, sat: Entity, reached: u32) {
+    let say = |world: &mut World, text: &str| crate::atmos_machinery::machine_say(world, sat, text);
+    match EMAG_THRESHOLDS.iter().position(|&t| t == reached) {
+        Some(0) => say(
+            world,
+            "Предупреждение. Вероятность метеоритного удара входит в опасный диапазон для более \
+             экзотических метеоритов.",
+        ),
+        Some(1) => say(
+            world,
+            "Предупреждение. Риск сгущения тёмной материи входит в существующие диапазоны. \
+             Дальнейшее вмешательство будет доложено.",
+        ),
+        Some(2) => {
+            say(
+                world,
+                "Предупреждение. Дальнейшее вмешательство было доложено.",
+            );
+            crate::events::priority_announce(
+                world,
+                "Предупреждение о странном метеоритном сигнале",
+                "Внимание! Вмешательство в работу метеоритных щитов подвергает станцию риску \
+                 необычных и смертоносных столкновений с метеоритами. Пожалуйста, проверьте свои \
+                 GPS-устройства на наличие странных сигналов и демонтируйте взломанные \
+                 метеоритные щиты.",
+            );
+        }
+        Some(3) => {
+            say(
+                world,
+                "Предупреждение. Предупреждение. Тёмно-материальный метеор на курсе к станции.",
+            );
+            if let Err(e) =
+                crate::events::force_event(world, crate::events::meteors::DARK_MATTEOR, None)
+            {
+                warn!("tampered meteor satellites: {e}");
+            }
+        }
+        _ => {}
+    }
+}
+
+/// `change_meteor_chance(mod)`: the meteor events' weights doubled or halved.
+fn change_meteor_chance(world: &mut World, double: bool) {
+    let Some(mut events) = world.get_resource_mut::<crate::events::Events>() else {
+        return;
+    };
+    for control in events
+        .controls
+        .iter_mut()
+        .filter(|c| METEOR_CHANCE_EVENTS.contains(&c.name))
+    {
+        control.weight = if double {
+            control.weight.saturating_mul(2)
+        } else {
+            control.weight / 2
+        };
+    }
+}
+
+/// `meteor_shield/Destroy` of an emagged shield: a counted shield that is gone counts down.
+fn forget_destroyed_shields(world: &mut World) {
+    if world.resource::<ShieldEmags>().counted.is_empty() {
+        return;
+    }
+    let gone: Vec<Entity> = world
+        .resource::<ShieldEmags>()
+        .counted
+        .iter()
+        .copied()
+        .filter(|&e| world.get_entity(e).is_err())
+        .collect();
+    for e in gone {
+        world
+            .resource_mut::<ShieldEmags>()
+            .counted
+            .retain(|&c| c != e);
+        change_meteor_chance(world, false);
     }
 }
 

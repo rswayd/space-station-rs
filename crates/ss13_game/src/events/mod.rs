@@ -642,6 +642,14 @@ impl Plugin for EventsServerPlugin {
             anomalies::neutralizer_act(w, actor, c.target)
                 || anomalies::releaser_act(w, actor, c.target)
         });
+        // `/datum/component/meteor_combat`: punching, batting and mining meteors.
+        app.add_click_handler(ClickPhase::EmptyHand, 3559, |w, c| {
+            meteors::punch(w, c.mob, c.target)
+        });
+        app.add_click_handler(ClickPhase::HeldOnTarget, 1519, |w, c| {
+            c.held
+                .is_some_and(|h| meteors::attacked(w, c.client, c.mob, h, c.target))
+        });
         // tg `COMSIG_ATOM_TOOL_ACT` of a Radiation Leak's machine: before the machine's own
         // tool acts.
         app.add_click_handler(ClickPhase::HeldOnTarget, 1585, |w, c| {
@@ -666,6 +674,7 @@ impl Plugin for EventsServerPlugin {
                 (
                     controller::events_fire,
                     meteors::move_meteors,
+                    meteors::process_meteor_mode,
                     immovable_rod::move_rods,
                     anomalies::process_anomalies,
                     fake_virus::process_fake_viruses,

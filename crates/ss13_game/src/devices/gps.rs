@@ -11,8 +11,8 @@
 //! for 30 s ("emp" overlay, the window closes, "слабо шипит" when used).
 // shortcut: no alt-click tracking toggle (the inventory's alt-click chain is shared; the window's
 // power button does the same), no bearings to linked levels (`get_linked_z_angle`), no
-// `visible_debug` floor tagging, no GPS on non-items (tendrils, kheiral cuffs), the pAI's
-// `inventory_state` is the item's default.
+// `visible_debug` floor tagging, no GPS on non-items but emagged meteor shields (no tendrils or
+// kheiral cuffs), the pAI's `inventory_state` is the item's default.
 // Cost: the views of GPS units with an open window, once a second, each one pass over the GPS
 // units (dozens on a station).
 
@@ -93,6 +93,17 @@ impl Gps {
             view: GpsData::default(),
             base_name: String::new(),
             ready: false,
+        }
+    }
+
+    /// `/datum/component/gps` on a non-item (`AddComponent(/datum/component/gps, tag)`):
+    /// tracking under `tag`, never renamed, no overlay and no EMP handling.
+    pub fn fixed(tag: &str) -> Self {
+        Self {
+            tag: tag.to_owned(),
+            overlay: false,
+            ready: true,
+            ..Self::of("")
         }
     }
 
@@ -494,7 +505,11 @@ fn rename_answers(world: &mut World, mut cursor: Local<MessageCursor<PromptAnswe
 /// `on_emp_act`: out for 30 s from the last pulse (`TIMER_OVERRIDE`), the window closes.
 fn gps_emps(world: &mut World, mut cursor: Local<MessageCursor<crate::emp::EmpAct>>) {
     for ev in crate::emp::emp_acts(world, &mut cursor) {
-        if !ev.hits_self() || world.get::<Gps>(ev.target).is_none() {
+        // The base component (a non-item) has no `emp_act` hook.
+        if !ev.hits_self()
+            || world.get::<Gps>(ev.target).is_none()
+            || world.get::<DmItem>(ev.target).is_none()
+        {
             continue;
         }
         let until = world.resource::<Time>().elapsed_secs_f64() + EMP_SECS;

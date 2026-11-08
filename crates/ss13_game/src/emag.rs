@@ -20,7 +20,8 @@
 //!   - a communications console, a vending machine, a chem dispenser, a sleeper, a lipid
 //!     extractor, an organ harvester (`crate::medical::pods`), a cyborg
 //!     (`crate::silicon::chassis`), a modular computer (`crate::modpc::pda`): their own
-//!     `emag_act`.
+//!     `emag_act`;
+//!   - a meteor shield satellite: `crate::station_goals::emag_act`.
 //! - Bots take emags through their own clicks (`crate::bots`), after [`can_emag`].
 // shortcut: no bluespace emag reach (`prox_check`), no emags stuck together, no Donk Co. fake
 // emag, no `emag_act` of the unported families; no hacked-APC flicker; no blackbox or
@@ -153,6 +154,7 @@ fn takes_emag(world: &World, target: Entity) -> bool {
         || e.contains::<crate::modpc::pda::ModularComputer>()
         || e.contains::<crate::power::pacman::Pacman>()
         || crate::power::shields::takes_emag(world, target)
+        || crate::station_goals::takes_emag(world, target)
         || e.contains::<crate::medical::pods::Pod>()
         || e.contains::<crate::medical::kiosk::MedicalKiosk>()
         || e.contains::<crate::medical::limbgrower::Limbgrower>()
@@ -335,6 +337,9 @@ pub fn emag_act(world: &mut World, actor: Actor, card: Entity, target: Entity) -
     }
     if world.get::<crate::service::Ledger>(target).is_some() {
         return crate::service::library_emag_act(world, client, target);
+    }
+    if crate::station_goals::takes_emag(world, target) {
+        return crate::station_goals::emag_act(world, client, mob, target);
     }
     if world.get::<crate::holodeck::Holodeck>(target).is_some() {
         return crate::holodeck::emag_act(world, client, target);
