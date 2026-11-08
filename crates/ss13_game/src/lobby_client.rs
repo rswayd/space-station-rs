@@ -618,10 +618,8 @@ impl ClientUi for JobPrefsUi {
             ),
             (crate::antag::ROLE_PARADOX_CLONE, "Парадокс-клон"),
             (crate::antag::ROLE_NIGHTMARE, "Кошмар"),
-            (crate::antag::ROLE_MORPH, "Морф"),
             (crate::antag::ROLE_SPACE_DRAGON, "Космический дракон"),
             (crate::antag::ROLE_REVENANT, "Ревенант"),
-            (crate::antag::ROLE_SLAUGHTER_DEMON, "Демон резни"),
             (crate::antag::ROLE_BLOB, "Блоб"),
             (crate::antag::ROLE_BLOB_INFECTION, "Блоб-носитель"),
         ]

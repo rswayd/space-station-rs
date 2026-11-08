@@ -3,8 +3,8 @@
 //! (`/datum/action/cooldown/mob_cooldown/assume_form`) and the "Morph" light midround
 //! (`/datum/dynamic_ruleset/midround/from_ghosts/morph`, weight 0 in the config: admins force it).
 //!
-//! - **Selection** ([`can_spawn`], [`spawn_morphs`], from `super::midround`): ghosts who want
-//!   [`ROLE_MORPH`]; a morph (`crate::mobs`: 150 health, 20 brute "glomps") appears on a
+//! - **Selection** ([`can_spawn`], [`spawn_morphs`], from `super::midround`): the ghosts polled
+//!   ([`ROLE_MORPH`] is its poll name, tg has no `pref_flag`); a morph (`crate::mobs`: 150 health, 20 brute "glomps") appears on a
 //!   maintenance landmark and the ghost's client takes it over; no station job, the greeting,
 //!   tg's default `AntagInfoGeneric` panel.
 //! - **Assume Form** (the button, then a click on what to copy, [`assume_click`]): the morph
@@ -17,7 +17,7 @@
 //! - **Death**: a disguised morph "dissolves into a pile of green flesh", the disguise drops
 //!   and everything it ate comes out (`content_barfer`).
 //! - [`roundend_report`]: each morph.
-// shortcut: no ghost poll (willing ghosts are taken), no shift-click alias of the ability, no
+// shortcut: no shift-click alias of the ability, no
 // vent crawling, no "doesn't look quite right" examine line within 3 tiles (the examine is the
 // copied name only), the medical HUD is not hidden, a morph despawned without dying loses what
 // it ate, and an eaten corpse stays hidden where it was eaten (it comes out under the morph).

@@ -220,6 +220,7 @@ impl Plugin for GameServerPlugin {
         ))
         .add_plugins(crate::round::RoundServerPlugin)
         .add_plugins(crate::ghost_roles::GhostRolesPlugin)
+        .add_plugins(crate::ghost_poll::GhostPollPlugin)
         .add_plugins(crate::weapons::WeaponsPlugin)
         .add_plugins((
             crate::tables::TablesPlugin,

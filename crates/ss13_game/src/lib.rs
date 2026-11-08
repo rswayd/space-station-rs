@@ -338,6 +338,8 @@ pub mod ghost_menu;
 #[cfg(feature = "client")]
 pub mod ghost_menu_client;
 #[cfg(feature = "server")]
+pub mod ghost_poll;
+#[cfg(feature = "server")]
 pub mod ghost_roles;
 #[cfg(feature = "server")]
 pub mod ghost_verbs;

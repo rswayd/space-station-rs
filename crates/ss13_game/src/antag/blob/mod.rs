@@ -5,7 +5,7 @@
 //! ([`strains`]) and minions ([`minions`]), and the "Blob" and "Blob Infection" heavy
 //! midrounds.
 //!
-//! - **Selection** (`super::midround`): "Blob" takes a willing ghost (`ROLE_BLOB`): an overmind
+//! - **Selection** (`super::midround`): "Blob" polls the ghosts with `ROLE_BLOB`: an overmind
 //!   on a blob start with 60 resources, which may place its core after a minute and does so on
 //!   a blob start by itself after six ([`spawn_overmind`], [`place_core`]). "Blob Infection" makes
 //!   a living crew member (`ROLE_BLOB_INFECTION`) a host ([`make_host`]) with the "Pop" button: it
@@ -31,7 +31,7 @@
 //!   health are shown on two more.
 //! - **BandaStation**: off the main station floor the expansion costs double and 700 structures
 //!   win (`check_station_floor`).
-// shortcut: no ghost poll for the midround (willing ghosts are taken), no telepathy (the
+// shortcut: no telepathy (the
 // overmind's speech is heard by ghosts only), no "Place Blob Core" HUD before the button, the
 // spore rally only says so, no status displays' biohazard alert, no hostile environment for the
 // shuttle, no news report, the victory takes everyone at once (no 10 s alarm, no area recolour),
@@ -61,6 +61,7 @@ use super::objectives::RoundEnd;
 use super::{AntagHudData, AntagHudUi, BrotherInfo, ObjectiveInfo};
 use crate::actions::{ActionButton, ActionButtons, ActionButtonsUi, set_buttons};
 use crate::combat::{CLICK_CD_MELEE, CombatRng};
+use crate::ghost_poll::{POLL_IGNORE_BLOB, PollSpec};
 use crate::health::{DamageType, Health, Stat};
 use crate::hud::{HealthHudData, HealthHudUi};
 use crate::server::{PlayerMob, SpawnPoints};
@@ -105,6 +106,8 @@ pub const RESOURCE_COST: f32 = 40.0;
 pub const FACTORY_COST: f32 = 60.0;
 pub const NODE_COST: f32 = 50.0;
 pub const BLOBBERNAUT_COST: f32 = 40.0;
+/// `pick_blobbernaut_candidate`'s `poll_time`.
+const BLOBBERNAUT_POLL_SECS: f64 = 20.0;
 pub const RELOCATE_COST: f32 = 80.0;
 pub const REROLL_COST: f32 = 40.0;
 const REROLL_FREE_SECS: f64 = 240.0;
@@ -1195,7 +1198,7 @@ pub fn create_shield(world: &mut World, overmind: Entity, tile: TilePos) {
     structures::change_to(world, shield, Kind::Reflective);
 }
 
-/// `create_blobbernaut`: the factory under the overmind makes one for a willing ghost.
+/// `create_blobbernaut`: the factory under the overmind makes one once a ghost signs up.
 pub fn create_blobbernaut(world: &mut World, overmind: Entity) {
     let Some(&pos) = world.get::<TilePos>(overmind) else {
         return;
@@ -1214,7 +1217,9 @@ pub fn create_blobbernaut(world: &mut World, overmind: Entity) {
     };
     let busy = b
         .blobbernaut
-        .is_some_and(|n| world.get::<Stat>(n).is_some_and(|s| *s != Stat::Dead));
+        .is_some_and(|n| world.get::<Stat>(n).is_some_and(|s| *s != Stat::Dead))
+        // `is_creating_blobbernaut`.
+        || crate::ghost_poll::is_polling_target(world, factory);
     if busy {
         tell_mob(
             world,
@@ -1245,7 +1250,32 @@ pub fn create_blobbernaut(world: &mut World, overmind: Entity) {
         Span::Notice,
         "Вы пытаетесь создать блоббернаута.",
     );
-    let Some((client, ghost)) = willing_ghost(world) else {
+    let ghosts = crate::ghost_poll::ghosts(world);
+    let spec = PollSpec {
+        question: "Вы хотите сыграть за блоббернаута?".to_owned(),
+        role_name: "блоббернаут".to_owned(),
+        secs: BLOBBERNAUT_POLL_SECS,
+        ignore: Some(POLL_IGNORE_BLOB),
+        target: Some(factory),
+        ..default()
+    };
+    crate::ghost_poll::poll_candidates(world, spec, ghosts, move |world, signed_up| {
+        blobbernaut_polled(world, overmind, factory, signed_up);
+    });
+}
+
+/// `on_poll_concluded`: a random signed-up ghost gets the blobbernaut, or the overmind its
+/// resources back.
+fn blobbernaut_polled(
+    world: &mut World,
+    overmind: Entity,
+    factory: Entity,
+    mut signed_up: Vec<crate::ghost_poll::Candidate>,
+) {
+    if world.get_entity(overmind).is_err() {
+        return;
+    }
+    let Some(chosen) = crate::ghost_poll::pick_candidate(world, &mut signed_up) else {
         tell_mob(
             world,
             overmind,
@@ -1255,17 +1285,25 @@ pub fn create_blobbernaut(world: &mut World, overmind: Entity) {
         add_points(world, overmind, BLOBBERNAUT_COST);
         return;
     };
-    let Some(naut) = minions::spawn_blobbernaut(world, factory, overmind, client, ghost) else {
+    let Some(naut) =
+        minions::spawn_blobbernaut(world, factory, overmind, chosen.client, chosen.mob)
+    else {
         add_points(world, overmind, BLOBBERNAUT_COST);
         return;
     };
     // `assign_blobbernaut`: the factory is much frailer while it lives.
+    let integrity = world
+        .get::<crate::obj_damage::Integrity>(factory)
+        .map_or(0.0, |i| i.current);
     let max = Kind::Factory.max_hp() * 0.25;
     if let Some(mut b) = world.get_mut::<Blob>(factory) {
         b.blobbernaut = Some(naut);
         b.max_integrity = max;
     }
     structures::set_integrity(world, factory, integrity.min(max));
+    let Some(&pos) = world.get::<TilePos>(factory) else {
+        return;
+    };
     for m in crate::pull::visible_message(
         world,
         pos,
@@ -1278,21 +1316,6 @@ pub fn create_blobbernaut(world: &mut World, overmind: Entity) {
     ) {
         world.write_message(m);
     }
-}
-
-/// The first ghost (by entity) whose player wants `ROLE_BLOB`.
-fn willing_ghost(world: &mut World) -> Option<(Entity, Entity)> {
-    let mut ghosts: Vec<(Entity, Entity)> = world
-        .query_filtered::<(Entity, &PlayerMob), With<crate::ghost::Ghost>>()
-        .iter(world)
-        .map(|(g, p)| (p.client, g))
-        .collect();
-    ghosts.sort_by_key(|(_, g)| *g);
-    ghosts.into_iter().find(|&(client, _)| {
-        world
-            .get::<super::dynamic::AntagPreferences>(client)
-            .is_some_and(|p| p.wants(ROLE_BLOB))
-    })
 }
 
 /// `relocate_core`: the core and the node under the overmind swap places.

@@ -30,7 +30,7 @@
 //!   back and paralyzed for 5 s, then an endlag growing with use, five times after a rift
 //!   failure). A devastating explosion takes 40-75% of its max health instead of gibbing it.
 //! - [`roundend_report`]: the dragon, its objective and how often each player was its carp.
-// shortcut: no ghost poll (willing ghosts are taken), no wavespeak telepathy, no gravity aura,
+// shortcut: no wavespeak telepathy, no gravity aura,
 // the rift's light colour and drifting, the shark form and fishing, the outline glow and the
 // gust/overlay sprites are not ported; the dragon pries doors in combat mode too (airlocks have
 // no integrity to attack); only walls are torn (not other closed turfs); the rift's explosion

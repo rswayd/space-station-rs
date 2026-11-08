@@ -16,8 +16,12 @@
 //!
 //! Admins force a midround ruleset ([`force_midround`], `force_run_midround`) or queue a latejoin
 //! one ([`Midround::queued_latejoin`]).
+//!
+//! A ghost ruleset ([`poll_ruleset`], `from_ghosts/collect_candidates`) asks its willing ghosts
+//! with a 30-second [`crate::ghost_poll`] poll and is selected from who signed up once it ends;
+//! a light one that then fails still tries the heavy one, as tg's `fire()` does after its sleep.
 // shortcut: of the rulesets only the midround traitor (sleeper agent), mass traitors, the midround
-// nuclear and clown operatives (opted-in ghosts are taken without a poll), the latejoin traitor
+// nuclear and clown operatives, the latejoin traitor
 // (infiltrator), the stowaway changeling, the latejoin revolution (provocateur), the midround
 // wizard, the paradox clone (`super::paradox_clone`), the nightmare (`super::nightmare`), the
 // morph (`super::morph`), the space dragon (`super::space_dragon`), the revenant
@@ -37,6 +41,7 @@ use super::{
     ROLE_SYNDICATE_INFILTRATOR,
 };
 use crate::ghost::Ghost;
+use crate::ghost_poll::{self, Candidate, DEFAULT_POLL_SECS, PollSpec};
 use crate::health::Stat;
 use crate::jobs::{Jobs, PlayerJob};
 use crate::server::PlayerMob;
@@ -600,6 +605,16 @@ pub fn try_spawn_midround(world: &mut World, kind: Kind) -> bool {
         info!("dynamic: midround ({kind:?}): no rulesets to pick from");
         return false;
     };
+    if picked.candidates == Candidates::Ghosts {
+        let polling = poll_ruleset(world, picked, alive, AfterPoll::Midround(kind));
+        if !polling {
+            info!(
+                "dynamic: midround ({kind:?}): {} preparation failed",
+                picked.config_tag
+            );
+        }
+        return polling;
+    }
     if execute(world, picked, alive, None).is_empty() {
         info!(
             "dynamic: midround ({kind:?}): {} preparation failed",
@@ -607,15 +622,21 @@ pub fn try_spawn_midround(world: &mut World, kind: Kind) -> bool {
         );
         return false;
     }
-    let cd = cooldown(world);
-    let t = now(world);
-    let mut state = world.resource_mut::<Midround>();
-    state.to_spawn[kind as usize] -= 1;
-    state.midround_cooldown = t + cd;
+    midround_spawned(world, kind);
     true
 }
 
-/// `force_run_midround`: the admin's ruleset, now. The selected bodies, or why nobody.
+/// A midround of `kind` ran: one fewer to spawn and the cooldown.
+fn midround_spawned(world: &mut World, kind: Kind) {
+    let cd = cooldown(world);
+    let t = now(world);
+    let mut state = world.resource_mut::<Midround>();
+    state.to_spawn[kind as usize] = state.to_spawn[kind as usize].saturating_sub(1);
+    state.midround_cooldown = t + cd;
+}
+
+/// `force_run_midround`: the admin's ruleset, now. The selected bodies, or why nobody; a ghost
+/// ruleset selects when its poll ends, and `Ok` with no bodies says the poll is running.
 pub fn force_midround(world: &mut World, tag: &str) -> Result<Vec<Entity>, String> {
     let r = ruleset(tag)
         .filter(|r| r.kind != Kind::Latejoin)
@@ -624,6 +645,13 @@ pub fn force_midround(world: &mut World, tag: &str) -> Result<Vec<Entity>, Strin
         return Err(format!("{tag} здесь не реализован."));
     }
     let (alive, _) = player_counts(world);
+    if r.candidates == Candidates::Ghosts {
+        return if poll_ruleset(world, r, alive, AfterPoll::Forced) {
+            Ok(Vec::new())
+        } else {
+            Err(format!("{tag}: подготовка не удалась (нет кандидатов)."))
+        };
+    }
     let picked = execute(world, r, alive, None);
     if picked.is_empty() {
         return Err(format!("{tag}: подготовка не удалась (нет кандидатов)."));
@@ -716,19 +744,29 @@ fn job_title(world: &World, mob: Entity) -> Option<String> {
     )
 }
 
-/// `trim_candidates` + `is_valid_candidate`: the client opted in (lobby toggle and `be_special`).
-fn wants(world: &World, mob: Entity, role: &str) -> bool {
-    world
+/// `trim_candidates` + `is_valid_candidate`: the client opted in (lobby toggle and, when the
+/// ruleset has a `pref_flag`, `be_special`).
+fn wants(world: &World, mob: Entity, r: &Ruleset) -> bool {
+    let Some(prefs) = world
         .get::<PlayerMob>(mob)
         .and_then(|p| world.get::<AntagPreferences>(p.client))
-        .is_some_and(|p| p.wants(role))
+    else {
+        return false;
+    };
+    match r
+        .role
+        .filter(|_| !matches!(r.config_tag, MORPH | SLAUGHTER_DEMON))
+    {
+        Some(role) => prefs.wants(role),
+        None => prefs.antag_roll,
+    }
 }
 
 /// `collect_candidates` + `trim_candidates` (bodies; ghosts for `from_ghosts`).
 fn candidates(world: &mut World, r: &Ruleset, latejoiner: Option<Entity>) -> Vec<Entity> {
-    let Some(role) = r.role else {
+    if r.role.is_none() {
         return Vec::new();
-    };
+    }
     let mut pool: Vec<Entity> = match r.candidates {
         Candidates::Latejoiner => latejoiner.into_iter().collect(),
         Candidates::Living => {
@@ -747,7 +785,7 @@ fn candidates(world: &mut World, r: &Ruleset, latejoiner: Option<Entity>) -> Vec
     };
     pool.sort();
     pool.retain(|&m| {
-        wants(world, m, role)
+        wants(world, m, r)
             && (r.candidates == Candidates::Ghosts
                 || job_title(world, m).is_some_and(|t| !blacklisted(world, r, &t)))
     });
@@ -762,15 +800,113 @@ fn execute(
     latejoiner: Option<Entity>,
 ) -> Vec<Entity> {
     let pool = candidates(world, r, latejoiner);
-    let mut caps = (r.caps.1.get(population), r.caps.0.get(population));
-    // The paradox clone's `max_antag_cap += prob(bonus_clone_chance)`.
-    if r.config_tag == PARADOX_CLONE
-        && with_rng(world, |rng| {
-            rng.prob(super::paradox_clone::BONUS_CLONE_CHANCE)
-        })
-    {
-        caps.0 += 1;
+    let caps = (r.caps.1.get(population), r.caps.0.get(population));
+    select_and_run(world, r, &pool, caps, None)
+}
+
+/// What follows a ghost ruleset's poll (tg's sleeping callers).
+#[derive(Clone, Copy, Debug)]
+enum AfterPoll {
+    /// `try_spawn_midround(kind)`.
+    Midround(Kind),
+    /// `force_run_midround`.
+    Forced,
+}
+
+/// The poll's title (`candidate_role || pref_flag`).
+fn poll_role_name(r: &Ruleset) -> &'static str {
+    match r.config_tag {
+        MIDROUND_NUKEOPS | MIDROUND_CLOWNOPS => "Оперативник",
+        MIDROUND_WIZARD => "Волшебник",
+        NIGHTMARE => "Кошмар",
+        MORPH => "Морф",
+        SPACE_DRAGON => "Космический дракон",
+        REVENANT => "Ревенант",
+        SLAUGHTER_DEMON => "Демон резни",
+        ABDUCTORS => "Абдуктор",
+        BLOB => "Блоб",
+        tag => tag,
     }
+}
+
+/// `from_ghosts/collect_candidates`: polls the ruleset's willing ghosts; [`ghost_ruleset_polled`]
+/// goes on when the poll ends. `false`: nobody to ask, preparation failed.
+fn poll_ruleset(world: &mut World, r: &'static Ruleset, population: u32, after: AfterPoll) -> bool {
+    let group = candidates(world, r, None);
+    if group.is_empty() {
+        return false;
+    }
+    let mut caps = (r.caps.1.get(population), r.caps.0.get(population));
+    let mut role_name = poll_role_name(r).to_owned();
+    // The original is picked first, for the poll to name it (`clone_target_ref`).
+    let mut original = None;
+    if r.config_tag == PARADOX_CLONE {
+        // The paradox clone's `max_antag_cap += prob(bonus_clone_chance)`.
+        if with_rng(world, |rng| {
+            rng.prob(super::paradox_clone::BONUS_CLONE_CHANCE)
+        }) {
+            caps.0 += 1;
+        }
+        let Some(target) = super::paradox_clone::pick_original(world) else {
+            return false;
+        };
+        role_name = format!("клон {}", super::objectives::target_text(world, target));
+        original = Some(target);
+    }
+    let spec = PollSpec {
+        question: format!("Ищем добровольцев на роль: {role_name}."),
+        role_name,
+        secs: DEFAULT_POLL_SECS,
+        ..default()
+    };
+    ghost_poll::poll_candidates(world, spec, group, move |world, signed_up| {
+        ghost_ruleset_polled(world, r, caps, original, after, signed_up);
+    });
+    true
+}
+
+/// tg after the sleep of `collect_candidates`: `prepare_execution` (`can_be_selected` again and
+/// who is still valid; the poll has trimmed who left), `execute` and the caller's bookkeeping.
+fn ghost_ruleset_polled(
+    world: &mut World,
+    r: &'static Ruleset,
+    caps: (u32, u32),
+    original: Option<Entity>,
+    after: AfterPoll,
+    signed_up: Vec<Candidate>,
+) {
+    let mut chosen = Vec::new();
+    if !signed_up.is_empty() && can_be_selected(world, r) {
+        let pool: Vec<Entity> = signed_up.iter().map(|c| c.mob).collect();
+        let pool: Vec<Entity> = pool.into_iter().filter(|&m| wants(world, m, r)).collect();
+        chosen = select_and_run(world, r, &pool, caps, original);
+    }
+    if chosen.is_empty() {
+        info!(
+            "dynamic: {} preparation failed: not enough candidates after the poll",
+            r.config_tag
+        );
+        if let AfterPoll::Midround(Kind::Light) = after
+            && now(world) >= world.resource::<Midround>().start_at[1]
+        {
+            try_spawn_midround(world, Kind::Heavy);
+        }
+        return;
+    }
+    if let AfterPoll::Midround(kind) = after {
+        midround_spawned(world, kind);
+    }
+}
+
+/// `select_candidates` from `pool` under `caps`, then `execute`: the selected bodies (empty:
+/// too few candidates or the role could not be given).
+fn select_and_run(
+    world: &mut World,
+    r: &'static Ruleset,
+    pool: &[Entity],
+    caps: (u32, u32),
+    original: Option<Entity>,
+) -> Vec<Entity> {
     let picked = with_rng(world, |rng| {
         let mut indices: Vec<usize> = (0..pool.len()).collect();
         super::dynamic::select_up_to(&mut indices, |_| true, caps, rng)
@@ -806,7 +942,7 @@ fn execute(
                 .iter()
                 .filter_map(|&g| world.get::<PlayerMob>(g).map(|p| p.client))
                 .collect();
-            if super::paradox_clone::spawn_clones(world, &clients).is_empty() {
+            if super::paradox_clone::spawn_clones(world, &clients, original).is_empty() {
                 return Vec::new();
             }
         }
@@ -945,6 +1081,81 @@ pub fn report_lines(world: &World) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::antag::dynamic::AntagPreferences;
+    use ss13_net::chat::server::SendChat;
+    use ss13_tgui::prompt::Prompt;
+    use ss13_tgui::server::OpenUi;
+
+    fn poll_world() -> (World, Entity, Entity) {
+        let mut world = World::new();
+        world.init_resource::<Messages<OpenUi>>();
+        world.init_resource::<Messages<SendChat>>();
+        world.init_resource::<Midround>();
+        world.init_resource::<ghost_poll::Polls>();
+        world.insert_resource(Time::<()>::default());
+        let client = world
+            .spawn(AntagPreferences {
+                antag_roll: true,
+                be_special: [super::super::ROLE_NIGHTMARE.to_owned()].into(),
+            })
+            .id();
+        let ghost = world
+            .spawn((Ghost { body: None }, PlayerMob { client }))
+            .id();
+        (world, client, ghost)
+    }
+
+    #[test]
+    fn a_ghost_ruleset_polls_and_a_timeout_fails_it_cleanly() {
+        let (mut world, _, ghost) = poll_world();
+        let r = ruleset(NIGHTMARE).unwrap();
+        assert!(poll_ruleset(&mut world, r, 1, AfterPoll::Forced));
+        assert_eq!(world.query::<&Prompt>().iter(&world).count(), 1);
+        // Nobody signed up: no role, the ghost stays, no poll left over.
+        ghost_poll::finish_all(&mut world);
+        assert!(world.resource::<Midround>().executed.is_empty());
+        assert!(world.get::<Ghost>(ghost).is_some());
+        assert_eq!(world.query::<&Prompt>().iter(&world).count(), 0);
+    }
+
+    #[test]
+    fn nobody_willing_fails_the_ghost_ruleset_at_once() {
+        let (mut world, client, _) = poll_world();
+        world.entity_mut(client).insert(AntagPreferences {
+            antag_roll: true,
+            be_special: Default::default(),
+        });
+        let r = ruleset(NIGHTMARE).unwrap();
+        assert!(!poll_ruleset(&mut world, r, 1, AfterPoll::Forced));
+        // The morph has no `pref_flag`: the lobby toggle is enough.
+        assert!(poll_ruleset(
+            &mut world,
+            ruleset(MORPH).unwrap(),
+            1,
+            AfterPoll::Forced
+        ));
+    }
+
+    #[test]
+    fn a_failed_poll_books_nothing() {
+        let (mut world, _, _) = poll_world();
+        let r = ruleset(NIGHTMARE).unwrap();
+        let mut state = world.resource_mut::<Midround>();
+        state.to_spawn = [1, 1, 0];
+        // Not time for the heavy midround the failed light one would go on to.
+        state.start_at = [0.0, f64::INFINITY, 0.0];
+        ghost_ruleset_polled(
+            &mut world,
+            r,
+            (1, 1),
+            None,
+            AfterPoll::Midround(Kind::Light),
+            Vec::new(),
+        );
+        let state = world.resource::<Midround>();
+        assert_eq!(state.to_spawn, [1, 1, 0]);
+        assert_eq!(state.midround_cooldown, 0.0);
+    }
 
     #[test]
     fn tier_counts_and_thresholds_follow_the_config() {

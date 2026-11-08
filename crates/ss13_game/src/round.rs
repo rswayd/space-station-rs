@@ -1800,10 +1800,8 @@ fn preference_acts(
                     crate::antag::ROLE_MALF,
                     crate::antag::ROLE_PARADOX_CLONE,
                     crate::antag::ROLE_NIGHTMARE,
-                    crate::antag::ROLE_MORPH,
                     crate::antag::ROLE_SPACE_DRAGON,
                     crate::antag::ROLE_REVENANT,
-                    crate::antag::ROLE_SLAUGHTER_DEMON,
                     crate::antag::ROLE_BLOB,
                     crate::antag::ROLE_BLOB_INFECTION,
                 ]

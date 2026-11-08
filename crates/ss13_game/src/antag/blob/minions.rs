@@ -6,8 +6,8 @@
 //!   blobbernaut); hostile basic mobs of the blob faction (`crate::mobs`, the `blob_spore`
 //!   controller fights like `simple_hostile`). A spore next to a dead human raises it
 //!   ([`zombify`]): a blob zombie with the corpse inside, which falls out when the zombie dies.
-//! - **Blobbernauts** ([`spawn_blobbernaut`], from `super::create_blobbernaut`): a willing ghost
-//!   (`ROLE_BLOB`) takes a 200-health brute, starting at half; its factory drops to a quarter of
+//! - **Blobbernauts** ([`spawn_blobbernaut`], from `super::create_blobbernaut`): a ghost polled
+//!   for 20 s (`POLL_IGNORE_BLOB`; nobody: refund) takes a 200-health brute, starting at half; its factory drops to a quarter of
 //!   its integrity while it lives. Near the core it heals 5% a second, near a node 2.5%; away from
 //!   blobs or without its factory it loses 1.25% a second for each ([`blobbernaut_life`]). Its
 //!   clicks attack (4 brute and 20 units of the strain's reagent, 20 brute without an overmind;
@@ -15,8 +15,7 @@
 //! - The factory gone: its spores and zombies die, its blobbernaut is orphaned. The overmind gone:
 //!   minions lose the strain's colour and the blobbernaut hits for 20 again.
 //! - A blob touching a hurt minion heals it by 1.25% of its health (`on_blob_touched`).
-// shortcut: no ghost poll for blobbernauts (a willing ghost is taken at once, none: refund), no
-// rally, no telepathy, no death clouds of the strain's reagent, spores raise corpses next to them
+// shortcut: no rally, no telepathy, no death clouds of the strain's reagent, spores raise corpses next to them
 // instead of attacking them, a zombie's corpse is hidden where the zombie stands (it does not
 // show through it), no z-level death of factory spores, no distributed neurons ghost control.
 

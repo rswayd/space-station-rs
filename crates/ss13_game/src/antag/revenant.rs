@@ -31,7 +31,7 @@
 //! - **Blight** ([`revblight_act`]): rest may cure it, fits of confusion and exhaustion, toxin
 //!   per stage reached, at stage 5 a last bout and the cure 10 s later; holy water cures.
 //! - [`roundend_report`]: each revenant and its objectives.
-// shortcut: no ghost poll (willing ghosts are taken), ghosts do not see a hidden revenant, no
+// shortcut: ghosts do not see a hidden revenant, no
 // deadchat speech or telepathy (it speaks aloud), no essence HUD (gains and losses go to chat),
 // salt, blessed tiles, the null rod's inhibition, orbiting, spirit boards and mirror prisons are
 // not ported, projectiles stop at a hidden revenant (without harm); Defile skips floors, rust,

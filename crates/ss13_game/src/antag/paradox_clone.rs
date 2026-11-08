@@ -18,8 +18,7 @@
 //!   lives), the greeting, the `paradox_clone` antag HUD icon and tg's default `AntagInfoGeneric`
 //!   panel (reopened by the antag info button).
 //! - [`roundend_report`]: the header, each clone and its objectives.
-// shortcut: no ghost poll (the first willing ghosts are taken, as the other ghost rulesets do
-// here), no admin pick of the original (`configure_ruleset`), no `is_safe_turf` check of the
+// shortcut: no admin pick of the original (`configure_ruleset`), no `is_safe_turf` check of the
 // landmark, no zapbang sound; quirks, personalities, age, voice and memories are not copied, and
 // there are no suit sensors to switch off.
 
@@ -193,6 +192,16 @@ pub fn can_spawn(world: &mut World) -> bool {
             .is_some_and(|s| !s.maintenance.is_empty())
 }
 
+/// `find_clone`: a random crew member to copy (`clone_target_ref`).
+pub fn pick_original(world: &mut World) -> Option<Entity> {
+    let candidates = clone_candidates(world);
+    if candidates.is_empty() {
+        return None;
+    }
+    let i = with_rng(world, |rng| rng.range(0, candidates.len() as i64 - 1)) as usize;
+    Some(candidates[i])
+}
+
 /// `find_maintenance_spawn(atmos_sensitive = TRUE)`: a random maintenance landmark.
 fn maintenance_spawn(world: &mut World) -> Option<TilePos> {
     let tiles = world.get_resource::<SpawnPoints>()?.maintenance.clone();
@@ -206,13 +215,22 @@ fn maintenance_spawn(world: &mut World) -> Option<TilePos> {
 /// The ruleset's `execute`: one original (`find_clone`), then a clone of it for each of
 /// `clients` (`assign_role`). The clones' bodies; empty when nobody can be cloned or there is no
 /// maintenance spawn.
-pub fn spawn_clones(world: &mut World, clients: &[Entity]) -> Vec<Entity> {
-    let candidates = clone_candidates(world);
-    if candidates.is_empty() {
-        return Vec::new();
-    }
-    let i = with_rng(world, |rng| rng.range(0, candidates.len() as i64 - 1)) as usize;
-    let original = candidates[i];
+pub fn spawn_clones(
+    world: &mut World,
+    clients: &[Entity],
+    original: Option<Entity>,
+) -> Vec<Entity> {
+    // The original of the poll, if still there (tg: the ruleset bails when its target is gone).
+    let original = match original {
+        Some(o) if world.get_entity(o).is_ok() => o,
+        Some(_) => return Vec::new(),
+        None => {
+            let Some(o) = pick_original(world) else {
+                return Vec::new();
+            };
+            o
+        }
+    };
     let mut out = Vec::new();
     for &client in clients {
         let Some(pos) = maintenance_spawn(world) else {

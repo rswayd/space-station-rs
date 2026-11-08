@@ -1136,12 +1136,15 @@ fn answer(world: &mut World, client: Entity, request: AdminRequest) -> AnswerRes
         } => crate::verbs::give_ai(world, client, &key, &template, make_hostile),
         AdminRequest::ForceMidround(tag) => {
             let picked = ss13_game::antag::midround::force_midround(world, &tag)?;
+            // No bodies yet: the ruleset polls the ghosts and selects when the poll ends.
+            let outcome = if picked.is_empty() {
+                "poll of ghosts started".to_owned()
+            } else {
+                format!("{} selected", picked.len())
+            };
             admin_action(
                 world,
-                &format!(
-                    "{key} forced the midround ruleset {tag}: {} selected.",
-                    picked.len()
-                ),
+                &format!("{key} forced the midround ruleset {tag}: {outcome}."),
             );
             Ok(Some(AdminResponse::Dynamic(dynamic_report(world))))
         }
