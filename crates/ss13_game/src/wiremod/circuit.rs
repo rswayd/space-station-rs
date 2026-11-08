@@ -14,12 +14,13 @@
 //!   options, a list port only lists.
 //! - Components: arithmetic, comparison, logic, not, random, length; concatenate, to string,
 //!   to number, text case, string contains; list literal, index list; clock (0.9 s), delay;
-//!   speech, radio (the signaler band), voice activator; and the shells' own (compact remote,
-//!   controller, bot).
+//!   speech, radio (the signaler band), voice activator; trigonometry, arctan2, toggle, string
+//!   replace; the shells' own (compact remote, controller, bot, airlock) and the USB components
+//!   of machines ([`super::devices`]: teleporter console, launchpad and its console, quantum pad).
 //!
 //! What touches the world goes out as [`Effect`]s; [`super::server`] applies them.
-// shortcut: no variables, setters/getters, modules, tables, assoc lists or instant execution;
-// no admin circuits; a radio's `private` mode is `public` (no owner IDs); list literals do not
+// shortcut: no variables, setters/getters, modules, tables, assoc lists or instant execution
+// (so no `Airlock Access Event`); no admin circuits; a radio's `private` mode is `public` (no owner IDs); list literals do not
 // count nested lists (`max_list_count`).
 
 use bevy::prelude::Entity;
@@ -52,6 +53,11 @@ const DEFAULT_CODE: f64 = 30.0;
 /// Deliveries per step.
 // shortcut: a fixed cap instead of `MC_TICK_CHECK`; the rest waits for the next step.
 const MAX_DELIVERIES: usize = 2000;
+/// Queued deliveries a circuit may hold: a fan-out feedback loop otherwise grows the queue by
+/// every run's outputs for as long as its cell lasts. Past it, new deliveries are dropped.
+// shortcut: a fixed cap instead of tg's `MC_TICK_CHECK`-paced queue, which has no such limit
+// (DM has no comparable memory cost to a queued callback); raise it if real circuits hit it.
+pub const MAX_PENDING: usize = 20_000;
 
 const IN_SIGNAL: u8 = 1;
 const OUT_SIGNAL: u8 = 2;
@@ -104,7 +110,7 @@ impl Value {
     }
 }
 
-fn boolean(b: bool) -> Value {
+pub(super) fn boolean(b: bool) -> Value {
     Value::Num(if b { 1.0 } else { 0.0 })
 }
 
@@ -270,6 +276,17 @@ pub enum Kind {
     WireBundle,
     /// `/obj/item/circuit_component/modpc`: a modular computer shell's own component.
     Modpc,
+    Trigonometry,
+    Arctan2,
+    Toggle,
+    Replace,
+    /// The airlock shell's own component.
+    Airlock,
+    // USB components of machines, added when a cable connects ([`super::devices`]).
+    TeleporterConsole,
+    QuantumPad,
+    Launchpad,
+    LaunchpadConsole,
 }
 
 pub struct KindDef {
@@ -297,7 +314,7 @@ const fn def(
     }
 }
 
-pub static KINDS: [KindDef; 23] = [
+pub static KINDS: [KindDef; 32] = [
     def(
         Kind::Arithmetic,
         "/obj/item/circuit_component/arithmetic",
@@ -459,6 +476,78 @@ pub static KINDS: [KindDef; 23] = [
         "Unassigned",
         "Circuit for basic functions of a modular computer.",
     ),
+    def(
+        Kind::Trigonometry,
+        "/obj/item/circuit_component/trigonometry",
+        "Trigonometry",
+        "Math",
+        "General trigonometry component with main and inverse trigonometry functions.",
+    ),
+    def(
+        Kind::Arctan2,
+        "/obj/item/circuit_component/arctan2",
+        "Arctangent 2 Component",
+        "Math",
+        "A two parameter arctan2 component, for calculating any angle you want.",
+    ),
+    def(
+        Kind::Toggle,
+        "/obj/item/circuit_component/compare/toggle",
+        "Toggle",
+        "Math",
+        "A component that toggles between on and off when triggered. All input ports (except for set toggle) will trigger the component.",
+    ),
+    def(
+        Kind::Replace,
+        "/obj/item/circuit_component/compare/contains/replace",
+        "String Replace",
+        "String",
+        "Replace any instance of a word/letter in a string with another",
+    ),
+    def(
+        Kind::Airlock,
+        "/obj/item/circuit_component/airlock",
+        "Airlock",
+        "Unassigned",
+        "The general interface with an airlock. Includes general statuses of the airlock",
+    ),
+    def(
+        Kind::TeleporterConsole,
+        "/obj/item/circuit_component/teleporter_control_console",
+        "Teleporter Control Console",
+        "Unassigned",
+        "Used to control a linked teleportation Hub and Station.",
+    ),
+    def(
+        Kind::QuantumPad,
+        "/obj/item/circuit_component/quantumpad",
+        "Quantum Pad",
+        "Unassigned",
+        "A bluespace quantum-linked telepad used for teleporting objects to other quantum pads.",
+    ),
+    def(
+        Kind::Launchpad,
+        "/obj/item/circuit_component/bluespace_launchpad",
+        "Bluespace Launchpad",
+        "Unassigned",
+        "Teleports anything to and from any location on the station. Doesn't use actual GPS coordinates, but rather offsets from the launchpad itself. Can only go as far as the launchpad can go, which depends on its parts.",
+    ),
+    def(
+        Kind::LaunchpadConsole,
+        "/obj/item/circuit_component/bluespace_launchpad/console",
+        "Bluespace Launchpad Console",
+        "Unassigned",
+        "Teleports anything to and from any location on the station. Doesn't use actual GPS coordinates, but rather offsets from the launchpad itself. Can only go as far as the launchpad can go, which depends on its parts.",
+    ),
+];
+
+pub const TRIGONOMETRY: [&str; 6] = [
+    "Sine",
+    "Cosine",
+    "Tangent",
+    "Arcsine",
+    "Arccosine",
+    "Arctangent",
 ];
 
 impl Kind {
@@ -495,6 +584,8 @@ pub struct NodeState {
     pub radio_freq: Option<u16>,
     /// The comparison's ports are numbers (`current_type`).
     pub numeric: bool,
+    /// The toggle component's `toggle_state`.
+    pub toggle: bool,
 }
 
 /// A component in a circuit.
@@ -512,6 +603,8 @@ pub struct Node {
     pub size: u32,
     /// Its item while it sits in the circuit; `None` for a shell's own components.
     pub item: Option<Entity>,
+    /// The machine a USB component speaks for ([`super::devices`]).
+    pub usb: Option<Entity>,
     flags: u8,
     trigger_in: Option<usize>,
     trigger_out: Option<usize>,
@@ -702,6 +795,99 @@ impl Node {
                 vec![out("Turned On", Ty::Signal), out("Shut Down", Ty::Signal)],
                 0,
             ),
+            Kind::Trigonometry => (
+                vec![
+                    opt("Trigonometric Function", &TRIGONOMETRY),
+                    inp("Input", Ty::Number, Input),
+                ],
+                vec![out("Output", Ty::Number)],
+                both,
+            ),
+            Kind::Arctan2 => (
+                vec![
+                    inp("Delta X", Ty::Number, Input),
+                    inp("Delta Y", Ty::Number, Input),
+                ],
+                vec![out("Angle", Ty::Number)],
+                both,
+            ),
+            Kind::Toggle => (
+                vec![
+                    inp("Set Toggle State", Ty::Boolean, Input),
+                    sig("Toggle And Compare"),
+                    sig("Compare"),
+                ],
+                compare_outs(),
+                0,
+            ),
+            Kind::Replace => (
+                vec![
+                    inp("Needle", Ty::String, Input),
+                    inp("Haystack", Ty::String, Input),
+                    inp("Replacement", Ty::String, Input),
+                    sig("Compare"),
+                ],
+                vec![
+                    out("True", Ty::Signal),
+                    out("False", Ty::Signal),
+                    out("Result", Ty::String),
+                ],
+                0,
+            ),
+            Kind::Airlock => (
+                vec![sig("Bolt"), sig("Unbolt"), sig("Open"), sig("Close")],
+                vec![
+                    out("Is Open", Ty::Boolean),
+                    out("Is Bolted", Ty::Boolean),
+                    out("Opened", Ty::Signal),
+                    out("Closed", Ty::Signal),
+                    out("Bolted", Ty::Signal),
+                    out("Unbolted", Ty::Signal),
+                ],
+                0,
+            ),
+            Kind::TeleporterConsole => (
+                vec![
+                    inp("New Target", Ty::String, Input),
+                    sig("Set Target"),
+                    sig("Update Targets"),
+                ],
+                vec![
+                    out("Current Target", Ty::String),
+                    out("Possible Targets", Ty::List(Box::new(Ty::Any))),
+                    out("Failed", Ty::Signal),
+                ],
+                OUT_SIGNAL,
+            ),
+            Kind::QuantumPad => (
+                vec![inp("Target Pad", Ty::Entity, Input)],
+                vec![out("On Fail", Ty::Signal)],
+                IN_SIGNAL,
+            ),
+            Kind::Launchpad | Kind::LaunchpadConsole => {
+                let mut ports = Vec::new();
+                if kind == Kind::LaunchpadConsole {
+                    let mut id = inp("Launchpad ID", Ty::Number, NoTrigger);
+                    id.value = Value::Num(1.0);
+                    ports.push(id);
+                }
+                ports.extend([
+                    inp("X offset", Ty::Number, Input),
+                    inp("Y offset", Ty::Number, Input),
+                    sig("Send"),
+                    sig("Retrieve"),
+                ]);
+                (
+                    ports,
+                    vec![
+                        out("Sent", Ty::Signal),
+                        out("Retrieved", Ty::Signal),
+                        out("Fail reason", Ty::String),
+                        out("Failed", Ty::Signal),
+                    ],
+                    0,
+                )
+            }
             // Its ports come with the shell's wires ([`Circuit::set_bundle_ports`]).
             Kind::WireBundle => (Vec::new(), Vec::new(), 0),
             Kind::Controller => (
@@ -736,6 +922,7 @@ impl Node {
             removable: true,
             size: 1,
             item: None,
+            usb: None,
             flags,
             trigger_in,
             trigger_out,
@@ -781,6 +968,9 @@ pub enum Effect {
     },
     /// The modular computer component acts on its computer (`crate::modpc::circuit`).
     Computer(ComputerEffect),
+    /// A machine's USB component or the airlock component got an input
+    /// ([`super::devices::device_input`]).
+    Device { node: u32, port: usize },
 }
 
 /// What the modular computer component asks of its computer.
@@ -866,6 +1056,16 @@ impl Circuit {
         node.y = rng.range(RANDOM_POS.0, RANDOM_POS.1) as i32;
         self.size += node.size;
         self.nodes.push(node);
+        id
+    }
+
+    /// `attach_circuit_components` of a USB port: the machine's component joins; it goes with
+    /// the cable ([`super::devices`]), so it takes no space and cannot be ejected as an item.
+    pub fn add_usb(&mut self, kind: Kind, machine: Entity, rng: &mut CombatRng) -> u32 {
+        let id = self.add(kind, None, false, rng);
+        if let Some(i) = self.index_of(id) {
+            self.nodes[i].usb = Some(machine);
+        }
         id
     }
 
@@ -984,7 +1184,7 @@ impl Circuit {
         p.value = value.clone();
         for n in &self.nodes {
             for (j, input) in n.inputs.iter().enumerate() {
-                if input.links.contains(&(id, port)) {
+                if input.links.contains(&(id, port)) && self.pending.len() < MAX_PENDING {
                     self.pending.push((n.id, j, value.clone()));
                 }
             }
@@ -1294,11 +1494,75 @@ impl Circuit {
                 };
                 ctx.effects.extend(effect.map(Effect::Computer));
             }
+            Kind::Trigonometry => {
+                let x = n.value(1).num().unwrap_or(0.0);
+                let r = match n.option(0).as_str() {
+                    "Cosine" => x.to_radians().cos(),
+                    "Tangent" => x.to_radians().tan(),
+                    "Arcsine" => x.clamp(-1.0, 1.0).asin().to_degrees(),
+                    "Arccosine" => x.clamp(-1.0, 1.0).acos().to_degrees(),
+                    "Arctangent" => x.atan().to_degrees(),
+                    _ => x.to_radians().sin(),
+                };
+                outs.push((0, Value::Num(r)));
+            }
+            Kind::Arctan2 => {
+                let (x, y) = (
+                    n.value(0).num().unwrap_or(0.0),
+                    n.value(1).num().unwrap_or(0.0),
+                );
+                outs.push((0, Value::Num(y.atan2(x).to_degrees())));
+            }
+            Kind::Toggle => {
+                if port == Some(0) {
+                    let value = n.value(0).truthy();
+                    self.nodes[i].state.toggle = value;
+                    return Outcome::default();
+                }
+                let mut toggle = n.state.toggle;
+                if port == Some(1) && n.value(1).truthy() {
+                    toggle = !toggle;
+                    outs.push((if toggle { 0 } else { 1 }, signal(ctx.now)));
+                }
+                if port == Some(2) && n.value(2).truthy() {
+                    outs.push((if toggle { 0 } else { 1 }, signal(ctx.now)));
+                }
+                outs.push((2, boolean(toggle)));
+                self.nodes[i].state.toggle = toggle;
+            }
+            Kind::Replace => {
+                let result = match (n.value(0), n.value(1)) {
+                    (Value::Str(f), Value::Str(h)) if !f.is_empty() && !h.is_empty() => {
+                        Value::Str(replacetext(h, f, &n.value(2).text()))
+                    }
+                    _ => Value::Null,
+                };
+                let compare_port = n.compare_port();
+                if port == Some(compare_port) && n.value(compare_port).truthy() {
+                    outs.push((if result.truthy() { 0 } else { 1 }, signal(ctx.now)));
+                }
+                outs.push((2, result));
+            }
+            Kind::Airlock if ctx.has_shell && port.is_some() => {
+                ctx.effects.push(Effect::Device {
+                    node: id,
+                    port: port.unwrap_or(0),
+                });
+            }
+            Kind::TeleporterConsole
+            | Kind::QuantumPad
+            | Kind::Launchpad
+            | Kind::LaunchpadConsole => {
+                if let Some(port) = port {
+                    ctx.effects.push(Effect::Device { node: id, port });
+                }
+            }
             Kind::Delay
             | Kind::Hear
             | Kind::CompactRemote
             | Kind::Controller
             | Kind::Bot
+            | Kind::Airlock
             | Kind::Modpc => {}
         }
         Outcome { outs, stop: false }
@@ -1307,9 +1571,14 @@ impl Circuit {
     /// One `SScircuit_component` step: the deliveries queued before it, then due clocks
     /// (`SSclock_component`) and delays (`addtimer`).
     pub fn tick(&mut self, ctx: &mut Ctx) {
+        self.tick_with(ctx, MAX_DELIVERIES);
+    }
+
+    /// [`Self::tick`], at most `limit` deliveries now; the rest waits for the next step.
+    pub fn tick_with(&mut self, ctx: &mut Ctx, limit: usize) {
         let mut batch = std::mem::take(&mut self.pending);
-        if batch.len() > MAX_DELIVERIES {
-            let rest = batch.split_off(MAX_DELIVERIES);
+        if batch.len() > limit {
+            let rest = batch.split_off(limit);
             self.pending = rest;
         }
         for (id, port, value) in batch {
@@ -1586,7 +1855,8 @@ impl Circuit {
                     color: "blue".to_owned(),
                     x: n.x,
                     y: n.y,
-                    removable: n.removable,
+                    // A USB component ejects as its cable's disconnection (`detach`).
+                    removable: n.removable || n.usb.is_some(),
                     input_ports: n
                         .inputs
                         .iter()
@@ -1690,6 +1960,30 @@ fn logic(op: &str, ports: &[Value]) -> bool {
         "XOR" => truthy > 0 && truthy < ports.len(),
         _ => !ports.is_empty() && truthy == ports.len(),
     }
+}
+
+/// `replacetext` (case-insensitive).
+fn replacetext(haystack: &str, needle: &str, replacement: &str) -> String {
+    let lower = |c: char| c.to_lowercase().next().unwrap_or(c);
+    let hay: Vec<char> = haystack.chars().collect();
+    let find: Vec<char> = needle.chars().map(lower).collect();
+    let mut out = String::with_capacity(haystack.len());
+    let mut i = 0;
+    while i < hay.len() {
+        if i + find.len() <= hay.len()
+            && hay[i..i + find.len()]
+                .iter()
+                .map(|&c| lower(c))
+                .eq(find.iter().copied())
+        {
+            out.push_str(replacement);
+            i += find.len();
+        } else {
+            out.push(hay[i]);
+            i += 1;
+        }
+    }
+    out
 }
 
 /// `findtext` (case-insensitive).
@@ -1994,6 +2288,99 @@ mod tests {
         b.circuit.clear_bundle_ports();
         assert!(b.circuit.nodes[bundle].outputs.is_empty());
         assert!(b.circuit.nodes[not].inputs[1].links.is_empty());
+    }
+
+    #[test]
+    fn a_feedback_loop_terminates_and_stays_bounded() {
+        let mut b = Bench::new();
+        b.charge = 100_000_000.0;
+        // Every component's `Triggered` drives the other two: the queue doubles every step.
+        let nodes = [b.add(Kind::Not), b.add(Kind::Not), b.add(Kind::Not)];
+        for to in nodes {
+            for from in nodes {
+                if to != from {
+                    assert!(b.connect((to, 1), (from, 1)));
+                }
+            }
+        }
+        b.input(nodes[0], 1, "");
+        for _ in 0..200 {
+            b.step();
+            assert!(b.circuit.pending.len() <= MAX_PENDING);
+        }
+        assert!(b.charge < 100_000_000.0, "the loop ran on its charge");
+        assert!(
+            b.circuit.pending.len() > MAX_DELIVERIES,
+            "the fan-out filled the queue"
+        );
+
+        // Out of charge the loop dies: what is queued drains without running anything.
+        b.charge = 0.0;
+        for _ in 0..=MAX_PENDING / MAX_DELIVERIES {
+            b.step();
+        }
+        assert!(b.circuit.pending.is_empty());
+        assert_eq!(b.charge, 0.0);
+    }
+
+    #[test]
+    fn acts_outside_the_circuit_are_refused() {
+        let mut b = Bench::new();
+        let a = b.add(Kind::Not);
+        let c = b.add(Kind::Not);
+        assert!(b.connect((a, 0), (c, 0)));
+        let wires = b.circuit.nodes[a].inputs[0].links.clone();
+        // Unknown component, unknown ports.
+        assert!(!b.connect((9, 0), (c, 0)));
+        assert!(!b.connect((a, 0), (9, 0)));
+        assert!(!b.connect((a, 9), (c, 0)));
+        assert!(!b.connect((a, 0), (c, 9)));
+        assert!(!b.circuit.disconnect(9, true, 0));
+        assert!(!b.circuit.disconnect(a, true, 9));
+        assert!(!b.circuit.perform_action(9, "add"));
+        assert!(!b.circuit.set_coordinates(9, 0.0, 0.0));
+        assert_eq!(
+            b.with(|circuit, ctx| circuit.manual_input(9, 0, Some("1"), ctx)),
+            None
+        );
+        assert_eq!(b.circuit.output_text(9, 0), None);
+        assert_eq!(b.circuit.nodes[a].inputs[0].links, wires, "nothing changed");
+    }
+
+    #[test]
+    fn pure_components() {
+        let mut b = Bench::new();
+        let trig = b.add(Kind::Trigonometry);
+        b.input(trig, 1, "30");
+        b.input(trig, 2, "");
+        let Value::Num(sine) = *b.out(trig, 0) else {
+            panic!();
+        };
+        assert!((sine - 0.5).abs() < 1e-9);
+        let atan = b.add(Kind::Arctan2);
+        b.input(atan, 0, "1");
+        b.input(atan, 1, "1");
+        b.input(atan, 2, "");
+        let Value::Num(angle) = *b.out(atan, 0) else {
+            panic!();
+        };
+        assert!((angle - 45.0).abs() < 1e-9);
+
+        let toggle = b.add(Kind::Toggle);
+        b.input(toggle, 1, "");
+        assert_eq!(*b.out(toggle, 2), Value::Num(1.0));
+        assert!(b.out(toggle, 0).truthy());
+        b.input(toggle, 0, "0");
+        assert_eq!(*b.out(toggle, 2), Value::Num(1.0), "set does not output");
+        b.input(toggle, 2, "");
+        assert_eq!(*b.out(toggle, 2), Value::Num(0.0));
+
+        let rep = b.add(Kind::Replace);
+        b.input(rep, 0, "CAT");
+        b.input(rep, 1, "a cat, a Cat");
+        b.input(rep, 2, "dog");
+        b.input(rep, 3, "");
+        assert_eq!(*b.out(rep, 2), Value::Str("a dog, a dog".into()));
     }
 
     #[test]

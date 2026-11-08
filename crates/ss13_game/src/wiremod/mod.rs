@@ -10,6 +10,8 @@ pub mod circuit;
 #[cfg(feature = "client")]
 pub mod client;
 #[cfg(feature = "server")]
+pub mod devices;
+#[cfg(feature = "server")]
 pub mod server;
 
 use serde::{Deserialize, Serialize};

@@ -22,7 +22,7 @@
 // shortcut: no beacon implants (`/obj/item/implant/beacon`, not ported) as targets, no renamed
 // beacons (no beacon rename), no forced power of a locked-in remote station (`lock_in_station`
 // sets its `NOPOWER` off; the port's power state belongs to the grid), no portal animation, no
-// USB circuit component, no hub/station icon change on power loss (only on use and toggles).
+// hub/station icon change on power loss (only on use and toggles).
 // CentCom and away levels are not modelled, so `is_eligible` and `Bumped` skip that check.
 
 use bevy::ecs::message::{MessageCursor, Messages};
@@ -263,6 +263,25 @@ pub fn get_targets(world: &mut World, console: Entity) -> Vec<(String, Entity)> 
     }
     sort_by_key(&mut targets);
     targets
+}
+
+/// The USB component's `Set Target`: by its name in [`get_targets`]. False when there is none.
+pub fn circuit_set_target(world: &mut World, console: Entity, name: &str) -> bool {
+    let Some(target) = get_targets(world, console)
+        .into_iter()
+        .find(|(n, _)| n == name)
+        .map(|(_, e)| e)
+    else {
+        return false;
+    };
+    if is_obj(world, target, STATION) {
+        let hub = hub_of(world, target);
+        set_target(world, console, hub);
+        lock_in_station(world, console, target);
+    } else {
+        set_target(world, console, Some(target));
+    }
+    true
 }
 
 /// `lock_in_station`: the target station links back to ours.

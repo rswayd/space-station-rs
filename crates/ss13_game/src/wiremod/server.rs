@@ -15,6 +15,7 @@
 //! - Shell triggers: the compact remote and the controller used in hand, the bot touched with
 //!   an empty hand send `Signal` with the user.
 //! - A screwdriver finishes a bot assembly (`/obj/item/shell/bot`, 3 s) into the bot.
+//! - USB cables connect a circuit in a shell with a USB port to machines ([`super::devices`]).
 //! - Effects: speech is the shell's `say` to the players in range (1 tile quiet); a radio
 //!   posts on the signaler band ([`crate::assemblies::server::post_signal`]), assembly
 //!   signalers included, and circuits receive their signals; voice activators hear speech
@@ -22,7 +23,7 @@
 //!
 //! Cost: every 0.1 s one pass over the circuits, stepping those with deliveries, a running
 //! clock or a pending delay (a handful); a said line is one pass over the circuits.
-// shortcut: no owner IDs or shell locking, no USB ports, no circuit marker, no duplicator, no
+// shortcut: no owner IDs or shell locking, no circuit marker, no duplicator, no
 // remote printing from the window, no `loaded` circuit's cell, no controller alt/right-click
 // signals, no inducers, no examine of the components; circuit speech is not heard by other
 // circuits or voice analyzers (it does not go through `Spoke`).
@@ -74,6 +75,8 @@ pub struct IntegratedCircuit {
     pub circuit: Circuit,
     pub cell: Option<Entity>,
     pub shell: Option<Entity>,
+    /// The machines connected by USB cable ([`super::devices`]).
+    pub usb: Vec<super::devices::UsbLink>,
 }
 
 /// A circuit component item that is not in a circuit (in one, it is a [`super::circuit::Node`]).
@@ -89,6 +92,8 @@ pub enum ShellKind {
     Computer,
     /// A stationary modular console.
     Console,
+    /// An airlock built with shell electronics (`crate::airlock_construction`).
+    Airlock,
 }
 
 impl ShellKind {
@@ -115,6 +120,7 @@ impl ShellKind {
             Self::Controller => &[Kind::Controller],
             Self::Bot => &[Kind::Bot],
             Self::Computer | Self::Console => &[Kind::Modpc],
+            Self::Airlock => &[Kind::Airlock],
         }
     }
 
@@ -123,8 +129,13 @@ impl ShellKind {
         match self {
             Self::CompactRemote => 25,
             Self::Controller | Self::Computer => 50,
-            Self::Bot | Self::Console => 100,
+            Self::Bot | Self::Console | Self::Airlock => 100,
         }
+    }
+
+    /// `SHELL_FLAG_USB_PORT`.
+    pub fn usb(self) -> bool {
+        matches!(self, Self::Bot | Self::Console)
     }
 }
 
@@ -157,6 +168,10 @@ impl Plugin for WiremodServerPlugin {
                 .is_some_and(|h| item_interaction(w, c.client, c.mob, h, c.target))
         });
         // The same on the floor; screwdrivers on shell assemblies.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 555, |w, c| {
+            c.held
+                .is_some_and(|h| super::devices::cable_interaction(w, c.client, c.mob, h, c.target))
+        });
         app.add_click_handler(ClickPhase::HeldOnTarget, 560, |w, c| {
             c.held
                 .is_some_and(|h| item_interaction(w, c.client, c.mob, h, c.target))
@@ -172,6 +187,7 @@ impl Plugin for WiremodServerPlugin {
                 Update,
                 (
                     tick_circuits.run_if(any_with_component::<IntegratedCircuit>),
+                    super::devices::watch.run_if(any_with_component::<super::devices::UsbCable>),
                     hear_speech.after(ss13_chat::server::SaySystems),
                     window_status.in_set(UiSystems::StatusHook),
                     circuit_acts.in_set(UiSystems::Handle),
@@ -202,6 +218,8 @@ fn make_items(add: On<Add<DmItem>>, items: Query<&DmItem>, mut commands: Command
         });
     } else if is_under(path, BOT_ASSEMBLY) {
         entity.try_insert(ShellAssembly { spawns: BOT });
+    } else if is_under(path, super::devices::CABLE) {
+        entity.try_insert(super::devices::UsbCable::default());
     }
 }
 
@@ -339,8 +357,16 @@ fn apply(world: &mut World, circuit: Entity, shell: Option<Entity>, effect: Effe
                 crate::modpc::circuit::apply(world, shell, effect);
             }
         }
+        Effect::Device { node, port } => {
+            super::devices::device_input(world, circuit, shell, node, port);
+        }
     }
 }
+
+/// Deliveries per step across all circuits (tg's `MC_TICK_CHECK` budget) and the smallest
+/// share of it a busy circuit gets.
+const STEP_DELIVERIES: usize = 20_000;
+const MIN_SHARE: usize = 50;
 
 /// `SScircuit_component` and `SSclock_component`: a step every 0.1 s.
 fn tick_circuits(world: &mut World, mut elapsed: Local<f64>) {
@@ -349,14 +375,20 @@ fn tick_circuits(world: &mut World, mut elapsed: Local<f64>) {
         return;
     }
     *elapsed = (*elapsed - STEP).min(STEP);
+    super::devices::airlock_states(world);
     let busy: Vec<Entity> = world
         .query::<(Entity, &IntegratedCircuit)>()
         .iter(world)
         .filter(|(_, c)| c.circuit.busy())
         .map(|(e, _)| e)
         .collect();
+    if busy.is_empty() {
+        return;
+    }
+    // Every circuit a fair share of the step: one with a loop cannot starve the others.
+    let limit = (STEP_DELIVERIES / busy.len()).max(MIN_SHARE);
     for e in busy {
-        with_circuit(world, e, |c, ctx| c.tick(ctx));
+        with_circuit(world, e, |c, ctx| c.tick_with(ctx, limit));
     }
 }
 
@@ -445,7 +477,7 @@ fn hear_speech(world: &mut World, mut cursor: Local<MessageCursor<Spoke>>) {
 
 // --- Clicks -------------------------------------------------------------------------------
 
-fn open_window(world: &mut World, client: Entity, mob: Entity, circuit: Entity) {
+pub(super) fn open_window(world: &mut World, client: Entity, mob: Entity, circuit: Entity) {
     let title = name_of(world, circuit);
     world.write_message(OpenUi::new::<IntegratedCircuitUi>(
         client, mob, circuit, title,
@@ -487,7 +519,9 @@ pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity)
             ShellKind::CompactRemote => Kind::CompactRemote,
             ShellKind::Controller => Kind::Controller,
             // A computer used in hand turns on (`crate::modpc`).
-            ShellKind::Bot | ShellKind::Computer | ShellKind::Console => return false,
+            ShellKind::Bot | ShellKind::Computer | ShellKind::Console | ShellKind::Airlock => {
+                return false;
+            }
         };
         shell_signal(world, client, mob, item, circuit, kind);
         return true;
@@ -804,6 +838,7 @@ pub fn remove_circuit(world: &mut World, shell: Entity) {
         return;
     };
     unregister_bundle(world, shell, circuit);
+    super::devices::detach_all(world, circuit);
     with_circuit(world, circuit, |c, _| c.detach_shell());
     if let Some(mut ic) = world.get_mut::<IntegratedCircuit>(circuit) {
         ic.shell = None;
@@ -1068,14 +1103,19 @@ fn circuit_acts(world: &mut World, mut cursor: Local<MessageCursor<UiActed<Integ
 
 /// `detach_component`: out of the circuit into the user's hands.
 fn detach(world: &mut World, actor: Entity, circuit: Entity, component: usize) {
-    let Some((id, kind, item)) = world
+    let Some((id, kind, item, usb)) = world
         .get::<IntegratedCircuit>(circuit)
         .and_then(|ic| ic.circuit.nodes.get(component))
-        .filter(|n| n.removable)
-        .map(|n| (n.id, n.kind, n.item))
+        .filter(|n| n.removable || n.usb.is_some())
+        .map(|n| (n.id, n.kind, n.item, n.usb))
     else {
         return;
     };
+    // `on_circuit_component_removed`: ejecting a USB component pulls its cable.
+    if let Some(machine) = usb {
+        super::devices::detach(world, circuit, machine);
+        return;
+    }
     if kind == Kind::WireBundle
         && let Some(shell) = world
             .get::<IntegratedCircuit>(circuit)
@@ -1128,4 +1168,5 @@ pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<crate::exami
         ));
         lines.push((Span::Notice, meter(circuit)));
     }
+    super::devices::examine_lines(world, target, lines);
 }
