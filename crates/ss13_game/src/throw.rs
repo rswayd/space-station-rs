@@ -13,8 +13,14 @@
 //!   lying mobs included): a living mob in throw mode with an empty active hand catches it,
 //!   otherwise takes `throwforce` as the item's damage type ([`crate::health::apply_damage`]) and,
 //!   standing, is pushed one tile; an unanchored closet is pushed. The item stops where it was.
-// shortcut: no thrower momentum, no throwing of grabbed mobs, no spin animation, no armour,
-// no space drift after landing; add with neck grabs, armour and zero gravity.
+//! - With an empty active hand the mob held in an aggressive (or harder) grab is thrown instead
+//!   (the grab ends; a neck grab throws one speed harder). A thrown carbon that crashes into
+//!   something dense is hurt (tg `carbon/throw_impact`): into a wall paralyzed 2 s and 10 brute
+//!   to a random bodypart (more when thrown faster than it throws itself), into a structure or a
+//!   non-carbon only when fast; into another carbon both fall for 2 s with 10 brute each.
+// shortcut: no thrower momentum, no spin animation, no armour on items, no space drift after
+// landing, no `check_block` of the carbon crashed into, no brawling knockdown blocks, no
+// hulk/dwarf throw power; add with armour, zero gravity and martial blocks.
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
@@ -257,7 +263,10 @@ fn throw_clicks(world: &mut World, mut clicks: Local<MessageCursor<ThrowClick>>)
         }
         // `throw_item` turns throw mode off first, whatever happens next.
         world.entity_mut(mob).insert(ThrowMode(false));
-        // shortcut: an empty hand throws nothing (tg throws an aggressively grabbed mob).
+        if held.is_none() {
+            throw_grabbed(world, mob, from, click, now);
+            continue;
+        }
         let Some(item) = held.filter(|&i| !crate::inventory::no_drop(world, i)) else {
             continue;
         };
@@ -303,6 +312,202 @@ fn throw_clicks(world: &mut World, mut clicks: Local<MessageCursor<ThrowClick>>)
         ));
         // tg `quickstart`: the first tick runs at once.
         fly_one(world, item, now * 10.0);
+    }
+}
+
+/// `throw_mode` default `throw_range`, `throw_speed` of a mob (`/atom/movable`).
+pub const MOB_THROW_RANGE: u32 = 7;
+pub const MOB_THROW_SPEED: f32 = 2.0;
+/// `CARBON_MAX_IMPACT_SPEED_BONUS`.
+pub const CARBON_MAX_IMPACT_SPEED_BONUS: f32 = 5.0;
+
+/// On a mob in flight: how much faster than its own `throw_speed` it was thrown (tg
+/// `extra_speed` of `carbon/throw_impact`, 0 when it threw itself).
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq)]
+pub struct ThrownMob {
+    pub extra_speed: f32,
+}
+
+/// tg `throw_item` with an empty hand: the mob pulled in an aggressive grab or harder, not
+/// buckled, is let go and thrown (`neckgrab_throw` adds one to the speed).
+fn throw_grabbed(world: &mut World, mob: Entity, from: TilePos, click: ThrowClick, now: f64) {
+    let Some(target) = world.get::<crate::pull::Pulling>(mob).map(|p| p.0) else {
+        return;
+    };
+    let grab = world
+        .get::<crate::pull::GrabState>(mob)
+        .copied()
+        .unwrap_or_default();
+    if grab < crate::pull::GrabState::Aggressive
+        || world.get::<Health>(target).is_none()
+        || world
+            .get::<crate::medical::surgery::Buckled>(target)
+            .is_some()
+    {
+        return;
+    }
+    world.entity_mut(mob).remove::<crate::pull::Pulling>();
+    let Some(&start) = world.get::<TilePos>(target) else {
+        return;
+    };
+    let neck = grab >= crate::pull::GrabState::Neck;
+    let speed = MOB_THROW_SPEED + f32::from(u8::from(neck));
+    let Some(path) = Trajectory::new(start, click.target_pos, MOB_THROW_RANGE, speed, now * 10.0)
+    else {
+        return;
+    };
+    let yeet = world.resource_mut::<CombatRng>().chance(0.5);
+    let pick = world.resource_mut::<CombatRng>().range(0, 4) as usize;
+    let (verb, own_verb) = if yeet { YEET } else { THROW_VERBS[pick] };
+    let (user, thing) = (name_of(world, mob), name_of(world, target));
+    let power = if neck { " с силой" } else { "" };
+    let chat = visible_message(
+        world,
+        from,
+        ChatChannel::Combat,
+        (Span::Danger, format!("{user}{power} {verb} {thing}!")),
+        &[(mob, Span::Danger, format!("Вы{power} {own_verb} {thing}!"))],
+    );
+    for message in chat {
+        world.write_message(message);
+    }
+    world.entity_mut(mob).insert(NextMove(now + CLICK_CD_THROW));
+    let aimed = (world.get::<ss13_mapload::Turf>(click.target).is_none() && click.target != target)
+        .then_some(click.target);
+    world.entity_mut(target).insert((
+        Thrown {
+            path,
+            thrower: Some(mob),
+            target: aimed,
+            last_dir: None,
+        },
+        ThrownMob {
+            extra_speed: (speed - MOB_THROW_SPEED).clamp(0.0, CARBON_MAX_IMPACT_SPEED_BONUS),
+        },
+    ));
+    fly_one(world, target, now * 10.0);
+}
+
+/// tg `iscarbon`: a living mob with hands that is not a silicon or a basic mob.
+fn is_carbon(world: &World, mob: Entity) -> bool {
+    world.get::<Health>(mob).is_some()
+        && world.get::<Inventory>(mob).is_some()
+        && world.get::<crate::silicon::Silicon>(mob).is_none()
+        && world.get::<crate::mobs::BasicMob>(mob).is_none()
+}
+
+/// tg `take_bodypart_damage(amount, check_armor = TRUE)`: brute to a random bodypart.
+fn bodypart_damage(world: &mut World, mob: Entity, amount: f32) {
+    let zone = match world.resource_mut::<CombatRng>().range(0, 5) {
+        0 => BodyZone::Head,
+        1 => BodyZone::Chest,
+        2 => BodyZone::LArm,
+        3 => BodyZone::RArm,
+        4 => BodyZone::LLeg,
+        _ => BodyZone::RLeg,
+    };
+    crate::bots::hurt_zone(world, mob, zone, DamageType::Brute, amount);
+}
+
+/// What a thrown carbon crashed into, for [`impact_damage`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Crash {
+    /// A dense turf (a wall).
+    Wall,
+    /// An `/obj/structure`.
+    Structure,
+    /// Another carbon.
+    Carbon,
+    /// Anything else dense (machines, other mobs).
+    Other,
+}
+
+/// tg `carbon/throw_impact` numbers: (seconds paralyzed, brute) of the thrown carbon, and the
+/// same for a carbon it crashed into.
+pub fn impact_damage(crash: Crash, extra_speed: f32) -> ((f32, f32), Option<(f32, f32)>) {
+    let fast = extra_speed > 0.0;
+    match crash {
+        Crash::Wall => ((2.0, 10.0 + 5.0 * extra_speed), None),
+        Crash::Structure if fast => ((1.0, 5.0 + 5.0 * extra_speed), None),
+        Crash::Other if fast => ((0.0, 5.0 * extra_speed), None),
+        Crash::Carbon => (
+            (2.0, 10.0 + 5.0 * extra_speed),
+            Some((2.0, 10.0 + 5.0 * extra_speed)),
+        ),
+        Crash::Structure | Crash::Other => ((0.0, 0.0), None),
+    }
+}
+
+/// tg `carbon/throw_impact` of a thrown mob that hit `hit` (`None`: it landed).
+fn mob_impact(world: &mut World, mob: Entity, hit: Option<Entity>) {
+    let extra = world.get::<ThrownMob>(mob).map_or(0.0, |t| t.extra_speed);
+    world.entity_mut(mob).remove::<ThrownMob>();
+    let Some(hit) = hit else {
+        return;
+    };
+    if !is_carbon(world, mob) || hit == mob {
+        return;
+    }
+    let crash = if world.get::<ss13_mapload::Turf>(hit).is_some() {
+        Crash::Wall
+    } else if is_carbon(world, hit) {
+        Crash::Carbon
+    } else if crate::construction::path_of(world, hit)
+        .is_some_and(|p| ss13_mapload::fidelity::is_under(&p, "/obj/structure"))
+    {
+        Crash::Structure
+    } else {
+        Crash::Other
+    };
+    // `if(hurt && hit_atom.density)`; the carbon branch does not ask.
+    let dense = world.get::<ss13_world::Density>(hit).is_some()
+        || world.get::<ss13_mapload::Turf>(hit).is_some();
+    if crash != Crash::Carbon && !dense {
+        return;
+    }
+    let ((stun, damage), victim) = impact_damage(crash, extra);
+    if stun > 0.0 {
+        crate::status_effects::apply(world, mob, crate::status_effects::Incap::Paralyze, stun);
+    }
+    if damage > 0.0 {
+        bodypart_damage(world, mob, damage);
+    }
+    if let Some((victim_stun, victim_damage)) = victim {
+        crate::status_effects::apply(
+            world,
+            hit,
+            crate::status_effects::Incap::Paralyze,
+            victim_stun,
+        );
+        bodypart_damage(world, hit, victim_damage);
+    }
+    let fast = if extra > 0.0 {
+        " с большой скоростью"
+    } else {
+        ""
+    };
+    let (who, what) = (name_of(world, mob), name_of(world, hit));
+    let at = world.get::<TilePos>(mob).copied().unwrap_or_default();
+    let (others, own) = if crash == Crash::Carbon {
+        (
+            format!("{who} врезается в {what}{fast}, сбивая с ног их обоих!"),
+            format!("Вы врезаетесь в {what}{fast}!"),
+        )
+    } else {
+        (
+            format!("{who} врезается в {what}{fast}!"),
+            format!("Вы врезаетесь в {what}{fast}!"),
+        )
+    };
+    let chat = visible_message(
+        world,
+        at,
+        ChatChannel::Combat,
+        (Span::Danger, others),
+        &[(mob, Span::BoldWarning, own)],
+    );
+    for message in chat {
+        world.write_message(message);
     }
 }
 
@@ -446,6 +651,10 @@ fn pick_hit(world: &World, blockers: &[Entity], target: Option<Entity>) -> Optio
 /// tg `finalize` -> `throw_impact` -> `hitby` of what was hit (`None`: it lands).
 fn finish(world: &mut World, item: Entity, thrown: &Thrown, hit: Option<Entity>) {
     world.entity_mut(item).remove::<Thrown>();
+    if world.get::<Health>(item).is_some() {
+        mob_impact(world, item, hit);
+        return;
+    }
     let Some(hit) = hit else {
         // `/obj/item/light/throw_impact`: a bulb shatters where it lands.
         crate::power::lighting::thrown(world, item);
@@ -661,6 +870,23 @@ mod tests {
         for pair in tiles.windows(2) {
             assert_eq!(pair[0].chebyshev(pair[1]), Some(1), "{tiles:?}");
         }
+    }
+
+    #[test]
+    fn crashes_hurt_like_carbon_throw_impact() {
+        // A wall always hurts; a structure or a machine only a carbon thrown faster than it
+        // throws itself (a neck grab throw: one faster).
+        assert_eq!(impact_damage(Crash::Wall, 0.0), ((2.0, 10.0), None));
+        assert_eq!(impact_damage(Crash::Wall, 1.0), ((2.0, 15.0), None));
+        assert_eq!(impact_damage(Crash::Structure, 0.0), ((0.0, 0.0), None));
+        assert_eq!(impact_damage(Crash::Structure, 1.0), ((1.0, 10.0), None));
+        assert_eq!(impact_damage(Crash::Other, 0.0), ((0.0, 0.0), None));
+        assert_eq!(impact_damage(Crash::Other, 2.0), ((0.0, 10.0), None));
+        // Into another carbon: both go down.
+        assert_eq!(
+            impact_damage(Crash::Carbon, 0.0),
+            ((2.0, 10.0), Some((2.0, 10.0)))
+        );
     }
 
     #[test]
