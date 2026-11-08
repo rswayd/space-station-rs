@@ -13,7 +13,7 @@
 //!   emitter sound at both ends and the pad's active power used.
 // shortcut: no briefcase launchpad and remote (`/obj/machinery/launchpad/briefcase`,
 // `/obj/item/launchpad_remote`: a syndicate kit with its own deploy/close flow), no diagnostic
-// HUD target marker, no beam visual, no ghost click to the target, no USB circuit component.
+// HUD target marker, no beam visual, no ghost click to the target.
 // A pad that stops working while charging is free again (tg leaves `teleporting` set).
 
 use bevy::ecs::message::{MessageCursor, Messages};
@@ -292,7 +292,7 @@ pub fn multitool_act(world: &mut World, client: Entity, tool: Entity, target: En
 }
 
 /// The console's pads that still exist (`pad_exists`).
-fn live_pads(world: &World, console: Entity) -> Vec<Entity> {
+pub fn live_pads(world: &World, console: Entity) -> Vec<Entity> {
     console_state(world, console)
         .pads
         .into_iter()

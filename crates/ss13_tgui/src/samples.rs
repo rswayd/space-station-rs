@@ -499,6 +499,7 @@ pub fn sample(name: &str) -> Option<Sample> {
                 one_access: false,
                 unres_direction: 2,
                 passed_name: "Engine Room".into(),
+                shell: false,
             },
         ),
         AiAirlockUi::NAME => of::<AiAirlockUi>(

@@ -5,10 +5,9 @@
 //!
 //! Acts: `one_access`, `direc_set` (`unres_direction`: 1, 2, 4, 8), `set` (`access`),
 //! `grant_all`, `clear_all`, `grant_region` / `deny_region` (`region`), `passedName`
-//! (`passedName`).
-// shortcut: no "Integrated Circuit Shell" checkbox (`set_shell`: airlocks take no circuit shell
-// here) and no "Cycling Id" field (`passedCycleId`: cycling airlocks are not ported); add them
-// with those mechanics.
+//! (`passedName`), `set_shell` (`on`).
+// shortcut: no "Cycling Id" field (`passedCycleId`: cycling airlocks are not ported); add it
+// with that mechanic.
 
 use serde::{Deserialize, Serialize};
 
@@ -44,6 +43,8 @@ pub struct AirlockElectronicsData {
     /// BYOND dir bits (`unres_sides`).
     pub unres_direction: u8,
     pub passed_name: String,
+    /// `shell`: the "Integrated Circuit Shell" checkbox.
+    pub shell: bool,
 }
 
 impl UiInterface for AirlockElectronicsUi {
@@ -102,6 +103,13 @@ mod client_side {
         data: &AirlockElectronicsData,
         local: &UiLocalState,
     ) -> impl Scene + use<> {
+        let (shell_icon, shell_on) = if data.shell {
+            ("check-square-o", String::new())
+        } else {
+            ("square-o", "1".to_owned())
+        };
+        let shell_params = params("on", shell_on);
+        let shell_selected = data.shell;
         let (one_icon, one_text) = if data.one_access {
             ("unlock", "One")
         } else {
@@ -192,6 +200,14 @@ mod client_side {
                         @LabeledListItem { @label: "Unrestricted Access" }
                         Children [ {north} -- {south} -- {east} -- {west} ]
                         --
+                        @LabeledListItem { @label: "Integrated Circuit Shell" }
+                        Children [
+                            @ss13_ui_kit::Button { @icon: shell_icon, @content: "Shell" }
+                            ss13_ui_kit::Button { selected: shell_selected }
+                            Act("set_shell")
+                            shell_params
+                        ]
+                        --
                         @LabeledListItem { @label: "Airlock Name" }
                         Children [
                             Input { value: name_value, max_length: name_max, fluid: true }
@@ -253,6 +269,7 @@ mod tests {
             one_access: true,
             unres_direction: 1 | 4,
             passed_name: "Engine Room".into(),
+            shell: true,
         };
         let bytes = crate::encode(&data);
         assert_eq!(

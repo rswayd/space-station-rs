@@ -9,8 +9,10 @@ use bevy::prelude::*;
 use ss13_game::assemblies::server::{self as asm, Assembly, AssemblyHolder, Device};
 use ss13_game::inventory::{CarriedBy, Inventory};
 use ss13_game::mecha::core::ItemCell;
+use ss13_game::science::quantum_pad::QuantumPad;
 use ss13_game::testing::{self, Drive, fixture_map, write_fixture};
 use ss13_game::wiremod::circuit::Kind;
+use ss13_game::wiremod::devices::{self as dv, UsbAttached, UsbCable};
 use ss13_game::wiremod::server::{self as wm, IntegratedCircuit, Shell};
 use ss13_shared::TilePos;
 
@@ -39,6 +41,13 @@ const TYPES: &str = r##"{
     "/obj/item/circuit_component": { "parent": "/obj/item" },
     "/obj/item/circuit_component/radio": { "parent": "/obj/item/circuit_component" },
     "/obj/item/compact_remote": { "parent": "/obj/item" },
+    "/obj/item/usb_cable": { "parent": "/obj/item" },
+    "/obj/structure": { "parent": "/obj", "declared_vars": {
+        "icon": { "resource": "i.dmi" }, "icon_state": "toy" } },
+    "/obj/structure/bot": { "parent": "/obj/structure" },
+    "/obj/machinery": { "parent": "/obj", "declared_vars": { "anchored": 1,
+        "icon": { "resource": "i.dmi" }, "icon_state": "toy" } },
+    "/obj/machinery/quantumpad": { "parent": "/obj/machinery" },
     "/obj/item/stock_parts": { "parent": "/obj/item" },
     "/obj/item/stock_parts/power_store": { "parent": "/obj/item/stock_parts" },
     "/obj/item/stock_parts/power_store/cell": { "parent": "/obj/item/stock_parts/power_store" },
@@ -92,6 +101,9 @@ const CELL: &str = "/obj/item/stock_parts/power_store/cell";
 const SIGNALER: &str = "/obj/item/assembly/signaler";
 const TIMER: &str = "/obj/item/assembly/timer";
 const SCREWDRIVER: &str = "/obj/item/screwdriver";
+const CABLE: &str = "/obj/item/usb_cable";
+const BOT: &str = "/obj/structure/bot";
+const PAD: &str = "/obj/machinery/quantumpad";
 
 const STATES: [(&str, &str); 4] = [
     ("t.dmi", "floor"),
@@ -113,6 +125,9 @@ fn fixture(test: &str) -> PathBuf {
         SIGNALER,
         TIMER,
         SCREWDRIVER,
+        CABLE,
+        BOT,
+        PAD,
         "/obj/item/assembly_holder",
         "/turf/open/floor",
         "/turf/closed/wall",
@@ -240,4 +255,77 @@ fn a_compact_remote_radios_a_signaler() {
     assert!(!ic.circuit.on);
     assert_eq!(ic.circuit.nodes.len(), 1);
     assert_eq!(world.get::<TilePos>(circuit), Some(&pos));
+}
+
+#[test]
+fn a_usb_cable_connects_a_bot_to_a_quantum_pad() {
+    let (mut s, client, mob) = Station::start("usb");
+    let pos = *s.get::<TilePos>(mob);
+    let circuit = s.spawn(CIRCUIT, pos);
+    let cell = s.spawn(CELL, pos);
+    let bot = s.spawn(BOT, pos);
+    let remote = s.spawn(REMOTE, pos);
+    let cable = s.spawn(CABLE, pos);
+    let pad = s.spawn(PAD, pos);
+    let other = s.spawn(PAD, pos);
+    let world = s.world();
+    world
+        .entity_mut(cell)
+        .insert(ItemCell(ss13_game::power::Cell {
+            charge: 1000.0,
+            maxcharge: 1000.0,
+            chargerate: 0.0,
+        }));
+    // The fixture has no power grid.
+    for p in [pad, other] {
+        world.entity_mut(p).remove::<ss13_game::power::Unpowered>();
+    }
+    world.entity_mut(pad).insert(QuantumPad {
+        linked: Some(other),
+        ..default()
+    });
+
+    // A remote has no USB port; the bot does.
+    assert!(dv::cable_interaction(world, client, mob, cable, remote));
+    assert_eq!(world.get::<UsbCable>(cable).unwrap().circuit, None);
+    assert!(wm::item_interaction(world, client, mob, cell, circuit));
+    assert!(wm::item_interaction(world, client, mob, circuit, bot));
+    world.flush();
+    assert_eq!(world.get::<Shell>(bot).unwrap().circuit, Some(circuit));
+
+    // The cable takes the bot's circuit, then the pad's port.
+    assert!(dv::cable_interaction(world, client, mob, cable, bot));
+    assert_eq!(world.get::<UsbCable>(cable).unwrap().circuit, Some(circuit));
+    assert!(dv::cable_interaction(world, client, mob, cable, pad));
+    world.flush();
+    let index = {
+        let ic = world.get::<IntegratedCircuit>(circuit).unwrap();
+        ic.circuit
+            .nodes
+            .iter()
+            .position(|n| n.kind == Kind::QuantumPad && n.usb == Some(pad))
+            .expect("the pad's component joined the circuit")
+    };
+    assert_eq!(world.get::<UsbAttached>(pad), Some(&UsbAttached(circuit)));
+    assert_eq!(world.get::<TilePos>(cable), None, "the cable went inside");
+
+    // The component's Trigger teleports through the pad's link.
+    assert!(
+        wm::with_circuit(world, circuit, |c, ctx| c.manual_input(
+            index,
+            1,
+            Some(""),
+            ctx
+        ))
+        .is_some()
+    );
+    assert!(world.get::<QuantumPad>(pad).unwrap().charging.is_some());
+
+    // Ejecting the component pulls the cable out at the machine.
+    dv::detach(world, circuit, pad);
+    world.flush();
+    assert_eq!(world.get::<UsbAttached>(pad), None);
+    assert_eq!(world.get::<TilePos>(cable), Some(&pos));
+    let ic = world.get::<IntegratedCircuit>(circuit).unwrap();
+    assert!(!ic.circuit.nodes.iter().any(|n| n.usb.is_some()));
 }

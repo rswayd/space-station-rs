@@ -15,7 +15,7 @@
 //!   `teleport_cooldown` = 40 s - 10 s per servo tier.
 //! - An unlinked keycard on a pad links to it after 4 s; alt-clicking the keycard in hand
 //!   unlinks it after 4 s.
-// shortcut: no USB circuit component (wiremod has no `usb_port` yet), no mapped `map_pad_id`
+// shortcut: no mapped `map_pad_id`
 // links (no map uses them), no ghost click to the linked pad, no keycard recolouring by the
 // pad's department (no greyscale configs at runtime), no "Quantum Pad For Dummies" paper.
 
@@ -212,6 +212,27 @@ pub fn interact(
         return;
     }
     doteleport(world, pad, target, Some(client), speed);
+}
+
+/// The USB component's `input_received`: to `target` if it is a pad, else to the linked pad.
+/// False on the refusals that signal `On Fail`.
+pub fn circuit_teleport(world: &mut World, pad: Entity, target: Option<Entity>) -> bool {
+    let linked = state(world, pad).linked;
+    let Some(to) = live_pad(world, target).or(live_pad(world, linked)) else {
+        return false;
+    };
+    let s = state(world, pad);
+    let (speed, cooldown, _) = ratings(world, pad);
+    let t = now(world);
+    if s.last_teleport.is_some_and(|last| t < last + cooldown)
+        || s.charging.is_some()
+        || state(world, to).charging.is_some()
+        || unpowered(world, to)
+    {
+        return false;
+    }
+    doteleport(world, pad, to, None, speed);
+    true
 }
 
 /// `doteleport`: the charge-up.

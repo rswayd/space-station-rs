@@ -26,7 +26,7 @@
 // reinforced glass flag is kept on the assembly only), no assembly names or examine lines, no
 // renaming with a pen, no RCD; destroyed assemblies leave nothing; finished airlocks are not
 // taken back apart into assemblies (their electronics are kept on them for that); no
-// integrated-circuit shell and cycle id of the electronics; the painter's toner cartridge
+// cycle id of the electronics; the painter's toner cartridge
 // cannot be swapped or refilled, and painting an assembly is not ported (tg has no code for it
 // either).
 
@@ -90,6 +90,8 @@ pub struct AirlockElectronics {
     /// BYOND dir bits.
     pub unres_sides: u8,
     pub passed_name: String,
+    /// `shell`: the airlock it builds takes an integrated circuit.
+    pub shell: bool,
 }
 
 /// A door assembly's live state.
@@ -625,6 +627,14 @@ pub fn finish_door(
     if let Some(mut d) = world.get_mut::<Door>(door) {
         apply_electronics(&mut d, &electronics);
     }
+    if electronics.shell {
+        world
+            .entity_mut(door)
+            .insert(crate::wiremod::server::Shell {
+                kind: crate::wiremod::server::ShellKind::Airlock,
+                circuit: None,
+            });
+    }
     world.entity_mut(door).insert(electronics);
     // What map load gives an airlock: its wires and its area's power.
     add_wires(world, door, pos);
@@ -895,6 +905,7 @@ pub enum ElectronicsAct {
     GrantRegion(String),
     DenyRegion(String),
     PassedName(String),
+    SetShell(bool),
 }
 
 /// `ui_static_data`: the station regions (`SSid_access.station_regions`) with the accesses
@@ -938,6 +949,7 @@ impl ServerUi for ElectronicsWindow {
             one_access: e.one_access,
             unres_direction: e.unres_sides,
             passed_name: e.passed_name.clone(),
+            shell: e.shell,
         }
     }
 
@@ -960,6 +972,12 @@ impl ServerUi for ElectronicsWindow {
             "grant_region" => text("region").map(ElectronicsAct::GrantRegion),
             "deny_region" => text("region").map(ElectronicsAct::DenyRegion),
             "passedName" => text("passedName").map(ElectronicsAct::PassedName),
+            // `!!params["on"]`.
+            "set_shell" => Ok(ElectronicsAct::SetShell(
+                params
+                    .get("on")
+                    .is_some_and(|v| !matches!(v, "" | "0" | "false")),
+            )),
             _ => Err(UiReject::UnknownAction),
         }
     }
@@ -996,6 +1014,7 @@ pub fn apply_act(e: &mut AirlockElectronics, act: ElectronicsAct) {
             let gone = region_access_list(&[region.as_str()]);
             e.accesses.retain(|a| !gone.contains(a));
         }
+        ElectronicsAct::SetShell(on) => e.shell = on,
         ElectronicsAct::PassedName(name) => {
             // BandaStation `sanitize(passed_name)`, tg `trim(..., 30)`.
             e.passed_name = crate::records::console::sanitize(&name, NAME_MAX);

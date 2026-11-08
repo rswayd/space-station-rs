@@ -290,6 +290,7 @@
 //! | 345 | `shuttle_remote::link` (a shuttle remote on a shuttle console) |
 //! | 400 | `modsuit::server::item_interaction` |
 //! | 500 | `assemblies::server::item_interaction` |
+//! | 555 | `wiremod::devices::cable_interaction` (USB cables on shells and machines) |
 //! | 560 | `wiremod::server::item_interaction` |
 //! | 600 | `grenades::item_interaction` |
 //! | 603 | `science::cell_lines::swab_interaction` (swabs and biopsy tools: sampling, onto petri dishes) |
