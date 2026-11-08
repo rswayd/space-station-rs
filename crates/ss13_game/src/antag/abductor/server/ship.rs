@@ -844,7 +844,7 @@ impl ServerUi for AbductorConsoleUi {
             SELECT_DISGUISE => ConsoleAct::SelectDisguise,
             SELECT => {
                 let category = params.get(CATEGORY).unwrap_or_default();
-                if !gear_categories().iter().any(|c| *c == category) {
+                if !gear_categories().contains(&category) {
                     return Err(UiReject::BadParams("category: no such category".into()));
                 }
                 ConsoleAct::Select(category.to_owned())
@@ -981,9 +981,7 @@ pub fn experiment_close(
     let blocked = world
         .resource::<SpatialIndex>()
         .on_tile(pos)
-        .iter()
-        .copied()
-        .collect::<Vec<_>>()
+        .to_vec()
         .into_iter()
         .any(|e| world.get::<Health>(e).is_some() && has_knowledge(world, e));
     if blocked || !is_open(world, machine) || crate::medical::pods::panel_open(world, machine) {

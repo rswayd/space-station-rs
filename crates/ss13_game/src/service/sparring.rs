@@ -760,12 +760,10 @@ pub fn call_stats(stats: [Option<Stat>; 2], down: [bool; 2]) -> Call {
     if stats.iter().any(|s| s.is_none() || *s == Some(Stat::Dead)) {
         return Call::Flub;
     }
-    for i in 0..2 {
-        if down[i] {
-            return Call::Won(1 - i, false);
-        }
+    match down.iter().position(|&d| d) {
+        Some(i) => Call::Won(1 - i, false),
+        None => Call::Continue,
     }
-    Call::Continue
 }
 
 /// The sparring datum's signals, polled: deaths and vanishings flub, a fighter down loses,

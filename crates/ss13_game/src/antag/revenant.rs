@@ -281,7 +281,6 @@ impl Ability {
                 reveal: 5.0,
                 stun: 3.0,
                 radius: 1,
-                ..base
             },
         }
     }
@@ -577,10 +576,10 @@ pub fn can_spawn(world: &mut World) -> bool {
 /// `get_revenant_spawns`: corpse tiles, with carp spawns when few.
 fn spawn_tiles(world: &mut World) -> Vec<TilePos> {
     let mut tiles = station_corpses(world);
-    if tiles.len() < COMFORTABLE_SPAWNS {
-        if let Some(s) = world.get_resource::<SpawnPoints>() {
-            tiles.extend(s.carp.iter().copied());
-        }
+    if tiles.len() < COMFORTABLE_SPAWNS
+        && let Some(s) = world.get_resource::<SpawnPoints>()
+    {
+        tiles.extend(s.carp.iter().copied());
     }
     tiles
 }
@@ -1981,7 +1980,7 @@ pub fn revblight_act(
         if world.get::<Stat>(mob) == Some(&Stat::Conscious)
             && let Some(emote) = ss13_chat::emote::find(key)
         {
-            let text: &str = &emote.message;
+            let text: &str = emote.message;
             let text = text.to_owned();
             crate::mobs::defense::emote(world, mob, &text);
         }

@@ -811,8 +811,10 @@ mod tests {
     #[test]
     fn missing_limbs_add_burden() {
         let mut world = World::new();
-        let mut health = Health::default();
-        health.missing = 0b1100; // both arms
+        let health = Health {
+            missing: 0b1100, // both arms
+            ..Default::default()
+        };
         let mob = world.spawn(health).id();
         assert_eq!(burden_count(&world, mob), 2);
     }

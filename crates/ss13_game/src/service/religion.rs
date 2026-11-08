@@ -1966,9 +1966,7 @@ fn rite_target(
             super::sparring::rite_target(world, user, altar, rite)
         }
         Rite::DeclareArena => {
-            let Some(client) = client_of(world, user) else {
-                return None;
-            };
+            let client = client_of(world, user)?;
             let areas = super::sparring::declarable_areas(world);
             let names = areas
                 .iter()

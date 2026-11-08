@@ -539,10 +539,13 @@ fn damage_reaction(
             }
         }
         Strain::ReplicatingFoam => {
-            if hurt == Hurt::Burn && damage > 0.0 && survives && roll(world, 60.0) {
-                if let Some(new) = expand(world, blob, None, None, false) {
-                    set_integrity(world, new, integrity - damage);
-                }
+            if hurt == Hurt::Burn
+                && damage > 0.0
+                && survives
+                && roll(world, 60.0)
+                && let Some(new) = expand(world, blob, None, None, false)
+            {
+                set_integrity(world, new, integrity - damage);
             }
         }
         Strain::ShiftingFragments => {
