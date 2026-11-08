@@ -23,13 +23,13 @@ WASD/стрелки, вверх/вниз по z-уровням, удержани
 Быстрая экипировка (E) и в пояс/сумку/хранилище/карманы, вытаскивание аксессуара.
 
 - **Код:** [`human.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/keybinding/human.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/inventory_client.rs` (E, Shift+E, Shift+V, Shift+Q, Alt+1, Alt+2, Shift+F), `crates/ss13_game/src/inventory.rs` (`quick_equip`, `smart_equip`, `quick_accessory_draw`): нет `equip_delay_self` и особых правил кобур
 
 ### Клавиши клиента и общения
 Say (T), радио, OOC (O), me (M), молитва, adminhelp (F1), скриншот, полноэкранный режим, минимальный HUD, закрыть все окна.
 
 - **Код:** [`client.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/keybinding/client.dm#L1), [`communication.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/keybinding/communication.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — ввод речи только через строку чата
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_chat/src/client/panel.rs` (T/F3 say, Y рация, O/F2 OOC, M me, P молитва, L LOOC; канал сбрасывается после отправки), `crates/ss13_admin/src/ooc.rs` (молитва), `crates/ss13_game/src/client_keys.rs` (F11 полноэкранный режим, F12 режимы HUD, Home закрыть окна), F1 adminhelp в `crates/ss13_admin/src/client.rs`; скриншот — средствами системы, в BandaStation не назначен
 
 ### Клавиши силиконов, существ и админов
 Клавиши ИИ, киборгов (модули), dextrous-мобов, админские (aghost, игроки, VV, ...).

@@ -273,6 +273,7 @@ pub struct Hud {
 pub struct InventoryShown(pub bool);
 
 #[derive(Component)]
+#[require(crate::client_keys::HudInventory)]
 struct HudRoot;
 
 #[derive(Component, Clone, Copy)]
@@ -454,11 +455,39 @@ fn send_inventory_keys(
     if typing || map.controlled().is_none() {
         return;
     }
+    let shift = keys.any_pressed([KeyCode::ShiftLeft, KeyCode::ShiftRight]);
+    let alt = keys.any_pressed([KeyCode::AltLeft, KeyCode::AltRight]);
+    let smart = |slot| SendIntent(ClientIntent::SmartEquip(slot));
     if keys.just_pressed(KeyCode::KeyX) {
         intents.write(SendIntent(ClientIntent::SwapHands));
     }
     if keys.just_pressed(KeyCode::KeyQ) {
-        intents.write(SendIntent(ClientIntent::DropActive));
+        // `keybinding/human/quick_equip_suit_storage`, else tg's drop.
+        intents.write(if shift {
+            smart(InventorySlot::SuitStorage)
+        } else {
+            SendIntent(ClientIntent::DropActive)
+        });
+    }
+    // `keybinding/human`: E, Shift+E (belt), Shift+V (back), Alt+1 and Alt+2 (pockets), Shift+F.
+    if keys.just_pressed(KeyCode::KeyE) {
+        intents.write(if shift {
+            smart(InventorySlot::Belt)
+        } else {
+            SendIntent(ClientIntent::QuickEquip)
+        });
+    }
+    if shift && keys.just_pressed(KeyCode::KeyV) {
+        intents.write(smart(InventorySlot::Back));
+    }
+    if alt && keys.just_pressed(KeyCode::Digit1) {
+        intents.write(smart(InventorySlot::LeftPocket));
+    }
+    if alt && keys.just_pressed(KeyCode::Digit2) {
+        intents.write(smart(InventorySlot::RightPocket));
+    }
+    if shift && keys.just_pressed(KeyCode::KeyF) {
+        intents.write(SendIntent(ClientIntent::QuickAccessoryDraw));
     }
 }
 

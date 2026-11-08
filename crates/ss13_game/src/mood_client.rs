@@ -47,6 +47,7 @@ pub struct MoodHud {
 }
 
 #[derive(Component)]
+#[require(crate::client_keys::HudInfo)]
 struct MoodRoot;
 
 #[derive(Component)]

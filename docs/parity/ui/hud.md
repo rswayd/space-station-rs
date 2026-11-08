@@ -42,7 +42,7 @@
 Круговые меню выбора (инструменты, крафт, режимы машин, смена формы).
 
 - **Код:** [`/atom/movable/screen/radial`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/_onclick/hud/screen_objects/radial.dm#L3), [`radial_persistent.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/_onclick/hud/screen_objects/radial_persistent.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — меню заменены фиксированными кликами (`crates/ss13_game/src/kitchen.rs`)
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_tgui/src/prompt.rs` (`PromptKind::Radial`, проверка ответа), `crates/ss13_tgui/src/interfaces/radial.rs`, `crates/ss13_game/src/radial.rs` (анкор, `require_near`, повторный клик, `can_still_use`), `crates/ss13_game/src/radial_client.rs` (рисование и страницы). Подключено: микроволновка и выбор облика ножен сабли (`crates/ss13_game/src/kitchen.rs`, `crates/ss13_game/src/clothing/reskin.rs`); остальные ещё используют списки или фиксированные клики (гриндер, инструменты RHD, крафт) — переводятся заменой `PromptKind::List` на `radial::show`
 
 ### Экраны карт и картинка-в-картинке
 Встроенные виды карты (камеры, превью), окна-попапы карты.

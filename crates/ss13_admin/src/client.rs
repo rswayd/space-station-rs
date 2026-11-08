@@ -849,6 +849,21 @@ fn tickets_tab(ui: &mut egui::Ui, state: &mut AdminUi, out: &mut Vec<AdminReques
 
 fn game_tab(ui: &mut egui::Ui, state: &mut AdminUi, out: &mut Vec<AdminRequest>) {
     egui::ScrollArea::vertical().show(ui, |ui| {
+        ui.add_enabled_ui(state.can(R_ADMIN), |ui| {
+            ui.horizontal(|ui| {
+                ui.strong("Чат:");
+                for (label, request) in [
+                    ("OOC вкл/выкл", AdminRequest::ToggleOoc),
+                    ("OOC мёртвых вкл/выкл", AdminRequest::ToggleDeadOoc),
+                    ("LOOC вкл/выкл", AdminRequest::ToggleLooc),
+                ] {
+                    if ui.button(label).clicked() {
+                        out.push(request);
+                    }
+                }
+            });
+        });
+        ui.separator();
         ui.add_enabled_ui(state.can(R_SPAWN), |ui| {
             ui.strong("Спавн (под собой)");
             ui.horizontal(|ui| {

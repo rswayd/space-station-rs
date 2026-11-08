@@ -101,6 +101,7 @@ pub struct GunHud {
 struct GunHudStates(HashMap<&'static str, IconStateId>);
 
 #[derive(Component)]
+#[require(crate::client_keys::HudInfo)]
 struct GunHudRoot;
 
 #[derive(Component)]

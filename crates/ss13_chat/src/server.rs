@@ -190,6 +190,32 @@ pub struct AnxiousSpoke {
     pub spaghetti: bool,
 }
 
+/// What kind of message a runechat is ([`Overhead`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum OverheadKind {
+    #[default]
+    Say,
+    /// `spans |= SPAN_ITALICS`.
+    Whisper,
+    /// `EMOTE_MESSAGE`.
+    Emote,
+    /// BandaStation's `spans = list("looc")`.
+    Looc,
+}
+
+/// One client's overhead text of what it heard or saw (tg `create_chat_message`): the words as
+/// that hearer makes them out. The game turns it into a runechat (`ss13_game::runechat`), or
+/// not (an unconscious or blind hearer).
+#[derive(Message, Clone, Debug, PartialEq)]
+pub struct Overhead {
+    pub client: Entity,
+    pub speaker: Entity,
+    /// The name its color comes from (`get_voice`).
+    pub name: String,
+    pub text: String,
+    pub kind: OverheadKind,
+}
+
 /// What one group of listeners hears of a message (tg `translate_language` per hearer): the
 /// clients, the text, and the language tag before the speaker's name.
 #[derive(Clone, Debug, PartialEq)]
@@ -326,11 +352,19 @@ impl SpeechRng {
     }
 }
 
+/// tg `handle_spam_prevention`'s counter: say, OOC and LOOC share it.
 #[derive(Resource, Default)]
-struct SayRates(HashMap<Entity, SayRate>);
+pub struct SayRates(HashMap<Entity, SayRate>);
+
+impl SayRates {
+    /// `Err(true)` for the first refusal of a window, `Err(false)` for the rest.
+    pub fn admit(&mut self, client: Entity, now: f64) -> Result<(), bool> {
+        self.0.entry(client).or_default().admit(now)
+    }
+}
 
 #[derive(Default)]
-struct SayRate {
+pub struct SayRate {
     window_start: f64,
     count: u32,
 }
@@ -361,6 +395,7 @@ impl Plugin for ChatServerPlugin {
             .add_message::<Spoke>()
             .add_message::<Emoted>()
             .add_message::<AnxiousSpoke>()
+            .add_message::<Overhead>()
             .add_observer(on_control_inserted)
             .add_observer(on_control_discarded)
             .add_systems(
@@ -579,10 +614,11 @@ fn handle_say(
     mut rng: ResMut<SpeechRng>,
     time: Res<Time<Real>>,
     mut chat: MessageWriter<SendChat>,
-    (mut rejected, mut emoted, mut anxious): (
+    (mut rejected, mut emoted, mut anxious, mut overhead): (
         MessageWriter<SayRejected>,
         MessageWriter<Emoted>,
         MessageWriter<AnxiousSpoke>,
+        MessageWriter<Overhead>,
     ),
     mut spoke: MessageWriter<Spoke>,
     mut commands: Commands,
@@ -595,10 +631,7 @@ fn handle_say(
         };
         let client = *client;
         let checked = rates
-            .0
-            .entry(client)
-            .or_default()
-            .admit(now)
+            .admit(client, now)
             .map_err(|first| (SayReject::RateLimited, first))
             .and_then(|()| {
                 if muted.contains(client) {
@@ -765,10 +798,19 @@ fn handle_say(
                     }
                     if !text.is_empty() {
                         info!(target: "say", "{client} {name} emote: {text}");
-                        let clients = hearers_within(HEARING_RANGE)
+                        let clients: Vec<Entity> = hearers_within(HEARING_RANGE)
                             .into_iter()
                             .map(|(c, ..)| c)
                             .collect();
+                        for &hearer in &clients {
+                            overhead.write(Overhead {
+                                client: hearer,
+                                speaker,
+                                name: name.clone(),
+                                text: text.clone(),
+                                kind: OverheadKind::Emote,
+                            });
+                        }
                         chat.write(SendChat {
                             clients,
                             message: emote_message(&name, &text),
@@ -975,6 +1017,15 @@ fn handle_say(
             let span = voices.get(speaker).map_or(Span::Say, |v| v.0);
             let verb = say_verb(&message);
             for heard in split_heard(seed, spoken_in, &message, hearers) {
+                for &hearer in &heard.clients {
+                    overhead.write(Overhead {
+                        client: hearer,
+                        speaker,
+                        name: name.clone(),
+                        text: heard.text.clone(),
+                        kind: OverheadKind::Say,
+                    });
+                }
                 chat.write(SendChat {
                     clients: heard.clients,
                     message: tagged(quote_message(&name, verb, &heard.text, span), heard.tag),
@@ -991,6 +1042,15 @@ fn handle_say(
             }
         }
         for heard in split_heard(seed, spoken_in, &message, full) {
+            for &hearer in &heard.clients {
+                overhead.write(Overhead {
+                    client: hearer,
+                    speaker,
+                    name: name.clone(),
+                    text: heard.text.clone(),
+                    kind: OverheadKind::Whisper,
+                });
+            }
             chat.write(SendChat {
                 clients: heard.clients,
                 message: tagged(whisper_message(&name, &heard.text), heard.tag),
@@ -999,6 +1059,15 @@ fn handle_say(
         // Eavesdroppers hear the translated words starred (`/mob/living/Hear`).
         for heard in split_heard(seed, spoken_in, &message, starred) {
             let text = stars(&heard.text, 25.0, || rng.percent());
+            for &hearer in &heard.clients {
+                overhead.write(Overhead {
+                    client: hearer,
+                    speaker,
+                    name: name.clone(),
+                    text: text.clone(),
+                    kind: OverheadKind::Whisper,
+                });
+            }
             chat.write(SendChat {
                 clients: heard.clients,
                 message: tagged(whisper_message(&name, &text), heard.tag),

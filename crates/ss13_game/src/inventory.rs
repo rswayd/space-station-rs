@@ -30,6 +30,7 @@ use bevy::prelude::*;
 use ss13_mapload::fidelity::is_under;
 use ss13_mapload::{DmAtom, DmClothing, DmItem, DmObj, DmWeight, IconIndex};
 use ss13_net::server::IntentReceived;
+use ss13_shared::chat::Span;
 use ss13_shared::protocol::{ClickModifiers, ClientIntent, InventorySlot};
 use ss13_shared::{Appearance, IconStateId, TilePos};
 use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiSystems};
@@ -450,6 +451,9 @@ enum Action {
     Slot(InventorySlot),
     AltSlot(InventorySlot),
     RightSlot(InventorySlot),
+    QuickEquip,
+    SmartEquip(InventorySlot),
+    AccessoryDraw,
 }
 
 /// Every action, in the order it arrived (the network caps intents per client per tick): keys
@@ -469,6 +473,9 @@ pub(crate) fn inventory_intents(
                 ClientIntent::ClickSlot(slot) => Action::Slot(slot),
                 ClientIntent::AltClickSlot(slot) => Action::AltSlot(slot),
                 ClientIntent::RightClickSlot(slot) => Action::RightSlot(slot),
+                ClientIntent::QuickEquip => Action::QuickEquip,
+                ClientIntent::SmartEquip(slot) => Action::SmartEquip(slot),
+                ClientIntent::QuickAccessoryDraw => Action::AccessoryDraw,
                 _ => return None,
             };
             Some((i.client, action))
@@ -649,6 +656,14 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 crate::modpc::pda::alt_click(world, mob, item);
             }
         }
+        // tg `/datum/keybinding/human/can_use`: `ishuman`.
+        Action::QuickEquip | Action::SmartEquip(_) | Action::AccessoryDraw
+            if world
+                .get::<crate::silicon::cyborg::ModuleSlots>(mob)
+                .is_some() => {}
+        Action::QuickEquip => quick_equip(world, client, mob, &inventory),
+        Action::SmartEquip(slot) => smart_equip(world, client, mob, &inventory, slot),
+        Action::AccessoryDraw => quick_accessory_draw(world, client, mob, &inventory),
         Action::Drop
             if crate::silicon::cyborg::inventory_action(
                 world,
@@ -858,12 +873,235 @@ fn click_equip_slot(
                 .hands[hand] = Some(worn);
         }
         (Some(item), None) if can_equip(world, mob, inventory, item, slot) => {
-            let mut inventory = world.get_mut::<Inventory>(mob).expect("checked by actor");
-            inventory.hands[hand] = None;
-            *inventory.slot_mut(slot) = Some(item);
+            equip_from_hand(world, mob, hand, item, slot);
         }
         _ => {}
     }
+}
+
+/// The active hand's item goes into the empty `slot`.
+fn equip_from_hand(world: &mut World, mob: Entity, hand: usize, item: Entity, slot: InventorySlot) {
+    let mut inventory = world.get_mut::<Inventory>(mob).expect("checked by actor");
+    inventory.hands[hand] = None;
+    *inventory.slot_mut(slot) = Some(item);
+}
+
+/// tg `equip_to_appropriate_slot`'s `slot_priority` (per-item `slot_equipment_priority` is not
+/// ported: `/obj/item/clothing/mask/...` overrides are ordering niceties).
+const QUICK_EQUIP_SLOTS: [InventorySlot; 15] = [
+    InventorySlot::Back,
+    InventorySlot::Id,
+    InventorySlot::Uniform,
+    InventorySlot::Suit,
+    InventorySlot::Mask,
+    InventorySlot::Head,
+    InventorySlot::Neck,
+    InventorySlot::Shoes,
+    InventorySlot::Gloves,
+    InventorySlot::Ears,
+    InventorySlot::Eyes,
+    InventorySlot::Belt,
+    InventorySlot::SuitStorage,
+    InventorySlot::LeftPocket,
+    InventorySlot::RightPocket,
+];
+
+/// tg `execute_quick_equip` -> `equip_to_best_slot`: the first free slot in priority order, else
+/// a held or worn storage (`equip_priorities`).
+// shortcut: no `equip_delay_self` wait (the slot click has none either) and no `active_storage`
+// first; add both with the equip delays.
+fn quick_equip(world: &mut World, client: Entity, mob: Entity, inventory: &Inventory) {
+    let Some(item) = inventory.active_item() else {
+        crate::tools::tell(
+            world,
+            client,
+            Span::Warning,
+            "Вы ничего не держите, что можно было бы экипировать!",
+        );
+        return;
+    };
+    if no_drop(world, item) {
+        return;
+    }
+    if let Some(slot) = QUICK_EQUIP_SLOTS
+        .into_iter()
+        .find(|&s| can_equip(world, mob, inventory, item, s))
+    {
+        equip_from_hand(world, mob, inventory.active, item, slot);
+        return;
+    }
+    let storages = [
+        inventory.hands[1 - inventory.active],
+        inventory.belt,
+        inventory.back,
+        inventory.suit,
+        inventory.uniform,
+    ];
+    for gear in storages.into_iter().flatten() {
+        if let Some(storage) = crate::storage::storage_of(world, gear)
+            && crate::storage::can_insert(world, storage, item).is_ok()
+        {
+            crate::storage::insert_from_hand(world, item, storage);
+            return;
+        }
+    }
+    let name = crate::security::name_of(world, item);
+    crate::tools::tell(
+        world,
+        client,
+        Span::Warning,
+        format!("Вы никуда не можете экипировать {name}!"),
+    );
+}
+
+/// The genitive tg passes as `slot_item_name`; `None`: not a smart-equip slot (the slot comes
+/// from the client).
+fn smart_equip_name(slot: InventorySlot) -> Option<&'static str> {
+    match slot {
+        InventorySlot::Belt => Some("пояса"),
+        InventorySlot::Back => Some("сумки"),
+        InventorySlot::SuitStorage => Some("из хранилища костюма"),
+        InventorySlot::LeftPocket => Some("левого кармана"),
+        InventorySlot::RightPocket => Some("правого кармана"),
+        _ => None,
+    }
+}
+
+/// tg `smart_equip_targeted`.
+fn smart_equip(
+    world: &mut World,
+    client: Entity,
+    mob: Entity,
+    inventory: &Inventory,
+    slot: InventorySlot,
+) {
+    let Some(slot_name) = smart_equip_name(slot) else {
+        return;
+    };
+    let thing = inventory.active_item().filter(|&i| !no_drop(world, i));
+    let Some(equipped) = inventory.slot(slot) else {
+        match thing {
+            Some(item) if can_equip(world, mob, inventory, item, slot) => {
+                equip_from_hand(world, mob, inventory.active, item, slot);
+            }
+            Some(_) => {}
+            None => crate::tools::tell(
+                world,
+                client,
+                Span::Warning,
+                format!("У вас нет {slot_name}, чтобы брать что-то оттуда!"),
+            ),
+        }
+        return;
+    };
+    let Some(storage) = crate::storage::storage_of(world, equipped) else {
+        match thing {
+            // `equipped_item.attack_hand(src)`: what the slot holds goes to the empty hand.
+            None if !no_drop(world, equipped) => {
+                let Some(mob_pos) = world.get::<TilePos>(mob).copied() else {
+                    return;
+                };
+                unequip(world, mob, mob_pos, slot);
+                world
+                    .get_mut::<Inventory>(mob)
+                    .expect("checked by actor")
+                    .hands[inventory.active] = Some(equipped);
+            }
+            None => {}
+            Some(item) => {
+                let (name, into) = (
+                    crate::security::name_of(world, item),
+                    crate::security::name_of(world, equipped),
+                );
+                crate::tools::tell(
+                    world,
+                    client,
+                    Span::Warning,
+                    format!("Вы не можете поместить {name} в {into}!"),
+                );
+            }
+        }
+        return;
+    };
+    if crate::lockbox::is_locked(world, storage) {
+        let name = crate::security::name_of(world, equipped);
+        crate::tools::tell(
+            world,
+            client,
+            Span::Warning,
+            format!("Замок на {name} закрыт!"),
+        );
+        return;
+    }
+    if let Some(item) = thing {
+        // A full or unfitting storage says why (`storage::refusal_text`).
+        crate::storage::insert_from_hand(world, item, storage);
+        return;
+    }
+    let last = world
+        .get::<crate::storage::Stored>(storage)
+        .and_then(|s| s.items().last().copied());
+    let Some(last) = last else {
+        let name = crate::security::name_of(world, equipped);
+        crate::tools::tell(
+            world,
+            client,
+            Span::Warning,
+            format!("Нечего вытаскивать из {name}!"),
+        );
+        return;
+    };
+    crate::storage::put_in_hands(world, mob, inventory, last);
+}
+
+/// BandaStation `quick_accessory_draw` (`modular_bandastation/weapon/code/ranged/
+/// quik_accessory.dm`): the jumpsuit's first accessory with a storage.
+// shortcut: every accessory acts as `toggle_accessory_storage` (the held item in, else the first
+// thing out); no tacticool two-gun holster, gun-type filter or `can_access_holster`; add them
+// when holsters get their gun rules.
+fn quick_accessory_draw(world: &mut World, client: Entity, mob: Entity, inventory: &Inventory) {
+    let say = |world: &mut World, span: Span, text: String| {
+        crate::tools::tell(world, client, span, text);
+    };
+    let Some(uniform) = inventory.uniform else {
+        say(world, Span::Warning, "На вас нет формы!".to_owned());
+        return;
+    };
+    let has_accessories = world
+        .get::<crate::clothing::accessories::Accessories>(uniform)
+        .is_some_and(|a| !a.items().is_empty());
+    if !has_accessories {
+        say(world, Span::Warning, "Нет аксессуаров!".to_owned());
+        return;
+    }
+    let Some(accessory) = crate::clothing::holsters::storage_accessory(world, uniform) else {
+        say(
+            world,
+            Span::Warning,
+            "Нет аксессуара с хранилищем!".to_owned(),
+        );
+        return;
+    };
+    let Some(storage) = crate::storage::storage_of(world, accessory) else {
+        return;
+    };
+    if let Some(held) = inventory.active_item().filter(|&i| !no_drop(world, i)) {
+        if !crate::storage::insert_from_hand(world, held, storage) {
+            let name = crate::security::name_of(world, held);
+            say(world, Span::Warning, format!("Не удалось убрать {name}!"));
+        }
+        return;
+    }
+    let first = world
+        .get::<crate::storage::Stored>(storage)
+        .and_then(|s| s.items().first().copied());
+    let Some(first) = first else {
+        say(world, Span::Warning, "Карман пуст!".to_owned());
+        return;
+    };
+    crate::storage::put_in_hands(world, mob, inventory, first);
+    let name = crate::security::name_of(world, first);
+    say(world, Span::Notice, format!("Вы достаёте {name}."));
 }
 
 /// tg `/datum/species/proc/can_equip` for `mob`, an organic human with every limb, into an

@@ -40,7 +40,7 @@ _«Аугментации, протезы и ампутации (BandaStation)»
 
 - **Код:** [`fps.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/client/preferences/fps.dm#L1), [`parallax.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/client/preferences/parallax.dm#L1), [`sounds.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/client/preferences/sounds.dm#L1), [`ui_style.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/client/preferences/ui_style.dm#L1), [`ghost.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/client/preferences/ghost.dm#L1), [`window_flashing.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/client/preferences/window_flashing.dm#L1)
 - **BandaStation:** [`sounds.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/client/preferences/sounds.dm#L131)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ❌ нет (сюда же относятся переключатели runechat, цвет OOC и `see_looc`, см. `ui/chat.md`, `comms/looc-whisper.md`)
 
 ### Игровые предпочтения ролей
 Отдел офицера СБ, расположение аплинка, предпочитаемая карта, ИИ-дисплей/голограмма, вид оперативника, преступление заключённого, PDA-рингтон.

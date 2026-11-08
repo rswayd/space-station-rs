@@ -18,7 +18,7 @@
 
 - **Код:** [`ooc verb`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/client/verbs/ooc.dm#L5), [`select_ignore`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/client/verbs/ooc.dm#L201), [`motd`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/client/verbs/ooc.dm#L177)
 - **BandaStation:** [`ooc.dm#L77`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/client/verbs/ooc.dm#L77) — бейджи в OOC
-- **Статус в ss13-rs:** ❌ нет — есть только стиль спана `Ooc` в `crates/ss13_chat/src/client/style.rs`
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_admin/src/ooc.rs` (`ClientIntent::Ooc`: сервер проверяет права, мут, длину, антиспам и рекламу; глобальные выключатели OOC/OOC мёртвых для админов `AdminRequest::ToggleOoc`/`ToggleDeadOoc`, вопрос «похоже на IC?», игнор игроков, MOTD из `config/motd.txt`, кнопки на вкладке OOC статпанели), клавиши O/F2 (`crates/ss13_chat/src/client/panel.rs`): нет цвета OOC и `allow_admin_ooccolor` (префы), `CHAT_OOC`-мьюта своего канала (префы), бана OOC, словесных фильтров, админ-уведомления, своих заметок, отчётов раундов, политики сервера; игнор живёт до переподключения (префы/SQL)
 
 ### Бейджи и донат-эффекты в чате (BandaStation)
 Иконки уровня подписки и роли персонала перед ником в OOC; донатерам — цвет/«сияние» ника (настройка видимости и эффекта).
@@ -32,4 +32,4 @@
 
 - **Код:** [`/datum/chatmessage`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/chatmessage.dm#L34), [`/mob/proc/create_chat_message()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/chatmessage.dm#L332), [`runechat.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/client/preferences/runechat.dm#L1)
 - **BandaStation:** [`chatmessage.dm#L75`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/chatmessage.dm#L75) — вычищение TTS-разметки ударений
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/runechat.rs` (сервер: цвет по имени, обрезка, проверка состояния слушателя), `crates/ss13_game/src/runechat_client.rs` (стопка, затухание, укорочение жизни старых строк), источник — `ss13_chat::server::Overhead` (речь, шёпот, эмоции, LOOC). Настройки вкл/выкл, длина и «для неговорящих» — в `docs/parity/ui/preferences.md` (нужно меню настроек); нет иконок радио/языка и `apply_message_emphasis`

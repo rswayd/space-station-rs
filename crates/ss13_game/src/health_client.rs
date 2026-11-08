@@ -66,6 +66,7 @@ pub struct HealthHud {
 }
 
 #[derive(Component)]
+#[require(crate::client_keys::HudInfo)]
 struct HudRoot;
 
 #[derive(Component, Clone, Copy, PartialEq, Eq)]
@@ -294,7 +295,9 @@ fn send_combat_key(
     let typing = focus
         .and_then(|f| f.get())
         .is_some_and(|e| text_fields.contains(e));
-    if !typing && keys.just_pressed(KeyCode::KeyF) {
+    // Shift+F is the quick accessory draw (`inventory_client`).
+    let shift = keys.any_pressed([KeyCode::ShiftLeft, KeyCode::ShiftRight]);
+    if !typing && !shift && keys.just_pressed(KeyCode::KeyF) {
         toggle(&map, &mut intents);
     }
 }

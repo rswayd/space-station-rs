@@ -204,6 +204,7 @@ impl Plugin for AdminServerPlugin {
         });
         crate::logout_report::build(app);
         crate::lobby::build(app);
+        crate::ooc::build(app);
         app.insert_resource(AdminLogFile(file))
             .init_resource::<Bans>()
             .init_resource::<Mutes>()
@@ -564,7 +565,10 @@ pub fn required_rights(request: &AdminRequest) -> Option<u32> {
         | ForceMidround(_)
         | SetSecurityLevel(_)
         | ManUp(_)
-        | GlobalManUp => R_ADMIN,
+        | GlobalManUp
+        | ToggleOoc
+        | ToggleDeadOoc
+        | ToggleLooc => R_ADMIN,
         AdminList | SetAdminRank { .. } | RemoveAdmin(_) => R_PERMISSIONS,
         PlaySound { .. } => R_SOUND,
         AirStatus | SpawnAir(_) | VvTile | ViewVariables(_) => R_DEBUG,
@@ -650,6 +654,11 @@ fn answer(world: &mut World, client: Entity, request: AdminRequest) -> AnswerRes
             world.resource_mut::<Tickets>().dirty = true;
             done(verb)
         }
+        AdminRequest::ToggleOoc => done(crate::ooc::toggle(world, &key, crate::ooc::Switch::Ooc)),
+        AdminRequest::ToggleDeadOoc => {
+            done(crate::ooc::toggle(world, &key, crate::ooc::Switch::DeadOoc))
+        }
+        AdminRequest::ToggleLooc => done(crate::ooc::toggle(world, &key, crate::ooc::Switch::Looc)),
         AdminRequest::Asay(text) => {
             let text = sanitize_text(&text, MAX_MESSAGE_LEN);
             if text.is_empty() {

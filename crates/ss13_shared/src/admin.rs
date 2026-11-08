@@ -84,6 +84,12 @@ pub enum AdminRequest {
         ckey: String,
         reason: String,
     },
+    /// `R_ADMIN`: tg "Toggle OOC".
+    ToggleOoc,
+    /// `R_ADMIN`: tg "Toggle Dead OOC".
+    ToggleDeadOoc,
+    /// `R_ADMIN`: BandaStation's LOOC switch.
+    ToggleLooc,
     /// `R_ADMIN`: mutes (or unmutes) IC speech, deadchat and adminhelp (tg `MUTE_ALL`).
     Mute {
         ckey: String,

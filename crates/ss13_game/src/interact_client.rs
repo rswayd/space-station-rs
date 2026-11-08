@@ -55,6 +55,7 @@ pub struct InteractHud {
 }
 
 #[derive(Component)]
+#[require(crate::client_keys::HudInventory)]
 struct ButtonsRoot;
 
 #[derive(Component, Clone, Copy, PartialEq, Eq, Debug)]
