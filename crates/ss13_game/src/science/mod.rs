@@ -10,7 +10,9 @@
 //! console (tgui `ServerControl`) in [`server_control`]. Xenobiology's slimes, extracts and
 //! potions are in [`xenobio`]; exploration drones and the scanner array in [`exodrone`];
 //! bitrunning (the quantum server, netpods, virtual domains) in [`bitrunning`]; the teleporter,
-//! hand tele, launchpads, gateways and satellite console in [`teleportation`].
+//! hand tele, launchpads, gateways and satellite console in [`teleportation`]; the ordnance lab
+//! (doppler array, tank compressor) in [`ordnance`] and its experiments, papers and partners
+//! (NT Frontier) in `scipaper`.
 //! [`client`] draws the windows. This module holds the windows' data, which both halves
 //! share.
 //!
@@ -46,12 +48,17 @@ pub mod experiments;
 pub mod gizmo;
 #[cfg(feature = "server")]
 pub mod lathe;
+pub mod ordnance;
+#[cfg(feature = "server")]
+pub mod ordnance_machines;
 #[cfg(feature = "server")]
 pub mod points;
 #[cfg(feature = "server")]
 pub mod quantum_pad;
 #[cfg(feature = "server")]
 pub mod relics;
+#[cfg(feature = "server")]
+pub mod scipaper;
 #[cfg(feature = "server")]
 pub mod server_control;
 #[cfg(feature = "server")]
@@ -99,6 +106,7 @@ impl bevy::prelude::Plugin for ScienceServerPlugin {
             relics::RelicPlugin,
             gizmo::GizmoPlugin,
             teleportation::server::TeleportationPlugin,
+            ordnance_machines::OrdnancePlugin,
         ));
     }
 }

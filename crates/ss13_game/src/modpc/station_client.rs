@@ -133,7 +133,202 @@ pub fn screen(s: &StationScreen) -> Part {
             }
             section("NT Restock Tracker".to_owned(), parts)
         }
+        StationScreen::Scipaper(d) => scipaper(d),
     }
+}
+
+/// `NtosScipaper`: the tabs as buttons, then the tab.
+fn scipaper(d: &ScipaperData) -> Part {
+    let p = |k: &str, v: String| vec![(k.to_owned(), v)];
+    let mut parts: Vec<Part> = [
+        (1, "Публикация"),
+        (2, "Статьи"),
+        (3, "Эксперименты"),
+        (4, "Партнёры"),
+    ]
+    .into_iter()
+    .map(|(n, label)| {
+        let label = if d.current_tab == n {
+            format!("[{label}]")
+        } else {
+            label.to_owned()
+        };
+        button(
+            label,
+            "folder",
+            PAPER_CHANGE_TAB,
+            p("new_tab", n.to_string()),
+        )
+    })
+    .collect();
+    if !d.has_techweb {
+        parts.push(line("Нет подключения к техвебу.".to_owned()));
+    }
+    let gains = |g: &PaperGist| format!("сотрудничество: {}, финансы: {}", g.gains.0, g.gains.1);
+    match d.current_tab {
+        1 => {
+            let mut form: Vec<Part> = vec![line(format!(
+                "Файл: {}",
+                d.selected_file.clone().unwrap_or_else(|| "—".to_owned())
+            ))];
+            for (name, uid) in &d.file_list {
+                form.push(button(
+                    name.clone(),
+                    "file",
+                    PAPER_SELECT_FILE,
+                    p("selected_uid", uid.to_string()),
+                ));
+            }
+            form.push(line(format!(
+                "Эксперимент: {}",
+                d.paper
+                    .experiment_name
+                    .clone()
+                    .unwrap_or_else(|| "—".to_owned())
+            )));
+            for (name, path) in &d.exp_list {
+                form.push(button(
+                    name.clone(),
+                    "flask",
+                    PAPER_SELECT_EXPERIMENT,
+                    p("selected_expath", path.clone()),
+                ));
+            }
+            form.push(line(format!(
+                "Уровень: {}",
+                d.paper
+                    .tier
+                    .map_or_else(|| "—".to_owned(), |t| t.to_string())
+            )));
+            for t in &d.allowed_tiers {
+                form.push(button(
+                    t.to_string(),
+                    "layer-group",
+                    PAPER_SELECT_TIER,
+                    p("selected_tier", t.to_string()),
+                ));
+            }
+            form.push(line(format!(
+                "Партнёр: {}",
+                d.paper.partner.clone().unwrap_or_else(|| "—".to_owned())
+            )));
+            for (name, path) in &d.allowed_partners {
+                form.push(button(
+                    name.clone(),
+                    "handshake",
+                    PAPER_SELECT_PARTNER,
+                    p("selected_partner", path.clone()),
+                ));
+            }
+            form.push(line(format!("Название: {}", d.paper.title)));
+            form.push(input(
+                "Название".to_owned(),
+                PAPER_REWRITE,
+                "title",
+                Vec::new(),
+            ));
+            let et_al = if d.paper.et_alia { " и др." } else { "" };
+            form.push(line(format!("Автор: {}{et_al}", d.paper.author)));
+            form.push(input(
+                "Автор".to_owned(),
+                PAPER_REWRITE,
+                "author",
+                Vec::new(),
+            ));
+            form.push(button(
+                "Соавторы".to_owned(),
+                "users",
+                PAPER_ET_ALIA,
+                Vec::new(),
+            ));
+            form.push(line(format!("Аннотация: {}", d.paper.abstract_text)));
+            form.push(input(
+                "Аннотация".to_owned(),
+                PAPER_REWRITE,
+                "abstract",
+                Vec::new(),
+            ));
+            form.push(line(format!("Ожидаемая выгода: {}", gains(&d.paper))));
+            form.push(button(
+                "Опубликовать".to_owned(),
+                "paper-plane",
+                PAPER_PUBLISH,
+                Vec::new(),
+            ));
+            parts.push(section("Новая статья".to_owned(), form));
+        }
+        2 => {
+            let mut papers: Vec<Part> = Vec::new();
+            if d.published.is_empty() {
+                papers.push(line("Статей пока нет.".to_owned()));
+            }
+            for g in &d.published {
+                let et_al = if g.et_alia { " и др." } else { "" };
+                papers.push(line(format!(
+                    "«{}» — {}{et_al}; {}, уровень {}; {}; {}",
+                    g.title,
+                    g.author,
+                    g.experiment_name.clone().unwrap_or_default(),
+                    g.tier.unwrap_or(0),
+                    g.partner.clone().unwrap_or_default(),
+                    gains(g)
+                )));
+            }
+            parts.push(section("Опубликованные статьи".to_owned(), papers));
+        }
+        3 => {
+            let rows: Vec<Part> = d
+                .experiments
+                .iter()
+                .map(|e| {
+                    let targets: Vec<String> = e.target.iter().map(|t| format!("{t}")).collect();
+                    line(format!(
+                        "{}: {} Цели ({}, {}): {}",
+                        e.name,
+                        e.description,
+                        e.prefix,
+                        e.suffix,
+                        targets.join(" / ")
+                    ))
+                })
+                .collect();
+            parts.push(section("Эксперименты".to_owned(), rows));
+        }
+        _ => {
+            for partner in &d.partners {
+                let mut rows = vec![
+                    line(partner.flufftext.clone()),
+                    line(format!(
+                        "Отношения: {}. Множители: сотрудничество ×{}, финансы ×{}",
+                        partner.relation, partner.multipliers.0, partner.multipliers.1
+                    )),
+                    line(format!(
+                        "Принимает: {}",
+                        partner.accepted_experiments.join(", ")
+                    )),
+                ];
+                for (name, discount, node) in &partner.boosted_nodes {
+                    let visible = d.visible_nodes.contains(node);
+                    let label = format!("{name}: −{discount}");
+                    if partner.purchaseable.contains(node) {
+                        rows.push(button(
+                            label,
+                            "cart-shopping",
+                            PAPER_PURCHASE_BOOST,
+                            vec![
+                                ("boost_seller".to_owned(), partner.path.clone()),
+                                ("purchased_boost".to_owned(), node.clone()),
+                            ],
+                        ));
+                    } else if visible {
+                        rows.push(line(label));
+                    }
+                }
+                parts.push(section(partner.name.clone(), rows));
+            }
+        }
+    }
+    section("NT Frontier".to_owned(), parts)
 }
 
 /// `NtosCivCargoHoldTerminal`.

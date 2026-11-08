@@ -339,6 +339,7 @@ fn merge_gases(world: &mut World, one: Entity, two: Entity) {
     if let Some(mut t) = world.get_mut::<TankAir>(one) {
         t.air = from.air;
     }
+    crate::explosions::sources::note_merge(world, two);
 }
 
 /// `split_gases`: `one`'s share of the volume back to it.

@@ -214,6 +214,49 @@ pub fn item_integrity_failure(world: &World, item: Entity) -> Option<f32> {
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Leaking;
 
+/// What a gas tank's air went through, for the doppler array (tg `reaction_info` filled by
+/// `/datum/component/atmos_reaction_recorder` and `explosion_info`).
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct TankResults {
+    /// The reactions that ran in it (`ss13_atmos::reactions::reacted_ids` mask). tg's recorder
+    /// never resets (its reset signals are never sent), so neither does this.
+    pub reactions: u32,
+    /// `TANK_MERGE_OVERPRESSURE`: gas merged into it left it over `TANK_FRAGMENT_PRESSURE`.
+    pub overpressure: bool,
+}
+
+/// Adds the reactions of `mask` to the tank's record.
+pub fn record_reactions(world: &mut World, tank: Entity, mask: u32) {
+    if mask == 0 {
+        return;
+    }
+    if let Some(mut r) = world.get_mut::<TankResults>(tank) {
+        r.reactions |= mask;
+        return;
+    }
+    if let Ok(mut e) = world.get_entity_mut(tank) {
+        e.insert(TankResults {
+            reactions: mask,
+            overpressure: false,
+        });
+    }
+}
+
+/// `merging_information` (`COMSIG_GASMIX_MERGED`): called after gas was merged into the tank.
+pub fn note_merge(world: &mut World, tank: Entity) {
+    let over = world
+        .get::<TankAir>(tank)
+        .is_some_and(|t| t.pressure() > TANK_FRAGMENT_PRESSURE);
+    if !over {
+        return;
+    }
+    let mut results = world.get::<TankResults>(tank).copied().unwrap_or_default();
+    results.overpressure = true;
+    if let Ok(mut e) = world.get_entity_mut(tank) {
+        e.insert(results);
+    }
+}
+
 /// Where an item's gas goes: its tile, or its carrier's.
 fn item_turf(world: &World, item: Entity) -> Option<TilePos> {
     let mut e = item;
@@ -252,13 +295,19 @@ pub fn item_destruction(world: &mut World, item: Entity) {
         return;
     };
     let pos = item_turf(world, item);
+    // A tank compressor holding the tank absorbs its explosion and takes its gas
+    // (`explosion_handle`, `assume_air`, `tank_destruction`).
+    let compressor = crate::science::ordnance_machines::compressor_of(world, item);
     if tank.pressure() > TANK_FRAGMENT_PRESSURE {
         let volume = tank.volume;
-        tank.air.react(
+        let mut reacted = 0;
+        tank.air.react_recording(
             ss13_atmos::reactions::Holder::Other,
             volume,
             &mut ss13_atmos::reactions::Exposures::default(),
+            &mut reacted,
         );
+        record_reactions(world, item, reacted);
         let power =
             (tank.volume * (tank.pressure() - TANK_FRAGMENT_PRESSURE)) / TANK_FRAGMENT_SCALE;
         // `COMSIG_ATOM_INTERNAL_EXPLOSION`: a refinery cancels it and keeps no gas
@@ -269,12 +318,31 @@ pub fn item_destruction(world: &mut World, item: Entity) {
             }
             return;
         }
-        if let Some(pos) = pos {
+        if let Some(c) = compressor {
+            crate::science::ordnance_machines::absorb_explosion(world, c);
+        } else if let Some(pos) = pos {
             info!("a gas tank at {pos:?} exploded with a power of {power}");
-            super::dyn_explosion(world, pos, power as f32, Some(0.0), Some(1.5), false);
+            // `dyn_explosion(src, power, flash_range = 1.5)` with the tank as the cause.
+            let (r, range) = super::wave::dyn_ranges(power as f32);
+            let ex = Explosion {
+                devastation: r.devastation,
+                heavy: r.heavy,
+                light: r.light,
+                flame: Some(0.0),
+                flash: Some(1.5 * range),
+                source: Some(item),
+                ..Explosion::new(0, 0, 0).cause("gas tank")
+            };
+            if power != 0.0 && power.is_finite() {
+                super::explosion(world, pos, ex);
+            }
         }
     }
-    if let Some(pos) = pos {
+    if let Some(c) = compressor {
+        let pressure = tank.pressure();
+        crate::science::ordnance_machines::assume_air(world, c, &tank.air);
+        crate::science::ordnance_machines::tank_destroyed(world, c, item, pressure);
+    } else if let Some(pos) = pos {
         if let Some(mut atmos) = world.get_resource_mut::<ss13_atmos::Atmos>() {
             atmos.merge_air(pos, &tank.air);
         }
@@ -322,6 +390,16 @@ pub fn tank_tolerances(world: &mut World, secs: f32) {
             super::ex_act::damage_item(world, tank, damage);
         }
         if world.get::<Leaking>(tank).is_none() || world.get_entity(tank).is_err() {
+            continue;
+        }
+        // `location.assume_air(leaked_gas)`: a tank compressor keeps it in its buffer.
+        if let Some(c) = crate::science::ordnance_machines::compressor_of(world, tank) {
+            let leaked = world
+                .get_mut::<TankAir>(tank)
+                .map(|mut t| t.air.remove_ratio(0.25));
+            if let Some(leaked) = leaked {
+                crate::science::ordnance_machines::assume_air(world, c, &leaked);
+            }
             continue;
         }
         let Some(pos) = item_turf(world, tank) else {

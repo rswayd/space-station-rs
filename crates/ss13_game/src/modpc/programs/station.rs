@@ -53,6 +53,8 @@ const MAX_REQUEST_VALUE: i64 = 1_000_000;
 const BUZZ: &str = "sound/machines/buzz/buzz-sigh.ogg";
 const SYNTH_NO: &str = "sound/machines/synth/synth_no.ogg";
 const CASH_REGISTER: &str = "sound/effects/cashregister.ogg";
+const PING: &str = "sound/machines/ping.ogg";
+const TERMINAL_ERROR: &str = "sound/machines/terminal/terminal_error.ogg";
 /// `MAX_MESSAGE_LEN`.
 const MAX_MESSAGE_LEN: usize = 1024;
 
@@ -83,6 +85,8 @@ pub struct StationApps {
     pub status_report: Option<String>,
     /// The station program in front at the last refresh: a different one has just started.
     pub front: Option<StationProgram>,
+    /// NT Frontier's paper, tab and file.
+    pub frontier: crate::science::scipaper::Frontier,
 }
 
 /// `transaction_history` of the accounts, by account id, newest last.
@@ -265,6 +269,14 @@ fn screen(
         }
         StationProgram::BountyBoard => StationScreen::BountyBoard(board_data(world, pc)),
         StationProgram::RestockTracker => StationScreen::Restock(vendor_rows(world)),
+        StationProgram::Frontier => {
+            crate::science::scipaper::recheck_file(world, pc, &mut state.frontier);
+            StationScreen::Scipaper(Box::new(crate::science::scipaper::screen(
+                world,
+                pc,
+                &state.frontier,
+            )))
+        }
         // Launchers open their own window and never come to the front.
         StationProgram::BudgetOrders | StationProgram::ScienceHub => {
             StationScreen::Bots(Vec::new())
@@ -655,6 +667,8 @@ pub enum StationAct {
     ApplyRequest(u32),
     PayApplicant(u32, u32),
     DeleteRequest(u32),
+    /// NT Frontier.
+    Paper(crate::science::scipaper::PaperAct),
 }
 
 impl StationAct {
@@ -672,12 +686,16 @@ impl StationAct {
             | Self::ApplyRequest(_)
             | Self::PayApplicant(..)
             | Self::DeleteRequest(_) => &[BountyBoard],
+            Self::Paper(_) => &[Frontier],
         }
     }
 }
 
 /// `None` for an action that is not one of these programs'.
 pub fn parse(action: &str, params: &UiParams) -> Option<Result<StationAct, UiReject>> {
+    if let Some(act) = crate::science::scipaper::parse(action, params) {
+        return Some(act.map(StationAct::Paper));
+    }
     let text = |key: &str| params.get(key).unwrap_or_default().to_owned();
     Some(match action {
         // tgui sends `token` and `amount`; this port's screen sends both as `transfer`.
@@ -861,6 +879,19 @@ pub fn apply(
         StationAct::ApplyRequest(r) => apply_request(world, client, pc, r),
         StationAct::PayApplicant(r, a) => pay_applicant(world, client, pc, r, a),
         StationAct::DeleteRequest(r) => delete_request(world, client, pc, r),
+        StationAct::Paper(act) => {
+            let out = crate::science::scipaper::apply(world, pc, &mut state.frontier, act);
+            if let Some(line) = out.say {
+                crate::atmos_machinery::machine_say(world, pc, &line);
+            }
+            if out.ping {
+                sound(world, pc, PING, 25.0);
+            }
+            if out.error {
+                sound(world, pc, TERMINAL_ERROR, 25.0);
+            }
+            Ok(())
+        }
     };
     if world.get_entity(pc).is_ok() {
         world.entity_mut(pc).insert(state);

@@ -39,6 +39,8 @@ impl Plugin for ScienceClientPlugin {
             .register_ui_view::<ServerControlUi>()
             .register_ui_view::<ExperimentorUi>()
             .register_ui_view::<super::anomaly_refinery::AnomalyRefineryUi>()
+            .register_ui_view::<super::ordnance::DopplerArrayUi>()
+            .register_ui_view::<super::ordnance::TankCompressorUi>()
             .add_plugins((
                 super::exodrone::client::ExodroneClientPlugin,
                 super::bitrunning::client::BitrunningClientPlugin,

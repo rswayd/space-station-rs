@@ -94,6 +94,7 @@ mod modsuit;
 mod mood;
 mod multiz;
 mod nukeops;
+mod ordnance;
 mod paperwork;
 mod paradox_clone;
 mod pda;

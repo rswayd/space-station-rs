@@ -30,6 +30,74 @@ pub enum StationScreen {
     BountyBoard(BountyBoardData),
     /// `NtosRestock`: `vending_list`.
     Restock(Vec<VendorRow>),
+    /// `NtosScipaper` (NT Frontier).
+    Scipaper(Box<ScipaperData>),
+}
+
+/// `scipaper_program/return_gist()` of a paper.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct PaperGist {
+    /// Cooperation and funding as words ("None" .. "Huge").
+    pub gains: (String, String),
+    pub title: String,
+    pub author: String,
+    pub et_alia: bool,
+    pub abstract_text: String,
+    pub experiment_name: Option<String>,
+    pub tier: Option<u32>,
+    pub partner: Option<String>,
+}
+
+/// An `experimentInformation` entry.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct OrdnanceExperimentInfo {
+    pub path: String,
+    pub name: String,
+    pub description: String,
+    /// `target_amount` by tier.
+    pub target: Vec<f64>,
+    /// "Range" / "Gas".
+    pub prefix: String,
+    /// "tiles" / "moles".
+    pub suffix: String,
+}
+
+/// A `partnersInformation` entry with its `relations` and `purchaseableBoosts`.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct PartnerInfo {
+    pub path: String,
+    pub name: String,
+    pub flufftext: String,
+    /// Cooperation and funding multipliers.
+    pub multipliers: (f64, f64),
+    /// Node name, discount, node path.
+    pub boosted_nodes: Vec<(String, f64, String)>,
+    pub accepted_experiments: Vec<String>,
+    pub relation: String,
+    /// Node paths that can be bought now.
+    pub purchaseable: Vec<String>,
+}
+
+/// `scipaper_program/ui_data` and `ui_static_data`.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct ScipaperData {
+    /// 1 publish, 2 published papers, 3 experiments, 4 partners.
+    pub current_tab: u8,
+    pub has_techweb: bool,
+    /// Tab 1: file name -> uid, experiment name -> path, tiers, partner name -> path.
+    pub file_list: Vec<(String, u32)>,
+    pub exp_list: Vec<(String, String)>,
+    pub allowed_tiers: Vec<u32>,
+    pub allowed_partners: Vec<(String, String)>,
+    pub selected_file: Option<String>,
+    pub paper: PaperGist,
+    /// Tab 2.
+    pub published: Vec<PaperGist>,
+    /// Tabs 3 and 4.
+    pub experiments: Vec<OrdnanceExperimentInfo>,
+    pub partners: Vec<PartnerInfo>,
+    /// Paths of the available and researched nodes.
+    pub visible_nodes: Vec<String>,
 }
 
 /// A vending machine of `restock_tracker/ui_data`.
@@ -157,3 +225,13 @@ pub const BOARD_DELETE: &str = "deleteRequest";
 // `NtosSpectreMeter` acts.
 pub const SPECTRE_SCAN: &str = "manual_scan";
 pub const SPECTRE_MODE: &str = "toggle_mode";
+// `NtosScipaper` acts. `rewrite` takes `title`, `author` and/or `abstract`.
+pub const PAPER_ET_ALIA: &str = "et_alia";
+pub const PAPER_PUBLISH: &str = "publish";
+pub const PAPER_REWRITE: &str = "rewrite";
+pub const PAPER_CHANGE_TAB: &str = "change_tab";
+pub const PAPER_SELECT_FILE: &str = "select_file";
+pub const PAPER_SELECT_EXPERIMENT: &str = "select_experiment";
+pub const PAPER_SELECT_TIER: &str = "select_tier";
+pub const PAPER_SELECT_PARTNER: &str = "select_partner";
+pub const PAPER_PURCHASE_BOOST: &str = "purchase_boost";

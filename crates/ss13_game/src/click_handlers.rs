@@ -176,6 +176,7 @@
 //! | 1510 | `teapot::interact` |
 //! | 1600 | `botany::interact` |
 //! | 1700 | `multiz::interact` |
+//! | 1787 | `science::ordnance_machines::interact` (the `DopplerArray` and `TankCompressor` windows) |
 //! | 1790 | `atmos_machinery::space_heater::interact` |
 //! | 1800 | `atmos_machinery::windows::interact` |
 //! | 1900 | `power::chargers::interact` |
@@ -300,6 +301,7 @@
 //! | 1450 | `silicon::mmi::item_interaction` |
 //! | 1460 | `silicon::ai_core::item_interaction` |
 //! | 1500 | `bots::construction::item_interaction` |
+//! | 1527 | `science::ordnance_machines::item_interaction` (data disks into the doppler array and tank compressor, tanks into the compressor, doppler wrench) |
 //! | 1549 | `eng_machines::manufactorio::item_interaction` (wrench, router, unloader, lathe and sorter multitool, sorter item filter, storage unit screwdriver) |
 //! | 1545 | `science::teleportation::hand_tele::item_interaction` (dispelling its portals, right click portal; items on a portal) |
 //! | 1511 | `mobs::lavaland::minebot` (a welder repairs a minebot) |

@@ -21,11 +21,11 @@
 //! Cost: one explosion walks `(2r + 1)^2` tiles once (the cap, r = 14, is 841 tiles: a few
 //! entity lookups each), then every entity on its blasted tiles once; nothing runs while
 //! nothing explodes (one `is_empty` check per tick).
-// shortcut: no explosion smoke or particles (`/datum/effect_system/explosion`), no doppler
-// arrays (`COMSIG_GLOB_EXPLOSION`), no z-level bomb cap multipliers, no `COMSIG_ATOM_EXPLODE`
-// cancellation (nothing here cancels an explosion); thrown mobs and structures are not thrown
-// (items are); a flame tile only lights a fire where the air burns (`hotspot_expose`), tg's
-// short-lived ambient hotspot in plain air is not drawn.
+// shortcut: no explosion smoke or particles (`/datum/effect_system/explosion`), no z-level
+// bomb cap multipliers, no `COMSIG_ATOM_EXPLODE` cancellation (nothing here cancels an
+// explosion); thrown mobs and structures are not thrown (items are); a flame tile only
+// lights a fire where the air burns (`hotspot_expose`), tg's short-lived ambient hotspot in
+// plain air is not drawn.
 
 pub mod ex_act;
 pub mod sources;
@@ -91,6 +91,9 @@ pub struct Explosion {
     pub arc: f32,
     /// For the log (tg `explosion_cause`).
     pub cause: String,
+    /// The atom that exploded (tg `explosion_cause` as an atom): a gas tank tells the doppler
+    /// arrays what reacted in it.
+    pub source: Option<Entity>,
 }
 
 impl Explosion {
@@ -107,6 +110,7 @@ impl Explosion {
             direction: 0.0,
             arc: 360.0,
             cause: String::new(),
+            source: None,
         }
     }
 
@@ -332,6 +336,7 @@ pub fn explosion(world: &mut World, epicenter: TilePos, ex: Explosion) {
     let Some((w, h)) = world.resource::<SpatialIndex>().level_size(epicenter.z) else {
         return;
     };
+    let started = std::time::Instant::now();
     let config = world
         .get_resource::<ExplosionConfig>()
         .copied()
@@ -444,7 +449,23 @@ pub fn explosion(world: &mut World, epicenter: TilePos, ex: Explosion) {
             }
         }
     }
-    world.resource_mut::<ExplosionQueue>().count += 1;
+    let index = {
+        let mut q = world.resource_mut::<ExplosionQueue>();
+        q.count += 1;
+        q.count
+    };
+    // `COMSIG_GLOB_EXPLOSION`: the doppler arrays.
+    crate::science::ordnance_machines::sense_explosion(
+        world,
+        &crate::science::ordnance_machines::SensedExplosion {
+            epicenter,
+            ranges: [dev, heavy, light],
+            orig_ranges: [ex.devastation, ex.heavy, ex.light],
+            took: started.elapsed().as_secs_f64(),
+            source: ex.source,
+            index,
+        },
+    );
 }
 
 /// The tile of `e`, or of what carries or holds it (tg `get_turf`).

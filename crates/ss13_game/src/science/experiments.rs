@@ -11,8 +11,10 @@
 //! experi-scanner, the destructive scanner) are in [`super::experi_scanner`].
 //!
 //! Cost: experiments change only on scans and research; a scan looks at one experiment.
+//! Ordnance experiments (`/datum/experiment/ordnance`, [`super::scipaper`]) are added like the
+//! others but only complete when a paper on them is published.
 // shortcut: experiments of the unsupported kinds (people, plants, materials, mechs, cytology,
-// fish, autopsies, ordnance, physical events, exploration: `ExperimentKind::Unsupported`) are never
+// fish, autopsies, physical events, exploration: `ExperimentKind::Unsupported`) are never
 // added to the techweb, and a node that requires one counts it as done; port each with the system
 // its checks read.
 
@@ -165,6 +167,10 @@ impl Experiment {
 
     /// tg `is_complete()`.
     pub fn is_complete(&self, def: &ExperimentDef) -> bool {
+        // `ordnance/is_complete`: `completed`, set only by publishing (which removes it).
+        if super::scipaper::is_ordnance(&def.id) {
+            return false;
+        }
         if is_points(def) {
             return self.points >= def.required_points;
         }
@@ -233,6 +239,12 @@ impl Experiment {
 
     /// tg `check_progress()`.
     pub fn progress(&self, def: &ExperimentDef) -> Vec<ProgressStage> {
+        if super::scipaper::is_ordnance(&def.id) {
+            return vec![ProgressStage::Bool {
+                text: super::scipaper::progress_text(&def.name),
+                done: false,
+            }];
+        }
         if is_points(def) {
             let text = match &def.kind {
                 ExperimentKind::MachineryTiered { tier } => format!(
@@ -314,7 +326,11 @@ impl Experiment {
 pub fn performable(db: &ResearchDb, id: &str) -> bool {
     db.experiment_index
         .get(id)
-        .is_some_and(|&i| db.experiments[i].kind != ExperimentKind::Unsupported)
+        .is_some_and(|&i| supported(&db.experiments[i]))
+}
+
+fn supported(def: &ExperimentDef) -> bool {
+    def.kind != ExperimentKind::Unsupported || super::scipaper::is_ordnance(&def.id)
 }
 
 impl Techweb {
@@ -323,7 +339,7 @@ impl Techweb {
         let Some(&def) = db.experiment_index.get(id) else {
             return false;
         };
-        if db.experiments[def].kind == ExperimentKind::Unsupported
+        if !supported(&db.experiments[def])
             || self.available_experiments.iter().any(|e| e.id == id)
             || self.completed_experiments.contains(id)
         {
