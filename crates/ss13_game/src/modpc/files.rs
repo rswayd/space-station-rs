@@ -34,11 +34,39 @@ pub const DISK_ROOT: &str = "/obj/item/disk/computer";
 /// `filetype` of a program.
 const PROGRAM_FILETYPE: &str = "PRG";
 
+/// What an ordnance data file holds (`/datum/computer_file/data/ordnance`): the record it was
+/// printed from, by identity (a doppler array's explosion index, a compressor record's id).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OrdnanceRecord {
+    /// `ordnance/explosive` (`DOP`): `explosion_record.explosion_identifier`.
+    Explosion(u32),
+    /// `ordnance/gaseous` (`COM`): the `gas_record`.
+    Compressor(u32),
+}
+
+/// `ORDNANCE_FILE_SIZE`: `/datum/computer_file/data/ordnance` `size`.
+pub const ORDNANCE_FILE_SIZE: u32 = 4;
+
+/// An ordnance data file on a disk.
+#[derive(Clone, Debug, PartialEq)]
+pub struct OrdnanceFile {
+    /// `uid`: unique per round.
+    pub uid: u32,
+    pub filename: String,
+    /// `possible_experiments`: experiment path -> score.
+    pub possible: Vec<(String, f64)>,
+    pub record: OrdnanceRecord,
+}
+
 /// A data disk's drive.
-#[derive(Component, Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Component, Clone, Debug, Default, PartialEq)]
 pub struct ComputerDisk {
     pub max_capacity: u32,
     pub files: Vec<ProgramKind>,
+    /// Data files (the doppler array's and tank compressor's prints).
+    // shortcut: data files are not listed in the file manager (no copy or delete there); the
+    // printers and NT Frontier read them from the disk.
+    pub data: Vec<OrdnanceFile>,
 }
 
 impl ComputerDisk {
@@ -77,6 +105,7 @@ impl ComputerDisk {
         let mut disk = Self {
             max_capacity,
             files: Vec::new(),
+            data: Vec::new(),
         };
         for p in programs {
             disk.add_file(p);
@@ -85,7 +114,17 @@ impl ComputerDisk {
     }
 
     pub fn used_capacity(&self) -> u32 {
-        self.files.iter().map(|p| p.size()).sum()
+        self.files.iter().map(|p| p.size()).sum::<u32>()
+            + self.data.len() as u32 * ORDNANCE_FILE_SIZE
+    }
+
+    /// `add_file` of a data file: false when it does not fit.
+    pub fn add_data(&mut self, file: OrdnanceFile) -> bool {
+        if self.used_capacity() + ORDNANCE_FILE_SIZE > self.max_capacity {
+            return false;
+        }
+        self.data.push(file);
+        true
     }
 
     /// `add_file`: fits (and, unlike tg's list, one copy of a program per drive).

@@ -536,11 +536,34 @@ pub fn reaction_ids() -> impl Iterator<Item = &'static str> {
     REACTIONS.iter().map(|r| r.id)
 }
 
+/// The tg ids of the reactions set in a [`GasMixture::react_recording`] mask.
+pub fn reacted_ids(mask: u32) -> impl Iterator<Item = &'static str> {
+    REACTIONS
+        .iter()
+        .enumerate()
+        .filter(move |(i, _)| mask & (1 << i) != 0)
+        .map(|(_, r)| r.id)
+}
+
 impl GasMixture {
     /// `react(holder)` of a `volume`-litre mixture: every reaction whose requirements hold, in
     /// tg order. Returns the reaction flags; `exposures` gets the turf exposures fires asked for
     /// (only with [`Holder::Turf`]).
     pub fn react(&mut self, holder: Holder, volume: f64, exposures: &mut Exposures) -> u8 {
+        let mut reacted = 0;
+        self.react_recording(holder, volume, exposures, &mut reacted)
+    }
+
+    /// [`Self::react`] that also sets bit `i` of `reacted` for every reaction (index into
+    /// [`reaction_ids`]) that did something: tg's `reaction_results` keys, which
+    /// `/datum/component/atmos_reaction_recorder` collects for gas tanks.
+    pub fn react_recording(
+        &mut self,
+        holder: Holder,
+        volume: f64,
+        exposures: &mut Exposures,
+        reacted: &mut u32,
+    ) -> u8 {
         let mut present = 0u32;
         for (g, &m) in self.moles.iter().enumerate() {
             if m != 0.0 {
@@ -569,9 +592,10 @@ impl GasMixture {
                 if keys & (1 << g) == 0 {
                     continue;
                 }
-                for reaction in REACTIONS
+                for (i, reaction) in REACTIONS
                     .iter()
-                    .filter(|r| r.priority == priority && r.major.0 == g)
+                    .enumerate()
+                    .filter(|(_, r)| r.priority == priority && r.major.0 == g)
                 {
                     if reaction.min_temp.is_some_and(|t| temp < t)
                         || reaction.max_temp.is_some_and(|t| temp > t)
@@ -579,7 +603,11 @@ impl GasMixture {
                     {
                         continue;
                     }
-                    flags |= (reaction.react)(self, &mut ctx);
+                    let result = (reaction.react)(self, &mut ctx);
+                    if result != NO_REACTION {
+                        *reacted |= 1 << i;
+                    }
+                    flags |= result;
                 }
             }
         }
@@ -1548,5 +1576,28 @@ mod tests {
         let (flags, _) = react(&mut air, Holder::Other);
         assert_eq!(flags, REACTING | VOLATILE_REACTION);
         assert!(air.get(G::BZ) == 0.0 && air.get(G::N2O) < 10.0 && air.get(G::CO2) > 0.0);
+    }
+
+    #[test]
+    fn react_recording_names_the_reactions_that_ran() {
+        let mut air = mix("hydrogen=50;o2=50;TEMP=1000");
+        let mut reacted = 0;
+        let flags = air.react_recording(
+            Holder::Other,
+            CELL_VOLUME,
+            &mut Exposures::default(),
+            &mut reacted,
+        );
+        assert_ne!(flags, NO_REACTION);
+        assert_eq!(reacted_ids(reacted).collect::<Vec<_>>(), vec!["h2fire"]);
+        let mut inert = mix("n2=50;TEMP=293");
+        let mut none = 0;
+        inert.react_recording(
+            Holder::Other,
+            CELL_VOLUME,
+            &mut Exposures::default(),
+            &mut none,
+        );
+        assert_eq!(none, 0);
     }
 }

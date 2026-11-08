@@ -204,7 +204,8 @@ fn fixture_assets(test: &str) -> PathBuf {
     write_fixture(&dir, TYPES, &used, &STATES, &[("map.dmm", &map())])
 }
 
-fn server(test: &str) -> App {
+/// The fixture station, shared with `crate::ordnance`.
+pub(crate) fn server(test: &str) -> App {
     let assets = fixture_assets(test);
     testing::server_app(fixture_map(&assets, &["map.dmm"]), |app| {
         app.insert_resource(ExplosionConfig {

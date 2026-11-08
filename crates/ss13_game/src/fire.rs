@@ -265,17 +265,28 @@ fn open_flames(world: &mut World) {
             atmos.hotspot_expose(pos, OPEN_FLAME_HEAT, OPEN_FLAME_VOLUME, false);
         }
     }
-    let mut tanks = world.query::<&mut TankAir>();
-    for mut tank in tanks.iter_mut(world) {
+    let mut tanks = world.query::<(Entity, &mut TankAir)>();
+    let mut reacted_tanks = Vec::new();
+    for (e, mut tank) in tanks.iter_mut(world) {
         let tank_air = tank.bypass_change_detection();
         let volume = tank_air.volume;
-        if tank_air
-            .air
-            .react(Holder::Other, volume, &mut Exposures::default())
-            != 0
+        let mut reacted = 0;
+        if tank_air.air.react_recording(
+            Holder::Other,
+            volume,
+            &mut Exposures::default(),
+            &mut reacted,
+        ) != 0
         {
             tank.set_changed();
         }
+        if reacted != 0 {
+            reacted_tanks.push((e, reacted));
+        }
+    }
+    // `atmos_reaction_recorder`: what reacted, for the doppler arrays.
+    for (e, reacted) in reacted_tanks {
+        crate::explosions::sources::record_reactions(world, e, reacted);
     }
     crate::explosions::sources::tank_tolerances(world, SSOBJ_WAIT_SECS as f32);
 }

@@ -197,6 +197,10 @@ pub struct Techweb {
     pub income_modifier: f64,
     /// Seconds (game time) of the last point generation.
     pub last_income: Option<f64>,
+    /// `published_papers`: ordnance experiment -> tier -> paper (`super::scipaper`).
+    pub published_papers: super::scipaper::PublishedPapers,
+    /// `scientific_cooperation`: partner type -> cooperation.
+    pub scientific_cooperation: BTreeMap<String, f64>,
 }
 
 /// tg `FLOOR(x, 0.1)`.
@@ -246,7 +250,8 @@ impl Techweb {
         self.points.get(point_type).copied().unwrap_or(0.0)
     }
 
-    /// tg `get_price(host)`: the costs less completed discount experiments.
+    /// tg `get_price(host)`: the costs less completed discount experiments, then less a bought
+    /// partner boost (`discount_boosts`, generic points, never below 0).
     pub fn price(&self, db: &ResearchDb, node: usize) -> Vec<(String, f64)> {
         let def = &db.nodes[node];
         let discount: f64 = def
@@ -255,9 +260,23 @@ impl Techweb {
             .filter(|(e, _)| self.completed_experiments.contains(e))
             .map(|(_, n)| n)
             .sum();
+        let boost = self
+            .boosted
+            .contains(&node)
+            .then(|| super::scipaper::node_boost(&def.id))
+            .flatten();
         def.costs
             .iter()
-            .map(|(t, n)| (t.clone(), n - discount))
+            .map(|(t, n)| {
+                let mut cost = n - discount;
+                if let Some(b) = boost
+                    && t == POINT_GENERIC
+                    && cost != 0.0
+                {
+                    cost = (cost - b).max(0.0);
+                }
+                (t.clone(), cost)
+            })
             .collect()
     }
 
