@@ -8,6 +8,7 @@ mod assemblies;
 mod atmos_machinery;
 mod barber;
 mod bitrunning;
+mod blob;
 mod border;
 mod botany;
 mod bots;

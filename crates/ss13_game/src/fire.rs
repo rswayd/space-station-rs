@@ -860,6 +860,18 @@ pub fn set_burning(world: &mut World, thing: Entity) {
 /// `take_damage(amount, BURN, FIRE)` on a structure or machine: destroyed at 0
 /// (`atom_destruction(FIRE)` -> `burn()` -> `deconstruct(FALSE)`).
 pub fn fire_damage(world: &mut World, thing: Entity, amount: f32) {
+    use crate::antag::blob::strains::Flag;
+    if crate::antag::blob::structures::damage(
+        world,
+        thing,
+        amount,
+        crate::health::DamageType::Burn,
+        Flag::Fire,
+    )
+    .is_some()
+    {
+        return;
+    }
     let Some(obj) = world.get::<DmObj>(thing).cloned() else {
         // An item (set alight by lava, `crate::lava`): through its fire armor.
         if world

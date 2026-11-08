@@ -22,6 +22,8 @@ use ss13_tgui::interfaces::vending::ProductIcon;
 
 pub mod abductor;
 #[cfg(feature = "server")]
+pub mod blob;
+#[cfg(feature = "server")]
 pub mod brainwashed;
 #[cfg(feature = "server")]
 pub mod brother;
@@ -89,6 +91,7 @@ impl bevy::prelude::Plugin for AntagServerPlugin {
             morph::MorphPlugin,
             valentine::ValentinePlugin,
             survivalist::SurvivalistPlugin,
+            blob::BlobPlugin,
         ))
         .add_plugins((
             space_dragon::SpaceDragonPlugin,
@@ -128,6 +131,10 @@ pub const ROLE_SLAUGHTER_DEMON: &str = "Slaughter Demon";
 pub const ROLE_REVENANT: &str = "Revenant";
 /// tg `ROLE_SPACE_DRAGON` (`space_dragon`), a `be_special` key as for the morph.
 pub const ROLE_SPACE_DRAGON: &str = "Space Dragon";
+/// tg `ROLE_BLOB`: the ghost midround's overmind (`blob`).
+pub const ROLE_BLOB: &str = "Blob";
+/// tg `ROLE_BLOB_INFECTION`: the living crew member who becomes a blob host (`blob`).
+pub const ROLE_BLOB_INFECTION: &str = "Blob Infection";
 
 /// The blood brother's info panel.
 pub struct AntagInfoBrotherUi;

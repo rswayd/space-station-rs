@@ -36,6 +36,16 @@ pub struct WalkPassable;
 #[derive(Component, Clone, Copy, Debug, Default)]
 pub struct PassesWalkBarriers;
 
+/// tg `pass_flags` of a mover (`PASSBLOB`, ...): it steps through a blocker whose
+/// [`PassFlagsSelf`] shares a bit. Server-side only: the client predicts the step and is
+/// corrected.
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PassFlags(pub u32);
+
+/// tg `pass_flags_self` of a dense blocker: a mover whose [`PassFlags`] share a bit passes it.
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PassFlagsSelf(pub u32);
+
 /// tg `/obj/machinery/prisongate` `CanAllowThrough`: a non-dense gate whose tile a mover enters
 /// only when the [`GatePolicy`] lets it (no policy: everyone passes). Server-side only: the
 /// client predicts the step and is corrected.
@@ -264,11 +274,19 @@ fn step(world: &mut World, entity: Entity, dir: Dir, diagonal: bool) -> bool {
         let on_climbable =
             world.get::<Density>(entity).is_some() && index.on_tile(from).iter().any(walkable);
         let passes = world.get::<PassesWalkBarriers>(entity).is_some();
+        let pass_flags = world.get::<PassFlags>(entity).map_or(0, |p| p.0);
+        let passed = |e: Entity| {
+            pass_flags != 0
+                && world
+                    .get::<PassFlagsSelf>(e)
+                    .is_some_and(|s| s.0 & pass_flags != 0)
+        };
         blockers.extend(
             index
                 .enter_blockers(to, dir, entity)
                 .filter(|e| !(on_climbable && walkable(e)))
-                .filter(|&e| !(passes && world.get::<WalkPassable>(e).is_some())),
+                .filter(|&e| !(passes && world.get::<WalkPassable>(e).is_some()))
+                .filter(|&e| !passed(e)),
         );
         blockers.extend(gate_refuses(world, entity, to));
     }

@@ -590,6 +590,10 @@ fn generic(path: &str) -> Option<Built> {
     } else if is("alien") {
         // `basic_alien.bt.json` with `melee_alien_combat`; left out: weeds and eggs.
         hostile_combat(25.0)
+    } else if is("blobbernaut") || is("blob_zombie") || is("blob_spore") {
+        // `blobbernaut.bt.json`, `blob_zombie.bt.json`, `blob_spore.bt.json`: hostile; left
+        // out: the overmind's rally point and the spores' corpse hunting (`crate::antag::blob`).
+        hostile_combat(25.0)
     } else if is("zombie") {
         // `zombie.bt.json`, `zombie_stupid.bt.json`: hostile and moaning; left out: obstacles.
         par(vec![hostile_combat(25.0), speech_loop_of(None)], 1.0)

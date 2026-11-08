@@ -21,8 +21,8 @@
 // (infiltrator), the stowaway changeling, the latejoin revolution (provocateur), the midround
 // wizard, the paradox clone (`super::paradox_clone`), the nightmare (`super::nightmare`), the
 // morph (`super::morph`), the space dragon (`super::space_dragon`), the revenant
-// (`super::revenant`), the slaughter demon (`super::slaughter`) and the abductors
-// (`super::abductor`) spawn anyone;
+// (`super::revenant`), the slaughter demon (`super::slaughter`), the abductors
+// (`super::abductor`) and the blob and blob infection (`super::blob`) spawn anyone;
 // the others keep their weights, are logged and fail preparation, as tg's do without candidates.
 // There is no admin cancel or reroll window before a midround, no false alarms, no AFK checks,
 // no account age or job bans, and `EMERGENCY_PAST_POINT_OF_NO_RETURN` ignores the call's
@@ -133,6 +133,8 @@ pub const SPACE_DRAGON: &str = "Space Dragon";
 pub const REVENANT: &str = "Revenant";
 pub const SLAUGHTER_DEMON: &str = "Slaughter Demon";
 pub const ABDUCTORS: &str = "Abductors";
+pub const BLOB: &str = "Blob";
+pub const BLOB_INFECTION: &str = "Blob Infection";
 
 const HOP: &[&str] = &["Head of Personnel"];
 const ONE: (Cap, Cap) = (Cap::Fixed(1), Cap::Fixed(1));
@@ -254,7 +256,10 @@ pub const RULESETS: [Ruleset; 30] = {
                 MIDROUND_NUKEOPS,
             )
         },
-        decrease(other("Blob", Heavy, [0, 1, 3, 3], 30), 3),
+        Ruleset {
+            role: Some(super::ROLE_BLOB),
+            ..decrease(other(BLOB, Heavy, [0, 1, 3, 3], 30), 3)
+        },
         decrease(other("Xenomorph", Heavy, [0, 1, 5, 5], 30), 3),
         Ruleset {
             role: Some(super::ROLE_SPACE_DRAGON),
@@ -284,7 +289,11 @@ pub const RULESETS: [Ruleset; 30] = {
             [0, 1, 3, 3],
             30,
         ))),
-        decrease(other("Blob Infection", Heavy, [0, 1, 3, 3], 30), 3),
+        Ruleset {
+            role: Some(super::ROLE_BLOB_INFECTION),
+            candidates: Candidates::Living,
+            ..decrease(other(BLOB_INFECTION, Heavy, [0, 1, 3, 3], 30), 3)
+        },
         // Latejoins.
         Ruleset {
             role: Some(ROLE_SYNDICATE_INFILTRATOR),
@@ -565,6 +574,7 @@ fn can_be_selected(world: &mut World, r: &Ruleset) -> bool {
         SLAUGHTER_DEMON => super::slaughter::can_spawn(world),
         // Fewer than 4 teams, and a ship to put the next one on.
         ABDUCTORS => super::abductor::server::can_spawn(world),
+        BLOB => super::blob::can_spawn(world),
         _ => true,
     }
 }
@@ -816,6 +826,20 @@ fn execute(
                 .collect();
             if super::morph::spawn_morphs(world, &ghosts).is_empty() {
                 return Vec::new();
+            }
+        }
+        BLOB => {
+            let ghosts: Vec<(Entity, Entity)> = chosen
+                .iter()
+                .filter_map(|&g| world.get::<PlayerMob>(g).map(|p| (p.client, g)))
+                .collect();
+            if super::blob::spawn_blobs(world, &ghosts).is_empty() {
+                return Vec::new();
+            }
+        }
+        BLOB_INFECTION => {
+            for &m in &chosen {
+                super::blob::make_host(world, m);
             }
         }
         SPACE_DRAGON => {

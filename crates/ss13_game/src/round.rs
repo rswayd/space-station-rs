@@ -959,6 +959,7 @@ fn declare_completion(world: &mut World, now: f64) {
     antags.extend(crate::antag::space_dragon::roundend_report(world, end));
     antags.extend(crate::antag::revenant::roundend_report(world, end));
     antags.extend(crate::antag::slaughter::roundend_report(world, end));
+    antags.extend(crate::antag::blob::roundend_report(world, end));
     antags.extend(crate::antag::brainwashed::roundend_report(world, end));
     antags.extend(crate::antag::valentine::roundend_report(world, end));
     antags.extend(crate::antag::survivalist::roundend_report(world, end));
@@ -1803,6 +1804,8 @@ fn preference_acts(
                     crate::antag::ROLE_SPACE_DRAGON,
                     crate::antag::ROLE_REVENANT,
                     crate::antag::ROLE_SLAUGHTER_DEMON,
+                    crate::antag::ROLE_BLOB,
+                    crate::antag::ROLE_BLOB_INFECTION,
                 ]
                 .contains(&role.as_str()) =>
             {

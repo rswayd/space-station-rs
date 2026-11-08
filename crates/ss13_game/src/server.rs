@@ -71,6 +71,8 @@ pub struct SpawnPoints {
     /// `/obj/effect/landmark/generic_maintenance_landmark` (tg `GLOB.generic_maintenance_landmarks`,
     /// `find_maintenance_spawn`).
     pub maintenance: Vec<TilePos>,
+    /// `/obj/effect/landmark/blobstart` (tg `GLOB.blobstart`, `crate::antag::blob`).
+    pub blobstart: Vec<TilePos>,
     /// Dev: handshake token -> spawn tile ([`DEV_SPAWNS_ENV`]).
     dev: HashMap<String, TilePos>,
 }
@@ -190,6 +192,7 @@ const START_LANDMARK: &str = "/obj/effect/landmark/start";
 const OBSERVER_LANDMARK: &str = "/obj/effect/landmark/observer_start";
 const CARP_LANDMARK: &str = "/obj/effect/landmark/carpspawn";
 const MAINTENANCE_LANDMARK: &str = "/obj/effect/landmark/generic_maintenance_landmark";
+const BLOBSTART_LANDMARK: &str = "/obj/effect/landmark/blobstart";
 /// tg `/obj/effect/landmark/start/ai` with `primary_ai = TRUE` (not its `/secondary`).
 const PRIMARY_AI_LANDMARK: &str = "/obj/effect/landmark/start/ai";
 
@@ -412,6 +415,7 @@ impl Plugin for GameServerPlugin {
                 .chain()
                 .before(WorldSystems::Movement),
         )
+        .add_message::<crate::antag::blob::BlobStep>()
         .add_systems(
             Update,
             (follow_mobs, ack_moves).after(WorldSystems::Movement),
@@ -531,6 +535,7 @@ fn find_spawn_points(world: &mut World) {
     let mut observer_start = None;
     let mut carp = Vec::new();
     let mut maintenance = Vec::new();
+    let mut blobstart = Vec::new();
     let protos = world.get_resource::<ss13_proto::Prototypes>();
     for loaded in &report.maps {
         let map = match DmmMap::from_file(&loaded.path) {
@@ -593,6 +598,15 @@ fn find_spawn_points(world: &mut World) {
                     .any(|o| is_under(&o.path, MAINTENANCE_LANDMARK))
             })
             .collect();
+        let blob_marks: Vec<bool> = map
+            .prefabs
+            .iter()
+            .map(|p| {
+                p.objects
+                    .iter()
+                    .any(|o| is_under(&o.path, BLOBSTART_LANDMARK))
+            })
+            .collect();
         let (sx, sy, sz) = map.size;
         for mz in 1..=sz {
             for y in 1..=sy {
@@ -615,6 +629,9 @@ fn find_spawn_points(world: &mut World) {
                     }
                     if maint_marks[i] {
                         maintenance.push(pos);
+                    }
+                    if blob_marks[i] {
+                        blobstart.push(pos);
                     }
                     if observer[i] && observer_start.is_none() {
                         observer_start = Some(pos);
@@ -657,6 +674,7 @@ fn find_spawn_points(world: &mut World) {
         forced,
         carp,
         maintenance,
+        blobstart,
         dev: dev_spawns(),
     });
     world.insert_resource(jobs);
@@ -903,7 +921,10 @@ pub(crate) fn forward_moves(
     mut mobs: Query<MoveItem>,
     mut requests: MessageWriter<MoveRequest>,
     mut ghost_steps: MessageWriter<GhostStep>,
-    mut eye_steps: MessageWriter<crate::silicon::ai::EyeStep>,
+    (mut eye_steps, mut blob_steps): (
+        MessageWriter<crate::silicon::ai::EyeStep>,
+        MessageWriter<crate::antag::blob::BlobStep>,
+    ),
     mut ghostize: MessageWriter<Ghostize>,
     mut resists: MessageWriter<MoveResist>,
     mut relays: MessageWriter<crate::closets::ClosetRelayMove>,
@@ -954,7 +975,7 @@ pub(crate) fn forward_moves(
             traits,
             effects,
             closeted,
-            eye,
+            (eye, blob),
             pilot,
             coma,
             (jaunting, incorporeal),
@@ -991,6 +1012,10 @@ pub(crate) fn forward_moves(
             // The AI's eye (`crate::silicon::ai`), tg `/mob/eye/camera/ai` `relaymove`.
             _ if eye => {
                 eye_steps.write(crate::silicon::ai::EyeStep { eye: mob, dir });
+            }
+            // The blob overmind (`crate::antag::blob`), tg `/mob/eye/blob/Move`.
+            _ if blob => {
+                blob_steps.write(crate::antag::blob::BlobStep { overmind: mob, dir });
             }
             // tg `phased_mob/relaymove` of an ethereal jaunt (`crate::spells`).
             _ if jaunting => {
@@ -1050,7 +1075,10 @@ type MoveItem<'a> = (
     Option<&'a crate::status_effects::Incapacitation>,
     Option<&'a crate::status_effects::StatusEffects>,
     Has<crate::closets::InCloset>,
-    Has<crate::silicon::ai::AiEye>,
+    (
+        Has<crate::silicon::ai::AiEye>,
+        Has<crate::antag::blob::BlobOvermind>,
+    ),
     Option<&'a crate::mecha::Pilot>,
     Has<crate::health::DeathComa>,
     (

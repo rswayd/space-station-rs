@@ -189,6 +189,7 @@ impl Plugin for ClickServerPlugin {
             .add_message::<RangedClick>()
             .add_message::<crate::modsuit::server::ModuleClick>()
             .add_message::<crate::silicon::ai::AiClick>()
+            .add_message::<crate::antag::blob::BlobClick>()
             .add_message::<crate::science::xenobio_console::XenoConsoleClick>()
             .add_message::<crate::silicon::interact::RobotClick>()
             .add_systems(
@@ -246,6 +247,7 @@ fn resolve_clicks(
         Has<crate::silicon::cyborg::Cyborg>,
         Has<crate::ghost::Ghost>,
         Has<crate::science::xenobio_console::XenoOperator>,
+        Has<crate::antag::blob::BlobOvermind>,
     )>,
     movers: Query<(), With<Mover>>,
     objs: Query<&ss13_mapload::DmObj>,
@@ -302,6 +304,7 @@ fn resolve_clicks(
             robot,
             ghost,
             xeno_operator,
+            overmind,
         )) = mobs.get(mob)
         else {
             continue;
@@ -395,6 +398,18 @@ fn resolve_clicks(
                 examiner: mob,
                 target,
             });
+            continue;
+        }
+        // tg `/mob/eye/blob/ClickOn` (`crate::antag::blob`): the rest is on the clicked tile.
+        if overmind {
+            if !modifiers.right {
+                out.blob.write(crate::antag::blob::BlobClick {
+                    client,
+                    overmind: mob,
+                    target_pos,
+                    modifiers,
+                });
+            }
             continue;
         }
         // tg `/obj/vehicle/sealed/mecha/on_mouseclick` and `on_click_alt` (`COMSIG_MOB_CLICKON`,
@@ -563,4 +578,5 @@ struct ClickWriters<'w> {
     ghost: MessageWriter<'w, crate::multiz::GhostClick>,
     module: MessageWriter<'w, crate::modsuit::server::ModuleClick>,
     give: MessageWriter<'w, GiveClick>,
+    blob: MessageWriter<'w, crate::antag::blob::BlobClick>,
 }
