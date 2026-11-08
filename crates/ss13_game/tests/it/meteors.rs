@@ -29,7 +29,23 @@ const TYPES: &str = r##"{
         "icon": { "resource": "l.dmi" }, "icon_state": "x2", "invisibility": 101 } },
     "/obj/effect/landmark/start": { "parent": "/obj/effect/landmark" },
     "/obj/effect/landmark/start/assistant": { "parent": "/obj/effect/landmark/start" },
+    "/obj/item": { "parent": "/obj" },
+    "/obj/item/clothing": { "parent": "/obj/item" },
+    "/obj/item/clothing/under": { "parent": "/obj/item/clothing", "declared_vars": { "slot_flags": 2 } },
+    "/obj/item/clothing/under/color": { "parent": "/obj/item/clothing/under" },
+    "/obj/item/clothing/under/color/grey": { "parent": "/obj/item/clothing/under/color" },
+    "/obj/item/clothing/shoes": { "parent": "/obj/item/clothing", "declared_vars": { "slot_flags": 128 } },
+    "/obj/item/clothing/shoes/sneakers": { "parent": "/obj/item/clothing/shoes" },
+    "/obj/item/clothing/shoes/sneakers/black": { "parent": "/obj/item/clothing/shoes/sneakers" },
+    "/obj/item/card": { "parent": "/obj/item" },
+    "/obj/item/card/id": { "parent": "/obj/item/card", "declared_vars": {
+        "access": { "list": [] }, "slot_flags": 256 } },
+    "/obj/item/card/id/advanced": { "parent": "/obj/item/card/id" },
     "/mob": { "parent": "/atom/movable", "declared_vars": { "layer": 4, "density": 1 } },
+    "/mob/living": { "parent": "/mob" },
+    "/mob/living/carbon": { "parent": "/mob/living" },
+    "/mob/living/carbon/human": { "parent": "/mob/living/carbon", "declared_vars": {
+        "icon": { "resource": "h.dmi" }, "icon_state": "human_basic" } },
     "/turf": { "parent": "/atom", "declared_vars": { "icon": { "resource": "t.dmi" } } },
     "/turf/open": { "parent": "/turf" },
     "/turf/open/space": { "parent": "/turf/open" },
@@ -39,7 +55,11 @@ const TYPES: &str = r##"{
   }
 }"##;
 
-const STATES: [(&str, &str); 2] = [("t.dmi", "space"), ("l.dmi", "x2")];
+const STATES: [(&str, &str); 3] = [
+    ("t.dmi", "space"),
+    ("l.dmi", "x2"),
+    ("h.dmi", "human_basic"),
+];
 const SIZE: usize = 30;
 
 fn fixture(test: &str) -> App {
