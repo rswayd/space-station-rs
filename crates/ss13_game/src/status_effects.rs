@@ -651,23 +651,41 @@ impl Incapacitation {
         limbs: Option<&crate::medical::LimbLimits>,
         rest: Option<&crate::rest::Rest>,
         locked: bool,
+        held: Held,
     ) -> Self {
         let e = |f: fn(&StatusEffects) -> bool| effects.is_some_and(f);
+        // `CHOKEHOLD_TRAIT` of a grab (`crate::pull`), `BUCKLED_TRAIT` of a carry.
+        let choked = held.grab.is_some();
+        let neck = held.grab >= Some(crate::pull::GrabState::Neck);
         Self {
             incapacitated: e(StatusEffects::incapacitated),
             // Buckled lying, no usable legs (`crate::medical`); a locked down cyborg
             // (`crate::silicon::chassis::LockedDown`).
             immobilized: e(StatusEffects::immobilized)
                 || limbs.is_some_and(|l| l.immobilized)
-                || locked,
-            floored: e(StatusEffects::floored) || limbs.is_some_and(|l| l.floored),
-            hands_blocked: e(StatusEffects::hands_blocked) || cuffed || locked,
+                || locked
+                || choked
+                || held.carried.is_some(),
+            floored: e(StatusEffects::floored)
+                || limbs.is_some_and(|l| l.floored)
+                || neck
+                || held.carried == Some(true),
+            hands_blocked: e(StatusEffects::hands_blocked) || cuffed || locked || choked,
             restrained: cuffed,
             staggered: effects.is_some_and(|e| e.staggered > 0.0),
             resting: rest.is_some_and(|r| r.down),
             knocked_out: e(StatusEffects::knocked_out),
         }
     }
+}
+
+/// What holds a mob in place from outside its status effects: the grab state of a
+/// [`crate::pull::Chokehold`], and a carry ([`crate::pull::carry::Carried`], `Some(true)` for a
+/// fireman carry, which floors).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Held {
+    pub grab: Option<crate::pull::GrabState>,
+    pub carried: Option<bool>,
 }
 
 /// The mob's [`Incapacitation`] (none for things without it).
@@ -1530,6 +1548,8 @@ fn refresh_incapacitation(
             Changed<crate::rest::Rest>,
             Added<crate::silicon::chassis::LockedDown>,
             Added<crate::medical::stasis::InStasis>,
+            Changed<crate::pull::Chokehold>,
+            Changed<crate::pull::carry::Carried>,
         )>,
     >,
     mut removed_effects: RemovedComponents<StatusEffects>,
@@ -1537,6 +1557,10 @@ fn refresh_incapacitation(
     mut removed_jackets: RemovedComponents<crate::restraints::SuitRestrained>,
     mut removed_locks: RemovedComponents<crate::silicon::chassis::LockedDown>,
     mut removed_stasis: RemovedComponents<crate::medical::stasis::InStasis>,
+    (mut removed_chokes, mut removed_carries): (
+        RemovedComponents<crate::pull::Chokehold>,
+        RemovedComponents<crate::pull::carry::Carried>,
+    ),
     mut mobs: Query<(
         Option<&StatusEffects>,
         (Has<Handcuffed>, Has<crate::restraints::SuitRestrained>),
@@ -1544,6 +1568,10 @@ fn refresh_incapacitation(
         Option<&crate::rest::Rest>,
         Has<crate::silicon::chassis::LockedDown>,
         Has<crate::medical::stasis::InStasis>,
+        (
+            Option<&crate::pull::Chokehold>,
+            Option<&crate::pull::carry::Carried>,
+        ),
         &mut Incapacitation,
     )>,
 ) {
@@ -1553,15 +1581,31 @@ fn refresh_incapacitation(
         .chain(removed_jackets.read())
         .chain(removed_locks.read())
         .chain(removed_stasis.read())
+        .chain(removed_chokes.read())
+        .chain(removed_carries.read())
         .collect();
     for mob in changed.iter().chain(removed) {
-        if let Ok((effects, (cuffs, jacket), limbs, rest, locked, stasis, mut traits)) =
-            mobs.get_mut(mob)
+        if let Ok((
+            effects,
+            (cuffs, jacket),
+            limbs,
+            rest,
+            locked,
+            stasis,
+            (choke, carried),
+            mut traits,
+        )) = mobs.get_mut(mob)
         {
             let cuffed = cuffs || jacket;
             // Stasis (`TRAIT_IMMOBILIZED`, `TRAIT_HANDS_BLOCKED`) blocks what a lockdown does.
-            let held = locked || stasis;
-            traits.set_if_neq(Incapacitation::of(effects, cuffed, limbs, rest, held));
+            let locked = locked || stasis;
+            let held = Held {
+                grab: choke.map(|c| c.0),
+                carried: carried.map(|c| c.fireman),
+            };
+            traits.set_if_neq(Incapacitation::of(
+                effects, cuffed, limbs, rest, locked, held,
+            ));
         }
     }
 }

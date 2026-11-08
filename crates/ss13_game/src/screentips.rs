@@ -309,6 +309,8 @@ mod server {
             match world.get::<GrabState>(user).copied().unwrap_or_default() {
                 GrabState::Passive => "Схватить",
                 GrabState::Aggressive => "За горло",
+                GrabState::Neck => "Задушить",
+                GrabState::Kill => return,
             }
         } else {
             "Потащить"

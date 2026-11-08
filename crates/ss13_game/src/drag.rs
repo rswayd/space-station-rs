@@ -51,6 +51,13 @@ pub enum DragJob {
     LoadMicrowave { storage: Entity },
     /// The target mob picked up into a hand (`mob_try_pickup`, `crate::mob_holder`).
     PickupMob,
+    /// The target onto the user's shoulders (`fireman_carry`, `crate::pull::carry`).
+    FiremanCarry,
+    /// The user onto the target's back (`piggyback`, `crate::pull::carry`).
+    Piggyback,
+    /// A ctrl+click grab upgrade from `from` (`grippedby`, `crate::pull`); not a drag, but the
+    /// same `do_after` plumbing.
+    GrabUpgrade { from: crate::pull::GrabState },
 }
 
 /// One end of a drag, resolved for the dragging mob.
@@ -234,6 +241,16 @@ fn drag(world: &mut World, client: Entity, from: DragEnd, to: DragEnd) {
     {
         return;
     }
+    // Human `mouse_buckle_handling` before the strip menu (`should_strip` lets a fireman carry
+    // through): a lying human onto its grabber, or oneself onto one's grabber.
+    // A held rider's blocked hands do not matter (`can_perform_action` without `NEED_HANDS`).
+    if let (End::World(over), End::World(_)) = (to, from)
+        && adjacent(world, dragged)
+        && adjacent(world, over)
+        && crate::pull::carry::mouse_buckle_handling(world, actor, over, dragged)
+    {
+        return;
+    }
     if to == End::World(mob)
         && matches!(from, End::World(_))
         && adjacent(world, dragged)
@@ -348,6 +365,9 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter, job: DragJob) 
             crate::closets::complete_stuff(world, mob, action.target, closet, at);
         }
         DragJob::PickupMob => crate::mob_holder::complete_pickup(world, mob, action),
+        DragJob::FiremanCarry => crate::pull::carry::complete_fireman(world, mob, action),
+        DragJob::Piggyback => crate::pull::carry::complete_piggyback(world, mob, action),
+        DragJob::GrabUpgrade { from } => crate::pull::complete_upgrade(world, mob, action, from),
         DragJob::LoadMicrowave { storage } => {
             let held = world.get::<Inventory>(mob).and_then(Inventory::active_item);
             if held == Some(storage) {

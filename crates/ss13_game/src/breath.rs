@@ -612,11 +612,12 @@ pub fn temp_change_amount(diff: f64, change_rate: f64) -> f64 {
 }
 
 impl Respiration {
-    /// The missed breaths of tg `breathe` (failing lungs, crit): `true` when this breath is
-    /// missed (`losebreath`).
-    pub fn misses_breath(&mut self, stat: Stat, lungs_failing: bool) -> bool {
+    /// The missed breaths of tg `breathe` (failing lungs, crit, a kill grab `choked`): `true`
+    /// when this breath is missed (`losebreath`).
+    pub fn misses_breath(&mut self, stat: Stat, lungs_failing: bool, choked: bool) -> bool {
         match stat {
             _ if lungs_failing => self.losebreath += 1.0,
+            _ if choked => self.losebreath += 1.0,
             Stat::HardCrit => self.losebreath += 1.0,
             Stat::SoftCrit => self.losebreath += 0.25,
             _ => {}
@@ -1436,7 +1437,7 @@ fn live(world: &mut World, mob: Entity, fired: u64, now: f64) {
         && (fired.is_multiple_of(next_breath) || resp.failed_last_breath)
     {
         let mut breath = None;
-        if !resp.misses_breath(stat, lungs_failing) {
+        if !resp.misses_breath(stat, lungs_failing, crate::pull::choked(world, mob)) {
             // `get_breath_from_internal`; `Some(None)` is an open but empty tank.
             let mut from_tank = None;
             if let Some(tank) = internal {
@@ -1757,17 +1758,21 @@ mod tests {
     #[test]
     fn crit_misses_breaths_like_tg_losebreath() {
         let mut resp = Respiration::default();
-        assert!(resp.misses_breath(Stat::HardCrit, false));
-        assert!(resp.misses_breath(Stat::HardCrit, false));
+        assert!(resp.misses_breath(Stat::HardCrit, false, false));
+        assert!(resp.misses_breath(Stat::HardCrit, false, false));
         // Soft crit: one breath in four.
         let misses: Vec<bool> = (0..4)
-            .map(|_| resp.misses_breath(Stat::SoftCrit, false))
+            .map(|_| resp.misses_breath(Stat::SoftCrit, false, false))
             .collect();
         assert_eq!(misses, [false, false, false, true]);
-        assert!(!resp.misses_breath(Stat::Conscious, false));
+        assert!(!resp.misses_breath(Stat::Conscious, false, false));
         // Failing lungs miss every breath, awake or not.
-        assert!(resp.misses_breath(Stat::Conscious, true));
-        assert!(resp.misses_breath(Stat::SoftCrit, true));
+        assert!(resp.misses_breath(Stat::Conscious, true, false));
+        assert!(resp.misses_breath(Stat::SoftCrit, true, false));
+        // A kill grab: every breath is missed, conscious or not.
+        resp.losebreath = 0.0;
+        assert!(resp.misses_breath(Stat::Conscious, false, true));
+        assert!(resp.misses_breath(Stat::Conscious, false, true));
     }
 
     #[test]

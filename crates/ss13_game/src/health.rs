@@ -895,16 +895,18 @@ fn lying_appearance(
             &mut Appearance,
             Option<&crate::tables::Elevated>,
             Option<&crate::pixel_shift::PixelShift>,
+            Option<&crate::pull::HeldOffset>,
         ),
         Or<(
             Changed<BodyPosition>,
             Changed<Appearance>,
             Changed<crate::tables::Elevated>,
             Changed<crate::pixel_shift::PixelShift>,
+            Changed<crate::pull::HeldOffset>,
         )>,
     >,
 ) {
-    for (posture, atom, mut appearance, elevated, shift) in &mut mobs {
+    for (posture, atom, mut appearance, elevated, shift, held) in &mut mobs {
         // tg `/datum/element/elevation`: up on a table or rack, lying or not.
         let up = elevated.map_or(0, |e| e.0);
         let (layer, pixel_y) = if posture.lying() {
@@ -913,8 +915,12 @@ fn lying_appearance(
         } else {
             (atom.layer, atom.pixel_y + up)
         };
+        // Grab and riding offsets (`crate::pull`); a rider's layer is the riding one.
+        let held = held.copied().unwrap_or_default();
+        let layer = held.layer.unwrap_or(layer);
         // BandaStation pixel shift (`crate::pixel_shift`), on top of everything else.
         let [sx, sy] = shift.map_or([0, 0], |s| s.0);
+        let [sx, sy] = [sx + held.pixel[0], sy + held.pixel[1]];
         let wanted = (
             Layer(layer),
             [atom.pixel_x + sx, pixel_y + sy],

@@ -52,6 +52,7 @@ mod forensics;
 mod furniture;
 mod genetics;
 mod ghost_roles;
+mod grabs;
 mod grenades;
 mod gulag;
 mod guns;

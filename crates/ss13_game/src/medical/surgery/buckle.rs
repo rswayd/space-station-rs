@@ -167,6 +167,10 @@ pub fn unbuckle(world: &mut World, actor: Actor, mob: Entity) {
         return;
     };
     world.entity_mut(mob).remove::<Buckled>();
+    // A rider off a human (`crate::pull::carry`).
+    if crate::pull::carry::post_unbuckle(world, actor, mob, furniture) {
+        return;
+    }
     if crate::furniture::post_unbuckle(world, actor, mob, furniture) {
         return;
     }
@@ -204,9 +208,16 @@ pub fn buckled_to(world: &mut World, furniture: Entity) -> Option<Entity> {
 }
 
 /// A buckled mob that left the furniture's tile (teleported, the furniture gone) is free; a
-/// vehicle's rider is `crate::vehicles`' (it moves with the vehicle).
+/// vehicle's rider is `crate::vehicles`' (it moves with the vehicle), a carried mob
+/// `crate::pull::carry`'s.
 pub(super) fn check_buckles(
-    mobs: Query<(Entity, &Buckled, &TilePos), Without<crate::vehicles::Rider>>,
+    mobs: Query<
+        (Entity, &Buckled, &TilePos),
+        (
+            Without<crate::vehicles::Rider>,
+            Without<crate::pull::carry::Carried>,
+        ),
+    >,
     furniture: Query<&TilePos>,
     mut commands: Commands,
 ) {

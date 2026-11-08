@@ -20,11 +20,17 @@
 //!   pull simply walks away (the pull breaks on distance). A restrained (handcuffed) pulled mob
 //!   cannot step at all (1 s, tg `Process_Grab`); its resist key works on the cuffs
 //!   (`crate::restraints`) instead of the grab.
+//! - A human grabbing aggressively upgrades further with ctrl+click after 3 s (`do_after`): a
+//!   neck grab, then a kill grab (tg `grippedby`). From aggressive on the victim is held
+//!   ([`Chokehold`]: `TRAIT_IMMOBILIZED`, `TRAIT_HANDS_BLOCKED`), from the neck grab on it is
+//!   floored, and a kill grab stops its breathing (`crate::breath`). The puller slows by tg's
+//!   `grab_slowdown`.
+//! - A pulled mob is drawn shifted towards its puller by the grab state (tg `set_pull_offsets`,
+//!   [`HeldOffset`]); fireman carries and piggyback rides are [`carry`].
 //! - The stop pulling key (C, Delete) or the HUD pull icon stops pulling.
-// shortcut: grabs stop at aggressive (no neck/kill grab with their `do_after`), no pull offsets
-// (`set_pull_offsets` pixel shifts), no mob swapping with the pulled mob, the puller is not turned
-// to face a dragged dense object (`client/Move`), and no conga lines in one tick; add with
-// strangling, buckling and the HUD pull state on the client.
+// shortcut: no mob swapping with the pulled mob, the puller is not turned to face a dragged dense
+// object (`client/Move`), no conga lines in one tick, no pacifist grab refusals, no species grab
+// sounds; add with buckling and the HUD pull state on the client.
 
 use bevy::ecs::entity::EntityHashMap;
 use bevy::ecs::message::MessageCursor;
@@ -45,6 +51,8 @@ use crate::inventory::CarriedBy;
 use crate::server::{PlayerMob, Players};
 use crate::status_effects::Incapacitation;
 use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiSystems};
+
+pub mod carry;
 
 /// `PULL_PRONE_SLOWDOWN`, deciseconds; closets' `drag_slowdown` is the same.
 pub const PULL_PRONE_SLOWDOWN: f32 = 1.5;
@@ -75,12 +83,14 @@ impl PulledBy {
     }
 }
 
-/// tg `grab_state` of a puller (`GRAB_PASSIVE`, `GRAB_AGGRESSIVE`); lives as long as [`Pulling`].
+/// tg `grab_state` of a puller (`GRAB_PASSIVE` .. `GRAB_KILL`); lives as long as [`Pulling`].
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub enum GrabState {
     #[default]
     Passive,
     Aggressive,
+    Neck,
+    Kill,
 }
 
 impl GrabState {
@@ -88,7 +98,87 @@ impl GrabState {
         match self {
             Self::Passive => 0,
             Self::Aggressive => 1,
+            Self::Neck => 2,
+            Self::Kill => 3,
         }
+    }
+
+    /// `grab_state + 1`, `None` past `GRAB_KILL`.
+    pub fn next(self) -> Option<Self> {
+        match self {
+            Self::Passive => Some(Self::Aggressive),
+            Self::Aggressive => Some(Self::Neck),
+            Self::Neck => Some(Self::Kill),
+            Self::Kill => None,
+        }
+    }
+
+    /// `/datum/movespeed_modifier/grab_slowdown/*` of the puller, deciseconds.
+    pub fn slowdown(self) -> f32 {
+        match self {
+            Self::Passive => 0.0,
+            Self::Aggressive => 3.0,
+            Self::Neck => 6.0,
+            Self::Kill => 9.0,
+        }
+    }
+
+    /// `GRAB_PIXEL_SHIFT_*` of `set_pull_offsets`.
+    pub fn pixel_shift(self) -> i16 {
+        match self {
+            Self::Passive => 6,
+            Self::Aggressive => 12,
+            Self::Neck | Self::Kill => 16,
+        }
+    }
+}
+
+/// `grippedby`'s `grab_upgrade_time`, deciseconds: every upgrade after the first.
+pub const GRAB_UPGRADE_DS: f32 = 30.0;
+
+/// tg `max_grab`: humans (and gorillas) up to `GRAB_KILL`; other mobs stop at aggressive.
+// shortcut: tg's default `max_grab` is `GRAB_PASSIVE` (aliens, spiders: aggressive); every
+// non-human here keeps the aggressive grab it had, until mobs get their own `max_grab`.
+pub fn max_grab(world: &World, mob: Entity) -> GrabState {
+    if world.get::<crate::human::HumanLook>(mob).is_some() {
+        GrabState::Kill
+    } else {
+        GrabState::Aggressive
+    }
+}
+
+/// tg `CHOKEHOLD_TRAIT` on a mob grabbed aggressively or harder (the grab state it is held in):
+/// `TRAIT_IMMOBILIZED` and `TRAIT_HANDS_BLOCKED`, from the neck grab on `TRAIT_FLOORED`
+/// (`crate::status_effects` folds it into `Incapacitation`).
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Chokehold(pub GrabState);
+
+/// Sprite offsets of a held mob on top of its own (tg `add_offsets(GRABBING_TRAIT)` of
+/// `set_pull_offsets`, and the riding offsets and layer of [`carry`]); drawn by
+/// `crate::health::lying_appearance`.
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq)]
+pub struct HeldOffset {
+    pub pixel: [i16; 2],
+    /// The layer the rider is drawn on (`MOB_ABOVE_PIGGYBACK_LAYER`, `MOB_BELOW_PIGGYBACK_LAYER`).
+    pub layer: Option<f32>,
+}
+
+/// A kill grab chokes: tg `breathe` misses the breath (`pulledby.grab_state >= GRAB_KILL`).
+pub fn choked(world: &World, mob: Entity) -> bool {
+    world
+        .get::<PulledBy>(mob)
+        .and_then(|p| world.get::<GrabState>(p.puller()))
+        .is_some_and(|g| *g >= GrabState::Kill)
+}
+
+/// `set_pull_offsets`: the offset of a mob pulled from `pulled` by a puller at `puller` with
+/// `grab`; diagonals use their east-west part.
+pub fn pull_offset(pulled: TilePos, puller: TilePos, grab: GrabState) -> [i16; 2] {
+    let o = grab.pixel_shift();
+    match dir_between(pulled, puller).map(Dir::offset) {
+        Some((dx, _)) if dx != 0 => [o * dx as i16, 0],
+        Some((_, dy)) if dy != 0 => [0, o * dy as i16],
+        _ => [0, 0],
     }
 }
 
@@ -128,7 +218,7 @@ impl Plugin for PullServerPlugin {
                         resist_intents,
                         move_resists,
                     ),
-                    (pull_slowdown, mark_held),
+                    (pull_slowdown, mark_held, pull_offsets),
                 )
                     .chain()
                     .after(WorldSystems::Movement)
@@ -141,6 +231,7 @@ impl Plugin for PullServerPlugin {
                     .after(HealthSystems)
                     .before(UiSystems::Open),
             )
+            .add_plugins(carry::CarryPlugin)
             .register_ui::<InteractHudUi>()
             .add_observer(on_stop_pulling)
             .add_observer(on_unpulled)
@@ -420,7 +511,7 @@ fn on_stop_pulling(remove: On<Remove<Pulling>>, mut commands: Commands) {
 
 fn on_unpulled(remove: On<Remove<PulledBy>>, mut commands: Commands) {
     if let Ok(mut pulled) = commands.get_entity(remove.entity) {
-        pulled.try_remove::<(HeldByGrab, ResistCooldown)>();
+        pulled.try_remove::<(HeldByGrab, ResistCooldown, Chokehold)>();
     }
 }
 
@@ -522,7 +613,12 @@ fn ctrl_clicks(world: &mut World, mut clicks: Local<MessageCursor<CtrlClick>>) {
         let mut chat = Vec::new();
         if pulling == Some(target) {
             // tg `pulled`: pulling it already does nothing; `grabbedby` upgrades a living one.
-            if !living || world.get::<GrabState>(mob) != Some(&GrabState::Passive) {
+            let grab = world.get::<GrabState>(mob).copied().unwrap_or_default();
+            if !living || grab >= max_grab(world, mob) {
+                continue;
+            }
+            if grab > GrabState::Passive {
+                start_upgrade(world, click.client, mob, target, grab, now);
                 continue;
             }
             world.entity_mut(mob).insert(GrabState::Aggressive);
@@ -612,6 +708,129 @@ fn ctrl_clicks(world: &mut World, mut clicks: Local<MessageCursor<CtrlClick>>) {
         for message in chat {
             world.write_message(message);
         }
+    }
+}
+
+/// tg `grippedby` past the aggressive grab: `CLICK_CD_GRABBING`, the warning, then
+/// [`GRAB_UPGRADE_DS`] of `do_after` ([`complete_upgrade`]).
+fn start_upgrade(
+    world: &mut World,
+    client: Entity,
+    mob: Entity,
+    target: Entity,
+    from: GrabState,
+    now: f64,
+) {
+    world
+        .entity_mut(mob)
+        .insert(NextMove(now + CLICK_CD_GRABBING));
+    let actor = crate::tools::Actor {
+        client,
+        mob,
+        item: world
+            .get::<crate::inventory::Inventory>(mob)
+            .and_then(crate::inventory::Inventory::active_item),
+    };
+    let started = crate::tools::do_after(
+        world,
+        actor,
+        target,
+        GRAB_UPGRADE_DS,
+        0,
+        crate::construction::Job::Interact(crate::drag::DragJob::GrabUpgrade { from }),
+    );
+    if !started {
+        return;
+    }
+    let Some(&at) = world.get::<TilePos>(target) else {
+        return;
+    };
+    let (user, victim) = (name_of(world, mob), name_of(world, target));
+    let chat = visible_message(
+        world,
+        at,
+        ChatChannel::Combat,
+        (
+            Span::Danger,
+            format!("{user} начинает усиливать захват на {victim}!"),
+        ),
+        &[
+            (
+                target,
+                Span::BoldWarning,
+                format!("{user} начинает усиливать захват на вас!"),
+            ),
+            (
+                mob,
+                Span::Danger,
+                format!("Вы начинаете усиливать захват на {victim}!"),
+            ),
+        ],
+    );
+    for message in chat {
+        world.write_message(message);
+    }
+}
+
+/// The end of a grab upgrade `do_after`: still pulling the same mob at the same state, then
+/// `setGrabState(grab_state + 1)`; a victim that is not dense (lying) is pulled onto the
+/// puller's tile.
+pub fn complete_upgrade(
+    world: &mut World,
+    mob: Entity,
+    action: &crate::tools::DoAfter,
+    from: GrabState,
+) {
+    let target = action.target;
+    if world.get::<Pulling>(mob).map(|p| p.0) != Some(target)
+        || world.get::<GrabState>(mob) != Some(&from)
+        || world.get::<Stat>(mob) != Some(&Stat::Conscious)
+    {
+        return;
+    }
+    let Some(next) = from.next().filter(|&n| n <= max_grab(world, mob)) else {
+        return;
+    };
+    world.entity_mut(mob).insert(next);
+    let (user, victim) = (name_of(world, mob), name_of(world, target));
+    let (others, own, theirs) = if next == GrabState::Kill {
+        (
+            format!("{user} начинает душить {victim}!"),
+            format!("Вы начинаете душить {victim}!"),
+            format!("{user} начинает душить вас!"),
+        )
+    } else {
+        (
+            format!("{user} хватает {victim} за шею!"),
+            format!("Вы хватаете {victim} за шею!"),
+            format!("{user} хватает вас за шею!"),
+        )
+    };
+    // `if(!buckled && !density) Move(user.loc)`.
+    if world.get::<ss13_world::Density>(target).is_none()
+        && world
+            .get::<crate::medical::surgery::Buckled>(target)
+            .is_none()
+        && let Some(&to) = world.get::<TilePos>(mob)
+    {
+        move_to_adjacent(world, target, to);
+    }
+    let at = world
+        .get::<TilePos>(target)
+        .copied()
+        .unwrap_or(action.target_pos);
+    let chat = visible_message(
+        world,
+        at,
+        ChatChannel::Combat,
+        (Span::Danger, others),
+        &[
+            (target, Span::BoldWarning, theirs),
+            (mob, Span::Danger, own),
+        ],
+    );
+    for message in chat {
+        world.write_message(message);
     }
 }
 
@@ -795,30 +1014,109 @@ fn move_resists(world: &mut World, mut resists: Local<MessageCursor<MoveResist>>
 }
 
 /// tg `update_pull_movespeed`: a passively pulled lying mob or a closet (not a crate) slows the
-/// puller.
-// Cost: per tick, one pass over pullers only.
+/// puller; `setGrabState` adds `grab_slowdown`, a carried mob `human_carry` ([`carry`]).
+// Cost: per tick, one pass over mobs that ever pulled or carried (they keep a `PullSlowdown`).
 fn pull_slowdown(
-    mut pullers: Query<(&Pulling, &GrabState, &mut PullSlowdown)>,
+    mut mobs: Query<(
+        Entity,
+        Option<&Pulling>,
+        Option<&GrabState>,
+        &mut PullSlowdown,
+    )>,
     bodies: Query<&BodyPosition>,
     closets: Query<&DmCloset>,
+    riders: Query<&carry::Carried>,
+    mut carriers: Local<bevy::ecs::entity::EntityHashSet>,
 ) {
-    for (&Pulling(pulled), grab, mut slowdown) in &mut pullers {
-        let drag = if let Ok(body) = bodies.get(pulled) {
-            if body.lying() && *grab < GrabState::Aggressive {
-                PULL_PRONE_SLOWDOWN
-            } else {
-                0.0
+    carriers.clear();
+    carriers.extend(riders.iter().map(|c| c.by));
+    for (mob, pulling, grab, mut slowdown) in &mut mobs {
+        let grab = grab.copied().unwrap_or_default();
+        let drag = match pulling {
+            Some(&Pulling(pulled)) => {
+                if let Ok(body) = bodies.get(pulled) {
+                    if body.lying() && grab < GrabState::Aggressive {
+                        PULL_PRONE_SLOWDOWN
+                    } else {
+                        0.0
+                    }
+                } else if closets.get(pulled).is_ok_and(|c| !c.is_crate) {
+                    PULL_PRONE_SLOWDOWN
+                } else {
+                    0.0
+                }
             }
-        } else if closets.get(pulled).is_ok_and(|c| !c.is_crate) {
-            PULL_PRONE_SLOWDOWN
+            None => 0.0,
+        };
+        let carry = if carriers.contains(&mob) {
+            carry::HUMAN_CARRY_SLOWDOWN
         } else {
             0.0
         };
-        slowdown.set_if_neq(PullSlowdown(drag));
+        slowdown.set_if_neq(PullSlowdown(drag + grab.slowdown() + carry));
     }
 }
 
-/// [`HeldByGrab`] on pulled mobs whose steps need a resist.
+/// tg `set_pull_offsets` / `reset_pull_offsets` for pulled mobs (not buckled ones; a carried
+/// mob's offsets are [`carry`]'s): shifted towards a living puller by the grab state, turned to
+/// face it, a lying body turned with it on the east-west axis.
+// Cost: per tick, one pass over pulled mobs and mobs ever held (a zero `HeldOffset` stays).
+fn pull_offsets(
+    mut mobs: Query<
+        (
+            Entity,
+            Option<&PulledBy>,
+            &TilePos,
+            Option<&HeldOffset>,
+            Option<&mut Facing>,
+            Option<&mut BodyPosition>,
+        ),
+        (
+            Or<(With<PulledBy>, With<HeldOffset>)>,
+            With<Stat>,
+            Without<crate::medical::surgery::Buckled>,
+        ),
+    >,
+    pullers: Query<(&TilePos, &GrabState), With<Stat>>,
+    mut commands: Commands,
+) {
+    for (mob, by, &at, offset, facing, body) in &mut mobs {
+        let puller = by.and_then(|b| pullers.get(b.puller()).ok());
+        let Some((&from, &grab)) = puller else {
+            // Zeroed rather than removed, so `crate::health` redraws the mob.
+            if offset.is_some_and(|o| *o != HeldOffset::default()) {
+                commands.entity(mob).insert(HeldOffset::default());
+            }
+            continue;
+        };
+        let wanted = HeldOffset {
+            pixel: pull_offset(at, from, grab),
+            layer: None,
+        };
+        if offset == Some(&wanted) {
+            continue;
+        }
+        commands.entity(mob).insert(wanted);
+        let Some(dir) = dir_between(at, from) else {
+            continue;
+        };
+        if let Some(mut facing) = facing {
+            facing.set_if_neq(Facing(dir));
+        }
+        // `LYING_ANGLE_EAST` 90, `LYING_ANGLE_WEST` 270.
+        if let Some(mut body) = body {
+            let (dx, _) = dir.offset();
+            if dx > 0 && body.lying_angle == 270 {
+                body.lying_angle = 90;
+            } else if dx < 0 && body.lying_angle == 90 {
+                body.lying_angle = 270;
+            }
+        }
+    }
+}
+
+/// [`HeldByGrab`] on pulled mobs whose steps need a resist, [`Chokehold`] on mobs grabbed
+/// aggressively or harder (tg `setGrabState` on the pulled mob).
 // Cost: per tick, one pass over pulled mobs only.
 fn mark_held(
     pulled: Query<(
@@ -828,12 +1126,20 @@ fn mark_held(
         &BodyPosition,
         Has<HeldByGrab>,
         Option<&Incapacitation>,
+        Option<&Chokehold>,
     )>,
     grabs: Query<&GrabState>,
     mut commands: Commands,
 ) {
-    for (mob, by, stat, body, held, traits) in &pulled {
+    for (mob, by, stat, body, held, traits, choke) in &pulled {
         let grab = grabs.get(by.puller()).copied().unwrap_or_default();
+        let wanted = (grab >= GrabState::Aggressive).then_some(Chokehold(grab));
+        if wanted.as_ref() != choke {
+            match wanted {
+                Some(c) => commands.entity(mob).insert(c),
+                None => commands.entity(mob).remove::<Chokehold>(),
+            };
+        }
         let traits = traits.copied().unwrap_or_default();
         let hold = grab >= GrabState::Aggressive
             || body.lying()
@@ -878,6 +1184,37 @@ mod tests {
         assert_eq!(resist_chance(GrabState::Passive, true), Some(60.0));
         assert_eq!(resist_chance(GrabState::Aggressive, false), Some(60.0));
         assert_eq!(resist_chance(GrabState::Aggressive, true), Some(30.0));
+        // A neck grab floors the victim: 60 / (2 + 1).
+        assert_eq!(resist_chance(GrabState::Neck, true), Some(20.0));
+        assert_eq!(resist_chance(GrabState::Kill, true), Some(15.0));
+    }
+
+    #[test]
+    fn grab_states_climb_to_kill_with_tg_slowdowns() {
+        assert_eq!(GrabState::Aggressive.next(), Some(GrabState::Neck));
+        assert_eq!(GrabState::Neck.next(), Some(GrabState::Kill));
+        assert_eq!(GrabState::Kill.next(), None);
+        let slow: Vec<f32> = [
+            GrabState::Passive,
+            GrabState::Aggressive,
+            GrabState::Neck,
+            GrabState::Kill,
+        ]
+        .map(GrabState::slowdown)
+        .to_vec();
+        assert_eq!(slow, [0.0, 3.0, 6.0, 9.0]);
+    }
+
+    #[test]
+    fn pulled_mobs_shift_towards_the_puller_like_set_pull_offsets() {
+        let me = at(5, 5);
+        assert_eq!(pull_offset(me, at(5, 6), GrabState::Passive), [0, 6]);
+        assert_eq!(pull_offset(me, at(5, 4), GrabState::Aggressive), [0, -12]);
+        assert_eq!(pull_offset(me, at(6, 5), GrabState::Neck), [16, 0]);
+        assert_eq!(pull_offset(me, at(4, 5), GrabState::Kill), [-16, 0]);
+        // Diagonals use the east-west part.
+        assert_eq!(pull_offset(me, at(6, 6), GrabState::Passive), [6, 0]);
+        assert_eq!(pull_offset(me, me, GrabState::Passive), [0, 0]);
     }
 
     /// A puller walks east, north-east and back west with a body behind it; the body keeps one
