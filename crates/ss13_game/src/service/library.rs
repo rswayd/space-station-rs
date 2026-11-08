@@ -323,6 +323,9 @@ fn bible_attack(world: &mut World, client: Entity, user: Entity, bible: Entity, 
     }
     let (name, user_name) = (name_of(world, target), name_of(world, user));
     if world.get::<Stat>(target) == Some(&Stat::Dead) {
+        if super::religion::sect_dead_bless(world, user, target) != Blessing::Failed {
+            return;
+        }
         let bible_name = name_of(world, bible);
         say_around(
             world,

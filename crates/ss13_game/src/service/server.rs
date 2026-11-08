@@ -93,6 +93,11 @@ impl Plugin for ServiceServerPlugin {
         super::barber::build(app);
         // The slot machine (`super::slots`).
         super::slots::build(app);
+        // The punished, festival, dream and sparring gods.
+        super::burden::build(app);
+        super::festival::build(app);
+        super::dream_sect::build(app);
+        super::sparring::build(app);
         app.register_ui::<PaperSheetUi>()
             .register_ui::<MarkdownViewerUi>()
             .register_ui::<super::DsmBookUi>()

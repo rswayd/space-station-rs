@@ -138,6 +138,11 @@ pub struct Song {
     pub player: Option<Entity>,
     /// `initial(icon_state)`, for the headphones' `_on`.
     pub base_icon: String,
+    /// The last playing stopped at its end (`COMSIG_INSTRUMENT_END` with `finished`), not
+    /// cut short.
+    pub ended_naturally: bool,
+    /// Repeats played since it started (`COMSIG_INSTRUMENT_REPEAT`).
+    pub repeats_done: u32,
     chords: Vec<Chord>,
     current: usize,
     elapsed: u32,
@@ -174,6 +179,8 @@ impl Song {
             elapsed: 0,
             delay_by: 0,
             residual: 0.0,
+            ended_naturally: false,
+            repeats_done: 0,
         }
     }
 
@@ -198,6 +205,7 @@ impl Song {
             return (Some(chord), Some(true));
         }
         self.repeat -= 1;
+        self.repeats_done += 1;
         self.current = 0;
         (Some(chord), None)
     }
@@ -210,6 +218,8 @@ impl Song {
         }
         self.playing = true;
         self.player = Some(player);
+        self.ended_naturally = false;
+        self.repeats_done = 0;
         self.elapsed = 0;
         self.delay_by = 0;
         self.residual = 0.0;
@@ -632,6 +642,9 @@ fn process_songs(world: &mut World) {
             play_chord(world, e, &chord);
         }
         if finished.is_some() {
+            if let Some(mut song) = world.get_mut::<Song>(e) {
+                song.ended_naturally = true;
+            }
             stop_playing(world, e);
         }
     }
@@ -1001,6 +1014,8 @@ pub fn editor_act(world: &mut World, client: Entity, actor: Entity, e: Entity, a
         song.elapsed = live.elapsed;
         song.delay_by = live.delay_by;
         song.residual = live.residual;
+        song.ended_naturally = live.ended_naturally;
+        song.repeats_done = live.repeats_done;
         *live = song;
     }
 }

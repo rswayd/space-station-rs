@@ -30,6 +30,7 @@
 //! | 700 | `antag::wizard::server::attack_self` |
 //! | 800 | `vision::visor_attack_self` |
 //! | 900 | `security::attack_self` |
+//! | 989 | `service::burden` pray refill (the chaplain's revolver) |
 //! | 993 | `guns_special::attack_self` (the last syringe out of a syringe gun) |
 //! | 1000 | `guns::attack_self` |
 //! | 1100 | `chem::attack_self` |
@@ -66,6 +67,7 @@
 //! | 2700 | `radio::attack_self` |
 //! | 2800 | `martial::attack_self` |
 //! | 2900 | `botany::attack_self` |
+//! | 2999 | `service::sparring` contract menu |
 //! | 3000 | `service::server::attack_self` |
 //! | 3010 | `service::barber::attack_self` (lipstick twist, the dye spray on oneself) |
 //! | 3050 | `fishing::server::attack_self` (rods), `fishing::aquarium::attack_self` (fish tanks) |
@@ -145,6 +147,7 @@
 //! | 1491 | `gun_attachments::attach` (a seclite, suppressor, bayonet or screwdriver on the gun) |
 //! | 1493 | `devices::table_clock::attackby` (a heavy item smashes the clock) |
 //! | 1195 | `modpc::programs::station` (a program disk into the computer in the other hand) |
+//! | 1489 | `service::burden` refuses manual reloads of the chaplain's revolver |
 //! | 1500 | `guns::item_interaction` |
 //! | 1600 | `guns::attack_hand` (empty active hand) |
 //! | 1700 | `construction::split_into_hand` (empty active hand) |

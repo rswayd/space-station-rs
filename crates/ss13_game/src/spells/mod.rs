@@ -735,6 +735,8 @@ fn antimagic_of(world: &World, mob: Entity) -> u32 {
     }
     // The antimagic and godwoken traumas (`TRAIT_ANTIMAGIC`, `TRAIT_HOLY`).
     flags |= crate::medical::special_traumas::antimagic_flags(world, mob);
+    // The psyker, the nullwave song and dream protection (`crate::service`).
+    flags |= crate::service::religion_antimagic(world, mob);
     flags
 }
 

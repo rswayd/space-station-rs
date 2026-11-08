@@ -90,13 +90,19 @@ pub const MACHINE_BLESSINGS: [&str; 13] = [
 /// What religion makes at runtime (`ss13_game::service` religion): the chaplain's bible, the
 /// altar a bible unpacks into, the armaments beacon, the immortal candles and the greedy
 /// god's vendor.
-pub const RELIGION_RUNTIME_TYPES: [&str; 6] = [
+pub const RELIGION_RUNTIME_TYPES: [&str; 11] = [
     "/obj/item/book/bible/booze",
     "/obj/structure/altar/of_gods",
     "/obj/item/choice_beacon/holy",
     "/obj/item/flashlight/flare/candle/infinite",
     "/obj/machinery/vending/custom/greed",
     "/obj/item/nullrod",
+    // The punished, festival and sparring gods' rites and gifts.
+    "/obj/item/gun/ballistic/revolver/chaplain",
+    "/obj/item/instrument/violin/festival",
+    "/obj/item/choice_beacon/music",
+    "/obj/item/sparring_contract",
+    "/obj/item/ceremonial_blade",
 ];
 
 /// The Cards Against Spess texts (`GLOB.card_decks`), written by `ss13-mapload convert` to

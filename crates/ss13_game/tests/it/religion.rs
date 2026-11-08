@@ -1,6 +1,7 @@
 //! Religion over a loopback server: the high priest's null rod becomes the picked form (the
 //! station's holy weapon); the bible on the altar of the gods picks the machine god; with the
-//! favor for it the "Receive Blessing" rite runs its invocations and pays the favor.
+//! favor for it the "Receive Blessing" rite runs its invocations and pays the favor. The
+//! festival god drops a music beacon for its priest and its first rite makes the holy violin.
 
 use std::path::{Path, PathBuf};
 
@@ -41,6 +42,11 @@ const TYPES: &str = r##"{
     "/obj/item/nullrod": { "parent": "/obj/item" },
     "/obj/item/nullrod/claymore": { "parent": "/obj/item/nullrod" },
     "/obj/item/nullrod/staff": { "parent": "/obj/item/nullrod" },
+    "/obj/item/choice_beacon": { "parent": "/obj/item" },
+    "/obj/item/choice_beacon/music": { "parent": "/obj/item/choice_beacon" },
+    "/obj/item/instrument": { "parent": "/obj/item" },
+    "/obj/item/instrument/violin": { "parent": "/obj/item/instrument" },
+    "/obj/item/instrument/violin/festival": { "parent": "/obj/item/instrument/violin" },
     "/obj/item/card": { "parent": "/obj/item" },
     "/obj/item/card/id": { "parent": "/obj/item/card", "declared_vars": {
         "access": { "list": [] }, "icon_state": "card_grey", "slot_flags": 256 } },
@@ -102,6 +108,8 @@ const NULLROD: &str = "/obj/item/nullrod";
 const CLAYMORE: &str = "/obj/item/nullrod/claymore";
 const BIBLE: &str = "/obj/item/book/bible";
 const ALTAR: &str = "/obj/structure/altar/of_gods";
+const MUSIC_BEACON: &str = "/obj/item/choice_beacon/music";
+const FESTIVAL_VIOLIN: &str = "/obj/item/instrument/violin/festival";
 
 fn fixture_assets(test: &str) -> PathBuf {
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR"))
@@ -114,6 +122,8 @@ fn fixture_assets(test: &str) -> PathBuf {
         "/obj/item/nullrod/staff",
         BIBLE,
         ALTAR,
+        MUSIC_BEACON,
+        FESTIVAL_VIOLIN,
         "/turf/open/floor",
         "/turf/closed/wall",
         "/turf/open/space/basic",
@@ -147,6 +157,12 @@ impl Station {
             .find(|(_, i)| i.path == path)
             .map(|(e, _)| e)
             .unwrap_or_else(|| panic!("{path} on the map"))
+    }
+
+    fn find_item(&mut self, path: &str) -> Option<Entity> {
+        let world = self.server.world_mut();
+        let mut q = world.query::<(Entity, &DmItem)>();
+        q.iter(world).find(|(_, i)| i.path == path).map(|(e, _)| e)
     }
 
     fn altar(&mut self) -> Entity {
@@ -249,4 +265,36 @@ fn the_high_priest_picks_a_holy_weapon_a_sect_and_performs_a_rite() {
     });
     s.run_until_for(10.0, "the rite is paid", |s| s.religion().favor == 100.0);
     assert!(s.try_get::<PerformingRite>(mob).is_none());
+}
+
+#[test]
+fn the_festival_god_gives_a_music_beacon_and_a_holy_violin() {
+    let mut s = Station::start("the_festival_god_gives_a_music_beacon_and_a_holy_violin");
+
+    let (bible, altar) = (s.item(BIBLE), s.altar());
+    s.put_in_hand(bible);
+    s.click(0, altar);
+    let list = s.next_list(None);
+    s.act(0, list, "submit", &[("entry", "Festival God")]);
+    s.run_until("the festival god is the sect", |s| {
+        s.religion().sect == Some(Sect::Music)
+    });
+    // `on_conversion`: the beacon on the priest's tile.
+    s.run_until("a music beacon lands", |s| {
+        s.find_item(MUSIC_BEACON).is_some()
+    });
+
+    s.server.world_mut().resource_mut::<Religion>().favor = 30.0;
+    s.click(0, altar);
+    let list = s.next_list(Some(list));
+    s.act(
+        0,
+        list,
+        "submit",
+        &[("entry", "Cogitandi Fidis (20 favor)")],
+    );
+    s.run_until_for(10.0, "the holy violin appears", |s| {
+        s.find_item(FESTIVAL_VIOLIN).is_some()
+    });
+    assert_eq!(s.religion().favor, 10.0);
 }
