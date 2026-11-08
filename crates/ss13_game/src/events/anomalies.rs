@@ -1003,7 +1003,8 @@ fn loose_obj(world: &World, t: Entity) -> bool {
         && path_of(world, t).is_none_or(|p| !is_under(&p, EFFECT))
 }
 
-fn anchored(world: &World, e: Entity) -> bool {
+/// tg `anchored`: the runtime flag, else the type's.
+pub(crate) fn anchored(world: &World, e: Entity) -> bool {
     world.get::<crate::obj_damage::Anchored>(e).map_or_else(
         || world.get::<DmObj>(e).is_some_and(|o| o.anchored),
         |a| a.0,
@@ -1011,7 +1012,7 @@ fn anchored(world: &World, e: Entity) -> bool {
 }
 
 /// `step_towards(thing, target)`: one step (diagonal allowed) unless something dense is there.
-fn step_towards(world: &mut World, thing: Entity, target: TilePos) {
+pub(crate) fn step_towards(world: &mut World, thing: Entity, target: TilePos) {
     let Some(&pos) = world.get::<TilePos>(thing) else {
         return;
     };

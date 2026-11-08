@@ -583,6 +583,41 @@ pub fn gib(world: &mut World, mob: Entity) {
     crate::construction::tile_changed(world, pos);
 }
 
+/// tg `dust()` with its defaults (`drop_items = FALSE`): the mob dies, its player becomes a
+/// ghost, the body goes with everything it carries, and `spawn_dust` leaves remains (human
+/// remains of a body with limbs, ash of the rest).
+// shortcut: no dust animation, death moodlets or plasmaman/xeno/robot remains.
+pub fn dust(world: &mut World, mob: Entity) {
+    use crate::inventory::{ALL_SLOTS, Inventory};
+    let Some(&pos) = world.get::<TilePos>(mob) else {
+        return;
+    };
+    world.entity_mut(mob).insert(Stat::Dead);
+    if let Some(client) = world.get::<PlayerMob>(mob).map(|p| p.client)
+        && let Some(ghost) = crate::ghost::ghostize_client(world, client)
+        && let Some(mut g) = world.get_mut::<crate::ghost::Ghost>(ghost)
+    {
+        g.body = None;
+    }
+    let mut carried: Vec<Entity> = world
+        .get::<Inventory>(mob)
+        .map(|inv| ALL_SLOTS.iter().filter_map(|&s| inv.slot(s)).collect())
+        .unwrap_or_default();
+    carried.extend(world.get::<crate::restraints::Handcuffed>(mob).map(|h| h.0));
+    let remains = if world.get::<crate::medical::wounds::Limbs>(mob).is_some() {
+        "/obj/effect/decal/remains/human"
+    } else {
+        "/obj/effect/decal/cleanable/ash"
+    };
+    for item in carried {
+        if let Ok(item) = world.get_entity_mut(item) {
+            item.despawn();
+        }
+    }
+    world.despawn(mob);
+    crate::construction::spawn_obj(world, remains, pos);
+}
+
 pub fn living_bundle() -> impl Bundle {
     (
         Health::default(),

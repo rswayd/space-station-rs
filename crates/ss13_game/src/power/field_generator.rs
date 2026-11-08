@@ -19,8 +19,9 @@
 //!
 //! Cost: only generators and fields exist in the queries; fields are made and dropped on
 //! events (start, shutdown), the per-frame pass is over generators with a timer pending.
-// shortcut: no floor shields (`shield_floor`), no singularity blocking (no singularity yet),
-// no explosion blocking, no generator `can_atmos_pass` switch, fields are dense to thrown items
+// Fields and active generators hold singularities and tesla balls
+// (`super::singularity::blocks_singularity`).
+// shortcut: no floor shields (`shield_floor`), no explosion blocking, no generator `can_atmos_pass` switch, fields are dense to thrown items
 // and gun projectiles (tg lets them through; emitter beams pass, `super::emitter`), no
 // megafauna or simple-animal rip-outs, fields are made in all four directions at once (tg
 // staggers them 0.1 s apart).

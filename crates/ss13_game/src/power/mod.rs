@@ -25,10 +25,12 @@ pub mod lighting;
 pub mod model;
 pub mod pacman;
 pub mod shields;
+pub mod singularity;
 pub mod smes;
 pub mod solar;
 pub mod supermatter;
 pub mod teg;
+pub mod tesla;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -342,6 +344,8 @@ impl Plugin for PowerServerPlugin {
                 apc_ui::ApcUiPlugin,
                 teg::TegPlugin,
                 lighting::LightingPlugin,
+                singularity::SingularityPlugin,
+                tesla::TeslaPlugin,
             ))
             .add_systems(
                 MapInit,

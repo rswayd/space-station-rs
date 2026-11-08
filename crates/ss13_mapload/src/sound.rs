@@ -610,6 +610,21 @@ pub mod files {
     pub const ADMIN: [&str; 1] = ["modular_bandastation/admin/sound/manup1.ogg"];
     /// Quantum pads (`ss13_game::science::quantum_pad`): the beam's hum.
     pub const TELEPORT: [&str; 1] = ["sound/items/weapons/emitter2.ogg"];
+    /// Singularities (`ss13_game::power::singularity`): a crystal eaten, a bag of holding.
+    pub const SINGULARITY: [&str; 2] = [
+        "sound/effects/supermatter.ogg",
+        "sound/effects/clockcult_gateway_disrupted.ogg",
+    ];
+    /// Tesla balls (`ss13_game::power::tesla`): bolts, a mini-ball charging, BandaStation's
+    /// moves and dispersal.
+    pub const TESLA: [&str; 6] = [
+        "sound/effects/magic/lightningbolt.ogg",
+        "sound/effects/magic/lightning_chargeup.ogg",
+        "modular_bandastation/tesla_rework/sound/tesla_move_1.ogg",
+        "modular_bandastation/tesla_rework/sound/tesla_move_2.ogg",
+        "modular_bandastation/tesla_rework/sound/tesla_move_3.ogg",
+        "modular_bandastation/tesla_rework/sound/tesla_destroy.ogg",
+    ];
     pub const SYNDIE_ITEMS: [&str; 3] = [
         "sound/items/weapons/saberon.ogg",
         "sound/items/weapons/saberoff.ogg",
@@ -1033,6 +1048,8 @@ pub fn referenced<'a>(
     out.extend(files::POWER_TOOLS.map(str::to_owned));
     out.extend(files::ADMIN.map(str::to_owned));
     out.extend(files::TELEPORT.map(str::to_owned));
+    out.extend(files::SINGULARITY.map(str::to_owned));
+    out.extend(files::TESLA.map(str::to_owned));
     out.extend(files::GAME_CODE.map(str::to_owned));
     out.extend(files::RESTAURANT.map(str::to_owned));
     out.extend(files::DECOR.map(str::to_owned));
