@@ -25,6 +25,8 @@ pub const NO_SLIP_ALL: &str = "noslip_all";
 pub const FAST_CUFFING: &str = "fast_cuffing";
 /// `TRAIT_FINGERPRINT_PASSTHROUGH`.
 pub const FINGERPRINT_PASSTHROUGH: &str = "fingerprint_passthrough";
+/// `TRAIT_MESON_VISION`: mesons (a singularity's stare does not stun).
+pub const MESON_VISION: &str = "meson_vision";
 
 /// The items whose `clothing_traits` `mob` has: worn in a slot their `slot_flags` allow.
 pub fn trait_sources(world: &World, mob: Entity) -> impl Iterator<Item = Entity> + '_ {

@@ -437,6 +437,14 @@ fn hit(world: &mut World, emitter: Entity, target: Entity) {
         sm.eat_beam(BEAM_DAMAGE);
         return;
     }
+    // A tesla ball takes the beam (`check_hit`); a singularity swallows it (`consume_bullets`).
+    if super::tesla::emitter_hit(world, target)
+        || world
+            .get::<super::singularity::Singularity>(target)
+            .is_some()
+    {
+        return;
+    }
     // `/obj/projectile/beam/emitter` (`LASER`) on a mech (`crate::mecha`).
     let from = world
         .get::<TilePos>(target)

@@ -117,6 +117,7 @@ mod security_level;
 mod service;
 mod shuttle;
 mod silicon;
+mod singularity;
 mod sound;
 mod space_events;
 mod spacemove;

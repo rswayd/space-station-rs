@@ -669,7 +669,7 @@ struct LastFire(u64);
 
 /// `TRAIT_BEING_SHOCKED` of zapped objects and mobs (1 s), by entity.
 #[derive(Resource, Default)]
-struct Shocked(HashMap<Entity, f64>);
+pub(super) struct Shocked(pub(super) HashMap<Entity, f64>);
 
 /// A crystal delaminated (tests, logs).
 #[derive(Message, Clone, Copy, Debug, PartialEq, Eq)]
@@ -1204,10 +1204,10 @@ fn count_down(world: &mut World, e: Entity, pos: TilePos, now: f64) {
     }
 }
 
-/// `delaminate`.
-// shortcut: no explosions, singularity, tesla ball, delamination radiation, hallucinations or
-// anomalies exist yet: the crystal is announced as gone to everyone on its level and deleted
-// (tg `qdel(sm)` ends every strategy).
+/// `delaminate`: [`Delaminated`] makes the singularity or the tesla ball
+/// (`super::singularity`, `super::tesla`).
+// shortcut: no explosions, delamination radiation, hallucinations or anomalies yet: the crystal
+// is announced as gone to everyone on its level and deleted (tg `qdel(sm)` ends every strategy).
 fn delaminate(world: &mut World, e: Entity, pos: TilePos) {
     let kind = world
         .get::<Supermatter>(e)

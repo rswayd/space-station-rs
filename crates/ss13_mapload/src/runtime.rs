@@ -74,6 +74,9 @@ pub const GIFT_TYPES: &[&str] = &[
 /// Constant paths `ss13_game` spawns that no other table of this crate lists: leftovers,
 /// products and printouts of machines, decals, grenade payloads, quirk items, paper kinds.
 pub const GAME_RUNTIME_TYPES: &[&str] = &[
+    // `power::singularity`, `power::tesla`: what a delamination or a collapsing tear leaves.
+    "/obj/singularity",
+    "/obj/tesla_ball",
     // `mobs::lavaland::minebot`: what a dead minebot leaves.
     "/obj/effect/decal/cleanable/blood/gibs/robot_debris/old",
     // `deployable_turrets`: the shots, the deployed and folded heavy machine guns.
