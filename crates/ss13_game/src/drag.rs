@@ -321,6 +321,12 @@ fn drag(world: &mut World, client: Entity, from: DragEnd, to: DragEnd) {
     {
         return;
     }
+    // `abductor/experiment/mouse_drop_receive`.
+    if let (End::World(over), End::World(_)) = (to, from)
+        && crate::antag::abductor::server::mouse_drop_receive(world, over, dragged)
+    {
+        return;
+    }
     // `netpod/mouse_drop_receive`.
     if let (End::World(over), End::World(_)) = (to, from)
         && crate::science::bitrunning::avatar::mouse_drop_receive(world, over, dragged)

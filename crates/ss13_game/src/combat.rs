@@ -310,6 +310,8 @@ fn melee(
                 || crate::chem::interacts_with_mobs(&item.path)
                 || crate::forensics::server::interacts_with_mobs(&item.path)
                 || crate::antag::syndie_items::interacts_with_mobs(&item.path)
+                // Abductor science tools, silencers, mental interface devices.
+                || crate::antag::abductor::server::interacts_with_mobs(&item.path)
                 || crate::silicon::aicard::interacts_with_mobs(&item.path)
                 || crate::silicon::pai::interacts_with_mobs(&item.path)
                 || crate::service::barber::interacts_with_mobs(&item.path)

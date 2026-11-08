@@ -320,12 +320,25 @@ pub struct IdCard {
 /// The access of the ID tg's `get_idcard(hand_first = TRUE)` finds on `mob` (a card or the card
 /// in a PDA: active hand, other hand, ID slot, belt); empty without one.
 pub fn mob_access(world: &World, mob: Entity) -> Vec<String> {
-    world
+    let mut access = world
         .get::<Inventory>(mob)
         .and_then(|i| i.id_card(world))
         .and_then(|card| world.get::<IdCard>(card))
         .map(|c| c.access.clone())
-        .unwrap_or_default()
+        .unwrap_or_default();
+    // The `simple_access` of an anagraphic abductor gland (`crate::antag::abductor`).
+    // shortcut: the station's accesses, not tg's `REGION_ALL_GLOBAL` (CentCom, Syndicate, away).
+    if world
+        .get::<crate::antag::abductor::server::GlandAccess>(mob)
+        .is_some()
+    {
+        for a in crate::id_access::all_station_access() {
+            if !access.iter().any(|o| o == a) {
+                access.push(a.to_owned());
+            }
+        }
+    }
+    access
 }
 
 /// tg `allowed(user)` by ID alone ([`mob_access`] against the requirements); each caller adds

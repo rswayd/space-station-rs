@@ -20,6 +20,7 @@ use ss13_shared::protocol::NetId;
 use ss13_tgui::UiInterface;
 use ss13_tgui::interfaces::vending::ProductIcon;
 
+pub mod abductor;
 #[cfg(feature = "server")]
 pub mod brainwashed;
 #[cfg(feature = "server")]

@@ -44,7 +44,7 @@ use crate::tools::tell;
 use crate::zone::BodyZone;
 
 mod data;
-mod effects;
+pub(crate) mod effects;
 mod life;
 mod spread;
 mod transfer;

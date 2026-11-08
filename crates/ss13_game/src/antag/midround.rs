@@ -21,7 +21,8 @@
 // (infiltrator), the stowaway changeling, the latejoin revolution (provocateur), the midround
 // wizard, the paradox clone (`super::paradox_clone`), the nightmare (`super::nightmare`), the
 // morph (`super::morph`), the space dragon (`super::space_dragon`), the revenant
-// (`super::revenant`) and the slaughter demon (`super::slaughter`) spawn anyone;
+// (`super::revenant`), the slaughter demon (`super::slaughter`) and the abductors
+// (`super::abductor`) spawn anyone;
 // the others keep their weights, are logged and fail preparation, as tg's do without candidates.
 // There is no admin cancel or reroll window before a midround, no false alarms, no AFK checks,
 // no account age or job bans, and `EMERGENCY_PAST_POINT_OF_NO_RETURN` ignores the call's
@@ -131,6 +132,7 @@ pub const MORPH: &str = "Morph";
 pub const SPACE_DRAGON: &str = "Space Dragon";
 pub const REVENANT: &str = "Revenant";
 pub const SLAUGHTER_DEMON: &str = "Slaughter Demon";
+pub const ABDUCTORS: &str = "Abductors";
 
 const HOP: &[&str] = &["Head of Personnel"];
 const ONE: (Cap, Cap) = (Cap::Fixed(1), Cap::Fixed(1));
@@ -200,7 +202,11 @@ pub const RULESETS: [Ruleset; 30] = {
             role: Some(super::ROLE_NIGHTMARE),
             ..other(NIGHTMARE, Light, flat(5), 15)
         },
-        decrease(other("Abductors", Light, flat(5), 20), 3),
+        Ruleset {
+            role: Some(super::abductor::ROLE_ABDUCTOR),
+            caps: (Cap::Fixed(2), Cap::Fixed(2)),
+            ..decrease(other(ABDUCTORS, Light, flat(5), 20), 3)
+        },
         Ruleset {
             role: Some(super::ROLE_REVENANT),
             ..non_repeatable(other(REVENANT, Light, flat(5), 10))
@@ -557,6 +563,8 @@ fn can_be_selected(world: &mut World, r: &Ruleset) -> bool {
         // More than 10 corpses on the station.
         REVENANT => super::revenant::can_spawn(world),
         SLAUGHTER_DEMON => super::slaughter::can_spawn(world),
+        // Fewer than 4 teams, and a ship to put the next one on.
+        ABDUCTORS => super::abductor::server::can_spawn(world),
         _ => true,
     }
 }
@@ -834,6 +842,15 @@ fn execute(
                 .filter_map(|&g| world.get::<PlayerMob>(g).map(|p| (p.client, g)))
                 .collect();
             if super::slaughter::spawn_demons(world, &ghosts).is_empty() {
+                return Vec::new();
+            }
+        }
+        ABDUCTORS => {
+            let clients: Vec<Entity> = chosen
+                .iter()
+                .filter_map(|&g| world.get::<PlayerMob>(g).map(|p| p.client))
+                .collect();
+            if super::abductor::server::spawn_abductors(world, &clients).is_empty() {
                 return Vec::new();
             }
         }
