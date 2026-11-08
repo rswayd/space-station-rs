@@ -832,7 +832,7 @@ fn blink(world: &mut World, mob: Entity, pos: TilePos) {
 
 /// The free tiles of `area` (`TELEPORT_SPELL_SKIP_BLOCKED`: dense things but mobs block).
 // Cost: one pass over the area table of the station levels (~65k tiles) per cast.
-fn area_tiles(world: &World, area: Entity) -> Vec<TilePos> {
+pub(crate) fn area_tiles(world: &World, area: Entity) -> Vec<TilePos> {
     let index = world.resource::<SpatialIndex>();
     let areas = world.resource::<ss13_mapload::Areas>();
     let mut out = Vec::new();

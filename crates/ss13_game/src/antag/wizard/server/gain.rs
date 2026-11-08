@@ -55,14 +55,14 @@ pub(super) fn name_of(world: &World, e: Entity) -> String {
 
 /// `path` spawned on `mob` (tg `equip_to_slot`): replicated and carried. `None` without its
 /// prototype.
-pub(super) fn carried(world: &mut World, mob: Entity, path: &str) -> Option<Entity> {
+pub(crate) fn carried(world: &mut World, mob: Entity, path: &str) -> Option<Entity> {
     let item = crate::construction::spawn_detached(world, path)?;
     world.entity_mut(item).insert((Networked, CarriedBy(mob)));
     Some(item)
 }
 
 /// `path` spawned into `pack` (`equip_to_storage`).
-pub(super) fn into_pack(world: &mut World, pack: Entity, path: &str) -> Option<Entity> {
+pub(crate) fn into_pack(world: &mut World, pack: Entity, path: &str) -> Option<Entity> {
     let item = crate::construction::spawn_detached(world, path)?;
     world.entity_mut(item).insert(Networked);
     crate::storage::put_inside(world, item, pack);
@@ -95,7 +95,7 @@ pub(crate) fn give(world: &mut World, mob: Entity, item: Entity) -> bool {
 }
 
 /// `delete_equipment`: everything the body carries goes.
-pub(super) fn strip(world: &mut World, mob: Entity) {
+pub(crate) fn strip(world: &mut World, mob: Entity) {
     if let Some(inventory) = world.get::<Inventory>(mob).cloned() {
         let items: Vec<Entity> = inventory
             .equipped()

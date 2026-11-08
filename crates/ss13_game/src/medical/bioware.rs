@@ -129,6 +129,8 @@ pub fn stable_heart(world: &World, mob: Entity) -> bool {
 /// `TRAIT_SHOCKIMMUNE`.
 pub fn shock_immune(world: &World, mob: Entity) -> bool {
     has(world, mob, Bioware::NerveGrounding)
+        // An electric abductor gland (`crate::antag::abductor`).
+        || crate::antag::abductor::server::gland_shock_immune(world, mob)
 }
 
 /// The imprinted cortex's `COMSIG_CARBON_BLOCK_TRAUMA`: basic traumas do not take.

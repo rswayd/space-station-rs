@@ -944,6 +944,7 @@ fn declare_completion(world: &mut World, now: f64) {
     antags.extend(crate::antag::cult::server::roundend_report(world, end));
     antags.extend(crate::antag::heretic::server::roundend_report(world, end));
     antags.extend(crate::antag::wizard::server::roundend_report(world, end));
+    antags.extend(crate::antag::abductor::server::roundend_report(world, end));
     antags.extend(crate::antag::paradox_clone::roundend_report(world, end));
     antags.extend(crate::antag::nightmare::roundend_report(world, end));
     antags.extend(crate::antag::morph::roundend_report(world, end));

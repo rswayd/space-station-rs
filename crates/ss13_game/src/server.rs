@@ -388,6 +388,7 @@ impl Plugin for GameServerPlugin {
             crate::spells::SpellsPlugin,
             crate::antag::wizard::server::WizardPlugin,
         ))
+        .add_plugins(crate::antag::abductor::server::AbductorPlugin)
         .insert_resource(MobProto(self.mob_proto.clone()))
         .init_resource::<SpawnPoints>()
         .init_resource::<Players>()

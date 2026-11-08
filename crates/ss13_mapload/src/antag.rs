@@ -163,6 +163,50 @@ pub const WIZARD_RUNTIME_TYPES: [&str; 40] = [
     "/obj/item/clothing/suit/wizrobe/red",
 ];
 
+/// What the abductors make at runtime (`ss13_game::antag::abductor`): their outfits, the
+/// console's gear, the gland storage's glands, the glands' eggs, slimes and spiderlings, the
+/// baton's energy cuffs.
+pub const ABDUCTOR_RUNTIME_TYPES: [&str; 38] = [
+    "/obj/item/clothing/under/abductor",
+    "/obj/item/clothing/shoes/combat",
+    "/obj/item/radio/headset/abductor",
+    "/obj/item/clothing/head/helmet/abductor",
+    "/obj/item/clothing/suit/armor/abductor/vest",
+    "/obj/item/melee/baton/abductor",
+    "/obj/item/storage/belt/military/abductor/full",
+    "/obj/item/storage/backpack",
+    "/obj/item/gun/energy/alien",
+    "/obj/item/abductor/silencer",
+    "/obj/item/abductor/gizmo",
+    "/obj/item/abductor/mind_device",
+    "/obj/item/restraints/handcuffs/energy",
+    "/obj/item/organ/tongue/abductor",
+    "/obj/item/abductor_machine_beacon/chem_dispenser",
+    "/obj/item/gun/energy/recharge/shrink_ray",
+    "/obj/item/abductor/alien_omnitool",
+    "/mob/living/basic/cow",
+    "/obj/item/food/grown/wheat",
+    "/obj/item/poster/random_abductor",
+    "/obj/item/organ/heart/gland/access",
+    "/obj/item/organ/heart/gland/blood",
+    "/obj/item/organ/heart/gland/chem",
+    "/obj/item/organ/heart/gland/egg",
+    "/obj/item/organ/heart/gland/electric",
+    "/obj/item/organ/heart/gland/heal",
+    "/obj/item/organ/heart/gland/mindshock",
+    "/obj/item/organ/heart/gland/plasma",
+    "/obj/item/organ/heart/gland/quantum",
+    "/obj/item/organ/heart/gland/slime",
+    "/obj/item/organ/heart/gland/spiderman",
+    "/obj/item/organ/heart/gland/transform",
+    "/obj/item/organ/heart/gland/trauma",
+    "/obj/item/organ/heart/gland/ventcrawling",
+    "/obj/item/organ/heart/gland/viral",
+    "/obj/item/food/egg/gland",
+    "/mob/living/basic/slime",
+    "/mob/living/basic/spider/growing/spiderling",
+];
+
 /// The uplink items sold here: the ones whose item exists in this codebase. The rest of tg's
 /// catalog needs mechanics that are not modelled yet (see `docs/parity/antagonists/uplink.md`).
 // shortcut: a curated list; grow it as the items' mechanics land.

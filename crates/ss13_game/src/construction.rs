@@ -328,6 +328,9 @@ pub enum Job {
     Shield(crate::power::shields::ShieldJob),
     /// Finishing a circuit shell assembly ([`crate::wiremod::server`]).
     Wiremod(Entity),
+    /// Abductor console mashing, science tool marks, baton cuffs
+    /// ([`crate::antag::abductor::server`]).
+    Abductor(crate::antag::abductor::server::AbductorJob),
     /// One second of an inducer charging this atom's cell ([`crate::inducer`]).
     Inducer(Entity),
     /// Mending shredded clothing ([`crate::clothing::damage`]).
@@ -1399,6 +1402,9 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         Job::Disposal(job) => crate::disposals::complete(world, mob, action, *job),
         &Job::Vampire(job) => crate::antag::vampire::server::complete(world, mob, action, job),
         &Job::Cult(job) => crate::antag::cult::server::complete(world, mob, action, job),
+        &Job::Abductor(job) => {
+            crate::antag::abductor::server::complete_abductor_job(world, mob, action, job)
+        }
         &Job::Heretic(job) => crate::antag::heretic::server::complete(world, mob, action, job),
         &Job::Changeling(job) => {
             crate::antag::changeling::server::complete(world, mob, action, job)

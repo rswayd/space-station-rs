@@ -62,7 +62,7 @@ const WHEAT: &str = "/obj/item/food/grown/wheat";
 /// `MAX_CHICKENS`.
 pub const MAX_CHICKENS: usize = 50;
 /// `EGG_LAYING_MESSAGES` (BandaStation keeps them in English).
-const EGG_LAYING_MESSAGES: [&str; 4] = [
+pub(crate) const EGG_LAYING_MESSAGES: [&str; 4] = [
     "lays an egg.",
     "squats down and croons.",
     "begins making a huge racket.",

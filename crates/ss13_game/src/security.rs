@@ -250,6 +250,15 @@ pub(crate) fn security_clicks(world: &mut World, mut clicks: Local<MessageCursor
             item: held,
         };
         let handled = match held {
+            // The advanced baton's modes in an abductor's hand (`crate::antag::abductor`).
+            Some(item)
+                if world
+                    .get::<crate::antag::abductor::server::AbductorBaton>(item)
+                    .is_some()
+                    && crate::antag::abductor::server::baton_attack(world, actor, item, target) =>
+            {
+                true
+            }
             Some(item) if world.get::<Baton>(item).is_some() => {
                 baton_attack(world, actor, item, target, click.modifiers.right, now)
             }
@@ -327,6 +336,7 @@ fn blocks_melee(world: &mut World, user: Entity, item: Entity, target: Entity) -
     if dm.force <= 0.0
         || crate::medical::interacts_with_mobs(&dm.path)
         || crate::chem::interacts_with_mobs(&dm.path)
+        || crate::antag::abductor::server::interacts_with_mobs(&dm.path)
         || (crate::food::is_food(&dm.path) && !combat)
     {
         return false;

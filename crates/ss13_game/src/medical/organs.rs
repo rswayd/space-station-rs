@@ -326,7 +326,8 @@ impl Organ {
             path: path.to_owned(),
             damage: 0.0,
             failing: false,
-            robotic: path.contains("/cybernetic"),
+            // Abductor glands are `ORGAN_ROBOTIC` too (`crate::antag::abductor`).
+            robotic: path.contains("/cybernetic") || path.contains("/heart/gland"),
             operated: false,
             failure_time: 0.0,
             beating: true,
@@ -618,6 +619,7 @@ fn on_insert(world: &mut World, organ: Entity, mob: Entity, slot: Slot) {
         }
         Slot::Stomach => crate::chem::stomach_inserted(world, organ, mob),
         Slot::Eyes => refresh_look(world, mob),
+        Slot::Heart => crate::antag::abductor::server::gland_inserted(world, organ, mob),
         Slot::Tongue => {
             use ss13_chat::language::{LanguageHolder, LanguageId, LanguageSource, Tongue};
             let tongue = world
@@ -666,6 +668,7 @@ pub fn remove(world: &mut World, organ: Entity, special: bool) {
         super::traumas::let_go(world, organ);
     }
     world.entity_mut(organ).remove::<OrganOf>();
+    crate::antag::abductor::server::gland_removed(world, organ, mob);
     match state.slot {
         Slot::Heart if !special => {
             let now = world.resource::<Time>().elapsed_secs_f64();

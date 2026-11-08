@@ -29,6 +29,7 @@
 //! | 600 | `antag::heretic::server::attack_self` |
 //! | 700 | `antag::wizard::server::attack_self` |
 //! | 800 | `vision::visor_attack_self` |
+//! | 893 | `antag::abductor::server::gear` (science tool, advanced baton, mental interface device modes) |
 //! | 900 | `security::attack_self` |
 //! | 993 | `guns_special::attack_self` (the last syringe out of a syringe gun) |
 //! | 1000 | `guns::attack_self` |
@@ -202,6 +203,7 @@
 //! | 2660 | `medical::kiosk::interact` |
 //! | 2663 | `science::xenobio_console::take_controls` (the slime console's controls) |
 //! | 2673 | `science::cell_lines::attack_hand` (microscope readout and dish removal, vat resampler and flush) |
+//! | 2683 | `antag::abductor::server::ship` (abductor console, experimentation machine, gland storage windows) |
 //! | 2670 | `medical::limbgrower::interact` |
 //! | 2685 | `brig::gulag::interact` (labor camp teleporter, its console, the item reclaimer) |
 //! | 2695 | `brig::labor::interact` (claim console, plate press; right click: produceporter) |
@@ -339,6 +341,8 @@
 //! | 1777 | `science::xenobio::item_interaction` (slimes, extracts) |
 //! | 1783 | `science::cell_lines::dish_interaction` (a petri dish into the microscope or a growing vat) |
 //! | 1800 | `kitchen::item_interaction` |
+//! | 1803 | `antag::abductor::server::ship` (a science tool or vest onto the abductor console, a gland into storage) |
+//! | 1813 | `antag::abductor::server::gear` (science tool, silencer, mental interface device on a mob; far clicks: `RangedClick`) |
 //! | 1850 | `restaurant::item_interaction` |
 //! | 1900 | `cooking::item_interaction` |
 //! | 2000 | `smartfridge::item_interaction` |
