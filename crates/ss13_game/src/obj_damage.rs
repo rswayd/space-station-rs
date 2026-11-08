@@ -324,6 +324,13 @@ pub fn strip(name: &str) -> &str {
 /// tg `take_damage` with its effects: `atom_break` at `integrity_failure`, `atom_destruction`
 /// at 0.
 pub fn take_damage(world: &mut World, target: Entity, amount: f32, damtype: DamageType) -> Hit {
+    // Blob structures have their own resistances (`crate::antag::blob::structures`).
+    use crate::antag::blob::strains::Flag;
+    if let Some(hit) =
+        crate::antag::blob::structures::damage(world, target, amount, damtype, Flag::Melee)
+    {
+        return hit;
+    }
     let Some(obj) = world.get::<DmObj>(target).cloned() else {
         return Hit {
             damage: 0.0,
@@ -397,6 +404,12 @@ pub fn take_damage_flagless(world: &mut World, target: Entity, amount: f32) -> H
 /// tg `take_damage(amount, BRUTE, BOMB)`: through the `bomb` armor, no deflection
 /// (`/obj/ex_act`).
 pub fn take_bomb_damage(world: &mut World, target: Entity, amount: f32) -> Hit {
+    use crate::antag::blob::strains::Flag;
+    if let Some(hit) =
+        crate::antag::blob::structures::damage(world, target, amount, DamageType::Brute, Flag::Bomb)
+    {
+        return hit;
+    }
     let Some(mut obj) = world.get::<DmObj>(target).cloned() else {
         return Hit {
             damage: 0.0,

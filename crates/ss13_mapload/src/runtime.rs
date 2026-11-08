@@ -964,6 +964,20 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     // The nightmare's light eater and the morph (`ss13_game::antag`).
     "/obj/item/light_eater",
     "/mob/living/basic/morph",
+    // The blob's structures and minions (`ss13_game::antag::blob`).
+    "/obj/structure/blob/normal",
+    "/obj/structure/blob/shield",
+    "/obj/structure/blob/shield/core",
+    "/obj/structure/blob/shield/reflective",
+    "/obj/structure/blob/shield/reflective/core",
+    "/obj/structure/blob/special/core",
+    "/obj/structure/blob/special/node",
+    "/obj/structure/blob/special/factory",
+    "/obj/structure/blob/special/resource",
+    "/mob/living/basic/blob_minion/spore",
+    "/mob/living/basic/blob_minion/spore/minion",
+    "/mob/living/basic/blob_minion/zombie/controlled",
+    "/mob/living/basic/blob_minion/blobbernaut/minion",
     // Laser pointer diodes, the choice beacons' deliveries (`ss13_game::devices`).
     "/obj/item/stock_parts/micro_laser",
     "/obj/item/stock_parts/micro_laser/high",

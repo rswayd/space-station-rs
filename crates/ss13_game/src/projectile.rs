@@ -561,6 +561,11 @@ fn impact(world: &mut World, p: &Projectile, name: &str, target: Entity) {
         crate::explosions::sources::boom(world, target);
         return;
     }
+    // Blob structures take the projectile's flag (`crate::antag::blob::structures`).
+    let flag = crate::antag::blob::strains::Flag::from_dm(&p.data.armor_flag);
+    if crate::antag::blob::structures::damage(world, target, p.data.damage, kind, flag).is_some() {
+        return;
+    }
     if world.get::<Turf>(target).is_none() && matches!(kind, DamageType::Brute | DamageType::Burn) {
         // shortcut: objects check their melee armor, not the projectile's flag.
         crate::obj_damage::take_damage(world, target, p.data.damage, kind);
