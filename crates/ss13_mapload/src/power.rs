@@ -103,6 +103,8 @@ pub struct DmPower {
     pub area_flags: f64,
     /// Light fixtures (brightness and bulb power are in [`DmLight`](crate::DmLight)).
     pub base_state: String,
+    /// The `.dmi` of the fixture's lit overlays.
+    pub overlay_icon: String,
     /// Watts per unit of `brightness * bulb_power`.
     pub power_consumption_rate: f64,
     pub no_low_power: bool,
@@ -117,7 +119,7 @@ enum Kind {
 }
 
 /// Power vars, their [`DmPower`] field and the family that has them.
-const VARS: [(&str, Kind, &str); 29] = [
+const VARS: [(&str, Kind, &str); 30] = [
     ("use_power", Kind::Num, MACHINE_ROOT),
     ("idle_power_usage", Kind::Num, MACHINE_ROOT),
     ("active_power_usage", Kind::Num, MACHINE_ROOT),
@@ -144,6 +146,7 @@ const VARS: [(&str, Kind, &str); 29] = [
     ("lightswitch", Kind::Flag, AREA_ROOT),
     ("area_flags", Kind::Num, AREA_ROOT),
     ("base_state", Kind::Text, LIGHT_ROOT),
+    ("overlay_icon", Kind::Text, LIGHT_ROOT),
     ("power_consumption_rate", Kind::Num, LIGHT_ROOT),
     ("no_low_power", Kind::Flag, LIGHT_ROOT),
     ("start_with_cell", Kind::Flag, LIGHT_ROOT),
@@ -268,6 +271,7 @@ fn json_ron(kind: Kind, value: &serde_json::Value) -> Option<String> {
         Kind::Text => match value {
             serde_json::Value::Null => Some(str_ron("")),
             serde_json::Value::String(s) => Some(str_ron(s)),
+            serde_json::Value::Object(o) => o.get("resource")?.as_str().map(str_ron),
             _ => None,
         },
     }
@@ -340,7 +344,8 @@ mod tests {
             "declared_vars": { "charge": 50000000, "output_level": 90000 } },
         "/obj/machinery/light": { "parent": "/obj/machinery", "declared_vars": {
             "use_power": 2, "power_channel": 2, "base_state": "tube", "power_consumption_rate": 20,
-            "no_low_power": 0, "start_with_cell": 1 } },
+            "overlay_icon": { "resource": "icons/lo.dmi" }, "no_low_power": 0,
+            "start_with_cell": 1 } },
         "/obj/structure": { "parent": "/obj" },
         "/obj/structure/cable": { "parent": "/obj/structure", "declared_vars": { "cable_layer": 2 } },
         "/obj/structure/cable/layer1": { "parent": "/obj/structure/cable", "declared_vars": { "cable_layer": 1 } },
@@ -365,6 +370,7 @@ mod tests {
         let types = DmTypes::parse(TYPES.as_bytes()).unwrap();
         assert_eq!(ron(&types, "/obj/structure/table"), "{}");
         assert_eq!(ron(&types, "/obj/item/circuitboard"), "{}");
+        assert!(ron(&types, "/obj/machinery/light").contains(r#"overlay_icon: "icons/lo.dmi""#));
         assert_eq!(
             ron(&types, "/obj/structure/cable/layer1"),
             r#"{"dm_power": (path: "/obj/structure/cable/layer1", cable_layer: 1.0)}"#

@@ -6,7 +6,7 @@
 
 - **Код:** [`/obj/machinery/light`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light.dm#L2), [`proc/update()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light.dm#L232), [`proc/has_power()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light.dm#L510), [`power_change()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/lighting/light.dm#L736)
 - **BandaStation:** [`modular_bandastation/aesthetics/lights/code/lights.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/aesthetics/lights/code/lights.dm#L1) — свои иконки, `bulb_colour` #FFF7F2, `bulb_power` 0.8, мощность ночного режима 0.6
-- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/power/mod.rs` (`LightFixture`, `apply_area_power`), `crates/ss13_mapload/src/light.rs`
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/power/mod.rs` (`LightFixture`, `apply_area_power`, `refresh_light`: иконка и оверлеи `update_overlays` — маска `emissive_appearance` и `overlay_icon` с `_emergency`/`_nightshift`/`_flickering` — только у включённой целой лампы; лампа, выключенная на старте, не сохраняет свет карты), `crates/ss13_mapload/src/light.rs`
 
 ### Аварийное освещение
 Без питания лампа с аварийной ячейкой светит красным в четверть дальности, ячейка тратится (~10 минут) и подзаряжается при питании; «major emergency» от пожарной тревоги.

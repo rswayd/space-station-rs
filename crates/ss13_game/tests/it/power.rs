@@ -82,7 +82,7 @@ pub(crate) const TYPES: &str = r##"{
         "use_power": 2, "idle_power_usage": 2, "active_power_usage": 20, "power_channel": 2,
         "light_angle": 170, "brightness": 8, "bulb_power": 1, "bulb_colour": "#f3fffa",
         "status": 0, "base_state": "tube", "power_consumption_rate": 20, "no_low_power": 0,
-        "start_with_cell": 1 } },
+        "start_with_cell": 1, "overlay_icon": { "resource": "lo.dmi" } } },
     "/obj/machinery/power": { "parent": "/obj/machinery", "declared_vars": {
         "use_power": 0, "idle_power_usage": 0, "active_power_usage": 0, "cable_layer": 2 } },
     "/obj/machinery/power/apc": { "parent": "/obj/machinery/power", "declared_vars": {
@@ -197,6 +197,13 @@ fn states() -> Vec<(String, String)> {
         ("a.dmi", "closing"),
         ("light.dmi", "tube"),
         ("light.dmi", "tube_emergency"),
+        ("light.dmi", "tube-empty"),
+        ("light.dmi", "tube-broken"),
+        ("light.dmi", "tube-burned"),
+        ("lo.dmi", "tube"),
+        ("lo.dmi", "tube_emergency"),
+        ("lo.dmi", "tube_nightshift"),
+        ("lo.dmi", "tube_flickering"),
         ("apc.dmi", "apc0"),
     ]
     .map(|(d, s)| (d.to_owned(), s.to_owned()))
@@ -493,6 +500,121 @@ fn outage_turns_lights_off_and_holds_doors() {
     s.run_until("the powered airlock opens on a click", |s| {
         s.door_state(door) != DoorState::Closed
     });
+}
+
+/// [`MAP`] with the area's light switch off (tg `turn_off_lights_with_lightswitch`).
+const DARK_MAP: &str = r##""w" = (/turf/closed/wall,/area/station{lightswitch = 0})
+"f" = (/turf/open/floor,/area/station{lightswitch = 0})
+"s" = (/obj/effect/landmark/start/assistant,/turf/open/floor,/area/station{lightswitch = 0})
+"l" = (/obj/machinery/light{dir = 1},/turf/open/floor,/area/station{lightswitch = 0})
+
+(1,1,1) = {"
+wwwwww
+wflffw
+wfsffw
+wwwwww
+"}
+"##;
+
+/// A fixture that starts off keeps neither the map's light nor its lit overlays.
+#[test]
+fn fixture_off_at_round_start_is_dark() {
+    let assets = fixture_assets_with("dark", DARK_MAP);
+    let mut s = Session::start(MapLoadPlugin {
+        source: assets.clone(),
+        maps: vec!["map.dmm".into()],
+        assets,
+    });
+    let light = s.find::<LightFixture>(TilePos::new(3, 3, 1));
+    s.hold(1.0, "stays dark", |s| {
+        s.get::<LightFixture>(light).mode == LightMode::Off
+    });
+    assert_eq!(s.get::<Optics>(light).light, None);
+    assert!(s.get::<Appearance>(light).overlays.is_empty());
+}
+
+/// tg `update_overlays()` through every state of a tube: the lit overlays and their emissive mask
+/// come and go with the light, on the server and on the client.
+#[test]
+fn fixture_overlays_follow_its_state() {
+    use ss13_game::power::lighting::{LightStatus, set_status};
+    use ss13_game::power::{set_area_fire, set_nightshift};
+
+    let assets = fixture_assets("overlays");
+    let mut s = Session::start(MapLoadPlugin {
+        source: assets.clone(),
+        maps: vec!["map.dmm".into()],
+        assets,
+    });
+    let (apc, light, bare) = (
+        s.find::<Apc>(APC),
+        s.find::<LightFixture>(LIGHT),
+        s.find::<LightFixture>(BARE_LIGHT),
+    );
+    let area = s.get::<Apc>(apc).area;
+    let glow = |tint: &str| vec![state_id("lo.dmi", "tube"), state_id("lo.dmi", tint)];
+    let server = |s: &Session, e: Entity| -> (IconStateId, Vec<IconStateId>) {
+        let a = s.get::<Appearance>(e);
+        (
+            a.icon_state,
+            a.overlays.iter().map(|o| o.icon_state).collect(),
+        )
+    };
+    let sprite = |state: &str| state_id("light.dmi", state);
+    s.run_until("the client draws the lit overlays", |s| {
+        s.client_overlays(light) == glow("tube")
+    });
+    assert_eq!(
+        s.get::<Appearance>(light).overlays[0].plane,
+        Some(ss13_shared::EMISSIVE_PLANE),
+        "the first overlay is the emissive mask"
+    );
+
+    set_area_fire(s.server.world_mut(), area, true);
+    assert_eq!(
+        server(&s, light),
+        (sprite("tube_emergency"), glow("tube_emergency"))
+    );
+    set_area_fire(s.server.world_mut(), area, false);
+    set_nightshift(s.server.world_mut(), apc, true);
+    assert_eq!(server(&s, light), (sprite("tube"), glow("tube_nightshift")));
+    set_nightshift(s.server.world_mut(), apc, false);
+    assert_eq!(server(&s, light), (sprite("tube"), glow("tube")));
+
+    for (status, state) in [
+        (LightStatus::Broken, "tube-broken"),
+        (LightStatus::Burned, "tube-burned"),
+        (LightStatus::Empty, "tube-empty"),
+    ] {
+        set_status(s.server.world_mut(), bare, status, None);
+        assert_eq!(server(&s, bare), (sprite(state), Vec::new()), "{state}");
+        s.run_until("the client drops the overlays", |s| {
+            s.client_overlays(bare).is_empty()
+        });
+        // A new bulb lights up again.
+        set_status(s.server.world_mut(), bare, LightStatus::Ok, None);
+        assert_eq!(server(&s, bare), (sprite("tube"), glow("tube")), "{state}");
+        s.run_until("the client draws them again", |s| {
+            s.client_overlays(bare) == glow("tube")
+        });
+    }
+
+    // No power: the cell's emergency light has no overlays either, only its icon state.
+    {
+        let mut a = s.apc_mut(apc);
+        a.cell.as_mut().unwrap().charge = 0.0;
+        a.chargemode = false;
+    }
+    s.run_until("the area loses power", |s| {
+        s.get::<AreaPower>(area).power == [false; 3]
+    });
+    s.run_until("the client drops the overlays of both", |s| {
+        s.client_overlays(light).is_empty() && s.client_overlays(bare).is_empty()
+    });
+    assert_eq!(s.get::<LightFixture>(light).mode, LightMode::Emergency);
+    assert_eq!(server(&s, light), (sprite("tube_emergency"), Vec::new()));
+    assert_eq!(s.get::<LightFixture>(bare).mode, LightMode::Off);
+    assert_eq!(server(&s, bare), (sprite("tube"), Vec::new()));
 }
 
 /// Light beyond the entity view: a fixture 15 tiles away is known to the client without its

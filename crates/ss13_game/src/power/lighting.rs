@@ -217,6 +217,9 @@ pub(crate) fn new_fixture(
 ) -> LightFixture {
     let state =
         |suffix: &str| index.and_then(|i| i.get(icon, &format!("{}{suffix}", dm.base_state)));
+    let overlay = |suffix: &str| {
+        index.and_then(|i| i.get(&dm.overlay_icon, &format!("{}{suffix}", dm.base_state)))
+    };
     let path = dm.path.as_str();
     let bulb = is_under(path, "/obj/machinery/light/small")
         || is_under(path, "/obj/machinery/light/floor");
@@ -248,6 +251,12 @@ pub(crate) fn new_fixture(
         status,
         template,
         status_states: [state("-empty"), state("-broken"), state("-burned")],
+        overlay_states: [
+            overlay(""),
+            overlay("_emergency"),
+            overlay("_nightshift"),
+            overlay("_flickering"),
+        ],
         bulb,
         switchcount: 0,
         flickering: false,

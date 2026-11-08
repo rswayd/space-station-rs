@@ -132,6 +132,8 @@ pub struct LightFixture {
     pub template: Option<LightSource>,
     /// `"[base_state]-empty"`, `-broken`, `-burned`.
     pub status_states: [Option<IconStateId>; 3],
+    /// `overlay_icon` states: `base_state`, `_emergency`, `_nightshift`, `_flickering`.
+    pub overlay_states: [Option<IconStateId>; 4],
     /// Takes `/obj/item/light/bulb` (small and floor lights), else tubes (`light_type`).
     pub bulb: bool,
     pub switchcount: u32,
@@ -175,6 +177,29 @@ impl LightFixture {
             LightMode::Emergency => self.emergency_light(),
             LightMode::Off => None,
         }
+    }
+
+    /// tg `update_overlays()`: only a fixture that is `on` with a whole bulb glows. Emergency
+    /// mode is `on = FALSE` (`power_change`), its red is the icon state alone.
+    fn overlays(&self) -> Vec<Overlay> {
+        if self.mode != LightMode::On || self.status != lighting::LightStatus::Ok {
+            return Vec::new();
+        }
+        let [base, emergency, nightshift, flickering] = self.overlay_states;
+        let tint = if self.flickering {
+            flickering
+        } else if self.fire {
+            emergency
+        } else if self.nightshift {
+            nightshift
+        } else {
+            base
+        };
+        let glow = base.map(|state| Overlay {
+            plane: Some(ss13_shared::EMISSIVE_PLANE),
+            ..Overlay::new(state)
+        });
+        glow.into_iter().chain(tint.map(Overlay::new)).collect()
     }
 }
 
@@ -632,14 +657,13 @@ pub(crate) fn init_power(world: &mut World) {
         let status = lighting::LightStatus::from_dm(light.status);
         let mut fixture =
             lighting::new_fixture(index, &dm, &light, on_light, &icon, area, emergency, status);
-        // Map load lit every working bulb; `apply_area_power` sets the real mode.
         if lighting::roundstart_break(world, &fixture) {
             fixture.status = lighting::LightStatus::Broken;
             fixture.on_light = None;
         }
-        if let Some(mut optics) = world.get_mut::<Optics>(e)
-            && fixture.on_light.is_none()
-        {
+        // Map load lit every working bulb. The fixture starts off and `apply_area_power` turns
+        // on those with power; it skips one that stays off, which must not keep the map's light.
+        if let Some(mut optics) = world.get_mut::<Optics>(e) {
             optics.light = None;
         }
         refresh_light(&fixture, None, world.get_mut::<Appearance>(e));
@@ -1124,7 +1148,7 @@ fn set_mode(
     refresh_light(light, optics, appearance);
 }
 
-/// Writes the fixture's light and icon state, touching the components only on a change so
+/// Writes the fixture's light, icon state and overlays, touching the components only on a change so
 /// replication sends nothing for an unchanged light.
 fn refresh_light(
     light: &LightFixture,
@@ -1149,10 +1173,17 @@ fn refresh_light(
         lighting::LightStatus::Broken => light.status_states[1],
         lighting::LightStatus::Burned => light.status_states[2],
     };
-    if let (Some(mut appearance), Some(state)) = (appearance, state)
+    let Some(mut appearance) = appearance else {
+        return;
+    };
+    if let Some(state) = state
         && appearance.icon_state != state
     {
         appearance.icon_state = state;
+    }
+    let overlays = light.overlays();
+    if appearance.overlays != overlays {
+        appearance.overlays = overlays;
     }
 }
 
@@ -1188,7 +1219,7 @@ pub fn set_area_fire(world: &mut World, area: Entity, fire: bool) -> bool {
 /// area's fixtures' `nightshift_enabled` (dimmer and warmer while on).
 // shortcut: the lighting load stays the full bulb's (tg draws `nightshift_brightness *
 // nightshift_light_power`); a fixture's own `color` does not override the night colour; no
-// `nightshift_allowed` (no ported fixture turns it off) and no `_nightshift` overlay.
+// `nightshift_allowed` (no ported fixture turns it off).
 pub fn set_nightshift(world: &mut World, apc: Entity, on: bool) {
     let Some(mut state) = world.get_mut::<model::Apc>(apc) else {
         return;
@@ -1329,6 +1360,7 @@ mod nightshift_tests {
             status: lighting::LightStatus::Ok,
             template: Some(source(8.0, 1.0)),
             status_states: [None; 3],
+            overlay_states: [None; 4],
             bulb: false,
             switchcount: 0,
             flickering: false,
@@ -1359,5 +1391,90 @@ mod nightshift_tests {
         set_nightshift(&mut w, apc, false);
         assert!(!w.get::<Apc>(apc).unwrap().nightshift_lights);
         assert_eq!(lit(&w), Some(1.0));
+    }
+
+    #[test]
+    fn only_a_lit_whole_bulb_has_overlays() {
+        let state = |i| Some(IconStateId(i));
+        let fixture = LightFixture {
+            area: Entity::PLACEHOLDER,
+            mode: LightMode::On,
+            on_light: Some(source(8.0, 1.0)),
+            brightness: 8.0,
+            emergency: None,
+            watts: 0.0,
+            states: [None, None],
+            fire_light: None,
+            fire: false,
+            night_light: None,
+            nightshift: false,
+            status: lighting::LightStatus::Ok,
+            template: None,
+            status_states: [None; 3],
+            overlay_states: [state(10), state(11), state(12), state(13)],
+            bulb: false,
+            switchcount: 0,
+            flickering: false,
+            integrity: 100.0,
+            bulb_power: 1.0,
+            consumption_rate: 20.0,
+        };
+        // The mask (`emissive_appearance`) and the sprite.
+        let drawn = |f: &LightFixture| -> Vec<(u32, bool)> {
+            f.overlays()
+                .iter()
+                .map(|o| (o.icon_state.0, o.plane == Some(ss13_shared::EMISSIVE_PLANE)))
+                .collect()
+        };
+        assert_eq!(drawn(&fixture), [(10, true), (10, false)]);
+        for (tint, f) in [
+            (
+                11,
+                LightFixture {
+                    fire: true,
+                    nightshift: true,
+                    ..fixture.clone()
+                },
+            ),
+            (
+                12,
+                LightFixture {
+                    nightshift: true,
+                    ..fixture.clone()
+                },
+            ),
+            (
+                13,
+                LightFixture {
+                    flickering: true,
+                    fire: true,
+                    ..fixture.clone()
+                },
+            ),
+        ] {
+            assert_eq!(drawn(&f), [(10, true), (tint, false)]);
+        }
+        for mode in [LightMode::Off, LightMode::Emergency] {
+            assert!(
+                drawn(&LightFixture {
+                    mode,
+                    ..fixture.clone()
+                })
+                .is_empty()
+            );
+        }
+        for status in [
+            lighting::LightStatus::Empty,
+            lighting::LightStatus::Broken,
+            lighting::LightStatus::Burned,
+        ] {
+            assert!(
+                drawn(&LightFixture {
+                    status,
+                    ..fixture.clone()
+                })
+                .is_empty()
+            );
+        }
     }
 }
