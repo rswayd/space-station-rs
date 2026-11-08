@@ -34,7 +34,10 @@ use bevy::prelude::*;
 use ss13_chat::radio::RADIO_CHANNEL_UPLINK;
 use ss13_chat::server::{SaySystems, Spoke};
 use ss13_chat::speech::RadioTarget;
-use ss13_mapload::antag::{ANTAG_FILE, AntagData, UPLINK_NUKE_OPS, UPLINK_TRAITORS, UplinkItemDef};
+use ss13_mapload::antag::{
+    ANTAG_FILE, AntagData, UPLINK_CLOWN_OPS, UPLINK_LONE_OP, UPLINK_NUKE_OPS, UPLINK_TRAITORS,
+    UplinkItemDef,
+};
 use ss13_mapload::fidelity::is_under;
 use ss13_mapload::spawner::Rng;
 use ss13_mapload::{DmItem, DmName, MapLoadPlugin, Template, read_manifest};
@@ -103,8 +106,9 @@ pub struct UplinkCatalog {
     pub data: AntagData,
     templates: HashMap<String, Template>,
     board: Arc<UplinkStatic>,
-    /// The catalog of `UPLINK_NUKE_OPS` uplinks.
-    nuke_board: Arc<UplinkStatic>,
+    /// The catalogs of the operatives' uplinks by flag (`UPLINK_NUKE_OPS`, `UPLINK_LONE_OP`,
+    /// `UPLINK_CLOWN_OPS`).
+    op_boards: Vec<(u32, Arc<UplinkStatic>)>,
 }
 
 impl UplinkCatalog {
@@ -282,18 +286,22 @@ fn load_catalog(world: &mut World) {
         }
     };
     let board = Arc::new(board_of(UPLINK_TRAITORS));
-    let nuke_board = Arc::new(board_of(UPLINK_NUKE_OPS));
+    let op_boards: Vec<(u32, Arc<UplinkStatic>)> =
+        [UPLINK_NUKE_OPS, UPLINK_LONE_OP, UPLINK_CLOWN_OPS]
+            .into_iter()
+            .map(|flag| (flag, Arc::new(board_of(flag))))
+            .collect();
     info!(
         "uplink: {} items for traitors, {} for nuclear operatives, {} steal targets",
         board.items.len(),
-        nuke_board.items.len(),
+        op_boards[0].1.items.len(),
         data.steal_items.len()
     );
     world.insert_resource(UplinkCatalog {
         data,
         templates,
         board,
-        nuke_board,
+        op_boards,
     });
 }
 
@@ -629,9 +637,16 @@ pub fn give_uplink(
 /// `/obj/item/uplink/nuclear` (`uplink_flag = UPLINK_NUKE_OPS`, `owner` = the operative): an
 /// open, unlockable uplink of `tc` telecrystals in `device`.
 pub fn give_nuclear_uplink(world: &mut World, owner: Entity, device: Entity, tc: u32) {
+    give_op_uplink(world, owner, device, tc, UPLINK_NUKE_OPS);
+}
+
+/// [`give_nuclear_uplink`] with the uplink type's flag: `/obj/item/uplink/loneop`
+/// (`UPLINK_LONE_OP`), `/obj/item/uplink/clownop` (`UPLINK_CLOWN_OPS`).
+pub fn give_op_uplink(world: &mut World, owner: Entity, device: Entity, tc: u32, flag: u32) {
     let board = world
         .get_resource::<UplinkCatalog>()
-        .map(|c| c.nuke_board.clone())
+        .and_then(|c| c.op_boards.iter().find(|(f, _)| *f == flag))
+        .map(|(_, b)| b.clone())
         .unwrap_or_default();
     world.entity_mut(device).insert((
         Uplink {
@@ -641,7 +656,7 @@ pub fn give_nuclear_uplink(world: &mut World, owner: Entity, device: Entity, tc:
             active: false,
             lockable: false,
             telecrystals: tc,
-            uplink_flag: UPLINK_NUKE_OPS,
+            uplink_flag: flag,
             item_stock: HashMap::new(),
             purchases: Vec::new(),
             shop_locked: false,

@@ -12,14 +12,30 @@ use serde::{Deserialize, Serialize};
 use ss13_tgui::UiInterface;
 
 #[cfg(feature = "server")]
+pub mod battlecruiser;
+#[cfg(feature = "server")]
 pub mod bomb;
 #[cfg(feature = "client")]
 pub mod client;
 #[cfg(feature = "server")]
+pub mod lone;
+#[cfg(feature = "server")]
+pub mod reinforcements;
+#[cfg(feature = "server")]
 pub mod server;
+#[cfg(feature = "server")]
+pub mod war;
 
 /// tg `ROLE_OPERATIVE`: the nuclear operative's `be_special` key.
 pub const ROLE_OPERATIVE: &str = "Operative";
+/// tg `ROLE_LONE_OPERATIVE`.
+pub const ROLE_LONE_OPERATIVE: &str = "Lone Operative";
+/// tg `ROLE_CLOWN_OPERATIVE`.
+pub const ROLE_CLOWN_OPERATIVE: &str = "Clown Operative";
+/// tg `ROLE_CLOWN_OPERATIVE_MIDROUND`.
+pub const ROLE_CLOWN_OPERATIVE_MIDROUND: &str = "Clown Operative (Midround)";
+/// tg `ROLE_BATTLECRUISER_CREW`.
+pub const ROLE_BATTLECRUISER_CREW: &str = "Battlecruiser Crew";
 
 /// The nuclear bomb's keypad.
 pub struct NuclearBombUi;

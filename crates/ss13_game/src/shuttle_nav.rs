@@ -49,6 +49,8 @@ const POD_CONSOLE: &str = "/obj/machinery/computer/shuttle/pod";
 const FERRY_CONSOLE: &str = "/obj/machinery/computer/shuttle/ferry";
 const WHITE_SHIP_CONSOLE: &str = "/obj/machinery/computer/shuttle/white_ship";
 const DEPARTING: &str = "Shuttle departing. Please stand away from the doors.";
+/// The infiltrator's `shuttle_id` (`crate::antag::nukeop::war::launch_check`).
+const INFILTRATOR_ID: &str = "syndicate";
 
 /// A console type: `(path and subtypes, shuttleId, possible_destinations, req_access)`;
 /// `None` for the shuttle the console stands on.
@@ -531,6 +533,11 @@ pub fn send_shuttle(
     if console.pod {
         crate::escape_pods::request(world, port, dest, console.emagged)
             .map_err(SendError::Refused)?;
+    }
+    // `/obj/machinery/computer/shuttle/syndicate/launch_check`: not while a declared war
+    // gives the station time to prepare.
+    if console.shuttle_id.as_deref() == Some(INFILTRATOR_ID) {
+        crate::antag::nukeop::war::launch_check(world).map_err(SendError::Refused)?;
     }
     request(world, port, dest);
     Ok(())

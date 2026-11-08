@@ -16,7 +16,7 @@
 //! Admins can queue rulesets instead of the roll ([`DynamicConfig::forced_rulesets`]); tests use
 //! that to get deterministic antagonists.
 // shortcut: only the traitor, blood brothers, the vampire, the changeling, the nuclear
-// operatives, the blood cult, the heretics, the revolution, the wizard and the malfunctioning
+// operatives (and the clown operatives), the blood cult, the heretics, the revolution, the wizard and the malfunctioning
 // AI (forced into the AI job, `crate::silicon::malf`) are implemented; other picked
 // rulesets spawn nobody (logged). Midround and latejoin rulesets: [`super::midround`]. BandaStation's weighted
 // selection by antag history (`ANTAG_WEIGHTED_SELECTION`) is off in its config and needs a
@@ -271,6 +271,9 @@ pub const VAMPIRE_RULESET: &str = "Roundstart Vampire";
 pub const VAMPIRE_CAP_DENOMINATOR: u32 = 24;
 pub const CHANGELING_RULESET: &str = "Roundstart Changeling";
 pub const NUKEOPS_RULESET: &str = "Roundstart Nukeops";
+/// `/datum/dynamic_ruleset/roundstart/nukies/clown`: the nuclear operatives' caps, weight 0
+/// (only queued by admins).
+pub const CLOWNOPS_RULESET: &str = "Roundstart Clownops";
 /// `/datum/dynamic_ruleset/roundstart/nukies` `min_antag_cap = list("denominator" = 18,
 /// "offset" = 1)` (no `max_antag_cap`: the same).
 pub const NUKEOPS_CAP_DENOMINATOR: u32 = 18;
@@ -330,7 +333,7 @@ const fn flat(w: u32) -> [u32; 4] {
     [w; 4]
 }
 
-pub const ROUNDSTART_RULESETS: [Ruleset; 12] = [
+pub const ROUNDSTART_RULESETS: [Ruleset; 13] = [
     Ruleset {
         config_tag: TRAITOR_RULESET,
         weight: flat(10),
@@ -397,6 +400,13 @@ pub const ROUNDSTART_RULESETS: [Ruleset; 12] = [
     Ruleset {
         config_tag: NUKEOPS_RULESET,
         weight: [0, 1, 3, 3],
+        min_pop: 30,
+        repeatable: false,
+        high_impact: true,
+    },
+    Ruleset {
+        config_tag: CLOWNOPS_RULESET,
+        weight: flat(0),
         min_pop: 30,
         repeatable: false,
         high_impact: true,
@@ -584,6 +594,9 @@ pub fn prepare_roundstart(
         let (role, caps) = if ruleset == NUKEOPS_RULESET {
             let cap = nukeops_cap(population);
             (super::nukeop::ROLE_OPERATIVE, (cap, cap))
+        } else if ruleset == CLOWNOPS_RULESET {
+            let cap = nukeops_cap(population);
+            (super::nukeop::ROLE_CLOWN_OPERATIVE, (cap, cap))
         } else if ruleset == WIZARD_RULESET {
             (super::wizard::ROLE_WIZARD, (1, 1))
         } else if ruleset == MALF_RULESET {
@@ -648,7 +661,7 @@ pub fn execute_roundstart(world: &mut World, selected: &[(Entity, &'static str)]
     for &(client, ruleset) in selected {
         // Spawned aboard the infiltrator or in the wizard's den by the round setup
         // (`RULESET_INVADER`, no job).
-        if ruleset == NUKEOPS_RULESET || ruleset == WIZARD_RULESET {
+        if ruleset == NUKEOPS_RULESET || ruleset == CLOWNOPS_RULESET || ruleset == WIZARD_RULESET {
             continue;
         }
         let mob = world.resource::<Players>().mob(client);

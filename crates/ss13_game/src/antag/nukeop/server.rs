@@ -18,7 +18,13 @@
 //!   headset locked to the syndicate frequency, and a nuclear uplink in the backpack with 25 TC
 //!   plus `CEILING(players / 5, 5)`; the team objective "nuke the station"; the bomb's code (the
 //!   team's `memorized_code`, also on the leader's paper). The leader also holds the war
-//!   declaration item.
+//!   declaration item ([`super::war`]).
+//! - **Clown operatives** ([`spawn_operatives_as`] with `clown`, the clown rulesets): the clown
+//!   outfits and job, the clown leader's titles, the clown uplink (`UPLINK_CLOWN_OPS`) and war
+//!   declaration; a bananium bomb's detonation makes clowns ([`make_into_clown`]).
+//! - **Other kinds** ([`add_op`]): reinforcements ([`super::reinforcements`]), the lone
+//!   operative with its own team ([`LoneopTeam`], [`super::lone`]); the battlecruiser crew is
+//!   [`super::battlecruiser`].
 //! - **The disk** ([`NukeDisk`]): the station's real disk; out of bounds (tg `atom_in_bounds`) or
 //!   gone, it reappears on a random station floor.
 //! - **The result** ([`compute_result`], tg `get_result`) and the round-end report
@@ -28,6 +34,9 @@
 // shortcut: the team name is a random last name (tg asks the leader, defaulting to one); the
 // leader is the first selected player (tg: most playtime); no team discounts, implants, MOD
 // suits, species switch or skillchips; the operatives see only their own antag HUD icon.
+// shortcut: clown operatives fly the basic infiltrator with its syndicate bomb (the clown
+// infiltrator template with the bananium bomb is not loaded), are not clumsy (no clumsy
+// mutation) and get no comedy metabolism or sad trombone implant.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -75,8 +84,26 @@ const INFILTRATOR_ID: &str = "syndicate";
 const AWAY_DOCK: &str = "syndicate_away";
 const DISK_PATH: &str = "/obj/item/disk/nuclear";
 const PAPER: &str = "/obj/item/paper";
-const CHALLENGE: &str = "/obj/item/nuclear_challenge";
 const NUCLEAR_UPLINK: &str = "/obj/item/uplink/nuclear";
+const LONEOP_UPLINK: &str = "/obj/item/uplink/loneop";
+const CLOWNOP_UPLINK: &str = "/obj/item/uplink/clownop";
+/// `/obj/machinery/nuclearbomb/selfdestruct`: the lone operative's and battlecruiser's target.
+pub const SELFDESTRUCT: &str = "/obj/machinery/nuclearbomb/selfdestruct";
+/// `nukeop_outfit` of each kind.
+pub const OUTFIT: &str = "/datum/outfit/syndicate";
+pub const OUTFIT_LEADER: &str = "/datum/outfit/syndicate/leader";
+pub const OUTFIT_LONEOP: &str = "/datum/outfit/syndicate/full/loneop";
+pub const OUTFIT_CLOWN: &str = "/datum/outfit/syndicate/clownop";
+pub const OUTFIT_CLOWN_LEADER: &str = "/datum/outfit/syndicate/clownop/leader";
+pub const OUTFIT_CLOWN_REINFORCEMENT: &str = "/datum/outfit/syndicate/clownop/no_crystals";
+/// `/datum/antagonist/nukeop/lone` `name`.
+pub const LONE_NAME: &str = "Одинокий оперативник";
+/// `/datum/antagonist/nukeop/reinforcement` `name`.
+pub const REINFORCEMENT_NAME: &str = "Поддержка ядерных оперативников";
+/// `/datum/antagonist/nukeop/clownop` `name` (`ROLE_CLOWN_OPERATIVE`).
+pub const CLOWNOP_NAME: &str = "Clown Operative";
+/// `/datum/antagonist/nukeop/leader/clownop/give_alias` titles.
+const CLOWN_LEADER_TITLES: [&str; 4] = ["Head Honker", "Slipmaster", "Clown King", "Honkbearer"];
 const PINPOINTER: &str = "/obj/item/pinpointer/nuke";
 const SYNDICATE_PINPOINTER: &str = "/obj/item/pinpointer/nuke/syndicate";
 /// `/datum/antagonist/nukeop/leader/give_alias` titles.
@@ -112,6 +139,25 @@ pub struct NukeTeam {
     pub leader: Option<Entity>,
     pub memorized_code: Option<String>,
     pub tracked_nuke: Option<Entity>,
+    /// Clown operatives (`/datum/antagonist/nukeop/clownop` and its leader and reinforcements).
+    pub clown: bool,
+}
+
+/// `/datum/team/nuclear/loneop`: the lone operative's own team, its bomb the station's
+/// self-destruct.
+#[derive(Resource, Clone, Debug, Default)]
+pub struct LoneopTeam(pub NukeTeam);
+
+/// Which `/datum/antagonist/nukeop` subtype.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum OpKind {
+    #[default]
+    Operative,
+    Leader,
+    /// `/reinforcement`: no bonus telecrystals, not sent to the base.
+    Reinforcement,
+    /// `/lone`: its own team, the self-destruct's code.
+    Lone,
 }
 
 /// The operative antagonist datum, on its body.
@@ -121,6 +167,9 @@ pub struct Nukeop {
     pub leader: bool,
     /// `antag_memory`.
     pub memory: String,
+    pub kind: OpKind,
+    /// A member of [`LoneopTeam`].
+    pub lone_team: bool,
 }
 
 /// The station's real nuclear authentication disk (tg `real_nuclear_disks`).
@@ -216,6 +265,7 @@ impl Plugin for NukeopPlugin {
         }
         app.add_plugins(NuclearBombPlugin)
             .init_resource::<NukeOutcome>()
+            .init_resource::<super::war::WarState>()
             .add_systems(
                 Startup,
                 (
@@ -224,7 +274,18 @@ impl Plugin for NukeopPlugin {
                     setup_world,
                 ),
             )
-            .add_systems(Update, (watch_disk, tick_pinpointers));
+            .add_systems(
+                Update,
+                (
+                    watch_disk,
+                    super::lone::disk_security,
+                    tick_pinpointers,
+                    super::war::tick_war,
+                    super::war::answers
+                        .in_set(ss13_tgui::server::UiSystems::Handle)
+                        .after(ss13_tgui::prompt::PromptSystems::Answer),
+                ),
+            );
     }
 }
 
@@ -342,6 +403,35 @@ fn to_everyone(world: &mut World, span: Span, text: &str) {
         clients,
         message: ChatMessage::simple(ChatChannel::System, span, text),
     });
+}
+
+/// The operatives' random generator, taken out for a caller that also needs the world.
+pub(super) fn take_rng(world: &mut World) -> Rng {
+    world
+        .remove_resource::<NukeopRng>()
+        .map_or(Rng::new(0), |r| r.0)
+}
+
+pub(super) fn put_rng(world: &mut World, rng: Rng) {
+    world.insert_resource(NukeopRng(rng));
+}
+
+/// `SSpolling.poll_ghost_candidates(role)` without the poll: the first ghost (by entity order)
+/// whose client opted in to `role`. Returns the ghost and its client.
+// shortcut: no 15 s poll window; the opted-in ghost is taken at once, as the midround rulesets
+// do (`crate::antag::midround`).
+pub fn willing_ghost(world: &mut World, role: &str) -> Option<(Entity, Entity)> {
+    let mut ghosts: Vec<(Entity, Entity)> = world
+        .query_filtered::<(Entity, &PlayerMob), With<crate::ghost::Ghost>>()
+        .iter(world)
+        .map(|(g, p)| (g, p.client))
+        .collect();
+    ghosts.sort();
+    ghosts.into_iter().find(|&(_, c)| {
+        world
+            .get::<crate::antag::dynamic::AntagPreferences>(c)
+            .is_some_and(|p| p.wants(role))
+    })
 }
 
 /// tg `syndicate_name()`.
@@ -462,11 +552,17 @@ fn infiltrator_spawns(world: &World) -> Vec<TilePos> {
 /// The ruleset's `execute()` for the players it selected: bodies aboard the infiltrator, the
 /// team, the leader first.
 pub fn spawn_operatives(world: &mut World, clients: &[Entity]) {
+    spawn_operatives_as(world, clients, false);
+}
+
+/// [`spawn_operatives`]; `clown` for the clown operatives' rulesets
+/// (`/datum/dynamic_ruleset/*/nukies/clown`).
+pub fn spawn_operatives_as(world: &mut World, clients: &[Entity], clown: bool) {
     if clients.is_empty() {
         return;
     }
     let spawns = infiltrator_spawns(world);
-    spawn_team(world);
+    spawn_team(world, clown);
     let mut rng = world
         .remove_resource::<NukeopRng>()
         .map_or(Rng::new(0), |r| r.0);
@@ -484,10 +580,11 @@ pub fn spawn_operatives(world: &mut World, clients: &[Entity]) {
         let mob = crate::server::spawn_mob(world, client, pos, String::new());
         world.entity_mut(client).remove::<crate::round::NewPlayer>();
         // `forced_occupations`: the operative (leader) job.
-        let job = if i == 0 {
-            crate::noncrew_jobs::NUCLEAR_OPERATIVE_LEADER
-        } else {
-            crate::noncrew_jobs::NUCLEAR_OPERATIVE
+        let job = match (clown, i == 0) {
+            (false, true) => crate::noncrew_jobs::NUCLEAR_OPERATIVE_LEADER,
+            (false, false) => crate::noncrew_jobs::NUCLEAR_OPERATIVE,
+            (true, true) => CLOWN_OPERATIVE_LEADER_JOB,
+            (true, false) => CLOWN_OPERATIVE_JOB,
         };
         crate::noncrew_jobs::set_assigned_role(world, mob, job);
         add_nukeop(world, mob, i == 0, joined, &mut rng);
@@ -505,7 +602,7 @@ pub fn dev_nukeop(world: &mut World, client: Entity, mob: Entity) {
         .map_or(Rng::new(0), |r| r.0);
     if leader {
         world.insert_resource(NukeopRng(rng));
-        spawn_team(world);
+        spawn_team(world, false);
         rng = world
             .remove_resource::<NukeopRng>()
             .map_or(Rng::new(0), |r| r.0);
@@ -536,8 +633,14 @@ pub fn dev_nukeop(world: &mut World, client: Entity, mob: Entity) {
     world.insert_resource(NukeopRng(rng));
 }
 
+/// `/datum/job/nuclear_operative/clown_operative` (+ `/leader`).
+pub const CLOWN_OPERATIVE_JOB: &str = "/datum/job/nuclear_operative/clown_operative";
+pub const CLOWN_OPERATIVE_LEADER_JOB: &str = "/datum/job/nuclear_operative/clown_operative/leader";
+/// `/datum/job/lone_operative`.
+pub const LONE_OPERATIVE_JOB: &str = "/datum/job/lone_operative";
+
 /// `/datum/team/nuclear/New` + `assign_nuke`.
-fn spawn_team(world: &mut World) {
+fn spawn_team(world: &mut World, clown: bool) {
     let mut rng = world
         .remove_resource::<NukeopRng>()
         .map_or(Rng::new(0), |r| r.0);
@@ -549,6 +652,7 @@ fn spawn_team(world: &mut World) {
     // whose default is a random last name).
     let mut team = NukeTeam {
         syndicate_name: syndicate_name(&mut rng),
+        clown,
         ..default()
     };
     if !last_names.is_empty() {
@@ -576,9 +680,122 @@ fn spawn_team(world: &mut World) {
     world.insert_resource(NukeopRng(rng));
 }
 
+/// The self-destruct terminal's entity (`/obj/machinery/nuclearbomb/selfdestruct`).
+pub fn selfdestruct(world: &mut World) -> Option<Entity> {
+    let mut bombs = world.query::<(Entity, &NuclearBomb, &ss13_mapload::DmObj)>();
+    bombs
+        .iter(world)
+        .filter(|(_, _, o)| o.path == SELFDESTRUCT)
+        .map(|(e, ..)| e)
+        .min()
+}
+
+/// `/datum/team/nuclear/loneop/New` + `assign_nuke`: a syndicate name, the self-destruct's
+/// code (BandaStation gives every bomb a random code at init).
+pub fn spawn_lone_team(world: &mut World) {
+    if world.contains_resource::<LoneopTeam>() {
+        return;
+    }
+    let mut rng = world
+        .remove_resource::<NukeopRng>()
+        .map_or(Rng::new(0), |r| r.0);
+    let mut team = NukeTeam {
+        syndicate_name: syndicate_name(&mut rng),
+        ..default()
+    };
+    if let Some(nuke) = selfdestruct(world) {
+        let code = random_nukecode(&mut rng);
+        let mut bomb = world.get_mut::<NuclearBomb>(nuke).expect("queried");
+        if bomb.state.r_code == super::bomb::NUKE_CODE_UNSET {
+            bomb.state.r_code = code;
+        }
+        team.memorized_code = Some(bomb.state.r_code.clone());
+        team.tracked_nuke = Some(nuke);
+    }
+    world.insert_resource(LoneopTeam(team));
+    world.insert_resource(NukeopRng(rng));
+}
+
+/// The lone operative's own team (`lone`), else the nuclear team.
+pub fn team_of(world: &World, lone: bool) -> Option<&NukeTeam> {
+    if lone {
+        world.get_resource::<LoneopTeam>().map(|t| &t.0)
+    } else {
+        world.get_resource::<NukeTeam>()
+    }
+}
+
+fn with_team(world: &mut World, lone: bool, f: impl FnOnce(&mut NukeTeam)) {
+    if lone {
+        if let Some(mut team) = world.get_resource_mut::<LoneopTeam>() {
+            f(&mut team.0);
+        }
+    } else if let Some(mut team) = world.get_resource_mut::<NukeTeam>() {
+        f(&mut team);
+    }
+}
+
+/// `nukeop_outfit` of `kind` in a (clown) team.
+pub fn outfit_path(kind: OpKind, clown: bool) -> &'static str {
+    match (kind, clown) {
+        (OpKind::Lone, _) => OUTFIT_LONEOP,
+        (OpKind::Operative, false) => OUTFIT,
+        (OpKind::Leader, false) => OUTFIT_LEADER,
+        // `/datum/outfit/syndicate/reinforcement` subtypes are picked by the beacon.
+        (OpKind::Reinforcement, false) => OUTFIT,
+        (OpKind::Operative, true) => OUTFIT_CLOWN,
+        (OpKind::Leader, true) => OUTFIT_CLOWN_LEADER,
+        (OpKind::Reinforcement, true) => OUTFIT_CLOWN_REINFORCEMENT,
+    }
+}
+
+/// The outfit's `tc` (25; a reinforcement's 0) plus `give_bonus_tc`'s `CEILING(joined / 5, 5)`
+/// for the roundstart operatives.
+pub fn starting_tc(kind: OpKind, joined: u32) -> u32 {
+    match kind {
+        OpKind::Operative | OpKind::Leader => OUTFIT_TC + bonus_tc(joined),
+        OpKind::Lone => OUTFIT_TC,
+        OpKind::Reinforcement => 0,
+    }
+}
+
+/// `/datum/outfit/syndicate` `uplink_type`'s flag.
+pub fn uplink_of(kind: OpKind, clown: bool) -> (&'static str, u32) {
+    use ss13_mapload::antag::{UPLINK_CLOWN_OPS, UPLINK_LONE_OP};
+    match (kind, clown) {
+        (OpKind::Lone, _) => (LONEOP_UPLINK, UPLINK_LONE_OP),
+        (_, true) => (CLOWNOP_UPLINK, UPLINK_CLOWN_OPS),
+        _ => (NUCLEAR_UPLINK, UPLINK_NUKE_OPS),
+    }
+}
+
 /// `add_antag_datum(/datum/antagonist/nukeop[/leader])` on a fresh body: `give_alias`,
 /// `forge_objectives`, `equip_op`, the bonus TC, `memorize_code`, `greet`.
 pub fn add_nukeop(world: &mut World, mob: Entity, leader: bool, joined: u32, rng: &mut Rng) {
+    let kind = if leader {
+        OpKind::Leader
+    } else {
+        OpKind::Operative
+    };
+    add_op(world, mob, kind, false, joined, None, rng);
+}
+
+/// [`add_nukeop`] of any kind; `lone_team` joins the lone operative's team (the lone
+/// operative, its reinforcements); `outfit` overrides the kind's (a reinforcement's subtype).
+pub fn add_op(
+    world: &mut World,
+    mob: Entity,
+    kind: OpKind,
+    lone_team: bool,
+    joined: u32,
+    outfit: Option<&str>,
+    rng: &mut Rng,
+) {
+    let leader = kind == OpKind::Leader;
+    let clown = !lone_team && world.get_resource::<NukeTeam>().is_some_and(|t| t.clown);
+    let outfit_path = outfit
+        .unwrap_or_else(|| outfit_path(kind, clown))
+        .to_owned();
     let client = client_of(world, mob);
     let key = client
         .and_then(|c| world.get::<ClientToken>(c))
@@ -590,45 +807,55 @@ pub fn add_nukeop(world: &mut World, mob: Entity, leader: bool, joined: u32, rng
             (
                 d.aliases.clone(),
                 d.outfits
-                    .get(usize::from(leader))
+                    .iter()
+                    .find(|o| o.path == outfit_path)
                     .or(d.outfits.first())
                     .cloned(),
             )
         })
         .unwrap_or_default();
-    let syndicate_name = world.resource::<NukeTeam>().syndicate_name.clone();
+    let syndicate_name = team_of(world, lone_team)
+        .map(|t| t.syndicate_name.clone())
+        .unwrap_or_default();
     let alias = if aliases.is_empty() {
         "Агент".to_owned()
     } else {
         aliases[rng.range(0, aliases.len() as i64 - 1) as usize].clone()
     };
     let mut name = format!("{alias} {syndicate_name}");
+    let title = match (leader, clown) {
+        (false, _) => "",
+        (true, true) => {
+            CLOWN_LEADER_TITLES[rng.range(0, CLOWN_LEADER_TITLES.len() as i64 - 1) as usize]
+        }
+        (true, false) => LEADER_TITLES[rng.range(0, LEADER_TITLES.len() as i64 - 1) as usize],
+    };
     if leader {
-        let title = LEADER_TITLES[rng.range(0, LEADER_TITLES.len() as i64 - 1) as usize];
         name = format!("{title} {name}");
     }
     world.entity_mut(mob).insert(Name::new(name.clone()));
-    {
-        let mut team = world.resource_mut::<NukeTeam>();
+    with_team(world, lone_team, |team| {
         team.members.push(mob);
         if leader {
             team.leader = Some(mob);
         }
-    }
+    });
     if let Some(outfit) = outfit {
+        let (uplink, flag) = uplink_of(kind, clown);
         equip_op(
             world,
             mob,
             &outfit,
             &name,
             leader,
-            OUTFIT_TC + bonus_tc(joined),
+            clown,
+            (uplink, flag, starting_tc(kind, joined)),
         );
     }
     let hud_icon = world
         .get_resource::<IconIndex>()
         .and_then(|index| index.get(ANTAG_HUD.0, ANTAG_HUD.1));
-    let code = world.resource::<NukeTeam>().memorized_code.clone();
+    let code = team_of(world, lone_team).and_then(|t| t.memorized_code.clone());
     let mut memory = String::new();
     if let Some(code) = &code {
         memory = format!("Код от ядерной боеголовки: {code}");
@@ -638,6 +865,8 @@ pub fn add_nukeop(world: &mut World, mob: Entity, leader: bool, joined: u32, rng
             key,
             leader,
             memory,
+            kind,
+            lone_team,
         },
         AntagHudData {
             hud_icon,
@@ -646,7 +875,6 @@ pub fn add_nukeop(world: &mut World, mob: Entity, leader: bool, joined: u32, rng
     ));
     // `greet`.
     if leader {
-        let title = name.split(' ').next().unwrap_or_default().to_owned();
         chat_to(
             world,
             client,
@@ -677,6 +905,19 @@ pub fn add_nukeop(world: &mut World, mob: Entity, leader: bool, joined: u32, rng
             client,
             Span::Bold,
             format!("Вы - агент {syndicate_name}!"),
+        );
+    }
+    if let Some(faction) = outfit_path.strip_prefix("/datum/outfit/syndicate/reinforcement/") {
+        // `/datum/outfit/syndicate/reinforcement/post_equip`.
+        chat_to(
+            world,
+            client,
+            Span::Notice,
+            format!(
+                "Вы - агент {}, посланный сопровождать ядерный отряд в его задании. \
+                 Поддерживайте союзников и помните: долой Нанотрейзен.",
+                reinforcement_faction(faction)
+            ),
         );
     }
     chat_to(world, client, Span::Notice, "Ваши текущие задачи:");
@@ -714,15 +955,30 @@ pub fn add_nukeop(world: &mut World, mob: Entity, leader: bool, joined: u32, rng
         }
     }
     if leader {
-        give_item(world, mob, CHALLENGE, |_, _| {});
+        let challenge = if clown {
+            super::war::CHALLENGE_CLOWN
+        } else {
+            super::war::CHALLENGE
+        };
+        give_item(world, mob, challenge, |_, _| {});
     }
     if let Some(client) = client {
         world.write_message(OpenUi::new::<AntagHudUi>(client, mob, mob, ""));
     }
-    info!(
-        "{mob} is a nuclear operative{}",
-        if leader { " (leader)" } else { "" }
-    );
+    info!("{mob} is a nuclear operative ({kind:?}, clown: {clown})");
+}
+
+/// `/datum/outfit/syndicate/reinforcement/*` `faction`.
+pub fn reinforcement_faction(subtype: &str) -> &'static str {
+    match subtype {
+        "gorlex" => "Мародёров Горлекса",
+        "cybersun" => "Cybersun Industries",
+        "donk" => "Donk Company",
+        "waffle" => "Waffle Corporation",
+        "interdyne" => "Interdyne Pharmaceutics",
+        "mi13" => "MI13",
+        _ => "Синдиката",
+    }
 }
 
 /// Spawns `path` into `mob`'s free hand (tg `put_in_hands`), else at its feet.
@@ -768,12 +1024,22 @@ fn into_pack(world: &mut World, pack: Entity, path: &str) -> Option<Entity> {
     Some(item)
 }
 
-/// `equip_op` with `/datum/outfit/syndicate` and its `post_equip`.
-fn equip_op(world: &mut World, mob: Entity, outfit: &Outfit, name: &str, leader: bool, tc: u32) {
-    let assignment = if leader {
-        "Syndicate Operative Leader"
-    } else {
-        "Syndicate Operative"
+/// `equip_op` with `/datum/outfit/syndicate` and its `post_equip`; `uplink` is the
+/// `uplink_type`, its flag and the outfit's `tc`.
+fn equip_op(
+    world: &mut World,
+    mob: Entity,
+    outfit: &Outfit,
+    name: &str,
+    leader: bool,
+    clown: bool,
+    uplink: (&str, u32, u32),
+) {
+    let assignment = match (clown, leader) {
+        (false, true) => "Syndicate Operative Leader",
+        (false, false) => "Syndicate Operative",
+        (true, true) => "Syndicate Entertainment Operative Leader",
+        (true, false) => "Syndicate Entertainment Operative",
     };
     let mut inventory = world.resource_scope(|world, data: Mut<NukeopData>| {
         crate::outfit::equip_outfit(world, mob, outfit, &data.templates)
@@ -814,8 +1080,9 @@ fn equip_op(world: &mut World, mob: Entity, outfit: &Outfit, name: &str, leader:
                 into_pack(world, pack, path);
             }
         }
-        if let Some(uplink) = into_pack(world, pack, NUCLEAR_UPLINK) {
-            crate::antag::uplink::give_nuclear_uplink(world, mob, uplink, tc);
+        let (uplink_path, flag, tc) = uplink;
+        if let Some(device) = into_pack(world, pack, uplink_path) {
+            crate::antag::uplink::give_op_uplink(world, mob, device, tc, flag);
         }
         // shortcut: the base's pinpointers come with the operative.
         if let Some(p) = into_pack(world, pack, SYNDICATE_PINPOINTER) {
@@ -835,7 +1102,7 @@ fn equip_op(world: &mut World, mob: Entity, outfit: &Outfit, name: &str, leader:
 pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity) -> bool {
     if world
         .get::<crate::antag::uplink::Uplink>(item)
-        .is_some_and(|u| u.uplink_flag == UPLINK_NUKE_OPS)
+        .is_some_and(|u| u.uplink_flag & ss13_mapload::antag::UPLINK_ALL_SYNDIE_OPS != 0)
     {
         crate::antag::uplink::open_uplink(world, client, mob, item);
         return true;
@@ -858,17 +1125,12 @@ pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity)
         );
         return true;
     }
-    if world
-        .get::<DmItem>(item)
-        .is_some_and(|i| i.path == CHALLENGE)
-    {
-        // shortcut: war declaration (bonus TC, shuttle delay, announcement) is not modelled.
-        chat_to(
-            world,
-            Some(client),
-            Span::Warning,
-            "Объявление войны пока недоступно.",
-        );
+    if super::war::is_challenge(world, item) {
+        super::war::use_challenge(world, client, mob, item);
+        return true;
+    }
+    if super::reinforcements::is_beacon(world, item) {
+        super::reinforcements::use_beacon(world, client, mob, item);
         return true;
     }
     false
@@ -947,7 +1209,16 @@ pub(crate) fn actually_explode(world: &mut World, bomb: Entity) {
         .filter(|(_, p, _, s)| gib_z.contains(&p.z) && **s != Stat::Dead)
         .map(|(e, ..)| e)
         .collect();
-    for e in victims {
+    // The bananium bomb's `nuke_effects`: everyone there becomes a clown instead.
+    let bananium = world
+        .get::<ss13_mapload::DmObj>(bomb)
+        .is_some_and(|o| ss13_mapload::fidelity::is_under(&o.path, super::bomb::BANANIUM_NUKE));
+    if bananium {
+        for e in victims.iter().copied() {
+            make_into_clown(world, e);
+        }
+    }
+    for e in victims.into_iter().filter(|_| !bananium) {
         let (Some(mut health), Some(mut stat)) = (
             world.get::<Health>(e).cloned(),
             world.get::<Stat>(e).copied(),
@@ -968,6 +1239,55 @@ pub(crate) fn actually_explode(world: &mut World, bomb: Entity) {
         crate::storage::take_out(world, disk, pos);
     }
     world.despawn(bomb);
+}
+
+/// What `make_into_clown` dresses a victim in, by slot.
+const CLOWN_CLOTHES: [(ss13_shared::protocol::InventorySlot, &str); 3] = [
+    (
+        ss13_shared::protocol::InventorySlot::Uniform,
+        "/obj/item/clothing/under/rank/civilian/clown",
+    ),
+    (
+        ss13_shared::protocol::InventorySlot::Shoes,
+        "/obj/item/clothing/shoes/clown_shoes",
+    ),
+    (
+        ss13_shared::protocol::InventorySlot::Mask,
+        "/obj/item/clothing/mask/gas/clown_hat",
+    ),
+];
+
+/// `make_into_clown`: a human's jumpsuit, shoes and mask drop and clown clothes take their
+/// place.
+// shortcut: the clothes can be taken off (no `TRAIT_NODROP`), no clumsiness (no clumsy
+// mutation), no clown phobia and no stun.
+pub fn make_into_clown(world: &mut World, mob: Entity) {
+    if world.get::<crate::human::HumanLook>(mob).is_none() || world.get::<Inventory>(mob).is_none()
+    {
+        return;
+    }
+    let pos = world.get::<TilePos>(mob).copied().unwrap_or_default();
+    for (slot, path) in CLOWN_CLOTHES {
+        let worn = world
+            .get_mut::<Inventory>(mob)
+            .and_then(|mut inv| *inv.slot_mut(slot));
+        if let Some(old) = worn {
+            crate::inventory::unequip(world, mob, pos, slot);
+            crate::inventory::put_down(world, old, pos);
+        }
+        let item = world.resource_scope(|world, data: Mut<NukeopData>| {
+            Some(data.templates.get(path)?.spawn(world, None))
+        });
+        let Some(item) = item else {
+            continue;
+        };
+        crate::storage::finish_item(world, item, 0);
+        world.entity_mut(item).insert((Networked, CarriedBy(mob)));
+        if let Some(mut inv) = world.get_mut::<Inventory>(mob) {
+            *inv.slot_mut(slot) = Some(item);
+        }
+    }
+    chat_to(world, client_of(world, mob), Span::Danger, "ХОНК!");
 }
 
 /// tg `check_finished`: the station was nuked.
@@ -1093,25 +1413,42 @@ pub fn infiltrator_home(world: &World) -> bool {
 /// `get_result` against the world.
 pub fn get_result(world: &mut World) -> Option<NukeResult> {
     let team = world.get_resource::<NukeTeam>()?.clone();
+    Some(result_for(world, &team))
+}
+
+/// `get_result` of `team`.
+fn result_for(world: &mut World, team: &NukeTeam) -> NukeResult {
     let outcome = *world.resource::<NukeOutcome>();
     let inputs = ResultInputs {
         shuttle_evacuated: crate::shuttle::evacuated(world),
         shuttle_landed_base: crate::shuttle::hijacked(world),
         disk_rescued: disk_rescued(world),
         syndies_didnt_escape: !infiltrator_home(world),
-        team_is_dead: team_dead(world, &team),
+        team_is_dead: team_dead(world, team),
         station_was_nuked: outcome.station_was_nuked,
         station_nuke_source: outcome.station_nuke_source,
     };
-    Some(compute_result(inputs))
+    compute_result(inputs)
 }
 
 /// `/datum/team/nuclear/roundend_report`.
 pub fn roundend_report(world: &mut World, _end: RoundEnd) -> Vec<ChatMessage> {
-    let Some(result) = get_result(world) else {
+    let Some(team) = world.get_resource::<NukeTeam>().cloned() else {
         return Vec::new();
     };
-    let team = world.resource::<NukeTeam>().clone();
+    report_for(world, &team)
+}
+
+/// The lone operative's team's `roundend_report` (`/datum/team/nuclear/loneop`).
+pub fn lone_roundend_report(world: &mut World, _end: RoundEnd) -> Vec<ChatMessage> {
+    let Some(team) = world.get_resource::<LoneopTeam>().map(|t| t.0.clone()) else {
+        return Vec::new();
+    };
+    report_for(world, &team)
+}
+
+fn report_for(world: &mut World, team: &NukeTeam) -> Vec<ChatMessage> {
+    let result = result_for(world, team);
     let station = crate::round::station_name(world);
     let name = &team.syndicate_name;
     let line = |segments: Vec<ChatSegment>| ChatMessage {

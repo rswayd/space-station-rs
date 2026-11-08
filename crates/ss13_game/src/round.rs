@@ -693,8 +693,9 @@ fn setup(world: &mut World, now: f64) {
             .collect()
     };
     let operatives = invaders(crate::antag::dynamic::NUKEOPS_RULESET);
+    let clowns = invaders(crate::antag::dynamic::CLOWNOPS_RULESET);
     let wizards = invaders(crate::antag::dynamic::WIZARD_RULESET);
-    ready.retain(|(c, _)| !operatives.contains(c) && !wizards.contains(c));
+    ready.retain(|(c, _)| !operatives.contains(c) && !clowns.contains(c) && !wizards.contains(c));
     let prefs: Vec<&JobPreferences> = ready.iter().map(|(_, p)| p).collect();
     let assigned = divide_occupations(&mut world.resource_mut::<Jobs>(), &prefs);
     let mut spawned = Vec::new();
@@ -720,6 +721,7 @@ fn setup(world: &mut World, now: f64) {
         }
     }
     crate::antag::nukeop::server::spawn_operatives(world, &operatives);
+    crate::antag::nukeop::server::spawn_operatives_as(world, &clowns, true);
     crate::antag::wizard::server::spawn_wizards(world, &wizards);
     crate::antag::dynamic::execute_roundstart(world, &antags);
     // `equip_characters`: the spare ID's captain, announced `OnRoundstart`.
@@ -941,6 +943,12 @@ fn declare_completion(world: &mut World, now: f64) {
         world, end,
     ));
     antags.extend(crate::antag::nukeop::server::roundend_report(world, end));
+    antags.extend(crate::antag::nukeop::server::lone_roundend_report(
+        world, end,
+    ));
+    antags.extend(crate::antag::nukeop::battlecruiser::roundend_report(
+        world, end,
+    ));
     antags.extend(crate::antag::cult::server::roundend_report(world, end));
     antags.extend(crate::antag::heretic::server::roundend_report(world, end));
     antags.extend(crate::antag::wizard::server::roundend_report(world, end));

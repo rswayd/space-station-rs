@@ -99,19 +99,51 @@ pub const HERETIC_RUNTIME_TYPES: [&str; 46] = [
 pub const UPLINK_TRAITORS: u32 = 1 << 0;
 /// tg `UPLINK_NUKE_OPS`.
 pub const UPLINK_NUKE_OPS: u32 = 1 << 1;
+/// tg `UPLINK_CLOWN_OPS`.
+pub const UPLINK_CLOWN_OPS: u32 = 1 << 2;
+/// tg `UPLINK_LONE_OP`.
+pub const UPLINK_LONE_OP: u32 = 1 << 4;
+/// tg `UPLINK_ALL_SYNDIE_OPS`.
+pub const UPLINK_ALL_SYNDIE_OPS: u32 = UPLINK_NUKE_OPS | UPLINK_LONE_OP | UPLINK_CLOWN_OPS;
 
-/// The nuclear operatives' outfits (`/datum/antagonist/nukeop` `nukeop_outfit`, the leader's).
-pub const NUKEOP_OUTFITS: [&str; 2] = ["/datum/outfit/syndicate", "/datum/outfit/syndicate/leader"];
+/// The nuclear operatives' outfits (`/datum/antagonist/nukeop` `nukeop_outfit`): the
+/// operative's, the leader's, the lone operative's, the clown operatives' (+ leader,
+/// reinforcement) and the reinforcements' (`/obj/item/antag_spawner/nuke_ops` picks a subtype).
+pub const NUKEOP_OUTFITS: [&str; 12] = [
+    "/datum/outfit/syndicate",
+    "/datum/outfit/syndicate/leader",
+    "/datum/outfit/syndicate/full/loneop",
+    "/datum/outfit/syndicate/clownop",
+    "/datum/outfit/syndicate/clownop/leader",
+    "/datum/outfit/syndicate/clownop/no_crystals",
+    "/datum/outfit/syndicate/reinforcement/gorlex",
+    "/datum/outfit/syndicate/reinforcement/cybersun",
+    "/datum/outfit/syndicate/reinforcement/donk",
+    "/datum/outfit/syndicate/reinforcement/waffle",
+    "/datum/outfit/syndicate/reinforcement/interdyne",
+    "/datum/outfit/syndicate/reinforcement/mi13",
+];
 
 /// Items the nuclear operatives get at runtime: the leader's code paper and war declaration
-/// item (`/datum/antagonist/nukeop/leader`), the nuclear uplink (`/datum/outfit/syndicate`
-/// `uplink_type`) and the operatives' pinpointer (on the syndicate base in tg).
-pub const NUKEOP_RUNTIME_TYPES: [&str; 5] = [
+/// item (`/datum/antagonist/nukeop/leader`, the clowns' `/clownops`), the uplinks
+/// (`/datum/outfit/syndicate` `uplink_type`: nuclear, lone operative, clown), the operatives'
+/// pinpointer (on the syndicate base in tg), the disk, the telecrystals of a war declaration
+/// without an uplink (`distribute_tc`) and what a bananium detonation dresses people in
+/// (`make_into_clown`).
+pub const NUKEOP_RUNTIME_TYPES: [&str; 13] = [
     "/obj/item/paper",
     "/obj/item/nuclear_challenge",
+    "/obj/item/nuclear_challenge/clownops",
     "/obj/item/uplink/nuclear",
+    "/obj/item/uplink/loneop",
+    "/obj/item/uplink/clownop",
     "/obj/item/pinpointer/nuke/syndicate",
     "/obj/item/disk/nuclear",
+    "/obj/item/stack/telecrystal",
+    "/obj/item/clothing/under/rank/civilian/clown",
+    "/obj/item/clothing/shoes/clown_shoes",
+    "/obj/item/clothing/mask/gas/clown_hat",
+    "/obj/item/storage/backpack/clown",
 ];
 
 /// The healing school's staff (`ss13_game::antag::wizard`).
@@ -166,7 +198,7 @@ pub const WIZARD_RUNTIME_TYPES: [&str; 40] = [
 /// The uplink items sold here: the ones whose item exists in this codebase. The rest of tg's
 /// catalog needs mechanics that are not modelled yet (see `docs/parity/antagonists/uplink.md`).
 // shortcut: a curated list; grow it as the items' mechanics land.
-pub const UPLINK_ITEMS: [&str; 97] = [
+pub const UPLINK_ITEMS: [&str; 99] = [
     // Guns that fire (`ss13_game::guns`): the traitors' Makarov case and .357 revolver, the
     // operatives' C-20r case, and their ammunition.
     "/datum/uplink_item/dangerous/pistol",
@@ -301,6 +333,9 @@ pub const UPLINK_ITEMS: [&str; 97] = [
     // (`ss13_game::clothing::holsters`).
     "/datum/uplink_item/device_tools/syndie_jaws_of_life",
     "/datum/uplink_item/device_tools/holster_tacticool",
+    // The reinforcement beacons (`ss13_game::antag::nukeop::reinforcements`).
+    "/datum/uplink_item/reinforcements/operative_reinforcement",
+    "/datum/uplink_item/reinforcement/clown_reinforcement",
 ];
 
 /// tg `/datum/uplink_category/discounts`: the category of an uplink's sales.

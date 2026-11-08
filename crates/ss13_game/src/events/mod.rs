@@ -140,8 +140,8 @@ pub fn station_tiles(world: &World) -> Vec<(Entity, TilePos)> {
 const MINUTE: f64 = 60.0;
 
 /// The ported controls with tg's vars (`code/modules/events/*.dm`; defaults: `earliest_start`
-/// 20 minutes, `max_occurrences` 20); BandaStation changes none of them in code (only
-/// `/datum/round_event_control/operative`, not ported).
+/// 20 minutes, `max_occurrences` 20); BandaStation changes only
+/// `/datum/round_event_control/operative` (`min_players = 30`).
 pub fn controls() -> Vec<EventControl> {
     let c = |name, weight, earliest_min: f64, min_players, max_occurrences, make| EventControl {
         name,
@@ -493,6 +493,16 @@ pub fn controls() -> Vec<EventControl> {
             dynamic_tweak::can_run,
             unfakeable(c(dynamic_tweak::NAME, 10, 20.0, 0, 1, dynamic_tweak::make)),
         ),
+        // BandaStation `min_players = 30`; the weight grows while the disk is neglected
+        // (`crate::antag::nukeop::lone::disk_security`).
+        unfakeable(c(
+            crate::antag::nukeop::lone::EVENT_NAME,
+            0,
+            20.0,
+            30,
+            1,
+            crate::antag::nukeop::lone::make,
+        )),
         summon(c(wizard::ROBELESS, 2, 0.0, 0, 1, wizard::make_robeless)),
         summon(c(wizard::IMPROVED, 3, 0.0, 0, 4, wizard::make_improved)),
         summon(c(

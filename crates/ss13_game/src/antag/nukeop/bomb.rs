@@ -32,6 +32,9 @@ use crate::obj_damage::Anchored;
 pub const NUKE_ROOT: &str = "/obj/machinery/nuclearbomb";
 /// tg `/obj/machinery/nuclearbomb/syndicate`: its code is the operatives' `memorized_code`.
 pub const SYNDICATE_NUKE: &str = "/obj/machinery/nuclearbomb/syndicate";
+/// `/obj/machinery/nuclearbomb/syndicate/bananium`: its own sprite, and its detonation makes
+/// clowns (`super::server::make_into_clown`).
+pub const BANANIUM_NUKE: &str = "/obj/machinery/nuclearbomb/syndicate/bananium";
 /// The beer nuke (`/obj/machinery/nuclearbomb/beer`) only sprays beer: not modelled.
 const BEER_NUKE: &str = "/obj/machinery/nuclearbomb/beer";
 const NUKE_DMI: &str = "icons/obj/machines/nuke.dmi";
@@ -588,15 +591,24 @@ fn update_look(world: &mut World, bomb_e: Entity) {
         return;
     };
     let (state, lights) = match look {
-        NukeLook::OffLocked => ("nuclearbomb_base", None),
-        NukeLook::OffUnlocked => ("nuclearbomb_base", Some("lights-safety")),
-        NukeLook::Timing => ("nuclearbomb_timing", Some("lights-timing")),
-        NukeLook::Exploding => ("nuclearbomb_exploding", Some("lights-exploding")),
+        NukeLook::OffLocked => ("_base", None),
+        NukeLook::OffUnlocked => ("_base", Some("lights-safety")),
+        NukeLook::Timing => ("_timing", Some("lights-timing")),
+        NukeLook::Exploding => ("_exploding", Some("lights-exploding")),
+    };
+    // `base_icon_state`.
+    let base = if world
+        .get::<DmObj>(bomb_e)
+        .is_some_and(|o| ss13_mapload::fidelity::is_under(&o.path, BANANIUM_NUKE))
+    {
+        "bananiumbomb"
+    } else {
+        "nuclearbomb"
     };
     let Some(index) = world.get_resource::<IconIndex>() else {
         return;
     };
-    let state = index.get(NUKE_DMI, state);
+    let state = index.get(NUKE_DMI, &format!("{base}{state}"));
     let lights = lights.and_then(|l| index.get(NUKE_DMI, l));
     if let Some(mut appearance) = world.get_mut::<Appearance>(bomb_e) {
         if let Some(state) = state {

@@ -123,6 +123,12 @@ fn convert_cmd(config: &MapLoadPlugin, mut map_dirs: Vec<PathBuf>) -> anyhow::Re
                 .source
                 .join("_maps/templates/lazy_templates/wizard_den.dmm"),
         );
+        // And the Syndicate battlecruiser (`ss13_game::antag::nukeop::battlecruiser`).
+        map_dirs.push(
+            config
+                .source
+                .join("_maps/templates/battlecruiser_starfury.dmm"),
+        );
         // The functional test bots' case maps (`ss13_bots`) load on the same assets.
         let cases = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/cases");
         if cases.is_dir() {

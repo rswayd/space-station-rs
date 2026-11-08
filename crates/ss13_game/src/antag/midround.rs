@@ -17,7 +17,7 @@
 //! Admins force a midround ruleset ([`force_midround`], `force_run_midround`) or queue a latejoin
 //! one ([`Midround::queued_latejoin`]).
 // shortcut: of the rulesets only the midround traitor (sleeper agent), mass traitors, the midround
-// nuclear operatives (opted-in ghosts are taken without a poll), the latejoin traitor
+// nuclear and clown operatives (opted-in ghosts are taken without a poll), the latejoin traitor
 // (infiltrator), the stowaway changeling, the latejoin revolution (provocateur), the midround
 // wizard, the paradox clone (`super::paradox_clone`), the nightmare (`super::nightmare`) and the
 // morph (`super::morph`) spawn anyone;
@@ -119,6 +119,7 @@ pub struct Ruleset {
 pub const MIDROUND_TRAITOR: &str = "Midround Traitor";
 pub const MASS_TRAITORS: &str = "Mass Traitors";
 pub const MIDROUND_NUKEOPS: &str = "Midround Nukeops";
+pub const MIDROUND_CLOWNOPS: &str = "Midround Clownops";
 pub const MIDROUND_WIZARD: &str = "Midround Wizard";
 pub const LATEJOIN_TRAITOR: &str = "Latejoin Traitor";
 pub const LATEJOIN_CHANGELING: &str = "Latejoin Changeling";
@@ -232,15 +233,14 @@ pub const RULESETS: [Ruleset; 30] = {
                 30,
             )))
         },
-        child(
-            high_impact(non_repeatable(other(
-                "Midround Clownops",
-                Heavy,
-                flat(0),
-                30,
-            ))),
-            MIDROUND_NUKEOPS,
-        ),
+        Ruleset {
+            role: Some(super::nukeop::ROLE_CLOWN_OPERATIVE_MIDROUND),
+            caps: (NUKIE_CAP, NUKIE_CAP),
+            ..child(
+                high_impact(non_repeatable(other(MIDROUND_CLOWNOPS, Heavy, flat(0), 30))),
+                MIDROUND_NUKEOPS,
+            )
+        },
         decrease(other("Blob", Heavy, [0, 1, 3, 3], 30), 3),
         decrease(other("Xenomorph", Heavy, [0, 1, 5, 5], 30), 3),
         decrease(other("Space Dragon", Heavy, [0, 3, 5, 5], 30), 3),
@@ -750,6 +750,13 @@ fn execute(
                 .filter_map(|&g| world.get::<PlayerMob>(g).map(|p| p.client))
                 .collect();
             super::nukeop::server::spawn_operatives(world, &clients);
+        }
+        MIDROUND_CLOWNOPS => {
+            let clients: Vec<Entity> = chosen
+                .iter()
+                .filter_map(|&g| world.get::<PlayerMob>(g).map(|p| p.client))
+                .collect();
+            super::nukeop::server::spawn_operatives_as(world, &clients, true);
         }
         MIDROUND_WIZARD => {
             let clients: Vec<Entity> = chosen

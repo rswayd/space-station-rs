@@ -682,6 +682,10 @@ pub fn take_role(world: &mut World, ghost: Entity, spawner: Entity) -> Option<En
     {
         return None;
     }
+    // The spawner type's `allow_spawn` (the battlecruiser's: once per player).
+    if !crate::antag::nukeop::battlecruiser::allow_spawn(world, client, s.def.as_deref()) {
+        return None;
+    }
     let mob = match &def {
         Some(d) => {
             let name = d
@@ -706,6 +710,8 @@ pub fn take_role(world: &mut World, ghost: Entity, spawner: Entity) -> Option<En
     world.despawn(ghost);
     // `create`: `set_assigned_role_with_greeting(spawner_job_path)`, `/datum/job/ghost_role`.
     crate::noncrew_jobs::set_assigned_role(world, mob, crate::noncrew_jobs::GHOST_ROLE);
+    // The spawner type's `special` (the battlecruiser's crew).
+    crate::antag::nukeop::battlecruiser::special(world, mob, client, s.def.as_deref());
     if !infinite {
         let left = s.uses - 1;
         let deletes = def.as_ref().is_none_or(|d| d.deletes_on_zero_uses_left);
