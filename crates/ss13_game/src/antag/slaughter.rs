@@ -5,8 +5,8 @@
 //! force it). The antagonist datum and its objectives are the wizard's
 //! (`docs/parity/antagonists/wizard.md`).
 //!
-//! - **Selection** ([`can_spawn`], [`spawn_demons`]): ghosts who want [`ROLE_SLAUGHTER_DEMON`];
-//!   the demon appears on a carp spawn already in the blood (`phased_mob/blood`), the job, the
+//! - **Selection** ([`can_spawn`], [`spawn_demons`]): the ghosts polled
+//!   ([`ROLE_SLAUGHTER_DEMON`], tg has no `pref_flag`); the demon appears on a carp spawn already in the blood (`phased_mob/blood`), the job, the
 //!   greeting and `demon_dies.ogg`.
 //! - **Blood Crawl** (button, [`blood_crawl`]): next to blood (a blood decal or a tomato smudge
 //!   within a tile) it sinks in at once (`crate::spells::Jaunting`, through walls, no time
@@ -19,7 +19,7 @@
 //!   tiles, 45 s cooldown).
 //! - **Death** (`DEL_ON_DEATH`, [`on_death`]): blood, innards and a demon heart are left (the
 //!   laughter demon leaves a kitten named Laughter instead).
-// shortcut: no ghost poll (willing ghosts are taken), no hit streak wound bonus, no blood colour
+// shortcut: no hit streak wound bonus, no blood colour
 // on leaving, the blood hands of carbon crawlers and the laughter demon's devastation rule; a
 // failed meal lets the victim out where the demon is; the revived friends of the laughter demon
 // get their ghost back only through `crate::ghost::return_to_body`.

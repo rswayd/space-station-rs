@@ -26,7 +26,7 @@
 //!   [`LightEaten`]); after 7 s of shadow walking its next hit on a mob is critical (a carbon or
 //!   cyborg is paralyzed, others take the force again, a corpse is gored).
 //! - [`roundend_report`]: each nightmare and its objective.
-// shortcut: no ghost poll (willing ghosts are taken as the other ghost rulesets do), no
+// shortcut: no
 // `is_safe_turf` check; the terrorize spell and its terror buildup, the light eater's butchering,
 // mining tool behaviour and crit glow, the heart's eating and transplant behaviour (a removed heart
 // only takes the blade away), the mood modifier and the shadow jaunt's purple look are not

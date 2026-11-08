@@ -1,5 +1,6 @@
 //! The paradox clone over real WebTransport on 127.0.0.1: two assistants join; B ghosts and opts
-//! in to the paradox clone; an admin forces the "Paradox Clone" midround. B gets a new body on
+//! in to the paradox clone; an admin forces the "Paradox Clone" midround, B signs up in the ghost
+//! poll and it ends. B gets a new body on
 //! the maintenance landmark: A's name and body, the assistant's outfit, a toolbox in hand, no
 //! station job, the antag HUD icon and the objectives "nobody named A stays alive" (done once A
 //! is dead) and "take A's place" (done while the clone lives). Nobody else wants it: the next
@@ -17,6 +18,7 @@ use ss13_game::antag::paradox_clone::{
 };
 use ss13_game::antag::{AntagHudData, ROLE_PARADOX_CLONE};
 use ss13_game::ghost::{Ghost, ghostize_client};
+use ss13_game::ghost_poll::finish_all;
 use ss13_game::health::Stat;
 use ss13_game::human::HumanLook;
 use ss13_game::inventory::Inventory;
@@ -27,6 +29,7 @@ use ss13_mapload::DmItem;
 use ss13_mapload::convert::DmTypes;
 use ss13_mapload::jobs::{JOBS_FILE, JobsData};
 use ss13_shared::TilePos;
+use ss13_tgui::prompt::{Prompt, PromptAnswer, PromptAnswered};
 
 const TYPES: &str = r##"{
   "schema": 3,
@@ -171,8 +174,32 @@ fn midround_paradox_clone_copies_a_crew_member() {
     });
     // A is the only crew member left to clone, and there is a maintenance spawn.
     assert!(can_spawn(world));
-    let picked = force_midround(world, PARADOX_CLONE).unwrap();
-    assert_eq!(picked, [ghost]);
+    // The ghost poll: B is asked, nothing is decided until it ends.
+    assert!(force_midround(world, PARADOX_CLONE).unwrap().is_empty());
+    let prompts: Vec<(Entity, Entity, Entity)> = world
+        .query::<(Entity, &Prompt)>()
+        .iter(world)
+        .map(|(e, p)| (e, p.client, p.actor))
+        .collect();
+    assert_eq!(prompts.len(), 1);
+    let (prompt, client, actor) = prompts[0];
+    assert_eq!((client, actor), (link_b, ghost));
+    assert!(
+        !world
+            .resource::<Midround>()
+            .executed
+            .contains(&PARADOX_CLONE)
+    );
+    // B signs up; the poll ends.
+    world.write_message(PromptAnswered {
+        prompt,
+        client,
+        actor,
+        answer: Some(PromptAnswer::Button(0)),
+    });
+    s.tick();
+    let world = s.server.world_mut();
+    finish_all(world);
     assert!(
         world
             .resource::<Midround>()

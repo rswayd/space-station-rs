@@ -4,7 +4,8 @@
 //! (`code/modules/events/holiday/vday.dm`, started from `crate::events::holiday_events`).
 //!
 //! - [`start_valentines`] (`/datum/round_event/valentines/start`): every living player body
-//!   (`is_valid_valentine`) is paired at random; both dates get a heart box, a candy heart and a
+//!   (`is_valid_valentine`) is polled for 30 s, signed up from the start; the ones who stay and
+//!   still qualify are paired at random ([`pair_valentines`]); both dates get a heart box, a candy heart and a
 //!   valentine card in their backpack (none without a backpack) and protect each other. A pair
 //!   gets a third wheel 4% of the time (`third_wheel_chance`), who protects one of the two and
 //!   starts with a random bouquet. The odd one out is the heartbreaker (martyr objective).
@@ -12,8 +13,7 @@
 //!   through their sync; a cyborg date is unlinked from its AI and stops syncing).
 //! - [`roundend_report`]: the "Валентинки" section: one line per date (both outcomes), the
 //!   third wheels, then each heartbreaker with its objective.
-// shortcut: no poll (tg's poll starts everyone signed up, so nobody opting out is the default
-// here), no CentCom check (there is no CentCom level), no "in love" alert or hearts over the date
+// shortcut: no CentCom check (there is no CentCom level), no "in love" alert or hearts over the date
 // (`/datum/status_effect/in_love`), no suicide tracking (a suicided date counts as dead).
 // Deviation: tg sets a cyborg date's law 0 only when it was linked to an AI (the law sits inside
 // the `connected_ai` check); here every cyborg date gets it.
@@ -31,7 +31,9 @@ use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiActed, UiSystems};
 
 use super::objectives::{Objective, ObjectiveKind, RoundEnd, considered_alive};
 use super::{AntagHudData, AntagHudUi, BrotherInfo, ObjectiveInfo};
+use crate::events::controller::EventRng;
 use crate::ghost::Ghost;
+use crate::ghost_poll::{PollSpec, poll_candidates};
 use crate::health::Stat;
 use crate::inventory::Inventory;
 use crate::server::PlayerMob;
@@ -45,6 +47,8 @@ pub const HEARTBREAKER_NAME: &str = "Heartbreaker";
 pub const THIRD_WHEEL_CHANCE: f32 = 4.0;
 /// The controller's `heartbreaker`.
 const HEARTBREAKER: bool = true;
+/// The poll's `poll_time`.
+const VALENTINE_POLL_SECS: f64 = 30.0;
 /// The controller's `items_to_give_out`.
 pub const VALENTINE_ITEMS: [&str; 3] = [
     "/obj/item/paper/valentine",
@@ -174,9 +178,34 @@ fn pick_n_take(rng: &mut Rng, list: &mut Vec<Entity>) -> Entity {
     list.remove(i)
 }
 
-/// `/datum/round_event/valentines/start` (the poll answered by everyone).
-pub fn start_valentines(world: &mut World, rng: &mut Rng) {
-    let mut candidates = valentine_candidates(world);
+/// `/datum/round_event/valentines/start`: the poll, then [`pair_valentines`] for who stayed.
+pub fn start_valentines(world: &mut World) {
+    let group = valentine_candidates(world);
+    let spec = PollSpec {
+        question: "Хотите валентинку?".to_owned(),
+        role_name: "Валентинка".to_owned(),
+        secs: VALENTINE_POLL_SECS,
+        start_signed_up: true,
+        ..default()
+    };
+    poll_candidates(world, spec, group, |world, signed_up| {
+        // `is_valid_valentine` again after the wait.
+        let valid = valentine_candidates(world);
+        let candidates: Vec<Entity> = signed_up
+            .into_iter()
+            .map(|c| c.mob)
+            .filter(|m| valid.contains(m))
+            .collect();
+        let mut rng = world
+            .remove_resource::<EventRng>()
+            .unwrap_or(EventRng(Rng::new(0)));
+        pair_valentines(world, candidates, &mut rng.0);
+        world.insert_resource(rng);
+    });
+}
+
+/// The pairing of the signed-up `candidates`.
+pub fn pair_valentines(world: &mut World, mut candidates: Vec<Entity>, rng: &mut Rng) {
     match candidates.len() {
         0 => return,
         1 => {
@@ -539,7 +568,8 @@ mod tests {
         // The dead do not date.
         let dead = player(&mut world, "Г");
         world.entity_mut(dead).insert(Stat::Dead);
-        start_valentines(&mut world, &mut Rng::new(7));
+        let candidates = valentine_candidates(&mut world);
+        pair_valentines(&mut world, candidates, &mut Rng::new(7));
         let dates: Vec<&Valentine> = mobs
             .iter()
             .filter_map(|&m| world.get::<Valentine>(m))

@@ -66,7 +66,7 @@ Robeless: маг (и все, у кого есть заклинания) колд
 В Рождество призрак может стать Сантой, который раздаёт подарки; станция украшается.
 
 - **Код:** [`/datum/round_event_control/santa`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/holiday/xmas.dm#L70)
-- **Статус в ss13-rs:** ❌ нет — нет опроса призраков и антагониста Санты (праздник Christmas есть: `crates/ss13_game/src/events/holidays.rs`)
+- **Статус в ss13-rs:** ❌ нет — опрос призраков есть (`crates/ss13_game/src/ghost_poll.rs`), нет антагониста Санты (праздник Christmas есть: `crates/ss13_game/src/events/holidays.rs`)
 
 ### 2 SPOOKY! (Хэллоуин)
 На Хэллоуин станция украшается, появляются тыквы-метеоры и хэллоуинские мелочи.

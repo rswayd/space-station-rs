@@ -418,8 +418,8 @@ pub(super) fn put_rng(world: &mut World, rng: Rng) {
 
 /// `SSpolling.poll_ghost_candidates(role)` without the poll: the first ghost (by entity order)
 /// whose client opted in to `role`. Returns the ghost and its client.
-// shortcut: no 15 s poll window; the opted-in ghost is taken at once, as the midround rulesets
-// do (`crate::antag::midround`).
+// shortcut: no 15 s poll window; the opted-in ghost is taken at once (the lone operative and
+// reinforcements), until these move to `crate::ghost_poll`.
 pub fn willing_ghost(world: &mut World, role: &str) -> Option<(Entity, Entity)> {
     let mut ghosts: Vec<(Entity, Entity)> = world
         .query_filtered::<(Entity, &PlayerMob), With<crate::ghost::Ghost>>()

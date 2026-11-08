@@ -97,7 +97,7 @@
 Случайное животное или бот обретает разум и отдаётся призраку-добровольцу; станционный вариант (только админы) — все сразу.
 
 - **Код:** [`/datum/round_event_control/sentience`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/ghost_role/sentience.dm#L25), [`/datum/round_event_control/sentience/all`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/ghost_role/sentience.dm#L125), [`/datum/round_event/ghost_role`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/ghost_role/_ghost_role.dm#L4)
-- **Статус в ss13-rs:** ❌ нет — базовые мобы и боты теперь есть (`crates/ss13_game/src/mobs/`, `crates/ss13_bots`), но нет опроса призраков (`SSpolling`: мидраунд-роли берут подписавшихся призраков без опроса) и вселения призрака в моба с выдачей разума
+- **Статус в ss13-rs:** ❌ нет — базовые мобы и боты теперь есть (`crates/ss13_game/src/mobs/`, `crates/ss13_bots`), опрос призраков есть (`crates/ss13_game/src/ghost_poll.rs`), нет самого события и вселения призрака в моба с выдачей разума
 
 ## Вторжения
 

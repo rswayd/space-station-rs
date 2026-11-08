@@ -121,15 +121,14 @@ pub const ROLE_MALF: &str = "Malf AI";
 pub const ROLE_PARADOX_CLONE: &str = "Paradox Clone";
 /// tg `ROLE_NIGHTMARE`: the nightmare's `be_special` key (`nightmare`).
 pub const ROLE_NIGHTMARE: &str = "Nightmare";
-/// tg `ROLE_MORPH` (`morph`). tg polls every ghost for the morph; here it is a `be_special`
-/// key, as willing ghosts are taken without a poll.
+/// tg `ROLE_MORPH` (`morph`); as in tg the morph's poll asks every ghost (no `pref_flag`).
 pub const ROLE_MORPH: &str = "Morph";
-/// The slaughter demon midround's candidates (`slaughter`): tg polls every ghost (no
-/// `pref_flag`); here it is a `be_special` key as for the morph.
+/// The slaughter demon midround's role (`slaughter`): as in tg, no `pref_flag`, every ghost is
+/// polled.
 pub const ROLE_SLAUGHTER_DEMON: &str = "Slaughter Demon";
-/// tg `ROLE_REVENANT` (`revenant`), a `be_special` key as for the morph.
+/// tg `ROLE_REVENANT` (`revenant`).
 pub const ROLE_REVENANT: &str = "Revenant";
-/// tg `ROLE_SPACE_DRAGON` (`space_dragon`), a `be_special` key as for the morph.
+/// tg `ROLE_SPACE_DRAGON` (`space_dragon`).
 pub const ROLE_SPACE_DRAGON: &str = "Space Dragon";
 /// tg `ROLE_BLOB`: the ghost midround's overmind (`blob`).
 pub const ROLE_BLOB: &str = "Blob";
