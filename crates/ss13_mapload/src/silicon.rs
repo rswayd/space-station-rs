@@ -34,6 +34,8 @@ pub const ROBOT_TYPE: &str = "/mob/living/silicon/robot";
 pub const AI_EYE_TYPE: &str = "/mob/eye/camera/ai";
 /// `/mob/living/silicon/robot::cell`.
 pub const ROBOT_CELL: &str = "/obj/item/stock_parts/power_store/cell/high";
+/// `/mob/living/silicon/robot/model/syndicate::cell`.
+pub const ROBOT_SYNDICATE_CELL: &str = "/obj/item/stock_parts/power_store/cell/hyper";
 const CAMERA: &str = "dm_camera";
 const CONSOLE: &str = "dm_camera_console";
 /// `/obj/machinery/ai_slipper`: the AI's foam dispenser.
@@ -51,11 +53,12 @@ pub const CAMERA_RUNTIME_TYPES: [&str; 3] = [
 /// Spawned at runtime by the silicon jobs: the mobs and the borg's cell; by carding, shunting
 /// and AI core construction (`ss13_game::silicon::ai_core`): the core, its board and what it
 /// comes apart into.
-pub const SILICON_TYPES: [&str; 8] = [
+pub const SILICON_TYPES: [&str; 9] = [
     AI_TYPE,
     ROBOT_TYPE,
     AI_EYE_TYPE,
     ROBOT_CELL,
+    ROBOT_SYNDICATE_CELL,
     "/obj/structure/ai_core",
     "/obj/item/circuitboard/aicore",
     "/obj/item/stack/sheet/rglass",
@@ -76,6 +79,17 @@ pub const PICK_MODELS: [&str; 6] = [
     "/obj/item/robot_model/janitor",
     "/obj/item/robot_model/service",
     "/obj/item/robot_model/peacekeeper",
+];
+
+/// The models `pick_model()` does not offer, which other paths reach: security (its config flag
+/// is on, see [`PICK_MODELS`]; a server without it adds this one to the list), the clown (its
+/// `transform` board), the syndicate models (the operatives' beacons).
+pub const OTHER_MODELS: [&str; 5] = [
+    "/obj/item/robot_model/security",
+    "/obj/item/robot_model/clown",
+    "/obj/item/robot_model/syndicate",
+    "/obj/item/robot_model/syndicate_medical",
+    "/obj/item/robot_model/saboteur",
 ];
 
 /// Camera vars of a type (defaults + map edits).
@@ -121,6 +135,9 @@ pub struct RobotModel {
     #[serde(default)]
     pub emag_modules: Vec<String>,
     pub radio_channels: Vec<String>,
+    /// One of [`OTHER_MODELS`]: not in the choice list.
+    #[serde(default)]
+    pub hidden: bool,
 }
 
 /// A cyborg upgrade board (tg `/obj/item/borg/upgrade` vars).
@@ -167,7 +184,7 @@ pub struct MalfFlavor {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct SiliconData {
     pub lawsets: Vec<Lawset>,
-    /// [`PICK_MODELS`] that exist.
+    /// [`PICK_MODELS`] and [`OTHER_MODELS`] that exist.
     pub models: Vec<RobotModel>,
     /// Every `/obj/item/borg/upgrade` subtype, by path.
     #[serde(default)]
@@ -283,9 +300,12 @@ pub fn resolve(types: &DmTypes) -> SiliconData {
     lawsets.sort_by(|a, b| a.path.cmp(&b.path));
     let models = PICK_MODELS
         .iter()
-        .filter(|p| types.types.contains_key(**p))
-        .map(|&path| RobotModel {
+        .map(|&p| (p, false))
+        .chain(OTHER_MODELS.iter().map(|&p| (p, true)))
+        .filter(|(p, _)| types.types.contains_key(*p))
+        .map(|(path, hidden)| RobotModel {
             path: path.to_owned(),
+            hidden,
             name: text(types.resolved(path, "name")).unwrap_or_default(),
             cyborg_base_icon: text(types.resolved(path, "cyborg_base_icon")).unwrap_or_default(),
             basic_modules: existing(types, list(types.resolved(path, "basic_modules"))),
@@ -451,6 +471,9 @@ mod tests {
             "name": "Service", "cyborg_base_icon": "service_m",
             "basic_modules": { "list": [{ "path": "/obj/item/pen" }, { "path": "/obj/item/nope" }] },
             "radio_channels": { "list": ["Сервис"] } } },
+        "/obj/item/robot_model/saboteur": { "parent": "/obj/item/robot_model", "declared_vars": {
+            "name": "Syndicate Saboteur", "cyborg_base_icon": "synd_engi",
+            "basic_modules": { "list": [{ "path": "/obj/item/pen" }] } } },
         "/obj/item/borg": { "parent": "/obj/item" },
         "/obj/item/borg/upgrade": { "parent": "/obj/item/borg", "declared_vars": {
             "locked": 0, "require_model": 0, "model_type": null, "one_use": 0,
@@ -489,9 +512,11 @@ mod tests {
         let crew = data.lawset("crewsimovpp").unwrap();
         assert_eq!(crew.inherent, ["A", "B"]);
         assert_eq!(crew.name, "Крюзимов++");
-        assert_eq!(data.models.len(), 1);
+        assert_eq!(data.models.len(), 2);
         assert_eq!(data.models[0].basic_modules, ["/obj/item/pen"]);
         assert_eq!(data.models[0].radio_channels, ["Сервис"]);
+        assert!(!data.models[0].hidden);
+        assert!(data.models[1].hidden, "{}", data.models[1].path);
         assert_eq!(data.upgrades.len(), 2);
         let amop = data.upgrade("/obj/item/borg/upgrade/amop").unwrap();
         assert!(amop.require_model && !amop.one_use && !amop.locked);

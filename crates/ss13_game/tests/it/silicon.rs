@@ -73,6 +73,9 @@ const TYPES: &str = r##"{
         "name": "Engineering", "cyborg_base_icon": "engineer",
         "basic_modules": { "list": [{ "path": "/obj/item/screwdriver" }, { "path": "/obj/item/multitool" }] },
         "radio_channels": { "list": ["Инженерия"] } } },
+    "/obj/item/robot_model/security": { "parent": "/obj/item/robot_model", "declared_vars": {
+        "name": "Security", "cyborg_base_icon": "sec",
+        "basic_modules": { "list": [{ "path": "/obj/item/multitool" }] } } },
     "/obj/item/ai_module": { "parent": "/obj/item", "declared_vars": { "name": "AI module" } },
     "/obj/item/ai_module/law": { "parent": "/obj/item/ai_module", "declared_vars": {
         "laws": { "list": [] } } },

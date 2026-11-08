@@ -26,8 +26,9 @@
 //!
 //! Using a baton or a flash in hand (`attack_self`) toggles the baton or flashes everyone
 //! around (`AOE_flash`: confusion only).
-// shortcut: no armor (the stun's `run_armor_check`), no clumsiness, no cyborg branches, no
-// sounds, sparks or baton light, no `TRAIT_BATON_RESISTANCE`, no cell removal or replacement (the cell
+// shortcut: no armor (the stun's `run_armor_check`), no clumsiness, no silicon blindness (a
+// flashed cyborg is only remembered as blinded, see `flash_silicon`), no
+// sounds (but the bonk on a cyborg), sparks or baton light, no `TRAIT_BATON_RESISTANCE`, no cell removal or replacement (the cell
 // is the baton's charge), no shoves into tables, lockers or disposal bins and no directional
 // (border) shove checks.
 
@@ -66,6 +67,10 @@ pub const STAGGERED_SLOWDOWN_LENGTH: f32 = 3.0;
 /// Security baton: `apply_stun_effect_end` 2 s after the hit, `set_confusion_if_lower(10 SECONDS)`.
 pub const BATON_STUN_DELAY: f64 = 2.0;
 pub const BATON_CONFUSION: f32 = 10.0;
+/// `stun_time_cyborg`: the contractor baton's paralysis of a cyborg, seconds.
+const STUN_TIME_CYBORG: f32 = 5.0;
+/// `playsound` of `afterattack` for a baton that does nothing to a cyborg.
+const BONK_SOUND: &str = "sound/effects/bang.ogg";
 /// `flash/attack`: `confusion_duration = 5 SECONDS`; `CONFUSION_STACK_MAX_MULTIPLIER`; AOE
 /// range.
 pub const FLASH_CONFUSION: f32 = 5.0;
@@ -103,6 +108,11 @@ pub struct Flash {
 /// `TRAIT_IWASBATONED`: who batoned this mob, until when.
 #[derive(Component, Clone, Debug, Default)]
 struct Batoned(Vec<(Entity, f64)>);
+
+/// Until when a flashed silicon counts as blinded (tg `set_temp_blindness_if_lower`; a silicon
+/// has no blindness here, only this memory: the next flash in the window paralyzes it).
+#[derive(Component, Clone, Copy, Debug)]
+struct SiliconFlashBlinded(f64);
 
 /// Timed follow-ups of a hit (tg `addtimer`): at the time, knock down for the seconds (the
 /// stun baton's delayed knockdown), or end the knockdown (`SetKnockdown(0)` after a side kick).
@@ -428,35 +438,65 @@ fn baton_attack(
     }
     finalize_baton_attack(world, baton, &dm, actor.mob, target, now);
     if let Some(&at) = world.get::<TilePos>(target) {
-        let verb = if dm.uses_cell {
-            "оглушает"
+        // `afterattack`: a cyborg gets `get_cyborg_stun_description` (and the bonk, unless the
+        // baton stuns cyborgs).
+        let cyborg = world
+            .get::<crate::silicon::cyborg::Cyborg>(target)
+            .is_some();
+        let (visible, local, local_span) = if cyborg && stuns_cyborgs(&dm) {
+            (
+                format!("{user} пульсирует сенсоры {victim} с помощью {item}!"),
+                format!("Вы пульсируете сенсоры {victim} с помощью {item}!"),
+                Span::Danger,
+            )
+        } else if cyborg {
+            crate::sound::playsound(
+                world,
+                crate::sound::PlaySound::new(at, BONK_SOUND, 10.0, true),
+            );
+            let (verb, short) = if dm.uses_cell {
+                ("оглушить", "оглушить")
+            } else {
+                ("сбить с ног", "сбить")
+            };
+            (
+                format!(
+                    "{user} пытается {verb} {victim} с помощью {item}, и предсказуемо терпит неудачу!"
+                ),
+                format!("{user} пытается... {short} вас с помощью {item}?"),
+                Span::BoldWarning,
+            )
         } else {
-            "сбивает с ног"
+            let verb = if dm.uses_cell {
+                "оглушает"
+            } else {
+                "сбивает с ног"
+            };
+            (
+                format!("{user} {verb} {victim} с помощью {item}!"),
+                format!("{user} {verb} вас с помощью {item}!"),
+                Span::BoldWarning,
+            )
         };
         show(
             world,
             at,
             DEFAULT_MESSAGE_RANGE,
             ChatChannel::Combat,
-            (
-                Span::Danger,
-                format!("{user} {verb} {victim} с помощью {item}!"),
-            ),
+            (Span::Danger, visible.clone()),
             &[
-                (
-                    target,
-                    Span::BoldWarning,
-                    format!("{user} {verb} вас с помощью {item}!"),
-                ),
-                (
-                    actor.mob,
-                    Span::Danger,
-                    format!("{user} {verb} {victim} с помощью {item}!"),
-                ),
+                (target, local_span, local),
+                (actor.mob, Span::Danger, visible),
             ],
         );
     }
     !harm
+}
+
+/// tg `affect_cyborg`: only the contractor baton has it.
+fn stuns_cyborgs(dm: &DmBaton) -> bool {
+    dm.path
+        .starts_with("/obj/item/melee/baton/telescopic/contractor_baton")
 }
 
 /// tg `finalize_baton_attack` -> `baton_effect` (+ the security baton's charge and
@@ -473,16 +513,41 @@ fn finalize_baton_attack(
     let mut state = world.get_mut::<Baton>(baton).expect("checked");
     state.ready_at = now + cooldown;
     if dm.uses_cell {
-        // `deductcharge`: `cell.use` refuses when short; below a hit the baton turns off.
-        let Some(charge) = state.charge.filter(|&c| c >= dm.cell_hit_cost) else {
-            return;
-        };
-        let left = charge - dm.cell_hit_cost;
-        state.charge = Some(left);
-        if state.active && left < dm.cell_hit_cost {
-            state.active = false;
-            refresh_baton(world, baton);
+        if let Some(mut cyborg) = world.get_mut::<crate::silicon::cyborg::Cyborg>(user) {
+            // `security/baton_effect`, `iscyborg(loc)`: the cyborg's own cell pays.
+            if cyborg.charge < dm.cell_hit_cost {
+                return;
+            }
+            cyborg.charge -= dm.cell_hit_cost;
+        } else {
+            let mut state = world.get_mut::<Baton>(baton).expect("checked");
+            // `deductcharge`: `cell.use` refuses when short; below a hit the baton turns off.
+            let Some(charge) = state.charge.filter(|&c| c >= dm.cell_hit_cost) else {
+                return;
+            };
+            let left = charge - dm.cell_hit_cost;
+            state.charge = Some(left);
+            if state.active && left < dm.cell_hit_cost {
+                state.active = false;
+                refresh_baton(world, baton);
+            }
         }
+    }
+    if world
+        .get::<crate::silicon::cyborg::Cyborg>(target)
+        .is_some()
+    {
+        // `baton_effect`: `if(!affect_cyborg) return FALSE`; the rest of it is the paralysis.
+        if stuns_cyborgs(dm) {
+            crate::status_effects::apply(
+                world,
+                target,
+                crate::status_effects::Incap::Paralyze,
+                STUN_TIME_CYBORG,
+            );
+            set_batoned(world, user, target, cooldown, now);
+        }
+        return;
     }
     adjust_stamina(world, target, dm.stamina_damage);
     // `additional_effects_non_cyborg`: the security baton jitters (40 s), confuses and stutters
@@ -522,6 +587,11 @@ fn finalize_baton_attack(
             }
         }
     }
+    set_batoned(world, user, target, cooldown, now);
+}
+
+/// tg `set_batoned`: `target` remembers who batoned it.
+fn set_batoned(world: &mut World, user: Entity, target: Entity, cooldown: f64, now: f64) {
     if cooldown > 0.0 {
         let mut entity = world.entity_mut(target);
         let mut batoned = entity.entry::<Batoned>().or_default();
@@ -798,6 +868,52 @@ pub(crate) fn burn_out(world: &mut World, flash: Entity) {
     }
 }
 
+/// A silicon's end of `flash_mob`: blinded for 5-15 s, and flashed again while blinded it is
+/// overloaded and paralyzed for 8-12 s.
+fn flash_silicon(world: &mut World, source: &FlashSource, victim: Entity, at: TilePos) {
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    let blinded = world
+        .get::<SiliconFlashBlinded>(victim)
+        .is_some_and(|b| now < b.0);
+    let (name_user, name_victim) = (source.name.clone(), name_of(world, victim));
+    let mut rng = world.resource_mut::<CombatRng>();
+    let (paralysis, blindness) = (rng.range(8, 12) as f32, rng.range(5, 15) as f64);
+    let (verb, secs) = if blinded {
+        crate::status_effects::apply(
+            world,
+            victim,
+            crate::status_effects::Incap::Paralyze,
+            paralysis,
+        );
+        ("перегружает сенсоры и вычисления", f64::from(paralysis))
+    } else {
+        ("ослепляет", blindness)
+    };
+    world
+        .entity_mut(victim)
+        .insert(SiliconFlashBlinded(now + secs));
+    if source.user.is_some() {
+        show(
+            world,
+            at,
+            DEFAULT_MESSAGE_RANGE,
+            ChatChannel::Combat,
+            (
+                Span::Warning,
+                format!("{name_user} {verb} {name_victim} вспышкой!"),
+            ),
+            &[],
+        );
+    } else {
+        tell_mob(
+            world,
+            victim,
+            Span::Danger,
+            format!("{name_user} {verb} вас!"),
+        );
+    }
+}
+
 /// tg `/obj/item/assembly/flash/attack`.
 fn flash_attack(world: &mut World, user: Entity, flash: Entity, target: Entity, now: f64) {
     if try_use_flash(world, flash, now) && flash_mob(world, user, target, FLASH_CONFUSION, true) {
@@ -886,7 +1002,13 @@ pub(crate) fn flash_mob_from(
     };
     let protection = eye_protection(world, victim);
     let facing = world.get::<Facing>(victim).map_or(Dir::South, |f| f.0);
-    let mut deviation = deviation(protection, victim_at, facing, source.at);
+    // `calculate_deviation`: "deep-rooted weakness to flashes" of silicons.
+    let silicon = world.get::<crate::silicon::Silicon>(victim).is_some();
+    let mut deviation = if silicon {
+        0
+    } else {
+        deviation(protection, victim_at, facing, source.at)
+    };
     // `COMSIG_MOB_PRE_FLASHED_MOB`: `can_flash_from_behind` makes a full deviation partial.
     if let Some(user) = source.user
         && deviation == 2
@@ -941,6 +1063,10 @@ pub(crate) fn flash_mob_from(
         e.adjust_confusion_up_to(confusion, confusion * CONFUSION_STACK_MAX_MULTIPLIER);
     }
     if !targeted {
+        return true;
+    }
+    if silicon {
+        flash_silicon(world, source, victim, victim_at);
         return true;
     }
     let scale = 1.0 - f32::from(deviation) * 0.5;

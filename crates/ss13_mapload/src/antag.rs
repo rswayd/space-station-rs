@@ -242,7 +242,7 @@ pub const ABDUCTOR_RUNTIME_TYPES: [&str; 38] = [
 /// The uplink items sold here: the ones whose item exists in this codebase. The rest of tg's
 /// catalog needs mechanics that are not modelled yet (see `docs/parity/antagonists/uplink.md`).
 // shortcut: a curated list; grow it as the items' mechanics land.
-pub const UPLINK_ITEMS: [&str; 99] = [
+pub const UPLINK_ITEMS: [&str; 102] = [
     // Guns that fire (`ss13_game::guns`): the traitors' Makarov case and .357 revolver, the
     // operatives' C-20r case, and their ammunition.
     "/datum/uplink_item/dangerous/pistol",
@@ -380,6 +380,9 @@ pub const UPLINK_ITEMS: [&str; 99] = [
     // The reinforcement beacons (`ss13_game::antag::nukeop::reinforcements`).
     "/datum/uplink_item/reinforcements/operative_reinforcement",
     "/datum/uplink_item/reinforcement/clown_reinforcement",
+    "/datum/uplink_item/reinforcements/assault_borg",
+    "/datum/uplink_item/reinforcements/medical_borg",
+    "/datum/uplink_item/reinforcements/saboteur_borg",
 ];
 
 /// tg `/datum/uplink_category/discounts`: the category of an uplink's sales.

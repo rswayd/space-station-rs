@@ -991,6 +991,17 @@ pub fn mousedropped_onto(
 
 /// tg `put_in_hands`: the active hand, else the other one, else at the mob's feet.
 pub(crate) fn put_in_hands(world: &mut World, mob: Entity, inventory: &Inventory, item: Entity) {
+    // A cyborg's module never falls: `activate_module` or it stays in the model.
+    if world
+        .get::<crate::silicon::cyborg::RobotModule>(item)
+        .is_some()
+        && world
+            .get::<crate::silicon::cyborg::ModuleSlots>(mob)
+            .is_some()
+    {
+        crate::silicon::cyborg::activate_module(world, mob, item);
+        return;
+    }
     let hand = [inventory.active, 1 - inventory.active]
         .into_iter()
         .find(|&h| inventory.hands[h].is_none());

@@ -12,7 +12,7 @@
 //! - Per-holder wire state the holder types do not have lives in [`WireState`].
 // shortcut: no holopad recordings (loop and replay only keep their state), no microwave
 // vampire charging (the mode wire's swap ends in "needs upgrades"), no cyborg built-in camera
-// or model reset, no mech internal damage, overclock, lights or `try_attack` (those wires keep
+// (the camera wire only announces), no mech internal damage, overclock, lights or `try_attack` (those wires keep
 // their state for the status lights), no MOD malfunction effects beyond the window's flag
 // (`interface_break` is not in the MODsuit window data), no fax jamming. Add with those systems.
 
@@ -413,6 +413,11 @@ pub fn on_cut(
         }
         (MachineWires::Robot, WIRE_LOCKDOWN) => {
             crate::silicon::chassis::set_lockdown(world, e, !mend);
+        }
+        (MachineWires::Robot, WIRE_RESET_MODEL) => {
+            if !mend {
+                crate::silicon::cyborg::reset_model(world, e);
+            }
         }
         (MachineWires::Mecha, WIRE_IDSCAN) => {
             if !mend && let Some(mut m) = world.get_mut::<Mech>(e) {

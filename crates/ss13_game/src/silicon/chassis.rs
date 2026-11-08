@@ -57,7 +57,7 @@ pub const EMAG_STUN_SECS: f32 = 10.0;
 /// `lockdown_timer`: 10 minutes until the cyborg overrides a console's lockdown.
 pub const LOCKDOWN_OVERRIDE_SECS: f64 = 600.0;
 /// `/datum/ai_laws/syndicate_override` `id`.
-const SYNDICATE_LAWS: &str = "syndie";
+pub(crate) const SYNDICATE_LAWS: &str = "syndie";
 
 /// `borg_emag_end`: each line after the sleep before it.
 const EMAG_END: [(f64, &str); 7] = [

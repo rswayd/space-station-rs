@@ -31,8 +31,8 @@
 // (→ ../tools: no light), it is a thrown coloured item; the RTD keeps no floor overlays
 // (decals) when it copies a design; the RWD has no custom amount dispensing (right click in
 // hand); the RPLD has no duct colours (ducts are not ported: right click does nothing, the
-// machines themselves → ../chemistry/plumbing.md), no mouse wheel layer change; no cyborg
-// (cell) versions; the RCL (pipe cleaners) is not ported.
+// machines themselves → ../chemistry/plumbing.md), no mouse wheel layer change; the RCL (pipe
+// cleaners) is not ported. The cyborg cookie synthesizer's sleepy cookies (`toxin`) are not.
 // Cost: one pass over the moved mobs' hands per step for the RWD; the rest runs on clicks.
 
 use bevy::ecs::message::{MessageCursor, Messages};
@@ -668,6 +668,23 @@ fn rsf_table(cookies: bool) -> &'static [&'static str] {
     if cookies { COOKIE_ITEMS } else { RSF_ITEMS }
 }
 
+/// `cost_by_item`: joules a cyborg pays (`dispense_cost`).
+fn rsf_cost(path: &str) -> f64 {
+    match path {
+        "/obj/item/reagent_containers/cup/glass/drinkingglass" => 20.0,
+        "/obj/item/plate" | "/obj/item/reagent_containers/cup/bowl" => 70.0,
+        "/obj/item/kitchen/fork/plastic"
+        | "/obj/item/knife/plastic"
+        | "/obj/item/kitchen/spoon/plastic"
+        | "/obj/item/food/seaweedsheet" => 30.0,
+        "/obj/item/storage/dice" | "/obj/item/toy/cards/deck" => 200.0,
+        "/obj/item/pen" => 50.0,
+        "/obj/item/food/cookie" => 100.0,
+        // The sillycup, paper and cigarette.
+        _ => 10.0,
+    }
+}
+
 /// RLD costs (`LIGHT_TUBE_COST`, `FLOOR_LIGHT_COST`, `GLOW_STICK_COST`, `DECONSTRUCT_COST`) and
 /// delays in deciseconds (`BUILD_DELAY`, `REMOVE_DELAY`).
 const TUBE_COST: u32 = 10;
@@ -898,17 +915,7 @@ fn matter_of(world: &World, item: Entity) -> Option<Matter> {
 
 /// `useResource(amount)`: false (and the warning) when short.
 fn take_matter(world: &mut World, client: Entity, item: Entity, cost: u32, dry: bool) -> bool {
-    let Some(m) = matter_of(world, item) else {
-        return false;
-    };
-    if !m.has(cost) {
-        tell(world, client, Span::Warning, "Недостаточно материи!");
-        return false;
-    }
-    if !dry && let Some(mut m) = world.get_mut::<Matter>(item) {
-        m.take(cost);
-    }
-    true
+    super::rcd::use_resource(world, client, item, cost, dry)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1008,6 +1015,7 @@ fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity) -> 
         return false;
     }
     if let Some(m) = matter_of(world, item) {
+        let m = super::rcd::shown_matter(world, item, &m);
         message = format!("Материя: {}", amount_text(m.matter, m.max));
     }
     let prompt = ask_world(
@@ -1477,6 +1485,10 @@ fn rtd_click(world: &mut World, actor: Actor, rtd: Entity, target: Entity, right
     let Some(r) = world.get::<Rtd>(rtd).copied() else {
         return false;
     };
+    // `/obj/item/construction/rtd/borg`: "Cannot deconstruct floors".
+    if right && world.get::<super::rcd::CellPowered>(rtd).is_some() {
+        return false;
+    }
     if world.get::<Turf>(target).is_none() {
         return false;
     }
@@ -1881,18 +1893,42 @@ fn rsf_click(world: &mut World, actor: Actor, rsf: Entity, target: Entity) -> bo
     let Some(&pos) = world.get::<TilePos>(target) else {
         return false;
     };
-    if r.matter == 0 {
-        tell(world, actor.client, Span::Warning, "Не хватает материи.");
-        return true;
-    }
     let cookies = item_path(world, rsf).is_some_and(|p| is_under(&p, COOKIESYNTH));
     let Some(&made) = rsf_table(cookies).get(r.design) else {
         return true;
     };
+    // `use_matter`: a cyborg pays `dispense_cost` joules from its cell, no matter.
+    let borg = world
+        .get::<crate::silicon::cyborg::Cyborg>(actor.mob)
+        .map(|c| c.charge);
+    let borg_cost = borg.map(|_| rsf_cost(made));
+    if let Some(cost) = borg_cost {
+        if borg.unwrap_or(0.0) - cost < 0.0 {
+            tell(
+                world,
+                actor.client,
+                Span::Warning,
+                "Недостаточно заряда для этого.",
+            );
+            return true;
+        }
+    } else if r.matter == 0 {
+        tell(world, actor.client, Span::Warning, "Не хватает материи.");
+        return true;
+    }
     let Some(new) = spawn_obj(world, made, pos) else {
         return true;
     };
-    let matter = r.matter - 1;
+    let matter = if borg_cost.is_some() {
+        r.matter
+    } else {
+        r.matter - 1
+    };
+    if let Some(cost) = borg_cost
+        && let Some(mut c) = world.get_mut::<crate::silicon::cyborg::Cyborg>(actor.mob)
+    {
+        c.charge -= cost;
+    }
     if let Some(mut r) = world.get_mut::<Rsf>(rsf) {
         r.matter = matter;
         if cookies {
@@ -1910,12 +1946,14 @@ fn rsf_click(world: &mut World, actor: Actor, rsf: Entity, target: Entity) -> bo
         Span::Notice,
         format!("Создаётся {name}..."),
     );
-    tell(
-        world,
-        actor.client,
-        Span::Notice,
-        format!("В нём теперь {matter}/{} единиц.", r.max),
-    );
+    if borg_cost.is_none() {
+        tell(
+            world,
+            actor.client,
+            Span::Notice,
+            format!("В нём теперь {matter}/{} единиц.", r.max),
+        );
+    }
     true
 }
 

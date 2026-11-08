@@ -22,7 +22,7 @@
 // shortcut: the straight jacket's `equip_delay_self` (5 s) and `strip_delay` (6 s) are not
 // ported: the inventory has no self-equip delays and the strip menu uses tg's defaults.
 // shortcut: no legcuffs, no clumsy self-cuffing, no `canBeHandcuffed` arm count (humans always have two arms here), no wirecutters
-// on weak cuffs, no cyborg dispensing.
+// on weak cuffs.
 
 use bevy::prelude::*;
 use ss13_mapload::{DmAtom, DmHandcuffs, DmName, IconIndex};
@@ -246,7 +246,24 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter, job: Restraint
                 );
                 return;
             }
-            apply_cuffs(world, cuffs, target);
+            // `apply_cuffs(dispense = iscyborg(user))`: a cyborg's module stays and a new pair
+            // of its type goes on. (tg then `qdel(src)`s the module, an obvious bug: the
+            // cyborg would lose its only cuffs after one use.)
+            let worn = if world.get::<crate::silicon::cyborg::Cyborg>(mob).is_some() {
+                let new = world
+                    .get::<DmHandcuffs>(cuffs)
+                    .map(|c| c.path.clone())
+                    .and_then(|path| {
+                        crate::construction::spawn_obj(world, &path, action.target_pos)
+                    });
+                let Some(new) = new else {
+                    return;
+                };
+                new
+            } else {
+                cuffs
+            };
+            apply_cuffs(world, worn, target);
             let (user, victim) = (name_of(world, mob), name_of(world, target));
             show(
                 world,

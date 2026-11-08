@@ -46,8 +46,9 @@ use crate::airlock_construction::{AirlockElectronics, DoorAssembly, ElectronicsW
 use crate::construction::{Job, path_of, place_on_top, scrape_away, spawn_obj, tile_changed};
 use crate::doors::Door;
 use crate::health::{Health, Stat};
-use crate::inventory::Inventory;
+use crate::inventory::{CarriedBy, Inventory};
 use crate::obj_damage::{is_under, set_anchored, set_icon_state};
+use crate::silicon::cyborg::{Cyborg, STANDARD_CELL_CHARGE};
 use crate::sound::{PlaySound, playsound};
 use crate::tools::{Actor, DoAfter, Stack, do_after, tell, use_stack};
 
@@ -136,7 +137,15 @@ const SHEET_MATTER: [(&str, u32); 7] = [
 
 /// RCD types (and the family's, [`super::rhd`]): path, `max_matter`, starting `matter`,
 /// `construction_upgrades`, `canRturf`, `delay_mod`; subtypes first.
-const VARIANTS: [(&str, u32, u32, u8, bool, f32); 14] = [
+const VARIANTS: [(&str, u32, u32, u8, bool, f32); 15] = [
+    (
+        "/obj/item/construction/rcd/borg/syndicate",
+        160,
+        0,
+        0,
+        true,
+        1.0,
+    ),
     ("/obj/item/construction/rld/mini", 100, 100, 0, false, 1.0),
     ("/obj/item/construction/rld", 200, 200, 0, false, 1.0),
     (
@@ -194,6 +203,100 @@ const VARIANTS: [(&str, u32, u32, u8, bool, f32); 14] = [
     ),
     ("/obj/item/construction/rcd/loaded", 160, 160, 0, false, 1.0),
 ];
+
+/// `/obj/item/construction/{rcd,rtd,rdd}/borg`: `energyfactor`, joules of the cyborg's cell per
+/// matter unit. Subtypes first.
+const CELL_POWERED: [(&str, f64); 4] = [
+    (
+        "/obj/item/construction/rcd/borg/syndicate",
+        0.066 * STANDARD_CELL_CHARGE,
+    ),
+    (
+        "/obj/item/construction/rcd/borg",
+        0.072 * STANDARD_CELL_CHARGE,
+    ),
+    (
+        "/obj/item/construction/rtd/borg",
+        0.03 * STANDARD_CELL_CHARGE,
+    ),
+    (
+        "/obj/item/construction/rdd/borg",
+        0.1 * STANDARD_CELL_CHARGE,
+    ),
+];
+
+/// A cyborg's RHD (tg's `/borg` types): its joules per matter unit come out of the holder's cell.
+#[derive(Component, Clone, Copy, Debug, PartialEq)]
+pub struct CellPowered(pub f64);
+
+fn cell_powered(path: &str) -> Option<CellPowered> {
+    CELL_POWERED
+        .iter()
+        .find(|(p, _)| is_under(path, p))
+        .map(|&(_, factor)| CellPowered(factor))
+}
+
+/// `get_matter`: a cyborg's RHD shows the holder's cell (`0` in any other hands), others their
+/// own matter.
+pub(crate) fn shown_matter(world: &World, item: Entity, m: &Matter) -> Matter {
+    let mut shown = *m;
+    if world.get::<CellPowered>(item).is_some() {
+        let cyborg = world
+            .get::<CarriedBy>(item)
+            .and_then(|c| world.get::<Cyborg>(c.0));
+        shown.matter = cyborg.map_or(0, |c| c.charge as u32);
+        if let Some(cyborg) = cyborg {
+            shown.max = cyborg.max_charge as u32;
+        }
+    }
+    shown
+}
+
+/// tg `useResource(amount, user, dry_run)`: a cell-powered RHD draws on the cyborg holding it,
+/// the others on their own matter. False (with the warning) when short.
+pub(crate) fn use_resource(
+    world: &mut World,
+    client: Entity,
+    item: Entity,
+    cost: u32,
+    dry: bool,
+) -> bool {
+    let Some(&CellPowered(per_unit)) = world.get::<CellPowered>(item) else {
+        let Some(m) = world.get::<Matter>(item).copied() else {
+            return false;
+        };
+        if !m.has(cost) {
+            tell(world, client, Span::Warning, "Недостаточно материи!");
+            return false;
+        }
+        if !dry && let Some(mut m) = world.get_mut::<Matter>(item) {
+            m.take(cost);
+        }
+        return true;
+    };
+    let Some(borg) = world.get::<CarriedBy>(item).map(|c| c.0) else {
+        return false;
+    };
+    if world
+        .get::<crate::silicon::chassis::Chassis>(borg)
+        .is_some_and(|c| c.cell.is_none())
+    {
+        tell(world, client, Span::Warning, "Ячейка не найдена!");
+        return false;
+    }
+    let need = f64::from(cost) * per_unit;
+    let Some(mut cyborg) = world.get_mut::<Cyborg>(borg) else {
+        return false;
+    };
+    if cyborg.charge < need {
+        tell(world, client, Span::Warning, "Недостаточно заряда!");
+        return false;
+    }
+    if !dry {
+        cyborg.charge -= need;
+    }
+    true
+}
 
 /// `RCD_TURF`, `RCD_WINDOWGRILLE`, `RCD_STRUCTURE`, `RCD_AIRLOCK`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -521,6 +624,11 @@ fn attach(add: On<Add<DmItem>>, items: Query<&DmItem>, mut commands: Commands) {
         commands
             .entity(add.entity)
             .insert_if_new(Matter::for_path(&item.path));
+    } else {
+        return;
+    }
+    if let Some(powered) = cell_powered(&item.path) {
+        commands.entity(add.entity).insert_if_new(powered);
     }
 }
 
@@ -584,12 +692,21 @@ pub fn load(world: &mut World, client: Entity, rcd: Entity, used: Entity) -> boo
             );
             return true;
         }
+        // `/borg` `banned_upgrades = RCD_UPGRADE_SILO_LINK`.
+        if bit == UPGRADE_SILO_LINK && world.get::<CellPowered>(rcd).is_some() {
+            tell(world, client, Span::Warning, "Нельзя установить улучшение!");
+            return true;
+        }
         world.get_mut::<Matter>(rcd).expect("checked").upgrades |= bit;
         world.despawn(used);
         if let Some(pos) = pos {
             playsound(world, PlaySound::new(pos, CLICK, 50.0, true));
         }
         return true;
+    }
+    // `insert_matter`: `if(iscyborg(user)) return FALSE`; only cyborgs hold a `/borg` RHD.
+    if world.get::<CellPowered>(rcd).is_some() {
+        return false;
     }
     let room = m.max.saturating_sub(m.matter);
     let loaded = if let Some(ammo) = ammo_amount(world, used) {
@@ -639,6 +756,7 @@ pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity)
     if let Some(pos) = crate::modpc::pda::turf_of(world, item) {
         playsound(world, PlaySound::new(pos, POP, 50.0, false));
     }
+    let shown = shown_matter(world, item, &m);
     let mut options = Vec::new();
     let mut items = Vec::new();
     for (i, design) in DESIGNS.iter().enumerate() {
@@ -657,7 +775,7 @@ pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity)
             client,
             mob,
             "RCD",
-            format!("Материя: {}", matter_text(&m)),
+            format!("Материя: {}", matter_text(&shown)),
             PromptKind::List {
                 items,
                 default: None,
@@ -1002,8 +1120,7 @@ pub fn item_interaction(
     let Some((delay, cost)) = rcd_vals(world, &m, target, design) else {
         return true;
     };
-    if !m.has(cost) {
-        tell(world, actor.client, Span::Warning, "Недостаточно материи!");
+    if !use_resource(world, actor.client, held, cost, true) {
         return true;
     }
     if !can_place(world, target, design) {
@@ -1091,8 +1208,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter, job: RcdJob) {
     let Some((_, cost)) = rcd_vals(world, &m, target, design) else {
         return;
     };
-    if !m.has(cost) {
-        tell(world, client, Span::Warning, "Недостаточно материи!");
+    if !use_resource(world, client, item, cost, true) {
         return;
     }
     if !can_place(world, target, design) {
@@ -1102,7 +1218,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter, job: RcdJob) {
     if !rcd_act(world, client, target, design, dir, item) {
         return;
     }
-    world.get_mut::<Matter>(item).expect("checked").take(cost);
+    use_resource(world, client, item, cost, false);
     let pos = action.target_pos;
     playsound(world, PlaySound::new(pos, DECONSTRUCT_SOUND, 50.0, true));
     playsound(world, PlaySound::new(pos, CLICK, 50.0, true));
@@ -1278,7 +1394,10 @@ pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<crate::exami
     };
     lines.push((
         Span::Plain,
-        format!("В нём {} единиц материи.", matter_text(m)),
+        format!(
+            "В нём {} единиц материи.",
+            matter_text(&shown_matter(world, target, m))
+        ),
     ));
     let names: Vec<&str> = DISKS
         .iter()
@@ -1302,6 +1421,57 @@ pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<crate::exami
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cyborg_rcds_are_cell_powered() {
+        assert_eq!(
+            cell_powered("/obj/item/construction/rcd/borg"),
+            Some(CellPowered(720.0))
+        );
+        assert_eq!(
+            cell_powered("/obj/item/construction/rcd/borg/syndicate"),
+            Some(CellPowered(660.0))
+        );
+        assert_eq!(cell_powered(RCD), None);
+        assert!(Matter::for_path("/obj/item/construction/rcd/borg/syndicate").rturf);
+    }
+
+    #[test]
+    fn a_borg_rcd_draws_on_the_holders_cell() {
+        let mut world = World::new();
+        world.init_resource::<Messages<ss13_net::chat::server::SendChat>>();
+        let borg = world
+            .spawn(Cyborg {
+                model: None,
+                model_item: None,
+                charge: 1000.0,
+                max_charge: 1000.0,
+                low_power: false,
+                connected_ai: None,
+                lawupdate: false,
+            })
+            .id();
+        let item = world
+            .spawn((
+                Matter::for_path("/obj/item/construction/rcd/borg"),
+                CellPowered(720.0),
+                CarriedBy(borg),
+            ))
+            .id();
+        let client = world.spawn_empty().id();
+        let cyborg = |w: &World| w.get::<Cyborg>(borg).unwrap().charge;
+        // A dry run checks, a real one pays `amount * energyfactor`.
+        assert!(use_resource(&mut world, client, item, 1, true));
+        assert_eq!(cyborg(&world), 1000.0);
+        assert!(use_resource(&mut world, client, item, 1, false));
+        assert_eq!(cyborg(&world), 280.0);
+        // Not enough charge: refused, nothing taken.
+        assert!(!use_resource(&mut world, client, item, 1, false));
+        assert_eq!(cyborg(&world), 280.0);
+        // Out of a cyborg's hands it has no power at all (tg: `!iscyborg(user)`).
+        world.entity_mut(item).remove::<CarriedBy>();
+        assert!(!use_resource(&mut world, client, item, 1, true));
+    }
 
     #[test]
     fn variants_follow_tg() {
