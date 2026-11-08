@@ -526,12 +526,9 @@ pub fn spawn_singularity(world: &mut World, path: &str, pos: TilePos) -> Option<
 /// `/datum/sm_delam/proc/effect_singulo`: a singularity of 800 energy eats the crystal.
 pub fn effect_singulo(world: &mut World, pos: TilePos) -> Option<Entity> {
     let e = spawn_singularity(world, SINGULARITY, pos)?;
-    let mut s = world.get_mut::<Singularity>(e).expect("just made");
-    s.energy = 800.0;
     // `consume(sm)`: the crystal is already gone here (`Delaminated`), its gain and charge
     // still come.
-    s.energy += SUPERMATTER_GAIN;
-    drop(s);
+    world.get_mut::<Singularity>(e).expect("just made").energy = 800.0 + SUPERMATTER_GAIN;
     supermatter_upgrade(world, e);
     Some(e)
 }

@@ -771,7 +771,7 @@ fn shock(world: &mut World, mob: Entity, damage: f32, source: Entity) {
         siemens -= 0.5;
     }
     match suit {
-        Some(s) if s == -1.0 => siemens -= 1.0,
+        Some(-1.0) => siemens -= 1.0,
         Some(s) if s <= 0.0 => siemens -= 0.95,
         _ => {}
     }
