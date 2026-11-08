@@ -506,7 +506,11 @@ pub(super) fn sect_bless(world: &mut World, chaplain: Entity, target: Entity) ->
         .collect();
     let mut wounds_moved: Vec<(BodyZone, BodyZone)> = Vec::new();
     if !my_parts.is_empty() {
-        for zone in BodyZone::ALL.into_iter().filter(|&z| theirs.has_part(z)) {
+        let their_parts: Vec<BodyZone> = BodyZone::ALL
+            .into_iter()
+            .filter(|&z| theirs.has_part(z))
+            .collect();
+        for zone in their_parts {
             let mine_zone = if mine.has_part(zone) {
                 zone
             } else {
