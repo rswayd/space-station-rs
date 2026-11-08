@@ -3,6 +3,7 @@
 //! --all-features -E 'test(/^cult::/)'`.
 
 mod airlock_construction;
+mod airlock_control;
 mod assemblies;
 mod atmos_machinery;
 mod barber;

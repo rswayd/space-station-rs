@@ -499,6 +499,8 @@ impl Plugin for TguiClientPlugin {
             .register_ui_view::<crate::interfaces::mech_bay::MechBayPowerConsoleUi>()
             .register_ui_view::<crate::interfaces::ai_airlock::AiAirlockUi>()
             .register_ui_view::<crate::interfaces::airlock_electronics::AirlockElectronicsUi>()
+            .register_ui_view::<crate::interfaces::airlock_controller::AirlockButtonControllerUi>()
+            .register_ui_view::<crate::interfaces::airlock_controller::AirlockControllerUi>()
             .register_ui_view::<crate::interfaces::apc::ApcUi>()
             .register_ui_view::<crate::interfaces::list_input::ListInputUi>()
             .register_ui_view::<crate::interfaces::alert::AlertUi>()

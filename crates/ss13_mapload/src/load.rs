@@ -503,7 +503,21 @@ impl Loader<'_> {
         let mut fields = Vec::new();
         let mut door_fields = Vec::new();
         let door = crate::door::is_door(&obj.path);
+        let mut helper_extra = Vec::new();
         for (var, value) in &obj.vars {
+            if let Some(h) = crate::door::helper_field_dmm(&obj.path, var, value) {
+                match h {
+                    Ok(entry) => helper_extra.push(entry),
+                    Err(_) => {
+                        *self
+                            .report
+                            .unsupported_values
+                            .entry(var.clone())
+                            .or_default() += 1;
+                    }
+                }
+                continue;
+            }
             if door && let Some(f) = crate::door::field_dmm(var, value) {
                 match f {
                     Ok(f) => door_fields.push(f),
@@ -522,6 +536,7 @@ impl Loader<'_> {
                 .or_else(|| crate::atmos_machine::field_dmm(&obj.path, var, value))
                 .or_else(|| crate::silicon::field_dmm(&obj.path, var, value))
                 .or_else(|| crate::wallmount::field_dmm(&obj.path, var, value))
+                .or_else(|| crate::airlock_control::field_dmm(&obj.path, var, value))
                 .unwrap_or_else(|| field_for(&obj.path, var, Val::from_dmm(value)));
             match field {
                 Ok(f) => fields.push(f),
@@ -537,7 +552,8 @@ impl Loader<'_> {
                 }
             }
         }
-        let extra: Vec<String> = crate::door::patch_entry(&door_fields).into_iter().collect();
+        let mut extra: Vec<String> = crate::door::patch_entry(&door_fields).into_iter().collect();
+        extra.extend(helper_extra);
         let overrides =
             (!fields.is_empty() || !extra.is_empty()).then(|| patch_ron_with(&fields, &extra));
         self.template(&obj.path, overrides)

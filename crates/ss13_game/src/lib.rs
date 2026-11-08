@@ -172,6 +172,12 @@ pub mod afflictions;
 #[cfg(feature = "server")]
 pub mod airlock_construction;
 #[cfg(feature = "server")]
+pub mod airlock_controllers;
+#[cfg(feature = "server")]
+pub mod airlock_cycle;
+#[cfg(feature = "server")]
+pub mod airlock_security;
+#[cfg(feature = "server")]
 pub mod alt_appearance;
 #[cfg(feature = "server")]
 pub mod animation;

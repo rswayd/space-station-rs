@@ -17,7 +17,7 @@
 //! - Flashlights ([`flashlight`]), GPS units ([`gps`]), the RCD ([`rcd`]) and its family
 //!   (RLD, RTD, RDD, RPLD, RWD, RSF: [`rhd`]), tape recorders
 //!   ([`taperecorder`]), laser pointers ([`laser_pointer`]), tracking and choice beacons
-//!   ([`beacons`]), binoculars ([`binoculars`]), broadcast cameras ([`broadcast_camera`]), door seals ([`door_seal`]), table clocks
+//!   ([`beacons`]), binoculars ([`binoculars`]), broadcast cameras ([`broadcast_camera`]), door remotes ([`door_remote`]), door seals ([`door_seal`]), table clocks
 //!   ([`table_clock`]) and hand gestures ([`hand_items`]).
 // shortcut: the voice spans are bold text (tg `SPAN_COMMAND` is bold and large, the clown's
 // `SPAN_CLOWN`, an emagged one `SPAN_REALLYBIG`): the chat has no larger span yet; no emag, no
@@ -32,6 +32,7 @@
 pub mod beacons;
 pub mod binoculars;
 pub mod broadcast_camera;
+pub mod door_remote;
 pub mod door_seal;
 pub mod flashlight;
 pub mod gps;
@@ -159,6 +160,7 @@ impl Plugin for DevicesPlugin {
         beacons::build(app);
         binoculars::build(app);
         broadcast_camera::build(app);
+        door_remote::build(app);
         hand_items::build(app);
         table_clock::build(app);
         flashlight::build(app);

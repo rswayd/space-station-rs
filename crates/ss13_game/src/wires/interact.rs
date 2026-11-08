@@ -263,6 +263,12 @@ pub fn interact(world: &mut World, client: Entity, user: Entity, holder: Entity)
     let Some(kind) = world.get::<Wires>(holder).map(|w| w.holder) else {
         return;
     };
+    // `airlock/attempt_wire_interaction`: plating over the wires.
+    if kind == WireHolder::Airlock
+        && crate::airlock_security::wires_protected(world, client, holder)
+    {
+        return;
+    }
     let electrified = world.get::<Electrified>(holder).is_some();
     // `fax/interactable`: an electrified fax shocks the hand too.
     if electrified

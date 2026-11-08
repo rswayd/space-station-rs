@@ -50,6 +50,7 @@
 //! | 1750 | `radiation::geiger_attack_self` |
 //! | 1753 | `devices::table_clock::interact` (repairing a broken clock) |
 //! | 1763 | `devices::broadcast_camera::attack_self` (live or offline) |
+//! | 1773 | `devices::door_remote::attack_self` (the next mode) |
 //! | 1800 | `explosions::sources::c4_attack_self` |
 //! | 1897 | `science::relics::attack_self` (a strange object: the hint, or its power) |
 //! | 1900 | `assemblies::server::attack_self` |
@@ -204,6 +205,7 @@
 //! | 2685 | `brig::gulag::interact` (labor camp teleporter, its console, the item reclaimer) |
 //! | 2695 | `brig::labor::interact` (claim console, plate press; right click: produceporter) |
 //! | 2700 | `tables::attack_hand` |
+//! | 2703 | `airlock_controllers::attack_hand` (access buttons and consoles, airlock consoles and sensors) |
 //! | 2800 | `falsewall::attack_hand` |
 //! | 2810 | `door_structures::mineral_attack_hand` (mineral doors) |
 //! | 2900 | `mining::interact` |
@@ -318,6 +320,7 @@
 //! | 1589 | `eng_machines::atmos_shield::item_interaction` (ID lock, tool refusals, wrench) |
 //! | 1590 | `teapot::item_interaction` (before `machine_frame` takes it apart) |
 //! | 1591 | `service::slots` (coins, holochips, multitool and emag on a slot machine) |
+//! | 1593 | `devices::door_remote::use_on` (a door remote on a door or turf next to the user; far clicks: `RangedClick`) |
 //! | 1595 | `science::bitrunning::avatar::crowbar_act` (prying a netpod open) |
 //! | 1597 | `science::quantum_pad::item_interaction` (multitool links, keycards) |
 //! | 1599 | `eng_machines::sheetifier::item_interaction` (meat in, wrench) |
@@ -345,6 +348,7 @@
 //! | 2610 | `medical::cryo::item_interaction` (a cup into the cell) |
 //! | 2630 | `medical::limbgrower::item_interaction` (limb design disks) |
 //! | 2700 | `wallmount::item_interaction` |
+//! | 2703 | `airlock_controllers` (any item presses an access button or console) |
 //! | 2707 | `wallmount::frames::item_interaction` (wall frames on walls, their screwdriver and wrench) |
 //! | 2710 | `power::lighting::item_interaction` (bulbs, replacers, fixtures, frames, wall frames, floodlights and their frames) |
 //! | 2715 | `power::lighting::swing_bulb` (a bulb shatters on a mob; never handles) |

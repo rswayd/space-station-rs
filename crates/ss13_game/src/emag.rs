@@ -159,6 +159,8 @@ fn takes_emag(world: &World, target: Entity) -> bool {
         || crate::silicon::pai::takes_emag(world, target)
         || e.contains::<crate::service::Ledger>()
         || e.contains::<crate::holodeck::Holodeck>()
+        || crate::devices::door_remote::is_remote(world, target)
+        || e.contains::<crate::airlock_controllers::AccessControl>()
 }
 
 fn name(world: &World, e: Entity) -> String {
@@ -338,6 +340,15 @@ pub fn emag_act(world: &mut World, actor: Actor, card: Entity, target: Entity) -
     }
     if world.get::<crate::holodeck::Holodeck>(target).is_some() {
         return crate::holodeck::emag_act(world, client, target);
+    }
+    if crate::devices::door_remote::is_remote(world, target) {
+        return crate::devices::door_remote::emag_act(world, mob, target);
+    }
+    if world
+        .get::<crate::airlock_controllers::AccessControl>(target)
+        .is_some()
+    {
+        return crate::airlock_controllers::emag_act(world, mob, target);
     }
     false
 }

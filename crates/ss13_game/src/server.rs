@@ -232,6 +232,8 @@ impl Plugin for GameServerPlugin {
             crate::airlock_construction::AirlockConstructionPlugin,
             crate::door_structures::DoorStructuresPlugin,
             crate::password_door::PasswordDoorPlugin,
+            crate::airlock_cycle::AirlockCyclePlugin,
+            crate::airlock_controllers::AirlockControllersPlugin,
         ))
         .add_plugins((
             crate::traps::TrapsPlugin,
