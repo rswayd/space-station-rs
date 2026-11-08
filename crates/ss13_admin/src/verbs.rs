@@ -18,7 +18,7 @@ use ss13_net::server::ClientToken;
 use ss13_net::sound::server::SendSound;
 use ss13_shared::TilePos;
 use ss13_shared::admin::rights::*;
-use ss13_shared::admin::{AdminEntry, AdminResponse, SoundScope};
+use ss13_shared::admin::{AdminEntry, AdminResponse, ErtPanel, ErtSlots, ErtSummon, SoundScope};
 use ss13_shared::chat::{ChatChannel, ChatMessage, Span};
 use ss13_shared::protocol::SoundEvent;
 use ss13_world::SpatialIndex;
@@ -37,6 +37,8 @@ const MAN_UP_TEXT: &str = "Man up. Deal with it. Move on.";
 const SIGHT_DISTANCE: f32 = 7.0;
 /// Rank texts, sound paths and gas strings, in characters.
 const MAX_TEXT: usize = 200;
+/// A mission or a denial's reason, in characters.
+const MAX_ERT_TEXT: usize = 1024;
 
 /// The permissions panel's rows, sorted by ckey.
 pub fn admin_list(world: &mut World) -> AdminResponse {
@@ -379,6 +381,89 @@ pub fn give_ai(
         ),
     );
     done(format!("ИИ «{template}»: {n}"))
+}
+
+/// BandaStation's `ert_manager` `ui_data`.
+pub fn ert_panel(world: &mut World) -> ErtPanel {
+    use ss13_game::antag::ert::{ErtState, TEMPLATES};
+    let state = world.resource::<ErtState>();
+    let (request_answered, requests) = (state.request_answered, state.requests.clone());
+    let spawnpoints = world
+        .get_resource::<ss13_game::server::SpawnPoints>()
+        .map_or(0, |s| s.ert.len() as u32);
+    ErtPanel {
+        security_level: ss13_game::security_level::current(world).name().to_owned(),
+        request_answered,
+        spawnpoints,
+        requests,
+        templates: TEMPLATES
+            .iter()
+            .map(|t| (t.path.to_owned(), t.label.to_owned()))
+            .collect(),
+    }
+}
+
+/// tg "Summon ERT": the template and overrides, validated here at the moment of effect.
+pub fn ert_summon(world: &mut World, key: &str, summon: &ErtSummon) -> AnswerResult {
+    let mission = sanitize_text(&summon.mission, MAX_ERT_TEXT);
+    let poll_desc = sanitize_text(&summon.poll_desc, MAX_TEXT);
+    let order = ss13_game::antag::ert::order_from_summon(world, summon, mission, poll_desc)?;
+    let mission = order.mission.clone();
+    let poll = order.polldesc.clone();
+    ss13_game::antag::ert::dispatch(world, order);
+    admin_action(
+        world,
+        &format!(
+            "{key} created a CentCom response team ({}): {mission}",
+            summon.template
+        ),
+    );
+    done(format!("ОБР: опрос призраков «{poll}»"))
+}
+
+/// BandaStation's ERT Manager `dispatchErt`: the slots are the panel's, checked here.
+pub fn ert_dispatch(
+    world: &mut World,
+    key: &str,
+    ert_type: &str,
+    commander: bool,
+    slots: &ErtSlots,
+    announce: bool,
+) -> AnswerResult {
+    use ss13_game::antag::ert;
+    let mut order = ert::order_from_slots(world, ert_type, commander, slots)?;
+    if !announce {
+        order.announce = None;
+    }
+    world.resource_mut::<ert::ErtState>().request_answered = true;
+    admin_action(
+        world,
+        &format!(
+            "{key} dispatched a {ert_type} ERT, {} slots",
+            order.team_size
+        ),
+    );
+    if announce {
+        ert::announce_authorized(world);
+    }
+    ert::dispatch(world, order);
+    done(format!("ОБР {ert_type}: опрос призраков"))
+}
+
+/// BandaStation's ERT Manager `denyErt`.
+pub fn ert_deny(world: &mut World, key: &str, reason: &str) -> AnswerResult {
+    let reason = sanitize_text(reason, MAX_ERT_TEXT);
+    ss13_game::antag::ert::deny(world, &reason);
+    admin_action(world, &format!("{key} denied the ERT request: {reason}"));
+    done("ОБР: запрос отклонён")
+}
+
+/// BandaStation's ERT Manager `toggleErtRequestAnswered`.
+pub fn ert_toggle_answered(world: &mut World) -> AnswerResult {
+    use ss13_game::antag::ert::ErtState;
+    let mut state = world.resource_mut::<ErtState>();
+    state.request_answered = !state.request_answered;
+    Ok(Some(AdminResponse::Ert(ert_panel(world))))
 }
 
 #[cfg(test)]

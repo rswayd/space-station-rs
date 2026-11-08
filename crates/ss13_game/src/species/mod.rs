@@ -84,6 +84,8 @@ pub enum SpeciesId {
     Monkey,
     /// `SPECIES_NIGHTMARE` (`crate::antag::nightmare`).
     Nightmare,
+    /// `SPECIES_ZOMBIE` (`crate::antag::zombie`).
+    Zombie,
 }
 
 /// The mob's species (tg `dna.species`). A human mob without it is [`SpeciesId::Human`].
@@ -214,6 +216,7 @@ impl OrganSet {
             Slot::Liver => self.liver,
             Slot::Stomach => self.stomach,
             Slot::Appendix => self.appendix,
+            Slot::Zombie => None,
         }
     }
 }
@@ -523,7 +526,7 @@ const SPIRIT: SpeciesDef = SpeciesDef {
 };
 
 /// Every species, in [`SpeciesId`] order.
-pub static SPECIES: [SpeciesDef; 32] = [
+pub static SPECIES: [SpeciesDef; 33] = [
     HUMAN,
     SpeciesDef {
         id: SpeciesId::Felinid,
@@ -1376,6 +1379,15 @@ pub static SPECIES: [SpeciesDef; 32] = [
         meat: Some("/obj/item/food/meat/slab/human/mutant/shadow"),
         ..BASE
     },
+    // `/datum/species/zombie`: the zombie itself is `/datum/status_effect/zombie/uninfected`
+    // (`crate::antag::zombie`), given by `set_species`.
+    SpeciesDef {
+        id: SpeciesId::Zombie,
+        key: "zombie",
+        path: "/datum/species/zombie",
+        name: "Зомби",
+        ..BASE
+    },
 ];
 
 /// Organ types that carry traits of their own (`organ_traits`).
@@ -1424,6 +1436,7 @@ impl SpeciesDef {
             tox_immune: self.has(Trait::ToxImmune),
             no_softcrit: self.has(Trait::NoSoftcrit),
             no_hardcrit: false,
+            no_death: false,
         }
     }
 }
@@ -1439,7 +1452,7 @@ pub fn def_of(world: &World, mob: Entity) -> &'static SpeciesDef {
 
 /// tg `HAS_TRAIT(mob, trait)` for the traits species and their organs give.
 pub fn has_trait(world: &World, mob: Entity, t: Trait) -> bool {
-    if def_of(world, mob).has(t) {
+    if def_of(world, mob).has(t) || crate::antag::zombie::grants(world, mob, t) {
         return true;
     }
     world.get::<organs::Organs>(mob).is_some_and(|owned| {
@@ -1527,6 +1540,8 @@ pub fn set_species(world: &mut World, mob: Entity, id: SpeciesId) {
         }
     }
     crate::inventory::refresh_look(world, mob);
+    // `on_species_gain` of the zombie, `COMSIG_SPECIES_GAIN` of the zombie status.
+    crate::antag::zombie::species_changed(world, mob, old, id);
     if old.is_some() {
         let name = def.name;
         if let Some(client) = world.get::<crate::server::PlayerMob>(mob).map(|p| p.client) {
@@ -1578,6 +1593,10 @@ pub fn regenerate_organs(world: &mut World, mob: Entity, replace_current: bool) 
     }
     let set = def_of(world, mob).organs;
     for slot in Slot::ALL {
+        // No species' organ: the infection survives a species change.
+        if slot == Slot::Zombie {
+            continue;
+        }
         let current = organs::organ(world, mob, slot);
         let wanted = set.get(slot);
         let current_path = current.and_then(|o| world.get::<Organ>(o).map(|s| s.path.clone()));

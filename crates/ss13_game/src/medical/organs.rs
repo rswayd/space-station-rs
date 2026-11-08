@@ -77,6 +77,8 @@ pub enum Slot {
     Heart,
     Liver,
     Tongue,
+    /// `ORGAN_SLOT_ZOMBIE`: the zombie infection (`crate::antag::zombie`), no species' own organ.
+    Zombie,
 }
 
 /// The static part of an organ type (tg vars).
@@ -125,7 +127,7 @@ const BASE: Spec = Spec {
 };
 
 impl Slot {
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 10] = [
         Self::Brain,
         Self::Appendix,
         Self::Stomach,
@@ -135,6 +137,7 @@ impl Slot {
         Self::Heart,
         Self::Liver,
         Self::Tongue,
+        Self::Zombie,
     ];
 
     /// The slot of an organ type (its root type).
@@ -257,6 +260,13 @@ impl Slot {
                 name: "tongue",
                 zone: TargetZone::Mouth,
                 ru: ("язык", "языка"),
+                ..BASE
+            },
+            Self::Zombie => Spec {
+                path: "/obj/item/organ/zombie_infection",
+                name: "festering ooze",
+                zone: TargetZone::Head,
+                ru: ("гнойную массу", "гнойной массы"),
                 ..BASE
             },
         }
@@ -620,6 +630,7 @@ fn on_insert(world: &mut World, organ: Entity, mob: Entity, slot: Slot) {
         Slot::Stomach => crate::chem::stomach_inserted(world, organ, mob),
         Slot::Eyes => refresh_look(world, mob),
         Slot::Heart => crate::antag::abductor::server::gland_inserted(world, organ, mob),
+        Slot::Zombie => crate::antag::zombie::infection_inserted(world, organ),
         Slot::Tongue => {
             use ss13_chat::language::{LanguageHolder, LanguageId, LanguageSource, Tongue};
             let tongue = world
@@ -677,6 +688,7 @@ pub fn remove(world: &mut World, organ: Entity, special: bool) {
             }
         }
         Slot::Stomach => crate::chem::stomach_removed(world, organ, mob),
+        Slot::Zombie => crate::antag::zombie::infection_removed(world, organ, mob),
         Slot::Eyes => refresh_look(world, mob),
         Slot::Tongue => {
             use ss13_chat::language::{LanguageHolder, LanguageId, LanguageSource, Tongue};

@@ -2351,6 +2351,8 @@ fn life(world: &mut World, chem: &Chemistry, mob: Entity, seconds: f32) {
     if world.get::<Stat>(mob) != Some(&Stat::Dead) && blood_amount(world, mob, MUTADONE) > 0.0 {
         crate::genetics::mutadone(world, mob);
     }
+    // `romerol/expose_mob`: any amount, before it is gone (`metabolization_rate = INFINITY`).
+    crate::antag::zombie::romerol_in_mob(world, chem, mob);
     crate::medical::traumas::brain_reagents(world, mob, seconds);
     crate::hallucination::reagents(world, mob, seconds);
     crate::radiation::reagents(world, mob, seconds);

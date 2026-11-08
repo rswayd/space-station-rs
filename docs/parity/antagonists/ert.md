@@ -6,23 +6,23 @@
 
 - **Код:** [`/datum/ert`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/ert.dm#L1), [`/datum/team/ert`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/ert/ert.dm#L2), [`/datum/antagonist/ert`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/ert/ert.dm#L6), [`/datum/antagonist/ert/commander`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/ert/ert.dm#L100), [`/datum/antagonist/ert/deathsquad`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/ert/ert.dm#L118), [`/datum/ert/inquisition`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/ert.dm#L80)
 - **BandaStation:** [`modular_bandastation/antagonists/code/ert.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/antagonists/code/ert.dm#L1) — у эскадрона смерти появился лидер, миссия содержит коды самоуничтожения
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/antag/ert.rs`: все `/datum/ert` с пресетами BandaStation (`TEMPLATES`) и все роли (`ROLES`) с их аутфитом и работой; миссии команды, `ErtMember`, `ErtState`, тело игрока, имя «роль фамилия», работа `noncrew_jobs`, запись в команду, приветствие (русские строки), `enforce_human`. Эскадрон смерти с кодами самоуничтожения. Нет: кастомного шаттла (`/bounty`), оружейных дверей `poddoor/ert` (ЦК не загружается), `TRAIT_HOLY` у инквизиторов, опыта лидера (лидер — случайный), плазменских аутфитов, `GLOB.commando_names`/`clown_names` (все фамилии из `last.txt`)
 
 ### Вызов ОБР админом
 Админ-окно настройки ОБР: тип, число, призыв призраков с опросом, превью внешности, телепорт к станции/на шаттл.
 
 - **Код:** [`/datum/admins/proc/makeERTTemplateModified()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/verbs/ert.dm#L9), [`/datum/admins/proc/makeERTPreviewIcon()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/verbs/ert.dm#L34)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `AdminRequest::ErtSummon` (`R_FUN`, проверка прав и значений на сервере в `ss13_admin::server`/`verbs::ert_summon`), секция «ОБР» во вкладке «Игра» админ-панели (`crates/ss13_admin/src/client.rs`): шаблон, размер, миссия, описание опроса, `enforce_human`, случайные имена; набор через `ghost_poll` (30 с), появление на `ert_spawn` или, без него, в прибытии. Нет: превью внешности, себя как офицера брифинга, кастомного шаттла и телепорта/шаттла (ЦК не загружается)
 
 ### Менеджер ОБР (BandaStation)
 TGUI `ErtManager`: число слотов по специальностям (СБ, медики, инженеры, уборщики, капелланы, клоуны), тип отряда, выбор опытного лидера по наигранному времени, точка брифинга.
 
 - **Код:** [`/datum/ert_manager`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/ert/code/ert_manager.dm#L15), [`/datum/ert_manager/proc/makeERTFromSlots()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/ert/code/ert_manager.dm#L219); tgui: [`ErtManager.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/ErtManager.tsx)
 - **BandaStation:** [`_ert.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/ert/_ert.dm#L1), [`ert_presets.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/ert/code/ert_presets.dm#L1) — пресеты amber/red/gamma/janitor/clown/inquisition
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `AdminRequest::{ErtPanel,ErtDispatch,ErtDeny,ErtToggleAnswered}` (`R_ADMIN`) и та же секция админ-панели вместо tgui `ErtManager`: типы Amber/Red/Gamma/Inquisition, слоты по специальностям (`ert::slots_to_roles`), командир вкл/выкл, объявления «протокол ОБР»/«ОБР в пути»/«ОБР недоступен», уровень угрозы, статус ответа, журнал запросов с консоли связи (`ert_request`). Нет: слота админа-брифера (`admin_slots`), выбора лидера по наигранному времени, кнопок просмотра игрока, цвета уровня
 
 ### Снаряжение ОБР
 Аутфиты ОБР и ЦК (броня, MODsuit, оружие по коду угрозы); BandaStation добавляет свои аутфиты ОБР.
 
 - **Код:** [`modular_bandastation/ert/code/ert_outfits.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/ert/code/ert_outfits.dm#L1), [`/obj/item/mod/control/pre_equipped/responsory`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mod/mod_types.dm#L469)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `ss13_mapload::antag::ERT_OUTFITS` + `AntagData::ert_outfits` (нужен `ss13-mapload convert`): аутфиты ролей (BandaStation amber/red/gamma, инквизиция, морпехи и др.) надеваются из конвертированных данных, ID с доступом станции и ЦК по `/datum/id_trim/centcom/ert`, гарнитура на частоте ЦК, имплант-щит. Нет: MODsuit и настоящего слота спины (серый рюкзак, как у всех профессий), `organs` гаммы и `additional_radio`

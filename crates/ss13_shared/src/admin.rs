@@ -210,6 +210,59 @@ pub enum AdminRequest {
     /// vendor's `get_sane_item_types`), answered by [`AdminResponse::Prototypes`]; spawned with
     /// [`AdminRequest::Spawn`].
     Subtypes(String),
+    /// `R_ADMIN`: BandaStation's ERT Manager state, answered by [`AdminResponse::Ert`].
+    ErtPanel,
+    /// `R_FUN`: tg "Summon ERT" (`/datum/ert` template with the panel's overrides).
+    ErtSummon(ErtSummon),
+    /// `R_ADMIN`: BandaStation's ERT Manager `dispatchErt` (slots by specialty).
+    ErtDispatch {
+        ert_type: String,
+        commander: bool,
+        slots: ErtSlots,
+        announce: bool,
+    },
+    /// `R_ADMIN`: `denyErt`, with the reason (may be empty).
+    ErtDeny(String),
+    /// `R_ADMIN`: `toggleErtRequestAnswered`.
+    ErtToggleAnswered,
+}
+
+/// [`AdminRequest::ErtSummon`]: the template and the overrides of tg's preference picker.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ErtSummon {
+    /// A `/datum/ert` type path.
+    pub template: String,
+    pub team_size: u8,
+    /// Empty: the template's mission.
+    pub mission: String,
+    /// Empty: the template's poll description.
+    pub poll_desc: String,
+    pub enforce_human: bool,
+    pub random_names: bool,
+}
+
+/// The ERT Manager's slots by specialty (`/datum/ert_manager`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ErtSlots {
+    pub security: u8,
+    pub medical: u8,
+    pub engineering: u8,
+    pub janitor: u8,
+    pub chaplain: u8,
+    pub clown: u8,
+}
+
+/// [`AdminResponse::Ert`]: what `ui_data` of `/datum/ert_manager` shows.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ErtPanel {
+    pub security_level: String,
+    pub request_answered: bool,
+    /// Landmarks the team can appear on (0: arrivals).
+    pub spawnpoints: u32,
+    /// `ert_request_messages`, newest first.
+    pub requests: Vec<String>,
+    /// The `/datum/ert` templates: type path, name.
+    pub templates: Vec<(String, String)>,
 }
 
 /// An entity in the View Variables window.
@@ -381,6 +434,8 @@ pub enum AdminResponse {
     VvTile(Vec<VvRef>),
     /// tg "View Variables" window.
     Variables(VvEntity),
+    /// BandaStation's ERT Manager state.
+    Ert(ErtPanel),
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

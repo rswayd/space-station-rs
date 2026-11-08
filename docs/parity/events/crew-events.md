@@ -106,7 +106,7 @@
 
 - **Код:** [`/datum/round_event_control/operative`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/ghost_role/operative.dm#L1)
 - **BandaStation:** [`code/modules/events/ghost_role/operative.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/ghost_role/operative.dm#L18), [`modular_bandastation/balance/code/events.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/balance/code/events.dm#L1) — взвешенный выбор кандидата; минимум 30 игроков
-- **Статус в ss13-rs:** ❌ нет — ядерный диск и оперативники теперь есть (`crates/ss13_game/src/antag/nukeop/`), но нет веса от заброшенности диска (`/obj/item/disk/nuclear/process` наращивает `weight` события), антагониста `nukeop/lone` с его снаряжением, работы `lone_operative` и опроса призраков с взвешенным выбором BandaStation
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/antag/nukeop/lone.rs`: вес от заброшенности диска (`disk_security`), событие от 30 игроков, опрос призраков с предпочтением «Lone Operative» через `ghost_poll` (30 с, `poll_lone_operative`), спавн у карпов, работа и снаряжение. Нет: взвешенного выбора BandaStation (веса считаются по истории антагов в БД; выбор равновероятный до появления БД), случайной внешности, волочения диска как удержания
 
 ### Dynamic Tweak
 Позволяет Dynamic запустить ещё один мидраунд- или латджойн-антагонист (оживляет «зелёные» смены).

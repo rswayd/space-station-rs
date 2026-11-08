@@ -65,6 +65,9 @@ pub struct AdminUi {
     /// The permissions panel's last [`AdminResponse::AdminList`].
     pub admins: Vec<AdminEntry>,
     pub ranks: Vec<String>,
+    /// The last [`AdminResponse::Ert`] and the ERT section's inputs.
+    pub ert: Option<ss13_shared::admin::ErtPanel>,
+    ert_form: ErtForm,
     /// [`AdminResponse::VvTile`] and the last [`AdminResponse::Variables`].
     pub vv_tile: Vec<VvRef>,
     pub vv: Option<VvEntity>,
@@ -113,6 +116,8 @@ impl Default for AdminUi {
             admins: Vec::new(),
             ranks: Vec::new(),
             vv_tile: Vec::new(),
+            ert: None,
+            ert_form: ErtForm::default(),
             vv: None,
             vv_edit: None,
             last_reply: String::new(),
@@ -255,6 +260,7 @@ fn collect(mut responses: MessageReader<AdminResponseReceived>, mut ui: ResMut<A
                 ui.admins.clone_from(admins);
                 ui.ranks.clone_from(ranks);
             }
+            AdminResponse::Ert(panel) => ui.ert = Some(panel.clone()),
             AdminResponse::VvTile(refs) => ui.vv_tile.clone_from(refs),
             AdminResponse::Variables(entity) => {
                 ui.vv = Some(entity.clone());
@@ -847,8 +853,155 @@ fn tickets_tab(ui: &mut egui::Ui, state: &mut AdminUi, out: &mut Vec<AdminReques
     });
 }
 
+/// What the admin types in the ERT section (tg's settings menu, BandaStation's manager).
+#[derive(Debug)]
+struct ErtForm {
+    template: String,
+    team_size: u8,
+    mission: String,
+    poll_desc: String,
+    enforce_human: bool,
+    random_names: bool,
+    ert_type: String,
+    commander: bool,
+    slots: ss13_shared::admin::ErtSlots,
+    announce: bool,
+    reason: String,
+}
+
+impl Default for ErtForm {
+    fn default() -> Self {
+        Self {
+            template: "/datum/ert/amber".to_owned(),
+            team_size: 5,
+            mission: String::new(),
+            poll_desc: String::new(),
+            enforce_human: true,
+            random_names: true,
+            ert_type: "Red".to_owned(),
+            commander: true,
+            slots: ss13_shared::admin::ErtSlots::default(),
+            announce: true,
+            reason: String::new(),
+        }
+    }
+}
+
+/// tg "Summon ERT" and BandaStation's ERT Manager; the server checks the rights and the values.
+fn ert_section(ui: &mut egui::Ui, state: &mut AdminUi, out: &mut Vec<AdminRequest>) {
+    use ss13_shared::admin::ErtSummon as Summon;
+    const TYPES: [&str; 4] = ["Amber", "Red", "Gamma", "Inquisition"];
+    let can_fun = state.can(R_FUN);
+    let can_admin = state.can(R_ADMIN);
+    let form = &mut state.ert_form;
+    ui.horizontal(|ui| {
+        ui.strong("ОБР");
+        if ui.small_button("Обновить").clicked() {
+            out.push(AdminRequest::ErtPanel);
+        }
+    });
+    if let Some(panel) = &state.ert {
+        ui.label(format!(
+            "Уровень: {}, запрос отвечен: {}, точек появления: {}",
+            panel.security_level,
+            if panel.request_answered {
+                "да"
+            } else {
+                "нет"
+            },
+            panel.spawnpoints
+        ));
+        for line in panel.requests.iter().take(5) {
+            ui.small(line.as_str());
+        }
+    }
+    ui.add_enabled_ui(can_fun, |ui| {
+        // tg "Summon ERT".
+        ui.horizontal_wrapped(|ui| {
+            ui.label("Шаблон");
+            ui.add(egui::TextEdit::singleline(&mut form.template).desired_width(180.0));
+            if let Some(panel) = &state.ert {
+                egui::ComboBox::from_id_salt("ert_templates")
+                    .selected_text("выбрать")
+                    .show_ui(ui, |ui| {
+                        for (path, label) in &panel.templates {
+                            ui.selectable_value(&mut form.template, path.clone(), label.as_str());
+                        }
+                    });
+            }
+            ui.label("Размер");
+            ui.add(egui::DragValue::new(&mut form.team_size).range(1..=30));
+            ui.checkbox(&mut form.enforce_human, "только люди");
+            ui.checkbox(&mut form.random_names, "случайные имена");
+        });
+        ui.horizontal(|ui| {
+            ui.label("Миссия");
+            ui.text_edit_singleline(&mut form.mission);
+            ui.label("Опрос");
+            ui.text_edit_singleline(&mut form.poll_desc);
+        });
+        if ui.small_button("Вызвать ОБР").clicked() {
+            out.push(AdminRequest::ErtSummon(Summon {
+                template: form.template.clone(),
+                team_size: form.team_size,
+                mission: form.mission.clone(),
+                poll_desc: form.poll_desc.clone(),
+                enforce_human: form.enforce_human,
+                random_names: form.random_names,
+            }));
+        }
+    });
+    ui.add_enabled_ui(can_admin, |ui| {
+        // BandaStation's ERT Manager.
+        ui.horizontal_wrapped(|ui| {
+            ui.label("Менеджер:");
+            egui::ComboBox::from_id_salt("ert_manager_type")
+                .selected_text(form.ert_type.clone())
+                .show_ui(ui, |ui| {
+                    for name in TYPES {
+                        ui.selectable_value(&mut form.ert_type, name.to_owned(), name);
+                    }
+                });
+            ui.checkbox(&mut form.commander, "командир");
+            ui.checkbox(&mut form.announce, "объявить");
+        });
+        ui.horizontal_wrapped(|ui| {
+            for (label, value) in [
+                ("СБ", &mut form.slots.security),
+                ("Мед", &mut form.slots.medical),
+                ("Инж", &mut form.slots.engineering),
+                ("Уборщики", &mut form.slots.janitor),
+                ("Капелланы", &mut form.slots.chaplain),
+                ("Клоуны", &mut form.slots.clown),
+            ] {
+                ui.label(label);
+                ui.add(egui::DragValue::new(value).range(0..=30));
+            }
+        });
+        ui.horizontal(|ui| {
+            if ui.small_button("Отправить").clicked() {
+                out.push(AdminRequest::ErtDispatch {
+                    ert_type: form.ert_type.clone(),
+                    commander: form.commander,
+                    slots: form.slots,
+                    announce: form.announce,
+                });
+            }
+            if ui.small_button("Запрос отвечен/не отвечен").clicked() {
+                out.push(AdminRequest::ErtToggleAnswered);
+            }
+            ui.text_edit_singleline(&mut form.reason);
+            if ui.small_button("Отклонить запрос").clicked() {
+                out.push(AdminRequest::ErtDeny(form.reason.clone()));
+            }
+        });
+    });
+    ui.separator();
+}
+
 fn game_tab(ui: &mut egui::Ui, state: &mut AdminUi, out: &mut Vec<AdminRequest>) {
     egui::ScrollArea::vertical().show(ui, |ui| {
+        ert_section(ui, state, out);
         ui.add_enabled_ui(state.can(R_SPAWN), |ui| {
             ui.strong("Спавн (под собой)");
             ui.horizontal(|ui| {

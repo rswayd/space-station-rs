@@ -516,6 +516,9 @@ fn record(
                     .admin_lists
                     .insert("variables".into(), json(entity));
             }
+            AdminResponse::Ert(panel) => {
+                observed.admin_lists.insert("ert".into(), json(panel));
+            }
         }
     }
     for ChatReceived(message) in chat.read() {

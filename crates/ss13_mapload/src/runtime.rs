@@ -1442,7 +1442,7 @@ pub const BITRUNNING_RUNTIME_TYPES: &[&str] = &[
 pub fn runtime_types() -> BTreeSet<&'static str> {
     use crate::{antag, atmos_machine, cargo, mobs, service, silicon};
     let mut out = BTreeSet::new();
-    let tables: [&[&'static str]; 29] = [
+    let tables: [&[&'static str]; 30] = [
         &crate::RUNTIME_TYPES,
         &crate::RUNTIME_CONTAINER_TYPES,
         &crate::CONSTRUCTION_TYPES,
@@ -1456,6 +1456,7 @@ pub fn runtime_types() -> BTreeSet<&'static str> {
         &antag::HERETIC_RUNTIME_TYPES,
         &antag::WIZARD_RUNTIME_TYPES,
         &antag::ABDUCTOR_RUNTIME_TYPES,
+        &antag::ZOMBIE_RUNTIME_TYPES,
         &mobs::MOB_RUNTIME_TYPES,
         &crate::restaurant::RESTAURANT_RUNTIME_TYPES,
         &silicon::CAMERA_RUNTIME_TYPES,
