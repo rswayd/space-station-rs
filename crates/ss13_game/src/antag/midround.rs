@@ -19,8 +19,8 @@
 // shortcut: of the rulesets only the midround traitor (sleeper agent), mass traitors, the midround
 // nuclear operatives (opted-in ghosts are taken without a poll), the latejoin traitor
 // (infiltrator), the stowaway changeling, the latejoin revolution (provocateur), the midround
-// wizard, the paradox clone (`super::paradox_clone`), the nightmare (`super::nightmare`) and the
-// morph (`super::morph`) spawn anyone;
+// wizard, the paradox clone (`super::paradox_clone`), the nightmare (`super::nightmare`), the
+// morph (`super::morph`) and the space dragon (`super::space_dragon`) spawn anyone;
 // the others keep their weights, are logged and fail preparation, as tg's do without candidates.
 // There is no admin cancel or reroll window before a midround, no false alarms, no AFK checks,
 // no account age or job bans, and `EMERGENCY_PAST_POINT_OF_NO_RETURN` ignores the call's
@@ -126,6 +126,7 @@ pub const LATEJOIN_REVOLUTION: &str = "Latejoin Revolution";
 pub const PARADOX_CLONE: &str = "Paradox Clone";
 pub const NIGHTMARE: &str = "Nightmare";
 pub const MORPH: &str = "Morph";
+pub const SPACE_DRAGON: &str = "Space Dragon";
 
 const HOP: &[&str] = &["Head of Personnel"];
 const ONE: (Cap, Cap) = (Cap::Fixed(1), Cap::Fixed(1));
@@ -243,7 +244,10 @@ pub const RULESETS: [Ruleset; 30] = {
         ),
         decrease(other("Blob", Heavy, [0, 1, 3, 3], 30), 3),
         decrease(other("Xenomorph", Heavy, [0, 1, 5, 5], 30), 3),
-        decrease(other("Space Dragon", Heavy, [0, 3, 5, 5], 30), 3),
+        Ruleset {
+            role: Some(super::ROLE_SPACE_DRAGON),
+            ..decrease(other(SPACE_DRAGON, Heavy, [0, 3, 5, 5], 30), 3)
+        },
         non_repeatable(other("Space Ninja", Heavy, [0, 0, 1, 2], 30)),
         child(
             decrease(other("Mass Changelings", Heavy, [0, 3, 4, 5], 25), 4),
@@ -539,6 +543,8 @@ fn can_be_selected(world: &mut World, r: &Ruleset) -> bool {
         // A dark maintenance spawn; any maintenance spawn.
         NIGHTMARE => super::nightmare::can_spawn(world),
         MORPH => super::morph::can_spawn(world),
+        // A carp spawn in space.
+        SPACE_DRAGON => super::space_dragon::can_spawn(world),
         _ => true,
     }
 }
@@ -782,6 +788,15 @@ fn execute(
                 .filter_map(|&g| world.get::<PlayerMob>(g).map(|p| (p.client, g)))
                 .collect();
             if super::morph::spawn_morphs(world, &ghosts).is_empty() {
+                return Vec::new();
+            }
+        }
+        SPACE_DRAGON => {
+            let ghosts: Vec<(Entity, Entity)> = chosen
+                .iter()
+                .filter_map(|&g| world.get::<PlayerMob>(g).map(|p| (p.client, g)))
+                .collect();
+            if super::space_dragon::spawn_dragons(world, &ghosts).is_empty() {
                 return Vec::new();
             }
         }

@@ -46,6 +46,8 @@ pub mod objectives;
 pub mod paradox_clone;
 pub mod revolution;
 #[cfg(feature = "server")]
+pub mod space_dragon;
+#[cfg(feature = "server")]
 pub mod survivalist;
 #[cfg(feature = "server")]
 pub mod syndie_items;
@@ -83,6 +85,7 @@ impl bevy::prelude::Plugin for AntagServerPlugin {
             valentine::ValentinePlugin,
             survivalist::SurvivalistPlugin,
         ))
+        .add_plugins(space_dragon::SpaceDragonPlugin)
         .add_systems(Startup, dynamic::init)
         .add_plugins(midround::MidroundPlugin);
     }
@@ -109,6 +112,8 @@ pub const ROLE_NIGHTMARE: &str = "Nightmare";
 /// tg `ROLE_MORPH` (`morph`). tg polls every ghost for the morph; here it is a `be_special`
 /// key, as willing ghosts are taken without a poll.
 pub const ROLE_MORPH: &str = "Morph";
+/// tg `ROLE_SPACE_DRAGON` (`space_dragon`), a `be_special` key as for the morph.
+pub const ROLE_SPACE_DRAGON: &str = "Space Dragon";
 
 /// The blood brother's info panel.
 pub struct AntagInfoBrotherUi;
