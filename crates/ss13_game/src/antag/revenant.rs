@@ -41,6 +41,7 @@
 // reform keeps the dead revenant's player (no new poll when it left).
 
 use bevy::ecs::message::MessageCursor;
+use bevy::ecs::system::SystemState;
 use bevy::prelude::*;
 use ss13_mapload::fidelity::is_under;
 use ss13_mapload::spawner::Rng;
@@ -610,7 +611,8 @@ pub fn spawn_revenants(world: &mut World, ghosts: &[(Entity, Entity)]) -> Vec<En
 
 /// `generate_random_mob_name`.
 fn random_name(rng: &mut Rng) -> String {
-    let pick = |rng: &mut Rng, list: &[&str]| list[rng.range(0, list.len() as i64 - 1) as usize];
+    let pick =
+        |rng: &mut Rng, list: &[&'static str]| list[rng.range(0, list.len() as i64 - 1) as usize];
     format!(
         "{}{}{}",
         pick(rng, &SPIRIT_TYPES),
@@ -1036,8 +1038,12 @@ fn scatter_residue(world: &mut World, client: Entity, mob: Entity, item: Entity)
 }
 
 /// A residue gone before it reformed (`revenant_prison/Destroy`): its revenant is no more.
-fn residues_gone(world: &mut World, mut removed: RemovedComponents<Residue>) {
-    let gone: Vec<Entity> = removed.read().collect();
+fn residues_gone(world: &mut World, removed: &mut SystemState<RemovedComponents<Residue>>) {
+    let gone: Vec<Entity> = removed
+        .get_mut(world)
+        .expect("RemovedComponents always validates")
+        .read()
+        .collect();
     for residue in gone {
         let held: Vec<Entity> = world
             .query::<(Entity, &Revenant)>()

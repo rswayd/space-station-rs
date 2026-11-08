@@ -38,6 +38,7 @@
 // rifts and spare carp.
 
 use bevy::ecs::message::MessageCursor;
+use bevy::ecs::system::SystemState;
 use bevy::prelude::*;
 use ss13_mapload::fidelity::is_under;
 use ss13_mapload::spawner::Rng;
@@ -1376,8 +1377,12 @@ fn victory(world: &mut World, dragon: Entity) {
 }
 
 /// A rift gone before it charged (`/obj/structure/carp_rift/Destroy`): its dragon fails.
-fn rifts_gone(world: &mut World, mut removed: RemovedComponents<CarpRift>) {
-    let gone: Vec<Entity> = removed.read().collect();
+fn rifts_gone(world: &mut World, removed: &mut SystemState<RemovedComponents<CarpRift>>) {
+    let gone: Vec<Entity> = removed
+        .get_mut(world)
+        .expect("RemovedComponents always validates")
+        .read()
+        .collect();
     if gone.is_empty() {
         return;
     }
