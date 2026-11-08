@@ -33,7 +33,10 @@ use ss13_world::SpatialIndex;
 
 use crate::fidelity::is_under;
 use crate::value::{Field, Skip, Val, parse_color};
-use crate::{Areas, Opaque, Turf};
+use crate::{Areas, DmTurfBuild, Opaque, Turf};
+
+/// `/turf/open/lava` and its subtypes (`refresh_light`).
+const LAVA: &str = "/turf/open/lava";
 
 /// tg `MINIMUM_USEFUL_LIGHT_RANGE`.
 pub const MINIMUM_USEFUL_LIGHT_RANGE: f32 = 1.4;
@@ -250,7 +253,8 @@ pub fn tint_fixture(path: &str, light: &mut LightSource, atom_color: Option<[u8;
 
 /// Tile lighting and starlight for every turf of levels `zs`, after they are spawned.
 pub fn light_tiles(world: &mut World, zs: impl IntoIterator<Item = u16>) {
-    let mut turfs = world.query_filtered::<(Entity, &TilePos, Option<&DmLight>), With<Turf>>();
+    let mut turfs = world
+        .query_filtered::<(Entity, &TilePos, Option<&DmLight>, Option<&DmTurfBuild>), With<Turf>>();
     for z in zs {
         let Some((w, h)) = world.resource::<SpatialIndex>().level_size(z) else {
             continue;
@@ -258,14 +262,15 @@ pub fn light_tiles(world: &mut World, zs: impl IntoIterator<Item = u16>) {
         let (w, h) = (w as usize, h as usize);
         let index = |x: i32, y: i32| (y as usize - 1) * w + (x as usize - 1);
         // Per tile: the turf, its lighting, whether it can show starlight.
-        let mut tiles: Vec<Option<(Entity, TileLighting, Option<LightSource>)>> = vec![None; w * h];
+        let mut tiles: Vec<Option<(Entity, TileLighting, Option<LightSource>, bool)>> =
+            vec![None; w * h];
         let areas = world.resource::<Areas>();
         let area_lights: EntityHashMap<DmLight> = areas
             .entities()
             .iter()
             .map(|&a| (a, world.get::<DmLight>(a).cloned().unwrap_or_default()))
             .collect();
-        for (entity, pos, light) in turfs.iter(world) {
+        for (entity, pos, light, build) in turfs.iter(world) {
             if pos.z != z {
                 continue;
             }
@@ -275,24 +280,35 @@ pub fn light_tiles(world: &mut World, zs: impl IntoIterator<Item = u16>) {
                 .area_at(*pos)
                 .and_then(|a| area_lights.get(&a))
                 .unwrap_or(&default);
-            let (tile, star) = tile_light(light, area);
-            tiles[index(pos.x, pos.y)] = Some((entity, tile, star));
+            let lava = build.is_some_and(|b| is_under(&b.path, LAVA));
+            let (tile, star) = tile_light(light, area, lava);
+            tiles[index(pos.x, pos.y)] = Some((entity, tile, star, lava));
         }
         let dynamic = |x: i32, y: i32| {
             x >= 1
                 && y >= 1
                 && x as usize <= w
                 && y as usize <= h
-                && tiles[index(x, y)].is_some_and(|(_, t, _)| t.dynamic())
+                && tiles[index(x, y)].is_some_and(|(_, t, ..)| t.dynamic())
+        };
+        // A neighbour that is another kind of tile than lava (the map edge is none).
+        let shore = |x: i32, y: i32| {
+            x >= 1
+                && y >= 1
+                && x as usize <= w
+                && y as usize <= h
+                && tiles[index(x, y)].is_some_and(|(.., lava)| !lava)
         };
         let mut updates = Vec::new();
         for y in 1..=h as i32 {
             for x in 1..=w as i32 {
-                let Some((entity, tile, star)) = tiles[index(x, y)] else {
+                let Some((entity, tile, star, lava)) = tiles[index(x, y)] else {
                     continue;
                 };
-                let lit_neighbour =
-                    star.is_some() && (-1..=1).any(|dy| (-1..=1).any(|dx| dynamic(x + dx, y + dy)));
+                let around = |near: &dyn Fn(i32, i32) -> bool| {
+                    (-1..=1).any(|dy| (-1..=1).any(|dx| near(x + dx, y + dy)))
+                };
+                let lit_neighbour = star.is_some() && around(if lava { &shore } else { &dynamic });
                 let tile = Some(tile).filter(|t| *t != DEFAULT_TILE);
                 let light = star.filter(|_| lit_neighbour);
                 if tile.is_some() || light.is_some() {
@@ -342,7 +358,10 @@ pub fn relight_rect(world: &mut World, z: u16, min: (i32, i32), max: (i32, i32))
                     .area_at(pos)
                     .and_then(|a| world.get::<DmLight>(a))
                     .unwrap_or(&no_light);
-                let (tile, star) = tile_light(light, area);
+                let lava = world
+                    .get::<DmTurfBuild>(turf)
+                    .is_some_and(|b| is_under(&b.path, LAVA));
+                let (tile, star) = tile_light(light, area, lava);
                 tiles.insert(
                     pos,
                     LitTurf {
@@ -350,12 +369,14 @@ pub fn relight_rect(world: &mut World, z: u16, min: (i32, i32), max: (i32, i32))
                         tile,
                         star,
                         space_lit: light.space_lit,
+                        lava,
                     },
                 );
             }
         }
     }
     let dynamic = |pos: TilePos| tiles.get(&pos).is_some_and(|t| t.tile.dynamic());
+    let shore = |pos: TilePos| tiles.get(&pos).is_some_and(|t| !t.lava);
     let mut updates = Vec::new();
     for (&pos, t) in &tiles {
         let inside =
@@ -363,18 +384,20 @@ pub fn relight_rect(world: &mut World, z: u16, min: (i32, i32), max: (i32, i32))
         if !inside {
             continue;
         }
-        let lit_neighbour = t.star.is_some()
-            && (-1..=1)
-                .any(|dy| (-1..=1).any(|dx| dynamic(TilePos::new(pos.x + dx, pos.y + dy, z))));
+        let near = |dx: i32, dy: i32| {
+            let tile = TilePos::new(pos.x + dx, pos.y + dy, z);
+            if t.lava { shore(tile) } else { dynamic(tile) }
+        };
+        let lit_neighbour = t.star.is_some() && (-1..=1).any(|dy| (-1..=1).any(|dx| near(dx, dy)));
         let tile = Some(t.tile).filter(|t| *t != DEFAULT_TILE);
         updates.push((
             t.entity,
             tile,
             t.star.filter(|_| lit_neighbour),
-            t.space_lit,
+            t.space_lit || t.lava,
         ));
     }
-    for (entity, tile, light, space_lit) in updates {
+    for (entity, tile, light, recomputed) in updates {
         let Some(optics) = world.get::<Optics>(entity) else {
             if tile.is_some() || light.is_some() {
                 world.entity_mut(entity).insert(Optics {
@@ -385,8 +408,8 @@ pub fn relight_rect(world: &mut World, z: u16, min: (i32, i32), max: (i32, i32))
             }
             continue;
         };
-        // Only starlight is recomputed: other turf lights come from the turf's own vars.
-        let new_light = if space_lit { light } else { optics.light };
+        // Only starlight and lava are recomputed: other turf lights come from the turf's vars.
+        let new_light = if recomputed { light } else { optics.light };
         if optics.tile != tile || optics.light != new_light {
             let mut optics = world.get_mut::<Optics>(entity).expect("checked above");
             optics.tile = tile;
@@ -400,10 +423,17 @@ struct LitTurf {
     tile: TileLighting,
     star: Option<LightSource>,
     space_lit: bool,
+    lava: bool,
 }
 
-/// A turf's tile lighting in its area and the starlight it shows next to lit tiles.
-fn tile_light(light: &DmLight, area: &DmLight) -> (TileLighting, Option<LightSource>) {
+/// A turf's tile lighting in its area and the light it may emit: starlight next to lit tiles, or
+/// lava's glow on its shore (tg `refresh_light`: only lava tiles beside something else cast
+/// light). Lava itself is lit in its `light_color` whatever surrounds it (tg's `lava-lightmask`
+/// overlay on `LIGHTING_PLANE`).
+// shortcut: the glow covers the whole tile instead of the mask's lava pixels, and `refresh_light`
+// looks at the neighbours of this level only; draw the mask when the client renders lighting
+// plane overlays.
+fn tile_light(light: &DmLight, area: &DmLight, lava: bool) -> (TileLighting, Option<LightSource>) {
     let base = (area.base_lighting_alpha > 0)
         .then_some(area.base_lighting_color)
         .flatten()
@@ -412,21 +442,23 @@ fn tile_light(light: &DmLight, area: &DmLight) -> (TileLighting, Option<LightSou
         let [r, g, b] = rgb(light.light_color);
         [r, g, b, 255]
     });
+    let glow = lava.then(|| {
+        let [r, g, b] = rgb(light.light_color);
+        [r, g, b, 255]
+    });
     let tile = TileLighting::new(
         area.static_lighting && !light.space_lit,
-        base.or(starlight).unwrap_or([0; 4]),
+        glow.or(base).or(starlight).unwrap_or([0; 4]),
     );
-    let star =
-        (light.space_lit && light.light_range > 0.0 && light.light_power != 0.0).then(|| {
-            LightSource {
-                range: light.light_range,
-                power: light.light_power,
-                color: rgb(light.light_color),
-                height: light.light_height,
-                angle: 360,
-                dir: Dir::North,
-                offset: [0, 0],
-            }
+    let star = ((light.space_lit || lava) && light.light_range > 0.0 && light.light_power != 0.0)
+        .then(|| LightSource {
+            range: light.light_range,
+            power: light.light_power,
+            color: rgb(light.light_color),
+            height: light.light_height,
+            angle: 360,
+            dir: Dir::North,
+            offset: [0, 0],
         });
     (tile, star)
 }

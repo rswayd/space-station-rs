@@ -173,6 +173,65 @@ fn lavaland_environment() {
     println!("lavaland z{z}: {} lava tiles", lava.len());
     assert!(lava.len() > 200, "{} lava tiles", lava.len());
 
+    // Lava glows: every tile is lit in its colour, only the shore casts light (`refresh_light`).
+    let optics = |world: &mut World, pos: TilePos| {
+        let t = ss13_game::construction::turf_at(world, pos).unwrap();
+        world.get::<ss13_shared::Optics>(t).cloned().unwrap()
+    };
+    let is_lava: std::collections::HashSet<TilePos> = lava.iter().copied().collect();
+    let known: std::collections::HashSet<TilePos> = tiles.iter().map(|(p, _)| *p).collect();
+    let around = |p: TilePos| {
+        (-1..=1).flat_map(move |dy| (-1..=1).map(move |dx| TilePos::new(p.x + dx, p.y + dy, p.z)))
+    };
+    let inner = *lava
+        .iter()
+        .find(|&&p| around(p).all(|n| is_lava.contains(&n)))
+        .expect("lava away from any shore");
+    let shore = *lava
+        .iter()
+        .find(|&&p| around(p).any(|n| known.contains(&n) && !is_lava.contains(&n)))
+        .expect("a lava shore");
+    let lit = optics(world, inner);
+    assert_eq!(lit.light, None, "inner lava casts no light");
+    assert!(
+        matches!(
+            lit.tile,
+            Some(ss13_shared::TileLighting::Area {
+                ambient: [0xC4, 0x8A, 0x18, 255],
+                ..
+            })
+        ),
+        "{lit:?}"
+    );
+    let glow = optics(world, shore).light.expect("the shore casts light");
+    assert_eq!(
+        (glow.range, glow.power, glow.color),
+        (2.0, 0.75, [0xC4, 0x8A, 0x18])
+    );
+    // Lava replaced by rock: the lava beside it is shore now, the rock does not glow.
+    let rock = TilePos::new(inner.x + 1, inner.y, inner.z);
+    ss13_game::construction::change_turf(
+        world,
+        rock,
+        "/turf/open/misc/asteroid/basalt/lava_land_surface",
+        Vec::new(),
+        false,
+    )
+    .expect("basalt");
+    assert!(optics(world, inner).light.is_some(), "a new shore");
+    let new_rock = optics(world, rock);
+    assert_eq!(new_rock.light, None);
+    assert!(
+        !matches!(
+            new_rock.tile,
+            Some(ss13_shared::TileLighting::Area {
+                ambient: [0xC4, ..],
+                ..
+            })
+        ),
+        "{new_rock:?}"
+    );
+
     // Ruins: some ruin areas on the level.
     let ruin_tiles = tiles
         .iter()
@@ -248,4 +307,79 @@ fn lavaland_environment() {
     run(&mut app, 35.0);
     assert!(hp(&app, exposed) < a - 10.0, "the ash burns outdoors");
     assert_eq!(hp(&app, sheltered), b, "the base shelters");
+}
+
+/// A pump with a shuttle at its external airlock keeps the shuttle's air: the pump knows the
+/// shuttle's pressure, its external airlock opens onto the shuttle, and nothing is siphoned.
+/// When the shuttle leaves the external airlock closes and cycling aims for space again.
+#[test]
+#[ignore = "needs generated assets, MetaStation and Lavaland; run with --ignored"]
+fn airlock_pump_docks_with_the_mining_shuttle() {
+    use ss13_game::atmos_machinery::airlock_pump::AirlockPump;
+    use ss13_game::doors::{Door, DoorState};
+
+    let map = metastation_map();
+    let lavaland = map.source.join(LAVALAND_MAP);
+    let mut app = server_app(map, |app| {
+        app.insert_resource(MiningLevel(lavaland))
+            .add_plugins(AtmosPlugin);
+    });
+    run(&mut app, 3.0);
+    let world = app.world_mut();
+    let port = get_shuttle(world, "mining").unwrap();
+    let at = *world.get::<TilePos>(port).unwrap();
+    let mut q = world.query::<(Entity, &AirlockPump, &TilePos)>();
+    let (pump, door, inside) = q
+        .iter(world)
+        .find_map(|(e, p, pos)| {
+            let d = *p.external.iter().find(|&&d| {
+                world.get::<TilePos>(d).is_some_and(|t| {
+                    t.z == at.z && (t.x - at.x).abs() <= 2 && (t.y - at.y).abs() <= 2
+                })
+            })?;
+            Some((e, d, *pos))
+        })
+        .expect("a pump at the mining dock");
+    let docked = world.get::<AirlockPump>(pump).unwrap().docked_side_pressure;
+    assert!(
+        docked.is_some_and(|kpa| kpa > 95.0),
+        "the pump knows the shuttle: {docked:?}"
+    );
+    assert_eq!(world.get::<Door>(door).unwrap().state, DoorState::Open);
+
+    // Walking out through the dock no longer empties the shuttle.
+    world.get_mut::<Door>(door).unwrap().cycle_requested = true;
+    run(&mut app, 15.0);
+    let world = app.world_mut();
+    let air = world.resource::<Atmos>();
+    let shuttle = air.pressure(TilePos::new(at.x - 2, at.y, at.z)).unwrap();
+    let chamber = air.pressure(inside).unwrap();
+    assert!(shuttle > 95.0, "shuttle at {shuttle} kPa");
+    assert!(chamber > 95.0, "chamber at {chamber} kPa");
+
+    // The shuttle leaves: undocked, the external airlock is shut, so is the open shuttle door.
+    let hatch = world
+        .resource::<ss13_world::SpatialIndex>()
+        .on_tile(at)
+        .to_vec()
+        .into_iter()
+        .find(|&e| world.get::<Door>(e).is_some())
+        .expect("the shuttle's airlock");
+    ss13_game::doors::with_door(world, hatch, |d, a, ctx| ((), ctx.open(d, a, true)));
+    run(&mut app, 2.0);
+    let world = app.world_mut();
+    assert_eq!(world.get::<Door>(hatch).unwrap().state, DoorState::Open);
+    let away = dock(world, "mining_away");
+    assert!(request(world, port, away));
+    run(&mut app, 20.0);
+    let world = app.world_mut();
+    assert_eq!(docked_at(world, "mining"), "mining_away");
+    assert_eq!(
+        world.get::<AirlockPump>(pump).unwrap().docked_side_pressure,
+        None
+    );
+    let state = world.get::<Door>(door).unwrap();
+    assert_eq!(state.state, DoorState::Closed);
+    assert!(state.locked, "bolted against space");
+    assert_eq!(world.get::<Door>(hatch).unwrap().state, DoorState::Closed);
 }

@@ -1904,6 +1904,9 @@ pub fn change_turf(
         return None;
     }
     let old = turf_at(world, pos);
+    let was_lava = old
+        .and_then(|o| path_of(world, o))
+        .is_some_and(|p| crate::obj_damage::is_under(&p, crate::lava::LAVA));
     let (old_kind, area_light) = old.map_or((None, None), |o| {
         (
             world.get::<TurfAir>(o).map(|a| a.kind),
@@ -1938,6 +1941,10 @@ pub fn change_turf(
         }
     }
     tile_changed(world, pos);
+    // tg `refresh_light`: the glow of this tile and which of the lava around it is on the shore.
+    if was_lava || crate::obj_damage::is_under(path, crate::lava::LAVA) {
+        ss13_mapload::light::relight_rect(world, pos.z, (pos.x, pos.y), (pos.x, pos.y));
+    }
     Some(turf)
 }
 

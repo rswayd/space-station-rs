@@ -184,12 +184,13 @@ fn metastation() {
     assert!(all_pumps.len() >= 20 && linked + 1 >= all_pumps.len());
     let (pump, p, pump_pos) = all_pumps
         .iter()
-        .find(|(_, _, pos)| {
-            server
-                .world()
-                .resource::<Atmos>()
-                .pressure(*pos)
-                .is_some_and(|kpa| kpa > 90.0)
+        .find(|(_, p, pos)| {
+            p.docked_side_pressure.is_none()
+                && server
+                    .world()
+                    .resource::<Atmos>()
+                    .pressure(*pos)
+                    .is_some_and(|kpa| kpa > 90.0)
         })
         .cloned()
         .expect("a pressurized airlock");

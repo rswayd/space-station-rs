@@ -13,8 +13,7 @@
 //!   pilots a mech; a catwalk or stone tile over the lava (`TRAIT_LAVA_STOPPED`) makes it safe.
 // shortcut: no plasma lava (`/turf/open/lava/plasma`: freezing instead of burning), no
 // `perma_fire_overlay` / `TRAIT_NO_EXTINGUISH` (a mob can roll its fire out on lava), no turf
-// slowdown (`slowdown = 2`: turf slowdown is not ported), no immerse visuals, no lava light
-// borders (`refresh_light`), no lava fishing, no lighting cigarettes, no heatproof rods
+// slowdown (`slowdown = 2`: turf slowdown is not ported), no immerse visuals, no lava fishing, no lighting cigarettes, no heatproof rods
 // (`/obj/item/stack/rods/lava`), no elevation (`TRAIT_ELEVATED_TURF`, `TRAIT_MOB_ELEVATED`), no
 // closet contents (things inside a closet are not on the tile); `/obj/effect`s are ignored
 // (they are all lava proof).

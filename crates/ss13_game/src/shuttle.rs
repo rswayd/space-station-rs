@@ -1185,6 +1185,10 @@ pub fn initiate_docking(
         }
     }
 
+    // tg airlock `beforeShuttleMove`.
+    let airlocks = crate::atmos_machinery::airlock_pump::airlocks_on(world, &old_turfs);
+    crate::atmos_machinery::airlock_pump::before_shuttle_move(world, &airlocks);
+
     // takeoff: turfs, areas, contents.
     let mut origins = Vec::new();
     let mut movables = 0;
@@ -1265,6 +1269,8 @@ pub fn initiate_docking(
     }
     relight(world, &old_turfs);
     relight(world, &new_turfs);
+    // tg airlock `afterShuttleMove`.
+    crate::atmos_machinery::airlock_pump::after_shuttle_move(world, &airlocks);
     mobile.docked = Some(dock);
     mobile.dir = target.dir;
     world.entity_mut(port).insert(mobile);
