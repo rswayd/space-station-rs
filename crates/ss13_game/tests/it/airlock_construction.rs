@@ -219,6 +219,7 @@ fn an_assembly_becomes_a_glass_airlock_with_its_electronics_access() {
         one_access: true,
         unres_sides: 1,
         passed_name: "Engine Room".into(),
+        shell: false,
     });
     run(
         world,

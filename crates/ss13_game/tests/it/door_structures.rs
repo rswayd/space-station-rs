@@ -386,6 +386,7 @@ fn a_windoor_assembly_becomes_a_brig_windoor_with_its_electronics_access() {
         // North and east: only north runs along a windoor facing south.
         unres_sides: 1 | 4,
         passed_name: "Cell 1".into(),
+        shell: false,
     });
     run(
         world,
