@@ -349,6 +349,39 @@ mod tests {
         assert!(!is_switch("/obj/item/flashlight/glowstick/red"));
         assert!(!is_switch("/obj/item/flashlight/lamp/space_bubble"));
         assert!(!is_switch("/obj/item/flashlightx"));
+        assert!(is_switch("/obj/item/clothing/head/utility/hardhat/red"));
+        assert!(!is_switch("/obj/item/clothing/head/utility"));
+    }
+
+    #[test]
+    fn a_hard_hat_switches_its_sprite_and_stays_silent() {
+        let mut world = World::new();
+        let hat = world
+            .spawn((
+                Flashlight {
+                    base_state: "hardhat0_yellow".to_owned(),
+                    ready: true,
+                    hardhat: true,
+                    ..default()
+                },
+                DmItem::default(),
+                DmAtom {
+                    icon_state: "hardhat0_yellow".into(),
+                    ..default()
+                },
+            ))
+            .id();
+        set_on(&mut world, hat, true);
+        assert!(world.get::<Flashlight>(hat).unwrap().on);
+        assert_eq!(
+            world.get::<DmItem>(hat).unwrap().worn_icon_state,
+            "hardhat1_yellow"
+        );
+        set_on(&mut world, hat, false);
+        assert_eq!(
+            world.get::<DmItem>(hat).unwrap().inhand_icon_state,
+            "hardhat0_yellow"
+        );
     }
 
     #[test]
