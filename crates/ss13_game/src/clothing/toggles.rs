@@ -456,6 +456,16 @@ fn watch_hoods(world: &mut World) {
 
 // --- Item action buttons ---------------------------------------------------------------------
 
+/// The buttons a worn item gives (tg `actions_types`): the gear's, else [`button_name`]'s.
+fn button_names(world: &World, slot: InventorySlot, item: Entity) -> Vec<&'static str> {
+    let gear = super::gear::buttons(world, slot, item);
+    if gear.is_empty() {
+        button_name(world, slot, item).into_iter().collect()
+    } else {
+        gear
+    }
+}
+
 /// The button a worn item gives (tg `actions_types` and `toggle_attached_clothing`'s action):
 /// "Toggle Hood" for a hooded suit in the suit slot, "Adjust" for an adjustable mask worn,
 /// "Toggle" for a worn toggleable helmet with an action.
@@ -493,23 +503,22 @@ fn refresh_buttons(world: &mut World) {
             let Some(item) = inventory.slot(slot) else {
                 continue;
             };
-            let Some(name) = button_name(world, slot, item) else {
-                continue;
-            };
-            ours.push((
-                ActionButton {
-                    id: format!("{BUTTON}{index}"),
-                    name: name.to_owned(),
-                    icon: world.get::<Appearance>(item).map(|a| a.icon_state),
-                    background: icons.and_then(|i| i.get(BUTTON_BACKGROUNDS, "bg_default")),
-                    border: None,
-                    available: true,
-                    cooldown: 0.0,
-                    active: false,
-                    maptext: None,
-                },
-                0.0,
-            ));
+            for name in button_names(world, slot, item) {
+                ours.push((
+                    ActionButton {
+                        id: format!("{BUTTON}{index}:{name}"),
+                        name: name.to_owned(),
+                        icon: world.get::<Appearance>(item).map(|a| a.icon_state),
+                        background: icons.and_then(|i| i.get(BUTTON_BACKGROUNDS, "bg_default")),
+                        border: None,
+                        available: true,
+                        cooldown: 0.0,
+                        active: false,
+                        maptext: None,
+                    },
+                    0.0,
+                ));
+            }
         }
         let current = world.get::<ActionButtons>(mob);
         let had = current.is_some_and(|b| b.0.iter().any(|(b, _)| b.id.starts_with(BUTTON)));
@@ -544,9 +553,15 @@ fn trigger_buttons(world: &mut World, mut acts: Local<MessageCursor<UiActed<Acti
         {
             continue;
         }
-        let Some(slot) = id
+        let Some((slot, name)) = id
             .strip_prefix(BUTTON)
-            .and_then(|n| n.parse::<usize>().ok())
+            .and_then(|rest| rest.split_once(':'))
+        else {
+            continue;
+        };
+        let Some(slot) = slot
+            .parse::<usize>()
+            .ok()
             .and_then(|n| ALL_SLOTS.get(n).copied())
         else {
             continue;
@@ -558,14 +573,20 @@ fn trigger_buttons(world: &mut World, mut acts: Local<MessageCursor<UiActed<Acti
             super::chameleon::select_look(world, client, actor, item);
             continue;
         }
-        match button_name(world, slot, item) {
-            Some("Toggle Hood") => {
+        // The item may have changed since the button was drawn.
+        let Some(&name) = button_names(world, slot, item).iter().find(|n| **n == name) else {
+            continue;
+        };
+        if super::gear::trigger(world, client, actor, item, name) {
+            continue;
+        }
+        match name {
+            "Toggle Hood" => {
                 toggle_hood(world, client, actor, item);
             }
-            Some(_) => {
+            _ => {
                 adjust_visor(world, client, actor, item);
             }
-            None => {}
         }
     }
 }
@@ -594,6 +615,7 @@ pub fn examine_lines(world: &World, item: Entity, lines: &mut Vec<crate::examine
             format!("Alt-click on {name} to toggle the {}.", c.toggle_noun),
         ));
     }
+    super::gear::examine_lines(world, item, lines);
     if is_under(&dm.path, BREATH_MASK) && c.adjustable {
         lines.push((Span::Notice, format!("Alt-click {name} to adjust it.")));
     }

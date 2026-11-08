@@ -21,6 +21,16 @@ pub const NO_SLIP_WATER: &str = "noslip_water";
 pub const NO_SLIP_ICE: &str = "noslip_ice";
 /// `TRAIT_NO_SLIP_ALL`: nothing slips.
 pub const NO_SLIP_ALL: &str = "noslip_all";
+/// `TRAIT_NO_SLIP_SLIDE`.
+pub const NO_SLIP_SLIDE: &str = "noslip_slide";
+/// `TRAIT_NEGATES_GRAVITY`: magboots.
+pub const NEGATES_GRAVITY: &str = "negates_gravity";
+/// `TRAIT_THERMAL_VISION`.
+pub const THERMAL_VISION: &str = "thermal_vision";
+/// `TRAIT_XRAY_VISION`.
+pub const XRAY_VISION: &str = "xray_vision";
+/// `TRAIT_TRUE_NIGHT_VISION`.
+pub const TRUE_NIGHT_VISION: &str = "true_night_vision";
 /// `TRAIT_FAST_CUFFING`.
 pub const FAST_CUFFING: &str = "fast_cuffing";
 /// `TRAIT_FINGERPRINT_PASSTHROUGH`.

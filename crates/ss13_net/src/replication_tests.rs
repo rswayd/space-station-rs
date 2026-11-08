@@ -857,6 +857,80 @@ fn masked_view_replicates_only_visible_tiles() {
 /// its opacity, closing hides it again; an x-ray client (an observer) gets the whole box; a
 /// step lets the player see from the next tile until it stands still.
 #[test]
+fn sight_flags_show_turfs_and_mobs_behind_walls() {
+    use crate::server::Sight;
+    use ss13_world::{SeenAsMob, SeenAsTurf};
+
+    let mut server = server_app(SocketAddr::from((Ipv4Addr::LOCALHOST, 0)));
+    let wall = Optics {
+        opaque: true,
+        ..default()
+    };
+    for x in 1..=63 {
+        server.world_mut().spawn((
+            Networked,
+            TilePos::new(x, 25, 1),
+            appearance(9),
+            wall.clone(),
+        ));
+    }
+    let (turf_pos, obj_pos, mob_pos) = (
+        TilePos::new(21, 27, 1),
+        TilePos::new(22, 27, 1),
+        TilePos::new(23, 27, 1),
+    );
+    server
+        .world_mut()
+        .spawn((Networked, turf_pos, appearance(3), SeenAsTurf));
+    server
+        .world_mut()
+        .spawn((Networked, obj_pos, appearance(4)));
+    server
+        .world_mut()
+        .spawn((Networked, mob_pos, appearance(5), SeenAsMob));
+    server.update();
+    let server_addr = server.world().resource::<NetServerConfig>().bind_addr;
+    let digest = (server.world().resource::<ServerCertificateDigest>().0).clone();
+    let mut client = client_app(NetClientConfig {
+        server_addr,
+        certificate_digest: digest,
+        token: "a".into(),
+    });
+    run_until(&mut [&mut server, &mut client], "connects", |apps| {
+        apps[0].world().resource::<Connected>().0.len() == 1
+    });
+    let link = server.world().resource::<Connected>().0[0];
+    let center = TilePos::new(21, 20, 1);
+    let viewer = Viewer::new(center);
+    let check = |server: &mut App, client: &mut App, shown: TilePos, flags: u16, what: &str| {
+        server
+            .world_mut()
+            .entity_mut(link)
+            .insert((viewer, Sight(flags)));
+        run_until(&mut [server, client], what, |apps| {
+            let want = state(apps[0], |_, p| {
+                within(viewer, 0)(p) && (p.y <= 25 || *p == shown)
+            });
+            seen(apps[1]) == want
+        });
+    };
+    check(
+        &mut server,
+        &mut client,
+        turf_pos,
+        Sight::SEE_TURFS,
+        "mesons",
+    );
+    check(
+        &mut server,
+        &mut client,
+        mob_pos,
+        Sight::SEE_MOBS,
+        "thermals",
+    );
+}
+
+#[test]
 fn line_of_sight_hides_what_walls_hide() {
     use crate::server::Sight;
     use ss13_shared::line_of_sight::ViewGrid;

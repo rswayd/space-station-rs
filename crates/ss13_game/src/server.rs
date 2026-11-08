@@ -256,6 +256,7 @@ impl Plugin for GameServerPlugin {
             crate::speech::SpeechServerPlugin,
             crate::breath::BreathPlugin,
             crate::internals::InternalsPlugin,
+            crate::jetpack::JetpackPlugin,
             crate::tools::ToolsServerPlugin,
             crate::construction::ConstructionServerPlugin,
             crate::obj_damage::ObjDamageServerPlugin,

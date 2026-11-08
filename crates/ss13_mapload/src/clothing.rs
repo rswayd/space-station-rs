@@ -10,6 +10,7 @@ use crate::value::Field;
 
 pub const CLOTHING_ROOT: &str = "/obj/item/clothing";
 pub const TANK_ROOT: &str = "/obj/item/tank";
+const GLASSES_ROOT: &str = "/obj/item/clothing/glasses";
 
 /// `/obj/item/clothing` vars (the protection ones are declared on `/obj/item`).
 #[derive(Component, Reflect, Clone, Debug, PartialEq)]
@@ -73,6 +74,11 @@ pub struct DmClothing {
     /// `clothing_traits`: trait ids (`"noslip_water"`, ...) the wearer has while this is worn in
     /// one of its `slot_flags` slots. Runtime state (`attach_clothing_traits`).
     pub clothing_traits: Vec<String>,
+    /// `/obj/item/clothing/glasses` `color_cutoffs` (`None`: no night vision), 0..=100 per
+    /// channel.
+    pub color_cutoffs: Option<[f32; 3]>,
+    /// `/obj/item/clothing/glasses` `lighting_cutoff`.
+    pub lighting_cutoff: Option<f32>,
 }
 
 impl Default for DmClothing {
@@ -113,6 +119,8 @@ impl Default for DmClothing {
             attachment_slot: 0,
             above_suit: false,
             clothing_traits: Vec::new(),
+            color_cutoffs: None,
+            lighting_cutoff: None,
         }
     }
 }
@@ -351,6 +359,32 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
                 "clothing_traits",
                 ron::to_string(&list).expect("string lists always serialize"),
             ));
+        }
+        if is_under(path, GLASSES_ROOT) {
+            if let Some(cutoffs) = value(GLASSES_ROOT, "color_cutoffs") {
+                let list: Option<[f32; 3]> = cutoffs
+                    .get("list")
+                    .and_then(|l| l.as_array())
+                    .and_then(|l| {
+                        l.iter()
+                            .map(|c| num(Some(c)).map(|n| n as f32))
+                            .collect::<Option<Vec<_>>>()
+                    })
+                    .and_then(|l| l.try_into().ok());
+                out.push(ext(
+                    "dm_clothing",
+                    "color_cutoffs",
+                    ron::to_string(&list).expect("cutoffs always serialize"),
+                ));
+            }
+            if let Some(cutoff) = value(GLASSES_ROOT, "lighting_cutoff") {
+                let n: Option<f32> = num(Some(cutoff)).map(|n| n as f32);
+                out.push(ext(
+                    "dm_clothing",
+                    "lighting_cutoff",
+                    ron::to_string(&n).expect("cutoffs always serialize"),
+                ));
+            }
         }
         if let Some(allowed) = value(CLOTHING_ROOT, "allowed").and_then(path_list) {
             out.push(ext(

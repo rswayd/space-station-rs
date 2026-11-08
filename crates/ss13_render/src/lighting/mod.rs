@@ -94,6 +94,17 @@ impl Default for LightingSettings {
 #[derive(Resource, Clone, Copy, Debug, Default, PartialEq)]
 pub struct LightingCutoff(pub f32);
 
+/// tg `lighting_color_cutoffs` plus `lighting_cutoff` of the client's mob, and what it may see
+/// behind walls. `cutoff`, 0..=1 per channel, raises dim light to at least that value (tg's
+/// `light_cutdown`/`light_cutup` filters) without washing out bright tiles. With `see_behind` a
+/// tile past the line of sight is drawn when the server sent something on it: mesons get its
+/// turf, thermals its mob; everything else stays black (BYOND `SEE_TURFS`, `SEE_MOBS`).
+#[derive(Resource, Clone, Copy, Debug, Default, PartialEq)]
+pub struct VisionLighting {
+    pub cutoff: [f32; 3],
+    pub see_behind: bool,
+}
+
 /// Cost of the lighting systems, for logs and benchmarks.
 #[derive(Resource, Default, Debug, Clone, Copy)]
 pub struct LightingStats {
@@ -119,6 +130,7 @@ impl Plugin for LightingPlugin {
             .init_resource::<LightingSettings>()
             .init_resource::<LightingStats>()
             .init_resource::<LightingCutoff>()
+            .init_resource::<VisionLighting>()
             .init_resource::<LightWorld>()
             .add_message::<LightUpdate>()
             .add_systems(Startup, spawn_lightmap)
@@ -130,6 +142,7 @@ impl Plugin for LightingPlugin {
                     sync_emissive_camera,
                     update_lightmap,
                     apply_cutoff.run_if(resource_changed::<LightingCutoff>),
+                    apply_vision.run_if(resource_changed::<VisionLighting>),
                     log_stats,
                 )
                     .chain()
@@ -174,6 +187,8 @@ pub struct LightWorld {
     /// ([`LowerLightmap`]).
     see_through: HashMap<TilePos, u32>,
     see_through_at: EntityHashMap<TilePos>,
+    /// [`VisionLighting::see_behind`].
+    see_behind: bool,
     /// Something in the lightmap may have changed.
     changed: bool,
 }
@@ -379,7 +394,7 @@ impl LightWorld {
         let known = self.los_radius.is_none() || self.occupied.contains_key(&pos);
         if self.masked(pos) || !known {
             0.0
-        } else if !self.behind_los(pos) {
+        } else if !self.behind_los(pos) || self.see_behind {
             1.0
         } else if self
             .eye
@@ -624,6 +639,9 @@ pub struct LightmapMaterial {
     /// it is 1 (untouched) instead of black. y: [`LightingCutoff`].
     #[uniform(6)]
     mode: Vec4,
+    /// rgb: [`VisionLighting::cutoff`].
+    #[uniform(7)]
+    color_cutoff: Vec4,
 }
 
 impl Material2d for LightmapMaterial {
@@ -716,6 +734,7 @@ fn spawn_lightmap(
                 emissive: emissive.clone(),
                 view: view.clone(),
                 mode: Vec4::new(if lower { 1.0 } else { 0.0 }, 0.0, 0.0, 0.0),
+                color_cutoff: Vec4::ZERO,
             })),
             Transform::default(),
             Visibility::Hidden,
@@ -746,6 +765,26 @@ fn apply_cutoff(
     for handle in &lightmaps {
         if let Some(mut material) = materials.get_mut(&handle.0) {
             material.mode.y = y;
+        }
+    }
+}
+
+/// [`VisionLighting`] into the lightmaps and the view; runs only when it changes.
+fn apply_vision(
+    vision: Res<VisionLighting>,
+    mut world: ResMut<LightWorld>,
+    lightmaps: Query<&MeshMaterial2d<LightmapMaterial>, With<Lightmap>>,
+    mut materials: ResMut<Assets<LightmapMaterial>>,
+) {
+    if world.see_behind != vision.see_behind {
+        world.see_behind = vision.see_behind;
+        world.changed = true;
+    }
+    let [r, g, b] = vision.cutoff;
+    let cutoff = Vec4::new(r, g, b, 0.0).clamp(Vec4::ZERO, Vec4::ONE);
+    for handle in &lightmaps {
+        if let Some(mut material) = materials.get_mut(&handle.0) {
+            material.color_cutoff = cutoff;
         }
     }
 }

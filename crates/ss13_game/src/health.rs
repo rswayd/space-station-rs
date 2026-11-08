@@ -123,6 +123,7 @@ impl Bodypart {
 /// oxygen on the mob.
 // Amputated limbs are `missing` (`crate::medical::bodyparts`).
 #[derive(Component, Clone, Debug, PartialEq)]
+#[require(ss13_world::SeenAsMob)]
 pub struct Health {
     pub max: f32,
     /// tg `get_brute_loss`/`get_fire_loss`: the bodyparts' sums, rounded to `DAMAGE_PRECISION`.

@@ -307,6 +307,11 @@ pub struct FullscreenHudData {
     pub blur: f32,
     /// tg `client_colours` on the game plane, lowest priority first.
     pub colours: Vec<ClientColour>,
+    /// tg `lighting_cutoff` + `lighting_color_cutoffs` of the mob, 0..=1 per channel
+    /// (`ss13_render::VisionLighting`).
+    pub cutoff: [f32; 3],
+    /// The mob's `sight` flags show something behind walls (`Sight::SEE_TURFS`, `SEE_MOBS`).
+    pub see_behind: bool,
 }
 
 /// tg's `screens` categories the port draws, in draw order: by tg layer (`FULLSCREEN_LAYER` 2

@@ -12,15 +12,17 @@
 //!   nothing to hold on to on its new tile drifts on ([`Drift`]): a tile per 0.5 s at 1 N
 //!   (`get_loop_delay`), until it comes next to a backup, bumps into something (doors hear the
 //!   bump) or reaches gravity. Drifting does not turn it.
-//! - Active MOD magboots ([`crate::modsuit::modules::NoSlip`], `TRAIT_NEGATES_GRAVITY`) keep the
-//!   wearer's footing; flying mobs, the buckled, the pulled and thrown things do not drift.
-//! - An active MOD ion jetpack ([`crate::modsuit::modules::Jetpack`]) with charge lets its
-//!   wearer step without a backup and, stabilized, stops its drift; without stabilizers the
-//!   wearer always drifts, faster by the jetpack's force.
+//! - Active MOD magboots and magboots ([`crate::modsuit::modules::NoSlip`], the clothing trait,
+//!   `TRAIT_NEGATES_GRAVITY`) keep the wearer's footing; flying mobs, the buckled, the pulled and
+//!   thrown things do not drift.
+//! - An active MOD ion jetpack ([`crate::modsuit::modules::Jetpack`]) with charge or an active
+//!   gas jetpack ([`crate::jetpack::GasJetpack`]) with gas lets its wearer step without a backup
+//!   and, stabilized, stops its drift; without stabilizers the wearer always drifts, faster by
+//!   the jetpack's force.
 // shortcut: weightless only over space turfs of space areas (no gravity generators; a floor in a
 // space area keeps gravity, which fixture stations rely on) — add gravity generators and
 // `force_no_gravity` with the gravity subsystem. Cardinal drift only (a diagonal step drifts along
-// its last half); no gas jetpacks (no item actions for them yet), no throw recoil, no floating bob
+// its last half); no throw recoil, no floating bob
 // (`DO_FLOATING_ANIM` loops forever: it needs replicated state, not an animation event), no
 // input block while gliding to a halt.
 
@@ -64,7 +66,9 @@ pub fn drift_delay(force: f32) -> f64 {
 
 /// `get_loop_delay` of `e`: [`drift_delay`] times its inertia multiplier (a jetpack's).
 fn loop_delay(world: &World, e: Entity, force: f32) -> f64 {
-    drift_delay(force) * crate::modsuit::modules::inertia_multiplier(world, e)
+    drift_delay(force)
+        * crate::modsuit::modules::inertia_multiplier(world, e)
+        * crate::jetpack::inertia_multiplier(world, e)
 }
 
 /// tg `drift_handler`: the entity drifts a tile in `dir` every [`drift_delay`] of `force`.
@@ -123,11 +127,18 @@ fn on_space_turf(world: &World, pos: TilePos) -> bool {
         .is_some_and(|b| is_under(&b.path, SPACE_TURF))
 }
 
+/// `mob_negates_gravity`: `TRAIT_NEGATES_GRAVITY` from active MOD magboots or worn magboots.
+pub fn negates_gravity(world: &World, e: Entity) -> bool {
+    use crate::clothing::traits::{NEGATES_GRAVITY, has_trait};
+    world.get::<crate::modsuit::modules::NoSlip>(e).is_some()
+        || has_trait(world, e, NEGATES_GRAVITY)
+}
+
 /// `!has_gravity()` of `e` at `pos`: `mob_negates_gravity` counts.
 pub fn weightless_at(world: &World, e: Entity, pos: TilePos) -> bool {
     !crate::multiz::has_gravity(world, pos)
         && on_space_turf(world, pos)
-        && world.get::<crate::modsuit::modules::NoSlip>(e).is_none()
+        && !negates_gravity(world, e)
 }
 
 fn is_lattice(world: &World, e: Entity) -> bool {
@@ -264,10 +275,12 @@ pub fn process_spacemove(world: &mut World, e: Entity, dir: Option<Dir>, continu
         return lattice_near(world, pos);
     }
     // `COMSIG_MOVABLE_SPACEMOVE` (the jetpack) and `TRAIT_NOGRAV_ALWAYS_DRIFT`.
-    if crate::modsuit::modules::jetpack_holds(world, e, dir, continuous) {
+    if crate::modsuit::modules::jetpack_holds(world, e, dir, continuous)
+        || crate::jetpack::holds(world, e, dir, continuous)
+    {
         return true;
     }
-    if crate::modsuit::modules::always_drifts(world, e) {
+    if crate::modsuit::modules::always_drifts(world, e) || crate::jetpack::always_drifts(world, e) {
         return false;
     }
     let Some(backup) = spacemove_backup(world, e, pos, dir, continuous) else {
@@ -476,6 +489,7 @@ fn track_weightless(
         let state = weightless_at(world, mob, pos).then(|| Weightless {
             stuck: !holds_on(world, mob)
                 && !crate::modsuit::modules::jetpack_ready(world, mob)
+                && !crate::jetpack::ready(world, mob)
                 && spacemove_backup(world, mob, pos, None, false).is_none(),
         });
         match (state, current) {

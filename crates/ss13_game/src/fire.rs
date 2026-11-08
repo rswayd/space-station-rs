@@ -1002,7 +1002,7 @@ fn pressure_resistance(world: &World, thing: Entity) -> Option<f64> {
 /// (`last_high_pressure_movement_air_cycle`) and steps along the pressure direction.
 // Cost: per air fire, the turfs that moved enough air (a breach: tens to hundreds) times the
 // things on them.
-// shortcut: no magboots (`TRAIT_NEGATES_GRAVITY`) and no buckling yet, so every mob can be
+// shortcut: no buckling yet, so every mob but a magbooted one (`mob_negates_gravity`) can be
 // blown away; tg knocks nobody down here (a strong wind only moves you more often).
 fn space_wind(
     world: &mut World,
@@ -1025,6 +1025,11 @@ fn space_wind(
         let things: Vec<Entity> = world.resource::<SpatialIndex>().on_tile(push.pos).to_vec();
         for thing in things {
             if moved_in.contains(&thing) || world.get::<PulledBy>(thing).is_some() {
+                continue;
+            }
+            if world.get::<Health>(thing).is_some()
+                && crate::spacemove::negates_gravity(world, thing)
+            {
                 continue;
             }
             let Some(resistance) = pressure_resistance(world, thing) else {

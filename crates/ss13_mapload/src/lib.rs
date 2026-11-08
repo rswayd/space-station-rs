@@ -224,6 +224,7 @@ pub struct Opaque;
 
 /// The tile's turf. Exactly one entity per tile has it.
 #[derive(Component, Clone, Copy, Debug, Default)]
+#[require(ss13_world::SeenAsTurf)]
 pub struct Turf;
 
 /// A BYOND area: one entity per area type, not per tile; tiles map to it through [`Areas`].

@@ -18,7 +18,7 @@ Alt-клик по баллону или кнопка действия откры
 tgui-окно баллона: текущее давление, регулировка давления выпуска, подключение к дыханию.
 
 - **Код:** [`ui_interact()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/tanks/tanks.dm#L234), [`ui_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/tanks/tanks.dm#L107); tgui: [`Tank.jsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/Tank.jsx)
-- **Статус в ss13-rs:** ❌ нет — давление выпуска фиксировано `distribute_pressure` типа
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/internals.rs` (`TankWindow`: открывается в руке, `hands_state`, `pressure`: reset/min/max/число, зажим 0..3 атм), `crates/ss13_tgui/src/interfaces/tank.rs`; `RoundGauge` — текстом, как в `ChemHeater`
 
 ### Разрыв и взрыв баллона
 Баллон с перегретой или пережатой смесью трескается, протекает и взрывается (основа плазменных бомб); к баллону можно прикрепить сборку с воспламенителем.
@@ -30,7 +30,7 @@ tgui-окно баллона: текущее давление, регулиро�
 Включаемый джетпак расходует газ и даёт движение в невесомости, со стабилизацией; капитанский, СБ, пустотный, импровизированный, CO2, обвязка; переключение на дыхание из джетпака.
 
 - **Код:** [`/obj/item/tank/jetpack`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/tanks/jetpack.dm#L1), [`turn_on()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/tanks/jetpack.dm#L108), [`configure_jetpack()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/tanks/jetpack.dm#L42)
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/internals.rs`: джетпак существует только как пустой баллон; нет невесомости и тяги
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/jetpack.rs` (`cycle`, `allow_thrust`, стабилизация, `full_speed`, газ из бака в тайл, EMP 4 с, улучшенные типы `drift_force`), кнопки в `crates/ss13_game/src/clothing/gear.rs` (тяга, стабилизация, дыхание), `crates/ss13_game/src/spacemove.rs` (шаг и дрейф в невесомости), начальный газ — `crates/ss13_game/src/internals.rs`; нет рецепта импровизированного джетпака (крафт — чужая группа)
 
 ### Ранцевые распылители
 Заплечный бак с распылителем: уборщика (космоочиститель), пожарный (огнетушитель с пеной и стеной металлической пены), перцовый для СБ, химический бак.
