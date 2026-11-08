@@ -531,6 +531,14 @@ fn apply(world: &mut World, client: Entity, action: Action) {
         .expect("checked by actor")
         .clone();
     match action {
+        // tg `perform_hand_swap` on a cyborg: `cycle_modules`, three slots.
+        Action::Swap
+            if world
+                .get::<crate::silicon::cyborg::ModuleSlots>(mob)
+                .is_some() =>
+        {
+            crate::silicon::cyborg::cycle_modules(world, mob);
+        }
         Action::Swap => set_active(world, mob, 1 - inventory.active),
         Action::Slot(slot @ (InventorySlot::LeftHand | InventorySlot::RightHand)) => {
             let hand = usize::from(slot == InventorySlot::RightHand);

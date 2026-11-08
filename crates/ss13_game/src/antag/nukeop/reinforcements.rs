@@ -7,9 +7,12 @@
 //! (`use_subtypes`: Gorlex, Cybersun, Donk, Waffle, Interdyne, MI13; the clown beacon: the clown
 //! reinforcement's), with an empty uplink of the team's kind, the team's code and objective; the
 //! beacon is used up. Nobody willing: the beacon stays.
-// shortcut: no drop pod (the reinforcement appears at the beacon), no 15 s poll; the cyborg
-// beacons (assault, medical, saboteur: no syndicate cyborg models) and the overwatch agent (no
-// overwatch console, body cameras or base outpost) are not sold.
+//! - The cyborg beacons (`borg_tele`: assault, medical, saboteur) build a syndicate cyborg of
+//!   their model instead of a human (`crate::silicon::cyborg::spawn_syndicate`), an operative
+//!   of the team too.
+// shortcut: no drop pod (the reinforcement appears at the beacon), no 15 s poll; the overwatch
+// agent (no overwatch console, body cameras or base outpost) is not sold; the syndicate cyborg
+// has no minimap, tacmap or PDA and keeps the "Cyborg" brain name (not the team's last name).
 
 use bevy::prelude::*;
 use ss13_mapload::DmItem;
@@ -31,11 +34,34 @@ pub const REINFORCEMENT_OUTFITS: [&str; 6] = [
     "/datum/outfit/syndicate/reinforcement/mi13",
 ];
 
+/// `/obj/item/antag_spawner/nuke_ops/borg_tele/*`: the model each builds.
+const BORG_BEACONS: [(&str, &str); 3] = [
+    (
+        "/obj/item/antag_spawner/nuke_ops/borg_tele/assault",
+        "/obj/item/robot_model/syndicate",
+    ),
+    (
+        "/obj/item/antag_spawner/nuke_ops/borg_tele/medical",
+        "/obj/item/robot_model/syndicate_medical",
+    ),
+    (
+        "/obj/item/antag_spawner/nuke_ops/borg_tele/saboteur",
+        "/obj/item/robot_model/saboteur",
+    ),
+];
+
+fn borg_model(path: &str) -> Option<&'static str> {
+    BORG_BEACONS
+        .iter()
+        .find(|(beacon, _)| *beacon == path)
+        .map(|&(_, model)| model)
+}
+
 /// Whether `item` is a reinforcement beacon this port sells.
 pub fn is_beacon(world: &World, item: Entity) -> bool {
-    world
-        .get::<DmItem>(item)
-        .is_some_and(|i| i.path == BEACON || i.path == CLOWN_BEACON)
+    world.get::<DmItem>(item).is_some_and(|i| {
+        i.path == BEACON || i.path == CLOWN_BEACON || borg_model(&i.path).is_some()
+    })
 }
 
 /// `check_usability`: an operative of any kind.
@@ -76,6 +102,13 @@ pub fn use_beacon(world: &mut World, client: Entity, user: Entity, beacon: Entit
     let clown = world
         .get::<DmItem>(beacon)
         .is_some_and(|i| i.path == CLOWN_BEACON);
+    let borg = world
+        .get::<DmItem>(beacon)
+        .and_then(|i| borg_model(&i.path));
+    if let Some(model) = borg {
+        call_cyborg(world, user, recruit, pos, model, beacon);
+        return;
+    }
     let mut rng = super::server::take_rng(world);
     let outfit = if clown {
         OUTFIT_CLOWN_REINFORCEMENT
@@ -97,6 +130,41 @@ pub fn use_beacon(world: &mut World, client: Entity, user: Entity, beacon: Entit
     );
     super::server::put_rng(world, rng);
     info!("{user} called a reinforcement operative {mob} ({outfit}) at {pos:?}");
+    if world.get_entity(beacon).is_ok() {
+        world.despawn(beacon);
+    }
+}
+
+/// `borg_tele/spawn_antag`: the cyborg, then `add_antag_datum(/datum/antagonist/nukeop/
+/// reinforcement/cyborg)` with the creator's team.
+fn call_cyborg(
+    world: &mut World,
+    user: Entity,
+    recruit: Entity,
+    pos: ss13_shared::TilePos,
+    model: &str,
+    beacon: Entity,
+) {
+    let Some(mob) = crate::silicon::cyborg::spawn_syndicate(world, recruit, pos, model) else {
+        return;
+    };
+    let name = world.get::<Name>(mob).cloned();
+    let lone_team = world.get::<Nukeop>(user).is_some_and(|n| n.lone_team);
+    let mut rng = super::server::take_rng(world);
+    add_op(
+        world,
+        mob,
+        OpKind::Reinforcement,
+        lone_team,
+        0,
+        None,
+        &mut rng,
+    );
+    super::server::put_rng(world, rng);
+    if let Some(name) = name {
+        world.entity_mut(mob).insert(name);
+    }
+    info!("{user} called a syndicate cyborg {mob} ({model}) at {pos:?}");
     if world.get_entity(beacon).is_ok() {
         world.despawn(beacon);
     }
@@ -134,7 +202,11 @@ mod tests {
             })
             .id();
         assert!(is_beacon(&world, beacon));
-        assert!(!is_beacon(&world, borg));
+        assert!(is_beacon(&world, borg));
+        assert_eq!(
+            borg_model("/obj/item/antag_spawner/nuke_ops/borg_tele/saboteur"),
+            Some("/obj/item/robot_model/saboteur")
+        );
     }
 
     #[test]

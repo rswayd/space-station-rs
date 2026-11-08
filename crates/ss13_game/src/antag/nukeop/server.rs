@@ -840,7 +840,10 @@ pub fn add_op(
             team.leader = Some(mob);
         }
     });
-    if let Some(outfit) = outfit {
+    // A syndicate cyborg wears nothing (`reinforcement/cyborg`).
+    if let Some(outfit) =
+        outfit.filter(|_| world.get::<crate::silicon::cyborg::Cyborg>(mob).is_none())
+    {
         let (uplink, flag) = uplink_of(kind, clown);
         equip_op(
             world,
