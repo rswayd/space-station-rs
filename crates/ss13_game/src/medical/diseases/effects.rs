@@ -402,6 +402,9 @@ pub(super) fn kind_act(
                 _ => {}
             }
         }
+        Kind::Revblight => {
+            return crate::antag::revenant::revblight_act(world, mob, stage, secs, rng);
+        }
         Kind::Advance => {}
     }
     Outcome::Keep

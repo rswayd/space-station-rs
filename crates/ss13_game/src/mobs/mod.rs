@@ -567,6 +567,7 @@ fn death(world: &mut World, mob: Entity, basic: &BasicMob) {
     constructs::on_death(world, def, pos);
     trader::on_death(world, def, pos);
     oneoffs::on_death(world, def, pos);
+    crate::antag::slaughter::on_death(world, mob, def, pos);
     // A mouse leaves its corpse as a food item (`/obj/item/food/deadmouse`, `copy_corpse`).
     if ss13_mapload::fidelity::is_under(&def.path, MOUSE_ROOT) {
         if let Some(corpse) = crate::construction::spawn_obj(world, DEAD_MOUSE, pos) {

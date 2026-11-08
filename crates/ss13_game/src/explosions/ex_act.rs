@@ -295,6 +295,16 @@ fn adjust(world: &mut World, mob: Entity, kind: DamageType, amount: f32) {
 
 /// `/mob/living/basic/ex_act` (and `simple_animal`'s).
 fn ex_act_basic(world: &mut World, mob: Entity, severity: Severity) {
+    // `/mob/living/basic/revenant/ex_act`: immune.
+    if world.get::<crate::antag::revenant::Revenant>(mob).is_some() {
+        return;
+    }
+    // The space dragon's `COMSIG_ATOM_PRE_EX_ACT`.
+    if matches!(severity, Severity::Devastate)
+        && crate::antag::space_dragon::on_exploded(world, mob)
+    {
+        return;
+    }
     // shortcut: basic mobs wear no armor here (`getarmor` is 0).
     let bomb_armor = 0.0_f32;
     let multi = (1.0 - bomb_armor / 166.6).clamp(0.0, 1.0);

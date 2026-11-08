@@ -619,6 +619,9 @@ impl ClientUi for JobPrefsUi {
             (crate::antag::ROLE_PARADOX_CLONE, "Парадокс-клон"),
             (crate::antag::ROLE_NIGHTMARE, "Кошмар"),
             (crate::antag::ROLE_MORPH, "Морф"),
+            (crate::antag::ROLE_SPACE_DRAGON, "Космический дракон"),
+            (crate::antag::ROLE_REVENANT, "Ревенант"),
+            (crate::antag::ROLE_SLAUGHTER_DEMON, "Демон резни"),
         ]
         .into_iter()
         .map(|(role, label)| {

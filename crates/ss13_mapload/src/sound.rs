@@ -327,7 +327,14 @@ pub mod files {
     ];
     /// Sounds the game code plays by a constant path (checked by the real-asset test
     /// `runtime_types::game_sound_literals_are_converted` in ss13_game).
-    pub const GAME_CODE: [&str; 277] = [
+    pub const GAME_CODE: [&str; 281] = [
+        // The slaughter demon's meal (`ss13_game::antag::slaughter`).
+        "sound/effects/magic/demon_consume.ogg",
+        // Overload Lights (`ss13_game::antag::revenant`).
+        "sound/machines/defib/defib_zap.ogg",
+        // The space dragon (`ss13_game::antag::space_dragon`).
+        "sound/mobs/non-humanoids/space_dragon/space_dragon_roar.ogg",
+        "sound/vehicles/rocketlaunch.ogg",
         "sound/mobs/non-humanoids/mook/mook_leap_yell.ogg",
         "sound/effects/tendril_destroyed.ogg",
         "sound/vehicles/mecha/mechmove01.ogg",

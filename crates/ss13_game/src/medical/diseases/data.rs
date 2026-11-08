@@ -260,6 +260,25 @@ pub(super) const DECLONING: Def = Def {
     ..BASE
 };
 
+pub(super) const REVBLIGHT: Def = Def {
+    path: "/datum/disease/revblight",
+    name: "Unnatural Wasting",
+    form: "Condition",
+    desc: "A strange condition which causes the victim to feel as if they were wasting away, despite being otherwise (almost) perfectly healthy.",
+    max_stages: 5,
+    stage_prob: 5.0,
+    spread_flags: SPREAD_NON_CONTAGIOUS,
+    cure_text: "Holy Water or rest",
+    spread_text: "None",
+    cures: crate::antag::revenant::REVBLIGHT_CURES,
+    cure_chance: 30.0,
+    agent: "Unholy Forces",
+    disease_flags: CURABLE,
+    spreading_modifier: 1.0,
+    severity: Severity::Harmful,
+    ..BASE
+};
+
 pub(super) const ADVANCE: Def = Def {
     path: "/datum/disease/advance",
     name: "Unknown",
@@ -273,7 +292,7 @@ pub(super) const ADVANCE: Def = Def {
 };
 
 impl Kind {
-    pub const ALL: [Self; 14] = [
+    pub const ALL: [Self; 15] = [
         Self::Cold,
         Self::Cold9,
         Self::Flu,
@@ -288,6 +307,7 @@ impl Kind {
         Self::DeathSandwich,
         Self::Anaphylaxis,
         Self::Decloning,
+        Self::Revblight,
     ];
 
     pub fn def(self) -> &'static Def {
@@ -306,6 +326,7 @@ impl Kind {
             Self::DeathSandwich => &DEATH_SANDWICH,
             Self::Anaphylaxis => &ANAPHYLAXIS,
             Self::Decloning => &DECLONING,
+            Self::Revblight => &REVBLIGHT,
             Self::Advance => &ADVANCE,
         }
     }

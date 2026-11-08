@@ -98,6 +98,7 @@
 //! | 3249 | `sheets::crush_attack_self` (a bluespace crystal crushed: blink) |
 //! | 3259 | `traps::attack_self` (a sturdy tripwire cable recoils) |
 //! | 3269 | `deployable_turrets::attack_self` (a folded machine gun deploys) |
+//! | 3277 | `antag::revenant::scatter_residue` (the glimmering residue scattered by hand) |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):
 //!

@@ -964,6 +964,17 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     // The nightmare's light eater and the morph (`ss13_game::antag`).
     "/obj/item/light_eater",
     "/mob/living/basic/morph",
+    // The space dragon, its rifts and their carp (`ss13_game::antag::space_dragon`).
+    "/mob/living/basic/space_dragon",
+    "/obj/structure/carp_rift",
+    "/mob/living/basic/carp/advanced",
+    // The revenant and its residue (`ss13_game::antag::revenant`).
+    "/mob/living/basic/revenant",
+    "/obj/item/ectoplasm/revenant",
+    // The slaughter demon and its death drops (`ss13_game::antag::slaughter`).
+    "/mob/living/basic/demon/slaughter",
+    "/obj/effect/decal/cleanable/blood/innards",
+    "/obj/item/organ/heart/demon",
     // Laser pointer diodes, the choice beacons' deliveries (`ss13_game::devices`).
     "/obj/item/stock_parts/micro_laser",
     "/obj/item/stock_parts/micro_laser/high",

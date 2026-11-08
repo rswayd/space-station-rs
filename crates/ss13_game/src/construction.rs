@@ -340,6 +340,8 @@ pub enum Job {
     Morph {
         corpse: bool,
     },
+    /// A space dragon's rift, meal, wall tearing or airlock prying ([`crate::antag::space_dragon`]).
+    SpaceDragon(crate::antag::space_dragon::DragonJob),
     /// Fixing a Radiation Leak's machine ([`crate::events::radiation_leak`]).
     RadiationLeak,
     /// An anomaly releaser on a core ([`crate::events::anomalies`]).
@@ -1454,6 +1456,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Clothing(job) => crate::clothing::damage::complete(world, mob, action, job),
         &Job::Fauna(job) => crate::mobs::farm::complete(world, mob, action, job),
         &Job::Morph { corpse } => crate::antag::morph::complete_eat(world, mob, action, corpse),
+        &Job::SpaceDragon(job) => crate::antag::space_dragon::complete(world, mob, action, job),
         &Job::Emitter(job) => crate::power::emitter::complete(world, client, target, job, consume),
         &Job::FieldGenerator(job) => {
             crate::power::field_generator::complete(world, client, target, job, consume)
