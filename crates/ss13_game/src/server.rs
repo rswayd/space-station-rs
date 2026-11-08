@@ -956,7 +956,7 @@ pub(crate) fn forward_moves(
             eye,
             pilot,
             coma,
-            jaunting,
+            (jaunting, incorporeal),
             rider,
         )) = mobs.get_mut(mob)
         else {
@@ -994,6 +994,10 @@ pub(crate) fn forward_moves(
             // tg `phased_mob/relaymove` of an ethereal jaunt (`crate::spells`).
             _ if jaunting => {
                 jaunt_steps.write(crate::spells::JauntStep { mob, dir });
+            }
+            // A hidden revenant's `incorporeal_move` (`crate::antag::revenant` reads it).
+            _ if incorporeal => {
+                ghost_steps.write(GhostStep { ghost: mob, dir });
             }
             // A mob in a death coma (a changeling's stasis) is not dead: it stays.
             (_, Some(&Stat::Dead)) if !coma => {
@@ -1048,7 +1052,10 @@ type MoveItem<'a> = (
     Has<crate::silicon::ai::AiEye>,
     Option<&'a crate::mecha::Pilot>,
     Has<crate::health::DeathComa>,
-    Has<crate::spells::Jaunting>,
+    (
+        Has<crate::spells::Jaunting>,
+        Has<crate::antag::revenant::Incorporeal>,
+    ),
     Option<&'a crate::vehicles::Rider>,
 );
 

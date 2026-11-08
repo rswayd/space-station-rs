@@ -44,6 +44,8 @@ pub mod nukeop;
 pub mod objectives;
 #[cfg(feature = "server")]
 pub mod paradox_clone;
+#[cfg(feature = "server")]
+pub mod revenant;
 pub mod revolution;
 #[cfg(feature = "server")]
 pub mod space_dragon;
@@ -85,7 +87,7 @@ impl bevy::prelude::Plugin for AntagServerPlugin {
             valentine::ValentinePlugin,
             survivalist::SurvivalistPlugin,
         ))
-        .add_plugins(space_dragon::SpaceDragonPlugin)
+        .add_plugins((space_dragon::SpaceDragonPlugin, revenant::RevenantPlugin))
         .add_systems(Startup, dynamic::init)
         .add_plugins(midround::MidroundPlugin);
     }
@@ -112,6 +114,8 @@ pub const ROLE_NIGHTMARE: &str = "Nightmare";
 /// tg `ROLE_MORPH` (`morph`). tg polls every ghost for the morph; here it is a `be_special`
 /// key, as willing ghosts are taken without a poll.
 pub const ROLE_MORPH: &str = "Morph";
+/// tg `ROLE_REVENANT` (`revenant`), a `be_special` key as for the morph.
+pub const ROLE_REVENANT: &str = "Revenant";
 /// tg `ROLE_SPACE_DRAGON` (`space_dragon`), a `be_special` key as for the morph.
 pub const ROLE_SPACE_DRAGON: &str = "Space Dragon";
 

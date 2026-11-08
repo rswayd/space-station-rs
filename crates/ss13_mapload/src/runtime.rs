@@ -968,6 +968,9 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/mob/living/basic/space_dragon",
     "/obj/structure/carp_rift",
     "/mob/living/basic/carp/advanced",
+    // The revenant and its residue (`ss13_game::antag::revenant`).
+    "/mob/living/basic/revenant",
+    "/obj/item/ectoplasm/revenant",
     // Laser pointer diodes, the choice beacons' deliveries (`ss13_game::devices`).
     "/obj/item/stock_parts/micro_laser",
     "/obj/item/stock_parts/micro_laser/high",

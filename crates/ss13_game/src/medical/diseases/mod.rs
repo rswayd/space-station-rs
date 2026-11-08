@@ -170,6 +170,8 @@ pub enum Kind {
     DeathSandwich,
     Anaphylaxis,
     Decloning,
+    /// `/datum/disease/revblight` (`crate::antag::revenant`).
+    Revblight,
     /// `/datum/disease/advance`: [`Disease::advance`] holds the symptoms.
     Advance,
 }

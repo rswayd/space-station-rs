@@ -20,7 +20,8 @@
 // nuclear operatives (opted-in ghosts are taken without a poll), the latejoin traitor
 // (infiltrator), the stowaway changeling, the latejoin revolution (provocateur), the midround
 // wizard, the paradox clone (`super::paradox_clone`), the nightmare (`super::nightmare`), the
-// morph (`super::morph`) and the space dragon (`super::space_dragon`) spawn anyone;
+// morph (`super::morph`), the space dragon (`super::space_dragon`) and the revenant
+// (`super::revenant`) spawn anyone;
 // the others keep their weights, are logged and fail preparation, as tg's do without candidates.
 // There is no admin cancel or reroll window before a midround, no false alarms, no AFK checks,
 // no account age or job bans, and `EMERGENCY_PAST_POINT_OF_NO_RETURN` ignores the call's
@@ -127,6 +128,7 @@ pub const PARADOX_CLONE: &str = "Paradox Clone";
 pub const NIGHTMARE: &str = "Nightmare";
 pub const MORPH: &str = "Morph";
 pub const SPACE_DRAGON: &str = "Space Dragon";
+pub const REVENANT: &str = "Revenant";
 
 const HOP: &[&str] = &["Head of Personnel"];
 const ONE: (Cap, Cap) = (Cap::Fixed(1), Cap::Fixed(1));
@@ -197,7 +199,10 @@ pub const RULESETS: [Ruleset; 30] = {
             ..other(NIGHTMARE, Light, flat(5), 15)
         },
         decrease(other("Abductors", Light, flat(5), 20), 3),
-        non_repeatable(other("Revenant", Light, flat(5), 10)),
+        Ruleset {
+            role: Some(super::ROLE_REVENANT),
+            ..non_repeatable(other(REVENANT, Light, flat(5), 10))
+        },
         other("Midround Changeling", Light, flat(5), 15),
         Ruleset {
             role: Some(super::paradox_clone::ROLE_PARADOX_CLONE),
@@ -545,6 +550,8 @@ fn can_be_selected(world: &mut World, r: &Ruleset) -> bool {
         MORPH => super::morph::can_spawn(world),
         // A carp spawn in space.
         SPACE_DRAGON => super::space_dragon::can_spawn(world),
+        // More than 10 corpses on the station.
+        REVENANT => super::revenant::can_spawn(world),
         _ => true,
     }
 }
@@ -797,6 +804,15 @@ fn execute(
                 .filter_map(|&g| world.get::<PlayerMob>(g).map(|p| (p.client, g)))
                 .collect();
             if super::space_dragon::spawn_dragons(world, &ghosts).is_empty() {
+                return Vec::new();
+            }
+        }
+        REVENANT => {
+            let ghosts: Vec<(Entity, Entity)> = chosen
+                .iter()
+                .filter_map(|&g| world.get::<PlayerMob>(g).map(|p| (p.client, g)))
+                .collect();
+            if super::revenant::spawn_revenants(world, &ghosts).is_empty() {
                 return Vec::new();
             }
         }
