@@ -339,6 +339,8 @@ pub enum Job {
     TearWall,
     /// Tipping or righting a cow, a turtle drinking ([`crate::mobs::farm`]).
     Fauna(crate::mobs::farm::FarmJob),
+    /// An alien's timed steps ([`crate::antag::xeno`]).
+    Xeno(crate::antag::xeno::abilities::XenoJob),
     /// A morph eating a corpse or an item ([`crate::antag::morph`]).
     Morph {
         corpse: bool,
@@ -1461,6 +1463,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Inducer(thing) => crate::inducer::complete(world, mob, action, thing),
         &Job::Clothing(job) => crate::clothing::damage::complete(world, mob, action, job),
         &Job::Fauna(job) => crate::mobs::farm::complete(world, mob, action, job),
+        &Job::Xeno(job) => crate::antag::xeno::abilities::complete(world, mob, action, job),
         &Job::Morph { corpse } => crate::antag::morph::complete_eat(world, mob, action, corpse),
         &Job::SpaceDragon(job) => crate::antag::space_dragon::complete(world, mob, action, job),
         &Job::Emitter(job) => crate::power::emitter::complete(world, client, target, job, consume),

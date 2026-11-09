@@ -28,6 +28,10 @@ pub struct EarsWorn;
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct BinaryCapable;
 
+/// On a body linked to the xenomorph hive (tg `hivecheck`): `:a` goes to [`RadioTarget::Hive`].
+#[derive(Component, Clone, Copy, Debug, Default)]
+pub struct AlienHivemind;
+
 /// On a body linked to the changeling hivemind (tg `TRAIT_CHANGELING_HIVEMIND`), kept by the
 /// game: `:g` goes to [`RadioTarget::Changeling`].
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -518,6 +522,8 @@ pub enum RadioExtension {
     Binary,
     /// `MODE_KEY_CHANGELING` (`:g`, BandaStation `:п`): tg's changeling saymode.
     Changeling,
+    /// `MODE_KEY_ALIEN` (`:a`, BandaStation `:ф`): tg's alien saymode.
+    Hive,
 }
 
 /// Where a message goes besides the air (tg `radio()`), already resolved by priority: the hand
@@ -536,6 +542,8 @@ pub enum RadioTarget {
     Binary,
     /// tg's changeling saymode: every hivemind member and ghost reads it, nothing is said aloud.
     Changeling,
+    /// tg's alien saymode (`alien_talk`).
+    Hive,
 }
 
 /// tg `MESSAGE_RANGE - WHISPER_RANGE` + `WHISPER_RANGE`: whispers are heard in full at 1 tile,
@@ -564,6 +572,7 @@ impl SayMods {
             // tg checks the saymode before the radio.
             (Some(RadioExtension::Binary), _) => Some(RadioTarget::Binary),
             (Some(RadioExtension::Changeling), _) => Some(RadioTarget::Changeling),
+            (Some(RadioExtension::Hive), _) => Some(RadioTarget::Hive),
             (Some(RadioExtension::Intercom), _) => Some(RadioTarget::Intercom),
             (Some(RadioExtension::LeftHand), _) => Some(RadioTarget::Hand(0)),
             (Some(RadioExtension::RightHand), _) => Some(RadioTarget::Hand(1)),
@@ -604,6 +613,7 @@ fn radio_key(key: char) -> Option<RadioExtension> {
         'd' => Some(RadioExtension::Deadmin),
         'b' | 'и' => Some(RadioExtension::Binary),
         'g' | 'п' => Some(RadioExtension::Changeling),
+        'a' | 'ф' => Some(RadioExtension::Hive),
         _ => None,
     }
 }

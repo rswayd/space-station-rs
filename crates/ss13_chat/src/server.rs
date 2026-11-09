@@ -36,10 +36,10 @@ use crate::emoji::{Emojis, emoji_parse};
 use crate::emote::{EMOTE_AUDIO_COOLDOWN_SECS, EmoteOutcome, EmoteSound, EmoteUser};
 use crate::language::{self, LanguageHolder, LanguageId, ScrambleSeed, Tongue};
 use crate::speech::{
-    ANXIOUS_FILLERS, Anxiety, AnxiousSay, BinaryCapable, ChangelingHivemind, EarsWorn, Impediments,
-    RadioExtension, RadioTarget, SpeakerStat, SpeechEffects, Tongueless, VoiceSpan, WhisperHeard,
-    capitalize, derpspeech, parse_mods_speaking, slur, stars, stutter, stutter_with, unintelligize,
-    whisper_heard,
+    ANXIOUS_FILLERS, AlienHivemind, Anxiety, AnxiousSay, BinaryCapable, ChangelingHivemind,
+    EarsWorn, Impediments, RadioExtension, RadioTarget, SpeakerStat, SpeechEffects, Tongueless,
+    VoiceSpan, WhisperHeard, capitalize, derpspeech, parse_mods_speaking, slur, stars, stutter,
+    stutter_with, unintelligize, whisper_heard,
 };
 
 /// tg `get_hearers_in_view(world.view)`: 7 tiles, Chebyshev, like BYOND `view()`.
@@ -547,6 +547,7 @@ type Body<'a> = (
     Has<EarsWorn>,
     Has<BinaryCapable>,
     Has<ChangelingHivemind>,
+    Has<AlienHivemind>,
     Has<Tongueless>,
     Option<&'a Impediments>,
     Option<&'a SpeechEffects>,
@@ -629,6 +630,7 @@ fn handle_say(
                 ears_worn,
                 binary,
                 hivemind,
+                hive,
                 tongueless,
                 impediments,
                 speech_effects,
@@ -925,9 +927,14 @@ fn handle_say(
             Some(RadioTarget::Binary) if !binary => None,
             // tg `/datum/saymode/changeling/can_be_used_by`: the hivemind trait.
             Some(RadioTarget::Changeling) if !hivemind => None,
+            // tg `/datum/saymode/xeno/can_be_used_by`: `hivecheck`.
+            Some(RadioTarget::Hive) if !hive => None,
             target => target,
         };
-        if matches!(target, Some(RadioTarget::Binary | RadioTarget::Changeling)) {
+        if matches!(
+            target,
+            Some(RadioTarget::Binary | RadioTarget::Changeling | RadioTarget::Hive)
+        ) {
             let verb = say_verb(&message);
             spoke.write(Spoke {
                 client,

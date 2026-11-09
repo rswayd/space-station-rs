@@ -964,6 +964,21 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     // The nightmare's light eater and the morph (`ss13_game::antag`).
     "/obj/item/light_eater",
     "/mob/living/basic/morph",
+    // Xenomorphs, their structures and the neurotoxin spit (`ss13_game::antag::xeno`).
+    "/mob/living/carbon/alien/larva",
+    "/mob/living/carbon/alien/adult/hunter",
+    "/mob/living/carbon/alien/adult/sentinel",
+    "/mob/living/carbon/alien/adult/drone",
+    "/mob/living/carbon/alien/adult/royal/praetorian",
+    "/mob/living/carbon/alien/adult/royal/queen",
+    "/obj/structure/alien/weeds",
+    "/obj/structure/alien/weeds/node",
+    "/obj/structure/alien/egg",
+    "/obj/structure/alien/resin/wall",
+    "/obj/structure/alien/resin/membrane",
+    "/obj/structure/bed/nest",
+    "/obj/item/clothing/mask/facehugger",
+    "/obj/projectile/neurotoxin",
     // The space dragon, its rifts and their carp (`ss13_game::antag::space_dragon`).
     "/mob/living/basic/space_dragon",
     "/obj/structure/carp_rift",

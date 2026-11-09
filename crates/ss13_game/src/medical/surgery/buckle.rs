@@ -82,6 +82,10 @@ pub fn mouse_drop_receive(
     if !crate::furniture::can_buckle(&path) || world.get::<Health>(dropped).is_none() {
         return false;
     }
+    // `nest/user_buckle_mob`: only aliens wrap someone in a nest.
+    if crate::antag::xeno::reproduction::nest_refuses(world, actor.mob, &path) {
+        return true;
+    }
     if furniture_taken(world, furniture) || world.get::<Buckled>(dropped).is_some() {
         return true;
     }
@@ -166,6 +170,9 @@ pub fn unbuckle(world: &mut World, actor: Actor, mob: Entity) {
     let Some(Buckled(furniture)) = world.get::<Buckled>(mob).copied() else {
         return;
     };
+    if crate::antag::xeno::reproduction::nest_unbuckle(world, actor, mob, furniture) {
+        return;
+    }
     world.entity_mut(mob).remove::<Buckled>();
     // A rider off a human (`crate::pull::carry`).
     if crate::pull::carry::post_unbuckle(world, actor, mob, furniture) {

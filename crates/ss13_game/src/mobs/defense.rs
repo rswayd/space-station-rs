@@ -97,13 +97,7 @@ pub(super) fn name_of(world: &World, e: Entity) -> String {
 use ss13_chat::capitalize;
 
 /// Applies `amount` of `kind` to a living mob and updates its stat; `zone` for carbons.
-pub(super) fn hurt(
-    world: &mut World,
-    mob: Entity,
-    kind: DamageType,
-    amount: f32,
-    zone: Option<BodyZone>,
-) {
+pub fn hurt(world: &mut World, mob: Entity, kind: DamageType, amount: f32, zone: Option<BodyZone>) {
     let mut e = world.entity_mut(mob);
     let (Some(mut health), Some(stat)) = (e.get::<Health>().cloned(), e.get::<Stat>().copied())
     else {

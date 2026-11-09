@@ -323,6 +323,7 @@ fn attach(world: &mut World, entity: Entity) {
     oneoffs::attach(world, entity, &def);
     lavaland::attach(world, entity, &def);
     megafauna::attach(world, entity, &def);
+    crate::antag::xeno::attach(world, entity, &def);
     set_look(world, entity, false);
 }
 

@@ -22,10 +22,15 @@ pub const BASIC_ROOT: &str = "/mob/living/basic";
 /// tg `/mob/living/simple_animal/hostile/megafauna`: the lavaland bosses, read as basic mobs
 /// (`del_on_death` as `DEL_ON_DEATH`, `minbodytemp`/`maxbodytemp` as the survivable range).
 pub const MEGAFAUNA_ROOT: &str = "/mob/living/simple_animal/hostile/megafauna";
+/// tg `/mob/living/carbon/alien`: the xenomorph castes, read as basic mobs with their icon
+/// states as the living and dead sprites and tox and stamina immune.
+pub const ALIEN_ROOT: &str = "/mob/living/carbon/alien";
 const COMPONENT: &str = "dm_mob";
 /// `CANPUSH` of `status_flags`; `MOVE_RESIST_DEFAULT`.
 const CANPUSH: u32 = 1 << 3;
 const MOVE_RESIST_DEFAULT: f32 = 1000.0;
+/// `BODYTEMP_HEAT_DAMAGE_LIMIT`.
+const ALIEN_MAX_TEMP: f32 = 360.15;
 
 /// Types the game spawns by itself: the carp of the migration event (tg `carp_type`,
 /// `boss_type`), round-start vermin (tg `SSminor_mapping`), and the dead mouse a mouse leaves.
@@ -382,7 +387,7 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
 
 /// A type read as a basic mob: `/mob/living/basic` and the megafauna.
 fn is_basic(path: &str) -> bool {
-    is_under(path, BASIC_ROOT) || is_under(path, MEGAFAUNA_ROOT)
+    is_under(path, BASIC_ROOT) || is_under(path, MEGAFAUNA_ROOT) || is_under(path, ALIEN_ROOT)
 }
 
 /// Every `/mob/living/basic` type and the megafauna.
@@ -563,6 +568,12 @@ fn mob_def(
             "maximum_survivable_temperature",
         )
     };
+    let alien = is_under(path, ALIEN_ROOT);
+    if alien {
+        // `/mob/living/carbon/alien`'s `get_tox_loss`, `adjust_stamina_loss`.
+        physiology[2] = 0.0;
+        physiology[4] = 0.0;
+    }
     let ai_controller = dm_path(v("ai_controller")).unwrap_or_default();
     MobDef {
         path: path.to_owned(),
@@ -594,13 +605,31 @@ fn mob_def(
         basic_mob_flags,
         habitable_atmos,
         unsuitable_atmos_damage: num("unsuitable_atmos_damage", 1.0),
-        minimum_survivable_temperature: num(min_temp, 250.0),
-        maximum_survivable_temperature: num(max_temp, 350.0),
+        // `alien/handle_environment`: only heat over `BODYTEMP_HEAT_DAMAGE_LIMIT` hurts.
+        minimum_survivable_temperature: if alien { 0.0 } else { num(min_temp, 250.0) },
+        maximum_survivable_temperature: if alien {
+            ALIEN_MAX_TEMP
+        } else {
+            num(max_temp, 350.0)
+        },
         unsuitable_cold_damage: num("unsuitable_cold_damage", 1.0),
-        unsuitable_heat_damage: num("unsuitable_heat_damage", 1.0),
+        // `HEAT_DAMAGE_LEVEL_2`.
+        unsuitable_heat_damage: if alien {
+            3.0
+        } else {
+            num("unsuitable_heat_damage", 1.0)
+        },
         icon: resource("icon"),
-        icon_living: s("icon_living"),
-        icon_dead: s("icon_dead"),
+        icon_living: if alien {
+            s("icon_state")
+        } else {
+            s("icon_living")
+        },
+        icon_dead: if alien {
+            format!("{}_dead", s("icon_state"))
+        } else {
+            s("icon_dead")
+        },
         density: v("density")
             .and_then(Value::as_f64)
             .is_none_or(|d| d != 0.0),
@@ -717,6 +746,11 @@ mod tests {
             "/mob/living/simple_animal/hostile/megafauna/colossus": {
                 "parent": "/mob/living/simple_animal/hostile/megafauna", "declared_vars": {
                 "name": "colossus", "maxHealth": 2500, "health": 2500, "del_on_death": 1, "speed": 10 } },
+            "/mob/living/carbon": { "parent": "/mob/living" },
+            "/mob/living/carbon/alien": { "parent": "/mob/living/carbon",
+                "declared_vars": { "name": "alien", "icon": { "resource": "icons/mob/nonhuman-player/alien.dmi" } } },
+            "/mob/living/carbon/alien/larva": { "parent": "/mob/living/carbon/alien",
+                "declared_vars": { "name": "alien larva", "icon_state": "larva0", "maxHealth": 25, "health": 25 } },
             "/datum/ai_controller/basic_controller/carp": { "parent": null, "declared_vars": {
                 "blackboard": { "list": [ { "assoc": ["targeting_strategy", { "path": "/datum/targeting_strategy/basic" }] },
                     { "assoc": ["BB_speech_lines", { "list": [
@@ -818,6 +852,22 @@ mod tests {
                 "/mob/living/simple_animal/hostile/megafauna/colossus"
             )
             .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn aliens_read_as_basic_mobs() {
+        let data = data();
+        let larva = &data.mobs["/mob/living/carbon/alien/larva"];
+        assert_eq!(larva.max_health, 25.0);
+        assert_eq!(larva.icon_living, "larva0");
+        assert_eq!(larva.icon_dead, "larva0_dead");
+        assert_eq!(larva.physiology, [1.0, 1.0, 0.0, 1.0, 0.0]);
+        assert_eq!(larva.maximum_survivable_temperature, ALIEN_MAX_TEMP);
+        let types = DmTypes::parse(TYPES.as_bytes()).unwrap();
+        assert_eq!(
+            type_fields(&types, "/mob/living/carbon/alien/larva").len(),
             1
         );
     }

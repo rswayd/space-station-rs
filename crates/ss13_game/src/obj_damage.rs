@@ -28,6 +28,8 @@ use crate::tools::Actor;
 
 /// `INDESTRUCTIBLE` (`resistance_flags`).
 pub const INDESTRUCTIBLE: u32 = 1 << 6;
+/// tg `/obj/structure/alien` (weeds, resin, eggs).
+const ALIEN_STRUCTURE: &str = "/obj/structure/alien";
 /// `CAN_BE_HIT` (`obj_flags`).
 pub const CAN_BE_HIT: u32 = 1 << 1;
 /// `DAMAGE_PRECISION`.
@@ -341,6 +343,14 @@ pub fn take_damage(world: &mut World, target: Entity, amount: f32, damtype: Dama
     // `/obj/structure/spider/run_atom_armor` for `MELEE`.
     let amount = if is_under(&obj.path, crate::effects::webs::SPIDER_STRUCTURE) {
         amount * crate::effects::webs::melee_damage_mult(damtype == DamageType::Burn)
+    } else if is_under(&obj.path, ALIEN_STRUCTURE) {
+        // `/obj/structure/alien/run_atom_armor` for `MELEE`.
+        amount
+            * if damtype == DamageType::Burn {
+                2.0
+            } else {
+                0.25
+            }
     } else {
         amount
     };

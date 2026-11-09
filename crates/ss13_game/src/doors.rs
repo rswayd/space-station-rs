@@ -1674,6 +1674,51 @@ pub fn force_open_act(world: &mut World, actor: crate::tools::Actor, target: Ent
     true
 }
 
+/// tg `/obj/machinery/door/airlock/attack_alien` out of combat mode: an electrified door shocks
+/// first; a bolted, welded or sealed one refuses; otherwise 5 s of prying. True when the click
+/// is handled (an open door or combat mode are not: the claws).
+pub fn alien_pry(world: &mut World, actor: crate::tools::Actor, target: Entity) -> bool {
+    use ss13_shared::chat::Span;
+    if world
+        .get::<crate::combat::CombatMode>(actor.mob)
+        .is_some_and(|c| c.0)
+    {
+        return false;
+    }
+    let Some(door) = world.get::<Door>(target) else {
+        return false;
+    };
+    if door.kind != DoorKind::Airlock || door.state != DoorState::Closed {
+        return false;
+    }
+    let refused = door.locked || door.welded || door.seal.is_some();
+    if world.get::<Electrified>(target).is_some()
+        && crate::wires::shock(world, target, actor.mob, 100.0)
+    {
+        return true;
+    }
+    if refused {
+        crate::tools::tell(world, actor.client, Span::Warning, "Шлюз не поддаётся!");
+        return true;
+    }
+    if crate::tools::do_after(
+        world,
+        actor,
+        target,
+        PRY_DS,
+        0,
+        crate::construction::Job::Door(DoorJob::Pry { tool: actor.mob }),
+    ) {
+        crate::tools::tell(
+            world,
+            actor.client,
+            Span::Notice,
+            "Вы вонзаете когти в шлюз со всей силой!",
+        );
+    }
+    true
+}
+
 /// The end of [`DoorJob::Pry`]: still a closed, unbolted, unwelded airlock (re-checked after the
 /// 5 s); an electrified one shocks again; then it opens with `BYPASS_DOOR_CHECKS` and the
 /// paramedic jaws alert the radio.
