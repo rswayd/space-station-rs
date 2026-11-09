@@ -155,7 +155,7 @@ mod server {
             slowdown::build(app);
             chameleon::build(app);
             toggles::build(app);
-            gear::build(app);
+            crate::clothing::gear::build(app);
             reskin::build(app);
         }
     }
