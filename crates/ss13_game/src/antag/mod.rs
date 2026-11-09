@@ -33,6 +33,8 @@ pub mod client;
 pub mod cult;
 #[cfg(feature = "server")]
 pub mod dynamic;
+#[cfg(feature = "server")]
+pub mod ert;
 pub mod heretic;
 #[cfg(feature = "server")]
 pub mod hud;
@@ -66,6 +68,8 @@ pub mod uplink;
 pub mod valentine;
 pub mod vampire;
 pub mod wizard;
+#[cfg(feature = "server")]
+pub mod zombie;
 
 /// Antagonists on the server: dynamic's state, the traitor and the uplink.
 #[cfg(feature = "server")]
@@ -98,6 +102,7 @@ impl bevy::prelude::Plugin for AntagServerPlugin {
             revenant::RevenantPlugin,
             slaughter::SlaughterPlugin,
         ))
+        .add_plugins((zombie::ZombiePlugin, ert::ErtPlugin))
         .add_systems(Startup, dynamic::init)
         .add_plugins(midround::MidroundPlugin);
     }

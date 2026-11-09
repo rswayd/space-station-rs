@@ -168,7 +168,11 @@ impl Plugin for CombatServerPlugin {
 fn toggle_combat_mode(
     mut intents: MessageReader<IntentReceived>,
     players: Res<Players>,
-    mut mobs: Query<(&PlayerMob, &mut CombatMode)>,
+    mut mobs: Query<(
+        &PlayerMob,
+        &mut CombatMode,
+        Option<&crate::antag::zombie::Zombified>,
+    )>,
 ) {
     for intent in intents.read() {
         if !matches!(intent.intent, ClientIntent::ToggleCombatMode) {
@@ -177,8 +181,10 @@ fn toggle_combat_mode(
         let Some(mob) = players.mob(intent.client) else {
             continue;
         };
-        if let Ok((player, mut mode)) = mobs.get_mut(mob)
+        // `TRAIT_COMBAT_MODE_LOCK`.
+        if let Ok((player, mut mode, zombie)) = mobs.get_mut(mob)
             && player.client == intent.client
+            && zombie.is_none_or(|z| !z.combat_locked())
         {
             mode.0 = !mode.0;
         }
@@ -493,6 +499,13 @@ fn melee(
                     );
                     crate::botany::unique::on_item_attack(world, attacker, target, weapon_entity);
                     crate::mining::crusher::after_attack(world, attacker, target, weapon_entity);
+                    crate::antag::zombie::after_attack(
+                        world,
+                        attacker,
+                        target,
+                        weapon_entity,
+                        zone,
+                    );
                 });
                 // tg `attacked_by`, `BODY_ZONE_HEAD`: blunt brute force may deconvert a rev.
                 if hit == BodyZone::Head && kind == DamageType::Brute && wounding.sharpness == 0 {

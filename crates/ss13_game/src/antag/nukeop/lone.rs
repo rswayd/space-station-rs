@@ -8,19 +8,22 @@
 //!   for over 500 s, each check has `(unmoved deciseconds - 5000) × 0.0001` % to add one
 //!   ([`unsecured_chance`]). The weight starts at 0, so a guarded disk never calls anyone.
 //! - **The event** ([`make`]): once, from 20 minutes and 30 players, picked by that weight. The
-//!   first ghost opted in to "Lone Operative" spawns at a carp spawn in space as the lone
-//!   operative job with the lone operative's full kit, an uplink of 25 TC for lone operatives,
+//!   ghosts opted in to "Lone Operative" are polled for 30 s ([`crate::ghost_poll`]) and one
+//!   who signed up spawns at a carp spawn in space as the lone operative job with the lone
+//!   operative's full kit, an uplink of 25 TC for lone operatives,
 //!   its own team (a syndicate name, the self-destruct terminal's code) and "nuke the station".
 //!   Nobody willing or no carp spawn: the event ends without a spawn.
 // shortcut: being pulled does not count as held; the disk's bedsheet "sleeps soundly" message
 // and the admin weight messages are not modelled; the body is the player's character, not a
-// random one (`randomize_human_appearance`).
+// random one (`randomize_human_appearance`). BandaStation's weighted pick is a uniform one (its
+// weights count past antag rounds, which the port keeps nowhere until the database).
 
 use bevy::prelude::*;
 use ss13_shared::TilePos;
 
-use super::server::{NukeDisk, OpKind, add_op, spawn_lone_team, willing_ghost};
+use super::server::{NukeDisk, OpKind, add_op, spawn_lone_team};
 use crate::events::controller::{EventRng, EventState, Events, RoundEvent};
+use crate::ghost_poll::{self, Candidate, DEFAULT_POLL_SECS, PollSpec};
 use crate::inventory::CarriedBy;
 use crate::server::PlayerMob;
 
@@ -162,16 +165,46 @@ struct LoneOperative;
 
 impl RoundEvent for LoneOperative {
     fn start(&mut self, world: &mut World, _: &mut EventState) {
-        spawn_lone_operative(world);
+        poll_lone_operative(world);
     }
 }
 
-/// `spawn_role()`: the lone operative's body, or `None` (`NOT_ENOUGH_PLAYERS`, `MAP_ERROR`).
-pub fn spawn_lone_operative(world: &mut World) -> Option<Entity> {
-    let Some((_, client)) = willing_ghost(world, super::ROLE_LONE_OPERATIVE) else {
-        info!("lone operative cannot be spawned due to lack of players signing up");
-        return None;
+/// The ghosts opted in to "Lone Operative" (tg `poll_ghost_candidates(role = ...)`).
+fn willing_ghosts(world: &mut World) -> Vec<Entity> {
+    let ghosts = ghost_poll::ghosts(world);
+    ghosts
+        .into_iter()
+        .filter(|&ghost| {
+            world
+                .get::<PlayerMob>(ghost)
+                .and_then(|p| world.get::<crate::antag::dynamic::AntagPreferences>(p.client))
+                .is_some_and(|p| p.wants(super::ROLE_LONE_OPERATIVE))
+        })
+        .collect()
+}
+
+/// The first half of `spawn_role()`: the poll; the rest when it ends.
+pub fn poll_lone_operative(world: &mut World) {
+    let spec = PollSpec {
+        question: "Вы хотите сыграть за одинокого оперативника?".to_owned(),
+        role_name: "одинокий оперативник".to_owned(),
+        secs: DEFAULT_POLL_SECS,
+        ..default()
     };
+    let group = willing_ghosts(world);
+    ghost_poll::poll_candidates(world, spec, group, |world, mut signed_up| {
+        match ghost_poll::pick_candidate(world, &mut signed_up) {
+            Some(chosen) => {
+                spawn_lone_operative(world, chosen);
+            }
+            None => info!("lone operative cannot be spawned due to lack of players signing up"),
+        }
+    });
+}
+
+/// The rest of `spawn_role()`: the lone operative's body, or `None` (`MAP_ERROR`).
+pub fn spawn_lone_operative(world: &mut World, chosen: Candidate) -> Option<Entity> {
+    let client = chosen.client;
     // `find_space_spawn`: a random carp spawn.
     let spawns = world
         .get_resource::<crate::server::SpawnPoints>()
@@ -261,6 +294,27 @@ mod tests {
         world.resource_mut::<Events>().controls[0].occurrences = 1;
         world.run_system_once(disk_security).unwrap();
         assert_eq!(world.resource::<Events>().controls[0].weight, weight);
+    }
+
+    #[test]
+    fn only_ghosts_opted_in_are_polled() {
+        use crate::antag::dynamic::AntagPreferences;
+        let mut world = World::new();
+        let client = world
+            .spawn(AntagPreferences {
+                be_special: [super::super::ROLE_LONE_OPERATIVE.to_owned()].into(),
+                ..default()
+            })
+            .id();
+        let other = world.spawn(AntagPreferences::default()).id();
+        let willing = world
+            .spawn((crate::ghost::Ghost { body: None }, PlayerMob { client }))
+            .id();
+        world.spawn((
+            crate::ghost::Ghost { body: None },
+            PlayerMob { client: other },
+        ));
+        assert_eq!(willing_ghosts(&mut world), vec![willing]);
     }
 
     #[test]

@@ -506,6 +506,15 @@ pub fn expose(world: &mut World, target: Entity, holder: &Holder, modifier: f32)
                     crate::fireplace::extinguish(world, target);
                 }
             }
+        } else if chem.is_type(r.id, crate::antag::zombie::ROMEROL) {
+            // `can_infect` by touch: at least 1u.
+            if living && volume >= 1.0 {
+                crate::antag::zombie::infect(
+                    world,
+                    target,
+                    crate::antag::zombie::INFECTION_NODAMAGE,
+                );
+            }
         } else if chem.is_type(r.id, SPACE_CLEANER) {
             match turf {
                 // `/datum/reagent/space_cleaner/expose_turf`.

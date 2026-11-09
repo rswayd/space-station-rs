@@ -73,6 +73,8 @@ pub struct SpawnPoints {
     pub maintenance: Vec<TilePos>,
     /// `/obj/effect/landmark/blobstart` (tg `GLOB.blobstart`, `crate::antag::blob`).
     pub blobstart: Vec<TilePos>,
+    /// `/obj/effect/landmark/ert_spawn` (tg `GLOB.emergencyresponseteamspawn`, `crate::antag::ert`).
+    pub ert: Vec<TilePos>,
     /// Dev: handshake token -> spawn tile ([`DEV_SPAWNS_ENV`]).
     dev: HashMap<String, TilePos>,
 }
@@ -193,6 +195,8 @@ const OBSERVER_LANDMARK: &str = "/obj/effect/landmark/observer_start";
 const CARP_LANDMARK: &str = "/obj/effect/landmark/carpspawn";
 const MAINTENANCE_LANDMARK: &str = "/obj/effect/landmark/generic_maintenance_landmark";
 const BLOBSTART_LANDMARK: &str = "/obj/effect/landmark/blobstart";
+/// `GLOB.emergencyresponseteamspawn`.
+const ERT_LANDMARK: &str = "/obj/effect/landmark/ert_spawn";
 /// tg `/obj/effect/landmark/start/ai` with `primary_ai = TRUE` (not its `/secondary`).
 const PRIMARY_AI_LANDMARK: &str = "/obj/effect/landmark/start/ai";
 
@@ -537,6 +541,7 @@ fn find_spawn_points(world: &mut World) {
     let mut carp = Vec::new();
     let mut maintenance = Vec::new();
     let mut blobstart = Vec::new();
+    let mut ert = Vec::new();
     let protos = world.get_resource::<ss13_proto::Prototypes>();
     for loaded in &report.maps {
         let map = match DmmMap::from_file(&loaded.path) {
@@ -608,6 +613,11 @@ fn find_spawn_points(world: &mut World) {
                     .any(|o| is_under(&o.path, BLOBSTART_LANDMARK))
             })
             .collect();
+        let ert_marks: Vec<bool> = map
+            .prefabs
+            .iter()
+            .map(|p| p.objects.iter().any(|o| is_under(&o.path, ERT_LANDMARK)))
+            .collect();
         let (sx, sy, sz) = map.size;
         for mz in 1..=sz {
             for y in 1..=sy {
@@ -633,6 +643,9 @@ fn find_spawn_points(world: &mut World) {
                     }
                     if blob_marks[i] {
                         blobstart.push(pos);
+                    }
+                    if ert_marks[i] {
+                        ert.push(pos);
                     }
                     if observer[i] && observer_start.is_none() {
                         observer_start = Some(pos);
@@ -676,6 +689,7 @@ fn find_spawn_points(world: &mut World) {
         carp,
         maintenance,
         blobstart,
+        ert,
         dev: dev_spawns(),
     });
     world.insert_resource(jobs);

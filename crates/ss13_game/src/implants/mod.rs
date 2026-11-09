@@ -345,7 +345,7 @@ impl Plugin for ImplantsPlugin {
     }
 }
 
-fn next_id(world: &mut World) -> u32 {
+pub(crate) fn next_id(world: &mut World) -> u32 {
     let mut next = world.get_resource_or_insert_with(NextImplantId::default);
     next.0 += 1;
     next.0

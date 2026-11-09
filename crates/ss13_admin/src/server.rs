@@ -345,6 +345,9 @@ fn comms_requests(world: &mut World, mut cursor: Local<MessageCursor<CommsReques
             request.text
         );
         log_admin(world, "REQUEST", &text);
+        if request.kind == ss13_game::comms_server::RequestKind::Ert {
+            ss13_game::antag::ert::record_request(world, text.clone());
+        }
         let to = admins_with(world, R_ADMIN);
         for &admin in &to {
             world.write_message(ss13_net::sound::server::SendSound {
@@ -564,7 +567,11 @@ pub fn required_rights(request: &AdminRequest) -> Option<u32> {
         | ForceMidround(_)
         | SetSecurityLevel(_)
         | ManUp(_)
-        | GlobalManUp => R_ADMIN,
+        | GlobalManUp
+        | ErtPanel
+        | ErtDispatch { .. }
+        | ErtDeny(_)
+        | ErtToggleAnswered => R_ADMIN,
         AdminList | SetAdminRank { .. } | RemoveAdmin(_) => R_PERMISSIONS,
         PlaySound { .. } => R_SOUND,
         AirStatus | SpawnAir(_) | VvTile | ViewVariables(_) => R_DEBUG,
@@ -572,7 +579,7 @@ pub fn required_rights(request: &AdminRequest) -> Option<u32> {
         Ban { .. } | Unban(_) => R_BAN,
         FindPrototypes(_) | Spawn(_) | Subtypes(_) => R_SPAWN,
         Smite { .. } | Emp { .. } => R_ADMIN | R_FUN,
-        Events | ForceEvent { .. } | DropBomb(_) | GiveAi { .. } => R_FUN,
+        Events | ForceEvent { .. } | DropBomb(_) | GiveAi { .. } | ErtSummon(_) => R_FUN,
         StartNow | EndRound | Restart => R_SERVER,
         TimeScale(_) => R_DEBUG,
     })
@@ -1134,6 +1141,16 @@ fn answer(world: &mut World, client: Entity, request: AdminRequest) -> AnswerRes
             template,
             make_hostile,
         } => crate::verbs::give_ai(world, client, &key, &template, make_hostile),
+        AdminRequest::ErtPanel => Ok(Some(AdminResponse::Ert(crate::verbs::ert_panel(world)))),
+        AdminRequest::ErtSummon(summon) => crate::verbs::ert_summon(world, &key, &summon),
+        AdminRequest::ErtDispatch {
+            ert_type,
+            commander,
+            slots,
+            announce,
+        } => crate::verbs::ert_dispatch(world, &key, &ert_type, commander, &slots, announce),
+        AdminRequest::ErtDeny(reason) => crate::verbs::ert_deny(world, &key, &reason),
+        AdminRequest::ErtToggleAnswered => crate::verbs::ert_toggle_answered(world),
         AdminRequest::ForceMidround(tag) => {
             let picked = ss13_game::antag::midround::force_midround(world, &tag)?;
             // No bodies yet: the ruleset polls the ghosts and selects when the poll ends.

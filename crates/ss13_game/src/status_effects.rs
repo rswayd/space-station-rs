@@ -971,7 +971,8 @@ pub fn apply(world: &mut World, mob: Entity, kind: Incap, secs: f32) -> bool {
     let secs = if kind == Incap::Sleeping {
         secs
     } else {
-        secs * crate::medical::bioware::stun_mod(world, mob)
+        crate::antag::zombie::spec_stun(world, mob, secs)
+            * crate::medical::bioware::stun_mod(world, mob)
     };
     if stun_blocked(world, mob, kind, secs) {
         return world
@@ -1084,7 +1085,8 @@ pub fn shake_up(world: &mut World, mob: Entity) {
 
 /// tg `Knockdown(amount, daze_amount)`.
 pub fn knockdown(world: &mut World, mob: Entity, secs: f32, daze: f32) {
-    let secs = secs * crate::medical::bioware::stun_mod(world, mob);
+    let secs = crate::antag::zombie::spec_stun(world, mob, secs)
+        * crate::medical::bioware::stun_mod(world, mob);
     // tg returns before the daze too.
     if stun_blocked(world, mob, Incap::Knockdown, secs) {
         return;
@@ -1099,7 +1101,9 @@ pub fn knockdown(world: &mut World, mob: Entity, secs: f32, daze: f32) {
 pub fn adjust_stamina(world: &mut World, mob: Entity, amount: f32) {
     // `GET_PHYSIOLOGY(src, STAMINA)` on damage (spliced nerves).
     let amount = if amount > 0.0 {
-        amount * crate::medical::bioware::stamina_mod(world, mob)
+        amount
+            * crate::medical::bioware::stamina_mod(world, mob)
+            * crate::antag::zombie::stamina_mod(world, mob)
     } else {
         amount
     };

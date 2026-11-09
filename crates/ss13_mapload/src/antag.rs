@@ -124,6 +124,75 @@ pub const NUKEOP_OUTFITS: [&str; 12] = [
     "/datum/outfit/syndicate/reinforcement/mi13",
 ];
 
+/// What zombies make at runtime (`ss13_game::antag::zombie`): the infection organ and the claws.
+pub const ZOMBIE_RUNTIME_TYPES: [&str; 4] = [
+    "/obj/item/organ/zombie_infection",
+    "/obj/item/organ/zombie_infection/nodamage",
+    "/obj/item/mutant_hand/zombie",
+    "/obj/item/mutant_hand/zombie/weak",
+];
+
+/// The emergency response teams' outfits (`/datum/antagonist/ert` `outfit`, BandaStation's
+/// `ert_outfits.dm`), every role of `ss13_game::antag::ert`.
+pub const ERT_OUTFITS: [&str; 56] = [
+    "/datum/outfit/centcom/ert/security",
+    "/datum/outfit/centcom/ert/security/amber",
+    "/datum/outfit/centcom/ert/security/red",
+    "/datum/outfit/centcom/ert/security/gamma",
+    "/datum/outfit/centcom/ert/security/inquisitor",
+    "/datum/outfit/centcom/ert/security/party",
+    "/datum/outfit/centcom/ert/engineer",
+    "/datum/outfit/centcom/ert/engineer/amber",
+    "/datum/outfit/centcom/ert/engineer/red",
+    "/datum/outfit/centcom/ert/engineer/gamma",
+    "/datum/outfit/centcom/ert/engineer/party",
+    "/datum/outfit/centcom/ert/medic",
+    "/datum/outfit/centcom/ert/medic/amber",
+    "/datum/outfit/centcom/ert/medic/red",
+    "/datum/outfit/centcom/ert/medic/gamma",
+    "/datum/outfit/centcom/ert/medic/inquisitor",
+    "/datum/outfit/centcom/ert/commander",
+    "/datum/outfit/centcom/ert/commander/amber",
+    "/datum/outfit/centcom/ert/commander/red",
+    "/datum/outfit/centcom/ert/commander/gamma",
+    "/datum/outfit/centcom/ert/commander/inquisitor",
+    "/datum/outfit/centcom/ert/commander/party",
+    "/datum/outfit/centcom/ert/janitor",
+    "/datum/outfit/centcom/ert/janitor/heavy",
+    "/datum/outfit/centcom/ert/janitor/amber",
+    "/datum/outfit/centcom/ert/janitor/red",
+    "/datum/outfit/centcom/ert/janitor/gamma",
+    "/datum/outfit/centcom/ert/janitor/party",
+    "/datum/outfit/centcom/ert/chaplain",
+    "/datum/outfit/centcom/ert/chaplain/amber",
+    "/datum/outfit/centcom/ert/chaplain/red",
+    "/datum/outfit/centcom/ert/chaplain/gamma",
+    "/datum/outfit/centcom/ert/chaplain/inquisitor",
+    "/datum/outfit/centcom/ert/clown",
+    "/datum/outfit/centcom/ert/clown/amber",
+    "/datum/outfit/centcom/ert/clown/red",
+    "/datum/outfit/centcom/ert/clown/gamma",
+    "/datum/outfit/centcom/ert/clown/party",
+    "/datum/outfit/centcom/death_commando",
+    "/datum/outfit/centcom/death_commando/officer",
+    "/datum/outfit/centcom/centcom_official",
+    "/datum/outfit/centcom/centcom_intern",
+    "/datum/outfit/centcom/centcom_intern/leader",
+    "/datum/outfit/centcom/centcom_intern/unarmed",
+    "/datum/outfit/centcom/centcom_intern/leader/unarmed",
+    "/datum/outfit/centcom/ert/marine",
+    "/datum/outfit/centcom/ert/marine/security",
+    "/datum/outfit/centcom/ert/marine/engineer",
+    "/datum/outfit/centcom/ert/marine/medic",
+    "/datum/outfit/centcom/militia",
+    "/datum/outfit/centcom/militia/general",
+    "/datum/outfit/centcom/ert/medical_commander",
+    "/datum/outfit/centcom/ert/medical_technician",
+    "/datum/outfit/bountyarmor/ert",
+    "/datum/outfit/bountyhook/ert",
+    "/datum/outfit/bountysynth/ert",
+];
+
 /// Items the nuclear operatives get at runtime: the leader's code paper and war declaration
 /// item (`/datum/antagonist/nukeop/leader`, the clowns' `/clownops`), the uplinks
 /// (`/datum/outfit/syndicate` `uplink_type`: nuclear, lone operative, clown), the operatives'
@@ -468,6 +537,9 @@ pub struct AntagData {
     /// [`NUKEOP_OUTFITS`] that resolve, in that order.
     #[serde(default)]
     pub nukeop_outfits: Vec<crate::jobs::Outfit>,
+    /// [`ERT_OUTFITS`] that resolve, in that order.
+    #[serde(default)]
+    pub ert_outfits: Vec<crate::jobs::Outfit>,
     /// `strings/names/operative_alias.txt` (`GLOB.operative_aliases`).
     #[serde(default)]
     pub operative_aliases: Vec<String>,
@@ -530,6 +602,19 @@ impl AntagData {
     /// Item types the uplink spawns: the converter emits prototypes for them.
     pub fn item_types(&self) -> BTreeSet<&str> {
         self.uplink_items.iter().map(|i| i.item.as_str()).collect()
+    }
+
+    /// Item types the emergency response teams' outfits spawn.
+    pub fn ert_types(&self) -> BTreeSet<&str> {
+        self.ert_outfits
+            .iter()
+            .flat_map(|o| {
+                o.items
+                    .iter()
+                    .map(|(_, p)| p.as_str())
+                    .chain(o.backpack_contents.iter().map(|(p, _)| p.as_str()))
+            })
+            .collect()
     }
 
     /// Item types the nuclear operatives' outfits spawn, and [`NUKEOP_RUNTIME_TYPES`].
@@ -638,12 +723,18 @@ pub fn resolve(types: &DmTypes) -> AntagData {
         .filter(|p| types.types.contains_key(**p))
         .map(|p| crate::jobs::outfit(types, p))
         .collect();
+    let ert_outfits = ERT_OUTFITS
+        .iter()
+        .filter(|p| types.types.contains_key(**p))
+        .map(|p| crate::jobs::outfit(types, p))
+        .collect();
     AntagData {
         uplink_categories: categories.into_iter().map(|(_, n)| n).collect(),
         discount_category: text(types.resolved(DISCOUNT_CATEGORY, "name")),
         uplink_items,
         steal_items,
         nukeop_outfits,
+        ert_outfits,
         ..AntagData::default()
     }
 }
