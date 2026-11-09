@@ -254,7 +254,11 @@ impl Plugin for GameServerPlugin {
             crate::instruments::InstrumentsPlugin,
         ))
         .add_plugins((
-            (crate::pull::PullServerPlugin, crate::bump::BumpPlugin, crate::jetpack::JetpackPlugin),
+            (
+                crate::pull::PullServerPlugin,
+                crate::bump::BumpPlugin,
+                crate::jetpack::JetpackPlugin,
+            ),
             crate::throw::ThrowServerPlugin,
             crate::examine::ExamineServerPlugin,
             crate::speech::SpeechServerPlugin,

@@ -39,6 +39,7 @@ pub mod reskin;
 pub mod sensors;
 #[cfg(feature = "server")]
 pub mod slowdown;
+#[cfg(feature = "server")]
 pub mod toggles;
 #[cfg(feature = "server")]
 pub mod traits;

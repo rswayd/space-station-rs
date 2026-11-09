@@ -597,7 +597,7 @@ fn metastation_families() {
         "covered families on MetaStation: {:?}",
         picked.iter().map(|p| p.0).collect::<Vec<_>>()
     );
-    assert_eq!(picked.len(), 21, "every family is mapped: {picked:?}");
+    assert_eq!(picked.len(), 22, "every family is mapped: {picked:?}");
     for (fam, machine, path, pos) in picked {
         let board = world.get::<DmMachine>(machine).unwrap().circuit.clone();
         let def = world
@@ -671,8 +671,10 @@ fn metastation_families() {
                     || e.contains::<teleporter::TeleConsole>()
                     || e.contains::<launchpad::Launchpad>()
                     || e.contains::<launchpad::PadConsole>()
-                    // The satellite console has no state of its own.
+                    // The satellite console has no state of its own; the teleporter console
+                    // gets its own on first use (`teleporter::console_state`).
                     || def.build_path.ends_with("/sat_control")
+                    || def.build_path == teleporter::CONSOLE
             }
             Family::QuantumPad => e.contains::<ss13_game::science::quantum_pad::QuantumPad>(),
             Family::Station => e.contains::<ss13_game::silicon::cyborg::RechargeStation>(),

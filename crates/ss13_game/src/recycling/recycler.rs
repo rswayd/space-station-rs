@@ -203,7 +203,6 @@ pub fn tick(world: &mut World) {
             let mut r = world.get_mut::<Recycler>(machine).expect("queried");
             r.safety_mode = false;
             r.safety_until = None;
-            drop(r);
             refresh(world, machine);
         }
         let on_tile: Vec<Entity> = world.resource::<SpatialIndex>().on_tile(pos).to_vec();
@@ -215,7 +214,6 @@ pub fn tick(world: &mut World) {
             .collect();
         r.seen = on_tile;
         let safety = r.safety_mode;
-        drop(r);
         if safety || world.get::<Unpowered>(machine).is_some() {
             continue;
         }

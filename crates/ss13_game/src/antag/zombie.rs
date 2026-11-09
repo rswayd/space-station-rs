@@ -730,12 +730,6 @@ mod tests {
         mob
     }
 
-    fn advance(world: &mut World, secs: f64) {
-        world
-            .resource_mut::<Time>()
-            .advance_by(std::time::Duration::from_secs_f64(secs));
-    }
-
     #[test]
     fn a_host_takes_toxin_only_with_the_damaging_kind() {
         let mut world = world();

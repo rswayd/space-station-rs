@@ -69,8 +69,9 @@ pub mod valentine;
 pub mod vampire;
 pub mod wizard;
 #[cfg(feature = "server")]
-pub mod zombie;
 pub mod xeno;
+#[cfg(feature = "server")]
+pub mod zombie;
 
 /// Antagonists on the server: dynamic's state, the traitor and the uplink.
 #[cfg(feature = "server")]

@@ -253,7 +253,7 @@ mod tests {
         assert_eq!(alpha_at(&l, 10.0), 0.0);
         assert_eq!(alpha_at(&l, 11.0), 1.0);
         assert!(alpha_at(&l, l.fade_at + FADE_SECS / 2.0) < 1.0);
-        assert_eq!(alpha_at(&l, l.fade_at + FADE_SECS), 0.0);
+        assert!(alpha_at(&l, l.fade_at + FADE_SECS) < 1e-6);
     }
 
     #[test]

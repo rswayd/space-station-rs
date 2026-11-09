@@ -317,8 +317,8 @@ pub fn tick(world: &mut World) {
     let now = world.resource::<Time>().elapsed_secs_f64();
     let active: Vec<Entity> = {
         let mut belts = world.resource_mut::<Belts>();
-        let list = std::mem::take(&mut belts.active);
-        list
+
+        std::mem::take(&mut belts.active)
     };
     let mut keep = Vec::with_capacity(active.len());
     for belt in active {

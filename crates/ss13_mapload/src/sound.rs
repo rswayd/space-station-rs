@@ -327,7 +327,7 @@ pub mod files {
     ];
     /// Sounds the game code plays by a constant path (checked by the real-asset test
     /// `runtime_types::game_sound_literals_are_converted` in ss13_game).
-    pub const GAME_CODE: [&str; 281] = [
+    pub const GAME_CODE: [&str; 299] = [
         // The slaughter demon's meal (`ss13_game::antag::slaughter`).
         "sound/effects/magic/demon_consume.ogg",
         // Overload Lights (`ss13_game::antag::revenant`).
@@ -612,6 +612,25 @@ pub mod files {
         "sound/mobs/non-humanoids/pony/snort.ogg",
         "sound/music/antag/malf.ogg",
         "sound/vehicles/skateboard_ollie.ogg",
+        // Named by the latest wave (scanned by `game_sound_literals_are_converted`).
+        "sound/ambience/misc/ticking_clock.ogg",
+        "sound/announcer/alarm/clownops.ogg",
+        "sound/effects/magic/clockwork/ark_activation.ogg",
+        "sound/effects/magic/lightningshock.ogg",
+        "sound/effects/magic/magic_block_holy.ogg",
+        "sound/items/baseballhit.ogg",
+        "sound/items/night_vision_on.ogg",
+        "sound/items/tools/jaws_pry.ogg",
+        "sound/items/weapons/fwoosh.ogg",
+        "sound/items/weapons/scope.ogg",
+        "sound/machines/gateway/gateway_calibrated.ogg",
+        "sound/machines/gateway/gateway_close.ogg",
+        "sound/machines/gateway/gateway_open.ogg",
+        "sound/machines/gateway/gateway_travel.ogg",
+        "sound/machines/pda_button/pda_button1.ogg",
+        "sound/mobs/non-humanoids/alien/alien_eat.ogg",
+        "sound/mobs/non-humanoids/alien/alien_york.ogg",
+        "sound/mobs/non-humanoids/hiss/hiss5.ogg",
     ];
     /// Admin verbs (`ss13_admin::verbs`): BandaStation's Man Up.
     pub const ADMIN: [&str; 1] = ["modular_bandastation/admin/sound/manup1.ogg"];

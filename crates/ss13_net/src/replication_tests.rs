@@ -879,15 +879,15 @@ fn sight_flags_show_turfs_and_mobs_behind_walls() {
         TilePos::new(22, 27, 1),
         TilePos::new(23, 27, 1),
     );
-    server
-        .world_mut()
-        .spawn((Networked, turf_pos, appearance(3), SeenAsTurf));
+    let turf = (server.world_mut())
+        .spawn((Networked, turf_pos, appearance(3), SeenAsTurf))
+        .id();
     server
         .world_mut()
         .spawn((Networked, obj_pos, appearance(4)));
-    server
-        .world_mut()
-        .spawn((Networked, mob_pos, appearance(5), SeenAsMob));
+    let mob = (server.world_mut())
+        .spawn((Networked, mob_pos, appearance(5), SeenAsMob))
+        .id();
     server.update();
     let server_addr = server.world().resource::<NetServerConfig>().bind_addr;
     let digest = (server.world().resource::<ServerCertificateDigest>().0).clone();
@@ -902,32 +902,20 @@ fn sight_flags_show_turfs_and_mobs_behind_walls() {
     let link = server.world().resource::<Connected>().0[0];
     let center = TilePos::new(21, 20, 1);
     let viewer = Viewer::new(center);
-    let check = |server: &mut App, client: &mut App, shown: TilePos, flags: u16, what: &str| {
+    let check = |server: &mut App, client: &mut App, shown: Entity, flags: u16, what: &str| {
         server
             .world_mut()
             .entity_mut(link)
             .insert((viewer, Sight(flags)));
         run_until(&mut [server, client], what, |apps| {
-            let want = state(apps[0], |_, p| {
-                within(viewer, 0)(p) && (p.y <= 25 || *p == shown)
+            let want = state(apps[0], |e, p| {
+                within(viewer, 0)(p) && (p.y <= 25 || e == shown)
             });
             seen(apps[1]) == want
         });
     };
-    check(
-        &mut server,
-        &mut client,
-        turf_pos,
-        Sight::SEE_TURFS,
-        "mesons",
-    );
-    check(
-        &mut server,
-        &mut client,
-        mob_pos,
-        Sight::SEE_MOBS,
-        "thermals",
-    );
+    check(&mut server, &mut client, turf, Sight::SEE_TURFS, "mesons");
+    check(&mut server, &mut client, mob, Sight::SEE_MOBS, "thermals");
 }
 
 #[test]

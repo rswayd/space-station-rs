@@ -169,8 +169,8 @@ pub(super) fn build(app: &mut App) {
                 .after(crate::click::ResolveClicks)
                 .before(crate::health::HealthSystems),
         )
-        .add_click_handler(ClickPhase::EmptyHand, 3491, |w, c| empty_hand(w, c))
-        .add_click_handler(ClickPhase::HeldOnTarget, 4501, |w, c| held_on_target(w, c));
+        .add_click_handler(ClickPhase::EmptyHand, 3491, empty_hand)
+        .add_click_handler(ClickPhase::HeldOnTarget, 4501, held_on_target);
 }
 
 fn roll(world: &mut World, range: (u32, u32)) -> f64 {
@@ -441,12 +441,12 @@ fn hugger_tick(world: &mut World, mut clock: Local<f64>) {
         }
         if h.state == HuggerState::Asleep && t >= h.awake_at {
             let mut woke = false;
-            if let Some(mut h) = world.get_mut::<FaceHugger>(hugger) {
-                if h.state == HuggerState::Asleep {
-                    h.state = HuggerState::Awake;
-                    h.awake_at = 0.0;
-                    woke = true;
-                }
+            if let Some(mut h) = world.get_mut::<FaceHugger>(hugger)
+                && h.state == HuggerState::Asleep
+            {
+                h.state = HuggerState::Awake;
+                h.awake_at = 0.0;
+                woke = true;
             }
             if woke {
                 crate::mobs::set_icon_state(world, hugger, ALIEN_DMI, "facehugger");

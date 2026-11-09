@@ -26,7 +26,10 @@ fn human(world: &mut World) -> Entity {
         ))
         .id();
     for slot in Slot::ALL {
-        let path = SpeciesId::Human.def().organs.get(slot).unwrap();
+        // Not every slot is a human organ: the zombie tumour is infection-only.
+        let Some(path) = SpeciesId::Human.def().organs.get(slot) else {
+            continue;
+        };
         let organ = organs::spawn_organ(world, path).unwrap();
         world.entity_mut(organ).insert(OrganOf(mob));
     }

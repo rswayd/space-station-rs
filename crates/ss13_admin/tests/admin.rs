@@ -535,7 +535,9 @@ fn ooc_is_global_and_looc_is_local() {
     s.run_until("OOC reaches the admin", |s| {
         s.chat_has(ADMIN, "OOC: bob: всем привет")
     });
-    assert!(s.chat_has(PLAYER, "OOC: bob: всем привет"));
+    s.run_until("OOC reaches the sender", |s| {
+        s.chat_has(PLAYER, "OOC: bob: всем привет")
+    });
 
     // Too long: cut to `MAX_MESSAGE_LEN`, never rejected wholesale by a client limit alone.
     let spam = "я".repeat(5000);
@@ -558,13 +560,12 @@ fn ooc_is_global_and_looc_is_local() {
     s.run_until("the sender reads its LOOC", |s| {
         s.chat_has(PLAYER, "LOOC: ") && s.chat_has(PLAYER, "далеко")
     });
-    assert!(
+    s.run_until("out of range the admin sees it remotely", |s| {
         s.seen(ADMIN)
             .chat
             .iter()
-            .any(|l| l.starts_with("(R)LOOC") && l.contains("далеко")),
-        "out of range the admin sees it remotely"
-    );
+            .any(|l| l.starts_with("(R)LOOC") && l.contains("далеко"))
+    });
     let bob = s.mob("bob");
     let near = s.pos("The Admin");
     s.server.world_mut().entity_mut(bob).insert(near);
