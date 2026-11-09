@@ -84,6 +84,8 @@ pub enum AdminRequest {
         ckey: String,
         reason: String,
     },
+    /// `R_SERVER`: tg "Set Admin Notice"; empty removes it.
+    SetAdminNotice(String),
     /// `R_ADMIN`: tg "Toggle OOC".
     ToggleOoc,
     /// `R_ADMIN`: tg "Toggle Dead OOC".

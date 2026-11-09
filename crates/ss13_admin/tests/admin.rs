@@ -583,6 +583,13 @@ fn ooc_is_global_and_looc_is_local() {
             .any(|l| l.starts_with("LOOC") && l.contains("рядом"))
     });
 
+    // The admin notice reaches everyone online.
+    done(s.ask(
+        ADMIN,
+        AdminRequest::SetAdminNotice("Рестарт в полночь".into()),
+    ));
+    s.run_until("the notice", |s| s.chat_has(PLAYER, "Рестарт в полночь"));
+
     // The switch silences players, not admins.
     done(s.ask(ADMIN, AdminRequest::ToggleOoc));
     assert!(!s.server.world().resource::<OocPolicy>().ooc);

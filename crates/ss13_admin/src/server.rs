@@ -577,7 +577,7 @@ pub fn required_rights(request: &AdminRequest) -> Option<u32> {
         FindPrototypes(_) | Spawn(_) | Subtypes(_) => R_SPAWN,
         Smite { .. } | Emp { .. } => R_ADMIN | R_FUN,
         Events | ForceEvent { .. } | DropBomb(_) | GiveAi { .. } => R_FUN,
-        StartNow | EndRound | Restart => R_SERVER,
+        StartNow | EndRound | Restart | SetAdminNotice(_) => R_SERVER,
         TimeScale(_) => R_DEBUG,
     })
 }
@@ -653,6 +653,9 @@ fn answer(world: &mut World, client: Entity, request: AdminRequest) -> AnswerRes
             admin_action(world, &format!("{key} {verb} themselves."));
             world.resource_mut::<Tickets>().dirty = true;
             done(verb)
+        }
+        AdminRequest::SetAdminNotice(text) => {
+            done(crate::ooc::set_admin_notice(world, &key, &text))
         }
         AdminRequest::ToggleOoc => done(crate::ooc::toggle(world, &key, crate::ooc::Switch::Ooc)),
         AdminRequest::ToggleDeadOoc => {

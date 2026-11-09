@@ -23,7 +23,8 @@ use ss13_game::health::Stat;
 use ss13_game::lobby::GameState;
 use ss13_game::round::Ticker;
 use ss13_game::statpanel::{
-    OOC_TAB, OOC_VERB_IGNORE, OOC_VERB_MOTD, OOC_VERB_UNIGNORE, StatPanelHost, StatPanelUi,
+    OOC_TAB, OOC_VERB_ADMIN_NOTICE, OOC_VERB_IGNORE, OOC_VERB_MOTD, OOC_VERB_UNIGNORE,
+    StatPanelHost, StatPanelUi,
 };
 use ss13_mapload::Opaque;
 use ss13_net::server::{ClientConnected, ClientToken, ControlledEntity, IntentReceived};
@@ -35,7 +36,8 @@ use ss13_tgui::server::{UiActed, UiSystems};
 use ss13_world::SpatialIndex;
 
 use crate::server::{
-    AdminConfig, AdminSession, admins_with, chat, client_ckey, log_admin, sanitize_text, tell,
+    AdminConfig, AdminSession, admin_action, admins_with, chat, client_ckey, log_admin,
+    sanitize_text, tell,
 };
 use ss13_shared::admin::rights::R_ADMIN;
 
@@ -71,6 +73,10 @@ pub enum Switch {
 #[derive(Resource, Clone, Debug, Default)]
 pub struct Motd(pub Vec<String>);
 
+/// `GLOB.admin_notice`: shown to everyone who joins, for this round (a new round is a new `App`).
+#[derive(Resource, Clone, Debug, Default)]
+pub struct AdminNotice(pub String);
+
 /// `prefs.ignoring`, on a connection.
 #[derive(Component, Clone, Debug, Default)]
 pub struct OocIgnored(pub HashSet<String>);
@@ -97,6 +103,7 @@ pub(crate) fn build(app: &mut App) {
         .unwrap_or_default();
     app.insert_resource(Motd(motd))
         .init_resource::<OocPolicy>()
+        .init_resource::<AdminNotice>()
         .add_systems(
             Update,
             (
@@ -141,6 +148,44 @@ pub(crate) fn toggle(world: &mut World, key: &str, which: Switch) -> String {
     }
     log_admin(world, "OOC", &format!("{key} set {name}: {state}"));
     format!("{name}: {state}")
+}
+
+/// tg `set_admin_notice`: a new notice goes to everyone online.
+pub(crate) fn set_admin_notice(world: &mut World, key: &str, raw: &str) -> String {
+    let text = sanitize_text(raw, MAX_MESSAGE_LEN);
+    let verb = if text.is_empty() { "removed" } else { "set" };
+    admin_action(world, &format!("{key} {verb} the admin notice: {text}"));
+    world.resource_mut::<AdminNotice>().0.clone_from(&text);
+    if text.is_empty() {
+        return "уведомление снято".to_owned();
+    }
+    let everyone = all_clients(world);
+    chat(world, everyone, admin_notice_line(&text));
+    "уведомление задано".to_owned()
+}
+
+fn admin_notice_line(text: &str) -> ChatMessage {
+    ChatMessage::simple(
+        ChatChannel::System,
+        Span::AdminNotice,
+        format!("Уведомление администрации: {text}"),
+    )
+}
+
+/// tg `/client/verb/admin_notice`.
+fn show_admin_notice(world: &mut World, client: Entity) {
+    let text = world.resource::<AdminNotice>().0.clone();
+    if text.is_empty() {
+        tell(
+            world,
+            client,
+            ChatChannel::System,
+            Span::Notice,
+            "Сейчас нет уведомлений администрации.",
+        );
+    } else {
+        chat(world, vec![client], admin_notice_line(&text));
+    }
 }
 
 fn all_clients(world: &mut World) -> Vec<Entity> {
@@ -516,6 +561,7 @@ fn run_verbs(world: &mut World, mut acts: Local<MessageCursor<UiActed<StatPanelU
             OOC_VERB_IGNORE => ask_ignore(world, client, true),
             OOC_VERB_UNIGNORE => ask_ignore(world, client, false),
             OOC_VERB_MOTD => show_motd(world, client),
+            OOC_VERB_ADMIN_NOTICE => show_admin_notice(world, client),
             _ => {}
         }
     }
@@ -593,11 +639,15 @@ fn send_motd(world: &mut World, mut connected: Local<MessageCursor<ClientConnect
         .read(world.resource::<Messages<ClientConnected>>())
         .map(|c| c.client)
         .collect();
-    if world.resource::<Motd>().0.is_empty() {
-        return;
-    }
+    let has_motd = !world.resource::<Motd>().0.is_empty();
+    let has_notice = !world.resource::<AdminNotice>().0.is_empty();
     for client in joined {
-        show_motd(world, client);
+        if has_motd {
+            show_motd(world, client);
+        }
+        if has_notice {
+            show_admin_notice(world, client);
+        }
     }
 }
 

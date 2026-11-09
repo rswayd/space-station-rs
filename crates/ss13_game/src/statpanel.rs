@@ -40,6 +40,7 @@ pub const OOC_TAB: &str = "OOC";
 pub const OOC_VERB_IGNORE: &str = "Игнорировать";
 pub const OOC_VERB_UNIGNORE: &str = "Перестать игнорировать";
 pub const OOC_VERB_MOTD: &str = "MOTD";
+pub const OOC_VERB_ADMIN_NOTICE: &str = "Уведомление администрации";
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StatPanelData {
@@ -340,7 +341,12 @@ mod server {
         }
         tabs.push((
             OOC_TAB,
-            vec![OOC_VERB_IGNORE, OOC_VERB_UNIGNORE, OOC_VERB_MOTD],
+            vec![
+                OOC_VERB_IGNORE,
+                OOC_VERB_UNIGNORE,
+                OOC_VERB_MOTD,
+                OOC_VERB_ADMIN_NOTICE,
+            ],
         ));
         tabs
     }

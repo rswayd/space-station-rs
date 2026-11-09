@@ -79,6 +79,7 @@ pub struct AdminUi {
     reply_text: String,
     player_text: String,
     search: String,
+    notice_text: String,
     announce_title: String,
     announce_text: String,
     time_scale: f32,
@@ -123,6 +124,7 @@ impl Default for AdminUi {
             reply_text: String::new(),
             player_text: String::new(),
             search: String::new(),
+            notice_text: String::new(),
             announce_title: String::new(),
             announce_text: String::new(),
             time_scale: 1.0,
@@ -860,6 +862,16 @@ fn game_tab(ui: &mut egui::Ui, state: &mut AdminUi, out: &mut Vec<AdminRequest>)
                     if ui.button(label).clicked() {
                         out.push(request);
                     }
+                }
+            });
+        });
+        ui.separator();
+        ui.add_enabled_ui(state.can(R_SERVER), |ui| {
+            ui.horizontal(|ui| {
+                ui.strong("Уведомление:");
+                ui.text_edit_singleline(&mut state.notice_text);
+                if ui.button("Задать").clicked() {
+                    out.push(AdminRequest::SetAdminNotice(state.notice_text.clone()));
                 }
             });
         });
