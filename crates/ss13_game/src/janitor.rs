@@ -83,8 +83,6 @@ pub const TURF_WET_LUBE: u8 = 1 << 3;
 pub const TURF_WET_SUPERLUBE: u8 = 1 << 4;
 /// `MAXIMUM_WET_TIME`, seconds.
 pub const MAXIMUM_WET_TIME: f32 = 300.0;
-/// `T0C`.
-const T0C: f64 = 273.15;
 /// `SSwet_floors`: `wait`, `temperature_coeff`, `time_ratio`.
 const WET_FLOORS_WAIT: f64 = 1.0;
 const WET_TEMPERATURE_COEFF: f64 = 2.0;
