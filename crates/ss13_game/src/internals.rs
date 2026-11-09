@@ -8,7 +8,10 @@
 //!   `HEADINTERNALS` is worn; `crate::breath` then breathes [`TankAir::remove_air_volume`].
 //! - A tank that leaves the mob closes at once (tg `doUnEquip`); a mask taken off closes it on
 //!   the next breath (tg `invalid_internals`).
+//! - The tank's window in hand (`attack_self`, tg `ui_interact`, `hands_state`) shows its
+//!   pressure and sets the release pressure.
 
+use bevy::ecs::system::SystemParamItem;
 use bevy::prelude::*;
 use ss13_atmos::gas::{ONE_ATMOSPHERE, R_IDEAL_GAS_EQUATION, T20C};
 use ss13_atmos::{GasId, GasMixture};
@@ -16,9 +19,19 @@ use ss13_mapload::fidelity::is_under;
 use ss13_mapload::{DmClothing, DmItem, DmName, DmTank};
 use ss13_net::chat::server::SendChat;
 use ss13_shared::chat::{ChatChannel, ChatMessage, ChatSegment, Span};
+use ss13_tgui::UiInterface;
+use ss13_tgui::interfaces::tank::{TankData, TankStatic, TankUi};
+use ss13_tgui::server::{
+    AppTguiExt, OpenUi, ServerUi, UiActed, UiParams, UiReject, UiSystems, UiWindow,
+};
 
 use crate::inventory::{CarriedBy, Inventory};
 use crate::server::PlayerMob;
+
+/// `TANK_MIN_RELEASE_PRESSURE`, `TANK_MAX_RELEASE_PRESSURE` (3 atm), `TANK_DEFAULT_RELEASE_PRESSURE`.
+const TANK_MIN_RELEASE_PRESSURE: f64 = 0.0;
+const TANK_MAX_RELEASE_PRESSURE: f64 = ONE_ATMOSPHERE * 3.0;
+const TANK_DEFAULT_RELEASE_PRESSURE: f64 = 16.0;
 
 /// `clothing_flags` bits (`code/__DEFINES/obj_flags.dm`).
 pub const STOPSPRESSUREDAMAGE: u32 = 1 << 1;
@@ -61,7 +74,7 @@ pub struct Internals(pub Option<Entity>);
 /// `populate_gas()` of the internals tanks (`tank_types.dm`): per type, `(gas, atmospheres)`
 /// of `X*ONE_ATMOSPHERE*volume/(R_IDEAL_GAS_EQUATION*T20C)` moles each. The longest matching
 /// type wins (procs are inherited); an empty list is a `populate_gas()` that adds nothing.
-const POPULATE: [(&str, &[(&str, f64)]); 20] = [
+const POPULATE: [(&str, &[(&str, f64)]); 23] = [
     ("/obj/item/tank/internals/oxygen", &[("o2", 6.0)]),
     ("/obj/item/tank/internals/oxygen/empty", &[]),
     (
@@ -102,8 +115,11 @@ const POPULATE: [(&str, &[(&str, f64)]); 20] = [
         "/obj/item/tank/internals/emergency_oxygen/engi/clown/helium",
         &[("o2", 10.0 * 0.75), ("helium", 10.0 * 0.25)],
     ),
-    // `/obj/item/tank/populate_gas()` returns: jetpacks and other tanks start empty.
+    // `/obj/item/tank/populate_gas()` returns: tanks of no other type start empty.
     ("/obj/item/tank", &[]),
+    ("/obj/item/tank/jetpack", &[("o2", 6.0)]),
+    ("/obj/item/tank/jetpack/improvised", &[]),
+    ("/obj/item/tank/jetpack/carbondioxide", &[("co2", 6.0)]),
 ];
 
 /// tg `Initialize`: `new(volume)` at `T20C`, then the type's `populate_gas()`.
@@ -127,8 +143,140 @@ pub struct InternalsPlugin;
 
 impl Plugin for InternalsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_observer(fill_tank).add_observer(tank_left_mob);
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // tg `ui_interact` from the default `attack_self`.
+        app.add_click_handler(ClickPhase::AttackSelf, 1757, |w, c| {
+            open_window(w, c.client, c.mob, c.target)
+        });
+        app.add_observer(fill_tank)
+            .add_observer(tank_left_mob)
+            .register_ui::<TankWindow>()
+            .add_systems(
+                Update,
+                (
+                    window_status.in_set(UiSystems::StatusHook),
+                    apply_acts.in_set(UiSystems::Handle),
+                ),
+            );
     }
+}
+
+/// The tank's window, in hand only (tg `hands_state`).
+fn open_window(world: &mut World, client: Entity, mob: Entity, item: Entity) -> bool {
+    if world.get::<TankAir>(item).is_none() {
+        return false;
+    }
+    let Some(inventory) = world.get::<Inventory>(mob) else {
+        return false;
+    };
+    if !inventory.hands.contains(&Some(item)) {
+        return false;
+    }
+    world
+        .entity_mut(item)
+        .insert(ss13_tgui::server::AlwaysState);
+    let title = world
+        .get::<DmName>(item)
+        .map(|n| n.name.clone())
+        .unwrap_or_default();
+    world.write_message(OpenUi::new::<TankWindow>(client, mob, item, title));
+    true
+}
+
+/// `hands_state`: the window closes once the tank leaves the user's hands.
+fn window_status(mut windows: Query<&mut UiWindow>, inventories: Query<&Inventory>) {
+    for mut window in &mut windows {
+        if window.interface == TankWindow::NAME
+            && !inventories
+                .get(window.actor)
+                .is_ok_and(|inv| inv.hands.contains(&Some(window.source)))
+        {
+            window.cap_status(ss13_tgui::UiStatus::Close);
+        }
+    }
+}
+
+pub struct TankWindow;
+
+impl UiInterface for TankWindow {
+    const NAME: &'static str = TankUi::NAME;
+    type Data = TankData;
+    type StaticData = TankStatic;
+}
+
+/// `act('pressure', {pressure})`: `reset`, `min`, `max` or a number.
+#[derive(Clone, Debug, PartialEq)]
+pub enum TankAct {
+    Reset,
+    Min,
+    Max,
+    Set(f64),
+}
+
+impl ServerUi for TankWindow {
+    type Source = (Entity, &'static TankAir);
+    type UserParam = Query<'static, 'static, &'static Internals>;
+    type Act = TankAct;
+
+    fn static_data(_: (Entity, &TankAir)) -> TankStatic {
+        TankStatic {
+            default_release_pressure: TANK_DEFAULT_RELEASE_PRESSURE.round() as f32,
+            min_release_pressure: TANK_MIN_RELEASE_PRESSURE.round() as f32,
+            max_release_pressure: TANK_MAX_RELEASE_PRESSURE.round() as f32,
+            leak_pressure: crate::explosions::sources::TANK_LEAK_PRESSURE.round() as f32,
+            fragment_pressure: crate::explosions::sources::TANK_FRAGMENT_PRESSURE.round() as f32,
+        }
+    }
+
+    fn data(
+        (item, tank): (Entity, &TankAir),
+        user: Entity,
+        internals: &SystemParamItem<'_, '_, Self::UserParam>,
+    ) -> TankData {
+        TankData {
+            tank_pressure: tank.pressure().round() as f32,
+            release_pressure: tank.distribute_pressure.round() as f32,
+            connected: internals.get(user).is_ok_and(|i| i.0 == Some(item)),
+        }
+    }
+
+    fn parse_act(action: &str, params: &UiParams) -> Result<TankAct, UiReject> {
+        if action != "pressure" {
+            return Err(UiReject::UnknownAction);
+        }
+        match params.text("pressure").as_deref() {
+            Ok("reset") => Ok(TankAct::Reset),
+            Ok("min") => Ok(TankAct::Min),
+            Ok("max") => Ok(TankAct::Max),
+            _ => params.number("pressure").map(TankAct::Set),
+        }
+    }
+}
+
+/// `ui_act`: the release pressure, `clamp(round(pressure), min, max)`.
+fn apply_acts(
+    mut acted: MessageReader<UiActed<TankWindow>>,
+    mut tanks: Query<(&mut TankAir, &DmTank)>,
+) {
+    for act in acted.read() {
+        let Ok((mut tank, dm)) = tanks.get_mut(act.source) else {
+            continue;
+        };
+        tank.distribute_pressure = release_pressure(&act.act, f64::from(dm.distribute_pressure));
+    }
+}
+
+/// The release pressure `act` sets on a tank whose `initial(distribute_pressure)` is `initial`.
+fn release_pressure(act: &TankAct, initial: f64) -> f64 {
+    let pressure = match *act {
+        TankAct::Reset => initial,
+        TankAct::Min => TANK_MIN_RELEASE_PRESSURE,
+        TankAct::Max => TANK_MAX_RELEASE_PRESSURE,
+        TankAct::Set(p) => p,
+    };
+    pressure
+        .round()
+        .clamp(TANK_MIN_RELEASE_PRESSURE, TANK_MAX_RELEASE_PRESSURE)
 }
 
 /// Deferred: the prototype may insert `DmItem` after `DmTank`.
@@ -268,9 +416,30 @@ mod tests {
         );
         let anesthetic = populate_gas("/obj/item/tank/internals/anesthetic", 70.0);
         assert!((pressure(&anesthetic, 70.0) - 3.0 * ONE_ATMOSPHERE).abs() < 1e-6);
+        // Jetpacks start full of their `gas_type`; an improvised one is empty.
+        let jetpack = populate_gas("/obj/item/tank/jetpack/captain", 90.0);
+        assert!((pressure(&jetpack, 90.0) - 6.0 * ONE_ATMOSPHERE).abs() < 1e-6);
+        let co2 = populate_gas("/obj/item/tank/jetpack/carbondioxide", 70.0);
+        assert!((pressure(&co2, 70.0) - 6.0 * ONE_ATMOSPHERE).abs() < 1e-6);
         assert_eq!(
-            populate_gas("/obj/item/tank/jetpack", 70.0).total_moles(),
+            populate_gas("/obj/item/tank/jetpack/improvised", 20.0).total_moles(),
             0.0
+        );
+    }
+
+    #[test]
+    fn the_window_clamps_the_release_pressure() {
+        assert_eq!(release_pressure(&TankAct::Set(16.4), 16.0), 16.0);
+        assert_eq!(release_pressure(&TankAct::Set(-3.0), 16.0), 0.0);
+        assert_eq!(
+            release_pressure(&TankAct::Set(1e9), 16.0),
+            TANK_MAX_RELEASE_PRESSURE
+        );
+        assert_eq!(release_pressure(&TankAct::Reset, 21.0), 21.0);
+        assert_eq!(release_pressure(&TankAct::Min, 16.0), 0.0);
+        assert_eq!(
+            release_pressure(&TankAct::Max, 16.0),
+            TANK_MAX_RELEASE_PRESSURE
         );
     }
 

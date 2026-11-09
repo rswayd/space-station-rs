@@ -10,7 +10,7 @@
 //! A client with a [`ViewMask`] gets only the entities on tiles the mask shows (`view_mask`).
 //! Every other client gets only what its eye sees (BYOND `view()`, `line_of_sight`): a mask of
 //! its own, recomputed when the viewer moves or opacity changes near it, unless its [`Sight`]
-//! sees through walls (observers).
+//! sees through walls (observers), or sees turfs or mobs through them ([`SeenAsTurf`], [`SeenAsMob`]).
 //! [`Invisibility`], [`VisibleToGroups`] and [`VisibleToMobs`] decide per client whether an
 //! entity exists for it at all; [`AltAppearances`] which appearance it gets (tg alternate
 //! appearances and override images), so the alternate value goes only to its seers.
@@ -38,7 +38,7 @@ use ss13_shared::protocol::NetId;
 use ss13_shared::{Appearance, Facing, LevelStack, Optics, TilePos, light_block};
 use ss13_world::{
     Border, ChunkPos, ClimbWalkable, ClimbsUp, Density, FallsThrough, Mover, NonDenseBorder,
-    Pushable, SpatialIndex,
+    Pushable, SeenAsMob, SeenAsTurf, SpatialIndex,
 };
 
 use crate::light_server::{LIGHT_MARGIN, LightGrid, block_overlaps, blocks_in};
@@ -153,6 +153,9 @@ pub struct AltAppearance {
 #[derive(Component, Clone, Debug, Default, PartialEq)]
 pub struct AltAppearances(pub Vec<AltAppearance>);
 
+/// [`Sight`] classes of an entity: [`SeenAsTurf`], [`SeenAsMob`], neither (an object).
+type SightClasses<'w, 's> = Query<'w, 's, (Has<SeenAsTurf>, Has<SeenAsMob>)>;
+
 type Alts<'w, 's> = Query<'w, 's, &'static AltAppearances, With<Networked>>;
 
 /// BYOND `sight` flags of a client: on the connection entity next to its [`Viewer`]. Absent = 0:
@@ -167,8 +170,6 @@ impl Sight {
     /// tg observers and x-ray: everything in the view box, walls or not.
     pub const XRAY: Self = Self(Self::SEE_MOBS | Self::SEE_OBJS | Self::SEE_TURFS);
 
-    // shortcut: one flag alone (mesons SEE_TURFS, thermals SEE_MOBS) still gets plain line of
-    // sight; needs entities classed as turf/obj/mob here once such glasses exist.
     fn sees_all(self) -> bool {
         self.0 & Self::XRAY.0 == Self::XRAY.0
     }
@@ -497,6 +498,8 @@ struct ClientView {
     tile_mask: Option<MaskId>,
     /// The line-of-sight radius last sent.
     los_sent: Option<u32>,
+    /// [`Sight`] flags of this pass.
+    sight: u16,
     /// Origins of the light blocks this client subscribes to.
     light_blocks: Vec<TilePos>,
     /// The viewer's level and the one below it, from the last pass.
@@ -546,7 +549,14 @@ impl ClientView {
 
     /// Whether the mask lets `entity` on `pos` through: everything without a mask, the
     /// controlled entity always.
-    fn shows(&self, masks: &ViewMasks, index: &SpatialIndex, entity: Entity, pos: TilePos) -> bool {
+    fn shows(
+        &self,
+        masks: &ViewMasks,
+        index: &SpatialIndex,
+        classes: &SightClasses<'_, '_>,
+        entity: Entity,
+        pos: TilePos,
+    ) -> bool {
         // The level below shows through a transparent tile over it, where that tile shows.
         let pos = match self.levels {
             Some((z, Some(below))) if pos.z == below => {
@@ -558,8 +568,24 @@ impl ClientView {
             }
             _ => pos,
         };
-        self.mask
-            .is_none_or(|m| self.control == Some(entity) || masks.visible(m, pos))
+        self.mask.is_none_or(|m| {
+            self.control == Some(entity)
+                || masks.visible(m, pos)
+                || self.sees_through_walls(classes, entity)
+        })
+    }
+
+    /// One `sight` flag shows this class behind walls; a game mask (camera static) always hides.
+    fn sees_through_walls(&self, classes: &SightClasses<'_, '_>, entity: Entity) -> bool {
+        if self.tile_mask.is_some() {
+            return false;
+        }
+        let flag = match classes.get(entity) {
+            Ok((true, _)) => Sight::SEE_TURFS,
+            Ok((_, true)) => Sight::SEE_MOBS,
+            _ => Sight::SEE_OBJS,
+        };
+        self.sight & flag != 0
     }
 
     /// Queues a light op, masked for a masked client.
@@ -1004,11 +1030,12 @@ fn replicate(
         RemovedComponents<FallsThrough>,
         RemovedComponents<Pushable>,
     ),
-    (stack, alt_states, alt_changed, mut removed_alts): (
+    (stack, alt_states, alt_changed, mut removed_alts, classes): (
         Option<Res<LevelStack>>,
         Alts,
         Query<Entity, (With<Networked>, Changed<AltAppearances>)>,
         RemovedComponents<AltAppearances>,
+        SightClasses,
     ),
 ) {
     let start = Instant::now();
@@ -1170,7 +1197,7 @@ fn replicate(
         let mut is_tracked = old_pos.is_some();
         for client in &candidates {
             let view = clients.get_mut(client).expect("registered viewer");
-            let shown = indexed && view.shows(masks, &index, entity, *pos);
+            let shown = indexed && view.shows(masks, &index, &classes, entity, *pos);
             let in_view =
                 shown && view.sees(invisibility) && view.view.is_some_and(|v| v.contains(*pos));
             let keep = next_level.get(client).copied().or_else(|| view.keep());
@@ -1300,7 +1327,7 @@ fn replicate(
                         view,
                         tick,
                         entity,
-                        (&states, &alt_states),
+                        (&states, &alt_states, &classes),
                         &index,
                         masks,
                         tracked,
@@ -1333,7 +1360,7 @@ fn replicate(
             update_light_interest(lights, view, client, masks);
         }
     }
-    for (client, viewer, controlled, see, mask, _) in &viewers {
+    for (client, viewer, controlled, see, mask, sight) in &viewers {
         let new_view = ViewBox::of(&viewer, stack.as_deref());
         let view = clients.entry(client).or_default();
         view.levels = Some((new_view.z, new_view.below));
@@ -1372,8 +1399,10 @@ fn replicate(
                 None => view.ops.push(ReplicationOp::Control(None)),
             }
         }
+        let sight = sight.map_or(0, |s| s.0);
         if view.see_invisible != see
             || view.see_groups != groups
+            || view.sight != sight
             || view.mask != mask
             || old_control != want
         {
@@ -1381,6 +1410,7 @@ fn replicate(
             // those with alternate appearances may look different.
             view.see_invisible = see;
             view.see_groups = groups;
+            view.sight = sight;
             let mask_changed = view.mask != mask;
             view.mask = mask;
             view.tile_mask = viewer_mask.map(|m| m.0);
@@ -1393,7 +1423,7 @@ fn replicate(
                     states.get(e).is_ok_and(|(pos, _, _, _, invisibility, _)| {
                         !view.sees(invisibility)
                             || !keep.contains(*pos)
-                            || !view.shows(masks, &index, e, *pos)
+                            || !view.shows(masks, &index, &classes, e, *pos)
                     })
                 })
                 .collect();
@@ -1438,7 +1468,8 @@ fn replicate(
                         .copied()
                         .filter(|&e| {
                             states.get(e).is_ok_and(|(pos, ..)| {
-                                !new_keep.contains(*pos) || !view.shows(masks, &index, e, *pos)
+                                !new_keep.contains(*pos)
+                                    || !view.shows(masks, &index, &classes, e, *pos)
                             })
                         })
                         .collect();
@@ -1469,7 +1500,7 @@ fn replicate(
                     if let Ok((&pos, facing, appearance, optics, invisibility, block)) =
                         states.get(entity)
                         && view.sees(invisibility)
-                        && view.shows(masks, &index, entity, pos)
+                        && view.shows(masks, &index, &classes, entity, pos)
                     {
                         if !tracked.contains_key(&entity) {
                             let alts = alt_states.get(entity).ok();
@@ -1508,7 +1539,7 @@ fn replicate(
                     view,
                     tick,
                     entity,
-                    (&states, &alt_states),
+                    (&states, &alt_states, &classes),
                     &index,
                     masks,
                     tracked,
@@ -1819,7 +1850,7 @@ fn refresh(
     view: &mut ClientView,
     tick: u32,
     entity: Entity,
-    (states, alt_states): (&States<'_, '_>, &Alts<'_, '_>),
+    (states, alt_states, classes): (&States<'_, '_>, &Alts<'_, '_>, &SightClasses<'_, '_>),
     index: &SpatialIndex,
     masks: &ViewMasks,
     tracked: &mut HashMap<Entity, Tracked>,
@@ -1828,7 +1859,7 @@ fn refresh(
     let Ok((&pos, facing, appearance, optics, invisibility, block)) = states.get(entity) else {
         return (0, 0);
     };
-    let shown = index.in_bounds(pos) && view.shows(masks, index, entity, pos);
+    let shown = index.in_bounds(pos) && view.shows(masks, index, classes, entity, pos);
     if view.known.contains_key(&entity) {
         let kept = shown && view.keep().is_some_and(|k| k.contains(pos));
         return (0, u64::from(!kept && view.despawn(tick, entity)));

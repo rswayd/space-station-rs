@@ -513,6 +513,7 @@ impl Plugin for TguiClientPlugin {
             .register_ui_view::<crate::interfaces::dna_console::DnaConsoleUi>()
             .register_ui_view::<crate::interfaces::electrolyzer::ElectrolyzerUi>()
             .register_ui_view::<crate::interfaces::space_heater::SpaceHeaterUi>()
+            .register_ui_view::<crate::interfaces::tank::TankUi>()
             .register_ui_view::<crate::interfaces::chem_dispenser::ChemDispenserUi>()
             .register_ui_view::<crate::interfaces::chem_master::ChemMasterUi>()
             .register_ui_view::<crate::interfaces::chem_heater::ChemHeaterUi>()

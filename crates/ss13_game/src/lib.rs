@@ -406,6 +406,8 @@ pub mod inventory_client;
 #[cfg(feature = "server")]
 pub mod janitor;
 #[cfg(feature = "server")]
+pub mod jetpack;
+#[cfg(feature = "server")]
 pub mod jobs;
 #[cfg(feature = "server")]
 pub mod join_queue;

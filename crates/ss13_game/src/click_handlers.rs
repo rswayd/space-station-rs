@@ -50,8 +50,10 @@
 //! | 1745 | `science::teleportation::hand_tele::attack_self` (the hand tele's destination list, the locator's window) |
 //! | 1747 | `instruments::attack_self` (a held instrument's song editor, the boombox menu) |
 //! | 1750 | `radiation::geiger_attack_self` |
+//! | 1757 | `internals::open_window` (the tank's window) |
 //! | 1753 | `devices::table_clock::interact` (repairing a broken clock) |
 //! | 1763 | `devices::broadcast_camera::attack_self` (live or offline) |
+//! | 1767 | `clothing::gear::toggle_magboots` |
 //! | 1773 | `devices::door_remote::attack_self` (the next mode) |
 //! | 1800 | `explosions::sources::c4_attack_self` |
 //! | 1897 | `science::relics::attack_self` (a strange object: the hint, or its power) |

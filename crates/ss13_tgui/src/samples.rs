@@ -81,6 +81,7 @@ use crate::interfaces::smart_vend::{FridgeItem, SmartVendData, SmartVendUi};
 use crate::interfaces::smes::{SmesData, SmesStatic, SmesUi};
 use crate::interfaces::solar_control::{SolarControlData, SolarControlUi};
 use crate::interfaces::space_heater::{SpaceHeaterData, SpaceHeaterUi};
+use crate::interfaces::tank::{TankData, TankStatic, TankUi};
 use crate::interfaces::teg::{
     CirculatorData, ThermoElectricGeneratorData, ThermoElectricGeneratorUi,
 };
@@ -702,6 +703,21 @@ pub fn sample(name: &str) -> Option<Sample> {
                 min_temp: 0.0,
                 max_temp: 60.0,
                 current_temp: Some(14.0),
+            },
+        ),
+        TankUi::NAME => of::<TankUi>(
+            "oxygen tank",
+            &TankStatic {
+                default_release_pressure: 16.0,
+                min_release_pressure: 0.0,
+                max_release_pressure: 304.0,
+                leak_pressure: 3040.0,
+                fragment_pressure: 4053.0,
+            },
+            &TankData {
+                tank_pressure: 1013.0,
+                release_pressure: 16.0,
+                connected: true,
             },
         ),
         DestinationTaggerUi::NAME => of::<DestinationTaggerUi>(

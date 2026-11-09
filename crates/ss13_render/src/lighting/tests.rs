@@ -355,6 +355,10 @@ fn glimpsed_tiles_are_dim() {
     );
     assert_eq!(world.view_level(at(3, 7)), 0.0, "behind the wall");
     assert_eq!(world.view_level(at(8, 3)), 0.0, "nothing known there");
+    // Mesons and thermals: what the server sent past the line of sight shows.
+    world.see_behind = true;
+    assert_eq!(world.view_level(at(3, 7)), 1.0);
+    assert_eq!(world.view_level(at(8, 3)), 0.0, "still nothing known there");
 }
 
 /// Under line of sight a seen tile is drawn only once something on it arrived (its turf), so

@@ -42,6 +42,7 @@ pub mod smart_vend;
 pub mod smes;
 pub mod solar_control;
 pub mod space_heater;
+pub mod tank;
 pub mod teg;
 pub mod text_input;
 pub mod thermo_machine;

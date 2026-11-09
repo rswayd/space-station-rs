@@ -17,6 +17,14 @@ pub use movement::{
     WalkPassable, gate_refuses, next_ready_at, resolve_move,
 };
 
+/// A turf to a client's `sight` flags (BYOND `SEE_TURFS`, `ss13_net` replication).
+#[derive(Component, Clone, Copy, Debug, Default)]
+pub struct SeenAsTurf;
+
+/// A mob to a client's `sight` flags (BYOND `SEE_MOBS`).
+#[derive(Component, Clone, Copy, Debug, Default)]
+pub struct SeenAsMob;
+
 /// Ordering points for other plugins: write `MoveRequest` before `Movement`, read `Moved`
 /// and fresh positions after it.
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]

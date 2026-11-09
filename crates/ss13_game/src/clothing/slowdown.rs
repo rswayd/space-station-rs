@@ -73,12 +73,16 @@ fn refresh(
         &Inventory,
         Has<crate::spacemove::Weightless>,
         Option<&EquipmentSlowdown>,
+        Option<&crate::jetpack::GasJetpack>,
     )>,
     items: Query<&DmItem>,
     mut commands: Commands,
 ) {
-    for (mob, inventory, floating, old) in &mobs {
-        let new = equipment_slowdown(inventory, |e| items.get(e).ok(), floating);
+    for (mob, inventory, floating, old, jetpack) in &mobs {
+        let mut new = equipment_slowdown(inventory, |e| items.get(e).ok(), floating);
+        if floating {
+            new += crate::jetpack::speed_modifier(jetpack);
+        }
         match old {
             Some(old) if old.0 == new => {}
             None if new == 0.0 => {}

@@ -26,6 +26,8 @@ pub mod damage;
 #[cfg(feature = "server")]
 pub mod envirosuit;
 #[cfg(feature = "server")]
+pub mod gear;
+#[cfg(feature = "server")]
 pub mod holsters;
 #[cfg(feature = "server")]
 pub mod lasertag;
@@ -37,7 +39,6 @@ pub mod reskin;
 pub mod sensors;
 #[cfg(feature = "server")]
 pub mod slowdown;
-#[cfg(feature = "server")]
 pub mod toggles;
 #[cfg(feature = "server")]
 pub mod traits;
@@ -154,6 +155,7 @@ mod server {
             slowdown::build(app);
             chameleon::build(app);
             toggles::build(app);
+            gear::build(app);
             reskin::build(app);
         }
     }

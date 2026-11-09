@@ -11,7 +11,7 @@
 Строительные каски и сварочные каски: включаемый фонарь на голове, у сварочных — щиток от вспышек; торт-шляпа как каска-светильник.
 
 - **Код:** [`/obj/item/clothing/head/utility/hardhat`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/head/hardhat.dm#L9), [`toggle_helmet_light()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/head/hardhat.dm#L49), [`/obj/item/clothing/head/utility/hardhat/welding`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/head/hardhat.dm#L134), [`/obj/item/clothing/head/utility/hardhat/cakehat`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/head/cakehat.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — фонарь не включается (свет предметов только из карты, `crates/ss13_mapload/src/light.rs`)
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/devices/flashlight.rs` (`Flashlight` со стилем каски: включается в руке и кнопкой на голове, свет на носителе, спрайт `hardhat[on]_[hat_type]`, EMP гасит), `crates/ss13_game/src/clothing/gear.rs` (кнопки «Toggle Helmet Light», «Toggle Welding Screen»: щиток сварочной каски, `crate::vision::toggle_hardhat_visor`); торт-шляпа светится, но нет её огня и урона (`cakehat/process`, `force_on`), тыквы без цвета; нет наложения спрайта щитка `visor_state`
 
 ### Сварочная маска
 Опускаемый щиток: полная защита от вспышек и сварки ценой затемнения обзора.

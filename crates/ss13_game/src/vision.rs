@@ -18,11 +18,14 @@
 //! overlays of a dead mob (`should_show_to`), so a corpse sends none.
 // shortcut: carbons only (silicons have no static overlay, basic mobs cannot be blinded as in tg);
 // no `damageoverlaytemp` pulse, no `TRAIT_SIGHT_BYPASS`, `TRAIT_NOCRITOVERLAY`, genetic or
-// scarred blindness, no night vision, see_in_dark or `sight` flags; blind mobs still get visible
-// messages and examine text (tg `blind_message`); no darkened-flash preference.
+// scarred blindness; no eye organ, species or mob cutoffs (only worn items, [`worn_vision`]); no
+// `ZTRAIT_NOXRAY`; no glass colour (`wearable_client_colour`: opt-in by right-alt-click in tg, off
+// by default); blind mobs still get visible messages and examine text (tg `blind_message`); no
+// darkened-flash preference.
 
 use bevy::prelude::*;
 use ss13_mapload::DmClothing;
+use ss13_net::server::Sight as NetSight;
 use ss13_shared::chat::Span;
 use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiSystems};
 
@@ -36,6 +39,11 @@ use crate::medical::organs::{self, OrganHost, Slot};
 use crate::medical::traumas::{self, Kind};
 use crate::quirks::{Quirk, Quirks};
 use crate::server::PlayerMob;
+
+/// `LIGHTING_CUTOFF_REAL_LOW`, `LIGHTING_CUTOFF_MEDIUM`, `LIGHTING_CUTOFF_HIGH`.
+const CUTOFF_REAL_LOW: f32 = 4.5;
+const CUTOFF_MEDIUM: f32 = 15.0;
+const CUTOFF_HIGH: f32 = 30.0;
 
 /// `TINT_MILD`, `TINT_DARKENED`, `TINT_BLIND`.
 pub const TINT_MILD: f32 = 1.5;
@@ -161,6 +169,52 @@ pub fn worn(inventory: &Inventory) -> impl Iterator<Item = Entity> + '_ {
         .filter(|&item| !inventory.pockets.contains(&Some(item)))
 }
 
+/// What a living mob's worn glasses and vision traits give it (tg `update_sight`): BYOND `sight`
+/// flags and the lighting cutoff (0..=1 per channel, tg `lighting_cutoff` plus
+/// `lighting_color_cutoffs`).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct WornVision {
+    pub sight: u16,
+    pub cutoff: [f32; 3],
+}
+
+/// tg `/mob/living/update_sight`, from the glasses (`color_cutoffs`, `lighting_cutoff`) and the
+/// `clothing_traits`.
+pub fn worn_vision(world: &World, mob: Entity) -> WornVision {
+    use crate::clothing::traits::{
+        MESON_VISION, THERMAL_VISION, TRUE_NIGHT_VISION, XRAY_VISION, has_trait,
+    };
+    if world.get::<Stat>(mob) == Some(&Stat::Dead) {
+        return WornVision::default();
+    }
+    let glasses = world
+        .get::<Inventory>(mob)
+        .and_then(|i| i.eyes)
+        .and_then(|item| world.get::<DmClothing>(item));
+    let color = glasses.and_then(|g| g.color_cutoffs).unwrap_or([0.0; 3]);
+    let mut cutoff = glasses.and_then(|g| g.lighting_cutoff).unwrap_or(0.0);
+    let average = (color[0] + color[1] + color[2]) / 3.0;
+    let mut sight = 0;
+    if has_trait(world, mob, MESON_VISION) {
+        sight |= NetSight::SEE_TURFS;
+        cutoff = cutoff.max(CUTOFF_REAL_LOW - average);
+    }
+    if has_trait(world, mob, THERMAL_VISION) {
+        sight |= NetSight::SEE_MOBS;
+        cutoff = cutoff.max(CUTOFF_MEDIUM - average);
+    }
+    if has_trait(world, mob, XRAY_VISION) {
+        sight |= NetSight::XRAY.0;
+    }
+    if has_trait(world, mob, TRUE_NIGHT_VISION) {
+        cutoff = cutoff.max(CUTOFF_HIGH);
+    }
+    WornVision {
+        sight,
+        cutoff: color.map(|c| (cutoff + c) / 100.0),
+    }
+}
+
 /// What `mob` should see now (tg `update_damage_hud` plus the vision effects).
 pub fn hud_data(world: &World, mob: Entity) -> FullscreenHudData {
     let (Some(health), Some(&stat), Some(sight)) = (
@@ -217,10 +271,14 @@ pub fn hud_data(world: &World, mob: Entity) -> FullscreenHudData {
     if sight.colorblind {
         colours.push(ClientColour::Monochrome);
     }
+    let worn = worn_vision(world, mob);
     FullscreenHudData {
         screens,
         blur: blur_size(vision.blur),
         colours,
+        cutoff: worn.cutoff,
+        see_behind: worn.sight & (NetSight::SEE_TURFS | NetSight::SEE_MOBS | NetSight::SEE_OBJS)
+            != 0,
     }
 }
 
@@ -435,6 +493,21 @@ const VISORS: [&str; 3] = [
     "/obj/item/clothing/glasses/welding",
     "/obj/item/clothing/mask/gas/welding",
 ];
+/// A welding hard hat's visor, flipped by its own action only (its `attack_self` is the light).
+const HARDHAT_WELDING: &str = "/obj/item/clothing/head/utility/hardhat/welding";
+
+/// `toggle_welding_screen`: flips a welding hard hat's visor.
+// shortcut: the hat's `visor_state` overlay is not drawn (its sprite does not change).
+pub fn toggle_hardhat_visor(world: &mut World, client: Entity, mob: Entity, item: Entity) -> bool {
+    let Some(path) = world
+        .get::<ss13_mapload::DmItem>(item)
+        .map(|i| i.path.clone())
+    else {
+        return false;
+    };
+    ss13_mapload::fidelity::is_under(&path, HARDHAT_WELDING)
+        && adjust_visor(world, client, mob, item, HARDHAT_WELDING)
+}
 
 /// A flipped-up visor: the item's `initial()` values it restores when pulled down.
 #[derive(Component, Clone, Debug, PartialEq)]
@@ -462,6 +535,11 @@ pub fn visor_attack_self(world: &mut World, client: Entity, mob: Entity, item: E
     else {
         return false;
     };
+    adjust_visor(world, client, mob, item, root)
+}
+
+/// tg `adjust_visor` of `item`, a visor under `root`.
+fn adjust_visor(world: &mut World, client: Entity, mob: Entity, item: Entity, root: &str) -> bool {
     // `can_use`: not incapacitated.
     if crate::status_effects::incapacitation(world, mob).incapacitated {
         return true;
@@ -474,6 +552,7 @@ pub fn visor_attack_self(world: &mut World, client: Entity, mob: Entity, item: E
         return true;
     };
     let up = world.get::<VisorUp>(item).cloned();
+    let hardhat = root == HARDHAT_WELDING;
     let (flash_protect, tint, worn, inhand) = match &up {
         // Down again: the initial values.
         Some(initial) => (
@@ -509,11 +588,15 @@ pub fn visor_attack_self(world: &mut World, client: Entity, mob: Entity, item: E
         c.flags_inv ^= c.visor_flags_inv;
         c.flags_cover ^= c.visor_flags_cover;
     }
-    if let Some(mut i) = world.get_mut::<ss13_mapload::DmItem>(item) {
+    if let Some(mut i) = world.get_mut::<ss13_mapload::DmItem>(item)
+        && !hardhat
+    {
         i.worn_icon_state = worn;
         i.inhand_icon_state = inhand;
     }
-    let state = if up.is_none() {
+    let state = if hardhat {
+        atom.icon_state.clone()
+    } else if up.is_none() {
         format!("{}up", atom.icon_state)
     } else {
         atom.icon_state.clone()
@@ -528,7 +611,7 @@ pub fn visor_attack_self(world: &mut World, client: Entity, mob: Entity, item: E
         inventory.set_changed();
     }
     let name = crate::security::name_of(world, item);
-    let text = match (root == VISORS[2], up.is_none()) {
+    let text = match (root == VISORS[2] || hardhat, up.is_none()) {
         (true, true) => "You push the visor up.".to_owned(),
         (true, false) => "You pull the visor down.".to_owned(),
         (false, true) => format!("Вы убираете {name}."),
@@ -610,6 +693,18 @@ fn sync_fullscreens(world: &mut World) {
     let mut query = world.query_filtered::<(Entity, &PlayerMob), With<OrganHost>>();
     let players: Vec<(Entity, Entity)> = query.iter(world).map(|(e, p)| (e, p.client)).collect();
     for (mob, client) in players {
+        // `set_sight`: the client's replication of what is behind walls (`ss13_net::server::Sight`).
+        let flags = worn_vision(world, mob).sight;
+        if world.get::<NetSight>(client).map_or(0, |s| s.0) != flags {
+            let Ok(mut connection) = world.get_entity_mut(client) else {
+                continue;
+            };
+            if flags == 0 {
+                connection.remove::<NetSight>();
+            } else {
+                connection.insert(NetSight(flags));
+            }
+        }
         let data = hud_data(world, mob);
         let mut entity = world.entity_mut(mob);
         let changed = match entity.get_mut::<FullscreenHudData>() {
@@ -844,6 +939,58 @@ mod tests {
         inventory.eyes = None;
         inventory.pockets[0] = Some(glasses);
         assert_eq!(sight(&world, mob).unwrap().nearsighted, 2);
+    }
+
+    #[test]
+    fn worn_vision_follows_glasses_and_traits() {
+        use ss13_net::server::Sight as Flags;
+        let mut world = World::new();
+        let mob = human(&mut world);
+        let slot = crate::inventory::slot_bit(ss13_shared::protocol::InventorySlot::Eyes);
+        let glasses = |world: &mut World, traits: &[&str], cutoffs: Option<[f32; 3]>| {
+            world
+                .spawn((
+                    ss13_mapload::DmItem {
+                        slot_flags: slot,
+                        ..Default::default()
+                    },
+                    DmClothing {
+                        clothing_traits: traits.iter().map(|t| (*t).to_owned()).collect(),
+                        color_cutoffs: cutoffs,
+                        ..DmClothing::default()
+                    },
+                ))
+                .id()
+        };
+        // Mesons: turfs through walls, dim night sight (their cutoffs and LIGHTING_CUTOFF_REAL_LOW).
+        let mesons = glasses(&mut world, &["meson_vision"], Some([5.0, 15.0, 5.0]));
+        world.entity_mut(mob).insert(Inventory {
+            eyes: Some(mesons),
+            ..Default::default()
+        });
+        let v = worn_vision(&world, mob);
+        assert_eq!(v.sight, Flags::SEE_TURFS);
+        assert!((v.cutoff[1] - 0.15).abs() < 1e-4, "{:?}", v.cutoff);
+        let data = hud_data(&world, mob);
+        assert!(data.see_behind);
+        assert_eq!(data.cutoff, v.cutoff);
+        // Night vision goggles: only the cutoffs.
+        let night = glasses(&mut world, &[], Some([10.0, 25.0, 10.0]));
+        world.get_mut::<Inventory>(mob).unwrap().eyes = Some(night);
+        let v = worn_vision(&world, mob);
+        assert_eq!(v.sight, 0);
+        assert!((v.cutoff[1] - 0.25).abs() < 1e-4);
+        assert!(!hud_data(&world, mob).see_behind);
+        // Thermals: mobs through walls and at least LIGHTING_CUTOFF_MEDIUM.
+        let thermals = glasses(&mut world, &["thermal_vision"], Some([25.0, 8.0, 5.0]));
+        world.get_mut::<Inventory>(mob).unwrap().eyes = Some(thermals);
+        let v = worn_vision(&world, mob);
+        assert_eq!(v.sight, Flags::SEE_MOBS);
+        let expected = [25.0, 8.0, 5.0].map(|c| (c + (15.0_f32 - 38.0 / 3.0).max(0.0)) / 100.0);
+        assert!((v.cutoff[0] - expected[0]).abs() < 1e-4, "{:?}", v.cutoff);
+        // A corpse keeps nothing.
+        world.entity_mut(mob).insert(Stat::Dead);
+        assert_eq!(worn_vision(&world, mob), WornVision::default());
     }
 
     #[test]

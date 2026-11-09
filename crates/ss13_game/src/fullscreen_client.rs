@@ -42,7 +42,7 @@ impl Plugin for FullscreenPlugin {
                 Update,
                 (
                     receive_fullscreen,
-                    (draw_screens, apply_filter),
+                    (draw_screens, apply_filter, apply_vision),
                     follow_map_insets.run_if(resource_changed::<MapInsets>),
                 )
                     .chain(),
@@ -407,6 +407,17 @@ impl FilterFade {
             &self.to,
             (now - self.since) / ClientColour::FADE,
         )
+    }
+}
+
+/// The lighting cutoff and what shows behind walls follow the worn vision.
+fn apply_vision(hud: Res<FullscreenHud>, vision: Option<ResMut<ss13_render::VisionLighting>>) {
+    if let Some(mut vision) = vision {
+        let shown = hud.shown();
+        vision.set_if_neq(ss13_render::VisionLighting {
+            cutoff: shown.cutoff,
+            see_behind: shown.see_behind,
+        });
     }
 }
 

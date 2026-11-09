@@ -1,5 +1,6 @@
-//! Flashlights and lamps (server), after tg `/obj/item/flashlight`
-//! (`code/game/objects/items/devices/flashlight.dm`).
+//! Flashlights, lamps and hard hat headlamps (server), after tg `/obj/item/flashlight`
+//! (`code/game/objects/items/devices/flashlight.dm`) and `/obj/item/clothing/head/utility/hardhat`
+//! (`code/modules/clothing/head/hardhat.dm`).
 //!
 //! Every switchable `/obj/item/flashlight` gets a [`Flashlight`]. Used in hand (`attack_self`)
 //! or right-clicked with an empty hand (`attack_hand_secondary`) it toggles (`toggle_light`):
@@ -26,6 +27,7 @@ use crate::sound::{PlaySound, playsound};
 use crate::storage::StoredIn;
 
 const FLASHLIGHT: &str = "/obj/item/flashlight";
+pub const HARDHAT: &str = "/obj/item/clothing/head/utility/hardhat";
 /// Subtypes with their own `toggle_light`/`attack_self` or light rules (see the shortcut).
 const NOT_SWITCHES: [&str; 7] = [
     "/obj/item/flashlight/flare",
@@ -54,6 +56,8 @@ pub struct Flashlight {
     base_state: String,
     base_inhand: String,
     ready: bool,
+    /// A hard hat: `hardhat[on]_[hat_type]` sprites, no switch sound.
+    hardhat: bool,
 }
 
 /// On a flashlight whose light this module put on `.0` (its holder or itself), with that light.
@@ -68,7 +72,9 @@ pub(super) fn build(app: &mut App) {
     });
     // tg `attack_hand_secondary`: a right click with an empty hand toggles it where it lies.
     app.add_click_handler(ClickPhase::EmptyHand, 3456, |w, c| {
-        c.modifiers.right && toggle_by(w, c.client, c.mob, c.target)
+        c.modifiers.right
+            && w.get::<Flashlight>(c.target).is_some_and(|f| !f.hardhat)
+            && toggle_by(w, c.client, c.mob, c.target)
     });
     app.add_observer(add_flashlight)
         .add_observer(unlight)
@@ -83,7 +89,8 @@ pub(super) fn build(app: &mut App) {
 
 /// True for the flashlight types this module switches.
 pub fn is_switch(path: &str) -> bool {
-    is_under(path, FLASHLIGHT) && !NOT_SWITCHES.iter().any(|root| is_under(path, root))
+    is_under(path, HARDHAT)
+        || (is_under(path, FLASHLIGHT) && !NOT_SWITCHES.iter().any(|root| is_under(path, root)))
 }
 
 fn add_flashlight(add: On<Add<DmItem>>, items: Query<&DmItem>, mut commands: Commands) {
@@ -118,14 +125,23 @@ fn init_flashlights(
         let light = dm_light.and_then(|l| {
             let on = DmLight {
                 start_on: true,
+                // A hard hat's light, not a flashlight's, goes by its `light_on`.
+                light_on: true,
                 ..l.clone()
             };
             source(&item.path, &on, dir, [0, 0])
         });
+        flashlight.hardhat = is_under(&item.path, HARDHAT);
         flashlight.light = light;
         flashlight.base_state = atom.map(|a| a.icon_state.clone()).unwrap_or_default();
         flashlight.base_inhand = item.inhand_icon_state.clone();
-        flashlight.on = dm_light.is_some_and(|l| l.start_on) && light.is_some();
+        flashlight.on = dm_light.is_some_and(|l| {
+            if flashlight.hardhat {
+                l.light_on
+            } else {
+                l.start_on
+            }
+        }) && light.is_some();
         flashlight.ready = true;
         // The map loader's light on the item itself is this module's from now on.
         if flashlight.on
@@ -152,7 +168,9 @@ pub fn toggle_light(world: &mut World, client: Option<Entity>, item: Entity) -> 
     let Some(flashlight) = world.get::<Flashlight>(item).cloned() else {
         return false;
     };
-    if let Some(pos) = crate::modpc::pda::turf_of(world, item) {
+    if !flashlight.hardhat
+        && let Some(pos) = crate::modpc::pda::turf_of(world, item)
+    {
         let sound = if flashlight.on { SOUND_OFF } else { SOUND_ON };
         playsound(world, PlaySound::new(pos, sound, 40.0, true));
     }
@@ -175,10 +193,22 @@ pub fn set_on(world: &mut World, item: Entity, on: bool) {
         return;
     }
     flashlight.on = on;
+    let hardhat = flashlight.hardhat;
     let (base_state, base_inhand) = (
         flashlight.base_state.clone(),
         flashlight.base_inhand.clone(),
     );
+    if hardhat {
+        // `update_icon_state`: `hardhat[on]_[hat_type]`, the in-hand state as well.
+        if let Some((_, hat_type)) = base_state.split_once('_') {
+            let state = format!("hardhat{}_{hat_type}", u8::from(on));
+            if let Some(mut dm) = world.get_mut::<DmItem>(item) {
+                dm.inhand_icon_state = state.clone();
+            }
+            crate::clothing::toggles::set_states(world, item, &state, state.clone());
+        }
+        return;
+    }
     // `update_icon_state`: `"[initial(icon_state)]-on"`, the same for the in-hand state.
     let suffix = if on { "-on" } else { "" };
     if !base_state.is_empty() {
@@ -319,6 +349,39 @@ mod tests {
         assert!(!is_switch("/obj/item/flashlight/glowstick/red"));
         assert!(!is_switch("/obj/item/flashlight/lamp/space_bubble"));
         assert!(!is_switch("/obj/item/flashlightx"));
+        assert!(is_switch("/obj/item/clothing/head/utility/hardhat/red"));
+        assert!(!is_switch("/obj/item/clothing/head/utility"));
+    }
+
+    #[test]
+    fn a_hard_hat_switches_its_sprite_and_stays_silent() {
+        let mut world = World::new();
+        let hat = world
+            .spawn((
+                Flashlight {
+                    base_state: "hardhat0_yellow".to_owned(),
+                    ready: true,
+                    hardhat: true,
+                    ..default()
+                },
+                DmItem::default(),
+                DmAtom {
+                    icon_state: "hardhat0_yellow".into(),
+                    ..default()
+                },
+            ))
+            .id();
+        set_on(&mut world, hat, true);
+        assert!(world.get::<Flashlight>(hat).unwrap().on);
+        assert_eq!(
+            world.get::<DmItem>(hat).unwrap().worn_icon_state,
+            "hardhat1_yellow"
+        );
+        set_on(&mut world, hat, false);
+        assert_eq!(
+            world.get::<DmItem>(hat).unwrap().inhand_icon_state,
+            "hardhat0_yellow"
+        );
     }
 
     #[test]
