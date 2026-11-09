@@ -40,6 +40,7 @@
 
 use bevy::ecs::message::{MessageCursor, Messages};
 use bevy::prelude::*;
+use ss13_atmos::gas::{T0C, T20C};
 use ss13_mapload::{DmCleanable, DmItem, DmObj, DmTurf, IconIndex, Turf};
 use ss13_net::server::IntentReceived;
 use ss13_reagents::{Holder, Owner, flags};
@@ -114,6 +115,9 @@ const SOAP: &str = "/obj/item/soap";
 const SPRAY: &str = "/obj/item/reagent_containers/spray";
 const WATER: &str = "/datum/reagent/water";
 const SPACE_CLEANER: &str = "/datum/reagent/space_cleaner";
+const FIREFIGHTING_FOAM: &str = "/datum/reagent/firefighting_foam";
+/// `/datum/reagent/water::cooling_temperature`.
+const WATER_COOLING_TEMPERATURE: f32 = 2.0;
 /// `REAGENT_CLEANS`.
 const REAGENT_CLEANS: u32 = 1 << 7;
 /// `/obj/item/mop` `mopspeed`, deciseconds.
@@ -482,6 +486,11 @@ pub fn wash_turf(world: &mut World, pos: TilePos, clean_types: u32, all_contents
 /// `reagents.expose(target, methods, volume_modifier)` for the reagents whose `expose_*` is
 /// ported here (water and space cleaner on turfs and objects).
 pub fn expose(world: &mut World, target: Entity, holder: &Holder, modifier: f32) {
+    expose_cooled(world, target, holder, modifier, WATER_COOLING_TEMPERATURE);
+}
+
+/// [`expose`] with water's `cooling_temperature` (extinguishers set their own).
+pub fn expose_cooled(world: &mut World, target: Entity, holder: &Holder, modifier: f32, cool: f32) {
     let Some(chem) = world.get_resource::<Chem>().map(|c| c.0.clone()) else {
         return;
     };
@@ -494,6 +503,10 @@ pub fn expose(world: &mut World, target: Entity, holder: &Holder, modifier: f32)
         if chem.is_type(r.id, WATER) {
             if let Some(pos) = turf {
                 // `/datum/reagent/water/expose_turf`.
+                douse_hotspot(world, pos, |t| {
+                    let cool = f64::from(cool);
+                    (t - cool * 1000.0).min(t / cool).max(T0C).min(t)
+                });
                 if volume >= 5.0 {
                     make_slippery(world, pos, TURF_WET_WATER, 10.0, (volume * 1.5).min(60.0));
                 }
@@ -504,6 +517,7 @@ pub fn expose(world: &mut World, target: Entity, holder: &Holder, modifier: f32)
                 // hairless hide soaks into wet hide.
                 if !crate::sheets::soak(world, target) {
                     crate::fireplace::extinguish(world, target);
+                    crate::fire::extinguish_obj(world, target);
                 }
             }
         } else if chem.is_type(r.id, crate::antag::zombie::ROMEROL) {
@@ -514,6 +528,20 @@ pub fn expose(world: &mut World, target: Entity, holder: &Holder, modifier: f32)
                     target,
                     crate::antag::zombie::INFECTION_NODAMAGE,
                 );
+            }
+        } else if chem.is_type(r.id, FIREFIGHTING_FOAM) {
+            // `/datum/reagent/firefighting_foam/expose_*`.
+            if let Some(pos) = turf {
+                douse_hotspot(
+                    world,
+                    pos,
+                    |t| if t > T20C { (t / 2.0).max(T20C) } else { t },
+                );
+            } else if living {
+                crate::fire::extinguish_mob(world, target);
+            } else {
+                crate::fireplace::extinguish(world, target);
+                crate::fire::extinguish_obj(world, target);
             }
         } else if chem.is_type(r.id, SPACE_CLEANER) {
             match turf {
@@ -530,6 +558,21 @@ pub fn expose(world: &mut World, target: Entity, holder: &Holder, modifier: f32)
             }
         }
     }
+}
+
+/// The fire on `pos` goes out and its air cools (not over space: `isspaceturf`).
+fn douse_hotspot(world: &mut World, pos: TilePos, cooled: impl FnOnce(f64) -> f64) {
+    if crate::construction::is_space(world, pos) {
+        return;
+    }
+    let Some(mut atmos) = world.get_resource_mut::<ss13_atmos::Atmos>() else {
+        return;
+    };
+    if atmos.hotspot(pos).is_none() {
+        return;
+    }
+    atmos.modify_air(pos, |air| air.temperature = cooled(air.temperature));
+    atmos.extinguish_hotspot(pos);
 }
 
 /// `WATER_TO_WET_STACKS_FACTOR_TOUCH`.

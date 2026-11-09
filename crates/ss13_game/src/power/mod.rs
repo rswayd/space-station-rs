@@ -17,6 +17,7 @@
 
 pub mod accumulator;
 pub mod apc_ui;
+pub mod cable_coil;
 pub mod chargers;
 pub mod emitter;
 pub mod field_generator;

@@ -612,7 +612,7 @@ impl LevelAir {
     }
 
     /// The turf goes away (`ChangeTurf` deletes its hotspot).
-    pub(super) fn remove_hotspot_of(&mut self, c: u32) {
+    pub fn remove_hotspot_of(&mut self, c: u32) {
         let slot = self.cells[c as usize].hotspot;
         if slot != NONE {
             self.remove_hotspot(slot);

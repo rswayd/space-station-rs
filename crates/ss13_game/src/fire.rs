@@ -857,6 +857,20 @@ pub fn set_burning(world: &mut World, thing: Entity) {
     }
 }
 
+/// `/obj/extinguish`: the burning component and its overlay go.
+pub fn extinguish_obj(world: &mut World, thing: Entity) {
+    if world.get::<Burning>(thing).is_none() {
+        return;
+    }
+    world.entity_mut(thing).remove::<Burning>();
+    let overlay = world
+        .get_resource::<IconIndex>()
+        .and_then(|i| i.get(BURNING_DMI, "fire"));
+    if let (Some(id), Some(mut appearance)) = (overlay, world.get_mut::<Appearance>(thing)) {
+        appearance.overlays.retain(|o| o.icon_state != id);
+    }
+}
+
 /// `take_damage(amount, BURN, FIRE)` on a structure or machine: destroyed at 0
 /// (`atom_destruction(FIRE)` -> `burn()` -> `deconstruct(FALSE)`).
 pub fn fire_damage(world: &mut World, thing: Entity, amount: f32) {

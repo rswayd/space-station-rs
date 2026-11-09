@@ -101,7 +101,10 @@
 //! | 3249 | `sheets::crush_attack_self` (a bluespace crystal crushed: blink) |
 //! | 3259 | `traps::attack_self` (a sturdy tripwire cable recoils) |
 //! | 3269 | `deployable_turrets::attack_self` (a folded machine gun deploys) |
+//! | 3275 | `extinguisher::attack_self` (the safety) |
 //! | 3277 | `antag::revenant::scatter_residue` (the glimmering residue scattered by hand) |
+//! | 3285 | `recycling::conveyor::attack_self` (a switch assembly links nearby belt stacks) |
+//! | 3295 | `power::cable_coil::attack_self` (the layer menu) |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):
 //!
@@ -145,6 +148,7 @@
 //! | 1300 | `disposals::mail_interaction` |
 //! | 1350 | `botany::grown_interaction` (log cutting, potato batteries) |
 //! | 1369 | `sheets::item_interaction` (a hot tool on burning sheets, rods on titanium in the other hand) |
+//! | 1385 | `recycling::conveyor::link_stack` (a switch assembly on a belt stack in the other hand) |
 //! | 1393 | `guns_special::item_interaction` (a syringe or DNA injector into a syringe gun, a grenade into a grenade launcher) |
 //! | 1400 | `chem::item_interaction` |
 //! | 1450 | `mining::hand_interaction` (modkits, point cards, gibtonite ore) |
@@ -267,6 +271,7 @@
 //! | 3539 | `gym::punch` (the punching bag) |
 //! | 3547 | `instruments::attack_hand` (piano editor, jukebox window and right-click toggle, boombox menu) |
 //! | 3559 | `events::meteors::punch` (a legendary athlete punches a meteor away) |
+//! | 3565 | `recycling::conveyor::switch_hand` (the lever; right click: backwards) |
 //!
 //! [`ClickPhase::HeldOnTarget`] (a world click with the active hand's item; tg
 //! `item_interaction`, `interact_with_atom`, `pre_attack`, `attackby`):
@@ -311,6 +316,7 @@
 //! | 1450 | `silicon::mmi::item_interaction` |
 //! | 1460 | `silicon::ai_core::item_interaction` |
 //! | 1500 | `bots::construction::item_interaction` |
+//! | 1505 | `extinguisher::refill_click` (a tank refills it) |
 //! | 1527 | `science::ordnance_machines::item_interaction` (data disks into the doppler array and tank compressor, tanks into the compressor, doppler wrench) |
 //! | 1549 | `eng_machines::manufactorio::item_interaction` (wrench, router, unloader, lathe and sorter multitool, sorter item filter, storage unit screwdriver) |
 //! | 1545 | `science::teleportation::hand_tele::item_interaction` (dispelling its portals, right click portal; items on a portal) |
@@ -368,6 +374,7 @@
 //! | 2707 | `wallmount::frames::item_interaction` (wall frames on walls, their screwdriver and wrench) |
 //! | 2710 | `power::lighting::item_interaction` (bulbs, replacers, fixtures, frames, wall frames, floodlights and their frames) |
 //! | 2715 | `power::lighting::swing_bulb` (a bulb shatters on a mob; never handles) |
+//! | 2785 | `recycling::held_on_target` (belts, switches, flaps, recyclers, disposal constructs and welding, belt stacks on floors) |
 //! | 2800 | `power::chargers::item_interaction` |
 //! | 2820 | `power::apc_ui::toggle_lock` (an ID or a PDA with one on an APC) |
 //! | 2830 | `power::emitter::toggle_lock` (an ID or a PDA with one on an emitter) |
@@ -413,6 +420,7 @@
 //! | 3800 | `medical::item_interaction` |
 //! | 3900 | `multiz::interact` (out of combat mode) |
 //! | 3985 | `atmos_machinery::space_heater::item_interaction` |
+//! | 3995 | `power::cable_coil::held_on_target` (laying, cutting, the multitool readout, robotic limb repair) |
 //! | 4000 | `atmos_machinery::windows::item_interaction` |
 //! | 4100 | `modpc::pda::item_interaction_secondary` (right click) |
 //! | 4200 | `disposals::item_interaction` |
@@ -435,6 +443,7 @@
 //! | 4600 | core: a cyborg module or `NoDrop` item stops here |
 //! | 4650 | `lockbox::item_interaction` (`closets` plugin) |
 //! | 4700 | core: a storage takes the held item |
+//! | 4745 | `extinguisher::spray_click` (far clicks: `RangedClick`) |
 //! | 4753 | `devices::laser_pointer::laser_act` (shining at what is clicked; far clicks: `RangedClick`) |
 //! | 4759 | `service::photo::snap` (a camera takes a picture; far clicks: `RangedClick`) |
 //! | 4800 | `cargo::bounty::item_interaction` |

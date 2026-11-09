@@ -56,17 +56,29 @@ pub struct PrisonGate;
 #[derive(Resource, Clone, Copy)]
 pub struct GatePolicy(pub fn(&World, Entity, Entity) -> bool);
 
-/// The [`PrisonGate`] on `to` that refuses `mover`, if any.
-// Cost: per step, a resource read and (with a policy) a component check per entity on the
-// target tile (a handful).
+/// tg `CanAllowThrough` that depends on the mover: an object whose tile a mover enters only when
+/// the function `(world, mover, object)` lets it (plastic flaps, a recycler's sides).
+/// Server-side only: the client predicts the step and is corrected.
+#[derive(Component, Clone, Copy, Debug)]
+pub struct EnterPolicy(pub fn(&World, Entity, Entity) -> bool);
+
+/// The [`PrisonGate`] or [`EnterPolicy`] object on `to` that refuses `mover`, if any.
+// Cost: per step, a resource read and two component checks per entity on the target tile (a
+// handful).
 pub fn gate_refuses(world: &World, mover: Entity, to: TilePos) -> Option<Entity> {
-    let policy = world.get_resource::<GatePolicy>()?.0;
+    let policy = world.get_resource::<GatePolicy>().map(|p| p.0);
     world
         .resource::<SpatialIndex>()
         .on_tile(to)
         .iter()
         .copied()
-        .find(|&g| world.get::<PrisonGate>(g).is_some() && !policy(world, mover, g))
+        .find(|&g| {
+            world
+                .get::<EnterPolicy>(g)
+                .is_some_and(|p| !(p.0)(world, mover, g))
+                || (world.get::<PrisonGate>(g).is_some()
+                    && policy.is_some_and(|p| !p(world, mover, g)))
+        })
 }
 
 /// tg `ON_BORDER_1`: a dense border object blocks only moves across the tile edges in `edges`

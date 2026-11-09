@@ -156,6 +156,7 @@ fn takes_emag(world: &World, target: Entity) -> bool {
         || crate::power::shields::takes_emag(world, target)
         || crate::station_goals::takes_emag(world, target)
         || e.contains::<crate::medical::pods::Pod>()
+        || e.contains::<crate::recycling::Recycler>()
         || e.contains::<crate::medical::kiosk::MedicalKiosk>()
         || e.contains::<crate::medical::limbgrower::Limbgrower>()
         || crate::silicon::pai::takes_emag(world, target)
@@ -255,6 +256,9 @@ pub fn can_emag(world: &mut World, mob: Entity, card: Entity, target: Entity) ->
 /// tg `target.emag_act(user, card)` of the ported families. True when it took.
 pub fn emag_act(world: &mut World, actor: Actor, card: Entity, target: Entity) -> bool {
     let (client, mob) = (actor.client, actor.mob);
+    if world.get::<crate::recycling::Recycler>(target).is_some() {
+        return crate::recycling::recycler::emag(world, client, target);
+    }
     if let Some(kind) = world.get::<Door>(target).map(|d| d.kind) {
         return match kind {
             DoorKind::Airlock => airlock(world, mob, card, target),

@@ -7,8 +7,8 @@
 //!   a second. It works without power (`INTERACT_MACHINE_OFFLINE`).
 //! - A fitting or a meter item used on it goes back in (is deleted); a wrench (4 s) unfastens or
 //!   fastens it (`default_unfasten_wrench`).
-// shortcut: the disposal and transit tube dispensers are not set up (their pipes and tubes are
-// not ported: docs/parity/engineering/recycling.md); no fingerprints.
+// shortcut: the transit tube dispenser is not set up (tubes are not ported); the disposal one is
+// `crate::disposals::build`; no fingerprints.
 
 use bevy::ecs::message::{MessageCursor, Messages};
 use bevy::ecs::system::SystemParamItem;

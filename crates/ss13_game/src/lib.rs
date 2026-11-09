@@ -308,6 +308,8 @@ pub mod examine;
 #[cfg(feature = "server")]
 pub mod explosions;
 #[cfg(feature = "server")]
+pub mod extinguisher;
+#[cfg(feature = "server")]
 pub mod falsewall;
 #[cfg(feature = "server")]
 pub mod fire;
@@ -517,6 +519,8 @@ pub mod radio_ui;
 #[cfg(feature = "server")]
 pub mod recoil;
 pub mod records;
+#[cfg(feature = "server")]
+pub mod recycling;
 #[cfg(feature = "server")]
 pub mod reinforced;
 #[cfg(feature = "server")]

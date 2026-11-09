@@ -34,6 +34,7 @@ pub mod disposal;
 pub mod dock;
 pub mod door;
 pub mod drinks;
+pub mod engmisc;
 pub mod fidelity;
 pub mod fishing;
 pub mod food;
@@ -100,6 +101,7 @@ pub use disposal::{DISPOSAL_RUNTIME_TYPES, DmMailSort};
 pub use dock::{DmDockingPort, ShuttleTemplates};
 pub use door::{DmAirlockHelper, DmDoor, DoorKind};
 pub use drinks::DmGlass;
+pub use engmisc::{DmConveyor, DmExtinguisher, DmMaterials, ENGMISC_RUNTIME_TYPES};
 pub use fidelity::{FidelityReport, IconIndex, MapSeed, tile_changed};
 pub use fishing::{DmFish, DmFishingRod};
 pub use food::{DmFood, Processing, Taste};
@@ -369,6 +371,9 @@ impl Plugin for DmProtoPlugin {
             .register_proto_component::<DmAiSlipper>("dm_ai_slipper")
             .register_proto_component::<DmLook>("dm_look")
             .register_proto_component::<DmCable>("dm_cable")
+            .register_proto_component::<DmConveyor>("dm_conveyor")
+            .register_proto_component::<DmExtinguisher>("dm_extinguisher")
+            .register_proto_component::<DmMaterials>("dm_materials")
             .register_proto_component::<DmClothing>("dm_clothing")
             .register_proto_component::<DmTank>("dm_tank")
             .register_proto_component::<DmBaton>("dm_baton")
