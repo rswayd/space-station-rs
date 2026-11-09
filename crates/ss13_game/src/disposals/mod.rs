@@ -25,12 +25,12 @@
 //! one step per 0.05 s: a tile lookup and a `nextdir`; a holder with a mob also scans the
 //! hidden mobs ([`InCloset`], a handful) to move its own. Bins process every
 //! 2 s (one tile air read and removal each while charging).
-// shortcut: no construction (welding pipes, disposal constructs, the pipe dispenser), no
-// multi-z trunks, no pipe damage, stopped holders or struggling out of them (a holder out of
+// shortcut: no RPD building (constructs come from the dispenser), no multi-z trunks, no pipe damage, stopped holders or struggling out of them (a holder out of
 // steps expels at once), broken pipe ends do not pop the floor tile; add with pipe
 // deconstruction.
 
 mod bin;
+pub mod build;
 mod mail;
 pub mod pipes;
 
@@ -206,6 +206,7 @@ impl Plugin for DisposalsServerPlugin {
             .init_resource::<DisposalClock>()
             .register_ui::<DisposalUnitWindow>()
             .register_ui::<DestTaggerWindow>()
+            .register_ui::<build::DisposalDispenserWindow>()
             .add_systems(ss13_world::MapInit, init_disposals)
             .add_systems(
                 Update,
@@ -216,6 +217,8 @@ impl Plugin for DisposalsServerPlugin {
                         .before(UiSystems::Open),
                     bin::apply_acts.in_set(UiSystems::Handle),
                     mail::apply_acts.in_set(UiSystems::Handle),
+                    build::dispenser_acts.in_set(UiSystems::Handle),
+                    build::init_dispensers,
                     (bin::window_status, mail::window_status).in_set(UiSystems::StatusHook),
                 ),
             )
@@ -256,24 +259,7 @@ fn init_disposals(world: &mut World) {
             let chute = is_under(&path, CHUTE_ROOT);
             bins.push((e, pos, bin::DisposalBin::new(chute, &path, &atom, icons)));
         } else if is_under(&path, OUTLET_ROOT) {
-            let sprite = |s: &str| icons.and_then(|i| i.get(&atom.icon, s));
-            outlets.push((
-                e,
-                pos,
-                DisposalOutlet {
-                    dir: if atom.dir == 0 {
-                        pipes::SOUTH
-                    } else {
-                        atom.dir
-                    },
-                    eject_range: EJECT_RANGE_SLOW,
-                    eject_speed: EJECT_SPEED_SLOW,
-                    trunk: None,
-                    open_until: None,
-                    start_eject: None,
-                    sprites: [sprite(&atom.icon_state), sprite("outlet-open")],
-                },
-            ));
+            outlets.push((e, pos, outlet_state(&atom, icons)));
         }
     }
     // `mail_sorting/LateInitialize`: the first mail junction on the helper's tile gets the tag.
@@ -339,6 +325,24 @@ fn init_disposals(world: &mut World) {
         report.build_secs * 1000.0
     );
     world.insert_resource(report);
+}
+
+/// A new outlet (`disposaloutlet/Initialize`).
+pub(crate) fn outlet_state(atom: &DmAtom, icons: Option<&IconIndex>) -> DisposalOutlet {
+    let sprite = |s: &str| icons.and_then(|i| i.get(&atom.icon, s));
+    DisposalOutlet {
+        dir: if atom.dir == 0 {
+            pipes::SOUTH
+        } else {
+            atom.dir
+        },
+        eject_range: EJECT_RANGE_SLOW,
+        eject_speed: EJECT_SPEED_SLOW,
+        trunk: None,
+        open_until: None,
+        start_eject: None,
+        sprites: [sprite(&atom.icon_state), sprite("outlet-open")],
+    }
 }
 
 /// Bins' 2 s process, finished flushes, holder steps, outlet throws.
@@ -666,8 +670,20 @@ fn outlet_throws(world: &mut World, now: f64) {
     }
 }
 
-pub use bin::{hitby, interact, mouse_drop_receive};
+pub use bin::{hitby, mouse_drop_receive};
 pub use mail::attack_self;
+
+/// tg `attack_hand` of bins (the `DisposalUnit` window) and the disposal pipe dispenser.
+pub fn interact(
+    world: &mut World,
+    client: Entity,
+    mob: Entity,
+    target: Entity,
+    modifiers: ss13_shared::protocol::ClickModifiers,
+) -> bool {
+    build::dispenser_interact(world, client, mob, target)
+        || bin::interact(world, client, mob, target, modifiers)
+}
 
 /// Disposal bins first (any item goes in), then the mail interactions.
 pub fn item_interaction(

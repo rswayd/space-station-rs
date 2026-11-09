@@ -2020,14 +2020,14 @@ pub fn rwd_step(world: &mut World, mob: Entity, rwd: Entity, pos: TilePos) {
 }
 
 /// `can_have_cabling() && can_lay_cable()`: plating (no floor tile over it).
-fn can_lay_cable(world: &World, pos: TilePos) -> bool {
+pub(crate) fn can_lay_cable(world: &World, pos: TilePos) -> bool {
     crate::construction::turf_at(world, pos)
         .and_then(|t| path_of(world, t))
         .is_some_and(|p| is_under(&p, PLATING))
 }
 
 /// `cable_allowed_here`: no cable of this layer on the tile yet.
-fn cable_allowed_here(world: &World, pos: TilePos, layer: u8) -> bool {
+pub(crate) fn cable_allowed_here(world: &World, pos: TilePos, layer: u8) -> bool {
     !world
         .resource::<SpatialIndex>()
         .on_tile(pos)
@@ -2041,17 +2041,22 @@ fn cable_allowed_here(world: &World, pos: TilePos, layer: u8) -> bool {
 
 /// `place_turf`: a cable of `layer` on `pos`, joined into the grid, it and its neighbours'
 /// sprites relinked.
-fn lay_cable(world: &mut World, pos: TilePos, layer: u8) -> Option<Entity> {
+pub(crate) fn lay_cable(world: &mut World, pos: TilePos, layer: u8) -> Option<Entity> {
     let cable = spawn_obj(world, cable_type(layer), pos)?;
     if let Some(mut grid) = world.get_resource_mut::<crate::power::grid::Grid>() {
         grid.add_cable(cable, pos, layer);
     }
+    relink_around(world, pos);
+    Some(cable)
+}
+
+/// [`relink_sprites`] of `pos` and its neighbours: after a cable appeared or went.
+pub(crate) fn relink_around(world: &mut World, pos: TilePos) {
     let mut tiles = vec![pos];
     tiles.extend(Dir::CARDINALS.iter().map(|&d| pos.step(d)));
     for tile in tiles {
         relink_sprites(world, tile);
     }
-    Some(cable)
 }
 
 fn cables_on(world: &World, pos: TilePos) -> Vec<(Entity, u8, u8)> {

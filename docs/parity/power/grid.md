@@ -17,13 +17,13 @@
 Кабели соединяются с соседними на общем слое (3 слоя), многослойный хаб соединяет слои; кусачки режут кабель (с ударом током под напряжением), мультитул показывает мощность сети.
 
 - **Код:** [`/obj/structure/cable`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/cable.dm#L17), [`proc/connect_cable()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/cable.dm#L83), [`wirecutter_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/cable.dm#L210), [`multitool_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/cable.dm#L266), [`/obj/structure/cable/multilayer`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/cable.dm#L751)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/power/grid.rs`, `crates/ss13_mapload/src/cable.rs`: граф кабелей строится один раз при загрузке; резать, прокладывать кабель и смотреть мощность мультитулом нельзя
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/power/grid.rs`, `crates/ss13_mapload/src/cable.rs`: граф кабелей при загрузке и правки на лету; `power/cable_coil.rs`: кусачки режут кабель (без удара током), мультитул показывает мощность сети. Нет: ПКМ-кусачек (`banned_links`), удара током
 
 ### Моток кабеля и прокладка (/obj/item/stack/cable_coil)
 Стак кабеля: прокладка по тайлам и слоям, выбор цвета и слоя в меню, ремонт ожогов роботов и протезов, наручники из кабеля.
 
 - **Код:** [`/obj/item/stack/cable_coil`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/cable.dm#L481), [`proc/place_turf()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/cable.dm#L688), [`attack_self()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/cable.dm#L572)
-- **Статус в ss13-rs:** ❌ нет — моток есть только как предмет-стак (наручники из кабеля — см. ../security/)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/power/cable_coil.rs`: клик по покрытию кладёт кабель выбранного слоя (через `devices::rhd::lay_cable`: сеть и спрайты соседей), меню в руке (`ListInput` вместо радиального) — слой 1/2/3 с цветом и наручники за 15 кабеля (падают под ноги), ремонт ожогов робо-конечности (15 за отрезок). Нет: хабов из меню, удара током при прокладке, повтора ремонта, починки сенсоров комбинезона
 
 ### Межэтажный кабельный хаб
 Соединяет кабельные сети соседних уровней (multi-z).

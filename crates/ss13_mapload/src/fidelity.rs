@@ -190,6 +190,7 @@ pub fn ext_field(path: &str, var: &str, value: Val) -> Result<Field, Skip> {
         .or_else(|_| crate::radio::ext_field(path, var, value))
         .or_else(|_| crate::dock::ext_field(path, var, value))
         .or_else(|_| crate::disposal::ext_field(path, var, value))
+        .or_else(|_| crate::engmisc::ext_field(path, var, value))
         .or_else(|_| crate::bots::ext_field(path, var, value))
         .or_else(|_| crate::service::ext_field(path, var, value))
         .or_else(|_| crate::mining::ext_field(path, var, value))
@@ -300,6 +301,7 @@ impl<'a> ConvertContext<'a> {
         fields.extend(crate::service::type_fields(self.types, path));
         fields.extend(crate::fishing::type_fields(self.types, path));
         fields.extend(crate::disposal::type_fields(self.types, path));
+        fields.extend(crate::engmisc::type_fields(self.types, path));
         fields.extend(crate::bots::type_fields(self.types, path));
         fields.extend(crate::mobs::type_fields(self.types, path));
         fields.extend(crate::wallmount::type_fields(self.types, path));

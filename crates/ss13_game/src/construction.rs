@@ -236,6 +236,8 @@ pub enum Job {
     Mecha(crate::mecha::core::MechJob),
     /// Stuffing a mob into a disposal bin, unwrapping a parcel ([`crate::disposals`]).
     Disposal(crate::disposals::DisposalJob),
+    /// Belts, disposal constructs, plastic flaps ([`crate::recycling`]).
+    Recycling(crate::recycling::RecyclingJob),
     /// Mopping or scrubbing ([`crate::janitor`]).
     Clean(crate::janitor::CleanJob),
     /// A vampire's bite or lair ritual ([`crate::antag::vampire::server`]).
@@ -1402,6 +1404,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         Job::Medical(job) => crate::medical::complete_med(world, mob, action, *job),
         &Job::Mecha(job) => crate::mecha::core::complete(world, mob, action, job),
         Job::Disposal(job) => crate::disposals::complete(world, mob, action, *job),
+        Job::Recycling(job) => crate::recycling::complete(world, mob, action, *job),
         &Job::Vampire(job) => crate::antag::vampire::server::complete(world, mob, action, job),
         &Job::Cult(job) => crate::antag::cult::server::complete(world, mob, action, job),
         &Job::Abductor(job) => {

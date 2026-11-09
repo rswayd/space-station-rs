@@ -12,9 +12,9 @@ pub use map_init::{
     MapInit, MapInitLate, MapInitPass, Mapped, begin_map_init, map_init_open, run_map_init,
 };
 pub use movement::{
-    Border, Bumped, ClimbWalkable, ClimbsUp, Density, FallsThrough, GatePolicy, MoveRequest, Moved,
-    Mover, NonDenseBorder, PassFlags, PassFlagsSelf, PassesWalkBarriers, PrisonGate, Pushable,
-    WalkPassable, gate_refuses, next_ready_at, resolve_move,
+    Border, Bumped, ClimbWalkable, ClimbsUp, Density, EnterPolicy, FallsThrough, GatePolicy,
+    MoveRequest, Moved, Mover, NonDenseBorder, PassFlags, PassFlagsSelf, PassesWalkBarriers,
+    PrisonGate, Pushable, WalkPassable, gate_refuses, next_ready_at, resolve_move,
 };
 
 /// Ordering points for other plugins: write `MoveRequest` before `Movement`, read `Moved`

@@ -372,7 +372,7 @@ fn expel_at(world: &mut World, bin: Entity, holder: Entity, now: f64) {
 }
 
 /// `eject()`: everything inside onto the bin's tile, not thrown.
-fn eject(world: &mut World, bin: Entity) {
+pub(super) fn eject(world: &mut World, bin: Entity) {
     let Some(&pos) = world.get::<TilePos>(bin) else {
         return;
     };

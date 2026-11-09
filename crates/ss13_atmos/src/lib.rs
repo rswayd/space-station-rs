@@ -376,6 +376,13 @@ impl Atmos {
             .is_some_and(|(level, tile)| level.hotspot_expose(tile, temperature, volume, soh))
     }
 
+    /// `qdel(hotspot)` of the fire on `pos`, if any.
+    pub fn extinguish_hotspot(&mut self, pos: TilePos) {
+        if let Some((level, tile)) = self.locate_mut(pos) {
+            level.remove_hotspot_of(tile);
+        }
+    }
+
     /// The fire on `pos` (tg `active_hotspot`).
     pub fn hotspot(&self, pos: TilePos) -> Option<&Hotspot> {
         let (level, tile) = self.locate(pos)?;

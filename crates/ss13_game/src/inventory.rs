@@ -637,6 +637,10 @@ fn apply(world: &mut World, client: Entity, action: Action) {
             {
                 // A quantum keycard unlinks.
             } else if let Some(item) = inventory.slot(slot)
+                && crate::extinguisher::click_alt(world, client, mob, item)
+            {
+                // An extinguisher is emptied.
+            } else if let Some(item) = inventory.slot(slot)
                 && crate::crayons::toggle_cap(world, client, item)
             {
                 // A spray can's cap.

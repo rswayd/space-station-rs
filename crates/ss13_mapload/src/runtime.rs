@@ -1442,12 +1442,13 @@ pub const BITRUNNING_RUNTIME_TYPES: &[&str] = &[
 pub fn runtime_types() -> BTreeSet<&'static str> {
     use crate::{antag, atmos_machine, cargo, mobs, service, silicon};
     let mut out = BTreeSet::new();
-    let tables: [&[&'static str]; 29] = [
+    let tables: [&[&'static str]; 30] = [
         &crate::RUNTIME_TYPES,
         &crate::RUNTIME_CONTAINER_TYPES,
         &crate::CONSTRUCTION_TYPES,
         &crate::MEDICAL_RUNTIME_TYPES,
         &crate::DISPOSAL_RUNTIME_TYPES,
+        crate::ENGMISC_RUNTIME_TYPES,
         &crate::BOT_RUNTIME_TYPES,
         &crate::WALLMOUNT_RUNTIME_TYPES,
         &crate::FRAME_RUNTIME_TYPES,
@@ -1487,6 +1488,8 @@ pub fn runtime_types() -> BTreeSet<&'static str> {
     // What growing vats grow and the dish the microscope hands back (`ss13_game::science`).
     out.extend(crate::cell_line_types::CELL_LINE_RESULTS);
     out.insert("/obj/item/petri_dish");
+    // What the disposal pipe dispenser makes (`ss13_game::recycling`).
+    out.extend(crate::engmisc::disposal_recipe_paths());
     // Log planks and plant mobs (`ss13_game::botany`).
     out.extend(crate::plants::BOTANY_RUNTIME_TYPES);
     // A canister's `relabel` copies another canister type's name and look.
