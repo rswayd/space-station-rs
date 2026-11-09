@@ -691,7 +691,9 @@ fn transmit_speech(
         // `talk_into` of the target's devices (`radio()`).
         let devices: Vec<(Entity, Option<RadioTarget>)> = match spoke.radio {
             // Saymodes (binary, the changeling hivemind) never reach a radio.
-            None | Some(RadioTarget::Binary | RadioTarget::Changeling) => Vec::new(),
+            None | Some(RadioTarget::Binary | RadioTarget::Changeling | RadioTarget::Hive) => {
+                Vec::new()
+            }
             Some(RadioTarget::Intercom) => index
                 .in_radius(spoke.pos, INTERCOM_RANGE)
                 .filter(|&e| {

@@ -146,4 +146,5 @@ mod wallmount;
 mod wiremod;
 mod wires;
 mod wizard;
+mod xeno;
 mod xenobio;

@@ -256,6 +256,7 @@
 //! | 3468 | `janitor::washer_attack_hand` (washing machine door; right click starts it) |
 //! | 3471 | `medical::special_traumas::stream_click` (a bluespace prophet's stream) |
 //! | 3481 | `science::anomaly_refinery::interact` (the `AnomalyRefinery` window) |
+//! | 3491 | `antag::xeno::reproduction::empty_hand` (an awake facehugger jumps at the hand) |
 //! | 3493 | `holodeck::interact` (the `Holodeck` window, ready buttons) |
 //! | 3497 | `telecomms_config::interact` (telecomms machine, monitor and log browser windows) |
 //! | 3507 | `blackbox::attack_hand` (the blackbox out of its recorder) |
@@ -425,6 +426,7 @@
 //! | 4400 | `science::experi_scanner::pre_attack` (not on living mobs) |
 //! | 4460 | `closets::kinds::held_on_target` (large crates, multitools on abandoned crates) |
 //! | 4491 | `weapons::rip_and_tear::pre_attack` (a wielded sledgehammer on a wall) |
+//! | 4501 | `antag::xeno::reproduction::held_on_target` (a held facehugger pressed to a face) |
 //! | 4495 | `events::space_vines::attacked_by` (an item hitting kudzu) |
 //! | 4467 | `misc_items::flatpacks::load` (a flatpack onto a flatpack cart) |
 //! | 4500 | `construction::item_interaction` |

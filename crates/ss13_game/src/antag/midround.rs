@@ -26,7 +26,8 @@
 // wizard, the paradox clone (`super::paradox_clone`), the nightmare (`super::nightmare`), the
 // morph (`super::morph`), the space dragon (`super::space_dragon`), the revenant
 // (`super::revenant`), the slaughter demon (`super::slaughter`), the abductors
-// (`super::abductor`) and the blob and blob infection (`super::blob`) spawn anyone;
+// (`super::abductor`), the blob and blob infection (`super::blob`) and the xenomorphs
+// (`super::xeno`) spawn anyone;
 // the others keep their weights, are logged and fail preparation, as tg's do without candidates.
 // There is no admin cancel or reroll window before a midround, no false alarms, no AFK checks,
 // no account age or job bans, and `EMERGENCY_PAST_POINT_OF_NO_RETURN` ignores the call's
@@ -140,6 +141,7 @@ pub const SLAUGHTER_DEMON: &str = "Slaughter Demon";
 pub const ABDUCTORS: &str = "Abductors";
 pub const BLOB: &str = "Blob";
 pub const BLOB_INFECTION: &str = "Blob Infection";
+pub const XENOMORPH: &str = "Xenomorph";
 
 const HOP: &[&str] = &["Head of Personnel"];
 const ONE: (Cap, Cap) = (Cap::Fixed(1), Cap::Fixed(1));
@@ -265,7 +267,10 @@ pub const RULESETS: [Ruleset; 30] = {
             role: Some(super::ROLE_BLOB),
             ..decrease(other(BLOB, Heavy, [0, 1, 3, 3], 30), 3)
         },
-        decrease(other("Xenomorph", Heavy, [0, 1, 5, 5], 30), 3),
+        Ruleset {
+            role: Some(super::ROLE_ALIEN),
+            ..decrease(other(XENOMORPH, Heavy, [0, 1, 5, 5], 30), 3)
+        },
         Ruleset {
             role: Some(super::ROLE_SPACE_DRAGON),
             ..decrease(other(SPACE_DRAGON, Heavy, [0, 3, 5, 5], 30), 3)
@@ -580,6 +585,8 @@ fn can_be_selected(world: &mut World, r: &Ruleset) -> bool {
         // Fewer than 4 teams, and a ship to put the next one on.
         ABDUCTORS => super::abductor::server::can_spawn(world),
         BLOB => super::blob::can_spawn(world),
+        // A vent to crawl out of.
+        XENOMORPH => super::xeno::can_spawn(world),
         _ => true,
     }
 }
@@ -825,6 +832,7 @@ fn poll_role_name(r: &Ruleset) -> &'static str {
         SLAUGHTER_DEMON => "Демон резни",
         ABDUCTORS => "Абдуктор",
         BLOB => "Блоб",
+        XENOMORPH => "Ксеноморф",
         tag => tag,
     }
 }
@@ -852,6 +860,10 @@ fn poll_ruleset(world: &mut World, r: &'static Ruleset, population: u32, after: 
         };
         role_name = format!("клон {}", super::objectives::target_text(world, target));
         original = Some(target);
+    }
+    // `xenomorph/New`: `max_antag_cap += prob(50)`.
+    if r.config_tag == XENOMORPH && with_rng(world, |rng| rng.prob(50.0)) {
+        caps.0 += 1;
     }
     let spec = PollSpec {
         question: format!("Ищем добровольцев на роль: {role_name}."),
@@ -970,6 +982,15 @@ fn select_and_run(
                 .filter_map(|&g| world.get::<PlayerMob>(g).map(|p| (p.client, g)))
                 .collect();
             if super::blob::spawn_blobs(world, &ghosts).is_empty() {
+                return Vec::new();
+            }
+        }
+        XENOMORPH => {
+            let ghosts: Vec<(Entity, Entity)> = chosen
+                .iter()
+                .filter_map(|&g| world.get::<PlayerMob>(g).map(|p| (p.client, g)))
+                .collect();
+            if super::xeno::spawn_xenos(world, &ghosts).is_empty() {
                 return Vec::new();
             }
         }

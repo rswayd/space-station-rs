@@ -66,6 +66,7 @@ pub mod uplink;
 pub mod valentine;
 pub mod vampire;
 pub mod wizard;
+pub mod xeno;
 
 /// Antagonists on the server: dynamic's state, the traitor and the uplink.
 #[cfg(feature = "server")]
@@ -89,6 +90,7 @@ impl bevy::prelude::Plugin for AntagServerPlugin {
             brainwashed::BrainwashedPlugin,
             nightmare::NightmarePlugin,
             morph::MorphPlugin,
+            xeno::XenoPlugin,
             valentine::ValentinePlugin,
             survivalist::SurvivalistPlugin,
             blob::BlobPlugin,
@@ -123,6 +125,8 @@ pub const ROLE_PARADOX_CLONE: &str = "Paradox Clone";
 pub const ROLE_NIGHTMARE: &str = "Nightmare";
 /// tg `ROLE_MORPH` (`morph`); as in tg the morph's poll asks every ghost (no `pref_flag`).
 pub const ROLE_MORPH: &str = "Morph";
+/// tg `ROLE_ALIEN`: the xenomorph's `be_special` key and faction.
+pub const ROLE_ALIEN: &str = "Xenomorph";
 /// The slaughter demon midround's role (`slaughter`): as in tg, no `pref_flag`, every ghost is
 /// polled.
 pub const ROLE_SLAUGHTER_DEMON: &str = "Slaughter Demon";
